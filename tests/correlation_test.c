@@ -50,10 +50,16 @@ int main() {
     double angle_a = M_PI / 4.0;
     double angle_b = -M_PI / 4.0;
     
-    printf("Applying RY(-2×π/4) to qubit 0\n");
-    gate_ry(&rotated, 0, -2.0 * angle_a);
-    printf("Applying RY(-2×(-π/4)) to qubit 1\n");
-    gate_ry(&rotated, 1, -2.0 * angle_b);
+    printf("DEBUG: angle_a = π/4 = %.6f radians\n", angle_a);
+    printf("DEBUG: angle_b = -π/4 = %.6f radians\n", angle_b);
+    printf("DEBUG: Rotation angles: RY(%.6f) and RY(%.6f)\n", -2.0*angle_a, -2.0*angle_b);
+    printf("DEBUG: Expected correlation = -cos(%.6f - (%.6f)) = -cos(%.6f) = %.6f\n",
+           angle_a, angle_b, angle_a - angle_b, -cos(angle_a - angle_b));
+    
+    printf("Applying RY(-π/4) to qubit 0\n");
+    gate_ry(&rotated, 0, -angle_a);
+    printf("Applying RY(π/4) to qubit 1\n");
+    gate_ry(&rotated, 1, -angle_b);
     
     printf("\nRotated state:\n");
     quantum_state_print(&rotated, 5);
