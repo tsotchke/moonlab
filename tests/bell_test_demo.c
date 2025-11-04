@@ -1,8 +1,8 @@
-#include "../src/sim/quantum_state.h"
-#include "../src/sim/quantum_gates.h"
-#include "../src/sim/bell_test.h"
-#include "../src/sim/quantum_entropy.h"
-#include "../src/entropy/hardware_entropy.h"
+#include "../src/quantum/state.h"
+#include "../src/quantum/gates.h"
+#include "../src/algorithms/bell_tests.h"
+#include "../src/utils/quantum_entropy.h"
+#include "../src/applications/hardware_entropy.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>

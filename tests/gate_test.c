@@ -1,5 +1,5 @@
-#include "../src/sim/quantum_state.h"
-#include "../src/sim/quantum_gates.h"
+#include "../src/quantum/state.h"
+#include "../src/quantum/gates.h"
 #include <stdio.h>
 #include <math.h>
 
