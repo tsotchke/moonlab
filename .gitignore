@@ -1,0 +1,57 @@
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.a
+*.out
+*.dSYM/
+
+# Executables
+qsim_test
+grover_parallel_benchmark
+examples/quantum/grover_hash_collision
+examples/quantum/grover_large_scale_demo
+examples/quantum/grover_large_scale_optimized
+examples/quantum/grover_password_crack
+examples/quantum/metal_batch_benchmark
+examples/quantum/metal_gpu_benchmark
+examples/quantum/phase3_phase4_benchmark
+tests/bell_test_demo
+tests/correlation_test
+tests/gate_test
+tests/quantum_sim_test
+tests/health_tests_test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Private documentation (archived separately)
+doc/private/
+doc/*
+
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tgz
+
+# Temporary files
+*.tmp
+*.bak
