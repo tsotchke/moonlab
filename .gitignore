@@ -24,6 +24,8 @@ tests/health_tests_test
 
 # IDE
 .vscode/
+.claude/
+.github/
 .idea/
 *.swp
 *.swo
@@ -32,6 +34,7 @@ tests/health_tests_test
 
 # Private documentation (archived separately)
 doc/private/
+reference/
 doc/*
 
 # Build directories

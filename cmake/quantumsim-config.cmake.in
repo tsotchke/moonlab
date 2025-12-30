@@ -1,0 +1,45 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies
+find_dependency(Threads REQUIRED)
+
+# Find optional dependencies based on how this was built
+if(@QSIM_HAS_OPENMP@)
+    find_dependency(OpenMP)
+endif()
+
+if(@QSIM_HAS_OPENCL@)
+    find_dependency(OpenCL)
+endif()
+
+if(@QSIM_HAS_VULKAN@)
+    find_dependency(Vulkan)
+endif()
+
+if(@QSIM_HAS_MPI@)
+    find_dependency(MPI)
+endif()
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/quantumsim-targets.cmake")
+
+# Check that targets were properly imported
+check_required_components(quantumsim)
+
+# Provide useful variables
+set(QUANTUMSIM_INCLUDE_DIRS "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@")
+set(QUANTUMSIM_LIBRARIES quantumsim::quantumsim)
+set(QUANTUMSIM_VERSION "@PROJECT_VERSION@")
+
+# Feature flags
+set(QUANTUMSIM_HAS_OPENMP @QSIM_HAS_OPENMP@)
+set(QUANTUMSIM_HAS_METAL @QSIM_HAS_METAL@)
+set(QUANTUMSIM_HAS_OPENCL @QSIM_HAS_OPENCL@)
+set(QUANTUMSIM_HAS_VULKAN @QSIM_HAS_VULKAN@)
+set(QUANTUMSIM_HAS_MPI @QSIM_HAS_MPI@)
+set(QUANTUMSIM_SIMD_AVX512 @QSIM_SIMD_AVX512@)
+set(QUANTUMSIM_SIMD_AVX2 @QSIM_SIMD_AVX2@)
+set(QUANTUMSIM_SIMD_NEON @QSIM_SIMD_NEON@)
+set(QUANTUMSIM_SIMD_SVE @QSIM_SIMD_SVE@)

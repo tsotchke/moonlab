@@ -1,5 +1,5 @@
 /**
- * @file qsim_v3_test.c
+ * @file quantum_sim_test.c
  * @brief Comprehensive test suite for Quantum Simulator v3.0
  * 
  * Tests all critical v3.0 improvements:

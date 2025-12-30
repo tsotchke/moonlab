@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
     );
     
     // Print detailed results
-    bell_test_print_results(&result);
+    bell_chsh_print_results(&result);
     
     // Interpretation
     printf("INTERPRETATION:\n");

@@ -278,4 +278,39 @@ void quantum_basis_state_string(
     size_t buffer_size
 );
 
+// ============================================================================
+// CONVENIENCE FUNCTIONS (POINTER-BASED API)
+// ============================================================================
+
+/**
+ * @brief Allocate and initialize quantum state
+ *
+ * Allocates a quantum_state_t on heap and initializes to |0...0⟩.
+ * Caller must call quantum_state_destroy() when done.
+ *
+ * @param num_qubits Number of qubits
+ * @return Pointer to new state or NULL on error
+ */
+quantum_state_t* quantum_state_create(int num_qubits);
+
+/**
+ * @brief Destroy heap-allocated quantum state
+ *
+ * Frees resources and the state structure itself.
+ *
+ * @param state State to destroy (safe to pass NULL)
+ */
+void quantum_state_destroy(quantum_state_t* state);
+
+/**
+ * @brief Reset state to |0...0⟩
+ *
+ * Alias for quantum_state_reset for API consistency.
+ *
+ * @param state State to reset
+ */
+static inline void quantum_state_init_zero(quantum_state_t* state) {
+    quantum_state_reset(state);
+}
+
 #endif /* QUANTUM_STATE_H */

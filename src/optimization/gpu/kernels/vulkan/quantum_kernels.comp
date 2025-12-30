@@ -1,0 +1,299 @@
+#version 450
+
+/**
+ * Vulkan Compute Shaders for Quantum Simulation
+ *
+ * Compile to SPIR-V with:
+ *   glslangValidator -V quantum_kernels.comp -o quantum_kernels.spv
+ *
+ * Each kernel is a separate shader - this file contains all kernels.
+ * Select via specialization constants or separate entry points.
+ */
+
+// Push constants for kernel parameters
+layout(push_constant) uniform PushConstants {
+    uint qubit_index;
+    uint num_qubits;
+    uint state_dim;
+    uint target;
+    float phase;
+    uint control_qubit;
+    uint target_qubit;
+} params;
+
+// Complex number as vec2 (x = real, y = imaginary)
+#define complex_t vec2
+
+// Complex arithmetic
+complex_t cmul(complex_t a, complex_t b) {
+    return complex_t(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+complex_t cadd(complex_t a, complex_t b) {
+    return a + b;
+}
+
+complex_t csub(complex_t a, complex_t b) {
+    return a - b;
+}
+
+float cabs2(complex_t z) {
+    return dot(z, z);
+}
+
+complex_t cscale(complex_t z, float s) {
+    return z * s;
+}
+
+complex_t cneg(complex_t z) {
+    return -z;
+}
+
+complex_t cpolar(float r, float theta) {
+    return complex_t(r * cos(theta), r * sin(theta));
+}
+
+// ============================================================================
+// SHARED MEMORY FOR REDUCTIONS
+// ============================================================================
+
+shared complex_t shared_data[256];
+
+// ============================================================================
+// BUFFER BINDINGS
+// ============================================================================
+
+layout(std430, binding = 0) buffer AmplitudeBuffer {
+    complex_t amplitudes[];
+};
+
+layout(std430, binding = 1) buffer OutputBuffer {
+    complex_t output_data[];
+};
+
+layout(std430, binding = 2) buffer TargetsBuffer {
+    uint targets[];
+};
+
+// ============================================================================
+// LOCAL SIZE
+// ============================================================================
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// ============================================================================
+// HADAMARD TRANSFORM
+// ============================================================================
+
+void hadamard_transform() {
+    uint tid = gl_GlobalInvocationID.x;
+    uint stride = 1u << params.qubit_index;
+    uint num_pairs = params.state_dim / 2u;
+
+    if (tid >= num_pairs) return;
+
+    // Calculate pair indices
+    uint mask = stride - 1u;
+    uint base = (tid >> params.qubit_index) << (params.qubit_index + 1u);
+    uint offset = tid & mask;
+    uint idx0 = base + offset;
+    uint idx1 = idx0 + stride;
+
+    // Load amplitudes
+    complex_t amp0 = amplitudes[idx0];
+    complex_t amp1 = amplitudes[idx1];
+
+    // Hadamard transformation
+    const float inv_sqrt2 = 0.70710678118;
+    complex_t new_amp0 = cscale(cadd(amp0, amp1), inv_sqrt2);
+    complex_t new_amp1 = cscale(csub(amp0, amp1), inv_sqrt2);
+
+    // Write back
+    amplitudes[idx0] = new_amp0;
+    amplitudes[idx1] = new_amp1;
+}
+
+// ============================================================================
+// HADAMARD ALL QUBITS
+// ============================================================================
+
+void hadamard_all() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    complex_t amp = amplitudes[tid];
+
+    // Count bits (Hamming weight)
+    uint n = tid;
+    n = (n & 0x55555555u) + ((n >> 1u) & 0x55555555u);
+    n = (n & 0x33333333u) + ((n >> 2u) & 0x33333333u);
+    n = (n & 0x0F0F0F0Fu) + ((n >> 4u) & 0x0F0F0F0Fu);
+    n = (n & 0x00FF00FFu) + ((n >> 8u) & 0x00FF00FFu);
+    n = (n & 0x0000FFFFu) + ((n >> 16u) & 0x0000FFFFu);
+    uint hamming = n;
+
+    float sign = ((hamming & 1u) != 0u) ? -1.0 : 1.0;
+    float scale = 1.0 / sqrt(float(1u << params.num_qubits));
+
+    amplitudes[tid] = cscale(amp, sign * scale);
+}
+
+// ============================================================================
+// ORACLE - SINGLE TARGET
+// ============================================================================
+
+void oracle_single_target() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid == params.target) {
+        amplitudes[tid] = cneg(amplitudes[tid]);
+    }
+}
+
+// ============================================================================
+// PAULI X GATE
+// ============================================================================
+
+void pauli_x() {
+    uint tid = gl_GlobalInvocationID.x;
+    uint stride = 1u << params.qubit_index;
+    uint num_pairs = params.state_dim / 2u;
+
+    if (tid >= num_pairs) return;
+
+    uint mask = stride - 1u;
+    uint base = (tid >> params.qubit_index) << (params.qubit_index + 1u);
+    uint offset = tid & mask;
+    uint idx0 = base + offset;
+    uint idx1 = idx0 + stride;
+
+    complex_t temp = amplitudes[idx0];
+    amplitudes[idx0] = amplitudes[idx1];
+    amplitudes[idx1] = temp;
+}
+
+// ============================================================================
+// PAULI Y GATE
+// ============================================================================
+
+void pauli_y() {
+    uint tid = gl_GlobalInvocationID.x;
+    uint stride = 1u << params.qubit_index;
+    uint num_pairs = params.state_dim / 2u;
+
+    if (tid >= num_pairs) return;
+
+    uint mask = stride - 1u;
+    uint base = (tid >> params.qubit_index) << (params.qubit_index + 1u);
+    uint offset = tid & mask;
+    uint idx0 = base + offset;
+    uint idx1 = idx0 + stride;
+
+    complex_t amp0 = amplitudes[idx0];
+    complex_t amp1 = amplitudes[idx1];
+
+    amplitudes[idx0] = complex_t(amp1.y, -amp1.x);   // -i * amp1
+    amplitudes[idx1] = complex_t(-amp0.y, amp0.x);  // i * amp0
+}
+
+// ============================================================================
+// PAULI Z GATE
+// ============================================================================
+
+void pauli_z() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    uint mask = 1u << params.qubit_index;
+    if ((tid & mask) != 0u) {
+        amplitudes[tid] = cneg(amplitudes[tid]);
+    }
+}
+
+// ============================================================================
+// PHASE GATE
+// ============================================================================
+
+void phase_gate() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    uint mask = 1u << params.qubit_index;
+    if ((tid & mask) != 0u) {
+        complex_t phase_factor = cpolar(1.0, params.phase);
+        amplitudes[tid] = cmul(amplitudes[tid], phase_factor);
+    }
+}
+
+// ============================================================================
+// CNOT GATE
+// ============================================================================
+
+void cnot_gate() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    uint control_mask = 1u << params.control_qubit;
+    uint target_mask = 1u << params.target_qubit;
+
+    // Only swap if control is 1 and we're the lower index (target bit = 0)
+    if (((tid & control_mask) != 0u) && ((tid & target_mask) == 0u)) {
+        uint partner = tid | target_mask;
+        complex_t temp = amplitudes[tid];
+        amplitudes[tid] = amplitudes[partner];
+        amplitudes[partner] = temp;
+    }
+}
+
+// ============================================================================
+// COMPUTE PROBABILITIES
+// ============================================================================
+
+void compute_probabilities() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    complex_t amp = amplitudes[tid];
+    // Store probability in output buffer (reinterpreted as float via x component)
+    output_data[tid] = complex_t(cabs2(amp), 0.0);
+}
+
+// ============================================================================
+// NORMALIZE STATE
+// ============================================================================
+
+void normalize_state() {
+    uint tid = gl_GlobalInvocationID.x;
+
+    if (tid >= params.state_dim) return;
+
+    float inv_norm = 1.0 / params.phase;  // phase field used for norm
+    amplitudes[tid] = cscale(amplitudes[tid], inv_norm);
+}
+
+// ============================================================================
+// MAIN - Select operation via specialization constant
+// ============================================================================
+
+layout(constant_id = 0) const uint OPERATION = 0;
+
+void main() {
+    switch (OPERATION) {
+        case 0: hadamard_transform(); break;
+        case 1: hadamard_all(); break;
+        case 2: oracle_single_target(); break;
+        case 3: pauli_x(); break;
+        case 4: pauli_y(); break;
+        case 5: pauli_z(); break;
+        case 6: phase_gate(); break;
+        case 7: cnot_gate(); break;
+        case 8: compute_probabilities(); break;
+        case 9: normalize_state(); break;
+        default: break;
+    }
+}

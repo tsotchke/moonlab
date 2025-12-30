@@ -222,7 +222,7 @@ int bell_test_confirms_quantum(const bell_test_result_t *result);
  * @brief Print Bell test results
  * @param result Bell test result
  */
-void bell_test_print_results(const bell_test_result_t *result);
+void bell_chsh_print_results(const bell_test_result_t *result);
 
 /**
  * @brief Calculate theoretical CHSH for given Bell state

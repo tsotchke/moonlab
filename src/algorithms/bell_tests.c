@@ -352,7 +352,7 @@ int bell_test_confirms_quantum(const bell_test_result_t *result) {
     return violates_classical && significant && near_maximum;
 }
 
-void bell_test_print_results(const bell_test_result_t *result) {
+void bell_chsh_print_results(const bell_test_result_t *result) {
     if (!result) return;
     
     printf("\n");

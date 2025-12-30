@@ -1,0 +1,245 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "installDir": "${sourceDir}/install/${presetName}"
+        },
+        {
+            "name": "debug",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "macos-arm64-release",
+            "displayName": "macOS ARM64 Release",
+            "description": "Release build for Apple Silicon (M1/M2/M3/M4)",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "QSIM_ENABLE_METAL": "ON",
+                "QSIM_ENABLE_NEON": "ON"
+            }
+        },
+        {
+            "name": "macos-arm64-debug",
+            "displayName": "macOS ARM64 Debug",
+            "description": "Debug build for Apple Silicon",
+            "inherits": ["base", "debug"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "QSIM_ENABLE_METAL": "ON",
+                "QSIM_ENABLE_NEON": "ON"
+            }
+        },
+        {
+            "name": "macos-x86_64-release",
+            "displayName": "macOS x86_64 Release",
+            "description": "Release build for Intel Mac",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "x86_64",
+                "QSIM_ENABLE_METAL": "ON",
+                "QSIM_ENABLE_AVX2": "ON",
+                "QSIM_ENABLE_AVX512": "ON"
+            }
+        },
+        {
+            "name": "linux-x86_64-release",
+            "displayName": "Linux x86_64 Release",
+            "description": "Release build for Linux x86_64",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "QSIM_ENABLE_AVX2": "ON",
+                "QSIM_ENABLE_AVX512": "ON",
+                "QSIM_ENABLE_OPENCL": "OFF",
+                "QSIM_ENABLE_VULKAN": "OFF"
+            }
+        },
+        {
+            "name": "linux-x86_64-debug",
+            "displayName": "Linux x86_64 Debug",
+            "description": "Debug build for Linux x86_64",
+            "inherits": ["base", "debug"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "QSIM_ENABLE_AVX2": "ON"
+            }
+        },
+        {
+            "name": "linux-arm64-release",
+            "displayName": "Linux ARM64 Release",
+            "description": "Release build for Linux ARM64 (Graviton, Ampere)",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "QSIM_ENABLE_NEON": "ON",
+                "QSIM_ENABLE_SVE": "ON"
+            }
+        },
+        {
+            "name": "linux-gpu-release",
+            "displayName": "Linux x86_64 GPU Release",
+            "description": "Release build with GPU support",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "QSIM_ENABLE_AVX2": "ON",
+                "QSIM_ENABLE_AVX512": "ON",
+                "QSIM_ENABLE_OPENCL": "ON",
+                "QSIM_ENABLE_VULKAN": "ON"
+            }
+        },
+        {
+            "name": "linux-mpi-release",
+            "displayName": "Linux MPI Release",
+            "description": "Release build with MPI for distributed computing",
+            "inherits": ["base", "release"],
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "QSIM_ENABLE_MPI": "ON",
+                "QSIM_ENABLE_AVX2": "ON",
+                "QSIM_ENABLE_AVX512": "ON"
+            }
+        },
+        {
+            "name": "native",
+            "displayName": "Native Release",
+            "description": "Optimized build for current system",
+            "inherits": ["base", "release"],
+            "cacheVariables": {
+                "QSIM_ENABLE_AVX512": "ON",
+                "QSIM_ENABLE_AVX2": "ON",
+                "QSIM_ENABLE_NEON": "ON",
+                "QSIM_ENABLE_SVE": "ON"
+            }
+        },
+        {
+            "name": "native-debug",
+            "displayName": "Native Debug",
+            "description": "Debug build for current system",
+            "inherits": ["base", "debug"]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "macos-arm64-release",
+            "configurePreset": "macos-arm64-release"
+        },
+        {
+            "name": "macos-arm64-debug",
+            "configurePreset": "macos-arm64-debug"
+        },
+        {
+            "name": "macos-x86_64-release",
+            "configurePreset": "macos-x86_64-release"
+        },
+        {
+            "name": "linux-x86_64-release",
+            "configurePreset": "linux-x86_64-release"
+        },
+        {
+            "name": "linux-x86_64-debug",
+            "configurePreset": "linux-x86_64-debug"
+        },
+        {
+            "name": "linux-arm64-release",
+            "configurePreset": "linux-arm64-release"
+        },
+        {
+            "name": "linux-gpu-release",
+            "configurePreset": "linux-gpu-release"
+        },
+        {
+            "name": "linux-mpi-release",
+            "configurePreset": "linux-mpi-release"
+        },
+        {
+            "name": "native",
+            "configurePreset": "native"
+        },
+        {
+            "name": "native-debug",
+            "configurePreset": "native-debug"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "base-test",
+            "hidden": true,
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error"
+            }
+        },
+        {
+            "name": "macos-arm64-release",
+            "configurePreset": "macos-arm64-release",
+            "inherits": "base-test"
+        },
+        {
+            "name": "linux-x86_64-release",
+            "configurePreset": "linux-x86_64-release",
+            "inherits": "base-test"
+        },
+        {
+            "name": "native",
+            "configurePreset": "native",
+            "inherits": "base-test"
+        }
+    ]
+}

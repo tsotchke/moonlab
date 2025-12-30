@@ -549,3 +549,33 @@ void quantum_basis_state_string(
     }
     buffer[num_qubits] = '\0';
 }
+
+// ============================================================================
+// CONVENIENCE FUNCTIONS (POINTER-BASED API)
+// ============================================================================
+
+quantum_state_t* quantum_state_create(int num_qubits) {
+    if (num_qubits <= 0 || (size_t)num_qubits > MAX_QUBITS) {
+        return NULL;
+    }
+
+    quantum_state_t* state = (quantum_state_t*)calloc(1, sizeof(quantum_state_t));
+    if (!state) {
+        return NULL;
+    }
+
+    qs_error_t err = quantum_state_init(state, (size_t)num_qubits);
+    if (err != QS_SUCCESS) {
+        free(state);
+        return NULL;
+    }
+
+    return state;
+}
+
+void quantum_state_destroy(quantum_state_t* state) {
+    if (!state) return;
+
+    quantum_state_free(state);
+    free(state);
+}
