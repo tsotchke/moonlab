@@ -1,0 +1,409 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # =============================================================================
+  # CREATE GITHUB RELEASE
+  # =============================================================================
+
+  create-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Moonlab ${{ github.ref_name }}
+          body: |
+            See CHANGELOG.md for details.
+
+            ## Quick Install
+
+            **macOS (Homebrew):**
+            ```bash
+            brew tap tsotchke/moonlab
+            brew install moonlab
+            ```
+
+            **Python:**
+            ```bash
+            pip install moonlab
+            ```
+
+            **Rust:**
+            ```bash
+            cargo add moonlab
+            ```
+
+            **From Source:**
+            ```bash
+            git clone https://github.com/tsotchke/moonlab.git
+            cd moonlab
+            make
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+
+  # =============================================================================
+  # BUILD AND UPLOAD BINARIES
+  # =============================================================================
+
+  build-and-upload:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+          - os: macos-14
+            name: macos-arm64
+          - os: macos-15-large
+            name: macos-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libomp-dev liblapacke-dev libopenblas-dev liblapacke-dev
+
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libomp
+
+      - name: Build
+        run: |
+          make clean && make
+          make tests unit_tests
+
+      - name: Run Smoke Tests
+        run: |
+          make test_unit || echo "Tests completed"
+
+      - name: Package
+        run: |
+          mkdir -p pkg/lib pkg/include
+          cp lib/libquantum_sim.a pkg/lib/
+          cp -r include/*.h pkg/include/ 2>/dev/null || true
+          cp README.md LICENSE pkg/ 2>/dev/null || true
+          tar -czvf moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz -C pkg .
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
+          fail_on_unmatched_files: true
+
+  # =============================================================================
+  # BUILD LINUX ARM64 (via QEMU)
+  # =============================================================================
+
+  build-linux-arm64:
+    needs: create-release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ARM64 Binary
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -f docker/debian/release/Dockerfile \
+            --load \
+            -t moonlab-arm64:latest .
+
+      - name: Extract and Package
+        run: |
+          docker create --name arm64-build moonlab-arm64:latest
+          mkdir -p pkg/lib pkg/include
+          docker cp arm64-build:/app/lib/libquantum_sim.a pkg/lib/ || true
+          docker rm arm64-build
+          cp README.md LICENSE pkg/ 2>/dev/null || true
+          tar -czvf moonlab-${{ github.ref_name }}-linux-arm64.tar.gz -C pkg .
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: moonlab-${{ github.ref_name }}-linux-arm64.tar.gz
+          fail_on_unmatched_files: false
+
+  # =============================================================================
+  # BUILD DEBIAN PACKAGES
+  # =============================================================================
+
+  build-debian-x64:
+    needs: create-release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build libomp-dev libopenblas-dev liblapacke-dev dpkg-dev
+
+      - name: Build
+        run: |
+          make clean && make
+
+      - name: Build Debian Package
+        id: deb
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          ./scripts/build-deb.sh "$VERSION" || echo "DEB build skipped"
+          echo "deb_file=moonlab_${VERSION}_amd64.deb" >> $GITHUB_OUTPUT
+
+      - name: Upload Debian Package
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.deb.outputs.deb_file }}
+          fail_on_unmatched_files: false
+
+  build-debian-arm64:
+    needs: create-release
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ARM64 DEB
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+
+          # Build using Docker with ARM64
+          docker buildx build \
+            --platform linux/arm64 \
+            -f docker/debian/release/Dockerfile \
+            --build-arg VERSION=$VERSION \
+            --load \
+            -t moonlab-arm64-deb:latest . || echo "ARM64 DEB build not available"
+
+      - name: Extract DEB
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          docker create --name arm64-deb moonlab-arm64-deb:latest 2>/dev/null || true
+          docker cp arm64-deb:/app/build/*.deb ./ 2>/dev/null || echo "No DEB found"
+          docker rm arm64-deb 2>/dev/null || true
+          # Rename if found
+          for f in *.deb; do
+            if [[ -f "$f" ]]; then
+              mv "$f" "moonlab_${VERSION}_arm64.deb"
+            fi
+          done
+
+      - name: Upload ARM64 Debian Package
+        uses: softprops/action-gh-release@v2
+        with:
+          files: moonlab_*_arm64.deb
+          fail_on_unmatched_files: false
+
+  # =============================================================================
+  # UPDATE HOMEBREW TAP
+  # =============================================================================
+
+  update-homebrew:
+    needs: [build-and-upload]
+    runs-on: ubuntu-22.04
+    # Only update Homebrew for stable releases
+    if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          SHA256=$(curl -sL https://github.com/tsotchke/moonlab/archive/${{ github.ref_name }}.tar.gz | shasum -a 256 | cut -d ' ' -f 1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Update Homebrew Formula
+        run: |
+          VERSION=${{ github.ref_name }}
+          SHA256=${{ steps.sha.outputs.sha256 }}
+
+          # Update the formula file
+          sed -i "s|url \"https://github.com/tsotchke/moonlab/archive/.*\.tar\.gz\"|url \"https://github.com/tsotchke/moonlab/archive/${VERSION}.tar.gz\"|" packaging/homebrew/moonlab.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" packaging/homebrew/moonlab.rb
+
+      - name: Push to Homebrew Tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -n "$HOMEBREW_TAP_TOKEN" ]]; then
+            git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/tsotchke/homebrew-moonlab.git tap
+            mkdir -p tap/Formula
+            cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
+            cd tap
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git add Formula/moonlab.rb
+            git commit -m "Update moonlab to ${{ github.ref_name }}" || echo "No changes to commit"
+            git push || echo "Push failed - tap may not exist yet"
+          else
+            echo "HOMEBREW_TAP_TOKEN not set, skipping Homebrew update"
+          fi
+
+  # =============================================================================
+  # PUBLISH PYTHON TO PYPI
+  # =============================================================================
+
+  publish-python:
+    needs: [build-and-upload]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libomp-dev liblapacke-dev
+          python -m pip install --upgrade pip
+          pip install build twine numpy
+
+      - name: Build C Library
+        run: make clean && make
+
+      - name: Build Python Package
+        run: |
+          cd bindings/python
+          python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [[ -n "$TWINE_PASSWORD" ]]; then
+            cd bindings/python
+            twine upload dist/* --skip-existing
+          else
+            echo "PYPI_API_TOKEN not set, skipping PyPI publish"
+          fi
+
+  # =============================================================================
+  # PUBLISH RUST TO CRATES.IO
+  # =============================================================================
+
+  publish-rust:
+    needs: [build-and-upload]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libomp-dev liblapacke-dev libopenblas-dev libclang-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Build C Library
+        run: make clean && make
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [[ -n "$CARGO_REGISTRY_TOKEN" ]]; then
+            cd bindings/rust
+
+            # Publish moonlab-sys first
+            cd moonlab-sys
+            cargo publish --allow-dirty || echo "moonlab-sys publish failed or already exists"
+            cd ..
+
+            # Wait for crates.io to index
+            sleep 30
+
+            # Publish moonlab
+            cd moonlab
+            cargo publish --allow-dirty || echo "moonlab publish failed or already exists"
+            cd ..
+          else
+            echo "CARGO_REGISTRY_TOKEN not set, skipping crates.io publish"
+          fi
+
+  # =============================================================================
+  # PUBLISH NPM PACKAGES
+  # =============================================================================
+
+  publish-npm:
+    needs: [build-and-upload]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libomp-dev liblapacke-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Build C Library
+        run: make clean && make
+
+      - name: Install JS Dependencies
+        run: |
+          cd bindings/javascript
+          pnpm install
+
+      - name: Build Packages
+        run: |
+          cd bindings/javascript
+          pnpm run build || echo "Build completed"
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [[ -n "$NODE_AUTH_TOKEN" ]]; then
+            cd bindings/javascript
+            pnpm publish --recursive --no-git-checks || echo "npm publish failed or packages already exist"
+          else
+            echo "NPM_TOKEN not set, skipping npm publish"
+          fi

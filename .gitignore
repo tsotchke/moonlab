@@ -20,7 +20,6 @@ tools/benchmarks/*_profiler
 # IDE
 .vscode/
 .claude/
-.github/
 .idea/
 *.swp
 *.swo
