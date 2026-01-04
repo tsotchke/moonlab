@@ -231,42 +231,46 @@ print("=== Simulation Complete ===")
 ## Part 3: JavaScript Version
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
+import { QuantumState } from '@moonlab/quantum-core';
 
-console.log("=== Moonlab Quantum Simulator: First Simulation (JS) ===\n");
+async function main() {
+  console.log("=== Moonlab Quantum Simulator: First Simulation (JS) ===\n");
 
-// Create 2-qubit state
-const state = new QuantumState(2);
-console.log(`Step 1: Initialized ${state.numQubits}-qubit state`);
-console.log(`  Dimension: ${state.stateDim}\n`);
+  // Create 2-qubit state
+  const state = await QuantumState.create({ numQubits: 2 });
+  console.log(`Step 1: Initialized ${state.numQubits}-qubit state`);
+  console.log(`  Dimension: ${state.stateDim}\n`);
 
-// Apply gates
-state.h(0);
-console.log("Step 3: Applied H(0)");
+  // Apply gates
+  state.h(0);
+  console.log("Step 3: Applied H(0)");
 
-state.cnot(0, 1);
-console.log("Step 4: Applied CNOT(0, 1)");
-console.log("  Created Bell state |Φ⁺⟩\n");
+  state.cnot(0, 1);
+  console.log("Step 4: Applied CNOT(0, 1)");
+  console.log("  Created Bell state |Φ⁺⟩\n");
 
-// Check probabilities
-const probs = state.probabilities();
-console.log("Step 5: Probabilities");
-for (let i = 0; i < probs.length; i++) {
+  // Check probabilities
+  const probs = state.getProbabilities();
+  console.log("Step 5: Probabilities");
+  for (let i = 0; i < probs.length; i++) {
     if (probs[i] > 0.001) {
-        const binary = i.toString(2).padStart(2, '0');
-        console.log(`  P(|${binary}⟩) = ${probs[i].toFixed(6)}`);
+      const binary = i.toString(2).padStart(2, '0');
+      console.log(`  P(|${binary}⟩) = ${probs[i].toFixed(6)}`);
     }
+  }
+  console.log();
+
+  // Measure
+  console.log("Step 6: Measurement");
+  const result = state.measureAll();
+  const binary = result.toString(2).padStart(2, '0');
+  console.log(`  Measured: |${binary}⟩`);
+  console.log("  State has collapsed!\n");
+
+  state.dispose();
+  console.log("=== Simulation Complete ===");
 }
-console.log();
-
-// Measure
-console.log("Step 6: Measurement");
-const result = state.measure();
-const binary = result.toString(2).padStart(2, '0');
-console.log(`  Measured: |${binary}⟩`);
-console.log("  State has collapsed!\n");
-
-console.log("=== Simulation Complete ===");
+main();
 ```
 
 ## Understanding the Simulation

@@ -32,8 +32,8 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 
 ```bash
 # Clone the repository
-git clone https://github.com/moonlab/quantum-simulator.git
-cd quantum-simulator
+git clone https://github.com/tsotchke/moonlab.git
+cd moonlab
 
 # Build the library and tests
 make all
@@ -325,6 +325,6 @@ open docs/api/html/index.html
 
 - **Issues**: Open a GitHub issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
-- **Email**: dev@moonlab.io
+- **Email**: support@tsotchke.ai
 
 Thank you for contributing!

@@ -6,8 +6,8 @@ The following versions of MoonLab Quantum Simulator receive security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| 0.1.x   | :white_check_mark: |
+| < 0.1   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -101,7 +101,7 @@ When using the Docker image:
 
 Security advisories will be published on:
 
-- [GitHub Security Advisories](https://github.com/moonlab/quantum-simulator/security/advisories)
+- [GitHub Security Advisories](https://github.com/tsotchke/moonlab/security/advisories)
 - The project's [security mailing list](mailto:security-announce@moonlab.io)
 
 ## Bug Bounty
@@ -120,9 +120,9 @@ For sensitive communications, you may encrypt your message using our PGP key:
 
 ## Contact
 
-- Security issues: security@moonlab.io
-- General questions: support@moonlab.io
-- GitHub: https://github.com/moonlab/quantum-simulator
+- Security issues: security@tsotchke.ai
+- General questions: support@tsotchke.ai
+- GitHub: https://github.com/tsotchke/moonlab
 
 ---
 

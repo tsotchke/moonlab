@@ -6,27 +6,27 @@ WebAssembly-compiled quantum simulation with React and Vue components for buildi
 
 | Package | Description |
 |---------|-------------|
-| [@moonlab/core](core.md) | Core quantum simulation (WASM) |
-| [@moonlab/viz](viz.md) | D3.js-based visualization |
-| [@moonlab/react](react.md) | React components |
-| [@moonlab/vue](vue.md) | Vue components |
+| [@moonlab/quantum-core](core.md) | Core quantum simulation (WASM) |
+| [@moonlab/quantum-viz](viz.md) | D3.js-based visualization |
+| [@moonlab/quantum-react](react.md) | React components |
+| [@moonlab/quantum-vue](vue.md) | Vue components |
 
 ## Installation
 
 ```bash
 # npm
-npm install @moonlab/core @moonlab/viz
+npm install @moonlab/quantum-core @moonlab/quantum-viz
 
 # pnpm
-pnpm add @moonlab/core @moonlab/viz
+pnpm add @moonlab/quantum-core @moonlab/quantum-viz
 
 # yarn
-yarn add @moonlab/core @moonlab/viz
+yarn add @moonlab/quantum-core @moonlab/quantum-viz
 ```
 
 For React or Vue:
 ```bash
-npm install @moonlab/react  # or @moonlab/vue
+npm install @moonlab/quantum-react  # or @moonlab/quantum-vue
 ```
 
 ## Quick Start
@@ -34,50 +34,65 @@ npm install @moonlab/react  # or @moonlab/vue
 ### ES Modules
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
+import { QuantumState } from '@moonlab/quantum-core';
 
-// Create 2-qubit state
-const state = new QuantumState(2);
+async function main() {
+  // Create 2-qubit state
+  const state = await QuantumState.create({ numQubits: 2 });
 
-// Create Bell state
-state.h(0).cnot(0, 1);
+  // Create Bell state
+  state.h(0).cnot(0, 1);
 
-// Get probabilities
-const probs = state.probabilities();
-console.log('P(|00⟩):', probs[0].toFixed(4));  // 0.5000
-console.log('P(|11⟩):', probs[3].toFixed(4));  // 0.5000
+  // Get probabilities
+  const probs = state.getProbabilities();
+  console.log('P(|00⟩):', probs[0].toFixed(4));  // 0.5000
+  console.log('P(|11⟩):', probs[3].toFixed(4));  // 0.5000
 
-// Measure
-const result = state.measure();
-console.log(`Measured: |${result.toString(2).padStart(2, '0')}⟩`);
+  // Measure all qubits
+  const result = state.measureAll();
+  console.log(`Measured: |${result.toString(2).padStart(2, '0')}⟩`);
 
-// Clean up WebAssembly memory
-state.free();
+  // Clean up WebAssembly memory
+  state.dispose();
+}
+
+main();
 ```
 
 ### CommonJS (Node.js)
 
 ```javascript
-const { QuantumState } = require('@moonlab/core');
+const { QuantumState } = require('@moonlab/quantum-core');
 
-const state = new QuantumState(4);
-state.h(0).h(1).h(2).h(3);
-console.log('Created uniform superposition');
-state.free();
+async function main() {
+  const state = await QuantumState.create({ numQubits: 4 });
+  state.h(0).h(1).h(2).h(3);
+  console.log('Created uniform superposition');
+  state.dispose();
+}
+
+main();
 ```
 
 ## QuantumState Class
 
-### Constructor
+### Factory Method
+
+QuantumState uses an async factory pattern (constructor is private).
 
 ```typescript
 class QuantumState {
-    constructor(numQubits: number);
+    static async create(options: QuantumStateOptions): Promise<QuantumState>;
+}
+
+interface QuantumStateOptions {
+    numQubits: number;       // 1-30 qubits
+    amplitudes?: Complex[];  // Optional initial amplitudes
 }
 ```
 
 **Parameters**:
-- `numQubits`: Number of qubits (1-28 in browser, 1-32 in Node.js)
+- `numQubits`: Number of qubits (1-28 in browser, 1-30 in Node.js)
 
 **Throws**: `Error` if memory allocation fails or qubits out of range
 
@@ -136,17 +151,14 @@ class QuantumState {
 
 ```typescript
 class QuantumState {
-    // Get amplitudes as Float64Array (real, imag pairs)
-    amplitudes(): Float64Array;
+    // Get all amplitudes as Complex[]
+    getAmplitudes(): Complex[];
 
     // Get probabilities
-    probabilities(): Float64Array;
-
-    // Get single amplitude
-    amplitude(index: number): { real: number; imag: number };
+    getProbabilities(): Float64Array;
 
     // Get single probability
-    probability(index: number): number;
+    probability(basisState: number): number;
 }
 ```
 
@@ -154,14 +166,11 @@ class QuantumState {
 
 ```typescript
 class QuantumState {
+    // Measure single qubit (collapses state)
+    measure(qubit: number): number;  // Returns 0 or 1
+
     // Measure all qubits (collapses state)
-    measure(): number;
-
-    // Measure specific qubits
-    measureQubits(qubits: number[]): number;
-
-    // Sample without collapse
-    sample(shots: number): Uint32Array;
+    measureAll(): number;  // Returns basis state index
 }
 ```
 
@@ -173,13 +182,13 @@ class QuantumState {
     reset(): this;
 
     // Clone the state
-    clone(): QuantumState;
+    async clone(): Promise<QuantumState>;
 
     // Entanglement entropy
-    entanglementEntropy(subsystem: number[]): number;
+    entropy(): number;
 
-    // Free WebAssembly memory
-    free(): void;
+    // Free WebAssembly memory (REQUIRED when done)
+    dispose(): void;
 }
 ```
 
@@ -188,24 +197,25 @@ class QuantumState {
 Full TypeScript definitions included:
 
 ```typescript
-import { QuantumState, Complex, MeasurementResult } from '@moonlab/core';
+import { QuantumState, Complex } from '@moonlab/quantum-core';
 
 interface Complex {
-    real: number;
-    imag: number;
+    re: number;
+    im: number;
 }
 
-const state: QuantumState = new QuantumState(4);
-const amp: Complex = state.amplitude(0);
+// Async usage required
+const state = await QuantumState.create({ numQubits: 4 });
+const amps: Complex[] = state.getAmplitudes();
 const prob: number = state.probability(0);
 ```
 
-## Visualization (@moonlab/viz)
+## Visualization (@moonlab/quantum-viz)
 
 ### CircuitDiagram
 
 ```typescript
-import { CircuitDiagram } from '@moonlab/viz';
+import { CircuitDiagram } from '@moonlab/quantum-viz';
 
 const diagram = new CircuitDiagram('#container', {
     numQubits: 3,
@@ -222,7 +232,7 @@ diagram.render();
 ### StateVisualization
 
 ```typescript
-import { StateVisualization } from '@moonlab/viz';
+import { StateVisualization } from '@moonlab/quantum-viz';
 
 const viz = new StateVisualization('#container', state, {
     type: 'bar',  // 'bar' | 'bloch' | 'city'
@@ -238,7 +248,7 @@ viz.update(state);
 ### BlochSphere
 
 ```typescript
-import { BlochSphere } from '@moonlab/viz';
+import { BlochSphere } from '@moonlab/quantum-viz';
 
 const bloch = new BlochSphere('#container', {
     width: 300,
@@ -249,12 +259,12 @@ const bloch = new BlochSphere('#container', {
 bloch.setState(state, 0);  // Show qubit 0
 ```
 
-## React Components (@moonlab/react)
+## React Components (@moonlab/quantum-react)
 
 ### QuantumCircuit
 
 ```jsx
-import { QuantumCircuit, Gate, Measure } from '@moonlab/react';
+import { QuantumCircuit, Gate, Measure } from '@moonlab/quantum-react';
 
 function MyCircuit() {
     const [result, setResult] = useState(null);
@@ -273,7 +283,7 @@ function MyCircuit() {
 ### useQuantumState Hook
 
 ```jsx
-import { useQuantumState } from '@moonlab/react';
+import { useQuantumState } from '@moonlab/quantum-react';
 
 function BellStateDemo() {
     const { state, gates, measure, probabilities } = useQuantumState(2);
@@ -296,7 +306,7 @@ function BellStateDemo() {
 ### StateVector
 
 ```jsx
-import { StateVector } from '@moonlab/react';
+import { StateVector } from '@moonlab/quantum-react';
 
 <StateVector
     state={state}
@@ -305,7 +315,7 @@ import { StateVector } from '@moonlab/react';
 />
 ```
 
-## Vue Components (@moonlab/vue)
+## Vue Components (@moonlab/quantum-vue)
 
 ### QuantumCircuit
 
@@ -319,7 +329,7 @@ import { StateVector } from '@moonlab/react';
 </template>
 
 <script setup>
-import { QuantumCircuit, Gate, Measure } from '@moonlab/vue';
+import { QuantumCircuit, Gate, Measure } from '@moonlab/quantum-vue';
 
 const onMeasure = (result) => {
     console.log('Measured:', result);
@@ -331,7 +341,7 @@ const onMeasure = (result) => {
 
 ```vue
 <script setup>
-import { useQuantum } from '@moonlab/vue';
+import { useQuantum } from '@moonlab/quantum-vue';
 
 const { state, h, cnot, measure, probabilities } = useQuantum(2);
 
@@ -344,18 +354,18 @@ const createBellState = () => {
 
 ## Async Initialization
 
-For large qubit counts, use async initialization:
+The factory pattern handles WASM initialization automatically:
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
+import { QuantumState, preload } from '@moonlab/quantum-core';
 
 async function simulate() {
-    // Initialize WASM module
-    await QuantumState.init();
+    // Optional: preload WASM module for faster first use
+    await preload();
 
-    const state = new QuantumState(20);
+    const state = await QuantumState.create({ numQubits: 20 });
     // ... operations ...
-    state.free();
+    state.dispose();
 }
 ```
 
@@ -365,19 +375,19 @@ Run simulations in a Web Worker:
 
 ```javascript
 // worker.js
-import { QuantumState } from '@moonlab/core';
+import { QuantumState } from '@moonlab/quantum-core';
 
 self.onmessage = async (e) => {
     const { numQubits, circuit } = e.data;
 
-    const state = new QuantumState(numQubits);
+    const state = await QuantumState.create({ numQubits });
 
     for (const gate of circuit) {
         state[gate.type](...gate.args);
     }
 
-    const probs = Array.from(state.probabilities());
-    state.free();
+    const probs = Array.from(state.getProbabilities());
+    state.dispose();
 
     self.postMessage({ probabilities: probs });
 };
@@ -398,24 +408,24 @@ worker.postMessage({
 WebAssembly requires manual memory management:
 
 ```javascript
-const state = new QuantumState(10);
+const state = await QuantumState.create({ numQubits: 10 });
 
 try {
     // ... operations ...
 } finally {
-    state.free();  // Always free!
+    state.dispose();  // Always dispose!
 }
 ```
 
-With async/await:
+With async/await pattern:
 ```javascript
 async function simulate() {
-    const state = new QuantumState(10);
+    const state = await QuantumState.create({ numQubits: 10 });
     try {
         state.h(0);
-        return state.measure();
+        return state.measureAll();
     } finally {
-        state.free();
+        state.dispose();
     }
 }
 ```
@@ -438,10 +448,10 @@ const wasmSupported = typeof WebAssembly !== 'undefined';
 
 | Package | Size (gzipped) |
 |---------|----------------|
-| @moonlab/core | ~150 KB |
-| @moonlab/viz | ~45 KB |
-| @moonlab/react | ~12 KB |
-| @moonlab/vue | ~10 KB |
+| @moonlab/quantum-core | ~150 KB |
+| @moonlab/quantum-viz | ~45 KB |
+| @moonlab/quantum-react | ~12 KB |
+| @moonlab/quantum-vue | ~10 KB |
 
 ## See Also
 

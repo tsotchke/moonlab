@@ -414,11 +414,19 @@ $D$ = MPO bond dimension
 
 ## References
 
-1. Schollwöck, U. (2011). "The density-matrix renormalization group in the age of matrix product states." Annals of Physics, 326(1), 96-192.
+**Review Articles**:
+1. Schollwöck, U. (2011). "The density-matrix renormalization group in the age of matrix product states." *Ann. Phys.* 326, 96-192.
+2. Orús, R. (2014). "A practical introduction to tensor networks." *Ann. Phys.* 349, 117-158.
+3. Verstraete, F., Murg, V., & Cirac, J.I. (2008). "Matrix product states, projected entangled pair states, and variational renormalization group methods." *Adv. Phys.* 57, 143-224.
 
-2. Orús, R. (2014). "A practical introduction to tensor networks." Annals of Physics, 349, 117-158.
+**Foundational Papers**:
+4. White, S.R. (1992). "Density matrix formulation for quantum renormalization groups." *Phys. Rev. Lett.* 69, 2863.
+5. Vidal, G. (2003). "Efficient classical simulation of slightly entangled quantum computations." *Phys. Rev. Lett.* 91, 147902.
+6. Vidal, G. (2004). "Efficient simulation of one-dimensional quantum many-body systems." *Phys. Rev. Lett.* 93, 040502.
 
-3. White, S. R. (1992). "Density matrix formulation for quantum renormalization groups." Physical Review Letters, 69(19), 2863.
+**Entanglement Renormalization**:
+7. Vidal, G. (2007). "Entanglement renormalization." *Phys. Rev. Lett.* 99, 220405.
+8. Evenbly, G. & Vidal, G. (2009). "Algorithms for entanglement renormalization." *Phys. Rev. B* 79, 144108.
 
 ## See Also
 

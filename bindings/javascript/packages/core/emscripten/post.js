@@ -114,6 +114,6 @@ Module['allocFloat64Array'] = function(length) {
  * Version info
  */
 Module['version'] = {
-  core: '1.0.0',
+  core: '0.1.1',
   wasm: true
 };

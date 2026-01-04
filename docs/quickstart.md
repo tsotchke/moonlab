@@ -98,20 +98,25 @@ print(f"Measured: |{result:02b}⟩")  # Either |00⟩ or |11⟩
 ## JavaScript Quick Start
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
+import { QuantumState } from '@moonlab/quantum-core';
 
-// Create Bell state
-const state = new QuantumState(2);
-state.h(0).cnot(0, 1);
+async function main() {
+  // Create Bell state
+  const state = await QuantumState.create({ numQubits: 2 });
+  state.h(0).cnot(0, 1);
 
-// Check probabilities
-const probs = state.probabilities();
-console.log(`P(|00⟩) = ${probs[0].toFixed(4)}`);
-console.log(`P(|11⟩) = ${probs[3].toFixed(4)}`);
+  // Check probabilities
+  const probs = state.getProbabilities();
+  console.log(`P(|00⟩) = ${probs[0].toFixed(4)}`);
+  console.log(`P(|11⟩) = ${probs[3].toFixed(4)}`);
 
-// Measure
-const result = state.measure();
-console.log(`Measured: |${result.toString(2).padStart(2, '0')}⟩`);
+  // Measure
+  const result = state.measureAll();
+  console.log(`Measured: |${result.toString(2).padStart(2, '0')}⟩`);
+
+  state.dispose();
+}
+main();
 ```
 
 ## Understanding the Bell State

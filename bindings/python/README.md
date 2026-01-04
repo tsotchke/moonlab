@@ -4,7 +4,7 @@
 
 Fast, feature-complete quantum computing in Python with PyTorch integration.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```python
 from moonlab import QuantumState
@@ -18,7 +18,7 @@ probs = state.probabilities()
 print(probs)  # [0.5, 0.0, 0.0, 0.5] - |00⟩ and |11⟩
 ```
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -45,7 +45,7 @@ pip install -e .
 python test_moonlab.py
 ```
 
-## 🎯 Features
+## Features
 
 ### Core Quantum Operations
 
@@ -57,9 +57,9 @@ python test_moonlab.py
 ### Quantum Algorithms
 
 - **VQE** - Variational Quantum Eigensolver for molecular simulation
-- **QAOA** - Quantum optimization (MaxCut, TSP, Portfolio)
-- **QPE** - Quantum Phase Estimation
+- **QAOA** - Quantum optimization (MaxCut, Ising models)
 - **Grover** - Quantum search algorithm
+- **Bell Tests** - CHSH inequality verification
 
 ### Quantum Machine Learning
 
@@ -69,7 +69,7 @@ python test_moonlab.py
 - **Quantum PCA**: Principal component analysis
 - **PyTorch Integration**: QuantumLayer with autograd
 
-## 📚 Examples
+## Examples
 
 ### Basic Quantum Circuit
 
@@ -144,7 +144,7 @@ X_reduced = qpca.transform(X_highdim)
 print(f"Explained variance: {qpca.explained_variance_}")
 ```
 
-## 🔬 Advanced Usage
+## Advanced Usage
 
 ### Custom Feature Maps
 
@@ -166,7 +166,8 @@ class CustomEncoding(QuantumFeatureMap):
 ### Variational Quantum Circuits
 
 ```python
-from moonlab.torch_layer import VariationalCircuit
+from moonlab.ml import VariationalCircuit
+from moonlab import QuantumState
 
 circuit = VariationalCircuit(num_qubits=8, num_layers=4)
 state = QuantumState(8)
@@ -191,7 +192,7 @@ svm = SVC(kernel='precomputed')
 svm.fit(K, y_train)
 ```
 
-## 🎓 Applications
+## Applications
 
 ### Drug Discovery (VQE)
 
@@ -199,23 +200,24 @@ svm.fit(K, y_train)
 from moonlab.algorithms import VQE
 
 # Simulate H₂ molecule
-vqe = VQE(num_qubits=2, num_layers=3)
-energy = vqe.solve_h2(bond_distance=0.74)
-print(f"Ground state energy: {energy:.6f} Ha")
+vqe = VQE(num_qubits=4, num_layers=3)
+result = vqe.solve_h2(bond_distance=0.74)
+print(f"Ground state energy: {result['energy']:.6f} Ha")
+print(f"Converged: {result['converged']}")
 ```
 
-### Portfolio Optimization (QAOA)
+### Graph Optimization (QAOA)
 
 ```python
 from moonlab.algorithms import QAOA
 
-# Optimize 10-stock portfolio
-qaoa = QAOA(num_qubits=10, num_layers=3)
-allocation = qaoa.optimize_portfolio(
-    returns=expected_returns,
-    covariance=cov_matrix,
-    risk_aversion=0.5
+# Solve MaxCut problem on a 5-vertex graph
+qaoa = QAOA(num_qubits=5, num_layers=3)
+result = qaoa.solve_maxcut(
+    edges=[(0,1), (1,2), (2,3), (3,4), (4,0), (0,2)]
 )
+print(f"Best cut: {bin(result['best_bitstring'])}")
+print(f"Cut value: {result['best_cost']}")
 ```
 
 ### Few-Shot Learning
@@ -235,13 +237,13 @@ model = QuantumClassifier(
 train_with_few_samples(model, X_train_small, y_train_small)
 ```
 
-## 📊 Performance
+## Performance
 
 | Operation | Speed | Notes |
 |-----------|-------|-------|
 | 20-qubit circuit | <1ms | SIMD + parallel optimized |
 | VQE H₂ molecule | 2-5s | Chemical accuracy |
-| QAOA 10-city TSP | 10-30s | Near-optimal solutions |
+| QAOA 10-vertex MaxCut | 10-30s | Near-optimal solutions |
 | Quantum kernel (n=100) | 5-15s | Exponential feature space |
 
 ### vs Other Frameworks
@@ -252,7 +254,7 @@ train_with_few_samples(model, X_train_small, y_train_small)
 | Qiskit | 10-50× slower | Excellent | ⚠️ Not optimized |
 | Cirq | 15-40× slower | Good | ⚠️ Not optimized |
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run test suite
@@ -265,7 +267,7 @@ python test_moonlab.py
 # - End-to-end workflows
 ```
 
-## 📖 API Reference
+## API Reference
 
 ### moonlab.core
 
@@ -296,60 +298,56 @@ python test_moonlab.py
 
 - **VQE** - Variational Quantum Eigensolver
 - **QAOA** - Quantum Approximate Optimization
-- **QPE** - Quantum Phase Estimation
 - **Grover** - Quantum search
-- **BellTest** - Quantum verification
+- **BellTest** - CHSH inequality verification
 
-## 🤝 Contributing
+## Contributing
 
 See [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for development guidelines.
 
-## 📄 License
+## License
 
 MIT License - See [`LICENSE`](../../LICENSE) file.
 
-## 🔗 Links
+## Links
 
-- **Documentation**: https://moonlab.dev (coming soon)
-- **GitHub**: https://github.com/[username]/moonlab
-- **arXiv Paper**: Coming March 2026
+- **Documentation**: https://github.com/tsotchke/moonlab
+- **GitHub**: https://github.com/tsotchke/moonlab
+- **Issues**: https://github.com/tsotchke/moonlab/issues
 
-## 💡 Citation
+## Citation
 
 If you use Moonlab in research, please cite:
 
 ```bibtex
 @software{moonlab2026,
-  title={Moonlab: Production Quantum Computing for Apple Silicon},
-  author={[Author Names]},
+  title={Moonlab: High-Performance Quantum Computing for Apple Silicon},
+  author={Tsotchke},
   year={2026},
-  url={https://github.com/[username]/moonlab}
+  url={https://github.com/tsotchke/moonlab}
 }
 ```
 
-## 🆘 Support
+## Support
 
-- **Issues**: GitHub Issues
-- **Discussions**: GitHub Discussions
-- **Email**: moonlab@[domain]
+- **Issues**: https://github.com/tsotchke/moonlab/issues
+- **Email**: support@tsotchke.ai
 
-## 🎯 Roadmap
+## References
 
-- [x] Core quantum operations (Week 1)
-- [x] VQE algorithm (Week 1)
-- [x] QAOA algorithm (Week 1-2)
-- [x] QPE algorithm (Week 2)
-- [x] Python bindings foundation (Week 2)
-- [x] PyTorch QuantumLayer (Week 2-3)
-- [x] Quantum ML feature maps (Week 2-3)
-- [x] Portfolio & TSP examples (Week 2-3)
-- [ ] TensorFlow integration (Week 4-5)
-- [ ] Advanced algorithms (HHL, Quantum Walks) (Week 6-7)
-- [ ] Complete documentation (Week 8-9)
-- [ ] Public release (Week 12 - March 2026)
+This library implements algorithms from the following foundational works:
+
+**Quantum Computing:**
+- Nielsen, M. A. & Chuang, I. L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press.
+
+**Variational Algorithms:**
+- Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." *Nat. Commun.* 5, 4213.
+- Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A quantum approximate optimization algorithm." arXiv:1411.4028.
+
+**Quantum Machine Learning:**
+- Schuld, M. & Petruccione, F. (2021). *Machine Learning with Quantum Computers*. Springer.
+- Benedetti, M. et al. (2019). "Parameterized quantum circuits as machine learning models." *Quantum Sci. Technol.* 4, 043001.
 
 ---
 
-**Built with ❤️ for the quantum computing community**
-
-*Last Updated: November 10, 2025 - Week 2-3 Complete*
+*Version 0.1.1 - January 2026*

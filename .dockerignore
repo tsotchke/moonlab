@@ -1,0 +1,50 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+lib/*.a
+lib/*.o
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker files (don't copy into container)
+docker/
+.dockerignore
+Dockerfile*
+
+# Test artifacts (except source)
+*.o
+!lib/**/*.o
+
+# Documentation
+docs/
+
+# Examples build artifacts
+examples/**/*.dSYM
+examples/**/bin/
+
+# Bindings build artifacts
+bindings/python/build/
+bindings/python/*.egg-info/
+bindings/python/__pycache__/
+bindings/rust/target/
+bindings/javascript/node_modules/
+bindings/javascript/packages/*/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log

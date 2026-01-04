@@ -1,6 +1,6 @@
 {
   "name": "moonlab-javascript",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Moonlab Quantum Simulator - JavaScript/WebAssembly Bindings",
   "scripts": {
@@ -8,6 +8,8 @@
     "build:wasm": "pnpm --filter @moonlab/quantum-core build:wasm",
     "dev": "turbo run dev",
     "test": "turbo run test",
+    "test:unit": "pnpm --filter @moonlab/quantum-core test:unit",
+    "test:integration": "pnpm --filter @moonlab/quantum-core test:integration",
     "lint": "turbo run lint",
     "clean": "turbo run clean && rm -rf node_modules"
   },

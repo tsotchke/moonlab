@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Ubuntu x86_64 Release Build
+  ubuntu-release:
+    build:
+      context: ..
+      dockerfile: docker/ubuntu/release/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    platform: linux/amd64
+    volumes:
+      - ../lib:/output/lib:rw
+
+  # Debian ARM64 Release Build
+  debian-arm64-release:
+    build:
+      context: ..
+      dockerfile: docker/debian/release/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    platform: linux/arm64
+    volumes:
+      - ../lib:/output/lib:rw
+
+  # Debian Debug Build
+  debian-debug:
+    build:
+      context: ..
+      dockerfile: docker/debian/debug/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    platform: linux/amd64
+    volumes:
+      - ../lib:/output/lib:rw

@@ -187,13 +187,18 @@ fn main() {
 ### JavaScript
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
+import { QuantumState } from '@moonlab/quantum-core';
 
-const state = new QuantumState(2);
-state.h(0).cnot(0, 1);
+async function main() {
+  const state = await QuantumState.create({ numQubits: 2 });
+  state.h(0).cnot(0, 1);
 
-const probs = state.probabilities();
-console.log(`P(|00⟩) = ${probs[0].toFixed(4)}`);
+  const probs = state.getProbabilities();
+  console.log(`P(|00⟩) = ${probs[0].toFixed(4)}`);
+
+  state.dispose();
+}
+main();
 ```
 
 ## Error Handling

@@ -502,7 +502,16 @@ print(f"Expected value: {portfolio_cost(result['best_bitstring']):.4f}")
 
 ## References
 
-1. Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A Quantum Approximate Optimization Algorithm." arXiv:1411.4028.
-2. Zhou, L. et al. (2020). "Quantum Approximate Optimization Algorithm: Performance, Mechanism, and Implementation on Near-Term Devices." Physical Review X, 10, 021067.
-3. Hadfield, S. et al. (2019). "From the Quantum Approximate Optimization Algorithm to a Quantum Alternating Operator Ansatz." Algorithms, 12(2), 34.
+**Foundational Papers**:
+1. Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A Quantum Approximate Optimization Algorithm." *arXiv:1411.4028*.
+2. Farhi, E. & Harrow, A.W. (2016). "Quantum supremacy through the quantum approximate optimization algorithm." *arXiv:1602.07674*.
+
+**Analysis and Implementation**:
+3. Zhou, L. et al. (2020). "Quantum Approximate Optimization Algorithm: Performance, Mechanism, and Implementation on Near-Term Devices." *Phys. Rev. X* 10, 021067.
+4. Crooks, G.E. (2018). "Performance of the quantum approximate optimization algorithm on the maximum cut problem." *arXiv:1811.08419*.
+5. Guerreschi, G.G. & Matsuura, A.Y. (2019). "QAOA for Max-Cut requires hundreds of qubits for quantum speed-up." *Sci. Rep.* 9, 6903.
+
+**Extensions and Variants**:
+6. Hadfield, S. et al. (2019). "From the Quantum Approximate Optimization Algorithm to a Quantum Alternating Operator Ansatz." *Algorithms* 12(2), 34.
+7. Harrigan, M.P. et al. (2021). "Quantum approximate optimization of non-planar graph problems on a planar superconducting processor." *Nat. Phys.* 17, 332-336.
 

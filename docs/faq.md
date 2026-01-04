@@ -98,8 +98,8 @@ state = QuantumState(4)
 
 **JavaScript**:
 ```javascript
-import { QuantumState } from '@moonlab/core';
-const state = new QuantumState(4);
+import { QuantumState } from '@moonlab/quantum-core';
+const state = await QuantumState.create({ numQubits: 4 });
 ```
 
 ### How do I create a Bell state?
@@ -299,8 +299,8 @@ In browsers, memory is limited. Reduce qubits or use Web Workers:
 
 ```javascript
 // Max ~25 qubits in browser
-const state = new QuantumState(20);  // OK
-const big = new QuantumState(30);    // May fail
+const state = await QuantumState.create({ numQubits: 20 });  // OK
+const big = await QuantumState.create({ numQubits: 30 });    // May fail
 ```
 
 ## Contributing

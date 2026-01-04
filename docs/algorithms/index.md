@@ -149,9 +149,20 @@ All algorithms in Moonlab are implemented with:
 
 ## References
 
-1. Grover, L. K. (1996). "A fast quantum mechanical algorithm for database search." STOC '96.
-2. Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." Nature Communications.
-3. Farhi, E. et al. (2014). "A Quantum Approximate Optimization Algorithm." arXiv:1411.4028.
-4. Kitaev, A. (1995). "Quantum measurements and the Abelian stabilizer problem." arXiv:quant-ph/9511026.
-5. White, S. R. (1992). "Density matrix formulation for quantum renormalization groups." Physical Review Letters.
+**Search Algorithms**:
+1. Grover, L.K. (1996). "A fast quantum mechanical algorithm for database search." *Proc. 28th STOC*, 212-219.
+2. Boyer, M., Brassard, G., Høyer, P., & Tapp, A. (1998). "Tight bounds on quantum searching." *Fortschr. Phys.* 46, 493-505.
+
+**Variational Algorithms**:
+3. Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." *Nat. Commun.* 5, 4213.
+4. Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A Quantum Approximate Optimization Algorithm." *arXiv:1411.4028*.
+5. Cerezo, M. et al. (2021). "Variational quantum algorithms." *Nat. Rev. Phys.* 3, 625-644.
+
+**Phase Estimation**:
+6. Kitaev, A.Y. (1995). "Quantum measurements and the Abelian stabilizer problem." *arXiv:quant-ph/9511026*.
+7. Cleve, R., Ekert, A., Macchiavello, C., & Mosca, M. (1998). "Quantum algorithms revisited." *Proc. R. Soc. Lond. A* 454, 339-354.
+
+**Tensor Networks**:
+8. White, S.R. (1992). "Density matrix formulation for quantum renormalization groups." *Phys. Rev. Lett.* 69, 2863.
+9. Haegeman, J. et al. (2016). "Unifying time evolution and optimization with matrix product states." *Phys. Rev. B* 94, 165116.
 

@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-algorithms",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "description": "Quantum algorithms for Moonlab simulator",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

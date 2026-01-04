@@ -5,13 +5,13 @@ Vue.js components for quantum circuit visualization and interaction.
 ## Installation
 
 ```bash
-npm install @moonlab/vue
+npm install @moonlab/quantum-vue
 ```
 
 ```javascript
 // main.js
 import { createApp } from 'vue'
-import MoonlabVue from '@moonlab/vue'
+import MoonlabVue from '@moonlab/quantum-vue'
 import App from './App.vue'
 
 const app = createApp(App)
@@ -75,7 +75,7 @@ Interactive quantum circuit editor and visualizer.
 
 <script setup>
 import { ref } from 'vue'
-import { QuantumCircuit } from '@moonlab/vue'
+import { QuantumCircuit } from '@moonlab/quantum-vue'
 
 const initialGates = ref([
   { type: 'H', qubit: 0, step: 0 },
@@ -131,7 +131,7 @@ async function runSimulation() {
 
 <script setup>
 import { ref, computed } from 'vue'
-import { BlochSphere } from '@moonlab/vue'
+import { BlochSphere } from '@moonlab/quantum-vue'
 
 const theta = ref(Math.PI / 4)
 const phi = ref(0)
@@ -183,7 +183,7 @@ Visualize quantum state amplitudes.
 </template>
 
 <script setup>
-import { StateVector } from '@moonlab/vue'
+import { StateVector } from '@moonlab/quantum-vue'
 
 function onBasisClick({ index, label }) {
   console.log(`Clicked basis state ${label} (index ${index})`)
@@ -219,7 +219,7 @@ Bar chart of measurement probabilities.
 
 <script setup>
 import { ref } from 'vue'
-import { ProbabilityDistribution } from '@moonlab/vue'
+import { ProbabilityDistribution } from '@moonlab/quantum-vue'
 
 const probs = ref([0.5, 0.0, 0.0, 0.5])  // Bell state
 </script>
@@ -253,7 +253,7 @@ Histogram of measurement results.
 
 <script setup>
 import { ref } from 'vue'
-import { MeasurementHistogram } from '@moonlab/vue'
+import { MeasurementHistogram } from '@moonlab/quantum-vue'
 
 const measurementCounts = ref({
   '00': 512,
@@ -292,7 +292,7 @@ Draggable gate palette for circuit building.
 </template>
 
 <script setup>
-import { GatePalette } from '@moonlab/vue'
+import { GatePalette } from '@moonlab/quantum-vue'
 
 function onGateSelect(gateType) {
   console.log('Selected gate:', gateType)
@@ -308,7 +308,7 @@ Reactive quantum state management.
 
 ```vue
 <script setup>
-import { useQuantumState } from '@moonlab/vue'
+import { useQuantumState } from '@moonlab/quantum-vue'
 
 const { state, apply, measure, reset, amplitudes, probabilities } = useQuantumState(4)
 
@@ -346,7 +346,7 @@ Circuit building and manipulation.
 
 ```vue
 <script setup>
-import { useCircuitBuilder } from '@moonlab/vue'
+import { useCircuitBuilder } from '@moonlab/quantum-vue'
 
 const {
   gates,
@@ -379,7 +379,7 @@ Manage simulation execution.
 
 ```vue
 <script setup>
-import { useSimulation } from '@moonlab/vue'
+import { useSimulation } from '@moonlab/quantum-vue'
 
 const {
   isRunning,
@@ -445,7 +445,7 @@ Shortcuts:
 
 ```vue
 <script setup>
-import { MoonlabTheme } from '@moonlab/vue'
+import { MoonlabTheme } from '@moonlab/quantum-vue'
 
 const customTheme = {
   colors: {
@@ -500,7 +500,7 @@ import type {
   StateVectorProps,
   BlochSphereProps,
   Complex
-} from '@moonlab/vue'
+} from '@moonlab/quantum-vue'
 
 const gate: Gate = {
   type: 'CNOT' as GateType,
@@ -551,8 +551,8 @@ import {
   MeasurementHistogram,
   StateVector,
   useSimulation
-} from '@moonlab/vue'
-import type { Gate } from '@moonlab/vue'
+} from '@moonlab/quantum-vue'
+import type { Gate } from '@moonlab/quantum-vue'
 
 const numQubits = ref(4)
 const gates = ref<Gate[]>([])

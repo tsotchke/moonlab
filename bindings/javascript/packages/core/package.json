@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-core",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "description": "WebAssembly quantum computing simulator core",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -24,6 +24,10 @@
     "build": "pnpm build:wasm && pnpm build:ts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "test": "vitest run",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist build"
   },

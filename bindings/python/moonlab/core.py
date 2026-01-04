@@ -622,7 +622,7 @@ class Measurement:
 
         Applies S†H, measures in Z, applies HS.
         """
-        state.s_dag(qubit)
+        state.sdg(qubit)
         state.h(qubit)
         outcome = Measurement.measure(state, qubit)
         state.h(qubit)

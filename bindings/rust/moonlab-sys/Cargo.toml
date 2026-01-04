@@ -1,6 +1,6 @@
 [package]
 name = "moonlab-sys"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Moonlab Team"]
 description = "Low-level FFI bindings to the Moonlab quantum simulator C library"
@@ -22,3 +22,13 @@ cc = "1.0"
 [features]
 default = []
 gpu = []  # Enable GPU acceleration bindings
+
+[lints.rust]
+unsafe_code = "allow"  # FFI bindings require unsafe
+
+[lints.clippy]
+all = "warn"
+# FFI bindings have many patterns clippy dislikes
+missing_safety_doc = "allow"
+must_use_candidate = "allow"
+module_name_repetitions = "allow"

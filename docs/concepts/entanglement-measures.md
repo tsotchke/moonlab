@@ -292,11 +292,19 @@ Complexity: $O(2^n \cdot \min(2^{n_A}, 2^{n_B})^2)$ vs. $O(4^n)$ for full $\rho$
 
 ## References
 
-1. Nielsen, M. A., & Chuang, I. L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press. Chapter 11.
+**Textbooks and Reviews**:
+1. Nielsen, M.A. & Chuang, I.L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press. Chapter 11.
+2. Horodecki, R., Horodecki, P., Horodecki, M., & Horodecki, K. (2009). "Quantum entanglement." *Rev. Mod. Phys.* 81, 865.
+3. Plenio, M.B. & Virmani, S. (2007). "An introduction to entanglement measures." *Quantum Inf. Comput.* 7, 1-51.
 
-2. Horodecki, R., Horodecki, P., Horodecki, M., & Horodecki, K. (2009). "Quantum entanglement." Reviews of Modern Physics, 81(2), 865.
+**Entanglement Entropy**:
+4. Eisert, J., Cramer, M., & Plenio, M.B. (2010). "Colloquium: Area laws for the entanglement entropy." *Rev. Mod. Phys.* 82, 277.
+5. Calabrese, P. & Cardy, J. (2004). "Entanglement entropy and quantum field theory." *J. Stat. Mech.* P06002.
 
-3. Eisert, J., Cramer, M., & Plenio, M. B. (2010). "Colloquium: Area laws for the entanglement entropy." Reviews of Modern Physics, 82(1), 277.
+**Entanglement Measures**:
+6. Wootters, W.K. (1998). "Entanglement of formation of an arbitrary state of two qubits." *Phys. Rev. Lett.* 80, 2245.
+7. Vidal, G. & Werner, R.F. (2002). "Computable measure of entanglement." *Phys. Rev. A* 65, 032314.
+8. Bennett, C.H. et al. (1996). "Mixed-state entanglement and quantum error correction." *Phys. Rev. A* 54, 3824.
 
 ## See Also
 

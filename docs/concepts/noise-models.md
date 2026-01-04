@@ -360,11 +360,20 @@ apply_pauli(state, qubit, pauli);  // Same Pauli to undo
 
 ## References
 
-1. Nielsen, M. A., & Chuang, I. L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press. Chapter 8.
+**Textbooks and Reviews**:
+1. Nielsen, M.A. & Chuang, I.L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press. Chapter 8.
+2. Preskill, J. (2018). "Quantum Computing in the NISQ era and beyond." *Quantum* 2, 79.
 
-2. Preskill, J. (2018). "Quantum Computing in the NISQ era and beyond." Quantum, 2, 79.
+**Quantum Error Correction**:
+3. Knill, E., Laflamme, R., & Zurek, W.H. (1998). "Resilient quantum computation: error models and thresholds." *Proc. R. Soc. Lond. A* 454, 365-384.
+4. Gottesman, D. (2010). "An introduction to quantum error correction and fault-tolerant quantum computation." *Quantum Information Science and Its Contributions to Mathematics*, 13-58.
+5. Preskill, J. (1998). "Reliable quantum computers." *Proc. R. Soc. Lond. A* 454, 385-410.
 
-3. Krantz, P., et al. (2019). "A quantum engineer's guide to superconducting qubits." Applied Physics Reviews, 6(2), 021318.
+**Hardware Characterization**:
+6. Krantz, P. et al. (2019). "A quantum engineer's guide to superconducting qubits." *Appl. Phys. Rev.* 6, 021318.
+
+**Error Mitigation**:
+7. Temme, K., Bravyi, S., & Gambetta, J.M. (2017). "Error mitigation for short-depth quantum circuits." *Phys. Rev. Lett.* 119, 180509.
 
 ## See Also
 

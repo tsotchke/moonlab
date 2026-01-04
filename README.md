@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)]() [![Bell Test](https://img.shields.io/badge/Bell%20CHSH-2.828-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Tensor Network](https://img.shields.io/badge/Tensor%20Network-100%2B%20qubits-purple)]() [![GPU Speedup](https://img.shields.io/badge/GPU%20Speedup-100x-orange)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]()
+[![Version](https://img.shields.io/badge/version-0.1.1-blue)]() [![Bell Test](https://img.shields.io/badge/Bell%20CHSH-2.828-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Tensor Network](https://img.shields.io/badge/Tensor%20Network-100%2B%20qubits-purple)]() [![GPU Speedup](https://img.shields.io/badge/GPU%20Speedup-100x-orange)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]()
 
 > **A comprehensive quantum computing framework spanning state vector simulation, tensor networks, topological quantum computing, and skyrmion physics**
 
@@ -437,7 +437,7 @@ fn main() {
 ### JavaScript (React)
 
 ```jsx
-import { useQuantumState, BlochSphere } from '@moonlab/react';
+import { useQuantumState, BlochSphere } from '@moonlab/quantum-react';
 
 function QuantumVisualizer() {
     const [state, dispatch] = useQuantumState(1);
@@ -461,7 +461,7 @@ function QuantumVisualizer() {
 </template>
 
 <script setup>
-import { useQuantumState } from '@moonlab/vue';
+import { useQuantumState } from '@moonlab/quantum-vue';
 const { state, circuit } = useQuantumState(2);
 </script>
 ```
@@ -585,7 +585,7 @@ If you use Moonlab in your research, please cite:
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
     month        = jan,
-    version      = {v0.1.0},
+    version      = {v0.1.1},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,
@@ -595,16 +595,46 @@ If you use Moonlab in your research, please cite:
 
 ## References
 
-**Theoretical Foundations**:
-- Bell, J.S. (1964). On the Einstein Podolsky Rosen paradox. *Physics*, 1(3), 195-200.
-- Grover, L.K. (1996). A fast quantum mechanical algorithm for database search. *STOC '96*.
-- White, S.R. (1992). Density matrix formulation for quantum renormalization groups. *Phys. Rev. Lett.* 69, 2863.
-- Kitaev, A. (2003). Fault-tolerant quantum computation by anyons. *Ann. Phys.* 303, 2-30.
-- Psaroudaki, C. & Panagopoulos, C. (2021). Skyrmion qubits: A new class of quantum logic elements. *Phys. Rev. Lett.* 127, 067201.
+**Foundational Textbooks and Reviews**:
+- Nielsen, M.A. & Chuang, I.L. (2010). *Quantum Computation and Quantum Information*. Cambridge University Press.
+- Preskill, J. (2018). Quantum computing in the NISQ era and beyond. *Quantum*, 2, 79.
 
-**Algorithms**:
+**Quantum Algorithms**:
+- Shor, P.W. (1994). Algorithms for quantum computation: discrete logarithms and factoring. *Proc. 35th FOCS*, 124-134.
+- Grover, L.K. (1996). A fast quantum mechanical algorithm for database search. *Proc. 28th STOC*, 212-219.
 - Peruzzo, A. et al. (2014). A variational eigenvalue solver on a photonic quantum processor. *Nat. Commun.* 5, 4213.
 - Farhi, E., Goldstone, J., & Gutmann, S. (2014). A quantum approximate optimization algorithm. *arXiv:1411.4028*.
+- Kitaev, A.Y. (1995). Quantum measurements and the Abelian stabilizer problem. *arXiv:quant-ph/9511026*.
+
+**Tensor Networks**:
+- White, S.R. (1992). Density matrix formulation for quantum renormalization groups. *Phys. Rev. Lett.* 69, 2863.
+- Schollwöck, U. (2011). The density-matrix renormalization group in the age of matrix product states. *Ann. Phys.* 326, 96-192.
+- Orús, R. (2014). A practical introduction to tensor networks. *Ann. Phys.* 349, 117-158.
+- Vidal, G. (2003). Efficient classical simulation of slightly entangled quantum computations. *Phys. Rev. Lett.* 91, 147902.
+- Haegeman, J. et al. (2016). Unifying time evolution and optimization with matrix product states. *Phys. Rev. B* 94, 165116.
+
+**Topological Quantum Computing**:
+- Kitaev, A. (2003). Fault-tolerant quantum computation by anyons. *Ann. Phys.* 303, 2-30.
+- Nayak, C., Simon, S.H., Stern, A., Freedman, M., & Das Sarma, S. (2008). Non-Abelian anyons and topological quantum computation. *Rev. Mod. Phys.* 80, 1083.
+- Fowler, A.G., Mariantoni, M., Martinis, J.M., & Cleland, A.N. (2012). Surface codes: Towards practical large-scale quantum computation. *Phys. Rev. A* 86, 032324.
+
+**Skyrmion Physics**:
+- Psaroudaki, C. & Panagopoulos, C. (2021). Skyrmion qubits: A new class of quantum logic elements. *Phys. Rev. Lett.* 127, 067201.
+
+**Quantum Chemistry**:
+- Jordan, P. & Wigner, E. (1928). Über das Paulische Äquivalenzverbot. *Z. Physik* 47, 631-651.
+- McArdle, S., Endo, S., Aspuru-Guzik, A., Benjamin, S.C., & Yuan, X. (2020). Quantum computational chemistry. *Rev. Mod. Phys.* 92, 015003.
+
+**Many-Body Localization**:
+- Nandkishore, R. & Huse, D.A. (2015). Many-body localization and thermalization in quantum statistical mechanics. *Annu. Rev. Condens. Matter Phys.* 6, 15-38.
+- Abanin, D.A., Altman, E., Bloch, I., & Serbyn, M. (2019). Colloquium: Many-body localization, thermalization, and entanglement. *Rev. Mod. Phys.* 91, 021001.
+
+**Bell Tests and Foundations**:
+- Bell, J.S. (1964). On the Einstein Podolsky Rosen paradox. *Physics Physique Физика* 1, 195-200.
+- Clauser, J.F., Horne, M.A., Shimony, A., & Holt, R.A. (1969). Proposed experiment to test local hidden-variable theories. *Phys. Rev. Lett.* 23, 880.
+
+**High-Performance Quantum Simulation**:
+- Häner, T. & Steiger, D.S. (2017). 0.5 petabyte simulation of a 45-qubit quantum circuit. *Proc. SC17*, Article 33.
 
 ## License
 

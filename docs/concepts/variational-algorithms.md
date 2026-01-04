@@ -353,11 +353,18 @@ Iteration | Energy    | Gradient Norm
 
 ## References
 
-1. Peruzzo, A., et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." Nature Communications, 5, 4213.
+**Foundational Papers**:
+1. Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." *Nat. Commun.* 5, 4213.
+2. Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A Quantum Approximate Optimization Algorithm." *arXiv:1411.4028*.
+3. McClean, J.R. et al. (2016). "The theory of variational hybrid quantum-classical algorithms." *New J. Phys.* 18, 023023.
 
-2. Farhi, E., Goldstone, J., & Gutmann, S. (2014). "A Quantum Approximate Optimization Algorithm." arXiv:1411.4028.
+**Reviews**:
+4. Cerezo, M. et al. (2021). "Variational quantum algorithms." *Nat. Rev. Phys.* 3, 625-644.
+5. Bharti, K. et al. (2022). "Noisy intermediate-scale quantum algorithms." *Rev. Mod. Phys.* 94, 015004.
 
-3. McClean, J. R., et al. (2018). "Barren plateaus in quantum neural network training landscapes." Nature Communications, 9, 4812.
+**Training Challenges**:
+6. McClean, J.R. et al. (2018). "Barren plateaus in quantum neural network training landscapes." *Nat. Commun.* 9, 4812.
+7. Stokes, J. et al. (2020). "Quantum natural gradient." *Quantum* 4, 269.
 
 ## See Also
 

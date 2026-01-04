@@ -532,7 +532,16 @@ Where:
 
 ## References
 
-1. White, S. R. (1992). "Density matrix formulation for quantum renormalization groups." Physical Review Letters, 69, 2863.
-2. Schollwöck, U. (2011). "The density-matrix renormalization group in the age of matrix product states." Annals of Physics, 326, 96-192.
-3. Orus, R. (2014). "A practical introduction to tensor networks." Annals of Physics, 349, 117-158.
+**Foundational Papers**:
+1. White, S.R. (1992). "Density matrix formulation for quantum renormalization groups." *Phys. Rev. Lett.* 69, 2863.
+2. White, S.R. (1993). "Density-matrix algorithms for quantum renormalization groups." *Phys. Rev. B* 48, 10345.
+3. Schollwöck, U. (2005). "The density-matrix renormalization group." *Rev. Mod. Phys.* 77, 259.
+
+**Matrix Product States**:
+4. Schollwöck, U. (2011). "The density-matrix renormalization group in the age of matrix product states." *Ann. Phys.* 326, 96-192.
+5. Orús, R. (2014). "A practical introduction to tensor networks." *Ann. Phys.* 349, 117-158.
+6. Vidal, G. (2003). "Efficient classical simulation of slightly entangled quantum computations." *Phys. Rev. Lett.* 91, 147902.
+
+**Quantum Chemistry Applications**:
+7. Chan, G.K.-L. & Head-Gordon, M. (2002). "Highly correlated calculations with a polynomial cost algorithm: A study of the density matrix renormalization group." *J. Chem. Phys.* 116, 4462.
 

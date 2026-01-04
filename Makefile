@@ -99,17 +99,21 @@ ifeq ($(shell uname -m),arm64)
     $(info [BUILD] Using $(DETECTED_CORES) performance cores for OpenMP)
 endif
 
-# Phase 3: Accelerate framework support (macOS only)
+# Phase 3: Accelerate framework support (macOS) / LAPACK (Linux)
 ACCELERATE_FLAGS =
 SECURITY_FLAGS =
 METAL_FLAGS =
+LAPACK_LIBS =
 ifeq ($(shell uname),Darwin)
     ACCELERATE_FLAGS = -framework Accelerate
     SECURITY_FLAGS = -framework Security
     METAL_FLAGS = -framework Metal -framework Foundation
+else
+    # Linux: link against LAPACKE/LAPACK/BLAS
+    LAPACK_LIBS = -llapacke -llapack -lblas
 endif
 
-LDFLAGS = -lm -lpthread -flto $(OPENMP_LIBS) $(ACCELERATE_FLAGS) $(SECURITY_FLAGS) $(METAL_FLAGS)
+LDFLAGS = -lm -lpthread -flto $(OPENMP_LIBS) $(ACCELERATE_FLAGS) $(SECURITY_FLAGS) $(METAL_FLAGS) $(LAPACK_LIBS)
 
 # Directory structure (MOONLAB REORGANIZATION)
 QUANTUM_DIR = src/quantum

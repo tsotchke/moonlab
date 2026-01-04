@@ -9,7 +9,7 @@ long_description = readme_path.read_text() if readme_path.exists() else ""
 
 setup(
     name="moonlab",
-    version="0.1.0-dev",
+    version="0.1.1",
     author="tsotchke",
     description="High-performance quantum computing simulator for Apple Silicon",
     long_description=long_description,

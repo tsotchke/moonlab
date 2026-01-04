@@ -89,5 +89,5 @@ Moonlab Quantum Simulator is open-source software. See the LICENSE file for deta
 
 ---
 
-**Version**: 1.0.0
+**Version**: 0.1.1
 **Last Updated**: January 2026

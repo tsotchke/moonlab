@@ -43,7 +43,7 @@ brew install libomp
 
 ```bash
 git clone https://github.com/tsotchke/moonlab.git
-cd quantum-simulator
+cd moonlab
 make
 ```
 
@@ -89,7 +89,7 @@ sudo apt install build-essential gcc make libgomp1
 
 # Clone and build
 git clone https://github.com/tsotchke/moonlab.git
-cd quantum-simulator
+cd moonlab
 make
 ```
 
@@ -98,7 +98,7 @@ make
 ```bash
 sudo dnf install gcc make libgomp
 git clone https://github.com/tsotchke/moonlab.git
-cd quantum-simulator
+cd moonlab
 make
 ```
 
@@ -107,7 +107,7 @@ make
 ```bash
 sudo pacman -S base-devel gcc openmp
 git clone https://github.com/tsotchke/moonlab.git
-cd quantum-simulator
+cd moonlab
 make
 ```
 
@@ -163,12 +163,12 @@ pnpm build
 ### In a Web Project
 
 ```bash
-npm install @moonlab/core @moonlab/viz
+npm install @moonlab/quantum-core @moonlab/quantum-viz
 ```
 
 ```javascript
-import { QuantumState } from '@moonlab/core';
-const state = new QuantumState(4);
+import { QuantumState } from '@moonlab/quantum-core';
+const state = await QuantumState.create({ numQubits: 4 });
 ```
 
 ## Build Options

@@ -495,7 +495,20 @@ $$N_{eval} = N_{terms} \times N_{shots} \times N_{iterations}$$
 
 ## References
 
-1. Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." Nature Communications, 5, 4213.
-2. McClean, J. R. et al. (2016). "The theory of variational hybrid quantum-classical algorithms." New Journal of Physics, 18, 023023.
-3. Kandala, A. et al. (2017). "Hardware-efficient variational quantum eigensolver for small molecules and quantum magnets." Nature, 549, 242-246.
+**Foundational Papers**:
+1. Peruzzo, A. et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." *Nat. Commun.* 5, 4213.
+2. McClean, J.R. et al. (2016). "The theory of variational hybrid quantum-classical algorithms." *New J. Phys.* 18, 023023.
+3. Kandala, A. et al. (2017). "Hardware-efficient variational quantum eigensolver for small molecules and quantum magnets." *Nature* 549, 242-246.
+
+**Optimization and Gradients**:
+4. Stokes, J. et al. (2020). "Quantum natural gradient." *Quantum* 4, 269.
+5. Spall, J.C. (1998). "Implementation of the simultaneous perturbation algorithm for stochastic optimization." *IEEE Trans. Aerosp. Electron. Syst.* 34, 817-823.
+6. McClean, J.R. et al. (2018). "Barren plateaus in quantum neural network training landscapes." *Nat. Commun.* 9, 4812.
+
+**Error Mitigation**:
+7. Temme, K., Bravyi, S., & Gambetta, J.M. (2017). "Error mitigation for short-depth quantum circuits." *Phys. Rev. Lett.* 119, 180509.
+8. Li, Y. & Benjamin, S.C. (2017). "Efficient variational quantum simulator incorporating active error minimization." *Phys. Rev. X* 7, 021050.
+
+**Ansatz Design**:
+9. Romero, J. et al. (2018). "Strategies for quantum computing molecular energies using the unitary coupled cluster ansatz." *Quantum Sci. Technol.* 4, 014008.
 

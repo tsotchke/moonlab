@@ -1,6 +1,6 @@
 [package]
 name = "moonlab"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Moonlab Team"]
 description = "Safe, idiomatic Rust bindings for the Moonlab quantum simulator"
@@ -22,3 +22,17 @@ approx = "0.5"
 
 [features]
 default = []
+
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+# Allow certain patterns common in FFI bindings
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
