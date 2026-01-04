@@ -17,7 +17,7 @@ We take the security of MoonLab Quantum Simulator seriously. If you believe you 
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@moonlab.io**
+Instead, please report them via email to: **security@tsotchke.ai**
 
 You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
 
@@ -102,7 +102,7 @@ When using the Docker image:
 Security advisories will be published on:
 
 - [GitHub Security Advisories](https://github.com/tsotchke/moonlab/security/advisories)
-- The project's [security mailing list](mailto:security-announce@moonlab.io)
+- The project's [security mailing list](mailto:security-announce@tsotchke.ai)
 
 ## Bug Bounty
 
