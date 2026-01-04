@@ -101,8 +101,8 @@ When using the Docker image:
 
 Security advisories will be published on:
 
-- [GitHub Security Advisories](https://github.com/moonlab/quantum-simulator/security/advisories)
-- The project's [security mailing list](mailto:security-announce@moonlab.io)
+- [GitHub Security Advisories](https://github.com/tsotchke/moonlab/security/advisories)
+- The project's [security mailing list](mailto:security-announce@tsotchke.ai)
 
 ## Bug Bounty
 
@@ -120,9 +120,9 @@ For sensitive communications, you may encrypt your message using our PGP key:
 
 ## Contact
 
-- Security issues: security@moonlab.io
-- General questions: support@moonlab.io
-- GitHub: https://github.com/moonlab/quantum-simulator
+- Security issues: security@tsotchke.ai
+- General questions: support@tsotchke.ai
+- GitHub: https://github.com/tsotchke/moonlab
 
 ---
 
