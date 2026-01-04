@@ -310,20 +310,25 @@ MIT License - See [`LICENSE`](../../LICENSE) file.
 
 ## 🔗 Links
 
-- **Documentation**: https://moonlab.dev (coming soon)
-- **GitHub**: https://github.com/[username]/moonlab
-- **arXiv Paper**: Coming March 2026
+- **Documentation**: https://tsotchke.ai (coming soon)
+- **GitHub**: https://github.com/tsotchke/moonlab
+- **arXiv Paper**: Coming Spring 2026
 
 ## 💡 Citation
 
 If you use Moonlab in research, please cite:
 
 ```bibtex
-@software{moonlab2026,
-  title={Moonlab: Production Quantum Computing for Apple Silicon},
-  author={[Author Names]},
-  year={2026},
-  url={https://github.com/[username]/moonlab}
+@software{tsotchke_moonlab_2024,
+    author       = {tsotchke},
+    title        = {{Moonlab}: A Quantum Computing Simulation Framework},
+    year         = {2026},
+    month        = jan,
+    version      = {v0.1.0},
+    url          = {https://github.com/tsotchke/moonlab},
+    license      = {MIT},
+    keywords     = {quantum computing, simulation, tensor networks,
+                    topological quantum computing, DMRG, VQE, QAOA}
 }
 ```
 
