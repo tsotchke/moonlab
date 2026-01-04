@@ -6,21 +6,16 @@
 *.out
 *.dSYM/
 
-# Executables
-qsim_test
-grover_parallel_benchmark
-examples/quantum/grover_hash_collision
-examples/quantum/grover_large_scale_demo
-examples/quantum/grover_large_scale_optimized
-examples/quantum/grover_password_crack
-examples/quantum/metal_batch_benchmark
-examples/quantum/metal_gpu_benchmark
-examples/quantum/phase3_phase4_benchmark
-tests/bell_test_demo
-tests/correlation_test
-tests/gate_test
-tests/quantum_sim_test
-tests/health_tests_test
+# Executables (no extension on Unix)
+# Pattern-based: clean builds via `make clean`
+tests/test_*
+!tests/test_*.c
+examples/**/[a-z]*
+!examples/**/*.c
+!examples/**/*.h
+tools/benchmarks/*_benchmark
+tools/benchmarks/*_profiler
+!tools/benchmarks/*.c
 
 # IDE
 .vscode/
@@ -41,6 +36,22 @@ doc/*
 build/
 dist/
 *.egg-info/
+
+# Rust
+target/
+**/target/
+Cargo.lock
+**/*.rs.bk
+
+# Node.js
+node_modules/
+**/node_modules/
+.vite/
+**/.vite/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Python
 __pycache__/

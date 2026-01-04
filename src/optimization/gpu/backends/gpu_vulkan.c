@@ -8,7 +8,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifdef HAS_VULKAN
@@ -1009,13 +1009,75 @@ int vulkan_grover_diffusion(
     uint32_t num_qubits,
     uint64_t state_dim
 ) {
-    // Diffusion requires sum reduction - for now, fallback to CPU
-    // A full implementation would use multiple passes with shared memory
-    (void)ctx;
-    (void)amplitudes;
-    (void)num_qubits;
-    (void)state_dim;
-    return -1;  // Not yet implemented
+    // Grover diffusion: D = 2|s⟩⟨s| - I where |s⟩ = H^n|0⟩
+    // For each amplitude: α_i → 2*mean - α_i
+    //
+    // Implementation strategy:
+    // 1. Compute sum of all amplitudes (parallel reduction)
+    // 2. Compute mean = sum / state_dim
+    // 3. Apply transformation: α_i = 2*mean - α_i
+
+    if (!ctx || !amplitudes) return -1;
+
+    // Step 1: Compute sum using parallel reduction
+    // For Vulkan, we use a multi-pass reduction with workgroups
+
+    // Allocate temporary buffer for reduction
+    size_t reduction_size = (state_dim + 255) / 256;  // One result per workgroup
+    vulkan_buffer_t *reduction_buf = vulkan_buffer_create(ctx,
+        reduction_size * 2 * sizeof(float),  // Complex values
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    );
+    if (!reduction_buf) return -1;
+
+    // First reduction pass: sum within each workgroup
+    push_constants_t pc = {
+        .state_dim = (uint32_t)state_dim
+    };
+
+    int ret = dispatch_compute(ctx, OP_REDUCE_SUM, amplitudes, reduction_buf, NULL, &pc, state_dim);
+    if (ret != 0) {
+        vulkan_buffer_destroy(reduction_buf);
+        return -1;
+    }
+
+    vulkan_wait_completion(ctx);
+
+    // Read back partial sums and compute final sum on CPU
+    // (For very large states, we'd do multiple GPU reduction passes)
+    float *partial_sums = (float *)malloc(reduction_size * 2 * sizeof(float));
+    if (!partial_sums) {
+        vulkan_buffer_destroy(reduction_buf);
+        return -1;
+    }
+
+    vulkan_buffer_read(reduction_buf, partial_sums, reduction_size * 2 * sizeof(float), 0);
+
+    // Sum all partial results
+    float sum_real = 0.0f, sum_imag = 0.0f;
+    for (size_t i = 0; i < reduction_size; i++) {
+        sum_real += partial_sums[i * 2];
+        sum_imag += partial_sums[i * 2 + 1];
+    }
+
+    free(partial_sums);
+    vulkan_buffer_destroy(reduction_buf);
+
+    // Compute mean
+    float mean_real = sum_real / (float)state_dim;
+    float mean_imag = sum_imag / (float)state_dim;
+
+    // Step 2: Apply diffusion transformation: α_i = 2*mean - α_i
+    push_constants_t diff_pc = {
+        .phase = mean_real,      // Using phase for mean_real
+        .target = (uint64_t)(*(uint32_t*)&mean_imag),  // mean_imag packed
+        .state_dim = (uint32_t)state_dim
+    };
+
+    ret = dispatch_compute(ctx, OP_DIFFUSION, amplitudes, NULL, NULL, &diff_pc, state_dim);
+
+    return ret;
 }
 
 int vulkan_grover_search(
@@ -1054,15 +1116,78 @@ int vulkan_grover_batch_search(
     uint32_t num_qubits,
     uint32_t num_iterations
 ) {
-    // Not yet implemented - requires custom batch shader
-    (void)ctx;
-    (void)batch_states;
-    (void)targets;
-    (void)results;
-    (void)num_searches;
-    (void)num_qubits;
-    (void)num_iterations;
-    return -1;
+    // Batch Grover search: run multiple independent searches in parallel
+    // Each search operates on a separate state vector within batch_states
+
+    if (!ctx || !batch_states || !targets || !results) return -1;
+    if (num_searches == 0 || num_qubits == 0) return -1;
+
+    uint64_t state_dim = 1ULL << num_qubits;
+    size_t state_size = state_dim * 2 * sizeof(float);  // Complex amplitudes
+
+    // Process each search independently
+    // For true parallelism, we'd use a single dispatch with batch indexing
+    // Here we use sequential dispatches with offset addressing
+
+    for (uint32_t search_idx = 0; search_idx < num_searches; search_idx++) {
+        // Calculate offset into batch buffer
+        size_t offset = search_idx * state_size;
+
+        // Create a view buffer for this search's state
+        // (In practice, we'd use descriptor set updates with offsets)
+        vulkan_buffer_t state_view = {
+            .buffer = batch_states->buffer,
+            .memory = batch_states->memory,
+            .size = state_size,
+            .offset = offset,
+            .ctx = ctx
+        };
+
+        // Initialize to uniform superposition
+        if (vulkan_hadamard_all(ctx, &state_view, num_qubits, state_dim) != 0) {
+            return -1;
+        }
+
+        // Run Grover iterations
+        for (uint32_t iter = 0; iter < num_iterations; iter++) {
+            // Oracle
+            if (vulkan_oracle(ctx, &state_view, targets[search_idx], state_dim) != 0) {
+                return -1;
+            }
+
+            // Diffusion
+            if (vulkan_grover_diffusion(ctx, &state_view, num_qubits, state_dim) != 0) {
+                return -1;
+            }
+        }
+
+        // Measure the result (find maximum probability state)
+        vulkan_wait_completion(ctx);
+
+        // Read back amplitudes and find max probability
+        float *amps = (float *)malloc(state_size);
+        if (!amps) return -1;
+
+        vulkan_buffer_read(&state_view, amps, state_size, 0);
+
+        double max_prob = 0.0;
+        uint64_t max_state = 0;
+
+        for (uint64_t i = 0; i < state_dim; i++) {
+            float real = amps[i * 2];
+            float imag = amps[i * 2 + 1];
+            double prob = (double)(real * real + imag * imag);
+            if (prob > max_prob) {
+                max_prob = prob;
+                max_state = i;
+            }
+        }
+
+        free(amps);
+        results[search_idx] = max_state;
+    }
+
+    return 0;
 }
 
 int vulkan_compute_probabilities(

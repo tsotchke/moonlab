@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="layerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3730a3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#047857;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="optGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#d97706;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#b45309;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="utilGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#b91c1c;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" fill="#1f2937">Moonlab Architecture</text>
+
+  <!-- Algorithm Layer -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="70" width="700" height="100" rx="10" fill="url(#layerGrad)"/>
+    <text x="400" y="95" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">ALGORITHM LAYER</text>
+
+    <rect x="70" y="110" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="130" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Grover</text>
+
+    <rect x="210" y="110" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="270" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="white">VQE / QAOA</text>
+
+    <rect x="350" y="110" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="410" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="white">QPE</text>
+
+    <rect x="490" y="110" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="550" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="white">DMRG</text>
+
+    <rect x="630" y="110" width="100" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="680" y="138" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Tensor Net</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M400 175 L400 195" stroke="#6b7280" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- Core Layer -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="200" width="700" height="100" rx="10" fill="url(#coreGrad)"/>
+    <text x="400" y="225" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">CORE SIMULATION LAYER</text>
+
+    <rect x="70" y="240" width="140" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="140" y="268" text-anchor="middle" font-family="monospace" font-size="12" fill="white">quantum_state_t</text>
+
+    <rect x="230" y="240" width="100" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="280" y="268" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Gates</text>
+
+    <rect x="350" y="240" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="410" y="268" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Measurement</text>
+
+    <rect x="490" y="240" width="120" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="550" y="268" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Entanglement</text>
+
+    <rect x="630" y="240" width="100" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="680" y="268" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Noise</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M400 305 L400 325" stroke="#6b7280" stroke-width="2"/>
+
+  <!-- Optimization Layer -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="330" width="700" height="100" rx="10" fill="url(#optGrad)"/>
+    <text x="400" y="355" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">OPTIMIZATION LAYER</text>
+
+    <rect x="70" y="370" width="140" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="140" y="398" text-anchor="middle" font-family="monospace" font-size="12" fill="white">SIMD (NEON/AVX)</text>
+
+    <rect x="230" y="370" width="140" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="300" y="398" text-anchor="middle" font-family="monospace" font-size="12" fill="white">Metal GPU</text>
+
+    <rect x="390" y="370" width="140" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="460" y="398" text-anchor="middle" font-family="monospace" font-size="12" fill="white">OpenMP</text>
+
+    <rect x="550" y="370" width="180" height="45" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="640" y="398" text-anchor="middle" font-family="monospace" font-size="12" fill="white">MPI Distributed</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M400 435 L400 455" stroke="#6b7280" stroke-width="2"/>
+
+  <!-- Utility Layer -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="460" width="700" height="80" rx="10" fill="url(#utilGrad)"/>
+    <text x="400" y="485" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">UTILITY LAYER</text>
+
+    <rect x="100" y="500" width="100" height="30" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="150" y="520" text-anchor="middle" font-family="monospace" font-size="11" fill="white">Config</text>
+
+    <rect x="220" y="500" width="100" height="30" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="270" y="520" text-anchor="middle" font-family="monospace" font-size="11" fill="white">Memory</text>
+
+    <rect x="340" y="500" width="100" height="30" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="390" y="520" text-anchor="middle" font-family="monospace" font-size="11" fill="white">Entropy</text>
+
+    <rect x="460" y="500" width="100" height="30" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="510" y="520" text-anchor="middle" font-family="monospace" font-size="11" fill="white">Profiler</text>
+
+    <rect x="580" y="500" width="100" height="30" rx="5" fill="white" fill-opacity="0.2"/>
+    <text x="630" y="520" text-anchor="middle" font-family="monospace" font-size="11" fill="white">Error</text>
+  </g>
+
+  <!-- Legend -->
+  <text x="400" y="575" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#6b7280">Data flows downward through layers; each layer depends only on layers below</text>
+</svg>

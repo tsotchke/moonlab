@@ -2,6 +2,7 @@
 #include "../quantum/gates.h"
 #include "../utils/constants.h"
 #include "../utils/quantum_entropy.h"
+#include "../utils/config.h"
 #include "../optimization/simd_ops.h"
 #include "../applications/hardware_entropy.h"
 #include <math.h>
@@ -9,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
+#define DEFAULT_GROVER_ANALYSIS_MAX_QUBITS 12
 
 // ============================================================================
 // GROVER OPERATORS
@@ -200,8 +203,14 @@ qs_error_t grover_random_samples(
 
 grover_analysis_t grover_analyze_performance(size_t num_qubits, size_t num_trials, quantum_entropy_ctx_t *entropy) {
     grover_analysis_t analysis = {0};
-    
-    if (num_qubits == 0 || num_qubits > 12 || num_trials == 0 || !entropy) {
+
+    // Get max qubits for analysis from config (prevents running too large)
+    qsim_config_t* cfg = qsim_config_global();
+    int max_analysis_qubits = (cfg && cfg->algorithm.grover_analysis_max_qubits > 0)
+        ? cfg->algorithm.grover_analysis_max_qubits
+        : DEFAULT_GROVER_ANALYSIS_MAX_QUBITS;
+
+    if (num_qubits == 0 || (int)num_qubits > max_analysis_qubits || num_trials == 0 || !entropy) {
         return analysis;
     }
     

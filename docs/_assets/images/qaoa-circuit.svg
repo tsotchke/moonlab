@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <defs>
+    <linearGradient id="costGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="mixerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#1f2937">QAOA Circuit for MaxCut (p=2 layers)</text>
+
+  <!-- Qubit lines -->
+  <g stroke="#9ca3af" stroke-width="1.5">
+    <line x1="50" y1="80" x2="750" y2="80"/>
+    <line x1="50" y1="140" x2="750" y2="140"/>
+    <line x1="50" y1="200" x2="750" y2="200"/>
+    <line x1="50" y1="260" x2="750" y2="260"/>
+  </g>
+
+  <!-- Qubit labels -->
+  <text x="30" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#374151">q₀</text>
+  <text x="30" y="145" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#374151">q₁</text>
+  <text x="30" y="205" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#374151">q₂</text>
+  <text x="30" y="265" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#374151">q₃</text>
+
+  <!-- Initial Hadamards -->
+  <g>
+    <rect x="60" y="65" width="30" height="30" rx="3" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+    <text x="75" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">H</text>
+
+    <rect x="60" y="125" width="30" height="30" rx="3" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+    <text x="75" y="145" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">H</text>
+
+    <rect x="60" y="185" width="30" height="30" rx="3" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+    <text x="75" y="205" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">H</text>
+
+    <rect x="60" y="245" width="30" height="30" rx="3" fill="#10b981" stroke="#059669" stroke-width="1.5"/>
+    <text x="75" y="265" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">H</text>
+  </g>
+
+  <!-- Layer 1 Cost Unitary -->
+  <g>
+    <rect x="110" y="55" width="100" height="220" rx="5" fill="#fee2e2" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,3"/>
+    <text x="160" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#dc2626">U_C(γ₁)</text>
+
+    <!-- ZZ interactions (edges) -->
+    <!-- Edge (0,1) -->
+    <circle cx="130" cy="80" r="6" fill="url(#costGrad)"/>
+    <circle cx="130" cy="140" r="6" fill="url(#costGrad)"/>
+    <line x1="130" y1="86" x2="130" y2="134" stroke="#ef4444" stroke-width="2"/>
+
+    <!-- Edge (1,2) -->
+    <circle cx="160" cy="140" r="6" fill="url(#costGrad)"/>
+    <circle cx="160" cy="200" r="6" fill="url(#costGrad)"/>
+    <line x1="160" y1="146" x2="160" y2="194" stroke="#ef4444" stroke-width="2"/>
+
+    <!-- Edge (2,3) -->
+    <circle cx="190" cy="200" r="6" fill="url(#costGrad)"/>
+    <circle cx="190" cy="260" r="6" fill="url(#costGrad)"/>
+    <line x1="190" y1="206" x2="190" y2="254" stroke="#ef4444" stroke-width="2"/>
+  </g>
+
+  <!-- Layer 1 Mixer Unitary -->
+  <g>
+    <rect x="220" y="55" width="80" height="220" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" stroke-dasharray="5,3"/>
+    <text x="260" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#2563eb">U_M(β₁)</text>
+
+    <!-- Rx gates -->
+    <rect x="245" y="65" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="260" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="245" y="125" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="260" y="145" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="245" y="185" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="260" y="205" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="245" y="245" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="260" y="265" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+  </g>
+
+  <!-- Layer 2 Cost Unitary -->
+  <g>
+    <rect x="320" y="55" width="100" height="220" rx="5" fill="#fee2e2" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,3"/>
+    <text x="370" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#dc2626">U_C(γ₂)</text>
+
+    <!-- ZZ interactions -->
+    <circle cx="340" cy="80" r="6" fill="url(#costGrad)"/>
+    <circle cx="340" cy="140" r="6" fill="url(#costGrad)"/>
+    <line x1="340" y1="86" x2="340" y2="134" stroke="#ef4444" stroke-width="2"/>
+
+    <circle cx="370" cy="140" r="6" fill="url(#costGrad)"/>
+    <circle cx="370" cy="200" r="6" fill="url(#costGrad)"/>
+    <line x1="370" y1="146" x2="370" y2="194" stroke="#ef4444" stroke-width="2"/>
+
+    <circle cx="400" cy="200" r="6" fill="url(#costGrad)"/>
+    <circle cx="400" cy="260" r="6" fill="url(#costGrad)"/>
+    <line x1="400" y1="206" x2="400" y2="254" stroke="#ef4444" stroke-width="2"/>
+  </g>
+
+  <!-- Layer 2 Mixer Unitary -->
+  <g>
+    <rect x="430" y="55" width="80" height="220" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" stroke-dasharray="5,3"/>
+    <text x="470" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#2563eb">U_M(β₂)</text>
+
+    <rect x="455" y="65" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="470" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="455" y="125" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="470" y="145" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="455" y="185" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="470" y="205" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+
+    <rect x="455" y="245" width="30" height="30" rx="3" fill="url(#mixerGrad)"/>
+    <text x="470" y="265" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rx</text>
+  </g>
+
+  <!-- Measurements -->
+  <g>
+    <rect x="530" y="65" width="35" height="30" rx="3" fill="#f3f4f6" stroke="#374151" stroke-width="1.5"/>
+    <path d="M540 88 Q547.5 75 555 88" stroke="#374151" stroke-width="1.5" fill="none"/>
+    <line x1="547.5" y1="78" x2="547.5" y2="88" stroke="#374151" stroke-width="1.5"/>
+
+    <rect x="530" y="125" width="35" height="30" rx="3" fill="#f3f4f6" stroke="#374151" stroke-width="1.5"/>
+    <path d="M540 148 Q547.5 135 555 148" stroke="#374151" stroke-width="1.5" fill="none"/>
+    <line x1="547.5" y1="138" x2="547.5" y2="148" stroke="#374151" stroke-width="1.5"/>
+
+    <rect x="530" y="185" width="35" height="30" rx="3" fill="#f3f4f6" stroke="#374151" stroke-width="1.5"/>
+    <path d="M540 208 Q547.5 195 555 208" stroke="#374151" stroke-width="1.5" fill="none"/>
+    <line x1="547.5" y1="198" x2="547.5" y2="208" stroke="#374151" stroke-width="1.5"/>
+
+    <rect x="530" y="245" width="35" height="30" rx="3" fill="#f3f4f6" stroke="#374151" stroke-width="1.5"/>
+    <path d="M540 268 Q547.5 255 555 268" stroke="#374151" stroke-width="1.5" fill="none"/>
+    <line x1="547.5" y1="258" x2="547.5" y2="268" stroke="#374151" stroke-width="1.5"/>
+  </g>
+
+  <!-- Classical wires to optimizer -->
+  <g stroke="#6b7280" stroke-width="1" stroke-dasharray="4,2">
+    <line x1="565" y1="80" x2="600" y2="80"/>
+    <line x1="565" y1="140" x2="600" y2="140"/>
+    <line x1="565" y1="200" x2="600" y2="200"/>
+    <line x1="565" y1="260" x2="600" y2="260"/>
+    <line x1="600" y1="80" x2="600" y2="260"/>
+    <line x1="600" y1="170" x2="620" y2="170"/>
+  </g>
+
+  <!-- Optimizer box -->
+  <rect x="620" y="130" width="120" height="80" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="680" y="158" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#92400e">Classical</text>
+  <text x="680" y="175" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#92400e">Optimizer</text>
+  <text x="680" y="195" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#b45309">Update γ, β</text>
+
+  <!-- Legend -->
+  <g transform="translate(50, 310)">
+    <text x="0" y="15" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#374151">Legend:</text>
+
+    <rect x="80" y="5" width="16" height="16" rx="2" fill="url(#costGrad)"/>
+    <text x="102" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Cost Layer: e^(-iγZZ) for each edge</text>
+
+    <rect x="300" y="5" width="16" height="16" rx="2" fill="url(#mixerGrad)"/>
+    <text x="322" y="17" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Mixer Layer: Rx(2β) on each qubit</text>
+  </g>
+
+  <!-- Graph representation -->
+  <g transform="translate(600, 290)">
+    <text x="80" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#374151">Graph Structure</text>
+    <circle cx="40" cy="30" r="10" fill="#e5e7eb" stroke="#374151" stroke-width="1.5"/>
+    <circle cx="80" cy="20" r="10" fill="#e5e7eb" stroke="#374151" stroke-width="1.5"/>
+    <circle cx="120" cy="30" r="10" fill="#e5e7eb" stroke="#374151" stroke-width="1.5"/>
+    <circle cx="80" cy="60" r="10" fill="#e5e7eb" stroke="#374151" stroke-width="1.5"/>
+    <line x1="48" y1="26" x2="72" y2="22" stroke="#374151" stroke-width="1.5"/>
+    <line x1="88" y1="24" x2="112" y2="28" stroke="#374151" stroke-width="1.5"/>
+    <line x1="80" y1="30" x2="80" y2="50" stroke="#374151" stroke-width="1.5"/>
+    <text x="40" y="34" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#374151">0</text>
+    <text x="80" y="24" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#374151">1</text>
+    <text x="120" y="34" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#374151">2</text>
+    <text x="80" y="64" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#374151">3</text>
+  </g>
+
+  <!-- Formula -->
+  <text x="400" y="385" text-anchor="middle" font-family="serif" font-size="11" fill="#4b5563">|ψ(γ,β)⟩ = U_M(β_p)U_C(γ_p)...U_M(β_1)U_C(γ_1)|+⟩^⊗n</text>
+</svg>

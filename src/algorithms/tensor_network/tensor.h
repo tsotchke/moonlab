@@ -12,7 +12,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifndef TENSOR_H
@@ -829,6 +829,29 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx);
  * @return true if GPU backend is initialized and ready
  */
 bool tensor_gpu_available(void);
+
+/**
+ * @brief Get the global GPU context (singleton)
+ *
+ * Returns the global GPU context, creating it if necessary.
+ * This is the preferred way to get a GPU context for tensor operations.
+ *
+ * @return GPU context or NULL if unavailable
+ */
+tensor_gpu_context_t *tensor_gpu_get_context(void);
+
+#ifdef __APPLE__
+/**
+ * @brief Get Metal context from GPU context
+ *
+ * Returns the underlying Metal context for direct Metal API calls.
+ * Only available on Apple platforms.
+ *
+ * @param ctx GPU context
+ * @return Metal context or NULL
+ */
+struct metal_compute_ctx *tensor_gpu_get_metal(tensor_gpu_context_t *ctx);
+#endif
 
 /**
  * @brief Allocate GPU buffer for tensor

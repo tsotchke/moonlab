@@ -14,7 +14,7 @@
  * Compile with: -mavx512f -mavx512dq -mavx512bw -mavx512vl
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "simd_avx512.h"

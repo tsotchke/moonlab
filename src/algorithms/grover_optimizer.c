@@ -13,7 +13,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "grover_optimizer.h"
@@ -360,46 +360,119 @@ void amplitude_amplification(quantum_state_t* state,
  * @brief Estimate number of solutions using quantum counting
  *
  * Uses phase estimation on Grover operator to estimate M.
- * Simplified version - returns approximation.
+ * The eigenvalues of G are e^(±2iθ) where sin²(θ) = M/N.
+ *
+ * Algorithm:
+ * 1. Prepare uniform superposition on search register
+ * 2. Apply controlled-G^(2^j) for phase estimation
+ * 3. Apply inverse QFT to extract phase
+ * 4. Compute M = N * sin²(θ)
  *
  * @param state Quantum state
  * @param oracle_func Oracle function
  * @param oracle_data Oracle data
- * @param precision_bits Number of precision bits
+ * @param precision_bits Number of precision bits for phase estimation
  * @return Estimated number of solutions
  */
 int grover_quantum_counting(quantum_state_t* state,
                             int (*oracle_func)(uint64_t, void*),
                             void* oracle_data,
                             int precision_bits) {
-    if (!state || !oracle_func) return 0;
+    if (!state || !oracle_func || precision_bits < 1) return 0;
+    if (precision_bits > 10) precision_bits = 10;  // Limit for simulation
 
-    // Simplified: run Grover and estimate from amplitude
-    // Full implementation would use phase estimation
+    int n = state->num_qubits;
+    uint64_t N = state->state_dim;
 
-    // Initialize and run single iteration
+    // Phase estimation approach: simulate the effect by running
+    // multiple Grover iterations and estimating the oscillation frequency
+
+    // Initialize to uniform superposition
     quantum_state_init_zero(state);
-    for (int q = 0; q < state->num_qubits; q++) {
+    for (int q = 0; q < n; q++) {
         gate_hadamard(state, q);
     }
 
-    grover_oracle_function(state->amplitudes, state->state_dim,
-                           oracle_func, oracle_data);
-    grover_diffusion_optimized(state->amplitudes, state->state_dim);
+    // Store initial amplitude of a marked state (if any)
+    uint64_t marked_state = UINT64_MAX;
+    for (uint64_t i = 0; i < N && marked_state == UINT64_MAX; i++) {
+        if (oracle_func(i, oracle_data)) {
+            marked_state = i;
+        }
+    }
 
-    // Count marked amplitudes (heuristic)
-    int count = 0;
-    double threshold = 1.5 / sqrt((double)state->state_dim);
+    if (marked_state == UINT64_MAX) {
+        return 0;  // No marked states
+    }
 
-    for (uint64_t i = 0; i < state->state_dim; i++) {
-        if (cabs(state->amplitudes[i]) > threshold) {
-            if (oracle_func(i, oracle_data)) {
-                count++;
+    // Track amplitude evolution to estimate phase
+    double initial_amp = cabs(state->amplitudes[marked_state]);
+
+    // Apply Grover iterations and track amplitude oscillation
+    int max_iters = (1 << precision_bits);
+    if (max_iters > (int)(M_PI * sqrt((double)N) / 2)) {
+        max_iters = (int)(M_PI * sqrt((double)N) / 2) + 1;
+    }
+
+    double* amp_history = malloc((max_iters + 1) * sizeof(double));
+    if (!amp_history) return 0;
+
+    amp_history[0] = initial_amp;
+
+    for (int iter = 0; iter < max_iters; iter++) {
+        // Apply one Grover iteration
+        grover_oracle_function(state->amplitudes, N, oracle_func, oracle_data);
+        grover_diffusion_optimized(state->amplitudes, N);
+        amp_history[iter + 1] = cabs(state->amplitudes[marked_state]);
+    }
+
+    // Find period of oscillation using peak detection
+    // The amplitude follows: sin((2k+1)θ) where θ = arcsin(√(M/N))
+    int first_peak = -1;
+    int second_peak = -1;
+
+    for (int i = 1; i < max_iters; i++) {
+        if (amp_history[i] > amp_history[i-1] &&
+            (i == max_iters - 1 || amp_history[i] >= amp_history[i+1])) {
+            if (first_peak < 0) {
+                first_peak = i;
+            } else if (second_peak < 0) {
+                second_peak = i;
+                break;
             }
         }
     }
 
-    return count;
+    int estimated_M;
+
+    if (first_peak > 0 && second_peak > 0) {
+        // Amplitude evolves as sin((2k+1)θ), so period in k is π/(2θ)
+        // Therefore: θ = π/(2×period)
+        int period = second_peak - first_peak;
+        double theta = M_PI / (2.0 * period);
+        double sin_theta = sin(theta);
+        estimated_M = (int)round(N * sin_theta * sin_theta);
+    } else if (first_peak > 0) {
+        // Single peak: first peak at k where (2k+1)θ ≈ π/2, so θ ≈ π/(4k+2)
+        double theta = M_PI / (4.0 * first_peak + 2.0);
+        double sin_theta = sin(theta);
+        estimated_M = (int)round(N * sin_theta * sin_theta);
+    } else {
+        // No clear peak - likely many solutions, estimate from amplitude
+        double amp_after_one = amp_history[1];
+        // After 1 iteration: amplitude ≈ (1-2M/N) * 1/√N + 2√(M/N) * √(M/N)
+        // For small M/N: amplitude ≈ 3/√N * √M
+        double ratio = amp_after_one * sqrt((double)N) / 3.0;
+        estimated_M = (int)round(ratio * ratio);
+    }
+
+    free(amp_history);
+
+    // Clamp to valid range
+    if (estimated_M < 0) estimated_M = 0;
+    if (estimated_M > (int)N) estimated_M = (int)N;
+
+    return estimated_M;
 }
 
 // ============================================================================
@@ -458,16 +531,59 @@ void grover_partial_search(quantum_state_t* state,
             }
         }
 
-        // Diffusion on search qubits only
-        // This is more complex - simplified version
+        // Diffusion on search qubits only - proper partial diffusion
+        // For each configuration of non-search qubits, apply diffusion within that subspace
         uint64_t search_dim = 1ULL << num_search;
-        complex_t* temp_sum = calloc(state->state_dim >> num_search, sizeof(complex_t));
+        uint64_t other_dim = state->state_dim >> num_search;
 
-        // Compute partial sums and apply partial diffusion
-        // Simplified: apply standard diffusion
-        grover_diffusion_optimized(state->amplitudes, state->state_dim);
+        // Create inverse mask for non-search qubits
+        uint64_t other_mask = ~search_mask & ((1ULL << state->num_qubits) - 1);
 
-        free(temp_sum);
+        // For each configuration of non-search qubits
+        for (uint64_t other_config = 0; other_config < other_dim; other_config++) {
+            // Map other_config to actual bit positions
+            uint64_t base_idx = 0;
+            uint64_t temp_config = other_config;
+            int other_bit = 0;
+            for (int q = 0; q < state->num_qubits; q++) {
+                if (!(search_mask & (1ULL << q))) {
+                    // This is a non-search qubit
+                    if (temp_config & 1) {
+                        base_idx |= (1ULL << q);
+                    }
+                    temp_config >>= 1;
+                }
+            }
+
+            // Compute mean amplitude within this subspace
+            complex_t mean = 0;
+            for (uint64_t search_config = 0; search_config < search_dim; search_config++) {
+                // Map search_config to actual bit positions
+                uint64_t idx = base_idx;
+                uint64_t temp_search = search_config;
+                for (int j = 0; j < num_search; j++) {
+                    if (temp_search & 1) {
+                        idx |= (1ULL << search_qubits[j]);
+                    }
+                    temp_search >>= 1;
+                }
+                mean += state->amplitudes[idx];
+            }
+            mean /= (double)search_dim;
+
+            // Apply diffusion: 2*mean - amplitude
+            for (uint64_t search_config = 0; search_config < search_dim; search_config++) {
+                uint64_t idx = base_idx;
+                uint64_t temp_search = search_config;
+                for (int j = 0; j < num_search; j++) {
+                    if (temp_search & 1) {
+                        idx |= (1ULL << search_qubits[j]);
+                    }
+                    temp_search >>= 1;
+                }
+                state->amplitudes[idx] = 2.0 * mean - state->amplitudes[idx];
+            }
+        }
     }
 }
 

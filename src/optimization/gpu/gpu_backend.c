@@ -13,7 +13,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "gpu_backend.h"
@@ -433,6 +433,11 @@ gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size) {
                 return NULL;
             }
             buffer->host_ptr = metal_buffer_contents(buffer->metal_buffer);
+            if (!buffer->host_ptr) {
+                metal_buffer_free(buffer->metal_buffer);
+                free(buffer);
+                return NULL;
+            }
             break;
 #endif
 #ifdef HAS_OPENCL
@@ -461,6 +466,11 @@ gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size) {
                 return NULL;
             }
             buffer->host_ptr = cuda_buffer_contents(buffer->cuda_buffer);
+            if (!buffer->host_ptr) {
+                cuda_buffer_free(buffer->cuda_buffer);
+                free(buffer);
+                return NULL;
+            }
             break;
 #endif
 #ifdef HAS_CUQUANTUM
@@ -476,6 +486,11 @@ gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size) {
                 return NULL;
             }
             buffer->host_ptr = cuquantum_buffer_device_ptr(buffer->cuda_buffer);
+            if (!buffer->host_ptr) {
+                cuquantum_statevec_free(buffer->cuda_buffer);
+                free(buffer);
+                return NULL;
+            }
             break;
         }
 #endif
@@ -542,10 +557,9 @@ gpu_error_t gpu_buffer_write(gpu_buffer_t* buffer, const void* data, size_t size
 #endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
-            // Note: OpenCL API doesn't support offset, so we ignore it for now
-            // A full implementation would use clEnqueueWriteBuffer with offset
-            if (offset != 0) return GPU_ERROR_NOT_SUPPORTED;
-            return opencl_buffer_write(buffer->ctx->opencl_ctx, buffer->opencl_buffer, data, size)
+            // OpenCL clEnqueueWriteBuffer supports offset natively
+            return opencl_buffer_write_offset(buffer->ctx->opencl_ctx, buffer->opencl_buffer,
+                                               data, size, offset)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
 #ifdef HAS_VULKAN
@@ -587,9 +601,9 @@ gpu_error_t gpu_buffer_read(gpu_buffer_t* buffer, void* data, size_t size, size_
 #endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
-            // Note: OpenCL API doesn't support offset, so we ignore it for now
-            if (offset != 0) return GPU_ERROR_NOT_SUPPORTED;
-            return opencl_buffer_read(buffer->ctx->opencl_ctx, buffer->opencl_buffer, data, size)
+            // OpenCL clEnqueueReadBuffer supports offset natively
+            return opencl_buffer_read_offset(buffer->ctx->opencl_ctx, buffer->opencl_buffer,
+                                              data, size, offset)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
 #ifdef HAS_VULKAN
@@ -1100,7 +1114,24 @@ gpu_error_t gpu_sum_squared_magnitudes(gpu_context_t* ctx, gpu_buffer_t* amplitu
     if (!ctx || !amplitudes || !result) return GPU_ERROR_INVALID_PARAM;
 
     switch (ctx->backend_type) {
-// OpenCL: sum_squared_magnitudes not yet implemented
+#ifdef HAS_OPENCL
+        case GPU_BACKEND_OPENCL:
+            return opencl_sum_squared_magnitudes(ctx->opencl_ctx, amplitudes->opencl_buffer,
+                                                  state_dim, result)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
+#ifdef HAS_VULKAN
+        case GPU_BACKEND_VULKAN:
+            return vulkan_sum_squared_magnitudes(ctx->vulkan_ctx, amplitudes->vulkan_buffer,
+                                                  state_dim, result)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
+#ifdef HAS_METAL
+        case GPU_BACKEND_METAL:
+            return metal_sum_squared_magnitudes(ctx->metal_ctx, amplitudes->metal_buffer,
+                                                 state_dim, result)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_CUDA
         case GPU_BACKEND_CUDA:
             return cuda_sum_squared_magnitudes(ctx->cuda_ctx, amplitudes->cuda_buffer,

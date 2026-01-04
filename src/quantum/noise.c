@@ -17,9 +17,10 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
+#include "../utils/config.h"
 #include "noise.h"
 #include "state.h"
 #include "gates.h"
@@ -27,6 +28,8 @@
 #include <string.h>
 #include <math.h>
 #include <complex.h>
+
+#define DEFAULT_GATE_TIME_US 0.020  // 20 nanoseconds
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -171,7 +174,7 @@ void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2
  */
 void noise_amplitude_damping(quantum_state_t* state, int qubit,
                              double gamma, double random_value) {
-    if (!state || !state->amplitudes || gamma <= 0.0) return;
+    if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
     if (qubit < 0 || qubit >= state->num_qubits) return;
 
     const uint64_t state_dim = state->state_dim;
@@ -237,14 +240,58 @@ void noise_amplitude_damping(quantum_state_t* state, int qubit,
  */
 void noise_phase_damping(quantum_state_t* state, int qubit,
                          double gamma, double random_value) {
-    if (!state || !state->amplitudes || gamma <= 0.0) return;
+    if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
     if (qubit < 0 || qubit >= state->num_qubits) return;
 
-    // Phase damping reduces off-diagonal elements
-    // Simplified: apply random Z with probability gamma
+    // Phase damping using Monte Carlo trajectory approach
+    // K0 = [[1, 0], [0, √(1-γ)]] (no-jump evolution)
+    // K1 = [[0, 0], [0, √γ]]     (jump: project to |1⟩)
 
-    if (random_value < gamma) {
-        gate_pauli_z(state, qubit);
+    const uint64_t state_dim = state->state_dim;
+    const uint64_t qubit_mask = 1ULL << qubit;
+    complex_t* amp = state->amplitudes;
+
+    double sqrt_1_gamma = sqrt(1.0 - gamma);
+
+    // Compute probability of |1⟩ component (jump probability)
+    double prob_one = 0.0;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        if (i & qubit_mask) {
+            prob_one += cabs(amp[i]) * cabs(amp[i]);
+        }
+    }
+
+    // Jump probability = γ * |⟨1|ψ⟩|²
+    double p_jump = gamma * prob_one;
+
+    if (random_value < p_jump && prob_one > 1e-15) {
+        // Jump occurred: project to |1⟩ subspace and randomize phase
+        // This effectively collapses coherence
+        for (uint64_t i = 0; i < state_dim; i++) {
+            if (!(i & qubit_mask)) {
+                // Zero out |0⟩ components
+                amp[i] = 0.0;
+            }
+        }
+    } else {
+        // No jump: apply K0 (dampen |1⟩ amplitudes)
+        for (uint64_t i = 0; i < state_dim; i++) {
+            if (i & qubit_mask) {
+                amp[i] *= sqrt_1_gamma;
+            }
+        }
+    }
+
+    // Renormalize
+    double norm = 0.0;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        norm += cabs(amp[i]) * cabs(amp[i]);
+    }
+    if (norm > 1e-15) {
+        double inv_norm = 1.0 / sqrt(norm);
+        for (uint64_t i = 0; i < state_dim; i++) {
+            amp[i] *= inv_norm;
+        }
     }
 }
 
@@ -539,8 +586,11 @@ noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
     noise_model_t* model = noise_model_create();
     if (!model) return NULL;
 
-    // Convert to consistent units (assume gate time ~20ns)
-    double gate_time_us = 0.020;
+    // Use gate time from config if available, otherwise default
+    qsim_config_t* cfg = qsim_config_global();
+    double gate_time_us = (cfg && cfg->noise.gate_time > 0)
+        ? cfg->noise.gate_time
+        : DEFAULT_GATE_TIME_US;
 
     model->t1 = t1_us;
     model->t2 = (t2_us <= 2.0 * t1_us) ? t2_us : 2.0 * t1_us;

@@ -25,7 +25,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "stride_gates.h"
@@ -879,10 +879,14 @@ void stride_toffoli(complex_t* amplitudes, int num_qubits,
 }
 
 /**
- * @brief Optimized Toffoli using simpler stride approach
+ * @brief Optimized Toffoli using proper stride-based iteration
  *
- * This version iterates through the state space checking only the
- * necessary conditions, avoiding the complex multi-index calculation.
+ * Uses nested loops to iterate only over indices where both controls are 1,
+ * achieving O(2^(n-3)) iterations instead of O(2^n).
+ *
+ * The key insight: for 3 qubits (c1, c2, target), we want to swap pairs where
+ * c1=1, c2=1, and target differs. We iterate over the 2^(n-3) "other" qubits
+ * and construct the proper indices directly.
  */
 void stride_toffoli_v2(complex_t* amplitudes, int num_qubits,
                        int control1, int control2, int target) {
@@ -891,30 +895,49 @@ void stride_toffoli_v2(complex_t* amplitudes, int num_qubits,
     const uint64_t c2_stride = 1ULL << control2;
     const uint64_t t_stride = 1ULL << target;
 
-    // We swap pairs where c1=1, c2=1, and we process target=0 → target=1
-    // Iterate through all indices where c1=1, c2=1, t=0
+    // Sort the three qubits by position for proper nesting
+    int qubits[3] = {control1, control2, target};
+    // Simple bubble sort for 3 elements
+    if (qubits[0] > qubits[1]) { int t = qubits[0]; qubits[0] = qubits[1]; qubits[1] = t; }
+    if (qubits[1] > qubits[2]) { int t = qubits[1]; qubits[1] = qubits[2]; qubits[2] = t; }
+    if (qubits[0] > qubits[1]) { int t = qubits[0]; qubits[0] = qubits[1]; qubits[1] = t; }
 
-    // Find the minimum qubit to determine outer stride
-    int min_q = (control1 < control2) ? control1 : control2;
-    min_q = (min_q < target) ? min_q : target;
+    int low = qubits[0];
+    int mid = qubits[1];
+    int high = qubits[2];
 
-    int max_q = (control1 > control2) ? control1 : control2;
-    max_q = (max_q > target) ? max_q : target;
+    const uint64_t low_stride = 1ULL << low;
+    const uint64_t mid_stride = 1ULL << mid;
+    const uint64_t high_stride = 1ULL << high;
 
-    // Simple iteration: check each amplitude pair
-    // For efficiency, only process indices where t=0 and both controls=1
-    for (uint64_t i = 0; i < state_dim; i++) {
-        // Check: c1=1, c2=1, t=0
-        int c1_set = (i & c1_stride) != 0;
-        int c2_set = (i & c2_stride) != 0;
-        int t_set = (i & t_stride) != 0;
+    const uint64_t low_block = low_stride << 1;
+    const uint64_t mid_block = mid_stride << 1;
+    const uint64_t high_block = high_stride << 1;
 
-        if (c1_set && c2_set && !t_set) {
-            // Swap i with i + t_stride
-            uint64_t j = i | t_stride;
-            complex_t tmp = amplitudes[i];
-            amplitudes[i] = amplitudes[j];
-            amplitudes[j] = tmp;
+    // Nested iteration: only 2^(n-3) iterations total
+    // Each loop level handles one of the 3 qubits' block structure
+    for (uint64_t h = 0; h < state_dim; h += high_block) {
+        for (uint64_t m = 0; m < high_stride; m += mid_block) {
+            for (uint64_t l = 0; l < mid_stride; l += low_block) {
+                for (uint64_t i = 0; i < low_stride; i++) {
+                    uint64_t base = h + m + l + i;
+
+                    // Compute all 8 possible indices for 3 qubits
+                    // We need: c1=1, c2=1, swap target=0 <-> target=1
+                    // The indices where both controls are 1:
+                    uint64_t idx_c1c2_t0 = base | c1_stride | c2_stride;  // c1=1, c2=1, t=0
+                    uint64_t idx_c1c2_t1 = idx_c1c2_t0 | t_stride;        // c1=1, c2=1, t=1
+
+                    // Only swap if target bit was 0 in idx_c1c2_t0
+                    // Since we constructed it with c1|c2 but not t, we need to check
+                    // that we haven't already set the target bit
+                    if ((idx_c1c2_t0 & t_stride) == 0) {
+                        complex_t tmp = amplitudes[idx_c1c2_t0];
+                        amplitudes[idx_c1c2_t0] = amplitudes[idx_c1c2_t1];
+                        amplitudes[idx_c1c2_t1] = tmp;
+                    }
+                }
+            }
         }
     }
 }
@@ -1077,15 +1100,65 @@ void stride_hadamard_all(complex_t* amplitudes, int num_qubits) {
 
 /**
  * @brief Benchmark stride-based vs bit-extraction methods
+ *
+ * Compares stride-based gate application against a baseline
+ * bit-extraction implementation.
  */
 double stride_benchmark_speedup(int num_qubits, int num_gates) {
-    // Placeholder - actual benchmark would compare against bit-extraction
-    // This would require the original gates.c implementation
+    if (num_qubits < 2 || num_qubits > 25 || num_gates < 1) {
+        return 1.0;  // Invalid parameters
+    }
 
-    (void)num_qubits;
-    (void)num_gates;
+    uint64_t dim = 1ULL << num_qubits;
+    complex_t* amplitudes = (complex_t*)malloc(dim * sizeof(complex_t));
+    complex_t* amplitudes_baseline = (complex_t*)malloc(dim * sizeof(complex_t));
 
-    // Return estimated speedup based on algorithm analysis
-    // Actual measurement: 4-6x for two-qubit gates
-    return 5.0;
+    if (!amplitudes || !amplitudes_baseline) {
+        free(amplitudes);
+        free(amplitudes_baseline);
+        return 1.0;
+    }
+
+    // Initialize state to |0>
+    memset(amplitudes, 0, dim * sizeof(complex_t));
+    memset(amplitudes_baseline, 0, dim * sizeof(complex_t));
+    amplitudes[0] = 1.0;
+    amplitudes_baseline[0] = 1.0;
+
+    // Benchmark stride-based method
+    clock_t start_stride = clock();
+    for (int i = 0; i < num_gates; i++) {
+        int qubit = i % num_qubits;
+        stride_hadamard(amplitudes, num_qubits, qubit);
+    }
+    clock_t end_stride = clock();
+    double time_stride = (double)(end_stride - start_stride) / CLOCKS_PER_SEC;
+
+    // Benchmark baseline bit-extraction method
+    clock_t start_baseline = clock();
+    for (int i = 0; i < num_gates; i++) {
+        int qubit = i % num_qubits;
+        // Baseline: iterate all amplitudes with bit-extraction
+        uint64_t mask = 1ULL << qubit;
+        for (uint64_t j = 0; j < dim; j++) {
+            if (!(j & mask)) {  // Process pairs where qubit=0
+                uint64_t k = j | mask;
+                complex_t a = amplitudes_baseline[j];
+                complex_t b = amplitudes_baseline[k];
+                amplitudes_baseline[j] = M_SQRT1_2 * (a + b);
+                amplitudes_baseline[k] = M_SQRT1_2 * (a - b);
+            }
+        }
+    }
+    clock_t end_baseline = clock();
+    double time_baseline = (double)(end_baseline - start_baseline) / CLOCKS_PER_SEC;
+
+    free(amplitudes);
+    free(amplitudes_baseline);
+
+    // Return speedup ratio
+    if (time_stride > 0) {
+        return time_baseline / time_stride;
+    }
+    return 1.0;
 }

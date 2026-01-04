@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 500">
+  <defs>
+    <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="memGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="kernelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <marker id="pipeArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6b7280"/>
+    </marker>
+    <marker id="dataArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="425" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#1f2937">Metal GPU Pipeline for Quantum Gate Operations</text>
+
+  <!-- CPU Side -->
+  <g transform="translate(30, 60)">
+    <rect x="0" y="0" width="200" height="400" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="100" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#1d4ed8">CPU (Host)</text>
+
+    <!-- System Memory -->
+    <g transform="translate(20, 45)">
+      <rect x="0" y="0" width="160" height="70" rx="6" fill="url(#memGrad)" stroke="#b45309" stroke-width="1.5"/>
+      <text x="80" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">System Memory</text>
+      <text x="80" y="38" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">State Vector (16-byte aligned)</text>
+      <text x="80" y="52" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">Gate Matrices</text>
+      <text x="80" y="66" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#fef3c7">malloc / aligned_alloc</text>
+    </g>
+
+    <!-- Command Encoder -->
+    <g transform="translate(20, 130)">
+      <rect x="0" y="0" width="160" height="55" rx="6" fill="url(#cpuGrad)" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="80" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Command Encoder</text>
+      <text x="80" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">MTLComputeCommandEncoder</text>
+      <text x="80" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#dbeafe">setComputePipelineState</text>
+    </g>
+
+    <!-- Buffer Management -->
+    <g transform="translate(20, 200)">
+      <rect x="0" y="0" width="160" height="55" rx="6" fill="url(#cpuGrad)" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="80" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Buffer Management</text>
+      <text x="80" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">MTLBuffer creation</text>
+      <text x="80" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#dbeafe">Shared / Private storage</text>
+    </g>
+
+    <!-- Command Queue -->
+    <g transform="translate(20, 270)">
+      <rect x="0" y="0" width="160" height="55" rx="6" fill="url(#cpuGrad)" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="80" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Command Queue</text>
+      <text x="80" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">MTLCommandQueue</text>
+      <text x="80" y="48" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#dbeafe">commit / waitUntilCompleted</text>
+    </g>
+
+    <!-- Dispatch -->
+    <g transform="translate(20, 340)">
+      <rect x="0" y="0" width="160" height="45" rx="6" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="80" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#4338ca">dispatchThreadgroups</text>
+      <text x="80" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#6366f1">dim3 grid, dim3 block</text>
+    </g>
+  </g>
+
+  <!-- Data Transfer Arrows -->
+  <g>
+    <path d="M235 120 Q280 120 280 170 Q280 220 325 220" stroke="#f59e0b" stroke-width="3" fill="none" marker-end="url(#dataArrow)"/>
+    <text x="290" y="160" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#d97706" transform="rotate(-90, 290, 160)">PCIe / Unified</text>
+  </g>
+
+  <!-- GPU Side -->
+  <g transform="translate(330, 60)">
+    <rect x="0" y="0" width="490" height="400" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+    <text x="245" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#047857">GPU (Apple Silicon / Metal)</text>
+
+    <!-- GPU Memory -->
+    <g transform="translate(20, 45)">
+      <rect x="0" y="0" width="200" height="90" rx="6" fill="url(#memGrad)" stroke="#b45309" stroke-width="1.5"/>
+      <text x="100" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Device Memory</text>
+      <text x="100" y="36" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">State Vector Buffer</text>
+      <text x="100" y="50" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">Gate Matrix Buffer</text>
+      <text x="100" y="64" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="white">Result Buffer</text>
+      <text x="100" y="82" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#fef3c7">High bandwidth (200+ GB/s)</text>
+    </g>
+
+    <!-- Compute Units -->
+    <g transform="translate(240, 45)">
+      <rect x="0" y="0" width="230" height="90" rx="6" fill="url(#gpuGrad)" stroke="#047857" stroke-width="1.5"/>
+      <text x="115" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">GPU Compute Units</text>
+
+      <!-- Threadgroup grid -->
+      <g transform="translate(15, 30)">
+        <rect x="0" y="0" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="30" y="0" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="60" y="0" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="90" y="0" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="0" y="25" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="30" y="25" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="60" y="25" width="25" height="20" rx="2" fill="#34d399"/>
+        <rect x="90" y="25" width="25" height="20" rx="2" fill="#34d399"/>
+        <text x="140" y="17" font-family="system-ui, sans-serif" font-size="8" fill="white">SIMD Groups</text>
+        <text x="140" y="32" font-family="system-ui, sans-serif" font-size="8" fill="white">32 threads each</text>
+        <text x="140" y="47" font-family="system-ui, sans-serif" font-size="8" fill="white">Parallel execution</text>
+      </g>
+    </g>
+
+    <!-- Kernel Box -->
+    <g transform="translate(20, 155)">
+      <rect x="0" y="0" width="450" height="180" rx="8" fill="#faf5ff" stroke="#8b5cf6" stroke-width="2"/>
+      <text x="225" y="22" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#6d28d9">Metal Shader Kernels</text>
+
+      <!-- Individual kernels -->
+      <g transform="translate(15, 35)">
+        <rect x="0" y="0" width="130" height="55" rx="5" fill="url(#kernelGrad)" stroke="#6d28d9" stroke-width="1"/>
+        <text x="65" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="white">apply_gate_kernel</text>
+        <text x="65" y="32" text-anchor="middle" font-family="monospace" font-size="8" fill="white">thread_position_in_grid</text>
+        <text x="65" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#ddd6fe">1 or 2-qubit gates</text>
+      </g>
+
+      <g transform="translate(160, 35)">
+        <rect x="0" y="0" width="130" height="55" rx="5" fill="url(#kernelGrad)" stroke="#6d28d9" stroke-width="1"/>
+        <text x="65" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="white">reduce_kernel</text>
+        <text x="65" y="32" text-anchor="middle" font-family="monospace" font-size="8" fill="white">threadgroup_barrier</text>
+        <text x="65" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#ddd6fe">Probability sums</text>
+      </g>
+
+      <g transform="translate(305, 35)">
+        <rect x="0" y="0" width="130" height="55" rx="5" fill="url(#kernelGrad)" stroke="#6d28d9" stroke-width="1"/>
+        <text x="65" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="white">measure_kernel</text>
+        <text x="65" y="32" text-anchor="middle" font-family="monospace" font-size="8" fill="white">atomic operations</text>
+        <text x="65" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#ddd6fe">Collapse state</text>
+      </g>
+
+      <!-- Memory access pattern -->
+      <g transform="translate(15, 100)">
+        <rect x="0" y="0" width="200" height="65" rx="5" fill="#f3e8ff" stroke="#a855f7" stroke-width="1"/>
+        <text x="100" y="16" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#7c3aed">Memory Access Pattern</text>
+        <text x="10" y="32" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• Coalesced reads (stride = 2^target)</text>
+        <text x="10" y="44" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• Thread-local gate application</text>
+        <text x="10" y="56" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• Coalesced writes back</text>
+      </g>
+
+      <!-- Performance box -->
+      <g transform="translate(235, 100)">
+        <rect x="0" y="0" width="200" height="65" rx="5" fill="#d1fae5" stroke="#10b981" stroke-width="1"/>
+        <text x="100" y="16" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#059669">Performance Metrics</text>
+        <text x="10" y="32" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• 10-50x speedup vs CPU</text>
+        <text x="10" y="44" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• &gt;90% occupancy achieved</text>
+        <text x="10" y="56" font-family="system-ui, sans-serif" font-size="8" fill="#374151">• M1 Max: 28+ qubits</text>
+      </g>
+    </g>
+
+    <!-- Synchronization -->
+    <g transform="translate(20, 350)">
+      <rect x="0" y="0" width="450" height="35" rx="5" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+      <text x="225" y="22" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#b91c1c">Synchronization: MTLFence / waitUntilCompleted / Memory Barriers</text>
+    </g>
+  </g>
+
+  <!-- Pipeline Flow -->
+  <g transform="translate(50, 475)">
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#374151">Pipeline Flow:</text>
+    <text x="100" y="0" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Allocate Buffers → Encode Commands → Dispatch Kernels → Synchronize → Read Results</text>
+  </g>
+</svg>

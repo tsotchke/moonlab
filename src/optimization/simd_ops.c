@@ -13,6 +13,14 @@
     #ifdef __AVX2__
         #include <immintrin.h>  // AVX2
     #endif
+    #ifdef __AVX512F__
+        #include <immintrin.h>  // AVX-512
+        #define AVX512_AVAILABLE 1
+    #else
+        #define AVX512_AVAILABLE 0
+    #endif
+#else
+    #define AVX512_AVAILABLE 0
 #endif
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
@@ -20,6 +28,14 @@
     #define NEON_AVAILABLE 1
 #else
     #define NEON_AVAILABLE 0
+#endif
+
+// ARM SVE (Scalable Vector Extension) - for Graviton3, A64FX, etc.
+#if defined(__ARM_FEATURE_SVE)
+    #include <arm_sve.h>
+    #define SVE_AVAILABLE 1
+#else
+    #define SVE_AVAILABLE 0
 #endif
 
 /**
@@ -56,10 +72,20 @@ simd_capabilities_t simd_detect_capabilities(void) {
     // Extended features (CPUID function 7)
     if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
         caps.has_avx2 = (ebx & (1 << 5)) != 0;
+        caps.has_avx512f = (ebx & (1 << 16)) != 0;   // AVX-512 Foundation
+        caps.has_avx512dq = (ebx & (1 << 17)) != 0;  // AVX-512 DQ extensions
     }
 #elif defined(__aarch64__)
     // ARM NEON is mandatory on AArch64
     caps.has_sse2 = 1;  // Map to NEON capability
+
+    // Check for SVE support at runtime
+#if SVE_AVAILABLE
+    caps.has_arm_sve = 1;
+#else
+    // On Linux, could check /proc/cpuinfo for sve
+    caps.has_arm_sve = 0;
+#endif
 #endif
     
     return caps;
@@ -72,6 +98,8 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps) {
     buffer[0] = '\0';
     
 #ifdef __x86_64__
+    if (caps->has_avx512f) strcat(buffer, "AVX-512F ");
+    if (caps->has_avx512dq) strcat(buffer, "AVX-512DQ ");
     if (caps->has_avx2) strcat(buffer, "AVX2 ");
     if (caps->has_avx) strcat(buffer, "AVX ");
     if (caps->has_fma) strcat(buffer, "FMA ");
@@ -80,6 +108,7 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps) {
     if (caps->has_sse3) strcat(buffer, "SSE3 ");
     if (caps->has_sse2) strcat(buffer, "SSE2 ");
 #elif defined(__aarch64__)
+    if (caps->has_arm_sve) strcat(buffer, "ARM_SVE ");
     if (caps->has_sse2) strcat(buffer, "ARM_NEON ");  // sse2 flag used for NEON
 #endif
     
@@ -96,8 +125,32 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps) {
 
 double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     if (!amplitudes || n == 0) return 0.0;
-    
-#if defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
+
+#if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
+    // AVX-512 implementation (8 doubles = 4 complex at once)
+    __m512d sum_vec = _mm512_setzero_pd();
+
+    size_t i = 0;
+    // Process 4 complex numbers (8 doubles) at a time
+    for (; i + 3 < n; i += 4) {
+        __m512d data = _mm512_loadu_pd((const double*)&amplitudes[i]);
+        __m512d sq = _mm512_mul_pd(data, data);
+        sum_vec = _mm512_add_pd(sum_vec, sq);
+    }
+
+    // Reduce 8 doubles to single sum
+    double sum = _mm512_reduce_add_pd(sum_vec);
+
+    // Handle remaining elements
+    for (; i < n; i++) {
+        double re = creal(amplitudes[i]);
+        double im = cimag(amplitudes[i]);
+        sum += re * re + im * im;
+    }
+
+    return sum;
+
+#elif defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
     // AVX2 implementation (4 doubles at once)
     __m256d sum_vec = _mm256_setzero_pd();
     
@@ -142,19 +195,48 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     __m128d sum_final = _mm_hadd_pd(sum_vec, sum_vec);
     return _mm_cvtsd_f64(sum_final);
     
+#elif SVE_AVAILABLE
+    // ARM SVE implementation (scalable vector length)
+    // SVE processes svcntd() doubles at a time (varies by platform: 2-8)
+    svfloat64_t sum_vec = svdup_f64(0.0);
+    svbool_t pred = svptrue_b64();
+
+    size_t i = 0;
+    size_t vl = svcntd();  // Number of doubles per vector
+
+    // Process full vectors
+    for (; i + vl/2 <= n; i += vl/2) {
+        // Load vl doubles (vl/2 complex numbers)
+        svfloat64_t data = svld1_f64(pred, (const double*)&amplitudes[i]);
+        svfloat64_t sq = svmul_f64_z(pred, data, data);
+        sum_vec = svadd_f64_z(pred, sum_vec, sq);
+    }
+
+    // Reduce vector to scalar
+    double sum = svaddv_f64(pred, sum_vec);
+
+    // Handle remainder with scalar
+    for (; i < n; i++) {
+        double re = creal(amplitudes[i]);
+        double im = cimag(amplitudes[i]);
+        sum += re * re + im * im;
+    }
+
+    return sum;
+
 #elif NEON_AVAILABLE
     // ARM NEON implementation (2 doubles per complex number)
     float64x2_t sum_vec = vdupq_n_f64(0.0);
-    
+
     for (size_t i = 0; i < n; i++) {
         float64x2_t data = vld1q_f64((const double*)&amplitudes[i]);
         float64x2_t sq = vmulq_f64(data, data);
         sum_vec = vaddq_f64(sum_vec, sq);
     }
-    
+
     // Extract and sum the two lanes
     return vgetq_lane_f64(sum_vec, 0) + vgetq_lane_f64(sum_vec, 1);
-    
+
 #else
     // Scalar fallback
     double sum = 0.0;
@@ -169,8 +251,24 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
 
 void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm) {
     if (!amplitudes || n == 0 || norm == 0.0) return;
-    
-#if defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
+
+#if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
+    // AVX-512: Process 8 doubles (4 complex) at a time
+    __m512d norm_vec = _mm512_set1_pd(norm);
+
+    size_t i = 0;
+    for (; i + 3 < n; i += 4) {
+        __m512d data = _mm512_loadu_pd((double*)&amplitudes[i]);
+        __m512d normalized = _mm512_div_pd(data, norm_vec);
+        _mm512_storeu_pd((double*)&amplitudes[i], normalized);
+    }
+
+    // Handle remaining elements
+    for (; i < n; i++) {
+        amplitudes[i] /= norm;
+    }
+
+#elif defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
     // AVX2: Process 4 doubles (2 complex) at a time
     __m256d norm_vec = _mm256_set1_pd(norm);
     
@@ -196,16 +294,35 @@ void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm) {
         _mm_storeu_pd((double*)&amplitudes[i], normalized);
     }
     
+#elif SVE_AVAILABLE
+    // ARM SVE implementation (scalable vector length)
+    svfloat64_t norm_vec = svdup_f64(norm);
+    svbool_t pred = svptrue_b64();
+
+    size_t i = 0;
+    size_t vl = svcntd();
+
+    for (; i + vl/2 <= n; i += vl/2) {
+        svfloat64_t data = svld1_f64(pred, (double*)&amplitudes[i]);
+        svfloat64_t normalized = svdiv_f64_z(pred, data, norm_vec);
+        svst1_f64(pred, (double*)&amplitudes[i], normalized);
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        amplitudes[i] /= norm;
+    }
+
 #elif NEON_AVAILABLE
     // ARM NEON implementation (2 doubles per complex number)
     float64x2_t norm_vec = vdupq_n_f64(norm);
-    
+
     for (size_t i = 0; i < n; i++) {
         float64x2_t data = vld1q_f64((double*)&amplitudes[i]);
         float64x2_t normalized = vdivq_f64(data, norm_vec);
         vst1q_f64((double*)&amplitudes[i], normalized);
     }
-    
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -313,8 +430,38 @@ void simd_compute_probabilities(
     size_t n
 ) {
     if (!amplitudes || !probabilities || n == 0) return;
-    
-#if defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
+
+#if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
+    // AVX-512: Process 4 complex (8 doubles) at once
+    size_t i = 0;
+    for (; i + 3 < n; i += 4) {
+        __m512d data = _mm512_loadu_pd((const double*)&amplitudes[i]);
+        __m512d sq = _mm512_mul_pd(data, data);
+
+        // Horizontal add within each complex number pair
+        // Result: [re0^2+im0^2, re1^2+im1^2, re2^2+im2^2, re3^2+im3^2, ...]
+        // Use shuffle and add to get probability sums
+        __m512d even = _mm512_shuffle_pd(sq, sq, 0x00);  // Real parts duplicated
+        __m512d odd = _mm512_shuffle_pd(sq, sq, 0xFF);   // Imag parts duplicated
+        __m512d sum = _mm512_add_pd(even, odd);
+
+        // Extract the 4 probabilities
+        double probs[8];
+        _mm512_storeu_pd(probs, sq);
+        probabilities[i]   = probs[0] + probs[1];
+        probabilities[i+1] = probs[2] + probs[3];
+        probabilities[i+2] = probs[4] + probs[5];
+        probabilities[i+3] = probs[6] + probs[7];
+    }
+
+    // Handle remaining
+    for (; i < n; i++) {
+        double re = creal(amplitudes[i]);
+        double im = cimag(amplitudes[i]);
+        probabilities[i] = re * re + im * im;
+    }
+
+#elif defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
     // AVX2: Process 2 complex (4 doubles) at once
     size_t i = 0;
     for (; i + 1 < n; i += 2) {
@@ -346,7 +493,37 @@ void simd_compute_probabilities(
         __m128d sum = _mm_hadd_pd(sq, sq);
         probabilities[i] = _mm_cvtsd_f64(sum);
     }
-    
+
+#elif SVE_AVAILABLE
+    // ARM SVE implementation
+    // SVE uses scalable vectors - process as many as hardware supports
+    svbool_t pred = svptrue_b64();
+    size_t vl = svcntd();
+
+    size_t i = 0;
+    for (; i + vl/2 <= n; i += vl/2) {
+        // Load vl doubles (vl/2 complex numbers)
+        svfloat64_t data = svld1_f64(pred, (const double*)&amplitudes[i]);
+        svfloat64_t sq = svmul_f64_z(pred, data, data);
+
+        // For probability, we need to add pairs: re^2 + im^2
+        // Use SVE's paired add operation
+        double probs_temp[16];  // Max vl is 2048 bits = 16 doubles
+        svst1_f64(pred, probs_temp, sq);
+
+        // Sum pairs manually (re^2 + im^2 for each complex)
+        for (size_t j = 0; j < vl/2 && i + j < n; j++) {
+            probabilities[i + j] = probs_temp[2*j] + probs_temp[2*j + 1];
+        }
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        double re = creal(amplitudes[i]);
+        double im = cimag(amplitudes[i]);
+        probabilities[i] = re * re + im * im;
+    }
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -363,8 +540,23 @@ void simd_compute_probabilities(
 
 void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n) {
     if (!dest || !src || n == 0) return;
-    
-#if defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
+
+#if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
+    // AVX-512: Process 64 bytes at once
+    size_t i = 0;
+    for (; i + 63 < n; i += 64) {
+        __m512i d = _mm512_loadu_si512((const __m512i*)(dest + i));
+        __m512i s = _mm512_loadu_si512((const __m512i*)(src + i));
+        __m512i result = _mm512_xor_si512(d, s);
+        _mm512_storeu_si512((__m512i*)(dest + i), result);
+    }
+
+    // Handle remaining bytes
+    for (; i < n; i++) {
+        dest[i] ^= src[i];
+    }
+
+#elif defined(__AVX2__) && defined(__x86_64__) && !defined(__aarch64__)
     // AVX2: Process 32 bytes at once
     size_t i = 0;
     for (; i + 31 < n; i += 32) {
@@ -388,12 +580,34 @@ void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n) {
         __m128i result = _mm_xor_si128(d, s);
         _mm_storeu_si128((__m128i*)(dest + i), result);
     }
-    
+
     // Handle remaining bytes
     for (; i < n; i++) {
         dest[i] ^= src[i];
     }
-    
+
+#elif SVE_AVAILABLE
+    // ARM SVE: Process scalable vector width bytes at once
+    svbool_t pred = svptrue_b8();
+    size_t vl = svcntb();  // Vector length in bytes
+
+    size_t i = 0;
+    for (; i + vl <= n; i += vl) {
+        svuint8_t d = svld1_u8(pred, dest + i);
+        svuint8_t s = svld1_u8(pred, src + i);
+        svuint8_t result = sveor_u8_z(pred, d, s);
+        svst1_u8(pred, dest + i, result);
+    }
+
+    // Handle remainder with predicated load/store
+    if (i < n) {
+        svbool_t rem_pred = svwhilelt_b8((uint64_t)i, (uint64_t)n);
+        svuint8_t d = svld1_u8(rem_pred, dest + i);
+        svuint8_t s = svld1_u8(rem_pred, src + i);
+        svuint8_t result = sveor_u8_z(rem_pred, d, s);
+        svst1_u8(rem_pred, dest + i, result);
+    }
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -413,8 +627,30 @@ void simd_mix_entropy(
     // Copy state to output, then XOR with entropy
     memcpy(output, state, size);
     simd_xor_bytes(output, entropy, size);
-    
-#if defined(__AVX2__) && !defined(__aarch64__)
+
+#if AVX512_AVAILABLE && !defined(__aarch64__)
+    // Additional mixing with bit rotation (AVX-512)
+    size_t i = 0;
+    for (; i + 63 < size; i += 64) {
+        __m512i data = _mm512_loadu_si512((const __m512i*)(output + i));
+
+        // Rotate left by 3 bits
+        __m512i rotated = _mm512_or_si512(
+            _mm512_slli_epi32(data, 3),
+            _mm512_srli_epi32(data, 29)
+        );
+
+        // XOR with rotation
+        __m512i mixed = _mm512_xor_si512(data, rotated);
+        _mm512_storeu_si512((__m512i*)(output + i), mixed);
+    }
+
+    // Handle remaining with scalar
+    for (; i < size; i++) {
+        output[i] ^= (output[i] << 3) | (output[i] >> 5);
+    }
+
+#elif defined(__AVX2__) && !defined(__aarch64__)
     // Additional mixing with bit rotation (AVX2)
     size_t i = 0;
     for (; i + 31 < size; i += 32) {
@@ -483,11 +719,31 @@ void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n) {
     for (size_t i = 0; i < n; i++) {
         __m128d a = _mm_loadu_pd((double*)&amp0[i]);
         __m128d b = _mm_loadu_pd((double*)&amp1[i]);
-        
+
         _mm_storeu_pd((double*)&amp0[i], b);
         _mm_storeu_pd((double*)&amp1[i], a);
     }
-    
+
+#elif SVE_AVAILABLE
+    // ARM SVE: Scalable complex swap
+    svbool_t pred = svptrue_b64();
+    size_t vl = svcntd();
+
+    size_t i = 0;
+    for (; i + vl/2 <= n; i += vl/2) {
+        svfloat64_t a = svld1_f64(pred, (double*)&amp0[i]);
+        svfloat64_t b = svld1_f64(pred, (double*)&amp1[i]);
+        svst1_f64(pred, (double*)&amp0[i], b);
+        svst1_f64(pred, (double*)&amp1[i], a);
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        complex_t temp = amp0[i];
+        amp0[i] = amp1[i];
+        amp1[i] = temp;
+    }
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -564,13 +820,31 @@ void simd_negate(complex_t *amplitudes, size_t n) {
 #elif defined(__SSE2__) && defined(__x86_64__)
     // SSE2: Negate both components
     __m128d neg_one = _mm_set1_pd(-1.0);
-    
+
     for (size_t i = 0; i < n; i++) {
         __m128d data = _mm_loadu_pd((double*)&amplitudes[i]);
         __m128d result = _mm_mul_pd(data, neg_one);
         _mm_storeu_pd((double*)&amplitudes[i], result);
     }
-    
+
+#elif SVE_AVAILABLE
+    // ARM SVE: Scalable negate
+    svbool_t pred = svptrue_b64();
+    svfloat64_t neg_one = svdup_f64(-1.0);
+    size_t vl = svcntd();
+
+    size_t i = 0;
+    for (; i + vl/2 <= n; i += vl/2) {
+        svfloat64_t data = svld1_f64(pred, (double*)&amplitudes[i]);
+        svfloat64_t result = svmul_f64_z(pred, data, neg_one);
+        svst1_f64(pred, (double*)&amplitudes[i], result);
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        amplitudes[i] = -amplitudes[i];
+    }
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -618,7 +892,44 @@ void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n) {
     for (size_t i = 0; i < n; i++) {
         amplitudes[i] = simd_complex_multiply(amplitudes[i], phase);
     }
-    
+
+#elif SVE_AVAILABLE
+    // ARM SVE: Scalable phase application
+    // Complex multiply: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
+    double phase_re = creal(phase);
+    double phase_im = cimag(phase);
+
+    svbool_t pred = svptrue_b64();
+    svfloat64_t phase_re_vec = svdup_f64(phase_re);
+    svfloat64_t phase_im_vec = svdup_f64(phase_im);
+    size_t vl = svcntd();
+
+    size_t i = 0;
+    for (; i + vl/2 <= n; i += vl/2) {
+        svfloat64_t amp = svld1_f64(pred, (double*)&amplitudes[i]);
+
+        // For complex multiply, we need to process real/imag pairs
+        // This is more complex with SVE's strided structure
+        // Fallback to per-element for now
+        double temp[16];
+        svst1_f64(pred, temp, amp);
+
+        for (size_t j = 0; j < vl && (i + j/2) < n; j += 2) {
+            double a = temp[j];
+            double b = temp[j+1];
+            temp[j] = a * phase_re - b * phase_im;
+            temp[j+1] = a * phase_im + b * phase_re;
+        }
+
+        amp = svld1_f64(pred, temp);
+        svst1_f64(pred, (double*)&amplitudes[i], amp);
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        amplitudes[i] *= phase;
+    }
+
 #else
     // Scalar fallback
     for (size_t i = 0; i < n; i++) {
@@ -637,10 +948,50 @@ uint64_t simd_cumulative_probability_search(
     double random_threshold
 ) {
     if (!amplitudes || n == 0) return 0;
-    
+
     double cumulative = 0.0;
-    
-#if defined(__ARM_NEON) || defined(__aarch64__)
+
+#if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
+    // AVX-512: Process 4 complex numbers at once
+    size_t i = 0;
+
+    for (; i + 3 < n; i += 4) {
+        __m512d data = _mm512_loadu_pd((const double*)&amplitudes[i]);
+        __m512d sq = _mm512_mul_pd(data, data);
+
+        // Extract probabilities: need re^2 + im^2 for each complex
+        double probs[8];
+        _mm512_storeu_pd(probs, sq);
+
+        double prob0 = probs[0] + probs[1];
+        double prob1 = probs[2] + probs[3];
+        double prob2 = probs[4] + probs[5];
+        double prob3 = probs[6] + probs[7];
+
+        cumulative += prob0;
+        if (random_threshold < cumulative) return i;
+
+        cumulative += prob1;
+        if (random_threshold < cumulative) return i + 1;
+
+        cumulative += prob2;
+        if (random_threshold < cumulative) return i + 2;
+
+        cumulative += prob3;
+        if (random_threshold < cumulative) return i + 3;
+    }
+
+    // Handle remainder
+    for (; i < n; i++) {
+        double re = creal(amplitudes[i]);
+        double im = cimag(amplitudes[i]);
+        cumulative += re * re + im * im;
+        if (random_threshold < cumulative) return i;
+    }
+
+    return n - 1;
+
+#elif defined(__ARM_NEON) || defined(__aarch64__)
     // ARM NEON: Process 2 complex numbers (4 doubles) at once
     size_t i = 0;
     

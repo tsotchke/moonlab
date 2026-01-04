@@ -28,7 +28,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include <stdio.h>
@@ -43,17 +43,17 @@
 #include "src/algorithms/tensor_network/tn_measurement.h"
 
 // ============================================================================
-// SIMULATION PARAMETERS
+// SIMULATION PARAMETERS (defaults, can be overridden via command line)
 // ============================================================================
 
-#define NUM_QUBITS         100    // System size (try changing to 200!)
-#define BOND_DIMENSION     128    // Max bond dimension (accuracy vs memory)
-#define TROTTER_STEPS      50     // Time evolution steps
-#define TROTTER_DT         0.05   // Time step size
+#define DEFAULT_NUM_QUBITS     100    // System size
+#define DEFAULT_BOND_DIM       128    // Max bond dimension
+#define DEFAULT_TROTTER_STEPS  50     // Time evolution steps
+#define DEFAULT_TROTTER_DT     0.05   // Time step size
+#define DEFAULT_FIELD_H        0.5    // Transverse field
 
-// Ising model parameters
-#define COUPLING_J         1.0    // ZZ coupling strength
-#define FIELD_H            0.5    // Transverse field (try 0.5, 1.0, 2.0)
+// Fixed parameters
+#define COUPLING_J             1.0    // ZZ coupling strength
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -316,23 +316,33 @@ static void print_entanglement_profile(const tn_mps_state_t *state) {
 // MAIN SIMULATION
 // ============================================================================
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    // Parse command line arguments
+    int num_qubits = DEFAULT_NUM_QUBITS;
+    int bond_dim = DEFAULT_BOND_DIM;
+    int trotter_steps = DEFAULT_TROTTER_STEPS;
+    double trotter_dt = DEFAULT_TROTTER_DT;
+    double field_h = DEFAULT_FIELD_H;
+
+    if (argc > 1) num_qubits = atoi(argv[1]);
+    if (argc > 2) trotter_steps = atoi(argv[2]);
+    if (argc > 3) bond_dim = atoi(argv[3]);
+    if (argc > 4) field_h = atof(argv[4]);
+    if (argc > 5) trotter_dt = atof(argv[5]);
+
+    // Validate
+    if (num_qubits < 4) num_qubits = 4;
+    if (num_qubits > 1000) num_qubits = 1000;
+    if (bond_dim < 2) bond_dim = 2;
+    if (bond_dim > 512) bond_dim = 512;
+    if (trotter_steps < 1) trotter_steps = 1;
+
     printf("\n");
-    printf("[BUILD: 2025-12-29 with ZZ measurement fix]\n");  // Version marker
+    printf("Usage: %s [qubits] [steps] [bond_dim] [field_h] [dt]\n", argv[0]);
     printf("\n");
     printf("╔═══════════════════════════════════════════════════════════════╗\n");
     printf("║   TENSOR NETWORK QUANTUM SIMULATION                           ║\n");
-    printf("║   100-Qubit Transverse Field Ising Model                      ║\n");
-    printf("╠═══════════════════════════════════════════════════════════════╣\n");
-    printf("║                                                               ║\n");
-    printf("║   This simulation is IMPOSSIBLE with state vectors:           ║\n");
-    printf("║   • State vector: 2^100 = 10^30 complex numbers               ║\n");
-    printf("║   • Memory needed: ~16,000,000,000,000,000,000 PETABYTES      ║\n");
-    printf("║                                                               ║\n");
-    printf("║   With tensor networks (MPS):                                 ║\n");
-    printf("║   • Memory needed: ~26 MB (bond dimension 128)                ║\n");
-    printf("║   • Reduction: 10^27 × smaller!                               ║\n");
-    printf("║                                                               ║\n");
+    printf("║   Transverse Field Ising Model                                ║\n");
     printf("╚═══════════════════════════════════════════════════════════════╝\n");
     printf("\n");
 
@@ -346,23 +356,23 @@ int main(void) {
     printf("  SIMULATION PARAMETERS\n");
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     printf("\n");
-    printf("  System size:       %d qubits\n", NUM_QUBITS);
-    printf("  Bond dimension:    %d (max)\n", BOND_DIMENSION);
+    printf("  System size:       %d qubits\n", num_qubits);
+    printf("  Bond dimension:    %d (max)\n", bond_dim);
     printf("  ZZ coupling (J):   %.2f\n", COUPLING_J);
-    printf("  Transverse field:  %.2f\n", FIELD_H);
-    printf("  J/h ratio:         %.2f ", COUPLING_J / FIELD_H);
-    if (COUPLING_J / FIELD_H > 1.0) {
+    printf("  Transverse field:  %.2f\n", field_h);
+    printf("  J/h ratio:         %.2f ", COUPLING_J / field_h);
+    if (COUPLING_J / field_h > 1.0) {
         printf("(ferromagnetic regime)\n");
-    } else if (COUPLING_J / FIELD_H < 1.0) {
+    } else if (COUPLING_J / field_h < 1.0) {
         printf("(paramagnetic regime)\n");
     } else {
         printf("(critical point!)\n");
     }
-    printf("  Trotter steps:     %d × dt=%.3f\n", TROTTER_STEPS, TROTTER_DT);
+    printf("  Trotter steps:     %d × dt=%.3f\n", trotter_steps, trotter_dt);
     printf("\n");
 
     // Estimate memory
-    uint64_t mem = tn_mps_estimate_memory(NUM_QUBITS, BOND_DIMENSION);
+    uint64_t mem = tn_mps_estimate_memory(num_qubits, bond_dim);
     printf("  Estimated memory:  %.2f MB\n", mem / (1024.0 * 1024.0));
     printf("\n");
 
@@ -375,13 +385,13 @@ int main(void) {
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     printf("\n");
 
-    tn_state_config_t config = tn_state_config_create(BOND_DIMENSION, 1e-10);
+    tn_state_config_t config = tn_state_config_create(bond_dim, 1e-10);
     config.auto_canonicalize = true;
 
     // Start in appropriate initial state based on the phase
     // J/h = 2.0 means we're in ferromagnetic regime (g = h/J = 0.5 < 1)
     // Ground state is close to |00...0⟩ or |11...1⟩
-    tn_mps_state_t *state = tn_mps_create_zero(NUM_QUBITS, &config);
+    tn_mps_state_t *state = tn_mps_create_zero(num_qubits, &config);
     if (!state) {
         fprintf(stderr, "Error: Failed to create MPS state\n");
         return 1;
@@ -391,7 +401,7 @@ int main(void) {
     // Add small rotation to break Z₂ symmetry and allow entanglement to build
     printf("  Initializing ferromagnetic-like state |00...0⟩ + small tilt...\n");
     int ret = TN_GATE_SUCCESS;
-    for (uint32_t i = 0; i < NUM_QUBITS; i++) {
+    for (uint32_t i = 0; i < (uint32_t)num_qubits; i++) {
         ret = tn_apply_ry(state, i, 0.1);  // Small tilt to break symmetry
         if (ret != TN_GATE_SUCCESS) {
             fprintf(stderr, "Error: Failed to apply Ry gates\n");
@@ -433,7 +443,7 @@ int main(void) {
 
     for (int step = 0; step <= ground_state_steps; step++) {
         if (step > 0) {
-            ret = apply_trotter_step(state, COUPLING_J, FIELD_H, imag_dt, true);
+            ret = apply_trotter_step(state, COUPLING_J, field_h, imag_dt, true);
             if (ret != TN_GATE_SUCCESS) {
                 fprintf(stderr, "ERROR: Imaginary time Trotter step failed at step %d\n", step);
                 fprintf(stderr, "       Error code: %d (%s)\n", ret, tn_gate_error_string(ret));
@@ -480,13 +490,13 @@ int main(void) {
     printf("\n");
     printf("  PHASE INTERPRETATION:\n");
     printf("  ─────────────────────────────────────────────────────────\n");
-    if (COUPLING_J / FIELD_H > 1.0) {
-        printf("  J/h = %.2f > 1 → FERROMAGNETIC PHASE\n", COUPLING_J / FIELD_H);
+    if (COUPLING_J / field_h > 1.0) {
+        printf("  J/h = %.2f > 1 → FERROMAGNETIC PHASE\n", COUPLING_J / field_h);
         printf("  • Spins prefer to align (⟨ZZ⟩ → +1)\n");
         printf("  • Low entanglement (area law satisfied)\n");
         printf("  • Classical-like order\n");
-    } else if (COUPLING_J / FIELD_H < 1.0) {
-        printf("  J/h = %.2f < 1 → PARAMAGNETIC PHASE\n", COUPLING_J / FIELD_H);
+    } else if (COUPLING_J / field_h < 1.0) {
+        printf("  J/h = %.2f < 1 → PARAMAGNETIC PHASE\n", COUPLING_J / field_h);
         printf("  • Spins align with transverse field\n");
         printf("  • Moderate entanglement\n");
         printf("  • Quantum fluctuations dominate\n");
@@ -507,11 +517,11 @@ int main(void) {
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     printf("\n");
     printf("  Suddenly changing h: %.2f → %.2f and evolving in real time...\n",
-           FIELD_H, FIELD_H * 2.0);
+           field_h, field_h * 2.0);
     printf("  This creates non-equilibrium quantum dynamics!\n");
     printf("\n");
 
-    double h_quench = FIELD_H * 2.0;  // Quench to different field strength
+    double h_quench = field_h * 2.0;  // Quench to different field strength
 
     printf("  Time      ⟨Z⟩      ⟨ZZ⟩     S(L/2)    Max Bond\n");
     printf("  ─────────────────────────────────────────────────────────\n");
@@ -533,7 +543,7 @@ int main(void) {
         if (step % 4 == 0) {
             double mag = compute_magnetization(state);
             double corr = compute_zz_correlation(state);
-            double s_center = tn_mps_entanglement_entropy(state, NUM_QUBITS / 2);
+            double s_center = tn_mps_entanglement_entropy(state, num_qubits / 2);
             tn_mps_stats_t s = tn_mps_get_stats(state);
             printf("  %.2f    %+.4f   %+.4f    %.4f      %4u\n",
                    t, mag, corr, s_center, s.max_bond_dim);
@@ -559,9 +569,9 @@ int main(void) {
 
     stats = tn_mps_get_stats(state);
 
-    printf("  ✓ Simulated %d-qubit quantum spin chain\n", NUM_QUBITS);
+    printf("  ✓ Simulated %d-qubit quantum spin chain\n", num_qubits);
     printf("  ✓ Found approximate ground state via imaginary time evolution\n");
-    printf("  ✓ Analyzed quantum phase (J/h = %.2f)\n", COUPLING_J / FIELD_H);
+    printf("  ✓ Analyzed quantum phase (J/h = %.2f)\n", COUPLING_J / field_h);
     printf("  ✓ Simulated non-equilibrium quench dynamics\n");
     printf("\n");
     printf("  Final state statistics:\n");
@@ -572,10 +582,11 @@ int main(void) {
     printf("\n");
 
     printf("  TRY EXPERIMENTING:\n");
-    printf("    • Change FIELD_H to 1.0 to see critical point behavior\n");
-    printf("    • Change FIELD_H to 2.0 to see paramagnetic phase\n");
-    printf("    • Increase NUM_QUBITS to 200 or even 500!\n");
-    printf("    • Increase BOND_DIMENSION for better accuracy\n");
+    printf("  Try different parameters:\n");
+    printf("    • ./quantum_spin_chain 100 50 128 1.0   # Critical point\n");
+    printf("    • ./quantum_spin_chain 100 50 128 2.0   # Paramagnetic phase\n");
+    printf("    • ./quantum_spin_chain 200 50 128 0.5   # Larger system\n");
+    printf("    • ./quantum_spin_chain 100 50 256 0.5   # Higher accuracy\n");
     printf("\n");
 
     // Cleanup

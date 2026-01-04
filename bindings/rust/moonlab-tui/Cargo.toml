@@ -1,0 +1,43 @@
+[package]
+name = "moonlab-tui"
+version = "0.1.0"
+edition = "2021"
+authors = ["Moonlab Team"]
+description = "Beautiful terminal UI for Moonlab quantum simulator"
+keywords = ["quantum", "tui", "terminal", "simulator"]
+categories = ["science", "visualization", "command-line-utilities"]
+
+[[bin]]
+name = "moonlab"
+path = "src/main.rs"
+
+[dependencies]
+moonlab = { path = "../moonlab" }
+moonlab-sys = { path = "../moonlab-sys" }
+
+# TUI Framework (pinned to versions compatible with rustc 1.86)
+ratatui = "0.26"
+crossterm = "0.27"
+
+# Async runtime for responsive UI
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Math & Complex numbers
+num-complex = "0.4"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

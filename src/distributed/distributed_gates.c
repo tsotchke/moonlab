@@ -3,7 +3,7 @@
  * @brief Distributed quantum gate implementation
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "distributed_gates.h"
@@ -1028,58 +1028,122 @@ dist_gate_error_t dist_mcx(partitioned_state_t* state,
         return dist_toffoli(state, controls[0], controls[1], target);
     }
 
-    // General MCX: decompose into Toffolis
-    // This is a simplified implementation
-    // Full implementation uses gray code or recursion
+    // General MCX with n>2 controls: Use recursive V-chain decomposition
+    // MCX(c1,...,cn,target) = Toffoli(c_{n-1},cn,target) with recursive control
+    //
+    // For distributed implementation, we handle three cases:
+    // 1. All partition controls must be 1, else gate is identity
+    // 2. Target is local: apply MCX directly on local amplitudes
+    // 3. Target is partition qubit: exchange amplitudes via MPI
 
-    // For now, check all controls and apply X if all are 1
     int rank = mpi_get_rank(state->dist_ctx);
     int tgt_partition = partition_is_partition_qubit(state, target);
 
-    // Check if all partition control qubits are 1
-    int partition_controls_one = 1;
+    // Separate controls into local and partition qubits
+    uint32_t num_local_controls = 0;
+    uint32_t num_partition_controls = 0;
+    uint32_t *local_controls = malloc(num_controls * sizeof(uint32_t));
+    if (!local_controls) return DIST_GATE_ERROR_ALLOC;
+
     for (uint32_t c = 0; c < num_controls; c++) {
         if (partition_is_partition_qubit(state, controls[c])) {
+            // Check if partition control bit is 0 - if so, gate is identity
             int bit = (rank >> (controls[c] - state->local_qubits)) & 1;
             if (!bit) {
-                partition_controls_one = 0;
-                break;
+                free(local_controls);
+                return DIST_GATE_SUCCESS;  // Partition control is 0, gate is no-op
             }
+            num_partition_controls++;
+        } else {
+            local_controls[num_local_controls++] = controls[c];
         }
     }
 
-    if (!partition_controls_one) {
-        return DIST_GATE_SUCCESS;  // Some partition control is 0
+    // Sanity check: all controls must be accounted for
+    if (num_local_controls + num_partition_controls != num_controls) {
+        free(local_controls);
+        return DIST_GATE_ERROR_INVALID_QUBIT;
     }
 
-    // Now handle remaining local controls + target
-    // This is a simplification - proper implementation needs full exchange
-    if (!tgt_partition) {
-        uint64_t tgt_stride = 1ULL << target;
+    // All partition controls are 1, proceed with local controls
+    if (num_local_controls == 0) {
+        // All controls are partition qubits and all are 1
+        // Just apply X to target
+        free(local_controls);
+        return dist_pauli_x(state, target);
+    }
 
+    // Handle target is partition qubit case
+    if (tgt_partition) {
+        // Need MPI exchange: partner rank has target bit flipped
+        int target_bit_pos = target - state->local_qubits;
+        int partner_rank = rank ^ (1 << target_bit_pos);
+
+        // Build control mask for local controls
+        uint64_t local_ctrl_mask = 0;
+        for (uint32_t c = 0; c < num_local_controls; c++) {
+            local_ctrl_mask |= (1ULL << local_controls[c]);
+        }
+
+        // Exchange amplitudes where all local controls are 1
+        double complex *send_buf = malloc(state->local_count * sizeof(double complex));
+        double complex *recv_buf = malloc(state->local_count * sizeof(double complex));
+        if (!send_buf || !recv_buf) {
+            free(local_controls);
+            free(send_buf);
+            free(recv_buf);
+            return DIST_GATE_ERROR_ALLOC;
+        }
+
+        // Pack amplitudes where all local controls are 1
+        uint64_t send_count = 0;
         for (uint64_t i = 0; i < state->local_count; i++) {
-            // Check local control bits
-            int all_local_ones = 1;
-            for (uint32_t c = 0; c < num_controls; c++) {
-                if (!partition_is_partition_qubit(state, controls[c])) {
-                    if (!get_bit(i, controls[c])) {
-                        all_local_ones = 0;
-                        break;
-                    }
-                }
+            if ((i & local_ctrl_mask) == local_ctrl_mask) {
+                send_buf[send_count++] = state->amplitudes[i];
             }
+        }
 
-            if (all_local_ones && !(i & tgt_stride)) {
-                uint64_t partner = i ^ tgt_stride;
-                if (partner < state->local_count) {
-                    double complex tmp = state->amplitudes[i];
-                    state->amplitudes[i] = state->amplitudes[partner];
-                    state->amplitudes[partner] = tmp;
-                }
+        // Exchange with partner rank
+        mpi_sendrecv(state->dist_ctx, send_buf, send_count * sizeof(double complex),
+                     partner_rank, recv_buf, send_count * sizeof(double complex), partner_rank);
+
+        // Unpack received amplitudes
+        uint64_t recv_idx = 0;
+        for (uint64_t i = 0; i < state->local_count; i++) {
+            if ((i & local_ctrl_mask) == local_ctrl_mask) {
+                state->amplitudes[i] = recv_buf[recv_idx++];
+            }
+        }
+
+        free(send_buf);
+        free(recv_buf);
+        free(local_controls);
+        return DIST_GATE_SUCCESS;
+    }
+
+    // Target is local: apply MCX directly
+    uint64_t tgt_stride = 1ULL << target;
+
+    // Build control mask for local controls
+    uint64_t local_ctrl_mask = 0;
+    for (uint32_t c = 0; c < num_local_controls; c++) {
+        local_ctrl_mask |= (1ULL << local_controls[c]);
+    }
+
+    // Apply MCX: swap amplitudes when all controls are 1
+    for (uint64_t i = 0; i < state->local_count; i++) {
+        // Check all local control bits
+        if ((i & local_ctrl_mask) == local_ctrl_mask && !(i & tgt_stride)) {
+            uint64_t partner = i ^ tgt_stride;
+            if (partner < state->local_count) {
+                double complex tmp = state->amplitudes[i];
+                state->amplitudes[i] = state->amplitudes[partner];
+                state->amplitudes[partner] = tmp;
             }
         }
     }
 
+    free(local_controls);
     return DIST_GATE_SUCCESS;
 }
 

@@ -118,6 +118,7 @@ OPTIMIZATION_DIR = src/optimization
 UTILS_DIR = src/utils
 APPLICATIONS_DIR = src/applications
 PROFILER_DIR = tools/profiler
+VISUALIZATION_DIR = src/visualization
 TEST_DIR = tests
 EXAMPLES_DIR = examples
 
@@ -128,24 +129,32 @@ CFLAGS += -Isrc
 QUANTUM_SRCS = $(wildcard $(QUANTUM_DIR)/*.c)
 ALGORITHMS_SRCS = $(wildcard $(ALGORITHMS_DIR)/*.c)
 TENSOR_NETWORK_SRCS = $(wildcard $(ALGORITHMS_DIR)/tensor_network/*.c)
+CHEMISTRY_SRCS = $(wildcard $(ALGORITHMS_DIR)/chemistry/*.c)
+MBL_SRCS = $(wildcard $(ALGORITHMS_DIR)/mbl/*.c)
+TOPOLOGICAL_SRCS = $(wildcard $(ALGORITHMS_DIR)/topological/*.c)
 OPTIMIZATION_SRCS = $(wildcard $(OPTIMIZATION_DIR)/*.c)
 UTILS_SRCS = $(wildcard $(UTILS_DIR)/*.c)
 APPLICATIONS_SRCS = $(wildcard $(APPLICATIONS_DIR)/*.c)
 PROFILER_SRCS = $(wildcard $(PROFILER_DIR)/*.c)
+VISUALIZATION_SRCS = $(wildcard $(VISUALIZATION_DIR)/*.c)
 TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
 
 # Object files
 QUANTUM_OBJS = $(QUANTUM_SRCS:.c=.o)
 ALGORITHMS_OBJS = $(ALGORITHMS_SRCS:.c=.o)
 TENSOR_NETWORK_OBJS = $(TENSOR_NETWORK_SRCS:.c=.o)
+CHEMISTRY_OBJS = $(CHEMISTRY_SRCS:.c=.o)
+MBL_OBJS = $(MBL_SRCS:.c=.o)
+TOPOLOGICAL_OBJS = $(TOPOLOGICAL_SRCS:.c=.o)
 OPTIMIZATION_OBJS = $(OPTIMIZATION_SRCS:.c=.o)
 UTILS_OBJS = $(UTILS_SRCS:.c=.o)
 APPLICATIONS_OBJS = $(APPLICATIONS_SRCS:.c=.o)
 PROFILER_OBJS = $(PROFILER_SRCS:.c=.o)
+VISUALIZATION_OBJS = $(VISUALIZATION_SRCS:.c=.o)
 TEST_OBJS = $(TEST_SRCS:.c=.o)
 
 # Combined object files for complete library
-ALL_LIB_OBJS = $(QUANTUM_OBJS) $(ALGORITHMS_OBJS) $(TENSOR_NETWORK_OBJS) $(OPTIMIZATION_OBJS) $(UTILS_OBJS) $(APPLICATIONS_OBJS) $(PROFILER_OBJS)
+ALL_LIB_OBJS = $(QUANTUM_OBJS) $(ALGORITHMS_OBJS) $(TENSOR_NETWORK_OBJS) $(CHEMISTRY_OBJS) $(MBL_OBJS) $(TOPOLOGICAL_OBJS) $(OPTIMIZATION_OBJS) $(UTILS_OBJS) $(APPLICATIONS_OBJS) $(PROFILER_OBJS) $(VISUALIZATION_OBJS)
 
 # Add Metal GPU support on macOS
 ifeq ($(shell uname),Darwin)
@@ -154,6 +163,7 @@ endif
 
 # Output files
 LIB = libquantumsim.so
+LIB_STATIC = libquantumsim.a
 QSIM_TEST = qsim_test
 GROVER_PARALLEL_BENCH = grover_parallel_benchmark
 
@@ -172,6 +182,11 @@ EXAMPLE_TSP = examples/applications/tsp_logistics
 EXAMPLE_SPIN_CHAIN = examples/tensor_network/quantum_spin_chain
 EXAMPLE_CRITICAL_POINT = examples/tensor_network/quantum_critical_point
 
+# Topological physics examples
+EXAMPLE_KITAEV_CHAIN = examples/topological/kitaev_chain
+EXAMPLE_SKYRMION_GS = examples/topological/skyrmion_ground_state
+EXAMPLE_SKYRMION_GATES = examples/topological/skyrmion_qubit_gates
+
 ALL_EXAMPLES = $(EXAMPLE_HASH_COLLISION) \
                $(EXAMPLE_LARGE_SCALE) \
                $(EXAMPLE_OPTIMIZED) \
@@ -185,13 +200,21 @@ ALL_EXAMPLES = $(EXAMPLE_HASH_COLLISION) \
                $(EXAMPLE_PORTFOLIO) \
                $(EXAMPLE_TSP) \
                $(EXAMPLE_SPIN_CHAIN) \
-               $(EXAMPLE_CRITICAL_POINT)
+               $(EXAMPLE_CRITICAL_POINT) \
+               $(EXAMPLE_KITAEV_CHAIN) \
+               $(EXAMPLE_SKYRMION_GS) \
+               $(EXAMPLE_SKYRMION_GATES)
 
 # Test executables
 HEALTH_TESTS = tests/health_tests_test
 BELL_TEST_DEMO = tests/bell_test_demo
 GATE_TEST = tests/gate_test
 CORRELATION_TEST = tests/correlation_test
+
+# Benchmark tools
+BENCHMARK_SCALING = tools/benchmarks/scaling_benchmark
+BENCHMARK_MEMORY = tools/benchmarks/memory_profiler
+ALL_BENCHMARKS = $(BENCHMARK_SCALING) $(BENCHMARK_MEMORY)
 
 # Unit tests
 UNIT_TEST_STATE = tests/unit/test_quantum_state
@@ -205,19 +228,37 @@ ALL_TESTS = $(QSIM_TEST) $(HEALTH_TESTS) $(BELL_TEST_DEMO) $(GATE_TEST) $(CORREL
             $(UNIT_TEST_STATE) $(UNIT_TEST_GATES) $(UNIT_TEST_MEMORY_ALIGN) $(UNIT_TEST_SIMD_DISPATCH) \
             $(UNIT_TEST_STRIDE_GATES) $(UNIT_TEST_TENSOR_NETWORK)
 
+# Integration tests
+INTEGRATION_TEST_GROVER = tests/integration/test_grover_integration
+INTEGRATION_TEST_VQE = tests/integration/test_vqe_integration
+INTEGRATION_TEST_QAOA = tests/integration/test_qaoa_integration
+INTEGRATION_TEST_QPE = tests/integration/test_qpe_integration
+ALL_INTEGRATION_TESTS = $(INTEGRATION_TEST_GROVER) $(INTEGRATION_TEST_VQE) $(INTEGRATION_TEST_QAOA) $(INTEGRATION_TEST_QPE)
+
 # Phony targets
 .PHONY: all clean test tests examples test_examples test_health test_v3 showcase quantum_examples parallel_bench \
         hash_collision large_scale optimized password metal_batch metal_gpu phase34 metal_demos clean_examples \
-        test_bell test_gate test_correlation clean_tests unit_tests test_unit coverage
+        test_bell test_gate test_correlation clean_tests unit_tests test_unit coverage \
+        kitaev_chain topological spin_chain critical_point benchmarks bench_scaling bench_memory clean_benchmarks \
+        integration-tests test_integration
 
 # Main targets
 all: $(LIB) $(QSIM_TEST)
 	@echo "Running Quantum Simulator v3.0 optimized tests..."
 	LD_LIBRARY_PATH=. ./$(QSIM_TEST)
 
-# Build library
+# Build shared library
 $(LIB): $(ALL_LIB_OBJS)
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
+
+# Build static library (for Rust FFI)
+$(LIB_STATIC): $(ALL_LIB_OBJS)
+	ar rcs $@ $^
+	@echo "Static library built: $@"
+
+# Target for Rust bindings
+rust-lib: $(LIB_STATIC)
+	@echo "Static library ready for Rust FFI"
 
 # ============================================================================
 # TEST TARGETS
@@ -315,6 +356,44 @@ $(UNIT_TEST_STRIDE_GATES): $(TEST_DIR)/unit/test_stride_gates.o $(OPTIMIZATION_D
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 $(UNIT_TEST_TENSOR_NETWORK): $(TEST_DIR)/unit/test_tensor_network.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Integration tests
+integration-tests: $(ALL_INTEGRATION_TESTS)
+	@echo "All integration tests built successfully"
+
+test_integration: integration-tests
+	@echo ""
+	@echo "╔═══════════════════════════════════════════════════════════╗"
+	@echo "║         RUNNING INTEGRATION TEST SUITE                    ║"
+	@echo "╚═══════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "=== Grover Integration Tests ==="
+	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_GROVER)
+	@echo ""
+	@echo "=== VQE Integration Tests ==="
+	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_VQE)
+	@echo ""
+	@echo "=== QAOA Integration Tests ==="
+	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_QAOA)
+	@echo ""
+	@echo "=== QPE Integration Tests ==="
+	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_QPE)
+	@echo ""
+	@echo "╔═══════════════════════════════════════════════════════════╗"
+	@echo "║         INTEGRATION TESTS COMPLETED                       ║"
+	@echo "╚═══════════════════════════════════════════════════════════╝"
+
+$(INTEGRATION_TEST_GROVER): $(TEST_DIR)/integration/test_grover_integration.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(INTEGRATION_TEST_VQE): $(TEST_DIR)/integration/test_vqe_integration.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(INTEGRATION_TEST_QAOA): $(TEST_DIR)/integration/test_qaoa_integration.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(INTEGRATION_TEST_QPE): $(TEST_DIR)/integration/test_qpe_integration.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 # Run all tests
@@ -463,6 +542,80 @@ critical_point: $(EXAMPLE_CRITICAL_POINT)
 	@echo "Running 200-qubit quantum critical point analysis..."
 	LD_LIBRARY_PATH=. ./$(EXAMPLE_CRITICAL_POINT)
 
+# ============================================================================
+# TOPOLOGICAL PHYSICS EXAMPLES
+# ============================================================================
+
+# Kitaev chain (1D topological superconductor)
+$(EXAMPLE_KITAEV_CHAIN): $(EXAMPLES_DIR)/topological/kitaev_chain.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Run Kitaev chain demo (Majorana fermions, topological phase transition)
+kitaev_chain: $(EXAMPLE_KITAEV_CHAIN)
+	@echo "Running Kitaev chain topological simulation..."
+	LD_LIBRARY_PATH=. ./$(EXAMPLE_KITAEV_CHAIN)
+
+# Skyrmion ground state simulation
+$(EXAMPLE_SKYRMION_GS): $(EXAMPLES_DIR)/topological/skyrmion_ground_state.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Skyrmion qubit gates demonstration
+$(EXAMPLE_SKYRMION_GATES): $(EXAMPLES_DIR)/topological/skyrmion_qubit_gates.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+# Run skyrmion demos
+skyrmion: $(EXAMPLE_SKYRMION_GS)
+	@echo "Running 2D skyrmion ground state simulation..."
+	LD_LIBRARY_PATH=. ./$(EXAMPLE_SKYRMION_GS)
+
+skyrmion-gates: $(EXAMPLE_SKYRMION_GATES)
+	@echo "Running skyrmion qubit gate demonstration..."
+	LD_LIBRARY_PATH=. ./$(EXAMPLE_SKYRMION_GATES)
+
+# Build all topological examples
+topological: kitaev_chain $(EXAMPLE_SKYRMION_GS) $(EXAMPLE_SKYRMION_GATES)
+	@echo "Topological physics examples built successfully"
+
+# ============================================================================
+# BENCHMARK TOOLS
+# ============================================================================
+
+# Build all benchmarks
+benchmarks: $(ALL_BENCHMARKS)
+	@echo ""
+	@echo "╔═══════════════════════════════════════════════════════════╗"
+	@echo "║         BENCHMARK TOOLS BUILT SUCCESSFULLY                 ║"
+	@echo "╠═══════════════════════════════════════════════════════════╣"
+	@echo "║                                                           ║"
+	@echo "║  Run benchmarks:                                          ║"
+	@echo "║    ./$(BENCHMARK_SCALING) --help                          ║"
+	@echo "║    ./$(BENCHMARK_MEMORY) --help                           ║"
+	@echo "║                                                           ║"
+	@echo "╚═══════════════════════════════════════════════════════════╝"
+	@echo ""
+
+# Scaling benchmark
+$(BENCHMARK_SCALING): tools/benchmarks/scaling_benchmark.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+bench_scaling: $(BENCHMARK_SCALING)
+	@echo "Running scaling benchmark..."
+	LD_LIBRARY_PATH=. ./$(BENCHMARK_SCALING)
+
+# Memory profiler
+$(BENCHMARK_MEMORY): tools/benchmarks/memory_profiler.o $(ALL_LIB_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+bench_memory: $(BENCHMARK_MEMORY)
+	@echo "Running memory profiler..."
+	LD_LIBRARY_PATH=. ./$(BENCHMARK_MEMORY)
+
+# Clean benchmarks
+clean_benchmarks:
+	rm -f $(ALL_BENCHMARKS)
+	rm -f tools/benchmarks/*.o
+	@echo "Benchmarks cleaned"
+
 # Metal examples (require Objective-C++ and Metal framework)
 # Build with gcc (standard linker) to avoid clang++/gcc LTO incompatibility
 $(EXAMPLE_METAL_BATCH): $(EXAMPLES_DIR)/quantum/metal_batch_benchmark.o $(OPTIMIZATION_DIR)/gpu_metal.o $(ALL_LIB_OBJS)
@@ -480,6 +633,8 @@ clean_examples:
 	rm -f $(ALL_EXAMPLES)
 	rm -f $(EXAMPLES_DIR)/quantum/*.o
 	rm -f $(EXAMPLES_DIR)/applications/*.o
+	rm -f $(EXAMPLES_DIR)/tensor_network/*.o
+	rm -f $(EXAMPLES_DIR)/topological/*.o
 	@echo "Examples cleaned"
 
 # Clean tests
@@ -501,10 +656,18 @@ coverage:
 	@echo "Coverage data generated. Use 'lcov' for HTML reports."
 
 # Clean all
-clean: clean_examples clean_tests
+clean: clean_examples clean_tests clean_benchmarks
 	rm -f $(GROVER_PARALLEL_BENCH)
+	rm -f $(LIB)
+	rm -rf build/
+	rm -rf *.dSYM
+	rm -rf tests/*.dSYM
+	rm -f tests/test_comprehensive tests/test_dmrg tests/test_dmrg_exe
+	rm -f tests/integration/test_*
 	find . -name "*.o" -delete
 	find . -name "*.so" -delete
+	find . -name "*.dylib" -delete
+	find . -name "*.a" -delete
 	@echo "Build artifacts cleaned"
 
 # Dependencies
@@ -522,3 +685,4 @@ $(OPTIMIZATION_OBJS): $(wildcard $(OPTIMIZATION_DIR)/*.h) $(wildcard $(QUANTUM_D
 $(UTILS_OBJS): $(wildcard $(UTILS_DIR)/*.h)
 $(APPLICATIONS_OBJS): $(wildcard $(APPLICATIONS_DIR)/*.h) $(wildcard $(QUANTUM_DIR)/*.h)
 $(PROFILER_OBJS): $(wildcard $(PROFILER_DIR)/*.h)
+$(VISUALIZATION_OBJS): $(wildcard $(VISUALIZATION_DIR)/*.h)

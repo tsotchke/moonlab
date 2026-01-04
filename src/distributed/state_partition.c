@@ -3,7 +3,7 @@
  * @brief State vector partitioning implementation
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "state_partition.h"

@@ -1590,19 +1590,160 @@ double metal_mps_expectation_zz(
     // Implementation follows same pattern as metal_mps_expectation_z
     // but applies transferMatrixZPipeline at both site_i and site_j
 
-    // Simplified implementation - in production, this would be more optimized
+    // Full implementation using transfer matrix method with Z at both sites
     @autoreleasepool {
-        // For now, use the decomposition <Z_i Z_j> computation
-        // Full implementation would follow transfer matrix pattern
-        // with Z insertion at both sites
+        // Get maximum bond dimension for buffer allocation
+        uint32_t max_chi = 1;
+        for (uint32_t s = 0; s < num_sites - 1; s++) {
+            if (bond_dims[s] > max_chi) max_chi = bond_dims[s];
+        }
 
-        // Placeholder - return product approximation
-        double z_i = metal_mps_expectation_z(ctx, mps_tensors, bond_dims, num_sites, site_i);
-        double z_j = metal_mps_expectation_z(ctx, mps_tensors, bond_dims, num_sites, site_j);
+        // Allocate transfer matrices (float precision for Metal, complex = 2 floats)
+        size_t transfer_size = max_chi * max_chi * sizeof(float) * 2;
+        metal_buffer_t* T_left = metal_buffer_create(ctx, transfer_size);
+        metal_buffer_t* T_curr = metal_buffer_create(ctx, transfer_size);
+        metal_buffer_t* T_temp = metal_buffer_create(ctx, transfer_size);
 
-        // This is only correct for product states
-        // Full implementation needed for correlated states
-        return z_i * z_j;
+        if (!T_left || !T_curr || !T_temp) {
+            if (T_left) metal_buffer_free(T_left);
+            if (T_curr) metal_buffer_free(T_curr);
+            if (T_temp) metal_buffer_free(T_temp);
+            return 0.0;
+        }
+
+        // Initialize T_left as identity
+        float* T_left_ptr = (float*)metal_buffer_contents(T_left);
+        memset(T_left_ptr, 0, transfer_size);
+        uint32_t init_chi = (site_i > 0) ? bond_dims[site_i - 1] : 1;
+        for (uint32_t i = 0; i < init_chi; i++) {
+            T_left_ptr[(i * max_chi + i) * 2] = 1.0f;
+        }
+
+        // Phase 1: Contract from left to site_i (identity transfer matrices)
+        for (uint32_t s = 0; s < site_i; s++) {
+            uint32_t chi_s_l = (s > 0) ? bond_dims[s - 1] : 1;
+            uint32_t chi_s_r = bond_dims[s];
+
+            if (ctx->transferMatrixIdentityPipeline) {
+                metal_buffer_t* buffers[] = {mps_tensors[s], T_curr};
+                uint32_t constants[] = {chi_s_l, chi_s_r};
+                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
+                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
+            }
+
+            if (s > 0 && ctx->contractTransferPipeline) {
+                metal_buffer_t* buffers[] = {T_left, T_curr, T_temp};
+                uint32_t constants[] = {chi_s_l};
+                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
+                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
+                metal_buffer_t* tmp = T_left;
+                T_left = T_temp;
+                T_temp = tmp;
+            } else if (s == 0) {
+                memcpy(T_left_ptr, metal_buffer_contents(T_curr), transfer_size);
+            }
+        }
+
+        // Phase 2: Apply Z transfer matrix at site_i
+        uint32_t chi_i_l = (site_i > 0) ? bond_dims[site_i - 1] : 1;
+        uint32_t chi_i_r = (site_i < num_sites - 1) ? bond_dims[site_i] : 1;
+
+        if (ctx->transferMatrixZPipeline) {
+            metal_buffer_t* buffers[] = {mps_tensors[site_i], T_curr};
+            uint32_t constants[] = {chi_i_l, chi_i_r};
+            dispatch_kernel_2d(ctx, ctx->transferMatrixZPipeline,
+                              buffers, 2, constants, 2, chi_i_l, chi_i_l);
+        }
+
+        if (site_i > 0 && ctx->contractTransferPipeline) {
+            metal_buffer_t* buffers[] = {T_left, T_curr, T_temp};
+            uint32_t constants[] = {chi_i_l};
+            dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
+                              buffers, 3, constants, 1, chi_i_l, chi_i_l);
+            metal_buffer_t* tmp = T_curr;
+            T_curr = T_temp;
+            T_temp = tmp;
+        }
+
+        // Phase 3: Contract from site_i+1 to site_j-1 (identity transfer matrices)
+        for (uint32_t s = site_i + 1; s < site_j; s++) {
+            uint32_t chi_s_l = bond_dims[s - 1];
+            uint32_t chi_s_r = (s < num_sites - 1) ? bond_dims[s] : 1;
+
+            if (ctx->transferMatrixIdentityPipeline) {
+                metal_buffer_t* buffers[] = {mps_tensors[s], T_temp};
+                uint32_t constants[] = {chi_s_l, chi_s_r};
+                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
+                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
+            }
+
+            if (ctx->contractTransferPipeline) {
+                metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
+                uint32_t constants[] = {chi_s_l};
+                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
+                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
+                metal_buffer_t* tmp = T_curr;
+                T_curr = T_left;
+                T_left = tmp;
+            }
+        }
+
+        // Phase 4: Apply Z transfer matrix at site_j
+        uint32_t chi_j_l = bond_dims[site_j - 1];
+        uint32_t chi_j_r = (site_j < num_sites - 1) ? bond_dims[site_j] : 1;
+
+        if (ctx->transferMatrixZPipeline) {
+            metal_buffer_t* buffers[] = {mps_tensors[site_j], T_temp};
+            uint32_t constants[] = {chi_j_l, chi_j_r};
+            dispatch_kernel_2d(ctx, ctx->transferMatrixZPipeline,
+                              buffers, 2, constants, 2, chi_j_l, chi_j_l);
+        }
+
+        if (ctx->contractTransferPipeline) {
+            metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
+            uint32_t constants[] = {chi_j_l};
+            dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
+                              buffers, 3, constants, 1, chi_j_l, chi_j_l);
+            metal_buffer_t* tmp = T_curr;
+            T_curr = T_left;
+            T_left = tmp;
+        }
+
+        // Phase 5: Contract from site_j+1 to right (identity transfer matrices)
+        for (uint32_t s = site_j + 1; s < num_sites; s++) {
+            uint32_t chi_s_l = bond_dims[s - 1];
+            uint32_t chi_s_r = (s < num_sites - 1) ? bond_dims[s] : 1;
+
+            if (ctx->transferMatrixIdentityPipeline) {
+                metal_buffer_t* buffers[] = {mps_tensors[s], T_temp};
+                uint32_t constants[] = {chi_s_l, chi_s_r};
+                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
+                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
+            }
+
+            if (ctx->contractTransferPipeline) {
+                metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
+                uint32_t constants[] = {chi_s_l};
+                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
+                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
+                metal_buffer_t* tmp = T_curr;
+                T_curr = T_left;
+                T_left = tmp;
+            }
+        }
+
+        // Extract trace (real part of diagonal elements)
+        double expectation = 0.0;
+        float* T_final = (float*)metal_buffer_contents(T_curr);
+        uint32_t final_chi = (num_sites > 1) ? bond_dims[num_sites - 2] : 1;
+        for (uint32_t i = 0; i < final_chi; i++) {
+            expectation += (double)T_final[(i * max_chi + i) * 2];
+        }
+
+        metal_buffer_free(T_left);
+        metal_buffer_free(T_curr);
+        metal_buffer_free(T_temp);
+        return expectation;
     }
 }
 

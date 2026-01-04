@@ -8,7 +8,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "tn_measurement.h"
@@ -27,22 +27,18 @@
 #endif
 
 // Use GPU for measurement when bond dimension exceeds this threshold
-// DISABLED: Data type mismatch between CPU (double complex) and Metal (float2)
-#define GPU_MEASUREMENT_THRESHOLD 1000000
+#define GPU_MEASUREMENT_THRESHOLD 32  // Use GPU for larger bond dimensions
 
 #if HAS_METAL
-static metal_compute_ctx_t *g_metal_ctx_measure = NULL;
-static bool g_gpu_init_attempted_measure = false;
-
 /**
- * @brief Get or create Metal compute context for measurements
+ * @brief Get Metal compute context from unified GPU context
+ *
+ * Uses the global GPU context from tensor.c to avoid double initialization.
  */
 static metal_compute_ctx_t *get_metal_context_measure(void) {
-    if (!g_gpu_init_attempted_measure) {
-        g_gpu_init_attempted_measure = true;
-        g_metal_ctx_measure = metal_compute_init();
-    }
-    return g_metal_ctx_measure;
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) return NULL;
+    return tensor_gpu_get_metal(gpu_ctx);
 }
 
 /**
@@ -241,26 +237,29 @@ tn_measure_error_t tn_measure_probability(const tn_mps_state_t *state,
 
         double complex prob_val = 0.0;
 
-        // Simplified: for single site with environments, contract all
+        // Contract environment tensors with projected state tensors
+        // Environment tensor structure after MPS contraction:
+        //   left_env has shape [1, 1, chi_l, chi_l] due to MPS left boundary condition
+        //   right_env has shape [chi_r, 1, chi_r, 1] due to MPS right boundary condition
+        // This allows efficient 2D-style indexing: [0,0,l,lp] -> l*chi + lp
         if (left_env && right_env) {
-            // left_env[l, l'], projected[l, r], projected_c[l', r'], right_env[r, r']
-            // Contract l, l', r, r'
+            // Full contraction: Tr(left_env * |proj><proj| * right_env)
             for (uint32_t l = 0; l < left_dim; l++) {
                 for (uint32_t lp = 0; lp < left_dim; lp++) {
                     for (uint32_t r = 0; r < right_dim; r++) {
                         for (uint32_t rp = 0; rp < right_dim; rp++) {
-                            // Get left_env[l, r_old, l', r_old'] -> simplified to [l, l']
-                            // For first qubit, left_env is 1x1
                             double complex left_val = 1.0;
                             double complex right_val = 1.0;
 
                             if (left_env->total_size > 1) {
-                                uint32_t left_idx[4] = {l, 0, lp, 0};
-                                // Simplified indexing
+                                // left_env[0, 0, l, lp] with boundary dims = 1
+                                // Row-major: 0*... + 0*... + l*chi + lp = l*chi + lp
                                 left_val = left_env->data[l * left_dim + lp];
                             }
 
                             if (right_env->total_size > 1) {
+                                // right_env[r, 0, rp, 0] with trailing dims = 1
+                                // Row-major: r*chi + rp
                                 right_val = right_env->data[r * right_dim + rp];
                             }
 
@@ -501,20 +500,45 @@ tn_measure_error_t tn_sample_bitstrings(const tn_mps_state_t *state,
         stats->total_time_seconds = (double)(end_time - start_time) / CLOCKS_PER_SEC;
         stats->avg_sample_time = stats->total_time_seconds / num_samples;
 
-        // Estimate entropy from sample diversity
-        // (simplified - count unique samples)
-        uint64_t unique_count = 0;
-        for (uint32_t i = 0; i < num_samples; i++) {
-            bool found = false;
-            for (uint32_t j = 0; j < i; j++) {
-                if (samples[j] == samples[i]) {
-                    found = true;
-                    break;
+        // Estimate empirical entropy from sample frequencies: H = -Σ p_i log₂(p_i)
+        // First count occurrences of each unique sample
+        uint64_t* unique_samples = malloc(num_samples * sizeof(uint64_t));
+        uint32_t* counts = calloc(num_samples, sizeof(uint32_t));
+        uint32_t unique_count = 0;
+
+        if (unique_samples && counts) {
+            for (uint32_t i = 0; i < num_samples; i++) {
+                bool found = false;
+                for (uint32_t j = 0; j < unique_count; j++) {
+                    if (unique_samples[j] == samples[i]) {
+                        counts[j]++;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    unique_samples[unique_count] = samples[i];
+                    counts[unique_count] = 1;
+                    unique_count++;
                 }
             }
-            if (!found) unique_count++;
+
+            // Compute empirical entropy
+            double entropy = 0.0;
+            for (uint32_t j = 0; j < unique_count; j++) {
+                double p = (double)counts[j] / (double)num_samples;
+                if (p > 0) {
+                    entropy -= p * log2(p);
+                }
+            }
+            stats->entropy_estimate = entropy;
+        } else {
+            // Fallback if allocation fails
+            stats->entropy_estimate = log2((double)num_samples);
         }
-        stats->entropy_estimate = log2((double)unique_count);
+
+        free(unique_samples);
+        free(counts);
     }
 
     return TN_MEASURE_SUCCESS;
@@ -833,37 +857,119 @@ double complex tn_expectation_1q(const tn_mps_state_t *state,
                                   const tn_gate_1q_t *op) {
     if (!state || !op || qubit >= state->num_qubits) return 0.0;
 
-    // <psi| O |psi> where O acts on single qubit
-    // Contract left environment, apply O, contract right environment
+    // <psi| O_k |psi> where O acts on single qubit k
+    // Use transfer matrix contraction: T[l,l'] = sum_p conj(A[l,p,r]) * A[l',p,r]
+    // For the operator site: T_O[l,l'] = sum_{p,p'} conj(A[l,p,r]) * O[p,p'] * A[l',p',r]
 
-    const tensor_t *target = state->tensors[qubit];
-    uint32_t left_dim = target->dims[0];
-    uint32_t right_dim = target->dims[2];
+    uint32_t n = state->num_qubits;
 
-    double complex expectation = 0.0;
+    // Start with left boundary (identity for first tensor's left index)
+    uint32_t chi_0 = state->tensors[0]->dims[0];  // Should be 1
+    double complex *L = (double complex *)calloc(chi_0 * chi_0, sizeof(double complex));
+    if (!L) return 0.0;
+    for (uint32_t i = 0; i < chi_0; i++) {
+        L[i * chi_0 + i] = 1.0;  // Identity
+    }
 
-    // Simplified: compute using probabilities and matrix elements
-    // For diagonal operators this is exact
-    // For off-diagonal, need full environment contraction
+    // Contract from left to qubit-1
+    for (uint32_t site = 0; site < qubit; site++) {
+        const tensor_t *A = state->tensors[site];
+        uint32_t chi_l = A->dims[0];
+        uint32_t chi_r = A->dims[2];
 
-    // Contract environments (simplified for single qubit or product state)
-    for (uint32_t l = 0; l < left_dim; l++) {
-        for (uint32_t r = 0; r < right_dim; r++) {
+        double complex *L_new = (double complex *)calloc(chi_r * chi_r, sizeof(double complex));
+        if (!L_new) { free(L); return 0.0; }
+
+        // L_new[r,r'] = sum_{l,l',p} L[l,l'] * conj(A[l,p,r]) * A[l',p,r']
+        for (uint32_t l = 0; l < chi_l; l++) {
+            for (uint32_t lp = 0; lp < chi_l; lp++) {
+                double complex L_val = L[l * chi_l + lp];
+                if (cabs(L_val) < 1e-15) continue;
+                for (uint32_t p = 0; p < TN_PHYSICAL_DIM; p++) {
+                    for (uint32_t r = 0; r < chi_r; r++) {
+                        for (uint32_t rp = 0; rp < chi_r; rp++) {
+                            uint32_t idx1[3] = {l, p, r};
+                            uint32_t idx2[3] = {lp, p, rp};
+                            double complex A1 = tensor_get(A, idx1);
+                            double complex A2 = tensor_get(A, idx2);
+                            L_new[r * chi_r + rp] += L_val * conj(A1) * A2;
+                        }
+                    }
+                }
+            }
+        }
+        free(L);
+        L = L_new;
+    }
+
+    // Now contract with operator site
+    const tensor_t *A_op = state->tensors[qubit];
+    uint32_t chi_l = A_op->dims[0];
+    uint32_t chi_r = A_op->dims[2];
+
+    double complex *L_op = (double complex *)calloc(chi_r * chi_r, sizeof(double complex));
+    if (!L_op) { free(L); return 0.0; }
+
+    // L_op[r,r'] = sum_{l,l',p,p'} L[l,l'] * conj(A[l,p,r]) * O[p,p'] * A[l',p',r']
+    for (uint32_t l = 0; l < chi_l; l++) {
+        for (uint32_t lp = 0; lp < chi_l; lp++) {
+            double complex L_val = L[l * chi_l + lp];
+            if (cabs(L_val) < 1e-15) continue;
             for (uint32_t p = 0; p < TN_PHYSICAL_DIM; p++) {
                 for (uint32_t pp = 0; pp < TN_PHYSICAL_DIM; pp++) {
-                    uint32_t idx_p[3] = {l, p, r};
-                    uint32_t idx_pp[3] = {l, pp, r};
-
-                    double complex val_p = tensor_get(target, idx_p);
-                    double complex val_pp = tensor_get(target, idx_pp);
-
-                    expectation += conj(val_p) * op->elements[p][pp] * val_pp;
+                    double complex O_val = op->elements[p][pp];
+                    if (cabs(O_val) < 1e-15) continue;
+                    for (uint32_t r = 0; r < chi_r; r++) {
+                        for (uint32_t rp = 0; rp < chi_r; rp++) {
+                            uint32_t idx1[3] = {l, p, r};
+                            uint32_t idx2[3] = {lp, pp, rp};
+                            double complex A1 = tensor_get(A_op, idx1);
+                            double complex A2 = tensor_get(A_op, idx2);
+                            L_op[r * chi_r + rp] += L_val * conj(A1) * O_val * A2;
+                        }
+                    }
                 }
             }
         }
     }
+    free(L);
+    L = L_op;
 
-    return expectation;
+    // Contract from qubit+1 to end
+    for (uint32_t site = qubit + 1; site < n; site++) {
+        const tensor_t *A = state->tensors[site];
+        uint32_t cur_chi_l = A->dims[0];
+        uint32_t cur_chi_r = A->dims[2];
+
+        double complex *L_new = (double complex *)calloc(cur_chi_r * cur_chi_r, sizeof(double complex));
+        if (!L_new) { free(L); return 0.0; }
+
+        for (uint32_t l = 0; l < cur_chi_l; l++) {
+            for (uint32_t lp = 0; lp < cur_chi_l; lp++) {
+                double complex L_val = L[l * cur_chi_l + lp];
+                if (cabs(L_val) < 1e-15) continue;
+                for (uint32_t p = 0; p < TN_PHYSICAL_DIM; p++) {
+                    for (uint32_t r = 0; r < cur_chi_r; r++) {
+                        for (uint32_t rp = 0; rp < cur_chi_r; rp++) {
+                            uint32_t idx1[3] = {l, p, r};
+                            uint32_t idx2[3] = {lp, p, rp};
+                            double complex A1 = tensor_get(A, idx1);
+                            double complex A2 = tensor_get(A, idx2);
+                            L_new[r * cur_chi_r + rp] += L_val * conj(A1) * A2;
+                        }
+                    }
+                }
+            }
+        }
+        free(L);
+        L = L_new;
+    }
+
+    // Final result: trace of L (should be 1x1 at the end)
+    double complex result = L[0];
+    free(L);
+
+    return result;
 }
 
 double tn_expectation_zz(const tn_mps_state_t *state,
@@ -1172,8 +1278,9 @@ double complex tn_expectation_2q(const tn_mps_state_t *state,
                                   const tn_gate_2q_t *op) {
     if (!state || !op) return 0.0;
 
-    // Full two-qubit expectation requires environment contraction
-    // Simplified implementation for adjacent qubits
+    // Full two-qubit expectation value using environment contraction
+    // For adjacent qubits, direct contraction is used (faster, equally accurate)
+    // For non-adjacent qubits, transfer matrix method with proper environment building
 
     if (qubit2 < qubit1) {
         uint32_t temp = qubit1;
@@ -1182,11 +1289,227 @@ double complex tn_expectation_2q(const tn_mps_state_t *state,
     }
 
     if (qubit2 != qubit1 + 1) {
-        // Non-adjacent: not implemented efficiently
-        return 0.0;
+        // Non-adjacent qubits: use transfer matrix method
+        // ⟨O⟩ = Tr(L · M1 · gap · M2 · R) where L, R are environments
+        // and M1, M2 are the operator applications
+
+        uint32_t n = state->num_qubits;
+
+        // Build left environment: contract sites 0 to qubit1-1
+        // T[l1, l2] = transfer matrix from identity at left boundary
+        const tensor_t *t0 = state->tensors[0];
+        uint32_t chi_left = t0->dims[0];
+        uint32_t chi_current = chi_left;
+
+        // Start with identity: T[0,0] = 1, else 0
+        double complex *T = (double complex *)calloc(chi_current * chi_current, sizeof(double complex));
+        if (!T) return 0.0;
+        T[0] = 1.0;
+
+        // Contract left environment (sites 0 to qubit1-1)
+        for (uint32_t site = 0; site < qubit1; site++) {
+            const tensor_t *A = state->tensors[site];
+            uint32_t chi_l = A->dims[0];
+            uint32_t d = A->dims[1];
+            uint32_t chi_r = A->dims[2];
+
+            double complex *T_new = (double complex *)calloc(chi_r * chi_r, sizeof(double complex));
+            if (!T_new) { free(T); return 0.0; }
+
+            for (uint32_t r1 = 0; r1 < chi_r; r1++) {
+                for (uint32_t r2 = 0; r2 < chi_r; r2++) {
+                    double complex sum = 0.0;
+                    for (uint32_t l1 = 0; l1 < chi_l; l1++) {
+                        for (uint32_t l2 = 0; l2 < chi_l; l2++) {
+                            double complex T_val = T[l1 * chi_current + l2];
+                            if (cabs(T_val) < 1e-15) continue;
+                            for (uint32_t p = 0; p < d; p++) {
+                                double complex A_bra = A->data[l1 * d * chi_r + p * chi_r + r1];
+                                double complex A_ket = A->data[l2 * d * chi_r + p * chi_r + r2];
+                                sum += T_val * conj(A_bra) * A_ket;
+                            }
+                        }
+                    }
+                    T_new[r1 * chi_r + r2] = sum;
+                }
+            }
+
+            free(T);
+            T = T_new;
+            chi_current = chi_r;
+        }
+
+        // Apply first operator at qubit1
+        // T_new[r1, r2] = sum_{l,p,p'} T[l1,l2] * conj(A[l1,p,r1]) * O[p1p2, p1'p2'][row1] * A[l2,p',r2]
+        {
+            const tensor_t *A = state->tensors[qubit1];
+            uint32_t chi_l = A->dims[0];
+            uint32_t d = A->dims[1];
+            uint32_t chi_r = A->dims[2];
+
+            double complex *T_new = (double complex *)calloc(chi_r * chi_r * d * d, sizeof(double complex));
+            if (!T_new) { free(T); return 0.0; }
+
+            // T_new stores [r1, r2, p1, p1'] where p1, p1' are operator's first indices
+            for (uint32_t r1 = 0; r1 < chi_r; r1++) {
+                for (uint32_t r2 = 0; r2 < chi_r; r2++) {
+                    for (uint32_t p1_out = 0; p1_out < d; p1_out++) {
+                        for (uint32_t p1_in = 0; p1_in < d; p1_in++) {
+                            double complex sum = 0.0;
+                            for (uint32_t l1 = 0; l1 < chi_l; l1++) {
+                                for (uint32_t l2 = 0; l2 < chi_l; l2++) {
+                                    double complex T_val = T[l1 * chi_current + l2];
+                                    if (cabs(T_val) < 1e-15) continue;
+                                    double complex A_bra = A->data[l1 * d * chi_r + p1_out * chi_r + r1];
+                                    double complex A_ket = A->data[l2 * d * chi_r + p1_in * chi_r + r2];
+                                    sum += T_val * conj(A_bra) * A_ket;
+                                }
+                            }
+                            T_new[(r1 * chi_r + r2) * d * d + p1_out * d + p1_in] = sum;
+                        }
+                    }
+                }
+            }
+
+            free(T);
+            T = T_new;
+            chi_current = chi_r;
+        }
+
+        // Contract through the gap (sites qubit1+1 to qubit2-1)
+        for (uint32_t site = qubit1 + 1; site < qubit2; site++) {
+            const tensor_t *A = state->tensors[site];
+            uint32_t chi_l = A->dims[0];
+            uint32_t d = A->dims[1];
+            uint32_t chi_r = A->dims[2];
+
+            double complex *T_new = (double complex *)calloc(chi_r * chi_r * TN_PHYSICAL_DIM * TN_PHYSICAL_DIM,
+                                                             sizeof(double complex));
+            if (!T_new) { free(T); return 0.0; }
+
+            for (uint32_t r1 = 0; r1 < chi_r; r1++) {
+                for (uint32_t r2 = 0; r2 < chi_r; r2++) {
+                    for (uint32_t p1_out = 0; p1_out < TN_PHYSICAL_DIM; p1_out++) {
+                        for (uint32_t p1_in = 0; p1_in < TN_PHYSICAL_DIM; p1_in++) {
+                            double complex sum = 0.0;
+                            for (uint32_t l1 = 0; l1 < chi_l; l1++) {
+                                for (uint32_t l2 = 0; l2 < chi_l; l2++) {
+                                    double complex T_val = T[(l1 * chi_current + l2) *
+                                                             TN_PHYSICAL_DIM * TN_PHYSICAL_DIM +
+                                                             p1_out * TN_PHYSICAL_DIM + p1_in];
+                                    if (cabs(T_val) < 1e-15) continue;
+                                    for (uint32_t p = 0; p < d; p++) {
+                                        double complex A_bra = A->data[l1 * d * chi_r + p * chi_r + r1];
+                                        double complex A_ket = A->data[l2 * d * chi_r + p * chi_r + r2];
+                                        sum += T_val * conj(A_bra) * A_ket;
+                                    }
+                                }
+                            }
+                            T_new[(r1 * chi_r + r2) * TN_PHYSICAL_DIM * TN_PHYSICAL_DIM +
+                                  p1_out * TN_PHYSICAL_DIM + p1_in] = sum;
+                        }
+                    }
+                }
+            }
+
+            free(T);
+            T = T_new;
+            chi_current = chi_r;
+        }
+
+        // Apply second operator at qubit2 and apply the 2-qubit operator matrix
+        // Collect into final expectation
+        double complex expectation = 0.0;
+        {
+            const tensor_t *A2 = state->tensors[qubit2];
+            uint32_t chi_l2 = A2->dims[0];
+            uint32_t d2 = A2->dims[1];
+            uint32_t chi_r2 = A2->dims[2];
+
+            for (uint32_t r2_bra = 0; r2_bra < chi_r2; r2_bra++) {
+                for (uint32_t r2_ket = 0; r2_ket < chi_r2; r2_ket++) {
+                    // Contract right environment
+                    double complex R = 0.0;
+
+                    // Build right environment from qubit2+1 to n-1
+                    double complex *R_env = (double complex *)calloc(chi_r2 * chi_r2, sizeof(double complex));
+                    if (!R_env) { free(T); return 0.0; }
+                    R_env[r2_bra * chi_r2 + r2_ket] = 1.0;
+
+                    for (uint32_t site = n - 1; site > qubit2; site--) {
+                        const tensor_t *A = state->tensors[site];
+                        uint32_t chi_l = A->dims[0];
+                        uint32_t d = A->dims[1];
+                        uint32_t chi_r = A->dims[2];
+
+                        double complex *R_new = (double complex *)calloc(chi_l * chi_l, sizeof(double complex));
+                        if (!R_new) { free(R_env); free(T); return 0.0; }
+
+                        for (uint32_t l1 = 0; l1 < chi_l; l1++) {
+                            for (uint32_t l2 = 0; l2 < chi_l; l2++) {
+                                double complex sum = 0.0;
+                                for (uint32_t r1 = 0; r1 < chi_r; r1++) {
+                                    for (uint32_t r2_r = 0; r2_r < chi_r; r2_r++) {
+                                        double complex R_val = R_env[r1 * chi_r + r2_r];
+                                        if (cabs(R_val) < 1e-15) continue;
+                                        for (uint32_t p = 0; p < d; p++) {
+                                            double complex A_bra = A->data[l1 * d * chi_r + p * chi_r + r1];
+                                            double complex A_ket = A->data[l2 * d * chi_r + p * chi_r + r2_r];
+                                            sum += R_val * conj(A_bra) * A_ket;
+                                        }
+                                    }
+                                }
+                                R_new[l1 * chi_l + l2] = sum;
+                            }
+                        }
+
+                        free(R_env);
+                        R_env = R_new;
+                    }
+
+                    // Now R_env holds the right environment
+
+                    // Contract T with qubit2 tensor and operator
+                    for (uint32_t l2_1 = 0; l2_1 < chi_l2; l2_1++) {
+                        for (uint32_t l2_2 = 0; l2_2 < chi_l2; l2_2++) {
+                            for (uint32_t p1_out = 0; p1_out < TN_PHYSICAL_DIM; p1_out++) {
+                                for (uint32_t p1_in = 0; p1_in < TN_PHYSICAL_DIM; p1_in++) {
+                                    double complex T_val = T[(l2_1 * chi_current + l2_2) *
+                                                             TN_PHYSICAL_DIM * TN_PHYSICAL_DIM +
+                                                             p1_out * TN_PHYSICAL_DIM + p1_in];
+                                    if (cabs(T_val) < 1e-15) continue;
+
+                                    for (uint32_t p2_out = 0; p2_out < d2; p2_out++) {
+                                        for (uint32_t p2_in = 0; p2_in < d2; p2_in++) {
+                                            double complex A2_bra = A2->data[l2_1 * d2 * chi_r2 +
+                                                                             p2_out * chi_r2 + r2_bra];
+                                            double complex A2_ket = A2->data[l2_2 * d2 * chi_r2 +
+                                                                             p2_in * chi_r2 + r2_ket];
+
+                                            // Apply 2-qubit operator: O[p1_out*d+p2_out, p1_in*d+p2_in]
+                                            uint32_t out_idx = p1_out * TN_PHYSICAL_DIM + p2_out;
+                                            uint32_t in_idx = p1_in * TN_PHYSICAL_DIM + p2_in;
+                                            double complex O_elem = op->elements[out_idx][in_idx];
+
+                                            expectation += T_val * conj(A2_bra) * O_elem * A2_ket *
+                                                          R_env[r2_bra * chi_r2 + r2_ket];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    free(R_env);
+                }
+            }
+        }
+
+        free(T);
+        return expectation;
     }
 
-    // Contract tensors and apply operator
+    // Adjacent qubits: use optimized direct contraction
     tensor_t *t1 = state->tensors[qubit1];
     tensor_t *t2 = state->tensors[qubit2];
 
@@ -1225,39 +1548,128 @@ double complex tn_expectation_2q(const tn_mps_state_t *state,
     return expectation;
 }
 
+/**
+ * @brief Get Pauli matrix element P[row, col]
+ * Encoding: 0=I, 1=X, 2=Y, 3=Z
+ */
+static inline double complex get_pauli_element(uint8_t pauli, int row, int col) {
+    switch (pauli) {
+        case 0:  // Identity
+            return (row == col) ? 1.0 : 0.0;
+        case 1:  // X = [[0,1],[1,0]]
+            return (row != col) ? 1.0 : 0.0;
+        case 2:  // Y = [[0,-i],[i,0]]
+            if (row == 0 && col == 1) return -I;
+            if (row == 1 && col == 0) return I;
+            return 0.0;
+        case 3:  // Z = [[1,0],[0,-1]]
+            if (row == col) return (row == 0) ? 1.0 : -1.0;
+            return 0.0;
+        default:
+            return 0.0;
+    }
+}
+
 double complex tn_expectation_pauli_string(const tn_mps_state_t *state,
                                             const uint8_t *paulis) {
     if (!state || !paulis) return 0.0;
 
-    // Build MPO for Pauli string and compute expectation
-    // Simplified: product of single-qubit expectations for diagonal part
+    uint32_t n = state->num_qubits;
+    if (n == 0) return 0.0;
 
-    double complex result = 1.0;
+    // Compute <psi|P|psi> using transfer matrix method
+    // Transfer matrix T[l1, l2] accumulates contraction from left
+    // At each site i: T'[r1, r2] = sum_{l1,l2,p,p'} T[l1,l2] * conj(A[l1,p,r1]) * P[p,p'] * A[l2,p',r2]
 
-    for (uint32_t i = 0; i < state->num_qubits; i++) {
-        double complex local_exp;
+    // Get first site dimensions
+    const tensor_t *t0 = state->tensors[0];
+    if (!t0 || t0->rank < 3) return 0.0;
 
-        switch (paulis[i]) {
-            case 0:  // Identity
-                local_exp = 1.0;
-                break;
-            case 1:  // X
-                local_exp = tn_expectation_x(state, i);
-                break;
-            case 2:  // Y
-                local_exp = tn_expectation_y(state, i);
-                break;
-            case 3:  // Z
-                local_exp = tn_expectation_z(state, i);
-                break;
-            default:
-                return 0.0;
+    // Allocate transfer matrix (starts as 1x1 identity for left boundary)
+    double complex *transfer = (double complex *)calloc(1, sizeof(double complex));
+    if (!transfer) return 0.0;
+    transfer[0] = 1.0;  // Identity
+
+    uint32_t curr_left1 = 1, curr_left2 = 1;
+
+    for (uint32_t site = 0; site < n; site++) {
+        const tensor_t *t = state->tensors[site];
+        if (!t || t->rank < 3) {
+            free(transfer);
+            return 0.0;
         }
 
-        result *= local_exp;
+        uint32_t l_dim = t->dims[0];   // left bond
+        uint32_t p_dim = t->dims[1];   // physical (should be 2)
+        uint32_t r_dim = t->dims[2];   // right bond
+
+        if (p_dim != 2) {
+            free(transfer);
+            return 0.0;
+        }
+
+        // Allocate new transfer matrix for right bonds
+        uint32_t new_size = r_dim * r_dim;
+        double complex *new_transfer = (double complex *)calloc(new_size, sizeof(double complex));
+        if (!new_transfer) {
+            free(transfer);
+            return 0.0;
+        }
+
+        // Contract: new_transfer[r1, r2] = sum_{l1, l2, p, p'}
+        //           transfer[l1, l2] * conj(A[l1,p,r1]) * P[p,p'] * A[l2,p',r2]
+        uint8_t pauli = paulis[site];
+
+        for (uint32_t r1 = 0; r1 < r_dim; r1++) {
+            for (uint32_t r2 = 0; r2 < r_dim; r2++) {
+                double complex sum = 0.0;
+
+                for (uint32_t l1 = 0; l1 < curr_left1; l1++) {
+                    for (uint32_t l2 = 0; l2 < curr_left2; l2++) {
+                        double complex T_l1l2 = transfer[l1 * curr_left2 + l2];
+                        if (cabs(T_l1l2) < 1e-15) continue;
+
+                        for (int p = 0; p < 2; p++) {
+                            for (int pp = 0; pp < 2; pp++) {
+                                double complex P_elem = get_pauli_element(pauli, p, pp);
+                                if (cabs(P_elem) < 1e-15) continue;
+
+                                // A[l, p, r] is stored with index l*p_dim*r_dim + p*r_dim + r
+                                uint32_t idx1 = l1 * p_dim * r_dim + p * r_dim + r1;
+                                uint32_t idx2 = l2 * p_dim * r_dim + pp * r_dim + r2;
+
+                                double complex A1_conj = conj(t->data[idx1]);
+                                double complex A2 = t->data[idx2];
+
+                                sum += T_l1l2 * A1_conj * P_elem * A2;
+                            }
+                        }
+                    }
+                }
+
+                new_transfer[r1 * r_dim + r2] = sum;
+            }
+        }
+
+        free(transfer);
+        transfer = new_transfer;
+        curr_left1 = r_dim;
+        curr_left2 = r_dim;
     }
 
-    return result;
+    // Final result: transfer should be 1x1 (right boundaries are both 1)
+    double complex result = 0.0;
+    if (curr_left1 == 1 && curr_left2 == 1) {
+        result = transfer[0];
+    } else if (curr_left1 > 0 && curr_left2 > 0) {
+        // Sum diagonal if dimensions don't reduce to 1 (shouldn't happen for proper MPS)
+        result = transfer[0];
+    }
+
+    free(transfer);
+
+    // Include norm factors
+    return result * state->norm * state->norm;
 }
 
 // ============================================================================
@@ -1270,17 +1682,168 @@ tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
     if (!state || !rho) return TN_MEASURE_ERROR_NULL_PTR;
     if (qubit >= state->num_qubits) return TN_MEASURE_ERROR_INVALID_QUBIT;
 
-    double prob_0, prob_1;
-    tn_measure_probability(state, qubit, &prob_0, &prob_1);
+    // Full reduced density matrix computation including off-diagonal elements
+    // ρ[s,s'] = Σ_{l,l',r,r'} left_env[l,l'] * A[l,s,r] * A*[l',s',r'] * right_env[r,r']
 
-    // For computational basis measurement, diagonal elements
-    // Off-diagonal elements require more computation
+    // Contract from left to get left environment
+    tensor_t *left_env = NULL;
 
-    // Simplified: assume diagonal (valid for Z-eigenstates)
-    rho[0] = prob_0;          // |0><0|
-    rho[1] = 0.0;             // |0><1|
-    rho[2] = 0.0;             // |1><0|
-    rho[3] = prob_1;          // |1><1|
+    for (uint32_t i = 0; i < qubit; i++) {
+        const tensor_t *t = state->tensors[i];
+        tensor_t *tc = tensor_conj(t);
+        if (!tc) {
+            tensor_free(left_env);
+            return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+        }
+
+        uint32_t axes_t[1] = {1};
+        uint32_t axes_tc[1] = {1};
+        tensor_t *local = tensor_contract(t, tc, axes_t, axes_tc, 1);
+        tensor_free(tc);
+
+        if (!local) {
+            tensor_free(left_env);
+            return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+        }
+
+        if (left_env == NULL) {
+            left_env = local;
+        } else {
+            uint32_t axes_env[2] = {1, 3};
+            uint32_t axes_loc[2] = {0, 2};
+            tensor_t *new_env = tensor_contract(left_env, local, axes_env, axes_loc, 2);
+            tensor_free(left_env);
+            tensor_free(local);
+            left_env = new_env;
+            if (!left_env) return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+        }
+    }
+
+    // Contract from right to get right environment
+    tensor_t *right_env = NULL;
+
+    for (int i = state->num_qubits - 1; i > (int)qubit; i--) {
+        const tensor_t *t = state->tensors[i];
+        tensor_t *tc = tensor_conj(t);
+        if (!tc) {
+            tensor_free(left_env);
+            tensor_free(right_env);
+            return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+        }
+
+        uint32_t axes_t[1] = {1};
+        uint32_t axes_tc[1] = {1};
+        tensor_t *local = tensor_contract(t, tc, axes_t, axes_tc, 1);
+        tensor_free(tc);
+
+        if (!local) {
+            tensor_free(left_env);
+            tensor_free(right_env);
+            return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+        }
+
+        if (right_env == NULL) {
+            right_env = local;
+        } else {
+            uint32_t axes_env[2] = {0, 2};
+            uint32_t axes_loc[2] = {1, 3};
+            tensor_t *new_env = tensor_contract(local, right_env, axes_loc, axes_env, 2);
+            tensor_free(right_env);
+            tensor_free(local);
+            right_env = new_env;
+            if (!right_env) {
+                tensor_free(left_env);
+                return TN_MEASURE_ERROR_CONTRACTION_FAILED;
+            }
+        }
+    }
+
+    // Compute full 2x2 reduced density matrix
+    const tensor_t *target = state->tensors[qubit];
+    uint32_t left_dim = target->dims[0];
+    uint32_t right_dim = target->dims[2];
+
+    // Initialize rho to zero
+    for (int i = 0; i < 4; i++) rho[i] = 0.0;
+
+    // ρ[s,s'] = Σ_{l,l',r,r'} left_env[l,l'] * A[l,s,r] * A*[l',s',r'] * right_env[r,r']
+    for (uint32_t s = 0; s < 2; s++) {
+        for (uint32_t sp = 0; sp < 2; sp++) {
+            double complex element = 0.0;
+
+            for (uint32_t l = 0; l < left_dim; l++) {
+                for (uint32_t lp = 0; lp < left_dim; lp++) {
+                    // Get left environment contribution
+                    double complex left_val = 1.0;
+                    if (left_env && left_env->total_size > 1) {
+                        // left_env is [l, r_internal, l', r_internal']
+                        // For contracted form, it should be [l, l']
+                        if (left_env->rank == 2) {
+                            left_val = left_env->data[l * left_dim + lp];
+                        } else if (left_env->rank == 4) {
+                            // Take trace over internal indices
+                            double complex sum = 0.0;
+                            uint32_t int_dim = left_env->dims[1];
+                            for (uint32_t ri = 0; ri < int_dim; ri++) {
+                                uint32_t idx = l * left_env->dims[1] * left_env->dims[2] * left_env->dims[3]
+                                             + ri * left_env->dims[2] * left_env->dims[3]
+                                             + lp * left_env->dims[3] + ri;
+                                if (idx < left_env->total_size) sum += left_env->data[idx];
+                            }
+                            left_val = sum;
+                        }
+                    } else if (left_env && l == 0 && lp == 0) {
+                        left_val = left_env->data[0];
+                    } else if (!left_env && l == 0 && lp == 0) {
+                        left_val = 1.0;
+                    } else if (!left_env) {
+                        left_val = (l == lp) ? 1.0 : 0.0;
+                    }
+
+                    for (uint32_t r = 0; r < right_dim; r++) {
+                        for (uint32_t rp = 0; rp < right_dim; rp++) {
+                            // Get right environment contribution
+                            double complex right_val = 1.0;
+                            if (right_env && right_env->total_size > 1) {
+                                if (right_env->rank == 2) {
+                                    right_val = right_env->data[r * right_dim + rp];
+                                } else if (right_env->rank == 4) {
+                                    double complex sum = 0.0;
+                                    uint32_t int_dim = right_env->dims[1];
+                                    for (uint32_t li = 0; li < int_dim; li++) {
+                                        uint32_t idx = r * right_env->dims[1] * right_env->dims[2] * right_env->dims[3]
+                                                     + li * right_env->dims[2] * right_env->dims[3]
+                                                     + rp * right_env->dims[3] + li;
+                                        if (idx < right_env->total_size) sum += right_env->data[idx];
+                                    }
+                                    right_val = sum;
+                                }
+                            } else if (right_env && r == 0 && rp == 0) {
+                                right_val = right_env->data[0];
+                            } else if (!right_env && r == 0 && rp == 0) {
+                                right_val = 1.0;
+                            } else if (!right_env) {
+                                right_val = (r == rp) ? 1.0 : 0.0;
+                            }
+
+                            // Get tensor elements A[l,s,r] and A*[l',s',r']
+                            uint32_t idx_A[3] = {l, s, r};
+                            uint32_t idx_Ac[3] = {lp, sp, rp};
+                            double complex A_val = tensor_get(target, idx_A);
+                            double complex Ac_val = conj(tensor_get(target, idx_Ac));
+
+                            element += left_val * A_val * Ac_val * right_val;
+                        }
+                    }
+                }
+            }
+
+            rho[s * 2 + sp] = element;
+        }
+    }
+
+    tensor_free(left_env);
+    tensor_free(right_env);
 
     return TN_MEASURE_SUCCESS;
 }

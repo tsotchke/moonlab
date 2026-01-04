@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200">
+  <defs>
+    <linearGradient id="hGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="250" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#1f2937">Bell State Circuit (|Φ⁺⟩)</text>
+
+  <!-- Qubit labels -->
+  <text x="30" y="75" text-anchor="end" font-family="monospace" font-size="14" fill="#374151">q₀: |0⟩</text>
+  <text x="30" y="135" text-anchor="end" font-family="monospace" font-size="14" fill="#374151">q₁: |0⟩</text>
+
+  <!-- Qubit wires -->
+  <line x1="40" y1="70" x2="420" y2="70" stroke="#374151" stroke-width="2"/>
+  <line x1="40" y1="130" x2="420" y2="130" stroke="#374151" stroke-width="2"/>
+
+  <!-- Hadamard gate -->
+  <rect x="80" y="50" width="40" height="40" rx="4" fill="url(#hGrad)" stroke="#4338ca" stroke-width="1.5"/>
+  <text x="100" y="77" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">H</text>
+
+  <!-- CNOT gate -->
+  <line x1="180" y1="70" x2="180" y2="130" stroke="#059669" stroke-width="2"/>
+  <circle cx="180" cy="70" r="8" fill="#059669" stroke="#047857" stroke-width="2"/>
+  <circle cx="180" cy="130" r="12" fill="none" stroke="#059669" stroke-width="2"/>
+  <line x1="168" y1="130" x2="192" y2="130" stroke="#059669" stroke-width="2"/>
+  <line x1="180" y1="118" x2="180" y2="142" stroke="#059669" stroke-width="2"/>
+
+  <!-- State annotations -->
+  <text x="60" y="170" text-anchor="middle" font-family="monospace" font-size="12" fill="#6b7280">|00⟩</text>
+  <text x="140" y="170" text-anchor="middle" font-family="monospace" font-size="12" fill="#6b7280">(|0⟩+|1⟩)|0⟩/√2</text>
+  <text x="250" y="170" text-anchor="middle" font-family="monospace" font-size="12" fill="#6b7280">(|00⟩+|11⟩)/√2</text>
+
+  <!-- Result annotation -->
+  <text x="430" y="75" text-anchor="start" font-family="monospace" font-size="12" fill="#374151">→</text>
+  <text x="450" y="100" text-anchor="start" font-family="serif" font-size="14" fill="#374151">|Φ⁺⟩ = (|00⟩+|11⟩)/√2</text>
+
+  <!-- Vertical lines for timing -->
+  <line x1="60" y1="50" x2="60" y2="155" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="130" y1="50" x2="130" y2="155" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="230" y1="50" x2="230" y2="155" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>
+</svg>

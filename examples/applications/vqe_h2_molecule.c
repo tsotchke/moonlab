@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     
     // Step 1: Create molecular Hamiltonian
     printf("Step 1: Constructing molecular Hamiltonian...\n");
-    molecular_hamiltonian_t *hamiltonian = vqe_create_h2_hamiltonian(bond_distance);
+    pauli_hamiltonian_t *hamiltonian = vqe_create_h2_hamiltonian(bond_distance);
     if (!hamiltonian) {
         fprintf(stderr, "Error: Failed to create H2 Hamiltonian\n");
         entropy_pool_free(global_entropy_pool);
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
     );
     if (!ansatz) {
         fprintf(stderr, "Error: Failed to create ansatz\n");
-        molecular_hamiltonian_free(hamiltonian);
+        pauli_hamiltonian_free(hamiltonian);
         entropy_pool_free(global_entropy_pool);
         return 1;
     }
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
     if (!optimizer) {
         fprintf(stderr, "Error: Failed to create optimizer\n");
         vqe_ansatz_free(ansatz);
-        molecular_hamiltonian_free(hamiltonian);
+        pauli_hamiltonian_free(hamiltonian);
         entropy_pool_free(global_entropy_pool);
         return 1;
     }
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Error: Failed to create VQE solver\n");
         vqe_optimizer_free(optimizer);
         vqe_ansatz_free(ansatz);
-        molecular_hamiltonian_free(hamiltonian);
+        pauli_hamiltonian_free(hamiltonian);
         entropy_pool_free(global_entropy_pool);
         return 1;
     }
@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
     vqe_solver_free(solver);
     vqe_optimizer_free(optimizer);
     vqe_ansatz_free(ansatz);
-    molecular_hamiltonian_free(hamiltonian);
+    pauli_hamiltonian_free(hamiltonian);
     entropy_pool_free(global_entropy_pool);
     
     printf("╔════════════════════════════════════════════════════════════╗\n");

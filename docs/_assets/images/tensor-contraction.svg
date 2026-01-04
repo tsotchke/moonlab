@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="tensorAGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="tensorBGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="tensorCGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="contractGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f87171;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#1f2937">Tensor Contraction Operations</text>
+
+  <!-- Matrix Multiplication as Contraction -->
+  <g transform="translate(30, 55)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Matrix Multiplication (Rank-2 Contraction)</text>
+
+    <rect x="0" y="15" width="360" height="140" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+
+    <!-- Tensor A -->
+    <g transform="translate(30, 45)">
+      <rect x="0" y="0" width="60" height="60" rx="8" fill="url(#tensorAGrad)" stroke="#1d4ed8" stroke-width="2"/>
+      <text x="30" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">A</text>
+      <line x1="0" y1="30" x2="-20" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="-25" y="35" text-anchor="end" font-family="serif" font-size="12" fill="#374151">i</text>
+      <line x1="60" y1="30" x2="80" y2="30" stroke="url(#contractGrad)" stroke-width="3"/>
+    </g>
+
+    <!-- Tensor B -->
+    <g transform="translate(130, 45)">
+      <rect x="0" y="0" width="60" height="60" rx="8" fill="url(#tensorBGrad)" stroke="#059669" stroke-width="2"/>
+      <text x="30" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">B</text>
+      <line x1="0" y1="30" x2="-20" y2="30" stroke="url(#contractGrad)" stroke-width="3"/>
+      <line x1="60" y1="30" x2="80" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="85" y="35" text-anchor="start" font-family="serif" font-size="12" fill="#374151">k</text>
+    </g>
+
+    <!-- Equals -->
+    <text x="235" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#374151">=</text>
+
+    <!-- Result C -->
+    <g transform="translate(270, 45)">
+      <rect x="0" y="0" width="60" height="60" rx="8" fill="url(#tensorCGrad)" stroke="#7c3aed" stroke-width="2"/>
+      <text x="30" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">C</text>
+      <line x1="0" y1="30" x2="-20" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="-25" y="35" text-anchor="end" font-family="serif" font-size="12" fill="#374151">i</text>
+      <line x1="60" y1="30" x2="80" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="85" y="35" text-anchor="start" font-family="serif" font-size="12" fill="#374151">k</text>
+    </g>
+
+    <!-- Contracted index label -->
+    <text x="130" y="125" text-anchor="middle" font-family="serif" font-size="11" fill="#ef4444">j (contracted)</text>
+
+    <!-- Formula -->
+    <text x="180" y="145" text-anchor="middle" font-family="serif" font-size="12" fill="#374151">C_{ik} = Σ_j A_{ij} B_{jk}</text>
+  </g>
+
+  <!-- Higher-rank contraction -->
+  <g transform="translate(410, 55)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Rank-3 Tensor Contraction</text>
+
+    <rect x="0" y="15" width="360" height="140" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+
+    <!-- Tensor A (rank-3) -->
+    <g transform="translate(30, 45)">
+      <rect x="0" y="0" width="60" height="60" rx="8" fill="url(#tensorAGrad)" stroke="#1d4ed8" stroke-width="2"/>
+      <text x="30" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">A</text>
+      <line x1="0" y1="30" x2="-20" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="-25" y="35" text-anchor="end" font-family="serif" font-size="12" fill="#374151">i</text>
+      <line x1="30" y1="0" x2="30" y2="-20" stroke="#374151" stroke-width="3"/>
+      <text x="30" y="-25" text-anchor="middle" font-family="serif" font-size="12" fill="#374151">j</text>
+      <line x1="60" y1="30" x2="80" y2="30" stroke="url(#contractGrad)" stroke-width="3"/>
+    </g>
+
+    <!-- Tensor B (rank-3) -->
+    <g transform="translate(130, 45)">
+      <rect x="0" y="0" width="60" height="60" rx="8" fill="url(#tensorBGrad)" stroke="#059669" stroke-width="2"/>
+      <text x="30" y="35" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="white">B</text>
+      <line x1="0" y1="30" x2="-20" y2="30" stroke="url(#contractGrad)" stroke-width="3"/>
+      <line x1="30" y1="60" x2="30" y2="80" stroke="#374151" stroke-width="3"/>
+      <text x="30" y="90" text-anchor="middle" font-family="serif" font-size="12" fill="#374151">l</text>
+      <line x1="60" y1="30" x2="80" y2="30" stroke="#374151" stroke-width="3"/>
+      <text x="85" y="35" text-anchor="start" font-family="serif" font-size="12" fill="#374151">m</text>
+    </g>
+
+    <!-- Equals -->
+    <text x="235" y="80" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" fill="#374151">=</text>
+
+    <!-- Result C (rank-4) -->
+    <g transform="translate(260, 35)">
+      <rect x="0" y="0" width="80" height="80" rx="8" fill="url(#tensorCGrad)" stroke="#7c3aed" stroke-width="2"/>
+      <text x="40" y="45" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="white">C</text>
+      <line x1="0" y1="40" x2="-15" y2="40" stroke="#374151" stroke-width="2"/>
+      <text x="-20" y="44" text-anchor="end" font-family="serif" font-size="10" fill="#374151">i</text>
+      <line x1="40" y1="0" x2="40" y2="-15" stroke="#374151" stroke-width="2"/>
+      <text x="40" y="-20" text-anchor="middle" font-family="serif" font-size="10" fill="#374151">j</text>
+      <line x1="40" y1="80" x2="40" y2="95" stroke="#374151" stroke-width="2"/>
+      <text x="40" y="105" text-anchor="middle" font-family="serif" font-size="10" fill="#374151">l</text>
+      <line x1="80" y1="40" x2="95" y2="40" stroke="#374151" stroke-width="2"/>
+      <text x="100" y="44" text-anchor="start" font-family="serif" font-size="10" fill="#374151">m</text>
+    </g>
+
+    <!-- Formula -->
+    <text x="180" y="145" text-anchor="middle" font-family="serif" font-size="11" fill="#374151">C_{ijlm} = Σ_k A_{ijk} B_{klm}</text>
+  </g>
+
+  <!-- MPS-style contraction -->
+  <g transform="translate(30, 220)">
+    <text x="370" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">MPS Tensor Network Contraction (Left-to-Right)</text>
+
+    <rect x="0" y="15" width="740" height="130" rx="8" fill="#faf5ff" stroke="#8b5cf6" stroke-width="2"/>
+
+    <!-- Chain of tensors -->
+    <g transform="translate(30, 55)">
+      <!-- Tensor 1 -->
+      <rect x="0" y="0" width="45" height="45" rx="6" fill="url(#tensorAGrad)" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="22" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">A¹</text>
+      <line x1="22" y1="0" x2="22" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="45" y1="22" x2="65" y2="22" stroke="#06b6d4" stroke-width="3"/>
+
+      <!-- Tensor 2 -->
+      <rect x="65" y="0" width="45" height="45" rx="6" fill="url(#tensorBGrad)" stroke="#059669" stroke-width="1.5"/>
+      <text x="87" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">A²</text>
+      <line x1="87" y1="0" x2="87" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="110" y1="22" x2="130" y2="22" stroke="#06b6d4" stroke-width="3"/>
+
+      <!-- Tensor 3 -->
+      <rect x="130" y="0" width="45" height="45" rx="6" fill="url(#tensorAGrad)" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="152" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">A³</text>
+      <line x1="152" y1="0" x2="152" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="175" y1="22" x2="195" y2="22" stroke="#06b6d4" stroke-width="3"/>
+
+      <!-- Ellipsis -->
+      <text x="210" y="30" font-family="system-ui, sans-serif" font-size="18" fill="#6b7280">···</text>
+
+      <!-- Tensor n -->
+      <rect x="230" y="0" width="45" height="45" rx="6" fill="url(#tensorBGrad)" stroke="#059669" stroke-width="1.5"/>
+      <text x="252" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Aⁿ</text>
+      <line x1="252" y1="0" x2="252" y2="-15" stroke="#ef4444" stroke-width="2"/>
+    </g>
+
+    <!-- Arrow -->
+    <text x="350" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" fill="#374151">→</text>
+
+    <!-- Contraction order -->
+    <g transform="translate(380, 55)">
+      <rect x="0" y="-10" width="100" height="65" rx="6" fill="url(#tensorCGrad)" fill-opacity="0.3" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4,2"/>
+      <text x="50" y="18" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#7c3aed">Contract</text>
+      <text x="50" y="32" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#7c3aed">left-to-right</text>
+      <text x="50" y="48" text-anchor="middle" font-family="monospace" font-size="9" fill="#7c3aed">O(nχ³d)</text>
+    </g>
+
+    <!-- Result -->
+    <g transform="translate(520, 55)">
+      <rect x="0" y="0" width="180" height="45" rx="6" fill="url(#tensorCGrad)" stroke="#7c3aed" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Contracted Result</text>
+      <text x="90" y="36" text-anchor="middle" font-family="serif" font-size="10" fill="white">ψ_{i₁i₂...iₙ}</text>
+
+      <!-- Physical indices -->
+      <line x1="30" y1="0" x2="30" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="60" y1="0" x2="60" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="90" y1="0" x2="90" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="120" y1="0" x2="120" y2="-15" stroke="#ef4444" stroke-width="2"/>
+      <line x1="150" y1="0" x2="150" y2="-15" stroke="#ef4444" stroke-width="2"/>
+    </g>
+  </g>
+
+  <!-- Contraction complexity -->
+  <g transform="translate(30, 375)">
+    <text x="370" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Contraction Complexity</text>
+
+    <rect x="0" y="15" width="740" height="100" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+
+    <!-- Complexity table -->
+    <g transform="translate(30, 35)">
+      <rect x="0" y="0" width="150" height="25" fill="#a7f3d0" stroke="#10b981"/>
+      <text x="75" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#065f46">Operation</text>
+      <rect x="150" y="0" width="200" height="25" fill="#a7f3d0" stroke="#10b981"/>
+      <text x="250" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#065f46">Cost</text>
+      <rect x="350" y="0" width="350" height="25" fill="#a7f3d0" stroke="#10b981"/>
+      <text x="525" y="17" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#065f46">Description</text>
+
+      <rect x="0" y="25" width="150" height="22" fill="#d1fae5" stroke="#10b981"/>
+      <text x="75" y="40" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">Matrix × Matrix</text>
+      <rect x="150" y="25" width="200" height="22" fill="#d1fae5" stroke="#10b981"/>
+      <text x="250" y="40" text-anchor="middle" font-family="serif" font-size="10" fill="#374151">O(m × n × p)</text>
+      <rect x="350" y="25" width="350" height="22" fill="#d1fae5" stroke="#10b981"/>
+      <text x="525" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#374151">(m×n) × (n×p) → (m×p), sum over n</text>
+
+      <rect x="0" y="47" width="150" height="22" fill="#ecfdf5" stroke="#10b981"/>
+      <text x="75" y="62" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">MPS bond</text>
+      <rect x="150" y="47" width="200" height="22" fill="#ecfdf5" stroke="#10b981"/>
+      <text x="250" y="62" text-anchor="middle" font-family="serif" font-size="10" fill="#374151">O(χ² × d × χ) = O(χ³d)</text>
+      <rect x="350" y="47" width="350" height="22" fill="#ecfdf5" stroke="#10b981"/>
+      <text x="525" y="62" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#374151">Contract virtual index between adjacent sites</text>
+    </g>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(30, 485)">
+    <line x1="0" y1="5" x2="30" y2="5" stroke="#374151" stroke-width="3"/>
+    <text x="40" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Open index (free)</text>
+
+    <line x1="180" y1="5" x2="210" y2="5" stroke="url(#contractGrad)" stroke-width="3"/>
+    <text x="220" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Contracted index (summed)</text>
+
+    <line x1="400" y1="5" x2="430" y2="5" stroke="#06b6d4" stroke-width="3"/>
+    <text x="440" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Virtual/bond index</text>
+
+    <line x1="580" y1="5" x2="610" y2="5" stroke="#ef4444" stroke-width="2"/>
+    <text x="620" y="10" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Physical index</text>
+  </g>
+</svg>

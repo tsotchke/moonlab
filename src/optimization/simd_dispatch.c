@@ -6,7 +6,7 @@
  * Supports AVX-512, AVX2, AVX, SSE, ARM NEON, and ARM SVE.
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "simd_dispatch.h"
@@ -392,15 +392,29 @@ static void detect_arm64_capabilities(simd_info_t* info) {
 // ============================================================================
 
 const simd_info_t* simd_detect_capabilities_full(void) {
-    // Thread-safe initialization check
+    // Thread-safe initialization using compare-and-exchange
+    // States: 0 = uninitialized, 1 = initialized, 2 = initializing
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
-    if (atomic_load(&g_simd_initialized)) {
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&g_simd_initialized, &expected, 2)) {
+        // We won the race - do initialization
+        // (fall through to initialization code below)
+    } else if (expected == 1) {
+        // Already initialized by another thread
+        atomic_thread_fence(memory_order_acquire);
+        return &g_simd_info;
+    } else {
+        // Another thread is initializing (expected == 2), spin until done
+        while (atomic_load_explicit(&g_simd_initialized, memory_order_acquire) != 1) {
+            // Spin-wait (could add sched_yield for better behavior)
+        }
         return &g_simd_info;
     }
 #else
     if (g_simd_initialized) {
         return &g_simd_info;
     }
+    g_simd_initialized = 2;  // Mark as initializing (best effort without atomics)
 #endif
 
     // Initialize structure
@@ -484,9 +498,10 @@ const simd_info_t* simd_detect_capabilities_full(void) {
     snprintf(p, remaining, "Scalar (unknown architecture)");
 #endif
 
-    // Mark as initialized
+    // Mark as initialized with release semantics
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
-    atomic_store(&g_simd_initialized, 1);
+    atomic_thread_fence(memory_order_release);
+    atomic_store_explicit(&g_simd_initialized, 1, memory_order_release);
 #else
     g_simd_initialized = 1;
 #endif

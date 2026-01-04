@@ -1,0 +1,121 @@
+# Moonlab WASM Exported Functions
+# Memory management
+_malloc
+_free
+
+# =============================================================================
+# TIER 1: Core State Management
+# =============================================================================
+_quantum_state_init
+_quantum_state_free
+_quantum_state_reset
+_quantum_state_clone
+_quantum_state_normalize
+_quantum_state_get_probability
+_quantum_state_entropy
+_quantum_state_purity
+_quantum_state_fidelity
+
+# =============================================================================
+# TIER 1: Single-Qubit Gates
+# =============================================================================
+_gate_hadamard
+_gate_pauli_x
+_gate_pauli_y
+_gate_pauli_z
+_gate_s
+_gate_s_dagger
+_gate_t
+_gate_t_dagger
+_gate_rx
+_gate_ry
+_gate_rz
+_gate_phase
+_gate_u3
+
+# =============================================================================
+# TIER 1: Two-Qubit Gates
+# =============================================================================
+_gate_cnot
+_gate_cz
+_gate_cy
+_gate_swap
+_gate_cphase
+_gate_crx
+_gate_cry
+_gate_crz
+
+# =============================================================================
+# TIER 1: Multi-Qubit Gates
+# =============================================================================
+_gate_toffoli
+_gate_fredkin
+_gate_qft
+_gate_iqft
+
+# =============================================================================
+# TIER 1: Measurement
+# =============================================================================
+_measurement_probability_one
+_measurement_probability_zero
+_measurement_all_probabilities
+_measurement_probability_distribution
+_measurement_single_qubit
+_measurement_all_qubits
+_measurement_expectation_z
+_measurement_expectation_x
+_measurement_expectation_y
+_measurement_correlation_zz
+
+# =============================================================================
+# TIER 2: Grover's Algorithm
+# =============================================================================
+_grover_search
+_grover_optimal_iterations
+_grover_oracle
+_grover_diffusion
+_grover_iteration
+
+# =============================================================================
+# TIER 2: Bell States
+# =============================================================================
+_create_bell_state
+_create_bell_state_phi_plus
+_create_bell_state_phi_minus
+_create_bell_state_psi_plus
+_create_bell_state_psi_minus
+_bell_test_chsh
+_bell_get_optimal_settings
+_calculate_chsh_parameter
+
+# =============================================================================
+# TIER 3: VQE
+# =============================================================================
+_pauli_hamiltonian_create
+_pauli_hamiltonian_free
+_pauli_hamiltonian_add_term
+_vqe_create_h2_hamiltonian
+_vqe_create_hardware_efficient_ansatz
+_vqe_ansatz_free
+_vqe_apply_ansatz
+_vqe_optimizer_create
+_vqe_optimizer_free
+_vqe_solver_create
+_vqe_solver_free
+_vqe_solve
+_vqe_compute_energy
+_vqe_hartree_to_kcalmol
+
+# =============================================================================
+# TIER 3: QAOA
+# =============================================================================
+_ising_model_create
+_ising_model_free
+_ising_model_set_coupling
+_ising_model_set_field
+_ising_model_evaluate
+_qaoa_solver_create
+_qaoa_solver_free
+_qaoa_solve
+_qaoa_compute_expectation
+_qaoa_apply_circuit

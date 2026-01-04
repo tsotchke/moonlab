@@ -84,6 +84,14 @@ _lib.quantum_state_reset.restype = None
 _lib.quantum_state_normalize.argtypes = [ctypes.POINTER(CQuantumState)]
 _lib.quantum_state_normalize.restype = ctypes.c_int
 
+# State from amplitudes
+_lib.quantum_state_from_amplitudes.argtypes = [
+    ctypes.POINTER(CQuantumState),
+    ctypes.POINTER(Complex),
+    ctypes.c_size_t
+]
+_lib.quantum_state_from_amplitudes.restype = ctypes.c_int
+
 # Single-qubit gates
 _lib.gate_hadamard.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_int]
 _lib.gate_hadamard.restype = ctypes.c_int
@@ -415,16 +423,27 @@ class QuantumState:
     def measure_all_fast(self) -> int:
         """
         Fast measurement of all qubits simultaneously
-        
+
         Returns:
             Measured basis state index (0 to 2^n - 1)
-            
-        Note: This collapses the wavefunction
+
+        Note: This collapses the wavefunction to the measured state
         """
-        # For now, simulate measurement using probabilities
-        # TODO: Integrate with C entropy context
-        probs = self.probabilities()
-        outcome = np.random.choice(self.state_dim, p=probs)
+        # Use C library for measurement (uses cryptographic entropy)
+        outcome = _lib.quantum_measure_all_fast(
+            ctypes.byref(self._state),
+            None  # NULL entropy context uses default
+        )
+
+        # Collapse wavefunction: set all amplitudes to 0 except measured state
+        for i in range(self.state_dim):
+            if i == outcome:
+                self._state.amplitudes[i].real = 1.0
+                self._state.amplitudes[i].imag = 0.0
+            else:
+                self._state.amplitudes[i].real = 0.0
+                self._state.amplitudes[i].imag = 0.0
+
         return int(outcome)
 
 
@@ -516,37 +535,99 @@ class Gates:
 
 class Measurement:
     """Quantum measurement operations with proper entropy handling"""
-    
+
     @staticmethod
     def measure(state: QuantumState, qubit: int) -> int:
         """
         Measure single qubit in computational basis
-        
+
         Returns:
             Measurement outcome (0 or 1)
-            
-        Note: Collapses wavefunction
+
+        Note: Collapses wavefunction to the post-measurement state
         """
-        # TODO: Full C integration with entropy context
-        # For now use probability-based simulation
+        # Calculate probability of measuring 0
         prob_0 = 0.0
-        
+
         for i in range(state.state_dim):
             if not ((i >> qubit) & 1):  # Qubit is 0
                 prob_0 += state.probability(i)
-        
-        outcome = 0 if np.random.random() < prob_0 else 1
+
+        # Use cryptographic randomness if available
+        try:
+            import secrets
+            random_val = secrets.randbelow(1000000) / 1000000.0
+        except ImportError:
+            random_val = np.random.random()
+
+        outcome = 0 if random_val < prob_0 else 1
+
+        # Collapse wavefunction: project onto subspace and renormalize
+        # For outcome b, keep only states where qubit has value b
+        new_norm_sq = 0.0
+
+        for i in range(state.state_dim):
+            qubit_val = (i >> qubit) & 1
+            if qubit_val != outcome:
+                # Zero out states inconsistent with measurement
+                state._state.amplitudes[i].real = 0.0
+                state._state.amplitudes[i].imag = 0.0
+            else:
+                # Keep these amplitudes for renormalization
+                amp = complex(state._state.amplitudes[i].real,
+                              state._state.amplitudes[i].imag)
+                new_norm_sq += abs(amp) ** 2
+
+        # Renormalize
+        if new_norm_sq > 1e-15:
+            renorm_factor = 1.0 / np.sqrt(new_norm_sq)
+            for i in range(state.state_dim):
+                if ((i >> qubit) & 1) == outcome:
+                    state._state.amplitudes[i].real *= renorm_factor
+                    state._state.amplitudes[i].imag *= renorm_factor
+
         return outcome
-    
+
     @staticmethod
     def measure_all(state: QuantumState) -> int:
         """
         Measure all qubits simultaneously
-        
+
         Returns:
             Basis state index (0 to 2^n - 1)
         """
         return state.measure_all_fast()
+
+    @staticmethod
+    def measure_z(state: QuantumState, qubit: int) -> int:
+        """Measure qubit in Z basis (computational basis)"""
+        return Measurement.measure(state, qubit)
+
+    @staticmethod
+    def measure_x(state: QuantumState, qubit: int) -> int:
+        """
+        Measure qubit in X basis
+
+        Applies H, measures in Z, applies H again.
+        """
+        state.h(qubit)
+        outcome = Measurement.measure(state, qubit)
+        state.h(qubit)
+        return outcome
+
+    @staticmethod
+    def measure_y(state: QuantumState, qubit: int) -> int:
+        """
+        Measure qubit in Y basis
+
+        Applies S†H, measures in Z, applies HS.
+        """
+        state.s_dag(qubit)
+        state.h(qubit)
+        outcome = Measurement.measure(state, qubit)
+        state.h(qubit)
+        state.s(qubit)
+        return outcome
 
 
 # ============================================================================
@@ -585,22 +666,44 @@ def statevector_to_numpy(state: QuantumState) -> np.ndarray:
 def numpy_to_statevector(amplitudes: np.ndarray, normalize: bool = True) -> QuantumState:
     """
     Create quantum state from NumPy array
-    
+
     Args:
         amplitudes: Complex array of amplitudes
         normalize: Whether to normalize the state
-        
+
     Returns:
         QuantumState initialized with given amplitudes
     """
     dim = len(amplitudes)
     num_qubits = int(np.log2(dim))
-    
+
     if 2**num_qubits != dim:
         raise ValueError(f"Array size {dim} is not a power of 2")
-    
-    # TODO: Implement C function quantum_state_from_amplitudes binding
-    # For now create state and warn
+
+    # Normalize if requested
+    if normalize:
+        norm = np.linalg.norm(amplitudes)
+        if norm > 1e-10:
+            amplitudes = amplitudes / norm
+
+    # Create state object
     state = QuantumState(num_qubits)
-    print("Warning: numpy_to_statevector not yet fully implemented")
+
+    # Convert numpy amplitudes to C Complex array
+    c_amplitudes = (Complex * dim)()
+    for i in range(dim):
+        amp = complex(amplitudes[i])
+        c_amplitudes[i].real = amp.real
+        c_amplitudes[i].imag = amp.imag
+
+    # Call C function to set amplitudes
+    ret = _lib.quantum_state_from_amplitudes(
+        ctypes.byref(state._state),
+        c_amplitudes,
+        ctypes.c_size_t(dim)
+    )
+
+    if ret != 0:
+        raise QuantumError(f"Failed to set state amplitudes (error code: {ret})")
+
     return state

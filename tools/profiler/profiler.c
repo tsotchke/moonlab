@@ -13,7 +13,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "profiler.h"
@@ -194,6 +194,9 @@ static int find_or_create_region(const char* name) {
     return id;
 }
 
+// Thread-local start time stack (matching call_stack)
+static profiler_time_t g_start_times[PROFILER_MAX_DEPTH];
+
 int profiler_region_start(const char* name) {
     if (!g_profiler || !g_profiler->enabled) return -1;
     if (!(g_profiler->flags & PROFILER_TIMING)) return -1;
@@ -208,14 +211,11 @@ int profiler_region_start(const char* name) {
         region->parent_id = g_profiler->call_stack[g_profiler->stack_depth - 1];
     }
 
-    // Push to call stack
+    // Push to call stack and capture start time
     if (g_profiler->stack_depth < PROFILER_MAX_DEPTH) {
+        g_start_times[g_profiler->stack_depth] = profiler_get_time();
         g_profiler->call_stack[g_profiler->stack_depth++] = region_id;
     }
-
-    // Store start time in a thread-local or stack-based manner
-    // For simplicity, we encode start time in the region temporarily
-    // This is a simplified implementation
 
     return region_id;
 }
@@ -223,11 +223,42 @@ int profiler_region_start(const char* name) {
 void profiler_region_end(int region_id) {
     if (!g_profiler || !g_profiler->enabled) return;
     if (region_id < 0 || region_id >= g_profiler->num_regions) return;
+    if (g_profiler->stack_depth <= 0) return;
+
+    // Capture end time and compute duration
+    profiler_time_t end_time = profiler_get_time();
+    int stack_idx = g_profiler->stack_depth - 1;
+
+    // Verify we're ending the correct region
+    if (g_profiler->call_stack[stack_idx] != region_id) {
+        // Mismatched begin/end - just pop
+        g_profiler->stack_depth--;
+        return;
+    }
+
+    // Compute elapsed time
+    uint64_t elapsed_ns = profiler_elapsed_ns(g_start_times[stack_idx], end_time);
+
+    // Update statistics using Welford's online algorithm
+    profiler_region_t* region = &g_profiler->regions[region_id];
+    region->call_count++;
+    region->total_time += elapsed_ns;
+
+    if (elapsed_ns < region->min_time) region->min_time = elapsed_ns;
+    if (elapsed_ns > region->max_time) region->max_time = elapsed_ns;
+
+    // Welford's algorithm for running mean and variance
+    double delta = (double)elapsed_ns - region->mean;
+    region->mean += delta / (double)region->call_count;
+    double delta2 = (double)elapsed_ns - region->mean;
+    region->m2 += delta * delta2;
+
+    // Self time = total time - children time
+    // (This is approximate; for accurate self-time we'd need to track children separately)
+    region->self_time = region->total_time;
 
     // Pop from call stack
-    if (g_profiler->stack_depth > 0) {
-        g_profiler->stack_depth--;
-    }
+    g_profiler->stack_depth--;
 }
 
 const profiler_region_t* profiler_get_region(const char* name) {

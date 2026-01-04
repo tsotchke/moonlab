@@ -10,14 +10,23 @@
  * - Logging and debugging
  *
  * @stability stable
- * @since v1.0.0
+ * @since v0.1.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifndef UTILS_CONFIG_H
 #define UTILS_CONFIG_H
+
+// ============================================================================
+// VERSION INFORMATION
+// ============================================================================
+
+#define MOONLAB_VERSION_MAJOR 0
+#define MOONLAB_VERSION_MINOR 1
+#define MOONLAB_VERSION_PATCH 0
+#define MOONLAB_VERSION_STRING "0.1.0"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -136,6 +145,16 @@ typedef struct {
 } qsim_gpu_config_t;
 
 /**
+ * @brief Algorithm parameters configuration
+ */
+typedef struct {
+    size_t max_measurements;        /**< Max measurement history (default: 1024) */
+    int jacobi_max_iter;            /**< Jacobi eigenvalue iterations (default: 100) */
+    double jacobi_tolerance;        /**< Jacobi convergence tolerance (default: 1e-12) */
+    int grover_analysis_max_qubits; /**< Max qubits for Grover analysis (default: 12) */
+} qsim_algorithm_config_t;
+
+/**
  * @brief Main configuration structure
  */
 typedef struct {
@@ -152,6 +171,7 @@ typedef struct {
     qsim_memory_config_t memory;
     qsim_thread_config_t threading;
     qsim_gpu_config_t gpu;
+    qsim_algorithm_config_t algorithm;
 
     // Logging
     qsim_log_level_t log_level;

@@ -1,0 +1,47 @@
+{
+  "name": "@moonlab/quantum-vue",
+  "version": "1.0.0",
+  "description": "Vue components for Moonlab quantum simulator",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external vue",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external vue",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts,.vue",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "quantum",
+    "vue",
+    "composables",
+    "components",
+    "visualization"
+  ],
+  "author": "Moonlab",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@moonlab/quantum-core": "workspace:*",
+    "@moonlab/quantum-viz": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": ">=3.0.0"
+  },
+  "devDependencies": {
+    "vue": "^3.0.0",
+    "tsup": "^8.0.0",
+    "vitest": "^1.0.0"
+  },
+  "sideEffects": false
+}

@@ -31,7 +31,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include <stdio.h>
@@ -49,19 +49,20 @@
 // SIMULATION PARAMETERS
 // ============================================================================
 
-#define MAX_QUBITS         200    // Maximum system size for finite-size scaling
-#define BOND_DIMENSION     256    // Higher bond dimension for accuracy at criticality
-#define COUPLING_J         1.0    // Fixed ZZ coupling
+// Default simulation parameters (can be overridden by command line)
+#define DEFAULT_NUM_QUBITS     200    // Maximum system size for finite-size scaling
+#define DEFAULT_BOND_DIM       256    // Higher bond dimension for accuracy at criticality
+#define DEFAULT_IMAG_TIME_STEPS 100   // Imaginary time evolution steps
+#define DEFAULT_IMAG_TIME_DT   0.1    // Imaginary time step
+#define DEFAULT_NUM_PHASE_POINTS 15   // Points across the transition
 
-// Ground state preparation parameters
-#define IMAG_TIME_STEPS    100    // Imaginary time evolution steps (more = better convergence)
-#define IMAG_TIME_DT       0.1    // Imaginary time step
+// Fixed parameters
+#define COUPLING_J         1.0    // Fixed ZZ coupling
 
 // CFT prediction for 1D Ising model
 #define CFT_CENTRAL_CHARGE 0.5    // c = 1/2 for Ising CFT
 
-// Phase scan parameters
-#define NUM_PHASE_POINTS   15     // Points across the transition
+// Phase scan range
 #define G_MIN              0.4    // g = h/J minimum
 #define G_MAX              2.0    // g = h/J maximum
 
@@ -186,7 +187,8 @@ static int apply_imaginary_time_step(tn_mps_state_t *state,
  * - g ≈ 1 (critical): start from mixed state to explore Hilbert space
  */
 static tn_mps_state_t *prepare_ground_state(uint32_t num_qubits, double g,
-                                             uint32_t bond_dim) {
+                                             uint32_t bond_dim,
+                                             int imag_time_steps, double imag_time_dt) {
     tn_state_config_t config = tn_state_config_create(bond_dim, 1e-10);
     config.auto_canonicalize = true;
 
@@ -222,8 +224,8 @@ static tn_mps_state_t *prepare_ground_state(uint32_t num_qubits, double g,
     // For TFIM ground state, entanglement grows with each ZZ interaction
     // At criticality, we need many steps for the entanglement to saturate
     int steps_completed = 0;
-    for (int step = 0; step < IMAG_TIME_STEPS; step++) {
-        ret = apply_imaginary_time_step(state, COUPLING_J, h, IMAG_TIME_DT);
+    for (int step = 0; step < imag_time_steps; step++) {
+        ret = apply_imaginary_time_step(state, COUPLING_J, h, imag_time_dt);
         if (ret != TN_GATE_SUCCESS) {
             if (num_qubits >= 100) {  // Only print for large systems
                 fprintf(stderr, "  [DEBUG] Evolution failed at step %d, error=%d\n", step, ret);
@@ -233,9 +235,9 @@ static tn_mps_state_t *prepare_ground_state(uint32_t num_qubits, double g,
         steps_completed++;
     }
 
-    if (num_qubits >= 100 && steps_completed < IMAG_TIME_STEPS) {
+    if (num_qubits >= 100 && steps_completed < imag_time_steps) {
         fprintf(stderr, "  [DEBUG] Only completed %d/%d steps for %u qubits\n",
-                steps_completed, IMAG_TIME_STEPS, num_qubits);
+                steps_completed, imag_time_steps, num_qubits);
     }
 
     return state;
@@ -305,22 +307,35 @@ static void print_bar(double value, double max_val, int width, const char *fill)
 // MAIN SIMULATION
 // ============================================================================
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    // Parse command line arguments
+    int num_qubits = DEFAULT_NUM_QUBITS;
+    int bond_dim = DEFAULT_BOND_DIM;
+    int imag_time_steps = DEFAULT_IMAG_TIME_STEPS;
+    double imag_time_dt = DEFAULT_IMAG_TIME_DT;
+    int num_phase_points = DEFAULT_NUM_PHASE_POINTS;
+
+    if (argc > 1) num_qubits = atoi(argv[1]);
+    if (argc > 2) imag_time_steps = atoi(argv[2]);
+    if (argc > 3) bond_dim = atoi(argv[3]);
+    if (argc > 4) num_phase_points = atoi(argv[4]);
+    if (argc > 5) imag_time_dt = atof(argv[5]);
+
     printf("\n");
     printf("╔═══════════════════════════════════════════════════════════════════════╗\n");
     printf("║                                                                       ║\n");
     printf("║   QUANTUM CRITICAL POINT ANALYSIS                                     ║\n");
-    printf("║   200-Qubit Tensor Network Simulation                                 ║\n");
+    printf("║   %d-Qubit Tensor Network Simulation                               ║\n", num_qubits);
     printf("║                                                                       ║\n");
     printf("╠═══════════════════════════════════════════════════════════════════════╣\n");
     printf("║                                                                       ║\n");
-    printf("║   SCALE OF THIS SIMULATION:                                           ║\n");
-    printf("║   ─────────────────────────                                           ║\n");
-    printf("║   • 200 qubits = 2^200 quantum amplitudes                             ║\n");
-    printf("║   • 2^200 ≈ 10^60 (a 1 followed by 60 zeros!)                         ║\n");
-    printf("║   • Observable universe has ~10^80 atoms                              ║\n");
-    printf("║   • Classical memory needed: 10^47 PETABYTES                          ║\n");
-    printf("║   • Tensor network memory: ~100 MB                                    ║\n");
+    printf("║   Usage: %s [qubits] [steps] [bond_dim] [phase_pts] [dt]           ║\n", argv[0]);
+    printf("║                                                                       ║\n");
+    printf("║   Current parameters:                                                 ║\n");
+    printf("║     Qubits: %-6d  Steps: %-6d  Bond dim: %-6d                   ║\n",
+           num_qubits, imag_time_steps, bond_dim);
+    printf("║     Phase points: %-3d  Time step: %.3f                              ║\n",
+           num_phase_points, imag_time_dt);
     printf("║                                                                       ║\n");
     printf("║   PHYSICS GOALS:                                                      ║\n");
     printf("║   ──────────────                                                      ║\n");
@@ -343,19 +358,21 @@ int main(void) {
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     printf("\n");
 
-    uint64_t mem = tn_mps_estimate_memory(MAX_QUBITS, BOND_DIMENSION);
-    printf("  System size:     %d qubits\n", MAX_QUBITS);
-    printf("  Bond dimension:  %d\n", BOND_DIMENSION);
+    uint64_t mem = tn_mps_estimate_memory(num_qubits, bond_dim);
+    printf("  System size:     %d qubits\n", num_qubits);
+    printf("  Bond dimension:  %d\n", bond_dim);
     printf("  Est. memory:     %.2f MB\n", mem / (1024.0 * 1024.0));
     printf("\n");
 
+    int sv_exponent = (int)(num_qubits * 0.301) - 13;  // exponent for PB
+    int reduction_exp = (int)(num_qubits * 0.301) - 6;
     printf("  Comparison:\n");
     printf("  ┌─────────────────────────────────────────────────────────────────┐\n");
-    printf("  │  Method          │ Memory for 200 qubits                        │\n");
+    printf("  │  Method          │ Memory for %d qubits                         │\n", num_qubits);
     printf("  ├─────────────────────────────────────────────────────────────────┤\n");
-    printf("  │  State Vector    │ 10^47 PB (impossible)                        │\n");
+    printf("  │  State Vector    │ 10^%d PB (impossible)                        │\n", sv_exponent);
     printf("  │  Tensor Network  │ ~%.0f MB (this simulation!)                   │\n", mem / (1024.0 * 1024.0));
-    printf("  │  Reduction       │ 10^54 × smaller                              │\n");
+    printf("  │  Reduction       │ 10^%d × smaller                              │\n", reduction_exp);
     printf("  └─────────────────────────────────────────────────────────────────┘\n");
     printf("\n");
 
@@ -376,28 +393,30 @@ int main(void) {
     printf("    • g = 1: Critical point (scale invariance, CFT)\n");
     printf("\n");
 
-    // Use smaller system for quick scan
-    uint32_t scan_qubits = 80;
+    // Use smaller system for quick scan (half of main system, min 40)
+    uint32_t scan_qubits = (num_qubits > 80) ? num_qubits / 2 : (num_qubits > 40 ? num_qubits : 40);
     printf("  Running scan with %d qubits for phase diagram...\n", scan_qubits);
     printf("\n");
 
-    double g_values[NUM_PHASE_POINTS];
-    double order_param[NUM_PHASE_POINTS];
-    double entropy_center[NUM_PHASE_POINTS];
-    double correlation[NUM_PHASE_POINTS];
-    double susceptibility[NUM_PHASE_POINTS];
+    // Use VLAs for phase points (C99)
+    double g_values[num_phase_points];
+    double order_param[num_phase_points];
+    double entropy_center[num_phase_points];
+    double correlation[num_phase_points];
+    double susceptibility[num_phase_points];
 
     printf("    g=h/J   ⟨|Z|⟩    ⟨ZZ⟩     S(L/2)    χ       Order Parameter\n");
     printf("  ─────────────────────────────────────────────────────────────────────\n");
 
-    double dg = (G_MAX - G_MIN) / (NUM_PHASE_POINTS - 1);
+    double dg = (G_MAX - G_MIN) / (num_phase_points - 1);
     double max_order = 0.0;
 
-    for (int i = 0; i < NUM_PHASE_POINTS; i++) {
+    for (int i = 0; i < num_phase_points; i++) {
         double g = G_MIN + i * dg;
         g_values[i] = g;
 
-        tn_mps_state_t *state = prepare_ground_state(scan_qubits, g, 128);
+        tn_mps_state_t *state = prepare_ground_state(scan_qubits, g, 128,
+                                                      imag_time_steps, imag_time_dt);
         if (!state) {
             fprintf(stderr, "Failed at g = %.2f\n", g);
             continue;
@@ -439,12 +458,13 @@ int main(void) {
     printf("    • Central charge c = 1/2 for Ising universality class\n");
     printf("\n");
 
-    printf("  Preparing 200-qubit ground state at criticality...\n");
-    printf("  (This may take a minute - we're simulating 10^60 quantum states!)\n");
+    printf("  Preparing %d-qubit ground state at criticality...\n", num_qubits);
+    printf("  (This may take a minute - we're simulating 10^%d quantum states!)\n", (int)(num_qubits * 0.301));
     printf("\n");
 
     clock_t critical_start = clock();
-    tn_mps_state_t *critical_state = prepare_ground_state(MAX_QUBITS, 1.0, BOND_DIMENSION);
+    tn_mps_state_t *critical_state = prepare_ground_state(num_qubits, 1.0, bond_dim,
+                                                           imag_time_steps, imag_time_dt);
 
     if (!critical_state) {
         fprintf(stderr, "Error: Failed to create critical state\n");
@@ -455,7 +475,7 @@ int main(void) {
     double critical_time = (double)(critical_end - critical_start) / CLOCKS_PER_SEC;
 
     tn_mps_stats_t stats = tn_mps_get_stats(critical_state);
-    printf("  ✓ 200-qubit critical state prepared in %.1f seconds\n", critical_time);
+    printf("  ✓ %d-qubit critical state prepared in %.1f seconds\n", num_qubits, critical_time);
     printf("  ✓ Memory used: %.2f MB\n", stats.memory_bytes / (1024.0 * 1024.0));
     printf("  ✓ Max bond dimension: %u\n", stats.max_bond_dim);
     printf("\n");
@@ -485,10 +505,10 @@ int main(void) {
 
     for (int i = 0; i < num_cuts; i++) {
         // Choose cuts at different positions, avoiding edges
-        uint32_t cut = 10 + i * 15;  // Cuts at 10, 25, 40, ..., 175
-        if (cut >= MAX_QUBITS - 10) break;
+        uint32_t cut = 10 + i * (num_qubits / 13);  // Spread across the system
+        if (cut >= (uint32_t)num_qubits - 10) break;
 
-        double l = (double)(cut < MAX_QUBITS/2 ? cut : MAX_QUBITS - cut);
+        double l = (double)(cut < (uint32_t)num_qubits/2 ? cut : num_qubits - cut);
         double s = tn_mps_entanglement_entropy(critical_state, cut);
         double s_predicted = (CFT_CENTRAL_CHARGE / 3.0) * log(l) + 0.5;  // +const
 
@@ -544,13 +564,20 @@ int main(void) {
     // ========================================================================
 
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    printf("  ENTANGLEMENT ENTROPY PROFILE (200 qubits)\n");
+    printf("  ENTANGLEMENT ENTROPY PROFILE (%d qubits)\n", num_qubits);
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     printf("\n");
 
     printf("  Position:  ");
-    uint32_t profile_points[] = {10, 30, 50, 70, 90, 100, 110, 130, 150, 170, 189};
-    int num_profile = sizeof(profile_points) / sizeof(profile_points[0]);
+    // Generate profile points dynamically based on system size
+    int num_profile = 11;
+    uint32_t profile_points[11];
+    for (int i = 0; i < num_profile; i++) {
+        profile_points[i] = (uint32_t)(10 + i * (num_qubits - 21) / 10);
+        if (profile_points[i] >= (uint32_t)num_qubits - 1) {
+            profile_points[i] = num_qubits - 2;
+        }
+    }
 
     for (int i = 0; i < num_profile; i++) {
         printf("%4u ", profile_points[i]);
@@ -617,14 +644,16 @@ int main(void) {
     printf("    L        log(L)    S(L/2)    S/(c/6)log(L)   Bond Dim\n");
     printf("  ─────────────────────────────────────────────────────────────────────\n");
 
-    // First entry is our already-computed 200-qubit state
-    double s_200 = tn_mps_entanglement_entropy(critical_state, MAX_QUBITS / 2);
-    double predicted_200 = (CFT_CENTRAL_CHARGE / 6.0) * log(MAX_QUBITS);
+    // First entry is our already-computed state
+    double s_main = tn_mps_entanglement_entropy(critical_state, num_qubits / 2);
+    double predicted_main = (CFT_CENTRAL_CHARGE / 6.0) * log((double)num_qubits);
 
-    // Compute for smaller sizes
+    // Compute for smaller sizes (only those smaller than our main system)
     for (int i = 0; i < num_sizes - 1; i++) {
         uint32_t L = sizes[i];
-        tn_mps_state_t *state = prepare_ground_state(L, 1.0, 128);
+        if (L >= (uint32_t)num_qubits) break;  // Skip sizes >= our main system
+        tn_mps_state_t *state = prepare_ground_state(L, 1.0, 128,
+                                                      imag_time_steps, imag_time_dt);
         if (!state) continue;
 
         double s = tn_mps_entanglement_entropy(state, L / 2);
@@ -637,9 +666,9 @@ int main(void) {
         tn_mps_free(state);
     }
 
-    // 200 qubit result
-    printf("  %4u       %5.3f     %6.4f      %6.3f         %4u  ← main result\n",
-           MAX_QUBITS, log(MAX_QUBITS), s_200, s_200 / predicted_200, stats.max_bond_dim);
+    // Main system result
+    printf("  %4d       %5.3f     %6.4f      %6.3f         %4u  ← main result\n",
+           num_qubits, log((double)num_qubits), s_main, s_main / predicted_main, stats.max_bond_dim);
     printf("\n");
 
     // ========================================================================
@@ -657,7 +686,9 @@ int main(void) {
     printf("  ┌─────────────────────────────────────────────────────────────────┐\n");
     printf("  │  ACHIEVEMENTS:                                                  │\n");
     printf("  │  ─────────────                                                  │\n");
-    printf("  │  ✓ Simulated 200 qubits (2^200 = 10^60 Hilbert space!)          │\n");
+    printf("  │  ✓ Simulated %d qubits (2^%d = 10^%d Hilbert space!)%s│\n",
+           num_qubits, num_qubits, (int)(num_qubits * 0.301),
+           num_qubits < 100 ? "            " : (num_qubits < 1000 ? "         " : "        "));
     printf("  │  ✓ Located quantum phase transition at g_c = 1.0                │\n");
     printf("  │  ✓ Extracted central charge c ≈ %.3f (CFT: 0.500)              │\n", extracted_c);
     printf("  │  ✓ Verified Ising universality class behavior                   │\n");
@@ -691,7 +722,8 @@ int main(void) {
     printf("║   QUANTUM CRITICAL POINT ANALYSIS COMPLETE                            ║\n");
     printf("║                                                                       ║\n");
     printf("║   Successfully verified conformal field theory predictions for        ║\n");
-    printf("║   the Ising universality class using 200-qubit tensor networks!       ║\n");
+    printf("║   the Ising universality class using %d-qubit tensor networks!%s║\n",
+           num_qubits, num_qubits < 100 ? "        " : (num_qubits < 1000 ? "      " : "     "));
     printf("║                                                                       ║\n");
     printf("╚═══════════════════════════════════════════════════════════════════════╝\n");
     printf("\n");

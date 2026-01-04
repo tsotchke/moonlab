@@ -14,7 +14,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifndef MPI_BRIDGE_H
@@ -63,7 +63,8 @@ typedef enum {
     MPI_BRIDGE_ERROR_PARTITION = -3,
     MPI_BRIDGE_ERROR_ALLOC = -4,
     MPI_BRIDGE_ERROR_SYNC = -5,
-    MPI_BRIDGE_ERROR_NOT_SUPPORTED = -6
+    MPI_BRIDGE_ERROR_NOT_SUPPORTED = -6,
+    MPI_BRIDGE_ERROR_TIMEOUT = -7
 } mpi_bridge_error_t;
 
 /**

@@ -336,4 +336,4 @@ open coverage_report/index.html
 
 ---
 
-**Questions?** See [`docs/DEVELOPMENT_STATUS.md`](../docs/DEVELOPMENT_STATUS.md) or open an issue.
+**Questions?** See the [contributing documentation](../docs/contributing/index.md) or open an issue.

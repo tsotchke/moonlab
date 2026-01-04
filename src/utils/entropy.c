@@ -12,7 +12,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "entropy.h"
@@ -35,6 +35,14 @@
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 #include <immintrin.h>
 #define HAS_X86
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
 #endif
 
 #if defined(__aarch64__) || defined(_M_ARM64)
@@ -274,8 +282,12 @@ int entropy_os_bytes(uint8_t* buffer, size_t size) {
 #endif
 
 #ifdef _WIN32
-    // CryptGenRandom would go here
-    // Not implemented in this version
+    // Use BCryptGenRandom (modern Windows API, Vista+)
+    NTSTATUS status = BCryptGenRandom(NULL, (PUCHAR)buffer, (ULONG)size,
+                                       BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if (NT_SUCCESS(status)) {
+        return (int)size;
+    }
 #endif
 
     return -1;
@@ -287,7 +299,7 @@ const char* entropy_os_source_name(void) {
 #elif defined(__linux__)
     return "/dev/urandom";
 #elif defined(_WIN32)
-    return "CryptGenRandom";
+    return "BCryptGenRandom";
 #else
     return "unknown";
 #endif

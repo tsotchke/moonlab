@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520">
+  <defs>
+    <linearGradient id="realGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="imagGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f87171;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+    <pattern id="alignPattern" patternUnits="userSpaceOnUse" width="16" height="16">
+      <rect width="16" height="16" fill="#f0fdf4"/>
+      <rect x="0" y="0" width="1" height="16" fill="#86efac"/>
+    </pattern>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#1f2937">Quantum State Memory Layout</text>
+
+  <!-- quantum_state_t Structure -->
+  <g transform="translate(40, 55)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">quantum_state_t Structure</text>
+
+    <rect x="0" y="15" width="360" height="180" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+
+    <!-- Header -->
+    <rect x="10" y="25" width="340" height="30" rx="4" fill="url(#headerGrad)"/>
+    <text x="180" y="45" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="white">typedef struct quantum_state_t</text>
+
+    <!-- Fields -->
+    <g transform="translate(20, 65)">
+      <rect x="0" y="0" width="320" height="22" rx="3" fill="#e0f2fe"/>
+      <text x="10" y="15" font-family="monospace" font-size="10" fill="#0369a1">size_t num_qubits;</text>
+      <text x="230" y="15" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">// 8 bytes</text>
+
+      <rect x="0" y="26" width="320" height="22" rx="3" fill="#e0f2fe"/>
+      <text x="10" y="41" font-family="monospace" font-size="10" fill="#0369a1">size_t dimension;</text>
+      <text x="230" y="41" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">// 8 bytes (2^n)</text>
+
+      <rect x="0" y="52" width="320" height="22" rx="3" fill="#fef3c7"/>
+      <text x="10" y="67" font-family="monospace" font-size="10" fill="#92400e">double complex* amplitudes;</text>
+      <text x="230" y="67" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">// 8 bytes ptr</text>
+
+      <rect x="0" y="78" width="320" height="22" rx="3" fill="#e0f2fe"/>
+      <text x="10" y="93" font-family="monospace" font-size="10" fill="#0369a1">uint32_t flags;</text>
+      <text x="230" y="93" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">// 4 bytes</text>
+
+      <rect x="0" y="104" width="320" height="22" rx="3" fill="#e0f2fe"/>
+      <text x="10" y="119" font-family="monospace" font-size="10" fill="#0369a1">void* gpu_buffer;</text>
+      <text x="230" y="119" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">// 8 bytes (Metal)</text>
+    </g>
+  </g>
+
+  <!-- Amplitude Array -->
+  <g transform="translate(420, 55)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Amplitude Array Layout</text>
+
+    <rect x="0" y="15" width="360" height="180" rx="8" fill="url(#alignPattern)" stroke="#22c55e" stroke-width="2"/>
+    <text x="10" y="35" font-family="system-ui, sans-serif" font-size="10" fill="#16a34a">16-byte aligned (for SIMD)</text>
+
+    <!-- Memory cells -->
+    <g transform="translate(10, 50)">
+      <!-- Index 0 -->
+      <g>
+        <rect x="0" y="0" width="80" height="25" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(α₀)</text>
+        <rect x="80" y="0" width="80" height="25" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(α₀)</text>
+        <text x="175" y="17" font-family="monospace" font-size="9" fill="#374151">|00...0⟩</text>
+        <text x="290" y="17" font-family="system-ui, sans-serif" font-size="8" fill="#6b7280">offset: 0</text>
+      </g>
+
+      <!-- Index 1 -->
+      <g transform="translate(0, 28)">
+        <rect x="0" y="0" width="80" height="25" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(α₁)</text>
+        <rect x="80" y="0" width="80" height="25" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(α₁)</text>
+        <text x="175" y="17" font-family="monospace" font-size="9" fill="#374151">|00...1⟩</text>
+        <text x="290" y="17" font-family="system-ui, sans-serif" font-size="8" fill="#6b7280">offset: 16</text>
+      </g>
+
+      <!-- Index 2 -->
+      <g transform="translate(0, 56)">
+        <rect x="0" y="0" width="80" height="25" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(α₂)</text>
+        <rect x="80" y="0" width="80" height="25" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(α₂)</text>
+        <text x="175" y="17" font-family="monospace" font-size="9" fill="#374151">|00..10⟩</text>
+        <text x="290" y="17" font-family="system-ui, sans-serif" font-size="8" fill="#6b7280">offset: 32</text>
+      </g>
+
+      <!-- Ellipsis -->
+      <text x="80" y="105" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#6b7280">⋮</text>
+
+      <!-- Last index -->
+      <g transform="translate(0, 112)">
+        <rect x="0" y="0" width="80" height="25" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(α_{2^n-1})</text>
+        <rect x="80" y="0" width="80" height="25" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="17" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(α_{2^n-1})</text>
+        <text x="175" y="17" font-family="monospace" font-size="9" fill="#374151">|11...1⟩</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Gate Matrix Layout -->
+  <g transform="translate(40, 260)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Gate Matrix Layout (Row-Major)</text>
+
+    <rect x="0" y="15" width="360" height="120" rx="8" fill="#faf5ff" stroke="#8b5cf6" stroke-width="2"/>
+
+    <!-- 2x2 gate matrix -->
+    <g transform="translate(20, 35)">
+      <text x="0" y="0" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#7c3aed">2×2 Gate (single-qubit):</text>
+
+      <g transform="translate(0, 15)">
+        <rect x="0" y="0" width="60" height="22" fill="#c4b5fd" stroke="#7c3aed" stroke-width="1"/>
+        <text x="30" y="15" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">g[0][0]</text>
+
+        <rect x="60" y="0" width="60" height="22" fill="#c4b5fd" stroke="#7c3aed" stroke-width="1"/>
+        <text x="90" y="15" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">g[0][1]</text>
+
+        <rect x="120" y="0" width="60" height="22" fill="#c4b5fd" stroke="#7c3aed" stroke-width="1"/>
+        <text x="150" y="15" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">g[1][0]</text>
+
+        <rect x="180" y="0" width="60" height="22" fill="#c4b5fd" stroke="#7c3aed" stroke-width="1"/>
+        <text x="210" y="15" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">g[1][1]</text>
+
+        <text x="270" y="15" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">64 bytes</text>
+      </g>
+
+      <text x="0" y="60" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#7c3aed">4×4 Gate (two-qubit):</text>
+      <text x="0" y="78" font-family="monospace" font-size="9" fill="#374151">g[0][0], g[0][1], g[0][2], g[0][3], g[1][0], ... g[3][3]</text>
+      <text x="270" y="78" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">256 bytes</text>
+    </g>
+  </g>
+
+  <!-- Memory Requirements Table -->
+  <g transform="translate(420, 260)">
+    <text x="180" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Memory Requirements</text>
+
+    <rect x="0" y="15" width="360" height="120" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+
+    <g transform="translate(10, 30)">
+      <!-- Table header -->
+      <rect x="0" y="0" width="80" height="22" fill="#fdba74"/>
+      <text x="40" y="15" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#374151">Qubits</text>
+      <rect x="80" y="0" width="130" height="22" fill="#fdba74"/>
+      <text x="145" y="15" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#374151">Amplitudes</text>
+      <rect x="210" y="0" width="130" height="22" fill="#fdba74"/>
+      <text x="275" y="15" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#374151">Memory</text>
+
+      <!-- Data rows -->
+      <g transform="translate(0, 22)">
+        <rect x="0" y="0" width="80" height="18" fill="#ffedd5"/>
+        <text x="40" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">10</text>
+        <rect x="80" y="0" width="130" height="18" fill="#ffedd5"/>
+        <text x="145" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">1,024</text>
+        <rect x="210" y="0" width="130" height="18" fill="#ffedd5"/>
+        <text x="275" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">16 KB</text>
+      </g>
+
+      <g transform="translate(0, 40)">
+        <rect x="0" y="0" width="80" height="18" fill="#fff"/>
+        <text x="40" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">20</text>
+        <rect x="80" y="0" width="130" height="18" fill="#fff"/>
+        <text x="145" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">1,048,576</text>
+        <rect x="210" y="0" width="130" height="18" fill="#fff"/>
+        <text x="275" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">16 MB</text>
+      </g>
+
+      <g transform="translate(0, 58)">
+        <rect x="0" y="0" width="80" height="18" fill="#ffedd5"/>
+        <text x="40" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">30</text>
+        <rect x="80" y="0" width="130" height="18" fill="#ffedd5"/>
+        <text x="145" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">1,073,741,824</text>
+        <rect x="210" y="0" width="130" height="18" fill="#ffedd5"/>
+        <text x="275" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">16 GB</text>
+      </g>
+
+      <g transform="translate(0, 76)">
+        <rect x="0" y="0" width="80" height="18" fill="#fff"/>
+        <text x="40" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">32</text>
+        <rect x="80" y="0" width="130" height="18" fill="#fff"/>
+        <text x="145" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">4,294,967,296</text>
+        <rect x="210" y="0" width="130" height="18" fill="#fff"/>
+        <text x="275" y="13" text-anchor="middle" font-family="monospace" font-size="9" fill="#374151">64 GB</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- SIMD Layout -->
+  <g transform="translate(40, 405)">
+    <text x="370" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">SIMD Vector Layout (NEON/AVX2)</text>
+
+    <rect x="0" y="15" width="740" height="80" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+
+    <!-- 256-bit register -->
+    <g transform="translate(20, 35)">
+      <text x="0" y="0" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#059669">AVX2 (256-bit): 2 complex doubles</text>
+
+      <g transform="translate(0, 10)">
+        <rect x="0" y="0" width="80" height="30" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(z₀)</text>
+
+        <rect x="80" y="0" width="80" height="30" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(z₀)</text>
+
+        <rect x="160" y="0" width="80" height="30" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="200" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(z₁)</text>
+
+        <rect x="240" y="0" width="80" height="30" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="280" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(z₁)</text>
+
+        <text x="340" y="19" font-family="system-ui, sans-serif" font-size="9" fill="#374151">__m256d</text>
+      </g>
+    </g>
+
+    <!-- 128-bit register (NEON) -->
+    <g transform="translate(420, 35)">
+      <text x="0" y="0" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#059669">NEON (128-bit): 1 complex double</text>
+
+      <g transform="translate(0, 10)">
+        <rect x="0" y="0" width="80" height="30" fill="url(#realGrad)" stroke="#1d4ed8" stroke-width="1"/>
+        <text x="40" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Re(z)</text>
+
+        <rect x="80" y="0" width="80" height="30" fill="url(#imagGrad)" stroke="#b91c1c" stroke-width="1"/>
+        <text x="120" y="19" text-anchor="middle" font-family="monospace" font-size="9" fill="white">Im(z)</text>
+
+        <text x="180" y="19" font-family="system-ui, sans-serif" font-size="9" fill="#374151">float64x2_t</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Formula -->
+  <text x="400" y="510" text-anchor="middle" font-family="serif" font-size="12" fill="#4b5563">Memory(n qubits) = 2ⁿ × 16 bytes = 2^{n+4} bytes</text>
+</svg>

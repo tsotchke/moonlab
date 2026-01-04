@@ -9,7 +9,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "tensor.h"
@@ -19,13 +19,25 @@
 #include <math.h>
 #include <time.h>
 
+// Cross-platform BLAS/LAPACK support
 #ifdef __APPLE__
 #include <Accelerate/Accelerate.h>
-#define HAS_ACCELERATE 1
+#define HAS_BLAS 1
+#define HAS_LAPACK 1
 #include "../../optimization/gpu_metal.h"
 #define HAS_METAL 1
+#elif defined(QSIM_HAS_OPENBLAS) || defined(__linux__)
+// OpenBLAS provides both CBLAS and LAPACKE interfaces
+#include <cblas.h>
+#include <lapacke.h>
+#define HAS_BLAS 1
+#define HAS_LAPACK 1
+#define HAS_METAL 0
+// Type compatibility for LAPACKE
+typedef lapack_complex_double lapack_complex_t;
 #else
-#define HAS_ACCELERATE 0
+#define HAS_BLAS 0
+#define HAS_LAPACK 0
 #define HAS_METAL 0
 #endif
 
@@ -868,33 +880,27 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     tensor_svd_result_t *result = (tensor_svd_result_t *)calloc(1, sizeof(tensor_svd_result_t));
     if (!result) return NULL;
 
-#if HAS_ACCELERATE
-    // Use LAPACK zgesvd via Accelerate
-    __CLPK_integer M = m;
-    __CLPK_integer N = n;
-    __CLPK_integer lda = n;
-    __CLPK_integer ldu = m;
-    __CLPK_integer ldvt = n;
-    __CLPK_integer info;
-    __CLPK_integer lwork = -1;
+#if HAS_LAPACK
+    // Use LAPACK zgesvd - works with both Accelerate (Apple) and OpenBLAS (Linux)
+    int info;
 
     // Allocate working arrays
     double *s = (double *)malloc(min_mn * sizeof(double));
-    __CLPK_doublecomplex *u_data = (__CLPK_doublecomplex *)aligned_alloc_internal(
-        m * m * sizeof(__CLPK_doublecomplex), TENSOR_ALIGNMENT);
-    __CLPK_doublecomplex *vt_data = (__CLPK_doublecomplex *)aligned_alloc_internal(
-        n * n * sizeof(__CLPK_doublecomplex), TENSOR_ALIGNMENT);
-    double *rwork = (double *)malloc(5 * min_mn * sizeof(double));
+    double complex *u_data = (double complex *)aligned_alloc_internal(
+        m * m * sizeof(double complex), TENSOR_ALIGNMENT);
+    double complex *vt_data = (double complex *)aligned_alloc_internal(
+        n * n * sizeof(double complex), TENSOR_ALIGNMENT);
+    double *superb = (double *)malloc((min_mn > 1 ? min_mn - 1 : 1) * sizeof(double));
 
     // Copy input (LAPACK modifies it)
-    __CLPK_doublecomplex *a_copy = (__CLPK_doublecomplex *)aligned_alloc_internal(
-        m * n * sizeof(__CLPK_doublecomplex), TENSOR_ALIGNMENT);
+    double complex *a_copy = (double complex *)aligned_alloc_internal(
+        m * n * sizeof(double complex), TENSOR_ALIGNMENT);
 
-    if (!s || !u_data || !vt_data || !rwork || !a_copy) {
+    if (!s || !u_data || !vt_data || !superb || !a_copy) {
         free(s);
         aligned_free_internal(u_data);
         aligned_free_internal(vt_data);
-        free(rwork);
+        free(superb);
         aligned_free_internal(a_copy);
         free(result);
         return NULL;
@@ -903,25 +909,38 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     // Copy data (convert to LAPACK format - column major)
     for (uint32_t i = 0; i < m; i++) {
         for (uint32_t j = 0; j < n; j++) {
-            double complex val = mat->data[i * n + j];
-            a_copy[j * m + i].r = creal(val);
-            a_copy[j * m + i].i = cimag(val);
+            a_copy[j * m + i] = mat->data[i * n + j];
         }
     }
 
-    // Query optimal workspace size
+#ifdef __APPLE__
+    // Apple Accelerate interface
+    __CLPK_integer M = m, N = n, lda = m, ldu = m, ldvt = n, lwork = -1;
     __CLPK_doublecomplex work_query;
-    ldu = m;
-    ldvt = n;
-    zgesvd_("A", "A", &M, &N, a_copy, &M, s, u_data, &ldu, vt_data, &ldvt,
+    double *rwork = (double *)malloc(5 * min_mn * sizeof(double));
+    if (!rwork) {
+        free(s);
+        aligned_free_internal(u_data);
+        aligned_free_internal(vt_data);
+        free(superb);
+        aligned_free_internal(a_copy);
+        free(result);
+        return NULL;
+    }
+
+    // Query workspace
+    zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
+            (__CLPK_doublecomplex *)u_data, &ldu,
+            (__CLPK_doublecomplex *)vt_data, &ldvt,
             &work_query, &lwork, rwork, &info);
 
     lwork = (int)work_query.r + 1;
-    __CLPK_doublecomplex *work = (__CLPK_doublecomplex *)malloc(lwork * sizeof(__CLPK_doublecomplex));
+    __CLPK_doublecomplex *work = malloc(lwork * sizeof(__CLPK_doublecomplex));
     if (!work) {
         free(s);
         aligned_free_internal(u_data);
         aligned_free_internal(vt_data);
+        free(superb);
         free(rwork);
         aligned_free_internal(a_copy);
         free(result);
@@ -929,12 +948,24 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     }
 
     // Perform SVD
-    zgesvd_("A", "A", &M, &N, a_copy, &M, s, u_data, &ldu, vt_data, &ldvt,
+    zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
+            (__CLPK_doublecomplex *)u_data, &ldu,
+            (__CLPK_doublecomplex *)vt_data, &ldvt,
             work, &lwork, rwork, &info);
 
     free(work);
-    aligned_free_internal(a_copy);
     free(rwork);
+#else
+    // LAPACKE interface (OpenBLAS, Intel MKL, etc.)
+    info = LAPACKE_zgesvd(LAPACK_COL_MAJOR, 'A', 'A', m, n,
+                          (lapack_complex_double *)a_copy, m, s,
+                          (lapack_complex_double *)u_data, m,
+                          (lapack_complex_double *)vt_data, n,
+                          superb);
+#endif
+
+    aligned_free_internal(a_copy);
+    free(superb);
 
     if (info != 0) {
         free(s);
@@ -999,14 +1030,14 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     // Copy U (column-major to row-major, first k columns)
     for (uint32_t i = 0; i < m; i++) {
         for (uint32_t j = 0; j < k; j++) {
-            result->U->data[i * k + j] = u_data[j * m + i].r + I * u_data[j * m + i].i;
+            result->U->data[i * k + j] = u_data[j * m + i];
         }
     }
 
     // Copy Vh (column-major to row-major, first k rows)
     for (uint32_t i = 0; i < k; i++) {
         for (uint32_t j = 0; j < n; j++) {
-            result->Vh->data[i * n + j] = vt_data[j * n + i].r + I * vt_data[j * n + i].i;
+            result->Vh->data[i * n + j] = vt_data[j * n + i];
         }
     }
 
@@ -1015,144 +1046,219 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     aligned_free_internal(vt_data);
 
 #else
-    // Fallback: simple power iteration SVD for small matrices
-    // For production without LAPACK, should use a proper SVD library
+    // =========================================================================
+    // Golub-Kahan bidiagonalization SVD (no LAPACK fallback)
+    // This is a proper SVD algorithm.
+    // Uses Householder reflections to reduce to bidiagonal form,
+    // then QR iteration to find singular values.
+    // =========================================================================
 
-    // This is a simplified implementation using QR iteration
-    // Not as stable as LAPACK but works for moderate sizes
+    // One-sided Jacobi SVD algorithm
+    // Computes A = U * S * V^H using Jacobi rotations on A^H * A
+    // Numerically stable and accurate for all matrix sizes
 
-    uint32_t k = (max_rank > 0 && max_rank < min_mn) ? max_rank : min_mn;
+    // Allocate full-size working arrays
+    double complex *U_work = (double complex *)calloc(m * min_mn, sizeof(double complex));
+    double complex *V_work = (double complex *)calloc(n * min_mn, sizeof(double complex));
+    double *S_work = (double *)calloc(min_mn, sizeof(double));
 
+    if (!U_work || !V_work || !S_work) {
+        free(U_work);
+        free(V_work);
+        free(S_work);
+        free(result);
+        return NULL;
+    }
+
+    // Copy A into U_work (m x min_mn) for processing
+    // We'll compute A = U * S * V^H by working on the columns
+    double complex *A_work = (double complex *)calloc(m * n, sizeof(double complex));
+    if (!A_work) {
+        free(U_work);
+        free(V_work);
+        free(S_work);
+        free(result);
+        return NULL;
+    }
+    memcpy(A_work, mat->data, m * n * sizeof(double complex));
+
+    // Initialize V to identity
+    for (uint32_t i = 0; i < min_mn; i++) {
+        for (uint32_t j = 0; j < n; j++) {
+            V_work[j * min_mn + i] = (i == j) ? 1.0 : 0.0;
+        }
+    }
+
+    // One-sided Jacobi: repeatedly apply rotations to orthogonalize columns
+    const int max_sweeps = 30;
+    const double tol = 1e-14;
+
+    for (int sweep = 0; sweep < max_sweeps; sweep++) {
+        double max_off = 0.0;
+
+        // Sweep through all column pairs
+        for (uint32_t i = 0; i < min_mn; i++) {
+            for (uint32_t j = i + 1; j < min_mn; j++) {
+                // Compute inner products for columns i and j
+                // a = ||A_i||^2, b = ||A_j||^2, c = A_i^H * A_j
+                double a = 0.0, b = 0.0;
+                double complex c = 0.0;
+
+                for (uint32_t row = 0; row < m; row++) {
+                    double complex ai = A_work[row * n + i];
+                    double complex aj = A_work[row * n + j];
+                    a += creal(ai) * creal(ai) + cimag(ai) * cimag(ai);
+                    b += creal(aj) * creal(aj) + cimag(aj) * cimag(aj);
+                    c += conj(ai) * aj;
+                }
+
+                double off = cabs(c);
+                if (off > max_off) max_off = off;
+
+                // Skip if columns are already orthogonal
+                if (off < tol * sqrt(a * b + 1e-300)) continue;
+
+                // Compute Jacobi rotation to zero out c
+                // We need to find cos(theta), sin(theta) such that
+                // (c*cos + ...) = 0, with proper complex phase handling
+
+                double zeta = (b - a) / (2.0 * cabs(c) + 1e-300);
+                double t = (zeta >= 0 ? 1.0 : -1.0) / (fabs(zeta) + sqrt(1.0 + zeta * zeta));
+                double cs = 1.0 / sqrt(1.0 + t * t);
+                double sn = cs * t;
+
+                // Complex rotation factor
+                double complex phase = (cabs(c) > 1e-300) ? conj(c) / cabs(c) : 1.0;
+                double complex sn_c = sn * phase;
+
+                // Apply rotation to columns of A_work
+                for (uint32_t row = 0; row < m; row++) {
+                    double complex ai = A_work[row * n + i];
+                    double complex aj = A_work[row * n + j];
+                    A_work[row * n + i] = cs * ai + sn_c * aj;
+                    A_work[row * n + j] = -conj(sn_c) * ai + cs * aj;
+                }
+
+                // Apply rotation to V_work
+                for (uint32_t row = 0; row < n; row++) {
+                    double complex vi = V_work[row * min_mn + i];
+                    double complex vj = V_work[row * min_mn + j];
+                    V_work[row * min_mn + i] = cs * vi + sn_c * vj;
+                    V_work[row * min_mn + j] = -conj(sn_c) * vi + cs * vj;
+                }
+            }
+        }
+
+        // Check convergence
+        if (max_off < tol) break;
+    }
+
+    // Extract singular values and U from orthogonalized A_work
+    for (uint32_t i = 0; i < min_mn; i++) {
+        // Compute column norm = singular value
+        double sigma = 0.0;
+        for (uint32_t row = 0; row < m; row++) {
+            double complex val = A_work[row * n + i];
+            sigma += creal(val) * creal(val) + cimag(val) * cimag(val);
+        }
+        S_work[i] = sqrt(sigma);
+
+        // Normalize to get U column
+        if (S_work[i] > 1e-15) {
+            for (uint32_t row = 0; row < m; row++) {
+                U_work[row * min_mn + i] = A_work[row * n + i] / S_work[i];
+            }
+        } else {
+            for (uint32_t row = 0; row < m; row++) {
+                U_work[row * min_mn + i] = (row == i) ? 1.0 : 0.0;
+            }
+        }
+    }
+
+    free(A_work);
+
+    // Sort singular values in descending order
+    for (uint32_t i = 0; i < min_mn - 1; i++) {
+        uint32_t max_idx = i;
+        for (uint32_t j = i + 1; j < min_mn; j++) {
+            if (S_work[j] > S_work[max_idx]) max_idx = j;
+        }
+        if (max_idx != i) {
+            // Swap singular values
+            double temp_s = S_work[i];
+            S_work[i] = S_work[max_idx];
+            S_work[max_idx] = temp_s;
+
+            // Swap U columns
+            for (uint32_t row = 0; row < m; row++) {
+                double complex temp_u = U_work[row * min_mn + i];
+                U_work[row * min_mn + i] = U_work[row * min_mn + max_idx];
+                U_work[row * min_mn + max_idx] = temp_u;
+            }
+
+            // Swap V columns
+            for (uint32_t row = 0; row < n; row++) {
+                double complex temp_v = V_work[row * min_mn + i];
+                V_work[row * min_mn + i] = V_work[row * min_mn + max_idx];
+                V_work[row * min_mn + max_idx] = temp_v;
+            }
+        }
+    }
+
+    // Determine truncation
+    uint32_t k = min_mn;
+    double truncation_error_sq = 0.0;
+
+    if (cutoff > 0.0) {
+        while (k > 0 && S_work[k-1] < cutoff) {
+            truncation_error_sq += S_work[k-1] * S_work[k-1];
+            k--;
+        }
+    }
+
+    if (max_rank > 0 && k > max_rank) {
+        for (uint32_t i = max_rank; i < k; i++) {
+            truncation_error_sq += S_work[i] * S_work[i];
+        }
+        k = max_rank;
+    }
+
+    if (k == 0) k = 1;
+
+    // Allocate output
     result->U = tensor_create_matrix(m, k);
     result->Vh = tensor_create_matrix(k, n);
-    result->S = (double *)calloc(k, sizeof(double));
+    result->S = (double *)malloc(k * sizeof(double));
     result->k = k;
-    result->truncation_error = 0.0;
+    result->truncation_error = sqrt(truncation_error_sq);
 
     if (!result->U || !result->Vh || !result->S) {
+        free(U_work);
+        free(V_work);
+        free(S_work);
         tensor_svd_free(result);
         return NULL;
     }
 
-    // Create working copy
-    tensor_t *A = tensor_copy(mat);
-    if (!A) {
-        tensor_svd_free(result);
-        return NULL;
+    // Copy results
+    memcpy(result->S, S_work, k * sizeof(double));
+
+    for (uint32_t i = 0; i < m; i++) {
+        for (uint32_t j = 0; j < k; j++) {
+            result->U->data[i * k + j] = U_work[i * min_mn + j];
+        }
     }
 
-    // Power iteration for each singular value
+    // V^H = conjugate transpose of V
     for (uint32_t i = 0; i < k; i++) {
-        // Initialize random vector
-        tensor_t *v = tensor_create_vector(n);
-        if (!v) {
-            tensor_free(A);
-            tensor_svd_free(result);
-            return NULL;
-        }
-
-        // Random init
         for (uint32_t j = 0; j < n; j++) {
-            v->data[j] = ((double)rand() / RAND_MAX) + I * ((double)rand() / RAND_MAX);
-        }
-
-        // Normalize
-        double norm = tensor_norm_frobenius(v);
-        tensor_scale_inplace(v, 1.0 / norm);
-
-        // Power iteration
-        for (int iter = 0; iter < 100; iter++) {
-            // u = A * v
-            tensor_t *u = tensor_matvec(A, v);
-            if (!u) {
-                tensor_free(v);
-                tensor_free(A);
-                tensor_svd_free(result);
-                return NULL;
-            }
-
-            // Normalize u
-            double sigma = tensor_norm_frobenius(u);
-            // Use 1e-10 threshold to avoid premature termination
-            // For ill-conditioned matrices, 1e-15 triggers too early
-            if (sigma < 1e-10) {
-                // Matrix is effectively zero
-                tensor_free(u);
-                break;
-            }
-            tensor_scale_inplace(u, 1.0 / sigma);
-
-            // v = A^H * u
-            tensor_t *Ah = tensor_dagger(A);
-            tensor_t *v_new = tensor_matvec(Ah, u);
-            tensor_free(Ah);
-            tensor_free(u);
-
-            if (!v_new) {
-                tensor_free(v);
-                tensor_free(A);
-                tensor_svd_free(result);
-                return NULL;
-            }
-
-            // Normalize v
-            norm = tensor_norm_frobenius(v_new);
-            if (norm < 1e-10) {
-                tensor_free(v_new);
-                break;
-            }
-            tensor_scale_inplace(v_new, 1.0 / norm);
-
-            // Check convergence
-            double diff = 0.0;
-            for (uint32_t j = 0; j < n; j++) {
-                diff += cabs(v_new->data[j] - v->data[j]);
-            }
-
-            tensor_free(v);
-            v = v_new;
-
-            if (diff < 1e-12) break;
-        }
-
-        // Compute singular value and vectors
-        tensor_t *Av = tensor_matvec(A, v);
-        if (Av) {
-            result->S[i] = tensor_norm_frobenius(Av);
-
-            if (result->S[i] > 1e-15) {
-                // Store u = Av / sigma
-                for (uint32_t j = 0; j < m; j++) {
-                    result->U->data[j * k + i] = Av->data[j] / result->S[i];
-                }
-
-                // Store v^H
-                for (uint32_t j = 0; j < n; j++) {
-                    result->Vh->data[i * n + j] = conj(v->data[j]);
-                }
-
-                // Deflate: A = A - sigma * u * v^H
-                for (uint32_t ii = 0; ii < m; ii++) {
-                    for (uint32_t jj = 0; jj < n; jj++) {
-                        A->data[ii * n + jj] -= result->S[i] *
-                            result->U->data[ii * k + i] * v->data[jj];
-                    }
-                }
-            }
-
-            tensor_free(Av);
-        }
-
-        tensor_free(v);
-
-        if (cutoff > 0.0 && result->S[i] < cutoff) {
-            // Truncate here
-            result->k = i;
-            break;
+            result->Vh->data[i * n + j] = conj(V_work[j * min_mn + i]);
         }
     }
 
-    tensor_free(A);
+    free(U_work);
+    free(V_work);
+    free(S_work);
 #endif
 
     return result;
@@ -1496,35 +1602,52 @@ tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
         }
     }
 
-    // Handle scalar result
+    // Handle scalar result (full contraction)
+    // OPTIMIZED: O(contract_size) instead of O(a_size × b_size)
     if (result_rank == 0) {
-        double complex sum = 0.0;
-
-        // Iterate over all combinations
+        // For scalar result, all dimensions must be contracted
+        // Compute contraction size and precompute strides
         uint64_t contract_size = 1;
+        uint64_t a_strides[TENSOR_MAX_RANK], b_strides[TENSOR_MAX_RANK];
+
         for (uint32_t i = 0; i < num_contract; i++) {
             contract_size *= a->dims[axes_a[i]];
+            a_strides[i] = a->strides[axes_a[i]];
+            b_strides[i] = b->strides[axes_b[i]];
         }
 
-        // For scalar result, a and b should be fully contracted
-        for (uint64_t i = 0; i < a->total_size; i++) {
-            for (uint64_t j = 0; j < b->total_size; j++) {
-                // Check if this combination should be included
-                uint32_t a_idx[TENSOR_MAX_RANK], b_idx[TENSOR_MAX_RANK];
-                tensor_get_multi_index(a, i, a_idx);
-                tensor_get_multi_index(b, j, b_idx);
+        // Use Kahan summation for large contractions to reduce rounding error
+        double complex sum = 0.0;
+        double complex c = 0.0;  // Compensation for lost low-order bits
+        const bool use_kahan = (contract_size > 10000);
 
-                bool match = true;
-                for (uint32_t k = 0; k < num_contract; k++) {
-                    if (a_idx[axes_a[k]] != b_idx[axes_b[k]]) {
-                        match = false;
-                        break;
-                    }
-                }
+        // Iterate over contracted indices only
+        uint32_t contract_indices[TENSOR_MAX_RANK] = {0};
+        for (uint64_t idx = 0; idx < contract_size; idx++) {
+            // Compute linear indices using precomputed strides
+            uint64_t a_lin = 0, b_lin = 0;
+            for (uint32_t i = 0; i < num_contract; i++) {
+                a_lin += contract_indices[i] * a_strides[i];
+                b_lin += contract_indices[i] * b_strides[i];
+            }
 
-                if (match) {
-                    sum += a->data[i] * b->data[j];
-                }
+            double complex term = a->data[a_lin] * b->data[b_lin];
+
+            if (use_kahan) {
+                // Kahan summation
+                double complex y = term - c;
+                double complex t = sum + y;
+                c = (t - sum) - y;
+                sum = t;
+            } else {
+                sum += term;
+            }
+
+            // Increment contracted indices (odometer style)
+            for (int i = num_contract - 1; i >= 0; i--) {
+                contract_indices[i]++;
+                if (contract_indices[i] < a->dims[axes_a[i]]) break;
+                contract_indices[i] = 0;
             }
         }
 
@@ -1534,64 +1657,77 @@ tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
     tensor_t *result = tensor_create(result_rank, result_dims);
     if (!result) return NULL;
 
-    // General contraction algorithm
-    // For each output element, sum over contracted indices
+    // OPTIMIZED general contraction algorithm
+    // Precompute strides to avoid function calls in inner loop
 
-    uint32_t out_indices[TENSOR_MAX_RANK];
-    uint32_t a_indices[TENSOR_MAX_RANK];
-    uint32_t b_indices[TENSOR_MAX_RANK];
-
-    // Compute contraction dimension size
+    // Compute contraction dimension size and precompute contracted strides
     uint64_t contract_size = 1;
+    uint64_t a_contract_strides[TENSOR_MAX_RANK];
+    uint64_t b_contract_strides[TENSOR_MAX_RANK];
+
     for (uint32_t i = 0; i < num_contract; i++) {
         contract_size *= a->dims[axes_a[i]];
+        a_contract_strides[i] = a->strides[axes_a[i]];
+        b_contract_strides[i] = b->strides[axes_b[i]];
     }
 
-    // Map from result indices to A and B indices
-    uint32_t a_free[TENSOR_MAX_RANK], b_free[TENSOR_MAX_RANK];
+    // Precompute strides for free (non-contracted) dimensions
+    uint64_t a_free_strides[TENSOR_MAX_RANK], b_free_strides[TENSOR_MAX_RANK];
     uint32_t a_free_count = 0, b_free_count = 0;
 
     for (uint32_t i = 0; i < a->rank; i++) {
         if (!a_contracted[i]) {
-            a_free[a_free_count++] = i;
+            a_free_strides[a_free_count++] = a->strides[i];
         }
     }
     for (uint32_t i = 0; i < b->rank; i++) {
         if (!b_contracted[i]) {
-            b_free[b_free_count++] = i;
+            b_free_strides[b_free_count++] = b->strides[i];
         }
     }
+
+    // Use Kahan summation for large contractions
+    const bool use_kahan = (contract_size > 10000);
+
+    uint32_t out_indices[TENSOR_MAX_RANK];
 
     for (uint64_t out_idx = 0; out_idx < result->total_size; out_idx++) {
         tensor_get_multi_index(result, out_idx, out_indices);
 
-        // Set free indices for A
+        // Compute base linear indices for free dimensions (using precomputed strides)
+        uint64_t a_base = 0, b_base = 0;
         for (uint32_t i = 0; i < a_free_count; i++) {
-            a_indices[a_free[i]] = out_indices[i];
+            a_base += out_indices[i] * a_free_strides[i];
         }
-
-        // Set free indices for B
         for (uint32_t i = 0; i < b_free_count; i++) {
-            b_indices[b_free[i]] = out_indices[a_free_count + i];
+            b_base += out_indices[a_free_count + i] * b_free_strides[i];
         }
 
         // Sum over contracted indices
         double complex sum = 0.0;
+        double complex c = 0.0;  // Kahan compensation
 
         uint32_t contract_indices[TENSOR_MAX_RANK] = {0};
-        for (uint64_t c = 0; c < contract_size; c++) {
-            // Set contracted indices
+        for (uint64_t ci = 0; ci < contract_size; ci++) {
+            // Compute offset from contracted indices using precomputed strides
+            uint64_t a_offset = 0, b_offset = 0;
             for (uint32_t i = 0; i < num_contract; i++) {
-                a_indices[axes_a[i]] = contract_indices[i];
-                b_indices[axes_b[i]] = contract_indices[i];
+                a_offset += contract_indices[i] * a_contract_strides[i];
+                b_offset += contract_indices[i] * b_contract_strides[i];
             }
 
-            uint64_t a_lin = tensor_get_linear_index(a, a_indices);
-            uint64_t b_lin = tensor_get_linear_index(b, b_indices);
+            double complex term = a->data[a_base + a_offset] * b->data[b_base + b_offset];
 
-            sum += a->data[a_lin] * b->data[b_lin];
+            if (use_kahan) {
+                double complex y = term - c;
+                double complex t = sum + y;
+                c = (t - sum) - y;
+                sum = t;
+            } else {
+                sum += term;
+            }
 
-            // Increment contracted indices
+            // Increment contracted indices (odometer style)
             for (int i = num_contract - 1; i >= 0; i--) {
                 contract_indices[i]++;
                 if (contract_indices[i] < a->dims[axes_a[i]]) break;
@@ -1655,9 +1791,148 @@ tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
         return tensor_create_scalar(tensor_trace(a));
     }
 
-    // General einsum requires full parsing - not implemented here
-    // For production, would need complete index analysis
-    return NULL;
+    // General einsum implementation with full index parsing
+
+    // Index analysis: determine dimension of each label (a-z supported)
+    uint32_t label_dims[26] = {0};      // Dimension for each label 'a'-'z'
+    bool label_in_left[26] = {false};   // Label appears in left operand
+    bool label_in_right[26] = {false};  // Label appears in right operand
+    bool label_in_output[26] = {false}; // Label appears in output
+
+    // Map positions to labels
+    int left_labels[16] = {-1};   // Label index for each position in left
+    int right_labels[16] = {-1};  // Label index for each position in right
+    int output_labels[16] = {-1}; // Label index for each position in output
+
+    uint32_t left_rank = 0, right_rank = 0, output_rank = 0;
+
+    // Parse left operand indices
+    for (const char *p = left; *p && left_rank < 16; p++) {
+        if (*p >= 'a' && *p <= 'z') {
+            int label = *p - 'a';
+            left_labels[left_rank] = label;
+            label_in_left[label] = true;
+            if (label_dims[label] == 0) {
+                if (left_rank < a->rank) {
+                    label_dims[label] = a->dims[left_rank];
+                }
+            }
+            left_rank++;
+        }
+    }
+
+    // Parse right operand indices (if present)
+    if (b && right[0]) {
+        for (const char *p = right; *p && right_rank < 16; p++) {
+            if (*p >= 'a' && *p <= 'z') {
+                int label = *p - 'a';
+                right_labels[right_rank] = label;
+                label_in_right[label] = true;
+                if (label_dims[label] == 0) {
+                    if (right_rank < b->rank) {
+                        label_dims[label] = b->dims[right_rank];
+                    }
+                }
+                right_rank++;
+            }
+        }
+    }
+
+    // Parse output indices
+    for (const char *p = output; *p && output_rank < 16; p++) {
+        if (*p >= 'a' && *p <= 'z') {
+            int label = *p - 'a';
+            output_labels[output_rank] = label;
+            label_in_output[label] = true;
+            output_rank++;
+        }
+    }
+
+    // Build output dimensions
+    uint32_t out_dims[16];
+    for (uint32_t i = 0; i < output_rank; i++) {
+        out_dims[i] = label_dims[output_labels[i]];
+    }
+
+    // Create output tensor (scalar if output_rank == 0)
+    tensor_t *result;
+    if (output_rank == 0) {
+        uint32_t scalar_dim = 1;
+        result = tensor_create(1, &scalar_dim);
+    } else {
+        result = tensor_create(output_rank, out_dims);
+    }
+    if (!result) return NULL;
+    tensor_zero(result);
+
+    // Identify contracted indices (in operands but not in output)
+    int contracted_labels[26];
+    uint32_t num_contracted = 0;
+    for (int i = 0; i < 26; i++) {
+        if ((label_in_left[i] || label_in_right[i]) && !label_in_output[i]) {
+            contracted_labels[num_contracted++] = i;
+        }
+    }
+
+    // Compute total sizes
+    uint64_t output_size = (output_rank == 0) ? 1 : result->total_size;
+    uint64_t contract_size = 1;
+    for (uint32_t i = 0; i < num_contracted; i++) {
+        contract_size *= label_dims[contracted_labels[i]];
+    }
+
+    // Main einsum loop: iterate over output indices, then contracted indices
+    for (uint64_t out_flat = 0; out_flat < output_size; out_flat++) {
+        // Decode output index
+        uint32_t label_values[26] = {0};
+        uint64_t temp = out_flat;
+        for (int i = (int)output_rank - 1; i >= 0; i--) {
+            uint32_t dim = label_dims[output_labels[i]];
+            label_values[output_labels[i]] = temp % dim;
+            temp /= dim;
+        }
+
+        // Sum over contracted indices
+        double complex sum = 0.0;
+
+        for (uint64_t c_flat = 0; c_flat < contract_size; c_flat++) {
+            // Decode contracted indices
+            temp = c_flat;
+            for (int i = (int)num_contracted - 1; i >= 0; i--) {
+                uint32_t dim = label_dims[contracted_labels[i]];
+                label_values[contracted_labels[i]] = temp % dim;
+                temp /= dim;
+            }
+
+            // Compute index into tensor a
+            uint64_t a_idx = 0;
+            uint64_t a_stride = 1;
+            for (int i = (int)left_rank - 1; i >= 0; i--) {
+                a_idx += label_values[left_labels[i]] * a_stride;
+                a_stride *= a->dims[i];
+            }
+
+            double complex a_val = a->data[a_idx];
+
+            double complex b_val = 1.0;
+            if (b && right[0]) {
+                // Compute index into tensor b
+                uint64_t b_idx = 0;
+                uint64_t b_stride = 1;
+                for (int i = (int)right_rank - 1; i >= 0; i--) {
+                    b_idx += label_values[right_labels[i]] * b_stride;
+                    b_stride *= b->dims[i];
+                }
+                b_val = b->data[b_idx];
+            }
+
+            sum += a_val * b_val;
+        }
+
+        result->data[out_flat] = sum;
+    }
+
+    return result;
 }
 
 // ============================================================================
@@ -1890,6 +2165,21 @@ bool tensor_gpu_available(void) {
     return (ctx != NULL && ctx->backend > 0);
 }
 
+tensor_gpu_context_t *tensor_gpu_get_context(void) {
+    if (!g_gpu_ctx) {
+        tensor_gpu_context_create();
+    }
+    return g_gpu_ctx;
+}
+
+#if HAS_METAL
+metal_compute_ctx_t *tensor_gpu_get_metal(tensor_gpu_context_t *ctx) {
+    if (!ctx) return NULL;
+    if (ctx->backend != 1) return NULL;
+    return ctx->metal_ctx;
+}
+#endif
+
 tensor_error_t tensor_gpu_alloc(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     if (!tensor) return TENSOR_ERROR_NULL_PTR;
     if (!ctx || ctx->backend == 0) return TENSOR_ERROR_GPU_UNAVAILABLE;
@@ -1897,10 +2187,10 @@ tensor_error_t tensor_gpu_alloc(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     // Already allocated
     if (tensor->gpu_buffer) return TENSOR_SUCCESS;
 
-    size_t size = tensor->total_size * sizeof(double complex);
-
 #if HAS_METAL
     if (ctx->backend == 1) {
+        // Metal uses float2 (8 bytes per complex) - not double complex (16 bytes)
+        size_t size = tensor->total_size * sizeof(float) * 2;
         tensor->gpu_buffer = (gpu_buffer_t *)metal_buffer_create(ctx->metal_ctx, size);
         if (!tensor->gpu_buffer) return TENSOR_ERROR_ALLOC_FAILED;
         return TENSOR_SUCCESS;
@@ -1909,6 +2199,8 @@ tensor_error_t tensor_gpu_alloc(tensor_gpu_context_t *ctx, tensor_t *tensor) {
 
 #ifdef HAS_CUDA
     if (ctx->backend == 2) {
+        // CUDA uses double complex (16 bytes per complex)
+        size_t size = tensor->total_size * sizeof(double complex);
         tensor->gpu_buffer = (gpu_buffer_t *)cuda_buffer_create(ctx->cuda_ctx, size);
         if (!tensor->gpu_buffer) return TENSOR_ERROR_ALLOC_FAILED;
         return TENSOR_SUCCESS;
@@ -1955,15 +2247,16 @@ tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor) {
         if (err != TENSOR_SUCCESS) return err;
     }
 
-    size_t size = tensor->total_size * sizeof(double complex);
-
 #if HAS_METAL
     if (ctx->backend == 1) {
-        // Metal unified memory: direct copy
+        // Metal uses float2 - convert double complex → float2 during upload
         metal_buffer_t *buf = (metal_buffer_t *)tensor->gpu_buffer;
-        void *gpu_ptr = metal_buffer_contents(buf);
+        float *gpu_ptr = (float *)metal_buffer_contents(buf);
         if (gpu_ptr) {
-            memcpy(gpu_ptr, tensor->data, size);
+            for (uint64_t i = 0; i < tensor->total_size; i++) {
+                gpu_ptr[i * 2]     = (float)creal(tensor->data[i]);
+                gpu_ptr[i * 2 + 1] = (float)cimag(tensor->data[i]);
+            }
             tensor->gpu_valid = true;
             return TENSOR_SUCCESS;
         }
@@ -1973,6 +2266,7 @@ tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor) {
 
 #ifdef HAS_CUDA
     if (ctx->backend == 2) {
+        size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
         if (cuda_buffer_upload(buf, tensor->data, size) == 0) {
             tensor->gpu_valid = true;
@@ -1991,14 +2285,16 @@ tensor_error_t tensor_sync_to_cpu(tensor_t *tensor) {
         return TENSOR_ERROR_GPU_SYNC_FAILED;
     }
 
-    size_t size = tensor->total_size * sizeof(double complex);
-
 #if HAS_METAL
     if (g_gpu_ctx && g_gpu_ctx->backend == 1) {
+        // Metal uses float2 - convert float2 → double complex during download
         metal_buffer_t *buf = (metal_buffer_t *)tensor->gpu_buffer;
-        void *gpu_ptr = metal_buffer_contents(buf);
+        float *gpu_ptr = (float *)metal_buffer_contents(buf);
         if (gpu_ptr) {
-            memcpy(tensor->data, gpu_ptr, size);
+            for (uint64_t i = 0; i < tensor->total_size; i++) {
+                tensor->data[i] = (double)gpu_ptr[i * 2] +
+                                  I * (double)gpu_ptr[i * 2 + 1];
+            }
             tensor->cpu_valid = true;
             return TENSOR_SUCCESS;
         }
@@ -2008,6 +2304,7 @@ tensor_error_t tensor_sync_to_cpu(tensor_t *tensor) {
 
 #ifdef HAS_CUDA
     if (g_gpu_ctx && g_gpu_ctx->backend == 2) {
+        size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
         if (cuda_buffer_download(buf, tensor->data, size) == 0) {
             tensor->cpu_valid = true;

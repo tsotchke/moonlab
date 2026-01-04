@@ -13,7 +13,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "config.h"
@@ -85,6 +85,12 @@ static void set_defaults(qsim_config_t* config) {
     config->gpu.max_vram = 0;
     config->gpu.async_transfers = 1;
     config->gpu.kernel_fusion = 1;
+
+    // Algorithm parameters
+    config->algorithm.max_measurements = 1024;
+    config->algorithm.jacobi_max_iter = 100;
+    config->algorithm.jacobi_tolerance = 1e-12;
+    config->algorithm.grover_analysis_max_qubits = 12;
 
     // Logging
     config->log_level = QSIM_LOG_WARN;
@@ -455,6 +461,90 @@ int qsim_backend_available(qsim_backend_t backend) {
     }
 }
 
+/**
+ * @brief Runtime CPUID check for x86 SIMD features
+ */
+#if defined(__x86_64__) || defined(__i386__)
+#include <cpuid.h>
+
+static void cpuid(int leaf, int subleaf, unsigned int *eax, unsigned int *ebx,
+                  unsigned int *ecx, unsigned int *edx) {
+    __cpuid_count(leaf, subleaf, *eax, *ebx, *ecx, *edx);
+}
+
+static int runtime_check_sse2(void) {
+    unsigned int eax, ebx, ecx, edx;
+    cpuid(1, 0, &eax, &ebx, &ecx, &edx);
+    return (edx >> 26) & 1;  // SSE2 bit
+}
+
+static int runtime_check_avx(void) {
+    unsigned int eax, ebx, ecx, edx;
+    cpuid(1, 0, &eax, &ebx, &ecx, &edx);
+
+    // Check OSXSAVE and AVX bits in ECX
+    int osxsave = (ecx >> 27) & 1;
+    int avx_bit = (ecx >> 28) & 1;
+
+    if (!osxsave || !avx_bit) return 0;
+
+    // Verify OS support via XGETBV
+    unsigned int xcr0;
+    __asm__ volatile("xgetbv" : "=a"(xcr0) : "c"(0) : "edx");
+
+    // Check XMM (bit 1) and YMM (bit 2) state support
+    return (xcr0 & 0x6) == 0x6;
+}
+
+static int runtime_check_avx2(void) {
+    if (!runtime_check_avx()) return 0;
+
+    unsigned int eax, ebx, ecx, edx;
+    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
+    return (ebx >> 5) & 1;  // AVX2 bit
+}
+
+static int runtime_check_avx512(void) {
+    if (!runtime_check_avx()) return 0;
+
+    unsigned int eax, ebx, ecx, edx;
+    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
+
+    // Check AVX-512 Foundation (bit 16)
+    int avx512f = (ebx >> 16) & 1;
+    if (!avx512f) return 0;
+
+    // Verify OS support for ZMM state via XGETBV
+    unsigned int xcr0;
+    __asm__ volatile("xgetbv" : "=a"(xcr0) : "c"(0) : "edx");
+
+    // Check XMM, YMM, and ZMM opmask + upper ZMM state
+    // Bits: 1=XMM, 2=YMM, 5=opmask, 6=ZMM_Hi256, 7=Hi16_ZMM
+    return (xcr0 & 0xE6) == 0xE6;
+}
+#endif
+
+#if defined(__aarch64__)
+#if defined(__linux__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+
+static int runtime_check_sve(void) {
+    unsigned long hwcap = getauxval(AT_HWCAP);
+    return (hwcap & HWCAP_SVE) != 0;
+}
+#elif defined(__APPLE__)
+static int runtime_check_sve(void) {
+    // Apple Silicon doesn't support SVE
+    return 0;
+}
+#else
+static int runtime_check_sve(void) {
+    return 0;  // Conservative default
+}
+#endif
+#endif
+
 int qsim_simd_available(qsim_simd_t simd) {
     switch (simd) {
         case QSIM_SIMD_NONE:
@@ -462,22 +552,24 @@ int qsim_simd_available(qsim_simd_t simd) {
 
 #if defined(__x86_64__) || defined(__i386__)
         case QSIM_SIMD_SSE2:
-            return 1;  // Baseline for x86_64
+            return runtime_check_sse2();
 
         case QSIM_SIMD_AVX:
+            return runtime_check_avx();
+
         case QSIM_SIMD_AVX2:
+            return runtime_check_avx2();
+
         case QSIM_SIMD_AVX512:
-            // Would need CPUID check
-            return 1;  // Simplified
+            return runtime_check_avx512();
 #endif
 
 #if defined(__aarch64__)
         case QSIM_SIMD_NEON:
-            return 1;  // Baseline for ARM64
+            return 1;  // Baseline for ARM64, always available
 
         case QSIM_SIMD_SVE:
-            // Would need hwcap check
-            return 0;  // Conservative
+            return runtime_check_sve();
 #endif
 
         default:

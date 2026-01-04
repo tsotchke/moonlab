@@ -17,7 +17,7 @@
  * Compile with: -march=armv8-a+sve or -march=armv9-a+sve2
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "simd_sve.h"

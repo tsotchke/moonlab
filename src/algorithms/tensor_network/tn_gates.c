@@ -8,7 +8,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "tn_gates.h"
@@ -26,9 +26,7 @@
 #endif
 
 // GPU threshold: use GPU when bond dimension exceeds this
-// DISABLED: Data type mismatch between CPU (double complex) and Metal (float2)
-// requires conversion layer before GPU path can be used
-#define GPU_BOND_THRESHOLD 1000000
+#define GPU_BOND_THRESHOLD 32  // Use GPU for larger bond dimensions
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -116,25 +114,27 @@ const tn_gate_2q_t TN_GATE_ISWAP = {{
 }};
 
 // ============================================================================
-// GPU ACCELERATION CONTEXT
+// GPU ACCELERATION CONTEXT (Unified with tensor.c)
 // ============================================================================
 
 #if HAS_METAL
-static metal_compute_ctx_t *g_metal_ctx = NULL;
-static bool g_gpu_init_attempted = false;
+static bool g_gpu_init_logged = false;
 
 /**
- * @brief Get or create Metal compute context
+ * @brief Get Metal compute context from unified GPU context
+ *
+ * Uses the global GPU context from tensor.c to avoid double initialization.
  */
 static metal_compute_ctx_t *get_metal_context(void) {
-    if (!g_gpu_init_attempted) {
-        g_gpu_init_attempted = true;
-        g_metal_ctx = metal_compute_init();
-        if (g_metal_ctx) {
-            fprintf(stderr, "Metal GPU acceleration enabled for tensor network operations\n");
-        }
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) return NULL;
+
+    metal_compute_ctx_t *ctx = tensor_gpu_get_metal(gpu_ctx);
+    if (ctx && !g_gpu_init_logged) {
+        g_gpu_init_logged = true;
+        fprintf(stderr, "Metal GPU acceleration enabled for tensor network operations\n");
     }
-    return g_metal_ctx;
+    return ctx;
 }
 
 /**
@@ -157,26 +157,67 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
     uint32_t chi_m = tl->dims[2];      // Middle bond (shared)
     uint32_t chi_r = tr->dims[2];      // Right bond
 
-    // Ensure tensors have GPU buffers and are synced
-    if (tensor_ensure_gpu(NULL, tl) != TENSOR_SUCCESS ||
-        tensor_ensure_gpu(NULL, tr) != TENSOR_SUCCESS) {
+    // Ensure tensors have GPU buffers sized for maximum possible output
+    // After SVD, bond can grow up to max_bond_dim, so pre-allocate that size
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) {
         return TN_GATE_ERROR_ALLOC_FAILED;  // Fall back to CPU
     }
 
-    // Create gate buffer on GPU
-    size_t gate_size = 16 * sizeof(double complex);
+    // Free existing GPU buffers - we'll reallocate with correct max size
+    if (tl->gpu_buffer) {
+        tensor_gpu_free(tl);
+    }
+    if (tr->gpu_buffer) {
+        tensor_gpu_free(tr);
+    }
+
+    // Calculate maximum possible sizes (using max_bond_dim)
+    uint32_t max_bond = state->config.max_bond_dim;
+    size_t max_tl_size = chi_l * 2 * max_bond * sizeof(float) * 2;  // float2
+    size_t max_tr_size = max_bond * 2 * chi_r * sizeof(float) * 2;  // float2
+
+    // Allocate GPU buffers with max size
+    tl->gpu_buffer = (gpu_buffer_t *)metal_buffer_create(ctx, max_tl_size);
+    tr->gpu_buffer = (gpu_buffer_t *)metal_buffer_create(ctx, max_tr_size);
+
+    if (!tl->gpu_buffer || !tr->gpu_buffer) {
+        if (tl->gpu_buffer) tensor_gpu_free(tl);
+        if (tr->gpu_buffer) tensor_gpu_free(tr);
+        return TN_GATE_ERROR_ALLOC_FAILED;  // Fall back to CPU
+    }
+
+    // Upload current tensor data to GPU (converting double->float)
+    float *tl_gpu = (float *)metal_buffer_contents((metal_buffer_t *)tl->gpu_buffer);
+    float *tr_gpu = (float *)metal_buffer_contents((metal_buffer_t *)tr->gpu_buffer);
+
+    for (uint64_t i = 0; i < tl->total_size; i++) {
+        tl_gpu[i * 2] = (float)creal(tl->data[i]);
+        tl_gpu[i * 2 + 1] = (float)cimag(tl->data[i]);
+    }
+    for (uint64_t i = 0; i < tr->total_size; i++) {
+        tr_gpu[i * 2] = (float)creal(tr->data[i]);
+        tr_gpu[i * 2 + 1] = (float)cimag(tr->data[i]);
+    }
+
+    tl->gpu_valid = true;
+    tr->gpu_valid = true;
+
+    // Create gate buffer on GPU (Metal uses float2, not double complex)
+    size_t gate_size = 16 * sizeof(float) * 2;  // 16 complex numbers as float2
     metal_buffer_t *gate_buf = metal_buffer_create(ctx, gate_size);
     if (!gate_buf) {
         return TN_GATE_ERROR_ALLOC_FAILED;
     }
 
-    // Copy gate matrix to GPU (flatten 4x4)
-    void *gate_ptr = metal_buffer_contents(gate_buf);
-    if (gate_ptr) {
-        double complex *gd = (double complex *)gate_ptr;
+    // Copy gate matrix to GPU (flatten 4x4, convert double → float)
+    float *gf = (float *)metal_buffer_contents(gate_buf);
+    if (gf) {
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
-                gd[i * 4 + j] = gate->elements[i][j];
+                int idx = (i * 4 + j) * 2;
+                gf[idx]     = (float)creal(gate->elements[i][j]);
+                gf[idx + 1] = (float)cimag(gate->elements[i][j]);
             }
         }
     }
@@ -202,18 +243,59 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
         return TN_GATE_ERROR_ALLOC_FAILED;  // Fall back to CPU
     }
 
-    // Sync results back to CPU
-    tensor_invalidate_cpu(tl);
-    tensor_invalidate_cpu(tr);
-    tl->gpu_valid = true;
-    tr->gpu_valid = true;
+    // Update tensor dimensions and sync results from GPU
+    // tl: [chi_l][2][chi_m] -> [chi_l][2][new_bond]
+    // tr: [chi_m][2][chi_r] -> [new_bond][2][chi_r]
+    uint64_t new_tl_size = chi_l * 2 * new_bond;
+    uint64_t new_tr_size = new_bond * 2 * chi_r;
 
-    if (tensor_sync_to_cpu(tl) != TENSOR_SUCCESS ||
-        tensor_sync_to_cpu(tr) != TENSOR_SUCCESS) {
-        return TN_GATE_ERROR_ALLOC_FAILED;
+    // Reallocate CPU buffers for new dimensions
+    if (new_tl_size != tl->total_size) {
+        double complex *new_data = (double complex *)calloc(new_tl_size, sizeof(double complex));
+        if (!new_data) return TN_GATE_ERROR_ALLOC_FAILED;
+        free(tl->data);
+        tl->data = new_data;
+        tl->dims[2] = new_bond;
+        tl->total_size = new_tl_size;
+        tl->strides[2] = 1;
+        tl->strides[1] = tl->dims[2];
+        tl->strides[0] = tl->dims[1] * tl->strides[1];
     }
 
-    // Update bond dimension
+    if (new_tr_size != tr->total_size) {
+        double complex *new_data = (double complex *)calloc(new_tr_size, sizeof(double complex));
+        if (!new_data) return TN_GATE_ERROR_ALLOC_FAILED;
+        free(tr->data);
+        tr->data = new_data;
+        tr->dims[0] = new_bond;
+        tr->total_size = new_tr_size;
+        tr->strides[2] = 1;
+        tr->strides[1] = tr->dims[2];
+        tr->strides[0] = tr->dims[1] * tr->strides[1];
+    }
+
+    // Manually sync GPU->CPU (can't use tensor_sync_to_cpu because buffer/tensor sizes differ)
+    // GPU buffer is sized for max_bond, but only new_bond elements are valid
+    float *tl_result = (float *)metal_buffer_contents((metal_buffer_t *)tl->gpu_buffer);
+    float *tr_result = (float *)metal_buffer_contents((metal_buffer_t *)tr->gpu_buffer);
+
+    for (uint64_t i = 0; i < new_tl_size; i++) {
+        tl->data[i] = (double)tl_result[i * 2] + I * (double)tl_result[i * 2 + 1];
+    }
+    for (uint64_t i = 0; i < new_tr_size; i++) {
+        tr->data[i] = (double)tr_result[i * 2] + I * (double)tr_result[i * 2 + 1];
+    }
+
+    tl->cpu_valid = true;
+    tr->cpu_valid = true;
+    tl->gpu_valid = false;  // GPU buffer has different layout, mark invalid
+    tr->gpu_valid = false;
+
+    // Free GPU buffers (they have wrong logical dimensions now)
+    tensor_gpu_free(tl);
+    tensor_gpu_free(tr);
+
+    // Update bond dimension in state
     state->bond_dims[left_qubit] = new_bond;
 
     // Update tracking
@@ -482,6 +564,7 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
 
     // theta has shape [ll, pl, pr, rr]
     // Apply gate: theta'[ll, pl', pr', rr] = sum_{pl,pr} gate[pl'*2+pr', pl*2+pr] * theta[ll, pl, pr, rr]
+    // OPTIMIZED: Direct indexing with precomputed strides instead of tensor_get/tensor_set
 
     tensor_t *theta_new = tensor_create(4, theta->dims);
     if (!theta_new) {
@@ -489,26 +572,41 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
         return TN_GATE_ERROR_ALLOC_FAILED;
     }
 
+    // Precompute strides for theta: [ll, pl, pr, rr]
+    // Strides: [pl*pr*rr, pr*rr, rr, 1] = [2*2*rr, 2*rr, rr, 1]
+    const uint64_t stride_ll = TN_PHYSICAL_DIM * TN_PHYSICAL_DIM * rr_dim;
+    const uint64_t stride_pl = TN_PHYSICAL_DIM * rr_dim;
+    const uint64_t stride_pr = rr_dim;
+    // stride_rr = 1
+
+    // Pre-fetch gate elements for better cache locality (4x4 = 16 elements)
+    const double complex g[4][4] = {
+        {gate->elements[0][0], gate->elements[0][1], gate->elements[0][2], gate->elements[0][3]},
+        {gate->elements[1][0], gate->elements[1][1], gate->elements[1][2], gate->elements[1][3]},
+        {gate->elements[2][0], gate->elements[2][1], gate->elements[2][2], gate->elements[2][3]},
+        {gate->elements[3][0], gate->elements[3][1], gate->elements[3][2], gate->elements[3][3]}
+    };
+
     for (uint32_t ll = 0; ll < ll_dim; ll++) {
+        const uint64_t base_ll = ll * stride_ll;
         for (uint32_t rr = 0; rr < rr_dim; rr++) {
-            for (uint32_t plp = 0; plp < TN_PHYSICAL_DIM; plp++) {
-                for (uint32_t prp = 0; prp < TN_PHYSICAL_DIM; prp++) {
-                    double complex sum = 0.0;
-                    uint32_t out_idx = plp * TN_PHYSICAL_DIM + prp;
+            const uint64_t base = base_ll + rr;
 
-                    for (uint32_t pl = 0; pl < TN_PHYSICAL_DIM; pl++) {
-                        for (uint32_t pr = 0; pr < TN_PHYSICAL_DIM; pr++) {
-                            uint32_t in_idx = pl * TN_PHYSICAL_DIM + pr;
-                            uint32_t theta_idx[4] = {ll, pl, pr, rr};
-                            sum += gate->elements[out_idx][in_idx] *
-                                   tensor_get(theta, theta_idx);
-                        }
-                    }
+            // Read all 4 input values for this (ll, rr) pair
+            const double complex t00 = theta->data[base];
+            const double complex t01 = theta->data[base + stride_pr];
+            const double complex t10 = theta->data[base + stride_pl];
+            const double complex t11 = theta->data[base + stride_pl + stride_pr];
 
-                    uint32_t new_idx[4] = {ll, plp, prp, rr};
-                    tensor_set(theta_new, new_idx, sum);
-                }
-            }
+            // Apply 4x4 gate matrix to compute all 4 outputs
+            theta_new->data[base] =
+                g[0][0]*t00 + g[0][1]*t01 + g[0][2]*t10 + g[0][3]*t11;
+            theta_new->data[base + stride_pr] =
+                g[1][0]*t00 + g[1][1]*t01 + g[1][2]*t10 + g[1][3]*t11;
+            theta_new->data[base + stride_pl] =
+                g[2][0]*t00 + g[2][1]*t01 + g[2][2]*t10 + g[2][3]*t11;
+            theta_new->data[base + stride_pl + stride_pr] =
+                g[3][0]*t00 + g[3][1]*t01 + g[3][2]*t10 + g[3][3]*t11;
         }
     }
 
@@ -728,11 +826,131 @@ tn_gate_error_t tn_apply_controlled(tn_mps_state_t *state,
         return tn_apply_gate_2q(state, controls[0], target, &cgate, NULL);
     }
 
-    // Multi-control decomposition (simplified)
-    // Use Toffoli-like decomposition
-    // This is a placeholder - full implementation would use proper decomposition
+    // Multi-control decomposition using recursive approach
+    // C^n(U) = C^{n-1}(V) · CX · C^{n-1}(V†) · CX · C^{n-1}(U) where V² = U
+    // For MPS, we use a simpler approach based on Toffoli decomposition
 
-    return TN_GATE_ERROR_INVALID_GATE;  // Not fully implemented for >1 control
+    // First, check if this is a multi-controlled X (Toffoli-like)
+    // Check if gate is close to X gate
+    double complex det = gate->elements[0][0] * gate->elements[1][1] -
+                         gate->elements[0][1] * gate->elements[1][0];
+    bool is_x_like = (cabs(gate->elements[0][0]) < 1e-10 &&
+                      cabs(gate->elements[1][1]) < 1e-10 &&
+                      cabs(gate->elements[0][1] - 1.0) < 1e-10 &&
+                      cabs(gate->elements[1][0] - 1.0) < 1e-10);
+
+    if (num_controls == 2) {
+        // For 2 controls, we can use a generalized Toffoli approach
+        // CCU = (H ⊗ I) · CCZ · (H ⊗ I) for U = X, but general case:
+        // Decompose U = e^(iα) R_z(β) R_y(γ) R_z(δ) and build CCU
+
+        if (is_x_like) {
+            // Use the optimized Toffoli implementation
+            return tn_apply_toffoli(state, controls[0], controls[1], target);
+        }
+
+        // General CCU decomposition using controlled gates
+        // CCU = C(c1, t, √U) · CNOT(c2, t) · C(c1, t, √U†) · CNOT(c2, t) · C(c2, t, U)
+        // Simplified: use the Barenco et al. decomposition
+
+        // Compute matrix square root V where V² = U
+        // V = (U + I * sqrt(det)) / sqrt(trace + 2*sqrt(det))
+        double complex sqrt_det = csqrt(det);
+        double complex trace = gate->elements[0][0] + gate->elements[1][1];
+        double complex denom = csqrt(trace + 2.0 * sqrt_det);
+
+        tn_gate_1q_t V = {{{0}}};
+        if (cabs(denom) > 1e-10) {
+            V.elements[0][0] = (gate->elements[0][0] + sqrt_det) / denom;
+            V.elements[0][1] = gate->elements[0][1] / denom;
+            V.elements[1][0] = gate->elements[1][0] / denom;
+            V.elements[1][1] = (gate->elements[1][1] + sqrt_det) / denom;
+        } else {
+            // Fallback for degenerate case
+            V = *gate;
+        }
+
+        // V† = conjugate transpose
+        tn_gate_1q_t Vdag = {{{0}}};
+        Vdag.elements[0][0] = conj(V.elements[0][0]);
+        Vdag.elements[0][1] = conj(V.elements[1][0]);
+        Vdag.elements[1][0] = conj(V.elements[0][1]);
+        Vdag.elements[1][1] = conj(V.elements[1][1]);
+
+        tn_gate_error_t err;
+
+        // CCU decomposition: C(c1, t, V) · CX(c2, t) · C(c1, t, V†) · CX(c2, t) · C(c2, t, U)
+        // Step 1: C(c2, t, U)
+        err = tn_apply_controlled(state, &controls[1], 1, target, gate);
+        if (err != TN_GATE_SUCCESS) return err;
+
+        // Step 2: CX(c2, t)
+        err = tn_apply_cnot(state, controls[1], target);
+        if (err != TN_GATE_SUCCESS) return err;
+
+        // Step 3: C(c1, t, V†)
+        err = tn_apply_controlled(state, &controls[0], 1, target, &Vdag);
+        if (err != TN_GATE_SUCCESS) return err;
+
+        // Step 4: CX(c2, t)
+        err = tn_apply_cnot(state, controls[1], target);
+        if (err != TN_GATE_SUCCESS) return err;
+
+        // Step 5: C(c1, t, V)
+        err = tn_apply_controlled(state, &controls[0], 1, target, &V);
+        if (err != TN_GATE_SUCCESS) return err;
+
+        return TN_GATE_SUCCESS;
+    }
+
+    // For n > 2 controls: use recursive decomposition
+    // C^n(U) = C^{n-1}(V) · CX(c_n, t) · C^{n-1}(V†) · CX(c_n, t) · C(c_n, t, U)
+
+    // Compute square root as above
+    double complex sqrt_det = csqrt(det);
+    double complex trace = gate->elements[0][0] + gate->elements[1][1];
+    double complex denom = csqrt(trace + 2.0 * sqrt_det);
+
+    tn_gate_1q_t V = {{{0}}};
+    if (cabs(denom) > 1e-10) {
+        V.elements[0][0] = (gate->elements[0][0] + sqrt_det) / denom;
+        V.elements[0][1] = gate->elements[0][1] / denom;
+        V.elements[1][0] = gate->elements[1][0] / denom;
+        V.elements[1][1] = (gate->elements[1][1] + sqrt_det) / denom;
+    } else {
+        V = *gate;
+    }
+
+    tn_gate_1q_t Vdag = {{{0}}};
+    Vdag.elements[0][0] = conj(V.elements[0][0]);
+    Vdag.elements[0][1] = conj(V.elements[1][0]);
+    Vdag.elements[1][0] = conj(V.elements[0][1]);
+    Vdag.elements[1][1] = conj(V.elements[1][1]);
+
+    tn_gate_error_t err;
+    uint32_t last_control = controls[num_controls - 1];
+
+    // Step 1: C(last_control, t, U)
+    err = tn_apply_controlled(state, &last_control, 1, target, gate);
+    if (err != TN_GATE_SUCCESS) return err;
+
+    // Step 2: CX(last_control, t)
+    err = tn_apply_cnot(state, last_control, target);
+    if (err != TN_GATE_SUCCESS) return err;
+
+    // Step 3: C^{n-1}(V†)
+    err = tn_apply_controlled(state, controls, num_controls - 1, target, &Vdag);
+    if (err != TN_GATE_SUCCESS) return err;
+
+    // Step 4: CX(last_control, t)
+    err = tn_apply_cnot(state, last_control, target);
+    if (err != TN_GATE_SUCCESS) return err;
+
+    // Step 5: C^{n-1}(V)
+    err = tn_apply_controlled(state, controls, num_controls - 1, target, &V);
+    if (err != TN_GATE_SUCCESS) return err;
+
+    return TN_GATE_SUCCESS;
 }
 
 tn_gate_error_t tn_apply_toffoli(tn_mps_state_t *state,

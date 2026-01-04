@@ -13,23 +13,271 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "entanglement.h"
 #include "state.h"
+#include "../utils/config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <complex.h>
 
-#ifdef HAS_ACCELERATE
+// Default Jacobi parameters (used when config unavailable)
+#define DEFAULT_JACOBI_MAX_ITER 100
+#define DEFAULT_JACOBI_TOLERANCE 1e-12
+
+// Helper to get Jacobi parameters from config
+static inline void get_jacobi_params(int* max_iter, double* tolerance) {
+    qsim_config_t* cfg = qsim_config_global();
+    *max_iter = (cfg && cfg->algorithm.jacobi_max_iter > 0)
+        ? cfg->algorithm.jacobi_max_iter
+        : DEFAULT_JACOBI_MAX_ITER;
+    *tolerance = (cfg && cfg->algorithm.jacobi_tolerance > 0)
+        ? cfg->algorithm.jacobi_tolerance
+        : DEFAULT_JACOBI_TOLERANCE;
+}
+
+// Cross-platform BLAS/LAPACK support for Hermitian eigenvalue computation
+#ifdef __APPLE__
 #include <Accelerate/Accelerate.h>
+#define HAS_LAPACK 1
+#elif defined(QSIM_HAS_OPENBLAS) || defined(__linux__)
+#include <lapacke.h>
+#define HAS_LAPACK 1
+#else
+#define HAS_LAPACK 0
 #endif
 
 #ifndef M_LOG2E
 #define M_LOG2E 1.4426950408889634  // log2(e)
 #endif
+
+// ============================================================================
+// EIGENVALUE DECOMPOSITION FOR HERMITIAN MATRICES
+// ============================================================================
+
+/**
+ * @brief Eigenvalue decomposition for Hermitian matrices
+ *
+ * Computes eigenvalues of a Hermitian matrix using LAPACK (when available)
+ * or Jacobi rotations as fallback.
+ *
+ * @param matrix Input Hermitian matrix (row-major, dim x dim)
+ * @param dim Matrix dimension
+ * @param eigenvalues Output array for eigenvalues (real, sorted descending)
+ * @param max_iter Maximum iterations for Jacobi fallback (100 typically sufficient)
+ * @param tol Convergence tolerance for Jacobi fallback (1e-12 typical)
+ * @return Number of iterations (0 if LAPACK used), -1 on error
+ */
+static int jacobi_hermitian_eigenvalues(const complex_t* matrix, uint64_t dim,
+                                        double* eigenvalues, int max_iter, double tol) {
+    if (!matrix || !eigenvalues || dim == 0) return -1;
+
+    // Work on a copy of the matrix (ZHEEV modifies input)
+    complex_t* A = malloc(dim * dim * sizeof(complex_t));
+    if (!A) return -1;
+    memcpy(A, matrix, dim * dim * sizeof(complex_t));
+
+#if HAS_LAPACK
+    // Use LAPACK ZHEEV for optimal performance
+    int use_jacobi = 0;
+
+#ifdef __APPLE__
+    // Apple Accelerate framework
+    {
+        char jobz = 'N';  // Eigenvalues only
+        char uplo = 'U';  // Upper triangle
+        __CLPK_integer n = (__CLPK_integer)dim;
+        __CLPK_integer lda = n;
+        __CLPK_integer lwork = -1;
+        __CLPK_integer info;
+        double complex work_query;
+        double* rwork = malloc((3 * dim - 2) * sizeof(double));
+
+        if (!rwork) {
+            free(A);
+            return -1;
+        }
+
+        // Query optimal work size
+        zheev_(&jobz, &uplo, &n, (__CLPK_doublecomplex*)A, &lda,
+               eigenvalues, (__CLPK_doublecomplex*)&work_query, &lwork, rwork, &info);
+
+        lwork = (__CLPK_integer)creal(work_query);
+        if (lwork < 1) lwork = 2 * dim;
+
+        double complex* work = malloc(lwork * sizeof(double complex));
+        if (!work) {
+            free(rwork);
+            free(A);
+            return -1;
+        }
+
+        // Compute eigenvalues
+        zheev_(&jobz, &uplo, &n, (__CLPK_doublecomplex*)A, &lda,
+               eigenvalues, (__CLPK_doublecomplex*)work, &lwork, rwork, &info);
+
+        free(work);
+        free(rwork);
+
+        if (info != 0) {
+            use_jacobi = 1;  // Fall back to Jacobi
+        } else {
+            // ZHEEV returns eigenvalues in ascending order, we want descending
+            for (uint64_t i = 0; i < dim / 2; i++) {
+                double tmp = eigenvalues[i];
+                eigenvalues[i] = eigenvalues[dim - 1 - i];
+                eigenvalues[dim - 1 - i] = tmp;
+            }
+            free(A);
+            return 0;  // Success with LAPACK
+        }
+    }
+#else
+    // OpenBLAS/LAPACKE interface
+    {
+        lapack_int n = (lapack_int)dim;
+        lapack_int info = LAPACKE_zheev(LAPACK_ROW_MAJOR, 'N', 'U', n,
+                                         (lapack_complex_double*)A, n, eigenvalues);
+        if (info != 0) {
+            use_jacobi = 1;
+        } else {
+            // ZHEEV returns ascending, we want descending
+            for (uint64_t i = 0; i < dim / 2; i++) {
+                double tmp = eigenvalues[i];
+                eigenvalues[i] = eigenvalues[dim - 1 - i];
+                eigenvalues[dim - 1 - i] = tmp;
+            }
+            free(A);
+            return 0;  // Success with LAPACK
+        }
+    }
+#endif
+
+    // If LAPACK failed, reload matrix for Jacobi
+    if (use_jacobi) {
+        memcpy(A, matrix, dim * dim * sizeof(complex_t));
+    }
+#endif  // HAS_LAPACK
+
+    // Jacobi fallback for systems without LAPACK or if LAPACK failed
+
+    // Jacobi iteration: find largest off-diagonal, apply rotation to eliminate it
+    for (int iter = 0; iter < max_iter; iter++) {
+        // Find largest off-diagonal element
+        double max_off = 0.0;
+        uint64_t p = 0, q = 0;
+
+        for (uint64_t i = 0; i < dim; i++) {
+            for (uint64_t j = i + 1; j < dim; j++) {
+                double mag = cabs(A[i * dim + j]);
+                if (mag > max_off) {
+                    max_off = mag;
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+
+        // Check convergence
+        if (max_off < tol) {
+            // Extract diagonal as eigenvalues
+            for (uint64_t i = 0; i < dim; i++) {
+                eigenvalues[i] = creal(A[i * dim + i]);
+            }
+
+            // Sort descending by bubble sort (sufficient for small matrices)
+            for (uint64_t i = 0; i < dim - 1; i++) {
+                for (uint64_t j = i + 1; j < dim; j++) {
+                    if (eigenvalues[j] > eigenvalues[i]) {
+                        double tmp = eigenvalues[i];
+                        eigenvalues[i] = eigenvalues[j];
+                        eigenvalues[j] = tmp;
+                    }
+                }
+            }
+
+            free(A);
+            return iter;
+        }
+
+        // Compute Jacobi rotation parameters for Hermitian case
+        // We need to eliminate A[p,q] and A[q,p] = conj(A[p,q])
+        double app = creal(A[p * dim + p]);
+        double aqq = creal(A[q * dim + q]);
+        complex_t apq = A[p * dim + q];
+
+        // For Hermitian matrices, rotation angle satisfies:
+        // tan(2θ) * exp(iφ) = 2*apq / (aqq - app)
+        // where φ = arg(apq)
+        double phi = carg(apq);
+        double mag_apq = cabs(apq);
+
+        double tau;
+        if (mag_apq < 1e-15) {
+            // Off-diagonal element is essentially zero, no rotation needed
+            continue;
+        } else if (fabs(aqq - app) < 1e-15) {
+            tau = 1.0;  // θ = π/4
+        } else {
+            tau = (aqq - app) / (2.0 * mag_apq);
+        }
+
+        double t;
+        if (tau >= 0) {
+            t = 1.0 / (tau + sqrt(1.0 + tau * tau));
+        } else {
+            t = -1.0 / (-tau + sqrt(1.0 + tau * tau));
+        }
+
+        double c = 1.0 / sqrt(1.0 + t * t);  // cos(θ)
+        double s = t * c;                      // sin(θ)
+
+        // Apply rotation: this is a unitary transformation
+        // A' = U^H A U where U is rotation in (p,q) plane with phase
+        complex_t exp_iphi = cexp(I * phi);
+        complex_t exp_miphi = cexp(-I * phi);
+
+        // Update matrix elements
+        for (uint64_t k = 0; k < dim; k++) {
+            if (k != p && k != q) {
+                complex_t akp = A[k * dim + p];
+                complex_t akq = A[k * dim + q];
+
+                A[k * dim + p] = c * akp - s * exp_miphi * akq;
+                A[k * dim + q] = s * exp_iphi * akp + c * akq;
+                A[p * dim + k] = conj(A[k * dim + p]);
+                A[q * dim + k] = conj(A[k * dim + q]);
+            }
+        }
+
+        // Update diagonal elements
+        A[p * dim + p] = app - t * mag_apq;
+        A[q * dim + q] = aqq + t * mag_apq;
+        A[p * dim + q] = 0.0;
+        A[q * dim + p] = 0.0;
+    }
+
+    // Did not converge - fall back to diagonal
+    for (uint64_t i = 0; i < dim; i++) {
+        eigenvalues[i] = creal(A[i * dim + i]);
+    }
+
+    for (uint64_t i = 0; i < dim - 1; i++) {
+        for (uint64_t j = i + 1; j < dim; j++) {
+            if (eigenvalues[j] > eigenvalues[i]) {
+                double tmp = eigenvalues[i];
+                eigenvalues[i] = eigenvalues[j];
+                eigenvalues[j] = tmp;
+            }
+        }
+    }
+
+    free(A);
+    return max_iter;
+}
 
 // ============================================================================
 // REDUCED DENSITY MATRIX
@@ -162,18 +410,39 @@ double entanglement_von_neumann_entropy(const complex_t* reduced_dm, uint64_t di
         return entropy;
     }
 
-    // For larger matrices, compute trace of ρ log ρ numerically
-    // This is a simplified approximation using diagonal elements
-    // Full implementation would require eigenvalue decomposition
+    // For larger matrices, use full eigenvalue decomposition
+    // Allocate eigenvalue array
+    double* eigenvalues = malloc(dim * sizeof(double));
+    if (!eigenvalues) {
+        // Fall back to diagonal approximation
+        double entropy = 0.0;
+        for (uint64_t i = 0; i < dim; i++) {
+            double diag = creal(reduced_dm[i * dim + i]);
+            if (diag > 1e-15) {
+                entropy -= diag * log2(diag);
+            }
+        }
+        return entropy;
+    }
 
+    // Compute eigenvalues using Jacobi iteration
+    int max_iter; double tol;
+    get_jacobi_params(&max_iter, &tol);
+    jacobi_hermitian_eigenvalues(reduced_dm, dim, eigenvalues, max_iter, tol);
+
+    // Compute von Neumann entropy: S = -Σ λᵢ log₂(λᵢ)
     double entropy = 0.0;
     for (uint64_t i = 0; i < dim; i++) {
-        double diag = creal(reduced_dm[i * dim + i]);
-        if (diag > 1e-15) {
-            entropy -= diag * log2(diag);
+        double lambda = eigenvalues[i];
+        // Clamp to [0, 1] for numerical stability
+        if (lambda < 1e-15) lambda = 0;
+        if (lambda > 1.0) lambda = 1.0;
+        if (lambda > 1e-15) {
+            entropy -= lambda * log2(lambda);
         }
     }
 
+    free(eigenvalues);
     return entropy;
 }
 
@@ -210,14 +479,50 @@ double entanglement_renyi_entropy(const complex_t* reduced_dm, uint64_t dim,
         return -log2(purity);
     }
 
-    // General case would require matrix power computation
-    // Simplified: use diagonal approximation
+    // General case: compute eigenvalues and use Tr(ρ^α) = Σ λᵢ^α
+    double* eigenvalues = malloc(dim * sizeof(double));
+    if (!eigenvalues) {
+        // Fallback to diagonal approximation
+        double trace_rho_alpha = 0.0;
+        for (uint64_t i = 0; i < dim; i++) {
+            double diag = creal(reduced_dm[i * dim + i]);
+            if (diag > 1e-15) {
+                trace_rho_alpha += pow(diag, alpha);
+            }
+        }
+        return log2(trace_rho_alpha) / (1.0 - alpha);
+    }
+
+    // Use Jacobi eigenvalue decomposition
+    int jmax_iter; double jtol;
+    get_jacobi_params(&jmax_iter, &jtol);
+    int converged = jacobi_hermitian_eigenvalues(reduced_dm, dim, eigenvalues, jmax_iter, jtol);
+
+    if (!converged) {
+        // Fallback to diagonal approximation
+        free(eigenvalues);
+        double trace_rho_alpha = 0.0;
+        for (uint64_t i = 0; i < dim; i++) {
+            double diag = creal(reduced_dm[i * dim + i]);
+            if (diag > 1e-15) {
+                trace_rho_alpha += pow(diag, alpha);
+            }
+        }
+        return log2(trace_rho_alpha) / (1.0 - alpha);
+    }
+
+    // Compute Tr(ρ^α) = Σ λᵢ^α
     double trace_rho_alpha = 0.0;
     for (uint64_t i = 0; i < dim; i++) {
-        double diag = creal(reduced_dm[i * dim + i]);
-        if (diag > 1e-15) {
-            trace_rho_alpha += pow(diag, alpha);
+        if (eigenvalues[i] > 1e-15) {
+            trace_rho_alpha += pow(eigenvalues[i], alpha);
         }
+    }
+
+    free(eigenvalues);
+
+    if (trace_rho_alpha <= 0.0) {
+        return 0.0;
     }
 
     return log2(trace_rho_alpha) / (1.0 - alpha);
@@ -354,12 +659,22 @@ double entanglement_concurrence_mixed(const complex_t* density_matrix) {
         }
     }
 
-    // Eigenvalues of R (simplified: use trace and determinant for bounds)
-    // Full implementation would need proper eigenvalue solver
-    double trace_R = creal(R[0] + R[5] + R[10] + R[15]);
+    // Compute eigenvalues of R using Jacobi iteration
+    // Concurrence formula: C = max(0, √λ₁ - √λ₂ - √λ₃ - √λ₄)
+    // where λᵢ are eigenvalues sorted in decreasing order
+    double eigenvalues[4];
+    int conc_max_iter; double conc_tol;
+    get_jacobi_params(&conc_max_iter, &conc_tol);
+    jacobi_hermitian_eigenvalues(R, 4, eigenvalues, conc_max_iter, conc_tol);
 
-    // Approximate: use purity-based bound
-    double concurrence = sqrt(fmax(0.0, trace_R)) - 1.0;
+    // Compute square roots of eigenvalues (clamped to non-negative)
+    double sqrt_lambda[4];
+    for (int i = 0; i < 4; i++) {
+        sqrt_lambda[i] = (eigenvalues[i] > 0) ? sqrt(eigenvalues[i]) : 0;
+    }
+
+    // Concurrence = max(0, √λ₁ - √λ₂ - √λ₃ - √λ₄)
+    double concurrence = sqrt_lambda[0] - sqrt_lambda[1] - sqrt_lambda[2] - sqrt_lambda[3];
     if (concurrence < 0) concurrence = 0;
     if (concurrence > 1) concurrence = 1;
 
@@ -429,16 +744,36 @@ int entanglement_schmidt_coefficients(const quantum_state_t* state,
         return -1;
     }
 
-    // Extract eigenvalues (simplified: use diagonal for now)
-    // Full implementation would use LAPACK zheev
+    // Extract eigenvalues using Jacobi decomposition
+    // Schmidt coefficients are square roots of eigenvalues of ρ_A
     *num_coefficients = (int)dim_a;
 
-    for (uint64_t i = 0; i < dim_a; i++) {
-        double eigenval = creal(rho_a[i * dim_a + i]);
-        coefficients[i] = (eigenval > 0) ? sqrt(eigenval) : 0;
+    double* eigenvalues = malloc(dim_a * sizeof(double));
+    if (!eigenvalues) {
+        // Fall back to diagonal approximation
+        for (uint64_t i = 0; i < dim_a; i++) {
+            double eigenval = creal(rho_a[i * dim_a + i]);
+            coefficients[i] = (eigenval > 0) ? sqrt(eigenval) : 0;
+        }
+    } else {
+        // Full eigenvalue decomposition
+        int schmidt_max_iter; double schmidt_tol;
+        get_jacobi_params(&schmidt_max_iter, &schmidt_tol);
+        jacobi_hermitian_eigenvalues(rho_a, dim_a, eigenvalues, schmidt_max_iter, schmidt_tol);
+
+        // Schmidt coefficients = sqrt(eigenvalues)
+        for (uint64_t i = 0; i < dim_a; i++) {
+            double eigenval = eigenvalues[i];
+            // Clamp for numerical stability
+            if (eigenval < 0) eigenval = 0;
+            if (eigenval > 1.0) eigenval = 1.0;
+            coefficients[i] = (eigenval > 0) ? sqrt(eigenval) : 0;
+        }
+        free(eigenvalues);
     }
 
-    // Sort descending
+    // Eigenvalues already sorted descending by jacobi_hermitian_eigenvalues
+    // But double-check the sort for safety
     for (int i = 0; i < *num_coefficients - 1; i++) {
         for (int j = i + 1; j < *num_coefficients; j++) {
             if (coefficients[j] > coefficients[i]) {

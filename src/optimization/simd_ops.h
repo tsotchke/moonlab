@@ -43,6 +43,9 @@ typedef struct {
     int has_avx;       /**< AVX support (2011+) */
     int has_avx2;      /**< AVX2 support (2013+) */
     int has_fma;       /**< FMA3 support */
+    int has_avx512f;   /**< AVX-512 Foundation (2016+) */
+    int has_avx512dq;  /**< AVX-512 DQ extensions */
+    int has_arm_sve;   /**< ARM SVE support */
 } simd_capabilities_t;
 
 /**

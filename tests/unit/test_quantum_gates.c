@@ -68,11 +68,11 @@ int test_pauli_x_gate() {
     quantum_state_t state;
     quantum_state_init(&state, 2);
     
-    // X on |0⟩ → |1⟩
+    // X on |00⟩ flips qubit 0: |00⟩ → |01⟩ (index 0 → 1, little-endian)
     qs_error_t err = gate_pauli_x(&state, 0);
     ASSERT_EQ(err, QS_SUCCESS, "X gate failed");
     ASSERT_NEAR(creal(state.amplitudes[0]), 0.0, 1e-10, "X didn't flip to |1⟩");
-    ASSERT_NEAR(creal(state.amplitudes[2]), 1.0, 1e-10, "X didn't flip to |1⟩");
+    ASSERT_NEAR(creal(state.amplitudes[1]), 1.0, 1e-10, "X didn't flip to |1⟩");
     
     // X again should return to |0⟩
     gate_pauli_x(&state, 0);
@@ -156,8 +156,8 @@ int test_hadamard_creates_equal_superposition() {
     gate_hadamard(&state, 0);
     gate_hadamard(&state, 1);
     
-    // All 4 basis states should have equal amplitude
-    double expected = 0.5;
+    // All 4 basis states should have equal amplitude 1/2, hence probability 1/4
+    double expected = 0.25;
     for (int i = 0; i < 4; i++) {
         double prob = creal(state.amplitudes[i]) * creal(state.amplitudes[i]);
         ASSERT_NEAR(prob, expected, 1e-10, "Not equal superposition");
@@ -229,14 +229,15 @@ int test_custom_phase_gate() {
 
 int test_rx_rotation() {
     TEST_START("RX rotation gate");
-    
+
     quantum_state_t state;
     quantum_state_init(&state, 1);
-    
-    // RX(π) is equivalent to X
+
+    // RX(π)|0⟩ = -i|1⟩ (equivalent to X up to global phase)
     gate_rx(&state, 0, M_PI);
-    ASSERT_NEAR(creal(state.amplitudes[1]), 1.0, 1e-10, "RX(π) ≠ X");
-    
+    ASSERT_NEAR(cabs(state.amplitudes[1]), 1.0, 1e-10, "RX(π) ≠ X (magnitude)");
+    ASSERT_NEAR(cimag(state.amplitudes[1]), -1.0, 1e-10, "RX(π)|0⟩ ≠ -i|1⟩");
+
     quantum_state_free(&state);
     TEST_PASS();
 }
@@ -260,17 +261,18 @@ int test_ry_rotation() {
 
 int test_rz_rotation() {
     TEST_START("RZ rotation gate");
-    
+
     quantum_state_t state;
     quantum_state_init(&state, 1);
     state.amplitudes[0] = 0.0;
     state.amplitudes[1] = 1.0;
-    
+
     gate_rz(&state, 0, M_PI);
-    
-    // RZ(π)|1⟩ = -i|1⟩
-    ASSERT_NEAR(cimag(state.amplitudes[1]), -1.0, 1e-10, "RZ(π) incorrect");
-    
+
+    // RZ(π)|1⟩ = e^(iπ/2)|1⟩ = i|1⟩
+    ASSERT_NEAR(cimag(state.amplitudes[1]), 1.0, 1e-10, "RZ(π) incorrect");
+    ASSERT_NEAR(creal(state.amplitudes[1]), 0.0, 1e-10, "RZ(π) real part should be 0");
+
     quantum_state_free(&state);
     TEST_PASS();
 }
@@ -288,11 +290,12 @@ int test_cnot_gate() {
     // CNOT on |00⟩ → |00⟩
     gate_cnot(&state, 0, 1);
     ASSERT_NEAR(creal(state.amplitudes[0]), 1.0, 1e-10, "CNOT changed |00⟩");
-    
-    // Prepare |10⟩, CNOT → |11⟩
+
+    // Prepare |01⟩ (index 1, qubit 0 = 1, control set), CNOT(0,1) → |11⟩ (index 3)
+    // Little-endian: index = q0 + 2*q1, so |01⟩ = 1, |11⟩ = 3
     quantum_state_reset(&state);
     state.amplitudes[0] = 0.0;
-    state.amplitudes[2] = 1.0;
+    state.amplitudes[1] = 1.0;  // |01⟩: q0=1, q1=0
     gate_cnot(&state, 0, 1);
     ASSERT_NEAR(creal(state.amplitudes[3]), 1.0, 1e-10, "CNOT didn't flip target");
     
@@ -362,34 +365,38 @@ int test_swap_gate() {
 
 int test_toffoli_gate() {
     TEST_START("Toffoli gate (CCNOT)");
-    
+
     quantum_state_t state;
     quantum_state_init(&state, 3);
-    
-    // Toffoli on |110⟩ → |111⟩
+
+    // Toffoli(ctrl0=0, ctrl1=1, target=2) flips qubit 2 when q0=1 AND q1=1
+    // Little-endian: index = q0 + 2*q1 + 4*q2
+    // |011⟩ = index 3 (q0=1, q1=1, q2=0) → |111⟩ = index 7
     state.amplitudes[0] = 0.0;
-    state.amplitudes[6] = 1.0;  // |110⟩
-    
+    state.amplitudes[3] = 1.0;  // |011⟩: q0=1, q1=1, q2=0
+
     gate_toffoli(&state, 0, 1, 2);
     ASSERT_NEAR(creal(state.amplitudes[7]), 1.0, 1e-10, "Toffoli didn't flip");
-    
+
     quantum_state_free(&state);
     TEST_PASS();
 }
 
 int test_fredkin_gate() {
     TEST_START("Fredkin gate (CSWAP)");
-    
+
     quantum_state_t state;
     quantum_state_init(&state, 3);
-    
-    // Fredkin on |110⟩ → |101⟩
+
+    // Fredkin(ctrl=0, target1=1, target2=2) swaps q1↔q2 when q0=1
+    // Little-endian: index = q0 + 2*q1 + 4*q2
+    // |011⟩ = index 3 (q0=1, q1=1, q2=0) → |101⟩ = index 5 (q0=1, q1=0, q2=1)
     state.amplitudes[0] = 0.0;
-    state.amplitudes[6] = 1.0;  // |110⟩
-    
+    state.amplitudes[3] = 1.0;  // |011⟩: q0=1, q1=1, q2=0
+
     gate_fredkin(&state, 0, 1, 2);
     ASSERT_NEAR(creal(state.amplitudes[5]), 1.0, 1e-10, "Fredkin didn't swap");
-    
+
     quantum_state_free(&state);
     TEST_PASS();
 }

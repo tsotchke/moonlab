@@ -1,0 +1,52 @@
+{
+  "name": "@moonlab/quantum-viz",
+  "version": "1.0.0",
+  "description": "Quantum state visualizations for Moonlab",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./canvas": {
+      "import": "./dist/canvas/index.mjs",
+      "require": "./dist/canvas/index.js",
+      "types": "./dist/canvas/index.d.ts"
+    },
+    "./webgl": {
+      "import": "./dist/webgl/index.mjs",
+      "require": "./dist/webgl/index.js",
+      "types": "./dist/webgl/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/canvas/index.ts src/webgl/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "quantum",
+    "visualization",
+    "bloch-sphere",
+    "webgl",
+    "canvas"
+  ],
+  "author": "Moonlab",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@moonlab/quantum-core": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "vitest": "^1.0.0"
+  },
+  "sideEffects": false
+}

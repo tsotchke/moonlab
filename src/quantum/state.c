@@ -4,6 +4,7 @@
 #include "../optimization/accelerate_ops.h"  // Phase 3: Apple Accelerate + AMX
 #include "../utils/secure_memory.h"
 #include "../utils/validation.h"
+#include "../utils/config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -11,6 +12,7 @@
 
 #define NORMALIZATION_TOLERANCE 1e-10
 #define SMALL_PROBABILITY 1e-15
+#define DEFAULT_MAX_MEASUREMENTS 1024
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -43,8 +45,11 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     // Initialize to |0...0⟩ state
     state->amplitudes[0] = 1.0 + 0.0*I;
     
-    // Allocate measurement history
-    state->max_measurements = 1024;
+    // Allocate measurement history (use config if available)
+    qsim_config_t* cfg = qsim_config_global();
+    state->max_measurements = (cfg && cfg->algorithm.max_measurements > 0)
+        ? cfg->algorithm.max_measurements
+        : DEFAULT_MAX_MEASUREMENTS;
     state->measurement_outcomes = (uint64_t *)calloc(state->max_measurements, sizeof(uint64_t));
     if (!state->measurement_outcomes) {
         free(state->amplitudes);

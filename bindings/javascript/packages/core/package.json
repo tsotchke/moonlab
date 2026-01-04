@@ -1,0 +1,46 @@
+{
+  "name": "@moonlab/quantum-core",
+  "version": "1.0.0",
+  "description": "WebAssembly quantum computing simulator core",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wasm": {
+      "import": "./dist/moonlab.wasm"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:wasm": "cd emscripten && cmake -B build -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake && cmake --build build",
+    "build:ts": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build": "pnpm build:wasm && pnpm build:ts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist build"
+  },
+  "keywords": [
+    "quantum",
+    "computing",
+    "webassembly",
+    "wasm",
+    "simulation"
+  ],
+  "author": "Moonlab",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {},
+  "sideEffects": false
+}

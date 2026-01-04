@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520">
+  <defs>
+    <linearGradient id="node0Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="node1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="node2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="node3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+    </linearGradient>
+    <marker id="commArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#1f2937">Distributed State Vector Partitioning (4 MPI Ranks)</text>
+
+  <!-- Full state vector -->
+  <g transform="translate(40, 55)">
+    <text x="360" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" font-weight="bold" fill="#374151">Complete State Vector (n qubits, 2ⁿ amplitudes)</text>
+
+    <rect x="0" y="15" width="720" height="40" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2"/>
+
+    <!-- Partition indicators -->
+    <rect x="0" y="15" width="180" height="40" rx="6" fill="url(#node0Grad)" fill-opacity="0.3"/>
+    <rect x="180" y="15" width="180" height="40" rx="6" fill="url(#node1Grad)" fill-opacity="0.3"/>
+    <rect x="360" y="15" width="180" height="40" rx="6" fill="url(#node2Grad)" fill-opacity="0.3"/>
+    <rect x="540" y="15" width="180" height="40" rx="6" fill="url(#node3Grad)" fill-opacity="0.3"/>
+
+    <text x="90" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Rank 0: [0, 2^{n-2})</text>
+    <text x="270" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Rank 1: [2^{n-2}, 2^{n-1})</text>
+    <text x="450" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Rank 2: [2^{n-1}, 3×2^{n-2})</text>
+    <text x="630" y="40" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Rank 3: [3×2^{n-2}, 2^n)</text>
+
+    <text x="360" y="75" text-anchor="middle" font-family="serif" font-size="11" fill="#6b7280">Each rank owns 2^{n-2} contiguous amplitudes (partitioned by top 2 qubits)</text>
+  </g>
+
+  <!-- Node diagram -->
+  <g transform="translate(50, 145)">
+    <!-- Node 0 -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="160" height="120" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="10" y="10" width="140" height="25" rx="5" fill="url(#node0Grad)"/>
+      <text x="80" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="white">MPI Rank 0</text>
+
+      <g transform="translate(15, 45)">
+        <rect x="0" y="0" width="130" height="20" rx="3" fill="#bfdbfe"/>
+        <text x="65" y="14" text-anchor="middle" font-family="monospace" font-size="9" fill="#1e40af">local_state[0..N/4]</text>
+      </g>
+
+      <g transform="translate(15, 70)">
+        <text x="0" y="12" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Qubits 0..n-3 local</text>
+        <text x="0" y="26" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Top 2 bits = 00</text>
+        <text x="0" y="40" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Host: node-0</text>
+      </g>
+    </g>
+
+    <!-- Node 1 -->
+    <g transform="translate(180, 0)">
+      <rect x="0" y="0" width="160" height="120" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+      <rect x="10" y="10" width="140" height="25" rx="5" fill="url(#node1Grad)"/>
+      <text x="80" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="white">MPI Rank 1</text>
+
+      <g transform="translate(15, 45)">
+        <rect x="0" y="0" width="130" height="20" rx="3" fill="#a7f3d0"/>
+        <text x="65" y="14" text-anchor="middle" font-family="monospace" font-size="9" fill="#065f46">local_state[0..N/4]</text>
+      </g>
+
+      <g transform="translate(15, 70)">
+        <text x="0" y="12" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Qubits 0..n-3 local</text>
+        <text x="0" y="26" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Top 2 bits = 01</text>
+        <text x="0" y="40" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Host: node-1</text>
+      </g>
+    </g>
+
+    <!-- Node 2 -->
+    <g transform="translate(360, 0)">
+      <rect x="0" y="0" width="160" height="120" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+      <rect x="10" y="10" width="140" height="25" rx="5" fill="url(#node2Grad)"/>
+      <text x="80" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="white">MPI Rank 2</text>
+
+      <g transform="translate(15, 45)">
+        <rect x="0" y="0" width="130" height="20" rx="3" fill="#fde68a"/>
+        <text x="65" y="14" text-anchor="middle" font-family="monospace" font-size="9" fill="#92400e">local_state[0..N/4]</text>
+      </g>
+
+      <g transform="translate(15, 70)">
+        <text x="0" y="12" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Qubits 0..n-3 local</text>
+        <text x="0" y="26" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Top 2 bits = 10</text>
+        <text x="0" y="40" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Host: node-2</text>
+      </g>
+    </g>
+
+    <!-- Node 3 -->
+    <g transform="translate(540, 0)">
+      <rect x="0" y="0" width="160" height="120" rx="10" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+      <rect x="10" y="10" width="140" height="25" rx="5" fill="url(#node3Grad)"/>
+      <text x="80" y="28" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="white">MPI Rank 3</text>
+
+      <g transform="translate(15, 45)">
+        <rect x="0" y="0" width="130" height="20" rx="3" fill="#fecaca"/>
+        <text x="65" y="14" text-anchor="middle" font-family="monospace" font-size="9" fill="#991b1b">local_state[0..N/4]</text>
+      </g>
+
+      <g transform="translate(15, 70)">
+        <text x="0" y="12" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Qubits 0..n-3 local</text>
+        <text x="0" y="26" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Top 2 bits = 11</text>
+        <text x="0" y="40" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Host: node-3</text>
+      </g>
+    </g>
+
+    <!-- Communication lines -->
+    <g stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,2">
+      <line x1="160" y1="60" x2="180" y2="60"/>
+      <line x1="340" y1="60" x2="360" y2="60"/>
+      <line x1="520" y1="60" x2="540" y2="60"/>
+
+      <!-- Cross connections -->
+      <path d="M80 120 Q80 150 260 150 Q440 150 440 120" fill="none"/>
+      <path d="M260 120 Q260 140 520 140 Q620 140 620 120" fill="none"/>
+    </g>
+  </g>
+
+  <!-- Gate types -->
+  <g transform="translate(40, 295)">
+    <text x="360" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">Gate Operation Types</text>
+
+    <!-- Local gate -->
+    <g transform="translate(0, 20)">
+      <rect x="0" y="0" width="230" height="95" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+      <text x="115" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#059669">Local Gates</text>
+      <text x="115" y="38" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Target qubit in range [0, n-log₂P)</text>
+
+      <g transform="translate(10, 50)">
+        <text x="0" y="0" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• No MPI communication needed</text>
+        <text x="0" y="14" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Each rank operates independently</text>
+        <text x="0" y="28" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Full parallelism, linear speedup</text>
+      </g>
+    </g>
+
+    <!-- Global gate -->
+    <g transform="translate(245, 20)">
+      <rect x="0" y="0" width="230" height="95" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+      <text x="115" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#92400e">Global Gates</text>
+      <text x="115" y="38" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Target qubit in range [n-log₂P, n)</text>
+
+      <g transform="translate(10, 50)">
+        <text x="0" y="0" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Requires MPI_Sendrecv</text>
+        <text x="0" y="14" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Partner rank = rank XOR 2^k</text>
+        <text x="0" y="28" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Exchange half of local state</text>
+      </g>
+    </g>
+
+    <!-- Two-qubit gate -->
+    <g transform="translate(490, 20)">
+      <rect x="0" y="0" width="230" height="95" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+      <text x="115" y="20" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" fill="#b91c1c">Two-Qubit Gates</text>
+      <text x="115" y="38" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#374151">Both qubits may span ranks</text>
+
+      <g transform="translate(10, 50)">
+        <text x="0" y="0" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Most complex pattern</text>
+        <text x="0" y="14" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Up to 4 ranks communicate</text>
+        <text x="0" y="28" font-family="system-ui, sans-serif" font-size="9" fill="#374151">• Uses collective operations</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Communication pattern -->
+  <g transform="translate(40, 425)">
+    <text x="360" y="0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#374151">MPI Communication Pattern for Global Gate on Qubit n-1</text>
+
+    <g transform="translate(100, 20)">
+      <!-- Rank boxes -->
+      <rect x="0" y="0" width="80" height="40" rx="5" fill="url(#node0Grad)"/>
+      <text x="40" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rank 0</text>
+
+      <rect x="150" y="0" width="80" height="40" rx="5" fill="url(#node1Grad)"/>
+      <text x="190" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rank 1</text>
+
+      <rect x="300" y="0" width="80" height="40" rx="5" fill="url(#node2Grad)"/>
+      <text x="340" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rank 2</text>
+
+      <rect x="450" y="0" width="80" height="40" rx="5" fill="url(#node3Grad)"/>
+      <text x="490" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">Rank 3</text>
+
+      <!-- Exchange arrows -->
+      <path d="M80 15 Q115 -5 150 15" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#commArrow)"/>
+      <path d="M150 25 Q115 45 80 25" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#commArrow)"/>
+      <text x="115" y="55" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#6b7280">0 ↔ 1</text>
+
+      <path d="M380 15 Q415 -5 450 15" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#commArrow)"/>
+      <path d="M450 25 Q415 45 380 25" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#commArrow)"/>
+      <text x="415" y="55" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8" fill="#6b7280">2 ↔ 3</text>
+    </g>
+  </g>
+
+  <!-- Scaling note -->
+  <g transform="translate(40, 500)">
+    <text x="0" y="0" font-family="system-ui, sans-serif" font-size="10" font-weight="bold" fill="#374151">Scaling:</text>
+    <text x="60" y="0" font-family="system-ui, sans-serif" font-size="10" fill="#374151">P ranks can simulate n = log₂P + local_qubits. With 1024 ranks × 28 local qubits = 38 total qubits.</text>
+  </g>
+</svg>

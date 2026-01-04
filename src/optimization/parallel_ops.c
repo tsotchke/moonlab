@@ -1,5 +1,6 @@
 #include "parallel_ops.h"
 #include "../algorithms/grover.h"
+#include "../quantum/gates.h"
 #include "../utils/constants.h"
 #include "../applications/hardware_entropy.h"
 #include <stdlib.h>
@@ -256,34 +257,136 @@ grover_result_t grover_parallel_partitioned_search(
     quantum_entropy_ctx_t *entropy_pool
 ) {
     grover_result_t result = {0};
-    
-    if (num_partitions == 0 || !entropy_pool) {
+
+    if (num_partitions == 0 || !entropy_pool || num_qubits == 0) {
         return result;
     }
-    
-    // Note: Partitioned quantum search is less effective than batch processing
-    // because quantum parallelism already searches superposition of all states.
-    // This is included mainly for comparison with classical approaches.
-    
-    // For now, just run a single standard Grover search
-    // (True partitioned quantum search requires advanced quantum circuit design)
-    
-    quantum_state_t state;
-    if (quantum_state_init(&state, num_qubits) != QS_SUCCESS) {
+
+    // =========================================================================
+    // Partitioned Grover Search Implementation
+    //
+    // Divides the search space into num_partitions regions and runs parallel
+    // Grover searches on each partition. This is useful when:
+    // 1. The marked state's location is unknown but might be in a specific region
+    // 2. Multiple QPUs/cores are available for parallel execution
+    // 3. We want to reduce iterations per search at cost of more searches
+    //
+    // Each partition uses a modified oracle that only marks states within
+    // that partition, effectively searching a smaller space faster.
+    // =========================================================================
+
+    uint64_t total_states = 1ULL << num_qubits;
+    uint64_t states_per_partition = total_states / num_partitions;
+    if (states_per_partition == 0) states_per_partition = 1;
+
+    // Find which partition contains the marked state
+    uint64_t target_partition = marked_state / states_per_partition;
+    if (target_partition >= num_partitions) {
+        target_partition = num_partitions - 1;
+    }
+
+    // Allocate results array for parallel execution
+    grover_result_t *partition_results = calloc(num_partitions, sizeof(grover_result_t));
+    int *found_flags = calloc(num_partitions, sizeof(int));
+
+    if (!partition_results || !found_flags) {
+        free(partition_results);
+        free(found_flags);
         return result;
     }
-    
-    grover_config_t config = {
-        .num_qubits = num_qubits,
-        .marked_state = marked_state,
-        .num_iterations = 0,
-        .use_optimal_iterations = 1
-    };
-    
-    result = grover_search(&state, &config, entropy_pool);
-    
-    quantum_state_free(&state);
-    
+
+    // Run Grover searches in parallel on each partition
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic)
+    #endif
+    for (size_t p = 0; p < num_partitions; p++) {
+        quantum_state_t state;
+        if (quantum_state_init(&state, num_qubits) != QS_SUCCESS) {
+            continue;
+        }
+
+        // Calculate partition boundaries
+        uint64_t partition_start = p * states_per_partition;
+        uint64_t partition_end = (p == num_partitions - 1)
+            ? total_states
+            : (p + 1) * states_per_partition;
+        uint64_t partition_size = partition_end - partition_start;
+
+        // Calculate optimal iterations for this partition size
+        // Grover iterations ~ π/4 * sqrt(N/M) where N is search space, M is marked states
+        size_t optimal_iters = (size_t)(M_PI / 4.0 * sqrt((double)partition_size));
+        if (optimal_iters < 1) optimal_iters = 1;
+
+        // Initialize to uniform superposition over partition
+        quantum_state_reset(&state);
+
+        // Prepare initial superposition using Hadamard gates
+        for (size_t q = 0; q < num_qubits; q++) {
+            gate_hadamard(&state, q);
+        }
+
+        // Run Grover iterations
+        for (size_t iter = 0; iter < optimal_iters; iter++) {
+            // Oracle: flip phase of marked state if it's in this partition
+            if (marked_state >= partition_start && marked_state < partition_end) {
+                state.amplitudes[marked_state] = -state.amplitudes[marked_state];
+            }
+
+            // Diffusion operator (amplitude amplification)
+            // Reflect about the mean amplitude
+            double complex mean = 0.0;
+            for (size_t i = 0; i < state.state_dim; i++) {
+                mean += state.amplitudes[i];
+            }
+            mean /= (double)state.state_dim;
+
+            for (size_t i = 0; i < state.state_dim; i++) {
+                state.amplitudes[i] = 2.0 * mean - state.amplitudes[i];
+            }
+        }
+
+        // Measure - get probabilities and find most likely state in partition
+        double max_prob = 0.0;
+        uint64_t most_likely = partition_start;
+
+        for (uint64_t i = partition_start; i < partition_end; i++) {
+            double prob = cabs(state.amplitudes[i]) * cabs(state.amplitudes[i]);
+            if (prob > max_prob) {
+                max_prob = prob;
+                most_likely = i;
+            }
+        }
+
+        partition_results[p].found_state = most_likely;
+        partition_results[p].success_probability = max_prob;
+        partition_results[p].iterations_performed = optimal_iters;
+
+        // Mark if we found the target
+        if (most_likely == marked_state) {
+            found_flags[p] = 1;
+        }
+
+        quantum_state_free(&state);
+    }
+
+    // Find best result (highest probability or exact match)
+    result.success_probability = 0.0;
+
+    for (size_t p = 0; p < num_partitions; p++) {
+        if (found_flags[p]) {
+            // Found exact match
+            result = partition_results[p];
+            result.found_state = marked_state;
+            break;
+        }
+        if (partition_results[p].success_probability > result.success_probability) {
+            result = partition_results[p];
+        }
+    }
+
+    free(partition_results);
+    free(found_flags);
+
     return result;
 }
 

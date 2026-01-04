@@ -9,7 +9,7 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "svd_compress.h"
@@ -742,14 +742,15 @@ double svd_entanglement_entropy(const double *singular_values, uint32_t count) {
     // Values between 1e-200 and 1e-30 are legitimate small numbers
     if (total_sq < 1e-200) return 0.0;
 
-    // Compute von Neumann entropy
+    // Compute von Neumann entropy in bits (log base 2)
+    // S = -Σ p_i log₂(p_i)
     double entropy = 0.0;
     for (uint32_t i = 0; i < count; i++) {
         double p = (singular_values[i] * singular_values[i]) / total_sq;
         // Use 1e-15 threshold for probability (machine epsilon level)
         // Very small probabilities contribute negligibly to entropy
         if (p > 1e-15) {
-            entropy -= p * log(p);
+            entropy -= p * log2(p);
         }
     }
 

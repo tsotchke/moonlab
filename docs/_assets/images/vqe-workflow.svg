@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 450">
+  <defs>
+    <linearGradient id="quantumGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="classicalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#047857;stop-opacity:1" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="350" y="30" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#1f2937">VQE Algorithm Workflow</text>
+
+  <!-- Quantum Computer Box -->
+  <rect x="50" y="60" width="280" height="250" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="190" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#4f46e5">Quantum Computer</text>
+
+  <!-- Classical Computer Box -->
+  <rect x="370" y="60" width="280" height="250" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="510" y="85" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#059669">Classical Computer</text>
+
+  <!-- Step 1: Ansatz -->
+  <rect x="80" y="110" width="220" height="50" rx="5" fill="url(#quantumGrad)"/>
+  <text x="190" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">1. Prepare Ansatz |ψ(θ)⟩</text>
+  <text x="190" y="148" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="white">Parameterized quantum circuit</text>
+
+  <!-- Step 2: Measure -->
+  <rect x="80" y="180" width="220" height="50" rx="5" fill="url(#quantumGrad)"/>
+  <text x="190" y="200" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">2. Measure ⟨ψ|H|ψ⟩</text>
+  <text x="190" y="218" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="white">Estimate energy expectation</text>
+
+  <!-- Arrow down on quantum side -->
+  <path d="M190 165 L190 175" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Arrow from quantum to classical -->
+  <path d="M305 205 L365 205" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="335" y="195" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">E(θ)</text>
+
+  <!-- Step 3: Optimize -->
+  <rect x="400" y="180" width="220" height="50" rx="5" fill="url(#classicalGrad)"/>
+  <text x="510" y="200" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="white">3. Classical Optimizer</text>
+  <text x="510" y="218" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="white">Update parameters θ</text>
+
+  <!-- Check convergence -->
+  <polygon points="510,260 560,285 510,310 460,285" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="510" y="290" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#92400e">Converged?</text>
+
+  <!-- Arrow down to diamond -->
+  <path d="M510 235 L510 255" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- No path - back to quantum -->
+  <path d="M460 285 L80 285 L80 250" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="270" y="275" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">No: θ_new</text>
+
+  <!-- Step 4: Result -->
+  <rect x="400" y="360" width="220" height="50" rx="5" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+  <text x="510" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#374151">4. Output: E_min, θ*</text>
+  <text x="510" y="400" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#6b7280">Ground state energy</text>
+
+  <!-- Yes path -->
+  <path d="M510 310 L510 355" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="525" y="335" font-family="system-ui, sans-serif" font-size="9" fill="#6b7280">Yes</text>
+
+  <!-- Formula -->
+  <text x="350" y="435" text-anchor="middle" font-family="serif" font-size="12" fill="#4b5563">E(θ) = ⟨ψ(θ)|H|ψ(θ)⟩ ≥ E₀ (Variational Principle)</text>
+</svg>

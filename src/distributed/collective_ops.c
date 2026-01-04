@@ -6,7 +6,7 @@
  * expectation values, and state analysis operations.
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "collective_ops.h"
@@ -17,6 +17,17 @@
 #include <math.h>
 #include <time.h>
 #include <float.h>
+
+// Cross-platform BLAS/LAPACK support for Hermitian eigenvalue problems
+#ifdef __APPLE__
+#include <Accelerate/Accelerate.h>
+#define HAS_LAPACK 1
+#elif defined(QSIM_HAS_OPENBLAS) || defined(__linux__)
+#include <lapacke.h>
+#define HAS_LAPACK 1
+#else
+#define HAS_LAPACK 0
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -822,40 +833,90 @@ collective_error_t collective_expectation_pauli(const partitioned_state_t* state
         return COLLECTIVE_ERROR_INVALID_ARG;
     }
 
-    // For product of Pauli operators, eigenvalue is product of individual eigenvalues
+    // For product of Pauli operators:
     // P = P_0 ⊗ P_1 ⊗ ... ⊗ P_{n-1}
-    // Eigenvalue for |i⟩ is (-1)^(sum of bits where P_k = Z or bits match for X,Y)
+    // ⟨ψ|P|ψ⟩ = Σᵢⱼ ψᵢ* P_ij ψⱼ
 
-    // This is a simplified implementation for diagonal (Z/I) strings
-    // Full implementation requires applying Pauli string
-
-    double local_sum = 0.0;
+    // Check for X/Y operators (require non-local computation)
+    int has_xy = 0;
+    uint64_t xy_mask = 0;  // Bits where X or Y operators are located
     int rank = mpi_get_rank(state->dist_ctx);
 
-    for (uint64_t i = 0; i < state->local_count; i++) {
-        uint64_t global_idx = partition_local_to_global(state, i);
-        double prob = amplitude_squared(state->amplitudes[i]);
-
-        // Compute parity for Z operators
-        int parity = 0;
-        for (uint32_t q = 0; q < state->num_qubits; q++) {
-            char op = pauli_string[state->num_qubits - 1 - q];  // Reverse order
-
-            if (op == 'Z' || op == 'z') {
-                int bit;
-                if (partition_is_partition_qubit(state, q)) {
-                    uint32_t partition_bit = q - state->local_qubits;
-                    bit = (rank >> partition_bit) & 1;
-                } else {
-                    bit = get_bit(i, q);
-                }
-                parity ^= bit;
-            }
-            // X and Y require state transformation - simplified here
+    for (uint32_t q = 0; q < state->num_qubits; q++) {
+        char op = pauli_string[state->num_qubits - 1 - q];
+        if (op == 'X' || op == 'x' || op == 'Y' || op == 'y') {
+            has_xy = 1;
+            xy_mask |= (1ULL << q);
         }
+    }
 
-        double sign = (parity == 0) ? 1.0 : -1.0;
-        local_sum += sign * prob;
+    double local_sum = 0.0;
+
+    if (!has_xy) {
+        // Pure Z/I string: diagonal, use eigenvalue approach
+        for (uint64_t i = 0; i < state->local_count; i++) {
+            double prob = amplitude_squared(state->amplitudes[i]);
+
+            int parity = 0;
+            for (uint32_t q = 0; q < state->num_qubits; q++) {
+                char op = pauli_string[state->num_qubits - 1 - q];
+
+                if (op == 'Z' || op == 'z') {
+                    int bit;
+                    if (partition_is_partition_qubit(state, q)) {
+                        uint32_t partition_bit = q - state->local_qubits;
+                        bit = (rank >> partition_bit) & 1;
+                    } else {
+                        bit = get_bit(i, q);
+                    }
+                    parity ^= bit;
+                }
+            }
+
+            double sign = (parity == 0) ? 1.0 : -1.0;
+            local_sum += sign * prob;
+        }
+    } else {
+        // Has X and/or Y: need to compute off-diagonal terms
+        // ⟨ψ|P|ψ⟩ = Σᵢ ψᵢ* (P|i⟩)
+        // P|i⟩ = phase * |j⟩ where j differs from i at X/Y positions
+
+        for (uint64_t i = 0; i < state->local_count; i++) {
+            uint64_t global_i = partition_local_to_global(state, i);
+
+            // Compute which state P maps |i⟩ to
+            uint64_t global_j = global_i ^ xy_mask;  // Flip bits at X/Y positions
+
+            // Compute phase factor from Z and Y operators
+            double complex phase = 1.0;
+
+            for (uint32_t q = 0; q < state->num_qubits; q++) {
+                char op = pauli_string[state->num_qubits - 1 - q];
+                int bit_i = (global_i >> q) & 1;
+                int bit_j = (global_j >> q) & 1;
+
+                if (op == 'Z' || op == 'z') {
+                    // Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩
+                    if (bit_i) phase *= -1.0;
+                } else if (op == 'Y' || op == 'y') {
+                    // Y|0⟩ = i|1⟩, Y|1⟩ = -i|0⟩
+                    if (bit_i == 0) {
+                        phase *= I;  // Y|0⟩ = i|1⟩
+                    } else {
+                        phase *= -I;  // Y|1⟩ = -i|0⟩
+                    }
+                }
+                // X just flips, no phase: X|0⟩ = |1⟩, X|1⟩ = |0⟩
+                // I does nothing
+            }
+
+            // Get amplitude at j (may be non-local)
+            double complex amp_j = partition_get_amplitude(state, global_j);
+            double complex amp_i = state->amplitudes[i];
+
+            // Contribution: ψᵢ* · phase · ψⱼ
+            local_sum += creal(conj(amp_i) * phase * amp_j);
+        }
     }
 
     mpi_bridge_error_t err = mpi_allreduce_sum_double(state->dist_ctx,
@@ -980,20 +1041,315 @@ collective_error_t collective_entanglement_entropy(const partitioned_state_t* st
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
     }
 
-    // Entanglement entropy requires computing reduced density matrix
-    // For large systems, this is expensive
+    // Entanglement entropy S_A = -Tr(ρ_A log₂ ρ_A)
+    // where ρ_A = Tr_B(|ψ⟩⟨ψ|) is the reduced density matrix
 
-    // Simplified implementation: only accurate for small subsystems
-    // Full implementation would use tensor network SVD
+    // Limit subsystem size to avoid memory issues (max 12 qubits = 4K x 4K matrix)
+    if (num_subsystem > 12 || num_subsystem == 0) {
+        *entropy = 0.0;
+        return COLLECTIVE_ERROR_NOT_INITIALIZED;
+    }
 
-    // For now, compute purity as proxy: Tr(ρ_A²)
-    // S_A ≈ -log2(Tr(ρ_A²)) for near-pure states
+    uint32_t n = state->num_qubits;
+    uint64_t dim_A = 1ULL << num_subsystem;        // 2^k for subsystem A
+    uint64_t dim_B = 1ULL << (n - num_subsystem);  // 2^(n-k) for complement B
 
-    // This is a placeholder - full implementation is complex
-    *entropy = 0.0;
+    // Build subsystem mask and validate qubits
+    uint64_t subsystem_mask = 0;
+    for (uint32_t i = 0; i < num_subsystem; i++) {
+        if (subsystem_qubits[i] >= n) {
+            *entropy = 0.0;
+            return COLLECTIVE_ERROR_NOT_INITIALIZED;
+        }
+        subsystem_mask |= (1ULL << subsystem_qubits[i]);
+    }
 
-    // TODO: Implement full entanglement entropy calculation
-    // using Schmidt decomposition or reduced density matrix
+    // Allocate reduced density matrix (complex, dim_A x dim_A)
+    double complex* rho_A = (double complex*)calloc(dim_A * dim_A, sizeof(double complex));
+    if (!rho_A) {
+        *entropy = 0.0;
+        return COLLECTIVE_ERROR_ALLOC;
+    }
+
+    // Helper: extract subsystem index from global index
+    // Maps global basis state |b⟩ to subsystem basis state |a⟩
+    // by picking out the bits specified in subsystem_qubits
+    #define EXTRACT_SUBSYSTEM_INDEX(global_idx) ({             \
+        uint64_t subsystem_idx = 0;                            \
+        for (uint32_t q = 0; q < num_subsystem; q++) {         \
+            if ((global_idx) & (1ULL << subsystem_qubits[q])) {\
+                subsystem_idx |= (1ULL << q);                  \
+            }                                                  \
+        }                                                      \
+        subsystem_idx;                                         \
+    })
+
+    // Compute local contribution to ρ_A
+    // ρ_A(i,j) = Σ_b ψ(idx(i,b)) * conj(ψ(idx(j,b)))
+    // where idx(a,b) reconstructs full index from subsystem index a and complement index b
+
+    for (uint64_t local_i = 0; local_i < state->local_count; local_i++) {
+        uint64_t global_i = state->local_start + local_i;
+        double complex psi_i = state->amplitudes[local_i];
+
+        if (cabs(psi_i) < 1e-15) continue;
+
+        uint64_t a_i = EXTRACT_SUBSYSTEM_INDEX(global_i);
+
+        // For the bra part, we need to sum over basis states with same complement index
+        // Find complement index (bits NOT in subsystem)
+        uint64_t complement_idx = 0;
+        uint32_t complement_bit = 0;
+        for (uint32_t q = 0; q < n; q++) {
+            if (!(subsystem_mask & (1ULL << q))) {
+                if (global_i & (1ULL << q)) {
+                    complement_idx |= (1ULL << complement_bit);
+                }
+                complement_bit++;
+            }
+        }
+
+        // For each j with same complement, contribute to ρ_A(a_i, a_j)
+        // This means we iterate over all subsystem indices for the ket side
+        for (uint64_t a_j = 0; a_j < dim_A; a_j++) {
+            // Reconstruct global_j from (a_j, complement_idx)
+            uint64_t global_j = 0;
+            complement_bit = 0;
+            uint32_t subsystem_bit = 0;
+
+            for (uint32_t q = 0; q < n; q++) {
+                if (subsystem_mask & (1ULL << q)) {
+                    // Subsystem qubit - take from a_j
+                    if (a_j & (1ULL << subsystem_bit)) {
+                        global_j |= (1ULL << q);
+                    }
+                    subsystem_bit++;
+                } else {
+                    // Complement qubit - take from complement_idx
+                    if (complement_idx & (1ULL << complement_bit)) {
+                        global_j |= (1ULL << q);
+                    }
+                    complement_bit++;
+                }
+            }
+
+            // Get amplitude for global_j (may be on another rank)
+            double complex psi_j;
+            if (global_j >= state->local_start && global_j < state->local_end) {
+                psi_j = state->amplitudes[global_j - state->local_start];
+            } else {
+                // For non-local indices, use MPI communication
+                // Simplified: if not local, set to 0 (will be summed via MPI_Allreduce)
+                psi_j = partition_get_amplitude(state, global_j);
+            }
+
+            // ρ_A(a_i, a_j) += ψ_i * conj(ψ_j)
+            rho_A[a_i * dim_A + a_j] += psi_i * conj(psi_j);
+        }
+    }
+
+    #undef EXTRACT_SUBSYSTEM_INDEX
+
+    // Reduce across all ranks (sum contributions)
+    if (state->dist_ctx && state->dist_ctx->size > 1) {
+        double complex* global_rho = (double complex*)calloc(dim_A * dim_A, sizeof(double complex));
+        if (global_rho) {
+            // Use MPI bridge wrapper for allreduce
+            mpi_allreduce_sum_complex(state->dist_ctx, rho_A, global_rho, dim_A * dim_A);
+            memcpy(rho_A, global_rho, dim_A * dim_A * sizeof(double complex));
+            free(global_rho);
+        }
+    }
+
+    (void)dim_B;  // Unused but computed for documentation
+
+    // Compute eigenvalues of ρ_A (Hermitian density matrix)
+    // Eigenvalues are real and non-negative for valid density matrices
+
+    double* eigenvalues = (double*)calloc(dim_A, sizeof(double));
+    if (!eigenvalues) {
+        free(rho_A);
+        *entropy = 0.0;
+        return COLLECTIVE_ERROR_ALLOC;
+    }
+
+    // Use runtime flag to track if we need Jacobi fallback
+    int use_jacobi = 0;
+
+#if HAS_LAPACK
+    // Use ZHEEV for proper Hermitian eigenvalue decomposition
+    // This handles the full complex Hermitian matrix correctly
+
+#ifdef __APPLE__
+    // Apple Accelerate framework (CLAPACK interface)
+    {
+        char jobz = 'N';  // Eigenvalues only
+        char uplo = 'U';  // Upper triangle
+        __CLPK_integer n_clpk = (__CLPK_integer)dim_A;
+        __CLPK_integer lda = n_clpk;
+        __CLPK_integer lwork = -1;
+        __CLPK_integer info;
+        double complex work_query;
+        double* rwork = (double*)malloc((3 * dim_A - 2) * sizeof(double));
+
+        if (!rwork) {
+            free(eigenvalues);
+            free(rho_A);
+            *entropy = 0.0;
+            return COLLECTIVE_ERROR_ALLOC;
+        }
+
+        // Query optimal work size
+        zheev_(&jobz, &uplo, &n_clpk, (__CLPK_doublecomplex*)rho_A, &lda,
+               eigenvalues, (__CLPK_doublecomplex*)&work_query, &lwork, rwork, &info);
+
+        lwork = (__CLPK_integer)creal(work_query);
+        if (lwork < 1) lwork = 2 * dim_A;
+
+        double complex* work = (double complex*)malloc(lwork * sizeof(double complex));
+        if (!work) {
+            free(rwork);
+            free(eigenvalues);
+            free(rho_A);
+            *entropy = 0.0;
+            return COLLECTIVE_ERROR_ALLOC;
+        }
+
+        // Compute eigenvalues
+        zheev_(&jobz, &uplo, &n_clpk, (__CLPK_doublecomplex*)rho_A, &lda,
+               eigenvalues, (__CLPK_doublecomplex*)work, &lwork, rwork, &info);
+
+        free(work);
+        free(rwork);
+
+        if (info != 0) {
+            use_jacobi = 1;  // Fallback to Jacobi if ZHEEV fails
+        }
+    }
+#else
+    // OpenBLAS/LAPACKE interface
+    {
+        lapack_int n_lap = (lapack_int)dim_A;
+        lapack_int info = LAPACKE_zheev(LAPACK_ROW_MAJOR, 'N', 'U', n_lap,
+                                         (lapack_complex_double*)rho_A, n_lap, eigenvalues);
+        if (info != 0) {
+            use_jacobi = 1;
+        }
+    }
+#endif
+
+#else
+    // No LAPACK available - use Jacobi for Hermitian matrices
+    use_jacobi = 1;
+#endif
+
+    if (use_jacobi) {
+        // Jacobi eigenvalue algorithm for Hermitian matrices
+        // We work with the full complex Hermitian matrix
+        // Uses unitary (complex) Jacobi rotations to diagonalize
+
+        double complex* H = (double complex*)malloc(dim_A * dim_A * sizeof(double complex));
+        if (!H) {
+            free(eigenvalues);
+            free(rho_A);
+            *entropy = 0.0;
+            return COLLECTIVE_ERROR_ALLOC;
+        }
+        memcpy(H, rho_A, dim_A * dim_A * sizeof(double complex));
+
+        const int max_iter = 100;
+        const double eps = 1e-12;
+
+        for (int iter = 0; iter < max_iter; iter++) {
+            // Find largest off-diagonal magnitude
+            double max_off = 0.0;
+            uint64_t p = 0, q = 1;
+
+            for (uint64_t i = 0; i < dim_A; i++) {
+                for (uint64_t j = i + 1; j < dim_A; j++) {
+                    double mag = cabs(H[i * dim_A + j]);
+                    if (mag > max_off) {
+                        max_off = mag;
+                        p = i;
+                        q = j;
+                    }
+                }
+            }
+
+            if (max_off < eps) break;
+
+            // Compute Jacobi rotation parameters for Hermitian matrix
+            // We want to zero out H[p,q] and H[q,p] = conj(H[p,q])
+            double hpp = creal(H[p * dim_A + p]);
+            double hqq = creal(H[q * dim_A + q]);
+            double complex hpq = H[p * dim_A + q];
+
+            // Phase factor to make hpq real
+            double abs_hpq = cabs(hpq);
+            double complex phase = (abs_hpq > eps) ? conj(hpq) / abs_hpq : 1.0;
+            double hpq_real = abs_hpq;
+
+            // Compute rotation angle for real 2x2 problem
+            double theta;
+            double diff = hqq - hpp;
+            if (fabs(diff) < eps) {
+                theta = M_PI / 4.0;
+            } else {
+                theta = 0.5 * atan2(2.0 * hpq_real, diff);
+            }
+
+            double c = cos(theta);
+            double s = sin(theta);
+
+            // Apply unitary transformation: H' = U† H U
+            // where U rotates in (p,q) plane with phase adjustment
+            for (uint64_t k = 0; k < dim_A; k++) {
+                if (k != p && k != q) {
+                    double complex hkp = H[k * dim_A + p];
+                    double complex hkq = H[k * dim_A + q];
+                    H[k * dim_A + p] = c * hkp - conj(phase) * s * hkq;
+                    H[p * dim_A + k] = conj(H[k * dim_A + p]);
+                    H[k * dim_A + q] = phase * s * hkp + c * hkq;
+                    H[q * dim_A + k] = conj(H[k * dim_A + q]);
+                }
+            }
+
+            // Update diagonal and off-diagonal in (p,q) block
+            double new_pp = c*c*hpp - 2*c*s*hpq_real + s*s*hqq;
+            double new_qq = s*s*hpp + 2*c*s*hpq_real + c*c*hqq;
+            H[p * dim_A + p] = new_pp;
+            H[q * dim_A + q] = new_qq;
+            H[p * dim_A + q] = 0.0;
+            H[q * dim_A + p] = 0.0;
+        }
+
+        // Extract eigenvalues (diagonal elements, should be real)
+        for (uint64_t i = 0; i < dim_A; i++) {
+            eigenvalues[i] = creal(H[i * dim_A + i]);
+        }
+
+        free(H);
+    }
+
+    // Compute von Neumann entropy: S = -Σ λᵢ log₂(λᵢ)
+    double S = 0.0;
+    for (uint64_t i = 0; i < dim_A; i++) {
+        double lambda = eigenvalues[i];
+        // Density matrix eigenvalues should be in [0,1]
+        // Clamp small negative values from numerical error
+        if (lambda < 0.0) lambda = 0.0;
+        if (lambda > 1e-15) {  // Avoid log(0)
+            S -= lambda * log2(lambda);
+        }
+    }
+
+    // Handle numerical precision (entropy should be non-negative)
+    if (S < 0.0) S = 0.0;
+
+    *entropy = S;
+
+    free(eigenvalues);
+    free(rho_A);
 
     return COLLECTIVE_SUCCESS;
 }

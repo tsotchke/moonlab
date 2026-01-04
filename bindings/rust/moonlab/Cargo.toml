@@ -1,0 +1,24 @@
+[package]
+name = "moonlab"
+version = "0.1.0"
+edition = "2021"
+authors = ["Moonlab Team"]
+description = "Safe, idiomatic Rust bindings for the Moonlab quantum simulator"
+license = "Apache-2.0"
+repository = "https://github.com/tsotchke/moonlab"
+keywords = ["quantum", "simulator", "computing", "physics"]
+categories = ["science", "simulation"]
+readme = "README.md"
+
+[dependencies]
+moonlab-sys = { path = "../moonlab-sys" }
+thiserror = "2.0"
+num-complex = "0.4"
+rand = "0.8"
+libc = "0.2"
+
+[dev-dependencies]
+approx = "0.5"
+
+[features]
+default = []

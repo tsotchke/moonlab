@@ -6,13 +6,14 @@
  * @since v1.0.0
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include "mpi_bridge.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #ifdef HAS_MPI
 #include <mpi.h>
@@ -183,10 +184,41 @@ mpi_bridge_error_t mpi_barrier(distributed_ctx_t* ctx) {
 
 mpi_bridge_error_t mpi_barrier_timeout(distributed_ctx_t* ctx,
                                        uint32_t timeout_ms) {
-    // MPI doesn't have native timeout support
-    // For now, just do a regular barrier
-    (void)timeout_ms;
-    return mpi_barrier(ctx);
+    if (!ctx) return MPI_BRIDGE_ERROR_INIT;
+
+    // Use non-blocking barrier with polling for timeout support
+    MPI_Request request;
+    int err = MPI_Ibarrier(*(MPI_Comm*)ctx->mpi_comm, &request);
+    if (err != MPI_SUCCESS) return MPI_BRIDGE_ERROR_SYNC;
+
+    // Poll with timeout
+    struct timespec start, now;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    int completed = 0;
+    while (!completed) {
+        MPI_Test(&request, &completed, MPI_STATUS_IGNORE);
+
+        if (completed) break;
+
+        // Check timeout
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        uint64_t elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 +
+                              (now.tv_nsec - start.tv_nsec) / 1000000;
+
+        if (elapsed_ms >= timeout_ms) {
+            // Timeout: cancel the request
+            MPI_Cancel(&request);
+            MPI_Request_free(&request);
+            return MPI_BRIDGE_ERROR_TIMEOUT;
+        }
+
+        // Brief sleep to avoid busy-waiting (100 microseconds)
+        struct timespec sleep_time = {0, 100000};
+        nanosleep(&sleep_time, NULL);
+    }
+
+    return MPI_BRIDGE_SUCCESS;
 }
 
 // ============================================================================

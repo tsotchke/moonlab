@@ -129,29 +129,50 @@ static void test_byte_generation(void) {
 
 static void test_uint64_generation(void) {
     test_start("uint64 generation");
-    
+
     qrng_v3_ctx_t *ctx;
     if (qrng_v3_init(&ctx) != QRNG_V3_SUCCESS) {
         test_fail("Init failed");
         return;
     }
-    
-    uint64_t value1, value2;
-    
-    if (qrng_v3_uint64(ctx, &value1) != QRNG_V3_SUCCESS ||
-        qrng_v3_uint64(ctx, &value2) != QRNG_V3_SUCCESS) {
-        qrng_v3_free(ctx);
-        test_fail("uint64 generation failed");
-        return;
+
+    // Generate multiple values for robust testing
+    // A broken RNG would produce all identical values
+    #define NUM_TEST_VALUES 10
+    uint64_t values[NUM_TEST_VALUES];
+
+    for (int i = 0; i < NUM_TEST_VALUES; i++) {
+        if (qrng_v3_uint64(ctx, &values[i]) != QRNG_V3_SUCCESS) {
+            qrng_v3_free(ctx);
+            test_fail("uint64 generation failed");
+            return;
+        }
     }
-    
+
     qrng_v3_free(ctx);
-    
-    if (value1 == value2) {
-        test_fail("Generated identical values");
+
+    // Check that we have at least some unique values
+    // (all identical would indicate broken RNG)
+    int unique_count = 1;
+    for (int i = 1; i < NUM_TEST_VALUES; i++) {
+        int is_unique = 1;
+        for (int j = 0; j < i; j++) {
+            if (values[i] == values[j]) {
+                is_unique = 0;
+                break;
+            }
+        }
+        if (is_unique) unique_count++;
+    }
+
+    // With a working RNG, we should have multiple unique values
+    // Probability of <3 unique in 10 samples is astronomically low
+    if (unique_count < 3) {
+        test_fail("RNG appears broken - too few unique values");
         return;
     }
-    
+    #undef NUM_TEST_VALUES
+
     test_pass();
 }
 

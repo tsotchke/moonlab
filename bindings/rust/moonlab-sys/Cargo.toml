@@ -1,0 +1,24 @@
+[package]
+name = "moonlab-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Moonlab Team"]
+description = "Low-level FFI bindings to the Moonlab quantum simulator C library"
+license = "Apache-2.0"
+repository = "https://github.com/tsotchke/moonlab"
+keywords = ["quantum", "simulator", "ffi", "bindings"]
+categories = ["science", "simulation"]
+
+[lib]
+name = "moonlab_sys"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+bindgen = "0.70"
+cc = "1.0"
+
+[features]
+default = []
+gpu = []  # Enable GPU acceleration bindings
