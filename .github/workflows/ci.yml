@@ -44,6 +44,7 @@ jobs:
     env:
       PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
       MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -74,6 +75,8 @@ jobs:
     runs-on: macos-15-large
     env:
       PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
 
     steps:
       - uses: actions/checkout@v4
