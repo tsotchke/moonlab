@@ -220,6 +220,9 @@ BENCHMARK_SCALING = tools/benchmarks/scaling_benchmark
 BENCHMARK_MEMORY = tools/benchmarks/memory_profiler
 ALL_BENCHMARKS = $(BENCHMARK_SCALING) $(BENCHMARK_MEMORY)
 
+# Hardware entropy probe helper (safe fork+exec for RNDR/RDRAND probing)
+HW_RNG_PROBE = tools/hw_rng_probe
+
 # Unit tests
 UNIT_TEST_STATE = tests/unit/test_quantum_state
 UNIT_TEST_GATES = tests/unit/test_quantum_gates
@@ -247,9 +250,13 @@ ALL_INTEGRATION_TESTS = $(INTEGRATION_TEST_GROVER) $(INTEGRATION_TEST_VQE) $(INT
         integration-tests test_integration
 
 # Main targets
-all: $(LIB) $(QSIM_TEST)
+all: $(LIB) $(QSIM_TEST) $(HW_RNG_PROBE)
 	@echo "Running Quantum Simulator v3.0 optimized tests..."
 	LD_LIBRARY_PATH=. ./$(QSIM_TEST)
+
+# Hardware RNG probe helper (for safe RNDR/RDRAND detection via fork+exec)
+$(HW_RNG_PROBE): tools/hw_rng_probe.c
+	$(CC) -o $@ $< -O2
 
 # Build shared library
 $(LIB): $(ALL_LIB_OBJS)
@@ -663,6 +670,7 @@ coverage:
 clean: clean_examples clean_tests clean_benchmarks
 	rm -f $(GROVER_PARALLEL_BENCH)
 	rm -f $(LIB)
+	rm -f $(HW_RNG_PROBE)
 	rm -rf build/
 	rm -rf *.dSYM
 	rm -rf tests/*.dSYM

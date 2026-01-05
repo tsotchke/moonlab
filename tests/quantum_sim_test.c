@@ -745,13 +745,13 @@ int main(void) {
     printf("║                                                           ║\n");
     
     if (tests_passed == tests_run) {
-        printf("║  Result: ✓ ALL TESTS PASSED                              ║\n");
+        printf("║  Result: ✓ ALL TESTS PASSED                               ║\n");
         printf("║                                                           ║\n");
         printf("║  Quantum RNG v3.0 is ready for production use!            ║\n");
     } else {
-        printf("║  Result: ✗ SOME TESTS FAILED                             ║\n");
+        printf("║  Result: ✗ SOME TESTS FAILED                              ║\n");
         printf("║                                                           ║\n");
-        printf("║  Please review failures before deployment                ║\n");
+        printf("║  Please review failures before deployment                 ║\n");
     }
     
     printf("╚═══════════════════════════════════════════════════════════╝\n\n");

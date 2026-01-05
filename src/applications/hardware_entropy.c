@@ -66,46 +66,40 @@ int rdseed_available(void) {
 static int rndr_detection_result = -1;
 
 /**
- * @brief Probe RNDR instruction safely using fork()
+ * @brief Path to the hardware RNG probe helper executable
  *
- * Executes RNDR in a child process. If the child crashes (SIGILL/SIGSEGV),
- * we know RNDR isn't actually available even if sysctl says it is.
- * This is the only safe method for VMs like GitHub Actions runners.
+ * The helper is a separate binary that safely executes RNDR/RNDRRS instructions.
+ * Using popen() (fork+exec) instead of fork() alone is safe in multithreaded
+ * processes because exec() replaces the child's address space, avoiding the
+ * undefined behavior that occurs when forked threads interact with mutexes.
  */
-static int rndr_probe_fork(void) {
-    pid_t pid = fork();
+static const char *HW_RNG_PROBE_PATH = "tools/hw_rng_probe";
 
-    if (pid < 0) {
-        return 0;  // fork failed, assume not available
+/**
+ * @brief Probe RNDR instruction safely using popen() (fork+exec)
+ *
+ * Spawns the helper executable which attempts the RNDR instruction.
+ * This is safe in multithreaded processes because popen() uses fork+exec,
+ * not fork alone. The child process is completely replaced by the helper.
+ */
+static int rndr_probe_popen(void) {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s --mode=rndr 2>/dev/null", HW_RNG_PROBE_PATH);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        return 0;  // popen failed
     }
 
-    if (pid == 0) {
-        // Child process: try the RNDR instruction
-        uint64_t result;
-        int ok;
-        __asm__ volatile(
-            "mrs %0, s3_3_c2_c4_0\n"
-            "cset %w1, ne"
-            : "=r"(result), "=r"(ok)
-            :
-            : "cc"
-        );
-        (void)result;
-        // Exit 0 on success, 1 if RNDR returned no entropy
-        _exit(ok ? 0 : 1);
+    char buf[32];
+    char *result = fgets(buf, sizeof(buf), fp);
+    int status = pclose(fp);
+
+    // Success if child exited normally with status 0 and produced output
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0 && result != NULL) {
+        return 1;
     }
 
-    // Parent: wait for child
-    int status = 0;
-    if (waitpid(pid, &status, 0) < 0) {
-        return 0;  // waitpid failed
-    }
-
-    if (WIFEXITED(status)) {
-        return WEXITSTATUS(status) == 0;
-    }
-
-    // Child was killed by signal (SIGILL/SIGSEGV) = RNDR not available
     return 0;
 }
 
@@ -159,9 +153,10 @@ int rndr_available(void) {
             return rndr_detection_result;
         }
 
-        // Tier 2: Sysctl says yes - verify with fork probe
+        // Tier 2: Sysctl says yes - verify with popen probe (fork+exec)
         // This catches VMs that lie about FEAT_RNG
-        rndr_detection_result = rndr_probe_fork();
+        // Using popen() is safe in multithreaded processes (unlike fork alone)
+        rndr_detection_result = rndr_probe_popen();
         return rndr_detection_result;
 
     #else
@@ -172,64 +167,63 @@ int rndr_available(void) {
 }
 
 /**
- * @brief Get entropy via ARM RNDR instruction
+ * @brief Execute RNDR/RNDRRS via helper process using popen() (fork+exec)
  *
- * RNDR (Random Number) - reseeded from hardware TRNG
- * Returns conditioned random number
+ * Spawns the helper executable to run the risky assembly instruction.
+ * popen() uses fork+exec which is safe in multithreaded processes.
+ * Returns 1 on success (value written to *out), 0 on failure.
+ */
+static int arm_rndr_popen_exec(int use_rndrrs, uint64_t *out) {
+    char cmd[256];
+    const char *mode = use_rndrrs ? "rndrrs" : "rndr";
+    snprintf(cmd, sizeof(cmd), "%s --mode=%s 2>/dev/null", HW_RNG_PROBE_PATH, mode);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        return 0;
+    }
+
+    char buf[32];
+    char *result = fgets(buf, sizeof(buf), fp);
+    int status = pclose(fp);
+
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || result == NULL) {
+        return 0;
+    }
+
+    // Parse hex output from helper (16 hex chars = 64 bits)
+    uint64_t val = 0;
+    if (sscanf(buf, "%llx", (unsigned long long *)&val) != 1) {
+        return 0;
+    }
+
+    *out = val;
+    return 1;
+}
+
+/**
+ * @brief Get entropy via ARM RNDR instruction (safe popen version)
  */
 int rndr_get_uint64(uint64_t *value) {
     if (!rndr_available()) return 0;
-    
-    uint64_t result;
-    int ok;
-    
-    // Retry up to 10 times as recommended
+
+    // Retry up to 10 times
     for (int i = 0; i < 10; i++) {
-        __asm__ volatile(
-            "mrs %0, s3_3_c2_c4_0\n"  // RNDR register
-            "cset %w1, ne"
-            : "=r"(result), "=r"(ok)
-            :
-            : "cc"
-        );
-        
-        if (ok) {
-            *value = result;
-            return 1;
-        }
+        if (arm_rndr_popen_exec(0, value)) return 1;
     }
-    
     return 0;
 }
 
 /**
- * @brief Get entropy via ARM RNDRRS instruction
- *
- * RNDRRS (Random Number Reseeded) - guaranteed reseed from TRNG
- * Higher quality but slower than RNDR
+ * @brief Get entropy via ARM RNDRRS instruction (safe popen version)
  */
 int rndrrs_get_uint64(uint64_t *value) {
     if (!rndr_available()) return 0;
-    
-    uint64_t result;
-    int ok;
-    
+
     // RNDRRS may take longer, retry up to 100 times
     for (int i = 0; i < 100; i++) {
-        __asm__ volatile(
-            "mrs %0, s3_3_c2_c4_1\n"  // RNDRRS register
-            "cset %w1, ne"
-            : "=r"(result), "=r"(ok)
-            :
-            : "cc"
-        );
-        
-        if (ok) {
-            *value = result;
-            return 1;
-        }
+        if (arm_rndr_popen_exec(1, value)) return 1;
     }
-    
     return 0;
 }
 
