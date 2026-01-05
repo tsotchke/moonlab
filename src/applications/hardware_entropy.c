@@ -60,73 +60,75 @@ int rdseed_available(void) {
 
 #ifdef __aarch64__
 
-// Thread-local storage for SIGILL handler state
-static __thread volatile sig_atomic_t rndr_probe_failed = 0;
-static __thread sigjmp_buf rndr_probe_jmpbuf;
-
-// SIGILL handler for runtime RNDR probing
-static void rndr_sigill_handler(int sig) {
-    (void)sig;
-    rndr_probe_failed = 1;
-    siglongjmp(rndr_probe_jmpbuf, 1);
-}
+#include <sys/wait.h>
 
 // Cache the detection result (-1 = not tested, 0 = not available, 1 = available)
 static int rndr_detection_result = -1;
 
 /**
- * @brief Probe RNDR instruction at runtime with signal handler
+ * @brief Probe RNDR instruction safely using fork()
  *
- * Attempts to execute RNDR and catches SIGILL if unsupported.
- * This is the most reliable detection method for VMs.
+ * Executes RNDR in a child process. If the child crashes (SIGILL/SIGSEGV),
+ * we know RNDR isn't actually available even if sysctl says it is.
+ * This is the only safe method for VMs like GitHub Actions runners.
  */
-static int rndr_probe_runtime(void) {
-    // Save old signal handler
-    struct sigaction old_action, new_action;
-    memset(&new_action, 0, sizeof(new_action));
-    new_action.sa_handler = rndr_sigill_handler;
-    sigemptyset(&new_action.sa_mask);
-    new_action.sa_flags = 0;
+static int rndr_probe_fork(void) {
+    pid_t pid = fork();
 
-    if (sigaction(SIGILL, &new_action, &old_action) != 0) {
-        return 0;  // Can't install handler, assume not available
+    if (pid < 0) {
+        return 0;  // fork failed, assume not available
     }
 
-    rndr_probe_failed = 0;
-
-    if (sigsetjmp(rndr_probe_jmpbuf, 1) == 0) {
-        // Try to execute RNDR
+    if (pid == 0) {
+        // Child process: try the RNDR instruction
         uint64_t result;
         int ok;
         __asm__ volatile(
-            "mrs %0, s3_3_c2_c4_0\n"  // RNDR register
+            "mrs %0, s3_3_c2_c4_0\n"
             "cset %w1, ne"
             : "=r"(result), "=r"(ok)
             :
             : "cc"
         );
         (void)result;
-        (void)ok;
+        // Exit 0 on success, 1 if RNDR returned no entropy
+        _exit(ok ? 0 : 1);
     }
 
-    // Restore old signal handler
-    sigaction(SIGILL, &old_action, NULL);
+    // Parent: wait for child
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return 0;  // waitpid failed
+    }
 
-    return !rndr_probe_failed;
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status) == 0;
+    }
+
+    // Child was killed by signal (SIGILL/SIGSEGV) = RNDR not available
+    return 0;
 }
 
 /**
  * @brief Check if ARM RNDR instruction is available
  *
- * Multi-tier detection strategy:
- * 1. Return cached result if already tested
- * 2. Try sysctl detection (fast, reliable on bare metal)
- * 3. Try runtime probe with SIGILL handler (works in VMs)
- * 4. Default to not available (safe fallback)
+ * Detection strategy:
+ * 1. Check MOONLAB_SKIP_HW_ENTROPY env var (CI opt-out)
+ * 2. Return cached result if already tested
+ * 3. Check sysctl for FEAT_RNG capability
+ * 4. If sysctl says yes, verify with fork-based probe
+ * 5. Cache and return result
  */
 int rndr_available(void) {
     // Return cached result if already tested
     if (rndr_detection_result >= 0) {
+        return rndr_detection_result;
+    }
+
+    // CI opt-out: skip hardware probe entirely
+    const char *skip = getenv("MOONLAB_SKIP_HW_ENTROPY");
+    if (skip && (skip[0] == '1' || skip[0] == 'y' || skip[0] == 'Y')) {
+        rndr_detection_result = 0;
         return rndr_detection_result;
     }
 
@@ -138,26 +140,28 @@ int rndr_available(void) {
 
     #elif defined(__APPLE__)
         // macOS: Multi-tier detection for Apple Silicon
-        // VMs (including GitHub Actions runners) may not expose RNDR
+        // VMs (including GitHub Actions runners) may report FEAT_RNG
+        // but crash when the instruction is actually executed.
 
-        // Tier 1: Try sysctl hw.optional.arm.FEAT_RNG (official name)
+        // Tier 1: Check sysctl for FEAT_RNG
         int has_feature = 0;
         size_t size = sizeof(has_feature);
-        if (sysctlbyname("hw.optional.arm.FEAT_RNG", &has_feature, &size, NULL, 0) == 0) {
-            rndr_detection_result = has_feature;
+        int sysctl_ok = (sysctlbyname("hw.optional.arm.FEAT_RNG", &has_feature, &size, NULL, 0) == 0);
+
+        if (!sysctl_ok) {
+            // Try alternate sysctl name
+            sysctl_ok = (sysctlbyname("hw.optional.armv8_5_rng", &has_feature, &size, NULL, 0) == 0);
+        }
+
+        if (!sysctl_ok || !has_feature) {
+            // Sysctl says no RNDR
+            rndr_detection_result = 0;
             return rndr_detection_result;
         }
 
-        // Tier 2: Try alternate sysctl names (older macOS versions)
-        if (sysctlbyname("hw.optional.armv8_5_rng", &has_feature, &size, NULL, 0) == 0) {
-            rndr_detection_result = has_feature;
-            return rndr_detection_result;
-        }
-
-        // Tier 3: Sysctl failed - assume RNDR not available
-        // Don't use runtime probe - it can cause issues in VMs due to signal handling
-        // /dev/random is excellent on macOS (hardware-backed) so this is fine
-        rndr_detection_result = 0;
+        // Tier 2: Sysctl says yes - verify with fork probe
+        // This catches VMs that lie about FEAT_RNG
+        rndr_detection_result = rndr_probe_fork();
         return rndr_detection_result;
 
     #else

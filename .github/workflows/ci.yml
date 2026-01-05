@@ -43,6 +43,7 @@ jobs:
     runs-on: macos-14
     env:
       PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      MOONLAB_SKIP_HW_ENTROPY: "1"
 
     steps:
       - uses: actions/checkout@v4
