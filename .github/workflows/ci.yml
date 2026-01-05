@@ -70,7 +70,7 @@ jobs:
             lib/libquantum_sim.a
 
   build-macos-intel:
-    runs-on: macos-13
+    runs-on: macos-15
     env:
       PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 

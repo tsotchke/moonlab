@@ -60,31 +60,108 @@ int rdseed_available(void) {
 
 #ifdef __aarch64__
 
+// Thread-local storage for SIGILL handler state
+static __thread volatile sig_atomic_t rndr_probe_failed = 0;
+static __thread sigjmp_buf rndr_probe_jmpbuf;
+
+// SIGILL handler for runtime RNDR probing
+static void rndr_sigill_handler(int sig) {
+    (void)sig;
+    rndr_probe_failed = 1;
+    siglongjmp(rndr_probe_jmpbuf, 1);
+}
+
+// Cache the detection result (-1 = not tested, 0 = not available, 1 = available)
+static int rndr_detection_result = -1;
+
+/**
+ * @brief Probe RNDR instruction at runtime with signal handler
+ *
+ * Attempts to execute RNDR and catches SIGILL if unsupported.
+ * This is the most reliable detection method for VMs.
+ */
+static int rndr_probe_runtime(void) {
+    // Save old signal handler
+    struct sigaction old_action, new_action;
+    memset(&new_action, 0, sizeof(new_action));
+    new_action.sa_handler = rndr_sigill_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+
+    if (sigaction(SIGILL, &new_action, &old_action) != 0) {
+        return 0;  // Can't install handler, assume not available
+    }
+
+    rndr_probe_failed = 0;
+
+    if (sigsetjmp(rndr_probe_jmpbuf, 1) == 0) {
+        // Try to execute RNDR
+        uint64_t result;
+        int ok;
+        __asm__ volatile(
+            "mrs %0, s3_3_c2_c4_0\n"  // RNDR register
+            "cset %w1, ne"
+            : "=r"(result), "=r"(ok)
+            :
+            : "cc"
+        );
+        (void)result;
+        (void)ok;
+    }
+
+    // Restore old signal handler
+    sigaction(SIGILL, &old_action, NULL);
+
+    return !rndr_probe_failed;
+}
+
 /**
  * @brief Check if ARM RNDR instruction is available
+ *
+ * Multi-tier detection strategy:
+ * 1. Return cached result if already tested
+ * 2. Try sysctl detection (fast, reliable on bare metal)
+ * 3. Try runtime probe with SIGILL handler (works in VMs)
+ * 4. Default to not available (safe fallback)
  */
 int rndr_available(void) {
+    // Return cached result if already tested
+    if (rndr_detection_result >= 0) {
+        return rndr_detection_result;
+    }
+
     #ifdef __linux__
-        // Linux: Use getauxval
+        // Linux: Use getauxval (fast and reliable)
         unsigned long hwcaps = getauxval(AT_HWCAP);
-        return (hwcaps & HWCAP_RNG) != 0;
+        rndr_detection_result = (hwcaps & HWCAP_RNG) != 0;
+        return rndr_detection_result;
+
     #elif defined(__APPLE__)
-        // macOS: Feature detection via sysctl
-        // Apple Silicon M1/M2 have RNDR support
+        // macOS: Multi-tier detection for Apple Silicon
+        // VMs (including GitHub Actions runners) may not expose RNDR
+
+        // Tier 1: Try sysctl hw.optional.arm.FEAT_RNG (official name)
         int has_feature = 0;
         size_t size = sizeof(has_feature);
-        
-        // Try to detect via hw.optional.armv8_5_a
         if (sysctlbyname("hw.optional.arm.FEAT_RNG", &has_feature, &size, NULL, 0) == 0) {
-            return has_feature;
+            rndr_detection_result = has_feature;
+            return rndr_detection_result;
         }
-        
-        // Fallback: Assume available on Apple Silicon (M1+)
-        // This is safe as the instruction will fail gracefully if not supported
-        return 1;
+
+        // Tier 2: Try alternate sysctl names (older macOS versions)
+        if (sysctlbyname("hw.optional.armv8_5_rng", &has_feature, &size, NULL, 0) == 0) {
+            rndr_detection_result = has_feature;
+            return rndr_detection_result;
+        }
+
+        // Tier 3: Runtime probe with SIGILL handler (catches VMs without RNDR)
+        rndr_detection_result = rndr_probe_runtime();
+        return rndr_detection_result;
+
     #else
-        // Other ARM platforms: Assume not available, fail gracefully
-        return 0;
+        // Other ARM platforms: Conservative default
+        rndr_detection_result = 0;
+        return rndr_detection_result;
     #endif
 }
 
