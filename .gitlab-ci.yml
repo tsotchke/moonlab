@@ -19,7 +19,7 @@ variables:
 # Build jobs
 # =============================================================================
 
-build-linux:
+build-linux-x86:
   extends: .linux-base
   stage: build
   script:
@@ -33,6 +33,19 @@ build-linux:
       - qsim_test
     expire_in: 1 hour
 
+build-linux-arm64:
+  stage: build
+  image: ubuntu:22.04
+  tags:
+    - docker
+  before_script:
+    - apt-get update
+    - apt-get install -y docker.io qemu-user-static
+  script:
+    - docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    - docker buildx build --platform linux/arm64 -f docker/debian/release/Dockerfile --load -t moonlab-arm64:latest .
+  allow_failure: true
+
 # =============================================================================
 # Test jobs
 # =============================================================================
@@ -40,7 +53,7 @@ build-linux:
 test-unit:
   extends: .linux-base
   stage: test
-  needs: [build-linux]
+  needs: [build-linux-x86]
   script:
     - LD_LIBRARY_PATH=. ./tests/unit/test_memory_align
     - LD_LIBRARY_PATH=. ./tests/unit/test_simd_dispatch
@@ -52,6 +65,10 @@ test-unit:
 test-integration:
   extends: .linux-base
   stage: test
-  needs: [build-linux]
+  needs: [build-linux-x86]
   script:
     - LD_LIBRARY_PATH=. ./qsim_test
+    - LD_LIBRARY_PATH=. ./tests/health_tests_test
+    - LD_LIBRARY_PATH=. ./tests/gate_test
+    - LD_LIBRARY_PATH=. ./tests/correlation_test
+    - LD_LIBRARY_PATH=. ./tests/bell_test_demo || true
