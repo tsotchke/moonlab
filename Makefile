@@ -8,7 +8,7 @@ CXX = clang++
 # -march=native: Use all CPU features
 # -ffast-math: Fast FP math (fixed gate code to handle this)
 # -funroll-loops: Loop unrolling
-CFLAGS = -Wall -Wextra -Ofast -march=native -ffast-math -funroll-loops -fPIC -I.
+CFLAGS = -Wall -Wextra -Ofast -march=native -ffast-math -funroll-loops -fPIC -mrdseed -I.
 CFLAGS_METAL = -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops -fPIC -I.
 
 # M2 ULTRA PARALLELIZATION - Phase 1: OpenMP 24-Core Support
