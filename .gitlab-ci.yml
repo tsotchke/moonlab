@@ -1,0 +1,57 @@
+stages:
+  - build
+  - test
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+# =============================================================================
+# Hidden job templates
+# =============================================================================
+
+.linux-base:
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update
+    - apt-get install -y build-essential libomp-dev libopenblas-dev liblapacke-dev
+
+# =============================================================================
+# Build jobs
+# =============================================================================
+
+build-linux:
+  extends: .linux-base
+  stage: build
+  script:
+    - make clean && make
+    - make tests unit_tests
+  artifacts:
+    paths:
+      - lib/
+      - obj/
+      - tests/
+      - qsim_test
+    expire_in: 1 hour
+
+# =============================================================================
+# Test jobs
+# =============================================================================
+
+test-unit:
+  extends: .linux-base
+  stage: test
+  needs: [build-linux]
+  script:
+    - LD_LIBRARY_PATH=. ./tests/unit/test_memory_align
+    - LD_LIBRARY_PATH=. ./tests/unit/test_simd_dispatch
+    - LD_LIBRARY_PATH=. ./tests/unit/test_stride_gates
+    - LD_LIBRARY_PATH=. ./tests/unit/test_quantum_state
+    - LD_LIBRARY_PATH=. ./tests/unit/test_quantum_gates
+    - LD_LIBRARY_PATH=. ./tests/unit/test_tensor_network
+
+test-integration:
+  extends: .linux-base
+  stage: test
+  needs: [build-linux]
+  script:
+    - LD_LIBRARY_PATH=. ./qsim_test
