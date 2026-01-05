@@ -154,8 +154,10 @@ int rndr_available(void) {
             return rndr_detection_result;
         }
 
-        // Tier 3: Runtime probe with SIGILL handler (catches VMs without RNDR)
-        rndr_detection_result = rndr_probe_runtime();
+        // Tier 3: Sysctl failed - assume RNDR not available
+        // Don't use runtime probe - it can cause issues in VMs due to signal handling
+        // /dev/random is excellent on macOS (hardware-backed) so this is fine
+        rndr_detection_result = 0;
         return rndr_detection_result;
 
     #else
@@ -472,27 +474,13 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
     ctx->caps.has_rdrand = rdrand_available();
     ctx->caps.has_rdseed = rdseed_available();
     
-    // ARM entropy support: DISABLED by default for compatibility
-    // The RNDR system register encoding is not stable across all macOS versions
-    // and Apple Silicon variants, causing illegal instruction faults.
-    //
-    // PRODUCTION RECOMMENDATION: Use /dev/random on ARM - it's:
-    // - Hardware-backed (Apple's TRNG feeds kernel entropy pool)
-    // - Guaranteed available
-    // - No illegal instruction risk
-    // - Excellent entropy quality (8.0 bits/byte)
-    //
-    // If you need RNDR specifically:
-    // 1. Test on your exact macOS version and chip (M1/M2/M3)
-    // 2. Add signal handler for SIGILL to catch illegal instruction
-    // 3. Enable conditionally based on successful runtime test
-    //
-    // For now, /dev/random provides excellent entropy on Apple Silicon
-    #if 0 && defined(__aarch64__)
+    // ARM RNDR support via sysctl detection (safe for VMs)
+    // Uses sysctl to check hw.optional.arm.FEAT_RNG - no risky runtime probing
+    // On VMs where sysctl fails, falls back to /dev/random (also excellent)
+    #if defined(__aarch64__)
     if (rndr_available()) {
-        // Code intentionally disabled - see comment above
-        ctx->caps.has_rdrand = 1;
-        ctx->caps.has_rdseed = 1;
+        ctx->caps.has_rdrand = 1;  // RNDR maps to RDRAND API
+        ctx->caps.has_rdseed = 1;  // RNDRRS maps to RDSEED API
     }
     #endif
     
