@@ -214,11 +214,14 @@ static int extract_quantum_entropy(
         measurements_since_evolution++;
         
         // Extract bytes from measurement
-        size_t bytes_to_copy = sizeof(measurement);
+        // Only copy bytes that contain actual random data
+        // With num_qubits bits of entropy, we have (num_qubits + 7) / 8 useful bytes
+        size_t bytes_per_measurement = (ctx->config.num_qubits + 7) / 8;
+        size_t bytes_to_copy = bytes_per_measurement;
         if (bytes_to_copy > size - bytes_generated) {
             bytes_to_copy = size - bytes_generated;
         }
-        
+
         memcpy(buffer + bytes_generated, &measurement, bytes_to_copy);
         bytes_generated += bytes_to_copy;
     }
@@ -283,17 +286,18 @@ static int extract_grover_entropy(
         ctx->stats.quantum_measurements += ctx->config.num_qubits;
         
         measurements_extracted++;
-        
-        // Extract bytes
-        size_t bytes_to_copy = sizeof(measurement);
+
+        // Extract bytes - only copy bytes that contain actual random data
+        size_t bytes_per_measurement = (ctx->config.num_qubits + 7) / 8;
+        size_t bytes_to_copy = bytes_per_measurement;
         if (bytes_to_copy > size - bytes_generated) {
             bytes_to_copy = size - bytes_generated;
         }
-        
+
         memcpy(buffer + bytes_generated, &measurement, bytes_to_copy);
         bytes_generated += bytes_to_copy;
     }
-    
+
     return 0;
 }
 
