@@ -9,6 +9,12 @@ import type { MoonlabModule } from './memory';
 // Singleton module instance
 let modulePromise: Promise<MoonlabModule> | null = null;
 let moduleInstance: MoonlabModule | null = null;
+const globalScope =
+  typeof globalThis !== 'undefined'
+    ? (globalThis as Record<string, unknown>)
+    : typeof window !== 'undefined'
+      ? ((window as unknown as Record<string, unknown>))
+      : {};
 
 /**
  * Load options for the WASM module
@@ -37,15 +43,25 @@ export interface LoadOptions {
  * Get the WASM module, loading it if necessary
  */
 export async function getModule(options?: LoadOptions): Promise<MoonlabModule> {
+  if (globalScope.__moonlabModuleInstance && typeof globalScope.__moonlabModuleInstance === 'object') {
+    return globalScope.__moonlabModuleInstance as MoonlabModule;
+  }
+
   if (moduleInstance) {
     return moduleInstance;
   }
 
+  if (globalScope.__moonlabModulePromise instanceof Promise) {
+    modulePromise = globalScope.__moonlabModulePromise as Promise<MoonlabModule>;
+  }
+
   if (!modulePromise) {
     modulePromise = loadModule(options);
+    globalScope.__moonlabModulePromise = modulePromise;
   }
 
   moduleInstance = await modulePromise;
+  globalScope.__moonlabModuleInstance = moduleInstance;
   return moduleInstance;
 }
 
@@ -62,6 +78,8 @@ export function isLoaded(): boolean {
 export function resetModule(): void {
   moduleInstance = null;
   modulePromise = null;
+  delete globalScope.__moonlabModuleInstance;
+  delete globalScope.__moonlabModulePromise;
 }
 
 /**
@@ -111,6 +129,16 @@ async function loadNodeModule(_options?: LoadOptions): Promise<MoonlabModule> {
  */
 async function loadBrowserModule(options?: LoadOptions): Promise<MoonlabModule> {
   try {
+    // If a previous instance exists (e.g., after HMR), reuse it to avoid double init
+    if (globalScope.__moonlabModuleInstance && typeof globalScope.__moonlabModuleInstance === 'object') {
+      return globalScope.__moonlabModuleInstance as MoonlabModule;
+    }
+    if (globalScope.__moonlabModulePromise instanceof Promise) {
+      const cached = await globalScope.__moonlabModulePromise;
+      globalScope.__moonlabModuleInstance = cached;
+      return cached as MoonlabModule;
+    }
+
     let MoonlabModuleFactory: (config?: unknown) => Promise<unknown>;
 
     // Check if already loaded globally (e.g., via script tag)
@@ -124,7 +152,13 @@ async function loadBrowserModule(options?: LoadOptions): Promise<MoonlabModule> 
       try {
         // @ts-expect-error - Dynamic import of WASM glue code
         const wasmModule = await import('../dist/moonlab.js');
-        MoonlabModuleFactory = wasmModule.default || wasmModule;
+        MoonlabModuleFactory =
+          wasmModule.default ||
+          (typeof wasmModule === 'function' ? wasmModule : undefined) ||
+          // Some builds expose a global instead of an ES export
+          ((typeof window !== 'undefined'
+            ? (window as unknown as Record<string, unknown>).MoonlabModule
+            : undefined) as typeof MoonlabModuleFactory | undefined);
       } catch {
         // Fallback to script loading from common locations
         const baseUrl = getBaseUrl();
@@ -152,8 +186,17 @@ async function loadBrowserModule(options?: LoadOptions): Promise<MoonlabModule> 
       return scriptDirectory + file;
     };
 
-    const module = await MoonlabModuleFactory(moduleConfig);
+    if (typeof MoonlabModuleFactory !== 'function') {
+      throw new Error('MoonlabModuleFactory is not available');
+    }
+
+    const loadingPromise = MoonlabModuleFactory(moduleConfig) as Promise<MoonlabModule>;
+    globalScope.__moonlabModulePromise = loadingPromise;
+
+    const module = await loadingPromise;
     await (module as MoonlabModule).ready;
+
+    globalScope.__moonlabModuleInstance = module;
 
     return module as MoonlabModule;
   } catch (error) {

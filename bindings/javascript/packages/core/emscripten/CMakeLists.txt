@@ -12,6 +12,7 @@ set(QUANTUM_SOURCES
     ${QSIM_ROOT}/src/quantum/gates.c
     ${QSIM_ROOT}/src/quantum/measurement.c
     ${QSIM_ROOT}/src/quantum/entanglement.c
+    ${QSIM_ROOT}/src/quantum/noise.c
 )
 
 # Source files - Algorithms
@@ -27,6 +28,12 @@ set(ALGORITHM_SOURCES
 set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/entropy.c
     ${QSIM_ROOT}/src/utils/matrix_math.c
+    ${QSIM_ROOT}/src/utils/config.c
+)
+
+# Source files - Optimization (SIMD operations with scalar fallbacks for WASM)
+set(OPTIMIZATION_SOURCES
+    ${QSIM_ROOT}/src/optimization/simd_ops.c
 )
 
 # Combine all sources
@@ -34,6 +41,7 @@ set(ALL_SOURCES
     ${QUANTUM_SOURCES}
     ${ALGORITHM_SOURCES}
     ${UTILS_SOURCES}
+    ${OPTIMIZATION_SOURCES}
 )
 
 # Create the WASM executable
@@ -45,6 +53,7 @@ target_include_directories(moonlab PRIVATE
     ${QSIM_ROOT}/src/quantum
     ${QSIM_ROOT}/src/algorithms
     ${QSIM_ROOT}/src/utils
+    ${QSIM_ROOT}/src/optimization
 )
 
 # Compiler flags
@@ -55,11 +64,20 @@ target_compile_options(moonlab PRIVATE
     -Wno-unused-function
 )
 
-# Read exported functions from file
+# Read exported functions from file and format for Emscripten
+# Emscripten expects EXPORTED_FUNCTIONS='["_func1","_func2",...]'
 file(READ "${CMAKE_SOURCE_DIR}/exports.txt" EXPORTED_FUNCTIONS)
-string(REGEX REPLACE "\n" "," EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
-string(REGEX REPLACE ",$" "" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
-string(REGEX REPLACE "#[^\n]*," "" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+# Remove comment lines (lines starting with #)
+string(REGEX REPLACE "#[^\n]*\n" "" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+# Remove empty lines and normalize whitespace
+string(REGEX REPLACE "[ \t]*\n[ \t]*" "\n" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+string(REGEX REPLACE "\n+" "\n" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+# Trim leading/trailing whitespace and newlines
+string(STRIP "${EXPORTED_FUNCTIONS}" EXPORTED_FUNCTIONS)
+# Convert newlines to ","  (with quotes for JSON array)
+string(REGEX REPLACE "\n" "\",\"" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+# Add quotes around the whole thing
+set(EXPORTED_FUNCTIONS "\"${EXPORTED_FUNCTIONS}\"")
 
 # Emscripten link flags
 set_target_properties(moonlab PROPERTIES

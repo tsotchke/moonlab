@@ -2,18 +2,11 @@
  * Moonlab WASM Post-initialization Script
  *
  * This runs after the WASM module is loaded.
+ * NOTE: onRuntimeInitialized is set up in pre.js, NOT here.
+ * Emscripten marks it as "consumed" once called, so any assignment
+ * here would fail with "Attempt to set Module.onRuntimeInitialized
+ * after it has already been processed."
  */
-
-// Call ready callback
-if (Module['onRuntimeInitialized']) {
-  var originalOnInit = Module['onRuntimeInitialized'];
-  Module['onRuntimeInitialized'] = function() {
-    originalOnInit();
-    Module['_onReady']();
-  };
-} else {
-  Module['onRuntimeInitialized'] = Module['_onReady'];
-}
 
 /**
  * Generate cryptographically secure random number [0, 1)
