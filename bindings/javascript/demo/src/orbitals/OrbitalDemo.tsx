@@ -30,9 +30,9 @@ const ATOMS: Atom[] = [
 ];
 
 const L_LABELS = ['s', 'p', 'd', 'f', 'g'];
-const GRID_SIZE = 8; // 8x8x8 grid -> 512 lattice points
+const GRID_SIZE = 16; // 16x16x16 grid -> 4096 lattice points
 const NUM_STATES = GRID_SIZE * GRID_SIZE * GRID_SIZE;
-const NUM_QUBITS = Math.round(Math.log2(NUM_STATES)); // 9 qubits
+const NUM_QUBITS = Math.ceil(Math.log2(NUM_STATES)); // 12 qubits
 
 interface CloudParams {
   atom: Atom;
@@ -172,7 +172,8 @@ const buildProbabilityGrid = async (params: CloudParams): Promise<ProbabilityGri
 const samplePoints = (
   probabilities: number[],
   positions: { x: number; y: number; z: number }[],
-  count: number
+  count: number,
+  extent: number
 ): Float32Array => {
   const cdf = new Float64Array(probabilities.length);
   let total = 0;
@@ -191,6 +192,17 @@ const samplePoints = (
     return points;
   }
 
+  // Calculate jitter amount based on grid spacing
+  // Use Gaussian jitter with stddev = spacing to smooth grid artifacts
+  const spacing = (extent * 2) / (GRID_SIZE - 1);
+
+  // Box-Muller transform for Gaussian random numbers
+  const gaussianRandom = () => {
+    const u1 = Math.random();
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  };
+
   for (let i = 0; i < count; i++) {
     const r = Math.random() * total;
     let low = 0;
@@ -205,9 +217,10 @@ const samplePoints = (
     }
 
     const pos = positions[low];
-    points[i * 3] = pos.x;
-    points[i * 3 + 1] = pos.y;
-    points[i * 3 + 2] = pos.z;
+    // Add Gaussian jitter to create smooth distribution around grid points
+    points[i * 3] = pos.x + gaussianRandom() * spacing;
+    points[i * 3 + 1] = pos.y + gaussianRandom() * spacing;
+    points[i * 3 + 2] = pos.z + gaussianRandom() * spacing;
   }
 
   return points;
@@ -391,7 +404,7 @@ const OrbitalDemo: React.FC = () => {
         pointCount,
         extent,
       });
-      const sampled = samplePoints(grid.probabilities, grid.positions, pointCount);
+      const sampled = samplePoints(grid.probabilities, grid.positions, pointCount, extent);
       setPointsBuffer(sampled);
       setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
     } catch (err) {
@@ -478,8 +491,8 @@ const OrbitalDemo: React.FC = () => {
             <input
               type="range"
               min={4000}
-              max={50000}
-              step={1000}
+              max={1000000}
+              step={5000}
               value={pointCount}
               onChange={(e) => setPointCount(Number(e.target.value))}
             />

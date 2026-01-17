@@ -148,23 +148,10 @@ async function loadBrowserModule(options?: LoadOptions): Promise<MoonlabModule> 
       // Custom path provided - use dynamic script loading
       MoonlabModuleFactory = await loadScript(options.jsPath);
     } else {
-      // Try ES module import (works with bundlers like Vite/webpack)
-      try {
-        // @ts-expect-error - Dynamic import of WASM glue code
-        const wasmModule = await import('../dist/moonlab.js');
-        MoonlabModuleFactory =
-          wasmModule.default ||
-          (typeof wasmModule === 'function' ? wasmModule : undefined) ||
-          // Some builds expose a global instead of an ES export
-          ((typeof window !== 'undefined'
-            ? (window as unknown as Record<string, unknown>).MoonlabModule
-            : undefined) as typeof MoonlabModuleFactory | undefined);
-      } catch {
-        // Fallback to script loading from common locations
-        const baseUrl = getBaseUrl();
-        const jsUrl = `${baseUrl}/moonlab.js`;
-        MoonlabModuleFactory = await loadScript(jsUrl);
-      }
+      // In browser, use script loading from public path (avoids Vite transform issues)
+      const baseUrl = getBaseUrl();
+      const jsUrl = `${baseUrl}/moonlab.js`;
+      MoonlabModuleFactory = await loadScript(jsUrl);
     }
 
     // Initialize the module with configuration

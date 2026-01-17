@@ -17,9 +17,12 @@ const STATE_STRUCT_SIZE = 256;
 
 /**
  * Offset of amplitudes pointer in quantum_state_t
- * This depends on the C struct layout
+ * WASM32 struct layout:
+ *   size_t num_qubits     @ offset 0  (4 bytes)
+ *   size_t state_dim      @ offset 4  (4 bytes)
+ *   complex_t *amplitudes @ offset 8  (4 bytes pointer)
  */
-const AMPLITUDES_OFFSET = 24;
+const AMPLITUDES_OFFSET = 8;
 
 /**
  * Offset of num_qubits in quantum_state_t
