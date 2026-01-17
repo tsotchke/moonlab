@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { QuantumState, preload, type Complex } from '@moonlab/quantum-core';
+import { ElementPicker } from './ElementPicker';
+import { ELEMENTS, type Atom } from './elements';
 import './Orbitals.css';
 
 // Preload Moonlab once per module load (avoids React strict-mode double effects)
@@ -12,136 +14,6 @@ const orbitalPreload =
         throw err;
       })
     : Promise.resolve();
-
-type Atom = { symbol: string; name: string; Z: number };
-
-const ATOMS: Atom[] = [
-  // Period 1
-  { symbol: 'H', name: 'Hydrogen', Z: 1 },
-  { symbol: 'He', name: 'Helium', Z: 2 },
-  // Period 2
-  { symbol: 'Li', name: 'Lithium', Z: 3 },
-  { symbol: 'Be', name: 'Beryllium', Z: 4 },
-  { symbol: 'B', name: 'Boron', Z: 5 },
-  { symbol: 'C', name: 'Carbon', Z: 6 },
-  { symbol: 'N', name: 'Nitrogen', Z: 7 },
-  { symbol: 'O', name: 'Oxygen', Z: 8 },
-  { symbol: 'F', name: 'Fluorine', Z: 9 },
-  { symbol: 'Ne', name: 'Neon', Z: 10 },
-  // Period 3
-  { symbol: 'Na', name: 'Sodium', Z: 11 },
-  { symbol: 'Mg', name: 'Magnesium', Z: 12 },
-  { symbol: 'Al', name: 'Aluminum', Z: 13 },
-  { symbol: 'Si', name: 'Silicon', Z: 14 },
-  { symbol: 'P', name: 'Phosphorus', Z: 15 },
-  { symbol: 'S', name: 'Sulfur', Z: 16 },
-  { symbol: 'Cl', name: 'Chlorine', Z: 17 },
-  { symbol: 'Ar', name: 'Argon', Z: 18 },
-  // Period 4
-  { symbol: 'K', name: 'Potassium', Z: 19 },
-  { symbol: 'Ca', name: 'Calcium', Z: 20 },
-  { symbol: 'Sc', name: 'Scandium', Z: 21 },
-  { symbol: 'Ti', name: 'Titanium', Z: 22 },
-  { symbol: 'V', name: 'Vanadium', Z: 23 },
-  { symbol: 'Cr', name: 'Chromium', Z: 24 },
-  { symbol: 'Mn', name: 'Manganese', Z: 25 },
-  { symbol: 'Fe', name: 'Iron', Z: 26 },
-  { symbol: 'Co', name: 'Cobalt', Z: 27 },
-  { symbol: 'Ni', name: 'Nickel', Z: 28 },
-  { symbol: 'Cu', name: 'Copper', Z: 29 },
-  { symbol: 'Zn', name: 'Zinc', Z: 30 },
-  { symbol: 'Ga', name: 'Gallium', Z: 31 },
-  { symbol: 'Ge', name: 'Germanium', Z: 32 },
-  { symbol: 'As', name: 'Arsenic', Z: 33 },
-  { symbol: 'Se', name: 'Selenium', Z: 34 },
-  { symbol: 'Br', name: 'Bromine', Z: 35 },
-  { symbol: 'Kr', name: 'Krypton', Z: 36 },
-  // Period 5
-  { symbol: 'Rb', name: 'Rubidium', Z: 37 },
-  { symbol: 'Sr', name: 'Strontium', Z: 38 },
-  { symbol: 'Y', name: 'Yttrium', Z: 39 },
-  { symbol: 'Zr', name: 'Zirconium', Z: 40 },
-  { symbol: 'Nb', name: 'Niobium', Z: 41 },
-  { symbol: 'Mo', name: 'Molybdenum', Z: 42 },
-  { symbol: 'Tc', name: 'Technetium', Z: 43 },
-  { symbol: 'Ru', name: 'Ruthenium', Z: 44 },
-  { symbol: 'Rh', name: 'Rhodium', Z: 45 },
-  { symbol: 'Pd', name: 'Palladium', Z: 46 },
-  { symbol: 'Ag', name: 'Silver', Z: 47 },
-  { symbol: 'Cd', name: 'Cadmium', Z: 48 },
-  { symbol: 'In', name: 'Indium', Z: 49 },
-  { symbol: 'Sn', name: 'Tin', Z: 50 },
-  { symbol: 'Sb', name: 'Antimony', Z: 51 },
-  { symbol: 'Te', name: 'Tellurium', Z: 52 },
-  { symbol: 'I', name: 'Iodine', Z: 53 },
-  { symbol: 'Xe', name: 'Xenon', Z: 54 },
-  // Period 6
-  { symbol: 'Cs', name: 'Cesium', Z: 55 },
-  { symbol: 'Ba', name: 'Barium', Z: 56 },
-  { symbol: 'La', name: 'Lanthanum', Z: 57 },
-  { symbol: 'Ce', name: 'Cerium', Z: 58 },
-  { symbol: 'Pr', name: 'Praseodymium', Z: 59 },
-  { symbol: 'Nd', name: 'Neodymium', Z: 60 },
-  { symbol: 'Pm', name: 'Promethium', Z: 61 },
-  { symbol: 'Sm', name: 'Samarium', Z: 62 },
-  { symbol: 'Eu', name: 'Europium', Z: 63 },
-  { symbol: 'Gd', name: 'Gadolinium', Z: 64 },
-  { symbol: 'Tb', name: 'Terbium', Z: 65 },
-  { symbol: 'Dy', name: 'Dysprosium', Z: 66 },
-  { symbol: 'Ho', name: 'Holmium', Z: 67 },
-  { symbol: 'Er', name: 'Erbium', Z: 68 },
-  { symbol: 'Tm', name: 'Thulium', Z: 69 },
-  { symbol: 'Yb', name: 'Ytterbium', Z: 70 },
-  { symbol: 'Lu', name: 'Lutetium', Z: 71 },
-  { symbol: 'Hf', name: 'Hafnium', Z: 72 },
-  { symbol: 'Ta', name: 'Tantalum', Z: 73 },
-  { symbol: 'W', name: 'Tungsten', Z: 74 },
-  { symbol: 'Re', name: 'Rhenium', Z: 75 },
-  { symbol: 'Os', name: 'Osmium', Z: 76 },
-  { symbol: 'Ir', name: 'Iridium', Z: 77 },
-  { symbol: 'Pt', name: 'Platinum', Z: 78 },
-  { symbol: 'Au', name: 'Gold', Z: 79 },
-  { symbol: 'Hg', name: 'Mercury', Z: 80 },
-  { symbol: 'Tl', name: 'Thallium', Z: 81 },
-  { symbol: 'Pb', name: 'Lead', Z: 82 },
-  { symbol: 'Bi', name: 'Bismuth', Z: 83 },
-  { symbol: 'Po', name: 'Polonium', Z: 84 },
-  { symbol: 'At', name: 'Astatine', Z: 85 },
-  { symbol: 'Rn', name: 'Radon', Z: 86 },
-  // Period 7
-  { symbol: 'Fr', name: 'Francium', Z: 87 },
-  { symbol: 'Ra', name: 'Radium', Z: 88 },
-  { symbol: 'Ac', name: 'Actinium', Z: 89 },
-  { symbol: 'Th', name: 'Thorium', Z: 90 },
-  { symbol: 'Pa', name: 'Protactinium', Z: 91 },
-  { symbol: 'U', name: 'Uranium', Z: 92 },
-  { symbol: 'Np', name: 'Neptunium', Z: 93 },
-  { symbol: 'Pu', name: 'Plutonium', Z: 94 },
-  { symbol: 'Am', name: 'Americium', Z: 95 },
-  { symbol: 'Cm', name: 'Curium', Z: 96 },
-  { symbol: 'Bk', name: 'Berkelium', Z: 97 },
-  { symbol: 'Cf', name: 'Californium', Z: 98 },
-  { symbol: 'Es', name: 'Einsteinium', Z: 99 },
-  { symbol: 'Fm', name: 'Fermium', Z: 100 },
-  { symbol: 'Md', name: 'Mendelevium', Z: 101 },
-  { symbol: 'No', name: 'Nobelium', Z: 102 },
-  { symbol: 'Lr', name: 'Lawrencium', Z: 103 },
-  { symbol: 'Rf', name: 'Rutherfordium', Z: 104 },
-  { symbol: 'Db', name: 'Dubnium', Z: 105 },
-  { symbol: 'Sg', name: 'Seaborgium', Z: 106 },
-  { symbol: 'Bh', name: 'Bohrium', Z: 107 },
-  { symbol: 'Hs', name: 'Hassium', Z: 108 },
-  { symbol: 'Mt', name: 'Meitnerium', Z: 109 },
-  { symbol: 'Ds', name: 'Darmstadtium', Z: 110 },
-  { symbol: 'Rg', name: 'Roentgenium', Z: 111 },
-  { symbol: 'Cn', name: 'Copernicium', Z: 112 },
-  { symbol: 'Nh', name: 'Nihonium', Z: 113 },
-  { symbol: 'Fl', name: 'Flerovium', Z: 114 },
-  { symbol: 'Mc', name: 'Moscovium', Z: 115 },
-  { symbol: 'Lv', name: 'Livermorium', Z: 116 },
-  { symbol: 'Ts', name: 'Tennessine', Z: 117 },
-  { symbol: 'Og', name: 'Oganesson', Z: 118 },
-];
 
 const L_LABELS = ['s', 'p', 'd', 'f', 'g'];
 const GRID_SIZE = 16; // 16x16x16 grid -> 4096 lattice points
@@ -354,7 +226,7 @@ const OrbitalDemo: React.FC = () => {
   const materialRef = useRef<THREE.PointsMaterial>();
   const controlsRef = useRef<OrbitControls>();
   const rotatingRef = useRef<boolean>(true);
-  const [atom, setAtom] = useState<Atom>(ATOMS[6]); // Nitrogen default
+  const [atom, setAtom] = useState<Atom>(() => ELEMENTS.find((e) => e.symbol === 'N') || ELEMENTS[0]);
   const [n, setN] = useState<number>(4);
   const [l, setL] = useState<number>(2);
   const [m, setM] = useState<number>(0);
@@ -367,6 +239,7 @@ const OrbitalDemo: React.FC = () => {
   const [pointsBuffer, setPointsBuffer] = useState<Float32Array | null>(null);
   const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(4, 7));
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
@@ -556,22 +429,19 @@ const OrbitalDemo: React.FC = () => {
 
         <div className="controls-body">
           <div className="control-grid">
-            <label className="control">
+            <div className="control">
               <span>Select Atom</span>
-              <select
-                value={atom.symbol}
-                onChange={(e) => {
-                  const next = ATOMS.find((a) => a.symbol === e.target.value);
-                  if (next) setAtom(next);
-                }}
-              >
-                {ATOMS.map((a) => (
-                  <option key={a.symbol} value={a.symbol}>
-                    {a.name} (Z = {a.Z})
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="atom-row">
+                <div className="atom-chip" title={atom.name}>
+                  <span className="atom-symbol">{atom.symbol}</span>
+                  <span className="atom-name">{atom.name}</span>
+                  <span className="atom-z">Z = {atom.Z}</span>
+                </div>
+                <button className="btn btn-secondary" type="button" onClick={() => setIsPickerOpen(true)}>
+                  Choose Element
+                </button>
+              </div>
+            </div>
 
             <label className="control">
               <span>Principal Quantum Number (n)</span>
@@ -699,6 +569,14 @@ const OrbitalDemo: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ElementPicker
+        elements={ELEMENTS}
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onSelect={(el) => setAtom(el)}
+        selected={atom}
+      />
     </div>
   );
 };
