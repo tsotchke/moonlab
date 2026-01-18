@@ -16,9 +16,14 @@ const orbitalPreload =
     : Promise.resolve();
 
 const L_LABELS = ['s', 'p', 'd', 'f', 'g'];
-const GRID_SIZE = 16; // 16x16x16 grid -> 4096 lattice points
-const NUM_STATES = GRID_SIZE * GRID_SIZE * GRID_SIZE;
-const NUM_QUBITS = Math.ceil(Math.log2(NUM_STATES)); // 12 qubits
+const MAX_GRID = 32;
+const MIN_GRID = 4;
+const BASE_GRID = 32;
+const BASE_STATES = BASE_GRID * BASE_GRID * BASE_GRID;
+const DEFAULT_QUBITS = Math.ceil(Math.log2(BASE_STATES)); // 15 qubits
+const MAX_QUBITS_UI = 32;
+const SAFE_QUBITS = 24;
+const MAX_QUBITS_RUNTIME = 32; // cap at 2^32 amplitudes (use with care)
 
 interface CloudParams {
   atom: Atom;
@@ -27,6 +32,7 @@ interface CloudParams {
   m: number;
   pointCount: number;
   extent: number;
+  gridSize: number;
 }
 
 interface ProbabilityGrid {
@@ -111,17 +117,18 @@ const radialComponent = (n: number, l: number, r: number, Z: number): number => 
 
 const buildProbabilityGrid = async (params: CloudParams): Promise<ProbabilityGrid> => {
   const start = performance.now();
-  const positions: { x: number; y: number; z: number }[] = new Array(NUM_STATES);
-  const amplitudes: Complex[] = new Array(NUM_STATES);
-  const probabilities: number[] = new Array(NUM_STATES);
+  const stateCount = params.gridSize * params.gridSize * params.gridSize;
+  const positions: { x: number; y: number; z: number }[] = new Array(stateCount);
+  const amplitudes: Complex[] = new Array(stateCount);
+  const probabilities: number[] = new Array(stateCount);
 
-  const spacing = (params.extent * 2) / (GRID_SIZE - 1);
+  const spacing = (params.extent * 2) / (params.gridSize - 1);
 
   let totalProb = 0;
-  for (let idx = 0; idx < NUM_STATES; idx++) {
-    const z = Math.floor(idx / (GRID_SIZE * GRID_SIZE));
-    const y = Math.floor((idx - z * GRID_SIZE * GRID_SIZE) / GRID_SIZE);
-    const x = idx % GRID_SIZE;
+  for (let idx = 0; idx < stateCount; idx++) {
+    const z = Math.floor(idx / (params.gridSize * params.gridSize));
+    const y = Math.floor((idx - z * params.gridSize * params.gridSize) / params.gridSize);
+    const x = idx % params.gridSize;
 
     const posX = -params.extent + x * spacing;
     const posY = -params.extent + y * spacing;
@@ -141,25 +148,49 @@ const buildProbabilityGrid = async (params: CloudParams): Promise<ProbabilityGri
   }
 
   const norm = totalProb > 0 ? Math.sqrt(totalProb) : 1;
-  for (let i = 0; i < NUM_STATES; i++) {
+  for (let i = 0; i < stateCount; i++) {
     const amp = probabilities[i] > 0 ? Math.sqrt(probabilities[i]) / norm : 0;
     amplitudes[i] = { real: amp, imag: 0 };
   }
 
-  const state = await QuantumState.create({ numQubits: NUM_QUBITS });
-  state.setAmplitudes(amplitudes);
-  const probs = Array.from(state.getProbabilities());
-  state.dispose();
-
+  // Default normalized probabilities for base lattice; actual dimension handled in regenerate
   const elapsedMs = performance.now() - start;
-  return { positions, probabilities: probs, elapsedMs };
+  return { positions, probabilities, elapsedMs };
+};
+
+const alignToDimension = (
+  probabilities: number[],
+  positions: { x: number; y: number; z: number }[],
+  targetDim: number
+): { probs: number[]; pos: { x: number; y: number; z: number }[] } => {
+  const baseLen = probabilities.length;
+  if (targetDim === baseLen) return { probs: probabilities, pos: positions };
+
+  if (targetDim < baseLen) {
+    const slicedProbs = probabilities.slice(0, targetDim);
+    const slicedPos = positions.slice(0, targetDim);
+    const total = slicedProbs.reduce((a, b) => a + b, 0);
+    const norm = total > 0 ? total : 1;
+    return { probs: slicedProbs.map((p) => p / norm), pos: slicedPos };
+  }
+
+  // targetDim > baseLen: pad with zeros at origin
+  const paddedProbs = probabilities.slice();
+  const paddedPos = positions.slice();
+  const padCount = targetDim - baseLen;
+  for (let i = 0; i < padCount; i++) {
+    paddedProbs.push(0);
+    paddedPos.push({ x: 0, y: 0, z: 0 });
+  }
+  return { probs: paddedProbs, pos: paddedPos };
 };
 
 const samplePoints = (
   probabilities: number[],
   positions: { x: number; y: number; z: number }[],
   count: number,
-  extent: number
+  extent: number,
+  gridSize: number
 ): Float32Array => {
   const cdf = new Float64Array(probabilities.length);
   let total = 0;
@@ -180,7 +211,7 @@ const samplePoints = (
 
   // Calculate jitter amount based on grid spacing
   // Use Gaussian jitter with stddev = spacing to smooth grid artifacts
-  const spacing = (extent * 2) / (GRID_SIZE - 1);
+  const spacing = (extent * 2) / (gridSize - 1);
 
   // Box-Muller transform for Gaussian random numbers
   const gaussianRandom = () => {
@@ -225,11 +256,17 @@ const OrbitalDemo: React.FC = () => {
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const materialRef = useRef<THREE.PointsMaterial>();
   const controlsRef = useRef<OrbitControls>();
+  const gridRef = useRef<THREE.GridHelper | null>(null);
+  const axesRef = useRef<THREE.AxesHelper | null>(null);
   const rotatingRef = useRef<boolean>(true);
   const [atom, setAtom] = useState<Atom>(() => ELEMENTS.find((e) => e.symbol === 'N') || ELEMENTS[0]);
   const [n, setN] = useState<number>(4);
   const [l, setL] = useState<number>(2);
   const [m, setM] = useState<number>(0);
+  const [qubits, setQubits] = useState<number>(
+    Math.max(4, Math.min(MAX_QUBITS_UI, DEFAULT_QUBITS))
+  );
+  const [allowHighQubits, setAllowHighQubits] = useState<boolean>(false);
   const [pointCount, setPointCount] = useState<number>(30000);
   const [pointSize, setPointSize] = useState<number>(0.05);
   const [opacity, setOpacity] = useState<number>(0.5);
@@ -282,13 +319,21 @@ const OrbitalDemo: React.FC = () => {
     );
     scene.add(nucleus);
 
-    const grid = new THREE.GridHelper(10, 20, '#0b3b5a', '#0b3b5a');
-    grid.position.y = -2.5;
-    scene.add(grid);
+    const initialExtent = extentForAtom(n, atom.Z);
+    const initialDim = Math.pow(2, Math.min(Math.max(8, DEFAULT_QUBITS), MAX_QUBITS_RUNTIME));
+    const initialGridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(initialDim))));
+    const initialSpacing = (initialExtent * 2) / (initialGridSide - 1);
+    const initialSize = initialSpacing * (initialGridSide - 1);
 
-    const axes = new THREE.AxesHelper(4);
-    axes.position.set(0, -2.5, 0);
+    const grid = new THREE.GridHelper(initialSize, initialGridSide - 1, '#0b3b5a', '#0b3b5a');
+    grid.position.y = -initialExtent;
+    scene.add(grid);
+    gridRef.current = grid;
+
+    const axes = new THREE.AxesHelper(initialExtent * 1.2);
+    axes.position.set(0, -initialExtent, 0);
     scene.add(axes);
+    axesRef.current = axes;
 
     const material = new THREE.PointsMaterial({
       size: pointSize,
@@ -378,33 +423,77 @@ const OrbitalDemo: React.FC = () => {
     materialRef.current.opacity = opacity;
   }, [pointsBuffer, pointSize, opacity, currentExtent]);
 
-  const regenerate = async () => {
+  const regenerate = async (targetQubits: number) => {
+    const capped = allowHighQubits ? targetQubits : Math.min(targetQubits, SAFE_QUBITS);
+    const effectiveQubits = Math.min(capped, MAX_QUBITS_RUNTIME);
     setIsGenerating(true);
     const extent = extentForAtom(n, atom.Z);
     setCurrentExtent(extent);
     try {
-      await orbitalPreload;
-      const grid = await buildProbabilityGrid({
-        atom,
-        n,
-        l,
-        m,
-        pointCount,
-        extent,
-      });
-      const sampled = samplePoints(grid.probabilities, grid.positions, pointCount, extent);
-      setPointsBuffer(sampled);
-      setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
-    } catch (err) {
-      console.error('Failed to build orbital cloud', err);
-    } finally {
+    await orbitalPreload;
+    const targetDim = Math.pow(2, effectiveQubits);
+    const gridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(targetDim))));
+    const spacing = (extent * 2) / (gridSide - 1);
+    const gridSizeWorld = spacing * (gridSide - 1);
+
+    const grid = await buildProbabilityGrid({
+      atom,
+      n,
+      l,
+      m,
+      pointCount,
+      extent,
+      gridSize: gridSide,
+    });
+    const aligned = alignToDimension(grid.probabilities, grid.positions, targetDim);
+
+    // Normalize via Moonlab state to respect measurement semantics
+    const amplitudes: Complex[] = new Array(targetDim);
+    let total = 0;
+    for (let i = 0; i < targetDim; i++) {
+      total += aligned.probs[i];
+    }
+    const norm = total > 0 ? Math.sqrt(total) : 1;
+    for (let i = 0; i < targetDim; i++) {
+      const amp = aligned.probs[i] > 0 ? Math.sqrt(aligned.probs[i]) / norm : 0;
+      amplitudes[i] = { real: amp, imag: 0 };
+    }
+
+    const state = await QuantumState.create({ numQubits: effectiveQubits });
+    state.setAmplitudes(amplitudes);
+    const probs = Array.from(state.getProbabilities());
+    state.dispose();
+
+    const sampled = samplePoints(probs, aligned.pos, pointCount, extent, gridSide);
+    setPointsBuffer(sampled);
+    setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
+
+    // Update grid helper to match current lattice
+    if (sceneRef.current) {
+      if (gridRef.current) {
+        sceneRef.current.remove(gridRef.current);
+      }
+      const newGrid = new THREE.GridHelper(gridSizeWorld, gridSide - 1, '#0b3b5a', '#0b3b5a');
+      newGrid.position.y = -extent;
+      sceneRef.current.add(newGrid);
+      gridRef.current = newGrid;
+    }
+
+    // Update axes position/size relative to extent
+    if (sceneRef.current && axesRef.current) {
+      axesRef.current.position.set(0, -extent, 0);
+      axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
+    }
+  } catch (err) {
+    console.error('Failed to build orbital cloud', err);
+  } finally {
       setIsGenerating(false);
     }
   };
 
-  useEffect(() => {
-    void regenerate();
-  }, [atom, n, l, m, pointCount]);
+useEffect(() => {
+  void regenerate(qubits);
+}, [atom, n, l, m, pointCount, qubits]);
 
   return (
     <div className="orbital-page">
@@ -457,6 +546,34 @@ const OrbitalDemo: React.FC = () => {
                 }}
               />
               <div className="control-value">n = {n}</div>
+            </label>
+
+            <label className="control">
+              <span>WASM Qubits (min 4, UI max 32)</span>
+              <input
+                type="range"
+                min={4}
+                max={allowHighQubits ? MAX_QUBITS_UI : SAFE_QUBITS}
+                value={Math.min(qubits, allowHighQubits ? MAX_QUBITS_UI : SAFE_QUBITS)}
+                onChange={(e) => setQubits(Number(e.target.value))}
+              />
+              <div className="control-value">
+                {qubits} requested • effective ≤ {MAX_QUBITS_RUNTIME} (state dim up to 2^{MAX_QUBITS_RUNTIME})
+              </div>
+            </label>
+
+            <label className="control checkbox-control">
+              <input
+                type="checkbox"
+                checked={allowHighQubits}
+                onChange={(e) => {
+                  setAllowHighQubits(e.target.checked);
+                  if (!e.target.checked && qubits > SAFE_QUBITS) {
+                    setQubits(SAFE_QUBITS);
+                  }
+                }}
+              />
+              <span>I have ≥64 GB RAM (enable 25–32 qubits)</span>
             </label>
 
             <label className="control">
@@ -553,18 +670,18 @@ const OrbitalDemo: React.FC = () => {
             </div>
           </div>
 
-          <div className="about-card">
-            <h3>About this simulation</h3>
-            <p>
-              We discretize a small 3D lattice, assign hydrogen-like orbital amplitudes with Moonlab
-              ({NUM_QUBITS} qubits, {NUM_STATES} basis states), let the WASM backend normalize the
-              distribution, and sample measurement outcomes to drive the point cloud. Three.js renders
-              the resulting |ψ|² density with orbit controls.
-            </p>
-            <ul>
-              <li>Adjust n, l, m to see shapes evolve (s, p, d, f…)</li>
-              <li>Atom choice changes nuclear charge (Z) and radial decay</li>
-              <li>Point density / size / opacity balance fidelity and performance</li>
+            <div className="about-card">
+              <h3>About this simulation</h3>
+              <p>
+                We discretize an adaptive 3D lattice (scales with qubits up to 32³), assign hydrogen-like orbital
+                amplitudes with Moonlab (up to {MAX_QUBITS_RUNTIME} qubits runtime), let the WASM backend normalize
+                the distribution, and sample measurement outcomes to drive the point cloud. Three.js renders the
+                resulting |ψ|² density with orbit controls.
+              </p>
+              <ul>
+                <li>Adjust n, l, m to see shapes evolve (s, p, d, f…)</li>
+                <li>Atom choice changes nuclear charge (Z) and radial decay</li>
+                <li>Point density / size / opacity balance fidelity and performance</li>
             </ul>
           </div>
         </div>
