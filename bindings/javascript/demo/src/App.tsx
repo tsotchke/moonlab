@@ -17,7 +17,7 @@ export const App: React.FC = () => {
             <span className="logo-text">Moonlab</span>
           </div>
           <nav className="nav">
-            <NavLink to="/" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <NavLink to="/playground" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               Playground
             </NavLink>
             <NavLink to="/examples" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -44,7 +44,8 @@ export const App: React.FC = () => {
       <main className="main">
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
-            <Route path="/" element={<Playground />} />
+            <Route path="/" element={<Orbitals />} />
+            <Route path="/playground" element={<Playground />} />
             <Route path="/examples" element={<Examples />} />
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/gallery/:id" element={<GalleryDetail />} />
