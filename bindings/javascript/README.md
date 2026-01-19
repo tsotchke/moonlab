@@ -6,6 +6,26 @@ This folder contains the JavaScript/TypeScript bindings, the WASM build, and the
 - `packages/core`: WASM build + JS bindings (`@moonlab/quantum-core`).
 - `demo`: Vite demo app (Orbital Explorer and other examples).
 
+## Prerequisites
+- Node.js 18+ (20+ recommended)
+- `pnpm` (corepack or global install)
+  - Corepack (preferred): `corepack enable`
+  - Global: `npm i -g pnpm`
+- Emscripten SDK (`emcc` on PATH) for WASM builds
+
+## Install dependencies
+From the repo root:
+```
+cd bindings/javascript
+pnpm install
+```
+
+## Run the demo
+```
+cd bindings/javascript
+pnpm --filter @moonlab/quantum-demo dev
+```
+
 ## Recent changes (Tensor Network + DMRG)
 - Tensor-network solver sources are compiled into the WASM build (DMRG/TDVP helpers, MPS ops).
 - New JS bindings are exposed in `@moonlab/quantum-core`:
@@ -59,4 +79,3 @@ pnpm --filter @moonlab/quantum-demo dev
 Notes:
 - The wasm link may emit warnings about `s_copy`/`s_cat` signature mismatches from `libf2c.a`; these are expected.
 - A small `f2c_stub.c` is included in the WASM build to satisfy the `MAIN__` symbol required by `libf2c.a`.
-
