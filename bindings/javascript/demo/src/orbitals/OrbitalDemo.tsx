@@ -27,6 +27,31 @@ const MAX_QUBITS_RUNTIME = 32; // cap at 2^32 amplitudes (use with care)
 const DMRG_MIN_SITES = 4;
 const DMRG_MAX_SITES = 16;
 const DEFAULT_DMRG_SITES = 10;
+const DEFAULT_ATOM = ELEMENTS.find((e) => e.symbol === 'Fe') || ELEMENTS[0];
+const DEFAULT_N = 5;
+const DEFAULT_L = 2;
+const DEFAULT_M = 2;
+const DEFAULT_POINT_COUNT = 494000;
+const DEFAULT_POINT_SIZE = 0.01;
+const DEFAULT_OPACITY = 0.15;
+
+const CONTROL_TOOLTIPS = {
+  atom: 'Choose the element (atomic number Z). Higher Z pulls the cloud inward and increases radial decay.',
+  chooseElement: 'Open the periodic table to select a different element.',
+  n: 'Sets the principal quantum number; higher n increases orbital size and radial nodes.',
+  qubits: 'Controls WASM state size; more qubits increase lattice resolution and memory/time cost.',
+  allowHighQubits: 'Unlocks 25-32 qubits; requires very high memory (64 GB+).',
+  useDmrg: 'Run TFIM ground-state solver in WASM to modulate orbital sampling.',
+  dmrgSites: 'Number of sites in the TFIM chain; more sites cost more compute.',
+  dmrgG: 'Transverse field ratio g/J; shifts the TFIM ground state.',
+  l: 'Orbital shape selector (s, p, d, f, ...).',
+  m: 'Orbital orientation (magnetic quantum number).',
+  pointCount: 'Number of sampled points; higher values yield a denser cloud.',
+  pointSize: 'Rendered size of each point sprite.',
+  opacity: 'Cloud transparency; lower values are more transparent.',
+  regenerate: 'Recompute the orbital cloud with current settings.',
+  rotation: 'Toggle auto-rotation of the scene.',
+};
 
 interface CloudParams {
   atom: Atom;
@@ -265,17 +290,17 @@ const OrbitalDemo: React.FC = () => {
   const axesRef = useRef<THREE.AxesHelper | null>(null);
   const nucleusRef = useRef<THREE.Mesh | null>(null);
   const rotatingRef = useRef<boolean>(true);
-  const [atom, setAtom] = useState<Atom>(() => ELEMENTS.find((e) => e.symbol === 'N') || ELEMENTS[0]);
-  const [n, setN] = useState<number>(4);
-  const [l, setL] = useState<number>(2);
-  const [m, setM] = useState<number>(0);
+  const [atom, setAtom] = useState<Atom>(() => DEFAULT_ATOM);
+  const [n, setN] = useState<number>(DEFAULT_N);
+  const [l, setL] = useState<number>(DEFAULT_L);
+  const [m, setM] = useState<number>(DEFAULT_M);
   const [qubits, setQubits] = useState<number>(
     Math.max(4, Math.min(MAX_QUBITS_UI, DEFAULT_QUBITS))
   );
   const [allowHighQubits, setAllowHighQubits] = useState<boolean>(false);
-  const [pointCount, setPointCount] = useState<number>(30000);
-  const [pointSize, setPointSize] = useState<number>(0.05);
-  const [opacity, setOpacity] = useState<number>(0.5);
+  const [pointCount, setPointCount] = useState<number>(DEFAULT_POINT_COUNT);
+  const [pointSize, setPointSize] = useState<number>(DEFAULT_POINT_SIZE);
+  const [opacity, setOpacity] = useState<number>(DEFAULT_OPACITY);
   const [isRotating, setIsRotating] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; generated: number } | null>(null);
@@ -291,7 +316,7 @@ const OrbitalDemo: React.FC = () => {
   } | null>(null);
   const [isDmrgRunning, setIsDmrgRunning] = useState<boolean>(false);
   const [pointsBuffer, setPointsBuffer] = useState<Float32Array | null>(null);
-  const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(4, 7));
+  const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(DEFAULT_N, DEFAULT_ATOM.Z));
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const dmrgRunId = useRef(0);
@@ -610,26 +635,32 @@ useEffect(() => {
         <div className="controls-body">
           <div className="control-grid">
             <div className="control">
-              <span>Select Atom</span>
+              <span title={CONTROL_TOOLTIPS.atom}>Select Atom</span>
               <div className="atom-row">
-                <div className="atom-chip" title={atom.name}>
+                <div className="atom-chip" title={`${atom.name}. ${CONTROL_TOOLTIPS.atom}`}>
                   <span className="atom-symbol">{atom.symbol}</span>
                   <span className="atom-name">{atom.name}</span>
                   <span className="atom-z">Z = {atom.Z}</span>
                 </div>
-                <button className="btn btn-secondary" type="button" onClick={() => setIsPickerOpen(true)}>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  onClick={() => setIsPickerOpen(true)}
+                  title={CONTROL_TOOLTIPS.chooseElement}
+                >
                   Choose Element
                 </button>
               </div>
             </div>
 
             <label className="control">
-              <span>Principal Quantum Number (n)</span>
+              <span title={CONTROL_TOOLTIPS.n}>Principal Quantum Number (n)</span>
               <input
                 type="range"
                 min={1}
                 max={5}
                 value={n}
+                title={CONTROL_TOOLTIPS.n}
                 onChange={(e) => {
                   const next = Number(e.target.value);
                   setN(next);
@@ -640,12 +671,13 @@ useEffect(() => {
             </label>
 
             <label className="control">
-              <span>WASM Qubits (min 4, UI max 32)</span>
+              <span title={CONTROL_TOOLTIPS.qubits}>WASM Qubits (min 4, UI max 32)</span>
               <input
                 type="range"
                 min={4}
                 max={allowHighQubits ? MAX_QUBITS_UI : SAFE_QUBITS}
                 value={Math.min(qubits, allowHighQubits ? MAX_QUBITS_UI : SAFE_QUBITS)}
+                title={CONTROL_TOOLTIPS.qubits}
                 onChange={(e) => setQubits(Number(e.target.value))}
               />
               <div className="control-value">
@@ -657,6 +689,7 @@ useEffect(() => {
               <input
                 type="checkbox"
                 checked={allowHighQubits}
+                title={CONTROL_TOOLTIPS.allowHighQubits}
                 onChange={(e) => {
                   setAllowHighQubits(e.target.checked);
                   if (!e.target.checked && qubits > SAFE_QUBITS) {
@@ -664,25 +697,27 @@ useEffect(() => {
                   }
                 }}
               />
-              <span>I have ≥64 GB RAM (enable 25–32 qubits)</span>
+              <span title={CONTROL_TOOLTIPS.allowHighQubits}>I have ≥64 GB RAM (enable 25–32 qubits)</span>
             </label>
 
             <label className="control checkbox-control">
               <input
                 type="checkbox"
                 checked={useDmrg}
+                title={CONTROL_TOOLTIPS.useDmrg}
                 onChange={(e) => setUseDmrg(e.target.checked)}
               />
-              <span>Use DMRG solver (TFIM ground state)</span>
+              <span title={CONTROL_TOOLTIPS.useDmrg}>Use DMRG solver (TFIM ground state)</span>
             </label>
 
             <label className="control">
-              <span>DMRG Chain Length</span>
+              <span title={CONTROL_TOOLTIPS.dmrgSites}>DMRG Chain Length</span>
               <input
                 type="range"
                 min={DMRG_MIN_SITES}
                 max={DMRG_MAX_SITES}
                 value={dmrgSites}
+                title={CONTROL_TOOLTIPS.dmrgSites}
                 onChange={(e) => setDmrgSites(Number(e.target.value))}
                 disabled={!useDmrg}
               />
@@ -690,13 +725,14 @@ useEffect(() => {
             </label>
 
             <label className="control">
-              <span>TFIM Field Ratio (g)</span>
+              <span title={CONTROL_TOOLTIPS.dmrgG}>TFIM Field Ratio (g)</span>
               <input
                 type="range"
                 min={0.2}
                 max={2.5}
                 step={0.05}
                 value={dmrgG}
+                title={CONTROL_TOOLTIPS.dmrgG}
                 onChange={(e) => setDmrgG(Number(e.target.value))}
                 disabled={!useDmrg}
               />
@@ -704,8 +740,8 @@ useEffect(() => {
             </label>
 
             <label className="control">
-              <span>Angular Momentum (l)</span>
-              <select value={l} onChange={(e) => setL(Number(e.target.value))}>
+              <span title={CONTROL_TOOLTIPS.l}>Angular Momentum (l)</span>
+              <select value={l} onChange={(e) => setL(Number(e.target.value))} title={CONTROL_TOOLTIPS.l}>
                 {lOptions.map((val) => (
                   <option key={val} value={val}>
                     l = {val} ({L_LABELS[val] || 'higher'})
@@ -715,8 +751,8 @@ useEffect(() => {
             </label>
 
             <label className="control">
-              <span>Magnetic Quantum Number (m)</span>
-              <select value={m} onChange={(e) => setM(Number(e.target.value))}>
+              <span title={CONTROL_TOOLTIPS.m}>Magnetic Quantum Number (m)</span>
+              <select value={m} onChange={(e) => setM(Number(e.target.value))} title={CONTROL_TOOLTIPS.m}>
                 {mOptions.map((val) => (
                   <option key={val} value={val}>
                     m = {val}
@@ -726,39 +762,42 @@ useEffect(() => {
             </label>
 
             <label className="control">
-              <span>Point Density</span>
+              <span title={CONTROL_TOOLTIPS.pointCount}>Point Density</span>
               <input
                 type="range"
                 min={4000}
                 max={1000000}
-                step={5000}
+                step={1000}
                 value={pointCount}
+                title={CONTROL_TOOLTIPS.pointCount}
                 onChange={(e) => setPointCount(Number(e.target.value))}
               />
               <div className="control-value">{pointCount.toLocaleString()} samples</div>
             </label>
 
             <label className="control">
-              <span>Point Size</span>
+              <span title={CONTROL_TOOLTIPS.pointSize}>Point Size</span>
               <input
                 type="range"
                 min={0.01}
                 max={0.15}
                 step={0.005}
                 value={pointSize}
+                title={CONTROL_TOOLTIPS.pointSize}
                 onChange={(e) => setPointSize(Number(e.target.value))}
               />
               <div className="control-value">{pointSize.toFixed(3)}</div>
             </label>
 
             <label className="control">
-              <span>Opacity</span>
+              <span title={CONTROL_TOOLTIPS.opacity}>Opacity</span>
               <input
                 type="range"
                 min={0.1}
                 max={0.9}
                 step={0.05}
                 value={opacity}
+                title={CONTROL_TOOLTIPS.opacity}
                 onChange={(e) => setOpacity(Number(e.target.value))}
               />
               <div className="control-value">{opacity.toFixed(2)}</div>
@@ -766,10 +805,19 @@ useEffect(() => {
           </div>
 
           <div className="button-row">
-            <button className="btn btn-primary" onClick={() => void regenerate()} disabled={isGenerating}>
+            <button
+              className="btn btn-primary"
+              onClick={() => void regenerate()}
+              disabled={isGenerating}
+              title={CONTROL_TOOLTIPS.regenerate}
+            >
               {isGenerating ? 'Generating…' : 'Regenerate Cloud'}
             </button>
-            <button className="btn btn-secondary" onClick={() => setIsRotating((prev) => !prev)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setIsRotating((prev) => !prev)}
+              title={CONTROL_TOOLTIPS.rotation}
+            >
               {isRotating ? 'Pause Rotation' : 'Resume Rotation'}
             </button>
           </div>

@@ -26,6 +26,15 @@ cd bindings/javascript
 pnpm --filter @moonlab/quantum-demo dev
 ```
 
+## Build for GitHub Pages
+This builds the demo into `/docs` at the repo root with relative asset paths:
+```
+cd bindings/javascript
+pnpm --filter @moonlab/quantum-demo build:gh-pages
+```
+The script will auto-build CLAPACK if the libs are missing (requires network access).
+The demo entrypoint will be `/docs/index.html`.
+
 ## Recent changes (Tensor Network + DMRG)
 - Tensor-network solver sources are compiled into the WASM build (DMRG/TDVP helpers, MPS ops).
 - New JS bindings are exposed in `@moonlab/quantum-core`:

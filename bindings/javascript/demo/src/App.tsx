@@ -27,7 +27,7 @@ export const App: React.FC = () => {
               Gallery
             </NavLink>
             <NavLink to="/orbitals" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-              Orbitals
+              Schrödinger
             </NavLink>
           </nav>
           <a
