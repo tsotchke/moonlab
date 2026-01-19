@@ -1,4 +1,4 @@
-import{r as n,j as e}from"./index-B3IZoOHj.js";const s=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@moonlab/quantum-core';
+import{r as n,j as e}from"./index-gMQi5RpL.js";const s=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@moonlab/quantum-core';
 
 // Create a 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -136,4 +136,4 @@ vqe.dispose();`,output:`Ground state energy: -1.1373 Ha
 Target (exact): -1.1372 Ha
 Error: 0.0001 Ha (within chemical accuracy!)
 Iterations: 47`}],d=()=>{const[o,r]=n.useState(s[0].id),[l,i]=n.useState(!1),a=s.find(t=>t.id===o)||s[0],c=async()=>{await navigator.clipboard.writeText(a.code),i(!0),setTimeout(()=>i(!1),2e3)};return e.jsxs("div",{className:"examples",children:[e.jsxs("div",{className:"section-header",children:[e.jsx("h1",{className:"section-title",children:"Code Examples"}),e.jsx("p",{className:"section-description",children:"Copy-paste code snippets to get started quickly with quantum computing."})]}),e.jsxs("div",{className:"examples-layout",children:[e.jsx("aside",{className:"examples-sidebar",children:s.map(t=>e.jsxs("button",{className:`example-btn ${o===t.id?"selected":""}`,onClick:()=>r(t.id),children:[e.jsx("span",{className:"example-title",children:t.title}),e.jsx("span",{className:"example-desc",children:t.description})]},t.id))}),e.jsxs("main",{className:"example-content",children:[e.jsxs("div",{className:"example-header",children:[e.jsx("h2",{children:a.title}),e.jsx("button",{className:"btn btn-secondary",onClick:c,children:l?"Copied!":"Copy Code"})]}),e.jsx("p",{className:"example-description",children:a.description}),e.jsx("div",{className:"code-container",children:e.jsx("pre",{className:"code-block",children:e.jsx("code",{children:a.code})})}),a.output&&e.jsxs("div",{className:"output-container",children:[e.jsx("h3",{children:"Output"}),e.jsx("pre",{className:"output-block",children:a.output})]})]})]})]})};export{d as default};
-//# sourceMappingURL=Examples-CgL3CCLJ.js.map
+//# sourceMappingURL=Examples-CfhtkYxo.js.map
