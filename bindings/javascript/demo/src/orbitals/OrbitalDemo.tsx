@@ -25,8 +25,8 @@ const MAX_QUBITS_UI = 32;
 const SAFE_QUBITS = 24;
 const MAX_QUBITS_RUNTIME = 32; // cap at 2^32 amplitudes (use with care)
 const DMRG_MIN_SITES = 4;
-const DMRG_MAX_SITES = 16;
-const DEFAULT_DMRG_SITES = 10;
+const DMRG_MAX_SITES = 12;
+const DEFAULT_DMRG_SITES = 6;
 const DEFAULT_ATOM = ELEMENTS.find((e) => e.symbol === 'Fe') || ELEMENTS[0];
 const DEFAULT_N = 5;
 const DEFAULT_L = 2;
@@ -603,16 +603,30 @@ const OrbitalDemo: React.FC = () => {
     }
   };
 
-useEffect(() => {
-  void regenerate(qubits);
-}, [atom, n, l, m, pointCount, qubits, useDmrg, dmrgWeights]);
+  useEffect(() => {
+    void regenerate(qubits);
+  }, [atom, n, l, m, pointCount, qubits, useDmrg, dmrgWeights]);
+
+  const isInitialLoad = pointsBuffer === null;
+  const showOverlay = isInitialLoad || isGenerating || (useDmrg && isDmrgRunning);
+  const overlayLabel = isInitialLoad
+    ? 'Initializing orbital cloud…'
+    : isGenerating
+      ? 'Building orbital…'
+      : 'Solving Schrödinger (DMRG)…';
 
   return (
     <div className="orbital-page">
       <div className="orbital-viewport" ref={mountRef}>
-        {(isGenerating || (useDmrg && isDmrgRunning)) && (
+        {showOverlay && (
           <div className="overlay">
-            {isGenerating ? 'Building orbital…' : 'Solving Schrödinger (DMRG)…'}
+            <div className="overlay-content">
+              <div className="quantum-spinner overlay-spinner" aria-hidden="true">
+                <div className="spinner-ring"></div>
+                <div className="spinner-core"></div>
+              </div>
+              <div className="overlay-text">{overlayLabel}</div>
+            </div>
           </div>
         )}
       </div>
