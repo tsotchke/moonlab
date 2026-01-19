@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:gh-pages": "test -f ../packages/core/emscripten/build/deps/clapack-wasm/lib/liblapack.a || bash ../packages/core/emscripten/build-clapack-wasm.sh && pnpm --filter @moonlab/quantum-core build && vite build --outDir ../../../docs --emptyOutDir",
+    "build:gh-pages": "test -f ../packages/core/emscripten/build/deps/clapack-wasm/lib/liblapack.a || bash ../packages/core/emscripten/build-clapack-wasm.sh && pnpm --filter @moonlab/quantum-core build && vite build --base=/moonlab/ --outDir ../../../docs --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
