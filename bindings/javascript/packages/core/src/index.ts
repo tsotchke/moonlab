@@ -89,6 +89,19 @@ export { WasmMemory } from './memory';
 export type { MoonlabModule } from './memory';
 
 // ============================================================================
+// Tensor Network / Solvers
+// ============================================================================
+export {
+  TensorNetworkState,
+  dmrgTFIMGroundState,
+} from './tensor-network';
+export type {
+  TensorNetworkOptions,
+  DMRGResult,
+  TFIMOptions,
+} from './tensor-network';
+
+// ============================================================================
 // Version Info
 // ============================================================================
 

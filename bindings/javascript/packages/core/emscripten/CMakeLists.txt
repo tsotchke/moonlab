@@ -24,6 +24,21 @@ set(ALGORITHM_SOURCES
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
 )
 
+# Source files - Tensor Network solvers (DMRG/TDVP/TEBD helpers, MPO utilities)
+set(TENSOR_NETWORK_SOURCES
+    ${QSIM_ROOT}/src/algorithms/tensor_network/contraction.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/dmrg.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/lattice_2d.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/mpo_2d.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/skyrmion_braiding.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/svd_compress.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/tdvp.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/tensor.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/tn_gates.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/tn_measurement.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/tn_state.c
+)
+
 # Source files - Utilities
 set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/entropy.c
@@ -40,18 +55,50 @@ set(OPTIMIZATION_SOURCES
 set(ALL_SOURCES
     ${QUANTUM_SOURCES}
     ${ALGORITHM_SOURCES}
+    ${TENSOR_NETWORK_SOURCES}
     ${UTILS_SOURCES}
     ${OPTIMIZATION_SOURCES}
+    ${CMAKE_SOURCE_DIR}/f2c_stub.c
 )
 
 # Create the WASM executable
 add_executable(moonlab ${ALL_SOURCES})
+
+# BLAS/LAPACK for tensor-network solvers (OpenBLAS preferred, CLAPACK fallback)
+set(OPENBLAS_WASM_ROOT "$ENV{OPENBLAS_WASM_ROOT}")
+if(NOT OPENBLAS_WASM_ROOT)
+    set(OPENBLAS_WASM_ROOT "${CMAKE_SOURCE_DIR}/build/deps/openblas-wasm")
+endif()
+
+set(CLAPACK_WASM_ROOT "$ENV{CLAPACK_WASM_ROOT}")
+if(NOT CLAPACK_WASM_ROOT)
+    set(CLAPACK_WASM_ROOT "${CMAKE_SOURCE_DIR}/build/deps/clapack-wasm")
+endif()
+
+if(EXISTS "${OPENBLAS_WASM_ROOT}/libopenblas.a")
+    message(STATUS "Using OpenBLAS/LAPACKE from ${OPENBLAS_WASM_ROOT}")
+    target_include_directories(moonlab PRIVATE "${OPENBLAS_WASM_ROOT}/include")
+    target_link_libraries(moonlab PRIVATE "${OPENBLAS_WASM_ROOT}/libopenblas.a")
+    target_compile_definitions(moonlab PRIVATE QSIM_HAS_OPENBLAS=1)
+elseif(EXISTS "${CLAPACK_WASM_ROOT}/lib/liblapack.a")
+    message(STATUS "Using CLAPACK from ${CLAPACK_WASM_ROOT}")
+    target_include_directories(moonlab PRIVATE "${CLAPACK_WASM_ROOT}/include")
+    target_link_libraries(moonlab PRIVATE
+        "${CLAPACK_WASM_ROOT}/lib/liblapack.a"
+        "${CLAPACK_WASM_ROOT}/lib/libblas.a"
+        "${CLAPACK_WASM_ROOT}/lib/libf2c.a"
+    )
+    target_compile_definitions(moonlab PRIVATE QSIM_HAS_CLAPACK=1)
+else()
+    message(FATAL_ERROR "BLAS/LAPACK not found. Provide OpenBLAS at ${OPENBLAS_WASM_ROOT} or CLAPACK at ${CLAPACK_WASM_ROOT}.")
+endif()
 
 # Include paths
 target_include_directories(moonlab PRIVATE
     ${QSIM_ROOT}/src
     ${QSIM_ROOT}/src/quantum
     ${QSIM_ROOT}/src/algorithms
+    ${QSIM_ROOT}/src/algorithms/tensor_network
     ${QSIM_ROOT}/src/utils
     ${QSIM_ROOT}/src/optimization
 )
@@ -87,6 +134,7 @@ set_target_properties(moonlab PROPERTIES
         -s MODULARIZE=1 \
         -s EXPORT_NAME='MoonlabModule' \
         -s EXPORTED_FUNCTIONS='[${EXPORTED_FUNCTIONS}]' \
+        -s EXPORT_ALL=1 \
         -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"getValue\",\"setValue\",\"UTF8ToString\",\"stringToUTF8\",\"HEAP8\",\"HEAPU8\",\"HEAP32\",\"HEAPU32\",\"HEAPF64\"]' \
         -s ALLOW_MEMORY_GROWTH=1 \
         -s MAXIMUM_MEMORY=2GB \

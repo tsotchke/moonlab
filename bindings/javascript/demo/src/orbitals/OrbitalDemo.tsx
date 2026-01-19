@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { QuantumState, preload, type Complex } from '@moonlab/quantum-core';
+import { QuantumState, dmrgTFIMGroundState, preload, type Complex } from '@moonlab/quantum-core';
 import { ElementPicker } from './ElementPicker';
 import { ELEMENTS, type Atom } from './elements';
 import './Orbitals.css';
@@ -24,6 +24,9 @@ const DEFAULT_QUBITS = Math.ceil(Math.log2(BASE_STATES)); // 15 qubits
 const MAX_QUBITS_UI = 32;
 const SAFE_QUBITS = 24;
 const MAX_QUBITS_RUNTIME = 32; // cap at 2^32 amplitudes (use with care)
+const DMRG_MIN_SITES = 4;
+const DMRG_MAX_SITES = 16;
+const DEFAULT_DMRG_SITES = 10;
 
 interface CloudParams {
   atom: Atom;
@@ -249,6 +252,8 @@ const extentForAtom = (n: number, Z: number) => {
   return base / compression;
 };
 
+const nucleusRadiusForExtent = (extent: number) => clamp(extent * 0.003, 0.006, 0.02);
+
 const OrbitalDemo: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const cloudRef = useRef<THREE.Points>();
@@ -258,6 +263,7 @@ const OrbitalDemo: React.FC = () => {
   const controlsRef = useRef<OrbitControls>();
   const gridRef = useRef<THREE.GridHelper | null>(null);
   const axesRef = useRef<THREE.AxesHelper | null>(null);
+  const nucleusRef = useRef<THREE.Mesh | null>(null);
   const rotatingRef = useRef<boolean>(true);
   const [atom, setAtom] = useState<Atom>(() => ELEMENTS.find((e) => e.symbol === 'N') || ELEMENTS[0]);
   const [n, setN] = useState<number>(4);
@@ -273,10 +279,22 @@ const OrbitalDemo: React.FC = () => {
   const [isRotating, setIsRotating] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; generated: number } | null>(null);
+  const [useDmrg, setUseDmrg] = useState<boolean>(true);
+  const [dmrgSites, setDmrgSites] = useState<number>(DEFAULT_DMRG_SITES);
+  const [dmrgG, setDmrgG] = useState<number>(1.0);
+  const [dmrgWeights, setDmrgWeights] = useState<number[] | null>(null);
+  const [dmrgStats, setDmrgStats] = useState<{
+    elapsedMs: number;
+    sites: number;
+    energy?: number;
+    variance?: number;
+  } | null>(null);
+  const [isDmrgRunning, setIsDmrgRunning] = useState<boolean>(false);
   const [pointsBuffer, setPointsBuffer] = useState<Float32Array | null>(null);
   const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(4, 7));
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
+  const dmrgRunId = useRef(0);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
@@ -284,6 +302,62 @@ const OrbitalDemo: React.FC = () => {
   useEffect(() => {
     setM((prev) => clamp(prev, -l, l));
   }, [l]);
+
+  useEffect(() => {
+    if (!useDmrg) {
+      setDmrgWeights(null);
+      setDmrgStats(null);
+      setIsDmrgRunning(false);
+      return;
+    }
+
+    const runId = ++dmrgRunId.current;
+    let cancelled = false;
+    const sites = clamp(dmrgSites, DMRG_MIN_SITES, DMRG_MAX_SITES);
+
+    setIsDmrgRunning(true);
+    const start = performance.now();
+
+    const solve = async () => {
+      await orbitalPreload;
+      const result = await dmrgTFIMGroundState({ numSites: sites, g: dmrgG });
+      const amplitudes = result.state.toStateVector(DMRG_MAX_SITES);
+      result.state.dispose();
+
+      const probs = amplitudes.map((amp) => amp.real * amp.real + amp.imag * amp.imag);
+      const total = probs.reduce((acc, p) => acc + p, 0);
+      const normalized = total > 0 ? probs.map((p) => p / total) : probs;
+
+      if (cancelled || dmrgRunId.current !== runId) return;
+      setDmrgWeights(normalized);
+      setDmrgStats({
+        elapsedMs: performance.now() - start,
+        sites,
+        energy: result.energy,
+        variance: result.energyVariance,
+      });
+    };
+
+    solve()
+      .catch((err) => {
+        if (cancelled || dmrgRunId.current !== runId) return;
+        console.error('DMRG solver failed', err);
+        setDmrgWeights(null);
+        setDmrgStats({
+          elapsedMs: performance.now() - start,
+          sites,
+        });
+      })
+      .finally(() => {
+        if (!cancelled && dmrgRunId.current === runId) {
+          setIsDmrgRunning(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [useDmrg, dmrgSites, dmrgG]);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -313,17 +387,20 @@ const OrbitalDemo: React.FC = () => {
     dir.position.set(4, 5, 2);
     scene.add(dir);
 
-    const nucleus = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 32, 32),
-      new THREE.MeshBasicMaterial({ color: '#ff7ac3' })
-    );
-    scene.add(nucleus);
-
     const initialExtent = extentForAtom(n, atom.Z);
     const initialDim = Math.pow(2, Math.min(Math.max(8, DEFAULT_QUBITS), MAX_QUBITS_RUNTIME));
     const initialGridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(initialDim))));
     const initialSpacing = (initialExtent * 2) / (initialGridSide - 1);
     const initialSize = initialSpacing * (initialGridSide - 1);
+
+    const nucleus = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 32, 32),
+      new THREE.MeshBasicMaterial({ color: '#ff7ac3' })
+    );
+    const nucleusRadius = nucleusRadiusForExtent(initialExtent);
+    nucleus.scale.setScalar(nucleusRadius);
+    scene.add(nucleus);
+    nucleusRef.current = nucleus;
 
     const grid = new THREE.GridHelper(initialSize, initialGridSide - 1, '#0b3b5a', '#0b3b5a');
     grid.position.y = -initialExtent;
@@ -423,7 +500,7 @@ const OrbitalDemo: React.FC = () => {
     materialRef.current.opacity = opacity;
   }, [pointsBuffer, pointSize, opacity, currentExtent]);
 
-  const regenerate = async (targetQubits: number) => {
+  const regenerate = async (targetQubits: number = qubits) => {
     const capped = allowHighQubits ? targetQubits : Math.min(targetQubits, SAFE_QUBITS);
     const effectiveQubits = Math.min(capped, MAX_QUBITS_RUNTIME);
     setIsGenerating(true);
@@ -447,15 +524,20 @@ const OrbitalDemo: React.FC = () => {
     });
     const aligned = alignToDimension(grid.probabilities, grid.positions, targetDim);
 
+    const dmrgInfluence = useDmrg && dmrgWeights && dmrgWeights.length > 0 ? dmrgWeights : null;
+
     // Normalize via Moonlab state to respect measurement semantics
     const amplitudes: Complex[] = new Array(targetDim);
     let total = 0;
     for (let i = 0; i < targetDim; i++) {
-      total += aligned.probs[i];
+      const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
+      total += aligned.probs[i] * weight;
     }
     const norm = total > 0 ? Math.sqrt(total) : 1;
     for (let i = 0; i < targetDim; i++) {
-      const amp = aligned.probs[i] > 0 ? Math.sqrt(aligned.probs[i]) / norm : 0;
+      const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
+      const prob = aligned.probs[i] * weight;
+      const amp = prob > 0 ? Math.sqrt(prob) / norm : 0;
       amplitudes[i] = { real: amp, imag: 0 };
     }
 
@@ -484,6 +566,11 @@ const OrbitalDemo: React.FC = () => {
       axesRef.current.position.set(0, -extent, 0);
       axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
     }
+
+    // Update nucleus scale relative to cloud extent
+    if (nucleusRef.current) {
+      nucleusRef.current.scale.setScalar(nucleusRadiusForExtent(extent));
+    }
   } catch (err) {
     console.error('Failed to build orbital cloud', err);
   } finally {
@@ -493,12 +580,16 @@ const OrbitalDemo: React.FC = () => {
 
 useEffect(() => {
   void regenerate(qubits);
-}, [atom, n, l, m, pointCount, qubits]);
+}, [atom, n, l, m, pointCount, qubits, useDmrg, dmrgWeights]);
 
   return (
     <div className="orbital-page">
       <div className="orbital-viewport" ref={mountRef}>
-        {isGenerating && <div className="overlay">Building orbital…</div>}
+        {(isGenerating || (useDmrg && isDmrgRunning)) && (
+          <div className="overlay">
+            {isGenerating ? 'Building orbital…' : 'Solving Schrödinger (DMRG)…'}
+          </div>
+        )}
       </div>
 
       <div className={`orbital-controls ${isCollapsed ? 'collapsed' : ''}`}>
@@ -574,6 +665,42 @@ useEffect(() => {
                 }}
               />
               <span>I have ≥64 GB RAM (enable 25–32 qubits)</span>
+            </label>
+
+            <label className="control checkbox-control">
+              <input
+                type="checkbox"
+                checked={useDmrg}
+                onChange={(e) => setUseDmrg(e.target.checked)}
+              />
+              <span>Use DMRG solver (TFIM ground state)</span>
+            </label>
+
+            <label className="control">
+              <span>DMRG Chain Length</span>
+              <input
+                type="range"
+                min={DMRG_MIN_SITES}
+                max={DMRG_MAX_SITES}
+                value={dmrgSites}
+                onChange={(e) => setDmrgSites(Number(e.target.value))}
+                disabled={!useDmrg}
+              />
+              <div className="control-value">{dmrgSites} sites</div>
+            </label>
+
+            <label className="control">
+              <span>TFIM Field Ratio (g)</span>
+              <input
+                type="range"
+                min={0.2}
+                max={2.5}
+                step={0.05}
+                value={dmrgG}
+                onChange={(e) => setDmrgG(Number(e.target.value))}
+                disabled={!useDmrg}
+              />
+              <div className="control-value">g = {dmrgG.toFixed(2)}</div>
             </label>
 
             <label className="control">
@@ -668,15 +795,49 @@ useEffect(() => {
                   : 'waiting for first run'}
               </div>
             </div>
+            <div>
+              <div className="stat-label">DMRG Solver</div>
+              <div className="stat-value">
+                {useDmrg
+                  ? isDmrgRunning
+                    ? 'solving TFIM ground state…'
+                    : dmrgStats
+                      ? `sites ${dmrgStats.sites} • E0 ≈ ${
+                          dmrgStats.energy !== undefined ? dmrgStats.energy.toFixed(4) : 'n/a'
+                        } • var ${
+                          dmrgStats.variance !== undefined ? dmrgStats.variance.toFixed(4) : 'n/a'
+                        } • ${Math.round(dmrgStats.elapsedMs)} ms`
+                      : 'waiting for first solve'
+                  : 'disabled'}
+              </div>
+            </div>
+          </div>
+
+          <div className="about-card">
+            <h3>Schrödinger Solver (DMRG)</h3>
+            <p>
+              The TFIM chain is solved in WASM using the tensor-network DMRG solver to compute a ground-state wavefunction.
+              Its probability distribution modulates the orbital sampling when enabled.
+            </p>
+            <ul>
+              <li>Status: {useDmrg ? (isDmrgRunning ? 'solving…' : 'ready') : 'disabled'}</li>
+              <li>Chain: {dmrgSites} sites (g = {dmrgG.toFixed(2)})</li>
+              <li>
+                Energy: {dmrgStats?.energy !== undefined ? dmrgStats.energy.toFixed(6) : 'n/a'} • Variance:{' '}
+                {dmrgStats?.variance !== undefined ? dmrgStats.variance.toFixed(6) : 'n/a'}
+              </li>
+            </ul>
           </div>
 
             <div className="about-card">
               <h3>About this simulation</h3>
               <p>
-                We discretize an adaptive 3D lattice (scales with qubits up to 32³), assign hydrogen-like orbital
-                amplitudes with Moonlab (up to {MAX_QUBITS_RUNTIME} qubits runtime), let the WASM backend normalize
-                the distribution, and sample measurement outcomes to drive the point cloud. Three.js renders the
-                resulting |ψ|² density with orbit controls.
+                We discretize an adaptive 3D lattice (scales with qubits up to 32³) and compute hydrogen-like orbital
+                amplitudes analytically on the CPU. Moonlab then builds a quantum state vector in WASM, normalizes it,
+                and samples measurement probabilities to drive the point cloud. If DMRG is enabled, Moonlab’s tensor-network
+                solver runs a TFIM ground-state calculation (a Schrödinger eigenproblem for a 1D spin chain) and uses that
+                quantum state’s probabilities to modulate the orbital distribution. Three.js renders the resulting |ψ|²
+                density with orbit controls.
               </p>
               <ul>
                 <li>Adjust n, l, m to see shapes evolve (s, p, d, f…)</li>
