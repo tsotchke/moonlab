@@ -26,6 +26,16 @@
 #define HAS_LAPACK 1
 #include "../../optimization/gpu_metal.h"
 #define HAS_METAL 1
+#elif defined(QSIM_HAS_CLAPACK)
+// CLAPACK provides f2c LAPACK interface (avoid conflict with <complex.h> macro)
+#pragma push_macro("complex")
+#undef complex
+#define complex f2c_complex
+#include <f2c.h>
+#pragma pop_macro("complex")
+#define HAS_BLAS 1
+#define HAS_LAPACK 1
+#define HAS_METAL 0
 #elif defined(QSIM_HAS_OPENBLAS) || defined(__linux__)
 // OpenBLAS provides both CBLAS and LAPACKE interfaces
 #include <cblas.h>
@@ -43,6 +53,16 @@ typedef lapack_complex_double lapack_complex_t;
 
 #ifdef HAS_CUDA
 #include "../../optimization/gpu/backends/gpu_cuda.h"
+#endif
+
+#if defined(QSIM_HAS_CLAPACK)
+// f2c LAPACK symbol (CLAPACK)
+extern int zgesvd_(char *jobu, char *jobvt, integer *m, integer *n,
+                   doublecomplex *a, integer *lda, doublereal *s,
+                   doublecomplex *u, integer *ldu,
+                   doublecomplex *vt, integer *ldvt,
+                   doublecomplex *work, integer *lwork,
+                   doublereal *rwork, integer *info);
 #endif
 
 // ============================================================================
@@ -882,7 +902,11 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
 
 #if HAS_LAPACK
     // Use LAPACK zgesvd - works with both Accelerate (Apple) and OpenBLAS (Linux)
+#if defined(QSIM_HAS_CLAPACK)
+    integer info;
+#else
     int info;
+#endif
 
     // Allocate working arrays
     double *s = (double *)malloc(min_mn * sizeof(double));
@@ -951,6 +975,48 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
             (__CLPK_doublecomplex *)u_data, &ldu,
             (__CLPK_doublecomplex *)vt_data, &ldvt,
+            work, &lwork, rwork, &info);
+
+    free(work);
+    free(rwork);
+#elif defined(QSIM_HAS_CLAPACK)
+    // CLAPACK f2c interface
+    integer M = (integer)m, N = (integer)n, lda = (integer)m, ldu = (integer)m, ldvt = (integer)n, lwork = -1;
+    doublecomplex work_query;
+    doublereal *rwork = (doublereal *)malloc(5 * min_mn * sizeof(doublereal));
+    if (!rwork) {
+        free(s);
+        aligned_free_internal(u_data);
+        aligned_free_internal(vt_data);
+        free(superb);
+        aligned_free_internal(a_copy);
+        free(result);
+        return NULL;
+    }
+
+    // Query workspace
+    zgesvd_("A", "A", &M, &N, (doublecomplex *)a_copy, &lda, s,
+            (doublecomplex *)u_data, &ldu,
+            (doublecomplex *)vt_data, &ldvt,
+            &work_query, &lwork, rwork, &info);
+
+    lwork = (integer)(work_query.r + 1);
+    doublecomplex *work = (doublecomplex *)malloc((size_t)lwork * sizeof(doublecomplex));
+    if (!work) {
+        free(s);
+        aligned_free_internal(u_data);
+        aligned_free_internal(vt_data);
+        free(superb);
+        free(rwork);
+        aligned_free_internal(a_copy);
+        free(result);
+        return NULL;
+    }
+
+    // Perform SVD
+    zgesvd_("A", "A", &M, &N, (doublecomplex *)a_copy, &lda, s,
+            (doublecomplex *)u_data, &ldu,
+            (doublecomplex *)vt_data, &ldvt,
             work, &lwork, rwork, &info);
 
     free(work);

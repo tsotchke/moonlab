@@ -363,6 +363,79 @@ export interface MoonlabModule {
     qubit2: number
   ): number;
 
+  // Tensor Network (MPS) core
+  _tn_mps_create_zero(numQubits: number, configPtr: number): number;
+  _tn_mps_create_basis(numQubits: number, basisState: number, configPtr: number): number;
+  _tn_mps_copy(statePtr: number): number;
+  _tn_mps_free(statePtr: number): void;
+  _tn_mps_num_qubits(statePtr: number): number;
+  _tn_mps_to_statevector(statePtr: number, amplitudesPtr: number): number;
+  _tn_mps_amplitude(statePtr: number, basisState: number): number;
+  _tn_mps_amplitudes(
+    statePtr: number,
+    basisStatesPtr: number,
+    numStates: number,
+    amplitudesPtr: number
+  ): number;
+  _tn_mps_normalize(statePtr: number): number;
+  _tn_mps_left_canonicalize(statePtr: number): number;
+  _tn_mps_right_canonicalize(statePtr: number): number;
+  _tn_mps_mixed_canonicalize(statePtr: number, center: number): number;
+  _tn_mps_move_center(statePtr: number, direction: number): number;
+  _tn_mps_truncate(statePtr: number, maxBond: number, cutoff: number): number;
+  _tn_mps_truncate_bond(statePtr: number, bond: number, maxBond: number, cutoff: number): number;
+  _tn_mps_grow_bond(statePtr: number, bond: number, newDim: number): number;
+  _tn_mps_fidelity(state1Ptr: number, state2Ptr: number): number;
+  _tn_mps_overlap(state1Ptr: number, state2Ptr: number): number;
+
+  // Tensor Network gates
+  _tn_apply_x(statePtr: number, qubit: number): number;
+  _tn_apply_y(statePtr: number, qubit: number): number;
+  _tn_apply_z(statePtr: number, qubit: number): number;
+  _tn_apply_h(statePtr: number, qubit: number): number;
+  _tn_apply_s(statePtr: number, qubit: number): number;
+  _tn_apply_t(statePtr: number, qubit: number): number;
+  _tn_apply_rx(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_ry(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_rz(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_cnot(statePtr: number, control: number, target: number): number;
+  _tn_apply_cz(statePtr: number, control: number, target: number): number;
+  _tn_apply_swap(statePtr: number, qubit1: number, qubit2: number): number;
+  _tn_apply_rzz(statePtr: number, qubit1: number, qubit2: number, theta: number): number;
+  _tn_apply_toffoli(
+    statePtr: number,
+    control1: number,
+    control2: number,
+    target: number
+  ): number;
+
+  // Tensor Network measurement
+  _tn_measure_probability(
+    statePtr: number,
+    qubit: number,
+    prob0Ptr: number,
+    prob1Ptr: number
+  ): number;
+  _tn_measure_bitstring_probability(statePtr: number, bitstring: number): number;
+  _tn_sample_auto(
+    statePtr: number,
+    numSamples: number,
+    samplesPtr: number,
+    seed: number,
+    statsPtr: number
+  ): number;
+
+  // DMRG convenience
+  _dmrg_tfim_ground_state(
+    numSites: number,
+    g: number,
+    configPtr: number,
+    resultOutPtr: number
+  ): number;
+  _dmrg_compute_energy(statePtr: number, mpoPtr: number): number;
+  _dmrg_energy_variance(statePtr: number, mpoPtr: number): number;
+  _dmrg_result_free(resultPtr: number): void;
+
   // Ready promise
   ready: Promise<MoonlabModule>;
 

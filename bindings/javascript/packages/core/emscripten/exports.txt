@@ -119,3 +119,58 @@ _qaoa_solver_free
 _qaoa_solve
 _qaoa_compute_expectation
 _qaoa_apply_circuit
+
+# =============================================================================
+# Tensor Network (MPS) Core
+# =============================================================================
+_tn_mps_create_zero
+_tn_mps_create_basis
+_tn_mps_copy
+_tn_mps_free
+_tn_mps_num_qubits
+_tn_mps_to_statevector
+_tn_mps_amplitude
+_tn_mps_amplitudes
+_tn_mps_normalize
+_tn_mps_left_canonicalize
+_tn_mps_right_canonicalize
+_tn_mps_mixed_canonicalize
+_tn_mps_move_center
+_tn_mps_truncate
+_tn_mps_truncate_bond
+_tn_mps_grow_bond
+_tn_mps_fidelity
+_tn_mps_overlap
+
+# =============================================================================
+# Tensor Network Gates
+# =============================================================================
+_tn_apply_x
+_tn_apply_y
+_tn_apply_z
+_tn_apply_h
+_tn_apply_s
+_tn_apply_t
+_tn_apply_rx
+_tn_apply_ry
+_tn_apply_rz
+_tn_apply_cnot
+_tn_apply_cz
+_tn_apply_swap
+_tn_apply_rzz
+_tn_apply_toffoli
+
+# =============================================================================
+# Tensor Network Measurement
+# =============================================================================
+_tn_measure_probability
+_tn_measure_bitstring_probability
+_tn_sample_auto
+
+# =============================================================================
+# Tensor Network DMRG / MPO Utilities
+# =============================================================================
+_dmrg_tfim_ground_state
+_dmrg_compute_energy
+_dmrg_energy_variance
+_dmrg_result_free
