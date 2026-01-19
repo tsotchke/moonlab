@@ -824,8 +824,183 @@ async function createWasm() {
 
   
 
+  var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
+  
+  var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
+      var maxIdx = idx + maxBytesToRead;
+      if (ignoreNul) return maxIdx;
+      // TextDecoder needs to know the byte length in advance, it doesn't stop on
+      // null terminator by itself.
+      // As a tiny code save trick, compare idx against maxIdx using a negation,
+      // so that maxBytesToRead=undefined/NaN means Infinity.
+      while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx;
+      return idx;
+    };
+  
+  
+    /**
+     * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
+     * array that contains uint8 values, returns a copy of that string as a
+     * Javascript String object.
+     * heapOrArray is either a regular array, or a JavaScript typed array view.
+     * @param {number=} idx
+     * @param {number=} maxBytesToRead
+     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
+     * @return {string}
+     */
+  var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
+  
+      var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul);
+  
+      // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
+      if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
+        return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
+      }
+      var str = '';
+      while (idx < endPtr) {
+        // For UTF8 byte structure, see:
+        // http://en.wikipedia.org/wiki/UTF-8#Description
+        // https://www.ietf.org/rfc/rfc2279.txt
+        // https://tools.ietf.org/html/rfc3629
+        var u0 = heapOrArray[idx++];
+        if (!(u0 & 0x80)) { str += String.fromCharCode(u0); continue; }
+        var u1 = heapOrArray[idx++] & 63;
+        if ((u0 & 0xE0) == 0xC0) { str += String.fromCharCode(((u0 & 31) << 6) | u1); continue; }
+        var u2 = heapOrArray[idx++] & 63;
+        if ((u0 & 0xF0) == 0xE0) {
+          u0 = ((u0 & 15) << 12) | (u1 << 6) | u2;
+        } else {
+          if ((u0 & 0xF8) != 0xF0) warnOnce('Invalid UTF-8 leading byte ' + ptrToString(u0) + ' encountered when deserializing a UTF-8 string in wasm memory to a JS string!');
+          u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63);
+        }
+  
+        if (u0 < 0x10000) {
+          str += String.fromCharCode(u0);
+        } else {
+          var ch = u0 - 0x10000;
+          str += String.fromCharCode(0xD800 | (ch >> 10), 0xDC00 | (ch & 0x3FF));
+        }
+      }
+      return str;
+    };
+  
+    /**
+     * Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
+     * emscripten HEAP, returns a copy of that string as a Javascript String object.
+     *
+     * @param {number} ptr
+     * @param {number=} maxBytesToRead - An optional length that specifies the
+     *   maximum number of bytes to read. You can omit this parameter to scan the
+     *   string until the first 0 byte. If maxBytesToRead is passed, and the string
+     *   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
+     *   string will cut short at that byte index.
+     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
+     * @return {string}
+     */
+  var UTF8ToString = (ptr, maxBytesToRead, ignoreNul) => {
+      assert(typeof ptr == 'number', `UTF8ToString expects a number (got ${typeof ptr})`);
+      return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead, ignoreNul) : '';
+    };
+  var SYSCALLS = {
+  varargs:undefined,
+  getStr(ptr) {
+        var ret = UTF8ToString(ptr);
+        return ret;
+      },
+  };
+  var ___syscall_dup3 = (fd, newfd, flags) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  var ___syscall_faccessat = (dirfd, path, amode, flags) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  function ___syscall_fcntl64(fd, cmd, varargs) {
+  SYSCALLS.varargs = varargs;
+  
+      return 0;
+    }
+
+  var ___syscall_fstat64 = (fd, buf) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  
+  var INT53_MAX = 9007199254740992;
+  
+  var INT53_MIN = -9007199254740992;
+  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
+  function ___syscall_ftruncate64(fd, length) {
+    length = bigintToI53Checked(length);
+  
+  
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  ;
+  }
+
+  function ___syscall_ioctl(fd, op, varargs) {
+  SYSCALLS.varargs = varargs;
+  
+      return 0;
+    }
+
+  var ___syscall_lstat64 = (path, buf) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  var ___syscall_newfstatat = (dirfd, path, buf, flags) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  function ___syscall_openat(dirfd, path, flags, varargs) {
+  SYSCALLS.varargs = varargs;
+  
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  }
+
+  var ___syscall_stat64 = (path, buf) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
+  var ___syscall_unlinkat = (dirfd, path, flags) => {
+  abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+  };
+
   var __abort_js = () =>
       abort('native code called abort()');
+
+  var _emscripten_get_now = () => performance.now();
+  
+  var _emscripten_date_now = () => Date.now();
+  
+  var nowIsMonotonic = 1;
+  
+  var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3;
+  
+  function _clock_time_get(clk_id, ignored_precision, ptime) {
+    ignored_precision = bigintToI53Checked(ignored_precision);
+  
+  
+      if (!checkWasiClock(clk_id)) {
+        return 28;
+      }
+      var now;
+      // all wasi clocks but realtime are monotonic
+      if (clk_id === 0) {
+        now = _emscripten_date_now();
+      } else if (nowIsMonotonic) {
+        now = _emscripten_get_now();
+      } else {
+        return 52;
+      }
+      // "now" is in ms, and wasi times are in ns.
+      var nsec = Math.round(now * 1000 * 1000);
+      HEAP64[((ptime)>>3)] = BigInt(nsec);
+      return 0;
+    ;
+  }
+
 
   var getHeapMax = () =>
       // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
@@ -1031,98 +1206,67 @@ async function createWasm() {
       return 0;
     };
 
-  var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
   
-  var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
-      var maxIdx = idx + maxBytesToRead;
-      if (ignoreNul) return maxIdx;
-      // TextDecoder needs to know the byte length in advance, it doesn't stop on
-      // null terminator by itself.
-      // As a tiny code save trick, compare idx against maxIdx using a negation,
-      // so that maxBytesToRead=undefined/NaN means Infinity.
-      while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx;
-      return idx;
-    };
-  
-  
-    /**
-     * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
-     * array that contains uint8 values, returns a copy of that string as a
-     * Javascript String object.
-     * heapOrArray is either a regular array, or a JavaScript typed array view.
-     * @param {number=} idx
-     * @param {number=} maxBytesToRead
-     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
-     * @return {string}
-     */
-  var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
-  
-      var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul);
-  
-      // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
-      if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
-        return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
+  var runtimeKeepaliveCounter = 0;
+  var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
+  var _proc_exit = (code) => {
+      EXITSTATUS = code;
+      if (!keepRuntimeAlive()) {
+        Module['onExit']?.(code);
+        ABORT = true;
       }
-      var str = '';
-      while (idx < endPtr) {
-        // For UTF8 byte structure, see:
-        // http://en.wikipedia.org/wiki/UTF-8#Description
-        // https://www.ietf.org/rfc/rfc2279.txt
-        // https://tools.ietf.org/html/rfc3629
-        var u0 = heapOrArray[idx++];
-        if (!(u0 & 0x80)) { str += String.fromCharCode(u0); continue; }
-        var u1 = heapOrArray[idx++] & 63;
-        if ((u0 & 0xE0) == 0xC0) { str += String.fromCharCode(((u0 & 31) << 6) | u1); continue; }
-        var u2 = heapOrArray[idx++] & 63;
-        if ((u0 & 0xF0) == 0xE0) {
-          u0 = ((u0 & 15) << 12) | (u1 << 6) | u2;
-        } else {
-          if ((u0 & 0xF8) != 0xF0) warnOnce('Invalid UTF-8 leading byte ' + ptrToString(u0) + ' encountered when deserializing a UTF-8 string in wasm memory to a JS string!');
-          u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63);
-        }
+      quit_(code, new ExitStatus(code));
+    };
   
-        if (u0 < 0x10000) {
-          str += String.fromCharCode(u0);
-        } else {
-          var ch = u0 - 0x10000;
-          str += String.fromCharCode(0xD800 | (ch >> 10), 0xDC00 | (ch & 0x3FF));
-        }
+  
+  /** @param {boolean|number=} implicit */
+  var exitJS = (status, implicit) => {
+      EXITSTATUS = status;
+  
+      checkUnflushedContent();
+  
+      // if exit() was called explicitly, warn the user if the runtime isn't actually being shut down
+      if (keepRuntimeAlive() && !implicit) {
+        var msg = `program exited (with status: ${status}), but keepRuntimeAlive() is set (counter=${runtimeKeepaliveCounter}) due to an async operation, so halting execution but not exiting the runtime or preventing further async execution (you can use emscripten_force_exit, if you want to force a true shutdown)`;
+        readyPromiseReject?.(msg);
+        err(msg);
       }
-      return str;
-    };
   
-    /**
-     * Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
-     * emscripten HEAP, returns a copy of that string as a Javascript String object.
-     *
-     * @param {number} ptr
-     * @param {number=} maxBytesToRead - An optional length that specifies the
-     *   maximum number of bytes to read. You can omit this parameter to scan the
-     *   string until the first 0 byte. If maxBytesToRead is passed, and the string
-     *   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
-     *   string will cut short at that byte index.
-     * @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
-     * @return {string}
-     */
-  var UTF8ToString = (ptr, maxBytesToRead, ignoreNul) => {
-      assert(typeof ptr == 'number', `UTF8ToString expects a number (got ${typeof ptr})`);
-      return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead, ignoreNul) : '';
+      _proc_exit(status);
     };
-  var SYSCALLS = {
-  varargs:undefined,
-  getStr(ptr) {
-        var ret = UTF8ToString(ptr);
-        return ret;
-      },
-  };
+  var _exit = exitJS;
+
   var _fd_close = (fd) => {
       abort('fd_close called without SYSCALLS_REQUIRE_FILESYSTEM');
     };
 
-  var INT53_MAX = 9007199254740992;
-  
-  var INT53_MIN = -9007199254740992;
-  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
+  var _fd_fdstat_get = (fd, pbuf) => {
+      var rightsBase = 0;
+      var rightsInheriting = 0;
+      var flags = 0;
+      {
+        // Hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0. We support at
+        // least stdin, stdout, stderr in a simple way.
+        assert(fd == 0 || fd == 1 || fd == 2);
+        var type = 2;
+        if (fd == 0) {
+          rightsBase = 2;
+        } else if (fd == 1 || fd == 2) {
+          rightsBase = 64;
+        }
+        flags = 1;
+      }
+      HEAP8[pbuf] = type;
+      HEAP16[(((pbuf)+(2))>>1)] = flags;
+      HEAP64[(((pbuf)+(8))>>3)] = BigInt(rightsBase);
+      HEAP64[(((pbuf)+(16))>>3)] = BigInt(rightsInheriting);
+      return 0;
+    };
+
+  var _fd_read = (fd, iov, iovcnt, pnum) => {
+      abort('fd_read called without SYSCALLS_REQUIRE_FILESYSTEM');
+    };
+
   function _fd_seek(fd, offset, whence, newOffset) {
     offset = bigintToI53Checked(offset);
   
@@ -1333,7 +1477,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'setTempRet0',
   'createNamedFunction',
   'zeroMemory',
-  'exitJS',
   'withStackSave',
   'strError',
   'inetPton4',
@@ -1348,7 +1491,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'getDynCaller',
   'dynCall',
   'handleException',
-  'keepRuntimeAlive',
   'runtimeKeepalivePush',
   'runtimeKeepalivePop',
   'callUserCallback',
@@ -1428,7 +1570,6 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'jsStackTrace',
   'getCallstack',
   'convertPCtoSourceLocation',
-  'checkWasiClock',
   'wasiRightsToMuslOFlags',
   'wasiOFlagsToMuslOFlags',
   'initRandomFill',
@@ -1508,6 +1649,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'stackRestore',
   'stackAlloc',
   'ptrToString',
+  'exitJS',
   'getHeapMax',
   'growMemory',
   'ENV',
@@ -1519,6 +1661,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'warnOnce',
   'readEmAsmArgsArray',
   'getExecutableName',
+  'keepRuntimeAlive',
   'alignMemory',
   'wasmTable',
   'wasmMemory',
@@ -1544,6 +1687,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'UNWIND_CACHE',
   'ExitStatus',
   'getEnvStrings',
+  'checkWasiClock',
   'flush_NO_FILESYSTEM',
   'emSetImmediate',
   'emClearImmediate_deps',
@@ -1677,6 +1821,45 @@ var _calculate_chsh_parameter = Module['_calculate_chsh_parameter'] = makeInvali
 var _bell_test_chsh = Module['_bell_test_chsh'] = makeInvalidEarlyAccess('_bell_test_chsh');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _bell_get_optimal_settings = Module['_bell_get_optimal_settings'] = makeInvalidEarlyAccess('_bell_get_optimal_settings');
+var _dmrg_result_free = Module['_dmrg_result_free'] = makeInvalidEarlyAccess('_dmrg_result_free');
+var _dmrg_tfim_ground_state = Module['_dmrg_tfim_ground_state'] = makeInvalidEarlyAccess('_dmrg_tfim_ground_state');
+var _tn_mps_free = Module['_tn_mps_free'] = makeInvalidEarlyAccess('_tn_mps_free');
+var _dmrg_compute_energy = Module['_dmrg_compute_energy'] = makeInvalidEarlyAccess('_dmrg_compute_energy');
+var _dmrg_energy_variance = Module['_dmrg_energy_variance'] = makeInvalidEarlyAccess('_dmrg_energy_variance');
+var _tn_mps_copy = Module['_tn_mps_copy'] = makeInvalidEarlyAccess('_tn_mps_copy');
+var _tn_mps_overlap = Module['_tn_mps_overlap'] = makeInvalidEarlyAccess('_tn_mps_overlap');
+var _tn_mps_create_zero = Module['_tn_mps_create_zero'] = makeInvalidEarlyAccess('_tn_mps_create_zero');
+var _tn_apply_x = Module['_tn_apply_x'] = makeInvalidEarlyAccess('_tn_apply_x');
+var _tn_apply_y = Module['_tn_apply_y'] = makeInvalidEarlyAccess('_tn_apply_y');
+var _tn_apply_z = Module['_tn_apply_z'] = makeInvalidEarlyAccess('_tn_apply_z');
+var _tn_apply_h = Module['_tn_apply_h'] = makeInvalidEarlyAccess('_tn_apply_h');
+var _tn_apply_s = Module['_tn_apply_s'] = makeInvalidEarlyAccess('_tn_apply_s');
+var _tn_apply_t = Module['_tn_apply_t'] = makeInvalidEarlyAccess('_tn_apply_t');
+var _tn_apply_rx = Module['_tn_apply_rx'] = makeInvalidEarlyAccess('_tn_apply_rx');
+var _tn_apply_ry = Module['_tn_apply_ry'] = makeInvalidEarlyAccess('_tn_apply_ry');
+var _tn_apply_rz = Module['_tn_apply_rz'] = makeInvalidEarlyAccess('_tn_apply_rz');
+var _tn_apply_cnot = Module['_tn_apply_cnot'] = makeInvalidEarlyAccess('_tn_apply_cnot');
+var _tn_apply_cz = Module['_tn_apply_cz'] = makeInvalidEarlyAccess('_tn_apply_cz');
+var _tn_apply_swap = Module['_tn_apply_swap'] = makeInvalidEarlyAccess('_tn_apply_swap');
+var _tn_apply_rzz = Module['_tn_apply_rzz'] = makeInvalidEarlyAccess('_tn_apply_rzz');
+var _tn_apply_toffoli = Module['_tn_apply_toffoli'] = makeInvalidEarlyAccess('_tn_apply_toffoli');
+var _tn_mps_truncate = Module['_tn_mps_truncate'] = makeInvalidEarlyAccess('_tn_mps_truncate');
+var _tn_measure_probability = Module['_tn_measure_probability'] = makeInvalidEarlyAccess('_tn_measure_probability');
+var _tn_measure_bitstring_probability = Module['_tn_measure_bitstring_probability'] = makeInvalidEarlyAccess('_tn_measure_bitstring_probability');
+var _tn_mps_amplitude = Module['_tn_mps_amplitude'] = makeInvalidEarlyAccess('_tn_mps_amplitude');
+var _tn_sample_auto = Module['_tn_sample_auto'] = makeInvalidEarlyAccess('_tn_sample_auto');
+var _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_mixed_canonicalize');
+var _tn_mps_move_center = Module['_tn_mps_move_center'] = makeInvalidEarlyAccess('_tn_mps_move_center');
+var _tn_mps_create_basis = Module['_tn_mps_create_basis'] = makeInvalidEarlyAccess('_tn_mps_create_basis');
+var _tn_mps_normalize = Module['_tn_mps_normalize'] = makeInvalidEarlyAccess('_tn_mps_normalize');
+var _tn_mps_num_qubits = Module['_tn_mps_num_qubits'] = makeInvalidEarlyAccess('_tn_mps_num_qubits');
+var _tn_mps_amplitudes = Module['_tn_mps_amplitudes'] = makeInvalidEarlyAccess('_tn_mps_amplitudes');
+var _tn_mps_to_statevector = Module['_tn_mps_to_statevector'] = makeInvalidEarlyAccess('_tn_mps_to_statevector');
+var _tn_mps_left_canonicalize = Module['_tn_mps_left_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_left_canonicalize');
+var _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_right_canonicalize');
+var _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = makeInvalidEarlyAccess('_tn_mps_truncate_bond');
+var _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = makeInvalidEarlyAccess('_tn_mps_grow_bond');
+var _tn_mps_fidelity = Module['_tn_mps_fidelity'] = makeInvalidEarlyAccess('_tn_mps_fidelity');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
@@ -1773,6 +1956,45 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['bell_test_chsh'] != 'undefined', 'missing Wasm export: bell_test_chsh');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
   assert(typeof wasmExports['bell_get_optimal_settings'] != 'undefined', 'missing Wasm export: bell_get_optimal_settings');
+  assert(typeof wasmExports['dmrg_result_free'] != 'undefined', 'missing Wasm export: dmrg_result_free');
+  assert(typeof wasmExports['dmrg_tfim_ground_state'] != 'undefined', 'missing Wasm export: dmrg_tfim_ground_state');
+  assert(typeof wasmExports['tn_mps_free'] != 'undefined', 'missing Wasm export: tn_mps_free');
+  assert(typeof wasmExports['dmrg_compute_energy'] != 'undefined', 'missing Wasm export: dmrg_compute_energy');
+  assert(typeof wasmExports['dmrg_energy_variance'] != 'undefined', 'missing Wasm export: dmrg_energy_variance');
+  assert(typeof wasmExports['tn_mps_copy'] != 'undefined', 'missing Wasm export: tn_mps_copy');
+  assert(typeof wasmExports['tn_mps_overlap'] != 'undefined', 'missing Wasm export: tn_mps_overlap');
+  assert(typeof wasmExports['tn_mps_create_zero'] != 'undefined', 'missing Wasm export: tn_mps_create_zero');
+  assert(typeof wasmExports['tn_apply_x'] != 'undefined', 'missing Wasm export: tn_apply_x');
+  assert(typeof wasmExports['tn_apply_y'] != 'undefined', 'missing Wasm export: tn_apply_y');
+  assert(typeof wasmExports['tn_apply_z'] != 'undefined', 'missing Wasm export: tn_apply_z');
+  assert(typeof wasmExports['tn_apply_h'] != 'undefined', 'missing Wasm export: tn_apply_h');
+  assert(typeof wasmExports['tn_apply_s'] != 'undefined', 'missing Wasm export: tn_apply_s');
+  assert(typeof wasmExports['tn_apply_t'] != 'undefined', 'missing Wasm export: tn_apply_t');
+  assert(typeof wasmExports['tn_apply_rx'] != 'undefined', 'missing Wasm export: tn_apply_rx');
+  assert(typeof wasmExports['tn_apply_ry'] != 'undefined', 'missing Wasm export: tn_apply_ry');
+  assert(typeof wasmExports['tn_apply_rz'] != 'undefined', 'missing Wasm export: tn_apply_rz');
+  assert(typeof wasmExports['tn_apply_cnot'] != 'undefined', 'missing Wasm export: tn_apply_cnot');
+  assert(typeof wasmExports['tn_apply_cz'] != 'undefined', 'missing Wasm export: tn_apply_cz');
+  assert(typeof wasmExports['tn_apply_swap'] != 'undefined', 'missing Wasm export: tn_apply_swap');
+  assert(typeof wasmExports['tn_apply_rzz'] != 'undefined', 'missing Wasm export: tn_apply_rzz');
+  assert(typeof wasmExports['tn_apply_toffoli'] != 'undefined', 'missing Wasm export: tn_apply_toffoli');
+  assert(typeof wasmExports['tn_mps_truncate'] != 'undefined', 'missing Wasm export: tn_mps_truncate');
+  assert(typeof wasmExports['tn_measure_probability'] != 'undefined', 'missing Wasm export: tn_measure_probability');
+  assert(typeof wasmExports['tn_measure_bitstring_probability'] != 'undefined', 'missing Wasm export: tn_measure_bitstring_probability');
+  assert(typeof wasmExports['tn_mps_amplitude'] != 'undefined', 'missing Wasm export: tn_mps_amplitude');
+  assert(typeof wasmExports['tn_sample_auto'] != 'undefined', 'missing Wasm export: tn_sample_auto');
+  assert(typeof wasmExports['tn_mps_mixed_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_mixed_canonicalize');
+  assert(typeof wasmExports['tn_mps_move_center'] != 'undefined', 'missing Wasm export: tn_mps_move_center');
+  assert(typeof wasmExports['tn_mps_create_basis'] != 'undefined', 'missing Wasm export: tn_mps_create_basis');
+  assert(typeof wasmExports['tn_mps_normalize'] != 'undefined', 'missing Wasm export: tn_mps_normalize');
+  assert(typeof wasmExports['tn_mps_num_qubits'] != 'undefined', 'missing Wasm export: tn_mps_num_qubits');
+  assert(typeof wasmExports['tn_mps_amplitudes'] != 'undefined', 'missing Wasm export: tn_mps_amplitudes');
+  assert(typeof wasmExports['tn_mps_to_statevector'] != 'undefined', 'missing Wasm export: tn_mps_to_statevector');
+  assert(typeof wasmExports['tn_mps_left_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_left_canonicalize');
+  assert(typeof wasmExports['tn_mps_right_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_right_canonicalize');
+  assert(typeof wasmExports['tn_mps_truncate_bond'] != 'undefined', 'missing Wasm export: tn_mps_truncate_bond');
+  assert(typeof wasmExports['tn_mps_grow_bond'] != 'undefined', 'missing Wasm export: tn_mps_grow_bond');
+  assert(typeof wasmExports['tn_mps_fidelity'] != 'undefined', 'missing Wasm export: tn_mps_fidelity');
   assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
   assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
@@ -1866,6 +2088,45 @@ function assignWasmExports(wasmExports) {
   _bell_test_chsh = Module['_bell_test_chsh'] = createExportWrapper('bell_test_chsh', 7);
   _fflush = createExportWrapper('fflush', 1);
   _bell_get_optimal_settings = Module['_bell_get_optimal_settings'] = createExportWrapper('bell_get_optimal_settings', 1);
+  _dmrg_result_free = Module['_dmrg_result_free'] = createExportWrapper('dmrg_result_free', 1);
+  _dmrg_tfim_ground_state = Module['_dmrg_tfim_ground_state'] = createExportWrapper('dmrg_tfim_ground_state', 4);
+  _tn_mps_free = Module['_tn_mps_free'] = createExportWrapper('tn_mps_free', 1);
+  _dmrg_compute_energy = Module['_dmrg_compute_energy'] = createExportWrapper('dmrg_compute_energy', 2);
+  _dmrg_energy_variance = Module['_dmrg_energy_variance'] = createExportWrapper('dmrg_energy_variance', 2);
+  _tn_mps_copy = Module['_tn_mps_copy'] = createExportWrapper('tn_mps_copy', 1);
+  _tn_mps_overlap = Module['_tn_mps_overlap'] = createExportWrapper('tn_mps_overlap', 3);
+  _tn_mps_create_zero = Module['_tn_mps_create_zero'] = createExportWrapper('tn_mps_create_zero', 2);
+  _tn_apply_x = Module['_tn_apply_x'] = createExportWrapper('tn_apply_x', 2);
+  _tn_apply_y = Module['_tn_apply_y'] = createExportWrapper('tn_apply_y', 2);
+  _tn_apply_z = Module['_tn_apply_z'] = createExportWrapper('tn_apply_z', 2);
+  _tn_apply_h = Module['_tn_apply_h'] = createExportWrapper('tn_apply_h', 2);
+  _tn_apply_s = Module['_tn_apply_s'] = createExportWrapper('tn_apply_s', 2);
+  _tn_apply_t = Module['_tn_apply_t'] = createExportWrapper('tn_apply_t', 2);
+  _tn_apply_rx = Module['_tn_apply_rx'] = createExportWrapper('tn_apply_rx', 3);
+  _tn_apply_ry = Module['_tn_apply_ry'] = createExportWrapper('tn_apply_ry', 3);
+  _tn_apply_rz = Module['_tn_apply_rz'] = createExportWrapper('tn_apply_rz', 3);
+  _tn_apply_cnot = Module['_tn_apply_cnot'] = createExportWrapper('tn_apply_cnot', 3);
+  _tn_apply_cz = Module['_tn_apply_cz'] = createExportWrapper('tn_apply_cz', 3);
+  _tn_apply_swap = Module['_tn_apply_swap'] = createExportWrapper('tn_apply_swap', 3);
+  _tn_apply_rzz = Module['_tn_apply_rzz'] = createExportWrapper('tn_apply_rzz', 4);
+  _tn_apply_toffoli = Module['_tn_apply_toffoli'] = createExportWrapper('tn_apply_toffoli', 4);
+  _tn_mps_truncate = Module['_tn_mps_truncate'] = createExportWrapper('tn_mps_truncate', 3);
+  _tn_measure_probability = Module['_tn_measure_probability'] = createExportWrapper('tn_measure_probability', 4);
+  _tn_measure_bitstring_probability = Module['_tn_measure_bitstring_probability'] = createExportWrapper('tn_measure_bitstring_probability', 2);
+  _tn_mps_amplitude = Module['_tn_mps_amplitude'] = createExportWrapper('tn_mps_amplitude', 3);
+  _tn_sample_auto = Module['_tn_sample_auto'] = createExportWrapper('tn_sample_auto', 5);
+  _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = createExportWrapper('tn_mps_mixed_canonicalize', 2);
+  _tn_mps_move_center = Module['_tn_mps_move_center'] = createExportWrapper('tn_mps_move_center', 2);
+  _tn_mps_create_basis = Module['_tn_mps_create_basis'] = createExportWrapper('tn_mps_create_basis', 3);
+  _tn_mps_normalize = Module['_tn_mps_normalize'] = createExportWrapper('tn_mps_normalize', 1);
+  _tn_mps_num_qubits = Module['_tn_mps_num_qubits'] = createExportWrapper('tn_mps_num_qubits', 1);
+  _tn_mps_amplitudes = Module['_tn_mps_amplitudes'] = createExportWrapper('tn_mps_amplitudes', 4);
+  _tn_mps_to_statevector = Module['_tn_mps_to_statevector'] = createExportWrapper('tn_mps_to_statevector', 2);
+  _tn_mps_left_canonicalize = Module['_tn_mps_left_canonicalize'] = createExportWrapper('tn_mps_left_canonicalize', 1);
+  _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = createExportWrapper('tn_mps_right_canonicalize', 1);
+  _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = createExportWrapper('tn_mps_truncate_bond', 4);
+  _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = createExportWrapper('tn_mps_grow_bond', 3);
+  _tn_mps_fidelity = Module['_tn_mps_fidelity'] = createExportWrapper('tn_mps_fidelity', 2);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
@@ -1879,7 +2140,33 @@ function assignWasmExports(wasmExports) {
 
 var wasmImports = {
   /** @export */
+  __syscall_dup3: ___syscall_dup3,
+  /** @export */
+  __syscall_faccessat: ___syscall_faccessat,
+  /** @export */
+  __syscall_fcntl64: ___syscall_fcntl64,
+  /** @export */
+  __syscall_fstat64: ___syscall_fstat64,
+  /** @export */
+  __syscall_ftruncate64: ___syscall_ftruncate64,
+  /** @export */
+  __syscall_ioctl: ___syscall_ioctl,
+  /** @export */
+  __syscall_lstat64: ___syscall_lstat64,
+  /** @export */
+  __syscall_newfstatat: ___syscall_newfstatat,
+  /** @export */
+  __syscall_openat: ___syscall_openat,
+  /** @export */
+  __syscall_stat64: ___syscall_stat64,
+  /** @export */
+  __syscall_unlinkat: ___syscall_unlinkat,
+  /** @export */
   _abort_js: __abort_js,
+  /** @export */
+  clock_time_get: _clock_time_get,
+  /** @export */
+  emscripten_date_now: _emscripten_date_now,
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
   /** @export */
@@ -1887,7 +2174,13 @@ var wasmImports = {
   /** @export */
   environ_sizes_get: _environ_sizes_get,
   /** @export */
+  exit: _exit,
+  /** @export */
   fd_close: _fd_close,
+  /** @export */
+  fd_fdstat_get: _fd_fdstat_get,
+  /** @export */
+  fd_read: _fd_read,
   /** @export */
   fd_seek: _fd_seek,
   /** @export */

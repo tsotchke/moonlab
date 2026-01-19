@@ -72,6 +72,14 @@ find "${BUILD_DIR}" -name 'libclapack.a' -o -name 'liblapack.a' -o -name 'libbla
   cp -f "${lib}" "${LIB_DIR}/"
 done
 
+# Remove the Fortran runtime main() to avoid Emscripten NO_ENTRY conflicts.
+if [ -f "${LIB_DIR}/libf2c.a" ]; then
+  echo "==> Removing f2c main() from libf2c.a"
+  emar d "${LIB_DIR}/libf2c.a" main.c.o || true
+  echo "==> Removing f2c s_copy/s_cat to avoid signature mismatches"
+  emar d "${LIB_DIR}/libf2c.a" s_copy.c.o s_cat.c.o || true
+fi
+
 # Copy headers from common CLAPACK locations
 for hdr_dir in "${SRC_DIR}/INCLUDE" "${SRC_DIR}/F2CLIBS" "${SRC_DIR}/CBLAS/include" "${SRC_DIR}/SRC"; do
   if [ -d "${hdr_dir}" ]; then

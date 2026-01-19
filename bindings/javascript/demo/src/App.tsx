@@ -26,7 +26,7 @@ export const App: React.FC = () => {
             <NavLink to="/gallery" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               Gallery
             </NavLink>
-            <NavLink to="/orbitals" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            <NavLink to="/schrodinger" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
               Schrödinger
             </NavLink>
           </nav>
@@ -48,7 +48,7 @@ export const App: React.FC = () => {
             <Route path="/examples" element={<Examples />} />
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/gallery/:id" element={<GalleryDetail />} />
-            <Route path="/orbitals" element={<Orbitals />} />
+            <Route path="/schrodinger" element={<Orbitals />} />
           </Routes>
         </Suspense>
       </main>
