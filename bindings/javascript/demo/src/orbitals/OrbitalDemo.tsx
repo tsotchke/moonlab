@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { QuantumState, dmrgTFIMGroundState, preload, type Complex } from '@moonlab/quantum-core';
+import { dmrgWeightsInWorker, ensureMoonlabWorker, probabilitiesFromAmplitudes } from '../workers/moonlabClient';
 import { ElementPicker } from './ElementPicker';
 import { ELEMENTS, type Atom } from './elements';
 import './Orbitals.css';
@@ -9,8 +9,8 @@ import './Orbitals.css';
 // Preload Moonlab once per module load (avoids React strict-mode double effects)
 const orbitalPreload =
   typeof window !== 'undefined'
-    ? preload().catch((err) => {
-        console.error('Moonlab preload failed', err);
+    ? ensureMoonlabWorker().catch((err) => {
+        console.error('Moonlab worker preload failed', err);
         throw err;
       })
     : Promise.resolve();
@@ -214,7 +214,7 @@ const alignToDimension = (
 };
 
 const samplePoints = (
-  probabilities: number[],
+  probabilities: ArrayLike<number>,
   positions: { x: number; y: number; z: number }[],
   count: number,
   extent: number,
@@ -307,7 +307,7 @@ const OrbitalDemo: React.FC = () => {
   const [useDmrg, setUseDmrg] = useState<boolean>(true);
   const [dmrgSites, setDmrgSites] = useState<number>(DEFAULT_DMRG_SITES);
   const [dmrgG, setDmrgG] = useState<number>(1.0);
-  const [dmrgWeights, setDmrgWeights] = useState<number[] | null>(null);
+  const [dmrgWeights, setDmrgWeights] = useState<Float64Array | null>(null);
   const [dmrgStats, setDmrgStats] = useState<{
     elapsedMs: number;
     sites: number;
@@ -345,21 +345,14 @@ const OrbitalDemo: React.FC = () => {
 
     const solve = async () => {
       await orbitalPreload;
-      const result = await dmrgTFIMGroundState({ numSites: sites, g: dmrgG });
-      const amplitudes = result.state.toStateVector(DMRG_MAX_SITES);
-      result.state.dispose();
-
-      const probs = amplitudes.map((amp) => amp.real * amp.real + amp.imag * amp.imag);
-      const total = probs.reduce((acc, p) => acc + p, 0);
-      const normalized = total > 0 ? probs.map((p) => p / total) : probs;
-
+      const result = await dmrgWeightsInWorker({ numSites: sites, g: dmrgG });
       if (cancelled || dmrgRunId.current !== runId) return;
-      setDmrgWeights(normalized);
+      setDmrgWeights(result.weights);
       setDmrgStats({
-        elapsedMs: performance.now() - start,
+        elapsedMs: result.elapsedMs ?? performance.now() - start,
         sites,
         energy: result.energy,
-        variance: result.energyVariance,
+        variance: result.variance,
       });
     };
 
@@ -532,73 +525,73 @@ const OrbitalDemo: React.FC = () => {
     const extent = extentForAtom(n, atom.Z);
     setCurrentExtent(extent);
     try {
-    await orbitalPreload;
-    const targetDim = Math.pow(2, effectiveQubits);
-    const gridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(targetDim))));
-    const spacing = (extent * 2) / (gridSide - 1);
-    const gridSizeWorld = spacing * (gridSide - 1);
+      await orbitalPreload;
+      const targetDim = Math.pow(2, effectiveQubits);
+      const gridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(targetDim))));
+      const spacing = (extent * 2) / (gridSide - 1);
+      const gridSizeWorld = spacing * (gridSide - 1);
 
-    const grid = await buildProbabilityGrid({
-      atom,
-      n,
-      l,
-      m,
-      pointCount,
-      extent,
-      gridSize: gridSide,
-    });
-    const aligned = alignToDimension(grid.probabilities, grid.positions, targetDim);
+      const grid = await buildProbabilityGrid({
+        atom,
+        n,
+        l,
+        m,
+        pointCount,
+        extent,
+        gridSize: gridSide,
+      });
+      const aligned = alignToDimension(grid.probabilities, grid.positions, targetDim);
 
-    const dmrgInfluence = useDmrg && dmrgWeights && dmrgWeights.length > 0 ? dmrgWeights : null;
+      const dmrgInfluence = useDmrg && dmrgWeights && dmrgWeights.length > 0 ? dmrgWeights : null;
 
-    // Normalize via Moonlab state to respect measurement semantics
-    const amplitudes: Complex[] = new Array(targetDim);
-    let total = 0;
-    for (let i = 0; i < targetDim; i++) {
-      const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
-      total += aligned.probs[i] * weight;
-    }
-    const norm = total > 0 ? Math.sqrt(total) : 1;
-    for (let i = 0; i < targetDim; i++) {
-      const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
-      const prob = aligned.probs[i] * weight;
-      const amp = prob > 0 ? Math.sqrt(prob) / norm : 0;
-      amplitudes[i] = { real: amp, imag: 0 };
-    }
-
-    const state = await QuantumState.create({ numQubits: effectiveQubits });
-    state.setAmplitudes(amplitudes);
-    const probs = Array.from(state.getProbabilities());
-    state.dispose();
-
-    const sampled = samplePoints(probs, aligned.pos, pointCount, extent, gridSide);
-    setPointsBuffer(sampled);
-    setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
-
-    // Update grid helper to match current lattice
-    if (sceneRef.current) {
-      if (gridRef.current) {
-        sceneRef.current.remove(gridRef.current);
+      const amplitudes = new Float64Array(targetDim * 2);
+      let total = 0;
+      for (let i = 0; i < targetDim; i++) {
+        const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
+        total += aligned.probs[i] * weight;
       }
-      const newGrid = new THREE.GridHelper(gridSizeWorld, gridSide - 1, '#0b3b5a', '#0b3b5a');
-      newGrid.position.y = -extent;
-      sceneRef.current.add(newGrid);
-      gridRef.current = newGrid;
-    }
+      const norm = total > 0 ? Math.sqrt(total) : 1;
+      for (let i = 0; i < targetDim; i++) {
+        const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
+        const prob = aligned.probs[i] * weight;
+        const amp = prob > 0 ? Math.sqrt(prob) / norm : 0;
+        amplitudes[i * 2] = amp;
+        amplitudes[i * 2 + 1] = 0;
+      }
 
-    // Update axes position/size relative to extent
-    if (sceneRef.current && axesRef.current) {
-      axesRef.current.position.set(0, -extent, 0);
-      axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
-    }
+      const probs = await probabilitiesFromAmplitudes({
+        numQubits: effectiveQubits,
+        amplitudes,
+      });
 
-    // Update nucleus scale relative to cloud extent
-    if (nucleusRef.current) {
-      nucleusRef.current.scale.setScalar(nucleusRadiusForExtent(extent));
-    }
-  } catch (err) {
-    console.error('Failed to build orbital cloud', err);
-  } finally {
+      const sampled = samplePoints(probs, aligned.pos, pointCount, extent, gridSide);
+      setPointsBuffer(sampled);
+      setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
+
+      // Update grid helper to match current lattice
+      if (sceneRef.current) {
+        if (gridRef.current) {
+          sceneRef.current.remove(gridRef.current);
+        }
+        const newGrid = new THREE.GridHelper(gridSizeWorld, gridSide - 1, '#0b3b5a', '#0b3b5a');
+        newGrid.position.y = -extent;
+        sceneRef.current.add(newGrid);
+        gridRef.current = newGrid;
+      }
+
+      // Update axes position/size relative to extent
+      if (sceneRef.current && axesRef.current) {
+        axesRef.current.position.set(0, -extent, 0);
+        axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
+      }
+
+      // Update nucleus scale relative to cloud extent
+      if (nucleusRef.current) {
+        nucleusRef.current.scale.setScalar(nucleusRadiusForExtent(extent));
+      }
+    } catch (err) {
+      console.error('Failed to build orbital cloud', err);
+    } finally {
       setIsGenerating(false);
     }
   };
