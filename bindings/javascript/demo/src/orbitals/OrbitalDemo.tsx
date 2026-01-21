@@ -16,6 +16,8 @@ const orbitalPreload =
     : Promise.resolve();
 
 const L_LABELS = ['s', 'p', 'd', 'f', 'g'];
+const MOBILE_COLLAPSE_QUERY = '(max-width: 900px)';
+const GRID_COLOR = '#2b2e31';
 const MAX_GRID = 32;
 const MIN_GRID = 4;
 const BASE_GRID = 32;
@@ -46,6 +48,7 @@ const CONTROL_TOOLTIPS = {
   dmrgG: 'Transverse field ratio g/J; shifts the TFIM ground state.',
   l: 'Orbital shape selector (s, p, d, f, ...).',
   m: 'Orbital orientation (magnetic quantum number).',
+  guides: 'Show or hide the lattice grid and Cartesian axes.',
   pointCount: 'Number of sampled points; higher values yield a denser cloud.',
   pointSize: 'Rendered size of each point sprite.',
   opacity: 'Cloud transparency; lower values are more transparent.',
@@ -319,10 +322,25 @@ const OrbitalDemo: React.FC = () => {
   const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(DEFAULT_N, DEFAULT_ATOM.Z));
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
+  const [showGuides, setShowGuides] = useState<boolean>(true);
   const dmrgRunId = useRef(0);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia(MOBILE_COLLAPSE_QUERY);
+    const apply = (matches: boolean) => setIsCollapsed(matches);
+    apply(media.matches);
+    const handler = (event: MediaQueryListEvent) => apply(event.matches);
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handler);
+      return () => media.removeEventListener('change', handler);
+    }
+    media.addListener(handler);
+    return () => media.removeListener(handler);
+  }, []);
 
   useEffect(() => {
     setM((prev) => clamp(prev, -l, l));
@@ -384,24 +402,28 @@ const OrbitalDemo: React.FC = () => {
     const height = mountRef.current.clientHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#050716');
+    scene.background = null;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
     camera.position.set(6, 6, 6);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
     mountRef.current.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.8;
+    controls.enablePan = false;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
-    const ambient = new THREE.AmbientLight('#88aaff', 0.4);
+    const ambient = new THREE.AmbientLight('#c2c2c2', 0.35);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight('#aaddff', 0.6);
+    const dir = new THREE.DirectionalLight('#f0f0f0', 0.55);
     dir.position.set(4, 5, 2);
     scene.add(dir);
 
@@ -413,20 +435,25 @@ const OrbitalDemo: React.FC = () => {
 
     const nucleus = new THREE.Mesh(
       new THREE.SphereGeometry(1, 32, 32),
-      new THREE.MeshBasicMaterial({ color: '#ff7ac3' })
+      new THREE.MeshBasicMaterial({ color: '#d8d8d8' })
     );
     const nucleusRadius = nucleusRadiusForExtent(initialExtent);
     nucleus.scale.setScalar(nucleusRadius);
     scene.add(nucleus);
     nucleusRef.current = nucleus;
 
-    const grid = new THREE.GridHelper(initialSize, initialGridSide - 1, '#0b3b5a', '#0b3b5a');
+    const grid = new THREE.GridHelper(initialSize, initialGridSide - 1, GRID_COLOR, GRID_COLOR);
     grid.position.y = -initialExtent;
+    grid.visible = showGuides;
     scene.add(grid);
     gridRef.current = grid;
 
     const axes = new THREE.AxesHelper(initialExtent * 1.2);
     axes.position.set(0, -initialExtent, 0);
+    const axesMaterial = axes.material as THREE.LineBasicMaterial;
+    axesMaterial.vertexColors = false;
+    axesMaterial.color.set('#7d7f82');
+    axes.visible = showGuides;
     scene.add(axes);
     axesRef.current = axes;
 
@@ -476,6 +503,15 @@ const OrbitalDemo: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.visible = showGuides;
+    }
+    if (axesRef.current) {
+      axesRef.current.visible = showGuides;
+    }
+  }, [showGuides]);
+
+  useEffect(() => {
     rotatingRef.current = isRotating;
     if (controlsRef.current) {
       controlsRef.current.autoRotate = isRotating;
@@ -495,7 +531,6 @@ const OrbitalDemo: React.FC = () => {
     geometry.setAttribute('position', new THREE.BufferAttribute(pointsBuffer, 3));
 
     const colors = new Float32Array(pointsBuffer.length);
-    const color = new THREE.Color();
     const maxR = currentExtent || 1;
     for (let i = 0; i < pointsBuffer.length; i += 3) {
       const x = pointsBuffer[i];
@@ -503,10 +538,10 @@ const OrbitalDemo: React.FC = () => {
       const z = pointsBuffer[i + 2];
       const r = Math.sqrt(x * x + y * y + z * z);
       const t = clamp(r / (maxR * 1.2), 0, 1);
-      color.setHSL(0.62 - 0.3 * t, 0.85, 0.55 + 0.2 * (1 - t));
-      colors[i] = color.r;
-      colors[i + 1] = color.g;
-      colors[i + 2] = color.b;
+      const shade = 0.9 - 0.45 * t;
+      colors[i] = shade;
+      colors[i + 1] = shade;
+      colors[i + 2] = shade;
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -568,22 +603,23 @@ const OrbitalDemo: React.FC = () => {
       setPointsBuffer(sampled);
       setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
 
-      // Update grid helper to match current lattice
-      if (sceneRef.current) {
-        if (gridRef.current) {
-          sceneRef.current.remove(gridRef.current);
-        }
-        const newGrid = new THREE.GridHelper(gridSizeWorld, gridSide - 1, '#0b3b5a', '#0b3b5a');
-        newGrid.position.y = -extent;
-        sceneRef.current.add(newGrid);
-        gridRef.current = newGrid;
+    // Update grid helper to match current lattice
+    if (sceneRef.current) {
+      if (gridRef.current) {
+        sceneRef.current.remove(gridRef.current);
       }
+      const newGrid = new THREE.GridHelper(gridSizeWorld, gridSide - 1, GRID_COLOR, GRID_COLOR);
+      newGrid.position.y = -extent;
+      newGrid.visible = showGuides;
+      sceneRef.current.add(newGrid);
+      gridRef.current = newGrid;
+    }
 
       // Update axes position/size relative to extent
-      if (sceneRef.current && axesRef.current) {
-        axesRef.current.position.set(0, -extent, 0);
-        axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
-      }
+    if (sceneRef.current && axesRef.current) {
+      axesRef.current.position.set(0, -extent, 0);
+      axesRef.current.scale.setScalar(Math.max(1, spacing * gridSide * 0.25));
+    }
 
       // Update nucleus scale relative to cloud extent
       if (nucleusRef.current) {
@@ -715,6 +751,16 @@ const OrbitalDemo: React.FC = () => {
                 onChange={(e) => setUseDmrg(e.target.checked)}
               />
               <span title={CONTROL_TOOLTIPS.useDmrg}>Use DMRG solver (TFIM ground state)</span>
+            </label>
+
+            <label className="control checkbox-control">
+              <input
+                type="checkbox"
+                checked={showGuides}
+                title={CONTROL_TOOLTIPS.guides}
+                onChange={(e) => setShowGuides(e.target.checked)}
+              />
+              <span title={CONTROL_TOOLTIPS.guides}>Show cartesian grid + axes</span>
             </label>
 
             <label className="control">

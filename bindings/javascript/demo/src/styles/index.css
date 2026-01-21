@@ -2,32 +2,40 @@
    Moonlab Quantum Simulator - Demo Site Styles
    ============================================================================ */
 
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
 :root {
-  --color-bg-primary: #0a0a1a;
-  --color-bg-secondary: #12122a;
-  --color-bg-tertiary: #1a1a3a;
-  --color-bg-card: #1a1a2e;
+  --color-bg-primary: #0a0a0a;
+  --color-bg-secondary: #101010;
+  --color-bg-tertiary: #181818;
+  --color-bg-card: #141414;
 
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #a0a0b0;
-  --color-text-muted: #606080;
+  --color-text-primary: #e6e6e6;
+  --color-text-secondary: #b2b2b2;
+  --color-text-muted: #7a7a7a;
 
-  --color-accent-blue: #6496ff;
-  --color-accent-purple: #9966ff;
-  --color-accent-cyan: #00d4ff;
-  --color-accent-green: #00ff88;
-  --color-accent-pink: #ff66aa;
+  --color-accent-blue: #cfd2d6;
+  --color-accent-purple: #9a9a9a;
+  --color-accent-cyan: #d7d7d7;
+  --color-accent-green: #bfc4c9;
+  --color-accent-pink: #d0d0d0;
 
-  --gradient-primary: linear-gradient(135deg, #6496ff 0%, #9966ff 100%);
-  --gradient-bg: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a2a 100%);
+  --moon-bg-image: none;
 
-  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
-  --shadow-glow: 0 0 30px rgba(100, 150, 255, 0.2);
+  --gradient-primary: linear-gradient(180deg, #f2f2f2 0%, #a8a8a8 100%);
+  --gradient-bg: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 50%),
+    linear-gradient(180deg, #0a0a0a 0%, #070707 100%);
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 18px rgba(200, 200, 200, 0.12);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  --font-body: 'VT323', 'Press Start 2P', monospace;
+  --font-display: 'Press Start 2P', 'VT323', monospace;
 
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
@@ -42,11 +50,16 @@
 }
 
 html, body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.5;
   color: var(--color-text-primary);
-  background: var(--gradient-bg);
+  background-color: #000;
+  background-image: var(--moon-bg-image);
+  background-position: center bottom;
+  background-size: 100vw auto;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   min-height: 100vh;
 }
 
@@ -74,9 +87,8 @@ button {
 
 /* Header */
 .header {
-  background: rgba(10, 10, 26, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(100, 150, 255, 0.1);
+  background: rgba(6, 6, 6, 0.98);
+  border-bottom: 2px solid rgba(200, 200, 200, 0.15);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -89,6 +101,7 @@ button {
   display: flex;
   align-items: center;
   gap: 2rem;
+  position: relative;
 }
 
 .logo {
@@ -96,26 +109,24 @@ button {
   align-items: center;
   gap: 0.5rem;
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
+  font-family: var(--font-display);
 }
 
 .logo-icon {
   width: 36px;
   height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--gradient-primary);
-  border-radius: var(--radius-md);
-  font-weight: 800;
-  font-size: 1.1rem;
+  display: block;
+  background: #1c1c1c;
+  border-radius: var(--radius-sm);
+  border: 2px solid rgba(220, 220, 220, 0.5);
+  padding: 4px;
+  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 .logo-text {
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-text-primary);
 }
 
 .nav {
@@ -130,29 +141,64 @@ button {
   color: var(--color-text-secondary);
   font-weight: 500;
   transition: all var(--transition-fast);
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.8rem;
+  font-family: var(--font-display);
 }
 
 .nav-link:hover {
   color: var(--color-text-primary);
-  background: rgba(100, 150, 255, 0.1);
+  background: rgba(200, 200, 200, 0.1);
+  border-color: rgba(200, 200, 200, 0.3);
 }
 
 .nav-link.active {
-  color: var(--color-accent-blue);
-  background: rgba(100, 150, 255, 0.15);
+  color: var(--color-text-primary);
+  background: rgba(220, 220, 220, 0.2);
+  border-color: rgba(220, 220, 220, 0.6);
+}
+
+.nav-link-external {
+  display: none;
 }
 
 .github-link {
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(100, 150, 255, 0.3);
+  border: 1px solid rgba(200, 200, 200, 0.4);
   border-radius: var(--radius-md);
   font-weight: 500;
   transition: all var(--transition-fast);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: var(--font-display);
 }
 
 .github-link:hover {
-  border-color: var(--color-accent-blue);
-  background: rgba(100, 150, 255, 0.1);
+  border-color: rgba(220, 220, 220, 0.6);
+  background: rgba(200, 200, 200, 0.12);
+}
+
+.menu-toggle {
+  display: none;
+  width: 42px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid rgba(200, 200, 200, 0.4);
+  background: rgba(15, 15, 15, 0.9);
+  border-radius: var(--radius-sm);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.menu-bar {
+  width: 18px;
+  height: 2px;
+  background: var(--color-text-primary);
+  display: block;
 }
 
 /* Main Content */
@@ -168,9 +214,24 @@ button {
 .footer {
   text-align: center;
   padding: 2rem;
-  border-top: 1px solid rgba(100, 150, 255, 0.1);
+  border-top: 2px solid rgba(200, 200, 200, 0.12);
   color: var(--color-text-muted);
   font-size: 0.875rem;
+}
+
+.footer-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.footer-logo {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 .footer-sub {
@@ -198,7 +259,7 @@ button {
   position: absolute;
   inset: 0;
   border: 3px solid transparent;
-  border-top-color: var(--color-accent-blue);
+  border-top-color: var(--color-text-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -208,7 +269,7 @@ button {
   position: absolute;
   inset: 6px;
   border: 3px solid transparent;
-  border-top-color: var(--color-accent-purple);
+  border-top-color: var(--color-text-secondary);
   border-radius: 50%;
   animation: spin 1.5s linear infinite reverse;
 }
@@ -219,10 +280,10 @@ button {
   left: 50%;
   width: 12px;
   height: 12px;
-  background: var(--gradient-primary);
+  background: var(--color-text-primary);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 20px var(--color-accent-blue);
+  box-shadow: 0 0 12px rgba(200, 200, 200, 0.6);
 }
 
 @keyframes spin {
@@ -232,25 +293,23 @@ button {
 /* Cards */
 .card {
   background: var(--color-bg-card);
-  border: 1px solid rgba(100, 150, 255, 0.1);
+  border: 2px solid rgba(180, 185, 190, 0.2);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   transition: all var(--transition-normal);
 }
 
 .card:hover {
-  border-color: rgba(100, 150, 255, 0.3);
+  border-color: rgba(200, 200, 200, 0.4);
   box-shadow: var(--shadow-glow);
 }
 
 .card-title {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
 }
 
 .card-description {
@@ -272,24 +331,25 @@ button {
 }
 
 .btn-primary {
-  background: var(--gradient-primary);
-  color: white;
+  background: rgba(230, 230, 230, 0.9);
+  color: #111111;
+  border: 2px solid rgba(230, 230, 230, 0.8);
 }
 
 .btn-primary:hover {
-  box-shadow: 0 4px 20px rgba(100, 150, 255, 0.4);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: rgba(100, 150, 255, 0.1);
+  background: rgba(200, 200, 200, 0.08);
   color: var(--color-text-primary);
-  border: 1px solid rgba(100, 150, 255, 0.2);
+  border: 2px solid rgba(200, 200, 200, 0.2);
 }
 
 .btn-secondary:hover {
-  background: rgba(100, 150, 255, 0.2);
-  border-color: rgba(100, 150, 255, 0.4);
+  background: rgba(200, 200, 200, 0.16);
+  border-color: rgba(200, 200, 200, 0.4);
 }
 
 .btn-icon {
@@ -299,14 +359,14 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(100, 150, 255, 0.1);
-  border: 1px solid rgba(100, 150, 255, 0.2);
+  background: rgba(200, 200, 200, 0.08);
+  border: 2px solid rgba(200, 200, 200, 0.2);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
 }
 
 .btn-icon:hover {
-  background: rgba(100, 150, 255, 0.2);
+  background: rgba(200, 200, 200, 0.16);
   color: var(--color-text-primary);
 }
 
@@ -333,13 +393,72 @@ button {
   .main { padding: 1rem; }
 }
 
+@media (max-width: 640px) {
+  .section-title {
+    font-size: 1.2rem;
+  }
+
+  .section-description {
+    font-size: 1rem;
+  }
+
+  .section-logo {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (max-width: 900px) {
+  .menu-toggle {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    flex: none;
+    flex-direction: column;
+    background: rgba(10, 10, 10, 0.97);
+    border-bottom: 2px solid rgba(200, 200, 200, 0.2);
+    padding: 0.75rem 1rem 1rem;
+    gap: 0.5rem;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 200ms ease, opacity 200ms ease;
+  }
+
+  .nav.open {
+    max-height: 360px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .github-link {
+    display: none;
+  }
+
+  .nav-link {
+    width: 100%;
+  }
+
+  .nav-link-external {
+    display: inline-flex;
+  }
+}
+
 /* Code Blocks */
 .code-block {
-  background: #0d0d1a;
-  border: 1px solid rgba(100, 150, 255, 0.1);
+  background: #0b0b0b;
+  border: 2px solid rgba(180, 185, 190, 0.2);
   border-radius: var(--radius-md);
   padding: 1rem;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   line-height: 1.5;
   overflow-x: auto;
@@ -354,7 +473,7 @@ button {
 /* Visualization Containers */
 .viz-container {
   background: var(--color-bg-secondary);
-  border: 1px solid rgba(100, 150, 255, 0.15);
+  border: 2px solid rgba(180, 185, 190, 0.2);
   border-radius: var(--radius-lg);
   padding: 1rem;
   display: flex;
@@ -371,16 +490,31 @@ button {
 /* Section Headers */
 .section-header {
   margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.section-logo {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  opacity: 0.9;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.section-header-text {
+  display: flex;
+  flex-direction: column;
 }
 
 .section-title {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
 }
 
 .section-description {
@@ -402,7 +536,7 @@ button {
   transform: translateX(-50%);
   padding: 0.5rem 0.75rem;
   background: var(--color-bg-card);
-  border: 1px solid rgba(100, 150, 255, 0.2);
+  border: 2px solid rgba(180, 185, 190, 0.3);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   white-space: nowrap;

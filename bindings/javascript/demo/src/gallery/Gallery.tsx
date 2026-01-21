@@ -4,6 +4,7 @@ import { GALLERY_ITEMS } from './galleryData';
 import './Gallery.css';
 
 const Gallery: React.FC = () => {
+  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
@@ -33,10 +34,13 @@ const Gallery: React.FC = () => {
   return (
     <div className="gallery">
       <div className="section-header">
-        <h1 className="section-title">Algorithm Gallery</h1>
-        <p className="section-description">
-          Visual demonstrations of quantum computing concepts and algorithms.
-        </p>
+        <img className="section-logo" src={logoUrl} alt="" aria-hidden="true" />
+        <div className="section-header-text">
+          <h1 className="section-title">Algorithm Gallery</h1>
+          <p className="section-description">
+            Visual demonstrations of quantum computing concepts and algorithms.
+          </p>
+        </div>
       </div>
 
       <div className="gallery-filters">

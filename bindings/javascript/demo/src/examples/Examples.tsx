@@ -175,6 +175,7 @@ vqe.dispose();`,
 ];
 
 const Examples: React.FC = () => {
+  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
   const [selectedExample, setSelectedExample] = useState<string>(EXAMPLES[0].id);
   const [copied, setCopied] = useState(false);
   const [runOutput, setRunOutput] = useState<Record<string, string>>({});
@@ -257,10 +258,13 @@ const Examples: React.FC = () => {
   return (
     <div className="examples">
       <div className="section-header">
-        <h1 className="section-title">Code Examples</h1>
-        <p className="section-description">
-          Copy-paste code snippets to get started quickly with quantum computing.
-        </p>
+        <img className="section-logo" src={logoUrl} alt="" aria-hidden="true" />
+        <div className="section-header-text">
+          <h1 className="section-title">Code Examples</h1>
+          <p className="section-description">
+            Copy-paste code snippets to get started quickly with quantum computing.
+          </p>
+        </div>
       </div>
 
       <div className="examples-layout">
