@@ -394,6 +394,10 @@ button {
 }
 
 @media (max-width: 640px) {
+  html, body {
+    font-size: 16px;
+  }
+
   .section-title {
     font-size: 1.2rem;
   }
@@ -405,6 +409,12 @@ button {
   .section-logo {
     width: 24px;
     height: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  html, body {
+    font-size: 15px;
   }
 }
 

@@ -36,6 +36,7 @@ const DEFAULT_M = 2;
 const DEFAULT_POINT_COUNT = 494000;
 const DEFAULT_POINT_SIZE = 0.01;
 const DEFAULT_OPACITY = 0.15;
+const DEFAULT_CLOUD_COLOR = '#d8d8d8';
 
 const CONTROL_TOOLTIPS = {
   atom: 'Choose the element (atomic number Z). Higher Z pulls the cloud inward and increases radial decay.',
@@ -49,6 +50,8 @@ const CONTROL_TOOLTIPS = {
   l: 'Orbital shape selector (s, p, d, f, ...).',
   m: 'Orbital orientation (magnetic quantum number).',
   guides: 'Show or hide the lattice grid and Cartesian axes.',
+  background: 'Toggle the pixelated moon backdrop behind the simulation.',
+  cloudColor: 'Set the tint used for the orbital point cloud.',
   pointCount: 'Number of sampled points; higher values yield a denser cloud.',
   pointSize: 'Rendered size of each point sprite.',
   opacity: 'Cloud transparency; lower values are more transparent.',
@@ -74,6 +77,22 @@ interface ProbabilityGrid {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+
+const hexToRgb = (hex: string) => {
+  const cleaned = hex.trim().replace('#', '');
+  const expanded = cleaned.length === 3
+    ? cleaned.split('').map((ch) => ch + ch).join('')
+    : cleaned;
+  if (expanded.length !== 6) {
+    return { r: 1, g: 1, b: 1 };
+  }
+  const value = Number.parseInt(expanded, 16);
+  return {
+    r: ((value >> 16) & 255) / 255,
+    g: ((value >> 8) & 255) / 255,
+    b: (value & 255) / 255,
+  };
+};
 
 const factorial = (n: number): number => {
   if (n < 0) return 1;
@@ -304,6 +323,7 @@ const OrbitalDemo: React.FC = () => {
   const [pointCount, setPointCount] = useState<number>(DEFAULT_POINT_COUNT);
   const [pointSize, setPointSize] = useState<number>(DEFAULT_POINT_SIZE);
   const [opacity, setOpacity] = useState<number>(DEFAULT_OPACITY);
+  const [cloudColor, setCloudColor] = useState<string>(DEFAULT_CLOUD_COLOR);
   const [isRotating, setIsRotating] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; generated: number } | null>(null);
@@ -323,7 +343,19 @@ const OrbitalDemo: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [showGuides, setShowGuides] = useState<boolean>(true);
+  const [showBackground, setShowBackground] = useState<boolean>(true);
   const dmrgRunId = useRef(0);
+  const pageStyle = useMemo(
+    () => ({
+      backgroundColor: '#000',
+      backgroundImage: showBackground ? 'var(--moon-bg-image)' : 'none',
+      backgroundPosition: 'center bottom',
+      backgroundSize: '100vw auto',
+      backgroundRepeat: 'no-repeat',
+    }),
+    [showBackground]
+  );
+  const cloudRgb = useMemo(() => hexToRgb(cloudColor), [cloudColor]);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
@@ -532,6 +564,7 @@ const OrbitalDemo: React.FC = () => {
 
     const colors = new Float32Array(pointsBuffer.length);
     const maxR = currentExtent || 1;
+    const { r: baseR, g: baseG, b: baseB } = cloudRgb;
     for (let i = 0; i < pointsBuffer.length; i += 3) {
       const x = pointsBuffer[i];
       const y = pointsBuffer[i + 1];
@@ -539,9 +572,9 @@ const OrbitalDemo: React.FC = () => {
       const r = Math.sqrt(x * x + y * y + z * z);
       const t = clamp(r / (maxR * 1.2), 0, 1);
       const shade = 0.9 - 0.45 * t;
-      colors[i] = shade;
-      colors[i + 1] = shade;
-      colors[i + 2] = shade;
+      colors[i] = shade * baseR;
+      colors[i + 1] = shade * baseG;
+      colors[i + 2] = shade * baseB;
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -551,7 +584,7 @@ const OrbitalDemo: React.FC = () => {
 
     materialRef.current.size = pointSize;
     materialRef.current.opacity = opacity;
-  }, [pointsBuffer, pointSize, opacity, currentExtent]);
+  }, [pointsBuffer, pointSize, opacity, currentExtent, cloudRgb]);
 
   const regenerate = async (targetQubits: number = qubits) => {
     const capped = allowHighQubits ? targetQubits : Math.min(targetQubits, SAFE_QUBITS);
@@ -645,7 +678,7 @@ const OrbitalDemo: React.FC = () => {
       : 'Solving Schrödinger (DMRG)…';
 
   return (
-    <div className="orbital-page">
+    <div className="orbital-page" style={pageStyle}>
       <div className="orbital-viewport" ref={mountRef}>
         {showOverlay && (
           <div className="overlay">
@@ -763,6 +796,16 @@ const OrbitalDemo: React.FC = () => {
               <span title={CONTROL_TOOLTIPS.guides}>Show cartesian grid + axes</span>
             </label>
 
+            <label className="control checkbox-control">
+              <input
+                type="checkbox"
+                checked={showBackground}
+                title={CONTROL_TOOLTIPS.background}
+                onChange={(e) => setShowBackground(e.target.checked)}
+              />
+              <span title={CONTROL_TOOLTIPS.background}>Show moon background</span>
+            </label>
+
             <label className="control">
               <span title={CONTROL_TOOLTIPS.dmrgSites}>DMRG Chain Length</span>
               <input
@@ -854,6 +897,19 @@ const OrbitalDemo: React.FC = () => {
                 onChange={(e) => setOpacity(Number(e.target.value))}
               />
               <div className="control-value">{opacity.toFixed(2)}</div>
+            </label>
+
+            <label className="control color-control">
+              <span title={CONTROL_TOOLTIPS.cloudColor}>Cloud Color</span>
+              <div className="color-row">
+                <input
+                  type="color"
+                  value={cloudColor}
+                  title={CONTROL_TOOLTIPS.cloudColor}
+                  onChange={(e) => setCloudColor(e.target.value)}
+                />
+                <div className="control-value">{cloudColor.toUpperCase()}</div>
+              </div>
             </label>
           </div>
 
