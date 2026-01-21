@@ -520,89 +520,91 @@ const Playground: React.FC = () => {
         {/* Circuit Editor */}
         <div className="circuit-editor">
           <h3>Circuit</h3>
-          <div className="circuit-grid-container">
-            {/* Time slot headers */}
-            <div className="time-slot-header">
-              <div className="qubit-label-spacer"></div>
-              {Array.from({ length: circuit.numSlots }, (_, t) => (
-                <div key={t} className="time-slot-label">t{t}</div>
-              ))}
-              <div className="measurement-spacer"></div>
-            </div>
-
-            {/* Qubit wires with grid cells */}
-            {Array.from({ length: circuit.numQubits }, (_, q) => (
-              <div key={q} className="qubit-row">
-                <span className="qubit-label">q{q}</span>
-                <div className="wire-grid">
-                  {Array.from({ length: circuit.numSlots }, (_, t) => {
-                    const gate = getGateAt(q, t);
-                    const isPendingSlot = pendingGate?.timeSlot === t;
-                    const isControl1 = pendingGate?.controlQubit === q && isPendingSlot;
-                    const isControl2 = pendingGate?.controlQubit2 === q && isPendingSlot;
-
-                    // Check if this cell is part of a multi-qubit gate
-                    const multiGate = circuit.gates.find(g =>
-                      g.timeSlot === t && (g.controlQubit === q || g.controlQubit2 === q)
-                    );
-                    const isControlNode = !!multiGate && (multiGate.controlQubit === q || multiGate.controlQubit2 === q);
-
-                    // Render gate symbol
-                    const renderGateSymbol = () => {
-                      if (isControl1 || isControl2) {
-                        return (
-                          <div className="control-node pending" title="Control qubit (pending)">●</div>
-                        );
-                      }
-                      if (isControlNode && multiGate) {
-                        return (
-                          <div
-                            className="control-node"
-                            style={{ color: GATE_INFO[multiGate.type].color }}
-                            title={`Control for ${multiGate.type}`}
-                          >●</div>
-                        );
-                      }
-                      if (gate && gate.qubit === q) {
-                        return (
-                          <div
-                            className={`gate-on-grid ${gate.type === 'Barrier' ? 'barrier' : ''}`}
-                            style={{ backgroundColor: GATE_INFO[gate.type].color }}
-                            title={`${GATE_INFO[gate.type].name}${gate.angle ? ` (${(gate.angle / Math.PI).toFixed(2)}π)` : ''}`}
-                          >
-                            {GATE_INFO[gate.type].symbol || gate.type}
-                          </div>
-                        );
-                      }
-                      return null;
-                    };
-
-                    return (
-                      <div
-                        key={t}
-                        className={`grid-cell ${selectedGate ? 'clickable' : ''} ${gate ? 'has-gate' : ''} ${isPendingSlot ? 'pending-slot' : ''}`}
-                        onClick={() => addGate(q, t)}
-                      >
-                        <div className="wire-segment"></div>
-                        {renderGateSymbol()}
-                        {/* Draw connection line for multi-qubit gates */}
-                        {gate && gate.qubit === q && gate.controlQubit !== undefined && (
-                          <div
-                            className="gate-connection"
-                            style={{
-                              height: `${Math.abs(gate.controlQubit - q) * 50}px`,
-                              top: gate.controlQubit < q ? `${(gate.controlQubit - q) * 50 + 25}px` : '25px',
-                              borderColor: GATE_INFO[gate.type].color,
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <span className="measurement">M</span>
+          <div className="circuit-scroll">
+            <div className="circuit-grid-container">
+              {/* Time slot headers */}
+              <div className="time-slot-header">
+                <div className="qubit-label-spacer"></div>
+                {Array.from({ length: circuit.numSlots }, (_, t) => (
+                  <div key={t} className="time-slot-label">t{t}</div>
+                ))}
+                <div className="measurement-spacer"></div>
               </div>
-            ))}
+
+              {/* Qubit wires with grid cells */}
+              {Array.from({ length: circuit.numQubits }, (_, q) => (
+                <div key={q} className="qubit-row">
+                  <span className="qubit-label">q{q}</span>
+                  <div className="wire-grid">
+                    {Array.from({ length: circuit.numSlots }, (_, t) => {
+                      const gate = getGateAt(q, t);
+                      const isPendingSlot = pendingGate?.timeSlot === t;
+                      const isControl1 = pendingGate?.controlQubit === q && isPendingSlot;
+                      const isControl2 = pendingGate?.controlQubit2 === q && isPendingSlot;
+
+                      // Check if this cell is part of a multi-qubit gate
+                      const multiGate = circuit.gates.find(g =>
+                        g.timeSlot === t && (g.controlQubit === q || g.controlQubit2 === q)
+                      );
+                      const isControlNode = !!multiGate && (multiGate.controlQubit === q || multiGate.controlQubit2 === q);
+
+                      // Render gate symbol
+                      const renderGateSymbol = () => {
+                        if (isControl1 || isControl2) {
+                          return (
+                            <div className="control-node pending" title="Control qubit (pending)">●</div>
+                          );
+                        }
+                        if (isControlNode && multiGate) {
+                          return (
+                            <div
+                              className="control-node"
+                              style={{ color: GATE_INFO[multiGate.type].color }}
+                              title={`Control for ${multiGate.type}`}
+                            >●</div>
+                          );
+                        }
+                        if (gate && gate.qubit === q) {
+                          return (
+                            <div
+                              className={`gate-on-grid ${gate.type === 'Barrier' ? 'barrier' : ''}`}
+                              style={{ backgroundColor: GATE_INFO[gate.type].color }}
+                              title={`${GATE_INFO[gate.type].name}${gate.angle ? ` (${(gate.angle / Math.PI).toFixed(2)}π)` : ''}`}
+                            >
+                              {GATE_INFO[gate.type].symbol || gate.type}
+                            </div>
+                          );
+                        }
+                        return null;
+                      };
+
+                      return (
+                        <div
+                          key={t}
+                          className={`grid-cell ${selectedGate ? 'clickable' : ''} ${gate ? 'has-gate' : ''} ${isPendingSlot ? 'pending-slot' : ''}`}
+                          onClick={() => addGate(q, t)}
+                        >
+                          <div className="wire-segment"></div>
+                          {renderGateSymbol()}
+                          {/* Draw connection line for multi-qubit gates */}
+                          {gate && gate.qubit === q && gate.controlQubit !== undefined && (
+                            <div
+                              className="gate-connection"
+                              style={{
+                                height: `${Math.abs(gate.controlQubit - q) * 50}px`,
+                                top: gate.controlQubit < q ? `${(gate.controlQubit - q) * 50 + 25}px` : '25px',
+                                borderColor: GATE_INFO[gate.type].color,
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="measurement">M</span>
+                </div>
+              ))}
+            </div>
           </div>
           <p className={`hint ${pendingGate ? 'pending' : ''}`}>{getPlacementHint()}</p>
           {pendingGate && (
