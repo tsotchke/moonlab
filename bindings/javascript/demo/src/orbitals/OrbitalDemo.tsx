@@ -35,8 +35,10 @@ const DEFAULT_L = 2;
 const DEFAULT_M = 2;
 const DEFAULT_POINT_COUNT = 494000;
 const DEFAULT_POINT_SIZE = 0.01;
-const DEFAULT_OPACITY = 0.15;
-const DEFAULT_CLOUD_COLOR = '#d8d8d8';
+const DEFAULT_OPACITY = 0.2;
+const DEFAULT_CLOUD_COLOR = '#ffffff';
+const DEFAULT_SHELL_COLOR_A = '#ffffff';
+const DEFAULT_SHELL_COLOR_B = '#612bde';
 
 const CONTROL_TOOLTIPS = {
   atom: 'Choose the element (atomic number Z). Higher Z pulls the cloud inward and increases radial decay.',
@@ -52,6 +54,9 @@ const CONTROL_TOOLTIPS = {
   guides: 'Show or hide the lattice grid and Cartesian axes.',
   background: 'Toggle the pixelated moon backdrop behind the simulation.',
   cloudColor: 'Set the tint used for the orbital point cloud.',
+  shellColors: 'Alternate between two colors for successive energy shells.',
+  shellColorA: 'Primary shell color (even shells).',
+  shellColorB: 'Secondary shell color (odd shells).',
   pointCount: 'Number of sampled points; higher values yield a denser cloud.',
   pointSize: 'Rendered size of each point sprite.',
   opacity: 'Cloud transparency; lower values are more transparent.',
@@ -324,10 +329,13 @@ const OrbitalDemo: React.FC = () => {
   const [pointSize, setPointSize] = useState<number>(DEFAULT_POINT_SIZE);
   const [opacity, setOpacity] = useState<number>(DEFAULT_OPACITY);
   const [cloudColor, setCloudColor] = useState<string>(DEFAULT_CLOUD_COLOR);
+  const [useShellColors, setUseShellColors] = useState<boolean>(true);
+  const [shellColorA, setShellColorA] = useState<string>(DEFAULT_SHELL_COLOR_A);
+  const [shellColorB, setShellColorB] = useState<string>(DEFAULT_SHELL_COLOR_B);
   const [isRotating, setIsRotating] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; generated: number } | null>(null);
-  const [useDmrg, setUseDmrg] = useState<boolean>(true);
+  const [useDmrg, setUseDmrg] = useState<boolean>(false);
   const [dmrgSites, setDmrgSites] = useState<number>(DEFAULT_DMRG_SITES);
   const [dmrgG, setDmrgG] = useState<number>(1.0);
   const [dmrgWeights, setDmrgWeights] = useState<Float64Array | null>(null);
@@ -342,8 +350,8 @@ const OrbitalDemo: React.FC = () => {
   const [currentExtent, setCurrentExtent] = useState<number>(extentForAtom(DEFAULT_N, DEFAULT_ATOM.Z));
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
-  const [showGuides, setShowGuides] = useState<boolean>(true);
-  const [showBackground, setShowBackground] = useState<boolean>(true);
+  const [showGuides, setShowGuides] = useState<boolean>(false);
+  const [showBackground, setShowBackground] = useState<boolean>(false);
   const dmrgRunId = useRef(0);
   const pageStyle = useMemo(
     () => ({
@@ -356,6 +364,35 @@ const OrbitalDemo: React.FC = () => {
     [showBackground]
   );
   const cloudRgb = useMemo(() => hexToRgb(cloudColor), [cloudColor]);
+  const shellRgbA = useMemo(() => hexToRgb(shellColorA), [shellColorA]);
+  const shellRgbB = useMemo(() => hexToRgb(shellColorB), [shellColorB]);
+  const radialNodeRadii = useMemo(() => {
+    if (!useShellColors) return [];
+    const nodeCount = Math.max(0, n - l - 1);
+    if (nodeCount === 0) return [];
+    const maxR = Math.max(0.1, currentExtent * 1.2);
+    const steps = 2048;
+    const nodes: number[] = [];
+    let prevR = 1e-4;
+    let prevVal = radialComponent(n, l, prevR, atom.Z);
+    for (let i = 1; i <= steps; i++) {
+      const r = (i / steps) * maxR;
+      const val = radialComponent(n, l, r, atom.Z);
+      if (prevVal === 0) {
+        prevVal = val;
+        prevR = r;
+        continue;
+      }
+      if (prevVal * val < 0) {
+        const t = Math.abs(prevVal) / (Math.abs(prevVal) + Math.abs(val));
+        nodes.push(prevR + t * (r - prevR));
+        if (nodes.length >= nodeCount) break;
+      }
+      prevVal = val;
+      prevR = r;
+    }
+    return nodes;
+  }, [useShellColors, n, l, atom.Z, currentExtent]);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
@@ -564,7 +601,6 @@ const OrbitalDemo: React.FC = () => {
 
     const colors = new Float32Array(pointsBuffer.length);
     const maxR = currentExtent || 1;
-    const { r: baseR, g: baseG, b: baseB } = cloudRgb;
     for (let i = 0; i < pointsBuffer.length; i += 3) {
       const x = pointsBuffer[i];
       const y = pointsBuffer[i + 1];
@@ -572,9 +608,20 @@ const OrbitalDemo: React.FC = () => {
       const r = Math.sqrt(x * x + y * y + z * z);
       const t = clamp(r / (maxR * 1.2), 0, 1);
       const shade = 0.9 - 0.45 * t;
-      colors[i] = shade * baseR;
-      colors[i + 1] = shade * baseG;
-      colors[i + 2] = shade * baseB;
+      let shellIndex = 0;
+      for (let j = 0; j < radialNodeRadii.length; j++) {
+        if (r >= radialNodeRadii[j]) {
+          shellIndex += 1;
+        } else {
+          break;
+        }
+      }
+      const baseColor = useShellColors
+        ? (shellIndex % 2 === 0 ? shellRgbA : shellRgbB)
+        : cloudRgb;
+      colors[i] = shade * baseColor.r;
+      colors[i + 1] = shade * baseColor.g;
+      colors[i + 2] = shade * baseColor.b;
     }
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -584,7 +631,20 @@ const OrbitalDemo: React.FC = () => {
 
     materialRef.current.size = pointSize;
     materialRef.current.opacity = opacity;
-  }, [pointsBuffer, pointSize, opacity, currentExtent, cloudRgb]);
+  }, [
+    pointsBuffer,
+    pointSize,
+    opacity,
+    currentExtent,
+    cloudRgb,
+    shellRgbA,
+    shellRgbB,
+    useShellColors,
+    n,
+    l,
+    atom.Z,
+    radialNodeRadii,
+  ]);
 
   const regenerate = async (targetQubits: number = qubits) => {
     const capped = allowHighQubits ? targetQubits : Math.min(targetQubits, SAFE_QUBITS);
@@ -683,10 +743,11 @@ const OrbitalDemo: React.FC = () => {
         {showOverlay && (
           <div className="overlay">
             <div className="overlay-content">
-              <div className="quantum-spinner overlay-spinner" aria-hidden="true">
-                <div className="spinner-ring"></div>
-                <div className="spinner-core"></div>
-              </div>
+              <img
+                className="loading-gif"
+                src={`${import.meta.env.BASE_URL}moonlab_glitch.gif`}
+                alt="Moonlab loading animation"
+              />
               <div className="overlay-text">{overlayLabel}</div>
             </div>
           </div>
@@ -776,15 +837,48 @@ const OrbitalDemo: React.FC = () => {
               <span title={CONTROL_TOOLTIPS.allowHighQubits}>I have ≥64 GB RAM (enable 25–32 qubits)</span>
             </label>
 
-            <label className="control checkbox-control">
-              <input
-                type="checkbox"
-                checked={useDmrg}
-                title={CONTROL_TOOLTIPS.useDmrg}
-                onChange={(e) => setUseDmrg(e.target.checked)}
-              />
-              <span title={CONTROL_TOOLTIPS.useDmrg}>Use DMRG solver (TFIM ground state)</span>
-            </label>
+            <div className="control-group">
+              <label className="control checkbox-control">
+                <input
+                  type="checkbox"
+                  checked={useDmrg}
+                  title={CONTROL_TOOLTIPS.useDmrg}
+                  onChange={(e) => setUseDmrg(e.target.checked)}
+                />
+                <span title={CONTROL_TOOLTIPS.useDmrg}>Use DMRG solver (TFIM ground state)</span>
+              </label>
+
+              {useDmrg && (
+                <>
+                  <label className="control">
+                    <span title={CONTROL_TOOLTIPS.dmrgSites}>DMRG Chain Length</span>
+                    <input
+                      type="range"
+                      min={DMRG_MIN_SITES}
+                      max={DMRG_MAX_SITES}
+                      value={dmrgSites}
+                      title={CONTROL_TOOLTIPS.dmrgSites}
+                      onChange={(e) => setDmrgSites(Number(e.target.value))}
+                    />
+                    <div className="control-value">{dmrgSites} sites</div>
+                  </label>
+
+                  <label className="control">
+                    <span title={CONTROL_TOOLTIPS.dmrgG}>TFIM Field Ratio (g)</span>
+                    <input
+                      type="range"
+                      min={0.2}
+                      max={2.5}
+                      step={0.05}
+                      value={dmrgG}
+                      title={CONTROL_TOOLTIPS.dmrgG}
+                      onChange={(e) => setDmrgG(Number(e.target.value))}
+                    />
+                    <div className="control-value">g = {dmrgG.toFixed(2)}</div>
+                  </label>
+                </>
+              )}
+            </div>
 
             <label className="control checkbox-control">
               <input
@@ -804,35 +898,6 @@ const OrbitalDemo: React.FC = () => {
                 onChange={(e) => setShowBackground(e.target.checked)}
               />
               <span title={CONTROL_TOOLTIPS.background}>Show moon background</span>
-            </label>
-
-            <label className="control">
-              <span title={CONTROL_TOOLTIPS.dmrgSites}>DMRG Chain Length</span>
-              <input
-                type="range"
-                min={DMRG_MIN_SITES}
-                max={DMRG_MAX_SITES}
-                value={dmrgSites}
-                title={CONTROL_TOOLTIPS.dmrgSites}
-                onChange={(e) => setDmrgSites(Number(e.target.value))}
-                disabled={!useDmrg}
-              />
-              <div className="control-value">{dmrgSites} sites</div>
-            </label>
-
-            <label className="control">
-              <span title={CONTROL_TOOLTIPS.dmrgG}>TFIM Field Ratio (g)</span>
-              <input
-                type="range"
-                min={0.2}
-                max={2.5}
-                step={0.05}
-                value={dmrgG}
-                title={CONTROL_TOOLTIPS.dmrgG}
-                onChange={(e) => setDmrgG(Number(e.target.value))}
-                disabled={!useDmrg}
-              />
-              <div className="control-value">g = {dmrgG.toFixed(2)}</div>
             </label>
 
             <label className="control">
@@ -899,18 +964,53 @@ const OrbitalDemo: React.FC = () => {
               <div className="control-value">{opacity.toFixed(2)}</div>
             </label>
 
-            <label className="control color-control">
-              <span title={CONTROL_TOOLTIPS.cloudColor}>Cloud Color</span>
-              <div className="color-row">
+            <div className="control-group">
+              <label className="control checkbox-control">
                 <input
-                  type="color"
-                  value={cloudColor}
-                  title={CONTROL_TOOLTIPS.cloudColor}
-                  onChange={(e) => setCloudColor(e.target.value)}
+                  type="checkbox"
+                  checked={useShellColors}
+                  title={CONTROL_TOOLTIPS.shellColors}
+                  onChange={(e) => setUseShellColors(e.target.checked)}
                 />
-                <div className="control-value">{cloudColor.toUpperCase()}</div>
-              </div>
-            </label>
+                <span title={CONTROL_TOOLTIPS.shellColors}>Alternate shell colors</span>
+              </label>
+
+              {useShellColors ? (
+                <label className="control color-control">
+                  <span title={CONTROL_TOOLTIPS.shellColorA}>Shell Colors</span>
+                  <div className="color-row">
+                    <input
+                      type="color"
+                      value={shellColorA}
+                      title={CONTROL_TOOLTIPS.shellColorA}
+                      onChange={(e) => setShellColorA(e.target.value)}
+                    />
+                    <input
+                      type="color"
+                      value={shellColorB}
+                      title={CONTROL_TOOLTIPS.shellColorB}
+                      onChange={(e) => setShellColorB(e.target.value)}
+                    />
+                    <div className="control-value">
+                      {shellColorA.toUpperCase()} / {shellColorB.toUpperCase()}
+                    </div>
+                  </div>
+                </label>
+              ) : (
+                <label className="control color-control">
+                  <span title={CONTROL_TOOLTIPS.cloudColor}>Cloud Color</span>
+                  <div className="color-row">
+                    <input
+                      type="color"
+                      value={cloudColor}
+                      title={CONTROL_TOOLTIPS.cloudColor}
+                      onChange={(e) => setCloudColor(e.target.value)}
+                    />
+                    <div className="control-value">{cloudColor.toUpperCase()}</div>
+                  </div>
+                </label>
+              )}
+            </div>
           </div>
 
           <div className="button-row">

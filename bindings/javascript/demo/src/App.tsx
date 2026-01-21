@@ -114,10 +114,11 @@ export const App: React.FC = () => {
 
 const LoadingSpinner: React.FC = () => (
   <div className="loading-container">
-    <div className="quantum-spinner">
-      <div className="spinner-ring"></div>
-      <div className="spinner-core"></div>
-    </div>
+    <img
+      className="loading-gif"
+      src={`${import.meta.env.BASE_URL}moonlab_glitch.gif`}
+      alt="Moonlab loading animation"
+    />
     <p>Initializing quantum state...</p>
   </div>
 );

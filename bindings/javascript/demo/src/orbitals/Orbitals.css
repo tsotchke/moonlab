@@ -148,6 +148,12 @@
   gap: 0.75rem;
 }
 
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .control {
   display: flex;
   flex-direction: column;
@@ -249,11 +255,17 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .color-control .control-value {
   font-size: 0.75rem;
   letter-spacing: 0.5px;
+}
+
+.color-control input[type="color"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .button-row {

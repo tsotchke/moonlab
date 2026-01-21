@@ -31,23 +31,17 @@
         min-height: 100vh;
         gap: 1rem;
       }
-      .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 3px solid rgba(100, 150, 255, 0.3);
-        border-top-color: #6496ff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
+      .loading-gif {
+        max-width: 90vw;
+        height: auto;
+        image-rendering: pixelated;
       }
     </style>
   </head>
   <body>
     <div id="root">
       <div class="loading">
-        <div class="loading-spinner"></div>
+        <img class="loading-gif" src="moonlab_glitch.gif" alt="Moonlab loading animation" />
         <p>Loading Quantum Simulator...</p>
       </div>
     </div>

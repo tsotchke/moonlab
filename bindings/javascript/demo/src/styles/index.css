@@ -14,11 +14,11 @@
   --color-text-secondary: #b2b2b2;
   --color-text-muted: #7a7a7a;
 
-  --color-accent-blue: #cfd2d6;
-  --color-accent-purple: #9a9a9a;
-  --color-accent-cyan: #d7d7d7;
-  --color-accent-green: #bfc4c9;
-  --color-accent-pink: #d0d0d0;
+  --color-accent-blue: #612bde;
+  --color-accent-purple: #612bde;
+  --color-accent-cyan: #612bde;
+  --color-accent-green: #612bde;
+  --color-accent-pink: #612bde;
 
   --moon-bg-image: none;
 
@@ -76,6 +76,11 @@ a:hover {
 button {
   font-family: inherit;
   cursor: pointer;
+}
+
+input[type="range"],
+input[type="checkbox"] {
+  accent-color: var(--color-accent-blue);
 }
 
 /* App Layout */
@@ -247,6 +252,13 @@ button {
   justify-content: center;
   min-height: 400px;
   gap: 1.5rem;
+}
+
+.loading-gif {
+  display: block;
+  max-width: 90vw;
+  height: auto;
+  image-rendering: pixelated;
 }
 
 .quantum-spinner {
