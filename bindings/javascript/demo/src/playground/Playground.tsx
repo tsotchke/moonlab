@@ -93,6 +93,7 @@ const GATE_CATEGORIES = {
 };
 
 const Playground: React.FC = () => {
+  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
   const [circuit, setCircuit] = useState<CircuitState>({
     numQubits: 3,
     numSlots: NUM_TIME_SLOTS,
@@ -418,10 +419,13 @@ const Playground: React.FC = () => {
   return (
     <div className="playground">
       <div className="section-header">
-        <h1 className="section-title">Quantum Circuit Playground</h1>
-        <p className="section-description">
-          Build quantum circuits interactively. Select a gate, then click on the circuit grid to place it.
-        </p>
+        <img className="section-logo" src={logoUrl} alt="" aria-hidden="true" />
+        <div className="section-header-text">
+          <h1 className="section-title">Quantum Circuit Playground</h1>
+          <p className="section-description">
+            Build quantum circuits interactively. Select a gate, then click on the circuit grid to place it.
+          </p>
+        </div>
       </div>
 
       <div className="playground-layout">
