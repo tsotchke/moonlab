@@ -31,25 +31,19 @@
         min-height: 100vh;
         gap: 1rem;
       }
-      .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 3px solid rgba(100, 150, 255, 0.3);
-        border-top-color: #6496ff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
+      .loading-gif {
+        max-width: 90vw;
+        height: auto;
+        image-rendering: pixelated;
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-6NymBPG0.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D0N5WHDF.css">
+    <script type="module" crossorigin src="./assets/index-CtOx95dX.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-D9qwP5hj.css">
   </head>
   <body>
     <div id="root">
       <div class="loading">
-        <div class="loading-spinner"></div>
+        <img class="loading-gif" src="./assets/moonlab_glitch-Cy2kesT5.gif" alt="Moonlab loading animation" />
         <p>Loading Quantum Simulator...</p>
       </div>
     </div>
