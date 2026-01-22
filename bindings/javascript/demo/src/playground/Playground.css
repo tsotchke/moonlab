@@ -7,7 +7,7 @@
 
 .playground-layout {
   display: grid;
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr) minmax(0, 420px);
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(240px, 360px);
   gap: 1.5rem;
   min-height: 600px;
   width: 100%;
@@ -157,6 +157,8 @@
   display: inline-block;
   min-width: 100%;
   overflow: visible;
+  --slot-size: 50px;
+  --label-size: 40px;
 }
 
 .circuit-scroll {
@@ -167,6 +169,12 @@
   padding-bottom: 0.25rem;
 }
 
+@media (min-width: 900px) {
+  .circuit-scroll {
+    overflow-x: hidden;
+  }
+}
+
 .time-slot-header {
   display: flex;
   align-items: center;
@@ -174,12 +182,12 @@
 }
 
 .qubit-label-spacer {
-  width: 40px;
+  width: var(--label-size);
   flex-shrink: 0;
 }
 
 .time-slot-label {
-  width: 50px;
+  width: var(--slot-size);
   flex-shrink: 0;
   text-align: center;
   font-family: var(--font-body);
@@ -188,18 +196,18 @@
 }
 
 .measurement-spacer {
-  width: 40px;
+  width: var(--label-size);
   flex-shrink: 0;
 }
 
 .qubit-row {
   display: flex;
   align-items: center;
-  height: 50px;
+  height: var(--slot-size);
 }
 
 .qubit-label {
-  width: 40px;
+  width: var(--label-size);
   flex-shrink: 0;
   font-family: var(--font-body);
   font-size: 0.875rem;
@@ -212,8 +220,8 @@
 }
 
 .grid-cell {
-  width: 50px;
-  height: 50px;
+  width: var(--slot-size);
+  height: var(--slot-size);
   flex-shrink: 0;
   position: relative;
   display: flex;
@@ -244,14 +252,14 @@
 }
 
 .gate-on-grid {
-  width: 36px;
-  height: 36px;
+  width: calc(var(--slot-size) * 0.72);
+  height: calc(var(--slot-size) * 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
-  font-size: 0.75rem;
+  font-size: clamp(10px, calc(var(--slot-size) * 0.26), 14px);
   font-weight: 700;
   color: white;
   cursor: pointer;
@@ -266,8 +274,8 @@
 }
 
 .measurement {
-  width: 30px;
-  height: 30px;
+  width: calc(var(--slot-size) * 0.6);
+  height: calc(var(--slot-size) * 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -275,7 +283,7 @@
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--radius-sm);
   font-family: var(--font-display);
-  font-size: 0.875rem;
+  font-size: clamp(10px, calc(var(--slot-size) * 0.28), 14px);
   color: var(--color-text-secondary);
 }
 
@@ -521,7 +529,7 @@
 
 /* Barrier Gate */
 .gate-on-grid.barrier {
-  width: 8px;
+  width: calc(var(--slot-size) * 0.16);
   background: repeating-linear-gradient(
     0deg,
     #555555 0px,
@@ -576,42 +584,6 @@
 @media (max-width: 640px) {
   .qubit-selector {
     grid-template-columns: repeat(3, 1fr);
-  }
-
-  .circuit-grid-container {
-    padding: 0.6rem;
-  }
-
-  .time-slot-label {
-    width: 40px;
-    font-size: 0.6rem;
-  }
-
-  .qubit-label,
-  .qubit-label-spacer,
-  .measurement-spacer {
-    width: 32px;
-  }
-
-  .qubit-row {
-    height: 40px;
-  }
-
-  .grid-cell {
-    width: 40px;
-    height: 40px;
-  }
-
-  .gate-on-grid {
-    width: 30px;
-    height: 30px;
-    font-size: 0.65rem;
-  }
-
-  .measurement {
-    width: 24px;
-    height: 24px;
-    font-size: 0.75rem;
   }
 }
 

@@ -18,7 +18,7 @@
 }
 
 .overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
@@ -27,7 +27,7 @@
   color: var(--color-text-primary);
   font-weight: 700;
   letter-spacing: 1px;
-  z-index: 10;
+  z-index: 2000;
 }
 
 .overlay-content {

@@ -9,7 +9,7 @@ const Orbitals = lazy(() => import('./orbitals/OrbitalDemo'));
 
 export const App: React.FC = () => {
   const [isNavOpen, setIsNavOpen] = useState(false);
-  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const moonBgUrl = `${import.meta.env.BASE_URL}moon-dark-lowrez.png`;
 
   useEffect(() => {

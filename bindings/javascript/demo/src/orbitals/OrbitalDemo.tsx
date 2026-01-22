@@ -739,26 +739,13 @@ const OrbitalDemo: React.FC = () => {
 
   return (
     <div className="orbital-page" style={pageStyle}>
-      <div className="orbital-viewport" ref={mountRef}>
-        {showOverlay && (
-          <div className="overlay">
-            <div className="overlay-content">
-              <img
-                className="loading-gif"
-                src={`${import.meta.env.BASE_URL}moonlab_glitch.gif`}
-                alt="Moonlab loading animation"
-              />
-              <div className="overlay-text">{overlayLabel}</div>
-            </div>
-          </div>
-        )}
-      </div>
+      <div className="orbital-viewport" ref={mountRef}></div>
 
       <div className={`orbital-controls ${isCollapsed ? 'collapsed' : ''}`}>
         <div className="controls-header">
           <div className="controls-header-left">
             <div className="pill">Schrödinger • Three.js • Moonlab</div>
-            <h1 className="section-title">Quantum Orbital Explorer</h1>
+            <h1 className="section-title">Schrodinger Sim</h1>
           </div>
           <button
             className="collapse-btn"
@@ -1112,6 +1099,19 @@ const OrbitalDemo: React.FC = () => {
         onSelect={(el) => setAtom(el)}
         selected={atom}
       />
+
+      {showOverlay && (
+        <div className="overlay">
+          <div className="overlay-content">
+            <img
+              className="loading-gif"
+              src={`${import.meta.env.BASE_URL}moonlab_glitch.gif`}
+              alt="Moonlab loading animation"
+            />
+            <div className="overlay-text">{overlayLabel}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

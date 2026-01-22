@@ -175,7 +175,7 @@ vqe.dispose();`,
 ];
 
 const Examples: React.FC = () => {
-  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const [selectedExample, setSelectedExample] = useState<string>(EXAMPLES[0].id);
   const [copied, setCopied] = useState(false);
   const [runOutput, setRunOutput] = useState<Record<string, string>>({});

@@ -144,6 +144,11 @@
   margin: 0 auto;
 }
 
+.gallery-detail .section-header {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .detail-header {
   display: flex;
   align-items: center;
