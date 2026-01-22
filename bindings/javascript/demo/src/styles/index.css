@@ -119,8 +119,8 @@ input[type="checkbox"] {
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
+  width: 45px;
+  height: 45px;
   display: block;
   background: #1c1c1c;
   border-radius: var(--radius-sm);
@@ -233,8 +233,8 @@ input[type="checkbox"] {
 }
 
 .footer-logo {
-  width: 28px;
-  height: 28px;
+  width: 35px;
+  height: 35px;
   image-rendering: pixelated;
   object-fit: contain;
 }
@@ -419,8 +419,8 @@ input[type="checkbox"] {
   }
 
   .section-logo {
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
   }
 }
 
@@ -518,8 +518,8 @@ input[type="checkbox"] {
 }
 
 .section-logo {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   image-rendering: pixelated;
   opacity: 0.9;
   flex-shrink: 0;

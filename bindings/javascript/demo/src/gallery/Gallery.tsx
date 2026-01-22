@@ -4,7 +4,7 @@ import { GALLERY_ITEMS } from './galleryData';
 import './Gallery.css';
 
 const Gallery: React.FC = () => {
-  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const canvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
 

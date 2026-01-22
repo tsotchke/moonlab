@@ -92,8 +92,10 @@ const GATE_CATEGORIES = {
   'Special': ['M', 'Reset', 'Barrier'] as GateType[],
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 const Playground: React.FC = () => {
-  const logoUrl = `${import.meta.env.BASE_URL}moonlab.png`;
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const [circuit, setCircuit] = useState<CircuitState>({
     numQubits: 3,
     numSlots: NUM_TIME_SLOTS,
@@ -106,6 +108,9 @@ const Playground: React.FC = () => {
   const [controlMode, setControlMode] = useState<'target' | 'control1' | 'control2'>('target');
   const [pendingGate, setPendingGate] = useState<{ timeSlot: number; controlQubit?: number; controlQubit2?: number } | null>(null);
   const [rotationAngle, setRotationAngle] = useState<number>(Math.PI / 2);
+  const [slotSize, setSlotSize] = useState<number>(50);
+  const [labelSize, setLabelSize] = useState<number>(40);
+  const circuitScrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blochCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -401,6 +406,26 @@ const Playground: React.FC = () => {
     }
   }, [probabilities]);
 
+  useEffect(() => {
+    const updateSizing = () => {
+      const container = circuitScrollRef.current;
+      if (!container) return;
+      const width = container.clientWidth;
+      const nextLabelSize = width < 480 ? 32 : 40;
+      const padding = 32;
+      const minSlotSize = width >= 900 ? 28 : 36;
+      const available = Math.max(0, width - padding - nextLabelSize * 2);
+      const rawSize = Math.floor(available / circuit.numSlots);
+      const nextSlotSize = clamp(rawSize, minSlotSize, 50);
+      setLabelSize(nextLabelSize);
+      setSlotSize(nextSlotSize);
+    };
+
+    updateSizing();
+    window.addEventListener('resize', updateSizing);
+    return () => window.removeEventListener('resize', updateSizing);
+  }, [circuit.numSlots]);
+
   const getPlacementHint = (): string => {
     if (!selectedGate) return 'Select a gate from the palette';
     const info = GATE_INFO[selectedGate];
@@ -520,8 +545,16 @@ const Playground: React.FC = () => {
         {/* Circuit Editor */}
         <div className="circuit-editor">
           <h3>Circuit</h3>
-          <div className="circuit-scroll">
-            <div className="circuit-grid-container">
+          <div className="circuit-scroll" ref={circuitScrollRef}>
+            <div
+              className="circuit-grid-container"
+              style={
+                {
+                  '--slot-size': `${slotSize}px`,
+                  '--label-size': `${labelSize}px`,
+                } as React.CSSProperties
+              }
+            >
               {/* Time slot headers */}
               <div className="time-slot-header">
                 <div className="qubit-label-spacer"></div>
@@ -591,8 +624,10 @@ const Playground: React.FC = () => {
                             <div
                               className="gate-connection"
                               style={{
-                                height: `${Math.abs(gate.controlQubit - q) * 50}px`,
-                                top: gate.controlQubit < q ? `${(gate.controlQubit - q) * 50 + 25}px` : '25px',
+                                height: `${Math.abs(gate.controlQubit - q) * slotSize}px`,
+                                top: gate.controlQubit < q
+                                  ? `${(gate.controlQubit - q) * slotSize + slotSize / 2}px`
+                                  : `${slotSize / 2}px`,
                                 borderColor: GATE_INFO[gate.type].color,
                               }}
                             />
