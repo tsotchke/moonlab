@@ -2,9 +2,20 @@
 const STATE_STRUCT_SIZE = 256;
 const AMPLITUDES_OFFSET = 8;
 const DEFAULT_ANGLE = Math.PI / 2;
+const GPU_BACKEND_NONE = 0;
+const GPU_BACKEND_WEBGPU = 2;
+const GPU_BACKEND_AUTO = 7;
 
 let modulePromise = null;
 let moduleInstance = null;
+const gpuSession = {
+  initialized: false,
+  available: false,
+  ctxPtr: 0,
+  backendType: GPU_BACKEND_NONE,
+  nativeAccelerated: false,
+  reason: 'uninitialized',
+};
 
 const getModule = async () => {
   if (moduleInstance) return moduleInstance;
@@ -65,6 +76,237 @@ const getProbabilities = (module, statePtr, dim) => {
   probs.set(module.HEAPF64.subarray(offset, offset + dim));
   module._free(outPtr);
   return probs;
+};
+
+const hasUnifiedGpuApi = (module) =>
+  typeof module._gpu_compute_init === 'function' &&
+  typeof module._gpu_compute_free === 'function' &&
+  typeof module._gpu_get_backend_type === 'function' &&
+  typeof module._gpu_buffer_create_from_data === 'function' &&
+  typeof module._gpu_buffer_create === 'function' &&
+  typeof module._gpu_buffer_read === 'function' &&
+  typeof module._gpu_buffer_free === 'function' &&
+  (typeof module._gpu_compute_probabilities_u32 === 'function' ||
+    typeof module._gpu_compute_probabilities === 'function');
+
+const ensureGpuSession = (module) => {
+  if (gpuSession.initialized) return gpuSession;
+  gpuSession.initialized = true;
+
+  if (!hasUnifiedGpuApi(module)) {
+    gpuSession.reason = 'unified-gpu-api-unavailable';
+    return gpuSession;
+  }
+
+  const preferred = GPU_BACKEND_WEBGPU;
+  let ctxPtr = module._gpu_compute_init(preferred);
+  if (!ctxPtr) {
+    // Keep AUTO as a secondary probe in case backend selection policy changes.
+    ctxPtr = module._gpu_compute_init(GPU_BACKEND_AUTO);
+  }
+  if (!ctxPtr) {
+    gpuSession.reason = 'gpu-context-init-failed';
+    return gpuSession;
+  }
+
+  const backendType = module._gpu_get_backend_type(ctxPtr);
+  if (backendType !== GPU_BACKEND_WEBGPU) {
+    module._gpu_compute_free(ctxPtr);
+    gpuSession.reason = `non-webgpu-backend-${backendType}`;
+    return gpuSession;
+  }
+
+  gpuSession.available = true;
+  gpuSession.ctxPtr = ctxPtr;
+  gpuSession.backendType = backendType;
+  gpuSession.nativeAccelerated =
+    typeof module._gpu_is_native_accelerated === 'function' &&
+    module._gpu_is_native_accelerated(ctxPtr) !== 0;
+  gpuSession.reason = 'ok';
+  return gpuSession;
+};
+
+const gpuCallHadamard = (module, ctxPtr, bufferPtr, qubit, stateDim) => {
+  if (typeof module._gpu_hadamard_u32 === 'function') {
+    return module._gpu_hadamard_u32(ctxPtr, bufferPtr, qubit, stateDim >>> 0);
+  }
+  if (typeof module._gpu_hadamard === 'function') {
+    return module._gpu_hadamard(ctxPtr, bufferPtr, qubit, BigInt(stateDim));
+  }
+  return -7;
+};
+
+const gpuCallPauliX = (module, ctxPtr, bufferPtr, qubit, stateDim) => {
+  if (typeof module._gpu_pauli_x_u32 === 'function') {
+    return module._gpu_pauli_x_u32(ctxPtr, bufferPtr, qubit, stateDim >>> 0);
+  }
+  if (typeof module._gpu_pauli_x === 'function') {
+    return module._gpu_pauli_x(ctxPtr, bufferPtr, qubit, BigInt(stateDim));
+  }
+  return -7;
+};
+
+const gpuCallPauliZ = (module, ctxPtr, bufferPtr, qubit, stateDim) => {
+  if (typeof module._gpu_pauli_z_u32 === 'function') {
+    return module._gpu_pauli_z_u32(ctxPtr, bufferPtr, qubit, stateDim >>> 0);
+  }
+  if (typeof module._gpu_pauli_z === 'function') {
+    return module._gpu_pauli_z(ctxPtr, bufferPtr, qubit, BigInt(stateDim));
+  }
+  return -7;
+};
+
+const gpuCallPhase = (module, ctxPtr, bufferPtr, qubit, theta, stateDim) => {
+  if (typeof module._gpu_phase_u32 === 'function') {
+    return module._gpu_phase_u32(ctxPtr, bufferPtr, qubit, theta, stateDim >>> 0);
+  }
+  if (typeof module._gpu_phase === 'function') {
+    return module._gpu_phase(ctxPtr, bufferPtr, qubit, theta, BigInt(stateDim));
+  }
+  return -7;
+};
+
+const gpuCallCnot = (module, ctxPtr, bufferPtr, control, target, stateDim) => {
+  if (typeof module._gpu_cnot_u32 === 'function') {
+    return module._gpu_cnot_u32(ctxPtr, bufferPtr, control, target, stateDim >>> 0);
+  }
+  if (typeof module._gpu_cnot === 'function') {
+    return module._gpu_cnot(ctxPtr, bufferPtr, control, target, BigInt(stateDim));
+  }
+  return -7;
+};
+
+const gpuComputeProbabilities = (module, ctxPtr, amplitudesBufferPtr, stateDim) => {
+  const probabilitiesBuffer = module._gpu_buffer_create(ctxPtr, stateDim * 8);
+  if (!probabilitiesBuffer) {
+    throw new Error('gpu_buffer_create failed for probabilities');
+  }
+
+  try {
+    const rc =
+      typeof module._gpu_compute_probabilities_u32 === 'function'
+        ? module._gpu_compute_probabilities_u32(
+            ctxPtr,
+            amplitudesBufferPtr,
+            probabilitiesBuffer,
+            stateDim >>> 0
+          )
+        : module._gpu_compute_probabilities(
+            ctxPtr,
+            amplitudesBufferPtr,
+            probabilitiesBuffer,
+            BigInt(stateDim)
+          );
+    if (rc !== 0) {
+      throw new Error(`gpu_compute_probabilities failed: ${rc}`);
+    }
+
+    const outPtr = module._malloc(stateDim * 8);
+    if (!outPtr) {
+      throw new Error('Failed to allocate probability output buffer');
+    }
+    const readRc = module._gpu_buffer_read(probabilitiesBuffer, outPtr, stateDim * 8, 0);
+    if (readRc !== 0) {
+      module._free(outPtr);
+      throw new Error(`gpu_buffer_read probabilities failed: ${readRc}`);
+    }
+    const probabilities = new Float64Array(stateDim);
+    probabilities.set(module.HEAPF64.subarray(outPtr >> 3, (outPtr >> 3) + stateDim));
+    module._free(outPtr);
+    return probabilities;
+  } finally {
+    module._gpu_buffer_free(probabilitiesBuffer);
+  }
+};
+
+const gpuApplyGate = (module, ctxPtr, amplitudesBufferPtr, gate, stateDim) => {
+  const angle = typeof gate.angle === 'number' ? gate.angle : DEFAULT_ANGLE;
+  switch (gate.type) {
+    case 'H':
+      return gpuCallHadamard(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+    case 'X':
+      return gpuCallPauliX(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+    case 'Y': {
+      const xRc = gpuCallPauliX(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+      if (xRc !== 0) return xRc;
+      return gpuCallPauliZ(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+    }
+    case 'Z':
+      return gpuCallPauliZ(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+    case 'S':
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, Math.PI / 2, stateDim);
+    case 'T':
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, Math.PI / 4, stateDim);
+    case 'Sdg':
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, -Math.PI / 2, stateDim);
+    case 'Tdg':
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, -Math.PI / 4, stateDim);
+    case 'P':
+    case 'Rz':
+      // Rz differs from phase by a global phase only, which does not affect probabilities.
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, angle, stateDim);
+    case 'Rx': {
+      const h1 = gpuCallHadamard(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+      if (h1 !== 0) return h1;
+      const p = gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, angle, stateDim);
+      if (p !== 0) return p;
+      return gpuCallHadamard(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim);
+    }
+    case 'Ry':
+    case 'U': {
+      // U gate in this demo path maps to U3(theta, 0, 0) == Ry(theta).
+      const p1 = gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, -Math.PI / 2, stateDim);
+      if (p1 !== 0) return p1;
+      const rx = gpuApplyGate(module, ctxPtr, amplitudesBufferPtr, { ...gate, type: 'Rx' }, stateDim);
+      if (rx !== 0) return rx;
+      return gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, Math.PI / 2, stateDim);
+    }
+    case 'CNOT':
+      if (typeof gate.controlQubit !== 'number') return -6;
+      return gpuCallCnot(
+        module,
+        ctxPtr,
+        amplitudesBufferPtr,
+        gate.controlQubit,
+        gate.qubit,
+        stateDim
+      );
+    case 'CZ':
+      if (typeof gate.controlQubit !== 'number') return -6;
+      // CZ = H(target) CNOT(control,target) H(target)
+      return (
+        gpuCallHadamard(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim) ||
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.controlQubit, gate.qubit, stateDim) ||
+        gpuCallHadamard(module, ctxPtr, amplitudesBufferPtr, gate.qubit, stateDim)
+      );
+    case 'CY':
+      if (typeof gate.controlQubit !== 'number') return -6;
+      // CY = Sdg(target) CNOT(control,target) S(target)
+      return (
+        gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, -Math.PI / 2, stateDim) ||
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.controlQubit, gate.qubit, stateDim) ||
+        gpuCallPhase(module, ctxPtr, amplitudesBufferPtr, gate.qubit, Math.PI / 2, stateDim)
+      );
+    case 'SWAP':
+      if (typeof gate.controlQubit !== 'number') return -6;
+      return (
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.controlQubit, gate.qubit, stateDim) ||
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.qubit, gate.controlQubit, stateDim) ||
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.controlQubit, gate.qubit, stateDim)
+      );
+    case 'DCX':
+      if (typeof gate.controlQubit !== 'number') return -6;
+      return (
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.controlQubit, gate.qubit, stateDim) ||
+        gpuCallCnot(module, ctxPtr, amplitudesBufferPtr, gate.qubit, gate.controlQubit, stateDim)
+      );
+    case 'M':
+    case 'Reset':
+    case 'Barrier':
+      return 0;
+    default:
+      return null;
+  }
 };
 
 const applyGate = (module, statePtr, gate, warnings) => {
@@ -192,7 +434,7 @@ const applyGate = (module, statePtr, gate, warnings) => {
   }
 };
 
-const runCircuit = async (payload) => {
+const runCircuitCpu = async (payload) => {
   const module = await getModule();
   const warnings = [];
   const numQubits = payload.numQubits;
@@ -204,13 +446,73 @@ const runCircuit = async (payload) => {
     }
     const dim = Math.pow(2, numQubits);
     const probabilities = getProbabilities(module, statePtr, dim);
-    return { probabilities, warnings };
+    return { probabilities, warnings, backend: 'cpu', nativeAccelerated: false };
   } finally {
     freeState(module, statePtr);
   }
 };
 
-const probabilitiesFromAmplitudes = async (payload) => {
+const runCircuitGpu = (module, payload) => {
+  const session = ensureGpuSession(module);
+  if (!session.available) {
+    return null;
+  }
+
+  const numQubits = payload.numQubits;
+  const gates = payload.gates || [];
+  const dim = Math.pow(2, numQubits);
+  if (!Number.isFinite(dim) || dim < 1 || dim > 0xffffffff) {
+    return null;
+  }
+
+  const amplitudes = new Float64Array(dim * 2);
+  amplitudes[0] = 1.0;
+
+  const amplitudesPtr = module._malloc(amplitudes.byteLength);
+  if (!amplitudesPtr) return null;
+  module.HEAPF64.set(amplitudes, amplitudesPtr >> 3);
+
+  const amplitudesBuffer = module._gpu_buffer_create_from_data(
+    session.ctxPtr,
+    amplitudesPtr,
+    amplitudes.byteLength
+  );
+  module._free(amplitudesPtr);
+  if (!amplitudesBuffer) return null;
+
+  try {
+    for (const gate of gates) {
+      const rc = gpuApplyGate(module, session.ctxPtr, amplitudesBuffer, gate, dim);
+      if (rc === null) {
+        return null;
+      }
+      if (rc !== 0) {
+        return null;
+      }
+    }
+
+    const probabilities = gpuComputeProbabilities(module, session.ctxPtr, amplitudesBuffer, dim);
+    return {
+      probabilities,
+      warnings: [],
+      backend: 'webgpu',
+      nativeAccelerated: session.nativeAccelerated,
+    };
+  } finally {
+    module._gpu_buffer_free(amplitudesBuffer);
+  }
+};
+
+const runCircuit = async (payload) => {
+  const module = await getModule();
+  const gpuResult = runCircuitGpu(module, payload);
+  if (gpuResult) {
+    return gpuResult;
+  }
+  return runCircuitCpu(payload);
+};
+
+const probabilitiesFromAmplitudesCpu = async (payload) => {
   const module = await getModule();
   const numQubits = payload.numQubits;
   const amplitudes = payload.amplitudes;
@@ -218,10 +520,52 @@ const probabilitiesFromAmplitudes = async (payload) => {
   try {
     setAmplitudes(module, statePtr, amplitudes);
     const dim = Math.pow(2, numQubits);
-    return getProbabilities(module, statePtr, dim);
+    return { probabilities: getProbabilities(module, statePtr, dim), backend: 'cpu' };
   } finally {
     freeState(module, statePtr);
   }
+};
+
+const probabilitiesFromAmplitudesGpu = (module, payload) => {
+  const session = ensureGpuSession(module);
+  if (!session.available) return null;
+
+  const numQubits = payload.numQubits;
+  const amplitudes = payload.amplitudes;
+  const dim = Math.pow(2, numQubits);
+  if (!Number.isFinite(dim) || dim < 1 || dim > 0xffffffff) {
+    return null;
+  }
+  if (!(amplitudes instanceof Float64Array) || amplitudes.length !== dim * 2) {
+    return null;
+  }
+
+  const amplitudesPtr = module._malloc(amplitudes.byteLength);
+  if (!amplitudesPtr) return null;
+  module.HEAPF64.set(amplitudes, amplitudesPtr >> 3);
+
+  const amplitudesBuffer = module._gpu_buffer_create_from_data(
+    session.ctxPtr,
+    amplitudesPtr,
+    amplitudes.byteLength
+  );
+  module._free(amplitudesPtr);
+  if (!amplitudesBuffer) return null;
+
+  try {
+    const probabilities = gpuComputeProbabilities(module, session.ctxPtr, amplitudesBuffer, dim);
+    return {
+      probabilities,
+      backend: 'webgpu',
+    };
+  } finally {
+    module._gpu_buffer_free(amplitudesBuffer);
+  }
+};
+
+const probabilitiesFromAmplitudes = async (payload) => {
+  const module = await getModule();
+  return probabilitiesFromAmplitudesGpu(module, payload) || probabilitiesFromAmplitudesCpu(payload);
 };
 
 const dmrgWeights = async (payload) => {
@@ -301,16 +645,24 @@ self.onmessage = async (event) => {
     let transfer = [];
 
     if (type === 'init') {
-      await getModule();
-      result = { ready: true };
+      const module = await getModule();
+      const session = ensureGpuSession(module);
+      result = {
+        ready: true,
+        webgpu: {
+          available: session.available,
+          nativeAccelerated: session.nativeAccelerated,
+          reason: session.reason,
+        },
+      };
     } else if (type === 'runCircuit') {
       const response = await runCircuit(payload);
       result = response;
       transfer = [response.probabilities.buffer];
     } else if (type === 'probabilitiesFromAmplitudes') {
-      const probabilities = await probabilitiesFromAmplitudes(payload);
-      result = { probabilities };
-      transfer = [probabilities.buffer];
+      const response = await probabilitiesFromAmplitudes(payload);
+      result = response;
+      transfer = [response.probabilities.buffer];
     } else if (type === 'dmrgWeights') {
       const response = await dmrgWeights(payload);
       result = response;
