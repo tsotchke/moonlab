@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { ensureMoonlabWorker, runCircuitInWorker, type WorkerGate } from '../workers/moonlabClient';
+import {
+  ensureMoonlabWorker,
+  runCircuitInWorker,
+  runExampleAlgorithmInWorker,
+  type WorkerGate,
+} from '../workers/moonlabClient';
 import './Examples.css';
 
 interface Example {
@@ -78,7 +83,7 @@ console.log(\`Success prob: \${result.successProbability}\`);  // ~96.9%
 console.log(\`Oracle calls: \${result.oracleCalls}\`);  // ~25 (vs 1024 classically!)
 
 grover.dispose();`,
-    runnable: false,
+    runnable: true,
   },
   {
     id: 'phase-kickback',
@@ -140,7 +145,7 @@ if (m0) state.z(2);
 console.log('Teleportation complete!');
 
 state.dispose();`,
-    runnable: false,
+    runnable: true,
   },
   {
     id: 'vqe-h2',
@@ -170,7 +175,7 @@ console.log(\`Chemical accuracy: \${result.chemicalAccuracy}\`);
 console.log(\`Iterations: \${result.iterations}\`);
 
 vqe.dispose();`,
-    runnable: false,
+    runnable: true,
   },
 ];
 
@@ -198,6 +203,13 @@ const Examples: React.FC = () => {
     return lines.join('\n');
   };
 
+  const formatTopStates = (states: Array<{ bitstring: string; probability: number }>): string => {
+    if (!states.length) return 'No high-probability states found.';
+    return states
+      .map((state) => `|${state.bitstring}⟩: ${(state.probability * 100).toFixed(2)}%`)
+      .join('\n');
+  };
+
   const runExample = async () => {
     if (!currentExample.runnable) return;
     setRunningId(currentExample.id);
@@ -206,6 +218,61 @@ const Examples: React.FC = () => {
       await ensureMoonlabWorker();
       let numQubits = 0;
       let gates: WorkerGate[] = [];
+
+      if (
+        currentExample.id === 'grover' ||
+        currentExample.id === 'quantum-teleportation' ||
+        currentExample.id === 'vqe-h2'
+      ) {
+        const response = await runExampleAlgorithmInWorker({
+          id: currentExample.id as 'grover' | 'quantum-teleportation' | 'vqe-h2',
+          cleanupAfterRun: true,
+        });
+
+        let output = '';
+        if (response.algorithm === 'grover') {
+          output = [
+            `Marked state: ${response.markedState} (|${response.markedState.toString(2).padStart(response.numQubits, '0')}⟩)`,
+            `Found state: ${response.foundState} (|${response.foundState.toString(2).padStart(response.numQubits, '0')}⟩)`,
+            `Iterations: ${response.iterations}`,
+            `Oracle calls: ${response.oracleCalls}`,
+            `Success probability at marked state: ${(response.successProbability * 100).toFixed(3)}%`,
+            '',
+            'Top states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        } else if (response.algorithm === 'quantum-teleportation') {
+          output = [
+            `Measured bits: m0=${response.measurementBits.m0}, m1=${response.measurementBits.m1}`,
+            `Teleportation fidelity (Bloch overlap): ${response.fidelity.toFixed(6)}`,
+            `Source Bloch vector: (${response.sourceBloch.x.toFixed(4)}, ${response.sourceBloch.y.toFixed(4)}, ${response.sourceBloch.z.toFixed(4)})`,
+            `Target Bloch vector: (${response.targetBloch.x.toFixed(4)}, ${response.targetBloch.y.toFixed(4)}, ${response.targetBloch.z.toFixed(4)})`,
+            '',
+            'Top states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        } else if (response.algorithm === 'vqe-h2') {
+          output = [
+            `Bond distance: ${response.bondDistance.toFixed(4)} Å`,
+            `Estimated ground energy: ${response.energyHartree.toFixed(9)} Ha`,
+            `Reference FCI energy: ${response.referenceEnergyHartree.toFixed(9)} Ha`,
+            `Chemical accuracy error: ${response.chemicalAccuracyKcalMol.toFixed(4)} kcal/mol`,
+            `Within chemical accuracy (<= 1 kcal/mol): ${response.convergedToChemicalAccuracy ? 'yes' : 'no'}`,
+            `Iterations: ${response.iterations}`,
+            `Energy evaluations: ${response.evaluations}`,
+            `Optimal parameters: [${Array.from(response.parameters)
+              .map((value) => value.toFixed(5))
+              .join(', ')}]`,
+            '',
+            'Top basis states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        }
+
+        setRunOutput((prev) => ({ ...prev, [currentExample.id]: output }));
+        return;
+      }
+
       if (currentExample.id === 'bell-state') {
         numQubits = 2;
         gates = [
@@ -229,11 +296,9 @@ const Examples: React.FC = () => {
         ];
       }
 
-      if (numQubits === 0) {
-        throw new Error('Example is not runnable in the browser build.');
-      }
+      if (numQubits === 0) throw new Error('Example is not runnable in the browser build.');
 
-      const result = await runCircuitInWorker({ numQubits, gates });
+      const result = await runCircuitInWorker({ numQubits, gates, cleanupAfterRun: true });
       if (result.warnings.length) {
         console.warn('Example warnings:', result.warnings);
       }

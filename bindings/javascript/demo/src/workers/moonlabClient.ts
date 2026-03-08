@@ -27,6 +27,47 @@ export type MoonlabWorkerInitStatus = {
   };
 };
 
+export type ExampleAlgorithmId = 'grover' | 'quantum-teleportation' | 'vqe-h2';
+
+export type ExampleAlgorithmResult =
+  | {
+      algorithm: 'grover';
+      numQubits: number;
+      markedState: number;
+      iterations: number;
+      oracleCalls: number;
+      foundState: number;
+      successProbability: number;
+      topStates: Array<{ index: number; bitstring: string; probability: number }>;
+      probabilities: Float64Array;
+    }
+  | {
+      algorithm: 'quantum-teleportation';
+      measurementBits: { m0: number; m1: number };
+      sourceBloch: { x: number; y: number; z: number };
+      targetBloch: { x: number; y: number; z: number };
+      fidelity: number;
+      topStates: Array<{ index: number; bitstring: string; probability: number }>;
+      probabilities: Float64Array;
+    }
+  | {
+      algorithm: 'vqe-h2';
+      bondDistance: number;
+      energyHartree: number;
+      referenceEnergyHartree: number;
+      chemicalAccuracyKcalMol: number;
+      convergedToChemicalAccuracy: boolean;
+      iterations: number;
+      evaluations: number;
+      parameters: Float64Array;
+      hamiltonian: {
+        nuclearRepulsion: number;
+        terms: Array<{ pauli: string; coefficient: number }>;
+      };
+      topStates: Array<{ index: number; bitstring: string; probability: number }>;
+      probabilities: Float64Array;
+    };
+
 let worker: Worker | null = null;
 let nextId = 1;
 const pending = new Map<number, PendingRequest>();
@@ -91,6 +132,7 @@ export const getMoonlabWorkerInitStatus = (): MoonlabWorkerInitStatus | null => 
 export const runCircuitInWorker = async (payload: {
   numQubits: number;
   gates: WorkerGate[];
+  cleanupAfterRun?: boolean;
 }): Promise<{
   probabilities: Float64Array;
   warnings: string[];
@@ -136,5 +178,13 @@ export const dmrgWeightsInWorker = async (payload: {
     variance?: number;
     elapsedMs: number;
   }>('dmrgWeights', payload);
+  return result;
+};
+
+export const runExampleAlgorithmInWorker = async (payload: {
+  id: ExampleAlgorithmId;
+  cleanupAfterRun?: boolean;
+}): Promise<ExampleAlgorithmResult> => {
+  const result = await callWorker<ExampleAlgorithmResult>('runExampleAlgorithm', payload);
   return result;
 };
