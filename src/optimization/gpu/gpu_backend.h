@@ -4,6 +4,7 @@
  *
  * Provides a single API for GPU-accelerated quantum operations across:
  * - Metal (macOS)
+ * - WebGPU (WASM/browser)
  * - OpenCL (cross-platform)
  * - Vulkan (cross-platform)
  * - CUDA (NVIDIA)
@@ -46,6 +47,7 @@ typedef double _Complex complex_t;
 typedef enum {
     GPU_BACKEND_NONE = 0,      /**< No GPU backend (CPU fallback) */
     GPU_BACKEND_METAL,         /**< Apple Metal (macOS only) */
+    GPU_BACKEND_WEBGPU,        /**< WebGPU (WASM/browser) */
     GPU_BACKEND_OPENCL,        /**< OpenCL (cross-platform) */
     GPU_BACKEND_VULKAN,        /**< Vulkan compute (cross-platform) */
     GPU_BACKEND_CUDA,          /**< NVIDIA CUDA */
@@ -132,6 +134,17 @@ gpu_backend_type_t gpu_get_backend_type(gpu_context_t* ctx);
  * @return Human-readable backend name
  */
 const char* gpu_backend_name(gpu_backend_type_t type);
+
+/**
+ * @brief Whether active backend is using native GPU acceleration.
+ *
+ * For WebGPU this indicates whether at least one native WGSL dispatch
+ * path has been successfully initialized/executed.
+ *
+ * @param ctx GPU context
+ * @return 1 if native acceleration active, 0 otherwise
+ */
+int gpu_is_native_accelerated(gpu_context_t* ctx);
 
 /**
  * @brief Get GPU device capabilities
@@ -451,6 +464,31 @@ const char* gpu_get_error_string(gpu_context_t* ctx);
  * @return Error description
  */
 const char* gpu_error_name(gpu_error_t error);
+
+// ============================================================================
+// WASM U32 STATE-DIM WRAPPERS
+// ============================================================================
+
+#if defined(__EMSCRIPTEN__)
+gpu_error_t gpu_hadamard_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                             uint32_t qubit_index, uint32_t state_dim);
+gpu_error_t gpu_hadamard_all_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                 uint32_t num_qubits, uint32_t state_dim);
+gpu_error_t gpu_pauli_x_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                            uint32_t qubit_index, uint32_t state_dim);
+gpu_error_t gpu_pauli_z_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                            uint32_t qubit_index, uint32_t state_dim);
+gpu_error_t gpu_phase_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                          uint32_t qubit_index, double theta, uint32_t state_dim);
+gpu_error_t gpu_cnot_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                         uint32_t control, uint32_t target, uint32_t state_dim);
+gpu_error_t gpu_compute_probabilities_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                          gpu_buffer_t* probabilities, uint32_t state_dim);
+gpu_error_t gpu_normalize_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                              double norm, uint32_t state_dim);
+gpu_error_t gpu_sum_squared_magnitudes_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                           uint32_t state_dim, double* result);
+#endif
 
 #ifdef __cplusplus
 }

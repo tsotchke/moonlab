@@ -318,7 +318,7 @@ export interface MoonlabModule {
     qubit: number,
     randomValue: number
   ): number;
-  _measurement_all_qubits(statePtr: number, randomValue: number): number;
+  _measurement_all_qubits(statePtr: number, randomValue: number): number | bigint;
   _measurement_expectation_z(statePtr: number, qubit: number): number;
   _measurement_expectation_x(statePtr: number, qubit: number): number;
   _measurement_expectation_y(statePtr: number, qubit: number): number;
@@ -423,6 +423,62 @@ export interface MoonlabModule {
     samplesPtr: number,
     seed: number,
     statsPtr: number
+  ): number;
+
+  // Tensor Network GPU backend introspection
+  _tensor_gpu_available?(): number;
+  _tensor_gpu_get_context?(): number;
+  _tensor_gpu_backend_type?(ctxPtr: number): number;
+  _tensor_gpu_webgpu_available?(): number;
+
+  // Unified GPU backend (WASM WebGPU path)
+  _gpu_compute_init?(preferred: number): number;
+  _gpu_compute_free?(ctxPtr: number): void;
+  _gpu_is_available?(): number;
+  _gpu_get_backend_type?(ctxPtr: number): number;
+  _gpu_is_native_accelerated?(ctxPtr: number): number;
+  _gpu_buffer_create?(ctxPtr: number, size: number): number;
+  _gpu_buffer_create_from_data?(ctxPtr: number, dataPtr: number, size: number): number;
+  _gpu_buffer_write?(bufferPtr: number, dataPtr: number, size: number, offset: number): number;
+  _gpu_buffer_read?(bufferPtr: number, dataPtr: number, size: number, offset: number): number;
+  _gpu_buffer_free?(bufferPtr: number): void;
+  _gpu_hadamard?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_hadamard_all?(ctxPtr: number, bufferPtr: number, numQubits: number, stateDim: bigint): number;
+  _gpu_pauli_x?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_pauli_z?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_phase?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: bigint): number;
+  _gpu_cnot?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: bigint): number;
+  _gpu_hadamard_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_hadamard_all_u32?(ctxPtr: number, bufferPtr: number, numQubits: number, stateDim: number): number;
+  _gpu_pauli_x_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_pauli_z_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_phase_u32?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: number): number;
+  _gpu_cnot_u32?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: number): number;
+  _gpu_compute_probabilities?(
+    ctxPtr: number,
+    amplitudesBufferPtr: number,
+    probabilitiesBufferPtr: number,
+    stateDim: bigint
+  ): number;
+  _gpu_compute_probabilities_u32?(
+    ctxPtr: number,
+    amplitudesBufferPtr: number,
+    probabilitiesBufferPtr: number,
+    stateDim: number
+  ): number;
+  _gpu_normalize?(ctxPtr: number, bufferPtr: number, norm: number, stateDim: bigint): number;
+  _gpu_normalize_u32?(ctxPtr: number, bufferPtr: number, norm: number, stateDim: number): number;
+  _gpu_sum_squared_magnitudes?(
+    ctxPtr: number,
+    bufferPtr: number,
+    stateDim: bigint,
+    resultPtr: number
+  ): number;
+  _gpu_sum_squared_magnitudes_u32?(
+    ctxPtr: number,
+    bufferPtr: number,
+    stateDim: number,
+    resultPtr: number
   ): number;
 
   // DMRG convenience

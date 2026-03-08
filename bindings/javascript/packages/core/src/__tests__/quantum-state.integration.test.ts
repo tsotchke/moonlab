@@ -179,9 +179,9 @@ describe('Two-Qubit Gates', () => {
 
   it('applies SWAP gate', async () => {
     state = await QuantumState.create({ numQubits: 2 });
-    state.x(0).swap(0, 1); // |10> -> |01>
+    state.x(0).swap(0, 1); // |01> -> |10> (qubit 0 is least-significant)
     const probs = state.getProbabilities();
-    expect(probs[0b01]).toBeCloseTo(1);
+    expect(probs[0b10]).toBeCloseTo(1);
   });
 
   it('validates control != target', async () => {
@@ -206,9 +206,9 @@ describe('Three-Qubit Gates', () => {
 
   it('Toffoli only flips when both controls are 1', async () => {
     state = await QuantumState.create({ numQubits: 3 });
-    state.x(0).toffoli(0, 1, 2); // |100> -> |100> (q1 is 0)
+    state.x(0).toffoli(0, 1, 2); // |001> -> |001> (q1 is 0)
     const probs = state.getProbabilities();
-    expect(probs[0b100]).toBeCloseTo(1);
+    expect(probs[0b001]).toBeCloseTo(1);
   });
 
   it('applies Fredkin gate', async () => {

@@ -90,38 +90,128 @@ async function loadModule(options?: LoadOptions): Promise<MoonlabModule> {
     typeof process !== 'undefined' &&
     process.versions != null &&
     process.versions.node != null;
+  const isDeno = isDenoRuntime();
 
-  if (isNode) {
-    return loadNodeModule(options);
+  if (isNode || isDeno) {
+    return loadServerModule(options);
   } else {
     return loadBrowserModule(options);
   }
 }
 
 /**
- * Load module in Node.js environment
+ * Load module in Node.js/Deno environment
  */
-async function loadNodeModule(_options?: LoadOptions): Promise<MoonlabModule> {
-  // In Node.js, we need to use require or dynamic import
-  // The path will be resolved relative to the package
+async function loadServerModule(_options?: LoadOptions): Promise<MoonlabModule> {
+  const candidates: string[] = [];
+  const metaUrl =
+    typeof import.meta !== 'undefined' &&
+    typeof import.meta.url === 'string' &&
+    import.meta.url.length > 0
+      ? import.meta.url
+      : null;
 
-  try {
-    // Try to load the compiled WASM module
-    // This assumes the module is built and available at dist/moonlab.js
-    const modulePath = new URL('../dist/moonlab.js', import.meta.url).pathname;
-
-    // Dynamic import for ES modules
-    const MoonlabModuleFactory = (await import(modulePath)).default;
-
-    const module = await MoonlabModuleFactory();
-    await module.ready;
-
-    return module as MoonlabModule;
-  } catch (error) {
-    throw new Error(
-      `Failed to load Moonlab WASM module in Node.js: ${error instanceof Error ? error.message : String(error)}`
-    );
+  if (metaUrl) {
+    candidates.push(new URL('../dist/moonlab.js', metaUrl).href);
+    candidates.push(new URL('../emscripten/build/moonlab.js', metaUrl).href);
   }
+
+  if (typeof __dirname === 'string') {
+    const path = await import('node:path');
+    const url = await import('node:url');
+    candidates.push(url.pathToFileURL(path.resolve(__dirname, 'moonlab.js')).href);
+    candidates.push(url.pathToFileURL(path.resolve(__dirname, '../emscripten/build/moonlab.js')).href);
+  }
+
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      const imported = await import(/* @vite-ignore */ candidate) as Record<string, unknown>;
+      let MoonlabModuleFactory = getMoonlabFactory(imported);
+      if (!MoonlabModuleFactory && isDenoRuntime()) {
+        MoonlabModuleFactory = await loadDenoCommonJsFactory(candidate);
+      }
+
+      if (typeof MoonlabModuleFactory !== 'function') {
+        throw new Error(`Module factory missing in ${candidate}`);
+      }
+
+      const module = await MoonlabModuleFactory();
+      await (module as MoonlabModule).ready;
+      return module as MoonlabModule;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const tried = candidates.join(', ');
+  throw new Error(
+    `Failed to load Moonlab WASM module in server runtime. Tried: ${tried}. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+  );
+}
+
+function isDenoRuntime(): boolean {
+  return typeof globalThis !== 'undefined' && 'Deno' in globalThis;
+}
+
+function getMoonlabFactory(imported: Record<string, unknown>): ((config?: unknown) => Promise<unknown>) | null {
+  const factory =
+    (imported.default as ((config?: unknown) => Promise<unknown>) | undefined) ??
+    (imported.MoonlabModule as ((config?: unknown) => Promise<unknown>) | undefined) ??
+    (typeof imported === 'function' ? (imported as unknown as (config?: unknown) => Promise<unknown>) : undefined);
+
+  return typeof factory === 'function' ? factory : null;
+}
+
+async function loadDenoCommonJsFactory(candidate: string): Promise<((config?: unknown) => Promise<unknown>) | null> {
+  const url = await import('node:url');
+  const path = await import('node:path');
+  const fs = await import('node:fs/promises');
+  const moduleApi = await import('node:module');
+  const processModule = await import('node:process');
+
+  const modulePath = candidate.startsWith('file:')
+    ? url.fileURLToPath(candidate)
+    : candidate;
+
+  const source = await fs.readFile(modulePath, 'utf8');
+  const moduleShim: { exports: unknown } = { exports: {} };
+  const exportsShim = moduleShim.exports;
+  const require = moduleApi.createRequire(url.pathToFileURL(modulePath).href);
+
+  const globalRecord = globalThis as Record<string, unknown>;
+  const previousProcess = globalRecord.process;
+  globalRecord.process = (processModule.default ?? processModule) as unknown;
+  try {
+    const evaluator = new Function(
+      'module',
+      'exports',
+      'require',
+      '__filename',
+      '__dirname',
+      source
+    );
+    evaluator(moduleShim, exportsShim, require, modulePath, path.dirname(modulePath));
+  } finally {
+    if (typeof previousProcess === 'undefined') {
+      delete globalRecord.process;
+    } else {
+      globalRecord.process = previousProcess;
+    }
+  }
+
+  if (typeof moduleShim.exports === 'function') {
+    return moduleShim.exports as (config?: unknown) => Promise<unknown>;
+  }
+
+  if (moduleShim.exports && typeof moduleShim.exports === 'object') {
+    const fromDefault = (moduleShim.exports as Record<string, unknown>).default;
+    if (typeof fromDefault === 'function') {
+      return fromDefault as (config?: unknown) => Promise<unknown>;
+    }
+  }
+
+  return null;
 }
 
 /**

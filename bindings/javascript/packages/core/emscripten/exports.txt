@@ -174,3 +174,43 @@ _dmrg_tfim_ground_state
 _dmrg_compute_energy
 _dmrg_energy_variance
 _dmrg_result_free
+
+# =============================================================================
+# Tensor Network GPU Backend Introspection
+# =============================================================================
+_tensor_gpu_available
+_tensor_gpu_get_context
+_tensor_gpu_backend_type
+_tensor_gpu_webgpu_available
+
+# =============================================================================
+# Unified GPU Backend (WASM WebGPU path)
+# =============================================================================
+_gpu_compute_init
+_gpu_compute_free
+_gpu_is_available
+_gpu_get_backend_type
+_gpu_is_native_accelerated
+_gpu_buffer_create
+_gpu_buffer_create_from_data
+_gpu_buffer_write
+_gpu_buffer_read
+_gpu_buffer_free
+_gpu_hadamard
+_gpu_hadamard_all
+_gpu_pauli_x
+_gpu_pauli_z
+_gpu_phase
+_gpu_cnot
+_gpu_compute_probabilities
+_gpu_normalize
+_gpu_sum_squared_magnitudes
+_gpu_hadamard_u32
+_gpu_hadamard_all_u32
+_gpu_pauli_x_u32
+_gpu_pauli_z_u32
+_gpu_phase_u32
+_gpu_cnot_u32
+_gpu_compute_probabilities_u32
+_gpu_normalize_u32
+_gpu_sum_squared_magnitudes_u32
