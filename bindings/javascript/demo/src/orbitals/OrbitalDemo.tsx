@@ -26,6 +26,8 @@ const DEFAULT_QUBITS = Math.ceil(Math.log2(BASE_STATES)); // 15 qubits
 const MAX_QUBITS_UI = 32;
 const SAFE_QUBITS = 24;
 const MAX_QUBITS_RUNTIME = 32; // cap at 2^32 amplitudes (use with care)
+const MAX_N_UI = 10;
+const FINE_STRUCTURE_ALPHA = 1 / 137.035999084;
 const DMRG_MIN_SITES = 4;
 const DMRG_MAX_SITES = 12;
 const DEFAULT_DMRG_SITES = 6;
@@ -34,7 +36,11 @@ const DEFAULT_N = 5;
 const DEFAULT_L = 2;
 const DEFAULT_M = 2;
 const DEFAULT_POINT_COUNT = 494000;
-const DEFAULT_POINT_SIZE = 0.01;
+const POINT_SIZE_MIN_UI = 0.01;
+const POINT_SIZE_MAX_UI = 0.15;
+const DEFAULT_POINT_SIZE = POINT_SIZE_MIN_UI;
+const OPACITY_MIN_UI = 0.1;
+const OPACITY_MAX_UI = 0.9;
 const DEFAULT_OPACITY = 0.2;
 const DEFAULT_CLOUD_COLOR = '#ffffff';
 const DEFAULT_SHELL_COLOR_A = '#ffffff';
@@ -42,12 +48,22 @@ const DEFAULT_SHELL_COLOR_B = '#612bde';
 const PROBABILITY_DRIFT_FALLBACK_L1 = 5e-3;
 const DMRG_INFLUENCE_BLEND = 0.35;
 const DMRG_INFLUENCE_GAMMA = 0.65;
+const ADAPTIVE_EXTENT_MAX_PASSES = 8;
+const ADAPTIVE_EXTENT_BOUNDARY_TARGET = 0.08;
+const ADAPTIVE_EXTENT_GROWTH_FACTOR = 1.6;
+const ADAPTIVE_EXTENT_MAX = 40;
 
 const CONTROL_TOOLTIPS = {
   atom: 'Choose the element (atomic number Z). Higher Z pulls the cloud inward and increases radial decay.',
   chooseElement: 'Open the periodic table to select a different element.',
   randomQuantumState: 'Pick a random element and a valid random quantum tuple (n, l, m).',
-  n: 'Sets the principal quantum number; higher n increases orbital size and radial nodes.',
+  n: `Sets the principal quantum number (1-${MAX_N_UI}); higher n increases orbital size and radial nodes.`,
+  screeningExchange:
+    'Approximate multi-electron screening/exchange using shell-based effective nuclear charge (Zeff).',
+  relativisticSpinOrbit:
+    'Applies relativistic radial contraction and a spin-orbit-inspired density splitting for high-Z atoms.',
+  correlationMixing:
+    'Mixes neighboring orbital configurations to approximate many-electron correlation effects.',
   qubits: 'Controls WASM state size; more qubits increase lattice resolution and memory/time cost.',
   allowHighQubits: 'Unlocks 25-32 qubits; requires very high memory (64 GB+).',
   useDmrg: 'Run TFIM ground-state solver in WASM to modulate orbital sampling.',
@@ -68,6 +84,12 @@ const CONTROL_TOOLTIPS = {
   rotation: 'Toggle auto-rotation of the scene.',
 };
 
+interface PhysicsModelOptions {
+  screeningExchange: boolean;
+  relativisticSpinOrbit: boolean;
+  correlationMixing: boolean;
+}
+
 interface CloudParams {
   atom: Atom;
   n: number;
@@ -76,6 +98,7 @@ interface CloudParams {
   pointCount: number;
   extent: number;
   gridSize: number;
+  physics: PhysicsModelOptions;
 }
 
 interface ProbabilityGrid {
@@ -177,14 +200,151 @@ const radialComponent = (n: number, l: number, r: number, Z: number): number => 
   return radial;
 };
 
+const shellCapacity = (n: number) => 2 * n * n;
+
+const electronsBeforeShell = (n: number): number => {
+  let total = 0;
+  for (let k = 1; k < n; k++) {
+    total += shellCapacity(k);
+  }
+  return total;
+};
+
+const electronsInShell = (Z: number, n: number): number => {
+  if (n < 1) return 0;
+  const before = electronsBeforeShell(n);
+  return clamp(Z - before, 0, shellCapacity(n));
+};
+
+const effectiveNuclearCharge = (atom: Atom, n: number, l: number, enabled: boolean): number => {
+  if (!enabled) return atom.Z;
+
+  const inShellN = electronsInShell(atom.Z, n);
+  const inShellNMinus1 = n > 1 ? electronsInShell(atom.Z, n - 1) : 0;
+  const sameShell = Math.max(0, inShellN - 1);
+  const lowerShell = Math.max(0, atom.Z - inShellN - inShellNMinus1);
+
+  const sameCoeff = 0.35;
+  const nMinus1Coeff = l <= 1 ? 0.85 : 1.0;
+  const exchangeTerm = l > 0 ? 0.02 * ((2 * l + 1) / Math.max(1, n)) : 0;
+
+  const shielding = sameCoeff * sameShell + nMinus1Coeff * inShellNMinus1 + lowerShell;
+  return clamp(atom.Z - shielding + exchangeTerm, 1, atom.Z);
+};
+
+const applyRelativisticContraction = (
+  zEff: number,
+  n: number,
+  l: number,
+  enabled: boolean
+): number => {
+  if (!enabled) return zEff;
+  const beta = Math.pow(FINE_STRUCTURE_ALPHA * zEff, 2);
+  const contraction = 1 + (beta * 0.32) / (Math.max(1, n) * (l + 1));
+  return zEff * contraction;
+};
+
+const spinOrbitDensityFactor = (
+  theta: number,
+  n: number,
+  l: number,
+  m: number,
+  zEff: number,
+  enabled: boolean
+): number => {
+  if (!enabled || l === 0 || m === 0) return 1;
+  const beta = Math.pow(FINE_STRUCTURE_ALPHA * zEff, 2);
+  const coupling = (beta * 0.28 * l) / Math.max(1, n * n);
+  const orientation = Math.cos(theta) * (m / Math.max(1, l));
+  return clamp(1 + coupling * orientation, 0.35, 1.65);
+};
+
+type CorrelationTerm = {
+  n: number;
+  l: number;
+  m: number;
+  weight: number;
+};
+
+const buildCorrelationTerms = (n: number, l: number, m: number): CorrelationTerm[] => {
+  const terms: CorrelationTerm[] = [];
+  const addTerm = (termN: number, termL: number, weight: number) => {
+    if (termN < 1 || termN > MAX_N_UI) return;
+    if (termL < 0 || termL >= termN) return;
+    if (weight <= 0) return;
+    terms.push({
+      n: termN,
+      l: termL,
+      m: clamp(m, -termL, termL),
+      weight,
+    });
+  };
+
+  if (l - 1 >= 0) addTerm(n, l - 1, 0.28);
+  if (l + 1 < n) addTerm(n, l + 1, 0.28);
+  if (n - 1 >= 1) addTerm(n - 1, Math.min(l, n - 2), 0.44);
+
+  let totalWeight = 0;
+  for (let i = 0; i < terms.length; i++) {
+    totalWeight += terms[i].weight;
+  }
+  if (totalWeight <= 0) return [];
+  for (let i = 0; i < terms.length; i++) {
+    terms[i].weight /= totalWeight;
+  }
+  return terms;
+};
+
+const correlationMixingStrength = (atom: Atom): number => clamp(0.04 + atom.Z * 0.0012, 0.04, 0.18);
+
 const buildProbabilityGrid = async (params: CloudParams): Promise<ProbabilityGrid> => {
   const start = performance.now();
   const stateCount = params.gridSize * params.gridSize * params.gridSize;
   const positions: { x: number; y: number; z: number }[] = new Array(stateCount);
-  const amplitudes: Complex[] = new Array(stateCount);
   const probabilities: number[] = new Array(stateCount);
 
   const spacing = (params.extent * 2) / (params.gridSize - 1);
+  const baseZEff = effectiveNuclearCharge(
+    params.atom,
+    params.n,
+    params.l,
+    params.physics.screeningExchange
+  );
+  const baseRadialZ = applyRelativisticContraction(
+    baseZEff,
+    params.n,
+    params.l,
+    params.physics.relativisticSpinOrbit
+  );
+
+  const correlationTerms = params.physics.correlationMixing
+    ? buildCorrelationTerms(params.n, params.l, params.m)
+    : [];
+  const correlationStrength =
+    params.physics.correlationMixing && correlationTerms.length > 0
+      ? correlationMixingStrength(params.atom)
+      : 0;
+  const preparedCorrelationTerms =
+    correlationStrength > 0
+      ? correlationTerms.map((term) => {
+          const termZEff = effectiveNuclearCharge(
+            params.atom,
+            term.n,
+            term.l,
+            params.physics.screeningExchange
+          );
+          return {
+            ...term,
+            zEff: termZEff,
+            radialZ: applyRelativisticContraction(
+              termZEff,
+              term.n,
+              term.l,
+              params.physics.relativisticSpinOrbit
+            ),
+          };
+        })
+      : [];
 
   let totalProb = 0;
   for (let idx = 0; idx < stateCount; idx++) {
@@ -199,20 +359,46 @@ const buildProbabilityGrid = async (params: CloudParams): Promise<ProbabilityGri
     const r = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
     const theta = r === 0 ? 0 : Math.acos(clamp(posZ / (r || 1), -1, 1));
     const phi = Math.atan2(posY, posX);
-
-    const radial = radialComponent(params.n, params.l, Math.max(r, 1e-5), params.atom.Z);
+    const rr = Math.max(r, 1e-5);
+    const radial = radialComponent(params.n, params.l, rr, baseRadialZ);
     const ylm = realSphericalHarmonic(params.l, params.m, theta, phi);
-    const prob = Math.max(0, radial * radial * ylm * ylm);
+    const soFactor = spinOrbitDensityFactor(
+      theta,
+      params.n,
+      params.l,
+      params.m,
+      baseZEff,
+      params.physics.relativisticSpinOrbit
+    );
+    let prob = Math.max(0, radial * radial * ylm * ylm * soFactor);
+
+    if (correlationStrength > 0) {
+      let mixedProb = 0;
+      for (let i = 0; i < preparedCorrelationTerms.length; i++) {
+        const term = preparedCorrelationTerms[i];
+        const termRadial = radialComponent(term.n, term.l, rr, term.radialZ);
+        const termYlm = realSphericalHarmonic(term.l, term.m, theta, phi);
+        const termSoFactor = spinOrbitDensityFactor(
+          theta,
+          term.n,
+          term.l,
+          term.m,
+          term.zEff,
+          params.physics.relativisticSpinOrbit
+        );
+        mixedProb += term.weight * Math.max(0, termRadial * termRadial * termYlm * termYlm * termSoFactor);
+      }
+      prob = (1 - correlationStrength) * prob + correlationStrength * mixedProb;
+    }
 
     positions[idx] = { x: posX, y: posY, z: posZ };
     probabilities[idx] = prob;
     totalProb += prob;
   }
 
-  const norm = totalProb > 0 ? Math.sqrt(totalProb) : 1;
+  const norm = totalProb > 0 ? totalProb : 1;
   for (let i = 0; i < stateCount; i++) {
-    const amp = probabilities[i] > 0 ? Math.sqrt(probabilities[i]) / norm : 0;
-    amplitudes[i] = { real: amp, imag: 0 };
+    probabilities[i] = probabilities[i] > 0 ? probabilities[i] / norm : 0;
   }
 
   // Default normalized probabilities for base lattice; actual dimension handled in regenerate
@@ -254,6 +440,36 @@ const nextPowerOfTwo = (value: number): number => {
     power <<= 1;
   }
   return power;
+};
+
+const boundaryMassFraction = (probabilities: ArrayLike<number>, gridSize: number): number => {
+  if (gridSize <= 2) return 0;
+  const area = gridSize * gridSize;
+  let boundaryMass = 0;
+  let totalMass = 0;
+
+  for (let i = 0; i < probabilities.length; i++) {
+    const p = probabilities[i] ?? 0;
+    if (p <= 0) continue;
+    totalMass += p;
+
+    const z = Math.floor(i / area);
+    const yz = i - z * area;
+    const y = Math.floor(yz / gridSize);
+    const x = yz - y * gridSize;
+    if (
+      x === 0 ||
+      y === 0 ||
+      z === 0 ||
+      x === gridSize - 1 ||
+      y === gridSize - 1 ||
+      z === gridSize - 1
+    ) {
+      boundaryMass += p;
+    }
+  }
+
+  return totalMass > 0 ? boundaryMass / totalMass : 0;
 };
 
 const samplePoints = (
@@ -442,6 +658,44 @@ const extentForAtom = (n: number, Z: number) => {
   return base / compression;
 };
 
+const estimateSpatialExtent = (
+  atom: Atom,
+  n: number,
+  l: number,
+  physics: PhysicsModelOptions
+): number => {
+  let extent = extentForAtom(n, atom.Z);
+  const adaptiveExtentEnabled =
+    physics.screeningExchange || physics.relativisticSpinOrbit || physics.correlationMixing;
+  if (adaptiveExtentEnabled) {
+    const seedZEff = effectiveNuclearCharge(atom, n, l, physics.screeningExchange);
+    const seedRadialZ = applyRelativisticContraction(seedZEff, n, l, physics.relativisticSpinOrbit);
+    const spreadScale = (n * n) / Math.max(0.5, seedRadialZ);
+    const seededExtent = clamp(1.5 + spreadScale * 0.55, extent, ADAPTIVE_EXTENT_MAX);
+    extent = Math.max(extent, seededExtent);
+    if (physics.correlationMixing) {
+      extent = Math.min(ADAPTIVE_EXTENT_MAX, extent * 1.08);
+    }
+  }
+  return extent;
+};
+
+const tunePointStyleForExtent = (
+  extent: number
+): {
+  pointSize: number;
+  opacity: number;
+} => {
+  const spreadNorm = clamp((extent - 1.5) / (ADAPTIVE_EXTENT_MAX * 0.35), 0, 1);
+  const pointSize = clamp(
+    POINT_SIZE_MIN_UI + spreadNorm * 0.085,
+    POINT_SIZE_MIN_UI,
+    POINT_SIZE_MAX_UI
+  );
+  const opacity = clamp(OPACITY_MIN_UI + spreadNorm * 0.6, OPACITY_MIN_UI, OPACITY_MAX_UI);
+  return { pointSize, opacity };
+};
+
 const nucleusRadiusForExtent = (extent: number) => clamp(extent * 0.003, 0.006, 0.02);
 
 const isPowerOfTwo = (value: number) => value > 0 && (value & (value - 1)) === 0;
@@ -572,11 +826,44 @@ const createPointSpriteTexture = (): THREE.Texture => {
   return texture;
 };
 
+const fitCameraToExtent = (
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  extent: number
+) => {
+  const safeExtent = Math.max(0.5, extent);
+  const targetDistance = Math.max(8, safeExtent * 2.8);
+  const near = Math.max(0.01, safeExtent * 0.01);
+  const far = Math.max(300, safeExtent * 160);
+
+  const target = controls.target.clone();
+  const dir = camera.position.clone().sub(target);
+  if (dir.lengthSq() < 1e-6) {
+    dir.set(1, 1, 1).normalize();
+  } else {
+    dir.normalize();
+  }
+
+  const currentDistance = camera.position.distanceTo(target);
+  if (currentDistance < targetDistance * 0.7 || currentDistance > targetDistance * 4.5) {
+    camera.position.copy(target.clone().add(dir.multiplyScalar(targetDistance)));
+  }
+
+  camera.near = near;
+  camera.far = far;
+  camera.updateProjectionMatrix();
+
+  controls.minDistance = Math.max(0.5, safeExtent * 0.12);
+  controls.maxDistance = Math.max(60, safeExtent * 12);
+  controls.update();
+};
+
 const OrbitalDemo: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const cloudRef = useRef<THREE.Points>();
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
+  const cameraRef = useRef<THREE.PerspectiveCamera>();
   const materialRef = useRef<THREE.PointsMaterial>();
   const controlsRef = useRef<OrbitControls>();
   const gridRef = useRef<THREE.GridHelper | null>(null);
@@ -619,6 +906,9 @@ const OrbitalDemo: React.FC = () => {
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [showGuides, setShowGuides] = useState<boolean>(false);
   const [showBackground, setShowBackground] = useState<boolean>(false);
+  const [useScreeningExchange, setUseScreeningExchange] = useState<boolean>(false);
+  const [useRelativisticSpinOrbit, setUseRelativisticSpinOrbit] = useState<boolean>(false);
+  const [useCorrelationMixing, setUseCorrelationMixing] = useState<boolean>(false);
   const dmrgRunId = useRef(0);
   const pageStyle = useMemo(
     () => ({
@@ -637,14 +927,16 @@ const OrbitalDemo: React.FC = () => {
     if (!useShellColors) return [];
     const nodeCount = Math.max(0, n - l - 1);
     if (nodeCount === 0) return [];
+    const zEff = effectiveNuclearCharge(atom, n, l, useScreeningExchange);
+    const radialZ = applyRelativisticContraction(zEff, n, l, useRelativisticSpinOrbit);
     const maxR = Math.max(0.1, currentExtent * 1.2);
     const steps = 2048;
     const nodes: number[] = [];
     let prevR = 1e-4;
-    let prevVal = radialComponent(n, l, prevR, atom.Z);
+    let prevVal = radialComponent(n, l, prevR, radialZ);
     for (let i = 1; i <= steps; i++) {
       const r = (i / steps) * maxR;
-      const val = radialComponent(n, l, r, atom.Z);
+      const val = radialComponent(n, l, r, radialZ);
       if (prevVal === 0) {
         prevVal = val;
         prevR = r;
@@ -659,20 +951,29 @@ const OrbitalDemo: React.FC = () => {
       prevR = r;
     }
     return nodes;
-  }, [useShellColors, n, l, atom.Z, currentExtent]);
+  }, [useShellColors, n, l, atom, currentExtent, useScreeningExchange, useRelativisticSpinOrbit]);
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
   const randomizeQuantumState = () => {
     const nextAtom = ELEMENTS[randomInt(0, ELEMENTS.length - 1)] ?? DEFAULT_ATOM;
-    const nextN = randomInt(1, 5);
+    const nextN = randomInt(1, MAX_N_UI);
     const nextL = randomInt(0, nextN - 1);
     const nextM = randomInt(-nextL, nextL);
+    const physics: PhysicsModelOptions = {
+      screeningExchange: useScreeningExchange,
+      relativisticSpinOrbit: useRelativisticSpinOrbit,
+      correlationMixing: useCorrelationMixing,
+    };
+    const estimatedExtent = estimateSpatialExtent(nextAtom, nextN, nextL, physics);
+    const tunedStyle = tunePointStyleForExtent(estimatedExtent);
 
     setAtom(nextAtom);
     setN(nextN);
     setL(nextL);
     setM(nextM);
+    setPointSize(tunedStyle.pointSize);
+    setOpacity(tunedStyle.opacity);
   };
 
   useEffect(() => {
@@ -751,7 +1052,7 @@ const OrbitalDemo: React.FC = () => {
     const scene = new THREE.Scene();
     scene.background = null;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.05, 1000);
     camera.position.set(6, 6, 6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -820,8 +1121,11 @@ const OrbitalDemo: React.FC = () => {
 
     sceneRef.current = scene;
     rendererRef.current = renderer;
+    cameraRef.current = camera;
     controlsRef.current = controls;
     materialRef.current = material;
+
+    fitCameraToExtent(camera, controls, initialExtent);
 
     const handleResize = () => {
       if (!rendererRef.current || !camera || !mountRef.current) return;
@@ -850,6 +1154,7 @@ const OrbitalDemo: React.FC = () => {
       }
       renderer.dispose();
       material.dispose();
+      cameraRef.current = undefined;
       if (pointTextureRef.current) {
         pointTextureRef.current.dispose();
         pointTextureRef.current = null;
@@ -937,24 +1242,60 @@ const OrbitalDemo: React.FC = () => {
     const capped = allowHighQubits ? targetQubits : Math.min(targetQubits, SAFE_QUBITS);
     const effectiveQubits = Math.min(capped, MAX_QUBITS_RUNTIME);
     setIsGenerating(true);
-    const extent = extentForAtom(n, atom.Z);
-    setCurrentExtent(extent);
+    let extent = extentForAtom(n, atom.Z);
     try {
       await orbitalPreload;
       const targetDim = Math.pow(2, effectiveQubits);
       const gridSide = Math.min(MAX_GRID, Math.max(MIN_GRID, Math.floor(Math.cbrt(targetDim))));
+      const physics = {
+        screeningExchange: useScreeningExchange,
+        relativisticSpinOrbit: useRelativisticSpinOrbit,
+        correlationMixing: useCorrelationMixing,
+      };
+      const adaptiveExtentEnabled =
+        physics.screeningExchange || physics.relativisticSpinOrbit || physics.correlationMixing;
+      if (adaptiveExtentEnabled) {
+        extent = estimateSpatialExtent(atom, n, l, physics);
+      }
+
+      let grid: ProbabilityGrid | null = null;
+      let boundaryMass = 0;
+      for (let pass = 0; pass < ADAPTIVE_EXTENT_MAX_PASSES; pass++) {
+        grid = await buildProbabilityGrid({
+          atom,
+          n,
+          l,
+          m,
+          pointCount,
+          extent,
+          gridSize: gridSide,
+          physics,
+        });
+        if (!adaptiveExtentEnabled) break;
+
+        boundaryMass = boundaryMassFraction(grid.probabilities, gridSide);
+        if (boundaryMass <= ADAPTIVE_EXTENT_BOUNDARY_TARGET || extent >= ADAPTIVE_EXTENT_MAX) {
+          break;
+        }
+        extent = Math.min(ADAPTIVE_EXTENT_MAX, extent * ADAPTIVE_EXTENT_GROWTH_FACTOR);
+      }
+      if (!grid) {
+        throw new Error('Failed to build probability grid');
+      }
+
+      if (adaptiveExtentEnabled && boundaryMass > ADAPTIVE_EXTENT_BOUNDARY_TARGET) {
+        console.warn(
+          `[orbitals] Boundary mass remained high after extent adaptation (${boundaryMass.toExponential(3)} at extent=${extent.toFixed(2)})`
+        );
+      }
+
+      setCurrentExtent(extent);
+      if (cameraRef.current && controlsRef.current) {
+        fitCameraToExtent(cameraRef.current, controlsRef.current, extent);
+      }
       const spacing = (extent * 2) / (gridSide - 1);
       const gridSizeWorld = spacing * (gridSide - 1);
 
-      const grid = await buildProbabilityGrid({
-        atom,
-        n,
-        l,
-        m,
-        pointCount,
-        extent,
-        gridSize: gridSide,
-      });
       const baseLen = grid.probabilities.length;
       const solverDim = targetDim <= baseLen ? targetDim : nextPowerOfTwo(baseLen);
       const solverQubits = Math.round(Math.log2(solverDim));
@@ -1079,7 +1420,19 @@ const OrbitalDemo: React.FC = () => {
 
   useEffect(() => {
     void regenerate(qubits);
-  }, [atom, n, l, m, pointCount, qubits, useDmrg, dmrgWeights]);
+  }, [
+    atom,
+    n,
+    l,
+    m,
+    pointCount,
+    qubits,
+    useDmrg,
+    dmrgWeights,
+    useScreeningExchange,
+    useRelativisticSpinOrbit,
+    useCorrelationMixing,
+  ]);
 
   const isInitialLoad = pointsBuffer === null;
   const showOverlay = isInitialLoad || isGenerating || (useDmrg && isDmrgRunning);
@@ -1088,6 +1441,13 @@ const OrbitalDemo: React.FC = () => {
     : isGenerating
       ? 'Building orbital…'
       : 'Solving Schrödinger (DMRG)…';
+  const activeAtomicCorrections = [
+    useScreeningExchange ? 'screening/exchange' : '',
+    useRelativisticSpinOrbit ? 'relativistic/spin-orbit' : '',
+    useCorrelationMixing ? 'correlation/mixing' : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
 
   return (
     <div className="orbital-page" style={pageStyle}>
@@ -1142,7 +1502,7 @@ const OrbitalDemo: React.FC = () => {
               <input
                 type="range"
                 min={1}
-                max={5}
+                max={MAX_N_UI}
                 value={n}
                 title={CONTROL_TOOLTIPS.n}
                 onChange={(e) => {
@@ -1153,6 +1513,40 @@ const OrbitalDemo: React.FC = () => {
               />
               <div className="control-value">n = {n}</div>
             </label>
+
+            <div className="control-group">
+              <label className="control checkbox-control">
+                <input
+                  type="checkbox"
+                  checked={useScreeningExchange}
+                  title={CONTROL_TOOLTIPS.screeningExchange}
+                  onChange={(e) => setUseScreeningExchange(e.target.checked)}
+                />
+                <span title={CONTROL_TOOLTIPS.screeningExchange}>Screening + exchange correction</span>
+              </label>
+
+              <label className="control checkbox-control">
+                <input
+                  type="checkbox"
+                  checked={useRelativisticSpinOrbit}
+                  title={CONTROL_TOOLTIPS.relativisticSpinOrbit}
+                  onChange={(e) => setUseRelativisticSpinOrbit(e.target.checked)}
+                />
+                <span title={CONTROL_TOOLTIPS.relativisticSpinOrbit}>
+                  Relativistic + spin-orbit correction
+                </span>
+              </label>
+
+              <label className="control checkbox-control">
+                <input
+                  type="checkbox"
+                  checked={useCorrelationMixing}
+                  title={CONTROL_TOOLTIPS.correlationMixing}
+                  onChange={(e) => setUseCorrelationMixing(e.target.checked)}
+                />
+                <span title={CONTROL_TOOLTIPS.correlationMixing}>Correlation + configuration mixing</span>
+              </label>
+            </div>
 
             <label className="control">
               <span title={CONTROL_TOOLTIPS.qubits}>WASM Qubits (min 4, UI max 32)</span>
@@ -1287,8 +1681,8 @@ const OrbitalDemo: React.FC = () => {
               <span title={CONTROL_TOOLTIPS.pointSize}>Point Size</span>
               <input
                 type="range"
-                min={0.01}
-                max={0.15}
+                min={POINT_SIZE_MIN_UI}
+                max={POINT_SIZE_MAX_UI}
                 step={0.005}
                 value={pointSize}
                 title={CONTROL_TOOLTIPS.pointSize}
@@ -1301,8 +1695,8 @@ const OrbitalDemo: React.FC = () => {
               <span title={CONTROL_TOOLTIPS.opacity}>Opacity</span>
               <input
                 type="range"
-                min={0.1}
-                max={0.9}
+                min={OPACITY_MIN_UI}
+                max={OPACITY_MAX_UI}
                 step={0.05}
                 value={opacity}
                 title={CONTROL_TOOLTIPS.opacity}
@@ -1392,6 +1786,12 @@ const OrbitalDemo: React.FC = () => {
               </div>
             </div>
             <div>
+              <div className="stat-label">Atomic Model</div>
+              <div className="stat-value">
+                {activeAtomicCorrections || 'hydrogenic baseline'}
+              </div>
+            </div>
+            <div>
               <div className="stat-label">Computation</div>
               <div className="stat-value">
                 {lastStats
@@ -1440,8 +1840,9 @@ const OrbitalDemo: React.FC = () => {
                 amplitudes analytically on the CPU. Moonlab then builds a quantum state vector in WASM, normalizes it,
                 and samples measurement probabilities to drive the point cloud. If DMRG is enabled, Moonlab’s tensor-network
                 solver runs a TFIM ground-state calculation (a Schrödinger eigenproblem for a 1D spin chain) and uses that
-                quantum state’s probabilities to modulate the orbital distribution. Three.js renders the resulting |ψ|²
-                density with orbit controls.
+                quantum state’s probabilities to modulate the orbital distribution. Optional checkboxes apply additional
+                screening/exchange, relativistic/spin-orbit, and correlation/mixing approximations on top of the
+                hydrogenic baseline. Three.js renders the resulting |ψ|² density with orbit controls.
               </p>
               <ul>
                 <li>Adjust n, l, m to see shapes evolve (s, p, d, f…)</li>
