@@ -58,7 +58,8 @@ typedef enum {
     QSIM_BACKEND_GPU_OPENCL,    /**< OpenCL */
     QSIM_BACKEND_GPU_VULKAN,    /**< Vulkan compute */
     QSIM_BACKEND_GPU_CUDA,      /**< NVIDIA CUDA */
-    QSIM_BACKEND_DISTRIBUTED    /**< MPI distributed */
+    QSIM_BACKEND_DISTRIBUTED,   /**< MPI distributed */
+    QSIM_BACKEND_GPU_WEBGPU     /**< WebGPU (WASM/browser) */
 } qsim_backend_t;
 
 /**

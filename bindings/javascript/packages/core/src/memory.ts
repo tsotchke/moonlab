@@ -318,7 +318,7 @@ export interface MoonlabModule {
     qubit: number,
     randomValue: number
   ): number;
-  _measurement_all_qubits(statePtr: number, randomValue: number): number;
+  _measurement_all_qubits(statePtr: number, randomValue: number): number | bigint;
   _measurement_expectation_z(statePtr: number, qubit: number): number;
   _measurement_expectation_x(statePtr: number, qubit: number): number;
   _measurement_expectation_y(statePtr: number, qubit: number): number;
@@ -362,6 +362,135 @@ export interface MoonlabModule {
     qubit1: number,
     qubit2: number
   ): number;
+
+  // Tensor Network (MPS) core
+  _tn_mps_create_zero(numQubits: number, configPtr: number): number;
+  _tn_mps_create_basis(numQubits: number, basisState: number, configPtr: number): number;
+  _tn_mps_copy(statePtr: number): number;
+  _tn_mps_free(statePtr: number): void;
+  _tn_mps_num_qubits(statePtr: number): number;
+  _tn_mps_to_statevector(statePtr: number, amplitudesPtr: number): number;
+  _tn_mps_amplitude(statePtr: number, basisState: number): number;
+  _tn_mps_amplitudes(
+    statePtr: number,
+    basisStatesPtr: number,
+    numStates: number,
+    amplitudesPtr: number
+  ): number;
+  _tn_mps_normalize(statePtr: number): number;
+  _tn_mps_left_canonicalize(statePtr: number): number;
+  _tn_mps_right_canonicalize(statePtr: number): number;
+  _tn_mps_mixed_canonicalize(statePtr: number, center: number): number;
+  _tn_mps_move_center(statePtr: number, direction: number): number;
+  _tn_mps_truncate(statePtr: number, maxBond: number, cutoff: number): number;
+  _tn_mps_truncate_bond(statePtr: number, bond: number, maxBond: number, cutoff: number): number;
+  _tn_mps_grow_bond(statePtr: number, bond: number, newDim: number): number;
+  _tn_mps_fidelity(state1Ptr: number, state2Ptr: number): number;
+  _tn_mps_overlap(state1Ptr: number, state2Ptr: number): number;
+
+  // Tensor Network gates
+  _tn_apply_x(statePtr: number, qubit: number): number;
+  _tn_apply_y(statePtr: number, qubit: number): number;
+  _tn_apply_z(statePtr: number, qubit: number): number;
+  _tn_apply_h(statePtr: number, qubit: number): number;
+  _tn_apply_s(statePtr: number, qubit: number): number;
+  _tn_apply_t(statePtr: number, qubit: number): number;
+  _tn_apply_rx(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_ry(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_rz(statePtr: number, qubit: number, theta: number): number;
+  _tn_apply_cnot(statePtr: number, control: number, target: number): number;
+  _tn_apply_cz(statePtr: number, control: number, target: number): number;
+  _tn_apply_swap(statePtr: number, qubit1: number, qubit2: number): number;
+  _tn_apply_rzz(statePtr: number, qubit1: number, qubit2: number, theta: number): number;
+  _tn_apply_toffoli(
+    statePtr: number,
+    control1: number,
+    control2: number,
+    target: number
+  ): number;
+
+  // Tensor Network measurement
+  _tn_measure_probability(
+    statePtr: number,
+    qubit: number,
+    prob0Ptr: number,
+    prob1Ptr: number
+  ): number;
+  _tn_measure_bitstring_probability(statePtr: number, bitstring: number): number;
+  _tn_sample_auto(
+    statePtr: number,
+    numSamples: number,
+    samplesPtr: number,
+    seed: number,
+    statsPtr: number
+  ): number;
+
+  // Tensor Network GPU backend introspection
+  _tensor_gpu_available?(): number;
+  _tensor_gpu_get_context?(): number;
+  _tensor_gpu_backend_type?(ctxPtr: number): number;
+  _tensor_gpu_webgpu_available?(): number;
+
+  // Unified GPU backend (WASM WebGPU path)
+  _gpu_compute_init?(preferred: number): number;
+  _gpu_compute_free?(ctxPtr: number): void;
+  _gpu_is_available?(): number;
+  _gpu_get_backend_type?(ctxPtr: number): number;
+  _gpu_is_native_accelerated?(ctxPtr: number): number;
+  _gpu_buffer_create?(ctxPtr: number, size: number): number;
+  _gpu_buffer_create_from_data?(ctxPtr: number, dataPtr: number, size: number): number;
+  _gpu_buffer_write?(bufferPtr: number, dataPtr: number, size: number, offset: number): number;
+  _gpu_buffer_read?(bufferPtr: number, dataPtr: number, size: number, offset: number): number;
+  _gpu_buffer_free?(bufferPtr: number): void;
+  _gpu_hadamard?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_hadamard_all?(ctxPtr: number, bufferPtr: number, numQubits: number, stateDim: bigint): number;
+  _gpu_pauli_x?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_pauli_z?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
+  _gpu_phase?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: bigint): number;
+  _gpu_cnot?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: bigint): number;
+  _gpu_hadamard_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_hadamard_all_u32?(ctxPtr: number, bufferPtr: number, numQubits: number, stateDim: number): number;
+  _gpu_pauli_x_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_pauli_z_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
+  _gpu_phase_u32?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: number): number;
+  _gpu_cnot_u32?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: number): number;
+  _gpu_compute_probabilities?(
+    ctxPtr: number,
+    amplitudesBufferPtr: number,
+    probabilitiesBufferPtr: number,
+    stateDim: bigint
+  ): number;
+  _gpu_compute_probabilities_u32?(
+    ctxPtr: number,
+    amplitudesBufferPtr: number,
+    probabilitiesBufferPtr: number,
+    stateDim: number
+  ): number;
+  _gpu_normalize?(ctxPtr: number, bufferPtr: number, norm: number, stateDim: bigint): number;
+  _gpu_normalize_u32?(ctxPtr: number, bufferPtr: number, norm: number, stateDim: number): number;
+  _gpu_sum_squared_magnitudes?(
+    ctxPtr: number,
+    bufferPtr: number,
+    stateDim: bigint,
+    resultPtr: number
+  ): number;
+  _gpu_sum_squared_magnitudes_u32?(
+    ctxPtr: number,
+    bufferPtr: number,
+    stateDim: number,
+    resultPtr: number
+  ): number;
+
+  // DMRG convenience
+  _dmrg_tfim_ground_state(
+    numSites: number,
+    g: number,
+    configPtr: number,
+    resultOutPtr: number
+  ): number;
+  _dmrg_compute_energy(statePtr: number, mpoPtr: number): number;
+  _dmrg_energy_variance(statePtr: number, mpoPtr: number): number;
+  _dmrg_result_free(resultPtr: number): void;
 
   // Ready promise
   ready: Promise<MoonlabModule>;

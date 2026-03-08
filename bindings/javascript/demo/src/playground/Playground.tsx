@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { ensureMoonlabWorker, runCircuitInWorker, type WorkerGate } from '../workers/moonlabClient';
 import './Playground.css';
 
 // Gate categories for organized display
@@ -91,7 +92,10 @@ const GATE_CATEGORIES = {
   'Special': ['M', 'Reset', 'Barrier'] as GateType[],
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 const Playground: React.FC = () => {
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const [circuit, setCircuit] = useState<CircuitState>({
     numQubits: 3,
     numSlots: NUM_TIME_SLOTS,
@@ -104,6 +108,9 @@ const Playground: React.FC = () => {
   const [controlMode, setControlMode] = useState<'target' | 'control1' | 'control2'>('target');
   const [pendingGate, setPendingGate] = useState<{ timeSlot: number; controlQubit?: number; controlQubit2?: number } | null>(null);
   const [rotationAngle, setRotationAngle] = useState<number>(Math.PI / 2);
+  const [slotSize, setSlotSize] = useState<number>(50);
+  const [labelSize, setLabelSize] = useState<number>(40);
+  const circuitScrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blochCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -238,225 +245,30 @@ const Playground: React.FC = () => {
 
   const simulateCircuit = useCallback(async () => {
     setIsSimulating(true);
-
-    // Simulate the circuit (mock implementation for demo)
-    // In production, this would use the actual @moonlab/quantum-core
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    const numStates = Math.pow(2, circuit.numQubits);
-
-    // Sort gates by time slot for correct execution order
-    const sortedGates = [...circuit.gates].sort((a, b) => a.timeSlot - b.timeSlot);
-
-    // Complex amplitude simulation
-    // Each amplitude is [real, imag]
-    let amps: [number, number][] = new Array(numStates).fill(null).map((_, i) => i === 0 ? [1, 0] : [0, 0]);
-
-    const sqrt2 = Math.sqrt(2);
-
-    for (const gate of sortedGates) {
-      const q = gate.qubit;
-      const newAmps: [number, number][] = amps.map(a => [...a] as [number, number]);
-
-      switch (gate.type) {
-        case 'H': {
-          // Hadamard: |0⟩ → (|0⟩+|1⟩)/√2, |1⟩ → (|0⟩-|1⟩)/√2
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            const partner = bit === 0 ? i | (1 << q) : i & ~(1 << q);
-            if (bit === 0) {
-              newAmps[i] = [(amps[i][0] + amps[partner][0]) / sqrt2, (amps[i][1] + amps[partner][1]) / sqrt2];
-              newAmps[partner] = [(amps[i][0] - amps[partner][0]) / sqrt2, (amps[i][1] - amps[partner][1]) / sqrt2];
-            }
-          }
-          break;
-        }
-        case 'X': {
-          // Pauli-X: bit flip
-          for (let i = 0; i < numStates; i++) {
-            const flipped = i ^ (1 << q);
-            newAmps[i] = [...amps[flipped]];
-          }
-          break;
-        }
-        case 'Y': {
-          // Pauli-Y: |0⟩ → i|1⟩, |1⟩ → -i|0⟩
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            const flipped = i ^ (1 << q);
-            if (bit === 0) {
-              // |0⟩ → i|1⟩
-              newAmps[flipped] = [-amps[i][1], amps[i][0]];
-            } else {
-              // |1⟩ → -i|0⟩
-              newAmps[flipped] = [amps[i][1], -amps[i][0]];
-            }
-          }
-          break;
-        }
-        case 'Z': {
-          // Pauli-Z: phase flip on |1⟩
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            if (bit === 1) {
-              newAmps[i] = [-amps[i][0], -amps[i][1]];
-            }
-          }
-          break;
-        }
-        case 'S': {
-          // S gate: |1⟩ → i|1⟩
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            if (bit === 1) {
-              newAmps[i] = [-amps[i][1], amps[i][0]];
-            }
-          }
-          break;
-        }
-        case 'T': {
-          // T gate: |1⟩ → e^(iπ/4)|1⟩
-          const c = Math.cos(Math.PI / 4);
-          const s = Math.sin(Math.PI / 4);
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            if (bit === 1) {
-              newAmps[i] = [amps[i][0] * c - amps[i][1] * s, amps[i][0] * s + amps[i][1] * c];
-            }
-          }
-          break;
-        }
-        case 'Sdg': {
-          // S†: |1⟩ → -i|1⟩
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            if (bit === 1) {
-              newAmps[i] = [amps[i][1], -amps[i][0]];
-            }
-          }
-          break;
-        }
-        case 'Tdg': {
-          // T†: |1⟩ → e^(-iπ/4)|1⟩
-          const c = Math.cos(Math.PI / 4);
-          const s = Math.sin(Math.PI / 4);
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            if (bit === 1) {
-              newAmps[i] = [amps[i][0] * c + amps[i][1] * s, -amps[i][0] * s + amps[i][1] * c];
-            }
-          }
-          break;
-        }
-        case 'SX': {
-          // √X gate
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            const partner = i ^ (1 << q);
-            if (bit === 0) {
-              const a0 = amps[i], a1 = amps[partner];
-              newAmps[i] = [(a0[0] + a1[0] + a0[1] - a1[1]) / 2, (a0[1] + a1[1] - a0[0] + a1[0]) / 2];
-              newAmps[partner] = [(a0[0] + a1[0] - a0[1] + a1[1]) / 2, (a0[1] + a1[1] + a0[0] - a1[0]) / 2];
-            }
-          }
-          break;
-        }
-        case 'Rx':
-        case 'Ry':
-        case 'Rz': {
-          const theta = gate.angle || Math.PI / 2;
-          const c = Math.cos(theta / 2);
-          const s = Math.sin(theta / 2);
-          for (let i = 0; i < numStates; i++) {
-            const bit = (i >> q) & 1;
-            const partner = i ^ (1 << q);
-            if (bit === 0) {
-              const a0 = amps[i], a1 = amps[partner];
-              if (gate.type === 'Rx') {
-                newAmps[i] = [a0[0] * c + a1[1] * s, a0[1] * c - a1[0] * s];
-                newAmps[partner] = [a1[0] * c + a0[1] * s, a1[1] * c - a0[0] * s];
-              } else if (gate.type === 'Ry') {
-                newAmps[i] = [a0[0] * c - a1[0] * s, a0[1] * c - a1[1] * s];
-                newAmps[partner] = [a0[0] * s + a1[0] * c, a0[1] * s + a1[1] * c];
-              } else { // Rz
-                newAmps[i] = [a0[0] * c + a0[1] * s, a0[1] * c - a0[0] * s];
-                newAmps[partner] = [a1[0] * c - a1[1] * s, a1[1] * c + a1[0] * s];
-              }
-            }
-          }
-          break;
-        }
-        case 'CNOT': {
-          // Controlled-X
-          const ctrl = gate.controlQubit!;
-          for (let i = 0; i < numStates; i++) {
-            const ctrlBit = (i >> ctrl) & 1;
-            if (ctrlBit === 1) {
-              const flipped = i ^ (1 << q);
-              newAmps[i] = [...amps[flipped]];
-              newAmps[flipped] = [...amps[i]];
-            }
-          }
-          break;
-        }
-        case 'CZ': {
-          // Controlled-Z
-          const ctrl = gate.controlQubit!;
-          for (let i = 0; i < numStates; i++) {
-            const ctrlBit = (i >> ctrl) & 1;
-            const tgtBit = (i >> q) & 1;
-            if (ctrlBit === 1 && tgtBit === 1) {
-              newAmps[i] = [-amps[i][0], -amps[i][1]];
-            }
-          }
-          break;
-        }
-        case 'SWAP': {
-          // Swap two qubits
-          const q2 = gate.controlQubit!;
-          for (let i = 0; i < numStates; i++) {
-            const bit1 = (i >> q) & 1;
-            const bit2 = (i >> q2) & 1;
-            if (bit1 !== bit2) {
-              const swapped = i ^ (1 << q) ^ (1 << q2);
-              if (i < swapped) {
-                newAmps[i] = [...amps[swapped]];
-                newAmps[swapped] = [...amps[i]];
-              }
-            }
-          }
-          break;
-        }
-        case 'CCX': {
-          // Toffoli gate
-          const ctrl1 = gate.controlQubit!;
-          const ctrl2 = gate.controlQubit2!;
-          for (let i = 0; i < numStates; i++) {
-            const c1 = (i >> ctrl1) & 1;
-            const c2 = (i >> ctrl2) & 1;
-            if (c1 === 1 && c2 === 1) {
-              const flipped = i ^ (1 << q);
-              newAmps[i] = [...amps[flipped]];
-              newAmps[flipped] = [...amps[i]];
-            }
-          }
-          break;
-        }
-        case 'I':
-        case 'Barrier':
-          // No operation
-          break;
-        default:
-          // Other gates - no-op for now
-          break;
+    try {
+      await ensureMoonlabWorker();
+      const sortedGates = [...circuit.gates].sort((a, b) => a.timeSlot - b.timeSlot);
+      const workerGates: WorkerGate[] = sortedGates.map((gate) => ({
+        type: gate.type,
+        qubit: gate.qubit,
+        controlQubit: gate.controlQubit,
+        controlQubit2: gate.controlQubit2,
+        angle: gate.angle,
+      }));
+      const result = await runCircuitInWorker({
+        numQubits: circuit.numQubits,
+        gates: workerGates,
+      });
+      if (result.warnings.length) {
+        console.warn('Playground gate warnings:', result.warnings);
       }
-      amps = newAmps;
+      setProbabilities(Array.from(result.probabilities));
+    } catch (error) {
+      console.error('Failed to simulate circuit', error);
+      setProbabilities([]);
+    } finally {
+      setIsSimulating(false);
     }
-
-    // Convert complex amplitudes to probabilities
-    const probs = amps.map(([re, im]) => re * re + im * im);
-    setProbabilities(probs);
-    setIsSimulating(false);
   }, [circuit]);
 
   // Draw amplitude bars
@@ -594,6 +406,26 @@ const Playground: React.FC = () => {
     }
   }, [probabilities]);
 
+  useEffect(() => {
+    const updateSizing = () => {
+      const container = circuitScrollRef.current;
+      if (!container) return;
+      const width = container.clientWidth;
+      const nextLabelSize = width < 480 ? 32 : 40;
+      const padding = 32;
+      const minSlotSize = width >= 900 ? 28 : 36;
+      const available = Math.max(0, width - padding - nextLabelSize * 2);
+      const rawSize = Math.floor(available / circuit.numSlots);
+      const nextSlotSize = clamp(rawSize, minSlotSize, 50);
+      setLabelSize(nextLabelSize);
+      setSlotSize(nextSlotSize);
+    };
+
+    updateSizing();
+    window.addEventListener('resize', updateSizing);
+    return () => window.removeEventListener('resize', updateSizing);
+  }, [circuit.numSlots]);
+
   const getPlacementHint = (): string => {
     if (!selectedGate) return 'Select a gate from the palette';
     const info = GATE_INFO[selectedGate];
@@ -612,10 +444,13 @@ const Playground: React.FC = () => {
   return (
     <div className="playground">
       <div className="section-header">
-        <h1 className="section-title">Quantum Circuit Playground</h1>
-        <p className="section-description">
-          Build quantum circuits interactively. Select a gate, then click on the circuit grid to place it.
-        </p>
+        <img className="section-logo" src={logoUrl} alt="" aria-hidden="true" />
+        <div className="section-header-text">
+          <h1 className="section-title">Quantum Circuit Playground</h1>
+          <p className="section-description">
+            Build quantum circuits interactively. Select a gate, then click on the circuit grid to place it.
+          </p>
+        </div>
       </div>
 
       <div className="playground-layout">
@@ -710,89 +545,101 @@ const Playground: React.FC = () => {
         {/* Circuit Editor */}
         <div className="circuit-editor">
           <h3>Circuit</h3>
-          <div className="circuit-grid-container">
-            {/* Time slot headers */}
-            <div className="time-slot-header">
-              <div className="qubit-label-spacer"></div>
-              {Array.from({ length: circuit.numSlots }, (_, t) => (
-                <div key={t} className="time-slot-label">t{t}</div>
-              ))}
-              <div className="measurement-spacer"></div>
-            </div>
-
-            {/* Qubit wires with grid cells */}
-            {Array.from({ length: circuit.numQubits }, (_, q) => (
-              <div key={q} className="qubit-row">
-                <span className="qubit-label">q{q}</span>
-                <div className="wire-grid">
-                  {Array.from({ length: circuit.numSlots }, (_, t) => {
-                    const gate = getGateAt(q, t);
-                    const isPendingSlot = pendingGate?.timeSlot === t;
-                    const isControl1 = pendingGate?.controlQubit === q && isPendingSlot;
-                    const isControl2 = pendingGate?.controlQubit2 === q && isPendingSlot;
-
-                    // Check if this cell is part of a multi-qubit gate
-                    const multiGate = circuit.gates.find(g =>
-                      g.timeSlot === t && (g.controlQubit === q || g.controlQubit2 === q)
-                    );
-                    const isControlNode = !!multiGate && (multiGate.controlQubit === q || multiGate.controlQubit2 === q);
-
-                    // Render gate symbol
-                    const renderGateSymbol = () => {
-                      if (isControl1 || isControl2) {
-                        return (
-                          <div className="control-node pending" title="Control qubit (pending)">●</div>
-                        );
-                      }
-                      if (isControlNode && multiGate) {
-                        return (
-                          <div
-                            className="control-node"
-                            style={{ color: GATE_INFO[multiGate.type].color }}
-                            title={`Control for ${multiGate.type}`}
-                          >●</div>
-                        );
-                      }
-                      if (gate && gate.qubit === q) {
-                        return (
-                          <div
-                            className={`gate-on-grid ${gate.type === 'Barrier' ? 'barrier' : ''}`}
-                            style={{ backgroundColor: GATE_INFO[gate.type].color }}
-                            title={`${GATE_INFO[gate.type].name}${gate.angle ? ` (${(gate.angle / Math.PI).toFixed(2)}π)` : ''}`}
-                          >
-                            {GATE_INFO[gate.type].symbol || gate.type}
-                          </div>
-                        );
-                      }
-                      return null;
-                    };
-
-                    return (
-                      <div
-                        key={t}
-                        className={`grid-cell ${selectedGate ? 'clickable' : ''} ${gate ? 'has-gate' : ''} ${isPendingSlot ? 'pending-slot' : ''}`}
-                        onClick={() => addGate(q, t)}
-                      >
-                        <div className="wire-segment"></div>
-                        {renderGateSymbol()}
-                        {/* Draw connection line for multi-qubit gates */}
-                        {gate && gate.qubit === q && gate.controlQubit !== undefined && (
-                          <div
-                            className="gate-connection"
-                            style={{
-                              height: `${Math.abs(gate.controlQubit - q) * 50}px`,
-                              top: gate.controlQubit < q ? `${(gate.controlQubit - q) * 50 + 25}px` : '25px',
-                              borderColor: GATE_INFO[gate.type].color,
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <span className="measurement">M</span>
+          <div className="circuit-scroll" ref={circuitScrollRef}>
+            <div
+              className="circuit-grid-container"
+              style={
+                {
+                  '--slot-size': `${slotSize}px`,
+                  '--label-size': `${labelSize}px`,
+                } as React.CSSProperties
+              }
+            >
+              {/* Time slot headers */}
+              <div className="time-slot-header">
+                <div className="qubit-label-spacer"></div>
+                {Array.from({ length: circuit.numSlots }, (_, t) => (
+                  <div key={t} className="time-slot-label">t{t}</div>
+                ))}
+                <div className="measurement-spacer"></div>
               </div>
-            ))}
+
+              {/* Qubit wires with grid cells */}
+              {Array.from({ length: circuit.numQubits }, (_, q) => (
+                <div key={q} className="qubit-row">
+                  <span className="qubit-label">q{q}</span>
+                  <div className="wire-grid">
+                    {Array.from({ length: circuit.numSlots }, (_, t) => {
+                      const gate = getGateAt(q, t);
+                      const isPendingSlot = pendingGate?.timeSlot === t;
+                      const isControl1 = pendingGate?.controlQubit === q && isPendingSlot;
+                      const isControl2 = pendingGate?.controlQubit2 === q && isPendingSlot;
+
+                      // Check if this cell is part of a multi-qubit gate
+                      const multiGate = circuit.gates.find(g =>
+                        g.timeSlot === t && (g.controlQubit === q || g.controlQubit2 === q)
+                      );
+                      const isControlNode = !!multiGate && (multiGate.controlQubit === q || multiGate.controlQubit2 === q);
+
+                      // Render gate symbol
+                      const renderGateSymbol = () => {
+                        if (isControl1 || isControl2) {
+                          return (
+                            <div className="control-node pending" title="Control qubit (pending)">●</div>
+                          );
+                        }
+                        if (isControlNode && multiGate) {
+                          return (
+                            <div
+                              className="control-node"
+                              style={{ color: GATE_INFO[multiGate.type].color }}
+                              title={`Control for ${multiGate.type}`}
+                            >●</div>
+                          );
+                        }
+                        if (gate && gate.qubit === q) {
+                          return (
+                            <div
+                              className={`gate-on-grid ${gate.type === 'Barrier' ? 'barrier' : ''}`}
+                              style={{ backgroundColor: GATE_INFO[gate.type].color }}
+                              title={`${GATE_INFO[gate.type].name}${gate.angle ? ` (${(gate.angle / Math.PI).toFixed(2)}π)` : ''}`}
+                            >
+                              {GATE_INFO[gate.type].symbol || gate.type}
+                            </div>
+                          );
+                        }
+                        return null;
+                      };
+
+                      return (
+                        <div
+                          key={t}
+                          className={`grid-cell ${selectedGate ? 'clickable' : ''} ${gate ? 'has-gate' : ''} ${isPendingSlot ? 'pending-slot' : ''}`}
+                          onClick={() => addGate(q, t)}
+                        >
+                          <div className="wire-segment"></div>
+                          {renderGateSymbol()}
+                          {/* Draw connection line for multi-qubit gates */}
+                          {gate && gate.qubit === q && gate.controlQubit !== undefined && (
+                            <div
+                              className="gate-connection"
+                              style={{
+                                height: `${Math.abs(gate.controlQubit - q) * slotSize}px`,
+                                top: gate.controlQubit < q
+                                  ? `${(gate.controlQubit - q) * slotSize + slotSize / 2}px`
+                                  : `${slotSize / 2}px`,
+                                borderColor: GATE_INFO[gate.type].color,
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="measurement">M</span>
+                </div>
+              ))}
+            </div>
           </div>
           <p className={`hint ${pendingGate ? 'pending' : ''}`}>{getPlacementHint()}</p>
           {pendingGate && (

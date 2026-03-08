@@ -25,8 +25,20 @@
 #define HAS_METAL 0
 #endif
 
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+#include "../../optimization/gpu/backends/gpu_webgpu.h"
+#define HAS_WEBGPU_TN 1
+#else
+#define HAS_WEBGPU_TN 0
+#endif
+
 // GPU threshold: use GPU when bond dimension exceeds this
 #define GPU_BOND_THRESHOLD 32  // Use GPU for larger bond dimensions
+
+#define TN_GPU_BACKEND_NONE 0
+#define TN_GPU_BACKEND_METAL 1
+#define TN_GPU_BACKEND_CUDA 2
+#define TN_GPU_BACKEND_WEBGPU 3
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -116,6 +128,16 @@ const tn_gate_2q_t TN_GATE_ISWAP = {{
 // ============================================================================
 // GPU ACCELERATION CONTEXT (Unified with tensor.c)
 // ============================================================================
+
+#if HAS_METAL || HAS_WEBGPU_TN
+static int tensor_gpu_backend_code(void) {
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) {
+        return TN_GPU_BACKEND_NONE;
+    }
+    return tensor_gpu_backend_type(gpu_ctx);
+}
+#endif
 
 #if HAS_METAL
 static bool g_gpu_init_logged = false;
@@ -309,6 +331,149 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
     return TN_GATE_SUCCESS;
 }
 #endif // HAS_METAL
+
+#if HAS_WEBGPU_TN
+static bool g_webgpu_fallback_logged = false;
+static bool g_webgpu_kernel_logged = false;
+
+/**
+ * @brief WebGPU MPS 2-qubit adjacent fast path.
+ *
+ * The gate application on theta is offloaded to the WebGPU backend helper.
+ * SVD/truncation/update remain in the existing CPU path for determinism.
+ */
+static tn_gate_error_t apply_gate_2q_adjacent_webgpu(tn_mps_state_t *state,
+                                                      uint32_t left_qubit,
+                                                      const tn_gate_2q_t *gate,
+                                                      double *truncation_error) {
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) return TN_GATE_ERROR_ALLOC_FAILED;
+
+    webgpu_compute_ctx_t *webgpu_ctx = tensor_gpu_get_webgpu(gpu_ctx);
+    if (!webgpu_ctx) return TN_GATE_ERROR_ALLOC_FAILED;
+
+    uint32_t right_qubit = left_qubit + 1;
+
+    tensor_t *tl = state->tensors[left_qubit];
+    tensor_t *tr = state->tensors[right_qubit];
+
+    uint32_t ll_dim = tl->dims[0];  // Left bond of left tensor
+    uint32_t rr_dim = tr->dims[2];  // Right bond of right tensor
+
+    // Contract left and right tensors: tl[ll, pl, bond] * tr[bond, pr, rr] -> theta[ll, pl, pr, rr]
+    uint32_t axes_l[1] = {2};
+    uint32_t axes_r[1] = {0};
+    tensor_t *theta = tensor_contract(tl, tr, axes_l, axes_r, 1);
+    if (!theta) return TN_GATE_ERROR_CONTRACTION_FAILED;
+
+    // Apply 4x4 two-qubit gate to theta on WebGPU (in-place).
+    int webgpu_native_used = 0;
+    if (webgpu_mps_apply_gate_theta(
+            webgpu_ctx,
+            theta->data,
+            (const double complex *)gate->elements,
+            ll_dim,
+            rr_dim,
+            &webgpu_native_used) != 0) {
+        if (!g_webgpu_fallback_logged) {
+            g_webgpu_fallback_logged = true;
+            fprintf(stderr,
+                    "WebGPU tensor-network gate kernel failed; falling back to CPU path\n");
+        }
+        tensor_free(theta);
+        return TN_GATE_ERROR_ALLOC_FAILED;
+    }
+    if (webgpu_native_used && !g_webgpu_kernel_logged) {
+        g_webgpu_kernel_logged = true;
+        fprintf(stderr, "WebGPU tensor-network 2-qubit gate kernel active\n");
+    }
+
+    // Reshape to matrix for SVD: [ll * pl, pr * rr]
+    uint32_t mat_dims[2] = {ll_dim * TN_PHYSICAL_DIM, TN_PHYSICAL_DIM * rr_dim};
+    tensor_t *mat = tensor_reshape(theta, 2, mat_dims);
+    tensor_free(theta);
+    if (!mat) return TN_GATE_ERROR_ALLOC_FAILED;
+
+    // SVD with truncation
+    svd_compress_config_t svd_cfg = svd_compress_config_default();
+    svd_cfg.max_bond_dim = state->config.max_bond_dim;
+    svd_cfg.cutoff = state->config.svd_cutoff;
+
+    svd_compress_result_t *svd = svd_compress(mat, &svd_cfg);
+    tensor_free(mat);
+
+    if (!svd) return TN_GATE_ERROR_TRUNCATION;
+
+    if (truncation_error) *truncation_error = svd->truncation_error;
+
+    uint32_t new_bond = svd->bond_dim;
+
+    // Normalize singular values while tracking removed norm.
+    double sv_norm_sq = 0.0;
+    for (uint32_t i = 0; i < new_bond; i++) {
+        double sv = svd->singular_values[i];
+        if (isnan(sv) || isinf(sv)) {
+            svd_compress_result_free(svd);
+            return TN_GATE_ERROR_TRUNCATION;
+        }
+        sv_norm_sq += sv * sv;
+    }
+    double sv_norm = sqrt(sv_norm_sq);
+
+    if (sv_norm > 1e-100 && !isnan(sv_norm) && !isinf(sv_norm)) {
+        state->log_norm_factor += log(sv_norm);
+        for (uint32_t i = 0; i < new_bond; i++) {
+            svd->singular_values[i] /= sv_norm;
+        }
+    } else if (sv_norm <= 1e-100) {
+        svd_compress_result_free(svd);
+        return TN_GATE_ERROR_TRUNCATION;
+    }
+
+    // U is [ll * pl, new_bond], reshape to [ll, pl, new_bond]
+    uint32_t new_tl_dims[3] = {ll_dim, TN_PHYSICAL_DIM, new_bond};
+    tensor_t *new_tl = tensor_reshape(svd->left, 3, new_tl_dims);
+    if (!new_tl) {
+        svd_compress_result_free(svd);
+        return TN_GATE_ERROR_ALLOC_FAILED;
+    }
+
+    // S_normalized * Vh, then reshape to [new_bond, pr, rr]
+    for (uint32_t i = 0; i < new_bond; i++) {
+        for (uint32_t j = 0; j < TN_PHYSICAL_DIM * rr_dim; j++) {
+            svd->right->data[i * TN_PHYSICAL_DIM * rr_dim + j] *= svd->singular_values[i];
+        }
+    }
+
+    uint32_t new_tr_dims[3] = {new_bond, TN_PHYSICAL_DIM, rr_dim};
+    tensor_t *new_tr = tensor_reshape(svd->right, 3, new_tr_dims);
+    if (!new_tr) {
+        tensor_free(new_tl);
+        svd_compress_result_free(svd);
+        return TN_GATE_ERROR_ALLOC_FAILED;
+    }
+
+    // Update state
+    tensor_free(state->tensors[left_qubit]);
+    tensor_free(state->tensors[right_qubit]);
+    state->tensors[left_qubit] = new_tl;
+    state->tensors[right_qubit] = new_tr;
+    state->bond_dims[left_qubit] = new_bond;
+
+    // Track truncation
+    state->cumulative_truncation_error += svd->truncation_error;
+    if (svd->num_discarded > 0) {
+        state->num_truncations++;
+    }
+
+    svd->left = NULL;
+    svd->right = NULL;
+    svd_compress_result_free(svd);
+
+    state->canonical = TN_CANONICAL_NONE;
+    return TN_GATE_SUCCESS;
+}
+#endif
 
 // ============================================================================
 // PARAMETERIZED GATES
@@ -535,15 +700,29 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
                                                uint32_t left_qubit,
                                                const tn_gate_2q_t *gate,
                                                double *truncation_error) {
-#if HAS_METAL
     // Try GPU path for larger bond dimensions
     if (state->bond_dims[left_qubit] >= GPU_BOND_THRESHOLD) {
-        tn_gate_error_t gpu_result = apply_gate_2q_adjacent_gpu(state, left_qubit, gate, truncation_error);
-        if (gpu_result == TN_GATE_SUCCESS) {
-            return TN_GATE_SUCCESS;
+#if HAS_METAL
+        if (tensor_gpu_backend_code() == TN_GPU_BACKEND_METAL) {
+            tn_gate_error_t gpu_result = apply_gate_2q_adjacent_gpu(state, left_qubit, gate, truncation_error);
+            if (gpu_result == TN_GATE_SUCCESS) {
+                return TN_GATE_SUCCESS;
+            }
         }
-        // Fall through to CPU path if GPU failed
+#endif
+#if HAS_WEBGPU_TN
+        if (tensor_gpu_backend_code() == TN_GPU_BACKEND_WEBGPU) {
+            tn_gate_error_t webgpu_result =
+                apply_gate_2q_adjacent_webgpu(state, left_qubit, gate, truncation_error);
+            if (webgpu_result == TN_GATE_SUCCESS) {
+                return TN_GATE_SUCCESS;
+            }
+        }
+#endif
+        // Fall through to CPU path if GPU path failed or is unavailable.
     }
+#if !HAS_METAL && !HAS_WEBGPU_TN
+    (void)truncation_error;
 #endif
 
     uint32_t right_qubit = left_qubit + 1;

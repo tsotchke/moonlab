@@ -47,24 +47,26 @@ export const ElementPicker: React.FC<ElementPickerProps> = ({
           </button>
         </div>
 
-        <div className="element-grid">
-          {sorted.map((el) => (
-            <button
-              key={el.Z}
-              className={`element-cell ${CATEGORY_CLASS[el.category]} ${
-                selected?.symbol === el.symbol ? 'selected' : ''
-              }`}
-              style={{ gridColumn: el.group, gridRow: el.period }}
-              title={`${el.name} (Z=${el.Z})`}
-              onClick={() => {
-                onSelect(el);
-                onClose();
-              }}
-            >
-              <span className="element-number">{el.Z}</span>
-              <span className="element-symbol">{el.symbol}</span>
-            </button>
-          ))}
+        <div className="element-grid-scroll">
+          <div className="element-grid">
+            {sorted.map((el) => (
+              <button
+                key={el.Z}
+                className={`element-cell ${CATEGORY_CLASS[el.category]} ${
+                  selected?.symbol === el.symbol ? 'selected' : ''
+                }`}
+                style={{ gridColumn: el.group, gridRow: el.period }}
+                title={`${el.name} (Z=${el.Z})`}
+                onClick={() => {
+                  onSelect(el);
+                  onClose();
+                }}
+              >
+                <span className="element-number">{el.Z}</span>
+                <span className="element-symbol">{el.symbol}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="picker-legend">

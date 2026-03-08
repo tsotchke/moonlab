@@ -11,8 +11,12 @@ function copyWasmPlugin() {
   return {
     name: 'copy-wasm',
     buildStart() {
-      const wasmSrc = resolve(__dirname, '../packages/core/dist/moonlab.wasm');
-      const jsSrc = resolve(__dirname, '../packages/core/dist/moonlab.js');
+      const distWasm = resolve(__dirname, '../packages/core/dist/moonlab.wasm');
+      const distJs = resolve(__dirname, '../packages/core/dist/moonlab.js');
+      const buildWasm = resolve(__dirname, '../packages/core/emscripten/build/moonlab.wasm');
+      const buildJs = resolve(__dirname, '../packages/core/emscripten/build/moonlab.js');
+      const wasmSrc = existsSync(distWasm) ? distWasm : buildWasm;
+      const jsSrc = existsSync(distJs) ? distJs : buildJs;
       const publicDir = resolve(__dirname, 'public');
 
       if (!existsSync(publicDir)) {

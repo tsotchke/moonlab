@@ -26,6 +26,10 @@
 #include "../gpu_metal.h"
 #endif
 
+#ifdef HAS_WEBGPU
+#include "backends/gpu_webgpu.h"
+#endif
+
 #ifdef HAS_OPENCL
 #include "backends/gpu_opencl.h"
 #endif
@@ -58,6 +62,7 @@ struct gpu_context {
 
     // Backend-specific context pointers
     void* metal_ctx;
+    void* webgpu_ctx;
     void* opencl_ctx;
     void* vulkan_ctx;
     void* cuda_ctx;
@@ -74,6 +79,7 @@ struct gpu_buffer {
 
     // Backend-specific handles
     void* metal_buffer;
+    void* webgpu_buffer;
     void* opencl_buffer;
     void* vulkan_buffer;
     void* cuda_buffer;
@@ -89,6 +95,17 @@ struct gpu_buffer {
 static int detect_metal(void) {
 #ifdef HAS_METAL
     return metal_is_available();
+#else
+    return 0;
+#endif
+}
+
+/**
+ * @brief Check WebGPU availability
+ */
+static int detect_webgpu(void) {
+#ifdef HAS_WEBGPU
+    return webgpu_is_available();
 #else
     return 0;
 #endif
@@ -147,6 +164,8 @@ static gpu_backend_type_t select_best_backend(void) {
     // macOS: Metal preferred
     if (detect_metal()) return GPU_BACKEND_METAL;
     if (detect_opencl()) return GPU_BACKEND_OPENCL;
+#elif defined(__EMSCRIPTEN__)
+    if (detect_webgpu()) return GPU_BACKEND_WEBGPU;
 #else
     // Linux/Windows: NVIDIA preferred, then Vulkan, then OpenCL
     if (detect_cuquantum()) return GPU_BACKEND_CUQUANTUM;
@@ -177,6 +196,9 @@ gpu_context_t* gpu_compute_init(gpu_backend_type_t preferred) {
     switch (selected) {
         case GPU_BACKEND_METAL:
             available = detect_metal();
+            break;
+        case GPU_BACKEND_WEBGPU:
+            available = detect_webgpu();
             break;
         case GPU_BACKEND_OPENCL:
             available = detect_opencl();
@@ -214,6 +236,12 @@ gpu_context_t* gpu_compute_init(gpu_backend_type_t preferred) {
         case GPU_BACKEND_METAL:
             ctx->metal_ctx = metal_compute_init();
             init_result = ctx->metal_ctx ? 0 : -1;
+            break;
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            ctx->webgpu_ctx = webgpu_compute_init();
+            init_result = ctx->webgpu_ctx ? 0 : -1;
             break;
 #endif
 #ifdef HAS_OPENCL
@@ -267,6 +295,11 @@ void gpu_compute_free(gpu_context_t* ctx) {
             if (ctx->metal_ctx) metal_compute_free(ctx->metal_ctx);
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            if (ctx->webgpu_ctx) webgpu_compute_free(ctx->webgpu_ctx);
+            break;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             if (ctx->opencl_ctx) opencl_compute_free(ctx->opencl_ctx);
@@ -295,7 +328,7 @@ void gpu_compute_free(gpu_context_t* ctx) {
 }
 
 int gpu_is_available(void) {
-    return detect_metal() || detect_opencl() || detect_vulkan() ||
+    return detect_metal() || detect_webgpu() || detect_opencl() || detect_vulkan() ||
            detect_cuda() || detect_cuquantum();
 }
 
@@ -307,12 +340,42 @@ const char* gpu_backend_name(gpu_backend_type_t type) {
     switch (type) {
         case GPU_BACKEND_NONE:      return "None (CPU)";
         case GPU_BACKEND_METAL:     return "Metal";
+        case GPU_BACKEND_WEBGPU:    return "WebGPU";
         case GPU_BACKEND_OPENCL:    return "OpenCL";
         case GPU_BACKEND_VULKAN:    return "Vulkan";
         case GPU_BACKEND_CUDA:      return "CUDA";
         case GPU_BACKEND_CUQUANTUM: return "cuQuantum";
         case GPU_BACKEND_AUTO:      return "Auto";
         default:                    return "Unknown";
+    }
+}
+
+int gpu_is_native_accelerated(gpu_context_t* ctx) {
+    if (!ctx) return 0;
+
+    switch (ctx->backend_type) {
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_native_compute_ready(ctx->webgpu_ctx);
+#endif
+#ifdef HAS_METAL
+        case GPU_BACKEND_METAL:
+#endif
+#ifdef HAS_OPENCL
+        case GPU_BACKEND_OPENCL:
+#endif
+#ifdef HAS_VULKAN
+        case GPU_BACKEND_VULKAN:
+#endif
+#ifdef HAS_CUDA
+        case GPU_BACKEND_CUDA:
+#endif
+#ifdef HAS_CUQUANTUM
+        case GPU_BACKEND_CUQUANTUM:
+#endif
+            return 1;
+        default:
+            return 0;
     }
 }
 
@@ -332,6 +395,20 @@ gpu_error_t gpu_get_capabilities(gpu_context_t* ctx, gpu_capabilities_t* caps) {
             caps->supports_unified_memory = 1;
             caps->supports_double = 1;
             strncpy(caps->vendor_name, "Apple", sizeof(caps->vendor_name) - 1);
+            break;
+        }
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU: {
+            uint32_t max_work_group = 0;
+            uint32_t compute_units = 0;
+            webgpu_get_device_info(ctx->webgpu_ctx, caps->device_name,
+                                   &max_work_group, &compute_units);
+            caps->max_threads_per_group = max_work_group;
+            caps->max_compute_units = compute_units;
+            caps->supports_unified_memory = 1;
+            caps->supports_double = 1;
+            strncpy(caps->vendor_name, "WebGPU", sizeof(caps->vendor_name) - 1);
             break;
         }
 #endif
@@ -440,6 +517,21 @@ gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size) {
             }
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            buffer->webgpu_buffer = webgpu_buffer_create(ctx->webgpu_ctx, size);
+            if (!buffer->webgpu_buffer) {
+                free(buffer);
+                return NULL;
+            }
+            buffer->host_ptr = webgpu_buffer_contents(buffer->webgpu_buffer);
+            if (!buffer->host_ptr) {
+                webgpu_buffer_free(buffer->webgpu_buffer);
+                free(buffer);
+                return NULL;
+            }
+            break;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             buffer->opencl_buffer = opencl_buffer_create(ctx->opencl_ctx, size);
@@ -527,6 +619,16 @@ gpu_buffer_t* gpu_buffer_create_from_data(gpu_context_t* ctx, void* data, size_t
             buffer->host_ptr = metal_buffer_contents(buffer->metal_buffer);
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            buffer->webgpu_buffer = webgpu_buffer_create_from_data(ctx->webgpu_ctx, data, size);
+            if (!buffer->webgpu_buffer) {
+                free(buffer);
+                return NULL;
+            }
+            buffer->host_ptr = webgpu_buffer_contents(buffer->webgpu_buffer);
+            break;
+#endif
         default:
             // For other backends, create buffer and copy data
             buffer = gpu_buffer_create(ctx, size);
@@ -552,6 +654,11 @@ gpu_error_t gpu_buffer_write(gpu_buffer_t* buffer, const void* data, size_t size
 #ifdef HAS_METAL
         case GPU_BACKEND_METAL:
             // Metal uses unified memory - direct memcpy
+            memcpy((char*)buffer->host_ptr + offset, data, size);
+            break;
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
             memcpy((char*)buffer->host_ptr + offset, data, size);
             break;
 #endif
@@ -599,6 +706,11 @@ gpu_error_t gpu_buffer_read(gpu_buffer_t* buffer, void* data, size_t size, size_
             memcpy(data, (char*)buffer->host_ptr + offset, size);
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            memcpy(data, (char*)buffer->host_ptr + offset, size);
+            break;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             // OpenCL clEnqueueReadBuffer supports offset natively
@@ -641,6 +753,11 @@ void gpu_buffer_free(gpu_buffer_t* buffer) {
             if (buffer->metal_buffer) metal_buffer_free(buffer->metal_buffer);
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            if (buffer->webgpu_buffer) webgpu_buffer_free(buffer->webgpu_buffer);
+            break;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             if (buffer->opencl_buffer) opencl_buffer_free(buffer->opencl_buffer);
@@ -678,6 +795,12 @@ gpu_error_t gpu_hadamard(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
         case GPU_BACKEND_METAL:
             return metal_hadamard(ctx->metal_ctx, amplitudes->metal_buffer,
                                   qubit_index, (uint32_t)state_dim) == 0 ?
+                   GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_hadamard(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                   qubit_index, state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
 #ifdef HAS_OPENCL
@@ -724,6 +847,12 @@ gpu_error_t gpu_hadamard_all(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                       num_qubits, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_hadamard_all(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                       num_qubits, state_dim) == 0 ?
+                   GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_hadamard_all(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -768,6 +897,12 @@ gpu_error_t gpu_pauli_x(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                  qubit_index, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_pauli_x(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                  qubit_index, state_dim) == 0 ?
+                   GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_pauli_x(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -796,6 +931,12 @@ gpu_error_t gpu_pauli_z(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                  qubit_index, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_pauli_z(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                  qubit_index, state_dim) == 0 ?
+                   GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_pauli_z(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -818,6 +959,12 @@ gpu_error_t gpu_phase(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
     if (!ctx || !amplitudes) return GPU_ERROR_INVALID_PARAM;
 
     switch (ctx->backend_type) {
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_phase(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                qubit_index, theta, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_phase(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -840,6 +987,12 @@ gpu_error_t gpu_cnot(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
     if (!ctx || !amplitudes) return GPU_ERROR_INVALID_PARAM;
 
     switch (ctx->backend_type) {
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_cnot(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                               control, target, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_cnot(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -883,6 +1036,12 @@ gpu_error_t gpu_oracle_single_target(gpu_context_t* ctx, gpu_buffer_t* amplitude
                                 (uint32_t)target_state, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_oracle(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                 target_state, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_oracle(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -906,6 +1065,12 @@ gpu_error_t gpu_oracle_multi_target(gpu_context_t* ctx, gpu_buffer_t* amplitudes
     if (!ctx || !amplitudes || !targets) return GPU_ERROR_INVALID_PARAM;
 
     switch (ctx->backend_type) {
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_oracle_multi(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                       targets, num_targets, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_METAL
         case GPU_BACKEND_METAL: {
             // Convert uint64_t to uint32_t for Metal
@@ -953,6 +1118,12 @@ gpu_error_t gpu_grover_diffusion(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                           num_qubits, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_grover_diffusion(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                           num_qubits, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_grover_diffusion(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -982,6 +1153,12 @@ gpu_error_t gpu_grover_iteration(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                           (uint32_t)target_state, num_qubits,
                                           (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_grover_iteration(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                           target_state, num_qubits, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
 // OpenCL uses fallback path (oracle + diffusion)
 #ifdef HAS_CUDA
@@ -1064,6 +1241,14 @@ gpu_error_t gpu_compute_probabilities(gpu_context_t* ctx, gpu_buffer_t* amplitud
                                                (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_compute_probabilities(ctx->webgpu_ctx,
+                                                amplitudes->webgpu_buffer,
+                                                probabilities->webgpu_buffer,
+                                                state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_compute_probabilities(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -1092,6 +1277,12 @@ gpu_error_t gpu_normalize(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                    (float)norm, (uint32_t)state_dim) == 0 ?
                    GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_normalize(ctx->webgpu_ctx, amplitudes->webgpu_buffer,
+                                    norm, state_dim)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_normalize(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -1114,6 +1305,13 @@ gpu_error_t gpu_sum_squared_magnitudes(gpu_context_t* ctx, gpu_buffer_t* amplitu
     if (!ctx || !amplitudes || !result) return GPU_ERROR_INVALID_PARAM;
 
     switch (ctx->backend_type) {
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_sum_squared_magnitudes(ctx->webgpu_ctx,
+                                                 amplitudes->webgpu_buffer,
+                                                 state_dim, result)
+                   == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             return opencl_sum_squared_magnitudes(ctx->opencl_ctx, amplitudes->opencl_buffer,
@@ -1156,6 +1354,11 @@ void gpu_wait_completion(gpu_context_t* ctx) {
             metal_wait_completion(ctx->metal_ctx);
             break;
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            webgpu_wait_completion(ctx->webgpu_ctx);
+            break;
+#endif
 #ifdef HAS_OPENCL
         case GPU_BACKEND_OPENCL:
             opencl_wait_completion(ctx->opencl_ctx);
@@ -1189,6 +1392,10 @@ double gpu_get_last_execution_time(gpu_context_t* ctx) {
         case GPU_BACKEND_METAL:
             return metal_get_last_execution_time(ctx->metal_ctx);
 #endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            return webgpu_get_last_execution_time(ctx->webgpu_ctx);
+#endif
         default:
             return ctx->last_exec_time;
     }
@@ -1203,6 +1410,11 @@ void gpu_set_performance_monitoring(gpu_context_t* ctx, int enable) {
 #ifdef HAS_METAL
         case GPU_BACKEND_METAL:
             metal_set_performance_monitoring(ctx->metal_ctx, enable);
+            break;
+#endif
+#ifdef HAS_WEBGPU
+        case GPU_BACKEND_WEBGPU:
+            webgpu_set_performance_monitoring(ctx->webgpu_ctx, enable);
             break;
 #endif
         default:
@@ -1229,3 +1441,50 @@ const char* gpu_error_name(gpu_error_t error) {
         default:                       return "Unknown error";
     }
 }
+
+#if defined(__EMSCRIPTEN__)
+gpu_error_t gpu_hadamard_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                             uint32_t qubit_index, uint32_t state_dim) {
+    return gpu_hadamard(ctx, amplitudes, qubit_index, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_hadamard_all_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                 uint32_t num_qubits, uint32_t state_dim) {
+    return gpu_hadamard_all(ctx, amplitudes, num_qubits, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_pauli_x_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                            uint32_t qubit_index, uint32_t state_dim) {
+    return gpu_pauli_x(ctx, amplitudes, qubit_index, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_pauli_z_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                            uint32_t qubit_index, uint32_t state_dim) {
+    return gpu_pauli_z(ctx, amplitudes, qubit_index, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_phase_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                          uint32_t qubit_index, double theta, uint32_t state_dim) {
+    return gpu_phase(ctx, amplitudes, qubit_index, theta, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_cnot_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                         uint32_t control, uint32_t target, uint32_t state_dim) {
+    return gpu_cnot(ctx, amplitudes, control, target, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_compute_probabilities_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                          gpu_buffer_t* probabilities, uint32_t state_dim) {
+    return gpu_compute_probabilities(ctx, amplitudes, probabilities, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_normalize_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                              double norm, uint32_t state_dim) {
+    return gpu_normalize(ctx, amplitudes, norm, (uint64_t)state_dim);
+}
+
+gpu_error_t gpu_sum_squared_magnitudes_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                                           uint32_t state_dim, double* result) {
+    return gpu_sum_squared_magnitudes(ctx, amplitudes, (uint64_t)state_dim, result);
+}
+#endif

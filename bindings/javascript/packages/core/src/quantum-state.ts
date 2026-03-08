@@ -600,7 +600,14 @@ export class QuantumState {
   measureAll(): number {
     this.checkDisposed();
     const randomValue = Math.random();
-    return this.module._measurement_all_qubits(this.statePtr, randomValue);
+    const measured = this.module._measurement_all_qubits(this.statePtr, randomValue) as number | bigint;
+    if (typeof measured === 'bigint') {
+      if (measured < 0n || measured > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error(`Measured basis state ${measured.toString()} exceeds JS safe integer range`);
+      }
+      return Number(measured);
+    }
+    return measured;
   }
 
   /**
