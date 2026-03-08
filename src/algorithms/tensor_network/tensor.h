@@ -807,7 +807,10 @@ typedef struct tensor_gpu_context tensor_gpu_context_t;
 /**
  * @brief Create GPU context for tensor operations
  *
- * Initializes the GPU backend (Metal on macOS, CUDA on Linux/Windows).
+ * Initializes the GPU backend:
+ * - Metal on macOS
+ * - CUDA on native Linux/Windows builds (when enabled)
+ * - WebGPU on WASM/browser builds (when enabled)
  * Returns NULL if GPU is not available.
  *
  * @return GPU context or NULL if unavailable
@@ -840,6 +843,29 @@ bool tensor_gpu_available(void);
  */
 tensor_gpu_context_t *tensor_gpu_get_context(void);
 
+/**
+ * @brief Get active backend type code for the context
+ *
+ * Codes:
+ * - 0: none
+ * - 1: metal
+ * - 2: cuda
+ * - 3: webgpu
+ *
+ * If @p ctx is NULL, uses the global context when available.
+ *
+ * @param ctx GPU context (or NULL for global)
+ * @return Backend type code
+ */
+int tensor_gpu_backend_type(const tensor_gpu_context_t *ctx);
+
+/**
+ * @brief Check WebGPU runtime availability (WASM builds)
+ *
+ * @return true if WebGPU runtime is available, false otherwise
+ */
+bool tensor_gpu_webgpu_available(void);
+
 #ifdef __APPLE__
 /**
  * @brief Get Metal context from GPU context
@@ -851,6 +877,18 @@ tensor_gpu_context_t *tensor_gpu_get_context(void);
  * @return Metal context or NULL
  */
 struct metal_compute_ctx *tensor_gpu_get_metal(tensor_gpu_context_t *ctx);
+#endif
+
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+/**
+ * @brief Get WebGPU context from GPU context
+ *
+ * Returns the underlying WebGPU context for direct WebGPU backend calls.
+ *
+ * @param ctx GPU context
+ * @return WebGPU context or NULL
+ */
+struct webgpu_compute_ctx *tensor_gpu_get_webgpu(tensor_gpu_context_t *ctx);
 #endif
 
 /**

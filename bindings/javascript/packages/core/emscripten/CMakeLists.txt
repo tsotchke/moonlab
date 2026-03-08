@@ -5,6 +5,7 @@ set(CMAKE_C_STANDARD 11)
 
 # Root of quantum simulator source
 set(QSIM_ROOT "${CMAKE_SOURCE_DIR}/../../../../../")
+option(MOONLAB_WASM_ENABLE_WEBGPU "Enable WebGPU backend scaffolding for WASM" ON)
 
 # Source files - Core quantum operations
 set(QUANTUM_SOURCES
@@ -49,7 +50,13 @@ set(UTILS_SOURCES
 # Source files - Optimization (SIMD operations with scalar fallbacks for WASM)
 set(OPTIMIZATION_SOURCES
     ${QSIM_ROOT}/src/optimization/simd_ops.c
+    ${QSIM_ROOT}/src/optimization/gpu/gpu_backend.c
 )
+if(MOONLAB_WASM_ENABLE_WEBGPU)
+    list(APPEND OPTIMIZATION_SOURCES
+        ${QSIM_ROOT}/src/optimization/gpu/backends/gpu_webgpu.c
+    )
+endif()
 
 # Combine all sources
 set(ALL_SOURCES
@@ -68,6 +75,10 @@ add_executable(moonlab ${ALL_SOURCES})
 set(OPENBLAS_WASM_ROOT "$ENV{OPENBLAS_WASM_ROOT}")
 if(NOT OPENBLAS_WASM_ROOT)
     set(OPENBLAS_WASM_ROOT "${CMAKE_SOURCE_DIR}/build/deps/openblas-wasm")
+endif()
+
+if(MOONLAB_WASM_ENABLE_WEBGPU)
+    target_compile_definitions(moonlab PRIVATE HAS_WEBGPU=1 QSIM_HAS_WEBGPU=1)
 endif()
 
 set(CLAPACK_WASM_ROOT "$ENV{CLAPACK_WASM_ROOT}")
@@ -110,6 +121,12 @@ target_compile_options(moonlab PRIVATE
     -DWASM_BUILD
     -Wno-unused-function
 )
+
+if(MOONLAB_WASM_ENABLE_WEBGPU)
+    # EM_ASYNC_JS-based WebGPU dispatch uses async/await and requires Asyncify.
+    target_link_options(moonlab PRIVATE "SHELL:-sASYNCIFY=1")
+    target_link_options(moonlab PRIVATE "SHELL:-sASYNCIFY_STACK_SIZE=1048576")
+endif()
 
 # Read exported functions from file and format for Emscripten
 # Emscripten expects EXPORTED_FUNCTIONS='["_func1","_func2",...]'

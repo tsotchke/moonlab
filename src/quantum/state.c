@@ -229,18 +229,16 @@ double quantum_state_entropy(const quantum_state_t *state) {
 
 double quantum_state_purity(const quantum_state_t *state) {
     if (!state || !state->amplitudes) return 0.0;
-    
-    // For pure state: Tr(ρ²) = (Σ|αᵢ|²)² = 1
-    // For mixed state: Tr(ρ²) < 1
-    double purity = 0.0;
-    
+
+    // State-vector representation stores pure states; purity is Tr(rho^2)
+    // where rho = |psi><psi|, so Tr(rho^2) = (||psi||^2)^2.
+    double norm_sq = 0.0;
     for (size_t i = 0; i < state->state_dim; i++) {
-        double prob = cabs(state->amplitudes[i]);
-        prob = prob * prob;
-        purity += prob * prob;
+        const double mag = cabs(state->amplitudes[i]);
+        norm_sq += mag * mag;
     }
-    
-    return purity;
+
+    return norm_sq * norm_sq;
 }
 
 double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2) {

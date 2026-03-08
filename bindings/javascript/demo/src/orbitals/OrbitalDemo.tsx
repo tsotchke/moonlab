@@ -39,10 +39,14 @@ const DEFAULT_OPACITY = 0.2;
 const DEFAULT_CLOUD_COLOR = '#ffffff';
 const DEFAULT_SHELL_COLOR_A = '#ffffff';
 const DEFAULT_SHELL_COLOR_B = '#612bde';
+const PROBABILITY_DRIFT_FALLBACK_L1 = 5e-3;
+const DMRG_INFLUENCE_BLEND = 0.35;
+const DMRG_INFLUENCE_GAMMA = 0.65;
 
 const CONTROL_TOOLTIPS = {
   atom: 'Choose the element (atomic number Z). Higher Z pulls the cloud inward and increases radial decay.',
   chooseElement: 'Open the periodic table to select a different element.',
+  randomQuantumState: 'Pick a random element and a valid random quantum tuple (n, l, m).',
   n: 'Sets the principal quantum number; higher n increases orbital size and radial nodes.',
   qubits: 'Controls WASM state size; more qubits increase lattice resolution and memory/time cost.',
   allowHighQubits: 'Unlocks 25-32 qubits; requires very high memory (64 GB+).',
@@ -82,6 +86,9 @@ interface ProbabilityGrid {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+
+const randomInt = (min: number, max: number): number =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 
 const hexToRgb = (hex: string) => {
   const cleaned = hex.trim().replace('#', '');
@@ -240,6 +247,15 @@ const alignToDimension = (
   return { probs: paddedProbs, pos: paddedPos };
 };
 
+const nextPowerOfTwo = (value: number): number => {
+  if (!Number.isFinite(value) || value <= 1) return 1;
+  let power = 1;
+  while (power < value && power < 0x80000000) {
+    power <<= 1;
+  }
+  return power;
+};
+
 const samplePoints = (
   probabilities: ArrayLike<number>,
   positions: { x: number; y: number; z: number }[],
@@ -247,14 +263,140 @@ const samplePoints = (
   extent: number,
   gridSize: number
 ): Float32Array => {
+  const points = new Float32Array(count * 3);
+
+  // Preferred path: sample continuously from grid cells using cell-average mass.
+  // This avoids point clouds clumping at lattice node centers (checkerboard artifacts).
+  const nodeCount = gridSize * gridSize * gridSize;
+  if (gridSize > 1 && probabilities.length === nodeCount) {
+    const nodeIndex = (x: number, y: number, z: number) => z * gridSize * gridSize + y * gridSize + x;
+
+    // Smooth the node field with a separable 1-2-1 kernel in 3D.
+    // This removes harsh voxel boundaries while preserving global orbital structure.
+    const smoothed = new Float64Array(nodeCount);
+    for (let z = 0; z < gridSize; z++) {
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          let sum = 0;
+          let wsum = 0;
+          for (let dz = -1; dz <= 1; dz++) {
+            const zz = clamp(z + dz, 0, gridSize - 1);
+            const wz = dz === 0 ? 2 : 1;
+            for (let dy = -1; dy <= 1; dy++) {
+              const yy = clamp(y + dy, 0, gridSize - 1);
+              const wy = dy === 0 ? 2 : 1;
+              for (let dx = -1; dx <= 1; dx++) {
+                const xx = clamp(x + dx, 0, gridSize - 1);
+                const wx = dx === 0 ? 2 : 1;
+                const w = wx * wy * wz;
+                sum += probabilities[nodeIndex(xx, yy, zz)] * w;
+                wsum += w;
+              }
+            }
+          }
+          smoothed[nodeIndex(x, y, z)] = wsum > 0 ? sum / wsum : probabilities[nodeIndex(x, y, z)];
+        }
+      }
+    }
+
+    const cellsPerAxis = gridSize - 1;
+    const cellsPerLayer = cellsPerAxis * cellsPerAxis;
+    const cellCount = cellsPerAxis * cellsPerAxis * cellsPerAxis;
+    const cellCdf = new Float64Array(cellCount);
+
+    let totalCellMass = 0;
+    let ci = 0;
+    for (let z = 0; z < cellsPerAxis; z++) {
+      for (let y = 0; y < cellsPerAxis; y++) {
+        for (let x = 0; x < cellsPerAxis; x++) {
+          const p000 = smoothed[nodeIndex(x, y, z)];
+          const p100 = smoothed[nodeIndex(x + 1, y, z)];
+          const p010 = smoothed[nodeIndex(x, y + 1, z)];
+          const p110 = smoothed[nodeIndex(x + 1, y + 1, z)];
+          const p001 = smoothed[nodeIndex(x, y, z + 1)];
+          const p101 = smoothed[nodeIndex(x + 1, y, z + 1)];
+          const p011 = smoothed[nodeIndex(x, y + 1, z + 1)];
+          const p111 = smoothed[nodeIndex(x + 1, y + 1, z + 1)];
+          const cellMass = (p000 + p100 + p010 + p110 + p001 + p101 + p011 + p111) * 0.125;
+          totalCellMass += cellMass;
+          cellCdf[ci++] = totalCellMass;
+        }
+      }
+    }
+
+    if (totalCellMass > 0) {
+      const spacing = (extent * 2) / (gridSize - 1);
+      for (let i = 0; i < count; i++) {
+        const r = Math.random() * totalCellMass;
+        let low = 0;
+        let high = cellCdf.length - 1;
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          if (r <= cellCdf[mid]) {
+            high = mid;
+          } else {
+            low = mid + 1;
+          }
+        }
+
+        const z = Math.floor(low / cellsPerLayer);
+        const yz = low - z * cellsPerLayer;
+        const y = Math.floor(yz / cellsPerAxis);
+        const x = yz - y * cellsPerAxis;
+
+        const p000 = smoothed[nodeIndex(x, y, z)];
+        const p100 = smoothed[nodeIndex(x + 1, y, z)];
+        const p010 = smoothed[nodeIndex(x, y + 1, z)];
+        const p110 = smoothed[nodeIndex(x + 1, y + 1, z)];
+        const p001 = smoothed[nodeIndex(x, y, z + 1)];
+        const p101 = smoothed[nodeIndex(x + 1, y, z + 1)];
+        const p011 = smoothed[nodeIndex(x, y + 1, z + 1)];
+        const p111 = smoothed[nodeIndex(x + 1, y + 1, z + 1)];
+        const maxCorner = Math.max(p000, p100, p010, p110, p001, p101, p011, p111);
+
+        // Rejection sample inside the selected voxel using trilinear density.
+        // This removes piecewise-constant "block" look inside each cell.
+        let u = Math.random();
+        let v = Math.random();
+        let w = Math.random();
+        if (maxCorner > 0) {
+          for (let attempt = 0; attempt < 6; attempt++) {
+            u = Math.random();
+            v = Math.random();
+            w = Math.random();
+            const ux = 1 - u;
+            const vy = 1 - v;
+            const wz = 1 - w;
+            const trilinear =
+              p000 * ux * vy * wz +
+              p100 * u * vy * wz +
+              p010 * ux * v * wz +
+              p110 * u * v * wz +
+              p001 * ux * vy * w +
+              p101 * u * vy * w +
+              p011 * ux * v * w +
+              p111 * u * v * w;
+            if (Math.random() * maxCorner <= trilinear) {
+              break;
+            }
+          }
+        }
+
+        points[i * 3] = -extent + (x + u) * spacing;
+        points[i * 3 + 1] = -extent + (y + v) * spacing;
+        points[i * 3 + 2] = -extent + (z + w) * spacing;
+      }
+      return points;
+    }
+  }
+
+  // Fallback for non-cubic aligned dimensions.
   const cdf = new Float64Array(probabilities.length);
   let total = 0;
   for (let i = 0; i < probabilities.length; i++) {
     total += probabilities[i];
     cdf[i] = total;
   }
-
-  const points = new Float32Array(count * 3);
   if (total <= 0) {
     for (let i = 0; i < count; i++) {
       points[i * 3] = (Math.random() - 0.5) * 2;
@@ -264,13 +406,10 @@ const samplePoints = (
     return points;
   }
 
-  // Calculate jitter amount based on grid spacing
-  // Use Gaussian jitter with stddev = spacing to smooth grid artifacts
-  const spacing = (extent * 2) / (gridSize - 1);
-
-  // Box-Muller transform for Gaussian random numbers
+  const spacing = (extent * 2) / Math.max(1, gridSize - 1);
+  const jitterSigma = spacing * 0.2;
   const gaussianRandom = () => {
-    const u1 = Math.random();
+    const u1 = Math.max(1e-12, Math.random());
     const u2 = Math.random();
     return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
   };
@@ -289,10 +428,9 @@ const samplePoints = (
     }
 
     const pos = positions[low];
-    // Add Gaussian jitter to create smooth distribution around grid points
-    points[i * 3] = pos.x + gaussianRandom() * spacing;
-    points[i * 3 + 1] = pos.y + gaussianRandom() * spacing;
-    points[i * 3 + 2] = pos.z + gaussianRandom() * spacing;
+    points[i * 3] = pos.x + gaussianRandom() * jitterSigma;
+    points[i * 3 + 1] = pos.y + gaussianRandom() * jitterSigma;
+    points[i * 3 + 2] = pos.z + gaussianRandom() * jitterSigma;
   }
 
   return points;
@@ -306,6 +444,134 @@ const extentForAtom = (n: number, Z: number) => {
 
 const nucleusRadiusForExtent = (extent: number) => clamp(extent * 0.003, 0.006, 0.02);
 
+const isPowerOfTwo = (value: number) => value > 0 && (value & (value - 1)) === 0;
+
+const dmrgWeightIndexForGrid = (
+  linearIndex: number,
+  gridSide: number,
+  dmrgLength: number
+): number => {
+  if (dmrgLength <= 0) return 0;
+  const area = gridSide * gridSide;
+  const z = Math.floor(linearIndex / area);
+  const yz = linearIndex - z * area;
+  const y = Math.floor(yz / gridSide);
+  const x = yz - y * gridSide;
+
+  // Spatial hash avoids 1D modulo aliasing (visible axis-locked striping/blocks).
+  const hx = Math.imul(x + 1, 73856093);
+  const hy = Math.imul(y + 1, 19349663);
+  const hz = Math.imul(z + 1, 83492791);
+  const hash = (hx ^ hy ^ hz) >>> 0;
+
+  if (isPowerOfTwo(dmrgLength)) {
+    return hash & (dmrgLength - 1);
+  }
+  return hash % dmrgLength;
+};
+
+const buildDmrgInfluenceSampler = (
+  dmrgWeights: Float64Array,
+  gridSide: number
+): ((linearIndex: number) => number) => {
+  const dmrgLength = dmrgWeights.length;
+  if (dmrgLength === 0) {
+    return () => 1;
+  }
+
+  let mean = 0;
+  for (let i = 0; i < dmrgLength; i++) {
+    mean += dmrgWeights[i];
+  }
+  mean = mean > 0 ? mean / dmrgLength : 1;
+
+  const cells = Math.max(1, gridSide - 1);
+  const side = Math.round(Math.cbrt(dmrgLength));
+  const hasCubeLayout = side * side * side === dmrgLength;
+  const dmrgIndex3D = (x: number, y: number, z: number) => z * side * side + y * side + x;
+
+  const soften = (rawWeight: number) => {
+    const normalized = mean > 0 ? rawWeight / mean : 1;
+    const compressed = Math.pow(Math.max(normalized, 1e-12), DMRG_INFLUENCE_GAMMA);
+    return 1 + DMRG_INFLUENCE_BLEND * (compressed - 1);
+  };
+
+  if (hasCubeLayout) {
+    return (linearIndex: number) => {
+      const area = gridSide * gridSide;
+      const z = Math.floor(linearIndex / area);
+      const yz = linearIndex - z * area;
+      const y = Math.floor(yz / gridSide);
+      const x = yz - y * gridSide;
+
+      const tx = (x / cells) * (side - 1);
+      const ty = (y / cells) * (side - 1);
+      const tz = (z / cells) * (side - 1);
+
+      const x0 = Math.floor(tx);
+      const y0 = Math.floor(ty);
+      const z0 = Math.floor(tz);
+      const x1 = Math.min(side - 1, x0 + 1);
+      const y1 = Math.min(side - 1, y0 + 1);
+      const z1 = Math.min(side - 1, z0 + 1);
+
+      const ux = tx - x0;
+      const uy = ty - y0;
+      const uz = tz - z0;
+
+      const w000 = dmrgWeights[dmrgIndex3D(x0, y0, z0)];
+      const w100 = dmrgWeights[dmrgIndex3D(x1, y0, z0)];
+      const w010 = dmrgWeights[dmrgIndex3D(x0, y1, z0)];
+      const w110 = dmrgWeights[dmrgIndex3D(x1, y1, z0)];
+      const w001 = dmrgWeights[dmrgIndex3D(x0, y0, z1)];
+      const w101 = dmrgWeights[dmrgIndex3D(x1, y0, z1)];
+      const w011 = dmrgWeights[dmrgIndex3D(x0, y1, z1)];
+      const w111 = dmrgWeights[dmrgIndex3D(x1, y1, z1)];
+
+      const vx00 = w000 * (1 - ux) + w100 * ux;
+      const vx10 = w010 * (1 - ux) + w110 * ux;
+      const vx01 = w001 * (1 - ux) + w101 * ux;
+      const vx11 = w011 * (1 - ux) + w111 * ux;
+      const vxy0 = vx00 * (1 - uy) + vx10 * uy;
+      const vxy1 = vx01 * (1 - uy) + vx11 * uy;
+      const raw = vxy0 * (1 - uz) + vxy1 * uz;
+
+      return soften(raw);
+    };
+  }
+
+  // Fallback for non-cubic DMRG lengths: hashed mapping with softened influence.
+  return (linearIndex: number) => {
+    const idx = dmrgWeightIndexForGrid(linearIndex, gridSide, dmrgLength);
+    return soften(dmrgWeights[idx]);
+  };
+};
+
+const createPointSpriteTexture = (): THREE.Texture => {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    const fallback = new THREE.Texture();
+    fallback.needsUpdate = true;
+    return fallback;
+  }
+
+  const r = size / 2;
+  const gradient = ctx.createRadialGradient(r, r, 0, r, r, r);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.45, 'rgba(255,255,255,0.9)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+};
+
 const OrbitalDemo: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const cloudRef = useRef<THREE.Points>();
@@ -316,6 +582,7 @@ const OrbitalDemo: React.FC = () => {
   const gridRef = useRef<THREE.GridHelper | null>(null);
   const axesRef = useRef<THREE.AxesHelper | null>(null);
   const nucleusRef = useRef<THREE.Mesh | null>(null);
+  const pointTextureRef = useRef<THREE.Texture | null>(null);
   const rotatingRef = useRef<boolean>(true);
   const [atom, setAtom] = useState<Atom>(() => DEFAULT_ATOM);
   const [n, setN] = useState<number>(DEFAULT_N);
@@ -396,6 +663,17 @@ const OrbitalDemo: React.FC = () => {
 
   const lOptions = useMemo(() => Array.from({ length: n }, (_, i) => i), [n]);
   const mOptions = useMemo(() => Array.from({ length: l * 2 + 1 }, (_, i) => i - l), [l]);
+  const randomizeQuantumState = () => {
+    const nextAtom = ELEMENTS[randomInt(0, ELEMENTS.length - 1)] ?? DEFAULT_ATOM;
+    const nextN = randomInt(1, 5);
+    const nextL = randomInt(0, nextN - 1);
+    const nextM = randomInt(-nextL, nextL);
+
+    setAtom(nextAtom);
+    setN(nextN);
+    setL(nextL);
+    setM(nextM);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -526,12 +804,17 @@ const OrbitalDemo: React.FC = () => {
     scene.add(axes);
     axesRef.current = axes;
 
+    const pointTexture = createPointSpriteTexture();
+    pointTextureRef.current = pointTexture;
+
     const material = new THREE.PointsMaterial({
       size: pointSize,
       sizeAttenuation: true,
       transparent: true,
       opacity,
       vertexColors: true,
+      map: pointTexture,
+      alphaTest: 0.06,
       depthWrite: false,
     });
 
@@ -567,6 +850,10 @@ const OrbitalDemo: React.FC = () => {
       }
       renderer.dispose();
       material.dispose();
+      if (pointTextureRef.current) {
+        pointTextureRef.current.dispose();
+        pointTextureRef.current = null;
+      }
       controls.dispose();
     };
   }, []);
@@ -668,31 +955,96 @@ const OrbitalDemo: React.FC = () => {
         extent,
         gridSize: gridSide,
       });
-      const aligned = alignToDimension(grid.probabilities, grid.positions, targetDim);
+      const baseLen = grid.probabilities.length;
+      const solverDim = targetDim <= baseLen ? targetDim : nextPowerOfTwo(baseLen);
+      const solverQubits = Math.round(Math.log2(solverDim));
+      if (solverDim !== targetDim) {
+        console.info(
+          `[orbitals] Capping solver dimension from 2^${effectiveQubits} (${targetDim.toLocaleString()}) to ${solverDim.toLocaleString()} (grid ${gridSide}^3)`
+        );
+      }
+
+      const aligned = alignToDimension(grid.probabilities, grid.positions, solverDim);
 
       const dmrgInfluence = useDmrg && dmrgWeights && dmrgWeights.length > 0 ? dmrgWeights : null;
+      const dmrgSampleWeight = dmrgInfluence
+        ? buildDmrgInfluenceSampler(dmrgInfluence, gridSide)
+        : (() => 1);
 
-      const amplitudes = new Float64Array(targetDim * 2);
+      const amplitudes = new Float64Array(solverDim * 2);
+      const expectedProbs = new Float64Array(solverDim);
       let total = 0;
-      for (let i = 0; i < targetDim; i++) {
-        const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
-        total += aligned.probs[i] * weight;
+      for (let i = 0; i < solverDim; i++) {
+        const baseProb = aligned.probs[i];
+        if (baseProb <= 0) continue;
+        total += baseProb * dmrgSampleWeight(i);
       }
-      const norm = total > 0 ? Math.sqrt(total) : 1;
-      for (let i = 0; i < targetDim; i++) {
-        const weight = dmrgInfluence ? dmrgInfluence[i % dmrgInfluence.length] : 1;
-        const prob = aligned.probs[i] * weight;
+      const safeTotal = total > 0 ? total : 1;
+      const norm = Math.sqrt(safeTotal);
+      for (let i = 0; i < solverDim; i++) {
+        const baseProb = aligned.probs[i];
+        if (baseProb <= 0) {
+          expectedProbs[i] = 0;
+          amplitudes[i * 2] = 0;
+          amplitudes[i * 2 + 1] = 0;
+          continue;
+        }
+        const prob = baseProb * dmrgSampleWeight(i);
+        expectedProbs[i] = prob / safeTotal;
         const amp = prob > 0 ? Math.sqrt(prob) / norm : 0;
         amplitudes[i * 2] = amp;
         amplitudes[i * 2 + 1] = 0;
       }
 
-      const probs = await probabilitiesFromAmplitudes({
-        numQubits: effectiveQubits,
+      const moonlabProbs = await probabilitiesFromAmplitudes({
+        numQubits: solverQubits,
         amplitudes,
       });
 
-      const sampled = samplePoints(probs, aligned.pos, pointCount, extent, gridSide);
+      let l1Drift = 0;
+      for (let i = 0; i < solverDim; i++) {
+        l1Drift += Math.abs(moonlabProbs[i] - expectedProbs[i]);
+      }
+
+      const probsForSampling =
+        Number.isFinite(l1Drift) && l1Drift <= PROBABILITY_DRIFT_FALLBACK_L1
+          ? moonlabProbs
+          : expectedProbs;
+      if (probsForSampling !== moonlabProbs) {
+        console.warn(
+          `[orbitals] Probability drift too high (L1=${l1Drift.toExponential(3)}); using analytic fallback`
+        );
+      }
+
+      // Always sample from the physical base lattice (gridSide^3). High-qubit runs
+      // use padded state dimensions, and sampling those padded entries reintroduces
+      // voxel aliasing artifacts.
+      const probsForSamplingGrid = new Float64Array(baseLen);
+      let gridMass = 0;
+      for (let i = 0; i < baseLen; i++) {
+        const p = probsForSampling[i] ?? 0;
+        probsForSamplingGrid[i] = p;
+        gridMass += p;
+      }
+      if (gridMass > 0) {
+        for (let i = 0; i < baseLen; i++) {
+          probsForSamplingGrid[i] /= gridMass;
+        }
+      } else {
+        // Ultimate fallback: analytic base-grid probabilities are guaranteed non-negative.
+        for (let i = 0; i < baseLen; i++) {
+          probsForSamplingGrid[i] = grid.probabilities[i];
+        }
+      }
+
+      const paddedMass = Math.max(0, 1 - gridMass);
+      if (paddedMass > 1e-5) {
+        console.warn(
+          `[orbitals] Probability leakage into padded states: ${paddedMass.toExponential(3)}`
+        );
+      }
+
+      const sampled = samplePoints(probsForSamplingGrid, grid.positions, pointCount, extent, gridSide);
       setPointsBuffer(sampled);
       setLastStats({ elapsedMs: grid.elapsedMs, generated: pointCount });
 
@@ -773,6 +1125,14 @@ const OrbitalDemo: React.FC = () => {
                   title={CONTROL_TOOLTIPS.chooseElement}
                 >
                   Choose Element
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  onClick={randomizeQuantumState}
+                  title={CONTROL_TOOLTIPS.randomQuantumState}
+                >
+                  Random Element + n/l/m
                 </button>
               </div>
             </div>

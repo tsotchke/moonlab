@@ -18,10 +18,20 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
+export type MoonlabWorkerInitStatus = {
+  ready: boolean;
+  webgpu?: {
+    available: boolean;
+    nativeAccelerated: boolean;
+    reason: string;
+  };
+};
+
 let worker: Worker | null = null;
 let nextId = 1;
 const pending = new Map<number, PendingRequest>();
 let initPromise: Promise<void> | null = null;
+let initStatus: MoonlabWorkerInitStatus | null = null;
 
 const getWorker = (): Worker => {
   if (worker) return worker;
@@ -64,16 +74,35 @@ const callWorker = async <T>(
 
 export const ensureMoonlabWorker = async (): Promise<void> => {
   if (!initPromise) {
-    initPromise = callWorker<{ ready: boolean }>('init').then(() => undefined);
+    initPromise = callWorker<MoonlabWorkerInitStatus>('init').then((status) => {
+      initStatus = status;
+      if (status.webgpu) {
+        console.info(
+          `[moonlab-worker] webgpu available=${status.webgpu.available} native=${status.webgpu.nativeAccelerated} reason=${status.webgpu.reason}`
+        );
+      }
+    });
   }
   return initPromise;
 };
 
+export const getMoonlabWorkerInitStatus = (): MoonlabWorkerInitStatus | null => initStatus;
+
 export const runCircuitInWorker = async (payload: {
   numQubits: number;
   gates: WorkerGate[];
-}): Promise<{ probabilities: Float64Array; warnings: string[] }> => {
-  const result = await callWorker<{ probabilities: Float64Array; warnings: string[] }>(
+}): Promise<{
+  probabilities: Float64Array;
+  warnings: string[];
+  backend?: 'cpu' | 'webgpu';
+  nativeAccelerated?: boolean;
+}> => {
+  const result = await callWorker<{
+    probabilities: Float64Array;
+    warnings: string[];
+    backend?: 'cpu' | 'webgpu';
+    nativeAccelerated?: boolean;
+  }>(
     'runCircuit',
     payload
   );
