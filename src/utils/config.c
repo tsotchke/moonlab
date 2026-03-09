@@ -449,6 +449,13 @@ int qsim_backend_available(qsim_backend_t backend) {
             return 0;
 #endif
 
+        case QSIM_BACKEND_GPU_WEBGPU:
+#ifdef QSIM_HAS_WEBGPU
+            return 1;
+#else
+            return 0;
+#endif
+
         case QSIM_BACKEND_DISTRIBUTED:
 #ifdef QSIM_HAS_MPI
             return 1;
@@ -578,7 +585,9 @@ int qsim_simd_available(qsim_simd_t simd) {
 }
 
 qsim_backend_t qsim_detect_backend(void) {
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__) && defined(QSIM_HAS_WEBGPU)
+    return QSIM_BACKEND_GPU_WEBGPU;
+#elif defined(__APPLE__)
     return QSIM_BACKEND_GPU_METAL;
 #elif defined(QSIM_HAS_CUDA)
     return QSIM_BACKEND_GPU_CUDA;
@@ -669,6 +678,7 @@ const char* qsim_backend_to_string(qsim_backend_t backend) {
         case QSIM_BACKEND_GPU_VULKAN:  return "gpu_vulkan";
         case QSIM_BACKEND_GPU_CUDA:    return "gpu_cuda";
         case QSIM_BACKEND_DISTRIBUTED: return "distributed";
+        case QSIM_BACKEND_GPU_WEBGPU:  return "gpu_webgpu";
         default:                       return "unknown";
     }
 }
@@ -687,6 +697,8 @@ qsim_backend_t qsim_backend_from_string(const char* str) {
     if (strcasecmp(str, "vulkan") == 0)      return QSIM_BACKEND_GPU_VULKAN;
     if (strcasecmp(str, "gpu_cuda") == 0)    return QSIM_BACKEND_GPU_CUDA;
     if (strcasecmp(str, "cuda") == 0)        return QSIM_BACKEND_GPU_CUDA;
+    if (strcasecmp(str, "gpu_webgpu") == 0)  return QSIM_BACKEND_GPU_WEBGPU;
+    if (strcasecmp(str, "webgpu") == 0)      return QSIM_BACKEND_GPU_WEBGPU;
     if (strcasecmp(str, "distributed") == 0) return QSIM_BACKEND_DISTRIBUTED;
     if (strcasecmp(str, "mpi") == 0)         return QSIM_BACKEND_DISTRIBUTED;
 

@@ -89,6 +89,42 @@ export { WasmMemory } from './memory';
 export type { MoonlabModule } from './memory';
 
 // ============================================================================
+// Tensor Network / Solvers
+// ============================================================================
+export {
+  TensorNetworkState,
+  dmrgTFIMGroundState,
+} from './tensor-network';
+export type {
+  TensorNetworkOptions,
+  DMRGResult,
+  TFIMOptions,
+} from './tensor-network';
+
+export {
+  isWebGPUAvailable,
+  initializeWebGPUBackend,
+  getActiveTensorGPUBackend,
+  isTensorGPUAvailable,
+} from './webgpu';
+export type { TensorGpuBackend } from './webgpu';
+
+export {
+  GPUBackendSession,
+  backendTypeName,
+  isUnifiedGPUApiAvailable,
+  GPU_BACKEND_NONE,
+  GPU_BACKEND_METAL,
+  GPU_BACKEND_WEBGPU,
+  GPU_BACKEND_OPENCL,
+  GPU_BACKEND_VULKAN,
+  GPU_BACKEND_CUDA,
+  GPU_BACKEND_CUQUANTUM,
+  GPU_BACKEND_AUTO,
+} from './gpu-backend';
+export type { GPUBackendTypeCode } from './gpu-backend';
+
+// ============================================================================
 // Version Info
 // ============================================================================
 

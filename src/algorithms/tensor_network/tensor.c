@@ -26,6 +26,16 @@
 #define HAS_LAPACK 1
 #include "../../optimization/gpu_metal.h"
 #define HAS_METAL 1
+#elif defined(QSIM_HAS_CLAPACK)
+// CLAPACK provides f2c LAPACK interface (avoid conflict with <complex.h> macro)
+#pragma push_macro("complex")
+#undef complex
+#define complex f2c_complex
+#include <f2c.h>
+#pragma pop_macro("complex")
+#define HAS_BLAS 1
+#define HAS_LAPACK 1
+#define HAS_METAL 0
 #elif defined(QSIM_HAS_OPENBLAS) || defined(__linux__)
 // OpenBLAS provides both CBLAS and LAPACKE interfaces
 #include <cblas.h>
@@ -43,6 +53,19 @@ typedef lapack_complex_double lapack_complex_t;
 
 #ifdef HAS_CUDA
 #include "../../optimization/gpu/backends/gpu_cuda.h"
+#endif
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+#include "../../optimization/gpu/backends/gpu_webgpu.h"
+#endif
+
+#if defined(QSIM_HAS_CLAPACK)
+// f2c LAPACK symbol (CLAPACK)
+extern int zgesvd_(char *jobu, char *jobvt, integer *m, integer *n,
+                   doublecomplex *a, integer *lda, doublereal *s,
+                   doublecomplex *u, integer *ldu,
+                   doublecomplex *vt, integer *ldvt,
+                   doublecomplex *work, integer *lwork,
+                   doublereal *rwork, integer *info);
 #endif
 
 // ============================================================================
@@ -882,7 +905,11 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
 
 #if HAS_LAPACK
     // Use LAPACK zgesvd - works with both Accelerate (Apple) and OpenBLAS (Linux)
+#if defined(QSIM_HAS_CLAPACK)
+    integer info;
+#else
     int info;
+#endif
 
     // Allocate working arrays
     double *s = (double *)malloc(min_mn * sizeof(double));
@@ -951,6 +978,48 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
             (__CLPK_doublecomplex *)u_data, &ldu,
             (__CLPK_doublecomplex *)vt_data, &ldvt,
+            work, &lwork, rwork, &info);
+
+    free(work);
+    free(rwork);
+#elif defined(QSIM_HAS_CLAPACK)
+    // CLAPACK f2c interface
+    integer M = (integer)m, N = (integer)n, lda = (integer)m, ldu = (integer)m, ldvt = (integer)n, lwork = -1;
+    doublecomplex work_query;
+    doublereal *rwork = (doublereal *)malloc(5 * min_mn * sizeof(doublereal));
+    if (!rwork) {
+        free(s);
+        aligned_free_internal(u_data);
+        aligned_free_internal(vt_data);
+        free(superb);
+        aligned_free_internal(a_copy);
+        free(result);
+        return NULL;
+    }
+
+    // Query workspace
+    zgesvd_("A", "A", &M, &N, (doublecomplex *)a_copy, &lda, s,
+            (doublecomplex *)u_data, &ldu,
+            (doublecomplex *)vt_data, &ldvt,
+            &work_query, &lwork, rwork, &info);
+
+    lwork = (integer)(work_query.r + 1);
+    doublecomplex *work = (doublecomplex *)malloc((size_t)lwork * sizeof(doublecomplex));
+    if (!work) {
+        free(s);
+        aligned_free_internal(u_data);
+        aligned_free_internal(vt_data);
+        free(superb);
+        free(rwork);
+        aligned_free_internal(a_copy);
+        free(result);
+        return NULL;
+    }
+
+    // Perform SVD
+    zgesvd_("A", "A", &M, &N, (doublecomplex *)a_copy, &lda, s,
+            (doublecomplex *)u_data, &ldu,
+            (doublecomplex *)vt_data, &ldvt,
             work, &lwork, rwork, &info);
 
     free(work);
@@ -2095,7 +2164,10 @@ struct tensor_gpu_context {
 #ifdef HAS_CUDA
     cuda_compute_ctx_t *cuda_ctx;
 #endif
-    int backend;  // 0=none, 1=metal, 2=cuda
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    webgpu_compute_ctx_t *webgpu_ctx;
+#endif
+    int backend;  // 0=none, 1=metal, 2=cuda, 3=webgpu
 };
 
 // Global GPU context (singleton for simplicity)
@@ -2129,6 +2201,15 @@ tensor_gpu_context_t *tensor_gpu_context_create(void) {
     }
 #endif
 
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    ctx->webgpu_ctx = webgpu_compute_init();
+    if (ctx->webgpu_ctx) {
+        ctx->backend = 3;
+        g_gpu_ctx = ctx;
+        return ctx;
+    }
+#endif
+
     // No GPU backend available
     free(ctx);
     return NULL;
@@ -2146,6 +2227,12 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx) {
 #ifdef HAS_CUDA
     if (ctx->cuda_ctx) {
         cuda_compute_cleanup(ctx->cuda_ctx);
+    }
+#endif
+
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    if (ctx->webgpu_ctx) {
+        webgpu_compute_free(ctx->webgpu_ctx);
     }
 #endif
 
@@ -2172,11 +2259,33 @@ tensor_gpu_context_t *tensor_gpu_get_context(void) {
     return g_gpu_ctx;
 }
 
+int tensor_gpu_backend_type(const tensor_gpu_context_t *ctx) {
+    const tensor_gpu_context_t *active = ctx ? ctx : g_gpu_ctx;
+    if (!active) return 0;
+    return active->backend;
+}
+
+bool tensor_gpu_webgpu_available(void) {
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    return webgpu_is_available() != 0;
+#else
+    return false;
+#endif
+}
+
 #if HAS_METAL
 metal_compute_ctx_t *tensor_gpu_get_metal(tensor_gpu_context_t *ctx) {
     if (!ctx) return NULL;
     if (ctx->backend != 1) return NULL;
     return ctx->metal_ctx;
+}
+#endif
+
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+webgpu_compute_ctx_t *tensor_gpu_get_webgpu(tensor_gpu_context_t *ctx) {
+    if (!ctx) return NULL;
+    if (ctx->backend != 3) return NULL;
+    return ctx->webgpu_ctx;
 }
 #endif
 
@@ -2207,6 +2316,15 @@ tensor_error_t tensor_gpu_alloc(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     }
 #endif
 
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    if (ctx->backend == 3) {
+        size_t size = tensor->total_size * sizeof(double complex);
+        tensor->gpu_buffer = (gpu_buffer_t *)webgpu_buffer_create(ctx->webgpu_ctx, size);
+        if (!tensor->gpu_buffer) return TENSOR_ERROR_ALLOC_FAILED;
+        return TENSOR_SUCCESS;
+    }
+#endif
+
     return TENSOR_ERROR_GPU_UNAVAILABLE;
 }
 
@@ -2225,6 +2343,15 @@ void tensor_gpu_free(tensor_t *tensor) {
 #ifdef HAS_CUDA
     if (g_gpu_ctx && g_gpu_ctx->backend == 2) {
         cuda_buffer_free((cuda_buffer_t *)tensor->gpu_buffer);
+        tensor->gpu_buffer = NULL;
+        tensor->gpu_valid = false;
+        return;
+    }
+#endif
+
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    if (g_gpu_ctx && g_gpu_ctx->backend == 3) {
+        webgpu_buffer_free((webgpu_buffer_t *)tensor->gpu_buffer);
         tensor->gpu_buffer = NULL;
         tensor->gpu_valid = false;
         return;
@@ -2276,6 +2403,18 @@ tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     }
 #endif
 
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    if (ctx->backend == 3) {
+        size_t size = tensor->total_size * sizeof(double complex);
+        webgpu_buffer_t *buf = (webgpu_buffer_t *)tensor->gpu_buffer;
+        if (webgpu_buffer_write(ctx->webgpu_ctx, buf, tensor->data, size) == 0) {
+            tensor->gpu_valid = true;
+            return TENSOR_SUCCESS;
+        }
+        return TENSOR_ERROR_GPU_SYNC_FAILED;
+    }
+#endif
+
     return TENSOR_ERROR_GPU_UNAVAILABLE;
 }
 
@@ -2307,6 +2446,18 @@ tensor_error_t tensor_sync_to_cpu(tensor_t *tensor) {
         size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
         if (cuda_buffer_download(buf, tensor->data, size) == 0) {
+            tensor->cpu_valid = true;
+            return TENSOR_SUCCESS;
+        }
+        return TENSOR_ERROR_GPU_SYNC_FAILED;
+    }
+#endif
+
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+    if (g_gpu_ctx && g_gpu_ctx->backend == 3) {
+        size_t size = tensor->total_size * sizeof(double complex);
+        webgpu_buffer_t *buf = (webgpu_buffer_t *)tensor->gpu_buffer;
+        if (webgpu_buffer_read(g_gpu_ctx->webgpu_ctx, buf, tensor->data, size) == 0) {
             tensor->cpu_valid = true;
             return TENSOR_SUCCESS;
         }

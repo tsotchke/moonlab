@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import {
+  ensureMoonlabWorker,
+  runCircuitInWorker,
+  runExampleAlgorithmInWorker,
+  type WorkerGate,
+} from '../workers/moonlabClient';
 import './Examples.css';
 
 interface Example {
@@ -6,7 +12,7 @@ interface Example {
   title: string;
   description: string;
   code: string;
-  output?: string;
+  runnable?: boolean;
 }
 
 const EXAMPLES: Example[] = [
@@ -31,9 +37,7 @@ console.log(probs);  // [0.5, 0, 0, 0.5]
 
 // Measuring qubit 0 instantly determines qubit 1
 state.dispose();`,
-    output: `Probabilities: [0.5, 0, 0, 0.5]
-States |00⟩ and |11⟩ each have 50% probability
-The qubits are now entangled!`,
+    runnable: true,
   },
   {
     id: 'superposition',
@@ -56,9 +60,7 @@ const total = probs.reduce((a, b) => a + b, 0);
 console.log(\`Total probability: \${total}\`);  // 1.0
 
 state.dispose();`,
-    output: `Probabilities: [0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125]
-Each of the 8 states (|000⟩ to |111⟩) has 12.5% probability
-Total probability: 1.0`,
+    runnable: true,
   },
   {
     id: 'grover',
@@ -81,12 +83,7 @@ console.log(\`Success prob: \${result.successProbability}\`);  // ~96.9%
 console.log(\`Oracle calls: \${result.oracleCalls}\`);  // ~25 (vs 1024 classically!)
 
 grover.dispose();`,
-    output: `Found: 42
-Success probability: 96.9%
-Oracle calls: 25
-
-Classical search would need 512 calls on average!
-Grover provides quadratic speedup: O(√N) vs O(N)`,
+    runnable: true,
   },
   {
     id: 'phase-kickback',
@@ -116,9 +113,7 @@ const probs = state.getProbabilities();
 console.log(probs);
 
 state.dispose();`,
-    output: `After phase kickback and measurement:
-The control qubit's phase has been modified
-This is the key insight behind QPE and other algorithms`,
+    runnable: true,
   },
   {
     id: 'quantum-teleportation',
@@ -150,11 +145,7 @@ if (m0) state.z(2);
 console.log('Teleportation complete!');
 
 state.dispose();`,
-    output: `Teleportation protocol:
-1. Create entangled pair (q1, q2)
-2. Bell measurement on (q0, q1)
-3. Apply corrections based on classical bits
-Result: q2 now has the original state from q0!`,
+    runnable: true,
   },
   {
     id: 'vqe-h2',
@@ -184,18 +175,144 @@ console.log(\`Chemical accuracy: \${result.chemicalAccuracy}\`);
 console.log(\`Iterations: \${result.iterations}\`);
 
 vqe.dispose();`,
-    output: `Ground state energy: -1.1373 Ha
-Target (exact): -1.1372 Ha
-Error: 0.0001 Ha (within chemical accuracy!)
-Iterations: 47`,
+    runnable: true,
   },
 ];
 
 const Examples: React.FC = () => {
+  const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
   const [selectedExample, setSelectedExample] = useState<string>(EXAMPLES[0].id);
   const [copied, setCopied] = useState(false);
+  const [runOutput, setRunOutput] = useState<Record<string, string>>({});
+  const [runError, setRunError] = useState<Record<string, string>>({});
+  const [runningId, setRunningId] = useState<string | null>(null);
 
   const currentExample = EXAMPLES.find(e => e.id === selectedExample) || EXAMPLES[0];
+
+  const formatProbabilities = (probs: Float64Array | number[], numQubits: number): string => {
+    const lines: string[] = [];
+    for (let i = 0; i < probs.length; i++) {
+      const prob = probs[i];
+      if (prob < 0.0005) continue;
+      const label = i.toString(2).padStart(numQubits, '0');
+      lines.push(`|${label}⟩: ${(prob * 100).toFixed(2)}%`);
+    }
+    if (lines.length === 0) {
+      return 'No non-zero probabilities found.';
+    }
+    return lines.join('\n');
+  };
+
+  const formatTopStates = (states: Array<{ bitstring: string; probability: number }>): string => {
+    if (!states.length) return 'No high-probability states found.';
+    return states
+      .map((state) => `|${state.bitstring}⟩: ${(state.probability * 100).toFixed(2)}%`)
+      .join('\n');
+  };
+
+  const runExample = async () => {
+    if (!currentExample.runnable) return;
+    setRunningId(currentExample.id);
+    setRunError((prev) => ({ ...prev, [currentExample.id]: '' }));
+    try {
+      await ensureMoonlabWorker();
+      let numQubits = 0;
+      let gates: WorkerGate[] = [];
+
+      if (
+        currentExample.id === 'grover' ||
+        currentExample.id === 'quantum-teleportation' ||
+        currentExample.id === 'vqe-h2'
+      ) {
+        const response = await runExampleAlgorithmInWorker({
+          id: currentExample.id as 'grover' | 'quantum-teleportation' | 'vqe-h2',
+          cleanupAfterRun: true,
+        });
+
+        let output = '';
+        if (response.algorithm === 'grover') {
+          output = [
+            `Marked state: ${response.markedState} (|${response.markedState.toString(2).padStart(response.numQubits, '0')}⟩)`,
+            `Found state: ${response.foundState} (|${response.foundState.toString(2).padStart(response.numQubits, '0')}⟩)`,
+            `Iterations: ${response.iterations}`,
+            `Oracle calls: ${response.oracleCalls}`,
+            `Success probability at marked state: ${(response.successProbability * 100).toFixed(3)}%`,
+            '',
+            'Top states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        } else if (response.algorithm === 'quantum-teleportation') {
+          output = [
+            `Measured bits: m0=${response.measurementBits.m0}, m1=${response.measurementBits.m1}`,
+            `Teleportation fidelity (Bloch overlap): ${response.fidelity.toFixed(6)}`,
+            `Source Bloch vector: (${response.sourceBloch.x.toFixed(4)}, ${response.sourceBloch.y.toFixed(4)}, ${response.sourceBloch.z.toFixed(4)})`,
+            `Target Bloch vector: (${response.targetBloch.x.toFixed(4)}, ${response.targetBloch.y.toFixed(4)}, ${response.targetBloch.z.toFixed(4)})`,
+            '',
+            'Top states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        } else if (response.algorithm === 'vqe-h2') {
+          output = [
+            `Bond distance: ${response.bondDistance.toFixed(4)} Å`,
+            `Estimated ground energy: ${response.energyHartree.toFixed(9)} Ha`,
+            `Reference FCI energy: ${response.referenceEnergyHartree.toFixed(9)} Ha`,
+            `Chemical accuracy error: ${response.chemicalAccuracyKcalMol.toFixed(4)} kcal/mol`,
+            `Within chemical accuracy (<= 1 kcal/mol): ${response.convergedToChemicalAccuracy ? 'yes' : 'no'}`,
+            `Iterations: ${response.iterations}`,
+            `Energy evaluations: ${response.evaluations}`,
+            `Optimal parameters: [${Array.from(response.parameters)
+              .map((value) => value.toFixed(5))
+              .join(', ')}]`,
+            '',
+            'Top basis states:',
+            formatTopStates(response.topStates),
+          ].join('\n');
+        }
+
+        setRunOutput((prev) => ({ ...prev, [currentExample.id]: output }));
+        return;
+      }
+
+      if (currentExample.id === 'bell-state') {
+        numQubits = 2;
+        gates = [
+          { type: 'H', qubit: 0 },
+          { type: 'CNOT', qubit: 1, controlQubit: 0 },
+        ];
+      } else if (currentExample.id === 'superposition') {
+        numQubits = 3;
+        gates = [
+          { type: 'H', qubit: 0 },
+          { type: 'H', qubit: 1 },
+          { type: 'H', qubit: 2 },
+        ];
+      } else if (currentExample.id === 'phase-kickback') {
+        numQubits = 2;
+        gates = [
+          { type: 'H', qubit: 0 },
+          { type: 'X', qubit: 1 },
+          { type: 'CZ', qubit: 1, controlQubit: 0 },
+          { type: 'H', qubit: 0 },
+        ];
+      }
+
+      if (numQubits === 0) throw new Error('Example is not runnable in the browser build.');
+
+      const result = await runCircuitInWorker({ numQubits, gates, cleanupAfterRun: true });
+      if (result.warnings.length) {
+        console.warn('Example warnings:', result.warnings);
+      }
+      const output = formatProbabilities(result.probabilities, numQubits);
+      setRunOutput((prev) => ({ ...prev, [currentExample.id]: output }));
+    } catch (error) {
+      setRunError((prev) => ({
+        ...prev,
+        [currentExample.id]: error instanceof Error ? error.message : String(error),
+      }));
+    } finally {
+      setRunningId(null);
+    }
+  };
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(currentExample.code);
@@ -206,10 +323,13 @@ const Examples: React.FC = () => {
   return (
     <div className="examples">
       <div className="section-header">
-        <h1 className="section-title">Code Examples</h1>
-        <p className="section-description">
-          Copy-paste code snippets to get started quickly with quantum computing.
-        </p>
+        <img className="section-logo" src={logoUrl} alt="" aria-hidden="true" />
+        <div className="section-header-text">
+          <h1 className="section-title">Code Examples</h1>
+          <p className="section-description">
+            Copy-paste code snippets to get started quickly with quantum computing.
+          </p>
+        </div>
       </div>
 
       <div className="examples-layout">
@@ -229,9 +349,20 @@ const Examples: React.FC = () => {
         <main className="example-content">
           <div className="example-header">
             <h2>{currentExample.title}</h2>
-            <button className="btn btn-secondary" onClick={copyCode}>
-              {copied ? 'Copied!' : 'Copy Code'}
-            </button>
+            <div className="example-actions">
+              {currentExample.runnable && (
+                <button
+                  className="btn btn-primary"
+                  onClick={runExample}
+                  disabled={runningId === currentExample.id}
+                >
+                  {runningId === currentExample.id ? 'Running…' : 'Run Example'}
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={copyCode}>
+                {copied ? 'Copied!' : 'Copy Code'}
+              </button>
+            </div>
           </div>
 
           <p className="example-description">{currentExample.description}</p>
@@ -242,12 +373,20 @@ const Examples: React.FC = () => {
             </pre>
           </div>
 
-          {currentExample.output && (
-            <div className="output-container">
-              <h3>Output</h3>
-              <pre className="output-block">{currentExample.output}</pre>
-            </div>
-          )}
+          <div className="output-container">
+            <h3>Output</h3>
+            {currentExample.runnable ? (
+              <pre className="output-block">
+                {runError[currentExample.id]
+                  ? `Error: ${runError[currentExample.id]}`
+                  : runOutput[currentExample.id] || 'Run the example to compute output in WASM.'}
+              </pre>
+            ) : (
+              <pre className="output-block">
+                This example depends on algorithms not bundled in the browser WASM build yet.
+              </pre>
+            )}
+          </div>
         </main>
       </div>
     </div>

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <stdint.h>
 
 // GPU acceleration
 #ifdef __APPLE__
@@ -26,8 +27,49 @@
 #define HAS_METAL 0
 #endif
 
+#if defined(HAS_WEBGPU) && HAS_WEBGPU
+#include "../../optimization/gpu/backends/gpu_webgpu.h"
+#define HAS_WEBGPU_TN 1
+#else
+#define HAS_WEBGPU_TN 0
+#endif
+
 // Use GPU for measurement when bond dimension exceeds this threshold
 #define GPU_MEASUREMENT_THRESHOLD 32  // Use GPU for larger bond dimensions
+
+#define TN_GPU_BACKEND_NONE 0
+#define TN_GPU_BACKEND_METAL 1
+#define TN_GPU_BACKEND_CUDA 2
+#define TN_GPU_BACKEND_WEBGPU 3
+
+/**
+ * @brief Check if GPU path is beneficial for this MPS
+ */
+static bool should_use_gpu_measurement(const tn_mps_state_t *state) {
+    uint32_t max_bond = 1;
+    for (uint32_t i = 0; i < state->num_qubits - 1; i++) {
+        if (state->bond_dims[i] > max_bond) {
+            max_bond = state->bond_dims[i];
+        }
+    }
+    return max_bond >= GPU_MEASUREMENT_THRESHOLD;
+}
+
+static int tensor_gpu_backend_code_measure(void) {
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) {
+        return TN_GPU_BACKEND_NONE;
+    }
+    return tensor_gpu_backend_type(gpu_ctx);
+}
+
+static double quiet_nan_value(void) {
+    union {
+        uint64_t bits;
+        double value;
+    } nan = { UINT64_C(0x7ff8000000000000) };
+    return nan.value;
+}
 
 #if HAS_METAL
 /**
@@ -42,30 +84,16 @@ static metal_compute_ctx_t *get_metal_context_measure(void) {
 }
 
 /**
- * @brief Check if GPU path is beneficial for this MPS
- */
-static bool should_use_gpu_measurement(const tn_mps_state_t *state) {
-    // Check max bond dimension
-    uint32_t max_bond = 1;
-    for (uint32_t i = 0; i < state->num_qubits - 1; i++) {
-        if (state->bond_dims[i] > max_bond) {
-            max_bond = state->bond_dims[i];
-        }
-    }
-    return max_bond >= GPU_MEASUREMENT_THRESHOLD;
-}
-
-/**
  * @brief Compute Z expectation using Metal GPU
  */
 static double tn_expectation_z_gpu(const tn_mps_state_t *state, uint32_t qubit) {
     metal_compute_ctx_t *ctx = get_metal_context_measure();
-    if (!ctx) return NAN;  // Signal failure
+    if (!ctx) return quiet_nan_value();  // Signal failure
 
     // Allocate array of GPU buffers for MPS tensors
     metal_buffer_t **gpu_buffers = (metal_buffer_t **)malloc(
         state->num_qubits * sizeof(metal_buffer_t *));
-    if (!gpu_buffers) return NAN;
+    if (!gpu_buffers) return quiet_nan_value();
 
     bool success = true;
 
@@ -91,7 +119,7 @@ static double tn_expectation_z_gpu(const tn_mps_state_t *state, uint32_t qubit) 
         gpu_buffers[i] = (metal_buffer_t *)t->gpu_buffer;
     }
 
-    double result = NAN;
+    double result = quiet_nan_value();
     if (success) {
         result = metal_mps_expectation_z(
             ctx,
@@ -106,6 +134,49 @@ static double tn_expectation_z_gpu(const tn_mps_state_t *state, uint32_t qubit) 
     return result;
 }
 #endif // HAS_METAL
+
+#if HAS_WEBGPU_TN
+static bool g_webgpu_measure_fallback_logged = false;
+static bool g_webgpu_measure_kernel_logged = false;
+
+/**
+ * @brief WebGPU MPS expectation fast path.
+ *
+ * Current kernel support covers canonical single-site <Z>; other shapes
+ * return NaN to trigger deterministic CPU fallback.
+ */
+static double tn_expectation_z_webgpu(const tn_mps_state_t *state, uint32_t qubit) {
+    tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
+    if (!gpu_ctx) return quiet_nan_value();
+
+    webgpu_compute_ctx_t *webgpu_ctx = tensor_gpu_get_webgpu(gpu_ctx);
+    if (!webgpu_ctx) return quiet_nan_value();
+
+    // Kernel currently covers canonical single-site expectation.
+    if (state->canonical_center == (int32_t)qubit &&
+        state->canonical == TN_CANONICAL_MIXED) {
+        const tensor_t *t = state->tensors[qubit];
+        double expectation = 0.0;
+        int webgpu_native_used = 0;
+        if (webgpu_mps_expectation_z_canonical(
+                webgpu_ctx, t->data, t->dims[0], t->dims[2], &expectation,
+                &webgpu_native_used) == 0) {
+            if (webgpu_native_used && !g_webgpu_measure_kernel_logged) {
+                g_webgpu_measure_kernel_logged = true;
+                fprintf(stderr, "WebGPU tensor-network canonical <Z> kernel active\n");
+            }
+            return expectation;
+        }
+    }
+
+    if (!g_webgpu_measure_fallback_logged) {
+        g_webgpu_measure_fallback_logged = true;
+        fprintf(stderr,
+                "WebGPU tensor-network measurement kernel unavailable for this shape; using CPU fallback\n");
+    }
+    return quiet_nan_value();
+}
+#endif
 
 // ============================================================================
 // SINGLE-QUBIT MEASUREMENT
@@ -660,19 +731,39 @@ double tn_expectation_z(const tn_mps_state_t *state, uint32_t qubit) {
     // use O(chi^2) local computation
     if (state->canonical_center == (int32_t)qubit &&
         state->canonical == TN_CANONICAL_MIXED) {
+#if HAS_WEBGPU_TN
+        if (should_use_gpu_measurement(state) &&
+            tensor_gpu_backend_code_measure() == TN_GPU_BACKEND_WEBGPU) {
+            double webgpu_canonical = tn_expectation_z_webgpu(state, qubit);
+            if (!isnan(webgpu_canonical)) {
+                return webgpu_canonical;
+            }
+        }
+#endif
         return expectation_z_canonical(state, qubit);
     }
 
-#if HAS_METAL
-    // GPU PATH: Use Metal GPU for large bond dimensions
+    // GPU PATH: Try backend-specific acceleration for large bond dimensions.
     if (should_use_gpu_measurement(state)) {
-        double gpu_result = tn_expectation_z_gpu(state, qubit);
-        if (!isnan(gpu_result)) {
-            return gpu_result;
+        const int backend = tensor_gpu_backend_code_measure();
+#if HAS_METAL
+        if (backend == TN_GPU_BACKEND_METAL) {
+            double gpu_result = tn_expectation_z_gpu(state, qubit);
+            if (!isnan(gpu_result)) {
+                return gpu_result;
+            }
         }
-        // Fall through to CPU path if GPU failed
-    }
 #endif
+#if HAS_WEBGPU_TN
+        if (backend == TN_GPU_BACKEND_WEBGPU) {
+            double webgpu_result = tn_expectation_z_webgpu(state, qubit);
+            if (!isnan(webgpu_result)) {
+                return webgpu_result;
+            }
+        }
+#endif
+        // Fall through to CPU path if GPU path failed or is unavailable.
+    }
 
     // SLOW PATH: Full transfer matrix contraction O(n*chi^4)
     // <Z_q> using transfer matrix method with numerical stabilization

@@ -2290,6 +2290,10 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         return NULL;
     }
 
+    // DMRG does not update normalization bookkeeping; ensure amplitudes are scaled correctly.
+    mps->norm = 1.0;
+    mps->log_norm_factor = 0.0;
+
     if (result) {
         *result = dmrg_res;
     } else {

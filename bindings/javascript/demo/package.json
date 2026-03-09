@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:gh-pages": "test -f ../packages/core/emscripten/build/deps/clapack-wasm/lib/liblapack.a || bash ../packages/core/emscripten/build-clapack-wasm.sh && pnpm --filter @moonlab/quantum-core build && vite build --outDir ../../../docs --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -14,6 +15,7 @@
     "@moonlab/quantum-algorithms": "workspace:*",
     "@moonlab/quantum-viz": "workspace:*",
     "@moonlab/quantum-react": "workspace:*",
+    "three": "^0.161.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0"

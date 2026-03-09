@@ -17,9 +17,12 @@ const STATE_STRUCT_SIZE = 256;
 
 /**
  * Offset of amplitudes pointer in quantum_state_t
- * This depends on the C struct layout
+ * WASM32 struct layout:
+ *   size_t num_qubits     @ offset 0  (4 bytes)
+ *   size_t state_dim      @ offset 4  (4 bytes)
+ *   complex_t *amplitudes @ offset 8  (4 bytes pointer)
  */
-const AMPLITUDES_OFFSET = 24;
+const AMPLITUDES_OFFSET = 8;
 
 /**
  * Offset of num_qubits in quantum_state_t
@@ -597,7 +600,14 @@ export class QuantumState {
   measureAll(): number {
     this.checkDisposed();
     const randomValue = Math.random();
-    return this.module._measurement_all_qubits(this.statePtr, randomValue);
+    const measured = this.module._measurement_all_qubits(this.statePtr, randomValue) as number | bigint;
+    if (typeof measured === 'bigint') {
+      if (measured < 0n || measured > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error(`Measured basis state ${measured.toString()} exceeds JS safe integer range`);
+      }
+      return Number(measured);
+    }
+    return measured;
   }
 
   /**
