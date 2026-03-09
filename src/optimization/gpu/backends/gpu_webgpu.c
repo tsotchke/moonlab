@@ -238,7 +238,7 @@ struct ProbabilityParams {
 };
 
 @group(0) @binding(0) var<storage, read> prob_src: array<vec2<f32>>;
-@group(0) @binding(1) var<storage, read_write> prob_dst: array<f32>;
+@group(0) @binding(1) var<storage, read_write> prob_dst: array<vec2<f32>>;
 @group(0) @binding(2) var<uniform> prob_params: ProbabilityParams;
 
 @compute @workgroup_size(256)
@@ -248,7 +248,7 @@ fn probabilities_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let amp = prob_src[i];
-  prob_dst[i] = dot(amp, amp);
+  prob_dst[i] = vec2<f32>(dot(amp, amp), 0.0);
 }
 
 fn complex_mul(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
@@ -754,7 +754,7 @@ EM_ASYNC_JS(int, moonlab_webgpu_probabilities_dispatch_async,
         }
 
         const amplitudesBytes = amplitudesF32.byteLength;
-        const probabilitiesBytes = n * 4;
+        const probabilitiesBytes = n * 8;
         const src = device.createBuffer({
             size: amplitudesBytes,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -794,6 +794,9 @@ EM_ASYNC_JS(int, moonlab_webgpu_probabilities_dispatch_async,
         pass.end();
         encoder.copyBufferToBuffer(dst, 0, readback, 0, probabilitiesBytes);
         device.queue.submit([encoder.finish()]);
+        if (typeof device.queue.onSubmittedWorkDone === 'function') {
+            await device.queue.onSubmittedWorkDone();
+        }
 
         await readback.mapAsync(GPUMapMode.READ);
         const mapped = readback.getMappedRange();
@@ -801,7 +804,7 @@ EM_ASYNC_JS(int, moonlab_webgpu_probabilities_dispatch_async,
         readback.unmap();
 
         for (let i = 0; i < n; i++) {
-            HEAPF64[probabilitiesHeapOffset + i] = resultF32[i];
+            HEAPF64[probabilitiesHeapOffset + i] = resultF32[i * 2];
         }
 
         if (typeof src.destroy === 'function') src.destroy();

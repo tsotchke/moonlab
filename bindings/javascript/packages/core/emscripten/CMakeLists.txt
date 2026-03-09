@@ -125,7 +125,7 @@ target_compile_options(moonlab PRIVATE
 if(MOONLAB_WASM_ENABLE_WEBGPU)
     # EM_ASYNC_JS-based WebGPU dispatch uses async/await and requires Asyncify.
     target_link_options(moonlab PRIVATE "SHELL:-sASYNCIFY=1")
-    target_link_options(moonlab PRIVATE "SHELL:-sASYNCIFY_STACK_SIZE=1048576")
+    target_link_options(moonlab PRIVATE "SHELL:-sASYNCIFY_STACK_SIZE=8388608")
 endif()
 
 # Read exported functions from file and format for Emscripten
