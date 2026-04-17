@@ -55,20 +55,31 @@ binds `moonlab_qrng_bytes` via dlsym) should now pin to this tag.
   `gpu_backend.c` so builds that have not yet implemented the real kernel
   in `gpu_metal.mm` still link. The real implementation, when added,
   overrides the weak stub at link time.
+- **Tsirelson-bound constant bug**: `QC_2SQRT2_HEX` in `src/utils/constants.h`
+  encoded `0x400B504F333F9DE6`, which is IEEE 754 3.4142135623730950
+  (i.e. 2+sqrt(2)), not 2*sqrt(2) = 2.8284271247461903. The correct
+  encoding is `0x4006A09E667F3BCD` (same mantissa as the
+  already-correct `QC_SQRT2_HEX` with the exponent field shifted by 1).
+  The consequence was that `bell_test_confirms_quantum()` compared CHSH
+  values against 0.9 * 3.4142 = 3.07 instead of 0.9 * 2.8284 = 2.55, so
+  no real quantum CHSH measurement (bounded above by 2.8284) could ever
+  pass the "near maximum" check. Simulator CHSH output was always correct;
+  only the reporting and pass/fail logic was broken. After this fix, the
+  Bell test reports ~99.4% of quantum maximum at 10k samples and essentially
+  100% at 100k+ samples, as expected.
 
 ### Testing
 
 - Verified clean-slate build on macOS arm64 in both Release and Debug
   configurations.
-- 9 of 11 CTest cases pass. The two failures (`bell_test`,
-  `unit_quantum_state`) are pre-existing issues carried over from 0.1.1:
-  `bell_test` has too-strict a CHSH threshold (measured 2.7536, above the
-  classical bound but the test asserts closer to Tsirelson 2 sqrt(2)), and
-  `unit_quantum_state::test_state_purity` constructs what it calls a
-  "mixed state" by setting 4 equal state-vector amplitudes — that is in
-  fact a pure state, and the underlying simulator is pure-state only.
-  Both will be addressed as part of the 0.2 Phase 1G build / CI / housekeeping
-  sweep.
+- 10 of 11 CTest cases pass after this release. Bell test now reports
+  CHSH at ~99.4% of the Tsirelson bound at the default 10k sample size,
+  converging to essentially 100% (CHSH = 2.8298 at 100k, 2.8265 at 500k).
+  The remaining failure is `unit_quantum_state::test_state_purity`, a
+  pre-existing test-side bug: it constructs what it calls a "mixed state"
+  by setting 4 equal state-vector amplitudes, but that is in fact a pure
+  state (purity = 1), and the underlying simulator is pure-state-only.
+  To be addressed in the 0.2 Phase 1G build / CI / housekeeping sweep.
 
 ### Known issues carried from 0.1.1
 
