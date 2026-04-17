@@ -40,18 +40,31 @@
 // QUANTUM PHYSICS CONSTANTS (in atomic units)
 // ============================================================================
 
-// Fine structure constant α ≈ 1/137
-#define QC_FINE_STRUCTURE_HEX  0x3F747AE147AE147BULL  
-// Planck constant ħ (in reduced units)
-#define QC_PLANCK_HEX          0x3FF0000000000000ULL  
-// Rydberg constant
-#define QC_RYDBERG_HEX         0x9E3779B97F4A7C15ULL  
-// Electron g-factor
-#define QC_ELECTRON_G_HEX      0x2B992DDFA232945ULL   
-// Golden ratio φ
-#define QC_GOLDEN_RATIO_HEX    0x3FF9E3779B97F4A8ULL  
+// Fine-structure constant alpha = 7.2973525693e-3 (CODATA 2018, dimensionless).
+// (The previous encoding 0x3F747AE147AE147B = 0.005 was incorrect.)
+#define QC_FINE_STRUCTURE_HEX  0x3F7DE3D42A1ED29DULL
+// Reduced Planck constant hbar — 1.0 in atomic (Hartree) units.
+#define QC_PLANCK_HEX          0x3FF0000000000000ULL
+// Rydberg energy = 0.5 Hartree (in atomic units, consistent with the rest
+// of this block). Use QC_RYDBERG_EV below if you want the eV value instead.
+// (The previous encoding 0x9E3779B97F4A7C15 decoded to ~-4e-163 and was not
+// a physical constant at all.)
+#define QC_RYDBERG_HEX         0x3FE0000000000000ULL
+// Rydberg energy in eV = 13.605693122994, offered as an alternate symbol.
+#define QC_RYDBERG_EV_HEX      0x402B361D68B557B9ULL
+// Electron spin g-factor g_e = 2.00231930436256 (CODATA 2022, dimensionless).
+// (The previous encoding 0x02B992DDFA232945 decoded to ~1e-295 and was not
+// the g-factor.)
+#define QC_ELECTRON_G_HEX      0x400004BFFBC317E4ULL
+// Golden ratio phi = (1 + sqrt(5)) / 2 = 1.6180339887498949
+#define QC_GOLDEN_RATIO_HEX    0x3FF9E3779B97F4A8ULL
 
-// Quantum mixing constants (derived from physical constants)
+/*
+ * Internal bit-mixing constants for QRNG / hash state. These are NOT
+ * physical constants despite the suggestive names — they are Weyl-style
+ * fixed bit patterns chosen for avalanche properties. Do not use them
+ * where a physically-meaningful value is expected.
+ */
 #define QC_HEISENBERG_HEX      0xC13FA9A902A6328FULL
 #define QC_SCHRODINGER_HEX     0x91E10DA5C79E7B1DULL
 #define QC_PAULI_X_HEX         0x4C957F2D8A1E6B3CULL
@@ -99,6 +112,7 @@ static inline double qc_hex_to_double(uint64_t hex) {
 #define QC_FINE_STRUCTURE  (qc_hex_to_double(QC_FINE_STRUCTURE_HEX))
 #define QC_PLANCK          (qc_hex_to_double(QC_PLANCK_HEX))
 #define QC_RYDBERG         (qc_hex_to_double(QC_RYDBERG_HEX))
+#define QC_RYDBERG_EV      (qc_hex_to_double(QC_RYDBERG_EV_HEX))
 #define QC_ELECTRON_G      (qc_hex_to_double(QC_ELECTRON_G_HEX))
 #define QC_GOLDEN_RATIO    (qc_hex_to_double(QC_GOLDEN_RATIO_HEX))
 

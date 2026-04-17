@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <inttypes.h>
 
 // ============================================================================
 // CONFIGURATION CALCULATIONS
@@ -345,11 +346,11 @@ void health_tests_print_stats(const health_test_ctx_t *ctx) {
     printf("  Startup complete: %s\n", ctx->stats.startup_complete ? "Yes" : "No");
     printf("\n");
     printf("Statistics:\n");
-    printf("  Samples tested:   %lu\n", ctx->stats.samples_tested);
-    printf("  Total failures:   %lu\n", ctx->stats.total_failures);
-    printf("  RCT failures:     %lu\n", ctx->stats.rct_failures);
-    printf("  APT failures:     %lu\n", ctx->stats.apt_failures);
-    printf("  Startup failures: %lu\n", ctx->stats.startup_failures);
+    printf("  Samples tested:   %" PRIu64 "\n", ctx->stats.samples_tested);
+    printf("  Total failures:   %" PRIu64 "\n", ctx->stats.total_failures);
+    printf("  RCT failures:     %" PRIu64 "\n", ctx->stats.rct_failures);
+    printf("  APT failures:     %" PRIu64 "\n", ctx->stats.apt_failures);
+    printf("  Startup failures: %" PRIu64 "\n", ctx->stats.startup_failures);
     
     if (ctx->stats.samples_tested > 0) {
         double failure_rate = (double)ctx->stats.total_failures / ctx->stats.samples_tested * 100.0;

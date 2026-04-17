@@ -968,6 +968,10 @@ gpu_error_t gpu_phase(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                       uint32_t qubit_index, double theta, uint64_t state_dim) {
     if (!ctx || !amplitudes) return GPU_ERROR_INVALID_PARAM;
 
+    /* Mark parameters as used for build configurations in which none of the
+     * backend-specific case arms below compile in. */
+    (void)qubit_index; (void)theta; (void)state_dim;
+
     switch (ctx->backend_type) {
 #ifdef HAS_WEBGPU
         case GPU_BACKEND_WEBGPU:
@@ -995,6 +999,10 @@ gpu_error_t gpu_phase(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
 gpu_error_t gpu_cnot(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                      uint32_t control, uint32_t target, uint64_t state_dim) {
     if (!ctx || !amplitudes) return GPU_ERROR_INVALID_PARAM;
+
+    /* Mark parameters as used for build configurations in which none of the
+     * backend-specific case arms below compile in. */
+    (void)control; (void)target; (void)state_dim;
 
     switch (ctx->backend_type) {
 #ifdef HAS_WEBGPU

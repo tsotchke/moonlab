@@ -59,6 +59,7 @@ option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
 option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
+option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers)" OFF)
 
 # SIMD options
 option(QSIM_ENABLE_AVX512 "Enable AVX-512 (if available)" ON)
@@ -142,8 +143,17 @@ endif()
 set(QSIM_WARNING_FLAGS)
 if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
     list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
+    if(QSIM_WERROR)
+        # -Werror everywhere our code is responsible, but exclude -Wpedantic
+        # because libomp's <omp.h> (a system header) uses enumerator values
+        # outside the ISO C range and we cannot fix that from the outside.
+        list(APPEND QSIM_WARNING_FLAGS -Werror -Wno-error=pedantic)
+    endif()
 elseif(QSIM_COMPILER_MSVC)
     list(APPEND QSIM_WARNING_FLAGS /W4)
+    if(QSIM_WERROR)
+        list(APPEND QSIM_WARNING_FLAGS /WX)
+    endif()
 endif()
 
 # Optimization flags
@@ -737,6 +747,14 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_quantum_state PRIVATE quantumsim)
     add_test(NAME unit_quantum_state COMMAND test_quantum_state)
 
+    add_executable(test_constants tests/unit/test_constants.c)
+    target_link_libraries(test_constants PRIVATE ${MATH_LIBRARY})
+    add_test(NAME unit_constants COMMAND test_constants)
+
+    add_executable(test_correctness_properties tests/unit/test_correctness_properties.c)
+    target_link_libraries(test_correctness_properties PRIVATE quantumsim)
+    add_test(NAME unit_correctness_properties COMMAND test_correctness_properties)
+
     add_executable(test_quantum_gates tests/unit/test_quantum_gates.c)
     target_link_libraries(test_quantum_gates PRIVATE quantumsim)
     add_test(NAME unit_quantum_gates COMMAND test_quantum_gates)
@@ -774,28 +792,35 @@ if(QSIM_BUILD_TESTS)
     endif()
     add_test(NAME unit_stride_gates COMMAND test_stride_gates)
 
-    # Distributed computing tests (MPI)
+    # Distributed computing tests (MPI). Each test executable is only
+    # added if the corresponding source file is present — the MPI test
+    # sources are planned per the 0.x release roadmap but not all are
+    # in the tree yet. This prevents CMake generate errors in builds
+    # that enable MPI before the matching test is written.
     if(QSIM_HAS_MPI)
-        add_executable(test_distributed_gates tests/unit/test_distributed_gates.c)
-        target_link_libraries(test_distributed_gates PRIVATE quantumsim MPI::MPI_C)
-        # Run with 4 MPI processes
-        add_test(NAME distributed_gates
-                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
-                         ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_distributed_gates> ${MPIEXEC_POSTFLAGS})
-
-        add_executable(test_state_partition tests/unit/test_state_partition.c)
-        target_link_libraries(test_state_partition PRIVATE quantumsim MPI::MPI_C)
-        add_test(NAME state_partition
-                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
-                         ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_state_partition> ${MPIEXEC_POSTFLAGS})
-
-        add_executable(test_collective_ops tests/unit/test_collective_ops.c)
-        target_link_libraries(test_collective_ops PRIVATE quantumsim MPI::MPI_C)
-        add_test(NAME collective_ops
-                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
-                         ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_collective_ops> ${MPIEXEC_POSTFLAGS})
-
-        message(STATUS "MPI Tests: Enabled (will run with 4 processes)")
+        set(_mpi_tests_added 0)
+        foreach(_mpi_test_name IN ITEMS
+                distributed_gates
+                state_partition
+                collective_ops)
+            set(_mpi_test_src "tests/unit/test_${_mpi_test_name}.c")
+            if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_mpi_test_src}")
+                add_executable(test_${_mpi_test_name} ${_mpi_test_src})
+                target_link_libraries(test_${_mpi_test_name}
+                                      PRIVATE quantumsim MPI::MPI_C)
+                add_test(NAME ${_mpi_test_name}
+                         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                                 ${MPIEXEC_PREFLAGS}
+                                 $<TARGET_FILE:test_${_mpi_test_name}>
+                                 ${MPIEXEC_POSTFLAGS})
+                math(EXPR _mpi_tests_added "${_mpi_tests_added} + 1")
+            endif()
+        endforeach()
+        if(_mpi_tests_added GREATER 0)
+            message(STATUS "MPI Tests: Enabled (${_mpi_tests_added} test(s), 4 MPI processes each)")
+        else()
+            message(STATUS "MPI Tests: None present in tests/unit/ yet")
+        endif()
     endif()
 
     # Downstream-ABI smoke test — dlopens libquantumsim and verifies the

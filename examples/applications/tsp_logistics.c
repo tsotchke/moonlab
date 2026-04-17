@@ -462,7 +462,7 @@ int main(void) {
     printf("║   Improvement:      %+7.2f%%                             ║\n", improvement);
     printf("║                                                            ║\n");
     printf("║ PROBLEM COMPLEXITY:                                        ║\n");
-    printf("║   Cities:           %zu                                    ║\n", NUM_CITIES);
+    printf("║   Cities:           %d                                     ║\n", NUM_CITIES);
     printf("║   Possible tours:   %.0f (factorial)                   ║\n", 
            tgamma(NUM_CITIES) / 2.0);
     printf("║   Classical time:   %.6f seconds                        ║\n", classical_time);

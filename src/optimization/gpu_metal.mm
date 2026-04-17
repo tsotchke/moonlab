@@ -247,7 +247,19 @@ metal_compute_ctx_t* metal_compute_init(void) {
 
         if (tensorSource) {
             MTLCompileOptions* options = [[MTLCompileOptions alloc] init];
-            options.fastMathEnabled = NO;  // Need precision for MPS
+            /* `fastMathEnabled` is deprecated in macOS 15 in favour of
+             * `mathMode`; use the new API when available and fall back on
+             * older OS versions. The fallback arm must still reference
+             * the deprecated selector, so silence that warning locally
+             * rather than opting out of -Werror globally. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            if (@available(macOS 15.0, iOS 18.0, *)) {
+                options.mathMode = MTLMathModeSafe;
+            } else {
+                options.fastMathEnabled = NO;
+            }
+#pragma clang diagnostic pop
             options.languageVersion = MTLLanguageVersion2_0;
 
             ctx->tensorLibrary = [ctx->device newLibraryWithSource:tensorSource
@@ -543,7 +555,7 @@ static int dispatch_kernel(
         
         // Calculate threadgroup size and count
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupSize = MIN(1024, maxThreads);  // Optimal for M2 Ultra
+        NSUInteger threadgroupSize = MIN((NSUInteger)1024, maxThreads);  // Optimal for M2 Ultra
         NSUInteger threadgroups = (grid_size + threadgroupSize - 1) / threadgroupSize;
         
         MTLSize threadsPerThreadgroup = MTLSizeMake(threadgroupSize, 1, 1);
@@ -585,7 +597,9 @@ int metal_hadamard(
     metal_buffer_t* buffers[] = {amplitudes};
     uint32_t constants[] = {qubit_index, state_dim};
     
-    uint32_t stride = 1u << qubit_index;
+    (void)qubit_index;  /* stride = 1u << qubit_index was computed here
+                           but was never used; the shader takes qubit_index
+                           via the constants array. */
     uint32_t num_pairs = state_dim / 2;
     
     return dispatch_kernel(ctx, ctx->hadamardPipeline,
@@ -1038,9 +1052,9 @@ static int dispatch_kernel_3d(
 
         // Calculate threadgroup size
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupX = MIN(8, grid_x);
-        NSUInteger threadgroupY = MIN(8, grid_y);
-        NSUInteger threadgroupZ = MIN(8, grid_z);
+        NSUInteger threadgroupX = MIN((NSUInteger)8, (NSUInteger)grid_x);
+        NSUInteger threadgroupY = MIN((NSUInteger)8, (NSUInteger)grid_y);
+        NSUInteger threadgroupZ = MIN((NSUInteger)8, (NSUInteger)grid_z);
 
         // Adjust to fit maxThreads
         while (threadgroupX * threadgroupY * threadgroupZ > maxThreads) {
@@ -1108,8 +1122,8 @@ static int dispatch_kernel_2d(
         }
 
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupX = MIN(16, grid_x);
-        NSUInteger threadgroupY = MIN(16, grid_y);
+        NSUInteger threadgroupX = MIN((NSUInteger)16, (NSUInteger)grid_x);
+        NSUInteger threadgroupY = MIN((NSUInteger)16, (NSUInteger)grid_y);
 
         while (threadgroupX * threadgroupY > maxThreads) {
             if (threadgroupY > 1) threadgroupY /= 2;
@@ -1266,8 +1280,9 @@ int metal_mps_apply_gate_2q(
         // For simplicity, copy the raw data - caller needs to handle reshape
         // In production, would do proper tensor reshape here
 
-        size_t A_new_size = chi_l_in * 2 * rank * sizeof(float) * 2;
-        size_t B_new_size = rank * 2 * chi_r_in * sizeof(float) * 2;
+        (void)chi_l_in; (void)chi_r_in; (void)rank;
+        /* A_new_size / B_new_size were computed here but never used;
+         * the caller handles tensor reshape at a higher level. */
 
         // Copy U data to A buffer (with S absorbed)
         float* U_ptr = (float*)metal_buffer_contents(U);

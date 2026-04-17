@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
@@ -239,6 +240,7 @@ int rndrrs_get_uint64(uint64_t *value) { (void)value; return 0; }
 // ============================================================================
 
 int rdrand_get_uint64(uint64_t *value) {
+    (void)value; /* unused on non-x86_64 targets */
 #ifdef __x86_64__
     if (!rdrand_available()) return 0;
     
@@ -258,6 +260,7 @@ int rdrand_get_uint64(uint64_t *value) {
 }
 
 int rdseed_get_uint64(uint64_t *value) {
+    (void)value; /* unused on non-x86_64 targets */
 #ifdef __x86_64__
     if (!rdseed_available()) return 0;
     
@@ -281,6 +284,7 @@ int rdseed_get_uint64(uint64_t *value) {
 // ============================================================================
 
 ssize_t entropy_getrandom(uint8_t *buffer, size_t size, unsigned int flags) {
+    (void)buffer; (void)size; (void)flags; /* unused on non-Linux targets */
 #ifdef __linux__
     #ifdef SYS_getrandom
     return syscall(SYS_getrandom, buffer, size, flags);
@@ -790,9 +794,9 @@ void entropy_print_stats(const entropy_ctx_t *ctx) {
     printf("\n");
     printf("Preferred source: %s\n", entropy_source_name(ctx->caps.preferred_source));
     printf("Last used source: %s\n", entropy_source_name(ctx->last_source));
-    printf("Total bytes collected: %lu\n", ctx->total_bytes);
-    printf("RDRAND failures: %lu\n", ctx->rdrand_failures);
-    printf("RDSEED failures: %lu\n", ctx->rdseed_failures);
+    printf("Total bytes collected: %" PRIu64 "\n", ctx->total_bytes);
+    printf("RDRAND failures: %" PRIu64 "\n", ctx->rdrand_failures);
+    printf("RDSEED failures: %" PRIu64 "\n", ctx->rdseed_failures);
     printf("Quality estimate: %.1f bits/byte\n", 
            entropy_quality_estimate(ctx->caps.preferred_source));
 }

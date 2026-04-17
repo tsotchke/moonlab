@@ -1689,9 +1689,9 @@ void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian) {
     printf("╠════════════════════════════════════════════════════════════╣\n");
     printf("║ Molecule:            %-33s ║\n", 
            hamiltonian->molecule_name ? hamiltonian->molecule_name : "Unknown");
-    printf("║ Qubits:              %3zu (2^%zu = %zu states)              ║\n", 
-           hamiltonian->num_qubits, hamiltonian->num_qubits, 
-           1ULL << hamiltonian->num_qubits);
+    printf("║ Qubits:              %3zu (2^%zu = %llu states)             ║\n",
+           hamiltonian->num_qubits, hamiltonian->num_qubits,
+           (unsigned long long)(1ULL << hamiltonian->num_qubits));
     printf("║ Bond distance:       %6.4f Angstroms                    ║\n", 
            hamiltonian->bond_distance);
     printf("║ Nuclear repulsion:   %14.10f Ha                ║\n", 

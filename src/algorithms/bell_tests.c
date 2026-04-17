@@ -7,18 +7,25 @@
 #include <string.h>
 #include <stdio.h>
 
+/* These names are defined as GNU extensions by <math.h> on macOS/glibc.
+ * Guard against redefinition to keep the file -Werror clean while still
+ * guaranteeing they exist on strictly-conforming C11 compilers that do
+ * not supply them. */
+#ifndef M_PI
 #define M_PI QC_PI
+#endif
+#ifndef M_SQRT2
 #define M_SQRT2 QC_SQRT2
+#endif
+#ifndef M_PI_4
 #define M_PI_4 QC_PI_4
+#endif
+#ifndef M_PI_2
 #define M_PI_2 QC_PI_2
+#endif
 
 // Optimal CHSH value for maximally entangled states: 2√2 (Tsirelson bound)
 #define CHSH_QUANTUM_MAX QC_TSIRELSON_BOUND
-
-// Helper function
-static inline int get_bit(uint64_t n, int bit_pos) {
-    return (n >> bit_pos) & 1ULL;
-}
 
 // ============================================================================
 // BELL STATE CREATION
@@ -142,23 +149,23 @@ double measure_correlation(
         return 0.0;
     }
     
-    // Step 3: Compute joint probabilities ONCE
-    // P(00), P(01), P(10), P(11) for the two qubits
+    /* Step 3: Compute joint probabilities ONCE.
+     * Only P(00), P(01), P(10) are needed for the inverse-CDF sampler
+     * below; P(11) is implicit as the remaining probability mass. */
     double prob_00 = 0.0;
     double prob_01 = 0.0;
     double prob_10 = 0.0;
-    double prob_11 = 0.0;
-    
+
     for (uint64_t basis = 0; basis < measurement_state.state_dim; basis++) {
         double prob = quantum_state_get_probability(&measurement_state, basis);
-        
+
         int bit_a = (basis >> qubit_a) & 1;
         int bit_b = (basis >> qubit_b) & 1;
-        
+
         if (bit_a == 0 && bit_b == 0) prob_00 += prob;
         else if (bit_a == 0 && bit_b == 1) prob_01 += prob;
         else if (bit_a == 1 && bit_b == 0) prob_10 += prob;
-        else prob_11 += prob;
+        /* else: P(11) mass, implicit in the final branch of the sampler */
     }
     
     // Step 4: Sample num_samples times from the SAME probability distribution

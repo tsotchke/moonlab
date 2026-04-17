@@ -175,14 +175,13 @@ void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2
 void noise_amplitude_damping(quantum_state_t* state, int qubit,
                              double gamma, double random_value) {
     if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
-    if (qubit < 0 || qubit >= state->num_qubits) return;
+    if (qubit < 0 || qubit >= (int)state->num_qubits) return;
 
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
     complex_t* amp = state->amplitudes;
 
     double sqrt_1_gamma = sqrt(1.0 - gamma);
-    double sqrt_gamma = sqrt(gamma);
 
     // For each pair of amplitudes differing in qubit
     for (uint64_t i = 0; i < state_dim; i++) {
@@ -241,7 +240,7 @@ void noise_amplitude_damping(quantum_state_t* state, int qubit,
 void noise_phase_damping(quantum_state_t* state, int qubit,
                          double gamma, double random_value) {
     if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
-    if (qubit < 0 || qubit >= state->num_qubits) return;
+    if (qubit < 0 || qubit >= (int)state->num_qubits) return;
 
     // Phase damping using Monte Carlo trajectory approach
     // K0 = [[1, 0], [0, √(1-γ)]] (no-jump evolution)

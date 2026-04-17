@@ -50,7 +50,7 @@ static double internal_random(void) {
  * @brief Measure a single qubit in computational basis
  */
 static int measure_qubit(quantum_state_t* state, int qubit) {
-    if (!state || qubit < 0 || qubit >= state->num_qubits) return 0;
+    if (!state || qubit < 0 || qubit >= (int)state->num_qubits) return 0;
 
     uint64_t mask = 1ULL << qubit;
     double prob_one = 0.0;
