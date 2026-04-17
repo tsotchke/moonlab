@@ -50,6 +50,13 @@ build/
 dist/
 *.egg-info/
 
+# CMake / CTest local artifacts
+.cache/
+Testing/
+
+# Local reference papers (not committed; handled per-phase in the release arc)
+references/
+
 # Rust
 target/
 **/target/

@@ -24,6 +24,16 @@
 // Backend-specific includes (conditionally compiled)
 #ifdef HAS_METAL
 #include "../gpu_metal.h"
+/* Fallback implementation for metal_sum_squared_magnitudes when the Metal
+ * backend .mm file does not provide one yet. Returns a "not supported"
+ * status so callers fall back through the dispatcher. Tagged weak so the
+ * real implementation (if later added to gpu_metal.mm) overrides it. */
+__attribute__((weak))
+int metal_sum_squared_magnitudes(void* metal_ctx, void* buffer,
+                                 uint32_t state_dim, double* result) {
+    (void)metal_ctx; (void)buffer; (void)state_dim; (void)result;
+    return -1; /* GPU_ERROR_KERNEL_FAILED */
+}
 #endif
 
 #ifdef HAS_WEBGPU
@@ -1167,11 +1177,12 @@ gpu_error_t gpu_grover_iteration(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                          target_state, num_qubits, state_dim)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
-        default:
+        default: {
             // Fallback: oracle + diffusion
             gpu_error_t err = gpu_oracle_single_target(ctx, amplitudes, target_state, state_dim);
             if (err != GPU_SUCCESS) return err;
             return gpu_grover_diffusion(ctx, amplitudes, num_qubits, state_dim);
+        }
     }
 }
 

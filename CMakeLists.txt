@@ -23,9 +23,20 @@
 
 cmake_minimum_required(VERSION 3.20)
 
+# Read the canonical version string from VERSION.txt so the CMake project
+# version, SOVERSION, pkg-config data, and any generated headers stay in
+# lock-step with the one file developers actually bump. The file is
+# expected to contain exactly one line of the form MAJOR.MINOR.PATCH.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt" QSIM_VERSION_RAW)
+string(STRIP "${QSIM_VERSION_RAW}" QSIM_VERSION)
+if(NOT QSIM_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR
+        "VERSION.txt must contain exactly 'MAJOR.MINOR.PATCH'; got '${QSIM_VERSION}'")
+endif()
+
 # Project definition
 project(quantum_simulator
-    VERSION 1.0.0
+    VERSION ${QSIM_VERSION}
     DESCRIPTION "High-performance quantum computing simulator"
     LANGUAGES C CXX
 )
@@ -419,8 +430,17 @@ set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/stride_gates.c
     src/optimization/parallel_ops.c
     src/optimization/accelerate_ops.c
-    src/optimization/gpu/gpu_backend.c
 )
+# The unified GPU backend dispatcher references symbols from each backend
+# implementation (Metal buffer helpers, CUDA kernels, etc.). Only add it
+# when at least one of those backends is actually enabled. For Metal we
+# also need the Objective-C++ implementation file.
+if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
+    list(APPEND QSIM_OPTIMIZATION_SOURCES src/optimization/gpu/gpu_backend.c)
+    if(QSIM_HAS_METAL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/gpu_metal.mm")
+        list(APPEND QSIM_OPTIMIZATION_SOURCES src/optimization/gpu_metal.mm)
+    endif()
+endif()
 
 # GPU backend sources (conditional)
 set(QSIM_GPU_SOURCES)
@@ -447,6 +467,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/entropy_pool.c
     src/applications/hardware_entropy.c
     src/applications/qrng.c
+    src/applications/moonlab_qrng_export.c
 )
 
 set(QSIM_PROFILER_SOURCES
@@ -471,8 +492,12 @@ set(QSIM_ALL_SOURCES
     ${QSIM_UTILS_SOURCES}
     ${QSIM_APPLICATIONS_SOURCES}
     ${QSIM_PROFILER_SOURCES}
-    ${QSIM_DISTRIBUTED_SOURCES}
 )
+# Distributed sources are only compilable when MPI is enabled — they
+# reference mpi_* helpers declared inside the MPI-gated translation units.
+if(QSIM_ENABLE_MPI)
+    list(APPEND QSIM_ALL_SOURCES ${QSIM_DISTRIBUTED_SOURCES})
+endif()
 
 # Optional AVX-512 sources
 if(QSIM_SIMD_AVX512)
@@ -771,6 +796,22 @@ if(QSIM_BUILD_TESTS)
                          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_collective_ops> ${MPIEXEC_POSTFLAGS})
 
         message(STATUS "MPI Tests: Enabled (will run with 4 processes)")
+    endif()
+
+    # Downstream-ABI smoke test — dlopens libquantumsim and verifies the
+    # symbols declared in src/applications/moonlab_export.h. Only meaningful
+    # for shared builds (dlopen needs a dylib/so).
+    if(QSIM_BUILD_SHARED)
+        add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
+        target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME abi_moonlab_export
+                 COMMAND test_moonlab_export_abi)
+        # Make the freshly-built libquantumsim discoverable to the test at
+        # run time without requiring `make install`.
+        set_tests_properties(abi_moonlab_export PROPERTIES
+            ENVIRONMENT
+                "DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
+        )
     endif()
 
     message(STATUS "Tests: Enabled")
