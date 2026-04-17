@@ -25,7 +25,7 @@
 // √2 and related
 #define QC_SQRT2_HEX           0x3FF6A09E667F3BCDULL  // √2
 #define QC_SQRT2_INV_HEX       0x3FE6A09E667F3BCDULL  // 1/√2
-#define QC_2SQRT2_HEX          0x400B504F333F9DE6ULL  // 2√2 (Tsirelson bound)
+#define QC_2SQRT2_HEX          0x4006A09E667F3BCDULL  // 2√2 (Tsirelson bound) = 2.8284271247461903
 
 // √3 and related
 #define QC_SQRT3_HEX           0x3FFBB67AE8584CAAULL  // √3
