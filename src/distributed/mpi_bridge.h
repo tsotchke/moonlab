@@ -399,6 +399,29 @@ mpi_bridge_error_t mpi_recv(distributed_ctx_t* ctx,
                             int source, int tag);
 
 /**
+ * @brief Combined send/receive in a single MPI call
+ *
+ * Wraps MPI_Sendrecv. Sends @p send_count bytes from @p send_data to the
+ * rank @p dest, and simultaneously receives @p recv_count bytes from
+ * @p source into @p recv_data. Prevents deadlock when two ranks swap
+ * buffers simultaneously.
+ *
+ * @param ctx        Distributed context.
+ * @param send_data  Buffer to send.
+ * @param send_count Number of bytes to send.
+ * @param dest       Destination rank.
+ * @param recv_data  Buffer to receive into.
+ * @param recv_count Number of bytes to receive.
+ * @param source     Source rank.
+ * @return MPI_BRIDGE_SUCCESS or an error code.
+ */
+mpi_bridge_error_t mpi_sendrecv(distributed_ctx_t* ctx,
+                                const void* send_data, size_t send_count,
+                                int dest,
+                                void* recv_data, size_t recv_count,
+                                int source);
+
+/**
  * @brief All-reduce max of uint64 values
  *
  * @param ctx Distributed context

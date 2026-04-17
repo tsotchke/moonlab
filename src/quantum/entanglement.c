@@ -16,6 +16,17 @@
  * Licensed under the MIT License
  */
 
+/* The Apple CLAPACK interface (zheev_ and friends) was deprecated in
+ * macOS 13.3 in favour of `-DACCELERATE_NEW_LAPACK` headers. Migration
+ * to the new interface is scheduled as part of the v0.2 Phase 1G build
+ * / CI housekeeping sweep (it requires touching every __CLPK_* typedef
+ * in this file). Until then, silence the deprecation warnings so the
+ * Release build stays -Werror clean. */
+#if defined(__APPLE__) && defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #include "entanglement.h"
 #include "state.h"
 #include "../utils/config.h"
@@ -717,7 +728,7 @@ int entanglement_schmidt_coefficients(const quantum_state_t* state,
     int* partition_b = malloc(num_b * sizeof(int));
     int b_idx = 0;
 
-    for (int q = 0; q < state->num_qubits; q++) {
+    for (int q = 0; q < (int)state->num_qubits; q++) {
         int in_a = 0;
         for (int i = 0; i < num_a; i++) {
             if (partition_a_qubits[i] == q) {
@@ -899,3 +910,7 @@ double entanglement_linear_entropy(const complex_t* reduced_dm, uint64_t dim) {
     double purity = entanglement_purity(reduced_dm, dim);
     return ((double)dim / (dim - 1)) * (1.0 - purity);
 }
+
+#if defined(__APPLE__) && defined(__clang__)
+#pragma clang diagnostic pop
+#endif

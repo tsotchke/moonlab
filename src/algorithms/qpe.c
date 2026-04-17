@@ -28,6 +28,7 @@
  * This is NOT a partial trace - extracts full quantum state of subsystem
  * when other qubits are in computational basis.
  */
+__attribute__((unused))
 static qs_error_t extract_substate(
     const quantum_state_t *full_state,
     const int *qubit_indices,
@@ -66,6 +67,7 @@ static qs_error_t extract_substate(
  * 
  * Updates full state with modified substate amplitudes.
  */
+__attribute__((unused))
 static qs_error_t insert_substate(
     quantum_state_t *full_state,
     const int *qubit_indices,
@@ -359,8 +361,10 @@ qpe_result_t qpe_estimate_phase(
     uint64_t precision_mask = (1ULL << precision_qubits) - 1;
     
     for (uint64_t basis_idx = 0; basis_idx < qpe_state.state_dim; basis_idx++) {
-        // Extract precision bits and system bits
-        uint64_t precision_part = basis_idx & precision_mask;
+        // Extract the system-register component; the precision-register
+        // part is not needed here because we are weighting by the full
+        // joint-amplitude, not conditioning on precision outcomes.
+        (void)precision_mask;
         uint64_t system_part = basis_idx >> precision_qubits;
         
         if (system_part < system_dim) {

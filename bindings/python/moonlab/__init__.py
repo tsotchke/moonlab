@@ -30,20 +30,27 @@ from .core import (
     QuantumError
 )
 
-from .algorithms import (
-    VQE,
-    QAOA,
-    Grover,
-    BellTest
-)
+# Algorithm wrappers currently bind against C symbols (molecular_hamiltonian_*,
+# vqe_*, qaoa_*, grover_*, bell_test_*) that are not yet exported from the
+# v0.1.2 dylib. Skip the import rather than crash at module load; the 0.2
+# Phase 1G housekeeping sweep will realign algorithms.py with the actual
+# C ABI or drop it in favour of a ctypes rework.
+try:
+    from .algorithms import (
+        VQE,
+        QAOA,
+        Grover,
+        BellTest,
+    )
+    _ALGO_AVAILABLE = True
+except (ImportError, AttributeError):
+    _ALGO_AVAILABLE = False
 
 __all__ = [
     'QuantumState',
     'Gates',
     'Measurement',
     'QuantumError',
-    'VQE',
-    'QAOA',
-    'Grover',
-    'BellTest',
 ]
+if _ALGO_AVAILABLE:
+    __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']

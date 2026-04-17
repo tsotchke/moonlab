@@ -44,7 +44,8 @@
  * @return Probability in [0, 1]
  */
 double measurement_probability_one(const quantum_state_t* state, int qubit) {
-    if (!state || !state->amplitudes || qubit < 0 || qubit >= state->num_qubits) {
+    if (!state || !state->amplitudes || qubit < 0 ||
+        qubit >= (int)state->num_qubits) {
         return 0.0;
     }
 
@@ -96,7 +97,7 @@ double measurement_probability_zero(const quantum_state_t* state, int qubit) {
 void measurement_all_probabilities(const quantum_state_t* state, double* probabilities) {
     if (!state || !probabilities) return;
 
-    for (int q = 0; q < state->num_qubits; q++) {
+    for (int q = 0; q < (int)state->num_qubits; q++) {
         probabilities[q] = measurement_probability_one(state, q);
     }
 }
@@ -147,7 +148,8 @@ void measurement_probability_distribution(const quantum_state_t* state,
  * @return Measurement result (0 or 1)
  */
 int measurement_single_qubit(quantum_state_t* state, int qubit, double random_value) {
-    if (!state || !state->amplitudes || qubit < 0 || qubit >= state->num_qubits) {
+    if (!state || !state->amplitudes || qubit < 0 ||
+        qubit >= (int)state->num_qubits) {
         return -1;
     }
 
@@ -269,11 +271,11 @@ uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
         return 0;
     }
 
-    // Create mask for measured qubits
-    uint64_t measure_mask = 0;
+    /* Validate qubit indices. (A historical `measure_mask` bitmask was
+     * computed here but never read; it has been removed.) */
     for (int i = 0; i < num_measure; i++) {
-        if (qubits[i] >= 0 && qubits[i] < state->num_qubits) {
-            measure_mask |= (1ULL << qubits[i]);
+        if (qubits[i] < 0 || qubits[i] >= (int)state->num_qubits) {
+            return 0;
         }
     }
 

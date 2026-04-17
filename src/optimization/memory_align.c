@@ -513,9 +513,10 @@ void simd_print_alloc_stats(void) {
 
 #else
 
-// Empty stubs when tracking is disabled
-static void track_allocation(size_t size) { (void)size; }
-static void track_deallocation(size_t size) { (void)size; }
-static void track_allocation_failure(void) {}
+/* Empty stubs when tracking is disabled. Flagged __attribute__((unused))
+ * because they are not referenced outside tracking-enabled builds. */
+__attribute__((unused)) static void track_allocation(size_t size) { (void)size; }
+__attribute__((unused)) static void track_deallocation(size_t size) { (void)size; }
+__attribute__((unused)) static void track_allocation_failure(void) {}
 
 #endif /* MEMORY_ALIGN_TRACK_STATS */

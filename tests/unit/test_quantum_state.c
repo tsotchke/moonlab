@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <complex.h>
 #include <assert.h>
 #include <string.h>
 
@@ -267,24 +268,43 @@ int test_state_entropy() {
 
 int test_state_purity() {
     TEST_START("State purity calculation");
-    
+
+    /* The simulator stores pure states (|psi>), not density matrices,
+     * so Tr(rho^2) = (||psi||^2)^2 = 1 for every normalized pure state.
+     * Verify this invariant across several pure-state shapes. True
+     * mixed-state purity testing (purity < 1) requires a density-matrix
+     * backend; that is scheduled for a later phase of the release arc. */
+
     quantum_state_t state;
     quantum_state_init(&state, 2);
-    
-    // Pure state: purity = 1
-    double purity = quantum_state_purity(&state);
-    ASSERT_NEAR(purity, 1.0, 1e-10, "Pure state purity not 1");
-    
-    // Mixed state: purity < 1
+
+    /* Shape 1: canonical initial state |00>. */
+    ASSERT_NEAR(quantum_state_purity(&state), 1.0, 1e-10,
+                "Initial |00> should have purity 1");
+
+    /* Shape 2: equal superposition (|00>+|01>+|10>+|11>)/2. */
     state.amplitudes[0] = 0.5;
     state.amplitudes[1] = 0.5;
     state.amplitudes[2] = 0.5;
     state.amplitudes[3] = 0.5;
-    
-    purity = quantum_state_purity(&state);
-    ASSERT_TRUE(purity < 1.0, "Mixed state purity should be < 1");
-    ASSERT_NEAR(purity, 0.25, 1e-10, "Incorrect purity for equal superposition");
-    
+    ASSERT_NEAR(quantum_state_purity(&state), 1.0, 1e-10,
+                "Equal superposition should have purity 1 (it is a pure state)");
+
+    /* Shape 3: Bell state |Phi+> = (|00>+|11>)/sqrt(2). */
+    for (size_t i = 0; i < state.state_dim; ++i) state.amplitudes[i] = 0.0;
+    state.amplitudes[0] = 1.0 / sqrt(2.0);
+    state.amplitudes[3] = 1.0 / sqrt(2.0);
+    ASSERT_NEAR(quantum_state_purity(&state), 1.0, 1e-10,
+                "Bell state |Phi+> should have purity 1");
+
+    /* Shape 4: a non-trivial asymmetric normalized superposition with
+     * complex phases. Chosen so coefficient magnitudes squared sum to 1. */
+    for (size_t i = 0; i < state.state_dim; ++i) state.amplitudes[i] = 0.0;
+    state.amplitudes[0] =  0.6;
+    state.amplitudes[1] =  0.8 * I;
+    ASSERT_NEAR(quantum_state_purity(&state), 1.0, 1e-10,
+                "Complex-phase normalized state should have purity 1");
+
     quantum_state_free(&state);
     TEST_PASS();
 }

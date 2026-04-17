@@ -10,11 +10,18 @@
 #include <arm_neon.h>
 #endif
 
-// Use constants from quantum_constants.h
+/* These GNU-extension macros are already defined by <math.h> on most
+ * platforms; only define them here if the host <math.h> did not. */
+#ifndef M_PI
 #define M_PI QC_PI
-#define SQRT2_INV QC_SQRT2_INV
+#endif
+#ifndef M_PI_4
 #define M_PI_4 QC_PI_4
+#endif
+#ifndef M_PI_2
 #define M_PI_2 QC_PI_2
+#endif
+#define SQRT2_INV QC_SQRT2_INV
 
 // ============================================================================
 // HELPER FUNCTIONS

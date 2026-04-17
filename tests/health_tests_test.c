@@ -29,6 +29,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <inttypes.h>
 
 // Test counters
 static int tests_run = 0;
@@ -560,10 +561,10 @@ int test_statistics_tracking(void) {
     ASSERT_TRUE(stats.samples_tested >= 1000, "Should track samples");
     ASSERT_TRUE(stats.tests_enabled, "Tests should be enabled");
 
-    printf("  Samples tested: %lu\n", stats.samples_tested);
-    printf("  Total failures: %lu\n", stats.total_failures);
-    printf("  RCT failures: %lu\n", stats.rct_failures);
-    printf("  APT failures: %lu\n", stats.apt_failures);
+    printf("  Samples tested: %" PRIu64 "\n", stats.samples_tested);
+    printf("  Total failures: %" PRIu64 "\n", stats.total_failures);
+    printf("  RCT failures: %" PRIu64 "\n", stats.rct_failures);
+    printf("  APT failures: %" PRIu64 "\n", stats.apt_failures);
 
     health_tests_free(&ctx);
     TEST_PASS();
@@ -693,8 +694,8 @@ int test_edge_alternating_pattern(void) {
         health_tests_run(&ctx, sample);
     }
 
-    printf("  RCT failures: %lu\n", ctx.stats.rct_failures);
-    printf("  APT failures: %lu\n", ctx.stats.apt_failures);
+    printf("  RCT failures: %" PRIu64 "\n", ctx.stats.rct_failures);
+    printf("  APT failures: %" PRIu64 "\n", ctx.stats.apt_failures);
 
     // Alternating should pass RCT but may trigger APT depending on configuration
     ASSERT_EQ(ctx.stats.rct_failures, 0, "Alternating should pass RCT");

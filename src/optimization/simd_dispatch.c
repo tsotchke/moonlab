@@ -279,6 +279,7 @@ static void detect_x86_capabilities(simd_info_t* info) {
 /**
  * @brief Get SVE vector length in bits
  */
+__attribute__((unused))
 static uint32_t get_sve_vector_length(void) {
 #if defined(__linux__) && defined(__ARM_FEATURE_SVE)
     // Use inline assembly to read SVE vector length
@@ -539,7 +540,8 @@ const char* simd_get_capability_string(void) {
 
 simd_backend_t simd_get_backend(simd_operation_t op) {
     const simd_info_t* info = simd_detect_capabilities_full();
-    (void)op;  // Currently all operations use same backend selection
+    (void)op;    /* Currently all operations use same backend selection. */
+    (void)info;  /* Unused on Apple Silicon where Accelerate is always preferred. */
 
 #ifdef SIMD_ARCH_X86
     if (info->has_avx512f) return SIMD_BACKEND_AVX512;

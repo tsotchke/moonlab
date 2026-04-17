@@ -8,26 +8,50 @@ with measurement, entropy, and NumPy integration.
 import ctypes
 import os
 import numpy as np
+import platform
+import sys
 from pathlib import Path
 from typing import Optional, List, Tuple, Union
 
-# Locate shared library
-_lib_name = "libquantumsim.so"
-_lib_path = Path(__file__).parent.parent.parent.parent / _lib_name
+# Locate shared library. Name differs per platform:
+#   macOS -> libquantumsim.dylib
+#   Linux -> libquantumsim.so
+#   Windows -> quantumsim.dll
+if sys.platform == "darwin":
+    _lib_names = ["libquantumsim.dylib", "libquantumsim.so"]
+elif sys.platform == "win32":
+    _lib_names = ["quantumsim.dll", "libquantumsim.dll"]
+else:
+    _lib_names = ["libquantumsim.so", "libquantumsim.dylib"]
 
-if not _lib_path.exists():
-    # Try alternative locations
-    alt_paths = [
-        Path(__file__).parent.parent.parent / "build" / _lib_name,
-        Path(__file__).parent.parent.parent / _lib_name,
-    ]
-    for alt_path in alt_paths:
-        if alt_path.exists():
-            _lib_path = alt_path
+# Search paths (checked in order). The top-level repo root is 4 parents up
+# from this file (bindings/python/moonlab/core.py -> repo root). Also try
+# ../build, which is where a local CMake build drops the dylib.
+_repo_root = Path(__file__).parent.parent.parent.parent
+_search_paths = [
+    _repo_root,
+    _repo_root / "build",
+    Path(__file__).parent.parent.parent / "build",
+    Path(__file__).parent.parent.parent,
+]
+
+_lib_path = None
+for _dir in _search_paths:
+    for _name in _lib_names:
+        _candidate = _dir / _name
+        if _candidate.exists():
+            _lib_path = _candidate
             break
-    
-    if not _lib_path.exists():
-        raise ImportError(f"Cannot find {_lib_name}. Build the C library first: make")
+    if _lib_path is not None:
+        break
+
+if _lib_path is None:
+    _tried = ", ".join(f"{d}/<{'|'.join(_lib_names)}>" for d in _search_paths)
+    raise ImportError(
+        f"Cannot find Moonlab shared library on {sys.platform}. "
+        f"Build the C library first (e.g. 'cmake -B build && cmake --build build') "
+        f"or set the library path. Tried: {_tried}"
+    )
 
 # Load C library
 _lib = ctypes.CDLL(str(_lib_path))

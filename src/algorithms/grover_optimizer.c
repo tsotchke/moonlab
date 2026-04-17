@@ -242,7 +242,7 @@ uint64_t grover_search_optimized(quantum_state_t* state,
     quantum_state_init_zero(state);
 
     // Apply H to all qubits
-    for (int q = 0; q < state->num_qubits; q++) {
+    for (int q = 0; q < (int)state->num_qubits; q++) {
         gate_hadamard(state, q);
     }
 
@@ -286,7 +286,7 @@ uint64_t grover_search_with_oracle(quantum_state_t* state,
 
     // Initialize
     quantum_state_init_zero(state);
-    for (int q = 0; q < state->num_qubits; q++) {
+    for (int q = 0; q < (int)state->num_qubits; q++) {
         gate_hadamard(state, q);
     }
 
@@ -535,17 +535,15 @@ void grover_partial_search(quantum_state_t* state,
         // For each configuration of non-search qubits, apply diffusion within that subspace
         uint64_t search_dim = 1ULL << num_search;
         uint64_t other_dim = state->state_dim >> num_search;
-
-        // Create inverse mask for non-search qubits
-        uint64_t other_mask = ~search_mask & ((1ULL << state->num_qubits) - 1);
+        (void)search_mask;  /* non-search bitmask previously materialised
+                               here was unused by the loop body below. */
 
         // For each configuration of non-search qubits
         for (uint64_t other_config = 0; other_config < other_dim; other_config++) {
             // Map other_config to actual bit positions
             uint64_t base_idx = 0;
             uint64_t temp_config = other_config;
-            int other_bit = 0;
-            for (int q = 0; q < state->num_qubits; q++) {
+            for (int q = 0; q < (int)state->num_qubits; q++) {
                 if (!(search_mask & (1ULL << q))) {
                     // This is a non-search qubit
                     if (temp_config & 1) {

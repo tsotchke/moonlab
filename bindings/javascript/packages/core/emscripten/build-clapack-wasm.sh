@@ -35,33 +35,59 @@ if [ -z "${SRC_DIR}" ]; then
   exit 1
 fi
 
+# Portable in-place sed: GNU `sed -i` and BSD `sed -i ''` take different
+# arguments. Detect and branch so the script works on macOS as well.
+if sed --version >/dev/null 2>&1; then
+  SED_INPLACE=(sed -i)
+else
+  SED_INPLACE=(sed -i '')
+fi
+
 # Patch missing stdio include in xerbla.c (needed for emcc/clang)
 XERBLA_C="${SRC_DIR}/BLAS/SRC/xerbla.c"
 if [ -f "${XERBLA_C}" ] && ! grep -q "stdio.h" "${XERBLA_C}"; then
   echo "==> Patching xerbla.c to include stdio.h"
-  sed -i '1i #include <stdio.h>' "${XERBLA_C}"
+  # BSD sed lacks `1i` so insert via a small temp-file step that works
+  # on both GNU and BSD implementations.
+  {
+    echo "#include <stdio.h>"
+    cat "${XERBLA_C}"
+  } > "${XERBLA_C}.tmp"
+  mv "${XERBLA_C}.tmp" "${XERBLA_C}"
 fi
 
 # Disable CLAPACK test builds (they fail under wasm-ld due to duplicate symbols)
 ROOT_CMAKE="${SRC_DIR}/CMakeLists.txt"
 BLAS_CMAKE="${SRC_DIR}/BLAS/CMakeLists.txt"
 if [ -f "${ROOT_CMAKE}" ]; then
-  sed -i 's/^add_subdirectory(TESTING)/# add_subdirectory(TESTING)/' "${ROOT_CMAKE}"
-  sed -i 's/^enable_testing()/# enable_testing()/' "${ROOT_CMAKE}"
+  "${SED_INPLACE[@]}" 's/^add_subdirectory(TESTING)/# add_subdirectory(TESTING)/' "${ROOT_CMAKE}"
+  "${SED_INPLACE[@]}" 's/^enable_testing()/# enable_testing()/' "${ROOT_CMAKE}"
 fi
 if [ -f "${BLAS_CMAKE}" ]; then
-  sed -i 's/^add_subdirectory(TESTING)/# add_subdirectory(TESTING)/' "${BLAS_CMAKE}"
+  "${SED_INPLACE[@]}" 's/^add_subdirectory(TESTING)/# add_subdirectory(TESTING)/' "${BLAS_CMAKE}"
 fi
 
 BUILD_DIR="${DEPS_DIR}/build"
 echo "==> Configuring with emcmake"
+# CLAPACK 3.2.1 still uses a pre-3.5 `cmake_minimum_required`; modern CMake
+# refuses that outright. `CMAKE_POLICY_VERSION_MINIMUM=3.5` opts in to
+# compatibility behaviour without modifying vendored sources.
 emcmake cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_SHARED_LIBS=OFF \
-  -DBUILD_TESTING=OFF
+  -DBUILD_TESTING=OFF \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 echo "==> Building"
-emmake make -C "${BUILD_DIR}" -j"$(nproc)"
+# macOS (BSD) does not ship `nproc`; fall back to sysctl or single-job.
+if command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+elif command -v sysctl >/dev/null 2>&1; then
+  JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 1)"
+else
+  JOBS=1
+fi
+emmake make -C "${BUILD_DIR}" -j"${JOBS}"
 
 echo "==> Staging libs/headers"
 LIB_DIR="${DEPS_DIR}/lib"

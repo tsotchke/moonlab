@@ -432,6 +432,25 @@ mpi_bridge_error_t mpi_recv(distributed_ctx_t* ctx,
     return MPI_BRIDGE_SUCCESS;
 }
 
+mpi_bridge_error_t mpi_sendrecv(distributed_ctx_t* ctx,
+                                const void* send_data, size_t send_count,
+                                int dest,
+                                void* recv_data, size_t recv_count,
+                                int source) {
+    if (!ctx || !send_data || !recv_data) return MPI_BRIDGE_ERROR_INIT;
+    if (send_count > INT32_MAX || recv_count > INT32_MAX) {
+        /* MPI_Sendrecv takes int counts. Very large buffers would need
+         * a chunked loop analogous to mpi_send/mpi_recv above; reject
+         * explicitly rather than silently truncate. */
+        return MPI_BRIDGE_ERROR_COMM;
+    }
+    const int tag = 0;
+    int err = MPI_Sendrecv(send_data, (int)send_count, MPI_BYTE, dest, tag,
+                           recv_data, (int)recv_count, MPI_BYTE, source, tag,
+                           *(MPI_Comm*)ctx->mpi_comm, MPI_STATUS_IGNORE);
+    return (err == MPI_SUCCESS) ? MPI_BRIDGE_SUCCESS : MPI_BRIDGE_ERROR_COMM;
+}
+
 mpi_bridge_error_t mpi_allreduce_max_uint64(distributed_ctx_t* ctx,
                                              const uint64_t* send_data,
                                              uint64_t* recv_data,
@@ -649,6 +668,16 @@ mpi_bridge_error_t mpi_recv(distributed_ctx_t* ctx,
                             void* data, size_t count,
                             int source, int tag) {
     (void)ctx; (void)data; (void)count; (void)source; (void)tag;
+    return MPI_BRIDGE_ERROR_NOT_SUPPORTED;
+}
+
+mpi_bridge_error_t mpi_sendrecv(distributed_ctx_t* ctx,
+                                const void* send_data, size_t send_count,
+                                int dest,
+                                void* recv_data, size_t recv_count,
+                                int source) {
+    (void)ctx; (void)send_data; (void)send_count; (void)dest;
+    (void)recv_data; (void)recv_count; (void)source;
     return MPI_BRIDGE_ERROR_NOT_SUPPORTED;
 }
 

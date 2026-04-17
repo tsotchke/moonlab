@@ -29,8 +29,7 @@ static inline void givens_rotation(
     complex_t app = matrix[p * n + p];
     complex_t aqq = matrix[q * n + q];
     complex_t apq = matrix[p * n + q];
-    
-    double theta;
+
     if (fabs(creal(apq)) < SMALL_NUMBER && fabs(cimag(apq)) < SMALL_NUMBER) {
         *c = 1.0;
         *s = 0.0;

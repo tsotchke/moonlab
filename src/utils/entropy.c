@@ -558,7 +558,6 @@ double entropy_estimate(const uint8_t* data, size_t size) {
 
     // Calculate Shannon entropy
     double entropy = 0.0;
-    double log2_size = log2((double)size);
 
     for (int i = 0; i < 256; i++) {
         if (counts[i] > 0) {

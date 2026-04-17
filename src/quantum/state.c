@@ -379,27 +379,19 @@ qs_error_t quantum_state_partial_trace(
     size_t dim_kept = 1ULL << num_kept;
     size_t dim_traced = 1ULL << num_traced;
     
-    // Create mask for kept qubits
-    uint64_t kept_mask = 0;
-    uint64_t traced_mask = 0;
-    
-    // Build masks
+    /* Build is_traced[] — the per-qubit flag the loops below actually use.
+     * (Historical versions of this function also built kept_mask and
+     * traced_mask as u64 bitmasks, but neither was read anywhere; they
+     * have been removed.) */
     int *is_traced = (int *)calloc(state->num_qubits, sizeof(int));
     if (!is_traced) return QS_ERROR_OUT_OF_MEMORY;
-    
+
     for (size_t i = 0; i < num_traced; i++) {
         if (qubits_to_trace[i] < 0 || qubits_to_trace[i] >= (int)state->num_qubits) {
             free(is_traced);
             return QS_ERROR_INVALID_QUBIT;
         }
         is_traced[qubits_to_trace[i]] = 1;
-        traced_mask |= (1ULL << qubits_to_trace[i]);
-    }
-    
-    for (size_t i = 0; i < state->num_qubits; i++) {
-        if (!is_traced[i]) {
-            kept_mask |= (1ULL << i);
-        }
     }
     
     // Initialize reduced density matrix to zero
