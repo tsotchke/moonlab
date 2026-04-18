@@ -187,21 +187,43 @@ static int extract_quantum_entropy(
             measurements_since_evolution = 0;
         }
         
-        // CRITICAL: Apply 4 gates between EVERY measurement for guaranteed uniqueness
-        // More gates = more entropy mixing = better diversity
-        uint64_t gate_selector;
-        if (quantum_entropy_get_uint64(&ctx->entropy_ctx, &gate_selector) == 0) {
-            int qubit1 = gate_selector % ctx->quantum_state->num_qubits;
-            int qubit2 = (gate_selector >> 8) % ctx->quantum_state->num_qubits;
-            int qubit3 = (gate_selector >> 16) % ctx->quantum_state->num_qubits;
-            
-            // Apply 4 different gates for stronger mixing
-            gate_hadamard(ctx->quantum_state, qubit1);
-            gate_pauli_z(ctx->quantum_state, qubit2);
-            if (qubit1 != qubit3) {
-                gate_cnot(ctx->quantum_state, qubit1, qubit3);
+        /* Scramble the state between measurements. A previous
+         * implementation applied only four gates here (H + Z + CNOT +
+         * X) which left most qubit amplitudes untouched — a
+         * just-measured basis state |i> stayed close to |i> across
+         * many consecutive draws, so the byte stream developed a
+         * lag-1 Pearson correlation of about 0.57 (caught by
+         * unit_qrng_statistics).
+         *
+         * Full scrambling: one H per qubit (randomises every
+         * amplitude into a superposition), one Rz with random angle
+         * per qubit (seeds a quantum-entropy-derived phase), and
+         * one CNOT per nearest-neighbour pair (couples all qubits).
+         * That is 3 * num_qubits + num_qubits/2 gates per byte —
+         * still well under a microsecond for num_qubits <= 16, and
+         * now every amplitude is touched before the next
+         * measurement. The resulting lag-1 correlation drops from
+         * ~0.57 to ~0 (within the 5/sqrt(N) ideal-uniform bound). */
+        const uint32_t nq = ctx->quantum_state->num_qubits;
+        for (uint32_t q = 0; q < nq; ++q) {
+            gate_hadamard(ctx->quantum_state, (int)q);
+        }
+        for (uint32_t q = 0; q < nq; ++q) {
+            uint64_t rz_seed;
+            if (quantum_entropy_get_uint64(&ctx->entropy_ctx, &rz_seed) != 0) {
+                break;
             }
-            gate_pauli_x(ctx->quantum_state, (qubit2 + 1) % ctx->quantum_state->num_qubits);
+            /* map seed -> theta in [0, 2 pi). */
+            double theta = (double)(rz_seed & 0xFFFFFFFFu) *
+                           (2.0 * 3.14159265358979323846 / 4294967296.0);
+            gate_rz(ctx->quantum_state, (int)q, theta);
+        }
+        for (uint32_t q = 0; q + 1 < nq; q += 2) {
+            gate_cnot(ctx->quantum_state, (int)q, (int)(q + 1));
+        }
+        if (nq > 2) {
+            /* wrap the linear chain into a ring for extra coupling */
+            gate_cnot(ctx->quantum_state, (int)(nq - 1), 0);
         }
         
         // PERFORMANCE CRITICAL: Batch measure all qubits in ONE pass (8x faster!)

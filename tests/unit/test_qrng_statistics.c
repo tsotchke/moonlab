@@ -99,17 +99,15 @@ static void test_serial_correlation(const uint8_t *buf, size_t n) {
     /* Pearson lag-1 correlation. For an ideal uniform source the
      * magnitude should be O(1/sqrt(N)) -- about 0.002 for N=256 KiB.
      *
-     * HOWEVER: the current qrng_v3 output pipeline has a known
-     * lag-1 correlation around rho_1 ~ 0.57 (reproducible across
-     * runs). This is a real quality issue that is scheduled for
-     * investigation in Phase 1F "QRNG hardening" -- the root cause
-     * is suspected to be state leakage between consecutive
-     * byte-extraction measurements. Until the pipeline is
-     * rewritten, this test asserts only that the correlation does
-     * not regress further (|rho_1| < 0.7). A catastrophic break
-     * (nearly-equal consecutive bytes) would push rho_1 close to
-     * 1.0 and fail loudly.
-     */
+     * Historical note: an earlier implementation applied only 4
+     * mixing gates between consecutive byte extractions, which left
+     * the quantum state close to the previous measurement outcome
+     * and produced a visible lag-1 correlation of rho_1 ~ 0.57
+     * (repeatable across runs). That was fixed in qrng.c's
+     * extract_quantum_entropy by scrambling the full register
+     * (one H per qubit + one random Rz + a CNOT ring) between
+     * every measurement. rho_1 now falls below the 5/sqrt(N)
+     * ideal-uniform threshold on the default N = 256 KiB. */
     double mean = 0.0;
     for (size_t i = 0; i < n; ++i) mean += (double)buf[i];
     mean /= (double)n;
@@ -122,17 +120,11 @@ static void test_serial_correlation(const uint8_t *buf, size_t n) {
         den += a * a;
     }
     double rho = (den > 0.0) ? num / den : 0.0;
-    const double ideal_tol = 5.0 / sqrt((double)n);
-    fprintf(stdout, "    mean = %.3f   rho_1 = %.6f   ideal-tol = %.6f\n",
-            mean, rho, ideal_tol);
-    if (fabs(rho) > ideal_tol) {
-        fprintf(stdout,
-                "    NOTE: |rho_1| exceeds the ideal-uniform bound — "
-                "this is a known QRNG-pipeline gap tracked for Phase 1F.\n");
-    }
-    CHECK(fabs(rho) < 0.7,
-          "|rho_1| = %.3e is below the catastrophic-regression bound 0.7",
-          fabs(rho));
+    const double tol = 5.0 / sqrt((double)n);
+    fprintf(stdout, "    mean = %.3f   rho_1 = %.6f   tol = %.6f\n",
+            mean, rho, tol);
+    CHECK(fabs(rho) < tol,
+          "|rho_1| = %.3e is within 5/sqrt(N) = %.3e", fabs(rho), tol);
 }
 
 static void test_zero_size_call(void) {
