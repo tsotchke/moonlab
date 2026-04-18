@@ -926,6 +926,11 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_lattice_2d PRIVATE quantumsim)
     add_test(NAME unit_lattice_2d COMMAND test_lattice_2d)
 
+    # Skyrmion braid path generators.
+    add_executable(test_skyrmion tests/unit/test_skyrmion.c)
+    target_link_libraries(test_skyrmion PRIVATE quantumsim)
+    add_test(NAME unit_skyrmion COMMAND test_skyrmion)
+
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
     find_program(PYTHON3_EXECUTABLE python3)
