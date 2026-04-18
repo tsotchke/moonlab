@@ -3,7 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>
 #include <stdio.h>
+
+/* The library is compiled with -ffast-math, under which the C99
+ * INFINITY macro is technically undefined behaviour (the optimizer
+ * assumes no infinities). Use DBL_MAX as the "failed energy"
+ * sentinel instead — finite, very large, and immune to fast-math
+ * folding. Callers compare against DBL_MAX with `>=` to detect
+ * the error state. */
+#define VQE_ENERGY_ERROR DBL_MAX
 
 /**
  * @file vqe.c
@@ -855,13 +864,13 @@ double vqe_compute_energy(
     const double *parameters
 ) {
     if (!solver || !parameters) {
-        return INFINITY;
+        return VQE_ENERGY_ERROR;
     }
     
     // Create quantum state
     quantum_state_t state;
     if (quantum_state_init(&state, solver->hamiltonian->num_qubits) != QS_SUCCESS) {
-        return INFINITY;
+        return VQE_ENERGY_ERROR;
     }
     
     // Update ansatz parameters
@@ -880,7 +889,7 @@ double vqe_compute_energy(
 
     if (apply_result != QS_SUCCESS) {
         quantum_state_free(&state);
-        return INFINITY;
+        return VQE_ENERGY_ERROR;
     }
     
     // Compute energy expectation: E = ⟨ψ|H|ψ⟩ = Σᵢ cᵢ⟨Pᵢ⟩
@@ -915,7 +924,7 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
     
     if (!solver) {
         result.converged = 0;
-        result.ground_state_energy = INFINITY;
+        result.ground_state_energy = VQE_ENERGY_ERROR;
         return result;
     }
     
@@ -923,15 +932,15 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
     result.num_parameters = solver->ansatz->num_parameters;
     result.optimal_parameters = malloc(result.num_parameters * sizeof(double));
     if (!result.optimal_parameters) {
-        result.ground_state_energy = INFINITY;
+        result.ground_state_energy = VQE_ENERGY_ERROR;
         return result;
     }
     
     memcpy(result.optimal_parameters, solver->ansatz->parameters,
            result.num_parameters * sizeof(double));
     
-    double best_energy = INFINITY;
-    double prev_energy = INFINITY;
+    double best_energy = VQE_ENERGY_ERROR;
+    double prev_energy = VQE_ENERGY_ERROR;
     double *gradient = malloc(result.num_parameters * sizeof(double));
     
     // ADAM optimizer state (if using ADAM)
