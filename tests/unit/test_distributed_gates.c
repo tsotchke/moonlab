@@ -134,6 +134,70 @@ int main(int argc, char** argv) {
 
             partition_state_free(pstate);
         }
+
+        /* SWAP test: put |1> on partition qubit via X, SWAP across to
+         * local qubit 0, verify the excitation moved. */
+        pstate = partition_state_create(ctx, num_qubits, NULL);
+        if (pstate) {
+            partition_init_zero(pstate);
+            dist_gate_error_t g =
+                dist_pauli_x(pstate, num_qubits - 1);
+            CHECK(g == DIST_GATE_SUCCESS,
+                  "dist_pauli_x on partition qubit");
+            g = dist_swap(pstate, 0, num_qubits - 1);
+            CHECK(g == DIST_GATE_SUCCESS,
+                  "dist_swap(0, %u) across partition (err=%d)",
+                  num_qubits - 1, g);
+
+            /* After X then SWAP, the |1> should sit on qubit 0, so the
+             * global amplitude that is non-zero is at index 1 (bit 0
+             * set). That index lives on rank 0. */
+            double local_sq = 0.0;
+            for (uint64_t i = 0; i < pstate->local_count; i++) {
+                double m = cabs(pstate->amplitudes[i]);
+                local_sq += m * m;
+            }
+            double global_sq = 0.0;
+            mpi_allreduce_sum_double(ctx, &local_sq, &global_sq, 1);
+            CHECK(fabs(global_sq - 1.0) < 1e-10,
+                  "norm^2 after X+SWAP = %.10f", global_sq);
+
+            if (rank == 0) {
+                /* amp[1] should be 1.0 (|0...01>). */
+                double a = cabs(pstate->amplitudes[1]);
+                CHECK(fabs(a * a - 1.0) < 1e-10,
+                      "P(|0...01>) = %.10f (expected 1.0)", a * a);
+            }
+            partition_state_free(pstate);
+        }
+
+        /* Toffoli test: prepare |1>|1>|0> via two X gates then apply
+         * Toffoli across the partition; target bit should flip. Only
+         * exercised for size >= 4 so we get 3 qubits + partition bits. */
+        if (size >= 4 && num_qubits >= 3) {
+            pstate = partition_state_create(ctx, num_qubits, NULL);
+            if (pstate) {
+                partition_init_zero(pstate);
+                dist_pauli_x(pstate, 0);
+                dist_pauli_x(pstate, 1);
+                dist_gate_error_t g =
+                    dist_toffoli(pstate, 0, 1, num_qubits - 1);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "dist_toffoli(0,1,%u) across partition (err=%d)",
+                      num_qubits - 1, g);
+
+                double local_sq = 0.0;
+                for (uint64_t i = 0; i < pstate->local_count; i++) {
+                    double m = cabs(pstate->amplitudes[i]);
+                    local_sq += m * m;
+                }
+                double global_sq = 0.0;
+                mpi_allreduce_sum_double(ctx, &local_sq, &global_sq, 1);
+                CHECK(fabs(global_sq - 1.0) < 1e-10,
+                      "norm^2 after Toffoli = %.10f", global_sq);
+                partition_state_free(pstate);
+            }
+        }
     }
 
     /* Rank 0 aggregates failure count across all ranks. */

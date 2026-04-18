@@ -351,6 +351,16 @@ qrng_v3_error_t qrng_v3_init_with_config(
     
     // Copy configuration
     memcpy(&ctx->config, config, sizeof(qrng_v3_config_t));
+
+    // Force Bell monitoring on when the user asks for BELL_VERIFIED mode —
+    // otherwise the mode name is a lie: it would be indistinguishable
+    // from DIRECT. Use a 64 KiB default interval if none was set.
+    if (ctx->config.mode == QRNG_V3_MODE_BELL_VERIFIED) {
+        ctx->config.enable_bell_monitoring = 1;
+        if (ctx->config.bell_test_interval == 0) {
+            ctx->config.bell_test_interval = 64 * 1024;
+        }
+    }
     
     // LAYER 1: Initialize hardware entropy pool (base layer)
     entropy_pool_config_t pool_config = {

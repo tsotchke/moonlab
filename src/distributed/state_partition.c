@@ -20,8 +20,8 @@
 #define HAVE_POSIX_MEMALIGN 1
 #endif
 
-// SIMD alignment (64 bytes for AVX-512)
-#define SIMD_ALIGNMENT 64
+#include "../optimization/memory_align.h"
+#define SIMD_ALIGNMENT ((size_t)SIMD_DEFAULT_ALIGNMENT)
 
 // ============================================================================
 // HELPER FUNCTIONS

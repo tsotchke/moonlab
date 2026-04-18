@@ -627,3 +627,11 @@ mod algorithms {
         assert!(z1.abs() < 1e-10);
     }
 }
+
+#[test]
+fn clone_then_drop_both_is_safe() {
+    let a = QuantumState::new(4).unwrap();
+    let b = a.clone();
+    drop(a);
+    drop(b);
+}

@@ -280,11 +280,12 @@ void qrng_get_stats(const qrng_context_t* ctx, qrng_stats_t* stats);
 int qrng_validate(const uint8_t* data, size_t size, qrng_stats_t* stats);
 
 /**
- * @brief Run comprehensive NIST SP 800-22 tests
+ * @brief Run a small subset of NIST SP 800-22 tests (monobit, runs,
+ *        poker — 3 of the full 15). NOT a full SP 800-22 validation.
  *
  * @param ctx QRNG context
  * @param num_bits Number of bits to test
- * @return Number of tests passed (out of 15)
+ * @return Number of tests passed (out of 3)
  */
 int qrng_nist_tests(qrng_context_t* ctx, size_t num_bits);
 
