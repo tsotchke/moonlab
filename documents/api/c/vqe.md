@@ -174,7 +174,8 @@ Ansatz types for trial state preparation.
 typedef enum {
     VQE_ANSATZ_HARDWARE_EFFICIENT,  // Hardware-efficient ansatz
     VQE_ANSATZ_UCCSD,               // Unitary Coupled Cluster (chemistry)
-    VQE_ANSATZ_CUSTOM               // User-defined ansatz
+    VQE_ANSATZ_CUSTOM,              // User-defined ansatz
+    VQE_ANSATZ_SYMMETRY_PRESERVING  // Particle-conserving Givens rotations
 } vqe_ansatz_type_t;
 ```
 
@@ -243,6 +244,62 @@ $$|\psi(\theta)\rangle = e^{T(\theta) - T^\dagger(\theta)} |HF\rangle$$
 where $T = T_1 + T_2$ includes single and double excitations.
 
 **Advantage**: Provides chemical accuracy for molecular systems
+
+### vqe_create_symmetry_preserving_ansatz
+
+Create a particle-conserving ansatz built from Givens rotations. Works
+in a fixed-occupation sector of the Jordan-Wigner Hilbert space and is
+the right choice for small-molecule chemistry where the ground state
+lives in a single electron-count sector.
+
+```c
+vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
+    size_t num_qubits,
+    size_t num_occupied,
+    size_t num_layers
+);
+```
+
+**Parameters**:
+- `num_qubits`: Number of spin-orbitals (= qubits)
+- `num_occupied`: Number of occupied orbitals in the reference state
+- `num_layers`: Number of Givens-rotation layers
+
+**Parameter Count**: `num_layers * num_occupied * (num_qubits - num_occupied)`
+
+**Circuit**: One Givens rotation per (occupied, virtual) qubit pair per
+layer:
+```
+for each (o, v) pair:
+  CNOT(q_v, q_o) · CRY(θ; control=q_o, target=q_v) · CNOT(q_v, q_o)
+```
+This rotates the two-qubit {|10⟩, |01⟩} subspace while leaving |00⟩ and
+|11⟩ untouched, preserving the total electron count.
+
+**When to use**:
+- Small-molecule VQE where the ground state has a fixed electron count
+  (e.g. tapered 2-qubit H₂, 4-qubit LiH).
+- Paired with `vqe_create_h2_hamiltonian` and `VQE_OPTIMIZER_COBYLA`
+  recovers H₂ chemical accuracy (<0.1 kcal/mol) across bond distances
+  from 0.5 to 2.0 Å.
+
+**Pre-condition**: The Hamiltonian's `hf_reference` bitmask must be
+set so `vqe_compute_energy` initialises the state to the correct
+Hartree-Fock reference configuration before the ansatz runs. All of
+`vqe_create_h2_hamiltonian`, `vqe_create_lih_hamiltonian` and
+`vqe_create_h2o_hamiltonian` set this field automatically.
+
+### vqe_exact_ground_state_energy
+
+Direct diagonalisation of the Pauli Hamiltonian's full 2^n × 2^n
+matrix via shifted power iteration. Returns the ground-state energy
+plus nuclear repulsion. Intended as a reference oracle for VQE
+convergence testing; complexity O(4^n) time, O(4^n) memory — safe for
+n ≤ 10 on commodity hosts.
+
+```c
+double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *H);
+```
 
 ### vqe_ansatz_free
 

@@ -178,6 +178,36 @@ static void test_norm_after_every_channel(void) {
     }
 }
 
+/* For ε(ρ) = (1-p)ρ + (p/3)(XρX+YρY+ZρZ) the completely-depolarizing
+ * point is p = 3/4: ε(ρ) = I/2 for any ρ. Starting from |0>, shot-
+ * averaged ensemble must give <Z> → 0 and P(|1>) → 0.5. */
+static void test_depolarizing_fully_mixes_to_I2(void) {
+    fprintf(stdout, "\n-- depolarizing(p=3/4) shot-average converges to I/2 --\n");
+    const int shots = 20000;
+    double sum_p1 = 0.0, sum_z = 0.0;
+    uint64_t rng = 0xC0FFEEu;
+    for (int s = 0; s < shots; s++) {
+        rng = rng * 6364136223846793005ULL + 1442695040888963407ULL;
+        double rv = (double)(rng >> 11) / (double)(1ULL << 53);
+        quantum_state_t q;
+        quantum_state_init(&q, 1);
+        noise_depolarizing_single(&q, 0, 0.75, rv);
+        double p1 = measurement_probability_one(&q, 0);
+        sum_p1 += p1;
+        sum_z  += 1.0 - 2.0 * p1;
+        quantum_state_free(&q);
+    }
+    double p1_avg = sum_p1 / shots;
+    double z_avg  = sum_z  / shots;
+    fprintf(stdout,
+            "    shots=%d  P(|1>)_avg = %.4f  <Z>_avg = %.4f\n",
+            shots, p1_avg, z_avg);
+    CHECK(fabs(p1_avg - 0.5) < 0.03,
+          "P(|1>)_avg = %.4f (expected 0.5 ± 0.03)", p1_avg);
+    CHECK(fabs(z_avg) < 0.03,
+          "<Z>_avg = %.4f (expected 0.0 ± 0.03)", z_avg);
+}
+
 /* Kraus-completeness: Σ K†K = I within float tolerance for every
  * single-qubit channel and parameter value. */
 static void test_kraus_completeness(void) {
@@ -213,6 +243,7 @@ int main(void) {
     test_amplitude_damping_preserves_norm();
     test_pure_dephasing_populations();
     test_norm_after_every_channel();
+    test_depolarizing_fully_mixes_to_I2();
     test_kraus_completeness();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");

@@ -5,6 +5,95 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Features
+
+- **VQE symmetry-preserving ansatz** (`VQE_ANSATZ_SYMMETRY_PRESERVING`).
+  Particle-conserving Givens rotations; paired with
+  `vqe_create_h2_hamiltonian` and `VQE_OPTIMIZER_COBYLA` now reaches
+  chemical accuracy (<0.1 kcal/mol) on H₂ across bond distances 0.5 –
+  2.0 Å.
+- **VQE exact ground-state reference**. New
+  `vqe_exact_ground_state_energy` builds the full Pauli Hamiltonian
+  matrix and returns the lowest eigenvalue via shifted power iteration.
+  Used by `vqe_h2_molecule` to compare against the Hamiltonian's real
+  FCI (not a literature constant that didn't match).
+- **`pauli_hamiltonian_t::hf_reference`** field: Hartree-Fock bitmask
+  used by `vqe_compute_energy` to prepare the reference state before
+  the ansatz runs. Preset for H₂, LiH and H₂O factories.
+- **Kraus-completeness validator**. `noise_kraus_completeness_deviation`
+  returns `max |Σ K†K − I|` element-wise for every single-qubit channel.
+  Test matrix (6 channels × 5 p values) passes at ≤ 2.2×10⁻¹⁶.
+- **QRNG**: `QRNG_V3_MODE_BELL_VERIFIED` now force-enables continuous
+  Bell monitoring (previously indistinguishable from `DIRECT`).
+
+### Fixes
+
+- **QPE bit-ordering**. `qpe_bitstring_to_phase` now uses the correct
+  `y / 2^m` mapping and the IQFT path emits a trailing bit-reversal
+  swap. T-gate test recovers φ = 1/8 exactly (confidence 1.0000).
+- **MPI distributed state vector**. `partition_state_{create,wrap}`
+  read a range from the MPI bridge that was never populated, so every
+  rank allocated a zero-size buffer. Now computed from
+  `total_amplitudes / size`. Cross-partition H + CNOT + SWAP +
+  Toffoli verified on `np=4`.
+- **H₂O Pauli Hamiltonian**. 23 malformed strings (wrong length or
+  embedded spaces) were silently dropped by `pauli_hamiltonian_add_term`.
+  Fixed; H₂O now populates all 38 declared terms.
+- **QAOA approximation ratio**. `qaoa_result_t::approximation_ratio`
+  was never written (always 0). `qaoa_solve` now brute-force enumerates
+  the Ising spectrum (n ≤ 20) and fills it in.
+- **VQE COBYLA optimizer**. Inner `simplex[i]` malloc had no NULL
+  check; bailed to a segfaulting memcpy on OOM. Now guarded.
+- **SIMD dispatch actually reaches gates**. `gate_pauli_x`,
+  `gate_pauli_y` and `gate_cnot` now call `simd_complex_swap` /
+  `simd_multiply_by_i`. Measured CNOT at n=20: 678 → 214 µs/gate
+  (3.17×).
+- **`make install` headers were uninstallable**. Relative includes
+  into `tools/profiler/` pointed outside the install tree; moved
+  `performance_monitor.{c,h}` into `src/utils/` so the header graph
+  closes.
+- **libomp hardcoded `/opt/homebrew/opt/libomp/lib/libomp.dylib`**
+  dependency. `install_name_tool` post-build rewrites it to
+  `@rpath/libomp.dylib`; target carries `@loader_path/../lib` +
+  Homebrew prefixes as rpath entries.
+- **Rust `cargo test` / `cargo build` required `DYLD_LIBRARY_PATH`**.
+  `build.rs` on the `moonlab` and `moonlab-tui` crates now emits
+  `-Wl,-rpath,<lib_dir>`.
+- **JS `Complex.conjugate({real:r, imag:0})`** returned `imag:-0`.
+  Normalised to `+0`. `Circuit.calculateDepth` now skips `measure`
+  gates (matches the docstring).
+- **Python `moonlab.algorithms`**: removed dead bindings to
+  non-existent C symbols; fixed use-after-free on re-solve
+  (`molecular_hamiltonian_free` called on a `pauli_hamiltonian_t*`);
+  `ml.py` now gates torch imports behind `try: import torch`.
+
+### Tests
+
+- Fibonacci anyon braiding: σ₁·σ₁⁻¹ = I verified exactly on a 4-tau
+  fusion tree (logical-qubit subspace, dim=2).
+- Grover multi-marked (k=3 on n=4): P(marked set) = 0.949 after one
+  optimal iteration.
+- Noisy VQE: depolarizing(p1=1e-3, p2=1e-2) runs to completion.
+- MPI cross-partition H+CNOT, X+SWAP, X+X+Toffoli on np=4.
+- Depolarizing(p=3/4) shot-averaged: 〈Z〉 → 0, P(|1⟩) → 0.5.
+- MBL level-spacing-ratio pipeline invokes exact diagonalisation and
+  `compute_level_statistics` end-to-end.
+
+### Documentation
+
+- `documents/api/c/vqe.md` documents the symmetry-preserving ansatz,
+  `hf_reference` pre-condition, and `vqe_exact_ground_state_energy`.
+- `src/quantum/state.h` and `src/distributed/mpi_bridge.h` carry
+  `@thread-safety` annotations (neither is thread-safe; QRNG is the
+  only documented thread-safe API).
+- README retired unsubstantiated GPU/MPI speedup tables in favour of
+  measured numbers from `bench_state_operations` and the rewritten
+  `phase3_phase4_benchmark`.
+- `qrng_nist_tests` docstring corrected: runs 3 of the 15 SP 800-22
+  tests (monobit, runs, poker), not the full battery.
+
 ## [0.1.2] - 2026-04-17
 
 Stability pin. Commits a set of build-rot fixes that have been shipping as

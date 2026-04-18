@@ -179,6 +179,20 @@ _lib.quantum_measure_all_fast.restype = ctypes.c_uint64
 _lib.quantum_state_get_probability.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_uint64]
 _lib.quantum_state_get_probability.restype = ctypes.c_double
 
+# Entanglement metrics
+_lib.entanglement_entropy_bipartition.argtypes = [
+    ctypes.POINTER(CQuantumState),
+    ctypes.POINTER(ctypes.c_int),
+    ctypes.c_int,
+]
+_lib.entanglement_entropy_bipartition.restype = ctypes.c_double
+
+_lib.entanglement_concurrence_2qubit.argtypes = [ctypes.POINTER(CQuantumState)]
+_lib.entanglement_concurrence_2qubit.restype = ctypes.c_double
+
+_lib.entanglement_negativity_2qubit.argtypes = [ctypes.POINTER(CQuantumState)]
+_lib.entanglement_negativity_2qubit.restype = ctypes.c_double
+
 # ============================================================================
 # PYTHON EXCEPTION
 # ============================================================================
@@ -469,6 +483,28 @@ class QuantumState:
                 self._state.amplitudes[i].imag = 0.0
 
         return int(outcome)
+
+    def entanglement_entropy(self, subsystem_qubits) -> float:
+        """Von Neumann entropy of the reduced density matrix on the given
+        subsystem. subsystem_qubits is an iterable of qubit indices."""
+        qubits = list(subsystem_qubits)
+        arr = (ctypes.c_int * len(qubits))(*qubits)
+        return float(_lib.entanglement_entropy_bipartition(
+            ctypes.byref(self._state), arr, len(qubits)))
+
+    def concurrence(self) -> float:
+        """2-qubit pure-state concurrence in [0, 1]. Raises for n != 2."""
+        if self.num_qubits != 2:
+            raise QuantumError("concurrence requires a 2-qubit state")
+        return float(_lib.entanglement_concurrence_2qubit(
+            ctypes.byref(self._state)))
+
+    def negativity(self) -> float:
+        """2-qubit pure-state negativity N = C/2 in [0, 1/2]."""
+        if self.num_qubits != 2:
+            raise QuantumError("negativity requires a 2-qubit state")
+        return float(_lib.entanglement_negativity_2qubit(
+            ctypes.byref(self._state)))
 
 
 # ============================================================================

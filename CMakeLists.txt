@@ -528,6 +528,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/hardware_entropy.c
     src/applications/qrng.c
     src/applications/moonlab_qrng_export.c
+    src/applications/nist_sp800_22.c
 )
 
 set(QSIM_PROFILER_SOURCES
@@ -1143,6 +1144,33 @@ if(QSIM_BUILD_EXAMPLES)
 
     add_executable(quantum_critical_point examples/tensor_network/quantum_critical_point.c)
     target_link_libraries(quantum_critical_point PRIVATE quantumsim)
+
+    # Execute a representative subset of examples under ctest so CI
+    # catches link-time success followed by runtime crashes. Heavy
+    # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
+    # are excluded — they're correct but multi-minute runs.
+    if(QSIM_BUILD_TESTS)
+        add_test(NAME example_vqe_h2_molecule
+                 COMMAND vqe_h2_molecule)
+        add_test(NAME example_qaoa_maxcut
+                 COMMAND qaoa_maxcut)
+        add_test(NAME example_grover_hash_collision
+                 COMMAND grover_hash_collision)
+        add_test(NAME example_quantum_spin_chain_small
+                 COMMAND quantum_spin_chain 8 3 16)
+        add_test(NAME example_phase3_phase4_benchmark
+                 COMMAND phase3_phase4_benchmark 16)
+        # quantum_critical_point is a multi-minute finite-size-scaling
+        # demo and is deliberately excluded from the CI smoke.
+        set_tests_properties(
+            example_vqe_h2_molecule
+            example_qaoa_maxcut
+            example_grover_hash_collision
+            example_quantum_spin_chain_small
+            example_phase3_phase4_benchmark
+            PROPERTIES TIMEOUT 120
+        )
+    endif()
 
     message(STATUS "Examples: Enabled")
 endif()

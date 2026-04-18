@@ -608,6 +608,11 @@ double entanglement_concurrence_2qubit(const quantum_state_t* state) {
     return 2.0 * cabs(det);
 }
 
+double entanglement_negativity_2qubit(const quantum_state_t* state) {
+    // For a 2-qubit pure state N(ρ) = C(ρ)/2.
+    return 0.5 * entanglement_concurrence_2qubit(state);
+}
+
 /**
  * @brief Compute concurrence from 2-qubit density matrix
  *

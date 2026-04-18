@@ -143,6 +143,39 @@ static void test_null_buf_nonzero_size(void) {
           "moonlab_qrng_bytes(NULL, 8) returns error (not 0)");
 }
 
+#include "../../src/applications/nist_sp800_22.h"
+
+static void test_sp800_22_subset(const uint8_t *buf, size_t size) {
+    fprintf(stdout, "\n-- SP 800-22 subset (fast tests only) --\n");
+    /* Unpack bytes into bits. */
+    size_t nbits = size * 8;
+    uint8_t *bits = malloc(nbits);
+    if (!bits) { fprintf(stderr, "  FAIL alloc\n"); failures++; return; }
+    for (size_t i = 0; i < size; i++)
+        for (int k = 0; k < 8; k++)
+            bits[i * 8 + k] = (uint8_t)((buf[i] >> (7 - k)) & 1);
+
+    /* Skip the expensive tests (DFT O(n^2), ≈1M-bit requirements).
+     * 256 KiB = 2 Mbits, plenty for the light tests. */
+    double p_mono = sp800_22_monobit(bits, nbits);
+    double p_blk  = sp800_22_block_frequency(bits, nbits, 128);
+    double p_runs = sp800_22_runs(bits, nbits);
+    double p_lr   = sp800_22_longest_run(bits, nbits);
+    double p_cf   = sp800_22_cusum_forward(bits, nbits);
+    double p_ser  = sp800_22_serial(bits, nbits, 5);
+    fprintf(stdout,
+            "    monobit p=%.4f  block-freq p=%.4f  runs p=%.4f\n"
+            "    longest-run p=%.4f  cusum-fwd p=%.4f  serial(m=5) p=%.4f\n",
+            p_mono, p_blk, p_runs, p_lr, p_cf, p_ser);
+    CHECK(p_mono  >= 0.01, "monobit p >= 0.01");
+    CHECK(p_blk   >= 0.01, "block-frequency p >= 0.01");
+    CHECK(p_runs  >= 0.01, "runs p >= 0.01");
+    CHECK(p_lr    >= 0.01, "longest-run p >= 0.01");
+    CHECK(p_cf    >= 0.01, "cusum-forward p >= 0.01");
+    CHECK(p_ser   >= 0.01, "serial p >= 0.01");
+    free(bits);
+}
+
 int main(void) {
     fprintf(stdout, "=== QRNG statistical quality tests ===\n");
 
@@ -161,6 +194,7 @@ int main(void) {
     test_byte_frequency_chi_squared(buf, QRNG_SAMPLE_BYTES);
     test_monobit_distribution(buf, QRNG_SAMPLE_BYTES);
     test_serial_correlation(buf, QRNG_SAMPLE_BYTES);
+    test_sp800_22_subset(buf, QRNG_SAMPLE_BYTES);
 
     free(buf);
     fprintf(stdout, "\n=== %d failure%s ===\n",
