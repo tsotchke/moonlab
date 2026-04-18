@@ -239,6 +239,7 @@ New tests added and wired into CTest:
   SKIPs when Metal unavailable.
 - `unit_lattice_2d` — square / triangular / honeycomb lattice
   construction and snake/grid mapping round-trip.
+- `unit_skyrmion` — `braid_path_circular` waypoint + total-time smoke.
 - `python_bindings_smoke` — Bell state built through the ctypes
   bridge and amplitudes verified against exact 1/sqrt(2).
 - `rust_bindings_smoke` — full `cargo test` on `bindings/rust/moonlab`
