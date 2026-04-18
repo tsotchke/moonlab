@@ -2,8 +2,8 @@
  * @file dmrg.c
  * @brief DMRG implementation for ground state preparation
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License
@@ -1855,7 +1855,8 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
     }
 
     // ============================================================
-    // SUBSPACE EXPANSION: Add noise to enable bond dimension growth
+    // NOISE PERTURBATION (not true subspace expansion): inject noise
+    // to encourage bond-dimension growth and escape local minima.
     // ============================================================
     // In two-site DMRG, the SVD can only produce bonds up to min(chi_l*d, d*chi_r).
     // Adding small noise before SVD allows exploration of new directions in

@@ -251,11 +251,11 @@ class TestTwoQubitGates:
         np.testing.assert_allclose(sv, expected, atol=1e-10)
 
     def test_swap(self, two_qubit_state):
-        """SWAP exchanges qubit states."""
-        two_qubit_state.x(0)  # |10>
-        two_qubit_state.swap(0, 1)  # -> |01>
+        """SWAP exchanges qubit states (little-endian basis indexing)."""
+        two_qubit_state.x(0)  # qubit 0 := 1 => state-vector index 1
+        two_qubit_state.swap(0, 1)  # qubit 1 := 1, qubit 0 := 0 => index 2
         sv = two_qubit_state.get_statevector()
-        expected = np.array([0, 1, 0, 0], dtype=complex)
+        expected = np.array([0, 0, 1, 0], dtype=complex)
         np.testing.assert_allclose(sv, expected, atol=1e-10)
 
     def test_swap_twice_is_identity(self, two_qubit_state):

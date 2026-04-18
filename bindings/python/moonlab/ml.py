@@ -1,23 +1,24 @@
 """
-Moonlab Quantum Machine Learning - Feature Maps & Kernels
+Moonlab Quantum Machine Learning — feature maps, kernels, and
+state-vector primitives for QML experimentation.
 
-Complete quantum ML toolkit with:
-- Quantum feature maps (amplitude, angle, IQP encodings)
-- Quantum kernels for QSVM
-- Variational quantum circuits
-- Quantum PCA and autoencoders
-
-References:
-- Havlíček et al., Nature 567, 209-212 (2019) - Quantum feature maps
-- Schuld & Killoran, Phys. Rev. Lett. 122, 040504 (2019) - Quantum kernels
-- Lloyd et al., Nat. Phys. 10, 631-633 (2014) - Quantum PCA
+Gradients do not flow back through quantum operations in this module:
+the quantum state is evolved imperatively via QuantumState and the
+returned numbers are detached. Use moonlab.torch_layer.QuantumLayer
+(parameter-shift rule autograd) if you need to train quantum circuits
+inside a torch graph.
 """
 
 import numpy as np
-import torch
-import torch.nn as nn
 from typing import Callable, Optional, List, Tuple
 from .core import QuantumState
+
+try:
+    import torch
+    import torch.nn as nn
+    _HAS_TORCH = True
+except ImportError:  # pragma: no cover
+    _HAS_TORCH = False
 
 # ============================================================================
 # QUANTUM FEATURE MAPS (Complete Implementations)
@@ -492,44 +493,31 @@ class QSVM:
 # VARIATIONAL QUANTUM CIRCUITS
 # ============================================================================
 
-class VariationalCircuit(nn.Module):
+class VariationalCircuit:
+    """Hardware-efficient variational circuit (3 rotations/qubit/layer).
+
+    Parameters are a numpy array; apply() mutates the given QuantumState.
+    This class does NOT autograd; use moonlab.torch_layer.QuantumLayer
+    for torch integration.
     """
-    Parameterized variational quantum circuit
-    
-    General-purpose variational circuit for QML tasks.
-    Uses hardware-efficient ansatz with trainable parameters.
-    """
-    
-    def __init__(self, num_qubits: int, num_layers: int = 2):
-        super().__init__()
-        
+
+    def __init__(self, num_qubits: int, num_layers: int = 2, seed: Optional[int] = None):
         self.num_qubits = num_qubits
         self.num_layers = num_layers
-        
-        # Parameters: 3 rotations per qubit per layer
+        rng = np.random.default_rng(seed)
         num_params = num_qubits * num_layers * 3
-        self.params = nn.Parameter(torch.randn(num_params) * 0.1)
-    
-    def forward(self, state: QuantumState) -> QuantumState:
-        """Apply variational circuit to quantum state"""
-        param_idx = 0
-        
-        for layer in range(self.num_layers):
-            # Rotation layer
+        self.params = rng.normal(0.0, 0.1, size=num_params)
+
+    def apply(self, state: QuantumState) -> QuantumState:
+        idx = 0
+        for _ in range(self.num_layers):
             for q in range(self.num_qubits):
-                theta_x = self.params[param_idx].item()
-                theta_y = self.params[param_idx + 1].item()
-                theta_z = self.params[param_idx + 2].item()
-                param_idx += 3
-                
-                state.rx(q, theta_x)
-                state.ry(q, theta_y)
-                state.rz(q, theta_z)
-            
-            # Entangling layer
+                state.rx(q, float(self.params[idx]))
+                state.ry(q, float(self.params[idx + 1]))
+                state.rz(q, float(self.params[idx + 2]))
+                idx += 3
             for q in range(self.num_qubits - 1):
                 state.cnot(q, q + 1)
-        
         return state
 
 
@@ -686,83 +674,54 @@ class QuantumPCA:
 # QUANTUM AUTOENCODER
 # ============================================================================
 
-class QuantumAutoencoder(nn.Module):
-    """
-    Quantum Autoencoder for data compression
-    
-    Architecture:
-    - Encoder: Classical → Quantum (amplitude encoding)
-    - Latent: Quantum state (exponential compression)
-    - Decoder: Quantum → Classical (measurement)
-    
-    Applications:
-    - Quantum data compression
-    - Feature learning
-    - Anomaly detection
-    """
-    
-    def __init__(self, input_dim: int, latent_qubits: int):
-        super().__init__()
-        
-        self.input_dim = input_dim
-        self.latent_qubits = latent_qubits
-        
-        # Classical encoder
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, latent_qubits * 4),
-            nn.ReLU(),
-            nn.Linear(latent_qubits * 4, latent_qubits)
-        )
-        
-        # Quantum compression
-        self.quantum_latent = VariationalCircuit(latent_qubits, num_layers=2)
-        
-        # Classical decoder
-        self.decoder = nn.Sequential(
-            nn.Linear(latent_qubits, latent_qubits * 4),
-            nn.ReLU(),
-            nn.Linear(latent_qubits * 4, input_dim)
-        )
-    
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Encode to latent space"""
-        latent_classical = self.encoder(x)
-        
-        # Apply quantum circuit (batch processing)
-        quantum_latents = []
-        for i in range(x.shape[0]):
-            state = QuantumState(self.latent_qubits)
-            
-            # Encode classical latent to quantum
-            for q in range(self.latent_qubits):
-                angle = latent_classical[i, q].item()
-                state.ry(q, angle)
-            
-            # Apply variational circuit
-            self.quantum_latent(state)
-            
-            # Measure expectations
-            expectations = []
-            for q in range(self.latent_qubits):
-                prob_0 = sum(state.probability(idx) 
-                           for idx in range(state.state_dim)
-                           if not ((idx >> q) & 1))
-                expectation = 2.0 * prob_0 - 1.0
-                expectations.append(expectation)
-            
-            quantum_latents.append(expectations)
-        
-        return torch.tensor(quantum_latents, dtype=torch.float32)
-    
-    def decode(self, latent: torch.Tensor) -> torch.Tensor:
-        """Decode from latent space"""
-        return self.decoder(latent)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Full autoencoder forward pass"""
-        latent = self.encode(x)
-        reconstruction = self.decode(latent)
-        return reconstruction
+if _HAS_TORCH:
+    class QuantumAutoencoder(nn.Module):
+        """Classical-encoder -> quantum-latent -> classical-decoder autoencoder.
+
+        The classical pre-/post-nets are standard nn.Sequentials and do
+        backprop normally. The quantum latent is a state-vector
+        VariationalCircuit whose outputs are detached (no parameter-shift
+        autograd here); gradients only flow through the classical heads.
+        """
+
+        def __init__(self, input_dim: int, latent_qubits: int):
+            super().__init__()
+            self.input_dim = input_dim
+            self.latent_qubits = latent_qubits
+            self.encoder = nn.Sequential(
+                nn.Linear(input_dim, latent_qubits * 4),
+                nn.ReLU(),
+                nn.Linear(latent_qubits * 4, latent_qubits),
+            )
+            self.quantum_latent = VariationalCircuit(latent_qubits, num_layers=2)
+            self.decoder = nn.Sequential(
+                nn.Linear(latent_qubits, latent_qubits * 4),
+                nn.ReLU(),
+                nn.Linear(latent_qubits * 4, input_dim),
+            )
+
+        def encode(self, x: "torch.Tensor") -> "torch.Tensor":
+            latent_classical = self.encoder(x)
+            quantum_latents = []
+            for i in range(x.shape[0]):
+                state = QuantumState(self.latent_qubits)
+                for q in range(self.latent_qubits):
+                    state.ry(q, float(latent_classical[i, q].item()))
+                self.quantum_latent.apply(state)
+                exps = []
+                for q in range(self.latent_qubits):
+                    prob_0 = sum(state.probability(idx)
+                                 for idx in range(state.state_dim)
+                                 if not ((idx >> q) & 1))
+                    exps.append(2.0 * prob_0 - 1.0)
+                quantum_latents.append(exps)
+            return torch.tensor(quantum_latents, dtype=torch.float32)
+
+        def decode(self, latent: "torch.Tensor") -> "torch.Tensor":
+            return self.decoder(latent)
+
+        def forward(self, x: "torch.Tensor") -> "torch.Tensor":
+            return self.decode(self.encode(x))
 
 
 # ============================================================================

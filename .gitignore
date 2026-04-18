@@ -47,6 +47,7 @@ doc/*
 
 # Build directories
 build/
+build-*/
 dist/
 *.egg-info/
 

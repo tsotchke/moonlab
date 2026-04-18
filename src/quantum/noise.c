@@ -1,20 +1,11 @@
 /**
  * @file noise.c
- * @brief Quantum noise models and error channels
+ * @brief Quantum noise channels by Monte Carlo trajectory sampling.
+ *        Each call realizes one Kraus operator; average over shots to
+ *        recover the channel.
  *
- * Implements common quantum noise channels:
- * - Depolarizing noise
- * - Amplitude damping
- * - Phase damping (dephasing)
- * - Bit flip / Phase flip
- * - Thermal relaxation (T1, T2)
- * - Readout error
- * - Crosstalk
- *
- * Uses Kraus operator representation for channels.
- *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

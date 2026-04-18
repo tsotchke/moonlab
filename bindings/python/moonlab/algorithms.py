@@ -1,8 +1,4 @@
-"""
-Moonlab Algorithms - Python wrappers for quantum algorithms
-
-VQE, QAOA, Grover, Bell Tests - Full C library bindings
-"""
+"""Moonlab algorithm bindings: VQE, QAOA, Grover, Bell tests."""
 
 import ctypes
 import numpy as np
@@ -13,12 +9,13 @@ from .core import _lib, QuantumState, QuantumError, CQuantumState
 # C STRUCTURE DEFINITIONS
 # ============================================================================
 
-class CMolecularHamiltonian(ctypes.Structure):
-    """Opaque structure for molecular Hamiltonian"""
+class CPauliHamiltonian(ctypes.Structure):
+    """Opaque handle for a pauli_hamiltonian_t (VQE sum-of-Pauli-strings
+    form, built from vqe_create_h2_hamiltonian / _lih_ / _h2o_). Fields
+    are declared as c_void_p so ctypes treats this as an opaque pointer;
+    the real struct layout lives in src/algorithms/vqe.h."""
     _fields_ = [
-        ("terms", ctypes.c_void_p),
-        ("num_terms", ctypes.c_size_t),
-        ("num_qubits", ctypes.c_size_t),
+        ("opaque", ctypes.c_void_p),
     ]
 
 class CVQEAnsatz(ctypes.Structure):
@@ -126,28 +123,20 @@ class CBellTestResult(ctypes.Structure):
 # C FUNCTION SIGNATURES
 # ============================================================================
 
-# VQE functions
-_lib.molecular_hamiltonian_create.argtypes = [ctypes.c_size_t]
-_lib.molecular_hamiltonian_create.restype = ctypes.POINTER(CMolecularHamiltonian)
-
-_lib.molecular_hamiltonian_free.argtypes = [ctypes.POINTER(CMolecularHamiltonian)]
-_lib.molecular_hamiltonian_free.restype = None
-
-_lib.molecular_hamiltonian_add_term.argtypes = [
-    ctypes.POINTER(CMolecularHamiltonian),
-    ctypes.c_double,  # coefficient
-    ctypes.c_char_p,  # pauli_string (e.g., "XZIY")
-]
-_lib.molecular_hamiltonian_add_term.restype = ctypes.c_int
+# VQE functions. The factory helpers return a pauli_hamiltonian_t*
+# (see src/algorithms/vqe.h); molecular_hamiltonian_t is a different
+# type in chemistry.h and is not exposed to Python at this point.
+_lib.pauli_hamiltonian_free.argtypes = [ctypes.POINTER(CPauliHamiltonian)]
+_lib.pauli_hamiltonian_free.restype = None
 
 _lib.vqe_create_h2_hamiltonian.argtypes = [ctypes.c_double]  # bond_distance
-_lib.vqe_create_h2_hamiltonian.restype = ctypes.POINTER(CMolecularHamiltonian)
+_lib.vqe_create_h2_hamiltonian.restype = ctypes.POINTER(CPauliHamiltonian)
 
 _lib.vqe_create_lih_hamiltonian.argtypes = [ctypes.c_double]  # bond_distance
-_lib.vqe_create_lih_hamiltonian.restype = ctypes.POINTER(CMolecularHamiltonian)
+_lib.vqe_create_lih_hamiltonian.restype = ctypes.POINTER(CPauliHamiltonian)
 
 _lib.vqe_create_h2o_hamiltonian.argtypes = []
-_lib.vqe_create_h2o_hamiltonian.restype = ctypes.POINTER(CMolecularHamiltonian)
+_lib.vqe_create_h2o_hamiltonian.restype = ctypes.POINTER(CPauliHamiltonian)
 
 _lib.vqe_create_hardware_efficient_ansatz.argtypes = [ctypes.c_size_t, ctypes.c_size_t]
 _lib.vqe_create_hardware_efficient_ansatz.restype = ctypes.POINTER(CVQEAnsatz)
@@ -162,7 +151,7 @@ _lib.vqe_optimizer_free.argtypes = [ctypes.POINTER(CVQEOptimizer)]
 _lib.vqe_optimizer_free.restype = None
 
 _lib.vqe_solver_create.argtypes = [
-    ctypes.POINTER(CMolecularHamiltonian),
+    ctypes.POINTER(CPauliHamiltonian),
     ctypes.POINTER(CVQEAnsatz),
     ctypes.POINTER(CVQEOptimizer),
 ]
@@ -352,7 +341,7 @@ class VQE:
         if hasattr(self, '_ansatz') and self._ansatz:
             _lib.vqe_ansatz_free(self._ansatz)
         if hasattr(self, '_hamiltonian') and self._hamiltonian:
-            _lib.molecular_hamiltonian_free(self._hamiltonian)
+            _lib.pauli_hamiltonian_free(self._hamiltonian)
 
     def solve_h2(self, bond_distance: float = 0.74) -> Dict[str, Any]:
         """
@@ -365,7 +354,7 @@ class VQE:
             Dict with 'energy' (Hartree), 'optimal_params', 'converged'
         """
         if self._hamiltonian:
-            _lib.molecular_hamiltonian_free(self._hamiltonian)
+            _lib.pauli_hamiltonian_free(self._hamiltonian)
 
         self._hamiltonian = _lib.vqe_create_h2_hamiltonian(
             ctypes.c_double(bond_distance)
@@ -386,7 +375,7 @@ class VQE:
             Dict with 'energy' (Hartree), 'optimal_params', 'converged'
         """
         if self._hamiltonian:
-            _lib.molecular_hamiltonian_free(self._hamiltonian)
+            _lib.pauli_hamiltonian_free(self._hamiltonian)
 
         self._hamiltonian = _lib.vqe_create_lih_hamiltonian(
             ctypes.c_double(bond_distance)
@@ -404,25 +393,12 @@ class VQE:
             Dict with 'energy' (Hartree), 'optimal_params', 'converged'
         """
         if self._hamiltonian:
-            _lib.molecular_hamiltonian_free(self._hamiltonian)
+            _lib.pauli_hamiltonian_free(self._hamiltonian)
 
         self._hamiltonian = _lib.vqe_create_h2o_hamiltonian()
         if not self._hamiltonian:
             raise QuantumError("Failed to create H2O Hamiltonian")
 
-        return self._solve()
-
-    def solve(self, hamiltonian: 'MolecularHamiltonian') -> Dict[str, Any]:
-        """
-        Find ground state for custom Hamiltonian
-
-        Args:
-            hamiltonian: MolecularHamiltonian object
-
-        Returns:
-            Dict with 'energy' (Hartree), 'optimal_params', 'converged'
-        """
-        self._hamiltonian = hamiltonian._ptr
         return self._solve()
 
     def _solve(self) -> Dict[str, Any]:
@@ -474,49 +450,6 @@ class VQE:
             c_params,
             ctypes.c_size_t(len(params))
         )
-
-
-class MolecularHamiltonian:
-    """
-    Custom molecular Hamiltonian for VQE
-
-    Build Hamiltonians as sums of Pauli strings with coefficients.
-
-    Example:
-        H = MolecularHamiltonian(4)
-        H.add_term(0.5, "ZIZI")   # ZZ interaction on qubits 0,2
-        H.add_term(-0.3, "XIXI")  # XX interaction
-    """
-
-    def __init__(self, num_qubits: int):
-        """Create empty Hamiltonian for num_qubits qubits"""
-        self._ptr = _lib.molecular_hamiltonian_create(ctypes.c_size_t(num_qubits))
-        if not self._ptr:
-            raise QuantumError("Failed to create Hamiltonian")
-        self.num_qubits = num_qubits
-
-    def __del__(self):
-        if hasattr(self, '_ptr') and self._ptr:
-            _lib.molecular_hamiltonian_free(self._ptr)
-
-    def add_term(self, coefficient: float, pauli_string: str) -> None:
-        """
-        Add a Pauli term to the Hamiltonian
-
-        Args:
-            coefficient: Real coefficient
-            pauli_string: String of I, X, Y, Z (one per qubit)
-        """
-        if len(pauli_string) != self.num_qubits:
-            raise ValueError(f"Pauli string must have {self.num_qubits} characters")
-
-        ret = _lib.molecular_hamiltonian_add_term(
-            self._ptr,
-            ctypes.c_double(coefficient),
-            pauli_string.encode('utf-8')
-        )
-        if ret != 0:
-            raise QuantumError("Failed to add Hamiltonian term")
 
 
 # ============================================================================
@@ -948,7 +881,7 @@ def run_vqe_h2(bond_distance: float = 0.74, num_layers: int = 2) -> Dict[str, An
     Returns:
         VQE result dictionary
     """
-    vqe = VQE(num_qubits=4, num_layers=num_layers)
+    vqe = VQE(num_qubits=2, num_layers=num_layers)
     return vqe.solve_h2(bond_distance)
 
 

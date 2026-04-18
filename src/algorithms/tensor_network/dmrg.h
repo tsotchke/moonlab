@@ -12,8 +12,8 @@
  * - Adaptive bond dimension growth
  * - Direct access to ground state energy
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License
@@ -48,8 +48,10 @@ typedef struct {
     bool verbose;               /**< Print progress information */
     bool two_site;              /**< Use two-site DMRG (more robust) */
 
-    // Subspace expansion parameters
-    double noise_strength;      /**< Noise for subspace expansion (0 = disabled) */
+    // Noise perturbation (injects noise into the SVD input to encourage
+    // bond-dimension growth and escape local minima). Not true subspace
+    // expansion (which would add vectors from the discarded singular space).
+    double noise_strength;      /**< Noise strength (0 = disabled) */
     double noise_decay;         /**< Decay factor per sweep (0.5 = halve each sweep) */
 
     // Density matrix perturbation
@@ -74,7 +76,7 @@ static inline dmrg_config_t dmrg_config_default(void) {
         .lanczos_tol = 1e-12,
         .verbose = false,
         .two_site = true,
-        // Subspace expansion defaults
+        // Noise-perturbation defaults
         .noise_strength = 1e-4,
         .noise_decay = 0.5,
         // Density matrix perturbation

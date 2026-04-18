@@ -10,8 +10,8 @@
  * - Entanglement and imbalance dynamics
  * - LIOM construction
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #include "mbl.h"

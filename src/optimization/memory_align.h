@@ -18,8 +18,8 @@
  * - All deallocations securely zero memory before freeing
  * - Prevents quantum state data from persisting in freed memory
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License
@@ -111,8 +111,8 @@ typedef struct {
  * simd_aligned_free(state, 1024 * sizeof(complex_t));
  * @endcode
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void* simd_aligned_alloc(size_t size, size_t alignment);
 
@@ -124,8 +124,8 @@ void* simd_aligned_alloc(size_t size, size_t alignment);
  * @param size Number of bytes to allocate
  * @return Pointer to aligned memory, or NULL on failure
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void* simd_aligned_alloc_default(size_t size);
 
@@ -141,8 +141,8 @@ void* simd_aligned_alloc_default(size_t size);
  * @note If size is 0, memory is freed without zeroing (use with caution)
  * @note If ptr is NULL, function returns immediately
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_aligned_free(void* ptr, size_t size);
 
@@ -161,8 +161,8 @@ void simd_aligned_free(void* ptr, size_t size);
  *
  * @note On failure, original memory is NOT freed
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void* simd_aligned_realloc(void* ptr, size_t old_size, size_t new_size, size_t alignment);
 
@@ -187,8 +187,8 @@ typedef double _Complex complex_t;
  * @param num_elements Number of complex numbers to allocate
  * @return Pointer to aligned complex array, or NULL on failure
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 complex_t* simd_alloc_complex_array(size_t num_elements);
 
@@ -198,8 +198,8 @@ complex_t* simd_alloc_complex_array(size_t num_elements);
  * @param ptr          Pointer to complex array
  * @param num_elements Number of elements (for secure zeroing)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_free_complex_array(complex_t* ptr, size_t num_elements);
 
@@ -209,8 +209,8 @@ void simd_free_complex_array(complex_t* ptr, size_t num_elements);
  * @param num_elements Number of doubles to allocate
  * @return Pointer to aligned double array, or NULL on failure
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 double* simd_alloc_double_array(size_t num_elements);
 
@@ -220,8 +220,8 @@ double* simd_alloc_double_array(size_t num_elements);
  * @param ptr          Pointer to double array
  * @param num_elements Number of elements (for secure zeroing)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_free_double_array(double* ptr, size_t num_elements);
 
@@ -231,8 +231,8 @@ void simd_free_double_array(double* ptr, size_t num_elements);
  * @param num_elements Number of uint64_t to allocate
  * @return Pointer to aligned uint64_t array, or NULL on failure
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 uint64_t* simd_alloc_uint64_array(size_t num_elements);
 
@@ -242,8 +242,8 @@ uint64_t* simd_alloc_uint64_array(size_t num_elements);
  * @param ptr          Pointer to uint64_t array
  * @param num_elements Number of elements (for secure zeroing)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_free_uint64_array(uint64_t* ptr, size_t num_elements);
 
@@ -258,8 +258,8 @@ void simd_free_uint64_array(uint64_t* ptr, size_t num_elements);
  * @param alignment Required alignment (must be power of 2)
  * @return 1 if aligned, 0 otherwise
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 int simd_is_aligned(const void* ptr, size_t alignment);
 
@@ -275,8 +275,8 @@ int simd_is_aligned(const void* ptr, size_t alignment);
  *
  * @return Optimal alignment in bytes
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_optimal_alignment(void);
 
@@ -289,8 +289,8 @@ size_t simd_get_optimal_alignment(void);
  * @param ptr  Pointer to memory
  * @param size Number of bytes to zero
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_secure_zero(void* ptr, size_t size);
 
@@ -305,8 +305,8 @@ void simd_secure_zero(void* ptr, size_t size);
  * @param size      Number of bytes to copy
  * @param alignment Alignment of both pointers
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_aligned_memcpy(void* dest, const void* src, size_t size, size_t alignment);
 
@@ -321,8 +321,8 @@ void simd_aligned_memcpy(void* dest, const void* src, size_t size, size_t alignm
  * @param size      Number of bytes to set
  * @param alignment Alignment of pointer
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_aligned_memset(void* ptr, int value, size_t size, size_t alignment);
 
@@ -341,7 +341,7 @@ void simd_aligned_memset(void* ptr, int value, size_t size, size_t alignment);
  * @param stats Output statistics structure
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  */
 void simd_get_alloc_stats(mem_alloc_stats_t* stats);
 
@@ -352,7 +352,7 @@ void simd_get_alloc_stats(mem_alloc_stats_t* stats);
  * Only available when compiled with MEMORY_ALIGN_TRACK_STATS.
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  */
 void simd_reset_alloc_stats(void);
 
@@ -363,7 +363,7 @@ void simd_reset_alloc_stats(void);
  * Only available when compiled with MEMORY_ALIGN_TRACK_STATS.
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  */
 void simd_print_alloc_stats(void);
 
@@ -389,8 +389,8 @@ typedef struct {
  *
  * @return Platform information structure
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 mem_platform_info_t simd_get_platform_info(void);
 

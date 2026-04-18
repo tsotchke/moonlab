@@ -4,7 +4,7 @@
  *
  * TDVP is a powerful algorithm for time evolution of MPS states that:
  * - Respects the variational manifold structure
- * - Preserves unitarity (norm conservation)
+ * - Renormalizes after SVD truncation to maintain unit norm
  * - Works for both real and imaginary time evolution
  * - Efficiently handles long-range interactions via MPO
  *

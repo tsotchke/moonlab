@@ -532,7 +532,7 @@ set(QSIM_APPLICATIONS_SOURCES
 
 set(QSIM_PROFILER_SOURCES
     tools/profiler/profiler.c
-    tools/profiler/performance_monitor.c
+    src/utils/performance_monitor.c
 )
 
 # Distributed computing sources (MPI)
@@ -698,6 +698,21 @@ if(QSIM_HAS_OPENMP)
         # macOS with Homebrew libomp
         target_link_libraries(quantumsim PRIVATE ${QSIM_OPENMP_LIBRARIES})
         target_include_directories(quantumsim PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
+
+        # Relocate libomp's absolute Homebrew path to @rpath, and add
+        # rpath entries so consumers on machines with Homebrew (or with
+        # libomp beside libquantumsim after install) resolve it cleanly.
+        # Any Homebrew prefix (Intel /usr/local, Apple Silicon /opt/homebrew)
+        # plus relocatable @loader_path/../lib covers the common cases.
+        set_target_properties(quantumsim PROPERTIES
+            BUILD_RPATH   "/opt/homebrew/opt/libomp/lib;/usr/local/opt/libomp/lib;@loader_path/../lib"
+            INSTALL_RPATH "/opt/homebrew/opt/libomp/lib;/usr/local/opt/libomp/lib;@loader_path/../lib"
+        )
+        add_custom_command(TARGET quantumsim POST_BUILD
+            COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
+                    "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
+            VERBATIM
+        )
     elseif(TARGET OpenMP::OpenMP_C)
         # Standard OpenMP target
         target_link_libraries(quantumsim PRIVATE OpenMP::OpenMP_C)
@@ -1112,6 +1127,22 @@ if(QSIM_BUILD_EXAMPLES)
 
     add_executable(tsp_logistics examples/applications/tsp_logistics.c)
     target_link_libraries(tsp_logistics PRIVATE quantumsim)
+
+    add_executable(quantum_spin_chain examples/tensor_network/quantum_spin_chain.c)
+    target_link_libraries(quantum_spin_chain PRIVATE quantumsim)
+    if(QSIM_HAS_OPENMP)
+        if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
+            target_link_libraries(quantum_spin_chain PRIVATE ${QSIM_OPENMP_LIBRARIES})
+            target_include_directories(quantum_spin_chain PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
+            target_compile_options(quantum_spin_chain PRIVATE -Xpreprocessor -fopenmp)
+        elseif(TARGET OpenMP::OpenMP_C)
+            target_link_libraries(quantum_spin_chain PRIVATE OpenMP::OpenMP_C)
+        endif()
+        target_compile_definitions(quantum_spin_chain PRIVATE HAS_OPENMP=1)
+    endif()
+
+    add_executable(quantum_critical_point examples/tensor_network/quantum_critical_point.c)
+    target_link_libraries(quantum_critical_point PRIVATE quantumsim)
 
     message(STATUS "Examples: Enabled")
 endif()

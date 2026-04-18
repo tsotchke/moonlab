@@ -5,8 +5,8 @@
  * High-performance quantum simulation using NVIDIA cuQuantum SDK.
  * Uses cuStateVec for state vector simulation.
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the Apache License, Version 2.0

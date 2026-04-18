@@ -5,7 +5,7 @@
  * Cross-platform GPU acceleration using Vulkan Compute
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

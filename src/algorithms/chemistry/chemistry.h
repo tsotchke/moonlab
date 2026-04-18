@@ -8,8 +8,8 @@
  * - UCCSD ansatz for VQE
  * - Hartree-Fock state preparation
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #ifndef CHEMISTRY_H
@@ -294,15 +294,9 @@ qs_error_t uccsd_apply_double(quantum_state_t *state,
 // ============================================================================
 
 /**
- * @brief Prepare Hartree-Fock reference state
- *
- * Creates |1111...0000> with n_electrons ones in lowest orbitals.
- * Uses Jordan-Wigner mapping where orbital j maps to qubit j.
- *
- * @param state Quantum state to initialize
- * @param num_electrons Number of electrons
- * @param num_orbitals Number of orbitals
- * @return Success or error code
+ * @brief Prepare the Hartree-Fock Slater-determinant reference state
+ *        |1...10...0⟩ (num_electrons qubits set, rest zero).
+ *        Not an SCF calculation — feed SCF orbitals into the Hamiltonian.
  */
 qs_error_t hartree_fock_state(quantum_state_t *state,
                                uint32_t num_electrons,

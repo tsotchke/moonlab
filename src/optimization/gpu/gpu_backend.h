@@ -16,8 +16,8 @@
  * - Linux without NVIDIA: Vulkan -> OpenCL
  * - Windows: CUDA -> Vulkan -> OpenCL
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

@@ -6,7 +6,7 @@
  * Supports NVIDIA, AMD, Intel, and Apple GPUs (deprecated on macOS)
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

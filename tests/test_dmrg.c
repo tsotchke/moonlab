@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
 
     printf("Running DMRG with max_bond_dim=%u, max_sweeps=%u...\n",
            config.max_bond_dim, config.max_sweeps);
-    printf("  Subspace expansion: noise=%.1e, decay=%.1f\n",
+    printf("  Noise perturbation: noise=%.1e, decay=%.1f\n",
            config.noise_strength, config.noise_decay);
     printf("  Density matrix perturbation: %.1e\n", config.dm_perturbation);
     printf("  Warmup: %u sweeps with noise=%.1e\n\n",

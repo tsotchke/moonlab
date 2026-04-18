@@ -11,8 +11,8 @@
  * - Grover's algorithm and quantum counting
  * - Reduced density matrices
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #include "../src/quantum/state.h"

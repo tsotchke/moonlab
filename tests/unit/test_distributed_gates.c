@@ -14,7 +14,10 @@
  */
 
 #include "../../src/distributed/mpi_bridge.h"
+#include "../../src/distributed/state_partition.h"
+#include "../../src/distributed/distributed_gates.h"
 #include <mpi.h>
+#include <complex.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,6 +81,60 @@ int main(int argc, char** argv) {
     er = mpi_barrier(ctx);
     CHECK(er == MPI_BRIDGE_SUCCESS,
           "mpi_barrier returns success (got %d)", er);
+
+    /* H(0) + CNOT(0, n-1) where qubit n-1 is a partition qubit should
+     * produce (|0...0> + |1*...*1>) / sqrt(2). Verify norm=1, P(0)=0.5. */
+    int size_is_pow2 = size > 0 && (size & (size - 1)) == 0;
+    if (size_is_pow2) {
+        uint32_t partition_bits = 0;
+        uint64_t s = (uint64_t)size;
+        while (s > 1) { s >>= 1; partition_bits++; }
+        uint32_t num_qubits = partition_bits + 2;
+
+        partitioned_state_t *pstate =
+            partition_state_create(ctx, num_qubits, NULL);
+        CHECK(pstate != NULL,
+              "partition_state_create(%u qubits, np=%d) succeeds",
+              num_qubits, size);
+
+        if (pstate) {
+            CHECK(partition_init_zero(pstate) == PARTITION_SUCCESS,
+                  "partition_init_zero(|0...0>)");
+
+            dist_gate_error_t g = dist_hadamard(pstate, 0);
+            CHECK(g == DIST_GATE_SUCCESS,
+                  "dist_hadamard on local qubit 0 (err=%d)", g);
+
+            g = dist_cnot(pstate, 0, num_qubits - 1);
+            CHECK(g == DIST_GATE_SUCCESS,
+                  "dist_cnot(0, %u) across partition boundary (err=%d)",
+                  num_qubits - 1, g);
+
+            /* Local squared-norm should allreduce-sum to 1.0. */
+            double local_sq = 0.0;
+            for (uint64_t i = 0; i < pstate->local_count; i++) {
+                double m = cabs(pstate->amplitudes[i]);
+                local_sq += m * m;
+            }
+            double global_sq = 0.0;
+            mpi_allreduce_sum_double(ctx, &local_sq, &global_sq, 1);
+            CHECK(fabs(global_sq - 1.0) < 1e-10,
+                  "norm^2 after H + distributed CNOT = %.10f "
+                  "(expected 1.0)", global_sq);
+
+            /* P(|0...0>) should be 1/2. Rank 0 owns the local index 0,
+             * which corresponds to global index 0 = |0...0>. */
+            if (rank == 0) {
+                double p00 = cabs(pstate->amplitudes[0]);
+                p00 = p00 * p00;
+                CHECK(fabs(p00 - 0.5) < 1e-10,
+                      "P(|0...0>) after H+CNOT = %.10f (expected 0.5)",
+                      p00);
+            }
+
+            partition_state_free(pstate);
+        }
+    }
 
     /* Rank 0 aggregates failure count across all ranks. */
     int my_failures = failures;

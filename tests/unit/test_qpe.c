@@ -33,17 +33,14 @@ static int failures = 0;
 
 static void test_phase_bitstring_roundtrip(void) {
     fprintf(stdout, "\n-- QPE: phase <-> bitstring round trip --\n");
-    /* Convention (see qpe_bitstring_to_phase in qpe.c):
-     *     phi = Sum_{k=0..m-1} b_k / 2^{k+1}
-     * i.e. bit 0 is the most significant fractional digit.
-     * So bitstring=1 -> 0.5, bitstring=2 -> 0.25, bitstring=4 -> 0.125. */
+    /* phi = y / 2^m where y = integer stored with bit k == qubit k outcome. */
     double phi = qpe_bitstring_to_phase(1, 4);
-    CHECK(fabs(phi - 0.5) < 1e-15,
-          "bitstring=1 m=4 -> phi=0.5 (got %.15g)", phi);
+    CHECK(fabs(phi - 1.0/16.0) < 1e-15,
+          "bitstring=1 m=4 -> phi=1/16 (got %.15g)", phi);
 
-    phi = qpe_bitstring_to_phase(4, 4);
-    CHECK(fabs(phi - 0.125) < 1e-15,
-          "bitstring=4 m=4 -> phi=0.125 (got %.15g)", phi);
+    phi = qpe_bitstring_to_phase(8, 4);
+    CHECK(fabs(phi - 0.5) < 1e-15,
+          "bitstring=8 m=4 -> phi=1/2 (got %.15g)", phi);
 
     phi = qpe_bitstring_to_phase(0, 8);
     CHECK(fabs(phi) < 1e-15,
@@ -84,27 +81,16 @@ static void test_t_gate_phase(void) {
             (unsigned long long)r.phase_bitstring,
             r.confidence);
 
-    /* The state-prep fix in qpe.c makes the T-gate case recover
-     * phi = 1/8 exactly (bitstring 8 at m=6). Assert that here.
-     * Non-dyadic / phi=1/2-class phases still have known accuracy
-     * issues pending further investigation — those are probed in
-     * the bitstring round-trip test above and in the standalone
-     * probe programs in tests/qpe_probe/. */
     CHECK(r.estimated_phase >= 0.0 && r.estimated_phase < 1.0,
           "estimated phase is in [0, 1)");
     CHECK(r.precision_bits == M,
           "result reports %zu precision bits (expected %zu)",
           r.precision_bits, (size_t)M);
-    /* Even for the dyadic phi=1/8, the current QPE implementation
-     * shows residual sampling variance that Phase 1G will chase. The
-     * smoke here only asserts (a) the algorithm produced a
-     * well-formed result and (b) the measurement-confidence value
-     * is finite and in the expected range. A correct-recovery
-     * regression test is a Phase 1G deliverable. */
-    CHECK(r.confidence >= 0.0 && r.confidence <= 1.0 + 1e-12,
-          "confidence %.6f is a valid probability", r.confidence);
-    CHECK(isfinite(r.estimated_phase),
-          "estimated phase %.6f is finite", r.estimated_phase);
+    CHECK(r.phase_bitstring == 8ULL,
+          "bitstring 8 at m=6 (got 0x%llx)",
+          (unsigned long long)r.phase_bitstring);
+    CHECK(fabs(r.estimated_phase - 0.125) < 1e-12,
+          "phi_est == 1/8 for T-gate (got %.12f)", r.estimated_phase);
 
     eigenstate_free(es);
     unitary_operator_free(U);

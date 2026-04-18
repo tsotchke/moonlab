@@ -230,8 +230,6 @@ double quantum_state_entropy(const quantum_state_t *state) {
 double quantum_state_purity(const quantum_state_t *state) {
     if (!state || !state->amplitudes) return 0.0;
 
-    // State-vector representation stores pure states; purity is Tr(rho^2)
-    // where rho = |psi><psi|, so Tr(rho^2) = (||psi||^2)^2.
     double norm_sq = 0.0;
     for (size_t i = 0; i < state->state_dim; i++) {
         const double mag = cabs(state->amplitudes[i]);

@@ -142,6 +142,92 @@ void pauli_hamiltonian_free(pauli_hamiltonian_t *hamiltonian) {
     free(hamiltonian);
 }
 
+/* Build the 2^n x 2^n complex matrix for the Pauli sum and return the
+ * lowest eigenvalue (+ nuclear_repulsion). Uses a simple Lanczos-like
+ * power iteration on H - shift*I so we don't need LAPACK here. */
+double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *H) {
+    if (!H || H->num_qubits == 0 || H->num_qubits > 12) {
+        double nan_v = 0.0; return nan_v / nan_v;
+    }
+
+    const size_t n = H->num_qubits;
+    const size_t dim = 1ULL << n;
+    double complex *M = calloc(dim * dim, sizeof(double complex));
+    if (!M) { double nv = 0.0; return nv/nv; }
+
+    /* Accumulate Hamiltonian matrix term by term. For each basis state
+     * |x>, P|x> = phase * |y> where y is x with bit q flipped whenever
+     * the Pauli at position q is X or Y, and phase picks up factors of
+     * (+/-1) from Z and (+/-i) from Y on bits of x. */
+    for (size_t t = 0; t < H->num_terms; t++) {
+        pauli_term_t *term = &H->terms[t];
+        if (!term->pauli_string) continue;
+        double c = term->coefficient;
+
+        for (size_t x = 0; x < dim; x++) {
+            size_t y = x;
+            double complex phase = 1.0 + 0.0*I;
+            for (size_t q = 0; q < n; q++) {
+                char p = term->pauli_string[q];
+                int bit = (int)((x >> q) & 1ULL);
+                if (p == 'X') {
+                    y ^= (1ULL << q);
+                } else if (p == 'Y') {
+                    y ^= (1ULL << q);
+                    /* Y = i X Z so picks up +i if bit=0, -i if bit=1. */
+                    phase *= (bit ? -I : I);
+                } else if (p == 'Z') {
+                    if (bit) phase *= -1.0;
+                }
+            }
+            M[y * dim + x] += c * phase;
+        }
+    }
+
+    /* Shifted power iteration to find the ground state of M.
+     * Let A = shift*I - M. Then A has largest eigenvalue shift - E_min.
+     * Pick shift larger than any row-1-norm to ensure A is positive. */
+    double shift = 0.0;
+    for (size_t i = 0; i < dim; i++) {
+        double row = 0.0;
+        for (size_t j = 0; j < dim; j++) row += cabs(M[i*dim + j]);
+        if (row > shift) shift = row;
+    }
+    shift += 1.0;
+
+    double complex *v = calloc(dim, sizeof(double complex));
+    double complex *w = calloc(dim, sizeof(double complex));
+    if (!v || !w) { free(M); free(v); free(w); double nv=0.0; return nv/nv; }
+
+    /* Random-ish nonzero start. */
+    for (size_t i = 0; i < dim; i++) v[i] = 1.0 / sqrt((double)dim);
+
+    double lambda = 0.0;
+    for (int iter = 0; iter < 5000; iter++) {
+        /* w = A v = shift*v - M*v */
+        for (size_t i = 0; i < dim; i++) w[i] = shift * v[i];
+        for (size_t i = 0; i < dim; i++) {
+            for (size_t j = 0; j < dim; j++) {
+                w[i] -= M[i*dim + j] * v[j];
+            }
+        }
+        double norm = 0.0;
+        for (size_t i = 0; i < dim; i++) norm += cabs(w[i]) * cabs(w[i]);
+        norm = sqrt(norm);
+        if (norm < 1e-300) break;
+        double complex num = 0.0 + 0.0*I;
+        for (size_t i = 0; i < dim; i++) num += conj(v[i]) * w[i];
+        double new_lambda = creal(num);
+        for (size_t i = 0; i < dim; i++) v[i] = w[i] / norm;
+        if (fabs(new_lambda - lambda) < 1e-12) { lambda = new_lambda; break; }
+        lambda = new_lambda;
+    }
+
+    free(M); free(v); free(w);
+    double E_min = shift - lambda;
+    return E_min + H->nuclear_repulsion;
+}
+
 int pauli_hamiltonian_add_term(
     pauli_hamiltonian_t *hamiltonian,
     double coefficient,
@@ -206,6 +292,7 @@ pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance) {
     
     h->molecule_name = strdup("H2");
     h->bond_distance = bond_distance;
+    h->hf_reference = 0x2;  // qubit 1 occupied (lowest-energy orbital)
     
     // Interpolate coefficients based on bond distance
     // Reference geometries: 0.5, 0.7414, 1.0, 1.4, 2.0 Angstroms
@@ -361,11 +448,11 @@ pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void) {
     // ONE-BODY TERMS (orbital energies after Jordan-Wigner)
     // Oxygen 2s orbital
     pauli_hamiltonian_add_term(h,  0.82147934, "ZIIIIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.82147934, "IZIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.82147934, "IZIIIIII", idx++);
     
     // Oxygen 2p orbitals
     pauli_hamiltonian_add_term(h, -0.48267721, "IIZIIIII", idx++);
-    pauli_hamiltonian_add_term(h, -0.48267721, "IIIZIII", idx++);
+    pauli_hamiltonian_add_term(h, -0.48267721, "IIIZIIII", idx++);
     pauli_hamiltonian_add_term(h,  0.31415926, "IIIIZIII", idx++);
     pauli_hamiltonian_add_term(h,  0.31415926, "IIIIIZII", idx++);
     
@@ -375,39 +462,39 @@ pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void) {
     
     // TWO-BODY TERMS (electron-electron interactions)
     // Same-orbital coulomb (density-density)
-    pauli_hamiltonian_add_term(h,  0.28191673, "ZZIIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.18257364, "IZZIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.18257364, "ZIZIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.14726421, "IIZZIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.28191673, "ZZIIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.18257364, "IZZIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.18257364, "ZIZIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.14726421, "IIZZIIII", idx++);
     pauli_hamiltonian_add_term(h,  0.14726421, "IZIZIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.14726421, "IIZIZII", idx++);
+    pauli_hamiltonian_add_term(h,  0.14726421, "IIZIZIII", idx++);
     
     // Exchange terms (XX + YY pairs)
-    pauli_hamiltonian_add_term(h,  0.17438239, "XXIIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.17438239, "YYIIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.12053361, "IXXIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.12053361, "IYYIIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.16582247, "IIXXIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.16582247, "IIYYIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.12582474, "IIIXXII", idx++);
-    pauli_hamiltonian_add_term(h,  0.12582474, "IIIYYII", idx++);
+    pauli_hamiltonian_add_term(h,  0.17438239, "XXIIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.17438239, "YYIIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.12053361, "IXXIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.12053361, "IYYIIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.16582247, "IIXXIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.16582247, "IIYYIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.12582474, "IIIXXIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.12582474, "IIIYYIII", idx++);
     pauli_hamiltonian_add_term(h,  0.09384721, "IIIIXXII", idx++);
-    pauli_hamiltonian_add_term(h,  0.09384721, "IIIIIYYII", idx++);
+    pauli_hamiltonian_add_term(h,  0.09384721, "IIIIYYII", idx++);
     pauli_hamiltonian_add_term(h,  0.08251473, "IIIIIXXI", idx++);
-    pauli_hamiltonian_add_term(h,  0.08251473, "IIIIIIYY I", idx++);
+    pauli_hamiltonian_add_term(h,  0.08251473, "XXXXIIII", idx++);
     pauli_hamiltonian_add_term(h,  0.06147291, "IIIIIIXX", idx++);
     pauli_hamiltonian_add_term(h,  0.06147291, "IIIIIIYY", idx++);
     
     // Higher-order correlation terms (selection of most important)
-    pauli_hamiltonian_add_term(h,  0.04523841, "ZZZZIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.03825174, "XXZZIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.03825174, "YYZZIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.03241872, "ZZXXIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.03241872, "ZZYYIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.02947123, "XXXXIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.02947123, "YYYYIII", idx++);
-    pauli_hamiltonian_add_term(h,  0.02947123, "XXYY III", idx++);
-    pauli_hamiltonian_add_term(h,  0.02947123, "YYXXIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.04523841, "ZZZZIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.03825174, "XXZZIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.03825174, "YYZZIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.03241872, "ZZXXIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.03241872, "ZZYYIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.02947123, "XXXXIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.02947123, "YYYYIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.02947123, "XXYYIIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.02947123, "YYXXIIII", idx++);
     
     // Additional important terms (truncated for performance)
     // Full H2O Hamiltonian would have 631 terms
@@ -440,8 +527,6 @@ vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
     ansatz->num_qubits = num_qubits;
     ansatz->num_layers = num_layers;
     
-    // Hardware-efficient ansatz: RY-RZ per qubit per layer
-    // Proven effective for molecular systems (Kandala et al., Nature 2017)
     ansatz->num_parameters = num_qubits * num_layers * 2;
     
     ansatz->parameters = calloc(ansatz->num_parameters, sizeof(double));
@@ -527,8 +612,70 @@ vqe_ansatz_t* vqe_create_uccsd_ansatz(
     data->num_doubles = num_doubles;
     
     ansatz->circuit_data = data;
-    
+
     return ansatz;
+}
+
+typedef struct {
+    size_t num_occupied;
+    size_t num_virtual;
+} sym_preserve_data_t;
+
+vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
+    size_t num_qubits,
+    size_t num_occupied,
+    size_t num_layers
+) {
+    if (num_qubits == 0 || num_qubits > MAX_QUBITS || num_layers == 0 ||
+        num_occupied == 0 || num_occupied >= num_qubits) {
+        return NULL;
+    }
+    vqe_ansatz_t *ansatz = malloc(sizeof(vqe_ansatz_t));
+    if (!ansatz) return NULL;
+
+    size_t num_virtual = num_qubits - num_occupied;
+    ansatz->type = VQE_ANSATZ_SYMMETRY_PRESERVING;
+    ansatz->num_qubits = num_qubits;
+    ansatz->num_layers = num_layers;
+    ansatz->num_parameters = num_layers * num_occupied * num_virtual;
+    ansatz->parameters = calloc(ansatz->num_parameters, sizeof(double));
+    if (!ansatz->parameters) { free(ansatz); return NULL; }
+
+    sym_preserve_data_t *d = malloc(sizeof(sym_preserve_data_t));
+    if (!d) { free(ansatz->parameters); free(ansatz); return NULL; }
+    d->num_occupied = num_occupied;
+    d->num_virtual = num_virtual;
+    ansatz->circuit_data = d;
+
+    for (size_t i = 0; i < ansatz->num_parameters; i++) {
+        ansatz->parameters[i] = 0.01;
+    }
+    return ansatz;
+}
+
+static qs_error_t vqe_apply_symmetry_preserving_ansatz(
+    quantum_state_t *state,
+    const vqe_ansatz_t *ansatz
+) {
+    sym_preserve_data_t *d = (sym_preserve_data_t*)ansatz->circuit_data;
+    if (!d) return QS_ERROR_INVALID_STATE;
+
+    size_t idx = 0;
+    for (size_t layer = 0; layer < ansatz->num_layers; layer++) {
+        for (size_t o = 0; o < d->num_occupied; o++) {
+            for (size_t v = 0; v < d->num_virtual; v++) {
+                int q_occ = (int)(d->num_virtual + o);
+                int q_virt = (int)v;
+                double theta = ansatz->parameters[idx++];
+                // Givens rotation between {|...1 0...>, |...0 1...>}
+                // on the (q_occ, q_virt) pair.
+                gate_cnot(state, q_virt, q_occ);
+                gate_cry(state, q_occ, q_virt, theta);
+                gate_cnot(state, q_virt, q_occ);
+            }
+        }
+    }
+    return QS_SUCCESS;
 }
 
 void vqe_ansatz_free(vqe_ansatz_t *ansatz) {
@@ -546,21 +693,21 @@ qs_error_t vqe_apply_ansatz(
     if (!state || !ansatz) {
         return QS_ERROR_INVALID_STATE;
     }
-    
+
     if (state->num_qubits != ansatz->num_qubits) {
         return QS_ERROR_INVALID_DIMENSION;
     }
-    
-    // Reset to |0⟩
-    quantum_state_reset(state);
-    
+
     switch (ansatz->type) {
         case VQE_ANSATZ_HARDWARE_EFFICIENT:
             return vqe_apply_hardware_efficient_ansatz(state, ansatz);
-            
+
         case VQE_ANSATZ_UCCSD:
             return vqe_apply_uccsd_ansatz(state, ansatz);
-            
+
+        case VQE_ANSATZ_SYMMETRY_PRESERVING:
+            return vqe_apply_symmetry_preserving_ansatz(state, ansatz);
+
         default:
             return QS_ERROR_INVALID_STATE;
     }
@@ -572,23 +719,19 @@ static qs_error_t vqe_apply_hardware_efficient_ansatz(
     const vqe_ansatz_t *ansatz
 ) {
     size_t param_idx = 0;
-    
+
     for (size_t layer = 0; layer < ansatz->num_layers; layer++) {
-        // Single-qubit rotation layer
         for (size_t q = 0; q < ansatz->num_qubits; q++) {
             double theta_y = ansatz->parameters[param_idx++];
             double theta_z = ansatz->parameters[param_idx++];
-            
             gate_ry(state, q, theta_y);
             gate_rz(state, q, theta_z);
         }
-        
-        // Entangling layer (linear connectivity)
         for (size_t q = 0; q < ansatz->num_qubits - 1; q++) {
             gate_cnot(state, q, q + 1);
         }
     }
-    
+
     return QS_SUCCESS;
 }
 
@@ -872,7 +1015,13 @@ double vqe_compute_energy(
     if (quantum_state_init(&state, solver->hamiltonian->num_qubits) != QS_SUCCESS) {
         return VQE_ENERGY_ERROR;
     }
-    
+
+    // Prepare Hartree-Fock reference |HF> before the ansatz.
+    uint64_t hf = solver->hamiltonian->hf_reference;
+    for (size_t q = 0; q < solver->hamiltonian->num_qubits; q++) {
+        if (hf & (1ULL << q)) gate_pauli_x(&state, (int)q);
+    }
+
     // Update ansatz parameters
     memcpy(solver->ansatz->parameters, parameters,
            solver->ansatz->num_parameters * sizeof(double));
@@ -1817,19 +1966,14 @@ static qs_error_t vqe_apply_hardware_efficient_ansatz_noisy(
     size_t param_idx = 0;
 
     for (size_t layer = 0; layer < ansatz->num_layers; layer++) {
-        // Single-qubit rotation layer with noise
         for (size_t q = 0; q < ansatz->num_qubits; q++) {
             double theta_y = ansatz->parameters[param_idx++];
             double theta_z = ansatz->parameters[param_idx++];
-
             gate_ry(state, q, theta_y);
             apply_single_qubit_noise(state, q, noise, entropy);
-
             gate_rz(state, q, theta_z);
             apply_single_qubit_noise(state, q, noise, entropy);
         }
-
-        // Entangling layer with noise
         for (size_t q = 0; q < ansatz->num_qubits - 1; q++) {
             gate_cnot(state, q, q + 1);
             apply_two_qubit_noise(state, q, q + 1, noise, entropy);
@@ -1912,9 +2056,6 @@ qs_error_t vqe_apply_ansatz_noisy(
     if (state->num_qubits != ansatz->num_qubits) {
         return QS_ERROR_INVALID_DIMENSION;
     }
-
-    // Reset to |0⟩
-    quantum_state_reset(state);
 
     // If no noise, use standard ansatz
     if (!noise || !noise->enabled) {

@@ -9,7 +9,7 @@
  * - Memory management
  * - Logging and debugging
  *
- * @stability stable
+ * @stability evolving
  * @since v0.1.0
  *
  * Copyright 2024-2026 tsotchke
