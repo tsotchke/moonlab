@@ -222,6 +222,28 @@ impl QuantumState {
         }
     }
 
+    /// Concurrence of a 2-qubit pure state, C in [0, 1].
+    /// Returns Err for states with num_qubits != 2.
+    pub fn concurrence(&self) -> Result<f64> {
+        if self.num_qubits != 2 {
+            return Err(QuantumError::InvalidQubit {
+                index: 0, max: 2,
+            });
+        }
+        Ok(unsafe { ffi::entanglement_concurrence_2qubit(self.as_ptr()) })
+    }
+
+    /// Negativity of a 2-qubit pure state, N in [0, 1/2].
+    /// Returns Err for states with num_qubits != 2.
+    pub fn negativity(&self) -> Result<f64> {
+        if self.num_qubits != 2 {
+            return Err(QuantumError::InvalidQubit {
+                index: 0, max: 2,
+            });
+        }
+        Ok(unsafe { ffi::entanglement_negativity_2qubit(self.as_ptr()) })
+    }
+
     /// Compute the purity of the state: Tr(ρ²).
     ///
     /// Returns 1.0 for pure states, < 1.0 for mixed states.

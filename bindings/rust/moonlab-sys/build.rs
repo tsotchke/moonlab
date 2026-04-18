@@ -199,9 +199,10 @@ fn main() {
         .allowlist_function("quantum_entropy_init")
         .allowlist_function("quantum_entropy_get_bytes")
         // Entanglement
-        .allowlist_function("entanglement_entropy")
-        .allowlist_function("concurrence")
-        .allowlist_function("negativity")
+        .allowlist_function("entanglement_entropy_bipartition")
+        .allowlist_function("entanglement_concurrence_2qubit")
+        .allowlist_function("entanglement_negativity_2qubit")
+        .allowlist_function("entanglement_renyi_entropy")
         // Configuration
         .allowlist_type("qsim_config_t")
         .allowlist_type("qsim_backend_t")

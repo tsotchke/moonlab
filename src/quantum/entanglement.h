@@ -70,6 +70,14 @@ double entanglement_concurrence_2qubit(const quantum_state_t* state);
  */
 double entanglement_concurrence_mixed(const complex_t* density_matrix);
 
+/**
+ * @brief Negativity N(ρ) = (‖ρ^TB‖_1 − 1)/2 for a pure 2-qubit state.
+ *        Equal to (C + 0)/2 for pure states, where C is concurrence.
+ * @return N in [0, 1/2]; 0 for separable, 1/2 for a maximally-entangled
+ *         Bell state.
+ */
+double entanglement_negativity_2qubit(const quantum_state_t* state);
+
 // ============================================================================
 // SCHMIDT DECOMPOSITION
 // ============================================================================

@@ -231,3 +231,26 @@ class TestMeasurement:
 
         # State should now be collapsed
         assert_probability(state, outcome, 1.0)
+
+
+class TestEntanglementMetrics:
+    """Bipartite entropy, 2-qubit concurrence and negativity."""
+
+    def test_bell_state_metrics(self):
+        s = QuantumState(2)
+        s.h(0).cnot(0, 1)
+        assert abs(s.concurrence() - 1.0) < 1e-10
+        assert abs(s.negativity() - 0.5) < 1e-10
+        assert abs(s.entanglement_entropy([0]) - 1.0) < 1e-10
+
+    def test_product_state_metrics(self):
+        s = QuantumState(2)
+        s.h(0)  # |+>|0>
+        assert abs(s.concurrence()) < 1e-10
+        assert abs(s.negativity()) < 1e-10
+        assert abs(s.entanglement_entropy([0])) < 1e-10
+
+    def test_concurrence_requires_two_qubits(self):
+        s = QuantumState(3)
+        with pytest.raises(Exception):
+            s.concurrence()

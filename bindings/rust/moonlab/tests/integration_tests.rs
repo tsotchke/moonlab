@@ -635,3 +635,27 @@ fn clone_then_drop_both_is_safe() {
     drop(a);
     drop(b);
 }
+
+#[test]
+fn bell_state_has_concurrence_and_negativity() {
+    let mut s = QuantumState::new(2).unwrap();
+    s.h(0).cnot(0, 1);
+    let c = s.concurrence().unwrap();
+    let n = s.negativity().unwrap();
+    assert!((c - 1.0).abs() < 1e-10, "Bell concurrence {c}");
+    assert!((n - 0.5).abs() < 1e-10, "Bell negativity {n}");
+}
+
+#[test]
+fn product_state_has_zero_concurrence() {
+    let mut s = QuantumState::new(2).unwrap();
+    s.h(0);  // |+>|0>
+    assert!(s.concurrence().unwrap().abs() < 1e-10);
+    assert!(s.negativity().unwrap().abs() < 1e-10);
+}
+
+#[test]
+fn concurrence_rejects_non_2q_states() {
+    let s = QuantumState::new(3).unwrap();
+    assert!(s.concurrence().is_err());
+}
