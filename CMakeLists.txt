@@ -431,6 +431,30 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/qaoa.c
     src/algorithms/qpe.c
     src/algorithms/vqe.c
+    # Tensor-network stack — MPS / MPO / DMRG / TDVP / skyrmion braiding.
+    # Previously present in the tree but not compiled into libquantumsim,
+    # which meant every public TN symbol was undefined to consumers and
+    # no TN tests could link.
+    src/algorithms/tensor_network/tensor.c
+    src/algorithms/tensor_network/tn_state.c
+    src/algorithms/tensor_network/tn_gates.c
+    src/algorithms/tensor_network/tn_measurement.c
+    src/algorithms/tensor_network/contraction.c
+    src/algorithms/tensor_network/svd_compress.c
+    src/algorithms/tensor_network/dmrg.c
+    src/algorithms/tensor_network/tdvp.c
+    src/algorithms/tensor_network/mpo_2d.c
+    src/algorithms/tensor_network/lattice_2d.c
+    src/algorithms/tensor_network/skyrmion_braiding.c
+    # Chemistry (Jordan-Wigner, UCCSD, molecular Hamiltonians).
+    src/algorithms/chemistry/chemistry.c
+    # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
+    src/algorithms/topological/topological.c
+    # Many-body localization.
+    src/algorithms/mbl/mbl.c
+    # Visualization — circuit diagrams + Feynman diagrams.
+    src/visualization/circuit_diagram.c
+    src/visualization/feynman_diagram.c
 )
 
 set(QSIM_OPTIMIZATION_SOURCES
@@ -791,6 +815,155 @@ if(QSIM_BUILD_TESTS)
         target_compile_definitions(test_stride_gates PRIVATE HAS_OPENMP=1)
     endif()
     add_test(NAME unit_stride_gates COMMAND test_stride_gates)
+
+    # Tensor-network unit test — the 800+ line suite that exercises
+    # tensors, SVD, MPS, gate application via tensor networks,
+    # measurement, and entanglement. Already in-tree but historically
+    # not wired into ctest.
+    add_executable(test_tensor_network tests/unit/test_tensor_network.c)
+    target_link_libraries(test_tensor_network PRIVATE quantumsim)
+    add_test(NAME unit_tensor_network COMMAND test_tensor_network)
+
+    # Comprehensive end-to-end suite: gates, entanglement (von Neumann /
+    # Renyi / concurrence), amplitude/phase damping noise, Grover, MPS.
+    add_executable(test_comprehensive tests/test_comprehensive.c)
+    target_link_libraries(test_comprehensive PRIVATE quantumsim)
+    add_test(NAME comprehensive COMMAND test_comprehensive)
+
+    # DMRG ground-state solver regression test.
+    add_executable(test_dmrg tests/test_dmrg.c)
+    target_link_libraries(test_dmrg PRIVATE quantumsim)
+    add_test(NAME dmrg COMMAND test_dmrg)
+
+    # MPS vs exact state-vector drift test — catches divergences as
+    # bond dimension or system size grows.
+    add_executable(test_mps_vs_exact tests/test_mps_vs_exact.c)
+    target_link_libraries(test_mps_vs_exact PRIVATE quantumsim)
+    add_test(NAME mps_vs_exact COMMAND test_mps_vs_exact)
+
+    # Time-evolution long-run regression.
+    add_executable(test_long_evolution tests/test_long_evolution.c)
+    target_link_libraries(test_long_evolution PRIVATE quantumsim)
+    add_test(NAME long_evolution COMMAND test_long_evolution)
+
+    # Fast-measurement correctness test.
+    add_executable(test_fast_measurement tests/test_fast_measurement.c)
+    target_link_libraries(test_fast_measurement PRIVATE quantumsim)
+    add_test(NAME fast_measurement COMMAND test_fast_measurement)
+
+    # Measurement-subsystem unit test: probability queries, projective
+    # collapse, Bell correlations, expectation values.
+    add_executable(test_measurement tests/unit/test_measurement.c)
+    target_link_libraries(test_measurement PRIVATE quantumsim)
+    add_test(NAME unit_measurement COMMAND test_measurement)
+
+    # Entanglement unit test: product-state zero entropy, Bell-state
+    # maximal entropy, fidelity, purity, partial trace = I/2.
+    add_executable(test_entanglement tests/unit/test_entanglement.c)
+    target_link_libraries(test_entanglement PRIVATE quantumsim)
+    add_test(NAME unit_entanglement COMMAND test_entanglement)
+
+    # Noise-channel unit test: involution of bit/phase flips, depolarizing
+    # p=0 no-op, norm preservation across every channel.
+    add_executable(test_noise tests/unit/test_noise.c)
+    target_link_libraries(test_noise PRIVATE quantumsim)
+    add_test(NAME unit_noise COMMAND test_noise)
+
+    # Grover algorithm smoke: on 3/4/5 qubits, success probability on the
+    # marked state must exceed 0.8 after pi/4 * sqrt(N) iterations.
+    add_executable(test_grover tests/unit/test_grover.c)
+    target_link_libraries(test_grover PRIVATE quantumsim)
+    add_test(NAME unit_grover COMMAND test_grover)
+
+    # VQE H2 ground-state smoke.
+    add_executable(test_vqe tests/unit/test_vqe.c)
+    target_link_libraries(test_vqe PRIVATE quantumsim)
+    add_test(NAME unit_vqe COMMAND test_vqe)
+
+    # QAOA MaxCut smoke.
+    add_executable(test_qaoa tests/unit/test_qaoa.c)
+    target_link_libraries(test_qaoa PRIVATE quantumsim)
+    add_test(NAME unit_qaoa COMMAND test_qaoa)
+
+    # QPE phase-recovery smoke.
+    add_executable(test_qpe tests/unit/test_qpe.c)
+    target_link_libraries(test_qpe PRIVATE quantumsim)
+    add_test(NAME unit_qpe COMMAND test_qpe)
+
+    # Chemistry module smoke.
+    add_executable(test_chemistry tests/unit/test_chemistry.c)
+    target_link_libraries(test_chemistry PRIVATE quantumsim)
+    add_test(NAME unit_chemistry COMMAND test_chemistry)
+
+    # Topological QC smoke.
+    add_executable(test_topological tests/unit/test_topological.c)
+    target_link_libraries(test_topological PRIVATE quantumsim)
+    add_test(NAME unit_topological COMMAND test_topological)
+
+    # Many-body localization smoke.
+    add_executable(test_mbl tests/unit/test_mbl.c)
+    target_link_libraries(test_mbl PRIVATE quantumsim)
+    add_test(NAME unit_mbl COMMAND test_mbl)
+
+    # SIMD / Accelerate parity against scalar reference.
+    add_executable(test_simd_parity tests/unit/test_simd_parity.c)
+    target_link_libraries(test_simd_parity PRIVATE quantumsim)
+    if(QSIM_HAS_ACCELERATE)
+        target_compile_definitions(test_simd_parity PRIVATE HAS_ACCELERATE=1)
+    endif()
+    add_test(NAME unit_simd_parity COMMAND test_simd_parity)
+
+    # Metal GPU kernel parity against CPU (macOS + Metal only).
+    add_executable(test_metal_parity tests/unit/test_metal_parity.c)
+    target_link_libraries(test_metal_parity PRIVATE quantumsim)
+    if(QSIM_HAS_METAL)
+        target_compile_definitions(test_metal_parity PRIVATE HAS_METAL=1)
+    endif()
+    add_test(NAME unit_metal_parity COMMAND test_metal_parity)
+
+    # 2D lattice + MPO-2D smoke (square / triangular / honeycomb).
+    add_executable(test_lattice_2d tests/unit/test_lattice_2d.c)
+    target_link_libraries(test_lattice_2d PRIVATE quantumsim)
+    add_test(NAME unit_lattice_2d COMMAND test_lattice_2d)
+
+    # Python bindings smoke — imports moonlab.core, constructs a Bell
+    # state, asserts exact amplitudes. Requires python3 on PATH.
+    find_program(PYTHON3_EXECUTABLE python3)
+    if(PYTHON3_EXECUTABLE)
+        add_test(NAME python_bindings_smoke
+                 COMMAND ${PYTHON3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_bindings_smoke.py)
+        set_tests_properties(python_bindings_smoke PROPERTIES
+            ENVIRONMENT
+                "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
+        )
+    endif()
+
+    # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
+    # if the crate root and Cargo are present.
+    find_program(CARGO_EXECUTABLE cargo)
+    if(CARGO_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
+        add_test(NAME rust_bindings_smoke
+                 COMMAND ${CARGO_EXECUTABLE} test --manifest-path
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml
+                         --no-fail-fast)
+        set_tests_properties(rust_bindings_smoke PROPERTIES
+            ENVIRONMENT
+                "MOONLAB_LIB_DIR=$<TARGET_FILE_DIR:quantumsim>;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
+        )
+    endif()
+
+    # WebGPU parity smoke — runs the existing randomized eval script.
+    # Requires pnpm, emscripten-built moonlab.wasm, and optionally a
+    # WebGPU-capable runtime (Chromium 113+ or Deno 2).
+    find_program(PNPM_EXECUTABLE pnpm)
+    if(PNPM_EXECUTABLE AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs")
+        add_test(NAME webgpu_unified_smoke
+                 COMMAND ${PNPM_EXECUTABLE} -C
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
+                         exec node scripts/webgpu-unified-smoke.mjs)
+    endif()
 
     # Distributed computing tests (MPI). Each test executable is only
     # added if the corresponding source file is present — the MPI test

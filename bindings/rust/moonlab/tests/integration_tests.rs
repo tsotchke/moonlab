@@ -322,9 +322,12 @@ mod entanglement {
         state.h(0).cnot(0, 1);
 
         let entropy = state.entanglement_entropy(&[0]).unwrap();
-        // Maximal entanglement for 2 qubits: ln(2) ≈ 0.693
-        assert!(entropy > 0.6, "Bell state should have high entropy: {}", entropy);
-        assert!(entropy < 0.8, "Entropy should not exceed ln(2): {}", entropy);
+        // Moonlab reports entanglement entropy in BITS (log2 units), so the
+        // maximal bipartite entropy of a Bell state is exactly 1.0 ebit
+        // (= log2(2)). Previous versions of this test asserted the natural-
+        // log value 0.693, which disagreed with the C convention.
+        assert!(entropy > 0.99, "Bell state should have ~1 ebit: {}", entropy);
+        assert!(entropy < 1.01, "Entropy should not exceed 1 ebit: {}", entropy);
     }
 
     #[test]

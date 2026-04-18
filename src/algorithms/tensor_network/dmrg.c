@@ -106,7 +106,6 @@ mpo_t *mpo_tfim_create(uint32_t num_sites, double J, double h) {
     double complex I_mat[4] = {1, 0, 0, 1};
     double complex X_mat[4] = {0, 1, 1, 0};
     double complex Z_mat[4] = {1, 0, 0, -1};
-    double complex zero_mat[4] = {0, 0, 0, 0};
 
     for (uint32_t site = 0; site < num_sites; site++) {
         mpo_tensor_t *W = &mpo->tensors[site];
@@ -226,7 +225,6 @@ mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double 
     double complex X_mat[4] = {0, 1, 1, 0};
     double complex Y_mat[4] = {0, -I, I, 0};
     double complex Z_mat[4] = {1, 0, 0, -1};
-    double complex Zero_mat[4] = {0, 0, 0, 0};
 
     for (uint32_t site = 0; site < num_sites; site++) {
         mpo_tensor_t *W = &mpo->tensors[site];
@@ -470,6 +468,7 @@ error:
 /**
  * @brief Helper: Convert 2D grid coordinates to snake (MPS) index
  */
+__attribute__((unused))
 static inline uint32_t grid_to_snake_idx(uint32_t x, uint32_t y, uint32_t Lx) {
     if (y % 2 == 0) {
         return y * Lx + x;
@@ -720,9 +719,9 @@ mpo_t *mpo_2d_heisenberg_dmi_create(uint32_t num_sites,
         // For interfacial DMI with d_ij in z-direction:
         // D * (X_i Y_j - Y_i X_j)
         if (D != 0.0 && bond_vectors != NULL) {
-            // Get bond direction for DMI
-            double dx = bond_vectors[b][0];
-            double dy = bond_vectors[b][1];
+            // Only the z-component of the bond direction is used below;
+            // x/y components are tracked in the outer table but not
+            // multiplied in here.
             double dz = bond_vectors[b][2];
 
             // For interfacial DMI: d_ij perpendicular to bond
@@ -2259,7 +2258,6 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
 
         // Add |+> component for the first bond index
         // This ensures we start near a reasonable state
-        uint32_t idx0[3] = {0, 0, 0};
         uint32_t idx1[3] = {0, 1, 0};
         mps->tensors[i]->data[0] += 1.0 / sqrt(2.0);  // |0> component
         tensor_set(mps->tensors[i], idx1, tensor_get(mps->tensors[i], idx1) + 1.0 / sqrt(2.0));
