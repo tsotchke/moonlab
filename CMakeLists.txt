@@ -60,6 +60,7 @@ option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers)" OFF)
+option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
 
 # SIMD options
 option(QSIM_ENABLE_AVX512 "Enable AVX-512 (if available)" ON)
@@ -154,6 +155,23 @@ elseif(QSIM_COMPILER_MSVC)
     if(QSIM_WERROR)
         list(APPEND QSIM_WARNING_FLAGS /WX)
     endif()
+endif()
+
+# AddressSanitizer + UndefinedBehaviorSanitizer. Opt-in; meant for CI
+# and local debug builds. Always paired with -O1 -g for readable reports.
+set(QSIM_SANITIZER_FLAGS)
+if(QSIM_ENABLE_SANITIZERS AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
+    list(APPEND QSIM_SANITIZER_FLAGS
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+        -fno-optimize-sibling-calls
+        -g
+    )
+    # Keep -O1 so the sanitizer can keep up without losing debuggability.
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND QSIM_SANITIZER_FLAGS -O1)
+    endif()
+    message(STATUS "Sanitizers: AddressSanitizer + UndefinedBehaviorSanitizer enabled")
 endif()
 
 # Optimization flags
@@ -576,7 +594,15 @@ target_include_directories(quantumsim
 target_compile_options(quantumsim PRIVATE
     ${QSIM_WARNING_FLAGS}
     ${QSIM_OPTIMIZE_FLAGS}
+    ${QSIM_SANITIZER_FLAGS}
 )
+
+# Sanitizer runtime needs to be linked into the shared library too.
+if(QSIM_ENABLE_SANITIZERS AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
+    target_link_options(quantumsim PRIVATE ${QSIM_SANITIZER_FLAGS})
+    add_compile_options(${QSIM_SANITIZER_FLAGS})
+    add_link_options(${QSIM_SANITIZER_FLAGS})
+endif()
 
 # Link libraries
 target_link_libraries(quantumsim

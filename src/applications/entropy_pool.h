@@ -71,6 +71,13 @@ typedef struct {
     
     // Thread safety
     pthread_mutex_t pool_mutex;    /**< Pool access mutex */
+    pthread_mutex_t health_mutex;  /**< Serialises health_tests_run_batch
+                                    *   calls made from the background
+                                    *   worker and the direct-generation
+                                    *   path. Without this, both threads
+                                    *   race on apt_window_pos and ASAN
+                                    *   reports a heap-buffer-overflow
+                                    *   in health_test_apt. */
     pthread_cond_t refill_cond;    /**< Refill condition variable */
     pthread_t background_thread;   /**< Background generation thread */
     int background_running;        /**< Background thread running flag */

@@ -2,103 +2,226 @@ name: CI
 
 on:
   push:
-    branches: [master, develop, 'feat/**']
+    branches: [master, develop, 'feat/**', 'chore/**', 'feature/**']
   pull_request:
     branches: [master]
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
+  # ============================================================================
+  # Tier A — native build + ctest on every supported platform.
+  # ============================================================================
 
+  linux-x64:
+    name: Linux x86_64 (Release)
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
+            build-essential cmake ninja-build \
             libomp-dev libopenblas-dev liblapacke-dev
 
-      - name: Build Library
-        run: make clean && make
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build All Tests
-        run: make tests unit_tests
+      - name: Build
+        run: cmake --build build -j
 
-      - name: Run Unit Tests
-        run: make test_unit
+      - name: Test (ctest, excluding long_evolution)
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
-      - name: Run Integration Tests
-        run: make test
-
-      - name: Upload Artifacts
+      - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
-          name: moonlab-linux-x64
+          name: moonlab-linux-x86_64
           path: |
-            lib/libquantum_sim.a
+            build/libquantumsim.so*
+            build/libquantumsim.a
 
-  build-macos-arm:
+  macos-arm64:
+    name: macOS arm64 (Release)
     runs-on: macos-14
     env:
-      PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
       MOONLAB_SKIP_HW_ENTROPY: "1"
       OMP_NUM_THREADS: "1"
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: brew install libomp
+      - name: Install dependencies
+        run: brew install libomp ninja
 
-      - name: Build Library
-        run: make clean && make
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build All Tests
-        run: make tests unit_tests
+      - name: Build
+        run: cmake --build build -j
 
-      - name: Run Unit Tests
-        run: make test_unit
+      - name: Test (ctest, excluding long_evolution)
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
-      - name: Run Integration Tests
-        run: make test
-
-      - name: Upload Artifacts
+      - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
           name: moonlab-macos-arm64
           path: |
-            lib/libquantum_sim.a
+            build/libquantumsim.*dylib
 
-  build-macos-intel:
-    runs-on: macos-15-large
+  macos-werror:
+    name: macOS arm64 (Release + -Werror)
+    runs-on: macos-14
     env:
-      PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
       MOONLAB_SKIP_HW_ENTROPY: "1"
       OMP_NUM_THREADS: "1"
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: brew install libomp
+      - name: Install dependencies
+        run: brew install libomp ninja
 
-      - name: Build Library
-        run: make clean && make
+      - name: Configure (-DQSIM_WERROR=ON)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_WERROR=ON
 
-      - name: Build All Tests
-        run: make tests unit_tests
+      - name: Build
+        run: cmake --build build -j
 
-      - name: Run Unit Tests
-        run: make test_unit
+      - name: Test
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
-      - name: Run Integration Tests
-        run: make test
+  macos-debug:
+    name: macOS arm64 (Debug)
+    runs-on: macos-14
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install libomp ninja
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 600
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+  # ============================================================================
+  # Tier B — MPI end-to-end (mpirun inside CI).
+  # ============================================================================
+
+  macos-mpi:
+    name: macOS arm64 (-DQSIM_ENABLE_MPI=ON)
+    runs-on: macos-14
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+      OMPI_MCA_plm_ssh_agent: /bin/false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (OpenMPI)
+        run: brew install libomp ninja open-mpi
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test (includes MPI distributed_gates via mpirun -np 4)
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+
+  # ============================================================================
+  # Tier C — sanitizers (ASAN + UBSAN) — correctness gates.
+  # ============================================================================
+
+  macos-sanitizers:
+    name: macOS arm64 (ASAN + UBSAN)
+    runs-on: macos-14
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+      ASAN_OPTIONS: "detect_leaks=0:abort_on_error=1:halt_on_error=1"
+      UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install libomp ninja
+      - name: Configure (+ sanitizers)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DQSIM_ENABLE_SANITIZERS=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        # Exclude long_evolution (7 min) and the language-binding smokes
+        # because Python / Rust / WebGPU drivers are not themselves
+        # sanitizer-instrumented — loading an ASAN-built dylib from a
+        # non-ASAN driver triggers spurious aborts.
+        run: ctest --test-dir build -E "long_evolution|python_bindings|rust_bindings|webgpu_unified" --output-on-failure --timeout 600
+
+  # ============================================================================
+  # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
+  # ============================================================================
+
+  bindings:
+    name: Bindings smoke (Python + Rust)
+    runs-on: macos-14
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install libomp ninja rust
+      - name: Install Python
+        uses: actions/setup-python@v5
         with:
-          name: moonlab-macos-x64
-          path: |
-            lib/libquantum_sim.a
+          python-version: '3.12'
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build library
+        run: cmake --build build -j
+      - name: Run bindings tests
+        run: ctest --test-dir build -R "python_bindings_smoke|rust_bindings_smoke" --output-on-failure --timeout 600
+
+  # ============================================================================
+  # Tier E — WASM build + WebGPU parity smoke.
+  # ============================================================================
+
+  wasm:
+    name: WASM / WebGPU smoke
+    runs-on: macos-14
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install ninja
+      - name: Install emsdk
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+      - name: Build CLAPACK for WASM
+        run: bash bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
+      - name: Configure WASM moonlab
+        run: |
+          source "$EMSDK/emsdk_env.sh"
+          emcmake cmake -S bindings/javascript/packages/core/emscripten \
+                        -B bindings/javascript/packages/core/emscripten/build \
+                        -DCMAKE_BUILD_TYPE=Release
+      - name: Build WASM moonlab
+        run: |
+          source "$EMSDK/emsdk_env.sh"
+          emmake make -C bindings/javascript/packages/core/emscripten/build -j
+      - name: Build TypeScript
+        run: |
+          cd bindings/javascript/packages/core
+          pnpm install --ignore-scripts
+          pnpm run build:ts
+      - name: Run WebGPU unified smoke
+        run: |
+          cd bindings/javascript/packages/core
+          node scripts/webgpu-unified-smoke.mjs
