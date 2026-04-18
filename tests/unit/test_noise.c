@@ -178,6 +178,33 @@ static void test_norm_after_every_channel(void) {
     }
 }
 
+/* Kraus-completeness: Σ K†K = I within float tolerance for every
+ * single-qubit channel and parameter value. */
+static void test_kraus_completeness(void) {
+    fprintf(stdout, "\n-- noise: Kraus-completeness Σ K†K = I --\n");
+    struct { noise_channel_id_t id; const char *name; } chans[] = {
+        {NOISE_CHANNEL_DEPOLARIZING,     "depolarizing"},
+        {NOISE_CHANNEL_AMPLITUDE_DAMPING,"amplitude damping"},
+        {NOISE_CHANNEL_PHASE_DAMPING,    "phase damping"},
+        {NOISE_CHANNEL_BIT_FLIP,         "bit flip"},
+        {NOISE_CHANNEL_PHASE_FLIP,       "phase flip"},
+        {NOISE_CHANNEL_BIT_PHASE_FLIP,   "bit-phase flip"},
+    };
+    double params[] = { 0.0, 0.1, 0.5, 0.9, 1.0 };
+    for (size_t c = 0; c < sizeof(chans)/sizeof(chans[0]); c++) {
+        for (size_t i = 0; i < sizeof(params)/sizeof(params[0]); i++) {
+            double dev = noise_kraus_completeness_deviation(
+                chans[c].id, params[i]);
+            CHECK(dev >= 0.0 && dev < 1e-12,
+                  "%-18s  p=%.2f  max|ΣK†K - I| = %.3e",
+                  chans[c].name, params[i], dev);
+        }
+    }
+    /* Invalid parameter is rejected. */
+    CHECK(noise_kraus_completeness_deviation(NOISE_CHANNEL_DEPOLARIZING, -0.1) < 0,
+          "invalid p rejected (returns < 0)");
+}
+
 int main(void) {
     fprintf(stdout, "=== noise channel tests ===\n");
     test_bit_flip_involution();
@@ -186,6 +213,7 @@ int main(void) {
     test_amplitude_damping_preserves_norm();
     test_pure_dephasing_populations();
     test_norm_after_every_channel();
+    test_kraus_completeness();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

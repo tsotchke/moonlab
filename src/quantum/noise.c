@@ -595,3 +595,85 @@ noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
 
     return model;
 }
+
+// ============================================================================
+// KRAUS-CHANNEL VALIDATION
+// ============================================================================
+
+/* A single-qubit Kraus set is a list of 2x2 matrices. We represent each
+ * matrix row-major as [a,b,c,d] meaning [[a,b],[c,d]] with complex entries. */
+typedef struct { double complex a, b, c, d; } kraus_2x2_t;
+
+static void kraus_dag_times(kraus_2x2_t k,
+                            double complex *h00,
+                            double complex *h01,
+                            double complex *h10,
+                            double complex *h11) {
+    /* Add K^dagger * K to the accumulator (h00, h01, h10, h11). */
+    double complex ka = conj(k.a), kb = conj(k.c);
+    double complex kc = conj(k.b), kd = conj(k.d);
+    *h00 += ka * k.a + kb * k.c;
+    *h01 += ka * k.b + kb * k.d;
+    *h10 += kc * k.a + kd * k.c;
+    *h11 += kc * k.b + kd * k.d;
+}
+
+double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p) {
+    if (p < 0.0 || p > 1.0) return -1.0;
+
+    kraus_2x2_t K[4];
+    size_t n = 0;
+    const double sp = sqrt(p);
+    const double sq = sqrt(1.0 - p);
+
+    switch (channel) {
+    case NOISE_CHANNEL_DEPOLARIZING:
+        /* Single-qubit depolarizing: (1-p)ρ + (p/3)(XρX+YρY+ZρZ). */
+        K[0] = (kraus_2x2_t){ sqrt(1.0 - p), 0, 0, sqrt(1.0 - p) };
+        K[1] = (kraus_2x2_t){ 0, sqrt(p / 3.0), sqrt(p / 3.0), 0 };
+        K[2] = (kraus_2x2_t){ 0, -I * sqrt(p / 3.0), I * sqrt(p / 3.0), 0 };
+        K[3] = (kraus_2x2_t){ sqrt(p / 3.0), 0, 0, -sqrt(p / 3.0) };
+        n = 4;
+        break;
+    case NOISE_CHANNEL_AMPLITUDE_DAMPING:
+        K[0] = (kraus_2x2_t){ 1, 0, 0, sq };
+        K[1] = (kraus_2x2_t){ 0, sp, 0, 0 };
+        n = 2;
+        break;
+    case NOISE_CHANNEL_PHASE_DAMPING:
+        K[0] = (kraus_2x2_t){ 1, 0, 0, sq };
+        K[1] = (kraus_2x2_t){ 0, 0, 0, sp };
+        n = 2;
+        break;
+    case NOISE_CHANNEL_BIT_FLIP:
+        K[0] = (kraus_2x2_t){ sq, 0, 0, sq };
+        K[1] = (kraus_2x2_t){ 0, sp, sp, 0 };
+        n = 2;
+        break;
+    case NOISE_CHANNEL_PHASE_FLIP:
+        K[0] = (kraus_2x2_t){ sq, 0, 0, sq };
+        K[1] = (kraus_2x2_t){ sp, 0, 0, -sp };
+        n = 2;
+        break;
+    case NOISE_CHANNEL_BIT_PHASE_FLIP:
+        K[0] = (kraus_2x2_t){ sq, 0, 0, sq };
+        K[1] = (kraus_2x2_t){ 0, -I * sp, I * sp, 0 };
+        n = 2;
+        break;
+    default:
+        return -1.0;
+    }
+
+    double complex h00 = 0, h01 = 0, h10 = 0, h11 = 0;
+    for (size_t i = 0; i < n; i++) kraus_dag_times(K[i], &h00, &h01, &h10, &h11);
+
+    double d00 = cabs(h00 - 1.0);
+    double d01 = cabs(h01);
+    double d10 = cabs(h10);
+    double d11 = cabs(h11 - 1.0);
+    double m = d00;
+    if (d01 > m) m = d01;
+    if (d10 > m) m = d10;
+    if (d11 > m) m = d11;
+    return m;
+}

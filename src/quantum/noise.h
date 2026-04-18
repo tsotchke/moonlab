@@ -169,6 +169,34 @@ void noise_model_set_readout_error(noise_model_t* model,
                                    double error_0, double error_1);
 void noise_model_set_enabled(noise_model_t* model, int enabled);
 
+// ============================================================================
+// KRAUS-CHANNEL VALIDATION
+// ============================================================================
+
+/**
+ * @brief Identifier for the single-qubit channel to validate.
+ */
+typedef enum {
+    NOISE_CHANNEL_DEPOLARIZING,    /**< One parameter: probability p. */
+    NOISE_CHANNEL_AMPLITUDE_DAMPING,/**< One parameter: gamma. */
+    NOISE_CHANNEL_PHASE_DAMPING,   /**< One parameter: lambda. */
+    NOISE_CHANNEL_BIT_FLIP,        /**< One parameter: probability p. */
+    NOISE_CHANNEL_PHASE_FLIP,      /**< One parameter: probability p. */
+    NOISE_CHANNEL_BIT_PHASE_FLIP,  /**< One parameter: probability p. */
+} noise_channel_id_t;
+
+/**
+ * @brief Check the Kraus completeness relation Σ_i K_i† K_i = I for a
+ *        single-qubit channel at parameter @p p. Returns the max
+ *        absolute deviation from the identity. A valid CPTP channel
+ *        returns 0 to within floating-point tolerance (~1e-15).
+ *
+ * @param channel Channel identifier.
+ * @param p Channel parameter (gamma, lambda, or probability).
+ * @return Max |Σ K†K - I| element-wise; negative on invalid input.
+ */
+double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
+
 #ifdef __cplusplus
 }
 #endif
