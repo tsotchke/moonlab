@@ -42,11 +42,15 @@ typedef enum {
 
 /**
  * @brief Quantum state representation
- * 
+ *
  * Represents a pure quantum state |ψ⟩ = Σ αᵢ|i⟩ where:
  * - αᵢ are complex amplitudes
  * - Σ|αᵢ|² = 1 (normalization)
  * - |i⟩ are computational basis states
+ *
+ * @thread-safety NOT thread-safe. Concurrent callers must serialize
+ *                all mutating operations (gates, measurement, reset).
+ *                Read-only accessors on a stable state are safe.
  */
 typedef struct {
     size_t num_qubits;              // Number of qubits

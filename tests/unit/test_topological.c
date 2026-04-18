@@ -72,10 +72,74 @@ static void test_toric_code_lifecycle(void) {
     }
 }
 
+static void test_fibonacci_braiding_invariants(void) {
+    fprintf(stdout, "\n-- topological: Fibonacci braiding --\n");
+    anyon_system_t* sys = anyon_system_fibonacci();
+    if (!sys) { CHECK(0, "create system"); return; }
+
+    /* Four tau anyons fusing to vacuum — the canonical setup used to
+     * realise one logical qubit of Fibonacci topological quantum
+     * computation. */
+    anyon_charge_t charges[4] = { FIB_TAU, FIB_TAU, FIB_TAU, FIB_TAU };
+    fusion_tree_t* tree = fusion_tree_create(sys, charges, 4, FIB_VACUUM);
+    CHECK(tree != NULL, "create 4-tau fusion tree");
+    if (!tree) { anyon_system_free(sys); return; }
+
+    /* Fusion space dimension: for n=4 tau anyons fused to vacuum, it's
+     * Fibonacci number F_{n-1} = F_3 = 2. */
+    uint32_t paths = fusion_count_paths(sys, charges, 4, FIB_VACUUM);
+    CHECK(paths == 2,
+          "fusion_count_paths(4 tau -> vacuum) == 2 (got %u)", paths);
+
+    /* Norm before braid should be 1. */
+    double norm0 = 0.0;
+    for (uint32_t i = 0; i < tree->num_paths; i++) {
+        double m = cabs(tree->amplitudes[i]);
+        norm0 += m * m;
+    }
+    CHECK(fabs(norm0 - 1.0) < 1e-10,
+          "initial norm == 1 (got %.12f)", norm0);
+
+    /* Snapshot amplitudes for identity-braid check. */
+    double complex amps0[8] = {0};
+    for (uint32_t i = 0; i < tree->num_paths && i < 8; i++) {
+        amps0[i] = tree->amplitudes[i];
+    }
+
+    /* Apply sigma_1 followed by sigma_1^{-1}: should be identity on
+     * the logical state up to global phase. */
+    qs_error_t err = braid_anyons(tree, 0, true);
+    CHECK(err == QS_SUCCESS, "sigma_1 succeeds");
+    err = braid_anyons(tree, 0, false);
+    CHECK(err == QS_SUCCESS, "sigma_1^{-1} succeeds");
+
+    /* Norm preserved. */
+    double norm1 = 0.0;
+    for (uint32_t i = 0; i < tree->num_paths; i++) {
+        double m = cabs(tree->amplitudes[i]);
+        norm1 += m * m;
+    }
+    CHECK(fabs(norm1 - 1.0) < 1e-10,
+          "norm preserved after sigma_1 sigma_1^{-1} (got %.12f)", norm1);
+
+    /* sigma * sigma^{-1} is identity on the full state. */
+    double max_diff = 0.0;
+    for (uint32_t i = 0; i < tree->num_paths && i < 8; i++) {
+        double d = cabs(tree->amplitudes[i] - amps0[i]);
+        if (d > max_diff) max_diff = d;
+    }
+    CHECK(max_diff < 1e-10,
+          "sigma_1 sigma_1^{-1} = I on amplitudes (max diff %.3e)", max_diff);
+
+    fusion_tree_free(tree);
+    anyon_system_free(sys);
+}
+
 int main(void) {
     fprintf(stdout, "=== topological smoke tests ===\n");
     test_fibonacci_quantum_dimension();
     test_ising_anyons();
+    test_fibonacci_braiding_invariants();
     test_surface_code_lifecycle();
     test_toric_code_lifecycle();
     fprintf(stdout, "\n=== %d failure%s ===\n",

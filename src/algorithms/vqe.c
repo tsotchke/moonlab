@@ -1360,8 +1360,23 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
 
                 simplex = malloc((n + 1) * sizeof(double *));
                 simplex_vals = malloc((n + 1) * sizeof(double));
+                if (!simplex || !simplex_vals) {
+                    free(simplex); free(simplex_vals);
+                    simplex = NULL; simplex_vals = NULL;
+                    result.ground_state_energy = VQE_ENERGY_ERROR;
+                    break;
+                }
+                int alloc_fail = 0;
                 for (size_t i = 0; i <= n; i++) {
                     simplex[i] = malloc(n * sizeof(double));
+                    if (!simplex[i]) { alloc_fail = 1; break; }
+                }
+                if (alloc_fail) {
+                    for (size_t i = 0; i <= n; i++) free(simplex[i]);
+                    free(simplex); free(simplex_vals);
+                    simplex = NULL; simplex_vals = NULL;
+                    result.ground_state_energy = VQE_ENERGY_ERROR;
+                    break;
                 }
 
                 // Initialize simplex around current point

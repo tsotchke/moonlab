@@ -831,14 +831,33 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
     
     free(grad_gamma);
     free(grad_beta);
-    
+
     result.optimization_time = solver->total_time;
-    
+
+    // Compute approximation ratio by brute-force enumerating the Ising
+    // spectrum. Cheap for the <=24-qubit regime QAOA targets; cap at
+    // 2^20 to stay under a second even on slow hosts. For larger
+    // problems leave the ratio at 0 so qaoa_print_result skips it.
+    {
+        uint32_t nq = solver->ising->num_qubits;
+        if (nq > 0 && nq <= 20) {
+            uint64_t dim = 1ULL << nq;
+            double opt = DBL_MAX, worst = -DBL_MAX;
+            for (uint64_t b = 0; b < dim; b++) {
+                double e = ising_model_evaluate(solver->ising, b);
+                if (e < opt)   opt = e;
+                if (e > worst) worst = e;
+            }
+            result.approximation_ratio = qaoa_approximation_ratio(
+                result.best_energy, opt, worst);
+        }
+    }
+
     if (solver->verbose) {
         printf("──────────────────────────────────────────────────────────\n\n");
         qaoa_print_result(&result);
     }
-    
+
     return result;
 }
 

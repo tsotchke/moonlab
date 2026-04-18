@@ -35,6 +35,11 @@ extern "C" {
  * @brief Distributed computing context
  *
  * Holds MPI state and partition information for distributed simulation.
+ *
+ * @thread-safety NOT thread-safe. MPI_Comm operations require
+ *                MPI_THREAD_MULTIPLE in the underlying MPI runtime AND
+ *                external caller serialization; this bridge assumes
+ *                single-threaded use per rank.
  */
 typedef struct {
     int rank;                    /**< This node's rank (0 to size-1) */

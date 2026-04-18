@@ -142,11 +142,63 @@ static void test_pauli_hamiltonian_construction(void) {
     fprintf(stdout, "  OK    freed Hamiltonian cleanly\n");
 }
 
+/* Noisy VQE: attach a depolarizing noise model and confirm the solver
+ * runs to completion without crashing and returns a finite energy
+ * above the ideal VQE energy (noise raises variational energies). */
+static void test_h2_noisy(void) {
+    fprintf(stdout, "\n-- VQE: H2 with depolarizing noise runs cleanly --\n");
+
+    pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(0.74);
+    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(H->num_qubits, 2);
+    vqe_optimizer_t* opt = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+    opt->max_iterations = 50;
+    opt->tolerance = 1e-6;
+    opt->learning_rate = 0.05;
+    opt->verbose = 0;
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    vqe_solver_t* solver = vqe_solver_create(H, ansatz, opt, &e);
+    CHECK(solver != NULL, "built VQE solver");
+    if (!solver) {
+        vqe_optimizer_free(opt); vqe_ansatz_free(ansatz);
+        pauli_hamiltonian_free(H); return;
+    }
+
+    noise_model_t* noise = vqe_create_depolarizing_noise(0.001, 0.01, 0.01);
+    CHECK(noise != NULL, "built depolarizing noise model");
+    if (!noise) {
+        vqe_solver_free(solver); vqe_optimizer_free(opt);
+        vqe_ansatz_free(ansatz); pauli_hamiltonian_free(H);
+        return;
+    }
+    vqe_solver_set_noise(solver, noise);
+
+    vqe_result_t res = vqe_solve(solver);
+    fprintf(stdout, "    E_noisy = %.6f Ha (noise p1=1e-3 p2=1e-2)\n",
+            res.ground_state_energy);
+    CHECK(isfinite(res.ground_state_energy),
+          "noisy VQE returns a finite energy");
+    CHECK(res.ground_state_energy > -2.0 && res.ground_state_energy < 2.0,
+          "noisy energy in physical window [-2, 2] Ha (%.6f)",
+          res.ground_state_energy);
+
+    /* noise is owned by solver now (per the header: "solver takes
+     * ownership, will free on solver_free") */
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
     test_h2_single_energy_evaluation();
     test_h2_optimizer_converges_below_hf();
+    test_h2_noisy();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
