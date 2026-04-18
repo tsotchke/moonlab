@@ -975,6 +975,18 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
     add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
 
+    # Performance benchmarks (build-only; no ctest entry so CI stays
+    # fast). Run directly for local profiling:
+    #   ./build/bench_state_operations
+    #   ./build/bench_tensor_networks    (pending API migration)
+    #
+    # bench_tensor_networks.c still uses the pre-0.1.2 tensor-network
+    # API (tn_mps_t / tn_mps_create / tn_mps_entanglement_entropy);
+    # migrating it to the current tn_mps_state_t API is a Phase 1G
+    # follow-up. Build-gated on source existence.
+    add_executable(bench_state_operations tests/performance/bench_state_operations.c)
+    target_link_libraries(bench_state_operations PRIVATE quantumsim)
+
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
     find_program(PYTHON3_EXECUTABLE python3)

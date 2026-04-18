@@ -132,7 +132,7 @@ static void bench_hadamard(void *data) {
 
 static void bench_x_gate(void *data) {
     gate_data_t *d = (gate_data_t *)data;
-    gate_x(d->state, d->target);
+    gate_pauli_x(d->state, d->target);
 }
 
 static void bench_t_gate(void *data) {
