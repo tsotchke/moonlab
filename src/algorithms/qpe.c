@@ -121,49 +121,47 @@ static qs_error_t apply_controlled_operator(
     
     size_t full_dim = state->state_dim;
     uint64_t control_mask = 1ULL << control_qubit;
-    
-    // Process only states where control qubit is |1⟩
+
+    /* Process only states where control qubit is |1>. We visit only
+     * basis indices whose target bits are all zero so each pair of
+     * 2^num_targets amplitudes is extracted and modified exactly once;
+     * otherwise we would apply U up to 2^num_targets times per group. */
+    uint64_t targets_mask = 0;
+    for (size_t i = 0; i < num_targets; ++i) {
+        targets_mask |= (1ULL << target_qubits[i]);
+    }
+
     for (uint64_t basis_idx = 0; basis_idx < full_dim; basis_idx++) {
-        if (basis_idx & control_mask) {
-            // Control is |1⟩, need to apply operator
-            
-            // Extract target qubit state
-            for (size_t t = 0; t < (1ULL << num_targets); t++) {
-                // Map target index to full index
-                uint64_t full_idx = basis_idx;
-                for (size_t i = 0; i < num_targets; i++) {
-                    // Clear target qubit bit
-                    full_idx &= ~(1ULL << target_qubits[i]);
-                    // Set according to target pattern
-                    if (t & (1ULL << i)) {
-                        full_idx |= (1ULL << target_qubits[i]);
-                    }
+        if (!(basis_idx & control_mask)) continue;
+        if (basis_idx & targets_mask)    continue;
+
+        for (size_t t = 0; t < (1ULL << num_targets); t++) {
+            uint64_t full_idx = basis_idx;
+            for (size_t i = 0; i < num_targets; i++) {
+                full_idx &= ~(1ULL << target_qubits[i]);
+                if (t & (1ULL << i)) {
+                    full_idx |= (1ULL << target_qubits[i]);
                 }
-                
-                target_state.amplitudes[t] = state->amplitudes[full_idx];
             }
-            
-            // Apply operator to target state
-            qs_error_t err = operator_func(&target_state, operator_data);
-            if (err != QS_SUCCESS) {
-                quantum_state_free(&target_state);
-                return err;
-            }
-            
-            // Insert modified target state back
-            for (size_t t = 0; t < (1ULL << num_targets); t++) {
-                uint64_t full_idx = basis_idx;
-                for (size_t i = 0; i < num_targets; i++) {
-                    full_idx &= ~(1ULL << target_qubits[i]);
-                    if (t & (1ULL << i)) {
-                        full_idx |= (1ULL << target_qubits[i]);
-                    }
-                }
-                
-                state->amplitudes[full_idx] = target_state.amplitudes[t];
-            }
+            target_state.amplitudes[t] = state->amplitudes[full_idx];
         }
-        // If control is |0⟩, state unchanged
+
+        qs_error_t err = operator_func(&target_state, operator_data);
+        if (err != QS_SUCCESS) {
+            quantum_state_free(&target_state);
+            return err;
+        }
+
+        for (size_t t = 0; t < (1ULL << num_targets); t++) {
+            uint64_t full_idx = basis_idx;
+            for (size_t i = 0; i < num_targets; i++) {
+                full_idx &= ~(1ULL << target_qubits[i]);
+                if (t & (1ULL << i)) {
+                    full_idx |= (1ULL << target_qubits[i]);
+                }
+            }
+            state->amplitudes[full_idx] = target_state.amplitudes[t];
+        }
     }
     
     quantum_state_free(&target_state);
@@ -355,28 +353,30 @@ qpe_result_t qpe_estimate_phase(
         gate_hadamard(&qpe_state, i);
     }
     
-    // Step 2: Initialize system qubits with eigenstate
-    // Copy eigenstate amplitudes to system qubit portion
-    size_t system_dim = 1ULL << unitary->num_qubits;
-    uint64_t precision_mask = (1ULL << precision_qubits) - 1;
-    
-    for (uint64_t basis_idx = 0; basis_idx < qpe_state.state_dim; basis_idx++) {
-        // Extract the system-register component; the precision-register
-        // part is not needed here because we are weighting by the full
-        // joint-amplitude, not conditioning on precision outcomes.
-        (void)precision_mask;
-        uint64_t system_part = basis_idx >> precision_qubits;
-        
-        if (system_part < system_dim) {
-            // Weight by precision superposition and eigenstate amplitude
-            complex_t precision_amp = qpe_state.amplitudes[basis_idx];
-            complex_t system_amp = eigenstate->state->amplitudes[system_part];
-            qpe_state.amplitudes[basis_idx] = precision_amp * system_amp;
+    /* Step 2: Tensor the eigenstate into the system register.
+     *
+     * After step 1 the state is |+>^m |0>^n. Writing each basis_idx as
+     * (precision_part, system_part), its amplitude is 2^{-m/2} iff
+     * system_part == 0, else 0.
+     *
+     * To form |+>^m (x) |psi> we replace the amplitude at every basis
+     * with (1/sqrt(2^m)) * eigenstate[system_part].  The previous
+     * implementation *multiplied* pre-existing amplitude by
+     * eigenstate[system_part], which always produced zero whenever the
+     * eigenstate had no |0>^n component — collapsing the QPE state to
+     * zero and making every measurement deterministic (the visible
+     * symptom was phi_est == (2^m - 1)/2^m for every non-zero phase).
+     */
+    {
+        size_t system_dim = 1ULL << unitary->num_qubits;
+        (void)system_dim;
+        const double inv_sqrt_m = 1.0 / sqrt((double)(1ULL << precision_qubits));
+        for (uint64_t basis_idx = 0; basis_idx < qpe_state.state_dim; basis_idx++) {
+            uint64_t system_part = basis_idx >> precision_qubits;
+            qpe_state.amplitudes[basis_idx] =
+                inv_sqrt_m * eigenstate->state->amplitudes[system_part];
         }
     }
-    
-    // Normalize after eigenstate injection
-    quantum_state_normalize(&qpe_state);
     
     // Step 3: Apply controlled-U^(2^k) operations
     for (size_t k = 0; k < precision_qubits; k++) {
