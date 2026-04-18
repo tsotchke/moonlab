@@ -93,6 +93,47 @@ binds `moonlab_qrng_bytes` via dlsym) should now pin to this tag.
   QRNG bit-mixing constants, which is what they actually are. Their
   values are unchanged, but the misleading physics names are now flagged
   in a block comment.
+- **QRNG lag-1 serial correlation (rho_1 = 0.567 -> 0.0)**:
+  `extract_quantum_entropy` in `src/applications/qrng.c` applied only
+  four mixing gates between consecutive measurements. Because
+  `quantum_measure_all_fast` collapses the state to a basis vector,
+  those four gates were never enough to disperse the amplitudes back
+  into the full 2^n-dimensional Hilbert space — most amplitudes
+  stayed concentrated near the just-measured state, and the byte
+  stream developed a reproducible lag-1 Pearson correlation of
+  about 0.57. The new scramble applies one H per qubit, one
+  entropy-seeded Rz per qubit, and a CNOT ring coupling all qubits
+  between every measurement. On 256 KiB of output the correlation
+  now falls within the 5/sqrt(N) ideal-uniform bound (rho_1 ~ 0.002)
+  while chi^2 and monobit tests remain healthy.
+- **QPE state-preparation multiplied by zero** in
+  `src/algorithms/qpe.c`: `qpe_estimate_phase` was multiplying each
+  full-state amplitude by the eigenstate amplitude at the
+  corresponding system_part instead of tensoring the |+>^m
+  precision register with the eigenstate. For any eigenstate with
+  no |0>^n component (e.g. the standard T-gate test case |1>) this
+  zeroed the QPE state outright and every subsequent measurement
+  collapsed to the all-ones bitstring. Fixed to replace amplitudes
+  with `(1/sqrt(2^m)) * eigenstate[system_part]`.
+- **ASAN race in `health_test_apt`**: `entropy_pool` was calling
+  `health_tests_run_batch` from both the background worker thread
+  and the direct-generation fallback without shared locking. Added
+  `pool->health_mutex` to serialise the two paths. ASAN heap-
+  buffer-overflow is now gone.
+- **VQE performance**: `vqe_measure_pauli_expectation` was
+  sampling 10,000 shots per Pauli term (cloning the full state
+  each shot). For ideal simulation the expectation value is
+  analytic — O(state_dim * num_qubits) — so the sampling path is
+  now the non-default fallback. `vqe_compute_energy` on an H2
+  Hamiltonian dropped from 480 ms to 1 ms per call; 1000 ADAM
+  iterations now finish in under 3 seconds and converge to
+  E = -1.121 Ha, about 4 mHa below the Hartree-Fock reference.
+- **Floating-point safety under `-ffast-math`**: `INFINITY` /
+  `NAN` sentinels in `vqe.c` and `dmrg.c` are undefined behaviour
+  under the library's default `-ffast-math`. Replaced with
+  finite `DBL_MAX` sentinels (`VQE_ENERGY_ERROR`,
+  `DMRG_ENERGY_ERROR`). `isnan(E)` checks rewritten to
+  `!isfinite(E) || E >= ENERGY_ERROR`.
 - **Test bug in `test_state_purity`**: the old test set four equal
   amplitudes on a 2-qubit state and asserted purity < 1, calling that
   a "mixed state". It is in fact a pure state (purity = 1). The
