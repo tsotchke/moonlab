@@ -39,6 +39,19 @@ static double get_time_us(void) {
     return tv.tv_sec * 1e6 + tv.tv_usec;
 }
 
+/* Thin shim over the 0.1.2+ tn_mps_create_zero API for these benches. */
+static tn_mps_state_t *create_zero_mps(uint32_t num_sites, uint32_t bond_dim) {
+    tn_state_config_t cfg = {
+        .max_bond_dim = bond_dim,
+        .svd_cutoff = 1e-10,
+        .max_truncation_error = 1e-8,
+        .track_truncation = false,
+        .auto_canonicalize = false,
+        .target_form = TN_CANONICAL_NONE,
+    };
+    return tn_mps_create_zero(num_sites, &cfg);
+}
+
 static bench_result_t run_benchmark(void (*func)(void *), void *data, int iterations) {
     double times[BENCH_ITERATIONS];
 
@@ -96,12 +109,12 @@ static void print_result(const char *name, bench_result_t *r) {
 typedef struct {
     uint32_t num_sites;
     uint32_t bond_dim;
-    tn_mps_t *mps;
+    tn_mps_state_t *mps;
 } mps_data_t;
 
 static void bench_mps_create(void *data) {
     mps_data_t *d = (mps_data_t *)data;
-    d->mps = tn_mps_create(d->num_sites, d->bond_dim);
+    d->mps = create_zero_mps(d->num_sites, d->bond_dim);
     tn_mps_free(d->mps);
 }
 
@@ -133,7 +146,7 @@ static void benchmark_mps_creation(void) {
 // ============================================================================
 
 typedef struct {
-    tn_mps_t *mps;
+    tn_mps_state_t *mps;
     uint32_t site;
 } gate_data_t;
 
@@ -153,8 +166,7 @@ static void benchmark_tn_gates(void) {
     uint32_t num_sites = 50;
     uint32_t bond_dim = 32;
 
-    tn_mps_t *mps = tn_mps_create(num_sites, bond_dim);
-    tn_mps_init_zero(mps);
+    tn_mps_state_t *mps = create_zero_mps(num_sites, bond_dim);
 
     gate_data_t data = {.mps = mps, .site = num_sites / 2};
 
@@ -174,7 +186,7 @@ static void benchmark_tn_gates(void) {
 // ============================================================================
 
 typedef struct {
-    tn_mps_t *mps;
+    tn_mps_state_t *mps;
     uint32_t bond;
 } entropy_data_t;
 
@@ -191,8 +203,7 @@ static void benchmark_entropy(void) {
 
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
-            tn_mps_t *mps = tn_mps_create(site_counts[i], bond_dims[j]);
-            tn_mps_init_zero(mps);
+            tn_mps_state_t *mps = create_zero_mps(site_counts[i], bond_dims[j]);
 
             // Create some entanglement
             for (uint32_t s = 0; s < site_counts[i]; s++) {
@@ -224,46 +235,48 @@ static void benchmark_entropy(void) {
 // ============================================================================
 
 typedef struct {
-    tn_mps_t *mps;
+    tn_mps_state_t *mps;
+    mpo_t *mpo;
     dmrg_config_t config;
-} dmrg_data_t;
+} dmrg_run_t;
 
 static void bench_dmrg(void *data) {
-    dmrg_data_t *d = (dmrg_data_t *)data;
-    dmrg_ground_state(d->mps, &d->config);
+    dmrg_run_t *d = (dmrg_run_t *)data;
+    dmrg_result_t *res = dmrg_ground_state(d->mps, d->mpo, &d->config);
+    if (res) dmrg_result_free(res);
 }
 
 static void benchmark_dmrg(void) {
-    printf("\n=== DMRG Benchmarks ===\n");
+    printf("\n=== DMRG Benchmarks (TFIM Hamiltonian) ===\n");
 
     int site_counts[] = {10, 16, 20};
     int bond_dims[] = {16, 32};
 
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 2; j++) {
-            tn_mps_t *mps = tn_mps_create(site_counts[i], bond_dims[j]);
-            tn_mps_init_zero(mps);
+            tn_mps_state_t *mps = create_zero_mps(site_counts[i], bond_dims[j]);
+            mpo_t *mpo = mpo_tfim_create(site_counts[i], 1.0, 0.5);
+            if (!mpo) { tn_mps_free(mps); continue; }
 
-            dmrg_data_t data = {
+            dmrg_config_t cfg = dmrg_config_default();
+            cfg.max_bond_dim = (uint32_t)bond_dims[j];
+            cfg.max_sweeps = 5;
+            cfg.energy_tol = 1e-6;
+
+            dmrg_run_t data = {
                 .mps = mps,
-                .config = {
-                    .num_sites = site_counts[i],
-                    .bond_dim = bond_dims[j],
-                    .max_sweeps = 5,
-                    .convergence_threshold = 1e-6,
-                    .J = 1.0,
-                    .delta = 1.0,
-                    .h_field = 0.0
-                }
+                .mpo = mpo,
+                .config = cfg,
             };
 
             char name[64];
-            snprintf(name, sizeof(name), "DMRG %d sites, χ=%d (5 sweeps)",
+            snprintf(name, sizeof(name), "DMRG %d sites, chi=%d (5 sweeps)",
                      site_counts[i], bond_dims[j]);
 
-            bench_result_t r = run_benchmark(bench_dmrg, &data, 3);  // Fewer iterations for slow benchmark
+            bench_result_t r = run_benchmark(bench_dmrg, &data, 3);
             print_result(name, &r);
 
+            mpo_free(mpo);
             tn_mps_free(mps);
         }
     }
@@ -280,8 +293,7 @@ static void benchmark_scaling(void) {
     int bond_dims[] = {8, 16, 32, 64, 128};
 
     for (int j = 0; j < 5; j++) {
-        tn_mps_t *mps = tn_mps_create(num_sites, bond_dims[j]);
-        tn_mps_init_zero(mps);
+        tn_mps_state_t *mps = create_zero_mps(num_sites, bond_dims[j]);
 
         // Time a sequence of gates
         double start = get_time_us();
