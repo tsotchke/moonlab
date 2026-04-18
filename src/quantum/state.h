@@ -154,9 +154,8 @@ qs_error_t quantum_state_normalize(quantum_state_t *state);
 double quantum_state_entropy(const quantum_state_t *state);
 
 /**
- * @brief Calculate state purity Tr(ρ²)
- * @param state Quantum state
- * @return Purity (1 for pure state, <1 for mixed)
+ * @brief ‖ψ‖⁴ (= Tr(ρ²) for a pure state). Always 1 for normalized |ψ⟩.
+ *        For subsystem purity use entanglement_purity() (entanglement.h).
  */
 double quantum_state_purity(const quantum_state_t *state);
 

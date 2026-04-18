@@ -63,6 +63,8 @@ typedef struct {
     double nuclear_repulsion;    // Nuclear-nuclear repulsion energy
     char *molecule_name;         // Name (e.g., "H2", "LiH")
     double bond_distance;        // Internuclear distance (Angstroms)
+    uint64_t hf_reference;       // Hartree-Fock bitstring: bit q = 1 means
+                                 // qubit q is |1> in the HF reference state.
 } pauli_hamiltonian_t;
 
 /**
@@ -133,6 +135,14 @@ pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance);
  */
 pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
 
+/**
+ * @brief Exact ground-state energy of a Pauli Hamiltonian by direct
+ *        matrix diagonalization. Intended for small (<=~10 qubit)
+ *        reference / verification. Complexity O(4^n).
+ * @return Ground-state energy including nuclear_repulsion, or NAN on error.
+ */
+double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *hamiltonian);
+
 // ============================================================================
 // VARIATIONAL ANSATZ
 // ============================================================================
@@ -143,7 +153,8 @@ pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
 typedef enum {
     VQE_ANSATZ_HARDWARE_EFFICIENT,  // Hardware-efficient ansatz
     VQE_ANSATZ_UCCSD,               // Unitary Coupled Cluster (chemistry)
-    VQE_ANSATZ_CUSTOM               // User-defined ansatz
+    VQE_ANSATZ_CUSTOM,              // User-defined ansatz
+    VQE_ANSATZ_SYMMETRY_PRESERVING  // Particle-conserving Givens rotations
 } vqe_ansatz_type_t;
 
 /**
@@ -191,6 +202,18 @@ vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
 vqe_ansatz_t* vqe_create_uccsd_ansatz(
     size_t num_qubits,
     size_t num_electrons
+);
+
+/**
+ * @brief Particle-conserving (symmetry-preserving) ansatz.
+ *        One Givens rotation per occupied-virtual qubit pair, per layer.
+ *        Gives chemical accuracy for small molecules (2-6 qubits) where
+ *        the GS lives in a fixed-occupation sector.
+ */
+vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
+    size_t num_qubits,
+    size_t num_occupied,
+    size_t num_layers
 );
 
 /**

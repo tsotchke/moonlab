@@ -46,49 +46,42 @@ static inline int get_bit(uint64_t n, int bit_pos) {
 qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // OPTIMIZED X gate: Stride-based indexing, no get_bit()
-    // X gate: |0⟩ ↔ |1⟩
+
+    // X gate: |0> <-> |1>. Swap two contiguous blocks of amplitudes
+    // via the SIMD-dispatched complex swap.
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
+
     for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        for (uint64_t i = 0; i < stride; i++) {
-            const uint64_t idx0 = base + i;
-            const uint64_t idx1 = idx0 + stride;
-            
-            // Swap amplitudes
-            const complex_t temp = state->amplitudes[idx0];
-            state->amplitudes[idx0] = state->amplitudes[idx1];
-            state->amplitudes[idx1] = temp;
-        }
+        simd_complex_swap(&state->amplitudes[base],
+                          &state->amplitudes[base + stride],
+                          stride);
     }
-    
+
     return QS_SUCCESS;
 }
 
 qs_error_t gate_pauli_y(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // OPTIMIZED Y gate: Stride-based indexing, no get_bit()
-    // Y gate: |0⟩ → i|1⟩, |1⟩ → -i|0⟩
+
+    // Y gate: |0> -> i|1>, |1> -> -i|0>. Equivalent to swap the two
+    // blocks, then multiply the old-|0> block by -i and the old-|1>
+    // block by +i. After the swap, amplitudes at [base..base+stride)
+    // are what used to live in the |1> block (gets multiplied by -i)
+    // and amplitudes at [base+stride..base+2*stride) are what used to
+    // live in the |0> block (gets multiplied by +i).
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
+
     for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        for (uint64_t i = 0; i < stride; i++) {
-            const uint64_t idx0 = base + i;
-            const uint64_t idx1 = idx0 + stride;
-            
-            const complex_t amp_0 = state->amplitudes[idx0];
-            const complex_t amp_1 = state->amplitudes[idx1];
-            
-            state->amplitudes[idx0] = -I * amp_1;  // |0⟩ component
-            state->amplitudes[idx1] = I * amp_0;   // |1⟩ component
-        }
+        simd_complex_swap(&state->amplitudes[base],
+                          &state->amplitudes[base + stride],
+                          stride);
+        simd_multiply_by_i(&state->amplitudes[base],          stride, 1);
+        simd_multiply_by_i(&state->amplitudes[base + stride], stride, 0);
     }
-    
+
     return QS_SUCCESS;
 }
 
@@ -124,38 +117,18 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-#if defined(__ARM_NEON) || defined(__aarch64__)
-    // ARM NEON: Vectorized processing
+
     for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // Process in stride-sized chunks
+        complex_t *a0 = &state->amplitudes[base];
+        complex_t *a1 = &state->amplitudes[base + stride];
         for (uint64_t i = 0; i < stride; i++) {
-            const uint64_t idx0 = base + i;
-            const uint64_t idx1 = idx0 + stride;
-            
-            const complex_t amp0 = state->amplitudes[idx0];
-            const complex_t amp1 = state->amplitudes[idx1];
-            
-            state->amplitudes[idx0] = (amp0 + amp1) * QC_SQRT2_INV;
-            state->amplitudes[idx1] = (amp0 - amp1) * QC_SQRT2_INV;
+            const complex_t x = a0[i];
+            const complex_t y = a1[i];
+            a0[i] = (x + y) * QC_SQRT2_INV;
+            a1[i] = (x - y) * QC_SQRT2_INV;
         }
     }
-#else
-    // Scalar fallback: Stride-based (still much faster than bit-checking)
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        for (uint64_t i = 0; i < stride; i++) {
-            const uint64_t idx0 = base + i;
-            const uint64_t idx1 = idx0 + stride;
-            
-            const complex_t amp0 = state->amplitudes[idx0];
-            const complex_t amp1 = state->amplitudes[idx1];
-            
-            state->amplitudes[idx0] = (amp0 + amp1) * QC_SQRT2_INV;
-            state->amplitudes[idx1] = (amp0 - amp1) * QC_SQRT2_INV;
-        }
-    }
-#endif
-    
+
     return QS_SUCCESS;
 }
 
@@ -372,17 +345,43 @@ qs_error_t gate_cnot(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
-    // CNOT: flip target if control is |1⟩
-    for (uint64_t i = 0; i < state->state_dim; i++) {
-        if (get_bit(i, control) && !get_bit(i, target)) {
-            uint64_t j = flip_bit(i, target);
-            complex_t temp = state->amplitudes[i];
-            state->amplitudes[i] = state->amplitudes[j];
-            state->amplitudes[j] = temp;
+
+    // CNOT: flip target when control == |1>. Stride-based layout lets us
+    // use simd_complex_swap on contiguous amplitude pairs.
+    const uint64_t c_stride = 1ULL << control;
+    const uint64_t t_stride = 1ULL << target;
+    const uint64_t dim = state->state_dim;
+    complex_t *amp = state->amplitudes;
+
+    if (control > target) {
+        const uint64_t c_block = c_stride << 1;
+        const uint64_t t_block = t_stride << 1;
+        for (uint64_t cbase = 0; cbase < dim; cbase += c_block) {
+            // upper half [cbase + c_stride, cbase + 2*c_stride) has control=1
+            for (uint64_t tbase = cbase + c_stride;
+                 tbase < cbase + c_block;
+                 tbase += t_block) {
+                simd_complex_swap(&amp[tbase],
+                                  &amp[tbase + t_stride],
+                                  t_stride);
+            }
+        }
+    } else {
+        const uint64_t t_block = t_stride << 1;
+        const uint64_t c_block = c_stride << 1;
+        for (uint64_t tbase = 0; tbase < dim; tbase += t_block) {
+            // within each target-block, swap pairs (target=0 <-> target=1)
+            // only where control bit is 1. control is a LOWER bit here.
+            for (uint64_t cbase = tbase + c_stride;
+                 cbase < tbase + t_stride;
+                 cbase += c_block) {
+                simd_complex_swap(&amp[cbase],
+                                  &amp[cbase + t_stride],
+                                  c_stride);
+            }
         }
     }
-    
+
     return QS_SUCCESS;
 }
 

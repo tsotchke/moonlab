@@ -679,7 +679,8 @@ export class Circuit {
     const qubitDepths = new Array(this._numQubits).fill(0);
 
     for (const gate of this._gates) {
-      if (gate.type === 'barrier') continue;
+      // Barriers and measurements do not contribute to unitary depth.
+      if (gate.type === 'barrier' || gate.type === 'measure') continue;
 
       const qubits = this.getGateQubits(gate);
       const maxDepth = Math.max(...qubits.map((q) => qubitDepths[q]));

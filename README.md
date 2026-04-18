@@ -1,24 +1,30 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue)]() [![Bell Test](https://img.shields.io/badge/Bell%20CHSH-2.828-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Tensor Network](https://img.shields.io/badge/Tensor%20Network-100%2B%20qubits-purple)]() [![GPU Speedup](https://img.shields.io/badge/GPU%20Speedup-100x-orange)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Tests](https://img.shields.io/badge/ctest-35%2F35-brightgreen)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.1.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
-> **A comprehensive quantum computing framework spanning state vector simulation, tensor networks, topological quantum computing, and skyrmion physics**
+> **Quantum-simulation toolkit: dense state-vector core, tensor-network algorithms, topological-QC experiments, skyrmion tracking, and a WebGPU/JS front-end.**
 
-Moonlab is a production-grade quantum simulation platform that bridges theoretical physics and high-performance computing. From Bell inequality violation (CHSH = 2.828) to DMRG ground state calculations, from topological anyon braiding to magnetic skyrmion qubits, Moonlab provides the tools researchers need to explore the full spectrum of quantum phenomena.
+Moonlab is a 0.x pre-release simulation library. The dense state-vector
+core is well exercised (up to 32 qubits, AMX/SIMD paths, Metal GPU on
+macOS). The tensor-network, topological-QC, and skyrmion modules are
+usable but less thoroughly benchmarked — treat published numbers as
+indicative, not guarantees, until each subsystem picks up its own
+benchmark harness in the 0.2 release arc. See CHANGELOG.md for the
+actual state of each subsystem.
 
 ## Highlights
 
 | Capability | Description |
 |------------|-------------|
-| **State Vector Engine** | Up to 32 qubits with AMX/SIMD optimization |
-| **Tensor Networks** | MPS, DMRG, TDVP for 100+ qubit systems |
-| **Topological QC** | Fibonacci/Ising anyons, surface codes, toric codes |
-| **Skyrmion Braiding** | Magnetic skyrmion topological qubits |
-| **Quantum Chemistry** | Jordan-Wigner, UCCSD, molecular Hamiltonians |
-| **Many-Body Localization** | Disordered spin chains, entanglement dynamics |
-| **Quantum Algorithms** | Grover, VQE, QAOA, QPE, Bell tests |
-| **GPU Acceleration** | Metal compute (100x speedup) |
-| **Multi-Language** | C, Python (PyTorch), Rust (TUI), JavaScript (React/Vue) |
+| **State Vector Engine** | Up to 32 qubits with AMX-aligned buffers + runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE + Apple Accelerate). |
+| **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Exercised at 50–100 sites in examples; no head-to-head benchmark against reference TN libraries yet. |
+| **Topological QC** | Fibonacci/Ising anyon modules, surface/toric code scaffolds. Educational depth — not yet wired to a Stim-style stabilizer backend. |
+| **Skyrmion physics** | Micromagnetic skyrmion position tracking (see the 0.2 roadmap for true non-abelian braiding). |
+| **Quantum Chemistry** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, pre-built H₂/LiH/H₂O Pauli Hamiltonians. |
+| **Many-Body Localization** | Disordered spin chains, entanglement dynamics. |
+| **Quantum Algorithms** | Grover, VQE, QAOA, QPE, Bell tests (CHSH). |
+| **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend is scaffolded; CUDA / OpenCL / Vulkan are declared but unimplemented. |
+| **Multi-Language** | C core + Python (ctypes), Rust, JavaScript (React/Vue/WebGPU). Python algorithm bindings have pending ABI fixes in this release — see `bindings/python/moonlab/algorithms.py` for the current state. |
 
 ## Table of Contents
 
@@ -501,29 +507,32 @@ const { state, circuit } = useQuantumState(2);
 
 ## Performance
 
-### GPU Acceleration (Metal)
+The numbers historically quoted here (GPU speedups, MPI scaling, DMRG
+wall-clocks) pre-date any reproducible harness that exercises the
+full pipeline on a single host configuration, so they have been
+retired pending the 0.2 benchmark work (Quantum Volume + CLOPS + XEB +
+direct RB as described in `docs/release/` / `MOONLAB_RELEASE_ROADMAP.md`).
 
-| Operation | CPU (SIMD) | GPU (Metal) | Speedup |
-|-----------|------------|-------------|---------|
-| 24-qubit Hadamard | 78 ms | 2.5 ms | 31x |
-| 28-qubit CNOT | 3.2 s | 52 ms | 62x |
-| Grover (22 qubits) | 28 min | 28 s | 60x |
+Runnable micro-benchmarks ship today:
 
-### Tensor Network Scaling
+```bash
+./build/bench_state_operations          # dense SV gate throughput
+./build/bench_tensor_networks           # MPS / DMRG micro-probes
+./build/grover_parallel_benchmark       # Grover scaling across cores
+./build/phase3_phase4_benchmark         # Metal kernel sanity
+```
 
-| System | Bond Dim | Memory | Time (DMRG) |
-|--------|----------|--------|-------------|
-| 50 sites | 64 | 200 KB | 2 s |
-| 100 sites | 128 | 1.6 MB | 15 s |
-| 200 sites | 256 | 13 MB | 2 min |
+Use those to measure your own hardware. A comparative
+regression harness against Qiskit-Aer / Qulacs / cuStateVec is
+tracked for 0.2.
 
-### Distributed Computing (MPI)
+### Distributed (MPI)
 
-| Qubits | Nodes | Memory/Node | Speedup |
-|--------|-------|-------------|---------|
-| 32 | 16 | 4 GB | 14x |
-| 34 | 64 | 4 GB | 52x |
-| 36 | 256 | 4 GB | 180x |
+`distributed_gates` exercises the MPI bridge: init, allreduce,
+sendrecv and barrier round-trip on ≥2 ranks. End-to-end distributed
+state-vector gate application across partitions is still in progress —
+the scaling table that used to live here was not reproducibly
+measured and has been removed.
 
 ## Building
 

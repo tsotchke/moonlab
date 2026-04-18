@@ -13,8 +13,8 @@
  * - x86-64: AVX-512 -> AVX2+FMA -> AVX2 -> AVX -> SSE4.1 -> SSE2 -> Scalar
  * - ARM64: SVE2 -> SVE -> NEON -> Scalar
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License
@@ -161,8 +161,8 @@ typedef struct {
  *
  * @note Thread-safe after first call
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 const simd_info_t* simd_detect_capabilities_full(void);
 
@@ -173,8 +173,8 @@ const simd_info_t* simd_detect_capabilities_full(void);
  *
  * @return Capability flags (simd_capability_t values OR'd together)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 uint32_t simd_get_capability_flags(void);
 
@@ -184,8 +184,8 @@ uint32_t simd_get_capability_flags(void);
  * @param cap Capability to check
  * @return 1 if available, 0 otherwise
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 int simd_has_capability(simd_capability_t cap);
 
@@ -194,8 +194,8 @@ int simd_has_capability(simd_capability_t cap);
  *
  * @return Current SIMD level (higher = more capable)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 simd_level_t simd_get_level(void);
 
@@ -207,8 +207,8 @@ simd_level_t simd_get_level(void);
  * @example "AVX-512 (F, BW, DQ, VL) + FMA + AVX2"
  * @example "ARM NEON + SVE (256-bit)"
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 const char* simd_get_capability_string(void);
 
@@ -253,8 +253,8 @@ typedef enum {
  * @param op Operation type
  * @return Backend that will be used
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 simd_backend_t simd_get_backend(simd_operation_t op);
 
@@ -264,8 +264,8 @@ simd_backend_t simd_get_backend(simd_operation_t op);
  * @param backend Backend type
  * @return Human-readable backend name
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 const char* simd_backend_name(simd_backend_t backend);
 
@@ -278,8 +278,8 @@ const char* simd_backend_name(simd_backend_t backend);
  *
  * @return Vector width: 16 (SSE/NEON), 32 (AVX), 64 (AVX-512), or variable (SVE)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_vector_width(void);
 
@@ -288,8 +288,8 @@ size_t simd_get_vector_width(void);
  *
  * @return Number of doubles: 2 (SSE/NEON), 4 (AVX), 8 (AVX-512)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_doubles_per_register(void);
 
@@ -298,8 +298,8 @@ size_t simd_get_doubles_per_register(void);
  *
  * @return Number of complex: 1 (SSE/NEON), 2 (AVX), 4 (AVX-512)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_complex_per_register(void);
 
@@ -312,8 +312,8 @@ size_t simd_get_complex_per_register(void);
  *
  * @return Unroll factor for optimal performance (typically 4-8)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_unroll_factor(void);
 
@@ -322,8 +322,8 @@ size_t simd_get_unroll_factor(void);
  *
  * @return Minimum element count (below this, scalar may be faster)
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_min_array_size(void);
 
@@ -338,8 +338,8 @@ size_t simd_get_min_array_size(void);
  * @param element_size Size of each element in bytes
  * @return Recommended chunk size in elements
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 size_t simd_get_chunk_size(size_t element_size);
 
@@ -353,8 +353,8 @@ size_t simd_get_chunk_size(size_t element_size);
  * Outputs comprehensive CPU feature information to stderr.
  * Useful for debugging and system configuration.
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 void simd_print_capabilities(void);
 
@@ -367,7 +367,7 @@ void simd_print_capabilities(void);
  * @return 1 if validation passes, 0 otherwise
  *
  * @stability beta
- * @since v1.0.0
+ * @since v0.1.2
  */
 int simd_validate(void);
 

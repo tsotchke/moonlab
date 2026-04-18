@@ -378,12 +378,14 @@ qpe_result_t qpe_estimate_phase(
         }
     }
     
-    // Step 3: Apply controlled-U^(2^k) operations
+    // Step 3: Apply controlled-U^(2^k) — qubit k carries power 2^k so the
+    // phase-encoded integer on the precision register is y = Σ q_k · 2^k
+    // (natural little-endian, same as the measurement loop below).
     for (size_t k = 0; k < precision_qubits; k++) {
-        int control_qubit = k;
-        int target_start = precision_qubits;
+        int control_qubit = (int)k;
+        int target_start = (int)precision_qubits;
         uint64_t power = 1ULL << k;
-        
+
         qs_error_t err = qpe_apply_controlled_unitary_power(
             &qpe_state, control_qubit, target_start, unitary, power
         );
@@ -395,34 +397,33 @@ qpe_result_t qpe_estimate_phase(
         }
     }
     
-    // Step 4: Inverse QFT on precision qubits
-    int *precision_indices = malloc(precision_qubits * sizeof(int));
-    if (!precision_indices) {
-        quantum_state_free(&qpe_state);
-        result.estimated_phase = -1.0;
-        return result;
+    // Step 4: Inverse QFT on the precision register. IQFT-without-swap
+    // leaves its result in bit-reversed order, so we trail a swap layer
+    // so measurement reads y in natural little-endian (bit k == qubit k).
+    for (int i = (int)precision_qubits - 1; i >= 0; i--) {
+        for (int j = (int)precision_qubits - 1; j > i; j--) {
+            double theta = -M_PI / (double)(1ULL << (j - i));
+            gate_cphase(&qpe_state, j, i, theta);
+        }
+        gate_hadamard(&qpe_state, i);
     }
-    
-    for (size_t i = 0; i < precision_qubits; i++) {
-        precision_indices[i] = i;
+    for (size_t i = 0; i < precision_qubits / 2; i++) {
+        gate_swap(&qpe_state, (int)i, (int)(precision_qubits - 1 - i));
     }
-    
-    gate_iqft(&qpe_state, precision_indices, precision_qubits);
-    free(precision_indices);
-    
-    // Step 5: Measure precision qubits
+
+    // Step 5: Measure precision qubits.
     uint64_t bitstring = 0;
     double total_probability = 0.0;
-    
+
     for (size_t i = 0; i < precision_qubits; i++) {
         measurement_result_t meas = quantum_measure(
             &qpe_state, i, MEASURE_COMPUTATIONAL, entropy
         );
-        
+
         if (meas.outcome == 1) {
             bitstring |= (1ULL << i);
         }
-        
+
         total_probability += meas.probability;
     }
     
@@ -451,26 +452,10 @@ qpe_result_t qpe_estimate_phase(
 // ============================================================================
 
 double qpe_bitstring_to_phase(uint64_t bitstring, size_t precision_bits) {
-    /**
-     * Convert measured bitstring to phase estimate
-     * 
-     * Bitstring represents binary fraction: 0.b_{m-1}...b_1 b_0
-     * Phase φ = Σ_{k=0}^{m-1} b_k / 2^{k+1}
-     */
-    
-    if (precision_bits == 0 || precision_bits > 64) {
-        return 0.0;
-    }
-    
-    double phase = 0.0;
-    
-    for (size_t k = 0; k < precision_bits; k++) {
-        if (bitstring & (1ULL << k)) {
-            phase += 1.0 / (1ULL << (k + 1));
-        }
-    }
-    
-    return phase;
+    /* Measured integer y = Σ b_k 2^k (bit k == qubit k outcome);
+     * phase φ = y / 2^m. */
+    if (precision_bits == 0 || precision_bits > 64) return 0.0;
+    return (double)bitstring / (double)(1ULL << precision_bits);
 }
 
 void qpe_print_result(const qpe_result_t *result) {

@@ -8,8 +8,8 @@
  * - DMRG sweeps
  * - Entanglement entropy calculation
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #include "../../src/algorithms/tensor_network/tn_state.h"

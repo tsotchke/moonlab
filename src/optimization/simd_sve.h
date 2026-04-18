@@ -19,8 +19,8 @@
  *
  * Compile with: -march=armv8-a+sve or -march=armv9-a+sve2
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

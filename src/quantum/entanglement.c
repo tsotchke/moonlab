@@ -9,8 +9,8 @@
  * - Entanglement witnesses
  * - Partial transpose for PPT criterion
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

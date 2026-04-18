@@ -9,7 +9,7 @@
 #include "../algorithms/bell_tests.h"
 #include "../algorithms/grover.h"
 #include "entropy_pool.h"
-#include "../../tools/profiler/performance_monitor.h"
+#include "../utils/performance_monitor.h"
 
 /**
  * @file quantum_rng_v3.h

@@ -9,8 +9,8 @@
  * - Measurement operations
  * - State normalization
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #include "../../src/quantum/state.h"

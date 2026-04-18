@@ -24,8 +24,8 @@
  *   3. Magnetization ⟨Z⟩ and correlations ⟨Z_i Z_j⟩
  *   4. Real-time quantum quench dynamics
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

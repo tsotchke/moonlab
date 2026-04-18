@@ -17,8 +17,8 @@
  * - Persistent memory of initial conditions
  * - Emergent local integrals of motion
  *
- * @stability stable
- * @since v1.0.0
+ * @stability evolving
+ * @since v0.1.2
  */
 
 #ifndef MBL_H

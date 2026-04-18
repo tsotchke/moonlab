@@ -126,9 +126,11 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
         return NULL;
     }
 
-    // Get local range from MPI context
-    mpi_get_local_range(dist_ctx, &state->local_start, &state->local_end);
-    state->local_count = state->local_end - state->local_start;
+    int rank = mpi_get_rank(dist_ctx);
+    uint64_t per_rank = state->total_amplitudes / (uint64_t)size;
+    state->local_start = (uint64_t)rank * per_rank;
+    state->local_end = state->local_start + per_rank;
+    state->local_count = per_rank;
 
     // Allocate local amplitudes
     state->amplitudes_size = state->local_count * sizeof(double complex);
@@ -195,8 +197,13 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
     state->partition_bits = log2_of_power_of_2((uint64_t)size);
     state->local_qubits = num_qubits - state->partition_bits;
 
-    mpi_get_local_range(dist_ctx, &state->local_start, &state->local_end);
-    state->local_count = state->local_end - state->local_start;
+    {
+        int rank = mpi_get_rank(dist_ctx);
+        uint64_t per_rank = state->total_amplitudes / (uint64_t)size;
+        state->local_start = (uint64_t)rank * per_rank;
+        state->local_end = state->local_start + per_rank;
+        state->local_count = per_rank;
+    }
 
     state->amplitudes = amplitudes;
     state->amplitudes_size = state->local_count * sizeof(double complex);

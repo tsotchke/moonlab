@@ -60,7 +60,7 @@ When using MoonLab Quantum Simulator in production:
 ### Entropy Sources
 
 - The Quantum Random Number Generator (QRNG) uses hardware entropy sources
-- NIST SP 800-90B compliant health tests are included
+- Ships the NIST SP 800-90B health-test suite (Repetition Count, Adaptive Proportion)
 - Do not disable health tests in production environments
 
 ### API Security

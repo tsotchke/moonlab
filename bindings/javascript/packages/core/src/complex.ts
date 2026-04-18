@@ -57,10 +57,12 @@ export function phase(c: Complex): number {
 }
 
 /**
- * Complex conjugate z* = a - bi
+ * Complex conjugate z* = a - bi. Normalize to +0 when the imaginary
+ * part is zero so that conj({real:r, imag:+0}) is deep-equal to its
+ * input (avoids IEEE 754 -0 surfacing in tests and JSON output).
  */
 export function conjugate(c: Complex): Complex {
-  return { real: c.real, imag: -c.imag };
+  return { real: c.real, imag: c.imag === 0 ? 0 : -c.imag };
 }
 
 /**

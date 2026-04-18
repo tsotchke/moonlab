@@ -30,16 +30,17 @@ fn main() {
     // only libquantumsim.{so,dylib,dll} is present.
     let lib_dir = env::var("MOONLAB_LIB_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| project_root.clone());
+        .unwrap_or_else(|_| project_root.join("build"));
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     let static_present = lib_dir.join("libquantumsim.a").exists();
     if static_present {
         println!("cargo:rustc-link-lib=static=quantumsim");
     } else {
-        // Shared-library fallback — honour the dylib / so / dll variants
-        // that CMake produces by default.
         println!("cargo:rustc-link-lib=dylib=quantumsim");
+        // Embed the dylib directory in the binary's rpath so cargo test
+        // works without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH.
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
     }
 
     // Link OpenMP (required for parallel operations)

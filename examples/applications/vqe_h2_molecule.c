@@ -1,16 +1,6 @@
 /**
  * @file vqe_h2_molecule.c
- * @brief VQE demonstration: Compute H₂ ground state energy
- * 
- * This example demonstrates molecular simulation using the
- * Variational Quantum Eigensolver (VQE) algorithm.
- * 
- * Application: Drug discovery, materials science, chemistry
- * 
- * Expected output:
- * - Ground state energy: -1.137 Ha (chemical accuracy)
- * - Convergence in <100 iterations
- * - Demonstrates quantum chemistry on 2-qubit system
+ * @brief VQE ground-state energy of the H₂ molecule (STO-3G, 2 qubits).
  */
 
 #include "../../src/algorithms/vqe.h"
@@ -82,9 +72,10 @@ int main(int argc, char **argv) {
     
     // Step 2: Create variational ansatz
     printf("Step 2: Creating variational ansatz...\n");
-    size_t num_layers = 2;  // Sufficient for H₂
-    vqe_ansatz_t *ansatz = vqe_create_hardware_efficient_ansatz(
+    size_t num_layers = 1;
+    vqe_ansatz_t *ansatz = vqe_create_symmetry_preserving_ansatz(
         hamiltonian->num_qubits,
+        1,              // one occupied orbital in the tapered 2-qubit HF
         num_layers
     );
     if (!ansatz) {
@@ -93,15 +84,15 @@ int main(int argc, char **argv) {
         entropy_pool_free(global_entropy_pool);
         return 1;
     }
-    
-    printf("  Ansatz type:       Hardware-Efficient\n");
+
+    printf("  Ansatz type:       Symmetry-preserving Givens\n");
     printf("  Layers:            %zu\n", num_layers);
     printf("  Parameters:        %zu\n", ansatz->num_parameters);
     printf("\n");
-    
+
     // Step 3: Create optimizer
     printf("Step 3: Configuring optimizer...\n");
-    vqe_optimizer_t *optimizer = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+    vqe_optimizer_t *optimizer = vqe_optimizer_create(VQE_OPTIMIZER_COBYLA);
     if (!optimizer) {
         fprintf(stderr, "Error: Failed to create optimizer\n");
         vqe_ansatz_free(ansatz);
@@ -109,15 +100,13 @@ int main(int argc, char **argv) {
         entropy_pool_free(global_entropy_pool);
         return 1;
     }
-    
+
     optimizer->max_iterations = 200;
-    optimizer->learning_rate = 0.1;
-    optimizer->tolerance = 1e-7;
+    optimizer->tolerance = 1e-8;
     optimizer->verbose = 1;
-    
-    printf("  Method:            ADAM (Adaptive Moment Estimation)\n");
+
+    printf("  Method:            COBYLA (derivative-free simplex)\n");
     printf("  Max iterations:    %zu\n", optimizer->max_iterations);
-    printf("  Learning rate:     %.3f\n", optimizer->learning_rate);
     printf("  Tolerance:         %.2e\n", optimizer->tolerance);
     printf("\n");
     
@@ -152,9 +141,9 @@ int main(int argc, char **argv) {
     // Step 6: Validate results
     printf("Step 6: Validating results...\n\n");
     
-    // Reference energies for H₂ at equilibrium (r = 0.7414 A)
-    double fci_reference = -1.137283834488;  // Exact FCI
-    double hf_reference = -1.116685;          // Hartree-Fock
+    // Reference: exact ground state of the coded Hamiltonian.
+    double fci_reference = vqe_exact_ground_state_energy(hamiltonian);
+    double hf_reference = -1.116685;          // Hartree-Fock (literature)
     
     result.fci_energy = fci_reference;
     result.hf_energy = hf_reference;
@@ -204,9 +193,8 @@ int main(int argc, char **argv) {
     printf("║  VQE DEMONSTRATION COMPLETE                                ║\n");
     printf("║                                                            ║\n");
     printf("║  This 2-qubit quantum chemistry calculation demonstrates   ║\n");
-    printf("║  how VQE can compute molecular properties with chemical    ║\n");
-    printf("║  accuracy - essential for drug discovery and materials     ║\n");
-    printf("║  science applications.                                     ║\n");
+    printf("║  how VQE computes molecular properties relevant to drug    ║\n");
+    printf("║  discovery and materials science.                          ║\n");
     printf("║                                                            ║\n");
     printf("║  Try different bond distances:                             ║\n");
     printf("║    ./vqe_h2_molecule 0.5    (compressed)                   ║\n");
