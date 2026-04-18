@@ -607,8 +607,9 @@ qs_error_t uccsd_apply(quantum_state_t *state, const uccsd_config_t *config) {
     if (!state || !config) return QS_ERROR_INVALID_STATE;
 
     uint32_t n_occ = config->num_electrons;
-    uint32_t n_virt = config->num_orbitals - config->num_electrons;
-
+    /* n_virt = config->num_orbitals - config->num_electrons was
+     * materialised here but never used; the loop bounds below use
+     * config->num_orbitals directly. */
     uint32_t amp_idx = 0;
 
     // Apply single excitations

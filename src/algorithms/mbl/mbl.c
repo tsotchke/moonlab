@@ -127,6 +127,7 @@ void xxz_hamiltonian_free(xxz_hamiltonian_t *h) {
 /**
  * @brief Count bits set in integer (population count)
  */
+__attribute__((unused))
 static inline int popcount64(uint64_t x) {
 #ifdef __GNUC__
     return __builtin_popcountll(x);
@@ -330,6 +331,7 @@ qs_error_t sparse_hamiltonian_diagonalize(sparse_hamiltonian_t *h) {
     int lwork = -1;
     int info;
     double complex work_query;
+    (void)work_query; /* only used via its address in some workspace-query paths below */
     double *rwork = malloc(3 * dim * sizeof(double));
 
     if (!rwork) {
@@ -1250,17 +1252,15 @@ static double compute_bipartite_entropy(const quantum_state_t *state,
 
     uint32_t L = state->num_qubits;
     uint32_t dim_A = 1U << num_subsystem;
-    uint32_t dim_B = 1U << (L - num_subsystem);
+    (void)L;  /* dim_B was once computed from (L - num_subsystem) but is
+                 implicit in the basis-state loops below. */
 
-    // Build reduced density matrix ρ_A = Tr_B(|ψ⟩⟨ψ|)
+    // Build reduced density matrix rho_A = Tr_B(|psi><psi|)
     double complex *rho_A = calloc(dim_A * dim_A, sizeof(double complex));
     if (!rho_A) return 0.0;
 
-    // Create masks for subsystem A and B
-    uint32_t mask_A = 0;
-    for (uint32_t i = 0; i < num_subsystem; i++) {
-        mask_A |= (1U << subsystem[i]);
-    }
+    /* The A/B partition is driven by the per-qubit subsystem array
+     * directly; no explicit bitmask is needed. */
 
     // For each pair of basis states that agree on B, contribute to ρ_A
     for (size_t idx1 = 0; idx1 < state->state_dim; idx1++) {

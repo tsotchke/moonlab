@@ -1408,6 +1408,7 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     __CLPK_integer N = n;
     __CLPK_integer K = k;
     __CLPK_integer lda = n;  // Row major, but we'll transpose
+    (void)lda;               // cached but zgeqrf uses its own leading-dim
     __CLPK_integer info;
     __CLPK_integer lwork = -1;
 

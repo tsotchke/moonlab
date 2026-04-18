@@ -145,10 +145,18 @@ set(QSIM_WARNING_FLAGS)
 if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
     list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
     if(QSIM_WERROR)
-        # -Werror everywhere our code is responsible, but exclude -Wpedantic
-        # because libomp's <omp.h> (a system header) uses enumerator values
-        # outside the ISO C range and we cannot fix that from the outside.
-        list(APPEND QSIM_WARNING_FLAGS -Werror -Wno-error=pedantic)
+        # -Werror everywhere our code is responsible. Exclusions:
+        #  * -Wpedantic: libomp's <omp.h> is a system header and uses
+        #    enumerator values outside the ISO C range.
+        #  * -Wdeprecated-declarations: Apple CLAPACK (zheev_, zgesvd_,
+        #    zgeqrf_, zungqr_, cblas_zgemm, cblas_zgemv, ...) was
+        #    deprecated in macOS 13.3 in favour of ACCELERATE_NEW_LAPACK.
+        #    Migration is a Phase 1G task; we still want the warning
+        #    visible but not build-breaking.
+        list(APPEND QSIM_WARNING_FLAGS
+             -Werror
+             -Wno-error=pedantic
+             -Wno-error=deprecated-declarations)
     endif()
 elseif(QSIM_COMPILER_MSVC)
     list(APPEND QSIM_WARNING_FLAGS /W4)

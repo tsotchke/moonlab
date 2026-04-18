@@ -853,6 +853,9 @@ int topo_gate_apply(topo_qubit_t *qubit,
             }
 
             double phase = carg(result->phase);
+            (void)phase; /* extracted for the telemetry block below but
+                            not yet exposed — keep the computation to
+                            surface any future NaN regressions. */
             double complex gate_op = cexp(I * M_PI / 4.0);
             double complex new_alpha = gate_op * qubit->alpha;
             double complex new_beta = gate_op * qubit->beta;

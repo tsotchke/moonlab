@@ -883,8 +883,9 @@ svd_compress_error_t svd_absorb_singular_values(tensor_t *tensor,
     if (axis >= tensor->rank) return SVD_COMPRESS_ERROR_INVALID_DIMS;
     if (tensor->dims[axis] != count) return SVD_COMPRESS_ERROR_INVALID_DIMS;
 
-    uint64_t stride = tensor->strides[axis];
-    uint32_t dim = tensor->dims[axis];
+    (void)tensor->strides; /* stride/dim cached historically but
+                              the per-index path below reads the
+                              axis directly. */
 
     // For each position along the axis, multiply by corresponding singular value
     uint32_t indices[TENSOR_MAX_RANK] = {0};

@@ -20,17 +20,20 @@
 #define ASCII_CLASSICAL_WIRE '='
 #define PI 3.14159265358979323846
 
-/* Box drawing characters (UTF-8) */
-static const char *BOX_TL = "\xe2\x94\x8c";  /* top-left corner */
-static const char *BOX_TR = "\xe2\x94\x90";  /* top-right corner */
-static const char *BOX_BL = "\xe2\x94\x94";  /* bottom-left corner */
-static const char *BOX_BR = "\xe2\x94\x98";  /* bottom-right corner */
-static const char *BOX_H = "\xe2\x94\x80";   /* horizontal */
-static const char *BOX_V = "\xe2\x94\x82";   /* vertical */
-static const char *CTRL_DOT = "\xe2\x97\x8f"; /* filled circle for control */
-static const char *OPLUS = "\xe2\x8a\x95";    /* circled plus for target */
-static const char *CROSS = "\xc3\x97";        /* multiplication sign for SWAP */
-static const char *METER = "M";               /* measurement symbol */
+/* Box drawing characters (UTF-8). The current ASCII-grid renderer uses
+ * plain ASCII only, but these UTF-8 glyphs remain as the reference for
+ * a future Unicode-capable output mode. Marked __attribute__((unused))
+ * to keep -Werror clean until that mode lands in Phase 1G. */
+__attribute__((unused)) static const char *BOX_TL = "\xe2\x94\x8c";
+__attribute__((unused)) static const char *BOX_TR = "\xe2\x94\x90";
+__attribute__((unused)) static const char *BOX_BL = "\xe2\x94\x94";
+__attribute__((unused)) static const char *BOX_BR = "\xe2\x94\x98";
+__attribute__((unused)) static const char *BOX_H  = "\xe2\x94\x80";
+__attribute__((unused)) static const char *BOX_V  = "\xe2\x94\x82";
+__attribute__((unused)) static const char *CTRL_DOT = "\xe2\x97\x8f";
+__attribute__((unused)) static const char *OPLUS    = "\xe2\x8a\x95";
+__attribute__((unused)) static const char *CROSS    = "\xc3\x97";
+__attribute__((unused)) static const char *METER    = "M";
 
 /* ============================================================================
  * INTERNAL HELPERS
@@ -693,6 +696,7 @@ static void draw_vertical_line(ascii_grid_t *grid, int y1, int y2, int x) {
 
 static void draw_measurement(ascii_grid_t *grid, int y, int x, int classical_bit) {
     if (y < 1 || y >= grid->height - 1) return;
+    (void)classical_bit; /* classical bit plumbing is a Phase 1G extension. */
 
     /* Simple measurement box */
     grid->grid[y - 1][x] = '+';
