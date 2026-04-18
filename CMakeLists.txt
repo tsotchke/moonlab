@@ -975,6 +975,12 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
     add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
 
+    # QRNG statistical quality: chi^2 / monobit / serial correlation
+    # on 256 KiB drawn through the stable ABI.
+    add_executable(test_qrng_statistics tests/unit/test_qrng_statistics.c)
+    target_link_libraries(test_qrng_statistics PRIVATE quantumsim)
+    add_test(NAME unit_qrng_statistics COMMAND test_qrng_statistics)
+
     # Performance benchmarks (build-only; no ctest entry so CI stays
     # fast). Run directly for local profiling:
     #   ./build/bench_state_operations
