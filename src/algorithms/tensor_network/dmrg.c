@@ -16,7 +16,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 #include <time.h>
+
+/* NaN is undefined behaviour under -ffast-math; use a finite sentinel
+ * (DBL_MAX) for "energy/expectation computation failed" and check with
+ * `>= DMRG_ENERGY_ERROR` in callers. `isnan(E)` paths are rewritten to
+ * `!isfinite(E) || E >= DMRG_ENERGY_ERROR`. */
+#define DMRG_ENERGY_ERROR DBL_MAX
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -2302,7 +2309,7 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
 }
 
 double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
-    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return NAN;
+    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // E = <psi|H|psi> computed via transfer matrix contraction
     // Similar to environment contraction
@@ -2314,7 +2321,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
     uint32_t b_0 = mpo->tensors[0].bond_dim_left;  // Should be 1
 
     tensor_t *T = create_left_boundary(chi_0, b_0);
-    if (!T) return NAN;
+    if (!T) return DMRG_ENERGY_ERROR;
 
     // Contract through the chain
     for (uint32_t site = 0; site < n; site++) {
@@ -2332,7 +2339,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
         tensor_t *T_new = tensor_create(3, new_dims);
         if (!T_new) {
             tensor_free(T);
-            return NAN;
+            return DMRG_ENERGY_ERROR;
         }
 
         memset(T_new->data, 0, T_new->total_size * sizeof(double complex));
@@ -2382,11 +2389,11 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
     // For a true eigenstate, Var(E) = 0
     // Computed by contracting MPS with TWO MPO layers
 
-    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return NAN;
+    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // First compute <H>
     double E = dmrg_compute_energy(mps, mpo);
-    if (isnan(E)) return NAN;
+    if (isnan(E)) return DMRG_ENERGY_ERROR;
 
     // Now compute <H^2> via double-layer MPO contraction
     // Transfer tensor T has shape [chi_l, b_l, b_l, chi_l'] for double MPO layer
@@ -2401,7 +2408,7 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
     // 4D transfer tensor: [chi_l, b_l, b_l, chi_l']
     uint32_t T_dims[4] = {chi_0, b_0, b_0, chi_0};
     tensor_t *T = tensor_create(4, T_dims);
-    if (!T) return NAN;
+    if (!T) return DMRG_ENERGY_ERROR;
 
     memset(T->data, 0, T->total_size * sizeof(double complex));
     T->data[0] = 1.0;  // Left boundary identity
@@ -2422,7 +2429,7 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
         tensor_t *T_new = tensor_create(4, new_dims);
         if (!T_new) {
             tensor_free(T);
-            return NAN;
+            return DMRG_ENERGY_ERROR;
         }
 
         memset(T_new->data, 0, T_new->total_size * sizeof(double complex));
