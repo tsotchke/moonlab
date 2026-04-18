@@ -188,6 +188,8 @@ uint64_t contract_estimate_flops(const tensor_t *a, const tensor_t *b,
                                   const uint32_t *axes_b,
                                   uint32_t num_contract) {
     if (!a || !b) return 0;
+    (void)axes_a; (void)axes_b; /* the coarse cost estimate below uses
+                                   tensor sizes only, not axis lists */
 
     // Result size
     uint64_t result_size = a->total_size * b->total_size;

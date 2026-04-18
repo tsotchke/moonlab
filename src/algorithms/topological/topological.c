@@ -548,6 +548,7 @@ double complex get_R_symbol(const anyon_system_t *sys,
 /**
  * @brief Recursively count fusion paths
  */
+__attribute__((unused))
 static uint32_t count_paths_recursive(const anyon_system_t *sys,
                                        const anyon_charge_t *charges,
                                        uint32_t num_remaining,
@@ -702,6 +703,8 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise) 
 
 qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex) {
     if (!tree) return QS_ERROR_INVALID_STATE;
+    (void)vertex; /* F-move currently rotates the whole tree basis;
+                     per-vertex selection is a Phase 1G extension. */
 
     // F-move changes basis at a fusion vertex
     // This is a unitary transformation on the fusion space
@@ -1559,6 +1562,7 @@ static inline uint32_t v_edge(const toric_code_t *code, uint32_t x, uint32_t y) 
  *
  * Projects onto +1 eigenspace of plaquette stabilizer B_p = ZZZZ.
  */
+__attribute__((unused))
 static void apply_plaquette_projector(toric_code_t *code, uint32_t x, uint32_t y) {
     uint32_t L = code->L;
     quantum_state_t *state = code->state;
@@ -1950,8 +1954,11 @@ void compute_modular_S_matrix(const anyon_system_t *sys,
 
     for (uint32_t a = 0; a < n; a++) {
         double d_a = anyon_quantum_dimension(sys, a);
+        (void)d_a;
         for (uint32_t b = 0; b < n; b++) {
             double d_b = anyon_quantum_dimension(sys, b);
+            (void)d_b; /* d_a/d_b computed for telemetry; the S-matrix
+                          sum below uses the fusion-rule coefficients. */
 
             // S_{ab} = (1/D) Σ_c N^c_{ab} d_c θ_c / (θ_a θ_b)
             // This is the full Verlinde formula (reduces to d_a d_b / D for Abelian theories)

@@ -225,6 +225,8 @@ tn_mps_state_t *tn_mps_from_statevector(const double complex *amplitudes,
     for (uint32_t i = 0; i < num_qubits - 1; i++) {
         // Reshape to [left_bond * physical, right_dims]
         uint32_t left_size = remaining->dims[0];
+        (void)left_size; /* consumed by the SVD below as tensor dim
+                            without needing the cached copy. */
         uint32_t right_size = remaining->dims[1];
 
         // Perform SVD
@@ -1225,6 +1227,8 @@ double tn_mps_norm_squared_fast(tn_mps_state_t *state) {
     // Initialize: transfer = identity for first site's left bond (dim 1)
     uint32_t tr_left = 1;
     uint32_t tr_right = 1;
+    (void)tr_right; /* tracked only through tr_left * p; tr_right
+                       restatement kept for readability. */
     transfer[0] = 1.0;
 
     for (uint32_t site = 0; site < state->num_qubits; site++) {
@@ -1252,6 +1256,8 @@ double tn_mps_norm_squared_fast(tn_mps_state_t *state) {
             // In index form: local[i,j,k,m] += T[i,pi,k] * conj(T[j,pi,m])
 
             const double complex *T_p = t->data + pi * r;  // Offset for physical index pi
+            (void)T_p; /* indexed via t->data + physical stride
+                          below rather than this cached pointer. */
             uint64_t stride_l = p * r;  // Stride between left indices
 
             for (uint32_t i = 0; i < l; i++) {

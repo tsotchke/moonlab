@@ -732,6 +732,8 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
 
     uint32_t ll_dim = tl->dims[0];  // Left bond of left tensor
     uint32_t bond = tl->dims[2];    // Shared bond (should equal tr->dims[0])
+    (void)bond; /* documentation-only: bond-dim agreement is enforced
+                   by the SVD truncation in the caller. */
     uint32_t rr_dim = tr->dims[2];  // Right bond of right tensor
 
     // Contract left and right tensors

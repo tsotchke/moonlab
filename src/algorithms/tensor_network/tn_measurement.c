@@ -1521,6 +1521,8 @@ double complex tn_expectation_2q(const tn_mps_state_t *state,
                 for (uint32_t r2_ket = 0; r2_ket < chi_r2; r2_ket++) {
                     // Contract right environment
                     double complex R = 0.0;
+                    (void)R; /* scalar accumulator used in earlier
+                                loop bodies; now R_env aggregates. */
 
                     // Build right environment from qubit2+1 to n-1
                     double complex *R_env = (double complex *)calloc(chi_r2 * chi_r2, sizeof(double complex));
@@ -1691,6 +1693,8 @@ double complex tn_expectation_pauli_string(const tn_mps_state_t *state,
         }
 
         uint32_t l_dim = t->dims[0];   // left bond
+        (void)l_dim; /* left bond dim is implicit in the contraction
+                        loops below via the tensor_get indexing. */
         uint32_t p_dim = t->dims[1];   // physical (should be 2)
         uint32_t r_dim = t->dims[2];   // right bond
 
