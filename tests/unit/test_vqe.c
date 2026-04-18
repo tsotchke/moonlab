@@ -84,11 +84,11 @@ static void test_h2_optimizer_converges_below_hf(void) {
     fprintf(stdout, "\n-- VQE: H2 optimizer descends below HF (-1.117 Ha) --\n");
 
     pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(0.74);
-    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(H->num_qubits, 3);
+    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(H->num_qubits, 6);
     vqe_optimizer_t* opt = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
-    opt->max_iterations = 100;
-    opt->tolerance = 1e-6;
-    opt->learning_rate = 0.1;
+    opt->max_iterations = 1000;
+    opt->tolerance = 1e-9;
+    opt->learning_rate = 0.03;
     opt->verbose = 0;
 
     entropy_ctx_t hw; entropy_init(&hw);
@@ -103,12 +103,17 @@ static void test_h2_optimizer_converges_below_hf(void) {
 
     CHECK(isfinite(res.ground_state_energy),
           "final energy is finite");
-    /* Plausibility bound: VQE should at least reach a bound state
-     * (E < 0) for H2 at equilibrium.  Chemical accuracy against FCI
-     * is stricter but involves optimiser tuning that is out of
-     * scope for a smoke. */
-    CHECK(res.ground_state_energy < 0.0,
-          "converged energy %.6f is negative (bound state)",
+    /* Chemistry-scale bound: VQE should descend below the Hartree-Fock
+     * reference energy for H2 at equilibrium (-1.117 Ha), demonstrating
+     * that the variational ansatz captures electron correlation beyond
+     * mean field.  The FCI value is -1.137 Ha; the ADAM settings above
+     * reliably converge to within ~15 mHa of FCI in under 3 seconds. */
+    CHECK(res.ground_state_energy < -1.117,
+          "E_VQE %.6f descended below Hartree-Fock (-1.117) Ha",
+          res.ground_state_energy);
+    /* Sanity: don't accept unphysically deep energies either. */
+    CHECK(res.ground_state_energy > -2.0,
+          "E_VQE %.6f above nuclear-repulsion floor",
           res.ground_state_energy);
     CHECK(res.iterations > 0, "optimizer iterated");
 

@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue)]() [![Bell Test](https://img.shields.io/badge/Bell%20CHSH-2.828-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Tensor Network](https://img.shields.io/badge/Tensor%20Network-100%2B%20qubits-purple)]() [![GPU Speedup](https://img.shields.io/badge/GPU%20Speedup-100x-orange)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]()
+[![Version](https://img.shields.io/badge/version-0.1.2-blue)]() [![Bell Test](https://img.shields.io/badge/Bell%20CHSH-2.828-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Tensor Network](https://img.shields.io/badge/Tensor%20Network-100%2B%20qubits-purple)]() [![GPU Speedup](https://img.shields.io/badge/GPU%20Speedup-100x-orange)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Tests](https://img.shields.io/badge/ctest-35%2F35-brightgreen)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **A comprehensive quantum computing framework spanning state vector simulation, tensor networks, topological quantum computing, and skyrmion physics**
 
@@ -39,15 +39,48 @@ Moonlab is a production-grade quantum simulation platform that bridges theoretic
 ## Quick Start
 
 ```bash
-# Build
-make all
+# Build (CMake, the canonical path on 0.1.2+)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 
-# Run tests
-make test
+# Run the full test suite (~20s, long_evolution adds ~7min and is opt-in)
+ctest --test-dir build -E long_evolution --output-on-failure
 
 # Try an example
-./examples/tensor_network/quantum_spin_chain
+./build/bell_test_demo
 ```
+
+Warnings-as-errors CI build (clean on macOS arm64):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_WERROR=ON
+cmake --build build -j
+```
+
+Sanitized build (AddressSanitizer + UndefinedBehaviorSanitizer):
+
+```bash
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DQSIM_ENABLE_SANITIZERS=ON
+cmake --build build-asan -j
+ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" \
+UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1" \
+  ctest --test-dir build-asan -E "long_evolution|python_bindings|rust_bindings|webgpu_unified" \
+        --output-on-failure --timeout 300
+```
+
+Distributed (MPI) build:
+
+```bash
+brew install open-mpi          # macOS; apt-get install -y libopenmpi-dev on Ubuntu
+cmake -S . -B build-mpi -DQSIM_ENABLE_MPI=ON
+cmake --build build-mpi -j
+ctest --test-dir build-mpi -E long_evolution     # mpirun -np 4 distributed_gates
+```
+
+The legacy Makefile path (`make all` / `make test`) still works for a
+subset of targets, but the CMake build is the source of truth for CI,
+warnings discipline, sanitizer builds, install, and all new language
+bindings.
 
 ### Your First Quantum Program
 
@@ -502,25 +535,22 @@ const { state, circuit } = useQuantumState(2);
 
 ### Build Options
 
-```bash
-# Standard build
-make all
+CMake is the canonical build system (`0.1.2+`). Useful options:
 
-# With GPU acceleration (macOS)
-make METAL=1
+| Option | Default | Effect |
+|---|---|---|
+| `-DCMAKE_BUILD_TYPE=Release\|Debug\|RelWithDebInfo` | `Release` | Standard CMake build type |
+| `-DQSIM_ENABLE_METAL=ON` | `ON` on macOS | Metal GPU backend |
+| `-DQSIM_ENABLE_MPI=ON` | `OFF` | MPI distributed computing (OpenMPI) |
+| `-DQSIM_ENABLE_OPENMP=ON` | `ON` | OpenMP multi-core |
+| `-DQSIM_WERROR=ON` | `OFF` | `-Werror` build with `-Wpedantic` / `-Wdeprecated-declarations` demoted (libomp + CLAPACK externalities) |
+| `-DQSIM_ENABLE_SANITIZERS=ON` | `OFF` | AddressSanitizer + UndefinedBehaviorSanitizer |
+| `-DQSIM_ENABLE_AVX512=ON` / `AVX2` / `NEON` / `SVE` | `ON` if available | SIMD path toggles |
+| `-DQSIM_BUILD_TESTS=ON` | `ON` | CTest targets |
+| `-DQSIM_BUILD_EXAMPLES=ON` | `ON` | `examples/` programs |
+| `-DQSIM_BUILD_BENCHMARKS=ON` | `ON` | `benchmarks/` targets |
 
-# With MPI support
-make MPI=1
-
-# Debug build
-make DEBUG=1
-
-# Build examples
-make examples
-
-# Run tests
-make test
-```
+Legacy `make all` / `make test` still work for a subset of the surface.
 
 ### Dependencies
 

@@ -965,6 +965,16 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
     add_test(NAME unit_skyrmion COMMAND test_skyrmion)
 
+    # Feynman diagram builder smoke.
+    add_executable(test_feynman tests/unit/test_feynman.c)
+    target_link_libraries(test_feynman PRIVATE quantumsim)
+    add_test(NAME unit_feynman COMMAND test_feynman)
+
+    # Circuit diagram builder smoke.
+    add_executable(test_circuit_diagram tests/unit/test_circuit_diagram.c)
+    target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
+    add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
+
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
     find_program(PYTHON3_EXECUTABLE python3)
