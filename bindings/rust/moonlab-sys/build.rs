@@ -24,9 +24,23 @@ fn main() {
     println!("cargo:rerun-if-changed={}/src/algorithms/qaoa.h", project_root.display());
     println!("cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h", project_root.display());
 
-    // Link against the quantum simulator static library
-    println!("cargo:rustc-link-search=native={}", project_root.display());
-    println!("cargo:rustc-link-lib=static=quantumsim");
+    // Link against the quantum simulator library. Prefer MOONLAB_LIB_DIR
+    // if the build system sets it (e.g. CMake CTest), fall back to the
+    // project root. Static preferred, but fall through to shared if
+    // only libquantumsim.{so,dylib,dll} is present.
+    let lib_dir = env::var("MOONLAB_LIB_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| project_root.clone());
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+    let static_present = lib_dir.join("libquantumsim.a").exists();
+    if static_present {
+        println!("cargo:rustc-link-lib=static=quantumsim");
+    } else {
+        // Shared-library fallback — honour the dylib / so / dll variants
+        // that CMake produces by default.
+        println!("cargo:rustc-link-lib=dylib=quantumsim");
+    }
 
     // Link OpenMP (required for parallel operations)
     println!("cargo:rustc-link-search=native=/opt/homebrew/opt/libomp/lib");

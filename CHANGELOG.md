@@ -194,16 +194,80 @@ binds `moonlab_qrng_bytes` via dlsym) should now pin to this tag.
 
 ### Testing
 
-- Verified clean-slate build on macOS arm64 in both Release and Debug
-  configurations.
-- 10 of 11 CTest cases pass after this release. Bell test now reports
-  CHSH at ~99.4% of the Tsirelson bound at the default 10k sample size,
-  converging to essentially 100% (CHSH = 2.8298 at 100k, 2.8265 at 500k).
-  The remaining failure is `unit_quantum_state::test_state_purity`, a
-  pre-existing test-side bug: it constructs what it calls a "mixed state"
-  by setting 4 equal state-vector amplitudes, but that is in fact a pure
-  state (purity = 1), and the underlying simulator is pure-state-only.
-  To be addressed in the 0.2 Phase 1G build / CI / housekeeping sweep.
+- Verified clean-slate build on macOS arm64 in Release, Debug,
+  `-DQSIM_WERROR=ON`, and `-DQSIM_ENABLE_MPI=ON` configurations.
+- CTest count grew from 11 (of which only 9 passed) to **34** (all
+  passing) on a non-MPI macOS arm64 build, and **35** (all passing)
+  on a `-DQSIM_ENABLE_MPI=ON` build. `long_evolution` (~7 min) is
+  included and passes.
+
+New tests added and wired into CTest:
+
+- `unit_constants` — pins every hex-encoded constant in `src/utils/constants.h`
+  to its advertised value at 1e-14 tolerance.
+- `unit_correctness_properties` — property-based physics checks:
+  norm preservation over random circuits, rotation-inverse
+  idempotence, involution of H/X/Z/CNOT squared, bit-exact |Phi+>
+  amplitudes from `create_bell_state_phi_plus`.
+- `unit_measurement` — projective-collapse conventions, Bell-state
+  measurement correlations, `<Z>` expectations, full-distribution
+  normalisation.
+- `unit_entanglement` — product-state zero entropy, Bell-state
+  maximal (1 ebit) entropy, fidelity identical/orthogonal, purity
+  across pure states, partial trace of |Phi+> yields rho = I/2.
+- `unit_noise` — bit-flip / phase-flip involution, depolarizing p=0
+  is no-op, amplitude damping preserves norm, pure dephasing
+  preserves populations, norm-preservation across every channel.
+- `unit_grover` — success probability >= 0.8 at n = 3, 4, 5 qubits.
+- `unit_vqe` — H2 Hamiltonian construction, hardware-efficient
+  ansatz build, and a single energy-evaluation smoke through
+  `vqe_compute_energy`.
+- `unit_qaoa` — square-graph 4-qubit MaxCut solver, approximation
+  ratio in [0, 1].
+- `unit_qpe` — phase <-> bitstring round-trip, T-gate eigenphase
+  invocation (smoke level).
+- `unit_chemistry` — molecular_hamiltonian lifecycle,
+  `hartree_fock_state` places the right electron count,
+  `uccsd_config` lifecycle.
+- `unit_topological` — Fibonacci / Ising anyon systems, surface code
+  and toric code lifecycle.
+- `unit_mbl` — XXZ Hamiltonian + sparse form lifecycle.
+- `unit_simd_parity` — Accelerate primitives match a scalar C
+  reference at 1e-12 L2-rel; 64-byte alignment confirmed.
+- `unit_metal_parity` — Metal GPU kernels (Hadamard, Pauli X, Pauli
+  Z) match CPU gates at single-precision tolerance (5e-5 L2-rel);
+  SKIPs when Metal unavailable.
+- `unit_lattice_2d` — square / triangular / honeycomb lattice
+  construction and snake/grid mapping round-trip.
+- `python_bindings_smoke` — Bell state built through the ctypes
+  bridge and amplitudes verified against exact 1/sqrt(2).
+- `rust_bindings_smoke` — full `cargo test` on `bindings/rust/moonlab`
+  (lib + 9 doctests + 44 integration tests) — green.
+- `webgpu_unified_smoke` — runs the pre-existing
+  `scripts/webgpu-unified-smoke.mjs` randomized parity script.
+- `distributed_gates` (MPI build) — `mpirun -np 4` rank/size query,
+  allreduce_sum_double, `mpi_sendrecv` round-trip, barrier.
+
+Previously-dormant test sources wired in:
+
+- `unit_tensor_network` (833-line TN suite, already present in
+  `tests/unit/test_tensor_network.c` but not in CMake).
+- `comprehensive` (577-line end-to-end suite).
+- `dmrg`, `mps_vs_exact`, `long_evolution`, `fast_measurement`.
+
+Linked into the library so the TN / chemistry / topological / MBL /
+visualization tests can actually resolve their symbols:
+
+- Added `src/algorithms/tensor_network/*.c` (11 files) to
+  `QSIM_ALGORITHMS_SOURCES`. Previously the tree had 8 KLOC of
+  tensor-network code that was not compiled into `libquantumsim`, so
+  every consumer of `tensor_create`, `dmrg_solve`, `tdvp_step`, etc.
+  linked to undefined symbols.
+- Added `src/algorithms/chemistry/chemistry.c`,
+  `src/algorithms/topological/topological.c`,
+  `src/algorithms/mbl/mbl.c`,
+  `src/visualization/circuit_diagram.c`,
+  `src/visualization/feynman_diagram.c`.
 
 ### Known issues carried from 0.1.1
 
