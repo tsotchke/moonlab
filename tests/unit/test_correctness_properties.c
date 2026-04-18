@@ -173,6 +173,90 @@ static void test_involutions(void) {
     quantum_state_free(&s);
 }
 
+static void test_swap_involution(void) {
+    fprintf(stdout, "\n-- SWAP(a,b) applied twice is identity --\n");
+    srand(0xFEED);
+    quantum_state_t s, original;
+    quantum_state_init(&s, 3);
+    for (int trial = 0; trial < 20; ++trial) {
+        randomize_state(&s);
+        quantum_state_clone(&original, &s);
+        int a = rand() % 3, b = (a + 1 + rand() % 2) % 3;
+        gate_swap(&s, a, b);
+        gate_swap(&s, a, b);
+        double diff = l2_amplitude_diff(&s, &original);
+        if (diff > 1e-14) {
+            fprintf(stderr,
+                    "  FAIL  SWAP(%d,%d) trial %d diff %.3e\n",
+                    a, b, trial, diff);
+            failures++;
+            quantum_state_free(&original);
+            quantum_state_free(&s);
+            return;
+        }
+        quantum_state_free(&original);
+    }
+    fprintf(stdout, "  OK    20 random SWAP pairs are identity (L2 < 1e-14)\n");
+    quantum_state_free(&s);
+}
+
+static void test_qft_iqft_roundtrip(void) {
+    fprintf(stdout, "\n-- QFT . IQFT = I on random states --\n");
+    srand(0xFACADE);
+    for (int nq = 2; nq <= 4; ++nq) {
+        quantum_state_t s, original;
+        quantum_state_init(&s, nq);
+        randomize_state(&s);
+        quantum_state_clone(&original, &s);
+
+        int qubits[8];
+        for (int q = 0; q < nq; ++q) qubits[q] = q;
+
+        gate_qft(&s, qubits, nq);
+        gate_iqft(&s, qubits, nq);
+
+        double diff = l2_amplitude_diff(&s, &original);
+        if (diff > 1e-12) {
+            fprintf(stderr,
+                    "  FAIL  n=%d QFT/IQFT round-trip L2 diff %.3e > 1e-12\n",
+                    nq, diff);
+            failures++;
+        } else {
+            fprintf(stdout,
+                    "  OK    n=%d: QFT . IQFT matches input (L2 = %.3e)\n",
+                    nq, diff);
+        }
+        quantum_state_free(&original);
+        quantum_state_free(&s);
+    }
+}
+
+static void test_ghz_bipartite_entanglement(void) {
+    fprintf(stdout, "\n-- GHZ state bipartite entropy = 1 ebit --\n");
+    /* |GHZ> = (|000> + |111>)/sqrt(2). Any bipartition (A = {0},
+     * B = {1,2}) gives maximally mixed reduced density rho_A = I/2
+     * with S(rho_A) = 1 bit. Exercises zheev_ in entanglement.c. */
+    for (int nq = 3; nq <= 5; ++nq) {
+        quantum_state_t s;
+        quantum_state_init(&s, nq);
+        gate_hadamard(&s, 0);
+        for (int q = 1; q < nq; ++q) gate_cnot(&s, 0, q);
+
+        int subsys[1] = { 0 };
+        double S = quantum_state_entanglement_entropy(&s, subsys, 1);
+        if (fabs(S - 1.0) > 1e-10) {
+            fprintf(stderr,
+                    "  FAIL  n=%d GHZ entropy = %.10f, expected 1.0\n",
+                    nq, S);
+            failures++;
+        } else {
+            fprintf(stdout,
+                    "  OK    n=%d GHZ: S(rho_A) = %.10f ebit\n", nq, S);
+        }
+        quantum_state_free(&s);
+    }
+}
+
 static void test_bell_phi_plus_amplitudes(void) {
     fprintf(stdout, "\n-- exact amplitudes of |Phi+> --\n");
     quantum_state_t s;
@@ -211,6 +295,9 @@ int main(void) {
     test_norm_preservation();
     test_rotation_inverse();
     test_involutions();
+    test_swap_involution();
+    test_qft_iqft_roundtrip();
+    test_ghz_bipartite_entanglement();
     test_bell_phi_plus_amplitudes();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
