@@ -312,6 +312,39 @@ typedef struct {
 } effective_hamiltonian_t;
 
 /**
+ * @brief Persistent scratch buffers used by
+ *        @c effective_hamiltonian_apply_ws to avoid per-Lanczos-step
+ *        calloc/free of the (chi^2 * bond^2)-sized intermediates.
+ *
+ * Lanczos typically requests 30-100 H_eff applications per bond, so
+ * re-allocating the three interior tensors each time is an O(N_L)
+ * drag on every DMRG iteration.  Threading a workspace through means
+ * the three buffers allocate once per bond (or once per sweep, if
+ * the caller hoists further), and subsequent applications grow the
+ * buffer only when the bond dimension actually changes.  Structure
+ * is zero-initialised on @c workspace_init so the first call
+ * allocates lazily.
+ */
+typedef struct {
+    double complex *temp1;       /**< x contracted with R */
+    size_t          temp1_cap;
+    double complex *temp2;       /**< + W2 */
+    size_t          temp2_cap;
+    double complex *temp3;       /**< + W1 */
+    size_t          temp3_cap;
+} effective_hamiltonian_workspace_t;
+
+/**
+ * @brief Zero-initialise a workspace.  Cheap; no allocation.
+ */
+void effective_hamiltonian_workspace_init(effective_hamiltonian_workspace_t *ws);
+
+/**
+ * @brief Release all buffers owned by @p ws and zero the struct.
+ */
+void effective_hamiltonian_workspace_free(effective_hamiltonian_workspace_t *ws);
+
+/**
  * @brief Apply effective Hamiltonian to vector
  *
  * y = H_eff @ x
@@ -326,6 +359,21 @@ typedef struct {
 int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
                                 const tensor_t *x,
                                 tensor_t *y);
+
+/**
+ * @brief Like @c effective_hamiltonian_apply but reuses scratch
+ *        buffers held in @p ws rather than calloc-ing on every call.
+ *
+ * Semantics are identical when @p ws is NULL (falls back to per-call
+ * allocation).  Otherwise the workspace is grown in place to fit the
+ * current bond / physical dimensions and the intermediates live
+ * across the full Lanczos sequence.  Safe to share a workspace
+ * across every bond in a sweep; not thread-safe.
+ */
+int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
+                                   const tensor_t *x,
+                                   tensor_t *y,
+                                   effective_hamiltonian_workspace_t *ws);
 
 /**
  * @brief Solve ground state of effective Hamiltonian using Lanczos

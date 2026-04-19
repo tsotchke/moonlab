@@ -806,9 +806,39 @@ void lanczos_result_free(lanczos_result_t *result) {
  *
  * H_eff is built from L, W_left, W_right, R environments.
  */
+void effective_hamiltonian_workspace_init(effective_hamiltonian_workspace_t *ws) {
+    if (!ws) return;
+    memset(ws, 0, sizeof(*ws));
+}
+
+void effective_hamiltonian_workspace_free(effective_hamiltonian_workspace_t *ws) {
+    if (!ws) return;
+    free(ws->temp1); ws->temp1 = NULL; ws->temp1_cap = 0;
+    free(ws->temp2); ws->temp2 = NULL; ws->temp2_cap = 0;
+    free(ws->temp3); ws->temp3 = NULL; ws->temp3_cap = 0;
+}
+
+/* Grow a single workspace buffer to @p need elements, preserving
+ * the caller-managed zero-fill policy.  Returns NULL on OOM. */
+static double complex *ws_grow(double complex **buf, size_t *cap, size_t need) {
+    if (*cap >= need) return *buf;
+    double complex *next = (double complex*)realloc(*buf, need * sizeof(double complex));
+    if (!next) return NULL;
+    *buf = next;
+    *cap = need;
+    return next;
+}
+
 int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
                                 const tensor_t *x,
                                 tensor_t *y) {
+    return effective_hamiltonian_apply_ws(H_eff, x, y, NULL);
+}
+
+int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
+                                   const tensor_t *x,
+                                   tensor_t *y,
+                                   effective_hamiltonian_workspace_t *ws) {
     if (!H_eff || !x || !y) return -1;
 
     uint32_t chi_l = H_eff->chi_l;
@@ -844,18 +874,32 @@ int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
         // Step 3: temp3[lp,bl,s1,s2,r] = temp2[lp,s1p,bm,s2,r] @ W1[bl,s1,s1p,bm]
         // Step 4: y[l,s1,s2,r] = temp3[lp,bl,s1,s2,r] @ L[l,bl,lp]
 
-        // Allocate intermediate tensors
+        // Allocate intermediate tensors.
+        //
+        // When a workspace is supplied, reuse its scratch buffers
+        // across every Lanczos application.  Each dispatch zero-fills
+        // the working region (not the whole buffer) since the
+        // nested-loop writes below only touch indices < temp{1,2,3}_size.
         size_t temp1_size = chi_l * d * d * b_r * chi_r;
         size_t temp2_size = chi_l * d * b_m * d * chi_r;
         size_t temp3_size = chi_l * b_l * d * d * chi_r;
 
-        double complex *temp1 = (double complex *)calloc(temp1_size, sizeof(double complex));
-        double complex *temp2 = (double complex *)calloc(temp2_size, sizeof(double complex));
-        double complex *temp3 = (double complex *)calloc(temp3_size, sizeof(double complex));
+        double complex *temp1 = NULL, *temp2 = NULL, *temp3 = NULL;
+        bool owns_temps = (ws == NULL);
 
-        if (!temp1 || !temp2 || !temp3) {
-            free(temp1); free(temp2); free(temp3);
-            return -1;
+        if (ws) {
+            temp1 = ws_grow(&ws->temp1, &ws->temp1_cap, temp1_size);
+            temp2 = ws_grow(&ws->temp2, &ws->temp2_cap, temp2_size);
+            temp3 = ws_grow(&ws->temp3, &ws->temp3_cap, temp3_size);
+            if (!temp1 || !temp2 || !temp3) return -1;
+        } else {
+            temp1 = (double complex *)calloc(temp1_size, sizeof(double complex));
+            temp2 = (double complex *)calloc(temp2_size, sizeof(double complex));
+            temp3 = (double complex *)calloc(temp3_size, sizeof(double complex));
+            if (!temp1 || !temp2 || !temp3) {
+                free(temp1); free(temp2); free(temp3);
+                return -1;
+            }
         }
 
         // Step 1: temp1[lp,s1p,s2p,br,r] = sum_rp x[lp,s1p,s2p,rp] * R[r,br,rp]
@@ -900,7 +944,7 @@ int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
             }
         }
 
-        free(temp1);
+        if (owns_temps) free(temp1);
 
         // Step 3: temp3[lp,bl,s1,s2,r] = sum_{s1p,bm} temp2[lp,s1p,bm,s2,r] * W1[bl,s1,s1p,bm]
         for (uint32_t lp = 0; lp < chi_l; lp++) {
@@ -924,7 +968,7 @@ int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
             }
         }
 
-        free(temp2);
+        if (owns_temps) free(temp2);
 
         // Step 4: y[l,s1,s2,r] = sum_{lp,bl} temp3[lp,bl,s1,s2,r] * L[l,bl,lp]
         for (uint32_t l = 0; l < chi_l; l++) {
@@ -946,7 +990,7 @@ int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
             }
         }
 
-        free(temp3);
+        if (owns_temps) free(temp3);
     }
     else {
         // One-site DMRG - similar but simpler
@@ -1100,6 +1144,11 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
     uint32_t d = H_eff->phys_dim;
     uint64_t vec_size = H_eff->two_site ? chi_l * d * d * chi_r : chi_l * d * chi_r;
 
+    /* Persistent H_eff-apply scratch; declared up front so every
+     * goto cleanup path can free it unconditionally. */
+    effective_hamiltonian_workspace_t ws;
+    effective_hamiltonian_workspace_init(&ws);
+
     lanczos_result_t *result = (lanczos_result_t *)calloc(1, sizeof(lanczos_result_t));
     if (!result) return NULL;
 
@@ -1174,7 +1223,7 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
 
         // w = H @ v_curr
         memcpy(x_tensor->data, v_curr, vec_size * sizeof(double complex));
-        int apply_ret = effective_hamiltonian_apply(H_eff, x_tensor, y_tensor);
+        int apply_ret = effective_hamiltonian_apply_ws(H_eff, x_tensor, y_tensor, &ws);
         if (apply_ret != 0) {
             fprintf(stderr, "      [Lanczos] H_eff apply failed at iter %u\n", iter);
             goto cleanup;
@@ -1284,6 +1333,7 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
     free(w);
     free(alpha);
     free(beta);
+    effective_hamiltonian_workspace_free(&ws);
 
     return result;
 
@@ -1300,6 +1350,7 @@ cleanup:
     free(w);
     free(alpha);
     free(beta);
+    effective_hamiltonian_workspace_free(&ws);
     lanczos_result_free(result);
     return NULL;
 }
