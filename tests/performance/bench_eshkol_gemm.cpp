@@ -187,6 +187,8 @@ int main() {
     bench_size(512, 256, 256);
     bench_size(1024, 256, 256);
     bench_size(1024, 512, 512);
+    bench_size(2048, 1024, 1024);
+    bench_size(4096, 2048, 2048);
 
     eshkol_gpu_shutdown();
     return 0;
