@@ -536,6 +536,12 @@ if(QSIM_ENABLE_CUQUANTUM)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuda.cu)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuquantum.cu)
 endif()
+# The Eshkol GPU bridge compiles regardless of whether Eshkol itself
+# is enabled -- the stub path returns MOONLAB_ESHKOL_NOT_BUILT so
+# callers can use the API unconditionally. The real (Eshkol-linking)
+# path activates only when QSIM_ENABLE_ESHKOL=ON and guards the
+# implementation behind #ifdef QSIM_ENABLE_ESHKOL.
+list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_eshkol.cpp)
 
 set(QSIM_UTILS_SOURCES
     src/utils/entropy.c
@@ -609,6 +615,35 @@ elseif(QSIM_BUILD_STATIC)
     add_library(quantumsim STATIC ${QSIM_ALL_SOURCES})
 else()
     add_library(quantumsim ${QSIM_ALL_SOURCES})
+endif()
+
+# Eshkol integration: enable the real (non-stub) path of the bridge
+# and link libeshkol-static.a with its framework dependencies.
+if(QSIM_ENABLE_ESHKOL)
+    set(_eshkol_inc   "${QSIM_ESHKOL_ROOT}/inc")
+    set(_eshkol_libfn "${QSIM_ESHKOL_ROOT}/build/libeshkol-static.a")
+    if(NOT EXISTS "${_eshkol_libfn}")
+        message(FATAL_ERROR
+            "QSIM_ENABLE_ESHKOL=ON but ${_eshkol_libfn} not found. "
+            "Build Eshkol first (cmake -S ${QSIM_ESHKOL_ROOT} -B "
+            "${QSIM_ESHKOL_ROOT}/build && cmake --build "
+            "${QSIM_ESHKOL_ROOT}/build).")
+    endif()
+    target_compile_definitions(quantumsim PRIVATE QSIM_ENABLE_ESHKOL=1)
+    target_include_directories(quantumsim PRIVATE "${_eshkol_inc}")
+    target_link_libraries(quantumsim PRIVATE
+        "${_eshkol_libfn}"
+        "-framework Metal"
+        "-framework MetalPerformanceShaders"
+        "-framework Foundation"
+        "-framework CoreGraphics"
+    )
+    set_source_files_properties(
+        src/optimization/gpu/backends/gpu_eshkol.cpp
+        PROPERTIES COMPILE_DEFINITIONS QSIM_ENABLE_ESHKOL=1
+    )
+    set_property(TARGET quantumsim PROPERTY CXX_STANDARD 17)
+    message(STATUS "Eshkol bridge: ON (lib=${_eshkol_libfn})")
 endif()
 
 # Include directories
@@ -1025,6 +1060,16 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_shor_ecdlp tests/unit/test_shor_ecdlp.c)
     target_link_libraries(test_shor_ecdlp PRIVATE quantumsim m)
     add_test(NAME unit_shor_ecdlp COMMAND test_shor_ecdlp)
+
+    # Moonlab-Eshkol bridge parity: moonlab_eshkol_zgemm vs cblas_zgemm.
+    # Always built; the test tolerates NOT_BUILT and NO_GPU by design.
+    add_executable(test_gpu_eshkol tests/unit/test_gpu_eshkol.cpp)
+    set_target_properties(test_gpu_eshkol PROPERTIES CXX_STANDARD 17)
+    target_link_libraries(test_gpu_eshkol PRIVATE quantumsim)
+    if(QSIM_HAS_ACCELERATE)
+        target_link_libraries(test_gpu_eshkol PRIVATE "-framework Accelerate")
+    endif()
+    add_test(NAME unit_gpu_eshkol COMMAND test_gpu_eshkol)
 
     # Chemistry module smoke.
     add_executable(test_chemistry tests/unit/test_chemistry.c)
