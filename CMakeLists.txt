@@ -25,16 +25,22 @@ cmake_minimum_required(VERSION 3.20)
 
 # Read the canonical version string from VERSION.txt so the CMake project
 # version, SOVERSION, pkg-config data, and any generated headers stay in
-# lock-step with the one file developers actually bump. The file is
-# expected to contain exactly one line of the form MAJOR.MINOR.PATCH.
+# lock-step with the one file developers actually bump. The file may
+# contain MAJOR.MINOR.PATCH optionally followed by a pre-release tag such
+# as "-dev" or "-rc1"; CMake's project() accepts only the numeric form, so
+# we split the raw string before passing it to project().
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt" QSIM_VERSION_RAW)
-string(STRIP "${QSIM_VERSION_RAW}" QSIM_VERSION)
-if(NOT QSIM_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+string(STRIP "${QSIM_VERSION_RAW}" QSIM_VERSION_FULL)
+if(NOT QSIM_VERSION_FULL MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)(-[A-Za-z0-9.-]+)?$")
     message(FATAL_ERROR
-        "VERSION.txt must contain exactly 'MAJOR.MINOR.PATCH'; got '${QSIM_VERSION}'")
+        "VERSION.txt must be MAJOR.MINOR.PATCH with an optional '-pre' tag; "
+        "got '${QSIM_VERSION_FULL}'")
 endif()
+set(QSIM_VERSION      ${CMAKE_MATCH_1})
+set(QSIM_VERSION_PRE  ${CMAKE_MATCH_2})  # includes leading '-' or empty
 
-# Project definition
+# Project definition (numeric version only; pre-release suffix is kept
+# separately for display / packaging).
 project(quantum_simulator
     VERSION ${QSIM_VERSION}
     DESCRIPTION "High-performance quantum computing simulator"
@@ -449,6 +455,10 @@ set(QSIM_QUANTUM_SOURCES
     src/quantum/noise.c
 )
 
+set(QSIM_BACKEND_SOURCES
+    src/backends/clifford/clifford.c
+)
+
 set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/grover.c
     src/algorithms/grover_optimizer.c
@@ -476,6 +486,12 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/chemistry/chemistry.c
     # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
     src/algorithms/topological/topological.c
+    # Real-space topology: Bianco-Resta local Chern marker (dense reference).
+    src/algorithms/topology_realspace/chern_marker.c
+    # Real-space topology: matrix-free Chebyshev-KPM Chern marker.
+    src/algorithms/topology_realspace/chern_kpm.c
+    # Quantum geometric tensor: momentum-space Berry curvature + metric.
+    src/algorithms/quantum_geometry/qgt.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -490,6 +506,7 @@ set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/stride_gates.c
     src/optimization/parallel_ops.c
     src/optimization/accelerate_ops.c
+    src/optimization/fusion/fusion.c
 )
 # The unified GPU backend dispatcher references symbols from each backend
 # implementation (Metal buffer helpers, CUDA kernels, etc.). Only add it
@@ -529,6 +546,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/qrng.c
     src/applications/moonlab_qrng_export.c
     src/applications/nist_sp800_22.c
+    src/applications/quantum_volume.c
 )
 
 set(QSIM_PROFILER_SOURCES
@@ -547,6 +565,7 @@ set(QSIM_DISTRIBUTED_SOURCES
 # Combine all sources
 set(QSIM_ALL_SOURCES
     ${QSIM_QUANTUM_SOURCES}
+    ${QSIM_BACKEND_SOURCES}
     ${QSIM_ALGORITHMS_SOURCES}
     ${QSIM_OPTIMIZATION_SOURCES}
     ${QSIM_GPU_SOURCES}
@@ -940,6 +959,48 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_qpe PRIVATE quantumsim)
     add_test(NAME unit_qpe COMMAND test_qpe)
 
+    # Clifford stabilizer backend: H2=I, X, S4=I, Bell, 100-qubit GHZ.
+    add_executable(test_clifford tests/unit/test_clifford.c)
+    target_link_libraries(test_clifford PRIVATE quantumsim)
+    add_test(NAME unit_clifford COMMAND test_clifford)
+
+    # Gate-fusion DAG: random-circuit parity vs gate-by-gate execution.
+    add_executable(test_fusion tests/unit/test_fusion.c)
+    target_link_libraries(test_fusion PRIVATE quantumsim)
+    add_test(NAME unit_fusion COMMAND test_fusion)
+
+    # Quantum Volume harness: HOP above 2/3 on noiseless simulator.
+    add_executable(test_quantum_volume tests/unit/test_quantum_volume.c)
+    target_link_libraries(test_quantum_volume PRIVATE quantumsim)
+    add_test(NAME unit_quantum_volume COMMAND test_quantum_volume)
+
+    # Clifford-backed surface code: syndrome response at d=7,9,15.
+    add_executable(test_surface_code_clifford tests/unit/test_surface_code_clifford.c)
+    target_link_libraries(test_surface_code_clifford PRIVATE quantumsim)
+    add_test(NAME unit_surface_code_clifford COMMAND test_surface_code_clifford)
+
+    # Local Chern marker: QWZ topological vs trivial phases.
+    add_executable(test_chern_marker tests/unit/test_chern_marker.c)
+    target_link_libraries(test_chern_marker PRIVATE quantumsim m)
+    add_test(NAME unit_chern_marker COMMAND test_chern_marker)
+
+    # matrix_math ground-truth: matmul, trace, Hermitian check, eigenvalues.
+    # Eigenvector correctness is tested ONLY on the real-symmetric path;
+    # the complex-Hermitian branch is known unsound (see matrix_math.h).
+    add_executable(test_matrix_math tests/unit/test_matrix_math.c)
+    target_link_libraries(test_matrix_math PRIVATE quantumsim m)
+    add_test(NAME unit_matrix_math COMMAND test_matrix_math)
+
+    # Matrix-free KPM Chern marker: parity with dense + large-L demo.
+    add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
+    target_link_libraries(test_chern_kpm PRIVATE quantumsim m)
+    add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
+
+    # Quantum geometric tensor: Berry / Chern via FHS link variables.
+    add_executable(test_qgt tests/unit/test_qgt.c)
+    target_link_libraries(test_qgt PRIVATE quantumsim m)
+    add_test(NAME unit_qgt COMMAND test_qgt)
+
     # Chemistry module smoke.
     add_executable(test_chemistry tests/unit/test_chemistry.c)
     target_link_libraries(test_chemistry PRIVATE quantumsim)
@@ -1005,6 +1066,16 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(bench_state_operations PRIVATE quantumsim)
     add_executable(bench_tensor_networks tests/performance/bench_tensor_networks.c)
     target_link_libraries(bench_tensor_networks PRIVATE quantumsim)
+    add_executable(bench_fusion tests/performance/bench_fusion.c)
+    target_link_libraries(bench_fusion PRIVATE quantumsim)
+    add_executable(bench_quantum_volume tests/performance/bench_quantum_volume.c)
+    target_link_libraries(bench_quantum_volume PRIVATE quantumsim)
+    add_executable(bench_clifford tests/performance/bench_clifford.c)
+    target_link_libraries(bench_clifford PRIVATE quantumsim)
+    add_executable(bench_chern_kpm tests/performance/bench_chern_kpm.c)
+    target_link_libraries(bench_chern_kpm PRIVATE quantumsim m)
+    add_executable(bench_chern_mosaic tests/performance/bench_chern_mosaic.c)
+    target_link_libraries(bench_chern_mosaic PRIVATE quantumsim m)
 
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
@@ -1268,7 +1339,7 @@ message(STATUS "")
 message(STATUS "========================================")
 message(STATUS "Quantum Simulator Configuration Summary")
 message(STATUS "========================================")
-message(STATUS "Version:      ${PROJECT_VERSION}")
+message(STATUS "Version:      ${PROJECT_VERSION}${QSIM_VERSION_PRE}")
 message(STATUS "Platform:     ${QSIM_PLATFORM_NAME}")
 message(STATUS "Architecture: ${QSIM_ARCH_NAME}")
 message(STATUS "Build Type:   ${CMAKE_BUILD_TYPE}")

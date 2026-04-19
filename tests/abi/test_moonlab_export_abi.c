@@ -19,6 +19,7 @@
 
 typedef int (*moonlab_qrng_bytes_fn)(uint8_t* buf, size_t size);
 typedef void (*moonlab_abi_version_fn)(int* major, int* minor, int* patch);
+typedef int (*moonlab_qwz_chern_fn)(double m, size_t N, double* out_chern);
 
 static const char* const LIB_CANDIDATES[] = {
     "libquantumsim.dylib",
@@ -140,6 +141,29 @@ int main(void) {
     int failures = 0;
     failures += test_version(h);
     failures += test_qrng(h);
+
+    /* moonlab_qwz_chern: topological / trivial phases of QWZ. */
+    dlerror();
+    moonlab_qwz_chern_fn qwz =
+        (moonlab_qwz_chern_fn)dlsym(h, "moonlab_qwz_chern");
+    if (!qwz || dlerror()) {
+        fprintf(stderr, "dlsym(moonlab_qwz_chern) failed\n");
+        failures++;
+    } else {
+        double c;
+        int ct = qwz(+1.0, 32, &c);
+        if (ct != -1) {
+            fprintf(stderr, "moonlab_qwz_chern(m=+1) = %d (raw %.3f), "
+                    "expected -1\n", ct, c);
+            failures++;
+        }
+        int cz = qwz(+3.0, 32, NULL);
+        if (cz != 0) {
+            fprintf(stderr, "moonlab_qwz_chern(m=+3) = %d, expected 0\n", cz);
+            failures++;
+        }
+        if (!failures) fprintf(stdout, "moonlab_qwz_chern OK\n");
+    }
 
     dlclose(h);
 

@@ -17,6 +17,9 @@
 
 #include "moonlab_export.h"
 #include "qrng.h"
+#include "../algorithms/quantum_geometry/qgt.h"
+#include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -70,4 +73,18 @@ void moonlab_abi_version(int* major, int* minor, int* patch) {
     if (major) *major = MOONLAB_ABI_VERSION_MAJOR;
     if (minor) *minor = MOONLAB_ABI_VERSION_MINOR;
     if (patch) *patch = MOONLAB_ABI_VERSION_PATCH;
+}
+
+int moonlab_qwz_chern(double m, size_t N, double* out_chern) {
+    if (N < 4) return INT_MIN;
+    qgt_system_t* sys = qgt_model_qwz(m);
+    if (!sys) return INT_MIN;
+    qgt_berry_grid_t g;
+    int rc = qgt_berry_grid(sys, N, &g);
+    if (rc != 0) { qgt_free(sys); return INT_MIN; }
+    double c = g.chern;
+    if (out_chern) *out_chern = c;
+    qgt_berry_grid_free(&g);
+    qgt_free(sys);
+    return (int)lround(c);
 }

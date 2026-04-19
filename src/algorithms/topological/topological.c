@@ -17,6 +17,7 @@
 #include "topological.h"
 #include "../../quantum/gates.h"
 #include "../../utils/matrix_math.h"
+#include "../../backends/clifford/clifford.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -2026,4 +2027,165 @@ double complex topological_spin(const anyon_system_t *sys,
     }
 
     return 1.0;
+}
+
+/* ======================================================================= */
+/*  Clifford-backed surface code                                           */
+/* ======================================================================= */
+
+surface_code_clifford_t*
+surface_code_clifford_create(uint32_t distance, uint64_t rng_seed) {
+    if (distance < 3 || distance % 2 == 0) return NULL;
+
+    surface_code_clifford_t* code = calloc(1, sizeof(*code));
+    if (!code) return NULL;
+
+    code->distance = distance;
+    code->num_data_qubits = distance * distance;
+    code->num_ancilla_qubits = (distance - 1) * (distance - 1);
+    uint32_t total = code->num_data_qubits + 2 * code->num_ancilla_qubits;
+
+    code->tableau = clifford_tableau_create(total);
+    if (!code->tableau) { free(code); return NULL; }
+
+    code->x_syndrome = calloc(code->num_ancilla_qubits, sizeof(uint8_t));
+    code->z_syndrome = calloc(code->num_ancilla_qubits, sizeof(uint8_t));
+    if (!code->x_syndrome || !code->z_syndrome) {
+        free(code->x_syndrome);
+        free(code->z_syndrome);
+        clifford_tableau_free(code->tableau);
+        free(code);
+        return NULL;
+    }
+    code->rng_state = (rng_seed == 0) ? 0xF1EEC0DE12345678ULL : rng_seed;
+    return code;
+}
+
+void surface_code_clifford_free(surface_code_clifford_t* code) {
+    if (!code) return;
+    clifford_tableau_free(code->tableau);
+    free(code->x_syndrome);
+    free(code->z_syndrome);
+    free(code);
+}
+
+uint32_t
+surface_code_clifford_data_index(const surface_code_clifford_t* code,
+                                 uint32_t row, uint32_t col) {
+    return row * code->distance + col;
+}
+
+static inline uint32_t
+z_ancilla_index(const surface_code_clifford_t* code, uint32_t r, uint32_t c) {
+    return code->num_data_qubits + r * (code->distance - 1) + c;
+}
+
+static inline uint32_t
+x_ancilla_index(const surface_code_clifford_t* code, uint32_t r, uint32_t c) {
+    uint32_t d = code->distance;
+    return code->num_data_qubits + (d - 1) * (d - 1)
+         + r * (d - 1) + c;
+}
+
+qs_error_t
+surface_code_clifford_apply_error(surface_code_clifford_t* code,
+                                  uint32_t q, char type) {
+    if (!code || q >= code->num_data_qubits) return QS_ERROR_INVALID_QUBIT;
+    clifford_error_t rc;
+    switch (type) {
+        case 'X': case 'x': rc = clifford_x(code->tableau, q); break;
+        case 'Y': case 'y': rc = clifford_y(code->tableau, q); break;
+        case 'Z': case 'z': rc = clifford_z(code->tableau, q); break;
+        default: return QS_ERROR_INVALID_STATE;
+    }
+    return (rc == CLIFFORD_SUCCESS) ? QS_SUCCESS : QS_ERROR_INVALID_STATE;
+}
+
+/**
+ * Measure a Z-stabilizer Z_a Z_b Z_c Z_d via ancilla:
+ *   - assumes ancilla starts in |0>
+ *   - CNOT(data_i -> ancilla) for each data qubit, accumulating parity
+ *   - measure ancilla in Z basis (parity = outcome)
+ *   - if outcome==1, apply X to ancilla to reset it to |0> for next round
+ */
+static int measure_z_stab(surface_code_clifford_t* code,
+                          const uint32_t* data_qubits, uint32_t n,
+                          uint32_t ancilla) {
+    for (uint32_t i = 0; i < n; i++) {
+        clifford_cnot(code->tableau, data_qubits[i], ancilla);
+    }
+    int outcome = 0;
+    clifford_measure(code->tableau, ancilla, &code->rng_state, &outcome, NULL);
+    if (outcome) clifford_x(code->tableau, ancilla);
+    return outcome;
+}
+
+/**
+ * Measure an X-stabilizer X_a X_b X_c X_d via ancilla:
+ *   - assumes ancilla starts in |0>
+ *   - H ancilla, CNOT(ancilla -> data_i) for each data qubit, H ancilla
+ *   - measure ancilla in Z basis
+ *   - reset ancilla to |0> via X if needed
+ */
+static int measure_x_stab(surface_code_clifford_t* code,
+                          const uint32_t* data_qubits, uint32_t n,
+                          uint32_t ancilla) {
+    clifford_h(code->tableau, ancilla);
+    for (uint32_t i = 0; i < n; i++) {
+        clifford_cnot(code->tableau, ancilla, data_qubits[i]);
+    }
+    clifford_h(code->tableau, ancilla);
+    int outcome = 0;
+    clifford_measure(code->tableau, ancilla, &code->rng_state, &outcome, NULL);
+    if (outcome) clifford_x(code->tableau, ancilla);
+    return outcome;
+}
+
+qs_error_t
+surface_code_clifford_measure_z_syndromes(surface_code_clifford_t* code) {
+    if (!code) return QS_ERROR_INVALID_STATE;
+    uint32_t d = code->distance;
+    uint32_t qubits[4];
+    for (uint32_t r = 0; r < d - 1; r++) {
+        for (uint32_t c = 0; c < d - 1; c++) {
+            qubits[0] = surface_code_clifford_data_index(code, r,     c);
+            qubits[1] = surface_code_clifford_data_index(code, r,     c + 1);
+            qubits[2] = surface_code_clifford_data_index(code, r + 1, c);
+            qubits[3] = surface_code_clifford_data_index(code, r + 1, c + 1);
+            uint32_t anc = z_ancilla_index(code, r, c);
+            int s = measure_z_stab(code, qubits, 4, anc);
+            code->z_syndrome[r * (d - 1) + c] = (uint8_t)s;
+        }
+    }
+    return QS_SUCCESS;
+}
+
+qs_error_t
+surface_code_clifford_measure_x_syndromes(surface_code_clifford_t* code) {
+    if (!code) return QS_ERROR_INVALID_STATE;
+    uint32_t d = code->distance;
+    uint32_t qubits[4];
+    for (uint32_t r = 0; r < d - 1; r++) {
+        for (uint32_t c = 0; c < d - 1; c++) {
+            qubits[0] = surface_code_clifford_data_index(code, r,     c);
+            qubits[1] = surface_code_clifford_data_index(code, r,     c + 1);
+            qubits[2] = surface_code_clifford_data_index(code, r + 1, c);
+            qubits[3] = surface_code_clifford_data_index(code, r + 1, c + 1);
+            uint32_t anc = x_ancilla_index(code, r, c);
+            int s = measure_x_stab(code, qubits, 4, anc);
+            code->x_syndrome[r * (d - 1) + c] = (uint8_t)s;
+        }
+    }
+    return QS_SUCCESS;
+}
+
+uint32_t
+surface_code_clifford_syndrome_weight(const surface_code_clifford_t* code) {
+    if (!code) return 0;
+    uint32_t w = 0;
+    uint32_t n = code->num_ancilla_qubits;
+    for (uint32_t i = 0; i < n; i++) {
+        w += code->x_syndrome[i] + code->z_syndrome[i];
+    }
+    return w;
 }

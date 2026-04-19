@@ -47,7 +47,7 @@ extern "C" {
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 1
+#define MOONLAB_ABI_VERSION_MINOR 2
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -87,6 +87,39 @@ void moonlab_abi_version(int* major, int* minor, int* patch);
  * @since 0.1.2
  */
 int moonlab_qrng_bytes(uint8_t* buf, size_t size);
+
+/* ---- Quantum geometric tensor (stable from 0.2.0) -------------------- */
+
+/**
+ * @brief Compute the integer Chern number of the lower band of the
+ *        Qi-Wu-Zhang 2-band Chern insulator
+ *
+ *   H(k) = sin(kx) sigma_x + sin(ky) sigma_y
+ *        + (m + cos(kx) + cos(ky)) sigma_z
+ *
+ * via the Fukui-Hatsugai-Suzuki link-variable method on a @p N x @p N
+ * Brillouin-zone grid. The return value is the integer Chern number
+ * (no gauge ambiguity) as rounded to nearest integer.
+ *
+ * This is the simplest primitive on the QGT ABI surface. Higher-level
+ * functions (per-plaquette Berry curvature arrays, Fubini-Study
+ * metric, custom models) are exposed on an opaque-handle interface via
+ * the internal `src/algorithms/quantum_geometry/qgt.h` header; when
+ * they stabilise they will be promoted here.
+ *
+ * Intended consumers: QGTL (github.com:tsotchke/quantum_geometric_tensor),
+ * lilirrep, SbNN.
+ *
+ * @param m  QWZ mass parameter.
+ * @param N  BZ grid side (N >= 4; 32 is plenty for a clean integer).
+ * @param out_chern  Optional: writes the raw (pre-rounding) Chern
+ *                   value; may be NULL.
+ * @return integer Chern number rounded to nearest int, or INT_MIN on
+ *         error (bad arguments / allocation failure).
+ *
+ * @since 0.2.0
+ */
+int moonlab_qwz_chern(double m, size_t N, double* out_chern);
 
 #ifdef __cplusplus
 } /* extern "C" */
