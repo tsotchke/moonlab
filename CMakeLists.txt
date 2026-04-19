@@ -1232,11 +1232,20 @@ if(QSIM_BUILD_TESTS)
     endif()
 
     # WebGPU parity smoke — runs the existing randomized eval script.
-    # Requires pnpm, emscripten-built moonlab.wasm, and optionally a
-    # WebGPU-capable runtime (Chromium 113+ or Deno 2).
+    # Requires pnpm, emscripten-built moonlab.wasm, a pnpm-built TS dist,
+    # and optionally a WebGPU-capable runtime (Chromium 113+ or Deno 2).
+    #
+    # We gate on both the script existing AND the compiled dist already
+    # being present, because CMake does not own the pnpm build graph;
+    # a fresh clone without `pnpm -C bindings/javascript/packages/core
+    # build` would otherwise fail this test on first run.  Downstreams
+    # that opt in run the pnpm build first and pick up this test on a
+    # re-configure.
     find_program(PNPM_EXECUTABLE pnpm)
     if(PNPM_EXECUTABLE AND EXISTS
-        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs")
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs"
+        AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/index.mjs")
         add_test(NAME webgpu_unified_smoke
                  COMMAND ${PNPM_EXECUTABLE} -C
                          ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
