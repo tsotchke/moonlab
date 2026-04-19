@@ -415,12 +415,125 @@ static void test_sign_matrix_element_small_tfim(void) {
     mpo_free(H_src);
 }
 
+/* ---------------------------------------------------------------- */
+/* 4. Full MPS sign / projector application                          */
+/* ---------------------------------------------------------------- */
+static void test_apply_sign_small_tfim(void) {
+    fprintf(stdout, "\n-- apply_sign vs dense: L=4 TFIM --\n");
+    const uint32_t L = 4;
+    mpo_t* H_src = mpo_tfim_create(L, 1.0, 0.8);
+    tn_mpo_t* H = mpo_kpm_mpo_to_tn_mpo(H_src);
+    CHECK(H_src && H, "MPOs built");
+
+    size_t N = 0;
+    double complex* Hd = build_dense_H(H_src, &N);
+    CHECK(N == ((size_t)1 << L), "dense dim = 2^L");
+
+    /* Spectrum bounds via eigendecomp. */
+    double complex* scratch = (double complex*)malloc(N * N * sizeof(double complex));
+    memcpy(scratch, Hd, N * N * sizeof(double complex));
+    double* evals = (double*)malloc(N * sizeof(double));
+    int info = diagonalise_hermitian(scratch, (int)N, evals);
+    CHECK(info == 0, "diag ok");
+    const double E_min = evals[0], E_max = evals[N - 1];
+    const double a = 0.5 * (E_max + E_min);
+    const double b = 0.55 * (E_max - E_min);
+    free(scratch);
+    free(evals);
+
+    tn_mps_state_t* ket = random_product_mps(L, 0xAB12);
+    CHECK(ket != NULL, "ket built");
+
+    /* Dense reference: |sign(H_tilde)|ket> via eigendecomp. */
+    double complex* psi = (double complex*)malloc(N * sizeof(double complex));
+    CHECK(tn_mps_to_statevector(ket, psi) == TN_STATE_SUCCESS, "ket -> SV");
+
+    /* Build sign(M) dense via eigendecomp of M = (H - a)/b and
+     * apply to psi to get sign_ket_dense. */
+    double complex* M = (double complex*)malloc(N * N * sizeof(double complex));
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) M[i * N + j] = Hd[i * N + j] / b;
+        M[i * N + i] -= a / b;
+    }
+    double* w = (double*)malloc(N * sizeof(double));
+    info = diagonalise_hermitian(M, (int)N, w);
+    CHECK(info == 0, "eigen ok");
+
+    /* sign_psi = V diag(sign(w)) V^H psi. */
+    double complex* Vhpsi = (double complex*)calloc(N, sizeof(double complex));
+    for (size_t k = 0; k < N; k++) {
+        double complex acc = 0.0;
+        for (size_t i = 0; i < N; i++) acc += conj(M[k * N + i]) * psi[i];
+        Vhpsi[k] = acc;
+    }
+    for (size_t k = 0; k < N; k++) {
+        const double s = (w[k] > 0) ? 1.0 : (w[k] < 0 ? -1.0 : 0.0);
+        Vhpsi[k] *= s;
+    }
+    double complex* sign_psi_dense = (double complex*)calloc(N, sizeof(double complex));
+    for (size_t i = 0; i < N; i++) {
+        double complex acc = 0.0;
+        for (size_t k = 0; k < N; k++) acc += M[k * N + i] * Vhpsi[k];
+        sign_psi_dense[i] = acc;
+    }
+
+    /* MPS path. */
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 1000;
+    params.E_shift = a;
+    params.E_scale = b;
+    params.max_bond_dim = 64;
+    tn_mps_state_t* sign_ket_mps = mpo_kpm_apply_sign(H, ket, &params);
+    CHECK(sign_ket_mps != NULL, "apply_sign returned MPS");
+
+    double complex* sign_psi_mps = (double complex*)malloc(N * sizeof(double complex));
+    CHECK(tn_mps_to_statevector(sign_ket_mps, sign_psi_mps) == TN_STATE_SUCCESS,
+          "MPS -> SV");
+
+    double num = 0.0, den = 0.0;
+    for (size_t i = 0; i < N; i++) {
+        double complex d = sign_psi_mps[i] - sign_psi_dense[i];
+        num += creal(d * conj(d));
+        den += creal(sign_psi_dense[i] * conj(sign_psi_dense[i]));
+    }
+    const double rel = (den > 0) ? sqrt(num / den) : sqrt(num);
+    fprintf(stdout, "    ||sign|ket>_mps - sign|ket>_dense|| / ||dense|| = %.3e\n", rel);
+    CHECK(rel < 1e-3, "apply_sign agrees with dense to 1e-3 rel");
+
+    /* Projector path. */
+    tn_mps_state_t* proj_ket_mps = mpo_kpm_apply_projector(H, ket, &params);
+    CHECK(proj_ket_mps != NULL, "apply_projector returned MPS");
+    double complex* proj_mps = (double complex*)malloc(N * sizeof(double complex));
+    tn_mps_to_statevector(proj_ket_mps, proj_mps);
+
+    double pnum = 0.0, pden = 0.0;
+    for (size_t i = 0; i < N; i++) {
+        const double complex expected = 0.5 * (psi[i] - sign_psi_dense[i]);
+        double complex d = proj_mps[i] - expected;
+        pnum += creal(d * conj(d));
+        pden += creal(expected * conj(expected));
+    }
+    const double prel = (pden > 0) ? sqrt(pnum / pden) : sqrt(pnum);
+    fprintf(stdout, "    ||P|ket>_mps - P|ket>_dense|| / ||dense|| = %.3e\n", prel);
+    CHECK(prel < 1e-3, "apply_projector agrees with dense to 1e-3 rel");
+
+    free(psi); free(M); free(w); free(Vhpsi);
+    free(sign_psi_dense); free(sign_psi_mps); free(proj_mps);
+    free(Hd);
+    tn_mps_free(ket);
+    tn_mps_free(sign_ket_mps);
+    tn_mps_free(proj_ket_mps);
+    tn_mpo_free(H);
+    mpo_free(H_src);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
     test_mps_combine_norm(4, 0xC0DE, 0xBEEF);
     test_mps_combine_norm(6, 0x1234, 0x5678);
     test_sign_matrix_element_small_tfim();
+    test_apply_sign_small_tfim();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

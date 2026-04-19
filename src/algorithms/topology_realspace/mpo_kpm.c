@@ -533,3 +533,190 @@ double complex mpo_kpm_projector_matrix_element(
         mpo_kpm_sign_matrix_element(H, bra, ket, params);
     return 0.5 * (overlap - sign_me);
 }
+
+/* ---------------------------------------------------------------- */
+/* Full MPS projector / sign application                             */
+/* ---------------------------------------------------------------- */
+
+/* Zero MPS with the same chain length and physical dimension as
+ * @p tmpl, bond dimension 1 everywhere, and all amplitudes = 0.
+ * Used as the initial accumulator for the Chebyshev sum. */
+static tn_mps_state_t* zero_mps_like(const tn_mps_state_t* tmpl) {
+    if (!tmpl || tmpl->num_qubits == 0) return NULL;
+    tn_state_config_t cfg = tmpl->config;
+    tn_mps_state_t* z = tn_mps_create_zero(tmpl->num_qubits, &cfg);
+    if (!z) return NULL;
+    /* tn_mps_create_zero builds |00...0>, i.e. amplitude-1 on one
+     * basis state. Zero every tensor to produce the null vector. */
+    for (uint32_t i = 0; i < z->num_qubits; i++) {
+        tensor_t* t = z->tensors[i];
+        if (t && t->data) {
+            memset(t->data, 0, t->total_size * sizeof(double complex));
+        }
+    }
+    z->norm = 1.0;
+    z->log_norm_factor = 0.0;
+    z->canonical = TN_CANONICAL_NONE;
+    z->canonical_center = -1;
+    return z;
+}
+
+tn_mps_state_t* mpo_kpm_apply_sign(
+    const tn_mpo_t* H,
+    const tn_mps_state_t* ket,
+    const mpo_kpm_params_t* params)
+{
+    if (!H || !ket || !params) return NULL;
+    if (params->n_cheby == 0) return NULL;
+    if (params->E_scale <= 0.0) return NULL;
+
+    const double a = params->E_shift;
+    const double b = params->E_scale;
+    const uint32_t max_bond = params->max_bond_dim;
+    const size_t N = params->n_cheby;
+
+    /* Precompute Jackson + sign coefficients once. */
+    double* cs = (double*)malloc(N * sizeof(double));
+    double* gs = (double*)malloc(N * sizeof(double));
+    if (!cs || !gs) { free(cs); free(gs); return NULL; }
+    mpo_kpm_sign_coefficients(N, cs);
+    if (params->use_jackson) {
+        mpo_kpm_jackson_weights(N, gs);
+    } else {
+        for (size_t n = 0; n < N; n++) gs[n] = 1.0;
+    }
+
+    /* Running state: v_prev = T_{n-1} |ket>, v_curr = T_n |ket>,
+     * acc = sum_{m=0}^{n} g_m c_m T_m |ket>. */
+    tn_mps_state_t* v_prev = tn_mps_copy(ket);
+    if (!v_prev) { free(cs); free(gs); return NULL; }
+    v_prev->config.max_bond_dim = max_bond;
+
+    tn_mps_state_t* acc = zero_mps_like(ket);
+    if (!acc) { tn_mps_free(v_prev); free(cs); free(gs); return NULL; }
+
+    /* c_0 = 0; nothing to add at n = 0. */
+
+    if (N == 1) { free(cs); free(gs); tn_mps_free(v_prev); return acc; }
+
+    /* v_1 = (1/b) H |ket> + (-a/b) |ket>. */
+    tn_mps_state_t* Hk = apply_H_copy(H, v_prev, max_bond);
+    if (!Hk) {
+        tn_mps_free(v_prev); tn_mps_free(acc);
+        free(cs); free(gs); return NULL;
+    }
+    tn_mps_state_t* ket_copy = tn_mps_copy(v_prev);
+    if (!ket_copy) {
+        tn_mps_free(v_prev); tn_mps_free(acc); tn_mps_free(Hk);
+        free(cs); free(gs); return NULL;
+    }
+    tn_mps_state_t* v_curr = combine_and_truncate(
+        Hk, (double complex)(1.0 / b),
+        ket_copy, (double complex)(-a / b),
+        max_bond);
+    if (!v_curr) {
+        tn_mps_free(v_prev); tn_mps_free(acc);
+        free(cs); free(gs); return NULL;
+    }
+
+    /* acc += g_1 c_1 * v_1. */
+    {
+        tn_mps_state_t* v1_copy = tn_mps_copy(v_curr);
+        if (!v1_copy) {
+            tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(acc);
+            free(cs); free(gs); return NULL;
+        }
+        tn_mps_state_t* next_acc = combine_and_truncate(
+            acc, 1.0,
+            v1_copy, (double complex)(gs[1] * cs[1]),
+            max_bond);
+        if (!next_acc) {
+            tn_mps_free(v_prev); tn_mps_free(v_curr);
+            free(cs); free(gs); return NULL;
+        }
+        acc = next_acc;
+    }
+
+    for (size_t n = 2; n < N; n++) {
+        /* v_next = (2/b) H |v_curr> - (2 a / b) |v_curr> - |v_prev>. */
+        tn_mps_state_t* Hv = apply_H_copy(H, v_curr, max_bond);
+        tn_mps_state_t* v_curr_copy = tn_mps_copy(v_curr);
+        if (!Hv || !v_curr_copy) {
+            if (Hv) tn_mps_free(Hv);
+            if (v_curr_copy) tn_mps_free(v_curr_copy);
+            tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(acc);
+            free(cs); free(gs); return NULL;
+        }
+        tn_mps_state_t* tmp1 = combine_and_truncate(
+            Hv,          (double complex)(2.0 / b),
+            v_curr_copy, (double complex)(-2.0 * a / b),
+            max_bond);
+        if (!tmp1) {
+            tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(acc);
+            free(cs); free(gs); return NULL;
+        }
+        tn_mps_state_t* v_next = mpo_kpm_mps_combine(tmp1, 1.0, v_prev, -1.0);
+        tn_mps_free(tmp1);
+        if (!v_next) {
+            tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(acc);
+            free(cs); free(gs); return NULL;
+        }
+        if (max_bond > 0) {
+            double err = 0.0;
+            tn_mps_truncate(v_next, max_bond, &err);
+        }
+
+        /* acc += g_n c_n * v_next. */
+        const double w = gs[n] * cs[n];
+        if (w != 0.0) {
+            tn_mps_state_t* vn_copy = tn_mps_copy(v_next);
+            if (!vn_copy) {
+                tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(v_next);
+                tn_mps_free(acc);
+                free(cs); free(gs); return NULL;
+            }
+            tn_mps_state_t* next_acc = combine_and_truncate(
+                acc, 1.0,
+                vn_copy, (double complex)w,
+                max_bond);
+            if (!next_acc) {
+                tn_mps_free(v_prev); tn_mps_free(v_curr); tn_mps_free(v_next);
+                free(cs); free(gs); return NULL;
+            }
+            acc = next_acc;
+        }
+
+        /* Roll. */
+        tn_mps_free(v_prev);
+        v_prev = v_curr;
+        v_curr = v_next;
+    }
+
+    tn_mps_free(v_prev);
+    tn_mps_free(v_curr);
+    free(cs);
+    free(gs);
+    return acc;
+}
+
+tn_mps_state_t* mpo_kpm_apply_projector(
+    const tn_mpo_t* H,
+    const tn_mps_state_t* ket,
+    const mpo_kpm_params_t* params)
+{
+    if (!params || !ket || !H) return NULL;
+    tn_mps_state_t* sign_ket = mpo_kpm_apply_sign(H, ket, params);
+    if (!sign_ket) return NULL;
+    tn_mps_state_t* ket_copy = tn_mps_copy(ket);
+    if (!ket_copy) { tn_mps_free(sign_ket); return NULL; }
+    tn_mps_state_t* out = mpo_kpm_mps_combine(
+        ket_copy, 0.5, sign_ket, -0.5);
+    tn_mps_free(ket_copy);
+    tn_mps_free(sign_ket);
+    if (!out) return NULL;
+    if (params->max_bond_dim > 0) {
+        double err = 0.0;
+        tn_mps_truncate(out, params->max_bond_dim, &err);
+    }
+    return out;
+}
