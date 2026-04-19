@@ -31,6 +31,14 @@ state-of-the-art simulator in each regime, and in the regimes where
 we are unique (real-space topology, adaptive representation,
 differentiable physics) we have no competition.
 
+Moonlab *is* an HPC library — a quantum HPC library. Every substrate
+is performance-engineered: vectorised CPU kernels, GPU offload where
+the work is parallel enough, distributed execution where problem size
+demands it, measurable roofline efficiency on every hot path. The
+layer that lowers substrate operations onto actual silicon is
+substrate #7 (§2.7); it is the reason we can commit to measured
+numbers and not just claims.
+
 ## 1. Design Commitments
 
 Every design decision in the tree must serve at least one of the
@@ -42,7 +50,13 @@ following. Decisions that serve none are deleted.
 2. **Measured performance, not claimed performance.** Every
    perf-adjacent PR must ship a benchmark that justifies the claim in
    the PR description. The benchmark number goes into the CI
-   dashboard.
+   dashboard. Moonlab is an HPC library; performance is a
+   first-class concern at every substrate, not a downstream
+   optimisation phase. A substrate is not considered complete until
+   it has (a) vectorised CPU kernels with a measured peak-FLOPs
+   fraction, (b) a GPU path wherever the work is parallel enough,
+   (c) a distributed execution path where problem size demands it,
+   and (d) CI-tracked roofline metrics.
 3. **Peer-review-grade honesty.** No marketing language in source
    docstrings, no unbacked speedup claims, no subsystem labelled
    "working" that isn't tested against a reference. Every numerical
@@ -63,10 +77,13 @@ following. Decisions that serve none are deleted.
 8. **Substrate before surface.** If adding a new module is easier
    than fixing the substrate underneath it, fix the substrate.
 
-## 2. The Six Substrates
+## 2. The Seven Substrates
 
 These are the primitives on which every Moonlab capability sits. The
-v0.3 release is the one in which all six are first-class.
+v0.3 release is the one in which all seven are first-class. Six of
+them are *what* the library computes; one (§2.7) is *where and how*
+the computation runs, and is the substrate that makes the "quantum
+HPC library" claim literal rather than rhetorical.
 
 ### 2.1 Hamiltonian algebra (substrate #1)
 
@@ -190,6 +207,87 @@ call stack.
 Unifying into a single context that every substrate writes into is
 a v0.3 item.
 
+### 2.7 Execution backend (substrate #7)
+
+**This is what makes Moonlab an HPC library.** The execution backend
+is the layer that lowers a substrate operation -- a gate, a matvec,
+an SVD, a tensor contraction, an MPO/MPS expectation -- onto actual
+silicon. Every higher substrate calls through this layer; no higher
+substrate hardcodes a kernel.
+
+The backend surface:
+
+| Tier | Target | Primitives |
+|---|---|---|
+| CPU | x86_64 + AArch64 | runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE), Apple Accelerate (AMX), OpenMP across cores, cache-aware blocking, NUMA-aware allocation |
+| GPU | Apple Metal + NVIDIA CUDA + cuQuantum / cuStateVec + AMD HIP + WebGPU for browsers | parallel gate kernels, batched 2-qubit fusion, on-device SVD / QR, tensor contraction, measurement sampling |
+| Distributed | MPI + NCCL / UCX | partitioned state vector, cross-partition gate application, collective measurement, load-balanced TN contraction |
+| Heterogeneous | auto-dispatch | CPU/GPU/distributed chosen per op based on problem size, locality, and available hardware; migration between tiers mid-run when the cost model says so |
+
+The backend exposes a narrow, audited API that each substrate
+consumes:
+
+```c
+/* Apply a 1- or 2-qubit gate to a state at a given representation. */
+moonlab_backend_result_t moonlab_bk_apply_gate(
+    moonlab_state_t*   state,
+    const moonlab_gate_t* gate,
+    const moonlab_bk_hints_t* hints);   /* optional: prefer GPU, etc. */
+
+/* Low-level complex BLAS-3 (row- or column-major) with a dispatchable
+ * backend. Wraps Accelerate / MKL / cuBLAS / rocBLAS; never reimplements. */
+moonlab_backend_result_t moonlab_bk_gemm(
+    moonlab_cplx_t alpha,
+    const moonlab_buffer_t* A, const moonlab_buffer_t* B,
+    moonlab_cplx_t beta,
+    moonlab_buffer_t* C);
+
+/* Tensor contraction (einsum-like); dispatches to cuTensorNet where
+ * available, falls back to batched GEMM otherwise. */
+moonlab_backend_result_t moonlab_bk_contract(
+    const char* einsum_spec,
+    const moonlab_tensor_t* const* operands, size_t n_operands,
+    moonlab_tensor_t* out);
+```
+
+**Principles governing the backend:**
+
+1. **We wrap, we do not reinvent**, classical linear algebra. BLAS /
+   LAPACK / Eigen / cuBLAS / cuSPARSE / cuTensorNet are dependencies,
+   not reimplementations. Moonlab's value-add is the quantum-
+   structure-aware dispatch on top, not the matmul.
+2. **Every kernel has a measured peak-FLOPs / peak-bandwidth fraction**
+   on its target. Roofline analysis for every hot path; CI tracks
+   the regressions.
+3. **SIMD is in the production path, not a parallel track.** The
+   `stride_gates` v0.2 scaffolding gets wired into the dispatcher;
+   the scalar loop in `gates.c` goes away.
+4. **GPU is first-class, not optional.** Metal, CUDA, and WebGPU are
+   on an equal footing with CPU; the same state migrates between
+   them. cuStateVec / cuTensorNet / cuSOLVER are consumed where
+   they help.
+5. **Distributed is not a bolt-on.** MPI partitioning is a
+   representation the dispatcher chooses when problem size > node
+   capacity. Cross-partition gate application is a backend primitive,
+   not a separate library surface.
+6. **Backend choice is observable**, never hidden: every execution
+   emits a log entry indicating which tier ran the op. Users can
+   pin, audit, and reproduce.
+
+**Status today:** fragmented and partial. CPU has a runtime SIMD
+dispatcher that the production gate path does *not* use (the
+stride_gates.c SIMD kernels exist but are not wired in). Metal has
+single-qubit kernels only. CUDA / OpenCL / Vulkan / cuQuantum /
+cuStateVec are declared options that have never been CI-tested
+against real SDKs. MPI has a partitioned state vector that passes a
+cross-partition smoke test but no measured scaling. WebGPU is at
+Phase 3 of `webgpuplan.md`. The roofline story is zero: no kernel
+has a measured FLOPs / bandwidth number.
+
+Bringing substrate #7 to full first-class status is the single
+biggest engineering investment in the v0.3 arc, and the one that
+converts "good research code" into "quantum HPC library."
+
 ## 3. New-Physics Surface
 
 These are the specific physics questions Moonlab is being designed
@@ -270,8 +368,9 @@ the number holding within 10 % on the canonical workload.
 
 | Regime | Workload | Target | Reference |
 |---|---|---|---|
-| Single-qubit gate, CPU | H on n=26 | ≤ 25 µs | Qulacs 20 µs |
-| Two-qubit gate, CPU | CNOT on n=26 | ≤ 30 µs | Qulacs 28 µs |
+| Single-qubit gate, CPU SIMD | H on n=26 | ≤ 25 µs | Qulacs 20 µs |
+| Two-qubit gate, CPU SIMD | CNOT on n=26 | ≤ 30 µs | Qulacs 28 µs |
+| CPU kernel efficiency | H on n=24 | ≥ 50 % of peak bandwidth | roofline |
 | Clifford random, tableau | GHZ-10000 | ≤ 10 ms | Stim ~0.4 ms (stretch: parity) |
 | DMRG, 1D Heisenberg | L=100, χ=200, 5 sweeps | ≤ 10 s | ITensor ~4 s |
 | MPS gate, typical | H @ 50 sites, χ=32 | ≤ 2 µs | ITensor ~1 µs |
@@ -279,13 +378,19 @@ the number holding within 10 % on the canonical workload.
 | Quantum Volume heavy-output | QV-10 mean HOP | ≥ 0.83 | Porter-Thomas 0.847 |
 | Chern-KPM bulk site | L=1024 (1M sites) | ≤ 2 s per site | (no published ref) |
 | FHS Chern integer | N=32 grid, QWZ | `lround(c) == C` | (analytical) |
+| GPU gate throughput, Metal | H on n=26 | ≤ 5 µs | stretch: cuStateVec ~1 µs |
+| GPU gate throughput, CUDA | H on n=28 | ≤ 10 µs | cuStateVec 3-8 µs |
+| MPI scaling | n=32 GHZ on np=16 | ≤ 2× single-node at n=28 | mpiQulacs |
+| Roofline utilisation | any hot kernel | ≥ 40 % of memory-bandwidth peak | measured |
 | Reproducibility manifest | every run | emitted | (new) |
 | Qulacs parity | 200 random circuits, n ≤ 16 | ‖Δψ‖ ≤ 1e-10 | (new) |
 | Stim parity | 100 Clifford circuits | bit-exact | (new) |
 | FCI parity | H₂, LiH, H₂O at equilibrium | ≤ 1 mHa | (new) |
+| ITensor parity | DMRG on 1D Heisenberg | ground-state energy ≤ 1e-8 rel | (new) |
 
-Regimes not listed (GPU, MPI, WebGPU, CUDA) get their own dashboard
-entries as the backends become real.
+Every entry in this table is a CI dashboard item. A perf regression
+opens an automatic issue; no PR that breaks a committed threshold
+merges without a dedicated update to this section.
 
 ## 5. Migration Path
 
@@ -310,7 +415,15 @@ becomes possible.
 **Phase 5 (weeks 20-28)**: substrate #4 (measurement/tomography)
 completes. MPO/QTCI Chern mosaic lands (10⁸ site target met).
 
-v0.3 releases between phases; v0.3.0 tag when all five complete.
+**Phase 6 (weeks 28-36)**: substrate #7 (execution backend) brought
+to first-class status. SIMD kernels wired into the production gate
+path; Metal 2Q + measurement kernels; CUDA / cuQuantum integration;
+MPI scaling measured at 16 and 64 ranks; WebGPU Phase 4 / Phase 5
+completed. Every kernel has a CI roofline entry. This is the phase
+that converts "good research code" into "quantum HPC library."
+
+v0.3 releases between phases; v0.3.0 tag when all seven substrates
+complete.
 
 ## 6. Publication Track
 
@@ -351,12 +464,17 @@ estimates ride on is the billing surface for the SaaS.
 
 What Moonlab is deliberately *not* becoming:
 
-- **Not a classical HPC library.** Classical linear algebra lives
-  in BLAS / LAPACK / Eigen. Moonlab wraps them; it does not replace
-  them.
+- **Not a reimplementation of classical linear algebra.** BLAS,
+  LAPACK, Eigen, cuBLAS, cuSPARSE, cuTensorNet, FFTW live upstream;
+  Moonlab consumes them. The value-add is quantum-structure-aware
+  dispatch, not matrix multiplication. (This is *not* a claim that
+  Moonlab is not HPC — substrate #7 makes it so. It is a claim that
+  our HPC contribution sits on top of existing numerical libraries,
+  not beneath them.)
 - **Not a symbolic CAS.** Moonlab's Hamiltonian algebra is a typed
   DSL for quantum operators, not a general-purpose computer algebra
-  system. Use SymPy / Mathematica upstream.
+  system. Use SymPy / Mathematica upstream for symbolic manipulation
+  that does not have a direct numerical consequence.
 - **Not a circuit designer's IDE.** Circuit authoring is Qiskit's
   and Cirq's niche. Moonlab consumes circuits they produce, and
   produces circuits they can execute.
