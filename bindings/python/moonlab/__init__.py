@@ -20,7 +20,7 @@ Quick Start:
     >>> result = state.measure(0)  # Measure qubit 0
 """
 
-__version__ = "0.1.0-dev"
+__version__ = "0.2.0-dev"
 __author__ = "tsotchke"
 
 from .core import (
@@ -30,11 +30,11 @@ from .core import (
     QuantumError
 )
 
-# Algorithm wrappers currently bind against C symbols (molecular_hamiltonian_*,
-# vqe_*, qaoa_*, grover_*, bell_test_*) that are not yet exported from the
-# v0.1.2 dylib. Skip the import rather than crash at module load; the 0.2
-# Phase 1G housekeeping sweep will realign algorithms.py with the actual
-# C ABI or drop it in favour of a ctypes rework.
+# Algorithm wrappers. These historically failed to load because of an
+# ABI mismatch; the mismatch was resolved in the 0.2 sweep but we keep
+# the import guard so a partial / stripped build of libquantumsim does
+# not crash the module at import. The intended state is
+# _ALGO_AVAILABLE == True on a full build.
 try:
     from .algorithms import (
         VQE,
@@ -46,11 +46,26 @@ try:
 except (ImportError, AttributeError):
     _ALGO_AVAILABLE = False
 
+from .benchmarks import quantum_volume, QuantumVolumeResult
+from .clifford import Clifford
+from .topology import (
+    ChernKPM, qwz_chern, berry_grid_qwz,
+    berry_grid_haldane, ssh_winding,
+)
+
 __all__ = [
     'QuantumState',
     'Gates',
     'Measurement',
     'QuantumError',
+    'quantum_volume',
+    'QuantumVolumeResult',
+    'Clifford',
+    'ChernKPM',
+    'qwz_chern',
+    'berry_grid_qwz',
+    'berry_grid_haldane',
+    'ssh_winding',
 ]
 if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
