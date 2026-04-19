@@ -40,11 +40,13 @@
 pub mod error;
 pub mod feynman;
 pub mod state;
+pub mod topology;
 
 // Re-export main types
 pub use error::{QuantumError, Result};
 pub use feynman::{FeynmanDiagram, ParticleType};
 pub use state::{QuantumState, MAX_QUBITS};
+pub use topology::{qwz_chern, ssh_winding, ChernKpm};
 
 /// Prelude module for convenient imports.
 ///
@@ -55,6 +57,7 @@ pub mod prelude {
     pub use crate::error::{QuantumError, Result};
     pub use crate::feynman::{FeynmanDiagram, ParticleType};
     pub use crate::state::{QuantumState, MAX_QUBITS};
+    pub use crate::topology::{qwz_chern, ssh_winding, ChernKpm};
 }
 
 #[cfg(test)]
