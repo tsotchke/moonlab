@@ -29,13 +29,34 @@
  * - Braiding operations for topological qubits
  * - Real-time correlation functions
  *
+ * MATHEMATICAL UNDERPINNING:
+ * ==========================
+ * TDVP projects the Schroedinger equation onto the tangent space of
+ * the MPS variational manifold; the projected flow respects the
+ * manifold exactly, conserves energy for time-independent @f$H@f$,
+ * and becomes a symplectic integrator under a symmetric two-site
+ * Lie-Trotter split.  Error per step is @f$O(dt^3)@f$ for the
+ * two-site integrator used here; the bond dimension @f$\chi@f$ sets
+ * the "resolution" with which entanglement growth is tracked.  The
+ * Haegeman 2016 paper unifies TDVP with DMRG (imaginary-time TDVP
+ * with large @f$dt@f$ converges to the DMRG ground state), which is
+ * the theoretical justification for reusing the same MPS / MPO
+ * machinery across `dmrg.h` and this file.
+ *
  * REFERENCES:
  * ===========
- * [1] J. Haegeman et al., "Time-dependent variational principle for quantum
- *     lattices", Phys. Rev. Lett. 107, 070601 (2011)
- *
- * [2] J. Haegeman et al., "Unifying time evolution and optimization with
- *     matrix product states", Phys. Rev. B 94, 165116 (2016)
+ *  [1] J. Haegeman, J. I. Cirac, T. J. Osborne, I. Pizorn,
+ *      H. Verschelde and F. Verstraete, "Time-dependent variational
+ *      principle for quantum lattices", Phys. Rev. Lett. 107, 070601
+ *      (2011), arXiv:1103.0936.  Introduces TDVP for MPS.
+ *  [2] J. Haegeman, C. Lubich, I. Oseledets, B. Vandereycken and
+ *      F. Verstraete, "Unifying time evolution and optimization with
+ *      matrix product states", Phys. Rev. B 94, 165116 (2016),
+ *      arXiv:1408.5056.  Two-site / projector variant implemented
+ *      here; the "unification" thesis establishes the DMRG link.
+ *  [3] U. Schollwoeck, "The density-matrix renormalization group in
+ *      the age of matrix product states", Ann. Phys. 326, 96 (2011),
+ *      arXiv:1008.3477.  Background for MPS / MPO conventions.
  *
  * Copyright 2024-2026 tsotchke
  * Licensed under the MIT License

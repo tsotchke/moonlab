@@ -60,12 +60,15 @@
  * the Su-Schrieffer-Heeger model), the topological invariant is the
  * Zak phase / winding number
  * @f[
- *   W \;=\; -\frac{1}{\pi}\oint_{\mathrm{BZ}} A(k)\,dk \;\in\; \mathbb{Z},
+ *   W \;=\; -\frac{\gamma_{\mathrm{Zak}}}{\pi} \;\in\; \mathbb{Z},
+ *   \qquad
+ *   \gamma_{\mathrm{Zak}} \;=\; i\oint_{\mathrm{BZ}} \langle u_-(k)|\partial_k u_-(k)\rangle\,dk,
  * @f]
  * evaluated here by the 1D analogue of the FHS construction (sum of
- * discrete link-variable phases around the Brillouin zone).  The sign
- * convention matches the canonical @f$W = +1@f$ for the topological
- * SSH phase @f$|t_2| > |t_1|@f$.
+ * discrete link-variable phases around the Brillouin zone).  The
+ * overall sign matches the canonical convention of Asboth-Oroszlany-
+ * Palyi (2016) §1.5: @f$W = +1@f$ in the topological SSH phase
+ * @f$|t_2| > |t_1|@f$.
  *
  * GAUGE-STABLE EIGENVECTOR SELECTION
  * ----------------------------------

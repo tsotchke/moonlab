@@ -7,16 +7,55 @@
 
 /**
  * @file grover.h
- * @brief Grover's search algorithm for quantum database search
- * 
- * Implements Grover's algorithm, which provides quadratic speedup
- * for unstructured search problems. This demonstrates genuine
- * quantum advantage: O(√N) vs classical O(N).
- * 
- * For random number generation, Grover's algorithm can be used to:
- * - Sample from quantum superpositions
- * - Demonstrate quantum speedup
- * - Generate quantum-enhanced random distributions
+ * @brief Grover amplitude-amplification search.
+ *
+ * OVERVIEW
+ * --------
+ * Grover's algorithm (Grover 1996) finds a marked element in an
+ * unstructured search space of size @f$N = 2^{n}@f$ in
+ * @f$O(\sqrt{N})@f$ oracle calls, a provably optimal quadratic
+ * speedup over the best classical algorithm
+ * @f$O(N)@f$ when the oracle is the only operational primitive
+ * (Bennett-Bernstein-Brassard-Vazirani lower bound).  The algorithm
+ * consists of a single preparation of the uniform superposition
+ * followed by @f$k = \lfloor \pi\sqrt{N/M}/4 \rfloor@f$ iterations of
+ * the *Grover operator*
+ * @f[
+ *   \hat G \;=\; H^{\otimes n}\,(2|0\rangle\langle 0| - \mathbb{1})\,H^{\otimes n}\,\hat O ,
+ * @f]
+ * where @f$\hat O@f$ is the oracle that flips the phase of the
+ * marked state(s), @f$M@f$ is the number of marked states, and the
+ * middle factor is the diffusion (reflection about the uniform
+ * state).  Each iteration rotates the state by angle
+ * @f$\theta = 2\arcsin\sqrt{M/N}@f$ in the 2D subspace spanned by
+ * the marked and un-marked uniform states, so success probability
+ * after @f$k@f$ iterations is @f$\sin^{2}((2k+1)\theta/2)@f$.
+ *
+ * Brassard, Hoyer, Mosca and Tapp generalised this to the *amplitude
+ * amplification* framework: given any algorithm @f$A@f$ that prepares
+ * a state with marked-component amplitude @f$a@f$, @f$O(1/a)@f$
+ * applications of a "Grover-like" operator built from @f$A@f$ and the
+ * oracle drive the marked amplitude to unity.  Grover's original
+ * algorithm is the special case @f$A = H^{\otimes n}@f$ acting on
+ * @f$|0\rangle^{\otimes n}@f$.
+ *
+ * USE CASES IN MOONLAB
+ * --------------------
+ * - Oracle-based search demonstrations (unit tests, `example_grover_*`).
+ * - The Grover-mode QRNG (`qrng.h`) amplifies a marked subset of the
+ *   computational basis to produce biased-random bitstreams with a
+ *   quantum provenance that is not reproducible by a PRNG.
+ * - Cryptographic-grade pre-image / collision search at qubit counts
+ *   small enough to be instructive rather than production.
+ *
+ * REFERENCES
+ * ----------
+ *  - L. K. Grover, "A fast quantum mechanical algorithm for database
+ *    search", STOC 1996, arXiv:quant-ph/9605043.  Original paper.
+ *  - G. Brassard, P. Hoyer, M. Mosca and A. Tapp, "Quantum amplitude
+ *    amplification and estimation", Contemp. Math. 305, 53 (2002),
+ *    arXiv:quant-ph/0005055.  Generalisation and the amplitude
+ *    estimation primitive.
  */
 
 /**

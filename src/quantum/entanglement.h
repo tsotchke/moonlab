@@ -1,6 +1,65 @@
 /**
  * @file entanglement.h
- * @brief Quantum entanglement analysis and utilities
+ * @brief Bipartite entanglement measures on pure and mixed states.
+ *
+ * OVERVIEW
+ * --------
+ * For a pure state @f$|\psi\rangle@f$ on @f$\mathcal H_A \otimes
+ * \mathcal H_B@f$, the reduced density matrix
+ * @f$\rho_A = \operatorname{Tr}_B\,|\psi\rangle\langle\psi|@f$
+ * carries the full entanglement information of the bipartition.
+ * Equivalent characterisations of its "mixedness" correspond to
+ * different entanglement measures:
+ *
+ *   - *Von Neumann entropy*
+ *     @f$S(\rho_A) = -\operatorname{Tr}\,\rho_A \log_2 \rho_A@f$ is the
+ *     canonical bipartite entanglement measure of a pure state, equal
+ *     to the Shannon entropy of its Schmidt coefficients.  For mixed
+ *     states it is replaced by the *entanglement of formation*
+ *     (Bennett-DiVincenzo-Smolin-Wootters 1996).
+ *   - *Renyi-@f$\alpha@f$ entropy*
+ *     @f$S_\alpha(\rho_A) = (1 - \alpha)^{-1}\log_2 \operatorname{Tr}\,\rho_A^{\alpha}@f$
+ *     interpolates between the min-entropy (@f$\alpha\to\infty@f$),
+ *     the collision entropy (@f$\alpha = 2@f$) and the von Neumann
+ *     entropy (@f$\alpha \to 1@f$).
+ *   - *Linear entropy* @f$S_L = 1 - \operatorname{Tr}\,\rho_A^{2}@f$ is
+ *     a numerically friendly surrogate for small bipartite systems.
+ *
+ * FOR TWO-QUBIT SYSTEMS
+ * ---------------------
+ * The Wootters *concurrence* is
+ * @f[
+ *   C(\rho) \;=\; \max\!\bigl(0,\; \sqrt{\lambda_1} - \sqrt{\lambda_2}
+ *                - \sqrt{\lambda_3} - \sqrt{\lambda_4}\bigr),
+ * @f]
+ * where @f$\lambda_i@f$ are the eigenvalues of
+ * @f$\rho (\sigma_y\otimes\sigma_y) \rho^{\ast} (\sigma_y\otimes\sigma_y)@f$
+ * in decreasing order; @f$C(\rho)=0@f$ iff @f$\rho@f$ is separable,
+ * @f$C(\rho)=1@f$ for a Bell state.  The *entanglement of formation*
+ * is a monotonic function of @f$C@f$ alone.  The *logarithmic
+ * negativity* uses the partial transpose:
+ * @f$\mathcal N(\rho) = (\lVert\rho^{T_B}\rVert_1 - 1)/2@f$.  For pure
+ * two-qubit states @f$\mathcal N = C/2@f$, reaching @f$1/2@f$ on Bell
+ * states and @f$0@f$ on product states.  These measures are the
+ * standard "small-system" entanglement certificates (see Horodecki
+ * review for the general theory).
+ *
+ * REFERENCES
+ * ----------
+ *  - C. H. Bennett, D. P. DiVincenzo, J. A. Smolin and W. K. Wootters,
+ *    "Mixed-state entanglement and quantum error correction",
+ *    Phys. Rev. A 54, 3824 (1996), arXiv:quant-ph/9604024.  Origin
+ *    of entanglement of formation.
+ *  - W. K. Wootters, "Entanglement of Formation of an Arbitrary State
+ *    of Two Qubits", Phys. Rev. Lett. 80, 2245 (1998),
+ *    arXiv:quant-ph/9709029.  Closed-form concurrence.
+ *  - G. Vidal and R. F. Werner, "A computable measure of entanglement",
+ *    Phys. Rev. A 65, 032314 (2002), arXiv:quant-ph/0102117.
+ *    Logarithmic negativity.
+ *  - R. Horodecki, P. Horodecki, M. Horodecki and K. Horodecki,
+ *    "Quantum entanglement", Rev. Mod. Phys. 81, 865 (2009),
+ *    arXiv:quant-ph/0702225.  Canonical review; all definitions used
+ *    here follow the conventions there.
  *
  * @stability evolving
  * @since v0.1.2

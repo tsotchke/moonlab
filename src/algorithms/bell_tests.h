@@ -7,14 +7,62 @@
 
 /**
  * @file bell_test.h
- * @brief Bell inequality testing for quantum behavior verification
- * 
- * Implements CHSH (Clauser-Horne-Shimony-Holt) inequality test to prove
- * genuine quantum properties. Classical systems obey CHSH ≤ 2, while
- * quantum systems can violate this up to 2√2 ≈ 2.828.
- * 
- * This is the gold standard for verifying quantum behavior and proving
- * the system exhibits genuine quantum entanglement.
+ * @brief Bell inequalities: CHSH, Mermin, and related statistical tests.
+ *
+ * OVERVIEW
+ * --------
+ * Bell's theorem (Bell 1964) proves that quantum mechanics is
+ * incompatible with any local hidden-variable description of nature:
+ * certain correlations between spacelike-separated measurements that
+ * quantum mechanics predicts cannot be reproduced by any classical
+ * model satisfying *locality* and *realism*.  The
+ * Clauser-Horne-Shimony-Holt (CHSH) inequality (Clauser, Horne,
+ * Shimony & Holt 1969) is the most widely used experimentally
+ * testable form.  For binary measurement outcomes
+ * @f$a_1, a_2, b_1, b_2 \in \{-1, +1\}@f$ recorded at Alice and Bob's
+ * settings, the CHSH observable
+ * @f[
+ *   S \;=\; E(a_1, b_1) + E(a_1, b_2) + E(a_2, b_1) - E(a_2, b_2)
+ * @f]
+ * obeys @f$|S| \le 2@f$ for any local-hidden-variable model but
+ * reaches @f$|S| \le 2\sqrt{2}@f$ (the Tsirelson bound) for quantum
+ * states.  A simulator that measures the Bell state
+ * @f$(|00\rangle + |11\rangle)/\sqrt{2}@f$ at optimally chosen
+ * settings (@f$a_1 = 0, a_2 = \pi/2@f$ for Alice and
+ * @f$b_1 = \pi/4, b_2 = -\pi/4@f$ for Bob) approaches
+ * @f$S = 2\sqrt{2}@f$ in the shot-count limit; the deviation from
+ * the Tsirelson bound at finite shot count is the statistical
+ * fingerprint a Bell-verified QRNG (see `qrng.h`) uses to reject
+ * epochs during which something has gone wrong.
+ *
+ * @f$n@f$-PARTITE GENERALISATIONS
+ * ------------------------------
+ * For @f$n \ge 3@f$ qubits the Mermin-Klyshko inequalities replace
+ * CHSH; quantum violations grow as @f$2^{(n-1)/2}@f$ while the
+ * classical bound stays at @f$2@f$, so the quantum-classical gap
+ * widens exponentially.  GHZ-class states saturate these
+ * inequalities.
+ *
+ * USE AS A DEVICE TEST
+ * --------------------
+ * A CHSH sample measuring @f$S > 2 + \delta@f$ with enough statistics
+ * to reject the null is a *device-independent* certificate that the
+ * system produces genuine quantum randomness (Pironio et al. 2010).
+ * Moonlab's Bell-verified QRNG mode (`qrng_v3_mode_bell_verified`) runs
+ * a continuous CHSH monitor and discards any epoch in which the
+ * measured @f$S@f$ fails to clear a user-set threshold.
+ *
+ * REFERENCES
+ * ----------
+ *  - J. S. Bell, "On the Einstein Podolsky Rosen paradox", Physics
+ *    Physique Fizika 1, 195 (1964).  Original inequality.
+ *  - J. F. Clauser, M. A. Horne, A. Shimony and R. A. Holt, "Proposed
+ *    experiment to test local hidden-variable theories",
+ *    Phys. Rev. Lett. 23, 880 (1969),
+ *    doi:10.1103/PhysRevLett.23.880.  CHSH form tested here.
+ *  - S. Pironio et al., "Random numbers certified by Bell's theorem",
+ *    Nature 464, 1021 (2010), arXiv:0911.3427.  Device-independent
+ *    randomness certification from loophole-free Bell tests.
  */
 
 /**

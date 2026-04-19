@@ -9,24 +9,77 @@
 
 /**
  * @file vqe.h
- * @brief Variational Quantum Eigensolver (VQE) for molecular simulation
- * 
- * VQE is a hybrid quantum-classical algorithm for finding ground state
- * energies of molecular systems. Critical for:
- * - Drug discovery (molecular binding energies)
- * - Materials science (battery chemistry, catalysts)
- * - Chemical reactions (activation energies)
- * 
- * Algorithm:
- * 1. Prepare trial state with variational circuit: |ψ(θ)⟩
- * 2. Measure energy expectation: E(θ) = ⟨ψ(θ)|H|ψ(θ)⟩
- * 3. Classical optimization: minimize E(θ) over parameters θ
- * 4. Iterate until convergence
- * 
- * 32-qubit capability enables:
- * - H₂ (2 qubits), LiH (4 qubits), H₂O (8 qubits)
- * - NH₃ (10 qubits), CH₄ (12 qubits), C₂H₄ (16 qubits)
- * - Benzene C₆H₆ (24 qubits), small proteins (28-30 qubits)
+ * @brief Variational Quantum Eigensolver for electronic-structure problems.
+ *
+ * OVERVIEW
+ * --------
+ * The Variational Quantum Eigensolver (Peruzzo et al. 2014) targets
+ * the ground-state energy of a Hamiltonian @f$H@f$ by combining a
+ * parameterised quantum state preparation with a classical outer
+ * loop:
+ *
+ *   1. Prepare @f$|\psi(\theta)\rangle = U(\theta)|\psi_0\rangle@f$
+ *      on the quantum device, where @f$U(\theta)@f$ is a
+ *      user-chosen ansatz circuit.
+ *   2. Measure the energy expectation
+ *      @f$E(\theta) = \langle\psi(\theta)|H|\psi(\theta)\rangle@f$
+ *      as a weighted sum over the Pauli terms of @f$H@f$.
+ *   3. Update @f$\theta@f$ via a classical optimiser (Nelder-Mead,
+ *      COBYLA, SPSA, gradient-based).
+ *   4. Iterate until convergence.
+ *
+ * By the Rayleigh-Ritz variational principle
+ * @f$E(\theta) \ge E_{\min}(H)@f$ for every @f$\theta@f$, so VQE's
+ * returned energy is an upper bound on the true ground-state
+ * energy.  Convergence to the exact ground state depends entirely on
+ * the *expressibility* of the ansatz; the accuracy gap relative to
+ * the full configuration-interaction (FCI) energy is the primary
+ * quality metric.
+ *
+ * ANSATZ CATALOGUE
+ * ----------------
+ * Three ansatz families are built in:
+ *
+ *  - *Hardware-efficient ansatz* (Kandala et al. 2017): alternating
+ *    layers of parameterised single-qubit rotations and a fixed
+ *    entangling pattern (CNOT ladder or ring).  Good for small
+ *    molecules on NISQ hardware; no physical symmetries imposed.
+ *  - *Unitary coupled-cluster with singles and doubles* (UCCSD, used
+ *    in Peruzzo et al. 2014 and O'Malley et al. 2016): physically
+ *    motivated, systematically improvable, particle-number
+ *    preserving.  Parameter count grows as @f$O(n_o^2 n_v^2)@f$.
+ *  - *Symmetry-preserving Givens ansatz*
+ *    (`VQE_ANSATZ_SYMMETRY_PRESERVING`): particle-conserving Givens
+ *    rotations; reaches chemical accuracy (<1 kcal/mol) on H2 with
+ *    fewer parameters than UCCSD and is the default for small
+ *    molecules.  See `documents/api/c/vqe.md` for details.
+ *
+ * EXACT GROUND-STATE REFERENCE
+ * ----------------------------
+ * `vqe_exact_ground_state_energy` constructs the full Pauli
+ * Hamiltonian matrix and returns the lowest eigenvalue via shifted
+ * power iteration, providing an FCI-equivalent reference for unit
+ * testing against the variational loop.
+ *
+ * REFERENCES
+ * ----------
+ *  - A. Peruzzo, J. McClean, P. Shadbolt, M.-H. Yung, X.-Q. Zhou,
+ *    P. J. Love, A. Aspuru-Guzik and J. L. O'Brien, "A variational
+ *    eigenvalue solver on a quantum processor", Nat. Commun. 5, 4213
+ *    (2014), arXiv:1304.3061.  Original VQE paper.
+ *  - P. J. J. O'Malley et al., "Scalable Quantum Simulation of
+ *    Molecular Energies", Phys. Rev. X 6, 031007 (2016),
+ *    arXiv:1512.06860.  H2 on superconducting qubits with UCCSD
+ *    (matches the H2 Hamiltonian built by
+ *    `vqe_create_h2_hamiltonian`).
+ *  - A. Kandala et al., "Hardware-efficient variational quantum
+ *    eigensolver for small molecules and quantum magnets",
+ *    Nature 549, 242 (2017), arXiv:1704.05018.  HEA ansatz family.
+ *  - S. McArdle, S. Endo, A. Aspuru-Guzik, S. C. Benjamin and X. Yuan,
+ *    "Quantum computational chemistry", Rev. Mod. Phys. 92, 015003
+ *    (2020), arXiv:1808.10402.  Modern review.
+ *
+ * @since v0.1.2
  */
 
 // ============================================================================
