@@ -43,21 +43,34 @@ static inline int get_bit(uint64_t n, int bit_pos) {
 // SINGLE-QUBIT GATES
 // ============================================================================
 
+/* Threading policy shared by every stride-block single-qubit gate:
+ * parallelise the outer block loop iff state_dim >= 2^21 (32 MiB).
+ * Blocks touch disjoint memory regions, so no synchronisation is
+ * needed.  See the commentary in gate_hadamard for the derivation. */
+#define QS_BLOCK_THRESHOLD_DIM (1ULL << 21)
+
 qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
-    // X gate: |0> <-> |1>. Swap two contiguous blocks of amplitudes
-    // via the SIMD-dispatched complex swap.
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
 
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         simd_complex_swap(&state->amplitudes[base],
                           &state->amplitudes[base + stride],
                           stride);
     }
-
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
@@ -65,40 +78,53 @@ qs_error_t gate_pauli_y(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
-    // Y gate: |0> -> i|1>, |1> -> -i|0>. Equivalent to swap the two
-    // blocks, then multiply the old-|0> block by -i and the old-|1>
-    // block by +i. After the swap, amplitudes at [base..base+stride)
-    // are what used to live in the |1> block (gets multiplied by -i)
-    // and amplitudes at [base+stride..base+2*stride) are what used to
-    // live in the |0> block (gets multiplied by +i).
+    /* Y = swap then multiply old-|0> block by -i and old-|1> by +i.
+     * After the swap, [base..base+stride) was |1> (gets -i) and
+     * [base+stride..base+2*stride) was |0> (gets +i). */
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
 
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         simd_complex_swap(&state->amplitudes[base],
                           &state->amplitudes[base + stride],
                           stride);
         simd_multiply_by_i(&state->amplitudes[base],          stride, 1);
         simd_multiply_by_i(&state->amplitudes[base + stride], stride, 0);
     }
-
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
 qs_error_t gate_pauli_z(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED Z gate: Vectorized negation of |1⟩ states
-    // Z gate: |0⟩ → |0⟩, |1⟩ → -|1⟩
+
+    /* Z negates the |1> half of each block. */
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-negate all |1⟩ states in this block at once
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         simd_negate(&state->amplitudes[base + stride], stride);
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
@@ -124,15 +150,8 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     const uint64_t block_size = stride << 1;
     const uint64_t n_blocks = state->state_dim / block_size;
 
-    /* Threshold: state_dim >= 2^21 (32 MiB of complex amplitudes). On
-     * modern chips with tens of MiB of shared L3 (Apple M-series 48
-     * MiB, recent x86 64-96 MiB), problem sizes that fit in L3 are
-     * bandwidth-satisfied by a single core; threading them just adds
-     * fork-join and coherence overhead. We thread only when the
-     * working set definitely spills to DRAM, where aggregate cross-
-     * core DRAM bandwidth is what we can convert to speedup. Also
-     * require n_blocks >= 32 so threads have something to do. */
-    const int should_thread = (state->state_dim >= (1ULL << 21)) &&
+    /* Threading policy: see QS_BLOCK_THRESHOLD_DIM above. */
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
                               (n_blocks >= 32);
 
 #ifdef _OPENMP
@@ -151,92 +170,90 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     return QS_SUCCESS;
 }
 
-qs_error_t gate_s(quantum_state_t *state, int qubit) {
+/* Helper: apply a fixed complex `phase` to the |1> half of every
+ * block (shared by S, S_dag, T, T_dag, Phase). */
+static qs_error_t qs_phase_on_one(quantum_state_t *state, int qubit,
+                                  complex_t phase) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED S gate: Vectorized multiply by i
-    // S gate: |0⟩ → |0⟩, |1⟩ → i|1⟩
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-multiply all |1⟩ states by i at once
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
+        simd_apply_phase(&state->amplitudes[base + stride], phase, stride);
+    }
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
+    return QS_SUCCESS;
+}
+
+qs_error_t gate_s(quantum_state_t *state, int qubit) {
+    /* |1> -> i|1>, equivalent to multiply-by-i on the |1> half. */
+    if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
+    if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    const uint64_t stride = 1ULL << qubit;
+    const uint64_t block_size = stride << 1;
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         simd_multiply_by_i(&state->amplitudes[base + stride], stride, 0);
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
 qs_error_t gate_s_dagger(quantum_state_t *state, int qubit) {
+    /* |1> -> -i|1>. */
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED S† gate: Vectorized multiply by -i
-    // S† gate: |0⟩ → |0⟩, |1⟩ → -i|1⟩
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-multiply all |1⟩ states by -i at once
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         simd_multiply_by_i(&state->amplitudes[base + stride], stride, 1);
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
 qs_error_t gate_t(quantum_state_t *state, int qubit) {
-    if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
-    if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED T gate: Vectorized phase multiplication
-    // T gate: |0⟩ → |0⟩, |1⟩ → e^(iπ/4)|1⟩
-    const complex_t phase = cexp(I * M_PI / 4.0);
-    const uint64_t stride = 1ULL << qubit;
-    const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-apply phase to all |1⟩ states at once
-        simd_apply_phase(&state->amplitudes[base + stride], phase, stride);
-    }
-    
-    return QS_SUCCESS;
+    return qs_phase_on_one(state, qubit, cexp(I * M_PI / 4.0));
 }
 
 qs_error_t gate_t_dagger(quantum_state_t *state, int qubit) {
-    if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
-    if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED T† gate: Vectorized phase multiplication
-    // T† gate: |0⟩ → |0⟩, |1⟩ → e^(-iπ/4)|1⟩
-    const complex_t phase = cexp(-I * M_PI / 4.0);
-    const uint64_t stride = 1ULL << qubit;
-    const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-apply phase to all |1⟩ states at once
-        simd_apply_phase(&state->amplitudes[base + stride], phase, stride);
-    }
-    
-    return QS_SUCCESS;
+    return qs_phase_on_one(state, qubit, cexp(-I * M_PI / 4.0));
 }
 
 qs_error_t gate_phase(quantum_state_t *state, int qubit, double theta) {
-    if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
-    if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // SIMD-OPTIMIZED Phase gate: Vectorized phase multiplication
-    // Phase gate: |0⟩ → |0⟩, |1⟩ → e^(iθ)|1⟩
-    const complex_t phase = cexp(I * theta);
-    const uint64_t stride = 1ULL << qubit;
-    const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        // SIMD-apply phase to all |1⟩ states at once
-        simd_apply_phase(&state->amplitudes[base + stride], phase, stride);
-    }
-    
-    return QS_SUCCESS;
+    return qs_phase_on_one(state, qubit, cexp(I * theta));
 }
 
 qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta) {
@@ -377,7 +394,7 @@ qs_error_t gate_cnot(quantum_state_t *state, int control, int target) {
     const uint64_t t_stride = 1ULL << target;
     const uint64_t dim = state->state_dim;
     complex_t *amp = state->amplitudes;
-    const int should_thread = (dim >= (1ULL << 21));
+    const int should_thread = (dim >= QS_BLOCK_THRESHOLD_DIM);
 
     if (control > target) {
         const uint64_t c_block = c_stride << 1;
