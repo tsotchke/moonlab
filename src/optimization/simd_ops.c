@@ -938,6 +938,98 @@ void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n) {
 #endif
 }
 
+/*
+ * simd_hadamard_pair:
+ *   For each i in [0, n):
+ *     a0_new = (a0[i] + a1[i]) * (1/sqrt 2)
+ *     a1_new = (a0[i] - a1[i]) * (1/sqrt 2)
+ *
+ * complex_t in this library is C99 `double _Complex`, laid out as two
+ * contiguous doubles [re, im]. All arch paths treat each complex
+ * number as a 128-bit 2xf64 vector and issue one sum / diff per pair.
+ * The NEON path is 2-way unrolled so the memory system can keep two
+ * load + two store streams in flight per iteration; this is what
+ * closes the roofline gap to peak bandwidth on Apple Silicon.
+ */
+void simd_hadamard_pair(complex_t *a0, complex_t *a1, size_t n) {
+    if (!a0 || !a1 || n == 0) return;
+    const double INV_SQRT2 = 0.70710678118654752440;
+
+#if NEON_AVAILABLE
+    const float64x2_t v_inv = vdupq_n_f64(INV_SQRT2);
+    size_t i = 0;
+    /* 2-way unroll: two independent pairs per loop iteration. */
+    for (; i + 2 <= n; i += 2) {
+        float64x2_t x0a = vld1q_f64((double*)&a0[i    ]);
+        float64x2_t x0b = vld1q_f64((double*)&a0[i + 1]);
+        float64x2_t x1a = vld1q_f64((double*)&a1[i    ]);
+        float64x2_t x1b = vld1q_f64((double*)&a1[i + 1]);
+
+        float64x2_t sa = vaddq_f64(x0a, x1a);
+        float64x2_t sb = vaddq_f64(x0b, x1b);
+        float64x2_t da = vsubq_f64(x0a, x1a);
+        float64x2_t db = vsubq_f64(x0b, x1b);
+
+        vst1q_f64((double*)&a0[i    ], vmulq_f64(sa, v_inv));
+        vst1q_f64((double*)&a0[i + 1], vmulq_f64(sb, v_inv));
+        vst1q_f64((double*)&a1[i    ], vmulq_f64(da, v_inv));
+        vst1q_f64((double*)&a1[i + 1], vmulq_f64(db, v_inv));
+    }
+    for (; i < n; i++) {
+        float64x2_t x0 = vld1q_f64((double*)&a0[i]);
+        float64x2_t x1 = vld1q_f64((double*)&a1[i]);
+        vst1q_f64((double*)&a0[i], vmulq_f64(vaddq_f64(x0, x1), v_inv));
+        vst1q_f64((double*)&a1[i], vmulq_f64(vsubq_f64(x0, x1), v_inv));
+    }
+
+#elif AVX512_AVAILABLE
+    /* AVX-512: 4 complex numbers (8 doubles) per 512-bit register. */
+    const __m512d v_inv = _mm512_set1_pd(INV_SQRT2);
+    size_t i = 0;
+    for (; i + 4 <= n; i += 4) {
+        __m512d x0 = _mm512_loadu_pd((double*)&a0[i]);
+        __m512d x1 = _mm512_loadu_pd((double*)&a1[i]);
+        __m512d s  = _mm512_add_pd(x0, x1);
+        __m512d d  = _mm512_sub_pd(x0, x1);
+        _mm512_storeu_pd((double*)&a0[i], _mm512_mul_pd(s, v_inv));
+        _mm512_storeu_pd((double*)&a1[i], _mm512_mul_pd(d, v_inv));
+    }
+    for (; i < n; i++) {
+        complex_t x0 = a0[i], x1 = a1[i];
+        a0[i] = (x0 + x1) * INV_SQRT2;
+        a1[i] = (x0 - x1) * INV_SQRT2;
+    }
+
+#elif defined(__SSE2__) && defined(__x86_64__)
+    /* SSE2 / AVX2 fallback: 1 complex per 128-bit register. */
+    const __m128d v_inv = _mm_set1_pd(INV_SQRT2);
+    size_t i = 0;
+    for (; i + 2 <= n; i += 2) {
+        __m128d x0a = _mm_loadu_pd((double*)&a0[i    ]);
+        __m128d x0b = _mm_loadu_pd((double*)&a0[i + 1]);
+        __m128d x1a = _mm_loadu_pd((double*)&a1[i    ]);
+        __m128d x1b = _mm_loadu_pd((double*)&a1[i + 1]);
+        _mm_storeu_pd((double*)&a0[i    ], _mm_mul_pd(_mm_add_pd(x0a, x1a), v_inv));
+        _mm_storeu_pd((double*)&a0[i + 1], _mm_mul_pd(_mm_add_pd(x0b, x1b), v_inv));
+        _mm_storeu_pd((double*)&a1[i    ], _mm_mul_pd(_mm_sub_pd(x0a, x1a), v_inv));
+        _mm_storeu_pd((double*)&a1[i + 1], _mm_mul_pd(_mm_sub_pd(x0b, x1b), v_inv));
+    }
+    for (; i < n; i++) {
+        complex_t x0 = a0[i], x1 = a1[i];
+        a0[i] = (x0 + x1) * INV_SQRT2;
+        a1[i] = (x0 - x1) * INV_SQRT2;
+    }
+
+#else
+    /* Scalar fallback. */
+    for (size_t i = 0; i < n; i++) {
+        complex_t x0 = a0[i], x1 = a1[i];
+        a0[i] = (x0 + x1) * INV_SQRT2;
+        a1[i] = (x0 - x1) * INV_SQRT2;
+    }
+#endif
+}
+
 // ============================================================================
 // QUANTUM MEASUREMENT OPTIMIZATIONS (CRITICAL FOR GROVER)
 // ============================================================================

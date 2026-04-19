@@ -1098,6 +1098,8 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(bench_chern_kpm PRIVATE quantumsim m)
     add_executable(bench_chern_mosaic tests/performance/bench_chern_mosaic.c)
     target_link_libraries(bench_chern_mosaic PRIVATE quantumsim m)
+    add_executable(bench_hadamard tests/performance/bench_hadamard.c)
+    target_link_libraries(bench_hadamard PRIVATE quantumsim m)
 
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
