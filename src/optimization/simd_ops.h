@@ -183,6 +183,27 @@ void simd_negate(complex_t *amplitudes, size_t n);
  */
 void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n);
 
+/**
+ * @brief Vectorized Hadamard pair update.
+ *
+ * For each i in [0, n):
+ *     a0_new = (a0[i] + a1[i]) / sqrt(2)
+ *     a1_new = (a0[i] - a1[i]) / sqrt(2)
+ *
+ * This is the inner kernel of `gate_hadamard`: block-structured
+ * Hadamard on a target qubit reduces to n = stride calls of this
+ * primitive per block, one per amplitude pair (a0 at index
+ * base + i, a1 at index base + i + stride). Operates in place on
+ * both arrays. On AArch64 uses NEON intrinsics with 2-way loop
+ * unrolling; on x86_64 uses AVX-512 where available, AVX2/SSE2
+ * otherwise; scalar fallback everywhere.
+ *
+ * @param a0  pointer to the first amplitude (|...0...>)
+ * @param a1  pointer to the paired amplitude (|...1...>)
+ * @param n   number of pairs
+ */
+void simd_hadamard_pair(complex_t *a0, complex_t *a1, size_t n);
+
 // ============================================================================
 // ENTROPY MIXING OPERATIONS
 // ============================================================================

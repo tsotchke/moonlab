@@ -105,28 +105,19 @@ qs_error_t gate_pauli_z(quantum_state_t *state, int qubit) {
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    /**
-     * ULTRA-OPTIMIZED HADAMARD GATE (Stride-Based + Full SIMD)
-     *
-     * H gate: |0⟩ → (|0⟩ + |1⟩)/√2, |1⟩ → (|0⟩ - |1⟩)/√2
-     *
-     * KEY OPTIMIZATION: Stride-based access eliminates bit-checking overhead
-     * and enables full vectorization across entire amplitude blocks.
-     */
-    
+
+    /* Stride-based block traversal; inner kernel is the SIMD
+     * primitive simd_hadamard_pair (NEON / AVX-512 / SSE2 / scalar).
+     * For a target qubit q, amplitudes pair up at offsets
+     * (base + i, base + i + stride) with stride = 2^q across blocks
+     * of size 2*stride. */
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
 
     for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        complex_t *a0 = &state->amplitudes[base];
-        complex_t *a1 = &state->amplitudes[base + stride];
-        for (uint64_t i = 0; i < stride; i++) {
-            const complex_t x = a0[i];
-            const complex_t y = a1[i];
-            a0[i] = (x + y) * QC_SQRT2_INV;
-            a1[i] = (x - y) * QC_SQRT2_INV;
-        }
+        simd_hadamard_pair(&state->amplitudes[base],
+                           &state->amplitudes[base + stride],
+                           (size_t)stride);
     }
 
     return QS_SUCCESS;
