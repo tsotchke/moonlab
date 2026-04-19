@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audit / housekeeping
+
+- **Academic-grade documentation pass (audit phase A)**: postdoctoral-
+  level prose and verified reference lists added to the P5.x module
+  headers -- `clifford.h`, `chern_marker.h`, `chern_kpm.h`, `qgt.h`,
+  `quantum_volume.h`, `fusion.h`, and the `surface_code_clifford_t`
+  block in `topological.h`. New top-level `ARCHITECTURE.md` describes
+  every subsystem, the three computational representations
+  (state-vector / tensor-network / Clifford tableau), the ABI story,
+  and the full bibliography. Every citation in the new prose was
+  verified by live arXiv / DOI fetch during the audit. Corrections
+  carried over from the verification pass: Bianco-Resta (2011) lives
+  at arXiv:1111.5697 (not 1108.2935 or 1104.5133); Haegeman TDVP PRL
+  is arXiv:1103.0936 (not 1103.5869). Hallucinated ID candidates that
+  did not resolve to the expected papers were discarded.
+- **Version + ABI alignment**: `VERSION.txt` bumped `0.1.2 -> 0.2.0-dev`,
+  README citation + badge + `documents/index.md` updated, Rust crates
+  (`moonlab`, `moonlab-sys`) bumped to `0.2.0-dev`, Python
+  `__version__` bumped. The ABI header had already been at
+  `0.2.0`/minor=2; package and ABI now agree.
+- **CMake version parser** accepts a pre-release suffix (`-dev`, `-rc1`,
+  etc.) in `VERSION.txt` and passes the numeric triple to `project()`.
+- **Rust bindings expand to cover the 0.2 surface**: the
+  `moonlab-sys` allowlist now includes 67 new bindings for
+  `moonlab_qwz_chern`, Clifford, Quantum Volume, Chern marker (dense
+  + KPM), QGT + SSH + Wilson, gate-fusion. `moonlab::topology`
+  high-level module added (`qwz_chern`, `ssh_winding`, `ChernKpm`),
+  with three passing unit tests inside the crate.
+- **`matrix_math` ground-truth unit test** (`unit_matrix_math`):
+  matmul on 2x2 complex, trace, Frobenius norm, Hermitian check,
+  conjugate transpose, eigenvalues on Pauli-Z and a 3x3
+  real-symmetric matrix (+ `M v = lambda v` check on the real path
+  only), NULL guards. Covers a previously untested `src/utils/`
+  subsystem.
+- **README caveat** for the complex-Hermitian eigenvector unsoundness
+  in `hermitian_eigen_decomposition`; the header already warned but
+  a user reading only the README had no signal.
+- **`stride_gates.h` docstring** now admits it is a parallel
+  experimental module; the production `gate_*` path already uses the
+  same stride pattern inline.
+- **`moonlab.algorithms` import guard** downgraded from "known
+  broken" to "defensive": verified all 66 ctypes signatures resolve
+  against the shipping dylib and `from moonlab.algorithms import
+  VQE, QAOA, Grover, BellTest` succeeds. Broken-subsystems memory
+  note updated; `python_bindings_smoke` now asserts
+  `_ALGO_AVAILABLE == True`.
+
 ### Features
 
 - **VQE symmetry-preserving ansatz** (`VQE_ANSATZ_SYMMETRY_PRESERVING`).
@@ -27,6 +74,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Test matrix (6 channels × 5 p values) passes at ≤ 2.2×10⁻¹⁶.
 - **QRNG**: `QRNG_V3_MODE_BELL_VERIFIED` now force-enables continuous
   Bell monitoring (previously indistinguishable from `DIRECT`).
+- **Clifford stabilizer backend** (`src/backends/clifford/`). Aaronson-
+  Gottesman tableau (arXiv:quant-ph/0406196), 2n × (2n+1) layout. Gates:
+  H, S, S†, X, Y, Z, CNOT, CZ, SWAP. Measurement separates deterministic
+  from random branches and reports which. Verified on a 100-qubit GHZ
+  (all-or-nothing across 200 shots) and Bell-state correlations
+  (1002/0/0/998 over 2000 shots). Header: `src/backends/clifford/clifford.h`.
+  Python surface: `moonlab.Clifford`; the existing
+  `python_bindings_smoke` test now builds and measures a 100-qubit GHZ
+  (beyond the dense simulator's ceiling). Throughput benchmark
+  (`bench_clifford`): GHZ-3200 prep in 82 ms, measure-all in 57 ms
+  (~18 us/qubit); random 1600-qubit Clifford stream 55 us/gate.
+  Scaling is O(n²) per gate as expected.
+- **Python bindings** for `quantum_volume_run` as `moonlab.quantum_volume`
+  returning a `QuantumVolumeResult` dataclass (width, num_trials,
+  mean_hop, stddev_hop, lower_ci_97p5, passed).
+- **Local Chern marker, matrix-free KPM**
+  (`src/algorithms/topology_realspace/chern_kpm.{c,h}`). Applies the
+  projector `P = (I - sign(H))/2` via a Jackson-regularised Chebyshev
+  expansion of `sign(H_hat)`, evaluated with a stencil-based QWZ
+  matvec. Memory stays O(N); no dense projector is formed. Parity
+  with the dense reference: |c_dense - c_kpm| < 0.001 at L=8, m=±1,3
+  (n_cheby=80). Scales linearly in N: L=100 (20k-dim, 10k-site
+  lattice) in 47 ms/site, L=300 (180k-dim, 90k-site lattice) in
+  569 ms/site, returning c(bulk) = +1.0000. The equivalent dense
+  projector at L=300 would need ~24 GiB of matrix storage.
+- **QGT primitives expansion**: `qgt_wilson_loop` (closed-path Berry
+  phase on any user-supplied path, building block for Z_2 / mirror
+  Chern / non-Abelian holonomies), `qgt_winding_1d` (integer winding
+  number of 1D chiral two-band systems via the Zak phase), and the
+  built-in `qgt_model_ssh(t1, t2)` whose topological regime
+  (|t2| > |t1|) returns winding = +1, trivial regime returns 0.
+  Python: `moonlab.ssh_winding`, `moonlab.berry_grid_qwz`,
+  `moonlab.berry_grid_haldane` return NumPy arrays ready for plotting;
+  sum(grid)/(2 pi) = Chern at 1e-4 accuracy on the 32x32 QWZ case.
+- **Quantum geometric tensor module**
+  (`src/algorithms/quantum_geometry/qgt.{c,h}`). Momentum-space
+  Berry curvature + Chern number via the Fukui-Hatsugai-Suzuki
+  link-variable method (JPSJ 74, 1674, 2005) with gauge-stable
+  eigenvector selection (dual-branch picker that avoids spurious
+  pi-jumps across h_z = 0). Built-in models: Qi-Wu-Zhang, Haldane.
+  Fubini-Study / quantum metric via centered finite differences
+  (`qgt_metric_at`); verified PSD and symmetric. Cross-validates
+  the real-space Chern marker: QWZ m=+1 gives C=-1 on both paths.
+  Haldane topological regime gives C=+-1, trivial gives 0.
+- **Stable-ABI entry point** `moonlab_qwz_chern(m, N, out_chern)`
+  added to `src/applications/moonlab_export.h`. QGTL, lilirrep
+  and SbNN can now probe the Chern number through a single dlsym
+  call. ABI minor version bumped 0.1 -> 0.2. The abi-smoke test
+  exercises the new symbol at m=+1 (C=-1) and m=+3 (C=0).
+- **OpenMP parallelism for Chern mosaics** via
+  `chern_kpm_bulk_sum` and a new `chern_kpm_bulk_map` that fills a
+  per-site `double[]` map. Sites are embarrassingly parallel; the
+  parallel region wraps one site at a time so per-matvec overhead
+  stays zero. Measured: 256-site mosaic at L=24 drops from 530 ms to
+  40 ms (13x on a 24-thread machine); 1024-site mosaic at L=40 runs
+  in 520 ms end-to-end.
+- **Python bindings for Chern KPM** as `moonlab.ChernKPM`. Returns
+  NumPy arrays for `bulk_map`; exposes `set_cn_modulation(n, Q, V0)`
+  for 4-, 8-, 10-fold quasicrystal modulations. The existing
+  `python_bindings_smoke` test asserts c(bulk mean) ~ +1.0 on a
+  12 x 12 QWZ topological lattice.
+- **QRNG statistical test flake fix**: `unit_qrng_statistics` now
+  runs each SP 800-22 subtest on 3 independent samples and requires
+  2-of-3 passes (per NIST SP 800-22 section 4.2). Drops the
+  single-run false-rejection rate from ~6% to ~2x10^-5.
+- **Quasicrystal modulation + Chern mosaic** (`chern_kpm_set_modulation`,
+  `chern_kpm_cn_modulation` in `chern_kpm.{c,h}`). Attaches a
+  spin-independent on-site potential V(r); a helper builds
+  `C_n`-rotationally-symmetric cosine modulations
+  `V(r) = V_0 Σ cos(q_i · r)`. The matrix-free matvec picks it up
+  without allocating any extra matrix memory. Verified: small V_0
+  preserves c(bulk) ≈ +1; V_0 = 3 drives the bulk mean to ~0
+  (gap closed). `bench_chern_mosaic` computes a full 24x24 bulk
+  marker map with C_4 modulation in 0.6 s; the mid-V_0 transition
+  regime shows spatial structure consistent with the quasicrystal
+  symmetry. This is the first iteration of the plan's §2I Chern
+  mosaic capability; the MPO/QTCI backend needed for 10^6+ sites
+  remains scheduled as the next iteration.
+- **Local Chern marker, dense reference**
+  (`src/algorithms/topology_realspace/chern_marker.{c,h}`). Implements
+  the Bianco-Resta real-space Chern marker
+  `c(r) = -(4π/A_c) Im Σ_s <r,s|P X Q Y P|r,s>` on the Qi-Wu-Zhang
+  2-band Chern insulator. Projector onto the filled band is computed
+  via Schulz iteration on the matrix sign function
+  `P = (I - sign(H))/2`, so no eigendecomposition is needed -- this is
+  the same algorithmic path the upcoming KPM/MPO implementation will
+  take at 10^6+ sites. Verified: C(bulk) = ±1 in topological regimes
+  (m = ±1) and 0 in trivial regimes (|m| = 3) on L=14/L=10 open
+  lattices; the existing `hermitian_eigen_decomposition` was confirmed
+  to silently corrupt complex-Hermitian inputs (real-Givens only),
+  which is why the sign-function path is used here. First ground-truth
+  reference for the plan's §2I headline real-space topology capability.
+- **Clifford-backed surface code** (`surface_code_clifford_t` in
+  `src/algorithms/topological/topological.{c,h}`). A parallel variant
+  of the dense `surface_code_t` that tracks stabilizers on the new
+  Aaronson-Gottesman tableau. d=15 needs 617 qubits (impossible on the
+  dense simulator) and is tractable on the tableau. Syndrome
+  measurement is ancilla-mediated: CNOTs onto a dedicated ancilla
+  (plus H-wrap for X-stabs), Z-basis measurement, ancilla reset.
+  Verified at d=3, 7, 9, 15: a single X error on a data qubit flips
+  exactly the four Z-syndromes of the vertices adjacent to it;
+  adjacent pairs correctly annihilate at shared vertices.
+  Public entry points: `surface_code_clifford_{create,free}`,
+  `_apply_error`, `_measure_{x,z}_syndromes`, `_syndrome_weight`.
+- **Quantum Volume harness** (`src/applications/quantum_volume.{c,h}`).
+  IBM spec (Cross et al., PRA 100, 032328, 2019): width = depth = d,
+  d layers of floor(d/2) Haar-random U(4) blocks on shuffled pairs,
+  exact heavy-output probability per circuit, mean HOP over N trials
+  with 97.5% CI lower bound and pass/fail against the 2/3 threshold.
+  Mezzadri 2007 Haar-U(4) generator (Gram-Schmidt + phase correction).
+  Noiseless statevector passes widths 3..10 at 100 trials: mean HOP
+  converges to the theoretical (1+ln2)/2 ≈ 0.847 with shrinking
+  stddev (0.089 at w=3, 0.007 at w=10). `unit_quantum_volume` and
+  `bench_quantum_volume` runners.
+- **Gate-fusion DAG** (`src/optimization/fusion/`). Builds a circuit as
+  a symbolic list (`fuse_circuit_t`), then `fuse_compile` merges runs
+  of consecutive single-qubit gates on the same qubit into a single 2x2
+  `FUSED_1Q` node. Each two-qubit gate flushes pending 2x2 accumulators
+  on the qubits it touches. Measured on a 5-layer HWEA VQE circuit at
+  n=16: 315 -> 155 gates, 14.8 ms -> 6.8 ms (2.18x). At n=20:
+  395 -> 195, 239 ms -> 167 ms (1.43x). Random-circuit parity to
+  L² ≤ 1e-10 vs gate-by-gate. Header: `src/optimization/fusion/fusion.h`.
 
 ### Fixes
 
