@@ -1107,6 +1107,12 @@ if(QSIM_BUILD_TESTS)
         target_link_libraries(bench_hadamard PRIVATE OpenMP::OpenMP_C)
     endif()
 
+    add_executable(bench_hadamard_metal tests/performance/bench_hadamard_metal.c)
+    target_link_libraries(bench_hadamard_metal PRIVATE quantumsim)
+    if(QSIM_HAS_METAL)
+        target_compile_definitions(bench_hadamard_metal PRIVATE HAS_METAL=1)
+    endif()
+
     # Python bindings smoke — imports moonlab.core, constructs a Bell
     # state, asserts exact amplitudes. Requires python3 on PATH.
     find_program(PYTHON3_EXECUTABLE python3)
