@@ -492,6 +492,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/topology_realspace/chern_kpm.c
     # Quantum geometric tensor: momentum-space Berry curvature + metric.
     src/algorithms/quantum_geometry/qgt.c
+    # Shor-ECDLP resource estimator (logical + FTQC cost model).
+    src/algorithms/shor_ecdlp/shor_ecdlp.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1014,6 +1016,12 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_qgt tests/unit/test_qgt.c)
     target_link_libraries(test_qgt PRIVATE quantumsim m)
     add_test(NAME unit_qgt COMMAND test_qgt)
+
+    # Shor-ECDLP resource estimator: reproduce Gidney-Drake-Boneh 2026
+    # secp256k1 numbers + FTQC overhead model.
+    add_executable(test_shor_ecdlp tests/unit/test_shor_ecdlp.c)
+    target_link_libraries(test_shor_ecdlp PRIVATE quantumsim m)
+    add_test(NAME unit_shor_ecdlp COMMAND test_shor_ecdlp)
 
     # Chemistry module smoke.
     add_executable(test_chemistry tests/unit/test_chemistry.c)
