@@ -493,6 +493,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/topology_realspace/chern_marker.c
     # Real-space topology: matrix-free Chebyshev-KPM Chern marker.
     src/algorithms/topology_realspace/chern_kpm.c
+    # Real-space topology: MPO-level Chebyshev / Jackson KPM (P5.16).
+    src/algorithms/topology_realspace/mpo_kpm.c
     # Quantum geometric tensor: momentum-space Berry curvature + metric.
     src/algorithms/quantum_geometry/qgt.c
     # Shor-ECDLP resource estimator (logical + FTQC cost model).
@@ -1049,6 +1051,12 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
     target_link_libraries(test_chern_kpm PRIVATE quantumsim m)
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
+    add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
+    target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
+    if(QSIM_PLATFORM_MACOS)
+        target_link_libraries(test_mpo_kpm PRIVATE "-framework Accelerate")
+    endif()
+    add_test(NAME unit_mpo_kpm COMMAND test_mpo_kpm)
 
     # Quantum geometric tensor: Berry / Chern via FHS link variables.
     add_executable(test_qgt tests/unit/test_qgt.c)

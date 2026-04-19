@@ -96,10 +96,12 @@
  *
  * ROLE IN MOONLAB
  * ---------------
- * This is the working scalable implementation of the Bianco-Resta
- * marker.  The next iteration (@ref P5.08) replaces the sparse matvec
- * by an MPO contraction and the position operators by QTCI-constructed
- * MPOs, reaching @f$10^6 \to 10^8@f$ sites per Antão et al.
+ * This is the sparse-stencil implementation of the Bianco-Resta
+ * marker, capping at @f$\sim\!10^{5}@f$ sites on a single host.  The
+ * MPO/MPS generalisation needed to reach @f$10^{6} \to 10^{8}@f$ sites
+ * per Antão et al. lives in @c mpo_kpm.h (P5.16 matrix-element form)
+ * and is built up to the full local-marker observable in the P5.08
+ * milestones.
  *
  * REFERENCES
  * ----------
