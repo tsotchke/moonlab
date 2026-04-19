@@ -20,6 +20,7 @@
 
 #include "../../src/algorithms/tensor_network/dmrg.h"
 #include "../../src/algorithms/tensor_network/tensor.h"
+#include "../../src/utils/manifest.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -31,6 +32,9 @@ static double now_us(void) {
     struct timeval tv; gettimeofday(&tv, NULL);
     return tv.tv_sec * 1e6 + tv.tv_usec;
 }
+
+static char*  g_metrics = NULL;
+static size_t g_metrics_cap = 0;
 
 /* Build a TFIM MPO and one bulk site's effective Hamiltonian at a
  * given bond dimension.  Environments are initialised to zero-pattern
@@ -92,6 +96,15 @@ static void run_case(uint32_t chi, uint32_t iters) {
     printf("  chi=%-4u iters=%-5u   legacy %8.2f us   ws %8.2f us   %5.2fx\n",
            chi, iters, legacy, ws_us, legacy / ws_us);
 
+    if (g_metrics && g_metrics_cap) {
+        size_t cur = strlen(g_metrics);
+        snprintf(g_metrics + cur, g_metrics_cap - cur,
+                 "%s{\"chi\":%u,\"iters\":%u,\"legacy_us\":%.3f,"
+                 "\"ws_us\":%.3f,\"speedup\":%.3f}",
+                 cur == 0 ? "" : ",",
+                 chi, iters, legacy, ws_us, legacy / ws_us);
+    }
+
     tensor_free(Lenv); tensor_free(Renv);
     tensor_free(x); tensor_free(y);
     mpo_free(mpo);
@@ -100,10 +113,38 @@ static void run_case(uint32_t chi, uint32_t iters) {
 int main(void) {
     printf("=== DMRG H_eff apply: legacy vs workspace ===\n");
     printf("  per-call times; lower is better; speedup = legacy/ws.\n\n");
+
+    moonlab_manifest_t manifest;
+    moonlab_manifest_capture(&manifest, "bench_dmrg_workspace", 0);
+
+    char buf[4096] = "[";
+    g_metrics = buf + 1;
+    g_metrics_cap = sizeof buf - 2;
+
     run_case(8,  2000);
     run_case(16, 1000);
     run_case(32,  500);
     run_case(64,  200);
     run_case(128, 100);
+
+    size_t mlen = strlen(buf);
+    buf[mlen] = ']'; buf[mlen + 1] = '\0';
+
+    char metrics_obj[5120];
+    snprintf(metrics_obj, sizeof metrics_obj, "{\"rows\":%s}", buf);
+    manifest.metrics_json = metrics_obj;
+
+    moonlab_manifest_stamp_finish(&manifest);
+
+    const char* out_path = getenv("MOONLAB_MANIFEST_OUT");
+    if (out_path && *out_path) {
+        FILE* f = fopen(out_path, "w");
+        if (f) {
+            moonlab_manifest_write_json_pretty(&manifest, f);
+            fclose(f);
+            fprintf(stderr, "[manifest] written to %s\n", out_path);
+        }
+    }
+    moonlab_manifest_release(&manifest);
     return 0;
 }
