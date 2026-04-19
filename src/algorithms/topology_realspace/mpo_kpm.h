@@ -242,6 +242,38 @@ double complex mpo_kpm_projector_matrix_element(
     const tn_mps_state_t* ket,
     const mpo_kpm_params_t* params);
 
+/**
+ * @brief Return an MPS representation of
+ *        @f$\operatorname{sign}(\hat{\tilde H})|\mathrm{ket}\rangle@f$.
+ *
+ * Runs the same three-term Chebyshev recurrence as
+ * @c mpo_kpm_chebyshev_moments but also maintains a running
+ * accumulator @f$|\mathrm{acc}\rangle = \sum_n g_n c_n T_n(\hat{\tilde H})|\mathrm{ket}\rangle@f$
+ * that is returned as the output MPS.  Peak bond dimension is bounded
+ * by @c params->max_bond_dim after each accumulation-and-truncation
+ * step, so the MPS stays compressible for gapped problems.
+ *
+ * @param H          Bare Hamiltonian MPO.
+ * @param ket        Input state (not modified).
+ * @param params     Chebyshev order, rescale, bond cap.
+ * @return Newly allocated MPS, or NULL on failure.
+ */
+tn_mps_state_t* mpo_kpm_apply_sign(
+    const tn_mpo_t* H,
+    const tn_mps_state_t* ket,
+    const mpo_kpm_params_t* params);
+
+/**
+ * @brief Return an MPS representation of the filled-band projector
+ *        @f$\hat P|\mathrm{ket}\rangle =
+ *          \tfrac12(|\mathrm{ket}\rangle -
+ *                   \operatorname{sign}(\hat{\tilde H})|\mathrm{ket}\rangle)@f$.
+ */
+tn_mps_state_t* mpo_kpm_apply_projector(
+    const tn_mpo_t* H,
+    const tn_mps_state_t* ket,
+    const mpo_kpm_params_t* params);
+
 #ifdef __cplusplus
 }
 #endif
