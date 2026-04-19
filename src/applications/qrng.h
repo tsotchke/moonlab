@@ -12,25 +12,72 @@
 #include "../utils/performance_monitor.h"
 
 /**
- * @file quantum_rng_v3.h
- * @brief Unified Quantum RNG v3.0 - Production quantum engine integration
- * 
- * This is the NEW unified quantum RNG that integrates:
- * - Proven quantum simulation engine (Bell verified CHSH=2.828)
- * - Hardware entropy pool with background generation
- * - Continuous Bell test monitoring
- * - Advanced Grover-based sampling
- * - SIMD-optimized operations
- * 
- * REPLACES: quantum_rng.c (legacy quantum-inspired implementation)
- * INTEGRATES: quantum_state.c + quantum_gates.c + bell_test.c + grover.c
- * 
- * Key improvements over v1.0:
- * - Actually uses the Bell-verified quantum engine
- * - Resolves entropy circular dependency (layered architecture)
- * - 10-20x faster Bell tests
- * - Advanced Grover sampling modes
- * - Runtime quantum verification
+ * @file qrng.h
+ * @brief Quantum random number generator (QRNG v3).
+ *
+ * OVERVIEW
+ * --------
+ * A quantum random number generator extracts randomness from the
+ * fundamental indeterminism of quantum measurements rather than from
+ * deterministic pseudorandom iteration.  The generator here is a
+ * layered architecture with three user-selectable modes:
+ *
+ *   - @em DIRECT: measure a freshly prepared @f$|+\rangle^{\otimes n}@f$
+ *     state in the computational basis, delivering fresh i.i.d.
+ *     Bernoulli-1/2 bits at rate @f$n@f$ per simulation.
+ *   - @em GROVER: apply a configured number of Grover iterations to
+ *     bias the output distribution before measurement; used for
+ *     studying structured quantum randomness and for sampling from
+ *     pre-designed distributions.
+ *   - @em BELL_VERIFIED: every epoch runs a CHSH test on an adjacent
+ *     Bell pair and discards the epoch if the measured Bell parameter
+ *     falls below a user-set threshold (default slack above the
+ *     classical bound @f$S > 2@f$).  This is an online,
+ *     *device-independent* style certification in the sense of
+ *     Pironio, Acín, Massar et al. (2010): the randomness is
+ *     guaranteed by the observed violation, regardless of the
+ *     internal mechanism.
+ *
+ * All three modes feed a post-processing layer that mixes quantum
+ * output with a hardware entropy pool (RDSEED / /dev/urandom /
+ * SecRandomCopyBytes, selected at build time per platform) via a
+ * Toeplitz-matrix extractor, producing cryptographically-strong
+ * output.  The final stage passes through the subset of the NIST
+ * SP 800-22 statistical battery installed in
+ * `src/applications/nist_sp800_22.c` (monobit, block frequency,
+ * runs, longest-run, cusum, serial) before delivery.  The full
+ * fifteen-test battery is available for offline audits.
+ *
+ * See the Herrero-Collantes and Garcia-Escartin review for the
+ * taxonomy of QRNG architectures and the practical tradeoffs that
+ * motivate this layered design.
+ *
+ * PUBLIC ABI
+ * ----------
+ * `moonlab_qrng_bytes` (in `moonlab_export.h`) is the stable entry
+ * point: a thread-safe `dlsym` target that returns
+ * cryptographically-strong bytes drawn through whichever mode the
+ * engine was compiled for.  It is the symbol consumed by downstream
+ * projects (QGTL, lilirrep, SbNN).
+ *
+ * REFERENCES
+ * ----------
+ *  - M. Herrero-Collantes and J. C. Garcia-Escartin, "Quantum Random
+ *    Number Generators", Rev. Mod. Phys. 89, 015004 (2017),
+ *    arXiv:1604.03304.  Review of QRNG architectures and
+ *    post-processing.
+ *  - S. Pironio et al., "Random numbers certified by Bell's theorem",
+ *    Nature 464, 1021 (2010), arXiv:0911.3427.  Device-independent
+ *    randomness certification.
+ *  - L. E. Bassham et al., "A Statistical Test Suite for Random and
+ *    Pseudorandom Number Generators for Cryptographic Applications",
+ *    NIST SP 800-22 rev. 1a (2010),
+ *    doi:10.6028/NIST.SP.800-22r1a.  The statistical battery whose
+ *    fast subset is exercised in CI.
+ *  - M. S. Turan et al., "Recommendation for the Entropy Sources Used
+ *    for Random Bit Generation", NIST SP 800-90B (2018),
+ *    doi:10.6028/NIST.SP.800-90B.  Hardware-entropy validation
+ *    framework; our QRNG output format is compatible with it.
  */
 
 // ============================================================================

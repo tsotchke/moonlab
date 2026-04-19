@@ -1,21 +1,74 @@
 /**
  * @file mbl.h
- * @brief Many-Body Localization (MBL) simulation module
+ * @brief Many-body localisation in disordered spin chains.
  *
- * This module implements quantum simulation of many-body localized systems:
- * - Disordered Heisenberg spin chains (XXZ model with random fields)
- * - MBL phase detection via level statistics
- * - Entanglement entropy dynamics (logarithmic growth signature)
- * - Imbalance dynamics (memory of initial state)
- * - Local integrals of motion (LIOMs / l-bits)
- * - MBL-thermal phase transition detection
+ * OVERVIEW
+ * --------
+ * A generic closed quantum many-body system at finite energy density
+ * is expected to thermalise: the eigenstate thermalization hypothesis
+ * (ETH) predicts that local observables in eigenstates agree with the
+ * microcanonical ensemble, and the entanglement entropy of subsystems
+ * grows as their volume.  Basko, Aleiner and Altshuler (2006) argued
+ * that sufficiently strong disorder can stabilise a distinct
+ * non-ergodic phase -- *many-body localisation* (MBL) -- in which
+ * thermalisation fails altogether.  Signatures that pick out the MBL
+ * phase numerically include:
+ *  - *Area-law entanglement* in eigenstates, contrasting with the
+ *    volume-law of the ETH phase.
+ *  - *Poisson*-distributed consecutive level spacings (the level-
+ *    statistics ratio @f$\langle r \rangle \to 0.386@f$), as opposed
+ *    to @f$\langle r \rangle \to 0.530@f$ for the Gaussian orthogonal
+ *    ensemble (GOE) that describes the thermal phase (Pal-Huse 2010).
+ *  - *Logarithmic* (as opposed to ballistic) growth of entanglement
+ *    entropy after a global quench, with a prefactor set by the
+ *    interaction strength.
+ *  - *Persistent memory* of initial-state imbalance, i.e. the
+ *    equilibration time diverges.
+ *  - An emergent extensive set of *local integrals of motion* ("l-bits").
  *
- * Many-Body Localization is a quantum phase where strong disorder prevents
- * thermalization, leading to:
- * - Area-law entanglement (vs volume-law in thermal phase)
- * - Poisson level statistics (vs GOE in thermal phase)
- * - Persistent memory of initial conditions
- * - Emergent local integrals of motion
+ * The canonical testbed is the one-dimensional disordered XXZ chain
+ * @f[
+ *   H \;=\; \sum_{i} \bigl(
+ *     S^{x}_i S^{x}_{i+1}
+ *     + S^{y}_i S^{y}_{i+1}
+ *     + J_z\,S^{z}_i S^{z}_{i+1}
+ *   \bigr) + \sum_i h_i\,S^{z}_i ,
+ * @f]
+ * with @f$h_i \in [-W, W]@f$ drawn uniformly at random.  The Pal-Huse
+ * MBL transition is at @f$W_c \approx 3.7@f$ for @f$J_z = 1@f$; the
+ * module's phase-diagram tools are set up for disorder sweeps across
+ * this boundary.  Nandkishore-Huse (2015) and Abanin-Altman-Bloch-
+ * Serbyn (2019) are the canonical reviews; the module follows their
+ * conventions for level statistics, imbalance dynamics, and l-bit
+ * construction.
+ *
+ * SCOPE
+ * -----
+ * Finite-size numerical MBL evidence is delicate: subtle finite-size
+ * drift of the crossover, rare-region effects (Griffiths regions),
+ * and the still-open question of the stability of MBL as a true
+ * quantum phase in the thermodynamic limit (recent debates from
+ * Suntajs-Bonca-Prosen-Vidmar; Sels-Polkovnikov) should all be kept
+ * in mind when interpreting output from this module at chain lengths
+ * @f$L \lesssim 20@f$.
+ *
+ * REFERENCES
+ * ----------
+ *  - D. M. Basko, I. L. Aleiner and B. L. Altshuler, "Metal-insulator
+ *    transition in a weakly interacting many-electron system with
+ *    localized single-particle states", Ann. Phys. 321, 1126 (2006),
+ *    arXiv:cond-mat/0506617.  Foundational MBL paper.
+ *  - A. Pal and D. A. Huse, "Many-body localization phase transition",
+ *    Phys. Rev. B 82, 174411 (2010), arXiv:1010.1992.  Numerical
+ *    evidence and the level-spacing signature used here.
+ *  - R. Nandkishore and D. A. Huse, "Many-Body Localization and
+ *    Thermalization in Quantum Statistical Mechanics",
+ *    Annu. Rev. Condens. Matter Phys. 6, 15 (2015), arXiv:1404.0686.
+ *  - D. A. Abanin, E. Altman, I. Bloch and M. Serbyn, "Many-body
+ *    localization, thermalization, and entanglement",
+ *    Rev. Mod. Phys. 91, 021001 (2019), arXiv:1804.11065.  Modern
+ *    review; chapters 2-4 are the l-bit / logarithmic entanglement
+ *    foundations this module follows.
  *
  * @stability evolving
  * @since v0.1.2

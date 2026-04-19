@@ -1,6 +1,63 @@
 /**
  * @file noise.h
- * @brief Quantum noise models and error channels
+ * @brief Kraus-operator quantum channels for noisy simulation.
+ *
+ * OVERVIEW
+ * --------
+ * Physical quantum devices are never unitary; their evolution is a
+ * trace-preserving completely positive (CPTP) map on the density
+ * matrix.  By the Stinespring-Kraus representation theorem, every
+ * CPTP map admits a decomposition
+ * @f[
+ *   \rho \;\mapsto\; \mathcal E(\rho) \;=\;
+ *     \sum_k K_k \,\rho\, K_k^{\dagger},
+ *   \qquad
+ *   \sum_k K_k^{\dagger} K_k \;=\; \mathbb{1},
+ * @f]
+ * which is the computational form we implement.  The Kraus operators
+ * @f$\{K_k\}@f$ are drawn from the canonical list of device error
+ * channels:
+ *  - *Depolarising* (isotropic random Pauli)
+ *    @f$\mathcal E_p(\rho) = (1-p)\rho +
+ *    (p/3)(X\rho X + Y\rho Y + Z\rho Z)@f$.
+ *    At @f$p = 3/4@f$ the channel saturates the maximally mixed
+ *    state; see `test_depolarizing_uniform` for the verification.
+ *  - *Amplitude damping* with rate @f$\gamma@f$ models @f$T_1@f$
+ *    relaxation @f$|1\rangle \to |0\rangle@f$.
+ *  - *Phase damping* with rate @f$\lambda@f$ models pure @f$T_2@f$
+ *    dephasing.
+ *  - *Bit-flip*, *phase-flip*, *bit-phase-flip* are the elementary
+ *    Pauli channels.
+ *
+ * The simulator supports both direct (Kraus-applied) and trajectory
+ * (stochastic unravelling) modes.  A completeness validator
+ * (`noise_kraus_completeness_deviation`) numerically verifies
+ * @f$\lVert\sum_k K_k^{\dagger} K_k - \mathbb{1}\rVert_{\max} \le
+ * 2.2\times 10^{-16}@f$ across the six built-in channels at five
+ * parameter values, serving as a quantitative sanity check that new
+ * channels do not violate CPTP by construction.
+ *
+ * Composite channels (sequential or convex combinations), correlated
+ * two-qubit channels, and temporal-correlation (coloured-noise)
+ * channels are queued for the 0.3 noise-suite expansion.  The
+ * primitives here are the minimum needed for NISQ-era VQE / QAOA
+ * noise studies in the sense of Preskill's NISQ review.
+ *
+ * REFERENCES
+ * ----------
+ *  - M. A. Nielsen and I. L. Chuang, "Quantum Computation and Quantum
+ *    Information", Cambridge University Press (10th anniversary ed.,
+ *    2010).  Chapter 8 is the textbook reference for the Kraus
+ *    representation, CPTP maps, and the canonical error channels.
+ *  - J. Preskill, "Quantum Computing in the NISQ era and beyond",
+ *    Quantum 2, 79 (2018), arXiv:1801.00862.  The context that makes
+ *    honest noise simulation (rather than ideal-unitary simulation)
+ *    the relevant research object at current-generation qubit counts.
+ *  - R. Horodecki, P. Horodecki, M. Horodecki and K. Horodecki,
+ *    "Quantum entanglement", Rev. Mod. Phys. 81, 865 (2009),
+ *    arXiv:quant-ph/0702225.  Noisy-state entanglement theory that
+ *    the measures in entanglement.h evaluate on output of these
+ *    channels.
  *
  * @stability evolving
  * @since v0.1.2

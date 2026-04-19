@@ -1,21 +1,83 @@
 /**
  * @file tn_state.h
- * @brief Tensor network quantum state representation
+ * @brief Matrix-product state representation of 1D / quasi-1D systems.
  *
- * Implements Matrix Product State (MPS) representation for quantum states.
- * Enables simulation of 50-200+ qubits for circuits with bounded entanglement.
+ * OVERVIEW
+ * --------
+ * A matrix-product state (MPS) is an ansatz for the full quantum
+ * state on an @f$L@f$-site chain,
+ * @f[
+ *   |\psi\rangle \;=\;
+ *   \sum_{\sigma_1\ldots\sigma_L}
+ *   \operatorname{Tr}\!\bigl(
+ *     A^{\sigma_1}_{1}\,A^{\sigma_2}_{2}\,\cdots\,A^{\sigma_L}_{L}
+ *   \bigr)\,
+ *   |\sigma_1\ldots\sigma_L\rangle,
+ * @f]
+ * where @f$A^{\sigma_i}_{i}@f$ are matrices with physical index
+ * @f$\sigma_i@f$ and bond indices connecting to neighbours.  The
+ * maximum bond dimension @f$\chi@f$ fixes the representational
+ * capacity: for a state with Schmidt decomposition of rank
+ * @f$r@f$ across any bipartition, an MPS with @f$\chi \ge r@f$
+ * represents it exactly.  Entanglement-area-law ground states of
+ * gapped 1D Hamiltonians satisfy @f$\chi \sim O(1)@f$ in the
+ * thermodynamic limit (Hastings), so DMRG on MPS gives controlled
+ * accuracy for the canonical 1D many-body problems.  Vidal (2003)
+ * was the first to show that bounded-entanglement circuits admit
+ * efficient MPS simulation; Schollwoeck (2011) and Orus (2014) are
+ * the canonical modern reviews.
  *
- * Memory scaling comparison (approximate):
- * | Qubits | State Vector | MPS (chi=256) | MPS (chi=512) |
- * |--------|--------------|---------------|---------------|
- * | 50     | 18 PB        | 13 MB         | 52 MB         |
- * | 100    | 20E9 TB      | 26 MB         | 105 MB        |
- * | 200    | Impossible   | 52 MB         | 210 MB        |
+ * COST SCALING
+ * ------------
+ * For fixed bond dimension @f$\chi@f$ and physical dimension @f$d@f$:
+ *  - Storage: @f$O(L\,d\,\chi^{2})@f$.
+ *  - Application of a local two-site gate: @f$O(d^2\,\chi^3)@f$ per
+ *    bond (matrix product + SVD).
+ *  - Expectation of a local operator: @f$O(L\,d\,\chi^2)@f$ with a
+ *    single left-right sweep.
+ *  - DMRG sweep: @f$O(L\,d^2\,\chi^3)@f$ per sweep for the 2-site
+ *    algorithm.
  *
- * Limitations:
- * - Accuracy depends on entanglement structure
- * - High-entanglement states (Grover, QFT) require large bond dimensions
- * - Best suited for local connectivity, shallow circuits
+ * Rough memory reference for an MPS on qubits (@f$d = 2@f$):
+ *
+ *   | L   | @f$\chi = 256@f$ | @f$\chi = 512@f$ |
+ *   |-----|------------------|------------------|
+ *   | 50  | ~13 MB           | ~52 MB           |
+ *   | 100 | ~26 MB           | ~105 MB          |
+ *   | 200 | ~52 MB           | ~210 MB          |
+ *
+ * These numbers assume area-law entanglement and are valid only for
+ * circuits / Hamiltonians whose Schmidt rank across every bipartition
+ * stays below @f$\chi@f$ throughout the simulation.  For volume-law
+ * entanglement (Grover, QFT output, deep random circuits) the MPS
+ * representation is exponentially expensive and state-vector (or
+ * tree tensor / PEPS) methods should be used instead.
+ *
+ * LIMITATIONS
+ * -----------
+ * - Accuracy depends entirely on the truncated Schmidt spectrum
+ *   across every bipartition; a single saturated bond silently breaks
+ *   the rest of the simulation.  Track the truncation error field of
+ *   @c tn_mps_state_t to monitor.
+ * - Best suited for local connectivity and circuit depth @f$\ll L@f$;
+ *   long-range two-qubit gates require swap networks or MPO
+ *   conversion.
+ * - Unlike the state-vector core, the MPS representation cannot
+ *   express arbitrary post-measurement updates efficiently.
+ *
+ * REFERENCES
+ * ----------
+ *  - U. Schollwoeck, "The density-matrix renormalization group in the
+ *    age of matrix product states", Ann. Phys. 326, 96 (2011),
+ *    arXiv:1008.3477.  Canonical reference; every canonical-form
+ *    gauge, SVD / QR update rule, and Schmidt-decomposition
+ *    convention here follows this paper.
+ *  - G. Vidal, "Efficient classical simulation of slightly entangled
+ *    quantum computations", Phys. Rev. Lett. 91, 147902 (2003),
+ *    arXiv:quant-ph/0301063.
+ *  - R. Orus, "A practical introduction to tensor networks: Matrix
+ *    product states and projected entangled pair states",
+ *    Ann. Phys. 349, 117 (2014), arXiv:1306.2164.
  *
  * @stability evolving
  * @since v0.1.2

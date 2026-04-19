@@ -1,12 +1,88 @@
 /**
  * @file chemistry.h
- * @brief Quantum chemistry algorithms for molecular simulation
+ * @brief Quantum chemistry primitives: fermion-to-qubit mapping, HF
+ *        reference state, unitary coupled cluster ansatz.
  *
- * This module provides quantum algorithms for chemistry:
- * - Jordan-Wigner transformation (fermion to qubit mapping)
- * - Molecular Hamiltonian construction
- * - UCCSD ansatz for VQE
- * - Hartree-Fock state preparation
+ * OVERVIEW
+ * --------
+ * Second-quantised electronic-structure problems live in the
+ * antisymmetric Fock space of fermionic creation / annihilation
+ * operators @f$\{a_p, a_p^{\dagger}\}@f$ obeying
+ * @f$\{a_p, a_q^{\dagger}\} = \delta_{pq}@f$.  To run them on a
+ * quantum computer they must first be mapped to qubit operators; the
+ * *Jordan-Wigner transformation* (Jordan-Wigner 1928) is the
+ * canonical mapping:
+ * @f[
+ *   a_p \;=\; \tfrac12\,Z_0 \cdots Z_{p-1}\,(X_p + i Y_p),
+ *   \qquad
+ *   a_p^{\dagger} \;=\; \tfrac12\,Z_0 \cdots Z_{p-1}\,(X_p - i Y_p),
+ * @f]
+ * with a nonlocal Z-string ("parity") that preserves anticommutation
+ * at the cost of @f$O(N)@f$ single-qubit operators per fermion
+ * operator.  Bravyi-Kitaev and its variants trade locality against
+ * tree depth; this module currently implements only Jordan-Wigner.
+ * The molecular electronic Hamiltonian
+ * @f[
+ *   H \;=\; \sum_{pq} h_{pq}\,a_p^{\dagger} a_q
+ *     + \tfrac12 \sum_{pqrs} h_{pqrs}\,
+ *       a_p^{\dagger} a_q^{\dagger} a_r a_s
+ * @f]
+ * with integrals @f$h_{pq}, h_{pqrs}@f$ from a classical
+ * Hartree-Fock or CASSCF precomputation is transformed via
+ * Jordan-Wigner into a weighted sum of Pauli strings, consumed by
+ * the VQE engine (`vqe.h`).
+ *
+ * The *unitary coupled-cluster* ansatz with singles and doubles
+ * (UCCSD) approximates the exact ground state by
+ * @f[
+ *   |\psi_{\mathrm{UCCSD}}\rangle \;=\;
+ *     e^{T - T^{\dagger}}\,|\mathrm{HF}\rangle,
+ *   \qquad
+ *   T \;=\; \sum_{ia} t_i^a a_a^{\dagger} a_i
+ *         + \tfrac14 \sum_{ijab} t_{ij}^{ab} a_a^{\dagger}
+ *           a_b^{\dagger} a_j a_i,
+ * @f]
+ * where @f$i, j@f$ range over occupied Hartree-Fock orbitals and
+ * @f$a, b@f$ over virtuals.  Jordan-Wigner maps @f$T - T^{\dagger}@f$
+ * to a sum of anti-Hermitian Pauli strings; a first-order Trotter
+ * split produces a parameterised quantum circuit whose parameters
+ * @f$\{t\}@f$ are optimised classically by the variational loop.
+ * Peruzzo et al. (2014) introduced VQE with UCCSD on photonic
+ * hardware; O'Malley et al. (2016) and Kandala et al. (2017) then
+ * scaled it to superconducting qubits (H2, LiH).  McArdle et al. and
+ * Cao et al. give modern reviews of the landscape that this module
+ * fits into.
+ *
+ * BUILT-IN MOLECULES
+ * ------------------
+ * Pre-computed Pauli Hamiltonians for H2, LiH, and H2O are provided
+ * along with a Hartree-Fock reference bitmask used by
+ * `vqe_compute_energy` to prepare the reference state before the
+ * ansatz runs.  All three match the integrals used in the O'Malley
+ * and Kandala papers at the equilibrium bond length.
+ *
+ * REFERENCES
+ * ----------
+ *  - P. Jordan and E. Wigner, "Ueber das Paulische Aequivalenzverbot",
+ *    Z. Physik 47, 631 (1928), doi:10.1007/BF01331938.  Original
+ *    fermion-to-qubit mapping.
+ *  - A. Peruzzo, J. McClean, P. Shadbolt, M.-H. Yung, X.-Q. Zhou,
+ *    P. J. Love, A. Aspuru-Guzik and J. L. O'Brien, "A variational
+ *    eigenvalue solver on a quantum processor", Nat. Commun. 5, 4213
+ *    (2014), arXiv:1304.3061.  VQE with UCCSD.
+ *  - P. J. J. O'Malley et al., "Scalable Quantum Simulation of
+ *    Molecular Energies", Phys. Rev. X 6, 031007 (2016),
+ *    arXiv:1512.06860.  H2 on superconducting hardware; our H2
+ *    Hamiltonian matches.
+ *  - A. Kandala et al., "Hardware-efficient variational quantum
+ *    eigensolver for small molecules and quantum magnets",
+ *    Nature 549, 242 (2017), arXiv:1704.05018.  HEA ansatz; origin
+ *    of the alternative ansatz surface in `vqe.h`.
+ *  - S. McArdle, S. Endo, A. Aspuru-Guzik, S. C. Benjamin and X. Yuan,
+ *    "Quantum computational chemistry", Rev. Mod. Phys. 92, 015003
+ *    (2020), arXiv:1808.10402.  Canonical review.
+ *  - Y. Cao et al., "Quantum Chemistry in the Age of Quantum
+ *    Computing", Chem. Rev. 119, 10856 (2019), arXiv:1812.09976.
  *
  * @stability evolving
  * @since v0.1.2

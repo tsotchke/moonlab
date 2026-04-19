@@ -1,18 +1,64 @@
 /**
  * @file topological.h
- * @brief Topological quantum computing simulation
+ * @brief Anyon models, fusion trees, braiding, and stabilizer codes.
  *
- * This module implements topological quantum computing primitives:
- * - Anyon models (Fibonacci, Ising)
- * - Braiding operations and F/R matrices
- * - Fusion trees and fusion rules
- * - Surface code and toric code
- * - Topological entanglement entropy
- * - Anyonic gates via braiding
+ * OVERVIEW
+ * --------
+ * Topological quantum computation (TQC), proposed by Kitaev (2003)
+ * and reviewed in Nayak, Simon, Stern, Freedman and Das Sarma (2008),
+ * encodes quantum information in *non-local* degrees of freedom of
+ * anyonic systems: the ground-space multiplicity of a system of
+ * localised anyons depends on their global topology (braid type,
+ * fusion channel), not on local perturbations.  Gates are
+ * implemented by adiabatically *braiding* anyon worldlines in
+ * spacetime; the resulting unitary depends only on the braid group
+ * element, which makes the computation intrinsically protected
+ * against local noise.
  *
- * Topological quantum computing encodes information in non-local,
- * topologically protected degrees of freedom, providing inherent
- * fault tolerance against local perturbations.
+ * Two anyon models are implemented:
+ *
+ *   - @em Fibonacci anyons.  The fusion rule @f$\tau \times \tau =
+ *     1 + \tau@f$ generates a universal gate set via braiding alone
+ *     (Freedman-Kitaev-Larsen-Wang proved that braid-group
+ *     representations of this model are computationally universal).
+ *     Single-qubit gates require braid words of specific lengths
+ *     acting on the fusion-tree Hilbert space (dimension 2 in the
+ *     anyon sector with total charge @f$\tau@f$).  The canonical
+ *     braid-based approximation of standard gates is due to
+ *     Bonesteel, Hormozi, Zikos and Simon (2005).
+ *   - @em Ising anyons.  Fusion rule @f$\sigma\times\sigma = 1 +
+ *     \psi@f$, with braiding realising the Clifford group (but NOT
+ *     universal on its own without a magic-state supply).  The F
+ *     and R matrices are the standard ones reviewed in Nayak et al.
+ *     sections III.B-C.
+ *
+ * Surface and toric codes complement the anyon models by encoding
+ * logical qubits in the ground space of a commuting stabilizer
+ * Hamiltonian.  Kitaev (2003) introduced the toric code; Fowler,
+ * Mariantoni, Martinis and Cleland (2012) gave the canonical
+ * treatment of the planar surface code and its error-correction
+ * protocol, both of which this module implements (see the
+ * `surface_code_t` and `surface_code_clifford_t` sections below for
+ * dense-state and Clifford-tableau variants respectively).
+ *
+ * REFERENCES
+ * ----------
+ *  - A. Yu. Kitaev, "Fault-tolerant quantum computation by anyons",
+ *    Ann. Phys. 303, 2 (2003), arXiv:quant-ph/9707021.  Foundational
+ *    TQC paper; toric-code + anyon-braiding framework.
+ *  - C. Nayak, S. H. Simon, A. Stern, M. Freedman and S. Das Sarma,
+ *    "Non-Abelian Anyons and Topological Quantum Computation",
+ *    Rev. Mod. Phys. 80, 1083 (2008), arXiv:0707.1889.  Canonical
+ *    review; F-symbols, R-symbols, fusion trees, braid group
+ *    representations.
+ *  - N. E. Bonesteel, L. Hormozi, G. Zikos and S. H. Simon, "Braid
+ *    Topologies for Quantum Computation", Phys. Rev. Lett. 95,
+ *    140503 (2005), arXiv:quant-ph/0505065.  Explicit braid-word
+ *    compilation of single-qubit gates for Fibonacci anyons.
+ *  - A. G. Fowler, M. Mariantoni, J. M. Martinis and A. N. Cleland,
+ *    "Surface codes: Towards practical large-scale quantum
+ *    computation", Phys. Rev. A 86, 032324 (2012), arXiv:1208.0928.
+ *    Canonical reference for the planar surface code.
  *
  * @stability evolving
  * @since v0.1.2

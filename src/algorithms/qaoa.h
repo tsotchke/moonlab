@@ -8,28 +8,66 @@
 
 /**
  * @file qaoa.h
- * @brief Quantum Approximate Optimization Algorithm (QAOA)
- * 
- * QAOA is a hybrid quantum-classical algorithm for combinatorial optimization.
- * Provides quantum advantage for NP-hard problems including:
- * - MaxCut (graph partitioning)
- * - Traveling Salesman Problem (TSP)
- * - Portfolio optimization (finance)
- * - Job scheduling (manufacturing)
- * - Graph coloring (network design)
- * 
- * Algorithm (Farhi et al., arXiv:1411.4028, 2014):
- * 1. Encode problem as Ising Hamiltonian: H_C = Σᵢⱼ Jᵢⱼ ZᵢZⱼ + Σᵢ hᵢZᵢ
- * 2. Initialize: |ψ₀⟩ = H⊗ⁿ|0⟩ⁿ (uniform superposition)
- * 3. Alternate p layers of:
- *    a. Cost Hamiltonian: exp(-iγₖH_C)
- *    b. Mixer Hamiltonian: exp(-iβₖH_M) where H_M = Σᵢ Xᵢ
- * 4. Measure and evaluate solution quality
- * 5. Classical optimization: minimize ⟨H_C⟩ over angles (γ,β)
- * 
- * 32-qubit capability enables:
- * - 32-city TSP, 32-stock portfolio, 32-node MaxCut
- * - Real business-scale problems
+ * @brief Quantum Approximate Optimization Algorithm (Farhi-Goldstone-Gutmann 2014).
+ *
+ * OVERVIEW
+ * --------
+ * QAOA is a hybrid quantum-classical algorithm that produces
+ * approximate ground states of diagonal cost Hamiltonians
+ * @f$H_C@f$.  An @f$n@f$-bit combinatorial optimisation problem
+ * (MaxCut, Max-@f$k@f$-SAT, Max-Independent-Set, etc.) is first
+ * encoded into an Ising Hamiltonian
+ * @f[
+ *   H_C \;=\; \sum_{i<j} J_{ij}\,Z_i Z_j + \sum_i h_i\,Z_i,
+ * @f]
+ * whose computational-basis ground state encodes the optimum.  The
+ * @f$p@f$-level QAOA ansatz prepares
+ * @f[
+ *   |\psi_p(\gamma, \beta)\rangle \;=\;
+ *   \prod_{k=1}^{p} e^{-i\beta_k H_M}\,e^{-i\gamma_k H_C}\,|+\rangle^{\otimes n},
+ * @f]
+ * with the *mixer* @f$H_M = \sum_i X_i@f$; the @f$2p@f$ angles
+ * @f$(\gamma, \beta)@f$ are then optimised classically to minimise
+ * @f$\langle\psi_p|H_C|\psi_p\rangle@f$.  As @f$p \to \infty@f$ the
+ * ansatz tends to the adiabatic ground state (Farhi et al.).  At
+ * fixed @f$p@f$, approximation-ratio guarantees are known on
+ * specific problem classes (e.g. Farhi et al.'s 0.6924 bound for
+ * MaxCut on 3-regular graphs at @f$p = 1@f$).
+ *
+ * GENERALISATIONS
+ * ---------------
+ * Hadfield et al. (2019) extend the mixer beyond @f$\sum X_i@f$ to
+ * any unitary that preserves a problem-specific feasible subspace
+ * ("Quantum Alternating Operator Ansatz"); this framework covers
+ * constrained problems (TSP, scheduling, graph colouring) where the
+ * Ising encoding uses large penalty terms.  The built-in encoders
+ * in `ising_encode_maxcut`, `ising_encode_tsp`, etc. use the
+ * penalty-based encoding; a future iteration can swap in the
+ * constrained QAOA mixer without changing the user-facing API.
+ *
+ * SIZE AND NOISE CAVEATS
+ * ----------------------
+ * At @f$n = 32@f$ qubits the simulator can exercise the algorithm on
+ * graphs up to 32 nodes for MaxCut and comparably sized TSP /
+ * portfolio instances.  These numbers describe the *simulator*'s
+ * capability; on current NISQ hardware the reachable depth is bound
+ * by coherence time and gate fidelity rather than by qubit count, so
+ * claims of "practical advantage" on real devices should be read
+ * with the Preskill (2018) NISQ caveats in mind.
+ *
+ * REFERENCES
+ * ----------
+ *  - E. Farhi, J. Goldstone and S. Gutmann, "A Quantum Approximate
+ *    Optimization Algorithm", arXiv:1411.4028 (2014).  Original
+ *    paper; MaxCut approximation ratio.
+ *  - S. Hadfield, Z. Wang, B. O'Gorman, E. G. Rieffel, D. Venturelli
+ *    and R. Biswas, "From the Quantum Approximate Optimization
+ *    Algorithm to a Quantum Alternating Operator Ansatz",
+ *    Algorithms 12, 34 (2019), arXiv:1709.03489.  Extended mixer
+ *    framework for constrained problems.
+ *  - J. Preskill, "Quantum Computing in the NISQ era and beyond",
+ *    Quantum 2, 79 (2018), arXiv:1801.00862.  Context for practical-
+ *    scale claims.
  */
 
 // ============================================================================

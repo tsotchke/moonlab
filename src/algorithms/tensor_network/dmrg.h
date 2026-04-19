@@ -1,16 +1,55 @@
 /**
  * @file dmrg.h
- * @brief Density Matrix Renormalization Group (DMRG) for ground state preparation
+ * @brief Density Matrix Renormalization Group for 1D ground states.
  *
- * DMRG is the gold standard algorithm for finding ground states of 1D quantum
- * systems. It's orders of magnitude faster than imaginary time evolution and
- * provides variational guarantees.
+ * OVERVIEW
+ * --------
+ * The Density Matrix Renormalization Group (DMRG), introduced by
+ * White in 1992, is a variational algorithm that minimises the
+ * energy expectation
+ * @f$\langle\psi|H|\psi\rangle/\langle\psi|\psi\rangle@f$ of a 1D
+ * quantum Hamiltonian @f$H@f$ over the manifold of matrix-product
+ * states (MPS) with bounded bond dimension @f$\chi@f$.  Its modern
+ * formulation, clarified after the advent of MPS / MPO notation (see
+ * Schollwöck's 2011 review), proceeds by sweeping left-to-right and
+ * back, at each step solving a local eigenproblem for the effective
+ * Hamiltonian acting on one or two sites, then re-decomposing the
+ * updated tensor via SVD.  Because every step minimises the same
+ * energy functional, the algorithm is variationally monotonic; the
+ * MPS ansatz itself caps the error by @f$O(e^{-c L / \xi})@f$ on
+ * gapped systems where the entanglement obeys an area law
+ * (Hastings).
  *
- * Key advantages over ITE:
- * - Convergence in O(1) sweeps vs O(exp) time steps
- * - Variational: energy always decreases
- * - Adaptive bond dimension growth
- * - Direct access to ground state energy
+ * The implementation here is 2-site DMRG with subspace expansion
+ * (adding a small number of additional columns to the left
+ * environment at each step so the local problem can explore bond
+ * directions that the current @f$\chi@f$ cannot represent) and
+ * noise decay (a progressively shrinking random kick to the effective
+ * Hamiltonian that prevents lock-in to local minima during the first
+ * sweeps).  Both ingredients are standard in modern DMRG codes; see
+ * Schollwöck §6 for the full treatment.
+ *
+ * When to use DMRG vs imaginary-time evolution: DMRG converges in a
+ * handful of sweeps whose cost is @f$O(L\,\chi^3\,d^2)@f$ per sweep,
+ * while ITE with Trotter steps needs @f$O(1/(\Delta\tau\, \Delta))@f$
+ * steps where @f$\Delta@f$ is the spectral gap.  DMRG is the method
+ * of choice for gapped 1D ground states; TDVP (see `tdvp.h`) is the
+ * complementary method for real-time evolution at fixed bond
+ * dimension.
+ *
+ * REFERENCES
+ * ----------
+ *  - S. R. White, "Density matrix formulation for quantum
+ *    renormalization groups", Phys. Rev. Lett. 69, 2863 (1992),
+ *    doi:10.1103/PhysRevLett.69.2863.  Original DMRG paper.
+ *  - U. Schollwoeck, "The density-matrix renormalization group in the
+ *    age of matrix product states", Ann. Phys. 326, 96 (2011),
+ *    arXiv:1008.3477.  Canonical modern treatment; our MPS / MPO
+ *    conventions and sweep scheme follow this reference.
+ *  - G. Vidal, "Efficient classical simulation of slightly entangled
+ *    quantum computations", Phys. Rev. Lett. 91, 147902 (2003),
+ *    arXiv:quant-ph/0301063.  MPS as a faithful classical simulation
+ *    substrate.
  *
  * @stability evolving
  * @since v0.1.2

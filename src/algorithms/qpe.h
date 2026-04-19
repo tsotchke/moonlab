@@ -10,23 +10,57 @@ typedef double _Complex complex_t;
 
 /**
  * @file qpe.h
- * @brief Quantum Phase Estimation (QPE) algorithm
- * 
- * QPE estimates eigenvalues of unitary operators - foundation for:
- * - Shor's factoring algorithm
- * - HHL linear system solver
- * - Quantum chemistry (excited states)
- * - Period finding
- * 
- * Algorithm (Kitaev 1995, Cleve et al. 1998):
- * 1. Prepare: |0⟩⊗ᵐ|ψ⟩ where U|ψ⟩ = e^(2πiφ)|ψ⟩
- * 2. Apply H⊗ᵐ to first m qubits
- * 3. Apply controlled-U^(2^k) operations
- * 4. Inverse QFT on first m qubits
- * 5. Measure to get φ estimate (m-bit precision)
- * 
- * Precision: m qubits give φ within 2^(-m) accuracy
- * 32-qubit simulator: 16 precision qubits + 16 system qubits
+ * @brief Quantum Phase Estimation.
+ *
+ * OVERVIEW
+ * --------
+ * Given a unitary @f$U@f$ and an eigenstate @f$|\psi\rangle@f$ with
+ * @f$U|\psi\rangle = e^{2\pi i\varphi}|\psi\rangle@f$, quantum phase
+ * estimation returns an @f$m@f$-bit approximation of @f$\varphi \in
+ * [0, 1)@f$ with polynomial resources.  The canonical circuit, due
+ * to Kitaev (1995) in eigenvalue-sampling form and Cleve, Ekert,
+ * Macchiavello & Mosca (1998) in inverse-QFT form, proceeds as:
+ *
+ *   1. Prepare the @f$m@f$-qubit ancilla register in
+ *      @f$H^{\otimes m}|0\rangle^{\otimes m}@f$.
+ *   2. Apply controlled-@f$U^{2^k}@f$ with the @f$k@f$-th ancilla
+ *      as the control, for @f$k = 0,\ldots,m-1@f$.
+ *   3. Apply the inverse quantum Fourier transform to the ancilla.
+ *   4. Measure the ancilla in the computational basis; the outcome
+ *      @f$y \in \{0,\ldots,2^m - 1\}@f$ gives
+ *      @f$\tilde\varphi = y/2^m@f$, within @f$2^{-m}@f$ of
+ *      @f$\varphi@f$ with probability @f$\ge 4/\pi^2@f$.
+ *
+ * QPE is the backbone of Shor's factoring algorithm (the order-
+ * finding subroutine is QPE on @f$U_a: |y\rangle \mapsto |a y \bmod
+ * N\rangle@f$), HHL-class linear-system solvers, several quantum-
+ * chemistry excited-state methods, and the variational quantum
+ * eigensolver's "QPE-polished" family.  The bit-ordering convention
+ * between the ancilla and the fractional representation of
+ * @f$\varphi@f$ is easy to get wrong: our QFT uses the convention
+ * where the most significant bit is qubit 0, and the inverse QFT
+ * therefore emits a trailing bit-reversal swap so the measurement
+ * outcome @f$y@f$ corresponds to @f$\varphi = y/2^m@f$ with no
+ * further post-processing (see `qpe_bitstring_to_phase`).
+ *
+ * PRECISION / RESOURCES
+ * ---------------------
+ *  - @f$m@f$ ancilla qubits give @f$\varphi@f$ within @f$2^{-m}@f$
+ *    of the true eigenphase.
+ *  - Moonlab's 32-qubit state vector supports up to @f$m = 16@f$
+ *    precision qubits alongside a @f$16@f$-qubit system register, or
+ *    any other sum @f$m + n_{\mathrm{sys}} \le 32@f$.
+ *  - Iterative variants (Kitaev 1995 style; Svore et al.) trade
+ *    circuit depth for shot count but are not implemented here.
+ *
+ * REFERENCES
+ * ----------
+ *  - A. Yu. Kitaev, "Quantum measurements and the Abelian Stabilizer
+ *    Problem", arXiv:quant-ph/9511026 (1995).  Original
+ *    eigenvalue-sampling form.
+ *  - R. Cleve, A. Ekert, C. Macchiavello and M. Mosca, "Quantum
+ *    algorithms revisited", Proc. R. Soc. Lond. A 454, 339 (1998),
+ *    arXiv:quant-ph/9708016.  Inverse-QFT formulation used here.
  */
 
 // ============================================================================
