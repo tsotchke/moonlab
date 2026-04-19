@@ -64,6 +64,9 @@ option(QSIM_ENABLE_OPENCL "Enable OpenCL GPU backend" OFF)
 option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
 option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
+option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II / SF64)" OFF)
+set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
+    "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers)" OFF)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
@@ -1111,6 +1114,33 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(bench_hadamard_metal PRIVATE quantumsim)
     if(QSIM_HAS_METAL)
         target_compile_definitions(bench_hadamard_metal PRIVATE HAS_METAL=1)
+    endif()
+
+    # Optional: Eshkol fp64-on-Metal backend (SF64 / Ozaki-II CRT).
+    # Enable via -DQSIM_ENABLE_ESHKOL=ON and -DQSIM_ESHKOL_ROOT=/path/to/eshkol.
+    if(QSIM_ENABLE_ESHKOL)
+        set(_eshkol_inc   "${QSIM_ESHKOL_ROOT}/inc")
+        set(_eshkol_libfn "${QSIM_ESHKOL_ROOT}/build/libeshkol-static.a")
+        if(NOT EXISTS "${_eshkol_libfn}")
+            message(FATAL_ERROR
+                "QSIM_ENABLE_ESHKOL=ON but ${_eshkol_libfn} not found. "
+                "Build Eshkol first (cmake -S ${QSIM_ESHKOL_ROOT} -B "
+                "${QSIM_ESHKOL_ROOT}/build && cmake --build "
+                "${QSIM_ESHKOL_ROOT}/build).")
+        endif()
+        add_executable(bench_eshkol_gemm tests/performance/bench_eshkol_gemm.cpp)
+        set_target_properties(bench_eshkol_gemm PROPERTIES CXX_STANDARD 17)
+        target_include_directories(bench_eshkol_gemm PRIVATE "${_eshkol_inc}")
+        target_compile_definitions(bench_eshkol_gemm PRIVATE HAS_ESHKOL=1)
+        target_link_libraries(bench_eshkol_gemm PRIVATE
+            "${_eshkol_libfn}"
+            "-framework Accelerate"
+            "-framework Metal"
+            "-framework MetalPerformanceShaders"
+            "-framework Foundation"
+            "-framework CoreGraphics"
+        )
+        message(STATUS "Eshkol: ON (lib=${_eshkol_libfn})")
     endif()
 
     # Python bindings smoke — imports moonlab.core, constructs a Bell
