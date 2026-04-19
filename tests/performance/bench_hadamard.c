@@ -70,6 +70,42 @@ static void bench_CNOT(size_t n) {
     quantum_state_free(&st);
 }
 
+static void bench_RY(size_t n) {
+    quantum_state_t st;
+    if (quantum_state_init(&st, n) != QS_SUCCESS) return;
+    gate_hadamard(&st, 0); gate_hadamard(&st, 1);
+    for (int w = 0; w < 3; w++) gate_ry(&st, (int)(n / 2), 0.3);
+
+    const int iters = 10;
+    double t0 = now_us();
+    for (int i = 0; i < iters; i++) gate_ry(&st, (int)(n / 2), 0.3);
+    double dt = (now_us() - t0) / iters;
+
+    uint64_t dim = 1ULL << n;
+    double bw = ((double)dim * 16.0 * 2.0 / (dt * 1e-6)) / 1e9;
+    printf("  RY      n=%2zu  %10llu  %9.2f us    %6.1f GB/s\n",
+           n, (unsigned long long)dim, dt, bw);
+    quantum_state_free(&st);
+}
+
+static void bench_RZ(size_t n) {
+    quantum_state_t st;
+    if (quantum_state_init(&st, n) != QS_SUCCESS) return;
+    gate_hadamard(&st, 0); gate_hadamard(&st, 1);
+    for (int w = 0; w < 3; w++) gate_rz(&st, (int)(n / 2), 0.3);
+
+    const int iters = 10;
+    double t0 = now_us();
+    for (int i = 0; i < iters; i++) gate_rz(&st, (int)(n / 2), 0.3);
+    double dt = (now_us() - t0) / iters;
+
+    uint64_t dim = 1ULL << n;
+    double bw = ((double)dim * 16.0 * 2.0 / (dt * 1e-6)) / 1e9;
+    printf("  RZ      n=%2zu  %10llu  %9.2f us    %6.1f GB/s\n",
+           n, (unsigned long long)dim, dt, bw);
+    quantum_state_free(&st);
+}
+
 int main(void) {
 #ifdef _OPENMP
     int nt = omp_get_max_threads();
@@ -82,5 +118,9 @@ int main(void) {
     for (size_t n = 16; n <= 26; n += 2) bench_H(n);
     printf("\n");
     for (size_t n = 16; n <= 26; n += 2) bench_CNOT(n);
+    printf("\n");
+    for (size_t n = 16; n <= 26; n += 2) bench_RY(n);
+    printf("\n");
+    for (size_t n = 16; n <= 26; n += 2) bench_RZ(n);
     return 0;
 }

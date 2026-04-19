@@ -257,87 +257,108 @@ qs_error_t gate_phase(quantum_state_t *state, int qubit, double theta) {
 }
 
 qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta) {
+    /* RX(θ) = cos(θ/2) I - i sin(θ/2) X
+     *       = [[ c,  -is ],
+     *          [ -is,  c ]]   with c = cos(θ/2), s = sin(θ/2). */
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // OPTIMIZED R_X(θ): Stride-based indexing, no get_bit()
-    // R_X(θ) = cos(θ/2)I - i*sin(θ/2)X
+
     const double cos_half = cos(theta / 2.0);
     const double sin_half = sin(theta / 2.0);
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
         for (uint64_t i = 0; i < stride; i++) {
             const uint64_t idx0 = base + i;
             const uint64_t idx1 = idx0 + stride;
-            
-            const complex_t amp_0 = state->amplitudes[idx0];
-            const complex_t amp_1 = state->amplitudes[idx1];
-            
-            state->amplitudes[idx0] = cos_half * amp_0 - I * sin_half * amp_1;
-            state->amplitudes[idx1] = cos_half * amp_1 - I * sin_half * amp_0;
+            const complex_t a0 = state->amplitudes[idx0];
+            const complex_t a1 = state->amplitudes[idx1];
+            state->amplitudes[idx0] = cos_half * a0 - I * sin_half * a1;
+            state->amplitudes[idx1] = cos_half * a1 - I * sin_half * a0;
         }
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
 qs_error_t gate_ry(quantum_state_t *state, int qubit, double theta) {
+    /* RY(θ) = cos(θ/2) I - i sin(θ/2) Y
+     *       = [[ c, -s ],
+     *          [ s,  c ]]   with c = cos(θ/2), s = sin(θ/2) (all real).
+     *
+     * Previous implementation scanned every amplitude with
+     * get_bit/flip_bit, throwing away the stride structure every
+     * sibling gate uses. Rewritten here as a stride-block kernel
+     * and threaded for consistency.  The inner math is real-valued;
+     * clang auto-vectorises the inner loop, and OpenMP distributes
+     * the outer blocks. */
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    /**
-     * OPTIMIZED RY ROTATION (SIMD)
-     * RY(θ) = cos(θ/2)I - i*sin(θ/2)Y
-     */
-    
-    double cos_half = cos(theta / 2.0);
-    double sin_half = sin(theta / 2.0);
-    
-    complex_t RY_matrix[4] = {
-        cos_half,  -sin_half,
-        sin_half,   cos_half
-    };
-    
-    for (uint64_t i = 0; i < state->state_dim; i++) {
-        if (!get_bit(i, qubit)) {
-            uint64_t j = flip_bit(i, qubit);
-            
-            complex_t input[2] = {state->amplitudes[i], state->amplitudes[j]};
-            complex_t output[2];
-            
-            simd_matrix2x2_vec_multiply(RY_matrix, input, output);
-            
-            state->amplitudes[i] = output[0];
-            state->amplitudes[j] = output[1];
+
+    const double cos_half = cos(theta / 2.0);
+    const double sin_half = sin(theta / 2.0);
+    const uint64_t stride = 1ULL << qubit;
+    const uint64_t block_size = stride << 1;
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
+        for (uint64_t i = 0; i < stride; i++) {
+            const uint64_t idx0 = base + i;
+            const uint64_t idx1 = idx0 + stride;
+            const complex_t a0 = state->amplitudes[idx0];
+            const complex_t a1 = state->amplitudes[idx1];
+            state->amplitudes[idx0] = cos_half * a0 - sin_half * a1;
+            state->amplitudes[idx1] = sin_half * a0 + cos_half * a1;
         }
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
 qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta) {
+    /* RZ(θ) = diag(e^{-iθ/2}, e^{+iθ/2}): apply two fixed phases to
+     * the |0> and |1> halves of each block, via the SIMD primitive
+     * simd_apply_phase.  Outer loop threaded. */
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
-    // OPTIMIZED R_Z(θ): Stride-based indexing, no get_bit()
-    // R_Z(θ) = [e^(-iθ/2) 0; 0 e^(iθ/2)]
+
     const complex_t phase_0 = cexp(-I * theta / 2.0);
-    const complex_t phase_1 = cexp(I * theta / 2.0);
+    const complex_t phase_1 = cexp(+I * theta / 2.0);
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
-    
-    for (uint64_t base = 0; base < state->state_dim; base += block_size) {
-        for (uint64_t i = 0; i < stride; i++) {
-            const uint64_t idx0 = base + i;
-            const uint64_t idx1 = idx0 + stride;
-            
-            state->amplitudes[idx0] *= phase_0;  // |0⟩ component
-            state->amplitudes[idx1] *= phase_1;  // |1⟩ component
-        }
+    const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM) &&
+                              (n_blocks >= 32);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#endif
+    for (int64_t b = 0; b < n_blocks; b++) {
+        const uint64_t base = (uint64_t)b * block_size;
+        simd_apply_phase(&state->amplitudes[base],          phase_0, stride);
+        simd_apply_phase(&state->amplitudes[base + stride], phase_1, stride);
     }
-    
+#ifndef _OPENMP
+    (void)should_thread;
+#endif
     return QS_SUCCESS;
 }
 
