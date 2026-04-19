@@ -26,8 +26,11 @@ deployment, distributed scaling, observability, research integration
 
 The honest gap list, in one breath:
 
-- **Tensor-network benchmark segfaults (SIGKILL).** The entire TN
-  stack's measured throughput is unknown right now.
+- **Tensor-network DMRG is slow.** Not crashing as initially
+  reported — the audit-agent runner hit its own timeout during a
+  long bench. DMRG at 16 sites, χ=32, 5 sweeps takes 18.3 s;
+  ITensor does this in ~1 s. ~15-20× slower is the real gap. MPS
+  gate application and entropy are fine.
 - **Cross-simulator parity is absent.** Only 1.5 % of tests
   cross-validate; zero tests cite published physics numbers.
 - **Deployment blockers are real.** 3 750 occurrences of hardcoded
@@ -63,7 +66,12 @@ Host: Apple M2 Ultra, 24 cores, Release build, default optimisation.
 | Gate-fusion speedup @ n=20 | 1.54× | Qulacs fusion ~1.3× | above par on same-qubit runs |
 | Chern KPM bulk site @ L=300 | 3.5 µs/site | no public reference | works, uncompared |
 | Chern mosaic 4:36 patch L=40 | 520 ms | — | reference-free |
-| TN gate throughput | **CRASH** | — | blocker |
+| MPS gate @ 50 sites, χ=32, H | 0.0 µs (below timer resolution) | — | OK |
+| MPS gate @ 50 sites, χ=32, CNOT | 2.4 µs | — | OK |
+| MPS entropy @ 100 sites, χ=32 | 158 µs | — | OK |
+| DMRG 10 sites, χ=16, 5 sweeps | 676 ms | ITensor ~100 ms | **~7× slower** |
+| DMRG 10 sites, χ=32, 5 sweeps | 1.46 s | ITensor ~150 ms | **~10× slower** |
+| DMRG 16 sites, χ=32, 5 sweeps | 18.3 s | ITensor ~1 s | **~18× slower** |
 | State-vector peak memory @ n=16 | 25.8 MB | Qulacs ~40 MB | lean |
 | MPI scaling | not measured | mpiQulacs published | **no data** |
 | GPU (Metal) gate throughput | not benchmarked | cuStateVec ~10 TFlop/s | **no data** |

@@ -719,14 +719,28 @@ if(QSIM_HAS_OPENMP)
         target_link_libraries(quantumsim PRIVATE ${QSIM_OPENMP_LIBRARIES})
         target_include_directories(quantumsim PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
 
-        # Relocate libomp's absolute Homebrew path to @rpath, and add
-        # rpath entries so consumers on machines with Homebrew (or with
-        # libomp beside libquantumsim after install) resolve it cleanly.
-        # Any Homebrew prefix (Intel /usr/local, Apple Silicon /opt/homebrew)
-        # plus relocatable @loader_path/../lib covers the common cases.
+        # Relocate libomp's absolute Homebrew path to @rpath, and build
+        # an rpath list that only contains directories that actually
+        # exist on this host. This keeps the binary relocatable
+        # (@loader_path/../lib is always present) while adding
+        # developer-machine fallbacks when present. For container /
+        # Docker builds, set QSIM_EXTRA_RPATH to pre-seed additional
+        # entries (e.g. "/opt/openmp/lib").
+        set(QSIM_RPATH_LIST "@loader_path/../lib")
+        foreach(_qsim_candidate_rpath
+                "$ENV{HOMEBREW_PREFIX}/opt/libomp/lib"
+                "/opt/homebrew/opt/libomp/lib"
+                "/usr/local/opt/libomp/lib")
+            if(_qsim_candidate_rpath AND EXISTS "${_qsim_candidate_rpath}")
+                list(APPEND QSIM_RPATH_LIST "${_qsim_candidate_rpath}")
+            endif()
+        endforeach()
+        if(DEFINED QSIM_EXTRA_RPATH)
+            list(APPEND QSIM_RPATH_LIST ${QSIM_EXTRA_RPATH})
+        endif()
         set_target_properties(quantumsim PROPERTIES
-            BUILD_RPATH   "/opt/homebrew/opt/libomp/lib;/usr/local/opt/libomp/lib;@loader_path/../lib"
-            INSTALL_RPATH "/opt/homebrew/opt/libomp/lib;/usr/local/opt/libomp/lib;@loader_path/../lib"
+            BUILD_RPATH   "${QSIM_RPATH_LIST}"
+            INSTALL_RPATH "${QSIM_RPATH_LIST}"
         )
         add_custom_command(TARGET quantumsim POST_BUILD
             COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
