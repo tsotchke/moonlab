@@ -43,8 +43,32 @@ fn main() {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
     }
 
-    // Link OpenMP (required for parallel operations)
-    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/libomp/lib");
+    // Link OpenMP (required for parallel operations).
+    //
+    // Path discovery priority (deployment-portable; Homebrew paths only
+    // added on macOS and only if they exist):
+    //   1. MOONLAB_OMP_DIR env var (explicit override).
+    //   2. HOMEBREW_PREFIX + /opt/libomp/lib on macOS, if set and present.
+    //   3. /opt/homebrew/opt/libomp/lib (Apple Silicon default), if exists.
+    //   4. /usr/local/opt/libomp/lib (Intel macOS default), if exists.
+    //   5. System default: rely on /usr/lib or LD_LIBRARY_PATH.
+    if let Ok(dir) = env::var("MOONLAB_OMP_DIR") {
+        println!("cargo:rustc-link-search=native={dir}");
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(brew) = env::var("HOMEBREW_PREFIX") {
+            let candidate = PathBuf::from(&brew).join("opt/libomp/lib");
+            if candidate.exists() {
+                println!("cargo:rustc-link-search=native={}", candidate.display());
+            }
+        }
+        for p in ["/opt/homebrew/opt/libomp/lib", "/usr/local/opt/libomp/lib"] {
+            if PathBuf::from(p).exists() {
+                println!("cargo:rustc-link-search=native={p}");
+            }
+        }
+    }
     println!("cargo:rustc-link-lib=dylib=omp");
 
     // Link system libraries (macOS)
