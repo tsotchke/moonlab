@@ -527,6 +527,70 @@ static void test_apply_sign_small_tfim(void) {
     mpo_free(H_src);
 }
 
+/* ---------------------------------------------------------------- */
+/* 5. Diagonal single-site-sum MPO                                    */
+/* ---------------------------------------------------------------- */
+static void test_diagonal_sum_mpo(void) {
+    fprintf(stdout, "\n-- diagonal-sum MPO Sum_i f_i sigma^z_i --\n");
+
+    const uint32_t L = 4;
+    double f[4] = { 1.0, 2.0, 3.0, 4.0 };
+    /* Pauli Z, row-major: [Z00, Z01, Z10, Z11] = [1, 0, 0, -1]. */
+    double complex Z[4] = { 1.0, 0.0, 0.0, -1.0 };
+
+    tn_mpo_t* D = mpo_kpm_diagonal_sum_mpo(L, Z, f);
+    CHECK(D != NULL, "MPO built");
+
+    /* Build a random product-state ket and its reference state vector. */
+    tn_mps_state_t* ket = random_product_mps(L, 0xF001);
+    const size_t N = (size_t)1 << L;
+    double complex* psi = (double complex*)malloc(N * sizeof(double complex));
+    CHECK(tn_mps_to_statevector(ket, psi) == TN_STATE_SUCCESS, "ket -> SV");
+
+    /* Dense: D|psi> and <psi|D|psi>. For Z operator, |basis = s_0 s_1 ... s_{L-1}>
+     * has D eigenvalue sum_i f_i * (1 - 2*s_i) (since Z|0>=+1, Z|1>=-1). */
+    double complex* Dpsi = (double complex*)calloc(N, sizeof(double complex));
+    for (size_t k = 0; k < N; k++) {
+        double eig = 0.0;
+        for (uint32_t i = 0; i < L; i++) {
+            int bit = (int)((k >> (L - 1 - i)) & 1U);
+            eig += f[i] * (bit == 0 ? 1.0 : -1.0);
+        }
+        Dpsi[k] = eig * psi[k];
+    }
+    double complex expt_dense = 0.0;
+    for (size_t k = 0; k < N; k++) expt_dense += conj(psi[k]) * Dpsi[k];
+
+    /* MPS: D|psi> via mpo_kpm_apply_mpo, then <psi|D|psi>. */
+    tn_mps_state_t* Dket_mps = mpo_kpm_apply_mpo(D, ket, 64);
+    CHECK(Dket_mps != NULL, "apply_mpo returned MPS");
+    double complex expt_mps = tn_mps_overlap(ket, Dket_mps);
+    double complex* Dpsi_mps_sv = (double complex*)malloc(N * sizeof(double complex));
+    tn_mps_to_statevector(Dket_mps, Dpsi_mps_sv);
+
+    fprintf(stdout, "    <psi|D|psi> dense = %+.6f%+.6fi\n",
+            creal(expt_dense), cimag(expt_dense));
+    fprintf(stdout, "    <psi|D|psi> MPS   = %+.6f%+.6fi\n",
+            creal(expt_mps), cimag(expt_mps));
+    CHECK(cabs(expt_dense - expt_mps) < 1e-10,
+          "<psi|D|psi> MPS matches dense");
+
+    /* Element-wise vector agreement between D|psi>_dense and D|psi>_mps. */
+    double num = 0.0, den = 0.0;
+    for (size_t k = 0; k < N; k++) {
+        double complex d = Dpsi[k] - Dpsi_mps_sv[k];
+        num += creal(d * conj(d));
+        den += creal(Dpsi[k] * conj(Dpsi[k]));
+    }
+    const double rel = (den > 0) ? sqrt(num / den) : sqrt(num);
+    fprintf(stdout, "    ||D|psi>_mps - D|psi>_dense|| / ||dense|| = %.3e\n", rel);
+    CHECK(rel < 1e-12, "D|psi> MPS matches dense vector");
+
+    free(psi); free(Dpsi); free(Dpsi_mps_sv);
+    tn_mps_free(ket); tn_mps_free(Dket_mps);
+    tn_mpo_free(D);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -534,6 +598,7 @@ int main(void) {
     test_mps_combine_norm(6, 0x1234, 0x5678);
     test_sign_matrix_element_small_tfim();
     test_apply_sign_small_tfim();
+    test_diagonal_sum_mpo();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;
