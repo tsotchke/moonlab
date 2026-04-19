@@ -13,6 +13,7 @@
  */
 
 #include "tensor.h"
+#include "../../optimization/gpu/backends/gpu_eshkol.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -711,6 +712,36 @@ bool tensor_allclose(const tensor_t *a, const tensor_t *b, double tol) {
 // MATRIX OPERATIONS
 // ============================================================================
 
+/* Crossover threshold below which Accelerate CPU wins and we
+ * skip GPU dispatch. Per-tier because the emulated-fp64 tiers
+ * (EXACT / HIGH) cross much later than native f32 (FAST / ML).
+ * Numbers derived from bench_eshkol_gemm measurements on M2
+ * Ultra; conservative by a factor of ~2 to make the dispatch
+ * decision robust to host thermal / background variability.
+ *
+ * Override at runtime via the integer-valued env var
+ * MOONLAB_TENSOR_GPU_THRESHOLD_MUL (work = M*K*N), which takes
+ * precedence over the per-tier defaults. */
+static size_t tensor_matmul_gpu_threshold(void) {
+    const char* env = getenv("MOONLAB_TENSOR_GPU_THRESHOLD_MUL");
+    if (env && *env) {
+        char* end = NULL;
+        size_t v = (size_t)strtoull(env, &end, 10);
+        if (end != env && v > 0) return v;
+    }
+    switch (moonlab_eshkol_get_precision()) {
+        case MOONLAB_ESHKOL_PRECISION_EXACT:
+            return (size_t)1 << 33;   /* SF64/Ozaki-II: never wins at realistic sizes today */
+        case MOONLAB_ESHKOL_PRECISION_HIGH:
+            return (size_t)1 << 28;   /* df64 (buggy 1e-7): crossover ~ 512^3 complex */
+        case MOONLAB_ESHKOL_PRECISION_FAST:
+            return (size_t)1 << 27;   /* f32: crossover ~ 1024x512x512 complex */
+        case MOONLAB_ESHKOL_PRECISION_ML:
+            return (size_t)1 << 27;   /* fp24: same band as FAST */
+    }
+    return (size_t)1 << 33;
+}
+
 tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b) {
     if (!a || !b) return NULL;
     if (a->rank != 2 || b->rank != 2) return NULL;
@@ -722,6 +753,26 @@ tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b) {
 
     tensor_t *result = tensor_create_matrix(m, n);
     if (!result) return NULL;
+
+    /* GPU dispatch path: when Eshkol is built + has a live GPU +
+     * the work exceeds the bandwidth-vs-dispatch crossover, run
+     * on GPU.  We keep the CPU path as the default for every
+     * smaller problem size -- Accelerate + AMX on Apple Silicon
+     * is genuinely competitive up to ~1024^3 fp64 complex. */
+    const size_t work = (size_t)m * (size_t)k * (size_t)n;
+    if (work >= tensor_matmul_gpu_threshold() && moonlab_eshkol_available()) {
+        const moonlab_cplx_t alpha = 1.0, beta = 0.0;
+        moonlab_eshkol_status_t st = moonlab_eshkol_zgemm(
+            (const moonlab_cplx_t*)a->data, k,
+            (const moonlab_cplx_t*)b->data, n,
+            (moonlab_cplx_t*)result->data, n,
+            (size_t)m, (size_t)k, (size_t)n,
+            alpha, beta);
+        if (st == MOONLAB_ESHKOL_OK) return result;
+        /* Any non-OK result falls through to the CPU path.  We do
+         * not clear `result` -- cblas_zgemm / the scalar loop below
+         * will overwrite every element. */
+    }
 
 #if HAS_ACCELERATE
     // Use BLAS zgemm for optimized matrix multiplication
