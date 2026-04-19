@@ -13,6 +13,7 @@
 
 #include "../../src/algorithms/tensor_network/tensor.h"
 #include "../../src/optimization/gpu/backends/gpu_eshkol.h"
+#include "../../src/utils/manifest.h"
 
 #include <complex.h>
 #include <math.h>
@@ -27,6 +28,12 @@ static double now_us(void) {
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1e6 + tv.tv_usec;
 }
+
+/* Scratch buffer the bench() inner loop appends metric rows to; the
+ * outer main() wraps it in brackets and embeds it as the manifest
+ * metrics.rows array.  NULL when the manifest is disabled. */
+static char*  g_metrics_buf = NULL;
+static size_t g_metrics_cap = 0;
 
 static void randomise(double complex* buf, uint64_t n, unsigned seed) {
     srand(seed);
@@ -89,6 +96,22 @@ static void bench(uint32_t M, uint32_t K, uint32_t N) {
            M, K, N, cpu_us, cpu_gf, gpu_us, gpu_gf,
            cpu_us / gpu_us, err);
 
+    /* Append one row to the metrics-JSON scratch buffer so the
+     * final manifest sidecar records the whole sweep. */
+    if (g_metrics_buf && g_metrics_cap) {
+        size_t cur = strlen(g_metrics_buf);
+        int written = snprintf(g_metrics_buf + cur,
+                               g_metrics_cap - cur,
+                               "%s{\"M\":%u,\"K\":%u,\"N\":%u,"
+                               "\"cpu_us\":%.2f,\"gpu_us\":%.2f,"
+                               "\"cpu_gflops\":%.2f,\"gpu_gflops\":%.2f,"
+                               "\"speedup\":%.3f,\"l2_rel\":%.6e}",
+                               cur == 0 ? "" : ",",
+                               M, K, N, cpu_us, gpu_us, cpu_gf, gpu_gf,
+                               cpu_us / gpu_us, err);
+        (void)written;
+    }
+
     tensor_free(A); tensor_free(B);
     tensor_free(Cref); tensor_free(Cgpu);
 }
@@ -103,6 +126,16 @@ int main(void) {
         printf("Eshkol not available; GPU pass will run the CPU path.\n\n");
     }
 
+    /* Manifest sidecar: capture at start; if MOONLAB_MANIFEST_OUT
+     * points at a writable path, emit pretty-JSON there at exit. */
+    moonlab_manifest_t manifest;
+    moonlab_manifest_capture(&manifest, "bench_tensor_matmul_eshkol", 0);
+
+    /* Metrics buffer grown by each bench() invocation. */
+    char metrics[4096] = "[";
+    g_metrics_buf = metrics + 1;  /* leave room for the leading '[' */
+    g_metrics_cap = sizeof metrics - 2; /* leave room for ']' */
+
     /* Sweep across the crossover for the default FAST tier (2^27). */
     bench(128,  64,  64);        /* well below */
     bench(256, 128, 128);        /* below */
@@ -110,5 +143,30 @@ int main(void) {
     bench(1024, 512, 512);       /* above */
     bench(2048, 1024, 1024);     /* well above */
     bench(4096, 2048, 2048);     /* large */
+
+    size_t mlen = strlen(metrics);
+    metrics[mlen] = ']';
+    metrics[mlen + 1] = '\0';
+
+    char metrics_obj[5120];
+    snprintf(metrics_obj, sizeof metrics_obj,
+             "{\"rows\":%s}", metrics);
+    manifest.metrics_json = metrics_obj;
+
+    moonlab_manifest_stamp_finish(&manifest);
+
+    const char* out_path = getenv("MOONLAB_MANIFEST_OUT");
+    if (out_path && *out_path) {
+        FILE* f = fopen(out_path, "w");
+        if (f) {
+            moonlab_manifest_write_json_pretty(&manifest, f);
+            fclose(f);
+            fprintf(stderr, "[manifest] written to %s\n", out_path);
+        } else {
+            fprintf(stderr, "[manifest] failed to open %s\n", out_path);
+        }
+    }
+
+    moonlab_manifest_release(&manifest);
     return 0;
 }

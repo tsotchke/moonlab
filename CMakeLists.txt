@@ -549,6 +549,7 @@ set(QSIM_UTILS_SOURCES
     src/utils/entropy.c
     src/utils/config.c
     src/utils/matrix_math.c
+    src/utils/manifest.c
 )
 
 set(QSIM_APPLICATIONS_SOURCES
@@ -1053,6 +1054,9 @@ if(QSIM_BUILD_TESTS)
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
     add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
     target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
+    add_executable(test_manifest tests/unit/test_manifest.c)
+    target_link_libraries(test_manifest PRIVATE quantumsim)
+    add_test(NAME unit_manifest COMMAND test_manifest)
     if(QSIM_PLATFORM_MACOS)
         target_link_libraries(test_mpo_kpm PRIVATE "-framework Accelerate")
     endif()
@@ -1447,6 +1451,106 @@ configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
     ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc
     @ONLY
+)
+
+# ==============================================================================
+# Reproducibility manifest build-info header (P5.18)
+# ==============================================================================
+#
+# Capture the current git SHA, dirty state, branch, and build timestamp at
+# configure time, then configure_file -> generated header so every consumer
+# can self-describe the source tree they came from.  Run again on every
+# configure; a full rebuild picks up a new commit's SHA.
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE MOONLAB_GIT_SHA
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE MOONLAB_GIT_SHA_SHORT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE MOONLAB_GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} diff --quiet HEAD --
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE MOONLAB_GIT_CLEAN_RC
+        ERROR_QUIET
+    )
+    if(MOONLAB_GIT_CLEAN_RC EQUAL 0)
+        set(MOONLAB_GIT_DIRTY 0)
+    else()
+        set(MOONLAB_GIT_DIRTY 1)
+    endif()
+endif()
+
+if(NOT MOONLAB_GIT_SHA)
+    set(MOONLAB_GIT_SHA "unknown")
+    set(MOONLAB_GIT_SHA_SHORT "unknown")
+    set(MOONLAB_GIT_BRANCH "unknown")
+    set(MOONLAB_GIT_DIRTY 0)
+endif()
+
+string(TIMESTAMP MOONLAB_BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
+
+# Translate CMake booleans into 0/1 macros for the generated header.
+foreach(flag
+    QSIM_ENABLE_OPENMP QSIM_ENABLE_METAL QSIM_ENABLE_OPENCL QSIM_ENABLE_VULKAN
+    QSIM_ENABLE_CUQUANTUM QSIM_ENABLE_MPI QSIM_ENABLE_ESHKOL QSIM_ENABLE_LTO
+    QSIM_ENABLE_SANITIZERS QSIM_ENABLE_AVX512 QSIM_ENABLE_AVX2
+    QSIM_ENABLE_NEON QSIM_ENABLE_SVE)
+    if(${flag})
+        set(${flag}_INT 1)
+    else()
+        set(${flag}_INT 0)
+    endif()
+endforeach()
+
+# Assemble a human-readable enabled-features list.
+set(MOONLAB_ENABLED_FEATURES_LIST "")
+foreach(pair
+    "QSIM_ENABLE_OPENMP:openmp"
+    "QSIM_ENABLE_METAL:metal"
+    "QSIM_ENABLE_OPENCL:opencl"
+    "QSIM_ENABLE_VULKAN:vulkan"
+    "QSIM_ENABLE_CUQUANTUM:cuquantum"
+    "QSIM_ENABLE_MPI:mpi"
+    "QSIM_ENABLE_ESHKOL:eshkol"
+    "QSIM_ENABLE_LTO:lto"
+    "QSIM_ENABLE_SANITIZERS:sanitizers"
+    "QSIM_ENABLE_AVX512:avx512"
+    "QSIM_ENABLE_AVX2:avx2"
+    "QSIM_ENABLE_NEON:neon"
+    "QSIM_ENABLE_SVE:sve")
+    string(REPLACE ":" ";" kv "${pair}")
+    list(GET kv 0 flag)
+    list(GET kv 1 label)
+    if(${flag})
+        list(APPEND MOONLAB_ENABLED_FEATURES_LIST "${label}")
+    endif()
+endforeach()
+string(REPLACE ";" "," MOONLAB_ENABLED_FEATURES "${MOONLAB_ENABLED_FEATURES_LIST}")
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/moonlab_build_info.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/moonlab_build_info.h
+    @ONLY
+)
+target_include_directories(quantumsim PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
 )
 
 install(FILES
