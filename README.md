@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.2.0--dev-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Quantum-simulation toolkit: dense state-vector core, tensor-network algorithms, topological-QC experiments, skyrmion tracking, and a WebGPU/JS front-end.**
 
@@ -11,6 +11,16 @@ usable but less thoroughly benchmarked — treat published numbers as
 indicative, not guarantees, until each subsystem picks up its own
 benchmark harness in the 0.2 release arc. See CHANGELOG.md for the
 actual state of each subsystem.
+
+> **Known limitation (v0.1.x–0.2.x):** `hermitian_eigen_decomposition`
+> in `src/utils/matrix_math.c` uses real-valued Givens rotations; it
+> returns correct *eigenvalues* but not eigenvectors for complex
+> Hermitian matrices. Current in-tree callers only consume eigenvalues,
+> so they're unaffected. For projector / Berry-curvature / Wilson-loop
+> work on complex-Hermitian operators, use the matrix-sign (Schulz)
+> path in `src/algorithms/topology_realspace/chern_marker.c` as a
+> template. Tracked for a proper complex-Jacobi / Householder-QL
+> rewrite in 0.3.
 
 ## Highlights
 
@@ -619,16 +629,16 @@ moonlab/
 If you use Moonlab in your research, please cite:
 
 ```bibtex
-@software{tsotchke_moonlab_2024,
+@software{tsotchke_moonlab_2026,
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    month        = jan,
-    version      = {v0.1.1},
+    version      = {v0.2.0-dev},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,
-                    topological quantum computing, DMRG, VQE, QAOA}
+                    topological quantum computing, DMRG, VQE, QAOA,
+                    Chern insulators, quantum geometric tensor}
 }
 ```
 

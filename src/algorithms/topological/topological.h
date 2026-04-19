@@ -437,6 +437,102 @@ qs_error_t surface_code_apply_error(surface_code_t *code,
 qs_error_t surface_code_decode_correct(surface_code_t *code);
 
 // ============================================================================
+// SURFACE CODE (Clifford-backed)
+// ============================================================================
+
+/**
+ * @brief Surface code simulated on the Aaronson-Gottesman tableau.
+ *
+ * The 2D surface code (Kitaev 2003; Fowler-Mariantoni-Martinis-Cleland
+ * 2012) is a stabilizer code that encodes one logical qubit into a
+ * planar array of @f$d \times d@f$ physical data qubits protected by
+ * @f$(d-1)^2@f$ X-type and @f$(d-1)^2@f$ Z-type stabilizer generators.
+ * Each plaquette stabilizer is a four-body operator (two-body on the
+ * boundary).  Logical operators are strings spanning the lattice; the
+ * code distance @f$d@f$ equals the minimum support of a non-trivial
+ * logical operator.
+ *
+ * Because every stabilizer and every gate in the surface-code syndrome-
+ * extraction circuit is Clifford, the entire protocol can be simulated
+ * in polynomial time on the Aaronson-Gottesman tableau.  This variant
+ * -- unlike the dense `surface_code_t` in the same header, which is
+ * capped near @f$d = 5@f$ by statevector memory -- scales to arbitrary
+ * distance; @f$d = 15@f$ uses 617 qubits and runs comfortably on a
+ * laptop.  Syndrome extraction is ancilla-mediated (one ancilla per
+ * stabilizer), matching the usual fault-tolerant protocol layout so the
+ * simulation reflects the same gate count a hardware implementation
+ * would execute.
+ *
+ * @verbatim
+ *   qubits [0 .. d^2 - 1]                          = data qubits
+ *   qubits [d^2 .. d^2 + (d-1)^2 - 1]              = Z-syndrome ancillas
+ *   qubits [d^2 + (d-1)^2 .. d^2 + 2(d-1)^2 - 1]   = X-syndrome ancillas
+ * @endverbatim
+ *
+ * The initial state is @f$|0\rangle^{\otimes N}@f$, which is already a
+ * +1 eigenstate of every Z-stabilizer; X-stabilizer outcomes start
+ * undefined (@f$|0\rangle@f$ has no X-string eigenvalue).  Error
+ * detection against X-errors is nevertheless correct: an X injected on
+ * a data qubit flips exactly the Z-stabilizers whose support contains
+ * that qubit (verified in the d=7, 9, 15 unit tests).  Decoders --
+ * minimum-weight perfect matching in practice, e.g. Fowler et al.
+ * §VII -- can be layered on top without changes to the tableau.
+ *
+ * REFERENCES
+ * ----------
+ *  - A. Yu. Kitaev, "Fault-tolerant quantum computation by anyons",
+ *    Ann. Phys. 303, 2 (2003), arXiv:quant-ph/9707021.  Origin of the
+ *    toric / surface code.
+ *  - A. G. Fowler, M. Mariantoni, J. M. Martinis and A. N. Cleland,
+ *    "Surface codes: Towards practical large-scale quantum computation",
+ *    Phys. Rev. A 86, 032324 (2012), arXiv:1208.0928.  The canonical
+ *    reference for the planar surface code, syndrome extraction
+ *    protocol, and the MWPM decoder.
+ */
+typedef struct {
+    uint32_t distance;
+    uint32_t num_data_qubits;
+    uint32_t num_ancilla_qubits;   /* (d-1)² each for X and Z */
+    struct clifford_tableau_t* tableau;
+    uint8_t* x_syndrome;           /* (d-1)² bits, row-major over faces */
+    uint8_t* z_syndrome;           /* (d-1)² bits, row-major over vertices */
+    uint64_t rng_state;
+} surface_code_clifford_t;
+
+surface_code_clifford_t* surface_code_clifford_create(uint32_t distance,
+                                                       uint64_t rng_seed);
+void surface_code_clifford_free(surface_code_clifford_t* code);
+
+/** Data-qubit index from (row, col). */
+uint32_t surface_code_clifford_data_index(const surface_code_clifford_t* code,
+                                          uint32_t row, uint32_t col);
+
+/** Apply a Pauli error to a data qubit. Type is 'X', 'Y' or 'Z'. */
+qs_error_t surface_code_clifford_apply_error(surface_code_clifford_t* code,
+                                             uint32_t data_qubit,
+                                             char error_type);
+
+/**
+ * Measure all Z-type stabilizers (ZZZZ on four data qubits around each
+ * interior vertex). Populates `z_syndrome`. Ancilla-mediated: for each
+ * vertex, reset its ancilla to |0⟩, CNOT each data qubit onto it, then
+ * measure the ancilla in Z basis.
+ */
+qs_error_t surface_code_clifford_measure_z_syndromes(surface_code_clifford_t* code);
+
+/**
+ * Measure all X-type stabilizers (XXXX on four data qubits around each
+ * interior face). Populates `x_syndrome`. Ancilla-mediated: H on
+ * ancilla, CNOT(ancilla → each data), H on ancilla, measure.
+ */
+qs_error_t surface_code_clifford_measure_x_syndromes(surface_code_clifford_t* code);
+
+/**
+ * Sum of set bits across both syndromes (diagnostic).
+ */
+uint32_t surface_code_clifford_syndrome_weight(const surface_code_clifford_t* code);
+
+// ============================================================================
 // TORIC CODE
 // ============================================================================
 
