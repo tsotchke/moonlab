@@ -17,11 +17,24 @@ typedef double _Complex complex_t;
  */
 
 /**
- * @brief Compute eigenvalues and eigenvectors of Hermitian matrix
- * 
- * Uses Jacobi algorithm for symmetric/Hermitian matrices.
- * Guaranteed to converge for Hermitian matrices.
- * 
+ * @brief Compute eigenvalues and eigenvectors of Hermitian matrix.
+ *
+ * Uses Jacobi rotations. Eigenvalues are returned correctly for both
+ * real-symmetric and complex-Hermitian inputs.
+ *
+ * IMPORTANT: the internal Givens rotations are REAL-valued, which is
+ * exact for real-symmetric matrices but only approximately diagonalises
+ * a complex-Hermitian matrix. The **eigenvectors** returned for a
+ * complex input may therefore not be proper eigenvectors of the input
+ * (they only diagonalise the real part). If you need eigenvectors of a
+ * complex Hermitian matrix (e.g. for projector construction,
+ * topological-marker / Berry-curvature / Wilson-loop computations),
+ * do NOT rely on this function -- use a sign-function / Schulz
+ * iteration on the gapped projector, or implement a proper complex
+ * Jacobi / Householder-QL routine. See
+ * `src/algorithms/topology_realspace/chern_marker.c` for an example
+ * of the sign-function path.
+ *
  * @param matrix Input Hermitian matrix (n×n), row-major order
  * @param n Dimension of matrix
  * @param eigenvalues Output: array of n real eigenvalues (sorted descending)

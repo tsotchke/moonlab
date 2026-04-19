@@ -1,9 +1,17 @@
 /**
  * @file stride_gates.h
- * @brief Stride-based optimized quantum gate operations
+ * @brief Stride-based SIMD-intrinsic gate kernels (experimental track).
  *
- * Provides 4-6x speedup over bit-extraction implementations by using
- * predictable memory access patterns that eliminate branch misprediction.
+ * NOTE: the production path in `src/quantum/gates.c` already uses the
+ * same stride-based traversal described below -- these helpers are an
+ * exploratory module with deeper SIMD-intrinsic specialization that is
+ * not yet wired into the public `gate_*` dispatch. Build-linked and
+ * covered by `tests/unit/test_stride_gates.c`, but not the canonical
+ * user-facing code path as of v0.2.0.
+ *
+ * Rationale: provides 4-6x speedup over a hypothetical bit-extraction
+ * implementation by using predictable memory access patterns that
+ * eliminate branch misprediction.
  *
  * Key Insight:
  * The quantum state vector has a specific structure based on qubit positions.

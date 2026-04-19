@@ -157,23 +157,65 @@ static void test_sp800_22_subset(const uint8_t *buf, size_t size) {
 
     /* Skip the expensive tests (DFT O(n^2), ≈1M-bit requirements).
      * 256 KiB = 2 Mbits, plenty for the light tests. */
-    double p_mono = sp800_22_monobit(bits, nbits);
-    double p_blk  = sp800_22_block_frequency(bits, nbits, 128);
-    double p_runs = sp800_22_runs(bits, nbits);
-    double p_lr   = sp800_22_longest_run(bits, nbits);
-    double p_cf   = sp800_22_cusum_forward(bits, nbits);
-    double p_ser  = sp800_22_serial(bits, nbits, 5);
-    fprintf(stdout,
-            "    monobit p=%.4f  block-freq p=%.4f  runs p=%.4f\n"
-            "    longest-run p=%.4f  cusum-fwd p=%.4f  serial(m=5) p=%.4f\n",
-            p_mono, p_blk, p_runs, p_lr, p_cf, p_ser);
-    CHECK(p_mono  >= 0.01, "monobit p >= 0.01");
-    CHECK(p_blk   >= 0.01, "block-frequency p >= 0.01");
-    CHECK(p_runs  >= 0.01, "runs p >= 0.01");
-    CHECK(p_lr    >= 0.01, "longest-run p >= 0.01");
-    CHECK(p_cf    >= 0.01, "cusum-forward p >= 0.01");
-    CHECK(p_ser   >= 0.01, "serial p >= 0.01");
-    free(bits);
+    /* NIST SP 800-22 prescribes running the battery on multiple
+     * independent samples and accepting if the pass rate exceeds the
+     * expected (1 - alpha) fraction. A single-sample check at alpha
+     * = 0.01 gives ~1% false rejection per test * 6 tests ~= 6% CI
+     * flakiness. We sample 3 buffers and require at least 2 of 3
+     * pass each test (false-reject rate ~3e-6 per test). */
+    const int attempts = 3;
+    int pass[6] = {0};
+    uint8_t* buf2 = malloc(QRNG_SAMPLE_BYTES);
+    uint8_t* bits2 = malloc(QRNG_SAMPLE_BYTES * 8);
+    if (!buf2 || !bits2) {
+        fprintf(stderr, "  FAIL alloc\n"); failures++;
+        free(bits); free(buf2); free(bits2); return;
+    }
+
+    for (int a = 0; a < attempts; a++) {
+        double p_mono, p_blk, p_runs, p_lr, p_cf, p_ser;
+        uint8_t* pbits;
+        size_t pnbits;
+        if (a == 0) {
+            pbits = bits; pnbits = nbits;
+        } else {
+            int rc = draw_sample(buf2, QRNG_SAMPLE_BYTES);
+            if (rc != 0) {
+                fprintf(stderr, "  FAIL redraw rc=%d\n", rc);
+                failures++;
+                continue;
+            }
+            for (size_t i = 0; i < QRNG_SAMPLE_BYTES; i++) {
+                for (int b = 0; b < 8; b++) {
+                    bits2[i * 8 + b] = (uint8_t)((buf2[i] >> (7 - b)) & 1);
+                }
+            }
+            pbits = bits2; pnbits = QRNG_SAMPLE_BYTES * 8;
+        }
+        p_mono = sp800_22_monobit(pbits, pnbits);
+        p_blk  = sp800_22_block_frequency(pbits, pnbits, 128);
+        p_runs = sp800_22_runs(pbits, pnbits);
+        p_lr   = sp800_22_longest_run(pbits, pnbits);
+        p_cf   = sp800_22_cusum_forward(pbits, pnbits);
+        p_ser  = sp800_22_serial(pbits, pnbits, 5);
+        fprintf(stdout,
+                "    attempt %d: monobit=%.3f block=%.3f runs=%.3f "
+                "lr=%.3f cusum=%.3f serial=%.3f\n",
+                a + 1, p_mono, p_blk, p_runs, p_lr, p_cf, p_ser);
+        if (p_mono >= 0.01) pass[0]++;
+        if (p_blk  >= 0.01) pass[1]++;
+        if (p_runs >= 0.01) pass[2]++;
+        if (p_lr   >= 0.01) pass[3]++;
+        if (p_cf   >= 0.01) pass[4]++;
+        if (p_ser  >= 0.01) pass[5]++;
+    }
+    CHECK(pass[0] >= 2, "monobit passed %d/%d attempts", pass[0], attempts);
+    CHECK(pass[1] >= 2, "block-frequency passed %d/%d attempts", pass[1], attempts);
+    CHECK(pass[2] >= 2, "runs passed %d/%d attempts", pass[2], attempts);
+    CHECK(pass[3] >= 2, "longest-run passed %d/%d attempts", pass[3], attempts);
+    CHECK(pass[4] >= 2, "cusum-forward passed %d/%d attempts", pass[4], attempts);
+    CHECK(pass[5] >= 2, "serial passed %d/%d attempts", pass[5], attempts);
+    free(bits); free(buf2); free(bits2);
 }
 
 int main(void) {
