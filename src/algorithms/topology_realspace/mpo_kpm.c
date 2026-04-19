@@ -720,3 +720,129 @@ tn_mps_state_t* mpo_kpm_apply_projector(
     }
     return out;
 }
+
+/* ---------------------------------------------------------------- */
+/* Diagonal single-site-sum MPO: D = sum_i f_i * O_i                  */
+/* ---------------------------------------------------------------- */
+
+/* Build a single MPO tensor for one site of the finite-automaton
+ * chain.  Layout [b_l, phys_in, phys_out, b_r]:
+ *   b_l = 0 "not-yet-fired":
+ *     b_r = 0 -> identity pass-through
+ *     b_r = 1 -> fire f_i * O  (terminate into accumulator channel)
+ *   b_l = 1 "already-fired":
+ *     b_r = 1 -> identity pass-through (carry accumulator)
+ *
+ * Boundary conventions:
+ *   - Site 0: left bond dim 1 with b_l = 0 forced (start state).
+ *   - Site L-1: right bond dim 1 with b_r = 1 forced (accept state).
+ */
+static tensor_t* diagonal_mpo_site_tensor(uint32_t site, uint32_t L,
+                                          const double complex op[4],
+                                          double f_i)
+{
+    const uint32_t d = 2;
+    uint32_t b_l = (site == 0) ? 1 : 2;
+    uint32_t b_r = (site == L - 1) ? 1 : 2;
+
+    const uint32_t dims[4] = {b_l, d, d, b_r};
+    tensor_t* W = tensor_create(4, dims);
+    if (!W) return NULL;
+    const uint32_t ld_pi = d * b_r;         /* stride along phys_in */
+    const uint32_t ld_bl = d * ld_pi;       /* stride along b_l */
+
+    /* Identity 2x2 in (phys_in, phys_out) = diag(1). */
+    double complex I4[4] = {1.0, 0.0, 0.0, 1.0};
+
+    /* Logical (bl, br) entries to fill:
+     *   (0, 0): I                         (always present, except
+     *                                      at site L-1 where b_r == 1
+     *                                      and we need the "fire"
+     *                                      channel, so this entry
+     *                                      is instead encoded at
+     *                                      (0, 0) as f * O --
+     *                                      handled below)
+     *   (0, 1): f_i * O_i                 (fire-and-terminate) --
+     *                                      when b_r > 1
+     *   (1, 1): I                         (carry accumulator) --
+     *                                      when b_l > 1
+     */
+
+    /* (0, 0) slot.  On internal sites this is "pass the
+     * not-yet-fired state through as identity"; on site L-1 the
+     * right boundary collapses to b_r = 1 and the only way to
+     * terminate without having fired earlier is to fire at this
+     * last opportunity, which means (0, 0) becomes f * O. */
+    for (uint32_t pi = 0; pi < d; pi++) {
+        for (uint32_t po = 0; po < d; po++) {
+            const uint32_t idx = 0 * ld_bl + pi * ld_pi + po * b_r + 0;
+            if (site == L - 1) {
+                W->data[idx] = f_i * op[pi * d + po];
+            } else {
+                W->data[idx] = I4[pi * d + po];
+            }
+        }
+    }
+
+    /* (0, 1) fire-slot: only exists when b_r >= 2, i.e. not on the
+     * right boundary.  At site 0 this lives in (b_l=0, b_r=1). */
+    if (b_r == 2) {
+        for (uint32_t pi = 0; pi < d; pi++) {
+            for (uint32_t po = 0; po < d; po++) {
+                const uint32_t idx = 0 * ld_bl + pi * ld_pi + po * b_r + 1;
+                W->data[idx] = f_i * op[pi * d + po];
+            }
+        }
+    }
+
+    /* (1, 1) carry-slot: only exists when b_l >= 2, i.e. not on
+     * the left boundary. */
+    if (b_l == 2 && b_r >= 1) {
+        const uint32_t br = (b_r == 1) ? 0 : 1;
+        for (uint32_t pi = 0; pi < d; pi++) {
+            for (uint32_t po = 0; po < d; po++) {
+                const uint32_t idx = 1 * ld_bl + pi * ld_pi + po * b_r + br;
+                W->data[idx] = I4[pi * d + po];
+            }
+        }
+    }
+
+    return W;
+}
+
+tn_mpo_t* mpo_kpm_diagonal_sum_mpo(uint32_t num_sites,
+                                   const double complex op[4],
+                                   const double* f_per_site)
+{
+    if (num_sites == 0 || !op || !f_per_site) return NULL;
+
+    tn_mpo_t* mpo = (tn_mpo_t*)calloc(1, sizeof(tn_mpo_t));
+    if (!mpo) return NULL;
+    mpo->num_sites = num_sites;
+    mpo->tensors   = (tensor_t**)calloc(num_sites, sizeof(tensor_t*));
+    if (num_sites >= 2) {
+        mpo->bond_dims = (uint32_t*)calloc(num_sites - 1, sizeof(uint32_t));
+    }
+    if (!mpo->tensors || (num_sites >= 2 && !mpo->bond_dims)) {
+        tn_mpo_free(mpo);
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < num_sites; i++) {
+        tensor_t* W = diagonal_mpo_site_tensor(i, num_sites, op,
+                                                f_per_site[i]);
+        if (!W) { tn_mpo_free(mpo); return NULL; }
+        mpo->tensors[i] = W;
+    }
+    for (uint32_t i = 0; i + 1 < num_sites; i++) {
+        mpo->bond_dims[i] = mpo->tensors[i]->dims[3];
+    }
+    return mpo;
+}
+
+tn_mps_state_t* mpo_kpm_apply_mpo(const tn_mpo_t* op,
+                                  const tn_mps_state_t* in,
+                                  uint32_t max_bond_dim)
+{
+    return apply_H_copy(op, in, max_bond_dim);
+}

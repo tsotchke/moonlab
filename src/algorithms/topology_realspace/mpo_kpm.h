@@ -274,6 +274,53 @@ tn_mps_state_t* mpo_kpm_apply_projector(
     const tn_mps_state_t* ket,
     const mpo_kpm_params_t* params);
 
+/**
+ * @brief Build an MPO for a diagonal-in-basis single-site-sum
+ *        operator @f$\hat D = \sum_{i=0}^{L-1} f_i\,\hat O_i@f$,
+ *        where @f$\hat O_i@f$ is the caller-supplied 2x2 matrix
+ *        acting on site i (and identity on all other sites), and
+ *        @f$f_i@f$ is a per-site real scalar.
+ *
+ * Common choices of @p op:
+ *   - Z (diag(1, -1)): gives @f$\hat D = \sum_i f_i \sigma^z_i@f$.
+ *     With @f$f_i = i@f$ this is a linear "position" observable on
+ *     a chain; with @f$f_i = \mathrm{parity}(i)@f$ a staggered
+ *     field; etc.
+ *   - n = (I - Z)/2 = diag(0, 1): gives a number-operator sum.
+ *   - (I + Z)/2 = diag(1, 0): hole-number sum.
+ *
+ * The returned MPO has bond dimension 2 at every interior bond via
+ * the standard finite-automaton construction (identity-pass state +
+ * finished-accumulation state).  Dispatchable through
+ * @c mpo_kpm_apply_H_copy (the static helper used by the Chebyshev
+ * recurrence) or directly through the forthcoming public apply
+ * helper.
+ *
+ * @param num_sites Length of the chain.
+ * @param op        4 entries, row-major: op[0..3] = [O00, O01, O10, O11].
+ * @param f_per_site Array of length @p num_sites giving the scalar
+ *                   weights @f$f_i@f$.
+ * @return A new @c tn_mpo_t owned by the caller, or NULL on OOM.
+ */
+tn_mpo_t* mpo_kpm_diagonal_sum_mpo(
+    uint32_t num_sites,
+    const double complex op[4],
+    const double* f_per_site);
+
+/**
+ * @brief Apply an arbitrary @c tn_mpo_t to a copy of @p ket and
+ *        return the result as a new MPS, SVD-truncated to
+ *        @c max_bond_dim.  Just like the internal recurrence helper
+ *        but exposed so callers can compose operators (e.g. apply
+ *        X_hat to a projector result).
+ *
+ * Thin wrapper around @c tn_apply_mpo's correct-axis-order cousin.
+ */
+tn_mps_state_t* mpo_kpm_apply_mpo(
+    const tn_mpo_t* op,
+    const tn_mps_state_t* in,
+    uint32_t max_bond_dim);
+
 #ifdef __cplusplus
 }
 #endif
