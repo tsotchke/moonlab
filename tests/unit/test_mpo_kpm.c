@@ -1187,6 +1187,176 @@ static void test_tn_apply_mpo_direct(void) {
     tn_mps_free(ket); tn_mps_free(expected); tn_mpo_free(Z_mpo);
 }
 
+/* ---------------------------------------------------------------- */
+/* 12. QWZ-as-MPO via dense->MPO converter: real 2D topological H   */
+/* ---------------------------------------------------------------- */
+/*
+ * Builds the Qi-Wu-Zhang 2-band Chern-insulator Hamiltonian on an
+ * L_x x L_y lattice with open boundary conditions, 2 orbitals per
+ * site (spin).  The single-particle Hilbert space has dimension
+ * N = 2 * L_x * L_y.  For L_x = L_y = 4 this gives N = 32 (5
+ * MPS-chain qubits), which fits the dense->MPO conversion.
+ *
+ * Verification: build H dense, convert to MPO, apply the Chebyshev
+ * filled-band projector, convert P back to dense, and check
+ * tr(P_mpo) ~ 16 (half-filling on a 32-dim space).  This is the
+ * first in-tree evidence that the MPO-level Chern machinery works
+ * on an actual topological Hamiltonian and not just a random
+ * Hermitian 8x8.
+ */
+
+/* Single-particle Hilbert-space index.  We flatten (x, y, orb) to
+ * k = ((y * L + x) << 1) | orb with orb in {0, 1}.  Row-major in
+ * memory so the dense matrix is straightforward to populate. */
+static size_t qwz_idx(size_t x, size_t y, size_t orb, size_t L) {
+    return ((y * L + x) << 1) | (orb & 1u);
+}
+
+/* Pauli matrices as 2x2 row-major tables, complex. */
+static const double complex SIGMA_X[4] = {0, 1, 1, 0};
+static const double complex SIGMA_Y[4] = {0, -1.0 * I, 1.0 * I, 0};
+static const double complex SIGMA_Z[4] = {1, 0, 0, -1};
+
+/* Build the dense QWZ Hamiltonian on an L x L lattice with open BC.
+ *   H = sum_r  m * sigma_z
+ *     + sum_{r, x-hops}   ((sigma_z + i sigma_x)/2 on hop)
+ *     + sum_{r, y-hops}   ((sigma_z + i sigma_y)/2 on hop)
+ * Row-major dense, size N x N with N = 2 * L * L.  Caller owns. */
+static double complex* build_qwz_dense(size_t L, double m, size_t* N_out) {
+    const size_t N = 2 * L * L;
+    double complex* H = (double complex*)calloc(N * N, sizeof(double complex));
+    if (!H) return NULL;
+
+    /* On-site m * sigma_z. */
+    for (size_t y = 0; y < L; y++) {
+        for (size_t x = 0; x < L; x++) {
+            for (size_t a = 0; a < 2; a++) {
+                for (size_t b = 0; b < 2; b++) {
+                    const size_t i = qwz_idx(x, y, a, L);
+                    const size_t j = qwz_idx(x, y, b, L);
+                    H[i * N + j] += m * SIGMA_Z[a * 2 + b];
+                }
+            }
+        }
+    }
+
+    /* T_x = (sigma_z + i sigma_x) / 2 between site (x, y) and (x+1, y). */
+    for (size_t y = 0; y < L; y++) {
+        for (size_t x = 0; x + 1 < L; x++) {
+            for (size_t a = 0; a < 2; a++) {
+                for (size_t b = 0; b < 2; b++) {
+                    double complex v = 0.5 * (SIGMA_Z[a * 2 + b]
+                                  + 1.0 * I * SIGMA_X[a * 2 + b]);
+                    const size_t i2 = qwz_idx(x + 1, y, a, L);
+                    const size_t j2 = qwz_idx(x,     y, b, L);
+                    H[i2 * N + j2] += v;
+                    H[j2 * N + i2] += conj(v);
+                }
+            }
+        }
+    }
+
+    /* T_y = (sigma_z + i sigma_y) / 2 between (x, y) and (x, y+1). */
+    for (size_t y = 0; y + 1 < L; y++) {
+        for (size_t x = 0; x < L; x++) {
+            for (size_t a = 0; a < 2; a++) {
+                for (size_t b = 0; b < 2; b++) {
+                    double complex v = 0.5 * (SIGMA_Z[a * 2 + b]
+                                  + 1.0 * I * SIGMA_Y[a * 2 + b]);
+                    const size_t i2 = qwz_idx(x, y + 1, a, L);
+                    const size_t j2 = qwz_idx(x, y,     b, L);
+                    H[i2 * N + j2] += v;
+                    H[j2 * N + i2] += conj(v);
+                }
+            }
+        }
+    }
+
+    if (N_out) *N_out = N;
+    return H;
+}
+
+static void test_qwz_as_mpo(void) {
+    fprintf(stdout, "\n-- QWZ 4x4 via dense->MPO + projector Chebyshev --\n");
+    const size_t L = 4;
+    size_t N = 0;
+    double complex* Hd = build_qwz_dense(L, -1.0, &N);
+    CHECK(Hd != NULL, "QWZ dense built");
+    CHECK(N == 32, "N = 2 * L * L = 32");
+
+    /* Dense reference: tr(P_dense) = number of negative eigenvalues. */
+    double complex* scratch = (double complex*)malloc(N * N * sizeof(double complex));
+    memcpy(scratch, Hd, N * N * sizeof(double complex));
+    double* evals = (double*)malloc(N * sizeof(double));
+    int info = diagonalise_hermitian(scratch, (int)N, evals);
+    CHECK(info == 0, "QWZ dense diagonalisation ok");
+    int filled_dense = 0;
+    double gap_near_zero = 1e9;
+    for (size_t k = 0; k < N; k++) {
+        if (evals[k] < 0) filled_dense++;
+        if (fabs(evals[k]) < gap_near_zero) gap_near_zero = fabs(evals[k]);
+    }
+    fprintf(stdout,
+            "    filled (E<0) = %d / %zu ; gap nearest 0 = %.4f\n",
+            filled_dense, N, gap_near_zero);
+    free(scratch);
+
+    /* Rescale to spectrum in (-1, 1). */
+    const double b = 1.05 * fabs(evals[N - 1] > fabs(evals[0]) ? evals[N - 1] : evals[0]);
+    free(evals);
+
+    /* log2(N) = 5 with N = 32. */
+    uint32_t Lchain = 0;
+    { size_t n = N; while (n > 1) { n >>= 1; Lchain++; } }
+    CHECK(Lchain == 5, "chain length = 5 qubits");
+
+    tn_mpo_t* H_mpo = mpo_kpm_mpo_from_dense(Hd, Lchain, 0.0);
+    CHECK(H_mpo != NULL, "QWZ -> MPO");
+
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 500;
+    params.E_shift = 0.0;
+    params.E_scale = b;
+    params.max_bond_dim = 64;
+
+    tn_mpo_t* P_mpo = mpo_kpm_projector_mpo(H_mpo, &params);
+    CHECK(P_mpo != NULL, "QWZ projector MPO built");
+
+    size_t Np = 0;
+    double complex* P_dense = tn_mpo_to_dense(P_mpo, &Np);
+    CHECK(P_dense != NULL && Np == N, "P MPO -> dense 32x32");
+
+    double complex trP = 0.0;
+    for (size_t i = 0; i < N; i++) trP += P_dense[i * N + i];
+    fprintf(stdout, "    tr(P_mpo) = %+.4f%+.4fi  (expect %d)\n",
+            creal(trP), cimag(trP), filled_dense);
+    CHECK(fabs(creal(trP) - (double)filled_dense) < 0.2,
+          "tr(P_mpo) within 0.2 of filled-band count");
+    CHECK(fabs(cimag(trP)) < 1e-3, "Im tr(P_mpo) ~ 0");
+
+    /* Idempotency: P^2 ~ P (should hold to ~1%).  Frobenius norm. */
+    double complex* P2 = (double complex*)calloc(N * N, sizeof(double complex));
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < N; k++) acc += P_dense[i * N + k] * P_dense[k * N + j];
+            P2[i * N + j] = acc;
+        }
+    }
+    double num = 0.0, den = 0.0;
+    for (size_t i = 0; i < N * N; i++) {
+        double complex d = P2[i] - P_dense[i];
+        num += creal(d * conj(d));
+        den += creal(P_dense[i] * conj(P_dense[i]));
+    }
+    double idem = (den > 0) ? sqrt(num / den) : 0.0;
+    fprintf(stdout, "    ||P^2 - P||_F / ||P||_F = %.3e\n", idem);
+    CHECK(idem < 5e-2, "P is approximately idempotent");
+
+    free(Hd); free(P_dense); free(P2);
+    tn_mpo_free(H_mpo); tn_mpo_free(P_mpo);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -1201,6 +1371,7 @@ int main(void) {
     test_mpo_from_dense_roundtrip();
     test_projector_from_generic_dense();
     test_tn_apply_mpo_direct();
+    test_qwz_as_mpo();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

@@ -521,13 +521,17 @@ Read this before judging the repo against its headline claims.  The
 adversarial audit that produced this list lives in
 `docs/audits/adversarial-review-2026-04-19.md`.
 
-- **Chern mosaic**: the scalar Bianco-Resta projector pipeline works
-  end-to-end on small Hamiltonians (validated to 7.7e-6 Frobenius
-  against LAPACK on a generic 8-dim H).  The paper-scale (10^6-10^8
-  site) capability is blocked on two pieces that do **not** ship in
-  0.2: a direct QWZ-finite-automaton MPO builder and QTCI-compressed
-  position operators.  The sparse-stencil renderer caps out around
-  L = 300.
+- **Chern mosaic**: the full MPO-level pipeline (dense H ->
+  Chebyshev projector -> idempotent P) now works on an actual QWZ
+  2D topological Hamiltonian at L = 4 (32-dim Hilbert, 5-qubit
+  MPS chain): tr(P_mpo) = 16.0000 vs 16 filled bands; P^2 - P
+  Frobenius error 3e-5.  The underlying sparse-stencil Chern-marker
+  renderer runs to L = 300 single-core.  The paper-headline
+  10^6-10^8-site capability still requires QTCI-compressed position
+  operators (not shipped) so we can avoid the O(2^L) dense
+  conversion used in the L = 4 validation; that is the one
+  remaining piece tracked in
+  `docs/benchmarks/chern-mosaic-pipeline.md`.
 - **CHSH / "Bell-verified" QRNG**: prior to 0.2.0-dev the
   `bell_test_chsh` function silently overwrote the input state with
   `|Phi+>` before measuring, so every CHSH reading was 2.828 by
