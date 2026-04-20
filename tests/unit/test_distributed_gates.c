@@ -198,6 +198,71 @@ int main(int argc, char** argv) {
                 partition_state_free(pstate);
             }
         }
+
+        /* GHZ preparation across every qubit.  H on qubit 0 then a
+         * CNOT chain (0 -> 1 -> 2 -> ...) produces
+         *   |GHZ_n> = (|0...0> + |1...1>) / sqrt(2).
+         * With partition_bits partition qubits, the top qubit sits
+         * across the partition; the CNOT chain therefore exercises
+         * both local and cross-partition two-qubit dispatch.  Verify
+         * the amplitude of |0...0> (index 0) and |1...1>
+         * (index (1 << num_qubits) - 1) both round to 1/sqrt(2). */
+        {
+            partitioned_state_t *pstate2 =
+                partition_state_create(ctx, num_qubits, NULL);
+            if (pstate2) {
+                CHECK(partition_init_zero(pstate2) == PARTITION_SUCCESS,
+                      "GHZ: partition_init_zero");
+                dist_gate_error_t g = dist_hadamard(pstate2, 0);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "GHZ: H(0) (err=%d)", g);
+                for (uint32_t q = 0; q + 1 < num_qubits; q++) {
+                    g = dist_cnot(pstate2, q, q + 1);
+                    CHECK(g == DIST_GATE_SUCCESS,
+                          "GHZ: CNOT(%u,%u) (err=%d)", q, q + 1, g);
+                }
+
+                double local_sq = 0.0;
+                for (uint64_t i = 0; i < pstate2->local_count; i++) {
+                    double m = cabs(pstate2->amplitudes[i]);
+                    local_sq += m * m;
+                }
+                double global_sq = 0.0;
+                mpi_allreduce_sum_double(ctx, &local_sq, &global_sq, 1);
+                CHECK(fabs(global_sq - 1.0) < 1e-10,
+                      "GHZ: norm^2 = %.10f", global_sq);
+
+                /* Rank 0 owns global index 0 (|0...0>).  The last
+                 * rank owns the top of the distribution so it holds
+                 * global index (1 << num_qubits) - 1 = |1...1>. */
+                double local_p_zero = 0.0, local_p_ones = 0.0;
+                const uint64_t global_ones =
+                    ((uint64_t)1 << num_qubits) - 1;
+                if (pstate2->local_start == 0 && pstate2->local_count > 0) {
+                    double a = cabs(pstate2->amplitudes[0]);
+                    local_p_zero = a * a;
+                }
+                if (global_ones >= pstate2->local_start &&
+                    global_ones <  pstate2->local_start + pstate2->local_count) {
+                    uint64_t idx = global_ones - pstate2->local_start;
+                    double a = cabs(pstate2->amplitudes[idx]);
+                    local_p_ones = a * a;
+                }
+                double p_zero_global = 0.0, p_ones_global = 0.0;
+                mpi_allreduce_sum_double(ctx, &local_p_zero,
+                                         &p_zero_global, 1);
+                mpi_allreduce_sum_double(ctx, &local_p_ones,
+                                         &p_ones_global, 1);
+                CHECK(fabs(p_zero_global - 0.5) < 1e-10,
+                      "GHZ: P(|0...0>) = %.10f (expected 0.5)",
+                      p_zero_global);
+                CHECK(fabs(p_ones_global - 0.5) < 1e-10,
+                      "GHZ: P(|1...1>) = %.10f (expected 0.5)",
+                      p_ones_global);
+
+                partition_state_free(pstate2);
+            }
+        }
     }
 
     /* Rank 0 aggregates failure count across all ranks. */
