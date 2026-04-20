@@ -591,6 +591,184 @@ static void test_diagonal_sum_mpo(void) {
     tn_mpo_free(D);
 }
 
+/* ---------------------------------------------------------------- */
+/* 6. End-to-end Q X P pipeline validation                           */
+/* ---------------------------------------------------------------- */
+/*
+ * Compose the full Bianco-Resta-shape matrix element on a small TFIM:
+ *   <alpha| Q X P |alpha>
+ * where
+ *   P = (I - sign((H - E_f I)/b)) / 2   (filled-band projector)
+ *   Q = I - P
+ *   X = sum_i i * sigma^z_i             ("position" diagonal sum MPO)
+ * and |alpha> is a random product state.
+ *
+ * MPS path: apply_projector(H, alpha) -> P|alpha>
+ *           apply_mpo(X, P|alpha>)    -> X P|alpha>
+ *           form Q|ket> = |ket> - P|ket> via mps_combine, apply to
+ *           X P|alpha>
+ *           hmm more cleanly: <alpha| Q X P |alpha>
+ *                           = <alpha|X P|alpha> - <alpha|P X P|alpha>
+ *           so we only need two MPS products + overlaps.
+ *
+ * Dense path: diagonalise H_tilde, build sign, P, then work in the
+ *             2^L-dim state vector space.  Compare.
+ */
+static void test_qxp_pipeline(void) {
+    fprintf(stdout, "\n-- end-to-end <alpha|Q X P|alpha> --\n");
+    const uint32_t L = 4;
+    mpo_t* H_src = mpo_tfim_create(L, 1.0, 0.8);
+    tn_mpo_t* H = mpo_kpm_mpo_to_tn_mpo(H_src);
+    CHECK(H && H_src, "TFIM MPO + adapter built");
+
+    size_t N = 0;
+    double complex* Hd = build_dense_H(H_src, &N);
+
+    /* Spectrum bounds. */
+    double complex* scratch = (double complex*)malloc(N * N * sizeof(double complex));
+    memcpy(scratch, Hd, N * N * sizeof(double complex));
+    double* evals = (double*)malloc(N * sizeof(double));
+    diagonalise_hermitian(scratch, (int)N, evals);
+    const double E_min = evals[0], E_max = evals[N - 1];
+    free(scratch); free(evals);
+    const double a = 0.5 * (E_max + E_min);
+    const double b = 0.55 * (E_max - E_min);
+
+    /* Build X = sum_i i * sigma^z_i as an MPO. */
+    double f[16] = {0};
+    for (uint32_t i = 0; i < L; i++) f[i] = (double)i;
+    double complex Zop[4] = { 1.0, 0.0, 0.0, -1.0 };
+    tn_mpo_t* X = mpo_kpm_diagonal_sum_mpo(L, Zop, f);
+    CHECK(X != NULL, "X-hat MPO built");
+
+    /* Random bra = ket (same state; matrix element becomes an
+     * expectation value, which is easier to interpret). */
+    tn_mps_state_t* alpha = random_product_mps(L, 0x91A0);
+    CHECK(alpha != NULL, "alpha built");
+
+    /* Dense: psi = alpha as statevector; sign(H_tilde), P = (I-sign)/2,
+     * Q = I - P; X is diagonal in basis with eigenvalue sum_i i*(1-2*s_i). */
+    double complex* psi = (double complex*)malloc(N * sizeof(double complex));
+    tn_mps_to_statevector(alpha, psi);
+
+    /* Build M = H_tilde dense, diagonalise into M (eigvecs as cols). */
+    double complex* M = (double complex*)malloc(N * N * sizeof(double complex));
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) M[i * N + j] = Hd[i * N + j] / b;
+        M[i * N + i] -= a / b;
+    }
+    double* w = (double*)malloc(N * sizeof(double));
+    diagonalise_hermitian(M, (int)N, w);
+
+    /* P|psi> dense: project onto eigenvectors with w < 0 (sign=-1
+     * means eigenvalue is in the filled band under the (I-sign)/2
+     * convention). */
+    double complex* Ppsi = (double complex*)calloc(N, sizeof(double complex));
+    {
+        double complex* Vhpsi = (double complex*)calloc(N, sizeof(double complex));
+        for (size_t k = 0; k < N; k++) {
+            double complex acc = 0.0;
+            for (size_t i = 0; i < N; i++) acc += conj(M[k * N + i]) * psi[i];
+            Vhpsi[k] = acc;
+        }
+        /* Zero out positive-eigenvalue components; keep negative. */
+        for (size_t k = 0; k < N; k++) {
+            if (w[k] >= 0.0) Vhpsi[k] = 0.0;
+        }
+        for (size_t i = 0; i < N; i++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < N; k++) acc += M[k * N + i] * Vhpsi[k];
+            Ppsi[i] = acc;
+        }
+        free(Vhpsi);
+    }
+
+    /* X|P psi> = diagonal · P psi; each entry scaled by its basis eig. */
+    double complex* XPpsi = (double complex*)malloc(N * sizeof(double complex));
+    for (size_t k = 0; k < N; k++) {
+        double eig = 0.0;
+        for (uint32_t i = 0; i < L; i++) {
+            int bit = (int)((k >> (L - 1 - i)) & 1U);
+            eig += f[i] * (bit == 0 ? 1.0 : -1.0);
+        }
+        XPpsi[k] = eig * Ppsi[k];
+    }
+
+    /* <alpha|X P|alpha> and <alpha|P X P|alpha>. */
+    double complex alpha_XP_alpha_dense = 0.0;
+    for (size_t k = 0; k < N; k++) alpha_XP_alpha_dense += conj(psi[k]) * XPpsi[k];
+    /* P |X P psi>: repeat the project. */
+    double complex* PXPpsi = (double complex*)calloc(N, sizeof(double complex));
+    {
+        double complex* Vhx = (double complex*)calloc(N, sizeof(double complex));
+        for (size_t k = 0; k < N; k++) {
+            double complex acc = 0.0;
+            for (size_t i = 0; i < N; i++) acc += conj(M[k * N + i]) * XPpsi[i];
+            Vhx[k] = acc;
+        }
+        for (size_t k = 0; k < N; k++) {
+            if (w[k] >= 0.0) Vhx[k] = 0.0;
+        }
+        for (size_t i = 0; i < N; i++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < N; k++) acc += M[k * N + i] * Vhx[k];
+            PXPpsi[i] = acc;
+        }
+        free(Vhx);
+    }
+    double complex alpha_PXP_alpha_dense = 0.0;
+    for (size_t k = 0; k < N; k++) alpha_PXP_alpha_dense += conj(psi[k]) * PXPpsi[k];
+
+    const double complex qxp_dense = alpha_XP_alpha_dense - alpha_PXP_alpha_dense;
+    fprintf(stdout, "    dense <alpha|X P|alpha>   = %+.6f%+.6fi\n",
+            creal(alpha_XP_alpha_dense), cimag(alpha_XP_alpha_dense));
+    fprintf(stdout, "    dense <alpha|P X P|alpha> = %+.6f%+.6fi\n",
+            creal(alpha_PXP_alpha_dense), cimag(alpha_PXP_alpha_dense));
+    fprintf(stdout, "    dense <alpha|Q X P|alpha> = %+.6f%+.6fi\n",
+            creal(qxp_dense), cimag(qxp_dense));
+
+    /* MPS path: P|alpha> via apply_projector, X P|alpha> via apply_mpo,
+     * then the two overlaps. */
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 1000;
+    params.E_shift = a;
+    params.E_scale = b;
+    params.max_bond_dim = 64;
+    params.svd_cutoff = 1e-14;
+
+    tn_mps_state_t* P_alpha   = mpo_kpm_apply_projector(H, alpha, &params);
+    CHECK(P_alpha != NULL, "P|alpha> built");
+    tn_mps_state_t* XP_alpha  = mpo_kpm_apply_mpo(X, P_alpha, 64);
+    CHECK(XP_alpha != NULL, "X P|alpha> built");
+    tn_mps_state_t* PXP_alpha = mpo_kpm_apply_projector(H, XP_alpha, &params);
+    CHECK(PXP_alpha != NULL, "P X P|alpha> built");
+
+    const double complex alpha_XP_alpha_mps  = tn_mps_overlap(alpha, XP_alpha);
+    const double complex alpha_PXP_alpha_mps = tn_mps_overlap(alpha, PXP_alpha);
+    const double complex qxp_mps = alpha_XP_alpha_mps - alpha_PXP_alpha_mps;
+
+    fprintf(stdout, "    MPS   <alpha|X P|alpha>   = %+.6f%+.6fi\n",
+            creal(alpha_XP_alpha_mps), cimag(alpha_XP_alpha_mps));
+    fprintf(stdout, "    MPS   <alpha|P X P|alpha> = %+.6f%+.6fi\n",
+            creal(alpha_PXP_alpha_mps), cimag(alpha_PXP_alpha_mps));
+    fprintf(stdout, "    MPS   <alpha|Q X P|alpha> = %+.6f%+.6fi\n",
+            creal(qxp_mps), cimag(qxp_mps));
+    fprintf(stdout, "    |mps - dense| = %.3e\n", cabs(qxp_mps - qxp_dense));
+
+    CHECK(cabs(alpha_XP_alpha_mps - alpha_XP_alpha_dense) < 1e-3,
+          "<alpha|X P|alpha> mps matches dense");
+    CHECK(cabs(alpha_PXP_alpha_mps - alpha_PXP_alpha_dense) < 1e-3,
+          "<alpha|P X P|alpha> mps matches dense");
+    CHECK(cabs(qxp_mps - qxp_dense) < 1e-3,
+          "composed <alpha|Q X P|alpha> mps matches dense");
+
+    free(psi); free(M); free(w); free(Ppsi); free(XPpsi); free(PXPpsi);
+    free(Hd);
+    tn_mps_free(alpha);
+    tn_mps_free(P_alpha); tn_mps_free(XP_alpha); tn_mps_free(PXP_alpha);
+    tn_mpo_free(X); tn_mpo_free(H); mpo_free(H_src);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -599,6 +777,7 @@ int main(void) {
     test_sign_matrix_element_small_tfim();
     test_apply_sign_small_tfim();
     test_diagonal_sum_mpo();
+    test_qxp_pipeline();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;
