@@ -975,6 +975,158 @@ static void test_projector_mpo_vs_mps_path(void) {
     tn_mpo_free(H); mpo_free(H_src);
 }
 
+/* ---------------------------------------------------------------- */
+/* 9. Dense -> MPO roundtrip                                          */
+/* ---------------------------------------------------------------- */
+static void test_mpo_from_dense_roundtrip(void) {
+    fprintf(stdout, "\n-- mpo_from_dense roundtrip --\n");
+    /* Build a random Hermitian 8x8 matrix (L = 3 sites). */
+    const uint32_t L = 3;
+    const size_t N = (size_t)1 << L;
+    double complex* H_dense = (double complex*)malloc(N * N * sizeof(double complex));
+    srand(0xFEEDC0DE);
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = i; j < N; j++) {
+            double re = (double)rand() / RAND_MAX - 0.5;
+            double im = (i == j) ? 0.0 : ((double)rand() / RAND_MAX - 0.5);
+            H_dense[i * N + j] = re + im * I;
+            H_dense[j * N + i] = re - im * I;
+        }
+    }
+
+    tn_mpo_t* mpo = mpo_kpm_mpo_from_dense(H_dense, L, 0.0);
+    CHECK(mpo != NULL, "mpo_from_dense returned non-null");
+    CHECK(mpo->num_sites == L, "num_sites = L = %u", L);
+
+    /* Dense-roundtrip via the tn_mpo_to_dense helper in this file. */
+    size_t Nr = 0;
+    double complex* H_roundtrip = tn_mpo_to_dense(mpo, &Nr);
+    CHECK(H_roundtrip != NULL, "tn_mpo_to_dense roundtrip");
+    CHECK(Nr == N, "dim matches");
+
+    double num = 0.0, den = 0.0;
+    for (size_t i = 0; i < N * N; i++) {
+        double complex d = H_dense[i] - H_roundtrip[i];
+        num += creal(d * conj(d));
+        den += creal(H_dense[i] * conj(H_dense[i]));
+    }
+    const double rel = (den > 0) ? sqrt(num / den) : sqrt(num);
+    fprintf(stdout, "    ||M - MPO(M)||_F / ||M||_F = %.3e\n", rel);
+    CHECK(rel < 1e-12, "dense roundtrip is ULP-exact");
+
+    free(H_dense); free(H_roundtrip);
+    tn_mpo_free(mpo);
+}
+
+/* ---------------------------------------------------------------- */
+/* 10. Chern-like closing: MPO-level P on a non-trivial 8x8 H        */
+/* ---------------------------------------------------------------- */
+/*
+ * Builds a small random Hermitian 8x8 H with a clear zero-energy gap
+ * (constructed via conjugation of a diagonal matrix with a random
+ * unitary), converts to MPO via mpo_from_dense, computes the filled-
+ * band projector via MPO-level Chebyshev, and confirms that
+ *   MPO_to_dense(P_mpo) * psi ~ P_dense * psi
+ * for a random psi.  This is the final self-consistency check: the
+ * whole MPO-level pipeline (from-dense -> sign -> projector) lines
+ * up with the dense Bianco-Resta projector on an arbitrary Hermitian
+ * operator.
+ */
+static void test_projector_from_generic_dense(void) {
+    fprintf(stdout, "\n-- projector_mpo on generic dense H --\n");
+    const uint32_t L = 3;
+    const size_t N = (size_t)1 << L;
+
+    /* Start from diag(lambda) with lambda on either side of 0. */
+    double lam[8] = {-3.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 3.0};
+    double complex* H = (double complex*)calloc(N * N, sizeof(double complex));
+    /* Build a random unitary U via QR of a random complex matrix. */
+    double complex* R = (double complex*)malloc(N * N * sizeof(double complex));
+    srand(0xFEEDBACEu);
+    for (size_t i = 0; i < N * N; i++) {
+        double re = (double)rand() / RAND_MAX - 0.5;
+        double im = (double)rand() / RAND_MAX - 0.5;
+        R[i] = re + im * I;
+    }
+    /* Gram-Schmidt on columns. */
+    double complex* U = (double complex*)calloc(N * N, sizeof(double complex));
+    for (size_t j = 0; j < N; j++) {
+        /* col j of U = R[:, j] minus projections onto U[:, 0..j-1]. */
+        for (size_t i = 0; i < N; i++) U[i * N + j] = R[i * N + j];
+        for (size_t k = 0; k < j; k++) {
+            double complex proj = 0.0;
+            for (size_t i = 0; i < N; i++) proj += conj(U[i * N + k]) * U[i * N + j];
+            for (size_t i = 0; i < N; i++) U[i * N + j] -= proj * U[i * N + k];
+        }
+        double norm2 = 0.0;
+        for (size_t i = 0; i < N; i++) norm2 += creal(U[i * N + j] * conj(U[i * N + j]));
+        double invn = 1.0 / sqrt(norm2);
+        for (size_t i = 0; i < N; i++) U[i * N + j] *= invn;
+    }
+    free(R);
+
+    /* H = U diag(lam) U^H. */
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < N; k++) acc += U[i * N + k] * lam[k] * conj(U[j * N + k]);
+            H[i * N + j] = acc;
+        }
+    }
+
+    /* Dense P = U diag([1 for lam<0, 0 for lam>=0]) U^H. */
+    double complex* Pd = (double complex*)calloc(N * N, sizeof(double complex));
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < N; k++) {
+                double occ = (lam[k] < 0) ? 1.0 : 0.0;
+                acc += U[i * N + k] * occ * conj(U[j * N + k]);
+            }
+            Pd[i * N + j] = acc;
+        }
+    }
+    free(U);
+
+    /* Dense -> MPO for H. */
+    tn_mpo_t* H_mpo = mpo_kpm_mpo_from_dense(H, L, 0.0);
+    CHECK(H_mpo != NULL, "H -> MPO");
+
+    /* Projector via MPO Chebyshev. */
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 400;
+    /* lam in [-3, 3]; shift 0, scale 3.5 to put spectrum in (-1, 1). */
+    params.E_shift = 0.0;
+    params.E_scale = 3.5;
+    params.max_bond_dim = 32;
+
+    tn_mpo_t* P_mpo = mpo_kpm_projector_mpo(H_mpo, &params);
+    CHECK(P_mpo != NULL, "projector MPO built");
+
+    size_t Nr = 0;
+    double complex* P_dense_from_mpo = tn_mpo_to_dense(P_mpo, &Nr);
+
+    double num = 0.0, den = 0.0;
+    for (size_t i = 0; i < N * N; i++) {
+        double complex d = P_dense_from_mpo[i] - Pd[i];
+        num += creal(d * conj(d));
+        den += creal(Pd[i] * conj(Pd[i]));
+    }
+    const double rel = (den > 0) ? sqrt(num / den) : sqrt(num);
+    fprintf(stdout, "    ||P_mpo - P_dense||_F / ||P_dense||_F = %.3e\n", rel);
+    CHECK(rel < 1e-2, "MPO-projector agrees with dense projector");
+
+    /* Trace check: tr(P) should equal number of negative eigenvalues. */
+    double complex tr = 0.0;
+    for (size_t i = 0; i < N; i++) tr += P_dense_from_mpo[i * N + i];
+    fprintf(stdout, "    tr(P_mpo) = %+.4f%+.4fi (expect 4)\n",
+            creal(tr), cimag(tr));
+    CHECK(fabs(creal(tr) - 4.0) < 1e-2, "tr(P) ~ number of filled states");
+
+    free(H); free(Pd); free(P_dense_from_mpo);
+    tn_mpo_free(H_mpo); tn_mpo_free(P_mpo);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -986,6 +1138,8 @@ int main(void) {
     test_qxp_pipeline();
     test_mpo_level_sign();
     test_projector_mpo_vs_mps_path();
+    test_mpo_from_dense_roundtrip();
+    test_projector_from_generic_dense();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

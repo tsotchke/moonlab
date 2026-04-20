@@ -1320,3 +1320,111 @@ tn_mpo_t* mpo_kpm_projector_mpo(const tn_mpo_t* H,
     tn_mpo_free(sign_mpo);
     return P;
 }
+
+/* ---------------------------------------------------------------- */
+/* Dense -> MPO via successive SVD                                   */
+/* ---------------------------------------------------------------- */
+
+tn_mpo_t* mpo_kpm_mpo_from_dense(const double complex* M,
+                                  uint32_t L,
+                                  double svd_cutoff)
+{
+    if (!M || L == 0) return NULL;
+    const size_t N  = (size_t)1 << L;
+    const size_t N2 = N * N;
+
+    tn_mpo_t* mpo = (tn_mpo_t*)calloc(1, sizeof(tn_mpo_t));
+    if (!mpo) return NULL;
+    mpo->num_sites = L;
+    mpo->tensors = (tensor_t**)calloc(L, sizeof(tensor_t*));
+    if (L >= 2) {
+        mpo->bond_dims = (uint32_t*)calloc(L - 1, sizeof(uint32_t));
+    }
+    if (!mpo->tensors || (L >= 2 && !mpo->bond_dims)) {
+        tn_mpo_free(mpo); return NULL;
+    }
+
+    /* Bit-interleaved layout: reshape M into a 4^L-long buffer so
+     * that linear index position (2s, 2s+1) correspond to site s's
+     * phys-in and phys-out bits, with site 0 holding the MSB bit of
+     * the matrix row / column index.  This matches the MSB-at-site-0
+     * convention already used by tn_mps_from_statevector. */
+    double complex* rest = (double complex*)malloc(N2 * sizeof(double complex));
+    if (!rest) { tn_mpo_free(mpo); return NULL; }
+    for (size_t i = 0; i < N; i++) {
+        for (size_t j = 0; j < N; j++) {
+            size_t T_idx = 0;
+            for (uint32_t k = 0; k < L; k++) {
+                if ((i >> k) & 1u) T_idx |= (size_t)1u << (2u * k + 1u);
+                if ((j >> k) & 1u) T_idx |= (size_t)1u << (2u * k);
+            }
+            rest[T_idx] = M[i * N + j];
+        }
+    }
+
+    size_t rest_rows = 1;
+    size_t rest_cols = N2;
+
+    /* Successive SVD from the left: at each step we reshape
+     *   rest [rest_rows, rest_cols] -> [rest_rows * 4, rest_cols / 4]
+     * SVD to U S V^H, keep U as the MPO tensor at this site, and
+     * pass S V^H forward as the new rest. */
+    for (uint32_t s = 0; s < L - 1; s++) {
+        const size_t mat_rows = rest_rows * 4;
+        const size_t mat_cols = rest_cols / 4;
+
+        uint32_t mdims[2] = {(uint32_t)mat_rows, (uint32_t)mat_cols};
+        tensor_t* mat = tensor_create(2, mdims);
+        if (!mat) { free(rest); tn_mpo_free(mpo); return NULL; }
+        memcpy(mat->data, rest, mat_rows * mat_cols * sizeof(double complex));
+
+        tensor_svd_result_t* svd = tensor_svd(mat, 0, svd_cutoff);
+        tensor_free(mat);
+        if (!svd) { free(rest); tn_mpo_free(mpo); return NULL; }
+
+        const uint32_t r = svd->k;
+        uint32_t wdims[4] = {(uint32_t)rest_rows, 2, 2, r};
+        tensor_t* W = tensor_create(4, wdims);
+        if (!W) {
+            tensor_svd_free(svd); free(rest); tn_mpo_free(mpo);
+            return NULL;
+        }
+        memcpy(W->data, svd->U->data,
+               (size_t)rest_rows * 4 * r * sizeof(double complex));
+        mpo->tensors[s] = W;
+
+        /* new rest = S V^H, shape [r, mat_cols]. */
+        double complex* new_rest = (double complex*)malloc(
+            (size_t)r * mat_cols * sizeof(double complex));
+        if (!new_rest) {
+            tensor_svd_free(svd); free(rest); tn_mpo_free(mpo);
+            return NULL;
+        }
+        for (uint32_t i = 0; i < r; i++) {
+            for (size_t j = 0; j < mat_cols; j++) {
+                new_rest[(size_t)i * mat_cols + j] =
+                    svd->S[i] * svd->Vh->data[(size_t)i * mat_cols + j];
+            }
+        }
+        tensor_svd_free(svd);
+        free(rest);
+        rest = new_rest;
+        rest_rows = r;
+        rest_cols = mat_cols;
+    }
+
+    /* Last site: rest has shape [rest_rows, 4] ==> MPO tensor
+     * [rest_rows, 2, 2, 1]. */
+    uint32_t wdims_last[4] = {(uint32_t)rest_rows, 2, 2, 1};
+    tensor_t* W_last = tensor_create(4, wdims_last);
+    if (!W_last) { free(rest); tn_mpo_free(mpo); return NULL; }
+    memcpy(W_last->data, rest,
+           (size_t)rest_rows * 4 * sizeof(double complex));
+    mpo->tensors[L - 1] = W_last;
+    free(rest);
+
+    for (uint32_t i = 0; i + 1 < L; i++) {
+        mpo->bond_dims[i] = mpo->tensors[i]->dims[3];
+    }
+    return mpo;
+}

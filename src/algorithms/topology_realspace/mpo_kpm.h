@@ -402,6 +402,40 @@ tn_mpo_t* mpo_kpm_projector_mpo(
     const tn_mpo_t* H,
     const mpo_kpm_params_t* params);
 
+/**
+ * @brief Convert a dense row-major 2^L x 2^L matrix into a
+ *        physical-dim-2 MPO of length L via successive SVD.
+ *
+ * Index convention: for a matrix @f$M_{ij}@f$ we interpret @f$i@f$ as
+ * @f$i = s^{(in)}_{L-1} s^{(in)}_{L-2} \ldots s^{(in)}_{0}@f$ with
+ * @f$s^{(in)}_0@f$ the least significant bit, and similarly for
+ * @f$j \to (s^{(out)}_k)@f$.  MPS convention in this library has
+ * site 0 at the LEFT end of the chain, so we place the MSB bit on
+ * site 0 (i.e., @c site 0 holds @f$s^{(in)}_{L-1}, s^{(out)}_{L-1}@f$).
+ * This matches the convention used by @c tn_mps_from_statevector in
+ * tn_state.c.
+ *
+ * The resulting MPO has interior bond dimensions at most
+ * @f$2^{\min(i, L-i)}@f$; for a full rank matrix, the middle bond
+ * saturates at @f$2^{L/2}@f$.  Truncation cutoff taken from
+ * @p svd_cutoff (singular values below it are dropped); pass 0 for
+ * exact decomposition.
+ *
+ * Intended for small @p L (say @p L <= 10) where the dense matrix
+ * fits comfortably in memory.  For larger operators the caller
+ * should build the MPO by a direct finite-automaton construction
+ * (see @c mpo_tfim_create) or by QTCI.
+ *
+ * @param M           Dense matrix, row-major, size @f$2^L \times 2^L@f$.
+ * @param num_sites   L (the MPO chain length).
+ * @param svd_cutoff  Singular-value truncation threshold; 0 to keep all.
+ * @return Newly allocated MPO or NULL on OOM / invalid input.
+ */
+tn_mpo_t* mpo_kpm_mpo_from_dense(
+    const double complex* M,
+    uint32_t num_sites,
+    double svd_cutoff);
+
 #ifdef __cplusplus
 }
 #endif
