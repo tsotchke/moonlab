@@ -536,10 +536,13 @@ adversarial audit that produced this list lives in
   temporary rather than on the QRNG's own evolving scratch state;
   treat the resulting CHSH number as a plumbing sanity check, not a
   proof of quantum advantage in the emitted bytes.
-- **MPI**: only the bridge primitives (init, allreduce, sendrecv,
-  barrier) are tested end-to-end.  Distributed state-vector gate
-  application across partitions is implemented but unverified; no
-  published multi-rank scaling numbers.
+- **MPI**: the `distributed_gates` ctest runs at `mpirun -np 4`
+  and exercises H, CNOT, SWAP, Toffoli, and a full GHZ chain
+  across the partition boundary (norm preservation + specific
+  amplitude checks to 1e-10).  What is **not** tested yet:
+  multi-node (>1 physical host) scaling, wall-clock comparisons
+  against single-host baselines, and any MPI backend other than
+  OpenMPI.
 - **GPU backends other than Metal + Eshkol**: CUDA, OpenCL, Vulkan,
   cuQuantum all have 1000+ LOC implementations but are not exercised
   by the default `ctest` run and have not been CI-validated against
