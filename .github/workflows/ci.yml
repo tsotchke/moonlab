@@ -133,6 +133,44 @@ jobs:
       - name: Test (includes MPI distributed_gates via mpirun -np 4)
         run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
+  linux-opencl:
+    name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, compile + fallback smoke)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (ICD loader + Pocl CPU ICD)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev \
+            opencl-headers ocl-icd-opencl-dev pocl-opencl-icd
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_OPENCL=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Run discovery smoke
+        run: ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+
+  linux-vulkan:
+    name: Linux x86_64 (-DQSIM_ENABLE_VULKAN=ON, compile + fallback smoke)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (Vulkan loader + lavapipe CPU ICD)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev \
+            libvulkan-dev vulkan-tools mesa-vulkan-drivers
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_VULKAN=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Run discovery smoke
+        run: ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+
   linux-mpi:
     name: Linux x86_64 (-DQSIM_ENABLE_MPI=ON)
     runs-on: ubuntu-22.04
