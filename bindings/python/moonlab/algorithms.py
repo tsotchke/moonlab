@@ -4,6 +4,7 @@ import ctypes
 import numpy as np
 from typing import Optional, List, Tuple, Dict, Any
 from .core import _lib, QuantumState, QuantumError, CQuantumState
+from .core import _DEFAULT_ENTROPY_CTX
 
 # ============================================================================
 # C STRUCTURE DEFINITIONS
@@ -40,14 +41,24 @@ class CVQESolver(ctypes.Structure):
     pass
 
 class CVQEResult(ctypes.Structure):
-    """Result from VQE solver"""
+    """Layout-mirrored from vqe_result_t in src/algorithms/vqe.h.
+    Field order and widths must match the C layout exactly.
+
+    `iterations` and `convergence_tolerance` are on the C side; the
+    previous Python layout had `num_iterations (c_int)` and
+    `final_gradient_norm (c_double)` at the same offsets, which worked
+    by accident only for specific struct alignment choices.  Now
+    matched byte-for-byte."""
     _fields_ = [
-        ("energy", ctypes.c_double),
-        ("optimal_params", ctypes.POINTER(ctypes.c_double)),
-        ("num_params", ctypes.c_size_t),
-        ("converged", ctypes.c_int),
-        ("num_iterations", ctypes.c_int),
-        ("final_gradient_norm", ctypes.c_double),
+        ("ground_state_energy",   ctypes.c_double),
+        ("optimal_parameters",    ctypes.POINTER(ctypes.c_double)),
+        ("num_parameters",        ctypes.c_size_t),
+        ("iterations",            ctypes.c_size_t),
+        ("convergence_tolerance", ctypes.c_double),
+        ("converged",             ctypes.c_int),
+        ("fci_energy",            ctypes.c_double),
+        ("hf_energy",             ctypes.c_double),
+        ("chemical_accuracy",     ctypes.c_double),
     ]
 
 class CIsingModel(ctypes.Structure):
@@ -71,33 +82,43 @@ class CQAOASolver(ctypes.Structure):
     pass
 
 class CQAOAResult(ctypes.Structure):
-    """Result from QAOA solver"""
+    """Layout-mirrored from qaoa_result_t in src/algorithms/qaoa.h.
+    Field order must match exactly or ctypes reads garbage offsets
+    and dereferencing the pointer fields segfaults."""
     _fields_ = [
-        ("expectation", ctypes.c_double),
-        ("optimal_gamma", ctypes.POINTER(ctypes.c_double)),
-        ("optimal_beta", ctypes.POINTER(ctypes.c_double)),
-        ("num_layers", ctypes.c_size_t),
-        ("best_bitstring", ctypes.c_uint64),
-        ("best_cost", ctypes.c_double),
-        ("converged", ctypes.c_int),
+        ("best_bitstring",       ctypes.c_uint64),
+        ("best_energy",          ctypes.c_double),
+        ("energy_history",       ctypes.POINTER(ctypes.c_double)),
+        ("num_iterations",       ctypes.c_size_t),
+        ("converged",            ctypes.c_int),
+        ("approximation_ratio",  ctypes.c_double),
+        ("optimal_gamma",        ctypes.POINTER(ctypes.c_double)),
+        ("optimal_beta",         ctypes.POINTER(ctypes.c_double)),
+        ("num_layers",           ctypes.c_size_t),
+        ("total_measurements",   ctypes.c_size_t),
+        ("optimization_time",    ctypes.c_double),
     ]
 
 class CGroverConfig(ctypes.Structure):
-    """Configuration for Grover search"""
+    """Layout-mirrored from grover_config_t in src/algorithms/grover.h.
+    C order is num_qubits, marked_state, num_iterations,
+    use_optimal_iterations."""
     _fields_ = [
-        ("marked_state", ctypes.c_uint64),
-        ("num_qubits", ctypes.c_size_t),
-        ("num_iterations", ctypes.c_size_t),
+        ("num_qubits",             ctypes.c_size_t),
+        ("marked_state",           ctypes.c_uint64),
+        ("num_iterations",         ctypes.c_size_t),
         ("use_optimal_iterations", ctypes.c_int),
     ]
 
 class CGroverResult(ctypes.Structure):
-    """Result from Grover search"""
+    """Layout-mirrored from grover_result_t in src/algorithms/grover.h."""
     _fields_ = [
-        ("found_state", ctypes.c_uint64),
-        ("success", ctypes.c_int),
-        ("iterations_used", ctypes.c_size_t),
-        ("probability", ctypes.c_double),
+        ("found_state",          ctypes.c_uint64),
+        ("success_probability",  ctypes.c_double),
+        ("oracle_calls",         ctypes.c_size_t),
+        ("iterations_performed", ctypes.c_size_t),
+        ("fidelity",             ctypes.c_double),
+        ("found_marked_state",   ctypes.c_int),
     ]
 
 class CBellMeasurementSettings(ctypes.Structure):
@@ -110,13 +131,25 @@ class CBellMeasurementSettings(ctypes.Structure):
     ]
 
 class CBellTestResult(ctypes.Structure):
-    """Result from Bell test"""
+    """Layout-mirrored from bell_test_result_t in src/algorithms/bell_tests.h."""
     _fields_ = [
-        ("correlations", ctypes.c_double * 4),  # E(a,b), E(a,b'), E(a',b), E(a',b')
-        ("chsh_parameter", ctypes.c_double),
-        ("violates_classical", ctypes.c_int),
-        ("num_measurements", ctypes.c_size_t),
-        ("variance", ctypes.c_double),
+        ("chsh_value",                  ctypes.c_double),
+        ("correlation_ab",              ctypes.c_double),
+        ("correlation_ab_prime",        ctypes.c_double),
+        ("correlation_a_prime_b",       ctypes.c_double),
+        ("correlation_a_prime_b_prime", ctypes.c_double),
+        ("classical_bound",             ctypes.c_double),
+        ("quantum_bound",               ctypes.c_double),
+        ("p_value",                     ctypes.c_double),
+        ("standard_error",              ctypes.c_double),
+        ("measurements",                ctypes.c_size_t),
+        ("violates_classical",          ctypes.c_int),
+        ("confirms_quantum",            ctypes.c_int),
+        ("statistically_significant",   ctypes.c_int),
+        ("counts_00",                   ctypes.c_uint64),
+        ("counts_01",                   ctypes.c_uint64),
+        ("counts_10",                   ctypes.c_uint64),
+        ("counts_11",                   ctypes.c_uint64),
     ]
 
 # ============================================================================
@@ -154,6 +187,7 @@ _lib.vqe_solver_create.argtypes = [
     ctypes.POINTER(CPauliHamiltonian),
     ctypes.POINTER(CVQEAnsatz),
     ctypes.POINTER(CVQEOptimizer),
+    ctypes.c_void_p,  # entropy context
 ]
 _lib.vqe_solver_create.restype = ctypes.POINTER(CVQESolver)
 
@@ -217,6 +251,7 @@ _lib.ising_encode_maxcut.restype = ctypes.POINTER(CIsingModel)
 _lib.qaoa_solver_create.argtypes = [
     ctypes.POINTER(CIsingModel),
     ctypes.c_size_t,  # num_layers
+    ctypes.c_void_p,  # entropy context
 ]
 _lib.qaoa_solver_create.restype = ctypes.POINTER(CQAOASolver)
 
@@ -265,8 +300,8 @@ _lib.create_bell_state.restype = ctypes.c_int
 _lib.bell_test_chsh.argtypes = [
     ctypes.POINTER(CQuantumState),
     ctypes.c_int, ctypes.c_int,  # qubit_a, qubit_b
+    ctypes.c_size_t,  # num_measurements  (C order puts this before settings)
     ctypes.POINTER(CBellMeasurementSettings),
-    ctypes.c_size_t,  # num_measurements
     ctypes.c_void_p,  # entropy context
 ]
 _lib.bell_test_chsh.restype = CBellTestResult
@@ -409,7 +444,8 @@ class VQE:
         self._solver = _lib.vqe_solver_create(
             self._hamiltonian,
             self._ansatz,
-            self._optimizer
+            self._optimizer,
+            _DEFAULT_ENTROPY_CTX,
         )
         if not self._solver:
             raise QuantumError("Failed to create VQE solver")
@@ -418,17 +454,17 @@ class VQE:
 
         # Extract optimal parameters
         params = []
-        if result.optimal_params and result.num_params > 0:
-            for i in range(result.num_params):
-                params.append(result.optimal_params[i])
+        if result.optimal_parameters and result.num_parameters > 0:
+            for i in range(result.num_parameters):
+                params.append(result.optimal_parameters[i])
 
         return {
-            'energy': result.energy,
-            'energy_kcal_mol': _lib.vqe_hartree_to_kcalmol(result.energy),
+            'energy': result.ground_state_energy,
+            'energy_kcal_mol': _lib.vqe_hartree_to_kcalmol(result.ground_state_energy),
             'optimal_params': np.array(params),
             'converged': bool(result.converged),
-            'num_iterations': result.num_iterations,
-            'gradient_norm': result.final_gradient_norm,
+            'num_iterations': result.iterations,
+            'gradient_norm': result.convergence_tolerance,
         }
 
     def compute_energy(self, params: np.ndarray) -> float:
@@ -534,7 +570,16 @@ class QAOA:
         if not self._model:
             raise QuantumError("Failed to encode MaxCut as Ising model")
 
-        return self._solve()
+        result = self._solve()
+        # For MaxCut the C Ising encoding minimizes H = sum_{(i,j)} w_ij s_i s_j,
+        # whose ground-state energy is (sum_cut_weights - sum_uncut_weights) * -1
+        # = -(2 * cut_weight - total_weight).  Invert to recover the cut value
+        # that the test harness and QAOA literature expect.
+        total_weight = sum(weights)
+        best_energy = result.get('best_energy', result['best_cost'])
+        result['best_cost'] = (total_weight - best_energy) / 2.0
+        result['max_possible_cost'] = total_weight
+        return result
 
     def solve_ising(self, J: np.ndarray, h: np.ndarray) -> Dict[str, Any]:
         """
@@ -582,7 +627,8 @@ class QAOA:
 
         self._solver = _lib.qaoa_solver_create(
             self._model,
-            ctypes.c_size_t(self.num_layers)
+            ctypes.c_size_t(self.num_layers),
+            _DEFAULT_ENTROPY_CTX,
         )
         if not self._solver:
             raise QuantumError("Failed to create QAOA solver")
@@ -598,11 +644,16 @@ class QAOA:
                 beta.append(result.optimal_beta[i])
 
         return {
-            'expectation': result.expectation,
+            'expectation': result.best_energy,
             'optimal_gamma': np.array(gamma),
             'optimal_beta': np.array(beta),
             'best_bitstring': result.best_bitstring,
-            'best_cost': result.best_cost,
+            'best_cost': result.best_energy,
+            'best_energy': result.best_energy,
+            'approximation_ratio': result.approximation_ratio,
+            'num_iterations': result.num_iterations,
+            'total_measurements': result.total_measurements,
+            'optimization_time': result.optimization_time,
             'converged': bool(result.converged),
         }
 
@@ -710,14 +761,16 @@ class Grover:
         result = _lib.grover_search(
             ctypes.byref(self._state._state),
             ctypes.byref(config),
-            None  # entropy context
+            _DEFAULT_ENTROPY_CTX,
         )
 
         return {
             'found_state': result.found_state,
-            'success': bool(result.success),
-            'probability': result.probability,
-            'iterations_used': result.iterations_used,
+            'success': bool(result.found_marked_state),
+            'probability': result.success_probability,
+            'iterations_used': result.iterations_performed,
+            'oracle_calls': result.oracle_calls,
+            'fidelity': result.fidelity,
         }
 
     def step(self, marked_state: int) -> None:
@@ -822,29 +875,30 @@ class BellTest:
         settings = CBellMeasurementSettings()
         _lib.bell_get_optimal_settings(ctypes.byref(settings))
 
-        # Run test
+        # Run test (C call order: state, a, b, num_meas, settings, entropy)
         result = _lib.bell_test_chsh(
             ctypes.byref(state._state),
             ctypes.c_int(qubit_a),
             ctypes.c_int(qubit_b),
-            ctypes.byref(settings),
             ctypes.c_size_t(num_measurements),
-            None  # entropy context
+            ctypes.byref(settings),
+            _DEFAULT_ENTROPY_CTX,
         )
 
-        correlations = [result.correlations[i] for i in range(4)]
-
         return {
-            'chsh': result.chsh_parameter,
+            'chsh': result.chsh_value,
             'correlations': {
-                'E(a,b)': correlations[0],
-                'E(a,b\')': correlations[1],
-                'E(a\',b)': correlations[2],
-                'E(a\',b\')': correlations[3],
+                'E(a,b)': result.correlation_ab,
+                'E(a,b\')': result.correlation_ab_prime,
+                'E(a\',b)': result.correlation_a_prime_b,
+                'E(a\',b\')': result.correlation_a_prime_b_prime,
             },
             'violates_classical': bool(result.violates_classical),
-            'num_measurements': result.num_measurements,
-            'variance': result.variance,
+            'confirms_quantum': bool(result.confirms_quantum),
+            'statistically_significant': bool(result.statistically_significant),
+            'num_measurements': result.measurements,
+            'standard_error': result.standard_error,
+            'p_value': result.p_value,
         }
 
     @staticmethod

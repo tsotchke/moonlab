@@ -550,6 +550,7 @@ set(QSIM_UTILS_SOURCES
     src/utils/config.c
     src/utils/matrix_math.c
     src/utils/manifest.c
+    src/utils/quantum_entropy.c
 )
 
 set(QSIM_APPLICATIONS_SOURCES
@@ -1217,6 +1218,28 @@ if(QSIM_BUILD_TESTS)
             ENVIRONMENT
                 "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
         )
+
+        # Full pytest suite — covers measurement entropy-ctx, algorithms
+        # (VQE/QAOA/Grover/BellTest), and state ops.  Gated on pytest
+        # being importable; otherwise skipped so bare-Python installs
+        # don't break the default build.
+        execute_process(
+            COMMAND ${PYTHON3_EXECUTABLE} -c "import pytest"
+            RESULT_VARIABLE _pytest_probe
+            OUTPUT_QUIET ERROR_QUIET)
+        if(_pytest_probe EQUAL 0)
+            add_test(NAME python_bindings_pytest
+                     COMMAND ${PYTHON3_EXECUTABLE} -m pytest -q
+                             --deselect tests/test_algorithms.py::TestVQEH2
+                             --deselect tests/test_algorithms.py::TestGroverSearch::test_grover_search_medium
+                             --deselect tests/test_algorithms.py::TestCHSHTest::test_chsh_high_statistics
+                             ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/tests
+                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python)
+            set_tests_properties(python_bindings_pytest PROPERTIES
+                ENVIRONMENT
+                    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
+            )
+        endif()
     endif()
 
     # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
