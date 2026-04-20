@@ -9,6 +9,7 @@
 
 #include "../../src/algorithms/topology_realspace/chern_kpm.h"
 #include "../../src/utils/manifest.h"
+#include "../../src/utils/bench_stats.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,19 +28,31 @@ static size_t g_metrics_cap = 0;
 static void bench_one(size_t L, size_t n_cheby, double m) {
     chern_kpm_system_t* sys = chern_kpm_create(L, m, n_cheby);
     size_t ctr = L / 2;
-    double t0 = now_us();
-    double c = chern_kpm_local_marker(sys, ctr, ctr);
-    double dt = now_us() - t0;
-    printf("  L=%-4zu  N=%-6zu  n_cheby=%-4zu  c(ctr)=%+.4f  time=%.1f ms\n",
-           L, L * L * 2, n_cheby, c, dt / 1000.0);
+
+    const int n_runs = bench_stats_n_runs(3);
+    double samples[128];
+    if (n_runs > 128) { chern_kpm_free(sys); return; }
+    double c = 0.0;
+    for (int r = 0; r < n_runs; r++) {
+        double t0 = now_us();
+        c = chern_kpm_local_marker(sys, ctr, ctr);
+        samples[r] = now_us() - t0;
+    }
+    bench_stats_t s = bench_stats_compute(samples, n_runs);
+    printf("  L=%-4zu  N=%-6zu  n_cheby=%-4zu  c(ctr)=%+.4f  "
+           "time=%.1f+/-%-5.1f ms  n=%d\n",
+           L, L * L * 2, n_cheby, c,
+           s.mean_us / 1000.0, s.stddev_us / 1000.0, n_runs);
 
     if (g_metrics && g_metrics_cap) {
+        char stats_js[256];
+        bench_stats_to_json(&s, stats_js, sizeof stats_js);
         size_t cur = strlen(g_metrics);
         snprintf(g_metrics + cur, g_metrics_cap - cur,
                  "%s{\"L\":%zu,\"N\":%zu,\"n_cheby\":%zu,"
-                 "\"c_center\":%.6f,\"time_ms\":%.3f}",
+                 "\"c_center\":%.6f,\"timing_us\":%s}",
                  cur == 0 ? "" : ",",
-                 L, L * L * 2, n_cheby, c, dt / 1000.0);
+                 L, L * L * 2, n_cheby, c, stats_js);
     }
     chern_kpm_free(sys);
 }

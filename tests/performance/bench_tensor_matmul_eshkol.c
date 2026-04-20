@@ -14,6 +14,7 @@
 #include "../../src/algorithms/tensor_network/tensor.h"
 #include "../../src/optimization/gpu/backends/gpu_eshkol.h"
 #include "../../src/utils/manifest.h"
+#include "../../src/utils/bench_stats.h"
 
 #include <complex.h>
 #include <math.h>
@@ -63,53 +64,65 @@ static void bench(uint32_t M, uint32_t K, uint32_t N) {
     randomise(A->data, (uint64_t)M * K, 0xA01);
     randomise(B->data, (uint64_t)K * N, 0xB02);
 
+    const int n_runs = bench_stats_n_runs(5);
+    double cpu_samples[128], gpu_samples[128];
+    if (n_runs > 128) return;
+
     /* CPU reference: force the threshold to infinity so we never
      * dispatch to the GPU path. */
     setenv("MOONLAB_TENSOR_GPU_THRESHOLD_MUL", "99999999999999999", 1);
     tensor_t* Cref = tensor_matmul(A, B);
-    const int iters = 3;
-    double t0 = now_us();
-    for (int i = 0; i < iters; i++) {
+    for (int r = 0; r < n_runs; r++) {
+        double t0 = now_us();
         tensor_t* tmp = tensor_matmul(A, B);
+        cpu_samples[r] = now_us() - t0;
         tensor_free(tmp);
     }
-    double cpu_us = (now_us() - t0) / iters;
+    bench_stats_t cpu_s = bench_stats_compute(cpu_samples, n_runs);
 
     /* GPU: restore the tier-aware threshold default. */
     unsetenv("MOONLAB_TENSOR_GPU_THRESHOLD_MUL");
     tensor_t* Cgpu = tensor_matmul(A, B);
-    t0 = now_us();
-    for (int i = 0; i < iters; i++) {
+    for (int r = 0; r < n_runs; r++) {
+        double t0 = now_us();
         tensor_t* tmp = tensor_matmul(A, B);
+        gpu_samples[r] = now_us() - t0;
         tensor_free(tmp);
     }
-    double gpu_us = (now_us() - t0) / iters;
+    bench_stats_t gpu_s = bench_stats_compute(gpu_samples, n_runs);
 
     double err = Cref && Cgpu ? l2_rel(Cref->data, Cgpu->data, (uint64_t)M * N) : 0.0;
 
+    const double cpu_us = cpu_s.mean_us;
+    const double gpu_us = gpu_s.mean_us;
     double flops = 8.0 * (double)M * (double)K * (double)N;
     double cpu_gf = flops / (cpu_us * 1e-6) / 1e9;
     double gpu_gf = flops / (gpu_us * 1e-6) / 1e9;
 
-    printf("  M=%-5u K=%-4u N=%-4u  CPU %9.2f us (%6.1f GF/s)  "
-           "tensor_matmul %9.2f us (%6.1f GF/s)  %5.2fx  err=%.2e\n",
-           M, K, N, cpu_us, cpu_gf, gpu_us, gpu_gf,
-           cpu_us / gpu_us, err);
+    printf("  M=%-5u K=%-4u N=%-4u  CPU %9.2f+/-%-6.2f us (%6.1f GF/s)  "
+           "tensor_matmul %9.2f+/-%-6.2f us (%6.1f GF/s)  %5.2fx  "
+           "err=%.2e  n=%d\n",
+           M, K, N,
+           cpu_us, cpu_s.stddev_us, cpu_gf,
+           gpu_us, gpu_s.stddev_us, gpu_gf,
+           cpu_us / gpu_us, err, n_runs);
 
     /* Append one row to the metrics-JSON scratch buffer so the
-     * final manifest sidecar records the whole sweep. */
+     * final manifest sidecar records the whole sweep, including
+     * the stddev / min / max of each of the two timing distributions. */
     if (g_metrics_buf && g_metrics_cap) {
+        char cpu_js[256], gpu_js[256];
+        bench_stats_to_json(&cpu_s, cpu_js, sizeof cpu_js);
+        bench_stats_to_json(&gpu_s, gpu_js, sizeof gpu_js);
         size_t cur = strlen(g_metrics_buf);
-        int written = snprintf(g_metrics_buf + cur,
-                               g_metrics_cap - cur,
-                               "%s{\"M\":%u,\"K\":%u,\"N\":%u,"
-                               "\"cpu_us\":%.2f,\"gpu_us\":%.2f,"
-                               "\"cpu_gflops\":%.2f,\"gpu_gflops\":%.2f,"
-                               "\"speedup\":%.3f,\"l2_rel\":%.6e}",
-                               cur == 0 ? "" : ",",
-                               M, K, N, cpu_us, gpu_us, cpu_gf, gpu_gf,
-                               cpu_us / gpu_us, err);
-        (void)written;
+        snprintf(g_metrics_buf + cur, g_metrics_cap - cur,
+                 "%s{\"M\":%u,\"K\":%u,\"N\":%u,"
+                 "\"cpu_gflops\":%.3f,\"gpu_gflops\":%.3f,"
+                 "\"speedup\":%.3f,\"l2_rel\":%.6e,"
+                 "\"cpu_stats\":%s,\"gpu_stats\":%s}",
+                 cur == 0 ? "" : ",",
+                 M, K, N, cpu_gf, gpu_gf, cpu_us / gpu_us, err,
+                 cpu_js, gpu_js);
     }
 
     tensor_free(A); tensor_free(B);
