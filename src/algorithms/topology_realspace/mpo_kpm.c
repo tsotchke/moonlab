@@ -846,3 +846,477 @@ tn_mps_state_t* mpo_kpm_apply_mpo(const tn_mpo_t* op,
 {
     return apply_H_copy(op, in, max_bond_dim);
 }
+
+/* ================================================================ */
+/* MPO-level Chebyshev machinery (P5.08 step 3)                     */
+/* ================================================================ */
+
+/* ---------------------------------------------------------------- */
+/* MPO constructors                                                   */
+/* ---------------------------------------------------------------- */
+
+tn_mpo_t* mpo_kpm_identity_mpo(uint32_t num_sites) {
+    if (num_sites == 0) return NULL;
+    tn_mpo_t* mpo = (tn_mpo_t*)calloc(1, sizeof(tn_mpo_t));
+    if (!mpo) return NULL;
+    mpo->num_sites = num_sites;
+    mpo->tensors = (tensor_t**)calloc(num_sites, sizeof(tensor_t*));
+    if (num_sites >= 2) {
+        mpo->bond_dims = (uint32_t*)calloc(num_sites - 1, sizeof(uint32_t));
+    }
+    if (!mpo->tensors || (num_sites >= 2 && !mpo->bond_dims)) {
+        tn_mpo_free(mpo);
+        return NULL;
+    }
+    for (uint32_t i = 0; i < num_sites; i++) {
+        const uint32_t dims[4] = {1, 2, 2, 1};
+        tensor_t* t = tensor_create(4, dims);
+        if (!t) { tn_mpo_free(mpo); return NULL; }
+        t->data[0 * 2 * 2 * 1 + 0 * 2 * 1 + 0 * 1 + 0] = 1.0; /* [0,0,0,0] */
+        t->data[0 * 2 * 2 * 1 + 1 * 2 * 1 + 1 * 1 + 0] = 1.0; /* [0,1,1,0] */
+        mpo->tensors[i] = t;
+    }
+    for (uint32_t i = 0; i + 1 < num_sites; i++) mpo->bond_dims[i] = 1;
+    return mpo;
+}
+
+/* ---------------------------------------------------------------- */
+/* MPO bond SVD compression                                           */
+/* ---------------------------------------------------------------- */
+
+/* Reshape a rank-4 MPO site [bL, d_in, d_out, bR] to a rank-3
+ * MPS-like [bL, d_in * d_out, bR] by merging the two physical axes.
+ * Returns a new tensor; caller owns it. */
+static tensor_t* mpo_site_as_mps(const tensor_t* s4) {
+    if (!s4 || s4->rank != 4) return NULL;
+    const uint32_t bL = s4->dims[0], d_in = s4->dims[1];
+    const uint32_t d_out = s4->dims[2], bR = s4->dims[3];
+    const uint32_t dims[3] = {bL, d_in * d_out, bR};
+    tensor_t* out = tensor_create(3, dims);
+    if (!out) return NULL;
+    memcpy(out->data, s4->data,
+           s4->total_size * sizeof(double complex));
+    return out;
+}
+
+/* Inverse: rank-3 [bL, d*d, bR] -> rank-4 [bL, d, d, bR]. */
+static tensor_t* mps_back_to_mpo_site(const tensor_t* s3,
+                                       uint32_t d_in, uint32_t d_out) {
+    if (!s3 || s3->rank != 3) return NULL;
+    if (s3->dims[1] != d_in * d_out) return NULL;
+    const uint32_t bL = s3->dims[0], bR = s3->dims[2];
+    const uint32_t dims[4] = {bL, d_in, d_out, bR};
+    tensor_t* out = tensor_create(4, dims);
+    if (!out) return NULL;
+    memcpy(out->data, s3->data,
+           s3->total_size * sizeof(double complex));
+    return out;
+}
+
+/* Single-bond SVD compression between two adjacent MPO sites.  Wraps
+ * the MPS bond compressor by reshaping; the physical-axis layout is
+ * preserved exactly. */
+static int mpo_bond_svd_compress(tensor_t** left, tensor_t** right,
+                                  uint32_t max_bond) {
+    if (!left || !right || !*left || !*right) return -1;
+    if ((*left)->rank != 4 || (*right)->rank != 4) return -1;
+
+    const uint32_t dL_in  = (*left)->dims[1];
+    const uint32_t dL_out = (*left)->dims[2];
+    const uint32_t dR_in  = (*right)->dims[1];
+    const uint32_t dR_out = (*right)->dims[2];
+
+    tensor_t* L3 = mpo_site_as_mps(*left);
+    tensor_t* R3 = mpo_site_as_mps(*right);
+    if (!L3 || !R3) { tensor_free(L3); tensor_free(R3); return -2; }
+
+    svd_compress_config_t cfg = svd_compress_config_fixed(max_bond);
+    svd_compress_result_t* res = svd_compress_bond(L3, R3, &cfg, true);
+    tensor_free(L3);
+    tensor_free(R3);
+    if (!res) return -3;
+
+    tensor_t* L4_new = mps_back_to_mpo_site(res->left,  dL_in, dL_out);
+    tensor_t* R4_new = mps_back_to_mpo_site(res->right, dR_in, dR_out);
+
+    res->left = NULL; res->right = NULL;  /* ownership transferred */
+    svd_compress_result_free(res);
+
+    if (!L4_new || !R4_new) {
+        tensor_free(L4_new); tensor_free(R4_new);
+        return -4;
+    }
+    tensor_free(*left);
+    tensor_free(*right);
+    *left = L4_new;
+    *right = R4_new;
+    return 0;
+}
+
+/* Sweep SVD compression right-to-left after bringing to
+ * left-canonical form via QR-like splits.  Conservative simple
+ * version: iterate all adjacent bonds L-to-R, then R-to-L, applying
+ * mpo_bond_svd_compress with the bond cap.  Sufficient for keeping
+ * MPO bond dim bounded during the Chebyshev recurrence. */
+static int mpo_truncate_all_bonds(tn_mpo_t* mpo, uint32_t max_bond) {
+    if (!mpo || max_bond == 0) return 0;
+    const uint32_t L = mpo->num_sites;
+    if (L < 2) return 0;
+    /* Left-to-right sweep. */
+    for (uint32_t i = 0; i + 1 < L; i++) {
+        int rc = mpo_bond_svd_compress(&mpo->tensors[i],
+                                        &mpo->tensors[i + 1],
+                                        max_bond);
+        if (rc != 0) return rc;
+    }
+    /* Right-to-left sweep. */
+    for (int i = (int)L - 2; i >= 0; i--) {
+        int rc = mpo_bond_svd_compress(&mpo->tensors[i],
+                                        &mpo->tensors[i + 1],
+                                        max_bond);
+        if (rc != 0) return rc;
+    }
+    if (mpo->bond_dims) {
+        for (uint32_t i = 0; i + 1 < L; i++) {
+            mpo->bond_dims[i] = mpo->tensors[i]->dims[3];
+        }
+    }
+    return 0;
+}
+
+/* ---------------------------------------------------------------- */
+/* MPO x MPO multiplication                                           */
+/* ---------------------------------------------------------------- */
+
+/* Per-site: C[(aL,bL), s_in, s_out, (aR,bR)] =
+ *   sum_t A[aL, s_in, t, aR] * B[bL, t, s_out, bR].
+ *
+ * tensor_contract(A, axes={2}, B, axes={1}) gives
+ *   raw shape [aL, s_in, aR, bL, s_out, bR];
+ * permute {0, 3, 1, 4, 2, 5} -> [aL, bL, s_in, s_out, aR, bR];
+ * reshape to [aL*bL, s_in, s_out, aR*bR].
+ */
+static tensor_t* mpo_site_multiply(const tensor_t* A, const tensor_t* B) {
+    if (!A || !B || A->rank != 4 || B->rank != 4) return NULL;
+    if (A->dims[2] != B->dims[1]) return NULL;
+    const uint32_t aL = A->dims[0], s_in  = A->dims[1];
+    const uint32_t aR = A->dims[3];
+    const uint32_t bL = B->dims[0], s_out = B->dims[2];
+    const uint32_t bR = B->dims[3];
+
+    uint32_t axes_a[1] = {2};
+    uint32_t axes_b[1] = {1};
+    tensor_t* raw = tensor_contract(A, B, axes_a, axes_b, 1);
+    if (!raw) return NULL;
+    uint32_t perm[6] = {0, 3, 1, 4, 2, 5};
+    tensor_t* p = tensor_transpose(raw, perm);
+    tensor_free(raw);
+    if (!p) return NULL;
+    const uint32_t new_dims[4] = {aL * bL, s_in, s_out, aR * bR};
+    tensor_t* out = tensor_reshape(p, 4, new_dims);
+    tensor_free(p);
+    return out;
+}
+
+tn_mpo_t* mpo_kpm_mpo_multiply(const tn_mpo_t* A, const tn_mpo_t* B,
+                                uint32_t max_bond_dim)
+{
+    if (!A || !B) return NULL;
+    if (A->num_sites != B->num_sites) return NULL;
+    const uint32_t L = A->num_sites;
+
+    tn_mpo_t* C = (tn_mpo_t*)calloc(1, sizeof(tn_mpo_t));
+    if (!C) return NULL;
+    C->num_sites = L;
+    C->tensors = (tensor_t**)calloc(L, sizeof(tensor_t*));
+    if (L >= 2) C->bond_dims = (uint32_t*)calloc(L - 1, sizeof(uint32_t));
+    if (!C->tensors || (L >= 2 && !C->bond_dims)) {
+        tn_mpo_free(C); return NULL;
+    }
+
+    for (uint32_t i = 0; i < L; i++) {
+        C->tensors[i] = mpo_site_multiply(A->tensors[i], B->tensors[i]);
+        if (!C->tensors[i]) { tn_mpo_free(C); return NULL; }
+    }
+    for (uint32_t i = 0; i + 1 < L; i++) {
+        C->bond_dims[i] = C->tensors[i]->dims[3];
+    }
+    if (max_bond_dim > 0) mpo_truncate_all_bonds(C, max_bond_dim);
+    return C;
+}
+
+/* ---------------------------------------------------------------- */
+/* MPO alpha A + beta B via block-diagonal construction               */
+/* ---------------------------------------------------------------- */
+
+static tensor_t* mpo_combine_first_site(
+    const tensor_t* A, double complex alpha,
+    const tensor_t* B, double complex beta)
+{
+    const uint32_t d_in = A->dims[1];
+    const uint32_t d_out = A->dims[2];
+    const uint32_t aR = A->dims[3];
+    const uint32_t bR = B->dims[3];
+    const uint32_t new_dims[4] = {1, d_in, d_out, aR + bR};
+    tensor_t* C = tensor_create(4, new_dims);
+    if (!C) return NULL;
+    for (uint32_t pi = 0; pi < d_in; pi++) {
+        for (uint32_t po = 0; po < d_out; po++) {
+            for (uint32_t r = 0; r < aR; r++) {
+                const size_t ai = ((size_t)0 * d_in + pi) * d_out * aR
+                                + (size_t)po * aR + r;
+                const size_t ci = ((size_t)0 * d_in + pi) * d_out * (aR + bR)
+                                + (size_t)po * (aR + bR) + r;
+                C->data[ci] = alpha * A->data[ai];
+            }
+            for (uint32_t r = 0; r < bR; r++) {
+                const size_t bi = ((size_t)0 * d_in + pi) * d_out * bR
+                                + (size_t)po * bR + r;
+                const size_t ci = ((size_t)0 * d_in + pi) * d_out * (aR + bR)
+                                + (size_t)po * (aR + bR) + (aR + r);
+                C->data[ci] = beta * B->data[bi];
+            }
+        }
+    }
+    return C;
+}
+
+static tensor_t* mpo_combine_interior_site(const tensor_t* A,
+                                           const tensor_t* B)
+{
+    const uint32_t d_in = A->dims[1];
+    const uint32_t d_out = A->dims[2];
+    const uint32_t aL = A->dims[0], aR = A->dims[3];
+    const uint32_t bL = B->dims[0], bR = B->dims[3];
+    const uint32_t new_dims[4] = {aL + bL, d_in, d_out, aR + bR};
+    tensor_t* C = tensor_create(4, new_dims);
+    if (!C) return NULL;
+    for (uint32_t pi = 0; pi < d_in; pi++) {
+        for (uint32_t po = 0; po < d_out; po++) {
+            for (uint32_t l = 0; l < aL; l++) {
+                for (uint32_t r = 0; r < aR; r++) {
+                    const size_t ai = ((size_t)l * d_in + pi) * d_out * aR
+                                    + (size_t)po * aR + r;
+                    const size_t ci = ((size_t)l * d_in + pi) * d_out * (aR + bR)
+                                    + (size_t)po * (aR + bR) + r;
+                    C->data[ci] = A->data[ai];
+                }
+            }
+            for (uint32_t l = 0; l < bL; l++) {
+                for (uint32_t r = 0; r < bR; r++) {
+                    const size_t bi = ((size_t)l * d_in + pi) * d_out * bR
+                                    + (size_t)po * bR + r;
+                    const size_t ci = ((size_t)(aL + l) * d_in + pi)
+                                      * d_out * (aR + bR)
+                                    + (size_t)po * (aR + bR) + (aR + r);
+                    C->data[ci] = B->data[bi];
+                }
+            }
+        }
+    }
+    return C;
+}
+
+static tensor_t* mpo_combine_last_site(const tensor_t* A, const tensor_t* B)
+{
+    const uint32_t d_in = A->dims[1];
+    const uint32_t d_out = A->dims[2];
+    const uint32_t aL = A->dims[0];
+    const uint32_t bL = B->dims[0];
+    const uint32_t new_dims[4] = {aL + bL, d_in, d_out, 1};
+    tensor_t* C = tensor_create(4, new_dims);
+    if (!C) return NULL;
+    for (uint32_t pi = 0; pi < d_in; pi++) {
+        for (uint32_t po = 0; po < d_out; po++) {
+            for (uint32_t l = 0; l < aL; l++) {
+                const size_t ai = ((size_t)l * d_in + pi) * d_out
+                                + (size_t)po;
+                const size_t ci = ((size_t)l * d_in + pi) * d_out
+                                + (size_t)po;
+                C->data[ci] = A->data[ai];
+            }
+            for (uint32_t l = 0; l < bL; l++) {
+                const size_t bi = ((size_t)l * d_in + pi) * d_out
+                                + (size_t)po;
+                const size_t ci = ((size_t)(aL + l) * d_in + pi) * d_out
+                                + (size_t)po;
+                C->data[ci] = B->data[bi];
+            }
+        }
+    }
+    return C;
+}
+
+tn_mpo_t* mpo_kpm_mpo_combine(const tn_mpo_t* A, double complex alpha,
+                               const tn_mpo_t* B, double complex beta,
+                               uint32_t max_bond_dim)
+{
+    if (!A || !B) return NULL;
+    if (A->num_sites != B->num_sites) return NULL;
+    const uint32_t L = A->num_sites;
+    if (L == 0) return NULL;
+
+    tn_mpo_t* C = (tn_mpo_t*)calloc(1, sizeof(tn_mpo_t));
+    if (!C) return NULL;
+    C->num_sites = L;
+    C->tensors = (tensor_t**)calloc(L, sizeof(tensor_t*));
+    if (L >= 2) C->bond_dims = (uint32_t*)calloc(L - 1, sizeof(uint32_t));
+    if (!C->tensors || (L >= 2 && !C->bond_dims)) {
+        tn_mpo_free(C); return NULL;
+    }
+
+    for (uint32_t i = 0; i < L; i++) {
+        const tensor_t* Ai = A->tensors[i];
+        const tensor_t* Bi = B->tensors[i];
+        if (!Ai || !Bi) { tn_mpo_free(C); return NULL; }
+        if (Ai->dims[1] != Bi->dims[1] || Ai->dims[2] != Bi->dims[2]) {
+            tn_mpo_free(C); return NULL;
+        }
+        tensor_t* Ci = NULL;
+        if (L == 1) {
+            /* Single-site: [1, d_in, d_out, 1]; just add. */
+            const uint32_t d_in = Ai->dims[1], d_out = Ai->dims[2];
+            const uint32_t dims[4] = {1, d_in, d_out, 1};
+            Ci = tensor_create(4, dims);
+            if (Ci) {
+                for (size_t k = 0; k < Ai->total_size; k++) {
+                    Ci->data[k] = alpha * Ai->data[k] + beta * Bi->data[k];
+                }
+            }
+        } else if (i == 0) {
+            Ci = mpo_combine_first_site(Ai, alpha, Bi, beta);
+        } else if (i == L - 1) {
+            Ci = mpo_combine_last_site(Ai, Bi);
+        } else {
+            Ci = mpo_combine_interior_site(Ai, Bi);
+        }
+        if (!Ci) { tn_mpo_free(C); return NULL; }
+        C->tensors[i] = Ci;
+    }
+    for (uint32_t i = 0; i + 1 < L; i++) {
+        C->bond_dims[i] = C->tensors[i]->dims[3];
+    }
+    if (max_bond_dim > 0) mpo_truncate_all_bonds(C, max_bond_dim);
+    return C;
+}
+
+/* ---------------------------------------------------------------- */
+/* MPO-level Chebyshev recurrence for sign(H_tilde)                   */
+/* ---------------------------------------------------------------- */
+
+tn_mpo_t* mpo_kpm_sign_mpo(const tn_mpo_t* H,
+                            const mpo_kpm_params_t* params)
+{
+    if (!H || !params) return NULL;
+    if (params->n_cheby == 0) return NULL;
+    if (params->E_scale <= 0.0) return NULL;
+    const uint32_t L = H->num_sites;
+    const uint32_t max_bond = params->max_bond_dim;
+    const double a = params->E_shift;
+    const double b = params->E_scale;
+    const size_t N = params->n_cheby;
+
+    /* Coefficients. */
+    double* cs = (double*)malloc(N * sizeof(double));
+    double* gs = (double*)malloc(N * sizeof(double));
+    if (!cs || !gs) { free(cs); free(gs); return NULL; }
+    mpo_kpm_sign_coefficients(N, cs);
+    if (params->use_jackson) mpo_kpm_jackson_weights(N, gs);
+    else for (size_t n = 0; n < N; n++) gs[n] = 1.0;
+
+    /* T_0 = I, T_1 = H_tilde = (H - a I) / b.
+     * Build T_1 as combine(H, 1/b, I, -a/b). */
+    tn_mpo_t* I_mpo = mpo_kpm_identity_mpo(L);
+    if (!I_mpo) { free(cs); free(gs); return NULL; }
+    tn_mpo_t* T_prev = mpo_kpm_identity_mpo(L);       /* T_0 */
+    tn_mpo_t* T_curr = mpo_kpm_mpo_combine(H, 1.0 / b,
+                                            I_mpo, -a / b,
+                                            max_bond);  /* T_1 */
+    if (!T_prev || !T_curr) {
+        tn_mpo_free(I_mpo);
+        if (T_prev) tn_mpo_free(T_prev);
+        if (T_curr) tn_mpo_free(T_curr);
+        free(cs); free(gs); return NULL;
+    }
+
+    /* Accumulator: g_0 c_0 T_0 + g_1 c_1 T_1.  c_0 = 0 so start from
+     * a zero-valued MPO and add g_1 c_1 T_1.  Build zero as scalar 0
+     * times identity via combine. */
+    tn_mpo_t* zero_mpo = mpo_kpm_mpo_combine(I_mpo, 0.0, I_mpo, 0.0,
+                                              max_bond);
+    tn_mpo_free(I_mpo);
+    if (!zero_mpo) {
+        tn_mpo_free(T_prev); tn_mpo_free(T_curr);
+        free(cs); free(gs); return NULL;
+    }
+    tn_mpo_t* acc = mpo_kpm_mpo_combine(zero_mpo, 1.0,
+                                         T_curr, gs[1] * cs[1],
+                                         max_bond);
+    tn_mpo_free(zero_mpo);
+    if (!acc) {
+        tn_mpo_free(T_prev); tn_mpo_free(T_curr);
+        free(cs); free(gs); return NULL;
+    }
+
+    /* Recurrence: T_{n+1} = 2 H_tilde T_n - T_{n-1}.
+     * We don't have H_tilde as a standalone MPO (we'd need to rebuild
+     * it), but we can use T_curr which at iteration n IS T_n, and
+     * compute 2 H_tilde T_n via MPO multiply:
+     *   T_next = 2 (H * T_curr / b) - (2 a / b) T_curr - T_prev.
+     * The (H T_curr / b) is an mpo_multiply; the scalar factors are
+     * folded into subsequent combines. */
+    for (size_t n = 2; n < N; n++) {
+        tn_mpo_t* H_T = mpo_kpm_mpo_multiply(H, T_curr, max_bond);
+        if (!H_T) break;
+        /* 2 H_T / b - (2 a / b) T_curr */
+        tn_mpo_t* tmp1 = mpo_kpm_mpo_combine(
+            H_T, 2.0 / b,
+            T_curr, -2.0 * a / b,
+            max_bond);
+        tn_mpo_free(H_T);
+        if (!tmp1) break;
+        /* T_next = tmp1 - T_prev. */
+        tn_mpo_t* T_next = mpo_kpm_mpo_combine(tmp1, 1.0,
+                                                 T_prev, -1.0,
+                                                 max_bond);
+        tn_mpo_free(tmp1);
+        if (!T_next) break;
+
+        /* acc += g_n c_n * T_next. */
+        const double w = gs[n] * cs[n];
+        if (w != 0.0) {
+            tn_mpo_t* next_acc = mpo_kpm_mpo_combine(acc, 1.0,
+                                                       T_next, w,
+                                                       max_bond);
+            if (!next_acc) {
+                tn_mpo_free(T_next);
+                break;
+            }
+            tn_mpo_free(acc);
+            acc = next_acc;
+        }
+        /* Roll: T_prev := T_curr; T_curr := T_next. */
+        tn_mpo_free(T_prev);
+        T_prev = T_curr;
+        T_curr = T_next;
+    }
+    tn_mpo_free(T_prev);
+    tn_mpo_free(T_curr);
+    free(cs); free(gs);
+    return acc;
+}
+
+tn_mpo_t* mpo_kpm_projector_mpo(const tn_mpo_t* H,
+                                 const mpo_kpm_params_t* params)
+{
+    if (!H || !params) return NULL;
+    tn_mpo_t* sign_mpo = mpo_kpm_sign_mpo(H, params);
+    if (!sign_mpo) return NULL;
+    tn_mpo_t* I_mpo = mpo_kpm_identity_mpo(H->num_sites);
+    if (!I_mpo) { tn_mpo_free(sign_mpo); return NULL; }
+    tn_mpo_t* P = mpo_kpm_mpo_combine(I_mpo, 0.5, sign_mpo, -0.5,
+                                       params->max_bond_dim);
+    tn_mpo_free(I_mpo);
+    tn_mpo_free(sign_mpo);
+    return P;
+}

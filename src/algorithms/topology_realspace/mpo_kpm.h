@@ -321,6 +321,87 @@ tn_mps_state_t* mpo_kpm_apply_mpo(
     const tn_mps_state_t* in,
     uint32_t max_bond_dim);
 
+/* ================================================================
+ * MPO-LEVEL CHEBYSHEV / SIGN(H) MACHINERY (P5.08 step 3).
+ *
+ * The MPS-level path above computes sign(H)|ket> for any particular
+ * |ket>.  To reproduce the Antao-Sun-Fumega-Lado full-lattice Chern
+ * mosaic at 10^6+ sites we instead need sign(H) (and therefore the
+ * filled-band projector P = (I - sign(H)) / 2) as an MPO, so the
+ * marker C(alpha) = 2 pi i tr[Q X Y P - P X Y Q] restricted to a
+ * specific site alpha can be evaluated by MPO-MPO contractions
+ * without ever materialising a state.  The machinery below is the
+ * MPO counterpart of the MPS pipeline: MPO * MPO multiplication,
+ * MPO linear combination, MPO SVD compression, and a Chebyshev
+ * recurrence that returns an MPO approximation to sign(H_tilde)
+ * with bond dimension bounded by @c params->max_bond_dim.
+ * ================================================================
+ */
+
+/**
+ * @brief Build the identity MPO @f$\mathbb{1}@f$ on @p num_sites
+ *        qubits.  Every site holds a rank-4 tensor of shape
+ *        @f$[1, 2, 2, 1]@f$ with diag(1, 1) values.  Bond dim 1.
+ */
+tn_mpo_t* mpo_kpm_identity_mpo(uint32_t num_sites);
+
+/**
+ * @brief Return @f$C = A \cdot B@f$ as a new MPO, SVD-truncated to
+ *        @c max_bond_dim at every interior bond.
+ *
+ * Per-site arithmetic: contract A's phys_out with B's phys_in,
+ * permute to merge the bond indices correctly, and reshape to a
+ * rank-4 MPO tensor.  The two MPOs must share @c num_sites and
+ * physical dimension; otherwise NULL is returned.
+ *
+ * Complexity (per site): @f$O(d^3 \chi_A^2 \chi_B^2)@f$ for the
+ * contraction, dominated by the subsequent SVD's
+ * @f$O((d \chi_A \chi_B)^3)@f$ if truncation is active.  Pass
+ * @c max_bond_dim = 0 to skip truncation.
+ */
+tn_mpo_t* mpo_kpm_mpo_multiply(
+    const tn_mpo_t* A, const tn_mpo_t* B, uint32_t max_bond_dim);
+
+/**
+ * @brief Return @f$C = \alpha A + \beta B@f$ via block-diagonal MPO
+ *        construction, SVD-truncated to @c max_bond_dim.  Mirrors
+ *        @c mpo_kpm_mps_combine but for rank-4 operators.
+ *
+ * At every interior bond the new bond dimension is
+ * @f$\chi^A + \chi^B@f$ prior to compression.  Scalar factors land
+ * on the first site exactly as in the MPS helper.
+ */
+tn_mpo_t* mpo_kpm_mpo_combine(
+    const tn_mpo_t* A, double complex alpha,
+    const tn_mpo_t* B, double complex beta,
+    uint32_t max_bond_dim);
+
+/**
+ * @brief Return an MPO representation of
+ *        @f$\operatorname{sign}(\hat{\tilde H})@f$ where
+ *        @f$\hat{\tilde H} = (\hat H - a\mathbb{1})/b@f$,
+ *        @f$a = \mathtt{params->E\_shift}@f$,
+ *        @f$b = \mathtt{params->E\_scale}@f$.
+ *
+ * Chebyshev accumulator
+ *   @f$S = \sum_{n=0}^{N_c-1} g_n c_n T_n(\hat{\tilde H})@f$
+ * built by @f$T_{n+1}=2\hat{\tilde H}T_n-T_{n-1}@f$ with
+ * per-step SVD truncation to @c params->max_bond_dim.  The bond
+ * dimension of @f$S@f$ at the end is bounded by that cap.
+ */
+tn_mpo_t* mpo_kpm_sign_mpo(
+    const tn_mpo_t* H,
+    const mpo_kpm_params_t* params);
+
+/**
+ * @brief Return the filled-band projector
+ *        @f$\hat P = \tfrac12(\mathbb{1} - \operatorname{sign}(\hat{\tilde H}))@f$
+ *        as an MPO.
+ */
+tn_mpo_t* mpo_kpm_projector_mpo(
+    const tn_mpo_t* H,
+    const mpo_kpm_params_t* params);
+
 #ifdef __cplusplus
 }
 #endif

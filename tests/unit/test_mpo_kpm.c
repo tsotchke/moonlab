@@ -769,6 +769,158 @@ static void test_qxp_pipeline(void) {
     tn_mpo_free(X); tn_mpo_free(H); mpo_free(H_src);
 }
 
+/* ---------------------------------------------------------------- */
+/* 7. MPO-level sign(H) validation                                   */
+/* ---------------------------------------------------------------- */
+
+/* Contract a tn_mpo_t into its dense 2^L x 2^L matrix representation
+ * (row-major, row = input basis state, col = output basis state,
+ * same convention as mpo_to_matrix).  O(2^(2L) * chi^L); only usable
+ * for small L.  Caller owns the returned buffer. */
+static double complex* tn_mpo_to_dense(const tn_mpo_t* mpo, size_t* out_N) {
+    if (!mpo || mpo->num_sites == 0) return NULL;
+    const uint32_t L = mpo->num_sites;
+    const uint32_t d = mpo->tensors[0]->dims[1];
+    const size_t N = 1;  /* placeholder */
+    (void)N;
+    size_t dim = 1;
+    for (uint32_t i = 0; i < L; i++) dim *= d;
+    double complex* out = (double complex*)calloc(dim * dim,
+                                                   sizeof(double complex));
+    if (!out) return NULL;
+    /* For each (input s1..sL, output s1'..sL'), walk the product. */
+    uint32_t* s_in  = (uint32_t*)calloc(L, sizeof(uint32_t));
+    uint32_t* s_out = (uint32_t*)calloc(L, sizeof(uint32_t));
+    for (size_t ii = 0; ii < dim; ii++) {
+        /* Decode ii into s_in[]. */
+        size_t tmp = ii;
+        for (int k = (int)L - 1; k >= 0; k--) {
+            s_in[k] = (uint32_t)(tmp % d);
+            tmp /= d;
+        }
+        for (size_t oo = 0; oo < dim; oo++) {
+            tmp = oo;
+            for (int k = (int)L - 1; k >= 0; k--) {
+                s_out[k] = (uint32_t)(tmp % d);
+                tmp /= d;
+            }
+            /* Contract over bond chain b_0..b_L with b_0 = b_L = 0. */
+            const uint32_t b_L_final = mpo->tensors[L - 1]->dims[3];
+            /* row-vector running through: v[b] after site i. */
+            uint32_t bond_max = 1;
+            for (uint32_t i = 0; i < L; i++) {
+                if (mpo->tensors[i]->dims[0] > bond_max)
+                    bond_max = mpo->tensors[i]->dims[0];
+                if (mpo->tensors[i]->dims[3] > bond_max)
+                    bond_max = mpo->tensors[i]->dims[3];
+            }
+            double complex* v_curr = (double complex*)calloc(bond_max,
+                                                             sizeof(double complex));
+            double complex* v_next = (double complex*)calloc(bond_max,
+                                                             sizeof(double complex));
+            v_curr[0] = 1.0;
+            uint32_t v_len = 1;
+            for (uint32_t i = 0; i < L; i++) {
+                const tensor_t* W = mpo->tensors[i];
+                const uint32_t bL = W->dims[0], di = W->dims[1];
+                const uint32_t do_ = W->dims[2], bR = W->dims[3];
+                memset(v_next, 0, bond_max * sizeof(double complex));
+                for (uint32_t bl = 0; bl < bL; bl++) {
+                    for (uint32_t br = 0; br < bR; br++) {
+                        const size_t widx = ((size_t)bl * di + s_in[i]) * do_ * bR
+                                            + (size_t)s_out[i] * bR + br;
+                        v_next[br] += v_curr[bl] * W->data[widx];
+                    }
+                }
+                memcpy(v_curr, v_next, bond_max * sizeof(double complex));
+                v_len = bR;
+            }
+            (void)v_len;
+            (void)b_L_final;
+            out[ii * dim + oo] = v_curr[0];
+            free(v_curr); free(v_next);
+        }
+    }
+    free(s_in); free(s_out);
+    if (out_N) *out_N = dim;
+    return out;
+}
+
+static void test_mpo_level_sign(void) {
+    fprintf(stdout, "\n-- MPO-level sign(H) vs dense --\n");
+    const uint32_t L = 3;
+    mpo_t* H_src = mpo_tfim_create(L, 1.0, 0.8);
+    tn_mpo_t* H = mpo_kpm_mpo_to_tn_mpo(H_src);
+
+    /* Dense H and its sign via eigendecomp. */
+    size_t Ndense = 0;
+    double complex* Hd = build_dense_H(H_src, &Ndense);
+    double complex* scratch = (double complex*)malloc(Ndense * Ndense
+                                                       * sizeof(double complex));
+    memcpy(scratch, Hd, Ndense * Ndense * sizeof(double complex));
+    double* evals = (double*)malloc(Ndense * sizeof(double));
+    diagonalise_hermitian(scratch, (int)Ndense, evals);
+    const double E_min = evals[0], E_max = evals[Ndense - 1];
+    free(scratch); free(evals);
+    const double a = 0.5 * (E_max + E_min);
+    const double b = 0.55 * (E_max - E_min);
+
+    /* Rebuild M = H_tilde dense + diagonalise + form sign. */
+    double complex* M = (double complex*)malloc(Ndense * Ndense
+                                                 * sizeof(double complex));
+    for (size_t i = 0; i < Ndense; i++) {
+        for (size_t j = 0; j < Ndense; j++)
+            M[i * Ndense + j] = Hd[i * Ndense + j] / b;
+        M[i * Ndense + i] -= a / b;
+    }
+    double* w = (double*)malloc(Ndense * sizeof(double));
+    diagonalise_hermitian(M, (int)Ndense, w);
+    double complex* sign_dense = (double complex*)calloc(Ndense * Ndense,
+                                                          sizeof(double complex));
+    for (size_t i = 0; i < Ndense; i++) {
+        for (size_t j = 0; j < Ndense; j++) {
+            double complex acc = 0.0;
+            for (size_t k = 0; k < Ndense; k++) {
+                const double s = (w[k] > 0) ? 1.0 : (w[k] < 0 ? -1.0 : 0.0);
+                acc += M[k * Ndense + i] * s * conj(M[k * Ndense + j]);
+            }
+            sign_dense[i * Ndense + j] = acc;
+        }
+    }
+    free(M); free(w);
+
+    /* MPO-level sign via Chebyshev. */
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 300;
+    params.E_shift = a;
+    params.E_scale = b;
+    params.max_bond_dim = 32;
+    params.use_jackson = 1;
+    tn_mpo_t* sign_mpo = mpo_kpm_sign_mpo(H, &params);
+    CHECK(sign_mpo != NULL, "sign MPO built");
+
+    size_t N2 = 0;
+    double complex* sign_mpo_dense = tn_mpo_to_dense(sign_mpo, &N2);
+    CHECK(sign_mpo_dense != NULL, "sign MPO -> dense matrix");
+    CHECK(N2 == Ndense, "dims match (%zu)", N2);
+
+    /* Frobenius-norm relative error. */
+    double num = 0.0, den = 0.0;
+    for (size_t i = 0; i < Ndense * Ndense; i++) {
+        double complex d = sign_mpo_dense[i] - sign_dense[i];
+        num += creal(d * conj(d));
+        den += creal(sign_dense[i] * conj(sign_dense[i]));
+    }
+    const double rel = (den > 0) ? sqrt(num / den) : sqrt(num);
+    fprintf(stdout, "    ||sign(H)_mpo - sign(H)_dense||_F / ||dense||_F = %.3e\n",
+            rel);
+    CHECK(rel < 1e-2, "MPO-level sign matches dense to 1%% at L=3, N_c=300");
+
+    free(Hd); free(sign_dense); free(sign_mpo_dense);
+    tn_mpo_free(sign_mpo);
+    tn_mpo_free(H); mpo_free(H_src);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -778,6 +930,7 @@ int main(void) {
     test_apply_sign_small_tfim();
     test_diagonal_sum_mpo();
     test_qxp_pipeline();
+    test_mpo_level_sign();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;
