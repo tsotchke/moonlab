@@ -56,6 +56,7 @@ option(QSIM_BUILD_STATIC "Build static library" OFF)
 option(QSIM_BUILD_TESTS "Build test suite" ON)
 option(QSIM_BUILD_EXAMPLES "Build example programs" ON)
 option(QSIM_BUILD_BENCHMARKS "Build benchmarks" ON)
+option(QSIM_BUILD_JS_DIST "Auto-build the TS/JS dist via pnpm (enables webgpu_unified_smoke on fresh clones)" OFF)
 
 # Feature options
 option(QSIM_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
@@ -1263,14 +1264,28 @@ if(QSIM_BUILD_TESTS)
     # We gate on both the script existing AND the compiled dist already
     # being present, because CMake does not own the pnpm build graph;
     # a fresh clone without `pnpm -C bindings/javascript/packages/core
-    # build` would otherwise fail this test on first run.  Downstreams
-    # that opt in run the pnpm build first and pick up this test on a
-    # re-configure.
+    # build` would otherwise fail this test on first run.
+    #
+    # With -DQSIM_BUILD_JS_DIST=ON, we invoke the pnpm build ourselves
+    # via a custom_target so dist/index.mjs lands on disk before
+    # ctest runs.  Default OFF keeps routine builds fast.
     find_program(PNPM_EXECUTABLE pnpm)
+    set(_js_dist "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/index.mjs")
+    if(QSIM_BUILD_JS_DIST AND PNPM_EXECUTABLE)
+        add_custom_command(
+            OUTPUT ${_js_dist}
+            COMMAND ${PNPM_EXECUTABLE} install --ignore-scripts
+            COMMAND ${PNPM_EXECUTABLE} run build:ts
+            WORKING_DIRECTORY
+                ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
+            COMMENT "Building TS/JS dist via pnpm (QSIM_BUILD_JS_DIST=ON)"
+            VERBATIM
+        )
+        add_custom_target(js_dist ALL DEPENDS ${_js_dist})
+    endif()
     if(PNPM_EXECUTABLE AND EXISTS
         "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs"
-        AND EXISTS
-        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/index.mjs")
+        AND (EXISTS "${_js_dist}" OR QSIM_BUILD_JS_DIST))
         add_test(NAME webgpu_unified_smoke
                  COMMAND ${PNPM_EXECUTABLE} -C
                          ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
