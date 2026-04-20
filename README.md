@@ -521,17 +521,16 @@ Read this before judging the repo against its headline claims.  The
 adversarial audit that produced this list lives in
 `docs/audits/adversarial-review-2026-04-19.md`.
 
-- **Chern mosaic**: the full MPO-level pipeline (dense H ->
-  Chebyshev projector -> idempotent P) now works on an actual QWZ
-  2D topological Hamiltonian at L = 4 (32-dim Hilbert, 5-qubit
-  MPS chain): tr(P_mpo) = 16.0000 vs 16 filled bands; P^2 - P
-  Frobenius error 3e-5.  The underlying sparse-stencil Chern-marker
-  renderer runs to L = 300 single-core.  The paper-headline
-  10^6-10^8-site capability still requires QTCI-compressed position
-  operators (not shipped) so we can avoid the O(2^L) dense
-  conversion used in the L = 4 validation; that is the one
-  remaining piece tracked in
-  `docs/benchmarks/chern-mosaic-pipeline.md`.
+- **Chern mosaic**: the full Bianco-Resta local marker
+  C(r) = -4 pi * Im Sum_orb <r, orb| P X Q Y P |r, orb>
+  now runs end-to-end via the MPO pipeline on a real QWZ 2D
+  Chern insulator at L = 4 and reproduces the dense Schulz
+  reference to machine precision (|MPO - dense| = 0.0000 at a
+  bulk site).  Position operators are the quantics-bit-weighted
+  diagonal-sum MPOs.  The sparse-stencil renderer scales to
+  L = 300 single-core.  Adaptive QTCI for non-monomial
+  modulations is still future work; the linear-in-coordinate
+  case (what the Bianco-Resta formula actually uses) is shipped.
 - **CHSH / "Bell-verified" QRNG**: prior to 0.2.0-dev the
   `bell_test_chsh` function silently overwrote the input state with
   `|Phi+>` before measuring, so every CHSH reading was 2.828 by

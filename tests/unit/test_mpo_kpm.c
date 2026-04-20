@@ -26,6 +26,7 @@
  */
 
 #include "../../src/algorithms/topology_realspace/mpo_kpm.h"
+#include "../../src/algorithms/topology_realspace/chern_marker.h"
 #include "../../src/algorithms/tensor_network/tn_state.h"
 #include "../../src/algorithms/tensor_network/dmrg.h"
 #include "../../src/algorithms/tensor_network/mpo_2d.h"  /* mpo_to_matrix */
@@ -837,7 +838,17 @@ static double complex* tn_mpo_to_dense(const tn_mpo_t* mpo, size_t* out_N) {
             }
             (void)v_len;
             (void)b_L_final;
-            out[ii * dim + oo] = v_curr[0];
+            /* MPO acts on states as (M psi)_row = sum_col M_{row, col} psi_col.
+             * Our per-site tensors store W[b_l, phys_in, phys_out, b_r],
+             * so ii == phys_in is the column (input) index and
+             * oo == phys_out is the row (output) index.  The dense
+             * matrix entry at (row, col) of M = (oo, ii), placed at
+             * row-major position out[oo * dim + ii].  This was
+             * previously storing at out[ii * dim + oo], which gave
+             * M^T; paired with a transposed from_dense the roundtrip
+             * looked correct but composed operators produced conj(M)
+             * results on Hermitian complex-off-diagonal inputs.  */
+            out[oo * dim + ii] = v_curr[0];
             free(v_curr); free(v_next);
         }
     }
@@ -1357,6 +1368,173 @@ static void test_qwz_as_mpo(void) {
     tn_mpo_free(H_mpo); tn_mpo_free(P_mpo);
 }
 
+/* ---------------------------------------------------------------- */
+/* 13. Full 2D Chern marker at a site via MPO pipeline                */
+/* ---------------------------------------------------------------- */
+/*
+ * Closes the Chern-mosaic pipeline on a small 2D lattice end to end.
+ * Builds QWZ (L x L with 2 orbitals) -> MPO, runs the Chebyshev
+ * filled-band projector, builds X-hat and Y-hat as bit-weighted
+ * single-site-sum MPOs in the quantics binary encoding of the
+ * lattice index, then composes the Bianco-Resta matrix element
+ *
+ *   C(r) = -4 pi * Im Sum_orb <r, orb| P X Q Y P |r, orb>
+ *
+ * at the central site of the bulk.  The QWZ ground state at m = -1 on
+ * a 4x4 lattice is well inside the topological phase, so C(r) at a
+ * bulk site should be close to +1.
+ *
+ * Index encoding matches the dense reference in chern_marker.c:
+ *   k = (y * L + x) * 2 + orb,  orb in {0, 1}.
+ *
+ * With L = 4 and orbs = 2 we have N = 32, log2(N) = 5 qubits.  MPO
+ * chain-site 0 holds the MSB of the binary index; converting that
+ * back to lattice coordinates,
+ *   site 0 -> y bit 1 (high),
+ *   site 1 -> y bit 0 (low),
+ *   site 2 -> x bit 1 (high),
+ *   site 3 -> x bit 0 (low),
+ *   site 4 -> orbital (LSB).
+ */
+
+/* Given the lattice coord (x, y, orb), return the 5-qubit basis
+ * state as a computational-basis index in MSB-at-site-0 ordering. */
+static uint64_t qwz_basis_state(size_t x, size_t y, size_t orb) {
+    return (uint64_t)(((y & 3u) << 3) | ((x & 3u) << 1) | (orb & 1u));
+}
+
+/* Build an X-hat or Y-hat MPO for the 5-qubit encoding above.
+ * coord == 0 -> X, coord == 1 -> Y. */
+static tn_mpo_t* build_position_mpo(int coord) {
+    const uint32_t L = 5;
+    double f[5] = {0, 0, 0, 0, 0};
+    if (coord == 0) {
+        /* x = bit1(x_bits) * 1 + bit0(x_bits) * 2;
+         * chain site 2 holds high x bit, site 3 holds low x bit. */
+        f[2] = 2.0;
+        f[3] = 1.0;
+    } else {
+        /* Similarly for y, on chain sites 0 (high) and 1 (low). */
+        f[0] = 2.0;
+        f[1] = 1.0;
+    }
+    /* n = (I - Z) / 2 = diag(0, 1) (row-major). */
+    double complex n_op[4] = {0, 0, 0, 1};
+    return mpo_kpm_diagonal_sum_mpo(L, n_op, f);
+}
+
+/* Apply an MPO to a ket MPS, returning a fresh MPS.  Thin wrapper
+ * around mpo_kpm_apply_mpo to keep the chain composition readable. */
+static tn_mps_state_t* apply(const tn_mpo_t* op, const tn_mps_state_t* in,
+                              uint32_t max_bond) {
+    return mpo_kpm_apply_mpo(op, in, max_bond);
+}
+
+/* state <- state - P state, where the input state is |v> and P|v>
+ * is a fresh copy.  Returns a newly allocated MPS for Q|v>. */
+static tn_mps_state_t* apply_Q(const tn_mpo_t* P,
+                                const tn_mps_state_t* v,
+                                uint32_t max_bond) {
+    tn_mps_state_t* Pv = mpo_kpm_apply_mpo(P, v, max_bond);
+    if (!Pv) return NULL;
+    tn_mps_state_t* vcopy = tn_mps_copy(v);
+    if (!vcopy) { tn_mps_free(Pv); return NULL; }
+    tn_mps_state_t* Qv = mpo_kpm_mps_combine(vcopy, 1.0, Pv, -1.0);
+    tn_mps_free(Pv);
+    tn_mps_free(vcopy);
+    if (!Qv) return NULL;
+    if (max_bond > 0) {
+        double err = 0.0;
+        tn_mps_truncate(Qv, max_bond, &err);
+    }
+    return Qv;
+}
+
+static void test_full_chern_marker_2d(void) {
+    fprintf(stdout, "\n-- 2D Chern marker on QWZ 4x4 via full MPO pipeline --\n");
+    const size_t Llat = 4;
+    size_t N = 0;
+    double complex* Hd = build_qwz_dense(Llat, -1.0, &N);
+    CHECK(Hd != NULL && N == 32, "QWZ dense built (N=32)");
+
+    /* Spectral bound. */
+    double complex* scratch = (double complex*)malloc(N * N * sizeof(double complex));
+    memcpy(scratch, Hd, N * N * sizeof(double complex));
+    double* evals = (double*)malloc(N * sizeof(double));
+    diagonalise_hermitian(scratch, (int)N, evals);
+    const double b = 1.05 * fabs(evals[N - 1] > fabs(evals[0]) ? evals[N - 1] : evals[0]);
+    free(scratch); free(evals);
+
+    tn_mpo_t* H_mpo = mpo_kpm_mpo_from_dense(Hd, 5, 0.0);
+    CHECK(H_mpo != NULL, "H MPO");
+    free(Hd);
+
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 500;
+    params.E_shift = 0.0;
+    params.E_scale = b;
+    params.max_bond_dim = 64;
+
+    tn_mpo_t* P_mpo = mpo_kpm_projector_mpo(H_mpo, &params);
+    CHECK(P_mpo != NULL, "projector MPO");
+
+    tn_mpo_t* X_mpo = build_position_mpo(0);
+    tn_mpo_t* Y_mpo = build_position_mpo(1);
+    CHECK(X_mpo && Y_mpo, "X and Y position MPOs");
+
+    /* Dense reference on the same site. */
+    chern_system_t* dense_sys = chern_qwz_create(Llat, -1.0);
+    CHECK(dense_sys != NULL, "dense QWZ system");
+    CHECK(chern_build_projector(dense_sys) == 0, "dense projector built");
+    const size_t rx = 2, ry = 2;  /* bulk center */
+    double c_dense = chern_local_marker(dense_sys, rx, ry);
+    fprintf(stdout, "    dense chern_local_marker(2,2) = %+.4f\n", c_dense);
+
+    /* MPO pipeline: C(r) = -4 pi * Im Sum_orb <r, orb| P X Q Y P | r, orb>.
+     * Order of MPO applications (right-to-left on state):
+     *   |s> -> P|s> -> Y(P|s>) -> Q Y P|s> -> X Q Y P|s> -> P X Q Y P|s>
+     * Then compute <r, orb| ...|r, orb>. */
+    tn_state_config_t cfg = tn_state_config_default();
+    cfg.max_bond_dim = 64;
+    double total_im = 0.0;
+    for (size_t orb = 0; orb < 2; orb++) {
+        const uint64_t bs = qwz_basis_state(rx, ry, orb);
+        tn_mps_state_t* alpha = tn_mps_create_basis(5, bs, &cfg);
+        CHECK(alpha != NULL, "|r,orb=%zu> basis state", orb);
+
+        tn_mps_state_t* s1 = apply(P_mpo, alpha, 64);  /* P |a> */
+        tn_mps_state_t* s2 = apply(Y_mpo, s1, 64);     /* Y P |a> */
+        tn_mps_free(s1);
+        tn_mps_state_t* s3 = apply_Q(P_mpo, s2, 64);   /* Q Y P |a> */
+        tn_mps_free(s2);
+        tn_mps_state_t* s4 = apply(X_mpo, s3, 64);     /* X Q Y P |a> */
+        tn_mps_free(s3);
+        tn_mps_state_t* s5 = apply(P_mpo, s4, 64);     /* P X Q Y P |a> */
+        tn_mps_free(s4);
+
+        double complex me = tn_mps_overlap(alpha, s5);
+        total_im += cimag(me);
+        fprintf(stdout, "    orb=%zu  <r,orb|PXQYP|r,orb> = %+.6f%+.6fi\n",
+                orb, creal(me), cimag(me));
+
+        tn_mps_free(alpha);
+        tn_mps_free(s5);
+    }
+    const double c_mpo = -4.0 * M_PI * total_im;
+    fprintf(stdout, "    MPO pipeline C(2,2) = %+.4f\n", c_mpo);
+    fprintf(stdout, "    |MPO - dense| = %.4f\n", fabs(c_mpo - c_dense));
+
+    /* MPO path includes Chebyshev-KPM error + SVD truncation + finite-
+     * N_c smoothing, so we accept a fairly loose tolerance here -- we
+     * are validating topology-scale (~1) agreement, not ULP match. */
+    CHECK(fabs(c_mpo - c_dense) < 0.3,
+          "MPO pipeline reproduces dense Chern marker within 0.3 at bulk site");
+
+    chern_system_free(dense_sys);
+    tn_mpo_free(H_mpo); tn_mpo_free(P_mpo);
+    tn_mpo_free(X_mpo); tn_mpo_free(Y_mpo);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -1372,6 +1550,7 @@ int main(void) {
     test_projector_from_generic_dense();
     test_tn_apply_mpo_direct();
     test_qwz_as_mpo();
+    test_full_chern_marker_2d();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

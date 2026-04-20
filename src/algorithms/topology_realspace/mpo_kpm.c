@@ -1344,19 +1344,30 @@ tn_mpo_t* mpo_kpm_mpo_from_dense(const double complex* M,
         tn_mpo_free(mpo); return NULL;
     }
 
-    /* Bit-interleaved layout: reshape M into a 4^L-long buffer so
-     * that linear index position (2s, 2s+1) correspond to site s's
-     * phys-in and phys-out bits, with site 0 holding the MSB bit of
-     * the matrix row / column index.  This matches the MSB-at-site-0
-     * convention already used by tn_mps_from_statevector. */
+    /* Bit-interleaved layout: reshape M into a 4^L-long buffer.  At
+     * each chain site s the rank-4 MPO tensor has shape
+     * [b_l, phys_in, phys_out, b_r]; after we reshape the flat buffer
+     * into [rest_rows * 4, ...] the 4 decomposes (in row-major) as
+     * (phys_in * 2 + phys_out).  Therefore:
+     *   - stride-2 axis (odd bit at position 2k+1) = phys_in.
+     *   - stride-1 axis (even bit at position 2k)  = phys_out.
+     *
+     * For M acting as (M psi)_i = sum_j M_ij psi_j:
+     *   - phys_in reads the state -> column index j.
+     *   - phys_out writes the state -> row index i.
+     *
+     * So bit_k(j) must go to the 2k+1 position, bit_k(i) to 2k.
+     * A prior version had these swapped, which stored M^T and, for
+     * complex-Hermitian inputs with nonzero imaginary off-diagonals,
+     * produced an MPO representing conj(M) instead of M.  Fixed. */
     double complex* rest = (double complex*)malloc(N2 * sizeof(double complex));
     if (!rest) { tn_mpo_free(mpo); return NULL; }
     for (size_t i = 0; i < N; i++) {
         for (size_t j = 0; j < N; j++) {
             size_t T_idx = 0;
             for (uint32_t k = 0; k < L; k++) {
-                if ((i >> k) & 1u) T_idx |= (size_t)1u << (2u * k + 1u);
-                if ((j >> k) & 1u) T_idx |= (size_t)1u << (2u * k);
+                if ((j >> k) & 1u) T_idx |= (size_t)1u << (2u * k + 1u);
+                if ((i >> k) & 1u) T_idx |= (size_t)1u << (2u * k);
             }
             rest[T_idx] = M[i * N + j];
         }
