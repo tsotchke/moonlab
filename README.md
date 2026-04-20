@@ -515,6 +515,47 @@ const { state, circuit } = useQuantumState(2);
 </script>
 ```
 
+## Limitations (as of 0.2.0-dev)
+
+Read this before judging the repo against its headline claims.  The
+adversarial audit that produced this list lives in
+`docs/audits/adversarial-review-2026-04-19.md`.
+
+- **Chern mosaic**: the scalar Bianco-Resta projector pipeline works
+  end-to-end on small Hamiltonians (validated to 7.7e-6 Frobenius
+  against LAPACK on a generic 8-dim H).  The paper-scale (10^6-10^8
+  site) capability is blocked on two pieces that do **not** ship in
+  0.2: a direct QWZ-finite-automaton MPO builder and QTCI-compressed
+  position operators.  The sparse-stencil renderer caps out around
+  L = 300.
+- **CHSH / "Bell-verified" QRNG**: prior to 0.2.0-dev the
+  `bell_test_chsh` function silently overwrote the input state with
+  `|Phi+>` before measuring, so every CHSH reading was 2.828 by
+  fiat.  Fixed this release.  The `moonlab_qrng_bytes`
+  BELL_VERIFIED mode now runs its health check on a fresh `|Phi+>`
+  temporary rather than on the QRNG's own evolving scratch state;
+  treat the resulting CHSH number as a plumbing sanity check, not a
+  proof of quantum advantage in the emitted bytes.
+- **MPI**: only the bridge primitives (init, allreduce, sendrecv,
+  barrier) are tested end-to-end.  Distributed state-vector gate
+  application across partitions is implemented but unverified; no
+  published multi-rank scaling numbers.
+- **GPU backends other than Metal + Eshkol**: CUDA, OpenCL, Vulkan,
+  cuQuantum all have 1000+ LOC implementations but are not exercised
+  by the default `ctest` run and have not been CI-validated against
+  their real SDKs.
+- **WebGPU / JS**: the `@moonlab/quantum-core` TS package builds and
+  the Metal-parity smoke runs when `dist/index.mjs` is already
+  built, but the default `ctest` on a fresh clone produces no
+  WebGPU coverage.
+- **Platforms**: macOS arm64 is the primary test host.  Linux x86_64
+  support is claimed but not CI-verified outside Docker smoke.
+  Windows is unsupported.
+- **Performance numbers**: every headline multiplier was measured
+  once on one host.  No stddev, no cross-platform reproduction.
+  Use the benches below to measure your own hardware; do not
+  quote the repository's numbers as portable.
+
 ## Performance
 
 The numbers historically quoted here (GPU speedups, MPI scaling, DMRG

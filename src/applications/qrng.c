@@ -928,20 +928,38 @@ bell_test_result_t qrng_v3_verify_quantum(
     size_t num_measurements
 ) {
     bell_test_result_t result = {0};
-    
+
     if (!ctx || !ctx->initialized || !ctx->quantum_state) {
         return result;
     }
-    
-    // Run Bell test on current quantum state
+
+    // Prior to the 0.2.0 audit this function passed ctx->quantum_state
+    // directly into bell_test_chsh.  bell_test_chsh used to silently
+    // overwrite its argument with |Phi+>, masking the fact that
+    // ctx->quantum_state is the QRNG's entropy-generation scratch
+    // state -- not a Bell state.  Now that bell_test_chsh honours its
+    // input, the health check must prepare its own Bell state on a
+    // temporary, run the CHSH test there, and free it.  This shifts
+    // the semantics from "verify the evolved state" (always 2.828 by
+    // fiat) to "verify the quantum-simulation plumbing still produces
+    // |Phi+> -> CHSH ~ 2.828", which is what the old broken code was
+    // actually doing.
+    quantum_state_t bell;
+    if (quantum_state_init(&bell, ctx->quantum_state->num_qubits) != QS_SUCCESS) {
+        return result;
+    }
+    create_bell_state_phi_plus(&bell, 0, 1);
+
     result = bell_test_chsh(
-        ctx->quantum_state,
+        &bell,
         0,  // Qubit A
         1,  // Qubit B
         num_measurements,
         NULL,  // Use optimal settings
         &ctx->entropy_ctx
     );
+
+    quantum_state_free(&bell);
     
     // Update statistics
     if (result.chsh_value > ctx->stats.max_chsh) {

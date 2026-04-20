@@ -244,19 +244,23 @@ bell_test_result_t bell_test_chsh(
     result.measurements = num_measurements;
     result.classical_bound = 2.0;
     result.quantum_bound = CHSH_QUANTUM_MAX;
-    
-    // Create maximally entangled Bell state |Φ⁺⟩
+
+    // Measure four correlations ON THE CALLER'S STATE.  Earlier versions
+    // of this function silently reset the clone to |00> and re-prepared
+    // a |Phi+> before every call, which meant the `state` argument was
+    // a lie: every input produced the same CHSH=2sqrt(2) figure
+    // regardless of what the caller actually passed.  That broke both
+    // the Python product-state xfail test and any downstream (notably
+    // qrng_v3_verify_quantum) that expected state-sensitive behaviour.
+    // We now measure correlations on the state the caller supplied;
+    // measure_correlation below clones it once per setting and rotates
+    // without mutating the original.
     quantum_state_t test_state;
     qs_error_t err = quantum_state_clone(&test_state, state);
     if (err != QS_SUCCESS) {
         return result;
     }
-    
-    // Reset to |00⟩ and create Bell state
-    quantum_state_reset(&test_state);
-    create_bell_state_phi_plus(&test_state, qubit_a, qubit_b);
-    
-    // Measure four correlations
+
     // Divide measurements equally among the four settings
     size_t samples_per_setting = num_measurements / 4;
     

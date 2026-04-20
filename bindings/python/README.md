@@ -51,7 +51,7 @@ python test_moonlab.py
 
 - **32-qubit simulation** (4.3 billion states)
 - **Complete universal gate set** (H, X, Y, Z, CNOT, Toffoli, rotations)
-- **Bell-verified** quantum behavior (CHSH ~ 2.87 measured at 10k samples; 2.828 is the theoretical Tsirelson bound)
+- **Bell inequality violation** on explicit Bell states (CHSH ~ 2.87 measured at 10k samples on |Phi+>, vs the Tsirelson bound 2.828).  The CHSH test now correctly honours whatever state you pass in -- the previous release silently overwrote the input with |Phi+>, making every CHSH result read 2.828 by fiat.  Separable inputs now give CHSH ~ 0 as physics requires.
 - **SIMD-dispatched C core** (AVX-512 / AVX2 / NEON / SVE) with an optional Metal GPU backend on Apple Silicon; see the reproducible-benchmark harness for host-specific numbers rather than a single multiplier
 
 ### Quantum Algorithms
