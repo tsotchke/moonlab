@@ -24,14 +24,16 @@ already has or still needs.
 | MPO linear combination                                 | shipped (`mpo_kpm_mpo_combine`)  |
 | MPO-level sign(H_tilde)                                | shipped (`mpo_kpm_sign_mpo`)     |
 | Filled-band projector as MPO                           | shipped (`mpo_kpm_projector_mpo`) |
-| QWZ (or any 2D tight-binding) H as an MPO              | **todo**                         |
-| Binary-quantics / QTCI compression for X, Y operators  | **todo** (P5.08 step 5)          |
-| Full lattice Chern-marker loop                         | **todo** (step 6)                |
+| Dense -> MPO via successive SVD                        | shipped (`mpo_kpm_mpo_from_dense`) |
+| QWZ (or any 2D tight-binding) H as an MPO (finite-automaton) | todo: direct builder at scale |
+| Binary-quantics / QTCI compression for X, Y operators  | todo (P5.08 scaling)             |
+| Full lattice Chern-marker loop                         | blocked on the above two         |
 
 ## What landed this sprint
 
-Twelve commits on master took the pipeline from "MPS states only" to
-"MPS plus MPO" with bidirectional validation:
+Fourteen commits on master took the pipeline from "MPS states only"
+to "every primitive on both MPS and MPO sides" with bidirectional
+validation closing on a generic Hermitian H:
 
 - `apply_sign` / `apply_projector` at the MPS level produce P|ket> to
   a Jackson-KPM error of ~3e-6 against dense LAPACK at N_c = 1000.
@@ -45,6 +47,14 @@ Twelve commits on master took the pipeline from "MPS states only" to
   <ket|P|ket> to 4e-7.
 - `<alpha|Q X P|alpha>` composed from three primitives matches dense
   to 3.7e-7.
+- `mpo_kpm_mpo_from_dense` lifts any 2^L x 2^L Hermitian matrix to
+  an MPO (roundtrip Frobenius error 1.2e-15 at L=3).
+- Final self-consistency: a generic random Hermitian H (built as
+  U diag(lam) U^H with lam = [-3, -2, -1, -0.5, 0.5, 1, 2, 3]) goes
+  dense -> MPO -> MPO Chebyshev -> dense and the resulting
+  projector matches the LAPACK eigendecomposition-based dense
+  projector to 7.7e-6, with tr(P) = 4.0000 exactly (four filled
+  states).  The full pipeline is closed.
 
 ## What the final two steps need
 
