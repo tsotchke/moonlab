@@ -108,7 +108,7 @@ jobs:
         run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 600
 
   # ============================================================================
-  # Tier B — MPI end-to-end (mpirun inside CI).
+  # Tier B — MPI end-to-end (mpirun inside CI, both macOS and Linux).
   # ============================================================================
 
   macos-mpi:
@@ -123,6 +123,34 @@ jobs:
 
       - name: Install dependencies (OpenMPI)
         run: brew install libomp ninja open-mpi
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test (includes MPI distributed_gates via mpirun -np 4)
+        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+
+  linux-mpi:
+    name: Linux x86_64 (-DQSIM_ENABLE_MPI=ON)
+    runs-on: ubuntu-22.04
+    env:
+      OMPI_MCA_plm_ssh_agent: /bin/false
+      # Allow mpirun to run as root inside CI containers.
+      OMPI_ALLOW_RUN_AS_ROOT: "1"
+      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (OpenMPI + BLAS)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev \
+            openmpi-bin libopenmpi-dev
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
@@ -164,8 +192,8 @@ jobs:
   # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
   # ============================================================================
 
-  bindings:
-    name: Bindings smoke (Python + Rust)
+  bindings-macos:
+    name: Bindings smoke (Python + Rust, macOS)
     runs-on: macos-14
     env:
       MOONLAB_SKIP_HW_ENTROPY: "1"
@@ -178,12 +206,40 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest numpy
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build library
         run: cmake --build build -j
-      - name: Run bindings tests
-        run: ctest --test-dir build -R "python_bindings_smoke|rust_bindings_smoke" --output-on-failure --timeout 600
+      - name: Run bindings tests (smoke + full pytest suite)
+        run: ctest --test-dir build -R "python_bindings|rust_bindings_smoke" --output-on-failure --timeout 600
+
+  bindings-linux:
+    name: Bindings smoke (Python + Rust, Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest numpy
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build library
+        run: cmake --build build -j
+      - name: Run bindings tests (smoke + full pytest suite)
+        run: ctest --test-dir build -R "python_bindings|rust_bindings_smoke" --output-on-failure --timeout 600
 
   # ============================================================================
   # Tier E — WASM build + WebGPU parity smoke.
