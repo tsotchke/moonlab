@@ -921,6 +921,60 @@ static void test_mpo_level_sign(void) {
     tn_mpo_free(H); mpo_free(H_src);
 }
 
+/* ---------------------------------------------------------------- */
+/* 8. Cross-check: MPO projector applied to state vs MPS path         */
+/* ---------------------------------------------------------------- */
+static void test_projector_mpo_vs_mps_path(void) {
+    fprintf(stdout, "\n-- projector_mpo applied to ket vs apply_projector --\n");
+    const uint32_t L = 3;
+    mpo_t* H_src = mpo_tfim_create(L, 1.0, 0.8);
+    tn_mpo_t* H = mpo_kpm_mpo_to_tn_mpo(H_src);
+
+    /* Spectrum bounds. */
+    size_t Ndense = 0;
+    double complex* Hd = build_dense_H(H_src, &Ndense);
+    double complex* scratch = (double complex*)malloc(Ndense * Ndense
+                                                       * sizeof(double complex));
+    memcpy(scratch, Hd, Ndense * Ndense * sizeof(double complex));
+    double* evals = (double*)malloc(Ndense * sizeof(double));
+    diagonalise_hermitian(scratch, (int)Ndense, evals);
+    const double a = 0.5 * (evals[0] + evals[Ndense - 1]);
+    const double b = 0.55 * (evals[Ndense - 1] - evals[0]);
+    free(Hd); free(scratch); free(evals);
+
+    mpo_kpm_params_t params = mpo_kpm_params_default();
+    params.n_cheby = 300;
+    params.E_shift = a;
+    params.E_scale = b;
+    params.max_bond_dim = 32;
+
+    tn_mps_state_t* ket = random_product_mps(L, 0xDEAD);
+
+    /* Path A: apply_projector on the state. */
+    tn_mps_state_t* P_ket_A = mpo_kpm_apply_projector(H, ket, &params);
+    CHECK(P_ket_A != NULL, "apply_projector ok");
+
+    /* Path B: build P as MPO, apply to the state. */
+    tn_mpo_t* P_mpo = mpo_kpm_projector_mpo(H, &params);
+    CHECK(P_mpo != NULL, "projector_mpo ok");
+    tn_mps_state_t* P_ket_B = mpo_kpm_apply_mpo(P_mpo, ket, 64);
+    CHECK(P_ket_B != NULL, "apply_mpo(P) ok");
+
+    /* Compare via <ket|P|ket> from each. */
+    const double complex me_A = tn_mps_overlap(ket, P_ket_A);
+    const double complex me_B = tn_mps_overlap(ket, P_ket_B);
+    fprintf(stdout, "    <ket|P|ket> MPS-route  = %+.6f%+.6fi\n",
+            creal(me_A), cimag(me_A));
+    fprintf(stdout, "    <ket|P|ket> MPO-route  = %+.6f%+.6fi\n",
+            creal(me_B), cimag(me_B));
+    CHECK(cabs(me_A - me_B) < 1e-3, "two routes agree on <ket|P|ket>");
+
+    tn_mps_free(ket);
+    tn_mps_free(P_ket_A); tn_mps_free(P_ket_B);
+    tn_mpo_free(P_mpo);
+    tn_mpo_free(H); mpo_free(H_src);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -931,6 +985,7 @@ int main(void) {
     test_diagonal_sum_mpo();
     test_qxp_pipeline();
     test_mpo_level_sign();
+    test_projector_mpo_vs_mps_path();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;
