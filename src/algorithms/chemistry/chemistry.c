@@ -199,11 +199,14 @@ void molecular_hamiltonian_add_h1(molecular_hamiltonian_t *h,
                                    uint32_t p, uint32_t q, double value) {
     if (!h || fabs(value) < 1e-15) return;
 
-    h->num_h1++;
-    h->h1 = realloc(h->h1, h->num_h1 * sizeof(one_electron_integral_t));
-    if (h->h1) {
-        h->h1[h->num_h1 - 1] = (one_electron_integral_t){p, q, value};
-    }
+    /* Grow via a temporary so an OOM leaves the invariant
+     * (h->num_h1 == allocated count) intact. */
+    const size_t new_count = (size_t)h->num_h1 + 1;
+    void *resized = realloc(h->h1, new_count * sizeof(one_electron_integral_t));
+    if (!resized) return;
+    h->h1 = resized;
+    h->h1[h->num_h1] = (one_electron_integral_t){p, q, value};
+    h->num_h1 = (uint32_t)new_count;
 }
 
 void molecular_hamiltonian_add_h2(molecular_hamiltonian_t *h,
@@ -211,11 +214,12 @@ void molecular_hamiltonian_add_h2(molecular_hamiltonian_t *h,
                                    uint32_t r, uint32_t s, double value) {
     if (!h || fabs(value) < 1e-15) return;
 
-    h->num_h2++;
-    h->h2 = realloc(h->h2, h->num_h2 * sizeof(two_electron_integral_t));
-    if (h->h2) {
-        h->h2[h->num_h2 - 1] = (two_electron_integral_t){p, q, r, s, value};
-    }
+    const size_t new_count = (size_t)h->num_h2 + 1;
+    void *resized = realloc(h->h2, new_count * sizeof(two_electron_integral_t));
+    if (!resized) return;
+    h->h2 = resized;
+    h->h2[h->num_h2] = (two_electron_integral_t){p, q, r, s, value};
+    h->num_h2 = (uint32_t)new_count;
 }
 
 qubit_hamiltonian_t *molecular_to_qubit_hamiltonian(const molecular_hamiltonian_t *mol_h) {
@@ -250,13 +254,17 @@ qubit_hamiltonian_t *molecular_to_qubit_hamiltonian(const molecular_hamiltonian_
 
         jw_operator_t jw = jw_transform_product(ops, 2, mol_h->num_orbitals);
 
-        // Add terms to Hamiltonian
-        h->terms = realloc(h->terms, (h->num_terms + jw.num_terms) * sizeof(pauli_string_t));
+        // Add terms to Hamiltonian via a temporary so an OOM leaves
+        // h intact rather than corrupting its pointer/count.
+        const size_t need = (size_t)h->num_terms + jw.num_terms;
+        void *resized = realloc(h->terms, need * sizeof(pauli_string_t));
+        if (!resized) { free(jw.terms); continue; }
+        h->terms = resized;
         for (uint32_t t = 0; t < jw.num_terms; t++) {
             h->terms[h->num_terms + t] = jw.terms[t];
             h->terms[h->num_terms + t].coeff *= val;
         }
-        h->num_terms += jw.num_terms;
+        h->num_terms = (uint32_t)need;
 
         free(jw.terms);  // Don't free individual ops as they're now owned by h
     }
@@ -278,12 +286,15 @@ qubit_hamiltonian_t *molecular_to_qubit_hamiltonian(const molecular_hamiltonian_
 
         jw_operator_t jw = jw_transform_product(ops, 4, mol_h->num_orbitals);
 
-        h->terms = realloc(h->terms, (h->num_terms + jw.num_terms) * sizeof(pauli_string_t));
+        const size_t need = (size_t)h->num_terms + jw.num_terms;
+        void *resized = realloc(h->terms, need * sizeof(pauli_string_t));
+        if (!resized) { free(jw.terms); continue; }
+        h->terms = resized;
         for (uint32_t t = 0; t < jw.num_terms; t++) {
             h->terms[h->num_terms + t] = jw.terms[t];
             h->terms[h->num_terms + t].coeff *= val;
         }
-        h->num_terms += jw.num_terms;
+        h->num_terms = (uint32_t)need;
 
         free(jw.terms);
     }

@@ -1398,11 +1398,22 @@ tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
         tensor_t *mps_t = state->tensors[i];
         tensor_t *mpo_t = mpo->tensors[i];
 
-        // Contract MPS tensor with MPO tensor
+        // Contract MPS tensor with MPO tensor.
         // MPS: [left_mps, phys, right_mps]
         // MPO: [left_mpo, phys_in, phys_out, right_mpo]
-        // Result: [left_mps, left_mpo, phys_out, right_mps, right_mpo]
-        // Then reshape to [left_new, phys_out, right_new]
+        //
+        // tensor_contract lays the surviving A-axes (left_mps,
+        // right_mps) before the surviving B-axes (left_mpo, phys_out,
+        // right_mpo), producing shape [left_mps, right_mps, left_mpo,
+        // phys_out, right_mpo].  The reshape to [left_mps * left_mpo,
+        // phys_out, right_mps * right_mpo] requires the two
+        // left-bonds to be adjacent in memory, so permute to
+        // [left_mps, left_mpo, phys_out, right_mps, right_mpo] via
+        // axis order {0, 2, 3, 1, 4} before the reshape.  Earlier
+        // versions of this function skipped the permute and
+        // produced garbage; no in-tree caller triggered the bug
+        // until the mpo_kpm module started using MPO-MPS action as
+        // a load-bearing primitive.
 
         uint32_t axes_mps[1] = {1};  // Physical index
         uint32_t axes_mpo[1] = {1};  // Physical in index
@@ -1410,16 +1421,18 @@ tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
         tensor_t *contracted = tensor_contract(mps_t, mpo_t, axes_mps, axes_mpo, 1);
         if (!contracted) return TN_GATE_ERROR_CONTRACTION_FAILED;
 
-        // Reshape: [left_mps, right_mps, left_mpo, phys_out, right_mpo]
-        // -> [left_mps * left_mpo, phys_out, right_mps * right_mpo]
+        uint32_t perm[5] = {0, 2, 3, 1, 4};
+        tensor_t *permuted = tensor_transpose(contracted, perm);
+        tensor_free(contracted);
+        if (!permuted) return TN_GATE_ERROR_ALLOC_FAILED;
 
         uint32_t new_left = mps_t->dims[0] * mpo_t->dims[0];
         uint32_t new_phys = mpo_t->dims[2];
         uint32_t new_right = mps_t->dims[2] * mpo_t->dims[3];
 
         uint32_t new_dims[3] = {new_left, new_phys, new_right};
-        tensor_t *new_mps = tensor_reshape(contracted, 3, new_dims);
-        tensor_free(contracted);
+        tensor_t *new_mps = tensor_reshape(permuted, 3, new_dims);
+        tensor_free(permuted);
 
         if (!new_mps) return TN_GATE_ERROR_ALLOC_FAILED;
 

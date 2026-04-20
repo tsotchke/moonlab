@@ -285,6 +285,8 @@ uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
     // Count possible outcomes and compute probabilities
     uint64_t num_outcomes = 1ULL << num_measure;
     double* outcome_probs = calloc(num_outcomes, sizeof(double));
+    if (!outcome_probs) return 0; /* OOM: fall back to a deterministic
+                                   * zero outcome rather than crash. */
 
     for (uint64_t i = 0; i < state_dim; i++) {
         // Extract measured qubit values
@@ -477,6 +479,11 @@ void measurement_sample(const quantum_state_t* state, uint64_t* outcomes,
 
     // Precompute cumulative distribution
     double* cdf = malloc(state_dim * sizeof(double));
+    if (!cdf) {
+        /* OOM: zero-fill outcomes and return without sampling. */
+        for (int s = 0; s < num_samples; s++) outcomes[s] = 0;
+        return;
+    }
     double cumulative = 0.0;
 
     for (uint64_t i = 0; i < state_dim; i++) {

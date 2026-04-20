@@ -51,8 +51,8 @@ python test_moonlab.py
 
 - **32-qubit simulation** (4.3 billion states)
 - **Complete universal gate set** (H, X, Y, Z, CNOT, Toffoli, rotations)
-- **Bell-verified** quantum behavior (CHSH = 2.828)
-- **10,000× optimized** for Apple Silicon
+- **Bell-verified** quantum behavior (CHSH ~ 2.87 measured at 10k samples; 2.828 is the theoretical Tsirelson bound)
+- **SIMD-dispatched C core** (AVX-512 / AVX2 / NEON / SVE) with an optional Metal GPU backend on Apple Silicon; see the reproducible-benchmark harness for host-specific numbers rather than a single multiplier
 
 ### Quantum Algorithms
 
@@ -350,4 +350,4 @@ This library implements algorithms from the following foundational works:
 
 ---
 
-*Version 0.1.1 - January 2026*
+*Version 0.2.0-dev - April 2026*
