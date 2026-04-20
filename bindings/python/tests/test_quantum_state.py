@@ -217,11 +217,34 @@ class TestMeasurement:
 
     def test_measure_excited_state(self, two_qubit_state):
         """Measuring |11> should always give 3."""
-        pytest.skip("measure_all_fast needs Python entropy_ctx wiring")
+        for _ in range(10):
+            state = QuantumState(2)
+            state.x(0).x(1)  # prepare |11>
+            outcome = state.measure_all_fast()
+            assert outcome == 3, f"expected |11> -> 3, got {outcome}"
 
     def test_measure_superposition_statistics(self):
         """Superposition measurements should follow probability distribution."""
-        pytest.skip("measure_all_fast needs Python entropy_ctx wiring")
+        # h on qubit 0 puts that qubit into +, qubit 1 stays |0>.  With
+        # qubit 0 as the low-order bit of the basis index, the 50/50
+        # outcomes are bitstring 0 (qubit0=0) and 1 (qubit0=1).
+        counts = {0: 0, 1: 0, 2: 0, 3: 0}
+        n_trials = 400
+        for _ in range(n_trials):
+            state = QuantumState(2)
+            state.h(0)
+            outcome = state.measure_all_fast()
+            counts[outcome] = counts.get(outcome, 0) + 1
+        # Outcomes 2 and 3 (qubit 1 == 1) should be zero.
+        assert counts[2] == 0 and counts[3] == 0, (
+            f"unexpected mass on qubit1=1 outcomes: {counts}")
+        # Outcomes 0 and 1 should each be close to n_trials / 2.  Binomial
+        # (n=400, p=0.5) has stddev ~= 10; 5-sigma is 50.
+        half = n_trials / 2.0
+        assert abs(counts[0] - half) < 50, (
+            f"|0> count {counts[0]} far from expected {half}")
+        assert abs(counts[1] - half) < 50, (
+            f"|1> count {counts[1]} far from expected {half}")
 
     def test_measure_collapses_state(self, two_qubit_state, assert_probability):
         """Measurement should collapse state to measured outcome."""

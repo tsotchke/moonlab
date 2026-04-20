@@ -171,9 +171,43 @@ _lib.gate_cphase.restype = ctypes.c_int
 _lib.gate_toffoli.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_int, ctypes.c_int, ctypes.c_int]
 _lib.gate_toffoli.restype = ctypes.c_int
 
-# Measurement (requires entropy context - will implement with wrapper)
+# Measurement (requires entropy context - constructed below via
+# quantum_entropy_ctx_create_hw, kept as a module-global).
 _lib.quantum_measure_all_fast.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_void_p]
 _lib.quantum_measure_all_fast.restype = ctypes.c_uint64
+
+# Hardware-backed quantum entropy context (non-inline helpers added in
+# 0.2.0).  Passing NULL for the ctx makes the C side return 0 for every
+# measurement regardless of state, so we allocate a process-wide ctx at
+# import time and reuse it for every measure_all_fast call.
+_lib.quantum_entropy_ctx_create_hw.argtypes = []
+_lib.quantum_entropy_ctx_create_hw.restype = ctypes.c_void_p
+
+_lib.quantum_entropy_ctx_destroy.argtypes = [ctypes.c_void_p]
+_lib.quantum_entropy_ctx_destroy.restype = None
+
+
+def _init_default_entropy_ctx():
+    """Build a hardware-backed quantum_entropy_ctx_t shared by every
+    measurement on this process.  Returns an opaque ``c_void_p``, or
+    raises ``MoonlabError`` if hardware entropy init fails (extremely
+    rare; only on hosts with no /dev/urandom and no RDSEED)."""
+    ptr = _lib.quantum_entropy_ctx_create_hw()
+    if not ptr:
+        raise RuntimeError(
+            "quantum_entropy_ctx_create_hw() returned NULL; "
+            "no hardware entropy source available"
+        )
+    return ctypes.c_void_p(ptr)
+
+
+_DEFAULT_ENTROPY_CTX = _init_default_entropy_ctx()
+# Ensure the C-side ctx is released at interpreter shutdown.  atexit
+# fires before ctypes tears down the library, which is the safe order.
+import atexit as _atexit
+_atexit.register(
+    lambda: _lib.quantum_entropy_ctx_destroy(_DEFAULT_ENTROPY_CTX)
+)
 
 # State properties
 _lib.quantum_state_get_probability.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_uint64]
@@ -460,28 +494,25 @@ class QuantumState:
     
     def measure_all_fast(self) -> int:
         """
-        Fast measurement of all qubits simultaneously
+        Fast measurement of all qubits simultaneously.
 
         Returns:
             Measured basis state index (0 to 2^n - 1)
 
-        Note: This collapses the wavefunction to the measured state
+        Note: This collapses the wavefunction to the measured state.
+
+        The process-wide hardware-entropy context (created at import
+        time; see ``_DEFAULT_ENTROPY_CTX``) is threaded through so the
+        C side samples from the actual amplitudes rather than
+        returning 0 as it did for a NULL ctx.
         """
-        # Use C library for measurement (uses cryptographic entropy)
         outcome = _lib.quantum_measure_all_fast(
             ctypes.byref(self._state),
-            None  # NULL entropy context uses default
+            _DEFAULT_ENTROPY_CTX,
         )
 
-        # Collapse wavefunction: set all amplitudes to 0 except measured state
-        for i in range(self.state_dim):
-            if i == outcome:
-                self._state.amplitudes[i].real = 1.0
-                self._state.amplitudes[i].imag = 0.0
-            else:
-                self._state.amplitudes[i].real = 0.0
-                self._state.amplitudes[i].imag = 0.0
-
+        # C side already collapsed the amplitudes to the outcome basis
+        # state via memset + unit amplitude, so we only need to return.
         return int(outcome)
 
     def entanglement_entropy(self, subsystem_qubits) -> float:

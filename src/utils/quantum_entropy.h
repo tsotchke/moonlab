@@ -101,7 +101,7 @@ static inline int quantum_entropy_get_double(
 
 /**
  * @brief Get cryptographically secure random uint64
- * 
+ *
  * @param ctx Entropy context
  * @param value Output pointer for random uint64
  * @return 0 on success, non-zero on error
@@ -113,5 +113,44 @@ static inline int quantum_entropy_get_uint64(
     if (!ctx || !value) return -1;
     return quantum_entropy_get_bytes(ctx, (uint8_t*)value, sizeof(*value));
 }
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Allocate and initialize a hardware-backed quantum entropy
+ *        context.
+ *
+ * Constructs a @c quantum_entropy_ctx_t whose @c get_bytes callback
+ * forwards to the platform hardware-entropy path
+ * (@c entropy_init + @c entropy_get_bytes from
+ * @c src/applications/hardware_entropy.h).  Intended for callers
+ * that cannot use the @c static @c inline @c quantum_entropy_init
+ * helper -- most notably ctypes-based bindings in Python/Rust
+ * which only see non-inline symbols.
+ *
+ * Pair every successful @c quantum_entropy_ctx_create_hw call with
+ * exactly one @c quantum_entropy_ctx_destroy call; the helper owns
+ * an internally-allocated hardware context that must be released.
+ *
+ * @return  Non-NULL ctx on success; NULL on OOM or hardware-entropy
+ *          init failure.
+ *
+ * @since 0.2.0
+ */
+quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
+
+/**
+ * @brief Free a context previously returned by
+ *        @c quantum_entropy_ctx_create_hw.  NULL-safe.
+ *
+ * @since 0.2.0
+ */
+void quantum_entropy_ctx_destroy(quantum_entropy_ctx_t *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUANTUM_ENTROPY_H */
