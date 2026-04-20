@@ -357,17 +357,6 @@ class TestCHSHTest:
         # With statistical noise, should still be > 2.5 for Bell state
         assert result['chsh'] > 2.0  # At least beat classical
 
-    @pytest.mark.xfail(
-        reason=(
-            "Moonlab's bell_test_chsh returns ~2.8 for the separable |++> "
-            "state, whereas the analytic value with standard CHSH angles is "
-            "0.  Symptom of a pre-existing bug in src/algorithms/bell_tests.c: "
-            "the measurement appears to ignore the input state and sample as "
-            "if from |Phi+>.  Tracked in docs/audits/v0.2.0-readiness.md; not "
-            "unblocking the Python bindings release."
-        ),
-        strict=True,
-    )
     def test_chsh_product_state_classical(self):
         """Product state should respect CHSH inequality."""
         state = QuantumState(2)

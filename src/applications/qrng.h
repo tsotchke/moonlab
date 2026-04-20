@@ -227,7 +227,14 @@ void qrng_v3_get_default_config(qrng_v3_config_t *config);
 /**
  * @brief Initialize quantum RNG v3 with default configuration
  * 
- * Creates unified quantum RNG using proven Bell-verified engine.
+ * Creates unified quantum RNG that combines hardware entropy with a
+ * simulated quantum evolution.  The BELL_VERIFIED mode runs a
+ * periodic CHSH health check against a freshly-prepared |Phi+> state
+ * (not against the QRNG's own evolved state; that distinction was
+ * clarified in the 2026-04-19 audit).  Treat the CHSH number as a
+ * plumbing sanity check, not a proof of quantum advantage in the
+ * emitted bytes.
+ *
  * Resolves entropy circular dependency through layered architecture:
  * 
  * Layer 1: Hardware entropy pool (RDSEED, /dev/random, etc.)

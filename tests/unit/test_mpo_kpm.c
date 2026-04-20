@@ -1127,6 +1127,66 @@ static void test_projector_from_generic_dense(void) {
     tn_mpo_free(H_mpo); tn_mpo_free(P_mpo);
 }
 
+/* ---------------------------------------------------------------- */
+/* 11. Direct regression test for tn_apply_mpo                        */
+/* ---------------------------------------------------------------- */
+/*
+ * The in-tree tn_gates.c tn_apply_mpo had a latent axis-reshape bug
+ * that no ctest target exercised; it surfaced only when mpo_kpm.c
+ * started building on top.  Adds a minimal direct test here so any
+ * future regression caught by the suite.
+ *
+ * Setup: |+++> on 3 qubits.  Apply sigma_z on qubit 0 via
+ * tn_mpo_single_site + tn_apply_mpo.  sigma_z |+> = |->, so the
+ * result is |-++>.  Compute <-++|result> and expect ~ 1.0.
+ */
+static void test_tn_apply_mpo_direct(void) {
+    fprintf(stdout, "\n-- tn_apply_mpo direct: sigma_z on |+++> --\n");
+    const uint32_t L = 3;
+
+    tn_state_config_t cfg = tn_state_config_default();
+    cfg.max_bond_dim = 16;
+    tn_mps_state_t* ket = tn_mps_create_zero(L, &cfg);
+    CHECK(ket != NULL, "ket built");
+
+    /* Put |+++> via H on each qubit. */
+    tn_gate_1q_t H = {{
+        { 1.0 / sqrt(2.0),  1.0 / sqrt(2.0) },
+        { 1.0 / sqrt(2.0), -1.0 / sqrt(2.0) },
+    }};
+    for (uint32_t i = 0; i < L; i++) {
+        CHECK(tn_apply_gate_1q(ket, i, &H) == TN_GATE_SUCCESS,
+              "H on qubit %u", i);
+    }
+
+    /* Expected final state: |-++> = (|000> - |100>) / sqrt(2) ... depends
+     * on qubit convention; instead of hand-deriving, build the expected
+     * MPS with H on qubits 1, 2 and X+H on qubit 0 (X|0> = |1>,
+     * H|1> = |->). */
+    tn_mps_state_t* expected = tn_mps_create_zero(L, &cfg);
+    tn_gate_1q_t X = {{{0, 1}, {1, 0}}};
+    tn_apply_gate_1q(expected, 0, &X);
+    for (uint32_t i = 0; i < L; i++) tn_apply_gate_1q(expected, i, &H);
+
+    /* Apply sigma_z on qubit 0 of ket via tn_mpo_single_site + tn_apply_mpo. */
+    tn_gate_1q_t Z = {{{1, 0}, {0, -1}}};
+    tn_mpo_t* Z_mpo = tn_mpo_single_site(L, 0, &Z);
+    CHECK(Z_mpo != NULL, "Z MPO built");
+
+    double err = 0.0;
+    CHECK(tn_apply_mpo(ket, Z_mpo, &err) == TN_GATE_SUCCESS,
+          "tn_apply_mpo returned SUCCESS");
+
+    /* |<expected|Z|+++>| = |<expected|expected>| = 1 (up to phase). */
+    const double complex ov = tn_mps_overlap(expected, ket);
+    fprintf(stdout, "    <-++|Z|+++> = %+.6f%+.6fi  (|overlap| = %.6f)\n",
+            creal(ov), cimag(ov), cabs(ov));
+    CHECK(fabs(cabs(ov) - 1.0) < 1e-10,
+          "|<expected|Z|+++>| = 1 (tn_apply_mpo axis-order fix live)");
+
+    tn_mps_free(ket); tn_mps_free(expected); tn_mpo_free(Z_mpo);
+}
+
 int main(void) {
     fprintf(stdout, "=== mpo_kpm unit tests ===\n");
     test_coefficients();
@@ -1140,6 +1200,7 @@ int main(void) {
     test_projector_mpo_vs_mps_path();
     test_mpo_from_dense_roundtrip();
     test_projector_from_generic_dense();
+    test_tn_apply_mpo_direct();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;
