@@ -333,4 +333,48 @@ void bell_monitor_get_statistics(const bell_test_monitor_t *monitor);
  */
 void bell_monitor_free(bell_test_monitor_t *monitor);
 
+// ============================================================================
+// ADDITIONAL BELL / NONLOCALITY INEQUALITIES  (v0.2)
+// ============================================================================
+
+/**
+ * @brief Mermin inequality on a 3-qubit GHZ state.
+ *
+ * For |GHZ> = (|000> + |111>)/sqrt(2), the Mermin polynomial
+ *   M = <XYY> + <YXY> + <YYX> - <XXX>
+ * has classical bound |M| <= 2 but quantum mechanics achieves |M| = 4.
+ * The caller supplies the 3 qubit indices.  The @p num_measurements
+ * budget is split equally among the four correlators.
+ *
+ * Result fields re-used: chsh_value holds |M|; correlation_ab through
+ * correlation_a_prime_b_prime hold the four <P1 P2 P3> correlators in
+ * the order {XYY, YXY, YYX, XXX}; classical_bound = 2; quantum_bound = 4.
+ */
+bell_test_result_t bell_test_mermin_ghz(
+    quantum_state_t *state,
+    int qubit_a,
+    int qubit_b,
+    int qubit_c,
+    size_t num_measurements,
+    quantum_entropy_ctx_t *entropy);
+
+/**
+ * @brief Mermin-Klyshko N-qubit inequality.
+ *
+ * For an N-qubit GHZ state the maximum quantum violation of the
+ * Mermin-Klyshko polynomial grows as 2^((N-1)/2); the classical (LHV)
+ * bound is 1.  This function measures the M_N polynomial on the caller's
+ * state over the first @p num_qubits qubits (assumed adjacent, 0..N-1).
+ *
+ * Returns the value of |M_N| normalised so that the classical bound is
+ * 1 and the ideal GHZ quantum value is 2^((N-1)/2).  For N = 2 this
+ * reduces to CHSH / (2 sqrt(2)); for N = 3 to Mermin / 4.  0.0 on
+ * argument error.
+ */
+double bell_test_mermin_klyshko(
+    quantum_state_t *state,
+    size_t num_qubits,
+    size_t num_measurements,
+    quantum_entropy_ctx_t *entropy);
+
 #endif /* BELL_TEST_H */

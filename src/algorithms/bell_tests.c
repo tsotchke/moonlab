@@ -516,10 +516,137 @@ void bell_monitor_get_statistics(const bell_test_monitor_t *monitor) {
 
 void bell_monitor_free(bell_test_monitor_t *monitor) {
     if (!monitor) return;
-    
+
     if (monitor->test_history) {
         free(monitor->test_history);
     }
-    
+
     memset(monitor, 0, sizeof(bell_test_monitor_t));
+}
+
+// ============================================================================
+// ADDITIONAL BELL / NONLOCALITY INEQUALITIES
+// ============================================================================
+
+/* Exact analytic expectation <P_0 P_1 ... P_{n-1}> where paulis[i] in
+ * {0=I, 1=X, 2=Y, 3=Z} on qubit qubits[i].  Works for any state_dim. */
+static double multi_pauli_expectation(const quantum_state_t *state,
+                                       const int *qubits,
+                                       const int *paulis,
+                                       size_t n_factors) {
+    if (!state || !qubits || !paulis) return 0.0;
+    quantum_state_t scratch;
+    if (quantum_state_clone(&scratch, state) != QS_SUCCESS) return 0.0;
+    qs_error_t err = QS_SUCCESS;
+    for (size_t i = 0; i < n_factors && err == QS_SUCCESS; i++) {
+        switch (paulis[i]) {
+            case 1: err = gate_pauli_x(&scratch, qubits[i]); break;
+            case 2: err = gate_pauli_y(&scratch, qubits[i]); break;
+            case 3: err = gate_pauli_z(&scratch, qubits[i]); break;
+            case 0: default: break;  /* Identity */
+        }
+    }
+    if (err != QS_SUCCESS) {
+        quantum_state_free(&scratch);
+        return 0.0;
+    }
+    /* <psi|P|psi> is real for Hermitian P.  Inner product. */
+    double complex acc = 0.0;
+    for (uint64_t i = 0; i < state->state_dim; i++) {
+        acc += conj(state->amplitudes[i]) * scratch.amplitudes[i];
+    }
+    quantum_state_free(&scratch);
+    return creal(acc);
+}
+
+bell_test_result_t bell_test_mermin_ghz(quantum_state_t *state,
+                                         int qa, int qb, int qc,
+                                         size_t num_measurements,
+                                         quantum_entropy_ctx_t *entropy) {
+    bell_test_result_t result = {0};
+    if (!state || !entropy) return result;
+    result.measurements = num_measurements;
+    result.classical_bound = 2.0;
+    result.quantum_bound = 4.0;
+
+    const int qubits[3] = { qa, qb, qc };
+    /* X=1, Y=2 encoding per multi_pauli_expectation. */
+    const int XYY[3] = { 1, 2, 2 };
+    const int YXY[3] = { 2, 1, 2 };
+    const int YYX[3] = { 2, 2, 1 };
+    const int XXX[3] = { 1, 1, 1 };
+
+    result.correlation_ab           = multi_pauli_expectation(state, qubits, XYY, 3);
+    result.correlation_ab_prime     = multi_pauli_expectation(state, qubits, YXY, 3);
+    result.correlation_a_prime_b    = multi_pauli_expectation(state, qubits, YYX, 3);
+    result.correlation_a_prime_b_prime = multi_pauli_expectation(state, qubits, XXX, 3);
+
+    /* M = <XYY> + <YXY> + <YYX> - <XXX>. */
+    double M = result.correlation_ab + result.correlation_ab_prime
+             + result.correlation_a_prime_b - result.correlation_a_prime_b_prime;
+    result.chsh_value = fabs(M);
+    result.violates_classical = (result.chsh_value > 2.0) ? 1 : 0;
+    result.confirms_quantum = (result.chsh_value > 3.5) ? 1 : 0;
+    return result;
+}
+
+/* Mermin-Klyshko polynomial M_N, computed recursively.
+ *   M_1 = X_0
+ *   M'_1 = Y_0
+ *   M_{k+1}   = (1/2)(M_k X_k + M'_k Y_k) + (1/2)(M'_k X_k - M_k Y_k)
+ *             = (M_k + M'_k)/2 * X_k + (M_k - M'_k)/2 * Y_k  ... etc.
+ * The quantum maximum on an N-qubit GHZ state is 2^((N-1)/2) above the
+ * classical bound of 1 (see Werner & Wolf, Phys. Rev. A 64, 032112).
+ *
+ * We compute |<M_N>| via a direct expansion: M_N is a sum over all
+ * 2^(N-1) tensor products of X's and Y's with specific signs.  The
+ * coefficient structure follows from the recursion above. */
+static double mermin_klyshko_term_sign(uint64_t pattern, size_t N) {
+    /* Pattern bit i = 1 means factor i is Y; 0 means X.  The sign is
+     * determined by: sign(pattern) = (-1)^(n_Y * (n_Y - 1) / 2) where
+     * n_Y is the number of Y factors.  (This matches the expansion of
+     * (X + iY)^N + (X - iY)^N up to normalisation.)  */
+    (void)N;
+    size_t ny = 0;
+    for (size_t i = 0; i < 64; i++) if (pattern & ((uint64_t)1 << i)) ny++;
+    int s = 1;
+    /* i^ny has real part non-zero only when ny is even; the real part
+     * is (-1)^(ny/2).  The Mermin-Klyshko polynomial picks exactly the
+     * patterns with even ny (the real part of the complex expansion). */
+    if (ny & 1) return 0.0;
+    if ((ny / 2) & 1) s = -1;
+    return (double)s;
+}
+
+double bell_test_mermin_klyshko(quantum_state_t *state,
+                                 size_t num_qubits,
+                                 size_t num_measurements,
+                                 quantum_entropy_ctx_t *entropy) {
+    (void)num_measurements;   /* analytic path, no sampling */
+    (void)entropy;
+    if (!state || num_qubits < 2 || num_qubits > 20) return 0.0;
+
+    const uint64_t N_terms = (uint64_t)1 << num_qubits;
+    double M = 0.0;
+    int *qubits = calloc(num_qubits, sizeof(int));
+    int *paulis = calloc(num_qubits, sizeof(int));
+    if (!qubits || !paulis) {
+        free(qubits); free(paulis);
+        return 0.0;
+    }
+    for (size_t i = 0; i < num_qubits; i++) qubits[i] = (int)i;
+
+    for (uint64_t pat = 0; pat < N_terms; pat++) {
+        double sgn = mermin_klyshko_term_sign(pat, num_qubits);
+        if (sgn == 0.0) continue;
+        for (size_t i = 0; i < num_qubits; i++) {
+            paulis[i] = (pat & ((uint64_t)1 << i)) ? 2 /* Y */ : 1 /* X */;
+        }
+        M += sgn * multi_pauli_expectation(state, qubits, paulis, num_qubits);
+    }
+    free(qubits); free(paulis);
+    /* Normalise so classical bound is 1.  The raw sum above has
+     * classical bound 2^((N-1)/2) and quantum maximum 2^(N-1). */
+    double norm = pow(2.0, (double)(num_qubits - 1) / 2.0);
+    return fabs(M) / norm;
 }
