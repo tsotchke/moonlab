@@ -511,6 +511,9 @@ set(QSIM_ALGORITHMS_SOURCES
     src/crypto/mlkem/poly.c
     # ML-KEM-512 KEM: KeyGen / Encaps / Decaps.
     src/crypto/mlkem/mlkem.c
+    # AES-256 + NIST SP 800-90A CTR_DRBG (pq-crystals KAT convention).
+    src/crypto/aes/aes.c
+    src/crypto/drbg/ctr_drbg.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1113,6 +1116,14 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_mlkem tests/unit/test_mlkem.c)
     target_link_libraries(test_mlkem PRIVATE quantumsim m)
     add_test(NAME unit_mlkem COMMAND test_mlkem)
+
+    add_executable(test_aes_drbg tests/unit/test_aes_drbg.c)
+    target_link_libraries(test_aes_drbg PRIVATE quantumsim m)
+    add_test(NAME unit_aes_drbg COMMAND test_aes_drbg)
+
+    add_executable(test_mlkem_nist_kat tests/unit/test_mlkem_nist_kat.c)
+    target_link_libraries(test_mlkem_nist_kat PRIVATE quantumsim m)
+    add_test(NAME unit_mlkem_nist_kat COMMAND test_mlkem_nist_kat)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
