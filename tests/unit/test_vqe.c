@@ -19,6 +19,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int failures = 0;
 
@@ -193,12 +194,78 @@ static void test_h2_noisy(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Validate the adjoint-mode gradient path against a central-difference
+ * reference on a real H2 VQE.  vqe_compute_gradient silently selects
+ * adjoint for (HEA + noise-free), so this also exercises the
+ * integration glue (hamiltonian -> moonlab_diff_pauli_term_t, HEA ->
+ * moonlab_diff_circuit_t). */
+static void test_h2_adjoint_gradient_matches_finite_diff(void) {
+    fprintf(stdout, "\n-- VQE: adjoint gradient matches central diff --\n");
+
+    pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(0.74);
+    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(H->num_qubits, 3);
+    vqe_optimizer_t* opt = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    vqe_solver_t* solver = vqe_solver_create(H, ansatz, opt, &e);
+    CHECK(solver != NULL, "built VQE solver");
+    if (!solver) {
+        vqe_optimizer_free(opt); vqe_ansatz_free(ansatz);
+        pauli_hamiltonian_free(H); return;
+    }
+
+    /* Pick a non-trivial parameter point (not all zeros so gradient
+     * is non-zero in every slot). */
+    const size_t n = ansatz->num_parameters;
+    double *theta = malloc(n * sizeof(double));
+    for (size_t k = 0; k < n; k++) theta[k] = 0.1 * (double)(k + 1);
+
+    double *grad_adj = malloc(n * sizeof(double));
+    int rc = vqe_compute_gradient(solver, theta, grad_adj);
+    CHECK(rc == 0, "vqe_compute_gradient returns success");
+
+    /* Central-difference reference.  vqe_compute_energy evaluates
+     * the same noise-free forward pass the adjoint path uses. */
+    const double h_step = 1e-4;
+    double *grad_fd = malloc(n * sizeof(double));
+    double *theta_p = malloc(n * sizeof(double));
+    for (size_t k = 0; k < n; k++) {
+        memcpy(theta_p, theta, n * sizeof(double));
+        theta_p[k] = theta[k] + h_step;
+        double ep = vqe_compute_energy(solver, theta_p);
+        theta_p[k] = theta[k] - h_step;
+        double em = vqe_compute_energy(solver, theta_p);
+        grad_fd[k] = (ep - em) / (2.0 * h_step);
+    }
+
+    double max_err = 0.0;
+    for (size_t k = 0; k < n; k++) {
+        double err = fabs(grad_adj[k] - grad_fd[k]);
+        if (err > max_err) max_err = err;
+    }
+    fprintf(stdout, "    max |adjoint - finite_diff| = %.2e (n=%zu params)\n",
+            max_err, n);
+    CHECK(max_err < 1e-6,
+          "adjoint gradient matches finite-diff to 1e-6 (got %.2e)",
+          max_err);
+
+    free(theta); free(grad_adj); free(grad_fd); free(theta_p);
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
     test_h2_single_energy_evaluation();
     test_h2_optimizer_converges_below_hf();
     test_h2_noisy();
+    test_h2_adjoint_gradient_matches_finite_diff();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

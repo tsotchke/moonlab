@@ -1,4 +1,5 @@
 #include "vqe.h"
+#include "diff/differentiable.h"
 #include "../quantum/gates.h"
 #include <stdlib.h>
 #include <string.h>
@@ -1524,25 +1525,195 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
     return result;
 }
 
+/* Translate a pauli_hamiltonian_t (uses "IXYZ" char strings) into the
+ * moonlab_diff_pauli_term_t array expected by the adjoint autograd.
+ * Allocates one flat int buffer for qubits and one for enums; caller
+ * frees the returned arrays via vqe_free_diff_terms. */
+typedef struct {
+    moonlab_diff_pauli_term_t *terms;
+    size_t n_terms;
+    int *qbuf;
+    moonlab_diff_observable_t *pbuf;
+} vqe_diff_terms_t;
+
+static void vqe_free_diff_terms(vqe_diff_terms_t *t) {
+    if (!t) return;
+    free(t->terms);  t->terms = NULL;
+    free(t->qbuf);   t->qbuf = NULL;
+    free(t->pbuf);   t->pbuf = NULL;
+    t->n_terms = 0;
+}
+
+static int vqe_build_diff_terms(const pauli_hamiltonian_t *h,
+                                 vqe_diff_terms_t *out) {
+    if (!h || !out) return -1;
+    memset(out, 0, sizeof(*out));
+    /* First pass: total non-identity Pauli factors across all terms. */
+    size_t total_ops = 0;
+    for (size_t i = 0; i < h->num_terms; i++) {
+        const char *ps = h->terms[i].pauli_string;
+        if (!ps) continue;
+        for (size_t q = 0; q < h->terms[i].num_qubits; q++) {
+            if (ps[q] != 'I' && ps[q] != 'i') total_ops++;
+        }
+    }
+    out->terms = calloc(h->num_terms, sizeof(*out->terms));
+    if (!out->terms) return -2;
+    if (total_ops > 0) {
+        out->qbuf = calloc(total_ops, sizeof(int));
+        out->pbuf = calloc(total_ops, sizeof(moonlab_diff_observable_t));
+        if (!out->qbuf || !out->pbuf) {
+            vqe_free_diff_terms(out);
+            return -3;
+        }
+    }
+    size_t cur = 0;
+    for (size_t i = 0; i < h->num_terms; i++) {
+        const pauli_term_t *term = &h->terms[i];
+        out->terms[i].coefficient = term->coefficient;
+        out->terms[i].qubits = (total_ops > 0) ? &out->qbuf[cur] : NULL;
+        out->terms[i].paulis = (total_ops > 0) ? &out->pbuf[cur] : NULL;
+        size_t nop = 0;
+        if (term->pauli_string) {
+            for (size_t q = 0; q < term->num_qubits; q++) {
+                char c = term->pauli_string[q];
+                if (c == 'I' || c == 'i') continue;
+                moonlab_diff_observable_t obs;
+                if      (c == 'X' || c == 'x') obs = MOONLAB_DIFF_OBS_X;
+                else if (c == 'Y' || c == 'y') obs = MOONLAB_DIFF_OBS_Y;
+                else if (c == 'Z' || c == 'z') obs = MOONLAB_DIFF_OBS_Z;
+                else {
+                    vqe_free_diff_terms(out);
+                    return -4;
+                }
+                out->qbuf[cur + nop] = (int)q;
+                out->pbuf[cur + nop] = obs;
+                nop++;
+            }
+        }
+        out->terms[i].num_ops = nop;
+        cur += nop;
+    }
+    out->n_terms = h->num_terms;
+    return 0;
+}
+
+/* Build a moonlab_diff_circuit_t that mirrors HF init + HEA ansatz.
+ * Parametric params in the returned circuit are filled from @p params
+ * (same order as the HEA layer loop). */
+static moonlab_diff_circuit_t* vqe_build_hea_diff_circuit(
+    const vqe_ansatz_t *ansatz,
+    uint64_t hf_reference,
+    const double *params
+) {
+    moonlab_diff_circuit_t *c =
+        moonlab_diff_circuit_create((uint32_t)ansatz->num_qubits);
+    if (!c) return NULL;
+
+    /* Hartree-Fock |HF> via fixed X gates. */
+    for (size_t q = 0; q < ansatz->num_qubits; q++) {
+        if (hf_reference & (1ULL << q)) {
+            if (moonlab_diff_x(c, (int)q) != 0) {
+                moonlab_diff_circuit_free(c); return NULL;
+            }
+        }
+    }
+
+    size_t p = 0;
+    for (size_t layer = 0; layer < ansatz->num_layers; layer++) {
+        for (size_t q = 0; q < ansatz->num_qubits; q++) {
+            if (moonlab_diff_ry(c, (int)q, params[p++]) != 0) {
+                moonlab_diff_circuit_free(c); return NULL;
+            }
+            if (moonlab_diff_rz(c, (int)q, params[p++]) != 0) {
+                moonlab_diff_circuit_free(c); return NULL;
+            }
+        }
+        for (size_t q = 0; q + 1 < ansatz->num_qubits; q++) {
+            if (moonlab_diff_cnot(c, (int)q, (int)(q + 1)) != 0) {
+                moonlab_diff_circuit_free(c); return NULL;
+            }
+        }
+    }
+    return c;
+}
+
+/* Adjoint-mode gradient for HEA ansatz with noise-free forward.
+ * Returns 0 on success; -N if inputs are incompatible (caller should
+ * fall back to PSR). */
+static int vqe_compute_gradient_adjoint(vqe_solver_t *solver,
+                                         const double *parameters,
+                                         double *gradient) {
+    if (!solver || !parameters || !gradient) return -1;
+    if (solver->ansatz->type != VQE_ANSATZ_HARDWARE_EFFICIENT) return -2;
+    if (solver->noise_model && solver->noise_model->enabled) return -3;
+
+    moonlab_diff_circuit_t *c = vqe_build_hea_diff_circuit(
+        solver->ansatz, solver->hamiltonian->hf_reference, parameters);
+    if (!c) return -4;
+    if (moonlab_diff_num_parameters(c) != solver->ansatz->num_parameters) {
+        moonlab_diff_circuit_free(c);
+        return -5;
+    }
+
+    vqe_diff_terms_t dt;
+    int rc = vqe_build_diff_terms(solver->hamiltonian, &dt);
+    if (rc != 0) {
+        moonlab_diff_circuit_free(c);
+        return -6;
+    }
+
+    quantum_state_t s;
+    if (quantum_state_init(&s, (uint32_t)solver->ansatz->num_qubits)
+        != QS_SUCCESS) {
+        moonlab_diff_circuit_free(c);
+        vqe_free_diff_terms(&dt);
+        return -7;
+    }
+    /* Forward: populates |psi(theta)>. */
+    if (moonlab_diff_forward(c, &s) != 0) {
+        quantum_state_free(&s);
+        moonlab_diff_circuit_free(c);
+        vqe_free_diff_terms(&dt);
+        return -8;
+    }
+
+    rc = moonlab_diff_backward_pauli_sum(c, &s, dt.terms, dt.n_terms,
+                                          gradient);
+
+    quantum_state_free(&s);
+    moonlab_diff_circuit_free(c);
+    vqe_free_diff_terms(&dt);
+    return (rc == 0) ? 0 : -9;
+}
+
 int vqe_compute_gradient(
     vqe_solver_t *solver,
     const double *parameters,
     double *gradient
 ) {
     /**
-     * PARAMETER SHIFT RULE (EXACT QUANTUM GRADIENTS)
-     * 
-     * For parameterized gate G(θ) = exp(-iθP/2) where P² = I:
-     * ∂⟨H⟩/∂θ = [⟨H⟩(θ+π/2) - ⟨H⟩(θ-π/2)] / 2
-     * 
-     * Reference: Mitarai et al., Phys. Rev. A 98, 032309 (2018)
-     * This is EXACT, not a finite difference approximation!
+     * GRADIENT COMPUTATION
+     *
+     * Fast path (HEA + noise-free): reverse-mode adjoint autograd
+     *   via moonlab_diff_backward_pauli_sum.  Cost is O(1) forward
+     *   passes in the parameter count.  See src/algorithms/diff/.
+     *
+     * Fallback: parameter-shift rule (Mitarai et al. 2018), 2 * N_params
+     *   forward passes.  Used for UCCSD, symmetry-preserving, and
+     *   any noisy simulation (adjoint via unitary generators doesn't
+     *   apply when the channel isn't unitary).
      */
-    
     if (!solver || !parameters || !gradient) {
         return -1;
     }
-    
+
+    /* Try adjoint path first.  Silently fall back on any return code
+     * so existing callers never observe a regression. */
+    if (vqe_compute_gradient_adjoint(solver, parameters, gradient) == 0) {
+        return 0;
+    }
+
     double *params_plus = malloc(solver->ansatz->num_parameters * sizeof(double));
     double *params_minus = malloc(solver->ansatz->num_parameters * sizeof(double));
     
