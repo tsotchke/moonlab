@@ -21,7 +21,8 @@
 typedef enum {
     OP_H, OP_X, OP_Y, OP_Z,
     OP_CNOT, OP_CZ,
-    OP_RX, OP_RY, OP_RZ
+    OP_RX, OP_RY, OP_RZ,
+    OP_CRX, OP_CRY, OP_CRZ
 } op_kind_t;
 
 typedef struct {
@@ -116,6 +117,22 @@ static int append_param(moonlab_diff_circuit_t *c, op_kind_t k,
     return 0;
 }
 
+static int append_param_controlled(moonlab_diff_circuit_t *c, op_kind_t k,
+                                    int ctrl, int target, double theta) {
+    if (!c) return -1;
+    if (ctrl < 0 || (uint32_t)ctrl >= c->num_qubits) return -2;
+    if (target < 0 || (uint32_t)target >= c->num_qubits) return -2;
+    if (ctrl == target) return -3;
+    if (ensure_cap(c) != 0) return -4;
+    op_t *op = &c->ops[c->n_ops++];
+    op->kind = k;
+    op->q0   = target;  /* target qubit in q0 (matches RX/RY/RZ convention) */
+    op->q1   = ctrl;    /* control qubit in q1 */
+    op->theta = theta;
+    op->param_index = c->n_params++;
+    return 0;
+}
+
 int moonlab_diff_h (moonlab_diff_circuit_t *c, int q) { return append_fixed(c, OP_H, q, -1); }
 int moonlab_diff_x (moonlab_diff_circuit_t *c, int q) { return append_fixed(c, OP_X, q, -1); }
 int moonlab_diff_y (moonlab_diff_circuit_t *c, int q) { return append_fixed(c, OP_Y, q, -1); }
@@ -130,6 +147,16 @@ int moonlab_diff_cz(moonlab_diff_circuit_t *c, int a, int b) {
 int moonlab_diff_rx(moonlab_diff_circuit_t *c, int q, double t) { return append_param(c, OP_RX, q, t); }
 int moonlab_diff_ry(moonlab_diff_circuit_t *c, int q, double t) { return append_param(c, OP_RY, q, t); }
 int moonlab_diff_rz(moonlab_diff_circuit_t *c, int q, double t) { return append_param(c, OP_RZ, q, t); }
+
+int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int tgt, double t) {
+    return append_param_controlled(c, OP_CRX, ctrl, tgt, t);
+}
+int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int tgt, double t) {
+    return append_param_controlled(c, OP_CRY, ctrl, tgt, t);
+}
+int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int tgt, double t) {
+    return append_param_controlled(c, OP_CRZ, ctrl, tgt, t);
+}
 
 int moonlab_diff_set_theta(moonlab_diff_circuit_t *c, size_t k, double t) {
     if (!c) return -1;
@@ -158,6 +185,10 @@ static qs_error_t apply_op(quantum_state_t *s, const op_t *op) {
         case OP_RX:    return gate_rx(s, op->q0, op->theta);
         case OP_RY:    return gate_ry(s, op->q0, op->theta);
         case OP_RZ:    return gate_rz(s, op->q0, op->theta);
+        /* q1 = ctrl, q0 = tgt per append_param_controlled. */
+        case OP_CRX:   return gate_crx(s, op->q1, op->q0, op->theta);
+        case OP_CRY:   return gate_cry(s, op->q1, op->q0, op->theta);
+        case OP_CRZ:   return gate_crz(s, op->q1, op->q0, op->theta);
     }
     return QS_ERROR_INVALID_STATE;
 }
@@ -171,6 +202,9 @@ static qs_error_t apply_op_inverse(quantum_state_t *s, const op_t *op) {
         case OP_RX:
         case OP_RY:
         case OP_RZ:
+        case OP_CRX:
+        case OP_CRY:
+        case OP_CRZ:
             inv.theta = -op->theta;
             break;
         default:
@@ -253,19 +287,39 @@ static double complex inner_product(const quantum_state_t *a,
 
 /* Apply Hermitian Pauli generator G in place to a state copy and
  * return <eta|G|xi> in one combined pass.  Reuses a scratch state
- * to avoid an extra alloc per step. */
+ * to avoid an extra alloc per step.
+ *
+ * For RX / RY / RZ:   G = X / Y / Z on op->q0.
+ * For CRX / CRY / CRZ: G = |1><1|_ctrl (op->q1) tensor (X/Y/Z)_tgt (op->q0)
+ *   -- apply the Pauli on the target, then project to the ctrl=1 subspace. */
 static double complex eta_G_xi(const quantum_state_t *eta,
                                 const quantum_state_t *xi,
-                                op_kind_t gate_kind,
-                                int qubit,
+                                const op_t *op,
                                 quantum_state_t *scratch) {
-    /* Copy xi into scratch, apply G (= X / Y / Z for RX / RY / RZ). */
     memcpy(scratch->amplitudes, xi->amplitudes,
            xi->state_dim * sizeof(*xi->amplitudes));
-    switch (gate_kind) {
-        case OP_RX: gate_pauli_x(scratch, qubit); break;
-        case OP_RY: gate_pauli_y(scratch, qubit); break;
-        case OP_RZ: gate_pauli_z(scratch, qubit); break;
+    switch (op->kind) {
+        case OP_RX: gate_pauli_x(scratch, op->q0); break;
+        case OP_RY: gate_pauli_y(scratch, op->q0); break;
+        case OP_RZ: gate_pauli_z(scratch, op->q0); break;
+        case OP_CRX:
+        case OP_CRY:
+        case OP_CRZ: {
+            /* Apply target Pauli first (commutes with the ctrl projector
+             * since they act on disjoint qubits). */
+            switch (op->kind) {
+                case OP_CRX: gate_pauli_x(scratch, op->q0); break;
+                case OP_CRY: gate_pauli_y(scratch, op->q0); break;
+                case OP_CRZ: gate_pauli_z(scratch, op->q0); break;
+                default: break;
+            }
+            /* Zero out amplitudes where the control bit is 0. */
+            const uint64_t cmask = (uint64_t)1 << op->q1;
+            for (uint64_t i = 0; i < scratch->state_dim; i++) {
+                if (!(i & cmask)) scratch->amplitudes[i] = 0.0;
+            }
+            break;
+        }
         default: return 0.0;
     }
     return inner_product(eta, scratch);
@@ -306,8 +360,8 @@ int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
      * Then undo U_k on both xi and eta. */
     for (size_t idx = c->n_ops; idx > 0; idx--) {
         const op_t *op = &c->ops[idx - 1];
-        if (op->kind == OP_RX || op->kind == OP_RY || op->kind == OP_RZ) {
-            double complex v = eta_G_xi(&eta, &xi, op->kind, op->q0, &scratch);
+        if (op->param_index != (size_t)-1) {
+            double complex v = eta_G_xi(&eta, &xi, op, &scratch);
             /* U = exp(-i theta G/2) with Hermitian G.  See
              * differentiable.h: grad = Im(<eta|G|xi>). */
             grad_out[op->param_index] = cimag(v);
@@ -402,8 +456,8 @@ static int backward_single_term(const moonlab_diff_circuit_t *c,
 
     for (size_t idx = c->n_ops; idx > 0; idx--) {
         const op_t *op = &c->ops[idx - 1];
-        if (op->kind == OP_RX || op->kind == OP_RY || op->kind == OP_RZ) {
-            double complex v = eta_G_xi(&eta, &xi, op->kind, op->q0, &scratch);
+        if (op->param_index != (size_t)-1) {
+            double complex v = eta_G_xi(&eta, &xi, op, &scratch);
             grad_out[op->param_index] += scale * cimag(v);
         }
         if (apply_op_inverse(&xi,  op) != QS_SUCCESS ||
