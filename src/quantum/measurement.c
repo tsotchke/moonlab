@@ -540,3 +540,164 @@ void measurement_estimate_probabilities(const uint64_t* samples, int num_samples
         probabilities[i] *= inv_n;
     }
 }
+
+/* =========================================================== */
+/* POVM + weak measurement  (v0.2)                              */
+/* =========================================================== */
+
+/* Compute out = M * psi for a row-major state_dim x state_dim
+ * matrix M.  Overwrites out (no aliasing allowed with psi). */
+static void apply_matrix(const complex_t *M, const complex_t *psi,
+                          complex_t *out, uint64_t state_dim) {
+    for (uint64_t i = 0; i < state_dim; i++) {
+        complex_t acc = 0.0;
+        const complex_t *row = &M[i * state_dim];
+        for (uint64_t j = 0; j < state_dim; j++) {
+            acc += row[j] * psi[j];
+        }
+        out[i] = acc;
+    }
+}
+
+/* Compute p_k = <psi| K_k^dag K_k |psi> = || K_k psi ||^2. */
+static double povm_outcome_prob(const complex_t *Kk,
+                                 const complex_t *psi,
+                                 complex_t *scratch,
+                                 uint64_t state_dim) {
+    apply_matrix(Kk, psi, scratch, state_dim);
+    double acc = 0.0;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        double re = creal(scratch[i]);
+        double im = cimag(scratch[i]);
+        acc += re * re + im * im;
+    }
+    return acc;
+}
+
+/* Verify sum_k K_k^dag K_k = I within tolerance. */
+static qs_error_t povm_check_completeness(const povm_t *povm) {
+    if (!povm || !povm->kraus_ops || povm->num_outcomes == 0) {
+        return QS_ERROR_INVALID_STATE;
+    }
+    const uint64_t D = povm->state_dim;
+    for (uint64_t a = 0; a < D; a++) {
+        for (uint64_t b = 0; b < D; b++) {
+            complex_t sum = 0.0;
+            for (size_t k = 0; k < povm->num_outcomes; k++) {
+                const complex_t *K = povm->kraus_ops[k];
+                complex_t entry = 0.0;
+                for (uint64_t c = 0; c < D; c++) {
+                    entry += conj(K[c * D + a]) * K[c * D + b];
+                }
+                sum += entry;
+            }
+            complex_t expected = (a == b) ? 1.0 : 0.0;
+            if (cabs(sum - expected) > 1e-9) return QS_ERROR_NOT_NORMALIZED;
+        }
+    }
+    return QS_SUCCESS;
+}
+
+qs_error_t measurement_povm_probabilities(const quantum_state_t *state,
+                                           const povm_t *povm,
+                                           double *probs_out) {
+    if (!state || !povm || !probs_out ||
+        povm->state_dim != state->state_dim) {
+        return QS_ERROR_INVALID_STATE;
+    }
+    complex_t *scratch = (complex_t*)malloc(state->state_dim * sizeof(complex_t));
+    if (!scratch) return QS_ERROR_OUT_OF_MEMORY;
+    for (size_t k = 0; k < povm->num_outcomes; k++) {
+        probs_out[k] = povm_outcome_prob(povm->kraus_ops[k],
+                                          state->amplitudes,
+                                          scratch, state->state_dim);
+    }
+    free(scratch);
+    return QS_SUCCESS;
+}
+
+qs_error_t measurement_povm(quantum_state_t *state,
+                             const povm_t *povm,
+                             double uniform,
+                             size_t *outcome_out) {
+    if (!state || !povm ||
+        povm->state_dim != state->state_dim) {
+        return QS_ERROR_INVALID_STATE;
+    }
+    qs_error_t cc = povm_check_completeness(povm);
+    if (cc != QS_SUCCESS) return cc;
+
+    const uint64_t D = state->state_dim;
+    complex_t *scratch = (complex_t*)malloc(D * sizeof(complex_t));
+    if (!scratch) return QS_ERROR_OUT_OF_MEMORY;
+    double *probs = (double*)malloc(povm->num_outcomes * sizeof(double));
+    if (!probs) { free(scratch); return QS_ERROR_OUT_OF_MEMORY; }
+    for (size_t k = 0; k < povm->num_outcomes; k++) {
+        probs[k] = povm_outcome_prob(povm->kraus_ops[k],
+                                      state->amplitudes, scratch, D);
+    }
+
+    double cum = 0.0;
+    size_t picked = povm->num_outcomes - 1;
+    for (size_t k = 0; k < povm->num_outcomes; k++) {
+        cum += probs[k];
+        if (uniform < cum) { picked = k; break; }
+    }
+    if (outcome_out) *outcome_out = picked;
+
+    apply_matrix(povm->kraus_ops[picked], state->amplitudes, scratch, D);
+    double p = probs[picked];
+    if (p <= 0.0) {
+        free(scratch); free(probs);
+        return QS_ERROR_NOT_NORMALIZED;
+    }
+    double inv_norm = 1.0 / sqrt(p);
+    for (uint64_t i = 0; i < D; i++) {
+        state->amplitudes[i] = scratch[i] * inv_norm;
+    }
+
+    free(scratch); free(probs);
+    return QS_SUCCESS;
+}
+
+qs_error_t measurement_weak_z(quantum_state_t *state,
+                               int qubit,
+                               double strength,
+                               double uniform,
+                               int *outcome_out) {
+    if (!state || qubit < 0 || (uint32_t)qubit >= state->num_qubits)
+        return QS_ERROR_INVALID_STATE;
+    if (strength < 0.0) strength = 0.0;
+    if (strength > 1.0) strength = 1.0;
+
+    const uint64_t D = state->state_dim;
+    const uint64_t mask = (uint64_t)1 << qubit;
+
+    const double theta = (M_PI / 4.0) * (1.0 - strength);
+    const double c = cos(theta);
+    const double s = sin(theta);
+
+    complex_t *Kplus  = (complex_t*)calloc(D * D, sizeof(complex_t));
+    complex_t *Kminus = (complex_t*)calloc(D * D, sizeof(complex_t));
+    if (!Kplus || !Kminus) {
+        free(Kplus); free(Kminus);
+        return QS_ERROR_OUT_OF_MEMORY;
+    }
+    for (uint64_t i = 0; i < D; i++) {
+        int bit = (i & mask) ? 1 : 0;
+        Kplus [i * D + i] = bit ? s : c;
+        Kminus[i * D + i] = bit ? c : s;
+    }
+
+    const complex_t *ops[2] = { Kplus, Kminus };
+    povm_t povm;
+    povm.num_outcomes = 2;
+    povm.state_dim    = D;
+    povm.kraus_ops    = ops;
+
+    size_t outcome = 0;
+    qs_error_t rc = measurement_povm(state, &povm, uniform, &outcome);
+    if (outcome_out) *outcome_out = (int)outcome;
+    free(Kplus); free(Kminus);
+    return rc;
+}
