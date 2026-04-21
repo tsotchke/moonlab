@@ -1,6 +1,6 @@
 [package]
 name = "moonlab"
-version = "0.2.0"
+version = "0.2.1-dev"
 edition = "2021"
 authors = ["Moonlab Team"]
 description = "Safe, idiomatic Rust bindings for the Moonlab quantum simulator"

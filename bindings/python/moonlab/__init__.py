@@ -24,7 +24,7 @@ Quick Start:
     >>> result = state.measure(0)  # Measure qubit 0
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1-dev"
 __author__ = "tsotchke"
 
 from .core import (
