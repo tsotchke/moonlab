@@ -73,6 +73,13 @@ for _name in ("rx", "ry", "rz"):
     _fn.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_double]
     _fn.restype = ctypes.c_int
 
+# Controlled parametric rotations: (ctrl, target, theta).
+for _name in ("crx", "cry", "crz"):
+    _fn = getattr(_lib, f"moonlab_diff_{_name}")
+    _fn.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                    ctypes.c_double]
+    _fn.restype = ctypes.c_int
+
 _lib.moonlab_diff_set_theta.argtypes = [ctypes.c_void_p, ctypes.c_size_t,
                                           ctypes.c_double]
 _lib.moonlab_diff_set_theta.restype = ctypes.c_int
@@ -197,6 +204,16 @@ class DiffCircuit:
         self._check(_lib.moonlab_diff_ry(self._ptr, qubit, theta)); return self
     def rz(self, qubit: int, theta: float) -> "DiffCircuit":
         self._check(_lib.moonlab_diff_rz(self._ptr, qubit, theta)); return self
+
+    def crx(self, control: int, target: int, theta: float) -> "DiffCircuit":
+        self._check(_lib.moonlab_diff_crx(self._ptr, control, target, theta))
+        return self
+    def cry(self, control: int, target: int, theta: float) -> "DiffCircuit":
+        self._check(_lib.moonlab_diff_cry(self._ptr, control, target, theta))
+        return self
+    def crz(self, control: int, target: int, theta: float) -> "DiffCircuit":
+        self._check(_lib.moonlab_diff_crz(self._ptr, control, target, theta))
+        return self
 
     def set_theta(self, k: int, theta: float) -> None:
         """Replace the k-th parametric angle with ``theta``."""

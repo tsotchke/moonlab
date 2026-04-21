@@ -96,6 +96,35 @@ def test_pauli_sum_h2_like():
     np.testing.assert_allclose(grad_adj, grad_fd, atol=1e-7)
 
 
+def test_controlled_rotations_vs_finite_diff():
+    """HEA-style circuit with CRX/CRY/CRZ: adjoint grad matches FD."""
+    thetas = [0.31, -0.44, 0.77, 1.15, -0.62, 0.48, -0.19]
+    circ = DiffCircuit(3)
+    circ.ry(0, thetas[0]).ry(1, thetas[1]).h(2)
+    circ.crx(0, 1, thetas[2]).cry(1, 2, thetas[3])
+    circ.cnot(0, 2)
+    circ.crz(2, 0, thetas[4]).ry(2, thetas[5]).crx(1, 0, thetas[6])
+    assert circ.num_parameters == 7
+
+    s = QuantumState(3)
+    circ.forward(s)
+    grad_adj = circ.backward(s, OBS_Z, 1)
+
+    h = 1e-4
+    grad_fd = np.zeros(7)
+    for k in range(7):
+        circ.set_theta(k, thetas[k] + h)
+        circ.forward(s)
+        fp = DiffCircuit.expect_z(s, 1)
+        circ.set_theta(k, thetas[k] - h)
+        circ.forward(s)
+        fm = DiffCircuit.expect_z(s, 1)
+        circ.set_theta(k, thetas[k])
+        grad_fd[k] = (fp - fm) / (2.0 * h)
+
+    np.testing.assert_allclose(grad_adj, grad_fd, atol=1e-7)
+
+
 def test_gradient_descent_drives_cost_down():
     """Simple GD loop -- cost strictly decreases toward an analytic min."""
     thetas = np.array([0.2, -0.3])

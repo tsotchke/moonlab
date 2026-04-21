@@ -317,12 +317,81 @@ static void test_pauli_sum_vqe(void) {
     moonlab_diff_circuit_free(c);
 }
 
+/* ---------------------------------------------------------------- */
+/* 5. Controlled parametric rotations CRX / CRY / CRZ               */
+/* ---------------------------------------------------------------- */
+/*
+ * Controlled rotations are the workhorse of hardware-efficient
+ * ansatze.  Their generator is |1><1|_ctrl tensor G_tgt where
+ * G = X/Y/Z, so <eta|G|xi> must be computed on the ctrl=1 subspace
+ * only.  Validate with a 3-qubit circuit that mixes RY, CRX, CRY,
+ * CRZ, CNOT and an entangling Hadamard.
+ */
+static void test_controlled_rotations(void) {
+    fprintf(stdout, "\n-- controlled rotations (CRX/CRY/CRZ) vs finite diff --\n");
+    moonlab_diff_circuit_t *c = moonlab_diff_circuit_create(3);
+    double thetas[7] = { 0.31, -0.44, 0.77, 1.15, -0.62, 0.48, -0.19 };
+
+    moonlab_diff_ry (c, 0, thetas[0]);
+    moonlab_diff_ry (c, 1, thetas[1]);
+    moonlab_diff_h  (c, 2);
+    moonlab_diff_crx(c, 0, 1, thetas[2]);
+    moonlab_diff_cry(c, 1, 2, thetas[3]);
+    moonlab_diff_cnot(c, 0, 2);
+    moonlab_diff_crz(c, 2, 0, thetas[4]);
+    moonlab_diff_ry (c, 2, thetas[5]);
+    moonlab_diff_crx(c, 1, 0, thetas[6]);
+
+    CHECK(moonlab_diff_num_parameters(c) == 7, "7 parameters recorded");
+
+    quantum_state_t s;
+    quantum_state_init(&s, 3);
+    moonlab_diff_forward(c, &s);
+
+    double grad_adj[7];
+    CHECK(moonlab_diff_backward(c, &s, MOONLAB_DIFF_OBS_Z, 1, grad_adj) == 0,
+          "backward returns success");
+
+    double grad_fd[7];
+    finite_diff_gradient_with_angles(c, thetas, 7,
+                                      MOONLAB_DIFF_OBS_Z, 1,
+                                      1e-4, grad_fd);
+    double max_err = 0.0;
+    for (int k = 0; k < 7; k++) {
+        double e = fabs(grad_adj[k] - grad_fd[k]);
+        if (e > max_err) max_err = e;
+        fprintf(stdout, "    k=%d  adj=%+.6f  fd=%+.6f  diff=%.2e\n",
+                k, grad_adj[k], grad_fd[k], e);
+    }
+    CHECK(max_err < 1e-7,
+          "adjoint within 1e-7 of finite-diff on <Z1> w/ CRX/CRY/CRZ");
+
+    /* Check <X2> observable too, for a different back-propagated O. */
+    double grad_adj_x[7], grad_fd_x[7];
+    moonlab_diff_backward(c, &s, MOONLAB_DIFF_OBS_X, 2, grad_adj_x);
+    finite_diff_gradient_with_angles(c, thetas, 7,
+                                      MOONLAB_DIFF_OBS_X, 2,
+                                      1e-4, grad_fd_x);
+    max_err = 0.0;
+    for (int k = 0; k < 7; k++) {
+        double e = fabs(grad_adj_x[k] - grad_fd_x[k]);
+        if (e > max_err) max_err = e;
+    }
+    fprintf(stdout, "    <X2> max grad diff: %.2e\n", max_err);
+    CHECK(max_err < 1e-7,
+          "adjoint within 1e-7 of finite-diff on <X2> w/ CRX/CRY/CRZ");
+
+    quantum_state_free(&s);
+    moonlab_diff_circuit_free(c);
+}
+
 int main(void) {
     fprintf(stdout, "=== differentiable moonlab tests ===\n");
     test_single_qubit_ry();
     test_hea_two_qubit();
     test_four_qubit_vqe_ansatz();
     test_pauli_sum_vqe();
+    test_controlled_rotations();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

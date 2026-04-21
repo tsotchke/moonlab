@@ -109,6 +109,19 @@ int moonlab_diff_ry(moonlab_diff_circuit_t *c, int qubit, double theta);
 int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double theta);
 
 /**
+ * @brief Controlled single-qubit rotations.  The gradient generator
+ *        is the projector-tensor-Pauli operator
+ *        @f$|1\rangle\langle 1|_{ctrl} \otimes G_{tgt}@f$ with
+ *        @f$G = X/Y/Z@f$ respectively, consistent with
+ *        @f$CR_{X/Y/Z}(\theta) = \exp(-i \theta/2 \cdot
+ *        |1\rangle\langle 1|_{ctrl} \otimes G_{tgt})@f$.
+ *        Hardware-efficient ansatze use these.
+ */
+int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+
+/**
  * @brief Update the @p k-th parametric angle in place (useful when
  *        an optimiser updates parameters across iterations without
  *        rebuilding the circuit).
