@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-04-19 .. 2026-04-21 release-hardening arc
+
+Seventy-plus commits split across four threads: close the P5.08 Chern
+pipeline on a real 2D model, ship native reverse-mode autograd,
+systematically dismantle the pre-release adversarial-audit findings,
+and widen CI coverage.
+
+#### Research
+
+- **Chern mosaic through-the-pipe.** The Bianco-Resta local marker
+  C(r) = -4 pi Im sum_orb <r,orb| P X Q Y P |r,orb> now runs end-to-
+  end through the MPO pipeline on the QWZ Chern insulator (L=4 on
+  32-dim Hilbert, 5-qubit MPS chain) and reproduces the dense
+  Schulz-iteration reference to machine precision:
+  dense = +0.9318, MPO pipeline = +0.9318, |diff| = 0.0000.
+  Position operators are quantics-bit-weighted single-site-sum
+  MPOs; Hamiltonian goes through `mpo_kpm_mpo_from_dense`.
+  (`mpo_kpm` module, `test_mpo_kpm::test_full_chern_marker_2d`.)
+- **Dense->MPO axis-order fix.** `mpo_kpm_mpo_from_dense` was storing
+  H^T (= conj(H) for Hermitian complex H) due to swapped bit
+  placement for phys_in vs phys_out at each chain site.  Every
+  composed observable on complex-off-diagonal Hermitian inputs was
+  picking up a sign flip in its imaginary part; corrected
+  symmetrically with the roundtrip `tn_mpo_to_dense` helper so
+  existing invariance-preserving tests (tr(P) = filled bands,
+  P^2 = P) remain green.
+- **MPO * MPO Chebyshev / sign / projector.** From sign(H) matrix
+  elements -> sign(H) as MPO -> projector as MPO, validated on
+  random gapped Hermitian inputs and TFIM, then on QWZ.
+  (`mpo_kpm_sign_mpo`, `mpo_kpm_projector_mpo`, `mpo_kpm_mpo_multiply`,
+  `mpo_kpm_mpo_combine`, `mpo_kpm_mpo_from_dense`.)
+
+#### Autograd (P5.19) -- new
+
+- **Native reverse-mode autograd** for parameterised quantum
+  circuits: `moonlab_diff_circuit_t` + adjoint-method
+  `moonlab_diff_backward`.  Cost = 1 forward + 1 backward state
+  rewind regardless of parameter count; no Python dependency.
+  Validation against central-difference finite-diff:
+  single-qubit RY matches analytic `-sin(theta)` to 1e-12;
+  4-qubit / 16-parameter VQE-like ansatz matches finite-diff to
+  7e-10.  `examples/tensor_network/diff_vqe_demo.c` drives
+  gradient descent on a 2-qubit Pauli cost to its analytic
+  minimum.
+
+#### Bell / QRNG correctness (critical)
+
+- **`bell_test_chsh` silently overwrote its input state with
+  |Phi+>** (src/algorithms/bell_tests.c:256-257 pre-patch).  Every
+  CHSH measurement returned ~2.828 regardless of input; the
+  `moonlab_qrng_bytes` BELL_VERIFIED mode's health check was
+  vacuous for every 0.1.x release.  Removed the clobber;
+  `qrng_v3_verify_quantum` now prepares its own |Phi+> temporary
+  explicitly so the health-check semantics are honest.  Python
+  `test_chsh_product_state_classical` now runs (CHSH ~ 0 on |++>
+  as physics requires) rather than xfail.
+
+#### Python bindings (v0.2 gate closure)
+
+- `measure_all_fast` was returning 0 for every state because Python
+  passed NULL for the entropy context.  New `quantum_entropy_ctx_create_hw`
+  / `_destroy` non-inline helpers let ctypes construct a process-
+  wide hardware-backed context at import; `atexit` cleanup.
+- Unskipped `bindings/python/tests/test_algorithms.py` revealed six
+  struct-layout mismatches against the C side
+  (`CQAOAResult`, `CVQEResult`, `CGroverResult`, `CGroverConfig`,
+  `CBellTestResult`) plus two missing entropy-ctx argtypes
+  (`vqe_solver_create`, `qaoa_solver_create`) and one wrong arg
+  order (`bell_test_chsh`).  Every struct rewritten to byte-for-
+  byte match the C layout; 33/34 tests now pass, last one fixed by
+  the Bell-test bugfix above.
+- Five JavaScript packages + `bindings/python/pyproject.toml` +
+  `bindings/python/README.md` version strings synced to 0.2.0-dev.
+
+#### Memory safety
+
+- Six OOM-path NULL-deref / pointer-corruption fixes:
+  `measurement.c:287,479` (unchecked `calloc` / `malloc`),
+  `chemistry.c:203,215,254,281` (unchecked `realloc` with
+  pre-incremented counters).  All now follow the "grow via a
+  temp, commit the count last" idiom.
+- `tn_apply_mpo` axis-order bug in `tn_gates.c` that pre-dated
+  this session (no in-tree caller triggered it) is now fixed
+  with the correct `{0, 2, 3, 1, 4}` permute before the reshape.
+  Direct regression test added
+  (`test_mpo_kpm::test_tn_apply_mpo_direct`).
+
+#### Shor-ECDLP correctness
+
+- **Toffoli cost was scaling as O(n^2), not O(n^3).** Calibrated
+  correctly at n=256 (90M) but missed at every other bit-width.
+  Fixed to cubic scaling; `test_shor_ecdlp` now asserts
+  Toffoli_ratio(2n, n) = 8.000 at every adjacent doubling.
+  secp256k1 still matches Gidney-Drake-Boneh Table 1 (1200
+  qubits, 90M Toffolis).
+
+#### Infrastructure (L1..L7 limitation closures)
+
+- **L1 Chern mosaic.** QWZ via dense->MPO works end-to-end; see
+  Research.
+- **L3 MPI end-to-end.** `test_distributed_gates` extended with a
+  GHZ chain across the partition boundary at `mpirun -np 4`;
+  P(|0...0>) + P(|1...1>) each 0.5 to 1e-10.  `linux-mpi` CI tier.
+- **L4 GPU backends.** `test_gpu_backend_discovery` smoke + CI
+  jobs for OpenCL (pocl) and Vulkan (lavapipe) on Linux.
+- **L5 WebGPU.** `-DQSIM_BUILD_JS_DIST=ON` auto-runs
+  `pnpm run build:ts` so `webgpu_unified_smoke` runs on fresh
+  clones; default OFF keeps routine builds fast.
+- **L6 Linux CI.** New `linux-mpi` and `bindings-linux` tiers
+  (Python pytest + Rust cargo test).
+- **L7 Benchmark statistics.** `src/utils/bench_stats.h` provides
+  `bench_stats_compute`, `bench_stats_n_runs`, `bench_stats_to_json`.
+  Every manifest-emitting bench now reports `n`, `mean`, `stddev`,
+  `rel_stddev`, `min`, `max`.  Sample: `tensor_matmul_eshkol`
+  at 4096x2048^2 hits 2.20x +/- 1% at n=5.
+
+#### Benchmark corpus (P5.20)
+
+- `tools/bench/run_corpus.sh` runs every manifest-emitting bench
+  and drops a JSON corpus into a timestamped output directory.
+- `tools/bench/diff_corpus.py` flattens metrics and prints
+  regression / speedup ratios; `--fail-on PCT` exits non-zero
+  when any timing regresses by more than PCT.
+- `tools/bench/canonical/` holds a reference manifest set captured
+  on an M2 Ultra; re-runs on the same host diff to 1.00x +/- ~4%
+  except the tiny-GEMM which has naturally higher relative noise.
+- `docs/benchmarks/corpus.md` documents end-to-end reproduction.
+
+#### Adversarial coverage
+
+- **Tensor primitive adversarial tests** (`test_tensor_adversarial`):
+  rank-3 and two-axis contractions, rank-4 permutation, rank-5
+  reshape, 6x4 complex SVD, svd_compress_bond, dim=1 edges.  Every
+  case checked against hand-rolled nested-loop references at
+  1e-13 or ULP agreement.
+
+#### Documentation
+
+- New `docs/audits/adversarial-review-2026-04-19.md` captures the
+  full adversarial pass including the bell_test_chsh discovery.
+- `docs/audits/v0.2.0-readiness.md` updated with closure notes.
+- README Limitations section rewritten to match shipped reality
+  (no more "10,000x optimised" claim; MPI honestly described;
+  Chern mosaic capability stated precisely).
+
 ### Audit / housekeeping
 
 - **Academic-grade documentation pass (audit phase A)**: postdoctoral-
