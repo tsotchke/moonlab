@@ -114,6 +114,26 @@ double entanglement_entropy_bipartition(const quantum_state_t* state,
                                         const int* subsystem_b_qubits,
                                         int num_b_qubits);
 
+/**
+ * @brief Quantum mutual information I(A:B) = S(A) + S(B) - S(AB).
+ *
+ * On a pure state of the A u B system, S(AB) = 0, so this reduces
+ * to S(A) + S(B) = 2 S(A) (symmetric).  For a pure state of a
+ * larger system, the caller should pass the indices of both
+ * partitions A and B (disjoint); any qubits not in A u B are
+ * traced out first.
+ *
+ * @param state         pure state over num_qubits >= |A| + |B|.
+ * @param qubits_a      indices of subsystem A; distinct from B.
+ * @param num_a         length of @p qubits_a.
+ * @param qubits_b      indices of subsystem B.
+ * @param num_b         length of @p qubits_b.
+ * @return I(A:B) in bits (log base 2), >= 0; 0.0 on argument error.
+ */
+double entanglement_mutual_information(const quantum_state_t* state,
+                                        const int* qubits_a, int num_a,
+                                        const int* qubits_b, int num_b);
+
 // ============================================================================
 // CONCURRENCE
 // ============================================================================

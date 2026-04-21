@@ -578,6 +578,53 @@ double entanglement_entropy_bipartition(const quantum_state_t* state,
     return entropy;
 }
 
+double entanglement_mutual_information(const quantum_state_t* state,
+                                        const int* qubits_a, int num_a,
+                                        const int* qubits_b, int num_b) {
+    if (!state || !qubits_a || !qubits_b ||
+        num_a <= 0 || num_b <= 0) return 0.0;
+
+    const int N = (int)state->num_qubits;
+    if (num_a + num_b > N) return 0.0;
+    /* Verify disjointness. */
+    for (int i = 0; i < num_a; i++) {
+        for (int j = 0; j < num_b; j++) {
+            if (qubits_a[i] == qubits_b[j]) return 0.0;
+        }
+    }
+
+    /* S(A): trace out everything that is not in A (= B + rest).
+     * entanglement_entropy_bipartition takes the list of qubits to
+     * TRACE OUT, so build that list by collecting the complement. */
+    int *not_A = (int*)malloc((size_t)N * sizeof(int));
+    int *not_B = (int*)malloc((size_t)N * sizeof(int));
+    int *not_AB = (int*)malloc((size_t)N * sizeof(int));
+    if (!not_A || !not_B || !not_AB) {
+        free(not_A); free(not_B); free(not_AB); return 0.0;
+    }
+    int na = 0, nb = 0, nab = 0;
+    for (int q = 0; q < N; q++) {
+        int in_A = 0, in_B = 0;
+        for (int k = 0; k < num_a; k++) if (qubits_a[k] == q) { in_A = 1; break; }
+        for (int k = 0; k < num_b; k++) if (qubits_b[k] == q) { in_B = 1; break; }
+        if (!in_A) not_A[na++] = q;
+        if (!in_B) not_B[nb++] = q;
+        if (!in_A && !in_B) not_AB[nab++] = q;
+    }
+
+    double S_A = entanglement_entropy_bipartition(state, not_A, na);
+    double S_B = entanglement_entropy_bipartition(state, not_B, nb);
+    double S_AB = 0.0;
+    if (nab > 0) {
+        S_AB = entanglement_entropy_bipartition(state, not_AB, nab);
+    }  /* else A u B is the whole state -> S_AB = 0 on pure state */
+
+    free(not_A); free(not_B); free(not_AB);
+    double mi = S_A + S_B - S_AB;
+    if (mi < 0.0 && mi > -1e-9) mi = 0.0;  /* clamp tiny numeric negatives */
+    return mi;
+}
+
 // ============================================================================
 // CONCURRENCE (2-QUBIT)
 // ============================================================================
