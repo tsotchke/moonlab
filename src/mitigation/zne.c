@@ -187,6 +187,59 @@ double zne_extrapolate(const double *scales,
     return 0.0;
 }
 
+/* ------------------------------------------------------------- */
+/* Probabilistic Error Cancellation                               */
+/* ------------------------------------------------------------- */
+
+double pec_one_norm_cost(const pec_quasi_prob_t *qp) {
+    if (!qp || !qp->etas) return 0.0;
+    double s = 0.0;
+    for (size_t i = 0; i < qp->num_terms; i++) s += fabs(qp->etas[i]);
+    return s;
+}
+
+double pec_sample_index(const pec_quasi_prob_t *qp,
+                         double uniform,
+                         size_t *index_out) {
+    if (!qp || !qp->etas || qp->num_terms == 0) {
+        if (index_out) *index_out = 0;
+        return 0.0;
+    }
+    const double gamma = pec_one_norm_cost(qp);
+    if (gamma <= 0.0) {
+        if (index_out) *index_out = 0;
+        return 0.0;
+    }
+    double cum = 0.0;
+    size_t picked = qp->num_terms - 1;
+    for (size_t i = 0; i < qp->num_terms; i++) {
+        cum += fabs(qp->etas[i]) / gamma;
+        if (uniform < cum) { picked = i; break; }
+    }
+    if (index_out) *index_out = picked;
+    return (qp->etas[picked] >= 0.0) ? 1.0 : -1.0;
+}
+
+double pec_aggregate(const double *signs, const double *measurements,
+                      size_t n, double gamma, double *stderr_out) {
+    if (!signs || !measurements || n == 0) {
+        if (stderr_out) *stderr_out = -1.0;
+        return 0.0;
+    }
+    double sum = 0.0, sum2 = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        double v = signs[i] * measurements[i];
+        sum  += v;
+        sum2 += v * v;
+    }
+    double mean = sum / (double)n;
+    double var  = (n > 1) ? (sum2 / (double)n - mean * mean) : 0.0;
+    if (var < 0.0) var = 0.0;
+    /* Estimator: mitigated = gamma * mean; stderr scales with gamma. */
+    if (stderr_out) *stderr_out = gamma * sqrt(var / (double)n);
+    return gamma * mean;
+}
+
 double zne_mitigate(zne_expectation_fn fn,
                     void *user,
                     const double *scales,

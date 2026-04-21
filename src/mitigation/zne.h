@@ -97,6 +97,62 @@ double zne_mitigate(
     zne_method_t method,
     double *stderr_out);
 
+/* =========================================================== */
+/* Probabilistic Error Cancellation (PEC)                       */
+/* =========================================================== */
+
+/**
+ * @brief PEC quasi-probability representation of one (inverse) Kraus
+ *        operation.  The inverse of the noise channel is expressed
+ *        as a real linear combination of basis unitaries:
+ *            N^{-1} = sum_i eta_i U_i
+ *        where eta_i can be negative.  Monte-Carlo sampling
+ *        estimates the mitigated expectation as
+ *            <O>_mitigated = gamma * E[sgn(eta_i) * <O>_i]
+ *        with gamma = sum_i |eta_i| (the "one-norm cost") and the
+ *        sampling distribution p_i = |eta_i| / gamma.
+ *
+ * @since 0.2.0
+ */
+typedef struct {
+    size_t num_terms;       /* number of quasi-prob basis ops */
+    const double *etas;      /* signed coefficients; length num_terms */
+    /* Caller owns storage for etas and any basis-unitary identifiers. */
+} pec_quasi_prob_t;
+
+/**
+ * @brief One-norm cost gamma = sum_i |eta_i| of a quasi-prob decomp.
+ *
+ * The PEC sampling overhead is gamma^2 for single-shot noisy-layer
+ * mitigation (see Temme et al. 2017).  Returns 0 on NULL input.
+ */
+double pec_one_norm_cost(const pec_quasi_prob_t *qp);
+
+/**
+ * @brief Sample an index i with probability |eta_i| / gamma and
+ *        return the associated sign.  Sets *index_out = i, and the
+ *        function returns +1.0 or -1.0.
+ */
+double pec_sample_index(const pec_quasi_prob_t *qp,
+                         double uniform,
+                         size_t *index_out);
+
+/**
+ * @brief Aggregate a batch of PEC samples into an unbiased estimator
+ *        of the mitigated expectation value.
+ *
+ * @param signs         array of +/-1 signs returned by @ref pec_sample_index.
+ * @param measurements  array of per-sample measurement outcomes
+ *                      (noisy <O> measured after the sampled basis op).
+ * @param n             number of samples.
+ * @param gamma         one-norm cost of the quasi-prob decomposition.
+ * @param stderr_out    optional; receives the standard error of the
+ *                      estimator.
+ * @return PEC-mitigated <O>; 0.0 on argument error.
+ */
+double pec_aggregate(const double *signs, const double *measurements,
+                      size_t n, double gamma, double *stderr_out);
+
 #ifdef __cplusplus
 }
 #endif

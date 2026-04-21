@@ -111,12 +111,58 @@ static void test_integration_depolar(void) {
           "linear mitigation improves over noisy baseline");
 }
 
+/* ---------------------------------------------------------------- */
+/* PEC tests                                                         */
+/* ---------------------------------------------------------------- */
+
+static void test_pec_one_norm_cost(void) {
+    fprintf(stdout, "\n-- PEC one-norm cost --\n");
+    double etas[3] = { 1.2, -0.5, 0.3 };
+    pec_quasi_prob_t qp = { .num_terms = 3, .etas = etas };
+    double gamma = pec_one_norm_cost(&qp);
+    fprintf(stdout, "    gamma = %.6f (expect 2.0)\n", gamma);
+    CHECK(fabs(gamma - 2.0) < 1e-12, "one-norm cost matches");
+}
+
+static void test_pec_sampling_signs(void) {
+    fprintf(stdout, "\n-- PEC sampling returns correct sign --\n");
+    double etas[3] = { 0.5, -0.5, 0.5 };  /* gamma = 1.5 */
+    pec_quasi_prob_t qp = { .num_terms = 3, .etas = etas };
+    size_t idx = 0;
+    /* u < 1/3 -> pick idx 0, sign +1. */
+    double s = pec_sample_index(&qp, 0.1, &idx);
+    CHECK(idx == 0 && s > 0, "u=0.1 -> idx 0, sign +");
+    /* 1/3 <= u < 2/3 -> pick idx 1, sign -. */
+    s = pec_sample_index(&qp, 0.5, &idx);
+    CHECK(idx == 1 && s < 0, "u=0.5 -> idx 1, sign -");
+    /* u >= 2/3 -> pick idx 2, sign +. */
+    s = pec_sample_index(&qp, 0.9, &idx);
+    CHECK(idx == 2 && s > 0, "u=0.9 -> idx 2, sign +");
+}
+
+static void test_pec_aggregate_recovers_mean(void) {
+    fprintf(stdout, "\n-- PEC aggregate recovers gamma * E[sgn * m] --\n");
+    const size_t n = 8;
+    double signs[8] = { +1, +1, -1, -1, +1, -1, +1, +1 };
+    double meas[8]  = { 0.6, 0.7, 0.5, 0.6, 0.65, 0.55, 0.6, 0.7 };
+    /* Raw signed sum: (+0.6 + 0.7 - 0.5 - 0.6 + 0.65 - 0.55 + 0.6 + 0.7)/8
+     * = 1.6 / 8 = 0.2. */
+    double sd = 0.0;
+    double out = pec_aggregate(signs, meas, n, 2.0, &sd);
+    fprintf(stdout, "    mitigated = %.6f (expect 0.4)  sd = %.4f\n", out, sd);
+    CHECK(fabs(out - 0.4) < 1e-9, "aggregate = gamma * E[...]");
+    CHECK(sd > 0.0, "standard error is positive");
+}
+
 int main(void) {
-    fprintf(stdout, "=== ZNE tests ===\n");
+    fprintf(stdout, "=== ZNE + PEC tests ===\n");
     test_linear_exact();
     test_richardson_polynomial_exact();
     test_exponential_fit();
     test_integration_depolar();
+    test_pec_one_norm_cost();
+    test_pec_sampling_signs();
+    test_pec_aggregate_recovers_mean();
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
