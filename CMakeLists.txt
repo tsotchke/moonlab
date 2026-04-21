@@ -507,6 +507,8 @@ set(QSIM_ALGORITHMS_SOURCES
     # Cryptographic primitives: SHA3 + SHAKE (FIPS 202) -- foundation
     # for PQC (FIPS 203/204/205) and for extractor seeding in DI-QRNG.
     src/crypto/sha3/sha3.c
+    # ML-KEM (FIPS 203) polynomial ring + NTT (Kyber primitives).
+    src/crypto/mlkem/poly.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1101,6 +1103,10 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_sha3 tests/unit/test_sha3.c)
     target_link_libraries(test_sha3 PRIVATE quantumsim m)
     add_test(NAME unit_sha3 COMMAND test_sha3)
+
+    add_executable(test_mlkem_poly tests/unit/test_mlkem_poly.c)
+    target_link_libraries(test_mlkem_poly PRIVATE quantumsim m)
+    add_test(NAME unit_mlkem_poly COMMAND test_mlkem_poly)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
