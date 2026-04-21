@@ -9,8 +9,12 @@ Features:
 - Complete universal gate set
 - VQE for molecular simulation
 - QAOA for combinatorial optimization
-- Bell-verified quantum behavior (CHSH = 2.828)
-- 10,000× optimized for Apple Silicon
+- Bell inequality violation on explicit Bell states
+  (CHSH ~ 2.87 measured; 2.828 is the Tsirelson bound)
+- Native reverse-mode autograd (moonlab.diff) for parameterized
+  circuits -- adjoint gradients without PyTorch
+- SIMD-dispatched C core with an optional Metal GPU backend on
+  Apple Silicon (see docs/benchmarks/reproducible-benchmarks.md)
 
 Quick Start:
     >>> from moonlab import QuantumState
@@ -52,6 +56,7 @@ from .topology import (
     ChernKPM, qwz_chern, berry_grid_qwz,
     berry_grid_haldane, ssh_winding,
 )
+from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
 
 __all__ = [
     'QuantumState',
@@ -66,6 +71,11 @@ __all__ = [
     'berry_grid_qwz',
     'berry_grid_haldane',
     'ssh_winding',
+    'DiffCircuit',
+    'PauliTerm',
+    'OBS_Z',
+    'OBS_X',
+    'OBS_Y',
 ]
 if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
