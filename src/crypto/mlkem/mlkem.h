@@ -103,6 +103,40 @@ int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                                    uint8_t K[32],
                                    const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
 
+/* ---- ML-KEM-768 ------------------------------------------------- */
+void moonlab_mlkem768_keygen(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
+                              uint8_t dk[MLKEM768_SECRETKEYBYTES],
+                              const uint8_t d[32], const uint8_t z[32]);
+void moonlab_mlkem768_encaps(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
+                              uint8_t K[32],
+                              const uint8_t ek[MLKEM768_PUBLICKEYBYTES],
+                              const uint8_t m[32]);
+void moonlab_mlkem768_decaps(uint8_t K[32],
+                              const uint8_t c[MLKEM768_CIPHERTEXTBYTES],
+                              const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+int  moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
+                                    uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+int  moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
+                                    uint8_t K[32],
+                                    const uint8_t ek[MLKEM768_PUBLICKEYBYTES]);
+
+/* ---- ML-KEM-1024 ------------------------------------------------ */
+void moonlab_mlkem1024_keygen(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
+                               uint8_t dk[MLKEM1024_SECRETKEYBYTES],
+                               const uint8_t d[32], const uint8_t z[32]);
+void moonlab_mlkem1024_encaps(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
+                               uint8_t K[32],
+                               const uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
+                               const uint8_t m[32]);
+void moonlab_mlkem1024_decaps(uint8_t K[32],
+                               const uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
+                               const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+int  moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
+                                     uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+int  moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
+                                     uint8_t K[32],
+                                     const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]);
+
 #ifdef __cplusplus
 }
 #endif
