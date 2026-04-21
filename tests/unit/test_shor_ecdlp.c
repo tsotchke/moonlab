@@ -13,6 +13,7 @@
 
 #include "../../src/algorithms/shor_ecdlp/shor_ecdlp.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -87,16 +88,44 @@ static void test_roetteler_secp256k1(void) {
 static void test_scaling_small(void) {
     fprintf(stdout, "\n-- Scaling: GDB qubit-minimal at n=8, 16, 64, 128, 256, 512 --\n");
     size_t ns[] = { 8, 16, 64, 128, 256, 512 };
-    for (size_t i = 0; i < sizeof(ns)/sizeof(ns[0]); i++) {
+    double toffolis[6];
+    size_t qubits[6];
+    for (size_t i = 0; i < 6; i++) {
         shor_ecdlp_params_t p;
         shor_ecdlp_params_secp256k1(&p);
         p.curve_bits = ns[i];
         shor_ecdlp_resources_t r;
         shor_ecdlp_estimate(&p, &r);
+        toffolis[i] = (double)r.toffoli_count;
+        qubits[i]   = r.logical_qubits;
         fprintf(stdout, "    n=%-4zu  qubits=%-6zu  toffolis=%.3e\n",
-                ns[i], r.logical_qubits, (double)r.toffoli_count);
+                ns[i], r.logical_qubits, toffolis[i]);
         CHECK(r.logical_qubits > 0 && r.toffoli_count > 0,
               "non-zero at n=%zu", ns[i]);
+    }
+
+    /* Assert cubic Toffoli scaling: doubling n should multiply Toffoli
+     * count by ~8x (Gidney-Drake-Boneh Sec. 5.2).  Allow +/- 10%. */
+    for (size_t i = 0; i + 1 < 6; i++) {
+        if (ns[i + 1] == 2 * ns[i]) {
+            const double ratio = toffolis[i + 1] / toffolis[i];
+            fprintf(stdout,
+                    "    n=%zu -> n=%zu : toffoli ratio = %.3f (expect 8.0)\n",
+                    ns[i], ns[i + 1], ratio);
+            CHECK(fabs(ratio - 8.0) < 0.8,
+                  "Toffoli ratio %zu->%zu within 10%% of cubic scaling",
+                  ns[i], ns[i + 1]);
+        }
+    }
+
+    /* Qubit count is linear: doubling n should multiply qubits by 2x. */
+    for (size_t i = 0; i + 1 < 6; i++) {
+        if (ns[i + 1] == 2 * ns[i]) {
+            const double ratio = (double)qubits[i + 1] / (double)qubits[i];
+            CHECK(fabs(ratio - 2.0) < 0.2,
+                  "qubit ratio %zu->%zu linear (got %.3f, expect 2.0)",
+                  ns[i], ns[i + 1], ratio);
+        }
     }
 }
 

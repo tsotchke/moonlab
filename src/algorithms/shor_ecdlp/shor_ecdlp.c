@@ -67,14 +67,27 @@ static double log2_d(double x) {
 static double toffolis_per_add(const shor_ecdlp_params_t* p) {
     double n = (double)p->curve_bits;
     switch (p->encoding) {
-        case 0: /* Roetteler 2017 */
+        case 0: /* Roetteler 2017: O(n^2 log n) per modular add */
             return 224.0 * n * n * log2_d(n);
-        case 1: /* Gidney-Drake-Boneh 2026 */
-            /* Calibrated so 2n * C_add(256) ~= 90e6 (qubit-minimal)
-             * or ~70e6 (depth-minimal). */
-            return (p->time_space_tradeoff == 0)
-                   ? (90.0e6 / (2.0 * 256.0)) * (n / 256.0)
-                   : (70.0e6 / (2.0 * 256.0)) * (n / 256.0);
+        case 1: /* Gidney-Drake-Boneh 2026, windowed modular arithmetic.
+                 * The full Shor-ECDLP primitive is O(n^3) in Toffolis
+                 * (n point additions, each O(n^2) modular arithmetic
+                 * via windowed adders).  We write that as 2n
+                 * controlled-adds each of cost proportional to n^2,
+                 * calibrated so that 2n * C_add(256) reproduces the
+                 * paper's Table 1 values of 90e6 (qubit-minimal) or
+                 * 70e6 (depth-minimal).  The previous formula used
+                 * linear-in-n scaling inside the add, which matched
+                 * n = 256 by calibration but missed O(n^3) at any
+                 * other width (Chen/Drake-Boneh arXiv:2603.28846
+                 * Sec. 5.2 gives the cubic scaling explicitly).  */
+            {
+                const double ratio = n / 256.0;
+                const double calib = (p->time_space_tradeoff == 0) ? 90.0e6 : 70.0e6;
+                /* total = 2n * C_add(n) = calib * (n/256)^3.
+                 * Dividing by 2n gives C_add(n). */
+                return (calib / (2.0 * 256.0)) * ratio * ratio;
+            }
         default:
             return 224.0 * n * n * log2_d(n);
     }
