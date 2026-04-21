@@ -509,6 +509,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/crypto/sha3/sha3.c
     # ML-KEM (FIPS 203) polynomial ring + NTT (Kyber primitives).
     src/crypto/mlkem/poly.c
+    # ML-KEM-512 KEM: KeyGen / Encaps / Decaps.
+    src/crypto/mlkem/mlkem.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1107,6 +1109,10 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_mlkem_poly tests/unit/test_mlkem_poly.c)
     target_link_libraries(test_mlkem_poly PRIVATE quantumsim m)
     add_test(NAME unit_mlkem_poly COMMAND test_mlkem_poly)
+
+    add_executable(test_mlkem tests/unit/test_mlkem.c)
+    target_link_libraries(test_mlkem PRIVATE quantumsim m)
+    add_test(NAME unit_mlkem COMMAND test_mlkem)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)

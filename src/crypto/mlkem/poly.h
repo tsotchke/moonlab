@@ -66,6 +66,14 @@ void mlkem_poly_reduce(mlkem_poly_t *p);
 void mlkem_poly_ntt(mlkem_poly_t *p);
 /** @brief In-place inverse NTT + Montgomery correction. */
 void mlkem_poly_invntt(mlkem_poly_t *p);
+/**
+ * @brief Multiply every coefficient of @p p by the Montgomery factor
+ *        R = 2^16 mod q.  Used after @ref mlkem_poly_basemul to
+ *        bring accumulated products back into the same form as the
+ *        NTT-transformed inputs so they can be added to NTT-transformed
+ *        noise/error polynomials.
+ */
+void mlkem_poly_tomont(mlkem_poly_t *p);
 
 /**
  * @brief Pointwise multiplication of two polynomials in NTT domain;

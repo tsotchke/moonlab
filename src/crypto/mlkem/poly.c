@@ -143,6 +143,14 @@ void mlkem_poly_basemul(mlkem_poly_t *dst,
     mlkem_poly_reduce(dst);
 }
 
+void mlkem_poly_tomont(mlkem_poly_t *p) {
+    /* f = 2^32 mod q = 1353.  fqmul(x, f) = x * R mod q. */
+    const int16_t f = 1353;
+    for (int i = 0; i < N; i++) {
+        p->coeffs[i] = fqmul(p->coeffs[i], f);
+    }
+}
+
 /* -------------------------------------------------------------- */
 /* CBD sampler                                                     */
 /* -------------------------------------------------------------- */
