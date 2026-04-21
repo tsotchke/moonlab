@@ -1387,6 +1387,9 @@ if(QSIM_BUILD_EXAMPLES)
     add_executable(tsp_logistics examples/applications/tsp_logistics.c)
     target_link_libraries(tsp_logistics PRIVATE quantumsim)
 
+    add_executable(diff_vqe_demo examples/tensor_network/diff_vqe_demo.c)
+    target_link_libraries(diff_vqe_demo PRIVATE quantumsim m)
+
     add_executable(quantum_spin_chain examples/tensor_network/quantum_spin_chain.c)
     target_link_libraries(quantum_spin_chain PRIVATE quantumsim)
     if(QSIM_HAS_OPENMP)
