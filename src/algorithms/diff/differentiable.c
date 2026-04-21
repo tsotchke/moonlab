@@ -332,3 +332,106 @@ int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
     quantum_state_free(&scratch);
     return 0;
 }
+
+/* ------------------------------------------------------------- */
+/* Multi-Pauli observable support                                 */
+/* ------------------------------------------------------------- */
+
+/* Apply a full Pauli string (product of single-qubit Paulis on
+ * distinct qubits) to @p state in place. */
+static qs_error_t apply_pauli_string(quantum_state_t *state,
+                                      const moonlab_diff_pauli_term_t *term) {
+    if (!state || !term) return QS_ERROR_INVALID_STATE;
+    for (size_t i = 0; i < term->num_ops; i++) {
+        if (apply_observable_in_place(state, term->paulis[i],
+                                       term->qubits[i]) != QS_SUCCESS) {
+            return QS_ERROR_INVALID_STATE;
+        }
+    }
+    return QS_SUCCESS;
+}
+
+double moonlab_diff_expect_pauli_sum(const quantum_state_t *state,
+                                      const moonlab_diff_pauli_term_t *terms,
+                                      size_t num_terms) {
+    if (!state || !terms || num_terms == 0) return 0.0;
+    /* For each term, compute <psi|P|psi> by applying P to a clone
+     * and taking the inner product with the original. */
+    double acc = 0.0;
+    quantum_state_t scratch;
+    if (quantum_state_clone(&scratch, state) != QS_SUCCESS) return 0.0;
+    for (size_t k = 0; k < num_terms; k++) {
+        /* Reset scratch = state. */
+        memcpy(scratch.amplitudes, state->amplitudes,
+               state->state_dim * sizeof(*state->amplitudes));
+        if (apply_pauli_string(&scratch, &terms[k]) != QS_SUCCESS) {
+            quantum_state_free(&scratch);
+            return 0.0;
+        }
+        double complex ip = inner_product(state, &scratch);
+        /* <psi|P|psi> is real when P is Hermitian, which every
+         * Pauli string is (up to global phase from Y factors; the
+         * full product is still Hermitian since each factor is and
+         * they act on distinct qubits). */
+        acc += terms[k].coefficient * creal(ip);
+    }
+    quantum_state_free(&scratch);
+    return acc;
+}
+
+/* Adjoint gradient for a single Pauli-string observable; adds into
+ * grad_out (does not zero it). */
+static int backward_single_term(const moonlab_diff_circuit_t *c,
+                                 const quantum_state_t *forward_state,
+                                 const moonlab_diff_pauli_term_t *term,
+                                 double scale,
+                                 double *grad_out) {
+    if (!c || !forward_state || !term || !grad_out) return -1;
+
+    quantum_state_t xi, eta, scratch;
+    if (quantum_state_clone(&xi, forward_state) != QS_SUCCESS) return -2;
+    if (quantum_state_clone(&eta, forward_state) != QS_SUCCESS) {
+        quantum_state_free(&xi); return -3;
+    }
+    if (apply_pauli_string(&eta, term) != QS_SUCCESS) {
+        quantum_state_free(&xi); quantum_state_free(&eta); return -4;
+    }
+    if (quantum_state_clone(&scratch, forward_state) != QS_SUCCESS) {
+        quantum_state_free(&xi); quantum_state_free(&eta); return -5;
+    }
+
+    for (size_t idx = c->n_ops; idx > 0; idx--) {
+        const op_t *op = &c->ops[idx - 1];
+        if (op->kind == OP_RX || op->kind == OP_RY || op->kind == OP_RZ) {
+            double complex v = eta_G_xi(&eta, &xi, op->kind, op->q0, &scratch);
+            grad_out[op->param_index] += scale * cimag(v);
+        }
+        if (apply_op_inverse(&xi,  op) != QS_SUCCESS ||
+            apply_op_inverse(&eta, op) != QS_SUCCESS) {
+            quantum_state_free(&xi);
+            quantum_state_free(&eta);
+            quantum_state_free(&scratch);
+            return -6;
+        }
+    }
+
+    quantum_state_free(&xi);
+    quantum_state_free(&eta);
+    quantum_state_free(&scratch);
+    return 0;
+}
+
+int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
+                                     const quantum_state_t *forward_state,
+                                     const moonlab_diff_pauli_term_t *terms,
+                                     size_t num_terms,
+                                     double *grad_out) {
+    if (!c || !forward_state || !terms || !grad_out) return -1;
+    for (size_t i = 0; i < c->n_params; i++) grad_out[i] = 0.0;
+    for (size_t k = 0; k < num_terms; k++) {
+        int rc = backward_single_term(c, forward_state, &terms[k],
+                                       terms[k].coefficient, grad_out);
+        if (rc != 0) return rc;
+    }
+    return 0;
+}

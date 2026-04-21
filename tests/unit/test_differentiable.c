@@ -237,11 +237,92 @@ static void test_four_qubit_vqe_ansatz(void) {
     moonlab_diff_circuit_free(c);
 }
 
+/* ---------------------------------------------------------------- */
+/* 4. Multi-Pauli-string observable (VQE-realistic)                  */
+/* ---------------------------------------------------------------- */
+/*
+ * Hamiltonian akin to a H2-in-minimal-basis VQE cost:
+ *     H = 0.5 I + 0.3 Z_0 + 0.4 Z_1 - 0.2 Z_0 Z_1 + 0.15 X_0 X_1
+ * on a 2-qubit HEA ansatz.  Validate the Pauli-sum gradient
+ * against finite differences of the Pauli-sum expectation.
+ */
+static void test_pauli_sum_vqe(void) {
+    fprintf(stdout, "\n-- Pauli-sum observable vs finite diff --\n");
+    moonlab_diff_circuit_t *c = moonlab_diff_circuit_create(2);
+    double thetas[4] = { 0.35, -0.22, 0.88, 1.11 };
+    moonlab_diff_ry(c, 0, thetas[0]);
+    moonlab_diff_ry(c, 1, thetas[1]);
+    moonlab_diff_cnot(c, 0, 1);
+    moonlab_diff_ry(c, 0, thetas[2]);
+    moonlab_diff_ry(c, 1, thetas[3]);
+
+    /* H = 0.5 I + 0.3 Z_0 + 0.4 Z_1 - 0.2 Z_0 Z_1 + 0.15 X_0 X_1. */
+    int q_z0[]  = {0};
+    int q_z1[]  = {1};
+    int q_zz[]  = {0, 1};
+    int q_xx[]  = {0, 1};
+    moonlab_diff_observable_t p_z[]  = { MOONLAB_DIFF_OBS_Z };
+    moonlab_diff_observable_t p_z2[] = { MOONLAB_DIFF_OBS_Z };
+    moonlab_diff_observable_t p_zz[] = { MOONLAB_DIFF_OBS_Z,
+                                          MOONLAB_DIFF_OBS_Z };
+    moonlab_diff_observable_t p_xx[] = { MOONLAB_DIFF_OBS_X,
+                                          MOONLAB_DIFF_OBS_X };
+    moonlab_diff_pauli_term_t terms[5] = {
+        { 0.5,  0,  NULL, NULL  },     /* identity */
+        { 0.3,  1,  q_z0, p_z   },
+        { 0.4,  1,  q_z1, p_z2  },
+        { -0.2, 2,  q_zz, p_zz  },
+        { 0.15, 2,  q_xx, p_xx  },
+    };
+
+    quantum_state_t s;
+    quantum_state_init(&s, 2);
+    moonlab_diff_forward(c, &s);
+
+    double grad_adj[4];
+    CHECK(moonlab_diff_backward_pauli_sum(c, &s, terms, 5, grad_adj) == 0,
+          "backward_pauli_sum ok");
+
+    /* Finite-diff via forward + expect_pauli_sum. */
+    double grad_fd[4];
+    const double h = 1e-4;
+    for (int k = 0; k < 4; k++) {
+        moonlab_diff_set_theta(c, k, thetas[k] + h);
+        moonlab_diff_forward(c, &s);
+        double fp = moonlab_diff_expect_pauli_sum(&s, terms, 5);
+        moonlab_diff_set_theta(c, k, thetas[k] - h);
+        moonlab_diff_forward(c, &s);
+        double fm = moonlab_diff_expect_pauli_sum(&s, terms, 5);
+        moonlab_diff_set_theta(c, k, thetas[k]);
+        grad_fd[k] = (fp - fm) / (2.0 * h);
+    }
+
+    double max_err = 0.0;
+    for (int k = 0; k < 4; k++) {
+        double e = fabs(grad_adj[k] - grad_fd[k]);
+        if (e > max_err) max_err = e;
+        fprintf(stdout, "    k=%d  adj=%+.6f  fd=%+.6f  diff=%.2e\n",
+                k, grad_adj[k], grad_fd[k], e);
+    }
+    CHECK(max_err < 1e-7, "multi-Pauli grad within 1e-7 of finite diff");
+
+    /* <H> evaluation sanity: re-evolve and print. */
+    moonlab_diff_forward(c, &s);
+    double h_val = moonlab_diff_expect_pauli_sum(&s, terms, 5);
+    fprintf(stdout, "    <H> = %+.6f\n", h_val);
+    /* Loose bound: sum of |coeffs| = 0.5 + 0.3 + 0.4 + 0.2 + 0.15 = 1.55 */
+    CHECK(fabs(h_val) < 1.6, "|<H>| within coefficient budget");
+
+    quantum_state_free(&s);
+    moonlab_diff_circuit_free(c);
+}
+
 int main(void) {
     fprintf(stdout, "=== differentiable moonlab tests ===\n");
     test_single_qubit_ry();
     test_hea_two_qubit();
     test_four_qubit_vqe_ansatz();
+    test_pauli_sum_vqe();
 
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return (failures == 0) ? 0 : 1;

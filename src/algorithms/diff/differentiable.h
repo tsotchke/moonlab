@@ -170,6 +170,50 @@ int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
                            int obs_qubit,
                            double *grad_out);
 
+/* ---------- Multi-Pauli observable ---------------------------------- */
+
+/**
+ * @brief A single Pauli string on selected qubits: a product of
+ *        single-qubit Paulis, e.g. Z_0 Z_1 X_2.
+ *
+ * @c num_ops is the number of non-identity factors; @c qubits and
+ * @c paulis are arrays of that length specifying which Pauli acts on
+ * which qubit.  All qubits must be distinct.
+ */
+typedef struct {
+    double coefficient;               /* weight on this term */
+    size_t num_ops;                    /* 0 = identity */
+    const int *qubits;                 /* length num_ops */
+    const moonlab_diff_observable_t *paulis; /* length num_ops */
+} moonlab_diff_pauli_term_t;
+
+/**
+ * @brief Compute gradient of
+ *        @f$\sum_k c_k \langle \psi | P_k | \psi \rangle@f$
+ *        with respect to every parametric angle, where each
+ *        @f$P_k@f$ is a Pauli string of @c terms[k].  Linear in the
+ *        terms: the gradient is accumulated
+ *          @c grad_out[i] += c_k * d<P_k>/dtheta_i.
+ *        @c grad_out is zeroed at entry.
+ *
+ * Cost: @c num_terms forward+backward sweeps (one per term).  For
+ * a typical VQE Hamiltonian with O(n^4) terms that's O(n^4) sweeps,
+ * still independent of the number of parameters.
+ */
+int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
+                                     const quantum_state_t *forward_state,
+                                     const moonlab_diff_pauli_term_t *terms,
+                                     size_t num_terms,
+                                     double *grad_out);
+
+/**
+ * @brief Compute @f$\sum_k c_k \langle \psi | P_k | \psi \rangle@f$
+ *        without gradients (convenience for VQE cost evaluation).
+ */
+double moonlab_diff_expect_pauli_sum(const quantum_state_t *state,
+                                      const moonlab_diff_pauli_term_t *terms,
+                                      size_t num_terms);
+
 #ifdef __cplusplus
 }
 #endif
