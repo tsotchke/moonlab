@@ -254,6 +254,62 @@ typedef enum {
  */
 double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
 
+// ============================================================================
+// COMPOSITE / CORRELATED CHANNELS  (v0.2, Plan 2D)
+// ============================================================================
+
+/**
+ * @brief Correlated two-qubit Pauli channel.
+ *
+ * Applies one of the 16 two-qubit Pauli operators (I, X, Y, Z)^{⊗2}
+ * with supplied probabilities.  @p probs is a length-16 array
+ * indexed by (p_a * 4 + p_b) with p_a, p_b ∈ {0=I, 1=X, 2=Y, 3=Z};
+ * it must sum to 1 within 1e-9 (otherwise the function returns
+ * without mutating the state).
+ *
+ * This is the right model for correlated gate errors on a 2q gate --
+ * e.g. a bias toward XX errors on a CNOT, which a product of two
+ * depolarizing channels cannot reproduce.
+ *
+ * @param state         mutable state.
+ * @param qubit_a       first qubit.
+ * @param qubit_b       second qubit (must differ from qubit_a).
+ * @param probs         length-16 probability table, sum to 1.
+ * @param uniform       a uniform [0, 1) sample.
+ */
+void noise_correlated_two_qubit_pauli(quantum_state_t* state,
+                                       int qubit_a, int qubit_b,
+                                       const double *probs,
+                                       double uniform);
+
+/**
+ * @brief Convex mixture of two single-qubit channels.
+ *
+ * With probability @p mixture_prob, apply channel A (selected by
+ * @p channel_a at parameter @p param_a).  Otherwise apply channel B.
+ * @p uniform_pick decides which branch; @p random_channel is passed
+ * into the selected channel's own sampling input.
+ *
+ * Useful for time-varying noise (pick branch per gate) or for
+ * biased-basis error models.
+ */
+void noise_convex_mixture_single(quantum_state_t* state, int qubit,
+                                  noise_channel_id_t channel_a, double param_a,
+                                  noise_channel_id_t channel_b, double param_b,
+                                  double mixture_prob,
+                                  double uniform_pick,
+                                  double random_channel);
+
+/**
+ * @brief Sequential composition of two single-qubit channels on the
+ *        same qubit.  Equivalent to applying them in succession.
+ */
+void noise_composite_sequential_single(quantum_state_t* state, int qubit,
+                                        noise_channel_id_t channel_a, double param_a,
+                                        noise_channel_id_t channel_b, double param_b,
+                                        double random_a,
+                                        double random_b);
+
 #ifdef __cplusplus
 }
 #endif

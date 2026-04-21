@@ -677,3 +677,86 @@ double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p) 
     if (d11 > m) m = d11;
     return m;
 }
+
+// ============================================================================
+// COMPOSITE / CORRELATED CHANNELS  (v0.2)
+// ============================================================================
+
+#include "gates.h"
+
+static void apply_pauli_idx(quantum_state_t *state, int qubit, int idx) {
+    switch (idx) {
+        case 0: break;  /* I */
+        case 1: gate_pauli_x(state, qubit); break;
+        case 2: gate_pauli_y(state, qubit); break;
+        case 3: gate_pauli_z(state, qubit); break;
+        default: break;
+    }
+}
+
+void noise_correlated_two_qubit_pauli(quantum_state_t* state,
+                                       int qubit_a, int qubit_b,
+                                       const double *probs,
+                                       double uniform) {
+    if (!state || !probs || qubit_a == qubit_b) return;
+    double sum = 0.0;
+    for (int i = 0; i < 16; i++) {
+        if (probs[i] < -1e-12) return;
+        sum += probs[i];
+    }
+    if (fabs(sum - 1.0) > 1e-9) return;
+
+    double cum = 0.0;
+    int pick = 15;
+    for (int i = 0; i < 16; i++) {
+        cum += probs[i];
+        if (uniform < cum) { pick = i; break; }
+    }
+    int pa = pick / 4;
+    int pb = pick % 4;
+    apply_pauli_idx(state, qubit_a, pa);
+    apply_pauli_idx(state, qubit_b, pb);
+}
+
+static void apply_named_channel(quantum_state_t *state, int qubit,
+                                 noise_channel_id_t ch, double p,
+                                 double rand_val) {
+    switch (ch) {
+        case NOISE_CHANNEL_DEPOLARIZING:
+            noise_depolarizing_single(state, qubit, p, rand_val); break;
+        case NOISE_CHANNEL_AMPLITUDE_DAMPING:
+            noise_amplitude_damping(state, qubit, p, rand_val); break;
+        case NOISE_CHANNEL_PHASE_DAMPING:
+            noise_phase_damping(state, qubit, p, rand_val); break;
+        case NOISE_CHANNEL_BIT_FLIP:
+            noise_bit_flip(state, qubit, p, rand_val); break;
+        case NOISE_CHANNEL_PHASE_FLIP:
+            noise_phase_flip(state, qubit, p, rand_val); break;
+        case NOISE_CHANNEL_BIT_PHASE_FLIP:
+            noise_bit_phase_flip(state, qubit, p, rand_val); break;
+    }
+}
+
+void noise_convex_mixture_single(quantum_state_t* state, int qubit,
+                                  noise_channel_id_t channel_a, double param_a,
+                                  noise_channel_id_t channel_b, double param_b,
+                                  double mixture_prob,
+                                  double uniform_pick,
+                                  double random_channel) {
+    if (!state) return;
+    if (uniform_pick < mixture_prob) {
+        apply_named_channel(state, qubit, channel_a, param_a, random_channel);
+    } else {
+        apply_named_channel(state, qubit, channel_b, param_b, random_channel);
+    }
+}
+
+void noise_composite_sequential_single(quantum_state_t* state, int qubit,
+                                        noise_channel_id_t channel_a, double param_a,
+                                        noise_channel_id_t channel_b, double param_b,
+                                        double random_a,
+                                        double random_b) {
+    if (!state) return;
+    apply_named_channel(state, qubit, channel_a, param_a, random_a);
+    apply_named_channel(state, qubit, channel_b, param_b, random_b);
+}
