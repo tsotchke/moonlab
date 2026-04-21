@@ -1435,6 +1435,9 @@ if(QSIM_BUILD_EXAMPLES)
     add_executable(tsp_logistics examples/applications/tsp_logistics.c)
     target_link_libraries(tsp_logistics PRIVATE quantumsim)
 
+    add_executable(pqc_qrng_demo examples/applications/pqc_qrng_demo.c)
+    target_link_libraries(pqc_qrng_demo PRIVATE quantumsim)
+
     add_executable(diff_vqe_demo examples/tensor_network/diff_vqe_demo.c)
     target_link_libraries(diff_vqe_demo PRIVATE quantumsim m)
 
