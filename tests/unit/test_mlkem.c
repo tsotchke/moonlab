@@ -119,12 +119,38 @@ static void test_implicit_rejection(void) {
           "implicit-rejection output is deterministic");
 }
 
+static void test_qrng_wrapper(void) {
+    fprintf(stdout, "\n-- keygen_qrng + encaps_qrng round-trip --\n");
+    uint8_t ek[MLKEM512_PUBLICKEYBYTES];
+    uint8_t dk[MLKEM512_SECRETKEYBYTES];
+    int rc = moonlab_mlkem512_keygen_qrng(ek, dk);
+    CHECK(rc == 0, "keygen_qrng succeeds");
+
+    uint8_t c[MLKEM512_CIPHERTEXTBYTES];
+    uint8_t K[32], K_dec[32];
+    rc = moonlab_mlkem512_encaps_qrng(c, K, ek);
+    CHECK(rc == 0, "encaps_qrng succeeds");
+
+    moonlab_mlkem512_decaps(K_dec, c, dk);
+    CHECK(memcmp(K, K_dec, 32) == 0,
+          "QRNG-sourced KeyGen + Encaps + Decaps round-trip");
+
+    /* QRNG path is non-deterministic: two successive keygens should
+     * produce different ek (with overwhelming probability). */
+    uint8_t ek2[MLKEM512_PUBLICKEYBYTES];
+    uint8_t dk2[MLKEM512_SECRETKEYBYTES];
+    moonlab_mlkem512_keygen_qrng(ek2, dk2);
+    CHECK(memcmp(ek, ek2, MLKEM512_PUBLICKEYBYTES) != 0,
+          "QRNG-sourced keygens produce distinct key pairs");
+}
+
 int main(void) {
     fprintf(stdout, "=== ML-KEM-512 end-to-end tests ===\n\n");
     fprintf(stdout, "-- correctness (10 random trials) --\n");
     for (int i = 0; i < 10; i++) test_correctness_one_trial(i);
     test_determinism();
     test_implicit_rejection();
+    test_qrng_wrapper();
 
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");

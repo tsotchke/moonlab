@@ -78,6 +78,31 @@ void moonlab_mlkem512_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM512_SECRETKEYBYTES]);
 
+/* ---- Convenience wrappers driven by moonlab_qrng_bytes ---------- */
+
+/**
+ * @brief KeyGen with entropy sourced from @c moonlab_qrng_bytes.
+ *
+ * Internally draws 64 bytes from the Bell-verified quantum RNG to
+ * populate (d, z) and then calls @ref moonlab_mlkem512_keygen.  The
+ * single public entry point that ties Moonlab's quantum entropy
+ * source to a FIPS-203 PQC key pair in one call.
+ *
+ * @return 0 on success; -1 on QRNG failure.
+ */
+int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
+                                   uint8_t dk[MLKEM512_SECRETKEYBYTES]);
+
+/**
+ * @brief Encaps with the internal message seed drawn from
+ *        @c moonlab_qrng_bytes.
+ *
+ * @return 0 on success; -1 on QRNG failure.
+ */
+int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
+                                   uint8_t K[32],
+                                   const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
+
 #ifdef __cplusplus
 }
 #endif

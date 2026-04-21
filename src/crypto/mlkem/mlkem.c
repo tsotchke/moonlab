@@ -17,6 +17,7 @@
 #include "mlkem.h"
 #include "poly.h"
 #include "../sha3/sha3.h"
+#include "../../applications/moonlab_export.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -326,4 +327,25 @@ void moonlab_mlkem512_decaps(uint8_t K_out[32],
         K_out[i] = (uint8_t)((K_candidate[i] & (uint8_t)~mask) |
                               (K_bad[i]     & mask));
     }
+}
+
+/* -------------------------------------------------------------- */
+/* QRNG-sourced convenience wrappers                               */
+/* -------------------------------------------------------------- */
+
+int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
+                                   uint8_t dk[MLKEM512_SECRETKEYBYTES]) {
+    uint8_t buf[64];
+    if (moonlab_qrng_bytes(buf, sizeof buf) != 0) return -1;
+    moonlab_mlkem512_keygen(ek, dk, buf, buf + 32);
+    return 0;
+}
+
+int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
+                                   uint8_t K_out[32],
+                                   const uint8_t ek[MLKEM512_PUBLICKEYBYTES]) {
+    uint8_t m[32];
+    if (moonlab_qrng_bytes(m, sizeof m) != 0) return -1;
+    moonlab_mlkem512_encaps(c, K_out, ek, m);
+    return 0;
 }

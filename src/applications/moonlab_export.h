@@ -121,6 +121,51 @@ int moonlab_qrng_bytes(uint8_t* buf, size_t size);
  */
 int moonlab_qwz_chern(double m, size_t N, double* out_chern);
 
+/* ---- ML-KEM-512 (FIPS 203) PQC KEM (stable from 0.2.0) -------------- */
+
+#define MOONLAB_MLKEM512_PUBLICKEYBYTES   800
+#define MOONLAB_MLKEM512_SECRETKEYBYTES   1632
+#define MOONLAB_MLKEM512_CIPHERTEXTBYTES  768
+#define MOONLAB_MLKEM512_SHAREDSECRETBYTES 32
+
+/**
+ * @brief Generate an ML-KEM-512 key pair, with entropy sourced from
+ *        Moonlab's Bell-verified quantum RNG.
+ *
+ * @param ek 800-byte output public key.
+ * @param dk 1632-byte output secret key.
+ * @return  0 on success, -1 on entropy failure.
+ * @since 0.2.0
+ */
+int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
+
+/**
+ * @brief Encapsulate a shared secret against an ML-KEM-512 public key.
+ *        Entropy for the inner message seed is drawn from
+ *        @ref moonlab_qrng_bytes.
+ *
+ * @param c  768-byte output ciphertext.
+ * @param K  32-byte output shared secret.
+ * @param ek 800-byte public key.
+ * @return  0 on success, -1 on entropy failure.
+ * @since 0.2.0
+ */
+int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+
+/**
+ * @brief Decapsulate an ML-KEM-512 ciphertext.  Constant-time;
+ *        implicit-rejection on invalid ciphertexts.
+ *
+ * @param K  32-byte output shared secret (may be pseudorandom on
+ *           tampered ciphertext).
+ * @param c  768-byte ciphertext.
+ * @param dk 1632-byte secret key.
+ * @since 0.2.0
+ */
+void moonlab_mlkem512_decaps(uint8_t* K,
+                              const uint8_t* c,
+                              const uint8_t* dk);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
