@@ -500,6 +500,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/quantum_geometry/qgt.c
     # Shor-ECDLP resource estimator (logical + FTQC cost model).
     src/algorithms/shor_ecdlp/shor_ecdlp.c
+    # Native autograd for parameterized circuits (P5.19).
+    src/algorithms/diff/differentiable.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1062,6 +1064,9 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_tensor_adversarial tests/unit/test_tensor_adversarial.c)
     target_link_libraries(test_tensor_adversarial PRIVATE quantumsim m)
     add_test(NAME tensor_adversarial COMMAND test_tensor_adversarial)
+    add_executable(test_differentiable tests/unit/test_differentiable.c)
+    target_link_libraries(test_differentiable PRIVATE quantumsim m)
+    add_test(NAME differentiable COMMAND test_differentiable)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
