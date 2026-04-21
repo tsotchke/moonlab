@@ -7,6 +7,170 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2026-04-21 v0.2.0 scope -- post-quantum crypto, error mitigation, measurement and noise completeness, Bell variants, autograd extension
+
+The second half of the v0.2.0 arc.  Four themes: ship a foundational
+post-quantum cryptography module (FIPS 202 + FIPS 203), add error
+mitigation as a new subsystem, close the Phase 2 "measurement and
+noise completeness" items from the release plan, and extend the
+native autograd to controlled rotations and real VQE integration.
+
+#### Post-quantum cryptography (new `src/crypto/`) -- foundation
+
+- **SHA-3 + SHAKE (FIPS 202).**  Clean-room reference
+  implementation of Keccak-f[1600] plus the four fixed-output
+  SHA-3 hashes (224/256/384/512) and both SHAKE XOFs.  Streaming
+  API (init / update / final / shake_squeeze) + one-shot wrappers.
+  All NIST known-answer vectors pass byte-for-byte, including the
+  200-byte 0xa3 intermediate-value test and SHAKE128/256 split-
+  squeeze continuity.  (`src/crypto/sha3/`, `tests/unit/test_sha3.c`.)
+
+- **ML-KEM (FIPS 203) full KEM, all three parameter sets.**  Runtime-
+  parameterised implementation covering ML-KEM-512, ML-KEM-768
+  (NIST-recommended default), and ML-KEM-1024 (Category 5).  Size
+  table matches FIPS 203 Table 3 exactly: ek = 800/1184/1568,
+  dk = 1632/2400/3168, ct = 768/1088/1568, shared = 32.  Includes:
+  - Polynomial ring Z_q[X]/(X^256 + 1), q = 3329, with Barrett +
+    Montgomery reductions, incomplete NTT (forward + inverse) over
+    the 256-th root of unity 17, pointwise basemul, CBD_eta sampler
+    for eta in {2, 3}, 12-bit packed byte encoding, compress /
+    decompress for d in {4, 5, 10, 11}.
+  - GenMatrix via SHAKE128 + rejection sampling (FIPS 203 Algorithm 7).
+  - K-PKE KeyGen / Encrypt / Decrypt (Section 5) and ML-KEM
+    KeyGen / Encaps / Decaps (Section 7) with Fujisaki-Okamoto
+    transform, constant-time equality check, and implicit rejection
+    via SHAKE256(z || c).
+  - 10 random correctness trials; NTT round-trip vs schoolbook
+    matches on randomised inputs; CBD sampler statistics match
+    theoretical mean=0, var={1.0, 1.5} for eta=2, 3.
+  - Regression KAT: 12 byte-level anchors pinning (ek, dk, ct, K)
+    SHA3-256 fingerprints for fixed (d, z, m) seeds across all
+    three parameter sets.  Full NIST FIPS 203 KAT conformance
+    (requires AES-256-CTR DRBG seed expansion + official .rsp
+    files) is tracked for 0.2.1.
+  (`src/crypto/mlkem/`, `tests/unit/test_mlkem.c`,
+  `tests/unit/test_mlkem_poly.c`.)
+
+- **Quantum-to-quantum-safe pipeline.**  `moonlab_mlkem{512,768,1024}_
+  keygen_qrng` / `_encaps_qrng` convenience wrappers draw their
+  (d, z, m) entropy from `moonlab_qrng_bytes`, the Bell-verified
+  QRNG.  A single stable-ABI call turns quantum-certified entropy
+  into a NIST-standard post-quantum key pair.
+
+- **Stable ABI.**  `moonlab_export.h` grows to export all three
+  KEM parameter sets via `MOONLAB_MLKEM{512,768,1024}_*BYTES`
+  constants and `moonlab_mlkem{bits}_keygen_qrng` / `_encaps_qrng` /
+  `_decaps`.  QGTL / lilirrep / downstream consumers can dlsym the
+  KEM surface without pulling in internal headers.
+
+- **Python bindings** at `moonlab.crypto.{sha3, mlkem}`.  Exposes
+  all hashes, XOFs, and all three ML-KEM parameter sets.  16 pytest
+  tests cover KAT match, round-trip, tamper detection, non-
+  determinism of QRNG-sourced keygen.
+
+- **End-to-end demo.**  `examples/applications/pqc_qrng_demo.c`:
+  Alice keygens from QRNG, Bob encapsulates, Alice decapsulates,
+  SHAKE256 expands the shared secret into a keystream, a flipped
+  ciphertext byte triggers implicit rejection.  ~100 lines of C
+  exercising the full stable-ABI surface.
+
+#### Error mitigation (new `src/mitigation/`)
+
+- **Zero-noise extrapolation (ZNE).**  Three estimators:
+  - `ZNE_LINEAR`: OLS intercept fit with residual stddev.
+  - `ZNE_RICHARDSON`: exact Lagrange interpolation at lambda = 0;
+    zero residual on polynomials of degree <= n - 1.
+  - `ZNE_EXPONENTIAL`: fit E = a + b * exp(-c * lambda) via a
+    1D grid + golden-section search on c with closed-form (a, b);
+    robust against the flat-residual landscape that defeats three-
+    parameter Gauss-Newton.
+  Integration test on a depolarised `<Z>` signal: exponential
+  recovers the noiseless value to 1e-13, Richardson to 1e-6,
+  linear ~1% (limit of the linear model on a non-linear signal).
+  Convenience `zne_mitigate()` driver sweeps a user callback across
+  noise scales and returns the extrapolated value + stderr.
+
+- **Probabilistic error cancellation (PEC) primitives.**
+  `pec_one_norm_cost` (gamma = sum_i |eta_i|), `pec_sample_index`
+  (sample i with prob |eta_i| / gamma, return sign), `pec_aggregate`
+  (unbiased estimator gamma * E[sgn * m] with stderr).  Monte-Carlo
+  glue for caller-supplied quasi-probability decompositions of
+  inverse noise channels.
+
+#### Measurement and entanglement (Phase 2E)
+
+- **POVM measurement.**  `measurement_povm` accepts a list of
+  Kraus operators summing to identity, samples outcome k with
+  prob `<psi| K_k^dag K_k |psi>`, and collapses the state to
+  `(K_k psi) / sqrt(p_k)`.  `measurement_povm_probabilities`
+  computes probabilities without mutating the state.
+  Completeness is verified up front; non-normalised POVMs return
+  `QS_ERROR_NOT_NORMALIZED`.
+- **Weak Z-measurement.**  `measurement_weak_z(qubit, strength)`:
+  strength 0 is non-disturbing, strength 1 is projective.
+  Implemented as a 2-outcome POVM with diagonal Kraus operators.
+- **Quantum mutual information.**  `entanglement_mutual_information
+  (state, A, B)` = S(A) + S(B) - S(AB) for any disjoint partitions.
+  Bell state: I = 2 bits; separable: I = 0; GHZ_3 reduced to {0, 1}:
+  I = 1 bit; GHZ_3 across {0} vs {1, 2}: I = 2 bits.
+
+#### Bell inequality completeness (Phase 2G)
+
+- **Mermin polynomial on |GHZ_3>.**  `bell_test_mermin_ghz`: four
+  correlators {XYY, YXY, YYX, XXX}, classical bound 2, quantum
+  max 4.  Analytic expectation via `multi_pauli_expectation` --
+  no Monte-Carlo sampling.  Matches theory to 1e-9.
+- **Mermin-Klyshko M_N on |GHZ_N>.**  `bell_test_mermin_klyshko`
+  with classical bound normalised to 1 and ideal quantum
+  2^((N-1)/2).  Reproduced exactly for N = 2 .. 5.
+- CH74 correlation form was considered but is algebraically
+  equivalent to CHSH under relabelling; not shipped as a distinct
+  helper.
+
+#### Noise-channel completeness (Phase 2D)
+
+- **Correlated two-qubit Pauli channel.**  16-probability table
+  over the (I, X, Y, Z)^2 basis; samples the correlated 2q error.
+  Models XX-biased CNOT errors that cannot be produced by
+  two independent single-qubit channels.
+- **Convex mixture of single-qubit channels.**
+- **Sequential composition** of two single-qubit channels on the
+  same qubit.
+
+#### QRNG (Plan 1F) -- device-independent primitives
+
+- **Pironio H_min bound.**  `qrng_di_min_entropy_from_chsh(S)`:
+  piecewise certified min-entropy per measurement bit,
+  `1 - log2(1 + sqrt(2 - S^2/4))` on (2, 2sqrt(2)], clamped
+  endpoints, monotone.
+- **Toeplitz-hash extractor.**  2-universal strong extractor with
+  leftover-hash-lemma bound; seed length enforcement (returns
+  -2 on short seed); linear in input (T(x1 xor x2) = T(x1) xor T(x2)).
+- **Raw-byte sizing.**  `qrng_di_raw_bytes_for_output(S, n_out, eps)`:
+  returns the raw input length needed so the certified min-entropy
+  is at least `8 * n_out + eps`.
+
+#### Autograd extension
+
+- **Controlled parametric rotations CRX / CRY / CRZ.**  Generator
+  `|1><1|_ctrl (x) G_tgt` with G = X/Y/Z; the eta_G_xi kernel
+  applies the target Pauli and projects on the ctrl=1 subspace
+  before the inner product.  These are the workhorse gates of
+  hardware-efficient ansatze and were missing from the initial
+  autograd.  Adjoint gradients match finite-difference to 1e-9
+  on a 3-qubit mixed circuit (RY/RZ/H/CNOT/CRX/CRY/CRZ).
+  Python bindings get `.crx() / .cry() / .crz()` methods.
+
+- **VQE adjoint-gradient fast path.**  `vqe_compute_gradient` now
+  silently uses reverse-mode autograd for the hardware-efficient
+  ansatz in noise-free simulation, falling back to parameter-shift
+  for UCCSD / symmetry-preserving / noisy runs.  On an H2 3-layer
+  HEA with 12 parameters the adjoint gradient matches central-
+  difference to 7.7e-10, and the scaling benchmark
+  (`bench_diff_adjoint`) measures a PSR/adjoint speedup of
+  1.0x -> 1.9x -> 3.5x -> 6.7x as parameter count grows from
+  12 to 96, linear in parameter count as expected.
+
 ### 2026-04-19 .. 2026-04-21 release-hardening arc
 
 Seventy-plus commits split across four threads: close the P5.08 Chern
