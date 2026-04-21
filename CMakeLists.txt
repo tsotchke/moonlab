@@ -1571,12 +1571,23 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
 )
 
-# pkg-config file
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc
-    @ONLY
-)
+# pkg-config file.  configure_file happens at *configure* time, so
+# CMAKE_INSTALL_PREFIX inside the .pc is locked to the cache value
+# when `cmake -S . -B build` ran.  If a consumer installs to a
+# different prefix via `cmake --install ... --prefix ...`, the .pc
+# would point at the wrong location.  Generate it at install time
+# instead so the prefix substitution sees the actual destination.
+install(CODE "
+    set(CMAKE_INSTALL_PREFIX   \"\${CMAKE_INSTALL_PREFIX}\")
+    set(CMAKE_INSTALL_LIBDIR   \"${CMAKE_INSTALL_LIBDIR}\")
+    set(CMAKE_INSTALL_INCLUDEDIR \"${CMAKE_INSTALL_INCLUDEDIR}\")
+    set(PROJECT_DESCRIPTION     \"${PROJECT_DESCRIPTION}\")
+    set(PROJECT_VERSION         \"${PROJECT_VERSION}\")
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
+        @ONLY)
+")
 
 # ==============================================================================
 # Reproducibility manifest build-info header (P5.18)
@@ -1679,7 +1690,8 @@ target_include_directories(quantumsim PUBLIC
 )
 
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc
+    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
+    RENAME quantumsim.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 
