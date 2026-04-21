@@ -504,6 +504,9 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/diff/differentiable.c
     # Error mitigation: zero-noise extrapolation (v0.2).
     src/mitigation/zne.c
+    # Cryptographic primitives: SHA3 + SHAKE (FIPS 202) -- foundation
+    # for PQC (FIPS 203/204/205) and for extractor seeding in DI-QRNG.
+    src/crypto/sha3/sha3.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1094,6 +1097,10 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_composite_noise tests/unit/test_composite_noise.c)
     target_link_libraries(test_composite_noise PRIVATE quantumsim m)
     add_test(NAME unit_composite_noise COMMAND test_composite_noise)
+
+    add_executable(test_sha3 tests/unit/test_sha3.c)
+    target_link_libraries(test_sha3 PRIVATE quantumsim m)
+    add_test(NAME unit_sha3 COMMAND test_sha3)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
