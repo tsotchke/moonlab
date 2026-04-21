@@ -57,6 +57,7 @@ from .topology import (
     berry_grid_haldane, ssh_winding,
 )
 from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
+from . import crypto
 
 __all__ = [
     'QuantumState',
