@@ -248,17 +248,23 @@ metal_compute_ctx_t* metal_compute_init(void) {
         if (tensorSource) {
             MTLCompileOptions* options = [[MTLCompileOptions alloc] init];
             /* `fastMathEnabled` is deprecated in macOS 15 in favour of
-             * `mathMode`; use the new API when available and fall back on
-             * older OS versions. The fallback arm must still reference
-             * the deprecated selector, so silence that warning locally
-             * rather than opting out of -Werror globally. */
+             * `mathMode`, which is a macOS 15 SDK symbol.  Gate the new
+             * API on the SDK actually exposing it (the CI macOS-14 image
+             * still ships Xcode with the pre-15 SDK) and fall back on
+             * the deprecated selector otherwise.  The fallback arm
+             * intentionally references the deprecated selector, so the
+             * -Wdeprecated-declarations warning is silenced locally. */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#if defined(__MAC_15_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_15_0
             if (@available(macOS 15.0, iOS 18.0, *)) {
                 options.mathMode = MTLMathModeSafe;
             } else {
                 options.fastMathEnabled = NO;
             }
+#else
+            options.fastMathEnabled = NO;
+#endif
 #pragma clang diagnostic pop
             options.languageVersion = MTLLanguageVersion2_0;
 

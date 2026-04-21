@@ -23,6 +23,8 @@ set(ALGORITHM_SOURCES
     ${QSIM_ROOT}/src/algorithms/vqe.c
     ${QSIM_ROOT}/src/algorithms/qaoa.c
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
+    # Native reverse-mode autograd (referenced unconditionally from vqe.c).
+    ${QSIM_ROOT}/src/algorithms/diff/differentiable.c
 )
 
 # Source files - Tensor Network solvers (DMRG/TDVP/TEBD helpers, MPO utilities)
@@ -51,6 +53,11 @@ set(UTILS_SOURCES
 set(OPTIMIZATION_SOURCES
     ${QSIM_ROOT}/src/optimization/simd_ops.c
     ${QSIM_ROOT}/src/optimization/gpu/gpu_backend.c
+    # Eshkol symbols are referenced unconditionally from tensor.c; in
+    # the WASM build we don't have the C++ implementation so link the
+    # C no-op stub that always reports "not available" and returns
+    # MOONLAB_ESHKOL_NOT_BUILT.  Runtime code falls back to CPU.
+    ${QSIM_ROOT}/src/optimization/gpu/backends/gpu_eshkol_stub.c
 )
 if(MOONLAB_WASM_ENABLE_WEBGPU)
     list(APPEND OPTIMIZATION_SOURCES
