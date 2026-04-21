@@ -564,6 +564,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/entropy_pool.c
     src/applications/hardware_entropy.c
     src/applications/qrng.c
+    src/applications/qrng_di.c
     src/applications/moonlab_qrng_export.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
@@ -1085,6 +1086,10 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_mutual_info tests/unit/test_mutual_info.c)
     target_link_libraries(test_mutual_info PRIVATE quantumsim m)
     add_test(NAME unit_mutual_info COMMAND test_mutual_info)
+
+    add_executable(test_qrng_di tests/unit/test_qrng_di.c)
+    target_link_libraries(test_qrng_di PRIVATE quantumsim m)
+    add_test(NAME unit_qrng_di COMMAND test_qrng_di)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
