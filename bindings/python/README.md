@@ -56,10 +56,58 @@ python test_moonlab.py
 
 ### Quantum Algorithms
 
-- **VQE** - Variational Quantum Eigensolver for molecular simulation
+- **VQE** - Variational Quantum Eigensolver for molecular simulation,
+  with native reverse-mode autograd (adjoint-method gradient) for the
+  hardware-efficient ansatz in noise-free simulation
 - **QAOA** - Quantum optimization (MaxCut, Ising models)
 - **Grover** - Quantum search algorithm
-- **Bell Tests** - CHSH inequality verification
+- **Bell Tests** - CHSH, Mermin (3-qubit GHZ), and Mermin-Klyshko
+  N-qubit nonlocality inequalities
+
+### Native Autograd (`moonlab.diff`)
+
+Reverse-mode gradients for parameterised circuits, without a PyTorch
+dependency:
+
+```python
+from moonlab import QuantumState
+from moonlab.diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X
+
+circ = DiffCircuit(num_qubits=2).ry(0, 0.3).ry(1, -0.4).cnot(0, 1)
+H = [PauliTerm(1.0, [0], [OBS_Z]),
+     PauliTerm(0.5, [0, 1], [OBS_Z, OBS_Z])]
+
+state = QuantumState(2)
+circ.forward(state)
+cost = DiffCircuit.expect_pauli_sum(state, H)
+grad = circ.backward_pauli_sum(state, H)   # ndarray, shape (n_params,)
+```
+
+Supported gates: RX / RY / RZ / H / X / Y / Z / CNOT / CZ / CRX / CRY / CRZ.
+
+### Post-Quantum Cryptography (`moonlab.crypto`)
+
+FIPS 202 SHA-3 / SHAKE and FIPS 203 ML-KEM (512 / 768 / 1024), seeded
+by the Bell-verified quantum RNG:
+
+```python
+from moonlab.crypto import sha3, mlkem
+
+digest = sha3.sha3_256(b"quantum randomness")        # 32 bytes
+stream = sha3.shake256(b"seed", outlen=1024)          # XOF
+
+# Alice keygens with quantum-sourced entropy
+ek, dk = mlkem.keygen768_qrng()                       # 1184-byte pk, 2400-byte sk
+# Bob encapsulates a shared secret
+ct, K_bob = mlkem.encaps768_qrng(ek)                  # 1088-byte ciphertext
+# Alice decapsulates
+K_alice = mlkem.decaps768(ct, dk)
+assert K_alice == K_bob                               # same 32-byte shared secret
+```
+
+All NIST SHA-3 / SHAKE known-answer vectors pass; ML-KEM is validated
+against the pq-crystals reference via AES-256-CTR_DRBG-derived NIST
+count=0 seed (see `docs/security/pqc.md` for the full threat model).
 
 ### Quantum Machine Learning
 
@@ -350,4 +398,4 @@ This library implements algorithms from the following foundational works:
 
 ---
 
-*Version 0.2.0-dev - April 2026*
+*Version 0.2.0 - April 2026*
