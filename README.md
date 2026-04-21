@@ -1,16 +1,25 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.2.0--dev-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
-> **Quantum-simulation toolkit: dense state-vector core, tensor-network algorithms, topological-QC experiments, skyrmion tracking, and a WebGPU/JS front-end.**
+> **Full-stack quantum simulation + quantum-safe cryptography: dense
+> state vector (32 qubits), tensor networks, Clifford tableau,
+> topological QC, chemistry / VQE with native autograd, error
+> mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
+> seeded by that QRNG.**
 
-Moonlab is a 0.x pre-release simulation library. The dense state-vector
-core is well exercised (up to 32 qubits, AMX/SIMD paths, Metal GPU on
-macOS). The tensor-network, topological-QC, and skyrmion modules are
-usable but less thoroughly benchmarked — treat published numbers as
-indicative, not guarantees, until each subsystem picks up its own
-benchmark harness in the 0.2 release arc. See CHANGELOG.md for the
-actual state of each subsystem.
+Moonlab v0.2.0 is the first release with an honest end-to-end
+"quantum-source to quantum-safe" pipeline in one library: the
+Bell-verified quantum RNG generates 32-byte seeds that feed directly
+into NIST-standard ML-KEM-512 / 768 / 1024 key generation via a single
+stable-ABI call.  Alongside the cryptography work, 0.2 closes the
+Phase 1/2 "completeness" items from the release plan — error
+mitigation (ZNE + PEC), POVM measurement, weak measurement, Mermin /
+Mermin-Klyshko Bell inequalities, quantum mutual information,
+composite and correlated noise channels, DI-QRNG primitives — and
+extends the native reverse-mode autograd with controlled rotations
+and integrates it directly into the VQE driver.  See
+[CHANGELOG.md](CHANGELOG.md) for the per-subsystem state.
 
 > **Known limitation (v0.1.x–0.2.x):** `hermitian_eigen_decomposition`
 > in `src/utils/matrix_math.c` uses real-valued Givens rotations; it
@@ -27,14 +36,18 @@ actual state of each subsystem.
 | Capability | Description |
 |------------|-------------|
 | **State Vector Engine** | Up to 32 qubits with AMX-aligned buffers + runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE + Apple Accelerate). |
-| **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Exercised at 50–100 sites in examples; no head-to-head benchmark against reference TN libraries yet. |
-| **Topological QC** | Fibonacci/Ising anyon modules, surface/toric code scaffolds. Educational depth — not yet wired to a Stim-style stabilizer backend. |
-| **Skyrmion physics** | Micromagnetic skyrmion position tracking (see the 0.2 roadmap for true non-abelian braiding). |
-| **Quantum Chemistry** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, pre-built H₂/LiH/H₂O Pauli Hamiltonians. |
-| **Many-Body Localization** | Disordered spin chains, entanglement dynamics. |
-| **Quantum Algorithms** | Grover, VQE, QAOA, QPE, Bell tests (CHSH). |
-| **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend is scaffolded; CUDA / OpenCL / Vulkan are declared but unimplemented. |
-| **Multi-Language** | C core + Python (ctypes), Rust, JavaScript (React/Vue/WebGPU). Python algorithm bindings have pending ABI fixes in this release — see `bindings/python/moonlab/algorithms.py` for the current state. |
+| **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Real-space topology via MPO Chebyshev-KPM: local Chern marker on generic 2D models matches dense reference to machine precision. |
+| **Clifford Backend** | Aaronson–Gottesman tableau simulator: O(n) gates, O(n²) measurement. 3200-qubit GHZ + all-qubits measurement in ~100 ms. |
+| **Chemistry / VQE** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, H₂/LiH/H₂O Pauli Hamiltonians. Native reverse-mode autograd (CRX/CRY/CRZ + all standard rotations); `vqe_compute_gradient` uses adjoint method for HEA noise-free paths — ~5× over parameter-shift on 12 params, linear scaling to 100+. |
+| **Quantum Algorithms** | Grover, VQE, QAOA, QPE, CHSH + Mermin + Mermin-Klyshko Bell tests, Shor-ECDLP resource estimator (Gidney/Drake/Boneh 2026). |
+| **Error Mitigation** | Zero-noise extrapolation (linear / Richardson / exponential) and probabilistic error cancellation (PEC) primitives. |
+| **Measurement** | Projective, POVM (with Kraus-completeness verification), weak-Z measurement with tunable strength, partial, non-collapsing expectations. |
+| **Entanglement Metrics** | Von Neumann entropy, Rényi-α, concurrence, negativity, mutual information I(A:B), Schmidt decomposition. |
+| **Post-Quantum Cryptography** | FIPS 202 SHA-3 + SHAKE (all KATs pass), FIPS 203 ML-KEM 512 / 768 / 1024 with Fujisaki-Okamoto and implicit rejection, plus QRNG-sourced keygen / encapsulate wrappers. |
+| **Quantum RNG** | v3 QRNG with Bell-verified mode; device-independent primitives: Pironio min-entropy bound + Toeplitz extractor. |
+| **Noise Models** | Depolarising, amplitude damping, phase damping, bit/phase-flip, thermal relaxation, composite, convex-mixture, correlated two-qubit Pauli. |
+| **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend scaffolded. |
+| **Multi-Language** | C core + Python (ctypes) / Rust / JavaScript bindings.  Python exposes quantum + crypto primitives; 120+ pytest cases. |
 
 ## Table of Contents
 
@@ -46,6 +59,8 @@ actual state of each subsystem.
 - [Skyrmion Braiding](#skyrmion-braiding)
 - [Quantum Chemistry](#quantum-chemistry)
 - [Many-Body Localization](#many-body-localization)
+- [Post-Quantum Cryptography](#post-quantum-cryptography)
+- [Error Mitigation](#error-mitigation)
 - [Language Bindings](#language-bindings)
 - [Performance](#performance)
 - [Building](#building)
@@ -248,8 +263,17 @@ double phase = qpe_estimate(&unitary, precision_qubits, &state);
 ```c
 #include "algorithms/bell_tests.h"
 
-bell_result_t result = bell_chsh(&state, 0, 1, 10000);
-printf("CHSH: %.4f (classical ≤ 2, quantum ≤ 2.828)\n", result.chsh_value);
+/* CHSH on a Bell pair */
+bell_test_result_t r = bell_test_chsh(&state, 0, 1, 10000, NULL, entropy);
+printf("CHSH: %.4f (classical <= 2, quantum <= 2.828)\n", r.chsh_value);
+
+/* Mermin polynomial on |GHZ_3>: classical <= 2, quantum max 4 */
+bell_test_result_t m = bell_test_mermin_ghz(&ghz3, 0, 1, 2, 0, entropy);
+printf("Mermin |M|: %.4f\n", m.chsh_value);
+
+/* Mermin-Klyshko M_N on |GHZ_N>, normalised so classical <= 1,
+   quantum max 2^((N-1)/2). */
+double mk = bell_test_mermin_klyshko(&ghz_n, N, 0, NULL);
 ```
 
 ## Topological Quantum Computing
@@ -426,6 +450,85 @@ double r = level_spacing_ratio(eigenvalues, num_eigenvalues);
 // Entanglement entropy dynamics
 double S = entanglement_entropy_half_chain(state, num_sites);
 ```
+
+## Post-Quantum Cryptography
+
+Moonlab v0.2 ships a reference implementation of FIPS 202 (SHA-3,
+SHAKE) and FIPS 203 (ML-KEM — the NIST-standardised
+module-lattice-based KEM), seeded by the same Bell-verified quantum
+RNG that exports `moonlab_qrng_bytes`.  Three parameter sets are
+available: ML-KEM-512 (NIST Category 1), ML-KEM-768 (recommended
+default), and ML-KEM-1024 (Category 5).
+
+```c
+#include <moonlab/moonlab_export.h>
+
+uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES];
+uint8_t dk[MOONLAB_MLKEM768_SECRETKEYBYTES];
+uint8_t ct[MOONLAB_MLKEM768_CIPHERTEXTBYTES];
+uint8_t K_alice[32], K_bob[32];
+
+// Entropy is drawn from moonlab_qrng_bytes internally.
+moonlab_mlkem768_keygen_qrng(ek, dk);
+moonlab_mlkem768_encaps_qrng(ct, K_bob, ek);
+moonlab_mlkem768_decaps(K_alice, ct, dk);
+// K_alice == K_bob
+```
+
+Python:
+
+```python
+from moonlab.crypto import mlkem
+ek, dk   = mlkem.keygen768_qrng()
+ct, K_a  = mlkem.encaps768_qrng(ek)
+K_b      = mlkem.decaps768(ct, dk)
+assert K_a == K_b
+```
+
+All NIST FIPS 202 known-answer vectors pass byte-for-byte (SHA-3 224 /
+256 / 384 / 512, SHAKE128, SHAKE256 including split-squeeze).  ML-KEM
+self-conformance is locked with a 12-anchor regression KAT (SHA3-256
+fingerprints of every artifact at fixed (d, z, m) seeds, across all
+three parameter sets).  Full NIST FIPS 203 known-answer conformance
+(which requires the AES-256-CTR DRBG seed-expansion oracle) is
+tracked for 0.2.1.
+
+Security posture: this is a reference implementation -- constant-time
+on non-exotic CPUs, not FIPS-140-certified, and not hardened for
+adversarial side-channel environments.  It is suitable for learning,
+for integrating the QRNG source into a PQC workflow, and for research
+on quantum-safe primitives.  For FIPS-certified production crypto,
+integrate with BoringSSL or OpenSSL EVP; the QRNG seed path still
+applies.
+
+See `examples/applications/pqc_qrng_demo.c` for a ~100-line
+end-to-end demo and `docs/security/pqc.md` for the threat model.
+
+## Error Mitigation
+
+A new `src/mitigation/` subsystem with the two workhorse techniques
+for current-generation NISQ hardware:
+
+```c
+#include <moonlab/mitigation/zne.h>
+
+// Suppose fn(lambda, ctx) runs the circuit with noise scaled by lambda
+// and returns the measured <O>.
+double scales[] = { 1.0, 1.5, 2.0, 3.0 };
+double sd = 0.0;
+double E_mitigated = zne_mitigate(fn, ctx, scales, 4,
+                                   ZNE_EXPONENTIAL, &sd);
+```
+
+Three estimators: linear (OLS intercept fit), Richardson (exact
+Lagrange interpolation at lambda = 0 -- zero residual on polynomials
+of degree <= n-1), and exponential (fit E = a + b exp(-c lambda),
+recovers depolarised `<Z>` to 1e-13 in the integration test).
+
+Probabilistic error cancellation primitives (`pec_one_norm_cost`,
+`pec_sample_index`, `pec_aggregate`) provide the Monte-Carlo
+machinery for caller-supplied quasi-probability decompositions of
+inverse noise channels.
 
 ## Language Bindings
 
