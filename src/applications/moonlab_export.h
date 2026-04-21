@@ -166,6 +166,28 @@ void moonlab_mlkem512_decaps(uint8_t* K,
                               const uint8_t* c,
                               const uint8_t* dk);
 
+/* ---- ML-KEM-768 (NIST-recommended default; stable from 0.2.0) ------- */
+
+#define MOONLAB_MLKEM768_PUBLICKEYBYTES    1184
+#define MOONLAB_MLKEM768_SECRETKEYBYTES    2400
+#define MOONLAB_MLKEM768_CIPHERTEXTBYTES   1088
+#define MOONLAB_MLKEM768_SHAREDSECRETBYTES 32
+
+int  moonlab_mlkem768_keygen_qrng(uint8_t* ek, uint8_t* dk);
+int  moonlab_mlkem768_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+
+/* ---- ML-KEM-1024 (Category 5; stable from 0.2.0) --------------------- */
+
+#define MOONLAB_MLKEM1024_PUBLICKEYBYTES    1568
+#define MOONLAB_MLKEM1024_SECRETKEYBYTES    3168
+#define MOONLAB_MLKEM1024_CIPHERTEXTBYTES   1568
+#define MOONLAB_MLKEM1024_SHAREDSECRETBYTES 32
+
+int  moonlab_mlkem1024_keygen_qrng(uint8_t* ek, uint8_t* dk);
+int  moonlab_mlkem1024_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

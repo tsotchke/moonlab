@@ -105,3 +105,34 @@ def test_mlkem_keygen_qrng_nondeterministic():
     ek1, _ = mlkem.keygen_qrng()
     ek2, _ = mlkem.keygen_qrng()
     assert ek1 != ek2
+
+
+def test_mlkem768_roundtrip():
+    ek, dk = mlkem.keygen768()
+    assert len(ek) == mlkem.MLKEM768_PUBLICKEYBYTES
+    assert len(dk) == mlkem.MLKEM768_SECRETKEYBYTES
+    ct, K_a = mlkem.encaps768(ek)
+    assert len(ct) == mlkem.MLKEM768_CIPHERTEXTBYTES
+    K_b = mlkem.decaps768(ct, dk)
+    assert K_a == K_b
+
+
+def test_mlkem1024_roundtrip():
+    ek, dk = mlkem.keygen1024()
+    ct, K_a = mlkem.encaps1024(ek)
+    K_b = mlkem.decaps1024(ct, dk)
+    assert K_a == K_b
+
+
+def test_mlkem768_qrng():
+    ek, dk = mlkem.keygen768_qrng()
+    ct, K_a = mlkem.encaps768_qrng(ek)
+    K_b = mlkem.decaps768(ct, dk)
+    assert K_a == K_b
+
+
+def test_mlkem1024_qrng():
+    ek, dk = mlkem.keygen1024_qrng()
+    ct, K_a = mlkem.encaps1024_qrng(ek)
+    K_b = mlkem.decaps1024(ct, dk)
+    assert K_a == K_b
