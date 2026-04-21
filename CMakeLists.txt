@@ -502,6 +502,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/shor_ecdlp/shor_ecdlp.c
     # Native autograd for parameterized circuits (P5.19).
     src/algorithms/diff/differentiable.c
+    # Error mitigation: zero-noise extrapolation (v0.2).
+    src/mitigation/zne.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
     # Visualization — circuit diagrams + Feynman diagrams.
@@ -1071,6 +1073,10 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_bell_variants tests/unit/test_bell_variants.c)
     target_link_libraries(test_bell_variants PRIVATE quantumsim m)
     add_test(NAME unit_bell_variants COMMAND test_bell_variants)
+
+    add_executable(test_zne tests/unit/test_zne.c)
+    target_link_libraries(test_zne PRIVATE quantumsim m)
+    add_test(NAME unit_zne COMMAND test_zne)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
