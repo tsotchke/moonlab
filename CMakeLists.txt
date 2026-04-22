@@ -1279,9 +1279,22 @@ if(QSIM_BUILD_TESTS)
     endif()
 
     # Python bindings smoke — imports moonlab.core, constructs a Bell
-    # state, asserts exact amplitudes. Requires python3 on PATH.
+    # state, asserts exact amplitudes. Requires python3 on PATH plus
+    # numpy (the smoke test imports it transitively through
+    # moonlab.core).  Gate the registration on numpy being importable
+    # so CI tiers that don't pre-install Python scientific packages
+    # (e.g. the plain macos-arm64 / macos-debug / macos-werror tiers
+    # that only brew-install libomp + ninja) don't fail here; the
+    # dedicated bindings-smoke job does pip-install numpy first and
+    # will still run the tests.
     find_program(PYTHON3_EXECUTABLE python3)
     if(PYTHON3_EXECUTABLE)
+        execute_process(
+            COMMAND ${PYTHON3_EXECUTABLE} -c "import numpy"
+            RESULT_VARIABLE _numpy_probe
+            OUTPUT_QUIET ERROR_QUIET)
+    endif()
+    if(PYTHON3_EXECUTABLE AND _numpy_probe EQUAL 0)
         add_test(NAME python_bindings_smoke
                  COMMAND ${PYTHON3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_bindings_smoke.py)
