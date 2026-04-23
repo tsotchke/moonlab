@@ -487,11 +487,13 @@ assert K_a == K_b
 
 All NIST FIPS 202 known-answer vectors pass byte-for-byte (SHA-3 224 /
 256 / 384 / 512, SHAKE128, SHAKE256 including split-squeeze).  ML-KEM
-self-conformance is locked with a 12-anchor regression KAT (SHA3-256
-fingerprints of every artifact at fixed (d, z, m) seeds, across all
-three parameter sets).  Full NIST FIPS 203 known-answer conformance
-(which requires the AES-256-CTR DRBG seed-expansion oracle) is
-tracked for 0.2.1.
+conformance is validated at two tiers: a self-regression KAT (12
+SHA3-256 fingerprints of every artifact at fixed (d, z, m) seeds,
+across all three parameter sets) and a NIST-seeded KAT that drives
+our in-tree AES-256 SP 800-90A CTR_DRBG from the published NIST
+count=0 seed through KeyGen + Encaps.  A FIPS 203 reviewer can hash
+the official PQCkemKAT .rsp artifacts with SHA3-256 and compare to
+the pinned fingerprints -- match establishes conformance.
 
 Security posture: this is a reference implementation -- constant-time
 on non-exotic CPUs, not FIPS-140-certified, and not hardened for
@@ -618,7 +620,7 @@ const { state, circuit } = useQuantumState(2);
 </script>
 ```
 
-## Limitations (as of 0.2.0-dev)
+## Limitations (as of 0.2.0)
 
 Read this before judging the repo against its headline claims.  The
 adversarial audit that produced this list lives in
@@ -634,7 +636,7 @@ adversarial audit that produced this list lives in
   L = 300 single-core.  Adaptive QTCI for non-monomial
   modulations is still future work; the linear-in-coordinate
   case (what the Bianco-Resta formula actually uses) is shipped.
-- **CHSH / "Bell-verified" QRNG**: prior to 0.2.0-dev the
+- **CHSH / "Bell-verified" QRNG**: prior to 0.2.0 the
   `bell_test_chsh` function silently overwrote the input state with
   `|Phi+>` before measuring, so every CHSH reading was 2.828 by
   fiat.  Fixed this release.  The `moonlab_qrng_bytes`
@@ -649,17 +651,24 @@ adversarial audit that produced this list lives in
   multi-node (>1 physical host) scaling, wall-clock comparisons
   against single-host baselines, and any MPI backend other than
   OpenMPI.
-- **GPU backends other than Metal + Eshkol**: CUDA, OpenCL, Vulkan,
-  cuQuantum all have 1000+ LOC implementations but are not exercised
-  by the default `ctest` run and have not been CI-validated against
-  their real SDKs.
-- **WebGPU / JS**: the `@moonlab/quantum-core` TS package builds and
-  the Metal-parity smoke runs when `dist/index.mjs` is already
-  built, but the default `ctest` on a fresh clone produces no
-  WebGPU coverage.
-- **Platforms**: macOS arm64 is the primary test host.  Linux x86_64
-  support is claimed but not CI-verified outside Docker smoke.
-  Windows is unsupported.
+- **GPU backends other than Metal + Eshkol**: OpenCL and Vulkan now
+  compile cleanly and pass a "compile + discovery smoke" CI tier on
+  Linux (apt's ocl-icd-loader + PoCL for OpenCL; vulkan-loader +
+  lavapipe for Vulkan) but are not exercised against a real GPU in
+  CI -- the smoke test just verifies backend selection and
+  fallback.  CUDA and cuQuantum have 1000+ LOC implementations but
+  no CI runner has NVIDIA hardware; treat them as compile-only.
+- **WebGPU / JS**: CI has a dedicated `WASM / WebGPU smoke` tier
+  that builds the TS `@moonlab/quantum-core` package and runs the
+  unified smoke end-to-end.  The default C-only `ctest` on a fresh
+  clone without `-DQSIM_BUILD_JS_DIST=ON` produces no WebGPU
+  coverage -- that is the trade-off for not requiring a JS toolchain
+  just to build the library.
+- **Platforms**: Linux x86_64, Linux aarch64, macOS arm64, and
+  macOS x86_64 all have CI tiers that build the full tree and run
+  `ctest -E long_evolution`; macOS arm64 additionally runs Release,
+  Debug, -Werror, ASAN+UBSAN, and MPI-enabled variants.  Windows
+  is unsupported.
 - **Performance numbers**: every headline multiplier was measured
   once on one host.  No stddev, no cross-platform reproduction.
   Use the benches below to measure your own hardware; do not
@@ -783,7 +792,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.2.0-dev},
+    version      = {v0.2.0},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

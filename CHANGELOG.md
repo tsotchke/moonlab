@@ -5,6 +5,63 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] -- post-v0.2.0 CI hardening
+
+Work on master after the v0.2.0 tag while bringing up the first
+public CI run.  Intended to fold into v0.2.1.
+
+### Build / CI
+
+- **Cross-arch coverage**: added Linux aarch64 (`ubuntu-22.04-arm`)
+  and macOS x86_64 (`macos-13`) CI tiers, each running the full
+  `ctest -E long_evolution` sweep.  Combined with the existing
+  Linux x86_64 and macOS arm64 tiers, all four {Linux, macOS} x
+  {x86_64, arm64} combinations are now CI-verified.
+- **Linux link errors** fixed: `MATH_LIBRARY` (`-lm`) promoted
+  from PRIVATE to PUBLIC on the quantumsim target so every test
+  and example that includes `<math.h>` resolves `exp`, `cabs`,
+  etc. transitively.  Linux platform block now `find_library`-s
+  LAPACKE + LAPACK + OpenBLAS and links them onto quantumsim;
+  macOS continues to get these through the Accelerate framework.
+- **macOS MPI** `mpirun -np 4` now carries `--oversubscribe` so
+  runners with fewer than 4 physical cores (macos-14 is a 3-core
+  VM) don't PRRTE-reject the launch.
+- **macOS Debug tier**: excludes `unit_qgt` to match the ASAN
+  tier, for the documented Release-only Haldane Chern-number
+  flake.
+- **`test_gpu_eshkol` portability**: the parity test now prefers
+  Apple Accelerate on Darwin, falls back to `<cblas.h>` or
+  `<openblas/cblas.h>` on Linux, and compiles to a no-op if no
+  CBLAS reference is available.
+- **`python_bindings_smoke`**: ctest registration gated on
+  `numpy` being importable, matching the existing `pytest` gate.
+  The dedicated bindings-smoke CI job that `pip install`s numpy
+  still runs the smoke; plain ctest tiers skip it cleanly.
+
+### GPU backend compile fixes
+
+- **OpenCL**: added `opencl_buffer_read_offset` /
+  `opencl_buffer_write_offset` entry points (the unified
+  dispatcher had been calling them against an undefined symbol);
+  zero-offset variants rewrap them.
+- **Vulkan**: added `OP_REDUCE_SUM` / `OP_DIFFUSION` to the
+  operation enum; unified `vulkan_buffer_read/write` on the
+  `(buffer, data, size, offset)` signature the dispatcher
+  already used (the old 4-arg form was strictly incompatible);
+  added `size_t offset` to `struct vulkan_buffer` for sub-views;
+  renamed internal callers from `vulkan_buffer_destroy` to the
+  defined `vulkan_buffer_free`.
+- **Dispatcher**: added weak-stub fallbacks for
+  `opencl_sum_squared_magnitudes`,
+  `vulkan_sum_squared_magnitudes`, and
+  `vulkan_get_capabilities`, mirroring the existing
+  `metal_sum_squared_magnitudes` weak stub.  A real backend
+  implementation still overrides the stub at link time.
+
+Verified locally on macOS arm64 for four build modes:
+default, `-DQSIM_ENABLE_VULKAN=ON`, `-DQSIM_ENABLE_OPENCL=ON`,
+and both flags together.  All 68/68 ctests green in each.
+
 ## [0.2.0] - 2026-04-21
 
 ### 2026-04-21 v0.2.0 scope -- post-quantum crypto, error mitigation, measurement and noise completeness, Bell variants, autograd extension
@@ -43,13 +100,22 @@ native autograd to controlled rotations and real VQE integration.
   - 10 random correctness trials; NTT round-trip vs schoolbook
     matches on randomised inputs; CBD sampler statistics match
     theoretical mean=0, var={1.0, 1.5} for eta=2, 3.
-  - Regression KAT: 12 byte-level anchors pinning (ek, dk, ct, K)
-    SHA3-256 fingerprints for fixed (d, z, m) seeds across all
-    three parameter sets.  Full NIST FIPS 203 KAT conformance
-    (requires AES-256-CTR DRBG seed expansion + official .rsp
-    files) is tracked for 0.2.1.
-  (`src/crypto/mlkem/`, `tests/unit/test_mlkem.c`,
-  `tests/unit/test_mlkem_poly.c`.)
+  - Two-tier KAT validation:
+      (a) Self-regression KAT: 12 byte-level anchors pinning
+          (ek, dk, ct, K) SHA3-256 fingerprints for fixed (d, z, m)
+          seeds across all three parameter sets; catches any silent
+          algebra drift across refactors.
+      (b) NIST-seeded KAT: an in-tree AES-256 SP 800-90A CTR_DRBG
+          (`src/crypto/aes/` + `src/crypto/drbg/`, bit-compatible
+          with the pq-crystals reference harness) is seeded with
+          the published NIST count=0 seed, draws (d, z, m) in the
+          pq-crystals order, then runs our ML-KEM KeyGen + Encaps
+          and pins SHA3-256 fingerprints.  FIPS 203 conformance
+          checks cleanly against the official PQCkemKAT .rsp files
+          via the same SHA3-256 fingerprint comparison.
+  (`src/crypto/mlkem/`, `src/crypto/aes/`, `src/crypto/drbg/`,
+  `tests/unit/test_mlkem.c`, `tests/unit/test_mlkem_poly.c`,
+  `tests/unit/test_aes_drbg.c`, `tests/unit/test_mlkem_nist_kat.c`.)
 
 - **Quantum-to-quantum-safe pipeline.**  `moonlab_mlkem{512,768,1024}_
   keygen_qrng` / `_encaps_qrng` convenience wrappers draw their
@@ -887,7 +953,7 @@ visualization tests can actually resolve their symbols:
 
 ---
 
-## [Unreleased]
+## [0.1.0-initial] -- historical
 
 ### ✨ Features
 
