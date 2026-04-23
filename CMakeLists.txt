@@ -694,8 +694,15 @@ endif()
 
 # Link libraries
 target_link_libraries(quantumsim
-    PRIVATE
+    PUBLIC
+        # libm (-lm on Linux; no-op on macOS where it's in libSystem).
+        # Promoted to PUBLIC so every test/example that calls complex
+        # math (exp, cabs, ...) via the quantumsim target gets libm
+        # transitively -- otherwise the Linux link fails with
+        # "undefined reference to exp@@GLIBC_2.29" on any test that
+        # includes <math.h> directly without a manual -lm.
         ${MATH_LIBRARY}
+    PRIVATE
         Threads::Threads
 )
 
@@ -730,6 +737,29 @@ endif()
 # Linux configuration
 if(QSIM_PLATFORM_LINUX)
     target_compile_definitions(quantumsim PRIVATE PLATFORM_LINUX=1)
+
+    # LAPACK (zheev_, LAPACKE_zheev, LAPACKE_zgesvd) on Linux.
+    # Apple's Accelerate framework provides these on macOS; Linux
+    # needs an explicit link against a BLAS/LAPACK provider.  We
+    # prefer LAPACKE (row-major wrappers used by collective_ops.c)
+    # over the raw Fortran symbols, but link both forms so either
+    # entry point resolves.  If neither is available, the build
+    # carries on; the affected features will fail at link time for
+    # consumers that call them.
+    find_library(LAPACKE_LIB NAMES lapacke)
+    find_library(LAPACK_LIB NAMES lapack)
+    find_library(BLAS_LIB   NAMES openblas blas)
+    if(LAPACKE_LIB AND LAPACK_LIB AND BLAS_LIB)
+        target_link_libraries(quantumsim PRIVATE
+            ${LAPACKE_LIB} ${LAPACK_LIB} ${BLAS_LIB})
+        message(STATUS "LAPACK: LAPACKE=${LAPACKE_LIB} "
+                       "LAPACK=${LAPACK_LIB} BLAS=${BLAS_LIB}")
+    else()
+        message(WARNING "LAPACK/LAPACKE not found on Linux; "
+                        "entanglement-entropy and MBL modules will fail "
+                        "to link their test drivers.  Install "
+                        "liblapacke-dev + libopenblas-dev to fix.")
+    endif()
 endif()
 
 # Windows configuration
@@ -1391,8 +1421,13 @@ if(QSIM_BUILD_TESTS)
                 add_executable(test_${_mpi_test_name} ${_mpi_test_src})
                 target_link_libraries(test_${_mpi_test_name}
                                       PRIVATE quantumsim MPI::MPI_C)
+                # --oversubscribe (Open MPI >= 5) or --use-hwthread-cpus
+                # lets us run 4 MPI procs on CI runners with fewer than
+                # 4 physical cores (macos-14 exposes 3 cores).  The flag
+                # is a no-op when there are enough slots.
                 add_test(NAME ${_mpi_test_name}
                          COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                                 --oversubscribe
                                  ${MPIEXEC_PREFLAGS}
                                  $<TARGET_FILE:test_${_mpi_test_name}>
                                  ${MPIEXEC_POSTFLAGS})
