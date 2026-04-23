@@ -109,35 +109,29 @@ vulkan_buffer_t* vulkan_buffer_create_from_data(
 );
 
 /**
- * @brief Read buffer contents to host
+ * @brief Read buffer contents to host, honoring any sub-view @c offset
+ *        stored inside the buffer plus an additional per-call @p offset.
  *
- * @param ctx Compute context
- * @param buffer GPU buffer
- * @param dst Host destination
- * @param size Bytes to read
- * @return 0 on success, -1 on failure
+ * Signature matches the unified gpu_backend dispatcher
+ * (buffer, data, size, offset) -- no separate compute-context arg,
+ * since @p buffer owns a back-pointer to its context.
+ *
+ * @return 0 on success, -1 on invalid args or out-of-range.
  */
 int vulkan_buffer_read(
-    vulkan_compute_ctx_t* ctx,
     vulkan_buffer_t* buffer,
     void* dst,
-    size_t size
+    size_t size,
+    size_t offset
 );
 
-/**
- * @brief Write host data to buffer
- *
- * @param ctx Compute context
- * @param buffer GPU buffer
- * @param src Host source
- * @param size Bytes to write
- * @return 0 on success, -1 on failure
- */
+/** @brief Write host data to buffer; see vulkan_buffer_read for the
+ *         offset contract. */
 int vulkan_buffer_write(
-    vulkan_compute_ctx_t* ctx,
     vulkan_buffer_t* buffer,
     const void* src,
-    size_t size
+    size_t size,
+    size_t offset
 );
 
 /**

@@ -42,10 +42,38 @@ int metal_sum_squared_magnitudes(void* metal_ctx, void* buffer,
 
 #ifdef HAS_OPENCL
 #include "backends/gpu_opencl.h"
+/* Weak fallback mirroring the Metal / Vulkan pattern above.  If the
+ * OpenCL backend adds a real implementation later, it overrides this
+ * at link time. */
+__attribute__((weak))
+int opencl_sum_squared_magnitudes(void* opencl_ctx, void* buffer,
+                                  uint32_t state_dim, double* result) {
+    (void)opencl_ctx; (void)buffer; (void)state_dim; (void)result;
+    return -1;
+}
 #endif
 
 #ifdef HAS_VULKAN
 #include "backends/gpu_vulkan.h"
+/* Weak fallbacks for a small handful of Vulkan backend entry points
+ * that the dispatcher expects but that have not yet been implemented
+ * in gpu_vulkan.c.  A real implementation in that file will override
+ * these at link time; until then the dispatcher simply returns a
+ * "not supported" status and the consumer falls through to whatever
+ * other backend is available.  Same pattern as metal_sum_squared_
+ * magnitudes above. */
+__attribute__((weak))
+int vulkan_sum_squared_magnitudes(void* vulkan_ctx, void* buffer,
+                                  uint32_t state_dim, double* result) {
+    (void)vulkan_ctx; (void)buffer; (void)state_dim; (void)result;
+    return -1;
+}
+__attribute__((weak))
+int vulkan_get_capabilities(void* vulkan_ctx, gpu_capabilities_t* caps) {
+    (void)vulkan_ctx;
+    if (caps) { memset(caps, 0, sizeof(*caps)); }
+    return -1;
+}
 #endif
 
 #ifdef HAS_CUDA

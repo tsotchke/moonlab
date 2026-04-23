@@ -142,6 +142,28 @@ int opencl_buffer_write(
 );
 
 /**
+ * @brief Read/write at a byte offset.  `clEnqueueReadBuffer` and
+ * `clEnqueueWriteBuffer` natively accept an offset argument; the
+ * zero-offset variants above are thin wrappers around these.  Used
+ * by the unified gpu_backend when a consumer slices into a packed
+ * state vector on the device.
+ */
+int opencl_buffer_read_offset(
+    opencl_compute_ctx_t* ctx,
+    opencl_buffer_t* buffer,
+    void* dst,
+    size_t size,
+    size_t offset
+);
+int opencl_buffer_write_offset(
+    opencl_compute_ctx_t* ctx,
+    opencl_buffer_t* buffer,
+    const void* src,
+    size_t size,
+    size_t offset
+);
+
+/**
  * @brief Free GPU buffer
  * @param buffer Buffer to free
  */
