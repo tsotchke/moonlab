@@ -506,11 +506,7 @@ int opencl_buffer_read(
     void* dst,
     size_t size
 ) {
-    if (!ctx || !buffer || !dst) return -1;
-
-    cl_int err = clEnqueueReadBuffer(ctx->queue, buffer->mem, CL_TRUE,
-                                     0, size, dst, 0, NULL, NULL);
-    return (err == CL_SUCCESS) ? 0 : -1;
+    return opencl_buffer_read_offset(ctx, buffer, dst, size, 0);
 }
 
 int opencl_buffer_write(
@@ -519,10 +515,32 @@ int opencl_buffer_write(
     const void* src,
     size_t size
 ) {
-    if (!ctx || !buffer || !src) return -1;
+    return opencl_buffer_write_offset(ctx, buffer, src, size, 0);
+}
 
+int opencl_buffer_read_offset(
+    opencl_compute_ctx_t* ctx,
+    opencl_buffer_t* buffer,
+    void* dst,
+    size_t size,
+    size_t offset
+) {
+    if (!ctx || !buffer || !dst) return -1;
+    cl_int err = clEnqueueReadBuffer(ctx->queue, buffer->mem, CL_TRUE,
+                                     offset, size, dst, 0, NULL, NULL);
+    return (err == CL_SUCCESS) ? 0 : -1;
+}
+
+int opencl_buffer_write_offset(
+    opencl_compute_ctx_t* ctx,
+    opencl_buffer_t* buffer,
+    const void* src,
+    size_t size,
+    size_t offset
+) {
+    if (!ctx || !buffer || !src) return -1;
     cl_int err = clEnqueueWriteBuffer(ctx->queue, buffer->mem, CL_TRUE,
-                                      0, size, src, 0, NULL, NULL);
+                                      offset, size, src, 0, NULL, NULL);
     return (err == CL_SUCCESS) ? 0 : -1;
 }
 

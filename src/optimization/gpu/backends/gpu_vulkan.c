@@ -27,7 +27,9 @@
 #define WORKGROUP_SIZE 256
 #define MAX_SHADER_SIZE (1024 * 1024)
 
-// Operation codes matching shader's OPERATION specialization constant
+// Operation codes matching shader's OPERATION specialization constant.
+// Add new ops to the end of the enum only; existing IDs are part of the
+// ABI between the C host code and the compiled shaders in shaders/.
 enum {
     OP_HADAMARD = 0,
     OP_HADAMARD_ALL = 1,
@@ -38,7 +40,9 @@ enum {
     OP_PHASE = 6,
     OP_CNOT = 7,
     OP_PROBABILITIES = 8,
-    OP_NORMALIZE = 9
+    OP_NORMALIZE = 9,
+    OP_REDUCE_SUM = 10,
+    OP_DIFFUSION  = 11
 };
 
 // ============================================================================
@@ -96,7 +100,11 @@ struct vulkan_buffer {
     VkBuffer buffer;
     VkDeviceMemory memory;
     size_t size;
-    void* mapped;  // Persistently mapped pointer
+    size_t offset;     // Byte offset into the parent buffer; 0 for primary
+                       // allocations, non-zero for sub-views created by
+                       // batch-search primitives that slice a shared buffer.
+    void* mapped;      // Persistently mapped pointer (points at owning
+                       // allocation; sub-view callers must add `offset`).
 };
 
 // ============================================================================
@@ -683,28 +691,28 @@ vulkan_buffer_t* vulkan_buffer_create_from_data(
 }
 
 int vulkan_buffer_read(
-    vulkan_compute_ctx_t* ctx,
     vulkan_buffer_t* buffer,
     void* dst,
-    size_t size
+    size_t size,
+    size_t offset
 ) {
-    if (!ctx || !buffer || !dst || !buffer->mapped) return -1;
-    if (size > buffer->size) size = buffer->size;
+    if (!buffer || !dst || !buffer->mapped) return -1;
+    if (offset + size > buffer->size) return -1;
 
-    memcpy(dst, buffer->mapped, size);
+    memcpy(dst, (char*)buffer->mapped + buffer->offset + offset, size);
     return 0;
 }
 
 int vulkan_buffer_write(
-    vulkan_compute_ctx_t* ctx,
     vulkan_buffer_t* buffer,
     const void* src,
-    size_t size
+    size_t size,
+    size_t offset
 ) {
-    if (!ctx || !buffer || !src || !buffer->mapped) return -1;
-    if (size > buffer->size) size = buffer->size;
+    if (!buffer || !src || !buffer->mapped) return -1;
+    if (offset + size > buffer->size) return -1;
 
-    memcpy(buffer->mapped, src, size);
+    memcpy((char*)buffer->mapped + buffer->offset + offset, src, size);
     return 0;
 }
 
@@ -1024,11 +1032,12 @@ int vulkan_grover_diffusion(
 
     // Allocate temporary buffer for reduction
     size_t reduction_size = (state_dim + 255) / 256;  // One result per workgroup
+    /* vulkan_buffer_create already hardcodes STORAGE_BUFFER usage +
+     * HOST_VISIBLE|HOST_COHERENT memory property; previous call site
+     * re-specified them as extra args that the 2-arg signature doesn't
+     * accept.  The reduction buffer just needs a size. */
     vulkan_buffer_t *reduction_buf = vulkan_buffer_create(ctx,
-        reduction_size * 2 * sizeof(float),  // Complex values
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    );
+        reduction_size * 2 * sizeof(float));
     if (!reduction_buf) return -1;
 
     // First reduction pass: sum within each workgroup
@@ -1038,7 +1047,7 @@ int vulkan_grover_diffusion(
 
     int ret = dispatch_compute(ctx, OP_REDUCE_SUM, amplitudes, reduction_buf, NULL, &pc, state_dim);
     if (ret != 0) {
-        vulkan_buffer_destroy(reduction_buf);
+        vulkan_buffer_free(reduction_buf);
         return -1;
     }
 
@@ -1048,7 +1057,7 @@ int vulkan_grover_diffusion(
     // (For very large states, we'd do multiple GPU reduction passes)
     float *partial_sums = (float *)malloc(reduction_size * 2 * sizeof(float));
     if (!partial_sums) {
-        vulkan_buffer_destroy(reduction_buf);
+        vulkan_buffer_free(reduction_buf);
         return -1;
     }
 
@@ -1062,7 +1071,7 @@ int vulkan_grover_diffusion(
     }
 
     free(partial_sums);
-    vulkan_buffer_destroy(reduction_buf);
+    vulkan_buffer_free(reduction_buf);
 
     // Compute mean
     float mean_real = sum_real / (float)state_dim;
