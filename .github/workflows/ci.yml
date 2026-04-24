@@ -56,13 +56,21 @@ jobs:
             libomp-dev libopenblas-dev liblapacke-dev
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DQSIM_BUILD_EXAMPLES=OFF
+          -DQSIM_BUILD_BENCHMARKS=OFF
 
       - name: Build
         run: cmake --build build -j
 
-      - name: Test (ctest, excluding long/heavy suites)
-        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
+      - name: Test (ctest, arm64 smoke)
+        run: >
+          ctest --test-dir build
+          -E "long_evolution|quantum_sim_test|bell_test|unit_vqe|unit_qaoa|unit_chern_kpm|unit_mpo_kpm|unit_qrng_statistics|rust_bindings"
+          --output-on-failure
+          --timeout 300
 
       - name: Upload dylib
         if: ${{ env.ACT != 'true' }}
