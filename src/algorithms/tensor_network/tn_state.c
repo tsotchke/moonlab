@@ -13,6 +13,7 @@
  */
 
 #include "tn_state.h"
+#include "optimization/memory_align.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -1124,10 +1125,10 @@ tn_state_error_t tn_mps_init_workspace(tn_mps_state_t *state) {
     if (max_chi <= 32) {
         uint64_t buffer_size = (uint64_t)max_chi * max_chi * max_chi * max_chi;
 
-        state->workspace.transfer_buffer = (double complex *)aligned_alloc(64,
-            buffer_size * 2 * sizeof(double complex));
-        state->workspace.local_buffer = (double complex *)aligned_alloc(64,
-            buffer_size * sizeof(double complex));
+        state->workspace.transfer_buffer = (double complex *)simd_aligned_alloc(
+            buffer_size * 2 * sizeof(double complex), SIMD_DEFAULT_ALIGNMENT);
+        state->workspace.local_buffer = (double complex *)simd_aligned_alloc(
+            buffer_size * sizeof(double complex), SIMD_DEFAULT_ALIGNMENT);
 
         if (!state->workspace.transfer_buffer || !state->workspace.local_buffer) {
             tn_mps_free_workspace(state);
@@ -1150,11 +1151,13 @@ void tn_mps_free_workspace(tn_mps_state_t *state) {
     if (!state) return;
 
     if (state->workspace.transfer_buffer) {
-        free(state->workspace.transfer_buffer);
+        simd_aligned_free(state->workspace.transfer_buffer,
+                          state->workspace.buffer_capacity * 2 * sizeof(double complex));
         state->workspace.transfer_buffer = NULL;
     }
     if (state->workspace.local_buffer) {
-        free(state->workspace.local_buffer);
+        simd_aligned_free(state->workspace.local_buffer,
+                          state->workspace.buffer_capacity * sizeof(double complex));
         state->workspace.local_buffer = NULL;
     }
     state->workspace.buffer_capacity = 0;

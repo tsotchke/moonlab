@@ -4,12 +4,17 @@
 #include <stdio.h>
 #include <errno.h>
 #include <inttypes.h>
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#include <bcrypt.h>
+#else
 #include <fcntl.h>
 #include <unistd.h>
-#include <time.h>
 #include <sys/time.h>
 #include <signal.h>
 #include <setjmp.h>
+#endif
+#include <time.h>
 
 // Platform-specific includes
 #ifdef __linux__
@@ -17,7 +22,7 @@
 #endif
 
 // CPU feature detection
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
 #include <cpuid.h>
 #elif defined(__aarch64__)
     // ARM feature detection - platform specific
@@ -36,7 +41,7 @@
 // ============================================================================
 
 int rdrand_available(void) {
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
     unsigned int eax, ebx, ecx, edx;
     if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
         return (ecx & (1 << 30)) != 0; // RDRAND is bit 30 of ECX
@@ -46,7 +51,7 @@ int rdrand_available(void) {
 }
 
 int rdseed_available(void) {
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
     unsigned int eax, ebx, ecx, edx;
     if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
         return (ebx & (1 << 18)) != 0; // RDSEED is bit 18 of EBX
@@ -241,7 +246,7 @@ int rndrrs_get_uint64(uint64_t *value) { (void)value; return 0; }
 
 int rdrand_get_uint64(uint64_t *value) {
     (void)value; /* unused on non-x86_64 targets */
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
     if (!rdrand_available()) return 0;
     
     unsigned char ok;
@@ -261,7 +266,7 @@ int rdrand_get_uint64(uint64_t *value) {
 
 int rdseed_get_uint64(uint64_t *value) {
     (void)value; /* unused on non-x86_64 targets */
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
     if (!rdseed_available()) return 0;
     
     unsigned char ok;
@@ -285,7 +290,26 @@ int rdseed_get_uint64(uint64_t *value) {
 
 ssize_t entropy_getrandom(uint8_t *buffer, size_t size, unsigned int flags) {
     (void)buffer; (void)size; (void)flags; /* unused on non-Linux targets */
-#ifdef __linux__
+#if defined(_WIN32) || defined(_WIN64)
+    if (!buffer) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (size > ULONG_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    NTSTATUS status = BCryptGenRandom(
+        NULL,
+        buffer,
+        (ULONG)size,
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if (status < 0) {
+        errno = EIO;
+        return -1;
+    }
+    return (ssize_t)size;
+#elif defined(__linux__)
     #ifdef SYS_getrandom
     return syscall(SYS_getrandom, buffer, size, flags);
     #else
@@ -304,14 +328,22 @@ ssize_t entropy_getrandom(uint8_t *buffer, size_t size, unsigned int flags) {
 
 // High-resolution timer for jitter collection
 static inline uint64_t get_timer_cycles(void) {
-#ifdef __x86_64__
+#if defined(__x86_64__) && !defined(_WIN32) && !defined(_WIN64)
     unsigned int lo, hi;
     __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
     return ((uint64_t)hi << 32) | lo;
 #else
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    timespec_get(&ts, TIME_UTC);
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+#endif
+}
+
+static inline void entropy_time_now(struct timespec *ts) {
+#if defined(_WIN32) || defined(_WIN64)
+    timespec_get(ts, TIME_UTC);
+#else
+    clock_gettime(CLOCK_MONOTONIC, ts);
 #endif
 }
 
@@ -389,7 +421,7 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
     
     // Initialize state with high-resolution time
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    entropy_time_now(&ts);
     uint64_t state = ((uint64_t)ts.tv_sec << 32) | ts.tv_nsec;
     
     uint64_t accumulator = 0;
@@ -412,7 +444,7 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
         uint64_t t2 = get_timer_cycles();
         
         // Additional timing source: system call
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+        entropy_time_now(&ts);
         uint64_t sys_time = ((uint64_t)ts.tv_nsec) ^ get_timer_cycles();
         
         uint64_t delta = t2 - t1;
@@ -492,6 +524,10 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
     uint8_t test_byte;
     ctx->caps.has_getrandom = (entropy_getrandom(&test_byte, 1, 0) > 0);
     
+#if defined(_WIN32) || defined(_WIN64)
+    ctx->caps.has_dev_random = 0;
+    ctx->caps.has_dev_urandom = 0;
+#else
     // Try to open /dev/random
     ctx->dev_random_fd = open("/dev/random", O_RDONLY | O_NONBLOCK);
     ctx->caps.has_dev_random = (ctx->dev_random_fd >= 0);
@@ -499,6 +535,7 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
     // Try to open /dev/urandom
     ctx->dev_urandom_fd = open("/dev/urandom", O_RDONLY);
     ctx->caps.has_dev_urandom = (ctx->dev_urandom_fd >= 0);
+#endif
     
     // Determine preferred source (best quality first)
     if (ctx->caps.has_rdseed) {
@@ -524,6 +561,7 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
 void entropy_free(entropy_ctx_t *ctx) {
     if (!ctx) return;
     
+#if !defined(_WIN32) && !defined(_WIN64)
     if (ctx->dev_random_fd >= 0) {
         close(ctx->dev_random_fd);
         ctx->dev_random_fd = -1;
@@ -533,6 +571,7 @@ void entropy_free(entropy_ctx_t *ctx) {
         close(ctx->dev_urandom_fd);
         ctx->dev_urandom_fd = -1;
     }
+#endif
     
     // Zero sensitive data
     memset(ctx, 0, sizeof(*ctx));
@@ -551,6 +590,14 @@ entropy_capabilities_t entropy_get_capabilities(const entropy_ctx_t *ctx) {
 // ============================================================================
 
 ssize_t entropy_dev_random(entropy_ctx_t *ctx, uint8_t *buffer, size_t size, int blocking) {
+#if defined(_WIN32) || defined(_WIN64)
+    (void)ctx;
+    (void)buffer;
+    (void)size;
+    (void)blocking;
+    errno = ENOSYS;
+    return -1;
+#else
     if (!ctx || !buffer || size == 0) return -1;
     if (ctx->dev_random_fd < 0) return -1;
     
@@ -573,9 +620,17 @@ ssize_t entropy_dev_random(entropy_ctx_t *ctx, uint8_t *buffer, size_t size, int
     }
     
     return total;
+#endif
 }
 
 ssize_t entropy_dev_urandom(entropy_ctx_t *ctx, uint8_t *buffer, size_t size) {
+#if defined(_WIN32) || defined(_WIN64)
+    (void)ctx;
+    (void)buffer;
+    (void)size;
+    errno = ENOSYS;
+    return -1;
+#else
     if (!ctx || !buffer || size == 0) return -1;
     if (ctx->dev_urandom_fd < 0) return -1;
     
@@ -591,6 +646,7 @@ ssize_t entropy_dev_urandom(entropy_ctx_t *ctx, uint8_t *buffer, size_t size) {
     }
     
     return total;
+#endif
 }
 
 // ============================================================================

@@ -3,7 +3,12 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#if defined(_WIN32) || defined(_WIN64)
+#include <stdint.h>
+typedef intptr_t ssize_t;
+#else
 #include <sys/types.h>
+#endif
 
 /**
  * @file hardware_entropy.h

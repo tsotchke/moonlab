@@ -76,6 +76,7 @@ static void zgemm_cpu(const cplx* A, const cplx* B, cplx* C,
 }
 #endif
 
+#if MOONLAB_HAS_CBLAS
 static void parity(std::size_t M, std::size_t K, std::size_t N,
                    moonlab_eshkol_precision_t tier, const char* label,
                    double tol) {
@@ -119,6 +120,7 @@ static void parity(std::size_t M, std::size_t K, std::size_t N,
     }
     delete[] A; delete[] B; delete[] Cref; delete[] Cbr;
 }
+#endif
 
 int main() {
     std::fprintf(stdout, "=== Moonlab-Eshkol bridge parity ===\n");

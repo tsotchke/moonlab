@@ -13,11 +13,15 @@
  */
 
 #include "../../src/utils/manifest.h"
-#include "../../build/generated/moonlab_build_info.h"
+#include "moonlab_build_info.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+#define strdup _strdup
+#endif
 
 static int failures = 0;
 #define CHECK(cond, fmt, ...) do {                               \
@@ -32,6 +36,46 @@ static int failures = 0;
 /* Return non-zero iff @p haystack contains @p needle. */
 static int contains(const char* haystack, const char* needle) {
     return strstr(haystack, needle) != NULL;
+}
+
+typedef void (*manifest_writer_t)(const moonlab_manifest_t* m, FILE* out);
+
+static char* capture_manifest_json(const moonlab_manifest_t* m,
+                                   manifest_writer_t writer,
+                                   size_t* out_len) {
+    FILE* mem = tmpfile();
+    if (!mem) return NULL;
+
+    writer(m, mem);
+    fflush(mem);
+
+    if (fseek(mem, 0, SEEK_END) != 0) {
+        fclose(mem);
+        return NULL;
+    }
+
+    long len = ftell(mem);
+    if (len < 0 || fseek(mem, 0, SEEK_SET) != 0) {
+        fclose(mem);
+        return NULL;
+    }
+
+    char* buf = malloc((size_t)len + 1);
+    if (!buf) {
+        fclose(mem);
+        return NULL;
+    }
+
+    size_t nread = fread(buf, 1, (size_t)len, mem);
+    fclose(mem);
+    if (nread != (size_t)len) {
+        free(buf);
+        return NULL;
+    }
+
+    buf[nread] = '\0';
+    if (out_len) *out_len = nread;
+    return buf;
 }
 
 static void test_build_info_macros(void) {
@@ -92,15 +136,8 @@ static void test_json_emission(void) {
     moonlab_manifest_capture(&m, "my_bench", 0xCAFEBABE);
     m.metrics_json = "{\"throughput_gflops\":612.3,\"notes\":\"hot\\ncache\"}";
 
-    /* Emit into a memory stream so the test doesn't touch disk or stdout. */
-    char* buf = NULL;
     size_t buflen = 0;
-    FILE* mem = open_memstream(&buf, &buflen);
-    CHECK(mem != NULL, "open_memstream ok");
-
-    moonlab_manifest_write_json(&m, mem);
-    fflush(mem);
-    fclose(mem);
+    char* buf = capture_manifest_json(&m, moonlab_manifest_write_json, &buflen);
 
     CHECK(buf && buflen > 0, "JSON emitted %zu bytes", buflen);
     CHECK(buf[0] == '{' && buf[buflen - 1] == '}', "JSON wrapped in braces");
@@ -131,11 +168,8 @@ static void test_pretty_roundtrip(void) {
     fprintf(stdout, "\n-- pretty-print roundtrip --\n");
     moonlab_manifest_t m;
     moonlab_manifest_capture(&m, "pretty", 7);
-    char* buf = NULL;
     size_t buflen = 0;
-    FILE* mem = open_memstream(&buf, &buflen);
-    moonlab_manifest_write_json_pretty(&m, mem);
-    fflush(mem); fclose(mem);
+    char* buf = capture_manifest_json(&m, moonlab_manifest_write_json_pretty, &buflen);
     CHECK(buf && buflen > 0, "pretty JSON emitted %zu bytes", buflen);
     CHECK(strncmp(buf, "{\n  \"run_label\"", 15) == 0,
           "pretty JSON starts with {\\n<2-space indent>");

@@ -115,6 +115,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(QSIM_PLATFORM_WINDOWS ON)
     set(QSIM_PLATFORM_NAME "Windows")
+    add_compile_definitions(_USE_MATH_DEFINES)
 else()
     message(WARNING "Unknown platform: ${CMAKE_SYSTEM_NAME}")
     set(QSIM_PLATFORM_NAME "Unknown")
@@ -279,8 +280,13 @@ endif()
 # Find Dependencies
 # ==============================================================================
 
-# Math library
-find_library(MATH_LIBRARY m)
+# Math library. Unix-like platforms need libm explicitly; MSVC provides the
+# C math functions from the CRT and has no separate "m" library.
+if(QSIM_PLATFORM_WINDOWS)
+    set(MATH_LIBRARY "")
+else()
+    find_library(MATH_LIBRARY m)
+endif()
 
 # Threads
 find_package(Threads REQUIRED)
@@ -529,13 +535,11 @@ set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/parallel_ops.c
     src/optimization/accelerate_ops.c
     src/optimization/fusion/fusion.c
+    src/optimization/gpu/gpu_backend.c
 )
-# The unified GPU backend dispatcher references symbols from each backend
-# implementation (Metal buffer helpers, CUDA kernels, etc.). Only add it
-# when at least one of those backends is actually enabled. For Metal we
+# Backend implementation files are added only when enabled. For Metal we
 # also need the Objective-C++ implementation file.
 if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
-    list(APPEND QSIM_OPTIMIZATION_SOURCES src/optimization/gpu/gpu_backend.c)
     if(QSIM_HAS_METAL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/gpu_metal.mm")
         list(APPEND QSIM_OPTIMIZATION_SOURCES src/optimization/gpu_metal.mm)
     endif()
@@ -631,6 +635,9 @@ if(QSIM_BUILD_SHARED)
         VERSION ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR}
     )
+    if(QSIM_PLATFORM_WINDOWS)
+        set_target_properties(quantumsim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
 elseif(QSIM_BUILD_STATIC)
     add_library(quantumsim STATIC ${QSIM_ALL_SOURCES})
 else()
@@ -765,6 +772,37 @@ endif()
 # Windows configuration
 if(QSIM_PLATFORM_WINDOWS)
     target_compile_definitions(quantumsim PRIVATE PLATFORM_WINDOWS=1)
+    target_link_libraries(quantumsim PRIVATE bcrypt)
+
+    if(QSIM_COMPILER_CLANG)
+        execute_process(
+            COMMAND ${CMAKE_C_COMPILER} --print-resource-dir
+            OUTPUT_VARIABLE QSIM_CLANG_RESOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+
+        if(QSIM_ARCH_X86_64)
+            set(QSIM_CLANG_BUILTINS_NAME clang_rt.builtins-x86_64)
+        elseif(QSIM_ARCH_ARM64)
+            set(QSIM_CLANG_BUILTINS_NAME clang_rt.builtins-aarch64)
+        endif()
+
+        if(QSIM_CLANG_BUILTINS_NAME)
+            find_library(QSIM_CLANG_BUILTINS
+                NAMES ${QSIM_CLANG_BUILTINS_NAME}
+                PATHS "${QSIM_CLANG_RESOURCE_DIR}/lib/windows"
+                NO_DEFAULT_PATH
+            )
+        endif()
+
+        if(QSIM_CLANG_BUILTINS)
+            target_link_libraries(quantumsim PUBLIC "${QSIM_CLANG_BUILTINS}")
+            message(STATUS "Clang builtins: ${QSIM_CLANG_BUILTINS}")
+        else()
+            message(WARNING "Clang builtins library not found; complex arithmetic may fail to link")
+        endif()
+    endif()
 endif()
 
 # ==============================================================================
@@ -897,7 +935,9 @@ if(QSIM_ENABLE_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT lto_supported OUTPUT lto_error)
 
-    if(lto_supported)
+    if(QSIM_PLATFORM_WINDOWS AND QSIM_COMPILER_CLANG)
+        message(STATUS "LTO: Disabled for Windows Clang")
+    elseif(lto_supported)
         set_target_properties(quantumsim PROPERTIES
             INTERPROCEDURAL_OPTIMIZATION TRUE
         )
@@ -958,7 +998,8 @@ if(QSIM_BUILD_TESTS)
 
     add_executable(test_memory_align tests/unit/test_memory_align.c
                    src/optimization/memory_align.c)
-    target_link_libraries(test_memory_align PRIVATE ${MATH_LIBRARY} Threads::Threads)
+    target_include_directories(test_memory_align PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_memory_align PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(test_memory_align PRIVATE ${ACCELERATE_FRAMEWORK})
         target_compile_definitions(test_memory_align PRIVATE HAS_ACCELERATE=1)
@@ -967,7 +1008,8 @@ if(QSIM_BUILD_TESTS)
 
     add_executable(test_simd_dispatch tests/unit/test_simd_dispatch.c
                    src/optimization/simd_dispatch.c)
-    target_link_libraries(test_simd_dispatch PRIVATE ${MATH_LIBRARY} Threads::Threads)
+    target_include_directories(test_simd_dispatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_simd_dispatch PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(test_simd_dispatch PRIVATE ${ACCELERATE_FRAMEWORK})
         target_compile_definitions(test_simd_dispatch PRIVATE HAS_ACCELERATE=1)
@@ -976,7 +1018,8 @@ if(QSIM_BUILD_TESTS)
 
     add_executable(test_stride_gates tests/unit/test_stride_gates.c
                    src/optimization/stride_gates.c)
-    target_link_libraries(test_stride_gates PRIVATE ${MATH_LIBRARY} Threads::Threads)
+    target_include_directories(test_stride_gates PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_stride_gates PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
     if(QSIM_HAS_OPENMP)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
             target_link_libraries(test_stride_gates PRIVATE ${QSIM_OPENMP_LIBRARIES})
@@ -1085,92 +1128,99 @@ if(QSIM_BUILD_TESTS)
 
     # Local Chern marker: QWZ topological vs trivial phases.
     add_executable(test_chern_marker tests/unit/test_chern_marker.c)
-    target_link_libraries(test_chern_marker PRIVATE quantumsim m)
+    target_link_libraries(test_chern_marker PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_chern_marker COMMAND test_chern_marker)
 
     # matrix_math ground-truth: matmul, trace, Hermitian check, eigenvalues.
     # Eigenvector correctness is tested ONLY on the real-symmetric path;
     # the complex-Hermitian branch is known unsound (see matrix_math.h).
     add_executable(test_matrix_math tests/unit/test_matrix_math.c)
-    target_link_libraries(test_matrix_math PRIVATE quantumsim m)
+    target_link_libraries(test_matrix_math PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_matrix_math COMMAND test_matrix_math)
 
     # Matrix-free KPM Chern marker: parity with dense + large-L demo.
     add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
-    target_link_libraries(test_chern_kpm PRIVATE quantumsim m)
+    target_link_libraries(test_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
-    add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
-    target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
+        target_link_libraries(test_mpo_kpm PRIVATE quantumsim ${MATH_LIBRARY})
+        if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+    endif()
     add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
     target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
     add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
     add_executable(test_tensor_adversarial tests/unit/test_tensor_adversarial.c)
-    target_link_libraries(test_tensor_adversarial PRIVATE quantumsim m)
+    target_link_libraries(test_tensor_adversarial PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME tensor_adversarial COMMAND test_tensor_adversarial)
     add_executable(test_differentiable tests/unit/test_differentiable.c)
-    target_link_libraries(test_differentiable PRIVATE quantumsim m)
+    target_link_libraries(test_differentiable PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME differentiable COMMAND test_differentiable)
 
     add_executable(test_bell_variants tests/unit/test_bell_variants.c)
-    target_link_libraries(test_bell_variants PRIVATE quantumsim m)
+    target_link_libraries(test_bell_variants PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_bell_variants COMMAND test_bell_variants)
 
     add_executable(test_zne tests/unit/test_zne.c)
-    target_link_libraries(test_zne PRIVATE quantumsim m)
+    target_link_libraries(test_zne PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_zne COMMAND test_zne)
 
     add_executable(test_povm tests/unit/test_povm.c)
-    target_link_libraries(test_povm PRIVATE quantumsim m)
+    target_link_libraries(test_povm PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_povm COMMAND test_povm)
 
     add_executable(test_mutual_info tests/unit/test_mutual_info.c)
-    target_link_libraries(test_mutual_info PRIVATE quantumsim m)
+    target_link_libraries(test_mutual_info PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_mutual_info COMMAND test_mutual_info)
 
     add_executable(test_qrng_di tests/unit/test_qrng_di.c)
-    target_link_libraries(test_qrng_di PRIVATE quantumsim m)
+    target_link_libraries(test_qrng_di PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qrng_di COMMAND test_qrng_di)
 
     add_executable(test_composite_noise tests/unit/test_composite_noise.c)
-    target_link_libraries(test_composite_noise PRIVATE quantumsim m)
+    target_link_libraries(test_composite_noise PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_composite_noise COMMAND test_composite_noise)
 
     add_executable(test_sha3 tests/unit/test_sha3.c)
-    target_link_libraries(test_sha3 PRIVATE quantumsim m)
+    target_link_libraries(test_sha3 PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_sha3 COMMAND test_sha3)
 
     add_executable(test_mlkem_poly tests/unit/test_mlkem_poly.c)
-    target_link_libraries(test_mlkem_poly PRIVATE quantumsim m)
+    target_link_libraries(test_mlkem_poly PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_mlkem_poly COMMAND test_mlkem_poly)
 
     add_executable(test_mlkem tests/unit/test_mlkem.c)
-    target_link_libraries(test_mlkem PRIVATE quantumsim m)
+    target_link_libraries(test_mlkem PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_mlkem COMMAND test_mlkem)
 
     add_executable(test_aes_drbg tests/unit/test_aes_drbg.c)
-    target_link_libraries(test_aes_drbg PRIVATE quantumsim m)
+    target_link_libraries(test_aes_drbg PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_aes_drbg COMMAND test_aes_drbg)
 
     add_executable(test_mlkem_nist_kat tests/unit/test_mlkem_nist_kat.c)
-    target_link_libraries(test_mlkem_nist_kat PRIVATE quantumsim m)
+    target_link_libraries(test_mlkem_nist_kat PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_mlkem_nist_kat COMMAND test_mlkem_nist_kat)
     add_executable(test_manifest tests/unit/test_manifest.c)
     target_link_libraries(test_manifest PRIVATE quantumsim)
     add_test(NAME unit_manifest COMMAND test_manifest)
-    if(QSIM_PLATFORM_MACOS)
+    if(NOT QSIM_PLATFORM_WINDOWS AND QSIM_PLATFORM_MACOS)
         target_link_libraries(test_mpo_kpm PRIVATE "-framework Accelerate")
     endif()
-    add_test(NAME unit_mpo_kpm COMMAND test_mpo_kpm)
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        add_test(NAME unit_mpo_kpm COMMAND test_mpo_kpm)
+    endif()
 
     # Quantum geometric tensor: Berry / Chern via FHS link variables.
     add_executable(test_qgt tests/unit/test_qgt.c)
-    target_link_libraries(test_qgt PRIVATE quantumsim m)
+    target_link_libraries(test_qgt PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qgt COMMAND test_qgt)
 
     # Shor-ECDLP resource estimator: reproduce Gidney-Drake-Boneh 2026
     # secp256k1 numbers + FTQC overhead model.
     add_executable(test_shor_ecdlp tests/unit/test_shor_ecdlp.c)
-    target_link_libraries(test_shor_ecdlp PRIVATE quantumsim m)
+    target_link_libraries(test_shor_ecdlp PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_shor_ecdlp COMMAND test_shor_ecdlp)
 
     # Moonlab-Eshkol bridge parity: moonlab_eshkol_zgemm vs cblas_zgemm.
@@ -1178,6 +1228,9 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_gpu_eshkol tests/unit/test_gpu_eshkol.cpp)
     set_target_properties(test_gpu_eshkol PROPERTIES CXX_STANDARD 17)
     target_link_libraries(test_gpu_eshkol PRIVATE quantumsim)
+    if(QSIM_PLATFORM_LINUX AND BLAS_LIB)
+        target_link_libraries(test_gpu_eshkol PRIVATE ${BLAS_LIB})
+    endif()
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(test_gpu_eshkol PRIVATE "-framework Accelerate")
     endif()
@@ -1240,6 +1293,7 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_qrng_statistics PRIVATE quantumsim)
     add_test(NAME unit_qrng_statistics COMMAND test_qrng_statistics)
 
+    if(QSIM_BUILD_BENCHMARKS)
     # Performance benchmarks (build-only; no ctest entry so CI stays
     # fast). Run directly for local profiling:
     #   ./build/bench_state_operations
@@ -1255,19 +1309,19 @@ if(QSIM_BUILD_TESTS)
     add_executable(bench_clifford tests/performance/bench_clifford.c)
     target_link_libraries(bench_clifford PRIVATE quantumsim)
     add_executable(bench_chern_kpm tests/performance/bench_chern_kpm.c)
-    target_link_libraries(bench_chern_kpm PRIVATE quantumsim m)
+    target_link_libraries(bench_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_chern_mosaic tests/performance/bench_chern_mosaic.c)
-    target_link_libraries(bench_chern_mosaic PRIVATE quantumsim m)
+    target_link_libraries(bench_chern_mosaic PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_chern_mosaic_hq tests/performance/bench_chern_mosaic_hq.c)
-    target_link_libraries(bench_chern_mosaic_hq PRIVATE quantumsim m)
+    target_link_libraries(bench_chern_mosaic_hq PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_tensor_matmul_eshkol tests/performance/bench_tensor_matmul_eshkol.c)
-    target_link_libraries(bench_tensor_matmul_eshkol PRIVATE quantumsim m)
+    target_link_libraries(bench_tensor_matmul_eshkol PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_dmrg_workspace tests/performance/bench_dmrg_workspace.c)
-    target_link_libraries(bench_dmrg_workspace PRIVATE quantumsim m)
+    target_link_libraries(bench_dmrg_workspace PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_diff_adjoint tests/performance/bench_diff_adjoint.c)
-    target_link_libraries(bench_diff_adjoint PRIVATE quantumsim m)
+    target_link_libraries(bench_diff_adjoint PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_hadamard tests/performance/bench_hadamard.c)
-    target_link_libraries(bench_hadamard PRIVATE quantumsim m)
+    target_link_libraries(bench_hadamard PRIVATE quantumsim ${MATH_LIBRARY})
     if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
         target_link_libraries(bench_hadamard PRIVATE ${QSIM_OPENMP_LIBRARIES})
         target_include_directories(bench_hadamard PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
@@ -1306,6 +1360,7 @@ if(QSIM_BUILD_TESTS)
             "-framework CoreGraphics"
         )
         message(STATUS "Eshkol: ON (lib=${_eshkol_libfn})")
+    endif()
     endif()
 
     # Python bindings smoke — imports moonlab.core, constructs a Bell
@@ -1444,7 +1499,7 @@ if(QSIM_BUILD_TESTS)
     # Downstream-ABI smoke test — dlopens libquantumsim and verifies the
     # symbols declared in src/applications/moonlab_export.h. Only meaningful
     # for shared builds (dlopen needs a dylib/so).
-    if(QSIM_BUILD_SHARED)
+    if(QSIM_BUILD_SHARED AND NOT QSIM_PLATFORM_WINDOWS)
         add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
         target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
         add_test(NAME abi_moonlab_export
@@ -1498,7 +1553,7 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(pqc_qrng_demo PRIVATE quantumsim)
 
     add_executable(diff_vqe_demo examples/tensor_network/diff_vqe_demo.c)
-    target_link_libraries(diff_vqe_demo PRIVATE quantumsim m)
+    target_link_libraries(diff_vqe_demo PRIVATE quantumsim ${MATH_LIBRARY})
 
     add_executable(quantum_spin_chain examples/tensor_network/quantum_spin_chain.c)
     target_link_libraries(quantum_spin_chain PRIVATE quantumsim)

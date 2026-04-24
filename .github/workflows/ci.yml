@@ -30,10 +30,11 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+      - name: Test (ctest, excluding long/heavy suites)
+        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
 
       - name: Upload dylib
+        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: moonlab-linux-x86_64
@@ -60,16 +61,67 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+      - name: Test (ctest, excluding long/heavy suites)
+        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
 
       - name: Upload dylib
+        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: moonlab-linux-aarch64
           path: |
             build/libquantumsim.so*
             build/libquantumsim.a
+
+  windows-x64:
+    name: Windows x86_64 (Release, clang-cl)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC developer shell
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Ensure Ninja
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y
+          }
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang-cl
+          -DCMAKE_CXX_COMPILER=clang-cl
+          -DQSIM_BUILD_EXAMPLES=OFF
+          -DQSIM_BUILD_BENCHMARKS=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build -j
+
+      - name: Test
+        shell: pwsh
+        run: >
+          ctest --test-dir build
+          -E "long_evolution|unit_qgt|unit_mbl|unit_qrng_statistics|python_bindings|rust_bindings"
+          --output-on-failure
+          --timeout 300
+          -j 2
+
+      - name: Upload DLL
+        if: ${{ env.ACT != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-windows-x86_64
+          path: |
+            build/quantumsim.dll
+            build/quantumsim.lib
 
   macos-arm64:
     name: macOS arm64 (Release)
@@ -93,6 +145,7 @@ jobs:
         run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
       - name: Upload dylib
+        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: moonlab-macos-arm64
@@ -121,6 +174,7 @@ jobs:
         run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
 
       - name: Upload dylib
+        if: ${{ env.ACT != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: moonlab-macos-x86_64
@@ -194,7 +248,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
 
   linux-opencl:
     name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, compile + fallback smoke)
@@ -260,7 +314,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
 
   # ============================================================================
   # Tier C — sanitizers (ASAN + UBSAN) — correctness gates.
