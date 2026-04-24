@@ -789,13 +789,31 @@ if(QSIM_PLATFORM_WINDOWS)
     # identical across all 4 platforms (macOS Accelerate, Linux OpenBLAS,
     # WASM CLAPACK, Windows OpenBLAS).  If OpenBLAS is not available the
     # CGS2 Gram-Schmidt fallback kicks in, still numerically sound.
+    #
+    # The include discovery is fragile on vcpkg: find_package(OpenBLAS)
+    # provides a target whose INTERFACE_INCLUDE_DIRECTORIES may not contain
+    # the directory holding lapacke.h (which vcpkg installs separately).
+    # We look for both headers explicitly and only enable the LAPACKE path
+    # when both are present.
     find_package(OpenBLAS QUIET CONFIG)
-    if(OpenBLAS_FOUND)
+    find_path(QSIM_LAPACKE_INCLUDE_DIR lapacke.h)
+    find_path(QSIM_CBLAS_INCLUDE_DIR cblas.h)
+    if(OpenBLAS_FOUND AND QSIM_LAPACKE_INCLUDE_DIR AND QSIM_CBLAS_INCLUDE_DIR)
         target_link_libraries(quantumsim PRIVATE OpenBLAS::OpenBLAS)
+        target_include_directories(quantumsim PRIVATE
+            ${QSIM_LAPACKE_INCLUDE_DIR}
+            ${QSIM_CBLAS_INCLUDE_DIR}
+        )
         target_compile_definitions(quantumsim PRIVATE QSIM_HAS_OPENBLAS=1)
-        message(STATUS "Windows OpenBLAS: ${OpenBLAS_DIR} (LAPACKE QR enabled)")
+        message(STATUS "Windows OpenBLAS: ${OpenBLAS_DIR}")
+        message(STATUS "  lapacke.h:       ${QSIM_LAPACKE_INCLUDE_DIR}")
+        message(STATUS "  cblas.h:         ${QSIM_CBLAS_INCLUDE_DIR}")
+        message(STATUS "  (LAPACKE QR enabled)")
     else()
-        message(STATUS "Windows OpenBLAS not found; tensor_qr falls back to CGS2")
+        message(STATUS "Windows: OpenBLAS found=${OpenBLAS_FOUND}, "
+                       "lapacke=${QSIM_LAPACKE_INCLUDE_DIR}, "
+                       "cblas=${QSIM_CBLAS_INCLUDE_DIR}; "
+                       "tensor_qr uses CGS2 fallback")
     endif()
 
     if(QSIM_COMPILER_CLANG)
