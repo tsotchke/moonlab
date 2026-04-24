@@ -37,6 +37,7 @@ and integrates it directly into the VQE driver.  See
 |------------|-------------|
 | **State Vector Engine** | Up to 32 qubits with AMX-aligned buffers + runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE + Apple Accelerate). |
 | **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Real-space topology via MPO Chebyshev-KPM: local Chern marker on generic 2D models matches dense reference to machine precision. |
+| **Clifford-Assisted MPS** | Hybrid `|psi> = C |phi>` representation that stores the Clifford part as an O(n) tableau and only the non-Clifford residual as an MPS.  64× bond-dim advantage + 13884× speedup over plain MPS on stabilizer circuits at n=12. |
 | **Clifford Backend** | Aaronson–Gottesman tableau simulator: O(n) gates, O(n²) measurement. 3200-qubit GHZ + all-qubits measurement in ~100 ms. |
 | **Chemistry / VQE** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, H₂/LiH/H₂O Pauli Hamiltonians. Native reverse-mode autograd (CRX/CRY/CRZ + all standard rotations); `vqe_compute_gradient` uses adjoint method for HEA noise-free paths — ~5× over parameter-shift on 12 params, linear scaling to 100+. |
 | **Quantum Algorithms** | Grover, VQE, QAOA, QPE, CHSH + Mermin + Mermin-Klyshko Bell tests, Shor-ECDLP resource estimator (Gidney/Drake/Boneh 2026). |
@@ -215,6 +216,42 @@ lattice_2d_t* lattice = lattice_2d_create(10, 10, LATTICE_SQUARE);
 // Apply 2D MPO Hamiltonian
 mpo_2d_t* H = mpo_2d_heisenberg(lattice, J_coupling);
 ```
+
+### Clifford-Assisted MPS (CA-MPS)
+
+Hybrid representation `|psi> = C |phi>` where `C` is a Clifford unitary
+tracked by the Aaronson-Gottesman tableau and `|phi>` is an MPS.  Clifford
+gates update only the tableau (O(n) bit ops); non-Clifford gates push
+Pauli-string rotations into the MPS factor.  For stabilizer-state-like
+circuits CA-MPS uses a bond dimension of 1 regardless of qubit count,
+giving up to 64x bond-dim advantage + 13884x speedup over plain MPS at
+n=12 (see `tests/performance/bench_ca_mps.c`).
+
+```c
+#include "algorithms/tensor_network/ca_mps.h"
+
+// 12-qubit CA-MPS with max MPS bond dim 32
+moonlab_ca_mps_t* s = moonlab_ca_mps_create(12, 32);
+
+// Clifford gates: tableau-only, no MPS cost
+for (uint32_t q = 0; q < 12; q++) moonlab_ca_mps_h(s, q);
+moonlab_ca_mps_cnot(s, 0, 1);
+
+// Non-Clifford: pushed into MPS factor via Pauli-string rotation MPO
+moonlab_ca_mps_rz(s, 3, 0.7);
+
+// Imaginary-time ground-state search (non-unitary primitive)
+moonlab_ca_mps_imag_pauli_rotation(s, (uint8_t[]){3,3,0,0,0,0,0,0,0,0,0,0}, 0.01);
+moonlab_ca_mps_normalize(s);
+
+// Expectation value of an observable Pauli string
+double _Complex e;
+uint8_t p[12] = {3,0,0,0,0,0,0,0,0,0,0,0};  // Z_0
+moonlab_ca_mps_expect_pauli(s, p, &e);
+```
+
+See `docs/research/ca_mps.md` for the full theory, gate-application rules,
+and benchmark methodology.
 
 ## Quantum Algorithms
 
