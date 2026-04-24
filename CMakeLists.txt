@@ -1176,13 +1176,15 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
     target_link_libraries(test_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
-    add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
-    target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
-    # test_mpo_kpm.c calls zheev_ directly (not through the library's
-    # own entry points), so it needs an explicit LAPACK link on Linux.
-    # macOS gets it for free via the Accelerate framework.
-    if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-        target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+    # test_mpo_kpm calls zheev_ directly so it needs LAPACK (Accelerate on
+    # macOS, -llapack on Linux).  Windows clang-cl doesn't ship a LAPACK
+    # ABI we can link, so skip the target entirely there.
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
+        target_link_libraries(test_mpo_kpm PRIVATE quantumsim ${MATH_LIBRARY})
+        if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
     endif()
     # test_gpu_backend_discovery links against gpu_is_available /
     # gpu_compute_init etc., which only exist when the unified
