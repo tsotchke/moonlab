@@ -1101,9 +1101,25 @@ if(QSIM_BUILD_TESTS)
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
     add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
     target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
-    add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
-    target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
-    add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
+    # test_mpo_kpm.c calls zheev_ directly (not through the library's
+    # own entry points), so it needs an explicit LAPACK link on Linux.
+    # macOS gets it for free via the Accelerate framework.
+    if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+        target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+    endif()
+    # test_gpu_backend_discovery links against gpu_is_available /
+    # gpu_compute_init etc., which only exist when the unified
+    # dispatcher (src/optimization/gpu/gpu_backend.c) is compiled
+    # into the library -- and that source is conditional on at least
+    # one backend being enabled (see the "Only add it when..." guard
+    # above).  Match the guard here so plain Linux / WASM builds
+    # don't try to link against undefined dispatcher symbols.
+    if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL
+       OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
+        add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
+        target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
+        add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
+    endif()
     add_executable(test_tensor_adversarial tests/unit/test_tensor_adversarial.c)
     target_link_libraries(test_tensor_adversarial PRIVATE quantumsim m)
     add_test(NAME tensor_adversarial COMMAND test_tensor_adversarial)
