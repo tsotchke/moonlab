@@ -5,10 +5,89 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] -- post-v0.2.0 CI hardening
+## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS primitive
 
-Work on master after the v0.2.0 tag while bringing up the first
-public CI run.  Intended to fold into v0.2.1.
+Work on master after the v0.2.0 tag: bring up the first public CI run,
+fix cross-platform numerical issues, and add the first iteration of
+the Clifford-Assisted Matrix Product State (CA-MPS) primitive.  All
+intended to fold into v0.2.1.
+
+### Added
+
+- **Clifford-Assisted MPS (`src/algorithms/tensor_network/ca_mps.{c,h}`)**:
+  new hybrid state representation `|psi> = C |phi>` that combines the
+  Aaronson-Gottesman tableau (`src/backends/clifford/`) with the
+  existing MPS machinery.  Clifford gates update only the tableau
+  (O(n) bit ops, no MPS cost); non-Clifford gates push Pauli-string
+  rotations into the MPS factor.  See `docs/research/ca_mps.md` for
+  the full design, gate-application rules, expectation formulas, and
+  sampling algorithm.
+  API: `moonlab_ca_mps_create/free/clone`, Clifford gates
+  (`h`, `s`, `sdag`, `x`, `y`, `z`, `cnot`, `cz`, `swap`), non-Clifford
+  gates (`rx`, `ry`, `rz`, `t_gate`), imaginary-time primitive
+  (`imag_pauli_rotation`), observables (`expect_pauli`,
+  `expect_pauli_sum`), and normalization (`normalize`, `norm`).
+- **Kagome ED cross-check**: new `tests/unit/test_kagome_ed_large.c`
+  validates Moonlab's 2x3 torus (N=18, 262144-dim Hilbert space) via
+  matrix-free Lanczos with full reorthogonalization against
+  Läuchli-Sudan-Sørensen PRB 83, 212401 (2011) Table I cluster "18 b"
+  (E = -8.048270773 J).  Agreement to 5.4e-10.  Companion to the
+  existing N=12 dense-ED test (same PRB source).
+- **Clifford tableau Pauli introspection**: `clifford_row_pauli`,
+  `clifford_conjugate_pauli`, `clifford_conjugate_pauli_inverse`,
+  `clifford_tableau_clone`.  Primitives CA-MPS needs for conjugating
+  Paulis and observables through the stored Clifford.
+- **CA-MPS benchmark harness** (`tests/performance/bench_ca_mps.c`):
+  bond-dim + wallclock comparison across pure Clifford,
+  Clifford-heavy (95% + 5% T), and Pauli-rotation circuit classes on
+  n = 6, 8, 10, 12 qubits.  Emits machine-readable JSON
+  (`schema: moonlab/ca_mps_bench_v1`) + human-readable table.
+  Headline: 64x bond-dim advantage + 13884x speedup at n=12 on a
+  stabilizer state.
+
+### Fixed
+
+- **Cross-platform QR numerics** (`src/algorithms/tensor_network/tensor.c`):
+  `tensor_qr` gated the LAPACK Householder path on `HAS_ACCELERATE`,
+  so Linux (OpenBLAS) and WASM (CLAPACK) both fell back to a hand-
+  written modified Gram-Schmidt QR.  MGS loses orthogonality after
+  a handful of applications and was silently corrupting MPS left-
+  canonicalization in `tn_apply_mpo`.  Observable symptom: imag-time
+  Heisenberg dimer converged to E = -3 on macOS but stalled at
+  E ~ -1 on Linux x86_64 / aarch64 after just 60 Trotter steps.
+  Fix: route through `LAPACKE_zgeqrf` / `LAPACKE_zungqr` on Linux
+  and CLAPACK `zgeqrf_` / `zungqr_` on WASM, matching the existing
+  LAPACK SVD path.  MGS stays as the last-resort fallback.
+- **1D chain Heisenberg MPO**
+  (`src/algorithms/tensor_network/dmrg.c:mpo_heisenberg_create`):
+  rewrote with the canonical Schollwöck 5-bond-dim layout.  The
+  previous version had X/Y/Z operators on (rows 1-3, column 0)
+  instead of (rows 1-3, column 4), which zeroed out the
+  operator-carrying path and made every N >= 4 chain return
+  `H = 0`.  Affected any caller of `mpo_heisenberg_create` with
+  N >= 4; no in-tree caller exercised the bug.
+- **2D kagome lattice topology**
+  (`src/algorithms/tensor_network/lattice_2d.c:compute_kagome_neighbors`):
+  rewrote with canonical A/B/C 3-sublattice encoding.  The previous
+  version produced 22 bonds on a 2x2 torus instead of the correct
+  24.
+- **Spurious MPO identity shift**
+  (`src/algorithms/tensor_network/mpo_2d.c:create_site_mpo`): the
+  right boundary had a `state 0 -> state 0` identity transition that
+  kept an all-identity path alive, adding `I` to H as a `+1` constant
+  energy shift.  Removed; all 2D Hamiltonians now produce the correct
+  spectrum.
+- **Windows clang-cl ccosh/csinh**: Windows UCRT's `<complex.h>`
+  doesn't declare the hyperbolic complex variants.  Replaced the
+  calls in `apply_conjugated_imag` with `cexp`-based formulas
+  (mathematically identical).
+- **Windows clang-cl `BCryptGenRandom` link**:
+  `test_hardware_entropy_probe` compiles `hardware_entropy.c`
+  directly instead of linking `quantumsim`, so it didn't inherit
+  Matt's `bcrypt` link.  Added an explicit `bcrypt` link for this
+  target on Windows only.
+
+### Build / CI
 
 ### Build / CI
 
