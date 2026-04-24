@@ -783,6 +783,21 @@ if(QSIM_PLATFORM_WINDOWS)
     target_compile_definitions(quantumsim PRIVATE PLATFORM_WINDOWS=1)
     target_link_libraries(quantumsim PRIVATE bcrypt)
 
+    # Windows can link OpenBLAS via vcpkg (the CI toolchain pre-installs it).
+    # Detecting it here activates the LAPACKE Householder QR path in
+    # src/algorithms/tensor_network/tensor.c and keeps numerical behaviour
+    # identical across all 4 platforms (macOS Accelerate, Linux OpenBLAS,
+    # WASM CLAPACK, Windows OpenBLAS).  If OpenBLAS is not available the
+    # CGS2 Gram-Schmidt fallback kicks in, still numerically sound.
+    find_package(OpenBLAS QUIET CONFIG)
+    if(OpenBLAS_FOUND)
+        target_link_libraries(quantumsim PRIVATE OpenBLAS::OpenBLAS)
+        target_compile_definitions(quantumsim PRIVATE QSIM_HAS_OPENBLAS=1)
+        message(STATUS "Windows OpenBLAS: ${OpenBLAS_DIR} (LAPACKE QR enabled)")
+    else()
+        message(STATUS "Windows OpenBLAS not found; tensor_qr falls back to CGS2")
+    endif()
+
     if(QSIM_COMPILER_CLANG)
         execute_process(
             COMMAND ${CMAKE_C_COMPILER} --print-resource-dir
