@@ -1149,6 +1149,22 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_heisenberg PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_heisenberg COMMAND test_ca_mps_heisenberg)
 
+    # CA-MPS imaginary-time ground-state search: Trotter-Suzuki on the
+    # Heisenberg bond-by-bond Gibbs factors, verify convergence to exact
+    # ED on N=2/4/6 open chains.  Calls zheev directly for the dense ED
+    # reference so it needs the LAPACK link (Accelerate on macOS).
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        add_executable(test_ca_mps_imag_time tests/unit/test_ca_mps_imag_time.c)
+        target_link_libraries(test_ca_mps_imag_time PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_imag_time PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_imag_time PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_imag_time COMMAND test_ca_mps_imag_time)
+        set_tests_properties(unit_ca_mps_imag_time PROPERTIES TIMEOUT 120)
+    endif()
+
     add_executable(test_clifford tests/unit/test_clifford.c)
     target_link_libraries(test_clifford PRIVATE quantumsim)
     add_test(NAME unit_clifford COMMAND test_clifford)
