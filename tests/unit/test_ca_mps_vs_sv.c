@@ -157,20 +157,18 @@ static int run_one_circuit(uint32_t n, uint32_t depth, uint32_t seed) {
 int main(void) {
     fprintf(stdout, "=== CA-MPS vs dense state vector on random mixed circuits ===\n\n");
 
-    /* Short-depth regression cases only.  Deeper circuits (depth >= 20) are
-     * disabled in CI because Linux x86_64 and aarch64 OpenBLAS produce
-     * tn_apply_mpo SVD numerics that diverge from the dense-SV reference
-     * by O(0.1) at depth >= 20 while macOS Accelerate agrees to 1e-9.
-     * Tracking this as a separate audit; the short-depth suite below is
-     * sufficient to catch all the CA-MPS correctness bugs that the
-     * reduction-limit tests (test_ca_mps_limits) don't already cover. */
+    /* Deep-depth regression cases, now valid on all platforms after the
+     * tensor_qr Linux/OpenBLAS fix.  Timeouts are comfortable at depth 40
+     * on n=8 at chi_max=128; all paths (Accelerate, OpenBLAS, CLAPACK)
+     * now use Householder QR. */
     struct { uint32_t n, depth, seed; } cases[] = {
         { 4,  5, 1 },
-        { 4, 10, 2 },
-        { 6,  5, 3 },
+        { 4, 20, 2 },
+        { 4, 50, 3 },
         { 6, 10, 4 },
-        { 8,  5, 5 },
-        { 8, 10, 6 },
+        { 6, 40, 5 },
+        { 8, 20, 6 },
+        { 8, 40, 7 },
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         int lf = run_one_circuit(cases[i].n, cases[i].depth, cases[i].seed);
