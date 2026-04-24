@@ -1,0 +1,132 @@
+/**
+ * @file ca_mps.h
+ * @brief Clifford-Assisted Matrix Product States (CA-MPS).
+ *
+ * A CA-MPS represents a quantum state as |psi> = C |phi> where C is a
+ * Clifford unitary tracked by the Aaronson-Gottesman tableau from
+ * src/backends/clifford/ and |phi> is a plain MPS from tn_state.
+ *
+ * Clifford gates update only the tableau (O(n) bit operations, no MPS
+ * cost).  Non-Clifford gates -- single-qubit rotations, T-gates, arbitrary
+ * two-qubit unitaries -- apply a Pauli-string rotation to the MPS, where
+ * the Pauli string is the Clifford-conjugated image of the gate's
+ * generator.  This converts a circuit with t T-gates from the plain-MPS
+ * requirement of chi ~ 2^{S/2} to CA-MPS's chi ~ 2^{t/2}; the gain is an
+ * exponential reduction in bond dimension for Clifford-dominated circuits.
+ *
+ * See docs/research/ca_mps.md for the full design: the gate-application
+ * rules, the expectation formula <psi|H|psi> = <phi|C^\dagger H C|phi>, and
+ * the sampling algorithm.
+ *
+ * @since v0.3.0
+ */
+#ifndef MOONLAB_CA_MPS_H
+#define MOONLAB_CA_MPS_H
+
+#include <complex.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
+
+typedef enum {
+    CA_MPS_SUCCESS = 0,
+    CA_MPS_ERR_INVALID = -1,
+    CA_MPS_ERR_QUBIT   = -2,
+    CA_MPS_ERR_OOM     = -3,
+    CA_MPS_ERR_BACKEND = -4,
+} ca_mps_error_t;
+
+/* ================================================================== */
+/*  Lifecycle                                                         */
+/* ================================================================== */
+
+/**
+ * @brief Allocate a CA-MPS in the |0...0> state.
+ *
+ * Tableau is initialized to identity (D = I).  MPS is a bond-dim-1
+ * product state.
+ *
+ * @param num_qubits    Number of qubits, 1..100000.
+ * @param max_bond_dim  MPS bond-dim cap used during non-Clifford gate
+ *                       application.  32 is a reasonable default for
+ *                       VQE / QAOA workloads.
+ * @return A newly owned handle, or NULL on allocation failure / bad args.
+ */
+moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
+
+/** Release all memory owned by @p s.  No-op on NULL. */
+void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
+
+/** Deep-copy a CA-MPS. */
+moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
+
+/* ================================================================== */
+/*  Introspection                                                     */
+/* ================================================================== */
+
+uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
+uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
+uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
+
+/* ================================================================== */
+/*  Clifford gates (tableau only, O(n) per gate)                       */
+/* ================================================================== */
+
+ca_mps_error_t moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_sdag(moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_x   (moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_y   (moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
+ca_mps_error_t moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+ca_mps_error_t moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
+ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
+
+/* ================================================================== */
+/*  Non-Clifford gates (push into MPS as Pauli-string rotations)       */
+/* ================================================================== */
+
+/** exp(i theta X_q).  For a Clifford-rich circuit, actual MPS action is a
+ *  Pauli-string rotation on the conjugated string D X_q D^dagger. */
+ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
+ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
+ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
+
+/** T gate: up to global phase, equals exp(i pi Z / 8); absorb into rz(pi/4)
+ *  for simulation purposes. */
+ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
+
+/**
+ * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
+ *
+ * @param pauli_string Array of n bytes in {0=I, 1=X, 2=Y, 3=Z}.
+ * @param theta        Rotation angle (radians).
+ */
+ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
+                                             const uint8_t* pauli_string,
+                                             double theta);
+
+/* ================================================================== */
+/*  Observables                                                       */
+/* ================================================================== */
+
+/**
+ * @brief Compute <psi | P | psi> for a Pauli string P.
+ *
+ * The Clifford prefactor is absorbed via <psi|P|psi> =
+ * <phi | C^dagger P C | phi> = <phi | D P D^dagger | phi>.  The conjugated
+ * Pauli string is computed in O(n^2) and the MPS expectation in O(n chi^2).
+ */
+ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
+                                           const uint8_t* pauli_string,
+                                           double _Complex* out_expval);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MOONLAB_CA_MPS_H */

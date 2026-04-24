@@ -175,6 +175,41 @@ int main(void) {
     }
     clifford_tableau_free(t5);
 
+    /* 7b. Round-trip invariant: for any P and tableau t representing C,
+     *     clifford_conjugate_pauli_inverse(t, clifford_conjugate_pauli(t, P))
+     *     should return P (up to a trivial sign round-trip). */
+    fprintf(stdout, "\nTest 7b: round-trip C then C^dagger returns input Pauli.\n");
+    clifford_tableau_t* t6 = clifford_tableau_create(n);
+    clifford_h(t6, 0);          /* C = H_0 */
+    clifford_cnot(t6, 0, 1);    /* C = CNOT(0,1) H_0 */
+    clifford_s(t6, 2);          /* C = S_2 CNOT(0,1) H_0 */
+    {
+        uint8_t in_paulis[][4] = {
+            {1, 0, 0, 0},  /* X_0 */
+            {0, 1, 0, 0},  /* X_1 */
+            {3, 3, 0, 0},  /* Z_0 Z_1 */
+            {1, 1, 0, 0},  /* X_0 X_1 */
+            {2, 2, 0, 0},  /* Y_0 Y_1 */
+            {1, 3, 2, 0},  /* X Z Y I */
+        };
+        for (size_t k = 0; k < sizeof(in_paulis) / sizeof(in_paulis[0]); k++) {
+            uint8_t forward[4], back[4];
+            int fph = 0, bph = 0;
+            clifford_conjugate_pauli(t6, in_paulis[k], 0, forward, &fph);
+            clifford_conjugate_pauli_inverse(t6, forward, fph, back, &bph);
+            print_pauli("  in     ", in_paulis[k], n, 0);
+            print_pauli("  forward", forward, n, fph);
+            print_pauli("  back   ", back, n, bph);
+            char label[64];
+            snprintf(label, sizeof(label),
+                     "round-trip input %s%s%s%s",
+                     pauli_char[in_paulis[k][0]], pauli_char[in_paulis[k][1]],
+                     pauli_char[in_paulis[k][2]], pauli_char[in_paulis[k][3]]);
+            CHECK(pauli_eq(in_paulis[k], back, n, 0, bph), "%s", label);
+        }
+    }
+    clifford_tableau_free(t6);
+
     /* 8. Clone and mutate independently. */
     fprintf(stdout, "\nTest 8: clifford_tableau_clone isolation.\n");
     clifford_tableau_t* orig = clifford_tableau_create(n);
