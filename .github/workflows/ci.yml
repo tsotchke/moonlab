@@ -363,7 +363,14 @@ jobs:
         #   Chern number comes out 0 instead of +/-1.  Release
         #   (default) test passes this cleanly; the Release tier above
         #   covers it.
-        run: ctest --test-dir build -E "long_evolution|python_bindings|rust_bindings|webgpu_unified|unit_qgt" --output-on-failure --timeout 600
+        # unit_kagome_ed builds a 4096x4096 dense Hamiltonian and runs
+        # zheev on it.  Under ASAN that's 10x slower and times out at the
+        # 600s ctest ceiling; the test is already covered by all the
+        # non-sanitizer tiers, so skipping it here is safe.
+        # unit_ca_mps_kagome12 runs a 12-qubit Trotter schedule that is
+        # compute-heavy under ASAN instrumentation; it's covered by every
+        # other tier as well.
+        run: ctest --test-dir build -E "long_evolution|python_bindings|rust_bindings|webgpu_unified|unit_qgt|unit_kagome_ed$|unit_ca_mps_kagome12" --output-on-failure --timeout 600
 
   # ============================================================================
   # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
