@@ -51,6 +51,7 @@ set(UTILS_SOURCES
 
 # Source files - Optimization (SIMD operations with scalar fallbacks for WASM)
 set(OPTIMIZATION_SOURCES
+    ${QSIM_ROOT}/src/optimization/memory_align.c
     ${QSIM_ROOT}/src/optimization/simd_ops.c
     ${QSIM_ROOT}/src/optimization/gpu/gpu_backend.c
     # Eshkol symbols are referenced unconditionally from tensor.c; in
