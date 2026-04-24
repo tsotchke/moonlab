@@ -1291,6 +1291,40 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_lattice_2d PRIVATE quantumsim)
     add_test(NAME unit_lattice_2d COMMAND test_lattice_2d)
 
+    # Kagome Heisenberg ED vs published references.  Both tests call
+    # LAPACK (zheev / dstev) directly rather than through quantumsim, so
+    # they need an explicit LAPACK link -- Accelerate on macOS, -llapack on
+    # Linux (same pattern as test_mpo_kpm).
+    #
+    # N=12 test: Läuchli-Sudan-Sørensen PRB 83, 212401 (2011) Table I cluster
+    # "12" (rectangular 2x2 torus, E = -5.444875216 J).  Dense ED via
+    # mpo_2d_heisenberg_dmi_create -> mpo_to_matrix -> zheev.
+    add_executable(test_kagome_ed tests/unit/test_kagome_ed.c)
+    target_link_libraries(test_kagome_ed PRIVATE quantumsim m)
+    if(APPLE)
+        target_link_libraries(test_kagome_ed PRIVATE "-framework Accelerate")
+    elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+        target_link_libraries(test_kagome_ed PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+    endif()
+    add_test(NAME unit_kagome_ed COMMAND test_kagome_ed)
+
+    # N=18 test: PRB 83, 212401 Table I cluster "18 b" (rectangular 2x3 torus,
+    # E = -8.048270773 J).  Matrix-free Lanczos with full reorthogonalization
+    # on a bond-list Heisenberg.  Peak memory ~840 MB, runtime ~8s on M2
+    # Ultra.  Tagged "long" for CI -- opt in via `ctest -L long`.
+    add_executable(test_kagome_ed_large tests/unit/test_kagome_ed_large.c)
+    target_link_libraries(test_kagome_ed_large PRIVATE quantumsim m)
+    if(APPLE)
+        target_link_libraries(test_kagome_ed_large PRIVATE "-framework Accelerate")
+    elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+        target_link_libraries(test_kagome_ed_large PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+    endif()
+    add_test(NAME unit_kagome_ed_large COMMAND test_kagome_ed_large)
+    set_tests_properties(unit_kagome_ed_large PROPERTIES
+        LABELS "long;memory_heavy"
+        TIMEOUT 120
+    )
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
