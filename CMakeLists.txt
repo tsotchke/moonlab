@@ -1141,6 +1141,14 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_bond_advantage PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_bond_advantage COMMAND test_ca_mps_bond_advantage)
 
+    # CA-MPS expect_pauli_sum integration test: builds the Heisenberg
+    # Hamiltonian as a Pauli sum and validates against dense state-vector
+    # <psi|H|psi> after a random Clifford preparation.  Foundation for
+    # VQE-on-CA-MPS and DMRG-on-CA-MPS drivers.
+    add_executable(test_ca_mps_heisenberg tests/unit/test_ca_mps_heisenberg.c)
+    target_link_libraries(test_ca_mps_heisenberg PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_heisenberg COMMAND test_ca_mps_heisenberg)
+
     add_executable(test_clifford tests/unit/test_clifford.c)
     target_link_libraries(test_clifford PRIVATE quantumsim)
     add_test(NAME unit_clifford COMMAND test_clifford)
