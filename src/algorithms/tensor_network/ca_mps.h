@@ -118,12 +118,34 @@ ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
  * @brief Compute <psi | P | psi> for a Pauli string P.
  *
  * The Clifford prefactor is absorbed via <psi|P|psi> =
- * <phi | C^dagger P C | phi> = <phi | D P D^dagger | phi>.  The conjugated
- * Pauli string is computed in O(n^2) and the MPS expectation in O(n chi^2).
+ * <phi | C^dagger P C | phi>.  The conjugated Pauli string is computed in
+ * O(n^2) and the MPS expectation in O(n chi^2).
  */
 ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                            const uint8_t* pauli_string,
                                            double _Complex* out_expval);
+
+/**
+ * @brief Compute <psi | H | psi> for a Hamiltonian H expressed as a sum of
+ *        Pauli strings: H = sum_k coeffs[k] * paulis[k].
+ *
+ * Each coefficient is complex (accepts Hermitian sums directly; non-
+ * Hermitian H is permitted but the returned expectation may be complex).
+ *
+ * @param paulis   Array of Pauli strings, shape [num_terms][num_qubits].
+ * @param coeffs   Array of complex coefficients, length num_terms.
+ * @param num_terms Number of Pauli-string terms.
+ * @param out_expval Returned expectation value.
+ *
+ * Cost: O(num_terms * n^2) for the n Clifford conjugations plus
+ * O(num_terms * n * chi^2) for the MPS expectation on each conjugated
+ * term.  Trivially parallelizable across terms.
+ */
+ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+                                                const uint8_t* paulis,
+                                                const double _Complex* coeffs,
+                                                uint32_t num_terms,
+                                                double _Complex* out_expval);
 
 #ifdef __cplusplus
 }

@@ -405,3 +405,20 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
     free(conj_pauli);
     return CA_MPS_SUCCESS;
 }
+
+ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+                                                const uint8_t* paulis,
+                                                const double _Complex* coeffs,
+                                                uint32_t num_terms,
+                                                double _Complex* out_expval) {
+    if (!s || !paulis || !coeffs || !out_expval) return CA_MPS_ERR_INVALID;
+    double _Complex acc = 0.0;
+    for (uint32_t k = 0; k < num_terms; k++) {
+        double _Complex term;
+        ca_mps_error_t e = moonlab_ca_mps_expect_pauli(s, paulis + (size_t)k * s->n, &term);
+        if (e != CA_MPS_SUCCESS) return e;
+        acc += coeffs[k] * term;
+    }
+    *out_expval = acc;
+    return CA_MPS_SUCCESS;
+}
