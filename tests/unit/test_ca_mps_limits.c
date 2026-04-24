@@ -221,6 +221,40 @@ int main(void) {
         moonlab_ca_mps_free(c);
     }
 
+    /* ------------------------------------------------------------ */
+    fprintf(stdout, "\nTest 10: expect_pauli_sum on Heisenberg dimer.\n");
+    {
+        /* Bell state: <XX + YY + ZZ> = +1 + (-1) + +1 = +1. */
+        moonlab_ca_mps_t* s = moonlab_ca_mps_create(2, 32);
+        moonlab_ca_mps_h(s, 0);
+        moonlab_ca_mps_cnot(s, 0, 1);
+        /* Heisenberg bond (sigma . sigma) = XX + YY + ZZ, coefficients 1. */
+        uint8_t paulis[3][2] = { {1, 1}, {2, 2}, {3, 3} };
+        double _Complex coeffs[3] = { 1.0, 1.0, 1.0 };
+        double _Complex e;
+        moonlab_ca_mps_expect_pauli_sum(s, (const uint8_t*)paulis, coeffs, 3, &e);
+        CHECK(CLOSEC(e,  1.0), "Bell state <sigma.sigma> = %.9f (expect +1)", creal(e));
+        moonlab_ca_mps_free(s);
+
+        /* Singlet state (|01> - |10>)/sqrt(2) has <sigma.sigma> = -3. */
+        s = moonlab_ca_mps_create(2, 32);
+        moonlab_ca_mps_x(s, 0);  /* |00> -> |10> */
+        moonlab_ca_mps_h(s, 0);  /* |10> -> (|00> - |10>)/sqrt(2) */
+        moonlab_ca_mps_cnot(s, 0, 1);  /* -> (|00> - |11>)/sqrt(2)  -- wait this isn't singlet */
+        /* Singlet = (|01> - |10>)/sqrt(2).  Construct as H_0 X_1 CNOT(0,1):
+         *   |00> -> |+>|0> -> |+>|1> (X_1) -> (|01> + |10>)/sqrt(2) via CNOT
+         *   then apply Z_0 to introduce the minus: -> (|01> - |10>)/sqrt(2) */
+        moonlab_ca_mps_free(s);
+        s = moonlab_ca_mps_create(2, 32);
+        moonlab_ca_mps_h(s, 0);
+        moonlab_ca_mps_x(s, 1);
+        moonlab_ca_mps_cnot(s, 0, 1);
+        moonlab_ca_mps_z(s, 0);
+        moonlab_ca_mps_expect_pauli_sum(s, (const uint8_t*)paulis, coeffs, 3, &e);
+        CHECK(CLOSEC(e, -3.0), "singlet <sigma.sigma> = %.9f (expect -3)", creal(e));
+        moonlab_ca_mps_free(s);
+    }
+
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }
