@@ -478,12 +478,23 @@ static mpo_tensor_t create_site_mpo(uint32_t site,
         }
     }
     else if (site == num_sites - 1) {
-        // Right boundary: single column
-
-        // Identity: 0 -> 0
-        for (int s = 0; s < 2; s++) {
-            SET_W(0, s, s, 0, 1.0);
-        }
+        // Right boundary: single column.
+        //
+        // State layout (see bulk case):
+        //   0 = "haven't opened any bond yet, identity pass-through"
+        //   1 = "at least one bond has been closed upstream, final pass-through"
+        //   2+ = "a bond is currently open, waiting for its closer"
+        //
+        // Valid paths into the right-boundary output:
+        //   - 1 -> 0: at least one bond already closed, carry it out.
+        //   - 2+ -> 0: close a bond that ends exactly at this site.
+        //
+        // A 0 -> 0 identity transition here would make the all-identity
+        // path 0 -> 0 -> ... -> 0 contribute a spurious I to the full
+        // Hamiltonian, adding a constant shift to every eigenvalue.  Do
+        // not add it.  (On-site terms and zero-bond systems are fine:
+        // a pure on-site term leaves site 0 in state 1, then traverses
+        // state 1 -> 1 -> ... -> 1 -> 0 via this collector.)
 
         // Final state: 1 -> 0 (collect everything)
         for (int s = 0; s < 2; s++) {
