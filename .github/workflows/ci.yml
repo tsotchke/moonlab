@@ -108,17 +108,24 @@ jobs:
       - name: Install OpenBLAS via vcpkg
         shell: pwsh
         run: |
-          vcpkg install openblas:x64-windows
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -Append -FilePath $env:GITHUB_ENV
+          # vcpkg is pre-installed at C:\vcpkg on windows-latest runners.
+          # VCPKG_ROOT is exported to all subsequent steps via GITHUB_ENV.
+          $vcpkgRoot = "C:\vcpkg"
+          & "$vcpkgRoot\vcpkg.exe" install openblas:x64-windows
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -Append -FilePath $env:GITHUB_ENV
 
       - name: Configure
         shell: pwsh
+        env:
+          CMAKE_MAKE_PROGRAM: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\Ninja\\ninja.exe"
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_C_COMPILER=clang-cl
           -DCMAKE_CXX_COMPILER=clang-cl
-          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+          "-DCMAKE_MAKE_PROGRAM=$env:CMAKE_MAKE_PROGRAM"
+          "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
           -DQSIM_BUILD_EXAMPLES=OFF
           -DQSIM_BUILD_BENCHMARKS=OFF
 
