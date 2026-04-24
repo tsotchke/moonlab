@@ -154,7 +154,7 @@ jobs:
 
   macos-x86_64:
     name: macOS x86_64 (Release)
-    runs-on: macos-13
+    runs-on: macos-15-intel
     env:
       MOONLAB_SKIP_HW_ENTROPY: "1"
       OMP_NUM_THREADS: "1"
