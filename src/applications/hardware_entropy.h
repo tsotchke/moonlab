@@ -187,6 +187,20 @@ int rdrand_available(void);
  */
 int rdseed_available(void);
 
+#if defined(__aarch64__) && defined(MOONLAB_TESTING)
+/**
+ * @brief Test-only wrapper around the ARM hardware RNG helper launcher.
+ *
+ * Invokes the configured helper executable directly for the requested mode.
+ * This exists only in dedicated unit-test builds.
+ *
+ * @param mode Probe mode (`rndr` or `rndrrs`)
+ * @param out Optional parsed 64-bit output
+ * @return 1 on success, 0 on failure
+ */
+int moonlab_hw_rng_probe_exec(const char *mode, uint64_t *out);
+#endif
+
 // ============================================================================
 // SYSTEM ENTROPY
 // ============================================================================

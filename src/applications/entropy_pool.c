@@ -242,8 +242,12 @@ int entropy_pool_init_with_config(
         health_err = health_tests_run_batch(ctx->health_ctx, startup_entropy, sizeof(startup_entropy));
         pthread_mutex_unlock(&ctx->health_mutex);
         if (health_err == HEALTH_SUCCESS) {
-            memcpy(ctx->pool_buffer, startup_entropy, sizeof(startup_entropy));
-            ctx->pool_available = sizeof(startup_entropy);
+            size_t startup_bytes = sizeof(startup_entropy);
+            if (startup_bytes > ctx->pool_size) {
+                startup_bytes = ctx->pool_size;
+            }
+            memcpy(ctx->pool_buffer, startup_entropy, startup_bytes);
+            ctx->pool_available = startup_bytes;
         }
     }
     secure_memzero(startup_entropy, sizeof(startup_entropy));

@@ -624,6 +624,9 @@ if(QSIM_SIMD_SVE)
     list(APPEND QSIM_ALL_SOURCES src/optimization/simd_sve.c)
 endif()
 
+# Standalone helper for safe ARM hardware-RNG probing.
+add_executable(hw_rng_probe tools/hw_rng_probe.c)
+
 # ==============================================================================
 # Library Target
 # ==============================================================================
@@ -643,6 +646,11 @@ elseif(QSIM_BUILD_STATIC)
 else()
     add_library(quantumsim ${QSIM_ALL_SOURCES})
 endif()
+
+add_dependencies(quantumsim hw_rng_probe)
+target_compile_definitions(quantumsim PRIVATE
+    MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
+)
 
 # Eshkol integration: enable the real (non-stub) path of the bridge
 # and link libeshkol-static.a with its framework dependencies.
@@ -1142,16 +1150,27 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
     target_link_libraries(test_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
-    if(NOT QSIM_PLATFORM_WINDOWS)
-        add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
-        target_link_libraries(test_mpo_kpm PRIVATE quantumsim ${MATH_LIBRARY})
-        if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
+    add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
+    target_link_libraries(test_mpo_kpm PRIVATE quantumsim m)
+    # test_mpo_kpm.c calls zheev_ directly (not through the library's
+    # own entry points), so it needs an explicit LAPACK link on Linux.
+    # macOS gets it for free via the Accelerate framework.
+    if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+        target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
     endif()
-    add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
-    target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
-    add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
+    # test_gpu_backend_discovery links against gpu_is_available /
+    # gpu_compute_init etc., which only exist when the unified
+    # dispatcher (src/optimization/gpu/gpu_backend.c) is compiled
+    # into the library -- and that source is conditional on at least
+    # one backend being enabled (see the "Only add it when..." guard
+    # above).  Match the guard here so plain Linux / WASM builds
+    # don't try to link against undefined dispatcher symbols.
+    if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL
+       OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
+        add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
+        target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
+        add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
+    endif()
     add_executable(test_tensor_adversarial tests/unit/test_tensor_adversarial.c)
     target_link_libraries(test_tensor_adversarial PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME tensor_adversarial COMMAND test_tensor_adversarial)
@@ -1286,6 +1305,24 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_circuit_diagram tests/unit/test_circuit_diagram.c)
     target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
     add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
+
+    # Entropy-pool initialization regression checks.
+    add_executable(test_entropy_pool tests/unit/test_entropy_pool.c)
+    target_link_libraries(test_entropy_pool PRIVATE quantumsim)
+    add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
+
+    # ARM helper probing should use the compiled helper path, not ./tools.
+    add_executable(test_hardware_entropy_probe
+        tests/unit/test_hardware_entropy_probe.c
+        src/applications/hardware_entropy.c
+    )
+    add_dependencies(test_hardware_entropy_probe hw_rng_probe)
+    target_link_libraries(test_hardware_entropy_probe PRIVATE Threads::Threads)
+    target_compile_definitions(test_hardware_entropy_probe PRIVATE
+        MOONLAB_TESTING=1
+        MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
+    )
+    add_test(NAME unit_hardware_entropy_probe COMMAND test_hardware_entropy_probe)
 
     # QRNG statistical quality: chi^2 / monobit / serial correlation
     # on 256 KiB drawn through the stable ABI.

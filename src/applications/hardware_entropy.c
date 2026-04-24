@@ -71,43 +71,122 @@ int rdseed_available(void) {
 // Cache the detection result (-1 = not tested, 0 = not available, 1 = available)
 static int rndr_detection_result = -1;
 
+#ifndef MOONLAB_HW_RNG_PROBE_PATH
+#define MOONLAB_HW_RNG_PROBE_PATH ((const char*)0)
+#endif
+
 /**
  * @brief Path to the hardware RNG probe helper executable
  *
  * The helper is a separate binary that safely executes RNDR/RNDRRS instructions.
- * Using popen() (fork+exec) instead of fork() alone is safe in multithreaded
- * processes because exec() replaces the child's address space, avoiding the
- * undefined behavior that occurs when forked threads interact with mutexes.
+ * The path is compiled in as an absolute path so the library never resolves the
+ * helper relative to the caller's working directory.
  */
-static const char *HW_RNG_PROBE_PATH = "tools/hw_rng_probe";
+static const char *HW_RNG_PROBE_PATH = MOONLAB_HW_RNG_PROBE_PATH;
 
 /**
- * @brief Probe RNDR instruction safely using popen() (fork+exec)
+ * @brief Execute RNDR/RNDRRS via a trusted helper using fork/execv
  *
- * Spawns the helper executable which attempts the RNDR instruction.
- * This is safe in multithreaded processes because popen() uses fork+exec,
- * not fork alone. The child process is completely replaced by the helper.
+ * Spawns the helper executable directly without invoking a shell. The helper
+ * path must be absolute; otherwise the probe is treated as unavailable.
+ *
+ * The child performs only async-signal-safe operations between fork and execv.
+ *
+ * @param mode Probe mode ("rndr" or "rndrrs")
+ * @param out Optional parsed 64-bit output from the helper
+ * @return 1 on success, 0 on failure
  */
-static int rndr_probe_popen(void) {
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "%s --mode=rndr 2>/dev/null", HW_RNG_PROBE_PATH);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
-        return 0;  // popen failed
+static int hw_rng_probe_exec(const char *mode, uint64_t *out) {
+    if (!mode || !HW_RNG_PROBE_PATH || HW_RNG_PROBE_PATH[0] != '/') {
+        return 0;
     }
+
+    char mode_arg[32];
+    int mode_len = snprintf(mode_arg, sizeof(mode_arg), "--mode=%s", mode);
+    if (mode_len <= 0 || (size_t)mode_len >= sizeof(mode_arg)) {
+        return 0;
+    }
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        return 0;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return 0;
+    }
+
+    if (pid == 0) {
+        char *const argv[] = {
+            (char *)HW_RNG_PROBE_PATH,
+            mode_arg,
+            NULL
+        };
+
+        close(pipefd[0]);
+        if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
+            _exit(127);
+        }
+        close(pipefd[1]);
+        execv(HW_RNG_PROBE_PATH, argv);
+        _exit(127);
+    }
+
+    close(pipefd[1]);
 
     char buf[32];
-    char *result = fgets(buf, sizeof(buf), fp);
-    int status = pclose(fp);
+    size_t total = 0;
+    while (total + 1 < sizeof(buf)) {
+        ssize_t n = read(pipefd[0], buf + total, sizeof(buf) - total - 1);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            close(pipefd[0]);
+            (void)waitpid(pid, NULL, 0);
+            return 0;
+        }
+        if (n == 0) {
+            break;
+        }
+        total += (size_t)n;
+        if (memchr(buf, '\n', total) != NULL) {
+            break;
+        }
+    }
+    close(pipefd[0]);
+    buf[total] = '\0';
 
-    // Success if child exited normally with status 0 and produced output
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0 && result != NULL) {
-        return 1;
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return 0;
+        }
     }
 
-    return 0;
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || total == 0) {
+        return 0;
+    }
+
+    if (out) {
+        uint64_t val = 0;
+        if (sscanf(buf, "%llx", (unsigned long long *)&val) != 1) {
+            return 0;
+        }
+        *out = val;
+    }
+
+    return 1;
 }
+
+#ifdef MOONLAB_TESTING
+int moonlab_hw_rng_probe_exec(const char *mode, uint64_t *out) {
+    return hw_rng_probe_exec(mode, out);
+}
+#endif
 
 /**
  * @brief Check if ARM RNDR instruction is available
@@ -116,7 +195,7 @@ static int rndr_probe_popen(void) {
  * 1. Check MOONLAB_SKIP_HW_ENTROPY env var (CI opt-out)
  * 2. Return cached result if already tested
  * 3. Check sysctl for FEAT_RNG capability
- * 4. If sysctl says yes, verify with fork-based probe
+ * 4. If sysctl says yes, verify with the trusted helper
  * 5. Cache and return result
  */
 int rndr_available(void) {
@@ -159,10 +238,9 @@ int rndr_available(void) {
             return rndr_detection_result;
         }
 
-        // Tier 2: Sysctl says yes - verify with popen probe (fork+exec)
-        // This catches VMs that lie about FEAT_RNG
-        // Using popen() is safe in multithreaded processes (unlike fork alone)
-        rndr_detection_result = rndr_probe_popen();
+        // Tier 2: Sysctl says yes - verify with the trusted helper.
+        // This catches VMs that lie about FEAT_RNG without invoking a shell.
+        rndr_detection_result = hw_rng_probe_exec("rndr", NULL);
         return rndr_detection_result;
 
     #else
@@ -173,41 +251,6 @@ int rndr_available(void) {
 }
 
 /**
- * @brief Execute RNDR/RNDRRS via helper process using popen() (fork+exec)
- *
- * Spawns the helper executable to run the risky assembly instruction.
- * popen() uses fork+exec which is safe in multithreaded processes.
- * Returns 1 on success (value written to *out), 0 on failure.
- */
-static int arm_rndr_popen_exec(int use_rndrrs, uint64_t *out) {
-    char cmd[256];
-    const char *mode = use_rndrrs ? "rndrrs" : "rndr";
-    snprintf(cmd, sizeof(cmd), "%s --mode=%s 2>/dev/null", HW_RNG_PROBE_PATH, mode);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
-        return 0;
-    }
-
-    char buf[32];
-    char *result = fgets(buf, sizeof(buf), fp);
-    int status = pclose(fp);
-
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || result == NULL) {
-        return 0;
-    }
-
-    // Parse hex output from helper (16 hex chars = 64 bits)
-    uint64_t val = 0;
-    if (sscanf(buf, "%llx", (unsigned long long *)&val) != 1) {
-        return 0;
-    }
-
-    *out = val;
-    return 1;
-}
-
-/**
  * @brief Get entropy via ARM RNDR instruction (safe popen version)
  */
 int rndr_get_uint64(uint64_t *value) {
@@ -215,7 +258,7 @@ int rndr_get_uint64(uint64_t *value) {
 
     // Retry up to 10 times
     for (int i = 0; i < 10; i++) {
-        if (arm_rndr_popen_exec(0, value)) return 1;
+        if (hw_rng_probe_exec("rndr", value)) return 1;
     }
     return 0;
 }
@@ -228,7 +271,7 @@ int rndrrs_get_uint64(uint64_t *value) {
 
     // RNDRRS may take longer, retry up to 100 times
     for (int i = 0; i < 100; i++) {
-        if (arm_rndr_popen_exec(1, value)) return 1;
+        if (hw_rng_probe_exec("rndrrs", value)) return 1;
     }
     return 0;
 }
