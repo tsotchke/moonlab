@@ -159,6 +159,53 @@ clifford_error_t clifford_sample_all(clifford_tableau_t* t,
                                      uint64_t* rng_state,
                                      uint64_t* result);
 
+/* ================================================================== */
+/*  Pauli-string introspection (added v0.3.0 for CA-MPS / CA-PEPS).   */
+/*                                                                    */
+/*  Each entry of a Pauli string is one byte in {0=I, 1=X, 2=Y, 3=Z}. */
+/*  Phase is encoded as an integer in {0, 1, 2, 3} meaning            */
+/*  {+1, +i, -1, -i} respectively (powers of i).  Pure stabilizer     */
+/*  rows always return phase 0 or 2 (i.e. +-1); the full {0,1,2,3}    */
+/*  range is only exercised by Pauli products.                        */
+/* ================================================================== */
+
+/**
+ * @brief Read the Pauli string stored in row @p row of the tableau.
+ *
+ * Rows [0, n) are destabilizers and row @p i stores @f$D X_i D^\dagger@f$.
+ * Rows [n, 2n) are stabilizers and row @p n+i stores @f$D Z_i D^\dagger@f$.
+ *
+ * @param[in]  t         Tableau to read.
+ * @param[in]  row       Row index in [0, 2n).
+ * @param[out] out_pauli Array of length n; byte j is the Pauli on qubit j.
+ * @param[out] out_phase Phase code in {0, 2} for any stabilizer row
+ *                       (rows always encode Hermitian Paulis with sign ±1).
+ */
+clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
+                                    uint8_t* out_pauli, int* out_phase);
+
+/**
+ * @brief Conjugate an input Pauli string through the tableau's Clifford @f$D@f$:
+ *        @f$P' = D P D^\dagger@f$.
+ *
+ * The input is a Pauli string (n bytes in {0,1,2,3}) with an optional leading
+ * phase (@p in_phase in {0,1,2,3} for {+1,+i,-1,-i}).  The output is another
+ * Pauli string with its accumulated phase.  No i-factors are introduced by the
+ * Clifford conjugation itself, but the Pauli multiplications used internally
+ * can produce them; the output @p out_phase captures the full residual phase.
+ */
+clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
+                                          const uint8_t* in_pauli,
+                                          int in_phase,
+                                          uint8_t* out_pauli,
+                                          int* out_phase);
+
+/**
+ * @brief Allocate a deep copy of the tableau.  The clone and original can
+ *        be mutated independently.  Returns NULL on allocation failure.
+ */
+clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t);
+
 #ifdef __cplusplus
 }
 #endif
