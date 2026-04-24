@@ -60,13 +60,23 @@ typedef lapack_complex_double lapack_complex_t;
 #endif
 
 #if defined(QSIM_HAS_CLAPACK)
-// f2c LAPACK symbol (CLAPACK)
+// f2c LAPACK symbols (CLAPACK).  Listing them explicitly because
+// CLAPACK distributions often ship subsets; on WASM CI we need these
+// to resolve at link time when we use them from tensor_svd / tensor_qr.
 extern int zgesvd_(char *jobu, char *jobvt, integer *m, integer *n,
                    doublecomplex *a, integer *lda, doublereal *s,
                    doublecomplex *u, integer *ldu,
                    doublecomplex *vt, integer *ldvt,
                    doublecomplex *work, integer *lwork,
                    doublereal *rwork, integer *info);
+extern int zgeqrf_(integer *m, integer *n,
+                   doublecomplex *a, integer *lda,
+                   doublecomplex *tau,
+                   doublecomplex *work, integer *lwork, integer *info);
+extern int zungqr_(integer *m, integer *n, integer *k,
+                   doublecomplex *a, integer *lda,
+                   doublecomplex *tau,
+                   doublecomplex *work, integer *lwork, integer *info);
 #endif
 
 // ============================================================================
