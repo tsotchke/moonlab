@@ -117,7 +117,7 @@ jobs:
         shell: pwsh
         run: >
           ctest --test-dir build
-          -E "long_evolution|unit_qgt|unit_mbl|unit_qrng_statistics|python_bindings|rust_bindings"
+          -E "long_evolution|mps_vs_exact|unit_qgt|unit_mbl|unit_qrng_statistics|python_bindings|rust_bindings"
           --output-on-failure
           --timeout 300
           -j 2
