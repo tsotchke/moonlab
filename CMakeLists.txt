@@ -620,6 +620,9 @@ if(QSIM_SIMD_SVE)
     list(APPEND QSIM_ALL_SOURCES src/optimization/simd_sve.c)
 endif()
 
+# Standalone helper for safe ARM hardware-RNG probing.
+add_executable(hw_rng_probe tools/hw_rng_probe.c)
+
 # ==============================================================================
 # Library Target
 # ==============================================================================
@@ -636,6 +639,11 @@ elseif(QSIM_BUILD_STATIC)
 else()
     add_library(quantumsim ${QSIM_ALL_SOURCES})
 endif()
+
+add_dependencies(quantumsim hw_rng_probe)
+target_compile_definitions(quantumsim PRIVATE
+    MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
+)
 
 # Eshkol integration: enable the real (non-stub) path of the bridge
 # and link libeshkol-static.a with its framework dependencies.
@@ -1254,6 +1262,19 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_entropy_pool tests/unit/test_entropy_pool.c)
     target_link_libraries(test_entropy_pool PRIVATE quantumsim)
     add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
+
+    # ARM helper probing should use the compiled helper path, not ./tools.
+    add_executable(test_hardware_entropy_probe
+        tests/unit/test_hardware_entropy_probe.c
+        src/applications/hardware_entropy.c
+    )
+    add_dependencies(test_hardware_entropy_probe hw_rng_probe)
+    target_link_libraries(test_hardware_entropy_probe PRIVATE Threads::Threads)
+    target_compile_definitions(test_hardware_entropy_probe PRIVATE
+        MOONLAB_TESTING=1
+        MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
+    )
+    add_test(NAME unit_hardware_entropy_probe COMMAND test_hardware_entropy_probe)
 
     # QRNG statistical quality: chi^2 / monobit / serial correlation
     # on 256 KiB drawn through the stable ABI.
