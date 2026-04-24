@@ -1250,6 +1250,11 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
     add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
 
+    # Entropy-pool initialization regression checks.
+    add_executable(test_entropy_pool tests/unit/test_entropy_pool.c)
+    target_link_libraries(test_entropy_pool PRIVATE quantumsim)
+    add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
+
     # QRNG statistical quality: chi^2 / monobit / serial correlation
     # on 256 KiB drawn through the stable ABI.
     add_executable(test_qrng_statistics tests/unit/test_qrng_statistics.c)
