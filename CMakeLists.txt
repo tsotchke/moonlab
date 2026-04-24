@@ -1363,6 +1363,14 @@ if(QSIM_BUILD_TESTS)
     )
     add_dependencies(test_hardware_entropy_probe hw_rng_probe)
     target_link_libraries(test_hardware_entropy_probe PRIVATE Threads::Threads)
+    # This test compiles hardware_entropy.c directly rather than linking
+    # quantumsim, so it doesn't inherit the library's include dirs.  Add src/
+    # explicitly so the Windows <unistd.h> / <time.h> / <complex.h> shims
+    # (src/unistd.h etc., from Matt's CI-portability PR) are discoverable
+    # under clang-cl.  Harmless on Unix where <unistd.h> comes from the SDK.
+    target_include_directories(test_hardware_entropy_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
     target_compile_definitions(test_hardware_entropy_probe PRIVATE
         MOONLAB_TESTING=1
         MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
