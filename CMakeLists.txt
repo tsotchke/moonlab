@@ -1149,6 +1149,13 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_heisenberg PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_heisenberg COMMAND test_ca_mps_heisenberg)
 
+    # Linux-divergence probe: instrumented dimer run that prints state
+    # at every Trotter step.  Not run in CI as a pass/fail test -- it's
+    # a diagnostic tool we'll remove once the divergence is understood.
+    add_executable(test_ca_mps_linux_probe tests/unit/test_ca_mps_linux_probe.c)
+    target_link_libraries(test_ca_mps_linux_probe PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_linux_probe COMMAND test_ca_mps_linux_probe)
+
     # CA-MPS imaginary-time ground-state search: Trotter-Suzuki on the
     # Heisenberg bond-by-bond Gibbs factors, verify convergence to exact
     # ED on N=2/4/6 open chains.  Calls zheev directly for the dense ED
