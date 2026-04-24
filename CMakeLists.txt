@@ -1372,6 +1372,14 @@ if(QSIM_BUILD_TESTS)
             target_link_libraries(test_kagome_ed PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
         endif()
         add_test(NAME unit_kagome_ed COMMAND test_kagome_ed)
+        # Dense zheev on a 4096x4096 complex Hermitian matrix takes ~2s on
+        # M2 Ultra but can hit 5+ min on slower CI runners (e.g. macos-15-intel
+        # / dockerized aarch64).  Default ctest 300s timeout isn't enough on
+        # those tiers; tag "long" + raise to 600s.
+        set_tests_properties(unit_kagome_ed PROPERTIES
+            LABELS "long"
+            TIMEOUT 600
+        )
 
         # N=18 test: PRB 83, 212401 Table I cluster "18 b" (rectangular 2x3
         # torus, E = -8.048270773 J).  Matrix-free Lanczos with full
