@@ -110,6 +110,28 @@ ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                              const uint8_t* pauli_string,
                                              double theta);
 
+/**
+ * @brief Apply exp(-tau P) for an n-qubit Pauli string P (non-unitary).
+ *
+ * This is the imaginary-time step primitive.  The operator is
+ *     exp(-tau P) = cosh(tau) I - sinh(tau) P
+ * which is non-unitary (for tau != 0); the caller is responsible for
+ * renormalizing the state via @c moonlab_ca_mps_normalize when needed.
+ *
+ * @param pauli_string Array of n bytes in {0=I, 1=X, 2=Y, 3=Z}.
+ * @param tau          Imaginary-time step.  Positive tau pushes the
+ *                     state toward the lowest-eigenvalue sector of P.
+ */
+ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
+                                                  const uint8_t* pauli_string,
+                                                  double tau);
+
+/** Rescale the internal MPS to unit norm. */
+ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
+
+/** Return <psi|psi> (should be 1 for a normalized state). */
+double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
+
 /* ================================================================== */
 /*  Observables                                                       */
 /* ================================================================== */

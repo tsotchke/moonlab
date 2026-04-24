@@ -182,26 +182,15 @@ static int pauli_weight(const uint8_t* p, uint32_t n) {
     return w;
 }
 
-static tn_mpo_t* build_pauli_rotation_mpo(uint32_t n,
-                                          const uint8_t* pauli, int phase_in,
-                                          double theta) {
-    /* phase_in is the accumulated phase (in powers of i) from Clifford
-     * conjugation of the generator.  Fold it into the angle so that
-     * exp(i theta P) (with P understood to include phase_in) is correctly
-     * represented as exp(i (theta + phase_in * pi/2) * P_bare) ... but
-     * that mixes cos/sin coefficients badly.  Cleaner: apply phase_in as
-     * a scalar multiplier to the "Pauli branch" coefficient.
-     *
-     * Specifically: the incoming Pauli is phase_in * P_bare where
-     * phase_in in {+1, +i, -1, -i} = i^phase_in.  The generator is thus
-     * G = i^phase_in * P_bare.  exp(i theta G) = cos(theta) I +
-     * i sin(theta) i^phase_in * P_bare.
-     *
-     * We store the Pauli branch coefficient as i * sin(theta) * i^phase_in
-     * = sin(theta) * i^(phase_in + 1). */
-    double _Complex i_pow[4] = { 1.0, 1.0*I, -1.0, -1.0*I };
-    double _Complex branch_coef = sin(theta) * i_pow[(phase_in + 1) & 3];
-    double cos_t = cos(theta);
+/* General form: build MPO for (cos_coef * I + branch_coef * P) where P is
+ * a weight-w Pauli string.  Used by both unitary (cos_coef = cos(theta),
+ * branch_coef = i sin(theta)) and imaginary-time (cos_coef = cosh(tau),
+ * branch_coef = -sinh(tau)) rotations. */
+static tn_mpo_t* build_pauli_mixture_mpo(uint32_t n,
+                                         const uint8_t* pauli,
+                                         double _Complex cos_coef,
+                                         double _Complex branch_coef) {
+    double _Complex cos_t = cos_coef;
 
     /* Find first and last non-identity position. */
     uint32_t q_first = n, q_last = 0;
@@ -301,9 +290,9 @@ static tn_mpo_t* build_pauli_rotation_mpo(uint32_t n,
 }
 
 /* ------------------------------------------------------------------ */
-/*  Apply a Pauli rotation as if it were exp(i theta * phase_in * P).  */
-/*  Handles identity case (global phase), weight-1 (direct MPS op),    */
-/*  and general weight via the rotation MPO.                            */
+/*  Apply exp(i theta * (phase_in * P)) where phase_in is in i-powers.  */
+/*  Handles identity case (global phase), and general weight via the    */
+/*  rotation MPO.                                                       */
 /* ------------------------------------------------------------------ */
 static ca_mps_error_t apply_conjugated_rotation(moonlab_ca_mps_t* s,
                                                 const uint8_t* pauli,
@@ -319,7 +308,48 @@ static ca_mps_error_t apply_conjugated_rotation(moonlab_ca_mps_t* s,
         return (e == TN_GATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
     }
 
-    tn_mpo_t* mpo = build_pauli_rotation_mpo(s->n, pauli, phase_in, theta);
+    /* exp(i theta * phase_in * P_bare) with phase_in in {1, i, -1, -i}:
+     * Identity branch: cos(theta)
+     * Pauli branch:    i sin(theta) * phase_in */
+    double _Complex i_pow[4] = { 1.0, 1.0*I, -1.0, -1.0*I };
+    double _Complex cos_coef = cos(theta);
+    double _Complex branch_coef = sin(theta) * i_pow[(phase_in + 1) & 3];
+
+    tn_mpo_t* mpo = build_pauli_mixture_mpo(s->n, pauli, cos_coef, branch_coef);
+    if (!mpo) return CA_MPS_ERR_OOM;
+    double trunc = 0.0;
+    tn_gate_error_t e = tn_apply_mpo(s->phi, mpo, &trunc);
+    tn_mpo_free(mpo);
+    return (e == TN_GATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
+}
+
+/* Apply exp(-tau * (phase_in * P)) to the MPS.  phase_in in i-powers. */
+static ca_mps_error_t apply_conjugated_imag(moonlab_ca_mps_t* s,
+                                            const uint8_t* pauli,
+                                            int phase_in, double tau) {
+    int w = pauli_weight(pauli, s->n);
+    double _Complex i_pow[4] = { 1.0, 1.0*I, -1.0, -1.0*I };
+    double _Complex sign = i_pow[phase_in & 3];   /* +-1 or +-i */
+    if (w == 0) {
+        /* exp(-tau * sign * I) = exp(-tau * sign) * I.  Apply as scalar
+         * to the MPS: if sign is real, the scalar is real (just a norm
+         * rescale); if sign is pure imaginary we'd need more care, but
+         * for our Hermitian H the phase_in is always 0 or 2. */
+        double _Complex scalar = cexp(-tau * sign);
+        double phase = carg(scalar);
+        tn_gate_error_t e = tn_apply_global_phase(s->phi, phase);
+        (void)e;
+        /* Magnitude change handled via normalize() call by the caller. */
+        return CA_MPS_SUCCESS;
+    }
+
+    /* exp(-tau * sign * P) = cosh(tau * sign) * I - sinh(tau * sign) * P.
+     * sign for Hermitian generators is +-1 so cosh/sinh are real.  We
+     * multiply them into the (cos, branch) coefficients. */
+    double _Complex cos_coef = ccosh(tau * sign);
+    double _Complex branch_coef = -csinh(tau * sign);
+
+    tn_mpo_t* mpo = build_pauli_mixture_mpo(s->n, pauli, cos_coef, branch_coef);
     if (!mpo) return CA_MPS_ERR_OOM;
     double trunc = 0.0;
     tn_gate_error_t e = tn_apply_mpo(s->phi, mpo, &trunc);
@@ -384,6 +414,31 @@ ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
     ca_mps_error_t e = apply_conjugated_rotation(s, out_pauli, out_phase, theta);
     free(out_pauli);
     return e;
+}
+
+ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
+                                                  const uint8_t* pauli,
+                                                  double tau) {
+    if (!s || !pauli) return CA_MPS_ERR_INVALID;
+    uint8_t* out_pauli = (uint8_t*)calloc(s->n, sizeof(uint8_t));
+    if (!out_pauli) return CA_MPS_ERR_OOM;
+    int out_phase = 0;
+    clifford_conjugate_pauli_inverse(s->D, pauli, 0, out_pauli, &out_phase);
+    ca_mps_error_t e = apply_conjugated_imag(s, out_pauli, out_phase, tau);
+    free(out_pauli);
+    return e;
+}
+
+ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s) {
+    if (!s) return CA_MPS_ERR_INVALID;
+    tn_state_error_t e = tn_mps_normalize(s->phi);
+    return (e == TN_STATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
+}
+
+double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s) {
+    if (!s) return 0.0;
+    /* |psi> = C|phi> has the same norm as |phi> (Clifford is unitary). */
+    return tn_mps_true_norm(s->phi);
 }
 
 /* ------------------------------------------------------------------ */
