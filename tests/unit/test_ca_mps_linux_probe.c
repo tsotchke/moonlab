@@ -81,5 +81,7 @@ int main(void) {
     }
 
     moonlab_ca_mps_free(s);
-    return 0;
+    /* Intentionally fail so CI --output-on-failure prints the trace.
+     * Removed once the divergence is characterised. */
+    return 1;
 }
