@@ -4,7 +4,25 @@
 //! and links against the libquantumsim library.
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn openmp_link_library_exists(dir: &Path) -> bool {
+    dir.join("libomp.so").exists()
+        || dir.join("libomp.a").exists()
+        || dir.join("libomp.dylib").exists()
+        || dir.join("omp.lib").exists()
+        || dir.join("libomp.lib").exists()
+}
+
+fn emit_openmp_search_dir_if_present(dir: impl AsRef<Path>) -> bool {
+    let dir = dir.as_ref();
+    if openmp_link_library_exists(dir) {
+        println!("cargo:rustc-link-search=native={}", dir.display());
+        true
+    } else {
+        false
+    }
+}
 
 fn main() {
     // Get the project root (3 levels up from bindings/rust/moonlab-sys)
@@ -43,29 +61,54 @@ fn main() {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
     }
 
-    // Link OpenMP (required for parallel operations).
-    //
-    // Path discovery priority (deployment-portable; Homebrew paths only
-    // added on macOS and only if they exist):
-    //   1. MOONLAB_OMP_DIR env var (explicit override).
-    //   2. HOMEBREW_PREFIX + /opt/libomp/lib on macOS, if set and present.
-    //   3. /opt/homebrew/opt/libomp/lib (Apple Silicon default), if exists.
-    //   4. /usr/local/opt/libomp/lib (Intel macOS default), if exists.
-    //   5. System default: rely on /usr/lib or LD_LIBRARY_PATH.
-    if let Ok(dir) = env::var("MOONLAB_OMP_DIR") {
-        println!("cargo:rustc-link-search=native={dir}");
+    // Link OpenMP (required for parallel operations). Ubuntu's libomp-dev
+    // installs libomp under /usr/lib/llvm-*/lib, which rust-lld does not search
+    // by default.
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    println!("cargo:rerun-if-env-changed=MOONLAB_OMP_DIR");
+    println!("cargo:rerun-if-env-changed=MOONLAB_OPENMP_LIB_DIR");
+
+    let mut found_openmp_dir = false;
+    for var in ["MOONLAB_OMP_DIR", "MOONLAB_OPENMP_LIB_DIR"] {
+        if let Ok(dir) = env::var(var) {
+            println!("cargo:rustc-link-search=native={dir}");
+            found_openmp_dir = true;
+            break;
+        }
     }
-    #[cfg(target_os = "macos")]
-    {
+
+    if !found_openmp_dir && target_os == "macos" {
         if let Ok(brew) = env::var("HOMEBREW_PREFIX") {
-            let candidate = PathBuf::from(&brew).join("opt/libomp/lib");
-            if candidate.exists() {
-                println!("cargo:rustc-link-search=native={}", candidate.display());
+            found_openmp_dir =
+                emit_openmp_search_dir_if_present(PathBuf::from(&brew).join("opt/libomp/lib"));
+        }
+        if !found_openmp_dir {
+            for p in ["/opt/homebrew/opt/libomp/lib", "/usr/local/opt/libomp/lib"] {
+                if emit_openmp_search_dir_if_present(p) {
+                    found_openmp_dir = true;
+                    break;
+                }
             }
         }
-        for p in ["/opt/homebrew/opt/libomp/lib", "/usr/local/opt/libomp/lib"] {
-            if PathBuf::from(p).exists() {
-                println!("cargo:rustc-link-search=native={p}");
+    }
+
+    if !found_openmp_dir && target_os == "linux" {
+        for major in (10..=21).rev() {
+            let candidate = PathBuf::from(format!("/usr/lib/llvm-{major}/lib"));
+            if emit_openmp_search_dir_if_present(candidate) {
+                found_openmp_dir = true;
+                break;
+            }
+        }
+        if !found_openmp_dir {
+            for p in [
+                "/usr/lib/x86_64-linux-gnu",
+                "/usr/lib/aarch64-linux-gnu",
+                "/usr/local/lib",
+            ] {
+                if emit_openmp_search_dir_if_present(p) {
+                    break;
+                }
             }
         }
     }
@@ -80,9 +123,19 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=Security");
     }
 
-    // Link math and C++ standard library
-    println!("cargo:rustc-link-lib=m");
-    println!("cargo:rustc-link-lib=c++");
+    // Link math and the platform C++ standard library.
+    if target_os != "windows" {
+        println!("cargo:rustc-link-lib=m");
+    }
+    match target_os.as_str() {
+        "linux" | "android" | "freebsd" | "openbsd" | "netbsd" => {
+            println!("cargo:rustc-link-lib=stdc++");
+        }
+        "macos" | "ios" => {
+            println!("cargo:rustc-link-lib=c++");
+        }
+        _ => {}
+    }
 
     // Create wrapper header that includes all needed headers
     let wrapper_content = format!(r#"

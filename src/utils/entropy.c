@@ -34,7 +34,9 @@
 
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 #include <immintrin.h>
-#ifdef __GNUC__
+#if defined(_WIN32)
+#include <intrin.h>
+#elif defined(__GNUC__)
 #include <cpuid.h>
 #endif
 #define HAS_X86
@@ -94,19 +96,31 @@ static void mix_into_state(uint64_t* state, const uint8_t* data, size_t size) {
 
 #ifdef HAS_X86
 static int x86_has_rdrand(void) {
+#if defined(_WIN32)
+    int info[4];
+    __cpuid(info, 1);
+    return (info[2] >> 30) & 1;
+#else
     unsigned int eax, ebx, ecx, edx;
     if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
         return (ecx >> 30) & 1;  // RDRAND bit
     }
     return 0;
+#endif
 }
 
 static int x86_has_rdseed(void) {
+#if defined(_WIN32)
+    int info[4];
+    __cpuidex(info, 7, 0);
+    return (info[1] >> 18) & 1;
+#else
     unsigned int eax, ebx, ecx, edx;
     if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
         return (ebx >> 18) & 1;  // RDSEED bit
     }
     return 0;
+#endif
 }
 
 static int x86_rdrand64(uint64_t* value) {
@@ -386,9 +400,11 @@ void entropy_destroy(entropy_ctx_t* ctx) {
     if (!ctx) return;
 
     // Close file descriptor
+#if defined(__linux__) || defined(__unix__) || defined(__APPLE__)
     if (ctx->fd_urandom >= 0) {
         close(ctx->fd_urandom);
     }
+#endif
 
     // Zero sensitive data
     memset(ctx->pool, 0, sizeof(ctx->pool));

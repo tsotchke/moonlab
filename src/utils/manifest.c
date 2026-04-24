@@ -10,7 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
 #include <sys/utsname.h>
+#include <unistd.h>
+#endif
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -20,8 +26,6 @@
 #if defined(__linux__)
 #include <sys/sysinfo.h>
 #endif
-
-#include <unistd.h>
 
 /* ---------------------------------------------------------------- */
 /* small helpers                                                     */
@@ -39,7 +43,11 @@ static char* dup_str(const char* s) {
 static char* iso_utc_now(void) {
     time_t t = time(NULL);
     struct tm tm_utc;
+#if defined(_WIN32) || defined(_WIN64)
+    gmtime_s(&tm_utc, &t);
+#else
     gmtime_r(&t, &tm_utc);
+#endif
     char buf[32];
     /* 2026-04-19T15:42:31Z */
     strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
@@ -52,14 +60,25 @@ static char* iso_utc_now(void) {
 
 static char* probe_hostname(void) {
     char buf[256];
+#if defined(_WIN32) || defined(_WIN64)
+    DWORD size = (DWORD)sizeof buf;
+    if (GetComputerNameA(buf, &size)) {
+        buf[sizeof buf - 1] = '\0';
+        return dup_str(buf);
+    }
+#else
     if (gethostname(buf, sizeof buf) == 0) {
         buf[sizeof buf - 1] = '\0';
         return dup_str(buf);
     }
+#endif
     return dup_str("unknown");
 }
 
 static char* probe_os_release(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    return dup_str("Windows");
+#else
     struct utsname u;
     if (uname(&u) == 0) {
         char buf[256];
@@ -67,11 +86,18 @@ static char* probe_os_release(void) {
         return dup_str(buf);
     }
     return dup_str("unknown");
+#endif
 }
 
 static int probe_cpu_count(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return si.dwNumberOfProcessors > 0 ? (int)si.dwNumberOfProcessors : 1;
+#else
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     return (n > 0) ? (int)n : 1;
+#endif
 }
 
 static char* probe_cpu_brand(void) {
@@ -117,7 +143,12 @@ static char* probe_cpu_brand(void) {
 }
 
 static uint64_t probe_mem_total_bytes(void) {
-#ifdef __APPLE__
+#if defined(_WIN32) || defined(_WIN64)
+    MEMORYSTATUSEX status;
+    status.dwLength = sizeof(status);
+    if (GlobalMemoryStatusEx(&status)) return (uint64_t)status.ullTotalPhys;
+    return 0;
+#elif defined(__APPLE__)
     uint64_t v = 0;
     size_t len = sizeof v;
     if (sysctlbyname("hw.memsize", &v, &len, NULL, 0) == 0) return v;
@@ -188,6 +219,7 @@ void moonlab_manifest_stamp_finish(moonlab_manifest_t* m) {
      * leave 0.  Callers who need nanosecond-grade elapsed should use
      * their own timer. */
     struct tm start_tm = {0}, finish_tm = {0};
+#if !defined(_WIN32) && !defined(_WIN64)
     if (m->run_start_iso &&
         strptime(m->run_start_iso, "%Y-%m-%dT%H:%M:%SZ", &start_tm) &&
         m->run_finish_iso &&
@@ -196,6 +228,10 @@ void moonlab_manifest_stamp_finish(moonlab_manifest_t* m) {
         time_t f = timegm(&finish_tm);
         if (s > 0 && f >= s) m->run_elapsed_seconds = (double)(f - s);
     }
+#else
+    (void)start_tm;
+    (void)finish_tm;
+#endif
 }
 
 void moonlab_manifest_release(moonlab_manifest_t* m) {

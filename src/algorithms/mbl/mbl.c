@@ -21,8 +21,10 @@
 #include <complex.h>
 
 #ifdef __APPLE__
+#define MBL_HAS_LAPACK 1
 #include <Accelerate/Accelerate.h>
-#else
+#elif defined(__linux__)
+#define MBL_HAS_LAPACK 1
 // LAPACK prototypes for non-Apple systems
 extern void zheev_(char *jobz, char *uplo, int *n, double complex *a, int *lda,
                    double *w, double complex *work, int *lwork, double *rwork, int *info);
@@ -33,6 +35,8 @@ extern void zgemm_(char *transa, char *transb, int *m, int *n, int *k,
                    double complex *alpha, double complex *a, int *lda,
                    double complex *b, int *ldb, double complex *beta,
                    double complex *c, int *ldc);
+#else
+#define MBL_HAS_LAPACK 0
 #endif
 
 #ifndef M_PI
@@ -298,6 +302,9 @@ qs_error_t sparse_hamiltonian_diagonalize(sparse_hamiltonian_t *h) {
     if (!h) return QS_ERROR_INVALID_STATE;
     if (h->eigensystem_computed) return QS_SUCCESS;
 
+#if !MBL_HAS_LAPACK
+    return QS_ERROR_INVALID_STATE;
+#else
     uint32_t dim = h->dim;
 
     // Convert sparse to dense for LAPACK
@@ -399,6 +406,7 @@ qs_error_t sparse_hamiltonian_diagonalize(sparse_hamiltonian_t *h) {
 
     h->eigensystem_computed = true;
     return QS_SUCCESS;
+#endif
 }
 
 // ============================================================================

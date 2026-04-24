@@ -90,10 +90,10 @@ void simd_secure_zero(void* ptr, size_t size) {
 static void secure_memzero_internal(void* ptr, size_t size) {
     if (!ptr || size == 0) return;
 
-#ifdef HAVE_MEMSET_S
-    memset_s(ptr, size, 0, size);
-#elif defined(_WIN32)
+#if defined(_WIN32)
     SecureZeroMemory(ptr, size);
+#elif defined(HAVE_MEMSET_S)
+    memset_s(ptr, size, 0, size);
 #elif defined(__APPLE__)
     // macOS has memset_s in <string.h> when __STDC_WANT_LIB_EXT1__ is defined
     memset(ptr, 0, size);

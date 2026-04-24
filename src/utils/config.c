@@ -22,6 +22,10 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#define strcasecmp _stricmp
+#endif
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
