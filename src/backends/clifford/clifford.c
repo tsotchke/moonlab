@@ -162,6 +162,149 @@ clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size_t b) {
     return clifford_cnot(t, a, b);
 }
 
+/* ================================================================== */
+/*  Pauli-string introspection for CA-MPS / CA-PEPS (v0.3.0)         */
+/* ================================================================== */
+
+/* Map (x, z) ∈ {0,1}² → Pauli code {0=I, 1=X, 2=Y, 3=Z}. */
+static inline uint8_t xz_to_pauli(uint8_t x, uint8_t z) {
+    /* I=(0,0), X=(1,0), Y=(1,1), Z=(0,1) */
+    if (!x && !z) return 0;
+    if ( x && !z) return 1;
+    if ( x &&  z) return 2;
+    return 3;
+}
+
+/* Multiply Pauli p2 into running Pauli p1, accumulating phase.
+ * Returns the new Pauli code for the site; the phase delta (in units of i)
+ * is added to *phase_accum (mod 4).
+ *
+ * Pauli multiplication on a single qubit (ignoring identity):
+ *   X * X = I, Y * Y = I, Z * Z = I
+ *   X * Y = +i Z,    Y * X = -i Z
+ *   Y * Z = +i X,    Z * Y = -i X
+ *   Z * X = +i Y,    X * Z = -i Y
+ *
+ * Phase contribution table indexed by (p1, p2): 0 = no phase, 1 = +i,
+ * 2 = -1 (not produced by a single multiplication but included for
+ * completeness), 3 = -i. */
+static uint8_t pauli_mul(uint8_t p1, uint8_t p2, int* phase_accum) {
+    if (p1 == 0) return p2;
+    if (p2 == 0) return p1;
+    if (p1 == p2) return 0;  /* X*X=Y*Y=Z*Z=I, no phase */
+
+    static const uint8_t prod_tab[4][4] = {
+        /*        I  X  Y  Z */
+        /* I */  {0, 1, 2, 3},
+        /* X */  {1, 0, 3, 2},  /* X*Y=Z, X*Z=Y */
+        /* Y */  {2, 3, 0, 1},  /* Y*X=Z, Y*Z=X */
+        /* Z */  {3, 2, 1, 0},  /* Z*X=Y, Z*Y=X */
+    };
+    /* Phase table: phase of p1*p2 in powers of i. */
+    static const uint8_t phase_tab[4][4] = {
+        /*        I  X  Y  Z */
+        /* I */  {0, 0, 0, 0},
+        /* X */  {0, 0, 1, 3},  /* XY=+iZ, XZ=-iY */
+        /* Y */  {0, 3, 0, 1},  /* YX=-iZ, YZ=+iX */
+        /* Z */  {0, 1, 3, 0},  /* ZX=+iY, ZY=-iX */
+    };
+    *phase_accum = (*phase_accum + (int)phase_tab[p1][p2]) & 3;
+    return prod_tab[p1][p2];
+}
+
+clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
+                                    uint8_t* out_pauli, int* out_phase) {
+    if (!t || !out_pauli || row >= 2 * t->n) return CLIFFORD_ERR_INVALID;
+    size_t n = t->n;
+    for (size_t j = 0; j < n; j++) {
+        out_pauli[j] = xz_to_pauli(tget(t, row, j), tget(t, row, n + j));
+    }
+    if (out_phase) {
+        /* Tableau phase bit: 0 -> sign +1 (phase code 0), 1 -> sign -1 (phase code 2). */
+        *out_phase = tget(t, row, 2 * n) ? 2 : 0;
+    }
+    return CLIFFORD_SUCCESS;
+}
+
+clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
+                                          const uint8_t* in_pauli,
+                                          int in_phase,
+                                          uint8_t* out_pauli,
+                                          int* out_phase) {
+    if (!t || !in_pauli || !out_pauli) return CLIFFORD_ERR_INVALID;
+    size_t n = t->n;
+    /* out = product over qubits q where in_pauli[q] != I of (D P_q D^†).
+     *   D X_q D^† = destabilizer row q
+     *   D Z_q D^† = stabilizer row n+q
+     *   D Y_q D^† = i * (D X_q D^†) * (D Z_q D^†)
+     */
+    uint8_t *factor = (uint8_t *)calloc(n, sizeof(uint8_t));
+    uint8_t *acc    = (uint8_t *)calloc(n, sizeof(uint8_t));
+    if (!factor || !acc) { free(factor); free(acc); return CLIFFORD_ERR_OOM; }
+
+    int phase = in_phase & 3;
+
+    for (size_t q = 0; q < n; q++) {
+        uint8_t pq = in_pauli[q];
+        if (pq == 0) continue;  /* identity, no factor */
+
+        if (pq == 1) {
+            /* X_q -> destabilizer row q. */
+            int fphase = 0;
+            clifford_row_pauli(t, q, factor, &fphase);
+            phase = (phase + fphase) & 3;
+        } else if (pq == 3) {
+            /* Z_q -> stabilizer row n+q. */
+            int fphase = 0;
+            clifford_row_pauli(t, n + q, factor, &fphase);
+            phase = (phase + fphase) & 3;
+        } else {
+            /* Y_q = i X_q Z_q -> i * (destab_q) * (stab_{n+q}) */
+            uint8_t *x_pauli = (uint8_t *)calloc(n, sizeof(uint8_t));
+            uint8_t *z_pauli = (uint8_t *)calloc(n, sizeof(uint8_t));
+            if (!x_pauli || !z_pauli) {
+                free(x_pauli); free(z_pauli); free(factor); free(acc);
+                return CLIFFORD_ERR_OOM;
+            }
+            int xph = 0, zph = 0;
+            clifford_row_pauli(t, q, x_pauli, &xph);
+            clifford_row_pauli(t, n + q, z_pauli, &zph);
+            phase = (phase + xph + zph + 1 /* factor i from Y = iXZ */) & 3;
+            /* factor = x_pauli * z_pauli, accumulating Pauli-product phase. */
+            for (size_t j = 0; j < n; j++) {
+                int dphase = 0;
+                factor[j] = pauli_mul(x_pauli[j], z_pauli[j], &dphase);
+                phase = (phase + dphase) & 3;
+            }
+            free(x_pauli); free(z_pauli);
+        }
+
+        /* acc <- acc * factor, qubit by qubit, with phase tracking. */
+        for (size_t j = 0; j < n; j++) {
+            int dphase = 0;
+            acc[j] = pauli_mul(acc[j], factor[j], &dphase);
+            phase = (phase + dphase) & 3;
+        }
+    }
+
+    memcpy(out_pauli, acc, n);
+    if (out_phase) *out_phase = phase;
+    free(factor); free(acc);
+    return CLIFFORD_SUCCESS;
+}
+
+clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t) {
+    if (!t) return NULL;
+    clifford_tableau_t* c = calloc(1, sizeof(*c));
+    if (!c) return NULL;
+    c->n = t->n;
+    size_t nbytes = 2 * t->n * (2 * t->n + 1);
+    c->tab = malloc(nbytes);
+    if (!c->tab) { free(c); return NULL; }
+    memcpy(c->tab, t->tab, nbytes);
+    return c;
+}
+
 /* --- Measurement (Aaronson-Gottesman Algorithm 2) --- */
 
 /* Row-sum helper for the measurement case: multiply row h by row i,

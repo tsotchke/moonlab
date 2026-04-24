@@ -1115,6 +1115,10 @@ if(QSIM_BUILD_TESTS)
     add_test(NAME unit_qpe COMMAND test_qpe)
 
     # Clifford stabilizer backend: H2=I, X, S4=I, Bell, 100-qubit GHZ.
+    add_executable(test_clifford_pauli_api tests/unit/test_clifford_pauli_api.c)
+    target_link_libraries(test_clifford_pauli_api PRIVATE quantumsim)
+    add_test(NAME unit_clifford_pauli_api COMMAND test_clifford_pauli_api)
+
     add_executable(test_clifford tests/unit/test_clifford.c)
     target_link_libraries(test_clifford PRIVATE quantumsim)
     add_test(NAME unit_clifford COMMAND test_clifford)
