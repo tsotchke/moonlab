@@ -233,11 +233,39 @@ mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double 
     double complex Y_mat[4] = {0, -I, I, 0};
     double complex Z_mat[4] = {1, 0, 0, -1};
 
+    /*
+     * Canonical XXZ-chain MPO with open boundaries.  Bond-dim 5 state
+     * semantics:
+     *   0 = haven't emitted the bond term yet (identity-before)
+     *   1 = X has been emitted on a site, waiting for its partner
+     *   2 = Y has been emitted, waiting for its partner
+     *   3 = Z has been emitted, waiting for its partner
+     *   4 = the bond has been closed upstream (identity-after)
+     *
+     * Bulk transfer matrix, rows = left bond, cols = right bond:
+     *
+     *     [ I       JX       JY       JDelta*Z      -hZ ]      <- row 0
+     *     [ 0        0        0            0          X  ]      <- row 1
+     *     [ 0        0        0            0          Y  ]      <- row 2
+     *     [ 0        0        0            0          Z  ]      <- row 3
+     *     [ 0        0        0            0          I  ]      <- row 4
+     *
+     * Left boundary = row 0 (row vector), right boundary = col 4
+     * (column vector).  This is the textbook Schollwoeck 2011 layout.
+     *
+     * The previous version of this function put J on the right
+     * boundary (instead of on the operator-row of the bulk/left) AND
+     * transposed the bulk wrong way, putting X/Y/Z at (row 1-3, col 0)
+     * instead of (row 1-3, col 4).  Result: N=2 happened to work
+     * (dimer has no bulk) but every N >= 4 chain returned H = 0,
+     * because the (row 1-3) X/Y/Z couplings had no "identity-after"
+     * state to propagate into and died on the next bulk site.
+     */
     for (uint32_t site = 0; site < num_sites; site++) {
         mpo_tensor_t *W = &mpo->tensors[site];
 
         if (site == 0) {
-            // Left boundary: W[0] has shape [1, 2, 2, 5]
+            // Left boundary: row 0 of bulk = [I, JX, JY, J*Delta*Z, -hZ].
             W->bond_dim_left = 1;
             W->bond_dim_right = 5;
             uint32_t dims[4] = {1, 2, 2, 5};
@@ -245,25 +273,18 @@ mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double 
             if (!W->W) { mpo_free(mpo); return NULL; }
             tensor_zero(W->W);
 
-            // Fill: [I, X, Y, Z, -h*Z]
-            // W[0, s, s', b] where s,s' are physical, b is right bond
             for (int s = 0; s < 2; s++) {
                 for (int sp = 0; sp < 2; sp++) {
                     int idx = s * 2 + sp;
-                    // b=0: I
                     W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 0] = I_mat[idx];
-                    // b=1: X
-                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 1] = X_mat[idx];
-                    // b=2: Y
-                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 2] = Y_mat[idx];
-                    // b=3: Z
-                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 3] = Z_mat[idx];
-                    // b=4: -h*Z
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 1] = J * X_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 2] = J * Y_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 3] = J * Delta * Z_mat[idx];
                     W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 4] = -h * Z_mat[idx];
                 }
             }
         } else if (site == num_sites - 1) {
-            // Right boundary: W[N-1] has shape [5, 2, 2, 1]
+            // Right boundary: col 4 of bulk = [-hZ, X, Y, Z, I]^T.
             W->bond_dim_left = 5;
             W->bond_dim_right = 1;
             uint32_t dims[4] = {5, 2, 2, 1};
@@ -271,24 +292,18 @@ mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double 
             if (!W->W) { mpo_free(mpo); return NULL; }
             tensor_zero(W->W);
 
-            // Fill: [I, X, Y, Z, -h*Z]^T (column vector in bond space)
             for (int s = 0; s < 2; s++) {
                 for (int sp = 0; sp < 2; sp++) {
                     int idx = s * 2 + sp;
-                    // b_l=0: -h*Z (on-site from left boundary propagation)
                     W->W->data[0 * 2*2*1 + s * 2*1 + sp * 1 + 0] = -h * Z_mat[idx];
-                    // b_l=1: J*X (coupling from left X)
-                    W->W->data[1 * 2*2*1 + s * 2*1 + sp * 1 + 0] = J * X_mat[idx];
-                    // b_l=2: J*Y (coupling from left Y)
-                    W->W->data[2 * 2*2*1 + s * 2*1 + sp * 1 + 0] = J * Y_mat[idx];
-                    // b_l=3: J*Delta*Z (coupling from left Z)
-                    W->W->data[3 * 2*2*1 + s * 2*1 + sp * 1 + 0] = J * Delta * Z_mat[idx];
-                    // b_l=4: I (identity to close)
-                    W->W->data[4 * 2*2*1 + s * 2*1 + sp * 1 + 0] = I_mat[idx];
+                    W->W->data[1 * 2*2*1 + s * 2*1 + sp * 1 + 0] =       X_mat[idx];
+                    W->W->data[2 * 2*2*1 + s * 2*1 + sp * 1 + 0] =       Y_mat[idx];
+                    W->W->data[3 * 2*2*1 + s * 2*1 + sp * 1 + 0] =       Z_mat[idx];
+                    W->W->data[4 * 2*2*1 + s * 2*1 + sp * 1 + 0] =       I_mat[idx];
                 }
             }
         } else {
-            // Bulk sites: W has shape [5, 2, 2, 5]
+            // Bulk: 5x5 transfer matrix above.
             W->bond_dim_left = 5;
             W->bond_dim_right = 5;
             uint32_t dims[4] = {5, 2, 2, 5};
@@ -296,39 +311,23 @@ mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double 
             if (!W->W) { mpo_free(mpo); return NULL; }
             tensor_zero(W->W);
 
-            // MPO transfer matrix structure:
-            // [[I, 0, 0, 0, 0],
-            //  [X, 0, 0, 0, 0],
-            //  [Y, 0, 0, 0, 0],
-            //  [Z, 0, 0, 0, 0],
-            //  [-h*Z, J*X, J*Y, J*Δ*Z, I]]
-
             for (int s = 0; s < 2; s++) {
                 for (int sp = 0; sp < 2; sp++) {
                     int idx = s * 2 + sp;
 
-                    // Row 0 (from left I): propagate I to right
+                    // Row 0: [I, JX, JY, J*Delta*Z, -hZ]
                     W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 0] = I_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 1] = J * X_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 2] = J * Y_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 3] = J * Delta * Z_mat[idx];
+                    W->W->data[0 * 2*2*5 + s * 2*5 + sp * 5 + 4] = -h * Z_mat[idx];
 
-                    // Row 1 (from left X): create X for coupling
-                    W->W->data[1 * 2*2*5 + s * 2*5 + sp * 5 + 0] = X_mat[idx];
+                    // Rows 1-3 close to col 4 with X, Y, Z respectively.
+                    W->W->data[1 * 2*2*5 + s * 2*5 + sp * 5 + 4] = X_mat[idx];
+                    W->W->data[2 * 2*2*5 + s * 2*5 + sp * 5 + 4] = Y_mat[idx];
+                    W->W->data[3 * 2*2*5 + s * 2*5 + sp * 5 + 4] = Z_mat[idx];
 
-                    // Row 2 (from left Y): create Y for coupling
-                    W->W->data[2 * 2*2*5 + s * 2*5 + sp * 5 + 0] = Y_mat[idx];
-
-                    // Row 3 (from left Z): create Z for coupling
-                    W->W->data[3 * 2*2*5 + s * 2*5 + sp * 5 + 0] = Z_mat[idx];
-
-                    // Row 4 (operator row):
-                    // Col 0: on-site -h*Z
-                    W->W->data[4 * 2*2*5 + s * 2*5 + sp * 5 + 0] = -h * Z_mat[idx];
-                    // Col 1: J*X to couple with next X
-                    W->W->data[4 * 2*2*5 + s * 2*5 + sp * 5 + 1] = J * X_mat[idx];
-                    // Col 2: J*Y to couple with next Y
-                    W->W->data[4 * 2*2*5 + s * 2*5 + sp * 5 + 2] = J * Y_mat[idx];
-                    // Col 3: J*Delta*Z to couple with next Z
-                    W->W->data[4 * 2*2*5 + s * 2*5 + sp * 5 + 3] = J * Delta * Z_mat[idx];
-                    // Col 4: I to propagate operator row
+                    // Row 4: identity pass-through.
                     W->W->data[4 * 2*2*5 + s * 2*5 + sp * 5 + 4] = I_mat[idx];
                 }
             }
