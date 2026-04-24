@@ -203,37 +203,80 @@ static void compute_honeycomb_neighbors(lattice_2d_t *lat) {
  * We map it to a rectangular grid where site_type = s % 3.
  */
 static void compute_kagome_neighbors(lattice_2d_t *lat) {
+    /* Canonical kagome lattice.
+     *
+     * 3 sublattices A, B, C per unit cell.  Primitive vectors
+     * a1 = (1, 0), a2 = (1/2, sqrt(3)/2).  Sublattice offsets within
+     * a unit cell:
+     *   r_A = (0, 0)
+     *   r_B = a1/2   = (1/2, 0)
+     *   r_C = a2/2   = (1/4, sqrt(3)/4)
+     * NN distance = 1/2.  Every site has coordination 4.
+     *
+     * Moonlab packs the 3 sublattices along the x axis via c.x % 3,
+     * so the unit-cell index is (c.x / 3, c.y).  Lx must be a
+     * multiple of 3 for the unit-cell count to come out whole.
+     *
+     * Each sublattice's 4 NN (using unit-cell (m, n) labels):
+     *
+     *   A at (m, n):
+     *     B at (m,   n)     up-triangle, same cell
+     *     C at (m,   n)     up-triangle, same cell
+     *     B at (m-1, n)     down-triangle, to the west
+     *     C at (m,   n-1)   down-triangle, to the south
+     *
+     *   B at (m, n):
+     *     A at (m,   n)     up-triangle, same cell
+     *     C at (m,   n)     up-triangle, same cell
+     *     A at (m+1, n)     down-triangle, to the east
+     *     C at (m+1, n-1)   down-triangle, diagonal (south-east)
+     *
+     *   C at (m, n):
+     *     A at (m,   n)     up-triangle, same cell
+     *     B at (m,   n)     up-triangle, same cell
+     *     A at (m,   n+1)   down-triangle, to the north
+     *     B at (m-1, n+1)   down-triangle, diagonal (north-west)
+     *
+     * No A-A, B-B, or C-C bonds; the coordination-4 structure is
+     * strictly inter-sublattice (corner-sharing up- and down-triangles).
+     *
+     * PBC collapse at small Lx or Ly can list the same physical
+     * bond twice in the neighbor array (e.g. at Ly=2 the south
+     * and north "down-triangle" neighbors of A coincide).  This is
+     * caller-responsibility to deduplicate when building a bond list
+     * for an MPO or Hamiltonian; keeping both entries here preserves
+     * the directional-bond-vector information (south-going vs north-
+     * going) that downstream DMI / chirality consumers may use.
+     */
     for (uint32_t s = 0; s < lat->num_sites; s++) {
         coord_2d_t c = snake_to_coord(lat, s);
         uint32_t n = 0;
 
-        // Kagome has 3 basis sites per unit cell
-        // Site type: 0, 1, or 2 based on position in the unit cell
-        // Using column index to determine site type
-        int site_type = c.x % 3;
+        int site_type = c.x % 3;          /* 0 = A, 1 = B, 2 = C */
 
-        // Kagome neighbor patterns (4 neighbors per site)
         int dx[4], dy[4];
         double bond_x[4], bond_y[4];
 
+        const double S = sqrt(3.0);
+
         switch (site_type) {
-            case 0:  // Corner site
-                dx[0] = 1;  dy[0] = 0;   bond_x[0] = 0.5;  bond_y[0] = 0.0;
-                dx[1] = -1; dy[1] = 0;   bond_x[1] = -0.5; bond_y[1] = 0.0;
-                dx[2] = 0;  dy[2] = 1;   bond_x[2] = 0.25; bond_y[2] = sqrt(3)/4;
-                dx[3] = 0;  dy[3] = -1;  bond_x[3] = 0.25; bond_y[3] = -sqrt(3)/4;
+            case 0:  /* A: same-cell B, same-cell C, west B, south C */
+                dx[0] = +1; dy[0] =  0;   bond_x[0] = +0.5;  bond_y[0] =  0.0;
+                dx[1] = +2; dy[1] =  0;   bond_x[1] = +0.25; bond_y[1] = +S/4;
+                dx[2] = -2; dy[2] =  0;   bond_x[2] = -0.5;  bond_y[2] =  0.0;
+                dx[3] = +2; dy[3] = -1;   bond_x[3] = +0.25; bond_y[3] = -S/4;
                 break;
-            case 1:  // Right-triangle site
-                dx[0] = -1; dy[0] = 0;   bond_x[0] = -0.5; bond_y[0] = 0.0;
-                dx[1] = 1;  dy[1] = 0;   bond_x[1] = 0.5;  bond_y[1] = 0.0;
-                dx[2] = 0;  dy[2] = 1;   bond_x[2] = -0.25; bond_y[2] = sqrt(3)/4;
-                dx[3] = -1; dy[3] = 1;   bond_x[3] = -0.75; bond_y[3] = sqrt(3)/4;
+            case 1:  /* B: same-cell A, same-cell C, east A, diag C */
+                dx[0] = -1; dy[0] =  0;   bond_x[0] = -0.5;  bond_y[0] =  0.0;
+                dx[1] = +1; dy[1] =  0;   bond_x[1] = -0.25; bond_y[1] = +S/4;
+                dx[2] = +2; dy[2] =  0;   bond_x[2] = +0.5;  bond_y[2] =  0.0;
+                dx[3] = +4; dy[3] = -1;   bond_x[3] = +0.75; bond_y[3] = -S/4;
                 break;
-            case 2:  // Left-triangle site
-                dx[0] = 1;  dy[0] = 0;   bond_x[0] = 0.5;  bond_y[0] = 0.0;
-                dx[1] = -1; dy[1] = 0;   bond_x[1] = -0.5; bond_y[1] = 0.0;
-                dx[2] = 0;  dy[2] = -1;  bond_x[2] = 0.25; bond_y[2] = -sqrt(3)/4;
-                dx[3] = 1;  dy[3] = -1;  bond_x[3] = 0.75; bond_y[3] = -sqrt(3)/4;
+            case 2:  /* C: same-cell A, same-cell B, north A, diag B */
+                dx[0] = -2; dy[0] =  0;   bond_x[0] = -0.25; bond_y[0] = -S/4;
+                dx[1] = -1; dy[1] =  0;   bond_x[1] = +0.25; bond_y[1] = -S/4;
+                dx[2] = -2; dy[2] = +1;   bond_x[2] = -0.25; bond_y[2] = +S/4;
+                dx[3] = -4; dy[3] = +1;   bond_x[3] = -0.75; bond_y[3] = +S/4;
                 break;
         }
 
@@ -241,19 +284,18 @@ static void compute_kagome_neighbors(lattice_2d_t *lat) {
             int32_t nx = c.x + dx[i];
             int32_t ny = c.y + dy[i];
 
-            // Apply boundary conditions
             if (lat->bc == BC_PERIODIC_X || lat->bc == BC_PERIODIC_XY) {
-                nx = ((nx % (int32_t)lat->Lx) + lat->Lx) % lat->Lx;
+                nx = ((nx % (int32_t)lat->Lx) + (int32_t)lat->Lx) % (int32_t)lat->Lx;
             }
             if (lat->bc == BC_PERIODIC_Y || lat->bc == BC_PERIODIC_XY) {
-                ny = ((ny % (int32_t)lat->Ly) + lat->Ly) % lat->Ly;
+                ny = ((ny % (int32_t)lat->Ly) + (int32_t)lat->Ly) % (int32_t)lat->Ly;
             }
 
             if (nx >= 0 && (uint32_t)nx < lat->Lx &&
                 ny >= 0 && (uint32_t)ny < lat->Ly) {
                 lat->neighbors[s][n].site = coord_to_snake(lat, nx, ny);
                 lat->neighbors[s][n].bond = (bond_vector_t){bond_x[i], bond_y[i], 0.0};
-                lat->neighbors[s][n].distance = 1.0;
+                lat->neighbors[s][n].distance = 0.5;
                 lat->neighbors[s][n].valid = true;
                 n++;
             }
