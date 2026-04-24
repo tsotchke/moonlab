@@ -354,20 +354,24 @@ static ca_mps_error_t apply_single_qubit_generator(moonlab_ca_mps_t* s,
     return e;
 }
 
+/* Public rotation API follows the standard Qiskit/Cirq convention:
+ *   R_P(theta) = exp(-i theta P / 2)
+ * so we convert to our internal generator (which applies exp(+i phi P))
+ * via phi = -theta / 2. */
 ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta) {
-    return apply_single_qubit_generator(s, q, 1 /* X */, theta);
+    return apply_single_qubit_generator(s, q, 1 /* X */, -theta / 2.0);
 }
 ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta) {
-    return apply_single_qubit_generator(s, q, 2 /* Y */, theta);
+    return apply_single_qubit_generator(s, q, 2 /* Y */, -theta / 2.0);
 }
 ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta) {
-    return apply_single_qubit_generator(s, q, 3 /* Z */, theta);
+    return apply_single_qubit_generator(s, q, 3 /* Z */, -theta / 2.0);
 }
 ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q) {
-    /* T = diag(1, e^{i pi/4}) = e^{i pi/8} * diag(e^{-i pi/8}, e^{i pi/8})
-     * = e^{i pi/8} * exp(i (pi/8) Z).  The global phase e^{i pi/8} doesn't
-     * affect observables; apply the Z rotation part. */
-    return apply_single_qubit_generator(s, q, 3 /* Z */, M_PI / 8.0);
+    /* T = diag(1, e^{i pi/4}) differs from R_Z(pi/4) = diag(e^{-i pi/8},
+     * e^{i pi/8}) only by a global phase e^{i pi/8}, which doesn't affect
+     * observables.  So T is moonlab_ca_mps_rz(q, M_PI/4). */
+    return moonlab_ca_mps_rz(s, q, M_PI / 4.0);
 }
 
 ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,

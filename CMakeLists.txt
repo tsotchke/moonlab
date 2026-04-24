@@ -1123,8 +1123,15 @@ if(QSIM_BUILD_TESTS)
     # Clifford-assisted MPS reduction-limit tests: pure Clifford (tableau-only
     # Bell/GHZ), pure MPS (rotations on |0>), and mixed H + T rotations.
     add_executable(test_ca_mps_limits tests/unit/test_ca_mps_limits.c)
-    target_link_libraries(test_ca_mps_limits PRIVATE quantumsim m)
+    target_link_libraries(test_ca_mps_limits PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_limits COMMAND test_ca_mps_limits)
+
+    # End-to-end CA-MPS correctness: random mixed Clifford + rx/ry/rz/CZ/CNOT
+    # circuits compared against the dense state-vector backend for every
+    # single-qubit Pauli expectation and a handful of ZZ pairs.
+    add_executable(test_ca_mps_vs_sv tests/unit/test_ca_mps_vs_sv.c)
+    target_link_libraries(test_ca_mps_vs_sv PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_vs_sv COMMAND test_ca_mps_vs_sv)
 
     add_executable(test_clifford tests/unit/test_clifford.c)
     target_link_libraries(test_clifford PRIVATE quantumsim)
@@ -1311,7 +1318,7 @@ if(QSIM_BUILD_TESTS)
     # "12" (rectangular 2x2 torus, E = -5.444875216 J).  Dense ED via
     # mpo_2d_heisenberg_dmi_create -> mpo_to_matrix -> zheev.
     add_executable(test_kagome_ed tests/unit/test_kagome_ed.c)
-    target_link_libraries(test_kagome_ed PRIVATE quantumsim m)
+    target_link_libraries(test_kagome_ed PRIVATE quantumsim ${MATH_LIBRARY})
     if(APPLE)
         target_link_libraries(test_kagome_ed PRIVATE "-framework Accelerate")
     elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
@@ -1324,7 +1331,7 @@ if(QSIM_BUILD_TESTS)
     # on a bond-list Heisenberg.  Peak memory ~840 MB, runtime ~8s on M2
     # Ultra.  Tagged "long" for CI -- opt in via `ctest -L long`.
     add_executable(test_kagome_ed_large tests/unit/test_kagome_ed_large.c)
-    target_link_libraries(test_kagome_ed_large PRIVATE quantumsim m)
+    target_link_libraries(test_kagome_ed_large PRIVATE quantumsim ${MATH_LIBRARY})
     if(APPLE)
         target_link_libraries(test_kagome_ed_large PRIVATE "-framework Accelerate")
     elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
