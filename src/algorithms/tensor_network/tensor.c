@@ -1602,7 +1602,21 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     free(tau);
 
 #else
-    // Modified Gram-Schmidt QR
+    // Classical Gram-Schmidt with twice-is-enough reorthogonalization (CGS2).
+    //
+    // Plain modified Gram-Schmidt loses orthogonality catastrophically after
+    // O(10) QR applications on the small tensors tn_apply_mpo chains
+    // together -- observed via the CA-MPS imag-time test on Linux OpenBLAS
+    // (now fixed via the LAPACK path) and on Windows clang-cl (no LAPACK
+    // available).  CGS2 recovers orthogonality to machine precision under
+    // the mild condition kappa(A) * eps < 1, which holds for our MPS
+    // canonicalization inputs.
+    //
+    // The algorithm: for each column j, do classical Gram-Schmidt TWICE.
+    // First pass removes the bulk of the non-orthogonal component; second
+    // pass removes the residual (quadratic suppression of error).  This is
+    // the Giraud-Langou-Rozloznik-Eshof "CGS2" variant with proven unit-
+    // roundoff orthogonality.
     result->Q = tensor_create_matrix(m, k);
     result->R = tensor_create_matrix(k, n);
 
@@ -1619,23 +1633,44 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     }
 
     for (uint32_t j = 0; j < k; j++) {
-        // Copy column j to Q
+        // Initialize Q[:,j] with A's column j.
         for (uint32_t i = 0; i < m; i++) {
             result->Q->data[i * k + j] = A->data[i * n + j];
         }
 
-        // Orthogonalize against previous columns
-        for (uint32_t i = 0; i < j; i++) {
-            // R[i,j] = Q[:,i]^H * A[:,j]
-            double complex dot = 0.0;
-            for (uint32_t l = 0; l < m; l++) {
-                dot += conj(result->Q->data[l * k + i]) * result->Q->data[l * k + j];
-            }
-            result->R->data[i * n + j] = dot;
-
-            // Q[:,j] -= R[i,j] * Q[:,i]
-            for (uint32_t l = 0; l < m; l++) {
-                result->Q->data[l * k + j] -= dot * result->Q->data[l * k + i];
+        // TWO PASSES of classical Gram-Schmidt against Q[:,0..j-1].
+        for (int pass = 0; pass < 2; pass++) {
+            double complex *corrections = NULL;
+            if (j > 0) {
+                corrections = (double complex *)calloc(j, sizeof(double complex));
+                if (!corrections) { tensor_free(A); tensor_qr_free(result); return NULL; }
+                /* Compute all corrections first (classical: uses current Q). */
+                for (uint32_t i = 0; i < j; i++) {
+                    double complex dot = 0.0;
+                    for (uint32_t l = 0; l < m; l++) {
+                        dot += conj(result->Q->data[l * k + i]) *
+                               result->Q->data[l * k + j];
+                    }
+                    corrections[i] = dot;
+                }
+                /* Apply all corrections. */
+                for (uint32_t i = 0; i < j; i++) {
+                    for (uint32_t l = 0; l < m; l++) {
+                        result->Q->data[l * k + j] -= corrections[i] *
+                                                      result->Q->data[l * k + i];
+                    }
+                }
+                /* Accumulate into R (pass 1 captures R[i,j]; pass 2 is a
+                 * tiny correction.  Sum both: R captures the total
+                 * projection onto each prior Q_i). */
+                for (uint32_t i = 0; i < j; i++) {
+                    if (pass == 0) {
+                        result->R->data[i * n + j] = corrections[i];
+                    } else {
+                        result->R->data[i * n + j] += corrections[i];
+                    }
+                }
+                free(corrections);
             }
         }
 
@@ -1648,15 +1683,13 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
 
         result->R->data[j * n + j] = norm;
 
-        // Use 1e-10 threshold to maintain orthogonality
-        // At 1e-15, accumulated numerical errors can make Q severely non-orthogonal
-        if (norm > 1e-10) {
+        if (norm > 1e-12) {
             for (uint32_t i = 0; i < m; i++) {
                 result->Q->data[i * k + j] /= norm;
             }
         } else {
-            // Column is nearly linearly dependent - zero it out
-            // This prevents non-orthogonal columns from corrupting later operations
+            // Column is nearly linearly dependent after reorthogonalization;
+            // zero it out to prevent subsequent non-orthogonality.
             for (uint32_t i = 0; i < m; i++) {
                 result->Q->data[i * k + j] = 0.0;
             }
