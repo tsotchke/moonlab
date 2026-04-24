@@ -1446,6 +1446,8 @@ if(QSIM_BUILD_TESTS)
     # fast). Run directly for local profiling:
     #   ./build/bench_state_operations
     #   ./build/bench_tensor_networks
+    add_executable(bench_ca_mps tests/performance/bench_ca_mps.c)
+    target_link_libraries(bench_ca_mps PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_state_operations tests/performance/bench_state_operations.c)
     target_link_libraries(bench_state_operations PRIVATE quantumsim)
     add_executable(bench_tensor_networks tests/performance/bench_tensor_networks.c)
