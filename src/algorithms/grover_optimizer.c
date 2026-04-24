@@ -159,15 +159,44 @@ void grover_diffusion_optimized(complex_t* amplitudes, uint64_t state_dim) {
     if (!amplitudes || state_dim == 0) return;
 
     // Step 1: Compute mean
-    complex_t sum = 0.0;
+    double sum_real = 0.0;
+    double sum_imag = 0.0;
 
 #ifdef _OPENMP
-    #pragma omp parallel for reduction(+:sum) schedule(static)
+    int num_threads = omp_get_max_threads();
+    double* local_sums = calloc((size_t)num_threads * 2, sizeof(double));
+    if (local_sums) {
+        #pragma omp parallel
+        {
+            int tid = omp_get_thread_num();
+            double local_real = 0.0;
+            double local_imag = 0.0;
+
+            #pragma omp for schedule(static) nowait
+            for (int64_t i = 0; i < (int64_t)state_dim; i++) {
+                local_real += creal(amplitudes[i]);
+                local_imag += cimag(amplitudes[i]);
+            }
+
+            local_sums[(size_t)tid * 2] = local_real;
+            local_sums[(size_t)tid * 2 + 1] = local_imag;
+        }
+
+        for (int t = 0; t < num_threads; t++) {
+            sum_real += local_sums[(size_t)t * 2];
+            sum_imag += local_sums[(size_t)t * 2 + 1];
+        }
+        free(local_sums);
+    } else
 #endif
+    {
     for (uint64_t i = 0; i < state_dim; i++) {
-        sum += amplitudes[i];
+            sum_real += creal(amplitudes[i]);
+            sum_imag += cimag(amplitudes[i]);
+        }
     }
 
+    complex_t sum = sum_real + I * sum_imag;
     complex_t mean = sum / (double)state_dim;
     complex_t two_mean = 2.0 * mean;
 
