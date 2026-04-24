@@ -345,9 +345,16 @@ static ca_mps_error_t apply_conjugated_imag(moonlab_ca_mps_t* s,
 
     /* exp(-tau * sign * P) = cosh(tau * sign) * I - sinh(tau * sign) * P.
      * sign for Hermitian generators is +-1 so cosh/sinh are real.  We
-     * multiply them into the (cos, branch) coefficients. */
-    double _Complex cos_coef = ccosh(tau * sign);
-    double _Complex branch_coef = -csinh(tau * sign);
+     * multiply them into the (cos, branch) coefficients.
+     *
+     * Compute cosh/sinh via cexp to sidestep Windows clang-cl's missing
+     * ccosh/csinh declarations (UCRT ships cexp in <complex.h> but not
+     * the hyperbolic complex variants). */
+    double _Complex z = tau * sign;
+    double _Complex e_pos = cexp(z);
+    double _Complex e_neg = cexp(-z);
+    double _Complex cos_coef = 0.5 * (e_pos + e_neg);     /* cosh(z) */
+    double _Complex branch_coef = -0.5 * (e_pos - e_neg); /* -sinh(z) */
 
     tn_mpo_t* mpo = build_pauli_mixture_mpo(s->n, pauli, cos_coef, branch_coef);
     if (!mpo) return CA_MPS_ERR_OOM;
