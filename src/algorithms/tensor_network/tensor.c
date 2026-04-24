@@ -1453,20 +1453,21 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     tensor_qr_result_t *result = (tensor_qr_result_t *)calloc(1, sizeof(tensor_qr_result_t));
     if (!result) return NULL;
 
-#if HAS_ACCELERATE
-    // Use LAPACK zgeqrf + zungqr
-    __CLPK_integer M = m;
-    __CLPK_integer N = n;
-    __CLPK_integer K = k;
-    __CLPK_integer lda = n;  // Row major, but we'll transpose
-    (void)lda;               // cached but zgeqrf uses its own leading-dim
-    __CLPK_integer info;
-    __CLPK_integer lwork = -1;
+#if HAS_LAPACK
+    // LAPACK Householder QR via zgeqrf + zungqr.  Accelerate, CLAPACK (f2c),
+    // and LAPACKE (OpenBLAS on Linux) all expose equivalent entry points;
+    // the three variants differ only in integer / complex-struct typing.
+    //
+    // BEFORE this routing existed, Linux fell through to the modified
+    // Gram-Schmidt fallback below and lost orthogonality after ~10 QR
+    // applications -- observable as canonical-form drift in MPS imag-time
+    // evolution that started matching Accelerate at step 0 but diverged
+    // dramatically by step 1+.
 
-    // Convert to column-major for LAPACK
-    __CLPK_doublecomplex *a_data = (__CLPK_doublecomplex *)aligned_alloc_internal(
-        m * n * sizeof(__CLPK_doublecomplex), TENSOR_ALIGNMENT);
-    __CLPK_doublecomplex *tau = (__CLPK_doublecomplex *)malloc(k * sizeof(__CLPK_doublecomplex));
+    // Workspace arrays
+    double complex *a_data = (double complex *)aligned_alloc_internal(
+        m * n * sizeof(double complex), TENSOR_ALIGNMENT);
+    double complex *tau = (double complex *)malloc(k * sizeof(double complex));
 
     if (!a_data || !tau) {
         aligned_free_internal(a_data);
@@ -1478,90 +1479,115 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     // Copy to column-major
     for (uint32_t i = 0; i < m; i++) {
         for (uint32_t j = 0; j < n; j++) {
-            double complex val = mat->data[i * n + j];
-            a_data[j * m + i].r = creal(val);
-            a_data[j * m + i].i = cimag(val);
+            a_data[j * m + i] = mat->data[i * n + j];
         }
     }
 
-    // Query workspace
+#ifdef __APPLE__
+    __CLPK_integer M = m, N = n, K = k, lwork = -1, info;
     __CLPK_doublecomplex work_query;
-    zgeqrf_(&M, &N, a_data, &M, tau, &work_query, &lwork, &info);
-
-    lwork = (int)work_query.r + 1;
-    __CLPK_doublecomplex *work = (__CLPK_doublecomplex *)malloc(lwork * sizeof(__CLPK_doublecomplex));
-    if (!work) {
-        aligned_free_internal(a_data);
-        free(tau);
-        free(result);
-        return NULL;
-    }
-
-    // Compute QR
-    zgeqrf_(&M, &N, a_data, &M, tau, work, &lwork, &info);
-
+    zgeqrf_(&M, &N, (__CLPK_doublecomplex *)a_data, &M,
+            (__CLPK_doublecomplex *)tau, &work_query, &lwork, &info);
+    lwork = (__CLPK_integer)work_query.r + 1;
+    __CLPK_doublecomplex *work = (__CLPK_doublecomplex *)malloc(
+        (size_t)lwork * sizeof(__CLPK_doublecomplex));
+    if (!work) { aligned_free_internal(a_data); free(tau); free(result); return NULL; }
+    zgeqrf_(&M, &N, (__CLPK_doublecomplex *)a_data, &M,
+            (__CLPK_doublecomplex *)tau, work, &lwork, &info);
     if (info != 0) {
-        free(work);
-        aligned_free_internal(a_data);
-        free(tau);
-        free(result);
+        free(work); aligned_free_internal(a_data); free(tau); free(result);
         return NULL;
     }
+#elif defined(QSIM_HAS_CLAPACK)
+    integer M = (integer)m, N = (integer)n, K = (integer)k, lwork = -1, info;
+    doublecomplex work_query;
+    zgeqrf_(&M, &N, (doublecomplex *)a_data, &M,
+            (doublecomplex *)tau, &work_query, &lwork, &info);
+    lwork = (integer)(work_query.r + 1);
+    doublecomplex *work = (doublecomplex *)malloc((size_t)lwork * sizeof(doublecomplex));
+    if (!work) { aligned_free_internal(a_data); free(tau); free(result); return NULL; }
+    zgeqrf_(&M, &N, (doublecomplex *)a_data, &M,
+            (doublecomplex *)tau, work, &lwork, &info);
+    if (info != 0) {
+        free(work); aligned_free_internal(a_data); free(tau); free(result);
+        return NULL;
+    }
+#else
+    /* LAPACKE path (Linux OpenBLAS etc).  No manual workspace query. */
+    lapack_int M = (lapack_int)m, N = (lapack_int)n, K = (lapack_int)k;
+    lapack_int info = LAPACKE_zgeqrf(LAPACK_COL_MAJOR, M, N,
+                                     (lapack_complex_double *)a_data, M,
+                                     (lapack_complex_double *)tau);
+    if (info != 0) {
+        aligned_free_internal(a_data); free(tau); free(result);
+        return NULL;
+    }
+#endif
 
-    // Extract R (upper triangular part)
+    // Extract R (upper triangular, k x n).
     result->R = tensor_create_matrix(k, n);
     if (!result->R) {
-        free(work);
-        aligned_free_internal(a_data);
-        free(tau);
-        free(result);
+        aligned_free_internal(a_data); free(tau); free(result);
         return NULL;
     }
-
     for (uint32_t i = 0; i < k; i++) {
         for (uint32_t j = 0; j < n; j++) {
-            if (j >= i) {
-                result->R->data[i * n + j] = a_data[j * m + i].r + I * a_data[j * m + i].i;
-            } else {
-                result->R->data[i * n + j] = 0.0;
-            }
+            result->R->data[i * n + j] = (j >= i) ? a_data[j * m + i] : 0.0;
         }
     }
 
-    // Generate Q
+    // Generate Q via zungqr (all three implementations).
+#ifdef __APPLE__
     lwork = -1;
-    zungqr_(&M, &K, &K, a_data, &M, tau, &work_query, &lwork, &info);
-    lwork = (int)work_query.r + 1;
-
-    __CLPK_doublecomplex *work2 = (__CLPK_doublecomplex *)realloc(work, lwork * sizeof(__CLPK_doublecomplex));
-    if (!work2) {
-        free(work);
-        aligned_free_internal(a_data);
-        free(tau);
-        tensor_qr_free(result);
+    zungqr_(&M, &K, &K, (__CLPK_doublecomplex *)a_data, &M,
+            (__CLPK_doublecomplex *)tau, &work_query, &lwork, &info);
+    lwork = (__CLPK_integer)work_query.r + 1;
+    {
+        __CLPK_doublecomplex *work2 = (__CLPK_doublecomplex *)realloc(
+            work, (size_t)lwork * sizeof(__CLPK_doublecomplex));
+        if (!work2) { free(work); aligned_free_internal(a_data); free(tau);
+                      tensor_qr_free(result); return NULL; }
+        work = work2;
+    }
+    zungqr_(&M, &K, &K, (__CLPK_doublecomplex *)a_data, &M,
+            (__CLPK_doublecomplex *)tau, work, &lwork, &info);
+    free(work);
+#elif defined(QSIM_HAS_CLAPACK)
+    lwork = -1;
+    zungqr_(&M, &K, &K, (doublecomplex *)a_data, &M,
+            (doublecomplex *)tau, &work_query, &lwork, &info);
+    lwork = (integer)(work_query.r + 1);
+    {
+        doublecomplex *work2 = (doublecomplex *)realloc(
+            work, (size_t)lwork * sizeof(doublecomplex));
+        if (!work2) { free(work); aligned_free_internal(a_data); free(tau);
+                      tensor_qr_free(result); return NULL; }
+        work = work2;
+    }
+    zungqr_(&M, &K, &K, (doublecomplex *)a_data, &M,
+            (doublecomplex *)tau, work, &lwork, &info);
+    free(work);
+#else
+    info = LAPACKE_zungqr(LAPACK_COL_MAJOR, M, K, K,
+                          (lapack_complex_double *)a_data, M,
+                          (lapack_complex_double *)tau);
+    if (info != 0) {
+        aligned_free_internal(a_data); free(tau); tensor_qr_free(result);
         return NULL;
     }
-    work = work2;
-
-    zungqr_(&M, &K, &K, a_data, &M, tau, work, &lwork, &info);
+#endif
 
     result->Q = tensor_create_matrix(m, k);
     if (!result->Q) {
-        free(work);
-        aligned_free_internal(a_data);
-        free(tau);
-        tensor_qr_free(result);
+        aligned_free_internal(a_data); free(tau); tensor_qr_free(result);
         return NULL;
     }
-
-    // Copy Q (column-major to row-major)
     for (uint32_t i = 0; i < m; i++) {
         for (uint32_t j = 0; j < k; j++) {
-            result->Q->data[i * k + j] = a_data[j * m + i].r + I * a_data[j * m + i].i;
+            result->Q->data[i * k + j] = a_data[j * m + i];
         }
     }
 
-    free(work);
     aligned_free_internal(a_data);
     free(tau);
 
