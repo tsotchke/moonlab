@@ -293,6 +293,109 @@ clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
     return CLIFFORD_SUCCESS;
 }
 
+/* Inverse conjugation: compute C^dagger P C where t stores C.
+ *
+ * Implementation: use the symplectic identity M^{-1} = Lambda M^T Lambda,
+ * which gives us the "inverse-map" Pauli for each single-qubit generator
+ * by reading COLUMNS of the forward tableau:
+ *
+ *   C^dagger X_i C : x-bit at j = tget(t, n+i, n+j)  (column n+i, stab rows)
+ *                    z-bit at j = tget(t, i,   n+j)  (column n+i, destab rows)
+ *   C^dagger Z_i C : x-bit at j = tget(t, n+i, j)    (column i,   stab rows)
+ *                    z-bit at j = tget(t, i,   j)    (column i,   destab rows)
+ *   C^dagger Y_i C = i * (C^dagger X_i C) * (C^dagger Z_i C).
+ *
+ * Phase bookkeeping for the inverse tableau is subtle (phase bits of the
+ * forward tableau don't directly give the inverse phases).  We track phase
+ * contributions from Pauli-product multiplications via the same phase table
+ * as the forward direction.  The "sign part" from the symplectic inversion
+ * itself (i.e., whether C^dagger X_i C = + or - X'_i for some X'_i when the
+ * forward tableau has phase bits set) is reconstructed via a per-generator
+ * consistency check: after computing the symplectic image, we verify that
+ * C (image) C^dagger equals +X_i / +Z_i / +Y_i by running it through the
+ * forward tableau; if the sign comes out wrong, we flip the image's phase.
+ */
+static void read_inv_single_qubit_image(const clifford_tableau_t* t, size_t q,
+                                        int gen_code, /* 1=X, 2=Y, 3=Z */
+                                        uint8_t* out_pauli, int* out_phase) {
+    size_t n = t->n;
+    int phase = 0;
+    /* Formula: C^dagger X_q C has x-bit at qubit j = tget(t, n+j, n+q)
+     *                            z-bit at qubit j = tget(t, j,   n+q)
+     * Derived from M^{-1} = Lambda M^T Lambda with M[r,c] = tget(t, c, r),
+     * giving M^{-1}[r, c] = tget(t, Lambda r, Lambda c). */
+    if (gen_code == 1) {
+        for (size_t j = 0; j < n; j++) {
+            uint8_t x = tget(t, n + j, n + q);
+            uint8_t z = tget(t, j,     n + q);
+            out_pauli[j] = xz_to_pauli(x, z);
+        }
+    } else if (gen_code == 3) {
+        /* C^dagger Z_q C: x-bit at j = tget(t, n+j, q), z-bit = tget(t, j, q). */
+        for (size_t j = 0; j < n; j++) {
+            uint8_t x = tget(t, n + j, q);
+            uint8_t z = tget(t, j,     q);
+            out_pauli[j] = xz_to_pauli(x, z);
+        }
+    } else {
+        /* Y = i X Z.  Compute C^dagger Y_i C = i * (C^dagger X_i C)(C^dagger Z_i C). */
+        uint8_t *x_image = calloc(n, sizeof(uint8_t));
+        uint8_t *z_image = calloc(n, sizeof(uint8_t));
+        read_inv_single_qubit_image(t, q, 1, x_image, &phase);
+        int zph = 0;
+        read_inv_single_qubit_image(t, q, 3, z_image, &zph);
+        phase = (phase + zph + 1) & 3;   /* +1 for the i in Y = iXZ */
+        for (size_t j = 0; j < n; j++) {
+            int dphase = 0;
+            out_pauli[j] = pauli_mul(x_image[j], z_image[j], &dphase);
+            phase = (phase + dphase) & 3;
+        }
+        free(x_image); free(z_image);
+    }
+
+    /* Sign-fixup: verify C (out_pauli) C^dagger == gen_Pauli with correct sign.
+     * Run the forward conjugation and check the result. */
+    uint8_t *fwd = calloc(n, sizeof(uint8_t));
+    int fwd_phase = 0;
+    clifford_conjugate_pauli(t, out_pauli, phase, fwd, &fwd_phase);
+    /* Expected: fwd = single-qubit Pauli at position q with phase 0.
+     * If fwd_phase != 0 (i.e. sign mismatch), flip our computed phase. */
+    if (fwd_phase != 0) phase = (phase + (4 - fwd_phase)) & 3;
+    free(fwd);
+
+    if (out_phase) *out_phase = phase;
+}
+
+clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
+                                                  const uint8_t* in_pauli,
+                                                  int in_phase,
+                                                  uint8_t* out_pauli,
+                                                  int* out_phase) {
+    if (!t || !in_pauli || !out_pauli) return CLIFFORD_ERR_INVALID;
+    size_t n = t->n;
+    uint8_t *factor = (uint8_t *)calloc(n, sizeof(uint8_t));
+    uint8_t *acc    = (uint8_t *)calloc(n, sizeof(uint8_t));
+    if (!factor || !acc) { free(factor); free(acc); return CLIFFORD_ERR_OOM; }
+
+    int phase = in_phase & 3;
+    for (size_t q = 0; q < n; q++) {
+        uint8_t pq = in_pauli[q];
+        if (pq == 0) continue;
+        int fphase = 0;
+        read_inv_single_qubit_image(t, q, pq, factor, &fphase);
+        phase = (phase + fphase) & 3;
+        for (size_t j = 0; j < n; j++) {
+            int dphase = 0;
+            acc[j] = pauli_mul(acc[j], factor[j], &dphase);
+            phase = (phase + dphase) & 3;
+        }
+    }
+    memcpy(out_pauli, acc, n);
+    if (out_phase) *out_phase = phase;
+    free(factor); free(acc);
+    return CLIFFORD_SUCCESS;
+}
+
 clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t) {
     if (!t) return NULL;
     clifford_tableau_t* c = calloc(1, sizeof(*c));

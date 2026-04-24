@@ -492,6 +492,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/tensor_network/mpo_2d.c
     src/algorithms/tensor_network/lattice_2d.c
     src/algorithms/tensor_network/skyrmion_braiding.c
+    src/algorithms/tensor_network/ca_mps.c
     # Chemistry (Jordan-Wigner, UCCSD, molecular Hamiltonians).
     src/algorithms/chemistry/chemistry.c
     # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
@@ -1118,6 +1119,12 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_clifford_pauli_api tests/unit/test_clifford_pauli_api.c)
     target_link_libraries(test_clifford_pauli_api PRIVATE quantumsim)
     add_test(NAME unit_clifford_pauli_api COMMAND test_clifford_pauli_api)
+
+    # Clifford-assisted MPS reduction-limit tests: pure Clifford (tableau-only
+    # Bell/GHZ), pure MPS (rotations on |0>), and mixed H + T rotations.
+    add_executable(test_ca_mps_limits tests/unit/test_ca_mps_limits.c)
+    target_link_libraries(test_ca_mps_limits PRIVATE quantumsim m)
+    add_test(NAME unit_ca_mps_limits COMMAND test_ca_mps_limits)
 
     add_executable(test_clifford tests/unit/test_clifford.c)
     target_link_libraries(test_clifford PRIVATE quantumsim)

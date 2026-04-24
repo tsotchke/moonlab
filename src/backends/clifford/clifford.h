@@ -201,6 +201,21 @@ clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
                                           int* out_phase);
 
 /**
+ * @brief Inverse conjugation: @f$C^\dagger P C@f$ where @p t stores @f$C@f$.
+ *
+ * Useful when "pushing" a Heisenberg-picture operator through the stored
+ * Clifford in the opposite direction, for example CA-MPS needs
+ * @f$C^\dagger T_q C@f$ to absorb a non-Clifford @f$T@f$ gate into the MPS
+ * branch.  Semantics and encoding match @c clifford_conjugate_pauli; the
+ * only difference is the direction of conjugation.
+ */
+clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
+                                                  const uint8_t* in_pauli,
+                                                  int in_phase,
+                                                  uint8_t* out_pauli,
+                                                  int* out_phase);
+
+/**
  * @brief Allocate a deep copy of the tableau.  The clone and original can
  *        be mutated independently.  Returns NULL on allocation failure.
  */
