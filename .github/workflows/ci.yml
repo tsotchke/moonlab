@@ -105,6 +105,12 @@ jobs:
             choco install ninja -y
           }
 
+      - name: Install OpenBLAS via vcpkg
+        shell: pwsh
+        run: |
+          vcpkg install openblas:x64-windows
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -Append -FilePath $env:GITHUB_ENV
+
       - name: Configure
         shell: pwsh
         run: >
@@ -112,6 +118,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_C_COMPILER=clang-cl
           -DCMAKE_CXX_COMPILER=clang-cl
+          -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
           -DQSIM_BUILD_EXAMPLES=OFF
           -DQSIM_BUILD_BENCHMARKS=OFF
 
