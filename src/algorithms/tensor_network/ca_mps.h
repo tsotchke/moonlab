@@ -90,14 +90,14 @@ ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 /*  Non-Clifford gates (push into MPS as Pauli-string rotations)       */
 /* ================================================================== */
 
-/** exp(i theta X_q).  For a Clifford-rich circuit, actual MPS action is a
- *  Pauli-string rotation on the conjugated string D X_q D^dagger. */
+/** R_P(theta) = exp(-i theta P / 2) following the standard Qiskit/Cirq
+ *  convention.  Non-Clifford in general: the MPS action is a Pauli-string
+ *  rotation on the Clifford-conjugated string C^dagger P_q C. */
 ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
 ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
 ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
-/** T gate: up to global phase, equals exp(i pi Z / 8); absorb into rz(pi/4)
- *  for simulation purposes. */
+/** T gate: equals R_Z(pi/4) up to a global phase e^{-i pi/8}. */
 ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
 
 /**

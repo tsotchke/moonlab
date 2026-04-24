@@ -114,32 +114,31 @@ int main(void) {
     /* ------------------------------------------------------------ */
     fprintf(stdout, "\nTest 5: Pure-MPS limit: rx(theta) with no Clifford.\n");
     {
-        /* On |0>, rx(theta) produces cos(theta/2)|0> - i sin(theta/2)|1>. */
+        /* Standard Qiskit/Cirq convention: R_X(theta) = exp(-i theta X / 2)
+         *   = cos(theta/2) I - i sin(theta/2) X.
+         * On |0>: cos(theta/2) |0> - i sin(theta/2) |1>.
+         * <Z> = cos^2(theta/2) - sin^2(theta/2) = cos(theta). */
         double theta = 0.7;
         moonlab_ca_mps_t* s = moonlab_ca_mps_create(1, 32);
         moonlab_ca_mps_rx(s, 0, theta);
 
-        /* exp(i theta X) = cos(theta) I + i sin(theta) X.
-         * On |0>:  cos(theta) |0> + i sin(theta) |1>.
-         * <Z> = |<0|...|0>|^2 - |<1|...|1>|^2 = cos^2 - sin^2 = cos(2 theta). */
         uint8_t p_z[1] = {3};
         double _Complex ez;
         moonlab_ca_mps_expect_pauli(s, p_z, &ez);
-        double expected = cos(2.0 * theta);
+        double expected = cos(theta);
         CHECK(CLOSEC(ez, expected),
-              "rx(%.2f): <Z> = %.9f (expect %.9f)", theta, creal(ez), expected);
+              "rx(%.2f): <Z> = %.9f (expect %.9f = cos(theta))",
+              theta, creal(ez), expected);
         moonlab_ca_mps_free(s);
     }
 
     /* ------------------------------------------------------------ */
     fprintf(stdout, "\nTest 6: Mixed: H + rz(theta).  Rz on |+> rotates in XY plane.\n");
     {
-        /* |+> under rz(theta) = exp(i theta Z) = cos(theta) I + i sin(theta) Z:
-         *   exp(i theta Z) |+> = cos(theta)|+> + i sin(theta) |-> .
-         *   <X> on this state = cos^2(theta) - sin^2(theta) = cos(2 theta).
-         *   <Y> on this state = -2 sin(theta) cos(theta) = -sin(2 theta).
-         *     (Derivation: Y|+> = -i|->, Y|-> = i|+>; all cross terms give
-         *     -sin cos and -cos sin, summing to -2 sin cos.) */
+        /* Standard convention R_Z(theta) = exp(-i theta Z / 2) on |+> gives
+         *   cos(theta/2)|+> - i sin(theta/2)|->.
+         *   <X> = cos^2(theta/2) - sin^2(theta/2) = cos(theta).
+         *   <Y> = +2 sin(theta/2) cos(theta/2) = +sin(theta). */
         double theta = 0.3;
         moonlab_ca_mps_t* s = moonlab_ca_mps_create(1, 32);
         moonlab_ca_mps_h(s, 0);
@@ -150,11 +149,11 @@ int main(void) {
         moonlab_ca_mps_expect_pauli(s, p_x, &ex);
         moonlab_ca_mps_expect_pauli(s, p_y, &ey);
         moonlab_ca_mps_expect_pauli(s, p_z, &ez);
-        double expX = cos(2.0 * theta);
-        double expY = -sin(2.0 * theta);
-        CHECK(CLOSEC(ex, expX), "<X> = %.9f (expect %.9f = cos(2 theta))",
+        double expX = cos(theta);
+        double expY = sin(theta);
+        CHECK(CLOSEC(ex, expX), "<X> = %.9f (expect %.9f = cos(theta))",
               creal(ex), expX);
-        CHECK(CLOSEC(ey, expY), "<Y> = %.9f (expect %.9f = -sin(2 theta))",
+        CHECK(CLOSEC(ey, expY), "<Y> = %.9f (expect %.9f = sin(theta))",
               creal(ey), expY);
         CHECK(CLOSEC(ez, 0.0), "<Z> = %.9f (expect 0)", creal(ez));
         moonlab_ca_mps_free(s);
@@ -182,14 +181,14 @@ int main(void) {
     /* ------------------------------------------------------------ */
     fprintf(stdout, "\nTest 8: H T H |0>.  H T H = exp(i pi/8 X) under our t_gate convention.\n");
     {
-        /* Moonlab's t_gate is exp(i (pi/8) Z) up to global phase.
-         * So H T H = H exp(i pi/8 Z) H = exp(i pi/8 X)
-         *         = cos(pi/8) I + i sin(pi/8) X
-         * applied to |0>: cos(pi/8)|0> + i sin(pi/8)|1>.
-         *   <Z> = cos^2(pi/8) - sin^2(pi/8) = cos(pi/4) = 1/sqrt(2) ≈ 0.70711
-         *   <X> = 0 (state has 0 real amplitude in +/- basis)
-         *   <Y> = +2 sin(pi/8) cos(pi/8) = +sin(pi/4) = +1/sqrt(2) ≈ +0.70711
-         *     (Bloch view: rotate +Z by -pi/4 around X axis -> into +Y, +Z) */
+        /* Moonlab's t_gate equals R_Z(pi/4) = exp(-i pi Z / 8) up to a global
+         * phase e^{-i pi/8}.  So H T H = H exp(-i pi Z / 8) H = exp(-i pi X / 8)
+         *        = cos(pi/8) I - i sin(pi/8) X
+         * applied to |0>: cos(pi/8) |0> - i sin(pi/8) |1>.
+         *   <Z> = cos^2(pi/8) - sin^2(pi/8) = cos(pi/4) = 1/sqrt(2) ≈ +0.70711
+         *   <X> = 0 (real parts of cross-terms cancel)
+         *   <Y> = -2 sin(pi/8) cos(pi/8) = -sin(pi/4) = -1/sqrt(2) ≈ -0.70711
+         *     (Bloch view: rotate +Z by +pi/4 around +X axis -> -Y, +Z) */
         moonlab_ca_mps_t* s = moonlab_ca_mps_create(1, 32);
         moonlab_ca_mps_h(s, 0);
         moonlab_ca_mps_t_gate(s, 0);
@@ -201,7 +200,7 @@ int main(void) {
         moonlab_ca_mps_expect_pauli(s, p_z, &ez);
         CHECK(CLOSEC(ex,  0.0),          "H T H |0>: <X> = %.9f (expect 0)", creal(ex));
         CHECK(CLOSEC(ez,  M_SQRT1_2),    "H T H |0>: <Z> = %.9f (expect 1/sqrt(2))", creal(ez));
-        CHECK(CLOSEC(ey,  M_SQRT1_2),    "H T H |0>: <Y> = %.9f (expect +1/sqrt(2))", creal(ey));
+        CHECK(CLOSEC(ey, -M_SQRT1_2),    "H T H |0>: <Y> = %.9f (expect -1/sqrt(2))", creal(ey));
         moonlab_ca_mps_free(s);
     }
 
