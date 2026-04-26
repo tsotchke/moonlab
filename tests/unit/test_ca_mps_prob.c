@@ -51,6 +51,8 @@ int main(void) {
     moonlab_ca_mps_t_gate(ca, 3);              gate_t(sv, 3);
     moonlab_ca_mps_t_dagger(ca, 3);            gate_t_dagger(sv, 3);
     moonlab_ca_mps_phase(ca, 0, -0.3);         gate_phase(sv, 0, -0.3);
+    moonlab_ca_mps_u3(ca, 1, 0.8, -1.2, 0.5);  gate_u3(sv, 1, 0.8, -1.2, 0.5);
+    moonlab_ca_mps_u3(ca, 2, 1.5, 0.0, -0.7);  gate_u3(sv, 2, 1.5, 0.0, -0.7);
 
     for (uint32_t q = 0; q < n; q++) {
         double pca, psv = sv_prob_z(sv, (int)q);

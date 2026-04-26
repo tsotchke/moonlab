@@ -125,6 +125,13 @@ ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
+/** General single-qubit unitary U3(theta, phi, lambda) (Qiskit convention):
+ *  [[cos(t/2),     -e^{i l} sin(t/2)],
+ *   [e^{i p} sin(t/2),  e^{i(p+l)} cos(t/2)]]
+ *  Equivalent up to a global phase to R_Z(p) . R_Y(t) . R_Z(l). */
+ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
+                                  double theta, double phi, double lambda);
+
 /**
  * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
  *
