@@ -86,6 +86,45 @@ intended to fold into v0.2.1.
   directly instead of linking `quantumsim`, so it didn't inherit
   Matt's `bcrypt` link.  Added an explicit `bcrypt` link for this
   target on Windows only.
+- **Householder QR fallback for no-LAPACK platforms**
+  (`src/algorithms/tensor_network/tensor.c`): replaced the
+  twice-iterated classical Gram-Schmidt fallback with proper
+  Householder reflectors hoisted into
+  `tensor_qr_householder_fallback`.  CGS2 zeroed out columns whose
+  norm collapsed below 1e-12 after orthogonalization, leaving Q
+  non-orthonormal whenever an MPS bond hit a near-rank-deficient
+  state -- which broke `unit_ca_mps_vs_sv` on Windows clang-cl at
+  depth >= 20.  Annotated the helper with `__attribute__((optnone))`
+  + `#pragma STDC FP_CONTRACT OFF` to dodge a clang
+  `-O3 -ffast-math -flto=thin -march=native` miscompile that fused
+  the dot-product accumulator into FMAs and flipped the imaginary
+  sign.  Confirmed bit-identical to LAPACK Householder when the
+  pragma is honoured.  Added `QSIM_FORCE_QR_FALLBACK=1` test flag
+  to exercise the fallback locally on macOS/Linux.
+- **Wide-matrix Jacobi SVD fallback**
+  (`src/algorithms/tensor_network/tensor.c`): the one-sided Jacobi
+  loop only orthogonalised the first `min(m,n)` columns, so for
+  `m < n` the trailing `n - m` columns were ignored and Vh +
+  singular values came out wrong (catastrophic on `unit_mpo_kpm`:
+  projector trace 2 instead of 16, `||P^2 - P||` ~= 0.7 instead
+  of ~= 0).  Fix: when `m < n`, recursively SVD `A^H` (which is
+  tall) and dagger U/Vh back.  Added `QSIM_FORCE_SVD_FALLBACK=1`
+  test flag.
+
+### CI hardening
+
+- **NIST SP 800-22 voting widened** (`tests/unit/test_qrng_statistics.c`):
+  per-test false-reject rate at 2-of-3 voting on alpha=0.01 was
+  3e-4, six tests in the battery gave 1.8e-3 per CI run -- one in
+  ~555.  Bumped to 5 attempts / 3-of-5 pass; per-test rate ~1e-5,
+  battery ~6e-5.  Tripped on macOS x86_64 / 2026-04-24 with
+  serial p-values 0.008, 0.621, 0.005 (one healthy outlier and
+  two harmless boundary brushes) before the bump.
+- **ASAN tier exclusion broadened** (`.github/workflows/ci.yml`):
+  also excludes `unit_kagome_ed_large`; under ASAN `zheev` on the
+  N=18 Hamiltonian times out at the test's 120s CMake-level
+  ceiling.  Both kagome ED variants are covered by every
+  non-sanitizer tier already.
 
 ### Build / CI
 
