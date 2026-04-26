@@ -24,9 +24,10 @@ intended to fold into v0.2.1.
   sampling algorithm.
   API: `moonlab_ca_mps_create/free/clone`, Clifford gates
   (`h`, `s`, `sdag`, `x`, `y`, `z`, `cnot`, `cz`, `swap`), non-Clifford
-  gates (`rx`, `ry`, `rz`, `t_gate`), imaginary-time primitive
-  (`imag_pauli_rotation`), observables (`expect_pauli`,
-  `expect_pauli_sum`), and normalization (`normalize`, `norm`).
+  gates (`rx`, `ry`, `rz`, `t_gate`, `t_dagger`, `phase`, `crz`, `crx`,
+  `cry`, `u3`), imaginary-time primitive (`imag_pauli_rotation`),
+  observables (`expect_pauli`, `expect_pauli_sum`, `prob_z`), and
+  normalization (`normalize`, `norm`).
 - **Kagome ED cross-check**: new `tests/unit/test_kagome_ed_large.c`
   validates Moonlab's 2x3 torus (N=18, 262144-dim Hilbert space) via
   matrix-free Lanczos with full reorthogonalization against

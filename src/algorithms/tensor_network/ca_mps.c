@@ -464,6 +464,17 @@ ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
     return CA_MPS_SUCCESS;
 }
 
+ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
+                                  double theta, double phi, double lambda) {
+    /* U3(t, p, l) = e^{i(p+l)/2} R_Z(p) R_Y(t) R_Z(l). */
+    if (!s) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    if ((e = moonlab_ca_mps_rz(s, q, lambda)) != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_ry(s, q, theta))  != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_rz(s, q, phi))    != CA_MPS_SUCCESS) return e;
+    return CA_MPS_SUCCESS;
+}
+
 ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit, double* out_prob) {
     if (!s || !out_prob) return CA_MPS_ERR_INVALID;
