@@ -52,6 +52,17 @@ typedef lapack_complex_double lapack_complex_t;
 #define HAS_METAL 0
 #endif
 
+/* Test-only flag: -DQSIM_FORCE_QR_FALLBACK=1 forces tensor_qr down the
+ * Householder fallback path even on platforms that have LAPACK.  Used to
+ * exercise the no-LAPACK QR path locally on macOS/Linux without touching
+ * tensor_svd (which has a separate Jacobi-SVD fallback that does not yet
+ * handle the m < n shape correctly). */
+#ifdef QSIM_FORCE_QR_FALLBACK
+#define QSIM_QR_USE_FALLBACK 1
+#else
+#define QSIM_QR_USE_FALLBACK 0
+#endif
+
 #ifdef HAS_CUDA
 #include "../../optimization/gpu/backends/gpu_cuda.h"
 #endif
@@ -1453,6 +1464,127 @@ tensor_svd_result_t *tensor_svd_truncate(const tensor_t *mat, double max_error) 
     return result;
 }
 
+#if !HAS_LAPACK || QSIM_QR_USE_FALLBACK
+/* Householder QR fallback for platforms without LAPACK (primarily Windows
+ * clang-cl without an OpenBLAS package).  Annotated optnone because under
+ * -O3 -ffast-math -flto=thin -march=native the optimizer fuses the
+ * dot-product loop into vectorized FMAs in a way that flips the imaginary
+ * sign of conj(v)*col, corrupting R.  Confirmed bit-identical to LAPACK
+ * Householder when optimization is disabled.  Only invoked on the no-BLAS
+ * fallback path, so giving up vectorization here costs nothing on the
+ * supported tier-1 platforms. */
+#pragma STDC FP_CONTRACT OFF
+#if defined(__clang__)
+__attribute__((optnone))
+#elif defined(__GNUC__)
+__attribute__((optimize("O0")))
+#endif
+static tensor_qr_result_t *tensor_qr_householder_fallback(const tensor_t *mat) {
+    if (!mat || mat->rank != 2) return NULL;
+    uint32_t m = mat->dims[0];
+    uint32_t n = mat->dims[1];
+    uint32_t k = (m < n) ? m : n;
+
+    tensor_qr_result_t *result = (tensor_qr_result_t *)calloc(1, sizeof(tensor_qr_result_t));
+    if (!result) return NULL;
+    result->Q = tensor_create_matrix(m, k);
+    result->R = tensor_create_matrix(k, n);
+    if (!result->Q || !result->R) { tensor_qr_free(result); return NULL; }
+
+    double complex *hh_W  = (double complex *)calloc((size_t)m * n, sizeof(double complex));
+    double complex *hh_vs = (double complex *)calloc((size_t)k * m, sizeof(double complex));
+    double *hh_tau = (double *)calloc(k, sizeof(double));
+    if (!hh_W || !hh_vs || !hh_tau) {
+        free(hh_W); free(hh_vs); free(hh_tau);
+        tensor_qr_free(result); return NULL;
+    }
+
+    for (uint32_t i = 0; i < m; i++)
+        for (uint32_t j = 0; j < n; j++)
+            hh_W[j * m + i] = mat->data[i * n + j];
+
+    for (uint32_t j = 0; j < k; j++) {
+        uint32_t L = m - j;
+        double complex *x = hh_W + j * m + j;
+        double xnorm = 0.0;
+        for (uint32_t i = 0; i < L; i++)
+            xnorm += creal(x[i]) * creal(x[i]) + cimag(x[i]) * cimag(x[i]);
+        xnorm = sqrt(xnorm);
+
+        if (xnorm < 1e-300) {
+            hh_vs[j * m] = 1.0;
+            hh_tau[j] = 0.0;
+            continue;
+        }
+
+        double abs0 = cabs(x[0]);
+        double complex sign0 = (abs0 > 0.0) ? (x[0] / abs0) : 1.0;
+        for (uint32_t i = 0; i < L; i++) hh_vs[j * m + i] = x[i];
+        hh_vs[j * m] = x[0] + sign0 * xnorm;
+
+        double vnorm2 = 0.0;
+        for (uint32_t i = 0; i < L; i++)
+            vnorm2 += creal(hh_vs[j*m+i]) * creal(hh_vs[j*m+i])
+                    + cimag(hh_vs[j*m+i]) * cimag(hh_vs[j*m+i]);
+        hh_tau[j] = (vnorm2 > 0.0) ? 2.0 / vnorm2 : 0.0;
+
+        for (uint32_t c = j; c < n; c++) {
+            double complex *col = hh_W + c * m + j;
+            double dot_re = 0.0, dot_im = 0.0;
+            for (uint32_t i = 0; i < L; i++) {
+                double v_re = creal(hh_vs[j*m+i]), v_im = cimag(hh_vs[j*m+i]);
+                double y_re = creal(col[i]),       y_im = cimag(col[i]);
+                dot_re += v_re * y_re + v_im * y_im;
+                dot_im += v_re * y_im - v_im * y_re;
+            }
+            dot_re *= hh_tau[j];
+            dot_im *= hh_tau[j];
+            for (uint32_t i = 0; i < L; i++) {
+                double v_re = creal(hh_vs[j*m+i]), v_im = cimag(hh_vs[j*m+i]);
+                double sub_re = dot_re * v_re - dot_im * v_im;
+                double sub_im = dot_re * v_im + dot_im * v_re;
+                col[i] -= sub_re + sub_im * I;
+            }
+        }
+    }
+
+    for (uint32_t i = 0; i < k; i++)
+        for (uint32_t c = i; c < n; c++)
+            result->R->data[i * n + c] = hh_W[c * m + i];
+
+    for (uint32_t i = 0; i < k; i++)
+        result->Q->data[i * k + i] = 1.0;
+
+    for (int32_t j = (int32_t)k - 1; j >= 0; j--) {
+        if (hh_tau[j] == 0.0) continue;
+        uint32_t L = m - (uint32_t)j;
+        double complex *v = hh_vs + j * m;
+        for (uint32_t c = (uint32_t)j; c < k; c++) {
+            double dot_re = 0.0, dot_im = 0.0;
+            for (uint32_t i = 0; i < L; i++) {
+                double v_re = creal(v[i]), v_im = cimag(v[i]);
+                double q_re = creal(result->Q->data[((uint32_t)j+i) * k + c]);
+                double q_im = cimag(result->Q->data[((uint32_t)j+i) * k + c]);
+                dot_re += v_re * q_re + v_im * q_im;
+                dot_im += v_re * q_im - v_im * q_re;
+            }
+            dot_re *= hh_tau[j];
+            dot_im *= hh_tau[j];
+            for (uint32_t i = 0; i < L; i++) {
+                double v_re = creal(v[i]), v_im = cimag(v[i]);
+                double sub_re = dot_re * v_re - dot_im * v_im;
+                double sub_im = dot_re * v_im + dot_im * v_re;
+                result->Q->data[((uint32_t)j+i) * k + c] -= sub_re + sub_im * I;
+            }
+        }
+    }
+
+    free(hh_W); free(hh_vs); free(hh_tau);
+    return result;
+}
+#pragma STDC FP_CONTRACT DEFAULT
+#endif /* !HAS_LAPACK || QSIM_QR_USE_FALLBACK */
+
 tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     if (!mat || mat->rank != 2) return NULL;
 
@@ -1463,16 +1595,18 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     tensor_qr_result_t *result = (tensor_qr_result_t *)calloc(1, sizeof(tensor_qr_result_t));
     if (!result) return NULL;
 
-#if HAS_LAPACK
+#if HAS_LAPACK && !QSIM_QR_USE_FALLBACK
     // LAPACK Householder QR via zgeqrf + zungqr.  Accelerate, CLAPACK (f2c),
     // and LAPACKE (OpenBLAS on Linux) all expose equivalent entry points;
     // the three variants differ only in integer / complex-struct typing.
     //
-    // BEFORE this routing existed, Linux fell through to the modified
-    // Gram-Schmidt fallback below and lost orthogonality after ~10 QR
-    // applications -- observable as canonical-form drift in MPS imag-time
-    // evolution that started matching Accelerate at step 0 but diverged
-    // dramatically by step 1+.
+    // BEFORE this routing existed, Linux fell through to a Gram-Schmidt
+    // fallback that lost orthogonality after ~10 QR applications --
+    // observable as canonical-form drift in MPS imag-time evolution that
+    // started matching Accelerate at step 0 but diverged by step 1+.
+    // The fallback below (used on platforms without LAPACK, primarily
+    // Windows clang-cl without OpenBLAS) is now Householder QR too and
+    // matches LAPACK to machine precision.
 
     // Workspace arrays
     double complex *a_data = (double complex *)aligned_alloc_internal(
@@ -1602,110 +1736,8 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat) {
     free(tau);
 
 #else
-    // Classical Gram-Schmidt with twice-is-enough reorthogonalization (CGS2).
-    //
-    // Plain modified Gram-Schmidt loses orthogonality catastrophically after
-    // O(10) QR applications on the small tensors tn_apply_mpo chains
-    // together -- observed via the CA-MPS imag-time test on Linux OpenBLAS
-    // (now fixed via the LAPACK path) and on Windows clang-cl (no LAPACK
-    // available).  CGS2 recovers orthogonality to machine precision under
-    // the mild condition kappa(A) * eps < 1, which holds for our MPS
-    // canonicalization inputs.
-    //
-    // The algorithm: for each column j, do classical Gram-Schmidt TWICE.
-    // First pass removes the bulk of the non-orthogonal component; second
-    // pass removes the residual (quadratic suppression of error).  This is
-    // the Giraud-Langou-Rozloznik-Eshof "CGS2" variant with proven unit-
-    // roundoff orthogonality.
-    result->Q = tensor_create_matrix(m, k);
-    result->R = tensor_create_matrix(k, n);
-
-    if (!result->Q || !result->R) {
-        tensor_qr_free(result);
-        return NULL;
-    }
-
-    // Copy matrix columns for processing
-    tensor_t *A = tensor_copy(mat);
-    if (!A) {
-        tensor_qr_free(result);
-        return NULL;
-    }
-
-    for (uint32_t j = 0; j < k; j++) {
-        // Initialize Q[:,j] with A's column j.
-        for (uint32_t i = 0; i < m; i++) {
-            result->Q->data[i * k + j] = A->data[i * n + j];
-        }
-
-        // TWO PASSES of classical Gram-Schmidt against Q[:,0..j-1].
-        for (int pass = 0; pass < 2; pass++) {
-            double complex *corrections = NULL;
-            if (j > 0) {
-                corrections = (double complex *)calloc(j, sizeof(double complex));
-                if (!corrections) { tensor_free(A); tensor_qr_free(result); return NULL; }
-                /* Compute all corrections first (classical: uses current Q). */
-                for (uint32_t i = 0; i < j; i++) {
-                    double complex dot = 0.0;
-                    for (uint32_t l = 0; l < m; l++) {
-                        dot += conj(result->Q->data[l * k + i]) *
-                               result->Q->data[l * k + j];
-                    }
-                    corrections[i] = dot;
-                }
-                /* Apply all corrections. */
-                for (uint32_t i = 0; i < j; i++) {
-                    for (uint32_t l = 0; l < m; l++) {
-                        result->Q->data[l * k + j] -= corrections[i] *
-                                                      result->Q->data[l * k + i];
-                    }
-                }
-                /* Accumulate into R (pass 1 captures R[i,j]; pass 2 is a
-                 * tiny correction.  Sum both: R captures the total
-                 * projection onto each prior Q_i). */
-                for (uint32_t i = 0; i < j; i++) {
-                    if (pass == 0) {
-                        result->R->data[i * n + j] = corrections[i];
-                    } else {
-                        result->R->data[i * n + j] += corrections[i];
-                    }
-                }
-                free(corrections);
-            }
-        }
-
-        // Normalize
-        double norm = 0.0;
-        for (uint32_t i = 0; i < m; i++) {
-            norm += cabs(result->Q->data[i * k + j]) * cabs(result->Q->data[i * k + j]);
-        }
-        norm = sqrt(norm);
-
-        result->R->data[j * n + j] = norm;
-
-        if (norm > 1e-12) {
-            for (uint32_t i = 0; i < m; i++) {
-                result->Q->data[i * k + j] /= norm;
-            }
-        } else {
-            // Column is nearly linearly dependent after reorthogonalization;
-            // zero it out to prevent subsequent non-orthogonality.
-            for (uint32_t i = 0; i < m; i++) {
-                result->Q->data[i * k + j] = 0.0;
-            }
-        }
-
-        // Fill remaining R entries
-        for (uint32_t jj = j + 1; jj < n; jj++) {
-            double complex dot = 0.0;
-            for (uint32_t i = 0; i < m; i++) {
-                dot += conj(result->Q->data[i * k + j]) * A->data[i * n + jj];
-            }
-            result->R->data[j * n + jj] = dot;
-        }
-    }
-
-    tensor_free(A);
+    free(result);
+    return tensor_qr_householder_fallback(mat);
 #endif
 
     return result;
