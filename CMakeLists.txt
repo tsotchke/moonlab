@@ -1140,6 +1140,13 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_vs_sv PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_vs_sv COMMAND test_ca_mps_vs_sv)
 
+    # CA-MPS marginal Z probabilities + T-dagger correctness against the
+    # dense state-vector backend.  Deterministic n=4 H+T+T-dag+S+CNOT
+    # circuit; every single-qubit P(Z=+1) must agree to <1e-12.
+    add_executable(test_ca_mps_prob tests/unit/test_ca_mps_prob.c)
+    target_link_libraries(test_ca_mps_prob PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_prob COMMAND test_ca_mps_prob)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the

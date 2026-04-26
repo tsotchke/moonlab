@@ -410,6 +410,30 @@ ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q) {
      * observables.  So T is moonlab_ca_mps_rz(q, M_PI/4). */
     return moonlab_ca_mps_rz(s, q, M_PI / 4.0);
 }
+ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q) {
+    /* T-dagger = diag(1, e^{-i pi/4}) = R_Z(-pi/4) up to a global phase. */
+    return moonlab_ca_mps_rz(s, q, -M_PI / 4.0);
+}
+
+ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
+                                      uint32_t qubit, double* out_prob) {
+    if (!s || !out_prob) return CA_MPS_ERR_INVALID;
+    if (qubit >= s->n) return CA_MPS_ERR_INVALID;
+    uint8_t* p = (uint8_t*)calloc(s->n, sizeof(uint8_t));
+    if (!p) return CA_MPS_ERR_OOM;
+    p[qubit] = 3;  /* Z */
+    double _Complex z;
+    ca_mps_error_t e = moonlab_ca_mps_expect_pauli(s, p, &z);
+    free(p);
+    if (e != CA_MPS_SUCCESS) return e;
+    /* P(Z=+1) = (1 + <Z>) / 2; <Z> is real for any Hermitian Z, but be
+     * defensive and clamp into [0, 1]. */
+    double pr = 0.5 * (1.0 + creal(z));
+    if (pr < 0.0) pr = 0.0;
+    if (pr > 1.0) pr = 1.0;
+    *out_prob = pr;
+    return CA_MPS_SUCCESS;
+}
 
 ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                              const uint8_t* pauli, double theta) {

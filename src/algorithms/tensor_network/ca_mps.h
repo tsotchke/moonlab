@@ -100,6 +100,9 @@ ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
 /** T gate: equals R_Z(pi/4) up to a global phase e^{-i pi/8}. */
 ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
 
+/** T-dagger gate: equals R_Z(-pi/4) up to a global phase e^{+i pi/8}. */
+ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q);
+
 /**
  * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
  *
@@ -168,6 +171,20 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                                 const double _Complex* coeffs,
                                                 uint32_t num_terms,
                                                 double _Complex* out_expval);
+
+/**
+ * @brief Marginal probability of measuring Z = +1 on a single qubit.
+ *
+ * Returns P(Z_q = +1) = (1 + <psi|Z_q|psi>) / 2, in [0, 1] up to imag-noise
+ * tolerance.  Marginal only -- ignores correlations with other qubits.  For
+ * correlated multi-qubit sampling use the Pauli-rotation MPO + sequential
+ * Born-rule sampling layer (not yet implemented).
+ *
+ * Cost: O(n^2 + n chi^2), same as a single Pauli-string expectation.
+ */
+ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
+                                      uint32_t qubit,
+                                      double* out_prob);
 
 #ifdef __cplusplus
 }
