@@ -462,6 +462,8 @@ static tn_gate_error_t apply_gate_2q_adjacent_webgpu(tn_mps_state_t *state,
 
     // Track truncation
     state->cumulative_truncation_error += svd->truncation_error;
+    tn_mps_track_relative_truncation(state, svd->singular_values,
+                                      svd->bond_dim, svd->truncation_error);
     if (svd->num_discarded > 0) {
         state->num_truncations++;
     }
@@ -883,6 +885,8 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
 
     // Track truncation
     state->cumulative_truncation_error += svd->truncation_error;
+    tn_mps_track_relative_truncation(state, svd->singular_values,
+                                      svd->bond_dim, svd->truncation_error);
     if (svd->num_discarded > 0) {
         state->num_truncations++;
     }
