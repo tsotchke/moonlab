@@ -415,6 +415,55 @@ ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q) {
     return moonlab_ca_mps_rz(s, q, -M_PI / 4.0);
 }
 
+ca_mps_error_t moonlab_ca_mps_phase(moonlab_ca_mps_t* s,
+                                     uint32_t q, double theta) {
+    /* P(theta) = diag(1, e^{i theta}) = e^{i theta / 2} R_Z(theta).
+     * Global phase doesn't affect any observable. */
+    return moonlab_ca_mps_rz(s, q, theta);
+}
+
+ca_mps_error_t moonlab_ca_mps_crz(moonlab_ca_mps_t* s,
+                                   uint32_t c, uint32_t t, double theta) {
+    /* Standard 2-CNOT phase-kickback decomposition:
+     *   |c=0>|t> -> identity
+     *   |c=1>|0> -> e^{-i theta/2} |1>|0>
+     *   |c=1>|1> -> e^{+i theta/2} |1>|1>
+     * which is exactly controlled-R_Z(theta) with R_Z = diag(e^{-i a/2},
+     * e^{+i a/2}).  Built from existing rz + cnot primitives. */
+    if (!s) return CA_MPS_ERR_INVALID;
+    if (c == t) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    if ((e = moonlab_ca_mps_rz(s, t,  theta / 2.0)) != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_cnot(s, c, t))            != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_rz(s, t, -theta / 2.0))   != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_cnot(s, c, t))            != CA_MPS_SUCCESS) return e;
+    return CA_MPS_SUCCESS;
+}
+
+ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
+                                   uint32_t c, uint32_t t, double theta) {
+    /* CRX = H_t . CRZ . H_t  (since H R_Z H = R_X). */
+    if (!s) return CA_MPS_ERR_INVALID;
+    if (c == t) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    if ((e = moonlab_ca_mps_h(s, t))               != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_crz(s, c, t, theta))   != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_h(s, t))               != CA_MPS_SUCCESS) return e;
+    return CA_MPS_SUCCESS;
+}
+
+ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
+                                   uint32_t c, uint32_t t, double theta) {
+    /* CRY = S_t . CRX . S^dag_t  (since S X S^dag = Y -> S R_X S^dag = R_Y). */
+    if (!s) return CA_MPS_ERR_INVALID;
+    if (c == t) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    if ((e = moonlab_ca_mps_s(s, t))               != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_crx(s, c, t, theta))   != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_sdag(s, t))            != CA_MPS_SUCCESS) return e;
+    return CA_MPS_SUCCESS;
+}
+
 ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit, double* out_prob) {
     if (!s || !out_prob) return CA_MPS_ERR_INVALID;

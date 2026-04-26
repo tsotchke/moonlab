@@ -1,9 +1,10 @@
 /**
  * @file test_ca_mps_prob.c
- * @brief Smoke test for moonlab_ca_mps_prob_z and moonlab_ca_mps_t_dagger
- *        against the dense state-vector backend.  Runs a deterministic
- *        H + T + T-dagger + S + CNOT circuit on n=4 and verifies every
- *        single-qubit Z probability agrees to <1e-12.
+ * @brief Smoke test for the convenience CA-MPS API additions
+ *        (T-dagger, phase, CRZ, CRX, CRY, prob_z) against the dense
+ *        state-vector backend.  Runs a deterministic mixed circuit on
+ *        n=4 and verifies every single-qubit Z probability agrees to
+ *        <1e-12 -- catches sign-convention bugs in the CR* decomps.
  */
 #include "../../src/algorithms/tensor_network/ca_mps.h"
 #include "../../src/quantum/state.h"
@@ -35,18 +36,21 @@ int main(void) {
     quantum_state_t*  sv = quantum_state_create((int)n);
     if (!ca || !sv) return 2;
 
-    /* Build a deterministic circuit:
-     *   H q0; H q1; T q0; T_dag q1; S q2; CNOT q0 q2; H q3; T q3; T_dag q3 */
-    moonlab_ca_mps_h(ca, 0);            gate_hadamard(sv, 0);
-    moonlab_ca_mps_h(ca, 1);            gate_hadamard(sv, 1);
-    moonlab_ca_mps_t_gate(ca, 0);       gate_t(sv, 0);
-    moonlab_ca_mps_t_dagger(ca, 1);     gate_t_dagger(sv, 1);
-    moonlab_ca_mps_s(ca, 2);            gate_s(sv, 2);
-    moonlab_ca_mps_cnot(ca, 0, 2);      gate_cnot(sv, 0, 2);
-    moonlab_ca_mps_h(ca, 3);            gate_hadamard(sv, 3);
-    moonlab_ca_mps_t_gate(ca, 3);       gate_t(sv, 3);
-    moonlab_ca_mps_t_dagger(ca, 3);     gate_t_dagger(sv, 3);
-    /* T then T-dagger = identity, so q3 should be back to |+> after H. */
+    /* Build a deterministic mixed circuit covering every new primitive.
+     * Goal: non-trivial entanglement + non-Clifford phase that exercises
+     * the CR* phase-kickback decomps. */
+    moonlab_ca_mps_h(ca, 0);                   gate_hadamard(sv, 0);
+    moonlab_ca_mps_h(ca, 1);                   gate_hadamard(sv, 1);
+    moonlab_ca_mps_t_gate(ca, 0);              gate_t(sv, 0);
+    moonlab_ca_mps_t_dagger(ca, 1);            gate_t_dagger(sv, 1);
+    moonlab_ca_mps_phase(ca, 2, 0.7);          gate_phase(sv, 2, 0.7);
+    moonlab_ca_mps_crz(ca, 0, 2, 0.4);         gate_crz(sv, 0, 2, 0.4);
+    moonlab_ca_mps_crx(ca, 1, 3, 0.9);         gate_crx(sv, 1, 3, 0.9);
+    moonlab_ca_mps_cry(ca, 2, 3, -0.6);        gate_cry(sv, 2, 3, -0.6);
+    moonlab_ca_mps_cnot(ca, 0, 1);             gate_cnot(sv, 0, 1);
+    moonlab_ca_mps_t_gate(ca, 3);              gate_t(sv, 3);
+    moonlab_ca_mps_t_dagger(ca, 3);            gate_t_dagger(sv, 3);
+    moonlab_ca_mps_phase(ca, 0, -0.3);         gate_phase(sv, 0, -0.3);
 
     for (uint32_t q = 0; q < n; q++) {
         double pca, psv = sv_prob_z(sv, (int)q);
@@ -64,15 +68,6 @@ int main(void) {
             fprintf(stdout, "  OK  q=%u  P(Z=+1)=%.6f  err=%.2e\n", q, pca, err);
         }
     }
-    /* Specifically check q3: H then T then T-dag is exactly H|0> = |+>,
-     * so P(Z=+1) = 0.5. */
-    double pca3;
-    moonlab_ca_mps_prob_z(ca, 3, &pca3);
-    if (fabs(pca3 - 0.5) > 1e-12) {
-        fprintf(stderr, "FAIL  q=3 should be exactly 0.5 (H|0>=|+>); got %.12f\n", pca3);
-        failures++;
-    }
-
     moonlab_ca_mps_free(ca);
     quantum_state_free(sv);
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
