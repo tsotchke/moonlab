@@ -52,15 +52,18 @@ typedef lapack_complex_double lapack_complex_t;
 #define HAS_METAL 0
 #endif
 
-/* Test-only flag: -DQSIM_FORCE_QR_FALLBACK=1 forces tensor_qr down the
- * Householder fallback path even on platforms that have LAPACK.  Used to
- * exercise the no-LAPACK QR path locally on macOS/Linux without touching
- * tensor_svd (which has a separate Jacobi-SVD fallback that does not yet
- * handle the m < n shape correctly). */
+/* Test-only flags: force individual decomposition fallbacks even on
+ * platforms that have LAPACK.  Used to exercise the no-LAPACK paths
+ * locally on macOS/Linux without disturbing the rest of the BLAS stack. */
 #ifdef QSIM_FORCE_QR_FALLBACK
 #define QSIM_QR_USE_FALLBACK 1
 #else
 #define QSIM_QR_USE_FALLBACK 0
+#endif
+#ifdef QSIM_FORCE_SVD_FALLBACK
+#define QSIM_SVD_USE_FALLBACK 1
+#else
+#define QSIM_SVD_USE_FALLBACK 0
 #endif
 
 #ifdef HAS_CUDA
@@ -975,7 +978,7 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
     tensor_svd_result_t *result = (tensor_svd_result_t *)calloc(1, sizeof(tensor_svd_result_t));
     if (!result) return NULL;
 
-#if HAS_LAPACK
+#if HAS_LAPACK && !QSIM_SVD_USE_FALLBACK
     // Use LAPACK zgesvd - works with both Accelerate (Apple) and OpenBLAS (Linux)
 #if defined(QSIM_HAS_CLAPACK)
     integer info;
@@ -1188,15 +1191,41 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
 
 #else
     // =========================================================================
-    // Golub-Kahan bidiagonalization SVD (no LAPACK fallback)
-    // This is a proper SVD algorithm.
-    // Uses Householder reflections to reduce to bidiagonal form,
-    // then QR iteration to find singular values.
+    // One-sided Jacobi SVD (no LAPACK fallback)
     // =========================================================================
+    //
+    // Wide-matrix dispatch: the one-sided Jacobi sweep below only rotates
+    // min(m,n) columns of A_work, so for m < n the trailing n - m columns
+    // of A get ignored and Vh comes out wrong (singular values are all in
+    // the first m columns).  Solve the daggered SVD on A^H (which is tall)
+    // and transpose the result back.
+    if (m < n) {
+        free(result);
+        tensor_t *Ah = tensor_dagger(mat);
+        if (!Ah) return NULL;
+        tensor_svd_result_t *svd_h = tensor_svd(Ah, max_rank, cutoff);
+        tensor_free(Ah);
+        if (!svd_h) return NULL;
+        // A = (A^H)^H = (U_h S Vh_h)^H = Vh_h^H S U_h^H
+        // -> A's U = dagger(Vh_h), A's Vh = dagger(U_h), S unchanged.
+        tensor_svd_result_t *out =
+            (tensor_svd_result_t *)calloc(1, sizeof(tensor_svd_result_t));
+        if (!out) { tensor_svd_free(svd_h); return NULL; }
+        out->k = svd_h->k;
+        out->truncation_error = svd_h->truncation_error;
+        out->S = (double *)malloc(out->k * sizeof(double));
+        out->U  = tensor_dagger(svd_h->Vh);
+        out->Vh = tensor_dagger(svd_h->U);
+        if (!out->S || !out->U || !out->Vh) {
+            tensor_svd_free(out); tensor_svd_free(svd_h); return NULL;
+        }
+        memcpy(out->S, svd_h->S, out->k * sizeof(double));
+        tensor_svd_free(svd_h);
+        return out;
+    }
 
-    // One-sided Jacobi SVD algorithm
-    // Computes A = U * S * V^H using Jacobi rotations on A^H * A
-    // Numerically stable and accurate for all matrix sizes
+    // One-sided Jacobi SVD algorithm (m >= n path).
+    // Computes A = U * S * V^H using Jacobi rotations on A^H * A.
 
     // Allocate full-size working arrays
     double complex *U_work = (double complex *)calloc(m * min_mn, sizeof(double complex));
