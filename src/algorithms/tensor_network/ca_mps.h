@@ -103,6 +103,28 @@ ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
 /** T-dagger gate: equals R_Z(-pi/4) up to a global phase e^{+i pi/8}. */
 ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q);
 
+/** Phase gate: P(theta) = diag(1, e^{i theta}); equals R_Z(theta) up to a
+ *  global phase e^{i theta / 2}. */
+ca_mps_error_t moonlab_ca_mps_phase(moonlab_ca_mps_t* s, uint32_t q, double theta);
+
+/** Controlled-R_Z(theta).  Decomposed as
+ *    R_Z(target, theta/2) . CNOT . R_Z(target, -theta/2) . CNOT
+ *  using only existing CA-MPS primitives. */
+ca_mps_error_t moonlab_ca_mps_crz(moonlab_ca_mps_t* s,
+                                   uint32_t control, uint32_t target,
+                                   double theta);
+
+/** Controlled-R_X(theta).  Decomposed as H_t . CRZ . H_t. */
+ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
+                                   uint32_t control, uint32_t target,
+                                   double theta);
+
+/** Controlled-R_Y(theta).  Decomposed as S_t . CRX . S^dag_t
+ *  (since S X S^dag = Y). */
+ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
+                                   uint32_t control, uint32_t target,
+                                   double theta);
+
 /**
  * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
  *
