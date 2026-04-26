@@ -195,7 +195,16 @@ typedef struct {
     tn_state_config_t config;       /**< Configuration */
     double norm;                    /**< State norm (may be non-1 after truncation) */
     double log_norm_factor;         /**< Log of accumulated norm factor (for lazy normalization) */
-    double cumulative_truncation_error; /**< Total truncation error */
+    /** Running sum of `truncation_error` (L2 norm of dropped singular values)
+     *  across every SVD truncation since state creation.  NOT normalised
+     *  by the per-step state norm, so this drifts above 1 under
+     *  non-unitary evolution (e.g. imaginary-time TEBD).  For a unit-norm
+     *  quality indicator use `max_relative_truncation_error` below. */
+    double cumulative_truncation_error;
+    /** max_i [ trunc_err_i / sqrt(trunc_err_i^2 + sum kept_s_i^2) ] over all
+     *  SVD truncations.  Bounded in [0, 1).  Equals zero when no
+     *  truncation has occurred (all bonds fit in `max_bond_dim`). */
+    double max_relative_truncation_error;
     uint64_t num_truncations;       /**< Number of truncation operations */
     tn_mps_workspace_t workspace;   /**< Pre-allocated workspace for optimized operations */
 } tn_mps_state_t;
@@ -209,9 +218,24 @@ typedef struct {
     uint32_t max_bond_dim;          /**< Maximum bond dimension */
     double avg_bond_dim;            /**< Average bond dimension */
     double entanglement_entropy;    /**< Entanglement entropy at center */
-    double truncation_error;        /**< Cumulative truncation error */
+    double truncation_error;        /**< Cumulative truncation error (unbounded) */
+    double max_relative_truncation_error; /**< Max per-step relative error, [0,1) */
     double norm;                    /**< Current norm */
 } tn_mps_stats_t;
+
+/**
+ * @brief Update `max_relative_truncation_error` from one SVD compression.
+ *
+ * Computes trunc_err / sqrt(trunc_err^2 + sum(kept_singular_values^2))
+ * (bounded in [0, 1)) and lifts the state's running max.  No-op when
+ * `kept` is NULL or all-zero (e.g. before any truncation), or when
+ * `dropped == 0` (lossless step).  Internal helper exposed for the
+ * SVD-bond + 2-qubit-gate truncation sites.
+ */
+void tn_mps_track_relative_truncation(tn_mps_state_t *state,
+                                       const double *kept_singular_values,
+                                       uint32_t kept_count,
+                                       double dropped_l2_norm);
 
 // ============================================================================
 // STATE CREATION AND DESTRUCTION

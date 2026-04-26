@@ -577,7 +577,10 @@ int main(int argc, char *argv[]) {
     printf("  Final state statistics:\n");
     printf("    • Memory used: %.2f MB\n", stats.memory_bytes / (1024.0 * 1024.0));
     printf("    • Max bond dimension: %u\n", stats.max_bond_dim);
-    printf("    • Truncation error: %.2e\n", stats.truncation_error);
+    printf("    • Truncation error: %.2e cumulative (sum of dropped-SV L2 norms)\n",
+           stats.truncation_error);
+    printf("                        %.2e max relative (per-step, in [0,1))\n",
+           stats.max_relative_truncation_error);
     printf("    • Total time: %.2f seconds\n", total_time);
     printf("\n");
 

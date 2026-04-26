@@ -116,6 +116,7 @@ tn_mps_state_t *tn_mps_create_zero(uint32_t num_qubits,
     state->norm = 1.0;
     state->log_norm_factor = 0.0;
     state->cumulative_truncation_error = 0.0;
+    state->max_relative_truncation_error = 0.0;
     state->num_truncations = 0;
 
     // Initialize workspace as invalid (will be allocated on first use)
@@ -335,6 +336,7 @@ tn_mps_state_t *tn_mps_from_statevector(const double complex *amplitudes,
     state->norm = 1.0;
     state->log_norm_factor = 0.0;
     state->cumulative_truncation_error = total_truncation;
+    state->max_relative_truncation_error = 0.0;
     state->num_truncations = num_qubits - 1;
 
     // Initialize workspace as invalid (will be allocated on first use)
@@ -362,6 +364,7 @@ tn_mps_state_t *tn_mps_copy(const tn_mps_state_t *state) {
     copy->norm = state->norm;
     copy->log_norm_factor = state->log_norm_factor;
     copy->cumulative_truncation_error = state->cumulative_truncation_error;
+    copy->max_relative_truncation_error = state->max_relative_truncation_error;
     copy->num_truncations = state->num_truncations;
 
     // Workspace is not copied - initialized fresh for each state
@@ -456,6 +459,7 @@ tn_mps_stats_t tn_mps_get_stats(const tn_mps_state_t *state) {
 
     stats.norm = state->norm;
     stats.truncation_error = state->cumulative_truncation_error;
+    stats.max_relative_truncation_error = state->max_relative_truncation_error;
     stats.max_bond_dim = tn_mps_max_bond_dim(state);
 
     uint64_t total_elements = 0;
@@ -497,7 +501,11 @@ void tn_mps_print_info(const tn_mps_state_t *state) {
     printf("  Canonical form:   %d (center: %d)\n",
            state->canonical, state->canonical_center);
     printf("  Norm:             %.6f\n", state->norm);
-    printf("  Truncation error: %.6e\n", state->cumulative_truncation_error);
+    printf("  Truncation error: %.6e cumulative (sum of dropped-SV L2 norms; "
+           "unbounded under non-unitary evolution)\n",
+           state->cumulative_truncation_error);
+    printf("                    %.6e max relative (per-step, bounded in [0,1))\n",
+           state->max_relative_truncation_error);
     printf("  Bond dimensions:  [");
     for (uint32_t i = 0; i < state->num_qubits - 1; i++) {
         printf("%u", state->bond_dims[i]);
@@ -1534,11 +1542,33 @@ tn_state_error_t tn_mps_truncate_bond(tn_mps_state_t *state,
 
     if (truncation_error) *truncation_error = result->truncation_error;
 
+    tn_mps_track_relative_truncation(state, result->singular_values,
+                                      result->bond_dim, result->truncation_error);
+
     result->left = NULL;
     result->right = NULL;
     svd_compress_result_free(result);
 
     return TN_STATE_SUCCESS;
+}
+
+void tn_mps_track_relative_truncation(tn_mps_state_t *state,
+                                       const double *kept_singular_values,
+                                       uint32_t kept_count,
+                                       double dropped_l2_norm) {
+    if (!state || dropped_l2_norm <= 0.0) return;
+    double kept_sq = 0.0;
+    if (kept_singular_values) {
+        for (uint32_t i = 0; i < kept_count; i++) {
+            double s = kept_singular_values[i];
+            kept_sq += s * s;
+        }
+    }
+    double total_sq = kept_sq + dropped_l2_norm * dropped_l2_norm;
+    if (total_sq <= 0.0) return;
+    double rel = dropped_l2_norm / sqrt(total_sq);
+    if (rel > state->max_relative_truncation_error)
+        state->max_relative_truncation_error = rel;
 }
 
 tn_state_error_t tn_mps_grow_bond(tn_mps_state_t *state,
