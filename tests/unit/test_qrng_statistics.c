@@ -159,11 +159,17 @@ static void test_sp800_22_subset(const uint8_t *buf, size_t size) {
      * 256 KiB = 2 Mbits, plenty for the light tests. */
     /* NIST SP 800-22 prescribes running the battery on multiple
      * independent samples and accepting if the pass rate exceeds the
-     * expected (1 - alpha) fraction. A single-sample check at alpha
-     * = 0.01 gives ~1% false rejection per test * 6 tests ~= 6% CI
-     * flakiness. We sample 3 buffers and require at least 2 of 3
-     * pass each test (false-reject rate ~3e-6 per test). */
-    const int attempts = 3;
+     * expected (1 - alpha) fraction.  Each test rejects 1% of runs at
+     * alpha = 0.01 even when the RNG is truly uniform.  We sample 5
+     * buffers and require at least 3 of 5 to pass each test --
+     * per-test false-reject rate ~= P(0..2 of 5 succeed at p=0.99) ~=
+     * 1e-5, six tests give ~6e-5 per CI run.  An earlier 2-of-3
+     * threshold (3e-4 per test) was tripping every few hundred runs
+     * on macOS x86_64 with completely valid QRNG output (e.g. the
+     * 2026-04-24 run that saw serial p-values of 0.008, 0.621, 0.005:
+     * one healthy outlier and two harmless boundary brushes). */
+    const int attempts = 5;
+    const int min_pass = 3;
     int pass[6] = {0};
     uint8_t* buf2 = malloc(QRNG_SAMPLE_BYTES);
     uint8_t* bits2 = malloc(QRNG_SAMPLE_BYTES * 8);
@@ -209,12 +215,12 @@ static void test_sp800_22_subset(const uint8_t *buf, size_t size) {
         if (p_cf   >= 0.01) pass[4]++;
         if (p_ser  >= 0.01) pass[5]++;
     }
-    CHECK(pass[0] >= 2, "monobit passed %d/%d attempts", pass[0], attempts);
-    CHECK(pass[1] >= 2, "block-frequency passed %d/%d attempts", pass[1], attempts);
-    CHECK(pass[2] >= 2, "runs passed %d/%d attempts", pass[2], attempts);
-    CHECK(pass[3] >= 2, "longest-run passed %d/%d attempts", pass[3], attempts);
-    CHECK(pass[4] >= 2, "cusum-forward passed %d/%d attempts", pass[4], attempts);
-    CHECK(pass[5] >= 2, "serial passed %d/%d attempts", pass[5], attempts);
+    CHECK(pass[0] >= min_pass, "monobit passed %d/%d attempts", pass[0], attempts);
+    CHECK(pass[1] >= min_pass, "block-frequency passed %d/%d attempts", pass[1], attempts);
+    CHECK(pass[2] >= min_pass, "runs passed %d/%d attempts", pass[2], attempts);
+    CHECK(pass[3] >= min_pass, "longest-run passed %d/%d attempts", pass[3], attempts);
+    CHECK(pass[4] >= min_pass, "cusum-forward passed %d/%d attempts", pass[4], attempts);
+    CHECK(pass[5] >= min_pass, "serial passed %d/%d attempts", pass[5], attempts);
     free(bits); free(buf2); free(bits2);
 }
 
