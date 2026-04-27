@@ -370,7 +370,10 @@ if(QSIM_ENABLE_OPENCL)
         message(STATUS "OpenCL: Found (version ${OpenCL_VERSION_STRING})")
         set(QSIM_HAS_OPENCL ON)
     else()
-        message(STATUS "OpenCL: Not found")
+        message(FATAL_ERROR
+            "QSIM_ENABLE_OPENCL=ON but OpenCL was not found by find_package. "
+            "Install an OpenCL SDK (Khronos headers + ICD loader) or "
+            "re-run with -DQSIM_ENABLE_OPENCL=OFF.")
     endif()
 endif()
 
@@ -381,7 +384,10 @@ if(QSIM_ENABLE_VULKAN)
         message(STATUS "Vulkan: Found")
         set(QSIM_HAS_VULKAN ON)
     else()
-        message(STATUS "Vulkan: Not found")
+        message(FATAL_ERROR
+            "QSIM_ENABLE_VULKAN=ON but Vulkan was not found by find_package. "
+            "Install the Vulkan SDK (LunarG SDK on Linux/Windows, MoltenVK "
+            "on macOS) or re-run with -DQSIM_ENABLE_VULKAN=OFF.")
     endif()
 endif()
 
@@ -432,13 +438,24 @@ if(QSIM_ENABLE_CUQUANTUM)
                     set(QSIM_HAS_CUTENSORNET ON)
                 endif()
             else()
-                message(STATUS "cuQuantum: Not found (CUDA available, using native kernels)")
+                message(FATAL_ERROR
+                    "QSIM_ENABLE_CUQUANTUM=ON and CUDA was found, but the "
+                    "cuQuantum headers (custatevec.h) or cuStateVec library "
+                    "could not be located.  Set CUQUANTUM_ROOT or "
+                    "$ENV{CUQUANTUM_ROOT} to the cuQuantum install root, or "
+                    "re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
             endif()
         else()
-            message(STATUS "CUDA: Toolkit not found")
+            message(FATAL_ERROR
+                "QSIM_ENABLE_CUQUANTUM=ON but the CUDA Toolkit was not "
+                "found by find_package(CUDAToolkit).  Install the CUDA "
+                "Toolkit or re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
         endif()
     else()
-        message(STATUS "CUDA: Compiler not found")
+        message(FATAL_ERROR
+            "QSIM_ENABLE_CUQUANTUM=ON but no CUDA compiler is available. "
+            "Install the CUDA Toolkit (which provides nvcc) or re-run "
+            "with -DQSIM_ENABLE_CUQUANTUM=OFF.")
     endif()
 endif()
 
@@ -449,7 +466,11 @@ if(QSIM_ENABLE_MPI)
         message(STATUS "MPI: Found")
         set(QSIM_HAS_MPI ON)
     else()
-        message(STATUS "MPI: Not found")
+        message(FATAL_ERROR
+            "QSIM_ENABLE_MPI=ON but MPI was not found by find_package. "
+            "Install OpenMPI / MPICH (Linux: apt install libopenmpi-dev, "
+            "macOS: brew install open-mpi) or re-run with "
+            "-DQSIM_ENABLE_MPI=OFF.")
     endif()
 endif()
 
