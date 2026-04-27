@@ -974,6 +974,7 @@ if(QSIM_BUILD_TESTS)
     add_executable(qsim_test tests/quantum_sim_test.c)
     target_link_libraries(qsim_test PRIVATE quantumsim)
     add_test(NAME quantum_sim_test COMMAND qsim_test)
+    set_tests_properties(quantum_sim_test PROPERTIES LABELS "long")
 
     # Health tests
     add_executable(health_tests_test tests/health_tests_test.c)
@@ -1077,6 +1078,7 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_long_evolution tests/test_long_evolution.c)
     target_link_libraries(test_long_evolution PRIVATE quantumsim)
     add_test(NAME long_evolution COMMAND test_long_evolution)
+    set_tests_properties(long_evolution PROPERTIES LABELS "long")
 
     # Fast-measurement correctness test.
     add_executable(test_fast_measurement tests/test_fast_measurement.c)
@@ -1307,6 +1309,7 @@ if(QSIM_BUILD_TESTS)
     endif()
     if(NOT QSIM_PLATFORM_WINDOWS)
         add_test(NAME unit_mpo_kpm COMMAND test_mpo_kpm)
+        set_tests_properties(unit_mpo_kpm PROPERTIES LABELS "long")
     endif()
 
     # Quantum geometric tensor: Berry / Chern via FHS link variables.
@@ -1462,6 +1465,7 @@ if(QSIM_BUILD_TESTS)
     add_executable(test_qrng_statistics tests/unit/test_qrng_statistics.c)
     target_link_libraries(test_qrng_statistics PRIVATE quantumsim)
     add_test(NAME unit_qrng_statistics COMMAND test_qrng_statistics)
+    set_tests_properties(unit_qrng_statistics PROPERTIES LABELS "long")
 
     if(QSIM_BUILD_BENCHMARKS)
     # Performance benchmarks (build-only; no ctest entry so CI stays

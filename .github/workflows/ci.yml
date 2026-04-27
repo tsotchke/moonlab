@@ -31,7 +31,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (ctest, excluding long/heavy suites)
-        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
       - name: Upload dylib
         if: ${{ env.ACT != 'true' }}
@@ -156,7 +156,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
       - name: Upload dylib
         if: ${{ env.ACT != 'true' }}
@@ -185,7 +185,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
       - name: Upload dylib
         if: ${{ env.ACT != 'true' }}
@@ -214,7 +214,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test
-        run: ctest --test-dir build -E long_evolution --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
   macos-debug:
     name: macOS arm64 (Debug)
@@ -236,7 +236,9 @@ jobs:
         # enough Debug-build floating-point noise that the rounded
         # Chern number drifts from +/-1 to 0.  Release builds are
         # unaffected (the Release tier runs the test).
-        run: ctest --test-dir build -E "long_evolution|unit_qgt" --output-on-failure --timeout 600
+        # unit_qgt: Debug-build float noise on Haldane Chern integral
+        # rounds +/-1 to 0; covered by Release tier.
+        run: ctest --test-dir build -LE long -E unit_qgt --output-on-failure --timeout 600
 
   # ============================================================================
   # Tier B — MPI end-to-end (mpirun inside CI, both macOS and Linux).
@@ -262,7 +264,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
   linux-opencl:
     name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, compile + fallback smoke)
@@ -328,7 +330,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -E "long_evolution|quantum_sim_test|unit_mpo_kpm|unit_qrng_statistics" --output-on-failure --timeout 300
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
   # ============================================================================
   # Tier C — sanitizers (ASAN + UBSAN) — correctness gates.
@@ -371,7 +373,12 @@ jobs:
         # unit_ca_mps_kagome12 runs a 12-qubit Trotter schedule that is
         # compute-heavy under ASAN instrumentation; it's covered by every
         # other tier as well.
-        run: ctest --test-dir build -E "long_evolution|python_bindings|rust_bindings|webgpu_unified|unit_qgt|unit_kagome_ed|unit_ca_mps_kagome12" --output-on-failure --timeout 600
+        # `-LE long` covers long_evolution, quantum_sim_test,
+        # unit_mpo_kpm, unit_qrng_statistics, unit_kagome_ed{,_large},
+        # and unit_ca_mps_kagome12 (all already labelled "long" in
+        # CMakeLists).  The remaining name-based exclusions are truly
+        # ASAN-specific, not slow-test exclusions.
+        run: ctest --test-dir build -LE long -E "python_bindings|rust_bindings|webgpu_unified|unit_qgt" --output-on-failure --timeout 600
 
   # ============================================================================
   # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
