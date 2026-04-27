@@ -4,12 +4,23 @@ from setuptools import setup, find_packages
 from pathlib import Path
 
 # Read README
-readme_path = Path(__file__).parent.parent.parent / "README.md"
+repo_root = Path(__file__).parent.parent.parent
+readme_path = repo_root / "README.md"
 long_description = readme_path.read_text() if readme_path.exists() else ""
+
+# Single source of truth for the version is VERSION.txt at the repo root,
+# matching CMakeLists.txt + pyproject.toml + bindings/rust/moonlab/Cargo.toml.
+# Convert PEP-440-incompatible "X.Y.Z-dev" -> "X.Y.Z.dev0" so pip is happy.
+version_path = repo_root / "VERSION.txt"
+_raw_version = version_path.read_text().strip() if version_path.exists() else "0.0.0"
+if _raw_version.endswith("-dev"):
+    _version = _raw_version[: -len("-dev")] + ".dev0"
+else:
+    _version = _raw_version.replace("-", ".")
 
 setup(
     name="moonlab",
-    version="0.1.2",
+    version=_version,
     author="tsotchke",
     description="High-performance quantum computing simulator for Apple Silicon",
     long_description=long_description,
