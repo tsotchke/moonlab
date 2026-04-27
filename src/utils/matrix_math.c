@@ -17,36 +17,60 @@ static inline double complex_abs_squared(complex_t z) {
     return r * r + i * i;
 }
 
-static inline void givens_rotation(
+/* Complex-Hermitian Jacobi (Givens) rotation that zeros A[p][q].
+ *
+ * The earlier real-only version (which used `creal(apq)` to derive `tau`
+ * and a real `s`) silently broke for true complex-Hermitian inputs:
+ * eigenvalues converged because the diagonal of a Hermitian matrix is
+ * real, but the eigenvectors only diagonalised the real part of A.
+ *
+ * Standard fix: factor the off-diagonal `a_pq = |a_pq| * e^{i phi}`,
+ * absorb the phase via D = diag(1, e^{-i phi}) so the resulting block
+ * is real-symmetric, then apply the real Jacobi rotation
+ *
+ *     R = [[c, s], [-s, c]]    (column-update convention used below)
+ *
+ * with the standard tan(2 theta) = -2 |a_pq| / (a_pp - a_qq) sign
+ * convention (i.e. cot(2 theta) = (a_qq - a_pp) / (2 |a_pq|)).
+ *
+ * The composite unitary U = D * R can be applied lazily by the caller
+ * via `phase` and the signed real `s`; we keep `phase` and `s`
+ * separate so the diagonal-update formula stays the standard real
+ * Jacobi  new_app = c^2 a - 2 c s |a_pq| + s^2 b.
+ */
+static inline void hermitian_givens_rotation(
     complex_t *matrix,
     size_t n,
     size_t p,
     size_t q,
-    double *c,
-    double *s
+    double *c_out,
+    double *s_out,
+    complex_t *phase_out
 ) {
-    // Compute Givens rotation to zero out matrix[p][q]
-    complex_t app = matrix[p * n + p];
-    complex_t aqq = matrix[q * n + q];
     complex_t apq = matrix[p * n + q];
+    double abs_apq = cabs(apq);
 
-    if (fabs(creal(apq)) < SMALL_NUMBER && fabs(cimag(apq)) < SMALL_NUMBER) {
-        *c = 1.0;
-        *s = 0.0;
+    if (abs_apq < SMALL_NUMBER) {
+        *c_out = 1.0;
+        *s_out = 0.0;
+        *phase_out = 1.0;
         return;
     }
-    
-    double tau = (creal(aqq) - creal(app)) / (2.0 * creal(apq));
+
+    *phase_out = apq / abs_apq;          /* e^{i phi} */
+    double app = creal(matrix[p * n + p]);
+    double aqq = creal(matrix[q * n + q]);
+
+    double tau = (aqq - app) / (2.0 * abs_apq);
     double t;
-    
-    if (tau >= 0) {
+    if (tau >= 0.0) {
         t = 1.0 / (tau + sqrt(1.0 + tau * tau));
     } else {
         t = -1.0 / (-tau + sqrt(1.0 + tau * tau));
     }
-    
-    *c = 1.0 / sqrt(1.0 + t * t);
-    *s = t * (*c);
+    double c = 1.0 / sqrt(1.0 + t * t);
+    *c_out = c;
+    *s_out = t * c;
 }
 
 // ============================================================================
@@ -113,40 +137,47 @@ int hermitian_eigen_decomposition(
             break;
         }
         
-        // Apply Givens rotation
+        /* Apply complex Hermitian Givens rotation in two pieces:
+         *   D = diag(1, e^{-i phi})       absorbs phase of a_pq
+         *   R = [[c, s], [-s, c]]         real Jacobi rotation
+         *   U = D * R     unitary; column update of A:
+         *     A[i, p] := c * A[i, p] - phase_bar * s * A[i, q]
+         *     A[i, q] := phase * s * A[i, p_old] + c * A[i, q]
+         * Diagonal block update is the standard real Jacobi form on
+         * the phase-cancelled |a_pq|. */
         double c, s;
-        givens_rotation(A, n, max_p, max_q, &c, &s);
-        
-        // Update matrix A
+        complex_t phase;
+        hermitian_givens_rotation(A, n, max_p, max_q, &c, &s, &phase);
+        const complex_t phase_bar = conj(phase);
+
+        /* Off-diagonal columns + symmetric rows for i not in {p, q}. */
         for (size_t i = 0; i < n; i++) {
-            if (i != max_p && i != max_q) {
-                complex_t aip = A[i * n + max_p];
-                complex_t aiq = A[i * n + max_q];
-                
-                A[i * n + max_p] = c * aip - s * aiq;
-                A[i * n + max_q] = s * aip + c * aiq;
-                A[max_p * n + i] = conj(A[i * n + max_p]);
-                A[max_q * n + i] = conj(A[i * n + max_q]);
-            }
+            if (i == max_p || i == max_q) continue;
+            complex_t aip = A[i * n + max_p];
+            complex_t aiq = A[i * n + max_q];
+            A[i * n + max_p] = c * aip - (phase_bar * s) * aiq;
+            A[i * n + max_q] = (phase * s) * aip + c * aiq;
+            A[max_p * n + i] = conj(A[i * n + max_p]);
+            A[max_q * n + i] = conj(A[i * n + max_q]);
         }
-        
-        // Update diagonal elements
-        complex_t app = A[max_p * n + max_p];
-        complex_t aqq = A[max_q * n + max_q];
-        complex_t apq = A[max_p * n + max_q];
-        
-        A[max_p * n + max_p] = c * c * app - 2.0 * c * s * apq + s * s * aqq;
-        A[max_q * n + max_q] = s * s * app + 2.0 * c * s * apq + c * c * aqq;
+
+        /* Diagonal block: in the basis where a_pq is real (= |a_pq|),
+         * the update is the standard real Jacobi form. */
+        const double app = creal(A[max_p * n + max_p]);
+        const double aqq = creal(A[max_q * n + max_q]);
+        const double abs_apq = cabs(A[max_p * n + max_q]);
+        A[max_p * n + max_p] = c * c * app - 2.0 * c * s * abs_apq + s * s * aqq;
+        A[max_q * n + max_q] = s * s * app + 2.0 * c * s * abs_apq + c * c * aqq;
         A[max_p * n + max_q] = 0.0;
         A[max_q * n + max_p] = 0.0;
-        
-        // Update eigenvectors
+
+        /* Eigenvector accumulation V := V * U.  Columns p, q of V get
+         * the same complex rotation as columns p, q of A. */
         for (size_t i = 0; i < n; i++) {
             complex_t vip = eigenvectors[i * n + max_p];
             complex_t viq = eigenvectors[i * n + max_q];
-            
-            eigenvectors[i * n + max_p] = c * vip - s * viq;
-            eigenvectors[i * n + max_q] = s * vip + c * viq;
+            eigenvectors[i * n + max_p] = c * vip - (phase_bar * s) * viq;
+            eigenvectors[i * n + max_q] = (phase * s) * vip + c * viq;
         }
         
         iteration++;

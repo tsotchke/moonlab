@@ -1188,6 +1188,13 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_svd_compress PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_svd_compress COMMAND test_svd_compress)
 
+    # Pin complex-Hermitian Jacobi correctness in matrix_math.c.
+    # Pre-2026-04-26 the rotations were real-valued; eigenvectors of
+    # complex-Hermitian inputs only diagonalised the real part of A.
+    add_executable(test_hermitian_eigen tests/unit/test_hermitian_eigen.c)
+    target_link_libraries(test_hermitian_eigen PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_hermitian_eigen COMMAND test_hermitian_eigen)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
