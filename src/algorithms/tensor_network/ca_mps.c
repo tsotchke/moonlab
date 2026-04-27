@@ -475,6 +475,51 @@ ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
     return CA_MPS_SUCCESS;
 }
 
+ca_mps_error_t moonlab_ca_mps_toffoli(moonlab_ca_mps_t* s,
+                                       uint32_t a, uint32_t b, uint32_t t) {
+    /* Standard Nielsen-Chuang decomposition.  6 CNOTs, 7 T/T-dagger,
+     * 2 H, all already in the CA-MPS API.
+     *
+     *   H t
+     *   CNOT b t ; T_dag t ; CNOT a t ; T t ; CNOT b t
+     *   T_dag t  ; CNOT a t ; T b   ; T t   ; H t
+     *   CNOT a b ; T a       ; T_dag b ; CNOT a b
+     */
+    if (!s) return CA_MPS_ERR_INVALID;
+    if (a == b || a == t || b == t) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    #define STEP(call) do { e = (call); if (e != CA_MPS_SUCCESS) return e; } while (0)
+    STEP(moonlab_ca_mps_h        (s, t));
+    STEP(moonlab_ca_mps_cnot     (s, b, t));
+    STEP(moonlab_ca_mps_t_dagger (s, t));
+    STEP(moonlab_ca_mps_cnot     (s, a, t));
+    STEP(moonlab_ca_mps_t_gate   (s, t));
+    STEP(moonlab_ca_mps_cnot     (s, b, t));
+    STEP(moonlab_ca_mps_t_dagger (s, t));
+    STEP(moonlab_ca_mps_cnot     (s, a, t));
+    STEP(moonlab_ca_mps_t_gate   (s, b));
+    STEP(moonlab_ca_mps_t_gate   (s, t));
+    STEP(moonlab_ca_mps_h        (s, t));
+    STEP(moonlab_ca_mps_cnot     (s, a, b));
+    STEP(moonlab_ca_mps_t_gate   (s, a));
+    STEP(moonlab_ca_mps_t_dagger (s, b));
+    STEP(moonlab_ca_mps_cnot     (s, a, b));
+    #undef STEP
+    return CA_MPS_SUCCESS;
+}
+
+ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
+                                       uint32_t c, uint32_t t1, uint32_t t2) {
+    /* CSWAP = CNOT(t2, t1) . Toffoli(c, t1, t2) . CNOT(t2, t1) */
+    if (!s) return CA_MPS_ERR_INVALID;
+    if (c == t1 || c == t2 || t1 == t2) return CA_MPS_ERR_INVALID;
+    ca_mps_error_t e;
+    if ((e = moonlab_ca_mps_cnot   (s, t2, t1))      != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_toffoli(s, c, t1, t2))   != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_cnot   (s, t2, t1))      != CA_MPS_SUCCESS) return e;
+    return CA_MPS_SUCCESS;
+}
+
 ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit, double* out_prob) {
     if (!s || !out_prob) return CA_MPS_ERR_INVALID;
