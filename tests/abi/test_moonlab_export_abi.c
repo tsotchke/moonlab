@@ -16,6 +16,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <complex.h>
 
 typedef int (*moonlab_qrng_bytes_fn)(uint8_t* buf, size_t size);
 typedef void (*moonlab_abi_version_fn)(int* major, int* minor, int* patch);
@@ -163,6 +164,54 @@ int main(void) {
             failures++;
         }
         if (!failures) fprintf(stdout, "moonlab_qwz_chern OK\n");
+    }
+
+    /* CA-MPS ABI surface: probe the create / Clifford / non-Clifford /
+     * observable entry points.  Don't drive a full simulation -- the
+     * goal is verifying the symbols are exported with the documented
+     * signatures.  Two-qubit Bell-state round-trip pins the most-used
+     * shape (H + CNOT, then <Z_0 Z_1> = +1 on the +Phi+ Bell state). */
+    typedef void* (*camps_create_fn)(uint32_t, uint32_t);
+    typedef void  (*camps_free_fn)(void*);
+    typedef int   (*camps_q_fn)(void*, uint32_t);
+    typedef int   (*camps_cc_fn)(void*, uint32_t, uint32_t);
+    typedef int   (*camps_expect_fn)(const void*, const uint8_t*, double _Complex*);
+
+    dlerror();
+    camps_create_fn  camps_create  = (camps_create_fn)  dlsym(h, "moonlab_ca_mps_create");
+    camps_free_fn    camps_free    = (camps_free_fn)    dlsym(h, "moonlab_ca_mps_free");
+    camps_q_fn       camps_h       = (camps_q_fn)       dlsym(h, "moonlab_ca_mps_h");
+    camps_cc_fn      camps_cnot    = (camps_cc_fn)      dlsym(h, "moonlab_ca_mps_cnot");
+    camps_expect_fn  camps_expect  = (camps_expect_fn)  dlsym(h, "moonlab_ca_mps_expect_pauli");
+
+    if (!camps_create || !camps_free || !camps_h || !camps_cnot || !camps_expect) {
+        fprintf(stderr, "dlsym for CA-MPS ABI symbols failed\n");
+        failures++;
+    } else {
+        void* s = camps_create(2, 4);
+        if (!s) {
+            fprintf(stderr, "moonlab_ca_mps_create(2, 4) returned NULL\n");
+            failures++;
+        } else {
+            (void)camps_h(s, 0);          /* prepare Bell state |Phi+> */
+            (void)camps_cnot(s, 0, 1);
+            uint8_t zz[2] = {3, 3};       /* Z_0 Z_1 */
+            double _Complex e = 0.0;
+            int rc = camps_expect(s, zz, &e);
+            if (rc != 0) {
+                fprintf(stderr, "expect_pauli rc = %d\n", rc); failures++;
+            } else {
+                double diff = creal(e) - 1.0;
+                if (diff < 0) diff = -diff;
+                if (diff > 1e-12) {
+                    fprintf(stderr, "Bell <Z_0 Z_1> = %.6f, expected +1\n", creal(e));
+                    failures++;
+                } else {
+                    fprintf(stdout, "moonlab_ca_mps_* (Bell <ZZ> = %.6f) OK\n", creal(e));
+                }
+            }
+            camps_free(s);
+        }
     }
 
     dlclose(h);
