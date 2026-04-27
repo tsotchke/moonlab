@@ -5,6 +5,7 @@
 
 #include "qgt.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -408,4 +409,39 @@ int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
     double raw = -zak / M_PI;
     if (out_raw) *out_raw = raw;
     return (int)lround(raw);
+}
+
+/* ====================================================================
+ * Topological phase diagrams (qgt_phase_diagram_chern)
+ * ==================================================================== */
+
+int qgt_phase_diagram_chern(qgt_param_system_fn factory,
+                             void* user,
+                             double param_min, double param_max,
+                             size_t K, size_t N,
+                             int* chern_out) {
+    if (!factory || !chern_out) return -1;
+    if (K < 2 || N < 4) return -1;
+    if (!(param_max > param_min)) return -1;
+
+    const double dp = (param_max - param_min) / (double)(K - 1);
+    for (size_t i = 0; i < K; i++) {
+        const double p = param_min + dp * (double)i;
+        qgt_system_t* sys = factory(user, p);
+        if (!sys) {
+            chern_out[i] = INT_MIN;
+            continue;
+        }
+        qgt_berry_grid_t g;
+        int rc = qgt_berry_grid(sys, N, &g);
+        if (rc != 0) {
+            chern_out[i] = INT_MIN;
+            qgt_free(sys);
+            continue;
+        }
+        chern_out[i] = (int)lround(g.chern);
+        qgt_berry_grid_free(&g);
+        qgt_free(sys);
+    }
+    return 0;
 }

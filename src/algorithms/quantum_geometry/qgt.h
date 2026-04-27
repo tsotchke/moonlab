@@ -282,6 +282,51 @@ void qgt_berry_grid_free(qgt_berry_grid_t* g);
 int qgt_metric_at(const qgt_system_t* sys, const double k[2],
                   double dk, double g[4]);
 
+/* ====================================================================
+ * Topological phase diagrams
+ *
+ * Sweep a 2-band Bloch model that depends on a single tunable
+ * parameter (e.g. QWZ mass m, Haldane phase phi) and classify each
+ * parameter value by its integer Chern number.  Output is a length-K
+ * array of integers covering K equally-spaced parameter samples in
+ * [param_min, param_max] inclusive.  Phase transitions show up as
+ * discrete jumps between integers.
+ *
+ * Cost: K * O(N^2) Bloch-Hamiltonian evaluations + K * O(N^2 log N)
+ * for the FHS Chern accumulation; K = 64 with N = 32 finishes in
+ * sub-second time on the QWZ model.
+ * ==================================================================== */
+
+/**
+ * @brief Build a parameterised QGT system from a single double knob.
+ *
+ * The factory @p factory takes the user pointer and the current
+ * parameter value, and must return a freshly allocated `qgt_system_t*`
+ * (or NULL on failure).  ::qgt_phase_diagram_chern frees each system
+ * after measuring it.
+ */
+typedef qgt_system_t* (*qgt_param_system_fn)(void* user, double param);
+
+/**
+ * @brief Compute integer Chern numbers along a 1D parameter sweep.
+ *
+ * @param factory    Builder for `qgt_system_t` parameterised by a double.
+ * @param user       Opaque user data forwarded to @p factory.
+ * @param param_min  Lower edge of the sweep (inclusive).
+ * @param param_max  Upper edge of the sweep (inclusive).
+ * @param K          Number of parameter samples (>=2).  K-1 spaces the grid.
+ * @param N          BZ grid side for the FHS Chern integral (>=4; 32 ample).
+ * @param[out] chern_out  Caller-allocated array of length K; populated
+ *                        with integer Chern numbers.
+ *
+ * @return 0 on success, negative on error.
+ */
+int qgt_phase_diagram_chern(qgt_param_system_fn factory,
+                             void* user,
+                             double param_min, double param_max,
+                             size_t K, size_t N,
+                             int* chern_out);
+
 #ifdef __cplusplus
 }
 #endif
