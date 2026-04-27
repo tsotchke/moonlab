@@ -145,6 +145,19 @@ ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
 ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
                                   double theta, double phi, double lambda);
 
+/** Toffoli (CCX): flip target if both controls are |1>.  Decomposed via
+ *  the Nielsen-Chuang 6-CNOT + 7-T construction so the operation is
+ *  expressed purely in terms of CA-MPS Clifford gates plus T / T-dagger.
+ *  All three qubit indices must be distinct. */
+ca_mps_error_t moonlab_ca_mps_toffoli(moonlab_ca_mps_t* s,
+                                       uint32_t c1, uint32_t c2, uint32_t t);
+
+/** Fredkin (CSWAP): swap @p t1 and @p t2 if the control is |1>.  Built
+ *  from CSWAP = CNOT(t1,t2) . Toffoli(c, t2, t1) . CNOT(t1, t2).  All
+ *  three qubit indices must be distinct. */
+ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
+                                       uint32_t c, uint32_t t1, uint32_t t2);
+
 /**
  * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
  *

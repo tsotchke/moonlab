@@ -247,6 +247,12 @@ int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, doubl
 int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
 int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
                                 double theta, double phi, double lambda);
+/** Toffoli (CCX): flips @p t when both @p c1 and @p c2 are |1>. */
+int moonlab_ca_mps_toffoli   (moonlab_ca_mps_t* s,
+                                uint32_t c1, uint32_t c2, uint32_t t);
+/** Fredkin (CSWAP): swaps @p t1 and @p t2 when @p c is |1>. */
+int moonlab_ca_mps_fredkin   (moonlab_ca_mps_t* s,
+                                uint32_t c, uint32_t t1, uint32_t t2);
 
 /** Apply exp(i theta P) for a Pauli string P (length = num_qubits). */
 int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,

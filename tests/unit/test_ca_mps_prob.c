@@ -53,6 +53,9 @@ int main(void) {
     moonlab_ca_mps_phase(ca, 0, -0.3);         gate_phase(sv, 0, -0.3);
     moonlab_ca_mps_u3(ca, 1, 0.8, -1.2, 0.5);  gate_u3(sv, 1, 0.8, -1.2, 0.5);
     moonlab_ca_mps_u3(ca, 2, 1.5, 0.0, -0.7);  gate_u3(sv, 2, 1.5, 0.0, -0.7);
+    /* Exercise the new 3-qubit gates. */
+    moonlab_ca_mps_toffoli(ca, 0, 1, 2);       gate_toffoli(sv, 0, 1, 2);
+    moonlab_ca_mps_fredkin(ca, 3, 0, 1);       gate_fredkin(sv, 3, 0, 1);
 
     for (uint32_t q = 0; q < n; q++) {
         double pca, psv = sv_prob_z(sv, (int)q);
