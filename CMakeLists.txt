@@ -1195,6 +1195,12 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_hermitian_eigen PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_hermitian_eigen COMMAND test_hermitian_eigen)
 
+    # QWZ phase diagram via qgt_phase_diagram_chern: integer Chern jumps
+    # at m = -2, 0, +2 (gap closures); compare to analytic phases.
+    add_executable(test_qgt_phase_diagram tests/unit/test_qgt_phase_diagram.c)
+    target_link_libraries(test_qgt_phase_diagram PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgt_phase_diagram COMMAND test_qgt_phase_diagram)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
