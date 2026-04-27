@@ -1144,25 +1144,30 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
     uint64_t vec_size = H_eff->two_site ? chi_l * d * d * chi_r : chi_l * d * chi_r;
 
     /* Persistent H_eff-apply scratch; declared up front so every
-     * goto cleanup path can free it unconditionally. */
+     * goto cleanup path can free it unconditionally.  All other
+     * pointers below are zeroed here so the cleanup label can
+     * unconditionally `free()` them whatever the failure point. */
     effective_hamiltonian_workspace_t ws;
     effective_hamiltonian_workspace_init(&ws);
+    double complex *v_prev = NULL, *v_curr = NULL, *v_next = NULL, *w = NULL;
+    double *alpha = NULL, *beta = NULL;
+    double complex **V = NULL;
 
     lanczos_result_t *result = (lanczos_result_t *)calloc(1, sizeof(lanczos_result_t));
-    if (!result) return NULL;
+    if (!result) goto cleanup;
 
     // Allocate Lanczos vectors
-    double complex *v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *v_curr = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *v_next = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *w = (double complex *)calloc(vec_size, sizeof(double complex));
+    v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
+    v_curr = (double complex *)calloc(vec_size, sizeof(double complex));
+    v_next = (double complex *)calloc(vec_size, sizeof(double complex));
+    w      = (double complex *)calloc(vec_size, sizeof(double complex));
 
     // Tridiagonal matrix elements
-    double *alpha = (double *)calloc(max_iter, sizeof(double));
-    double *beta = (double *)calloc(max_iter + 1, sizeof(double));
+    alpha = (double *)calloc(max_iter,     sizeof(double));
+    beta  = (double *)calloc(max_iter + 1, sizeof(double));
 
     // Store all Lanczos vectors for eigenvector reconstruction
-    double complex **V = (double complex **)calloc(max_iter, sizeof(double complex *));
+    V = (double complex **)calloc(max_iter, sizeof(double complex *));
 
     if (!v_prev || !v_curr || !v_next || !w || !alpha || !beta || !V) {
         goto cleanup;
