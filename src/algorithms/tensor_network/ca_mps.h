@@ -76,14 +76,27 @@ uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 /*  Clifford gates (tableau only, O(n) per gate)                       */
 /* ================================================================== */
 
+/* All Clifford gates below update only the Aaronson-Gottesman tableau;
+ * the MPS factor |phi> is left untouched (cost: O(n) bit operations
+ * per gate, no SVD). */
+
+/** Hadamard gate on qubit @p q. */
 ca_mps_error_t moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
+/** S = sqrt(Z), phase gate diag(1, i). */
 ca_mps_error_t moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
+/** S^dagger = diag(1, -i). */
 ca_mps_error_t moonlab_ca_mps_sdag(moonlab_ca_mps_t* s, uint32_t q);
+/** Pauli X (bit flip). */
 ca_mps_error_t moonlab_ca_mps_x   (moonlab_ca_mps_t* s, uint32_t q);
+/** Pauli Y. */
 ca_mps_error_t moonlab_ca_mps_y   (moonlab_ca_mps_t* s, uint32_t q);
+/** Pauli Z (phase flip). */
 ca_mps_error_t moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
+/** Controlled-NOT, control = @p ctrl, target = @p targ. */
 ca_mps_error_t moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+/** Controlled-Z (symmetric in @p a / @p b). */
 ca_mps_error_t moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
+/** SWAP (symmetric in @p a / @p b). */
 ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 
 /* ================================================================== */
