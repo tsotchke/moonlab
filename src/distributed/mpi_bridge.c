@@ -82,14 +82,21 @@ distributed_ctx_t* mpi_bridge_init_no_args(const mpi_init_options_t* options) {
     // Query thread support level
     MPI_Query_thread(&ctx->thread_support);
 
-    // Create local communicator for intra-node communication
+    // Create local communicator for intra-node communication.  On OOM
+    // we used to leave local_comm = NULL with ctx->initialized = 1, which
+    // hid the partial failure: local_rank/local_size stayed at calloc's
+    // zero value -- plausible (rank 0 of size 1) but wrong, and callers
+    // had no way to tell.  Hard-fail the whole init instead.
     ctx->local_comm = malloc(sizeof(MPI_Comm));
-    if (ctx->local_comm) {
-        MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
-                            MPI_INFO_NULL, (MPI_Comm*)ctx->local_comm);
-        MPI_Comm_rank(*(MPI_Comm*)ctx->local_comm, &ctx->local_rank);
-        MPI_Comm_size(*(MPI_Comm*)ctx->local_comm, &ctx->local_size);
+    if (!ctx->local_comm) {
+        free(ctx->mpi_comm);
+        free(ctx);
+        return NULL;
     }
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
+                        MPI_INFO_NULL, (MPI_Comm*)ctx->local_comm);
+    MPI_Comm_rank(*(MPI_Comm*)ctx->local_comm, &ctx->local_rank);
+    MPI_Comm_size(*(MPI_Comm*)ctx->local_comm, &ctx->local_size);
 
     ctx->initialized = 1;
 
