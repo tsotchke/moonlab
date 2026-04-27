@@ -18,6 +18,9 @@
 #include "moonlab_export.h"
 #include "qrng.h"
 #include "../algorithms/quantum_geometry/qgt.h"
+#include "../algorithms/tensor_network/dmrg.h"
+#include "../algorithms/tensor_network/tn_state.h"
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <pthread.h>
@@ -87,4 +90,34 @@ int moonlab_qwz_chern(double m, size_t N, double* out_chern) {
     qgt_berry_grid_free(&g);
     qgt_free(sys);
     return (int)lround(c);
+}
+
+double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
+                                 uint32_t max_bond_dim, uint32_t num_sweeps) {
+    if (num_sites < 2 || max_bond_dim < 1 || num_sweeps == 0) return DBL_MAX;
+
+    dmrg_config_t cfg = dmrg_config_default();
+    cfg.max_bond_dim = max_bond_dim;
+    cfg.max_sweeps   = (int)num_sweeps;
+
+    dmrg_result_t* dmrg_res = NULL;
+    tn_mps_state_t* mps = dmrg_tfim_ground_state(num_sites, g, &cfg, &dmrg_res);
+    if (!mps) return DBL_MAX;
+
+    /* dmrg_tfim_ground_state stores the converged energy in the result
+     * struct when the caller passes a non-NULL result pointer. */
+    double energy = DBL_MAX;
+    if (dmrg_res) {
+        energy = dmrg_res->ground_energy;
+        dmrg_result_free(dmrg_res);
+    } else {
+        /* Fallback: rebuild the MPO + recompute energy. */
+        mpo_t* mpo = mpo_tfim_create(num_sites, /*J=*/1.0, g);
+        if (mpo) {
+            energy = dmrg_compute_energy(mps, mpo);
+            mpo_free(mpo);
+        }
+    }
+    tn_mps_free(mps);
+    return energy;
 }
