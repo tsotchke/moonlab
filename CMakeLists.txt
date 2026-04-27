@@ -1743,6 +1743,14 @@ if(QSIM_BUILD_EXAMPLES)
     add_executable(quantum_critical_point examples/tensor_network/quantum_critical_point.c)
     target_link_libraries(quantum_critical_point PRIVATE quantumsim)
 
+    add_executable(example_ca_mps_clifford_advantage
+        examples/tensor_network/ca_mps_clifford_advantage.c)
+    target_link_libraries(example_ca_mps_clifford_advantage PRIVATE quantumsim)
+
+    add_executable(example_ca_mps_imag_time
+        examples/tensor_network/ca_mps_imag_time.c)
+    target_link_libraries(example_ca_mps_imag_time PRIVATE quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
