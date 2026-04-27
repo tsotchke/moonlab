@@ -22,7 +22,6 @@
 #include <string.h>
 #include <math.h>
 #include <complex.h>
-#include <time.h>
 
 #include "src/algorithms/tensor_network/tensor.h"
 #include "src/algorithms/tensor_network/svd_compress.h"
@@ -758,8 +757,10 @@ int main(void) {
     printf("║                                                           ║\n");
     printf("╚═══════════════════════════════════════════════════════════╝\n\n");
 
-    // Seed random number generator
-    srand((unsigned int)time(NULL));
+    // Fixed seed: deterministic CI runs.  Every other unit test in this
+    // tree fixes its seed; using time(NULL) here was the only outlier and
+    // a latent flake source if a timing-dependent path ever appeared.
+    srand(0xC0FFEEu);
 
     printf("=== Tensor Basic Operations ===\n");
     RUN_TEST(test_tensor_create_destroy);
