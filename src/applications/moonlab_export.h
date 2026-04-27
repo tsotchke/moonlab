@@ -280,6 +280,34 @@ int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
 int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                            uint32_t qubit, double* out_prob);
 
+/* ---- DMRG scalar entry points (stable from 0.2.1) ------------------ */
+/*
+ * Run DMRG to convergence on a built-in 1D model and return only the
+ * resulting ground-state energy.  These are the simplest possible
+ * stable-ABI surface for DMRG: scalar in, scalar out, no opaque
+ * handle.  Suited to phase-diagram queries (sweep a parameter, read
+ * one number per point) which is the dominant QGTL/SbNN use case.
+ *
+ * On error returns DBL_MAX (NaN cannot be used as an error sentinel
+ * under -ffast-math).  Callers should compare against DBL_MAX.
+ */
+
+/**
+ * @brief Transverse-field Ising model ground-state energy via DMRG.
+ *
+ * H = -J sum_i Z_i Z_{i+1} - h sum_i X_i, with @c J = 1 and @c g = h/J.
+ *
+ * @param num_sites    Chain length (>= 2).
+ * @param g            h/J ratio.  g > 1 paramagnetic, g < 1 ordered.
+ * @param max_bond_dim DMRG truncation cap; 32 is plenty up to N=20.
+ * @param num_sweeps   Two-site sweeps (typically 5-10 to converge).
+ * @return Ground-state energy, or DBL_MAX on error.
+ *
+ * @since 0.2.1
+ */
+double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
+                                 uint32_t max_bond_dim, uint32_t num_sweeps);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

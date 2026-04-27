@@ -214,6 +214,36 @@ int main(void) {
         }
     }
 
+    /* DMRG scalar entry point: TFIM ground-state energy at g = 1
+     * (the quantum critical point), N = 8 chain, chi = 16, 5 sweeps.
+     * Per-site energy at the critical point is ~ -4/pi for large N;
+     * for N = 8 with periodic BCs we accept anything in [-1.3, -1.0]
+     * per site, which is generous and only catches gross regressions
+     * (a returned 0, +inf, or DBL_MAX). */
+    typedef double (*dmrg_tfim_fn)(uint32_t, double, uint32_t, uint32_t);
+    dlerror();
+    dmrg_tfim_fn dmrg_tfim = (dmrg_tfim_fn)dlsym(h, "moonlab_dmrg_tfim_energy");
+    if (!dmrg_tfim) {
+        fprintf(stderr, "dlsym(moonlab_dmrg_tfim_energy) failed\n");
+        failures++;
+    } else {
+        double E = dmrg_tfim(/*N=*/8, /*g=*/1.0, /*chi=*/16, /*sweeps=*/5);
+        if (E >= 1e30) {
+            fprintf(stderr, "moonlab_dmrg_tfim_energy returned sentinel %.3e\n", E);
+            failures++;
+        } else {
+            double e_per_site = E / 8.0;
+            if (e_per_site < -1.3 || e_per_site > -1.0) {
+                fprintf(stderr, "moonlab_dmrg_tfim_energy/N = %.4f outside "
+                        "expected [-1.3, -1.0]\n", e_per_site);
+                failures++;
+            } else {
+                fprintf(stdout, "moonlab_dmrg_tfim_energy(N=8, g=1) = %.4f "
+                        "(%.4f / site) OK\n", E, e_per_site);
+            }
+        }
+    }
+
     dlclose(h);
 
     if (failures) {
