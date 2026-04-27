@@ -1170,6 +1170,13 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_prob PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_prob COMMAND test_ca_mps_prob)
 
+    # Direct unit tests for the SVD compression layer that every MPS
+    # truncation goes through.  Closes a 19-Apr audit gap: previously
+    # exercised only indirectly via mps_vs_exact and the CA-MPS suite.
+    add_executable(test_svd_compress tests/unit/test_svd_compress.c)
+    target_link_libraries(test_svd_compress PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_svd_compress COMMAND test_svd_compress)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
