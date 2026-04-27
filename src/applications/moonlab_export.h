@@ -37,6 +37,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <complex.h>     /* for double _Complex in CA-MPS observable signatures */
 
 #ifdef __cplusplus
 extern "C" {
@@ -187,6 +188,91 @@ void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
 int  moonlab_mlkem1024_keygen_qrng(uint8_t* ek, uint8_t* dk);
 int  moonlab_mlkem1024_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
 void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+
+/* ---- Clifford-Assisted MPS (stable from 0.2.1) ---------------------- */
+/*
+ * Hybrid state representation |psi> = C |phi> combining the
+ * Aaronson-Gottesman tableau (Clifford prefactor C) with an MPS factor
+ * |phi>.  Clifford gates are O(n) tableau updates with no MPS cost;
+ * non-Clifford gates push a Pauli-string rotation into |phi>.  The
+ * design is documented in `docs/research/ca_mps.md` and the bond-dim
+ * advantage is benchmarked in `tests/performance/bench_ca_mps.c`
+ * (64x at N=12 on a stabilizer state).
+ *
+ * Pauli-string arguments are arrays of `n` bytes from {0=I, 1=X, 2=Y,
+ * 3=Z}.  Functions return 0 on success, non-zero on error.
+ *
+ * The handle type is forward-declared as opaque; consumers do not need
+ * to include any internal Moonlab header.
+ *
+ * Intended consumers: QGTL, lilirrep, SbNN.
+ */
+
+typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
+
+/** Allocate a CA-MPS state on @p num_qubits with bond cap @p max_bond_dim. */
+moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
+/** Release a CA-MPS state created by ::moonlab_ca_mps_create. */
+void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
+/** Deep-clone (independent of the source). */
+moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
+
+/** Number of qubits.  0 if @p s is NULL. */
+uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
+/** Configured bond-dimension cap. */
+uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
+/** Current peak bond dimension across the MPS factor. */
+uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
+
+/* Clifford gates: tableau-only (O(n) per gate, no MPS cost). */
+int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_s    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_sdag (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_x    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_y    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_z    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_cnot (moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+int moonlab_ca_mps_cz   (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
+int moonlab_ca_mps_swap (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
+
+/* Non-Clifford gates: push a Pauli-string rotation into the MPS factor. */
+int moonlab_ca_mps_rx        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+int moonlab_ca_mps_ry        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+int moonlab_ca_mps_rz        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+int moonlab_ca_mps_t_gate    (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_t_dagger  (moonlab_ca_mps_t* s, uint32_t q);
+int moonlab_ca_mps_phase     (moonlab_ca_mps_t* s, uint32_t q, double theta);
+int moonlab_ca_mps_crz       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
+                                double theta, double phi, double lambda);
+
+/** Apply exp(i theta P) for a Pauli string P (length = num_qubits). */
+int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
+                                   const uint8_t* pauli_string, double theta);
+/** Imaginary-time exp(-tau P) for a Pauli string P; non-unitary. */
+int moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
+                                        const uint8_t* pauli_string, double tau);
+/** Restore unit norm after non-unitary evolution. */
+int moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
+/** Current state norm. */
+double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
+
+/** <psi|P|psi> for a Pauli string P. */
+int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
+                                 const uint8_t* pauli_string,
+                                 double _Complex* out_expval);
+/** <psi|H|psi> for H = sum_k coeffs[k] * paulis[k]; paulis is laid out
+ *  as `num_terms * num_qubits` bytes. */
+int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+                                     const uint8_t* paulis,
+                                     const double _Complex* coeffs,
+                                     uint32_t num_terms,
+                                     double _Complex* out_expval);
+/** Marginal P(Z_qubit = +1), in [0, 1]. */
+int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
+                           uint32_t qubit, double* out_prob);
 
 #ifdef __cplusplus
 } /* extern "C" */
