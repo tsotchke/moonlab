@@ -1,5 +1,46 @@
 # Moonlab Deep Architectural Audit — 2026-04-19
 
+> **2026-04-26 update.** A second systematic pass (commit log
+> `c73cd78..HEAD`) closed several of the 19 Apr findings.  Status of
+> every gap called out below:
+>
+> - Python / JS version split — fixed.  `setup.py` now reads
+>   `VERSION.txt` (`2ac971d`); all five manifests resolve to
+>   `0.2.1.dev0`.
+> - Logging / `printf`-in-library-files — count down from 8 files to
+>   6 (`quantum/state.c`, `utils/{performance_monitor,manifest,
+>   config}.c`, `utils/{bench_stats,validation}.h`).  Logging shim
+>   still pending.
+> - Test seed flake risk — fixed (`0f566a1`): `test_tensor_network.c`
+>   now uses a fixed `0xC0FFEE` seed.
+> - CI exclusion-by-name — fixed (`8fe2b1d`): all six tier
+>   invocations now use `ctest -LE long`; new long tests get
+>   auto-excluded by labelling them `long`.
+> - CA-MPS shipped without examples — fixed (`a7e6065`): two
+>   examples land under `examples/tensor_network/`.
+> - Cross-platform tensor_qr / tensor_svd correctness — fixed
+>   (`c73cd78`, `365792b`): no-LAPACK platforms now use a real
+>   Householder QR + a wide-matrix-aware Jacobi SVD that match
+>   LAPACK to machine precision.
+> - simd_aligned_memcpy/memset "lying name" — fixed (`7a92303`):
+>   debug-build alignment assertion + honest header doc.
+> - vqe_solve unchecked mallocs — fixed (`e126b36`).
+> - mpi_bridge half-init failure mode — fixed (`96bcb32`).
+> - DMRG Lanczos cleanup symmetry — fixed (`fe6998d`).
+> - Cumulative truncation metric unbounded under non-unitary
+>   evolution — fixed (`eca44ea`): `max_relative_truncation_error`
+>   added as a bounded sibling field.
+> - QRNG NIST 2-of-3 voting flake — fixed (`fe38742`): widened to
+>   3-of-5.
+> - kagome ED ASAN timeout — fixed (`88bdc9b`).
+>
+> **Still open**: stable ABI surface (still 3 symbols), 41 error
+> enums, deployment blockers (Homebrew paths, missing Dockerfiles),
+> aarch64 QRNG init slowness (worked around with test exclusion),
+> coverage tooling, vqe_solve refactor, and the CA-PEPS / Phase 3
+> work that the v0.3 plan covers.  See `MEMORY.md` and the active
+> task list for the remaining queue.
+
 **Status:** Moonlab is a well-documented, literature-grounded research
 simulator with a clean C core. It is **not yet** a publishable
 scientific instrument, a sellable product, a deployable SaaS, or the

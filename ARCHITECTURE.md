@@ -183,6 +183,29 @@ MPO, square / triangular / honeycomb lattice utilities, skyrmion
 braiding primitives on top. Modern additions (adaptive-bond TDVP,
 split-CTMRG, BP + cluster contraction, isoTNS) are queued for 0.3.
 
+#### Clifford-Assisted MPS (CA-MPS, `ca_mps.{c,h}`, since 0.2.1)
+
+Hybrid state representation @f$\lvert\psi\rangle = C\lvert\phi\rangle@f$
+combining the Aaronson-Gottesman tableau backend (`backends/clifford/`)
+with the existing MPS factor.  Clifford gates update only the tableau
+(O(n) bit ops, no MPS cost); non-Clifford gates push the
+Clifford-conjugated Pauli rotation into the MPS factor.  Headline
+benchmark: 64x bond-dim advantage and ~22 000x speedup against plain
+MPS on a random Clifford circuit at N=12 (`bench_ca_mps`).  Full design,
+gate-application rules, expectation formulas, and the queued 2D
+extension (CA-PEPS, planned for 0.4) are in
+`docs/research/ca_mps.md`.
+
+#### Decomposition kernels (`tensor.c`)
+
+`tensor_qr` and `tensor_svd` route through LAPACK on tier-1 platforms
+(Accelerate / OpenBLAS / CLAPACK).  On the no-LAPACK fallback path
+(Windows clang-cl without OpenBLAS) `tensor_qr` runs an in-tree
+Householder QR and `tensor_svd` runs a one-sided Jacobi SVD; both
+match LAPACK to machine precision for every shape including m<n
+(verified by `test_ca_mps_vs_sv` and `test_mpo_kpm` under
+`-DQSIM_FORCE_QR_FALLBACK=1` / `-DQSIM_FORCE_SVD_FALLBACK=1`).
+
 ### 4.8 Quantum RNG (`src/applications/qrng*`)
 
 Three-mode v3 engine: direct (quantum simulation of a Hadamard
