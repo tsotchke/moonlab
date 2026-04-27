@@ -126,6 +126,111 @@ intended to fold into v0.2.1.
   N=18 Hamiltonian times out at the test's 120s CMake-level
   ceiling.  Both kagome ED variants are covered by every
   non-sanitizer tier already.
+- **CI exclusion gated by LABELS** (`.github/workflows/ci.yml` +
+  `CMakeLists.txt`): the seven slow tests (`long_evolution`,
+  `quantum_sim_test`, `unit_mpo_kpm`, `unit_qrng_statistics`,
+  `unit_kagome_ed{,_large}`, `unit_ca_mps_kagome12`) carry a
+  `LABELS "long"` property and every fast tier now runs
+  `ctest -LE long`.  Adding a new long test no longer requires
+  hand-editing every job's regex.
+- **Optional-backend opt-in is now fail-fast** (`CMakeLists.txt`):
+  `QSIM_ENABLE_OPENCL/VULKAN/CUQUANTUM/MPI=ON` now `FATAL_ERROR`
+  if the SDK is missing instead of falling back to the stub
+  backends silently.  Each error names the SDK to install and
+  the off-switch flag.
+- **Coverage tier added** (`.github/workflows/ci.yml` +
+  `QSIM_ENABLE_COVERAGE`): new `linux-coverage` job builds with
+  `--coverage -O0`, runs `ctest -LE long`, and uploads
+  `coverage.info` as an artefact.  First continuous coverage
+  signal in the project.
+- **Linux aarch64 entropy-probe bypass**
+  (`.github/workflows/ci.yml`): set `MOONLAB_SKIP_HW_ENTROPY=1`
+  to match every macOS tier.  Drops the bespoke 11-test
+  exclusion list to the standard `-LE long`; nine tests
+  (`unit_mlkem`, `abi_moonlab_export`, `unit_vqe`, `unit_qaoa`,
+  `unit_chern_kpm`, `unit_mpo_kpm`, `bell_test`, `rust_bindings`,
+  `quantum_sim_test`) now run on aarch64.
+
+### Code-quality
+
+- **Bounded per-step truncation metric**
+  (`src/algorithms/tensor_network/tn_state.h`):
+  `max_relative_truncation_error` sibling field added to
+  `tn_mps_state_t`.  Tracks
+  `max_i [trunc_err_i / sqrt(trunc_err_i^2 + sum kept_s_i^2)]`,
+  bounded in `[0, 1)` regardless of imag-time norm decay.  The
+  existing `cumulative_truncation_error` is preserved (backward
+  compat) but its docstring now states explicitly that it is
+  unbounded under non-unitary evolution.
+- **`vqe_solve` allocations NULL-checked**
+  (`src/algorithms/vqe.c:1094-1102`).
+- **`mpi_bridge_init_no_args` hard-fails on `local_comm` OOM**
+  (`src/distributed/mpi_bridge.c:86`) instead of returning a
+  half-initialised context with `local_rank = local_size = 0`.
+- **DMRG Lanczos cleanup symmetry**
+  (`src/algorithms/tensor_network/dmrg.c:1147-1152`): early
+  `result`-allocation failure now routes through the same
+  `cleanup:` label as every other failure point.
+- **`simd_aligned_memcpy/memset` made honest**
+  (`src/optimization/memory_align.c:358`): the `alignment`
+  parameter now triggers a debug-build `assert(simd_is_aligned)`
+  instead of being discarded; header doc rewritten to describe
+  what the body actually does.
+- **Stable-ABI surface promoted: 32 CA-MPS symbols**
+  (`src/applications/moonlab_export.h`): full lifecycle +
+  Clifford / non-Clifford gates + Pauli rotations + observables
+  exported with `moonlab_ca_mps_*` names.  ABI smoke test
+  (`tests/abi/test_moonlab_export_abi.c`) `dlsym`s every entry
+  point and drives a 2-qubit Bell-state round-trip; result
+  `<Z_0 Z_1> = +1.000000`.
+- **CA-MPS API completeness vs the dense state-vector backend**:
+  added `t_dagger`, `phase`, `crz`, `crx`, `cry`, `u3`, and
+  `prob_z` (marginal Z probability).  Smoke test
+  (`unit_ca_mps_prob`) confirms each lands within 4.4e-16 of
+  the SV-backend reference on a non-trivial mixed circuit.
+- **Redirectable debug-print APIs**
+  (`quantum_state_fprint`, `perf_monitor_fprint_stats`):
+  `*_fprint(FILE*, ...)` variants accept any stream; the
+  legacy `*_print` calls remain as `stdout` wrappers.
+
+### Tests / examples / docs
+
+- **`unit_svd_compress`** (`tests/unit/test_svd_compress.c`):
+  direct unit test for the SVD compression layer.  Pins
+  full-rank round-trip + truncation invariants
+  (`truncation_error == sqrt(sum dropped SV^2)`, kept SVs
+  match the leading prefix of the full spectrum).
+- **CA-MPS examples**
+  (`examples/tensor_network/ca_mps_clifford_advantage.c`,
+  `examples/tensor_network/ca_mps_imag_time.c`).  The
+  Clifford-advantage demo prints the bond-dim ratio (`16x` at
+  N=12, depth 12N).  The imag-time demo converges
+  `<H> = -1 -> -3` on the Heisenberg dimer in 50 dtau=0.05
+  steps and holds machine precision.
+- **WASM build documented** in
+  `bindings/javascript/packages/core/README.md` (EMSDK
+  setup + the four `pnpm` scripts + the CLAPACK / OpenBLAS
+  flavours).
+- **Error-code catalog** (`docs/error_codes.md`): every
+  `*_error_t` / `*_status_t` enum in the tree, its header,
+  its full code list, and the convention every Moonlab error
+  enum follows.
+- **AUDIT.md preamble** dated 2026-04-26 walks the 19 Apr
+  findings one-by-one and tags the commit that closed each.
+  ARCHITECTURE.md gains "Clifford-Assisted MPS" + "Decomposition
+  kernels" subsections under Tensor Networks.
+- **Python `setup.py` reads `VERSION.txt`**: ends the cross-
+  manifest version skew (was hardcoded `0.1.2`, now resolves
+  to `0.2.1.dev0` like every other manifest).
+- **`vqe_solve` COBYLA branch refactored**
+  (`src/algorithms/vqe.c`): the 165-LOC inline reflect /
+  expand / contract / shrink procedure moves to
+  `vqe_step_cobyla` backed by a per-solve `cobyla_state_t`.
+  Closes a long-standing static-globals leak (the previous
+  simplex outlived the call) and shrinks `vqe_solve` from
+  467 to 317 LOC.
+- **`unit_qrng_statistics` test_tensor_network seed**:
+  fixed `0xC0FFEE` instead of `time(NULL)`.
 
 ### Build / CI
 
