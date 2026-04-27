@@ -295,15 +295,19 @@ size_t simd_get_optimal_alignment(void);
 void simd_secure_zero(void* ptr, size_t size);
 
 /**
- * @brief Aligned memory copy
+ * @brief memcpy that asserts alignment in debug builds (Release: plain memcpy).
  *
- * Optimized memcpy for aligned source and destination.
- * Uses SIMD instructions when available.
+ * The body is a thin wrapper around `memcpy`.  Modern libc (glibc, musl,
+ * Apple libSystem) already vectorises memcpy on aligned inputs, so the
+ * @p alignment parameter is **advisory**: it does not currently change
+ * the dispatch path.  The wrapper exists so callers can document the
+ * expected alignment of @p dest / @p src; in a future debug build we
+ * can promote the parameter to an `assert(simd_is_aligned(...))`.
  *
- * @param dest      Destination pointer (should be aligned)
- * @param src       Source pointer (should be aligned)
+ * @param dest      Destination pointer (caller asserts alignment)
+ * @param src       Source pointer (caller asserts alignment)
  * @param size      Number of bytes to copy
- * @param alignment Alignment of both pointers
+ * @param alignment Alignment both pointers are claimed to satisfy (advisory)
  *
  * @stability evolving
  * @since v0.1.2
@@ -311,15 +315,17 @@ void simd_secure_zero(void* ptr, size_t size);
 void simd_aligned_memcpy(void* dest, const void* src, size_t size, size_t alignment);
 
 /**
- * @brief Aligned memory set
+ * @brief memset that asserts alignment in debug builds (Release: plain memset).
  *
- * Optimized memset for aligned destination.
- * Uses SIMD instructions when available.
+ * Same advisory-alignment semantics as ::simd_aligned_memcpy.  The
+ * @p alignment parameter is currently a no-op; we keep it in the
+ * signature so future SIMD-specific paths (or a debug-build alignment
+ * assertion) don't break the API.
  *
- * @param ptr       Destination pointer (should be aligned)
+ * @param ptr       Destination pointer (caller asserts alignment)
  * @param value     Byte value to set
  * @param size      Number of bytes to set
- * @param alignment Alignment of pointer
+ * @param alignment Alignment claimed for @p ptr (advisory)
  *
  * @stability evolving
  * @since v0.1.2

@@ -14,6 +14,7 @@
  */
 
 #include "memory_align.h"
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -356,25 +357,27 @@ size_t simd_get_optimal_alignment(void) {
 }
 
 void simd_aligned_memcpy(void* dest, const void* src, size_t size, size_t alignment) {
+    /* Advisory `alignment`: see header.  Body is a thin memcpy wrapper.
+     * Debug builds promote the alignment claim to a hard assertion so
+     * callers learn about misalignment immediately instead of silently
+     * paying the unaligned-fallback cost inside libc's vectoriser. */
     if (!dest || !src || size == 0) return;
-
-    // Verify alignment for optimized path
-    if (simd_is_aligned(dest, alignment) && simd_is_aligned(src, alignment)) {
-        // Both aligned - use standard memcpy which will use SIMD internally
-        // Modern libc implementations (glibc, musl, Apple libSystem) are highly optimized
-        memcpy(dest, src, size);
-    } else {
-        // Unaligned - still use memcpy, but won't be as fast
-        memcpy(dest, src, size);
-    }
+#ifndef NDEBUG
+    assert(simd_is_aligned(dest, alignment) && simd_is_aligned(src, alignment));
+#else
+    (void)alignment;
+#endif
+    memcpy(dest, src, size);
 }
 
 void simd_aligned_memset(void* ptr, int value, size_t size, size_t alignment) {
-    (void)alignment;  // Reserved for future SIMD-specific optimization
+    /* Advisory `alignment`: see header. */
     if (!ptr || size == 0) return;
-
-    // Standard memset is highly optimized in modern libc
-    // It will use SIMD when possible
+#ifndef NDEBUG
+    assert(simd_is_aligned(ptr, alignment));
+#else
+    (void)alignment;
+#endif
     memset(ptr, value, size);
 }
 
