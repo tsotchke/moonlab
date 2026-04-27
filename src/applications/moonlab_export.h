@@ -308,6 +308,13 @@ int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
 double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
                                  uint32_t max_bond_dim, uint32_t num_sweeps);
 
+/* The Heisenberg / Kitaev / 2D variants are queued behind a small
+ * internal refactor: dmrg_ground_state(mps, mpo, cfg) requires the
+ * caller to supply a non-trivial-bond-dim MPS, which dmrg_tfim_ground_state
+ * does internally with random tensors but generic users must replicate.
+ * Once `dmrg_init_random_mps(N, chi_init, &cfg)` is factored out
+ * upstream, the additional model wrappers become 5-line duplicates. */
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
