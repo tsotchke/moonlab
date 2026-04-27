@@ -45,6 +45,13 @@ jobs:
   linux-arm64:
     name: Linux aarch64 (Release)
     runs-on: ubuntu-22.04-arm
+    env:
+      # Match every macOS tier: skip the multi-tier RNDR / FEAT_RNG
+      # hardware-entropy probe at QRNG-init time.  The probe sysctl
+      # path on aarch64 runners measurably slowed unit_mlkem and
+      # abi_moonlab_export to multi-minute timeouts.  /dev/urandom
+      # via getrandom() remains the seeding source.
+      MOONLAB_SKIP_HW_ENTROPY: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -65,18 +72,13 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Test (ctest, arm64 smoke)
-        # unit_mlkem and abi_moonlab_export time out on the aarch64 runner
-        # because the QRNG-sourced path initialises an 8-qubit quantum
-        # simulation that is CPU-bound.  Other tiers (macOS arm64, macOS
-        # x86_64, Linux x86_64) run these tests in <10s, so cross-platform
-        # coverage is preserved; fixing the slow-init path is tracked as
-        # a follow-up.
-        run: >
-          ctest --test-dir build
-          -E "long_evolution|quantum_sim_test|bell_test|unit_vqe|unit_qaoa|unit_chern_kpm|unit_mpo_kpm|unit_qrng_statistics|unit_mlkem$|abi_moonlab_export|rust_bindings"
-          --output-on-failure
-          --timeout 300
+      - name: Test (ctest, arm64)
+        # Same `-LE long` exclusion as every other tier.  The earlier
+        # name-based exclusions for unit_mlkem / abi_moonlab_export /
+        # unit_qrng_statistics were specifically targeting the QRNG
+        # hardware-probe slowness, which is now bypassed by the
+        # MOONLAB_SKIP_HW_ENTROPY env var declared above.
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
       - name: Upload dylib
         if: ${{ env.ACT != 'true' }}
