@@ -1092,14 +1092,27 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
     double best_energy = VQE_ENERGY_ERROR;
     double prev_energy = VQE_ENERGY_ERROR;
     double *gradient = malloc(result.num_parameters * sizeof(double));
-    
+    if (!gradient) {
+        free(result.optimal_parameters);
+        result.optimal_parameters = NULL;
+        result.ground_state_energy = VQE_ENERGY_ERROR;
+        return result;
+    }
+
     // ADAM optimizer state (if using ADAM)
     double *m = NULL, *v = NULL;
     double beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8;
-    
+
     if (solver->optimizer->type == VQE_OPTIMIZER_ADAM) {
         m = calloc(result.num_parameters, sizeof(double));
         v = calloc(result.num_parameters, sizeof(double));
+        if (!m || !v) {
+            free(m); free(v); free(gradient);
+            free(result.optimal_parameters);
+            result.optimal_parameters = NULL;
+            result.ground_state_energy = VQE_ENERGY_ERROR;
+            return result;
+        }
     }
     
     if (solver->optimizer->verbose) {
