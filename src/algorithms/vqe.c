@@ -1069,6 +1069,181 @@ double vqe_compute_energy(
     return energy;
 }
 
+/* ====================================================================
+ * COBYLA: Nelder-Mead-style simplex (derivative-free).
+ *
+ * One iteration of vqe_solve under VQE_OPTIMIZER_COBYLA invokes
+ * vqe_step_cobyla, which:
+ *   - on the first call, allocates the (n+1)-vertex simplex around
+ *     solver->ansatz->parameters and evaluates the energy at each
+ *     vertex
+ *   - on every subsequent call, performs one
+ *     reflection / expansion / contraction / shrink step
+ *   - leaves solver->ansatz->parameters set to the current best vertex
+ *
+ * State persists across calls in the cobyla_state_t struct owned by
+ * the caller (vqe_solve).  Fixes a long-standing static-globals
+ * pitfall where calling vqe_solve twice with different parameter
+ * counts leaked the previous simplex.
+ * ==================================================================== */
+
+typedef struct {
+    double **simplex;       /* (n+1) rows of n doubles, NULL if not yet init */
+    double  *simplex_vals;  /* length (n+1) */
+    int      initialized;
+    size_t   n;             /* dimension this simplex was allocated for */
+} cobyla_state_t;
+
+static void cobyla_state_free(cobyla_state_t *st) {
+    if (!st) return;
+    if (st->simplex) {
+        for (size_t i = 0; i <= st->n; i++) free(st->simplex[i]);
+        free(st->simplex);
+    }
+    free(st->simplex_vals);
+    st->simplex = NULL;
+    st->simplex_vals = NULL;
+    st->initialized = 0;
+    st->n = 0;
+}
+
+/* Initialise the simplex around the current solver parameters.
+ * Returns 0 on success, -1 on allocation failure. */
+static int cobyla_state_init(cobyla_state_t *st, vqe_solver_t *solver,
+                              size_t n, double rho, double current_energy) {
+    cobyla_state_free(st);
+    st->simplex      = malloc((n + 1) * sizeof(double *));
+    st->simplex_vals = malloc((n + 1) * sizeof(double));
+    if (!st->simplex || !st->simplex_vals) {
+        cobyla_state_free(st);
+        return -1;
+    }
+    for (size_t i = 0; i <= n; i++) st->simplex[i] = NULL;
+    for (size_t i = 0; i <= n; i++) {
+        st->simplex[i] = malloc(n * sizeof(double));
+        if (!st->simplex[i]) { cobyla_state_free(st); return -1; }
+    }
+    /* Vertex 0 = current parameters; vertex i = vertex 0 + rho*e_{i-1}. */
+    for (size_t p = 0; p < n; p++) st->simplex[0][p] = solver->ansatz->parameters[p];
+    st->simplex_vals[0] = current_energy;
+    for (size_t i = 1; i <= n; i++) {
+        memcpy(st->simplex[i], st->simplex[0], n * sizeof(double));
+        st->simplex[i][i - 1] += rho;
+        for (size_t p = 0; p < n; p++) solver->ansatz->parameters[p] = st->simplex[i][p];
+        st->simplex_vals[i] = vqe_compute_energy(solver, solver->ansatz->parameters);
+    }
+    st->initialized = 1;
+    st->n = n;
+    return 0;
+}
+
+/* One COBYLA step.  Mutates solver->ansatz->parameters to the
+ * step-best vertex.  Returns 0 on success, -1 on alloc failure
+ * (caller should abort the optimisation in that case). */
+static int vqe_step_cobyla(vqe_solver_t *solver, cobyla_state_t *st,
+                            double current_energy, int is_first_iter) {
+    const size_t n = solver->ansatz->num_parameters;
+    const double rho = 0.5;  /* trust-region radius (initial / fixed) */
+
+    if (!st->initialized || is_first_iter || st->n != n) {
+        if (cobyla_state_init(st, solver, n, rho, current_energy) != 0) return -1;
+    }
+
+    /* Find best, worst, second-worst vertices. */
+    size_t best_idx = 0, worst_idx = 0, second_worst_idx = 0;
+    for (size_t i = 1; i <= n; i++) {
+        if (st->simplex_vals[i] < st->simplex_vals[best_idx])  best_idx  = i;
+        if (st->simplex_vals[i] > st->simplex_vals[worst_idx]) worst_idx = i;
+    }
+    for (size_t i = 0; i <= n; i++) {
+        if (i == worst_idx) continue;
+        if (st->simplex_vals[i] > st->simplex_vals[second_worst_idx]
+            || second_worst_idx == worst_idx) {
+            second_worst_idx = i;
+        }
+    }
+
+    /* Centroid of all but the worst vertex. */
+    double *centroid = calloc(n, sizeof(double));
+    if (!centroid) return -1;
+    for (size_t i = 0; i <= n; i++) {
+        if (i == worst_idx) continue;
+        for (size_t p = 0; p < n; p++) centroid[p] += st->simplex[i][p] / (double)n;
+    }
+
+    /* Reflect. */
+    double *reflected = malloc(n * sizeof(double));
+    if (!reflected) { free(centroid); return -1; }
+    for (size_t p = 0; p < n; p++) {
+        reflected[p] = centroid[p] + 1.0 * (centroid[p] - st->simplex[worst_idx][p]);
+        solver->ansatz->parameters[p] = reflected[p];
+    }
+    double reflected_val = vqe_compute_energy(solver, solver->ansatz->parameters);
+
+    if (reflected_val < st->simplex_vals[best_idx]) {
+        /* Reflection beat best -> try expansion. */
+        double *expanded = malloc(n * sizeof(double));
+        if (!expanded) { free(reflected); free(centroid); return -1; }
+        for (size_t p = 0; p < n; p++) {
+            expanded[p] = centroid[p] + 2.0 * (reflected[p] - centroid[p]);
+            solver->ansatz->parameters[p] = expanded[p];
+        }
+        double expanded_val = vqe_compute_energy(solver, solver->ansatz->parameters);
+        if (expanded_val < reflected_val) {
+            memcpy(st->simplex[worst_idx], expanded, n * sizeof(double));
+            st->simplex_vals[worst_idx] = expanded_val;
+        } else {
+            memcpy(st->simplex[worst_idx], reflected, n * sizeof(double));
+            st->simplex_vals[worst_idx] = reflected_val;
+        }
+        free(expanded);
+    } else if (reflected_val < st->simplex_vals[second_worst_idx]) {
+        /* Reflection beat second-worst -> accept. */
+        memcpy(st->simplex[worst_idx], reflected, n * sizeof(double));
+        st->simplex_vals[worst_idx] = reflected_val;
+    } else {
+        /* Reflection failed -> contract (outside or inside). */
+        double *contracted = malloc(n * sizeof(double));
+        if (!contracted) { free(reflected); free(centroid); return -1; }
+        if (reflected_val < st->simplex_vals[worst_idx]) {
+            for (size_t p = 0; p < n; p++)
+                contracted[p] = centroid[p] + 0.5 * (reflected[p] - centroid[p]);
+        } else {
+            for (size_t p = 0; p < n; p++)
+                contracted[p] = centroid[p] + 0.5 * (st->simplex[worst_idx][p] - centroid[p]);
+        }
+        for (size_t p = 0; p < n; p++) solver->ansatz->parameters[p] = contracted[p];
+        double contracted_val = vqe_compute_energy(solver, solver->ansatz->parameters);
+        if (contracted_val < st->simplex_vals[worst_idx]) {
+            memcpy(st->simplex[worst_idx], contracted, n * sizeof(double));
+            st->simplex_vals[worst_idx] = contracted_val;
+        } else {
+            /* Shrink: pull every vertex halfway toward best. */
+            for (size_t i = 0; i <= n; i++) {
+                if (i == best_idx) continue;
+                for (size_t p = 0; p < n; p++) {
+                    st->simplex[i][p] = st->simplex[best_idx][p]
+                        + 0.5 * (st->simplex[i][p] - st->simplex[best_idx][p]);
+                    solver->ansatz->parameters[p] = st->simplex[i][p];
+                }
+                st->simplex_vals[i] = vqe_compute_energy(solver, solver->ansatz->parameters);
+            }
+        }
+        free(contracted);
+    }
+
+    /* Set parameters to the step-best vertex. */
+    best_idx = 0;
+    for (size_t i = 1; i <= n; i++) {
+        if (st->simplex_vals[i] < st->simplex_vals[best_idx]) best_idx = i;
+    }
+    memcpy(solver->ansatz->parameters, st->simplex[best_idx], n * sizeof(double));
+
+    free(centroid);
+    free(reflected);
+    return 0;
+}
+
 vqe_result_t vqe_solve(vqe_solver_t *solver) {
     vqe_result_t result = {0};
     
@@ -1098,6 +1273,10 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
         result.ground_state_energy = VQE_ENERGY_ERROR;
         return result;
     }
+
+    /* Per-solve COBYLA state.  Used only when the optimiser is
+     * VQE_OPTIMIZER_COBYLA; freed unconditionally before return. */
+    cobyla_state_t cobyla_state = { 0 };
 
     // ADAM optimizer state (if using ADAM)
     double *m = NULL, *v = NULL;
@@ -1352,168 +1531,12 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
             free(q);
 
         } else if (solver->optimizer->type == VQE_OPTIMIZER_COBYLA) {
-            // COBYLA: Constrained Optimization BY Linear Approximation
-            // Derivative-free optimization using linear interpolation
-
-            size_t n = result.num_parameters;
-            double rho = 0.5;  // Initial trust region radius
-            double rho_end = 1e-6;  // Final trust region radius
-
-            // Simplex vertices: n+1 points
-            static double **simplex = NULL;
-            static double *simplex_vals = NULL;
-            static int cobyla_initialized = 0;
-
-            if (!cobyla_initialized || iter == 0) {
-                // Free any previous allocation
-                if (simplex) {
-                    for (size_t i = 0; i <= n; i++) free(simplex[i]);
-                    free(simplex);
-                }
-                if (simplex_vals) free(simplex_vals);
-
-                simplex = malloc((n + 1) * sizeof(double *));
-                simplex_vals = malloc((n + 1) * sizeof(double));
-                if (!simplex || !simplex_vals) {
-                    free(simplex); free(simplex_vals);
-                    simplex = NULL; simplex_vals = NULL;
-                    result.ground_state_energy = VQE_ENERGY_ERROR;
-                    break;
-                }
-                int alloc_fail = 0;
-                for (size_t i = 0; i <= n; i++) {
-                    simplex[i] = malloc(n * sizeof(double));
-                    if (!simplex[i]) { alloc_fail = 1; break; }
-                }
-                if (alloc_fail) {
-                    for (size_t i = 0; i <= n; i++) free(simplex[i]);
-                    free(simplex); free(simplex_vals);
-                    simplex = NULL; simplex_vals = NULL;
-                    result.ground_state_energy = VQE_ENERGY_ERROR;
-                    break;
-                }
-
-                // Initialize simplex around current point
-                for (size_t p = 0; p < n; p++) {
-                    simplex[0][p] = solver->ansatz->parameters[p];
-                }
-                simplex_vals[0] = energy;
-
-                for (size_t i = 1; i <= n; i++) {
-                    memcpy(simplex[i], simplex[0], n * sizeof(double));
-                    simplex[i][i - 1] += rho;
-                    for (size_t p = 0; p < n; p++) {
-                        solver->ansatz->parameters[p] = simplex[i][p];
-                    }
-                    simplex_vals[i] = vqe_compute_energy(solver, solver->ansatz->parameters);
-                }
-
-                cobyla_initialized = 1;
+            /* See vqe_step_cobyla above for the Nelder-Mead-style
+             * reflect / expand / contract / shrink procedure. */
+            if (vqe_step_cobyla(solver, &cobyla_state, energy, iter == 0) != 0) {
+                result.ground_state_energy = VQE_ENERGY_ERROR;
+                break;
             }
-
-            // Find best, worst, and second worst vertices
-            size_t best_idx = 0, worst_idx = 0, second_worst_idx = 0;
-            for (size_t i = 1; i <= n; i++) {
-                if (simplex_vals[i] < simplex_vals[best_idx]) best_idx = i;
-                if (simplex_vals[i] > simplex_vals[worst_idx]) worst_idx = i;
-            }
-            for (size_t i = 0; i <= n; i++) {
-                if (i == worst_idx) continue;
-                if (simplex_vals[i] > simplex_vals[second_worst_idx] || second_worst_idx == worst_idx) {
-                    second_worst_idx = i;
-                }
-            }
-
-            // Compute centroid of all points except worst
-            double *centroid = calloc(n, sizeof(double));
-            for (size_t i = 0; i <= n; i++) {
-                if (i == worst_idx) continue;
-                for (size_t p = 0; p < n; p++) {
-                    centroid[p] += simplex[i][p] / n;
-                }
-            }
-
-            // Try reflection
-            double *reflected = malloc(n * sizeof(double));
-            double alpha_r = 1.0;
-            for (size_t p = 0; p < n; p++) {
-                reflected[p] = centroid[p] + alpha_r * (centroid[p] - simplex[worst_idx][p]);
-                solver->ansatz->parameters[p] = reflected[p];
-            }
-            double reflected_val = vqe_compute_energy(solver, solver->ansatz->parameters);
-
-            if (reflected_val < simplex_vals[best_idx]) {
-                // Try expansion
-                double alpha_e = 2.0;
-                double *expanded = malloc(n * sizeof(double));
-                for (size_t p = 0; p < n; p++) {
-                    expanded[p] = centroid[p] + alpha_e * (reflected[p] - centroid[p]);
-                    solver->ansatz->parameters[p] = expanded[p];
-                }
-                double expanded_val = vqe_compute_energy(solver, solver->ansatz->parameters);
-
-                if (expanded_val < reflected_val) {
-                    memcpy(simplex[worst_idx], expanded, n * sizeof(double));
-                    simplex_vals[worst_idx] = expanded_val;
-                } else {
-                    memcpy(simplex[worst_idx], reflected, n * sizeof(double));
-                    simplex_vals[worst_idx] = reflected_val;
-                }
-                free(expanded);
-            } else if (reflected_val < simplex_vals[second_worst_idx]) {
-                // Accept reflection
-                memcpy(simplex[worst_idx], reflected, n * sizeof(double));
-                simplex_vals[worst_idx] = reflected_val;
-            } else {
-                // Try contraction
-                double alpha_c = 0.5;
-                double *contracted = malloc(n * sizeof(double));
-                if (reflected_val < simplex_vals[worst_idx]) {
-                    // Outside contraction
-                    for (size_t p = 0; p < n; p++) {
-                        contracted[p] = centroid[p] + alpha_c * (reflected[p] - centroid[p]);
-                    }
-                } else {
-                    // Inside contraction
-                    for (size_t p = 0; p < n; p++) {
-                        contracted[p] = centroid[p] + alpha_c * (simplex[worst_idx][p] - centroid[p]);
-                    }
-                }
-                for (size_t p = 0; p < n; p++) {
-                    solver->ansatz->parameters[p] = contracted[p];
-                }
-                double contracted_val = vqe_compute_energy(solver, solver->ansatz->parameters);
-
-                if (contracted_val < simplex_vals[worst_idx]) {
-                    memcpy(simplex[worst_idx], contracted, n * sizeof(double));
-                    simplex_vals[worst_idx] = contracted_val;
-                } else {
-                    // Shrink all vertices toward best
-                    for (size_t i = 0; i <= n; i++) {
-                        if (i == best_idx) continue;
-                        for (size_t p = 0; p < n; p++) {
-                            simplex[i][p] = simplex[best_idx][p] + 0.5 * (simplex[i][p] - simplex[best_idx][p]);
-                            solver->ansatz->parameters[p] = simplex[i][p];
-                        }
-                        simplex_vals[i] = vqe_compute_energy(solver, solver->ansatz->parameters);
-                    }
-                }
-                free(contracted);
-            }
-
-            // Set parameters to best vertex
-            best_idx = 0;
-            for (size_t i = 1; i <= n; i++) {
-                if (simplex_vals[i] < simplex_vals[best_idx]) best_idx = i;
-            }
-            memcpy(solver->ansatz->parameters, simplex[best_idx], n * sizeof(double));
-
-            free(centroid);
-            free(reflected);
-
-            // Update trust region radius
-            rho *= 0.99;
-            if (rho < rho_end) rho = rho_end;
         }
     }
     
@@ -1529,7 +1552,8 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
     free(gradient);
     free(m);
     free(v);
-    
+    cobyla_state_free(&cobyla_state);
+
     if (solver->optimizer->verbose) {
         printf("────────────────────────────────────────────────────────────────────\n\n");
         vqe_print_result(&result);
