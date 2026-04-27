@@ -489,43 +489,48 @@ void quantum_state_clear_measurements(quantum_state_t *state) {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-void quantum_state_print(const quantum_state_t *state, size_t max_terms) {
-    if (!state || !state->amplitudes) return;
-    
-    printf("Quantum State (");
-    printf("%zu qubits, dim=%zu):\n", state->num_qubits, state->state_dim);
-    
+void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_terms) {
+    if (!out || !state || !state->amplitudes) return;
+    if (max_terms == 0) max_terms = state->state_dim;
+
+    fprintf(out, "Quantum State (");
+    fprintf(out, "%zu qubits, dim=%zu):\n", state->num_qubits, state->state_dim);
+
     size_t terms_printed = 0;
     for (size_t i = 0; i < state->state_dim && terms_printed < max_terms; i++) {
         complex_t amp = state->amplitudes[i];
         double prob = cabs(amp);
         prob = prob * prob;
-        
+
         if (prob > SMALL_PROBABILITY) {
             char basis_str[MAX_QUBITS + 1];
             quantum_basis_state_string(i, state->num_qubits, basis_str, sizeof(basis_str));
-            
-            printf("  ");
-            if (creal(amp) != 0.0) printf("%.6f", creal(amp));
+
+            fprintf(out, "  ");
+            if (creal(amp) != 0.0) fprintf(out, "%.6f", creal(amp));
             if (cimag(amp) > 0.0) {
-                printf("+%.6fi", cimag(amp));
+                fprintf(out, "+%.6fi", cimag(amp));
             } else if (cimag(amp) < 0.0) {
-                printf("%.6fi", cimag(amp));
+                fprintf(out, "%.6fi", cimag(amp));
             }
-            printf(" |%s⟩ (p=%.6f)\n", basis_str, prob);
-            
+            fprintf(out, " |%s\xe2\x9f\xa9 (p=%.6f)\n", basis_str, prob);
+
             terms_printed++;
         }
     }
-    
+
     if (terms_printed < state->state_dim) {
-        printf("  ... (%zu more terms)\n", state->state_dim - terms_printed);
+        fprintf(out, "  ... (%zu more terms)\n", state->state_dim - terms_printed);
     }
-    
-    printf("Properties:\n");
-    printf("  Entropy: %.6f bits\n", quantum_state_entropy(state));
-    printf("  Purity: %.6f\n", quantum_state_purity(state));
-    printf("  Measurements: %zu\n", state->num_measurements);
+
+    fprintf(out, "Properties:\n");
+    fprintf(out, "  Entropy: %.6f bits\n", quantum_state_entropy(state));
+    fprintf(out, "  Purity: %.6f\n", quantum_state_purity(state));
+    fprintf(out, "  Measurements: %zu\n", state->num_measurements);
+}
+
+void quantum_state_print(const quantum_state_t *state, size_t max_terms) {
+    quantum_state_fprint(stdout, state, max_terms);
 }
 
 void quantum_basis_state_string(

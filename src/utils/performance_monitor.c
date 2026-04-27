@@ -218,55 +218,52 @@ void perf_monitor_get_stats(const perf_monitor_ctx_t *ctx, perf_stats_t *stats) 
         100.0 * ctx->output_generation_cycles / ctx->total_cycles : 0.0;
 }
 
-void perf_monitor_print_stats(const perf_monitor_ctx_t *ctx) {
-    if (!ctx) return;
-    
+void perf_monitor_fprint_stats(FILE *out, const perf_monitor_ctx_t *ctx) {
+    if (!out || !ctx) return;
+
     perf_stats_t stats;
     perf_monitor_get_stats(ctx, &stats);
-    
-    printf("\n");
-    printf("╔═══════════════════════════════════════════════════════════╗\n");
-    printf("║         PERFORMANCE MONITORING STATISTICS                 ║\n");
-    printf("╠═══════════════════════════════════════════════════════════╣\n");
-    printf("║                                                           ║\n");
-    printf("║  Operations:                                              ║\n");
-    printf("║    Total operations:    %10llu                         ║\n", 
-           (unsigned long long)stats.total_operations);
-    printf("║    Bytes processed:     %10llu                         ║\n",
-           (unsigned long long)stats.bytes_processed);
-    printf("║                                                           ║\n");
-    printf("║  Latency (per operation):                                 ║\n");
-    printf("║    Average:             %10.2f ns                      ║\n", stats.avg_latency_ns);
-    printf("║    Minimum:             %10.2f ns                      ║\n", stats.min_latency_ns);
-    printf("║    Maximum:             %10.2f ns                      ║\n", stats.max_latency_ns);
-    printf("║                                                           ║\n");
-    printf("║  Throughput:                                              ║\n");
-    printf("║    Current:             %10.2f MB/s                    ║\n", stats.current_throughput_mbps);
-    printf("║    Peak:                %10.2f MB/s                    ║\n", stats.peak_throughput_mbps);
-    printf("║                                                           ║\n");
-    printf("║  Time Distribution:                                       ║\n");
-    printf("║    Entropy collection:  %10.1f%%                        ║\n", stats.entropy_percent);
-    printf("║    Health testing:      %10.1f%%                        ║\n", stats.health_percent);
-    printf("║    Quantum mixing:      %10.1f%%                        ║\n", stats.quantum_percent);
-    printf("║    Output generation:   %10.1f%%                        ║\n", stats.output_percent);
-    printf("║                                                           ║\n");
-    printf("╚═══════════════════════════════════════════════════════════╝\n");
-    printf("\n");
-    
-    // Print latency histogram
-    printf("Latency Distribution:\n");
-    printf("─────────────────────────────────────────────────────────\n");
-    
+
+    fprintf(out, "\n");
+    fprintf(out, "+----------------------------------------------------------+\n");
+    fprintf(out, "|         PERFORMANCE MONITORING STATISTICS               |\n");
+    fprintf(out, "+----------------------------------------------------------+\n");
+    fprintf(out, "  Operations:\n");
+    fprintf(out, "    Total operations:    %10llu\n",
+            (unsigned long long)stats.total_operations);
+    fprintf(out, "    Bytes processed:     %10llu\n",
+            (unsigned long long)stats.bytes_processed);
+    fprintf(out, "  Latency (per operation):\n");
+    fprintf(out, "    Average:             %10.2f ns\n", stats.avg_latency_ns);
+    fprintf(out, "    Minimum:             %10.2f ns\n", stats.min_latency_ns);
+    fprintf(out, "    Maximum:             %10.2f ns\n", stats.max_latency_ns);
+    fprintf(out, "  Throughput:\n");
+    fprintf(out, "    Current:             %10.2f MB/s\n", stats.current_throughput_mbps);
+    fprintf(out, "    Peak:                %10.2f MB/s\n", stats.peak_throughput_mbps);
+    fprintf(out, "  Time Distribution:\n");
+    fprintf(out, "    Entropy collection:  %10.1f%%\n", stats.entropy_percent);
+    fprintf(out, "    Health testing:      %10.1f%%\n", stats.health_percent);
+    fprintf(out, "    Quantum mixing:      %10.1f%%\n", stats.quantum_percent);
+    fprintf(out, "    Output generation:   %10.1f%%\n", stats.output_percent);
+    fprintf(out, "+----------------------------------------------------------+\n\n");
+
+    fprintf(out, "Latency Distribution:\n");
+    fprintf(out, "------------------------------------------------------------\n");
+
     uint64_t threshold = 1000;
     for (int i = 0; i < 20; i++) {
         if (ctx->latency_histogram[i] > 0) {
             double ns = threshold / ctx->cpu_mhz * 1000.0;
-            printf("  <%8.1f ns: %10llu ops\n",
-                   ns, (unsigned long long)ctx->latency_histogram[i]);
+            fprintf(out, "  <%8.1f ns: %10llu ops\n",
+                    ns, (unsigned long long)ctx->latency_histogram[i]);
         }
         threshold *= 2;
     }
-    printf("\n");
+    fprintf(out, "\n");
+}
+
+void perf_monitor_print_stats(const perf_monitor_ctx_t *ctx) {
+    perf_monitor_fprint_stats(stdout, ctx);
 }
 
 double perf_monitor_get_overhead_percent(const perf_monitor_ctx_t *ctx) {

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>      /* for FILE in *_fprint signatures */
 #include <complex.h>
 #include <math.h>
 
@@ -261,9 +262,27 @@ void quantum_state_clear_measurements(quantum_state_t *state);
 // ============================================================================
 
 /**
- * @brief Print quantum state (debug)
- * @param state Quantum state
- * @param max_terms Maximum number of terms to print
+ * @brief Print quantum state to a chosen FILE stream (debug).
+ *
+ * Lets callers redirect to a file, pipe, or a memory-backed FILE; the
+ * original ::quantum_state_print is kept as a thin wrapper that always
+ * writes to stdout.
+ *
+ * @param out       Destination stream (must be non-NULL)
+ * @param state     Quantum state
+ * @param max_terms Maximum number of terms to print (0 = all)
+ */
+void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_terms);
+
+/**
+ * @brief Print quantum state to stdout (debug).
+ *
+ * Equivalent to `quantum_state_fprint(stdout, state, max_terms)`.  Kept
+ * as the legacy entry point; new code should prefer the explicit-FILE
+ * variant so that quiet test runs and structured pipelines can redirect.
+ *
+ * @param state     Quantum state
+ * @param max_terms Maximum number of terms to print (0 = all)
  */
 void quantum_state_print(const quantum_state_t *state, size_t max_terms);
 

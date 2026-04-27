@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>      /* for FILE in *_fprint signature */
 
 /**
  * @file performance_monitor.h
@@ -161,8 +162,17 @@ void perf_monitor_record_bytes(perf_monitor_ctx_t *ctx, size_t bytes);
 void perf_monitor_get_stats(const perf_monitor_ctx_t *ctx, perf_stats_t *stats);
 
 /**
- * @brief Print detailed performance statistics
- * 
+ * @brief Print detailed performance statistics to a chosen FILE stream.
+ * @param out Destination stream (must be non-NULL)
+ * @param ctx Monitor context
+ */
+void perf_monitor_fprint_stats(FILE *out, const perf_monitor_ctx_t *ctx);
+
+/**
+ * @brief Print detailed performance statistics to stdout.
+ *
+ * Equivalent to `perf_monitor_fprint_stats(stdout, ctx)`.
+ *
  * @param ctx Monitor context
  */
 void perf_monitor_print_stats(const perf_monitor_ctx_t *ctx);
