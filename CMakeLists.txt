@@ -1201,6 +1201,14 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_qgt_phase_diagram PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qgt_phase_diagram COMMAND test_qgt_phase_diagram)
 
+    # 2D phase-diagram mechanics, exercised on QWZ stacked along a
+    # no-op y-axis.  The Haldane (t2, phi) physics test is queued for
+    # when the Haldane Bloch implementation stabilises against grid-
+    # size oscillation.
+    add_executable(test_qgt_phase_diagram_2d tests/unit/test_qgt_phase_diagram_2d.c)
+    target_link_libraries(test_qgt_phase_diagram_2d PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgt_phase_diagram_2d COMMAND test_qgt_phase_diagram_2d)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
