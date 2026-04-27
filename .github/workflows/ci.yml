@@ -381,6 +381,56 @@ jobs:
         run: ctest --test-dir build -LE long -E "python_bindings|rust_bindings|webgpu_unified|unit_qgt" --output-on-failure --timeout 600
 
   # ============================================================================
+  # Tier C2 — line-coverage signal.  Builds with --coverage on Linux gcc,
+  # runs the same -LE long sweep, runs lcov to produce coverage.info, and
+  # uploads it as a CI artifact + prints a per-directory summary so you
+  # can see which subtrees are dark.
+  # ============================================================================
+
+  linux-coverage:
+    name: Linux x86_64 (Release + coverage)
+    runs-on: ubuntu-22.04
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential ninja-build cmake \
+            libopenblas-dev liblapacke-dev libomp-dev lcov
+      - name: Configure (+ coverage)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DQSIM_ENABLE_COVERAGE=ON
+          -DQSIM_ENABLE_LTO=OFF
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        # -LE long matches every other tier; coverage doesn't change which
+        # tests we run, only what we measure.
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 900
+      - name: Capture coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.raw.info \
+               --rc geninfo_unexecuted_blocks=1 \
+               --ignore-errors source --ignore-errors mismatch
+          # Drop system + third-party noise.
+          lcov --remove coverage.raw.info \
+               '/usr/*' '*/build/*' '*/tests/*' '*/bindings/*' \
+               --output-file coverage.info \
+               --ignore-errors unused
+          lcov --list coverage.info | tail -40
+      - name: Upload coverage report
+        if: ${{ env.ACT != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-coverage
+          path: coverage.info
+
+  # ============================================================================
   # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
   # ============================================================================
 

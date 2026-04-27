@@ -71,6 +71,7 @@ set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers)" OFF)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
+option(QSIM_ENABLE_COVERAGE   "Build with --coverage (gcov-compatible) for CI coverage reporting" OFF)
 
 # SIMD options
 option(QSIM_ENABLE_AVX512 "Enable AVX-512 (if available)" ON)
@@ -727,6 +728,16 @@ if(QSIM_ENABLE_SANITIZERS AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
     target_link_options(quantumsim PRIVATE ${QSIM_SANITIZER_FLAGS})
     add_compile_options(${QSIM_SANITIZER_FLAGS})
     add_link_options(${QSIM_SANITIZER_FLAGS})
+endif()
+
+# gcov-compatible coverage instrumentation; both gcc and clang emit
+# .gcno/.gcda files that lcov + genhtml can render.  We disable LTO
+# and force -O0 to keep line-level coverage useful (the optimiser
+# folds away basic blocks otherwise).
+if(QSIM_ENABLE_COVERAGE AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+    message(STATUS "Coverage: gcov instrumentation enabled (-O0)")
 endif()
 
 # Link libraries
