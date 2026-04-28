@@ -121,3 +121,39 @@ double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
     tn_mps_free(mps);
     return energy;
 }
+
+double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
+                                       double J, double Delta, double h,
+                                       uint32_t max_bond_dim,
+                                       uint32_t num_sweeps) {
+    if (num_sites < 2 || max_bond_dim < 1 || num_sweeps == 0) return DBL_MAX;
+
+    mpo_t* mpo = mpo_heisenberg_create(num_sites, J, Delta, h);
+    if (!mpo) return DBL_MAX;
+
+    tn_state_config_t mps_cfg = tn_state_config_default();
+    mps_cfg.max_bond_dim = max_bond_dim;
+    uint32_t chi_init = (max_bond_dim > 8) ? 8 : max_bond_dim;
+    tn_mps_state_t* mps = dmrg_init_random_mps(num_sites, chi_init, &mps_cfg);
+    if (!mps) {
+        mpo_free(mpo);
+        return DBL_MAX;
+    }
+
+    dmrg_config_t cfg = dmrg_config_default();
+    cfg.max_bond_dim = max_bond_dim;
+    cfg.max_sweeps   = (int)num_sweeps;
+
+    double energy = DBL_MAX;
+    dmrg_result_t* res = dmrg_ground_state(mps, mpo, &cfg);
+    if (res) {
+        energy = res->ground_energy;
+        dmrg_result_free(res);
+    } else {
+        energy = dmrg_compute_energy(mps, mpo);
+    }
+
+    tn_mps_free(mps);
+    mpo_free(mpo);
+    return energy;
+}
