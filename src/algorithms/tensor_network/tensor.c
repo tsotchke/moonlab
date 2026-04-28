@@ -1288,12 +1288,21 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
                 // Skip if columns are already orthogonal
                 if (off < tol * sqrt(a * b + 1e-300)) continue;
 
-                // Compute Jacobi rotation to zero out c
-                // We need to find cos(theta), sin(theta) such that
-                // (c*cos + ...) = 0, with proper complex phase handling
-
+                // Compute Jacobi rotation to zero out c.
+                //
+                // After right-multiplying [A_i, A_j] by
+                // R = [[cs, -conj(sn_c)], [sn_c, cs]] with
+                // sn_c = sn * conj(c)/|c|, the new off-diagonal is
+                //   c_new = e^{i*arg(c)} * [cs*sn*(b-a) + (cs^2-sn^2)*|c|].
+                // Setting that to zero gives cot(2*theta) = (a-b)/(2|c|) = -zeta.
+                // tan(theta) = t then satisfies t^2 - 2*zeta*t - 1 = 0; the
+                // smaller-magnitude root is t = -sign(zeta) / (|zeta| + sqrt(zeta^2 + 1)).
+                // (The +sign(zeta) form picks the *larger* root; that satisfies
+                // a different polynomial, only reduces |c| partially per sweep,
+                // and leaves U non-orthonormal at machine precision -- which
+                // breaks DMRG's left-canonical form.)
                 double zeta = (b - a) / (2.0 * cabs(c) + 1e-300);
-                double t = (zeta >= 0 ? 1.0 : -1.0) / (fabs(zeta) + sqrt(1.0 + zeta * zeta));
+                double t = -((zeta >= 0 ? 1.0 : -1.0)) / (fabs(zeta) + sqrt(1.0 + zeta * zeta));
                 double cs = 1.0 / sqrt(1.0 + t * t);
                 double sn = cs * t;
 
