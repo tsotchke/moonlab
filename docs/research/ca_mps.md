@@ -301,18 +301,45 @@ This is publishable material. It's not in the v0.3.0 scope; the scope is the fix
 
 ---
 
-## 6. Benchmarks (what we publish)
+## 6. Benchmarks (measured)
 
-| Circuit class | Plain MPS `chi` for 1e-6 energy | CA-MPS `chi` for 1e-6 energy | Speedup |
-|---|---|---|---|
-| Random Clifford depth-10, n=20 | blows up to 2^10 | chi=1 | unbounded |
-| Random Clifford + 5% T, n=20 | ~64 | ~8 | ~8x |
-| VQE hardware-efficient, n=16, 4 layers | ~128 | ~16 | ~8x |
-| Surface code d=5, logical memory | ~1024 | ~4 | ~256x |
-| Kagome 12-site DMRG | ~128 | ~128 (D trivial) | 1.0x (regression) |
-| Random circuits on 18 qubits | ~512 | ~512 (D saturates) | 1.0x (regression) |
+The numbers below are from `tests/performance/bench_ca_mps.c` run on Apple M2 Ultra; raw JSON in `benchmarks/results/ca_mps_v2_2026-04-28.json`.
 
-The kagome and random-circuit rows are the regression points that confirm CA-MPS's pure-MPS limit agrees with plain MPS. The VQE and surface-code rows are the wins.
+### 6.1 Where CA-MPS wins (clean)
+
+| Circuit | n | depth | chi_plain | chi_ca | wallclock speedup |
+|---|---|---|---|---|---|
+| Random Clifford | 6 | 80 | 4 | 1 | 48x |
+| Random Clifford | 10 | 120 | 32 | 1 | 4.4e5x |
+| Random Clifford | 12 | 150 | 16 | 1 | 1.9e6x |
+| Surface-stabilizer cycle | 10 | 10 cycles | 16 | 1 | 590x |
+| Surface-stabilizer cycle | 12 | 12 cycles | 32 | 1 | 2.0e6x |
+| Clifford-heavy (5% T) | 10 | 120 | 8 | 4 | 35x |
+
+These are workloads where the Clifford content carries the entanglement structure -- pure-Clifford and surface-code-style circuits drive `chi_plain` to the 2^(n/2) ceiling while `D` absorbs all of it and `chi_ca` stays at 1.
+
+### 6.2 Where CA-MPS LOSES (the falsified §5.1 prediction)
+
+| Circuit | n | depth | chi_plain | chi_ca | wallclock |
+|---|---|---|---|---|---|
+| VQE hardware-efficient | 8 | 4 layers | **16** | **128** | CA-MPS 200x slower |
+| VQE hardware-efficient | 10 | 4 layers | **16** | **512** | CA-MPS 2900x slower |
+| VQE hardware-efficient | 12 | 4 layers | **16** | **256** | CA-MPS 13500x slower |
+| QAOA ring (p=4) | 12 | 4 rounds | **8** | **256** | CA-MPS 187x slower |
+| Random Pauli rotation | 10 | 120 gates | 32 | 512 | ~1x |
+
+The §5.1 prediction that "VQE ansatzes with hardware-efficient structure ... absorbed for free into D" does **not survive contact with measurement**. Mechanism (now confirmed): a real HEA layer applies non-Clifford rotations on every qubit, not just a sparse subset. Each rotation `R_z(theta)` on qubit q gets conjugated through `D` to a rotation around the Pauli string `D Z_q D†`, which after the first CNOT chain has weight close to n. CA-MPS's `|phi>` therefore receives a sequence of weight-n Pauli rotations -- maximally entangling on the MPS factor -- while plain MPS sees a single-qubit rotation followed by a CNOT (small bond growth). The "Clifford prefactor absorbs entanglement" intuition is correct *when D is well-aligned with the workload*; with a generic accumulated D, CA-MPS pays the full delocalization cost.
+
+This rules out fixed-D CA-MPS as a useful method for canonical VQE / QAOA. The fix is §5.3: variational-D, where D is searched over alongside |phi>. Until that ships, the publishable claim is narrower than originally pitched -- see §6.3.
+
+### 6.3 What's publishable today
+
+The fixed-D 1D CA-MPS in v0.3.0 is a clean win on a specific workload class:
+- **stabilizer-rich circuits** (surface-code stabilizer extraction, error-correction simulation, Clifford-tableau benchmarks);
+- **circuits with sparse non-Clifford content** (clifford_heavy at 5% T-density wins by 7-35x wallclock with comparable bond dim);
+- the **regression points** (kagome, random rotation) confirm correctness in the pure-MPS limit.
+
+Variational-D (§5.3) is the gating item for a credible VQE/QAOA result. CA-PEPS (§7) is the gating item for venue-uplift to a physics-novelty journal.
 
 ---
 
