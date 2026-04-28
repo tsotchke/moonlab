@@ -1836,6 +1836,13 @@ if(QSIM_BUILD_EXAMPLES)
         examples/tensor_network/ca_mps_imag_time.c)
     target_link_libraries(example_ca_mps_imag_time PRIVATE quantumsim ${MATH_LIBRARY})
 
+    # Variational-D oracle proof: does a hand-supplied Clifford reduce
+    # |phi> bond dim for the TFIM ground state?  Gating experiment for the
+    # full var-D implementation (see docs/research/ca_mps.md §5.3).
+    add_executable(example_ca_mps_oracle_proof
+        examples/tensor_network/ca_mps_oracle_proof.c)
+    target_link_libraries(example_ca_mps_oracle_proof PRIVATE quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
