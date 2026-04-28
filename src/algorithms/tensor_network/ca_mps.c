@@ -87,6 +87,16 @@ uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s) {
     return max_b;
 }
 
+double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s) {
+    if (!s || !s->phi || s->n < 2) return 0.0;
+    double s_max = 0.0;
+    for (uint32_t i = 0; i + 1 < s->n; i++) {
+        double e = tn_mps_entanglement_entropy(s->phi, i);
+        if (e > s_max) s_max = e;
+    }
+    return s_max;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Clifford gates -- tableau-only updates.                           */
 /*                                                                    */

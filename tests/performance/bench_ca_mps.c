@@ -55,6 +55,20 @@ static uint32_t plain_mps_max_bond(const tn_mps_state_t* s) {
     return m;
 }
 
+/* Max half-cut von Neumann entropy across all bipartitions.  This is the
+ * representation-independent measure of how entangled the state is and
+ * the right primary metric for CA-MPS-vs-plain-MPS comparisons -- the
+ * bond_dim metric reports allocated storage, not post-truncation rank. */
+static double plain_mps_max_half_cut_entropy(const tn_mps_state_t* s) {
+    uint32_t n = s->num_qubits;
+    double s_max = 0.0;
+    for (uint32_t i = 0; i + 1 < n; i++) {
+        double e = tn_mps_entanglement_entropy(s, i);
+        if (e > s_max) s_max = e;
+    }
+    return s_max;
+}
+
 /* ---------------------------------------------------------------- */
 /*  Circuit classes                                                  */
 /* ---------------------------------------------------------------- */
@@ -268,6 +282,8 @@ struct bench_point {
     uint32_t non_clifford_count;
     uint32_t plain_bond_max;
     uint32_t ca_bond_max;
+    double plain_entropy_max;
+    double ca_entropy_max;
     double plain_wallclock_s;
     double ca_wallclock_s;
 };
@@ -329,6 +345,7 @@ static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
     }
     double plain_time = now_s() - t0;
     out->plain_bond_max = plain_mps_max_bond(plain);
+    out->plain_entropy_max = plain_mps_max_half_cut_entropy(plain);
     tn_mps_free(plain);
 
     /* Pass 2: run on CA-MPS only with the same RNG sequence. */
@@ -348,6 +365,7 @@ static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
     out->depth = depth;
     out->non_clifford_count = nc;
     out->ca_bond_max = moonlab_ca_mps_current_bond_dim(ca);
+    out->ca_entropy_max = moonlab_ca_mps_max_half_cut_entropy(ca);
     out->plain_wallclock_s = plain_time;
     out->ca_wallclock_s = ca_time;
 
@@ -363,12 +381,15 @@ int main(int argc, char** argv) {
     FILE* json = fopen(out_path, "w");
     if (!json) { fprintf(stderr, "cannot open %s for writing\n", out_path); return 1; }
 
-    fprintf(stdout, "=== CA-MPS vs plain MPS benchmark ===\n\n");
-    fprintf(stdout, "%-16s %5s %6s %5s %9s %9s %8s %9s %9s %7s\n",
-            "circuit", "n", "depth", "T", "chi_plain", "chi_ca", "bond_x",
-            "t_plain_s", "t_ca_s", "speed");
+    fprintf(stdout, "=== CA-MPS vs plain MPS benchmark ===\n");
+    fprintf(stdout, "Entropy is the primary metric (rep-independent); chi shows allocated\n");
+    fprintf(stdout, "storage and is unreliable when DMRG / TEBD keeps bonds at chi_max.\n\n");
+    fprintf(stdout, "%-16s %5s %6s %5s %8s %8s %8s %8s %9s %9s %7s\n",
+            "circuit", "n", "depth", "T",
+            "S_plain", "S_ca", "S_x",
+            "chi_pl", "t_plain_s", "t_ca_s", "speed");
 
-    fprintf(json, "{\n  \"schema\": \"moonlab/ca_mps_bench_v1\",\n");
+    fprintf(json, "{\n  \"schema\": \"moonlab/ca_mps_bench_v2\",\n");
     fprintf(json, "  \"points\": [\n");
 
     int first = 1;
@@ -401,21 +422,28 @@ int main(int argc, char** argv) {
             struct bench_point p;
             run_one_point(qubit_sizes[qi], schedule[ci].cclass,
                           schedule[ci].depths[qi], 42 + qi * 7 + ci, &p);
-            double bond_ratio = (double)p.plain_bond_max / (double)p.ca_bond_max;
             double speed_ratio = p.ca_wallclock_s > 0
                 ? p.plain_wallclock_s / p.ca_wallclock_s : 0.0;
-            fprintf(stdout, "%-16s %5u %6u %5u %9u %9u %8.1fx %9.4f %9.4f %6.1fx\n",
+            double s_ratio = p.ca_entropy_max > 1e-12
+                ? p.plain_entropy_max / p.ca_entropy_max : 0.0;
+            fprintf(stdout, "%-16s %5u %6u %5u %8.4f %8.4f %8.2fx %8u %9.4f %9.4f %6.1fx\n",
                     class_name(p.circuit_class), p.n, p.depth, p.non_clifford_count,
-                    p.plain_bond_max, p.ca_bond_max, bond_ratio,
+                    p.plain_entropy_max, p.ca_entropy_max, s_ratio,
+                    p.plain_bond_max,
                     p.plain_wallclock_s, p.ca_wallclock_s, speed_ratio);
+            fflush(stdout);
 
             if (!first) fprintf(json, ",\n");
             first = 0;
             fprintf(json, "    { \"circuit\": \"%s\", \"n\": %u, \"depth\": %u, "
-                          "\"non_clifford\": %u, \"chi_plain\": %u, \"chi_ca\": %u, "
+                          "\"non_clifford\": %u, "
+                          "\"S_plain\": %.6f, \"S_ca\": %.6f, "
+                          "\"chi_plain\": %u, \"chi_ca\": %u, "
                           "\"t_plain_s\": %.6f, \"t_ca_s\": %.6f }",
                     class_name(p.circuit_class), p.n, p.depth, p.non_clifford_count,
-                    p.plain_bond_max, p.ca_bond_max, p.plain_wallclock_s, p.ca_wallclock_s);
+                    p.plain_entropy_max, p.ca_entropy_max,
+                    p.plain_bond_max, p.ca_bond_max,
+                    p.plain_wallclock_s, p.ca_wallclock_s);
         }
     }
 

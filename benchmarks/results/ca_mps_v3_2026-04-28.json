@@ -1,0 +1,29 @@
+{
+  "schema": "moonlab/ca_mps_bench_v2",
+  "points": [
+    { "circuit": "pure_clifford", "n": 6, "depth": 80, "non_clifford": 0, "S_plain": 2.000000, "S_ca": 0.000000, "chi_plain": 4, "chi_ca": 1, "t_plain_s": 0.000823, "t_ca_s": 0.000018 },
+    { "circuit": "clifford_heavy", "n": 6, "depth": 80, "non_clifford": 3, "S_plain": 2.000000, "S_ca": 1.000000, "chi_plain": 4, "chi_ca": 8, "t_plain_s": 0.000943, "t_ca_s": 0.000089 },
+    { "circuit": "pauli_rotation", "n": 6, "depth": 80, "non_clifford": 49, "S_plain": 2.022677, "S_ca": 1.994738, "chi_plain": 8, "chi_ca": 32, "t_plain_s": 0.000737, "t_ca_s": 0.003588 },
+    { "circuit": "vqe_hea", "n": 6, "depth": 4, "non_clifford": 48, "S_plain": 1.667621, "S_ca": 1.722146, "chi_plain": 8, "chi_ca": 32, "t_plain_s": 0.000375, "t_ca_s": 0.003968 },
+    { "circuit": "qaoa_ring", "n": 6, "depth": 4, "non_clifford": 48, "S_plain": 0.721242, "S_ca": 1.070678, "chi_plain": 8, "chi_ca": 32, "t_plain_s": 0.000715, "t_ca_s": 0.003534 },
+    { "circuit": "surface_cycle", "n": 6, "depth": 6, "non_clifford": 0, "S_plain": 2.000000, "S_ca": 0.000000, "chi_plain": 4, "chi_ca": 1, "t_plain_s": 0.000241, "t_ca_s": 0.000001 },
+    { "circuit": "pure_clifford", "n": 8, "depth": 100, "non_clifford": 0, "S_plain": 3.000000, "S_ca": 0.000000, "chi_plain": 8, "chi_ca": 1, "t_plain_s": 0.001273, "t_ca_s": 0.000005 },
+    { "circuit": "clifford_heavy", "n": 8, "depth": 100, "non_clifford": 3, "S_plain": 3.000000, "S_ca": 0.000000, "chi_plain": 8, "chi_ca": 4, "t_plain_s": 0.001904, "t_ca_s": 0.000063 },
+    { "circuit": "pauli_rotation", "n": 8, "depth": 100, "non_clifford": 73, "S_plain": 2.786434, "S_ca": 3.147885, "chi_plain": 16, "chi_ca": 128, "t_plain_s": 0.002766, "t_ca_s": 0.242172 },
+    { "circuit": "vqe_hea", "n": 8, "depth": 4, "non_clifford": 64, "S_plain": 2.335380, "S_ca": 2.725991, "chi_plain": 16, "chi_ca": 128, "t_plain_s": 0.000331, "t_ca_s": 0.110114 },
+    { "circuit": "qaoa_ring", "n": 8, "depth": 4, "non_clifford": 64, "S_plain": 0.721242, "S_ca": 1.324901, "chi_plain": 8, "chi_ca": 128, "t_plain_s": 0.001531, "t_ca_s": 0.061935 },
+    { "circuit": "surface_cycle", "n": 8, "depth": 8, "non_clifford": 0, "S_plain": 0.000000, "S_ca": 0.000000, "chi_plain": 1, "chi_ca": 1, "t_plain_s": 0.000646, "t_ca_s": 0.000003 },
+    { "circuit": "pure_clifford", "n": 10, "depth": 120, "non_clifford": 0, "S_plain": 4.345230, "S_ca": 0.000000, "chi_plain": 32, "chi_ca": 1, "t_plain_s": 3.740416, "t_ca_s": 0.000009 },
+    { "circuit": "clifford_heavy", "n": 10, "depth": 120, "non_clifford": 2, "S_plain": 3.000000, "S_ca": 0.600876, "chi_plain": 8, "chi_ca": 4, "t_plain_s": 0.003598, "t_ca_s": 0.000064 },
+    { "circuit": "pauli_rotation", "n": 10, "depth": 120, "non_clifford": 84, "S_plain": 3.941802, "S_ca": 4.265795, "chi_plain": 32, "chi_ca": 512, "t_plain_s": 8.908975, "t_ca_s": 10.862704 },
+    { "circuit": "vqe_hea", "n": 10, "depth": 4, "non_clifford": 80, "S_plain": 2.564298, "S_ca": 3.432484, "chi_plain": 16, "chi_ca": 512, "t_plain_s": 0.001991, "t_ca_s": 1.871948 },
+    { "circuit": "qaoa_ring", "n": 10, "depth": 4, "non_clifford": 80, "S_plain": 0.721242, "S_ca": 1.433986, "chi_plain": 8, "chi_ca": 256, "t_plain_s": 0.004334, "t_ca_s": 0.384795 },
+    { "circuit": "surface_cycle", "n": 10, "depth": 10, "non_clifford": 0, "S_plain": 4.000000, "S_ca": 0.000000, "chi_plain": 16, "chi_ca": 1, "t_plain_s": 0.004059, "t_ca_s": 0.000009 },
+    { "circuit": "pure_clifford", "n": 12, "depth": 150, "non_clifford": 0, "S_plain": 0.000000, "S_ca": 0.000000, "chi_plain": 16, "chi_ca": 1, "t_plain_s": 25.044367, "t_ca_s": 0.000023 },
+    { "circuit": "clifford_heavy", "n": 12, "depth": 150, "non_clifford": 7, "S_plain": 3.000000, "S_ca": 0.600876, "chi_plain": 8, "chi_ca": 16, "t_plain_s": 0.004407, "t_ca_s": 0.000458 },
+    { "circuit": "pauli_rotation", "n": 12, "depth": 150, "non_clifford": 96, "S_plain": 4.376717, "S_ca": 5.236718, "chi_plain": 64, "chi_ca": 256, "t_plain_s": 568.247047, "t_ca_s": 37.024692 },
+    { "circuit": "vqe_hea", "n": 12, "depth": 4, "non_clifford": 96, "S_plain": 3.172488, "S_ca": 3.753597, "chi_plain": 16, "chi_ca": 256, "t_plain_s": 0.000852, "t_ca_s": 11.513486 },
+    { "circuit": "qaoa_ring", "n": 12, "depth": 4, "non_clifford": 96, "S_plain": 0.721242, "S_ca": 1.442484, "chi_plain": 8, "chi_ca": 256, "t_plain_s": 0.005039, "t_ca_s": 0.898976 },
+    { "circuit": "surface_cycle", "n": 12, "depth": 12, "non_clifford": 0, "S_plain": 4.281744, "S_ca": 0.000000, "chi_plain": 32, "chi_ca": 1, "t_plain_s": 52.315187, "t_ca_s": 0.000012 }
+  ]
+}
