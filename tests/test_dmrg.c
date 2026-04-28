@@ -134,5 +134,9 @@ int main(int argc, char *argv[]) {
     dmrg_result_free(result);
     tn_mps_free(ground_state);
 
-    return 0;
+    /* Treat anything beyond 5% relative error as a regression rather
+     * than a stylistic warning -- the previous always-return-0 form
+     * silently masked the SVD-fallback Jacobi sign bug (which produced
+     * E = -198 instead of -9.84 for N=8, g=1, max_bond=16). */
+    return (rel_error < 5.0) ? 0 : 1;
 }
