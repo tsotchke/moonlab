@@ -46,6 +46,14 @@ fn main() {
     // if the build system sets it (e.g. CMake CTest), fall back to the
     // project root. Static preferred, but fall through to shared if
     // only libquantumsim.{so,dylib,dll} is present.
+    //
+    // The rerun-if-env-changed line below is load-bearing: without it
+    // cargo bakes the value of MOONLAB_LIB_DIR into the cached rlib at
+    // first build and silently keeps it forever, so a later ctest run
+    // that points at a different build directory (e.g. build-fallback,
+    // build-werror) links against the stale path and fails with
+    // "library 'quantumsim' not found".
+    println!("cargo:rerun-if-env-changed=MOONLAB_LIB_DIR");
     let lib_dir = env::var("MOONLAB_LIB_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| project_root.join("build"));
