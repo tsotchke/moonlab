@@ -62,7 +62,14 @@ static uint32_t plain_mps_max_bond(const tn_mps_state_t* s) {
 enum circuit_class {
     CIRCUIT_PURE_CLIFFORD,     /* H, S, CNOT, CZ -- stabilizer state */
     CIRCUIT_CLIFFORD_HEAVY,    /* 95% Clifford + 5% T-gate */
-    CIRCUIT_PAULI_ROTATION,    /* random rx/ry/rz angles, no Clifford structure */
+    CIRCUIT_PAULI_ROTATION,    /* random rx/ry/rz angles, mixed CNOTs */
+    /* Structured (non-random) workloads that match the section 6
+     * design-doc predictions.  These are the regimes CA-MPS is
+     * actually targeted at -- a Clifford-rich entangling structure
+     * with a sparse, predictable distribution of non-Clifford gates. */
+    CIRCUIT_VQE_HEA,           /* hardware-efficient ansatz: Ry+Rz on each qubit, CNOT chain */
+    CIRCUIT_QAOA_RING,         /* QAOA on an n-cycle ring: ZZ cost + X mixer */
+    CIRCUIT_SURFACE_CYCLE,     /* repeated stabilizer-extraction (pure Clifford) */
 };
 
 static const char* class_name(int c) {
@@ -70,13 +77,104 @@ static const char* class_name(int c) {
         case CIRCUIT_PURE_CLIFFORD:   return "pure_clifford";
         case CIRCUIT_CLIFFORD_HEAVY:  return "clifford_heavy";
         case CIRCUIT_PAULI_ROTATION:  return "pauli_rotation";
+        case CIRCUIT_VQE_HEA:         return "vqe_hea";
+        case CIRCUIT_QAOA_RING:       return "qaoa_ring";
+        case CIRCUIT_SURFACE_CYCLE:   return "surface_cycle";
     }
     return "?";
 }
 
-/* Apply one gate of the given class to both backends.  Returns 1 if a T-gate
- * (non-Clifford) was applied, 0 otherwise.  Used to count magic gate density
- * in the report. */
+/* Each structured class executes one full layer/round per step, so
+ * the depth parameter can stay loop-controlled.  Returns the count
+ * of non-Clifford gates emitted by the layer. */
+static uint32_t apply_layer_vqe_hea(tn_mps_state_t* plain, moonlab_ca_mps_t* ca,
+                                     uint32_t n) {
+    /* VQE-HEA layer: per-qubit Ry(theta) Rz(phi) + linear CNOT chain.
+     * The angles are deterministic functions of qubit index + a per-call
+     * counter so successive layers are not identical (which would make
+     * Rz collapse into a global phase).  Rotation angles are kept
+     * generic (well off any magic-angle multiple of pi/4) so the
+     * non-Clifford content is real. */
+    uint32_t nc = 0;
+    for (uint32_t q = 0; q < n; q++) {
+        double th = 0.137 + 0.29 * (double)q + 0.413 * rng_unit();
+        double ph = 0.241 + 0.31 * (double)q + 0.519 * rng_unit();
+        if (plain) tn_apply_ry(plain, q, th);
+        if (ca)    moonlab_ca_mps_ry(ca, q, th);
+        if (plain) tn_apply_rz(plain, q, ph);
+        if (ca)    moonlab_ca_mps_rz(ca, q, ph);
+        nc += 2;
+    }
+    for (uint32_t q = 0; q + 1 < n; q++) {
+        if (plain) tn_apply_cnot(plain, q, q + 1);
+        if (ca)    moonlab_ca_mps_cnot(ca, q, q + 1);
+    }
+    return nc;
+}
+
+/* Apply exp(-i * gamma * Z_i Z_j) via CNOT-Rz-CNOT decomposition.
+ * The Rz is the only non-Clifford gate. */
+static void apply_zz_rotation(tn_mps_state_t* plain, moonlab_ca_mps_t* ca,
+                               uint32_t i, uint32_t j, double gamma) {
+    if (plain) tn_apply_cnot(plain, i, j);
+    if (ca)    moonlab_ca_mps_cnot(ca, i, j);
+    if (plain) tn_apply_rz(plain, j, 2.0 * gamma);
+    if (ca)    moonlab_ca_mps_rz(ca, j, 2.0 * gamma);
+    if (plain) tn_apply_cnot(plain, i, j);
+    if (ca)    moonlab_ca_mps_cnot(ca, i, j);
+}
+
+static uint32_t apply_round_qaoa_ring(tn_mps_state_t* plain, moonlab_ca_mps_t* ca,
+                                       uint32_t n, double gamma, double beta) {
+    /* One QAOA round on an n-cycle: cost layer over edges (i, i+1 mod n),
+     * then mixer layer Rx(2*beta) on each qubit.  Each ZZ rotation
+     * contributes one non-Clifford Rz; mixer contributes n. */
+    uint32_t nc = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t j = (i + 1) % n;
+        apply_zz_rotation(plain, ca, i, j, gamma);
+        nc += 1;
+    }
+    for (uint32_t q = 0; q < n; q++) {
+        if (plain) tn_apply_rx(plain, q, 2.0 * beta);
+        if (ca)    moonlab_ca_mps_rx(ca, q, 2.0 * beta);
+        nc += 1;
+    }
+    return nc;
+}
+
+static uint32_t apply_layer_surface_cycle(tn_mps_state_t* plain, moonlab_ca_mps_t* ca,
+                                           uint32_t n) {
+    /* Surface-code-like stabilizer-extraction cycle (no measurements, the
+     * Clifford content is what we benchmark): X-stabilizer pattern
+     * H ; CNOT(a, d_left) ; CNOT(a, d_right) ; H, plus Z-stabilizer
+     * CNOT(d, a) chains.  Even-indexed qubits act as data, odd-indexed
+     * as ancillas; this is a 1D "stabilizer chain" that stresses both
+     * short-range entanglement *and* CA-MPS's pure-Clifford limit
+     * (chi_ca should stay at 1). */
+    for (uint32_t a = 1; a + 1 < n; a += 2) {
+        if (plain) tn_apply_h(plain, a);
+        if (ca)    moonlab_ca_mps_h(ca, a);
+        if (plain) tn_apply_cnot(plain, a, a - 1);
+        if (ca)    moonlab_ca_mps_cnot(ca, a, a - 1);
+        if (plain) tn_apply_cnot(plain, a, a + 1);
+        if (ca)    moonlab_ca_mps_cnot(ca, a, a + 1);
+        if (plain) tn_apply_h(plain, a);
+        if (ca)    moonlab_ca_mps_h(ca, a);
+    }
+    /* Z-stabilizer pattern shifted by one: even-indexed ancillas. */
+    for (uint32_t a = 2; a + 1 < n; a += 2) {
+        if (plain) tn_apply_cnot(plain, a - 1, a);
+        if (ca)    moonlab_ca_mps_cnot(ca, a - 1, a);
+        if (plain) tn_apply_cnot(plain, a + 1, a);
+        if (ca)    moonlab_ca_mps_cnot(ca, a + 1, a);
+    }
+    return 0;
+}
+
+/* Apply one gate of the given class to whichever backend is non-NULL.
+ * Returns 1 if a T-gate or Pauli rotation (non-Clifford) was applied,
+ * 0 otherwise.  Used to count magic gate density in the report. */
 static int apply_one_gate(int cclass,
                           tn_mps_state_t* plain, moonlab_ca_mps_t* ca,
                           uint32_t n) {
@@ -87,23 +185,47 @@ static int apply_one_gate(int cclass,
 
     if (cclass == CIRCUIT_PURE_CLIFFORD) {
         switch (rng_u32(4)) {
-            case 0: tn_apply_h(plain, q);        moonlab_ca_mps_h(ca, q); break;
-            case 1: tn_apply_s(plain, q);        moonlab_ca_mps_s(ca, q); break;
-            case 2: tn_apply_cnot(plain, q, q2); moonlab_ca_mps_cnot(ca, q, q2); break;
-            case 3: tn_apply_cz(plain, q, q2);   moonlab_ca_mps_cz(ca, q, q2); break;
+            case 0:
+                if (plain) tn_apply_h(plain, q);
+                if (ca)    moonlab_ca_mps_h(ca, q);
+                break;
+            case 1:
+                if (plain) tn_apply_s(plain, q);
+                if (ca)    moonlab_ca_mps_s(ca, q);
+                break;
+            case 2:
+                if (plain) tn_apply_cnot(plain, q, q2);
+                if (ca)    moonlab_ca_mps_cnot(ca, q, q2);
+                break;
+            case 3:
+                if (plain) tn_apply_cz(plain, q, q2);
+                if (ca)    moonlab_ca_mps_cz(ca, q, q2);
+                break;
         }
     } else if (cclass == CIRCUIT_CLIFFORD_HEAVY) {
         if (rng_unit() < 0.05) {
             /* T gate: single-qubit rotation pi/4 around Z. */
-            tn_apply_t(plain, q);
-            moonlab_ca_mps_t_gate(ca, q);
+            if (plain) tn_apply_t(plain, q);
+            if (ca)    moonlab_ca_mps_t_gate(ca, q);
             non_clifford = 1;
         } else {
             switch (rng_u32(4)) {
-                case 0: tn_apply_h(plain, q);        moonlab_ca_mps_h(ca, q); break;
-                case 1: tn_apply_s(plain, q);        moonlab_ca_mps_s(ca, q); break;
-                case 2: tn_apply_cnot(plain, q, q2); moonlab_ca_mps_cnot(ca, q, q2); break;
-                case 3: tn_apply_cz(plain, q, q2);   moonlab_ca_mps_cz(ca, q, q2); break;
+                case 0:
+                    if (plain) tn_apply_h(plain, q);
+                    if (ca)    moonlab_ca_mps_h(ca, q);
+                    break;
+                case 1:
+                    if (plain) tn_apply_s(plain, q);
+                    if (ca)    moonlab_ca_mps_s(ca, q);
+                    break;
+                case 2:
+                    if (plain) tn_apply_cnot(plain, q, q2);
+                    if (ca)    moonlab_ca_mps_cnot(ca, q, q2);
+                    break;
+                case 3:
+                    if (plain) tn_apply_cz(plain, q, q2);
+                    if (ca)    moonlab_ca_mps_cz(ca, q, q2);
+                    break;
             }
         }
     } else {
@@ -112,13 +234,22 @@ static int apply_one_gate(int cclass,
          * bond dimension.  Pure single-qubit rotations on |0..0> stay at
          * bond 1 regardless of backend, which isn't a useful benchmark. */
         if (rng_unit() < 0.3) {
-            tn_apply_cnot(plain, q, q2);
-            moonlab_ca_mps_cnot(ca, q, q2);
+            if (plain) tn_apply_cnot(plain, q, q2);
+            if (ca)    moonlab_ca_mps_cnot(ca, q, q2);
         } else {
             switch (rng_u32(3)) {
-                case 0: tn_apply_rx(plain, q, theta); moonlab_ca_mps_rx(ca, q, theta); break;
-                case 1: tn_apply_ry(plain, q, theta); moonlab_ca_mps_ry(ca, q, theta); break;
-                case 2: tn_apply_rz(plain, q, theta); moonlab_ca_mps_rz(ca, q, theta); break;
+                case 0:
+                    if (plain) tn_apply_rx(plain, q, theta);
+                    if (ca)    moonlab_ca_mps_rx(ca, q, theta);
+                    break;
+                case 1:
+                    if (plain) tn_apply_ry(plain, q, theta);
+                    if (ca)    moonlab_ca_mps_ry(ca, q, theta);
+                    break;
+                case 2:
+                    if (plain) tn_apply_rz(plain, q, theta);
+                    if (ca)    moonlab_ca_mps_rz(ca, q, theta);
+                    break;
             }
             non_clifford = 1;
         }
@@ -141,6 +272,43 @@ struct bench_point {
     double ca_wallclock_s;
 };
 
+/* True iff the class advances depth in units of "one full layer" rather
+ * than "one random gate".  Affects how max_bond is reported (always
+ * the post-circuit peak) but the timing convention is identical. */
+static int is_structured(int cclass) {
+    return cclass == CIRCUIT_VQE_HEA
+        || cclass == CIRCUIT_QAOA_RING
+        || cclass == CIRCUIT_SURFACE_CYCLE;
+}
+
+/* One step of the named circuit class on both backends.
+ * Returns the number of non-Clifford gates applied. */
+static uint32_t apply_one_step(int cclass, tn_mps_state_t* plain,
+                                moonlab_ca_mps_t* ca, uint32_t n,
+                                uint32_t step_idx) {
+    (void)step_idx;
+    if (is_structured(cclass)) {
+        switch (cclass) {
+            case CIRCUIT_VQE_HEA:
+                return apply_layer_vqe_hea(plain, ca, n);
+            case CIRCUIT_QAOA_RING: {
+                /* Use the standard QAOA "fixed-angle" schedule for p=1 on
+                 * unweighted ring: gamma ~ pi/4, beta ~ pi/8.  Subsequent
+                 * rounds drift the angles slightly so the workload isn't
+                 * a single repeated layer. */
+                double gamma = 0.785 + 0.05 * (double)step_idx;
+                double beta  = 0.392 + 0.03 * (double)step_idx;
+                return apply_round_qaoa_ring(plain, ca, n, gamma, beta);
+            }
+            case CIRCUIT_SURFACE_CYCLE:
+                return apply_layer_surface_cycle(plain, ca, n);
+        }
+        return 0;
+    }
+    /* Random (non-structured) classes: one gate per step. */
+    return (uint32_t)apply_one_gate(cclass, plain, ca, n);
+}
+
 static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
                           struct bench_point* out) {
     uint32_t chi_max = (n <= 10) ? (1u << n) : 256;
@@ -154,63 +322,24 @@ static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
 
     rng_seed((uint64_t)seed * 0x100000001B3ULL);
 
-    /* Run once on plain MPS for timing. */
+    /* Pass 1: run on plain MPS only (CA-MPS gets re-run for clean timing). */
     double t0 = now_s();
     for (uint32_t step = 0; step < depth; step++) {
-        (void)apply_one_gate(cclass, plain, ca, n);
+        (void)apply_one_step(cclass, plain, NULL, n, step);
     }
     double plain_time = now_s() - t0;
-
     out->plain_bond_max = plain_mps_max_bond(plain);
-    out->ca_bond_max = moonlab_ca_mps_current_bond_dim(ca);
-
-    /* Rerun just CA-MPS to separate its wallclock (the above call updates
-     * both, so its time is dominated by the slower of the two; rerun for
-     * a clean CA-MPS timing). */
     tn_mps_free(plain);
-    moonlab_ca_mps_free(ca);
 
-    plain = tn_mps_create_zero(n, &cfg);
+    /* Pass 2: run on CA-MPS only with the same RNG sequence. */
+    moonlab_ca_mps_free(ca);
     ca = moonlab_ca_mps_create(n, chi_max);
     rng_seed((uint64_t)seed * 0x100000001B3ULL);
 
     uint32_t nc = 0;
     t0 = now_s();
     for (uint32_t step = 0; step < depth; step++) {
-        uint32_t q = rng_u32(n);
-        uint32_t q2 = (q + 1 + rng_u32(n - 1)) % n;
-        double theta = 2.0 * M_PI * rng_unit();
-        if (cclass == CIRCUIT_PURE_CLIFFORD) {
-            switch (rng_u32(4)) {
-                case 0: moonlab_ca_mps_h(ca, q); break;
-                case 1: moonlab_ca_mps_s(ca, q); break;
-                case 2: moonlab_ca_mps_cnot(ca, q, q2); break;
-                case 3: moonlab_ca_mps_cz(ca, q, q2); break;
-            }
-        } else if (cclass == CIRCUIT_CLIFFORD_HEAVY) {
-            if (rng_unit() < 0.05) {
-                moonlab_ca_mps_t_gate(ca, q);
-                nc++;
-            } else {
-                switch (rng_u32(4)) {
-                    case 0: moonlab_ca_mps_h(ca, q); break;
-                    case 1: moonlab_ca_mps_s(ca, q); break;
-                    case 2: moonlab_ca_mps_cnot(ca, q, q2); break;
-                    case 3: moonlab_ca_mps_cz(ca, q, q2); break;
-                }
-            }
-        } else {
-            if (rng_unit() < 0.3) {
-                moonlab_ca_mps_cnot(ca, q, q2);
-            } else {
-                switch (rng_u32(3)) {
-                    case 0: moonlab_ca_mps_rx(ca, q, theta); break;
-                    case 1: moonlab_ca_mps_ry(ca, q, theta); break;
-                    case 2: moonlab_ca_mps_rz(ca, q, theta); break;
-                }
-                nc++;
-            }
-        }
+        nc += apply_one_step(cclass, NULL, ca, n, step);
     }
     double ca_time = now_s() - t0;
 
@@ -218,10 +347,10 @@ static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
     out->circuit_class = cclass;
     out->depth = depth;
     out->non_clifford_count = nc;
+    out->ca_bond_max = moonlab_ca_mps_current_bond_dim(ca);
     out->plain_wallclock_s = plain_time;
     out->ca_wallclock_s = ca_time;
 
-    tn_mps_free(plain);
     moonlab_ca_mps_free(ca);
 }
 
@@ -243,14 +372,35 @@ int main(int argc, char** argv) {
     fprintf(json, "  \"points\": [\n");
 
     int first = 1;
+
+    /* The schedule pairs each (n, class) point with a class-appropriate
+     * depth.  Random-circuit classes use gate-count depth; structured
+     * classes use layer count.  A VQE/HEA layer is ~3n gates, a QAOA
+     * round is ~5n gates, and a surface-cycle layer is ~3n gates. */
+    struct bench_schedule {
+        int cclass;
+        const uint32_t* depths;     /* indexed by qubit_sizes index */
+    };
     const uint32_t qubit_sizes[] = { 6, 8, 10, 12 };
-    const uint32_t depths[]      = { 80, 100, 120, 150 };
-    const int classes[] = { CIRCUIT_PURE_CLIFFORD, CIRCUIT_CLIFFORD_HEAVY, CIRCUIT_PAULI_ROTATION };
+    const uint32_t depths_random[]   = { 80, 100, 120, 150 };
+    const uint32_t depths_vqe[]      = {  4,   4,   4,   4 };  /* layers */
+    const uint32_t depths_qaoa[]     = {  4,   4,   4,   4 };  /* rounds */
+    const uint32_t depths_surface[]  = {  6,   8,  10,  12 };  /* cycles */
+    const struct bench_schedule schedule[] = {
+        { CIRCUIT_PURE_CLIFFORD,  depths_random  },
+        { CIRCUIT_CLIFFORD_HEAVY, depths_random  },
+        { CIRCUIT_PAULI_ROTATION, depths_random  },
+        { CIRCUIT_VQE_HEA,        depths_vqe     },
+        { CIRCUIT_QAOA_RING,      depths_qaoa    },
+        { CIRCUIT_SURFACE_CYCLE,  depths_surface },
+    };
+    const size_t num_classes = sizeof(schedule) / sizeof(schedule[0]);
 
     for (size_t qi = 0; qi < sizeof(qubit_sizes) / sizeof(qubit_sizes[0]); qi++) {
-        for (size_t ci = 0; ci < sizeof(classes) / sizeof(classes[0]); ci++) {
+        for (size_t ci = 0; ci < num_classes; ci++) {
             struct bench_point p;
-            run_one_point(qubit_sizes[qi], classes[ci], depths[qi], 42 + qi * 7 + ci, &p);
+            run_one_point(qubit_sizes[qi], schedule[ci].cclass,
+                          schedule[ci].depths[qi], 42 + qi * 7 + ci, &p);
             double bond_ratio = (double)p.plain_bond_max / (double)p.ca_bond_max;
             double speed_ratio = p.ca_wallclock_s > 0
                 ? p.plain_wallclock_s / p.ca_wallclock_s : 0.0;
