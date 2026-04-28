@@ -73,6 +73,14 @@ option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
 option(QSIM_ENABLE_COVERAGE   "Build with --coverage (gcov-compatible) for CI coverage reporting" OFF)
 
+# Force the in-tree no-LAPACK QR / SVD fallbacks even on platforms that have
+# Accelerate / OpenBLAS / LAPACKE.  Used by a dedicated CI tier so the
+# fallback codepaths -- which production WASM and Windows clang-cl builds
+# rely on -- are exercised on every PR instead of only when something
+# happens to break in the wild.
+option(QSIM_FORCE_QR_FALLBACK  "Route tensor_qr through the no-LAPACK Householder fallback" OFF)
+option(QSIM_FORCE_SVD_FALLBACK "Route tensor_svd through the no-LAPACK Jacobi fallback" OFF)
+
 # SIMD options
 option(QSIM_ENABLE_AVX512 "Enable AVX-512 (if available)" ON)
 option(QSIM_ENABLE_AVX2 "Enable AVX2 (if available)" ON)
@@ -674,6 +682,19 @@ add_dependencies(quantumsim hw_rng_probe)
 target_compile_definitions(quantumsim PRIVATE
     MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
 )
+
+# Test-only knobs that force the in-tree QR / SVD fallback codepaths in
+# tensor.c even when LAPACK is available.  Used by a dedicated CI tier
+# (tier-fallback) so WASM and Windows clang-cl regressions show up on
+# every PR rather than only after a release ships.
+if(QSIM_FORCE_QR_FALLBACK)
+    target_compile_definitions(quantumsim PRIVATE QSIM_FORCE_QR_FALLBACK=1)
+    message(STATUS "Forcing tensor_qr through the no-LAPACK Householder fallback")
+endif()
+if(QSIM_FORCE_SVD_FALLBACK)
+    target_compile_definitions(quantumsim PRIVATE QSIM_FORCE_SVD_FALLBACK=1)
+    message(STATUS "Forcing tensor_svd through the no-LAPACK Jacobi fallback")
+endif()
 
 # Eshkol integration: enable the real (non-stub) path of the bridge
 # and link libeshkol-static.a with its framework dependencies.

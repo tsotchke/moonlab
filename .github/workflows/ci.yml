@@ -383,6 +383,41 @@ jobs:
         run: ctest --test-dir build -LE long -E "python_bindings|rust_bindings|webgpu_unified|unit_qgt" --output-on-failure --timeout 600
 
   # ============================================================================
+  # Tier C3 — exercise the no-LAPACK QR + SVD fallback codepaths in
+  # tensor.c on every PR.  The fallbacks are what production WASM and
+  # Windows clang-cl builds actually use; without this tier they only get
+  # exercised when something has already broken in the wild.  A Jacobi
+  # sign error caught here in 2026-04 had been silently producing
+  # non-orthonormal U matrices (and DMRG energies off by an order of
+  # magnitude) for two release cycles.
+  # ============================================================================
+
+  linux-fallback:
+    name: Linux x86_64 (Release + QR/SVD fallback)
+    runs-on: ubuntu-22.04
+    env:
+      MOONLAB_SKIP_HW_ENTROPY: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential ninja-build cmake \
+            libopenblas-dev liblapacke-dev libomp-dev
+      - name: Configure (+ forced fallbacks)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DQSIM_BUILD_TESTS=ON
+          -DQSIM_FORCE_QR_FALLBACK=ON
+          -DQSIM_FORCE_SVD_FALLBACK=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Test (-LE long, fallback paths)
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 900
+
+  # ============================================================================
   # Tier C2 — line-coverage signal.  Builds with --coverage on Linux gcc,
   # runs the same -LE long sweep, runs lcov to produce coverage.info, and
   # uploads it as a CI artifact + prints a per-directory summary so you
