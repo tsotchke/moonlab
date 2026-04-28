@@ -72,6 +72,26 @@ uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
+/**
+ * @brief Maximum half-cut von Neumann entanglement entropy of the MPS factor
+ *        |phi> across all bipartitions.
+ *
+ * This is the representation-independent measure of how entangled |phi>
+ * is.  Unlike ::moonlab_ca_mps_current_bond_dim, it does not depend on
+ * whether DMRG / TEBD has compressed the bonds back to their actual rank
+ * after each operation -- the entropy is computed directly from the
+ * Schmidt spectrum.
+ *
+ * Use this for benchmarks comparing CA-MPS to plain MPS: the entropy
+ * is the right yardstick for "how compactly does the state representation
+ * have to grow" while bond_dim only reflects the working storage.
+ *
+ * @param s  CA-MPS handle.  Must be non-NULL.
+ * @return Max bipartite entanglement entropy in nats; 0 on a NULL or
+ *         single-qubit state.
+ */
+double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
+
 /* ================================================================== */
 /*  Clifford gates (tableau only, O(n) per gate)                       */
 /* ================================================================== */
