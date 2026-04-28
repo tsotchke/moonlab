@@ -308,12 +308,35 @@ int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
 double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
                                  uint32_t max_bond_dim, uint32_t num_sweeps);
 
-/* The Heisenberg / Kitaev / 2D variants are queued behind a small
- * internal refactor: dmrg_ground_state(mps, mpo, cfg) requires the
- * caller to supply a non-trivial-bond-dim MPS, which dmrg_tfim_ground_state
- * does internally with random tensors but generic users must replicate.
- * Once `dmrg_init_random_mps(N, chi_init, &cfg)` is factored out
- * upstream, the additional model wrappers become 5-line duplicates. */
+/**
+ * @brief Heisenberg XXZ chain ground-state energy via DMRG.
+ *
+ * Pauli-operator convention (open boundary conditions):
+ *   H = J sum_i (X_i X_{i+1} + Y_i Y_{i+1} + Delta Z_i Z_{i+1})
+ *       - h sum_i Z_i
+ *
+ * Eigenvalues of (X.X + Y.Y + Z.Z) on a single bond are -3 (singlet)
+ * and +1 (triplet); the spin-operator form S.S = (1/4)(X.X + Y.Y + Z.Z)
+ * gives the eigenvalues you see in textbooks divided by 4.  Reference
+ * OBC ground states for J = Delta = 1, h = 0:
+ *   N = 2  -> E_GS = -3
+ *   N = 4  -> E_GS = -6.4641
+ *   N = 8  -> E_GS = -13.4997
+ *
+ * @param num_sites    Chain length (>= 2).
+ * @param J            Exchange coupling.
+ * @param Delta        XXZ anisotropy (Delta = 1 for isotropic Heisenberg).
+ * @param h            Longitudinal field.
+ * @param max_bond_dim DMRG truncation cap (32-128 typical).
+ * @param num_sweeps   Two-site sweeps to convergence.
+ * @return Ground-state energy, or DBL_MAX on error.
+ *
+ * @since 0.2.1
+ */
+double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
+                                       double J, double Delta, double h,
+                                       uint32_t max_bond_dim,
+                                       uint32_t num_sweeps);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -244,6 +244,34 @@ int main(void) {
         }
     }
 
+    /* DMRG Heisenberg: isotropic OBC chain N = 8, J = 1, Delta = 1,
+     * h = 0.  The MPO uses Pauli convention (X.X + Y.Y + Z.Z per bond),
+     * so the OBC ground-state energy from direct ED is -13.4997.  DMRG
+     * with chi = 32, 8 sweeps converges to that within 1e-3.  Accept
+     * [-13.6, -13.4] as the smoke band. */
+    typedef double (*dmrg_heis_fn)(uint32_t, double, double, double,
+                                    uint32_t, uint32_t);
+    dlerror();
+    dmrg_heis_fn dmrg_heis =
+        (dmrg_heis_fn)dlsym(h, "moonlab_dmrg_heisenberg_energy");
+    if (!dmrg_heis) {
+        fprintf(stderr, "dlsym(moonlab_dmrg_heisenberg_energy) failed\n");
+        failures++;
+    } else {
+        double E = dmrg_heis(/*N=*/8, /*J=*/1.0, /*Delta=*/1.0, /*h=*/0.0,
+                             /*chi=*/32, /*sweeps=*/8);
+        if (E >= 1e30) {
+            fprintf(stderr, "moonlab_dmrg_heisenberg_energy returned sentinel %.3e\n", E);
+            failures++;
+        } else if (E > -13.4 || E < -13.6) {
+            fprintf(stderr, "moonlab_dmrg_heisenberg_energy = %.4f outside "
+                    "[-13.6, -13.4] (OBC ED = -13.4997)\n", E);
+            failures++;
+        } else {
+            fprintf(stdout, "moonlab_dmrg_heisenberg_energy(N=8) = %.4f OK\n", E);
+        }
+    }
+
     dlclose(h);
 
     if (failures) {

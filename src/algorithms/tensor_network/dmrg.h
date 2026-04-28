@@ -514,6 +514,31 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
  * @param result Output: DMRG result
  * @return Ground state MPS or NULL on failure
  */
+/**
+ * @brief Allocate and randomly initialise an MPS suitable for DMRG.
+ *
+ * Returns an MPS on @p num_sites with bond dimension @p chi_init in
+ * the bulk (1 at the boundaries), tensors filled with small random
+ * values plus a |+> shift, normalised approximately to unit norm.
+ * The caller is then expected to call ::dmrg_ground_state to optimise
+ * it against an MPO.
+ *
+ * The internal helpers @c dmrg_tfim_ground_state and the ABI wrapper
+ * @c moonlab_dmrg_heisenberg_energy both use this; downstream
+ * consumers needing a non-trivial-bond-dim MPS for any 1D variational
+ * problem should use it too.
+ *
+ * @param num_sites  Chain length (>= 2).
+ * @param chi_init   Bulk bond dimension; clamped to @p mps_cfg->max_bond_dim
+ *                   if smaller, and to 2 from below.
+ * @param mps_cfg    State configuration (cutoff, max_bond_dim).  May be
+ *                   NULL for default.
+ * @return Allocated MPS on success, NULL on allocation failure.
+ */
+tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
+                                      uint32_t chi_init,
+                                      const tn_state_config_t *mps_cfg);
+
 tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
                                         double g,
                                         const dmrg_config_t *config,

@@ -2277,68 +2277,14 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
     mps_cfg.max_bond_dim = cfg.max_bond_dim;
     mps_cfg.svd_cutoff = cfg.svd_cutoff;
 
-    // Initial bond dimension (smaller than max, but larger than 1)
+    /* MPS init: random tensors at chi_init bond dim biased toward |+>.
+     * Extracted into dmrg_init_random_mps so Heisenberg / Kitaev / 2D
+     * model wrappers can reuse the same setup. */
     uint32_t chi_init = (cfg.max_bond_dim > 8) ? 8 : cfg.max_bond_dim;
-    if (chi_init < 2) chi_init = 2;
-
-    // Create MPS with chi_init bond dimension
-    tn_mps_state_t *mps = (tn_mps_state_t *)calloc(1, sizeof(tn_mps_state_t));
+    tn_mps_state_t *mps = dmrg_init_random_mps(num_sites, chi_init, &mps_cfg);
     if (!mps) {
         mpo_free(mpo);
         return NULL;
-    }
-    mps->num_qubits = num_sites;
-    mps->config = mps_cfg;
-    mps->tensors = (tensor_t **)calloc(num_sites, sizeof(tensor_t *));
-    mps->bond_dims = (uint32_t *)calloc(num_sites - 1, sizeof(uint32_t));
-    if (!mps->tensors || !mps->bond_dims) {
-        tn_mps_free(mps);
-        mpo_free(mpo);
-        return NULL;
-    }
-
-    // Create tensors with bond dimension chi_init
-    // Use random initialization with small magnitude
-    srand(42);  // Fixed seed for reproducibility
-    for (uint32_t i = 0; i < num_sites; i++) {
-        uint32_t chi_l = (i == 0) ? 1 : chi_init;
-        uint32_t chi_r = (i == num_sites - 1) ? 1 : chi_init;
-        uint32_t dims[3] = {chi_l, 2, chi_r};
-
-        mps->tensors[i] = tensor_create(3, dims);
-        if (!mps->tensors[i]) {
-            tn_mps_free(mps);
-            mpo_free(mpo);
-            return NULL;
-        }
-
-        // Initialize with small random values
-        for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
-            double re = ((double)rand() / RAND_MAX - 0.5) * 0.1;
-            double im = ((double)rand() / RAND_MAX - 0.5) * 0.1;
-            mps->tensors[i]->data[j] = re + I * im;
-        }
-
-        // Add |+> component for the first bond index
-        // This ensures we start near a reasonable state
-        uint32_t idx1[3] = {0, 1, 0};
-        mps->tensors[i]->data[0] += 1.0 / sqrt(2.0);  // |0> component
-        tensor_set(mps->tensors[i], idx1, tensor_get(mps->tensors[i], idx1) + 1.0 / sqrt(2.0));
-
-        if (i < num_sites - 1) {
-            mps->bond_dims[i] = chi_init;
-        }
-    }
-
-    // Normalize the MPS (approximate)
-    double norm = tn_mps_norm(mps);
-    if (norm > 1e-10) {
-        double scale = 1.0 / norm;
-        for (uint32_t i = 0; i < num_sites; i++) {
-            for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
-                mps->tensors[i]->data[j] *= pow(scale, 1.0 / num_sites);
-            }
-        }
     }
 
     // Run DMRG
@@ -2361,6 +2307,65 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         dmrg_result_free(dmrg_res);
     }
 
+    return mps;
+}
+
+tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
+                                      uint32_t chi_init,
+                                      const tn_state_config_t *mps_cfg) {
+    if (num_sites < 2) return NULL;
+
+    tn_state_config_t cfg = mps_cfg ? *mps_cfg : tn_state_config_default();
+    if (chi_init > cfg.max_bond_dim) chi_init = cfg.max_bond_dim;
+    if (chi_init < 2) chi_init = 2;
+
+    tn_mps_state_t *mps = (tn_mps_state_t *)calloc(1, sizeof(tn_mps_state_t));
+    if (!mps) return NULL;
+    mps->num_qubits = num_sites;
+    mps->config = cfg;
+    mps->tensors = (tensor_t **)calloc(num_sites, sizeof(tensor_t *));
+    mps->bond_dims = (uint32_t *)calloc(num_sites - 1, sizeof(uint32_t));
+    if (!mps->tensors || !mps->bond_dims) {
+        tn_mps_free(mps);
+        return NULL;
+    }
+
+    /* Fixed-seed reproducibility: every DMRG model wrapper that calls
+     * this gets the same starting MPS for the same num_sites. */
+    srand(42);
+    for (uint32_t i = 0; i < num_sites; i++) {
+        uint32_t chi_l = (i == 0) ? 1 : chi_init;
+        uint32_t chi_r = (i == num_sites - 1) ? 1 : chi_init;
+        uint32_t dims[3] = {chi_l, 2, chi_r};
+        mps->tensors[i] = tensor_create(3, dims);
+        if (!mps->tensors[i]) {
+            tn_mps_free(mps);
+            return NULL;
+        }
+        for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
+            double re = ((double)rand() / RAND_MAX - 0.5) * 0.1;
+            double im = ((double)rand() / RAND_MAX - 0.5) * 0.1;
+            mps->tensors[i]->data[j] = re + I * im;
+        }
+        /* Bias toward |+> so the initial overlap with a typical
+         * ground state is non-trivial. */
+        uint32_t idx1[3] = {0, 1, 0};
+        mps->tensors[i]->data[0] += 1.0 / sqrt(2.0);
+        tensor_set(mps->tensors[i], idx1,
+                   tensor_get(mps->tensors[i], idx1) + 1.0 / sqrt(2.0));
+        if (i < num_sites - 1) mps->bond_dims[i] = chi_init;
+    }
+
+    /* Approximate normalisation: scale every tensor by norm^{-1/N}. */
+    double norm = tn_mps_norm(mps);
+    if (norm > 1e-10) {
+        double scale = pow(1.0 / norm, 1.0 / (double)num_sites);
+        for (uint32_t i = 0; i < num_sites; i++) {
+            for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
+                mps->tensors[i]->data[j] *= scale;
+            }
+        }
+    }
     return mps;
 }
 
