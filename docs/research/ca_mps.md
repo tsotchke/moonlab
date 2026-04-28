@@ -290,14 +290,36 @@ Given a Hamiltonian `H` and a CA-MPS ansatz `C|phi>`, minimize `<psi|H|psi> = <p
 
 For a dense Clifford `D`, `H'` has bond dimension up to `4^n`. In practice Clifford circuits from VQE / surface codes keep the bond dim of `H'` manageable.
 
-### 5.3 Variational-D mode
+### 5.3 Variational-D mode (v0.4.0 — gating item for VQE/QAOA paper)
 
-An ambitious extension: co-optimize `D` alongside `|phi>`. Alternate:
+The §6 benchmarks falsify the §5.1 prediction that fixed-D CA-MPS wins on VQE-HEA / QAOA. The mechanism is: when D is the "free" Clifford accumulated from the entangling layers of the workload, conjugating the workload's non-Clifford rotations through it produces weight-near-n Pauli strings that maximally entangle |phi>. The implicit assumption -- "the natural D is Clifford-aligned with the workload's entanglement" -- is wrong for canonical VQE and QAOA.
 
-1. **D-fixed |phi>-update:** one DMRG sweep on `H' = DHD†`.
-2. **|phi>-fixed D-update:** search over single-qubit Cliffords and CNOTs that reduce `<phi|H'|phi>`. Greedy-best O(n) Clifford gates per iteration.
+The fix is to **search for D** rather than accept the workload-supplied one. Co-optimize `D` and `|phi>` by alternating:
 
-This is publishable material. It's not in the v0.3.0 scope; the scope is the fixed-D primitive and its regression-tested reduction limits.
+1. **D-fixed |phi>-update:** standard DMRG sweep on the conjugated MPO `H' = D H D†`. `H'` is built once per outer iteration via `clifford_conjugate_pauli` on each Pauli term of H (see §4.4 for the per-term cost).
+
+2. **|phi>-fixed D-update:** greedy local-Clifford search. For each candidate gate `G` in `{H_q, S_q, S_dag_q, X_q, Y_q, Z_q}` (single-qubit) and `{CNOT_{q,r}, CZ_{q,r}, SWAP_{q,r}}` (nearest-neighbor 2-qubit), compute the energy change
+
+       E(GD, phi) - E(D, phi) = sum_k c_k * (<phi|G Q_k G^dag|phi> - <phi|Q_k|phi>)
+
+   where `Q_k = D P_k D†` are the Paulis we already track. For a single-qubit `G_q`, only Pauli terms with non-trivial support on `q` contribute, so the per-candidate cost is O(non-identity terms with support q) cached single-Pauli expectations -- not a fresh DMRG run. Pick the gate that decreases energy the most, apply, repeat until no improvement. O(n^2) candidates per pass, O(passes-until-saturated * n^2 * MPS-expect) total.
+
+#### Minimum-viable validating experiment ("oracle proof")
+
+Before committing to the full variational search, prove the *concept* with a hand-supplied D:
+
+- Pick TFIM near criticality (g=1, n=8-12) where plain MPS hits the entropy ceiling fast.
+- Hand-construct the Jordan-Wigner Clifford D_JW (it lives in the H/S/CNOT gate set; depth O(n)).
+- Initialise CA-MPS with D = D_JW, run imag-time evolution toward the TFIM ground state.
+- Measure chi(|phi>) under D = D_JW vs D = I, both reaching the same energy tolerance.
+
+Predicted outcome: under D = D_JW, |phi> is the JW image of a Bogoliubov state -- representable as an MPS with chi ~ O(n) rather than the plain-MPS chi ~ O(2^c log n) at the critical point. If chi(|phi>_JW) << chi(|phi>_I) by an order of magnitude at n=12, the variational search has a target it can plausibly reach. If chi(|phi>_JW) is not much smaller, even the oracle D fails -- and we should rethink the whole thesis before sinking 2 weeks into greedy search.
+
+#### Implementation cost
+
+Full var-D (greedy local-Clifford search + DMRG-on-H' alternating loop): ~2 weeks.
+
+The oracle-proof experiment: ~2 days. Should run *first*; treat its result as the gating signal for the full implementation.
 
 ---
 
