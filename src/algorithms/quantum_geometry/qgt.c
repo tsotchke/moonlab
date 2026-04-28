@@ -445,3 +445,39 @@ int qgt_phase_diagram_chern(qgt_param_system_fn factory,
     }
     return 0;
 }
+
+int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
+                                void* user,
+                                double x_min, double x_max,
+                                double y_min, double y_max,
+                                size_t Kx, size_t Ky, size_t N,
+                                int* chern_out) {
+    if (!factory || !chern_out) return -1;
+    if (Kx < 2 || Ky < 2 || N < 4) return -1;
+    if (!(x_max > x_min) || !(y_max > y_min)) return -1;
+
+    const double dx = (x_max - x_min) / (double)(Kx - 1);
+    const double dy = (y_max - y_min) / (double)(Ky - 1);
+    for (size_t ix = 0; ix < Kx; ix++) {
+        const double x = x_min + dx * (double)ix;
+        for (size_t iy = 0; iy < Ky; iy++) {
+            const double y = y_min + dy * (double)iy;
+            qgt_system_t* sys = factory(user, x, y);
+            if (!sys) {
+                chern_out[ix * Ky + iy] = INT_MIN;
+                continue;
+            }
+            qgt_berry_grid_t g;
+            int rc = qgt_berry_grid(sys, N, &g);
+            if (rc != 0) {
+                chern_out[ix * Ky + iy] = INT_MIN;
+                qgt_free(sys);
+                continue;
+            }
+            chern_out[ix * Ky + iy] = (int)lround(g.chern);
+            qgt_berry_grid_free(&g);
+            qgt_free(sys);
+        }
+    }
+    return 0;
+}

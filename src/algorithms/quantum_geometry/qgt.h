@@ -327,6 +327,45 @@ int qgt_phase_diagram_chern(qgt_param_system_fn factory,
                              size_t K, size_t N,
                              int* chern_out);
 
+/**
+ * @brief Two-parameter Bloch-system factory.
+ *
+ * Used by ::qgt_phase_diagram_chern_2d to build a `qgt_system_t*` for
+ * each (param_x, param_y) sample.  Caller of the diagram returns
+ * NULL on failure; ::qgt_phase_diagram_chern_2d writes `INT_MIN`
+ * into the corresponding output cell and continues.
+ */
+typedef qgt_system_t* (*qgt_param_system_2d_fn)(void* user,
+                                                  double param_x,
+                                                  double param_y);
+
+/**
+ * @brief Compute integer Chern numbers on a 2D parameter grid.
+ *
+ * Mirrors ::qgt_phase_diagram_chern with a second parameter axis;
+ * useful for the canonical Haldane (t2, phi) diagram and similar
+ * two-parameter topological-phase landscapes.
+ *
+ * @param factory     Builder for `qgt_system_t` parameterised by two doubles.
+ * @param user        Opaque user data forwarded to @p factory.
+ * @param x_min,x_max Inclusive sweep range on the first parameter.
+ * @param y_min,y_max Inclusive sweep range on the second parameter.
+ * @param Kx          Number of samples on the first axis (>=2).
+ * @param Ky          Number of samples on the second axis (>=2).
+ * @param N           BZ grid side for the FHS Chern integral (>=4).
+ * @param[out] chern_out  Caller-allocated row-major array of length
+ *                        Kx*Ky.  `chern_out[ix * Ky + iy]` holds the
+ *                        Chern number for sample (ix, iy).
+ *
+ * @return 0 on success, negative on error.
+ */
+int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
+                                void* user,
+                                double x_min, double x_max,
+                                double y_min, double y_max,
+                                size_t Kx, size_t Ky, size_t N,
+                                int* chern_out);
+
 #ifdef __cplusplus
 }
 #endif
