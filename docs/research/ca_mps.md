@@ -528,13 +528,22 @@ universal claim.
      chi advantage requires a more entangled system; see (3) and
      (4).  This experiment is filed as inherently uninformative
      for TFIM and is not pursued further.
-  3. **Kagome AFM at n=12**: experiment running.  Uses var-D
-     across the four warmstarts on the 24-bond kagome torus.
-     Kagome's frustrated SU(2)-symmetric ground state is the
-     hardest test of var-D's model-dependence -- per the §6.4
-     XXZ negative result, we expect ratio ~1.0 for I/H_all (no
-     Clifford alignment) and possibly some reduction for the
-     dual/ferro warmstarts driven by Ising-like fluctuations.
+  3. **Kagome AFM at n=12**: partial result (raw output in
+     `benchmarks/results/ca_mps_var_d_kagome12_partial_2026-04-29.txt`).
+     IDENTITY warmstart only, ran out of compute budget at
+     438 s wallclock for ONE warmstart.  Result:
+       E_varD = -17.05 (PRB ref -21.78, 22% off due to short
+       run)
+       S(phi) = 2.16 nats
+       gates accepted = 0
+     The 0-gate-accept matches the §6.4 XXZ-Heisenberg pattern:
+     SU(2)-symmetric frustrated GS doesn't have a Clifford basin
+     the greedy search can find at fixed |phi>=|0..0>.  Confirming
+     dual/ferro warmstarts also fail (or finding one that helps)
+     would need a larger compute budget than this session can
+     afford -- 4 warmstarts at this size is ~30 min wallclock.
+     The partial result is consistent with the model-dependence
+     thesis but doesn't strengthen the publishable claim.
   4. **CA-PEPS 2D scaffold**: shipped in
      `src/algorithms/tensor_network/ca_peps.{c,h}`.  Public API
      surface defined, every entry point returns

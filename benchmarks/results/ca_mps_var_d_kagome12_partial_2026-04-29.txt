@@ -1,0 +1,9 @@
+=== variational-D CA-MPS on kagome 12-site cluster ===
+
+  num_bonds = 24 (expect 24)
+  Pauli terms = 72 (24 bonds * 3 Pauli pairs)
+  Reference: PRB 83, 212401 cluster 12 (Pauli) E_GS = -21.7795 (Pauli) = -5.4449 (spin convention)
+
+warm             E_varD   E_per_spin     S(phi)      iters        gates     wall_s
+----------------------------------------------------------------------
+I            -17.047869    -4.261967     2.1638          4            0     438.40
