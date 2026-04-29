@@ -1274,6 +1274,20 @@ if(QSIM_BUILD_TESTS)
         endif()
         add_test(NAME unit_ca_mps_var_d COMMAND test_ca_mps_var_d)
         set_tests_properties(unit_ca_mps_var_d PROPERTIES TIMEOUT 60)
+
+        # CA-MPS alternating variational-D (imag-time |phi> + Clifford D).
+        # Headline experiment: TFIM at criticality (g=1) on n=6 must
+        # converge to within 5% of the exact GS energy with bounded
+        # |phi> entropy.
+        add_executable(test_ca_mps_var_d_alt tests/unit/test_ca_mps_var_d_alt.c)
+        target_link_libraries(test_ca_mps_var_d_alt PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_var_d_alt PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_var_d_alt PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_var_d_alt COMMAND test_ca_mps_var_d_alt)
+        set_tests_properties(unit_ca_mps_var_d_alt PROPERTIES TIMEOUT 120)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401

@@ -102,6 +102,75 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
     const ca_mps_var_d_config_t* config,
     ca_mps_var_d_result_t* result);
 
+/* ================================================================== */
+/*  Alternating optimization (imag-time |phi> + greedy Clifford D)     */
+/* ================================================================== */
+
+typedef struct {
+    /** Outer iterations of the alternating loop. */
+    int max_outer_iters;
+    /** Trotter step size for the imaginary-time |phi>-update. */
+    double imag_time_dtau;
+    /** Number of Trotter sweeps per outer iteration.  Each sweep
+     *  applies one full Pauli-term cycle of e^(-dtau * c_k * P_k). */
+    int imag_time_steps_per_outer;
+    /** Cap on greedy passes inside each outer iteration's D-update. */
+    int clifford_passes_per_outer;
+    /** Stop when the energy decreases by less than this between outer
+     *  iterations. */
+    double convergence_eps;
+    /** Include 2-qubit Cliffords in the search (passed through to the
+     *  inner Clifford-only routine). */
+    int include_2q_gates;
+    /** Print one line per outer iteration. */
+    int verbose;
+} ca_mps_var_d_alt_config_t;
+
+ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void);
+
+typedef struct {
+    double initial_energy;
+    double final_energy;
+    double initial_phi_entropy;
+    double final_phi_entropy;
+    /** Total Clifford gates accepted across all outer iterations. */
+    int total_gates_added;
+    int outer_iterations;
+    int converged;
+} ca_mps_var_d_alt_result_t;
+
+/**
+ * @brief Alternating-optimization variational-D for CA-MPS.
+ *
+ * Drives @p state toward a low-energy CA-MPS approximation of the
+ * ground state of @p hamiltonian by alternating two updates:
+ *
+ *   1. **|phi>-update** (imag-time): for each Pauli term @c P_k
+ *      with coefficient @c c_k in H, applies @c exp(-dtau * c_k * P_k)
+ *      to @c |psi>.  Internally each non-Clifford rotation is
+ *      conjugated through @c D and pushed into @c |phi>; Clifford
+ *      terms only rotate @c D (free).  Repeats for
+ *      @c imag_time_steps_per_outer Trotter cycles, then renormalises.
+ *
+ *   2. **D-update** (greedy Clifford): runs
+ *      ::moonlab_ca_mps_optimize_var_d_clifford_only at the current
+ *      @c |phi> for up to @c clifford_passes_per_outer passes.  This
+ *      finds a Clifford rotation that reduces @c <psi|H|psi> at
+ *      fixed @c |phi>; subsequent imag-time steps then drive @c |phi>
+ *      to the new D's natural target (which has lower @c S(|phi>)
+ *      when @c D is well-aligned with the workload).
+ *
+ * Stops when an outer iteration reduces the energy by less than
+ * @c convergence_eps.
+ */
+ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
+    moonlab_ca_mps_t* state,
+    const uint8_t* paulis,
+    const double* coeffs,
+    uint32_t num_terms,
+    const ca_mps_var_d_alt_config_t* config,
+    ca_mps_var_d_alt_result_t* result);
+
 #ifdef __cplusplus
 }
 #endif
