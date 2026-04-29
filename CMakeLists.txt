@@ -1888,6 +1888,15 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_mps_var_d_chi_scan PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Greedy Clifford disentangler: take a converged plain-DMRG ground
+    # state and directly minimise its half-cut entropy via Clifford
+    # gates applied to the MPS.  Different angle on the var-D claim --
+    # entropy as direct objective, no imag-time, no warmstart heuristics.
+    add_executable(example_ca_mps_disentangler
+        examples/tensor_network/ca_mps_disentangler.c)
+    target_link_libraries(example_ca_mps_disentangler PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
