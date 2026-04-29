@@ -523,6 +523,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/tensor_network/lattice_2d.c
     src/algorithms/tensor_network/skyrmion_braiding.c
     src/algorithms/tensor_network/ca_mps.c
+    src/algorithms/tensor_network/ca_mps_var_d.c
     # Chemistry (Jordan-Wigner, UCCSD, molecular Hamiltonians).
     src/algorithms/chemistry/chemistry.c
     # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
@@ -1260,6 +1261,19 @@ if(QSIM_BUILD_TESTS)
         endif()
         add_test(NAME unit_ca_mps_imag_time COMMAND test_ca_mps_imag_time)
         set_tests_properties(unit_ca_mps_imag_time PROPERTIES TIMEOUT 120)
+
+        # CA-MPS variational-D Clifford-only search.  Validates that the
+        # greedy local-Clifford search reduces <psi|H|psi> on a small
+        # TFIM problem (n=4, g=2.5) starting from |psi> = |0...0>.
+        add_executable(test_ca_mps_var_d tests/unit/test_ca_mps_var_d.c)
+        target_link_libraries(test_ca_mps_var_d PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_var_d PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_var_d PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_var_d COMMAND test_ca_mps_var_d)
+        set_tests_properties(unit_ca_mps_var_d PROPERTIES TIMEOUT 60)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
