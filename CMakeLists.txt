@@ -1897,6 +1897,15 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_mps_disentangler PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Generalisation: var-D vs plain DMRG on the XXZ Heisenberg model.
+    # If the entropy-reduction claim is real and not TFIM-specific, it
+    # should also reduce |phi> entropy on Heisenberg ground states across
+    # the Delta sweep (XY -> SU(2) -> Ising-like).
+    add_executable(example_ca_mps_var_d_heisenberg
+        examples/tensor_network/ca_mps_var_d_heisenberg.c)
+    target_link_libraries(example_ca_mps_var_d_heisenberg PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
