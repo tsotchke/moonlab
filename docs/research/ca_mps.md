@@ -422,7 +422,9 @@ The fixed-D 1D CA-MPS in v0.3.0 is a clean win on a specific workload class:
 - **circuits with sparse non-Clifford content** (clifford_heavy at 5% T-density wins 5x on entropy + 10-56x wallclock);
 - the **regression points** (random Pauli rotation) confirm correctness in the pure-MPS limit (entropy ratio 0.84x, but wallclock 15x faster at n=12 because Clifford gates are cheap).
 
-Variational-D (§5.3) is the gating item for a credible VQE/QAOA result. The 2026-04-28 oracle proof (hand-supplied Clifford drops TFIM ground-state half-cut entropy by 5-50x) confirms variational-D has a reachable target. CA-PEPS (§7) is the gating item for venue-uplift to a physics-novelty journal.
+Variational-D (§5.3) shipped in 2026-04-29: alternating imag-time |phi>-update + greedy Clifford D-update over a four-warmstart basin pool (I, H_all, dual=H_all+CNOT_chain, ferro=H_0+CNOT_chain).  Headline result: TFIM phase sweep, var-D matches plain DMRG energy convergence (dE_rel < 0.7%) with **5x to 1430x lower |phi> half-cut entropy than plain DMRG's |psi>** across the entire phase diagram including the quantum critical point.
+
+CA-PEPS (§7) is the gating item for venue-uplift to a physics-novelty journal.
 
 ---
 
