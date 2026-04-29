@@ -424,6 +424,40 @@ The fixed-D 1D CA-MPS in v0.3.0 is a clean win on a specific workload class:
 
 Variational-D (§5.3) shipped in 2026-04-29: alternating imag-time |phi>-update + greedy Clifford D-update over a four-warmstart basin pool (I, H_all, dual=H_all+CNOT_chain, ferro=H_0+CNOT_chain).  Headline result: TFIM phase sweep, var-D matches plain DMRG energy convergence (dE_rel < 0.7%) with **5x to 1430x lower |phi> half-cut entropy than plain DMRG's |psi>** across the entire phase diagram including the quantum critical point.
 
+### 6.4 Model dependence -- XXZ Heisenberg (negative result)
+
+Generalising the var-D head-to-head to the 1D XXZ Heisenberg model
+(`examples/tensor_network/ca_mps_var_d_heisenberg.c`) shows a clear
+model-dependent split.  Sweep result at n=6 (full sweep at n=8 didn't
+finish in budget; raw text in `benchmarks/results/ca_mps_var_d_xxz_n6_2026-04-29.txt`):
+
+| Delta | regime | dE_rel | S_psi | S_phi | reduction |
+|---|---|---|---|---|---|
+| 0.0 | XY (gapless) | 13% | 1.04 | 1.03 | **1.0x (no reduction)** |
+| 0.5 | gapless XXZ | 0.02% | 1.03 | 1.02 | **1.0x** |
+| 1.0 | SU(2) Heisenberg | 0.04% | 1.03 | 1.02 | **1.0x** |
+| 1.5 | Ising-anisotropy | 0.06% | 1.03 | 0.25 | **4x** |
+| 2.0 | gapped Ising-like | 0.10% | 1.03 | 0.20 | **5x** |
+
+For Delta <= 1 (the gapless XXZ regime including the SU(2)-symmetric
+Heisenberg point), var-D gives essentially no entropy reduction.  This
+is consistent with the underlying mechanism: var-D only helps when the
+target state has stabilizer-structured entanglement that some Clifford
+can absorb.  Heisenberg's GS in the gapless regime has SU(2)-symmetric
+fluctuations with no analogous Clifford basis transformation.
+
+For Delta >= 1.5 (Ising-anisotropy regime), the Z-coupling dominates
+and the GS becomes Ising-like; the dual Clifford warmstart (which
+worked for TFIM) starts to help, giving 4-5x reduction.
+
+This is a useful negative result for the paper: var-D is
+**model-dependent** -- a powerful method for systems with stabilizer-
+adjacent ground states (TFIM, Ising-like, surface codes), not a
+generic compression for all Hamiltonians.  Generalising further would
+require either model-specific Clifford warmstart catalogues or a
+deeper basin-search algorithm (e.g. multi-gate composite moves, beam
+search, simulated annealing) that we don't currently have.
+
 CA-PEPS (§7) is the gating item for venue-uplift to a physics-novelty journal.
 
 ---
