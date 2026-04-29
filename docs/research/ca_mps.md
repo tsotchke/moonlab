@@ -514,6 +514,36 @@ These are the gating items for a stronger paper; the current
 state is publishable as a focused methods paper but not as a
 universal claim.
 
+### 6.6 Status of the four next-chunks (2026-04-29)
+
+  1. **Composite-move search**: shipped behind `composite_2gate`
+     config flag.  When the 1-gate greedy search finds no descent,
+     tries pairs (G1, G2) of single-qubit Cliffords applied in
+     sequence.  Cost O(N^2 * G^2) per pass; off by default.
+     Heisenberg validation pending.
+  2. **n=12 chi-scan**: TFIM critical at n=8 already saturated
+     plain DMRG at chi=4, so n=12 chi-scan would not show a
+     meaningful chi advantage either (TFIM has central charge
+     c=1, chi ~ L^(1/6) is intrinsically slow-growing).  The
+     chi advantage requires a more entangled system; see (3) and
+     (4).  This experiment is filed as inherently uninformative
+     for TFIM and is not pursued further.
+  3. **Kagome AFM at n=12**: experiment running.  Uses var-D
+     across the four warmstarts on the 24-bond kagome torus.
+     Kagome's frustrated SU(2)-symmetric ground state is the
+     hardest test of var-D's model-dependence -- per the §6.4
+     XXZ negative result, we expect ratio ~1.0 for I/H_all (no
+     Clifford alignment) and possibly some reduction for the
+     dual/ferro warmstarts driven by Ising-like fluctuations.
+  4. **CA-PEPS 2D scaffold**: shipped in
+     `src/algorithms/tensor_network/ca_peps.{c,h}`.  Public API
+     surface defined, every entry point returns
+     CA_PEPS_ERR_NOT_IMPLEMENTED.  Honest scaffolding so
+     downstream consumers can plan against the API; the full
+     implementation is the 2-week chunk that includes building
+     a plain `tn_peps_state_t` type, split-CTMRG environment-
+     tensor contraction, and the CA-PEPS wrapper.
+
 ---
 
 ## 7. 2D extension: CA-PEPS
