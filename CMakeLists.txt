@@ -1871,6 +1871,14 @@ if(QSIM_BUILD_EXAMPLES)
         examples/tensor_network/ca_mps_oracle_proof.c)
     target_link_libraries(example_ca_mps_oracle_proof PRIVATE quantumsim ${MATH_LIBRARY})
 
+    # Head-to-head: variational-D CA-MPS vs plain DMRG on a TFIM phase
+    # sweep.  This is the paper figure -- entropy ratio S(phi)/S(psi)
+    # across the ferromagnetic / critical / paramagnetic regimes.
+    add_executable(example_ca_mps_var_d_vs_plain_dmrg
+        examples/tensor_network/ca_mps_var_d_vs_plain_dmrg.c)
+    target_link_libraries(example_ca_mps_var_d_vs_plain_dmrg PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)

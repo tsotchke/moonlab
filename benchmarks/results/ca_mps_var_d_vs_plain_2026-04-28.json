@@ -1,0 +1,15 @@
+{
+  "schema": "moonlab/ca_mps_var_d_vs_plain_dmrg_v1",
+  "points": [
+    { "n": 6, "g": 0.2500, "E_exact": -5.976966, "E_dmrg": -5.125851, "E_varD": -5.118906, "S_psi": 0.999581, "S_phi": 0.001576, "S_ratio": 0.001577, "varD_outer_iters": 3, "varD_gates": 0 },
+    { "n": 6, "g": 0.5000, "E_exact": -6.163047, "E_dmrg": -5.522030, "E_varD": -5.485940, "S_psi": 0.963554, "S_phi": 0.015741, "S_ratio": 0.016336, "varD_outer_iters": 3, "varD_gates": 0 },
+    { "n": 6, "g": 1.0000, "E_exact": -7.296230, "E_dmrg": -7.296230, "E_varD": -7.206911, "S_psi": 0.473190, "S_phi": 0.530135, "S_ratio": 1.120344, "varD_outer_iters": 30, "varD_gates": 5 },
+    { "n": 6, "g": 1.5000, "E_exact": -9.618002, "E_dmrg": -9.847571, "E_varD": -9.723155, "S_psi": 0.217101, "S_phi": 0.107069, "S_ratio": 0.493174, "varD_outer_iters": 13, "varD_gates": 1 },
+    { "n": 6, "g": 2.5000, "E_exact": -15.156779, "E_dmrg": -15.503037, "E_varD": -15.338698, "S_psi": 0.085868, "S_phi": 0.021518, "S_ratio": 0.250592, "varD_outer_iters": 7, "varD_gates": 1 },
+    { "n": 8, "g": 0.2500, "E_exact": -8.008340, "E_dmrg": -7.157010, "E_varD": -7.148981, "S_psi": 1.000235, "S_phi": 0.000660, "S_ratio": 0.000660, "varD_outer_iters": 2, "varD_gates": 0 },
+    { "n": 8, "g": 0.5000, "E_exact": -8.290128, "E_dmrg": -7.640593, "E_varD": -7.601438, "S_psi": 0.993437, "S_phi": 0.015721, "S_ratio": 0.015825, "varD_outer_iters": 3, "varD_gates": 0 },
+    { "n": 8, "g": 1.0000, "E_exact": -9.837951, "E_dmrg": -9.837951, "E_varD": -9.712282, "S_psi": 0.515274, "S_phi": 0.544194, "S_ratio": 1.056125, "varD_outer_iters": 30, "varD_gates": 5 },
+    { "n": 8, "g": 1.5000, "E_exact": -12.961455, "E_dmrg": -13.191405, "E_varD": -13.016673, "S_psi": 0.219969, "S_phi": 0.108882, "S_ratio": 0.494990, "varD_outer_iters": 15, "varD_gates": 1 },
+    { "n": 8, "g": 2.5000, "E_exact": -20.358863, "E_dmrg": -20.705122, "E_varD": -20.474742, "S_psi": 0.085926, "S_phi": 0.021544, "S_ratio": 0.250722, "varD_outer_iters": 7, "varD_gates": 1 }
+  ]
+}
