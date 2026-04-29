@@ -1879,6 +1879,15 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_mps_var_d_vs_plain_dmrg PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Bond-dim cap scan: at fixed (n, g), what chi do we need for a
+    # given accuracy?  Plain DMRG vs variational-D CA-MPS.  This is
+    # the paper's strongest claim -- the chi required for a fixed
+    # accuracy threshold is much smaller for var-D than for plain DMRG.
+    add_executable(example_ca_mps_var_d_chi_scan
+        examples/tensor_network/ca_mps_var_d_chi_scan.c)
+    target_link_libraries(example_ca_mps_var_d_chi_scan PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
