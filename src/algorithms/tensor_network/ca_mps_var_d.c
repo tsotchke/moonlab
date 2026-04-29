@@ -242,6 +242,7 @@ ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void) {
     c.clifford_passes_per_outer   = 10;
     c.convergence_eps             = 1e-7;
     c.include_2q_gates            = 1;
+    c.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
     c.verbose                     = 0;
     return c;
 }
@@ -280,6 +281,34 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
 
     ca_mps_var_d_alt_config_t cfg =
         config ? *config : ca_mps_var_d_alt_config_default();
+
+    /* Optional warm-start: apply a structured Clifford to D before
+     * starting the alternating loop.  Useful at criticality where
+     * the right Clifford involves H on every qubit (and possibly a
+     * CNOT chain); the greedy local search starting from D=I has no
+     * single-gate descent toward it because reaching the right
+     * basin requires ~n consecutive accepts that look bad in step 1.
+     * Warmstart options bias the search toward known-productive
+     * basins for specific model classes. */
+    if (cfg.warmstart == CA_MPS_WARMSTART_H_ALL ||
+        cfg.warmstart == CA_MPS_WARMSTART_DUAL_TFIM) {
+        uint32_t n = moonlab_ca_mps_num_qubits(state);
+        for (uint32_t q = 0; q < n; q++) {
+            ca_mps_error_t e = moonlab_ca_mps_h(state, q);
+            if (e != CA_MPS_SUCCESS) return e;
+        }
+        if (cfg.warmstart == CA_MPS_WARMSTART_DUAL_TFIM) {
+            /* CNOT chain: CNOT(0,1) CNOT(1,2) ... CNOT(n-2,n-1).
+             * Combined with H_all this is the dual basis transform
+             * for 1D TFIM that the 2026-04-28 oracle proof showed
+             * reduces |phi> entropy by 5-50x across the phase
+             * diagram, including the critical point. */
+            for (uint32_t q = 0; q + 1 < n; q++) {
+                ca_mps_error_t e = moonlab_ca_mps_cnot(state, q, q + 1);
+                if (e != CA_MPS_SUCCESS) return e;
+            }
+        }
+    }
 
     double E_curr = evaluate_energy(state, paulis, coeffs, num_terms);
     double S0 = moonlab_ca_mps_max_half_cut_entropy(state);
