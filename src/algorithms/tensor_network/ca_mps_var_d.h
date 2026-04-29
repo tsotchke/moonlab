@@ -117,7 +117,8 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
 typedef enum {
     CA_MPS_WARMSTART_IDENTITY = 0,    /* D starts at I (default) */
     CA_MPS_WARMSTART_H_ALL,           /* D = product of H on every qubit */
-    CA_MPS_WARMSTART_DUAL_TFIM        /* D = H_all then CNOT-chain (TFIM-dual) */
+    CA_MPS_WARMSTART_DUAL_TFIM,       /* D = H_all then CNOT-chain (TFIM-dual) */
+    CA_MPS_WARMSTART_FERRO_TFIM       /* D = CNOT-chain then H_0 (cat-state encoder) */
 } ca_mps_warmstart_t;
 
 typedef struct {
