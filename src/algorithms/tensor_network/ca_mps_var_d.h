@@ -106,6 +106,20 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
 /*  Alternating optimization (imag-time |phi> + greedy Clifford D)     */
 /* ================================================================== */
 
+/** Warm-start initial Clifford for D.  When the alternating optimiser
+ *  starts at D = I, the greedy local search can get trapped in a basin
+ *  with no descent direction toward Cliffords that need many gates to
+ *  reach -- notably, the dual H_all + CNOT-chain Clifford that the
+ *  oracle proof showed is the right answer for transverse-field
+ *  systems near criticality.  Warm-starting D to a structured Clifford
+ *  before the alternating loop puts the search in a more productive
+ *  basin. */
+typedef enum {
+    CA_MPS_WARMSTART_IDENTITY = 0,    /* D starts at I (default) */
+    CA_MPS_WARMSTART_H_ALL,           /* D = product of H on every qubit */
+    CA_MPS_WARMSTART_DUAL_TFIM        /* D = H_all then CNOT-chain (TFIM-dual) */
+} ca_mps_warmstart_t;
+
 typedef struct {
     /** Outer iterations of the alternating loop. */
     int max_outer_iters;
@@ -122,6 +136,8 @@ typedef struct {
     /** Include 2-qubit Cliffords in the search (passed through to the
      *  inner Clifford-only routine). */
     int include_2q_gates;
+    /** Initial Clifford basin for D (see ::ca_mps_warmstart_t). */
+    ca_mps_warmstart_t warmstart;
     /** Print one line per outer iteration. */
     int verbose;
 } ca_mps_var_d_alt_config_t;
