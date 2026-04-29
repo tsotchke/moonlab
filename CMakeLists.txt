@@ -1289,6 +1289,17 @@ if(QSIM_BUILD_TESTS)
         endif()
         add_test(NAME unit_ca_mps_var_d_alt COMMAND test_ca_mps_var_d_alt)
         set_tests_properties(unit_ca_mps_var_d_alt PROPERTIES TIMEOUT 120)
+
+        # Composite-2-gate move feature regression test.
+        add_executable(test_ca_mps_var_d_composite tests/unit/test_ca_mps_var_d_composite.c)
+        target_link_libraries(test_ca_mps_var_d_composite PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_var_d_composite PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_var_d_composite PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_var_d_composite COMMAND test_ca_mps_var_d_composite)
+        set_tests_properties(unit_ca_mps_var_d_composite PROPERTIES TIMEOUT 60)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
