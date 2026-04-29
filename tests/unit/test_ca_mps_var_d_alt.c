@@ -108,6 +108,7 @@ int main(void) {
 
     ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
     cfg.verbose = 1;
+    cfg.warmstart = CA_MPS_WARMSTART_DUAL_TFIM;
     cfg.max_outer_iters = 30;
     cfg.imag_time_dtau = 0.1;
     cfg.imag_time_steps_per_outer = 5;
@@ -132,14 +133,25 @@ int main(void) {
     fprintf(stdout, "  Total gates    = %d\n", res.total_gates_added);
     fprintf(stdout, "  Converged      = %d\n", res.converged);
 
-    /* Pass criteria. */
-    CHECK(rel_err < 0.05,
-          "final energy %.6f is %.2f%% off the exact %.6f (>5%% tol)",
+    /* Pass criteria.
+     *
+     * Note: the JW closed-form E_exact used here matches the OBC TFIM
+     * ground state at g=1 specifically (where the formula's k-values
+     * happen to coincide with the actual OBC dispersion).  We chose
+     * g=1 deliberately for this reason -- it gives a meaningful
+     * "absolute" reference without needing the full transcendental
+     * OBC root-finding.  Other g points are validated against plain
+     * DMRG in benchmarks/results/ca_mps_var_d_vs_plain_dmrg_*.json. */
+    CHECK(rel_err < 0.01,
+          "final energy %.6f is %.4f%% off exact %.6f (>1%% tol)",
           res.final_energy, rel_err * 100.0, E_exact);
-    CHECK(res.total_gates_added > 0,
-          "alternating loop accepted no Clifford gates");
-    CHECK(res.final_phi_entropy < 1.5,
-          "S(phi) = %.4f exceeds the 1.5 nat ceiling",
+    /* The dual warmstart already gives a near-optimal D for TFIM at
+     * criticality, so the greedy refinement may not need to add any
+     * gates; that's a success path, not a failure. */
+    CHECK(res.final_phi_entropy < 0.2,
+          "S(phi) = %.4f exceeds the 0.2 nat ceiling -- var-D at the "
+          "critical point should drop |phi> entropy well below plain "
+          "MPS's S=0.473 nats at this n,g",
           res.final_phi_entropy);
 
     moonlab_ca_mps_free(state);
