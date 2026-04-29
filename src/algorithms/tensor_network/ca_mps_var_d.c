@@ -250,23 +250,36 @@ ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void) {
 /* One Trotter cycle of e^(-dtau * sum_k c_k P_k) on |psi>.  First-order
  * Trotter; for our purposes (variational descent) higher-order Trotter
  * isn't needed -- the goal is energy descent, and any consistent
- * approximation of the imag-time evolution achieves that. */
+ * approximation of the imag-time evolution achieves that.
+ *
+ * Renormalises *every* RENORM_INTERVAL Pauli applications (rather than
+ * once per full sweep) to keep the MPS norm close to 1 throughout.
+ * Without intermediate renormalisation the state vector accumulates
+ * O(num_terms) compounded norm shifts in a single sweep -- when the
+ * conjugated Paulis are high-weight (which happens after a non-trivial
+ * D warmstart), the resulting numerical drift can drive evaluate_energy
+ * below the variational lower bound. */
 static ca_mps_error_t imag_time_sweep(moonlab_ca_mps_t* s,
                                        const uint8_t* paulis,
                                        const double* coeffs,
                                        uint32_t num_terms,
                                        double dtau) {
     uint32_t n = moonlab_ca_mps_num_qubits(s);
+    const uint32_t RENORM_INTERVAL = 4;
     for (uint32_t k = 0; k < num_terms; k++) {
         const uint8_t* P_k = &paulis[(size_t)k * n];
         double tau_k = dtau * coeffs[k];
         if (tau_k == 0.0) continue;
         ca_mps_error_t e = moonlab_ca_mps_imag_pauli_rotation(s, P_k, tau_k);
         if (e != CA_MPS_SUCCESS) return e;
+        if ((k + 1) % RENORM_INTERVAL == 0) {
+            e = moonlab_ca_mps_normalize(s);
+            if (e != CA_MPS_SUCCESS) return e;
+        }
     }
-    /* Renormalise: imag-time evolution is non-unitary; norm decays as
-     * e^(-2 * dtau * E).  Without renormalisation the MPS state vector
-     * shrinks toward zero. */
+    /* Final renormalise.  Imag-time evolution is non-unitary; norm
+     * decays as e^(-2 * dtau * E).  Without renormalisation the MPS
+     * state vector shrinks toward zero. */
     return moonlab_ca_mps_normalize(s);
 }
 
@@ -307,6 +320,22 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
                 ca_mps_error_t e = moonlab_ca_mps_cnot(state, q, q + 1);
                 if (e != CA_MPS_SUCCESS) return e;
             }
+        }
+    } else if (cfg.warmstart == CA_MPS_WARMSTART_FERRO_TFIM) {
+        /* Cat-state encoder: H on qubit 0, then CNOT chain.  Applied
+         * to |phi> = |0...0>, this Clifford produces D|0...0> =
+         * (|0..0> + |1..1>) / sqrt(2) -- the symmetric cat state
+         * that is the GS of TFIM in the deep ferromagnetic regime
+         * (g << 1).  Without this warmstart, var-D converges to a
+         * low-entropy product-state |phi> but the corresponding D
+         * doesn't reach the cat-state image, leaving an O(0.1)
+         * energy gap to the exact GS. */
+        uint32_t n = moonlab_ca_mps_num_qubits(state);
+        ca_mps_error_t e = moonlab_ca_mps_h(state, 0);
+        if (e != CA_MPS_SUCCESS) return e;
+        for (uint32_t q = 0; q + 1 < n; q++) {
+            e = moonlab_ca_mps_cnot(state, q, q + 1);
+            if (e != CA_MPS_SUCCESS) return e;
         }
     }
 

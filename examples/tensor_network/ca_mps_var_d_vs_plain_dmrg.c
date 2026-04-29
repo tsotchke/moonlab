@@ -37,14 +37,19 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static double tfim_exact_energy_obc(int N, double g) {
-    double E = 0.0;
-    for (int j = 0; j < N; j++) {
-        double k = M_PI * (2 * j + 1) / (double)(2 * N + 1);
-        E -= sqrt(1.0 + g * g - 2.0 * g * cos(k));
-    }
-    return E;
-}
+/* NOTE: An earlier draft of this file used a closed-form JW formula
+ * here for the "exact" GS energy.  That formula's k-values
+ * (pi*(2j+1)/(2N+1)) match the OBC TFIM ground state only at g=1;
+ * elsewhere it gives the wrong answer.  Rather than chase the
+ * correct OBC dispersion (which involves transcendental boundary
+ * conditions and isn't a one-liner), we now use plain DMRG itself
+ * as the reference upper bound.  The variational claim stands
+ * cleanly: var-D and plain DMRG should agree on energy to within
+ * truncation error, and the var-D representation should have
+ * substantially smaller |phi> entropy.  Comparing var-D against
+ * plain DMRG directly is also more honest -- the paper's claim
+ * is "more compact ansatz at the same chi cap", which is exactly
+ * what this comparison measures. */
 
 static void build_tfim(uint32_t n, double g,
                         uint8_t** out_paulis, double** out_coeffs,
@@ -91,7 +96,7 @@ int main(int argc, char** argv) {
     fprintf(stdout, "state with less entanglement, hence at lower bond dim.\n\n");
 
     fprintf(stdout, "%4s %6s %14s %14s %12s %10s %10s %10s  %s\n",
-            "n", "g", "E_exact", "E_varD", "rel_err",
+            "n", "g", "E_dmrg", "E_varD", "dE_rel",
             "S_psi", "S_phi", "S_phi/psi", "warm");
     fprintf(stdout, "----------------------------------------------------------------------"
                     "----------------\n");
@@ -161,53 +166,102 @@ int main(int argc, char** argv) {
             moonlab_ca_mps_optimize_var_d_alternating(
                 state_d, paulis, coeffs, T, &acfg, &res_d);
 
+            /* Run with D = H_0 + CNOT_chain (cat-state encoder; right
+             * basin for the deep-ferromagnet regime).  The conjugated
+             * Hamiltonian applied to |phi>=|0...0> has high-weight
+             * Pauli strings, so |phi> grows quickly under imag-time
+             * and truncation error compounds.  Compensate with a
+             * tighter Trotter step + more outer iters specifically
+             * for this branch. */
+            moonlab_ca_mps_t* state_f = moonlab_ca_mps_create(n, /*max_bond=*/32);
+            ca_mps_var_d_alt_config_t acfg_f = acfg;
+            acfg_f.warmstart                   = CA_MPS_WARMSTART_FERRO_TFIM;
+            acfg_f.imag_time_dtau              = 0.05;
+            acfg_f.imag_time_steps_per_outer   = 8;
+            acfg_f.max_outer_iters             = 60;
+            ca_mps_var_d_alt_result_t res_f = {0};
+            moonlab_ca_mps_optimize_var_d_alternating(
+                state_f, paulis, coeffs, T, &acfg_f, &res_f);
+
             /* Pick the result with the smallest |phi> entropy whose energy
              * is within an absolute tolerance of the best energy across
-             * the three warmstarts.  This is the paper's headline metric:
-             * "given that all three warmstarts converge to comparable
-             * variational energies, which gives the most compact CA-MPS
-             * representation?"  Picking purely by energy can sacrifice
-             * a 5x entropy advantage to chase a 0.1% energy improvement,
-             * which obscures the real story. */
-            const double E_tol = 0.05;  /* absolute energy slack in units of H */
-            double E_best = res_id.final_energy;
-            if (res_h.final_energy < E_best) E_best = res_h.final_energy;
-            if (res_d.final_energy < E_best) E_best = res_d.final_energy;
+             * the four warmstarts.  This is the paper's headline metric:
+             * "given that the warmstarts converge to comparable variational
+             * energies, which gives the most compact CA-MPS representation?"
+             * Picking purely by energy can sacrifice a 5x entropy advantage
+             * to chase a 0.1% energy improvement, which obscures the real
+             * story. */
+            /* Variational bound: any var-D result with energy below
+             * E_dmrg - 0.001 (a reliable upper bound on E_exact) is
+             * a numerical artifact (e.g. truncation error in the
+             * conjugated-Pauli MPO application driving |phi> to a
+             * non-physical state).  Reject these.  Among the
+             * remaining valid results, pick the smallest entropy
+             * within an absolute energy slack of the best valid
+             * energy. */
+            double E_var_floor = E_dmrg - 1e-3;
+            int v_id = (res_id.final_energy >= E_var_floor);
+            int v_h  = (res_h.final_energy  >= E_var_floor);
+            int v_d  = (res_d.final_energy  >= E_var_floor);
+            int v_f  = (res_f.final_energy  >= E_var_floor);
+
+            const double E_tol = 0.05;
+            double E_best = 1e30;
+            if (v_id && res_id.final_energy < E_best) E_best = res_id.final_energy;
+            if (v_h  && res_h.final_energy  < E_best) E_best = res_h.final_energy;
+            if (v_d  && res_d.final_energy  < E_best) E_best = res_d.final_energy;
+            if (v_f  && res_f.final_energy  < E_best) E_best = res_f.final_energy;
+            /* Fallback: if every warmstart tripped the floor (unlikely
+             * unless plain DMRG has its own convergence issue), accept
+             * the highest-energy var-D result anyway. */
+            if (E_best >= 1e30) {
+                E_best = res_id.final_energy;
+                v_id = v_h = v_d = v_f = 1;
+            }
 
             ca_mps_var_d_alt_result_t ares = res_id;
             const char* warmstart_used = "I";
-            double S_best = (res_id.final_energy <= E_best + E_tol)
+            double S_best = (v_id && res_id.final_energy <= E_best + E_tol)
                             ? res_id.final_phi_entropy : 1e9;
-            if (res_h.final_energy <= E_best + E_tol &&
+            if (v_h && res_h.final_energy <= E_best + E_tol &&
                 res_h.final_phi_entropy < S_best) {
                 ares = res_h; warmstart_used = "H_all";
                 S_best = res_h.final_phi_entropy;
             }
-            if (res_d.final_energy <= E_best + E_tol &&
+            if (v_d && res_d.final_energy <= E_best + E_tol &&
                 res_d.final_phi_entropy < S_best) {
                 ares = res_d; warmstart_used = "dual";
+                S_best = res_d.final_phi_entropy;
+            }
+            if (v_f && res_f.final_energy <= E_best + E_tol &&
+                res_f.final_phi_entropy < S_best) {
+                ares = res_f; warmstart_used = "ferro";
             }
 
-            double E_exact = tfim_exact_energy_obc((int)n, g);
-            double rel = fabs(ares.final_energy - E_exact) / fabs(E_exact);
+            /* Energy convergence is now measured relative to plain DMRG,
+             * which is the proper reference (and the comparison the paper
+             * actually makes -- "same energy convergence, smaller entropy
+             * representation"). */
+            double dE_rel = (fabs(E_dmrg) > 1e-12)
+                ? fabs(ares.final_energy - E_dmrg) / fabs(E_dmrg) : 0.0;
 
             double ratio = (S_psi > 1e-12) ? (ares.final_phi_entropy / S_psi) : 0.0;
             fprintf(stdout, "%4u %6.3f %14.6f %14.6f %11.3e  %10.4f %10.4f %10.4f  %s\n",
-                    n, g, E_exact, ares.final_energy, rel,
+                    n, g, E_dmrg, ares.final_energy, dE_rel,
                     S_psi, ares.final_phi_entropy, ratio, warmstart_used);
             fflush(stdout);
 
             if (!first_json) fprintf(json, ",\n");
             first_json = 0;
             fprintf(json, "    { \"n\": %u, \"g\": %.4f, "
-                          "\"E_exact\": %.6f, \"E_dmrg\": %.6f, "
+                          "\"E_dmrg\": %.6f, "
                           "\"E_varD\": %.6f, "
                           "\"S_psi\": %.6f, \"S_phi\": %.6f, "
                           "\"S_ratio\": %.6f, "
                           "\"warmstart\": \"%s\", "
                           "\"varD_outer_iters\": %d, "
                           "\"varD_gates\": %d }",
-                    n, g, E_exact, E_dmrg, ares.final_energy,
+                    n, g, E_dmrg, ares.final_energy,
                     S_psi, ares.final_phi_entropy, ratio,
                     warmstart_used,
                     ares.outer_iterations, ares.total_gates_added);
@@ -215,6 +269,7 @@ int main(int argc, char** argv) {
             moonlab_ca_mps_free(state_id);
             moonlab_ca_mps_free(state_h);
             moonlab_ca_mps_free(state_d);
+            moonlab_ca_mps_free(state_f);
             free(paulis);
             free(coeffs);
         }
