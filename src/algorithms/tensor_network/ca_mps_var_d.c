@@ -28,6 +28,7 @@ ca_mps_var_d_config_t ca_mps_var_d_config_default(void) {
     c.max_passes = 50;
     c.improvement_eps = 1e-8;
     c.include_2q_gates = 1;
+    c.composite_2gate = 0;
     c.verbose = 0;
     return c;
 }
@@ -191,6 +192,41 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
             }
         }
 
+        /* Composite 2-gate moves -- pairs (A, B) applied in sequence.
+         * Helps escape 1-gate local minima where the right descent
+         * direction requires two gates that each look bad alone.  Only
+         * runs when no single-gate move beats best_dE -- otherwise the
+         * single-gate descent is taken first and the composite search
+         * runs at the next iteration with updated state. */
+        int best_g2 = -1;
+        uint32_t best2_q1a = 0, best2_q1b = 0;
+        if (cfg.composite_2gate && best_gate < 0) {
+            /* Single-qubit pair followed by single-qubit pair (different
+             * qubits) -- catches dual-basis-style transformations.  */
+            for (uint32_t qa = 0; qa < n; qa++) {
+                for (int ga = 0; ga < n1q; ga++) {
+                    int gA = gate_list_1q[ga];
+                    if (apply_cand(state, gA, qa, 0) != CA_MPS_SUCCESS) continue;
+                    for (uint32_t qb = 0; qb < n; qb++) {
+                        if (qb == qa) continue;
+                        for (int gb = 0; gb < n1q; gb++) {
+                            int gB = gate_list_1q[gb];
+                            if (apply_cand(state, gB, qb, 0) != CA_MPS_SUCCESS) continue;
+                            double E_test = evaluate_energy(state, paulis, coeffs, num_terms);
+                            undo_cand(state, gB, qb, 0);
+                            double dE = E_test - E_curr;
+                            if (dE < best_dE) {
+                                best_dE = dE;
+                                best_gate = gA; best_q1 = qa; best_q2 = 0;
+                                best_g2 = gB;   best2_q1a = qb; best2_q1b = 0;
+                            }
+                        }
+                    }
+                    undo_cand(state, gA, qa, 0);
+                }
+            }
+        }
+
         if (best_gate < 0) {
             /* No candidate beat the threshold -- local minimum reached. */
             converged = 1;
@@ -209,6 +245,16 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
             } else {
                 fprintf(stdout, "[var-D] accept %s(%u)    dE=%+.6e  E=%.10f\n",
                         cand_name(best_gate), best_q1, best_dE, E_curr);
+            }
+        }
+        /* If this was a composite 2-gate move, also apply the second
+         * gate.  best_dE already accounts for both gates' net effect. */
+        if (best_g2 >= 0) {
+            apply_cand(state, best_g2, best2_q1a, best2_q1b);
+            gates_added++;
+            if (cfg.verbose) {
+                fprintf(stdout, "[var-D] accept %s(%u)    (composite partner)\n",
+                        cand_name(best_g2), best2_q1a);
             }
         }
     }
@@ -242,6 +288,7 @@ ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void) {
     c.clifford_passes_per_outer   = 10;
     c.convergence_eps             = 1e-7;
     c.include_2q_gates            = 1;
+    c.composite_2gate             = 0;
     c.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
     c.verbose                     = 0;
     return c;
@@ -373,6 +420,7 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
         ca_mps_var_d_config_t inner = ca_mps_var_d_config_default();
         inner.max_passes       = cfg.clifford_passes_per_outer;
         inner.include_2q_gates = cfg.include_2q_gates;
+        inner.composite_2gate  = cfg.composite_2gate;
         inner.improvement_eps  = cfg.convergence_eps * 1e-2;
         inner.verbose          = 0;
         ca_mps_var_d_result_t inner_res = {0};

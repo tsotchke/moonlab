@@ -524,6 +524,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/tensor_network/skyrmion_braiding.c
     src/algorithms/tensor_network/ca_mps.c
     src/algorithms/tensor_network/ca_mps_var_d.c
+    src/algorithms/tensor_network/ca_peps.c
     # Chemistry (Jordan-Wigner, UCCSD, molecular Hamiltonians).
     src/algorithms/chemistry/chemistry.c
     # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
@@ -1904,6 +1905,15 @@ if(QSIM_BUILD_EXAMPLES)
     add_executable(example_ca_mps_var_d_heisenberg
         examples/tensor_network/ca_mps_var_d_heisenberg.c)
     target_link_libraries(example_ca_mps_var_d_heisenberg PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
+    # Hard test: var-D on kagome 12-site Heisenberg AFM (frustrated
+    # spin liquid GS).  Compares the four warmstarts against the
+    # IDENTITY baseline (which is plain MPS imag-time).  This is the
+    # "can it help on a hard problem" test for the paper.
+    add_executable(example_ca_mps_var_d_kagome12
+        examples/tensor_network/ca_mps_var_d_kagome12.c)
+    target_link_libraries(example_ca_mps_var_d_kagome12 PRIVATE
         quantumsim ${MATH_LIBRARY})
 
     # Execute a representative subset of examples under ctest so CI

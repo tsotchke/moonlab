@@ -44,6 +44,13 @@ typedef struct {
      *  searched. */
     int include_2q_gates;
 
+    /** Try 2-gate composite moves -- pairs (G1, G2) applied in sequence
+     *  -- in addition to single-gate moves.  Helps escape 1-gate local
+     *  minima where the right descent direction requires two gates that
+     *  individually look bad.  Cost: O(N^2 * G^2) per pass instead of
+     *  O(N * G), so set to 0 when speed matters. */
+    int composite_2gate;
+
     /** Print one line per accepted gate to stdout. */
     int verbose;
 } ca_mps_var_d_config_t;
@@ -137,6 +144,9 @@ typedef struct {
     /** Include 2-qubit Cliffords in the search (passed through to the
      *  inner Clifford-only routine). */
     int include_2q_gates;
+    /** Try 2-gate composite moves in the inner Clifford search.  Passed
+     *  through to ::moonlab_ca_mps_optimize_var_d_clifford_only.  Costly. */
+    int composite_2gate;
     /** Initial Clifford basin for D (see ::ca_mps_warmstart_t). */
     ca_mps_warmstart_t warmstart;
     /** Print one line per outer iteration. */
