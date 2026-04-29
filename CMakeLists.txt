@@ -1300,6 +1300,13 @@ if(QSIM_BUILD_TESTS)
         endif()
         add_test(NAME unit_ca_mps_var_d_composite COMMAND test_ca_mps_var_d_composite)
         set_tests_properties(unit_ca_mps_var_d_composite PROPERTIES TIMEOUT 60)
+
+        # CA-PEPS scaffold smoke test -- verifies API is callable and
+        # every NOT_IMPLEMENTED entry point fails loudly.
+        add_executable(test_ca_peps_scaffold tests/unit/test_ca_peps_scaffold.c)
+        target_link_libraries(test_ca_peps_scaffold PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_ca_peps_scaffold COMMAND test_ca_peps_scaffold)
+        set_tests_properties(unit_ca_peps_scaffold PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
