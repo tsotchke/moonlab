@@ -460,6 +460,60 @@ search, simulated annealing) that we don't currently have.
 
 CA-PEPS (§7) is the gating item for venue-uplift to a physics-novelty journal.
 
+### 6.5 Final synthesis (2026-04-29)
+
+After seven experiments and many algorithmic iterations, the
+publishable surface of var-D 1D CA-MPS is:
+
+**What works (publishable strong claim):**
+- TFIM phase sweep, n=6,8,10: var-D drops |phi> half-cut entropy
+  by 4x-1430x vs plain MPS at matching energy convergence
+  (dE_rel < 0.7% at all but the cat-state regime).
+- Critical-point reduction stays meaningful but decays with N
+  (7x at n=6, 5x at n=8, 4x at n=10).  Asymptotic behaviour
+  unverified beyond n=10; possible the constant-factor advantage
+  saturates or vanishes at large N.
+- Stabilizer-rich workloads (surface code, pure Clifford circuits):
+  S(|phi>) -> 0, wallclock speedup 100x to 4Mx.
+- Direct disentangler (post-DMRG) matches the oracle proof at
+  n=6,8 but fails at n=10 due to intermediate-bond blow-up
+  during deep Clifford application; the alternating optimiser
+  doesn't have this issue because it builds D and |phi> together.
+
+**What fails (honest limitations):**
+- XXZ Heisenberg, Delta <= 1 (gapless regime including SU(2)
+  point): no entropy reduction.  The method is model-dependent.
+- Cat-state TFIM regime (g <= 0.5): 8-14% energy gap to exact
+  due to Z2 symmetry locking from |0...0> initial state.
+- Chi advantage at n=8 g=1: doesn't materialise because plain
+  DMRG already converges at chi=4.
+- Var-D has a ~1% energy floor regardless of chi -- the
+  alternating-optimiser convergence floor, independent of bond
+  cap.
+
+**Publishable framing:** "Variational-D CA-MPS is an effective
+method for ground-state problems with stabilizer-adjacent
+entanglement structure (TFIM-class, Ising-anisotropy XXZ,
+stabilizer-rich circuits).  It dramatically compresses the MPS
+representation across the entire TFIM phase diagram including
+the critical point.  The method is model-dependent -- it does
+not help on gapless SU(2)-symmetric systems where the right
+basis transformation isn't Clifford."
+
+**What would unlock a stronger paper claim:**
+1. Multi-gate composite-move Clifford search (escape 1-gate
+   local minima, possibly help on Heisenberg).
+2. Larger-N TFIM (n >= 12) chi-scan to demonstrate the
+   operational chi advantage.
+3. Application to a HARD problem where plain DMRG struggles
+   (kagome AFM at n=18, J1-J2 spin liquid, etc.) -- this is
+   the highest-impact next chunk.
+4. CA-PEPS 2D extension (the venue uplift).
+
+These are the gating items for a stronger paper; the current
+state is publishable as a focused methods paper but not as a
+universal claim.
+
 ---
 
 ## 7. 2D extension: CA-PEPS
