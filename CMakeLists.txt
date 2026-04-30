@@ -1349,6 +1349,20 @@ if(QSIM_BUILD_TESTS)
             PRIVATE quantumsim ${MATH_LIBRARY})
         add_test(NAME unit_moonlab_status COMMAND test_moonlab_status)
         set_tests_properties(unit_moonlab_status PROPERTIES TIMEOUT 10)
+
+        # Smoke harness for tensor-network public API surfaces that
+        # ICC found had no in-tree caller (tensor_einsum,
+        # svd_left_canonicalize, svd_right_canonicalize,
+        # tn_expectation_2q).  Closes four entries on the dead-code
+        # triage queue documented in AUDIT.md.
+        add_executable(test_tn_dead_code_smoke
+            tests/unit/test_tn_dead_code_smoke.c)
+        target_link_libraries(test_tn_dead_code_smoke
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_tn_dead_code_smoke
+            COMMAND test_tn_dead_code_smoke)
+        set_tests_properties(unit_tn_dead_code_smoke
+            PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
