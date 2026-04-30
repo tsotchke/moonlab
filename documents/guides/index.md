@@ -26,6 +26,7 @@ These guides provide step-by-step instructions for specific tasks. Unlike tutori
 | Guide | Description |
 |-------|-------------|
 | [Noise Simulation](noise-simulation.md) | Add realistic noise to circuits |
+| [Gauge-aware warmstart](gauge-aware-warmstart.md) | Project a CA-MPS state into the +1 eigenspace of any commuting Pauli stabilizer subgroup -- LGT, surface/toric/repetition codes, abelian symmetry sectors (since v0.2.1) |
 
 ## Quick Reference
 

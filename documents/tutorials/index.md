@@ -35,6 +35,7 @@ Scale up with tensor networks and GPU acceleration.
 |----------|--------|----------|
 | [08. Tensor Network Simulation](08-tensor-network-simulation.md) | MPS and DMRG basics | 60 min |
 | [09. GPU Acceleration](09-gpu-acceleration.md) | Metal-accelerated simulation | 45 min |
+| [11. 1+1D Z2 Lattice Gauge Theory](11-z2-lattice-gauge-theory.md) | CA-MPS + var-D + gauge-aware warmstart on Z2 LGT (since v0.2.1) | 60 min |
 
 ## Prerequisites
 

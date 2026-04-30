@@ -50,6 +50,7 @@ Moonlab is structured as a layered system:
 | [State Vector Engine](state-vector-engine.md) | Amplitude storage and manipulation | Full details |
 | [GPU Pipeline](gpu-pipeline.md) | Metal acceleration | Full details |
 | [Tensor Network Engine](tensor-network-engine.md) | MPS/DMRG implementation | Full details |
+| [CA-MPS Engine](ca-mps-engine.md) | Hybrid `\|psi> = D\|phi>` representation, var-D ground-state search, gauge-aware warmstart, 1+1D Z2 LGT (since v0.2.1) | Full details |
 
 ### Supporting Systems
 

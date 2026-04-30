@@ -170,6 +170,32 @@ Deep dive into Moonlab's APIs.
    - React/Vue components
    - Browser visualization
 
+## What's new in v0.2.1
+
+The v0.2.1 release ships the **Clifford-Assisted MPS (CA-MPS)**
+pipeline -- a hybrid `|psi> = D|phi>` state representation that
+combines the Aaronson-Gottesman tableau (for the Clifford layer)
+with an MPS factor (for the non-Clifford residual).  Read more:
+
+- Concept primer: [Clifford-augmented states](../concepts/clifford-augmented-states.md).
+- Algorithm reference: [CA-MPS + var-D](../algorithms/ca-mps-var-d.md).
+- Architecture: [CA-MPS Engine](../architecture/ca-mps-engine.md).
+- Hands-on tutorial: [Tutorial 11: 1+1D Z2 LGT](../tutorials/11-z2-lattice-gauge-theory.md).
+- API: [C](../api/c/ca-mps.md) | [Python](../api/python/ca_mps.md).
+
+The headline new capabilities for downstream users:
+
+1. **Variational-D ground-state search** -- alternating greedy local-
+   Clifford search + imag-time evolution.  Validated on TFIM, XXZ
+   Heisenberg, kagome 12-site frustrated AFM.
+2. **Gauge-aware stabilizer-subgroup warmstart** -- one Aaronson-
+   Gottesman symplectic-Gauss-Jordan call gets you a CA-MPS state in
+   the simultaneous +1 eigenspace of any abelian Pauli stabilizer
+   subgroup (LGT Gauss-law operators, surface/toric/repetition code
+   stabilizers, fixed-charge symmetry sectors).
+3. **First HEP application: 1+1D Z2 lattice gauge theory** with
+   exactly gauge-invariant kinetic terms.
+
 ## Quick Reference Resources
 
 ### Cheat Sheets
