@@ -33,6 +33,8 @@ contributors can find them without grepping.
 | Tensor: MPS gates                         | `tn_gate_error_t`             | `src/algorithms/tensor_network/tn_gates.h` |
 | Tensor: MPS measurement                   | `tn_measure_error_t`          | `src/algorithms/tensor_network/tn_measurement.h` |
 | Tensor: CA-MPS                            | `ca_mps_error_t`              | `src/algorithms/tensor_network/ca_mps.h` |
+| Tensor: CA-MPS var-D + gauge warmstart    | `ca_mps_error_t` (shared)     | `src/algorithms/tensor_network/ca_mps_var_d.h`, `..._stab_warmstart.h` |
+| Tensor: CA-PEPS                           | `ca_peps_error_t`             | `src/algorithms/tensor_network/ca_peps.h` |
 
 ## Detail
 
@@ -123,7 +125,28 @@ MPS-state measurement.
 
 ### `ca_mps_error_t` (algorithms/tensor_network/ca_mps.h)
 
-Clifford-Assisted MPS.
+Clifford-Assisted MPS.  Shared by `ca_mps_var_d` (variational-D
+ground-state search) and `ca_mps_var_d_stab_warmstart` (gauge-aware
+stabilizer-subgroup Clifford builder) — every entry point in those
+modules returns `ca_mps_error_t` with one of the codes:
+`CA_MPS_SUCCESS = 0`, `CA_MPS_ERR_INVALID = -1`,
+`CA_MPS_ERR_QUBIT = -2`, `CA_MPS_ERR_OOM = -3`,
+`CA_MPS_ERR_BACKEND = -4`.  In particular,
+`moonlab_ca_mps_apply_stab_subgroup_warmstart` returns
+`CA_MPS_ERR_INVALID` if the supplied generators do not pairwise
+commute or are not linearly independent in the symplectic
+F2-vector-space sense.
+
+### `ca_peps_error_t` (algorithms/tensor_network/ca_peps.h)
+
+2D Clifford-Assisted PEPS (scaffold).  Codes:
+`CA_PEPS_SUCCESS = 0`, `CA_PEPS_ERR_INVALID = -1`,
+`CA_PEPS_ERR_QUBIT = -2`, `CA_PEPS_ERR_OOM = -3`,
+`CA_PEPS_ERR_BACKEND = -4`, `CA_PEPS_ERR_NOT_IMPLEMENTED = -100`.
+All non-trivial gate and contraction entry points currently return
+`CA_PEPS_ERR_NOT_IMPLEMENTED` — the v0.3 milestone wires the
+gate-application and 2D contraction logic.  Allocation, free, and
+qubit-count accessors return `CA_PEPS_SUCCESS` already.
 
 ## Adding a new error enum
 

@@ -1,5 +1,33 @@
 # Moonlab Deep Architectural Audit — 2026-04-19
 
+> **2026-04-30 update.** Third pass (commit log `c73cd78..61ec2e0`).
+> Major delta since 2026-04-26:
+>
+> - **var-D mode for CA-MPS shipped** (commits 791dfc4, 5814465,
+>   24bc665, plus task #78–84): greedy local-Clifford search,
+>   alternating loop, four warmstart options (IDENTITY, H_ALL,
+>   DUAL_TFIM, FERRO_TFIM), 2-gate composite moves.
+> - **1+1D Z2 lattice gauge theory shipped** (commit d66c712):
+>   Pauli-sum builder for matter + gauge-link Hamiltonian, Gauss-law
+>   and Wilson-line accessors, demo driver in `examples/hep/`,
+>   research write-up.
+> - **Gauge-aware stabilizer-subgroup warmstart shipped**
+>   (commit 61ec2e0): Aaronson-Gottesman symplectic-Gauss-Jordan
+>   Clifford builder, new `STABILIZER_SUBGROUP` warmstart enum,
+>   unit-tested on Bell + GHZ + Z2 LGT generators + commutativity
+>   reject path.
+> - **CA-PEPS scaffold shipped** (commit 4dedb3e): public API stable,
+>   gate logic returns `NOT_IMPLEMENTED` until v0.3.
+> - **Discrepancy found**: task #73 ("Centralise error enums into
+>   one `moonlab_status_t` registry") is marked completed in the
+>   task list but no `moonlab_status_t` symbol exists in `src/`.
+>   The 41 per-module error enums are still distinct.  Reopened as
+>   an open item.
+> - **ICC dogfood**: indexed Moonlab (782 files, 346K LOC, 6350
+>   symbols), surfaced ~50 dead functions ≥ 30 LOC under `src/`
+>   with `--grep-confirm` (no call-shaped textual reference).
+>   Triage queue documented in §"Dead-code triage queue" below.
+>
 > **2026-04-26 update.** A second systematic pass (commit log
 > `c73cd78..HEAD`) closed several of the 19 Apr findings.  Status of
 > every gap called out below:
@@ -34,12 +62,87 @@
 >   3-of-5.
 > - kagome ED ASAN timeout — fixed (`88bdc9b`).
 >
-> **Still open**: stable ABI surface (still 3 symbols), 41 error
-> enums, deployment blockers (Homebrew paths, missing Dockerfiles),
-> aarch64 QRNG init slowness (worked around with test exclusion),
-> coverage tooling, vqe_solve refactor, and the CA-PEPS / Phase 3
-> work that the v0.3 plan covers.  See `MEMORY.md` and the active
-> task list for the remaining queue.
+> **Still open at 2026-04-30**:
+>
+> - **Centralised `moonlab_status_t` registry**: task list flagged
+>   completed but the symbol does not exist in the codebase.  41
+>   per-module error enums still distinct.
+> - **Stable ABI surface still narrow**: `moonlab_camps_*` and
+>   `moonlab_vqe_*` shipped (task #72) but most algorithm modules
+>   still lack ABI exposure.  CA-PEPS, var-D, and gauge-warmstart
+>   primitives are not yet in `moonlab_export.h`.
+> - **CA-PEPS gate logic + 2D contraction**: scaffolded, all gate
+>   functions return `CA_PEPS_ERR_NOT_IMPLEMENTED`.  v0.3 milestone.
+> - **Z2 LGT exact gauge invariance**: the kinetic terms in
+>   `lattice_z2_1d.c` anti-commute with `G_x` term-by-term (lambda
+>   penalty enforces gauge invariance only energetically), so the
+>   var-D + gauge-aware-warmstart combo is exact at warmstart but
+>   drifts under imag-time evolution.  Fix design is documented in
+>   `docs/research/var_d_lattice_gauge_theory.md` §"Hamiltonian
+>   gauge invariance"; ~30-line Pauli-sum-builder edit + commutativity
+>   unit test pending.
+> - **MBL `construct_lioms` and `scan_phase_diagram`**: 165 LOC and
+>   103 LOC respectively per ICC dead-code report; no in-tree
+>   callers.  Either dead or part of an unwired research path.
+> - **GPU backends**: CUDA, OpenCL, Vulkan, WebGPU all declared but
+>   only Metal is functional.  ICC found `metal_mps_expectation_zz`
+>   (177 LOC) with no callers — likely dead code in the Metal layer
+>   too.
+> - **Distributed primitives**: `partition_fetch_remote` (135 LOC),
+>   `partition_scatter_updates` (135 LOC), `dist_mcx` (132 LOC),
+>   `partition_plan_2q_exchange` (86 LOC), several
+>   `collective_*` ops — all dead per ICC.  MPI bridge ships,
+>   distributed engine on top of it does not.
+> - **Aarch64 QRNG init slowness**: worked around with test
+>   exclusion (task #70 marked completed but the workaround stays).
+> - **Coverage tooling**: gcov / llvm-cov tier was added (task #71)
+>   but not yet wired into the public CI dashboards.
+> - **vqe_solve refactor**: marked complete (task #68) but the file
+>   is still ~454 LOC and `vqe_apply_pauli_rotation` (117 LOC) and
+>   `vqe_create_uccsd_ansatz` (69 LOC) are flagged dead by ICC —
+>   the refactor likely orphaned legacy code paths that should be
+>   deleted.
+> - **Deployment blockers**: Homebrew paths, missing Dockerfiles
+>   for some platform tiers.  Carry-over.
+>
+> See `MEMORY.md` and the active task list for the remaining queue.
+
+## Dead-code triage queue (ICC `find-dead-code --grep-confirm`)
+
+ICC dogfood (2026-04-30) on the `moonlab` index found ~50 functions
+in `src/` with no call-shaped textual reference anywhere in
+`src/`, `tests/`, `include/`, `examples/`.  Triage strategy:
+
+1. **Public API**: keep, document.  ICC may have miscounted because
+   external bindings (Python, Rust, JS) call these via the stable
+   ABI; if not, move to `moonlab_export.h`.
+2. **Internal but reachable via dispatch / vtable / function pointer**:
+   keep, audit dispatch.
+3. **Internal and truly unreachable**: delete.
+
+Top candidates to triage by file:
+
+| File | Function | LOC | Initial classification |
+|---|---|---|---|
+| `src/algorithms/tensor_network/tn_measurement.c` | `tn_expectation_2q` | 276 | Public API or test helper — confirm |
+| `src/algorithms/tensor_network/tensor.c` | `tensor_einsum` | 178 | Likely public — confirm |
+| `src/optimization/gpu_metal.mm` | `metal_mps_expectation_zz` | 177 | Probably dead (Metal-only) |
+| `src/algorithms/tensor_network/tn_state.c` | `tn_mps_from_statevector` | 175 | Likely public (tests use it?) |
+| `src/algorithms/mbl/mbl.c` | `construct_lioms` | 165 | Open research path; unwired |
+| `src/algorithms/tensor_network/dmrg.c` | `mpo_skyrmion_create` | 156 | Skyrmion module; likely dead |
+| `src/algorithms/tensor_network/svd_compress.c` | `svd_left_canonicalize` | 141 | Public — likely dead |
+| `src/optimization/parallel_ops.c` | `grover_parallel_partitioned_search` | 139 | Distributed Grover; unwired |
+| `src/distributed/state_partition.c` | `partition_fetch_remote` | 135 | Distributed engine unwired |
+| `src/distributed/state_partition.c` | `partition_scatter_updates` | 135 | Same |
+| `src/distributed/distributed_gates.c` | `dist_mcx` | 132 | Same |
+| `src/algorithms/tensor_network/dmrg.c` | `dmrg_energy_variance` | 128 | Public diagnostic — confirm |
+| `src/algorithms/vqe.c` | `vqe_apply_pauli_rotation` | 117 | Possibly orphaned by refactor |
+| `src/algorithms/topological/topological.c` | `surface_code_decode_correct` | 110 | Public surface-code primitive |
+| `src/optimization/simd_ops.c` | `simd_compute_probabilities` | 109 | SIMD path — confirm runtime dispatch |
+
+The remaining ~35 entries are below 100 LOC.  Each entry should be
+either deleted, exposed via the stable ABI, or wired into a real
+call site before the v0.2.1 → v0.2.2 → v0.3 ramp.
 
 **Status:** Moonlab is a well-documented, literature-grounded research
 simulator with a clean C core. It is **not yet** a publishable

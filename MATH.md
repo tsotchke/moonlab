@@ -255,6 +255,145 @@ Clifford circuit indicates a bug in the tableau update, not a
 numerical approximation (this is why the tests demand exact
 agreement, not a tolerance-bounded one).
 
+## 10. Clifford-Assisted MPS (CA-MPS)
+
+Hybrid representation
+@f$\lvert\psi\rangle = D \lvert\phi\rangle@f$
+with @f$D@f$ a Clifford unitary stored as an Aaronson-Gottesman
+tableau and @f$\lvert\phi\rangle@f$ an MPS.  Operations split:
+
+- **Clifford gate @f$U \in \mathcal{C}_n@f$**: update only the
+  tableau, @f$D \to U D@f$.  Cost @f$O(n)@f$ for 1-qubit, @f$O(n)@f$
+  for 2-qubit.  No MPS work.
+- **Non-Clifford gate** parametrised as
+  @f$\exp(-i\theta P/2)@f$ for some Pauli string @f$P@f$:
+  conjugate through the tableau,
+  @f$P' = D^\dagger P D \in \pm \mathcal{P}_n@f$, then apply the
+  Pauli-rotation MPO @f$\exp(-i\theta P'/2)@f$ to
+  @f$\lvert\phi\rangle@f$.
+
+**Expectation value of a Pauli string @f$Q@f$.** The state
+@f$\lvert\psi\rangle = D\lvert\phi\rangle@f$ has
+@f[
+  \langle\psi\rvert Q \lvert\psi\rangle
+  = \langle\phi\rvert D^\dagger Q D \lvert\phi\rangle
+  = \pm \langle\phi\rvert Q' \lvert\phi\rangle
+@f]
+where @f$Q' = D^\dagger Q D@f$ is computed by the tableau in
+@f$O(n^2)@f$ and the inner expectation is the standard MPS Pauli
+expectation.
+
+**Entanglement bound.** Because Clifford unitaries on n qubits
+realise an irreducible representation of the symplectic group
+@f$\operatorname{Sp}(2n, \mathbb{F}_2)@f$, every CA-MPS factorisation
+satisfies
+@f[
+  S(\lvert\psi\rangle) = S(D\lvert\phi\rangle)
+                       \le S(\lvert\phi\rangle) + n_{\text{cut}}\log 2,
+@f]
+where @f$n_{\text{cut}}@f$ is the number of qubits the cut crosses
+(2-local CNOTs in @f$D@f$ can introduce up to @f$n_{\text{cut}}\log 2@f$
+of additional half-cut entropy when they straddle the bipartition).
+For purely stabilizer @f$\lvert\psi\rangle@f$ a suitable @f$D@f$ takes
+@f$\lvert\phi\rangle = \lvert 0^n\rangle@f$ and
+@f$S(\lvert\phi\rangle) = 0@f$ exactly.
+
+Full design and proofs: `docs/research/ca_mps.md`.
+
+## 11. Variational-D (var-D) ground-state search
+
+Given a Hamiltonian
+@f$H = \sum_k c_k P_k@f$ as a Pauli sum, var-D minimises
+@f[
+  E(D, \lvert\phi\rangle)
+  = \langle\psi\rvert H \lvert\psi\rangle
+  = \sum_k c_k \langle\phi\rvert D^\dagger P_k D \lvert\phi\rangle
+@f]
+by alternating between a D-update (greedy local Clifford search) and
+a @f$\lvert\phi\rangle@f$-update (imag-time Trotter sweep).
+
+**D-update.** At fixed @f$\lvert\phi\rangle@f$, enumerate single-
+and two-qubit Clifford candidates @f$g \in \{H, S, S^\dagger,
+\mathrm{CNOT}, \mathrm{CZ}, \mathrm{SWAP}\}@f$.  For each candidate
+compute @f$\Delta E = \langle\phi\rvert D^\dagger g^\dagger H g D \lvert\phi\rangle - \langle\phi\rvert D^\dagger H D\lvert\phi\rangle@f$.
+Accept the largest @f$\Delta E < -\epsilon@f$.  Repeat to local
+minimum.  Optional 2-gate composite moves @f$(g_1, g_2)@f$ help
+escape 1-gate local minima where the right descent direction
+requires two consecutive accepts.
+
+**@f$\lvert\phi\rangle@f$-update.** First-order Trotter sweep over
+the Pauli sum, each @f$\exp(-d\tau\, c_k\, P_k)@f$ applied via
+the imag-time Pauli-rotation MPO with intermediate renormalisation
+every 4 terms (without renormalisation, the MPS norm drifts and
+the variational energy estimate falls below the true ground state).
+
+**Convergence.** The alternating loop is monotone in
+@f$E@f$ at each accepted gate and at each Trotter cycle, so
+@f$E_t \to E_\infty@f$.  The fixed point need not be the global
+ground state — the greedy gate search has stationary points
+wherever no single (or 2-gate composite) Clifford reduces the
+energy at fixed @f$\lvert\phi\rangle@f$.  Empirically TFIM converges
+to within @f$10^{-3}@f$ of exact GS energy at n=12 with the
+DUAL_TFIM warmstart; XXZ near criticality stalls at a
+ferromagnetic-cluster local minimum (n=10) and needs FERRO_TFIM
+warmstart or longer composite-2-gate search.
+
+Implementation: `src/algorithms/tensor_network/ca_mps_var_d.{c,h}`,
+public entry `moonlab_ca_mps_optimize_var_d_alternating`.
+
+## 12. Gauge-aware warmstart via symplectic Gauss-Jordan
+
+Given k pairwise-commuting Pauli generators
+@f$\{g_0, \ldots, g_{k-1}\}@f$ on n qubits (the stabilizer subgroup
+of an LGT, surface code, etc.), the Aaronson-Gottesman canonical-form
+construction yields a Clifford @f$D_S@f$ such that
+@f$D_S^\dagger g_i D_S = (-1)^{r_i} Z_{q_i}@f$ for distinct
+qubits @f$q_i@f$ and phase bits @f$r_i \in \{0, 1\}@f$.  Then
+@f[
+  D_S \lvert b\rangle, \qquad b_{q_i} = r_i,
+@f]
+is in the simultaneous +1 eigenspace of every @f$g_i@f$.
+
+**Algorithm.** Encode each generator as a row of an @f$F_2@f$
+tableau @f$[X | Z | r]@f$ with shape @f$(k, 2n+1)@f$.  Symplectic
+Gauss-Jordan with three operations:
+
+1. **Row swap / row XOR**: re-order or multiply generators.  Free
+   in gate cost.
+2. **Single-qubit column ops** (H, S): swap or modify the @f$(x, z)@f$
+   pair on one column.  H: @f$(x, z) \to (z, x)@f$, @f$r \xor= xz@f$.
+   S: @f$(x, z) \to (x, x \xor z)@f$, @f$r \xor= xz@f$.
+3. **Two-qubit column op** (CNOT @f$c \to t@f$):
+   @f$x_t \xor= x_c@f$, @f$z_c \xor= z_t@f$,
+   @f$r \xor= x_c \, z_t \, (x_t \oplus z_c \oplus 1)@f$.
+
+The reduction loop pivots row-by-row on a fresh qubit, rotating
+each non-trivial entry to X via H/S, clearing the row's other
+non-trivial qubits via CNOT, eliminating the column from other
+rows by row XOR, and finally rotating the pivot from X back to Z.
+After @f$k@f$ pivots the tableau is in canonical form.
+
+**Cost.** @f$O(k n^2)@f$ tableau ops, @f$O(n^2)@f$ Clifford gates
+emitted.  For Z2 LGT with @f$k = N - 2 \sim n/2@f$ this is well
+below the alternating-loop cost.
+
+**Preparation circuit.**  The Cliffords @f$G_1, \ldots, G_M@f$
+emitted as column ops satisfy
+@f$g_i' = G_M \cdots G_1 g_i G_1^\dagger \cdots G_M^\dagger@f$.
+The state stabilised by the original generators is
+@f[
+  \lvert\psi\rangle = G_1^\dagger G_2^\dagger \cdots G_M^\dagger \lvert b\rangle,
+@f]
+so the prep circuit applies X gates on the negative-phase pivots
+(taking @f$\lvert 0^n\rangle@f$ to @f$\lvert b\rangle@f$) followed by
+the recorded gate list in reverse with each @f$S@f$ replaced by
+@f$S^\dagger@f$ and H, CNOT self-conjugate.
+
+Implementation: `src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.{c,h}`,
+public entry `moonlab_ca_mps_apply_stab_subgroup_warmstart`.  Math
+write-up specific to 1+1D Z2 LGT in
+`docs/research/var_d_lattice_gauge_theory.md`.
+
 ## References
 
 All bounds and theorems cited above come from the references

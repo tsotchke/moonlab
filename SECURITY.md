@@ -4,10 +4,11 @@
 
 The following versions of MoonLab Quantum Simulator receive security updates:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
-| < 0.1   | :x:                |
+| Version  | Supported          | Notes                                |
+| -------- | ------------------ | ------------------------------------ |
+| 0.2.x    | :white_check_mark: | Current release line (0.2.1-dev on master); CA-MPS, var-D, gauge-aware warmstart, Z2 LGT |
+| 0.1.x    | :white_check_mark: | Maintenance; security fixes only     |
+| < 0.1    | :x:                | EOL                                  |
 
 ## Reporting a Vulnerability
 
