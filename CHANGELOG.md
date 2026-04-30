@@ -119,8 +119,45 @@ All targeted at v0.2.1.
   lands in v0.3 once the 1D var-D primitives are stable.  Public
   symbols are stable so downstream binders can wire against them
   now.  Smoke test: `tests/unit/test_ca_peps.c`.
+- **Centralised `moonlab_status_t` registry**
+  (`src/utils/moonlab_status.{h,c}`): generic int return type for
+  code that composes calls across modules, plus
+  `moonlab_status_to_string(module, status)` pretty-printer.
+  Existing per-module `*_error_t` enums coexist (no breaking
+  change); the registry documents the canonical zero / -1 / -2 /
+  -3 / -4 = SUCCESS / INVALID / QUBIT / OOM / BACKEND convention
+  every module already follows, plus the
+  `MOONLAB_STATUS_ERR_MODULE_BASE = -100` slot for module-specific
+  extensions.  Closes audit task #73.
+- **Dead-code-triage smoke harness**
+  (`tests/unit/test_tn_dead_code_smoke.c` +
+  `test_tn_mps_from_statevector.c`): exercises 9 public TN APIs
+  that ICC's `find-dead-code --grep-confirm` flagged as having no
+  in-tree caller (`tensor_einsum`, `tn_mps_from_statevector`,
+  `mpo_skyrmion_create`, `svd_left_canonicalize`,
+  `svd_right_canonicalize`, `dmrg_energy_variance`,
+  `tn_expectation_2q`, `tn_mpo_two_site`, `tn_histogram_create`,
+  `tensor_svd_truncate`).  Each was correct on its intended input;
+  the audit signal was missing test coverage, not broken
+  behaviour.
 
 ### Fixed
+
+- **Z2 LGT kinetic terms now exactly gauge-invariant**
+  (`src/applications/hep/lattice_z2_1d.c`): the previous form
+  `X_{2x} X_{2x+1} X_{2x+2} + Y_{2x} X_{2x+1} Y_{2x+2}` anti-commuted
+  with `G_x = X_{2x-1} Z_{2x} X_{2x+1}` term-by-term (`X_{2x}` vs
+  `Z_{2x}` was the only non-trivial overlap; one anti-commute = odd
+  parity), so the lambda penalty enforced gauge invariance only
+  energetically and var-D's gauge-aware warmstart drifted out of
+  the gauge sector under imag-time evolution.  Replace with the
+  Z2-link-operator-absorbed form
+  `K_x = -(t/2) X_{2x} Y_{2x+1} Y_{2x+2} + (t/2) Y_{2x} Y_{2x+1} X_{2x+2}`;
+  each piece commutes term-by-term with both `G_x` and
+  `G_{x+1}` (anti-commute count = 2 = even).  The full Hamiltonian
+  now preserves the gauge sector exactly under any unitary or
+  imag-time evolution.  Pinned by the term-by-term commutativity
+  check in `test_z2_lgt_pauli_sum.c`.
 
 - **Cross-platform QR numerics** (`src/algorithms/tensor_network/tensor.c`):
   `tensor_qr` gated the LAPACK Householder path on `HAS_ACCELERATE`,
