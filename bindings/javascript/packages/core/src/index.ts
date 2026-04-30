@@ -48,6 +48,12 @@ export {
 } from './ca-mps';
 export type { VarDConfig, Z2LgtPauliSum, PauliByte } from './ca-mps';
 
+// Noise channels (since 0.2.1).
+export * as noise from './noise';
+
+// Entanglement metrics (since 0.2.1).
+export * as entanglement from './entanglement';
+
 export { Circuit } from './circuit';
 export type {
   Gate,
