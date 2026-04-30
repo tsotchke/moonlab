@@ -20,6 +20,11 @@
 #include "../algorithms/quantum_geometry/qgt.h"
 #include "../algorithms/tensor_network/dmrg.h"
 #include "../algorithms/tensor_network/tn_state.h"
+#include "../algorithms/tensor_network/ca_mps.h"
+#include "../algorithms/tensor_network/ca_mps_var_d.h"
+#include "../algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
+#include "hep/lattice_z2_1d.h"
+#include "../utils/moonlab_status.h"
 #include <float.h>
 #include <limits.h>
 #include <math.h>
@@ -156,4 +161,99 @@ double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
     tn_mps_free(mps);
     mpo_free(mpo);
     return energy;
+}
+
+/* ================================================================== */
+/*  Variational-D ABI wrappers (since 0.2.1).                          */
+/* ================================================================== */
+
+int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
+                              const uint8_t* paulis,
+                              const double* coeffs,
+                              uint32_t num_terms,
+                              uint32_t max_outer_iters,
+                              double imag_time_dtau,
+                              uint32_t imag_time_steps_per_outer,
+                              uint32_t clifford_passes_per_outer,
+                              int composite_2gate,
+                              int warmstart,
+                              const uint8_t* stab_paulis,
+                              uint32_t stab_num_gens,
+                              double* out_final_energy) {
+    if (!state || !paulis || !coeffs || num_terms == 0) {
+        return CA_MPS_ERR_INVALID;
+    }
+    /* Map the int warmstart code to the public enum.  Out-of-range
+     * values fall through to IDENTITY rather than failing -- this
+     * matches the convention in the internal API for forward-compat. */
+    ca_mps_warmstart_t ws = CA_MPS_WARMSTART_IDENTITY;
+    switch (warmstart) {
+        case 1: ws = CA_MPS_WARMSTART_H_ALL; break;
+        case 2: ws = CA_MPS_WARMSTART_DUAL_TFIM; break;
+        case 3: ws = CA_MPS_WARMSTART_FERRO_TFIM; break;
+        case 4: ws = CA_MPS_WARMSTART_STABILIZER_SUBGROUP; break;
+        default: ws = CA_MPS_WARMSTART_IDENTITY; break;
+    }
+    ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
+    cfg.max_outer_iters             = (int)max_outer_iters;
+    cfg.imag_time_dtau              = imag_time_dtau;
+    cfg.imag_time_steps_per_outer   = (int)imag_time_steps_per_outer;
+    cfg.clifford_passes_per_outer   = (int)clifford_passes_per_outer;
+    cfg.composite_2gate             = composite_2gate;
+    cfg.warmstart                   = ws;
+    cfg.warmstart_stab_paulis       = stab_paulis;
+    cfg.warmstart_stab_num_gens     = stab_num_gens;
+    cfg.verbose                     = 0;
+
+    ca_mps_var_d_alt_result_t res = {0};
+    ca_mps_error_t e = moonlab_ca_mps_optimize_var_d_alternating(
+        state, paulis, coeffs, num_terms, &cfg, &res);
+    if (out_final_energy) *out_final_energy = res.final_energy;
+    return (int)e;
+}
+
+int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
+                                     const uint8_t* paulis,
+                                     uint32_t num_gens) {
+    return (int)moonlab_ca_mps_apply_stab_subgroup_warmstart(state,
+                                                               paulis,
+                                                               num_gens);
+}
+
+/* ================================================================== */
+/*  1+1D Z2 LGT ABI wrappers (since 0.2.1).                            */
+/* ================================================================== */
+
+int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
+                              double t_hop, double h_link,
+                              double mass, double gauss_penalty,
+                              uint8_t** out_paulis,
+                              double** out_coeffs,
+                              uint32_t* out_num_terms,
+                              uint32_t* out_num_qubits) {
+    z2_lgt_config_t cfg = {
+        .num_matter_sites = num_matter_sites,
+        .t_hop            = t_hop,
+        .h_link           = h_link,
+        .mass             = mass,
+        .gauss_penalty    = gauss_penalty
+    };
+    return z2_lgt_1d_build_pauli_sum(&cfg, out_paulis, out_coeffs,
+                                       out_num_terms, out_num_qubits);
+}
+
+int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
+                                  uint32_t site_x,
+                                  uint8_t* out_pauli) {
+    z2_lgt_config_t cfg = { .num_matter_sites = num_matter_sites };
+    return z2_lgt_1d_gauss_law_pauli(&cfg, site_x, out_pauli);
+}
+
+/* ================================================================== */
+/*  Diagnostic stringifier (since 0.2.1).                              */
+/* ================================================================== */
+
+const char* moonlab_status_string(int module, int status) {
+    return moonlab_status_to_string((moonlab_status_module_t)module,
+                                      (moonlab_status_t)status);
 }

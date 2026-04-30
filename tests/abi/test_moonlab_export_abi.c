@@ -272,6 +272,88 @@ int main(void) {
         }
     }
 
+    /* moonlab_z2_lgt_1d_build + moonlab_z2_lgt_1d_gauss_law: probe the
+     * 1+1D Z2 LGT Pauli-sum and Gauss-law accessors, new in 0.2.1. */
+    typedef int (*z2_build_fn)(uint32_t, double, double, double, double,
+                                uint8_t**, double**, uint32_t*, uint32_t*);
+    typedef int (*z2_gauss_fn)(uint32_t, uint32_t, uint8_t*);
+    dlerror();
+    z2_build_fn z2_build = (z2_build_fn)dlsym(h, "moonlab_z2_lgt_1d_build");
+    z2_gauss_fn z2_gauss = (z2_gauss_fn)dlsym(h, "moonlab_z2_lgt_1d_gauss_law");
+    if (!z2_build || !z2_gauss) {
+        fprintf(stderr, "dlsym(moonlab_z2_lgt_1d_*) failed: %s\n",
+                dlerror() ? dlerror() : "(null)");
+        failures++;
+    } else {
+        uint8_t* paulis = NULL;
+        double*  coeffs = NULL;
+        uint32_t T = 0, nq = 0;
+        int rc = z2_build(/*N=*/4, /*t=*/1.0, /*h=*/0.5, /*m=*/0.0,
+                           /*lambda=*/0.0, &paulis, &coeffs, &T, &nq);
+        if (rc != 0 || nq != 7 || T == 0) {
+            fprintf(stderr,
+                    "moonlab_z2_lgt_1d_build N=4 wrong: rc=%d nq=%u T=%u\n",
+                    rc, nq, T);
+            failures++;
+        } else {
+            fprintf(stdout, "moonlab_z2_lgt_1d_build N=4: nq=%u T=%u OK\n",
+                    nq, T);
+        }
+        free(paulis);
+        free(coeffs);
+
+        uint8_t gx[7] = {0};
+        rc = z2_gauss(/*N=*/4, /*site_x=*/1, gx);
+        /* G_1 = X_1 Z_2 X_3 -> bytes 0,1,3,1,0,0,0 (X=1, Z=3). */
+        if (rc != 0 || gx[1] != 1 || gx[2] != 3 || gx[3] != 1) {
+            fprintf(stderr,
+                    "moonlab_z2_lgt_1d_gauss_law: layout wrong (rc=%d, "
+                    "got %u %u %u %u %u %u %u)\n",
+                    rc, gx[0], gx[1], gx[2], gx[3], gx[4], gx[5], gx[6]);
+            failures++;
+        } else {
+            fprintf(stdout, "moonlab_z2_lgt_1d_gauss_law N=4 site=1 OK\n");
+        }
+    }
+
+    /* moonlab_status_string: probe the diagnostic stringifier. */
+    typedef const char* (*status_fn)(int, int);
+    dlerror();
+    status_fn status = (status_fn)dlsym(h, "moonlab_status_string");
+    if (!status) {
+        fprintf(stderr, "dlsym(moonlab_status_string) failed\n");
+        failures++;
+    } else {
+        const char* ok = status(/*module=GENERIC=*/0, /*status=SUCCESS=*/0);
+        const char* err = status(/*module=CA_MPS=*/1, /*status=INVALID=*/-1);
+        if (!ok || !err || strcmp(ok, "SUCCESS") != 0 ||
+            strcmp(err, "ERR_INVALID") != 0) {
+            fprintf(stderr,
+                    "moonlab_status_string: unexpected (%s, %s)\n",
+                    ok ? ok : "(null)", err ? err : "(null)");
+            failures++;
+        } else {
+            fprintf(stdout, "moonlab_status_string OK\n");
+        }
+    }
+
+    /* moonlab_ca_mps_var_d_run + moonlab_ca_mps_gauge_warmstart:
+     * dlsym-find the new ABI entry points (don't run them; the
+     * existing CA-MPS handle creation is already exercised by
+     * test_qrng's CA-MPS API probes elsewhere). */
+    if (!dlsym(h, "moonlab_ca_mps_var_d_run")) {
+        fprintf(stderr, "dlsym(moonlab_ca_mps_var_d_run) failed\n");
+        failures++;
+    } else {
+        fprintf(stdout, "moonlab_ca_mps_var_d_run dlsym OK\n");
+    }
+    if (!dlsym(h, "moonlab_ca_mps_gauge_warmstart")) {
+        fprintf(stderr, "dlsym(moonlab_ca_mps_gauge_warmstart) failed\n");
+        failures++;
+    } else {
+        fprintf(stdout, "moonlab_ca_mps_gauge_warmstart dlsym OK\n");
+    }
+
     dlclose(h);
 
     if (failures) {

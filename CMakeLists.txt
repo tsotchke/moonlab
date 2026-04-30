@@ -1363,6 +1363,14 @@ if(QSIM_BUILD_TESTS)
             COMMAND test_tn_dead_code_smoke)
         set_tests_properties(unit_tn_dead_code_smoke
             PROPERTIES TIMEOUT 30)
+
+        # MBL dead-code smoke (construct_lioms, scan_phase_diagram).
+        # Closes two more dead-code triage entries.
+        add_executable(test_mbl_smoke tests/unit/test_mbl_smoke.c)
+        target_link_libraries(test_mbl_smoke
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_mbl_smoke COMMAND test_mbl_smoke)
+        set_tests_properties(unit_mbl_smoke PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401

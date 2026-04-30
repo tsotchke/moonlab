@@ -338,6 +338,155 @@ double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
                                        uint32_t max_bond_dim,
                                        uint32_t num_sweeps);
 
+/* ---- Variational-D ground-state search (stable from 0.2.1) --------- */
+
+/**
+ * @brief Variational-D alternating ground-state search on a CA-MPS.
+ *
+ * Drives @p state toward a low-energy CA-MPS approximation of the
+ * ground state of @p paulis (a Pauli-sum Hamiltonian) by alternating
+ * a greedy local-Clifford D-update with imag-time evolution on
+ * |phi>.  See `docs/research/ca_mps.md` §5 and `MATH.md` §11.
+ *
+ * Entry-point wrapper around the internal
+ * @c moonlab_ca_mps_optimize_var_d_alternating with sensible defaults
+ * exposed via dedicated arguments.  The full-config form is available
+ * to in-tree callers via `algorithms/tensor_network/ca_mps_var_d.h`.
+ *
+ * @param state                  CA-MPS handle (mutated in place).
+ * @param paulis                 Flat (num_terms, num_qubits) uint8 Pauli
+ *                               array (0=I, 1=X, 2=Y, 3=Z).
+ * @param coeffs                 Real coefficients, length num_terms.
+ * @param num_terms              Pauli-sum length.
+ * @param max_outer_iters        Outer alternating-loop cap.
+ * @param imag_time_dtau         Imag-time step size.
+ * @param imag_time_steps_per_outer  Trotter cycles per outer iter.
+ * @param clifford_passes_per_outer  Greedy D-update passes per outer iter.
+ * @param composite_2gate        Pass 1 to enable 2-gate composite moves.
+ * @param warmstart              0=IDENTITY, 1=H_ALL, 2=DUAL_TFIM,
+ *                               3=FERRO_TFIM, 4=STABILIZER_SUBGROUP.
+ * @param stab_paulis            For warmstart=4: (k, num_qubits) generators.
+ *                               NULL for other warmstarts.
+ * @param stab_num_gens          For warmstart=4: number of generators k.
+ * @param[out] out_final_energy  Final variational energy (NULL if not wanted).
+ *
+ * @return 0 on success, negative ::ca_mps_error_t on failure.
+ *
+ * @since 0.2.1
+ */
+int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
+                              const uint8_t* paulis,
+                              const double* coeffs,
+                              uint32_t num_terms,
+                              uint32_t max_outer_iters,
+                              double imag_time_dtau,
+                              uint32_t imag_time_steps_per_outer,
+                              uint32_t clifford_passes_per_outer,
+                              int composite_2gate,
+                              int warmstart,
+                              const uint8_t* stab_paulis,
+                              uint32_t stab_num_gens,
+                              double* out_final_energy);
+
+/**
+ * @brief Apply the gauge-aware stabilizer-subgroup warmstart Clifford.
+ *
+ * Build and apply the symplectic-Gauss-Jordan Clifford that places
+ * `state->D|0^n>` in the simultaneous +1 eigenspace of every supplied
+ * Pauli generator.  Standalone use case (no var-D loop): ground-state
+ * preparation for stabilizer-coded Hamiltonians, surface / toric /
+ * repetition codes, and lattice gauge theories.
+ *
+ * Thin wrapper around
+ * `moonlab_ca_mps_apply_stab_subgroup_warmstart` (the internal entry
+ * point in `ca_mps_var_d_stab_warmstart.h`); the wrapper exists so
+ * the stable ABI declaration uses an `int` return type independent
+ * of the internal `ca_mps_error_t` enum.
+ *
+ * @param state       CA-MPS handle (mutated in place, gates absorbed
+ *                    into the Clifford prefactor D).
+ * @param paulis      Flat (num_gens, num_qubits) uint8 array of
+ *                    pairwise-commuting generators.
+ * @param num_gens    Number of generators (>= 1, <= num_qubits).
+ *
+ * @return 0 on success, ::CA_MPS_ERR_INVALID (-1) if generators
+ *         don't pairwise commute or aren't independent.
+ *
+ * @since 0.2.1
+ */
+int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
+                                     const uint8_t* paulis,
+                                     uint32_t num_gens);
+
+/* ---- 1+1D Z2 lattice gauge theory (stable from 0.2.1) -------------- */
+
+/**
+ * @brief Build the qubit Pauli sum for a 1+1D Z2 LGT Hamiltonian.
+ *
+ * Allocates `*out_paulis` and `*out_coeffs`; caller must free both.
+ * Encoding: 0=I, 1=X, 2=Y, 3=Z; row-major (num_terms, num_qubits).
+ * Hamiltonian written with exactly gauge-invariant kinetic terms;
+ * see `docs/research/var_d_lattice_gauge_theory.md`.
+ *
+ * @param num_matter_sites N >= 2.
+ * @param t_hop          Matter-hopping amplitude.
+ * @param h_link         Electric-field strength on each link.
+ * @param mass           Staggered fermion mass.
+ * @param gauss_penalty  Lambda; redundant under exactly gauge-
+ *                       invariant H, but kept for compatibility.
+ * @param[out] out_paulis      Allocated Pauli-byte array.
+ * @param[out] out_coeffs      Allocated coefficient array.
+ * @param[out] out_num_terms   Pauli-sum length.
+ * @param[out] out_num_qubits  Total qubit count = 2 * N - 1.
+ *
+ * @return 0 on success, negative on bad input or OOM.
+ *
+ * @since 0.2.1
+ */
+int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
+                              double t_hop, double h_link,
+                              double mass, double gauss_penalty,
+                              uint8_t** out_paulis,
+                              double** out_coeffs,
+                              uint32_t* out_num_terms,
+                              uint32_t* out_num_qubits);
+
+/**
+ * @brief Write the Gauss-law operator at interior site x into out_pauli.
+ *
+ * `G_x = X_{2x-1} Z_{2x} X_{2x+1}` for x in [1, N-2].  out_pauli must
+ * point to a buffer of length 2 * num_matter_sites - 1.
+ *
+ * @return 0 on success, negative on out-of-range x.
+ *
+ * @since 0.2.1
+ */
+int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
+                                  uint32_t site_x,
+                                  uint8_t* out_pauli);
+
+/* ---- Diagnostic stringifier (stable from 0.2.1) -------------------- */
+
+/**
+ * @brief Pretty-print a Moonlab status code for the named module.
+ *
+ * Returns a static string for canonical codes (SUCCESS, ERR_INVALID,
+ * ERR_QUBIT, ERR_OOM, ERR_BACKEND); a module-specific name for known
+ * extensions; a thread-local "<MODULE status N>" fallback otherwise.
+ * Never returns NULL.
+ *
+ * @param module  One of the moonlab_status_module_t values:
+ *                0=GENERIC, 1=CA_MPS, 2=CA_MPS_VAR_D,
+ *                3=CA_MPS_STAB_WARMSTART, 4=CA_PEPS,
+ *                5=TN_STATE, 6=TN_GATE, 7=TN_MEASURE, 8=TENSOR,
+ *                9=CONTRACT, 10=SVD_COMPRESS, 11=CLIFFORD,
+ *                12=PARTITION, 13=DIST_GATE, 14=MPI_BRIDGE.
+ * @param status  Integer return code.
+ *
+ * @since 0.2.1
+ */
+const char* moonlab_status_string(int module, int status);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
