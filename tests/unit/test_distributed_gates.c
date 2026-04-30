@@ -16,6 +16,7 @@
 #include "../../src/distributed/mpi_bridge.h"
 #include "../../src/distributed/state_partition.h"
 #include "../../src/distributed/distributed_gates.h"
+#include "../../src/distributed/collective_ops.h"
 #include <mpi.h>
 #include <complex.h>
 #include <math.h>
@@ -259,6 +260,64 @@ int main(int argc, char** argv) {
                 CHECK(fabs(p_ones_global - 0.5) < 1e-10,
                       "GHZ: P(|1...1>) = %.10f (expected 0.5)",
                       p_ones_global);
+
+                /* Coverage smoke: exercise additional public symbols
+                 * in src/distributed/ that lack in-tree callers.
+                 * Each call drives the API path; numerical assertions
+                 * are loose -- the point is to surface API breakage,
+                 * not pin specific physics.  Calls limited to those
+                 * with simple collective semantics so all ranks
+                 * uniformly enter the MPI ops below.  More
+                 * sophisticated patterns (collective_top_k_states,
+                 * partition_fetch_remote / scatter_updates) need
+                 * carefully-matched per-rank descriptors -- queued
+                 * for a follow-up MPI-only test under v0.3. */
+
+                /* distributed_gates.h: multi-controlled X.  GHZ has
+                 * 50/50 weight on |0...0> and |1...1>; flipping with
+                 * controls = (q0, q1) on the |1...1> branch routes
+                 * through the cross-partition multi-control path. */
+                if (num_qubits >= 3) {
+                    uint32_t controls[2] = { 0, 1 };
+                    dist_gate_error_t dg = dist_mcx(
+                        pstate2, controls, 2, num_qubits - 1);
+                    CHECK(dg == DIST_GATE_SUCCESS,
+                          "dist_mcx({0,1}, %u) = %d",
+                          num_qubits - 1, dg);
+                }
+
+                /* collective_ops.h: per-qubit X/Y/Z expectations and
+                 * Pauli-string expectation.  Each is a pure allreduce
+                 * with the same descriptor on every rank, so calling
+                 * with identical scalar args from all ranks is safe. */
+                {
+                    double ev_x = 0.0, ev_y = 0.0, ev_z = 0.0;
+                    collective_error_t ce =
+                        collective_expectation_x(pstate2, 0, &ev_x);
+                    CHECK(ce == COLLECTIVE_SUCCESS,
+                          "collective_expectation_x(0) = %d", ce);
+                    ce = collective_expectation_y(pstate2, 0, &ev_y);
+                    CHECK(ce == COLLECTIVE_SUCCESS,
+                          "collective_expectation_y(0) = %d", ce);
+                    ce = collective_expectation_z(pstate2, 0, &ev_z);
+                    CHECK(ce == COLLECTIVE_SUCCESS,
+                          "collective_expectation_z(0) = %d", ce);
+
+                    char* pauli_string = malloc(num_qubits + 1);
+                    if (pauli_string) {
+                        for (uint32_t q = 0; q < num_qubits; q++) {
+                            pauli_string[q] = 'Z';
+                        }
+                        pauli_string[num_qubits] = '\0';
+                        double pauli_ev = 0.0;
+                        ce = collective_expectation_pauli(
+                            pstate2, pauli_string, &pauli_ev);
+                        CHECK(ce == COLLECTIVE_SUCCESS,
+                              "collective_expectation_pauli('%s') = %d",
+                              pauli_string, ce);
+                        free(pauli_string);
+                    }
+                }
 
                 partition_state_free(pstate2);
             }
