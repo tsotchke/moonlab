@@ -5,7 +5,7 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS + var-D + Z2 LGT
+## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS + var-D + Z2 LGT (release-ready as 0.2.1)
 
 Work on master after the v0.2.0 tag.  Three threads:
 
@@ -129,6 +129,18 @@ All targeted at v0.2.1.
   every module already follows, plus the
   `MOONLAB_STATUS_ERR_MODULE_BASE = -100` slot for module-specific
   extensions.  Closes audit task #73.
+- **Stable ABI additions** (`src/applications/moonlab_export.h`):
+  five new entry points join the committed downstream-facing
+  surface, all stable from 0.2.1 forward:
+  `moonlab_ca_mps_var_d_run` (alternating var-D ground-state search
+  with all warmstart options exposed via int code),
+  `moonlab_ca_mps_gauge_warmstart` (standalone stabilizer-subgroup
+  Clifford preparation),
+  `moonlab_z2_lgt_1d_build` and `moonlab_z2_lgt_1d_gauss_law`
+  (1+1D Z2 LGT Pauli-sum + Gauss-law accessors),
+  `moonlab_status_string` (diagnostic stringifier for any
+  Moonlab status code).  All five are dlsym-findable and
+  pinned by `tests/abi/test_moonlab_export_abi.c`.
 - **Dead-code-triage smoke harness**
   (`tests/unit/test_tn_dead_code_smoke.c` +
   `test_tn_mps_from_statevector.c`): exercises 9 public TN APIs
