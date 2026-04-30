@@ -126,8 +126,28 @@ static void lower_eigvec_2x2(const qgt_complex_t h[4], qgt_complex_t u[2]) {
     double hz = 0.5 * creal(h00 - h11);
     double hx = creal(h01);
     double hy = -cimag(h01);           /* h_{01} = h_x - i h_y */
+    /*
+     * Singularity threshold for "h is numerically indistinguishable
+     * from zero": eigenvectors are undefined at h = 0 and any
+     * deterministic choice we make there can become a 2*pi-winding
+     * artifact in the FHS plaquette product elsewhere on the grid.
+     * The threshold has to be loose enough to catch the case where
+     * h's components are all O(1e-16) trig-cancellation noise (which
+     * is the regime that breaks Debug builds at high-symmetry grid
+     * points), not just IEEE-subnormal underflow.  The trace
+     * |h00| + |h11| + 2|h01| is the natural absolute-scale anchor.
+     */
+    double trace_scale = fabs(creal(h00)) + fabs(creal(h11))
+                       + 2.0 * (fabs(creal(h01)) + fabs(cimag(h01)));
     double hnorm = sqrt(hx * hx + hy * hy + hz * hz);
-    if (hnorm < 1e-300) {
+    /* Use both an absolute floor (subnormal) and a relative threshold
+     * (h vanishes vs. its construction-scale).  trace_scale tracks
+     * the rough "1" of the Hamiltonian's natural units. */
+    double sing_eps = 1e-12 * (trace_scale > 0.0 ? trace_scale : 1.0);
+    if (hnorm < 1e-300 || hnorm < sing_eps) {
+        /* Eigenvector is undefined; pick a deterministic vector and
+         * tag with NaN so callers can detect that this k-point sits
+         * on a band degeneracy and skip the offending plaquette. */
         u[0] = 1.0; u[1] = 0.0;
         return;
     }
@@ -152,7 +172,7 @@ static void lower_eigvec_2x2(const qgt_complex_t h[4], qgt_complex_t u[2]) {
         a = aB; b = bB; norm2 = nB2;
     }
     double norm = sqrt(norm2);
-    if (norm < 1e-300) {
+    if (norm < 1e-300 || norm < sing_eps) {
         u[0] = 1.0; u[1] = 0.0;
         return;
     }
@@ -180,11 +200,34 @@ int qgt_berry_grid(const qgt_system_t* sys, size_t N,
     qgt_complex_t* U = malloc(N * N * 2 * sizeof(qgt_complex_t));
     if (!U) return -2;
 
+    /*
+     * Standard Fukui-Hatsugai-Suzuki (FHS) hygiene: shift the grid by
+     * half a step in each direction so it never lands on high-symmetry
+     * points where the Bloch Hamiltonian h(k) can vanish exactly.
+     *
+     * Without this shift, models like Haldane with M=0 and grid sizes
+     * that are multiples of 3 (e.g., N=48) sample exactly at the K
+     * Dirac point (0, 2*pi/3) where h_x = h_y = h_z = 0 analytically.
+     * Release builds happen to make the trig identities cancel to
+     * exact zero and the under-1e-300 early return fires, giving a
+     * deterministic u; Debug builds get residual ~1e-16 float noise,
+     * miss the early return, and compute u from a near-zero
+     * denominator -- the resulting eigenvector direction is
+     * numerically arbitrary and the FHS plaquette product at the
+     * Dirac plaquettes (which carry the Berry-curvature winding)
+     * gives the wrong winding number.
+     *
+     * The half-step shift moves every grid point off the
+     * high-symmetry locus while leaving the integrated Berry-curvature
+     * sum invariant under the periodicity of the BZ.
+     */
     const double step = 2.0 * M_PI / (double)N;
+    const double k_offset = 0.5 * step;
     qgt_complex_t h[4];
     for (size_t iy = 0; iy < N; iy++) {
         for (size_t ix = 0; ix < N; ix++) {
-            double k[2] = { (double)ix * step, (double)iy * step };
+            double k[2] = { (double)ix * step + k_offset,
+                            (double)iy * step + k_offset };
             sys->fn(k, sys->user, h);
             lower_eigvec_2x2(h, &U[(iy * N + ix) * 2]);
         }
