@@ -1328,6 +1328,17 @@ if(QSIM_BUILD_TESTS)
         target_link_libraries(test_gauge_warmstart PRIVATE quantumsim ${MATH_LIBRARY})
         add_test(NAME unit_gauge_warmstart COMMAND test_gauge_warmstart)
         set_tests_properties(unit_gauge_warmstart PROPERTIES TIMEOUT 30)
+
+        # Round-trip test for tn_mps_from_statevector.  Closes the ICC
+        # dead-code triage entry for that public function.
+        add_executable(test_tn_mps_from_statevector
+            tests/unit/test_tn_mps_from_statevector.c)
+        target_link_libraries(test_tn_mps_from_statevector
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_tn_mps_from_statevector
+            COMMAND test_tn_mps_from_statevector)
+        set_tests_properties(unit_tn_mps_from_statevector
+            PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
