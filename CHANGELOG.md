@@ -5,7 +5,11 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS + var-D + Z2 LGT (release-ready as 0.2.1)
+## [Unreleased]
+
+(No unreleased changes since v0.2.1.)
+
+## [0.2.1] - 2026-04-30
 
 Work on master after the v0.2.0 tag.  Three threads:
 

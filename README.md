@@ -903,10 +903,12 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.2.0},
+    version      = {v0.2.1},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,
+                    Clifford-Assisted MPS, variational-D, lattice gauge
+                    theory, Z2 LGT, gauge-aware warmstart,
                     topological quantum computing, DMRG, VQE, QAOA,
                     Chern insulators, quantum geometric tensor}
 }
