@@ -47,7 +47,7 @@ int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
     const uint32_t nq   = 2u * N - 1u;
 
     /* Term-count upper bound:
-     *   hopping:   2 * (N - 1)         (XXX + YXY per bond)
+     *   hopping:   2 * (N - 1)         (XYY + YYX per bond, gauge-invariant)
      *   electric:  (N - 1)             (Z on each link)
      *   mass:      N                   (Z on each matter site)
      *   gauss:     2 * (N - 2)         (lambda * I + (-lambda) * G_x)
@@ -68,20 +68,53 @@ int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
     uint32_t k = 0;
 
     /* --- matter hopping with parallel transport --- */
-    /* For each bond x = 0..N-2: -t * (X_{2x} X_{2x+1} X_{2x+2} +
-     *                                  Y_{2x} X_{2x+1} Y_{2x+2}) */
+    /*
+     * Gauge-invariant matter hopping with the link operator U = X
+     * absorbed into the JW expression.  Earlier Moonlab releases used
+     *   X_{2x} X_{2x+1} X_{2x+2} + Y_{2x} X_{2x+1} Y_{2x+2}
+     * which is the bare JW form; both pieces anti-commute with G_x =
+     * X_{2x-1} Z_{2x} X_{2x+1} (the Z-X overlap at qubit 2x flips
+     * parity once -> odd -> anti-commute), so the lambda penalty was
+     * enforcing gauge invariance only energetically.
+     *
+     * Inserting the Z2 gauge-link operator U_{2x+1} = X_{2x+1} into
+     * the JW expression and combining with the JW string Z_{2x+1}
+     * gives X * Z = -i Y on the link qubit, and the combined hop
+     * (after taking the Hermitian h.c. partner) reduces to
+     *
+     *   K_x = (1/2) * [X_{2x} Y_{2x+1} Y_{2x+2} - Y_{2x} Y_{2x+1} X_{2x+2}]
+     *
+     * Each piece commutes with G_x and G_{x+1} term-by-term:
+     *   X_{2x} Y_{2x+1} Y_{2x+2}  vs G_x = X Z X (qubits 2x-1, 2x, 2x+1):
+     *     qubit 2x:   X vs Z -> anti
+     *     qubit 2x+1: Y vs X -> anti
+     *     -> 2 anti = even = commute.
+     *   Same operator vs G_{x+1} = X Z X (qubits 2x+1, 2x+2, 2x+3):
+     *     qubit 2x+1: Y vs X -> anti
+     *     qubit 2x+2: Y vs Z -> anti
+     *     -> 2 anti = even = commute.
+     * Y X Y form is symmetric under x <-> x+1 and gives the same
+     * commutativity.  Verified by tests/unit/test_z2_lgt_pauli_sum.c
+     * (commutativity check) and tests/unit/test_gauge_warmstart.c
+     * (post-warmstart-after-evolution Gauss-law violation stays at
+     * machine zero for N=4).
+     *
+     * Coefficient: -t/2 per piece so the resulting hop matrix
+     * element <x|H|x+1> = -t (matching the bare JW + gauge link
+     * expansion -- we factor out the 1/2 from the symmetrisation).
+     */
     for (uint32_t x = 0; x + 1 < N; x++) {
         const uint32_t qm0 = 2 * x;
         const uint32_t ql  = 2 * x + 1;
         const uint32_t qm1 = 2 * x + 2;
 
         zero_pauli(p, nq);
-        p[qm0] = 1; p[ql] = 1; p[qm1] = 1;          /* XXX */
-        add_term(paulis, coeffs, &k, nq, p, -cfg->t_hop);
+        p[qm0] = 1; p[ql] = 2; p[qm1] = 2;          /* XYY */
+        add_term(paulis, coeffs, &k, nq, p, -0.5 * cfg->t_hop);
 
         zero_pauli(p, nq);
-        p[qm0] = 2; p[ql] = 1; p[qm1] = 2;          /* YXY */
-        add_term(paulis, coeffs, &k, nq, p, -cfg->t_hop);
+        p[qm0] = 2; p[ql] = 2; p[qm1] = 1;          /* YYX */
+        add_term(paulis, coeffs, &k, nq, p, +0.5 * cfg->t_hop);
     }
 
     /* --- electric field on each link --- */
