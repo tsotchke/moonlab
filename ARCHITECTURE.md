@@ -80,7 +80,9 @@ src/
       chern_kpm.{c,h}     matrix-free Chebyshev-KPM marker (scales to L ~ 300)
     quantum_geometry/
       qgt.{c,h}     quantum geometric tensor, Berry, Wilson loop, SSH winding
-    tensor_network/ MPS, MPO, DMRG, TDVP, CTMRG (partial)
+    tensor_network/ MPS, MPO, DMRG, TDVP, CTMRG (partial), CA-MPS,
+                    var-D ground-state search, CA-PEPS scaffold,
+                    gauge-aware stabilizer-subgroup warmstart
     bell_tests.{c,h} CHSH / GHZ / Mermin
     mbl/            many-body localisation
   applications/
@@ -88,6 +90,7 @@ src/
     qrng.{c,h}         v3 quantum RNG (Bell-verified / Grover / direct)
     nist_sp800_22.c    15-test NIST statistical battery
     quantum_volume.{c,h}  IBM Quantum Volume harness
+    hep/              HEP applications: 1+1D Z2 lattice gauge theory
   optimization/
     memory_align.{c,h} AMX-aligned allocation
     simd_*.{c,h}       AVX-512 / AVX2 / NEON / SVE kernels
@@ -185,16 +188,67 @@ split-CTMRG, BP + cluster contraction, isoTNS) are queued for 0.3.
 
 #### Clifford-Assisted MPS (CA-MPS, `ca_mps.{c,h}`, since 0.2.1)
 
-Hybrid state representation @f$\lvert\psi\rangle = C\lvert\phi\rangle@f$
+Hybrid state representation @f$\lvert\psi\rangle = D\lvert\phi\rangle@f$
 combining the Aaronson-Gottesman tableau backend (`backends/clifford/`)
 with the existing MPS factor.  Clifford gates update only the tableau
 (O(n) bit ops, no MPS cost); non-Clifford gates push the
 Clifford-conjugated Pauli rotation into the MPS factor.  Headline
 benchmark: 64x bond-dim advantage and ~22 000x speedup against plain
-MPS on a random Clifford circuit at N=12 (`bench_ca_mps`).  Full design,
-gate-application rules, expectation formulas, and the queued 2D
-extension (CA-PEPS, planned for 0.4) are in
+MPS on a random Clifford circuit at N=12 (`bench_ca_mps`).  Full
+design, gate-application rules, expectation formulas, and the 2D
+extension (CA-PEPS, scaffolded in v0.2.1, gate logic in v0.3) are in
 `docs/research/ca_mps.md`.
+
+#### Variational-D ground-state search (`ca_mps_var_d.{c,h}`, since 0.2.1)
+
+Extends CA-MPS from circuit simulation to ground-state search by
+alternating two updates:
+
+1. **|phi>-update** -- imag-time Trotter sweep over the Pauli sum,
+   each non-Clifford rotation conjugated through @f$D@f$ before
+   pushing into @f$\lvert\phi\rangle@f$.
+2. **D-update** -- greedy local-Clifford search on
+   @f$\langle\phi\rvert D^\dagger H D\lvert\phi\rangle@f$, with
+   single-qubit (`H`, `S`, `S^\dagger`) and optional two-qubit
+   (`CNOT`, `CZ`, `SWAP`) candidates plus 2-gate composite moves to
+   escape 1-gate local minima.
+
+Warmstart enum (`ca_mps_warmstart_t`) seeds @f$D@f$ in a productive
+basin: `IDENTITY`, `H_ALL`, `DUAL_TFIM` (H_all + CNOT chain — the
+Kramers-Wannier dual basis), `FERRO_TFIM` (cat-state encoder),
+`STABILIZER_SUBGROUP` (gauge-aware, see below).  Validated on TFIM,
+XXZ Heisenberg, and kagome 12-site frustrated AFM under
+`examples/tensor_network/ca_mps_var_d_*`.
+
+#### Gauge-aware warmstart (`ca_mps_var_d_stab_warmstart.{c,h}`, since 0.2.1)
+
+Aaronson-Gottesman symplectic-Gauss-Jordan elimination on a Pauli
+tableau.  Takes a list of commuting Pauli generators
+@f$\{g_0, \ldots, g_{k-1}\}@f$ on n qubits and emits an O(n^2)-gate
+Clifford circuit @f$D_S@f$ such that
+@f$D_S\lvert 0^n\rangle@f$ is in the simultaneous +1 eigenspace of
+every @f$g_i@f$.  Used by var-D's `STABILIZER_SUBGROUP` warmstart;
+also a standalone primitive for stabilizer-coded problems (LGT
+Gauss-law projectors, surface / toric / colour codes, repetition
+codes).  Cost: O(n^2) gates emitted, O(k * n^2) tableau ops.
+
+#### 1+1D Z2 lattice gauge theory (`src/applications/hep/lattice_z2_1d.{c,h}`, since 0.2.1)
+
+Pauli-sum builder for the Schwinger-style 1D chain on `2N - 1`
+qubits (N matter + N - 1 link).  Includes matter hopping
+(cluster-form), electric-field on links, staggered fermion mass,
+and the Gauss-law penalty
+@f$\lambda \sum_x (I - G_x)@f$.  Companion ops:
+`z2_lgt_1d_gauss_law_pauli` (interior @f$G_x@f$),
+`z2_lgt_1d_wilson_line_pauli`.  Demo:
+`examples/hep/z2_gauge_var_d.c`; math:
+`docs/research/var_d_lattice_gauge_theory.md`.
+
+#### CA-PEPS (`ca_peps.{c,h}`, scaffold since 0.2.1)
+
+Public-API scaffold for the 2D extension of CA-MPS.  Symbols
+stable; gate-application and 2D contraction logic land in v0.3.
+Smoke test in `tests/unit/test_ca_peps.c`.
 
 #### Decomposition kernels (`tensor.c`)
 

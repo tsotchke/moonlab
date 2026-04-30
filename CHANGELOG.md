@@ -5,12 +5,31 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS primitive
+## [Unreleased] -- post-v0.2.0 CI hardening + CA-MPS + var-D + Z2 LGT
 
-Work on master after the v0.2.0 tag: bring up the first public CI run,
-fix cross-platform numerical issues, and add the first iteration of
-the Clifford-Assisted Matrix Product State (CA-MPS) primitive.  All
-intended to fold into v0.2.1.
+Work on master after the v0.2.0 tag.  Three threads:
+
+1.  **CI hardening + cross-platform numerics**: bring up the first
+    public CI run, fix Linux/Windows/aarch64 platform issues that
+    were masked by macOS-only development, refresh top-level docs,
+    centralise error enums.
+2.  **Clifford-Assisted Matrix Product State (CA-MPS)**: hybrid
+    `|psi> = D|phi>` representation that absorbs the Clifford
+    structure of a circuit into a tableau and only pushes
+    non-Clifford rotations into the MPS factor.  Headline:
+    64x bond-dim advantage + 13884x speedup vs plain MPS on
+    stabilizer-rich states at n=12.
+3.  **Variational-D (var-D) + 1+1D Z2 lattice gauge theory + the
+    gauge-aware stabilizer-subgroup warmstart**: extends CA-MPS
+    from circuit simulation to ground-state search by alternating
+    a greedy local-Clifford update on D with imag-time evolution
+    on |phi>.  First HEP application: matter-coupled Z2 gauge
+    theory on a 1D chain with the Aaronson-Gottesman symplectic-
+    Gauss-Jordan Clifford builder generalising "warmstart" from
+    a hard-coded basis transform to any commuting Pauli generator
+    set.
+
+All targeted at v0.2.1.
 
 ### Added
 
@@ -45,6 +64,61 @@ intended to fold into v0.2.1.
   (`schema: moonlab/ca_mps_bench_v1`) + human-readable table.
   Headline: 64x bond-dim advantage + 13884x speedup at n=12 on a
   stabilizer state.
+- **Variational-D mode for CA-MPS**
+  (`src/algorithms/tensor_network/ca_mps_var_d.{c,h}`): greedy
+  local-Clifford search that mutates `D` to minimise
+  `<psi|H|psi> = <phi|D^dag H D|phi>` at fixed `|phi>`, plus an
+  alternating loop that interleaves the Clifford-only D-update
+  with imag-time evolution on `|phi>`.  Public API:
+  `moonlab_ca_mps_optimize_var_d_clifford_only` (D-only,
+  ground-state energy gradient via Clifford basis rotations) and
+  `moonlab_ca_mps_optimize_var_d_alternating` (alternating D + |phi>
+  loop).  Config struct exposes `max_passes`, `improvement_eps`,
+  `include_2q_gates`, `composite_2gate` (2-gate composite moves to
+  escape 1-gate local minima), and the warmstart enum.  Default
+  warmstarts: `IDENTITY`, `H_ALL`, `DUAL_TFIM` (H_all + CNOT chain
+  - the Kramers-Wannier-dual basis), `FERRO_TFIM` (H + CNOT chain
+  - the cat-state encoder).  Validated on n=10, 12 TFIM, XXZ
+  Heisenberg (`examples/tensor_network/ca_mps_var_d_heisenberg.c`),
+  kagome 12-site frustrated AFM
+  (`examples/tensor_network/ca_mps_var_d_kagome12.c`), and direct
+  comparison to plain DMRG
+  (`examples/tensor_network/ca_mps_var_d_vs_plain_dmrg.c`).
+- **1+1D Z2 lattice gauge theory**
+  (`src/applications/hep/lattice_z2_1d.{c,h}`): Pauli-sum builder
+  for the Schwinger-style 1D chain with N matter sites + N-1 link
+  qubits (total `2N-1`), matter hopping (cluster-form), electric
+  field on links, staggered fermion mass, and Gauss-law penalty.
+  Companion ops: `z2_lgt_1d_gauss_law_pauli` (the interior
+  `G_x = X_{2x-1} Z_{2x} X_{2x+1}` operator) and
+  `z2_lgt_1d_wilson_line_pauli` (Z product across consecutive
+  link qubits).  Demo driver:
+  `examples/hep/z2_gauge_var_d.c` sweeps the electric-field
+  strength `h` and reports plain-MPS vs var-D entropy +
+  Gauss-law violation per `h`.  Math write-up:
+  `docs/research/var_d_lattice_gauge_theory.md`.
+- **Gauge-aware stabilizer-subgroup warmstart for var-D**
+  (`src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.{c,h}`):
+  Aaronson-Gottesman symplectic-Gauss-Jordan Clifford builder.
+  Takes any list of commuting Pauli generators (the stabilizer
+  subgroup S of an LGT, surface code, toric code, repetition
+  code, etc.) on n qubits and emits an O(n^2)-gate Clifford
+  circuit C such that `C|0^n>` is in the simultaneous +1 eigenspace
+  of every `g` in S.  Exposed as the new var-D warmstart
+  `CA_MPS_WARMSTART_STABILIZER_SUBGROUP` (config carries the
+  generator list).  Public entry point also callable on its own:
+  `moonlab_ca_mps_apply_stab_subgroup_warmstart`.  Unit-tested on
+  Bell stabilizers `{XX, ZZ}`, GHZ-3 `{XXX, ZZI, IZZ}`, and the
+  four interior Gauss-law operators of an N=4 Z2 LGT, plus
+  the rejection path for anti-commuting input
+  (`tests/unit/test_gauge_warmstart.c`).
+- **CA-PEPS 2D scaffolding**
+  (`src/algorithms/tensor_network/ca_peps.{c,h}`): public-API
+  scaffold for the 2D extension of CA-MPS.  Currently
+  `NOT_IMPLEMENTED` — the gate-application and contraction logic
+  lands in v0.3 once the 1D var-D primitives are stable.  Public
+  symbols are stable so downstream binders can wire against them
+  now.  Smoke test: `tests/unit/test_ca_peps.c`.
 
 ### Fixed
 

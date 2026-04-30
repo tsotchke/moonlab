@@ -37,7 +37,8 @@ and integrates it directly into the VQE driver.  See
 |------------|-------------|
 | **State Vector Engine** | Up to 32 qubits with AMX-aligned buffers + runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE + Apple Accelerate). |
 | **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Real-space topology via MPO Chebyshev-KPM: local Chern marker on generic 2D models matches dense reference to machine precision. |
-| **Clifford-Assisted MPS** | Hybrid `|psi> = C |phi>` representation that stores the Clifford part as an O(n) tableau and only the non-Clifford residual as an MPS.  64× bond-dim advantage + 13884× speedup over plain MPS on stabilizer circuits at n=12. |
+| **Clifford-Assisted MPS** | Hybrid `|psi> = D |phi>` representation that stores the Clifford part as an O(n) tableau and only the non-Clifford residual as an MPS.  64× bond-dim advantage + 13884× speedup over plain MPS on stabilizer circuits at n=12. Variational-D ground-state search (`ca_mps_var_d.{c,h}`) alternates a greedy local-Clifford D-update with imag-time on `|phi>` — TFIM/XXZ/kagome AFM oracles ship in `examples/tensor_network/`. CA-PEPS 2D scaffold (`ca_peps.{c,h}`) lands the public API for v0.3. |
+| **Gauge-Aware Warmstart** | Aaronson-Gottesman symplectic-Gauss-Jordan Clifford builder (`ca_mps_var_d_stab_warmstart.{c,h}`): takes any list of commuting Pauli generators on n qubits (LGT Gauss-law operators, surface/toric-code stabilizers, repetition-code stabilizers) and emits an O(n^2)-gate Clifford that places `\|0^n>` in the simultaneous +1 eigenspace.  First HEP application: 1+1D Z2 lattice gauge theory (`src/applications/hep/lattice_z2_1d.{c,h}` + `examples/hep/z2_gauge_var_d.c`). |
 | **Clifford Backend** | Aaronson–Gottesman tableau simulator: O(n) gates, O(n²) measurement. 3200-qubit GHZ + all-qubits measurement in ~100 ms. |
 | **Chemistry / VQE** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, H₂/LiH/H₂O Pauli Hamiltonians. Native reverse-mode autograd (CRX/CRY/CRZ + all standard rotations); `vqe_compute_gradient` uses adjoint method for HEA noise-free paths — ~5× over parameter-shift on 12 params, linear scaling to 100+. |
 | **Quantum Algorithms** | Grover, VQE, QAOA, QPE, CHSH + Mermin + Mermin-Klyshko Bell tests, Shor-ECDLP resource estimator (Gidney/Drake/Boneh 2026). |
@@ -252,6 +253,79 @@ moonlab_ca_mps_expect_pauli(s, p, &e);
 
 See `docs/research/ca_mps.md` for the full theory, gate-application rules,
 and benchmark methodology.
+
+### Variational-D (var-D) ground-state search
+
+CA-MPS is also a ground-state-search representation: `|psi_GS> ~ D|phi>`
+where `D` is a Clifford basis transform chosen to absorb the
+stabilizer-rich entanglement of the target Hamiltonian, leaving `|phi>`
+as a low-entanglement MPS.  `moonlab_ca_mps_optimize_var_d_alternating`
+implements the alternating optimisation: greedy local-Clifford D-update
++ imag-time `|phi>` evolution.
+
+```c
+#include "algorithms/tensor_network/ca_mps_var_d.h"
+
+ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
+cfg.warmstart                 = CA_MPS_WARMSTART_DUAL_TFIM;  // H_all + CNOT chain
+cfg.max_outer_iters           = 25;
+cfg.imag_time_steps_per_outer = 4;
+cfg.clifford_passes_per_outer = 8;
+cfg.composite_2gate           = 1;  // 2-gate composite moves to escape local minima
+
+ca_mps_var_d_alt_result_t res = {0};
+moonlab_ca_mps_optimize_var_d_alternating(
+    state, paulis, coeffs, num_terms, &cfg, &res);
+// res.final_energy, res.final_phi_entropy, res.total_gates_added, ...
+```
+
+Warmstart options bias the greedy search toward known-productive Clifford
+basins:
+- `IDENTITY` -- D starts at I.
+- `H_ALL` -- product of H on every qubit.
+- `DUAL_TFIM` -- H_all then CNOT chain (Kramers-Wannier dual basis).
+- `FERRO_TFIM` -- H + CNOT chain (cat-state encoder).
+- `STABILIZER_SUBGROUP` -- gauge-aware: see below.
+
+Validated workloads (in `examples/tensor_network/`): 1D TFIM,
+1D XXZ Heisenberg (`ca_mps_var_d_heisenberg.c`), kagome 12-site
+frustrated AFM (`ca_mps_var_d_kagome12.c`), comparison vs plain DMRG
+(`ca_mps_var_d_vs_plain_dmrg.c`).
+
+### Gauge-aware stabilizer-subgroup warmstart
+
+For Hamiltonians whose physical sector is the +1 eigenspace of a
+commuting set of Pauli generators (lattice gauge theory Gauss-law
+operators, surface/toric/repetition-code stabilizers, any abelian
+symmetry projector), the warmstart Clifford `D_S` can be built
+exactly via Aaronson-Gottesman symplectic Gauss-Jordan.  `D_S|0^n>`
+is then in the simultaneous +1 eigenspace of every generator and
+the var-D loop only has to capture the residual non-stabilizer
+dynamics on top.
+
+```c
+#include "algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
+
+// Generators g_0, ..., g_{k-1} as (k, n) row-major Pauli bytes
+// (0=I, 1=X, 2=Y, 3=Z), pairwise commuting and independent.
+moonlab_ca_mps_apply_stab_subgroup_warmstart(state, generators, k);
+// state->D now stabilises the +1 eigenspace of every g_i.
+```
+
+First HEP application: 1+1D Z2 lattice gauge theory.
+`src/applications/hep/lattice_z2_1d.{c,h}` builds the matter +
+gauge-link Pauli sum; `examples/hep/z2_gauge_var_d.c` runs the
+full var-D pipeline with the gauge-aware warmstart.  Math write-up:
+`docs/research/var_d_lattice_gauge_theory.md`.
+
+### CA-PEPS (2D scaffold)
+
+`src/algorithms/tensor_network/ca_peps.{c,h}` ships the public-API
+scaffold for the 2D extension of CA-MPS.  Symbols are stable so
+downstream binders can wire against them now; gate-application and
+contraction logic land in v0.3.  Smoke test:
+`tests/unit/test_ca_peps.c` (returns `NOT_IMPLEMENTED` until the
+core ships).
 
 ## Quantum Algorithms
 
