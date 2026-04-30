@@ -125,7 +125,16 @@ typedef enum {
     CA_MPS_WARMSTART_IDENTITY = 0,    /* D starts at I (default) */
     CA_MPS_WARMSTART_H_ALL,           /* D = product of H on every qubit */
     CA_MPS_WARMSTART_DUAL_TFIM,       /* D = H_all then CNOT-chain (TFIM-dual) */
-    CA_MPS_WARMSTART_FERRO_TFIM       /* D = CNOT-chain then H_0 (cat-state encoder) */
+    CA_MPS_WARMSTART_FERRO_TFIM,      /* D = CNOT-chain then H_0 (cat-state encoder) */
+    /* D is built by symplectic Gauss-Jordan elimination on a
+     * caller-supplied list of commuting Pauli generators (the
+     * stabilizer subgroup S).  The resulting D|0^n> is in the
+     * simultaneous +1 eigenspace of every g in S.  Targeted at
+     * stabilizer-coded Hamiltonians: lattice gauge theories
+     * (Z2 LGT Gauss-law operators), surface/toric codes, etc.  Set
+     * @c warmstart_stab_paulis and @c warmstart_stab_num_gens on
+     * the config struct when selecting this enum. */
+    CA_MPS_WARMSTART_STABILIZER_SUBGROUP
 } ca_mps_warmstart_t;
 
 typedef struct {
@@ -149,6 +158,17 @@ typedef struct {
     int composite_2gate;
     /** Initial Clifford basin for D (see ::ca_mps_warmstart_t). */
     ca_mps_warmstart_t warmstart;
+    /** Generators of the stabilizer subgroup, used only when
+     *  @c warmstart == ::CA_MPS_WARMSTART_STABILIZER_SUBGROUP.
+     *  Flat row-major (warmstart_stab_num_gens, num_qubits) uint8
+     *  array with the same Pauli-byte encoding as @c paulis on the
+     *  Hamiltonian (0=I, 1=X, 2=Y, 3=Z).  The generators must
+     *  pairwise commute and be linearly independent; otherwise
+     *  ::moonlab_ca_mps_optimize_var_d_alternating returns
+     *  ::CA_MPS_ERR_INVALID. */
+    const uint8_t* warmstart_stab_paulis;
+    /** Number of stabilizer generators (rows of @c warmstart_stab_paulis). */
+    uint32_t       warmstart_stab_num_gens;
     /** Print one line per outer iteration. */
     int verbose;
 } ca_mps_var_d_alt_config_t;

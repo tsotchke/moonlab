@@ -9,20 +9,36 @@
  * value.
  *
  * Sweeps over the electric-field strength h at fixed t = 1, m = 0.5,
- * lambda = 5, comparing for each h:
- *   - Plain DMRG ground state |psi_GS> via dmrg_ground_state on the
- *     Pauli-sum -> MPO (constructed below).
- *   - var-D alternating optimiser on the same Pauli sum; reports
- *     S(|phi>) and the residual Gauss-law violation
- *     <psi|sum_x (I - G_x)|psi>.
+ * lambda = 5.  For each h, runs three configurations on the same
+ * Pauli sum and compares them side by side:
  *
- * Headline: at all h, var-D's |phi> entropy should be substantially
- * below plain DMRG's |psi> entropy because the Gauss-law penalty
- * generates stabilizer-rich entanglement that D absorbs.
+ *   1. **Plain MPS** (D frozen at I).  Reference: this is what an
+ *      ordinary DMRG-style imag-time evolution sees, with no Clifford
+ *      help.  S_psi_max is the maximum half-cut entropy of the result.
+ *
+ *   2. **var-D, IDENTITY warmstart**.  D starts at I and the greedy
+ *      Clifford search has to find gauge-projecting gates from
+ *      scratch.  In practice (see prior runs), the search has no
+ *      single-gate descent direction toward the gauge-invariant
+ *      sector and converges to a low-entropy |phi> that still
+ *      violates Gauss law.
+ *
+ *   3. **var-D, STABILIZER_SUBGROUP warmstart**.  D is initialised
+ *      to a Clifford that stabilises the +1 eigenspace of every
+ *      interior Gauss-law operator.  Built by symplectic Gauss-Jordan
+ *      elimination on the Pauli tableau of the generators (see
+ *      ca_mps_var_d_stab_warmstart.{c,h}).  var-D then only has to
+ *      capture the residual matter + electric-field dynamics on top
+ *      of an already-gauge-projected basis.
+ *
+ * Headline expectation: configuration 3 has a residual Gauss-law
+ * violation at machine zero immediately after warmstart, while
+ * configurations 1 and 2 leave a finite violation.
  */
 
 #include "../../src/algorithms/tensor_network/ca_mps.h"
 #include "../../src/algorithms/tensor_network/ca_mps_var_d.h"
+#include "../../src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
 #include "../../src/algorithms/tensor_network/tn_state.h"
 #include "../../src/applications/hep/lattice_z2_1d.h"
 
@@ -96,9 +112,25 @@ int main(int argc, char** argv) {
             N, 2 * N - 1, gauss_lam);
     fprintf(stdout, "Gauss-law constraint G_x = X_{2x-1} X_{2x+1} Z_{2x} on interior x.\n\n");
 
-    fprintf(stdout, "%6s %12s %10s %10s %12s %14s %10s\n",
-            "h", "E_varD", "S_phi", "S_psi_max", "ratio", "Gauss_viol", "wall_s");
-    fprintf(stdout, "----------------------------------------------------------------------------\n");
+    fprintf(stdout,
+        "%6s %12s %10s %12s %14s %14s %14s %14s %10s\n",
+        "h", "E_vd_gw", "S_phi_gw", "S_ratio_gw",
+        "Gviol_plain", "Gviol_id", "Gviol_gw_init", "Gviol_gw_fin",
+        "wall_gw_s");
+    fprintf(stdout,
+        "------------------------------------------------------------"
+        "------------------------------------------------\n");
+    fprintf(stdout,
+        "Note: Gviol_gw_init is the Gauss-law violation immediately\n"
+        "after the stabilizer-subgroup warmstart, with NO imag-time\n"
+        "evolution.  It should be at machine zero -- this is the\n"
+        "headline check that the warmstart projects into the gauge\n"
+        "sector exactly.  Gviol_gw_fin is the same quantity after the\n"
+        "full alternating loop has run; it is allowed to drift away\n"
+        "from zero because the kinetic terms in this LGT Hamiltonian\n"
+        "(written with bare JW, not exactly gauge-invariant on the\n"
+        "lattice -- the lambda penalty enforces gauge invariance only\n"
+        "energetically) anti-commute with G_x.\n\n");
 
     fprintf(json, "{\n  \"schema\": \"moonlab/z2_lgt_var_d_v1\",\n");
     fprintf(json, "  \"N_matter\": %u, \"t_hop\": %.4f, \"mass\": %.4f, "
@@ -123,9 +155,15 @@ int main(int argc, char** argv) {
             fprintf(stderr, "build_pauli_sum failed\n"); continue;
         }
 
-        /* Plain MPS reference: run a CA-MPS with D=I for many imag-time
-         * steps -- this is an MPS evolution under H since D never moves
-         * from the identity. */
+        /* Build the interior Gauss-law generators once -- shared by
+         * the warmstart input and the residual-violation diagnostic. */
+        const uint32_t k_gens = (N >= 3) ? (N - 2) : 0;
+        uint8_t* gens = (uint8_t*)calloc((size_t)k_gens * nq, 1);
+        for (uint32_t i = 0; i < k_gens; i++) {
+            z2_lgt_1d_gauss_law_pauli(&cfg, i + 1, &gens[(size_t)i * nq]);
+        }
+
+        /* (1) Plain MPS reference: D frozen at I. */
         moonlab_ca_mps_t* st_plain = moonlab_ca_mps_create(nq, /*max_bond=*/32);
         ca_mps_var_d_alt_config_t cfg_plain = ca_mps_var_d_alt_config_default();
         cfg_plain.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
@@ -138,47 +176,75 @@ int main(int argc, char** argv) {
         ca_mps_var_d_alt_result_t res_plain = {0};
         moonlab_ca_mps_optimize_var_d_alternating(
             st_plain, paulis, coeffs, T, &cfg_plain, &res_plain);
-        double E_plain = res_plain.final_energy;
-        double S_psi_max = res_plain.final_phi_entropy;   /* with D=I, this is S(|psi>) */
+        double S_psi_max = res_plain.final_phi_entropy;
+        double Gviol_plain = ca_mps_gauss_violation(st_plain, &cfg);
 
-        /* var-D run: same Pauli sum, but allow Clifford prefactor to evolve. */
-        moonlab_ca_mps_t* st_vd = moonlab_ca_mps_create(nq, /*max_bond=*/32);
-        ca_mps_var_d_alt_config_t cfg_vd = ca_mps_var_d_alt_config_default();
-        cfg_vd.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
-        cfg_vd.max_outer_iters             = 25;
-        cfg_vd.imag_time_dtau              = 0.10;
-        cfg_vd.imag_time_steps_per_outer   = 4;
-        cfg_vd.clifford_passes_per_outer   = 8;
-        cfg_vd.composite_2gate             = 1;   /* useful here -- gauge constraints
-                                                      need 2-gate moves to absorb */
-        cfg_vd.convergence_eps             = 1e-6;
-        cfg_vd.verbose                     = 0;
-        ca_mps_var_d_alt_result_t res_vd = {0};
+        /* (2) var-D with IDENTITY warmstart -- the previous baseline. */
+        moonlab_ca_mps_t* st_id = moonlab_ca_mps_create(nq, /*max_bond=*/32);
+        ca_mps_var_d_alt_config_t cfg_id = ca_mps_var_d_alt_config_default();
+        cfg_id.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
+        cfg_id.max_outer_iters             = 25;
+        cfg_id.imag_time_dtau              = 0.10;
+        cfg_id.imag_time_steps_per_outer   = 4;
+        cfg_id.clifford_passes_per_outer   = 8;
+        cfg_id.composite_2gate             = 1;
+        cfg_id.convergence_eps             = 1e-6;
+        cfg_id.verbose                     = 0;
+        ca_mps_var_d_alt_result_t res_id = {0};
+        moonlab_ca_mps_optimize_var_d_alternating(
+            st_id, paulis, coeffs, T, &cfg_id, &res_id);
+        double Gviol_id = ca_mps_gauss_violation(st_id, &cfg);
+
+        /* (3) Apply the stabilizer-subgroup warmstart by hand, capture
+         * the post-warmstart-pre-evolution Gauss-law violation, then
+         * run the alternating loop with IDENTITY warmstart so the
+         * dispatcher does not double-apply the gauge Clifford. */
+        moonlab_ca_mps_t* st_gw = moonlab_ca_mps_create(nq, /*max_bond=*/32);
+        moonlab_ca_mps_apply_stab_subgroup_warmstart(st_gw, gens, k_gens);
+        double Gviol_gw_init = ca_mps_gauss_violation(st_gw, &cfg);
+
+        ca_mps_var_d_alt_config_t cfg_gw = ca_mps_var_d_alt_config_default();
+        cfg_gw.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
+        cfg_gw.max_outer_iters             = 25;
+        cfg_gw.imag_time_dtau              = 0.10;
+        cfg_gw.imag_time_steps_per_outer   = 4;
+        cfg_gw.clifford_passes_per_outer   = 8;
+        cfg_gw.composite_2gate             = 1;
+        cfg_gw.convergence_eps             = 1e-6;
+        cfg_gw.verbose                     = 0;
+        ca_mps_var_d_alt_result_t res_gw = {0};
         double t0 = now_s();
         moonlab_ca_mps_optimize_var_d_alternating(
-            st_vd, paulis, coeffs, T, &cfg_vd, &res_vd);
+            st_gw, paulis, coeffs, T, &cfg_gw, &res_gw);
         double dt = now_s() - t0;
 
-        double E_vd = res_vd.final_energy;
-        double S_phi = res_vd.final_phi_entropy;
-        double ratio = (S_psi_max > 1e-12) ? (S_phi / S_psi_max) : 0.0;
-        double gauss_viol = ca_mps_gauss_violation(st_vd, &cfg);
+        double E_gw = res_gw.final_energy;
+        double S_phi_gw = res_gw.final_phi_entropy;
+        double S_ratio_gw =
+            (S_psi_max > 1e-12) ? (S_phi_gw / S_psi_max) : 0.0;
+        double Gviol_gw_fin = ca_mps_gauss_violation(st_gw, &cfg);
 
-        fprintf(stdout, "%6.2f %12.6f %10.4f %10.4f %12.4f %14.3e %10.2f\n",
-                h, E_vd, S_phi, S_psi_max, ratio, gauss_viol, dt);
+        fprintf(stdout,
+            "%6.2f %12.6f %10.4f %12.4f %14.3e %14.3e %14.3e %14.3e %10.2f\n",
+            h, E_gw, S_phi_gw, S_ratio_gw,
+            Gviol_plain, Gviol_id, Gviol_gw_init, Gviol_gw_fin, dt);
         fflush(stdout);
-
-        (void)E_plain;   /* available if a future row needs it */
 
         if (!first) fprintf(json, ",\n");
         first = 0;
-        fprintf(json, "    { \"h\": %.4f, \"E_varD\": %.6f, \"S_phi\": %.6f, "
-                      "\"S_psi_max\": %.6f, \"S_ratio\": %.6f, "
-                      "\"gauss_violation\": %.6e, \"wall_s\": %.4f }",
-                h, E_vd, S_phi, S_psi_max, ratio, gauss_viol, dt);
+        fprintf(json,
+            "    { \"h\": %.4f, \"E_vd_gw\": %.6f, \"S_phi_gw\": %.6f, "
+            "\"S_psi_max\": %.6f, \"S_ratio_gw\": %.6f, "
+            "\"gauss_viol_plain\": %.6e, \"gauss_viol_id\": %.6e, "
+            "\"gauss_viol_gw_init\": %.6e, \"gauss_viol_gw_final\": %.6e, "
+            "\"wall_gw_s\": %.4f }",
+            h, E_gw, S_phi_gw, S_psi_max, S_ratio_gw,
+            Gviol_plain, Gviol_id, Gviol_gw_init, Gviol_gw_fin, dt);
 
         moonlab_ca_mps_free(st_plain);
-        moonlab_ca_mps_free(st_vd);
+        moonlab_ca_mps_free(st_id);
+        moonlab_ca_mps_free(st_gw);
+        free(gens);
         free(paulis); free(coeffs);
     }
 

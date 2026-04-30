@@ -524,6 +524,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/tensor_network/skyrmion_braiding.c
     src/algorithms/tensor_network/ca_mps.c
     src/algorithms/tensor_network/ca_mps_var_d.c
+    src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.c
     src/algorithms/tensor_network/ca_peps.c
     # Chemistry (Jordan-Wigner, UCCSD, molecular Hamiltonians).
     src/algorithms/chemistry/chemistry.c
@@ -1319,6 +1320,14 @@ if(QSIM_BUILD_TESTS)
         target_link_libraries(test_z2_lgt_pauli_sum PRIVATE quantumsim ${MATH_LIBRARY})
         add_test(NAME unit_z2_lgt_pauli_sum COMMAND test_z2_lgt_pauli_sum)
         set_tests_properties(unit_z2_lgt_pauli_sum PROPERTIES TIMEOUT 30)
+
+        # Stabilizer-subgroup warmstart for var-D.  Validates the
+        # symplectic Gauss-Jordan Clifford builder on Bell, GHZ, and
+        # 1+1D Z2 LGT Gauss-law generators.
+        add_executable(test_gauge_warmstart tests/unit/test_gauge_warmstart.c)
+        target_link_libraries(test_gauge_warmstart PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_gauge_warmstart COMMAND test_gauge_warmstart)
+        set_tests_properties(unit_gauge_warmstart PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
