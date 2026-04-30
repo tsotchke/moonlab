@@ -214,3 +214,33 @@ _gpu_cnot_u32
 _gpu_compute_probabilities_u32
 _gpu_normalize_u32
 _gpu_sum_squared_magnitudes_u32
+# CA-MPS handle + gates (since 0.2.1).
+_moonlab_ca_mps_create
+_moonlab_ca_mps_free
+_moonlab_ca_mps_clone
+_moonlab_ca_mps_num_qubits
+_moonlab_ca_mps_max_bond_dim
+_moonlab_ca_mps_current_bond_dim
+_moonlab_ca_mps_h
+_moonlab_ca_mps_s
+_moonlab_ca_mps_sdag
+_moonlab_ca_mps_x
+_moonlab_ca_mps_y
+_moonlab_ca_mps_z
+_moonlab_ca_mps_cnot
+_moonlab_ca_mps_cz
+_moonlab_ca_mps_swap
+_moonlab_ca_mps_rx
+_moonlab_ca_mps_ry
+_moonlab_ca_mps_rz
+_moonlab_ca_mps_t_gate
+_moonlab_ca_mps_t_dagger
+_moonlab_ca_mps_phase
+_moonlab_ca_mps_normalize
+_moonlab_ca_mps_norm
+# Variational-D + gauge warmstart + Z2 LGT + status (since 0.2.1).
+_moonlab_ca_mps_var_d_run
+_moonlab_ca_mps_gauge_warmstart
+_moonlab_z2_lgt_1d_build
+_moonlab_z2_lgt_1d_gauss_law
+_moonlab_status_string

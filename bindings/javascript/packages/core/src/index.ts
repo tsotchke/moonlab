@@ -35,6 +35,19 @@
 export { QuantumState } from './quantum-state';
 export type { QuantumStateOptions } from './quantum-state';
 
+// Clifford-Assisted MPS + var-D + gauge warmstart + Z2 LGT (since 0.2.1).
+export {
+  CaMps,
+  Warmstart,
+  StatusModule,
+  varDRun,
+  gaugeWarmstart,
+  z2Lgt1dBuild,
+  z2Lgt1dGaussLaw,
+  statusString,
+} from './ca-mps';
+export type { VarDConfig, Z2LgtPauliSum, PauliByte } from './ca-mps';
+
 export { Circuit } from './circuit';
 export type {
   Gate,
