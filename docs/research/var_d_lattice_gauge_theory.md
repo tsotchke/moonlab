@@ -91,10 +91,50 @@ This bridges into the program's existing theory work in three concrete ways:
 | Wilson-line operator accessor | ✅ shipped, unit-tested |
 | Demo driver (var-D vs plain MPS) | ✅ shipped, partial results |
 | Math write-up | ✅ this document |
-| Gauge-aware warmstart `D_{\text{gauge}}` | ⏳ open research item |
+| Gauge-aware warmstart `D_gauge` | ✅ shipped, unit-tested (`ca_mps_var_d_stab_warmstart.{c,h}`, `tests/unit/test_gauge_warmstart.c`) |
+| Exactly gauge-invariant kinetic terms | ⏳ next research item — see §"Hamiltonian gauge invariance" below |
 | Theorem proof (full) | ⏳ open theory item |
 | Cross-check vs exact diagonalisation | ⏳ pending |
-| Larger N (N=6, N=8) | ⏳ needs gauge-aware warmstart first |
+| Larger N (N=6, N=8) | ⏳ tractable now that warmstart ships |
+
+## Gauge-aware warmstart `D_gauge` (shipped)
+
+The construction `D_gauge` is implemented in `src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.{c,h}` as `moonlab_ca_mps_apply_stab_subgroup_warmstart` and exposed through the var-D alternating-loop config as the new enum value `CA_MPS_WARMSTART_STABILIZER_SUBGROUP`.
+
+Algorithm: symplectic Gauss-Jordan on the Pauli tableau (Aaronson-Gottesman 2004). The k commuting generators are encoded as a `(k, 2n+1)` F2 matrix `[X | Z | r]`. Column operations apply Clifford gates (H, S, CNOT) to the tableau and accumulate in a gate log; row operations multiply generators (free). After elimination the tableau is `{ Z_{q_0}, ..., Z_{q_{k-1}} }` with phase bits `r_p`. The state `|b>` with `b_{q_p} = r_p` is in the +1 eigenspace of every transformed generator. The preparation circuit is the inverse-and-reversed gate log applied to `|b>` (which is reached from `|0^n>` by X gates on the negative-phase pivots). Total cost: `O(n^2)` gates, applied to `state->D` (the CA-MPS Clifford prefactor) so they are absorbed into the Clifford layer for free.
+
+The unit test `tests/unit/test_gauge_warmstart.c` pins:
+1. Bell stabilizers `{XX, ZZ}` -> `<XX> = <ZZ> = +1`.
+2. GHZ-3 stabilizers `{XXX, ZZI, IZZ}` -> all three expectations = +1.
+3. The four interior Gauss-law operators of an N=4 1+1D Z2 LGT (7 qubits) -> all four expectations = +1.
+4. Anti-commuting input `{X_0, Z_0}` is rejected with `CA_MPS_ERR_INVALID`.
+5. The full var-D entry path with `CA_MPS_WARMSTART_STABILIZER_SUBGROUP` produces a state in the gauge sector immediately after the warmstart phase.
+
+## Hamiltonian gauge invariance — next research item
+
+The headline empirical run (`examples/hep/z2_gauge_var_d.c`) reports four Gauss-law-violation columns per `h`:
+- `Gviol_plain`: plain-MPS final state.
+- `Gviol_id`: var-D with IDENTITY warmstart, final state.
+- `Gviol_gw_init`: var-D with `STABILIZER_SUBGROUP` warmstart, **immediately** after warmstart, **before** any imag-time evolution.
+- `Gviol_gw_fin`: same run, after the full alternating loop.
+
+The headline check is `Gviol_gw_init` at machine zero — the warmstart projects exactly into the gauge sector. This is what the unit test pins. `Gviol_gw_fin` is allowed to drift away from zero, and in practice does, because the LGT Hamiltonian as written here has kinetic terms (the matter-hopping cluster operators `X_{2x} X_{2x+1} X_{2x+2}` and `Y_{2x} X_{2x+1} Y_{2x+2}`) that anti-commute with `G_x`. Concretely, `[X_{2x} X_{2x+1} X_{2x+2}, X_{2x-1} Z_{2x} X_{2x+1}] != 0` because `X_{2x}` and `Z_{2x}` anti-commute and that is the only non-trivial overlap. The lambda penalty `lambda * (I - G_x)` enforces gauge invariance only **energetically**, not as an exact symmetry of the Hamiltonian.
+
+This means the imag-time evolution can drift out of the gauge sector even when started inside it. To convert the warmstart into an end-to-end advantage we need one of two extensions:
+
+1. **Exactly gauge-invariant kinetic terms.** Construct the JW transform so that the matter-hopping operator includes the gauge-link operator on the link qubit such that the resulting Pauli string commutes with `G_x`. For Z2 this means a kinetic term of the form `X_{2x} Y_{2x+1} X_{2x+2}` rather than the simpler `X_{2x} X_{2x+1} X_{2x+2}` — the link operator carries a Y instead of an X, picked so that it cancels the anti-commute with the matter-side Z in `G_x`. This is a one-line fix in `lattice_z2_1d.c` once the algebra is checked, and it makes the warmstart-based subspace stable under imag-time evolution.
+
+2. **Gauge-aware var-D inner loop.** Constrain the greedy Clifford gate search to only accept gates `g` for which `g D g^dagger` still commutes with every `G_x` (equivalently, `D` keeps mapping `|0^n>` to the gauge sector). This is a slightly bigger change (one extra commutation check per candidate gate) and works for any kinetic term, but it foregoes the ability of var-D to find a `D` that absorbs gauge violation into Clifford layers.
+
+Option 1 is the cleaner research direction. After it lands, the headline plot becomes "warmstart drives `Gviol` from O(1e-2) (plain) to machine zero (warmstart) for every h, with var-D additionally reducing `S(|phi>)` by ~5x at strong coupling".
+
+## Generalisation beyond Z2
+
+The warmstart algorithm itself is independent of the model: it takes any list of commuting Pauli generators on n qubits and emits an O(n^2) Clifford circuit. Concrete next applications:
+- **Surface / toric code stabilizers.** Plaquette and star operators are 4-qubit Pauli strings that commute by construction.
+- **Repetition / colour codes.** All standard CSS codes.
+- **ZN gauge theories with N > 2.** Need single-qudit Cliffords (clock + shift gates), not just qubit Cliffords. The symplectic-elimination skeleton stays the same.
+- **Continuous-symmetry sectors via stabilizer projection.** Pick an abelian commuting subgroup of the symmetry algebra; the warmstart then projects into a fixed irrep.
 
 ## Appendix — the math, slightly more carefully
 

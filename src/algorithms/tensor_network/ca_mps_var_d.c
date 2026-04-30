@@ -18,6 +18,7 @@
 
 #include "ca_mps_var_d.h"
 #include "ca_mps.h"
+#include "ca_mps_var_d_stab_warmstart.h"
 
 #include <complex.h>
 #include <stdio.h>
@@ -290,6 +291,8 @@ ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void) {
     c.include_2q_gates            = 1;
     c.composite_2gate             = 0;
     c.warmstart                   = CA_MPS_WARMSTART_IDENTITY;
+    c.warmstart_stab_paulis       = NULL;
+    c.warmstart_stab_num_gens     = 0;
     c.verbose                     = 0;
     return c;
 }
@@ -384,6 +387,21 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
             e = moonlab_ca_mps_cnot(state, q, q + 1);
             if (e != CA_MPS_SUCCESS) return e;
         }
+    } else if (cfg.warmstart == CA_MPS_WARMSTART_STABILIZER_SUBGROUP) {
+        /* Gauge-aware warmstart: build a Clifford D that places
+         * D|0^n> in the +1 eigenspace of every supplied stabilizer
+         * generator (the Gauss-law operators of an LGT, or the
+         * stabilizers of a quantum error-correcting code).  See
+         * ca_mps_var_d_stab_warmstart.{c,h} for the symplectic
+         * Gauss-Jordan construction. */
+        if (!cfg.warmstart_stab_paulis || cfg.warmstart_stab_num_gens == 0) {
+            return CA_MPS_ERR_INVALID;
+        }
+        ca_mps_error_t e = moonlab_ca_mps_apply_stab_subgroup_warmstart(
+            state,
+            cfg.warmstart_stab_paulis,
+            cfg.warmstart_stab_num_gens);
+        if (e != CA_MPS_SUCCESS) return e;
     }
 
     double E_curr = evaluate_energy(state, paulis, coeffs, num_terms);
