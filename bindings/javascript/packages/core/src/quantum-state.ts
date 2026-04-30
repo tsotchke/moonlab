@@ -120,6 +120,25 @@ export class QuantumState {
   }
 
   /**
+   * Internal: WASM heap pointer of the underlying `quantum_state_t`.
+   * Used by sibling modules (`noise.ts`, `entanglement.ts`) to call
+   * the C ABI directly without needing the QuantumState class to host
+   * every wrapper method.  Not part of the public API contract --
+   * the underlying `statePtr` is owned and freed by this class.
+   */
+  _internal_state_pointer(): number {
+    if (this._disposed) {
+      throw new Error('QuantumState is disposed');
+    }
+    return this.statePtr;
+  }
+
+  /** Internal: WASM module handle.  See `_internal_state_pointer`. */
+  _internal_module(): MoonlabModule {
+    return this.module;
+  }
+
+  /**
    * Dimension of state space (2^n)
    */
   get stateDim(): number {

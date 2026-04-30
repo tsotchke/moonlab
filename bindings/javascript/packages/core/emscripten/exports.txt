@@ -263,3 +263,5 @@ _noise_thermal_relaxation
 # Entanglement metrics (since 0.2.1).
 _entanglement_entropy_bipartition
 _entanglement_mutual_information
+_entanglement_concurrence_2qubit
+_entanglement_negativity_2qubit
