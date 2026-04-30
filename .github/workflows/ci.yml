@@ -454,14 +454,29 @@ jobs:
         run: ctest --test-dir build -LE long --output-on-failure --timeout 900
       - name: Capture coverage
         run: |
+          # ubuntu-22.04 ships lcov 1.15 which only knows
+          # --ignore-errors source/graph/gcov; --ignore-errors
+          # mismatch and --ignore-errors unused are lcov 2.0+ syntax
+          # and abort with "unknown argument" on 1.15.  We test for
+          # the available flags at runtime and pass only the supported
+          # ones.
+          ignore_capture=""
+          if lcov --help 2>&1 | grep -q "ignore-errors source"; then
+            ignore_capture="--ignore-errors source"
+          fi
+          ignore_remove=""
+          if lcov --help 2>&1 | grep -q "ignore-errors unused" \
+             || lcov --version 2>&1 | grep -qE "version (2|[3-9])"; then
+            ignore_remove="--ignore-errors unused"
+          fi
           lcov --capture --directory build --output-file coverage.raw.info \
                --rc geninfo_unexecuted_blocks=1 \
-               --ignore-errors source --ignore-errors mismatch
+               $ignore_capture
           # Drop system + third-party noise.
           lcov --remove coverage.raw.info \
                '/usr/*' '*/build/*' '*/tests/*' '*/bindings/*' \
                --output-file coverage.info \
-               --ignore-errors unused
+               $ignore_remove
           lcov --list coverage.info | tail -40
       - name: Upload coverage report
         if: ${{ env.ACT != 'true' }}
