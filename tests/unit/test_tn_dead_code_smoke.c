@@ -209,6 +209,70 @@ static void test_mpo_skyrmion_create_smoke(void) {
     if (mpo) mpo_free(mpo);
 }
 
+/* ------------------------------------------------------------------ */
+/* dmrg_energy_variance: TFIM ground-state-ish MPS; verify the        */
+/* variance is non-negative (a strict eigenstate would give 0).       */
+/* ------------------------------------------------------------------ */
+
+static void test_dmrg_energy_variance(void) {
+    fprintf(stdout, "\n--- dmrg_energy_variance (TFIM MPO on 4-qubit |0000>) ---\n");
+
+    tn_state_config_t cfg = tn_state_config_default();
+    tn_mps_state_t* s = tn_mps_create_zero(4, &cfg);
+    CHECK(s != NULL, "tn_mps_create_zero");
+    if (!s) return;
+
+    mpo_t* mpo = mpo_tfim_create(4, /*J=*/1.0, /*h=*/0.5);
+    CHECK(mpo != NULL, "mpo_tfim_create");
+    if (mpo) {
+        double var = dmrg_energy_variance(s, mpo);
+        CHECK(var >= -1e-9,
+              "dmrg_energy_variance returned %.6f (should be >= 0)", var);
+        mpo_free(mpo);
+    }
+
+    tn_mps_free(s);
+}
+
+/* ------------------------------------------------------------------ */
+/* tn_histogram_create: build a histogram from synthetic samples.     */
+/* ------------------------------------------------------------------ */
+
+static void test_tn_histogram_create(void) {
+    fprintf(stdout, "\n--- tn_histogram_create ---\n");
+    uint64_t samples[8] = { 0, 1, 0, 1, 2, 0, 1, 1 };
+    tn_histogram_t* h = tn_histogram_create(samples, 8);
+    CHECK(h != NULL, "tn_histogram_create returned NULL");
+    if (h) tn_histogram_free(h);
+}
+
+/* ------------------------------------------------------------------ */
+/* tensor_svd_truncate: random 4x3 matrix, error-bounded truncation.  */
+/* ------------------------------------------------------------------ */
+
+static void test_tensor_svd_truncate(void) {
+    fprintf(stdout, "\n--- tensor_svd_truncate (4x3 random) ---\n");
+
+    uint32_t dims[2] = { 4, 3 };
+    tensor_t* t = tensor_create(2, dims);
+    CHECK(t != NULL, "tensor_create");
+    if (!t) return;
+
+    srand(0xFEEDBABE);
+    for (uint32_t i = 0; i < 4; i++) {
+        for (uint32_t j = 0; j < 3; j++) {
+            uint32_t idx[2] = { i, j };
+            double re = (rand() / (double)RAND_MAX) - 0.5;
+            tensor_set(t, idx, re + 0.0 * I);
+        }
+    }
+
+    tensor_svd_result_t* svd = tensor_svd_truncate(t, /*max_error=*/1e-6);
+    CHECK(svd != NULL, "tensor_svd_truncate returned NULL");
+    if (svd) tensor_svd_free(svd);
+    tensor_free(t);
+}
+
 int main(void) {
     fprintf(stdout, "=== TN dead-code-triage smoke harness ===\n");
     test_tensor_einsum_matmul();
@@ -216,6 +280,9 @@ int main(void) {
     test_tn_expectation_2q_cnot();
     test_tn_mpo_two_site_apply();
     test_mpo_skyrmion_create_smoke();
+    test_dmrg_energy_variance();
+    test_tn_histogram_create();
+    test_tensor_svd_truncate();
 
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
