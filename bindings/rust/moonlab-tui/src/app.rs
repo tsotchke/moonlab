@@ -2,8 +2,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use moonlab::{
-    CaMps, FeynmanDiagram, QuantumState,
-    z2_lgt_1d_build, z2_lgt_1d_gauss_law,
+    CaMps, FeynmanDiagram, QuantumState, VarDConfig, Warmstart,
+    var_d_run, z2_lgt_1d_build, z2_lgt_1d_gauss_law,
 };
 use std::time::Instant;
 
@@ -49,6 +49,12 @@ pub enum Algorithm {
     /// the term count + interior Gauss-law operator structure.
     /// Showcases the v0.2.1 HEP application surface.
     Z2LgtBuild,
+    /// Run var-D end-to-end on a 4-qubit TFIM at criticality (g=1) with
+    /// the DUAL_TFIM warmstart.  Reports the final variational energy,
+    /// `|phi>` entropy, and gates accepted across the alternating loop.
+    /// Exercises the full v0.2.1 var-D pipeline including the Trotter
+    /// imag-time |phi>-update and the greedy Clifford D-update.
+    CaMpsVarDTfim,
 }
 
 impl Algorithm {
@@ -63,6 +69,7 @@ impl Algorithm {
             Self::CaMpsGhz => "CA-MPS GHZ (bond-dim advantage)",
             Self::CaMpsBellWarmstart => "CA-MPS gauge warmstart (Bell)",
             Self::Z2LgtBuild => "1+1D Z2 LGT Hamiltonian",
+            Self::CaMpsVarDTfim => "var-D ground state (4-qubit TFIM, g=1)",
         }
     }
 
@@ -84,6 +91,9 @@ impl Algorithm {
             Self::Z2LgtBuild => {
                 "Schwinger-style 1+1D Z2 lattice gauge theory: matter + gauge-link Pauli sum with exactly gauge-invariant kinetic terms"
             }
+            Self::CaMpsVarDTfim => {
+                "Alternating greedy-Clifford D-update + imag-time |phi>-update on 4-qubit TFIM at criticality, with the H_all + CNOT-chain (Kramers-Wannier dual) warmstart"
+            }
         }
     }
 
@@ -98,6 +108,7 @@ impl Algorithm {
             Self::CaMpsGhz,
             Self::CaMpsBellWarmstart,
             Self::Z2LgtBuild,
+            Self::CaMpsVarDTfim,
         ]
     }
 }
@@ -833,6 +844,62 @@ impl App {
                 if n >= 1 { state.h(0); }
                 self.total_steps = 1;
                 self.status = z2.unwrap_or_else(|e| format!("Z2 LGT build failed: {e}"));
+            }
+            Algorithm::CaMpsVarDTfim => {
+                // Run var-D end-to-end on a 4-qubit TFIM at criticality.
+                // Build the Pauli sum directly: H = -sum_i Z_i Z_{i+1}
+                //                                - sum_i X_i  (g = 1).
+                // num_qubits = 4 -> 7 Pauli terms (3 ZZ + 4 X).  The
+                // displayed QuantumState gets a single Hadamard for
+                // visual feedback; the actual var-D run mutates an
+                // internal CaMps and reports the final energy + bond-
+                // dim + iterations to the status line.
+                let n_q: u32 = 4;
+                let num_terms: u32 = 7;  // 3 ZZ + 4 X
+                let mut paulis = vec![0u8; (num_terms as usize) * (n_q as usize)];
+                let mut coeffs = vec![0.0f64; num_terms as usize];
+                // 3 ZZ terms.
+                for i in 0..3u32 {
+                    let row = i as usize;
+                    paulis[row * (n_q as usize) + i as usize] = 3;       // Z
+                    paulis[row * (n_q as usize) + (i + 1) as usize] = 3; // Z
+                    coeffs[row] = -1.0;
+                }
+                // 4 X terms.
+                for i in 0..4u32 {
+                    let row = (3 + i) as usize;
+                    paulis[row * (n_q as usize) + i as usize] = 1;       // X
+                    coeffs[row] = -1.0;
+                }
+                let mut ca = match CaMps::new(n_q, 16) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        self.status = format!("CaMps::new failed: {e:?}");
+                        return;
+                    }
+                };
+                let mut cfg = VarDConfig::default();
+                cfg.warmstart = Warmstart::DualTfim;
+                cfg.composite_2gate = true;
+                cfg.max_outer_iters = 12;
+                cfg.imag_time_steps_per_outer = 4;
+                cfg.clifford_passes_per_outer = 6;
+
+                let energy = match var_d_run(
+                    &mut ca, &paulis, &coeffs, num_terms,
+                    /*stab*/ &[], /*stab_n*/ 0, &cfg,
+                ) {
+                    Ok(e) => e,
+                    Err(err) => {
+                        self.status = format!("var_d_run failed: {err:?}");
+                        return;
+                    }
+                };
+                if n >= 1 { state.h(0); }
+                self.total_steps = cfg.max_outer_iters as usize;
+                self.status = format!(
+                    "TFIM g=1, n=4: var-D final E={:.4} (exact GS = -4.7588), bond_dim={}, norm={:.3}",
+                    energy, ca.bond_dim(), ca.norm());
             }
         }
 
