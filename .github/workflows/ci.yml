@@ -450,12 +450,8 @@ jobs:
         run: cmake --build build -j
       - name: Test
         # -LE long matches every other tier; coverage doesn't change which
-        # tests we run, only what we measure.  Exclude unit_qgt for the
-        # same reason as the Debug + ASAN tiers: the Fukui-Hatsugai-Suzuki
-        # Chern integral on Haldane has enough Debug-build float noise
-        # that the rounded Chern number drifts from +/-1 to 0.  Release
-        # tiers cover the assertion.
-        run: ctest --test-dir build -LE long -E unit_qgt --output-on-failure --timeout 900
+        # tests we run, only what we measure.
+        run: ctest --test-dir build -LE long --output-on-failure --timeout 900
       - name: Capture coverage
         run: |
           lcov --capture --directory build --output-file coverage.raw.info \
