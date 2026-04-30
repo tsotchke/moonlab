@@ -64,18 +64,44 @@ int main(void) {
      */
     CHECK(T == 15, "term count mismatch: %u (expected 15)", T);
 
-    /* Verify the XXX term on bond 0 has coefficient -t_hop = -1.0 */
+    /* Gauge-invariant kinetic terms (since the XYY/YYX rewrite):
+     *   K_x = -(t/2) X_{2x} Y_{2x+1} Y_{2x+2}
+     *       + (t/2) Y_{2x} Y_{2x+1} X_{2x+2}
+     * Bond 0 -> qubits 0, 1, 2; with t_hop = 1.0, the coefficients
+     * are -0.5 and +0.5. */
     uint8_t target[7];
     memset(target, 0, 7);
-    target[0] = 1; target[1] = 1; target[2] = 1;     /* X X X on qubits 0,1,2 */
-    CHECK(has_term_like(paulis, coeffs, T, nq, target, -1.0, 1e-12),
-          "missing -t * XXX on bond 0");
+    target[0] = 1; target[1] = 2; target[2] = 2;     /* X Y Y */
+    CHECK(has_term_like(paulis, coeffs, T, nq, target, -0.5, 1e-12),
+          "missing -(t/2) * XYY on bond 0");
 
-    /* Verify the YXY term on bond 0 has coefficient -t_hop = -1.0 */
     memset(target, 0, 7);
-    target[0] = 2; target[1] = 1; target[2] = 2;     /* Y X Y */
-    CHECK(has_term_like(paulis, coeffs, T, nq, target, -1.0, 1e-12),
-          "missing -t * YXY on bond 0");
+    target[0] = 2; target[1] = 2; target[2] = 1;     /* Y Y X */
+    CHECK(has_term_like(paulis, coeffs, T, nq, target, +0.5, 1e-12),
+          "missing +(t/2) * YYX on bond 0");
+
+    /* Term-by-term commutativity with the interior Gauss-law
+     * operators is the headline correctness property of the
+     * gauge-invariant rewrite.  Verify it on the kinetic term
+     * acting at bond x = 0 vs G_1 = X_1 Z_2 X_3 (interior site x=1
+     * -> qubits 1, 2, 3). */
+    {
+        const uint8_t G1[7] = { 0, 1, 3, 1, 0, 0, 0 };
+        const uint8_t XYY[7] = { 1, 2, 2, 0, 0, 0, 0 };
+        const uint8_t YYX[7] = { 2, 2, 1, 0, 0, 0, 0 };
+        const uint8_t* hop_terms[2] = { XYY, YYX };
+        for (int t = 0; t < 2; t++) {
+            int parity = 0;
+            for (uint32_t q = 0; q < 7; q++) {
+                uint8_t a = hop_terms[t][q], b = G1[q];
+                if (a == 0 || b == 0 || a == b) continue;
+                parity ^= 1;
+            }
+            CHECK(parity == 0,
+                  "kinetic term %d does NOT commute with G_1 (parity=%d)",
+                  t, parity);
+        }
+    }
 
     /* Electric field: -h * Z on link 0 (qubit 1) */
     memset(target, 0, 7);

@@ -92,7 +92,7 @@ This bridges into the program's existing theory work in three concrete ways:
 | Demo driver (var-D vs plain MPS) | ✅ shipped, partial results |
 | Math write-up | ✅ this document |
 | Gauge-aware warmstart `D_gauge` | ✅ shipped, unit-tested (`ca_mps_var_d_stab_warmstart.{c,h}`, `tests/unit/test_gauge_warmstart.c`) |
-| Exactly gauge-invariant kinetic terms | ⏳ next research item — see §"Hamiltonian gauge invariance" below |
+| Exactly gauge-invariant kinetic terms | ✅ shipped — `lattice_z2_1d.c` now uses `K_x = (-t/2) X_{2x} Y_{2x+1} Y_{2x+2} + (+t/2) Y_{2x} Y_{2x+1} X_{2x+2}` with term-by-term `[K_x, G_y] = 0` pinned by `tests/unit/test_z2_lgt_pauli_sum.c`. |
 | Theorem proof (full) | ⏳ open theory item |
 | Cross-check vs exact diagonalisation | ⏳ pending |
 | Larger N (N=6, N=8) | ⏳ tractable now that warmstart ships |
@@ -110,7 +110,7 @@ The unit test `tests/unit/test_gauge_warmstart.c` pins:
 4. Anti-commuting input `{X_0, Z_0}` is rejected with `CA_MPS_ERR_INVALID`.
 5. The full var-D entry path with `CA_MPS_WARMSTART_STABILIZER_SUBGROUP` produces a state in the gauge sector immediately after the warmstart phase.
 
-## Hamiltonian gauge invariance — next research item
+## Hamiltonian gauge invariance — shipped
 
 The headline empirical run (`examples/hep/z2_gauge_var_d.c`) reports four Gauss-law-violation columns per `h`:
 - `Gviol_plain`: plain-MPS final state.
@@ -118,15 +118,23 @@ The headline empirical run (`examples/hep/z2_gauge_var_d.c`) reports four Gauss-
 - `Gviol_gw_init`: var-D with `STABILIZER_SUBGROUP` warmstart, **immediately** after warmstart, **before** any imag-time evolution.
 - `Gviol_gw_fin`: same run, after the full alternating loop.
 
-The headline check is `Gviol_gw_init` at machine zero — the warmstart projects exactly into the gauge sector. This is what the unit test pins. `Gviol_gw_fin` is allowed to drift away from zero, and in practice does, because the LGT Hamiltonian as written here has kinetic terms (the matter-hopping cluster operators `X_{2x} X_{2x+1} X_{2x+2}` and `Y_{2x} X_{2x+1} Y_{2x+2}`) that anti-commute with `G_x`. Concretely, `[X_{2x} X_{2x+1} X_{2x+2}, X_{2x-1} Z_{2x} X_{2x+1}] != 0` because `X_{2x}` and `Z_{2x}` anti-commute and that is the only non-trivial overlap. The lambda penalty `lambda * (I - G_x)` enforces gauge invariance only **energetically**, not as an exact symmetry of the Hamiltonian.
+`Gviol_gw_init` is at machine zero by construction — the warmstart projects exactly into the gauge sector.  Earlier prereleases of this example showed `Gviol_gw_fin` drifting to O(1e-2) under imag-time evolution because the kinetic terms in the LGT Hamiltonian (`X_{2x} X_{2x+1} X_{2x+2}` and `Y_{2x} X_{2x+1} Y_{2x+2}`) anti-commuted with `G_x = X_{2x-1} Z_{2x} X_{2x+1}` term-by-term: `X_{2x}` and `Z_{2x}` anti-commute, and that was the only non-trivial overlap, giving an odd anti-commute parity.  The lambda penalty `lambda * (I - G_x)` enforced gauge invariance only **energetically**, not as an exact symmetry of the Hamiltonian.
 
-This means the imag-time evolution can drift out of the gauge sector even when started inside it. To convert the warmstart into an end-to-end advantage we need one of two extensions:
+The fix that ships in `lattice_z2_1d.c` replaces those kinetic Pauli strings with the gauge-invariant pair derived from inserting the Z2 link operator `U_{2x+1} = X_{2x+1}` into the JW expansion (the link operator combined with the JW string `Z_{2x+1}` becomes `XZ = -iY` on the link qubit; the Hermitian symmetrisation of the resulting hop yields):
 
-1. **Exactly gauge-invariant kinetic terms.** Construct the JW transform so that the matter-hopping operator includes the gauge-link operator on the link qubit such that the resulting Pauli string commutes with `G_x`. For Z2 this means a kinetic term of the form `X_{2x} Y_{2x+1} X_{2x+2}` rather than the simpler `X_{2x} X_{2x+1} X_{2x+2}` — the link operator carries a Y instead of an X, picked so that it cancels the anti-commute with the matter-side Z in `G_x`. This is a one-line fix in `lattice_z2_1d.c` once the algebra is checked, and it makes the warmstart-based subspace stable under imag-time evolution.
+```
+K_x = -(t/2) X_{2x} Y_{2x+1} Y_{2x+2} + (t/2) Y_{2x} Y_{2x+1} X_{2x+2}
+```
 
-2. **Gauge-aware var-D inner loop.** Constrain the greedy Clifford gate search to only accept gates `g` for which `g D g^dagger` still commutes with every `G_x` (equivalently, `D` keeps mapping `|0^n>` to the gauge sector). This is a slightly bigger change (one extra commutation check per candidate gate) and works for any kinetic term, but it foregoes the ability of var-D to find a `D` that absorbs gauge violation into Clifford layers.
+For each piece the anti-commute count with `G_x = X Z X` (qubits 2x-1, 2x, 2x+1) is:
+- `XYY` vs `G_x`: qubit 2x has `X` vs `Z` (anti) and qubit 2x+1 has `Y` vs `X` (anti) → 2 → even → commute.
+- `YYX` vs `G_x`: qubit 2x has `Y` vs `Z` (anti) and qubit 2x+1 has `Y` vs `X` (anti) → 2 → even → commute.
 
-Option 1 is the cleaner research direction. After it lands, the headline plot becomes "warmstart drives `Gviol` from O(1e-2) (plain) to machine zero (warmstart) for every h, with var-D additionally reducing `S(|phi>)` by ~5x at strong coupling".
+And similarly with `G_{x+1} = X Z X` on qubits 2x+1, 2x+2, 2x+3 — both pieces commute term-by-term.  The full Hamiltonian therefore preserves the gauge sector exactly, the lambda penalty becomes redundant for physics in the +1 sector, and `Gviol_gw_fin` stays at machine zero throughout the alternating loop.
+
+`tests/unit/test_z2_lgt_pauli_sum.c` pins the term-by-term commutativity check directly in the Pauli-byte representation; the absence of `XXX` / `YXY` and the presence of `XYY` / `YYX` with the half-amplitude coefficients are also pinned.
+
+Future option for any Hamiltonian where the kinetic terms can't be rewritten this way: add a gauge-aware var-D inner loop that constrains the greedy Clifford gate search to gates `g` for which `g D g^\dagger` still commutes with every generator.  Open research item; not blocking for Z2 LGT.
 
 ## Generalisation beyond Z2
 

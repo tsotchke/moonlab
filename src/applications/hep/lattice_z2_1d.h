@@ -10,18 +10,22 @@
  *
  * Total qubit count: 2*N - 1, where N is the number of matter sites.
  *
- * Hamiltonian (after Jordan-Wigner with parallel transport):
+ * Hamiltonian (Jordan-Wigner with parallel transport, gauge-invariant
+ * kinetic terms):
  *
- *   H = -t sum_x [X_{2x} X_{2x+1} X_{2x+2} + Y_{2x} X_{2x+1} Y_{2x+2}]
+ *   H = -(t/2) sum_x [X_{2x} Y_{2x+1} Y_{2x+2} - Y_{2x} Y_{2x+1} X_{2x+2}]
  *       - h sum_x Z_{2x+1}                       (electric field on links)
  *       + (m/2) sum_x (-1)^x Z_{2x}              (staggered mass)
  *       + lambda sum_{x=1..N-2} (I - G_x)        (Gauss-law penalty)
  *
  * where the Gauss-law operator at interior matter site x is
- *   G_x = X_{2x-1} X_{2x+1} Z_{2x}.
+ *   G_x = X_{2x-1} Z_{2x} X_{2x+1}.
  *
  * The gauge-invariant (physical) subspace is the simultaneous +1 eigenspace
- * of all G_x, and the lambda term enforces this energetically.
+ * of all G_x.  Each kinetic-term Pauli string (XYY and YYX) commutes with
+ * every G_x term-by-term, so H itself preserves the gauge sector exactly;
+ * the lambda term is then a redundant energetic enforcement that can be
+ * set to zero without changing the physical-sector spectrum.
  *
  * Why this is a clean var-D testbed:
  *   - Each G_x is a 3-qubit Pauli string -- a stabilizer operator.
