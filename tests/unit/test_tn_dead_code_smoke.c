@@ -24,6 +24,7 @@
 #include "../../src/algorithms/tensor_network/tn_state.h"
 #include "../../src/algorithms/tensor_network/tn_gates.h"
 #include "../../src/algorithms/tensor_network/tn_measurement.h"
+#include "../../src/algorithms/tensor_network/dmrg.h"
 
 #include <complex.h>
 #include <math.h>
@@ -163,11 +164,58 @@ static void test_tn_expectation_2q_cnot(void) {
     tn_mps_free(s);
 }
 
+/* ------------------------------------------------------------------ */
+/* tn_mpo_two_site: build a 4-site CNOT MPO acting on (1, 2) and apply */
+/* it to |0000>; verify result is still normalised.                   */
+/* ------------------------------------------------------------------ */
+
+static void test_tn_mpo_two_site_apply(void) {
+    fprintf(stdout, "\n--- tn_mpo_two_site (CNOT on 4-site |0000>) ---\n");
+
+    tn_state_config_t cfg = tn_state_config_default();
+    tn_mps_state_t* s = tn_mps_create_zero(4, &cfg);
+    CHECK(s != NULL, "tn_mps_create_zero");
+    if (!s) return;
+
+    tn_mpo_t* mpo = tn_mpo_two_site(4, 1, 2, &TN_GATE_CNOT);
+    CHECK(mpo != NULL, "tn_mpo_two_site returned NULL");
+    if (mpo) {
+        double err = 0.0;
+        tn_gate_error_t e = tn_apply_mpo(s, mpo, &err);
+        CHECK(e == TN_GATE_SUCCESS, "tn_apply_mpo returned %d", (int)e);
+        /* CNOT|00> = |00>, so applying CNOT_{1,2} to |0000> stays |0000>. */
+        double n = tn_mps_norm(s);
+        CHECK(fabs(n - 1.0) < 1e-9, "norm after MPO apply = %.6f", n);
+        tn_mpo_free(mpo);
+    }
+
+    tn_mps_free(s);
+}
+
+/* ------------------------------------------------------------------ */
+/* mpo_skyrmion_create: 6-site 2D 2x3 skyrmion lattice; smoke-only.   */
+/* Pin: the call returns a non-NULL MPO and frees cleanly.            */
+/* ------------------------------------------------------------------ */
+
+static void test_mpo_skyrmion_create_smoke(void) {
+    fprintf(stdout, "\n--- mpo_skyrmion_create (2x3 lattice) ---\n");
+
+    /* Six sites on a 2x3 grid; J = 1, D = 0.3, B = 0.05, K = 0.02
+     * are physically reasonable for a small skyrmion test. */
+    mpo_t* mpo = mpo_skyrmion_create(6, /*Lx=*/2, /*Ly=*/3,
+                                       /*J=*/1.0, /*D=*/0.3,
+                                       /*B=*/0.05, /*K=*/0.02);
+    CHECK(mpo != NULL, "mpo_skyrmion_create returned NULL");
+    if (mpo) mpo_free(mpo);
+}
+
 int main(void) {
     fprintf(stdout, "=== TN dead-code-triage smoke harness ===\n");
     test_tensor_einsum_matmul();
     test_svd_canonicalize_round_trip();
     test_tn_expectation_2q_cnot();
+    test_tn_mpo_two_site_apply();
+    test_mpo_skyrmion_create_smoke();
 
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
