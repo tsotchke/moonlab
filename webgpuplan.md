@@ -19,10 +19,17 @@ Add **WebGPU support to the WASM build** with a staged rollout that is safe, tes
     - `pauli_z`
     - `cnot`
     - `compute_probabilities`
+    - `mps_apply_gate_theta` (rank-4 MPS gate application)
+    - `mps_expectation_z_canonical` (per-pair Z-expectation reduction)
   - Automated non-interactive loops:
     - `scripts/webgpu-eval.mjs` (tensor/runtime parity checks)
     - `scripts/webgpu-unified-smoke.mjs` (backend/native smoke)
     - `scripts/webgpu-unified-eval.mjs` (randomized unified backend parity loop)
+- Phase 4 progress (post-v0.2.1):
+  - WGSL kernels added + pipeline-registered for `rz`, `cz`, `swap`
+    (the three highest-leverage gates currently CPU-fallback).
+    Dispatch wiring (EM_ASYNC_JS + C wrapper + WASM export + JS
+    binding) is the next concrete item -- queued as task #95-D.
 - In progress:
   - Deno-native WebGPU dispatch enablement (currently guarded off due Asyncify/runtime instability in Deno path).
   - Tensor-network compute offload parity for WebGPU in `tn_gates.c`/`tn_measurement.c` (currently Metal-only fast path).

@@ -914,6 +914,20 @@ if(QSIM_SIMD_SVE)
     endif()
 endif()
 
+# simd_ops.c uses SSE3 intrinsics (_mm_hadd_pd, _mm_addsub_pd) inside
+# blocks that are only gated on __SSE2__.  On Release builds this works
+# because -march=native upgrades the baseline to whatever the host
+# supports; on Debug / coverage builds without -march=native, the
+# compiler's default baseline is x86-64 (SSE2 only) and the SSE3
+# intrinsics fail to declare.  Force -msse3 per-file on x86_64 so the
+# SSE3-using code paths compile regardless of build type.
+if(QSIM_ARCH_X86_64 AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
+    set_source_files_properties(
+        src/optimization/simd_ops.c
+        PROPERTIES COMPILE_FLAGS "-msse3"
+    )
+endif()
+
 # ==============================================================================
 # OpenMP Configuration
 # ==============================================================================
