@@ -1,0 +1,8 @@
+=== variational-D CA-MPS on 1+1D Z2 lattice gauge theory ===
+N = 4 matter sites, total qubits = 7, lambda = 5.0
+Gauss-law constraint G_x = X_{2x-1} X_{2x+1} Z_{2x} on interior x.
+
+     h       E_varD      S_phi  S_psi_max        ratio     Gauss_viol     wall_s
+----------------------------------------------------------------------------
+  0.25   -10.866932     1.9248     0.9993       1.9262      2.538e-02     301.56
+  0.50   -11.580086     1.1146     0.9970       1.1179      3.995e-02     278.61

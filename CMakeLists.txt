@@ -615,6 +615,10 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/moonlab_qrng_export.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
+    # HEP / lattice gauge theory bench primitives.  The 1+1D Z2 LGT Pauli-sum
+    # builder powers the var-D x gauge-constraint-absorption demonstration in
+    # examples/hep/ and tests/unit/test_z2_lgt_pauli_sum.c.
+    src/applications/hep/lattice_z2_1d.c
 )
 
 set(QSIM_PROFILER_SOURCES
@@ -1307,6 +1311,14 @@ if(QSIM_BUILD_TESTS)
         target_link_libraries(test_ca_peps_scaffold PRIVATE quantumsim ${MATH_LIBRARY})
         add_test(NAME unit_ca_peps_scaffold COMMAND test_ca_peps_scaffold)
         set_tests_properties(unit_ca_peps_scaffold PROPERTIES TIMEOUT 30)
+
+        # 1+1D Z2 lattice gauge theory Pauli-sum builder.  Pins the term-
+        # count breakdown, individual term coefficients, Gauss-law operator
+        # support, and Wilson-line construction.
+        add_executable(test_z2_lgt_pauli_sum tests/unit/test_z2_lgt_pauli_sum.c)
+        target_link_libraries(test_z2_lgt_pauli_sum PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_z2_lgt_pauli_sum COMMAND test_z2_lgt_pauli_sum)
+        set_tests_properties(unit_z2_lgt_pauli_sum PROPERTIES TIMEOUT 30)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
@@ -1932,6 +1944,15 @@ if(QSIM_BUILD_EXAMPLES)
     add_executable(example_ca_mps_var_d_kagome12
         examples/tensor_network/ca_mps_var_d_kagome12.c)
     target_link_libraries(example_ca_mps_var_d_kagome12 PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
+    # HEP demo: var-D absorbs Gauss-law constraints on 1+1D Z2 lattice
+    # gauge theory.  Bridges the var-D method to lattice-QCD-style
+    # simulations -- the SaaS / hardware-development / serious-mathematics
+    # vignette that no competing simulator currently offers.
+    add_executable(example_z2_gauge_var_d
+        examples/hep/z2_gauge_var_d.c)
+    target_link_libraries(example_z2_gauge_var_d PRIVATE
         quantumsim ${MATH_LIBRARY})
 
     # Execute a representative subset of examples under ctest so CI
