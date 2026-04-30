@@ -105,6 +105,9 @@ EM_ASYNC_JS(int, moonlab_webgpu_init_async, (), {
             state.pauliXPipeline &&
             state.pauliZPipeline &&
             state.cnotPipeline &&
+            state.rzPipeline &&
+            state.czPipeline &&
+            state.swapPipeline &&
             state.probabilitiesPipeline &&
             state.mpsApplyGateThetaPipeline &&
             state.mpsExpectationZCanonicalPipeline) {
@@ -197,6 +200,94 @@ fn pauli_z_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     v = -v;
   }
   pauli_z_dst[i] = v;
+}
+
+struct PhaseRzParams {
+  qubit: u32,
+  state_dim: u32,
+  cos_half: f32,
+  sin_half: f32,
+};
+
+@group(0) @binding(0) var<storage, read> rz_src: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> rz_dst: array<vec2<f32>>;
+@group(0) @binding(2) var<uniform> rz_params: PhaseRzParams;
+
+@compute @workgroup_size(256)
+fn rz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
+  // RZ(theta) on qubit q multiplies |0> by e^{-i theta/2} and |1> by
+  // e^{+i theta/2}.  cos_half = cos(theta/2), sin_half = sin(theta/2).
+  let i = gid.x;
+  if (i >= rz_params.state_dim) {
+    return;
+  }
+  let v = rz_src[i];
+  let bit = (i & (1u << rz_params.qubit)) != 0u;
+  // sign: -1 on |0>, +1 on |1> for the imag exponent.
+  let s = select(-1.0, 1.0, bit);
+  // (cos - i*s*sin) * (re + i*im) = (cos*re + s*sin*im) + i (cos*im - s*sin*re)
+  let c = rz_params.cos_half;
+  let ssin = s * rz_params.sin_half;
+  rz_dst[i] = vec2<f32>(
+    c * v.x + ssin * v.y,
+    c * v.y - ssin * v.x
+  );
+}
+
+struct SwapParams {
+  qubit_a: u32,
+  qubit_b: u32,
+  state_dim: u32,
+  _pad0: u32,
+};
+
+@group(0) @binding(0) var<storage, read> swap_src: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> swap_dst: array<vec2<f32>>;
+@group(0) @binding(2) var<uniform> swap_params: SwapParams;
+
+@compute @workgroup_size(256)
+fn swap_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x;
+  if (i >= swap_params.state_dim) {
+    return;
+  }
+  // Compute the index that has bits a and b swapped.
+  let bit_a = (i >> swap_params.qubit_a) & 1u;
+  let bit_b = (i >> swap_params.qubit_b) & 1u;
+  if (bit_a == bit_b) {
+    swap_dst[i] = swap_src[i];
+    return;
+  }
+  // Bits differ: read from the swapped index.
+  let j = i ^ (1u << swap_params.qubit_a) ^ (1u << swap_params.qubit_b);
+  swap_dst[i] = swap_src[j];
+}
+
+struct CzParams {
+  control: u32,
+  target: u32,
+  state_dim: u32,
+  _pad0: u32,
+};
+
+@group(0) @binding(0) var<storage, read> cz_src: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> cz_dst: array<vec2<f32>>;
+@group(0) @binding(2) var<uniform> cz_params: CzParams;
+
+@compute @workgroup_size(256)
+fn cz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
+  // CZ flips the sign of |11> and leaves all other basis states alone.
+  let i = gid.x;
+  if (i >= cz_params.state_dim) {
+    return;
+  }
+  let bit_c = (i >> cz_params.control) & 1u;
+  let bit_t = (i >> cz_params.target) & 1u;
+  var v = cz_src[i];
+  if (bit_c == 1u && bit_t == 1u) {
+    v = -v;
+  }
+  cz_dst[i] = v;
 }
 
 struct CnotParams {
@@ -368,6 +459,27 @@ fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u
                         entryPoint: 'cnot_kernel',
                     },
                 });
+                const rzPipeline = device.createComputePipeline({
+                    layout: 'auto',
+                    compute: {
+                        module: shaderModule,
+                        entryPoint: 'rz_kernel',
+                    },
+                });
+                const czPipeline = device.createComputePipeline({
+                    layout: 'auto',
+                    compute: {
+                        module: shaderModule,
+                        entryPoint: 'cz_kernel',
+                    },
+                });
+                const swapPipeline = device.createComputePipeline({
+                    layout: 'auto',
+                    compute: {
+                        module: shaderModule,
+                        entryPoint: 'swap_kernel',
+                    },
+                });
                 const probabilitiesPipeline = device.createComputePipeline({
                     layout: 'auto',
                     compute: {
@@ -396,6 +508,9 @@ fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u
                 state.pauliXPipeline = pauliXPipeline;
                 state.pauliZPipeline = pauliZPipeline;
                 state.cnotPipeline = cnotPipeline;
+                state.rzPipeline = rzPipeline;
+                state.czPipeline = czPipeline;
+                state.swapPipeline = swapPipeline;
                 state.probabilitiesPipeline = probabilitiesPipeline;
                 state.mpsApplyGateThetaPipeline = mpsApplyGateThetaPipeline;
                 state.mpsExpectationZCanonicalPipeline = mpsExpectationZCanonicalPipeline;

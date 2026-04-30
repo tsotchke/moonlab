@@ -238,9 +238,28 @@ _moonlab_ca_mps_t_dagger
 _moonlab_ca_mps_phase
 _moonlab_ca_mps_normalize
 _moonlab_ca_mps_norm
-# Variational-D + gauge warmstart + Z2 LGT + status (since 0.2.1).
-_moonlab_ca_mps_var_d_run
-_moonlab_ca_mps_gauge_warmstart
-_moonlab_z2_lgt_1d_build
-_moonlab_z2_lgt_1d_gauss_law
-_moonlab_status_string
+# Variational-D + gauge warmstart + Z2 LGT + status -- internal symbols
+# (the v0.2.1 ABI wrappers in moonlab_qrng_export.c live behind moonlab_*
+# names but pull in qgt + qrng, which we keep out of the WASM build to
+# stay light.  The WASM TS layer calls the underlying C functions
+# directly under their internal names instead).
+_moonlab_ca_mps_optimize_var_d_alternating
+_moonlab_ca_mps_optimize_var_d_clifford_only
+_moonlab_ca_mps_apply_stab_subgroup_warmstart
+_z2_lgt_1d_build_pauli_sum
+_z2_lgt_1d_gauss_law_pauli
+_z2_lgt_1d_num_qubits
+_moonlab_status_to_string
+# Noise channels (since 0.2.1).
+_noise_depolarizing_single
+_noise_depolarizing_two_qubit
+_noise_amplitude_damping
+_noise_phase_damping
+_noise_pure_dephasing
+_noise_bit_flip
+_noise_phase_flip
+_noise_bit_phase_flip
+_noise_thermal_relaxation
+# Entanglement metrics (since 0.2.1).
+_entanglement_entropy_bipartition
+_entanglement_mutual_information

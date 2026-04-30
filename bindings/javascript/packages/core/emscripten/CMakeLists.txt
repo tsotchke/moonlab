@@ -40,6 +40,27 @@ set(TENSOR_NETWORK_SOURCES
     ${QSIM_ROOT}/src/algorithms/tensor_network/tn_gates.c
     ${QSIM_ROOT}/src/algorithms/tensor_network/tn_measurement.c
     ${QSIM_ROOT}/src/algorithms/tensor_network/tn_state.c
+    # CA-MPS + var-D + gauge warmstart + CA-PEPS scaffold (since 0.2.1).
+    ${QSIM_ROOT}/src/algorithms/tensor_network/ca_mps.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/ca_mps_var_d.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.c
+    ${QSIM_ROOT}/src/algorithms/tensor_network/ca_peps.c
+)
+
+# Source files - Aaronson-Gottesman tableau backend (since 0.2.1, used by CA-MPS).
+set(BACKEND_SOURCES
+    ${QSIM_ROOT}/src/backends/clifford/clifford.c
+)
+
+# Source files - HEP applications (since 0.2.1).
+# Note: moonlab_qrng_export.c (the v0.2.1 ABI wrappers exposed via
+# moonlab_export.h) deliberately stays out of the WASM build because it
+# pulls in qgt + qrng + hardware_entropy (heavy, much of it
+# host-only).  The WASM TS layer calls the underlying internal C
+# functions directly using their real names; see exports.txt and
+# bindings/javascript/packages/core/src/ca-mps.ts.
+set(APPLICATION_SOURCES
+    ${QSIM_ROOT}/src/applications/hep/lattice_z2_1d.c
 )
 
 # Source files - Utilities
@@ -47,6 +68,7 @@ set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/entropy.c
     ${QSIM_ROOT}/src/utils/matrix_math.c
     ${QSIM_ROOT}/src/utils/config.c
+    ${QSIM_ROOT}/src/utils/moonlab_status.c
 )
 
 # Source files - Optimization (SIMD operations with scalar fallbacks for WASM)
@@ -71,6 +93,8 @@ set(ALL_SOURCES
     ${QUANTUM_SOURCES}
     ${ALGORITHM_SOURCES}
     ${TENSOR_NETWORK_SOURCES}
+    ${BACKEND_SOURCES}
+    ${APPLICATION_SOURCES}
     ${UTILS_SOURCES}
     ${OPTIMIZATION_SOURCES}
     ${CMAKE_SOURCE_DIR}/f2c_stub.c
