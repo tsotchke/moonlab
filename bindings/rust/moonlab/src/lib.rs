@@ -37,12 +37,17 @@
 //! This crate provides safe wrappers around the `moonlab-sys` FFI bindings.
 //! All memory is automatically managed through Rust's ownership system.
 
+pub mod ca_mps;
 pub mod error;
 pub mod feynman;
 pub mod state;
 pub mod topology;
 
 // Re-export main types
+pub use ca_mps::{
+    gauge_warmstart, status_string, var_d_run, z2_lgt_1d_build,
+    z2_lgt_1d_gauss_law, CaMps, StatusModule, VarDConfig, Warmstart,
+};
 pub use error::{QuantumError, Result};
 pub use feynman::{FeynmanDiagram, ParticleType};
 pub use state::{QuantumState, MAX_QUBITS};
@@ -54,6 +59,7 @@ pub use topology::{qwz_chern, ssh_winding, ChernKpm};
 /// use moonlab::prelude::*;
 /// ```
 pub mod prelude {
+    pub use crate::ca_mps::{CaMps, VarDConfig, Warmstart};
     pub use crate::error::{QuantumError, Result};
     pub use crate::feynman::{FeynmanDiagram, ParticleType};
     pub use crate::state::{QuantumState, MAX_QUBITS};

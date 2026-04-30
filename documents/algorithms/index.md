@@ -33,6 +33,8 @@ This section provides comprehensive documentation of quantum algorithms, includi
 |-----------|---------|----------|
 | [DMRG](dmrg-algorithm.md) | $O(n\chi^3)$ | 1D ground states |
 | [TDVP](tdvp-algorithm.md) | $O(n\chi^3)$ | Real-time dynamics |
+| [CA-MPS + var-D](ca-mps-var-d.md) | $O(n\chi'^3)$, $\chi' \ll \chi$ | Stabilizer-rich circuits + gauge-projected ground states |
+| [Gauge-aware warmstart](ca-mps-var-d.md#gauge-aware-warmstart) | $O(n^2)$ Clifford gates | LGT, surface/toric/repetition codes, abelian symmetry sectors |
 
 ### Topological Quantum Computing
 
