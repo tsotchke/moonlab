@@ -24,7 +24,7 @@ Quick Start:
     >>> result = state.measure(0)  # Measure qubit 0
 """
 
-__version__ = "0.2.1-dev"
+__version__ = "0.2.1"
 __author__ = "tsotchke"
 
 from .core import (
@@ -58,6 +58,28 @@ from .topology import (
 )
 from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
 from . import crypto
+
+# Clifford-Assisted MPS + var-D + gauge-aware warmstart + Z2 LGT.
+# Optional import: a stripped libquantumsim build without these
+# entry points (e.g. WASM size-trimmed) should still import the
+# top-level moonlab module.
+try:
+    from .ca_mps import (
+        CAMPS,
+        WARMSTART_IDENTITY,
+        WARMSTART_H_ALL,
+        WARMSTART_DUAL_TFIM,
+        WARMSTART_FERRO_TFIM,
+        WARMSTART_STABILIZER_SUBGROUP,
+        var_d_run,
+        gauge_warmstart,
+        z2_lgt_1d_build,
+        z2_lgt_1d_gauss_law,
+        status_string,
+    )
+    _CAMPS_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _CAMPS_AVAILABLE = False
 
 __all__ = [
     'QuantumState',
