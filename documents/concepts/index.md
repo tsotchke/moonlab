@@ -23,6 +23,7 @@ Understanding quantum computing requires familiarity with concepts from linear a
 |-------|-------------|---------------|
 | [Entanglement Measures](entanglement-measures.md) | Entropy, purity, fidelity | Measurement theory |
 | [Tensor Networks](tensor-networks.md) | MPS, MPO, DMRG foundations | Entanglement |
+| [Clifford-augmented states](clifford-augmented-states.md) | Hybrid `\|psi> = D\|phi>` representation, when CA-MPS helps (since v0.2.1) | Tensor networks |
 | [Variational Algorithms](variational-algorithms.md) | VQE and QAOA principles | Gates, measurement |
 | [Noise Models](noise-models.md) | Decoherence and error channels | All foundational |
 

@@ -177,6 +177,70 @@ console.log(\`Iterations: \${result.iterations}\`);
 vqe.dispose();`,
     runnable: true,
   },
+  {
+    id: 'ca-mps-stabilizer',
+    title: 'CA-MPS: Stabilizer Circuit',
+    description: 'Pure-Clifford GHZ state via Clifford-Assisted MPS. The Clifford structure goes into the tableau (O(n) bit ops); the MPS stays at bond dimension 1. 64x bond-dim advantage and 13884x speedup vs plain MPS at n=12 (since v0.2.1).',
+    code: `import { CaMps } from '@moonlab/quantum-core';
+
+// 12-qubit CA-MPS, max MPS bond dim 32. The Clifford prefactor D
+// stores the Aaronson-Gottesman tableau; |phi> stays at bond 1
+// for any pure-Clifford circuit.
+const state = await CaMps.create(12, 32);
+
+// 12-qubit GHZ: H on qubit 0, then a CNOT chain.
+state.h(0);
+for (let q = 0; q + 1 < 12; q++) state.cnot(q, q + 1);
+
+console.log('num_qubits =', state.numQubits);
+console.log('bond_dim   =', state.bondDim);   // expected: 1
+console.log('norm       =', state.norm);       // expected: 1.0
+
+state.dispose();`,
+    runnable: false,
+  },
+  {
+    id: 'gauge-warmstart-bell',
+    title: 'Gauge-Aware Warmstart: Bell stabilizers',
+    description: 'Aaronson-Gottesman symplectic-Gauss-Jordan Clifford prep on the abelian stabilizer subgroup {XX, ZZ}. The resulting state is in the simultaneous +1 eigenspace of every generator -- the Bell state |Phi+>. Generalises to LGT Gauss-law operators, surface/toric/repetition codes (since v0.2.1).',
+    code: `import { CaMps, gaugeWarmstart } from '@moonlab/quantum-core';
+
+// Bell-pair stabilizer subgroup S = {XX, ZZ}.
+// Pauli-byte encoding: 0=I, 1=X, 2=Y, 3=Z.
+const generators = new Uint8Array([
+  1, 1,    // X X
+  3, 3,    // Z Z
+]);
+
+const state = await CaMps.create(2, 8);
+gaugeWarmstart(state, generators, /*numGens=*/2);
+
+// state.D|00> is now in the +1 eigenspace of both XX and ZZ,
+// i.e. the Bell state (|00> + |11>) / sqrt(2).
+console.log('norm =', state.norm);   // 1.0
+state.dispose();`,
+    runnable: false,
+  },
+  {
+    id: 'z2-lgt-build',
+    title: 'Z2 Lattice Gauge Theory: Pauli sum builder',
+    description: 'Build the 1+1D Z2 LGT Hamiltonian on N matter sites. Exactly gauge-invariant kinetic terms (XYY/YYX form) -- each piece commutes with every interior Gauss-law operator G_x = X_{2x-1} Z_{2x} X_{2x+1}. First HEP application of the gauge-aware warmstart (since v0.2.1).',
+    code: `import { z2Lgt1dBuild, z2Lgt1dGaussLaw } from '@moonlab/quantum-core';
+
+// N = 4 matter sites -> 7 qubits (4 matter + 3 link).
+const ham = await z2Lgt1dBuild(4, /*t=*/1.0, /*h=*/0.5, /*m=*/0.0,
+                                  /*gauss_penalty=*/0.0);
+
+console.log('num_qubits =', ham.numQubits);  // 7
+console.log('num_terms  =', ham.numTerms);   // matter + electric + mass
+
+// Interior Gauss-law operator at matter site x = 1.
+const G1 = await z2Lgt1dGaussLaw(4, 1);
+// Bytes are 0,1,3,1,0,0,0 -- X on qubit 1, Z on qubit 2,
+// X on qubit 3, identity elsewhere.
+console.log('G_1 =', Array.from(G1));`,
+    runnable: false,
+  },
 ];
 
 const Examples: React.FC = () => {

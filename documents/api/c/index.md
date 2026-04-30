@@ -18,6 +18,7 @@ The C API is organized into modules:
 | [QAOA](qaoa.md) | `qaoa.h` | Quantum optimization |
 | [QPE](qpe.md) | `qpe.h` | Phase estimation |
 | [Tensor Network](tensor-network.md) | `tensor.h`, `dmrg.h` | MPS and DMRG |
+| [CA-MPS + var-D](ca-mps.md) | `ca_mps.h`, `ca_mps_var_d.h`, `ca_mps_var_d_stab_warmstart.h`, `lattice_z2_1d.h`, `moonlab_status.h` | Hybrid `\|psi> = D\|phi>` representation, var-D ground-state search, gauge-aware stabilizer-subgroup warmstart, 1+1D Z2 LGT, status registry. Since v0.2.1. |
 | [Topological](topological.md) | `topological.h` | Anyon models, surface codes |
 | [Skyrmion Braiding](skyrmion-braiding.md) | `skyrmion_braiding.h` | Topological qubits |
 | [GPU Metal](gpu-metal.md) | `gpu_metal.h` | Metal acceleration |

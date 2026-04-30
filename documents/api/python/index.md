@@ -8,6 +8,7 @@ The Python bindings provide a high-level, Pythonic interface to Moonlab Quantum 
 |--------|-------------|
 | [Core](core.md) | `QuantumState`, gates, measurement |
 | [Algorithms](algorithms.md) | VQE, QAOA, Grover implementations |
+| [CA-MPS + var-D](ca_mps.md) | `CAMPS` class plus `var_d_run`, `gauge_warmstart`, `z2_lgt_1d_build`, `z2_lgt_1d_gauss_law`, `status_string`. Since v0.2.1. |
 | [ML](ml.md) | Quantum machine learning (QSVM, kernels) |
 | [Torch Layer](torch-layer.md) | PyTorch integration |
 | [Visualization](visualization.md) | Circuit diagrams, state plots |
