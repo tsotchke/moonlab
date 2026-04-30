@@ -604,6 +604,7 @@ set(QSIM_UTILS_SOURCES
     src/utils/matrix_math.c
     src/utils/manifest.c
     src/utils/quantum_entropy.c
+    src/utils/moonlab_status.c
 )
 
 set(QSIM_APPLICATIONS_SOURCES
@@ -1339,6 +1340,15 @@ if(QSIM_BUILD_TESTS)
             COMMAND test_tn_mps_from_statevector)
         set_tests_properties(unit_tn_mps_from_statevector
             PROPERTIES TIMEOUT 30)
+
+        # Centralised moonlab_status_t registry test.  Closes audit
+        # task #73 (was previously marked complete without code).
+        add_executable(test_moonlab_status
+            tests/unit/test_moonlab_status.c)
+        target_link_libraries(test_moonlab_status
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_moonlab_status COMMAND test_moonlab_status)
+        set_tests_properties(unit_moonlab_status PROPERTIES TIMEOUT 10)
     endif()
 
     # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
