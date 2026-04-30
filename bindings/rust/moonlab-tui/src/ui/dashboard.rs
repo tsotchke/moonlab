@@ -700,6 +700,18 @@ fn help_algorithm_browser() -> (&'static str, Vec<Line<'static>>) {
             Span::styled("  QAOA       ", Style::default().fg(Color::Magenta)),
             Span::raw("Quantum Approximate Optimization Algorithm"),
         ]),
+        Line::from(vec![
+            Span::styled("  CA-MPS GHZ ", Style::default().fg(Color::LightCyan)),
+            Span::raw("Hybrid |psi> = D|phi> stores Clifford in tableau (bond_dim=1)"),
+        ]),
+        Line::from(vec![
+            Span::styled("  CA-MPS BWS ", Style::default().fg(Color::LightCyan)),
+            Span::raw("Gauge-aware Bell warmstart: symplectic GJ on {XX, ZZ}"),
+        ]),
+        Line::from(vec![
+            Span::styled("  Z2 LGT     ", Style::default().fg(Color::LightCyan)),
+            Span::raw("1+1D Z2 lattice gauge theory Pauli-sum builder + Gauss-law"),
+        ]),
         Line::from(""),
         Line::from(Span::styled("Press any key to close", Style::default().fg(Color::DarkGray))),
     ])
@@ -1005,6 +1017,32 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
                 gates.push(Gate::Rx(i, 0.5));
             }
             CircuitDiagram::new(n).title("QAOA p=1").gates(gates)
+        }
+        Algorithm::CaMpsGhz => {
+            // Same gate sequence as GHZ -- CA-MPS just stores it in
+            // the tableau instead of materialising it in MPS bonds.
+            let mut gates = vec![Gate::H(0)];
+            for i in 1..n {
+                gates.push(Gate::CNOT(0, i));
+            }
+            CircuitDiagram::new(n)
+                .title("CA-MPS GHZ (bond-dim = 1)")
+                .gates(gates)
+        }
+        Algorithm::CaMpsBellWarmstart => {
+            // The gauge-aware warmstart emits a Clifford circuit
+            // equivalent to {H, CNOT} that prepares the Bell state.
+            CircuitDiagram::new(2.max(n))
+                .title("CA-MPS gauge warmstart (Bell)")
+                .gates(vec![Gate::H(0), Gate::CNOT(0, 1)])
+        }
+        Algorithm::Z2LgtBuild => {
+            // The Pauli-sum builder doesn't act as a circuit per se;
+            // show a minimal 1-qubit Hadamard placeholder so the
+            // visualisation has something to draw.
+            CircuitDiagram::new(n)
+                .title("1+1D Z2 LGT (Pauli-sum build)")
+                .gates(vec![Gate::H(0)])
         }
     }
 }

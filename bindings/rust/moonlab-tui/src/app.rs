@@ -1,7 +1,10 @@
 //! Application state and logic.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use moonlab::{FeynmanDiagram, QuantumState};
+use moonlab::{
+    CaMps, FeynmanDiagram, QuantumState,
+    z2_lgt_1d_build, z2_lgt_1d_gauss_law,
+};
 use std::time::Instant;
 
 /// Application execution mode.
@@ -30,6 +33,22 @@ pub enum Algorithm {
     VQE,
     QAOA,
     QFT,
+    /// CA-MPS bond-dim advantage demo.  Builds an n-qubit GHZ via the
+    /// CA-MPS hybrid representation and reports the resulting MPS bond
+    /// dimension (1 for any pure-Clifford circuit) alongside the plain
+    /// MPS bond dim that would be required to represent the same state
+    /// (max half-cut entanglement of GHZ = 1 -> chi >= 2^1 = 2).  Since
+    /// v0.2.1.
+    CaMpsGhz,
+    /// Gauge-aware stabilizer-subgroup warmstart demo on the Bell-pair
+    /// stabilizers {XX, ZZ}.  Shows that a single Aaronson-Gottesman
+    /// symplectic-Gauss-Jordan call places the CA-MPS into the +1
+    /// eigenspace of every supplied generator.  Since v0.2.1.
+    CaMpsBellWarmstart,
+    /// Build the 1+1D Z2 LGT Hamiltonian on N matter sites and report
+    /// the term count + interior Gauss-law operator structure.
+    /// Showcases the v0.2.1 HEP application surface.
+    Z2LgtBuild,
 }
 
 impl Algorithm {
@@ -41,6 +60,9 @@ impl Algorithm {
             Self::VQE => "VQE (H₂ Molecule)",
             Self::QAOA => "QAOA (MaxCut)",
             Self::QFT => "Quantum Fourier Transform",
+            Self::CaMpsGhz => "CA-MPS GHZ (bond-dim advantage)",
+            Self::CaMpsBellWarmstart => "CA-MPS gauge warmstart (Bell)",
+            Self::Z2LgtBuild => "1+1D Z2 LGT Hamiltonian",
         }
     }
 
@@ -53,6 +75,15 @@ impl Algorithm {
             Self::VQE => "Variational Quantum Eigensolver for chemistry",
             Self::QAOA => "Quantum Approximate Optimization",
             Self::QFT => "Quantum analog of discrete Fourier transform",
+            Self::CaMpsGhz => {
+                "CA-MPS hybrid |psi> = D|phi> on n-qubit GHZ; pure Clifford goes into the tableau, MPS bond-dim stays at 1"
+            }
+            Self::CaMpsBellWarmstart => {
+                "Symplectic Gauss-Jordan Clifford prep on commuting generators {XX, ZZ} -> Bell state in +1 eigenspace"
+            }
+            Self::Z2LgtBuild => {
+                "Schwinger-style 1+1D Z2 lattice gauge theory: matter + gauge-link Pauli sum with exactly gauge-invariant kinetic terms"
+            }
         }
     }
 
@@ -64,6 +95,9 @@ impl Algorithm {
             Self::VQE,
             Self::QAOA,
             Self::QFT,
+            Self::CaMpsGhz,
+            Self::CaMpsBellWarmstart,
+            Self::Z2LgtBuild,
         ]
     }
 }
@@ -731,6 +765,74 @@ impl App {
                 }
                 self.total_steps = 4 * n;
                 self.status = String::from("QAOA p=1 circuit");
+            }
+            Algorithm::CaMpsGhz => {
+                // Build the GHZ state via CA-MPS to demonstrate the
+                // bond-dim advantage on a pure-Clifford circuit.
+                // The displayed QuantumState is updated in parallel
+                // for the live amplitude visualisation; the CA-MPS
+                // bond_dim metric goes into the status line.
+                state.h(0);
+                for i in 1..n {
+                    state.cnot(0, i);
+                }
+                let bond_dim_str = match CaMps::new(n as u32, 32) {
+                    Ok(mut ca) => {
+                        let _ = ca.h(0);
+                        for q in 1..(n as u32) {
+                            let _ = ca.cnot(0, q);
+                        }
+                        format!(
+                            "CA-MPS bond_dim={} (plain MPS needs >=2 for GHZ); norm={:.3}",
+                            ca.bond_dim(),
+                            ca.norm())
+                    }
+                    Err(e) => format!("CA-MPS create failed: {e:?}"),
+                };
+                self.total_steps = n;
+                self.status = format!("{n}-qubit GHZ via CA-MPS -- {bond_dim_str}");
+            }
+            Algorithm::CaMpsBellWarmstart => {
+                // Bell-pair stabilizer subgroup {XX, ZZ} -> Bell state
+                // via the gauge-aware symplectic-Gauss-Jordan Clifford.
+                state.h(0).cnot(0, 1); // mirror on the displayed state
+                let warm_status = (|| -> Result<String, String> {
+                    let mut ca = CaMps::new(2, 8).map_err(|e| format!("{e:?}"))?;
+                    // {XX, ZZ} as (k=2, n=2) Pauli bytes.
+                    let gens: [u8; 4] = [1, 1, 3, 3];
+                    moonlab::gauge_warmstart(&mut ca, &gens, 2)
+                        .map_err(|e| format!("{e:?}"))?;
+                    Ok(format!(
+                        "Bell warmstart OK -- norm={:.3}, bond_dim={}",
+                        ca.norm(),
+                        ca.bond_dim()))
+                })();
+                self.total_steps = 2;
+                self.status = warm_status.unwrap_or_else(|e| format!("warmstart failed: {e}"));
+            }
+            Algorithm::Z2LgtBuild => {
+                // Build the Z2 LGT Pauli sum on N=4 matter sites + dump
+                // the interior Gauss-law operator G_1 layout.  Mirrors
+                // a single Hadamard on the displayed state for visual
+                // feedback (the actual Pauli-sum work happens off the
+                // displayed state).
+                let n_matter: u32 = 4;
+                let z2 = (|| -> Result<String, String> {
+                    let (_paulis, coeffs, num_qubits) =
+                        z2_lgt_1d_build(n_matter, 1.0, 0.5, 0.0, 0.0)
+                            .map_err(|e| format!("{e:?}"))?;
+                    let g1 = z2_lgt_1d_gauss_law(n_matter, 1)
+                        .map_err(|e| format!("{e:?}"))?;
+                    let layout: String = g1.iter().map(|&b| match b {
+                        0 => '.', 1 => 'X', 2 => 'Y', 3 => 'Z', _ => '?',
+                    }).collect();
+                    Ok(format!(
+                        "Z2 LGT N={n_matter}: {num_qubits} qubits, {} Pauli terms; G_1=[{layout}]",
+                        coeffs.len()))
+                })();
+                if n >= 1 { state.h(0); }
+                self.total_steps = 1;
+                self.status = z2.unwrap_or_else(|e| format!("Z2 LGT build failed: {e}"));
             }
         }
 
