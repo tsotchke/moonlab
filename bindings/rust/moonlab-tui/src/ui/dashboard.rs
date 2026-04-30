@@ -712,6 +712,10 @@ fn help_algorithm_browser() -> (&'static str, Vec<Line<'static>>) {
             Span::styled("  Z2 LGT     ", Style::default().fg(Color::LightCyan)),
             Span::raw("1+1D Z2 lattice gauge theory Pauli-sum builder + Gauss-law"),
         ]),
+        Line::from(vec![
+            Span::styled("  var-D TFIM ", Style::default().fg(Color::LightCyan)),
+            Span::raw("Live alternating greedy-Clifford + imag-time on 4-qubit TFIM"),
+        ]),
         Line::from(""),
         Line::from(Span::styled("Press any key to close", Style::default().fg(Color::DarkGray))),
     ])
@@ -1043,6 +1047,21 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
             CircuitDiagram::new(n)
                 .title("1+1D Z2 LGT (Pauli-sum build)")
                 .gates(vec![Gate::H(0)])
+        }
+        Algorithm::CaMpsVarDTfim => {
+            // var-D's DUAL_TFIM warmstart applies H_all + CNOT-chain
+            // to the Clifford prefactor D before the alternating loop
+            // begins.  Visualise that warmstart structure as the
+            // canonical "circuit" for this algorithm.
+            let nq = 4usize.max(n);
+            let mut gates = Vec::new();
+            for i in 0..nq { gates.push(Gate::H(i)); }
+            for i in 0..nq.saturating_sub(1) {
+                gates.push(Gate::CNOT(i, i + 1));
+            }
+            CircuitDiagram::new(nq)
+                .title("var-D TFIM (DUAL_TFIM warmstart)")
+                .gates(gates)
         }
     }
 }
