@@ -109,40 +109,66 @@
 
 ## Dead-code triage queue (ICC `find-dead-code --grep-confirm`)
 
-ICC dogfood (2026-04-30) on the `moonlab` index found ~50 functions
-in `src/` with no call-shaped textual reference anywhere in
-`src/`, `tests/`, `include/`, `examples/`.  Triage strategy:
+ICC dogfood on the `moonlab` index, two passes:
 
-1. **Public API**: keep, document.  ICC may have miscounted because
-   external bindings (Python, Rust, JS) call these via the stable
-   ABI; if not, move to `moonlab_export.h`.
-2. **Internal but reachable via dispatch / vtable / function pointer**:
-   keep, audit dispatch.
-3. **Internal and truly unreachable**: delete.
+**2026-04-30 morning baseline**: ~50 functions in `src/` ≥ 30 LOC
+with no call-shaped textual reference anywhere in `src/`, `tests/`,
+`include/`, `examples/`.
 
-Top candidates to triage by file:
+**2026-04-30 afternoon, after this commit batch**: 9 of the top-15
+entries closed via the dead-code-triage smoke harness
+(`tests/unit/test_tn_dead_code_smoke.c` + an earlier dedicated
+`test_tn_mps_from_statevector.c`).  Each function is now exercised
+by the suite; ICC re-index after the harness landed shows them no
+longer in the dead-code top.
 
-| File | Function | LOC | Initial classification |
+Closed by smoke harness:
+- `tensor_einsum` (178 LOC) -- 2x2 matmul against hand-computed.
+- `tn_mps_from_statevector` (175 LOC) -- round-trip on product /
+  GHZ / W / random 5-qubit, max abs diff < 1e-10.
+- `mpo_skyrmion_create` (156 LOC) -- 2x3 lattice non-NULL smoke.
+- `svd_left_canonicalize` (141 LOC) -- 4x3 random matrix.
+- `dmrg_energy_variance` (128 LOC) -- TFIM 4-qubit |0000>, var >= 0.
+- `tn_expectation_2q` (276 LOC) -- <00|CNOT|00> = 1, <00|CZ|00> = 1.
+- `tn_mpo_two_site` (74 LOC) -- 4-site CNOT on |0000>, norm = 1.
+- `tn_histogram_create` (67 LOC) -- 8-sample synthetic.
+- `tensor_svd_truncate` (58 LOC) -- 4x3 error-bounded truncation.
+
+**Remaining queue, post-cleanup**:
+
+| File | Function | LOC | Classification |
 |---|---|---|---|
-| `src/algorithms/tensor_network/tn_measurement.c` | `tn_expectation_2q` | 276 | Public API or test helper — confirm |
-| `src/algorithms/tensor_network/tensor.c` | `tensor_einsum` | 178 | Likely public — confirm |
-| `src/optimization/gpu_metal.mm` | `metal_mps_expectation_zz` | 177 | Probably dead (Metal-only) |
-| `src/algorithms/tensor_network/tn_state.c` | `tn_mps_from_statevector` | 175 | Likely public (tests use it?) |
-| `src/algorithms/mbl/mbl.c` | `construct_lioms` | 165 | Open research path; unwired |
-| `src/algorithms/tensor_network/dmrg.c` | `mpo_skyrmion_create` | 156 | Skyrmion module; likely dead |
-| `src/algorithms/tensor_network/svd_compress.c` | `svd_left_canonicalize` | 141 | Public — likely dead |
-| `src/optimization/parallel_ops.c` | `grover_parallel_partitioned_search` | 139 | Distributed Grover; unwired |
-| `src/distributed/state_partition.c` | `partition_fetch_remote` | 135 | Distributed engine unwired |
+| `src/optimization/gpu_metal.mm` | `metal_mps_expectation_zz` | 177 | Unwired GPU; v0.3 wire to Metal dispatch or delete |
+| `src/algorithms/mbl/mbl.c` | `construct_lioms` | 165 | MBL research path, no caller; v0.3 add MBL example or delete |
+| `src/optimization/parallel_ops.c` | `grover_parallel_partitioned_search` | 139 | Distributed Grover, unwired |
+| `src/distributed/state_partition.c` | `partition_fetch_remote` | 135 | Distributed engine, unwired |
 | `src/distributed/state_partition.c` | `partition_scatter_updates` | 135 | Same |
 | `src/distributed/distributed_gates.c` | `dist_mcx` | 132 | Same |
-| `src/algorithms/tensor_network/dmrg.c` | `dmrg_energy_variance` | 128 | Public diagnostic — confirm |
-| `src/algorithms/vqe.c` | `vqe_apply_pauli_rotation` | 117 | Possibly orphaned by refactor |
-| `src/algorithms/topological/topological.c` | `surface_code_decode_correct` | 110 | Public surface-code primitive |
-| `src/optimization/simd_ops.c` | `simd_compute_probabilities` | 109 | SIMD path — confirm runtime dispatch |
+| `src/algorithms/vqe.c` | `vqe_apply_pauli_rotation` | 117 | Orphaned by VQE refactor (#68); delete or wire |
+| `src/algorithms/topological/topological.c` | `surface_code_decode_correct` | 110 | Surface code primitive, no test |
+| `src/optimization/simd_ops.c` | `simd_compute_probabilities` | 109 | Confirm runtime-dispatch reachability |
+| `src/distributed/collective_ops.c` | `collective_expectation_pauli` | 106 | Distributed |
+| `src/algorithms/mbl/mbl.c` | `scan_phase_diagram` | 103 | MBL research path |
 
-The remaining ~35 entries are below 100 LOC.  Each entry should be
-either deleted, exposed via the stable ABI, or wired into a real
-call site before the v0.2.1 → v0.2.2 → v0.3 ramp.
+Three coherent unwired sub-systems dominate the remaining queue
+(distributed engine ~600 LOC, MBL research path ~270 LOC, Metal
+GPU ~177 LOC).  These are feature-level decisions for v0.3 rather
+than test-per-function triage:
+
+1. **Distributed engine** -- `src/distributed/` + supporting
+   `parallel_ops.c`.  Either wire end-to-end with an MPI integration
+   test, or move to `experimental/` with a documented "unwired in
+   v0.2; v0.3 milestone" comment.
+2. **MBL research path** -- `src/algorithms/mbl/`.  Either add a
+   l-bit scan example showing a full phase-diagram run, or delete
+   construct_lioms / scan_phase_diagram and revert the module to
+   the spectral-statistics primitives that are actually used.
+3. **Metal GPU MPS expectations** -- one orphan function in an
+   otherwise-unused Metal MPS path.  Wire to `gpu_metal.h`
+   dispatch or delete.
+
+The remaining ~30 sub-100-LOC entries are quick triage that fits
+in v0.2.2 cleanup.
 
 **Status:** Moonlab is a well-documented, literature-grounded research
 simulator with a clean C core. It is **not yet** a publishable
