@@ -21,8 +21,13 @@
 #include "ca_mps_var_d_stab_warmstart.h"
 
 #include <complex.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 ca_mps_var_d_config_t ca_mps_var_d_config_default(void) {
     ca_mps_var_d_config_t c;
@@ -112,6 +117,158 @@ static double evaluate_energy(const moonlab_ca_mps_t* s,
     return creal(out);
 }
 
+/* One candidate move: a primary gate plus optionally a composite second
+ * gate.  gate2 < 0 means single-gate candidate. */
+typedef struct {
+    int gate;       uint32_t q1;   uint32_t q2;
+    int gate2;      uint32_t q1_2; uint32_t q2_2;
+} cand_t;
+
+/* Apply a candidate's primary (and optional composite) gate to @p s.
+ * Returns 0 on success, -1 if any step failed; on -1 the caller must
+ * still call cand_undo to roll back any partial progress. */
+static int cand_apply(moonlab_ca_mps_t* s, const cand_t* c) {
+    if (apply_cand(s, c->gate, c->q1, c->q2) != CA_MPS_SUCCESS) return -1;
+    if (c->gate2 >= 0) {
+        if (apply_cand(s, c->gate2, c->q1_2, c->q2_2) != CA_MPS_SUCCESS) {
+            undo_cand(s, c->gate, c->q1, c->q2);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void cand_undo(moonlab_ca_mps_t* s, const cand_t* c) {
+    if (c->gate2 >= 0) undo_cand(s, c->gate2, c->q1_2, c->q2_2);
+    undo_cand(s, c->gate, c->q1, c->q2);
+}
+
+/* Enumerate all single-gate candidates: 1q on every qubit, optionally
+ * 2q on every nearest-neighbour pair.  Caller frees out[]. */
+static cand_t* enumerate_single_cands(uint32_t n, int include_2q,
+                                       size_t* out_count) {
+    const int gate_list_1q[] = { CAND_H, CAND_S, CAND_SDAG };
+    const int n1q = sizeof(gate_list_1q) / sizeof(gate_list_1q[0]);
+    const int gate_list_2q[] = { CAND_CNOT, CAND_CZ, CAND_SWAP };
+    const int n2q = sizeof(gate_list_2q) / sizeof(gate_list_2q[0]);
+
+    size_t cap = (size_t)n * n1q + (include_2q ? (size_t)(n - 1) * n2q : 0);
+    cand_t* cands = (cand_t*)calloc(cap, sizeof(cand_t));
+    if (!cands) { *out_count = 0; return NULL; }
+
+    size_t k = 0;
+    for (uint32_t q = 0; q < n; q++) {
+        for (int gi = 0; gi < n1q; gi++) {
+            cands[k] = (cand_t){ gate_list_1q[gi], q, 0, -1, 0, 0 };
+            k++;
+        }
+    }
+    if (include_2q) {
+        for (uint32_t q = 0; q + 1 < n; q++) {
+            for (int gi = 0; gi < n2q; gi++) {
+                cands[k] = (cand_t){ gate_list_2q[gi], q, q + 1, -1, 0, 0 };
+                k++;
+            }
+        }
+    }
+    *out_count = k;
+    return cands;
+}
+
+/* Enumerate composite single+single candidates: gA on qa, gB on qb,
+ * with qb != qa.  Helps escape 1-gate local minima. */
+static cand_t* enumerate_composite_cands(uint32_t n, size_t* out_count) {
+    const int gate_list_1q[] = { CAND_H, CAND_S, CAND_SDAG };
+    const int n1q = sizeof(gate_list_1q) / sizeof(gate_list_1q[0]);
+
+    size_t cap = (size_t)n * n1q * (size_t)(n - 1) * n1q;
+    cand_t* cands = (cand_t*)calloc(cap, sizeof(cand_t));
+    if (!cands) { *out_count = 0; return NULL; }
+
+    size_t k = 0;
+    for (uint32_t qa = 0; qa < n; qa++) {
+        for (int ga = 0; ga < n1q; ga++) {
+            for (uint32_t qb = 0; qb < n; qb++) {
+                if (qb == qa) continue;
+                for (int gb = 0; gb < n1q; gb++) {
+                    cands[k] = (cand_t){
+                        gate_list_1q[ga], qa, 0,
+                        gate_list_1q[gb], qb, 0
+                    };
+                    k++;
+                }
+            }
+        }
+    }
+    *out_count = k;
+    return cands;
+}
+
+/* Evaluate every candidate's resulting energy in parallel.  Returns
+ * the energies in @p out_energies (must be length n_cands).  Each
+ * thread keeps a private CA-MPS clone and a private complex-coeffs
+ * buffer; the original @p state is not mutated.  INFINITY is written
+ * for any candidate whose apply() failed (out-of-range, etc.). */
+static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
+                                          const uint8_t* paulis,
+                                          const double* coeffs,
+                                          uint32_t num_terms,
+                                          const cand_t* cands,
+                                          size_t n_cands,
+                                          double* out_energies) {
+    /* Pre-convert coefficients to complex once (read-only across threads). */
+    double _Complex* cz_master =
+        (double _Complex*)calloc(num_terms, sizeof(double _Complex));
+    if (!cz_master) {
+        for (size_t i = 0; i < n_cands; i++) out_energies[i] = INFINITY;
+        return;
+    }
+    for (uint32_t i = 0; i < num_terms; i++) cz_master[i] = (double _Complex)coeffs[i];
+
+    #pragma omp parallel
+    {
+        moonlab_ca_mps_t* my = moonlab_ca_mps_clone(state);
+
+        #pragma omp for schedule(dynamic, 1)
+        for (size_t i = 0; i < n_cands; i++) {
+            if (!my) {
+                out_energies[i] = INFINITY;
+                continue;
+            }
+            const cand_t* c = &cands[i];
+            if (cand_apply(my, c) != 0) {
+                out_energies[i] = INFINITY;
+                continue;
+            }
+            double _Complex out = 0.0;
+            moonlab_ca_mps_expect_pauli_sum(my, paulis, cz_master, num_terms, &out);
+            out_energies[i] = creal(out);
+            cand_undo(my, c);
+        }
+
+        if (my) moonlab_ca_mps_free(my);
+    }
+
+    free(cz_master);
+}
+
+/* Sequential reduction: pick the candidate with the most-negative
+ * energy delta vs E_curr that exceeds the improvement threshold.
+ * Returns the index, or -1 if none beat the threshold. */
+static long pick_best_candidate(const double* energies, size_t n_cands,
+                                 double E_curr, double threshold,
+                                 double* out_dE) {
+    long best = -1;
+    double best_dE = -threshold;
+    for (size_t i = 0; i < n_cands; i++) {
+        if (!isfinite(energies[i])) continue;
+        const double dE = energies[i] - E_curr;
+        if (dE < best_dE) { best_dE = dE; best = (long)i; }
+    }
+    *out_dE = best_dE;
+    return best;
+}
+
 ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
     moonlab_ca_mps_t* state,
     const uint8_t* paulis,
@@ -147,115 +304,74 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
     int converged = 0;
 
     for (passes = 0; passes < cfg.max_passes; passes++) {
-        /* Best candidate found so far in this pass. */
-        double best_dE = -cfg.improvement_eps;   /* must beat eps to accept */
-        int best_gate = -1;
-        uint32_t best_q1 = 0, best_q2 = 0;
+        /* Phase A: enumerate single-gate candidates (1q + optional 2q),
+         * evaluate them all in parallel, pick the best.  Each thread
+         * keeps a private CA-MPS clone so candidate apply/undo doesn't
+         * race on the shared tableau. */
+        size_t n_single = 0;
+        cand_t* single_cands =
+            enumerate_single_cands(n, cfg.include_2q_gates, &n_single);
+        cand_t best;
+        best.gate = -1;
+        double best_dE = 0.0;
 
-        const int gate_list_1q[] = { CAND_H, CAND_S, CAND_SDAG };
-        const int n1q = sizeof(gate_list_1q) / sizeof(gate_list_1q[0]);
-        const int gate_list_2q[] = { CAND_CNOT, CAND_CZ, CAND_SWAP };
-        const int n2q = sizeof(gate_list_2q) / sizeof(gate_list_2q[0]);
-
-        /* Single-qubit candidates. */
-        for (uint32_t q = 0; q < n; q++) {
-            for (int gi = 0; gi < n1q; gi++) {
-                int g = gate_list_1q[gi];
-                if (apply_cand(state, g, q, 0) != CA_MPS_SUCCESS) continue;
-                double E_test = evaluate_energy(state, paulis, coeffs, num_terms);
-                undo_cand(state, g, q, 0);
-                double dE = E_test - E_curr;
-                if (dE < best_dE) {
-                    best_dE = dE;
-                    best_gate = g;
-                    best_q1 = q;
-                    best_q2 = 0;
-                }
+        if (single_cands && n_single > 0) {
+            double* energies = (double*)calloc(n_single, sizeof(double));
+            if (energies) {
+                evaluate_candidates_parallel(state, paulis, coeffs, num_terms,
+                                              single_cands, n_single, energies);
+                long pick = pick_best_candidate(energies, n_single, E_curr,
+                                                 cfg.improvement_eps, &best_dE);
+                if (pick >= 0) best = single_cands[pick];
+                free(energies);
             }
         }
+        free(single_cands);
 
-        /* Two-qubit candidates on every nearest-neighbour pair. */
-        if (cfg.include_2q_gates) {
-            for (uint32_t q = 0; q + 1 < n; q++) {
-                for (int gi = 0; gi < n2q; gi++) {
-                    int g = gate_list_2q[gi];
-                    if (apply_cand(state, g, q, q + 1) != CA_MPS_SUCCESS) continue;
-                    double E_test = evaluate_energy(state, paulis, coeffs, num_terms);
-                    undo_cand(state, g, q, q + 1);
-                    double dE = E_test - E_curr;
-                    if (dE < best_dE) {
-                        best_dE = dE;
-                        best_gate = g;
-                        best_q1 = q;
-                        best_q2 = q + 1;
-                    }
+        /* Phase B: composite 2-gate move search runs only when phase A
+         * found nothing.  Same parallel pattern. */
+        if (best.gate < 0 && cfg.composite_2gate) {
+            size_t n_composite = 0;
+            cand_t* composite_cands = enumerate_composite_cands(n, &n_composite);
+            if (composite_cands && n_composite > 0) {
+                double* energies = (double*)calloc(n_composite, sizeof(double));
+                if (energies) {
+                    evaluate_candidates_parallel(state, paulis, coeffs, num_terms,
+                                                  composite_cands, n_composite,
+                                                  energies);
+                    long pick = pick_best_candidate(energies, n_composite, E_curr,
+                                                     cfg.improvement_eps, &best_dE);
+                    if (pick >= 0) best = composite_cands[pick];
+                    free(energies);
                 }
             }
+            free(composite_cands);
         }
 
-        /* Composite 2-gate moves -- pairs (A, B) applied in sequence.
-         * Helps escape 1-gate local minima where the right descent
-         * direction requires two gates that each look bad alone.  Only
-         * runs when no single-gate move beats best_dE -- otherwise the
-         * single-gate descent is taken first and the composite search
-         * runs at the next iteration with updated state. */
-        int best_g2 = -1;
-        uint32_t best2_q1a = 0, best2_q1b = 0;
-        if (cfg.composite_2gate && best_gate < 0) {
-            /* Single-qubit pair followed by single-qubit pair (different
-             * qubits) -- catches dual-basis-style transformations.  */
-            for (uint32_t qa = 0; qa < n; qa++) {
-                for (int ga = 0; ga < n1q; ga++) {
-                    int gA = gate_list_1q[ga];
-                    if (apply_cand(state, gA, qa, 0) != CA_MPS_SUCCESS) continue;
-                    for (uint32_t qb = 0; qb < n; qb++) {
-                        if (qb == qa) continue;
-                        for (int gb = 0; gb < n1q; gb++) {
-                            int gB = gate_list_1q[gb];
-                            if (apply_cand(state, gB, qb, 0) != CA_MPS_SUCCESS) continue;
-                            double E_test = evaluate_energy(state, paulis, coeffs, num_terms);
-                            undo_cand(state, gB, qb, 0);
-                            double dE = E_test - E_curr;
-                            if (dE < best_dE) {
-                                best_dE = dE;
-                                best_gate = gA; best_q1 = qa; best_q2 = 0;
-                                best_g2 = gB;   best2_q1a = qb; best2_q1b = 0;
-                            }
-                        }
-                    }
-                    undo_cand(state, gA, qa, 0);
-                }
-            }
-        }
-
-        if (best_gate < 0) {
+        if (best.gate < 0) {
             /* No candidate beat the threshold -- local minimum reached. */
             converged = 1;
             passes++;
             break;
         }
 
-        /* Accept the best candidate permanently. */
-        apply_cand(state, best_gate, best_q1, best_q2);
+        /* Accept the best candidate permanently on the original state. */
+        cand_apply(state, &best);
         E_curr += best_dE;
         gates_added++;
+        if (best.gate2 >= 0) gates_added++;
+
         if (cfg.verbose) {
-            if (cand_is_2q(best_gate)) {
+            if (cand_is_2q(best.gate)) {
                 fprintf(stdout, "[var-D] accept %s(%u,%u)  dE=%+.6e  E=%.10f\n",
-                        cand_name(best_gate), best_q1, best_q2, best_dE, E_curr);
+                        cand_name(best.gate), best.q1, best.q2, best_dE, E_curr);
             } else {
                 fprintf(stdout, "[var-D] accept %s(%u)    dE=%+.6e  E=%.10f\n",
-                        cand_name(best_gate), best_q1, best_dE, E_curr);
+                        cand_name(best.gate), best.q1, best_dE, E_curr);
             }
-        }
-        /* If this was a composite 2-gate move, also apply the second
-         * gate.  best_dE already accounts for both gates' net effect. */
-        if (best_g2 >= 0) {
-            apply_cand(state, best_g2, best2_q1a, best2_q1b);
-            gates_added++;
-            if (cfg.verbose) {
+            if (best.gate2 >= 0) {
                 fprintf(stdout, "[var-D] accept %s(%u)    (composite partner)\n",
-                        cand_name(best_g2), best2_q1a);
+                        cand_name(best.gate2), best.q1_2);
             }
         }
     }
