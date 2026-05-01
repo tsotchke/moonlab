@@ -126,6 +126,12 @@ static double measure_energy_peps(const moonlab_ca_peps_t* p,
     return creal(e);
 }
 
+/* Second-order Strang splitting:
+ *   exp(-dtau sum_k h_k P_k)
+ *     ~ [prod_{k=1}^{T-1} exp(-dtau/2 h_k P_k)]
+ *       . exp(-dtau h_T P_T)
+ *       . [prod_{k=T-1}^{1} exp(-dtau/2 h_k P_k)]
+ * with O(dtau^3) per-step error vs O(dtau^2) for first-order. */
 static double run_imag_time(uint32_t Lx, uint32_t Ly, double J, double g,
                              double dtau, uint32_t steps, uint32_t chi) {
     uint8_t* paulis;
@@ -139,9 +145,18 @@ static double run_imag_time(uint32_t Lx, uint32_t Ly, double J, double g,
     for (uint32_t i = 0; i < n; i++) moonlab_ca_peps_h(p, i);
 
     for (uint32_t step = 0; step < steps; step++) {
-        for (uint32_t k = 0; k < T; k++) {
+        /* Forward half-sweep, k = 0..T-2 with dtau/2. */
+        for (uint32_t k = 0; k + 1 < T; k++) {
             moonlab_ca_peps_imag_pauli_rotation(
-                p, paulis + (size_t)k * n, dtau * coeffs[k]);
+                p, paulis + (size_t)k * n, 0.5 * dtau * coeffs[k]);
+        }
+        /* Centre term: full dtau on the last term. */
+        moonlab_ca_peps_imag_pauli_rotation(
+            p, paulis + (size_t)(T - 1) * n, dtau * coeffs[T - 1]);
+        /* Backward half-sweep, k = T-2..0 with dtau/2. */
+        for (uint32_t k = T - 1; k-- > 0; ) {
+            moonlab_ca_peps_imag_pauli_rotation(
+                p, paulis + (size_t)k * n, 0.5 * dtau * coeffs[k]);
         }
         if (((step + 1) & 3) == 0) moonlab_ca_peps_normalize(p);
     }
@@ -179,7 +194,7 @@ int main(int argc, char** argv) {
         { 2, 2,  8, 0.05,  80 },
         { 3, 2, 16, 0.05, 100 },
         { 3, 3, 32, 0.04, 150 },
-        { 4, 3, 48, 0.03, 200 },
+        { 4, 3, 96, 0.03, 200 },
     };
     const size_t n_sweeps = sizeof(sweeps) / sizeof(sweeps[0]);
     const double g_values[] = { 0.25, 0.5, 1.0, 1.5, 2.0, 3.0 };
