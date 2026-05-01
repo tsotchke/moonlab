@@ -169,6 +169,36 @@ int webgpu_cnot(webgpu_compute_ctx_t* ctx,
                 uint32_t target,
                 uint64_t state_dim);
 
+/**
+ * @brief Apply RZ(theta) on `qubit_index`. Native WGSL dispatch when available,
+ *        CPU fallback otherwise.
+ */
+int webgpu_rz(webgpu_compute_ctx_t* ctx,
+              webgpu_buffer_t* amplitudes,
+              uint32_t qubit_index,
+              double theta,
+              uint64_t state_dim);
+
+/**
+ * @brief Apply controlled-Z. Native WGSL dispatch when available, CPU fallback
+ *        otherwise.
+ */
+int webgpu_cz(webgpu_compute_ctx_t* ctx,
+              webgpu_buffer_t* amplitudes,
+              uint32_t control,
+              uint32_t target,
+              uint64_t state_dim);
+
+/**
+ * @brief Apply SWAP between two qubits. Native WGSL dispatch when available,
+ *        CPU fallback otherwise.
+ */
+int webgpu_swap(webgpu_compute_ctx_t* ctx,
+                webgpu_buffer_t* amplitudes,
+                uint32_t qubit_a,
+                uint32_t qubit_b,
+                uint64_t state_dim);
+
 int webgpu_oracle(webgpu_compute_ctx_t* ctx,
                   webgpu_buffer_t* amplitudes,
                   uint64_t target,

@@ -304,6 +304,24 @@ gpu_error_t gpu_phase(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
 gpu_error_t gpu_cnot(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                      uint32_t control, uint32_t target, uint64_t state_dim);
 
+/**
+ * @brief GPU-accelerated RZ(theta) rotation. Currently routed via WebGPU only.
+ */
+gpu_error_t gpu_rz(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                   uint32_t qubit_index, double theta, uint64_t state_dim);
+
+/**
+ * @brief GPU-accelerated controlled-Z. Currently routed via WebGPU only.
+ */
+gpu_error_t gpu_cz(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                   uint32_t control, uint32_t target, uint64_t state_dim);
+
+/**
+ * @brief GPU-accelerated SWAP. Currently routed via WebGPU only.
+ */
+gpu_error_t gpu_swap(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                     uint32_t qubit_a, uint32_t qubit_b, uint64_t state_dim);
+
 // ============================================================================
 // GROVER'S ALGORITHM OPERATIONS
 // ============================================================================
@@ -482,6 +500,12 @@ gpu_error_t gpu_phase_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                           uint32_t qubit_index, double theta, uint32_t state_dim);
 gpu_error_t gpu_cnot_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                          uint32_t control, uint32_t target, uint32_t state_dim);
+gpu_error_t gpu_rz_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                       uint32_t qubit_index, double theta, uint32_t state_dim);
+gpu_error_t gpu_cz_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                       uint32_t control, uint32_t target, uint32_t state_dim);
+gpu_error_t gpu_swap_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+                         uint32_t qubit_a, uint32_t qubit_b, uint32_t state_dim);
 gpu_error_t gpu_compute_probabilities_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                           gpu_buffer_t* probabilities, uint32_t state_dim);
 gpu_error_t gpu_normalize_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,

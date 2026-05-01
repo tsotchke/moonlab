@@ -848,6 +848,252 @@ EM_ASYNC_JS(int, moonlab_webgpu_cnot_dispatch_async,
     }
 });
 
+EM_ASYNC_JS(int, moonlab_webgpu_rz_dispatch_async,
+            (uintptr_t amplitudes_ptr, uint32_t qubit_index,
+             double cos_half, double sin_half, uint32_t state_dim), {
+    try {
+        const initialized = await moonlab_webgpu_init_async();
+        if (!initialized) {
+            return 0;
+        }
+
+        const state = Module.__moonlabWebGPU;
+        const device = state.device;
+        const n = state_dim >>> 0;
+        const valueCount = n * 2;
+        const heapOffset = amplitudes_ptr >>> 3;  // bytes -> f64 index
+
+        const amplitudesF32 = new Float32Array(valueCount);
+        for (let i = 0; i < valueCount; i++) {
+            amplitudesF32[i] = HEAPF64[heapOffset + i];
+        }
+
+        const amplitudesBytes = amplitudesF32.byteLength;
+        const src = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        const dst = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        const readback = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        // PhaseRzParams = { qubit:u32, state_dim:u32, cos_half:f32, sin_half:f32 }
+        const paramsBytes = 16;
+        const paramsBuf = device.createBuffer({
+            size: paramsBytes,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        const paramsAB = new ArrayBuffer(paramsBytes);
+        const paramsU32 = new Uint32Array(paramsAB);
+        const paramsF32 = new Float32Array(paramsAB);
+        paramsU32[0] = qubit_index >>> 0;
+        paramsU32[1] = n;
+        paramsF32[2] = cos_half;
+        paramsF32[3] = sin_half;
+
+        device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength);
+        device.queue.writeBuffer(paramsBuf, 0, paramsAB, 0, paramsBytes);
+
+        const bindGroup = device.createBindGroup({
+            layout: state.rzPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: src } },
+                { binding: 1, resource: { buffer: dst } },
+                { binding: 2, resource: { buffer: paramsBuf } },
+            ],
+        });
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(state.rzPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize));
+        pass.dispatchWorkgroups(workgroups);
+        pass.end();
+        encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes);
+        device.queue.submit([encoder.finish()]);
+
+        await readback.mapAsync(GPUMapMode.READ);
+        const mapped = readback.getMappedRange();
+        const resultF32 = new Float32Array(mapped.slice(0));
+        readback.unmap();
+
+        for (let i = 0; i < valueCount; i++) {
+            HEAPF64[heapOffset + i] = resultF32[i];
+        }
+
+        if (typeof src.destroy === 'function') src.destroy();
+        if (typeof dst.destroy === 'function') dst.destroy();
+        if (typeof readback.destroy === 'function') readback.destroy();
+        if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        return 1;
+    } catch (err) {
+        return 0;
+    }
+});
+
+EM_ASYNC_JS(int, moonlab_webgpu_cz_dispatch_async,
+            (uintptr_t amplitudes_ptr, uint32_t control, uint32_t target, uint32_t state_dim), {
+    try {
+        const initialized = await moonlab_webgpu_init_async();
+        if (!initialized) {
+            return 0;
+        }
+
+        const state = Module.__moonlabWebGPU;
+        const device = state.device;
+        const n = state_dim >>> 0;
+        const valueCount = n * 2;
+        const heapOffset = amplitudes_ptr >>> 3;
+
+        const amplitudesF32 = new Float32Array(valueCount);
+        for (let i = 0; i < valueCount; i++) {
+            amplitudesF32[i] = HEAPF64[heapOffset + i];
+        }
+
+        const amplitudesBytes = amplitudesF32.byteLength;
+        const src = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        const dst = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        const readback = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        const params = new Uint32Array([control >>> 0, target >>> 0, n, 0]);
+        const paramsBuf = device.createBuffer({
+            size: params.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength);
+        device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength);
+
+        const bindGroup = device.createBindGroup({
+            layout: state.czPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: src } },
+                { binding: 1, resource: { buffer: dst } },
+                { binding: 2, resource: { buffer: paramsBuf } },
+            ],
+        });
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(state.czPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize));
+        pass.dispatchWorkgroups(workgroups);
+        pass.end();
+        encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes);
+        device.queue.submit([encoder.finish()]);
+
+        await readback.mapAsync(GPUMapMode.READ);
+        const mapped = readback.getMappedRange();
+        const resultF32 = new Float32Array(mapped.slice(0));
+        readback.unmap();
+
+        for (let i = 0; i < valueCount; i++) {
+            HEAPF64[heapOffset + i] = resultF32[i];
+        }
+
+        if (typeof src.destroy === 'function') src.destroy();
+        if (typeof dst.destroy === 'function') dst.destroy();
+        if (typeof readback.destroy === 'function') readback.destroy();
+        if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        return 1;
+    } catch (err) {
+        return 0;
+    }
+});
+
+EM_ASYNC_JS(int, moonlab_webgpu_swap_dispatch_async,
+            (uintptr_t amplitudes_ptr, uint32_t qubit_a, uint32_t qubit_b, uint32_t state_dim), {
+    try {
+        const initialized = await moonlab_webgpu_init_async();
+        if (!initialized) {
+            return 0;
+        }
+
+        const state = Module.__moonlabWebGPU;
+        const device = state.device;
+        const n = state_dim >>> 0;
+        const valueCount = n * 2;
+        const heapOffset = amplitudes_ptr >>> 3;
+
+        const amplitudesF32 = new Float32Array(valueCount);
+        for (let i = 0; i < valueCount; i++) {
+            amplitudesF32[i] = HEAPF64[heapOffset + i];
+        }
+
+        const amplitudesBytes = amplitudesF32.byteLength;
+        const src = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        const dst = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        const readback = device.createBuffer({
+            size: amplitudesBytes,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        const params = new Uint32Array([qubit_a >>> 0, qubit_b >>> 0, n, 0]);
+        const paramsBuf = device.createBuffer({
+            size: params.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength);
+        device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength);
+
+        const bindGroup = device.createBindGroup({
+            layout: state.swapPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: src } },
+                { binding: 1, resource: { buffer: dst } },
+                { binding: 2, resource: { buffer: paramsBuf } },
+            ],
+        });
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        pass.setPipeline(state.swapPipeline);
+        pass.setBindGroup(0, bindGroup);
+        const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize));
+        pass.dispatchWorkgroups(workgroups);
+        pass.end();
+        encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes);
+        device.queue.submit([encoder.finish()]);
+
+        await readback.mapAsync(GPUMapMode.READ);
+        const mapped = readback.getMappedRange();
+        const resultF32 = new Float32Array(mapped.slice(0));
+        readback.unmap();
+
+        for (let i = 0; i < valueCount; i++) {
+            HEAPF64[heapOffset + i] = resultF32[i];
+        }
+
+        if (typeof src.destroy === 'function') src.destroy();
+        if (typeof dst.destroy === 'function') dst.destroy();
+        if (typeof readback.destroy === 'function') readback.destroy();
+        if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        return 1;
+    } catch (err) {
+        return 0;
+    }
+});
+
 EM_ASYNC_JS(int, moonlab_webgpu_probabilities_dispatch_async,
             (uintptr_t amplitudes_ptr, uintptr_t probabilities_ptr, uint32_t state_dim), {
     try {
@@ -1173,6 +1419,41 @@ static int moonlab_webgpu_cnot_dispatch_async(uintptr_t amplitudes_ptr,
     (void)amplitudes_ptr;
     (void)control;
     (void)target;
+    (void)state_dim;
+    return 0;
+}
+
+static int moonlab_webgpu_rz_dispatch_async(uintptr_t amplitudes_ptr,
+                                            uint32_t qubit_index,
+                                            double cos_half,
+                                            double sin_half,
+                                            uint32_t state_dim) {
+    (void)amplitudes_ptr;
+    (void)qubit_index;
+    (void)cos_half;
+    (void)sin_half;
+    (void)state_dim;
+    return 0;
+}
+
+static int moonlab_webgpu_cz_dispatch_async(uintptr_t amplitudes_ptr,
+                                            uint32_t control,
+                                            uint32_t target,
+                                            uint32_t state_dim) {
+    (void)amplitudes_ptr;
+    (void)control;
+    (void)target;
+    (void)state_dim;
+    return 0;
+}
+
+static int moonlab_webgpu_swap_dispatch_async(uintptr_t amplitudes_ptr,
+                                              uint32_t qubit_a,
+                                              uint32_t qubit_b,
+                                              uint32_t state_dim) {
+    (void)amplitudes_ptr;
+    (void)qubit_a;
+    (void)qubit_b;
     (void)state_dim;
     return 0;
 }
@@ -1601,6 +1882,133 @@ int webgpu_cnot(webgpu_compute_ctx_t* ctx,
             const double complex tmp = a[i0];
             a[i0] = a[i1];
             a[i1] = tmp;
+        }
+    }
+
+    mark_exec_time(ctx, start);
+    return 0;
+}
+
+int webgpu_rz(webgpu_compute_ctx_t* ctx,
+              webgpu_buffer_t* amplitudes,
+              uint32_t qubit_index,
+              double theta,
+              uint64_t state_dim) {
+    if (validate_state_buffer(ctx, amplitudes, state_dim) != 0) return -1;
+    if (qubit_index >= 63) return set_error(ctx, "Invalid qubit index");
+
+    const double start = webgpu_now_seconds();
+    const double cos_half = cos(theta * 0.5);
+    const double sin_half = sin(theta * 0.5);
+    if (moonlab_webgpu_native_dispatch_supported() &&
+        state_dim <= UINT32_MAX &&
+        qubit_index < 32) {
+        const int dispatched = moonlab_webgpu_rz_dispatch_async(
+            (uintptr_t)amplitudes->host_ptr,
+            qubit_index,
+            cos_half,
+            sin_half,
+            (uint32_t)state_dim
+        );
+        if (dispatched == 1) {
+            mark_native_ready(ctx);
+            mark_exec_time(ctx, start);
+            return 0;
+        }
+    }
+
+    /* CPU fallback: RZ(theta) = diag(e^{-i theta/2}, e^{+i theta/2}). */
+    const uint64_t mask = 1ULL << qubit_index;
+    const double complex p0 = cos_half - I * sin_half;
+    const double complex p1 = cos_half + I * sin_half;
+    double complex* a = (double complex*)amplitudes->host_ptr;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        a[i] *= (i & mask) ? p1 : p0;
+    }
+
+    mark_exec_time(ctx, start);
+    return 0;
+}
+
+int webgpu_cz(webgpu_compute_ctx_t* ctx,
+              webgpu_buffer_t* amplitudes,
+              uint32_t control,
+              uint32_t target,
+              uint64_t state_dim) {
+    if (validate_state_buffer(ctx, amplitudes, state_dim) != 0) return -1;
+    if (control >= 63 || target >= 63 || control == target) {
+        return set_error(ctx, "Invalid control/target qubits");
+    }
+
+    const double start = webgpu_now_seconds();
+    if (moonlab_webgpu_native_dispatch_supported() &&
+        state_dim <= UINT32_MAX &&
+        control < 32 &&
+        target < 32) {
+        const int dispatched = moonlab_webgpu_cz_dispatch_async(
+            (uintptr_t)amplitudes->host_ptr,
+            control,
+            target,
+            (uint32_t)state_dim
+        );
+        if (dispatched == 1) {
+            mark_native_ready(ctx);
+            mark_exec_time(ctx, start);
+            return 0;
+        }
+    }
+
+    /* CPU fallback: flip the sign of |11>. */
+    const uint64_t both = (1ULL << control) | (1ULL << target);
+    double complex* a = (double complex*)amplitudes->host_ptr;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        if ((i & both) == both) a[i] = -a[i];
+    }
+
+    mark_exec_time(ctx, start);
+    return 0;
+}
+
+int webgpu_swap(webgpu_compute_ctx_t* ctx,
+                webgpu_buffer_t* amplitudes,
+                uint32_t qubit_a,
+                uint32_t qubit_b,
+                uint64_t state_dim) {
+    if (validate_state_buffer(ctx, amplitudes, state_dim) != 0) return -1;
+    if (qubit_a >= 63 || qubit_b >= 63 || qubit_a == qubit_b) {
+        return set_error(ctx, "Invalid swap qubits");
+    }
+
+    const double start = webgpu_now_seconds();
+    if (moonlab_webgpu_native_dispatch_supported() &&
+        state_dim <= UINT32_MAX &&
+        qubit_a < 32 &&
+        qubit_b < 32) {
+        const int dispatched = moonlab_webgpu_swap_dispatch_async(
+            (uintptr_t)amplitudes->host_ptr,
+            qubit_a,
+            qubit_b,
+            (uint32_t)state_dim
+        );
+        if (dispatched == 1) {
+            mark_native_ready(ctx);
+            mark_exec_time(ctx, start);
+            return 0;
+        }
+    }
+
+    /* CPU fallback: walk |..0..1..> and |..1..0..> pairs and swap. */
+    const uint64_t mask_a = 1ULL << qubit_a;
+    const uint64_t mask_b = 1ULL << qubit_b;
+    double complex* a = (double complex*)amplitudes->host_ptr;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        const int bit_a = (i & mask_a) != 0;
+        const int bit_b = (i & mask_b) != 0;
+        if (bit_a == 1 && bit_b == 0) {
+            const uint64_t j = (i ^ mask_a) | mask_b;
+            const double complex tmp = a[i];
+            a[i] = a[j];
+            a[j] = tmp;
         }
     }
 

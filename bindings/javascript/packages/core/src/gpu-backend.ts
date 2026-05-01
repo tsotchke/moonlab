@@ -218,6 +218,33 @@ export class GPUBackendSession {
     return this.module._gpu_cnot(this.ctxPtr, bufferPtr, control, target, BigInt(stateDim));
   }
 
+  rz(bufferPtr: number, qubit: number, theta: number, stateDim: number): number {
+    this.ensureNotDisposed();
+    if (typeof this.module._gpu_rz_u32 === 'function') {
+      return this.module._gpu_rz_u32(this.ctxPtr, bufferPtr, qubit, theta, stateDim >>> 0);
+    }
+    if (typeof this.module._gpu_rz !== 'function') return -7;
+    return this.module._gpu_rz(this.ctxPtr, bufferPtr, qubit, theta, BigInt(stateDim));
+  }
+
+  cz(bufferPtr: number, control: number, target: number, stateDim: number): number {
+    this.ensureNotDisposed();
+    if (typeof this.module._gpu_cz_u32 === 'function') {
+      return this.module._gpu_cz_u32(this.ctxPtr, bufferPtr, control, target, stateDim >>> 0);
+    }
+    if (typeof this.module._gpu_cz !== 'function') return -7;
+    return this.module._gpu_cz(this.ctxPtr, bufferPtr, control, target, BigInt(stateDim));
+  }
+
+  swap(bufferPtr: number, qubitA: number, qubitB: number, stateDim: number): number {
+    this.ensureNotDisposed();
+    if (typeof this.module._gpu_swap_u32 === 'function') {
+      return this.module._gpu_swap_u32(this.ctxPtr, bufferPtr, qubitA, qubitB, stateDim >>> 0);
+    }
+    if (typeof this.module._gpu_swap !== 'function') return -7;
+    return this.module._gpu_swap(this.ctxPtr, bufferPtr, qubitA, qubitB, BigInt(stateDim));
+  }
+
   computeProbabilities(amplitudesBufferPtr: number, stateDim: number): Float64Array {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_buffer_create !== 'function' ||

@@ -448,12 +448,18 @@ export interface MoonlabModule {
   _gpu_pauli_z?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: bigint): number;
   _gpu_phase?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: bigint): number;
   _gpu_cnot?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: bigint): number;
+  _gpu_rz?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: bigint): number;
+  _gpu_cz?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: bigint): number;
+  _gpu_swap?(ctxPtr: number, bufferPtr: number, qubitA: number, qubitB: number, stateDim: bigint): number;
   _gpu_hadamard_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
   _gpu_hadamard_all_u32?(ctxPtr: number, bufferPtr: number, numQubits: number, stateDim: number): number;
   _gpu_pauli_x_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
   _gpu_pauli_z_u32?(ctxPtr: number, bufferPtr: number, qubit: number, stateDim: number): number;
   _gpu_phase_u32?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: number): number;
   _gpu_cnot_u32?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: number): number;
+  _gpu_rz_u32?(ctxPtr: number, bufferPtr: number, qubit: number, theta: number, stateDim: number): number;
+  _gpu_cz_u32?(ctxPtr: number, bufferPtr: number, control: number, target: number, stateDim: number): number;
+  _gpu_swap_u32?(ctxPtr: number, bufferPtr: number, qubitA: number, qubitB: number, stateDim: number): number;
   _gpu_compute_probabilities?(
     ctxPtr: number,
     amplitudesBufferPtr: number,
