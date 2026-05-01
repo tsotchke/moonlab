@@ -2040,6 +2040,16 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_peps_2d_tfim PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # CA-PEPS 2D TFIM ground-state cross-checked against dense ED.  Runs
+    # imag-time evolution on the same Pauli sum that vqe_exact_ground_state_energy
+    # diagonalises, and reports |E_imag - E_ED| as the parity figure that
+    # sits underneath the §3.6 paper claim of correctness for the row-
+    # major-MPS-backed CA-PEPS at 2D TFIM scales.
+    add_executable(example_ca_peps_2d_tfim_vs_ed
+        examples/tensor_network/ca_peps_2d_tfim_vs_ed.c)
+    target_link_libraries(example_ca_peps_2d_tfim_vs_ed PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
