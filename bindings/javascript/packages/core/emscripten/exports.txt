@@ -202,6 +202,9 @@ _gpu_pauli_x
 _gpu_pauli_z
 _gpu_phase
 _gpu_cnot
+_gpu_rz
+_gpu_cz
+_gpu_swap
 _gpu_compute_probabilities
 _gpu_normalize
 _gpu_sum_squared_magnitudes
@@ -211,6 +214,9 @@ _gpu_pauli_x_u32
 _gpu_pauli_z_u32
 _gpu_phase_u32
 _gpu_cnot_u32
+_gpu_rz_u32
+_gpu_cz_u32
+_gpu_swap_u32
 _gpu_compute_probabilities_u32
 _gpu_normalize_u32
 _gpu_sum_squared_magnitudes_u32
