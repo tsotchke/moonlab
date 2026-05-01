@@ -81,6 +81,12 @@ try:
 except (ImportError, AttributeError, OSError):
     _CAMPS_AVAILABLE = False
 
+try:
+    from .ca_peps import CAPEPS
+    _CAPEPS_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _CAPEPS_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',

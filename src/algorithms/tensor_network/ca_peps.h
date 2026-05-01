@@ -2,25 +2,34 @@
  * @file ca_peps.h
  * @brief Clifford-Assisted PEPS -- 2D generalisation of CA-MPS.
  *
- * The 2D extension promised in §7 of docs/research/ca_mps.md: replace
- * the MPS factor |phi> with a Projected Entangled Pair State (PEPS)
- * while keeping the Clifford prefactor D as the same Aaronson-Gottesman
- * tableau used by ca_mps.h.  Clifford gates update only the tableau
- * (free); non-Clifford gates apply Pauli-string rotations to the PEPS
- * via split-CTMRG environment-tensor contraction.
+ * The 2D extension promised in section 7 of docs/research/ca_mps.md.
+ * The state lives on an Lx by Ly square lattice; Clifford gates update
+ * the Aaronson-Gottesman tableau D only (free), and non-Clifford gates
+ * push through D as Pauli-string rotations applied to the physical
+ * factor |phi>.
  *
- * **Status: scaffold only as of 2026-04-29.**  This header defines the
- * public API surface for a downstream consumer (e.g. QGTL) to plan
- * against.  The implementation in @c ca_peps.c stubs every entry point
- * with @c CA_PEPS_ERR_NOT_IMPLEMENTED.  The reason: PEPS itself doesn't
- * exist yet in Moonlab -- no @c tn_peps_state_t type, no split-CTMRG
- * environment routine, no PEPS-specific SVD compression.  Building
- * those is the actual work; CA-PEPS sits on top.  Estimated 2 weeks
- * for the full implementation per the design doc.
+ * v0.2.1 implementation: |phi> is stored as a row-major MPS over the
+ * Lx * Ly qubits via the existing CA-MPS engine (q = x + Lx * y).  This
+ * is *not* a true PEPS factor -- a real 2D tensor with four bond indices
+ * per site, plus split-CTMRG / boundary-MPS contraction, lands in v0.3.
+ * The row-major embedding nonetheless gives correct results for any
+ * circuit at the current ABI surface (single + 2-qubit Cliffords + RX/
+ * RY/RZ + Pauli expectation), since:
+ *   - Clifford updates are tableau-only and don't touch |phi>.
+ *   - Single-qubit rotations conjugate to a Pauli string and apply as a
+ *     bond-dim-2 MPO regardless of the underlying tensor topology.
+ *   - Pauli expectation values reduce to <phi | conj_pauli | phi> and
+ *     contract through the existing CA-MPS path.
  *
- * The scaffolded API is designed to mirror @c moonlab_ca_mps_* one-to-one
- * so consumer code can switch between 1D and 2D by changing the type
- * and the @c create call.
+ * The trade-off is bond-growth scaling: dense non-Clifford 2D circuits
+ * push the row-major MPS bond dimension up faster than a true PEPS
+ * would.  For Clifford-heavy circuits (the regime CA-* targets) the
+ * difference is irrelevant.  Two-qubit non-Clifford gates are not in
+ * the public API yet; they need real PEPS to be added without giving
+ * up the scaling argument.
+ *
+ * The API mirrors @c moonlab_ca_mps_* one-to-one so consumer code can
+ * switch between 1D and 2D by changing the type and the @c create call.
  */
 
 #ifndef MOONLAB_CA_PEPS_H
@@ -35,8 +44,9 @@ extern "C" {
 #endif
 
 /** Error codes returned by every public CA-PEPS entry point.  All
- * non-zero values indicate failure; @c CA_PEPS_ERR_NOT_IMPLEMENTED
- * is the placeholder used by stubs in the v0.1 scaffolding. */
+ * non-zero values indicate failure.  @c CA_PEPS_ERR_NOT_IMPLEMENTED
+ * is retained for ABI compatibility and is reserved for entry points
+ * that still depend on real PEPS infrastructure (none in v0.2.1). */
 typedef enum {
     CA_PEPS_SUCCESS              =  0,
     CA_PEPS_ERR_INVALID          = -1,
