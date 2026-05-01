@@ -2050,6 +2050,15 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_peps_2d_tfim_vs_ed PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # CA-PEPS variational-D ground-state on the same 2D TFIM benchmark.
+    # Uses the alternating Clifford-disentangle + imag-time loop with
+    # FERRO/H_ALL warmstart selected by field-strength regime; the
+    # paper §3.5 var-D claim is now testable in 2D, not just 1D.
+    add_executable(example_ca_peps_2d_tfim_var_d_vs_ed
+        examples/tensor_network/ca_peps_2d_tfim_var_d_vs_ed.c)
+    target_link_libraries(example_ca_peps_2d_tfim_var_d_vs_ed PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
