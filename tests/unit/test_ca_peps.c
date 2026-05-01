@@ -16,6 +16,7 @@
 #include "../../src/algorithms/tensor_network/ca_mps.h"
 
 #include <complex.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -150,6 +151,59 @@ static int test_matches_ca_mps(void) {
     return 0;
 }
 
+/* Exercise the v0.2.1 extension API: imag_pauli_rotation, normalize,
+ * expect_pauli_sum, prob_z, current_bond_dim, max_half_cut_entropy.
+ * Builds a minimal 2-qubit X+ZZ Hamiltonian, applies a single
+ * imag-time step, and checks that the underlying CA-MPS observables
+ * agree numerically. */
+static int test_extended_api(void) {
+    moonlab_ca_peps_t* p = moonlab_ca_peps_create(2, 1, 8);
+    moonlab_ca_mps_t*  m = moonlab_ca_mps_create(2, 8);
+    ASSERT(p && m, "create both");
+
+    /* Same circuit through both: H on both, then imag exp(-0.1 ZZ). */
+    ASSERT_OK(moonlab_ca_peps_h(p, 0));
+    ASSERT_OK(moonlab_ca_peps_h(p, 1));
+    ASSERT_OK(moonlab_ca_mps_h(m, 0));
+    ASSERT_OK(moonlab_ca_mps_h(m, 1));
+    const uint8_t zz[2] = {3, 3};
+    ASSERT_OK(moonlab_ca_peps_imag_pauli_rotation(p, zz, 0.1));
+    ASSERT_OK(moonlab_ca_mps_imag_pauli_rotation(m, zz, 0.1));
+    ASSERT_OK(moonlab_ca_peps_normalize(p));
+    ASSERT_OK(moonlab_ca_mps_normalize(m));
+
+    const double np = moonlab_ca_peps_norm(p);
+    const double nm = moonlab_ca_mps_norm(m);
+    ASSERT(fabs(np - nm) < 1e-12, "norm mismatch");
+    ASSERT(fabs(np - 1.0) < 1e-9, "not normalised");
+
+    /* Pauli-sum expectation: H = -1.0 * ZZ + 0.5 * X_0. */
+    const uint8_t paulis[2 * 2] = { 3,3,  1,0 };
+    const double _Complex coeffs[2] = { -1.0, 0.5 };
+    double _Complex ep = 0, em = 0;
+    ASSERT_OK(moonlab_ca_peps_expect_pauli_sum(p, paulis, coeffs, 2, &ep));
+    ASSERT_OK(moonlab_ca_mps_expect_pauli_sum(m, paulis, coeffs, 2, &em));
+    ASSERT(cabs(ep - em) < 1e-12, "expect_pauli_sum mismatch");
+
+    /* prob_z parity. */
+    double pp = 0, pm = 0;
+    ASSERT_OK(moonlab_ca_peps_prob_z(p, 0, &pp));
+    ASSERT_OK(moonlab_ca_mps_prob_z(m, 0, &pm));
+    ASSERT(fabs(pp - pm) < 1e-12, "prob_z mismatch");
+
+    /* Bond-dim and entropy accessors are non-decreasing functions of
+     * the underlying state -- just check they execute without error
+     * and return finite, non-negative values. */
+    const uint32_t cb = moonlab_ca_peps_current_bond_dim(p);
+    const double   se = moonlab_ca_peps_max_half_cut_entropy(p);
+    ASSERT(cb >= 1 && cb <= 8, "current bond dim out of range");
+    ASSERT(se >= 0.0 && se < 1e3, "entropy unreasonable");
+
+    moonlab_ca_peps_free(p);
+    moonlab_ca_mps_free(m);
+    return 0;
+}
+
 int main(void) {
     if (test_lifecycle() != 0) return 1;
     fprintf(stderr, "PASS test_lifecycle\n");
@@ -157,5 +211,7 @@ int main(void) {
     fprintf(stderr, "PASS test_adjacency_validation\n");
     if (test_matches_ca_mps() != 0) return 1;
     fprintf(stderr, "PASS test_matches_ca_mps\n");
+    if (test_extended_api() != 0) return 1;
+    fprintf(stderr, "PASS test_extended_api\n");
     return 0;
 }

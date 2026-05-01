@@ -2032,6 +2032,14 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_z2_gauge_var_d PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # CA-PEPS 2D TFIM imag-time evolution.  Exercises the row-major-MPS-
+    # backed CA-PEPS path end-to-end on an Lx-by-Ly square lattice and
+    # emits a ca_peps_2d_tfim_v1 JSON for paper figures.
+    add_executable(example_ca_peps_2d_tfim
+        examples/tensor_network/ca_peps_2d_tfim.c)
+    target_link_libraries(example_ca_peps_2d_tfim PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
@@ -2047,6 +2055,12 @@ if(QSIM_BUILD_EXAMPLES)
                  COMMAND quantum_spin_chain 8 3 16)
         add_test(NAME example_phase3_phase4_benchmark
                  COMMAND phase3_phase4_benchmark 16)
+        # CA-PEPS 2D TFIM smoke at 2x2 with short imag-time evolution;
+        # full 3x3 sweep is the paper-grade benchmark archived under
+        # benchmarks/results/.
+        add_test(NAME example_ca_peps_2d_tfim_smoke
+                 COMMAND example_ca_peps_2d_tfim
+                         /tmp/ca_peps_tfim_smoke.json 2 2 8 0.1 30)
         # quantum_critical_point is a multi-minute finite-size-scaling
         # demo and is deliberately excluded from the CI smoke.
         set_tests_properties(
@@ -2055,6 +2069,7 @@ if(QSIM_BUILD_EXAMPLES)
             example_grover_hash_collision
             example_quantum_spin_chain_small
             example_phase3_phase4_benchmark
+            example_ca_peps_2d_tfim_smoke
             PROPERTIES TIMEOUT 120
         )
     endif()

@@ -79,6 +79,16 @@ uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s);
 uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s);
 uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s);
 uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s);
+uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s);
+
+/**
+ * @brief Maximum half-cut von Neumann entanglement entropy of @c |phi>
+ *        across all bipartitions, in nats.
+ *
+ * Same yardstick as the CA-MPS analogue: representation-independent
+ * compactness measure.
+ */
+double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s);
 
 /* ================================================================== */
 /*  Clifford gates -- tableau-only updates (O(n) bit ops).            */
@@ -104,14 +114,66 @@ ca_peps_error_t moonlab_ca_peps_rx(moonlab_ca_peps_t* s, uint32_t q, double thet
 ca_peps_error_t moonlab_ca_peps_ry(moonlab_ca_peps_t* s, uint32_t q, double theta);
 ca_peps_error_t moonlab_ca_peps_rz(moonlab_ca_peps_t* s, uint32_t q, double theta);
 
+/** T = R_Z(pi/4) up to a global phase. */
+ca_peps_error_t moonlab_ca_peps_t_gate(moonlab_ca_peps_t* s, uint32_t q);
+
+/** T-dagger = R_Z(-pi/4) up to a global phase. */
+ca_peps_error_t moonlab_ca_peps_t_dagger(moonlab_ca_peps_t* s, uint32_t q);
+
+/** P(theta) = diag(1, e^{i theta}); equals R_Z(theta) up to a global phase. */
+ca_peps_error_t moonlab_ca_peps_phase(moonlab_ca_peps_t* s,
+                                       uint32_t q, double theta);
+
+/**
+ * @brief Apply exp(i theta P) for an n-qubit Pauli string P.
+ *
+ * @param pauli  Length-(Lx*Ly) byte array, 0=I, 1=X, 2=Y, 3=Z.
+ * @param theta  Rotation angle in radians.
+ */
+ca_peps_error_t moonlab_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
+                                                const uint8_t* pauli,
+                                                double theta);
+
+/**
+ * @brief Apply exp(-tau P) for an n-qubit Pauli string P.
+ *
+ * Imaginary-time-step primitive (non-unitary).  The caller is
+ * responsible for renormalisation via @c moonlab_ca_peps_normalize.
+ */
+ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
+                                                     const uint8_t* pauli,
+                                                     double tau);
+
+/** Rescale the internal MPS factor to unit norm. */
+ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s);
+
+/** Return the norm of the underlying state. */
+double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s);
+
 /* ================================================================== */
-/*  Measurement -- requires split-CTMRG environment for a 2D PEPS      */
-/*                 contraction.                                        */
+/*  Measurement                                                         */
 /* ================================================================== */
 
 ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
                                               const uint8_t* pauli,
                                               double _Complex* out_expval);
+
+/**
+ * @brief Compute <psi|H|psi> for a Hamiltonian H = sum_k c_k P_k.
+ *
+ * @param paulis     Flat (num_terms, num_qubits) uint8 Pauli array.
+ * @param coeffs     Length-num_terms complex coefficients.
+ * @param num_terms  Pauli-sum length.
+ */
+ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
+                                                  const uint8_t* paulis,
+                                                  const double _Complex* coeffs,
+                                                  uint32_t num_terms,
+                                                  double _Complex* out_expval);
+
+/** Marginal P(Z_q = +1).  See ca_mps analogue for the fine print. */
+ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
+                                        uint32_t q, double* out_prob);
 
 #ifdef __cplusplus
 }
