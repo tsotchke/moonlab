@@ -120,6 +120,12 @@ uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s) {
 uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s) {
     return s ? s->chi_bond : 0;
 }
+uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s) {
+    return s ? moonlab_ca_mps_current_bond_dim(s->mps) : 0;
+}
+double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s) {
+    return s ? moonlab_ca_mps_max_half_cut_entropy(s->mps) : 0.0;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Clifford gates -- tableau-only, geometry-free.  Delegate.          */
@@ -171,8 +177,41 @@ ca_peps_error_t moonlab_ca_peps_cz(moonlab_ca_peps_t* s,
 DELEGATE_1Q_THETA(rx)
 DELEGATE_1Q_THETA(ry)
 DELEGATE_1Q_THETA(rz)
+DELEGATE_1Q_THETA(phase)
 
 #undef DELEGATE_1Q_THETA
+
+ca_peps_error_t moonlab_ca_peps_t_gate(moonlab_ca_peps_t* s, uint32_t q) {
+    if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;
+    return map_err(moonlab_ca_mps_t_gate(s->mps, q));
+}
+ca_peps_error_t moonlab_ca_peps_t_dagger(moonlab_ca_peps_t* s, uint32_t q) {
+    if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;
+    return map_err(moonlab_ca_mps_t_dagger(s->mps, q));
+}
+
+ca_peps_error_t moonlab_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
+                                                const uint8_t* pauli,
+                                                double theta) {
+    if (!s || !pauli) return CA_PEPS_ERR_INVALID;
+    return map_err(moonlab_ca_mps_pauli_rotation(s->mps, pauli, theta));
+}
+
+ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
+                                                     const uint8_t* pauli,
+                                                     double tau) {
+    if (!s || !pauli) return CA_PEPS_ERR_INVALID;
+    return map_err(moonlab_ca_mps_imag_pauli_rotation(s->mps, pauli, tau));
+}
+
+ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s) {
+    if (!s) return CA_PEPS_ERR_INVALID;
+    return map_err(moonlab_ca_mps_normalize(s->mps));
+}
+
+double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s) {
+    return s ? moonlab_ca_mps_norm(s->mps) : 0.0;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Pauli expectation.  Delegate -- the underlying contraction is     */
@@ -184,4 +223,21 @@ ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
                                               double _Complex* out_expval) {
     if (!s || !pauli || !out_expval) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_expect_pauli(s->mps, pauli, out_expval));
+}
+
+ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
+                                                  const uint8_t* paulis,
+                                                  const double _Complex* coeffs,
+                                                  uint32_t num_terms,
+                                                  double _Complex* out_expval) {
+    if (!s || !paulis || !coeffs || !out_expval) return CA_PEPS_ERR_INVALID;
+    return map_err(moonlab_ca_mps_expect_pauli_sum(
+        s->mps, paulis, coeffs, num_terms, out_expval));
+}
+
+ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
+                                        uint32_t q, double* out_prob) {
+    if (!s || !out_prob) return CA_PEPS_ERR_INVALID;
+    if (q >= s->Lx * s->Ly) return CA_PEPS_ERR_QUBIT;
+    return map_err(moonlab_ca_mps_prob_z(s->mps, q, out_prob));
 }
