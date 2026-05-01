@@ -187,15 +187,16 @@ int main(int argc, char** argv) {
         uint32_t inner; uint32_t passes;
         int composite;
     } sweep_t;
-    /* var-D parameters tuned for paper-friendly wall-clock.  The
-     * Clifford search re-evaluates the full Pauli-sum energy after
-     * every candidate move, so per-pass cost is O(n^2 * num_terms *
-     * n * chi^2) and grows fast with n.  We keep 2x2 and 3x2 (n=4
-     * and n=6) -- small enough that var-D converges to <1e-4 rel-err
-     * in seconds while exhibiting the entropy-reduction-with-tight-
-     * parity story; 3x3/4x3 are saturated by the Clifford search
-     * cost, not by the algorithm, and live in a separate offline
-     * benchmark. */
+    /* var-D parameters tuned for paper-friendly wall-clock.  Per-pass
+     * cost is O(num_candidates * num_terms * n * chi^2) where
+     * num_candidates ~ 6n (singles + 2q) or ~9 n^2 (composite).
+     * Candidate evaluations now run in parallel via OpenMP, but the
+     * inner imag-time evolution is single-threaded; combined cost on
+     * n=9, 12 lattices runs into many minutes per g, beyond the paper-
+     * grade single-host budget.  We keep this bench at 2x2 / 3x2 where
+     * var-D + Strang gives O(1e-7) parity and 14-30x entropy reduction
+     * vs |psi> in single-digit seconds.  The Strang-only imag-time
+     * bench in ca_peps_2d_tfim_vs_ed.c covers the 3x3 / 4x3 parity. */
     const sweep_t sweeps[] = {
         { 2, 2,  8, 20, 0.1, 3, 3, 1 },
         { 3, 2, 16, 12, 0.1, 3, 2, 1 },
