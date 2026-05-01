@@ -34,6 +34,7 @@
 
 #include "ca_peps.h"
 #include "ca_mps.h"
+#include "../../applications/moonlab_export.h"
 
 #include <stdlib.h>
 
@@ -240,4 +241,30 @@ ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
     if (!s || !out_prob) return CA_PEPS_ERR_INVALID;
     if (q >= s->Lx * s->Ly) return CA_PEPS_ERR_QUBIT;
     return map_err(moonlab_ca_mps_prob_z(s->mps, q, out_prob));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Variational-D run (delegate to CA-MPS engine).                     */
+/* ------------------------------------------------------------------ */
+
+int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
+                               const uint8_t* paulis,
+                               const double* coeffs,
+                               uint32_t num_terms,
+                               uint32_t max_outer_iters,
+                               double imag_time_dtau,
+                               uint32_t imag_time_steps_per_outer,
+                               uint32_t clifford_passes_per_outer,
+                               int composite_2gate,
+                               int warmstart,
+                               const uint8_t* stab_paulis,
+                               uint32_t stab_num_gens,
+                               double* out_final_energy) {
+    if (!state || !paulis || !coeffs) return CA_PEPS_ERR_INVALID;
+    return moonlab_ca_mps_var_d_run(
+        state->mps, paulis, coeffs, num_terms,
+        max_outer_iters, imag_time_dtau,
+        imag_time_steps_per_outer, clifford_passes_per_outer,
+        composite_2gate, warmstart,
+        stab_paulis, stab_num_gens, out_final_energy);
 }

@@ -175,6 +175,56 @@ ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
 ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
                                         uint32_t q, double* out_prob);
 
+/* ================================================================== */
+/*  Variational-D ground-state search (delegated to CA-MPS engine)    */
+/* ================================================================== */
+
+/**
+ * @brief Run the variational-D alternating loop for a Pauli-sum
+ *        Hamiltonian on the row-major-MPS-backed CA-PEPS.
+ *
+ * Thin wrapper around @c moonlab_ca_mps_var_d_run.  Greedy local
+ * Clifford search on D is alternated with imaginary-time evolution on
+ * the underlying |phi>.  Local-Clifford moves operate on linear-index
+ * adjacent qubits, which corresponds to horizontal lattice neighbours
+ * in the row-major embedding -- vertical correlations are still
+ * captured by D through composite multi-qubit Cliffords (CNOT chains
+ * along the linear ordering), but a real PEPS factor would expose
+ * them more efficiently.  v0.3 milestone.
+ *
+ * @param state                  CA-PEPS handle (mutated in place).
+ * @param paulis                 Flat (num_terms, Lx*Ly) uint8 array.
+ * @param coeffs                 Real coefficients, length num_terms.
+ * @param num_terms              Pauli-sum length.
+ * @param max_outer_iters        Outer alternating-loop cap.
+ * @param imag_time_dtau         Imag-time step size.
+ * @param imag_time_steps_per_outer  Trotter cycles per outer iter.
+ * @param clifford_passes_per_outer  Greedy D-update passes per outer iter.
+ * @param composite_2gate        Pass 1 to enable 2-gate composite moves.
+ * @param warmstart              0=I, 1=H_ALL, 2=DUAL_TFIM, 3=FERRO_TFIM,
+ *                               4=STABILIZER_SUBGROUP.
+ * @param stab_paulis            For warmstart=4: (k, num_qubits) generators.
+ * @param stab_num_gens          For warmstart=4: number of generators k.
+ * @param[out] out_final_energy  Final variational energy (NULL ok).
+ *
+ * @return 0 on success, negative ::ca_peps_error_t on failure.
+ *
+ * @since v0.2.1
+ */
+int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
+                               const uint8_t* paulis,
+                               const double* coeffs,
+                               uint32_t num_terms,
+                               uint32_t max_outer_iters,
+                               double imag_time_dtau,
+                               uint32_t imag_time_steps_per_outer,
+                               uint32_t clifford_passes_per_outer,
+                               int composite_2gate,
+                               int warmstart,
+                               const uint8_t* stab_paulis,
+                               uint32_t stab_num_gens,
+                               double* out_final_energy);
+
 #ifdef __cplusplus
 }
 #endif
