@@ -1216,6 +1216,13 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(test_ca_mps_limits PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_limits COMMAND test_ca_mps_limits)
 
+    # CA-PEPS row-major-MPS implementation: lifecycle + adjacency validation
+    # + parity against the underlying CA-MPS for a mixed Clifford + rotation
+    # circuit on a 3x3 lattice.
+    add_executable(test_ca_peps tests/unit/test_ca_peps.c)
+    target_link_libraries(test_ca_peps PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_peps COMMAND test_ca_peps)
+
     # End-to-end CA-MPS correctness: random mixed Clifford + rx/ry/rz/CZ/CNOT
     # circuits compared against the dense state-vector backend for every
     # single-qubit Pauli expectation and a handful of ZZ pairs.
@@ -1326,13 +1333,6 @@ if(QSIM_BUILD_TESTS)
         endif()
         add_test(NAME unit_ca_mps_var_d_composite COMMAND test_ca_mps_var_d_composite)
         set_tests_properties(unit_ca_mps_var_d_composite PROPERTIES TIMEOUT 60)
-
-        # CA-PEPS scaffold smoke test -- verifies API is callable and
-        # every NOT_IMPLEMENTED entry point fails loudly.
-        add_executable(test_ca_peps_scaffold tests/unit/test_ca_peps_scaffold.c)
-        target_link_libraries(test_ca_peps_scaffold PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_ca_peps_scaffold COMMAND test_ca_peps_scaffold)
-        set_tests_properties(unit_ca_peps_scaffold PROPERTIES TIMEOUT 30)
 
         # 1+1D Z2 lattice gauge theory Pauli-sum builder.  Pins the term-
         # count breakdown, individual term coefficients, Gauss-law operator
