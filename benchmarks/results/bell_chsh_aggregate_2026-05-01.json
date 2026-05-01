@@ -1,0 +1,31 @@
+{
+  "schema": "moonlab/bell_chsh_aggregate_v1",
+  "params": {"n_runs": 10, "shots_per_run": 10000, "bell_state": "phi_plus", "angles": "optimal"},
+  "per_run": [
+    {"run": 1, "chsh": 2.8104, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 2, "chsh": 2.7888, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 3, "chsh": 2.8312, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 4, "chsh": 2.8328, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 5, "chsh": 2.8728, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 6, "chsh": 2.8072, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 7, "chsh": 2.7888, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 8, "chsh": 2.8, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 9, "chsh": 2.8112, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1},
+    {"run": 10, "chsh": 2.8256, "std_err": 0.02, "p_value": 0, "violates_classical": 1, "confirms_quantum": 1}
+  ],
+  "aggregate": {
+    "median": 2.8108,
+    "q1": 2.8018,
+    "q3": 2.8298,
+    "iqr": 0.028,
+    "min": 2.7888,
+    "max": 2.8728,
+    "mean": 2.81688,
+    "stddev": 0.02514724637,
+    "sem": 0.007952257541,
+    "tsirelson_bound": 2.828427125,
+    "classical_bound": 2.0,
+    "violates_classical_rate": 1,
+    "confirms_quantum_rate": 1
+  }
+}
