@@ -2059,6 +2059,15 @@ if(QSIM_BUILD_EXAMPLES)
     target_link_libraries(example_ca_peps_2d_tfim_var_d_vs_ed PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Bell-CHSH multi-run aggregate: runs the CHSH test N>=5 times and
+    # reports median + IQR + min/max + violation rate.  Closes the
+    # paper §4.2 todo about reporting a statistically-honest CHSH
+    # value rather than a single sampled run.
+    add_executable(example_bell_chsh_aggregate
+        examples/applications/bell_chsh_aggregate.c)
+    target_link_libraries(example_bell_chsh_aggregate PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
