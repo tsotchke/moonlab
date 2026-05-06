@@ -238,7 +238,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
             @"pauli_z"
         ];
         
-        id<MTLComputePipelineState>* pipelines[] = {
+        __strong id<MTLComputePipelineState>* pipelines[] = {
             &ctx->hadamardPipeline,
             &ctx->hadamardAllPipeline,
             &ctx->oraclePipeline,
@@ -322,7 +322,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
                     @"tensor_scale"
                 ];
 
-                id<MTLComputePipelineState>* tensorPipelines[] = {
+                __strong id<MTLComputePipelineState>* tensorPipelines[] = {
                     &ctx->tensorContract2SitePipeline,
                     &ctx->applyGateThetaPipeline,
                     &ctx->computeColumnNormsPipeline,
