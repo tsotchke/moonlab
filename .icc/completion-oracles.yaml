@@ -1,0 +1,145 @@
+# Moonlab (libquantumsim) completion oracles.
+#
+# Consumed by ICC's completion_oracles.py. Each oracle gates a "goal" the
+# assistant might be asked to drive: any goal name that contains one of
+# the listed aliases (case-folded substring match) selects that oracle.
+#
+# Severities:
+#   high   -> FAIL when criterion missing (must be fixed before claiming done)
+#   medium -> WARN when criterion missing (track, don't block)
+#
+# The criteria align with the user's standing rules for this project:
+#   - "no stubs - wire features properly" (no_stubbed_paths, severity: high)
+#   - audit tone leads with what's broken (failure_free, severity: high)
+#   - tests must be indexed before claiming completion (test_evidence)
+#
+# Add or refine an oracle when a new release stream lands (v0.3, v0.4, etc.).
+
+oracles:
+  - name: moonlab-release-readiness
+    target: moonlab-release-readiness
+    aliases:
+      - moonlab
+      - libquantumsim
+      - quantum-simulator
+      - quantum_simulator
+      - release
+    requires:
+      - id: tests_indexed
+        test_evidence: true
+        severity: high
+        label: Focused Moonlab tests are indexed
+        action: run_ctest_and_self_index
+      - id: production_paths_real
+        no_stubbed_paths:
+          - production_fallback
+          - synthetic_model_only
+          - not_exercised_by_real_smoke
+        severity: high
+        label: Production paths are real, not stubs or fallbacks
+        action: wire_real_path_or_mark_fallback
+      - id: pipeline_contracts_wired
+        no_contract_gap:
+          - flag_without_contract
+          - state_key_produced_without_consumer
+          - state_key_consumed_without_producer
+          - artifact_without_test_or_trace
+          - checkpoint_without_test_or_trace
+          - missing_expected_contract_kind
+        severity: high
+        label: Build/test/bench/release pipeline has no orphan flags or state keys
+        action: fix_contract_graph_gap
+      - id: failure_free
+        runtime_check: failure_free
+        severity: high
+        label: Runtime trace records no failures
+        action: fix_runtime_failure
+
+  - name: moonlab-abi-readiness
+    target: moonlab-abi-readiness
+    aliases:
+      - abi
+      - moonlab_export
+      - moonlab-bindings
+      - bindings
+      - qgtl
+    requires:
+      - id: cmake_flags_indexed
+        contract_kind: CLIFlag
+        severity: high
+        label: CMake options surfaced as CLI flags are indexed
+        action: add_or_index_cliflag_contract
+      - id: pipeline_phases_indexed
+        contract_kind: PipelinePhase
+        severity: high
+        label: Configure / build / test / install phases are indexed
+        action: add_or_index_pipelinephase_contract
+      - id: abi_state_keys_connected
+        no_contract_gap:
+          - state_key_consumed_without_producer
+          - state_key_produced_without_consumer
+        severity: high
+        label: ABI symbols have producers and consumers wired
+        action: wire_state_key_producer_or_consumer
+      - id: abi_paths_real
+        no_stubbed_paths:
+          - production_fallback
+          - synthetic_model_only
+          - not_exercised_by_real_smoke
+        severity: high
+        label: Exported ABI is backed by real implementations
+        action: wire_real_path_or_mark_fallback
+      - id: abi_tests_indexed
+        test_evidence: true
+        severity: high
+        label: ABI / bindings tests are indexed
+        action: run_abi_smoke_tests_and_self_index
+      - id: failure_free
+        runtime_check: failure_free
+        severity: high
+        label: Runtime trace records no ABI / binding failures
+        action: fix_runtime_failure
+
+  - name: ca-tn-paper-readiness
+    target: ca-tn-paper-readiness
+    aliases:
+      - ca-mps
+      - ca-tn
+      - ca-peps
+      - var-d
+      - paper
+      - preprint
+      - arxiv
+    requires:
+      - id: camps_tests_indexed
+        test_evidence: true
+        severity: high
+        label: CA-MPS / CA-PEPS / var-D test suite indexed
+        action: run_ctest_camps_label_and_self_index
+      - id: paper_artifacts_emitted_or_indexed
+        runtime_or_contract:
+          events: [artifact, checkpoint]
+          contracts: [Artifact, Checkpoint]
+        severity: high
+        label: Paper benchmark JSONs are emitted or indexed
+        action: emit_expected_artifact_or_add_probe
+      - id: paper_artifacts_validated
+        no_contract_gap:
+          - artifact_without_test_or_trace
+          - checkpoint_without_test_or_trace
+        severity: medium
+        label: Bench artifacts have validators or runtime traces
+        action: add_artifact_validator_or_runtime_probe
+      - id: paper_paths_real
+        no_stubbed_paths:
+          - production_fallback
+          - synthetic_model_only
+          - not_exercised_by_real_smoke
+        severity: high
+        label: Numerics for the paper come from real production paths
+        action: wire_real_path_or_mark_fallback
+      - id: failure_free
+        runtime_check: failure_free
+        severity: high
+        label: Runtime trace records no failures in CA-TN benches
+        action: fix_runtime_failure
