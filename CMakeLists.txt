@@ -1296,6 +1296,16 @@ if(QSIM_BUILD_TESTS)
         add_test(NAME unit_ca_mps_imag_time COMMAND test_ca_mps_imag_time)
         set_tests_properties(unit_ca_mps_imag_time PROPERTIES TIMEOUT 120)
 
+        add_executable(test_imag_pauli_2q_smoke tests/unit/test_imag_pauli_2q_smoke.c)
+        target_link_libraries(test_imag_pauli_2q_smoke PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_imag_pauli_2q_smoke PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_imag_pauli_2q_smoke PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_imag_pauli_2q_smoke COMMAND test_imag_pauli_2q_smoke)
+        set_tests_properties(unit_imag_pauli_2q_smoke PROPERTIES TIMEOUT 30)
+
         # CA-MPS variational-D Clifford-only search.  Validates that the
         # greedy local-Clifford search reduces <psi|H|psi> on a small
         # TFIM problem (n=4, g=2.5) starting from |psi> = |0...0>.
@@ -1711,6 +1721,8 @@ if(QSIM_BUILD_TESTS)
     target_link_libraries(bench_tensor_matmul_eshkol PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_dmrg_workspace tests/performance/bench_dmrg_workspace.c)
     target_link_libraries(bench_dmrg_workspace PRIVATE quantumsim ${MATH_LIBRARY})
+    add_executable(bench_apply_conjugated_imag tests/performance/bench_apply_conjugated_imag.c)
+    target_link_libraries(bench_apply_conjugated_imag PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_diff_adjoint tests/performance/bench_diff_adjoint.c)
     target_link_libraries(bench_diff_adjoint PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_hadamard tests/performance/bench_hadamard.c)
