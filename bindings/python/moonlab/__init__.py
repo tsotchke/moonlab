@@ -24,7 +24,7 @@ Quick Start:
     >>> result = state.measure(0)  # Measure qubit 0
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __author__ = "tsotchke"
 
 from .core import (
@@ -55,9 +55,21 @@ from .clifford import Clifford
 from .topology import (
     ChernKPM, qwz_chern, berry_grid_qwz,
     berry_grid_haldane, ssh_winding,
+    # v0.3 additions
+    chern_qwz_proj, chern_qwz_parallel_transport,
+    kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
 )
 from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
 from . import crypto
+
+# Matrix-product density operator noise simulator (since v0.3.0).
+# Optional import: a stripped libquantumsim build without these
+# entry points is still a usable Moonlab.
+try:
+    from .mpdo import Mpdo
+    _MPDO_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _MPDO_AVAILABLE = False
 
 # Clifford-Assisted MPS + var-D + gauge-aware warmstart + Z2 LGT.
 # Optional import: a stripped libquantumsim build without these
@@ -100,6 +112,12 @@ __all__ = [
     'berry_grid_qwz',
     'berry_grid_haldane',
     'ssh_winding',
+    'chern_qwz_proj',
+    'chern_qwz_parallel_transport',
+    'kane_mele_z2',
+    'bhz_z2',
+    'kitaev_chain_z2',
+    'hofstadter_chern',
     'DiffCircuit',
     'PauliTerm',
     'OBS_Z',
@@ -108,3 +126,5 @@ __all__ = [
 ]
 if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
+if _MPDO_AVAILABLE:
+    __all__ += ['Mpdo']
