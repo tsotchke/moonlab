@@ -136,18 +136,32 @@ int main(void) {
 }
 ```
 
-## Roadmap (v0.3.x)
+## Language bindings
 
-- Two-qubit Kraus channels with SVD bond truncation
-- Wrappers for the existing two-qubit composite-Pauli channel
-- High-level `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)`
-  entry point per the v0.3 plan §2A
-- Python binding parity (currently accessible via raw ctypes against
-  `libquantumsim`)
+- **Python** (`moonlab.mpdo.Mpdo`): full parity with the C
+  single-qubit surface.  Supports the six named channels, arbitrary
+  user-supplied Kraus operators via NumPy complex arrays, and Pauli
+  expectations selected by string or integer code.  Validated by
+  `bindings/python/tests/test_mpdo.py` (10 cases at 1e-12).
+- **Rust** (`moonlab::mpdo`): the `Mpdo` struct exposes the same
+  surface with RAII handle management; tests in
+  `bindings/rust/moonlab/src/mpdo.rs`.
+
+## Roadmap
+
+- Two-qubit Kraus channels with SVD-based bond truncation.
+- Wrappers for the existing two-qubit composite-Pauli channel.
+- A high-level entry point
+  `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)` driven
+  by a calibrated noise model.
 
 ## See also
 
 - `src/quantum/noise.h` — pure-state Kraus channel reference
-  implementation; conventions match exactly.
-- `tests/unit/test_mpdo_smoke.c` — 9-case smoke at 1e-12 tolerance.
-- `docs/reference/qgt-api.md` — sister v0.3 module (topology).
+  implementation; conventions are identical, enabling small-system
+  cross-checks.
+- `tests/unit/test_mpdo_smoke.c` — nine-case smoke at 1e-12.
+- `docs/tutorials/mpdo_noise.md` — worked tutorial with primary-
+  source citations.
+- `docs/reference/qgt-api.md` — sister v0.3 module (quantum
+  geometric tensor).

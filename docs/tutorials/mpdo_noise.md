@@ -179,19 +179,35 @@ decomposition or (b) loss of weight to bond truncation.  In v0.3.0
 the single-qubit path performs no truncation, so any deviation
 reflects the supplied Kraus operators.
 
-## 7. Roadmap for v0.3.x
+## 7. Language bindings
 
-The remaining MPDO surface is scheduled for the v0.3.x point
-releases:
+The single-qubit MPDO surface ships with first-class Python and Rust
+bindings in v0.3.0.  The Python module is a thin wrapper that
+preserves the C semantics:
+
+```python
+from moonlab.mpdo import Mpdo
+
+rho = Mpdo(num_qubits=4, max_bond_dim=16)
+rho.apply_depolarizing(qubit=0, p=0.4)
+print(rho.expect_pauli(0, 'Z'))   # 0.466667 ...
+```
+
+The Rust binding (`moonlab::mpdo::Mpdo`) provides RAII handle
+management, typed Pauli codes, and the same six named channels.
+Both bindings are validated against the C reference at `1e-12`
+tolerance.
+
+## 8. Roadmap
+
+The remaining MPDO surface is scheduled for forthcoming releases:
 
 - Two-qubit Kraus channels with singular-value-decomposition bond
   truncation [2].
 - Two-qubit composite-Pauli channel wrappers.
 - A high-level entry point
-  `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)` that
-  consumes a calibrated noise model.
-- Python binding parity (currently accessible via raw `ctypes`
-  against `libquantumsim`).
+  `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)` driven
+  by a calibrated noise model.
 
 For two-qubit noise in the interim, the dense state-vector
 implementation in `src/quantum/noise.c` supports any qubit count up
