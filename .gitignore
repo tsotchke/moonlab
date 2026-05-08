@@ -45,6 +45,10 @@ doc/private/
 reference/
 doc/*
 
+# Allow public docs/ subtree (top-level reference, tutorials, research)
+!docs/reference/
+!docs/reference/**
+
 # Build directories
 build/
 build-*/
