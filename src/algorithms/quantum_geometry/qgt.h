@@ -211,6 +211,51 @@ void             qgt_free_1d(qgt_system_1d_t* sys);
 MOONLAB_API qgt_system_1d_t* qgt_model_ssh(double t1, double t2);
 
 /**
+ * @brief Kitaev (2001) 1D p-wave topological superconductor.
+ *
+ * Spinless fermion chain with nearest-neighbour hopping @p t, on-site
+ * chemical potential @p mu, and p-wave pairing amplitude @p delta.
+ * In Bogoliubov-de-Gennes (Nambu) form the Bloch Hamiltonian is
+ *   H(k) = (-2t cos(k) - mu) tau_z + 2 delta sin(k) tau_y
+ * acting on the Nambu spinor (c_k, c_{-k}^dag)^T.
+ *
+ * Topological phase diagram (delta != 0):
+ *   |mu| < 2|t|  ->  Z_2 = 1  (topological, Majorana zero modes at edges)
+ *   |mu| > 2|t|  ->  Z_2 = 0  (trivial)
+ *
+ * @param t      Nearest-neighbour hopping amplitude.
+ * @param mu     Chemical potential.
+ * @param delta  p-wave pairing amplitude (real-valued by convention;
+ *               complex pairing factors out a global gauge).
+ *
+ * @return Newly-owned 1D system handle, or NULL on alloc failure.
+ */
+MOONLAB_API qgt_system_1d_t* qgt_model_kitaev_chain(double t, double mu,
+                                                     double delta);
+
+/**
+ * @brief Z_2 topological invariant of a 1D BdG superconductor with
+ *        particle-hole symmetry.
+ *
+ * For a 2-band BdG Hamiltonian @p sys at the two TR-invariant momenta
+ * k = 0 and k = pi, the Z_2 invariant (Kitaev 2001) is
+ *   nu = (1 - sgn(M(0)) sgn(M(pi))) / 2  in {0, 1}
+ * where M(k) is the Pfaffian of the BdG matrix at k in the Majorana
+ * basis.  For a 2x2 BdG with a sigma_z + b sigma_y form (Kitaev
+ * chain's natural basis), M(k) = a (the diagonal coefficient) at
+ * k = 0, pi where the off-diagonal pairing vanishes, so
+ *   nu = (1 - sgn(M_0) sgn(M_pi)) / 2
+ * with M_0, M_pi the diagonal coefficients at the two TR-invariant
+ * points.
+ *
+ * @param[in]  sys  1D BdG system at half filling.
+ * @param[out] z2   0 (trivial) or 1 (topological).
+ *
+ * @return 0 on success, negative on bad arguments.
+ */
+MOONLAB_API int qgt_z2_invariant_1d_bdg(const qgt_system_1d_t* sys, int* z2);
+
+/**
  * @brief Winding number of a 1D chiral two-band system via the
  *        discrete Zak-phase formula
  *        @f$W = -(2\pi)^{-1}\sum_k \operatorname{arg}

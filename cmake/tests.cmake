@@ -355,6 +355,12 @@
         add_test(NAME unit_qgt_bhz COMMAND test_qgt_bhz)
         set_tests_properties(unit_qgt_bhz PROPERTIES TIMEOUT 30 LABELS "topology")
 
+        # Kitaev p-wave chain + 1D BdG Z_2 invariant (v0.3 QGT extension).
+        add_executable(test_qgt_kitaev_chain tests/unit/test_qgt_kitaev_chain.c)
+        target_link_libraries(test_qgt_kitaev_chain PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_kitaev_chain COMMAND test_qgt_kitaev_chain)
+        set_tests_properties(unit_qgt_kitaev_chain PROPERTIES TIMEOUT 30 LABELS "topology")
+
         # MPDO noise simulator scaffold (v0.3 noise extension).
         add_executable(test_mpdo_smoke tests/unit/test_mpdo_smoke.c)
         target_link_libraries(test_mpdo_smoke PRIVATE quantumsim ${MATH_LIBRARY})
