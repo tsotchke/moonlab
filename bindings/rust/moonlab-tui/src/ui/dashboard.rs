@@ -1063,5 +1063,14 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
                 .title("var-D TFIM (DUAL_TFIM warmstart)")
                 .gates(gates)
         }
+        Algorithm::TopologyPhaseDiagram => {
+            // Topology phase-diagram has no concrete circuit; show a
+            // single placeholder Hadamard so the dashboard layout
+            // stays consistent.  The interesting output (QWZ Chern
+            // sweep + SSH winding) is in app.status.
+            CircuitDiagram::new(n.max(1))
+                .title("QWZ Chern sweep -- see status line")
+                .gates(vec![Gate::H(0)])
+        }
     }
 }

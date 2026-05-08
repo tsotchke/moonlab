@@ -3,6 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use moonlab::{
     CaMps, FeynmanDiagram, QuantumState, VarDConfig, Warmstart,
+    qwz_chern, ssh_winding,
     var_d_run, z2_lgt_1d_build, z2_lgt_1d_gauss_law,
 };
 use std::time::Instant;
@@ -55,6 +56,12 @@ pub enum Algorithm {
     /// Exercises the full v0.2.1 var-D pipeline including the Trotter
     /// imag-time |phi>-update and the greedy Clifford D-update.
     CaMpsVarDTfim,
+    /// Topology phase diagram: sweeps the QWZ mass `m` across [-3, 3]
+    /// and reports the integer Chern number at each grid point.
+    /// Renders an ASCII bar chart of the Chern landscape so you can
+    /// see the +1 / -1 / 0 plateaus and the gap-closing transitions
+    /// at m = -2, 0, +2 in a single screen.  Since v0.3.0.
+    TopologyPhaseDiagram,
 }
 
 impl Algorithm {
@@ -70,6 +77,7 @@ impl Algorithm {
             Self::CaMpsBellWarmstart => "CA-MPS gauge warmstart (Bell)",
             Self::Z2LgtBuild => "1+1D Z2 LGT Hamiltonian",
             Self::CaMpsVarDTfim => "var-D ground state (4-qubit TFIM, g=1)",
+            Self::TopologyPhaseDiagram => "Topology phase diagram (QWZ Chern sweep)",
         }
     }
 
@@ -94,6 +102,9 @@ impl Algorithm {
             Self::CaMpsVarDTfim => {
                 "Alternating greedy-Clifford D-update + imag-time |phi>-update on 4-qubit TFIM at criticality, with the H_all + CNOT-chain (Kramers-Wannier dual) warmstart"
             }
+            Self::TopologyPhaseDiagram => {
+                "QWZ Chern number sweep over m in [-3, 3] via FHS link-variable integration on a 32x32 BZ grid; visualises the +1 / -1 / 0 plateaus and the gap-closing transitions at m = -2, 0, +2"
+            }
         }
     }
 
@@ -109,6 +120,7 @@ impl Algorithm {
             Self::CaMpsBellWarmstart,
             Self::Z2LgtBuild,
             Self::CaMpsVarDTfim,
+            Self::TopologyPhaseDiagram,
         ]
     }
 }
@@ -900,6 +912,33 @@ impl App {
                 self.status = format!(
                     "TFIM g=1, n=4: var-D final E={:.4} (exact GS = -4.7588), bond_dim={}, norm={:.3}",
                     energy, ca.bond_dim(), ca.norm());
+            }
+            Algorithm::TopologyPhaseDiagram => {
+                // Sweep QWZ mass m across [-3, 3] in 31 steps, computing
+                // Chern via the stable moonlab_qwz_chern ABI on a 32x32
+                // BZ grid.  Render a one-line "phase ribbon" showing
+                // each plateau and the transitions between them.
+                //
+                // Cross-check the SSH winding at one representative t2
+                // value too, so the status line carries both 1D and 2D
+                // topological invariants in a single screen.
+                let mut chern: Vec<i32> = Vec::with_capacity(31);
+                for i in 0..31 {
+                    let m = -3.0 + (i as f64) * (6.0 / 30.0);
+                    chern.push(qwz_chern(m, 32));
+                }
+                let ribbon: String = chern.iter().map(|&c| match c {
+                    1  => '+',
+                    -1 => '-',
+                    0  => '.',
+                    _  => '?',
+                }).collect();
+                let ssh_top = ssh_winding(1.0, 2.0, 64);   // topological
+                let ssh_triv = ssh_winding(2.0, 1.0, 64);  // trivial
+                if n >= 1 { state.h(0); }
+                self.total_steps = chern.len();
+                self.status = format!(
+                    "QWZ phase ribbon (m=-3 -> +3, '+'=C+1, '-'=C-1, '.'=trivial): [{ribbon}]  |  SSH: t2>t1 W={ssh_top}, t1>t2 W={ssh_triv}");
             }
         }
 
