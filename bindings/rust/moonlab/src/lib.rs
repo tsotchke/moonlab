@@ -40,6 +40,7 @@
 pub mod ca_mps;
 pub mod error;
 pub mod feynman;
+pub mod mpdo;
 pub mod state;
 pub mod topology;
 
@@ -50,6 +51,7 @@ pub use ca_mps::{
 };
 pub use error::{QuantumError, Result};
 pub use feynman::{FeynmanDiagram, ParticleType};
+pub use mpdo::{Mpdo, PauliCode};
 pub use state::{QuantumState, MAX_QUBITS};
 pub use topology::{qwz_chern, ssh_winding, ChernKpm};
 
@@ -62,6 +64,7 @@ pub mod prelude {
     pub use crate::ca_mps::{CaMps, VarDConfig, Warmstart};
     pub use crate::error::{QuantumError, Result};
     pub use crate::feynman::{FeynmanDiagram, ParticleType};
+    pub use crate::mpdo::{Mpdo, PauliCode};
     pub use crate::state::{QuantumState, MAX_QUBITS};
     pub use crate::topology::{qwz_chern, ssh_winding, ChernKpm};
 }

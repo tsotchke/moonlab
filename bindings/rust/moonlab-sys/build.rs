@@ -153,6 +153,7 @@ fn main() {
 #include "{root}/src/quantum/measurement.h"
 #include "{root}/src/quantum/entanglement.h"
 #include "{root}/src/quantum/noise.h"
+#include "{root}/src/quantum/noise_mpdo.h"
 #include "{root}/src/algorithms/grover.h"
 #include "{root}/src/algorithms/vqe.h"
 #include "{root}/src/algorithms/qaoa.h"
@@ -348,6 +349,25 @@ fn main() {
         .allowlist_function("moonlab_abi_version")
         .allowlist_function("moonlab_qrng_bytes")
         .allowlist_function("moonlab_qwz_chern")
+        // MPDO noise simulator (v0.3)
+        .allowlist_type("moonlab_mpdo_t")
+        .allowlist_type("mpdo_complex_t")
+        .allowlist_type("mpdo_error_t")
+        .allowlist_function("moonlab_mpdo_create")
+        .allowlist_function("moonlab_mpdo_free")
+        .allowlist_function("moonlab_mpdo_clone")
+        .allowlist_function("moonlab_mpdo_num_qubits")
+        .allowlist_function("moonlab_mpdo_max_bond_dim")
+        .allowlist_function("moonlab_mpdo_current_bond_dim")
+        .allowlist_function("moonlab_mpdo_trace")
+        .allowlist_function("moonlab_mpdo_apply_kraus_1q")
+        .allowlist_function("moonlab_mpdo_apply_depolarizing_1q")
+        .allowlist_function("moonlab_mpdo_apply_amplitude_damping_1q")
+        .allowlist_function("moonlab_mpdo_apply_phase_damping_1q")
+        .allowlist_function("moonlab_mpdo_apply_bit_flip_1q")
+        .allowlist_function("moonlab_mpdo_apply_phase_flip_1q")
+        .allowlist_function("moonlab_mpdo_apply_bit_phase_flip_1q")
+        .allowlist_function("moonlab_mpdo_expect_pauli_1q")
         // Clifford stabilizer backend
         .allowlist_type("clifford_tableau_t")
         .allowlist_type("clifford_error_t")
