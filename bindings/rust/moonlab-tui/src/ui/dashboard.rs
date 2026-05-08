@@ -1072,5 +1072,14 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
                 .title("QWZ Chern sweep -- see status line")
                 .gates(vec![Gate::H(0)])
         }
+        Algorithm::MpdoNoiseTour => {
+            // MPDO noise tour drives the density matrix directly; the
+            // status line carries the <Z> ribbons for each channel.
+            // Render a placeholder gate sequence so the circuit panel
+            // doesn't empty out.
+            CircuitDiagram::new(n.max(1))
+                .title("MPDO noise tour -- see status line")
+                .gates(vec![Gate::H(0)])
+        }
     }
 }
