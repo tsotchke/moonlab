@@ -1,0 +1,10 @@
+{
+  "harness": "bench_warmstart_empirical_entropy",
+  "description": "Empirical S(|phi_0>) on Z2 LGT confining-phase ground state",
+  "parameters": {"mass": 0.5, "t_hop": 0.5, "h_link": 1.5, "gauss_penalty": 5},
+  "records": [
+    {"N":4, "n":7, "k":2, "final_energy":-11.87508129, "initial_phi_entropy_log2":0, "final_phi_entropy_log2":1.433124443, "upper_bound_log2":2, "outer_iterations":2, "walltime_s":0.457719},
+    {"N":6, "n":11, "k":4, "final_energy":-22.3275476, "initial_phi_entropy_log2":0, "final_phi_entropy_log2":0.9700052721, "upper_bound_log2":3, "outer_iterations":2, "walltime_s":10.936192},
+    {"N":8, "n":15, "k":6, "final_energy":-33.31130849, "initial_phi_entropy_log2":0, "final_phi_entropy_log2":1.055437247, "upper_bound_log2":4, "outer_iterations":2, "walltime_s":36.945977}
+  ]
+}
