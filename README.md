@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.2.3-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -8,7 +8,37 @@
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
 
-Moonlab v0.2.0 is the first release with an honest end-to-end
+## New in v0.3.0 (2026-05-08)
+
+- **Matrix-product density operator (MPDO) noise simulator** — polynomial-
+  cost simulation of noisy circuits with named single-qubit channels
+  (depolarising, amplitude damping, phase damping, bit/phase/bit-phase
+  flip).  Up to ~100 qubits at single-qubit error rates of 1e-3 in
+  quasi-1D layouts.  See `src/quantum/noise_mpdo.{c,h}`.
+
+- **n-band quantum geometric tensor (QGT) module** — opaque-handle
+  multi-band Bloch-Hamiltonian primitives + three Berry-grid Chern
+  integrators (eigvec FHS, parallel-transport, projector-trace,
+  rigorously gauge-free).  Z_2 invariant for 4-band TR-symmetric and
+  1D BdG systems.  Cross-checked against the existing real-space
+  Bianco-Resta `chern_marker` on QWZ.
+
+- **New topological-band-structure model primitives**: Kane-Mele
+  (4-band honeycomb QSH), BHZ (4-band square-lattice TI), Kitaev
+  p-wave chain (1D BdG topological superconductor), Harper-Hofstadter
+  (q-band magnetic-flux lattice).  Every model reproduces its
+  analytical phase boundary exactly.  Hofstadter sub-band Chern
+  numbers match the canonical TKNN values.
+
+- **Critical Haldane fix** — the existing 2-band Haldane Hamiltonian's
+  NNN antisymmetric sum vanished at the Dirac points in this
+  primitive-coord convention; restored to the canonical form, which
+  reproduces the textbook `|M| < 3*sqrt(3)*|t2*sin(phi)|` boundary.
+
+See [CHANGELOG.md](CHANGELOG.md#030---2026-05-08) for the full
+breakdown.
+
+Moonlab v0.2.0 was the first release with an honest end-to-end
 "quantum-source to quantum-safe" pipeline in one library: the
 Bell-verified quantum RNG generates 32-byte seeds that feed directly
 into NIST-standard ML-KEM-512 / 768 / 1024 key generation via a single
