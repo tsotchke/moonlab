@@ -619,6 +619,60 @@ qgt_system_1d_t* qgt_model_ssh(double t1, double t2) {
     return s;
 }
 
+/* ----- Kitaev p-wave chain --------------------------------------- */
+
+typedef struct { double t, mu, delta; } kitaev_params_t;
+
+static void kitaev_bloch(double k, void* user, qgt_complex_t h[4]) {
+    const kitaev_params_t* p = (const kitaev_params_t*)user;
+    double xi = -2.0 * p->t * cos(k) - p->mu;
+    double Delta_k = 2.0 * p->delta * sin(k);
+    /* H(k) = xi(k) tau_z + Delta(k) tau_y in the Nambu basis.
+     * tau_z = diag(+1, -1); tau_y = [[0, -i], [+i, 0]].
+     * h[r*2 + c] in row-major:
+     *   H[0,0] = xi      H[0,1] = -i Delta
+     *   H[1,0] = +i Delta  H[1,1] = -xi  */
+    h[0] = (qgt_complex_t)xi;
+    h[1] = -_Complex_I * (qgt_complex_t)Delta_k;
+    h[2] = +_Complex_I * (qgt_complex_t)Delta_k;
+    h[3] = (qgt_complex_t)(-xi);
+}
+
+qgt_system_1d_t* qgt_model_kitaev_chain(double t, double mu, double delta) {
+    kitaev_params_t* p = malloc(sizeof(*p));
+    if (!p) return NULL;
+    p->t = t; p->mu = mu; p->delta = delta;
+    qgt_system_1d_t* s = qgt_create_1d(kitaev_bloch, p);
+    if (!s) { free(p); return NULL; }
+    s->owned_user = p;
+    return s;
+}
+
+int qgt_z2_invariant_1d_bdg(const qgt_system_1d_t* sys, int* z2) {
+    if (!sys || !z2) return -1;
+    /* At the TR-invariant momenta k = 0 and k = pi, evaluate the BdG
+     * Hamiltonian and read off the diagonal coefficient (the
+     * Pfaffian-sign proxy for a 2x2 BdG with vanishing off-diagonal
+     * at TRIM).  For Kitaev: Delta(0) = Delta(pi) = 0, so H(0,pi) =
+     * xi*tau_z; sgn(Pf) = sgn(xi). */
+    qgt_complex_t h0[4], hpi[4];
+    sys->fn(0.0, sys->user, h0);
+    sys->fn(M_PI, sys->user, hpi);
+    double m0  = creal(h0[0]);    /* H_{00} at k=0 */
+    double mpi = creal(hpi[0]);   /* H_{00} at k=pi */
+    int s0  = (m0  > 0.0) ? +1 : (m0  < 0.0 ? -1 : 0);
+    int spi = (mpi > 0.0) ? +1 : (mpi < 0.0 ? -1 : 0);
+    if (s0 == 0 || spi == 0) {
+        /* Gap closing at a TRIM point -- Z_2 is undefined; return 0 by
+         * convention but flag via an out-of-range value if needed. */
+        *z2 = 0;
+        return 0;
+    }
+    /* nu = (1 - s0 * spi) / 2 */
+    *z2 = (s0 * spi < 0) ? 1 : 0;
+    return 0;
+}
+
 int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
                    double* out_raw) {
     if (!sys || N < 4) { if (out_raw) *out_raw = 0.0; return 0; }
