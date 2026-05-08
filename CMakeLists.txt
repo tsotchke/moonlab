@@ -530,6 +530,7 @@ set(QSIM_QUANTUM_SOURCES
     src/quantum/measurement.c
     src/quantum/entanglement.c
     src/quantum/noise.c
+    src/quantum/noise_mpdo.c
 )
 
 set(QSIM_BACKEND_SOURCES
