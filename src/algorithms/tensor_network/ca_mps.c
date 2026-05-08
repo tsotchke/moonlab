@@ -709,6 +709,20 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
     return CA_MPS_SUCCESS;
 }
 
+ca_mps_error_t moonlab_ca_mps_conjugate_pauli_through_C(
+    const moonlab_ca_mps_t* s,
+    const uint8_t* in_pauli,
+    uint8_t* out_pauli,
+    int* out_phase) {
+    if (!s || !in_pauli || !out_pauli || !out_phase) return CA_MPS_ERR_INVALID;
+    /* Same conjugation expect_pauli uses internally: C^dagger P C. */
+    int phase = 0;
+    clifford_error_t e =
+        clifford_conjugate_pauli_inverse(s->D, in_pauli, 0, out_pauli, &phase);
+    *out_phase = phase;
+    return (e == CLIFFORD_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
+}
+
 ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                                 const uint8_t* paulis,
                                                 const double _Complex* coeffs,
