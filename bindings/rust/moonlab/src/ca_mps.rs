@@ -210,6 +210,14 @@ pub struct VarDConfig {
     pub clifford_passes_per_outer: u32,
     pub composite_2gate: bool,
     pub warmstart: Warmstart,
+    /// Outer-loop convergence threshold (since 0.2.4).
+    ///
+    /// `0.0` keeps the C-side default of `1e-7`; passing a tighter
+    /// value (e.g. `1e-12`) routes through `moonlab_ca_mps_var_d_run_v2`
+    /// so the alternating loop runs through the full `max_outer_iters`
+    /// budget instead of bailing at a non-GS fixed point.  See the
+    /// Python wrapper docstring for the XXZ off-symmetry residual data.
+    pub convergence_eps: f64,
 }
 
 impl Default for VarDConfig {
@@ -221,6 +229,7 @@ impl Default for VarDConfig {
             clifford_passes_per_outer: 8,
             composite_2gate: false,
             warmstart: Warmstart::Identity,
+            convergence_eps: 0.0,
         }
     }
 }
@@ -264,22 +273,43 @@ pub fn var_d_run(
         std::ptr::null()
     };
 
-    let rc = unsafe {
-        ffi::moonlab_ca_mps_var_d_run(
-            state.handle.as_ptr(),
-            paulis.as_ptr(),
-            coeffs.as_ptr(),
-            num_terms,
-            cfg.max_outer_iters,
-            cfg.imag_time_dtau,
-            cfg.imag_time_steps_per_outer,
-            cfg.clifford_passes_per_outer,
-            if cfg.composite_2gate { 1 } else { 0 },
-            cfg.warmstart as i32,
-            stab_ptr,
-            stab_num_gens,
-            &mut out_e as *mut f64,
-        )
+    let rc = if cfg.convergence_eps > 0.0 {
+        unsafe {
+            ffi::moonlab_ca_mps_var_d_run_v2(
+                state.handle.as_ptr(),
+                paulis.as_ptr(),
+                coeffs.as_ptr(),
+                num_terms,
+                cfg.max_outer_iters,
+                cfg.imag_time_dtau,
+                cfg.imag_time_steps_per_outer,
+                cfg.clifford_passes_per_outer,
+                if cfg.composite_2gate { 1 } else { 0 },
+                cfg.warmstart as i32,
+                stab_ptr,
+                stab_num_gens,
+                cfg.convergence_eps,
+                &mut out_e as *mut f64,
+            )
+        }
+    } else {
+        unsafe {
+            ffi::moonlab_ca_mps_var_d_run(
+                state.handle.as_ptr(),
+                paulis.as_ptr(),
+                coeffs.as_ptr(),
+                num_terms,
+                cfg.max_outer_iters,
+                cfg.imag_time_dtau,
+                cfg.imag_time_steps_per_outer,
+                cfg.clifford_passes_per_outer,
+                if cfg.composite_2gate { 1 } else { 0 },
+                cfg.warmstart as i32,
+                stab_ptr,
+                stab_num_gens,
+                &mut out_e as *mut f64,
+            )
+        }
     };
     check(rc)?;
     Ok(out_e)

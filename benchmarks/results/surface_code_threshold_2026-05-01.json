@@ -1,0 +1,32 @@
+{
+  "schema": "moonlab/surface_code_threshold_v1",
+  "description": "Code-capacity surface-code logical-error rate vs i.i.d. depolarising p, distances {3, 5, 7}.  Greedy nearest-neighbour MWPM decoder; open-boundary planar code; logical X/Z anticommutation check on edge-string representatives.",
+  "trials_per_point": 5000,
+  "distances": [3, 5, 7],
+  "sweeps": [
+    {"d": 3, "p": 0.005000, "trials": 5000, "fails_uncorr": 88, "fails_greedy": 101, "p_log_uncorr": 0.0176, "p_log_greedy": 0.0202, "se_uncorr": 0.00185958, "se_greedy": 0.00198957, "wall_s": 0.0013},
+    {"d": 3, "p": 0.008000, "trials": 5000, "fails_uncorr": 151, "fails_greedy": 127, "p_log_uncorr": 0.0302, "p_log_greedy": 0.0254, "se_uncorr": 0.00242025, "se_greedy": 0.00222508, "wall_s": 0.0014},
+    {"d": 3, "p": 0.012000, "trials": 5000, "fails_uncorr": 207, "fails_greedy": 204, "p_log_uncorr": 0.0414, "p_log_greedy": 0.0408, "se_uncorr": 0.00281731, "se_greedy": 0.00279769, "wall_s": 0.0014},
+    {"d": 3, "p": 0.016000, "trials": 5000, "fails_uncorr": 298, "fails_greedy": 278, "p_log_uncorr": 0.0596, "p_log_greedy": 0.0556, "se_uncorr": 0.00334807, "se_greedy": 0.00324064, "wall_s": 0.0013},
+    {"d": 3, "p": 0.020000, "trials": 5000, "fails_uncorr": 380, "fails_greedy": 358, "p_log_uncorr": 0.076, "p_log_greedy": 0.0716, "se_uncorr": 0.00374764, "se_greedy": 0.00364619, "wall_s": 0.0014},
+    {"d": 3, "p": 0.025000, "trials": 5000, "fails_uncorr": 425, "fails_greedy": 450, "p_log_uncorr": 0.085, "p_log_greedy": 0.09, "se_uncorr": 0.00394398, "se_greedy": 0.00404722, "wall_s": 0.0014},
+    {"d": 3, "p": 0.030000, "trials": 5000, "fails_uncorr": 532, "fails_greedy": 540, "p_log_uncorr": 0.1064, "p_log_greedy": 0.108, "se_uncorr": 0.00436071, "se_greedy": 0.00438944, "wall_s": 0.0014},
+    {"d": 3, "p": 0.040000, "trials": 5000, "fails_uncorr": 648, "fails_greedy": 685, "p_log_uncorr": 0.1296, "p_log_greedy": 0.137, "se_uncorr": 0.00474982, "se_greedy": 0.00486274, "wall_s": 0.0015},
+    {"d": 5, "p": 0.005000, "trials": 5000, "fails_uncorr": 145, "fails_greedy": 133, "p_log_uncorr": 0.029, "p_log_greedy": 0.0266, "se_uncorr": 0.00237314, "se_greedy": 0.00227563, "wall_s": 0.0028},
+    {"d": 5, "p": 0.008000, "trials": 5000, "fails_uncorr": 241, "fails_greedy": 228, "p_log_uncorr": 0.0482, "p_log_greedy": 0.0456, "se_uncorr": 0.00302908, "se_greedy": 0.00295028, "wall_s": 0.0028},
+    {"d": 5, "p": 0.012000, "trials": 5000, "fails_uncorr": 377, "fails_greedy": 327, "p_log_uncorr": 0.0754, "p_log_greedy": 0.0654, "se_uncorr": 0.00373403, "se_greedy": 0.00349636, "wall_s": 0.0030},
+    {"d": 5, "p": 0.016000, "trials": 5000, "fails_uncorr": 489, "fails_greedy": 450, "p_log_uncorr": 0.0978, "p_log_greedy": 0.09, "se_uncorr": 0.00420084, "se_greedy": 0.00404722, "wall_s": 0.0030},
+    {"d": 5, "p": 0.020000, "trials": 5000, "fails_uncorr": 595, "fails_greedy": 520, "p_log_uncorr": 0.119, "p_log_greedy": 0.104, "se_uncorr": 0.00457906, "se_greedy": 0.00431704, "wall_s": 0.0030},
+    {"d": 5, "p": 0.025000, "trials": 5000, "fails_uncorr": 725, "fails_greedy": 691, "p_log_uncorr": 0.145, "p_log_greedy": 0.1382, "se_uncorr": 0.00497946, "se_greedy": 0.00488059, "wall_s": 0.0031},
+    {"d": 5, "p": 0.030000, "trials": 5000, "fails_uncorr": 846, "fails_greedy": 778, "p_log_uncorr": 0.1692, "p_log_greedy": 0.1556, "se_uncorr": 0.00530229, "se_greedy": 0.00512618, "wall_s": 0.0031},
+    {"d": 5, "p": 0.040000, "trials": 5000, "fails_uncorr": 1040, "fails_greedy": 1024, "p_log_uncorr": 0.208, "p_log_greedy": 0.2048, "se_uncorr": 0.00573997, "se_greedy": 0.00570714, "wall_s": 0.0032},
+    {"d": 7, "p": 0.005000, "trials": 5000, "fails_uncorr": 197, "fails_greedy": 187, "p_log_uncorr": 0.0394, "p_log_greedy": 0.0374, "se_uncorr": 0.00275128, "se_greedy": 0.00268333, "wall_s": 0.0056},
+    {"d": 7, "p": 0.008000, "trials": 5000, "fails_uncorr": 334, "fails_greedy": 308, "p_log_uncorr": 0.0668, "p_log_greedy": 0.0616, "se_uncorr": 0.00353094, "se_greedy": 0.00340016, "wall_s": 0.0058},
+    {"d": 7, "p": 0.012000, "trials": 5000, "fails_uncorr": 513, "fails_greedy": 458, "p_log_uncorr": 0.1026, "p_log_greedy": 0.0916, "se_uncorr": 0.00429123, "se_greedy": 0.00407945, "wall_s": 0.0058},
+    {"d": 7, "p": 0.016000, "trials": 5000, "fails_uncorr": 686, "fails_greedy": 648, "p_log_uncorr": 0.1372, "p_log_greedy": 0.1296, "se_uncorr": 0.00486572, "se_greedy": 0.00474982, "wall_s": 0.0058},
+    {"d": 7, "p": 0.020000, "trials": 5000, "fails_uncorr": 783, "fails_greedy": 731, "p_log_uncorr": 0.1566, "p_log_greedy": 0.1462, "se_uncorr": 0.00513958, "se_greedy": 0.00499651, "wall_s": 0.0060},
+    {"d": 7, "p": 0.025000, "trials": 5000, "fails_uncorr": 970, "fails_greedy": 905, "p_log_uncorr": 0.194, "p_log_greedy": 0.181, "se_uncorr": 0.00559221, "se_greedy": 0.00544498, "wall_s": 0.0063},
+    {"d": 7, "p": 0.030000, "trials": 5000, "fails_uncorr": 1140, "fails_greedy": 1060, "p_log_uncorr": 0.228, "p_log_greedy": 0.212, "se_uncorr": 0.00593323, "se_greedy": 0.00578024, "wall_s": 0.0064},
+    {"d": 7, "p": 0.040000, "trials": 5000, "fails_uncorr": 1433, "fails_greedy": 1390, "p_log_uncorr": 0.2866, "p_log_greedy": 0.278, "se_uncorr": 0.00639469, "se_greedy": 0.00633587, "wall_s": 0.0069}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/cross_backend_xxz_v1",
+  "description": "Cross-backend XXZ Heisenberg ground-state validation: same Hamiltonian H = J sum<ij> (X_i X_j + Y_i Y_j + Delta Z_i Z_j) - h sum_i Z_i computed by three independent Moonlab engines.  DMRG matches dense ED to ~10 digits at every Delta.  var-D with H_ALL warmstart and 20-outer / 5-imag-step budget converges to within ~1% of DMRG (residual driven by imag-time rather than by SU(2)-symmetry obstruction).  An IDENTITY warmstart leaves |phi> = |0..0> in the Sz=-n/2 kernel of XX+YY where imag-time is trivially stuck at the wrong eigenvalue; H_ALL puts |phi> on every Sz sector.",
+  "params": {"n": 6, "J": 1.000000, "h": 0.000000, "obc": true, "dmrg_chi": 64, "dmrg_sweeps": 8, "ca_mps_chi": 32, "var_d_outer_iters": 20, "var_d_dtau": 0.10, "var_d_imag_steps": 5, "var_d_cliff_passes": 1, "var_d_warmstart": "H_ALL"},
+  "rows": [
+    {"n": 6, "J": 1.000000, "Delta": 0.000000, "h": 0.000000, "E_ED": -6.9879184149, "E_DMRG": -6.9879184125, "E_varD": -6.0978219005, "rel_err_DMRG": 3.443149e-10, "rel_err_varD": 1.273765e-01, "t_ED": 0.0023, "t_DMRG": 0.0560, "t_varD": 2.2110},
+    {"n": 6, "J": 1.000000, "Delta": 0.500000, "h": 0.000000, "E_ED": -8.3915505530, "E_DMRG": -8.3915505501, "E_varD": -6.9779037755, "rel_err_DMRG": 3.534894e-10, "rel_err_varD": 1.684607e-01, "t_ED": 0.0024, "t_DMRG": 0.0554, "t_varD": 2.7280},
+    {"n": 6, "J": 1.000000, "Delta": 1.000000, "h": 0.000000, "E_ED": -9.9743085356, "E_DMRG": -9.9743085347, "E_varD": -8.0078530103, "rel_err_DMRG": 8.851340e-11, "rel_err_varD": 1.971521e-01, "t_ED": 0.0025, "t_DMRG": 0.0579, "t_varD": 1.7594},
+    {"n": 6, "J": 1.000000, "Delta": 1.500000, "h": 0.000000, "E_ED": -11.7093435636, "E_DMRG": -11.7093435626, "E_varD": -9.9548471003, "rel_err_DMRG": 8.689572e-11, "rel_err_varD": 1.498373e-01, "t_ED": 0.0022, "t_DMRG": 0.0568, "t_varD": 2.6077},
+    {"n": 6, "J": 1.000000, "Delta": 2.000000, "h": 0.000000, "E_ED": -13.5777154405, "E_DMRG": -13.5777154394, "E_varD": -12.0806315891, "rel_err_DMRG": 8.551039e-11, "rel_err_varD": 1.102604e-01, "t_ED": 0.0021, "t_DMRG": 0.0566, "t_varD": 1.3793}
+  ]
+}

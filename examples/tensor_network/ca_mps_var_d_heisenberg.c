@@ -73,7 +73,11 @@ int main(int argc, char** argv) {
     fprintf(json, "{\n  \"schema\": \"moonlab/ca_mps_var_d_xxz_v1\",\n  \"points\": [\n");
     int first_json = 1;
 
-    const uint32_t n_values[]     = { 6, 8 };
+    /* Restricted to n=6 with composite-2-gate ON to test whether the
+     * new composite-move feature helps the gapless regime where
+     * single-gate greedy gave 1.0x ratio.  Compare to the
+     * non-composite results in §6.4 of the design doc. */
+    const uint32_t n_values[]     = { 6 };
     const double   Delta_values[] = { 0.0, 0.5, 1.0, 1.5, 2.0 };
 
     for (size_t ni = 0; ni < sizeof(n_values)/sizeof(n_values[0]); ni++) {
@@ -111,6 +115,7 @@ int main(int argc, char** argv) {
             base.imag_time_steps_per_outer = 3;
             base.clifford_passes_per_outer = 6;
             base.convergence_eps           = 1e-6;
+            base.composite_2gate           = 1;  /* test the new feature */
             base.verbose                   = 0;
 
             const ca_mps_warmstart_t warms[4] = {

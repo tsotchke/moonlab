@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/bell_variants_aggregate_v1",
+  "description": "Multi-run aggregated Bell-inequality violations: CHSH on |Phi+>, Mermin-3 on 3-qubit GHZ, Mermin-Klyshko N-qubit on 4q and 5q GHZ.  Each variant runs 10 independent passes; reports per-run value plus median, IQR, min/max, mean, stddev, classical-violation rate, and within-10% of quantum-bound rate.",
+  "runs_per_variant": 10,
+  "shots_per_run": 10000,
+  "variants": [
+    {"variant": "CHSH (|Phi+>)", "n_qubits": 2, "classical_bound": 2, "quantum_bound": 2.82843, "n_runs": 10, "values": [2.8384, 2.812, 2.88, 2.8736, 2.816, 2.86, 2.8112, 2.8616, 2.8608, 2.8256], "median": 2.8492, "q1": 2.8184, "q3": 2.8614, "min": 2.8112, "max": 2.88, "mean": 2.84392, "stddev": 0.02504766656, "violation_rate": 1, "quantum_within_10pct_rate": 1},
+    {"variant": "Mermin-3 (GHZ)", "n_qubits": 3, "classical_bound": 2, "quantum_bound": 4, "n_runs": 10, "values": [4, 4, 4, 4, 4, 4, 4, 4, 4, 4], "median": 4, "q1": 4, "q3": 4, "min": 4, "max": 4, "mean": 4, "stddev": 0, "violation_rate": 1, "quantum_within_10pct_rate": 1},
+    {"variant": "Mermin-Klyshko-4 (GHZ)", "n_qubits": 4, "classical_bound": 1, "quantum_bound": 2.82843, "n_runs": 10, "values": [2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125, 2.828427125], "median": 2.828427125, "q1": 2.828427125, "q3": 2.828427125, "min": 2.828427125, "max": 2.828427125, "mean": 2.828427125, "stddev": 0, "violation_rate": 1, "quantum_within_10pct_rate": 1},
+    {"variant": "Mermin-Klyshko-5 (GHZ)", "n_qubits": 5, "classical_bound": 1, "quantum_bound": 4, "n_runs": 10, "values": [4, 4, 4, 4, 4, 4, 4, 4, 4, 4], "median": 4, "q1": 4, "q3": 4, "min": 4, "max": 4, "mean": 4, "stddev": 0, "violation_rate": 1, "quantum_within_10pct_rate": 1}
+  ]
+}

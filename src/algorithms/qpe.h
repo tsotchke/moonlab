@@ -4,6 +4,10 @@
 #include "../quantum/state.h"
 #include "../utils/quantum_entropy.h"
 #include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // Use standard complex type from state.h
 typedef double _Complex complex_t;
@@ -227,5 +231,9 @@ unitary_operator_t* qpe_create_t_gate(void);
  * @return Unitary operator
  */
 unitary_operator_t* qpe_create_rz_gate(double theta);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QPE_H */

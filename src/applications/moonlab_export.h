@@ -39,6 +39,12 @@
 #include <stdint.h>
 #include <complex.h>     /* for double _Complex in CA-MPS observable signatures */
 
+/* MOONLAB_API visibility tag.  Lives in its own header so module
+ * headers (ca_mps.h, dmrg.h, ...) can pick up the tag without
+ * pulling in the full ABI surface declaration.  See moonlab_api.h
+ * for the macro expansion contract. */
+#include "moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,7 +69,7 @@ extern "C" {
  *
  * @since 0.1.2
  */
-void moonlab_abi_version(int* major, int* minor, int* patch);
+MOONLAB_API void moonlab_abi_version(int* major, int* minor, int* patch);
 
 /**
  * @brief Fill a buffer with cryptographically-strong quantum random bytes.
@@ -87,7 +93,7 @@ void moonlab_abi_version(int* major, int* minor, int* patch);
  *
  * @since 0.1.2
  */
-int moonlab_qrng_bytes(uint8_t* buf, size_t size);
+MOONLAB_API int moonlab_qrng_bytes(uint8_t* buf, size_t size);
 
 /* ---- Quantum geometric tensor (stable from 0.2.0) -------------------- */
 
@@ -120,7 +126,7 @@ int moonlab_qrng_bytes(uint8_t* buf, size_t size);
  *
  * @since 0.2.0
  */
-int moonlab_qwz_chern(double m, size_t N, double* out_chern);
+MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
 
 /* ---- ML-KEM-512 (FIPS 203) PQC KEM (stable from 0.2.0) -------------- */
 
@@ -211,18 +217,18 @@ void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
 typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
 
 /** Allocate a CA-MPS state on @p num_qubits with bond cap @p max_bond_dim. */
-moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
+MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
 /** Release a CA-MPS state created by ::moonlab_ca_mps_create. */
-void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
+MOONLAB_API void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
 /** Deep-clone (independent of the source). */
-moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
+MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
 
 /** Number of qubits.  0 if @p s is NULL. */
-uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
 /** Configured bond-dimension cap. */
-uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
 /** Current peak bond dimension across the MPS factor. */
-uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /* Clifford gates: tableau-only (O(n) per gate, no MPS cost). */
 int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
@@ -255,29 +261,29 @@ int moonlab_ca_mps_fredkin   (moonlab_ca_mps_t* s,
                                 uint32_t c, uint32_t t1, uint32_t t2);
 
 /** Apply exp(i theta P) for a Pauli string P (length = num_qubits). */
-int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                    const uint8_t* pauli_string, double theta);
 /** Imaginary-time exp(-tau P) for a Pauli string P; non-unitary. */
-int moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
                                         const uint8_t* pauli_string, double tau);
 /** Restore unit norm after non-unitary evolution. */
-int moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
+MOONLAB_API int moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
 /** Current state norm. */
-double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
+MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
 
 /** <psi|P|psi> for a Pauli string P. */
-int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                  const uint8_t* pauli_string,
                                  double _Complex* out_expval);
 /** <psi|H|psi> for H = sum_k coeffs[k] * paulis[k]; paulis is laid out
  *  as `num_terms * num_qubits` bytes. */
-int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                      const uint8_t* paulis,
                                      const double _Complex* coeffs,
                                      uint32_t num_terms,
                                      double _Complex* out_expval);
 /** Marginal P(Z_qubit = +1), in [0, 1]. */
-int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                            uint32_t qubit, double* out_prob);
 
 /* ---- DMRG scalar entry points (stable from 0.2.1) ------------------ */
@@ -305,7 +311,7 @@ int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
  *
  * @since 0.2.1
  */
-double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
+MOONLAB_API double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
                                  uint32_t max_bond_dim, uint32_t num_sweeps);
 
 /**
@@ -333,7 +339,7 @@ double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
  *
  * @since 0.2.1
  */
-double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
+MOONLAB_API double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
                                        double J, double Delta, double h,
                                        uint32_t max_bond_dim,
                                        uint32_t num_sweeps);
@@ -374,7 +380,7 @@ double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
  *
  * @since 0.2.1
  */
-int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
+MOONLAB_API int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
                               const uint8_t* paulis,
                               const double* coeffs,
                               uint32_t num_terms,
@@ -387,6 +393,39 @@ int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
                               const uint8_t* stab_paulis,
                               uint32_t stab_num_gens,
                               double* out_final_energy);
+
+/**
+ * @brief Variational-D alternating loop with explicit convergence
+ *        threshold control (v0.2.4 extension).
+ *
+ * Same semantics as ::moonlab_ca_mps_var_d_run but exposes
+ * @p convergence_eps -- the early-exit threshold the alternating
+ * outer loop tests after each iter.  The default-eps run wrapper
+ * fixes this at 1e-7, which is unsuitable for SU(2)-symmetric
+ * Heisenberg-class problems where the loop hits a non-GS fixed
+ * point quickly: with eps=1e-7 the loop declares convergence
+ * after a few iters at 11-19% residual; tightening eps below the
+ * fixed-point's natural floor lets the search escape and resume
+ * imag-time evolution.
+ *
+ * Pass @p convergence_eps <= 0 to use the default 1e-7.
+ *
+ * @since 0.2.4
+ */
+MOONLAB_API int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
+                                 const uint8_t* paulis,
+                                 const double* coeffs,
+                                 uint32_t num_terms,
+                                 uint32_t max_outer_iters,
+                                 double imag_time_dtau,
+                                 uint32_t imag_time_steps_per_outer,
+                                 uint32_t clifford_passes_per_outer,
+                                 int composite_2gate,
+                                 int warmstart,
+                                 const uint8_t* stab_paulis,
+                                 uint32_t stab_num_gens,
+                                 double convergence_eps,
+                                 double* out_final_energy);
 
 /**
  * @brief Apply the gauge-aware stabilizer-subgroup warmstart Clifford.
@@ -414,7 +453,7 @@ int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
  *
  * @since 0.2.1
  */
-int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
+MOONLAB_API int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
                                      const uint8_t* paulis,
                                      uint32_t num_gens);
 
@@ -485,7 +524,7 @@ int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
  *
  * @since 0.2.1
  */
-const char* moonlab_status_string(int module, int status);
+MOONLAB_API const char* moonlab_status_string(int module, int status);
 
 #ifdef __cplusplus
 } /* extern "C" */

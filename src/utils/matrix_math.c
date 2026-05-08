@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#if defined(__APPLE__)
+#  include <Accelerate/Accelerate.h>
+#  define MOONLAB_HAVE_LAPACK_ZHEEV 1
+#  define MOONLAB_LAPACK_APPLE 1
+#elif defined(MOONLAB_HAVE_LAPACKE)
+#  include <lapacke.h>
+#  define MOONLAB_HAVE_LAPACK_ZHEEV 1
+#endif
+
 #define JACOBI_TOLERANCE 1e-12
 #define SMALL_NUMBER 1e-15
 
@@ -87,19 +96,98 @@ int hermitian_eigen_decomposition(
 ) {
     if (!matrix || !eigenvalues || !eigenvectors) return -1;
     if (n == 0) return -1;
-    
+
     if (max_iterations <= 0) {
         max_iterations = 50 * n * n;
     }
     if (tolerance <= 0) {
         tolerance = JACOBI_TOLERANCE;
     }
-    
+
     // Verify matrix is Hermitian
     if (!matrix_is_hermitian(matrix, n, tolerance)) {
         return -1;
     }
-    
+
+#if defined(MOONLAB_HAVE_LAPACK_ZHEEV)
+    /* LAPACK zheev path: O(n^3) work; on M2 Ultra a 4096x4096 zheev
+     * runs in ~10 s, vs the Jacobi rotation fallback which is O(n^4)
+     * per sweep with O(n^2) rotation-target scans -- enough to make
+     * n=4096 hours-long.  The Jacobi code below is kept verbatim as
+     * the no-LAPACK fallback for platforms without Accelerate /
+     * lapacke; the eigenvalues-descending convention is preserved by
+     * a final reverse pass.
+     *
+     * zheev wants column-major.  We feed it a copy of the input and
+     * exploit the Hermitian property: A^T == conj(A), so a row-major
+     * Hermitian buffer reads identically to its column-major form
+     * when the storage triangle is reflected.  The simpler answer
+     * here is to copy and trust uplo='U' to read the upper triangle
+     * symmetrically. */
+    {
+        complex_t *A = (complex_t *)malloc(n * n * sizeof(complex_t));
+        double *rwork = (double *)malloc((3 * n > 1 ? 3 * n - 2 : 1) * sizeof(double));
+        if (!A || !rwork) { free(A); free(rwork); return -1; }
+        memcpy(A, matrix, n * n * sizeof(complex_t));
+
+        char jobz = 'V';
+        char uplo = 'U';
+#if defined(MOONLAB_LAPACK_APPLE)
+        __CLPK_integer N = (__CLPK_integer)n;
+        __CLPK_integer lda = N;
+        __CLPK_integer lwork = -1;
+        __CLPK_integer info = 0;
+        __CLPK_doublecomplex work_query;
+        zheev_(&jobz, &uplo, &N,
+               (__CLPK_doublecomplex *)A, &lda,
+               eigenvalues, &work_query, &lwork, rwork, &info);
+        if (info != 0) { free(A); free(rwork); return -1; }
+        lwork = (__CLPK_integer)creal(*(double complex *)&work_query);
+        __CLPK_doublecomplex *work =
+            (__CLPK_doublecomplex *)malloc((size_t)lwork * sizeof(__CLPK_doublecomplex));
+        if (!work) { free(A); free(rwork); return -1; }
+        zheev_(&jobz, &uplo, &N,
+               (__CLPK_doublecomplex *)A, &lda,
+               eigenvalues, work, &lwork, rwork, &info);
+        free(work);
+        if (info != 0) { free(A); free(rwork); return -1; }
+#else
+        lapack_int N = (lapack_int)n;
+        lapack_int info = LAPACKE_zheev(LAPACK_COL_MAJOR, jobz, uplo, N,
+                                          (lapack_complex_double *)A, N,
+                                          eigenvalues);
+        (void)rwork;
+        if (info != 0) { free(A); free(rwork); return -1; }
+#endif
+        free(rwork);
+
+        /* zheev returns eigenvalues ascending and eigenvectors column-
+         * major; the earlier Jacobi path advertises descending order
+         * (vqe_exact_ground_state_energy reads eigvals[dim-1] for the
+         * ground state), so reverse the eigenvalue and column orders. */
+        for (size_t i = 0; i < n / 2; i++) {
+            double tmp = eigenvalues[i];
+            eigenvalues[i] = eigenvalues[n - 1 - i];
+            eigenvalues[n - 1 - i] = tmp;
+        }
+        /* zheev reads our row-major buffer as if it were column-major
+         * (= H^T = conj(H) since H is Hermitian).  Eigenvalues of
+         * conj(H) match those of H but the eigenvectors are conjugated;
+         * undo that with a final conj().  The j-th descending
+         * eigenvector lives in zheev's ascending column (n-1-j); we
+         * also reverse along the way so the test's
+         *   v_j[i] == eigenvectors[i*n + j]
+         * convention is preserved. */
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < n; j++) {
+                eigenvectors[i * n + j] = conj(A[(n - 1 - j) * n + i]);
+            }
+        }
+        free(A);
+        return 0;
+    }
+#endif
+
     // Copy matrix to working array (will be diagonalized)
     complex_t *A = (complex_t *)malloc(n * n * sizeof(complex_t));
     if (!A) return -1;

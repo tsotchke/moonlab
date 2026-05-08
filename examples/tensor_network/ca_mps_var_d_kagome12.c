@@ -124,14 +124,14 @@ int main(int argc, char** argv) {
      * (kagome at chi=32 is already a useful reduction over chi=256). */
 
     for (int w = 0; w < 4; w++) {
-        moonlab_ca_mps_t* state = moonlab_ca_mps_create(12, /*max_bond=*/64);
+        moonlab_ca_mps_t* state = moonlab_ca_mps_create(12, /*max_bond=*/32);
         ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
         cfg.warmstart                   = warms[w];
-        cfg.max_outer_iters             = 25;
-        cfg.imag_time_dtau              = 0.10;
-        cfg.imag_time_steps_per_outer   = 4;
-        cfg.clifford_passes_per_outer   = 4;
-        cfg.convergence_eps             = 1e-5;
+        cfg.max_outer_iters             = 12;
+        cfg.imag_time_dtau              = 0.15;
+        cfg.imag_time_steps_per_outer   = 2;
+        cfg.clifford_passes_per_outer   = 3;
+        cfg.convergence_eps             = 1e-4;
         cfg.verbose                     = 0;
 
         ca_mps_var_d_alt_result_t res = {0};

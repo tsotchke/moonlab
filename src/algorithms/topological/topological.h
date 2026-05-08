@@ -71,6 +71,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // ============================================================================
 // ANYON MODELS
@@ -742,5 +746,9 @@ void compute_modular_T_matrix(const anyon_system_t *sys,
  */
 double complex topological_spin(const anyon_system_t *sys,
                                  anyon_charge_t charge);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* TOPOLOGICAL_H */

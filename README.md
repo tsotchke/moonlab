@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.2.3-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -21,15 +21,13 @@ extends the native reverse-mode autograd with controlled rotations
 and integrates it directly into the VQE driver.  See
 [CHANGELOG.md](CHANGELOG.md) for the per-subsystem state.
 
-> **Known limitation (v0.1.x–0.2.x):** `hermitian_eigen_decomposition`
-> in `src/utils/matrix_math.c` uses real-valued Givens rotations; it
-> returns correct *eigenvalues* but not eigenvectors for complex
-> Hermitian matrices. Current in-tree callers only consume eigenvalues,
-> so they're unaffected. For projector / Berry-curvature / Wilson-loop
-> work on complex-Hermitian operators, use the matrix-sign (Schulz)
-> path in `src/algorithms/topology_realspace/chern_marker.c` as a
-> template. Tracked for a proper complex-Jacobi / Householder-QL
-> rewrite in 0.3.
+> **v0.2.x note**: `hermitian_eigen_decomposition` in `src/utils/matrix_math.c`
+> now correctly handles both real-symmetric and complex-Hermitian inputs
+> (residual ||H v − λv|| < 1e-14 on the 2×2 smoke; consumed by the
+> dense-ED path in `vqe_exact_ground_state_energy`).  The earlier
+> real-Givens limitation was fixed in v0.2.0; the README warning is
+> retained here as a deprecation note for downstream code that may
+> have copied the old workaround.
 
 ## Highlights
 
@@ -903,7 +901,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.2.1},
+    version      = {v0.2.3},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

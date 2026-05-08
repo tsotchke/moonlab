@@ -1,0 +1,35 @@
+{
+  "schema": "moonlab/kagome_ed_v1",
+  "description": "Cross-validation of Moonlab matrix-free Lanczos ground-state energy against the published PRB 83, 212401 (2011) Table I cluster '18b' value (a=(2,-2), b=(-2,-1), 2x3 kagome torus).  Closes the moonlab paper §4.1 cross-validation claim with archived numerical agreement.",
+  "host": {
+    "machine": "Apple M2 Ultra",
+    "os": "Darwin 24.1.0 (macOS 15.1)"
+  },
+  "lattice": {
+    "type": "kagome",
+    "geometry": "6x3 torus, periodic XY",
+    "num_sites": 18,
+    "num_bonds": 36,
+    "hilbert_dim": 262144
+  },
+  "lanczos": {
+    "method": "matrix-free, full reorthogonalisation",
+    "max_iters": 200,
+    "iters_taken": 110,
+    "convergence_delta": 7.71e-13,
+    "seed_sector": "Sz=0",
+    "rng_seed": 42
+  },
+  "energies": {
+    "moonlab_E0": -8.0482707735,
+    "prb_E0": -8.0482707730,
+    "abs_diff": 5.399e-10,
+    "tolerance_threshold": 1e-7
+  },
+  "wall_s": 26.77,
+  "passed": true,
+  "reference": {
+    "citation": "A. M. Läuchli, J. Sudan, E. S. Sørensen, PRB 83, 212401 (2011), Table I cluster 18b",
+    "doi": "10.1103/PhysRevB.83.212401"
+  }
+}

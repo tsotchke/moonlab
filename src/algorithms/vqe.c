@@ -1,9 +1,11 @@
 #include "vqe.h"
 #include "diff/differentiable.h"
 #include "../quantum/gates.h"
+#include "../utils/matrix_math.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 #include <float.h>
 #include <stdio.h>
 
@@ -185,47 +187,32 @@ double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *H) {
         }
     }
 
-    /* Shifted power iteration to find the ground state of M.
-     * Let A = shift*I - M. Then A has largest eigenvalue shift - E_min.
-     * Pick shift larger than any row-1-norm to ensure A is positive. */
-    double shift = 0.0;
-    for (size_t i = 0; i < dim; i++) {
-        double row = 0.0;
-        for (size_t j = 0; j < dim; j++) row += cabs(M[i*dim + j]);
-        if (row > shift) shift = row;
+    /* Direct Hermitian eigendecomposition.  Was: shifted power
+     * iteration with a uniform / hybrid start, which converged to
+     * the wrong eigenvalue on SU(2)-symmetric inputs (Heisenberg XXZ
+     * at Delta=1 returned +5.0 instead of -9.97 on n=6) and stalled
+     * at ~ 1e-6 on near-degenerate spectra (TFIM g=0.25).  The
+     * matrix_math.h Hermitian eigensolver returns ALL eigenvalues at
+     * machine precision regardless of spectrum structure, so picking
+     * the smallest is exact.  Cost is O(dim^3) which fits the
+     * dim <= 4096 (n <= 12) cap on this routine. */
+    double *eigvals = calloc(dim, sizeof(double));
+    complex_t *eigvecs = calloc(dim * dim, sizeof(complex_t));
+    if (!eigvals || !eigvecs) {
+        free(M); free(eigvals); free(eigvecs);
+        double nv = 0.0; return nv / nv;
     }
-    shift += 1.0;
-
-    double complex *v = calloc(dim, sizeof(double complex));
-    double complex *w = calloc(dim, sizeof(double complex));
-    if (!v || !w) { free(M); free(v); free(w); double nv=0.0; return nv/nv; }
-
-    /* Random-ish nonzero start. */
-    for (size_t i = 0; i < dim; i++) v[i] = 1.0 / sqrt((double)dim);
-
-    double lambda = 0.0;
-    for (int iter = 0; iter < 5000; iter++) {
-        /* w = A v = shift*v - M*v */
-        for (size_t i = 0; i < dim; i++) w[i] = shift * v[i];
-        for (size_t i = 0; i < dim; i++) {
-            for (size_t j = 0; j < dim; j++) {
-                w[i] -= M[i*dim + j] * v[j];
-            }
-        }
-        double norm = 0.0;
-        for (size_t i = 0; i < dim; i++) norm += cabs(w[i]) * cabs(w[i]);
-        norm = sqrt(norm);
-        if (norm < 1e-300) break;
-        double complex num = 0.0 + 0.0*I;
-        for (size_t i = 0; i < dim; i++) num += conj(v[i]) * w[i];
-        double new_lambda = creal(num);
-        for (size_t i = 0; i < dim; i++) v[i] = w[i] / norm;
-        if (fabs(new_lambda - lambda) < 1e-12) { lambda = new_lambda; break; }
-        lambda = new_lambda;
+    int rc = hermitian_eigen_decomposition(M, dim, eigvals, eigvecs,
+                                            /*max_iter*/ 0,
+                                            /*tol*/      0.0);
+    if (rc != 0) {
+        free(M); free(eigvals); free(eigvecs);
+        double nv = 0.0; return nv / nv;
     }
-
-    free(M); free(v); free(w);
-    double E_min = shift - lambda;
+    /* Eigenvalues are returned descending; the ground state is the
+     * smallest (last) eigenvalue. */
+    double E_min = eigvals[dim - 1];
+    free(M); free(eigvals); free(eigvecs);
     return E_min + H->nuclear_repulsion;
 }
 

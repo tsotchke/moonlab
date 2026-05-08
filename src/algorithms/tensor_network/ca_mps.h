@@ -26,6 +26,8 @@
 #include <complex.h>
 #include <stdint.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -56,21 +58,21 @@ typedef enum {
  *                       VQE / QAOA workloads.
  * @return A newly owned handle, or NULL on allocation failure / bad args.
  */
-moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
+MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
 
 /** Release all memory owned by @p s.  No-op on NULL. */
-void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
+MOONLAB_API void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
 
 /** Deep-copy a CA-MPS. */
-moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
+MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
 
 /* ================================================================== */
 /*  Introspection                                                     */
 /* ================================================================== */
 
-uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
-uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
-uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
+MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /**
  * @brief Maximum half-cut von Neumann entanglement entropy of the MPS factor
@@ -184,7 +186,7 @@ ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
  * @param pauli_string Array of n bytes in {0=I, 1=X, 2=Y, 3=Z}.
  * @param theta        Rotation angle (radians).
  */
-ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                              const uint8_t* pauli_string,
                                              double theta);
 
@@ -200,15 +202,15 @@ ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
  * @param tau          Imaginary-time step.  Positive tau pushes the
  *                     state toward the lowest-eigenvalue sector of P.
  */
-ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
                                                   const uint8_t* pauli_string,
                                                   double tau);
 
 /** Rescale the internal MPS to unit norm. */
-ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
 
 /** Return <psi|psi> (should be 1 for a normalized state). */
-double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
+MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
 
 /* ================================================================== */
 /*  Observables                                                       */
@@ -221,7 +223,7 @@ double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
  * <phi | C^dagger P C | phi>.  The conjugated Pauli string is computed in
  * O(n^2) and the MPS expectation in O(n chi^2).
  */
-ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                            const uint8_t* pauli_string,
                                            double _Complex* out_expval);
 
@@ -241,11 +243,27 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
  * O(num_terms * n * chi^2) for the MPS expectation on each conjugated
  * term.  Trivially parallelizable across terms.
  */
-ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                                 const uint8_t* paulis,
                                                 const double _Complex* coeffs,
                                                 uint32_t num_terms,
                                                 double _Complex* out_expval);
+
+/**
+ * @brief Compute @f$Q = C^\dagger P C@f$ for the current Clifford @f$C@f$ in @p s.
+ *
+ * Exposes the Clifford-conjugated Pauli string and accumulated phase so that
+ * higher-level routines (var-D delta-caching, MPDO + CA-MPS bridging) can
+ * inspect Q's support without recomputing it.  @p out_pauli must be at least
+ * @c moonlab_ca_mps_num_qubits(s) bytes.  @p out_phase encodes the
+ * accumulated @f$i^{phase}@f$ factor in {0,1,2,3}.
+ *
+ * Cost: O(n^2) Heisenberg conjugation through the tableau.
+ */
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
+                                                          const uint8_t* in_pauli,
+                                                          uint8_t* out_pauli,
+                                                          int* out_phase);
 
 /**
  * @brief Marginal probability of measuring Z = +1 on a single qubit.
@@ -257,36 +275,9 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
  *
  * Cost: O(n^2 + n chi^2), same as a single Pauli-string expectation.
  */
-ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit,
                                       double* out_prob);
-
-/**
- * @brief Compute the Heisenberg-picture image @f$P' = C^\dagger P C@f$ of a
- *        Pauli string under the CA-MPS Clifford factor.
- *
- * @f$|\psi\rangle = C|\phi\rangle@f$, so the expectation-value identity
- * @f$\langle\psi|P|\psi\rangle = \langle\phi | C^\dagger P C |
- * \phi\rangle@f$ is mediated by this function.  Exposed as a public
- * diagnostic so callers can structurally inspect the Clifford factor
- * (e.g. verify that the stabilizer-subgroup-warmstart Clifford has the
- * trailing-qubit-padding form predicted by Theorem 1 of the CA-TN
- * methods paper).
- *
- * @param[in]  s         CA-MPS handle (read-only).
- * @param[in]  in_pauli  Input Pauli string, length @c num_qubits.
- *                       Encoding: 0=I, 1=X, 2=Y, 3=Z (same as
- *                       ::moonlab_ca_mps_expect_pauli).
- * @param[out] out_pauli Conjugated Pauli string, length @c num_qubits.
- * @param[out] out_phase Phase code in {0, 1, 2, 3} for {+1, +i, -1, -i}.
- *
- * @return CA_MPS_SUCCESS, CA_MPS_ERR_INVALID, or CA_MPS_ERR_OOM.
- */
-ca_mps_error_t moonlab_ca_mps_conjugate_pauli_through_C(
-    const moonlab_ca_mps_t* s,
-    const uint8_t* in_pauli,
-    uint8_t* out_pauli,
-    int* out_phase);
 
 #ifdef __cplusplus
 }

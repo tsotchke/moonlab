@@ -167,19 +167,20 @@ double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
 /*  Variational-D ABI wrappers (since 0.2.1).                          */
 /* ================================================================== */
 
-int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
-                              const uint8_t* paulis,
-                              const double* coeffs,
-                              uint32_t num_terms,
-                              uint32_t max_outer_iters,
-                              double imag_time_dtau,
-                              uint32_t imag_time_steps_per_outer,
-                              uint32_t clifford_passes_per_outer,
-                              int composite_2gate,
-                              int warmstart,
-                              const uint8_t* stab_paulis,
-                              uint32_t stab_num_gens,
-                              double* out_final_energy) {
+int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
+                                 const uint8_t* paulis,
+                                 const double* coeffs,
+                                 uint32_t num_terms,
+                                 uint32_t max_outer_iters,
+                                 double imag_time_dtau,
+                                 uint32_t imag_time_steps_per_outer,
+                                 uint32_t clifford_passes_per_outer,
+                                 int composite_2gate,
+                                 int warmstart,
+                                 const uint8_t* stab_paulis,
+                                 uint32_t stab_num_gens,
+                                 double convergence_eps,
+                                 double* out_final_energy) {
     if (!state || !paulis || !coeffs || num_terms == 0) {
         return CA_MPS_ERR_INVALID;
     }
@@ -204,12 +205,38 @@ int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
     cfg.warmstart_stab_paulis       = stab_paulis;
     cfg.warmstart_stab_num_gens     = stab_num_gens;
     cfg.verbose                     = 0;
+    if (convergence_eps > 0.0) {
+        cfg.convergence_eps = convergence_eps;
+    }
 
     ca_mps_var_d_alt_result_t res = {0};
     ca_mps_error_t e = moonlab_ca_mps_optimize_var_d_alternating(
         state, paulis, coeffs, num_terms, &cfg, &res);
     if (out_final_energy) *out_final_energy = res.final_energy;
     return (int)e;
+}
+
+int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
+                              const uint8_t* paulis,
+                              const double* coeffs,
+                              uint32_t num_terms,
+                              uint32_t max_outer_iters,
+                              double imag_time_dtau,
+                              uint32_t imag_time_steps_per_outer,
+                              uint32_t clifford_passes_per_outer,
+                              int composite_2gate,
+                              int warmstart,
+                              const uint8_t* stab_paulis,
+                              uint32_t stab_num_gens,
+                              double* out_final_energy) {
+    return moonlab_ca_mps_var_d_run_v2(state, paulis, coeffs, num_terms,
+                                        max_outer_iters, imag_time_dtau,
+                                        imag_time_steps_per_outer,
+                                        clifford_passes_per_outer,
+                                        composite_2gate, warmstart,
+                                        stab_paulis, stab_num_gens,
+                                        /*convergence_eps*/ 0.0,
+                                        out_final_energy);
 }
 
 int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,

@@ -679,7 +679,16 @@ ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
 
 ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s) {
     if (!s) return CA_MPS_ERR_INVALID;
-    tn_state_error_t e = tn_mps_normalize(s->phi);
+    /* Imag-time gates accumulate the per-step rescale into
+     * state->log_norm_factor (so the storage tensors stay unit-norm and
+     * we don't lose precision over many small steps).  Plain
+     * tn_mps_normalize only renormalises the *storage* tensors, leaving
+     * log_norm_factor in place; the result has storage-norm = 1 but
+     * true_norm = exp(log_norm_factor) != 1.  Apply the deferred factor
+     * first, then renormalise the storage. */
+    tn_state_error_t e = tn_mps_commit_normalization(s->phi);
+    if (e != TN_STATE_SUCCESS) return CA_MPS_ERR_BACKEND;
+    e = tn_mps_normalize(s->phi);
     return (e == TN_STATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
 }
 
@@ -709,18 +718,15 @@ ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
     return CA_MPS_SUCCESS;
 }
 
-ca_mps_error_t moonlab_ca_mps_conjugate_pauli_through_C(
-    const moonlab_ca_mps_t* s,
-    const uint8_t* in_pauli,
-    uint8_t* out_pauli,
-    int* out_phase) {
+ca_mps_error_t moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
+                                              const uint8_t* in_pauli,
+                                              uint8_t* out_pauli,
+                                              int* out_phase) {
     if (!s || !in_pauli || !out_pauli || !out_phase) return CA_MPS_ERR_INVALID;
-    /* Same conjugation expect_pauli uses internally: C^dagger P C. */
     int phase = 0;
-    clifford_error_t e =
-        clifford_conjugate_pauli_inverse(s->D, in_pauli, 0, out_pauli, &phase);
-    *out_phase = phase;
-    return (e == CLIFFORD_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
+    clifford_conjugate_pauli_inverse(s->D, in_pauli, 0, out_pauli, &phase);
+    *out_phase = phase & 3;
+    return CA_MPS_SUCCESS;
 }
 
 ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,

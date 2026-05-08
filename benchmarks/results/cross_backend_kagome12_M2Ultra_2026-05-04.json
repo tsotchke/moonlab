@@ -1,0 +1,6 @@
+{
+  "schema": "moonlab/cross_backend_kagome12_v1",
+  "description": "Cross-backend kagome-12 AFM Heisenberg ground-state validation: ED + DMRG + CA-MPS var-D on the same Pauli-operator Hamiltonian.  Lattice is the standard p6mm 2x2 kagome torus (12 sites, 24 NN bonds).  J_Pauli = 0.25 reproduces the libirrep / Lauchli-Sudan-Sorensen PRB 83, 212401 cluster-12 reference E_0 = -5.44487522.",
+  "params": {"n": 12, "num_bonds": 24, "J_pauli": 0.250000, "libirrep_E0": -5.44487522, "dmrg_chi": 128, "dmrg_sweeps": 20, "ca_mps_chi": 32, "var_d_outer_iters": 30, "var_d_dtau": 0.10, "var_d_imag_steps": 5, "var_d_warmstart": "H_ALL"},
+  "row": {"E_ED": -5.4448752170, "E_DMRG": -5.4448752168, "E_varD": -4.3032533309, "E_libirrep": -5.44487522, "rel_err_DMRG_vs_ED": 2.557262e-11, "rel_err_varD_vs_ED": 2.096691e-01, "rel_err_ED_vs_libirrep": 5.561481e-10, "rel_err_DMRG_vs_libirrep": 5.817208e-10, "t_ED": 93.6427, "t_DMRG": 39.8560, "t_varD": 81.3163}
+}

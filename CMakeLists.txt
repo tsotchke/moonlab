@@ -39,6 +39,14 @@ endif()
 set(QSIM_VERSION      ${CMAKE_MATCH_1})
 set(QSIM_VERSION_PRE  ${CMAKE_MATCH_2})  # includes leading '-' or empty
 
+# Split MAJOR.MINOR.PATCH for the moonlab_features.h template so callers
+# can branch on numeric API versions without re-parsing the string.
+string(REPLACE "." ";" _qsim_version_list "${QSIM_VERSION}")
+list(GET _qsim_version_list 0 QSIM_VERSION_MAJOR)
+list(GET _qsim_version_list 1 QSIM_VERSION_MINOR)
+list(GET _qsim_version_list 2 QSIM_VERSION_PATCH)
+unset(_qsim_version_list)
+
 # Project definition (numeric version only; pre-release suffix is kept
 # separately for display / packaging).
 project(quantum_simulator
@@ -55,6 +63,7 @@ option(QSIM_BUILD_SHARED "Build shared library" ON)
 option(QSIM_BUILD_STATIC "Build static library" OFF)
 option(QSIM_BUILD_TESTS "Build test suite" ON)
 option(QSIM_BUILD_EXAMPLES "Build example programs" ON)
+option(QSIM_BUILD_VISUALIZATION "Build the circuit / Feynman diagram renderer module" ON)
 option(QSIM_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(QSIM_BUILD_JS_DIST "Auto-build the TS/JS dist via pnpm (enables webgpu_unified_smoke on fresh clones)" OFF)
 
@@ -69,9 +78,22 @@ option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II /
 set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
     "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
-option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers)" OFF)
+option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
 option(QSIM_ENABLE_COVERAGE   "Build with --coverage (gcov-compatible) for CI coverage reporting" OFF)
+
+# v0.3 ABI tightening: when ON, applies -fvisibility=hidden globally so
+# only symbols decorated with MOONLAB_API (in src/applications/moonlab_export.h)
+# are exported from libquantumsim.dylib.  Defaults OFF for v0.2.x
+# because the Python and Rust bindings currently consume ~108 internal
+# entry points (gate_*, quantum_*, vqe_*, chern_*, etc.) that are not
+# yet in the stable ABI; flipping this to ON without first promoting
+# those entries will break the bindings.  The v0.3 cycle's plan is:
+# (1) tag every binding-consumed symbol with MOONLAB_API at its decl
+# site, (2) flip this default to ON, (3) ship a v1.0 stable ABI.
+# Enable here for early-adopter consumers who want to verify their
+# usage stays inside the tagged surface.
+option(QSIM_HIDDEN_VISIBILITY "Hide non-tagged symbols (forward-compat for v0.3 ABI)" OFF)
 
 # Force the in-tree no-LAPACK QR / SVD fallbacks even on platforms that have
 # Accelerate / OpenBLAS / LAPACKE.  Used by a dedicated CI tier so the
@@ -340,6 +362,21 @@ if(QSIM_ENABLE_OPENMP)
     endif()
 endif()
 
+# Helper macro: link a target against the platform-resolved OpenMP
+# runtime.  Replaces 20 copies of an identical conditional block that
+# bound macOS Homebrew libomp paths and the standard OpenMP::OpenMP_C
+# CMake target, with the matching include-directory dance for macOS.
+# Macro (not function) so caller-provided variables interpolate
+# correctly into target_link_libraries.
+macro(qsim_target_link_openmp tgt)
+    if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
+        target_link_libraries(${tgt} PRIVATE ${QSIM_OPENMP_LIBRARIES})
+        target_include_directories(${tgt} PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
+    elseif(TARGET OpenMP::OpenMP_C)
+        target_link_libraries(${tgt} PRIVATE OpenMP::OpenMP_C)
+    endif()
+endmacro()
+
 # Apple Accelerate Framework
 if(QSIM_PLATFORM_MACOS)
     find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -497,6 +534,7 @@ set(QSIM_QUANTUM_SOURCES
 
 set(QSIM_BACKEND_SOURCES
     src/backends/clifford/clifford.c
+    src/backends/clifford/pauli_frame.c
 )
 
 set(QSIM_ALGORITHMS_SOURCES
@@ -534,6 +572,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/topology_realspace/chern_marker.c
     # Real-space topology: matrix-free Chebyshev-KPM Chern marker.
     src/algorithms/topology_realspace/chern_kpm.c
+    # Momentum-space topology: Fukui-Hatsugai-Suzuki link-variable Chern.
+    src/algorithms/topology_realspace/chern_fhs.c
     # Real-space topology: MPO-level Chebyshev / Jackson KPM (P5.16).
     src/algorithms/topology_realspace/mpo_kpm.c
     # Quantum geometric tensor: momentum-space Berry curvature + metric.
@@ -556,10 +596,17 @@ set(QSIM_ALGORITHMS_SOURCES
     src/crypto/drbg/ctr_drbg.c
     # Many-body localization.
     src/algorithms/mbl/mbl.c
-    # Visualization — circuit diagrams + Feynman diagrams.
-    src/visualization/circuit_diagram.c
-    src/visualization/feynman_diagram.c
 )
+
+# Visualization: circuit diagrams + Feynman diagrams.  Pure-render
+# code, no numerical kernels; downstream consumers (NQS, QGTL) that
+# don't need the renderers can configure with
+# -DQSIM_BUILD_VISUALIZATION=OFF for a thinner libquantumsim.
+if(QSIM_BUILD_VISUALIZATION)
+    list(APPEND QSIM_ALGORITHMS_SOURCES
+        src/visualization/circuit_diagram.c
+        src/visualization/feynman_diagram.c)
+endif()
 
 set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/memory_align.c
@@ -745,12 +792,32 @@ target_include_directories(quantumsim
         ${CMAKE_CURRENT_SOURCE_DIR}/tools
 )
 
+# Windows-only system-header shims for Win32 ports of POSIX names
+# (clock_gettime, usleep, pthread_mutex, complex math).  Lives under
+# src/compat/ so it does NOT shadow system headers on Linux/macOS,
+# which previously produced four #include_next warnings on every
+# compile.  On Windows we splice src/compat/ into the include path
+# AHEAD of the system path so the shims resolve as <time.h> etc.
+if(QSIM_PLATFORM_WINDOWS)
+    target_include_directories(quantumsim BEFORE PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/compat>)
+endif()
+
 # Compile options
 target_compile_options(quantumsim PRIVATE
     ${QSIM_WARNING_FLAGS}
     ${QSIM_OPTIMIZE_FLAGS}
     ${QSIM_SANITIZER_FLAGS}
 )
+
+# Visibility tightening: if QSIM_HIDDEN_VISIBILITY=ON, hide every
+# symbol that is not explicitly tagged with MOONLAB_API.  This is the
+# v0.3 forward-compat surface; v0.2.x defaults OFF because the
+# bindings still consume internal-only entry points.
+if(QSIM_HIDDEN_VISIBILITY AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
+    target_compile_options(quantumsim PRIVATE
+        -fvisibility=hidden -fvisibility-inlines-hidden)
+endif()
 
 # Sanitizer runtime needs to be linked into the shared library too.
 if(QSIM_ENABLE_SANITIZERS AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
@@ -1025,6 +1092,38 @@ if(QSIM_HAS_MPI)
 endif()
 
 # ==============================================================================
+# Generate moonlab_features.h with the resolved feature flags.
+# Consumers include this header to branch on what got compiled in,
+# avoiding link-time unresolved-symbol errors when calling into a
+# subsystem that was disabled at build time.
+# ==============================================================================
+# For each subsystem, mark MOONLAB_HAS_<NAME> = 1 iff it was actually
+# detected and compiled in (QSIM_HAS_* set by find_package or platform
+# probe; QSIM_SIMD_* set by the per-arch dispatcher).  Do not consult
+# QSIM_ENABLE_* — that's the user-supplied request, not the resolved
+# state, and would mark NEON=1 on x86 hosts.
+foreach(feat MPI METAL CUDA OPENCL VULKAN WEBGPU CUQUANTUM OPENMP)
+    if(QSIM_HAS_${feat})
+        set(MOONLAB_HAS_${feat} 1)
+    else()
+        set(MOONLAB_HAS_${feat} 0)
+    endif()
+endforeach()
+foreach(feat AVX512 AVX2 NEON SVE)
+    if(QSIM_SIMD_${feat})
+        set(MOONLAB_HAS_${feat} 1)
+    else()
+        set(MOONLAB_HAS_${feat} 0)
+    endif()
+endforeach()
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/applications/moonlab_features.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/moonlab_features.h"
+    @ONLY)
+target_include_directories(quantumsim PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
+
+# ==============================================================================
 # Link-Time Optimization
 # ==============================================================================
 
@@ -1049,875 +1148,7 @@ endif()
 # ==============================================================================
 
 if(QSIM_BUILD_TESTS)
-    enable_testing()
-
-    # Main test executable
-    add_executable(qsim_test tests/quantum_sim_test.c)
-    target_link_libraries(qsim_test PRIVATE quantumsim)
-    add_test(NAME quantum_sim_test COMMAND qsim_test)
-    set_tests_properties(quantum_sim_test PROPERTIES LABELS "long")
-
-    # Health tests
-    add_executable(health_tests_test tests/health_tests_test.c)
-    target_link_libraries(health_tests_test PRIVATE quantumsim)
-    add_test(NAME health_tests COMMAND health_tests_test)
-
-    # Bell test demo
-    add_executable(bell_test_demo tests/bell_test_demo.c)
-    target_link_libraries(bell_test_demo PRIVATE quantumsim)
-    add_test(NAME bell_test COMMAND bell_test_demo)
-
-    # Gate test
-    add_executable(gate_test tests/gate_test.c)
-    target_link_libraries(gate_test PRIVATE quantumsim)
-    add_test(NAME gate_test COMMAND gate_test)
-
-    # Correlation test
-    add_executable(correlation_test tests/correlation_test.c)
-    target_link_libraries(correlation_test PRIVATE quantumsim)
-    add_test(NAME correlation_test COMMAND correlation_test)
-
-    # Unit tests
-    add_executable(test_quantum_state tests/unit/test_quantum_state.c)
-    target_link_libraries(test_quantum_state PRIVATE quantumsim)
-    add_test(NAME unit_quantum_state COMMAND test_quantum_state)
-
-    add_executable(test_constants tests/unit/test_constants.c)
-    target_link_libraries(test_constants PRIVATE ${MATH_LIBRARY})
-    add_test(NAME unit_constants COMMAND test_constants)
-
-    add_executable(test_correctness_properties tests/unit/test_correctness_properties.c)
-    target_link_libraries(test_correctness_properties PRIVATE quantumsim)
-    add_test(NAME unit_correctness_properties COMMAND test_correctness_properties)
-
-    add_executable(test_quantum_gates tests/unit/test_quantum_gates.c)
-    target_link_libraries(test_quantum_gates PRIVATE quantumsim)
-    add_test(NAME unit_quantum_gates COMMAND test_quantum_gates)
-
-    add_executable(test_memory_align tests/unit/test_memory_align.c
-                   src/optimization/memory_align.c)
-    target_include_directories(test_memory_align PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_memory_align PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
-    if(QSIM_HAS_ACCELERATE)
-        target_link_libraries(test_memory_align PRIVATE ${ACCELERATE_FRAMEWORK})
-        target_compile_definitions(test_memory_align PRIVATE HAS_ACCELERATE=1)
-    endif()
-    add_test(NAME unit_memory_align COMMAND test_memory_align)
-
-    add_executable(test_simd_dispatch tests/unit/test_simd_dispatch.c
-                   src/optimization/simd_dispatch.c)
-    target_include_directories(test_simd_dispatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_simd_dispatch PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
-    if(QSIM_HAS_ACCELERATE)
-        target_link_libraries(test_simd_dispatch PRIVATE ${ACCELERATE_FRAMEWORK})
-        target_compile_definitions(test_simd_dispatch PRIVATE HAS_ACCELERATE=1)
-    endif()
-    add_test(NAME unit_simd_dispatch COMMAND test_simd_dispatch)
-
-    add_executable(test_stride_gates tests/unit/test_stride_gates.c
-                   src/optimization/stride_gates.c)
-    target_include_directories(test_stride_gates PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_stride_gates PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
-    if(QSIM_HAS_OPENMP)
-        if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-            target_link_libraries(test_stride_gates PRIVATE ${QSIM_OPENMP_LIBRARIES})
-            target_include_directories(test_stride_gates PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
-            target_compile_options(test_stride_gates PRIVATE -Xpreprocessor -fopenmp)
-        elseif(TARGET OpenMP::OpenMP_C)
-            target_link_libraries(test_stride_gates PRIVATE OpenMP::OpenMP_C)
-        endif()
-        target_compile_definitions(test_stride_gates PRIVATE HAS_OPENMP=1)
-    endif()
-    add_test(NAME unit_stride_gates COMMAND test_stride_gates)
-
-    # Tensor-network unit test — the 800+ line suite that exercises
-    # tensors, SVD, MPS, gate application via tensor networks,
-    # measurement, and entanglement. Already in-tree but historically
-    # not wired into ctest.
-    add_executable(test_tensor_network tests/unit/test_tensor_network.c)
-    target_link_libraries(test_tensor_network PRIVATE quantumsim)
-    add_test(NAME unit_tensor_network COMMAND test_tensor_network)
-
-    # Comprehensive end-to-end suite: gates, entanglement (von Neumann /
-    # Renyi / concurrence), amplitude/phase damping noise, Grover, MPS.
-    add_executable(test_comprehensive tests/test_comprehensive.c)
-    target_link_libraries(test_comprehensive PRIVATE quantumsim)
-    add_test(NAME comprehensive COMMAND test_comprehensive)
-
-    # DMRG ground-state solver regression test.
-    add_executable(test_dmrg tests/test_dmrg.c)
-    target_link_libraries(test_dmrg PRIVATE quantumsim)
-    add_test(NAME dmrg COMMAND test_dmrg)
-
-    # MPS vs exact state-vector drift test — catches divergences as
-    # bond dimension or system size grows.
-    add_executable(test_mps_vs_exact tests/test_mps_vs_exact.c)
-    target_link_libraries(test_mps_vs_exact PRIVATE quantumsim)
-    add_test(NAME mps_vs_exact COMMAND test_mps_vs_exact)
-
-    # Time-evolution long-run regression.
-    add_executable(test_long_evolution tests/test_long_evolution.c)
-    target_link_libraries(test_long_evolution PRIVATE quantumsim)
-    add_test(NAME long_evolution COMMAND test_long_evolution)
-    set_tests_properties(long_evolution PROPERTIES LABELS "long")
-
-    # Fast-measurement correctness test.
-    add_executable(test_fast_measurement tests/test_fast_measurement.c)
-    target_link_libraries(test_fast_measurement PRIVATE quantumsim)
-    add_test(NAME fast_measurement COMMAND test_fast_measurement)
-
-    # Measurement-subsystem unit test: probability queries, projective
-    # collapse, Bell correlations, expectation values.
-    add_executable(test_measurement tests/unit/test_measurement.c)
-    target_link_libraries(test_measurement PRIVATE quantumsim)
-    add_test(NAME unit_measurement COMMAND test_measurement)
-
-    # Entanglement unit test: product-state zero entropy, Bell-state
-    # maximal entropy, fidelity, purity, partial trace = I/2.
-    add_executable(test_entanglement tests/unit/test_entanglement.c)
-    target_link_libraries(test_entanglement PRIVATE quantumsim)
-    add_test(NAME unit_entanglement COMMAND test_entanglement)
-
-    # Noise-channel unit test: involution of bit/phase flips, depolarizing
-    # p=0 no-op, norm preservation across every channel.
-    add_executable(test_noise tests/unit/test_noise.c)
-    target_link_libraries(test_noise PRIVATE quantumsim)
-    add_test(NAME unit_noise COMMAND test_noise)
-
-    # Grover algorithm smoke: on 3/4/5 qubits, success probability on the
-    # marked state must exceed 0.8 after pi/4 * sqrt(N) iterations.
-    add_executable(test_grover tests/unit/test_grover.c)
-    target_link_libraries(test_grover PRIVATE quantumsim)
-    add_test(NAME unit_grover COMMAND test_grover)
-
-    # VQE H2 ground-state smoke.
-    add_executable(test_vqe tests/unit/test_vqe.c)
-    target_link_libraries(test_vqe PRIVATE quantumsim)
-    add_test(NAME unit_vqe COMMAND test_vqe)
-
-    # QAOA MaxCut smoke.
-    add_executable(test_qaoa tests/unit/test_qaoa.c)
-    target_link_libraries(test_qaoa PRIVATE quantumsim)
-    add_test(NAME unit_qaoa COMMAND test_qaoa)
-
-    # QPE phase-recovery smoke.
-    add_executable(test_qpe tests/unit/test_qpe.c)
-    target_link_libraries(test_qpe PRIVATE quantumsim)
-    add_test(NAME unit_qpe COMMAND test_qpe)
-
-    # Clifford stabilizer backend: H2=I, X, S4=I, Bell, 100-qubit GHZ.
-    add_executable(test_clifford_pauli_api tests/unit/test_clifford_pauli_api.c)
-    target_link_libraries(test_clifford_pauli_api PRIVATE quantumsim)
-    add_test(NAME unit_clifford_pauli_api COMMAND test_clifford_pauli_api)
-
-    # Clifford-assisted MPS reduction-limit tests: pure Clifford (tableau-only
-    # Bell/GHZ), pure MPS (rotations on |0>), and mixed H + T rotations.
-    add_executable(test_ca_mps_limits tests/unit/test_ca_mps_limits.c)
-    target_link_libraries(test_ca_mps_limits PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_limits COMMAND test_ca_mps_limits)
-
-    # CA-PEPS row-major-MPS implementation: lifecycle + adjacency validation
-    # + parity against the underlying CA-MPS for a mixed Clifford + rotation
-    # circuit on a 3x3 lattice.
-    add_executable(test_ca_peps tests/unit/test_ca_peps.c)
-    target_link_libraries(test_ca_peps PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_peps COMMAND test_ca_peps)
-
-    # End-to-end CA-MPS correctness: random mixed Clifford + rx/ry/rz/CZ/CNOT
-    # circuits compared against the dense state-vector backend for every
-    # single-qubit Pauli expectation and a handful of ZZ pairs.
-    add_executable(test_ca_mps_vs_sv tests/unit/test_ca_mps_vs_sv.c)
-    target_link_libraries(test_ca_mps_vs_sv PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_vs_sv COMMAND test_ca_mps_vs_sv)
-
-    # CA-MPS marginal Z probabilities + T-dagger correctness against the
-    # dense state-vector backend.  Deterministic n=4 H+T+T-dag+S+CNOT
-    # circuit; every single-qubit P(Z=+1) must agree to <1e-12.
-    add_executable(test_ca_mps_prob tests/unit/test_ca_mps_prob.c)
-    target_link_libraries(test_ca_mps_prob PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_prob COMMAND test_ca_mps_prob)
-
-    # Direct unit tests for the SVD compression layer that every MPS
-    # truncation goes through.  Closes a 19-Apr audit gap: previously
-    # exercised only indirectly via mps_vs_exact and the CA-MPS suite.
-    add_executable(test_svd_compress tests/unit/test_svd_compress.c)
-    target_link_libraries(test_svd_compress PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_svd_compress COMMAND test_svd_compress)
-
-    # Pin complex-Hermitian Jacobi correctness in matrix_math.c.
-    # Pre-2026-04-26 the rotations were real-valued; eigenvectors of
-    # complex-Hermitian inputs only diagonalised the real part of A.
-    add_executable(test_hermitian_eigen tests/unit/test_hermitian_eigen.c)
-    target_link_libraries(test_hermitian_eigen PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_hermitian_eigen COMMAND test_hermitian_eigen)
-
-    # QWZ phase diagram via qgt_phase_diagram_chern: integer Chern jumps
-    # at m = -2, 0, +2 (gap closures); compare to analytic phases.
-    add_executable(test_qgt_phase_diagram tests/unit/test_qgt_phase_diagram.c)
-    target_link_libraries(test_qgt_phase_diagram PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_qgt_phase_diagram COMMAND test_qgt_phase_diagram)
-
-    # 2D phase-diagram mechanics, exercised on QWZ stacked along a
-    # no-op y-axis.  The Haldane (t2, phi) physics test is queued for
-    # when the Haldane Bloch implementation stabilises against grid-
-    # size oscillation.
-    add_executable(test_qgt_phase_diagram_2d tests/unit/test_qgt_phase_diagram_2d.c)
-    target_link_libraries(test_qgt_phase_diagram_2d PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_qgt_phase_diagram_2d COMMAND test_qgt_phase_diagram_2d)
-
-    # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
-    # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
-    # represent, while CA-MPS factors it entirely into the tableau so the
-    # MPS factor stays at bond dim 1.
-    add_executable(test_ca_mps_bond_advantage tests/unit/test_ca_mps_bond_advantage.c)
-    target_link_libraries(test_ca_mps_bond_advantage PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_bond_advantage COMMAND test_ca_mps_bond_advantage)
-
-    # CA-MPS expect_pauli_sum integration test: builds the Heisenberg
-    # Hamiltonian as a Pauli sum and validates against dense state-vector
-    # <psi|H|psi> after a random Clifford preparation.  Foundation for
-    # VQE-on-CA-MPS and DMRG-on-CA-MPS drivers.
-    add_executable(test_ca_mps_heisenberg tests/unit/test_ca_mps_heisenberg.c)
-    target_link_libraries(test_ca_mps_heisenberg PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_heisenberg COMMAND test_ca_mps_heisenberg)
-
-    # CA-MPS imaginary-time ground-state search: Trotter-Suzuki on the
-    # Heisenberg bond-by-bond Gibbs factors, verify convergence to exact
-    # ED on N=2/4/6 open chains.  Calls zheev directly for the dense ED
-    # reference so it needs the LAPACK link (Accelerate on macOS).
-    if(NOT QSIM_PLATFORM_WINDOWS)
-        add_executable(test_ca_mps_imag_time tests/unit/test_ca_mps_imag_time.c)
-        target_link_libraries(test_ca_mps_imag_time PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_ca_mps_imag_time PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_ca_mps_imag_time PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_ca_mps_imag_time COMMAND test_ca_mps_imag_time)
-        set_tests_properties(unit_ca_mps_imag_time PROPERTIES TIMEOUT 120)
-
-        add_executable(test_imag_pauli_2q_smoke tests/unit/test_imag_pauli_2q_smoke.c)
-        target_link_libraries(test_imag_pauli_2q_smoke PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_imag_pauli_2q_smoke PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_imag_pauli_2q_smoke PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_imag_pauli_2q_smoke COMMAND test_imag_pauli_2q_smoke)
-        set_tests_properties(unit_imag_pauli_2q_smoke PROPERTIES TIMEOUT 30)
-
-        # CA-MPS variational-D Clifford-only search.  Validates that the
-        # greedy local-Clifford search reduces <psi|H|psi> on a small
-        # TFIM problem (n=4, g=2.5) starting from |psi> = |0...0>.
-        add_executable(test_ca_mps_var_d tests/unit/test_ca_mps_var_d.c)
-        target_link_libraries(test_ca_mps_var_d PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_ca_mps_var_d PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_ca_mps_var_d PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_ca_mps_var_d COMMAND test_ca_mps_var_d)
-        set_tests_properties(unit_ca_mps_var_d PROPERTIES TIMEOUT 60)
-
-        # CA-MPS alternating variational-D (imag-time |phi> + Clifford D).
-        # Headline experiment: TFIM at criticality (g=1) on n=6 must
-        # converge to within 5% of the exact GS energy with bounded
-        # |phi> entropy.
-        add_executable(test_ca_mps_var_d_alt tests/unit/test_ca_mps_var_d_alt.c)
-        target_link_libraries(test_ca_mps_var_d_alt PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_ca_mps_var_d_alt PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_ca_mps_var_d_alt PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_ca_mps_var_d_alt COMMAND test_ca_mps_var_d_alt)
-        set_tests_properties(unit_ca_mps_var_d_alt PROPERTIES TIMEOUT 120)
-
-        # Composite-2-gate move feature regression test.
-        add_executable(test_ca_mps_var_d_composite tests/unit/test_ca_mps_var_d_composite.c)
-        target_link_libraries(test_ca_mps_var_d_composite PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_ca_mps_var_d_composite PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_ca_mps_var_d_composite PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_ca_mps_var_d_composite COMMAND test_ca_mps_var_d_composite)
-        set_tests_properties(unit_ca_mps_var_d_composite PROPERTIES TIMEOUT 60)
-
-        # 1+1D Z2 lattice gauge theory Pauli-sum builder.  Pins the term-
-        # count breakdown, individual term coefficients, Gauss-law operator
-        # support, and Wilson-line construction.
-        add_executable(test_z2_lgt_pauli_sum tests/unit/test_z2_lgt_pauli_sum.c)
-        target_link_libraries(test_z2_lgt_pauli_sum PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_z2_lgt_pauli_sum COMMAND test_z2_lgt_pauli_sum)
-        set_tests_properties(unit_z2_lgt_pauli_sum PROPERTIES TIMEOUT 30)
-
-        # Stabilizer-subgroup warmstart for var-D.  Validates the
-        # symplectic Gauss-Jordan Clifford builder on Bell, GHZ, and
-        # 1+1D Z2 LGT Gauss-law generators.
-        add_executable(test_gauge_warmstart tests/unit/test_gauge_warmstart.c)
-        target_link_libraries(test_gauge_warmstart PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_gauge_warmstart COMMAND test_gauge_warmstart)
-        set_tests_properties(unit_gauge_warmstart PROPERTIES TIMEOUT 30)
-
-        # Round-trip test for tn_mps_from_statevector.  Closes the ICC
-        # dead-code triage entry for that public function.
-        add_executable(test_tn_mps_from_statevector
-            tests/unit/test_tn_mps_from_statevector.c)
-        target_link_libraries(test_tn_mps_from_statevector
-            PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_tn_mps_from_statevector
-            COMMAND test_tn_mps_from_statevector)
-        set_tests_properties(unit_tn_mps_from_statevector
-            PROPERTIES TIMEOUT 30)
-
-        # Centralised moonlab_status_t registry test.  Closes audit
-        # task #73 (was previously marked complete without code).
-        add_executable(test_moonlab_status
-            tests/unit/test_moonlab_status.c)
-        target_link_libraries(test_moonlab_status
-            PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_moonlab_status COMMAND test_moonlab_status)
-        set_tests_properties(unit_moonlab_status PROPERTIES TIMEOUT 10)
-
-        # Smoke harness for tensor-network public API surfaces that
-        # ICC found had no in-tree caller (tensor_einsum,
-        # svd_left_canonicalize, svd_right_canonicalize,
-        # tn_expectation_2q).  Closes four entries on the dead-code
-        # triage queue documented in AUDIT.md.
-        add_executable(test_tn_dead_code_smoke
-            tests/unit/test_tn_dead_code_smoke.c)
-        target_link_libraries(test_tn_dead_code_smoke
-            PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_tn_dead_code_smoke
-            COMMAND test_tn_dead_code_smoke)
-        set_tests_properties(unit_tn_dead_code_smoke
-            PROPERTIES TIMEOUT 30)
-
-        # MBL dead-code smoke (construct_lioms, scan_phase_diagram).
-        # Closes two more dead-code triage entries.
-        add_executable(test_mbl_smoke tests/unit/test_mbl_smoke.c)
-        target_link_libraries(test_mbl_smoke
-            PRIVATE quantumsim ${MATH_LIBRARY})
-        add_test(NAME unit_mbl_smoke COMMAND test_mbl_smoke)
-        set_tests_properties(unit_mbl_smoke PROPERTIES TIMEOUT 30)
-    endif()
-
-    # CA-MPS kagome 12-site Heisenberg ground state, matching PRB 83, 212401
-    # (2011) Table I cluster "12" to <= 1e-2.  Runs a Trotter-Suzuki
-    # imaginary-time schedule at chi_max = 256.  Tagged "long" and skipped
-    # on Linux aarch64 and Windows due to runtime / BLAS specificity.
-    add_executable(test_ca_mps_kagome12 tests/unit/test_ca_mps_kagome12.c)
-    target_link_libraries(test_ca_mps_kagome12 PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_ca_mps_kagome12 COMMAND test_ca_mps_kagome12)
-    set_tests_properties(unit_ca_mps_kagome12 PROPERTIES
-        LABELS "long"
-        TIMEOUT 300
-    )
-
-    add_executable(test_clifford tests/unit/test_clifford.c)
-    target_link_libraries(test_clifford PRIVATE quantumsim)
-    add_test(NAME unit_clifford COMMAND test_clifford)
-
-    # Gate-fusion DAG: random-circuit parity vs gate-by-gate execution.
-    add_executable(test_fusion tests/unit/test_fusion.c)
-    target_link_libraries(test_fusion PRIVATE quantumsim)
-    add_test(NAME unit_fusion COMMAND test_fusion)
-
-    # Quantum Volume harness: HOP above 2/3 on noiseless simulator.
-    add_executable(test_quantum_volume tests/unit/test_quantum_volume.c)
-    target_link_libraries(test_quantum_volume PRIVATE quantumsim)
-    add_test(NAME unit_quantum_volume COMMAND test_quantum_volume)
-
-    # Clifford-backed surface code: syndrome response at d=7,9,15.
-    add_executable(test_surface_code_clifford tests/unit/test_surface_code_clifford.c)
-    target_link_libraries(test_surface_code_clifford PRIVATE quantumsim)
-    add_test(NAME unit_surface_code_clifford COMMAND test_surface_code_clifford)
-
-    # Local Chern marker: QWZ topological vs trivial phases.
-    add_executable(test_chern_marker tests/unit/test_chern_marker.c)
-    target_link_libraries(test_chern_marker PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_chern_marker COMMAND test_chern_marker)
-
-    # matrix_math ground-truth: matmul, trace, Hermitian check, eigenvalues.
-    # Eigenvector correctness is tested ONLY on the real-symmetric path;
-    # the complex-Hermitian branch is known unsound (see matrix_math.h).
-    add_executable(test_matrix_math tests/unit/test_matrix_math.c)
-    target_link_libraries(test_matrix_math PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_matrix_math COMMAND test_matrix_math)
-
-    # Matrix-free KPM Chern marker: parity with dense + large-L demo.
-    # The aarch64 OpenBLAS path accumulates enough numerical drift in
-    # the Newton-Schulz + Chebyshev-KPM stack to fail the parity-with-
-    # dense pin (|c_dense - c_kpm| ~ 10^11 instead of < 0.1).  Label
-    # `aarch64_flake` so the aarch64 CI tier can skip via -LE.
-    add_executable(test_chern_kpm tests/unit/test_chern_kpm.c)
-    target_link_libraries(test_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_chern_kpm COMMAND test_chern_kpm)
-    set_tests_properties(unit_chern_kpm PROPERTIES LABELS "aarch64_flake")
-    # test_mpo_kpm calls zheev_ directly so it needs LAPACK (Accelerate on
-    # macOS, -llapack on Linux).  Windows clang-cl doesn't ship a LAPACK
-    # ABI we can link, so skip the target entirely there.
-    if(NOT QSIM_PLATFORM_WINDOWS)
-        add_executable(test_mpo_kpm tests/unit/test_mpo_kpm.c)
-        target_link_libraries(test_mpo_kpm PRIVATE quantumsim ${MATH_LIBRARY})
-        if(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_mpo_kpm PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-    endif()
-    # test_gpu_backend_discovery links against gpu_is_available /
-    # gpu_compute_init etc., which only exist when the unified
-    # dispatcher (src/optimization/gpu/gpu_backend.c) is compiled
-    # into the library -- and that source is conditional on at least
-    # one backend being enabled (see the "Only add it when..." guard
-    # above).  Match the guard here so plain Linux / WASM builds
-    # don't try to link against undefined dispatcher symbols.
-    if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL
-       OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
-        add_executable(test_gpu_backend_discovery tests/unit/test_gpu_backend_discovery.c)
-        target_link_libraries(test_gpu_backend_discovery PRIVATE quantumsim)
-        add_test(NAME gpu_backend_discovery COMMAND test_gpu_backend_discovery)
-    endif()
-    add_executable(test_tensor_adversarial tests/unit/test_tensor_adversarial.c)
-    target_link_libraries(test_tensor_adversarial PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME tensor_adversarial COMMAND test_tensor_adversarial)
-    add_executable(test_differentiable tests/unit/test_differentiable.c)
-    target_link_libraries(test_differentiable PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME differentiable COMMAND test_differentiable)
-
-    add_executable(test_bell_variants tests/unit/test_bell_variants.c)
-    target_link_libraries(test_bell_variants PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_bell_variants COMMAND test_bell_variants)
-
-    add_executable(test_zne tests/unit/test_zne.c)
-    target_link_libraries(test_zne PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_zne COMMAND test_zne)
-
-    add_executable(test_povm tests/unit/test_povm.c)
-    target_link_libraries(test_povm PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_povm COMMAND test_povm)
-
-    add_executable(test_mutual_info tests/unit/test_mutual_info.c)
-    target_link_libraries(test_mutual_info PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_mutual_info COMMAND test_mutual_info)
-
-    add_executable(test_qrng_di tests/unit/test_qrng_di.c)
-    target_link_libraries(test_qrng_di PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_qrng_di COMMAND test_qrng_di)
-
-    add_executable(test_composite_noise tests/unit/test_composite_noise.c)
-    target_link_libraries(test_composite_noise PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_composite_noise COMMAND test_composite_noise)
-
-    add_executable(test_sha3 tests/unit/test_sha3.c)
-    target_link_libraries(test_sha3 PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_sha3 COMMAND test_sha3)
-
-    add_executable(test_mlkem_poly tests/unit/test_mlkem_poly.c)
-    target_link_libraries(test_mlkem_poly PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_mlkem_poly COMMAND test_mlkem_poly)
-
-    add_executable(test_mlkem tests/unit/test_mlkem.c)
-    target_link_libraries(test_mlkem PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_mlkem COMMAND test_mlkem)
-
-    add_executable(test_aes_drbg tests/unit/test_aes_drbg.c)
-    target_link_libraries(test_aes_drbg PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_aes_drbg COMMAND test_aes_drbg)
-
-    add_executable(test_mlkem_nist_kat tests/unit/test_mlkem_nist_kat.c)
-    target_link_libraries(test_mlkem_nist_kat PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_mlkem_nist_kat COMMAND test_mlkem_nist_kat)
-    add_executable(test_manifest tests/unit/test_manifest.c)
-    target_link_libraries(test_manifest PRIVATE quantumsim)
-    add_test(NAME unit_manifest COMMAND test_manifest)
-    if(NOT QSIM_PLATFORM_WINDOWS AND QSIM_PLATFORM_MACOS)
-        target_link_libraries(test_mpo_kpm PRIVATE "-framework Accelerate")
-    endif()
-    if(NOT QSIM_PLATFORM_WINDOWS)
-        add_test(NAME unit_mpo_kpm COMMAND test_mpo_kpm)
-        set_tests_properties(unit_mpo_kpm PROPERTIES LABELS "long")
-    endif()
-
-    # Quantum geometric tensor: Berry / Chern via FHS link variables.
-    add_executable(test_qgt tests/unit/test_qgt.c)
-    target_link_libraries(test_qgt PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_qgt COMMAND test_qgt)
-
-    # Shor-ECDLP resource estimator: reproduce Gidney-Drake-Boneh 2026
-    # secp256k1 numbers + FTQC overhead model.
-    add_executable(test_shor_ecdlp tests/unit/test_shor_ecdlp.c)
-    target_link_libraries(test_shor_ecdlp PRIVATE quantumsim ${MATH_LIBRARY})
-    add_test(NAME unit_shor_ecdlp COMMAND test_shor_ecdlp)
-
-    # Moonlab-Eshkol bridge parity: moonlab_eshkol_zgemm vs cblas_zgemm.
-    # Always built; the test tolerates NOT_BUILT and NO_GPU by design.
-    add_executable(test_gpu_eshkol tests/unit/test_gpu_eshkol.cpp)
-    set_target_properties(test_gpu_eshkol PROPERTIES CXX_STANDARD 17)
-    target_link_libraries(test_gpu_eshkol PRIVATE quantumsim)
-    if(QSIM_PLATFORM_LINUX AND BLAS_LIB)
-        target_link_libraries(test_gpu_eshkol PRIVATE ${BLAS_LIB})
-    endif()
-    if(QSIM_HAS_ACCELERATE)
-        target_link_libraries(test_gpu_eshkol PRIVATE "-framework Accelerate")
-    endif()
-    add_test(NAME unit_gpu_eshkol COMMAND test_gpu_eshkol)
-
-    # Chemistry module smoke.
-    add_executable(test_chemistry tests/unit/test_chemistry.c)
-    target_link_libraries(test_chemistry PRIVATE quantumsim)
-    add_test(NAME unit_chemistry COMMAND test_chemistry)
-
-    # Topological QC smoke.
-    add_executable(test_topological tests/unit/test_topological.c)
-    target_link_libraries(test_topological PRIVATE quantumsim)
-    add_test(NAME unit_topological COMMAND test_topological)
-
-    # Many-body localization smoke.
-    add_executable(test_mbl tests/unit/test_mbl.c)
-    target_link_libraries(test_mbl PRIVATE quantumsim)
-    add_test(NAME unit_mbl COMMAND test_mbl)
-
-    # SIMD / Accelerate parity against scalar reference.
-    add_executable(test_simd_parity tests/unit/test_simd_parity.c)
-    target_link_libraries(test_simd_parity PRIVATE quantumsim)
-    if(QSIM_HAS_ACCELERATE)
-        target_compile_definitions(test_simd_parity PRIVATE HAS_ACCELERATE=1)
-    endif()
-    add_test(NAME unit_simd_parity COMMAND test_simd_parity)
-
-    # Metal GPU kernel parity against CPU (macOS + Metal only).
-    add_executable(test_metal_parity tests/unit/test_metal_parity.c)
-    target_link_libraries(test_metal_parity PRIVATE quantumsim)
-    if(QSIM_HAS_METAL)
-        target_compile_definitions(test_metal_parity PRIVATE HAS_METAL=1)
-    endif()
-    add_test(NAME unit_metal_parity COMMAND test_metal_parity)
-
-    # 2D lattice + MPO-2D smoke (square / triangular / honeycomb).
-    add_executable(test_lattice_2d tests/unit/test_lattice_2d.c)
-    target_link_libraries(test_lattice_2d PRIVATE quantumsim)
-    add_test(NAME unit_lattice_2d COMMAND test_lattice_2d)
-
-    # Kagome Heisenberg ED vs published references.  Both tests call
-    # LAPACK (zheev / dstev) directly rather than through quantumsim, so
-    # they need an explicit LAPACK link -- Accelerate on macOS, -llapack on
-    # Linux.  Windows clang-cl doesn't ship a LAPACK ABI we can link, so
-    # skip these targets there (same pattern as test_mpo_kpm).
-    if(NOT QSIM_PLATFORM_WINDOWS)
-        # N=12 test: Läuchli-Sudan-Sørensen PRB 83, 212401 (2011) Table I
-        # cluster "12" (rectangular 2x2 torus, E = -5.444875216 J).  Dense
-        # ED via mpo_2d_heisenberg_dmi_create -> mpo_to_matrix -> zheev.
-        add_executable(test_kagome_ed tests/unit/test_kagome_ed.c)
-        target_link_libraries(test_kagome_ed PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_kagome_ed PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_kagome_ed PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_kagome_ed COMMAND test_kagome_ed)
-        # Dense zheev on a 4096x4096 complex Hermitian matrix takes ~2s on
-        # M2 Ultra but can hit 5+ min on slower CI runners (e.g. macos-15-intel
-        # / dockerized aarch64).  Default ctest 300s timeout isn't enough on
-        # those tiers; tag "long" + raise to 600s.
-        set_tests_properties(unit_kagome_ed PROPERTIES
-            LABELS "long"
-            TIMEOUT 600
-        )
-
-        # N=18 test: PRB 83, 212401 Table I cluster "18 b" (rectangular 2x3
-        # torus, E = -8.048270773 J).  Matrix-free Lanczos with full
-        # reorthogonalization on a bond-list Heisenberg.  Peak memory ~840
-        # MB, runtime ~8s on M2 Ultra.  Tagged "long" for CI.
-        add_executable(test_kagome_ed_large tests/unit/test_kagome_ed_large.c)
-        target_link_libraries(test_kagome_ed_large PRIVATE quantumsim ${MATH_LIBRARY})
-        if(APPLE)
-            target_link_libraries(test_kagome_ed_large PRIVATE "-framework Accelerate")
-        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
-            target_link_libraries(test_kagome_ed_large PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
-        endif()
-        add_test(NAME unit_kagome_ed_large COMMAND test_kagome_ed_large)
-        set_tests_properties(unit_kagome_ed_large PROPERTIES
-            LABELS "long;memory_heavy"
-            TIMEOUT 120
-        )
-    endif()
-
-    # Skyrmion braid path generators.
-    add_executable(test_skyrmion tests/unit/test_skyrmion.c)
-    target_link_libraries(test_skyrmion PRIVATE quantumsim)
-    add_test(NAME unit_skyrmion COMMAND test_skyrmion)
-
-    # Feynman diagram builder smoke.
-    add_executable(test_feynman tests/unit/test_feynman.c)
-    target_link_libraries(test_feynman PRIVATE quantumsim)
-    add_test(NAME unit_feynman COMMAND test_feynman)
-
-    # Circuit diagram builder smoke.
-    add_executable(test_circuit_diagram tests/unit/test_circuit_diagram.c)
-    target_link_libraries(test_circuit_diagram PRIVATE quantumsim)
-    add_test(NAME unit_circuit_diagram COMMAND test_circuit_diagram)
-
-    # Entropy-pool initialization regression checks.
-    add_executable(test_entropy_pool tests/unit/test_entropy_pool.c)
-    target_link_libraries(test_entropy_pool PRIVATE quantumsim)
-    add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
-
-    # ARM helper probing should use the compiled helper path, not ./tools.
-    add_executable(test_hardware_entropy_probe
-        tests/unit/test_hardware_entropy_probe.c
-        src/applications/hardware_entropy.c
-    )
-    add_dependencies(test_hardware_entropy_probe hw_rng_probe)
-    target_link_libraries(test_hardware_entropy_probe PRIVATE Threads::Threads)
-    # This test compiles hardware_entropy.c directly rather than linking
-    # quantumsim, so it doesn't inherit the library's include dirs OR the
-    # library's system-library links.  Add src/ explicitly for the Windows
-    # shim headers and add bcrypt on Windows for BCryptGenRandom, both of
-    # which quantumsim already has in its target_link/include properties.
-    target_include_directories(test_hardware_entropy_probe PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    if(QSIM_PLATFORM_WINDOWS)
-        target_link_libraries(test_hardware_entropy_probe PRIVATE bcrypt)
-    endif()
-    target_compile_definitions(test_hardware_entropy_probe PRIVATE
-        MOONLAB_TESTING=1
-        MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
-    )
-    add_test(NAME unit_hardware_entropy_probe COMMAND test_hardware_entropy_probe)
-
-    # QRNG statistical quality: chi^2 / monobit / serial correlation
-    # on 256 KiB drawn through the stable ABI.
-    add_executable(test_qrng_statistics tests/unit/test_qrng_statistics.c)
-    target_link_libraries(test_qrng_statistics PRIVATE quantumsim)
-    add_test(NAME unit_qrng_statistics COMMAND test_qrng_statistics)
-    set_tests_properties(unit_qrng_statistics PROPERTIES LABELS "long")
-
-    if(QSIM_BUILD_BENCHMARKS)
-    # Performance benchmarks (build-only; no ctest entry so CI stays
-    # fast). Run directly for local profiling:
-    #   ./build/bench_state_operations
-    #   ./build/bench_tensor_networks
-    add_executable(bench_ca_mps tests/performance/bench_ca_mps.c)
-    target_link_libraries(bench_ca_mps PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_state_operations tests/performance/bench_state_operations.c)
-    target_link_libraries(bench_state_operations PRIVATE quantumsim)
-    add_executable(bench_tensor_networks tests/performance/bench_tensor_networks.c)
-    target_link_libraries(bench_tensor_networks PRIVATE quantumsim)
-    add_executable(bench_fusion tests/performance/bench_fusion.c)
-    target_link_libraries(bench_fusion PRIVATE quantumsim)
-    add_executable(bench_quantum_volume tests/performance/bench_quantum_volume.c)
-    target_link_libraries(bench_quantum_volume PRIVATE quantumsim)
-    add_executable(bench_clifford tests/performance/bench_clifford.c)
-    target_link_libraries(bench_clifford PRIVATE quantumsim)
-    add_executable(bench_chern_kpm tests/performance/bench_chern_kpm.c)
-    target_link_libraries(bench_chern_kpm PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_chern_mosaic tests/performance/bench_chern_mosaic.c)
-    target_link_libraries(bench_chern_mosaic PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_chern_mosaic_hq tests/performance/bench_chern_mosaic_hq.c)
-    target_link_libraries(bench_chern_mosaic_hq PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_tensor_matmul_eshkol tests/performance/bench_tensor_matmul_eshkol.c)
-    target_link_libraries(bench_tensor_matmul_eshkol PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_dmrg_workspace tests/performance/bench_dmrg_workspace.c)
-    target_link_libraries(bench_dmrg_workspace PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_apply_conjugated_imag tests/performance/bench_apply_conjugated_imag.c)
-    target_link_libraries(bench_apply_conjugated_imag PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_diff_adjoint tests/performance/bench_diff_adjoint.c)
-    target_link_libraries(bench_diff_adjoint PRIVATE quantumsim ${MATH_LIBRARY})
-    add_executable(bench_hadamard tests/performance/bench_hadamard.c)
-    target_link_libraries(bench_hadamard PRIVATE quantumsim ${MATH_LIBRARY})
-    if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-        target_link_libraries(bench_hadamard PRIVATE ${QSIM_OPENMP_LIBRARIES})
-        target_include_directories(bench_hadamard PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
-    elseif(TARGET OpenMP::OpenMP_C)
-        target_link_libraries(bench_hadamard PRIVATE OpenMP::OpenMP_C)
-    endif()
-
-    add_executable(bench_hadamard_metal tests/performance/bench_hadamard_metal.c)
-    target_link_libraries(bench_hadamard_metal PRIVATE quantumsim)
-    if(QSIM_HAS_METAL)
-        target_compile_definitions(bench_hadamard_metal PRIVATE HAS_METAL=1)
-    endif()
-
-    # Optional: Eshkol fp64-on-Metal backend (SF64 / Ozaki-II CRT).
-    # Enable via -DQSIM_ENABLE_ESHKOL=ON and -DQSIM_ESHKOL_ROOT=/path/to/eshkol.
-    if(QSIM_ENABLE_ESHKOL)
-        set(_eshkol_inc   "${QSIM_ESHKOL_ROOT}/inc")
-        set(_eshkol_libfn "${QSIM_ESHKOL_ROOT}/build/libeshkol-static.a")
-        if(NOT EXISTS "${_eshkol_libfn}")
-            message(FATAL_ERROR
-                "QSIM_ENABLE_ESHKOL=ON but ${_eshkol_libfn} not found. "
-                "Build Eshkol first (cmake -S ${QSIM_ESHKOL_ROOT} -B "
-                "${QSIM_ESHKOL_ROOT}/build && cmake --build "
-                "${QSIM_ESHKOL_ROOT}/build).")
-        endif()
-        add_executable(bench_eshkol_gemm tests/performance/bench_eshkol_gemm.cpp)
-        set_target_properties(bench_eshkol_gemm PROPERTIES CXX_STANDARD 17)
-        target_include_directories(bench_eshkol_gemm PRIVATE "${_eshkol_inc}")
-        target_compile_definitions(bench_eshkol_gemm PRIVATE HAS_ESHKOL=1)
-        target_link_libraries(bench_eshkol_gemm PRIVATE
-            "${_eshkol_libfn}"
-            "-framework Accelerate"
-            "-framework Metal"
-            "-framework MetalPerformanceShaders"
-            "-framework Foundation"
-            "-framework CoreGraphics"
-        )
-        message(STATUS "Eshkol: ON (lib=${_eshkol_libfn})")
-    endif()
-    endif()
-
-    # Python bindings smoke — imports moonlab.core, constructs a Bell
-    # state, asserts exact amplitudes. Requires python3 on PATH plus
-    # numpy (the smoke test imports it transitively through
-    # moonlab.core).  Gate the registration on numpy being importable
-    # so CI tiers that don't pre-install Python scientific packages
-    # (e.g. the plain macos-arm64 / macos-debug / macos-werror tiers
-    # that only brew-install libomp + ninja) don't fail here; the
-    # dedicated bindings-smoke job does pip-install numpy first and
-    # will still run the tests.
-    find_program(PYTHON3_EXECUTABLE python3)
-    if(PYTHON3_EXECUTABLE)
-        execute_process(
-            COMMAND ${PYTHON3_EXECUTABLE} -c "import numpy"
-            RESULT_VARIABLE _numpy_probe
-            OUTPUT_QUIET ERROR_QUIET)
-    endif()
-    if(PYTHON3_EXECUTABLE AND _numpy_probe EQUAL 0)
-        add_test(NAME python_bindings_smoke
-                 COMMAND ${PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_bindings_smoke.py)
-        set_tests_properties(python_bindings_smoke PROPERTIES
-            ENVIRONMENT
-                "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-        )
-
-        # Full pytest suite — covers measurement entropy-ctx, algorithms
-        # (VQE/QAOA/Grover/BellTest), and state ops.  Gated on pytest
-        # being importable; otherwise skipped so bare-Python installs
-        # don't break the default build.
-        execute_process(
-            COMMAND ${PYTHON3_EXECUTABLE} -c "import pytest"
-            RESULT_VARIABLE _pytest_probe
-            OUTPUT_QUIET ERROR_QUIET)
-        if(_pytest_probe EQUAL 0)
-            add_test(NAME python_bindings_pytest
-                     COMMAND ${PYTHON3_EXECUTABLE} -m pytest -q
-                             --deselect tests/test_algorithms.py::TestVQEH2
-                             --deselect tests/test_algorithms.py::TestGroverSearch::test_grover_search_medium
-                             --deselect tests/test_algorithms.py::TestCHSHTest::test_chsh_high_statistics
-                             ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/tests
-                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python)
-            set_tests_properties(python_bindings_pytest PROPERTIES
-                ENVIRONMENT
-                    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-            )
-        endif()
-    endif()
-
-    # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
-    # if the crate root and Cargo are present.
-    find_program(CARGO_EXECUTABLE cargo)
-    if(CARGO_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
-        add_test(NAME rust_bindings_smoke
-                 COMMAND ${CARGO_EXECUTABLE} test --manifest-path
-                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml
-                         --no-fail-fast)
-        set_tests_properties(rust_bindings_smoke PROPERTIES
-            ENVIRONMENT
-                "MOONLAB_LIB_DIR=$<TARGET_FILE_DIR:quantumsim>;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-        )
-    endif()
-
-    # WebGPU parity smoke — runs the existing randomized eval script.
-    # Requires pnpm, emscripten-built moonlab.wasm, a pnpm-built TS dist,
-    # and optionally a WebGPU-capable runtime (Chromium 113+ or Deno 2).
-    #
-    # We gate on both the script existing AND the compiled dist already
-    # being present, because CMake does not own the pnpm build graph;
-    # a fresh clone without `pnpm -C bindings/javascript/packages/core
-    # build` would otherwise fail this test on first run.
-    #
-    # With -DQSIM_BUILD_JS_DIST=ON, we invoke the pnpm build ourselves
-    # via a custom_target so dist/index.mjs lands on disk before
-    # ctest runs.  Default OFF keeps routine builds fast.
-    find_program(PNPM_EXECUTABLE pnpm)
-    set(_js_dist "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/index.mjs")
-    if(QSIM_BUILD_JS_DIST AND PNPM_EXECUTABLE)
-        add_custom_command(
-            OUTPUT ${_js_dist}
-            COMMAND ${PNPM_EXECUTABLE} install --ignore-scripts
-            COMMAND ${PNPM_EXECUTABLE} run build:ts
-            WORKING_DIRECTORY
-                ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
-            COMMENT "Building TS/JS dist via pnpm (QSIM_BUILD_JS_DIST=ON)"
-            VERBATIM
-        )
-        add_custom_target(js_dist ALL DEPENDS ${_js_dist})
-    endif()
-    if(PNPM_EXECUTABLE AND EXISTS
-        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs"
-        AND (EXISTS "${_js_dist}" OR QSIM_BUILD_JS_DIST))
-        add_test(NAME webgpu_unified_smoke
-                 COMMAND ${PNPM_EXECUTABLE} -C
-                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
-                         exec node scripts/webgpu-unified-smoke.mjs)
-    endif()
-
-    # Distributed computing tests (MPI). Each test executable is only
-    # added if the corresponding source file is present — the MPI test
-    # sources are planned per the 0.x release roadmap but not all are
-    # in the tree yet. This prevents CMake generate errors in builds
-    # that enable MPI before the matching test is written.
-    if(QSIM_HAS_MPI)
-        set(_mpi_tests_added 0)
-        foreach(_mpi_test_name IN ITEMS
-                distributed_gates
-                state_partition
-                collective_ops)
-            set(_mpi_test_src "tests/unit/test_${_mpi_test_name}.c")
-            if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_mpi_test_src}")
-                add_executable(test_${_mpi_test_name} ${_mpi_test_src})
-                target_link_libraries(test_${_mpi_test_name}
-                                      PRIVATE quantumsim MPI::MPI_C)
-                # --oversubscribe (Open MPI >= 5) or --use-hwthread-cpus
-                # lets us run 4 MPI procs on CI runners with fewer than
-                # 4 physical cores (macos-14 exposes 3 cores).  The flag
-                # is a no-op when there are enough slots.
-                add_test(NAME ${_mpi_test_name}
-                         COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
-                                 --oversubscribe
-                                 ${MPIEXEC_PREFLAGS}
-                                 $<TARGET_FILE:test_${_mpi_test_name}>
-                                 ${MPIEXEC_POSTFLAGS})
-                math(EXPR _mpi_tests_added "${_mpi_tests_added} + 1")
-            endif()
-        endforeach()
-        if(_mpi_tests_added GREATER 0)
-            message(STATUS "MPI Tests: Enabled (${_mpi_tests_added} test(s), 4 MPI processes each)")
-        else()
-            message(STATUS "MPI Tests: None present in tests/unit/ yet")
-        endif()
-    endif()
-
-    # Downstream-ABI smoke test — dlopens libquantumsim and verifies the
-    # symbols declared in src/applications/moonlab_export.h. Only meaningful
-    # for shared builds (dlopen needs a dylib/so).
-    if(QSIM_BUILD_SHARED AND NOT QSIM_PLATFORM_WINDOWS)
-        add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
-        target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
-        add_test(NAME abi_moonlab_export
-                 COMMAND test_moonlab_export_abi)
-        # Make the freshly-built libquantumsim discoverable to the test at
-        # run time without requiring `make install`.
-        set_tests_properties(abi_moonlab_export PROPERTIES
-            ENVIRONMENT
-                "DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-        )
-    endif()
-
-    message(STATUS "Tests: Enabled")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
 endif()
 
 # ==============================================================================
@@ -1925,196 +1156,7 @@ endif()
 # ==============================================================================
 
 if(QSIM_BUILD_EXAMPLES)
-    # Grover examples
-    add_executable(grover_hash_collision examples/quantum/grover_hash_collision.c)
-    target_link_libraries(grover_hash_collision PRIVATE quantumsim)
-
-    add_executable(grover_large_scale_demo examples/quantum/grover_large_scale_demo.c)
-    target_link_libraries(grover_large_scale_demo PRIVATE quantumsim)
-
-    add_executable(grover_large_scale_optimized examples/quantum/grover_large_scale_optimized.c)
-    target_link_libraries(grover_large_scale_optimized PRIVATE quantumsim)
-
-    add_executable(grover_password_crack examples/quantum/grover_password_crack.c)
-    target_link_libraries(grover_password_crack PRIVATE quantumsim)
-
-    add_executable(phase3_phase4_benchmark examples/quantum/phase3_phase4_benchmark.c)
-    target_link_libraries(phase3_phase4_benchmark PRIVATE quantumsim)
-
-    # Application examples
-    add_executable(vqe_h2_molecule examples/applications/vqe_h2_molecule.c)
-    target_link_libraries(vqe_h2_molecule PRIVATE quantumsim)
-
-    add_executable(qaoa_maxcut examples/applications/qaoa_maxcut.c)
-    target_link_libraries(qaoa_maxcut PRIVATE quantumsim)
-
-    add_executable(portfolio_optimization examples/applications/portfolio_optimization.c)
-    target_link_libraries(portfolio_optimization PRIVATE quantumsim)
-
-    add_executable(tsp_logistics examples/applications/tsp_logistics.c)
-    target_link_libraries(tsp_logistics PRIVATE quantumsim)
-
-    add_executable(pqc_qrng_demo examples/applications/pqc_qrng_demo.c)
-    target_link_libraries(pqc_qrng_demo PRIVATE quantumsim)
-
-    add_executable(diff_vqe_demo examples/tensor_network/diff_vqe_demo.c)
-    target_link_libraries(diff_vqe_demo PRIVATE quantumsim ${MATH_LIBRARY})
-
-    add_executable(quantum_spin_chain examples/tensor_network/quantum_spin_chain.c)
-    target_link_libraries(quantum_spin_chain PRIVATE quantumsim)
-    if(QSIM_HAS_OPENMP)
-        if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-            target_link_libraries(quantum_spin_chain PRIVATE ${QSIM_OPENMP_LIBRARIES})
-            target_include_directories(quantum_spin_chain PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
-            target_compile_options(quantum_spin_chain PRIVATE -Xpreprocessor -fopenmp)
-        elseif(TARGET OpenMP::OpenMP_C)
-            target_link_libraries(quantum_spin_chain PRIVATE OpenMP::OpenMP_C)
-        endif()
-        target_compile_definitions(quantum_spin_chain PRIVATE HAS_OPENMP=1)
-    endif()
-
-    add_executable(quantum_critical_point examples/tensor_network/quantum_critical_point.c)
-    target_link_libraries(quantum_critical_point PRIVATE quantumsim)
-
-    add_executable(example_ca_mps_clifford_advantage
-        examples/tensor_network/ca_mps_clifford_advantage.c)
-    target_link_libraries(example_ca_mps_clifford_advantage PRIVATE quantumsim)
-
-    add_executable(example_ca_mps_imag_time
-        examples/tensor_network/ca_mps_imag_time.c)
-    target_link_libraries(example_ca_mps_imag_time PRIVATE quantumsim ${MATH_LIBRARY})
-
-    # Variational-D oracle proof: does a hand-supplied Clifford reduce
-    # |phi> bond dim for the TFIM ground state?  Gating experiment for the
-    # full var-D implementation (see docs/research/ca_mps.md §5.3).
-    add_executable(example_ca_mps_oracle_proof
-        examples/tensor_network/ca_mps_oracle_proof.c)
-    target_link_libraries(example_ca_mps_oracle_proof PRIVATE quantumsim ${MATH_LIBRARY})
-
-    # Head-to-head: variational-D CA-MPS vs plain DMRG on a TFIM phase
-    # sweep.  This is the paper figure -- entropy ratio S(phi)/S(psi)
-    # across the ferromagnetic / critical / paramagnetic regimes.
-    add_executable(example_ca_mps_var_d_vs_plain_dmrg
-        examples/tensor_network/ca_mps_var_d_vs_plain_dmrg.c)
-    target_link_libraries(example_ca_mps_var_d_vs_plain_dmrg PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Bond-dim cap scan: at fixed (n, g), what chi do we need for a
-    # given accuracy?  Plain DMRG vs variational-D CA-MPS.  This is
-    # the paper's strongest claim -- the chi required for a fixed
-    # accuracy threshold is much smaller for var-D than for plain DMRG.
-    add_executable(example_ca_mps_var_d_chi_scan
-        examples/tensor_network/ca_mps_var_d_chi_scan.c)
-    target_link_libraries(example_ca_mps_var_d_chi_scan PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Greedy Clifford disentangler: take a converged plain-DMRG ground
-    # state and directly minimise its half-cut entropy via Clifford
-    # gates applied to the MPS.  Different angle on the var-D claim --
-    # entropy as direct objective, no imag-time, no warmstart heuristics.
-    add_executable(example_ca_mps_disentangler
-        examples/tensor_network/ca_mps_disentangler.c)
-    target_link_libraries(example_ca_mps_disentangler PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Generalisation: var-D vs plain DMRG on the XXZ Heisenberg model.
-    # If the entropy-reduction claim is real and not TFIM-specific, it
-    # should also reduce |phi> entropy on Heisenberg ground states across
-    # the Delta sweep (XY -> SU(2) -> Ising-like).
-    add_executable(example_ca_mps_var_d_heisenberg
-        examples/tensor_network/ca_mps_var_d_heisenberg.c)
-    target_link_libraries(example_ca_mps_var_d_heisenberg PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Hard test: var-D on kagome 12-site Heisenberg AFM (frustrated
-    # spin liquid GS).  Compares the four warmstarts against the
-    # IDENTITY baseline (which is plain MPS imag-time).  This is the
-    # "can it help on a hard problem" test for the paper.
-    add_executable(example_ca_mps_var_d_kagome12
-        examples/tensor_network/ca_mps_var_d_kagome12.c)
-    target_link_libraries(example_ca_mps_var_d_kagome12 PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # HEP demo: var-D absorbs Gauss-law constraints on 1+1D Z2 lattice
-    # gauge theory.  Bridges the var-D method to lattice-QCD-style
-    # simulations -- the SaaS / hardware-development / serious-mathematics
-    # vignette that no competing simulator currently offers.
-    add_executable(example_z2_gauge_var_d
-        examples/hep/z2_gauge_var_d.c)
-    target_link_libraries(example_z2_gauge_var_d PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # CA-PEPS 2D TFIM imag-time evolution.  Exercises the row-major-MPS-
-    # backed CA-PEPS path end-to-end on an Lx-by-Ly square lattice and
-    # emits a ca_peps_2d_tfim_v1 JSON for paper figures.
-    add_executable(example_ca_peps_2d_tfim
-        examples/tensor_network/ca_peps_2d_tfim.c)
-    target_link_libraries(example_ca_peps_2d_tfim PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # CA-PEPS 2D TFIM ground-state cross-checked against dense ED.  Runs
-    # imag-time evolution on the same Pauli sum that vqe_exact_ground_state_energy
-    # diagonalises, and reports |E_imag - E_ED| as the parity figure that
-    # sits underneath the §3.6 paper claim of correctness for the row-
-    # major-MPS-backed CA-PEPS at 2D TFIM scales.
-    add_executable(example_ca_peps_2d_tfim_vs_ed
-        examples/tensor_network/ca_peps_2d_tfim_vs_ed.c)
-    target_link_libraries(example_ca_peps_2d_tfim_vs_ed PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # CA-PEPS variational-D ground-state on the same 2D TFIM benchmark.
-    # Uses the alternating Clifford-disentangle + imag-time loop with
-    # FERRO/H_ALL warmstart selected by field-strength regime; the
-    # paper §3.5 var-D claim is now testable in 2D, not just 1D.
-    add_executable(example_ca_peps_2d_tfim_var_d_vs_ed
-        examples/tensor_network/ca_peps_2d_tfim_var_d_vs_ed.c)
-    target_link_libraries(example_ca_peps_2d_tfim_var_d_vs_ed PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Bell-CHSH multi-run aggregate: runs the CHSH test N>=5 times and
-    # reports median + IQR + min/max + violation rate.  Closes the
-    # paper §4.2 todo about reporting a statistically-honest CHSH
-    # value rather than a single sampled run.
-    add_executable(example_bell_chsh_aggregate
-        examples/applications/bell_chsh_aggregate.c)
-    target_link_libraries(example_bell_chsh_aggregate PRIVATE
-        quantumsim ${MATH_LIBRARY})
-
-    # Execute a representative subset of examples under ctest so CI
-    # catches link-time success followed by runtime crashes. Heavy
-    # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
-    # are excluded — they're correct but multi-minute runs.
-    if(QSIM_BUILD_TESTS)
-        add_test(NAME example_vqe_h2_molecule
-                 COMMAND vqe_h2_molecule)
-        add_test(NAME example_qaoa_maxcut
-                 COMMAND qaoa_maxcut)
-        add_test(NAME example_grover_hash_collision
-                 COMMAND grover_hash_collision)
-        add_test(NAME example_quantum_spin_chain_small
-                 COMMAND quantum_spin_chain 8 3 16)
-        add_test(NAME example_phase3_phase4_benchmark
-                 COMMAND phase3_phase4_benchmark 16)
-        # CA-PEPS 2D TFIM smoke at 2x2 with short imag-time evolution;
-        # full 3x3 sweep is the paper-grade benchmark archived under
-        # benchmarks/results/.
-        add_test(NAME example_ca_peps_2d_tfim_smoke
-                 COMMAND example_ca_peps_2d_tfim
-                         /tmp/ca_peps_tfim_smoke.json 2 2 8 0.1 30)
-        # quantum_critical_point is a multi-minute finite-size-scaling
-        # demo and is deliberately excluded from the CI smoke.
-        set_tests_properties(
-            example_vqe_h2_molecule
-            example_qaoa_maxcut
-            example_grover_hash_collision
-            example_quantum_spin_chain_small
-            example_phase3_phase4_benchmark
-            example_ca_peps_2d_tfim_smoke
-            PROPERTIES TIMEOUT 120
-        )
-    endif()
-
-    message(STATUS "Examples: Enabled")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/examples.cmake)
 endif()
 
 # ==============================================================================
@@ -2128,12 +1170,9 @@ if(QSIM_BUILD_BENCHMARKS)
     )
     target_link_libraries(grover_parallel_benchmark PRIVATE quantumsim)
     if(QSIM_HAS_OPENMP)
+        qsim_target_link_openmp(grover_parallel_benchmark)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-            target_link_libraries(grover_parallel_benchmark PRIVATE ${QSIM_OPENMP_LIBRARIES})
-            target_include_directories(grover_parallel_benchmark PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
             target_compile_options(grover_parallel_benchmark PRIVATE -Xpreprocessor -fopenmp)
-        elseif(TARGET OpenMP::OpenMP_C)
-            target_link_libraries(grover_parallel_benchmark PRIVATE OpenMP::OpenMP_C)
         endif()
         target_compile_definitions(grover_parallel_benchmark PRIVATE HAS_OPENMP=1)
     endif()

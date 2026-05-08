@@ -81,6 +81,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // ============================================================================
 // DISORDERED HAMILTONIANS
@@ -615,5 +619,9 @@ double expectation_energy(const quantum_state_t *state,
  */
 double energy_variance(const quantum_state_t *state,
                         const sparse_hamiltonian_t *h);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MBL_H */

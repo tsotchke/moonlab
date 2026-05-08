@@ -1,0 +1,10 @@
+{
+  "schema": "moonlab/fusion_v1",
+  "description": "Gate-fusion DAG speedup on a VQE/QAOA hardware-efficient ansatz (HWEA): per-qubit Rz-Rx-Rz rotations followed by a CNOT ladder, repeated L times.  Speedup = unfused_time / fused_time.",
+  "rows": [
+    {"n": 12, "layers": 5, "original_gates": 235, "fused_gates": 115, "merges": 120, "t_unfused_ms": 9.1370, "t_fused_ms": 1.3660, "speedup": 6.6889},
+    {"n": 16, "layers": 5, "original_gates": 315, "fused_gates": 155, "merges": 160, "t_unfused_ms": 190.8180, "t_fused_ms": 29.4990, "speedup": 6.4686},
+    {"n": 20, "layers": 5, "original_gates": 395, "fused_gates": 195, "merges": 200, "t_unfused_ms": 3798.7880, "t_fused_ms": 595.0580, "speedup": 6.3839},
+    {"n": 22, "layers": 3, "original_gates": 261, "fused_gates": 129, "merges": 132, "t_unfused_ms": 2919.0740, "t_fused_ms": 1332.0370, "speedup": 2.1914}
+  ]
+}

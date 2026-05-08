@@ -1,0 +1,32 @@
+{
+  "schema": "moonlab/state_throughput_v2",
+  "k_reps": 5,
+  "omp_threads": 24,
+  "description": "Per-host gate throughput on the state-vector engine; for k=5 independent reps each averaging 10 iterations on the middle qubit (or middle pair for CNOT) of an n-qubit |+>-prepared state.  Reports mean +- stddev per-iter wall, min (noise floor), mean and max read+write bandwidth.  Bandwidth = 2 * dim * 16 bytes / wall is an analytic floor not a measured DRAM controller traffic; treat as an order-of-magnitude figure.",
+  "rows": [
+    {"gate": "H", "n": 16, "dim": 65536, "k_reps": 5, "mean_us": 47.9000, "std_us": 14.6339, "min_us": 21.8000, "mean_gbps": 43.7819, "std_gbps": 13.3758, "max_gbps": 96.1996},
+    {"gate": "H", "n": 18, "dim": 262144, "k_reps": 5, "mean_us": 3050.9800, "std_us": 1272.1196, "min_us": 1066.1000, "mean_gbps": 2.7495, "std_gbps": 1.1464, "max_gbps": 7.8685},
+    {"gate": "H", "n": 20, "dim": 1048576, "k_reps": 5, "mean_us": 6314.6400, "std_us": 2074.4064, "min_us": 4667.1000, "mean_gbps": 5.3138, "std_gbps": 1.7456, "max_gbps": 7.1896},
+    {"gate": "H", "n": 22, "dim": 4194304, "k_reps": 5, "mean_us": 7969.3400, "std_us": 583.3569, "min_us": 7324.0000, "mean_gbps": 16.8418, "std_gbps": 1.2328, "max_gbps": 18.3257},
+    {"gate": "H", "n": 24, "dim": 16777216, "k_reps": 5, "mean_us": 13551.9400, "std_us": 1662.2891, "min_us": 11297.5000, "mean_gbps": 39.6158, "std_gbps": 4.8593, "max_gbps": 47.5212},
+    {"gate": "H", "n": 26, "dim": 67108864, "k_reps": 5, "mean_us": 16694.0400, "std_us": 3258.1480, "min_us": 10609.4000, "mean_gbps": 128.6377, "std_gbps": 25.1060, "max_gbps": 202.4133},
+    {"gate": "CNOT", "n": 16, "dim": 65536, "k_reps": 5, "mean_us": 10.5600, "std_us": 0.3200, "min_us": 10.4000, "mean_gbps": 198.5939, "std_gbps": 6.0180, "max_gbps": 201.6492},
+    {"gate": "CNOT", "n": 18, "dim": 262144, "k_reps": 5, "mean_us": 2866.9000, "std_us": 244.0352, "min_us": 2483.4000, "mean_gbps": 2.9260, "std_gbps": 0.2491, "max_gbps": 3.3779},
+    {"gate": "CNOT", "n": 20, "dim": 1048576, "k_reps": 5, "mean_us": 3521.6400, "std_us": 572.5527, "min_us": 2686.9000, "mean_gbps": 9.5281, "std_gbps": 1.5491, "max_gbps": 12.4882},
+    {"gate": "CNOT", "n": 22, "dim": 4194304, "k_reps": 5, "mean_us": 4411.0000, "std_us": 802.3916, "min_us": 3202.4000, "mean_gbps": 30.4280, "std_gbps": 5.5351, "max_gbps": 41.9116},
+    {"gate": "CNOT", "n": 24, "dim": 16777216, "k_reps": 5, "mean_us": 6625.0200, "std_us": 607.3883, "min_us": 5700.7000, "mean_gbps": 81.0369, "std_gbps": 7.4295, "max_gbps": 94.1763},
+    {"gate": "CNOT", "n": 26, "dim": 67108864, "k_reps": 5, "mean_us": 14054.5400, "std_us": 2355.9379, "min_us": 10532.4000, "mean_gbps": 152.7964, "std_gbps": 25.6130, "max_gbps": 203.8931},
+    {"gate": "RY", "n": 16, "dim": 65536, "k_reps": 5, "mean_us": 110.7400, "std_us": 31.1554, "min_us": 53.6000, "mean_gbps": 18.9376, "std_gbps": 5.3279, "max_gbps": 39.1260},
+    {"gate": "RY", "n": 18, "dim": 262144, "k_reps": 5, "mean_us": 3629.3000, "std_us": 1714.7357, "min_us": 2220.2000, "mean_gbps": 2.3114, "std_gbps": 1.0920, "max_gbps": 3.7783},
+    {"gate": "RY", "n": 20, "dim": 1048576, "k_reps": 5, "mean_us": 4810.1400, "std_us": 1430.6514, "min_us": 2955.2000, "mean_gbps": 6.9758, "std_gbps": 2.0748, "max_gbps": 11.3544},
+    {"gate": "RY", "n": 22, "dim": 4194304, "k_reps": 5, "mean_us": 8109.6000, "std_us": 1898.7072, "min_us": 5818.4000, "mean_gbps": 16.5505, "std_gbps": 3.8750, "max_gbps": 23.0678},
+    {"gate": "RY", "n": 24, "dim": 16777216, "k_reps": 5, "mean_us": 14039.1200, "std_us": 1996.9321, "min_us": 10940.5000, "mean_gbps": 38.2411, "std_gbps": 5.4394, "max_gbps": 49.0719},
+    {"gate": "RY", "n": 26, "dim": 67108864, "k_reps": 5, "mean_us": 7951.3200, "std_us": 3480.1247, "min_us": 5989.8000, "mean_gbps": 270.0789, "std_gbps": 118.2078, "max_gbps": 358.5234},
+    {"gate": "RZ", "n": 16, "dim": 65536, "k_reps": 5, "mean_us": 26.1800, "std_us": 0.5564, "min_us": 25.5000, "mean_gbps": 80.1051, "std_gbps": 1.7025, "max_gbps": 82.2413},
+    {"gate": "RZ", "n": 18, "dim": 262144, "k_reps": 5, "mean_us": 166.6400, "std_us": 4.2392, "min_us": 161.2000, "mean_gbps": 50.3397, "std_gbps": 1.2806, "max_gbps": 52.0385},
+    {"gate": "RZ", "n": 20, "dim": 1048576, "k_reps": 5, "mean_us": 404.4600, "std_us": 36.3333, "min_us": 334.8000, "mean_gbps": 82.9611, "std_gbps": 7.4525, "max_gbps": 100.2223},
+    {"gate": "RZ", "n": 22, "dim": 4194304, "k_reps": 5, "mean_us": 985.5800, "std_us": 140.2241, "min_us": 764.3000, "mean_gbps": 136.1815, "std_gbps": 19.3753, "max_gbps": 175.6087},
+    {"gate": "RZ", "n": 24, "dim": 16777216, "k_reps": 5, "mean_us": 1426.2600, "std_us": 19.2683, "min_us": 1402.3000, "mean_gbps": 376.4187, "std_gbps": 5.0853, "max_gbps": 382.8503},
+    {"gate": "RZ", "n": 26, "dim": 67108864, "k_reps": 5, "mean_us": 5514.3200, "std_us": 137.2119, "min_us": 5369.3000, "mean_gbps": 389.4376, "std_gbps": 9.6903, "max_gbps": 399.9560}
+  ]
+}

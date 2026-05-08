@@ -124,7 +124,7 @@ _lib.moonlab_ca_mps_t_dagger.restype = ctypes.c_int
 _lib.moonlab_ca_mps_normalize.argtypes = [ctypes.c_void_p]
 _lib.moonlab_ca_mps_normalize.restype = ctypes.c_int
 
-# var-D run.
+# var-D run (v0.2.1 entry point).
 _lib.moonlab_ca_mps_var_d_run.argtypes = [
     ctypes.c_void_p,                    # state
     ctypes.POINTER(ctypes.c_uint8),     # paulis
@@ -141,6 +141,30 @@ _lib.moonlab_ca_mps_var_d_run.argtypes = [
     ctypes.POINTER(ctypes.c_double),    # out_final_energy (NULLable)
 ]
 _lib.moonlab_ca_mps_var_d_run.restype = ctypes.c_int
+
+# var-D run v0.2.4 entry point with explicit convergence_eps.
+# Older dylibs (0.2.3 and earlier) don't export this; the binding
+# checks at import time and falls back to the v1 function with the
+# library's default eps when v2 is missing.
+_HAS_VAR_D_V2 = hasattr(_lib, "moonlab_ca_mps_var_d_run_v2")
+if _HAS_VAR_D_V2:
+    _lib.moonlab_ca_mps_var_d_run_v2.argtypes = [
+        ctypes.c_void_p,                    # state
+        ctypes.POINTER(ctypes.c_uint8),     # paulis
+        ctypes.POINTER(ctypes.c_double),    # coeffs
+        ctypes.c_uint32,                    # num_terms
+        ctypes.c_uint32,                    # max_outer_iters
+        ctypes.c_double,                    # imag_time_dtau
+        ctypes.c_uint32,                    # imag_time_steps_per_outer
+        ctypes.c_uint32,                    # clifford_passes_per_outer
+        ctypes.c_int,                       # composite_2gate
+        ctypes.c_int,                       # warmstart
+        ctypes.POINTER(ctypes.c_uint8),     # stab_paulis (NULLable)
+        ctypes.c_uint32,                    # stab_num_gens
+        ctypes.c_double,                    # convergence_eps (<= 0 -> default)
+        ctypes.POINTER(ctypes.c_double),    # out_final_energy (NULLable)
+    ]
+    _lib.moonlab_ca_mps_var_d_run_v2.restype = ctypes.c_int
 
 # Standalone gauge warmstart.
 _lib.moonlab_ca_mps_gauge_warmstart.argtypes = [
@@ -301,7 +325,8 @@ def var_d_run(state: CAMPS, paulis, coeffs,
               clifford_passes_per_outer: int = 8,
               composite_2gate: bool = False,
               warmstart: int = WARMSTART_IDENTITY,
-              stab_paulis=None) -> float:
+              stab_paulis=None,
+              convergence_eps: float = 0.0) -> float:
     """Run the variational-D alternating ground-state search.
 
     Returns the final variational energy.  See
@@ -316,6 +341,16 @@ def var_d_run(state: CAMPS, paulis, coeffs,
         Pauli sum byte encoding.
     coeffs : array-like float64, shape (num_terms,)
         Real coefficients.
+    convergence_eps : float, optional (since v0.2.4)
+        Outer-loop convergence threshold.  ``0.0`` (the default)
+        keeps the C-side default of ``1e-7``.  Passing a tighter
+        value (e.g. ``1e-12``) lets the alternating loop run
+        through its full ``max_outer_iters`` budget instead of
+        bailing at a non-GS fixed point -- useful on the off-
+        symmetry rows of an XXZ Delta sweep where the v0.2.3
+        residual was 11-19% with the default eps.  Requires a
+        Moonlab dylib >= 0.2.4; older builds raise ``RuntimeError``
+        when a non-default eps is requested.
     warmstart : int
         One of WARMSTART_IDENTITY (0), WARMSTART_H_ALL (1),
         WARMSTART_DUAL_TFIM (2), WARMSTART_FERRO_TFIM (3),
@@ -351,21 +386,43 @@ def var_d_run(state: CAMPS, paulis, coeffs,
         _keep = s
 
     out_e = ctypes.c_double(0.0)
-    rc = _lib.moonlab_ca_mps_var_d_run(
-        state._h,
-        p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-        c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-        ctypes.c_uint32(num_terms),
-        ctypes.c_uint32(max_outer_iters),
-        ctypes.c_double(imag_time_dtau),
-        ctypes.c_uint32(imag_time_steps_per_outer),
-        ctypes.c_uint32(clifford_passes_per_outer),
-        ctypes.c_int(1 if composite_2gate else 0),
-        ctypes.c_int(int(warmstart)),
-        sp_ptr,
-        ctypes.c_uint32(sp_num),
-        ctypes.byref(out_e),
-    )
+    if convergence_eps > 0.0:
+        if not _HAS_VAR_D_V2:
+            raise RuntimeError(
+                "convergence_eps requires Moonlab dylib >= 0.2.4 "
+                "(moonlab_ca_mps_var_d_run_v2)")
+        rc = _lib.moonlab_ca_mps_var_d_run_v2(
+            state._h,
+            p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+            c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            ctypes.c_uint32(num_terms),
+            ctypes.c_uint32(max_outer_iters),
+            ctypes.c_double(imag_time_dtau),
+            ctypes.c_uint32(imag_time_steps_per_outer),
+            ctypes.c_uint32(clifford_passes_per_outer),
+            ctypes.c_int(1 if composite_2gate else 0),
+            ctypes.c_int(int(warmstart)),
+            sp_ptr,
+            ctypes.c_uint32(sp_num),
+            ctypes.c_double(convergence_eps),
+            ctypes.byref(out_e),
+        )
+    else:
+        rc = _lib.moonlab_ca_mps_var_d_run(
+            state._h,
+            p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+            c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            ctypes.c_uint32(num_terms),
+            ctypes.c_uint32(max_outer_iters),
+            ctypes.c_double(imag_time_dtau),
+            ctypes.c_uint32(imag_time_steps_per_outer),
+            ctypes.c_uint32(clifford_passes_per_outer),
+            ctypes.c_int(1 if composite_2gate else 0),
+            ctypes.c_int(int(warmstart)),
+            sp_ptr,
+            ctypes.c_uint32(sp_num),
+            ctypes.byref(out_e),
+        )
     _check(rc)
     del _keep
     return float(out_e.value)

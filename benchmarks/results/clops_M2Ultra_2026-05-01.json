@@ -1,0 +1,11 @@
+{
+  "schema": "moonlab/clops_v1",
+  "description": "CLOPS = circuits/second on a VQE/QAOA-shaped hardware-efficient ansatz (Rz-Rx-Rz + CNOT ladder) at L layers.  Each iteration uses a fresh parameter draw plus a final all-qubit Z-basis measurement.",
+  "omp_threads": 24,
+  "rows": [
+    {"n": 8, "layers": 5, "iters": 20000, "total_wall_s": 8.377810, "clops": 2387.259},
+    {"n": 12, "layers": 5, "iters": 4000, "total_wall_s": 36.016609, "clops": 111.060},
+    {"n": 16, "layers": 5, "iters": 500, "total_wall_s": 99.775269, "clops": 5.011},
+    {"n": 20, "layers": 5, "iters": 40, "total_wall_s": 156.799876, "clops": 0.255}
+  ]
+}

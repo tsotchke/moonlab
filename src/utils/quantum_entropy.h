@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "../applications/moonlab_api.h"
+
 /**
  * @file quantum_entropy.h
  * @brief Cryptographically secure entropy interface for quantum operations
@@ -147,7 +149,7 @@ quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
  *
  * @since 0.2.0
  */
-void quantum_entropy_ctx_destroy(quantum_entropy_ctx_t *ctx);
+MOONLAB_API void quantum_entropy_ctx_destroy(quantum_entropy_ctx_t *ctx);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,12 @@
 #include "../utils/quantum_entropy.h"
 #include <stdint.h>
 
+#include "../applications/moonlab_api.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file quantum_gates.h
  * @brief Complete universal quantum gate set
@@ -28,21 +34,21 @@
  * |0⟩ → |1⟩, |1⟩ → |0⟩
  * Matrix: [0 1; 1 0]
  */
-qs_error_t gate_pauli_x(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_pauli_x(quantum_state_t *state, int qubit);
 
 /**
  * @brief Pauli-Y gate (bit and phase flip)
  * |0⟩ → i|1⟩, |1⟩ → -i|0⟩
  * Matrix: [0 -i; i 0]
  */
-qs_error_t gate_pauli_y(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_pauli_y(quantum_state_t *state, int qubit);
 
 /**
  * @brief Pauli-Z gate (phase flip)
  * |0⟩ → |0⟩, |1⟩ → -|1⟩
  * Matrix: [1 0; 0 -1]
  */
-qs_error_t gate_pauli_z(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_pauli_z(quantum_state_t *state, int qubit);
 
 /**
  * @brief Hadamard gate (creates superposition)
@@ -50,63 +56,63 @@ qs_error_t gate_pauli_z(quantum_state_t *state, int qubit);
  * |1⟩ → (|0⟩ - |1⟩)/√2
  * Matrix: [1 1; 1 -1]/√2
  */
-qs_error_t gate_hadamard(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_hadamard(quantum_state_t *state, int qubit);
 
 /**
  * @brief S gate (Phase gate, √Z)
  * |0⟩ → |0⟩, |1⟩ → i|1⟩
  * Matrix: [1 0; 0 i]
  */
-qs_error_t gate_s(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_s(quantum_state_t *state, int qubit);
 
 /**
  * @brief S† gate (Inverse S gate)
  * |0⟩ → |0⟩, |1⟩ → -i|1⟩
  * Matrix: [1 0; 0 -i]
  */
-qs_error_t gate_s_dagger(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_s_dagger(quantum_state_t *state, int qubit);
 
 /**
  * @brief T gate (π/8 gate, √S)
  * |0⟩ → |0⟩, |1⟩ → e^(iπ/4)|1⟩
  * Matrix: [1 0; 0 e^(iπ/4)]
  */
-qs_error_t gate_t(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_t(quantum_state_t *state, int qubit);
 
 /**
  * @brief T† gate (Inverse T gate)
  * |0⟩ → |0⟩, |1⟩ → e^(-iπ/4)|1⟩
  * Matrix: [1 0; 0 e^(-iπ/4)]
  */
-qs_error_t gate_t_dagger(quantum_state_t *state, int qubit);
+MOONLAB_API qs_error_t gate_t_dagger(quantum_state_t *state, int qubit);
 
 /**
  * @brief Arbitrary phase gate
  * |0⟩ → |0⟩, |1⟩ → e^(iθ)|1⟩
  * @param theta Phase angle in radians
  */
-qs_error_t gate_phase(quantum_state_t *state, int qubit, double theta);
+MOONLAB_API qs_error_t gate_phase(quantum_state_t *state, int qubit, double theta);
 
 /**
  * @brief Rotation around X axis
  * R_X(θ) = exp(-iθX/2) = cos(θ/2)I - i*sin(θ/2)X
  * @param theta Rotation angle in radians
  */
-qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta);
+MOONLAB_API qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta);
 
 /**
  * @brief Rotation around Y axis
  * R_Y(θ) = exp(-iθY/2) = cos(θ/2)I - i*sin(θ/2)Y
  * @param theta Rotation angle in radians
  */
-qs_error_t gate_ry(quantum_state_t *state, int qubit, double theta);
+MOONLAB_API qs_error_t gate_ry(quantum_state_t *state, int qubit, double theta);
 
 /**
  * @brief Rotation around Z axis
  * R_Z(θ) = exp(-iθZ/2) = [e^(-iθ/2) 0; 0 e^(iθ/2)]
  * @param theta Rotation angle in radians
  */
-qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta);
+MOONLAB_API qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta);
 
 /**
  * @brief Arbitrary single-qubit unitary U3 gate
@@ -128,7 +134,7 @@ qs_error_t gate_u3(quantum_state_t *state, int qubit, double theta, double phi, 
  * @param control Control qubit index
  * @param target Target qubit index
  */
-qs_error_t gate_cnot(quantum_state_t *state, int control, int target);
+MOONLAB_API qs_error_t gate_cnot(quantum_state_t *state, int control, int target);
 
 /**
  * @brief CZ gate (Controlled-Z)
@@ -136,7 +142,7 @@ qs_error_t gate_cnot(quantum_state_t *state, int control, int target);
  * @param control Control qubit index
  * @param target Target qubit index
  */
-qs_error_t gate_cz(quantum_state_t *state, int control, int target);
+MOONLAB_API qs_error_t gate_cz(quantum_state_t *state, int control, int target);
 
 /**
  * @brief CY gate (Controlled-Y)
@@ -152,7 +158,7 @@ qs_error_t gate_cy(quantum_state_t *state, int control, int target);
  * @param qubit1 First qubit index
  * @param qubit2 Second qubit index
  */
-qs_error_t gate_swap(quantum_state_t *state, int qubit1, int qubit2);
+MOONLAB_API qs_error_t gate_swap(quantum_state_t *state, int qubit1, int qubit2);
 
 /**
  * @brief Controlled-Phase gate
@@ -161,7 +167,7 @@ qs_error_t gate_swap(quantum_state_t *state, int qubit1, int qubit2);
  * @param target Target qubit index
  * @param theta Phase angle
  */
-qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double theta);
+MOONLAB_API qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double theta);
 
 /**
  * @brief Controlled-Rotation X gate
@@ -199,7 +205,7 @@ qs_error_t gate_crz(quantum_state_t *state, int control, int target, double thet
  * @param control2 Second control qubit
  * @param target Target qubit
  */
-qs_error_t gate_toffoli(quantum_state_t *state, int control1, int control2, int target);
+MOONLAB_API qs_error_t gate_toffoli(quantum_state_t *state, int control1, int control2, int target);
 
 /**
  * @brief Fredkin gate (CSWAP, Controlled-SWAP)
@@ -373,5 +379,9 @@ qs_error_t apply_two_qubit_gate(
  * @return 1 if normalized, 0 otherwise
  */
 int verify_gate_normalization(const quantum_state_t *state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUANTUM_GATES_H */

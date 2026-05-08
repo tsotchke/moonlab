@@ -5,6 +5,12 @@
 #include "../utils/quantum_entropy.h"
 #include <stddef.h>
 
+#include "../applications/moonlab_api.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file bell_test.h
  * @brief Bell inequalities: CHSH, Mermin, and related statistical tests.
@@ -166,7 +172,7 @@ qs_error_t create_bell_state_psi_minus(quantum_state_t *state, int qubit1, int q
  * @param type Bell state type
  * @return QS_SUCCESS or error code
  */
-qs_error_t create_bell_state(quantum_state_t *state, int qubit1, int qubit2, bell_state_type_t type);
+MOONLAB_API qs_error_t create_bell_state(quantum_state_t *state, int qubit1, int qubit2, bell_state_type_t type);
 
 // ============================================================================
 // CORRELATION MEASUREMENT
@@ -210,7 +216,7 @@ double measure_correlation(
  * @param correlations Array of 4 correlations [E(a,b), E(a,b'), E(a',b), E(a',b')]
  * @return CHSH S-parameter
  */
-double calculate_chsh_parameter(const double correlations[4]);
+MOONLAB_API double calculate_chsh_parameter(const double correlations[4]);
 
 // ============================================================================
 // FULL BELL TEST
@@ -232,7 +238,7 @@ double calculate_chsh_parameter(const double correlations[4]);
  * @param entropy Secure entropy source
  * @return Complete Bell test results with statistical analysis
  */
-bell_test_result_t bell_test_chsh(
+MOONLAB_API bell_test_result_t bell_test_chsh(
     quantum_state_t *state,
     int qubit_a,
     int qubit_b,
@@ -251,7 +257,7 @@ bell_test_result_t bell_test_chsh(
  * 
  * @param settings Output: optimal measurement settings
  */
-void bell_get_optimal_settings(bell_measurement_settings_t *settings);
+MOONLAB_API void bell_get_optimal_settings(bell_measurement_settings_t *settings);
 
 /**
  * @brief Verify Bell test results meet quantum criteria
@@ -350,7 +356,7 @@ void bell_monitor_free(bell_test_monitor_t *monitor);
  * correlation_a_prime_b_prime hold the four <P1 P2 P3> correlators in
  * the order {XYY, YXY, YYX, XXX}; classical_bound = 2; quantum_bound = 4.
  */
-bell_test_result_t bell_test_mermin_ghz(
+MOONLAB_API bell_test_result_t bell_test_mermin_ghz(
     quantum_state_t *state,
     int qubit_a,
     int qubit_b,
@@ -371,10 +377,14 @@ bell_test_result_t bell_test_mermin_ghz(
  * reduces to CHSH / (2 sqrt(2)); for N = 3 to Mermin / 4.  0.0 on
  * argument error.
  */
-double bell_test_mermin_klyshko(
+MOONLAB_API double bell_test_mermin_klyshko(
     quantum_state_t *state,
     size_t num_qubits,
     size_t num_measurements,
     quantum_entropy_ctx_t *entropy);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* BELL_TEST_H */

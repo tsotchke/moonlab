@@ -6,6 +6,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../applications/moonlab_api.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file qaoa.h
  * @brief Quantum Approximate Optimization Algorithm (Farhi-Goldstone-Gutmann 2014).
@@ -98,13 +104,13 @@ typedef struct {
  * @param num_qubits Number of qubits
  * @return Initialized Ising model
  */
-ising_model_t* ising_model_create(size_t num_qubits);
+MOONLAB_API ising_model_t* ising_model_create(size_t num_qubits);
 
 /**
  * @brief Free Ising model
  * @param model Ising model to free
  */
-void ising_model_free(ising_model_t *model);
+MOONLAB_API void ising_model_free(ising_model_t *model);
 
 /**
  * @brief Set coupling coefficient J[i][j]
@@ -114,7 +120,7 @@ void ising_model_free(ising_model_t *model);
  * @param value Coupling strength
  * @return 0 on success, -1 on error
  */
-int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double value);
+MOONLAB_API int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double value);
 
 /**
  * @brief Set local field h[i]
@@ -123,7 +129,7 @@ int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double va
  * @param value Field strength
  * @return 0 on success, -1 on error
  */
-int ising_model_set_field(ising_model_t *model, size_t i, double value);
+MOONLAB_API int ising_model_set_field(ising_model_t *model, size_t i, double value);
 
 /**
  * @brief Evaluate Ising energy for bit string
@@ -135,7 +141,7 @@ int ising_model_set_field(ising_model_t *model, size_t i, double value);
  * @param bitstring Bit string (0/1 for each qubit)
  * @return Energy value
  */
-double ising_model_evaluate(const ising_model_t *model, uint64_t bitstring);
+MOONLAB_API double ising_model_evaluate(const ising_model_t *model, uint64_t bitstring);
 
 /**
  * @brief Print Ising model
@@ -163,13 +169,13 @@ typedef struct {
  * @param num_edges Number of edges
  * @return Initialized graph
  */
-graph_t* graph_create(size_t num_vertices, size_t num_edges);
+MOONLAB_API graph_t* graph_create(size_t num_vertices, size_t num_edges);
 
 /**
  * @brief Free graph
  * @param graph Graph to free
  */
-void graph_free(graph_t *graph);
+MOONLAB_API void graph_free(graph_t *graph);
 
 /**
  * @brief Add edge to graph
@@ -180,7 +186,7 @@ void graph_free(graph_t *graph);
  * @param weight Edge weight (1.0 for unweighted)
  * @return 0 on success, -1 on error
  */
-int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight);
+MOONLAB_API int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight);
 
 /**
  * @brief Encode MaxCut problem as Ising model
@@ -191,7 +197,7 @@ int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight)
  * @param graph Input graph
  * @return Ising model encoding
  */
-ising_model_t* ising_encode_maxcut(const graph_t *graph);
+MOONLAB_API ising_model_t* ising_encode_maxcut(const graph_t *graph);
 
 /**
  * @brief Portfolio optimization problem
@@ -315,7 +321,7 @@ typedef struct {
  * @param entropy Entropy context
  * @return QAOA solver context
  */
-qaoa_solver_t* qaoa_solver_create(
+MOONLAB_API qaoa_solver_t* qaoa_solver_create(
     ising_model_t *ising_model,
     size_t num_layers,
     quantum_entropy_ctx_t *entropy
@@ -325,7 +331,7 @@ qaoa_solver_t* qaoa_solver_create(
  * @brief Free QAOA solver
  * @param solver QAOA solver
  */
-void qaoa_solver_free(qaoa_solver_t *solver);
+MOONLAB_API void qaoa_solver_free(qaoa_solver_t *solver);
 
 /**
  * @brief Compute expectation value for QAOA parameters
@@ -339,7 +345,7 @@ void qaoa_solver_free(qaoa_solver_t *solver);
  * @param beta Mixer Hamiltonian angles
  * @return Expected energy (cost function value)
  */
-double qaoa_compute_expectation(
+MOONLAB_API double qaoa_compute_expectation(
     qaoa_solver_t *solver,
     const double *gamma,
     const double *beta
@@ -360,7 +366,7 @@ double qaoa_compute_expectation(
  * @param solver QAOA solver
  * @return QAOA result with best solution
  */
-qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
+MOONLAB_API qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
 
 /**
  * @brief Apply QAOA circuit for given parameters
@@ -532,5 +538,9 @@ void qaoa_bitstring_to_spins(
     size_t num_qubits,
     int *spins
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QAOA_H */

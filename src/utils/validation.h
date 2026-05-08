@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file validation.h
@@ -247,5 +251,9 @@ static inline int validate_unique_indices(const int *indices, size_t num_indices
     }
     return 1;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VALIDATION_H */

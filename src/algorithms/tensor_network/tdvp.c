@@ -14,6 +14,14 @@
 #include <math.h>
 #include <time.h>
 
+#if defined(__APPLE__)
+#  include <Accelerate/Accelerate.h>
+#  define MOONLAB_TDVP_HAVE_BLAS 1
+#elif defined(MOONLAB_HAVE_CBLAS)
+#  include <cblas.h>
+#  define MOONLAB_TDVP_HAVE_BLAS 1
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -458,11 +466,26 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
         .two_site = true
     };
 
-    // Form theta = A @ B
+    // Form theta = A @ B.  Both tensors are row-major rank-3 with the
+    // contracted axis (chi_m) on A's last and B's first slot, so a
+    // single zgemm on the (chi_l*d, chi_m) x (chi_m, d*chi_r)
+    // reshape lands directly in the row-major theta layout.
     uint32_t theta_dims[4] = {chi_l, d, d, chi_r};
     tensor_t *theta = tensor_create(4, theta_dims);
     if (!theta) return -1;
 
+#if defined(MOONLAB_TDVP_HAVE_BLAS)
+    {
+        const double complex one = 1.0, zero = 0.0;
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                    (int)(chi_l * d), (int)(d * chi_r), (int)chi_m,
+                    &one,
+                    A->data, (int)chi_m,
+                    B->data, (int)(d * chi_r),
+                    &zero,
+                    theta->data, (int)(d * chi_r));
+    }
+#else
     for (uint32_t l = 0; l < chi_l; l++) {
         for (uint32_t s1 = 0; s1 < d; s1++) {
             for (uint32_t s2 = 0; s2 < d; s2++) {
@@ -479,6 +502,7 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
             }
         }
     }
+#endif
 
     // Evolve: theta_new = exp(-i*H*dt) @ theta
     tensor_t *theta_evolved = tensor_create(4, theta_dims);

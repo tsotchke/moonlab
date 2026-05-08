@@ -19,6 +19,14 @@
 #include <float.h>
 #include <time.h>
 
+#if defined(__APPLE__)
+#  include <Accelerate/Accelerate.h>
+#  define MOONLAB_DMRG_HAVE_BLAS 1
+#elif defined(MOONLAB_HAVE_CBLAS)
+#  include <cblas.h>
+#  define MOONLAB_DMRG_HAVE_BLAS 1
+#endif
+
 /* NaN is undefined behaviour under -ffast-math; use a finite sentinel
  * (DBL_MAX) for "energy/expectation computation failed" and check with
  * `>= DMRG_ENERGY_ERROR` in callers. `isnan(E)` paths are rewritten to
@@ -992,9 +1000,18 @@ int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
         if (owns_temps) free(temp3);
     }
     else {
-        // One-site DMRG - similar but simpler
-        // theta has shape [chi_l][d][chi_r]
-        // Implementation similar to above but with only one W tensor
+        /* One-site DMRG path is not implemented.  The 2-site sweeps
+         * exposed by dmrg_ground_state, dmrg_optimize_two_site and
+         * dmrg_run_sweep are the only paths exercised by the test
+         * suite, so the public dmrg_config_t.two_site flag is
+         * effectively a 2-site/abort toggle until someone wires the
+         * 1-site branch properly.  Failing fast here is better than
+         * silently returning y = 0 to a Lanczos iterator that would
+         * then "converge" at lambda = 0. */
+        fprintf(stderr,
+                "DMRG: one-site H_eff path is not implemented; set "
+                "config.two_site = true (the default).\n");
+        return -1;
     }
 
     return 0;
@@ -1438,6 +1455,317 @@ static tensor_t *create_right_boundary(uint32_t chi, uint32_t mpo_bond) {
     return R;
 }
 
+/* BLAS-backed environment contraction for DMRG.
+ *
+ * Implements the right-environment update
+ *
+ *   R_new[l, bl, lp] = sum_{r, s, sp, rp, br}
+ *       conj(A[l, s, r]) * W[bl, s, sp, br] * A[lp, sp, rp] * R_next[r, br, rp]
+ *
+ * as three pairwise zgemms.  The fully-nested 7-deep loop in the
+ * original code is O(chi^4 * b^2 * d^2) per site -- on the kagome
+ * 6x2 MPO (b ~ 80) at chi=128 that is ~7e12 flops per env update,
+ * unacceptable as the ground-state preparation hot path.  The three
+ * pairwise contractions sum to O(chi^2 * b * (chi + b) * d^2),
+ * roughly 2e8 flops at the same parameters and well inside zgemm's
+ * fast path.  Empirically the kagome 12 cross-backend bench's DMRG
+ * step drops from "doesn't finish in 18 minutes" to seconds.
+ *
+ * Decomposition:
+ *   T1[lp, sp, r, br] = sum_rp A[lp, sp, rp] * R_next[r, br, rp]
+ *     reshape -> A_2d (chi_l * d, chi_r) x R_2d^T (chi_r, chi_r * b_r)
+ *
+ *   T1' = permute(T1, axes=(0,2,1,3))      -> (chi_l, chi_r, d, b_r)
+ *   T2[lp, r, bl, s] = sum_{sp, br} T1'[lp, r, sp, br] * W[bl, s, sp, br]
+ *     reshape -> T1_2d (chi_l*chi_r, d*b_r) x W_2d^T (d*b_r, b_l*d)
+ *
+ *   T2' = permute(T2, axes=(0,2,3,1))      -> (chi_l, b_l, d, chi_r)
+ *   R_perm[lp, bl, l] = sum_{s, r} T2'[lp, bl, s, r] * conj(A[l, s, r])
+ *     reshape -> T2_2d (chi_l*b_l, d*chi_r) x A_2d^H (d*chi_r, chi_l)
+ *
+ *   R_out[l, bl, lp] = R_perm[lp, bl, l]   (axis 0/2 swap)
+ *
+ * Returns NULL on allocation failure or BLAS-unavailable build.
+ * All input pointers must be valid; @p A has shape [chi_l, d, chi_r],
+ * @p W has shape [b_l, d, d, b_r], @p R_next has shape
+ * [chi_r, b_r, chi_r].
+ */
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+static tensor_t *dmrg_contract_right_env_blas(const tensor_t *A,
+                                                const mpo_tensor_t *W,
+                                                const tensor_t *R_next) {
+    const uint32_t chi_l = A->dims[0];
+    const uint32_t d     = A->dims[1];
+    const uint32_t chi_r = A->dims[2];
+    const uint32_t b_l   = W->bond_dim_left;
+    const uint32_t b_r   = W->bond_dim_right;
+
+    if (R_next->dims[0] != chi_r || R_next->dims[1] != b_r ||
+        R_next->dims[2] != chi_r || W->W->dims[1] != d ||
+        W->W->dims[2] != d) {
+        return NULL;
+    }
+
+    const double complex one = 1.0;
+    const double complex zero = 0.0;
+
+    /* Step 1: T1[lp, sp, r, br] = A[lp, sp, rp] * R_next[r, br, rp]
+     * via zgemm( A_mat, R_mat^T ):  (chi_l*d, chi_r) x (chi_r, chi_r*b_r) */
+    const size_t T1_size = (size_t)chi_l * d * chi_r * b_r;
+    double complex *T1 = (double complex *)malloc(T1_size * sizeof(*T1));
+    if (!T1) return NULL;
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                (int)(chi_l * d), (int)(chi_r * b_r), (int)chi_r,
+                &one,
+                A->data, (int)chi_r,
+                R_next->data, (int)chi_r,
+                &zero,
+                T1, (int)(chi_r * b_r));
+
+    /* T1' = permute T1[lp, sp, r, br] -> T1'[lp, r, sp, br]
+     * (swap axes 1 and 2) */
+    double complex *T1p = (double complex *)malloc(T1_size * sizeof(*T1p));
+    if (!T1p) { free(T1); return NULL; }
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t r = 0; r < chi_r; r++) {
+            for (uint32_t sp = 0; sp < d; sp++) {
+                for (uint32_t br = 0; br < b_r; br++) {
+                    const size_t src = ((size_t)lp * d + sp) * chi_r * b_r
+                                       + (size_t)r * b_r + br;
+                    const size_t dst = ((size_t)lp * chi_r + r) * d * b_r
+                                       + (size_t)sp * b_r + br;
+                    T1p[dst] = T1[src];
+                }
+            }
+        }
+    }
+    free(T1);
+
+    /* Step 2: T2[lp, r, bl, s] = T1'[lp, r, sp, br] * W[bl, s, sp, br]
+     * via zgemm( T1'_mat, W_mat^T ): (chi_l*chi_r, d*b_r) x (d*b_r, b_l*d) */
+    const size_t T2_size = (size_t)chi_l * chi_r * b_l * d;
+    double complex *T2 = (double complex *)malloc(T2_size * sizeof(*T2));
+    if (!T2) { free(T1p); return NULL; }
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                (int)(chi_l * chi_r), (int)(b_l * d), (int)(d * b_r),
+                &one,
+                T1p, (int)(d * b_r),
+                W->W->data, (int)(d * b_r),
+                &zero,
+                T2, (int)(b_l * d));
+    free(T1p);
+
+    /* T2' = permute T2[lp, r, bl, s] -> T2'[lp, bl, s, r]
+     * (axes 0,1,2,3 -> 0,2,3,1) */
+    double complex *T2p = (double complex *)malloc(T2_size * sizeof(*T2p));
+    if (!T2p) { free(T2); return NULL; }
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t bl = 0; bl < b_l; bl++) {
+            for (uint32_t s = 0; s < d; s++) {
+                for (uint32_t r = 0; r < chi_r; r++) {
+                    const size_t src = ((size_t)lp * chi_r + r) * b_l * d
+                                       + (size_t)bl * d + s;
+                    const size_t dst = ((size_t)lp * b_l + bl) * d * chi_r
+                                       + (size_t)s * chi_r + r;
+                    T2p[dst] = T2[src];
+                }
+            }
+        }
+    }
+    free(T2);
+
+    /* Step 3: R_perm[lp, bl, l] = T2'[lp, bl, s, r] * conj(A[l, s, r])
+     * via zgemm( T2'_mat, A_mat^H ): (chi_l*b_l, d*chi_r) x (d*chi_r, chi_l) */
+    const size_t Rperm_size = (size_t)chi_l * b_l * chi_l;
+    double complex *Rperm = (double complex *)malloc(Rperm_size * sizeof(*Rperm));
+    if (!Rperm) { free(T2p); return NULL; }
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,
+                (int)(chi_l * b_l), (int)chi_l, (int)(d * chi_r),
+                &one,
+                T2p, (int)(d * chi_r),
+                A->data, (int)(d * chi_r),
+                &zero,
+                Rperm, (int)chi_l);
+    free(T2p);
+
+    /* Final permute: R_perm[lp, bl, l] -> R_out[l, bl, lp] */
+    uint32_t out_dims[3] = { chi_l, b_l, chi_l };
+    tensor_t *R_out = tensor_create(3, out_dims);
+    if (!R_out) { free(Rperm); return NULL; }
+    for (uint32_t l = 0; l < chi_l; l++) {
+        for (uint32_t bl = 0; bl < b_l; bl++) {
+            for (uint32_t lp = 0; lp < chi_l; lp++) {
+                const size_t src = ((size_t)lp * b_l + bl) * chi_l + l;
+                const size_t dst = ((size_t)l * b_l + bl) * chi_l + lp;
+                R_out->data[dst] = Rperm[src];
+            }
+        }
+    }
+    free(Rperm);
+    return R_out;
+}
+
+/* Mirror of dmrg_contract_right_env_blas for the left environment.
+ *
+ *   L_new[r, br, rp] = sum_{l, s, sp, lp, bl}
+ *       conj(A[l, s, r]) * L_prev[l, bl, lp] * W[bl, s, sp, br] * A[lp, sp, rp]
+ *
+ * Decomposition mirrors right-env exactly:
+ *   T1[s, l, lp, sp] = sum_bl L_prev[l, bl, lp] * W[bl, s, sp, br]^slice
+ *     -- but it is cleaner to contract A first against L_prev:
+ *   T1[bl, lp, s, r] = sum_l conj(A[l, s, r]) * L_prev[l, bl, lp]
+ *   T2[lp, br, sp, r] = ... see implementation below.
+ *
+ * Same complexity bound and BLAS dispatch as the right-env path.
+ */
+static tensor_t *dmrg_contract_left_env_blas(const tensor_t *A,
+                                               const mpo_tensor_t *W,
+                                               const tensor_t *L_prev) {
+    const uint32_t chi_l = A->dims[0];
+    const uint32_t d     = A->dims[1];
+    const uint32_t chi_r = A->dims[2];
+    const uint32_t b_l   = W->bond_dim_left;
+    const uint32_t b_r   = W->bond_dim_right;
+
+    if (L_prev->dims[0] != chi_l || L_prev->dims[1] != b_l ||
+        L_prev->dims[2] != chi_l || W->W->dims[1] != d ||
+        W->W->dims[2] != d) {
+        return NULL;
+    }
+
+    const double complex one = 1.0;
+    const double complex zero = 0.0;
+
+    /* Step 1: T1[s, r, bl, lp] = conj(A[l, s, r]) * L_prev[l, bl, lp]
+     *
+     * conj(A) viewed as (chi_l, d*chi_r) -> we want l contracted with
+     * L_prev's first axis.  Use CblasConjTrans on A.
+     * zgemm( A_mat^H, L_mat ): (d*chi_r, chi_l) x (chi_l, b_l*chi_l). */
+    const size_t T1_size = (size_t)d * chi_r * b_l * chi_l;
+    double complex *T1 = (double complex *)malloc(T1_size * sizeof(*T1));
+    if (!T1) return NULL;
+    cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,
+                (int)(d * chi_r), (int)(b_l * chi_l), (int)chi_l,
+                &one,
+                A->data, (int)(d * chi_r),
+                L_prev->data, (int)(b_l * chi_l),
+                &zero,
+                T1, (int)(b_l * chi_l));
+    /* T1[s*chi_r + r, bl*chi_l + lp] in row-major; index pattern
+     * T1[s, r, bl, lp]. */
+
+    /* T1' = permute T1[s, r, bl, lp] -> T1'[lp, bl, s, r]
+     * (axes 0,1,2,3 -> 3,2,0,1) */
+    double complex *T1p = (double complex *)malloc(T1_size * sizeof(*T1p));
+    if (!T1p) { free(T1); return NULL; }
+    for (uint32_t s = 0; s < d; s++) {
+        for (uint32_t r = 0; r < chi_r; r++) {
+            for (uint32_t bl = 0; bl < b_l; bl++) {
+                for (uint32_t lp = 0; lp < chi_l; lp++) {
+                    const size_t src = ((size_t)s * chi_r + r) * b_l * chi_l
+                                       + (size_t)bl * chi_l + lp;
+                    const size_t dst = ((size_t)lp * b_l + bl) * d * chi_r
+                                       + (size_t)s * chi_r + r;
+                    T1p[dst] = T1[src];
+                }
+            }
+        }
+    }
+    free(T1);
+
+    /* Step 2: T2[lp, r, sp, br] = T1'[lp, bl, s, r] * W[bl, s, sp, br]
+     * (contract bl, s).
+     * T1' viewed as (chi_l, b_l*d, chi_r) with middle axis = (bl, s):
+     *   T1'_2d[lp*chi_r + r, bl*d + s] needs a re-permute since current
+     *   layout is T1'[lp, bl, s, r] which makes (lp*r) and (bl*s) interleaved.
+     *
+     * Easier: re-layout T1' once more so (bl, s) sit together as a single
+     * matrix dim.  Skip a permute by using the original T1[s, r, bl, lp]
+     * layout and treating (s, bl) as the contracted axis. */
+
+    /* Drop the previous permutation; redo step 2 from T1[s, r, bl, lp].
+     * T1 viewed as (s*r, bl*lp).  W viewed as (bl*s, sp*br).
+     * The contraction is over (bl, s); reshape T1 to (r*lp, s*bl):
+     *   T1_alt[r, lp, s, bl] from T1[s, r, bl, lp]: another permute.
+     *
+     * To minimise permutations, run a second small permutation on T1p
+     * (already in [lp, bl, s, r]) into [lp, r, bl, s] -> [lp*r, bl*s]. */
+    double complex *T1q = (double complex *)malloc(T1_size * sizeof(*T1q));
+    if (!T1q) { free(T1p); return NULL; }
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t r = 0; r < chi_r; r++) {
+            for (uint32_t bl = 0; bl < b_l; bl++) {
+                for (uint32_t s = 0; s < d; s++) {
+                    const size_t src = ((size_t)lp * b_l + bl) * d * chi_r
+                                       + (size_t)s * chi_r + r;
+                    const size_t dst = ((size_t)lp * chi_r + r) * b_l * d
+                                       + (size_t)bl * d + s;
+                    T1q[dst] = T1p[src];
+                }
+            }
+        }
+    }
+    free(T1p);
+
+    /* Now T1q[lp*chi_r + r, bl*d + s].  zgemm with W_2d[bl*d + s, sp*br]:
+     * but W is laid out [bl, s, sp, br] which gives row-major
+     * W_2d[bl*d + s, sp*b_r + br].  Match. */
+    const size_t T2_size = (size_t)chi_l * chi_r * d * b_r;
+    double complex *T2 = (double complex *)malloc(T2_size * sizeof(*T2));
+    if (!T2) { free(T1q); return NULL; }
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                (int)(chi_l * chi_r), (int)(d * b_r), (int)(b_l * d),
+                &one,
+                T1q, (int)(b_l * d),
+                W->W->data, (int)(d * b_r),
+                &zero,
+                T2, (int)(d * b_r));
+    free(T1q);
+
+    /* T2[lp*chi_r + r, sp*b_r + br] -> index pattern T2[lp, r, sp, br].
+     * Step 3: L_perm[r, br, rp] = T2[lp, r, sp, br] * A[lp, sp, rp]
+     * Contract (lp, sp).
+     * T2 needs layout (r*br, lp*sp); A needs layout (lp*sp, rp).
+     * Permute T2 to T2'[r, br, lp, sp]; A is already (chi_l*d, chi_r). */
+    double complex *T2p = (double complex *)malloc(T2_size * sizeof(*T2p));
+    if (!T2p) { free(T2); return NULL; }
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t r = 0; r < chi_r; r++) {
+            for (uint32_t sp = 0; sp < d; sp++) {
+                for (uint32_t br = 0; br < b_r; br++) {
+                    const size_t src = ((size_t)lp * chi_r + r) * d * b_r
+                                       + (size_t)sp * b_r + br;
+                    const size_t dst = ((size_t)r * b_r + br) * chi_l * d
+                                       + (size_t)lp * d + sp;
+                    T2p[dst] = T2[src];
+                }
+            }
+        }
+    }
+    free(T2);
+
+    const size_t Lout_size = (size_t)chi_r * b_r * chi_r;
+    double complex *Lout = (double complex *)malloc(Lout_size * sizeof(*Lout));
+    if (!Lout) { free(T2p); return NULL; }
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                (int)(chi_r * b_r), (int)chi_r, (int)(chi_l * d),
+                &one,
+                T2p, (int)(chi_l * d),
+                A->data, (int)chi_r,
+                &zero,
+                Lout, (int)chi_r);
+    free(T2p);
+
+    /* Lout already in row-major (r, br, rp); wrap it. */
+    uint32_t out_dims[3] = { chi_r, b_r, chi_r };
+    tensor_t *L_new = tensor_create(3, out_dims);
+    if (!L_new) { free(Lout); return NULL; }
+    memcpy(L_new->data, Lout, Lout_size * sizeof(*Lout));
+    free(Lout);
+    return L_new;
+}
+#endif /* MOONLAB_DMRG_HAVE_BLAS */
+
 int dmrg_init_right_environments(dmrg_environments_t *env,
                                   const tn_mps_state_t *mps,
                                   const mpo_t *mpo) {
@@ -1462,6 +1790,10 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
         tensor_t *R_next = env->R[i + 1];
         if (!R_next || !R_next->data) return -1;
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+        tensor_t *R_new = dmrg_contract_right_env_blas(A, W, R_next);
+        if (!R_new) return -1;
+#else
         uint32_t chi_l = A->dims[0];
         uint32_t d = A->dims[1];
         uint32_t chi_r_old = A->dims[2];
@@ -1499,6 +1831,7 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
                 }
             }
         }
+#endif
 
         if (env->R[i]) tensor_free(env->R[i]);
         env->R[i] = R_new;
@@ -1528,6 +1861,10 @@ int dmrg_init_left_environments(dmrg_environments_t *env,
         mpo_tensor_t *W = &mpo->tensors[i - 1];  // [b_l][d][d][b_r]
         tensor_t *L_prev = env->L[i - 1];  // [chi_l'][b_l][chi_l']
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+        tensor_t *L_new = dmrg_contract_left_env_blas(A, W, L_prev);
+        if (!L_new) return -1;
+#else
         uint32_t chi_l_old = A->dims[0];
         uint32_t d = A->dims[1];
         uint32_t chi_r = A->dims[2];
@@ -1571,6 +1908,7 @@ int dmrg_init_left_environments(dmrg_environments_t *env,
                 }
             }
         }
+#endif
 
         if (env->L[i]) tensor_free(env->L[i]);
         env->L[i] = L_new;
@@ -1604,6 +1942,10 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
                 site, L_prev->dims[0], L_prev->dims[1], L_prev->dims[2], chi_l);
         return 0;  // Skip update
     }
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+    tensor_t *L_new = dmrg_contract_left_env_blas(A, W, L_prev);
+    if (!L_new) return -1;
+#else
     uint32_t d = A->dims[1];
     uint32_t chi_r = A->dims[2];
     uint32_t b_l = W->bond_dim_left;
@@ -1642,6 +1984,7 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
             }
         }
     }
+#endif
 
     if (env->L[site + 1]) tensor_free(env->L[site + 1]);
     env->L[site + 1] = L_new;
@@ -1692,6 +2035,10 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
             mpo_tensor_t *Ws = &mpo->tensors[s];
             tensor_t *Rs_next = env->R[s + 1];
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+            tensor_t *R_new = dmrg_contract_right_env_blas(As, Ws, Rs_next);
+            if (!R_new) return -1;
+#else
             uint32_t chi_ls = As->dims[0];
             uint32_t ds = As->dims[1];
             uint32_t chi_rs = As->dims[2];
@@ -1730,6 +2077,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
                     }
                 }
             }
+#endif
 
             tensor_free(env->R[s]);
             env->R[s] = R_new;
@@ -1740,6 +2088,11 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
         chi_r = mps->tensors[site]->dims[2];
     }
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+    (void)chi_l; (void)d; (void)chi_r;
+    tensor_t *R_new = dmrg_contract_right_env_blas(A, W, R_next);
+    if (!R_new) return -1;
+#else
     uint32_t b_l = W->bond_dim_left;
     uint32_t b_r = W->bond_dim_right;
 
@@ -1776,6 +2129,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
             }
         }
     }
+#endif
 
     if (env->R[site - 1]) tensor_free(env->R[site - 1]);
     env->R[site - 1] = R_new;

@@ -44,10 +44,18 @@ static inline int get_bit(uint64_t n, int bit_pos) {
 // ============================================================================
 
 /* Threading policy shared by every stride-block single-qubit gate:
- * parallelise the outer block loop iff state_dim >= 2^21 (32 MiB).
- * Blocks touch disjoint memory regions, so no synchronisation is
- * needed.  See the commentary in gate_hadamard for the derivation. */
-#define QS_BLOCK_THRESHOLD_DIM (1ULL << 21)
+ * parallelise the outer block loop iff state_dim >= 2^18 (4 MiB
+ * working set).  Blocks touch disjoint memory regions, so no
+ * synchronisation is needed.  The previous v0.1 threshold of 2^21
+ * (32 MiB) left n in [16, 20] running serial which produced a
+ * 10x bandwidth cliff at n=22 in the per-host throughput bench:
+ * fork-join overhead on Apple Silicon is on the order of 10 us, so
+ * any per-thread work above ~30 us amortises the dispatch cost.  At
+ * 2^18 each of 24 threads handles ~10k amplitudes, ~40 us at the
+ * Hadamard-gate kernel rate, well past break-even.  See
+ * benchmarks/results/state_throughput_*.json for the cliff before
+ * and after this change. */
+#define QS_BLOCK_THRESHOLD_DIM (1ULL << 18)
 
 qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;

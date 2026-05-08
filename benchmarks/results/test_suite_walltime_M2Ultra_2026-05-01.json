@@ -1,0 +1,18 @@
+{
+  "schema": "moonlab/test_suite_walltime_v1",
+  "description": "Wall-clock for the full short-tier ctest run on a single host. Excludes the long / aarch64_flake / exhaustive labels per the standard CI gate. Closes the moonlab paper §4.6 todo (line ~640, 'Insert wall-clock for the full make test run on a single specified host; do not extrapolate').",
+  "host": {
+    "machine": "Apple M2 Ultra",
+    "os": "Darwin 24.1.0 (macOS 15.1)",
+    "cores": 24,
+    "build_type": "Release"
+  },
+  "labels_excluded": ["long", "aarch64_flake", "exhaustive"],
+  "tests_run": 90,
+  "wall_s_real": 83.90,
+  "wall_s_user": 168.12,
+  "wall_s_sys": 11.15,
+  "parallel_jobs": 8,
+  "all_passed": true,
+  "date": "2026-05-01"
+}

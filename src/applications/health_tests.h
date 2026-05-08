@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file health_tests.h
@@ -319,5 +323,9 @@ const char* health_error_string(health_error_t error);
  * @return 1 if valid, 0 otherwise
  */
 int health_validate_config(const health_test_config_t *config);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HEALTH_TESTS_H */

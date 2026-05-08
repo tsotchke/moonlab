@@ -2034,14 +2034,27 @@ tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
     const char *comma = strchr(subscripts, ',');
 
     if (comma && comma < arrow) {
-        // Two operands
-        strncpy(left, subscripts, comma - subscripts);
-        strncpy(right, comma + 1, arrow - comma - 1);
+        // Two operands; clamp lengths to fit our fixed buffers minus
+        // one byte for the trailing NUL.
+        size_t llen = (size_t)(comma - subscripts);
+        size_t rlen = (size_t)(arrow - comma - 1);
+        if (llen >= sizeof left)  llen = sizeof left  - 1;
+        if (rlen >= sizeof right) rlen = sizeof right - 1;
+        memcpy(left,  subscripts, llen);    left[llen]  = '\0';
+        memcpy(right, comma + 1,  rlen);    right[rlen] = '\0';
     } else {
         // Single operand
-        strncpy(left, subscripts, arrow - subscripts);
+        size_t llen = (size_t)(arrow - subscripts);
+        if (llen >= sizeof left) llen = sizeof left - 1;
+        memcpy(left, subscripts, llen);     left[llen]  = '\0';
     }
-    strcpy(output, arrow + 2);
+    /* Output side: arrow+2 to end, again clamped. */
+    {
+        size_t olen = strlen(arrow + 2);
+        if (olen >= sizeof output) olen = sizeof output - 1;
+        memcpy(output, arrow + 2, olen);
+        output[olen] = '\0';
+    }
 
     // For simple cases, dispatch to existing functions
     if (strcmp(subscripts, "ij,jk->ik") == 0 && b) {

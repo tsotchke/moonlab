@@ -5,6 +5,10 @@
 #include <string.h>
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #endif
 
 /**
@@ -94,5 +98,9 @@ static inline int secure_memcmp(const void *a, const void *b, size_t size) {
     
     return diff;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SECURE_MEMORY_H */
