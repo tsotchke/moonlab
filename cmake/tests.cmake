@@ -367,6 +367,14 @@
         add_test(NAME unit_qgt_hofstadter COMMAND test_qgt_hofstadter)
         set_tests_properties(unit_qgt_hofstadter PROPERTIES TIMEOUT 60 LABELS "topology")
 
+        # Cross-check momentum-space FHS / projector-trace vs real-space
+        # Bianco-Resta on QWZ -- two independent topology calculations
+        # must agree.
+        add_executable(test_qgt_vs_chern_marker tests/unit/test_qgt_vs_chern_marker.c)
+        target_link_libraries(test_qgt_vs_chern_marker PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_vs_chern_marker COMMAND test_qgt_vs_chern_marker)
+        set_tests_properties(unit_qgt_vs_chern_marker PROPERTIES TIMEOUT 60 LABELS "topology")
+
         # MPDO noise simulator scaffold (v0.3 noise extension).
         add_executable(test_mpdo_smoke tests/unit/test_mpdo_smoke.c)
         target_link_libraries(test_mpdo_smoke PRIVATE quantumsim ${MATH_LIBRARY})
