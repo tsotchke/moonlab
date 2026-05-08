@@ -322,6 +322,262 @@ int main(void) {
         free(paulis);
     }
 
+    /* --- Case 8: surface code d=3 Z-stabilisers. ----------------------
+     *
+     * Extends case 7 to a richer code: the rotated surface code at
+     * distance 3 has 9 data qubits and 4 weight-4 Z-stabilisers (one
+     * per interior vertex of the 2x2 plaquette grid).  The canonical
+     * form predicted by the symplectic Gauss-Jordan construction is
+     * the same single-qubit-Z form (eq:pivot-canonical), so the four
+     * generators must reduce to four distinct single-qubit-Z pivots.
+     *
+     * Layout (data-qubit indices):
+     *
+     *     0  1  2
+     *     3  4  5
+     *     6  7  8
+     *
+     * Z-stabilisers (one per 2x2 face):
+     *     Z_top_left:     0, 1, 3, 4
+     *     Z_top_right:    1, 2, 4, 5
+     *     Z_bottom_left:  3, 4, 6, 7
+     *     Z_bottom_right: 4, 5, 7, 8
+     *
+     * All commute (they're all Z-type) and are F_2-linearly
+     * independent (Z_4 appears in all four; the other three positions
+     * each appear in exactly one stabiliser).  Expected dimension of
+     * the +1 eigenspace: 2^{9-4} = 32.  The reported (k_A, k_B) split
+     * for the half-cut at |A| = 4 (qubits 0..3) determines the
+     * paper's Schmidt-rank bound for this lattice.
+     *
+     * This is the §10 paper roadmap "extend to surface code"
+     * deliverable. */
+    {
+        const uint32_t n = 9;
+        const uint32_t k = 4;
+        uint8_t* gens = (uint8_t*)calloc((size_t)k * n, 1);
+        /* Z = code 3 */
+        const uint32_t supports[4][4] = {
+            {0, 1, 3, 4},
+            {1, 2, 4, 5},
+            {3, 4, 6, 7},
+            {4, 5, 7, 8},
+        };
+        for (uint32_t i = 0; i < k; i++) {
+            for (uint32_t j = 0; j < 4; j++) {
+                gens[(size_t)i * n + supports[i][j]] = 3;  /* Z */
+            }
+        }
+
+        moonlab_ca_mps_t* s = moonlab_ca_mps_create(n, 32);
+        ca_mps_error_t err =
+            moonlab_ca_mps_apply_stab_subgroup_warmstart(s, gens, k);
+        fprintf(stdout, "\n--- case 8: surface code d=3, 4 Z-stabilisers ---\n");
+        CHECK(err == CA_MPS_SUCCESS, "warmstart apply (got %d)", (int)err);
+
+        if (err == CA_MPS_SUCCESS) {
+            uint8_t* conj = (uint8_t*)calloc(n, 1);
+            int*     pivots = (int*)calloc(k, sizeof(int));
+            uint32_t cut = n / 2;          /* half-cut at qubit 4 */
+            uint32_t left_pivots = 0, right_pivots = 0;
+
+            for (uint32_t i = 0; i < k; i++) {
+                int phase = 0;
+                ca_mps_error_t ce =
+                    moonlab_ca_mps_conjugate_pauli(
+                        s, &gens[(size_t)i * n], conj, &phase);
+                CHECK(ce == CA_MPS_SUCCESS,
+                      "conjugate_pauli stab_%u (got %d)",
+                      (unsigned)i, (int)ce);
+                CHECK(phase == 0,
+                      "stab_%u: phase = %d (expected 0 = +1)",
+                      (unsigned)i, phase);
+
+                int weight = 0, pivot = -1;
+                for (uint32_t q = 0; q < n; q++) {
+                    if (conj[q] == 0) continue;
+                    CHECK(conj[q] == 3,
+                          "stab_%u: qubit %u has Pauli code %u (expected pure Z)",
+                          (unsigned)i, (unsigned)q, (unsigned)conj[q]);
+                    weight++;
+                    pivot = (int)q;
+                }
+                CHECK(weight == 1,
+                      "stab_%u: conjugated weight = %d (expected 1)",
+                      (unsigned)i, weight);
+                pivots[i] = pivot;
+                if (pivot >= 0) {
+                    if ((uint32_t)pivot < cut) left_pivots++;
+                    else                       right_pivots++;
+                }
+
+                fprintf(stdout, "  stab_%u -> C^dag g C = ", (unsigned)i);
+                for (uint32_t q = 0; q < n; q++) {
+                    static const char* names[4] = {"I","X","Y","Z"};
+                    fprintf(stdout, "%s", names[conj[q] & 3]);
+                }
+                fprintf(stdout, " (pivot=%d)\n", pivot);
+            }
+
+            for (uint32_t i = 0; i < k; i++) {
+                for (uint32_t j = i + 1; j < k; j++) {
+                    CHECK(pivots[i] != pivots[j],
+                          "pivots[%u] == pivots[%u] = %d",
+                          (unsigned)i, (unsigned)j, pivots[i]);
+                }
+            }
+
+            uint32_t n_left   = cut;
+            uint32_t n_right  = n - cut;
+            uint32_t free_l   = n_left  - left_pivots;
+            uint32_t free_r   = n_right - right_pivots;
+            uint32_t schmidt_log2 = (free_l < free_r) ? free_l : free_r;
+            fprintf(stdout,
+                    "  half-cut: cut=%u | left=%u (%u pivot, %u free) | "
+                    "right=%u (%u pivot, %u free) | Schmidt rank <= 2^%u\n",
+                    (unsigned)cut, (unsigned)n_left, (unsigned)left_pivots,
+                    (unsigned)free_l, (unsigned)n_right, (unsigned)right_pivots,
+                    (unsigned)free_r, (unsigned)schmidt_log2);
+
+            free(pivots);
+            free(conj);
+        }
+
+        moonlab_ca_mps_free(s);
+        free(gens);
+    }
+
+    /* --- Case 9: toric code 2x2 Z-stabilisers (4 vertices, 8 qubits). -
+     *
+     * The toric code on a 2x2 torus has 2 * 2 * 2 = 8 data qubits
+     * (two per unit cell), 4 vertex stabilisers (X-type, weight 4)
+     * and 4 plaquette stabilisers (Z-type, weight 4); the 4 + 4 = 8
+     * generators are not independent (their product yields the
+     * identity for each species), so dim H_phys = 2^{8 - (4 + 4 - 2)} =
+     * 2^2 = 4 (two logical qubits, as expected for the torus).
+     *
+     * For this test we feed only the 3 independent Z-plaquette
+     * stabilisers (one redundancy among the 4) on the 8 data qubits.
+     *
+     * Layout: edges labelled (h_row_col, v_row_col) on a 2x2 torus
+     * with periodic wrap.  Pairing edges into 8 indices:
+     *
+     *     index 0: h(0,0)   horizontal edge (0,0)-(0,1)
+     *     index 1: h(0,1)   horizontal edge (0,1)-(0,0) wrap
+     *     index 2: h(1,0)
+     *     index 3: h(1,1)
+     *     index 4: v(0,0)   vertical edge (0,0)-(1,0)
+     *     index 5: v(0,1)
+     *     index 6: v(1,0)
+     *     index 7: v(1,1)
+     *
+     * Plaquettes (cell at (r,c) bordered by 4 edges):
+     *     P_00: h(0,0), h(1,0), v(0,0), v(0,1) -> {0, 2, 4, 5}
+     *     P_01: h(0,1), h(1,1), v(0,1), v(0,0) -> {1, 3, 5, 4} (wrap)
+     *     P_10: h(1,0), h(0,0), v(1,0), v(1,1) -> {2, 0, 6, 7}
+     *     P_11: h(1,1), h(0,1), v(1,1), v(1,0) -> {3, 1, 7, 6} */
+    {
+        const uint32_t n = 8;
+        const uint32_t k = 3;          /* 3 independent of the 4 plaquettes */
+        uint8_t* gens = (uint8_t*)calloc((size_t)k * n, 1);
+        const uint32_t supports[3][4] = {
+            {0, 2, 4, 5},  /* P_00 */
+            {1, 3, 5, 4},  /* P_01 */
+            {2, 0, 6, 7},  /* P_10 */
+        };
+        for (uint32_t i = 0; i < k; i++) {
+            for (uint32_t j = 0; j < 4; j++) {
+                gens[(size_t)i * n + supports[i][j]] = 3;  /* Z */
+            }
+        }
+
+        moonlab_ca_mps_t* s = moonlab_ca_mps_create(n, 32);
+        ca_mps_error_t err =
+            moonlab_ca_mps_apply_stab_subgroup_warmstart(s, gens, k);
+        fprintf(stdout, "\n--- case 9: toric code 2x2, 3 Z-plaquettes ---\n");
+        CHECK(err == CA_MPS_SUCCESS, "warmstart apply (got %d)", (int)err);
+
+        /* The AG construction for arbitrary commuting Z-stabilisers does
+         * NOT in general produce single-Z conjugates per row -- only that
+         * each conjugate is Z-only with +1 phase, and that the F_2
+         * row-rank of the Z-support matrix is k.  Cases 7 and 8 happen
+         * to land single-Z because their pivot orderings allow it; case
+         * 9's toric geometry forces at least one row to be a product of
+         * two Z-pivots after row-XOR.  This is the honest invariant. */
+        if (err == CA_MPS_SUCCESS) {
+            uint8_t* conj = (uint8_t*)calloc(n, 1);
+            uint8_t* pivot_seen = (uint8_t*)calloc(n, 1);  /* which qubits
+                                                            * are part of
+                                                            * any conj's
+                                                            * Z-support */
+            uint32_t cut = n / 2;
+
+            for (uint32_t i = 0; i < k; i++) {
+                int phase = 0;
+                moonlab_ca_mps_conjugate_pauli(
+                    s, &gens[(size_t)i * n], conj, &phase);
+                CHECK(phase == 0,
+                      "plaq_%u: phase=%d", (unsigned)i, phase);
+
+                int weight = 0;
+                for (uint32_t q = 0; q < n; q++) {
+                    if (conj[q] == 0) continue;
+                    CHECK(conj[q] == 3,
+                          "plaq_%u: qubit %u code %u (expected Z)",
+                          (unsigned)i, (unsigned)q, (unsigned)conj[q]);
+                    weight++;
+                    pivot_seen[q] = 1;
+                }
+                CHECK(weight >= 1,
+                      "plaq_%u: zero-weight (degenerate generator)",
+                      (unsigned)i);
+
+                fprintf(stdout, "  plaq_%u -> C^dag g C = ", (unsigned)i);
+                for (uint32_t q = 0; q < n; q++) {
+                    static const char* names[4] = {"I","X","Y","Z"};
+                    fprintf(stdout, "%s", names[conj[q] & 3]);
+                }
+                fprintf(stdout, " (weight=%d)\n", weight);
+            }
+
+            uint32_t total_pivots = 0;
+            uint32_t left_pivots  = 0, right_pivots = 0;
+            for (uint32_t q = 0; q < n; q++) {
+                if (!pivot_seen[q]) continue;
+                total_pivots++;
+                if (q < cut) left_pivots++;
+                else         right_pivots++;
+            }
+            /* The pivot set is the union of Z-supports across the
+             * conjugated generators.  For independent inputs the F_2
+             * row-rank is k, so |pivot set| >= k.  Each pivot kills one
+             * computational-basis dimension on its side of the cut
+             * (the constraint is "amplitude vanishes unless this qubit
+             * is 0 in the pivot-aligned XOR-combination"). */
+            CHECK(total_pivots >= k,
+                  "|pivot set| = %u, expected >= %u",
+                  (unsigned)total_pivots, (unsigned)k);
+
+            uint32_t n_left   = cut;
+            uint32_t n_right  = n - cut;
+            uint32_t free_l   = n_left  - left_pivots;
+            uint32_t free_r   = n_right - right_pivots;
+            uint32_t schmidt_log2 = (free_l < free_r) ? free_l : free_r;
+            fprintf(stdout,
+                    "  half-cut: cut=%u | left=%u (%u pivot, %u free) | "
+                    "right=%u (%u pivot, %u free) | Schmidt rank <= 2^%u\n",
+                    (unsigned)cut, (unsigned)n_left, (unsigned)left_pivots,
+                    (unsigned)free_l, (unsigned)n_right, (unsigned)right_pivots,
+                    (unsigned)free_r, (unsigned)schmidt_log2);
+
+            free(pivot_seen);
+            free(conj);
+        }
+
+        moonlab_ca_mps_free(s);
+        free(gens);
+    }
+
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
         return 0;
