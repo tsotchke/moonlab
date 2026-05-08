@@ -1,8 +1,8 @@
 # Tutorial: Getting started
 
-This tutorial takes you from a fresh checkout to running your first
-quantum simulation.  Every command was verified against v0.3.0 on
-macOS arm64 and Ubuntu 24.04 x86_64.
+This tutorial takes a fresh checkout to a running quantum simulation
+in three short steps.  All commands were verified against Moonlab
+v0.3.0 on macOS arm64 (Apple Silicon) and Ubuntu 24.04 x86_64.
 
 ## 1. Build the library
 
@@ -37,7 +37,9 @@ gates, measurement, MPS, DMRG, var-D, MPDO, QGT, QRNG, PQC).
 
 ## 2. Your first quantum program
 
-The classical "hello world" of quantum computing is the Hadamard gate:
+The canonical introductory program in quantum computing prepares a
+single-qubit superposition with the Hadamard gate `H` and verifies
+the resulting probability distribution against the Born rule:
 
 ```c
 #include "moonlab/quantum/state.h"
@@ -70,7 +72,10 @@ already built for you:
 ./build/examples/basic/hello_quantum
 ```
 
-## 3. Two qubits, one gate, one Bell pair
+## 3. Bell pair preparation and verification
+
+The two-qubit entangled Bell state `|Phi^+> = (|00> + |11>) / sqrt(2)`
+is prepared by a Hadamard followed by a CNOT:
 
 ```c
 quantum_state_t state;
@@ -78,7 +83,6 @@ quantum_state_init(&state, /*num_qubits=*/2);
 
 gate_hadamard(&state, 0);
 gate_cnot(&state, /*control=*/0, /*target=*/1);
-/* state is (|00> + |11>) / sqrt(2). */
 
 for (size_t i = 0; i < 4; ++i) {
     complex_t a = quantum_state_get_amplitude(&state, i);
@@ -87,9 +91,11 @@ for (size_t i = 0; i < 4; ++i) {
 quantum_state_free(&state);
 ```
 
-This is the canonical entangled state.  Run
-`./build/examples/basic/bell_state` to see the same program with full
-CHSH-inequality verification (`S` should land near 2*sqrt(2) = 2.828).
+The example program `./build/examples/basic/bell_state` extends this
+preparation with a full CHSH-inequality verification: the measured
+correlator `S` violates the classical bound `|S| <= 2` and approaches
+the Tsirelson bound `2 sqrt(2) ~= 2.828`, certifying genuine quantum
+entanglement.
 
 ## 4. Where to go next
 
@@ -117,6 +123,6 @@ sibling using the bindings at `bindings/python/moonlab/`.
 - **WebGPU demo doesn't load**: rebuild the WASM artefacts via
   `bindings/javascript/scripts/build_wasm.sh`; serve over `http`, not
   `file://` (Chrome/Safari refuse WebGPU on local files).
-- **ctest timeout on `unit_qgt_*`**: expected at L >= 12; the
-  benchmark targets scan smaller grids.  Re-run with `-j 1` if
-  parallel CTest contention is the suspect.
+- **`ctest` timeouts on `unit_qgt_*`**: expected at lattice sizes
+  `L >= 12`; the benchmark targets use smaller grids.  Re-run with
+  `-j 1` if parallel CTest contention is the suspected cause.

@@ -1,27 +1,32 @@
 # Tutorial: Topological band structure with the QGT module
 
-This tutorial walks through Moonlab's quantum-geometric-tensor module
-on five canonical models, ordered from simplest to richest.  By the
-end you will have computed Chern numbers and Z_2 invariants from
-momentum-space Bloch Hamiltonians and verified each against its
-analytical phase boundary.
+This tutorial walks through Moonlab's quantum-geometric-tensor (QGT)
+module on six canonical lattice models, ordered from least to most
+structured: SSH, Qi-Wu-Zhang, Haldane, Kane-Mele, Bernevig-Hughes-
+Zhang (BHZ), and Hofstadter.  At each step we evaluate the relevant
+topological invariant — winding number, Chern number, or Z_2 — and
+cross-check the numerical result against the analytical phase
+boundary obtained from the original literature.
 
 Prerequisites:
 
-- Built `libquantumsim` with `-DQSIM_BUILD_TESTS=ON
-  -DQSIM_BUILD_BENCHMARKS=ON`.
-- Familiarity with second-quantised tight-binding Hamiltonians and
-  Berry-phase topology at the level of Bernevig & Hughes
-  *Topological Insulators and Topological Superconductors*.
+- A Release build of `libquantumsim` configured with
+  `-DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_BENCHMARKS=ON`.
+- Working familiarity with single-particle tight-binding Hamiltonians
+  and Berry-phase topology at the level of Bernevig and Hughes [1].
 
-We work entirely in C; Python and Rust wrappers for the same
-primitives land in v0.3.x.
+The exposition is in C, which is the canonical surface for these
+primitives; Python and Rust wrappers track the same API one minor
+release behind.
 
-## 1. SSH chain — the warm-up
+## 1. Su-Schrieffer-Heeger chain (1D winding)
 
-Su-Schrieffer-Heeger (1979) is the simplest 1D topological model:
-two-site unit cell with intra-cell hopping `t1` and inter-cell `t2`.
-Topological for `|t2| > |t1|`.
+The Su-Schrieffer-Heeger (SSH) model [2] is the simplest 1D model
+exhibiting a topological transition: a bipartite chain with
+intra-cell hopping `t1` and inter-cell hopping `t2`.  Chiral symmetry
+gives an integer winding number `W in Z`; the chain is topologically
+non-trivial (`W = 1`) for `|t2| > |t1|` and trivial (`W = 0`)
+otherwise.
 
 ```c
 #include "moonlab/algorithms/quantum_geometry/qgt.h"
@@ -37,14 +42,16 @@ int main(void) {
 }
 ```
 
-The integer winding number is computed via the discrete Zak phase
-along the 1D BZ.  Try `t1=1.0, t2=0.5` — you should get `W = 0`
-(trivial phase).
+The integer winding is computed from the discrete Zak phase [3]
+along the 1D Brillouin zone.  Setting `t1 = 1.0, t2 = 0.5` returns
+`W = 0`, recovering the trivial phase.
 
-## 2. QWZ — minimal 2D Chern insulator
+## 2. Qi-Wu-Zhang model: 2D Chern insulator
 
-Qi-Wu-Zhang (2006) is the 2-band Chern insulator that lives in every
-topology textbook.  Two integer Chern jumps as `m` sweeps `[-3, 3]`.
+The Qi-Wu-Zhang (QWZ) model [4] is the minimal two-band Chern
+insulator on a square lattice.  Its Chern number takes integer
+values that change by unity at the gap closings `m in {-2, 0, 2}`,
+giving a piecewise-constant phase diagram on `m in [-3, 3]`.
 
 ```c
 qgt_system_t* sys = qgt_model_qwz(/*m=*/-1.5);
@@ -55,19 +62,23 @@ qgt_berry_grid_free(&g);
 qgt_free(sys);
 ```
 
-`qgt_berry_grid_proj` is the projector-trace integrator (gauge-free
-by construction); `qgt_berry_grid` and `qgt_berry_grid_pt` give the
-same answer via different gauge prescriptions.  At the gap-closing
-points `m = 0, ±2` the Chern is technically undefined; on the
-half-step grid the integrator reports an integer that's an artifact
-of the discretisation.
+`qgt_berry_grid_proj` realises the projector-trace integrator,
+which is manifestly gauge-invariant; `qgt_berry_grid` (Fukui-
+Hatsugai-Suzuki link variables [5]) and `qgt_berry_grid_pt`
+(parallel-transport gauge) compute the same integer through
+different gauge prescriptions.  At the gap-closing points
+`m in {-2, 0, 2}` the Chern number is mathematically undefined; the
+half-step BZ sampling assigns an integer artifact of the chosen
+discretisation.
 
-## 3. Haldane — the parent honeycomb Chern insulator
+## 3. Haldane model: honeycomb Chern insulator
 
-Haldane (1988) is the first model that shows a Chern insulator
-without a uniform magnetic field.  The phase boundary is at
-`|M| = 3*sqrt(3)*|t2*sin(phi)|`.  At fixed `phi = pi/2` and
-`t2 = 0.06`, the boundary is `M ≈ 0.31177`:
+Haldane's seminal model [6] was the first demonstration that a
+Chern insulator can arise without a uniform magnetic field, via
+complex next-nearest-neighbour hopping that breaks time-reversal
+locally while preserving zero net flux.  The phase boundary is
+`|M| = 3 sqrt(3) |t_2 sin(phi)|`; at `phi = pi/2` and `t_2 = 0.06`
+the analytic boundary is `M ~= 0.31177`:
 
 ```c
 for (double M = 0.0; M <= 0.5; M += 0.05) {
@@ -97,13 +108,16 @@ Haldane M=0.45 -> C = +0
 Haldane M=0.50 -> C = +0
 ```
 
-The transition lands within one M-grid spacing of the analytical
-boundary `0.31177`.
+The numerical transition lands within one grid spacing of the
+analytic boundary `0.31177`, consistent with the half-step
+discretisation error.
 
-## 4. Kane-Mele — quantum spin Hall
+## 4. Kane-Mele model: quantum spin Hall insulator
 
-Kane-Mele (2005) is the canonical 2D TI: time-reversal-symmetric,
-4-band, has a Z_2 invariant rather than an integer Chern.
+The Kane-Mele model [7] is the canonical two-dimensional topological
+insulator: a time-reversal-symmetric, four-band Hamiltonian whose
+classification is governed by a Z_2 invariant rather than an
+integer Chern number.
 
 ```c
 qgt_system_n_t* sys = qgt_model_kane_mele(
@@ -117,16 +131,20 @@ printf("Kane-Mele lambda_v=0.10: Z_2 = %d (expected 1, QSH)\n", z2);
 qgt_free_nband(sys);
 ```
 
-In the Sz-conserving regime (Rashba off) the Z_2 invariant equals
-`|C_up| mod 2`, where `C_up` is the spin-up sub-block's Chern.  The
-invariant is `1` (QSH) for `|lambda_v| < 3*sqrt(3) * |lambda_so|`.
+In the S_z-conserving regime (Rashba coupling off) the Z_2
+invariant reduces to `|C_up| mod 2`, where `C_up` is the Chern
+number of the spin-up sub-block.  The invariant equals `1` (QSH
+phase) for `|lambda_v| < 3 sqrt(3) |lambda_so|`.
 
-## 5. BHZ — square-lattice TI (HgTe quantum well)
+## 5. Bernevig-Hughes-Zhang model: HgTe quantum well
 
-BHZ has a similar Z_2 invariant on a square lattice with a tunable
-mass.  Lattice regularisation gives the QSH window
-`0 < M / B < 8` (the X-corner closings at `M = 4B` cancel; the
-M-corner closing at `M = 8B` re-trivialises).
+The Bernevig-Hughes-Zhang (BHZ) model [8] describes the HgTe/CdTe
+quantum well that hosts the experimentally observed two-dimensional
+topological insulator.  On a square lattice the regularised model
+has a QSH window `0 < M / B < 8`: the gap closings at the X-corners
+of the Brillouin zone (at `M = 4B`) cancel pairwise, and the
+M-corner closing at `M = 8B` returns the system to the trivial
+phase.
 
 ```c
 qgt_system_n_t* sys = qgt_model_bhz(/*A=*/1.0, /*B=*/1.0, /*M=*/3.0);
@@ -136,12 +154,14 @@ printf("BHZ M=3.0: Z_2 = %d (expected 1, QSH)\n", z2);
 qgt_free_nband(sys);
 ```
 
-## 6. Hofstadter — fractal sub-band Cherns
+## 6. Hofstadter model: magnetic sub-band Chern numbers
 
-Hofstadter (1976) on a square lattice in flux `phi = p/q` per
-plaquette gives a `q`-band magnetic-Bloch Hamiltonian.  The famous
-TKNN Diophantine equation `t_r p + s_r q = r` determines each
-sub-band's integer Chern.
+Hofstadter [9] showed that a square-lattice tight-binding model in
+a uniform flux `phi = p/q` per plaquette decomposes into a `q`-band
+magnetic-Bloch Hamiltonian; the resulting spectrum is the celebrated
+"Hofstadter butterfly".  The Thouless-Kohmoto-Nightingale-den Nijs
+(TKNN) Diophantine equation `t_r p + s_r q = r` [10] determines the
+integer Chern number of each magnetic sub-band.
 
 ```c
 qgt_system_n_t* sys = qgt_model_hofstadter(/*t=*/1.0,
@@ -155,15 +175,16 @@ qgt_berry_grid_free(&g);
 qgt_free_nband(sys);
 ```
 
-For `q = 3` the three bands have Chern `(+1, -2, +1)` — the lowest
-plus middle gives `n_occupied = 2` Chern `-1`.
+For `q = 3` the three magnetic sub-bands carry Chern numbers
+`(+1, -2, +1)`, summing to zero as required.  Filling the lowest two
+bands therefore yields `n_occupied = 2` and a total Chern of `-1`.
 
-## 7. Cross-check: real-space ↔ momentum-space
+## 7. Cross-check: real-space versus momentum-space invariants
 
-A topological invariant should not depend on which representation we
-use.  Moonlab ships a real-space Bianco-Resta local Chern marker
-implementation in `src/algorithms/topology_realspace/chern_marker.h`.
-On QWZ we can verify the two paths agree:
+Topological invariants must be representation-independent.  Moonlab
+provides a real-space implementation of the Bianco-Resta local
+Chern marker [11] in `src/algorithms/topology_realspace/chern_marker.h`.
+On QWZ the two representations must agree:
 
 ```c
 #include "moonlab/algorithms/topology_realspace/chern_marker.h"
@@ -183,16 +204,62 @@ printf("QWZ m=%.2f: C_momentum=%+d, C_realspace=%+d (must match)\n",
        m, C_momentum, C_realspace);
 ```
 
-This is the test in `tests/unit/test_qgt_vs_chern_marker.c`.  Both
-paths must return the same integer for any gapped 2-band Hamiltonian.
+This identity is verified by `tests/unit/test_qgt_vs_chern_marker.c`,
+which asserts pointwise agreement of the two integer outputs on a
+representative QWZ phase point.
 
-## Where to go from here
+## Further reading
 
-- Run `./build_release/bench_topology_phase_diagrams
-  benchmarks/results/topology.json` to dump a full phase-diagram
-  archive across all six models.  Useful for plotting.
-- See `docs/reference/qgt-api.md` for the full API.
-- See `docs/research/quantum_geometry_tensor.md` for the theory
-  underlying the three integrators and the design rationale.
-- Check the `tests/unit/test_qgt_*.c` files for ready-to-modify
-  template programs.
+- `./build_release/bench_topology_phase_diagrams
+  benchmarks/results/topology.json` dumps a complete phase-diagram
+  archive across all six models, suitable for plotting and
+  reproducibility.
+- `docs/reference/qgt-api.md` documents the full API surface.
+- `docs/research/quantum_geometry_tensor.md` derives the geometry
+  underlying the three Chern integrators and motivates the
+  projector-trace gauge-invariant formulation.
+- `tests/unit/test_qgt_*.c` provides ready-to-modify template
+  programs for each model and integrator combination.
+
+## References
+
+[1] B. A. Bernevig and T. L. Hughes, *Topological Insulators and
+    Topological Superconductors*, Princeton University Press, 2013.
+
+[2] W. P. Su, J. R. Schrieffer, and A. J. Heeger, "Solitons in
+    polyacetylene", Phys. Rev. Lett. **42**, 1698 (1979).
+
+[3] J. Zak, "Berry's phase for energy bands in solids",
+    Phys. Rev. Lett. **62**, 2747 (1989).
+
+[4] X.-L. Qi, Y.-S. Wu, and S.-C. Zhang, "Topological quantization
+    of the spin Hall effect in two-dimensional paramagnetic
+    semiconductors", Phys. Rev. B **74**, 085308 (2006).
+
+[5] T. Fukui, Y. Hatsugai, and H. Suzuki, "Chern numbers in
+    discretized Brillouin zone: Efficient method of computing
+    (spin) Hall conductances", J. Phys. Soc. Jpn. **74**, 1674
+    (2005).
+
+[6] F. D. M. Haldane, "Model for a quantum Hall effect without
+    Landau levels: Condensed-matter realization of the 'parity
+    anomaly'", Phys. Rev. Lett. **61**, 2015 (1988).
+
+[7] C. L. Kane and E. J. Mele, "Z_2 topological order and the
+    quantum spin Hall effect", Phys. Rev. Lett. **95**, 146802
+    (2005).
+
+[8] B. A. Bernevig, T. L. Hughes, and S.-C. Zhang, "Quantum spin
+    Hall effect and topological phase transition in HgTe quantum
+    wells", Science **314**, 1757 (2006).
+
+[9] D. R. Hofstadter, "Energy levels and wave functions of Bloch
+    electrons in rational and irrational magnetic fields",
+    Phys. Rev. B **14**, 2239 (1976).
+
+[10] D. J. Thouless, M. Kohmoto, M. P. Nightingale, and M. den Nijs,
+    "Quantized Hall conductance in a two-dimensional periodic
+    potential", Phys. Rev. Lett. **49**, 405 (1982).
+
+[11] R. Bianco and R. Resta, "Mapping topological order in
+    coordinate space", Phys. Rev. B **84**, 241106(R) (2011).
