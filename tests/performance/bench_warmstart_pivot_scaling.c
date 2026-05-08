@@ -42,6 +42,7 @@
 #include "../../src/algorithms/tensor_network/ca_mps.h"
 #include "../../src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -336,6 +337,81 @@ static int json_emit(FILE* f, const pivot_record_t* recs, size_t n_rec) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pivot-order variance under random permutations                     */
+/* ------------------------------------------------------------------ */
+
+/* Permute the rows of `paulis` according to `perm` in place.  The
+ * AG warmstart's pivot output depends on input generator order, so
+ * sweeping permutations quantifies the implementation-specific
+ * variance of the bound. */
+static void permute_paulis(uint8_t* paulis, uint32_t k, uint32_t n,
+                           const uint32_t* perm, uint8_t* tmp) {
+    for (uint32_t i = 0; i < k; i++) {
+        memcpy(&tmp[(size_t)i * n], &paulis[(size_t)perm[i] * n], n);
+    }
+    memcpy(paulis, tmp, (size_t)k * n);
+}
+
+/* Fisher-Yates shuffle with deterministic LCG seed for reproducibility. */
+static void shuffle_perm(uint32_t* perm, uint32_t k, uint64_t* state) {
+    for (uint32_t i = 0; i < k; i++) perm[i] = i;
+    for (uint32_t i = k - 1; i > 0; i--) {
+        *state = *state * 6364136223846793005ULL + 1442695040888963407ULL;
+        uint32_t j = (uint32_t)((*state >> 32) % (i + 1));
+        uint32_t tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp;
+    }
+}
+
+/* For one (code, size), run the warmstart under R random permutations
+ * of the input generator order; report mean +/- stddev of the half-cut
+ * Schmidt-bound. */
+static void run_variance_sweep(const char* code_name, uint32_t size_param,
+                                uint8_t* paulis, uint32_t n, uint32_t k,
+                                uint32_t reps) {
+    uint8_t*  tmp_paulis = (uint8_t*)malloc((size_t)k * n);
+    uint8_t*  perm_paulis = (uint8_t*)malloc((size_t)k * n);
+    uint32_t* perm = (uint32_t*)malloc((size_t)k * sizeof(uint32_t));
+
+    uint64_t lcg_state = 0xCAFEBABEDEADBEEFULL ^ size_param;
+
+    int s_min = INT32_MAX, s_max = INT32_MIN;
+    double s_sum = 0.0, s_sum_sq = 0.0;
+    int valid = 0;
+    int kA_min = INT32_MAX, kA_max = INT32_MIN;
+
+    for (uint32_t r = 0; r < reps; r++) {
+        memcpy(perm_paulis, paulis, (size_t)k * n);
+        if (r > 0) {
+            shuffle_perm(perm, k, &lcg_state);
+            permute_paulis(perm_paulis, k, n, perm, tmp_paulis);
+        }
+        pivot_record_t rec;
+        if (measure_record(code_name, size_param, perm_paulis, n, k, &rec) != 0)
+            continue;
+        int s = rec.schmidt_log2_half;
+        s_sum += (double)s;
+        s_sum_sq += (double)(s * s);
+        if (s < s_min) s_min = s;
+        if (s > s_max) s_max = s;
+        if ((int)rec.k_A_half < kA_min) kA_min = (int)rec.k_A_half;
+        if ((int)rec.k_A_half > kA_max) kA_max = (int)rec.k_A_half;
+        valid++;
+    }
+
+    if (valid > 0) {
+        double mean = s_sum / valid;
+        double var  = s_sum_sq / valid - mean * mean;
+        double std  = (var > 0.0) ? sqrt(var) : 0.0;
+        printf("%-12s sz=%-3u: half-cut bound over %d perms: "
+               "min=%d, max=%d, mean=%.2f +/- %.2f, k_A range [%d, %d]\n",
+               code_name, (unsigned)size_param, valid,
+               s_min, s_max, mean, std, kA_min, kA_max);
+    }
+
+    free(tmp_paulis); free(perm_paulis); free(perm);
+}
+
+/* ------------------------------------------------------------------ */
 /*  main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -390,6 +466,34 @@ int main(int argc, char** argv) {
         json_emit(f, recs, n_rec);
         fclose(f);
         printf("\nwrote JSON archive: %s (%zu records)\n", argv[1], n_rec);
+    }
+
+    /* Pivot-order variance sweep: pick one representative size per
+     * code family and report bound mean +/- stddev across 32 random
+     * permutations of input generator order.  This quantifies how
+     * much the half-cut bound depends on implementation pivoting
+     * order vs being intrinsic to the code. */
+    printf("\n--- pivot-order variance sweep (32 perms each) ---\n");
+    {
+        uint8_t* paulis = NULL; uint32_t n = 0, k = 0;
+        if (build_z2_lgt(8, &paulis, &n, &k) == 0) {
+            run_variance_sweep("Z2_LGT", 8, paulis, n, k, 32);
+            free(paulis);
+        }
+    }
+    {
+        uint8_t* paulis = NULL; uint32_t n = 0, k = 0;
+        if (build_surface(5, &paulis, &n, &k) == 0) {
+            run_variance_sweep("Surface_d", 5, paulis, n, k, 32);
+            free(paulis);
+        }
+    }
+    {
+        uint8_t* paulis = NULL; uint32_t n = 0, k = 0;
+        if (build_toric(3, &paulis, &n, &k) == 0) {
+            run_variance_sweep("Toric_LxL", 3, paulis, n, k, 32);
+            free(paulis);
+        }
     }
 
     return 0;
