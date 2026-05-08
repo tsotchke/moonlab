@@ -337,6 +337,12 @@
         add_test(NAME unit_gauge_warmstart COMMAND test_gauge_warmstart)
         set_tests_properties(unit_gauge_warmstart PROPERTIES TIMEOUT 30)
 
+        # Kane-Mele 4-band model + Z_2 invariant (v0.3 QGT extension).
+        add_executable(test_qgt_kane_mele tests/unit/test_qgt_kane_mele.c)
+        target_link_libraries(test_qgt_kane_mele PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_kane_mele COMMAND test_qgt_kane_mele)
+        set_tests_properties(unit_qgt_kane_mele PROPERTIES TIMEOUT 30 LABELS "topology")
+
         # Smoke test for the direct 1q/2q-gate fast path inside
         # moonlab_ca_mps_apply_pauli_imag (the perf optimisation that
         # bypasses the bond-dim-2 MPO build for low-weight Paulis).

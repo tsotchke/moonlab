@@ -4,6 +4,7 @@
  */
 
 #include "qgt.h"
+#include "../../utils/matrix_math.h"
 
 #include <limits.h>
 #include <math.h>
@@ -523,4 +524,323 @@ int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
         }
     }
     return 0;
+}
+
+/* ====================================================================
+ * Multi-band Bloch systems
+ * ==================================================================== */
+
+struct qgt_system_n {
+    qgt_bloch_n_fn fn;
+    void*          user;
+    void*          owned_user;
+    size_t         n_bands;
+    size_t         n_occupied;
+};
+
+qgt_system_n_t* qgt_create_nband(qgt_bloch_n_fn f, void* user,
+                                  size_t n_bands, size_t n_occupied) {
+    if (!f || n_bands < 2) return NULL;
+    if (n_occupied < 1 || n_occupied >= n_bands) return NULL;
+    qgt_system_n_t* s = calloc(1, sizeof(*s));
+    if (!s) return NULL;
+    s->fn = f;
+    s->user = user;
+    s->owned_user = NULL;
+    s->n_bands = n_bands;
+    s->n_occupied = n_occupied;
+    return s;
+}
+
+void qgt_free_nband(qgt_system_n_t* sys) {
+    if (!sys) return;
+    free(sys->owned_user);
+    free(sys);
+}
+
+/* Compute the lowest-energy n_occupied eigenvectors of H at momentum k.
+ * Output @p u_occ is row-major (n_bands, n_occupied): u_occ[i*M + a] is
+ * the i-th component of the a-th occupied band, sorted by ascending
+ * energy.  Returns 0 on success, -1 on diagonalisation failure. */
+static int diag_occupied(const qgt_system_n_t* sys, const double k[2],
+                         qgt_complex_t* u_occ) {
+    const size_t n = sys->n_bands;
+    const size_t M = sys->n_occupied;
+    qgt_complex_t* H = malloc(n * n * sizeof(qgt_complex_t));
+    qgt_complex_t* V = malloc(n * n * sizeof(qgt_complex_t));
+    double*        E = malloc(n * sizeof(double));
+    if (!H || !V || !E) { free(H); free(V); free(E); return -1; }
+    sys->fn(k, sys->user, H);
+    int rc = hermitian_eigen_decomposition(H, n, E, V, 0, 0.0);
+    if (rc != 0) { free(H); free(V); free(E); return -1; }
+    /* `hermitian_eigen_decomposition` returns eigenvalues sorted
+     * descending and eigvecs row-major: V[i*n + j] = i-th component of
+     * the j-th descending eigvec.  Lowest-energy bands are j in
+     * [n - M, n - 1]; copy them as the M occupied columns. */
+    for (size_t i = 0; i < n; i++) {
+        for (size_t a = 0; a < M; a++) {
+            size_t j = n - M + a;   /* a = 0 -> highest of occupied */
+            u_occ[i * M + a] = V[i * n + j];
+        }
+    }
+    free(H); free(V); free(E);
+    return 0;
+}
+
+/* Determinant of an MxM complex matrix via Gauss elimination with
+ * partial pivoting.  Operates on a writable copy of @p A; returns the
+ * complex determinant.  On singular input returns 0. */
+static qgt_complex_t det_mxm(const qgt_complex_t* A, size_t M) {
+    if (M == 1) return A[0];
+    if (M == 2) {
+        return A[0] * A[3] - A[1] * A[2];
+    }
+    qgt_complex_t* B = malloc(M * M * sizeof(qgt_complex_t));
+    if (!B) return 0.0;
+    memcpy(B, A, M * M * sizeof(qgt_complex_t));
+    qgt_complex_t det = 1.0;
+    int sign = 1;
+    for (size_t i = 0; i < M; i++) {
+        /* Partial pivot: find row r >= i with max |B[r][i]| */
+        size_t piv = i;
+        double piv_mag = cabs(B[i * M + i]);
+        for (size_t r = i + 1; r < M; r++) {
+            double m = cabs(B[r * M + i]);
+            if (m > piv_mag) { piv_mag = m; piv = r; }
+        }
+        if (piv_mag < 1e-300) { free(B); return 0.0; }
+        if (piv != i) {
+            for (size_t c = 0; c < M; c++) {
+                qgt_complex_t tmp = B[i * M + c];
+                B[i * M + c]   = B[piv * M + c];
+                B[piv * M + c] = tmp;
+            }
+            sign = -sign;
+        }
+        qgt_complex_t pivot = B[i * M + i];
+        det *= pivot;
+        for (size_t r = i + 1; r < M; r++) {
+            qgt_complex_t f = B[r * M + i] / pivot;
+            for (size_t c = i; c < M; c++) {
+                B[r * M + c] -= f * B[i * M + c];
+            }
+        }
+    }
+    free(B);
+    return ((double)sign) * det;
+}
+
+/* Compute the M x M overlap matrix S_{ab} = <u_occ_a(k1) | u_occ_b(k2)>
+ * and return det(S) -- this is the non-Abelian U(M) link variable. */
+static qgt_complex_t link_det(const qgt_complex_t* u1, const qgt_complex_t* u2,
+                              size_t n, size_t M) {
+    qgt_complex_t* S = malloc(M * M * sizeof(qgt_complex_t));
+    if (!S) return 0.0;
+    for (size_t a = 0; a < M; a++) {
+        for (size_t b = 0; b < M; b++) {
+            qgt_complex_t s = 0.0;
+            for (size_t i = 0; i < n; i++) {
+                s += conj(u1[i * M + a]) * u2[i * M + b];
+            }
+            S[a * M + b] = s;
+        }
+    }
+    qgt_complex_t d = det_mxm(S, M);
+    free(S);
+    return d;
+}
+
+static double arg_pp(qgt_complex_t z) {
+    double a = atan2(cimag(z), creal(z));
+    /* Already in (-pi, pi]. */
+    return a;
+}
+
+int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
+                          qgt_berry_grid_t* out) {
+    if (!sys || !out || N < 4) return -1;
+    const size_t n = sys->n_bands;
+    const size_t M = sys->n_occupied;
+    qgt_complex_t* U_grid = malloc(N * N * n * M * sizeof(qgt_complex_t));
+    if (!U_grid) return -1;
+
+    const double dk = 2.0 * M_PI / (double)N;
+    /* Diagonalise on each grid point. */
+    for (size_t ix = 0; ix < N; ix++) {
+        for (size_t iy = 0; iy < N; iy++) {
+            const double k[2] = { -M_PI + dk * (double)ix,
+                                   -M_PI + dk * (double)iy };
+            qgt_complex_t* slot = &U_grid[(ix * N + iy) * n * M];
+            if (diag_occupied(sys, k, slot) != 0) {
+                free(U_grid);
+                return -1;
+            }
+        }
+    }
+
+    /* Plaquette flux: F_xy(k) = arg[U_x(k) U_y(k+x) U_x(k+y)^-1 U_y(k)^-1] */
+    double* berry = malloc(N * N * sizeof(double));
+    if (!berry) { free(U_grid); return -1; }
+    double chern = 0.0;
+    for (size_t ix = 0; ix < N; ix++) {
+        const size_t ixp = (ix + 1) % N;
+        for (size_t iy = 0; iy < N; iy++) {
+            const size_t iyp = (iy + 1) % N;
+            const qgt_complex_t* u00 = &U_grid[(ix  * N + iy ) * n * M];
+            const qgt_complex_t* uxp = &U_grid[(ixp * N + iy ) * n * M];
+            const qgt_complex_t* uyp = &U_grid[(ix  * N + iyp) * n * M];
+            const qgt_complex_t* uxy = &U_grid[(ixp * N + iyp) * n * M];
+            qgt_complex_t Ux  = link_det(u00, uxp, n, M);
+            qgt_complex_t Uy_x = link_det(uxp, uxy, n, M);
+            qgt_complex_t Ux_y = link_det(uyp, uxy, n, M);
+            qgt_complex_t Uy  = link_det(u00, uyp, n, M);
+            /* Normalise to extract pure phase (det link variable's
+             * magnitude is the volume of the parallelepiped of overlap;
+             * for the Chern number only the phase matters). */
+            qgt_complex_t plaq = (Ux * Uy_x) / (Ux_y * Uy);
+            double F = arg_pp(plaq);
+            berry[ix * N + iy] = F;
+            chern += F;
+        }
+    }
+    chern /= (2.0 * M_PI);
+    free(U_grid);
+    out->N = N;
+    out->berry = berry;
+    out->chern = chern;
+    return 0;
+}
+
+/* ----- Z_2 invariant via spin-Chern (Sz-conserving fast path) -------
+ *
+ * For a 4-band TRS system with conserved Sz (Rashba off), the
+ * Hamiltonian is block-diagonal in spin: H = diag(H_up, H_down) in
+ * the basis (|A,up>, |B,up>, |A,down>, |B,down>).  The spin-up
+ * Chern number C_up determines Z_2 = |C_up| mod 2 in {0, 1}.
+ *
+ * We extract H_up = H[0:2, 0:2] from the full 4x4 callback at each k
+ * and compute Chern via the existing 2-band FHS path.  The full
+ * Pfaffian Fukui-Hatsugai construction (Rashba-compatible) is on
+ * the v0.3.1 roadmap.
+ */
+
+typedef struct {
+    qgt_bloch_n_fn fn4;
+    void*          user4;
+} z2_block_user_t;
+
+static void z2_block_bloch(const double k[2], void* user, qgt_complex_t h[4]) {
+    z2_block_user_t* z = (z2_block_user_t*)user;
+    qgt_complex_t H4[16];
+    z->fn4(k, z->user4, H4);
+    /* Extract the (A_up, B_up) 2x2 block: indices (0, 1) of the
+     * row-major 4x4. */
+    h[0] = H4[0 * 4 + 0];
+    h[1] = H4[0 * 4 + 1];
+    h[2] = H4[1 * 4 + 0];
+    h[3] = H4[1 * 4 + 1];
+}
+
+int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N, int* z2) {
+    if (!sys || !z2) return -1;
+    if (sys->n_bands != 4 || sys->n_occupied != 2) return -2;
+    if (N < 8) return -1;
+
+    z2_block_user_t z = { sys->fn, sys->user };
+    qgt_system_t* sub = qgt_create(z2_block_bloch, &z);
+    if (!sub) return -1;
+    qgt_berry_grid_t g;
+    int rc = qgt_berry_grid(sub, N, &g);
+    qgt_free(sub);
+    if (rc != 0) return rc;
+    int C_up = (int)lround(g.chern);
+    qgt_berry_grid_free(&g);
+    int abs_C = C_up < 0 ? -C_up : C_up;
+    *z2 = abs_C & 1;
+    return 0;
+}
+
+/* ----- Kane-Mele honeycomb model (2005) ------------------------------
+ *
+ * Basis order: (A_up, B_up, A_down, B_down).
+ *
+ * The model is
+ *   H = -t sum_<ij> c_i^dag c_j
+ *       + i lambda_so sum_<<ij>> nu_ij c_i^dag s_z c_j
+ *       + lambda_v sum_i xi_i c_i^dag c_i
+ *       + Rashba (lambda_r) -- not Sz-conserving.
+ *
+ * Bloch Hamiltonian on the honeycomb lattice with primitive vectors
+ *   a_1 = (sqrt(3)/2, 1/2),  a_2 = (sqrt(3)/2, -1/2)
+ * (lattice constant = 1).  Nearest-neighbour vectors:
+ *   d_1 = (0, 1/sqrt(3))
+ *   d_2 = (-1/2, -1/(2 sqrt(3)))
+ *   d_3 = (+1/2, -1/(2 sqrt(3)))
+ * Next-nearest-neighbour vectors are on the same sublattice:
+ *   b_1 = a_1 - a_2 = (0, 1)
+ *   b_2 = -a_2 = (-sqrt(3)/2, 1/2)
+ *   b_3 = a_1 = (sqrt(3)/2, 1/2)
+ * with sign nu = +1 for A->A counterclockwise, -1 for B->B (same
+ * vectors traversed clockwise).
+ */
+
+typedef struct {
+    double t;
+    double lambda_so;
+    double lambda_r;
+    double lambda_v;
+} km_params_t;
+
+static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
+    km_params_t* p = (km_params_t*)user;
+    /* Primitive reciprocal coordinates kx = k . a1, ky = k . a2.
+     * Matches the existing qgt_model_haldane parametrisation so that
+     * integration over [-pi, pi]^2 covers exactly one BZ. */
+    double kx = k[0], ky = k[1];
+    /* NN A->B sum in primitive reciprocal coordinates: same as Haldane. */
+    qgt_complex_t f = (cos(kx) + cos(kx - ky) + cos(ky))
+                    + I * (sin(kx) + sin(kx - ky) + sin(ky));
+    /* NNN antisymmetric (signed) sum -- the spin-orbit driver.
+     * Matches Haldane's c2 with opposite sign convention so that
+     * spin-up acts like Haldane phi = +pi/2 and spin-down like -pi/2. */
+    double c2 = sin(kx - ky) - sin(kx) + sin(ky);
+
+    /* Initialise to zero. */
+    for (int i = 0; i < 16; i++) h[i] = 0.0;
+
+    /* Spin-up sigma_z = lambda_v - 2 * lambda_so * c2  (Haldane phi = +pi/2). */
+    double sz_up = p->lambda_v - 2.0 * p->lambda_so * c2;
+    /* Spin-down sigma_z = lambda_v + 2 * lambda_so * c2  (Haldane phi = -pi/2). */
+    double sz_dn = p->lambda_v + 2.0 * p->lambda_so * c2;
+
+    qgt_complex_t hop = p->t * f;   /* convention: H = +t f sigma_x style */
+
+    /* Spin-up block (A_up=0, B_up=1) */
+    h[0 * 4 + 0] = +sz_up;
+    h[0 * 4 + 1] = conj(hop);
+    h[1 * 4 + 0] = hop;
+    h[1 * 4 + 1] = -sz_up;
+    /* Spin-down block (A_down=2, B_down=3) */
+    h[2 * 4 + 2] = +sz_dn;
+    h[2 * 4 + 3] = conj(hop);
+    h[3 * 4 + 2] = hop;
+    h[3 * 4 + 3] = -sz_dn;
+
+    /* Rashba (off-block, mixes spins).  Set to zero so the
+     * Sz-conserving Z_2 path is exact. */
+    (void)p->lambda_r;  /* TODO v0.3.1: full Rashba terms */
+}
+
+qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
+                                     double lambda_r, double lambda_v) {
+    km_params_t* p = malloc(sizeof(*p));
+    if (!p) return NULL;
+    p->t = t;
+    p->lambda_so = lambda_so;
+    p->lambda_r = lambda_r;
+    p->lambda_v = lambda_v;
+    qgt_system_n_t* sys = qgt_create_nband(km_bloch, p, 4, 2);
+    if (!sys) { free(p); return NULL; }
+    sys->owned_user = p;
+    return sys;
 }
