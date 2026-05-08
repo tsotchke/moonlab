@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.2.4.)
+(No unreleased changes since v0.2.5.)
+
+## [0.2.5] - 2026-05-08
+
+CA-MPS structural-correctness consolidation on top of v0.2.4.  Closes
+the divergence between master (which had been carrying CA-TN paper
+work) and the v0.2.4 release track, unifying both threads onto one
+master line.  Adds the regression harness suite that backs Theorem 1
+of the CA-TN methods paper with concrete numerical scaling claims.
+
+### Added
+- **Structural pivot-canonical test** (`test_gauge_warmstart.c`
+  case 7): pins the AG warmstart's canonical-form invariant
+  on the Z2 LGT N=4 generators.  Previous case 4 only verified
+  the +1-eigenspace property, leaving the canonical-form
+  regression open.
+- **Surface + toric Z-stabiliser cases** (cases 8 + 9): extend case
+  7 to the rotated surface code d=3 and the 2x2 toric code.  Toric
+  case 9 reveals that the AG canonical form's per-row output is
+  sometimes a Z-product rather than a single Z; the test asserts
+  the honest Z-only-with-+1-phase invariant.
+- **`bench_warmstart_pivot_scaling`**: 24-record scaling sweep
+  across Z2 LGT N in [4, 32], surface d in [3, 15], toric L in
+  [2, 10].  Reports half-cut and best-balanced bipartition splits.
+  Headline: surface d=15 (n=225 qubits, k=196 stabs) gives
+  rotated entropy bound 7 log 2 vs unrotated 112 log 2 -- a
+  2^105 ~ 10^31-fold reduction in MPS bond dimension.  Toric
+  L >= 3 goes further: |phi_0> is a *product state* across the
+  optimal balanced bipartition for all sizes tested.
+- **`bench_warmstart_empirical_entropy`**: imag-time evolution of
+  the warmstart against the confining-phase Z2 LGT Hamiltonian.
+  Measures the actual converged half-cut entropy versus the
+  Theorem-1 upper bound for N in {4, 6, 8}; reports
+  S_conv/S_bound tightness ratio (0.72 at N=4, 0.26 at N=8).
+  Demonstrates the bound is loose for physically-relevant ground
+  states.
+- **Pivot-order variance sweep**: 32 random permutations of input
+  generator order produce variance-zero output for all three code
+  families.  The pivot distribution (k_A, k_B) is *intrinsic to
+  the code's symplectic structure*, not implementation-specific.
+
+### Fixed
+- **`moonlab_ca_mps_normalize` log-norm bug** (caught during the
+  master/v0.2.4 merge): plain `tn_mps_normalize` only renormalises
+  the storage tensors and ignores `state->log_norm_factor`
+  accumulated by imag-time gates.  Fix: call
+  `tn_mps_commit_normalization` first to fold the deferred
+  log-norm factor into tensor data, then renormalise.
+- **Bindings version sync**: bindings/javascript/* and
+  bindings/python/pyproject.toml were stuck at 0.2.3 across the
+  v0.2.4 release (only Rust got bumped).  All 7 manifests now
+  match VERSION.txt.
+
+### Verified
+- ctest 102/102 green on macOS arm64 Release with
+  `-DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_BENCHMARKS=ON`.
+- All ca_mps unit tests pass (13 tests, 11.5 s wall).
+- Python + Rust bindings in sync at 0.2.5.
 
 ## [0.2.4] - 2026-05-06
 
