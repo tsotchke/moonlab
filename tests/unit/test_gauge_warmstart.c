@@ -184,6 +184,144 @@ int main(void) {
         free(coeffs);
     }
 
+    /* --- Case 7: pivot-canonical structural assertion. ----------------
+     *
+     * Theorem 1 of papers/drafts/ca_tn_method/main.tex (Remark 1) calls
+     * out that the warmstart Clifford C_0's structural form is
+     * implementation-pivoting-dependent.  This test pins the actual
+     * pivot pattern emitted by the symplectic-Gauss-Jordan builder so a
+     * regression that breaks it (rather than just changing it) is
+     * caught.
+     *
+     * The original test only pinned the +1-eigenspace property
+     * <psi|g_i|psi> = +1, which any Clifford that lands |0^n> in
+     * H_phys would satisfy and which leaves the pivot structure
+     * unverified.  An implementation regression that conjugated some g_i
+     * to a multi-qubit Z-string instead of a single-qubit Z (and so
+     * scattered the stabilised dimensions across multiple qubits) would
+     * pass the eigenspace check but break the bond-dimension count
+     * Theorem 1 builds on.
+     *
+     * Pinned invariants for the AG construction:
+     *   (i)   C_0^dag g_i C_0 is a Z-only Pauli string (no X or Y).
+     *   (ii)  The Z-support is a *single* qubit (the AG pivot for g_i).
+     *   (iii) The pivots are pairwise distinct across i.
+     *   (iv)  The phase is +1.
+     *
+     * Together these imply the bipartite Schmidt-rank bound used in
+     * Theorem 1: each pivot kills one F_2 dimension on one side of the
+     * cut, so the "free" subspace of |phi_0> has rank
+     *   2^{n - k_left} on the left, 2^{n - k_right} on the right
+     * for k_left + k_right = k pivots distributed across the bipartite
+     * cut.  The exact distribution (k_left, k_right) is reported below
+     * for the test's own bipartite cut and is the implementation-pinned
+     * fact Theorem 1's bound rests on. */
+    {
+        z2_lgt_config_t cfg = {0};
+        cfg.num_matter_sites = 4;
+        cfg.t_hop = 1.0; cfg.h_link = 1.0; cfg.mass = 0.0;
+        cfg.gauss_penalty = 0.0;
+        uint32_t n = z2_lgt_1d_num_qubits(&cfg);   /* 7 */
+        uint32_t k = cfg.num_matter_sites - 2;     /* 2 generators */
+        uint8_t* paulis = (uint8_t*)calloc((size_t)k * n, 1);
+        for (uint32_t i = 0; i < k; i++) {
+            z2_lgt_1d_gauss_law_pauli(&cfg, i + 1, &paulis[(size_t)i * n]);
+        }
+
+        moonlab_ca_mps_t* s = moonlab_ca_mps_create(n, 32);
+        ca_mps_error_t err =
+            moonlab_ca_mps_apply_stab_subgroup_warmstart(s, paulis, k);
+        fprintf(stdout, "\n--- case 7: pivot-canonical form ---\n");
+        CHECK(err == CA_MPS_SUCCESS, "warmstart apply (got %d)", (int)err);
+
+        if (err == CA_MPS_SUCCESS) {
+            uint8_t* conj = (uint8_t*)calloc(n, 1);
+            int*     pivots = (int*)calloc(k, sizeof(int));
+            uint32_t cut = n / 2;          /* half-cut bipartition */
+            uint32_t left_pivots = 0, right_pivots = 0;
+
+            for (uint32_t i = 0; i < k; i++) {
+                int phase = 0;
+                ca_mps_error_t ce =
+                    moonlab_ca_mps_conjugate_pauli_through_C(
+                        s, &paulis[(size_t)i * n], conj, &phase);
+                CHECK(ce == CA_MPS_SUCCESS,
+                      "conjugate_pauli_through_C g_%u (got %d)",
+                      (unsigned)i, (int)ce);
+
+                /* Invariant (iv): positive phase. */
+                CHECK(phase == 0,
+                      "g_%u: phase = %d (expected 0 = +1)", (unsigned)i, phase);
+
+                /* Invariants (i)+(ii): pure Z-string with weight exactly 1. */
+                int weight = 0;
+                int pivot  = -1;
+                for (uint32_t q = 0; q < n; q++) {
+                    if (conj[q] == 0) continue;
+                    CHECK(conj[q] == 3,
+                          "g_%u: qubit %u has Pauli code %u "
+                          "(expected pure Z; X or Y violates Theorem 1)",
+                          (unsigned)i, (unsigned)q, (unsigned)conj[q]);
+                    weight++;
+                    pivot = (int)q;
+                }
+                CHECK(weight == 1,
+                      "g_%u: conjugated weight = %d "
+                      "(expected 1 -- single-qubit Z pivot)",
+                      (unsigned)i, weight);
+                pivots[i] = pivot;
+                if (pivot >= 0) {
+                    if ((uint32_t)pivot < cut) left_pivots++;
+                    else                       right_pivots++;
+                }
+
+                fprintf(stdout, "  g_%u -> C^dag g C = ", (unsigned)i);
+                for (uint32_t q = 0; q < n; q++) {
+                    static const char* names[4] = {"I","X","Y","Z"};
+                    fprintf(stdout, "%s", names[conj[q] & 3]);
+                }
+                fprintf(stdout, " (pivot=%d, phase %d)\n", pivot, phase);
+            }
+
+            /* Invariant (iii): pivots pairwise distinct. */
+            for (uint32_t i = 0; i < k; i++) {
+                for (uint32_t j = i + 1; j < k; j++) {
+                    CHECK(pivots[i] != pivots[j],
+                          "pivots[%u] == pivots[%u] = %d "
+                          "(generators collapsed onto same qubit)",
+                          (unsigned)i, (unsigned)j, pivots[i]);
+                }
+            }
+
+            /* Report bipartition split for Theorem 1's Schmidt-rank
+             * bound.  For Z2 LGT N=4 the AG builder picks Z-link
+             * qubits 1 and 3, both in the left half {0..3}: the right
+             * half {4..6} is pivot-free, so the half-cut Schmidt rank
+             * of |phi_0> is bounded by 2^min(left_free, right_free) =
+             * 2^min(n_left - left_pivots, n_right - right_pivots) =
+             * 2^min(2, 3) = 4, giving S(|phi_0>) <= 2 log 2 -- tighter
+             * than the (N+1)/2 log 2 = 2.5 log 2 the trailing-pivot
+             * argument would predict. */
+            uint32_t n_left   = cut;
+            uint32_t n_right  = n - cut;
+            uint32_t free_l   = n_left  - left_pivots;
+            uint32_t free_r   = n_right - right_pivots;
+            uint32_t schmidt_log2 = (free_l < free_r) ? free_l : free_r;
+            fprintf(stdout,
+                    "  half-cut bipartition: cut=%u | left=%u (%u pivot, %u free) | "
+                    "right=%u (%u pivot, %u free) | Schmidt rank <= 2^%u\n",
+                    (unsigned)cut, (unsigned)n_left, (unsigned)left_pivots,
+                    (unsigned)free_l, (unsigned)n_right, (unsigned)right_pivots,
+                    (unsigned)free_r, (unsigned)schmidt_log2);
+
+            free(pivots);
+            free(conj);
+        }
+
+        moonlab_ca_mps_free(s);
+        free(paulis);
+    }
+
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
         return 0;
