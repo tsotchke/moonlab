@@ -269,6 +269,44 @@ typedef struct {
 MOONLAB_API int qgt_berry_grid(const qgt_system_t* sys, size_t N,
                    qgt_berry_grid_t* out);
 
+/**
+ * @brief Berry-grid integrator with parallel-transport gauge.
+ *
+ * Same FHS plaquette construction as ::qgt_berry_grid but with an
+ * extra gauge-fix step: each eigenvector u(k) is phase-rotated so
+ * that @f$\langle u(k_{\rm prev}) | u(k)\rangle > 0@f$ along a
+ * spanning walk of the BZ (kx-axis first, then ky from each ix).
+ * Removes the LAPACK / closed-form gauge mismatches that affect
+ * eigvec-based methods.  Costs an extra O(N^2) per-grid phase-fix
+ * on top of the standard FHS work.  Returns the same physically-
+ * correct Chern number as ::qgt_berry_grid_proj.
+ */
+MOONLAB_API int qgt_berry_grid_pt(const qgt_system_t* sys, size_t N,
+                                   qgt_berry_grid_t* out);
+
+/**
+ * @brief Berry-grid integrator using the projector-trace formula
+ *        (rigorously gauge-free).
+ *
+ * Discrete projector formulation: the lower-band projector
+ *   @f$P_-(\mathbf k) = \tfrac12(\mathbb 1 - \hat h \cdot
+ *      \boldsymbol\sigma)@f$
+ * is gauge-invariant by construction, so the plaquette holonomy
+ *   @f$F_{xy}(\mathbf k) = -\arg
+ *       \mathrm{Tr}[P_-(\mathbf k)\,P_-(\mathbf k + \mathbf{dx})
+ *                  \,P_-(\mathbf k + \mathbf{dx} + \mathbf{dy})
+ *                  \,P_-(\mathbf k + \mathbf{dy})]@f$
+ * is gauge-free without any phase-fix scaffolding.  The integrated
+ * total over the BZ gives @f$2\pi C@f$ at small grid spacing.
+ *
+ * Use this when you want the most directly-trustworthy Chern
+ * integrator: it has no eigvec-gauge sensitivity by construction
+ * and produces results identical to a correctly-implemented
+ * ::qgt_berry_grid (eigvec FHS) path on the same Hamiltonian.
+ */
+MOONLAB_API int qgt_berry_grid_proj(const qgt_system_t* sys, size_t N,
+                                     qgt_berry_grid_t* out);
+
 MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
 
 /**

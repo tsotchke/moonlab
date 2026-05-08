@@ -337,6 +337,12 @@
         add_test(NAME unit_gauge_warmstart COMMAND test_gauge_warmstart)
         set_tests_properties(unit_gauge_warmstart PROPERTIES TIMEOUT 30)
 
+        # QGT integrator agreement (qgt_berry_grid vs _pt vs _proj on QWZ).
+        add_executable(test_qgt_integrators tests/unit/test_qgt_integrators.c)
+        target_link_libraries(test_qgt_integrators PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_integrators COMMAND test_qgt_integrators)
+        set_tests_properties(unit_qgt_integrators PROPERTIES TIMEOUT 30 LABELS "topology")
+
         # Kane-Mele 4-band model + Z_2 invariant (v0.3 QGT extension).
         add_executable(test_qgt_kane_mele tests/unit/test_qgt_kane_mele.c)
         target_link_libraries(test_qgt_kane_mele PRIVATE quantumsim ${MATH_LIBRARY})

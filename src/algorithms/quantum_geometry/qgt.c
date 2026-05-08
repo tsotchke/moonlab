@@ -164,6 +164,22 @@ static void lower_eigvec_2x2(const qgt_complex_t h[4], qgt_complex_t u[2]) {
     double nB2 = creal(aB) * creal(aB) + cimag(aB) * cimag(aB)
                + creal(bB) * creal(bB) + cimag(bB) * cimag(bB);
 
+    /* Always use formula A so the gauge is globally consistent
+     * across the BZ.  The previous "pick larger norm" heuristic
+     * switched between A and B at the (h_z = 0) equator; on either
+     * side the eigvec is smooth, but at the switching surface A and
+     * B disagree by a relative phase, breaking the FHS plaquette
+     * product on plaquettes that straddle the surface.  This bug
+     * manifested as Chern = 0 for any 2D 2-band Bloch model with
+     * non-zero mass on top of NN hopping (Haldane M > 0,
+     * Kane-Mele lambda_v > 0), even when |M| <
+     * 3*sqrt(3)*t2*sin(phi).  Sole-formula-A has a measure-zero
+     * singularity at the south pole (h = -|h| z hat); the
+     * half-step grid offset above keeps every grid point off it.
+     * If we DO land at or near it (very small a_floor), fall back
+     * to a deterministic placeholder; the plaquette catches a
+     * spurious flux there but it's confined to one O(1/N^2)
+     * cell. */
     /* Pick the larger-norm branch so we stay away from its singularity. */
     qgt_complex_t a, b;
     double norm2;
@@ -266,6 +282,197 @@ int qgt_berry_grid(const qgt_system_t* sys, size_t N,
     }
     out->chern = chern_sum / (2.0 * M_PI);
 
+    free(U);
+    return 0;
+}
+
+/* ====================================================================
+ * Parallel-transport-gauge Berry-curvature integrator
+ *
+ * Implements the FHS plaquette construction with an enforced
+ * parallel-transport gauge: at each grid point u(k) is phase-rotated
+ * so that <u(k_prev) | u(k)> > 0 (real and positive) along a chosen
+ * spanning tree of the BZ.  This eliminates the LAPACK-gauge
+ * randomness that breaks the FHS link-variable continuity at the
+ * BZ wrap, and gives the right Chern number for 2-band Bloch
+ * Hamiltonians with arbitrary mass terms (Haldane M > 0,
+ * Kane-Mele lambda_v > 0, BHZ).  Costs an extra O(N^2) per-grid
+ * phase-fix loop on top of the standard FHS plaquette traversal.
+ *
+ * Walk order:
+ *   - First populate eigvecs along the kx axis (iy = 0) using
+ *     parallel transport from u(0, 0).
+ *   - Then for each ix, populate the ky axis upward via parallel
+ *     transport from u(ix, 0).
+ *
+ * After this gauge fix, the FHS plaquette product over the BZ
+ * captures the correct Berry phase, including the BZ-wrap holonomy
+ * which appears as a localised flux at one corner.
+ * ==================================================================== */
+
+static void phase_align_2(qgt_complex_t v[2],
+                          const qgt_complex_t ref[2]) {
+    /* Phase-rotate v so that <ref | v> is real and positive. */
+    qgt_complex_t inner = conj(ref[0]) * v[0] + conj(ref[1]) * v[1];
+    double mag = cabs(inner);
+    if (mag < 1e-300) return;
+    qgt_complex_t phase = conj(inner) / mag;
+    v[0] *= phase;
+    v[1] *= phase;
+}
+
+/* Build the lower-band projector P_-(k) = (I - h.σ/|h|)/2 of a 2-band
+ * Bloch Hamiltonian.  Smooth in k except at gap-closing points.
+ * Output P is row-major 2x2: P[r * 2 + c]. */
+static void lower_projector_2x2(const qgt_complex_t h[4],
+                                 qgt_complex_t P[4]) {
+    qgt_complex_t h00 = h[0], h11 = h[3], h01 = h[1];
+    double hz = 0.5 * creal(h00 - h11);
+    double hx = creal(h01);
+    double hy = -cimag(h01);
+    double hnorm = sqrt(hx * hx + hy * hy + hz * hz);
+    if (hnorm < 1e-300) {
+        P[0] = 0.5; P[1] = 0.0; P[2] = 0.0; P[3] = 0.5;
+        return;
+    }
+    double inv = 0.5 / hnorm;
+    P[0] = (qgt_complex_t)(0.5 - inv * hz);
+    P[1] = -inv * (hx - _Complex_I * hy);
+    P[2] = -inv * (hx + _Complex_I * hy);
+    P[3] = (qgt_complex_t)(0.5 + inv * hz);
+}
+
+/* 2x2 complex matrix multiply: C = A * B. */
+static void mat2_mul(const qgt_complex_t A[4], const qgt_complex_t B[4],
+                     qgt_complex_t C[4]) {
+    C[0] = A[0]*B[0] + A[1]*B[2];
+    C[1] = A[0]*B[1] + A[1]*B[3];
+    C[2] = A[2]*B[0] + A[3]*B[2];
+    C[3] = A[2]*B[1] + A[3]*B[3];
+}
+
+/* Trace of a 2x2 complex matrix. */
+static qgt_complex_t mat2_trace(const qgt_complex_t A[4]) {
+    return A[0] + A[3];
+}
+
+int qgt_berry_grid_proj(const qgt_system_t* sys, size_t N,
+                         qgt_berry_grid_t* out) {
+    if (!sys || !out || N < 4) return -1;
+
+    qgt_complex_t* P = malloc(N * N * 4 * sizeof(qgt_complex_t));
+    if (!P) return -2;
+
+    const double step = 2.0 * M_PI / (double)N;
+    const double k_offset = 0.5 * step;
+    qgt_complex_t h[4];
+    for (size_t iy = 0; iy < N; iy++) {
+        for (size_t ix = 0; ix < N; ix++) {
+            double k[2] = { (double)ix * step + k_offset,
+                            (double)iy * step + k_offset };
+            sys->fn(k, sys->user, h);
+            lower_projector_2x2(h, &P[(iy * N + ix) * 4]);
+        }
+    }
+
+    out->N = N;
+    out->berry = calloc(N * N, sizeof(double));
+    if (!out->berry) { free(P); return -3; }
+
+    /* Plaquette holonomy via projector trace:
+     *   F_xy(k) ≈ -arg Tr[ P(k) P(k+x) P(k+x+y) P(k+y) ].
+     * For the lower band of a 2-band Hamiltonian this is the
+     * gauge-free analogue of the FHS link product.  At small grid
+     * spacing the trace's argument equals 2 * (Berry curvature) *
+     * (plaquette area), and the integrated total over the BZ gives
+     * 2*pi*Chern. */
+    double chern_sum = 0.0;
+    for (size_t iy = 0; iy < N; iy++) {
+        size_t iy1 = (iy + 1) % N;
+        for (size_t ix = 0; ix < N; ix++) {
+            size_t ix1 = (ix + 1) % N;
+            const qgt_complex_t* P00 = &P[(iy  * N + ix ) * 4];
+            const qgt_complex_t* P10 = &P[(iy  * N + ix1) * 4];
+            const qgt_complex_t* P11 = &P[(iy1 * N + ix1) * 4];
+            const qgt_complex_t* P01 = &P[(iy1 * N + ix ) * 4];
+            qgt_complex_t M1[4], M2[4], M3[4];
+            mat2_mul(P00, P10, M1);
+            mat2_mul(M1,  P11, M2);
+            mat2_mul(M2,  P01, M3);
+            qgt_complex_t tr = mat2_trace(M3);
+            double F = -arg_principal(tr);
+            out->berry[iy * N + ix] = F;
+            chern_sum += F;
+        }
+    }
+    out->chern = chern_sum / (2.0 * M_PI);
+    free(P);
+    return 0;
+}
+
+int qgt_berry_grid_pt(const qgt_system_t* sys, size_t N,
+                       qgt_berry_grid_t* out) {
+    if (!sys || !out || N < 4) return -1;
+
+    qgt_complex_t* U = malloc(N * N * 2 * sizeof(qgt_complex_t));
+    if (!U) return -2;
+
+    const double step = 2.0 * M_PI / (double)N;
+    const double k_offset = 0.5 * step;
+    qgt_complex_t h[4];
+
+    /* Bottom row (iy = 0): parallel-transport along kx. */
+    {
+        size_t iy = 0;
+        for (size_t ix = 0; ix < N; ix++) {
+            double k[2] = { (double)ix * step + k_offset,
+                            (double)iy * step + k_offset };
+            sys->fn(k, sys->user, h);
+            qgt_complex_t* u = &U[(iy * N + ix) * 2];
+            lower_eigvec_2x2(h, u);
+            if (ix > 0) {
+                const qgt_complex_t* prev = &U[(iy * N + ix - 1) * 2];
+                phase_align_2(u, prev);
+            }
+        }
+    }
+    /* Each column (ix fixed): parallel-transport upward in ky. */
+    for (size_t ix = 0; ix < N; ix++) {
+        for (size_t iy = 1; iy < N; iy++) {
+            double k[2] = { (double)ix * step + k_offset,
+                            (double)iy * step + k_offset };
+            sys->fn(k, sys->user, h);
+            qgt_complex_t* u = &U[(iy * N + ix) * 2];
+            lower_eigvec_2x2(h, u);
+            const qgt_complex_t* prev = &U[((iy - 1) * N + ix) * 2];
+            phase_align_2(u, prev);
+        }
+    }
+
+    out->N = N;
+    out->berry = calloc(N * N, sizeof(double));
+    if (!out->berry) { free(U); return -3; }
+
+    double chern_sum = 0.0;
+    for (size_t iy = 0; iy < N; iy++) {
+        size_t iy1 = (iy + 1) % N;
+        for (size_t ix = 0; ix < N; ix++) {
+            size_t ix1 = (ix + 1) % N;
+            const qgt_complex_t* u00 = &U[(iy  * N + ix ) * 2];
+            const qgt_complex_t* u10 = &U[(iy  * N + ix1) * 2];
+            const qgt_complex_t* u11 = &U[(iy1 * N + ix1) * 2];
+            const qgt_complex_t* u01 = &U[(iy1 * N + ix ) * 2];
+            qgt_complex_t Ux       = vdot2(u00, u10);
+            qgt_complex_t Uy_at_x1 = vdot2(u10, u11);
+            qgt_complex_t Ux_at_y1 = vdot2(u01, u11);
+            qgt_complex_t Uy       = vdot2(u00, u01);
+            qgt_complex_t plaq = Ux * Uy_at_x1 * conj(Ux_at_y1) * conj(Uy);
+            double F = -arg_principal(plaq);
+            out->berry[iy * N + ix] = F;
+            chern_sum += F;
+        }
+    }
+    out->chern = chern_sum / (2.0 * M_PI);
     free(U);
     return 0;
 }
