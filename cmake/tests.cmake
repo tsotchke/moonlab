@@ -729,6 +729,8 @@
     target_link_libraries(bench_apply_conjugated_imag PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_warmstart_pivot_scaling tests/performance/bench_warmstart_pivot_scaling.c)
     target_link_libraries(bench_warmstart_pivot_scaling PRIVATE quantumsim ${MATH_LIBRARY})
+    add_executable(bench_topology_phase_diagrams tests/performance/bench_topology_phase_diagrams.c)
+    target_link_libraries(bench_topology_phase_diagrams PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_warmstart_empirical_entropy tests/performance/bench_warmstart_empirical_entropy.c)
     target_link_libraries(bench_warmstart_empirical_entropy PRIVATE quantumsim ${MATH_LIBRARY})
     add_executable(bench_state_operations tests/performance/bench_state_operations.c)
