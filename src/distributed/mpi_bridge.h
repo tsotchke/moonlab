@@ -23,6 +23,23 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* If the build's moonlab_features.h is reachable, gate on
+ * MOONLAB_HAS_MPI so consumers learn at compile time whether the MPI
+ * subsystem was actually built into libquantumsim.  When it isn't
+ * reachable (e.g. a header-only consumer not using CMake-installed
+ * include paths), we silently allow the declarations; users will hit
+ * an unresolved-symbol at link time, which is the prior behaviour. */
+#if defined(__has_include)
+#  if __has_include(<moonlab_features.h>)
+#    include <moonlab_features.h>
+#  endif
+#endif
+#if defined(MOONLAB_HAS_MPI) && !MOONLAB_HAS_MPI
+#  if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC warning "Moonlab was built with QSIM_ENABLE_MPI=OFF; this header's declarations have no implementations linked into libquantumsim.  Reconfigure with -DQSIM_ENABLE_MPI=ON or do not include <mpi_bridge.h>."
+#  endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

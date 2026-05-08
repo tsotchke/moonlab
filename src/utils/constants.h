@@ -2,6 +2,10 @@
 #define QUANTUM_CONSTANTS_H
 
 #include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file quantum_constants.h
@@ -135,5 +139,9 @@ static inline double qc_hex_to_double(uint64_t hex) {
 
 // Maximum entanglement entropy (1 ebit)
 #define QC_MAX_EBIT     1.0
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUANTUM_CONSTANTS_H */

@@ -243,10 +243,10 @@ int main(void) {
             for (uint32_t i = 0; i < k; i++) {
                 int phase = 0;
                 ca_mps_error_t ce =
-                    moonlab_ca_mps_conjugate_pauli_through_C(
+                    moonlab_ca_mps_conjugate_pauli(
                         s, &paulis[(size_t)i * n], conj, &phase);
                 CHECK(ce == CA_MPS_SUCCESS,
-                      "conjugate_pauli_through_C g_%u (got %d)",
+                      "conjugate_pauli g_%u (got %d)",
                       (unsigned)i, (int)ce);
 
                 /* Invariant (iv): positive phase. */

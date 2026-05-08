@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/pauli_frame_v1",
+  "description": "Pauli-frame batched-shot throughput on a rotated surface-code Z-stabilizer cycle.  Each round injects i.i.d. depolarising noise on every data qubit and runs the standard CNOT-to-ancilla syndrome extraction.  The bit-packed batch lets a single AVX-1 uint64 XOR advance 64 shots simultaneously.",
+  "params": {"n_shots": 100000, "rounds": 50, "p_depolarising": 0.005},
+  "rows": [
+    {"d": 5, "n_data": 25, "total_wall_s": 0.691702, "shots_per_s": 7228545.065, "frame_ops_per_s": 643340510.801},
+    {"d": 9, "n_data": 81, "total_wall_s": 2.323992, "shots_per_s": 2151470.388, "frame_ops_per_s": 725045520.767},
+    {"d": 15, "n_data": 225, "total_wall_s": 6.667217, "shots_per_s": 749938.091, "frame_ops_per_s": 756687533.603},
+    {"d": 23, "n_data": 529, "total_wall_s": 15.694918, "shots_per_s": 318574.455, "frame_ops_per_s": 785286031.934},
+    {"d": 31, "n_data": 961, "total_wall_s": 29.086427, "shots_per_s": 171901.485, "frame_ops_per_s": 784042674.643}
+  ]
+}

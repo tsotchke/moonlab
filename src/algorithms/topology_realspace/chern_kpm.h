@@ -128,6 +128,8 @@
 
 #include <stddef.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -157,10 +159,10 @@ typedef struct {
  * @param n_cheby  Chebyshev truncation order; n_cheby >= 8
  * @return         allocated handle, or NULL on invalid arguments / OOM.
  */
-chern_kpm_system_t* chern_kpm_create(size_t L, double m, size_t n_cheby);
+MOONLAB_API chern_kpm_system_t* chern_kpm_create(size_t L, double m, size_t n_cheby);
 
 /** @brief Release memory owned by the handle. */
-void chern_kpm_free(chern_kpm_system_t* sys);
+MOONLAB_API void chern_kpm_free(chern_kpm_system_t* sys);
 
 /**
  * @brief Local Bianco-Resta marker at lattice site @p (rx, ry).
@@ -169,7 +171,7 @@ void chern_kpm_free(chern_kpm_system_t* sys);
  * diagonal position operators.  Memory is @f$O(N)@f$; work is
  * @f$O(N_c \cdot \mathrm{nnz}(\hat H))@f$ per site.
  */
-double chern_kpm_local_marker(const chern_kpm_system_t* sys,
+MOONLAB_API double chern_kpm_local_marker(const chern_kpm_system_t* sys,
                               size_t rx, size_t ry);
 
 /**
@@ -177,7 +179,7 @@ double chern_kpm_local_marker(const chern_kpm_system_t* sys,
  *
  * Parallelised across sites via OpenMP where available.
  */
-double chern_kpm_bulk_sum(const chern_kpm_system_t* sys,
+MOONLAB_API double chern_kpm_bulk_sum(const chern_kpm_system_t* sys,
                           size_t rmin, size_t rmax);
 
 /**
@@ -186,7 +188,7 @@ double chern_kpm_bulk_sum(const chern_kpm_system_t* sys,
  *
  * @return 0 on success, nonzero on invalid range / OOM.
  */
-int chern_kpm_bulk_map(const chern_kpm_system_t* sys,
+MOONLAB_API int chern_kpm_bulk_map(const chern_kpm_system_t* sys,
                        size_t rmin, size_t rmax,
                        double* out);
 
@@ -205,7 +207,7 @@ int chern_kpm_bulk_map(const chern_kpm_system_t* sys,
  *
  * @return 0 on success, non-zero on invalid arguments.
  */
-int chern_kpm_set_modulation(chern_kpm_system_t* sys,
+MOONLAB_API int chern_kpm_set_modulation(chern_kpm_system_t* sys,
                              const double* V_per_site,
                              double V_maxabs);
 
@@ -220,7 +222,7 @@ int chern_kpm_set_modulation(chern_kpm_system_t* sys,
  * (octagonal), @f$10@f$ (decagonal).  Ownership transfers to the
  * caller; free with @c free when done.
  */
-double* chern_kpm_cn_modulation(size_t L, int n, double Q, double V0);
+MOONLAB_API double* chern_kpm_cn_modulation(size_t L, int n, double Q, double V0);
 
 #ifdef __cplusplus
 }

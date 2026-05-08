@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 #include <complex.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef double _Complex complex_t;
 
@@ -106,5 +110,9 @@ void matrix_conjugate_transpose(
  * @return Frobenius norm
  */
 double matrix_frobenius_norm(const complex_t *matrix, size_t m, size_t n);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MATRIX_MATH_H */

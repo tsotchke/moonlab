@@ -1,0 +1,11 @@
+{
+  "schema": "moonlab/xeb_v1",
+  "description": "Cross-entropy benchmark on the noiseless state-vector engine.  Random hardware-efficient circuits at L layers; F_xeb = D * E[p(s)] - 1; Porter-Thomas predicts F_xeb -> 1 in expectation.  F_exact computes E[p(s)] directly from the statevector; F_sampled draws n_shots bitstrings and averages.  Mean and stddev over n_circuits independent circuits.",
+  "rows": [
+    {"n": 6, "layers": 10, "n_circuits": 200, "n_shots": 4096, "mean_F_exact": 0.964016, "std_F_exact": 0.215202, "mean_F_sampled": 0.964042, "std_F_sampled": 0.219552, "wall_s": 0.0774},
+    {"n": 8, "layers": 10, "n_circuits": 200, "n_shots": 4096, "mean_F_exact": 1.005868, "std_F_exact": 0.135186, "mean_F_sampled": 1.007165, "std_F_sampled": 0.136652, "wall_s": 0.2264},
+    {"n": 10, "layers": 10, "n_circuits": 100, "n_shots": 4096, "mean_F_exact": 1.039429, "std_F_exact": 0.076232, "mean_F_sampled": 1.041473, "std_F_sampled": 0.076198, "wall_s": 0.4140},
+    {"n": 12, "layers": 10, "n_circuits": 50, "n_shots": 4096, "mean_F_exact": 1.081077, "std_F_exact": 0.073884, "mean_F_sampled": 1.082199, "std_F_sampled": 0.072703, "wall_s": 0.9109},
+    {"n": 14, "layers": 10, "n_circuits": 20, "n_shots": 4096, "mean_F_exact": 1.123166, "std_F_exact": 0.055975, "mean_F_sampled": 1.121335, "std_F_sampled": 0.062226, "wall_s": 1.6831}
+  ]
+}

@@ -96,29 +96,41 @@ simd_capabilities_t simd_detect_capabilities(void) {
 
 const char* simd_capabilities_string(const simd_capabilities_t *caps) {
     if (!caps) return "Unknown";
-    
+
+    /* Buffer-bounded snprintf-style append: each tag stops at
+     * end-of-buffer rather than overflowing. */
     static char buffer[256];
     buffer[0] = '\0';
-    
+    size_t pos = 0;
+    const size_t cap = sizeof(buffer);
+
+    #define APPEND_TAG(cond, tag) \
+        do { if (cond) { \
+            int _n = snprintf(buffer + pos, cap - pos, "%s ", (tag)); \
+            if (_n > 0 && (size_t)_n < cap - pos) pos += (size_t)_n; \
+        } } while (0)
+
 #ifdef __x86_64__
-    if (caps->has_avx512f) strcat(buffer, "AVX-512F ");
-    if (caps->has_avx512dq) strcat(buffer, "AVX-512DQ ");
-    if (caps->has_avx2) strcat(buffer, "AVX2 ");
-    if (caps->has_avx) strcat(buffer, "AVX ");
-    if (caps->has_fma) strcat(buffer, "FMA ");
-    if (caps->has_sse4_1) strcat(buffer, "SSE4.1 ");
-    if (caps->has_ssse3) strcat(buffer, "SSSE3 ");
-    if (caps->has_sse3) strcat(buffer, "SSE3 ");
-    if (caps->has_sse2) strcat(buffer, "SSE2 ");
+    APPEND_TAG(caps->has_avx512f,  "AVX-512F");
+    APPEND_TAG(caps->has_avx512dq, "AVX-512DQ");
+    APPEND_TAG(caps->has_avx2,     "AVX2");
+    APPEND_TAG(caps->has_avx,      "AVX");
+    APPEND_TAG(caps->has_fma,      "FMA");
+    APPEND_TAG(caps->has_sse4_1,   "SSE4.1");
+    APPEND_TAG(caps->has_ssse3,    "SSSE3");
+    APPEND_TAG(caps->has_sse3,     "SSE3");
+    APPEND_TAG(caps->has_sse2,     "SSE2");
 #elif defined(__aarch64__)
-    if (caps->has_arm_sve) strcat(buffer, "ARM_SVE ");
-    if (caps->has_sse2) strcat(buffer, "ARM_NEON ");  // sse2 flag used for NEON
+    APPEND_TAG(caps->has_arm_sve,  "ARM_SVE");
+    /* `has_sse2` is reused as the NEON flag on aarch64 (legacy naming). */
+    APPEND_TAG(caps->has_sse2,     "ARM_NEON");
 #endif
-    
+
+    #undef APPEND_TAG
+
     if (buffer[0] == '\0') {
         return "Scalar only";
     }
-    
     return buffer;
 }
 

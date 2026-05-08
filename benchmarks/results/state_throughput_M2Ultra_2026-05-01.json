@@ -1,0 +1,31 @@
+{
+  "schema": "moonlab/state_throughput_v1",
+  "omp_threads": 24,
+  "description": "Per-host gate throughput on the state-vector engine; mean over 10 iterations on the middle qubit (or middle pair for CNOT) of an n-qubit |+>-prepared state.  Bandwidth = 2 * dim * 16 bytes / mean_time.",
+  "rows": [
+    {"gate": "H", "n": 16, "dim": 65536, "mean_time_us": 294.3000, "rw_gb_per_s": 7.126},
+    {"gate": "H", "n": 18, "dim": 262144, "mean_time_us": 1156.9000, "rw_gb_per_s": 7.251},
+    {"gate": "H", "n": 20, "dim": 1048576, "mean_time_us": 4514.9000, "rw_gb_per_s": 7.432},
+    {"gate": "H", "n": 22, "dim": 4194304, "mean_time_us": 1680.5000, "rw_gb_per_s": 79.868},
+    {"gate": "H", "n": 24, "dim": 16777216, "mean_time_us": 6560.3000, "rw_gb_per_s": 81.836},
+    {"gate": "H", "n": 26, "dim": 67108864, "mean_time_us": 24862.6000, "rw_gb_per_s": 86.374},
+    {"gate": "CNOT", "n": 16, "dim": 65536, "mean_time_us": 62.7000, "rw_gb_per_s": 33.447},
+    {"gate": "CNOT", "n": 18, "dim": 262144, "mean_time_us": 240.4000, "rw_gb_per_s": 34.894},
+    {"gate": "CNOT", "n": 20, "dim": 1048576, "mean_time_us": 942.0000, "rw_gb_per_s": 35.620},
+    {"gate": "CNOT", "n": 22, "dim": 4194304, "mean_time_us": 475.3000, "rw_gb_per_s": 282.385},
+    {"gate": "CNOT", "n": 24, "dim": 16777216, "mean_time_us": 1379.9000, "rw_gb_per_s": 389.065},
+    {"gate": "CNOT", "n": 26, "dim": 67108864, "mean_time_us": 5688.5000, "rw_gb_per_s": 377.513},
+    {"gate": "RY", "n": 16, "dim": 65536, "mean_time_us": 167.8000, "rw_gb_per_s": 12.498},
+    {"gate": "RY", "n": 18, "dim": 262144, "mean_time_us": 710.0000, "rw_gb_per_s": 11.815},
+    {"gate": "RY", "n": 20, "dim": 1048576, "mean_time_us": 2649.6000, "rw_gb_per_s": 12.664},
+    {"gate": "RY", "n": 22, "dim": 4194304, "mean_time_us": 960.1000, "rw_gb_per_s": 139.796},
+    {"gate": "RY", "n": 24, "dim": 16777216, "mean_time_us": 3573.0000, "rw_gb_per_s": 150.258},
+    {"gate": "RY", "n": 26, "dim": 67108864, "mean_time_us": 13978.4000, "rw_gb_per_s": 153.629},
+    {"gate": "RZ", "n": 16, "dim": 65536, "mean_time_us": 985.2000, "rw_gb_per_s": 2.129},
+    {"gate": "RZ", "n": 18, "dim": 262144, "mean_time_us": 4100.4000, "rw_gb_per_s": 2.046},
+    {"gate": "RZ", "n": 20, "dim": 1048576, "mean_time_us": 16100.0000, "rw_gb_per_s": 2.084},
+    {"gate": "RZ", "n": 22, "dim": 4194304, "mean_time_us": 5434.1000, "rw_gb_per_s": 24.699},
+    {"gate": "RZ", "n": 24, "dim": 16777216, "mean_time_us": 21985.8000, "rw_gb_per_s": 24.419},
+    {"gate": "RZ", "n": 26, "dim": 67108864, "mean_time_us": 79809.7000, "rw_gb_per_s": 26.908}
+  ]
+}

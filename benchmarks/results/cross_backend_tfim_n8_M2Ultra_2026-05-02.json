@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/cross_backend_tfim_v1",
+  "description": "Cross-backend TFIM ground-state validation: same Hamiltonian H = -J sum<ij> Z_i Z_{i+1} - g sum_i X_i computed by three independent Moonlab engines (state-vector dense ED via vqe_exact_ground_state_energy; MPS DMRG via moonlab_dmrg_tfim_energy; CA-MPS var-D via moonlab_ca_mps_var_d_run).  Reports |dE|/|E| for each engine relative to ED.",
+  "params": {"n": 8, "J": 1.000000, "obc": true, "dmrg_chi": 64, "dmrg_sweeps": 8, "ca_mps_chi": 32, "var_d_outer_iters": 12, "var_d_dtau": 0.10, "var_d_imag_steps": 4, "var_d_cliff_passes": 2},
+  "rows": [
+    {"n": 8, "J": 1.000000, "g": 0.250000, "E_ED": -7.1570104638, "E_DMRG": -7.1570104619, "E_varD": -7.1570054213, "rel_err_DMRG": 2.695406e-10, "rel_err_varD": 7.045552e-07, "t_ED": 0.0054, "t_DMRG": 0.2797, "t_varD": 41.3513},
+    {"n": 8, "J": 1.000000, "g": 0.500000, "E_ED": -7.6405925536, "E_DMRG": -7.6405925512, "E_varD": -7.6405639244, "rel_err_DMRG": 3.154749e-10, "rel_err_varD": 3.746983e-06, "t_ED": 0.0128, "t_DMRG": 0.2888, "t_varD": 41.7937},
+    {"n": 8, "J": 1.000000, "g": 1.000000, "E_ED": -9.8379514475, "E_DMRG": -9.8379514443, "E_varD": -9.8377070280, "rel_err_DMRG": 3.182401e-10, "rel_err_varD": 2.484455e-05, "t_ED": 0.0082, "t_DMRG": 0.3022, "t_varD": 41.6508},
+    {"n": 8, "J": 1.000000, "g": 1.500000, "E_ED": -13.1914049522, "E_DMRG": -13.1914049512, "E_varD": -13.1905300267, "rel_err_DMRG": 7.669220e-11, "rel_err_varD": 6.632542e-05, "t_ED": 0.0059, "t_DMRG": 0.3212, "t_varD": 9.8834},
+    {"n": 8, "J": 1.000000, "g": 2.500000, "E_ED": -20.7051222413, "E_DMRG": -20.7051222399, "E_varD": -20.7007459573, "rel_err_DMRG": 6.454096e-11, "rel_err_varD": 2.113624e-04, "t_ED": 0.0048, "t_DMRG": 0.2514, "t_varD": 2.7540}
+  ]
+}

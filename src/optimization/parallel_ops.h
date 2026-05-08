@@ -5,6 +5,10 @@
 #include "../quantum/state.h"
 #include "../utils/quantum_entropy.h"
 #include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file grover_parallel.h
@@ -181,5 +185,9 @@ size_t grover_parallel_get_optimal_batch_size(void);
  * @brief Print parallel execution configuration
  */
 void grover_parallel_print_config(const grover_parallel_config_t *config);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* GROVER_PARALLEL_H */

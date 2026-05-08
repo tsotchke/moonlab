@@ -6,6 +6,10 @@
 #include <stdio.h>      /* for FILE in *_fprint signatures */
 #include <complex.h>
 #include <math.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // Use C99 complex types
 typedef double _Complex complex_t;
@@ -27,11 +31,41 @@ typedef double _Complex complex_t;
  * - 28 qubits: 268M states = 4.3GB (trivial)
  */
 
-#define MAX_QUBITS 32  // Phase 4: Scale to 32 qubits (4.3B states, 68.7GB)
-#define MAX_STATE_DIM (1ULL << MAX_QUBITS)  // 2^32 = 4,294,967,296
-#define RECOMMENDED_MAX_QUBITS 28  // Sweet spot: 268M states = 4.3GB (fast + safe)
+/* Properly namespaced.  The unprefixed `MAX_QUBITS` was prone to
+ * collision with vendored Qiskit-Aer / cuStateVec headers that use the
+ * same name, so we rename to `MOONLAB_MAX_QUBITS` and leave a
+ * deprecated alias for one cycle.  The deprecated alias will be
+ * removed in v0.3.0; new code should use the prefixed name. */
+#define MOONLAB_MAX_QUBITS         32  /* 4.3B amps × 16 B = 68.7 GB. */
+#define MOONLAB_MAX_STATE_DIM      (1ULL << MOONLAB_MAX_QUBITS)
+#define MOONLAB_RECOMMENDED_QUBITS 28  /* 268M amps = 4.3 GB. */
 
-// Error codes specific to quantum simulation
+/* Static guards against silent shift-overflow if a future patch raises
+ * MOONLAB_MAX_QUBITS past 63 or builds on a 32-bit host. */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(size_t) >= 8,
+               "Moonlab requires a 64-bit size_t.");
+_Static_assert(MOONLAB_MAX_QUBITS <= 63,
+               "MOONLAB_MAX_QUBITS must be <= 63 to avoid 1ULL shift overflow.");
+#endif
+
+/* Deprecated unprefixed aliases (removal scheduled for v0.3.0). */
+#define MAX_QUBITS              MOONLAB_MAX_QUBITS
+#define MAX_STATE_DIM           MOONLAB_MAX_STATE_DIM
+#define RECOMMENDED_MAX_QUBITS  MOONLAB_RECOMMENDED_QUBITS
+
+/* Error codes specific to quantum simulation.  These live in their
+ * own enum for historical reasons (predates the centralised
+ * `moonlab_status_t` registry in `src/utils/moonlab_status.h`).  All
+ * values are int-compatible with `moonlab_status_t`, so a function
+ * declared `moonlab_status_t f()` may return any QS_* literal and a
+ * function declared `qs_error_t f()` may be assigned to a
+ * `moonlab_status_t`.  New modules should prefer `moonlab_status_t`
+ * directly; the QS_* names remain stable for the v0.x series. */
+#include "../utils/moonlab_status.h"
+
+#include "../applications/moonlab_api.h"
+
 typedef enum {
     QS_SUCCESS = 0,
     QS_ERROR_INVALID_QUBIT = -1,
@@ -54,23 +88,19 @@ typedef enum {
  *                Read-only accessors on a stable state are safe.
  */
 typedef struct {
-    size_t num_qubits;              // Number of qubits
-    size_t state_dim;               // 2^num_qubits
-    complex_t *amplitudes;          // State vector coefficients
-    
-    // Quantum properties
-    double global_phase;            // Global phase factor
-    double entanglement_entropy;    // Von Neumann entropy
-    double purity;                  // Tr(ρ²)
-    double fidelity;                // State fidelity
-    
-    // Measurement history for verification
+    size_t num_qubits;              /* Number of qubits */
+    size_t state_dim;               /* 2^num_qubits */
+    complex_t *amplitudes;          /* State vector coefficients */
+
+    /* Measurement history for verification (circular buffer cap; see
+     * @c quantum_state_record_measurement and
+     * @c quantum_state_get_measurement_history). */
     uint64_t *measurement_outcomes;
     size_t num_measurements;
     size_t max_measurements;
-    
-    // Memory management
-    int owns_memory;                // 1 if we allocated amplitudes
+
+    /* Memory management. */
+    int owns_memory;                /* 1 if we allocated amplitudes */
 } quantum_state_t;
 
 // ============================================================================
@@ -97,13 +127,13 @@ typedef struct {
  * @param num_qubits Number of qubits (1-32, recommended 28 for speed/memory balance)
  * @return QS_SUCCESS or error code
  */
-qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
+MOONLAB_API qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
 
 /**
  * @brief Free quantum state resources
  * @param state Quantum state to free
  */
-void quantum_state_free(quantum_state_t *state);
+MOONLAB_API void quantum_state_free(quantum_state_t *state);
 
 /**
  * @brief Create arbitrary quantum state from amplitudes
@@ -112,7 +142,7 @@ void quantum_state_free(quantum_state_t *state);
  * @param dim Dimension of state space
  * @return QS_SUCCESS or error code
  */
-qs_error_t quantum_state_from_amplitudes(
+MOONLAB_API qs_error_t quantum_state_from_amplitudes(
     quantum_state_t *state,
     const complex_t *amplitudes,
     size_t dim
@@ -124,13 +154,13 @@ qs_error_t quantum_state_from_amplitudes(
  * @param src Source state
  * @return QS_SUCCESS or error code
  */
-qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src);
+MOONLAB_API qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src);
 
 /**
  * @brief Reset state to |0...0⟩
  * @param state Quantum state to reset
  */
-void quantum_state_reset(quantum_state_t *state);
+MOONLAB_API void quantum_state_reset(quantum_state_t *state);
 
 // ============================================================================
 // STATE PROPERTIES
@@ -149,7 +179,7 @@ int quantum_state_is_normalized(const quantum_state_t *state, double tolerance);
  * @param state Quantum state to normalize
  * @return QS_SUCCESS or error code
  */
-qs_error_t quantum_state_normalize(quantum_state_t *state);
+MOONLAB_API qs_error_t quantum_state_normalize(quantum_state_t *state);
 
 /**
  * @brief Calculate von Neumann entropy S = -Tr(ρ log₂ ρ)
@@ -186,7 +216,7 @@ complex_t quantum_state_get_amplitude(const quantum_state_t *state, uint64_t bas
  * @param basis_index Index of basis state
  * @return Probability |αᵢ|²
  */
-double quantum_state_get_probability(const quantum_state_t *state, uint64_t basis_index);
+MOONLAB_API double quantum_state_get_probability(const quantum_state_t *state, uint64_t basis_index);
 
 // ============================================================================
 // ENTANGLEMENT MEASURES
@@ -334,5 +364,9 @@ void quantum_state_destroy(quantum_state_t* state);
 static inline void quantum_state_init_zero(quantum_state_t* state) {
     quantum_state_reset(state);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUANTUM_STATE_H */

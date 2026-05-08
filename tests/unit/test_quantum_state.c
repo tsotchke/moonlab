@@ -135,15 +135,13 @@ int test_state_clone() {
     original.amplitudes[1] = 0.5 + 0.0*I;
     original.amplitudes[2] = 0.5 + 0.0*I;
     original.amplitudes[3] = 0.5 + 0.0*I;
-    original.global_phase = 0.5;
-    
+
     qs_error_t err = quantum_state_clone(&clone, &original);
     ASSERT_EQ(err, QS_SUCCESS, "Cloning failed");
-    
+
     // Verify clone
     ASSERT_EQ(clone.num_qubits, original.num_qubits, "Qubit count mismatch");
     ASSERT_NEAR(creal(clone.amplitudes[0]), creal(original.amplitudes[0]), 1e-10, "Amplitude mismatch");
-    ASSERT_NEAR(clone.global_phase, original.global_phase, 1e-10, "Phase mismatch");
     
     // Verify deep copy
     clone.amplitudes[0] = 1.0;
@@ -163,13 +161,12 @@ int test_state_reset() {
     // Modify state
     state.amplitudes[0] = 0.0;
     state.amplitudes[1] = 1.0;
-    state.global_phase = 1.5;
-    
+
     quantum_state_reset(&state);
-    
+
     // Check reset to |00⟩
     ASSERT_NEAR(creal(state.amplitudes[0]), 1.0, 1e-10, "Not reset to |00⟩");
-    ASSERT_NEAR(state.global_phase, 0.0, 1e-10, "Phase not reset");
+    ASSERT_NEAR(creal(state.amplitudes[1]), 0.0, 1e-10, "Other amp not reset");
     
     quantum_state_free(&state);
     TEST_PASS();

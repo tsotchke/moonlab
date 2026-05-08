@@ -10,6 +10,10 @@
 #include "../algorithms/grover.h"
 #include "entropy_pool.h"
 #include "../utils/performance_monitor.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file qrng.h
@@ -524,5 +528,9 @@ qrng_v3_error_t qrng_v3_init_from_seed(
     const uint8_t *seed,
     size_t seed_len
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* QUANTUM_RNG_V3_H */

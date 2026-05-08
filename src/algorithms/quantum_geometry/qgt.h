@@ -138,6 +138,8 @@
 #include <stddef.h>
 #include <complex.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -175,7 +177,7 @@ qgt_system_t* qgt_create(qgt_bloch_fn f, void* user);
  *   - @f$C = -1@f$ for @f$0 < m < +2@f$,
  *   - @f$C = 0@f$ for @f$|m| > 2@f$.
  */
-qgt_system_t* qgt_model_qwz(double m);
+MOONLAB_API qgt_system_t* qgt_model_qwz(double m);
 
 /**
  * @brief Haldane (1988) honeycomb-lattice Chern insulator.
@@ -184,7 +186,7 @@ qgt_system_t* qgt_model_qwz(double m);
  * @f$t_2@f$ with Peierls phase @f$\phi@f$, sublattice staggering
  * @f$M@f$.  Topological for @f$|M| < 3\sqrt{3}\,|t_2\sin\phi|@f$.
  */
-qgt_system_t* qgt_model_haldane(double t1, double t2,
+MOONLAB_API qgt_system_t* qgt_model_haldane(double t1, double t2,
                                 double phi, double M_stagger);
 
 /**
@@ -206,7 +208,7 @@ void             qgt_free_1d(qgt_system_1d_t* sys);
  * (topological phase with zero-energy edge modes in open boundaries);
  * @f$W = 0@f$ otherwise.
  */
-qgt_system_1d_t* qgt_model_ssh(double t1, double t2);
+MOONLAB_API qgt_system_1d_t* qgt_model_ssh(double t1, double t2);
 
 /**
  * @brief Winding number of a 1D chiral two-band system via the
@@ -240,7 +242,7 @@ int qgt_wilson_loop(const qgt_system_t* sys,
 /**
  * @brief Release the QGT handle.
  */
-void qgt_free(qgt_system_t* sys);
+MOONLAB_API void qgt_free(qgt_system_t* sys);
 
 /**
  * @brief Output container for @c qgt_berry_grid.
@@ -264,10 +266,10 @@ typedef struct {
  * provided the band remains gapped throughout the grid (Fukui,
  * Hatsugai and Suzuki 2005).
  */
-int qgt_berry_grid(const qgt_system_t* sys, size_t N,
+MOONLAB_API int qgt_berry_grid(const qgt_system_t* sys, size_t N,
                    qgt_berry_grid_t* out);
 
-void qgt_berry_grid_free(qgt_berry_grid_t* g);
+MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
 
 /**
  * @brief Fubini-Study metric @f$g_{\mu\nu}(\mathbf k) =

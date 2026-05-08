@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>      /* for FILE in *_fprint signature */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file performance_monitor.h
@@ -184,5 +188,9 @@ void perf_monitor_print_stats(const perf_monitor_ctx_t *ctx);
  * @return Estimated overhead as percentage
  */
 double perf_monitor_get_overhead_percent(const perf_monitor_ctx_t *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PERFORMANCE_MONITOR_H */

@@ -81,6 +81,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -102,13 +104,13 @@ typedef enum {
  *
  * @return Pointer to an owned tableau, or NULL on allocation failure.
  */
-clifford_tableau_t* clifford_tableau_create(size_t num_qubits);
+MOONLAB_API clifford_tableau_t* clifford_tableau_create(size_t num_qubits);
 
 /** @brief Release all memory associated with the tableau. */
-void clifford_tableau_free(clifford_tableau_t* t);
+MOONLAB_API void clifford_tableau_free(clifford_tableau_t* t);
 
 /** @brief Number of qubits this tableau was created for. */
-size_t clifford_num_qubits(const clifford_tableau_t* t);
+MOONLAB_API size_t clifford_num_qubits(const clifford_tableau_t* t);
 
 /* ---- Single-qubit Clifford gates --- */
 clifford_error_t clifford_h(clifford_tableau_t* t, size_t q);
@@ -144,7 +146,7 @@ clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size_t b);
  *                            NULL).
  * @return CLIFFORD_SUCCESS on success.
  */
-clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
+MOONLAB_API clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
                                   uint64_t* rng_state,
                                   int* outcome,
                                   int* outcome_kind);

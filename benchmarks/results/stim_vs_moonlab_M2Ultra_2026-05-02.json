@@ -1,0 +1,160 @@
+{
+  "schema": "moonlab/stim_vs_moonlab_v1",
+  "host": {
+    "machine": "arm64",
+    "system": "Darwin",
+    "release": "24.1.0"
+  },
+  "stim_version": "1.15.0",
+  "params": {
+    "shots": 10000,
+    "rounds": 10,
+    "p": 0.005,
+    "noise_model": "phenomenological depolarising on data qubits + measurement flip"
+  },
+  "stim_rows": [
+    {
+      "engine": "stim",
+      "stim_version": "1.15.0",
+      "d": 5,
+      "n_data": 25,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.05607975000748411,
+      "shots_per_s": 178317.48534302405,
+      "shot_rounds_per_s": 1783174.8534302404,
+      "samples_shape": [
+        10000,
+        240
+      ]
+    },
+    {
+      "engine": "stim",
+      "stim_version": "1.15.0",
+      "d": 9,
+      "n_data": 81,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.0294642910012044,
+      "shots_per_s": 339393.87849486124,
+      "shot_rounds_per_s": 3393938.7849486126,
+      "samples_shape": [
+        10000,
+        800
+      ]
+    },
+    {
+      "engine": "stim",
+      "stim_version": "1.15.0",
+      "d": 15,
+      "n_data": 225,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.0844650420040125,
+      "shots_per_s": 118392.17459366149,
+      "shot_rounds_per_s": 1183921.745936615,
+      "samples_shape": [
+        10000,
+        2240
+      ]
+    },
+    {
+      "engine": "stim",
+      "stim_version": "1.15.0",
+      "d": 23,
+      "n_data": 529,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.23445737500151154,
+      "shots_per_s": 42651.6760239917,
+      "shot_rounds_per_s": 426516.76023991697,
+      "samples_shape": [
+        10000,
+        5280
+      ]
+    },
+    {
+      "engine": "stim",
+      "stim_version": "1.15.0",
+      "d": 31,
+      "n_data": 961,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.567947583986097,
+      "shots_per_s": 17607.258630833076,
+      "shot_rounds_per_s": 176072.58630833076,
+      "samples_shape": [
+        10000,
+        9600
+      ]
+    }
+  ],
+  "moonlab_rows": [
+    {
+      "engine": "moonlab",
+      "d": 5,
+      "n_data": 25,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.003908,
+      "shots_per_s": 25589067.171,
+      "shot_rounds_per_s": 255890671.71,
+      "frame_ops_per_s": 2277426978.22
+    },
+    {
+      "engine": "moonlab",
+      "d": 9,
+      "n_data": 81,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.013126,
+      "shots_per_s": 7618388.884,
+      "shot_rounds_per_s": 76183888.84,
+      "frame_ops_per_s": 2567397053.855
+    },
+    {
+      "engine": "moonlab",
+      "d": 15,
+      "n_data": 225,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.037988,
+      "shots_per_s": 2632413.875,
+      "shot_rounds_per_s": 26324138.75,
+      "frame_ops_per_s": 2656105600.221
+    },
+    {
+      "engine": "moonlab",
+      "d": 23,
+      "n_data": 529,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.089406,
+      "shots_per_s": 1118492.997,
+      "shot_rounds_per_s": 11184929.969999999,
+      "frame_ops_per_s": 2757085238.243
+    },
+    {
+      "engine": "moonlab",
+      "d": 31,
+      "n_data": 961,
+      "rounds": 10,
+      "n_shots": 10000,
+      "p": 0.005,
+      "wall_s": 0.162899,
+      "shots_per_s": 613878.144,
+      "shot_rounds_per_s": 6138781.4399999995,
+      "frame_ops_per_s": 2799898213.091
+    }
+  ],
+  "description": "Head-to-head Stim vs Moonlab Pauli-frame sampler on a phenomenological-noise rotated surface-code Z-stabilizer cycle.  Each engine runs the same shots*rounds workload at fixed distance d in {5, 9, 15, 23, 31}.  Note: Stim runs the full rotated surface code with X+Z stabilizers and syndrome-extraction CNOTs as compiled by stim's circuit generator; Moonlab's bench_pauli_frame runs only the Z-stabilizer half of the cycle.  The ratio therefore compares like to like up to that factor of ~2 in stabilizer count, which the table reports without correction so the reader can assess raw single-core throughput."
+}

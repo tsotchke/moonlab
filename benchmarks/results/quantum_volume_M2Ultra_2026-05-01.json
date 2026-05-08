@@ -1,0 +1,17 @@
+{
+  "schema": "moonlab/quantum_volume_v1",
+  "description": "IBM Quantum Volume protocol on the noiseless state-vector engine.  HOP = heavy-output probability; pass at width w iff the lower 97.5% CI on mean HOP exceeds 2/3.  QV = 2^w_max.",
+  "trials_per_width": 100,
+  "qv_max_width": 10,
+  "qv_value": 1024,
+  "rows": [
+    {"width": 3, "trials": 100, "mean_hop": 0.852637, "stddev_hop": 0.088942, "lower_ci_97p5": 0.835205, "passed": true},
+    {"width": 4, "trials": 100, "mean_hop": 0.844710, "stddev_hop": 0.050214, "lower_ci_97p5": 0.834868, "passed": true},
+    {"width": 5, "trials": 100, "mean_hop": 0.858280, "stddev_hop": 0.041742, "lower_ci_97p5": 0.850099, "passed": true},
+    {"width": 6, "trials": 100, "mean_hop": 0.853683, "stddev_hop": 0.022219, "lower_ci_97p5": 0.849328, "passed": true},
+    {"width": 7, "trials": 100, "mean_hop": 0.855397, "stddev_hop": 0.021245, "lower_ci_97p5": 0.851233, "passed": true},
+    {"width": 8, "trials": 100, "mean_hop": 0.850461, "stddev_hop": 0.013423, "lower_ci_97p5": 0.847830, "passed": true},
+    {"width": 9, "trials": 100, "mean_hop": 0.851143, "stddev_hop": 0.009521, "lower_ci_97p5": 0.849277, "passed": true},
+    {"width": 10, "trials": 100, "mean_hop": 0.848431, "stddev_hop": 0.006569, "lower_ci_97p5": 0.847143, "passed": true}
+  ]
+}

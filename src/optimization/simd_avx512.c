@@ -43,26 +43,32 @@ const char* avx512_get_features(void) {
     static int initialized = 0;
 
     if (!initialized) {
-        char* p = features + strlen(features);
-
+        size_t pos = strlen(features);
+        const size_t cap = sizeof(features);
+        #define APPEND_FEATURE(tag) \
+            do { \
+                int _n = snprintf(features + pos, cap - pos, " %s", (tag)); \
+                if (_n > 0 && (size_t)_n < cap - pos) pos += (size_t)_n; \
+            } while (0)
 #ifdef __AVX512F__
-        strcat(p, " F"); p = features + strlen(features);
+        APPEND_FEATURE("F");
 #endif
 #ifdef __AVX512DQ__
-        strcat(p, " DQ"); p = features + strlen(features);
+        APPEND_FEATURE("DQ");
 #endif
 #ifdef __AVX512BW__
-        strcat(p, " BW"); p = features + strlen(features);
+        APPEND_FEATURE("BW");
 #endif
 #ifdef __AVX512VL__
-        strcat(p, " VL"); p = features + strlen(features);
+        APPEND_FEATURE("VL");
 #endif
 #ifdef __AVX512CD__
-        strcat(p, " CD"); p = features + strlen(features);
+        APPEND_FEATURE("CD");
 #endif
 #ifdef __AVX512VNNI__
-        strcat(p, " VNNI");
+        APPEND_FEATURE("VNNI");
 #endif
+        #undef APPEND_FEATURE
         initialized = 1;
     }
 

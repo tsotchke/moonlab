@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -204,11 +205,151 @@ static cand_t* enumerate_composite_cands(uint32_t n, size_t* out_count) {
     return cands;
 }
 
-/* Evaluate every candidate's resulting energy in parallel.  Returns
- * the energies in @p out_energies (must be length n_cands).  Each
- * thread keeps a private CA-MPS clone and a private complex-coeffs
- * buffer; the original @p state is not mutated.  INFINITY is written
- * for any candidate whose apply() failed (out-of-range, etc.). */
+/* Per-pass term cache used by the delta-caching candidate evaluator.
+ *
+ * Captures, in the master state and once per Phase A pass:
+ *   term_value[k]   = real(coeffs[k] * <psi | P_k | psi>) at the current D
+ *   support_q[k]    = list of qubit indices on which the conjugated
+ *                     Q_k = D^dagger P_k D is non-identity
+ *   support_len[k]  = length of support_q[k]
+ *   E_total         = sum over k of term_value[k] (matches E_curr)
+ *
+ * Plus an inverse index:
+ *   terms_for_q[q]  = list of term indices k where Q_k is non-identity
+ *                     on qubit q (used to compute the affected-term set
+ *                     for any candidate whose qubit support is known)
+ *   tfq_count[q]    = length of terms_for_q[q]
+ *
+ * Memory: O(num_terms * n) for the support arrays and the inverse index.
+ * Build cost: one moonlab_ca_mps_conjugate_pauli + one
+ * tn-MPS expectation per term, identical to a baseline expect_pauli_sum.
+ */
+typedef struct {
+    uint32_t  num_terms;
+    uint32_t  n;
+    double*   term_value;     /* [num_terms] */
+    uint8_t*  support_q;      /* [num_terms * n], packed list of qubits */
+    uint8_t*  support_len;    /* [num_terms] */
+    uint32_t* terms_for_q;    /* [n * num_terms], packed list of term ids */
+    uint32_t* tfq_count;      /* [n] */
+    double    E_total;
+} term_cache_t;
+
+static void term_cache_free(term_cache_t* c) {
+    if (!c) return;
+    free(c->term_value);
+    free(c->support_q);
+    free(c->support_len);
+    free(c->terms_for_q);
+    free(c->tfq_count);
+    c->term_value = NULL;
+    c->support_q = NULL;
+    c->support_len = NULL;
+    c->terms_for_q = NULL;
+    c->tfq_count = NULL;
+}
+
+/* Build the per-term cache for the given master state. */
+static int term_cache_build(term_cache_t* out,
+                             const moonlab_ca_mps_t* state,
+                             const uint8_t* paulis,
+                             const double* coeffs,
+                             uint32_t num_terms) {
+    uint32_t n = moonlab_ca_mps_num_qubits(state);
+    out->num_terms = num_terms;
+    out->n = n;
+    out->term_value  = (double*)  calloc(num_terms, sizeof(double));
+    out->support_q   = (uint8_t*) calloc((size_t)num_terms * n, sizeof(uint8_t));
+    out->support_len = (uint8_t*) calloc(num_terms, sizeof(uint8_t));
+    out->terms_for_q = (uint32_t*)calloc((size_t)n * num_terms, sizeof(uint32_t));
+    out->tfq_count   = (uint32_t*)calloc(n, sizeof(uint32_t));
+    if (!out->term_value || !out->support_q || !out->support_len ||
+        !out->terms_for_q || !out->tfq_count) {
+        term_cache_free(out);
+        return -1;
+    }
+    out->E_total = 0.0;
+
+    uint8_t* qbuf = (uint8_t*)calloc(n, sizeof(uint8_t));
+    if (!qbuf) { term_cache_free(out); return -1; }
+
+    for (uint32_t k = 0; k < num_terms; k++) {
+        const uint8_t* P_k = &paulis[(size_t)k * n];
+
+        /* Per-term value at the master state. */
+        double _Complex zk = 0.0;
+        if (moonlab_ca_mps_expect_pauli(state, P_k, &zk) != CA_MPS_SUCCESS) {
+            free(qbuf);
+            term_cache_free(out);
+            return -1;
+        }
+        const double v = coeffs[k] * creal(zk);
+        out->term_value[k] = v;
+        out->E_total += v;
+
+        /* Conjugated Q_k = D^dagger P_k D, used only for its support pattern. */
+        int phase = 0;
+        if (moonlab_ca_mps_conjugate_pauli(state, P_k, qbuf, &phase) != CA_MPS_SUCCESS) {
+            free(qbuf);
+            term_cache_free(out);
+            return -1;
+        }
+        uint8_t len = 0;
+        for (uint32_t q = 0; q < n; q++) {
+            if (qbuf[q] != 0) {
+                out->support_q[(size_t)k * n + len] = (uint8_t)q;
+                len++;
+                uint32_t pos = out->tfq_count[q]++;
+                out->terms_for_q[(size_t)q * num_terms + pos] = k;
+            }
+        }
+        out->support_len[k] = len;
+    }
+    free(qbuf);
+    return 0;
+}
+
+/* Collect the qubits a candidate Clifford acts on into @p out_qs.
+ * Single-qubit gates contribute one qubit; two-qubit gates contribute
+ * two; composite candidates contribute their gate2 partner as well.
+ * Returns the number of distinct qubits written. */
+static int cand_affected_qubits(const cand_t* c, uint32_t* out_qs) {
+    uint32_t qs[4];
+    int m = 0;
+    qs[m++] = c->q1;
+    if (cand_is_2q(c->gate)) qs[m++] = c->q2;
+    if (c->gate2 >= 0) {
+        qs[m++] = c->q1_2;
+        if (cand_is_2q(c->gate2)) qs[m++] = c->q2_2;
+    }
+    /* Deduplicate (small m, simple loop). */
+    int n_unique = 0;
+    for (int i = 0; i < m; i++) {
+        int dup = 0;
+        for (int j = 0; j < n_unique; j++) {
+            if (out_qs[j] == qs[i]) { dup = 1; break; }
+        }
+        if (!dup) out_qs[n_unique++] = qs[i];
+    }
+    return n_unique;
+}
+
+/* Evaluate every candidate's resulting energy in parallel using a
+ * per-term delta cache.  For each candidate G acting on qubit set Q_G,
+ * only terms whose Clifford-conjugated Q_k = D^dagger P_k D has
+ * non-identity support inside Q_G contribute to the energy delta -- the
+ * remaining terms commute with G and reuse their cached value.
+ *
+ * Wall-clock savings vs the naive full-sum re-evaluation are ~num_terms
+ * divided by the typical per-candidate affected-term count.  For
+ * kagome-12 (72 terms, ~10 affected per single-qubit candidate) this is
+ * a 5-7x speedup; for composite mode (1k+ candidates per pass) the
+ * improvement is the dominant Phase B speedup.
+ *
+ * Each thread keeps a private CA-MPS clone and a per-thread
+ * scratch flag buffer; the master @p state is not mutated.  INFINITY is
+ * written for any candidate whose apply() failed.
+ */
 static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
                                           const uint8_t* paulis,
                                           const double* coeffs,
@@ -216,40 +357,109 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
                                           const cand_t* cands,
                                           size_t n_cands,
                                           double* out_energies) {
-    /* Pre-convert coefficients to complex once (read-only across threads). */
-    double _Complex* cz_master =
-        (double _Complex*)calloc(num_terms, sizeof(double _Complex));
-    if (!cz_master) {
-        for (size_t i = 0; i < n_cands; i++) out_energies[i] = INFINITY;
+    term_cache_t cache;
+    memset(&cache, 0, sizeof(cache));
+    if (term_cache_build(&cache, state, paulis, coeffs, num_terms) != 0) {
+        /* Cache build failed (OOM); fall back to full re-evaluation so
+         * the caller still gets a correct answer, just slower. */
+        double _Complex* cz_master =
+            (double _Complex*)calloc(num_terms, sizeof(double _Complex));
+        if (!cz_master) {
+            for (size_t i = 0; i < n_cands; i++) out_energies[i] = INFINITY;
+            return;
+        }
+        for (uint32_t i = 0; i < num_terms; i++)
+            cz_master[i] = (double _Complex)coeffs[i];
+
+        #pragma omp parallel
+        {
+            moonlab_ca_mps_t* my = moonlab_ca_mps_clone(state);
+            #pragma omp for schedule(dynamic, 1)
+            for (size_t i = 0; i < n_cands; i++) {
+                if (!my) { out_energies[i] = INFINITY; continue; }
+                const cand_t* c = &cands[i];
+                if (cand_apply(my, c) != 0) { out_energies[i] = INFINITY; continue; }
+                double _Complex out = 0.0;
+                moonlab_ca_mps_expect_pauli_sum(my, paulis, cz_master, num_terms, &out);
+                out_energies[i] = creal(out);
+                cand_undo(my, c);
+            }
+            if (my) moonlab_ca_mps_free(my);
+        }
+        free(cz_master);
         return;
     }
-    for (uint32_t i = 0; i < num_terms; i++) cz_master[i] = (double _Complex)coeffs[i];
+
+    const uint32_t n = cache.n;
 
     #pragma omp parallel
     {
         moonlab_ca_mps_t* my = moonlab_ca_mps_clone(state);
+        uint8_t* affected_flag = (uint8_t*)calloc(num_terms, sizeof(uint8_t));
+        uint32_t* affected_list = (uint32_t*)calloc(num_terms, sizeof(uint32_t));
 
         #pragma omp for schedule(dynamic, 1)
         for (size_t i = 0; i < n_cands; i++) {
-            if (!my) {
+            if (!my || !affected_flag || !affected_list) {
                 out_energies[i] = INFINITY;
                 continue;
             }
             const cand_t* c = &cands[i];
+
+            /* Build the affected-term list from the candidate's qubit set. */
+            uint32_t cand_qs[4];
+            int n_cand_qs = cand_affected_qubits(c, cand_qs);
+            uint32_t n_affected = 0;
+            for (int j = 0; j < n_cand_qs; j++) {
+                uint32_t q = cand_qs[j];
+                const uint32_t cnt = cache.tfq_count[q];
+                const uint32_t* lst = &cache.terms_for_q[(size_t)q * num_terms];
+                for (uint32_t r = 0; r < cnt; r++) {
+                    uint32_t k = lst[r];
+                    if (!affected_flag[k]) {
+                        affected_flag[k] = 1;
+                        affected_list[n_affected++] = k;
+                    }
+                }
+            }
+
             if (cand_apply(my, c) != 0) {
+                /* Candidate failed; clear the flag scratch and report INF. */
+                for (uint32_t r = 0; r < n_affected; r++)
+                    affected_flag[affected_list[r]] = 0;
                 out_energies[i] = INFINITY;
                 continue;
             }
-            double _Complex out = 0.0;
-            moonlab_ca_mps_expect_pauli_sum(my, paulis, cz_master, num_terms, &out);
-            out_energies[i] = creal(out);
+
+            /* Sum the per-term value deltas only over affected terms. */
+            double dE = 0.0;
+            for (uint32_t r = 0; r < n_affected; r++) {
+                uint32_t k = affected_list[r];
+                const uint8_t* P_k = &paulis[(size_t)k * n];
+                double _Complex zk = 0.0;
+                if (moonlab_ca_mps_expect_pauli(my, P_k, &zk) != CA_MPS_SUCCESS) {
+                    dE = INFINITY;
+                    break;
+                }
+                const double new_v = coeffs[k] * creal(zk);
+                dE += new_v - cache.term_value[k];
+                affected_flag[k] = 0;  /* clear inline so we don't loop again */
+            }
+            /* Clear any flags not zeroed by the early-break path. */
+            for (uint32_t r = 0; r < n_affected; r++)
+                affected_flag[affected_list[r]] = 0;
+
             cand_undo(my, c);
+
+            out_energies[i] = isfinite(dE) ? cache.E_total + dE : INFINITY;
         }
 
         if (my) moonlab_ca_mps_free(my);
+        free(affected_flag);
+        free(affected_list);
     }
 
-    free(cz_master);
+    term_cache_free(&cache);
 }
 
 /* Sequential reduction: pick the candidate with the most-negative

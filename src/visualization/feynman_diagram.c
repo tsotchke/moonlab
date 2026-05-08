@@ -64,7 +64,7 @@ static void sb_ensure(string_builder_t *sb, size_t additional) {
 static void sb_append(string_builder_t *sb, const char *str) {
     size_t len = strlen(str);
     sb_ensure(sb, len + 1);
-    strcpy(sb->buffer + sb->size, str);
+    memcpy(sb->buffer + sb->size, str, len + 1);
     sb->size += len;
 }
 
@@ -441,7 +441,7 @@ feynman_options_t feynman_default_options(void) {
         .wave_frequency = 4,
         .font_size = 12
     };
-    strcpy(opts.font_family, "monospace");
+    snprintf(opts.font_family, sizeof opts.font_family, "monospace");
     return opts;
 }
 
@@ -450,7 +450,7 @@ feynman_options_t feynman_publication_options(void) {
     opts.width = 80;
     opts.height = 30;
     opts.font_size = 14;
-    strcpy(opts.font_family, "Computer Modern");
+    snprintf(opts.font_family, sizeof opts.font_family, "Computer Modern");
     return opts;
 }
 

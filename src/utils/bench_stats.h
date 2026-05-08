@@ -33,6 +33,10 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 typedef struct {
     double mean_us;
@@ -111,5 +115,9 @@ static inline int bench_stats_to_json(const bench_stats_t *s,
         s->n_runs, s->mean_us, s->stddev_us,
         s->rel_stddev, s->min_us, s->max_us);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MOONLAB_BENCH_STATS_H */

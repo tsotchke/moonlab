@@ -214,6 +214,57 @@ int main(void) {
         }
     }
 
+    /* CA-MPS conjugate_pauli (since 0.2.4): get back Q_k = D^dagger P D
+     * for the current Clifford D in the state.  Probe with D = identity
+     * (default after create) so Q_k must equal the input string and the
+     * phase is 0. */
+    typedef int (*camps_conj_fn)(const void*, const uint8_t*, uint8_t*, int*);
+    dlerror();
+    camps_conj_fn camps_conj =
+        (camps_conj_fn)dlsym(h, "moonlab_ca_mps_conjugate_pauli");
+    if (!camps_conj) {
+        fprintf(stderr, "dlsym(moonlab_ca_mps_conjugate_pauli) failed\n");
+        failures++;
+    } else if (camps_create) {
+        void* s = camps_create(3, 4);
+        if (!s) {
+            fprintf(stderr, "moonlab_ca_mps_create(3,4) NULL for conj probe\n");
+            failures++;
+        } else {
+            uint8_t in_p[3] = {1, 2, 3};   /* X Y Z */
+            uint8_t out_p[3] = {0, 0, 0};
+            int phase = -1;
+            int rc = camps_conj(s, in_p, out_p, &phase);
+            if (rc != 0 || out_p[0] != 1 || out_p[1] != 2 || out_p[2] != 3 ||
+                phase != 0) {
+                fprintf(stderr,
+                        "conjugate_pauli (D=I): rc=%d out=[%u,%u,%u] phase=%d\n",
+                        rc, out_p[0], out_p[1], out_p[2], phase);
+                failures++;
+            } else {
+                fprintf(stdout, "moonlab_ca_mps_conjugate_pauli OK\n");
+            }
+            camps_free(s);
+        }
+    }
+
+    /* var-D entry points (v0.2.1 + v0.2.4): probe both symbols are
+     * exported.  Don't actually run them (they're tested elsewhere) --
+     * just verify that bindings consumers (QGTL, lilirrep) can resolve
+     * them. */
+    dlerror();
+    void* var_d_run_sym    = dlsym(h, "moonlab_ca_mps_var_d_run");
+    void* var_d_run_v2_sym = dlsym(h, "moonlab_ca_mps_var_d_run_v2");
+    if (!var_d_run_sym) {
+        fprintf(stderr, "dlsym(moonlab_ca_mps_var_d_run) failed\n");
+        failures++;
+    } else if (!var_d_run_v2_sym) {
+        fprintf(stderr, "dlsym(moonlab_ca_mps_var_d_run_v2) failed\n");
+        failures++;
+    } else {
+        fprintf(stdout, "moonlab_ca_mps_var_d_run + var_d_run_v2 OK\n");
+    }
+
     /* DMRG scalar entry point: TFIM ground-state energy at g = 1
      * (the quantum critical point), N = 8 chain, chi = 16, 5 sweeps.
      * Per-site energy at the critical point is ~ -4/pi for large N;

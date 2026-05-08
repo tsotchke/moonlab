@@ -57,11 +57,8 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     }
     
     state->owns_memory = 1;
-    state->global_phase = 0.0;
-    state->purity = 1.0;  // Pure state
-    state->fidelity = 1.0;
     state->num_measurements = 0;
-    
+
     return QS_SUCCESS;
 }
 
@@ -132,13 +129,7 @@ qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src
     
     // Copy amplitudes
     memcpy(dest->amplitudes, src->amplitudes, src->state_dim * sizeof(complex_t));
-    
-    // Copy properties
-    dest->global_phase = src->global_phase;
-    dest->entanglement_entropy = src->entanglement_entropy;
-    dest->purity = src->purity;
-    dest->fidelity = src->fidelity;
-    
+
     // Copy measurement history
     size_t measurements_to_copy = src->num_measurements;
     if (measurements_to_copy > dest->max_measurements) {
@@ -157,10 +148,6 @@ void quantum_state_reset(quantum_state_t *state) {
     // Reset to |0...0⟩
     memset(state->amplitudes, 0, state->state_dim * sizeof(complex_t));
     state->amplitudes[0] = 1.0 + 0.0*I;
-    
-    state->global_phase = 0.0;
-    state->purity = 1.0;
-    state->fidelity = 1.0;
     state->num_measurements = 0;
 }
 

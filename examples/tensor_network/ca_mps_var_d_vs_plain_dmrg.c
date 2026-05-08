@@ -105,13 +105,26 @@ int main(int argc, char** argv) {
     fprintf(json, "  \"points\": [\n");
     int first_json = 1;
 
-    const uint32_t n_values[] = { 6, 8 };
+    /* Default sweep covers n=6, 8 across the full phase diagram; n=10
+     * at the critical point only because the FERRO branch becomes
+     * expensive at larger n (each Trotter sweep is ~30s for
+     * apply_pauli_rotation chains over chi=32 MPS factors).  The
+     * variational claim that needs scaling validation is the
+     * critical-point ratio; the gapped phases already converge fast
+     * at small n and the per-point cost stays bounded. */
+    const uint32_t n_values[] = { 6, 8, 10 };
     const double   g_values[] = { 0.25, 0.5, 1.0, 1.5, 2.5 };
+    /* Skip n=10 for non-critical g values to keep wallclock bounded.
+     * The critical point at g=1.0 is the one we most need for the
+     * scaling argument. */
+    #define INCLUDE_NG_POINT(n_, g_) \
+        ((n_) <= 8 || fabs((g_) - 1.0) < 1e-6)
 
     for (size_t ni = 0; ni < sizeof(n_values)/sizeof(n_values[0]); ni++) {
         uint32_t n = n_values[ni];
         for (size_t gi = 0; gi < sizeof(g_values)/sizeof(g_values[0]); gi++) {
             double g = g_values[gi];
+            if (!INCLUDE_NG_POINT(n, g)) continue;
 
             /* Plain DMRG ground state. */
             dmrg_config_t cfg = dmrg_config_default();
@@ -172,13 +185,14 @@ int main(int argc, char** argv) {
              * Pauli strings, so |phi> grows quickly under imag-time
              * and truncation error compounds.  Compensate with a
              * tighter Trotter step + more outer iters specifically
-             * for this branch. */
+             * for this branch.  Scale back at larger n so wallclock
+             * stays bounded -- the per-Pauli-term cost grows with n. */
             moonlab_ca_mps_t* state_f = moonlab_ca_mps_create(n, /*max_bond=*/32);
             ca_mps_var_d_alt_config_t acfg_f = acfg;
             acfg_f.warmstart                   = CA_MPS_WARMSTART_FERRO_TFIM;
-            acfg_f.imag_time_dtau              = 0.05;
-            acfg_f.imag_time_steps_per_outer   = 8;
-            acfg_f.max_outer_iters             = 60;
+            acfg_f.imag_time_dtau              = (n <= 8) ? 0.05 : 0.10;
+            acfg_f.imag_time_steps_per_outer   = (n <= 8) ? 8 : 4;
+            acfg_f.max_outer_iters             = (n <= 8) ? 60 : 30;
             ca_mps_var_d_alt_result_t res_f = {0};
             moonlab_ca_mps_optimize_var_d_alternating(
                 state_f, paulis, coeffs, T, &acfg_f, &res_f);

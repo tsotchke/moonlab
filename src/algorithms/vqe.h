@@ -7,6 +7,12 @@
 #include <stddef.h>
 #include <complex.h>
 
+#include "../applications/moonlab_api.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file vqe.h
  * @brief Variational Quantum Eigensolver for electronic-structure problems.
@@ -135,7 +141,7 @@ pauli_hamiltonian_t* pauli_hamiltonian_create(
  * @brief Free Pauli Hamiltonian
  * @param hamiltonian Hamiltonian to free
  */
-void pauli_hamiltonian_free(pauli_hamiltonian_t *hamiltonian);
+MOONLAB_API void pauli_hamiltonian_free(pauli_hamiltonian_t *hamiltonian);
 
 /**
  * @brief Add Pauli term to Hamiltonian
@@ -176,7 +182,7 @@ pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance);
  * @param bond_distance Internuclear distance in Angstroms
  * @return LiH Hamiltonian
  */
-pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance);
+MOONLAB_API pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance);
 
 /**
  * @brief Create H₂O (Water) molecule Hamiltonian
@@ -194,7 +200,7 @@ pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
  *        reference / verification. Complexity O(4^n).
  * @return Ground-state energy including nuclear_repulsion, or NAN on error.
  */
-double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *hamiltonian);
+MOONLAB_API double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *hamiltonian);
 
 // ============================================================================
 // VARIATIONAL ANSATZ
@@ -237,7 +243,7 @@ typedef struct {
  * @param num_layers Circuit depth
  * @return Ansatz structure
  */
-vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
+MOONLAB_API vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
     size_t num_qubits,
     size_t num_layers
 );
@@ -273,7 +279,7 @@ vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
  * @brief Free ansatz structure
  * @param ansatz Ansatz to free
  */
-void vqe_ansatz_free(vqe_ansatz_t *ansatz);
+MOONLAB_API void vqe_ansatz_free(vqe_ansatz_t *ansatz);
 
 /**
  * @brief Apply ansatz circuit to quantum state
@@ -338,13 +344,13 @@ typedef struct {
  * @param type Optimizer type
  * @return Optimizer configuration
  */
-vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type);
+MOONLAB_API vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type);
 
 /**
  * @brief Free optimizer
  * @param optimizer Optimizer to free
  */
-void vqe_optimizer_free(vqe_optimizer_t *optimizer);
+MOONLAB_API void vqe_optimizer_free(vqe_optimizer_t *optimizer);
 
 // ============================================================================
 // VQE ALGORITHM
@@ -398,7 +404,7 @@ typedef struct {
  * @param entropy Entropy context for measurements
  * @return VQE solver context
  */
-vqe_solver_t* vqe_solver_create(
+MOONLAB_API vqe_solver_t* vqe_solver_create(
     pauli_hamiltonian_t *hamiltonian,
     vqe_ansatz_t *ansatz,
     vqe_optimizer_t *optimizer,
@@ -409,7 +415,7 @@ vqe_solver_t* vqe_solver_create(
  * @brief Free VQE solver
  * @param solver VQE solver to free
  */
-void vqe_solver_free(vqe_solver_t *solver);
+MOONLAB_API void vqe_solver_free(vqe_solver_t *solver);
 
 /**
  * @brief Set noise model for VQE solver
@@ -467,7 +473,7 @@ noise_model_t* vqe_create_nisq_noise(
  * @param parameters Current variational parameters
  * @return Energy expectation value
  */
-double vqe_compute_energy(
+MOONLAB_API double vqe_compute_energy(
     vqe_solver_t *solver,
     const double *parameters
 );
@@ -487,7 +493,7 @@ double vqe_compute_energy(
  * @param solver VQE solver context
  * @return VQE result with ground state energy
  */
-vqe_result_t vqe_solve(vqe_solver_t *solver);
+MOONLAB_API vqe_result_t vqe_solve(vqe_solver_t *solver);
 
 /**
  * @brief Compute gradient of energy with respect to parameters
@@ -550,7 +556,7 @@ qs_error_t vqe_apply_pauli_rotation(
  * @param energy Energy in Hartree
  * @return Energy in kcal/mol
  */
-double vqe_hartree_to_kcalmol(double energy);
+MOONLAB_API double vqe_hartree_to_kcalmol(double energy);
 
 /**
  * @brief Print VQE result
@@ -563,5 +569,9 @@ void vqe_print_result(const vqe_result_t *result);
  * @param hamiltonian Molecular Hamiltonian
  */
 void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VQE_H */

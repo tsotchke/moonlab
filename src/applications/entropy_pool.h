@@ -6,6 +6,10 @@
 #include <pthread.h>
 #include "hardware_entropy.h"
 #include "health_tests.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /**
  * @file entropy_pool.h
@@ -210,5 +214,9 @@ int entropy_pool_needs_refill(const entropy_pool_ctx_t *ctx);
  * @param ctx Pool context
  */
 void entropy_pool_print_stats(const entropy_pool_ctx_t *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ENTROPY_POOL_H */

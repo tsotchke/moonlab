@@ -464,7 +464,7 @@ render_options_t circuit_default_options(void) {
         .svg_width = 800,
         .svg_height = 400
     };
-    strcpy(opts.font_family, "monospace");
+    snprintf(opts.font_family, sizeof opts.font_family, "monospace");
     return opts;
 }
 
@@ -484,7 +484,7 @@ render_options_t circuit_publication_options(void) {
     opts.wire_spacing = 4;
     opts.show_grid = true;
     opts.font_size = 14;
-    strcpy(opts.font_family, "Computer Modern");
+    snprintf(opts.font_family, sizeof opts.font_family, "Computer Modern");
     return opts;
 }
 
@@ -947,7 +947,10 @@ static void sb_ensure(string_builder_t *sb, size_t additional) {
 static void sb_append(string_builder_t *sb, const char *str) {
     size_t len = strlen(str);
     sb_ensure(sb, len + 1);
-    strcpy(sb->buffer + sb->size, str);
+    /* sb_ensure guarantees capacity, so memcpy is the bounded primitive
+     * (strcpy would also be safe here, but using memcpy makes the
+     * bound explicit and survives the -Wfortify gauntlet). */
+    memcpy(sb->buffer + sb->size, str, len + 1);
     sb->size += len;
 }
 

@@ -458,6 +458,8 @@ fn main() {
         .allowlist_function("moonlab_ca_mps_norm")
         // var-D, gauge warmstart, Z2 LGT, status (since 0.2.1).
         .allowlist_function("moonlab_ca_mps_var_d_run")
+        // var-D v2 with explicit convergence_eps (since 0.2.4).
+        .allowlist_function("moonlab_ca_mps_var_d_run_v2")
         .allowlist_function("moonlab_ca_mps_gauge_warmstart")
         .allowlist_function("moonlab_z2_lgt_1d_build")
         .allowlist_function("moonlab_z2_lgt_1d_gauss_law")

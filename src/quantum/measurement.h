@@ -18,6 +18,8 @@
 #include "state.h"
 #include <stdint.h>
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

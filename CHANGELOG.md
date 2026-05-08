@@ -7,7 +7,294 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.2.1.)
+(No unreleased changes since v0.2.4.)
+
+## [0.2.4] - 2026-05-06
+
+Performance + ABI consolidation release on top of v0.2.3.  Two
+hot-path rewrites (DMRG environment contractor and var-D delta
+cache), a LAPACK fast path for the Hermitian eigensolver that
+unblocks n=12 ED, the var-D convergence-eps escape that closes
+the off-symmetry XXZ residuals to machine precision, plus a
+broad ABI tagging sweep across 12 module headers.
+
+### Added
+- **Kagome 12 cross-backend bench** (`bench_cross_backend_kagome12`)
+  rounds out the cross-validation story: ED + DMRG + var-D on the
+  same 6x2 PBC kagome AFM Hamiltonian, with reference comparison
+  to the libirrep $E_0 = -5.44487522 J$ ground state.  Pairs with
+  the existing TFIM and XXZ benches as the third model in the
+  paper's cross-backend table.
+- **`moonlab_ca_mps_conjugate_pauli`** ABI: returns the Clifford-
+  conjugated Pauli string + accumulated phase for the current $D$
+  in the CA-MPS state.  Used internally by the var-D delta cache
+  and exposed for higher-level routines that need to inspect
+  $D^\dagger P D$ without recomputing it.
+- **`MOONLAB_API` visibility tag** applied to 79 binding-consumed
+  declarations across 12 public headers: `state.h`, `gates.h`,
+  `measurement.h`, `entanglement.h`, `quantum_entropy.h`, `vqe.h`,
+  `qaoa.h`, `grover.h`, `bell_tests.h`, `clifford.h`, `qgt.h`,
+  `chern_kpm.h`.  Brings the hidden-visibility surface count from
+  21 to 100, and lets `QSIM_HIDDEN_VISIBILITY=ON` strip every
+  internal symbol from the dylib in a follow-up release.
+
+### Changed
+- **var-D Clifford candidate evaluation** now uses a per-term
+  delta cache: a candidate Clifford gate $G$ on qubit set $Q_G$
+  only re-evaluates terms whose conjugated Pauli string $D^\dagger
+  P_k D$ has non-identity support inside $Q_G$.  All other terms
+  reuse their cached value.  Speedup is $\sim N_\text{terms} /
+  N_\text{affected}$, which on the kagome 12 problem (72 terms,
+  $\sim$ 10 affected per single-qubit candidate) is $\sim$ 5-7x;
+  composite-mode passes (1k+ candidates per pass) see the largest
+  absolute wall-clock reduction.  Falls back to full re-evaluation
+  on cache OOM so correctness is unconditional.
+- **`hermitian_eigen_decomposition` LAPACK fast path**: routes
+  through Accelerate `zheev_` on Apple platforms (lapacke.h
+  `LAPACKE_zheev` on Linux when `MOONLAB_HAVE_LAPACKE` is set).
+  The Jacobi rotation fallback is O(n^4) per sweep with O(n^2)
+  rotation-target scans -- enough to make a single n=12 (4096-dim)
+  Hermitian eigendecomp run for hours on M2 Ultra; the LAPACK
+  path closes that case in $\sim$ 10 s.  Eigenvectors come back
+  in the row-major / descending-eigenvalue layout the existing
+  test pin (`unit_hermitian_eigen`) expects, plus a one-shot
+  conjugate to undo the row-major-as-column-major reading of
+  the input buffer.  Fallback Jacobi path retained for portable
+  builds without LAPACK.
+
+- **`moonlab_ca_mps_var_d_run_v2`** ABI extension exposes the
+  alternating-loop `convergence_eps` so callers can override
+  the default 1e-7.  The original `moonlab_ca_mps_var_d_run`
+  remains and now thunks to the v2 with eps=0 (default).  At
+  eps=1e-12 on the n=6 XXZ sweep, the `Delta in {0.5, 1.5}`
+  rows drop from 17%/15% residual to ~1e-7 -- the alternating
+  loop now runs through its full 60-iter budget instead of
+  declaring convergence at the non-GS fixed point.  The
+  high-symmetry points `Delta in {0, 1, 2}` stay stuck at
+  11-20% (the fixed point is robust to eps alone; needs a
+  2-site Gibbs TEBD update or stronger warmstart, tracked for
+  v0.3).
+- **DMRG environment contractor** rewritten as three pairwise
+  zgemms instead of a 7-deep nested scalar loop.  Drops the
+  per-site environment update from O(chi^4 * b^2 * d^2) to
+  O(chi^2 * b * (chi + b) * d^2); on the wide kagome 2D MPO
+  the kagome 12 cross-backend bench's DMRG step goes from
+  "doesn't finish in 18 minutes" to 40 s and now matches dense
+  ED to relative 2.6e-11 at chi=128.  Wired through both env
+  init paths plus all three update paths (left, right, plus
+  the rebuild-from-boundary branch).  The original scalar
+  nested loop is preserved as the no-MOONLAB_DMRG_HAVE_BLAS
+  fallback for portable builds.
+- **TDVP two-site theta formation** dispatches the
+  $A \otimes B$ contraction through `cblas_zgemm` instead of a
+  4-deep nested scalar loop.  Same row-major layout as the
+  output, so no permutation overhead.  `unit_skyrmion`
+  (the only test exercising `tdvp_evolve_two_site`) green at
+  0.34 s.
+
+### Bindings
+- **Python `moonlab.ca_mps.var_d_run`** grows a
+  `convergence_eps` keyword.  Default `0.0` keeps the existing
+  call shape via `moonlab_ca_mps_var_d_run`; positive values
+  route through `moonlab_ca_mps_var_d_run_v2` after probing
+  the dylib at import time.  Older Moonlab builds raise a
+  clear `RuntimeError` instead of silently ignoring the
+  argument.
+- **Rust `moonlab::ca_mps::VarDConfig`** gains a
+  `convergence_eps: f64` field (default 0.0); positive
+  values dispatch to the v2 entry.  `moonlab-sys` allowlists
+  the new symbol so `bindgen` picks it up automatically.
+
+### ABI test coverage
+- `test_moonlab_export_abi` now `dlsym`-probes
+  `moonlab_ca_mps_var_d_run`, `moonlab_ca_mps_var_d_run_v2`,
+  and `moonlab_ca_mps_conjugate_pauli`.  The conjugate_pauli
+  probe also runs a trivial $D = I$ round-trip ($Q_k = P_k$,
+  phase 0).
+
+## [0.2.3] - 2026-05-04
+
+Audit-driven point release.  Two real bug fixes that emerged from
+running the v0.2.2 cross-backend bench against models other than
+TFIM, plus a new XXZ Heisenberg cross-backend harness.
+
+### Fixed
+- **`vqe_exact_ground_state_energy`**: was using shifted power
+  iteration with a uniform-vector start, which has *exact zero*
+  overlap with non-trivial-Sz-sector ground states of SU(2)-
+  symmetric Hamiltonians.  Returned $+5.0$ (highest eigenvalue)
+  instead of $-9.97$ (ground state) on the n=6 Heisenberg point
+  at $\Delta=1$.  Fix: switch to direct Hermitian eigendecomposition
+  via `matrix_math.h` `hermitian_eigen_decomposition`.  At dim
+  $\le 4096$ (the n $\le$ 12 cap) this is a few-millisecond
+  one-shot, returns the smallest eigenvalue at floating-point
+  precision regardless of spectrum structure.  Power iteration
+  also stalled at ~$10^{-6}$ on near-degenerate spectra (TFIM
+  $g=0.25$); the new path matches DMRG to $\sim 10^{-10}$
+  uniformly on both TFIM and XXZ.
+- **XXZ cross-backend bench warmstart**: IDENTITY warmstart on
+  Heisenberg-like models leaves $|\phi\rangle = |0...0\rangle$ in
+  the $S_z = -n/2$ kernel of $XX+YY$, where imag-time evolution is
+  identically zero.  Bench reported $E=0$ (an exact eigenvalue,
+  not the ground state).  Fix: switch the XXZ bench to H_ALL
+  warmstart, which spreads $|\phi\rangle$ across every $S_z$
+  sector.  Comments document the pathology so future modules
+  picking warmstart heuristics avoid it.
+
+### Added
+- **`bench_cross_backend_xxz`**: companion to the TFIM
+  cross-backend bench, runs ED + DMRG + var-D on the same
+  Heisenberg-XXZ Hamiltonian.  Sweeps $\Delta \in \{0, 0.5, 1.0,
+  1.5, 2.0\}$ at $J=1$, $h=0$.  DMRG matches ED to $10^{-10}$
+  across all $\Delta$.  var-D with H_ALL warmstart and 20-outer /
+  5-imag-step budget converges to $11$--$20\%$ of ED across the
+  sweep (model-dependent SU(2) underperformance, no longer the
+  spurious zero from the IDENTITY pathology).
+- Paper §4.10 expanded with Heisenberg XXZ cross-backend table
+  alongside the existing TFIM table.  18 pages, clean BibTeX
+  compile.
+
+## [0.2.2] - 2026-05-04
+
+Audit-response cycle on the v0.2.1 paper, plus structural cleanup
+that came out of the architectural audit on the codebase itself.
+Twelve audit findings closed across three commit clusters.
+
+### Added
+- **Toric-code threshold harness v2** (`examples/applications/surface_code_threshold.c`):
+  full rewrite from a stripped-down planar code with anti-threshold
+  curves to a toric code with optimal MWPM (brute-force exact at
+  ≤10 defects, greedy + 2-opt above).  5000 trials per (d, p) at
+  d ∈ {3, 5, 7, 9} now demonstrates threshold crossing at
+  p ≈ 0.07 (literature anchor 0.103, gap explained by greedy
+  fallback above 10 defects).  Schema bumped to
+  `moonlab/surface_code_threshold_v2`; archive
+  `benchmarks/results/surface_code_threshold_v2_2026-05-02.json`.
+- **Stim head-to-head harness** (`tests/performance/stim_vs_moonlab.py`):
+  same-host comparison of Moonlab Pauli-frame batched-shot sampler
+  vs `stim.compile_detector_sampler` at d ∈ {5, 9, 15, 23, 31} on
+  the rotated surface-code Z-cycle.  Moonlab samples 22–143× faster
+  on M2 Ultra (Z-cycle vs full XZ cycle, factor-of-two correction
+  brings ratio to 11–72× like-for-like).  Archive
+  `stim_vs_moonlab_M2Ultra_2026-05-02.json`.
+- **Cross-backend TFIM ground-state validation**
+  (`tests/performance/bench_cross_backend_tfim.c`): same Hamiltonian
+  through dense ED, MPS DMRG, and CA-MPS var-D.  DMRG matches ED to
+  7–10 digits; var-D matches ED to 4–7 digits at n=8.  Archive
+  `cross_backend_tfim_n8_M2Ultra_2026-05-02.json`.
+- **Per-host throughput v2 with k=5 reps**
+  (`tests/performance/bench_state_throughput.c`): mean ± stddev plus
+  noise-floor min over k independent reps, restoring the n ∈ {16,
+  18, 20} rows that the prior v1 harness omitted.  Archive
+  `state_throughput_v2_M2Ultra_2026-05-02.json`.
+- **Fukui–Hatsugai–Suzuki momentum-space Chern integrator**
+  (`src/algorithms/topology_realspace/chern_fhs.{c,h}`,
+  `tests/unit/test_chern_fhs.c`): third in-tree path to the QWZ
+  Chern integer alongside the dense Bianco–Resta marker and the
+  matrix-free KPM marker.  At N=64, FHS converges to the integer to
+  ≤ 5×10⁻¹⁵ on every gapped point of the QWZ phase diagram tested.
+  Cross-validation against the dense marker asserts the BR/FHS
+  sign-flip relation as a regression.  Closes the paper §2.7 / §4.3
+  three-paths claim.
+- **Reproducibility manifest** (`benchmarks/results/MANIFEST.md`):
+  every paper claim mapped to its harness binary, exact command,
+  archived JSON path, and asserted tolerance.  Lists superseded
+  archives explicitly so future readers don't cite them.
+- **Six paper figures** rendered from archived JSONs in
+  `papers/drafts/moonlab_software/figures/` (in `tsotchke-private`
+  paper repo): threshold curves, state-throughput, Stim ratio,
+  var-D phase sweep, Chern mosaic, cross-backend bars.
+
+### Fixed
+- **OpenMP-engagement cliff in state-vector kernels**
+  (`src/quantum/gates.c`): lowered `QS_BLOCK_THRESHOLD_DIM` from
+  2²¹ (32 MiB) to 2¹⁸ (4 MiB).  Hadamard at n=16 went from 7 GB/s
+  to 44 GB/s after the change; the v1 throughput table omitted the
+  small-n rows that exposed the cliff.  Apple Silicon OMP fork-join
+  is ~10 µs, so 2¹⁸ amps × 24 threads ≈ 10k amps/thread × 4 ns/amp
+  ≈ 40 µs is well past break-even.
+- **Surface-code logical-failure check**
+  (`examples/applications/surface_code_threshold.c`): was probing
+  parity along the X-operator support; corrected to probe along the
+  Z-operator support `{h(a, 0)}` and `{v(0, b)}`.  Single-edge unit
+  test (50/50 pass on d=5).  Combined with the geometry rewrite,
+  this is what closed the anti-threshold finding from the paper
+  audit.
+- **Chern mosaic L=96 archive**: replaced the prior Debug-build
+  254.6 s / 32.9 ms-per-site numbers with the Release-build 25.4 s
+  / 3.28 ms-per-site numbers.  Archive
+  `chern_mosaic_L96_V0_0p2_M2Ultra_2026-05-02_release.json`.
+
+### Architectural cleanup
+- **MOONLAB_API macro** in `moonlab_export.h` tags the 21 stable ABI
+  declarations with `__attribute__((visibility("default")))` on
+  GCC/Clang and `__declspec(dll{import,export})` on MSVC.
+- **`QSIM_HIDDEN_VISIBILITY` build option** (default OFF for v0.2.x)
+  applies `-fvisibility=hidden` globally; smoke-tested at
+  1437→8 exported symbols.  Forward-compat surface for the v0.3 ABI
+  cycle that will tag the ~108 binding-consumed entry points and
+  flip the default to ON.
+- **Compile-time feature flags** generated into
+  `moonlab_features.h` (`MOONLAB_HAS_{MPI,METAL,CUDA,...}`).
+  Distributed headers gate their public declarations on
+  `MOONLAB_HAS_MPI` so users see a `#pragma GCC warning` instead of
+  unresolved-symbol at link time when MPI was disabled at build time.
+- **Compat headers relocated** to `src/compat/`, eliminating four
+  `#include_next` warnings that bled into every consumer's translation
+  unit.  `src/compat/` is added to the include path before system
+  headers only on Windows.
+- **`MAX_QUBITS` renamed** to `MOONLAB_MAX_QUBITS` with a deprecated
+  alias for one cycle (avoids collision with vendored Qiskit-Aer /
+  cuStateVec).  `_Static_assert` on `sizeof(size_t) >= 8` and
+  `MOONLAB_MAX_QUBITS <= 63` to prevent silent shift-overflow.
+- **Stale state fields removed** from `quantum_state_t`:
+  `global_phase`, `entanglement_entropy`, `purity`, `fidelity` were
+  set once at init and never updated by any gate or measurement;
+  callers now use accessor functions that re-derive from amplitudes.
+- **`extern "C"` guards** added to 21 public headers
+  (vqe.h, qpe.h, grover.h, qaoa.h, bell_tests.h, matrix_math.h,
+  validation.h, qrng.h, hardware_entropy.h, state.h, gates.h, ...).
+- **`qs_error_t` aliased** to `moonlab_status_t` semantics: state.h
+  now includes `<utils/moonlab_status.h>` and documents the
+  int-compatibility relationship.  No QS_* numeric values changed.
+- **CMake decomposition**: root file 2549 → 1363 lines.  Tests
+  (1008 lines) and examples (206 lines) extracted to
+  `cmake/{tests,examples}.cmake` via `include()` (same-scope, no
+  variable-passing dance).
+- **`qsim_target_link_openmp(target)` macro** replaces 9 duplicated
+  blocks of OpenMP linkage logic in CMakeLists.txt.
+- **`qsim_label_tests(label test...)` helper** drives 14 logical
+  ctest labels (core, tn, ca_mps, topology, clifford, algorithms,
+  qrng, crypto, bell, gpu, viz, bindings, abi, examples).
+  Selectable via `ctest -L topology` etc.
+- **`QSIM_BUILD_VISUALIZATION` build option** (default ON for
+  back-compat) makes the `src/visualization/` renderer module opt-in.
+  Downstream consumers (NQS, QGTL) that don't need it can configure
+  with `-DQSIM_BUILD_VISUALIZATION=OFF` for a thinner libquantumsim.
+- **`QSIM_WERROR=ON` default** flipped from OFF.  Build is clean
+  under Release + -Werror with the documented `-Wno-error=` pedantic
+  / deprecated-declarations exclusions.
+- **21 strcpy/strcat callsites** replaced with bounded snprintf or
+  memcpy variants (visualization renderers, simd capability strings,
+  einsum subscript parser).
+- **Bindings version sync** enforced via
+  `tools/check_binding_versions.sh` ctest gate.  Was: 3 binding
+  manifests stale relative to VERSION.txt.  Now: 10/10 manifests in
+  sync, regression-tested on every ctest.
+- **Reproducibility manifest** at `benchmarks/results/MANIFEST.md`
+  maps every paper claim to its harness binary, exact command,
+  archived JSON, and asserted tolerance.
+- **Bell-variants harness** added: CHSH + Mermin-3 + Mermin-Klyshko
+  on 4q and 5q GHZ.  All four variants saturate the predicted
+  quantum bound, all 10/10 violate classical.
+
+### Verified
+- ctest gate (`-j8`, Release, `-LE` long/aarch64_flake/exhaustive):
+  93/93 tests pass on M2 Ultra (was 92/92; added `unit_chern_fhs` and
+  `bindings_version_sync`).  14-30 s wall, depending on warm cache.
+- Build clean under Release + `-Werror` on macOS arm64.
+- Paper grew from 14 to 17 pages with six figures rendered from the
+  archived JSONs; clean BibTeX compile, no undefined references.
 
 ## [0.2.1] - 2026-04-30
 

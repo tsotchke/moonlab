@@ -95,6 +95,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 // ============================================================================
 // JORDAN-WIGNER TRANSFORMATION
@@ -437,5 +441,9 @@ molecule_t *molecule_lih(double bond_length);
  * @return H2O molecule
  */
 molecule_t *molecule_h2o(double oh_length, double angle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* CHEMISTRY_H */

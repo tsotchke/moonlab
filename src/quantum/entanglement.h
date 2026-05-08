@@ -75,6 +75,8 @@
 #include <stdint.h>
 #include <complex.h>
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -110,7 +112,7 @@ double entanglement_renyi_entropy(const complex_t* reduced_dm, uint64_t dim,
 /**
  * @brief Compute entanglement entropy for bipartition
  */
-double entanglement_entropy_bipartition(const quantum_state_t* state,
+MOONLAB_API double entanglement_entropy_bipartition(const quantum_state_t* state,
                                         const int* subsystem_b_qubits,
                                         int num_b_qubits);
 

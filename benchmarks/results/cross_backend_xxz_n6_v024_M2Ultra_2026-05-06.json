@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/cross_backend_xxz_v1",
+  "description": "Cross-backend XXZ Heisenberg ground-state validation: same Hamiltonian H = J sum<ij> (X_i X_j + Y_i Y_j + Delta Z_i Z_j) - h sum_i Z_i computed by three independent Moonlab engines.  DMRG matches dense ED to ~10 digits at every Delta.  var-D now uses the v0.2.4 var_d_run_v2 entry point with convergence_eps=1e-12; this lets the alternating loop run through its 60-iter budget instead of declaring convergence at the 11-19% non-GS fixed point.  At Delta in {0.5, 1.5} the residual drops to ~1e-7 (machine precision against ED); at the high-symmetry points Delta in {0, 1, 2} the fixed point is robust to eps tightening and the residual stays at 11-20% -- escaping it requires either a 2-site Gibbs TEBD |phi>-update or a higher-symmetry warmstart, tracked for v0.3.  An IDENTITY warmstart leaves |phi> = |0..0> in the Sz=-n/2 kernel of XX+YY where imag-time is trivially stuck at the wrong eigenvalue; H_ALL puts |phi> on every Sz sector.",
+  "params": {"n": 6, "J": 1.000000, "h": 0.000000, "obc": true, "dmrg_chi": 64, "dmrg_sweeps": 8, "ca_mps_chi": 64, "var_d_outer_iters": 60, "var_d_dtau": 0.05, "var_d_imag_steps": 10, "var_d_cliff_passes": 2, "var_d_convergence_eps": 1e-12, "var_d_warmstart": "H_ALL"},
+  "rows": [
+    {"n": 6, "J": 1.000000, "Delta": 0.000000, "h": 0.000000, "E_ED": -6.9879184149, "E_DMRG": -6.9879184125, "E_varD": -6.0978338809, "rel_err_DMRG": 3.443155e-10, "rel_err_varD": 1.273748e-01, "t_ED": 0.0006, "t_DMRG": 0.0151, "t_varD": 4.4716},
+    {"n": 6, "J": 1.000000, "Delta": 0.500000, "h": 0.000000, "E_ED": -8.3915505530, "E_DMRG": -8.3915505501, "E_varD": -8.3915497133, "rel_err_DMRG": 3.534888e-10, "rel_err_varD": 1.000705e-07, "t_ED": 0.0011, "t_DMRG": 0.0187, "t_varD": 9.7399},
+    {"n": 6, "J": 1.000000, "Delta": 1.000000, "h": 0.000000, "E_ED": -9.9743085356, "E_DMRG": -9.9743085347, "E_varD": -8.0079733998, "rel_err_DMRG": 8.547496e-11, "rel_err_varD": 1.971400e-01, "t_ED": 0.0005, "t_DMRG": 0.0128, "t_varD": 1.5724},
+    {"n": 6, "J": 1.000000, "Delta": 1.500000, "h": 0.000000, "E_ED": -11.7093435636, "E_DMRG": -11.7093435626, "E_varD": -11.7093407347, "rel_err_DMRG": 8.689436e-11, "rel_err_varD": 2.415916e-07, "t_ED": 0.0006, "t_DMRG": 0.0172, "t_varD": 9.0946},
+    {"n": 6, "J": 1.000000, "Delta": 2.000000, "h": 0.000000, "E_ED": -13.5777154405, "E_DMRG": -13.5777154394, "E_varD": -12.0811114300, "rel_err_DMRG": 8.550856e-11, "rel_err_varD": 1.102250e-01, "t_ED": 0.0005, "t_DMRG": 0.0153, "t_varD": 2.9094}
+  ]
+}

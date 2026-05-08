@@ -5,6 +5,12 @@
 #include "../utils/quantum_entropy.h"
 #include <stddef.h>
 
+#include "../applications/moonlab_api.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @file grover.h
  * @brief Grover amplitude-amplification search.
@@ -103,7 +109,7 @@ typedef struct {
  * @param entropy Secure entropy source for measurement
  * @return Result including found state and statistics
  */
-grover_result_t grover_search(quantum_state_t *state, const grover_config_t *config, quantum_entropy_ctx_t *entropy);
+MOONLAB_API grover_result_t grover_search(quantum_state_t *state, const grover_config_t *config, quantum_entropy_ctx_t *entropy);
 
 /**
  * @brief Calculate optimal number of Grover iterations
@@ -114,7 +120,7 @@ grover_result_t grover_search(quantum_state_t *state, const grover_config_t *con
  * @param num_qubits Number of qubits
  * @return Optimal number of iterations
  */
-size_t grover_optimal_iterations(size_t num_qubits);
+MOONLAB_API size_t grover_optimal_iterations(size_t num_qubits);
 
 /**
  * @brief Oracle operator for Grover's algorithm
@@ -126,7 +132,7 @@ size_t grover_optimal_iterations(size_t num_qubits);
  * @param marked_state Index of state to mark
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
+MOONLAB_API qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
 
 /**
  * @brief Diffusion operator (inversion about average)
@@ -137,7 +143,7 @@ qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
  * @param state Quantum state
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_diffusion(quantum_state_t *state);
+MOONLAB_API qs_error_t grover_diffusion(quantum_state_t *state);
 
 /**
  * @brief Single Grover iteration (oracle + diffusion)
@@ -148,7 +154,7 @@ qs_error_t grover_diffusion(quantum_state_t *state);
  * @param marked_state State to amplify
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_state);
+MOONLAB_API qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_state);
 
 // ============================================================================
 // RANDOM SAMPLING USING GROVER
@@ -313,5 +319,9 @@ uint64_t grover_mcmc_step(
     uint64_t current_state,
     quantum_entropy_ctx_t *entropy
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* GROVER_H */

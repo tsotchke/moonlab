@@ -48,8 +48,13 @@ doc/*
 # Build directories
 build/
 build-*/
+build_*/
 dist/
 *.egg-info/
+
+# Bench JSONs written to repo root (archived bench output goes to
+# benchmarks/results/ instead).
+/bench_*.json
 
 # CMake / CTest local artifacts
 .cache/

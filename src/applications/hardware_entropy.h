@@ -8,6 +8,10 @@
 typedef intptr_t ssize_t;
 #else
 #include <sys/types.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #endif
 
 /**
@@ -285,5 +289,9 @@ const char* entropy_source_name(entropy_source_type_t source);
  * @param ctx Entropy context
  */
 void entropy_print_stats(const entropy_ctx_t *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* HARDWARE_ENTROPY_H */
