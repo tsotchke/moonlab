@@ -163,6 +163,92 @@ int main(void) {
         moonlab_mpdo_free(m);
     }
 
+    /* ---- Case 6: named depolarising channel matches manual Kraus
+     *               at p = 0.4: <Z> -> 1 - 4p/3 = 7/15 -------------- */
+    {
+        const double p = 0.4;
+        moonlab_mpdo_t* m = moonlab_mpdo_create(1, 16);
+        mpdo_error_t rc = moonlab_mpdo_apply_depolarizing_1q(m, 0, p);
+        CHECK(rc == MPDO_SUCCESS, "apply_depolarizing_1q rc=%d", (int)rc);
+
+        double z = 0.0;
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &z);
+        const double expected = 1.0 - 4.0 * p / 3.0;
+        CHECK_NEAR(z, expected, 1e-12, "named depolarizing(p=0.4) <Z>");
+
+        double tr = moonlab_mpdo_trace(m);
+        CHECK_NEAR(tr, 1.0, 1e-12, "Tr after named depolarizing");
+
+        moonlab_mpdo_free(m);
+    }
+
+    /* ---- Case 7: amplitude damping at gamma=1 sends |1> -> |0> ---
+     *
+     * Prepare |1><1| via X gate, then full amplitude-damp.  Expected:
+     * <Z> = +1 (back at |0><0|) and Tr = 1. */
+    {
+        moonlab_mpdo_t* m = moonlab_mpdo_create(1, 16);
+        const mpdo_complex_t X_kraus[4] = { 0.0, 1.0, 1.0, 0.0 };
+        moonlab_mpdo_apply_kraus_1q(m, 0, X_kraus, 1);
+
+        double z = 0.0;
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &z);
+        CHECK_NEAR(z, -1.0, 1e-12, "<Z> after X");
+
+        mpdo_error_t rc = moonlab_mpdo_apply_amplitude_damping_1q(m, 0, 1.0);
+        CHECK(rc == MPDO_SUCCESS, "apply_amplitude_damping_1q rc=%d", (int)rc);
+
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &z);
+        CHECK_NEAR(z, +1.0, 1e-12, "<Z> after full amplitude damping = +1");
+        double tr = moonlab_mpdo_trace(m);
+        CHECK_NEAR(tr, 1.0, 1e-12, "Tr after full amplitude damping");
+
+        moonlab_mpdo_free(m);
+    }
+
+    /* ---- Case 8: phase damping preserves <Z>, kills <X> on |+> ---
+     *
+     * Prepare |+> = H|0> via H Kraus, verify <X>=1, <Z>=0.  Apply
+     * phase damping at lambda=1: <X> -> 0, <Z> unchanged. */
+    {
+        moonlab_mpdo_t* m = moonlab_mpdo_create(1, 16);
+        const double inv_sqrt2 = 1.0 / sqrt(2.0);
+        const mpdo_complex_t H_kraus[4] = {
+            (mpdo_complex_t)inv_sqrt2,  (mpdo_complex_t)inv_sqrt2,
+            (mpdo_complex_t)inv_sqrt2, -(mpdo_complex_t)inv_sqrt2,
+        };
+        moonlab_mpdo_apply_kraus_1q(m, 0, H_kraus, 1);
+
+        double zb = 0.0, xb = 0.0;
+        moonlab_mpdo_expect_pauli_1q(m, 0, 1, &xb);
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &zb);
+        CHECK_NEAR(xb, 1.0, 1e-12, "<X> on |+> = 1");
+        CHECK_NEAR(zb, 0.0, 1e-12, "<Z> on |+> = 0");
+
+        mpdo_error_t rc = moonlab_mpdo_apply_phase_damping_1q(m, 0, 1.0);
+        CHECK(rc == MPDO_SUCCESS, "apply_phase_damping_1q rc=%d", (int)rc);
+
+        moonlab_mpdo_expect_pauli_1q(m, 0, 1, &xb);
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &zb);
+        CHECK_NEAR(xb, 0.0, 1e-12, "<X> after lambda=1 phase damping = 0");
+        CHECK_NEAR(zb, 0.0, 1e-12, "<Z> after lambda=1 phase damping = 0");
+
+        moonlab_mpdo_free(m);
+    }
+
+    /* ---- Case 9: bit-flip channel and its idempotence at p=1 ---- */
+    {
+        const double p = 0.7;
+        moonlab_mpdo_t* m = moonlab_mpdo_create(1, 16);
+        moonlab_mpdo_apply_bit_flip_1q(m, 0, p);
+        double z = 0.0;
+        moonlab_mpdo_expect_pauli_1q(m, 0, 3, &z);
+        /* On |0><0|: rho -> (1-p)|0><0| + p|1><1|;  <Z> = 1 - 2p */
+        CHECK_NEAR(z, 1.0 - 2.0 * p, 1e-12, "bit_flip <Z>");
+
+        moonlab_mpdo_free(m);
+    }
+
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
         return 0;

@@ -150,6 +150,77 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_kraus_1q(moonlab_mpdo_t* state,
                                                       const mpdo_complex_t* kraus,
                                                       uint32_t num_kraus);
 
+/* ---- Named single-qubit channels ----------------------------------
+ *
+ * Convenience wrappers around the standard textbook channels.  Each
+ * builds the appropriate Kraus operators internally and calls
+ * moonlab_mpdo_apply_kraus_1q.  Channel parameter conventions match
+ * the existing src/quantum/noise.h definitions so the noise model
+ * stays consistent across MPDO and pure-state simulation paths.
+ */
+
+/**
+ * @brief Single-qubit depolarising channel
+ *        @f$\rho \mapsto (1-p)\rho + (p/3)(X\rho X + Y\rho Y + Z\rho Z)@f$.
+ *
+ * @param p  Depolarising probability in [0, 1].  At p=0 the channel
+ *           is identity; at p=3/4 it sends every state to the maximally
+ *           mixed state I/2.
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_depolarizing_1q(moonlab_mpdo_t* state,
+                                                            uint32_t qubit,
+                                                            double p);
+
+/**
+ * @brief Single-qubit amplitude damping (T1 relaxation)
+ *        @f$\rho \mapsto K_0 \rho K_0^\dagger + K_1 \rho K_1^\dagger@f$
+ *        with @f$K_0 = \mathrm{diag}(1, \sqrt{1-\gamma})@f$,
+ *        @f$K_1 = \sqrt{\gamma}\,|0\rangle\langle 1|@f$.
+ *
+ * @param gamma  Damping parameter in [0, 1].  At gamma=0 the channel
+ *               is identity; at gamma=1 it deterministically resets
+ *               every state to |0><0|.
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_amplitude_damping_1q(moonlab_mpdo_t* state,
+                                                                  uint32_t qubit,
+                                                                  double gamma);
+
+/**
+ * @brief Single-qubit phase damping (pure dephasing, T2 only)
+ *        @f$K_0 = \mathrm{diag}(1, \sqrt{1-\lambda})@f$,
+ *        @f$K_1 = \sqrt{\lambda}\,|1\rangle\langle 1|@f$.
+ *
+ * @param lambda  Dephasing parameter in [0, 1].  Reduces off-diagonal
+ *                density-matrix elements by factor sqrt(1-lambda).
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_damping_1q(moonlab_mpdo_t* state,
+                                                              uint32_t qubit,
+                                                              double lambda);
+
+/**
+ * @brief Bit-flip channel
+ *        @f$\rho \mapsto (1-p)\rho + p\,X\rho X@f$.
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_flip_1q(moonlab_mpdo_t* state,
+                                                        uint32_t qubit,
+                                                        double p);
+
+/**
+ * @brief Phase-flip channel
+ *        @f$\rho \mapsto (1-p)\rho + p\,Z\rho Z@f$.
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_flip_1q(moonlab_mpdo_t* state,
+                                                          uint32_t qubit,
+                                                          double p);
+
+/**
+ * @brief Bit-phase-flip channel
+ *        @f$\rho \mapsto (1-p)\rho + p\,Y\rho Y@f$.
+ */
+MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q(moonlab_mpdo_t* state,
+                                                               uint32_t qubit,
+                                                               double p);
+
 /* ================================================================== */
 /*  Observables                                                       */
 /* ================================================================== */

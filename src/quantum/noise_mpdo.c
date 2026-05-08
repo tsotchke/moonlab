@@ -23,6 +23,7 @@
 
 #include "noise_mpdo.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -225,6 +226,90 @@ mpdo_error_t moonlab_mpdo_apply_kraus_1q(moonlab_mpdo_t* state,
     memcpy(T, Tnew, tensor_size(L, R) * sizeof(mpdo_complex_t));
     free(Tnew);
     return MPDO_SUCCESS;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Named channels                                                    */
+/* ------------------------------------------------------------------ */
+
+mpdo_error_t moonlab_mpdo_apply_depolarizing_1q(moonlab_mpdo_t* state,
+                                                 uint32_t qubit,
+                                                 double p) {
+    if (p < 0.0 || p > 1.0) return MPDO_ERR_INVALID;
+    const double a = sqrt(1.0 - p);              /* identity weight */
+    const double b = sqrt(p / 3.0);              /* per-Pauli weight */
+    const mpdo_complex_t kraus[4 * 4] = {
+        /* I */ a, 0.0, 0.0, a,
+        /* X */ 0.0, b, b, 0.0,
+        /* Y */ 0.0, -b * _Complex_I, b * _Complex_I, 0.0,
+        /* Z */ b, 0.0, 0.0, -b,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 4);
+}
+
+mpdo_error_t moonlab_mpdo_apply_amplitude_damping_1q(moonlab_mpdo_t* state,
+                                                      uint32_t qubit,
+                                                      double gamma) {
+    if (gamma < 0.0 || gamma > 1.0) return MPDO_ERR_INVALID;
+    const double s = sqrt(1.0 - gamma);
+    const double r = sqrt(gamma);
+    const mpdo_complex_t kraus[2 * 4] = {
+        /* K_0 = diag(1, sqrt(1-gamma)) */ 1.0, 0.0, 0.0, s,
+        /* K_1 = sqrt(gamma) * |0><1|  */ 0.0, r,   0.0, 0.0,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 2);
+}
+
+mpdo_error_t moonlab_mpdo_apply_phase_damping_1q(moonlab_mpdo_t* state,
+                                                  uint32_t qubit,
+                                                  double lambda) {
+    if (lambda < 0.0 || lambda > 1.0) return MPDO_ERR_INVALID;
+    const double s = sqrt(1.0 - lambda);
+    const double r = sqrt(lambda);
+    const mpdo_complex_t kraus[2 * 4] = {
+        /* K_0 = diag(1, sqrt(1-lambda)) */ 1.0, 0.0, 0.0, s,
+        /* K_1 = sqrt(lambda) * |1><1| */   0.0, 0.0, 0.0, r,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 2);
+}
+
+mpdo_error_t moonlab_mpdo_apply_bit_flip_1q(moonlab_mpdo_t* state,
+                                             uint32_t qubit,
+                                             double p) {
+    if (p < 0.0 || p > 1.0) return MPDO_ERR_INVALID;
+    const double a = sqrt(1.0 - p);
+    const double b = sqrt(p);
+    const mpdo_complex_t kraus[2 * 4] = {
+        /* K_0 = sqrt(1-p) I */ a, 0.0, 0.0, a,
+        /* K_1 = sqrt(p) X */   0.0, b, b, 0.0,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 2);
+}
+
+mpdo_error_t moonlab_mpdo_apply_phase_flip_1q(moonlab_mpdo_t* state,
+                                               uint32_t qubit,
+                                               double p) {
+    if (p < 0.0 || p > 1.0) return MPDO_ERR_INVALID;
+    const double a = sqrt(1.0 - p);
+    const double b = sqrt(p);
+    const mpdo_complex_t kraus[2 * 4] = {
+        /* K_0 = sqrt(1-p) I */ a, 0.0, 0.0, a,
+        /* K_1 = sqrt(p) Z */   b, 0.0, 0.0, -b,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 2);
+}
+
+mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q(moonlab_mpdo_t* state,
+                                                   uint32_t qubit,
+                                                   double p) {
+    if (p < 0.0 || p > 1.0) return MPDO_ERR_INVALID;
+    const double a = sqrt(1.0 - p);
+    const double b = sqrt(p);
+    const mpdo_complex_t kraus[2 * 4] = {
+        /* K_0 = sqrt(1-p) I */ a, 0.0, 0.0, a,
+        /* K_1 = sqrt(p) Y */   0.0, -b * _Complex_I, b * _Complex_I, 0.0,
+    };
+    return moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, 2);
 }
 
 /* ------------------------------------------------------------------ */
