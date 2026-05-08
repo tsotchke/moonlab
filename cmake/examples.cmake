@@ -150,6 +150,26 @@
     target_link_libraries(example_ca_peps_2d_tfim_var_d_vs_ed PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # v0.3 QGT topology examples: each demonstrates one new model
+    # primitive (Kane-Mele, BHZ, Hofstadter, Kitaev p-wave chain) and
+    # prints the topological invariant across its phase diagram.
+    add_executable(example_qgt_kane_mele
+        examples/topological/qgt_kane_mele.c)
+    target_link_libraries(example_qgt_kane_mele PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_bhz
+        examples/topological/qgt_bhz.c)
+    target_link_libraries(example_qgt_bhz PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_hofstadter
+        examples/topological/qgt_hofstadter.c)
+    target_link_libraries(example_qgt_hofstadter PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_kitaev_z2
+        examples/topological/qgt_kitaev_z2.c)
+    target_link_libraries(example_qgt_kitaev_z2 PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Bell-CHSH multi-run aggregate: runs the CHSH test N>=5 times and
     # reports median + IQR + min/max + violation rate.  Closes the
     # paper §4.2 todo about reporting a statistically-honest CHSH
