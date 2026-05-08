@@ -83,15 +83,27 @@ static void haldane_bloch(const double k[2], void* user,
     const haldane_params_t* p = (const haldane_params_t*)user;
     double t1 = p->t1, t2 = p->t2, phi = p->phi, M = p->M;
     double kx = k[0], ky = k[1];
-    /* NN sum (off-diagonal): sum_delta e^{-i k . delta_j}. */
+    /* NN sum (off-diagonal): sum_delta e^{-i k . delta_j}.  Vanishes
+     * at the Dirac points (kx, ky) = (0, +/-2*pi/3) in this primitive-
+     * coord convention. */
     double ax = kx, ay = ky;
     qgt_complex_t f = (cos(ax) + cos(ax - ay) + cos(ay))
                     + _Complex_I * (sin(ax) + sin(ax - ay) + sin(ay));
-    /* Diagonal terms: NNN hopping contributes cos(phi) * [standard NNN sum] to
-     * both diagonals (same sign) and sin(phi) * [antisymmetric NNN sum] to
-     * sigma_z. */
+    /* NNN diagonal terms.  c1 (even, contributes a sublattice-symmetric
+     * shift) and c2 (odd, contributes the SOC mass that gaps the Dirac
+     * points with opposite signs).  c2 must take values +/- 3*sqrt(3)/2
+     * at (0, +/- 2*pi/3) to drive a topological phase transition at
+     * |M| = 3*sqrt(3)*t2*|sin(phi)|.  The earlier
+     *   c2 = sin(kx-ky) - sin(kx) + sin(ky)
+     * form vanished at both Dirac points -- it was the antisymmetric
+     * NNN sum for a different primitive-coord orientation -- giving an
+     * always-trivial Hamiltonian away from M=0.  The form below is
+     *   c2 = sin(ky) * (1 + 2*cos(kx))
+     *      = sin(ky) + sin(ky+kx) + sin(ky-kx)
+     * which evaluates to +-3*sqrt(3)/2 at the Dirac points and gives
+     * the canonical Haldane phase diagram. */
     double c1 = cos(ax - ay) + cos(ax) + cos(ay);          /* even under AB swap */
-    double c2 = sin(ax - ay) - sin(ax) + sin(ay);          /* odd (signed NNN) */
+    double c2 = sin(ay) * (1.0 + 2.0 * cos(ax));            /* odd (signed NNN) */
     double diag_sum = 2.0 * t2 * cos(phi) * c1;
     double sigma_z = M - 2.0 * t2 * sin(phi) * c2;
     h[0] = diag_sum + sigma_z;
@@ -1007,10 +1019,12 @@ static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
     /* NN A->B sum in primitive reciprocal coordinates: same as Haldane. */
     qgt_complex_t f = (cos(kx) + cos(kx - ky) + cos(ky))
                     + I * (sin(kx) + sin(kx - ky) + sin(ky));
-    /* NNN antisymmetric (signed) sum -- the spin-orbit driver.
-     * Matches Haldane's c2 with opposite sign convention so that
-     * spin-up acts like Haldane phi = +pi/2 and spin-down like -pi/2. */
-    double c2 = sin(kx - ky) - sin(kx) + sin(ky);
+    /* NNN antisymmetric (signed) sum -- the spin-orbit driver.  Same
+     * canonical form as the corrected Haldane c2 (see qgt_model_haldane
+     * for the why): nonzero at the Dirac points (0, +/-2*pi/3) where
+     * f vanishes, with opposite signs.  Matches Haldane's c2 with the
+     * spin-up block acting like phi = +pi/2 and spin-down like -pi/2. */
+    double c2 = sin(ky) * (1.0 + 2.0 * cos(kx));
 
     /* Initialise to zero. */
     for (int i = 0; i < 16; i++) h[i] = 0.0;
