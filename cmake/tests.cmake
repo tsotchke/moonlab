@@ -349,6 +349,12 @@
         add_test(NAME unit_qgt_kane_mele COMMAND test_qgt_kane_mele)
         set_tests_properties(unit_qgt_kane_mele PROPERTIES TIMEOUT 30 LABELS "topology")
 
+        # BHZ 4-band model + Z_2 invariant (v0.3 QGT extension).
+        add_executable(test_qgt_bhz tests/unit/test_qgt_bhz.c)
+        target_link_libraries(test_qgt_bhz PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_bhz COMMAND test_qgt_bhz)
+        set_tests_properties(unit_qgt_bhz PROPERTIES TIMEOUT 30 LABELS "topology")
+
         # MPDO noise simulator scaffold (v0.3 noise extension).
         add_executable(test_mpdo_smoke tests/unit/test_mpdo_smoke.c)
         target_link_libraries(test_mpdo_smoke PRIVATE quantumsim ${MATH_LIBRARY})

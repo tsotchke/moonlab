@@ -87,6 +87,29 @@ int main(void) {
         qgt_free(sys);
     }
 
+    /* Haldane: phase boundary at |M| = 3*sqrt(3)*t2*|sin(phi)|.
+     * For t2=0.06, phi=pi/2: boundary 0.312.  Sweep across the
+     * transition. */
+    fprintf(stdout, "\n=== Haldane phase diagram ===\n");
+    {
+        struct { double M; int C_expected; const char* label; } cases[] = {
+            { 0.10, -1, "topological (M=0.10)" },
+            { 0.25, -1, "topological (M=0.25)" },
+            { 0.40,  0, "trivial     (M=0.40)" },
+            { 1.00,  0, "trivial     (M=1.00)" },
+        };
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+            fprintf(stdout, "\n-- Haldane %s --\n", cases[i].label);
+            qgt_system_t* sys = qgt_model_haldane(1.0, 0.06, 0.5 * M_PI,
+                                                   cases[i].M);
+            int c = chern_match(sys, 48);
+            CHECK(c == cases[i].C_expected,
+                  "all three integrators agree at C=%d, got %d (M=%.2f)",
+                  cases[i].C_expected, c, cases[i].M);
+            qgt_free(sys);
+        }
+    }
+
     if (failures == 0) {
         fprintf(stdout, "\nALL TESTS PASS\n");
         return 0;

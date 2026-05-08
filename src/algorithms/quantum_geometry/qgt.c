@@ -1065,3 +1065,68 @@ qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
     sys->owned_user = p;
     return sys;
 }
+
+/* ----- BHZ (Bernevig-Hughes-Zhang) 4-band model ---------------------
+ *
+ * Square-lattice TI in the basis (|s,+>, |p,+>, |s,->, |p,->).  Spin
+ * is conserved (Sz commutes with H), so the Hamiltonian is block-
+ * diagonal:
+ *
+ *   h_+(k) = (M + 2 B (2 - cos kx - cos ky)) sigma_z
+ *          + A sin(kx) sigma_x + A sin(ky) sigma_y
+ *   h_-(k) = h_+*(-k) = (M + 2 B (2 - cos kx - cos ky)) sigma_z
+ *          - A sin(kx) sigma_x - A sin(ky) sigma_y
+ *
+ * Z_2 = 1 (QSH) for 0 < M/B < 4; trivial for M/B < 0 or > 4.
+ */
+
+typedef struct {
+    double A;
+    double B;
+    double M;
+} bhz_params_t;
+
+static void bhz_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
+    bhz_params_t* p = (bhz_params_t*)user;
+    double kx = k[0], ky = k[1];
+    /* Common diagonal: M - 2B (2 - cos kx - cos ky).  At Gamma = (0, 0)
+     * this evaluates to M; at X = (pi, 0) / (0, pi) it is M - 4B; at M
+     * point (pi, pi) it is M - 8B.  This is the standard BHZ
+     * convention where QSH lies in 0 < M < 4B. */
+    double mass = p->M - 2.0 * p->B * (2.0 - cos(kx) - cos(ky));
+    double sx = p->A * sin(kx);
+    double sy = p->A * sin(ky);
+
+    for (int i = 0; i < 16; i++) h[i] = 0.0;
+
+    /* Spin-up block (rows 0,1, cols 0,1):
+     *   h_+ = mass*sigma_z + sx*sigma_x + sy*sigma_y
+     */
+    h[0 * 4 + 0] = (qgt_complex_t)mass;
+    h[0 * 4 + 1] = (qgt_complex_t)sx - _Complex_I * (qgt_complex_t)sy;
+    h[1 * 4 + 0] = (qgt_complex_t)sx + _Complex_I * (qgt_complex_t)sy;
+    h[1 * 4 + 1] = (qgt_complex_t)(-mass);
+    /* Spin-down block (rows 2,3, cols 2,3): TR partner of the spin-up
+     * block.  Computed as sigma_y * conj(h_+(-k)) * sigma_y, which for
+     * h_+ = mass*sigma_z + sx*sigma_x + sy*sigma_y (with sx, sy odd
+     * and mass even in k) yields h_- = -mass*sigma_z + sx*sigma_x +
+     * sy*sigma_y.  Same in-plane components, opposite sigma_z
+     * coefficient -- this is what makes the spin-down Chern equal to
+     * minus the spin-up Chern (C_total = 0 by TRS). */
+    h[2 * 4 + 2] = (qgt_complex_t)(-mass);
+    h[2 * 4 + 3] = (qgt_complex_t)sx - _Complex_I * (qgt_complex_t)sy;
+    h[3 * 4 + 2] = (qgt_complex_t)sx + _Complex_I * (qgt_complex_t)sy;
+    h[3 * 4 + 3] = (qgt_complex_t)mass;
+}
+
+qgt_system_n_t* qgt_model_bhz(double A, double B, double M) {
+    bhz_params_t* p = malloc(sizeof(*p));
+    if (!p) return NULL;
+    p->A = A;
+    p->B = B;
+    p->M = M;
+    qgt_system_n_t* sys = qgt_create_nband(bhz_bloch, p, 4, 2);
+    if (!sys) { free(p); return NULL; }
+    sys->owned_user = p;
+    return sys;
+}

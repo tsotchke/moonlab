@@ -532,6 +532,41 @@ MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                                  double lambda_r,
                                                  double lambda_v);
 
+/**
+ * @brief Bernevig-Hughes-Zhang (BHZ) 2006 model of HgTe/CdTe quantum
+ *        wells -- a square-lattice 4-band time-reversal-symmetric
+ *        topological insulator at half filling.
+ *
+ * In the basis (s+, p+, s-, p-) (electron and heavy-hole orbitals at
+ * J_z = +/-3/2) the Bloch Hamiltonian decomposes into spin-up and
+ * spin-down 2x2 blocks:
+ *
+ *   H_BHZ(k) = h_+(k) (+) h_-(k)
+ *
+ *   h_+(k) = (M + 2 B (2 - cos kx - cos ky)) sigma_z
+ *          + A sin(kx) sigma_x + A sin(ky) sigma_y
+ *   h_-(k) = h_+(-k)*  (time-reversal partner)
+ *
+ * Topological phase diagram in this lattice regularization
+ * (mass = M - 2B(2 - cos kx - cos ky), Gamma closing at M=0, X
+ * closings at M=4B which cancel, M-corner closing at M=8B):
+ *   - M / B < 0      -> Z_2 = 0 (trivial)
+ *   - 0 < M / B < 8  -> Z_2 = 1 (QSH)
+ *   - M / B > 8      -> Z_2 = 0 (trivial)
+ *
+ * The textbook continuum BHZ has QSH for 0 < M/B < 4; the X-corner
+ * UV cutoff in this lattice regularisation extends the topological
+ * window to 8B.
+ *
+ * @param A   nearest-neighbour s-p hybridisation amplitude.
+ * @param B   sub-band coupling.
+ * @param M   mass / band-inversion parameter.
+ *
+ * @return Newly-owned 4-band system at half-filling (n_occupied = 2)
+ *         or NULL on alloc failure.
+ */
+MOONLAB_API qgt_system_n_t* qgt_model_bhz(double A, double B, double M);
+
 #ifdef __cplusplus
 }
 #endif
