@@ -1184,3 +1184,62 @@ qgt_system_n_t* qgt_model_bhz(double A, double B, double M) {
     sys->owned_user = p;
     return sys;
 }
+
+/* ----- Harper-Hofstadter model ------------------------------------- */
+
+typedef struct {
+    double t;
+    size_t p;
+    size_t q;
+} hofstadter_params_t;
+
+static void hofstadter_bloch(const double k[2], void* user, qgt_complex_t* h) {
+    const hofstadter_params_t* hp = (const hofstadter_params_t*)user;
+    const size_t q = hp->q;
+    const double phi = (double)hp->p / (double)q;
+    const double t = hp->t;
+    /* The magnetic BZ is reduced to k_x in [-pi/q, pi/q] x k_y in
+     * [-pi, pi].  qgt_berry_grid_nband walks k in [-pi, pi]^2 in
+     * primitive coordinates, so we map k[0] -> k_x_phys = k[0]/q to
+     * cover exactly one magnetic BZ over the integrator's full
+     * domain. */
+    const double kx = k[0] / (double)q;
+    const double ky = k[1];
+
+    /* Zero out the q*q matrix. */
+    for (size_t i = 0; i < q * q; i++) h[i] = 0.0;
+
+    /* Diagonal: -2 t cos(2 pi phi m + ky) on row m. */
+    for (size_t m = 0; m < q; m++) {
+        h[m * q + m] = (qgt_complex_t)(-2.0 * t *
+                                        cos(2.0 * M_PI * phi * (double)m + ky));
+    }
+
+    /* Off-diagonal nearest-neighbour hopping in x.
+     * Wrap-around bond carries the magnetic Bloch phase exp(+i q kx)
+     * for the (0, q-1) bond and exp(-i q kx) for (q-1, 0). */
+    for (size_t m = 0; m + 1 < q; m++) {
+        h[m * q + (m + 1)] = (qgt_complex_t)(-t);
+        h[(m + 1) * q + m] = (qgt_complex_t)(-t);
+    }
+    if (q >= 2) {
+        qgt_complex_t wrap = (qgt_complex_t)(-t)
+                           * cexp(+_Complex_I * (qgt_complex_t)((double)q * kx));
+        h[0 * q + (q - 1)] = wrap;
+        h[(q - 1) * q + 0] = conj(wrap);
+    }
+}
+
+qgt_system_n_t* qgt_model_hofstadter(double t, size_t p, size_t q,
+                                      size_t n_occupied) {
+    if (q < 2 || p < 1 || n_occupied < 1 || n_occupied >= q) return NULL;
+    hofstadter_params_t* hp = malloc(sizeof(*hp));
+    if (!hp) return NULL;
+    hp->t = t;
+    hp->p = p;
+    hp->q = q;
+    qgt_system_n_t* sys = qgt_create_nband(hofstadter_bloch, hp, q, n_occupied);
+    if (!sys) { free(hp); return NULL; }
+    sys->owned_user = hp;
+    return sys;
+}

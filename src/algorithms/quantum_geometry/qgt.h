@@ -612,6 +612,45 @@ MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
  */
 MOONLAB_API qgt_system_n_t* qgt_model_bhz(double A, double B, double M);
 
+/**
+ * @brief Harper-Hofstadter (1976) tight-binding model on a square
+ *        lattice with magnetic flux @f$\phi = p/q@f$ per plaquette
+ *        in Landau gauge @f$A_y = \phi \cdot x@f$.
+ *
+ * In the magnetic unit cell of size q in x and 1 in y, the Bloch
+ * Hamiltonian is a q x q matrix
+ *   H_{mn}(k_x, k_y) = -t (delta_{m,n+1} + delta_{m,n-1})
+ *                      - 2 t cos(2*pi*phi*m + k_y) delta_{m,n}
+ * with the m=0, m=q-1 wrap-around edges carrying the magnetic
+ * Bloch phase exp(+/- i q k_x).  k_x ranges over [-pi/q, pi/q]
+ * (the magnetic BZ); k_y over [-pi, pi].  Use n_occupied = N to
+ * select the lowest N sub-bands.
+ *
+ * The famous Hofstadter butterfly is the spectrum of this model as
+ * phi varies; each sub-band carries an integer Chern number that
+ * solves the Diophantine equation t_r * p + s_r * q = r
+ * (Thouless-Kohmoto-Nightingale-den Nijs 1982).  For phi = 1/q the
+ * lowest band has Chern = +1.
+ *
+ * Built-in Chern numbers (lowest band, p = 1):
+ *   q = 3:  (+1, -2, +1)         lowest -> highest
+ *   q = 4:  (+1, +1, -3, +1)     (sub-bands collapse to triplet at half-filling)
+ *   q = 5:  (+1, +1, -4, +1, +1)
+ *
+ * @param t     Nearest-neighbour hopping amplitude.
+ * @param p     Numerator of the magnetic flux per plaquette (in
+ *              units of the flux quantum); typically p = 1.
+ * @param q     Denominator of the flux per plaquette; the magnetic
+ *              unit cell is q sites wide.  Must be >= 2.
+ * @param n_occupied How many lowest-energy bands to integrate over
+ *              for ::qgt_berry_grid_nband.  1..(q-1).
+ *
+ * @return Newly-owned q-band system handle, or NULL on bad args.
+ */
+MOONLAB_API qgt_system_n_t* qgt_model_hofstadter(double t,
+                                                  size_t p, size_t q,
+                                                  size_t n_occupied);
+
 #ifdef __cplusplus
 }
 #endif
