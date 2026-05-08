@@ -398,4 +398,30 @@ This library implements algorithms from the following foundational works:
 
 ---
 
-*Version 0.2.0 - April 2026*
+## New in v0.3.0 (May 2026)
+
+The Python bindings track the v0.3 C-side additions but do not yet
+expose every new entry-point.  Already accessible via `moonlab.*`:
+
+- `moonlab.var_d_run`, `moonlab.var_d_run_v2` (CA-MPS variational-D
+  with `convergence_eps`).
+- All v0.2 noise channels (depolarizing, amplitude_damping, phase_damping,
+  bit_flip, phase_flip, bit_phase_flip).
+- Bell tests + Bell-variants harness.
+
+Pending Python wrappers (track upstream `qgt_*` and `moonlab_mpdo_*`
+C symbols; coming in v0.3.x):
+
+- Quantum geometric tensor: Berry curvature grids, Z_2 invariants,
+  Kane-Mele / BHZ / Hofstadter / Kitaev model factories.
+- MPDO noise simulator: density-matrix evolution under named
+  channels, Pauli expectation values, density-matrix trace.
+
+For now these are reachable through the C ABI directly via `ctypes`
+on `libquantumsim.dylib`/`.so`/`.dll`.  See
+`docs/reference/qgt-api.md` and `docs/reference/mpdo-api.md` for the
+ABI contracts.
+
+---
+
+*Version 0.3.0 - May 2026*
