@@ -7,7 +7,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.2.5.)
+(No unreleased changes since v0.3.0.)
+
+## [0.3.0] - 2026-05-08
+
+First v0.3 release.  Two new substantial modules (matrix-product
+density operator noise simulator + n-band quantum geometric tensor
+infrastructure) plus a body of new topological-band-structure
+primitives that turn moonlab into a credible momentum-space topology
+calculator.  No regressions: ctest 17/17 topology + all base subsystems
+still green.
+
+### Added
+
+#### Matrix-product density operator (MPDO) noise simulator
+New `src/quantum/noise_mpdo.{c,h}`:
+
+- `moonlab_mpdo_t` opaque handle: MPS-of-superoperators with 4-dim
+  physical leg per site (= vec of local 2x2 density matrix).  Initial
+  state `|0...0><0...0|` is a bond-dim-1 product.
+- `moonlab_mpdo_create / free / clone`: lifecycle.
+- `moonlab_mpdo_apply_kraus_1q(state, qubit, kraus, num_kraus)`:
+  general single-qubit Kraus channel via 4x4 superoperator.
+- Named-channel wrappers matching `src/quantum/noise.h` conventions:
+  `moonlab_mpdo_apply_depolarizing_1q`,
+  `moonlab_mpdo_apply_amplitude_damping_1q`,
+  `moonlab_mpdo_apply_phase_damping_1q`,
+  `moonlab_mpdo_apply_bit_flip_1q`,
+  `moonlab_mpdo_apply_phase_flip_1q`,
+  `moonlab_mpdo_apply_bit_phase_flip_1q`.
+- `moonlab_mpdo_trace`: full Tr(rho) by left-to-right physical-leg
+  contraction with the partial-trace projector.
+- `moonlab_mpdo_expect_pauli_1q`: <P_q> for P in {I, X, Y, Z}.
+
+Test (`test_mpdo_smoke`, 9 cases at 1e-12): clone independence,
+amplitude damping at gamma=1, phase damping preserving <Z> and
+killing <X> on |+>, depolarising at intermediate p reproducing
+<Z> = 1 - 4p/3, etc.
+
+Two-qubit Kraus + SVD-based bond truncation deferred to v0.3.1.
+
+#### Quantum geometric tensor (QGT) extensions
+New multi-band infrastructure in `src/algorithms/quantum_geometry/qgt.{c,h}`:
+
+- `qgt_create_nband(f, user, n_bands, n_occupied)`: opaque-handle
+  multi-band Bloch system constructor.
+- `qgt_berry_grid_nband`: non-Abelian U(M) FHS Chern integrator using
+  the determinant link variable for the M-dim occupied subspace.
+- `qgt_berry_grid_pt`: parallel-transport-gauge Chern integrator
+  (eigvec-based with phase-fix).
+- `qgt_berry_grid_proj`: rigorously gauge-free projector-trace Chern
+  integrator using `Tr[P(k1) P(k2) P(k3) P(k4)]`.
+- `qgt_z2_invariant(sys, N, &z2)`: Z_2 invariant for 4-band TR-symmetric
+  systems via the Sz-conserving spin-Chern fast path.  Full Pfaffian
+  Fukui-Hatsugai 2007 (Rashba-compatible) deferred to v0.3.1.
+- `qgt_z2_invariant_1d_bdg(sys, &z2)`: Pfaffian-sign Z_2 for 1D BdG
+  systems (Kitaev convention) at TR-invariant momenta.
+
+#### New topological-band-structure model primitives
+- **Kane-Mele** (`qgt_model_kane_mele`): 4-band honeycomb QSH insulator
+  in basis (A_up, B_up, A_down, B_down) with the canonical phase
+  boundary at `|lambda_v| = 3*sqrt(3)*|lambda_so|`.
+- **BHZ** (`qgt_model_bhz`): 4-band square-lattice TI in
+  Bernevig-Hughes-Zhang (2006) form.  Lattice regularization gives
+  QSH for 0 < M/B < 8 (X-corner closings cancel; M-corner closing
+  at 8B re-trivialises).
+- **Kitaev p-wave chain** (`qgt_model_kitaev_chain`): 1D BdG topological
+  superconductor with phase boundary at `|mu| < 2|t|`.
+- **Hofstadter** (`qgt_model_hofstadter`): square lattice in magnetic
+  flux phi = p/q per plaquette, q-band magnetic-BZ Hamiltonian.
+  Lowest band Chern = +1 for any q (TKNN); q=3 gives Chern numbers
+  (+1, -2, +1), q=5 gives (+1, +1, -4, +1, +1).
+
+#### Tests + benchmarks
+- `test_qgt_kane_mele`: 7-point lambda_v sweep across the QSH/trivial
+  transition.
+- `test_qgt_bhz`: 10-point M sweep across both lattice phase
+  boundaries.
+- `test_qgt_kitaev_chain`: 7-point mu sweep across `|mu| = 2t`.
+- `test_qgt_hofstadter`: q=3 lowest-band, q=3 lowest-two-bands,
+  and q=5 lowest-band Chern numbers all matching TKNN.
+- `test_qgt_integrators`: all three Berry-grid integrators agree on
+  9 (model, parameter) data points spanning QWZ and Haldane phase
+  diagrams.
+- `test_qgt_vs_chern_marker`: cross-checks momentum-space FHS
+  (qgt_berry_grid_proj) against the existing real-space
+  Bianco-Resta local Chern marker (chern_marker.h) on 6 QWZ test
+  points.  Two completely independent topology backends agree on
+  every integer.
+- `bench_topology_phase_diagrams`: 136-point JSON archive sweeping
+  all 6 QGT models across their parameter ranges.
+
+### Fixed
+- **`qgt_model_haldane` antisymmetric NNN sum** (issue surfaced
+  during the Kane-Mele Z_2 work): the `c2(k) = sin(kx-ky) - sin(kx)
+  + sin(ky)` term vanished at the actual Dirac points
+  `(kx, ky) = (0, +/-2*pi/3)` of this Hamiltonian's primitive-coord
+  convention, so the SOC mass couldn't gap them and Chern was
+  identically 0 for any non-zero M.  Replaced with
+  `c2 = sin(ky)*(1 + 2*cos(kx))` which evaluates to `+/-3*sqrt(3)/2`
+  at the Dirac points, restoring the canonical phase boundary
+  `|M| < 3*sqrt(3)*|t2*sin(phi)|`.  Diagnosed by building two
+  independent gauge-free Chern integrators (parallel-transport,
+  projector-trace) and observing all three integrators returned
+  the same wrong answer -- pointing at the Hamiltonian rather
+  than the integrator.  Same fix applied to Kane-Mele which
+  inherited the identical NNN convention.
+
+### Verified
+- ctest 17/17 topology + all base subsystems green.
+- All 6 topological models reproduce their analytical phase
+  boundaries to within one parameter-grid spacing.
+- QWZ Chern at m in {-1.5, -0.5, +0.5, +1.5, -3, +3} matches
+  between FHS, parallel-transport, projector-trace, and the
+  real-space Bianco-Resta path -- four independent
+  implementations on identical input.
+- Hofstadter Chern numbers match TKNN at q=3 and q=5.
+- Bindings (Python + Rust + 6 JS packages) bumped to 0.3.0.
 
 ## [0.2.5] - 2026-05-08
 
