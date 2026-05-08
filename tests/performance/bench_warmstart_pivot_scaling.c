@@ -169,12 +169,19 @@ typedef struct {
     uint32_t k_B_half;
     int      schmidt_log2_half;
     int      unrotated_log2_half;
-    /* best-cut sweep */
+    /* best-cut sweep (any cut, dominated by trivial endpoints) */
     uint32_t best_cut;
     uint32_t best_k_A;
     uint32_t best_k_B;
     int      best_schmidt_log2;
     int      unrotated_log2_best;
+    /* balanced-cut sweep (n/3 <= |A| <= 2n/3) -- the regime of
+     * MPS-style decomposition where the cut isn't trivially small */
+    uint32_t balanced_best_cut;
+    uint32_t balanced_best_k_A;
+    uint32_t balanced_best_k_B;
+    int      balanced_best_schmidt_log2;
+    int      balanced_unrotated_log2;
 } pivot_record_t;
 
 static int measure_record(const char* code_name,
@@ -251,6 +258,11 @@ static int measure_record(const char* code_name,
      * the natural one for an MPS half-cut family). */
     out->best_schmidt_log2 = INT32_MAX;
     out->unrotated_log2_best = INT32_MAX;
+    out->balanced_best_schmidt_log2 = INT32_MAX;
+    out->balanced_unrotated_log2 = INT32_MAX;
+    uint32_t balanced_lo = (n + 2) / 3;     /* ceil(n/3) */
+    uint32_t balanced_hi = (2 * n) / 3;     /* floor(2n/3) */
+    if (balanced_hi < balanced_lo) balanced_hi = balanced_lo;
     for (uint32_t cut = 1; cut < n; cut++) {
         uint32_t kA = 0, kB = 0;
         for (uint32_t q = 0; q < n; q++) {
@@ -268,6 +280,15 @@ static int measure_record(const char* code_name,
             out->best_k_A = kA;
             out->best_k_B = kB;
         }
+        if (cut >= balanced_lo && cut <= balanced_hi) {
+            if (s_rot < out->balanced_best_schmidt_log2) {
+                out->balanced_best_schmidt_log2 = s_rot;
+                out->balanced_unrotated_log2    = s_unr;
+                out->balanced_best_cut          = cut;
+                out->balanced_best_k_A          = kA;
+                out->balanced_best_k_B          = kB;
+            }
+        }
     }
 
     free(conj);
@@ -282,7 +303,7 @@ static int measure_record(const char* code_name,
 
 static void print_header(void) {
     printf("\n%-12s | %-3s | %-4s | %-4s | %-4s | half-cut       | "
-           "best-cut\n",
+           "balanced-cut (n/3..2n/3)\n",
            "code", "sz", "n", "k", "|Q|");
     printf("%-12s | %-3s | %-4s | %-4s | %-4s | "
            "%-3s %-3s %-3s %-3s | %-3s %-3s %-3s %-3s\n",
@@ -300,8 +321,10 @@ static void print_row(const pivot_record_t* r) {
            (unsigned)r->k, (unsigned)r->pivot_set_size,
            (unsigned)r->k_A_half, (unsigned)r->k_B_half,
            r->schmidt_log2_half, r->unrotated_log2_half,
-           (unsigned)r->best_cut, r->best_schmidt_log2,
-           r->unrotated_log2_best, (unsigned)r->best_k_A);
+           (unsigned)r->balanced_best_cut,
+           r->balanced_best_schmidt_log2,
+           r->balanced_unrotated_log2,
+           (unsigned)r->balanced_best_k_A);
 }
 
 static int json_emit(FILE* f, const pivot_record_t* recs, size_t n_rec) {
@@ -328,7 +351,12 @@ static int json_emit(FILE* f, const pivot_record_t* recs, size_t n_rec) {
         fprintf(f, "\"best_k_A\":%u, ",            (unsigned)r->best_k_A);
         fprintf(f, "\"best_k_B\":%u, ",            (unsigned)r->best_k_B);
         fprintf(f, "\"best_schmidt_log2\":%d, ",   r->best_schmidt_log2);
-        fprintf(f, "\"unrotated_log2_best\":%d",   r->unrotated_log2_best);
+        fprintf(f, "\"unrotated_log2_best\":%d, ", r->unrotated_log2_best);
+        fprintf(f, "\"balanced_best_cut\":%u, ",   (unsigned)r->balanced_best_cut);
+        fprintf(f, "\"balanced_best_k_A\":%u, ",   (unsigned)r->balanced_best_k_A);
+        fprintf(f, "\"balanced_best_k_B\":%u, ",   (unsigned)r->balanced_best_k_B);
+        fprintf(f, "\"balanced_best_schmidt_log2\":%d, ", r->balanced_best_schmidt_log2);
+        fprintf(f, "\"balanced_unrotated_log2\":%d", r->balanced_unrotated_log2);
         fprintf(f, "}%s\n", (i + 1 < n_rec) ? "," : "");
     }
     fprintf(f, "  ]\n");
