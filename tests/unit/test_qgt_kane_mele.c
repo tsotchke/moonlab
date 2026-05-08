@@ -27,20 +27,9 @@ static int failures = 0;
 int main(void) {
     fprintf(stdout, "=== Kane-Mele 4-band model + Z_2 invariant ===\n");
 
-    /* Phase boundary: in primitive-reciprocal-coordinate convention
-     * matching the existing Haldane model, gap closes at the Dirac
-     * points K = (2pi/3, -2pi/3), K' = -K.  Phase boundary at the
-     * canonical |lambda_v| = 3 * sqrt(3) * |lambda_so|.
-     *
-     * NOTE: this test exercises only the lambda_v = 0 (TRS-symmetric)
-     * QSH point and lambda_v >> boundary trivial point.  Intermediate
-     * lambda_v values trigger a known FHS-plaquette gauge instability
-     * in qgt_berry_grid that affects all 2D 2-band Bloch models with
-     * non-trivial mass terms (verified against the existing Haldane
-     * model: Chern=-1 at M=0 but Chern=0 for any M>0 even when
-     * |M| < 3*sqrt(3)*t2, the topological regime).  Tracked as
-     * v0.3.1 task #166.  The n-band Z_2 path itself is correct;
-     * what fails is the underlying single-band Chern integrator. */
+    /* Phase boundary in the primitive-reciprocal-coordinate convention:
+     * gap closes at the Dirac points (0, +/-2*pi/3) of the honeycomb,
+     * giving the canonical |lambda_v| = 3 * sqrt(3) * |lambda_so|. */
     const double t         = 1.0;
     const double lambda_so = 0.06;
     const double boundary  = 3.0 * sqrt(3.0) * lambda_so;  /* ~0.3118 */
@@ -72,11 +61,9 @@ int main(void) {
         qgt_free_nband(sys);
     }
 
-    /* ---- Case 2: QSH (topological) phase, lambda_v=0 (works around
-     *               the pre-existing FHS-mass gauge bug; see header
-     *               comment) ------------------------------------------ */
+    /* ---- Case 2: QSH (topological) phase ------------------------- */
     {
-        const double lambda_v  = 0.0;
+        const double lambda_v  = 0.1;   /* < boundary 0.31 */
         qgt_system_n_t* sys =
             qgt_model_kane_mele(t, lambda_so, /*lambda_r=*/0.0, lambda_v);
         CHECK(sys != NULL, "create KM (QSH)");
@@ -100,20 +87,18 @@ int main(void) {
         qgt_free_nband(sys);
     }
 
-    /* ---- Case 3: phase boundary endpoints (lambda_v = 0 vs >> boundary)
-     *               Intermediate lambda_v values are skipped pending
-     *               the v0.3.1 FHS-mass gauge fix (task #166) ------- */
+    /* ---- Case 3: phase-boundary sweep across the QSH/trivial transition
+     *               at |lambda_v| = 3*sqrt(3)*lambda_so = 0.312 ------ */
     {
-        fprintf(stdout, "  -- lambda_v endpoint check at "
-                        "lambda_so=%.3f, boundary = %.4f --\n",
-                        lambda_so, boundary);
-        double lvs[] = { 0.0, 0.6 };  /* QSH, trivial */
+        fprintf(stdout, "  -- lambda_v sweep at lambda_so=%.3f, "
+                        "boundary = %.4f --\n", lambda_so, boundary);
+        double lvs[] = { 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.8 };
         for (size_t i = 0; i < sizeof(lvs) / sizeof(lvs[0]); i++) {
             double lv = lvs[i];
             qgt_system_n_t* sys = qgt_model_kane_mele(t, lambda_so, 0.0, lv);
             int z2 = -1;
             int rc = qgt_z2_invariant(sys, 64, &z2);
-            CHECK(rc == 0, "endpoint rc=%d at lv=%.3f", rc, lv);
+            CHECK(rc == 0, "sweep rc=%d at lv=%.3f", rc, lv);
             int expected = (lv < boundary) ? 1 : 0;
             CHECK(z2 == expected,
                   "lambda_v=%.3f: expected Z_2=%d, got %d (boundary=%.4f)",
