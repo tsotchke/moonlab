@@ -1,23 +1,30 @@
-# Tutorial: Noisy circuits with MPDO
+# Tutorial: Noisy circuit simulation with the MPDO engine
 
-The matrix-product density operator (MPDO) engine added in v0.3.0 is
-Moonlab's polynomial-cost noise simulator.  Where the dense state-
-vector path costs O(2^n) per gate, MPDO costs O(n * chi^2) per
-single-qubit channel, so you can simulate hundreds of qubits at
-single-qubit error rates around 1e-3 in quasi-1D layouts.
+The matrix-product density operator (MPDO) representation, introduced
+by Verstraete, Garcia-Ripoll, and Cirac [1] and developed for noisy
+circuit simulation by Werner et al. [2], encodes a many-body density
+matrix as a tensor train of vectorised local density blocks.  The
+Moonlab MPDO engine implements this representation with bond
+dimension `chi` capped at construction time.  The cost of a
+single-qubit Kraus channel is `O(n chi^2)`, in contrast to the
+`O(4^n)` scaling of dense density-matrix simulation, enabling
+simulation of order-100 qubits in quasi-1D layouts at single-qubit
+error rates near `10^-3`.
 
-This tutorial walks through the full v0.3 single-qubit surface:
-initial state, named channels, custom Kraus operators, and
-expectation-value readout.  Every numerical claim is checked by
-`tests/unit/test_mpdo_smoke.c` to 1e-12.
+This tutorial covers the v0.3 single-qubit surface: state
+initialisation, named completely-positive trace-preserving (CPTP)
+channels, user-supplied Kraus operators, and observable readout.
+All numerical results are pinned to machine precision (`10^-12`) by
+`tests/unit/test_mpdo_smoke.c`.
 
 Prerequisites:
 
 - Moonlab built with `-DQSIM_BUILD_TESTS=ON`.
-- Familiarity with the Kraus operator-sum representation and named
-  noise channels (depolarising, amplitude damping, phase damping).
+- Working knowledge of the Kraus operator-sum representation [3]
+  and the standard single-qubit noise channels (depolarising,
+  amplitude damping, dephasing).
 
-Header: `src/quantum/noise_mpdo.h`.  Full reference:
+Header: `src/quantum/noise_mpdo.h`.  Full API reference:
 [../reference/mpdo-api.md](../reference/mpdo-api.md).
 
 ## 1. The initial state
@@ -39,14 +46,16 @@ int main(void) {
 }
 ```
 
-The MPDO is initialised in the product `|0...0><0...0|` at chi = 1.
-You always have `Tr(rho) = 1` and `<Z_q> = +1` for every qubit.
+The MPDO is initialised in the product state
+`|0...0><0...0|` at bond dimension `chi = 1`, so `Tr(rho) = 1`
+and `<Z_q> = +1` for every qubit by construction.
 
 ## 2. Named single-qubit channels
 
-These wrap the standard Kraus reps and match `src/quantum/noise.h`
-exactly.  All of them are CPTP by construction (you do not need to
-verify completeness yourself).
+The library exposes the canonical single-qubit Kraus channels with
+operators consistent with [4] and the conventions used in
+`src/quantum/noise.h`.  Each named channel is CPTP by construction;
+no completeness check is required of the user.
 
 ```c
 moonlab_mpdo_apply_depolarizing_1q     (m, qubit, p);       /* p in [0,1] */
@@ -65,7 +74,7 @@ moonlab_mpdo_apply_bit_phase_flip_1q   (m, qubit, p);
 | bit_flip | `(1-p) I + p X` | `<Z>` -> `<Z>` * (1-2p) |
 | phase_flip | `(1-p) I + p Z` | `<X>` -> `<X>` * (1-2p) |
 
-## 3. Worked example — depolarising channel
+## 3. Worked example: the depolarising channel
 
 ```c
 #include "moonlab/quantum/noise_mpdo.h"
@@ -84,16 +93,17 @@ int main(void) {
 }
 ```
 
-The Pauli twirl `<Z> -> <Z>(1 - 4p/3)` is not a heuristic — it falls
-straight out of the operator-sum identity for the depolarising
-channel and is the gold-standard cross-check whenever you are
-debugging a custom calibration model.
+The contraction `<Z> -> <Z>(1 - 4p/3)` follows from the Pauli-twirl
+identity for the symmetric depolarising channel and serves as a
+canonical cross-check when validating custom calibration models.
 
-## 4. Custom Kraus operators
+## 4. User-supplied Kraus operators
 
-Every named channel is a wrapper around `moonlab_mpdo_apply_kraus_1q`,
-so you can also feed your own operators.  The convention is row-major
-`[num_kraus, 2, 2]` flat array of `mpdo_complex_t` (= `double _Complex`):
+Each named channel is a thin wrapper around the general entry point
+`moonlab_mpdo_apply_kraus_1q`, which accepts an arbitrary
+operator-sum decomposition.  The convention is a row-major
+`[num_kraus, 2, 2]` flat array of `mpdo_complex_t`
+(`double _Complex`):
 
 ```c
 /* Pauli X as a single-Kraus channel (i.e. a unitary X gate). */
@@ -118,16 +128,18 @@ const mpdo_complex_t k[4 * 4] = {
 moonlab_mpdo_apply_kraus_1q(m, qubit, k, /*num_kraus=*/4);
 ```
 
-Trace preservation (`sum_a K_a^dag K_a = I`) is your responsibility
-when you bring your own Kraus rep.  Use
-`noise_kraus_completeness_deviation` from `src/quantum/noise.h` to
-quantify it before you trust your calibration import.
+Trace preservation (`sum_a K_a^dag K_a = I`) is the user's
+responsibility for arbitrary Kraus decompositions; the helper
+`noise_kraus_completeness_deviation` in `src/quantum/noise.h`
+returns the operator-norm deviation and should be checked before
+trusting any calibration import.
 
-## 5. Composing gates and noise
+## 5. Composing unitaries and noise
 
-A typical noisy circuit alternates ideal unitaries with named channels.
-The following sequence simulates a `H` gate followed by phase damping
-on an otherwise-decohering qubit:
+A realistic noisy circuit alternates ideal unitary gates with named
+channels.  The following sequence applies a Hadamard gate followed
+by a dephasing channel and measures the resulting transverse
+coherence:
 
 ```c
 moonlab_mpdo_t* m = moonlab_mpdo_create(2, 16);
@@ -149,7 +161,7 @@ printf("<X_0> = %.4f (expected 0.8944)\n", x0);
 printf("<Z_0> = %.4f (expected 0)\n",      z0);
 ```
 
-## 6. Reading observables and traces
+## 6. Observables and trace
 
 ```c
 double trace = moonlab_mpdo_trace(m);                      /* always 1 */
@@ -161,32 +173,60 @@ double e_z;
 moonlab_mpdo_expect_pauli_1q(m, qubit, /*Z=*/3, &e_z);
 ```
 
-`Tr(rho)` should always be 1 to roundoff for a CPTP-evolved state.
-Drift away from 1 is the canary that either (a) you fed a non-CPTP
-Kraus rep, or (b) bond truncation lost too much weight.  In v0.3.0 the
-single-qubit path never truncates, so all drift is your Kraus rep.
+`Tr(rho)` must equal 1 to roundoff for a CPTP-evolved state.  Any
+deviation indicates either (a) a non-CPTP user-supplied Kraus
+decomposition or (b) loss of weight to bond truncation.  In v0.3.0
+the single-qubit path performs no truncation, so any deviation
+reflects the supplied Kraus operators.
 
-## 7. Roadmap (v0.3.x)
+## 7. Roadmap for v0.3.x
 
-The remaining MPDO surface lands in v0.3.x:
+The remaining MPDO surface is scheduled for the v0.3.x point
+releases:
 
-- Two-qubit Kraus channels with SVD bond truncation
-- Two-qubit composite-Pauli wrappers
-- High-level `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)`
-  driving the full noise model from a calibration file
-- Python binding parity (currently accessible via raw ctypes against
-  `libquantumsim`)
+- Two-qubit Kraus channels with singular-value-decomposition bond
+  truncation [2].
+- Two-qubit composite-Pauli channel wrappers.
+- A high-level entry point
+  `moonlab_mpdo_simulate_noisy(circuit, noise_model, shots)` that
+  consumes a calibrated noise model.
+- Python binding parity (currently accessible via raw `ctypes`
+  against `libquantumsim`).
 
-If you need two-qubit noise *today*, the dense-state-vector + Kraus
-sampler in `src/quantum/noise.c` works at any qubit count up to 32 and
-exposes the same named channels with identical conventions.
+For two-qubit noise in the interim, the dense state-vector
+implementation in `src/quantum/noise.c` supports any qubit count up
+to 32 and exposes the same named channels with identical
+conventions.
+
+## References
+
+[1] F. Verstraete, J. J. Garcia-Ripoll, and J. I. Cirac,
+    "Matrix product density operators: Simulation of finite-
+    temperature and dissipative systems",
+    Phys. Rev. Lett. **93**, 207204 (2004).
+
+[2] A. H. Werner, D. Jaschke, P. Silvi, M. Kliesch, T. Calarco,
+    J. Eisert, and S. Montangero, "Positive tensor network
+    approach for simulating open quantum many-body systems",
+    Phys. Rev. Lett. **116**, 237201 (2016).
+
+[3] K. Kraus, *States, Effects, and Operations: Fundamental
+    Notions of Quantum Theory*, Lecture Notes in Physics, vol. 190,
+    Springer (1983).
+
+[4] M. A. Nielsen and I. L. Chuang, *Quantum Computation and
+    Quantum Information*, Cambridge University Press, 10th
+    Anniversary Edition, 2010, chapter 8 (Quantum noise and quantum
+    operations).
 
 ## See also
 
-- [getting_started.md](getting_started.md) — first-build walkthrough.
-- [topological_band_structure.md](topological_band_structure.md) —
-  companion v0.3 module (quantum geometric tensor).
-- `tests/unit/test_mpdo_smoke.c` — the 9-case smoke that pins every
-  expression in this tutorial to 1e-12.
-- `src/quantum/noise.h` — pure-state Kraus channel reference, same
-  conventions as MPDO so you can cross-check on small systems.
+- [getting_started.md](getting_started.md): a first-build
+  walkthrough.
+- [topological_band_structure.md](topological_band_structure.md):
+  the companion v0.3 module (quantum geometric tensor).
+- `tests/unit/test_mpdo_smoke.c`: the nine-case validation suite
+  that pins every numerical claim in this tutorial to `10^-12`.
+- `src/quantum/noise.h`: pure-state Kraus channel reference
+  implementation with conventions identical to the MPDO engine,
+  enabling small-system cross-checks.

@@ -379,71 +379,86 @@ const PhysicsNote: React.FC<{ model: Model }> = ({ model }) => {
       return (
         <>
           <p>
-            QWZ has gap closings at <code>m = -2, 0, +2</code>.  The
-            integer Chern number changes by ±1 across each closing.  In
-            the <code>0 &lt; m &lt; 2</code> phase the Berry-curvature
-            distribution is concentrated near <code>k = (π, π)</code>.
+            The Qi-Wu-Zhang (QWZ) Hamiltonian (Qi, Wu, and Zhang,
+            <em> Phys. Rev. B</em> <strong>74</strong>, 085308, 2006)
+            exhibits gap closings at <code>m = -2, 0, +2</code>; the
+            integer Chern number jumps by ±1 across each closing.  In
+            the topological window <code>0 &lt; m &lt; 2</code> the
+            Berry curvature is concentrated near <code>k = (π, π)</code>.
           </p>
           <p>
-            Verified against moonlab&apos;s <code>qgt_berry_grid_proj</code>
-            (gauge-free projector trace) and the real-space
-            <code>chern_marker</code> (Bianco-Resta) paths -- all three
-            give identical integers at every test point.
+            Moonlab computes the Chern number through three independent
+            paths: the Fukui-Hatsugai-Suzuki link-variable integrator
+            <code>qgt_berry_grid</code>, the gauge-free projector trace
+            <code>qgt_berry_grid_proj</code>, and the real-space
+            Bianco-Resta marker <code>chern_marker</code>.  All three
+            return identical integers on every gapped phase point.
           </p>
         </>
       );
     case 'Haldane':
       return (
         <p>
-          Haldane (1988) was the first model to show a Chern insulator
-          without a uniform magnetic field.  The next-nearest-neighbour
-          hopping with Peierls phase <code>φ</code> generates a local
-          flux that gaps the Dirac points with opposite signs at K and
-          K&apos;, producing an integer Chern number even though the net
-          flux per unit cell is zero.  Phase boundary at
-          <code>|M| = 3√3·|t₂·sin(φ)|</code>.
+          The Haldane model (Haldane, <em>Phys. Rev. Lett.</em>{' '}
+          <strong>61</strong>, 2015, 1988) was the first demonstration
+          that a Chern insulator can arise without a uniform magnetic
+          field.  Complex next-nearest-neighbour hopping with Peierls
+          phase <code>φ</code> generates a staggered local flux that
+          gaps the Dirac points at <code>K</code> and <code>K&apos;</code>{' '}
+          with opposite signs, while preserving zero net flux per unit
+          cell.  The phase boundary is <code>|M| = 3√3 |t₂ sin(φ)|</code>.
         </p>
       );
     case 'KaneMele':
       return (
         <p>
-          Kane-Mele (2005) is the canonical 2D quantum spin Hall (QSH)
-          insulator: 4-band, time-reversal-symmetric, with a Z₂
-          invariant rather than an integer Chern.  In the
-          Sz-conserving regime (Rashba off) the Z₂ equals the parity
-          of the spin-up Chern.  Helical edge modes carry counter-
-          propagating spin currents.
+          The Kane-Mele model (Kane and Mele, <em>Phys. Rev. Lett.</em>{' '}
+          <strong>95</strong>, 146802, 2005) is the canonical
+          two-dimensional quantum spin Hall (QSH) insulator: a four-band,
+          time-reversal-symmetric Hamiltonian classified by a Z₂
+          invariant rather than an integer Chern number.  In the
+          S<sub>z</sub>-conserving regime (Rashba coupling absent) the
+          Z₂ invariant reduces to the parity of the spin-up sub-block
+          Chern number.  The topological phase hosts helical edge modes
+          carrying counter-propagating spin currents.
         </p>
       );
     case 'BHZ':
       return (
         <p>
-          BHZ (2006) describes HgTe quantum wells.  The lattice
-          regularisation has gap closings at <code>M=0</code> (Γ),
-          <code>M=4B</code> (X-corners, cancel), and <code>M=8B</code>
-          (M-corner).  The QSH window is <code>0 &lt; M/B &lt; 8</code>;
-          the X-corner closings cancel by symmetry, so the topology
-          persists across the whole window.
+          The Bernevig-Hughes-Zhang model (Bernevig, Hughes, and Zhang,{' '}
+          <em>Science</em> <strong>314</strong>, 1757, 2006) models HgTe
+          quantum wells.  Its lattice regularisation has gap closings at
+          {' '}<code>M = 0</code> (Γ point), <code>M = 4B</code>{' '}
+          (X-corners, which cancel pairwise), and <code>M = 8B</code>{' '}
+          (M-corner).  The QSH phase occupies <code>0 &lt; M/B &lt; 8</code>;
+          the symmetry-cancelled X-corner closings preserve the
+          topology throughout this interval.
         </p>
       );
     case 'Kitaev':
       return (
         <p>
-          Kitaev (2001) is a 1D p-wave topological superconductor.
-          The Z₂ invariant from the Pfaffian-sign product at TR-invariant
-          momenta <code>k = 0, π</code> gives <code>1</code> when
-          <code>|μ| &lt; 2|t|</code>; in that phase the chain hosts
-          Majorana zero modes at its edges.
+          The Kitaev p-wave chain (Kitaev, <em>Physics-Uspekhi</em>{' '}
+          <strong>44</strong>, 131, 2001) is a one-dimensional topological
+          superconductor in the BdG framework.  The Z₂ invariant — the
+          product of Pfaffian signs at the time-reversal-invariant
+          momenta <code>k = 0, π</code> — equals 1 when{' '}
+          <code>|μ| &lt; 2|t|</code>, and the corresponding open chain
+          hosts Majorana zero modes at its boundaries.
         </p>
       );
     case 'SSH':
       return (
         <p>
-          Su-Schrieffer-Heeger (1979): two-site unit cell with intra-
-          cell hopping <code>t₁</code> and inter-cell hopping <code>t₂</code>.
-          The chiral symmetry quantises the winding number;
-          <code>W = 1</code> for <code>|t₂| &gt; |t₁|</code> hosts edge
-          zero modes under open boundaries.
+          The Su-Schrieffer-Heeger model (Su, Schrieffer, and Heeger,{' '}
+          <em>Phys. Rev. Lett.</em> <strong>42</strong>, 1698, 1979) is a
+          one-dimensional bipartite chain with intra-cell hopping{' '}
+          <code>t₁</code> and inter-cell hopping <code>t₂</code>.  Chiral
+          symmetry quantises the winding number; the topological phase{' '}
+          <code>W = 1</code> arises for <code>|t₂| &gt; |t₁|</code> and
+          supports protected edge zero modes under open boundary
+          conditions.
         </p>
       );
   }
