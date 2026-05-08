@@ -7,7 +7,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.3.0.)
+A consolidation cycle following the v0.3.0 release.  Brings the
+Python and Rust binding surfaces to full parity with the C library,
+adds a topology explorer to the web demo and an MPDO noise tour to
+the Rust TUI, ships three new tutorials with primary-literature
+citations, and adds two worked Python examples covering the entire
+v0.3 surface.
+
+### Added
+
+#### Python bindings: full v0.3 parity
+New `bindings/python/moonlab/mpdo.py`: ctypes wrapper of the
+matrix-product density operator engine.  Exposes `Mpdo` with RAII
+free-on-delete, `clone`, the six named single-qubit channels
+(depolarising, amplitude damping, phase damping, bit / phase /
+bit-phase flip), arbitrary user-supplied Kraus operators via NumPy
+complex arrays, and Pauli expectation values selectable by string
+or integer code.
+
+`bindings/python/moonlab/topology.py` extended with the v0.3 n-band
+primitives: `chern_qwz_proj` (gauge-free projector-trace integrator),
+`chern_qwz_parallel_transport` (parallel-transport gauge),
+`kane_mele_z2`, `bhz_z2`, `kitaev_chain_z2`, and `hofstadter_chern`.
+Each docstring cites its primary source.
+
+`bindings/python/moonlab/core.py`: new `MOONLAB_LIB_PATH` and
+`MOONLAB_LIB_DIR` env-var overrides for the dylib search path
+(parity with the Rust binding's `MOONLAB_LIB_DIR`).  The default
+search now also includes `build_release/`.
+
+`bindings/python/moonlab/__init__.py`: `__version__` 0.2.1 -> 0.3.0
+(matching VERSION.txt), new exports.
+
+Tests (`bindings/python/tests/test_mpdo.py`,
+`test_topology_v03.py`, 19 cases): mirror `test_mpdo_smoke.c` at
+1e-12; verify three-integrator agreement on QWZ, the Kane-Mele
+phase boundary, the BHZ QSH window, the Kitaev Majorana phase, and
+Hofstadter sub-band Cherns.
+
+#### Rust bindings: MPDO + v0.3 topology
+New `bindings/rust/moonlab/src/mpdo.rs`: safe `Mpdo` wrapper with
+the same API as the Python binding plus a typed `PauliCode` selector
+and three unit tests (initial state, depolarising, amplitude
+damping reset).
+
+`bindings/rust/moonlab/src/topology.rs` extended with `chern_qwz_proj`,
+`chern_qwz_parallel_transport`, `kane_mele_z2`, `bhz_z2`,
+`kitaev_chain_z2`, and `hofstadter_chern`.  Six new unit tests
+including the three-integrator agreement check on QWZ.
+
+`bindings/rust/moonlab-sys/build.rs`: bindgen allowlist extended
+with the MPDO surface (14 entry points + types) and the n-band QGT
+surface (6 entry points + `qgt_system_n_t`).
+
+#### Rust TUI: two new algorithm views
+`Algorithm::TopologyPhaseDiagram` sweeps QWZ mass `m` over [-3, 3]
+in 31 steps, computes the Chern number through the stable
+`moonlab_qwz_chern` ABI, and renders an ASCII phase ribbon
+alongside an SSH winding cross-check.
+
+`Algorithm::MpdoNoiseTour` exercises the v0.3 MPDO surface across
+11 strength points for each of three named channels (depolarising,
+amplitude damping, phase damping) and renders the resulting `<Z>`
+trajectories as ASCII ribbons.
+
+#### Web demo: topology explorer page
+`bindings/javascript/demo/src/topology/`: new `/topology` route
+with interactive sliders for QWZ, Haldane, Kane-Mele, BHZ, Kitaev,
+and SSH.  Each model carries a physics note citing the original
+reference (Qi-Wu-Zhang 2006, Haldane 1988, Kane-Mele 2005, BHZ
+2006, Kitaev 2001, SSH 1979).
+
+#### Documentation: tutorials and references
+New `docs/tutorials/README.md`, `getting_started.md`, `mpdo_noise.md`,
+`topological_band_structure.md` — three first-class tutorials with
+primary-source citations.
+
+`docs/research/quantum_geometry_tensor.md`: removed stale
+"deferred to v0.3.x" claims; added a numbered References section
+covering Provost-Vallee 1980, Berry 1984, Fukui-Hatsugai-Suzuki
+2005, SSH 1979, Kane-Mele 2005, BHZ 2006, Kitaev 2001, Hofstadter
+1976, TKNN 1982, Zak 1989, Fukui-Hatsugai 2007, Bianco-Resta 2011,
+and Bernevig-Hughes 2013.
+
+`docs/reference/qgt-api.md` and `mpdo-api.md`: new Language bindings
+sections documenting the shipped Python and Rust surfaces; removed
+the stale "Python parity coming in v0.3.x" notes.
+
+`bindings/python/README.md`: replaced the "Pending Python wrappers"
+section with the actual v0.3 surface, including primary-source
+citations.
+
+#### Worked examples
+- `examples/topological/qgt_phase_diagrams.py`: six-section Python
+  program reproducing every analytical phase boundary covered in
+  the topology tutorial.
+- `examples/applications/mpdo_noise_demo.py`: five-section MPDO
+  walkthrough — depolarising `<Z> = 1 - 4p/3`, amplitude damping
+  `<Z> = 2 gamma - 1` from `|1>`, Hadamard + phase damping
+  `<X> = sqrt(1 - lambda)`, clone independence — all matching closed
+  form to roundoff.
+
+### Verified
+
+- `pytest bindings/python/tests`: 155 passing (136 pre-existing + 19
+  new) against `build_release/libquantumsim.0.3.0.dylib`.
+- `cargo test --lib` (moonlab crate): 29 passing including the
+  three-integrator QWZ agreement, Kane-Mele / BHZ / Kitaev Z_2
+  windows, and Hofstadter q in {3, 4, 5} lowest-band Cherns.
+- `pnpm vite build` (web demo): clean; the lazy-loaded /topology
+  chunk weighs 4.5 kB CSS + ~10 kB JS.
+- The Rust TUI rebuilds cleanly with both new Algorithm variants.
 
 ## [0.3.0] - 2026-05-08
 

@@ -53,7 +53,10 @@ pub use error::{QuantumError, Result};
 pub use feynman::{FeynmanDiagram, ParticleType};
 pub use mpdo::{Mpdo, PauliCode};
 pub use state::{QuantumState, MAX_QUBITS};
-pub use topology::{qwz_chern, ssh_winding, ChernKpm};
+pub use topology::{
+    bhz_z2, chern_qwz_parallel_transport, chern_qwz_proj, hofstadter_chern,
+    kane_mele_z2, kitaev_chain_z2, qwz_chern, ssh_winding, ChernKpm,
+};
 
 /// Prelude module for convenient imports.
 ///
@@ -66,7 +69,11 @@ pub mod prelude {
     pub use crate::feynman::{FeynmanDiagram, ParticleType};
     pub use crate::mpdo::{Mpdo, PauliCode};
     pub use crate::state::{QuantumState, MAX_QUBITS};
-    pub use crate::topology::{qwz_chern, ssh_winding, ChernKpm};
+    pub use crate::topology::{
+        bhz_z2, chern_qwz_parallel_transport, chern_qwz_proj,
+        hofstadter_chern, kane_mele_z2, kitaev_chain_z2, qwz_chern,
+        ssh_winding, ChernKpm,
+    };
 }
 
 #[cfg(test)]
