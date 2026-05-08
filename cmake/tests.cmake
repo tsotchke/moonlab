@@ -343,6 +343,12 @@
         add_test(NAME unit_qgt_kane_mele COMMAND test_qgt_kane_mele)
         set_tests_properties(unit_qgt_kane_mele PROPERTIES TIMEOUT 30 LABELS "topology")
 
+        # MPDO noise simulator scaffold (v0.3 noise extension).
+        add_executable(test_mpdo_smoke tests/unit/test_mpdo_smoke.c)
+        target_link_libraries(test_mpdo_smoke PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_mpdo_smoke COMMAND test_mpdo_smoke)
+        set_tests_properties(unit_mpdo_smoke PROPERTIES TIMEOUT 30 LABELS "noise")
+
         # Smoke test for the direct 1q/2q-gate fast path inside
         # moonlab_ca_mps_apply_pauli_imag (the perf optimisation that
         # bypasses the bond-dim-2 MPO build for low-weight Paulis).
