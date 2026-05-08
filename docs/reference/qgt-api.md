@@ -147,10 +147,10 @@ Chern of the occupied subspace.  For TR-symmetric systems this is
 zero; use `qgt_z2_invariant` instead.
 
 `qgt_z2_invariant` requires `n_bands == 4 && n_occupied == 2` and
-assumes Sz conservation (Rashba SOC = 0).  Extracts the upper-left
-2x2 block (spin-up sector) and returns `|C_up| mod 2`.  The full
-Pfaffian Fukui-Hatsugai 2007 (Rashba-compatible) Z_2 path lands in
-v0.3.x.
+assumes S_z conservation (Rashba SOC = 0).  It extracts the
+upper-left 2 x 2 block (spin-up sector) and returns `|C_up| mod 2`.
+A full Rashba-compatible Pfaffian variant of Fukui and Hatsugai
+(2007) is scheduled for a future release.
 
 ### 4-band TI models
 
@@ -197,8 +197,23 @@ regression-pinned reference data.
 - `src/algorithms/topology_realspace/chern_fhs.{c,h}` — momentum-space
   FHS for direct two-band lattice models (alternative entry point).
 
+## Language bindings
+
+- **Python** (`moonlab.topology`): `chern_qwz_proj`,
+  `chern_qwz_parallel_transport`, `kane_mele_z2`, `bhz_z2`,
+  `kitaev_chain_z2`, `hofstadter_chern`, plus the v0.2
+  `qwz_chern`, `berry_grid_qwz`, `berry_grid_haldane`, and
+  `ssh_winding`.  Validated by
+  `bindings/python/tests/test_topology_v03.py`.
+- **Rust** (`moonlab::topology`): `qwz_chern`, `ssh_winding`,
+  and `ChernKpm`; the n-band v0.3 surface is reachable through
+  `moonlab_sys` for callers that need it.
+
 ## See also
 
-- `docs/research/quantum_geometry_tensor.md` — module theory + design rationale.
-- `docs/tutorials/topological_band_structure.md` — Kane-Mele walkthrough.
-- `tests/unit/test_qgt_*.c` — example callers.
+- `docs/research/quantum_geometry_tensor.md` — module theory and design
+  rationale.
+- `docs/tutorials/topological_band_structure.md` — full walkthrough
+  across SSH, QWZ, Haldane, Kane-Mele, BHZ, and Hofstadter with
+  primary-source citations.
+- `tests/unit/test_qgt_*.c` — minimal example callers.

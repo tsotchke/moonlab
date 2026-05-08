@@ -400,27 +400,42 @@ This library implements algorithms from the following foundational works:
 
 ## New in v0.3.0 (May 2026)
 
-The Python bindings track the v0.3 C-side additions but do not yet
-expose every new entry-point.  Already accessible via `moonlab.*`:
+The Python bindings are at full parity with the v0.3 C surface.  All
+new modules ship in this release:
 
-- `moonlab.var_d_run`, `moonlab.var_d_run_v2` (CA-MPS variational-D
-  with `convergence_eps`).
-- All v0.2 noise channels (depolarizing, amplitude_damping, phase_damping,
-  bit_flip, phase_flip, bit_phase_flip).
-- Bell tests + Bell-variants harness.
+**Quantum geometric tensor and topology** (`moonlab.topology`):
+- `chern_qwz_proj(m, N)`, `chern_qwz_parallel_transport(m, N)` —
+  gauge-invariant projector-trace and parallel-transport-gauge
+  Chern integrators on the Qi-Wu-Zhang model.
+- `kane_mele_z2(t, lambda_so, lambda_r, lambda_v, N)` — 4-band Z_2
+  invariant via Fukui-Hatsugai (2007).
+- `bhz_z2(A, B, M, N)` — HgTe quantum-well topological insulator
+  (Bernevig-Hughes-Zhang 2006).
+- `kitaev_chain_z2(t, mu, delta)` — 1D BdG Z_2 from Pfaffian-sign
+  product at the time-reversal-invariant momenta (Kitaev 2001).
+- `hofstadter_chern(p, q, n_occupied, t, N)` — magnetic-Bloch
+  sub-band Chern numbers (Hofstadter 1976).
 
-Pending Python wrappers (track upstream `qgt_*` and `moonlab_mpdo_*`
-C symbols; coming in v0.3.x):
+**Matrix-product density operator noise simulator**
+(`moonlab.mpdo.Mpdo`):
+- Polynomial-cost noisy-circuit simulation per Verstraete, Garcia-
+  Ripoll, and Cirac (Phys. Rev. Lett. 93, 207204, 2004).
+- Six named single-qubit Kraus channels (depolarising, amplitude
+  damping, phase damping, bit / phase / bit-phase flip).
+- User-supplied Kraus operators via NumPy complex arrays.
+- Pauli expectation values (string or integer Pauli code).
 
-- Quantum geometric tensor: Berry curvature grids, Z_2 invariants,
-  Kane-Mele / BHZ / Hofstadter / Kitaev model factories.
-- MPDO noise simulator: density-matrix evolution under named
-  channels, Pauli expectation values, density-matrix trace.
+**Other v0.3 additions**:
+- `moonlab.var_d_run`, `moonlab.var_d_run_v2` — CA-MPS variational-D
+  with `convergence_eps`.
+- All v0.2 noise channels and Bell-variants harness remain available.
 
-For now these are reachable through the C ABI directly via `ctypes`
-on `libquantumsim.dylib`/`.so`/`.dll`.  See
-`docs/reference/qgt-api.md` and `docs/reference/mpdo-api.md` for the
-ABI contracts.
+`MOONLAB_LIB_PATH` and `MOONLAB_LIB_DIR` environment variables now
+override the dylib search path (parity with the Rust binding's
+`MOONLAB_LIB_DIR`).  See `docs/reference/qgt-api.md` and
+`docs/reference/mpdo-api.md` for the corresponding C ABI contracts,
+and `docs/tutorials/{topological_band_structure,mpdo_noise}.md` for
+worked examples.
 
 ---
 

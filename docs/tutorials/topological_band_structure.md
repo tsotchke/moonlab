@@ -16,8 +16,9 @@ Prerequisites:
   and Berry-phase topology at the level of Bernevig and Hughes [1].
 
 The exposition is in C, which is the canonical surface for these
-primitives; Python and Rust wrappers track the same API one minor
-release behind.
+primitives.  Python and Rust bindings reach feature parity in
+v0.3.0; equivalent code in those languages appears at the end of
+each section where applicable.
 
 ## 1. Su-Schrieffer-Heeger chain (1D winding)
 
@@ -123,7 +124,7 @@ integer Chern number.
 qgt_system_n_t* sys = qgt_model_kane_mele(
     /*t=*/1.0,
     /*lambda_so=*/0.06,
-    /*lambda_r=*/0.0,    /* Rashba off; full Pfaffian path lands in v0.3.x */
+    /*lambda_r=*/0.0,    /* Rashba off; S_z-conserving path */
     /*lambda_v=*/0.10);
 int z2;
 qgt_z2_invariant(sys, /*N=*/48, &z2);
