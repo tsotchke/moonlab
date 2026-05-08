@@ -24,13 +24,24 @@ elif sys.platform == "win32":
 else:
     _lib_names = ["libquantumsim.so", "libquantumsim.dylib"]
 
-# Search paths (checked in order). The top-level repo root is 4 parents up
-# from this file (bindings/python/moonlab/core.py -> repo root). Also try
-# ../build, which is where a local CMake build drops the dylib.
+# Search paths (checked in order).  Two env vars override: MOONLAB_LIB_PATH
+# is a full path to libquantumsim.{dylib,so,dll}; MOONLAB_LIB_DIR is the
+# directory containing it (parity with the Rust binding's MOONLAB_LIB_DIR
+# convention).  The top-level repo root is four parents up from this file
+# (bindings/python/moonlab/core.py -> repo root).  ../build is the
+# canonical CMake out-of-tree build location.
 _repo_root = Path(__file__).parent.parent.parent.parent
-_search_paths = [
-    _repo_root,
+_search_paths = []
+_env_path = os.environ.get("MOONLAB_LIB_PATH")
+if _env_path:
+    _search_paths.append(Path(_env_path).parent)
+_env_dir = os.environ.get("MOONLAB_LIB_DIR")
+if _env_dir:
+    _search_paths.append(Path(_env_dir))
+_search_paths += [
+    _repo_root / "build_release",
     _repo_root / "build",
+    _repo_root,
     Path(__file__).parent.parent.parent / "build",
     Path(__file__).parent.parent.parent,
 ]
