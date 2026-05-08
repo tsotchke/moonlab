@@ -368,6 +368,132 @@ int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
                                 size_t Kx, size_t Ky, size_t N,
                                 int* chern_out);
 
+/* ====================================================================
+ * Multi-band (n-band) Bloch systems
+ *
+ * The two-band primitives above are tuned for the spin-1/2 / sublattice
+ * minimal models (QWZ, Haldane, SSH).  For richer Hamiltonians --
+ * Kane-Mele (4 bands), BHZ (4 bands), Bernevig-Hughes-Zhang variants,
+ * multi-orbital tight-binding -- the same Fukui-Hatsugai-Suzuki link-
+ * variable construction generalises to a non-Abelian U(M) connection
+ * over the M-dimensional occupied subspace.
+ *
+ * The n-band API takes a Bloch callback that emits an n*n Hermitian
+ * matrix at each k, plus a fixed number of occupied bands M.  The
+ * implementation diagonalises at each plaquette corner, builds the
+ * MxM link variables U_mu(k) = det <u_occ(k) | u_occ(k + dk_mu)>,
+ * and accumulates the FHS Chern from the principal-arg of the
+ * plaquette holonomy.
+ * ==================================================================== */
+
+/**
+ * @brief Bloch callback emitting an n*n Hermitian Hamiltonian at 2D
+ *        momentum @p k.  @p h is row-major: h[i*n + j] = H_{ij}.
+ *        Must be Hermitian; the caller's choice of @p n is fixed at
+ *        ::qgt_create_nband construction time.
+ */
+typedef void (*qgt_bloch_n_fn)(const double k[2], void* user,
+                               qgt_complex_t* h);
+
+typedef struct qgt_system_n qgt_system_n_t;
+
+/**
+ * @brief Construct an n-band Bloch system.
+ *
+ * @param f             Callback emitting the Hamiltonian.
+ * @param user          Opaque user pointer forwarded to @p f.
+ * @param n_bands       Total number of bands (matrix dimension).  Must be >= 2.
+ * @param n_occupied    Number of occupied bands counted from the bottom
+ *                      (lowest energy).  Must satisfy 1 <= n_occupied <= n_bands - 1.
+ *                      Pass @p n_bands / 2 for the conventional half-filling.
+ *
+ * @return Newly-owned handle, or NULL on bad arguments.
+ */
+MOONLAB_API qgt_system_n_t* qgt_create_nband(qgt_bloch_n_fn f, void* user,
+                                              size_t n_bands,
+                                              size_t n_occupied);
+
+MOONLAB_API void qgt_free_nband(qgt_system_n_t* sys);
+
+/**
+ * @brief Compute the (Abelian, occupied-subspace summed) Chern number
+ *        on an N x N BZ grid via the non-Abelian FHS prescription.
+ *
+ * The construction of T. Fukui, Y. Hatsugai and H. Suzuki (2005)
+ * generalises directly to a multi-band occupied subspace by replacing
+ * the Abelian U(1) link variable
+ *   U_mu(k) = <u | u(k + dk_mu)> / |...|
+ * with the SU(M) link
+ *   U_mu(k) = det( <u_occ(k) | u_occ(k + dk_mu)> )
+ * (the determinant of the M x M overlap matrix), and accumulating
+ *   F_xy(k) = arg[ U_x(k) U_y(k+dk_x) U_x(k+dk_y)^{-1} U_y(k)^{-1} ]
+ * around each plaquette.  The total Chern number is the sum of Chern
+ * numbers of the occupied bands, exact at finite N when the gap
+ * between band M and band M+1 is finite throughout the BZ.
+ *
+ * @param sys      Multi-band system handle.
+ * @param N        Grid side; >= 8 for typical models.
+ * @param[out] out Result container (caller-supplied).  Holds the
+ *                 plaquette field and the integrated total Chern.
+ * @return 0 on success, negative on error.
+ */
+MOONLAB_API int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
+                                      qgt_berry_grid_t* out);
+
+/**
+ * @brief Compute the Z_2 invariant (Kane-Mele 2005) of a 4-band
+ *        time-reversal-symmetric Bloch Hamiltonian via the n-field
+ *        method of Fukui & Hatsugai (2007).
+ *
+ * The Z_2 invariant nu in {0, 1} distinguishes the trivial insulator
+ * (nu = 0) from the quantum spin Hall (QSH) insulator (nu = 1) of
+ * 2D time-reversal-symmetric class-AII band Hamiltonians.  We require
+ * @p sys to have @c n_bands == 4 with @c n_occupied == 2 (half-
+ * filled), and that the Hamiltonian commutes with the time-reversal
+ * operator (the caller's responsibility -- this routine does not
+ * verify the symmetry, only computes the invariant assuming it
+ * holds).
+ *
+ * Algorithm: Fukui-Hatsugai 2007.  Working on the half BZ
+ * @f$0 \le k_y \le \pi@f$, build the discrete F_12 plaquette flux
+ * using the determinant link variable, and the discrete A_1 along
+ * the @f$k_y = 0@f$ and @f$k_y = \pi@f$ TRIM lines using the same
+ * link variable.  The Z_2 invariant is
+ *   nu = (1 / (2 pi)) [ sum_BZ-half F_12 - sum_TRIM A_1 ]  mod 2.
+ *
+ * @param sys     4-band system at half-filling.
+ * @param N       Grid side; must be even, >= 8.
+ * @param[out]    z2 Output: 0 (trivial) or 1 (topological).
+ * @return 0 on success, negative on error.
+ */
+MOONLAB_API int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N,
+                                  int* z2);
+
+/**
+ * @brief Kane-Mele model on the honeycomb lattice (2005).
+ *
+ * 4-band Hamiltonian with the basis (A-up, B-up, A-down, B-down):
+ *   H_KM = t * sum_<ij> c_i^dag c_j
+ *        + i lambda_SO * sum_<<ij>> nu_ij c_i^dag s_z c_j
+ *        + lambda_R * (Rashba SOC term)
+ *        + lambda_v * sum_i xi_i c_i^dag c_i  (sublattice staggering)
+ *
+ * Topological phase diagram (lambda_R = 0):
+ *   nu = 1 (QSH) when |lambda_v| < 3 sqrt(3) |lambda_SO|;
+ *   nu = 0       otherwise.
+ *
+ * @param t           Nearest-neighbour hopping.
+ * @param lambda_so   Intrinsic spin-orbit coupling (Z_2 driver).
+ * @param lambda_r    Rashba SOC.  Set to 0 for the canonical KM.
+ * @param lambda_v    Sublattice mass / staggering.
+ *
+ * @return Newly-owned 4-band system at half-filling (n_occupied = 2),
+ *         or NULL on alloc failure.
+ */
+MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
+                                                 double lambda_r,
+                                                 double lambda_v);
+
 #ifdef __cplusplus
 }
 #endif
