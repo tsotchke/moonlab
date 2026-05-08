@@ -11,24 +11,28 @@ What the module computes:
 - Berry curvature `Omega_{xy}(k) = -2 Im Q_{xy}(k)` and Fubini-Study
   metric `g_{mu nu}(k) = Re Q_{mu nu}(k)` of any user-supplied 1D or
   2D Bloch Hamiltonian.
-- Integer Chern numbers via the Fukui-Hatsugai-Suzuki (2005) discrete
+- Integer Chern numbers via the Fukui-Hatsugai-Suzuki [3] discrete
   link-variable construction, generalised to non-Abelian U(M)
   occupied subspaces in the n-band path.
-- Z_2 invariants for 4-band TR-symmetric systems (Sz-conserving fast
-  path; full Pfaffian Fukui-Hatsugai 2007 deferred to v0.3.x) and 1D
-  particle-hole symmetric BdG systems.
-- Discrete winding number for 1D chiral systems (SSH).
-- Phase diagrams via 1D and 2D parameter sweeps.
+- Z_2 invariants for 4-band time-reversal-symmetric systems via the
+  S_z-conserving spin-Chern formulation (Kane and Mele [5]) and for
+  one-dimensional particle-hole-symmetric BdG systems via the
+  Pfaffian-sign product at the TR-invariant momenta (Kitaev [7]).
+- Discrete winding number for 1D chiral systems (SSH [4]) via the
+  Zak phase [10].
+- Phase diagrams obtained by sweeping a model's parameter space over
+  one or two dimensions.
 
-What it does NOT compute (and why):
+What the module does *not* compute, and why:
 
-- *Continuous* Berry-curvature density beyond a finite plaquette sum.
-  The FHS construction is exactly integer-valued at any finite N when
-  the gap is open, so the discrete sum *is* the topological invariant;
-  there's no need for a continuum limit.
-- Full Pfaffian Fukui-Hatsugai 2007 Z_2 (deferred): the Sz-conserving
-  spin-Chern shortcut covers the canonical Kane-Mele and BHZ
-  (Rashba-free) regimes that the v0.3 plan calls for.
+- A *continuum* Berry-curvature density beyond the finite plaquette
+  sum.  The FHS construction is exactly integer-valued at any finite
+  `N` once the gap is open [3]; the discrete sum *is* the
+  topological invariant and no continuum limit is needed.
+- The full Pfaffian variant of Fukui and Hatsugai [11] for systems
+  that break S_z symmetry (e.g. Kane-Mele with Rashba coupling).
+  This is scheduled for a future release; the S_z-conserving
+  shortcut covers the canonical Kane-Mele and BHZ regimes.
 
 ## Three integrators
 
@@ -104,10 +108,12 @@ assumes Sz conservation.  It extracts the upper-left 2x2 block of the
 its Chern via `qgt_berry_grid` (the original 2-band FHS path), and
 returns `|C_up| mod 2`.
 
-This works exactly for canonical Kane-Mele (`lambda_r = 0`) and BHZ.
-Adding Rashba (`lambda_r != 0`) breaks Sz conservation; that requires
-the full Pfaffian Fukui-Hatsugai 2007 Z_2 path on the half-BZ + TRIM
-loop integrals, which is on the v0.3.x roadmap.
+This is exact for the canonical Kane-Mele model (`lambda_r = 0`) [5]
+and for the BHZ model [6].  Adding Rashba coupling
+(`lambda_r != 0`) breaks S_z conservation, in which case the full
+Pfaffian construction of Fukui and Hatsugai [11] on the half
+Brillouin zone with TRIM line integrals is required; that path is
+scheduled for a future release.
 
 ## Z_2 invariant for 1D BdG
 
@@ -166,20 +172,60 @@ Hamiltonian itself.
 
 ## References
 
-- Provost & Vallee, *Riemannian structure on manifolds of quantum
-  states*, Commun. Math. Phys. **76**, 289 (1980).  Origin of the QGT.
-- Berry, *Quantal phase factors accompanying adiabatic changes*,
-  Proc. R. Soc. Lond. A **392**, 45 (1984).  Berry connection and phase.
-- Fukui, Hatsugai & Suzuki, *Chern numbers in discretized Brillouin
-  zone*, J. Phys. Soc. Jpn. **74**, 1674 (2005), arXiv:cond-mat/0503172.
-  Link-variable quantisation we implement.
-- Fukui & Hatsugai, *Quantum spin Hall effect in three-dimensional
-  materials: Lattice computation of Z_2 topological invariants*, J.
-  Phys. Soc. Jpn. **76**, 053702 (2007).  The full Pfaffian Z_2 path
-  we'll implement in v0.3.x.
-- Bernevig & Hughes, *Topological Insulators and Topological
-  Superconductors*, Princeton (2013).  Textbook reference for all
-  built-in models.
-- Thouless, Kohmoto, Nightingale & den Nijs, *Quantized Hall
-  conductance in a two-dimensional periodic potential*, Phys. Rev.
-  Lett. **49**, 405 (1982).  Hofstadter Diophantine equation.
+[1] J. P. Provost and G. Vallee, "Riemannian structure on manifolds
+    of quantum states", *Commun. Math. Phys.* **76**, 289 (1980).
+    Origin of the quantum geometric tensor.
+
+[2] M. V. Berry, "Quantal phase factors accompanying adiabatic
+    changes", *Proc. R. Soc. Lond. A* **392**, 45 (1984).  Berry
+    connection and the geometric phase.
+
+[3] T. Fukui, Y. Hatsugai, and H. Suzuki, "Chern numbers in
+    discretized Brillouin zone: Efficient method of computing
+    (spin) Hall conductances", *J. Phys. Soc. Jpn.* **74**, 1674
+    (2005); arXiv:cond-mat/0503172.  Link-variable quantisation
+    used in `qgt_berry_grid` and `qgt_berry_grid_nband`.
+
+[4] W. P. Su, J. R. Schrieffer, and A. J. Heeger, "Solitons in
+    polyacetylene", *Phys. Rev. Lett.* **42**, 1698 (1979).  SSH
+    chain.
+
+[5] C. L. Kane and E. J. Mele, "Z_2 topological order and the
+    quantum spin Hall effect", *Phys. Rev. Lett.* **95**, 146802
+    (2005).  Kane-Mele model and Z_2 invariant.
+
+[6] B. A. Bernevig, T. L. Hughes, and S.-C. Zhang, "Quantum spin
+    Hall effect and topological phase transition in HgTe quantum
+    wells", *Science* **314**, 1757 (2006).  BHZ model.
+
+[7] A. Y. Kitaev, "Unpaired Majorana fermions in quantum wires",
+    *Physics-Uspekhi* **44**, 131 (2001).  1D BdG Z_2 from the
+    Pfaffian-sign product at TR-invariant momenta.
+
+[8] D. R. Hofstadter, "Energy levels and wave functions of Bloch
+    electrons in rational and irrational magnetic fields",
+    *Phys. Rev. B* **14**, 2239 (1976).  Hofstadter butterfly.
+
+[9] D. J. Thouless, M. Kohmoto, M. P. Nightingale, and M. den Nijs,
+    "Quantized Hall conductance in a two-dimensional periodic
+    potential", *Phys. Rev. Lett.* **49**, 405 (1982).  TKNN
+    Diophantine equation for magnetic sub-band Cherns.
+
+[10] J. Zak, "Berry's phase for energy bands in solids",
+    *Phys. Rev. Lett.* **62**, 2747 (1989).  Discrete Zak phase
+    used in `qgt_winding_1d`.
+
+[11] T. Fukui and Y. Hatsugai, "Quantum spin Hall effect in
+    three-dimensional materials: Lattice computation of Z_2
+    topological invariants", *J. Phys. Soc. Jpn.* **76**, 053702
+    (2007).  Pfaffian Z_2 construction for Rashba-coupled
+    Hamiltonians.
+
+[12] R. Bianco and R. Resta, "Mapping topological order in
+    coordinate space", *Phys. Rev. B* **84**, 241106(R) (2011).
+    Real-space local Chern marker used by the cross-check against
+    `qgt_berry_grid_proj`.
+
+[13] B. A. Bernevig and T. L. Hughes, *Topological Insulators and
+    Topological Superconductors*, Princeton University Press, 2013.
+    Standard textbook reference for the built-in models.
