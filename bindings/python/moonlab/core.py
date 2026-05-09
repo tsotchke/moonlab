@@ -25,25 +25,36 @@ else:
     _lib_names = ["libquantumsim.so", "libquantumsim.dylib"]
 
 # Search paths (checked in order). The top-level repo root is 4 parents up
-# from this file (bindings/python/moonlab/core.py -> repo root). Also try
-# ../build, which is where a local CMake build drops the dylib.
+# from this file (bindings/python/moonlab/core.py -> repo root). Prefer an
+# explicit library override and fresh CMake build outputs before a repo-root
+# dylib, which may be a stale copied artifact.
 _repo_root = Path(__file__).parent.parent.parent.parent
+_env_lib_path = os.environ.get("MOONLAB_LIBRARY_PATH")
 _search_paths = [
-    _repo_root,
+    _repo_root / "build-qgtl-vendor",
     _repo_root / "build",
     Path(__file__).parent.parent.parent / "build",
     Path(__file__).parent.parent.parent,
+    _repo_root,
 ]
 
 _lib_path = None
-for _dir in _search_paths:
-    for _name in _lib_names:
-        _candidate = _dir / _name
-        if _candidate.exists():
-            _lib_path = _candidate
+if _env_lib_path:
+    _env_candidate = Path(_env_lib_path).expanduser()
+    if _env_candidate.is_dir():
+        _search_paths.insert(0, _env_candidate)
+    elif _env_candidate.exists():
+        _lib_path = _env_candidate
+
+if _lib_path is None:
+    for _dir in _search_paths:
+        for _name in _lib_names:
+            _candidate = _dir / _name
+            if _candidate.exists():
+                _lib_path = _candidate
+                break
+        if _lib_path is not None:
             break
-    if _lib_path is not None:
-        break
 
 if _lib_path is None:
     _tried = ", ".join(f"{d}/<{'|'.join(_lib_names)}>" for d in _search_paths)
@@ -52,6 +63,18 @@ if _lib_path is None:
         f"Build the C library first (e.g. 'cmake -B build && cmake --build build') "
         f"or set the library path. Tried: {_tried}"
     )
+
+_omp_duplicate_runtime_allowed = False
+if (
+    sys.platform == "darwin" and
+    "torch" in sys.modules and
+    "KMP_DUPLICATE_LIB_OK" not in os.environ
+):
+    # PyTorch wheels on macOS ship their own libomp while the local Moonlab
+    # CMake build links Homebrew libomp. Make the compatibility path explicit
+    # so torch_layer can report it instead of letting libomp abort the process.
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    _omp_duplicate_runtime_allowed = True
 
 # Load C library
 _lib = ctypes.CDLL(str(_lib_path))
