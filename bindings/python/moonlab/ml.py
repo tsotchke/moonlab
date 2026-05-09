@@ -9,9 +9,13 @@ returned numbers are detached. Use moonlab.torch_layer.QuantumLayer
 inside a torch graph.
 """
 
+import logging
+
 import numpy as np
 from typing import Callable, Optional, List, Tuple
 from .core import QuantumState
+
+logger = logging.getLogger(__name__)
 
 try:
     import torch
@@ -350,12 +354,12 @@ class QSVM:
         
         Uses quantum kernel K(xᵢ,xⱼ) = |⟨φ(xᵢ)|φ(xⱼ)⟩|²
         """
-        print(f"Computing quantum kernel matrix for {len(X)} samples...")
-        
+        logger.info("Computing quantum kernel matrix for %d samples", len(X))
+
         # Compute kernel matrix
         K = self.kernel.compute_matrix(X)
-        
-        print("Solving SVM dual using Sequential Minimal Optimization (SMO)...")
+
+        logger.info("Solving SVM dual using Sequential Minimal Optimization (SMO)")
         
         # SMO Algorithm (Platt, 1998) - Industry standard SVM solver
         # This is THE production algorithm used in libsvm, scikit-learn, etc.
@@ -456,7 +460,10 @@ class QSVM:
         if len(self.alphas) > 0:
             self.b /= len(self.alphas)
         
-        print(f"Training complete. Support vectors: {len(self.alphas)}/{n_samples}")
+        logger.info(
+            "Training complete. Support vectors: %d / %d",
+            len(self.alphas), n_samples,
+        )
     
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -571,7 +578,10 @@ class QuantumPCA:
         if self.num_qubits is None:
             self.num_qubits = int(np.ceil(np.log2(n_features)))
         
-        print(f"Quantum PCA: Using {self.num_qubits} qubits for {n_features} features")
+        logger.info(
+            "Quantum PCA: using %d qubits for %d features",
+            self.num_qubits, n_features,
+        )
         
         # Center and normalize data
         X_centered = X - np.mean(X, axis=0)
@@ -634,7 +644,10 @@ class QuantumPCA:
                     best_eigenvector = candidate
             
             if best_eigenvector is None:
-                print(f"  Warning: Component {comp_idx} extraction failed, using fallback")
+                logger.warning(
+                    "Component %d extraction failed, falling back to random initialisation",
+                    comp_idx,
+                )
                 best_eigenvector = np.random.randn(n_features)
                 best_eigenvector /= np.linalg.norm(best_eigenvector)
                 best_eigenvalue = best_eigenvector @ cov_matrix @ best_eigenvector
@@ -652,9 +665,15 @@ class QuantumPCA:
         total_variance = np.sum(eigenvalues)
         if total_variance > 0:
             explained_ratio = 100.0 * np.sum(self.explained_variance_) / total_variance
-            print(f"Quantum PCA: {explained_ratio:.1f}% variance explained")
-            print(f"  Method: Quantum amplitude amplification with {self.num_qubits} qubits")
-            print(f"  Eigenvalues: {[f'{ev:.4f}' for ev in self.explained_variance_]}")
+            logger.info(
+                "Quantum PCA: %.1f%% variance explained "
+                "(method: amplitude amplification with %d qubits)",
+                explained_ratio, self.num_qubits,
+            )
+            logger.debug(
+                "Quantum PCA eigenvalues: %s",
+                [f"{ev:.4f}" for ev in self.explained_variance_],
+            )
     
     def transform(self, X: np.ndarray) -> np.ndarray:
         """Project data onto principal components"""
