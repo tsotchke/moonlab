@@ -9,14 +9,17 @@
  * declarations in their respective headers, but had no caller
  * anywhere in src/, tests/, examples/, or bindings/.  This file
  * converts them from "untested API surface" into "exercised by
- * the suite" without changing behaviour, closing four entries on
- * the dead-code triage queue.
+ * the suite" without changing behaviour, closing entries on the
+ * dead-code triage queue.
  *
  * Functions exercised:
  *   - tensor_einsum            (tensor.c)
  *   - svd_left_canonicalize    (svd_compress.c)
  *   - svd_right_canonicalize   (svd_compress.c)
  *   - tn_expectation_2q        (tn_measurement.c)
+ *   - contract_mps_mpo         (contraction.c)
+ *   - DMRG backend provenance, environment init, random MPS init,
+ *     ground-state, energy, and variance helpers (dmrg.c)
  */
 
 #include "../../src/algorithms/tensor_network/tensor.h"
@@ -24,6 +27,7 @@
 #include "../../src/algorithms/tensor_network/tn_state.h"
 #include "../../src/algorithms/tensor_network/tn_gates.h"
 #include "../../src/algorithms/tensor_network/tn_measurement.h"
+#include "../../src/algorithms/tensor_network/contraction.h"
 #include "../../src/algorithms/tensor_network/dmrg.h"
 
 #include <complex.h>
@@ -37,6 +41,35 @@ static int failures = 0;
 #define CHECK(cond, fmt, ...) do { \
     if (!(cond)) { fprintf(stderr, "FAIL " fmt "\n", ##__VA_ARGS__); failures++; } \
 } while (0)
+
+static void check_dmrg_trace_consistency(const dmrg_backend_trace_t *trace,
+                                         const char *owner) {
+    CHECK(trace != NULL, "DMRG trace must be non-NULL");
+    if (!trace) return;
+    CHECK(trace->owner != NULL && strcmp(trace->owner, owner) == 0,
+          "DMRG trace owner = %s (expected %s)",
+          trace->owner ? trace->owner : "(null)", owner);
+    CHECK(trace->operation != NULL, "DMRG trace operation must be named");
+    CHECK(trace->backend_name != NULL, "DMRG backend must be named");
+    CHECK((trace->blas_available && !trace->scalar_kernel) ||
+          (!trace->blas_available && trace->scalar_kernel),
+          "DMRG BLAS/scalar flags must identify one active kernel family");
+    CHECK(!trace->accelerate_available || trace->blas_available,
+          "DMRG Accelerate implies BLAS availability");
+}
+
+static void check_contract_trace_consistency(const contract_backend_trace_t *trace,
+                                             const char *owner) {
+    CHECK(trace != NULL, "contraction trace must be non-NULL");
+    if (!trace) return;
+    CHECK(trace->owner != NULL && strcmp(trace->owner, owner) == 0,
+          "contraction trace owner = %s (expected %s)",
+          trace->owner ? trace->owner : "(null)", owner);
+    CHECK(trace->operation != NULL, "contraction trace operation must be named");
+    CHECK(trace->backend_name != NULL, "contraction backend must be named");
+    CHECK(trace->openmp_available || trace->scalar_kernel,
+          "contraction scalar kernel must be active when OpenMP is unavailable");
+}
 
 /* ------------------------------------------------------------------ */
 /* tensor_einsum: matrix multiplication via "ij,jk->ik".              */
@@ -193,6 +226,56 @@ static void test_tn_mpo_two_site_apply(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* contract_mps_mpo: apply a TFIM MPO tensor-by-tensor and verify the */
+/* backend provenance is explicit.                                    */
+/* ------------------------------------------------------------------ */
+
+static void test_contract_mps_mpo_backend_provenance(void) {
+    fprintf(stdout, "\n--- contract_mps_mpo backend provenance ---\n");
+
+    tn_state_config_t state_cfg = tn_state_config_default();
+    tn_mps_state_t* s = tn_mps_create_zero(2, &state_cfg);
+    CHECK(s != NULL, "tn_mps_create_zero");
+    if (!s) return;
+
+    mpo_t* mpo = mpo_tfim_create(2, /*J=*/1.0, /*h=*/0.25);
+    CHECK(mpo != NULL, "mpo_tfim_create");
+    if (!mpo) {
+        tn_mps_free(s);
+        return;
+    }
+
+    contract_config_t cfg = contract_config_default();
+    cfg.use_compression = true;
+    cfg.num_threads = 1;
+    const tensor_t* mpo_tensors[2] = { mpo->tensors[0].W, mpo->tensors[1].W };
+    const tensor_t* mps_tensors[2] = { s->tensors[0], s->tensors[1] };
+
+    tensor_t** applied = contract_mps_mpo(mps_tensors, mpo_tensors, 2, &cfg);
+    CHECK(applied != NULL, "contract_mps_mpo returned NULL");
+    if (applied) {
+        for (uint32_t i = 0; i < 2; i++) {
+            CHECK(applied[i] != NULL, "contract_mps_mpo site %u returned NULL", i);
+            tensor_free(applied[i]);
+        }
+        free(applied);
+    }
+
+    const contract_backend_trace_t* trace = contract_get_last_backend_trace();
+    check_contract_trace_consistency(trace, "contract_mps_mpo");
+    if (trace) {
+        CHECK(trace->compression_requested,
+              "contract_mps_mpo trace should preserve compression request");
+        CHECK(trace->num_threads == 1,
+              "contract_mps_mpo trace num_threads = %u (expected 1)",
+              trace->num_threads);
+    }
+
+    mpo_free(mpo);
+    tn_mps_free(s);
+}
+
+/* ------------------------------------------------------------------ */
 /* mpo_skyrmion_create: 6-site 2D 2x3 skyrmion lattice; smoke-only.   */
 /* Pin: the call returns a non-NULL MPO and frees cleanly.            */
 /* ------------------------------------------------------------------ */
@@ -207,6 +290,87 @@ static void test_mpo_skyrmion_create_smoke(void) {
                                        /*B=*/0.05, /*K=*/0.02);
     CHECK(mpo != NULL, "mpo_skyrmion_create returned NULL");
     if (mpo) mpo_free(mpo);
+}
+
+/* ------------------------------------------------------------------ */
+/* DMRG provenance and helper coverage: exercise backend probe,        */
+/* random-MPS init, environment init, ground-state, and energy path.   */
+/* ------------------------------------------------------------------ */
+
+static void test_dmrg_backend_provenance_helpers(void) {
+    fprintf(stdout, "\n--- DMRG backend provenance helpers ---\n");
+
+    dmrg_backend_trace_t probe =
+        dmrg_backend_probe("test_tn_dead_code_smoke", "probe");
+    check_dmrg_trace_consistency(&probe, "test_tn_dead_code_smoke");
+
+    tn_state_config_t state_cfg = tn_state_config_default();
+    state_cfg.max_bond_dim = 4;
+    tn_mps_state_t* env_mps = tn_mps_create_zero(4, &state_cfg);
+    CHECK(env_mps != NULL, "tn_mps_create_zero");
+    if (!env_mps) return;
+
+    mpo_t* env_mpo = mpo_tfim_create(4, /*J=*/1.0, /*h=*/0.5);
+    CHECK(env_mpo != NULL, "mpo_tfim_create");
+    if (!env_mpo) {
+        tn_mps_free(env_mps);
+        return;
+    }
+
+    dmrg_environments_t* env = dmrg_environments_create(4);
+    CHECK(env != NULL, "dmrg_environments_create");
+    if (env) {
+        CHECK(dmrg_init_right_environments(env, env_mps, env_mpo) == 0,
+              "dmrg_init_right_environments returned nonzero");
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_init_right_environments");
+
+        CHECK(dmrg_init_left_environments(env, env_mps, env_mpo) == 0,
+              "dmrg_init_left_environments returned nonzero");
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_init_left_environments");
+        dmrg_environments_free(env);
+    }
+
+    double E = dmrg_compute_energy(env_mps, env_mpo);
+    CHECK(isfinite(E) && E < 1e100, "dmrg_compute_energy returned %.6e", E);
+    check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_compute_energy");
+
+    mpo_free(env_mpo);
+    tn_mps_free(env_mps);
+
+    tn_mps_state_t* random_mps = dmrg_init_random_mps(2, 2, &state_cfg);
+    CHECK(random_mps != NULL, "dmrg_init_random_mps");
+    check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_init_random_mps");
+    if (!random_mps) return;
+
+    mpo_t* ground_mpo = mpo_tfim_create(2, /*J=*/1.0, /*h=*/0.5);
+    CHECK(ground_mpo != NULL, "mpo_tfim_create for ground state");
+    if (!ground_mpo) {
+        tn_mps_free(random_mps);
+        return;
+    }
+
+    dmrg_config_t dmrg_cfg = dmrg_config_default();
+    dmrg_cfg.max_bond_dim = 4;
+    dmrg_cfg.max_sweeps = 1;
+    dmrg_cfg.warmup_sweeps = 0;
+    dmrg_cfg.lanczos_max_iter = 8;
+    dmrg_cfg.noise_strength = 0.0;
+    dmrg_cfg.verbose = false;
+
+    dmrg_result_t* result = dmrg_ground_state(random_mps, ground_mpo, &dmrg_cfg);
+    CHECK(result != NULL, "dmrg_ground_state returned NULL");
+    check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_ground_state");
+    if (result) {
+        CHECK(result->num_sweeps <= dmrg_cfg.max_sweeps,
+              "dmrg_ground_state sweeps = %u (max %u)",
+              result->num_sweeps, dmrg_cfg.max_sweeps);
+        dmrg_result_free(result);
+    }
+
+    mpo_free(ground_mpo);
+    tn_mps_free(random_mps);
 }
 
 /* ------------------------------------------------------------------ */
@@ -228,6 +392,8 @@ static void test_dmrg_energy_variance(void) {
         double var = dmrg_energy_variance(s, mpo);
         CHECK(var >= -1e-9,
               "dmrg_energy_variance returned %.6f (should be >= 0)", var);
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_energy_variance");
         mpo_free(mpo);
     }
 
@@ -279,7 +445,9 @@ int main(void) {
     test_svd_canonicalize_round_trip();
     test_tn_expectation_2q_cnot();
     test_tn_mpo_two_site_apply();
+    test_contract_mps_mpo_backend_provenance();
     test_mpo_skyrmion_create_smoke();
+    test_dmrg_backend_provenance_helpers();
     test_dmrg_energy_variance();
     test_tn_histogram_create();
     test_tensor_svd_truncate();

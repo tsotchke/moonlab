@@ -37,6 +37,54 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#if defined(__APPLE__) && defined(MOONLAB_DMRG_HAVE_BLAS)
+#define DMRG_BACKEND_NAME "accelerate-blas"
+#define DMRG_BACKEND_BLAS_AVAILABLE true
+#define DMRG_BACKEND_ACCELERATE_AVAILABLE true
+#define DMRG_BACKEND_SCALAR_KERNEL false
+#elif defined(MOONLAB_DMRG_HAVE_BLAS)
+#define DMRG_BACKEND_NAME "cblas"
+#define DMRG_BACKEND_BLAS_AVAILABLE true
+#define DMRG_BACKEND_ACCELERATE_AVAILABLE false
+#define DMRG_BACKEND_SCALAR_KERNEL false
+#else
+#define DMRG_BACKEND_NAME "scalar-c"
+#define DMRG_BACKEND_BLAS_AVAILABLE false
+#define DMRG_BACKEND_ACCELERATE_AVAILABLE false
+#define DMRG_BACKEND_SCALAR_KERNEL true
+#endif
+
+static dmrg_backend_trace_t g_dmrg_last_backend_trace = {
+    .owner = "dmrg_backend_probe",
+    .operation = "probe",
+    .backend_name = DMRG_BACKEND_NAME,
+    .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
+    .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
+    .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL
+};
+
+dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
+                                        const char *operation) {
+    dmrg_backend_trace_t trace = {
+        .owner = owner ? owner : "dmrg_backend_probe",
+        .operation = operation ? operation : "probe",
+        .backend_name = DMRG_BACKEND_NAME,
+        .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
+        .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
+        .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL
+    };
+    return trace;
+}
+
+const dmrg_backend_trace_t *dmrg_get_last_backend_trace(void) {
+    return &g_dmrg_last_backend_trace;
+}
+
+static void dmrg_record_backend_trace(const char *owner,
+                                      const char *operation) {
+    g_dmrg_last_backend_trace = dmrg_backend_probe(owner, operation);
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -1769,6 +1817,8 @@ static tensor_t *dmrg_contract_left_env_blas(const tensor_t *A,
 int dmrg_init_right_environments(dmrg_environments_t *env,
                                   const tn_mps_state_t *mps,
                                   const mpo_t *mpo) {
+    dmrg_record_backend_trace("dmrg_init_right_environments",
+                              "right-environment-contraction");
     if (!env || !mps || !mpo) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -1843,6 +1893,8 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
 int dmrg_init_left_environments(dmrg_environments_t *env,
                                  const tn_mps_state_t *mps,
                                  const mpo_t *mpo) {
+    dmrg_record_backend_trace("dmrg_init_left_environments",
+                              "left-environment-contraction");
     if (!env || !mps || !mpo) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -2461,6 +2513,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
 dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
                                   const mpo_t *mpo,
                                   const dmrg_config_t *config) {
+    dmrg_record_backend_trace("dmrg_ground_state", "two-site-sweep");
     if (!mps || !mpo || !config) return NULL;
 
     double start_time = get_time_sec();
@@ -2606,6 +2659,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
 
     result->total_time = get_time_sec() - start_time;
 
+    dmrg_record_backend_trace("dmrg_ground_state", "two-site-sweep");
     return result;
 }
 
@@ -2667,6 +2721,7 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
 tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
                                       uint32_t chi_init,
                                       const tn_state_config_t *mps_cfg) {
+    dmrg_record_backend_trace("dmrg_init_random_mps", "random-mps-initialization");
     if (num_sites < 2) return NULL;
 
     tn_state_config_t cfg = mps_cfg ? *mps_cfg : tn_state_config_default();
@@ -2724,6 +2779,7 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
 }
 
 double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
+    dmrg_record_backend_trace("dmrg_compute_energy", "energy-expectation");
     if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // E = <psi|H|psi> computed via transfer matrix contraction
@@ -2800,6 +2856,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
 }
 
 double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
+    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
     // Var(E) = <H^2> - <H>^2
     // For a true eigenstate, Var(E) = 0
     // Computed by contracting MPS with TWO MPO layers
@@ -2808,7 +2865,8 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
 
     // First compute <H>
     double E = dmrg_compute_energy(mps, mpo);
-    if (isnan(E)) return DMRG_ENERGY_ERROR;
+    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
+    if (!isfinite(E) || E >= DMRG_ENERGY_ERROR) return DMRG_ENERGY_ERROR;
 
     // Now compute <H^2> via double-layer MPO contraction
     // Transfer tensor T has shape [chi_l, b_l, b_l, chi_l'] for double MPO layer
@@ -2925,5 +2983,6 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
         // Otherwise return the value (might indicate numerical issues)
     }
 
+    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
     return variance;
 }

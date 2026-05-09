@@ -149,9 +149,39 @@ typedef struct {
 } dmrg_result_t;
 
 /**
+ * @brief Runtime provenance for DMRG tensor contractions.
+ *
+ * The DMRG implementation has compile-time accelerated kernels for the
+ * environment contractions and scalar C kernels as the portable baseline.
+ * This trace reports which family was compiled into the library and which
+ * public DMRG entry point most recently recorded provenance.
+ */
+typedef struct {
+    const char *owner;            /**< Public API or helper recording provenance */
+    const char *operation;        /**< Logical operation being traced */
+    const char *backend_name;     /**< "accelerate-blas", "cblas", or "scalar-c" */
+    bool blas_available;          /**< BLAS-backed environment kernels are compiled in */
+    bool accelerate_available;    /**< Apple Accelerate is the BLAS provider */
+    bool scalar_kernel;           /**< Portable scalar C kernels are the active path */
+} dmrg_backend_trace_t;
+
+/**
  * @brief Free DMRG result
  */
 void dmrg_result_free(dmrg_result_t *result);
+
+/**
+ * @brief Return compile-time DMRG backend provenance for an owner/operation.
+ *
+ * Passing NULL uses stable defaults ("dmrg_backend_probe", "probe").
+ */
+dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
+                                        const char *operation);
+
+/**
+ * @brief Return provenance recorded by the most recent public DMRG entry point.
+ */
+const dmrg_backend_trace_t *dmrg_get_last_backend_trace(void);
 
 // ============================================================================
 // HAMILTONIAN DEFINITION

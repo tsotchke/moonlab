@@ -23,6 +23,71 @@
 #include <omp.h>
 #endif
 
+#if defined(_OPENMP)
+#define CONTRACT_OPENMP_AVAILABLE true
+#define CONTRACT_DEFAULT_BACKEND_NAME "openmp-c"
+#define CONTRACT_DEFAULT_SCALAR_KERNEL false
+#else
+#define CONTRACT_OPENMP_AVAILABLE false
+#define CONTRACT_DEFAULT_BACKEND_NAME "scalar-c"
+#define CONTRACT_DEFAULT_SCALAR_KERNEL true
+#endif
+
+static contract_backend_trace_t g_contract_last_backend_trace = {
+    .owner = "contract_backend_probe",
+    .operation = "probe",
+    .backend_name = CONTRACT_DEFAULT_BACKEND_NAME,
+    .openmp_available = CONTRACT_OPENMP_AVAILABLE,
+    .parallel_requested = true,
+    .scalar_kernel = CONTRACT_DEFAULT_SCALAR_KERNEL,
+    .compression_requested = false,
+    .num_threads = 0
+};
+
+static bool contract_scalar_kernel_selected(const contract_config_t *config) {
+#if defined(_OPENMP)
+    return config && !config->parallel;
+#else
+    (void)config;
+    return true;
+#endif
+}
+
+static const char *contract_backend_name_selected(const contract_config_t *config) {
+#if defined(_OPENMP)
+    return (!config || config->parallel) ? "openmp-c" : "scalar-c";
+#else
+    (void)config;
+    return "scalar-c";
+#endif
+}
+
+contract_backend_trace_t contract_backend_probe(const contract_config_t *config,
+                                                const char *owner,
+                                                const char *operation) {
+    contract_backend_trace_t trace = {
+        .owner = owner ? owner : "contract_backend_probe",
+        .operation = operation ? operation : "probe",
+        .backend_name = contract_backend_name_selected(config),
+        .openmp_available = CONTRACT_OPENMP_AVAILABLE,
+        .parallel_requested = config ? config->parallel : true,
+        .scalar_kernel = contract_scalar_kernel_selected(config),
+        .compression_requested = config ? config->use_compression : false,
+        .num_threads = config ? config->num_threads : 0
+    };
+    return trace;
+}
+
+const contract_backend_trace_t *contract_get_last_backend_trace(void) {
+    return &g_contract_last_backend_trace;
+}
+
+static void contract_record_backend_trace(const contract_config_t *config,
+                                          const char *owner,
+                                          const char *operation) {
+    g_contract_last_backend_trace = contract_backend_probe(config, owner, operation);
+}
+
 // ============================================================================
 // CONFIGURATION MANAGEMENT
 // ============================================================================
@@ -858,6 +923,7 @@ tensor_t **contract_mps_mpo(const tensor_t **mps,
                              const tensor_t **mpo,
                              uint32_t num_sites,
                              const contract_config_t *config) {
+    contract_record_backend_trace(config, "contract_mps_mpo", "mps-mpo-application");
     if (!mps || !mpo || num_sites == 0 || !config) return NULL;
 
     // Allocate result array

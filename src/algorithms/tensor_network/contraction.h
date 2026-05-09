@@ -145,6 +145,24 @@ typedef struct {
     double compression_error;       /**< Total compression error */
 } contract_stats_t;
 
+/**
+ * @brief Runtime provenance for contraction helper entry points.
+ *
+ * The generic contraction engine always has a portable scalar C path and may
+ * compile OpenMP loops when available.  This trace records the backend family
+ * selected for a public helper and the relevant execution options.
+ */
+typedef struct {
+    const char *owner;               /**< Public API recording provenance */
+    const char *operation;           /**< Logical operation being traced */
+    const char *backend_name;        /**< "openmp-c" or "scalar-c" */
+    bool openmp_available;           /**< OpenMP support is compiled in */
+    bool parallel_requested;         /**< Caller requested parallel execution */
+    bool scalar_kernel;              /**< Portable scalar C path is active */
+    bool compression_requested;      /**< Caller requested SVD compression */
+    uint32_t num_threads;            /**< Requested thread count (0 = auto) */
+} contract_backend_trace_t;
+
 // ============================================================================
 // CONFIGURATION MANAGEMENT
 // ============================================================================
@@ -412,6 +430,20 @@ tensor_t **contract_mps_mpo(const tensor_t **mps,
                              const tensor_t **mpo,
                              uint32_t num_sites,
                              const contract_config_t *config);
+
+/**
+ * @brief Return contraction backend provenance for an owner/operation.
+ *
+ * Passing NULL uses stable defaults and a default contraction configuration.
+ */
+contract_backend_trace_t contract_backend_probe(const contract_config_t *config,
+                                                const char *owner,
+                                                const char *operation);
+
+/**
+ * @brief Return provenance recorded by the most recent contraction helper.
+ */
+const contract_backend_trace_t *contract_get_last_backend_trace(void);
 
 // ============================================================================
 // COST ESTIMATION
