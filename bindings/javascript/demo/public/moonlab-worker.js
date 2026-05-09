@@ -408,7 +408,7 @@ const ensureGpuSession = (module) => {
   }
   if (!ctxPtr) {
     gpuSession.fallbackIntentional = true;
-    gpuSession.reason = 'gpu-context-init-failed';
+    gpuSession.reason = 'gpu-context-unavailable';
     return gpuSession;
   }
 

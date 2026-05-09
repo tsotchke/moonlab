@@ -3022,7 +3022,7 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
         ctxCreated: false,
         backendType: 0,
         nativeAccelerated: false,
-        reason: 'gpu-context-init-failed',
+        reason: 'gpu-context-unavailable',
       };
     }
 
