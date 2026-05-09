@@ -13,7 +13,6 @@ const resultsPath = path.resolve(artifactDir, 'results.json');
 const {
   GPUBackendSession,
   GPU_BACKEND_WEBGPU,
-  backendTypeName,
 } = await import(path.resolve(packageRoot, 'dist/index.mjs'));
 
 function getEnv(name, fallback = '') {
@@ -52,7 +51,12 @@ async function main() {
     pauliZRc: null,
     cnotRc1: null,
     cnotRc2: null,
+    hadamardAllRc: null,
+    normSquaredBefore: null,
+    normSquaredAfter: null,
+    complexRoundtrip: null,
     probabilities: null,
+    allHadamardProbabilities: null,
     passed: false,
     reason: '',
   };
@@ -76,7 +80,7 @@ async function main() {
   }
 
   report.sessionCreated = true;
-  report.backend = backendTypeName(session.backendType);
+  report.backend = session.backendName;
   report.nativeAccelerated = session.nativeAccelerated;
   const hadamardStateDim = 2;
   const hadamardBuffer = session.createBufferFromInterleaved(new Float64Array([
@@ -96,6 +100,13 @@ async function main() {
     -0.6, 0.2,
   ]);
   const cnotBuffer = session.createBufferFromInterleaved(cnotInitial);
+  const allHadamardStateDim = 4;
+  const allHadamardBuffer = session.createBufferFromComplex([
+    { real: 1, imag: 0 },
+    { real: 0, imag: 0 },
+    { real: 0, imag: 0 },
+    { real: 0, imag: 0 },
+  ]);
 
   try {
     report.hadamardRc = session.hadamard(hadamardBuffer, 0, hadamardStateDim);
@@ -103,6 +114,24 @@ async function main() {
     report.pauliZRc = session.pauliZ(pauliBuffer, 0, pauliStateDim);
     report.cnotRc1 = session.cnot(cnotBuffer, 0, 1, cnotStateDim);
     report.cnotRc2 = session.cnot(cnotBuffer, 0, 1, cnotStateDim);
+    report.complexRoundtrip = session
+      .readComplexBuffer(allHadamardBuffer, allHadamardStateDim)
+      .map((z) => [z.real, z.imag]);
+    report.normSquaredBefore = session.sumSquaredMagnitudes(
+      allHadamardBuffer,
+      allHadamardStateDim
+    );
+    report.hadamardAllRc = session.hadamardAll(
+      allHadamardBuffer,
+      2,
+      allHadamardStateDim
+    );
+    if (report.hadamardAllRc === 0) {
+      report.normSquaredAfter = session.sumSquaredMagnitudes(
+        allHadamardBuffer,
+        allHadamardStateDim
+      );
+    }
     const isWebGPU = session.backendType === GPU_BACKEND_WEBGPU;
 
     if (requireWebGPU && !isWebGPU) {
@@ -135,11 +164,38 @@ async function main() {
       throw new Error(report.reason);
     }
 
+    if (isWebGPU && report.hadamardAllRc !== 0) {
+      report.reason = `Hadamard-all failed on WebGPU backend: rc=${report.hadamardAllRc}`;
+      report.passed = false;
+      throw new Error(report.reason);
+    }
+
     if (report.hadamardRc === 0) {
       const probs = session.computeProbabilities(hadamardBuffer, hadamardStateDim);
       report.probabilities = [probs[0], probs[1]];
       if (!approxEqual(probs[0], 0.5) || !approxEqual(probs[1], 0.5)) {
         report.reason = `Unexpected probabilities: [${probs[0]}, ${probs[1]}]`;
+        report.passed = false;
+        throw new Error(report.reason);
+      }
+    }
+
+    if (report.hadamardAllRc === 0) {
+      const allProbs = session.computeProbabilities(
+        allHadamardBuffer,
+        allHadamardStateDim
+      );
+      report.allHadamardProbabilities = Array.from(allProbs);
+      for (const probability of report.allHadamardProbabilities) {
+        if (!approxEqual(probability, 0.25)) {
+          report.reason = `Unexpected all-Hadamard probability: ${probability}`;
+          report.passed = false;
+          throw new Error(report.reason);
+        }
+      }
+      if (!approxEqual(report.normSquaredBefore, 1.0) ||
+          !approxEqual(report.normSquaredAfter, 1.0)) {
+        report.reason = `Norm drift: before=${report.normSquaredBefore}, after=${report.normSquaredAfter}`;
         report.passed = false;
         throw new Error(report.reason);
       }
@@ -174,6 +230,7 @@ async function main() {
     session.freeBuffer(hadamardBuffer);
     session.freeBuffer(pauliBuffer);
     session.freeBuffer(cnotBuffer);
+    session.freeBuffer(allHadamardBuffer);
     session.dispose();
     await fs.mkdir(artifactDir, { recursive: true });
     await fs.writeFile(resultsPath, JSON.stringify(report, null, 2), 'utf8');

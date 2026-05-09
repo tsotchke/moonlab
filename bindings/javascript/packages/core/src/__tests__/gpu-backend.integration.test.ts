@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GPU_BACKEND_NONE,
   GPUBackendSession,
+  backendTypeName,
   isUnifiedGPUApiAvailable,
 } from '../gpu-backend';
 
@@ -16,7 +17,48 @@ describe('Unified GPU Backend Integration', () => {
     expect(session).not.toBeNull();
     if (session) {
       expect(typeof session.backendType).toBe('number');
+      expect(session.backendName).toBe(backendTypeName(session.backendType));
       expect(typeof session.nativeAccelerated).toBe('boolean');
+      session.dispose();
+    }
+  });
+
+  it('round-trips complex buffers and validates norm helpers', async () => {
+    const session = await GPUBackendSession.create();
+    expect(session).not.toBeNull();
+    if (!session) return;
+
+    const stateDim = 4;
+    const buffer = session.createBufferFromComplex([
+      { real: 1, imag: 0 },
+      { real: 0, imag: 0 },
+      { real: 0, imag: 0 },
+      { real: 0, imag: 0 },
+    ]);
+
+    try {
+      const complex = session.readComplexBuffer(buffer, stateDim);
+      expect(complex).toHaveLength(stateDim);
+      expect(complex[0].real).toBeCloseTo(1);
+      expect(complex[0].imag).toBeCloseTo(0);
+
+      const norm = session.sumSquaredMagnitudes(buffer, stateDim);
+      expect(norm).toBeCloseTo(1);
+
+      const allRc = session.hadamardAll(buffer, 2, stateDim);
+      if (session.backendType === GPU_BACKEND_NONE) {
+        expect(allRc).toBe(-7);
+        return;
+      }
+
+      expect(allRc).toBe(0);
+      const probabilities = session.computeProbabilities(buffer, stateDim);
+      for (const probability of probabilities) {
+        expect(probability).toBeCloseTo(0.25);
+      }
+      expect(session.sumSquaredMagnitudes(buffer, stateDim)).toBeCloseTo(1);
+    } finally {
+      session.freeBuffer(buffer);
       session.dispose();
     }
   });
