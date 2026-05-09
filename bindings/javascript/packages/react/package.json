@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-react",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "React components for Moonlab quantum simulator",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

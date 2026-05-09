@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(No unreleased changes since v0.3.1.)
+
+## [0.3.1] - 2026-05-09
+
 A consolidation cycle following the v0.3.0 release.  Brings the
 Python and Rust binding surfaces to full parity with the C library,
 adds a topology explorer to the web demo and an MPDO noise tour to
 the Rust TUI, ships three new tutorials with primary-literature
 citations, and adds two worked Python examples covering the entire
-v0.3 surface.
+v0.3 surface.  Closes the ICC architectural-audit punch list:
+production-audit verdict moves from `fail` (7 risks) to `warn` (2
+heuristic false positives).
 
 ### Added
 
@@ -108,16 +114,77 @@ citations.
   `<X> = sqrt(1 - lambda)`, clone independence — all matching closed
   form to roundoff.
 
+#### ICC architectural audit — punch-list cleanup
+
+- `bindings/python/tests/test_topology_v03.py` renamed to
+  `test_topology.py` so ICC's stem-fallback matcher correctly
+  attributes the test to `topology.py`.
+- New `bindings/python/tests/test_clifford.py` (11 cases) covering
+  the Aaronson-Gottesman tableau bindings: deterministic
+  `|0...0>` measurement, X eigenvalue flip, H-induced randomness,
+  GHZ correlations on n = 16 qubits, Bell pair, S then S†
+  identity, CZ ≡ H·CNOT·H equivalence, SWAP, and validation.
+- `bindings/python/moonlab/ml.py` and `torch_layer.py`: `print()`
+  calls converted to `logger.{info,warning,debug}` (9 sites
+  total) with module-level `logger = logging.getLogger(__name__)`.
+- `bindings/python/moonlab/ml.py`: `QuantumFeatureMap` promoted to
+  `abc.ABC` with `@abstractmethod` on `encode`, replacing the
+  by-convention `raise NotImplementedError` body.
+- `bindings/python/moonlab/algorithms.py` and `core.py`: redundant
+  `pass` after class docstrings removed (`CVQESolver`,
+  `CQAOASolver`, `QuantumError`).
+- `src/applications/hardware_entropy.h` and `src/utils/entropy.h`:
+  the CPU timing-jitter routines (`entropy_jitter`,
+  `entropy_jitter_bytes`) carry IMPORTANT notices declaring them
+  fallback paths invoked only when stronger sources fail; cite
+  Hamburg-Kocher-Marson 2012 and Mueller LRNG 2018 as the
+  methodology.
+
+#### Web demo: WASM-verified topology page
+- `bindings/javascript/packages/core/emscripten/exports.txt`:
+  added `_moonlab_qwz_chern`, `_moonlab_qrng_bytes`, and
+  `_moonlab_abi_version` so the next libquantumsim WASM build
+  carries the v0.3 stable ABI symbols.
+- `bindings/javascript/demo/src/topology/wasmBridge.ts` (new):
+  on-demand loader for the `MoonlabModule` factory with a typed
+  `cwrap` of `moonlab_qwz_chern`, returning `null` gracefully
+  when the symbol is absent (older WASM build).
+- `TopologyDemo.tsx`: the QWZ section now displays a
+  "verified by libquantumsim WASM (C = ±N)" badge under the
+  invariant readout when the WASM symbol is available; a
+  divergence indicator surfaces if the closed-form analytical
+  path and the WASM-computed Chern ever disagree.
+
+#### Rust example program
+- `bindings/rust/moonlab/examples/topology_demo.rs`: Rust
+  counterpart to the Python `qgt_phase_diagrams.py` example.
+  Reproduces SSH winding, three-integrator QWZ agreement,
+  Kane-Mele Z_2 phase boundary, BHZ QSH window, Kitaev Majorana
+  phase, and Hofstadter sub-band Cherns for `q` in `{3..7}`.
+
+#### ICC repository hygiene
+- Re-registered with skip-dirs covering `build_release/`,
+  `build_hidden/`, `build/`, `bindings/docs/`,
+  `bindings/javascript/demo/dist/`, `docs/assets/`,
+  `doc/private/`, `node_modules/`, and `target/`.  Re-indexing
+  drops `index_quality` blind-spot count from 1015 to 51 and
+  moves `source_drift` to `clean`.
+
 ### Verified
 
-- `pytest bindings/python/tests`: 155 passing (136 pre-existing + 19
-  new) against `build_release/libquantumsim.0.3.0.dylib`.
+- `pytest bindings/python/tests`: 166 passing (155 pre-existing +
+  11 new Clifford cases) against
+  `build_release/libquantumsim.0.3.1.dylib`.
 - `cargo test --lib` (moonlab crate): 29 passing including the
   three-integrator QWZ agreement, Kane-Mele / BHZ / Kitaev Z_2
-  windows, and Hofstadter q in {3, 4, 5} lowest-band Cherns.
-- `pnpm vite build` (web demo): clean; the lazy-loaded /topology
-  chunk weighs 4.5 kB CSS + ~10 kB JS.
-- The Rust TUI rebuilds cleanly with both new Algorithm variants.
+  windows, and Hofstadter q in `{3, 4, 5}` lowest-band Cherns.
+- `cargo run --example topology_demo`: clean output matching the
+  Python sibling.
+- `pnpm vite build` (web demo): clean; the lazy-loaded `/topology`
+  chunk grew from 10.0 kB to 12.85 kB JS to accommodate the WASM
+  bridge.
+- ICC `production-audit`: verdict `warn` (was `fail`); risk count
+  7 → 2 (both remaining are heuristic false positives).
 
 ## [0.3.0] - 2026-05-08
 
