@@ -2978,6 +2978,76 @@ for (const prop of Object.keys(Module)) {
   };
 })();
 
+MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
+  const instance = await MoonlabModule(moduleArg);
+  if (instance && instance.ready) {
+    await instance.ready;
+  }
+
+  const requiredUnifiedGpuApi = [
+    '_gpu_compute_init',
+    '_gpu_compute_free',
+    '_gpu_get_backend_type',
+    '_gpu_buffer_create_from_data',
+    '_gpu_buffer_create',
+    '_gpu_buffer_read',
+    '_gpu_buffer_free',
+    '_gpu_compute_probabilities',
+  ];
+  const missingUnifiedGpuApi = requiredUnifiedGpuApi.filter((name) => {
+    if (name === '_gpu_compute_probabilities') {
+      return (
+        typeof instance._gpu_compute_probabilities_u32 !== 'function' &&
+        typeof instance._gpu_compute_probabilities !== 'function'
+      );
+    }
+    return typeof instance[name] !== 'function';
+  });
+
+  const probeBackend = (preferredBackendType) => {
+    if (missingUnifiedGpuApi.length > 0) {
+      return {
+        preferredBackendType,
+        ctxCreated: false,
+        backendType: 0,
+        nativeAccelerated: false,
+        reason: 'unified-gpu-api-unavailable',
+      };
+    }
+
+    const ctxPtr = instance._gpu_compute_init(preferredBackendType);
+    if (!ctxPtr) {
+      return {
+        preferredBackendType,
+        ctxCreated: false,
+        backendType: 0,
+        nativeAccelerated: false,
+        reason: 'gpu-context-init-failed',
+      };
+    }
+
+    const backendType = instance._gpu_get_backend_type(ctxPtr);
+    const nativeAccelerated =
+      typeof instance._gpu_is_native_accelerated === 'function' &&
+      instance._gpu_is_native_accelerated(ctxPtr) !== 0;
+    instance._gpu_compute_free(ctxPtr);
+    return {
+      preferredBackendType,
+      ctxCreated: true,
+      backendType,
+      nativeAccelerated,
+      reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
+    };
+  };
+
+  return {
+    moduleReady: true,
+    missingUnifiedGpuApi,
+    webgpu: probeBackend(2),
+    auto: probeBackend(7),
+  };
+};
+
 // Export using a UMD style export, or ES6 exports if selected
 if (typeof exports === 'object' && typeof module === 'object') {
   module.exports = MoonlabModule;
@@ -2986,4 +3056,3 @@ if (typeof exports === 'object' && typeof module === 'object') {
   module.exports.default = MoonlabModule;
 } else if (typeof define === 'function' && define['amd'])
   define([], () => MoonlabModule);
-
