@@ -214,11 +214,20 @@ const char* entropy_os_source_name(void);
 // ============================================================================
 
 /**
- * @brief Collect entropy from CPU timing jitter
+ * @brief Fallback entropy source: CPU timing-jitter sampler.
  *
- * @param buffer Output buffer
- * @param size Number of bytes
- * @return Number of bytes collected
+ * IMPORTANT: This is a *fallback* path used only when stronger
+ * entropy sources (RDRAND/RDSEED/ARM RNG/`getrandom`/`/dev/urandom`)
+ * are unavailable.  The reseeding paths in `entropy.c` invoke this
+ * routine after first attempting the platform sources.  Callers
+ * outside the entropy stack should not use it as a substitute for
+ * `entropy_collect_bytes`.
+ *
+ * @param buffer Output buffer.
+ * @param size   Number of bytes requested.
+ * @return Number of bytes successfully collected (may be less than
+ *         `size` if the timer is too coarse to resolve usable
+ *         jitter).
  */
 size_t entropy_jitter_bytes(uint8_t* buffer, size_t size);
 

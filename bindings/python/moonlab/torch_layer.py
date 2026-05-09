@@ -30,12 +30,16 @@ References:
 - Farhi & Neven, arXiv:1802.06002 (2018) - Quantum neural networks
 """
 
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Optional, Callable, List, Tuple
 from .core import QuantumState
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # QUANTUM GRADIENT COMPUTATION (Parameter Shift Rule)
@@ -1046,7 +1050,10 @@ def train_quantum_model(
         avg_loss = epoch_loss / num_batches
         losses.append(avg_loss)
 
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.4f}")
+        logger.info(
+            "Epoch %d / %d, loss: %.4f",
+            epoch + 1, num_epochs, avg_loss,
+        )
 
     return losses
 
