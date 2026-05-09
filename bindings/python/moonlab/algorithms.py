@@ -37,8 +37,7 @@ class CVQEOptimizer(ctypes.Structure):
     ]
 
 class CVQESolver(ctypes.Structure):
-    """Opaque structure for VQE solver"""
-    pass
+    """Opaque ctypes handle for ``vqe_solver_t`` from ``src/algorithms/vqe.h``."""
 
 class CVQEResult(ctypes.Structure):
     """Layout-mirrored from vqe_result_t in src/algorithms/vqe.h.
@@ -78,8 +77,7 @@ class CGraph(ctypes.Structure):
     ]
 
 class CQAOASolver(ctypes.Structure):
-    """Opaque structure for QAOA solver"""
-    pass
+    """Opaque ctypes handle for ``qaoa_solver_t`` from ``src/algorithms/qaoa.h``."""
 
 class CQAOAResult(ctypes.Structure):
     """Layout-mirrored from qaoa_result_t in src/algorithms/qaoa.h.

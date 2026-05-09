@@ -271,3 +271,12 @@ _entanglement_entropy_bipartition
 _entanglement_mutual_information
 _entanglement_concurrence_2qubit
 _entanglement_negativity_2qubit
+
+# =============================================================================
+# Stable ABI: topology + QRNG (since 0.3.0).  These are the symbols
+# that QGTL / SbNN / lilirrep / the web demo dlsym from libquantumsim,
+# so they must be present in every WASM build.
+# =============================================================================
+_moonlab_qwz_chern
+_moonlab_qrng_bytes
+_moonlab_abi_version

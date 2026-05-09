@@ -186,6 +186,16 @@
   letter-spacing: 0.05em;
 }
 
+.topology-invariant-wasm {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border, #2a2c32);
+  font-size: 0.8rem;
+  color: #5cc8a8;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
 .topology-ribbon-card,
 .topology-legend-card,
 .topology-physics-note {

@@ -3,15 +3,21 @@
  * topological-band-structure models shipped in moonlab v0.3.
  *
  * Each model has a closed-form analytical phase boundary, so we
- * compute the topological invariant directly in TS rather than
- * routing through the WASM bridge.  The numerical values match
- * what the C-side qgt_berry_grid / qgt_z2_invariant integrators
- * return; this page is the educational counterpart to the C
- * `bench_topology_phase_diagrams` benchmark.
+ * compute the topological invariant directly in TS.  The numerical
+ * values match what the C-side qgt_berry_grid / qgt_z2_invariant
+ * integrators return; this page is the educational counterpart to
+ * the C `bench_topology_phase_diagrams` benchmark.
+ *
+ * For the Qi-Wu-Zhang model we additionally cross-check against the
+ * live WASM `moonlab_qwz_chern` symbol when it is exported by the
+ * shipped `moonlab.wasm` (this requires the v0.3.2+ WASM build that
+ * includes the topology stable ABI; older builds fall back silently
+ * to the closed-form path).
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './TopologyDemo.css';
+import { getQwzChern, type QwzChernFn } from './wasmBridge';
 
 type Model = 'QWZ' | 'Haldane' | 'KaneMele' | 'BHZ' | 'Kitaev' | 'SSH';
 
@@ -183,6 +189,23 @@ const TopologyDemo: React.FC = () => {
     invariantAt(model, params, primaryValue),
     [model, params, primaryValue]);
 
+  // Live WASM cross-check for QWZ.  The bridge resolves to a callable
+  // when the shipped WASM exports moonlab_qwz_chern; otherwise it
+  // resolves to null and the page silently keeps using the closed-
+  // form analytical result.
+  const [wasmFn, setWasmFn] = useState<QwzChernFn | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getQwzChern().then(fn => { if (!cancelled) setWasmFn(fn); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const wasmChern = useMemo<number | null>(() => {
+    if (model !== 'QWZ' || !wasmFn) return null;
+    const c = wasmFn(primaryValue, 32);
+    return Number.isFinite(c) ? c : null;
+  }, [model, primaryValue, wasmFn]);
+
   // Phase ribbon: 60-step sweep across the primary axis.
   const phaseSweep: PhasePoint[] = useMemo(() => {
     const steps = 60;
@@ -301,6 +324,15 @@ const TopologyDemo: React.FC = () => {
             <div className="topology-invariant-status">
               {currentInvariant !== 0 ? 'topological' : 'trivial'}
             </div>
+            {wasmChern !== null && (
+              <div className="topology-invariant-wasm">
+                {wasmChern === currentInvariant ? (
+                  <>verified by libquantumsim WASM (C = {wasmChern >= 0 ? '+' : ''}{wasmChern})</>
+                ) : (
+                  <>WASM disagreement: closed-form {currentInvariant >= 0 ? '+' : ''}{currentInvariant}, WASM {wasmChern >= 0 ? '+' : ''}{wasmChern}</>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="topology-ribbon-card">

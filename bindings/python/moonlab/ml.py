@@ -10,6 +10,7 @@ inside a torch graph.
 """
 
 import logging
+from abc import ABC, abstractmethod
 
 import numpy as np
 from typing import Callable, Optional, List, Tuple
@@ -28,21 +29,23 @@ except ImportError:  # pragma: no cover
 # QUANTUM FEATURE MAPS (Complete Implementations)
 # ============================================================================
 
-class QuantumFeatureMap:
+class QuantumFeatureMap(ABC):
     """
-    Base class for quantum feature maps
-    
-    Maps classical data x ∈ ℝⁿ to quantum state |φ(x)⟩
-    Creates exponentially large feature space for ML.
+    Abstract base class for quantum feature maps.
+
+    Maps classical data x in R^n to a quantum state |phi(x)>, creating
+    an exponentially large feature space for kernel-based ML.
+    Subclasses (AngleEncoding, AmplitudeEncoding, etc.) implement
+    `encode` for the specific basis.
     """
-    
+
     def __init__(self, num_qubits: int):
         self.num_qubits = num_qubits
         self.feature_dim = num_qubits
-    
-    def encode(self, x: np.ndarray, state: QuantumState):
-        """Encode classical data into quantum state"""
-        raise NotImplementedError()
+
+    @abstractmethod
+    def encode(self, x: np.ndarray, state: QuantumState) -> None:
+        """Encode classical data into the supplied quantum state."""
 
 
 class AngleEncoding(QuantumFeatureMap):
