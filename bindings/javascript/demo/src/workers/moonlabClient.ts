@@ -22,8 +22,14 @@ export type MoonlabWorkerInitStatus = {
   ready: boolean;
   webgpu?: {
     available: boolean;
+    backendType: number;
+    backendName: string;
+    preferredBackendType: number;
+    preferredBackendName: string;
     nativeAccelerated: boolean;
+    fallbackIntentional: boolean;
     reason: string;
+    missingUnifiedGpuApi: string[];
   };
 };
 
@@ -119,7 +125,7 @@ export const ensureMoonlabWorker = async (): Promise<void> => {
       initStatus = status;
       if (status.webgpu) {
         console.info(
-          `[moonlab-worker] webgpu available=${status.webgpu.available} native=${status.webgpu.nativeAccelerated} reason=${status.webgpu.reason}`
+          `[moonlab-worker] webgpu available=${status.webgpu.available} backend=${status.webgpu.backendName} preferred=${status.webgpu.preferredBackendName} native=${status.webgpu.nativeAccelerated} fallback=${status.webgpu.fallbackIntentional} reason=${status.webgpu.reason}`
         );
       }
     });
