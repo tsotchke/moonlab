@@ -130,7 +130,7 @@ class ParameterShiftGradient(torch.autograd.Function):
         ctx.circuit_fn = circuit_fn
         ctx.measurement_fn = measurement_fn
         ctx.num_qubits = num_qubits
-        ctx.backend_trace = _make_torch_backend_trace("ParameterShiftGradient", "forward")
+        ctx.backend_trace = _make_torch_backend_trace("ParameterShiftGradient.forward", "forward")
         ParameterShiftGradient.last_backend_trace = ctx.backend_trace
 
         # Apply circuit and measure
@@ -151,7 +151,7 @@ class ParameterShiftGradient(torch.autograd.Function):
         circuit_fn = ctx.circuit_fn
         measurement_fn = ctx.measurement_fn
         ParameterShiftGradient.last_backend_trace = _make_torch_backend_trace(
-            "ParameterShiftGradient", "backward"
+            "ParameterShiftGradient.backward", "backward"
         )
 
         # Gradient w.r.t. parameters using parameter shift
@@ -511,7 +511,7 @@ class QuantumLayer(nn.Module):
                 expectations.append(expectation)
 
             self._last_backend_trace = _make_torch_backend_trace(
-                "QuantumLayer", "measure_observables"
+                "QuantumLayer.measure_observables", "measure_observables"
             )
             return _measurement_tensor(expectations, reference)
 
@@ -524,7 +524,7 @@ class QuantumLayer(nn.Module):
             # Convert to expectation-like values: 2*p(1) - 1
             expectations = 2.0 * qubit_avgs - 1.0
             self._last_backend_trace = _make_torch_backend_trace(
-                "QuantumLayer", "measure_observables"
+                "QuantumLayer.measure_observables", "measure_observables"
             )
             return _measurement_tensor(expectations.tolist(), reference)
 
@@ -655,7 +655,7 @@ class QuantumConv1D(nn.Module):
         Returns:
             Output tensor of shape (batch_size, out_features, num_qubits)
         """
-        self._last_backend_trace = _make_torch_backend_trace("QuantumConv1D", "forward")
+        self._last_backend_trace = _make_torch_backend_trace("QuantumConv1D.forward", "forward")
         batch_size = x.shape[0]
         outputs = []
 
@@ -738,7 +738,7 @@ class QuantumPooling(nn.Module):
         Returns:
             Pooled tensor with reduced spatial dimension
         """
-        self._last_backend_trace = _make_torch_backend_trace("QuantumPooling", "forward")
+        self._last_backend_trace = _make_torch_backend_trace("QuantumPooling.forward", "forward")
         if self.method == 'measure':
             # Measurement-based pooling: average over pool windows
             # Similar to average pooling but motivated by quantum measurement
