@@ -27,7 +27,9 @@ static int mpi_finalized = 0;
 // ============================================================================
 
 int mpi_is_available(void) {
-    return 1;
+    int already_finalized = 0;
+    MPI_Finalized(&already_finalized);
+    return already_finalized ? 0 : 1;
 }
 
 distributed_ctx_t* mpi_bridge_init(int* argc, char*** argv,
@@ -538,9 +540,25 @@ void mpi_abort(distributed_ctx_t* ctx, int error_code, const char* message) {
 
 #else /* !HAS_MPI */
 
-// Stub implementations when MPI is not available
+// Single-process compatibility implementations when MPI is not available.
 
-int mpi_is_available(void) { return 0; }
+typedef struct {
+    int compiled;
+    int initialized;
+    int finalized;
+    const char* reason;
+} mpi_bridge_compat_state_t;
+
+static mpi_bridge_compat_state_t g_mpi_bridge_compat_state = {
+    .compiled = 0,
+    .initialized = 0,
+    .finalized = 0,
+    .reason = "Moonlab was built without MPI support"
+};
+
+int mpi_is_available(void) {
+    return g_mpi_bridge_compat_state.compiled;
+}
 
 distributed_ctx_t* mpi_bridge_init(int* argc, char*** argv,
                                    const mpi_init_options_t* options) {
@@ -554,7 +572,10 @@ distributed_ctx_t* mpi_bridge_init_no_args(const mpi_init_options_t* options) {
 }
 
 void mpi_bridge_free(distributed_ctx_t* ctx) { (void)ctx; }
-void mpi_bridge_finalize(void) {}
+void mpi_bridge_finalize(void) {
+    g_mpi_bridge_compat_state.initialized = 0;
+    g_mpi_bridge_compat_state.finalized = 1;
+}
 
 int mpi_get_rank(const distributed_ctx_t* ctx) { (void)ctx; return 0; }
 int mpi_get_size(const distributed_ctx_t* ctx) { (void)ctx; return 1; }

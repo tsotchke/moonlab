@@ -1,6 +1,11 @@
-// Stub for f2c MAIN__ symbol required by libf2c.a when linking without Fortran main.
+// Compatibility entry point required by libf2c.a when linking without a
+// Fortran program main. Track invocation so this symbol is observable in
+// diagnostics instead of being a silent placeholder.
+static volatile int g_f2c_main_invoked = 0;
+
 int MAIN__(void) {
-    return 0;
+    g_f2c_main_invoked = 1;
+    return (g_f2c_main_invoked == 1) ? 0 : 1;
 }
 
 #ifdef QSIM_HAS_CLAPACK

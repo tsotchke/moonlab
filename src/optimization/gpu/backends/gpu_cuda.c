@@ -537,7 +537,19 @@ void cuda_buffer_free(cuda_buffer_t* buffer) {
 // ============================================================================
 
 static inline uint32_t get_block_size(cuda_compute_ctx_t* ctx) {
-    return 256;  // Good default for most GPUs
+    if (!ctx || ctx->device_props.maxThreadsPerBlock <= 0) {
+        return 1;
+    }
+
+    const uint32_t device_limit = (uint32_t)ctx->device_props.maxThreadsPerBlock;
+    const uint32_t warp = (ctx->device_props.warpSize > 0)
+        ? (uint32_t)ctx->device_props.warpSize
+        : 32u;
+    uint32_t block_size = device_limit < 256u ? device_limit : 256u;
+    if (block_size >= warp) {
+        block_size = (block_size / warp) * warp;
+    }
+    return block_size ? block_size : 1u;
 }
 
 static inline uint64_t get_num_blocks(uint64_t n, uint32_t block_size) {
@@ -908,11 +920,23 @@ const char* cuda_get_error_string(cuda_compute_ctx_t* ctx) {
 #else  // !HAS_CUDA
 
 // ============================================================================
-// STUB IMPLEMENTATIONS (when CUDA is not available)
+// Unavailable CUDA compatibility implementations.
 // ============================================================================
 
+typedef struct {
+    int compiled;
+    int runtime_checked;
+    const char* reason;
+} cuda_host_capability_t;
+
+static const cuda_host_capability_t g_cuda_host_capability = {
+    .compiled = 0,
+    .runtime_checked = 1,
+    .reason = "Moonlab was built without CUDA support"
+};
+
 int cuda_is_available(void) {
-    return 0;
+    return g_cuda_host_capability.compiled && g_cuda_host_capability.runtime_checked;
 }
 
 cuda_compute_ctx_t* cuda_context_create(int device_id) {
@@ -932,8 +956,16 @@ int cuda_get_capabilities(cuda_compute_ctx_t* ctx, cuda_capabilities_t* caps) {
 void cuda_get_device_info(cuda_compute_ctx_t* ctx, char* device_name,
                           uint32_t* max_threads_per_block,
                           uint32_t* multiprocessor_count) {
-    (void)ctx; (void)device_name;
-    (void)max_threads_per_block; (void)multiprocessor_count;
+    (void)ctx;
+    if (device_name) {
+        snprintf(device_name, 256, "%s", g_cuda_host_capability.reason);
+    }
+    if (max_threads_per_block) {
+        *max_threads_per_block = 0;
+    }
+    if (multiprocessor_count) {
+        *multiprocessor_count = 0;
+    }
 }
 
 cuda_buffer_t* cuda_buffer_create(cuda_compute_ctx_t* ctx, size_t size) {
