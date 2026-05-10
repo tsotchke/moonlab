@@ -2,7 +2,7 @@
 //!
 //! Organizes all widgets into a cohesive display.
 
-use super::{AmplitudeBars, BlochSphere, CircuitDiagram, EntanglementHeatmap, FeynmanMetrics, FeynmanWidget, Gate, MetricsPanel, ParticleLegend, StandardDiagram};
+use super::{AmplitudeBars, BlochSphere, CircuitDiagram, EntanglementHeatmap, FeynmanMetrics, FeynmanWidget, Gate, GateLegend, MetricsPanel, ParticleLegend, StandardDiagram};
 use crate::app::{Algorithm, App, AppMode, FeynmanDiagramType, Focus, FreeGate};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -544,7 +544,19 @@ fn render_main_panel(frame: &mut Frame, area: Rect, app: &App) {
 
     let circuit_widget = circuit.current_step(app.circuit_step);
     // TODO: Apply circuit_border style when CircuitDiagram supports it
-    frame.render_widget(circuit_widget, top_chunks[0]);
+    if top_chunks[0].height >= 14 {
+        let circuit_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(7),
+                Constraint::Length(7),
+            ])
+            .split(top_chunks[0]);
+        frame.render_widget(circuit_widget, circuit_chunks[0]);
+        frame.render_widget(GateLegend, circuit_chunks[1]);
+    } else {
+        frame.render_widget(circuit_widget, top_chunks[0]);
+    }
 
     // Render Bloch sphere
     frame.render_widget(

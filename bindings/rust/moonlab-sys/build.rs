@@ -24,23 +24,85 @@ fn emit_openmp_search_dir_if_present(dir: impl AsRef<Path>) -> bool {
     }
 }
 
+fn quantumsim_library_exists(dir: &Path) -> bool {
+    [
+        "libquantumsim.a",
+        "libquantumsim.dylib",
+        "libquantumsim.so",
+        "quantumsim.dll",
+        "quantumsim.lib",
+    ]
+    .iter()
+    .any(|name| dir.join(name).exists())
+}
+
+fn emit_quantumsim_rerun_paths(project_root: &Path) {
+    for candidate in [
+        project_root.join("build-qgtl-vendor"),
+        project_root.join("build"),
+        project_root.to_path_buf(),
+    ] {
+        if candidate.exists() {
+            println!("cargo:rerun-if-changed={}", candidate.display());
+        }
+    }
+}
+
+fn default_quantumsim_lib_dir(project_root: &Path) -> PathBuf {
+    for candidate in [
+        project_root.join("build-qgtl-vendor"),
+        project_root.join("build"),
+        project_root.to_path_buf(),
+    ] {
+        if quantumsim_library_exists(&candidate) {
+            return candidate;
+        }
+    }
+
+    project_root.join("build")
+}
+
 fn main() {
     // Get the project root (3 levels up from bindings/rust/moonlab-sys)
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let project_root = PathBuf::from(&manifest_dir)
-        .parent().unwrap()  // rust/
-        .parent().unwrap()  // bindings/
-        .parent().unwrap()  // project root
+        .parent()
+        .unwrap() // rust/
+        .parent()
+        .unwrap() // bindings/
+        .parent()
+        .unwrap() // project root
         .to_path_buf();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}/src/quantum/state.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/quantum/gates.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/quantum/measurement.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/grover.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/vqe.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/qaoa.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h", project_root.display());
+    println!(
+        "cargo:rerun-if-changed={}/src/quantum/state.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/quantum/gates.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/quantum/measurement.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/algorithms/grover.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/algorithms/vqe.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/algorithms/qaoa.h",
+        project_root.display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h",
+        project_root.display()
+    );
 
     // Link against the quantum simulator library. Prefer MOONLAB_LIB_DIR
     // if the build system sets it (e.g. CMake CTest), fall back to the
@@ -54,9 +116,10 @@ fn main() {
     // build-werror) links against the stale path and fails with
     // "library 'quantumsim' not found".
     println!("cargo:rerun-if-env-changed=MOONLAB_LIB_DIR");
+    emit_quantumsim_rerun_paths(&project_root);
     let lib_dir = env::var("MOONLAB_LIB_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| project_root.join("build"));
+        .unwrap_or_else(|_| default_quantumsim_lib_dir(&project_root));
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     let static_present = lib_dir.join("libquantumsim.a").exists();
@@ -146,7 +209,8 @@ fn main() {
     }
 
     // Create wrapper header that includes all needed headers
-    let wrapper_content = format!(r#"
+    let wrapper_content = format!(
+        r#"
 // Wrapper header for bindgen
 #include "{root}/src/quantum/state.h"
 #include "{root}/src/quantum/gates.h"
@@ -166,9 +230,12 @@ fn main() {
 #include "{root}/src/algorithms/topology_realspace/chern_marker.h"
 #include "{root}/src/algorithms/quantum_geometry/qgt.h"
 #include "{root}/src/optimization/fusion/fusion.h"
-"#, root = project_root.display());
+"#,
+        root = project_root.display()
+    );
 
-    let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let wrapper_path = out_path.join("wrapper.h");
     std::fs::write(&wrapper_path, wrapper_content).expect("Failed to write wrapper.h");
 
     // Generate bindings
@@ -474,11 +541,7 @@ fn main() {
         .expect("Unable to generate bindings");
 
     // Write bindings to OUT_DIR
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
-
-    // Clean up wrapper
-    let _ = std::fs::remove_file(wrapper_path);
 }
