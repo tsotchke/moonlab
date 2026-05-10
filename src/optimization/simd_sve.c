@@ -548,27 +548,43 @@ void sve_prefetch_amplitudes(const complex_t* amplitudes, size_t n, int write) {
 #else /* !SVE_AVAILABLE */
 
 // ============================================================================
-// FALLBACK IMPLEMENTATIONS (When SVE not available)
+// SCALAR IMPLEMENTATIONS (When SVE is not available)
 // ============================================================================
 
+typedef struct {
+    int has_sve;
+    int has_sve2;
+    uint32_t vector_length_bits;
+    size_t doubles_per_register;
+    const char* features;
+} sve_scalar_capability_t;
+
+static const sve_scalar_capability_t g_sve_scalar_capability = {
+    .has_sve = 0,
+    .has_sve2 = 0,
+    .vector_length_bits = 0,
+    .doubles_per_register = 0,
+    .features = "SVE unavailable; scalar backend active"
+};
+
 int sve_is_available(void) {
-    return 0;
+    return g_sve_scalar_capability.has_sve;
 }
 
 int sve2_is_available(void) {
-    return 0;
+    return g_sve_scalar_capability.has_sve2;
 }
 
 uint32_t sve_get_vector_length(void) {
-    return 0;
+    return g_sve_scalar_capability.vector_length_bits;
 }
 
 size_t sve_get_doubles_per_register(void) {
-    return 0;
+    return g_sve_scalar_capability.doubles_per_register;
 }
 
 const char* sve_get_features(void) {
-    return "SVE not available";
+    return g_sve_scalar_capability.features;
 }
 
 double sve_sum_squared_magnitudes(const complex_t* amplitudes, size_t n) {
@@ -688,9 +704,48 @@ void sve_batch_apply_gate_2x2(const complex_t matrix[4],
 
 void sve_rotation_pairs(complex_t* amp0, complex_t* amp1, size_t n,
                         double cos_half, double sin_half, char axis) {
-    (void)cos_half; (void)sin_half; (void)axis;
-    (void)amp0; (void)amp1; (void)n;
-    // Scalar fallback would be same as SVE version - omitted for brevity
+    if (!amp0 || !amp1 || n == 0) return;
+
+    for (size_t i = 0; i < n; i++) {
+        double a_re = creal(amp0[i]), a_im = cimag(amp0[i]);
+        double b_re = creal(amp1[i]), b_im = cimag(amp1[i]);
+
+        double new_a_re, new_a_im, new_b_re, new_b_im;
+
+        switch (axis) {
+            case 'X':
+            case 'x':
+                new_a_re = cos_half * a_re + sin_half * b_im;
+                new_a_im = cos_half * a_im - sin_half * b_re;
+                new_b_re = sin_half * a_im + cos_half * b_re;
+                new_b_im = -sin_half * a_re + cos_half * b_im;
+                break;
+
+            case 'Y':
+            case 'y':
+                new_a_re = cos_half * a_re - sin_half * b_re;
+                new_a_im = cos_half * a_im - sin_half * b_im;
+                new_b_re = sin_half * a_re + cos_half * b_re;
+                new_b_im = sin_half * a_im + cos_half * b_im;
+                break;
+
+            case 'Z':
+            case 'z':
+                new_a_re = cos_half * a_re + sin_half * a_im;
+                new_a_im = cos_half * a_im - sin_half * a_re;
+                new_b_re = cos_half * b_re - sin_half * b_im;
+                new_b_im = cos_half * b_im + sin_half * b_re;
+                break;
+
+            default:
+                new_a_re = a_re; new_a_im = a_im;
+                new_b_re = b_re; new_b_im = b_im;
+                break;
+        }
+
+        amp0[i] = new_a_re + new_a_im * I;
+        amp1[i] = new_b_re + new_b_im * I;
+    }
 }
 
 double sve_strided_sum_squared(const complex_t* amplitudes,
@@ -767,8 +822,17 @@ void sve_mix_entropy(const uint8_t* state, const uint8_t* entropy,
 }
 
 void sve_prefetch_amplitudes(const complex_t* amplitudes, size_t n, int write) {
-    (void)amplitudes; (void)n; (void)write;
-    // No prefetch in fallback
+    if (!amplitudes || n == 0) return;
+
+#if defined(__GNUC__) || defined(__clang__)
+    const char* bytes = (const char*)amplitudes;
+    size_t total_bytes = n * sizeof(complex_t);
+    for (size_t i = 0; i < total_bytes; i += 64) {
+        __builtin_prefetch(bytes + i, write ? 1 : 0, 0);
+    }
+#else
+    (void)write;
+#endif
 }
 
 #endif /* SVE_AVAILABLE */
