@@ -34,8 +34,41 @@ const gpuSession = {
   missingUnifiedGpuApi: [],
   probabilityFailureCount: 0,
   lastProbabilityFailureAt: 0,
+  lastBackendTrace: null,
 };
 let lastGpuCircuitFailureAt = 0;
+let lastGpuBackendTrace = {
+  owner: 'moonlab-worker',
+  operation: 'uninitialized',
+  available: false,
+  backendType: GPU_BACKEND_NONE,
+  backendName: 'none',
+  preferredBackendType: GPU_BACKEND_WEBGPU,
+  preferredBackendName: 'webgpu',
+  nativeAccelerated: false,
+  fallbackIntentional: false,
+  missingUnifiedGpuApi: [],
+  reason: 'uninitialized',
+};
+
+const recordGpuBackendTrace = (owner, operation, details = {}) => {
+  lastGpuBackendTrace = {
+    owner,
+    operation,
+    available: gpuSession.available,
+    backendType: gpuSession.backendType,
+    backendName: gpuSession.backendName,
+    preferredBackendType: gpuSession.preferredBackendType,
+    preferredBackendName: gpuSession.preferredBackendName,
+    nativeAccelerated: gpuSession.nativeAccelerated,
+    fallbackIntentional: gpuSession.fallbackIntentional,
+    missingUnifiedGpuApi: gpuSession.missingUnifiedGpuApi,
+    reason: gpuSession.reason,
+    ...details,
+  };
+  gpuSession.lastBackendTrace = lastGpuBackendTrace;
+  return lastGpuBackendTrace;
+};
 
 const resetGpuSession = () => {
   gpuSession.initialized = false;
@@ -51,6 +84,7 @@ const resetGpuSession = () => {
   gpuSession.missingUnifiedGpuApi = [];
   gpuSession.probabilityFailureCount = 0;
   gpuSession.lastProbabilityFailureAt = 0;
+  gpuSession.lastBackendTrace = lastGpuBackendTrace;
 };
 
 const releaseGpuContext = (module) => {
@@ -87,6 +121,11 @@ const disableGpuPathForModule = (module, reason) => {
   gpuSession.nativeAccelerated = false;
   gpuSession.fallbackIntentional = true;
   gpuSession.reason = reason;
+  recordGpuBackendTrace('disableGpuPathForModule', 'gpu-fallback', {
+    available: false,
+    fallbackIntentional: true,
+    reason,
+  });
 };
 
 const describeGpuBackend = (backendType) => {
@@ -376,13 +415,30 @@ const probeUnifiedGpuApi = (module) => {
     }
     return typeof module[name] !== 'function';
   });
+  const available = missing.length === 0;
+  const trace = recordGpuBackendTrace('probeUnifiedGpuApi', 'unified-gpu-api-probe', {
+    available,
+    missingUnifiedGpuApi: missing,
+    fallbackIntentional: !available,
+    reason: available ? 'ok' : 'unified-gpu-api-unavailable',
+  });
   return {
-    available: missing.length === 0,
+    available,
     missing,
+    trace,
   };
 };
 
-const hasUnifiedGpuApi = (module) => probeUnifiedGpuApi(module).available;
+const hasUnifiedGpuApi = (module, probe = probeUnifiedGpuApi(module)) => {
+  const available = probe.available;
+  recordGpuBackendTrace('hasUnifiedGpuApi', 'unified-gpu-api-gate', {
+    available,
+    missingUnifiedGpuApi: probe.missing,
+    fallbackIntentional: !available,
+    reason: available ? 'ok' : 'unified-gpu-api-unavailable',
+  });
+  return available;
+};
 
 const ensureGpuSession = (module) => {
   if (gpuSession.initialized) return gpuSession;
@@ -390,7 +446,7 @@ const ensureGpuSession = (module) => {
 
   const apiProbe = probeUnifiedGpuApi(module);
   gpuSession.missingUnifiedGpuApi = apiProbe.missing;
-  if (!apiProbe.available || !hasUnifiedGpuApi(module)) {
+  if (!hasUnifiedGpuApi(module, apiProbe)) {
     gpuSession.fallbackIntentional = true;
     gpuSession.reason = 'unified-gpu-api-unavailable';
     return gpuSession;
@@ -409,6 +465,11 @@ const ensureGpuSession = (module) => {
   if (!ctxPtr) {
     gpuSession.fallbackIntentional = true;
     gpuSession.reason = 'gpu-context-unavailable';
+    recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
+      available: false,
+      fallbackIntentional: true,
+      reason: gpuSession.reason,
+    });
     return gpuSession;
   }
 
@@ -419,6 +480,11 @@ const ensureGpuSession = (module) => {
   if (backendType !== GPU_BACKEND_WEBGPU) {
     module._gpu_compute_free(ctxPtr);
     gpuSession.reason = `non-webgpu-backend-${backendType}`;
+    recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
+      available: false,
+      fallbackIntentional: true,
+      reason: gpuSession.reason,
+    });
     return gpuSession;
   }
 
@@ -428,6 +494,7 @@ const ensureGpuSession = (module) => {
     typeof module._gpu_is_native_accelerated === 'function' &&
     module._gpu_is_native_accelerated(ctxPtr) !== 0;
   gpuSession.reason = 'ok';
+  recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection');
   return gpuSession;
 };
 
@@ -1285,6 +1352,7 @@ const handleWorkerMessage = async (event) => {
           fallbackIntentional: session.fallbackIntentional,
           reason: session.reason,
           missingUnifiedGpuApi: session.missingUnifiedGpuApi,
+          backendTrace: session.lastBackendTrace || lastGpuBackendTrace,
         },
       };
     } else if (type === 'runCircuit') {

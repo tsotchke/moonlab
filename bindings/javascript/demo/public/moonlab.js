@@ -2978,6 +2978,19 @@ for (const prop of Object.keys(Module)) {
   };
 })();
 
+MoonlabModule.lastBackendRuntimeProbe = {
+  owner: 'MoonlabModule',
+  operation: 'factory-definition',
+  moduleReady: false,
+  missingUnifiedGpuApi: [],
+  fallbackIntentional: false,
+  reason: 'not-probed',
+};
+
+MoonlabModule.getLastBackendRuntimeProbe = function() {
+  return JSON.parse(JSON.stringify(MoonlabModule.lastBackendRuntimeProbe));
+};
+
 MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
   const instance = await MoonlabModule(moduleArg);
   if (instance && instance.ready) {
@@ -3011,6 +3024,7 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
         ctxCreated: false,
         backendType: 0,
         nativeAccelerated: false,
+        fallbackIntentional: true,
         reason: 'unified-gpu-api-unavailable',
       };
     }
@@ -3022,6 +3036,7 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
         ctxCreated: false,
         backendType: 0,
         nativeAccelerated: false,
+        fallbackIntentional: true,
         reason: 'gpu-context-unavailable',
       };
     }
@@ -3036,16 +3051,25 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
       ctxCreated: true,
       backendType,
       nativeAccelerated,
+      fallbackIntentional: backendType !== preferredBackendType,
       reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
     };
   };
 
-  return {
+  const trace = {
+    owner: 'MoonlabModule',
+    operation: 'probeBackendRuntime',
     moduleReady: true,
     missingUnifiedGpuApi,
     webgpu: probeBackend(2),
     auto: probeBackend(7),
   };
+  trace.fallbackIntentional =
+    missingUnifiedGpuApi.length > 0 || trace.webgpu.fallbackIntentional;
+  trace.reason =
+    missingUnifiedGpuApi.length > 0 ? 'unified-gpu-api-unavailable' : trace.webgpu.reason;
+  MoonlabModule.lastBackendRuntimeProbe = trace;
+  return trace;
 };
 
 // Export using a UMD style export, or ES6 exports if selected

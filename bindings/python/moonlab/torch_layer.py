@@ -49,6 +49,8 @@ _TORCH_NATIVE_BACKEND_SYMBOLS = (
     "quantum_measure_all_fast",
 )
 
+_TORCH_LAST_BACKEND_TRACE: Dict[str, Any] = {}
+
 
 def moonlab_torch_backend_probe() -> Dict[str, Any]:
     """Return the native/runtime backend used by the PyTorch integration."""
@@ -73,12 +75,20 @@ def moonlab_torch_backend_probe() -> Dict[str, Any]:
 
 
 def _make_torch_backend_trace(owner: str, operation: str) -> Dict[str, Any]:
+    global _TORCH_LAST_BACKEND_TRACE
     probe = moonlab_torch_backend_probe()
-    return {
+    trace = {
         "owner": owner,
         "operation": operation,
         **probe,
     }
+    _TORCH_LAST_BACKEND_TRACE = trace
+    return trace
+
+
+def moonlab_torch_last_backend_trace() -> Dict[str, Any]:
+    """Return the most recent PyTorch integration backend trace."""
+    return dict(_TORCH_LAST_BACKEND_TRACE)
 
 
 def _identity_measurement(outputs: torch.Tensor) -> torch.Tensor:
@@ -86,6 +96,7 @@ def _identity_measurement(outputs: torch.Tensor) -> torch.Tensor:
 
 
 def _measurement_tensor(values: List[float], reference: Optional[torch.Tensor] = None) -> torch.Tensor:
+    _make_torch_backend_trace("_measurement_tensor", "tensor-construction")
     dtype = torch.float32
     device = None
     if reference is not None:
