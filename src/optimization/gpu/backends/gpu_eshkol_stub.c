@@ -1,12 +1,12 @@
 /**
  * @file gpu_eshkol_stub.c
- * @brief Pure-C no-op stub for the Eshkol GPU backend.
+ * @brief Pure-C compatibility layer for builds without the Eshkol GPU backend.
  *
  * The canonical Eshkol backend lives in gpu_eshkol.cpp and is only
  * compiled when Eshkol is built in.  On target platforms where the
  * C++ file cannot be compiled (notably the Emscripten / WASM build
  * which uses C-only sources), this file provides link-compatible
- * no-op implementations of the moonlab_eshkol_* API so callers in
+ * status-preserving implementations of the moonlab_eshkol_* API so callers in
  * tensor.c and elsewhere can depend on the symbols unconditionally
  * and take the "eshkol not available -> fall back to CPU" branch at
  * runtime.
@@ -17,7 +17,9 @@
 
 #include "gpu_eshkol.h"
 
-int moonlab_eshkol_available(void) { return 0; }
+int moonlab_eshkol_available(void) {
+    return moonlab_eshkol_init() == MOONLAB_ESHKOL_OK ? 1 : 0;
+}
 
 moonlab_eshkol_status_t moonlab_eshkol_init(void) {
     return MOONLAB_ESHKOL_NOT_BUILT;
