@@ -58,7 +58,8 @@ python test_moonlab.py
 
 - **VQE** - Variational Quantum Eigensolver for molecular simulation,
   with native reverse-mode autograd (adjoint-method gradient) for the
-  hardware-efficient ansatz in noise-free simulation
+  hardware-efficient ansatz in noise-free simulation. Convenience helpers
+  include `run_vqe_h2`, `run_vqe_lih`, and `run_vqe_h2o`.
 - **QAOA** - Quantum optimization (MaxCut, Ising models)
 - **Grover** - Quantum search algorithm
 - **Bell Tests** - CHSH, Mermin (3-qubit GHZ), and Mermin-Klyshko

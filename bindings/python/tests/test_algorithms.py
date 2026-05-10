@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+import moonlab.algorithms as algorithms
 from moonlab import QuantumState
 from moonlab.algorithms import (
     VQE,
@@ -10,6 +11,8 @@ from moonlab.algorithms import (
     Grover,
     BellTest,
     run_vqe_h2,
+    run_vqe_lih,
+    run_vqe_h2o,
     run_qaoa_maxcut,
     run_grover,
     run_bell_test,
@@ -79,6 +82,89 @@ class TestVQEH2:
         result = run_vqe_h2(bond_distance=0.74, num_layers=1)
         assert 'energy' in result
         assert 'converged' in result
+
+    def test_run_vqe_lih_convenience_dispatches(self, monkeypatch):
+        """LiH convenience wrapper should use the public VQE LiH method."""
+        calls = {}
+
+        def fake_solve_lih(self, bond_distance):
+            calls['num_qubits'] = self.num_qubits
+            calls['num_layers'] = self.num_layers
+            calls['bond_distance'] = bond_distance
+            return {'energy': -7.8, 'converged': True}
+
+        monkeypatch.setattr(VQE, 'solve_lih', fake_solve_lih)
+
+        result = run_vqe_lih(bond_distance=1.65, num_layers=3)
+
+        assert calls == {
+            'num_qubits': 4,
+            'num_layers': 3,
+            'bond_distance': 1.65,
+        }
+        assert result['energy'] == pytest.approx(-7.8)
+
+    def test_run_vqe_h2o_convenience_dispatches(self, monkeypatch):
+        """H2O convenience wrapper should use the public VQE H2O method."""
+        calls = {}
+
+        def fake_solve_h2o(self):
+            calls['num_qubits'] = self.num_qubits
+            calls['num_layers'] = self.num_layers
+            return {'energy': -75.0, 'converged': True}
+
+        monkeypatch.setattr(VQE, 'solve_h2o', fake_solve_h2o)
+
+        result = run_vqe_h2o(num_layers=4)
+
+        assert calls == {'num_qubits': 8, 'num_layers': 4}
+        assert result['energy'] == pytest.approx(-75.0)
+
+    def test_vqe_lih_dispatches_to_native_hamiltonian(self, monkeypatch):
+        """LiH helper should create the native LiH Hamiltonian and solve it."""
+        marker = object()
+        calls = {}
+
+        def fake_create_lih(distance):
+            calls['distance'] = distance.value
+            return marker
+
+        monkeypatch.setattr(algorithms._lib, 'vqe_create_lih_hamiltonian', fake_create_lih)
+        monkeypatch.setattr(VQE, '_solve', lambda self: {'energy': -7.8, 'converged': True})
+
+        vqe = object.__new__(VQE)
+        vqe._hamiltonian = None
+        vqe._solver = None
+
+        result = vqe.solve_lih(bond_distance=1.7)
+
+        assert calls['distance'] == pytest.approx(1.7)
+        assert vqe._hamiltonian is marker
+        assert result['energy'] == pytest.approx(-7.8)
+        vqe._hamiltonian = None
+
+    def test_vqe_h2o_dispatches_to_native_hamiltonian(self, monkeypatch):
+        """H2O helper should create the native H2O Hamiltonian and solve it."""
+        marker = object()
+        calls = {'created': 0}
+
+        def fake_create_h2o():
+            calls['created'] += 1
+            return marker
+
+        monkeypatch.setattr(algorithms._lib, 'vqe_create_h2o_hamiltonian', fake_create_h2o)
+        monkeypatch.setattr(VQE, '_solve', lambda self: {'energy': -75.0, 'converged': True})
+
+        vqe = object.__new__(VQE)
+        vqe._hamiltonian = None
+        vqe._solver = None
+
+        result = vqe.solve_h2o()
+
+        assert calls['created'] == 1
+        assert vqe._hamiltonian is marker
+        assert result['energy'] == pytest.approx(-75.0)
+        vqe._hamiltonian = None
 
 
 # =============================================================================

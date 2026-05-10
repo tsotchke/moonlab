@@ -200,8 +200,7 @@ export class CircuitDiagram {
   setCircuit(circuit: Circuit): void {
     this.circuit = circuit;
     this.calculateLayout();
-    this.scrollX = 0;
-    this.render();
+    this.scrollTo(0);
   }
 
   /**

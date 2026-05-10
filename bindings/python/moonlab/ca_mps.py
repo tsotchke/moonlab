@@ -284,13 +284,14 @@ def _check(rc: int) -> None:
 # ---------------------------------------------------------------- #
 
 
-def _as_uint8_buf(arr) -> ctypes.POINTER(ctypes.c_uint8):
+def _as_uint8_buf(arr):
     """Return a (POINTER(c_uint8), keep_alive) tuple ensuring lifetime."""
     a = np.ascontiguousarray(arr, dtype=np.uint8)
     return a.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)), a
 
 
-def _as_double_buf(arr) -> ctypes.POINTER(ctypes.c_double):
+def _as_double_buf(arr):
+    """Return a (POINTER(c_double), keep_alive) tuple ensuring lifetime."""
     a = np.ascontiguousarray(arr, dtype=np.float64)
     return a.ctypes.data_as(ctypes.POINTER(ctypes.c_double)), a
 
@@ -305,7 +306,7 @@ def gauge_warmstart(state: CAMPS, paulis) -> None:
     `RuntimeError` if the generators don't pairwise commute or aren't
     independent.
     """
-    p = np.ascontiguousarray(paulis, dtype=np.uint8)
+    p_ptr, p = _as_uint8_buf(paulis)
     if p.ndim != 2:
         raise ValueError("paulis must be a 2-D (num_gens, num_qubits) array")
     num_gens, n = p.shape
@@ -313,7 +314,7 @@ def gauge_warmstart(state: CAMPS, paulis) -> None:
         raise ValueError(
             f"paulis num_qubits={n} != state.num_qubits={state.num_qubits}")
     rc = _lib.moonlab_ca_mps_gauge_warmstart(
-        state._h, p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+        state._h, p_ptr,
         ctypes.c_uint32(num_gens))
     _check(rc)
 
@@ -358,8 +359,8 @@ def var_d_run(state: CAMPS, paulis, coeffs,
     stab_paulis : optional array-like uint8, shape (k, num_qubits)
         Required when warmstart == WARMSTART_STABILIZER_SUBGROUP.
     """
-    p = np.ascontiguousarray(paulis, dtype=np.uint8)
-    c = np.ascontiguousarray(coeffs, dtype=np.float64)
+    p_ptr, p = _as_uint8_buf(paulis)
+    c_ptr, c = _as_double_buf(coeffs)
     if p.ndim != 2:
         raise ValueError("paulis must be (num_terms, num_qubits)")
     num_terms, n = p.shape
@@ -377,11 +378,10 @@ def var_d_run(state: CAMPS, paulis, coeffs,
         if stab_paulis is None:
             raise ValueError(
                 "warmstart == STABILIZER_SUBGROUP requires stab_paulis")
-        s = np.ascontiguousarray(stab_paulis, dtype=np.uint8)
+        sp_ptr, s = _as_uint8_buf(stab_paulis)
         if s.ndim != 2 or s.shape[1] != n:
             raise ValueError(
                 f"stab_paulis shape {s.shape} != (k, {n})")
-        sp_ptr = s.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         sp_num = s.shape[0]
         _keep = s
 
@@ -393,8 +393,8 @@ def var_d_run(state: CAMPS, paulis, coeffs,
                 "(moonlab_ca_mps_var_d_run_v2)")
         rc = _lib.moonlab_ca_mps_var_d_run_v2(
             state._h,
-            p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-            c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            p_ptr,
+            c_ptr,
             ctypes.c_uint32(num_terms),
             ctypes.c_uint32(max_outer_iters),
             ctypes.c_double(imag_time_dtau),
@@ -410,8 +410,8 @@ def var_d_run(state: CAMPS, paulis, coeffs,
     else:
         rc = _lib.moonlab_ca_mps_var_d_run(
             state._h,
-            p.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-            c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            p_ptr,
+            c_ptr,
             ctypes.c_uint32(num_terms),
             ctypes.c_uint32(max_outer_iters),
             ctypes.c_double(imag_time_dtau),

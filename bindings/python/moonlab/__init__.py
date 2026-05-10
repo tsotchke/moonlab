@@ -45,6 +45,12 @@ try:
         QAOA,
         Grover,
         BellTest,
+        run_vqe_h2,
+        run_vqe_lih,
+        run_vqe_h2o,
+        run_qaoa_maxcut,
+        run_grover,
+        run_bell_test,
     )
     _ALGO_AVAILABLE = True
 except (ImportError, AttributeError):
@@ -107,4 +113,15 @@ __all__ = [
     'OBS_Y',
 ]
 if _ALGO_AVAILABLE:
-    __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
+    __all__ += [
+        'VQE',
+        'QAOA',
+        'Grover',
+        'BellTest',
+        'run_vqe_h2',
+        'run_vqe_lih',
+        'run_vqe_h2o',
+        'run_qaoa_maxcut',
+        'run_grover',
+        'run_bell_test',
+    ]

@@ -165,6 +165,8 @@ export class CaMps {
   rx(q: number, theta: number): this { this.call1qParam('rx', q, theta); return this; }
   ry(q: number, theta: number): this { this.call1qParam('ry', q, theta); return this; }
   rz(q: number, theta: number): this { this.call1qParam('rz', q, theta); return this; }
+  t(q: number): this { return this.tGate(q); }
+  tdg(q: number): this { return this.tDagger(q); }
   tGate(q: number): this { this.call1q('t_gate', q); return this; }
   tDagger(q: number): this { this.call1q('t_dagger', q); return this; }
   phase(q: number, theta: number): this { this.call1qParam('phase', q, theta); return this; }

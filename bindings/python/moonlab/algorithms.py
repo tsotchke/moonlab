@@ -939,6 +939,35 @@ def run_vqe_h2(bond_distance: float = 0.74, num_layers: int = 2) -> Dict[str, An
     return vqe.solve_h2(bond_distance)
 
 
+def run_vqe_lih(bond_distance: float = 1.6, num_layers: int = 2) -> Dict[str, Any]:
+    """
+    Quick VQE run for LiH molecule
+
+    Args:
+        bond_distance: Li-H distance in Angstroms
+        num_layers: Ansatz depth
+
+    Returns:
+        VQE result dictionary
+    """
+    vqe = VQE(num_qubits=4, num_layers=num_layers)
+    return vqe.solve_lih(bond_distance)
+
+
+def run_vqe_h2o(num_layers: int = 2) -> Dict[str, Any]:
+    """
+    Quick VQE run for H2O molecule
+
+    Args:
+        num_layers: Ansatz depth
+
+    Returns:
+        VQE result dictionary
+    """
+    vqe = VQE(num_qubits=8, num_layers=num_layers)
+    return vqe.solve_h2o()
+
+
 def run_qaoa_maxcut(edges: List[Tuple[int, int]],
                     num_layers: int = 3) -> Dict[str, Any]:
     """

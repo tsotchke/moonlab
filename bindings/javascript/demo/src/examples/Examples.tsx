@@ -384,6 +384,10 @@ const Examples: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyCodeClick = () => {
+    void copyCode();
+  };
+
   return (
     <div className="examples">
       <div className="section-header">
@@ -423,7 +427,7 @@ const Examples: React.FC = () => {
                   {runningId === currentExample.id ? 'Running…' : 'Run Example'}
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={copyCode}>
+              <button className="btn btn-secondary" onClick={handleCopyCodeClick}>
                 {copied ? 'Copied!' : 'Copy Code'}
               </button>
             </div>

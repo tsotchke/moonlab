@@ -7,6 +7,8 @@ const Gallery = lazy(() => import('./gallery/Gallery'));
 const GalleryDetail = lazy(() => import('./gallery/GalleryDetail'));
 const Orbitals = lazy(() => import('./orbitals/OrbitalDemo'));
 
+const renderLoadingFallback = (): React.ReactNode => LoadingSpinner({});
+
 export const App: React.FC = () => {
   const [isNavOpen, setIsNavOpen] = useState(false);
   const logoUrl = `${import.meta.env.BASE_URL}ml-logo.png`;
@@ -89,7 +91,7 @@ export const App: React.FC = () => {
       </header>
 
       <main className="main">
-        <Suspense fallback={<LoadingSpinner />}>
+        <Suspense fallback={renderLoadingFallback()}>
           <Routes>
             <Route path="/" element={<Orbitals />} />
             <Route path="/playground" element={<Playground />} />
@@ -112,7 +114,7 @@ export const App: React.FC = () => {
   );
 };
 
-const LoadingSpinner: React.FC = () => (
+export const LoadingSpinner: React.FC = () => (
   <div className="loading-container">
     <img
       className="loading-gif"
