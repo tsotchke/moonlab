@@ -227,9 +227,99 @@ static void test_tn_mpo_two_site_apply(void) {
 }
 
 /* ------------------------------------------------------------------ */
-/* contract_mps_mpo: apply a TFIM MPO tensor-by-tensor and verify the */
-/* backend provenance is explicit.                                    */
+/* contract_mps_mpo: exact rank-3 MPS layout and backend provenance.  */
 /* ------------------------------------------------------------------ */
+
+static void test_contract_mps_mpo_rank3_values(void) {
+    fprintf(stdout, "\n--- contract_mps_mpo rank-3 value layout ---\n");
+
+    uint32_t m_dims[3] = { 2, 2, 3 };
+    uint32_t o_dims[4] = { 2, 2, 2, 2 };
+    tensor_t* m = tensor_create(3, m_dims);
+    tensor_t* o = tensor_create(4, o_dims);
+    CHECK(m != NULL && o != NULL, "tensor_create for MPS/MPO site");
+    if (!m || !o) {
+        tensor_free(m);
+        tensor_free(o);
+        return;
+    }
+
+    for (uint32_t lm = 0; lm < m_dims[0]; lm++) {
+        for (uint32_t pin = 0; pin < m_dims[1]; pin++) {
+            for (uint32_t rm = 0; rm < m_dims[2]; rm++) {
+                uint32_t idx[3] = { lm, pin, rm };
+                double complex value = (1.0 + 100.0 * lm + 10.0 * pin + rm) +
+                                       (0.25 * (lm + pin + rm)) * I;
+                tensor_set(m, idx, value);
+            }
+        }
+    }
+
+    for (uint32_t lo = 0; lo < o_dims[0]; lo++) {
+        for (uint32_t pin = 0; pin < o_dims[1]; pin++) {
+            for (uint32_t pout = 0; pout < o_dims[2]; pout++) {
+                for (uint32_t ro = 0; ro < o_dims[3]; ro++) {
+                    uint32_t idx[4] = { lo, pin, pout, ro };
+                    double complex value =
+                        (0.5 + 20.0 * lo + 5.0 * pin + 2.0 * pout + ro) -
+                        (0.125 * (lo + pin + pout + ro)) * I;
+                    tensor_set(o, idx, value);
+                }
+            }
+        }
+    }
+
+    const tensor_t* mps_tensors[1] = { m };
+    const tensor_t* mpo_tensors[1] = { o };
+    contract_config_t cfg = contract_config_default();
+    tensor_t** applied = contract_mps_mpo(mps_tensors, mpo_tensors, 1, &cfg);
+
+    CHECK(applied != NULL && applied[0] != NULL, "contract_mps_mpo result");
+    if (applied) {
+        if (applied[0]) {
+            CHECK(applied[0]->rank == 3, "result rank = %u (expected 3)", applied[0]->rank);
+            CHECK(applied[0]->dims[0] == m_dims[0] * o_dims[0],
+                  "left bond dim = %u", applied[0]->dims[0]);
+            CHECK(applied[0]->dims[1] == o_dims[2],
+                  "physical output dim = %u", applied[0]->dims[1]);
+            CHECK(applied[0]->dims[2] == m_dims[2] * o_dims[3],
+                  "right bond dim = %u", applied[0]->dims[2]);
+
+            for (uint32_t lm = 0; lm < m_dims[0]; lm++) {
+                for (uint32_t lo = 0; lo < o_dims[0]; lo++) {
+                    for (uint32_t pout = 0; pout < o_dims[2]; pout++) {
+                        for (uint32_t rm = 0; rm < m_dims[2]; rm++) {
+                            for (uint32_t ro = 0; ro < o_dims[3]; ro++) {
+                                double complex expected = 0.0;
+                                for (uint32_t pin = 0; pin < m_dims[1]; pin++) {
+                                    uint32_t midx[3] = { lm, pin, rm };
+                                    uint32_t oidx[4] = { lo, pin, pout, ro };
+                                    expected += tensor_get(m, midx) * tensor_get(o, oidx);
+                                }
+
+                                uint32_t ridx[3] = {
+                                    lm * o_dims[0] + lo,
+                                    pout,
+                                    rm * o_dims[3] + ro
+                                };
+                                double diff = cabs(tensor_get(applied[0], ridx) - expected);
+                                CHECK(diff < 1e-10,
+                                      "layout[%u,%u,%u] diff %.3e",
+                                      ridx[0], ridx[1], ridx[2], diff);
+                            }
+                        }
+                    }
+                }
+            }
+
+            tensor_free(applied[0]);
+        }
+        free(applied);
+    }
+
+    tensor_free(m);
+    tensor_free(o);
+}
 
 static void test_contract_mps_mpo_backend_provenance(void) {
     fprintf(stdout, "\n--- contract_mps_mpo backend provenance ---\n");
@@ -257,6 +347,11 @@ static void test_contract_mps_mpo_backend_provenance(void) {
     if (applied) {
         for (uint32_t i = 0; i < 2; i++) {
             CHECK(applied[i] != NULL, "contract_mps_mpo site %u returned NULL", i);
+            if (applied[i]) {
+                CHECK(applied[i]->rank == 3,
+                      "contract_mps_mpo site %u rank = %u (expected 3)",
+                      i, applied[i]->rank);
+            }
             tensor_free(applied[i]);
         }
         free(applied);
@@ -508,6 +603,7 @@ int main(void) {
     test_svd_canonicalize_round_trip();
     test_tn_expectation_2q_cnot();
     test_tn_mpo_two_site_apply();
+    test_contract_mps_mpo_rank3_values();
     test_contract_mps_mpo_backend_provenance();
     test_mpo_skyrmion_create_smoke();
     test_dmrg_backend_provenance_helpers();

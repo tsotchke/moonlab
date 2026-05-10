@@ -919,6 +919,91 @@ tensor_t *contract_tree(const tensor_t **tensors,
     return result;
 }
 
+static void contract_free_tensor_array(tensor_t **tensors, uint32_t count) {
+    if (!tensors) return;
+
+    for (uint32_t i = 0; i < count; i++) {
+        tensor_free(tensors[i]);
+    }
+    free(tensors);
+}
+
+static bool contract_mul_dim(uint32_t a, uint32_t b, uint32_t *out) {
+    if (!out) return false;
+    if (a != 0 && b > UINT32_MAX / a) return false;
+
+    *out = a * b;
+    return true;
+}
+
+static tensor_t *contract_apply_site_compression(const tensor_t *site,
+                                                  const svd_compress_config_t *config) {
+    if (!site || !config || site->rank != 3) return NULL;
+
+    svd_compress_result_t *svd = svd_compress_split(site, 2, config);
+    if (!svd || !svd->left || !svd->right) {
+        svd_compress_result_free(svd);
+        return NULL;
+    }
+
+    tensor_t *left = svd->left;
+    svd->left = NULL;
+
+    if (svd_absorb_singular_values(left, svd->singular_values,
+                                    svd->bond_dim, 2) != SVD_COMPRESS_SUCCESS) {
+        tensor_free(left);
+        svd_compress_result_free(svd);
+        return NULL;
+    }
+
+    uint32_t left_axis[1] = {2};
+    uint32_t right_axis[1] = {0};
+    tensor_t *compressed = contract_tensors(left, svd->right,
+                                             left_axis, right_axis, 1);
+
+    tensor_free(left);
+    svd_compress_result_free(svd);
+    return compressed;
+}
+
+static tensor_t *contract_mps_mpo_site(const tensor_t *m,
+                                        const tensor_t *o,
+                                        const contract_config_t *config) {
+    if (!m || !o || !config) return NULL;
+    if (m->rank != 3 || o->rank != 4) return NULL;
+    if (m->dims[1] != o->dims[1]) return NULL;
+
+    uint32_t reshaped_dims[3];
+    if (!contract_mul_dim(m->dims[0], o->dims[0], &reshaped_dims[0]) ||
+        !contract_mul_dim(m->dims[2], o->dims[3], &reshaped_dims[2])) {
+        return NULL;
+    }
+    reshaped_dims[1] = o->dims[2];
+
+    uint32_t axes_m[1] = {1};
+    uint32_t axes_o[1] = {1};
+    tensor_t *contracted = contract_tensors(m, o, axes_m, axes_o, 1);
+    if (!contracted) return NULL;
+
+    uint32_t perm[5] = {0, 2, 3, 1, 4};
+    tensor_t *ordered = tensor_transpose(contracted, perm);
+    tensor_free(contracted);
+    if (!ordered) return NULL;
+
+    tensor_t *reshaped = tensor_reshape(ordered, 3, reshaped_dims);
+    tensor_free(ordered);
+    if (!reshaped) return NULL;
+
+    if (!config->use_compression) {
+        return reshaped;
+    }
+
+    tensor_t *compressed = contract_apply_site_compression(reshaped,
+                                                            &config->compress_config);
+    tensor_free(reshaped);
+    return compressed;
+}
+
 tensor_t **contract_mps_mpo(const tensor_t **mps,
                              const tensor_t **mpo,
                              uint32_t num_sites,
@@ -937,36 +1022,13 @@ tensor_t **contract_mps_mpo(const tensor_t **mps,
     // Then reshape to [new_left_bond, physical_out, new_right_bond]
 
     for (uint32_t site = 0; site < num_sites; site++) {
-        const tensor_t *m = mps[site];
-        const tensor_t *o = mpo[site];
-
-        // Contract physical indices
-        // MPS[i,a,b] * MPO[c,a,d,e] -> Result[i,b,c,d,e]
-        // Sum over 'a' (physical index)
-
-        uint32_t axes_m[1] = {1};  // Physical axis of MPS
-        uint32_t axes_o[1] = {1};  // Physical_in axis of MPO
-
-        tensor_t *contracted = contract_tensors(m, o, axes_m, axes_o, 1);
-        if (!contracted) {
-            for (uint32_t j = 0; j < site; j++) {
-                tensor_free(result[j]);
-            }
-            free(result);
+        tensor_t *site_result = contract_mps_mpo_site(mps[site], mpo[site], config);
+        if (!site_result) {
+            contract_free_tensor_array(result, site);
             return NULL;
         }
 
-        // Apply compression if configured
-        if (config->use_compression) {
-            // Reshape to matrix and compress
-            // Current shape: [left_mps, right_mps, left_mpo, physical_out, right_mpo]
-            // Reshape to: [left_mps * left_mpo, physical_out, right_mps * right_mpo]
-
-            // For simplicity, just store the contracted result
-            // Full MPS-MPO application would require more sophisticated compression
-        }
-
-        result[site] = contracted;
+        result[site] = site_result;
     }
 
     return result;
