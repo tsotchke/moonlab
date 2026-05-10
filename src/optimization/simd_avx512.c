@@ -20,6 +20,7 @@
 #include "simd_avx512.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 
 // ============================================================================
@@ -35,7 +36,11 @@
 // ============================================================================
 
 int avx512_is_available(void) {
-    return 1;  // Compiled with AVX-512, so it's available
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_cpu_supports("avx512f") ? 1 : 0;
+#else
+    return AVX512_AVAILABLE ? 1 : 0;
+#endif
 }
 
 const char* avx512_get_features(void) {
@@ -444,15 +449,27 @@ void avx512_xor_bytes(uint8_t* dest, const uint8_t* src, size_t n) {
 #else /* !AVX512_AVAILABLE */
 
 // ============================================================================
-// FALLBACK IMPLEMENTATIONS (When AVX-512 not available at compile time)
+// Fallback implementations when AVX-512 is not available at compile time.
 // ============================================================================
 
+typedef struct {
+    int compiled;
+    int runtime_checked;
+    const char* reason;
+} avx512_capability_t;
+
+static const avx512_capability_t g_avx512_capability = {
+    .compiled = 0,
+    .runtime_checked = 1,
+    .reason = "AVX-512 not available in this build"
+};
+
 int avx512_is_available(void) {
-    return 0;
+    return g_avx512_capability.compiled && g_avx512_capability.runtime_checked;
 }
 
 const char* avx512_get_features(void) {
-    return "AVX-512 not available";
+    return g_avx512_capability.reason;
 }
 
 double avx512_sum_squared_magnitudes(const complex_t* amplitudes, size_t n) {

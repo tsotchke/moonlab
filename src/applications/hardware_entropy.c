@@ -277,10 +277,30 @@ int rndrrs_get_uint64(uint64_t *value) {
 }
 
 #else
-// Stub implementations for non-ARM platforms
-int rndr_available(void) { return 0; }
-int rndr_get_uint64(uint64_t *value) { (void)value; return 0; }
-int rndrrs_get_uint64(uint64_t *value) { (void)value; return 0; }
+// Explicit unavailable capability for non-ARM platforms.
+typedef struct {
+    int compiled;
+    const char* instruction;
+} arm_rndr_capability_t;
+
+static const arm_rndr_capability_t g_arm_rndr_capability = {
+    .compiled = 0,
+    .instruction = "ARM RNDR/RNDRRS"
+};
+
+int rndr_available(void) {
+    return g_arm_rndr_capability.compiled;
+}
+
+int rndr_get_uint64(uint64_t *value) {
+    if (value) *value = 0;
+    return rndr_available();
+}
+
+int rndrrs_get_uint64(uint64_t *value) {
+    if (value) *value = 0;
+    return rndr_available();
+}
 #endif
 
 // ============================================================================

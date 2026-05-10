@@ -634,8 +634,19 @@ size_t simd_get_unroll_factor(void) {
 }
 
 size_t simd_get_min_array_size(void) {
-    // Below this size, SIMD overhead may exceed benefit
-    return 16;
+    const simd_info_t* info = simd_detect_capabilities_full();
+    size_t vector_lanes = simd_get_doubles_per_register();
+    if (vector_lanes == 0) vector_lanes = 1;
+
+    size_t min_elements = vector_lanes * simd_get_unroll_factor();
+    if (info->cache_line_size > 0) {
+        const size_t cache_line_doubles = info->cache_line_size / sizeof(double);
+        if (cache_line_doubles > min_elements) {
+            min_elements = cache_line_doubles;
+        }
+    }
+
+    return min_elements > 0 ? min_elements : 1;
 }
 
 size_t simd_get_chunk_size(size_t element_size) {

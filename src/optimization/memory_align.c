@@ -516,10 +516,25 @@ void simd_print_alloc_stats(void) {
 
 #else
 
-/* Empty stubs when tracking is disabled. Flagged __attribute__((unused))
- * because they are not referenced outside tracking-enabled builds. */
-__attribute__((unused)) static void track_allocation(size_t size) { (void)size; }
-__attribute__((unused)) static void track_deallocation(size_t size) { (void)size; }
-__attribute__((unused)) static void track_allocation_failure(void) {}
+/* Lightweight observability hooks when public allocation statistics are
+ * disabled. Flagged __attribute__((unused)) because they are not referenced
+ * outside tracking-enabled builds. */
+static volatile size_t g_tracking_disabled_events = 0;
+
+__attribute__((unused)) static void track_allocation(size_t size) {
+    if (size > 0) {
+        g_tracking_disabled_events++;
+    }
+}
+
+__attribute__((unused)) static void track_deallocation(size_t size) {
+    if (size > 0) {
+        g_tracking_disabled_events++;
+    }
+}
+
+__attribute__((unused)) static void track_allocation_failure(void) {
+    g_tracking_disabled_events++;
+}
 
 #endif /* MEMORY_ALIGN_TRACK_STATS */

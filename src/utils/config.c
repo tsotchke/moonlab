@@ -546,12 +546,25 @@ static int runtime_check_sve(void) {
 }
 #elif defined(__APPLE__)
 static int runtime_check_sve(void) {
-    // Apple Silicon doesn't support SVE
+#if defined(__ARM_FEATURE_SVE)
+    return 1;
+#else
+    int sve_supported = 0;
+    size_t len = sizeof(sve_supported);
+    if (sysctlbyname("hw.optional.arm.FEAT_SVE", &sve_supported, &len, NULL, 0) == 0) {
+        return sve_supported != 0;
+    }
     return 0;
+#endif
 }
 #else
 static int runtime_check_sve(void) {
-    return 0;  // Conservative default
+#if defined(__ARM_FEATURE_SVE)
+    return 1;
+#else
+    const int runtime_probe_available = 0;
+    return runtime_probe_available;
+#endif
 }
 #endif
 #endif
