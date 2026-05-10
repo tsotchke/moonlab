@@ -18,7 +18,8 @@
  *   - svd_right_canonicalize   (svd_compress.c)
  *   - tn_expectation_2q        (tn_measurement.c)
  *   - contract_mps_mpo         (contraction.c)
- *   - DMRG backend provenance, environment init, random MPS init,
+ *   - DMRG backend provenance, environment init/update, two-site
+ *     optimisation, sweep, TFIM convenience, random MPS init,
  *     ground-state, energy, and variance helpers (dmrg.c)
  */
 
@@ -329,6 +330,33 @@ static void test_dmrg_backend_provenance_helpers(void) {
               "dmrg_init_left_environments returned nonzero");
         check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
                                      "dmrg_init_left_environments");
+
+        CHECK(dmrg_update_left_environment(env, env_mps, env_mpo, 0) == 0,
+              "dmrg_update_left_environment returned nonzero");
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_update_left_environment");
+
+        CHECK(dmrg_update_right_environment(env, env_mps, env_mpo, 2) == 0,
+              "dmrg_update_right_environment returned nonzero");
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_update_right_environment");
+
+        dmrg_config_t direct_cfg = dmrg_config_default();
+        direct_cfg.max_bond_dim = 4;
+        direct_cfg.max_sweeps = 1;
+        direct_cfg.warmup_sweeps = 0;
+        direct_cfg.lanczos_max_iter = 8;
+        direct_cfg.noise_strength = 0.0;
+        direct_cfg.dm_perturbation = 0.0;
+
+        double site_energy = 0.0;
+        CHECK(dmrg_optimize_two_site(env_mps, env_mpo, env, 0,
+                                     DMRG_SWEEP_LEFT_TO_RIGHT, &direct_cfg,
+                                     &site_energy) == 0,
+              "dmrg_optimize_two_site returned nonzero");
+        CHECK(isfinite(site_energy), "dmrg_optimize_two_site energy %.6e", site_energy);
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                     "dmrg_optimize_two_site");
         dmrg_environments_free(env);
     }
 
@@ -371,6 +399,41 @@ static void test_dmrg_backend_provenance_helpers(void) {
 
     mpo_free(ground_mpo);
     tn_mps_free(random_mps);
+
+    tn_mps_state_t* sweep_mps = dmrg_init_random_mps(2, 2, &state_cfg);
+    CHECK(sweep_mps != NULL, "dmrg_init_random_mps for sweep");
+    if (!sweep_mps) return;
+
+    mpo_t* sweep_mpo = mpo_tfim_create(2, /*J=*/1.0, /*h=*/0.5);
+    CHECK(sweep_mpo != NULL, "mpo_tfim_create for sweep");
+    if (!sweep_mpo) {
+        tn_mps_free(sweep_mps);
+        return;
+    }
+
+    dmrg_environments_t* sweep_env = dmrg_environments_create(2);
+    CHECK(sweep_env != NULL, "dmrg_environments_create for sweep");
+    if (sweep_env) {
+        double sweep_energy = 0.0;
+        CHECK(dmrg_sweep(sweep_mps, sweep_mpo, sweep_env, &dmrg_cfg,
+                         &sweep_energy) == 0,
+              "dmrg_sweep returned nonzero");
+        CHECK(isfinite(sweep_energy), "dmrg_sweep energy %.6e", sweep_energy);
+        check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_sweep");
+        dmrg_environments_free(sweep_env);
+    }
+
+    mpo_free(sweep_mpo);
+    tn_mps_free(sweep_mps);
+
+    dmrg_result_t* tfim_result = NULL;
+    tn_mps_state_t* tfim_mps = dmrg_tfim_ground_state(2, /*g=*/0.5,
+                                                      &dmrg_cfg, &tfim_result);
+    CHECK(tfim_mps != NULL, "dmrg_tfim_ground_state returned NULL");
+    check_dmrg_trace_consistency(dmrg_get_last_backend_trace(),
+                                 "dmrg_tfim_ground_state");
+    if (tfim_result) dmrg_result_free(tfim_result);
+    if (tfim_mps) tn_mps_free(tfim_mps);
 }
 
 /* ------------------------------------------------------------------ */

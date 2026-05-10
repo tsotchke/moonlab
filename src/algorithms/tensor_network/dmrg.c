@@ -1973,6 +1973,8 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
                                   const tn_mps_state_t *mps,
                                   const mpo_t *mpo,
                                   uint32_t site) {
+    dmrg_record_backend_trace("dmrg_update_left_environment",
+                              "left-environment-update");
     // Similar to init_right but going left to right
     // L[site+1] = contract L[site] @ A[site] @ W[site]
 
@@ -2048,6 +2050,8 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
                                    const tn_mps_state_t *mps,
                                    const mpo_t *mpo,
                                    uint32_t site) {
+    dmrg_record_backend_trace("dmrg_update_right_environment",
+                              "right-environment-update");
     // Update R[site-1] after optimizing at site
     if (!env || !mps || !mpo || site == 0) return -1;
     if (!env->R[site]) {
@@ -2200,6 +2204,8 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
                             dmrg_sweep_direction_t direction,
                             const dmrg_config_t *config,
                             double *energy) {
+    dmrg_record_backend_trace("dmrg_optimize_two_site",
+                              "two-site-local-eigensolve");
     if (!mps || !mpo || !env || !config || !energy) return -1;
     if (site >= mps->num_qubits - 1) return -1;
 
@@ -2474,6 +2480,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
                dmrg_environments_t *env,
                const dmrg_config_t *config,
                double *energy) {
+    dmrg_record_backend_trace("dmrg_sweep", "forward-backward-sweep");
     if (!mps || !mpo || !env || !config || !energy) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -2507,6 +2514,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
     }
 
     *energy = site_energy;
+    dmrg_record_backend_trace("dmrg_sweep", "forward-backward-sweep");
     return 0;
 }
 
@@ -2671,6 +2679,8 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
                                         double g,
                                         const dmrg_config_t *config,
                                         dmrg_result_t **result) {
+    dmrg_record_backend_trace("dmrg_tfim_ground_state",
+                              "tfim-convenience-ground-state");
     // Use default config if not provided
     dmrg_config_t cfg = config ? *config : dmrg_config_default();
 
@@ -2715,6 +2725,8 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         dmrg_result_free(dmrg_res);
     }
 
+    dmrg_record_backend_trace("dmrg_tfim_ground_state",
+                              "tfim-convenience-ground-state");
     return mps;
 }
 
