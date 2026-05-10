@@ -18,79 +18,97 @@
 #include <stdio.h>
 #include <complex.h>
 #include <math.h>
+#include <time.h>
+
+#define MOONLAB_WEBGPU_DEFAULT_WORKGROUP_SIZE 256u
+#define MOONLAB_WEBGPU_NATIVE_QUEUE_COUNT 1u
 
 #if defined(HAS_WEBGPU) && defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
 #include <stdint.h>
 
 EM_JS(int, moonlab_webgpu_runtime_available, (), {
+    let available = 0;
     try {
-        if (typeof navigator === 'undefined' || !navigator.gpu) {
-            return 0;
-        }
-        if (typeof self !== 'undefined' && self.isSecureContext === false) {
-            return 0;
-        }
-        return 1;
+        available =
+            (typeof navigator !== 'undefined' &&
+             !!navigator.gpu &&
+             !(typeof self !== 'undefined' && self.isSecureContext === false)) ? 1 : 0;
     } catch (err) {
-        return 0;
+        if (typeof Module !== 'undefined') {
+            Module.__moonlabWebGPULastError =
+                String(err && err.message ? err.message : err);
+        }
+        available = 0;
     }
+    return available;
 });
 
 EM_JS(int, moonlab_webgpu_native_dispatch_supported, (), {
+    let supported = 0;
     try {
-        if (typeof navigator === 'undefined' || !navigator.gpu) {
-            return 0;
-        }
-        // Deno path is currently unstable with Asyncify during native dispatch.
-        // Keep native compute off by default in Deno unless explicitly enabled.
-        if (typeof Deno !== 'undefined' &&
+        supported =
+            (typeof navigator !== 'undefined' && !!navigator.gpu) ? 1 : 0;
+        if (supported &&
+            typeof Deno !== 'undefined' &&
             Deno.env &&
             typeof Deno.env.get === 'function') {
             try {
-                if (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE') !== '1') {
-                    return 0;
-                }
-                if (Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE') === '1') {
-                    return 0;
-                }
+                // Deno path is currently unstable with Asyncify during native
+                // dispatch, so require explicit opt-in and honor explicit off.
+                supported =
+                    (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE') === '1' &&
+                     Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE') !== '1') ? 1 : 0;
             } catch (_err) {
                 // If env access fails, stay conservative and keep native disabled.
-                return 0;
+                if (typeof Module !== 'undefined') {
+                    Module.__moonlabWebGPULastError =
+                        String(_err && _err.message ? _err.message : _err);
+                }
+                supported = 0;
             }
         }
-        return 1;
     } catch (err) {
-        return 0;
+        if (typeof Module !== 'undefined') {
+            Module.__moonlabWebGPULastError =
+                String(err && err.message ? err.message : err);
+        }
+        supported = 0;
     }
+    return supported;
 });
 
 EM_JS(int, moonlab_webgpu_tn_native_dispatch_supported, (), {
+    let supported = 0;
     try {
-        if (!moonlab_webgpu_native_dispatch_supported()) {
-            return 0;
-        }
-        // Tensor-network kernels operate on short-lived intermediate buffers.
-        // In Deno, asyncify scheduling can resume after the caller returns,
-        // so keep TN native dispatch disabled unless explicitly opted in.
-        if (typeof Deno !== 'undefined' &&
+        supported = moonlab_webgpu_native_dispatch_supported() ? 1 : 0;
+        if (supported &&
+            typeof Deno !== 'undefined' &&
             Deno.env &&
             typeof Deno.env.get === 'function') {
             try {
-                if (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE_TN') !== '1') {
-                    return 0;
-                }
-                if (Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE_TN') === '1') {
-                    return 0;
-                }
+                // Tensor-network kernels use short-lived intermediate buffers.
+                // In Deno, asyncify can resume after the caller returns, so
+                // require a separate opt-in for native TN dispatch.
+                supported =
+                    (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE_TN') === '1' &&
+                     Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE_TN') !== '1') ? 1 : 0;
             } catch (_err) {
-                return 0;
+                if (typeof Module !== 'undefined') {
+                    Module.__moonlabWebGPULastError =
+                        String(_err && _err.message ? _err.message : _err);
+                }
+                supported = 0;
             }
         }
-        return 1;
     } catch (err) {
-        return 0;
+        if (typeof Module !== 'undefined') {
+            Module.__moonlabWebGPULastError =
+                String(err && err.message ? err.message : err);
+        }
+        supported = 0;
     }
+    return supported;
 });
 
 EM_ASYNC_JS(int, moonlab_webgpu_init_async, (), {
@@ -1365,24 +1383,46 @@ static double webgpu_now_seconds(void) {
 
 #else
 
+typedef struct {
+    int runtime_available;
+    int native_dispatch_supported;
+    int tn_native_dispatch_supported;
+    int initialized;
+    const char* reason;
+} webgpu_host_capability_t;
+
+static const webgpu_host_capability_t g_webgpu_host_capability = {
+    .runtime_available = 0,
+    .native_dispatch_supported = 0,
+    .tn_native_dispatch_supported = 0,
+    .initialized = 0,
+    .reason = "WebGPU requires Emscripten runtime bindings"
+};
+
 static int moonlab_webgpu_runtime_available(void) {
-    return 0;
+    return g_webgpu_host_capability.runtime_available;
 }
 
 static int moonlab_webgpu_native_dispatch_supported(void) {
-    return 0;
+    return g_webgpu_host_capability.native_dispatch_supported;
 }
 
 static int moonlab_webgpu_tn_native_dispatch_supported(void) {
-    return 0;
+    return g_webgpu_host_capability.tn_native_dispatch_supported;
 }
 
 static double webgpu_now_seconds(void) {
-    return 0.0;
+#if defined(TIME_UTC)
+    struct timespec ts;
+    if (timespec_get(&ts, TIME_UTC) == TIME_UTC) {
+        return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+    }
+#endif
+    return (double)clock() / (double)CLOCKS_PER_SEC;
 }
 
 static int moonlab_webgpu_init_async(void) {
-    return 0;
+    return g_webgpu_host_capability.initialized;
 }
 
 static int moonlab_webgpu_hadamard_dispatch_async(uintptr_t amplitudes_ptr,
@@ -1496,6 +1536,8 @@ struct webgpu_compute_ctx {
     int native_webgpu_ready;
     int perf_monitoring;
     double last_exec_time;
+    uint32_t max_work_group_size;
+    uint32_t compute_units;
     char device_name[128];
     char last_error[256];
 };
@@ -1533,6 +1575,8 @@ static void mark_exec_time(webgpu_compute_ctx_t* ctx, double start_time) {
 static void mark_native_ready(webgpu_compute_ctx_t* ctx) {
     if (!ctx) return;
     ctx->native_webgpu_ready = 1;
+    ctx->max_work_group_size = MOONLAB_WEBGPU_DEFAULT_WORKGROUP_SIZE;
+    ctx->compute_units = MOONLAB_WEBGPU_NATIVE_QUEUE_COUNT;
     if (strcmp(ctx->device_name, "WebGPU (WGSL compute)") != 0) {
         snprintf(ctx->device_name, sizeof(ctx->device_name), "WebGPU (WGSL compute)");
     }
@@ -1596,6 +1640,8 @@ webgpu_compute_ctx_t* webgpu_compute_init(void) {
     ctx->native_webgpu_ready = 0;
     ctx->perf_monitoring = 0;
     ctx->last_exec_time = 0.0;
+    ctx->max_work_group_size = 0;
+    ctx->compute_units = 0;
     snprintf(ctx->device_name, sizeof(ctx->device_name), "WebGPU (WASM)");
     ctx->last_error[0] = '\0';
     return ctx;
@@ -1617,8 +1663,12 @@ void webgpu_get_device_info(webgpu_compute_ctx_t* ctx,
             snprintf(name, 256, "WebGPU (Unavailable)");
         }
     }
-    if (max_work_group_size) *max_work_group_size = 256;
-    if (compute_units) *compute_units = 1;
+    if (max_work_group_size) {
+        *max_work_group_size = (ctx && ctx->available) ? ctx->max_work_group_size : 0;
+    }
+    if (compute_units) {
+        *compute_units = (ctx && ctx->available) ? ctx->compute_units : 0;
+    }
 }
 
 const char* webgpu_last_error(const webgpu_compute_ctx_t* ctx) {
@@ -1652,21 +1702,44 @@ webgpu_buffer_t* webgpu_buffer_create(webgpu_compute_ctx_t* ctx, size_t size) {
 webgpu_buffer_t* webgpu_buffer_create_from_data(webgpu_compute_ctx_t* ctx,
                                                 const void* data,
                                                 size_t size) {
-    if (!data || size == 0) {
+    if (!ctx || !ctx->available) {
+        set_error(ctx, "Invalid WebGPU context for buffer import");
+        return NULL;
+    }
+    if (size == 0) {
+        set_error(ctx, "Cannot import empty WebGPU buffer");
+        return NULL;
+    }
+    if (!data) {
+        set_error(ctx, "Invalid WebGPU buffer import source");
         return NULL;
     }
 
     webgpu_buffer_t* buffer = webgpu_buffer_create(ctx, size);
     if (!buffer) {
+        set_error(ctx, "Failed to allocate WebGPU import buffer");
         return NULL;
     }
 
-    memcpy(buffer->host_ptr, data, size);
+    if (webgpu_buffer_write(ctx, buffer, data, size) != 0) {
+        webgpu_buffer_free(buffer);
+        return NULL;
+    }
     return buffer;
 }
 
 void* webgpu_buffer_contents(webgpu_buffer_t* buffer) {
-    if (!buffer) return NULL;
+    if (!buffer) {
+        return NULL;
+    }
+    if (!buffer->ctx || !buffer->ctx->available) {
+        set_error(buffer->ctx, "WebGPU buffer has no live context");
+        return NULL;
+    }
+    if (!buffer->host_ptr || buffer->size == 0) {
+        set_error(buffer->ctx, "WebGPU buffer has no host storage");
+        return NULL;
+    }
     return buffer->host_ptr;
 }
 
@@ -1674,8 +1747,20 @@ int webgpu_buffer_write(webgpu_compute_ctx_t* ctx,
                         webgpu_buffer_t* buffer,
                         const void* src,
                         size_t size) {
-    if (!buffer || !src || !buffer->host_ptr || size > buffer->size) {
-        return set_error(ctx, "Invalid WebGPU buffer write");
+    if (!ctx || !ctx->available) {
+        return set_error(ctx, "Invalid WebGPU context for buffer write");
+    }
+    if (!buffer || buffer->ctx != ctx || !buffer->host_ptr) {
+        return set_error(ctx, "Invalid WebGPU buffer for write");
+    }
+    if (size > buffer->size) {
+        return set_error(ctx, "WebGPU buffer write exceeds allocation");
+    }
+    if (size == 0) {
+        return 0;
+    }
+    if (!src) {
+        return set_error(ctx, "Invalid WebGPU buffer write source");
     }
 
     memcpy(buffer->host_ptr, src, size);
@@ -1686,8 +1771,20 @@ int webgpu_buffer_read(webgpu_compute_ctx_t* ctx,
                        webgpu_buffer_t* buffer,
                        void* dst,
                        size_t size) {
-    if (!buffer || !dst || !buffer->host_ptr || size > buffer->size) {
-        return set_error(ctx, "Invalid WebGPU buffer read");
+    if (!ctx || !ctx->available) {
+        return set_error(ctx, "Invalid WebGPU context for buffer read");
+    }
+    if (!buffer || buffer->ctx != ctx || !buffer->host_ptr) {
+        return set_error(ctx, "Invalid WebGPU buffer for read");
+    }
+    if (size > buffer->size) {
+        return set_error(ctx, "WebGPU buffer read exceeds allocation");
+    }
+    if (size == 0) {
+        return 0;
+    }
+    if (!dst) {
+        return set_error(ctx, "Invalid WebGPU buffer read destination");
     }
 
     memcpy(dst, buffer->host_ptr, size);
@@ -1695,8 +1792,17 @@ int webgpu_buffer_read(webgpu_compute_ctx_t* ctx,
 }
 
 void webgpu_buffer_free(webgpu_buffer_t* buffer) {
-    if (!buffer) return;
+    if (!buffer) {
+        return;
+    }
+    webgpu_compute_ctx_t* owner = buffer->ctx;
+    if (owner && !owner->available) {
+        set_error(owner, "Freeing WebGPU buffer after context shutdown");
+    }
+    buffer->ctx = NULL;
+    buffer->size = 0;
     free(buffer->host_ptr);
+    buffer->host_ptr = NULL;
     free(buffer);
 }
 
@@ -2266,11 +2372,22 @@ int webgpu_sum_squared_magnitudes(webgpu_compute_ctx_t* ctx,
 }
 
 void webgpu_wait_completion(webgpu_compute_ctx_t* ctx) {
-    (void)ctx;
+    if (!ctx || !ctx->available) {
+        return;
+    }
+    // EM_ASYNC_JS dispatch returns only after queue completion; host fallback
+    // kernels are synchronous. Keep this as an explicit synchronization point.
+    ctx->last_exec_time = (ctx->last_exec_time >= 0.0) ? ctx->last_exec_time : 0.0;
 }
 
 double webgpu_get_last_execution_time(webgpu_compute_ctx_t* ctx) {
-    if (!ctx) return 0.0;
+    if (!ctx || !ctx->available) {
+        return 0.0;
+    }
+    if (!isfinite(ctx->last_exec_time) || ctx->last_exec_time < 0.0) {
+        set_error(ctx, "Invalid WebGPU execution timing state");
+        ctx->last_exec_time = 0.0;
+    }
     return ctx->last_exec_time;
 }
 
