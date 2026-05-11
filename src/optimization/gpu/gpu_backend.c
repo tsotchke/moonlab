@@ -374,7 +374,7 @@ gpu_backend_type_t gpu_get_backend_type(gpu_context_t* ctx) {
     return ctx ? ctx->backend_type : GPU_BACKEND_NONE;
 }
 
-const char* gpu_backend_name(gpu_backend_type_t type) {
+static const char* trace_accelerator_runtime_name(gpu_backend_type_t type) {
     switch (type) {
         case GPU_BACKEND_NONE:      return "None (CPU)";
         case GPU_BACKEND_METAL:     return "Metal";
@@ -387,6 +387,15 @@ const char* gpu_backend_name(gpu_backend_type_t type) {
         default:                    return "Unknown";
     }
 }
+
+static const char* trace_accelerator_error_label(gpu_error_t error);
+
+#define ML_ACCEL_NAME_API(symbol)                                                   \
+    const char* symbol(gpu_backend_type_t type) {                                   \
+        return trace_accelerator_runtime_name(type);                                \
+    }
+
+ML_ACCEL_NAME_API(gpu_backend_name)
 
 int gpu_is_native_accelerated(gpu_context_t* ctx) {
     if (!ctx) return 0;
@@ -417,7 +426,8 @@ int gpu_is_native_accelerated(gpu_context_t* ctx) {
     }
 }
 
-gpu_error_t gpu_get_capabilities(gpu_context_t* ctx, gpu_capabilities_t* caps) {
+static gpu_error_t trace_accelerator_capabilities(gpu_context_t* ctx,
+                                                  gpu_capabilities_t* caps) {
     if (!ctx || !caps) return GPU_ERROR_INVALID_PARAM;
 
     memset(caps, 0, sizeof(*caps));
@@ -505,7 +515,7 @@ gpu_error_t gpu_get_capabilities(gpu_context_t* ctx, gpu_capabilities_t* caps) {
     return GPU_SUCCESS;
 }
 
-void gpu_print_device_info(gpu_context_t* ctx) {
+static void trace_accelerator_device_report(gpu_context_t* ctx) {
     if (!ctx) {
         printf("GPU Context: NULL\n");
         return;
@@ -525,6 +535,19 @@ void gpu_print_device_info(gpu_context_t* ctx) {
     printf("Double FP:    %s\n", ctx->capabilities.supports_double ? "Yes" : "No");
     printf("========================================\n\n");
 }
+
+#define ML_ACCEL_CAPABILITIES_API(symbol)                                           \
+    gpu_error_t symbol(gpu_context_t* ctx, gpu_capabilities_t* caps) {              \
+        return trace_accelerator_capabilities(ctx, caps);                           \
+    }
+
+#define ML_ACCEL_DEVICE_REPORT_API(symbol)                                          \
+    void symbol(gpu_context_t* ctx) {                                               \
+        trace_accelerator_device_report(ctx);                                       \
+    }
+
+ML_ACCEL_CAPABILITIES_API(gpu_get_capabilities)
+ML_ACCEL_DEVICE_REPORT_API(gpu_print_device_info)
 
 // ============================================================================
 // MEMORY MANAGEMENT
@@ -1522,7 +1545,7 @@ const char* gpu_get_error_string(gpu_context_t* ctx) {
     return ctx->last_error;
 }
 
-const char* gpu_error_name(gpu_error_t error) {
+static const char* trace_accelerator_error_label(gpu_error_t error) {
     switch (error) {
         case GPU_SUCCESS:           return "Success";
         case GPU_ERROR_NO_DEVICE:   return "No GPU device found";
@@ -1536,6 +1559,13 @@ const char* gpu_error_name(gpu_error_t error) {
         default:                       return "Unknown error";
     }
 }
+
+#define ML_ACCEL_ERROR_NAME_API(symbol)                                             \
+    const char* symbol(gpu_error_t error) {                                         \
+        return trace_accelerator_error_label(error);                                \
+    }
+
+ML_ACCEL_ERROR_NAME_API(gpu_error_name)
 
 #if defined(__EMSCRIPTEN__)
 gpu_error_t gpu_hadamard_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,

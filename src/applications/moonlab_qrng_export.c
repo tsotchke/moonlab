@@ -97,8 +97,9 @@ int moonlab_qwz_chern(double m, size_t N, double* out_chern) {
     return (int)lround(c);
 }
 
-double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
-                                 uint32_t max_bond_dim, uint32_t num_sweeps) {
+static double trace_tfim_ground_energy_export(uint32_t num_sites, double g,
+                                              uint32_t max_bond_dim,
+                                              uint32_t num_sweeps) {
     if (num_sites < 2 || max_bond_dim < 1 || num_sweeps == 0) return DBL_MAX;
 
     dmrg_config_t cfg = dmrg_config_default();
@@ -127,10 +128,10 @@ double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
     return energy;
 }
 
-double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
-                                       double J, double Delta, double h,
-                                       uint32_t max_bond_dim,
-                                       uint32_t num_sweeps) {
+static double trace_heisenberg_ground_energy_export(uint32_t num_sites,
+                                                    double J, double Delta, double h,
+                                                    uint32_t max_bond_dim,
+                                                    uint32_t num_sweeps) {
     if (num_sites < 2 || max_bond_dim < 1 || num_sweeps == 0) return DBL_MAX;
 
     mpo_t* mpo = mpo_heisenberg_create(num_sites, J, Delta, h);
@@ -162,6 +163,23 @@ double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
     mpo_free(mpo);
     return energy;
 }
+
+#define ML_TFIM_ENERGY_EXPORT_API(symbol)                                           \
+    double symbol(uint32_t num_sites, double g,                                     \
+                  uint32_t max_bond_dim, uint32_t num_sweeps) {                    \
+        return trace_tfim_ground_energy_export(num_sites, g,                        \
+                                               max_bond_dim, num_sweeps);           \
+    }
+
+#define ML_HEISENBERG_ENERGY_EXPORT_API(symbol)                                     \
+    double symbol(uint32_t num_sites, double J, double Delta, double h,             \
+                  uint32_t max_bond_dim, uint32_t num_sweeps) {                    \
+        return trace_heisenberg_ground_energy_export(num_sites, J, Delta, h,        \
+                                                     max_bond_dim, num_sweeps);     \
+    }
+
+ML_TFIM_ENERGY_EXPORT_API(moonlab_dmrg_tfim_energy)
+ML_HEISENBERG_ENERGY_EXPORT_API(moonlab_dmrg_heisenberg_energy)
 
 /* ================================================================== */
 /*  Variational-D ABI wrappers (since 0.2.1).                          */

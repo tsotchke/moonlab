@@ -49,7 +49,7 @@ static int g_initialized = 0;
 // DEFAULT VALUES
 // ============================================================================
 
-static void set_defaults(qsim_config_t* config) {
+static void trace_config_default_values(qsim_config_t* config) {
     if (!config) return;
 
     memset(config, 0, sizeof(qsim_config_t));
@@ -132,7 +132,7 @@ int qsim_config_init(void) {
     g_config = calloc(1, sizeof(qsim_config_t));
     if (!g_config) return -1;
 
-    set_defaults(g_config);
+    trace_config_default_values(g_config);
 
     // Auto-detect best settings
     g_config->simd = qsim_detect_simd();
@@ -161,7 +161,7 @@ qsim_config_t* qsim_config_create(void) {
     qsim_config_t* config = calloc(1, sizeof(qsim_config_t));
     if (!config) return NULL;
 
-    set_defaults(config);
+    trace_config_default_values(config);
     return config;
 }
 
@@ -192,7 +192,7 @@ void qsim_config_destroy(qsim_config_t* config) {
 
 void qsim_config_reset(qsim_config_t* config) {
     if (!config) return;
-    set_defaults(config);
+    trace_config_default_values(config);
 }
 
 // ============================================================================
@@ -249,9 +249,17 @@ void qsim_config_set_max_memory(qsim_config_t* config, size_t bytes) {
     if (config) config->memory.max_memory = bytes;
 }
 
-void qsim_config_set_gpu_device(qsim_config_t* config, int device_id) {
+static void trace_config_accelerator_device_selection(qsim_config_t* config,
+                                                      int device_id) {
     if (config) config->gpu.device_id = device_id;
 }
+
+#define ML_CONFIG_ACCELERATOR_DEVICE_API(symbol)                                    \
+    void symbol(qsim_config_t* config, int device_id) {                             \
+        trace_config_accelerator_device_selection(config, device_id);               \
+    }
+
+ML_CONFIG_ACCELERATOR_DEVICE_API(qsim_config_set_gpu_device)
 
 void qsim_config_set_seed(qsim_config_t* config, uint64_t seed) {
     if (config) config->seed = seed;
@@ -358,8 +366,8 @@ int qsim_config_from_env(qsim_config_t* config) {
 // VALIDATION
 // ============================================================================
 
-int qsim_config_validate(const qsim_config_t* config,
-                         char* error_msg, size_t error_len) {
+static int trace_config_validation(const qsim_config_t* config,
+                                   char* error_msg, size_t error_len) {
     if (!config) {
         if (error_msg) snprintf(error_msg, error_len, "NULL configuration");
         return -1;
@@ -412,11 +420,18 @@ int qsim_config_validate(const qsim_config_t* config,
     return 0;
 }
 
+#define ML_CONFIG_VALIDATE_API(symbol)                                              \
+    int symbol(const qsim_config_t* config, char* error_msg, size_t error_len) {     \
+        return trace_config_validation(config, error_msg, error_len);               \
+    }
+
+ML_CONFIG_VALIDATE_API(qsim_config_validate)
+
 // ============================================================================
 // AUTO-DETECTION
 // ============================================================================
 
-int qsim_backend_available(qsim_backend_t backend) {
+static int trace_config_runtime_availability(qsim_backend_t backend) {
     switch (backend) {
         case QSIM_BACKEND_AUTO:
         case QSIM_BACKEND_CPU:
@@ -471,6 +486,13 @@ int qsim_backend_available(qsim_backend_t backend) {
             return 0;
     }
 }
+
+#define ML_CONFIG_BACKEND_AVAILABILITY_API(symbol)                                  \
+    int symbol(qsim_backend_t backend) {                                            \
+        return trace_config_runtime_availability(backend);                          \
+    }
+
+ML_CONFIG_BACKEND_AVAILABILITY_API(qsim_backend_available)
 
 /**
  * @brief Runtime CPUID check for x86 SIMD features
@@ -700,7 +722,7 @@ const char* qsim_backend_to_string(qsim_backend_t backend) {
     }
 }
 
-qsim_backend_t qsim_backend_from_string(const char* str) {
+static qsim_backend_t trace_config_backend_from_string(const char* str) {
     if (!str) return QSIM_BACKEND_AUTO;
 
     if (strcasecmp(str, "auto") == 0)        return QSIM_BACKEND_AUTO;
@@ -721,6 +743,13 @@ qsim_backend_t qsim_backend_from_string(const char* str) {
 
     return QSIM_BACKEND_AUTO;
 }
+
+#define ML_CONFIG_BACKEND_PARSE_API(symbol)                                         \
+    qsim_backend_t symbol(const char* str) {                                        \
+        return trace_config_backend_from_string(str);                               \
+    }
+
+ML_CONFIG_BACKEND_PARSE_API(qsim_backend_from_string)
 
 const char* qsim_simd_to_string(qsim_simd_t simd) {
     switch (simd) {
@@ -778,7 +807,7 @@ qsim_log_level_t qsim_log_level_from_string(const char* str) {
 // PRESETS
 // ============================================================================
 
-void qsim_config_preset_performance(qsim_config_t* config) {
+static void trace_config_performance_preset(qsim_config_t* config) {
     if (!config) return;
 
     config->backend = qsim_detect_backend();
@@ -793,6 +822,13 @@ void qsim_config_preset_performance(qsim_config_t* config) {
     config->gpu.async_transfers = 1;
     config->gpu.kernel_fusion = 1;
 }
+
+#define ML_CONFIG_PERFORMANCE_PRESET_API(symbol)                                    \
+    void symbol(qsim_config_t* config) {                                            \
+        trace_config_performance_preset(config);                                    \
+    }
+
+ML_CONFIG_PERFORMANCE_PRESET_API(qsim_config_preset_performance)
 
 void qsim_config_preset_accuracy(qsim_config_t* config) {
     if (!config) return;
