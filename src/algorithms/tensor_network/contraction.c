@@ -41,6 +41,7 @@ static contract_backend_trace_t g_contract_last_backend_trace = {
     .parallel_requested = true,
     .scalar_kernel = CONTRACT_DEFAULT_SCALAR_KERNEL,
     .compression_requested = false,
+    .fallback_intentional = CONTRACT_DEFAULT_SCALAR_KERNEL,
     .num_threads = 0
 };
 
@@ -73,6 +74,7 @@ contract_backend_trace_t contract_backend_probe(const contract_config_t *config,
         .parallel_requested = config ? config->parallel : true,
         .scalar_kernel = contract_scalar_kernel_selected(config),
         .compression_requested = config ? config->use_compression : false,
+        .fallback_intentional = contract_scalar_kernel_selected(config),
         .num_threads = config ? config->num_threads : 0
     };
     return trace;

@@ -60,7 +60,8 @@ static dmrg_backend_trace_t g_dmrg_last_backend_trace = {
     .backend_name = DMRG_BACKEND_NAME,
     .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
     .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
-    .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL
+    .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL,
+    .fallback_intentional = DMRG_BACKEND_SCALAR_KERNEL
 };
 
 dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
@@ -71,7 +72,8 @@ dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
         .backend_name = DMRG_BACKEND_NAME,
         .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
         .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
-        .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL
+        .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL,
+        .fallback_intentional = DMRG_BACKEND_SCALAR_KERNEL
     };
     return trace;
 }

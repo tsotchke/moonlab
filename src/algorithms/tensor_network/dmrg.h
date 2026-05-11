@@ -163,6 +163,7 @@ typedef struct {
     bool blas_available;          /**< BLAS-backed environment kernels are compiled in */
     bool accelerate_available;    /**< Apple Accelerate is the BLAS provider */
     bool scalar_kernel;           /**< Portable scalar C kernels are the active path */
+    bool fallback_intentional;    /**< Scalar fallback is the deliberate portable path */
 } dmrg_backend_trace_t;
 
 /**

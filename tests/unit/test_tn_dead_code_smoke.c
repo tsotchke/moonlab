@@ -57,6 +57,8 @@ static void check_dmrg_trace_consistency(const dmrg_backend_trace_t *trace,
           "DMRG BLAS/scalar flags must identify one active kernel family");
     CHECK(!trace->accelerate_available || trace->blas_available,
           "DMRG Accelerate implies BLAS availability");
+    CHECK(!trace->scalar_kernel || trace->fallback_intentional,
+          "DMRG scalar fallback must be explicitly intentional");
 }
 
 static void check_contract_trace_consistency(const contract_backend_trace_t *trace,
@@ -70,6 +72,8 @@ static void check_contract_trace_consistency(const contract_backend_trace_t *tra
     CHECK(trace->backend_name != NULL, "contraction backend must be named");
     CHECK(trace->openmp_available || trace->scalar_kernel,
           "contraction scalar kernel must be active when OpenMP is unavailable");
+    CHECK(!trace->scalar_kernel || trace->fallback_intentional,
+          "contraction scalar fallback must be explicitly intentional");
 }
 
 /* ------------------------------------------------------------------ */

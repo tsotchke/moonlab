@@ -160,6 +160,7 @@ typedef struct {
     bool parallel_requested;         /**< Caller requested parallel execution */
     bool scalar_kernel;              /**< Portable scalar C path is active */
     bool compression_requested;      /**< Caller requested SVD compression */
+    bool fallback_intentional;       /**< Scalar/non-native path was selected deliberately */
     uint32_t num_threads;            /**< Requested thread count (0 = auto) */
 } contract_backend_trace_t;
 
