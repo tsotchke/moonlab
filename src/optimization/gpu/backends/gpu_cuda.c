@@ -84,8 +84,8 @@ struct cuda_buffer {
 // ============================================================================
 
 // Hadamard gate kernel: |0⟩ → (|0⟩+|1⟩)/√2, |1⟩ → (|0⟩-|1⟩)/√2
-__global__ void kernel_hadamard(cuDoubleComplex* amplitudes,
-                                 uint32_t qubit_idx, uint64_t state_dim) {
+static __global__ void kernel_hadamard(cuDoubleComplex* amplitudes,
+                                       uint32_t qubit_idx, uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t stride = (uint64_t)1 << qubit_idx;
 
@@ -110,8 +110,8 @@ __global__ void kernel_hadamard(cuDoubleComplex* amplitudes,
 }
 
 // Pauli-X gate kernel: swap |0⟩ ↔ |1⟩
-__global__ void kernel_pauli_x(cuDoubleComplex* amplitudes,
-                                uint32_t qubit_idx, uint64_t state_dim) {
+static __global__ void kernel_pauli_x(cuDoubleComplex* amplitudes,
+                                      uint32_t qubit_idx, uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t stride = (uint64_t)1 << qubit_idx;
 
@@ -126,8 +126,8 @@ __global__ void kernel_pauli_x(cuDoubleComplex* amplitudes,
 }
 
 // Pauli-Y gate kernel: |0⟩ → i|1⟩, |1⟩ → -i|0⟩
-__global__ void kernel_pauli_y(cuDoubleComplex* amplitudes,
-                                uint32_t qubit_idx, uint64_t state_dim) {
+static __global__ void kernel_pauli_y(cuDoubleComplex* amplitudes,
+                                      uint32_t qubit_idx, uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t stride = (uint64_t)1 << qubit_idx;
 
@@ -145,8 +145,8 @@ __global__ void kernel_pauli_y(cuDoubleComplex* amplitudes,
 }
 
 // Pauli-Z gate kernel: |0⟩ → |0⟩, |1⟩ → -|1⟩
-__global__ void kernel_pauli_z(cuDoubleComplex* amplitudes,
-                                uint32_t qubit_idx, uint64_t state_dim) {
+static __global__ void kernel_pauli_z(cuDoubleComplex* amplitudes,
+                                      uint32_t qubit_idx, uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t stride = (uint64_t)1 << qubit_idx;
 
@@ -162,8 +162,9 @@ __global__ void kernel_pauli_z(cuDoubleComplex* amplitudes,
 }
 
 // Phase gate kernel: |0⟩ → |0⟩, |1⟩ → e^(iθ)|1⟩
-__global__ void kernel_phase_gate(cuDoubleComplex* amplitudes,
-                                   uint32_t qubit_idx, double phase, uint64_t state_dim) {
+static __global__ void kernel_phase_gate(cuDoubleComplex* amplitudes,
+                                         uint32_t qubit_idx, double phase,
+                                         uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t stride = (uint64_t)1 << qubit_idx;
 
@@ -182,8 +183,9 @@ __global__ void kernel_phase_gate(cuDoubleComplex* amplitudes,
 }
 
 // CNOT gate kernel
-__global__ void kernel_cnot(cuDoubleComplex* amplitudes,
-                            uint32_t control, uint32_t target, uint64_t state_dim) {
+static __global__ void kernel_cnot(cuDoubleComplex* amplitudes,
+                                   uint32_t control, uint32_t target,
+                                   uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t target_stride = (uint64_t)1 << target;
     uint64_t control_mask = (uint64_t)1 << control;
@@ -203,7 +205,7 @@ __global__ void kernel_cnot(cuDoubleComplex* amplitudes,
 }
 
 // Oracle kernel: flip phase of target state
-__global__ void kernel_oracle_single(cuDoubleComplex* amplitudes, uint64_t target) {
+static __global__ void kernel_oracle_single(cuDoubleComplex* amplitudes, uint64_t target) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx == target) {
         amplitudes[idx] = make_cuDoubleComplex(
@@ -214,8 +216,9 @@ __global__ void kernel_oracle_single(cuDoubleComplex* amplitudes, uint64_t targe
 }
 
 // Sparse oracle kernel: flip phase of multiple targets
-__global__ void kernel_sparse_oracle(cuDoubleComplex* amplitudes,
-                                      const uint64_t* targets, uint32_t num_targets) {
+static __global__ void kernel_sparse_oracle(cuDoubleComplex* amplitudes,
+                                            const uint64_t* targets,
+                                            uint32_t num_targets) {
     uint64_t target_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (target_idx >= num_targets) return;
 
@@ -228,9 +231,10 @@ __global__ void kernel_sparse_oracle(cuDoubleComplex* amplitudes,
 
 // Diffusion operator: 2|s⟩⟨s| - I
 // First pass: compute mean
-__global__ void kernel_diffusion_mean(const cuDoubleComplex* amplitudes,
-                                       double* partial_sums_re, double* partial_sums_im,
-                                       uint64_t state_dim) {
+static __global__ void kernel_diffusion_mean(const cuDoubleComplex* amplitudes,
+                                             double* partial_sums_re,
+                                             double* partial_sums_im,
+                                             uint64_t state_dim) {
     extern __shared__ double sdata[];
     double* sdata_re = sdata;
     double* sdata_im = sdata + blockDim.x;
@@ -265,8 +269,9 @@ __global__ void kernel_diffusion_mean(const cuDoubleComplex* amplitudes,
 }
 
 // Second pass: apply diffusion
-__global__ void kernel_diffusion_apply(cuDoubleComplex* amplitudes,
-                                        double mean_re, double mean_im, uint64_t state_dim) {
+static __global__ void kernel_diffusion_apply(cuDoubleComplex* amplitudes,
+                                              double mean_re, double mean_im,
+                                              uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= state_dim) return;
 
@@ -278,8 +283,9 @@ __global__ void kernel_diffusion_apply(cuDoubleComplex* amplitudes,
 }
 
 // Compute probabilities kernel
-__global__ void kernel_compute_probabilities(const cuDoubleComplex* amplitudes,
-                                              double* probabilities, uint64_t state_dim) {
+static __global__ void kernel_compute_probabilities(const cuDoubleComplex* amplitudes,
+                                                    double* probabilities,
+                                                    uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= state_dim) return;
 
@@ -288,7 +294,8 @@ __global__ void kernel_compute_probabilities(const cuDoubleComplex* amplitudes,
 }
 
 // Normalize state kernel
-__global__ void kernel_normalize(cuDoubleComplex* amplitudes, double norm, uint64_t state_dim) {
+static __global__ void kernel_normalize(cuDoubleComplex* amplitudes, double norm,
+                                        uint64_t state_dim) {
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= state_dim) return;
 
@@ -301,8 +308,9 @@ __global__ void kernel_normalize(cuDoubleComplex* amplitudes, double norm, uint6
 }
 
 // Sum squared magnitudes kernel (reduction)
-__global__ void kernel_sum_squared_magnitudes(const cuDoubleComplex* amplitudes,
-                                               double* partial_sums, uint64_t state_dim) {
+static __global__ void kernel_sum_squared_magnitudes(const cuDoubleComplex* amplitudes,
+                                                     double* partial_sums,
+                                                     uint64_t state_dim) {
     extern __shared__ double sdata[];
     uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t tid = threadIdx.x;
