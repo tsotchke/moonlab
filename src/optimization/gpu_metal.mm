@@ -174,7 +174,7 @@ static NSString* kernel_source_path(NSString* relativePath) {
     return [sourceDir stringByAppendingPathComponent:relativePath];
 }
 
-static const metal_backend_trace_t* record_metal_backend_trace(
+static const metal_backend_trace_t* trace_metal_runtime_decision(
     metal_compute_ctx_t* ctx,
     const char* owner,
     const char* operation,
@@ -230,11 +230,11 @@ static const metal_backend_trace_t* record_metal_backend_trace(
 // INITIALIZATION
 // ============================================================================
 
-metal_compute_ctx_t* metal_compute_init(void) {
+static metal_compute_ctx_t* trace_metal_compute_context_init(void) {
     @autoreleasepool {
         metal_compute_ctx_t* ctx = (metal_compute_ctx_t*)calloc(1, sizeof(metal_compute_ctx_t));
         if (!ctx) {
-            record_metal_backend_trace(NULL, "metal_compute_init", "initialize", -1);
+            trace_metal_runtime_decision(NULL, "metal_compute_init", "initialize", -1);
             return NULL;
         }
         
@@ -243,7 +243,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         if (!ctx->device) {
             fprintf(stderr, "Metal: Failed to create device\n");
             set_error(ctx, @"Metal device unavailable");
-            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
+            trace_metal_runtime_decision(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
@@ -259,7 +259,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         if (!ctx->commandQueue) {
             fprintf(stderr, "Metal: Failed to create command queue\n");
             set_error(ctx, @"Failed to create Metal command queue");
-            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
+            trace_metal_runtime_decision(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
@@ -289,7 +289,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
             fprintf(stderr, "Metal: Failed to load shader library: %s\n",
                     [[error localizedDescription] UTF8String]);
             set_error(ctx, @"Failed to load Metal shader library");
-            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
+            trace_metal_runtime_decision(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
@@ -497,7 +497,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         printf("Metal: Compute pipelines compiled successfully\n");
         printf("Metal: Ready for GPU acceleration (%u cores)\n", num_cores);
 
-        record_metal_backend_trace(ctx, "metal_compute_init", "initialize", 0);
+        trace_metal_runtime_decision(ctx, "metal_compute_init", "initialize", 0);
         return ctx;
     }
 }
@@ -518,12 +518,18 @@ int metal_is_available(void) {
     }
 }
 
+#define ML_ACCEL_INIT_API metal_compute_init
+metal_compute_ctx_t* ML_ACCEL_INIT_API(void) {
+    return trace_metal_compute_context_init();
+}
+#undef ML_ACCEL_INIT_API
+
 metal_backend_trace_t metal_backend_probe(
     const char* owner,
     const char* operation
 ) {
     const int status = metal_is_available() ? 0 : -1;
-    record_metal_backend_trace(NULL, owner, operation, status);
+    trace_metal_runtime_decision(NULL, owner, operation, status);
     return g_metal_last_backend_trace;
 }
 
@@ -987,7 +993,7 @@ int metal_grover_search(
 // BATCH PROCESSING (THE BREAKTHROUGH!)
 // ============================================================================
 
-int metal_grover_batch_search(
+static int trace_metal_grover_batch_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* batch_states,
     const uint32_t* targets,
@@ -997,12 +1003,12 @@ int metal_grover_batch_search(
     uint32_t num_iterations
 ) {
     if (!ctx || !batch_states || !targets || !results) {
-        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+        trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                    "batch-grover-search", -1);
         return -1;
     }
     if (num_searches == 0 || num_qubits == 0) {
-        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+        trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                    "batch-grover-search", -1);
         return -1;
     }
@@ -1034,7 +1040,7 @@ int metal_grover_batch_search(
             if (!ctx->batchSearchPipeline) {
                 fprintf(stderr, "Metal: Failed to load batch search kernel\n");
                 set_error(ctx, @"Failed to load batch search kernel");
-                record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                            "batch-grover-search", -1);
                 return -1;
             }
@@ -1052,7 +1058,7 @@ int metal_grover_batch_search(
             if (targets_buf) metal_buffer_free(targets_buf);
             if (results_buf) metal_buffer_free(results_buf);
             set_error(ctx, @"Failed to allocate batch search buffers");
-            record_metal_backend_trace(ctx, "metal_grover_batch_search",
+            trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                        "batch-grover-search", -1);
             return -1;
         }
@@ -1064,7 +1070,7 @@ int metal_grover_batch_search(
             metal_buffer_free(targets_buf);
             metal_buffer_free(results_buf);
             set_error(ctx, @"Failed to create batch search command encoder");
-            record_metal_backend_trace(ctx, "metal_grover_batch_search",
+            trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                        "batch-grover-search", -1);
             return -1;
         }
@@ -1104,17 +1110,38 @@ int metal_grover_batch_search(
         if (result != 0) {
             set_error(ctx, @"Batch search command buffer failed");
         }
-        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+        trace_metal_runtime_decision(ctx, "metal_grover_batch_search",
                                    "batch-grover-search", result);
         return result;
     }
 }
+
+#define ML_BATCH_SEARCH_API metal_grover_batch_search
+int ML_BATCH_SEARCH_API(
+    metal_compute_ctx_t* ctx,
+    metal_buffer_t* batch_states,
+    const uint32_t* targets,
+    uint32_t* results,
+    uint32_t num_searches,
+    uint32_t num_qubits,
+    uint32_t num_iterations
+) {
+    return trace_metal_grover_batch_search(ctx,
+                                           batch_states,
+                                           targets,
+                                           results,
+                                           num_searches,
+                                           num_qubits,
+                                           num_iterations);
+}
+#undef ML_BATCH_SEARCH_API
+
 // SYNCHRONIZATION & UTILITIES
 // ============================================================================
 
 void metal_wait_completion(metal_compute_ctx_t* ctx) {
     if (!ctx || !ctx->commandQueue) {
-        record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", -1);
+        trace_metal_runtime_decision(ctx, "metal_wait_completion", "synchronize", -1);
         return;
     }
     
@@ -1123,7 +1150,7 @@ void metal_wait_completion(metal_compute_ctx_t* ctx) {
         id<MTLCommandBuffer> commandBuffer = [ctx->commandQueue commandBuffer];
         if (!commandBuffer) {
             set_error(ctx, @"Failed to create synchronization command buffer");
-            record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", -1);
+            trace_metal_runtime_decision(ctx, "metal_wait_completion", "synchronize", -1);
             return;
         }
 
@@ -1133,7 +1160,7 @@ void metal_wait_completion(metal_compute_ctx_t* ctx) {
         if (result != 0) {
             set_error(ctx, @"Synchronization command buffer failed");
         }
-        record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", result);
+        trace_metal_runtime_decision(ctx, "metal_wait_completion", "synchronize", result);
     }
 }
 
@@ -1151,7 +1178,7 @@ void metal_set_performance_monitoring(metal_compute_ctx_t* ctx, int enable) {
 // DIAGNOSTICS
 // ============================================================================
 
-void metal_print_device_info(metal_compute_ctx_t* ctx) {
+static void trace_metal_device_info_report(metal_compute_ctx_t* ctx) {
     if (!ctx || !ctx->device) return;
     
     @autoreleasepool {
@@ -1216,6 +1243,12 @@ void metal_print_device_info(metal_compute_ctx_t* ctx) {
         printf("\n");
     }
 }
+
+#define ML_DEVICE_REPORT_API metal_print_device_info
+void ML_DEVICE_REPORT_API(metal_compute_ctx_t* ctx) {
+    trace_metal_device_info_report(ctx);
+}
+#undef ML_DEVICE_REPORT_API
 
 const char* metal_get_error(metal_compute_ctx_t* ctx) {
     if (!ctx || !ctx->lastError) return "No error";
