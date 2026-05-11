@@ -125,6 +125,11 @@ impl CircuitDiagram {
         self
     }
 
+    pub fn num_qubits(mut self, num_qubits: usize) -> Self {
+        self.num_qubits = num_qubits;
+        self
+    }
+
     /// Add gates for common algorithms.
     pub fn bell_circuit() -> Self {
         Self::new(2)

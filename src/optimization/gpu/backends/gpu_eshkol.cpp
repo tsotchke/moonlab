@@ -50,10 +50,30 @@ struct EshkolHostBuf {
         wrapped = (rc == 0);
         return rc;
     }
-    ~EshkolHostBuf() {
-        if (wrapped) eshkol_gpu_free(&buf);
-    }
 };
+
+static void trace_eshkol_host_buf_free(EshkolHostBuf& host_buf) {
+    if (host_buf.wrapped) {
+        eshkol_gpu_free(&host_buf.buf);
+        host_buf.wrapped = false;
+    }
+}
+
+static void trace_eshkol_host_buf_free_all(EshkolHostBuf* buffers,
+                                           size_t count) {
+    if (!buffers) return;
+    for (size_t i = 0; i < count; i++) {
+        trace_eshkol_host_buf_free(buffers[i]);
+    }
+}
+
+static void trace_eshkol_scratch_free(double* Ar, double* Ai,
+                                      double* Br, double* Bi,
+                                      double* Cr, double* Ci,
+                                      double* tmp) {
+    std::free(Ar); std::free(Ai); std::free(Br); std::free(Bi);
+    std::free(Cr); std::free(Ci); std::free(tmp);
+}
 
 /* Split interleaved complex (re, im) into separate real/imag
  * contiguous arrays. Honours leading dimension ld (elements not
@@ -189,24 +209,24 @@ moonlab_eshkol_status_t moonlab_eshkol_zgemm(
     double* Ci  = (double*)std::calloc(M * N, sizeof(double));
     double* tmp = (double*)std::malloc(M * N * sizeof(double));
     if (!Ar || !Ai || !Br || !Bi || !Cr || !Ci || !tmp) {
-        std::free(Ar); std::free(Ai); std::free(Br); std::free(Bi);
-        std::free(Cr); std::free(Ci); std::free(tmp);
+        trace_eshkol_scratch_free(Ar, Ai, Br, Bi, Cr, Ci, tmp);
         return MOONLAB_ESHKOL_OOM;
     }
 
     split_complex(A, M, K, lda, Ar, Ai);
     split_complex(B, K, N, ldb, Br, Bi);
 
-    EshkolHostBuf bAr, bAi, bBr, bBi, bCr, bCi, bTmp;
-    if (bAr.wrap(Ar,  M * K * sizeof(double)) != 0 ||
-        bAi.wrap(Ai,  M * K * sizeof(double)) != 0 ||
-        bBr.wrap(Br,  K * N * sizeof(double)) != 0 ||
-        bBi.wrap(Bi,  K * N * sizeof(double)) != 0 ||
-        bCr.wrap(Cr,  M * N * sizeof(double)) != 0 ||
-        bCi.wrap(Ci,  M * N * sizeof(double)) != 0 ||
-        bTmp.wrap(tmp, M * N * sizeof(double)) != 0) {
-        std::free(Ar); std::free(Ai); std::free(Br); std::free(Bi);
-        std::free(Cr); std::free(Ci); std::free(tmp);
+    enum { BUF_AR, BUF_AI, BUF_BR, BUF_BI, BUF_CR, BUF_CI, BUF_TMP, BUF_COUNT };
+    EshkolHostBuf buffers[BUF_COUNT];
+    if (buffers[BUF_AR].wrap(Ar,  M * K * sizeof(double)) != 0 ||
+        buffers[BUF_AI].wrap(Ai,  M * K * sizeof(double)) != 0 ||
+        buffers[BUF_BR].wrap(Br,  K * N * sizeof(double)) != 0 ||
+        buffers[BUF_BI].wrap(Bi,  K * N * sizeof(double)) != 0 ||
+        buffers[BUF_CR].wrap(Cr,  M * N * sizeof(double)) != 0 ||
+        buffers[BUF_CI].wrap(Ci,  M * N * sizeof(double)) != 0 ||
+        buffers[BUF_TMP].wrap(tmp, M * N * sizeof(double)) != 0) {
+        trace_eshkol_host_buf_free_all(buffers, BUF_COUNT);
+        trace_eshkol_scratch_free(Ar, Ai, Br, Bi, Cr, Ci, tmp);
         return MOONLAB_ESHKOL_DISPATCH_FAILED;
     }
 
@@ -217,21 +237,29 @@ moonlab_eshkol_status_t moonlab_eshkol_zgemm(
      * the subtraction / addition on CPU after each pair. Future:
      * fused 2x2 block form once Eshkol exposes accumulation in a
      * single dispatch. */
-    if (eshkol_gpu_matmul_f64(&bAr.buf, &bBr.buf, &bCr.buf,  M, K, N) != 0 ||
-        eshkol_gpu_matmul_f64(&bAi.buf, &bBi.buf, &bTmp.buf, M, K, N) != 0) {
+    if (eshkol_gpu_matmul_f64(&buffers[BUF_AR].buf, &buffers[BUF_BR].buf,
+                              &buffers[BUF_CR].buf,  M, K, N) != 0 ||
+        eshkol_gpu_matmul_f64(&buffers[BUF_AI].buf, &buffers[BUF_BI].buf,
+                              &buffers[BUF_TMP].buf, M, K, N) != 0) {
+        trace_eshkol_host_buf_free_all(buffers, BUF_COUNT);
+        trace_eshkol_scratch_free(Ar, Ai, Br, Bi, Cr, Ci, tmp);
         return MOONLAB_ESHKOL_DISPATCH_FAILED;
     }
     for (size_t i = 0; i < M * N; i++) Cr[i] -= tmp[i];
-    if (eshkol_gpu_matmul_f64(&bAr.buf, &bBi.buf, &bCi.buf,  M, K, N) != 0 ||
-        eshkol_gpu_matmul_f64(&bAi.buf, &bBr.buf, &bTmp.buf, M, K, N) != 0) {
+    if (eshkol_gpu_matmul_f64(&buffers[BUF_AR].buf, &buffers[BUF_BI].buf,
+                              &buffers[BUF_CI].buf,  M, K, N) != 0 ||
+        eshkol_gpu_matmul_f64(&buffers[BUF_AI].buf, &buffers[BUF_BR].buf,
+                              &buffers[BUF_TMP].buf, M, K, N) != 0) {
+        trace_eshkol_host_buf_free_all(buffers, BUF_COUNT);
+        trace_eshkol_scratch_free(Ar, Ai, Br, Bi, Cr, Ci, tmp);
         return MOONLAB_ESHKOL_DISPATCH_FAILED;
     }
     for (size_t i = 0; i < M * N; i++) Ci[i] += tmp[i];
 
     merge_complex(Cr, Ci, M, N, ldc, alpha, beta, C);
 
-    std::free(Ar); std::free(Ai); std::free(Br); std::free(Bi);
-    std::free(Cr); std::free(Ci); std::free(tmp);
+    trace_eshkol_host_buf_free_all(buffers, BUF_COUNT);
+    trace_eshkol_scratch_free(Ar, Ai, Br, Bi, Cr, Ci, tmp);
     return MOONLAB_ESHKOL_OK;
 }
 

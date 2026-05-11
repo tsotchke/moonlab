@@ -748,6 +748,10 @@ fn feynman_labeled_external_and_standard_qed_build() {
     assert!(bhabha.num_vertices() > 0);
     assert!(!bhabha.render_ascii().is_empty());
 
+    let compton = moonlab::feynman::standard::qed::compton().unwrap();
+    assert!(compton.num_vertices() > 0);
+    assert!(!compton.render_ascii().is_empty());
+
     let moller = moonlab::feynman::standard::qed::moller().unwrap();
     assert!(moller.num_vertices() > 0);
     assert!(!moller.render_ascii().is_empty());

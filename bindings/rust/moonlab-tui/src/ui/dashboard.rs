@@ -981,9 +981,9 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
 
     match app.current_algorithm() {
         Algorithm::Bell => {
-            CircuitDiagram::new(2.max(n))
+            CircuitDiagram::bell_circuit()
+                .num_qubits(2.max(n))
                 .title("Bell State")
-                .gates(vec![Gate::H(0), Gate::CNOT(0, 1)])
         }
         Algorithm::GHZ => {
             CircuitDiagram::ghz_circuit(n).title("GHZ State")

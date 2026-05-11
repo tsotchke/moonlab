@@ -47,7 +47,7 @@ inline complex_t csub(complex_t a, complex_t b) {
 /**
  * Complex magnitude squared: |a+bi|² = a² + b²
  */
-inline float cabs2(complex_t z) {
+inline float trace_quantum_kernel_cabs2(complex_t z) {
     return dot(z, z);  // SIMD-optimized on all M-series
 }
 
@@ -325,7 +325,7 @@ kernel void compute_probabilities(
     if (tid >= state_dim) return;
     
     complex_t amp = amplitudes[tid];
-    probabilities[tid] = cabs2(amp);
+    probabilities[tid] = trace_quantum_kernel_cabs2(amp);
 }
 
 // ============================================================================
