@@ -799,3 +799,17 @@ def train_qsvm(
         'num_qubits': num_qubits,
         'feature_map': feature_map
     }
+
+
+__all__ = [
+    'QuantumFeatureMap',
+    'AngleEncoding',
+    'AmplitudeEncoding',
+    'IQPEncoding',
+    'QuantumKernel',
+    'QSVM',
+    'VariationalCircuit',
+    'QuantumPCA',
+    'quantum_kernel_matrix',
+    'train_qsvm',
+]
