@@ -16,6 +16,9 @@ const assertMoonlabModuleProbeSurface = (path) => {
   assert(source.includes('MoonlabModule.lastBackendRuntimeProbe'), `${path}: missing last probe`);
   assert(source.includes('MoonlabModule.getLastBackendRuntimeProbe'), `${path}: missing probe getter`);
   assert(source.includes('MoonlabModule.probeBackendRuntime'), `${path}: missing runtime probe`);
+  assert(source.includes('backendName'), `${path}: missing backendName field`);
+  assert(source.includes('backend_name'), `${path}: missing backend_name field`);
+  assert(source.includes('backendAvailable'), `${path}: missing backend availability field`);
   assert(source.includes('fallbackIntentional'), `${path}: missing fallback field`);
 };
 

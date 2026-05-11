@@ -62,15 +62,26 @@ def moonlab_torch_backend_probe() -> Dict[str, Any]:
     else:
         torch_device = "cpu"
 
+    fallback_intentional = torch_device != "cpu" or _omp_duplicate_runtime_allowed
+    if torch_device != "cpu":
+        fallback_reason = f"torch-{torch_device}-tensor-native-quantum-on-cpu"
+    elif _omp_duplicate_runtime_allowed:
+        fallback_reason = "macos-openmp-runtime-compatibility"
+    else:
+        fallback_reason = "native-ctypes"
+
     return {
         "quantum_backend": "moonlab-c-ctypes",
+        "backend_name": "moonlab-c-ctypes",
         "library_path": str(_lib_path),
         "available": len(missing) == 0,
+        "backend_available": len(missing) == 0,
         "missing_symbols": missing,
         "torch_device": torch_device,
         "native_quantum_on_cpu": True,
         "omp_duplicate_runtime_allowed": _omp_duplicate_runtime_allowed,
-        "fallback_intentional": torch_device != "cpu" or _omp_duplicate_runtime_allowed,
+        "fallback_intentional": fallback_intentional,
+        "fallback_reason": fallback_reason,
     }
 
 

@@ -2981,6 +2981,9 @@ for (const prop of Object.keys(Module)) {
 MoonlabModule.lastBackendRuntimeProbe = {
   owner: 'MoonlabModule',
   operation: 'factory-definition',
+  backendName: 'wasm-factory',
+  backend_name: 'wasm-factory',
+  backendAvailable: false,
   moduleReady: false,
   missingUnifiedGpuApi: [],
   fallbackIntentional: false,
@@ -2996,6 +2999,20 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
   if (instance && instance.ready) {
     await instance.ready;
   }
+
+  const backendNameForType = (backendType) => {
+    switch (backendType) {
+      case 0: return 'none';
+      case 1: return 'metal';
+      case 2: return 'webgpu';
+      case 3: return 'opencl';
+      case 4: return 'vulkan';
+      case 5: return 'cuda';
+      case 6: return 'cuquantum';
+      case 7: return 'auto';
+      default: return 'unknown';
+    }
+  };
 
   const requiredUnifiedGpuApi = [
     '_gpu_compute_init',
@@ -3023,6 +3040,8 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
         preferredBackendType,
         ctxCreated: false,
         backendType: 0,
+        backendName: 'none',
+        backend_name: 'none',
         nativeAccelerated: false,
         fallbackIntentional: true,
         reason: 'unified-gpu-api-unavailable',
@@ -3035,6 +3054,8 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
         preferredBackendType,
         ctxCreated: false,
         backendType: 0,
+        backendName: 'none',
+        backend_name: 'none',
         nativeAccelerated: false,
         fallbackIntentional: true,
         reason: 'gpu-context-unavailable',
@@ -3050,6 +3071,8 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
       preferredBackendType,
       ctxCreated: true,
       backendType,
+      backendName: backendNameForType(backendType),
+      backend_name: backendNameForType(backendType),
       nativeAccelerated,
       fallbackIntentional: backendType !== preferredBackendType,
       reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
@@ -3059,6 +3082,9 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
   const trace = {
     owner: 'MoonlabModule',
     operation: 'probeBackendRuntime',
+    backendName: 'wasm-unified-gpu',
+    backend_name: 'wasm-unified-gpu',
+    backendAvailable: missingUnifiedGpuApi.length === 0,
     moduleReady: true,
     missingUnifiedGpuApi,
     webgpu: probeBackend(2),

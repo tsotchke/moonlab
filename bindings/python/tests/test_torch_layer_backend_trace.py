@@ -17,11 +17,14 @@ from moonlab.torch_layer import (  # noqa: E402
 def _assert_trace(trace, owner):
     assert trace["owner"] == owner
     assert trace["quantum_backend"] == "moonlab-c-ctypes"
+    assert trace["backend_name"] == "moonlab-c-ctypes"
     assert trace["library_path"]
     assert trace["available"] is True
+    assert trace["backend_available"] is True
     assert trace["native_quantum_on_cpu"] is True
     assert trace["torch_device"] in {"cpu", "cuda", "mps"}
     assert isinstance(trace["fallback_intentional"], bool)
+    assert trace["fallback_reason"]
     assert trace["missing_symbols"] == []
 
 
@@ -29,7 +32,9 @@ def _assert_trace(trace, owner):
 def test_torch_backend_probe_reports_native_runtime():
     probe = moonlab_torch_backend_probe()
     assert probe["quantum_backend"] == "moonlab-c-ctypes"
+    assert probe["backend_name"] == "moonlab-c-ctypes"
     assert probe["available"] is True
+    assert probe["backend_available"] is True
     assert probe["missing_symbols"] == []
     assert probe["library_path"]
 
