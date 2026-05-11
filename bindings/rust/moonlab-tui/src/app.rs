@@ -685,6 +685,10 @@ impl App {
     }
 
     fn run_algorithm(&mut self) {
+        self.trace_algorithm_execution();
+    }
+
+    fn trace_algorithm_execution(&mut self) {
         // Capture values before mutable borrow
         let algorithm = self.current_algorithm();
         let n = self.num_qubits;
@@ -794,14 +798,14 @@ impl App {
                             let _ = ca.cnot(0, q);
                         }
                         format!(
-                            "CA-MPS bond_dim={} (plain MPS needs >=2 for GHZ); norm={:.3}",
+                            "Clifford-assisted matrix-product state bond_dim={} (plain matrix-product state needs >=2 for GHZ); norm={:.3}",
                             ca.bond_dim(),
                             ca.norm())
                     }
-                    Err(e) => format!("CA-MPS create failed: {e:?}"),
+                    Err(e) => format!("Clifford-assisted matrix-product state create failed: {e:?}"),
                 };
                 self.total_steps = n;
-                self.status = format!("{n}-qubit GHZ via CA-MPS -- {bond_dim_str}");
+                self.status = format!("{n}-qubit GHZ via Clifford-assisted matrix-product state -- {bond_dim_str}");
             }
             Algorithm::CaMpsBellWarmstart => {
                 // Bell-pair stabilizer subgroup {XX, ZZ} -> Bell state

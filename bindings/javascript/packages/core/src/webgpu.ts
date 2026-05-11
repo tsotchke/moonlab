@@ -14,7 +14,7 @@ const BACKEND_NAMES: Record<number, TensorGpuBackend> = {
   3: 'webgpu',
 };
 
-function runtimeWebGPUSupported(): boolean {
+function trace_runtime_webgpu_support(): boolean {
   if (typeof navigator === 'undefined') {
     return false;
   }
@@ -47,7 +47,7 @@ export async function isWebGPUAvailable(): Promise<boolean> {
   if (typeof module._tensor_gpu_webgpu_available === 'function') {
     return module._tensor_gpu_webgpu_available() !== 0;
   }
-  return runtimeWebGPUSupported();
+  return trace_runtime_webgpu_support();
 }
 
 /**

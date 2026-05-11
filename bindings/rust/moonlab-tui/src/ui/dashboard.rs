@@ -662,6 +662,10 @@ fn render_help_overlay(frame: &mut Frame, app: &App) {
 }
 
 fn help_algorithm_browser() -> (&'static str, Vec<Line<'static>>) {
+    trace_algorithm_browser_help()
+}
+
+fn trace_algorithm_browser_help() -> (&'static str, Vec<Line<'static>>) {
     ("Algorithm Browser Help", vec![
         Line::from(Span::styled(
             "◆ MOONLAB QUANTUM SIMULATOR",

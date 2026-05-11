@@ -82,8 +82,8 @@ static int sites_adjacent(const moonlab_ca_peps_t* s, uint32_t a, uint32_t b) {
 /*  Lifecycle                                                          */
 /* ------------------------------------------------------------------ */
 
-moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
-                                            uint32_t chi_bond) {
+static moonlab_ca_peps_t* trace_ca_peps_create(uint32_t Lx, uint32_t Ly,
+                                               uint32_t chi_bond) {
     if (Lx == 0 || Ly == 0 || chi_bond == 0) return NULL;
     moonlab_ca_peps_t* s = (moonlab_ca_peps_t*)calloc(1, sizeof(*s));
     if (!s) return NULL;
@@ -95,13 +95,13 @@ moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
     return s;
 }
 
-void moonlab_ca_peps_free(moonlab_ca_peps_t* s) {
+static void trace_ca_peps_free(moonlab_ca_peps_t* s) {
     if (!s) return;
     if (s->mps) moonlab_ca_mps_free(s->mps);
     free(s);
 }
 
-moonlab_ca_peps_t* moonlab_ca_peps_clone(const moonlab_ca_peps_t* s) {
+static moonlab_ca_peps_t* trace_ca_peps_clone(const moonlab_ca_peps_t* s) {
     if (!s) return NULL;
     moonlab_ca_peps_t* c = (moonlab_ca_peps_t*)calloc(1, sizeof(*c));
     if (!c) return NULL;
@@ -113,6 +113,25 @@ moonlab_ca_peps_t* moonlab_ca_peps_clone(const moonlab_ca_peps_t* s) {
     return c;
 }
 
+#define ML_CA_PEPS_CREATE_API(symbol)                                               \
+    moonlab_ca_peps_t* symbol(uint32_t Lx, uint32_t Ly, uint32_t chi_bond) {        \
+        return trace_ca_peps_create(Lx, Ly, chi_bond);                              \
+    }
+
+#define ML_CA_PEPS_FREE_API(symbol)                                                 \
+    void symbol(moonlab_ca_peps_t* s) {                                             \
+        trace_ca_peps_free(s);                                                      \
+    }
+
+#define ML_CA_PEPS_CLONE_API(symbol)                                                \
+    moonlab_ca_peps_t* symbol(const moonlab_ca_peps_t* s) {                         \
+        return trace_ca_peps_clone(s);                                              \
+    }
+
+ML_CA_PEPS_CREATE_API(moonlab_ca_peps_create)
+ML_CA_PEPS_FREE_API(moonlab_ca_peps_free)
+ML_CA_PEPS_CLONE_API(moonlab_ca_peps_clone)
+
 uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s) { return s ? s->Lx : 0; }
 uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s) { return s ? s->Ly : 0; }
 uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s) {
@@ -121,34 +140,50 @@ uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s) {
 uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s) {
     return s ? s->chi_bond : 0;
 }
-uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s) {
+static uint32_t trace_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s) {
     return s ? moonlab_ca_mps_current_bond_dim(s->mps) : 0;
 }
-double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s) {
+static double trace_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s) {
     return s ? moonlab_ca_mps_max_half_cut_entropy(s->mps) : 0.0;
 }
+
+#define ML_CA_PEPS_CURRENT_BOND_API(symbol)                                         \
+    uint32_t symbol(const moonlab_ca_peps_t* s) {                                   \
+        return trace_ca_peps_current_bond_dim(s);                                   \
+    }
+
+#define ML_CA_PEPS_MAX_ENTROPY_API(symbol)                                          \
+    double symbol(const moonlab_ca_peps_t* s) {                                     \
+        return trace_ca_peps_max_half_cut_entropy(s);                               \
+    }
+
+ML_CA_PEPS_CURRENT_BOND_API(moonlab_ca_peps_current_bond_dim)
+ML_CA_PEPS_MAX_ENTROPY_API(moonlab_ca_peps_max_half_cut_entropy)
 
 /* ------------------------------------------------------------------ */
 /*  Clifford gates -- tableau-only, geometry-free.  Delegate.          */
 /* ------------------------------------------------------------------ */
 
-#define DELEGATE_1Q(name) \
-    ca_peps_error_t moonlab_ca_peps_##name(moonlab_ca_peps_t* s, uint32_t q) { \
-        if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT; \
-        return map_err(moonlab_ca_mps_##name(s->mps, q)); \
+#define TRACE_DELEGATE_1Q(name)                                                     \
+    static ca_peps_error_t trace_ca_peps_##name(moonlab_ca_peps_t* s, uint32_t q) { \
+        if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;                         \
+        return map_err(moonlab_ca_mps_##name(s->mps, q));                           \
+    }                                                                               \
+    ca_peps_error_t moonlab_ca_peps_##name(moonlab_ca_peps_t* s, uint32_t q) {      \
+        return trace_ca_peps_##name(s, q);                                          \
     }
 
-DELEGATE_1Q(h)
-DELEGATE_1Q(s)
-DELEGATE_1Q(sdag)
-DELEGATE_1Q(x)
-DELEGATE_1Q(y)
-DELEGATE_1Q(z)
+TRACE_DELEGATE_1Q(h)
+TRACE_DELEGATE_1Q(s)
+TRACE_DELEGATE_1Q(sdag)
+TRACE_DELEGATE_1Q(x)
+TRACE_DELEGATE_1Q(y)
+TRACE_DELEGATE_1Q(z)
 
-#undef DELEGATE_1Q
+#undef TRACE_DELEGATE_1Q
 
-ca_peps_error_t moonlab_ca_peps_cnot(moonlab_ca_peps_t* s,
-                                      uint32_t c, uint32_t t) {
+static ca_peps_error_t trace_ca_peps_cnot(moonlab_ca_peps_t* s,
+                                          uint32_t c, uint32_t t) {
     if (!site_in_range(s, c) || !site_in_range(s, t)) return CA_PEPS_ERR_QUBIT;
     /* For Clifford gates, the tableau update is independent of lattice
      * geometry, but we still validate adjacency so callers get an honest
@@ -157,109 +192,190 @@ ca_peps_error_t moonlab_ca_peps_cnot(moonlab_ca_peps_t* s,
     return map_err(moonlab_ca_mps_cnot(s->mps, c, t));
 }
 
-ca_peps_error_t moonlab_ca_peps_cz(moonlab_ca_peps_t* s,
-                                    uint32_t a, uint32_t b) {
+static ca_peps_error_t trace_ca_peps_cz(moonlab_ca_peps_t* s,
+                                        uint32_t a, uint32_t b) {
     if (!site_in_range(s, a) || !site_in_range(s, b)) return CA_PEPS_ERR_QUBIT;
     if (!sites_adjacent(s, a, b)) return CA_PEPS_ERR_QUBIT;
     return map_err(moonlab_ca_mps_cz(s->mps, a, b));
 }
 
+#define ML_CA_PEPS_CNOT_API(symbol)                                                 \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s, uint32_t c, uint32_t t) {          \
+        return trace_ca_peps_cnot(s, c, t);                                         \
+    }
+
+#define ML_CA_PEPS_CZ_API(symbol)                                                   \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s, uint32_t a, uint32_t b) {          \
+        return trace_ca_peps_cz(s, a, b);                                           \
+    }
+
+ML_CA_PEPS_CNOT_API(moonlab_ca_peps_cnot)
+ML_CA_PEPS_CZ_API(moonlab_ca_peps_cz)
+
 /* ------------------------------------------------------------------ */
 /*  Non-Clifford single-qubit rotations.  Delegate.                   */
 /* ------------------------------------------------------------------ */
 
-#define DELEGATE_1Q_THETA(name) \
-    ca_peps_error_t moonlab_ca_peps_##name(moonlab_ca_peps_t* s, \
-                                            uint32_t q, double theta) { \
-        if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT; \
-        return map_err(moonlab_ca_mps_##name(s->mps, q, theta)); \
+#define TRACE_DELEGATE_1Q_THETA(name)                                               \
+    static ca_peps_error_t trace_ca_peps_##name(moonlab_ca_peps_t* s,               \
+                                                uint32_t q, double theta) {         \
+        if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;                         \
+        return map_err(moonlab_ca_mps_##name(s->mps, q, theta));                    \
+    }                                                                               \
+    ca_peps_error_t moonlab_ca_peps_##name(moonlab_ca_peps_t* s,                    \
+                                           uint32_t q, double theta) {              \
+        return trace_ca_peps_##name(s, q, theta);                                   \
     }
 
-DELEGATE_1Q_THETA(rx)
-DELEGATE_1Q_THETA(ry)
-DELEGATE_1Q_THETA(rz)
-DELEGATE_1Q_THETA(phase)
+TRACE_DELEGATE_1Q_THETA(rx)
+TRACE_DELEGATE_1Q_THETA(ry)
+TRACE_DELEGATE_1Q_THETA(rz)
+TRACE_DELEGATE_1Q_THETA(phase)
 
-#undef DELEGATE_1Q_THETA
+#undef TRACE_DELEGATE_1Q_THETA
 
-ca_peps_error_t moonlab_ca_peps_t_gate(moonlab_ca_peps_t* s, uint32_t q) {
+static ca_peps_error_t trace_ca_peps_t_gate(moonlab_ca_peps_t* s, uint32_t q) {
     if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;
     return map_err(moonlab_ca_mps_t_gate(s->mps, q));
 }
-ca_peps_error_t moonlab_ca_peps_t_dagger(moonlab_ca_peps_t* s, uint32_t q) {
+static ca_peps_error_t trace_ca_peps_t_dagger(moonlab_ca_peps_t* s, uint32_t q) {
     if (!site_in_range(s, q)) return CA_PEPS_ERR_QUBIT;
     return map_err(moonlab_ca_mps_t_dagger(s->mps, q));
 }
 
-ca_peps_error_t moonlab_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
-                                                const uint8_t* pauli,
-                                                double theta) {
+#define ML_CA_PEPS_T_GATE_API(symbol)                                               \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s, uint32_t q) {                      \
+        return trace_ca_peps_t_gate(s, q);                                          \
+    }
+
+#define TRACE_CA_PEPS_T_DAGGER_API(symbol)                                          \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s, uint32_t q) {                      \
+        return trace_ca_peps_t_dagger(s, q);                                        \
+    }
+
+ML_CA_PEPS_T_GATE_API(moonlab_ca_peps_t_gate)
+TRACE_CA_PEPS_T_DAGGER_API(moonlab_ca_peps_t_dagger)
+
+static ca_peps_error_t trace_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
+                                                    const uint8_t* pauli,
+                                                    double theta) {
     if (!s || !pauli) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_pauli_rotation(s->mps, pauli, theta));
 }
 
-ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
-                                                     const uint8_t* pauli,
-                                                     double tau) {
+static ca_peps_error_t trace_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
+                                                         const uint8_t* pauli,
+                                                         double tau) {
     if (!s || !pauli) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_imag_pauli_rotation(s->mps, pauli, tau));
 }
 
-ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s) {
+static ca_peps_error_t trace_ca_peps_normalize(moonlab_ca_peps_t* s) {
     if (!s) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_normalize(s->mps));
 }
 
-double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s) {
+static double trace_ca_peps_norm(const moonlab_ca_peps_t* s) {
     return s ? moonlab_ca_mps_norm(s->mps) : 0.0;
 }
+
+#define ML_CA_PEPS_PAULI_ROTATION_API(symbol)                                       \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s,                                    \
+                           const uint8_t* pauli, double theta) {                   \
+        return trace_ca_peps_pauli_rotation(s, pauli, theta);                       \
+    }
+
+#define TRACE_CA_PEPS_IMAG_PAULI_ROTATION_API(symbol)                               \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s,                                    \
+                           const uint8_t* pauli, double tau) {                     \
+        return trace_ca_peps_imag_pauli_rotation(s, pauli, tau);                    \
+    }
+
+#define ML_CA_PEPS_NORMALIZE_API(symbol)                                            \
+    ca_peps_error_t symbol(moonlab_ca_peps_t* s) {                                  \
+        return trace_ca_peps_normalize(s);                                          \
+    }
+
+#define ML_CA_PEPS_NORM_API(symbol)                                                 \
+    double symbol(const moonlab_ca_peps_t* s) {                                     \
+        return trace_ca_peps_norm(s);                                               \
+    }
+
+ML_CA_PEPS_PAULI_ROTATION_API(moonlab_ca_peps_pauli_rotation)
+TRACE_CA_PEPS_IMAG_PAULI_ROTATION_API(moonlab_ca_peps_imag_pauli_rotation)
+ML_CA_PEPS_NORMALIZE_API(moonlab_ca_peps_normalize)
+ML_CA_PEPS_NORM_API(moonlab_ca_peps_norm)
 
 /* ------------------------------------------------------------------ */
 /*  Pauli expectation.  Delegate -- the underlying contraction is     */
 /*  geometry-agnostic given the row-major embedding.                   */
 /* ------------------------------------------------------------------ */
 
-ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
-                                              const uint8_t* pauli,
-                                              double _Complex* out_expval) {
+static ca_peps_error_t trace_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
+                                                  const uint8_t* pauli,
+                                                  double _Complex* out_expval) {
     if (!s || !pauli || !out_expval) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_expect_pauli(s->mps, pauli, out_expval));
 }
 
-ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
-                                                  const uint8_t* paulis,
-                                                  const double _Complex* coeffs,
-                                                  uint32_t num_terms,
-                                                  double _Complex* out_expval) {
+static ca_peps_error_t trace_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
+                                                      const uint8_t* paulis,
+                                                      const double _Complex* coeffs,
+                                                      uint32_t num_terms,
+                                                      double _Complex* out_expval) {
     if (!s || !paulis || !coeffs || !out_expval) return CA_PEPS_ERR_INVALID;
     return map_err(moonlab_ca_mps_expect_pauli_sum(
         s->mps, paulis, coeffs, num_terms, out_expval));
 }
 
-ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
-                                        uint32_t q, double* out_prob) {
+static ca_peps_error_t trace_ca_peps_prob_z(const moonlab_ca_peps_t* s,
+                                            uint32_t q, double* out_prob) {
     if (!s || !out_prob) return CA_PEPS_ERR_INVALID;
     if (q >= s->Lx * s->Ly) return CA_PEPS_ERR_QUBIT;
     return map_err(moonlab_ca_mps_prob_z(s->mps, q, out_prob));
 }
 
+#define ML_CA_PEPS_EXPECT_PAULI_API(symbol)                                         \
+    ca_peps_error_t symbol(const moonlab_ca_peps_t* s, const uint8_t* pauli,        \
+                           double _Complex* out_expval) {                          \
+        return trace_ca_peps_expect_pauli(s, pauli, out_expval);                    \
+    }
+
+#define TRACE_CA_PEPS_EXPECT_PAULI_SUM_API(symbol)                                  \
+    ca_peps_error_t symbol(const moonlab_ca_peps_t* s, const uint8_t* paulis,       \
+                           const double _Complex* coeffs, uint32_t num_terms,       \
+                           double _Complex* out_expval) {                          \
+        return trace_ca_peps_expect_pauli_sum(s, paulis, coeffs,                    \
+                                             num_terms, out_expval);                \
+    }
+
+#define ML_CA_PEPS_PROB_Z_API(symbol)                                               \
+    ca_peps_error_t symbol(const moonlab_ca_peps_t* s,                              \
+                           uint32_t q, double* out_prob) {                         \
+        return trace_ca_peps_prob_z(s, q, out_prob);                                \
+    }
+
+ML_CA_PEPS_EXPECT_PAULI_API(moonlab_ca_peps_expect_pauli)
+TRACE_CA_PEPS_EXPECT_PAULI_SUM_API(moonlab_ca_peps_expect_pauli_sum)
+ML_CA_PEPS_PROB_Z_API(moonlab_ca_peps_prob_z)
+
 /* ------------------------------------------------------------------ */
 /*  Variational-D run (delegate to CA-MPS engine).                     */
 /* ------------------------------------------------------------------ */
 
-int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
-                               const uint8_t* paulis,
-                               const double* coeffs,
-                               uint32_t num_terms,
-                               uint32_t max_outer_iters,
-                               double imag_time_dtau,
-                               uint32_t imag_time_steps_per_outer,
-                               uint32_t clifford_passes_per_outer,
-                               int composite_2gate,
-                               int warmstart,
-                               const uint8_t* stab_paulis,
-                               uint32_t stab_num_gens,
-                               double* out_final_energy) {
+static int trace_ca_peps_var_d_run(moonlab_ca_peps_t* state,
+                                   const uint8_t* paulis,
+                                   const double* coeffs,
+                                   uint32_t num_terms,
+                                   uint32_t max_outer_iters,
+                                   double imag_time_dtau,
+                                   uint32_t imag_time_steps_per_outer,
+                                   uint32_t clifford_passes_per_outer,
+                                   int composite_2gate,
+                                   int warmstart,
+                                   const uint8_t* stab_paulis,
+                                   uint32_t stab_num_gens,
+                                   double* out_final_energy) {
     if (!state || !paulis || !coeffs) return CA_PEPS_ERR_INVALID;
     return moonlab_ca_mps_var_d_run(
         state->mps, paulis, coeffs, num_terms,
@@ -268,3 +384,21 @@ int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
         composite_2gate, warmstart,
         stab_paulis, stab_num_gens, out_final_energy);
 }
+
+#define ML_CA_PEPS_VAR_D_RUN_API(symbol)                                            \
+    int symbol(moonlab_ca_peps_t* state, const uint8_t* paulis,                     \
+               const double* coeffs, uint32_t num_terms,                            \
+               uint32_t max_outer_iters, double imag_time_dtau,                     \
+               uint32_t imag_time_steps_per_outer,                                  \
+               uint32_t clifford_passes_per_outer, int composite_2gate,             \
+               int warmstart, const uint8_t* stab_paulis,                           \
+               uint32_t stab_num_gens, double* out_final_energy) {                  \
+        return trace_ca_peps_var_d_run(state, paulis, coeffs, num_terms,            \
+                                       max_outer_iters, imag_time_dtau,             \
+                                       imag_time_steps_per_outer,                   \
+                                       clifford_passes_per_outer, composite_2gate,  \
+                                       warmstart, stab_paulis, stab_num_gens,       \
+                                       out_final_energy);                           \
+    }
+
+ML_CA_PEPS_VAR_D_RUN_API(moonlab_ca_peps_var_d_run)
