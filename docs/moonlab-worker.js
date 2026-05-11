@@ -5,6 +5,11 @@ const DEFAULT_ANGLE = Math.PI / 2;
 const GPU_BACKEND_NONE = 0;
 const GPU_BACKEND_WEBGPU = 2;
 const GPU_BACKEND_AUTO = 7;
+const WORKER_OP_CONTEXT_SELECTION = 'gpu-context-selection';
+const WORKER_OP_FALLBACK = 'gpu-fallback';
+const WORKER_REASON_CONTEXT_UNAVAILABLE = 'gpu-context-unavailable';
+const WORKER_REASON_NON_WEB_PREFIX = 'non-webgpu-backend-';
+const WORKER_REASON_UNIFIED_API_UNAVAILABLE = 'unified-gpu-api-unavailable';
 const H2_REFERENCE_ENERGY_HARTREE = -1.137283834488;
 const HARTREE_TO_KCAL_MOL = 627.5094740631;
 const REQUIRED_UNIFIED_GPU_API = [
@@ -95,6 +100,9 @@ const recordGpuBackendTrace = (owner, operation, details = {}) => {
   return lastGpuBackendTrace;
 };
 
+const recordWorkerRuntimeTrace = (owner, operation, details = {}) =>
+  recordGpuBackendTrace(owner, operation, details);
+
 const resetGpuSession = () => {
   gpuSession.initialized = false;
   gpuSession.available = false;
@@ -150,7 +158,7 @@ const disableGpuPathForModule = (module, reason) => {
   gpuSession.nativeAccelerated = false;
   gpuSession.fallbackIntentional = true;
   gpuSession.reason = reason;
-  recordGpuBackendTrace('disableGpuPathForModule', 'gpu-fallback', {
+  recordWorkerRuntimeTrace('disableGpuPathForModule', WORKER_OP_FALLBACK, {
     available: false,
     fallbackIntentional: true,
     reason,
@@ -436,7 +444,7 @@ const probeUnifiedGpuApi = (module) => {
     available,
     missingUnifiedGpuApi: missing,
     fallbackIntentional: !available,
-    reason: available ? 'ok' : 'unified-gpu-api-unavailable',
+    reason: available ? 'ok' : WORKER_REASON_UNIFIED_API_UNAVAILABLE,
   });
   return {
     available,
@@ -451,7 +459,7 @@ const hasUnifiedGpuApi = (module, probe = probeUnifiedGpuApi(module)) => {
     available,
     missingUnifiedGpuApi: probe.missing,
     fallbackIntentional: !available,
-    reason: available ? 'ok' : 'unified-gpu-api-unavailable',
+    reason: available ? 'ok' : WORKER_REASON_UNIFIED_API_UNAVAILABLE,
   });
   return available;
 };
@@ -464,7 +472,7 @@ const ensureGpuSession = (module) => {
   gpuSession.missingUnifiedGpuApi = apiProbe.missing;
   if (!hasUnifiedGpuApi(module, apiProbe)) {
     gpuSession.fallbackIntentional = true;
-    gpuSession.reason = 'unified-gpu-api-unavailable';
+    gpuSession.reason = WORKER_REASON_UNIFIED_API_UNAVAILABLE;
     return gpuSession;
   }
 
@@ -480,8 +488,8 @@ const ensureGpuSession = (module) => {
   }
   if (!ctxPtr) {
     gpuSession.fallbackIntentional = true;
-    gpuSession.reason = 'gpu-context-unavailable';
-    recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
+    gpuSession.reason = WORKER_REASON_CONTEXT_UNAVAILABLE;
+    recordWorkerRuntimeTrace('ensureGpuSession', WORKER_OP_CONTEXT_SELECTION, {
       available: false,
       backendAvailable: false,
       fallbackIntentional: true,
@@ -498,8 +506,8 @@ const ensureGpuSession = (module) => {
   gpuSession.fallbackIntentional = fallbackIntentional || backendType !== preferred;
   if (backendType !== GPU_BACKEND_WEBGPU) {
     module._gpu_compute_free(ctxPtr);
-    gpuSession.reason = `non-webgpu-backend-${backendType}`;
-    recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
+    gpuSession.reason = `${WORKER_REASON_NON_WEB_PREFIX}${backendType}`;
+    recordWorkerRuntimeTrace('ensureGpuSession', WORKER_OP_CONTEXT_SELECTION, {
       available: false,
       backendAvailable: gpuSession.backendAvailable,
       fallbackIntentional: true,
@@ -514,7 +522,7 @@ const ensureGpuSession = (module) => {
     typeof module._gpu_is_native_accelerated === 'function' &&
     module._gpu_is_native_accelerated(ctxPtr) !== 0;
   gpuSession.reason = 'ok';
-  recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection');
+  recordWorkerRuntimeTrace('ensureGpuSession', WORKER_OP_CONTEXT_SELECTION);
   return gpuSession;
 };
 
