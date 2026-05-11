@@ -727,6 +727,29 @@ fn feynman_diagram_builds_and_renders() {
 }
 
 #[test]
+fn feynman_labeled_external_and_standard_qed_build() {
+    let mut diagram = FeynmanDiagram::new("labeled e- scattering").unwrap();
+    let incoming = diagram.add_external_vertex(-1.0, 0.0, "e- in");
+    let vertex = diagram.add_vertex_labeled(0.0, 0.0, "V");
+    let outgoing = diagram.add_external_vertex(1.0, 0.0, "e- out");
+
+    assert!(incoming >= 0);
+    assert!(vertex >= 0);
+    assert!(outgoing >= 0);
+    assert_eq!(diagram.num_vertices(), 3);
+
+    diagram
+        .add_fermion(incoming, vertex, "e-")
+        .add_fermion(vertex, outgoing, "e-");
+    assert_eq!(diagram.num_propagators(), 2);
+    assert!(!diagram.render_ascii().is_empty());
+
+    let bhabha = moonlab::feynman::standard::qed::bhabha().unwrap();
+    assert!(bhabha.num_vertices() > 0);
+    assert!(!bhabha.render_ascii().is_empty());
+}
+
+#[test]
 fn quantum_error_display_mentions_invalid_qubit_bounds() {
     let err = QuantumError::InvalidQubit { index: 5, max: 4 };
     assert!(err.to_string().contains("5"));

@@ -174,6 +174,7 @@ fn render_feynman_content(frame: &mut Frame, area: Rect, app: &App) {
     // Render Feynman diagram widget
     frame.render_widget(
         FeynmanWidget::from_standard(diagram_type, app.feynman_diagram.as_ref())
+            .show_labels(true)
             .frame(app.frame()),
         right_chunks[0],
     );
