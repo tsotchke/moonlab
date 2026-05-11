@@ -1245,3 +1245,24 @@ def evaluate_quantum_model(
         'loss': total_loss / len(test_loader),
         'predictions': all_preds
     }
+
+
+__all__ = [
+    'moonlab_torch_backend_probe',
+    'moonlab_torch_last_backend_trace',
+    'ParameterShiftGradient',
+    'QuantumLayer',
+    'QuantumConv1D',
+    'QuantumPooling',
+    'QuantumClassifier',
+    'HybridQNN',
+    'QuantumEncoder',
+    'count_quantum_parameters',
+    'quantum_layer_summary',
+    'initialize_quantum_layer',
+    'create_mnist_model',
+    'create_binary_classifier',
+    'create_quantum_cnn',
+    'train_quantum_model',
+    'evaluate_quantum_model',
+]
