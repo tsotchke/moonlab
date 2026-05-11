@@ -531,6 +531,96 @@ static void test_dmrg_backend_provenance_helpers(void) {
     if (tfim_mps) tn_mps_free(tfim_mps);
 }
 
+static void test_dmrg_one_site_mode(void) {
+    fprintf(stdout, "\n--- DMRG one-site mode ---\n");
+
+    uint32_t boundary_dims[3] = { 1, 1, 1 };
+    tensor_t* L = tensor_create(3, boundary_dims);
+    tensor_t* R = tensor_create(3, boundary_dims);
+    uint32_t w_dims[4] = { 1, 2, 2, 1 };
+    tensor_t* W_tensor = tensor_create(4, w_dims);
+    uint32_t site_dims[3] = { 1, 2, 1 };
+    tensor_t* x = tensor_create(3, site_dims);
+    tensor_t* y = tensor_create(3, site_dims);
+    CHECK(L && R && W_tensor && x && y, "one-site H_eff tensor allocation");
+
+    if (L && R && W_tensor && x && y) {
+        L->data[0] = 1.0;
+        R->data[0] = 1.0;
+        uint32_t wx01[4] = { 0, 0, 1, 0 };
+        uint32_t wx10[4] = { 0, 1, 0, 0 };
+        tensor_set(W_tensor, wx01, 1.0);
+        tensor_set(W_tensor, wx10, 1.0);
+
+        x->data[0] = 2.0 + 3.0 * I;
+        x->data[1] = -1.0 + 0.5 * I;
+
+        mpo_tensor_t W = {
+            .W = W_tensor,
+            .bond_dim_left = 1,
+            .bond_dim_right = 1,
+            .phys_dim = 2
+        };
+        effective_hamiltonian_t H_eff = {
+            .L = L,
+            .R = R,
+            .W_left = &W,
+            .W_right = NULL,
+            .chi_l = 1,
+            .chi_r = 1,
+            .phys_dim = 2,
+            .two_site = false
+        };
+
+        CHECK(effective_hamiltonian_apply(&H_eff, x, y) == 0,
+              "one-site effective_hamiltonian_apply returned nonzero");
+        CHECK(cabs(y->data[0] - x->data[1]) < 1e-12,
+              "one-site H_eff y[0] mismatch");
+        CHECK(cabs(y->data[1] - x->data[0]) < 1e-12,
+              "one-site H_eff y[1] mismatch");
+    }
+
+    tensor_free(L);
+    tensor_free(R);
+    tensor_free(W_tensor);
+    tensor_free(x);
+    tensor_free(y);
+
+    tn_state_config_t state_cfg = tn_state_config_default();
+    state_cfg.max_bond_dim = 2;
+    tn_mps_state_t* mps = dmrg_init_random_mps(2, 2, &state_cfg);
+    CHECK(mps != NULL, "dmrg_init_random_mps for one-site mode");
+    if (!mps) return;
+
+    mpo_t* mpo = mpo_tfim_create(2, /*J=*/1.0, /*h=*/0.5);
+    CHECK(mpo != NULL, "mpo_tfim_create for one-site mode");
+    if (!mpo) {
+        tn_mps_free(mps);
+        return;
+    }
+
+    dmrg_config_t one_site_cfg = dmrg_config_default();
+    one_site_cfg.two_site = false;
+    one_site_cfg.max_bond_dim = 2;
+    one_site_cfg.max_sweeps = 1;
+    one_site_cfg.warmup_sweeps = 0;
+    one_site_cfg.lanczos_max_iter = 8;
+    one_site_cfg.noise_strength = 0.0;
+    one_site_cfg.dm_perturbation = 0.0;
+
+    dmrg_result_t* result = dmrg_ground_state(mps, mpo, &one_site_cfg);
+    CHECK(result != NULL, "dmrg_ground_state one-site mode returned NULL");
+    check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_ground_state");
+    if (result) {
+        CHECK(isfinite(result->ground_energy),
+              "one-site ground energy %.6e", result->ground_energy);
+        dmrg_result_free(result);
+    }
+
+    mpo_free(mpo);
+    tn_mps_free(mps);
+}
+
 /* ------------------------------------------------------------------ */
 /* dmrg_energy_variance: TFIM ground-state-ish MPS; verify the        */
 /* variance is non-negative (a strict eigenstate would give 0).       */
@@ -607,6 +697,7 @@ int main(void) {
     test_contract_mps_mpo_backend_provenance();
     test_mpo_skyrmion_create_smoke();
     test_dmrg_backend_provenance_helpers();
+    test_dmrg_one_site_mode();
     test_dmrg_energy_variance();
     test_tn_histogram_create();
     test_tensor_svd_truncate();

@@ -1048,18 +1048,103 @@ int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
         if (owns_temps) free(temp3);
     }
     else {
-        /* One-site DMRG path is not implemented.  The 2-site sweeps
-         * exposed by dmrg_ground_state, dmrg_optimize_two_site and
-         * dmrg_run_sweep are the only paths exercised by the test
-         * suite, so the public dmrg_config_t.two_site flag is
-         * effectively a 2-site/abort toggle until someone wires the
-         * 1-site branch properly.  Failing fast here is better than
-         * silently returning y = 0 to a Lanczos iterator that would
-         * then "converge" at lambda = 0. */
-        fprintf(stderr,
-                "DMRG: one-site H_eff path is not implemented; set "
-                "config.two_site = true (the default).\n");
-        return -1;
+        if (!H_eff->L || !H_eff->R) return -1;
+        if (!H_eff->L->data || !H_eff->R->data) return -1;
+        if (!H_eff->W_left || !H_eff->W_left->W || !H_eff->W_left->W->data) return -1;
+        if (x->rank != 3 || y->rank != 3) return -1;
+        if (x->dims[0] != chi_l || x->dims[1] != d || x->dims[2] != chi_r) return -1;
+        if (y->dims[0] != chi_l || y->dims[1] != d || y->dims[2] != chi_r) return -1;
+
+        uint32_t b_l = H_eff->W_left->bond_dim_left;
+        uint32_t b_r = H_eff->W_left->bond_dim_right;
+        tensor_t *L = H_eff->L;
+        tensor_t *R = H_eff->R;
+        tensor_t *W = H_eff->W_left->W;
+
+        size_t temp1_size = (size_t)chi_l * d * b_r * chi_r;
+        size_t temp2_size = (size_t)chi_l * b_l * d * chi_r;
+        double complex *temp1 = NULL;
+        double complex *temp2 = NULL;
+        bool owns_temps = (ws == NULL);
+
+        if (ws) {
+            temp1 = ws_grow(&ws->temp1, &ws->temp1_cap, temp1_size);
+            temp2 = ws_grow(&ws->temp2, &ws->temp2_cap, temp2_size);
+            if (!temp1 || !temp2) return -1;
+        } else {
+            temp1 = (double complex *)calloc(temp1_size, sizeof(double complex));
+            temp2 = (double complex *)calloc(temp2_size, sizeof(double complex));
+            if (!temp1 || !temp2) {
+                free(temp1);
+                free(temp2);
+                return -1;
+            }
+        }
+
+        // temp1[lp,sp,br,r] = sum_rp x[lp,sp,rp] * R[r,br,rp]
+        for (uint32_t lp = 0; lp < chi_l; lp++) {
+            for (uint32_t sp = 0; sp < d; sp++) {
+                for (uint32_t br = 0; br < b_r; br++) {
+                    for (uint32_t r = 0; r < chi_r; r++) {
+                        double complex sum = 0.0;
+                        for (uint32_t rp = 0; rp < chi_r; rp++) {
+                            uint64_t x_idx = (uint64_t)lp * d * chi_r + sp * chi_r + rp;
+                            uint64_t R_idx = (uint64_t)r * b_r * chi_r + br * chi_r + rp;
+                            sum += x->data[x_idx] * R->data[R_idx];
+                        }
+                        uint64_t t1_idx = (uint64_t)lp * d * b_r * chi_r +
+                                          sp * b_r * chi_r + br * chi_r + r;
+                        temp1[t1_idx] = sum;
+                    }
+                }
+            }
+        }
+
+        // temp2[lp,bl,s,r] = sum_{sp,br} temp1[lp,sp,br,r] * W[bl,s,sp,br]
+        for (uint32_t lp = 0; lp < chi_l; lp++) {
+            for (uint32_t bl = 0; bl < b_l; bl++) {
+                for (uint32_t s = 0; s < d; s++) {
+                    for (uint32_t r = 0; r < chi_r; r++) {
+                        double complex sum = 0.0;
+                        for (uint32_t sp = 0; sp < d; sp++) {
+                            for (uint32_t br = 0; br < b_r; br++) {
+                                uint64_t t1_idx = (uint64_t)lp * d * b_r * chi_r +
+                                                  sp * b_r * chi_r + br * chi_r + r;
+                                uint64_t W_idx = (uint64_t)bl * d * d * b_r +
+                                                 s * d * b_r + sp * b_r + br;
+                                sum += temp1[t1_idx] * W->data[W_idx];
+                            }
+                        }
+                        uint64_t t2_idx = (uint64_t)lp * b_l * d * chi_r +
+                                          bl * d * chi_r + s * chi_r + r;
+                        temp2[t2_idx] = sum;
+                    }
+                }
+            }
+        }
+
+        if (owns_temps) free(temp1);
+
+        // y[l,s,r] = sum_{lp,bl} temp2[lp,bl,s,r] * L[l,bl,lp]
+        for (uint32_t l = 0; l < chi_l; l++) {
+            for (uint32_t s = 0; s < d; s++) {
+                for (uint32_t r = 0; r < chi_r; r++) {
+                    double complex sum = 0.0;
+                    for (uint32_t lp = 0; lp < chi_l; lp++) {
+                        for (uint32_t bl = 0; bl < b_l; bl++) {
+                            uint64_t t2_idx = (uint64_t)lp * b_l * d * chi_r +
+                                              bl * d * chi_r + s * chi_r + r;
+                            uint64_t L_idx = (uint64_t)l * b_l * chi_l + bl * chi_l + lp;
+                            sum += temp2[t2_idx] * L->data[L_idx];
+                        }
+                    }
+                    uint64_t y_idx = (uint64_t)l * d * chi_r + s * chi_r + r;
+                    y->data[y_idx] = sum;
+                }
+            }
+        }
+
+        if (owns_temps) free(temp2);
     }
 
     return 0;
@@ -2193,6 +2278,74 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
     return 0;
 }
 
+static int dmrg_optimize_one_site(tn_mps_state_t *mps,
+                                   const mpo_t *mpo,
+                                   dmrg_environments_t *env,
+                                   uint32_t site,
+                                   dmrg_sweep_direction_t direction,
+                                   const dmrg_config_t *config,
+                                   double *energy) {
+    dmrg_record_backend_trace("dmrg_optimize_one_site",
+                              "one-site-local-eigensolve");
+    (void)direction;
+
+    if (!mps || !mpo || !env || !config || !energy) return -1;
+    if (site >= mps->num_qubits || site >= mpo->num_sites) return -1;
+
+    tensor_t *A = mps->tensors[site];
+    if (!A || !A->data || A->rank != 3) return -1;
+
+    uint32_t chi_l = A->dims[0];
+    uint32_t d = A->dims[1];
+    uint32_t chi_r = A->dims[2];
+
+    if (!env->L[site] || !env->L[site]->data) return -1;
+    if (!env->R[site] || !env->R[site]->data) return -1;
+    if (env->L[site]->dims[0] != chi_l || env->L[site]->dims[2] != chi_l) return -1;
+    if (env->R[site]->dims[0] != chi_r || env->R[site]->dims[2] != chi_r) return -1;
+
+    mpo_tensor_t *W = &mpo->tensors[site];
+    if (!W->W || !W->W->data || W->W->rank != 4) return -1;
+    if (W->phys_dim != d || W->W->dims[1] != d || W->W->dims[2] != d) return -1;
+
+    effective_hamiltonian_t H_eff = {
+        .L = env->L[site],
+        .R = env->R[site],
+        .W_left = W,
+        .W_right = NULL,
+        .chi_l = chi_l,
+        .chi_r = chi_r,
+        .phys_dim = d,
+        .two_site = false
+    };
+
+    lanczos_result_t *lanczos = lanczos_ground_state(&H_eff, A,
+                                                       config->lanczos_max_iter,
+                                                       config->lanczos_tol);
+    if (!lanczos || !lanczos->eigenvector) {
+        lanczos_result_free(lanczos);
+        return -1;
+    }
+
+    if (lanczos->eigenvector->rank != 3 ||
+        lanczos->eigenvector->dims[0] != chi_l ||
+        lanczos->eigenvector->dims[1] != d ||
+        lanczos->eigenvector->dims[2] != chi_r) {
+        lanczos_result_free(lanczos);
+        return -1;
+    }
+
+    tensor_t *A_new = lanczos->eigenvector;
+    lanczos->eigenvector = NULL;
+    *energy = lanczos->eigenvalue;
+
+    tensor_free(mps->tensors[site]);
+    mps->tensors[site] = A_new;
+
+    lanczos_result_free(lanczos);
+    return 0;
+}
+
 // ============================================================================
 // DMRG CORE ALGORITHM
 // ============================================================================
@@ -2485,31 +2638,59 @@ int dmrg_sweep(tn_mps_state_t *mps,
 
     uint32_t n = mps->num_qubits;
     double site_energy = 0.0;
+    if (n == 0) return -1;
 
     // Rebuild all environments from current MPS before L->R sweep
     if (dmrg_init_left_environments(env, mps, mpo) != 0) return -1;
     if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
 
-    // Left-to-right sweep
-    for (uint32_t site = 0; site < n - 1; site++) {
-        if (dmrg_optimize_two_site(mps, mpo, env, site, DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
-            return -1;
-        }
-        if (site < n - 2) {
-            dmrg_update_left_environment(env, mps, mpo, site);
-        }
-    }
+    if (config->two_site) {
+        if (n < 2) return -1;
 
-    // Rebuild right environments before R->L sweep
-    dmrg_init_right_environments(env, mps, mpo);
-
-    // Right-to-left sweep
-    for (int site = n - 2; site >= 0; site--) {
-        if (dmrg_optimize_two_site(mps, mpo, env, site, DMRG_SWEEP_RIGHT_TO_LEFT, config, &site_energy) != 0) {
-            return -1;
+        // Left-to-right sweep
+        for (uint32_t site = 0; site < n - 1; site++) {
+            if (dmrg_optimize_two_site(mps, mpo, env, site, DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
+                return -1;
+            }
+            if (site < n - 2) {
+                dmrg_update_left_environment(env, mps, mpo, site);
+            }
         }
-        if (site > 0) {
-            dmrg_update_right_environment(env, mps, mpo, site + 1);
+
+        // Rebuild right environments before R->L sweep
+        if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
+
+        // Right-to-left sweep
+        for (int site = (int)n - 2; site >= 0; site--) {
+            if (dmrg_optimize_two_site(mps, mpo, env, (uint32_t)site,
+                                       DMRG_SWEEP_RIGHT_TO_LEFT, config, &site_energy) != 0) {
+                return -1;
+            }
+            if (site > 0) {
+                dmrg_update_right_environment(env, mps, mpo, (uint32_t)site + 1);
+            }
+        }
+    } else {
+        for (uint32_t site = 0; site < n; site++) {
+            if (dmrg_optimize_one_site(mps, mpo, env, site,
+                                       DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
+                return -1;
+            }
+            if (site < n - 1) {
+                dmrg_update_left_environment(env, mps, mpo, site);
+            }
+        }
+
+        if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
+
+        for (int site = (int)n - 1; site >= 0; site--) {
+            if (dmrg_optimize_one_site(mps, mpo, env, (uint32_t)site,
+                                       DMRG_SWEEP_RIGHT_TO_LEFT, config, &site_energy) != 0) {
+                return -1;
+            }
+            if (site > 0) {
+                dmrg_update_right_environment(env, mps, mpo, (uint32_t)site);
+            }
         }
     }
 
