@@ -54,7 +54,13 @@ export * as noise from './noise';
 // Entanglement metrics (since 0.2.1).
 export * as entanglement from './entanglement';
 
-export { Circuit } from './circuit';
+export {
+  Circuit,
+  bellCircuit,
+  ghzCircuit,
+  qftCircuit,
+  superpositionCircuit,
+} from './circuit';
 export type {
   Gate,
   GateType,

@@ -3,6 +3,7 @@
 // diagnostics instead of being a silent placeholder.
 static volatile int g_f2c_main_invoked = 0;
 
+// icc: compatibility-api required by libf2c when no Fortran main is linked.
 int MAIN__(void) {
     g_f2c_main_invoked = 1;
     return (g_f2c_main_invoked == 1) ? 0 : 1;
@@ -19,6 +20,7 @@ int MAIN__(void) {
 extern char *F77_aloc(ftnlen, const char *);
 #endif
 
+// icc: compatibility-api mirrors the libf2c string-copy helper for CLAPACK WASM.
 int s_copy(char *a, char *b, ftnlen la, ftnlen lb) {
     char *aend = a + la;
 
@@ -49,6 +51,7 @@ int s_copy(char *a, char *b, ftnlen la, ftnlen lb) {
     return 0;
 }
 
+// icc: compatibility-api mirrors the libf2c string-concat helper for CLAPACK WASM.
 int s_cat(char *lp, char *rpp[], ftnint rnp[], ftnint *np, ftnlen ll) {
     ftnlen i, nc;
     char *rp;
