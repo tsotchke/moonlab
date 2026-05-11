@@ -3,7 +3,8 @@
 //! These tests verify the complete functionality of the quantum simulator
 //! including state creation, gates, measurements, and algorithms.
 
-use moonlab::{QuantumState, QuantumError, MAX_QUBITS};
+use moonlab::{FeynmanDiagram, ParticleType, QuantumError, QuantumState, MAX_QUBITS};
+use std::fs;
 use std::f64::consts::PI;
 
 // =============================================================================
@@ -658,4 +659,58 @@ fn product_state_has_zero_concurrence() {
 fn concurrence_rejects_non_2q_states() {
     let s = QuantumState::new(3).unwrap();
     assert!(s.concurrence().is_err());
+}
+
+#[test]
+fn feynman_diagram_save_exports_files() {
+    let diagram = FeynmanDiagram::qed_vertex().unwrap();
+    let base = std::env::temp_dir().join(format!(
+        "moonlab-feynman-{}",
+        std::process::id()
+    ));
+    let svg_path = base.with_extension("svg");
+    let tex_path = base.with_extension("tex");
+
+    let rendered_svg = diagram.render_svg(320, 240);
+    let rendered_tex = diagram.render_latex();
+    assert!(rendered_svg.contains("<svg"));
+    assert!(rendered_tex.contains("\\begin{tikzpicture}"));
+
+    diagram
+        .save_svg(svg_path.to_str().unwrap(), 320, 240)
+        .unwrap();
+    diagram.save_latex(tex_path.to_str().unwrap()).unwrap();
+
+    let svg = fs::read_to_string(&svg_path).unwrap();
+    let tex = fs::read_to_string(&tex_path).unwrap();
+    assert!(svg.contains("<svg"));
+    assert!(tex.contains("\\begin{tikzpicture}"));
+
+    let _ = fs::remove_file(svg_path);
+    let _ = fs::remove_file(tex_path);
+}
+
+#[test]
+fn feynman_diagram_builds_and_renders() {
+    let mut diagram = FeynmanDiagram::new("e+ e- -> gamma gamma").unwrap();
+    assert_eq!(diagram.process(), "e+ e- -> gamma gamma");
+    assert_eq!(ParticleType::Photon.ascii_char(), '~');
+    assert_eq!(ParticleType::Gluon.ascii_char(), '@');
+
+    let v1 = diagram.add_vertex(0.0, 0.0);
+    let v2 = diagram.add_vertex(1.0, 0.0);
+    assert!(v1 >= 0);
+    assert!(v2 >= 0);
+    assert_ne!(v1, v2);
+
+    diagram
+        .add_fermion(v1, v2, "e-")
+        .add_photon(v1, v2, "gamma");
+    assert_eq!(diagram.num_propagators(), 2);
+
+    let qed = FeynmanDiagram::qed_vertex().unwrap();
+    let compton = FeynmanDiagram::compton_scattering().unwrap();
+    assert!(qed.num_vertices() > 0);
+    assert!(compton.num_vertices() > 0);
+    assert!(!qed.render_ascii().is_empty());
 }

@@ -41,8 +41,20 @@ static void test_circular_braid_path(void) {
     braid_path_free(p);
 }
 
+static void test_default_braid_config(void) {
+    fprintf(stdout, "\n-- skyrmion: default braid config --\n");
+    braid_config_t cfg = braid_config_default();
+    CHECK(cfg.dt > 0.0, "default dt = %.6f > 0", cfg.dt);
+    CHECK(cfg.max_bond_dim > 0, "default max_bond_dim = %u",
+          (unsigned)cfg.max_bond_dim);
+    CHECK(cfg.braid_segments > 0, "default braid_segments = %u",
+          (unsigned)cfg.braid_segments);
+    CHECK(cfg.track_skyrmions, "default tracks skyrmions");
+}
+
 int main(void) {
     fprintf(stdout, "=== skyrmion braiding smoke ===\n");
+    test_default_braid_config();
     test_circular_braid_path();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");

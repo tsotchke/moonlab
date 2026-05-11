@@ -129,23 +129,6 @@ void xxz_hamiltonian_free(xxz_hamiltonian_t *h) {
 }
 
 /**
- * @brief Count bits set in integer (population count)
- */
-__attribute__((unused))
-static inline int popcount64(uint64_t x) {
-#ifdef __GNUC__
-    return __builtin_popcountll(x);
-#else
-    int count = 0;
-    while (x) {
-        count += x & 1;
-        x >>= 1;
-    }
-    return count;
-#endif
-}
-
-/**
  * @brief Get spin value at site (±0.5)
  */
 static inline double spin_z(uint64_t state, uint32_t site) {

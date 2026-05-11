@@ -63,21 +63,6 @@ static double mps_max_half_cut_entropy(const tn_mps_state_t* s, uint32_t n) {
     return s_max;
 }
 
-/* Compute energy of a CA-MPS state under a Pauli sum (real coeffs). */
-static double ca_mps_pauli_energy(const moonlab_ca_mps_t* s,
-                                    const uint8_t* paulis,
-                                    const double* coeffs,
-                                    uint32_t num_terms,
-                                    uint32_t n) {
-    (void)n;
-    double _Complex* cz = (double _Complex*)calloc(num_terms, sizeof(double _Complex));
-    for (uint32_t i = 0; i < num_terms; i++) cz[i] = (double _Complex)coeffs[i];
-    double _Complex out = 0.0;
-    moonlab_ca_mps_expect_pauli_sum(s, paulis, cz, num_terms, &out);
-    free(cz);
-    return creal(out);
-}
-
 /* Compute mean Gauss-law violation <(N-2) - sum_{interior x} G_x> on a CA-MPS state. */
 static double ca_mps_gauss_violation(const moonlab_ca_mps_t* s,
                                       const z2_lgt_config_t* cfg) {

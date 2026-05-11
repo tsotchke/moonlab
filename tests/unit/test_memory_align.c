@@ -20,6 +20,8 @@
 #include <math.h>
 
 #include "../../src/optimization/memory_align.h"
+#include "../../src/utils/secure_memory.h"
+#include "../../src/utils/validation.h"
 
 // ============================================================================
 // TEST UTILITIES
@@ -360,6 +362,71 @@ static int test_secure_zero(void) {
     return 1;
 }
 
+static int test_secure_memcmp(void) {
+    const unsigned char a[] = { 0x01, 0x02, 0x03, 0x04 };
+    const unsigned char b[] = { 0x01, 0x02, 0x03, 0x04 };
+    const unsigned char c[] = { 0x01, 0x02, 0x03, 0x05 };
+
+    TEST_ASSERT(secure_memcmp(a, b, sizeof(a)) == 0,
+                "Equal buffers should compare equal");
+    TEST_ASSERT(secure_memcmp(a, c, sizeof(a)) != 0,
+                "Different buffers should compare different");
+    TEST_ASSERT(secure_memcmp(NULL, b, sizeof(b)) != 0,
+                "NULL input should fail closed");
+
+    TEST_PASS("Secure memcmp test passed");
+    return 1;
+}
+
+static int test_validate_array_indices(void) {
+    const int valid[] = { 0, 2, 4 };
+    const int negative[] = { 0, -1, 2 };
+    const int too_large[] = { 0, 5 };
+
+    TEST_ASSERT(validate_array_indices(valid, 3, 5),
+                "Valid indices should pass");
+    TEST_ASSERT(!validate_array_indices(negative, 3, 5),
+                "Negative index should fail");
+    TEST_ASSERT(!validate_array_indices(too_large, 2, 5),
+                "Out-of-range index should fail");
+    TEST_ASSERT(!validate_array_indices(NULL, 1, 5),
+                "NULL indices should fail");
+
+    TEST_PASS("Array index validation test passed");
+    return 1;
+}
+
+static int test_validate_unique_indices(void) {
+    const int unique[] = { 0, 2, 4 };
+    const int duplicate[] = { 0, 2, 0 };
+
+    TEST_ASSERT(validate_unique_indices(unique, 3),
+                "Unique indices should pass");
+    TEST_ASSERT(!validate_unique_indices(duplicate, 3),
+                "Duplicate index should fail");
+    TEST_ASSERT(!validate_unique_indices(NULL, 1),
+                "NULL indices should fail");
+
+    TEST_PASS("Unique index validation test passed");
+    return 1;
+}
+
+static int test_validate_health_config(void) {
+    TEST_ASSERT(validate_health_config(10, 100, 64, 4.0),
+                "Valid health config should pass");
+    TEST_ASSERT(!validate_health_config(1, 100, 64, 4.0),
+                "Too-small RCT cutoff should fail");
+    TEST_ASSERT(!validate_health_config(10, 9, 64, 4.0),
+                "Too-small APT cutoff should fail");
+    TEST_ASSERT(!validate_health_config(10, 100, 15, 4.0),
+                "Too-small APT window should fail");
+    TEST_ASSERT(!validate_health_config(10, 100, 64, 0.0),
+                "Invalid entropy should fail");
+
+    TEST_PASS("Health config validation test passed");
+    return 1;
+}
+
 // ============================================================================
 // PLATFORM INFO TEST
 // ============================================================================
@@ -547,6 +614,10 @@ int main(void) {
 
     // Security tests
     RUN_TEST(test_secure_zero);
+    RUN_TEST(test_secure_memcmp);
+    RUN_TEST(test_validate_array_indices);
+    RUN_TEST(test_validate_unique_indices);
+    RUN_TEST(test_validate_health_config);
 
     // Platform tests
     RUN_TEST(test_platform_info);

@@ -1116,8 +1116,7 @@ static int trace_metal_grover_batch_search(
     }
 }
 
-#define ML_BATCH_SEARCH_API metal_grover_batch_search
-int ML_BATCH_SEARCH_API(
+int metal_grover_batch_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* batch_states,
     const uint32_t* targets,
@@ -1134,7 +1133,6 @@ int ML_BATCH_SEARCH_API(
                                            num_qubits,
                                            num_iterations);
 }
-#undef ML_BATCH_SEARCH_API
 
 // SYNCHRONIZATION & UTILITIES
 // ============================================================================

@@ -212,6 +212,10 @@ impl<'a> FeynmanWidget<'a> {
         // Center position
         let cx = area.x + area.width / 2;
         let cy = area.y + area.height / 2;
+        let style_fermion = Style::default().fg(self.particle_color(ParticleType::Fermion));
+        let style_antifermion = Style::default().fg(self.particle_color(ParticleType::Antifermion));
+        let style_photon = Style::default().fg(self.particle_color(ParticleType::Photon));
+        let style_vertex = Style::default().fg(Color::Red);
 
         match diagram_type {
             StandardDiagram::QedVertex => {
@@ -221,69 +225,54 @@ impl<'a> FeynmanWidget<'a> {
                 //       ●~~~~ γ
                 //      /
                 //     e-
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 4, cy - 2, "e⁻", style_e);
-                buf.set_string(cx - 2, cy - 1, "\\", style_e);
-                buf.set_string(cx, cy, "●", style_v);
-                buf.set_string(cx + 1, cy, "~~~~", style_g);
-                buf.set_string(cx + 5, cy, "γ", style_g);
-                buf.set_string(cx - 2, cy + 1, "/", style_e);
-                buf.set_string(cx - 4, cy + 2, "e⁻", style_e);
+                buf.set_string(cx - 4, cy - 2, "e⁻", style_fermion);
+                buf.set_string(cx - 2, cy - 1, "\\", style_fermion);
+                buf.set_string(cx, cy, "●", style_vertex);
+                buf.set_string(cx + 1, cy, "~~~~", style_photon);
+                buf.set_string(cx + 5, cy, "γ", style_photon);
+                buf.set_string(cx - 2, cy + 1, "/", style_fermion);
+                buf.set_string(cx - 4, cy + 2, "e⁻", style_fermion);
             }
             StandardDiagram::EeToMuMu => {
                 // e+ e- -> mu+ mu- via photon
-                let style_e = Style::default().fg(Color::White);
                 let style_m = Style::default().fg(Color::Cyan);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
 
-                buf.set_string(cx - 6, cy - 2, "e⁺ →", style_e);
-                buf.set_string(cx - 2, cy - 1, "\\", style_e);
-                buf.set_string(cx, cy, "●", style_v);
-                buf.set_string(cx + 1, cy, "~~", style_g);
-                buf.set_string(cx + 3, cy, "●", style_v);
+                buf.set_string(cx - 6, cy - 2, "e⁺ →", style_antifermion);
+                buf.set_string(cx - 2, cy - 1, "\\", style_antifermion);
+                buf.set_string(cx, cy, "●", style_vertex);
+                buf.set_string(cx + 1, cy, "~~", style_photon);
+                buf.set_string(cx + 3, cy, "●", style_vertex);
                 buf.set_string(cx + 4, cy - 1, "/", style_m);
                 buf.set_string(cx + 5, cy - 2, "→ μ⁺", style_m);
-                buf.set_string(cx - 6, cy + 2, "e⁻ →", style_e);
-                buf.set_string(cx - 2, cy + 1, "/", style_e);
+                buf.set_string(cx - 6, cy + 2, "e⁻ →", style_fermion);
+                buf.set_string(cx - 2, cy + 1, "/", style_fermion);
                 buf.set_string(cx + 4, cy + 1, "\\", style_m);
                 buf.set_string(cx + 5, cy + 2, "→ μ⁻", style_m);
             }
             StandardDiagram::Compton => {
                 // Compton: e- + γ -> e- + γ
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 8, cy, "e⁻ →─", style_e);
-                buf.set_string(cx - 3, cy, "●", style_v);
-                buf.set_string(cx - 2, cy - 2, "γ", style_g);
-                buf.set_string(cx - 2, cy - 1, "|", style_g);
-                buf.set_string(cx - 2, cy, "~", style_g);
-                buf.set_string(cx - 1, cy, "─", style_e);
-                buf.set_string(cx, cy, "●", style_v);
-                buf.set_string(cx + 1, cy, "─→ e⁻", style_e);
-                buf.set_string(cx + 1, cy - 1, "|", style_g);
-                buf.set_string(cx + 1, cy - 2, "γ", style_g);
+                buf.set_string(cx - 8, cy, "e⁻ →─", style_fermion);
+                buf.set_string(cx - 3, cy, "●", style_vertex);
+                buf.set_string(cx - 2, cy - 2, "γ", style_photon);
+                buf.set_string(cx - 2, cy - 1, "|", style_photon);
+                buf.set_string(cx - 2, cy, "~", style_photon);
+                buf.set_string(cx - 1, cy, "─", style_fermion);
+                buf.set_string(cx, cy, "●", style_vertex);
+                buf.set_string(cx + 1, cy, "─→ e⁻", style_fermion);
+                buf.set_string(cx + 1, cy - 1, "|", style_photon);
+                buf.set_string(cx + 1, cy - 2, "γ", style_photon);
             }
             StandardDiagram::PairAnnihilation => {
                 // e+ e- -> γ γ
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 6, cy - 1, "e⁺ →", style_e);
-                buf.set_string(cx - 2, cy - 1, "\\", style_e);
-                buf.set_string(cx, cy, "●", style_v);
-                buf.set_string(cx + 1, cy - 1, "~~~~", style_g);
-                buf.set_string(cx + 5, cy - 1, "γ", style_g);
-                buf.set_string(cx - 6, cy + 1, "e⁻ →", style_e);
-                buf.set_string(cx - 2, cy + 1, "/", style_e);
-                buf.set_string(cx + 1, cy + 1, "~~~~", style_g);
-                buf.set_string(cx + 5, cy + 1, "γ", style_g);
+                buf.set_string(cx - 6, cy - 1, "e⁺ →", style_antifermion);
+                buf.set_string(cx - 2, cy - 1, "\\", style_antifermion);
+                buf.set_string(cx, cy, "●", style_vertex);
+                buf.set_string(cx + 1, cy - 1, "~~~~", style_photon);
+                buf.set_string(cx + 5, cy - 1, "γ", style_photon);
+                buf.set_string(cx - 6, cy + 1, "e⁻ →", style_fermion);
+                buf.set_string(cx - 2, cy + 1, "/", style_fermion);
+                buf.set_string(cx + 1, cy + 1, "~~~~", style_photon);
+                buf.set_string(cx + 5, cy + 1, "γ", style_photon);
             }
             StandardDiagram::Moller | StandardDiagram::Bhabha => {
                 // t-channel scattering
@@ -292,49 +281,37 @@ impl<'a> FeynmanWidget<'a> {
                 } else {
                     ("e⁺", "e⁻")
                 };
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 6, cy - 2, &format!("{} →─", p1), style_e);
-                buf.set_string(cx - 1, cy - 2, "●", style_v);
-                buf.set_string(cx, cy - 2, "─→", style_e);
-                buf.set_string(cx + 2, cy - 2, p1, style_e);
-                buf.set_string(cx - 1, cy - 1, "|", style_g);
-                buf.set_string(cx - 1, cy, "~", style_g);
-                buf.set_string(cx - 1, cy + 1, "|", style_g);
-                buf.set_string(cx - 6, cy + 2, &format!("{} →─", p2), style_e);
-                buf.set_string(cx - 1, cy + 2, "●", style_v);
-                buf.set_string(cx, cy + 2, "─→", style_e);
-                buf.set_string(cx + 2, cy + 2, p2, style_e);
+                buf.set_string(cx - 6, cy - 2, &format!("{} →─", p1), style_fermion);
+                buf.set_string(cx - 1, cy - 2, "●", style_vertex);
+                buf.set_string(cx, cy - 2, "─→", style_fermion);
+                buf.set_string(cx + 2, cy - 2, p1, style_fermion);
+                buf.set_string(cx - 1, cy - 1, "|", style_photon);
+                buf.set_string(cx - 1, cy, "~", style_photon);
+                buf.set_string(cx - 1, cy + 1, "|", style_photon);
+                buf.set_string(cx - 6, cy + 2, &format!("{} →─", p2), style_fermion);
+                buf.set_string(cx - 1, cy + 2, "●", style_vertex);
+                buf.set_string(cx, cy + 2, "─→", style_fermion);
+                buf.set_string(cx + 2, cy + 2, p2, style_fermion);
             }
             StandardDiagram::ElectronSelfEnergy => {
                 // One-loop self-energy
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 8, cy, "e⁻ →─", style_e);
-                buf.set_string(cx - 3, cy, "●", style_v);
-                buf.set_string(cx - 2, cy - 1, "╭~~╮", style_g);
-                buf.set_string(cx - 2, cy, "─", style_e);
-                buf.set_string(cx + 1, cy, "─", style_e);
-                buf.set_string(cx - 2, cy + 1, "╰──╯", style_e);
-                buf.set_string(cx + 2, cy, "●", style_v);
-                buf.set_string(cx + 3, cy, "─→ e⁻", style_e);
+                buf.set_string(cx - 8, cy, "e⁻ →─", style_fermion);
+                buf.set_string(cx - 3, cy, "●", style_vertex);
+                buf.set_string(cx - 2, cy - 1, "╭~~╮", style_photon);
+                buf.set_string(cx - 2, cy, "─", style_fermion);
+                buf.set_string(cx + 1, cy, "─", style_fermion);
+                buf.set_string(cx - 2, cy + 1, "╰──╯", style_fermion);
+                buf.set_string(cx + 2, cy, "●", style_vertex);
+                buf.set_string(cx + 3, cy, "─→ e⁻", style_fermion);
             }
             StandardDiagram::VacuumPolarization => {
                 // Vacuum polarization loop
-                let style_e = Style::default().fg(Color::White);
-                let style_g = Style::default().fg(Color::Yellow);
-                let style_v = Style::default().fg(Color::Red);
-
-                buf.set_string(cx - 8, cy, "γ ~~~", style_g);
-                buf.set_string(cx - 3, cy, "●", style_v);
-                buf.set_string(cx - 2, cy - 1, "╭──╮", style_e);
-                buf.set_string(cx - 2, cy + 1, "╰──╯", style_e);
-                buf.set_string(cx + 2, cy, "●", style_v);
-                buf.set_string(cx + 3, cy, "~~~ γ", style_g);
+                buf.set_string(cx - 8, cy, "γ ~~~", style_photon);
+                buf.set_string(cx - 3, cy, "●", style_vertex);
+                buf.set_string(cx - 2, cy - 1, "╭──╮", style_fermion);
+                buf.set_string(cx - 2, cy + 1, "╰──╯", style_fermion);
+                buf.set_string(cx + 2, cy, "●", style_vertex);
+                buf.set_string(cx + 3, cy, "~~~ γ", style_photon);
             }
         }
     }

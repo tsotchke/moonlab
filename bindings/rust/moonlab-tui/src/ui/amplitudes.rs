@@ -166,7 +166,7 @@ impl<'a> Widget for AmplitudeBars<'a> {
             let y = inner.y + row as u16;
             let prob = probs[idx];
             let amp = amps[idx];
-            let _phase = amp.arg(); // Reserved for future phase visualization
+            let phase = amp.arg();
 
             // Basis state label
             let label = Self::format_basis_state(idx, num_qubits);
@@ -175,7 +175,11 @@ impl<'a> Widget for AmplitudeBars<'a> {
             // Bar
             let bar_fill = prob / max_prob;
             let bar = Self::bar_string(bar_width, bar_fill);
-            let bar_color = Self::prob_color(prob);
+            let bar_color = if self.show_phases {
+                Self::phase_color(phase)
+            } else {
+                Self::prob_color(prob)
+            };
             buf.set_string(inner.x + label_width as u16, y, &bar, Style::default().fg(bar_color));
 
             // Probability value
