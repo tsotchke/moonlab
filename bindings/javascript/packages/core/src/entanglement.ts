@@ -59,6 +59,7 @@ function modAndPtr(state: QuantumState): { mod: EntanglementModule; ptr: number 
  * traced out).  Returns S(rho_B) in nats (log base e), where
  * S(rho) = -Tr(rho log rho).
  */
+// icc: public-api exported through the package `entanglement` namespace.
 export function vonNeumannEntropy(
   state: QuantumState, qubitsB: number[],
 ): number {
@@ -74,6 +75,7 @@ export function vonNeumannEntropy(
  *
  * Returned in bits (log base 2).
  */
+// icc: public-api exported through the package `entanglement` namespace.
 export function mutualInformation(
   state: QuantumState, qubitsA: number[], qubitsB: number[],
 ): number {
@@ -89,6 +91,7 @@ export function mutualInformation(
  * separable states and 1 for maximally entangled (e.g. Bell).  Only
  * meaningful when `state.numQubits === 2`.
  */
+// icc: public-api exported through the package `entanglement` namespace.
 export function concurrence2Qubit(state: QuantumState): number {
   const { mod, ptr } = modAndPtr(state);
   return mod._entanglement_concurrence_2qubit(ptr);
@@ -99,6 +102,7 @@ export function concurrence2Qubit(state: QuantumState): number {
  * of negative eigenvalues of the partial transpose.  Returns 0 for
  * separable, 0.5 for maximally entangled.
  */
+// icc: public-api exported through the package `entanglement` namespace.
 export function negativity2Qubit(state: QuantumState): number {
   const { mod, ptr } = modAndPtr(state);
   return mod._entanglement_negativity_2qubit(ptr);

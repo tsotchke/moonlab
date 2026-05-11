@@ -42,6 +42,7 @@ export function depolarizing(state: QuantumState, qubit: number, p: number): voi
 }
 
 /** Two-qubit depolarising channel with probability `p`. */
+// icc: public-api exported through the package `noise` namespace.
 export function depolarizing2(
   state: QuantumState, qubit1: number, qubit2: number, p: number,
 ): void {
@@ -50,6 +51,7 @@ export function depolarizing2(
 }
 
 /** Amplitude-damping channel (T1 relaxation) with rate `gamma` in [0, 1]. */
+// icc: public-api exported through the package `noise` namespace.
 export function amplitudeDamping(
   state: QuantumState, qubit: number, gamma: number,
 ): void {
@@ -58,6 +60,7 @@ export function amplitudeDamping(
 }
 
 /** Phase-damping channel with rate `gamma` in [0, 1]. */
+// icc: public-api exported through the package `noise` namespace.
 export function phaseDamping(
   state: QuantumState, qubit: number, gamma: number,
 ): void {
@@ -66,6 +69,7 @@ export function phaseDamping(
 }
 
 /** Pure-dephasing channel with rate `gamma` in [0, 1]. */
+// icc: public-api exported through the package `noise` namespace.
 export function pureDephasing(
   state: QuantumState, qubit: number, gamma: number,
 ): void {
@@ -74,24 +78,30 @@ export function pureDephasing(
 }
 
 /** Bit-flip channel with probability `p`. */
+// icc: public-api exported through the package `noise` namespace.
 export function bitFlip(state: QuantumState, qubit: number, p: number): void {
   const { mod, ptr } = modAndPtr(state);
   mod._noise_bit_flip(ptr, qubit, p);
 }
 
 /** Phase-flip channel with probability `p`. */
+// icc: public-api exported through the package `noise` namespace.
 export function phaseFlip(state: QuantumState, qubit: number, p: number): void {
   const { mod, ptr } = modAndPtr(state);
   mod._noise_phase_flip(ptr, qubit, p);
 }
 
 /** Bit-phase-flip channel with probability `p`. */
+// icc: public-api exported through the package `noise` namespace.
 export function bitPhaseFlip(state: QuantumState, qubit: number, p: number): void {
   const { mod, ptr } = modAndPtr(state);
   mod._noise_bit_phase_flip(ptr, qubit, p);
 }
 
-/** Thermal relaxation with T1, T2 timescales over duration `t`. */
+/**
+ * Thermal relaxation with T1, T2 timescales over duration `t`.
+ */
+// icc: public-api exported through the package `noise` namespace.
 export function thermalRelaxation(
   state: QuantumState,
   qubit: number,

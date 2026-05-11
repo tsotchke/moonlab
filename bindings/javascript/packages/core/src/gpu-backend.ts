@@ -114,6 +114,7 @@ export class GPUBackendSession {
     );
   }
 
+  // icc: public-api GPUBackendSession exposes complex-buffer upload for external callers.
   createBufferFromComplex(data: Complex[]): number {
     const interleaved = new Float64Array(data.length * 2);
     for (let i = 0; i < data.length; i++) {
@@ -133,6 +134,7 @@ export class GPUBackendSession {
     );
   }
 
+  // icc: public-api GPUBackendSession exposes complex-buffer reads for external callers.
   readComplexBuffer(bufferPtr: number, complexCount: number): Complex[] {
     const interleaved = this.readInterleavedBuffer(bufferPtr, complexCount);
     const out: Complex[] = [];
@@ -145,12 +147,14 @@ export class GPUBackendSession {
     return out;
   }
 
+  // icc: public-api GPUBackendSession exposes explicit buffer release for external callers.
   freeBuffer(bufferPtr: number): void {
     if (typeof this.module._gpu_buffer_free === 'function' && bufferPtr) {
       this.module._gpu_buffer_free(bufferPtr);
     }
   }
 
+  // icc: public-api GPUBackendSession exposes Hadamard for external callers.
   hadamard(bufferPtr: number, qubit: number, stateDim: number): number {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_hadamard_u32 === 'function') {
@@ -160,6 +164,7 @@ export class GPUBackendSession {
     return this.module._gpu_hadamard(this.ctxPtr, bufferPtr, qubit, BigInt(stateDim));
   }
 
+  // icc: public-api GPUBackendSession exposes all-qubit Hadamard for external callers.
   hadamardAll(bufferPtr: number, numQubits: number, stateDim: number): number {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_hadamard_all_u32 === 'function') {
@@ -169,6 +174,7 @@ export class GPUBackendSession {
     return this.module._gpu_hadamard_all(this.ctxPtr, bufferPtr, numQubits, BigInt(stateDim));
   }
 
+  // icc: public-api GPUBackendSession exposes Pauli-X for external callers.
   pauliX(bufferPtr: number, qubit: number, stateDim: number): number {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_pauli_x_u32 === 'function') {
@@ -178,6 +184,7 @@ export class GPUBackendSession {
     return this.module._gpu_pauli_x(this.ctxPtr, bufferPtr, qubit, BigInt(stateDim));
   }
 
+  // icc: public-api GPUBackendSession exposes Pauli-Z for external callers.
   pauliZ(bufferPtr: number, qubit: number, stateDim: number): number {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_pauli_z_u32 === 'function') {
@@ -232,6 +239,7 @@ export class GPUBackendSession {
     return this.module._gpu_swap(this.ctxPtr, bufferPtr, qubitA, qubitB, BigInt(stateDim));
   }
 
+  // icc: public-api GPUBackendSession exposes probability computation for external callers.
   computeProbabilities(amplitudesBufferPtr: number, stateDim: number): Float64Array {
     this.ensureNotDisposed();
     return trace_gpu_backend_compute_probabilities(
@@ -243,6 +251,7 @@ export class GPUBackendSession {
     );
   }
 
+  // icc: public-api GPUBackendSession exposes norm accumulation for external callers.
   sumSquaredMagnitudes(amplitudesBufferPtr: number, stateDim: number): number {
     this.ensureNotDisposed();
     if (typeof this.module._gpu_sum_squared_magnitudes !== 'function') {
