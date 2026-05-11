@@ -747,6 +747,10 @@ fn feynman_labeled_external_and_standard_qed_build() {
     let bhabha = moonlab::feynman::standard::qed::bhabha().unwrap();
     assert!(bhabha.num_vertices() > 0);
     assert!(!bhabha.render_ascii().is_empty());
+
+    let moller = moonlab::feynman::standard::qed::moller().unwrap();
+    assert!(moller.num_vertices() > 0);
+    assert!(!moller.render_ascii().is_empty());
 }
 
 #[test]

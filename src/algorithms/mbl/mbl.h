@@ -411,6 +411,16 @@ typedef enum {
 } evolution_method_t;
 
 /**
+ * @brief Select the XXZ Hamiltonian used by EVOLUTION_TROTTER.
+ *
+ * Passing NULL clears the selected Hamiltonian and lets mbl_time_evolve
+ * fall back to Krylov for EVOLUTION_TROTTER requests.
+ *
+ * @param xxz XXZ Hamiltonian parameters, or NULL to clear
+ */
+void mbl_set_xxz_for_trotter(const xxz_hamiltonian_t *xxz);
+
+/**
  * @brief Time evolve quantum state
  *
  * Applies U(t) = exp(-iHt) to the state.

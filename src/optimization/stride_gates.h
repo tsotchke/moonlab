@@ -391,16 +391,6 @@ void stride_hadamard_all(complex_t* amplitudes, int num_qubits);
 // ============================================================================
 
 /**
- * @brief Get stride for a qubit position
- *
- * @param qubit Qubit index (0-indexed from LSB)
- * @return Stride value (2^qubit)
- */
-static inline uint64_t get_stride(int qubit) {
-    return 1ULL << qubit;
-}
-
-/**
  * @brief Get block size for a qubit position
  *
  * @param qubit Qubit index

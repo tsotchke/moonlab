@@ -11,6 +11,7 @@
  */
 
 #include "../../src/algorithms/mbl/mbl.h"
+#include <complex.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -38,6 +39,42 @@ static void test_xxz_hamiltonian_lifecycle(void) {
     if (sp) sparse_hamiltonian_free(sp);
     xxz_hamiltonian_free(h);
     fprintf(stdout, "  OK    freed XXZ and sparse Hamiltonians\n");
+}
+
+static void test_trotter_xxz_selector(void) {
+    fprintf(stdout, "\n-- MBL: XXZ selector for Trotter evolution --\n");
+    xxz_hamiltonian_t* xxz = xxz_hamiltonian_create(2, 1.0, 0.5, 0.25, false, 7);
+    CHECK(xxz != NULL, "create 2-site XXZ Hamiltonian for Trotter");
+    if (!xxz) return;
+
+    sparse_hamiltonian_t* sp = xxz_build_sparse(xxz);
+    CHECK(sp != NULL, "build sparse form for Trotter selector");
+    if (!sp) {
+        xxz_hamiltonian_free(xxz);
+        return;
+    }
+
+    quantum_state_t state;
+    qs_error_t init = quantum_state_init(&state, 2);
+    CHECK(init == QS_SUCCESS, "initialize 2-qubit state for Trotter");
+    if (init == QS_SUCCESS) {
+        prepare_neel_state(&state);
+        mbl_set_xxz_for_trotter(xxz);
+        qs_error_t evolved = mbl_time_evolve(&state, sp, 0.05, EVOLUTION_TROTTER);
+        mbl_set_xxz_for_trotter(NULL);
+        CHECK(evolved == QS_SUCCESS, "EVOLUTION_TROTTER uses selected XXZ Hamiltonian");
+
+        double norm_sq = 0.0;
+        for (size_t i = 0; i < state.state_dim; i++) {
+            const double mag = cabs(state.amplitudes[i]);
+            norm_sq += mag * mag;
+        }
+        CHECK(fabs(norm_sq - 1.0) < 1e-9, "Trotter evolution preserves norm (%.12f)", norm_sq);
+        quantum_state_free(&state);
+    }
+
+    sparse_hamiltonian_free(sp);
+    xxz_hamiltonian_free(xxz);
 }
 
 /* Average the level-spacing ratio <r> across num_seeds disorder
@@ -96,6 +133,7 @@ static void test_level_statistics_phase_shift(void) {
 int main(void) {
     fprintf(stdout, "=== MBL smoke tests ===\n");
     test_xxz_hamiltonian_lifecycle();
+    test_trotter_xxz_selector();
     test_level_statistics_phase_shift();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");

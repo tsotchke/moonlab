@@ -191,13 +191,6 @@ static inline int validate_health_config(
     return 1;
 }
 
-/**
- * @brief Validate number of qubits
- */
-static inline int validate_num_qubits(size_t num_qubits, size_t max_qubits) {
-    return (num_qubits > 0 && num_qubits <= max_qubits);
-}
-
 // ============================================================================
 // UTILITY VALIDATION
 // ============================================================================

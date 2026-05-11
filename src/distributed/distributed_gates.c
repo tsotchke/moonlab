@@ -117,20 +117,6 @@ static inline int get_bit(uint64_t value, uint32_t bit) {
 }
 
 /**
- * @brief Set bit at position
- */
-static inline uint64_t set_bit(uint64_t value, uint32_t bit) {
-    return value | (1ULL << bit);
-}
-
-/**
- * @brief Clear bit at position
- */
-static inline uint64_t clear_bit(uint64_t value, uint32_t bit) {
-    return value & ~(1ULL << bit);
-}
-
-/**
  * @brief Flip bit at position
  */
 static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {

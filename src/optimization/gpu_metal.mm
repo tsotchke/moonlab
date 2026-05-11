@@ -518,11 +518,9 @@ int metal_is_available(void) {
     }
 }
 
-#define ML_ACCEL_INIT_API metal_compute_init
-metal_compute_ctx_t* ML_ACCEL_INIT_API(void) {
+metal_compute_ctx_t* metal_compute_init(void) {
     return trace_metal_compute_context_init();
 }
-#undef ML_ACCEL_INIT_API
 
 metal_backend_trace_t metal_backend_probe(
     const char* owner,
@@ -1242,11 +1240,9 @@ static void trace_metal_device_info_report(metal_compute_ctx_t* ctx) {
     }
 }
 
-#define ML_DEVICE_REPORT_API metal_print_device_info
-void ML_DEVICE_REPORT_API(metal_compute_ctx_t* ctx) {
+void metal_print_device_info(metal_compute_ctx_t* ctx) {
     trace_metal_device_info_report(ctx);
 }
-#undef ML_DEVICE_REPORT_API
 
 const char* metal_get_error(metal_compute_ctx_t* ctx) {
     if (!ctx || !ctx->lastError) return "No error";
