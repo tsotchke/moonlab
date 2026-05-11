@@ -87,6 +87,7 @@ inline complex_t cneg(complex_t z) {
 /**
  * Complex division: (a+bi)/(c+di) = ((ac+bd) + (bc-ad)i) / (c^2+d^2)
  */
+// icc: keep-live used by Metal shader kernels; ICC does not resolve Metal inline calls.
 inline complex_t cdiv(complex_t a, complex_t b) {
     float denom = cabs2(b);
     if (denom < 1e-30f) {
