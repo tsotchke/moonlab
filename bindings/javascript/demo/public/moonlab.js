@@ -9,6 +9,15 @@ var MoonlabModule = (() => {
   // In EXPORT_ES6 mode we can just use 'import.meta.url'.
   var _scriptName = globalThis.document?.currentScript?.src;
   return async function(moduleArg = {}) {
+    if (typeof MoonlabModule !== 'undefined' &&
+        typeof MoonlabModule.recordBackendRuntimeProbe === 'function') {
+      MoonlabModule.recordBackendRuntimeProbe({
+        operation: 'factory-invocation',
+        moduleReady: false,
+        backendAvailable: false,
+        reason: 'factory-loading',
+      });
+    }
     var moduleRtn;
 
 // include: shell.js
@@ -2974,6 +2983,15 @@ for (const prop of Object.keys(Module)) {
 
 
 
+    if (typeof MoonlabModule !== 'undefined' &&
+        typeof MoonlabModule.recordBackendRuntimeProbe === 'function') {
+      MoonlabModule.recordBackendRuntimeProbe({
+        operation: 'factory-ready',
+        moduleReady: true,
+        backendAvailable: true,
+        reason: 'wasm-runtime-ready',
+      });
+    }
     return moduleRtn;
   };
 })();
@@ -2988,6 +3006,21 @@ MoonlabModule.lastBackendRuntimeProbe = {
   missingUnifiedGpuApi: [],
   fallbackIntentional: false,
   reason: 'not-probed',
+};
+
+MoonlabModule.recordBackendRuntimeProbe = function(details = {}) {
+  MoonlabModule.lastBackendRuntimeProbe = {
+    owner: 'MoonlabModule',
+    operation: details.operation || 'factory-event',
+    backendName: 'wasm-factory',
+    backend_name: 'wasm-factory',
+    backendAvailable: Boolean(details.backendAvailable),
+    moduleReady: Boolean(details.moduleReady),
+    missingUnifiedGpuApi: details.missingUnifiedGpuApi || [],
+    fallbackIntentional: Boolean(details.fallbackIntentional),
+    reason: details.reason || 'factory-event',
+  };
+  return MoonlabModule.getLastBackendRuntimeProbe();
 };
 
 MoonlabModule.getLastBackendRuntimeProbe = function() {

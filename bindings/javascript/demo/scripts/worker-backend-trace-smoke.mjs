@@ -14,8 +14,11 @@ const assert = (condition, message) => {
 const assertMoonlabModuleProbeSurface = (path) => {
   const source = readFileSync(path, 'utf8');
   assert(source.includes('MoonlabModule.lastBackendRuntimeProbe'), `${path}: missing last probe`);
+  assert(source.includes('MoonlabModule.recordBackendRuntimeProbe'), `${path}: missing factory trace recorder`);
   assert(source.includes('MoonlabModule.getLastBackendRuntimeProbe'), `${path}: missing probe getter`);
   assert(source.includes('MoonlabModule.probeBackendRuntime'), `${path}: missing runtime probe`);
+  assert(source.includes('factory-invocation'), `${path}: missing factory invocation trace`);
+  assert(source.includes('factory-ready'), `${path}: missing factory ready trace`);
   assert(source.includes('backendName'), `${path}: missing backendName field`);
   assert(source.includes('backend_name'), `${path}: missing backend_name field`);
   assert(source.includes('backendAvailable'), `${path}: missing backend availability field`);
