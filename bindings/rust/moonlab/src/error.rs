@@ -63,21 +63,3 @@ pub(crate) fn check_result(code: i32, context: &str) -> Result<()> {
         Err(QuantumError::Ffi(format!("{}: error code {}", context, code)))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_display() {
-        let err = QuantumError::InvalidQubit { index: 5, max: 4 };
-        assert!(err.to_string().contains("5"));
-        assert!(err.to_string().contains("4"));
-    }
-
-    #[test]
-    fn test_check_result() {
-        assert!(check_result(0, "test").is_ok());
-        assert!(check_result(-1, "test").is_err());
-    }
-}

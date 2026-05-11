@@ -192,15 +192,6 @@ static inline int validate_health_config(
 }
 
 /**
- * @brief Validate matrix dimensions
- */
-static inline int validate_matrix_dims(size_t m, size_t n, size_t k) {
-    if (m == 0 || n == 0 || k == 0) return 0;
-    if (m > 65536 || n > 65536 || k > 65536) return 0;  // Reasonable limits
-    return 1;
-}
-
-/**
  * @brief Validate number of qubits
  */
 static inline int validate_num_qubits(size_t num_qubits, size_t max_qubits) {

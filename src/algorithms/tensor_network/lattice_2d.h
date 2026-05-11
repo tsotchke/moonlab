@@ -219,17 +219,6 @@ static inline uint32_t coord_to_grid(const lattice_2d_t *lat, int32_t x, int32_t
     return y * lat->Lx + x;
 }
 
-/**
- * @brief Get coordinates from grid index
- */
-static inline coord_2d_t grid_to_coord(const lattice_2d_t *lat, uint32_t grid_idx) {
-    coord_2d_t c = {-1, -1};
-    if (!lat || grid_idx >= lat->num_sites) return c;
-    c.y = grid_idx / lat->Lx;
-    c.x = grid_idx % lat->Lx;
-    return c;
-}
-
 // ============================================================================
 // NEIGHBOR FUNCTIONS
 // ============================================================================

@@ -184,36 +184,3 @@ impl Drop for ChernKpm {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn qwz_chern_phases() {
-        assert_eq!(qwz_chern(1.0, 32), -1);
-        assert_eq!(qwz_chern(-1.0, 32), 1);
-        assert_eq!(qwz_chern(3.0, 32), 0);
-    }
-
-    #[test]
-    fn ssh_winding_phases() {
-        assert_eq!(ssh_winding(1.0, 2.0, 64), 1);
-        assert_eq!(ssh_winding(2.0, 1.0, 64), 0);
-    }
-
-    #[test]
-    // Linux aarch64 hits the same KPM numerical-flakiness mode as the
-    // C unit_chern_kpm test that's already CI-excluded on this target.
-    // The Newton-Schulz + Chebyshev-KPM stack accumulates enough
-    // difference on aarch64 OpenBLAS that the mean-Chern assertion
-    // lands outside the 0.25 tolerance.  Skip on aarch64 until the
-    // underlying KPM-on-aarch64 issue is resolved (audit punch-list).
-    #[cfg(not(target_arch = "aarch64"))]
-    fn kpm_bulk_topological() {
-        let sys = ChernKpm::new(12, -1.0, 100).unwrap();
-        let map = sys.bulk_map(4, 8).unwrap();
-        let mean: f64 = map.iter().sum::<f64>() / map.len() as f64;
-        assert!((mean - 1.0).abs() < 0.25, "bulk mean = {mean}");
-    }
-}

@@ -3,7 +3,9 @@
 //! These tests verify the complete functionality of the quantum simulator
 //! including state creation, gates, measurements, and algorithms.
 
-use moonlab::{FeynmanDiagram, ParticleType, QuantumError, QuantumState, MAX_QUBITS};
+use moonlab::{
+    qwz_chern, ssh_winding, FeynmanDiagram, ParticleType, QuantumError, QuantumState, MAX_QUBITS,
+};
 use std::fs;
 use std::f64::consts::PI;
 
@@ -702,6 +704,10 @@ fn feynman_diagram_builds_and_renders() {
     assert!(v1 >= 0);
     assert!(v2 >= 0);
     assert_ne!(v1, v2);
+    diagram.update_bounds();
+    let bounds = diagram.bounds();
+    assert!(bounds.2 >= bounds.0);
+    assert!(bounds.3 >= bounds.1);
 
     diagram
         .add_fermion(v1, v2, "e-")
@@ -718,4 +724,29 @@ fn feynman_diagram_builds_and_renders() {
     assert!(qed.num_vertices() > 0);
     assert!(compton.num_vertices() > 0);
     assert!(!qed.render_ascii().is_empty());
+}
+
+#[test]
+fn quantum_error_display_mentions_invalid_qubit_bounds() {
+    let err = QuantumError::InvalidQubit { index: 5, max: 4 };
+    assert!(err.to_string().contains("5"));
+    assert!(err.to_string().contains("4"));
+}
+
+#[test]
+fn topology_phase_helpers_match_known_phases() {
+    assert_eq!(qwz_chern(1.0, 32), -1);
+    assert_eq!(qwz_chern(-1.0, 32), 1);
+    assert_eq!(qwz_chern(3.0, 32), 0);
+    assert_eq!(ssh_winding(1.0, 2.0, 64), 1);
+    assert_eq!(ssh_winding(2.0, 1.0, 64), 0);
+}
+
+#[test]
+#[cfg(not(target_arch = "aarch64"))]
+fn topology_kpm_bulk_marker_is_topological() {
+    let sys = moonlab::ChernKpm::new(12, -1.0, 100).unwrap();
+    let map = sys.bulk_map(4, 8).unwrap();
+    let mean: f64 = map.iter().sum::<f64>() / map.len() as f64;
+    assert!((mean - 1.0).abs() < 0.25, "bulk mean = {mean}");
 }

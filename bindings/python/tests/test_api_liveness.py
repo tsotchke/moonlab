@@ -5,6 +5,7 @@ import numpy as np
 from moonlab import Clifford
 from moonlab.core import Complex
 from moonlab.ml import QuantumPCA
+from moonlab.visualization import CircuitDiagram
 
 
 def test_complex_to_python_returns_builtin_complex():
@@ -43,3 +44,10 @@ def test_quantum_pca_fit_transform_projects_components():
     assert projected.shape == (4, 1)
     assert model.components_.shape == (1, 2)
     np.testing.assert_allclose(projected, model.transform(X))
+
+
+def test_circuit_diagram_set_qubit_label_updates_rendered_wire():
+    circuit = CircuitDiagram(2).set_qubit_label(1, "ancilla")
+
+    assert circuit.qubit_labels[1] == "ancilla"
+    assert "ancilla:" in circuit.to_ascii()

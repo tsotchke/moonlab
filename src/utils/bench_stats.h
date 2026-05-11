@@ -89,18 +89,6 @@ static inline int bench_stats_n_runs(int default_n) {
 }
 
 /**
- * @brief Pretty-print a single bench_stats_t line.  Does NOT add a
- *        trailing newline.
- */
-static inline void bench_stats_print(const bench_stats_t *s, FILE *out) {
-    if (!s || !out) return;
-    fprintf(out,
-            "%.2f us +/- %.2f (%.1f%%)  [min %.2f  max %.2f  n=%d]",
-            s->mean_us, s->stddev_us, s->rel_stddev * 100.0,
-            s->min_us, s->max_us, s->n_runs);
-}
-
-/**
  * @brief Format a bench_stats_t as a JSON object suitable to splice
  *        into a reproducibility-manifest metrics fragment.  Writes
  *        at most @p cap bytes into @p buf; returns number of bytes

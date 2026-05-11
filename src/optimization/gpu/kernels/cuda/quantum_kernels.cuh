@@ -21,14 +21,6 @@
 
 typedef cuDoubleComplex complex_t;
 
-// Complex arithmetic helpers (device functions)
-__device__ __forceinline__ complex_t cmul(complex_t a, complex_t b) {
-    return make_cuDoubleComplex(
-        cuCreal(a) * cuCreal(b) - cuCimag(a) * cuCimag(b),
-        cuCreal(a) * cuCimag(b) + cuCimag(a) * cuCreal(b)
-    );
-}
-
 __device__ __forceinline__ complex_t cadd(complex_t a, complex_t b) {
     return make_cuDoubleComplex(cuCreal(a) + cuCreal(b), cuCimag(a) + cuCimag(b));
 }
