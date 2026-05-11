@@ -87,16 +87,7 @@ kernel void batch_hadamard_init(
     float scale = 1.0f / sqrt((float)(1u << num_qubits));
     
     for (uint i = tid; i < state_dim; i += tpg) {
-        // H⊗n|0...0⟩ = uniform superposition
-        uint hamming = popcount(i);
-        float sign = (hamming & 1) ? -1.0f : 1.0f;
-        
-        // Initialize: only |0...0⟩ has amplitude, rest are 0
-        if (i == 0) {
-            state[i] = complex_t(sign * scale, 0.0f);
-        } else {
-            state[i] = complex_t(0.0f, 0.0f);
-        }
+        state[i] = complex_t(scale, 0.0f);
     }
 }
 
@@ -217,9 +208,7 @@ inline void batch_hadamard_all(
     float scale = 1.0f / sqrt((float)(1u << num_qubits));
     
     for (uint i = tid; i < state_dim; i += tpg) {
-        uint hamming = popcount(i);
-        float sign = (hamming & 1) ? -1.0f : 1.0f;
-        state[i] = cscale(state[i], sign * scale);
+        state[i] = complex_t(scale, 0.0f);
     }
     
     threadgroup_barrier(mem_flags::mem_device);

@@ -50,6 +50,28 @@ static int failures = 0;
 /* Metal kernels use float2 = { float real, float imag }. */
 typedef struct { float re; float im; } fcomplex_t;
 
+static void check_trace_identity(const metal_backend_trace_t* trace,
+                                 const char* owner,
+                                 const char* operation) {
+    CHECK(trace != NULL, "Metal backend trace is present");
+    if (!trace) return;
+
+    CHECK(trace->owner != NULL && strcmp(trace->owner, owner) == 0,
+          "Metal backend trace owner is %s", owner);
+    CHECK(trace->operation != NULL && strcmp(trace->operation, operation) == 0,
+          "Metal backend trace operation is %s", operation);
+    CHECK(trace->backend_name != NULL,
+          "Metal backend trace records backend name");
+    CHECK(trace->device_name != NULL,
+          "Metal backend trace records device name");
+    CHECK(trace->metal_available == 0 || trace->metal_available == 1,
+          "Metal backend trace availability is boolean");
+    CHECK(trace->tensor_pipelines_loaded <= trace->tensor_pipelines_expected,
+          "Metal tensor pipeline trace is bounded (%d/%d)",
+          trace->tensor_pipelines_loaded,
+          trace->tensor_pipelines_expected);
+}
+
 static void randomize_double(complex_t* buf, size_t n, unsigned seed) {
     srand(seed);
     double norm = 0.0;
@@ -142,12 +164,51 @@ static void test_gate_parity(metal_compute_ctx_t* ctx,
     quantum_state_free(&cpu_state);
 }
 
+static void test_batch_grover_trace(metal_compute_ctx_t* ctx) {
+    const uint32_t num_searches = 1;
+    const uint32_t num_qubits = 2;
+    const uint32_t state_dim = 1u << num_qubits;
+    const uint32_t num_iterations = 1;
+    const size_t nbytes = num_searches * state_dim * sizeof(fcomplex_t);
+
+    metal_buffer_t* batch_states = metal_buffer_create(ctx, nbytes);
+    CHECK(batch_states != NULL, "Metal batch Grover state buffer allocated");
+    if (!batch_states) return;
+
+    memset(metal_buffer_contents(batch_states), 0, nbytes);
+
+    uint32_t targets[] = {2};
+    uint32_t results[] = {0};
+    int rc = metal_grover_batch_search(ctx, batch_states, targets, results,
+                                       num_searches, num_qubits,
+                                       num_iterations);
+
+    const metal_backend_trace_t* trace = metal_get_last_backend_trace();
+    check_trace_identity(trace, "metal_grover_batch_search",
+                         "batch-grover-search");
+    CHECK(rc == 0, "Metal batch Grover search completes successfully");
+    CHECK(trace && trace->batch_search_pipeline_loaded == 1,
+          "Metal batch Grover trace confirms compiled batch pipeline");
+    if (rc == 0) {
+        CHECK(results[0] == targets[0],
+              "Metal batch Grover search finds target %u", targets[0]);
+    }
+
+    metal_buffer_free(batch_states);
+}
+
 #endif  /* METAL_PRESENT */
 
 int main(void) {
     fprintf(stdout, "=== Metal GPU parity tests ===\n");
 #if METAL_PRESENT
+    metal_backend_trace_t probe =
+        metal_backend_probe("test_metal_parity", "probe");
+    check_trace_identity(&probe, "test_metal_parity", "probe");
+
     if (!metal_is_available()) {
+        CHECK(probe.fallback_intentional == 1,
+              "Metal unavailable probe is marked as intentional fallback");
         fprintf(stdout, "  SKIP  metal_is_available() reports 0 — no Metal adapter\n");
         fprintf(stdout, "\n=== %d failure%s ===\n",
                 failures, failures == 1 ? "" : "s");
@@ -161,6 +222,24 @@ int main(void) {
                 failures, failures == 1 ? "" : "s");
         return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
+
+    const metal_backend_trace_t* init_trace = metal_get_last_backend_trace();
+    check_trace_identity(init_trace, "metal_compute_init", "initialize");
+    CHECK(init_trace->device_created == 1,
+          "Metal init trace confirms real device creation");
+    CHECK(init_trace->command_queue_created == 1,
+          "Metal init trace confirms command queue creation");
+    CHECK(init_trace->shader_library_loaded == 1,
+          "Metal init trace confirms shader library loading");
+    CHECK(init_trace->last_status == 0,
+          "Metal init trace reports successful status");
+
+    test_batch_grover_trace(ctx);
+    metal_wait_completion(ctx);
+    const metal_backend_trace_t* wait_trace = metal_get_last_backend_trace();
+    check_trace_identity(wait_trace, "metal_wait_completion", "synchronize");
+    CHECK(wait_trace->last_status == 0,
+          "Metal wait trace reports successful synchronization");
 
     test_gate_parity(ctx, "Hadamard", gate_hadamard, metal_hadamard, 5, 0);
     test_gate_parity(ctx, "Hadamard", gate_hadamard, metal_hadamard, 5, 2);

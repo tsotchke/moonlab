@@ -36,6 +36,30 @@ typedef struct metal_compute_ctx metal_compute_ctx_t;
 // Metal buffer handle
 typedef struct metal_buffer metal_buffer_t;
 
+/**
+ * @brief Runtime provenance for Metal backend decisions
+ *
+ * This trace is intentionally plain C ABI data so downstream consumers can
+ * verify that a Metal execution path used a real Metal device and identify
+ * which optional shader families were available at runtime.
+ */
+typedef struct {
+    const char* owner;
+    const char* operation;
+    const char* backend_name;
+    const char* device_name;
+    int metal_available;
+    int device_created;
+    int command_queue_created;
+    int shader_library_loaded;
+    int batch_search_pipeline_loaded;
+    int tensor_library_loaded;
+    int tensor_pipelines_loaded;
+    int tensor_pipelines_expected;
+    int fallback_intentional;
+    int last_status;
+} metal_backend_trace_t;
+
 // ============================================================================
 // INITIALIZATION & CLEANUP
 // ============================================================================
@@ -62,6 +86,25 @@ void metal_compute_free(metal_compute_ctx_t* ctx);
  * @return 1 if Metal is available, 0 otherwise
  */
 int metal_is_available(void);
+
+/**
+ * @brief Probe Metal availability without creating a compute context
+ *
+ * @param owner Caller label recorded in the returned trace
+ * @param operation Operation label recorded in the returned trace
+ * @return Backend trace for the probe
+ */
+metal_backend_trace_t metal_backend_probe(
+    const char* owner,
+    const char* operation
+);
+
+/**
+ * @brief Return the last backend trace recorded by Metal operations
+ *
+ * @return Pointer to process-local trace storage
+ */
+const metal_backend_trace_t* metal_get_last_backend_trace(void);
 
 /**
  * @brief Get GPU device information

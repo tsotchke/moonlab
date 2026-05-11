@@ -2,8 +2,13 @@
 #import <Foundation/Foundation.h>
 #include "gpu_metal.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <mach/mach_time.h>
+
+#ifndef MOONLAB_SOURCE_DIR
+#define MOONLAB_SOURCE_DIR "."
+#endif
 
 /**
  * @file metal_bridge.mm
@@ -69,6 +74,29 @@ struct metal_buffer {
 // UTILITY FUNCTIONS
 // ============================================================================
 
+#define METAL_TENSOR_PIPELINES_EXPECTED 13
+
+static char g_metal_trace_owner[96] = "metal";
+static char g_metal_trace_operation[96] = "uninitialized";
+static char g_metal_trace_backend[32] = "none";
+static char g_metal_trace_device[256] = "unavailable";
+static metal_backend_trace_t g_metal_last_backend_trace = {
+    g_metal_trace_owner,
+    g_metal_trace_operation,
+    g_metal_trace_backend,
+    g_metal_trace_device,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    METAL_TENSOR_PIPELINES_EXPECTED,
+    1,
+    -1
+};
+
 static double get_time_seconds() {
     static mach_timebase_info_data_t timebase_info;
     static dispatch_once_t onceToken;
@@ -86,6 +114,118 @@ static void set_error(metal_compute_ctx_t* ctx, NSString* error) {
     }
 }
 
+static void copy_trace_string(char* dst,
+                              size_t dst_size,
+                              const char* src,
+                              const char* fallback) {
+    if (!dst || dst_size == 0) return;
+
+    const char* value = src ? src : fallback;
+    if (!value) value = "";
+
+    strncpy(dst, value, dst_size - 1);
+    dst[dst_size - 1] = '\0';
+}
+
+static int count_tensor_pipelines(metal_compute_ctx_t* ctx) {
+    if (!ctx) return 0;
+
+    id<MTLComputePipelineState> pipelines[] = {
+        ctx->tensorContract2SitePipeline,
+        ctx->applyGateThetaPipeline,
+        ctx->computeColumnNormsPipeline,
+        ctx->jacobiRotationPipeline,
+        ctx->extractSingularValuesPipeline,
+        ctx->normalizeAndTruncateUPipeline,
+        ctx->truncateVPipeline,
+        ctx->transferMatrixZPipeline,
+        ctx->transferMatrixIdentityPipeline,
+        ctx->contractTransferPipeline,
+        ctx->transferTracePipeline,
+        ctx->tensorNormSquaredPipeline,
+        ctx->tensorScalePipeline
+    };
+
+    int loaded = 0;
+    for (size_t i = 0; i < sizeof(pipelines) / sizeof(pipelines[0]); ++i) {
+        if (pipelines[i]) loaded++;
+    }
+    return loaded;
+}
+
+static void copy_device_name(id<MTLDevice> device) {
+    if (!device) {
+        copy_trace_string(g_metal_trace_device,
+                          sizeof(g_metal_trace_device),
+                          "unavailable",
+                          "unavailable");
+        return;
+    }
+
+    NSString* deviceName = [device name];
+    copy_trace_string(g_metal_trace_device,
+                      sizeof(g_metal_trace_device),
+                      [deviceName UTF8String],
+                      "unnamed-metal-device");
+}
+
+static NSString* kernel_source_path(NSString* relativePath) {
+    NSString* sourceDir = [NSString stringWithUTF8String:MOONLAB_SOURCE_DIR];
+    return [sourceDir stringByAppendingPathComponent:relativePath];
+}
+
+static const metal_backend_trace_t* record_metal_backend_trace(
+    metal_compute_ctx_t* ctx,
+    const char* owner,
+    const char* operation,
+    int status
+) {
+    @autoreleasepool {
+        id<MTLDevice> availableDevice = ctx && ctx->device
+            ? ctx->device
+            : MTLCreateSystemDefaultDevice();
+
+        const int metal_available = availableDevice != nil;
+
+        copy_trace_string(g_metal_trace_owner,
+                          sizeof(g_metal_trace_owner),
+                          owner,
+                          "metal");
+        copy_trace_string(g_metal_trace_operation,
+                          sizeof(g_metal_trace_operation),
+                          operation,
+                          "operation");
+        copy_trace_string(g_metal_trace_backend,
+                          sizeof(g_metal_trace_backend),
+                          metal_available ? "metal" : "none",
+                          "none");
+        copy_device_name(availableDevice);
+
+        g_metal_last_backend_trace.owner = g_metal_trace_owner;
+        g_metal_last_backend_trace.operation = g_metal_trace_operation;
+        g_metal_last_backend_trace.backend_name = g_metal_trace_backend;
+        g_metal_last_backend_trace.device_name = g_metal_trace_device;
+        g_metal_last_backend_trace.metal_available = metal_available;
+        g_metal_last_backend_trace.device_created =
+            (ctx && ctx->device) ? 1 : 0;
+        g_metal_last_backend_trace.command_queue_created =
+            (ctx && ctx->commandQueue) ? 1 : 0;
+        g_metal_last_backend_trace.shader_library_loaded =
+            (ctx && ctx->library) ? 1 : 0;
+        g_metal_last_backend_trace.batch_search_pipeline_loaded =
+            (ctx && ctx->batchSearchPipeline) ? 1 : 0;
+        g_metal_last_backend_trace.tensor_library_loaded =
+            (ctx && ctx->tensorLibrary) ? 1 : 0;
+        g_metal_last_backend_trace.tensor_pipelines_loaded = count_tensor_pipelines(ctx);
+        g_metal_last_backend_trace.tensor_pipelines_expected =
+            METAL_TENSOR_PIPELINES_EXPECTED;
+        g_metal_last_backend_trace.fallback_intentional = metal_available ? 0 : 1;
+        g_metal_last_backend_trace.last_status = status;
+
+        return &g_metal_last_backend_trace;
+    }
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -93,12 +233,17 @@ static void set_error(metal_compute_ctx_t* ctx, NSString* error) {
 metal_compute_ctx_t* metal_compute_init(void) {
     @autoreleasepool {
         metal_compute_ctx_t* ctx = (metal_compute_ctx_t*)calloc(1, sizeof(metal_compute_ctx_t));
-        if (!ctx) return NULL;
+        if (!ctx) {
+            record_metal_backend_trace(NULL, "metal_compute_init", "initialize", -1);
+            return NULL;
+        }
         
         // Get Metal device (should be M2 Ultra)
         ctx->device = MTLCreateSystemDefaultDevice();
         if (!ctx->device) {
             fprintf(stderr, "Metal: Failed to create device\n");
+            set_error(ctx, @"Metal device unavailable");
+            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
@@ -113,13 +258,16 @@ metal_compute_ctx_t* metal_compute_init(void) {
         ctx->commandQueue = [ctx->device newCommandQueue];
         if (!ctx->commandQueue) {
             fprintf(stderr, "Metal: Failed to create command queue\n");
+            set_error(ctx, @"Failed to create Metal command queue");
+            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
         
         // Load shader library
         NSError* error = nil;
-        NSString* shaderPath = @"src/optimization/kernels/quantum_kernels.metal";
+        NSString* shaderPath =
+            kernel_source_path(@"src/optimization/kernels/quantum_kernels.metal");
         
         // Try to compile from source
         NSString* shaderSource = [NSString stringWithContentsOfFile:shaderPath
@@ -140,13 +288,16 @@ metal_compute_ctx_t* metal_compute_init(void) {
         if (!ctx->library) {
             fprintf(stderr, "Metal: Failed to load shader library: %s\n",
                     [[error localizedDescription] UTF8String]);
+            set_error(ctx, @"Failed to load Metal shader library");
+            record_metal_backend_trace(ctx, "metal_compute_init", "initialize", -1);
             free(ctx);
             return NULL;
         }
         
         // Load batch kernels
         NSError* batchError = nil;
-        NSString* batchPath = @"src/optimization/kernels/quantum_kernels_batch.metal";
+        NSString* batchPath =
+            kernel_source_path(@"src/optimization/kernels/quantum_kernels_batch.metal");
         NSString* batchSource = [NSString stringWithContentsOfFile:batchPath
                                                            encoding:NSUTF8StringEncoding
                                                               error:&batchError];
@@ -240,7 +391,8 @@ metal_compute_ctx_t* metal_compute_init(void) {
 
         // Load tensor network kernels
         NSError* tensorError = nil;
-        NSString* tensorPath = @"src/optimization/kernels/tensor_kernels.metal";
+        NSString* tensorPath =
+            kernel_source_path(@"src/optimization/kernels/tensor_kernels.metal");
         NSString* tensorSource = [NSString stringWithContentsOfFile:tensorPath
                                                            encoding:NSUTF8StringEncoding
                                                               error:&tensorError];
@@ -345,6 +497,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         printf("Metal: Compute pipelines compiled successfully\n");
         printf("Metal: Ready for GPU acceleration (%u cores)\n", num_cores);
 
+        record_metal_backend_trace(ctx, "metal_compute_init", "initialize", 0);
         return ctx;
     }
 }
@@ -363,6 +516,19 @@ int metal_is_available(void) {
         id<MTLDevice> device = MTLCreateSystemDefaultDevice();
         return device != nil;
     }
+}
+
+metal_backend_trace_t metal_backend_probe(
+    const char* owner,
+    const char* operation
+) {
+    const int status = metal_is_available() ? 0 : -1;
+    record_metal_backend_trace(NULL, owner, operation, status);
+    return g_metal_last_backend_trace;
+}
+
+const metal_backend_trace_t* metal_get_last_backend_trace(void) {
+    return &g_metal_last_backend_trace;
 }
 
 void metal_get_device_info(
@@ -830,15 +996,24 @@ int metal_grover_batch_search(
     uint32_t num_qubits,
     uint32_t num_iterations
 ) {
-    if (!ctx || !batch_states || !targets || !results) return -1;
-    if (num_searches == 0 || num_qubits == 0) return -1;
+    if (!ctx || !batch_states || !targets || !results) {
+        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                   "batch-grover-search", -1);
+        return -1;
+    }
+    if (num_searches == 0 || num_qubits == 0) {
+        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                   "batch-grover-search", -1);
+        return -1;
+    }
     
     @autoreleasepool {
         // Load batch kernel if not already loaded
         if (!ctx->batchSearchPipeline) {
             // Try to load from batch kernel file
             NSError* error = nil;
-            NSString* batchPath = @"src/optimization/kernels/quantum_kernels_batch.metal";
+            NSString* batchPath =
+                kernel_source_path(@"src/optimization/kernels/quantum_kernels_batch.metal");
             NSString* batchSource = [NSString stringWithContentsOfFile:batchPath
                                                                encoding:NSUTF8StringEncoding
                                                                   error:&error];
@@ -858,6 +1033,9 @@ int metal_grover_batch_search(
             
             if (!ctx->batchSearchPipeline) {
                 fprintf(stderr, "Metal: Failed to load batch search kernel\n");
+                set_error(ctx, @"Failed to load batch search kernel");
+                record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                           "batch-grover-search", -1);
                 return -1;
             }
         }
@@ -873,12 +1051,23 @@ int metal_grover_batch_search(
         if (!targets_buf || !results_buf) {
             if (targets_buf) metal_buffer_free(targets_buf);
             if (results_buf) metal_buffer_free(results_buf);
+            set_error(ctx, @"Failed to allocate batch search buffers");
+            record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                       "batch-grover-search", -1);
             return -1;
         }
         
         // Dispatch batch kernel
         id<MTLCommandBuffer> commandBuffer = [ctx->commandQueue commandBuffer];
         id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+        if (!commandBuffer || !encoder) {
+            metal_buffer_free(targets_buf);
+            metal_buffer_free(results_buf);
+            set_error(ctx, @"Failed to create batch search command encoder");
+            record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                       "batch-grover-search", -1);
+            return -1;
+        }
         
         [encoder setComputePipelineState:ctx->batchSearchPipeline];
         [encoder setBuffer:batch_states->buffer offset:0 atIndex:0];
@@ -911,20 +1100,40 @@ int metal_grover_batch_search(
         metal_buffer_free(targets_buf);
         metal_buffer_free(results_buf);
         
-        return ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+        int result = ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+        if (result != 0) {
+            set_error(ctx, @"Batch search command buffer failed");
+        }
+        record_metal_backend_trace(ctx, "metal_grover_batch_search",
+                                   "batch-grover-search", result);
+        return result;
     }
 }
 // SYNCHRONIZATION & UTILITIES
 // ============================================================================
 
 void metal_wait_completion(metal_compute_ctx_t* ctx) {
-    if (!ctx || !ctx->commandQueue) return;
+    if (!ctx || !ctx->commandQueue) {
+        record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", -1);
+        return;
+    }
     
     @autoreleasepool {
         // Create a barrier to wait for all pending operations
         id<MTLCommandBuffer> commandBuffer = [ctx->commandQueue commandBuffer];
+        if (!commandBuffer) {
+            set_error(ctx, @"Failed to create synchronization command buffer");
+            record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", -1);
+            return;
+        }
+
         [commandBuffer commit];
         [commandBuffer waitUntilCompleted];
+        int result = ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+        if (result != 0) {
+            set_error(ctx, @"Synchronization command buffer failed");
+        }
+        record_metal_backend_trace(ctx, "metal_wait_completion", "synchronize", result);
     }
 }
 
