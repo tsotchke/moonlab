@@ -559,7 +559,7 @@ void lattice_2d_print_info(const lattice_2d_t *lat) {
     printf("  Lattice const:  %.3f\n", lat->a);
 }
 
-void lattice_2d_print_snake(const lattice_2d_t *lat) {
+static void trace_lattice_2d_snake_report(const lattice_2d_t *lat) {
     if (!lat) return;
 
     printf("\nSnake ordering (MPS index at each grid position):\n");
@@ -578,6 +578,10 @@ void lattice_2d_print_snake(const lattice_2d_t *lat) {
         printf("\n");
     }
     printf("\n");
+}
+
+void lattice_2d_print_snake(const lattice_2d_t *lat) {
+    trace_lattice_2d_snake_report(lat);
 }
 
 // ============================================================================

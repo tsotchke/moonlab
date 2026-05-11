@@ -147,7 +147,7 @@ static bool g_gpu_init_logged = false;
  *
  * Uses the global GPU context from tensor.c to avoid double initialization.
  */
-static metal_compute_ctx_t *get_metal_context(void) {
+static metal_compute_ctx_t *trace_metal_context_for_tn_gate(void) {
     tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
     if (!gpu_ctx) return NULL;
 
@@ -159,15 +159,19 @@ static metal_compute_ctx_t *get_metal_context(void) {
     return ctx;
 }
 
+static metal_compute_ctx_t *get_metal_context(void) {
+    return trace_metal_context_for_tn_gate();
+}
+
 /**
  * @brief Apply 2-qubit gate using Metal GPU
  *
  * @return TN_GATE_SUCCESS on success, or negative error if GPU path failed (fall back to CPU)
  */
-static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
-                                                    uint32_t left_qubit,
-                                                    const tn_gate_2q_t *gate,
-                                                    double *truncation_error) {
+static tn_gate_error_t trace_apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
+                                                        uint32_t left_qubit,
+                                                        const tn_gate_2q_t *gate,
+                                                        double *truncation_error) {
     metal_compute_ctx_t *ctx = get_metal_context();
     if (!ctx) return TN_GATE_ERROR_ALLOC_FAILED;  // Signal to use CPU path
 
@@ -329,6 +333,14 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
     state->canonical = TN_CANONICAL_NONE;
 
     return TN_GATE_SUCCESS;
+}
+
+static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
+                                                  uint32_t left_qubit,
+                                                  const tn_gate_2q_t *gate,
+                                                  double *truncation_error) {
+    return trace_apply_gate_2q_adjacent_gpu(state, left_qubit, gate,
+                                            truncation_error);
 }
 #endif // HAS_METAL
 

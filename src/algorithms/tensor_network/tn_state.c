@@ -489,7 +489,7 @@ tn_mps_stats_t tn_mps_get_stats(const tn_mps_state_t *state) {
     return stats;
 }
 
-void tn_mps_print_info(const tn_mps_state_t *state) {
+static void trace_tn_mps_info_report(const tn_mps_state_t *state) {
     if (!state) {
         printf("MPS State: NULL\n");
         return;
@@ -516,6 +516,10 @@ void tn_mps_print_info(const tn_mps_state_t *state) {
     tn_mps_stats_t stats = tn_mps_get_stats(state);
     printf("  Memory usage:     %lu bytes\n", (unsigned long)stats.memory_bytes);
     printf("  Entanglement:     %.4f\n", stats.entanglement_entropy);
+}
+
+void tn_mps_print_info(const tn_mps_state_t *state) {
+    trace_tn_mps_info_report(state);
 }
 
 // ============================================================================

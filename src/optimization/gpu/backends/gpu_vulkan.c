@@ -597,7 +597,7 @@ void vulkan_get_device_info(
     }
 }
 
-void vulkan_print_device_info(vulkan_compute_ctx_t* ctx) {
+static void trace_vulkan_device_info_report(vulkan_compute_ctx_t* ctx) {
     if (!ctx) return;
 
     printf("\n");
@@ -609,6 +609,10 @@ void vulkan_print_device_info(vulkan_compute_ctx_t* ctx) {
     printf("  Device Memory: %llu MB\n",
            (unsigned long long)(ctx->max_memory / (1024 * 1024)));
     printf("========================================\n\n");
+}
+
+void vulkan_print_device_info(vulkan_compute_ctx_t* ctx) {
+    trace_vulkan_device_info_report(ctx);
 }
 
 // ============================================================================
