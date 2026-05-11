@@ -2122,12 +2122,12 @@ int webgpu_swap(webgpu_compute_ctx_t* ctx,
     return 0;
 }
 
-int webgpu_mps_apply_gate_theta(webgpu_compute_ctx_t* ctx,
-                                void* theta_host_ptr,
-                                const double complex* gate_4x4,
-                                uint32_t chi_l,
-                                uint32_t chi_r,
-                                int* used_native_out) {
+static int trace_webgpu_mps_apply_gate_theta(webgpu_compute_ctx_t* ctx,
+                                             void* theta_host_ptr,
+                                             const double complex* gate_4x4,
+                                             uint32_t chi_l,
+                                             uint32_t chi_r,
+                                             int* used_native_out) {
     if (!ctx || !theta_host_ptr || !gate_4x4 || chi_l == 0 || chi_r == 0) {
         return set_error(ctx, "Invalid MPS gate-theta parameters");
     }
@@ -2173,12 +2173,22 @@ int webgpu_mps_apply_gate_theta(webgpu_compute_ctx_t* ctx,
     return 0;
 }
 
-int webgpu_mps_expectation_z_canonical(webgpu_compute_ctx_t* ctx,
-                                       const void* tensor_host_ptr,
-                                       uint32_t chi_l,
-                                       uint32_t chi_r,
-                                       double* expectation_out,
-                                       int* used_native_out) {
+int webgpu_mps_apply_gate_theta(webgpu_compute_ctx_t* ctx,
+                                void* theta_host_ptr,
+                                const double complex* gate_4x4,
+                                uint32_t chi_l,
+                                uint32_t chi_r,
+                                int* used_native_out) {
+    return trace_webgpu_mps_apply_gate_theta(ctx, theta_host_ptr, gate_4x4,
+                                             chi_l, chi_r, used_native_out);
+}
+
+static int trace_webgpu_mps_expectation_z_canonical(webgpu_compute_ctx_t* ctx,
+                                                    const void* tensor_host_ptr,
+                                                    uint32_t chi_l,
+                                                    uint32_t chi_r,
+                                                    double* expectation_out,
+                                                    int* used_native_out) {
     if (!ctx || !tensor_host_ptr || !expectation_out || chi_l == 0 || chi_r == 0) {
         return set_error(ctx, "Invalid MPS canonical expectation parameters");
     }
@@ -2222,6 +2232,18 @@ int webgpu_mps_expectation_z_canonical(webgpu_compute_ctx_t* ctx,
     *expectation_out = (denominator > 1e-30) ? (numerator / denominator) : 0.0;
     mark_exec_time(ctx, start);
     return 0;
+}
+
+int webgpu_mps_expectation_z_canonical(webgpu_compute_ctx_t* ctx,
+                                       const void* tensor_host_ptr,
+                                       uint32_t chi_l,
+                                       uint32_t chi_r,
+                                       double* expectation_out,
+                                       int* used_native_out) {
+    return trace_webgpu_mps_expectation_z_canonical(ctx, tensor_host_ptr,
+                                                   chi_l, chi_r,
+                                                   expectation_out,
+                                                   used_native_out);
 }
 
 int webgpu_oracle(webgpu_compute_ctx_t* ctx,
