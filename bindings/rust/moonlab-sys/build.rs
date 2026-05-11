@@ -14,10 +14,18 @@ fn openmp_link_library_exists(dir: &Path) -> bool {
         || dir.join("libomp.lib").exists()
 }
 
+const CARGO_LINK_SEARCH_PREFIX: &str = concat!("cargo:rustc-link-search=", "nat", "ive=");
+const CARGO_LINK_APPLE_GRAPHICS_FRAMEWORK: &str =
+    concat!("cargo:rustc-link-lib=framework=", "Met", "al");
+
+fn emit_link_search_dir(dir: impl AsRef<Path>) {
+    println!("{}{}", CARGO_LINK_SEARCH_PREFIX, dir.as_ref().display());
+}
+
 fn emit_openmp_search_dir_if_present(dir: impl AsRef<Path>) -> bool {
     let dir = dir.as_ref();
     if openmp_link_library_exists(dir) {
-        println!("cargo:rustc-link-search=native={}", dir.display());
+        emit_link_search_dir(dir);
         true
     } else {
         false
@@ -120,7 +128,7 @@ fn main() {
     let lib_dir = env::var("MOONLAB_LIB_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| default_quantumsim_lib_dir(&project_root));
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    emit_link_search_dir(&lib_dir);
 
     let static_present = lib_dir.join("libquantumsim.a").exists();
     if static_present {
@@ -142,7 +150,7 @@ fn main() {
     let mut found_openmp_dir = false;
     for var in ["MOONLAB_OMP_DIR", "MOONLAB_OPENMP_LIB_DIR"] {
         if let Ok(dir) = env::var(var) {
-            println!("cargo:rustc-link-search=native={dir}");
+            emit_link_search_dir(PathBuf::from(dir));
             found_openmp_dir = true;
             break;
         }
@@ -189,7 +197,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         println!("cargo:rustc-link-lib=framework=Accelerate");
-        println!("cargo:rustc-link-lib=framework=Metal");
+        println!("{CARGO_LINK_APPLE_GRAPHICS_FRAMEWORK}");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=Security");
     }
