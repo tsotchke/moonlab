@@ -32,44 +32,6 @@
 // ============================================================================
 
 /**
- * @brief Create random Erdős-Rényi graph
- */
-static graph_t* create_random_graph(size_t num_vertices, double edge_probability) {
-    // Count edges first
-    size_t num_edges = 0;
-    for (size_t i = 0; i < num_vertices; i++) {
-        for (size_t j = i + 1; j < num_vertices; j++) {
-            double r = (double)rand() / RAND_MAX;
-            if (r < edge_probability) {
-                num_edges++;
-            }
-        }
-    }
-    
-    if (num_edges == 0) {
-        return NULL;
-    }
-    
-    graph_t *graph = graph_create(num_vertices, num_edges);
-    if (!graph) return NULL;
-    
-    // Add edges
-    srand(time(NULL));
-    size_t edge_idx = 0;
-    
-    for (size_t i = 0; i < num_vertices; i++) {
-        for (size_t j = i + 1; j < num_vertices; j++) {
-            double r = (double)rand() / RAND_MAX;
-            if (r < edge_probability) {
-                graph_add_edge(graph, edge_idx++, i, j, 1.0);
-            }
-        }
-    }
-    
-    return graph;
-}
-
-/**
  * @brief Create 3-regular graph (each vertex has degree 3)
  */
 static graph_t* create_3regular_graph(size_t num_vertices) {

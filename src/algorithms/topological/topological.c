@@ -1559,56 +1559,6 @@ static inline uint32_t v_edge(const toric_code_t *code, uint32_t x, uint32_t y) 
 }
 
 /**
- * @brief Apply toric code plaquette projector
- *
- * Projects onto +1 eigenspace of plaquette stabilizer B_p = ZZZZ.
- */
-__attribute__((unused))
-static void apply_plaquette_projector(toric_code_t *code, uint32_t x, uint32_t y) {
-    uint32_t L = code->L;
-    quantum_state_t *state = code->state;
-    size_t dim = state->state_dim;
-
-    // Get the 4 edges around plaquette (x, y)
-    uint32_t qubits[4] = {
-        h_edge(code, x, y),              // Top
-        h_edge(code, x, (y + 1) % L),    // Bottom
-        v_edge(code, x, y),              // Left
-        v_edge(code, (x + 1) % L, y)     // Right
-    };
-
-    // Build Z mask
-    uint64_t z_mask = 0;
-    for (int i = 0; i < 4; i++) {
-        z_mask |= (1ULL << qubits[i]);
-    }
-
-    // Apply projector (I + ZZZZ)/2
-    double complex *new_amps = malloc(dim * sizeof(double complex));
-    if (!new_amps) return;
-
-    for (size_t basis = 0; basis < dim; basis++) {
-        int parity = __builtin_popcountll(basis & z_mask) & 1;
-        double sign = parity ? -1.0 : 1.0;
-        // (I + Z)|ψ⟩ = |ψ⟩ + sign|ψ⟩
-        new_amps[basis] = state->amplitudes[basis] * (1.0 + sign) * 0.5;
-    }
-
-    // Normalize
-    double norm = 0.0;
-    for (size_t i = 0; i < dim; i++) {
-        norm += cabs(new_amps[i]) * cabs(new_amps[i]);
-    }
-    norm = sqrt(norm);
-    if (norm > 1e-15) {
-        for (size_t i = 0; i < dim; i++) {
-            state->amplitudes[i] = new_amps[i] / norm;
-        }
-    }
-    free(new_amps);
-}
-
-/**
  * @brief Apply toric code vertex projector
  *
  * Projects onto +1 eigenspace of vertex stabilizer A_v = XXXX.
