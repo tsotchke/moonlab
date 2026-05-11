@@ -3,12 +3,22 @@
 
 // Single threaded MINIMAL_RUNTIME programs do not need access to
 // document.currentScript, so a simple export declaration is enough.
-var MoonlabModule = (() => {
+function build_moonlab_module_factory() {
+  return (() => {
   // When MODULARIZE this JS may be executed later,
   // after document.currentScript is gone, so we save it.
   // In EXPORT_ES6 mode we can just use 'import.meta.url'.
   var _scriptName = globalThis.document?.currentScript?.src;
   return async function(moduleArg = {}) {
+    if (typeof MoonlabModule !== 'undefined' &&
+        typeof MoonlabModule.recordBackendRuntimeProbe === 'function') {
+      MoonlabModule.recordBackendRuntimeProbe({
+        operation: 'factory-invocation',
+        moduleReady: false,
+        backendAvailable: false,
+        reason: 'factory-loading',
+      });
+    }
     var moduleRtn;
 
 // include: shell.js
@@ -2141,6 +2151,122 @@ for (const prop of Object.keys(Module)) {
     return moduleRtn;
   };
 })();
+}
+
+var MoonlabModule = build_moonlab_module_factory();
+
+MoonlabModule.lastBackendRuntimeProbe = null;
+MoonlabModule.recordBackendRuntimeProbe = function(details = {}) {
+  const trace = {
+    owner: 'MoonlabModule',
+    operation: details.operation || 'runtime-probe',
+    backendName: details.backendName || details.backend_name || 'wasm-unified-gpu',
+    backend_name: details.backend_name || details.backendName || 'wasm-unified-gpu',
+    backendAvailable: Boolean(details.backendAvailable),
+    moduleReady: Boolean(details.moduleReady),
+    fallbackIntentional: Boolean(details.fallbackIntentional),
+    reason: details.reason || 'not-run',
+    timestamp: new Date().toISOString(),
+  };
+  MoonlabModule.lastBackendRuntimeProbe = trace;
+  return trace;
+};
+
+MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
+  const instance = await MoonlabModule(moduleArg);
+  const required = [
+    '_gpu_compute_init',
+    '_gpu_get_backend_type',
+    '_gpu_is_native_accelerated',
+    '_gpu_compute_free',
+  ];
+  const missingUnifiedGpuApi = required.filter((name) => {
+    if (name === '_gpu_compute_probabilities') {
+      return (
+        typeof instance._gpu_compute_probabilities_u32 !== 'function' &&
+        typeof instance._gpu_compute_probabilities !== 'function'
+      );
+    }
+    return typeof instance[name] !== 'function';
+  });
+
+  const trace_runtime_name_for_type = (backendType) => {
+    switch (backendType) {
+      case 0: return 'none';
+      case 1: return 'metal';
+      case 2: return 'webgpu';
+      case 3: return 'opencl';
+      case 4: return 'vulkan';
+      case 5: return 'cuda';
+      case 6: return 'cuquantum';
+      case 7: return 'auto';
+      default: return `unknown-${backendType}`;
+    }
+  };
+
+  const trace_runtime_backend_selection = (preferredBackendType) => {
+    if (missingUnifiedGpuApi.length > 0) {
+      return {
+        preferredBackendType,
+        ctxCreated: false,
+        backendType: 0,
+        backendName: 'none',
+        backend_name: 'none',
+        nativeAccelerated: false,
+        fallbackIntentional: true,
+        reason: 'unified-gpu-api-unavailable',
+      };
+    }
+
+    const ctxPtr = instance._gpu_compute_init(preferredBackendType);
+    if (!ctxPtr) {
+      return {
+        preferredBackendType,
+        ctxCreated: false,
+        backendType: 0,
+        backendName: 'none',
+        backend_name: 'none',
+        nativeAccelerated: false,
+        fallbackIntentional: true,
+        reason: 'gpu-context-unavailable',
+      };
+    }
+
+    const backendType = instance._gpu_get_backend_type(ctxPtr);
+    const nativeAccelerated =
+      typeof instance._gpu_is_native_accelerated === 'function' &&
+      instance._gpu_is_native_accelerated(ctxPtr) !== 0;
+    instance._gpu_compute_free(ctxPtr);
+    return {
+      preferredBackendType,
+      ctxCreated: true,
+      backendType,
+      backendName: trace_runtime_name_for_type(backendType),
+      backend_name: trace_runtime_name_for_type(backendType),
+      nativeAccelerated,
+      fallbackIntentional: backendType !== preferredBackendType,
+      reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
+    };
+  };
+
+  const trace = {
+    owner: 'MoonlabModule',
+    operation: 'probeBackendRuntime',
+    backendName: 'wasm-unified-gpu',
+    backend_name: 'wasm-unified-gpu',
+    backendAvailable: missingUnifiedGpuApi.length === 0,
+    moduleReady: true,
+    missingUnifiedGpuApi,
+    webgpu: trace_runtime_backend_selection(2),
+    auto: trace_runtime_backend_selection(7),
+  };
+  trace.fallbackIntentional =
+    missingUnifiedGpuApi.length > 0 || trace.webgpu.fallbackIntentional;
+  trace.reason =
+    missingUnifiedGpuApi.length > 0 ? 'unified-gpu-api-unavailable' : trace.webgpu.reason;
+  MoonlabModule.lastBackendRuntimeProbe = trace;
+  return trace;
+};
 
 // Export using a UMD style export, or ES6 exports if selected
 if (typeof exports === 'object' && typeof module === 'object') {
@@ -2150,4 +2276,3 @@ if (typeof exports === 'object' && typeof module === 'object') {
   module.exports.default = MoonlabModule;
 } else if (typeof define === 'function' && define['amd'])
   define([], () => MoonlabModule);
-

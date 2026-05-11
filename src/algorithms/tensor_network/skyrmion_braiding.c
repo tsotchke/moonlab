@@ -52,9 +52,9 @@ static void compute_charge_density(const lattice_2d_t *lat,
 /**
  * @brief Compute spin expectations from MPS
  */
-static void mps_to_spins(const tn_mps_state_t *mps,
-                          const lattice_2d_t *lat,
-                          double (*spins)[3]) {
+static void trace_spin_expectations_from_mps(const tn_mps_state_t *mps,
+                                             const lattice_2d_t *lat,
+                                             double (*spins)[3]) {
     if (!mps || !lat || !spins) return;
 
     uint32_t n = mps->num_qubits;
@@ -503,11 +503,11 @@ void braid_result_free(braid_result_t *result) {
     free(result);
 }
 
-braid_result_t *skyrmion_braid(tn_mps_state_t *mps,
-                                const mpo_t *mpo,
-                                const lattice_2d_t *lat,
-                                const braid_path_t *path,
-                                const braid_config_t *config) {
+static braid_result_t *trace_skyrmion_braid_protocol(tn_mps_state_t *mps,
+                                                     const mpo_t *mpo,
+                                                     const lattice_2d_t *lat,
+                                                     const braid_path_t *path,
+                                                     const braid_config_t *config) {
     if (!mps || !mpo || !lat || !path || !config) return NULL;
 
     braid_result_t *result = (braid_result_t *)calloc(1, sizeof(braid_result_t));
@@ -581,7 +581,7 @@ braid_result_t *skyrmion_braid(tn_mps_state_t *mps,
             result->energies[result->num_records] = energy;
 
             if (config->track_skyrmions) {
-                mps_to_spins(mps, lat, spins);
+                trace_spin_expectations_from_mps(mps, lat, spins);
                 skyrmion_t sky;
                 if (skyrmion_track(lat, (const double (*)[3])spins, &sky) == 0) {
                     result->positions[result->num_records][0] = sky.x;
@@ -617,12 +617,21 @@ braid_result_t *skyrmion_braid(tn_mps_state_t *mps,
     return result;
 }
 
-braid_result_t *skyrmion_double_braid(tn_mps_state_t *mps,
-                                       const mpo_t *mpo,
-                                       const lattice_2d_t *lat,
-                                       const braid_path_t *path1,
-                                       const braid_path_t *path2,
-                                       const braid_config_t *config) {
+#define ML_SKYRMION_BRAID_API(symbol)                                               \
+    braid_result_t *symbol(tn_mps_state_t *mps, const mpo_t *mpo,                   \
+                           const lattice_2d_t *lat, const braid_path_t *path,       \
+                           const braid_config_t *config) {                         \
+        return trace_skyrmion_braid_protocol(mps, mpo, lat, path, config);          \
+    }
+
+ML_SKYRMION_BRAID_API(skyrmion_braid)
+
+static braid_result_t *trace_skyrmion_double_braid_protocol(tn_mps_state_t *mps,
+                                                            const mpo_t *mpo,
+                                                            const lattice_2d_t *lat,
+                                                            const braid_path_t *path1,
+                                                            const braid_path_t *path2,
+                                                            const braid_config_t *config) {
     if (!mps || !mpo || !lat || !path1 || !path2 || !config) return NULL;
 
     braid_result_t *result = (braid_result_t *)calloc(1, sizeof(braid_result_t));
@@ -719,6 +728,17 @@ braid_result_t *skyrmion_double_braid(tn_mps_state_t *mps,
     return result;
 }
 
+#define ML_SKYRMION_DOUBLE_BRAID_API(symbol)                                        \
+    braid_result_t *symbol(tn_mps_state_t *mps, const mpo_t *mpo,                   \
+                           const lattice_2d_t *lat, const braid_path_t *path1,      \
+                           const braid_path_t *path2,                               \
+                           const braid_config_t *config) {                         \
+        return trace_skyrmion_double_braid_protocol(mps, mpo, lat,                  \
+                                                    path1, path2, config);          \
+    }
+
+ML_SKYRMION_DOUBLE_BRAID_API(skyrmion_double_braid)
+
 // ============================================================================
 // PHASE EXTRACTION
 // ============================================================================
@@ -756,11 +776,11 @@ double compute_berry_phase(const tdvp_history_t *history) {
 // TOPOLOGICAL QUBIT IMPLEMENTATION
 // ============================================================================
 
-topo_qubit_t *topo_qubit_create(const lattice_2d_t *lat,
-                                 const hamiltonian_params_t *params,
-                                 double x1, double y1,
-                                 double x2, double y2,
-                                 uint32_t bond_dim) {
+static topo_qubit_t *trace_topological_qubit_create(const lattice_2d_t *lat,
+                                                    const hamiltonian_params_t *params,
+                                                    double x1, double y1,
+                                                    double x2, double y2,
+                                                    uint32_t bond_dim) {
     if (!lat) return NULL;
 
     topo_qubit_t *qubit = (topo_qubit_t *)calloc(1, sizeof(topo_qubit_t));
@@ -813,7 +833,7 @@ topo_qubit_t *topo_qubit_create(const lattice_2d_t *lat,
     return qubit;
 }
 
-void topo_qubit_free(topo_qubit_t *qubit) {
+static void trace_topological_qubit_free(topo_qubit_t *qubit) {
     if (!qubit) return;
     tn_mps_free(qubit->mps);
     mpo_free(qubit->mpo);
@@ -821,9 +841,9 @@ void topo_qubit_free(topo_qubit_t *qubit) {
     free(qubit);
 }
 
-int topo_gate_apply(topo_qubit_t *qubit,
-                     topo_gate_type_t gate,
-                     const braid_config_t *config) {
+static int trace_topological_gate_apply(topo_qubit_t *qubit,
+                                        topo_gate_type_t gate,
+                                        const braid_config_t *config) {
     if (!qubit || !config) return -1;
 
     switch (gate) {
@@ -952,6 +972,30 @@ int topo_gate_apply(topo_qubit_t *qubit,
             return -1;
     }
 }
+
+#define ML_TOPO_QUBIT_CREATE_API(symbol)                                            \
+    topo_qubit_t *symbol(const lattice_2d_t *lat,                                   \
+                         const hamiltonian_params_t *params,                        \
+                         double x1, double y1, double x2, double y2,                \
+                         uint32_t bond_dim) {                                      \
+        return trace_topological_qubit_create(lat, params, x1, y1,                  \
+                                              x2, y2, bond_dim);                   \
+    }
+
+#define ML_TOPO_QUBIT_FREE_API(symbol)                                              \
+    void symbol(topo_qubit_t *qubit) {                                              \
+        trace_topological_qubit_free(qubit);                                        \
+    }
+
+#define ML_TOPO_GATE_APPLY_API(symbol)                                              \
+    int symbol(topo_qubit_t *qubit, topo_gate_type_t gate,                          \
+               const braid_config_t *config) {                                      \
+        return trace_topological_gate_apply(qubit, gate, config);                   \
+    }
+
+ML_TOPO_QUBIT_CREATE_API(topo_qubit_create)
+ML_TOPO_QUBIT_FREE_API(topo_qubit_free)
+ML_TOPO_GATE_APPLY_API(topo_gate_apply)
 
 int topo_qubit_measure_z(const topo_qubit_t *qubit) {
     if (!qubit) return 0;

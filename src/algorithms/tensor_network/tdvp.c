@@ -377,9 +377,9 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
 // TDVP ENGINE
 // ============================================================================
 
-tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
-                                   mpo_t *mpo,
-                                   const tdvp_config_t *config) {
+static tdvp_engine_t *trace_tdvp_engine_context(tn_mps_state_t *mps,
+                                                mpo_t *mpo,
+                                                const tdvp_config_t *config) {
     if (!mps || !mpo || !config) return NULL;
 
     tdvp_engine_t *engine = (tdvp_engine_t *)calloc(1, sizeof(tdvp_engine_t));
@@ -413,6 +413,14 @@ tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
     return engine;
 }
 
+#define ML_TDVP_ENGINE_CREATE_API(symbol)                                           \
+    tdvp_engine_t *symbol(tn_mps_state_t *mps, mpo_t *mpo,                          \
+                          const tdvp_config_t *config) {                           \
+        return trace_tdvp_engine_context(mps, mpo, config);                         \
+    }
+
+ML_TDVP_ENGINE_CREATE_API(tdvp_engine_create)
+
 void tdvp_engine_free(tdvp_engine_t *engine) {
     if (!engine) return;
     dmrg_environments_free(engine->env);
@@ -434,13 +442,13 @@ double tdvp_get_time(const tdvp_engine_t *engine) {
 /**
  * @brief Evolve two-site tensor
  */
-static int tdvp_evolve_two_site(tn_mps_state_t *mps,
-                                 const mpo_t *mpo,
-                                 dmrg_environments_t *env,
-                                 uint32_t site,
-                                 double complex dt,
-                                 const tdvp_config_t *config,
-                                 double *truncation_error) {
+static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
+                                      const mpo_t *mpo,
+                                      dmrg_environments_t *env,
+                                      uint32_t site,
+                                      double complex dt,
+                                      const tdvp_config_t *config,
+                                      double *truncation_error) {
     if (!mps || !mpo || !env || site >= mps->num_qubits - 1) return -1;
 
     tensor_t *A = mps->tensors[site];
@@ -581,7 +589,7 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
 // TDVP STEP
 // ============================================================================
 
-int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
+static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     if (!engine) return -1;
 
     double start_time = get_time_sec();
@@ -607,8 +615,8 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Left-to-right sweep with dt/2
     for (uint32_t site = 0; site < n - 1; site++) {
         double trunc_err;
-        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, &trunc_err) != 0) {
+        if (trace_tdvp_two_site_update(mps, mpo, env, site, dt / 2,
+                                       &engine->config, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %u (L->R)\n", site);
             return -1;
         }
@@ -630,8 +638,8 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Right-to-left sweep with dt/2
     for (int site = n - 2; site >= 0; site--) {
         double trunc_err;
-        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, &trunc_err) != 0) {
+        if (trace_tdvp_two_site_update(mps, mpo, env, site, dt / 2,
+                                       &engine->config, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %d (R->L)\n", site);
             return -1;
         }
@@ -675,6 +683,13 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     return 0;
 }
 
+#define ML_TDVP_STEP_API(symbol)                                                    \
+    int symbol(tdvp_engine_t *engine, tdvp_result_t *result) {                      \
+        return trace_tdvp_step(engine, result);                                      \
+    }
+
+ML_TDVP_STEP_API(tdvp_step)
+
 int tdvp_evolve_to(tdvp_engine_t *engine,
                     double target_time,
                     tdvp_history_t *history) {
@@ -710,11 +725,11 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
 // SINGLE-STEP STATELESS VERSION
 // ============================================================================
 
-int tdvp_single_step(tn_mps_state_t *mps,
-                      const mpo_t *mpo,
-                      double dt,
-                      const tdvp_config_t *config,
-                      double *energy) {
+static int trace_tdvp_single_step(tn_mps_state_t *mps,
+                                  const mpo_t *mpo,
+                                  double dt,
+                                  const tdvp_config_t *config,
+                                  double *energy) {
     if (!mps || !mpo || !config) return -1;
 
     // Create temporary engine
@@ -733,15 +748,23 @@ int tdvp_single_step(tn_mps_state_t *mps,
     return ret;
 }
 
+#define ML_TDVP_SINGLE_STEP_API(symbol)                                             \
+    int symbol(tn_mps_state_t *mps, const mpo_t *mpo, double dt,                    \
+               const tdvp_config_t *config, double *energy) {                      \
+        return trace_tdvp_single_step(mps, mpo, dt, config, energy);                \
+    }
+
+ML_TDVP_SINGLE_STEP_API(tdvp_single_step)
+
 // ============================================================================
 // EVOLUTION WITH OBSERVABLES
 // ============================================================================
 
-int tdvp_evolve_with_observables(tdvp_engine_t *engine,
-                                  double target_time,
-                                  observable_callback_t callback,
-                                  void *user_data,
-                                  uint32_t measure_interval) {
+static int trace_tdvp_observable_evolution(tdvp_engine_t *engine,
+                                           double target_time,
+                                           observable_callback_t callback,
+                                           void *user_data,
+                                           uint32_t measure_interval) {
     if (!engine) return -1;
 
     uint32_t step_count = 0;
@@ -771,3 +794,13 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
 
     return 0;
 }
+
+#define ML_TDVP_OBSERVABLE_EVOLUTION_API(symbol)                                    \
+    int symbol(tdvp_engine_t *engine, double target_time,                           \
+               observable_callback_t callback, void *user_data,                     \
+               uint32_t measure_interval) {                                        \
+        return trace_tdvp_observable_evolution(engine, target_time, callback,       \
+                                               user_data, measure_interval);        \
+    }
+
+ML_TDVP_OBSERVABLE_EVOLUTION_API(tdvp_evolve_with_observables)
