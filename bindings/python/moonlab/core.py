@@ -65,14 +65,11 @@ if _lib_path is None:
     )
 
 _omp_duplicate_runtime_allowed = False
-if (
-    sys.platform == "darwin" and
-    "torch" in sys.modules and
-    "KMP_DUPLICATE_LIB_OK" not in os.environ
-):
+if sys.platform == "darwin" and "KMP_DUPLICATE_LIB_OK" not in os.environ:
     # PyTorch wheels on macOS ship their own libomp while the local Moonlab
-    # CMake build links Homebrew libomp. Make the compatibility path explicit
-    # so torch_layer can report it instead of letting libomp abort the process.
+    # CMake build links Homebrew libomp. Pytest and notebooks may import
+    # Moonlab before torch, so make the compatibility path import-order
+    # independent instead of letting a later torch import abort the process.
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     _omp_duplicate_runtime_allowed = True
 
