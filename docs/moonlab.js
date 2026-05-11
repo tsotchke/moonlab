@@ -3,7 +3,8 @@
 
 // Single threaded MINIMAL_RUNTIME programs do not need access to
 // document.currentScript, so a simple export declaration is enough.
-var MoonlabModule = (() => {
+function build_moonlab_module_factory() {
+  return (() => {
   // When MODULARIZE this JS may be executed later,
   // after document.currentScript is gone, so we save it.
   // In EXPORT_ES6 mode we can just use 'import.meta.url'.
@@ -2994,7 +2995,10 @@ for (const prop of Object.keys(Module)) {
     }
     return moduleRtn;
   };
-})();
+  })();
+}
+
+var MoonlabModule = build_moonlab_module_factory();
 
 MoonlabModule.lastBackendRuntimeProbe = {
   owner: 'MoonlabModule',
@@ -3033,7 +3037,7 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
     await instance.ready;
   }
 
-  const backendNameForType = (backendType) => {
+  const trace_runtime_name_for_type = (backendType) => {
     switch (backendType) {
       case 0: return 'none';
       case 1: return 'metal';
@@ -3067,7 +3071,7 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
     return typeof instance[name] !== 'function';
   });
 
-  const probeBackend = (preferredBackendType) => {
+  const trace_runtime_backend_selection = (preferredBackendType) => {
     if (missingUnifiedGpuApi.length > 0) {
       return {
         preferredBackendType,
@@ -3104,8 +3108,8 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
       preferredBackendType,
       ctxCreated: true,
       backendType,
-      backendName: backendNameForType(backendType),
-      backend_name: backendNameForType(backendType),
+      backendName: trace_runtime_name_for_type(backendType),
+      backend_name: trace_runtime_name_for_type(backendType),
       nativeAccelerated,
       fallbackIntentional: backendType !== preferredBackendType,
       reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
@@ -3120,8 +3124,8 @@ MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
     backendAvailable: missingUnifiedGpuApi.length === 0,
     moduleReady: true,
     missingUnifiedGpuApi,
-    webgpu: probeBackend(2),
-    auto: probeBackend(7),
+    webgpu: trace_runtime_backend_selection(2),
+    auto: trace_runtime_backend_selection(7),
   };
   trace.fallbackIntentional =
     missingUnifiedGpuApi.length > 0 || trace.webgpu.fallbackIntentional;
