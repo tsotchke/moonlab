@@ -23,6 +23,9 @@
 #include <omp.h>
 #endif
 
+static const char *CONTRACT_OP_STATE_OPERATOR_APPLICATION =
+    "state-operator-application";
+
 #if defined(_OPENMP)
 #define CONTRACT_OPENMP_AVAILABLE true
 #define CONTRACT_DEFAULT_BACKEND_NAME "openmp-c"
@@ -37,6 +40,7 @@ static contract_backend_trace_t g_contract_last_backend_trace = {
     .owner = "contract_backend_probe",
     .operation = "probe",
     .backend_name = CONTRACT_DEFAULT_BACKEND_NAME,
+    .backend_available = true,
     .openmp_available = CONTRACT_OPENMP_AVAILABLE,
     .parallel_requested = true,
     .scalar_kernel = CONTRACT_DEFAULT_SCALAR_KERNEL,
@@ -70,6 +74,7 @@ contract_backend_trace_t contract_backend_probe(const contract_config_t *config,
         .owner = owner ? owner : "contract_backend_probe",
         .operation = operation ? operation : "probe",
         .backend_name = contract_backend_name_selected(config),
+        .backend_available = true,
         .openmp_available = CONTRACT_OPENMP_AVAILABLE,
         .parallel_requested = config ? config->parallel : true,
         .scalar_kernel = contract_scalar_kernel_selected(config),
@@ -84,9 +89,9 @@ const contract_backend_trace_t *contract_get_last_backend_trace(void) {
     return &g_contract_last_backend_trace;
 }
 
-static void contract_record_backend_trace(const contract_config_t *config,
-                                          const char *owner,
-                                          const char *operation) {
+static void contract_record_runtime_provenance(const contract_config_t *config,
+                                               const char *owner,
+                                               const char *operation) {
     g_contract_last_backend_trace = contract_backend_probe(config, owner, operation);
 }
 
@@ -1006,12 +1011,13 @@ static tensor_t *contract_mps_mpo_site(const tensor_t *m,
     return compressed;
 }
 
-tensor_t **contract_mps_mpo(const tensor_t **mps,
+tensor_t **contract_mps_mpo(const tensor_t **state_tensors,
                              const tensor_t **mpo,
                              uint32_t num_sites,
                              const contract_config_t *config) {
-    contract_record_backend_trace(config, "contract_mps_mpo", "mps-mpo-application");
-    if (!mps || !mpo || num_sites == 0 || !config) return NULL;
+    contract_record_runtime_provenance(config, "contract_mps_mpo",
+                                       CONTRACT_OP_STATE_OPERATOR_APPLICATION);
+    if (!state_tensors || !mpo || num_sites == 0 || !config) return NULL;
 
     // Allocate result array
     tensor_t **result = (tensor_t **)calloc(num_sites, sizeof(tensor_t *));
@@ -1024,7 +1030,9 @@ tensor_t **contract_mps_mpo(const tensor_t **mps,
     // Then reshape to [new_left_bond, physical_out, new_right_bond]
 
     for (uint32_t site = 0; site < num_sites; site++) {
-        tensor_t *site_result = contract_mps_mpo_site(mps[site], mpo[site], config);
+        tensor_t *site_result = contract_mps_mpo_site(state_tensors[site],
+                                                       mpo[site],
+                                                       config);
         if (!site_result) {
             contract_free_tensor_array(result, site);
             return NULL;

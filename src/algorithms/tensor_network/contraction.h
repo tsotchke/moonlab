@@ -156,6 +156,7 @@ typedef struct {
     const char *owner;               /**< Public API recording provenance */
     const char *operation;           /**< Logical operation being traced */
     const char *backend_name;        /**< "openmp-c" or "scalar-c" */
+    bool backend_available;          /**< True when a concrete contraction kernel family is active */
     bool openmp_available;           /**< OpenMP support is compiled in */
     bool parallel_requested;         /**< Caller requested parallel execution */
     bool scalar_kernel;              /**< Portable scalar C path is active */
@@ -421,13 +422,13 @@ tensor_t *contract_tree(const tensor_t **tensors,
  * Applies matrix product operator to matrix product state.
  * Commonly used for time evolution and expectation values.
  *
- * @param mps Array of MPS tensors [num_sites]
+ * @param state_tensors Array of MPS tensors [num_sites]
  * @param mpo Array of MPO tensors [num_sites]
  * @param num_sites Number of sites
  * @param config Configuration (compression important)
  * @return Resulting MPS tensors or NULL on failure
  */
-tensor_t **contract_mps_mpo(const tensor_t **mps,
+tensor_t **contract_mps_mpo(const tensor_t **state_tensors,
                              const tensor_t **mpo,
                              uint32_t num_sites,
                              const contract_config_t *config);

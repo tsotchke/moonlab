@@ -72,6 +72,8 @@ static void check_contract_trace_consistency(const contract_backend_trace_t *tra
           trace->owner ? trace->owner : "(null)", owner);
     CHECK(trace->operation != NULL, "contraction trace operation must be named");
     CHECK(trace->backend_name != NULL, "contraction backend must be named");
+    CHECK(trace->backend_available,
+          "contraction backend trace should mark the active kernel family available");
     CHECK(trace->openmp_available || trace->scalar_kernel,
           "contraction scalar kernel must be active when OpenMP is unavailable");
     CHECK(!trace->scalar_kernel || trace->fallback_intentional,
