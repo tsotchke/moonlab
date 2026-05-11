@@ -74,3 +74,36 @@ def test_quantum_pooling_forward_records_backend_trace():
     assert tuple(output.shape) == (1, 2)
     assert torch.allclose(output, torch.tensor([[2.0, 4.0]], dtype=torch.float32))
     _assert_trace(layer.last_backend_trace, "QuantumPooling.forward")
+
+
+@pytest.mark.ml
+def test_quantum_pooling_trace_returns_density_blocks():
+    layer = QuantumPooling(pool_size=2, method="trace")
+    x = torch.tensor([[1.0 + 1.0j, 2.0 - 1.0j, 3.0 + 0.5j, 4.0 + 2.0j]])
+
+    output = layer(x)
+
+    assert tuple(output.shape) == (1, 2, 2, 2)
+    expected0 = torch.outer(x[0, :2], x[0, :2].conj())
+    expected1 = torch.outer(x[0, 2:4], x[0, 2:4].conj())
+    assert torch.allclose(output[0, 0], expected0)
+    assert torch.allclose(output[0, 1], expected1)
+    _assert_trace(layer.last_backend_trace, "QuantumPooling.forward")
+
+
+@pytest.mark.ml
+def test_quantum_pooling_trace_sequence_reduces_by_partial_trace():
+    layer = QuantumPooling(pool_size=2, method="trace")
+    x = torch.tensor([[[1.0, 2.0],
+                       [3.0, 5.0],
+                       [7.0, 11.0],
+                       [13.0, 17.0]]], dtype=torch.float32)
+
+    output = layer(x)
+
+    assert tuple(output.shape) == (1, 2, 2, 2)
+    first_window = x[0, :2, :]
+    second_window = x[0, 2:4, :]
+    assert torch.allclose(output[0, 0], first_window.T @ first_window)
+    assert torch.allclose(output[0, 1], second_window.T @ second_window)
+    _assert_trace(layer.last_backend_trace, "QuantumPooling.forward")

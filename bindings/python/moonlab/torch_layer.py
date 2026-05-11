@@ -724,6 +724,11 @@ class QuantumPooling(nn.Module):
         num_qubits: Optional[int] = None
     ):
         super().__init__()
+        if pool_size < 1:
+            raise ValueError("pool_size must be >= 1")
+        if method not in {'measure', 'parametric', 'trace'}:
+            raise ValueError(f"Unknown pooling method: {method}")
+
         self.pool_size = pool_size
         self.method = method
 
@@ -811,13 +816,24 @@ class QuantumPooling(nn.Module):
                 return self.quantum_pool(x)
 
         elif self.method == 'trace':
-            # Partial trace pooling: keep every pool_size-th element
-            # This is a simplified version; true partial trace would require
-            # density matrix operations
             if len(x.shape) == 3:
-                return x[:, ::self.pool_size, :]
+                batch_size, seq_len, features = x.shape
+                new_seq_len = seq_len // self.pool_size
+                if new_seq_len == 0:
+                    raise ValueError("pool_size exceeds sequence length")
+
+                windows = x[:, :new_seq_len * self.pool_size, :]
+                windows = windows.reshape(batch_size, new_seq_len, self.pool_size, features)
+                return torch.einsum('bnpf,bnpg->bnfg', windows, windows.conj())
             else:
-                return x[:, ::self.pool_size]
+                batch_size, features = x.shape
+                new_features = features // self.pool_size
+                if new_features == 0:
+                    raise ValueError("pool_size exceeds feature dimension")
+
+                windows = x[:, :new_features * self.pool_size]
+                windows = windows.reshape(batch_size, new_features, self.pool_size)
+                return torch.einsum('bnp,bnq->bnpq', windows, windows.conj())
 
         else:
             raise ValueError(f"Unknown pooling method: {self.method}")
