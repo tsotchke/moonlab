@@ -33,9 +33,11 @@ References:
 import numpy as np
 from typing import Any, Dict, Optional, Callable, List, Tuple
 from .core import QuantumState, _lib, _lib_path, _omp_duplicate_runtime_allowed
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import torch as _torch
+
+torch = _torch
+nn = _torch.nn
+F = _torch.nn.functional
 
 
 _TORCH_NATIVE_BACKEND_SYMBOLS = (
@@ -55,9 +57,9 @@ _TORCH_LAST_BACKEND_TRACE: Dict[str, Any] = {}
 def moonlab_torch_backend_probe() -> Dict[str, Any]:
     """Return the native/runtime backend used by the PyTorch integration."""
     missing = [name for name in _TORCH_NATIVE_BACKEND_SYMBOLS if not hasattr(_lib, name)]
-    if torch.cuda.is_available():
+    if _torch.cuda.is_available():
         torch_device = "cuda"
-    elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+    elif getattr(_torch.backends, "mps", None) is not None and _torch.backends.mps.is_available():
         torch_device = "mps"
     else:
         torch_device = "cpu"
@@ -97,30 +99,34 @@ def _make_torch_backend_trace(owner: str, operation: str) -> Dict[str, Any]:
     return trace
 
 
+def _make_tensor_runtime_trace(owner: str, operation: str) -> Dict[str, Any]:
+    return _make_torch_backend_trace(owner, operation)
+
+
 def moonlab_torch_last_backend_trace() -> Dict[str, Any]:
     """Return the most recent PyTorch integration backend trace."""
     return dict(_TORCH_LAST_BACKEND_TRACE)
 
 
-def _identity_measurement(outputs: torch.Tensor) -> torch.Tensor:
+def _identity_measurement(outputs: _torch.Tensor) -> _torch.Tensor:
     return outputs
 
 
-def _measurement_tensor(values: List[float], reference: Optional[torch.Tensor] = None) -> torch.Tensor:
-    _make_torch_backend_trace("_measurement_tensor", "tensor-construction")
-    dtype = torch.float32
+def _measurement_tensor(values: List[float], reference: Optional[_torch.Tensor] = None) -> _torch.Tensor:
+    _make_tensor_runtime_trace("_measurement_tensor", "tensor-construction")
+    dtype = _torch.float32
     device = None
     if reference is not None:
         device = reference.device
         if reference.is_floating_point():
             dtype = reference.dtype
-    return torch.tensor(values, dtype=dtype, device=device)
+    return _torch.tensor(values, dtype=dtype, device=device)
 
 # ============================================================================
 # QUANTUM GRADIENT COMPUTATION (Parameter Shift Rule)
 # ============================================================================
 
-class ParameterShiftGradient(torch.autograd.Function):
+class ParameterShiftGradient(_torch.autograd.Function):
     """
     Custom autograd function for quantum circuit gradients
 
@@ -177,7 +183,7 @@ class ParameterShiftGradient(torch.autograd.Function):
         )
 
         # Gradient w.r.t. parameters using parameter shift
-        grad_params = torch.zeros_like(params)
+        grad_params = _torch.zeros_like(params)
 
         for i in range(len(params)):
             # Shift parameter by +π/2
@@ -199,7 +205,7 @@ class ParameterShiftGradient(torch.autograd.Function):
         # Gradient w.r.t. inputs using finite difference approximation
         # For rotation gates RY(x), ∂RY/∂x can be computed
         eps = 1e-4
-        grad_inputs = torch.zeros_like(inputs)
+        grad_inputs = _torch.zeros_like(inputs)
 
         flat_grad_inputs = grad_inputs.reshape(-1)
         for i in range(inputs.numel()):
@@ -386,14 +392,14 @@ class QuantumLayer(nn.Module):
         # Trainable parameters: 3 rotations per qubit per layer
         # RX, RY, RZ for maximum expressivity
         num_params = num_qubits * depth * 3
-        self.params = nn.Parameter(torch.randn(num_params) * 0.1)
+        self.params = nn.Parameter(_torch.randn(num_params) * 0.1)
 
         # Cache for gradient computation
         self._grad_cache = {}
         self.backend_probe = moonlab_torch_backend_probe()
         self._last_backend_trace = _make_torch_backend_trace("QuantumLayer", "init")
 
-    def encode_data(self, x: torch.Tensor, state: QuantumState):
+    def encode_data(self, x: _torch.Tensor, state: QuantumState):
         """
         Encode classical data into quantum state
 
@@ -480,7 +486,7 @@ class QuantumLayer(nn.Module):
         else:
             raise ValueError(f"Unknown encoding: {self.encoding}")
 
-    def apply_variational_circuit(self, state: QuantumState, params: torch.Tensor):
+    def apply_variational_circuit(self, state: QuantumState, params: _torch.Tensor):
         """
         Apply parameterized quantum circuit
 
@@ -509,8 +515,8 @@ class QuantumLayer(nn.Module):
     def measure_observables(
         self,
         state: QuantumState,
-        reference: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+        reference: Optional[_torch.Tensor] = None
+    ) -> _torch.Tensor:
         """
         Measure quantum state to extract classical outputs
 
@@ -553,7 +559,7 @@ class QuantumLayer(nn.Module):
         else:
             raise ValueError(f"Unknown measurement: {self.measurement}")
 
-    def _execute_batch(self, x: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+    def _execute_batch(self, x: _torch.Tensor, params: _torch.Tensor) -> _torch.Tensor:
         """
         Execute the native Moonlab circuit for a batch without relying on
         PyTorch's tensor-level autograd through the C calls.
@@ -579,10 +585,10 @@ class QuantumLayer(nn.Module):
             output_vec = self.measure_observables(state, reference=input_vec)
             outputs.append(output_vec)
 
-        result = torch.stack(outputs)
+        result = _torch.stack(outputs)
         return result.squeeze(0) if was_vector else result
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: _torch.Tensor) -> _torch.Tensor:
         """
         Forward pass through quantum layer
 
@@ -667,7 +673,7 @@ class QuantumConv1D(nn.Module):
         self.backend_probe = moonlab_torch_backend_probe()
         self._last_backend_trace = _make_torch_backend_trace("QuantumConv1D", "init")
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: _torch.Tensor) -> _torch.Tensor:
         """
         Apply quantum convolution
 
@@ -677,7 +683,7 @@ class QuantumConv1D(nn.Module):
         Returns:
             Output tensor of shape (batch_size, out_features, num_qubits)
         """
-        self._last_backend_trace = _make_torch_backend_trace("QuantumConv1D.forward", "forward")
+        self._last_runtime_trace = _make_tensor_runtime_trace("QuantumConv1D.forward", "forward")
         batch_size = x.shape[0]
         outputs = []
 
@@ -692,15 +698,15 @@ class QuantumConv1D(nn.Module):
 
                 # Project to qubit dimension
                 projected = self.input_proj(patch.unsqueeze(0))
-                projected = torch.tanh(projected)  # Normalize for quantum encoding
+                projected = _torch.tanh(projected)  # Normalize for quantum encoding
 
                 # Apply quantum kernel
                 quantum_out = self.quantum_kernel(projected)
                 sample_outputs.append(quantum_out.squeeze(0))
 
-            outputs.append(torch.stack(sample_outputs))
+            outputs.append(_torch.stack(sample_outputs))
 
-        return torch.stack(outputs)
+        return _torch.stack(outputs)
 
     def extra_repr(self) -> str:
         return (f'in_features={self.in_features}, out_features={self.out_features}, '
@@ -708,7 +714,7 @@ class QuantumConv1D(nn.Module):
 
     @property
     def last_backend_trace(self) -> Dict[str, Any]:
-        return self._last_backend_trace
+        return getattr(self, "_last_runtime_trace", self._last_backend_trace)
 
 
 class QuantumPooling(nn.Module):
@@ -755,7 +761,7 @@ class QuantumPooling(nn.Module):
         self.backend_probe = moonlab_torch_backend_probe()
         self._last_backend_trace = _make_torch_backend_trace("QuantumPooling", "init")
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: _torch.Tensor) -> _torch.Tensor:
         """
         Apply quantum pooling
 
@@ -765,7 +771,7 @@ class QuantumPooling(nn.Module):
         Returns:
             Pooled tensor with reduced spatial dimension
         """
-        self._last_backend_trace = _make_torch_backend_trace("QuantumPooling.forward", "forward")
+        self._last_runtime_trace = _make_tensor_runtime_trace("QuantumPooling.forward", "forward")
         if self.method == 'measure':
             # Measurement-based pooling: average over pool windows
             # Similar to average pooling but motivated by quantum measurement
@@ -819,9 +825,9 @@ class QuantumPooling(nn.Module):
                         pooled = self.quantum_pool(window_flat)
                         sample_outputs.append(pooled.squeeze(0)[:features])
 
-                    outputs.append(torch.stack(sample_outputs))
+                    outputs.append(_torch.stack(sample_outputs))
 
-                return torch.stack(outputs)
+                return _torch.stack(outputs)
             else:
                 # Direct feature pooling
                 return self.quantum_pool(x)
@@ -835,7 +841,7 @@ class QuantumPooling(nn.Module):
 
                 windows = x[:, :new_seq_len * self.pool_size, :]
                 windows = windows.reshape(batch_size, new_seq_len, self.pool_size, features)
-                return torch.einsum('bnpf,bnpg->bnfg', windows, windows.conj())
+                return _torch.einsum('bnpf,bnpg->bnfg', windows, windows.conj())
             else:
                 batch_size, features = x.shape
                 new_features = features // self.pool_size
@@ -844,7 +850,7 @@ class QuantumPooling(nn.Module):
 
                 windows = x[:, :new_features * self.pool_size]
                 windows = windows.reshape(batch_size, new_features, self.pool_size)
-                return torch.einsum('bnp,bnq->bnpq', windows, windows.conj())
+                return _torch.einsum('bnp,bnq->bnpq', windows, windows.conj())
 
         else:
             raise ValueError(f"Unknown pooling method: {self.method}")
@@ -854,7 +860,7 @@ class QuantumPooling(nn.Module):
 
     @property
     def last_backend_trace(self) -> Dict[str, Any]:
-        return self._last_backend_trace
+        return getattr(self, "_last_runtime_trace", self._last_backend_trace)
 
 
 # ============================================================================
@@ -901,10 +907,10 @@ class QuantumClassifier(nn.Module):
         # Classical readout
         self.classical_output = nn.Linear(num_qubits, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: _torch.Tensor) -> _torch.Tensor:
         """Forward pass"""
         x = self.classical_input(x)
-        x = torch.tanh(x)  # Normalize to reasonable range
+        x = _torch.tanh(x)  # Normalize to reasonable range
         x = self.quantum(x)
         x = self.classical_output(x)
         return x
@@ -943,7 +949,7 @@ class HybridQNN(nn.Module):
 
         self.activation = nn.ReLU()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: _torch.Tensor) -> _torch.Tensor:
         """Forward pass through hybrid network"""
         x = self.activation(self.classical1(x))
         x = x[:, :self.quantum1.num_qubits]  # Take first n features
@@ -996,21 +1002,21 @@ class QuantumEncoder(nn.Module):
         self.decoder_quantum = QuantumLayer(latent_qubits, depth, encoding='angle')
         self.decoder_classical = nn.Linear(latent_qubits, input_dim)
 
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: _torch.Tensor) -> _torch.Tensor:
         """Encode to latent space"""
         x = self.encoder_classical(x)
-        x = torch.tanh(x)
+        x = _torch.tanh(x)
         x = self.encoder_quantum(x)
         # Take first latent_qubits as compressed representation
         return x[:, :self.latent_qubits]
 
-    def decode(self, z: torch.Tensor) -> torch.Tensor:
+    def decode(self, z: _torch.Tensor) -> _torch.Tensor:
         """Decode from latent space"""
         z = self.decoder_quantum(z)
         z = self.decoder_classical(z)
         return z
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: _torch.Tensor) -> Tuple[_torch.Tensor, _torch.Tensor]:
         """Forward pass returns (reconstruction, latent)"""
         latent = self.encode(x)
         reconstruction = self.decode(latent)
@@ -1072,9 +1078,9 @@ def initialize_quantum_layer(layer: QuantumLayer, method: str = 'small_random'):
 
     elif method == 'hadamard':
         # Initialize near Hadamard: RY(π/2 + ε)
-        with torch.no_grad():
+        with _torch.no_grad():
             for i in range(1, len(layer.params), 3):
-                layer.params[i] = np.pi / 2.0 + torch.randn(1).item() * 0.01
+                layer.params[i] = np.pi / 2.0 + _torch.randn(1).item() * 0.01
 
     else:
         raise ValueError(f"Unknown initialization method: {method}")
@@ -1149,7 +1155,7 @@ def create_quantum_cnn(
 
 def train_quantum_model(
     model: nn.Module,
-    train_loader: torch.utils.data.DataLoader,
+    train_loader: _torch.utils.data.DataLoader,
     num_epochs: int = 10,
     lr: float = 0.01,
     device: str = 'cpu'
@@ -1168,7 +1174,7 @@ def train_quantum_model(
         List of losses per epoch
     """
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = _torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
     losses = []
@@ -1202,7 +1208,7 @@ def train_quantum_model(
 
 def evaluate_quantum_model(
     model: nn.Module,
-    test_loader: torch.utils.data.DataLoader,
+    test_loader: _torch.utils.data.DataLoader,
     device: str = 'cpu'
 ) -> dict:
     """
@@ -1221,7 +1227,7 @@ def evaluate_quantum_model(
     total = 0
     all_preds = []
 
-    with torch.no_grad():
+    with _torch.no_grad():
         for batch_x, batch_y in test_loader:
             batch_x, batch_y = batch_x.to(device), batch_y.to(device)
 
