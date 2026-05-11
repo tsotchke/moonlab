@@ -552,7 +552,7 @@ int cuquantum_cz(cuquantum_compute_ctx_t* ctx,
 // ============================================================================
 
 // Kernel to flip phase at target index
-__global__ void oracle_flip_kernel(cuDoubleComplex* amplitudes, uint64_t target) {
+__global__ void trace_oracle_flip_kernel(cuDoubleComplex* amplitudes, uint64_t target) {
     if (blockIdx.x == 0 && threadIdx.x == 0) {
         cuDoubleComplex amp = amplitudes[target];
         amplitudes[target] = make_cuDoubleComplex(-cuCreal(amp), -cuCimag(amp));
@@ -565,7 +565,7 @@ int cuquantum_oracle_single_target(cuquantum_compute_ctx_t* ctx,
                                    uint64_t target) {
     if (!ctx || !statevec) return -1;
 
-    oracle_flip_kernel<<<1, 1, 0, ctx->stream>>>(
+    trace_oracle_flip_kernel<<<1, 1, 0, ctx->stream>>>(
         (cuDoubleComplex*)statevec->device_ptr,
         target
     );

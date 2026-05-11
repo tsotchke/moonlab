@@ -21,30 +21,6 @@
 
 typedef cuDoubleComplex complex_t;
 
-__device__ __forceinline__ complex_t cadd(complex_t a, complex_t b) {
-    return make_cuDoubleComplex(cuCreal(a) + cuCreal(b), cuCimag(a) + cuCimag(b));
-}
-
-__device__ __forceinline__ complex_t csub(complex_t a, complex_t b) {
-    return make_cuDoubleComplex(cuCreal(a) - cuCreal(b), cuCimag(a) - cuCimag(b));
-}
-
-__device__ __forceinline__ complex_t cscale(complex_t z, double s) {
-    return make_cuDoubleComplex(cuCreal(z) * s, cuCimag(z) * s);
-}
-
-__device__ __forceinline__ complex_t cneg(complex_t z) {
-    return make_cuDoubleComplex(-cuCreal(z), -cuCimag(z));
-}
-
-__device__ __forceinline__ double cabs2(complex_t z) {
-    return cuCreal(z) * cuCreal(z) + cuCimag(z) * cuCimag(z);
-}
-
-__device__ __forceinline__ complex_t cpolar(double r, double theta) {
-    return make_cuDoubleComplex(r * cos(theta), r * sin(theta));
-}
-
 // ============================================================================
 // QUANTUM GATE KERNELS
 // ============================================================================
