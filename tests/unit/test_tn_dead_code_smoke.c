@@ -52,6 +52,8 @@ static void check_dmrg_trace_consistency(const dmrg_backend_trace_t *trace,
           trace->owner ? trace->owner : "(null)", owner);
     CHECK(trace->operation != NULL, "DMRG trace operation must be named");
     CHECK(trace->backend_name != NULL, "DMRG backend must be named");
+    CHECK(trace->backend_available,
+          "DMRG backend trace should mark the active kernel family available");
     CHECK((trace->blas_available && !trace->scalar_kernel) ||
           (!trace->blas_available && trace->scalar_kernel),
           "DMRG BLAS/scalar flags must identify one active kernel family");

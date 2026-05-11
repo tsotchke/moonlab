@@ -58,6 +58,7 @@ static dmrg_backend_trace_t g_dmrg_last_backend_trace = {
     .owner = "dmrg_backend_probe",
     .operation = "probe",
     .backend_name = DMRG_BACKEND_NAME,
+    .backend_available = true,
     .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
     .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
     .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL,
@@ -70,6 +71,7 @@ dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
         .owner = owner ? owner : "dmrg_backend_probe",
         .operation = operation ? operation : "probe",
         .backend_name = DMRG_BACKEND_NAME,
+        .backend_available = true,
         .blas_available = DMRG_BACKEND_BLAS_AVAILABLE,
         .accelerate_available = DMRG_BACKEND_ACCELERATE_AVAILABLE,
         .scalar_kernel = DMRG_BACKEND_SCALAR_KERNEL,
@@ -82,8 +84,8 @@ const dmrg_backend_trace_t *dmrg_get_last_backend_trace(void) {
     return &g_dmrg_last_backend_trace;
 }
 
-static void dmrg_record_backend_trace(const char *owner,
-                                      const char *operation) {
+static void dmrg_record_runtime_provenance(const char *owner,
+                                           const char *operation) {
     g_dmrg_last_backend_trace = dmrg_backend_probe(owner, operation);
 }
 
@@ -1902,16 +1904,16 @@ static tensor_t *dmrg_contract_left_env_blas(const tensor_t *A,
 #endif /* MOONLAB_DMRG_HAVE_BLAS */
 
 int dmrg_init_right_environments(dmrg_environments_t *env,
-                                  const tn_mps_state_t *mps,
+                                  const tn_mps_state_t *state,
                                   const mpo_t *mpo) {
-    dmrg_record_backend_trace("dmrg_init_right_environments",
+    dmrg_record_runtime_provenance("dmrg_init_right_environments",
                               "right-environment-contraction");
-    if (!env || !mps || !mpo) return -1;
+    if (!env || !state || !mpo) return -1;
 
-    uint32_t n = mps->num_qubits;
+    uint32_t n = state->num_qubits;
 
     // R[n-1] is the right boundary
-    uint32_t chi_r = mps->tensors[n - 1]->dims[2];
+    uint32_t chi_r = state->tensors[n - 1]->dims[2];
     uint32_t b_r = mpo->tensors[n - 1].bond_dim_right;
 
     if (env->R[n - 1]) tensor_free(env->R[n - 1]);
@@ -1920,7 +1922,7 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
 
     // Build R[i] from R[i+1] by contracting with A[i+1] and W[i+1]
     for (int i = n - 2; i >= 0; i--) {
-        tensor_t *A = mps->tensors[i + 1];
+        tensor_t *A = state->tensors[i + 1];
         if (!A || !A->data) return -1;
 
         mpo_tensor_t *W = &mpo->tensors[i + 1];
@@ -1978,16 +1980,16 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
 }
 
 int dmrg_init_left_environments(dmrg_environments_t *env,
-                                 const tn_mps_state_t *mps,
+                                 const tn_mps_state_t *state,
                                  const mpo_t *mpo) {
-    dmrg_record_backend_trace("dmrg_init_left_environments",
+    dmrg_record_runtime_provenance("dmrg_init_left_environments",
                               "left-environment-contraction");
-    if (!env || !mps || !mpo) return -1;
+    if (!env || !state || !mpo) return -1;
 
-    uint32_t n = mps->num_qubits;
+    uint32_t n = state->num_qubits;
 
     // L[0] is the left boundary
-    uint32_t chi_l = mps->tensors[0]->dims[0];  // Should be 1 for left boundary
+    uint32_t chi_l = state->tensors[0]->dims[0];  // Should be 1 for left boundary
     uint32_t b_l = mpo->tensors[0].bond_dim_left;
 
     if (env->L[0]) tensor_free(env->L[0]);
@@ -1996,7 +1998,7 @@ int dmrg_init_left_environments(dmrg_environments_t *env,
 
     // Build L[i] from L[i-1] by contracting with A[i-1] and W[i-1]
     for (uint32_t i = 1; i < n; i++) {
-        tensor_t *A = mps->tensors[i - 1];  // [chi_l][d][chi_r]
+        tensor_t *A = state->tensors[i - 1];  // [chi_l][d][chi_r]
         mpo_tensor_t *W = &mpo->tensors[i - 1];  // [b_l][d][d][b_r]
         tensor_t *L_prev = env->L[i - 1];  // [chi_l'][b_l][chi_l']
 
@@ -2057,22 +2059,22 @@ int dmrg_init_left_environments(dmrg_environments_t *env,
 }
 
 int dmrg_update_left_environment(dmrg_environments_t *env,
-                                  const tn_mps_state_t *mps,
+                                  const tn_mps_state_t *state,
                                   const mpo_t *mpo,
                                   uint32_t site) {
-    dmrg_record_backend_trace("dmrg_update_left_environment",
+    dmrg_record_runtime_provenance("dmrg_update_left_environment",
                               "left-environment-update");
     // Similar to init_right but going left to right
     // L[site+1] = contract L[site] @ A[site] @ W[site]
 
-    if (!env || !mps || !mpo || site >= mps->num_qubits - 1) return -1;
+    if (!env || !state || !mpo || site >= state->num_qubits - 1) return -1;
     if (!env->L[site]) {
         fprintf(stderr, "DMRG: L[%u] is NULL in update_left\n", site);
         return -1;
     }
 
     tensor_t *L_prev = env->L[site];
-    tensor_t *A = mps->tensors[site];
+    tensor_t *A = state->tensors[site];
     mpo_tensor_t *W = &mpo->tensors[site];
 
     uint32_t chi_l = A->dims[0];
@@ -2134,20 +2136,20 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
 }
 
 int dmrg_update_right_environment(dmrg_environments_t *env,
-                                   const tn_mps_state_t *mps,
+                                   const tn_mps_state_t *state,
                                    const mpo_t *mpo,
                                    uint32_t site) {
-    dmrg_record_backend_trace("dmrg_update_right_environment",
+    dmrg_record_runtime_provenance("dmrg_update_right_environment",
                               "right-environment-update");
     // Update R[site-1] after optimizing at site
-    if (!env || !mps || !mpo || site == 0) return -1;
+    if (!env || !state || !mpo || site == 0) return -1;
     if (!env->R[site]) {
         fprintf(stderr, "DMRG: R[%u] is NULL in update_right\n", site);
         return -1;
     }
 
     // Similar contraction as init_right_environments but for single site
-    tensor_t *A = mps->tensors[site];
+    tensor_t *A = state->tensors[site];
     mpo_tensor_t *W = &mpo->tensors[site];
     tensor_t *R_next = env->R[site];
 
@@ -2160,12 +2162,12 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
     if (R_next->dims[0] != chi_r || R_next->dims[2] != chi_r) {
         // Dimension mismatch after SVD bond dimension change
         // Rebuild R environments from site to boundary
-        uint32_t n = mps->num_qubits;
+        uint32_t n = state->num_qubits;
         uint32_t b_r = mpo->tensors[n - 1].bond_dim_right;
 
         // Start from rightmost site with identity
         tensor_free(env->R[n - 1]);
-        uint32_t A_chi = mps->tensors[n - 1]->dims[2];
+        uint32_t A_chi = state->tensors[n - 1]->dims[2];
         uint32_t dims_R[3] = {A_chi, b_r, A_chi};
         env->R[n - 1] = tensor_create(3, dims_R);
         if (!env->R[n - 1]) return -1;
@@ -2174,7 +2176,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
 
         // Contract from right to site
         for (int s = (int)n - 2; s >= (int)site; s--) {
-            tensor_t *As = mps->tensors[s];
+            tensor_t *As = state->tensors[s];
             mpo_tensor_t *Ws = &mpo->tensors[s];
             tensor_t *Rs_next = env->R[s + 1];
 
@@ -2228,7 +2230,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
 
         // Now R_next should be correct - get updated reference
         R_next = env->R[site];
-        chi_r = mps->tensors[site]->dims[2];
+        chi_r = state->tensors[site]->dims[2];
     }
 
 #if defined(MOONLAB_DMRG_HAVE_BLAS)
@@ -2280,21 +2282,21 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
     return 0;
 }
 
-static int dmrg_optimize_one_site(tn_mps_state_t *mps,
+static int dmrg_optimize_one_site(tn_mps_state_t *state,
                                    const mpo_t *mpo,
                                    dmrg_environments_t *env,
                                    uint32_t site,
                                    dmrg_sweep_direction_t direction,
                                    const dmrg_config_t *config,
                                    double *energy) {
-    dmrg_record_backend_trace("dmrg_optimize_one_site",
+    dmrg_record_runtime_provenance("dmrg_optimize_one_site",
                               "one-site-local-eigensolve");
     (void)direction;
 
-    if (!mps || !mpo || !env || !config || !energy) return -1;
-    if (site >= mps->num_qubits || site >= mpo->num_sites) return -1;
+    if (!state || !mpo || !env || !config || !energy) return -1;
+    if (site >= state->num_qubits || site >= mpo->num_sites) return -1;
 
-    tensor_t *A = mps->tensors[site];
+    tensor_t *A = state->tensors[site];
     if (!A || !A->data || A->rank != 3) return -1;
 
     uint32_t chi_l = A->dims[0];
@@ -2341,8 +2343,8 @@ static int dmrg_optimize_one_site(tn_mps_state_t *mps,
     lanczos->eigenvector = NULL;
     *energy = lanczos->eigenvalue;
 
-    tensor_free(mps->tensors[site]);
-    mps->tensors[site] = A_new;
+    tensor_free(state->tensors[site]);
+    state->tensors[site] = A_new;
 
     lanczos_result_free(lanczos);
     return 0;
@@ -2352,20 +2354,20 @@ static int dmrg_optimize_one_site(tn_mps_state_t *mps,
 // DMRG CORE ALGORITHM
 // ============================================================================
 
-int dmrg_optimize_two_site(tn_mps_state_t *mps,
+int dmrg_optimize_two_site(tn_mps_state_t *state,
                             const mpo_t *mpo,
                             dmrg_environments_t *env,
                             uint32_t site,
                             dmrg_sweep_direction_t direction,
                             const dmrg_config_t *config,
                             double *energy) {
-    dmrg_record_backend_trace("dmrg_optimize_two_site",
+    dmrg_record_runtime_provenance("dmrg_optimize_two_site",
                               "two-site-local-eigensolve");
-    if (!mps || !mpo || !env || !config || !energy) return -1;
-    if (site >= mps->num_qubits - 1) return -1;
+    if (!state || !mpo || !env || !config || !energy) return -1;
+    if (site >= state->num_qubits - 1) return -1;
 
-    tensor_t *A = mps->tensors[site];      // [chi_l][d][chi_m]
-    tensor_t *B = mps->tensors[site + 1];  // [chi_m][d][chi_r]
+    tensor_t *A = state->tensors[site];      // [chi_l][d][chi_m]
+    tensor_t *B = state->tensors[site + 1];  // [chi_m][d][chi_r]
 
     if (!A || !B) {
         fprintf(stderr, "DMRG: NULL tensor at site %u or %u\n", site, site + 1);
@@ -2620,92 +2622,92 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
     }
 
     // Update MPS tensors
-    tensor_free(mps->tensors[site]);
-    tensor_free(mps->tensors[site + 1]);
-    mps->tensors[site] = A_new;
-    mps->tensors[site + 1] = B_new;
-    mps->bond_dims[site] = new_bond;
+    tensor_free(state->tensors[site]);
+    tensor_free(state->tensors[site + 1]);
+    state->tensors[site] = A_new;
+    state->tensors[site + 1] = B_new;
+    state->bond_dims[site] = new_bond;
 
     svd_compress_result_free(svd);
     return 0;
 }
 
-int dmrg_sweep(tn_mps_state_t *mps,
+int dmrg_sweep(tn_mps_state_t *state,
                const mpo_t *mpo,
                dmrg_environments_t *env,
                const dmrg_config_t *config,
                double *energy) {
-    dmrg_record_backend_trace("dmrg_sweep", "forward-backward-sweep");
-    if (!mps || !mpo || !env || !config || !energy) return -1;
+    dmrg_record_runtime_provenance("dmrg_sweep", "forward-backward-sweep");
+    if (!state || !mpo || !env || !config || !energy) return -1;
 
-    uint32_t n = mps->num_qubits;
+    uint32_t n = state->num_qubits;
     double site_energy = 0.0;
     if (n == 0) return -1;
 
     // Rebuild all environments from current MPS before L->R sweep
-    if (dmrg_init_left_environments(env, mps, mpo) != 0) return -1;
-    if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
+    if (dmrg_init_left_environments(env, state, mpo) != 0) return -1;
+    if (dmrg_init_right_environments(env, state, mpo) != 0) return -1;
 
     if (config->two_site) {
         if (n < 2) return -1;
 
         // Left-to-right sweep
         for (uint32_t site = 0; site < n - 1; site++) {
-            if (dmrg_optimize_two_site(mps, mpo, env, site, DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
+            if (dmrg_optimize_two_site(state, mpo, env, site, DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
                 return -1;
             }
             if (site < n - 2) {
-                dmrg_update_left_environment(env, mps, mpo, site);
+                dmrg_update_left_environment(env, state, mpo, site);
             }
         }
 
         // Rebuild right environments before R->L sweep
-        if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
+        if (dmrg_init_right_environments(env, state, mpo) != 0) return -1;
 
         // Right-to-left sweep
         for (int site = (int)n - 2; site >= 0; site--) {
-            if (dmrg_optimize_two_site(mps, mpo, env, (uint32_t)site,
+            if (dmrg_optimize_two_site(state, mpo, env, (uint32_t)site,
                                        DMRG_SWEEP_RIGHT_TO_LEFT, config, &site_energy) != 0) {
                 return -1;
             }
             if (site > 0) {
-                dmrg_update_right_environment(env, mps, mpo, (uint32_t)site + 1);
+                dmrg_update_right_environment(env, state, mpo, (uint32_t)site + 1);
             }
         }
     } else {
         for (uint32_t site = 0; site < n; site++) {
-            if (dmrg_optimize_one_site(mps, mpo, env, site,
+            if (dmrg_optimize_one_site(state, mpo, env, site,
                                        DMRG_SWEEP_LEFT_TO_RIGHT, config, &site_energy) != 0) {
                 return -1;
             }
             if (site < n - 1) {
-                dmrg_update_left_environment(env, mps, mpo, site);
+                dmrg_update_left_environment(env, state, mpo, site);
             }
         }
 
-        if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
+        if (dmrg_init_right_environments(env, state, mpo) != 0) return -1;
 
         for (int site = (int)n - 1; site >= 0; site--) {
-            if (dmrg_optimize_one_site(mps, mpo, env, (uint32_t)site,
+            if (dmrg_optimize_one_site(state, mpo, env, (uint32_t)site,
                                        DMRG_SWEEP_RIGHT_TO_LEFT, config, &site_energy) != 0) {
                 return -1;
             }
             if (site > 0) {
-                dmrg_update_right_environment(env, mps, mpo, (uint32_t)site);
+                dmrg_update_right_environment(env, state, mpo, (uint32_t)site);
             }
         }
     }
 
     *energy = site_energy;
-    dmrg_record_backend_trace("dmrg_sweep", "forward-backward-sweep");
+    dmrg_record_runtime_provenance("dmrg_sweep", "forward-backward-sweep");
     return 0;
 }
 
-dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
+dmrg_result_t *dmrg_ground_state(tn_mps_state_t *state,
                                   const mpo_t *mpo,
                                   const dmrg_config_t *config) {
-    dmrg_record_backend_trace("dmrg_ground_state", "two-site-sweep");
-    if (!mps || !mpo || !config) return NULL;
+    dmrg_record_runtime_provenance("dmrg_ground_state", "two-site-sweep");
+    if (!state || !mpo || !config) return NULL;
 
     double start_time = get_time_sec();
 
@@ -2721,7 +2723,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
     }
 
     // Create environments
-    dmrg_environments_t *env = dmrg_environments_create(mps->num_qubits);
+    dmrg_environments_t *env = dmrg_environments_create(state->num_qubits);
     if (!env) {
         dmrg_result_free(result);
         return NULL;
@@ -2729,7 +2731,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
 
     // Initialize left boundary
     uint32_t b_l = mpo->tensors[0].bond_dim_left;
-    env->L[0] = create_left_boundary(mps->tensors[0]->dims[0], b_l);
+    env->L[0] = create_left_boundary(state->tensors[0]->dims[0], b_l);
     if (!env->L[0]) {
         dmrg_environments_free(env);
         dmrg_result_free(result);
@@ -2737,7 +2739,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
     }
 
     // Initialize right environments
-    if (dmrg_init_right_environments(env, mps, mpo) != 0) {
+    if (dmrg_init_right_environments(env, state, mpo) != 0) {
         dmrg_environments_free(env);
         dmrg_result_free(result);
         return NULL;
@@ -2775,7 +2777,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
         for (uint32_t warmup = 0; warmup < config->warmup_sweeps; warmup++) {
             double energy;
 
-            if (dmrg_sweep(mps, mpo, env, &sweep_config, &energy) != 0) {
+            if (dmrg_sweep(state, mpo, env, &sweep_config, &energy) != 0) {
                 dmrg_environments_free(env);
                 dmrg_result_free(result);
                 return NULL;
@@ -2809,7 +2811,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
     for (uint32_t sweep = 0; sweep < config->max_sweeps; sweep++) {
         double energy;
 
-        if (dmrg_sweep(mps, mpo, env, &sweep_config, &energy) != 0) {
+        if (dmrg_sweep(state, mpo, env, &sweep_config, &energy) != 0) {
             dmrg_environments_free(env);
             dmrg_result_free(result);
             return NULL;
@@ -2850,7 +2852,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
 
     result->total_time = get_time_sec() - start_time;
 
-    dmrg_record_backend_trace("dmrg_ground_state", "two-site-sweep");
+    dmrg_record_runtime_provenance("dmrg_ground_state", "two-site-sweep");
     return result;
 }
 
@@ -2862,7 +2864,7 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
                                         double g,
                                         const dmrg_config_t *config,
                                         dmrg_result_t **result) {
-    dmrg_record_backend_trace("dmrg_tfim_ground_state",
+    dmrg_record_runtime_provenance("dmrg_tfim_ground_state",
                               "tfim-convenience-ground-state");
     // Use default config if not provided
     dmrg_config_t cfg = config ? *config : dmrg_config_default();
@@ -2882,25 +2884,25 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
      * Extracted into dmrg_init_random_mps so Heisenberg / Kitaev / 2D
      * model wrappers can reuse the same setup. */
     uint32_t chi_init = (cfg.max_bond_dim > 8) ? 8 : cfg.max_bond_dim;
-    tn_mps_state_t *mps = dmrg_init_random_mps(num_sites, chi_init, &mps_cfg);
-    if (!mps) {
+    tn_mps_state_t *state = dmrg_init_random_mps(num_sites, chi_init, &mps_cfg);
+    if (!state) {
         mpo_free(mpo);
         return NULL;
     }
 
     // Run DMRG
-    dmrg_result_t *dmrg_res = dmrg_ground_state(mps, mpo, &cfg);
+    dmrg_result_t *dmrg_res = dmrg_ground_state(state, mpo, &cfg);
 
     mpo_free(mpo);
 
     if (!dmrg_res) {
-        tn_mps_free(mps);
+        tn_mps_free(state);
         return NULL;
     }
 
     // DMRG does not update normalization bookkeeping; ensure amplitudes are scaled correctly.
-    mps->norm = 1.0;
-    mps->log_norm_factor = 0.0;
+    state->norm = 1.0;
+    state->log_norm_factor = 0.0;
 
     if (result) {
         *result = dmrg_res;
@@ -2908,29 +2910,29 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         dmrg_result_free(dmrg_res);
     }
 
-    dmrg_record_backend_trace("dmrg_tfim_ground_state",
+    dmrg_record_runtime_provenance("dmrg_tfim_ground_state",
                               "tfim-convenience-ground-state");
-    return mps;
+    return state;
 }
 
 tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
                                       uint32_t chi_init,
                                       const tn_state_config_t *mps_cfg) {
-    dmrg_record_backend_trace("dmrg_init_random_mps", "random-mps-initialization");
+    dmrg_record_runtime_provenance("dmrg_init_random_mps", "random-state-initialization");
     if (num_sites < 2) return NULL;
 
     tn_state_config_t cfg = mps_cfg ? *mps_cfg : tn_state_config_default();
     if (chi_init > cfg.max_bond_dim) chi_init = cfg.max_bond_dim;
     if (chi_init < 2) chi_init = 2;
 
-    tn_mps_state_t *mps = (tn_mps_state_t *)calloc(1, sizeof(tn_mps_state_t));
-    if (!mps) return NULL;
-    mps->num_qubits = num_sites;
-    mps->config = cfg;
-    mps->tensors = (tensor_t **)calloc(num_sites, sizeof(tensor_t *));
-    mps->bond_dims = (uint32_t *)calloc(num_sites - 1, sizeof(uint32_t));
-    if (!mps->tensors || !mps->bond_dims) {
-        tn_mps_free(mps);
+    tn_mps_state_t *state = (tn_mps_state_t *)calloc(1, sizeof(tn_mps_state_t));
+    if (!state) return NULL;
+    state->num_qubits = num_sites;
+    state->config = cfg;
+    state->tensors = (tensor_t **)calloc(num_sites, sizeof(tensor_t *));
+    state->bond_dims = (uint32_t *)calloc(num_sites - 1, sizeof(uint32_t));
+    if (!state->tensors || !state->bond_dims) {
+        tn_mps_free(state);
         return NULL;
     }
 
@@ -2941,49 +2943,49 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
         uint32_t chi_l = (i == 0) ? 1 : chi_init;
         uint32_t chi_r = (i == num_sites - 1) ? 1 : chi_init;
         uint32_t dims[3] = {chi_l, 2, chi_r};
-        mps->tensors[i] = tensor_create(3, dims);
-        if (!mps->tensors[i]) {
-            tn_mps_free(mps);
+        state->tensors[i] = tensor_create(3, dims);
+        if (!state->tensors[i]) {
+            tn_mps_free(state);
             return NULL;
         }
-        for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
+        for (uint64_t j = 0; j < state->tensors[i]->total_size; j++) {
             double re = ((double)rand() / RAND_MAX - 0.5) * 0.1;
             double im = ((double)rand() / RAND_MAX - 0.5) * 0.1;
-            mps->tensors[i]->data[j] = re + I * im;
+            state->tensors[i]->data[j] = re + I * im;
         }
         /* Bias toward |+> so the initial overlap with a typical
          * ground state is non-trivial. */
         uint32_t idx1[3] = {0, 1, 0};
-        mps->tensors[i]->data[0] += 1.0 / sqrt(2.0);
-        tensor_set(mps->tensors[i], idx1,
-                   tensor_get(mps->tensors[i], idx1) + 1.0 / sqrt(2.0));
-        if (i < num_sites - 1) mps->bond_dims[i] = chi_init;
+        state->tensors[i]->data[0] += 1.0 / sqrt(2.0);
+        tensor_set(state->tensors[i], idx1,
+                   tensor_get(state->tensors[i], idx1) + 1.0 / sqrt(2.0));
+        if (i < num_sites - 1) state->bond_dims[i] = chi_init;
     }
 
     /* Approximate normalisation: scale every tensor by norm^{-1/N}. */
-    double norm = tn_mps_norm(mps);
+    double norm = tn_mps_norm(state);
     if (norm > 1e-10) {
         double scale = pow(1.0 / norm, 1.0 / (double)num_sites);
         for (uint32_t i = 0; i < num_sites; i++) {
-            for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
-                mps->tensors[i]->data[j] *= scale;
+            for (uint64_t j = 0; j < state->tensors[i]->total_size; j++) {
+                state->tensors[i]->data[j] *= scale;
             }
         }
     }
-    return mps;
+    return state;
 }
 
-double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
-    dmrg_record_backend_trace("dmrg_compute_energy", "energy-expectation");
-    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
+double dmrg_compute_energy(const tn_mps_state_t *state, const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_compute_energy", "energy-expectation");
+    if (!state || !mpo || state->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // E = <psi|H|psi> computed via transfer matrix contraction
     // Similar to environment contraction
 
-    uint32_t n = mps->num_qubits;
+    uint32_t n = state->num_qubits;
 
     // Start with left boundary
-    uint32_t chi_0 = mps->tensors[0]->dims[0];  // Should be 1
+    uint32_t chi_0 = state->tensors[0]->dims[0];  // Should be 1
     uint32_t b_0 = mpo->tensors[0].bond_dim_left;  // Should be 1
 
     tensor_t *T = create_left_boundary(chi_0, b_0);
@@ -2991,7 +2993,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
 
     // Contract through the chain
     for (uint32_t site = 0; site < n; site++) {
-        tensor_t *A = mps->tensors[site];
+        tensor_t *A = state->tensors[site];
         mpo_tensor_t *W = &mpo->tensors[site];
 
         uint32_t chi_l = A->dims[0];
@@ -3050,27 +3052,27 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
     return energy;
 }
 
-double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
-    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
+double dmrg_energy_variance(const tn_mps_state_t *state, const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_energy_variance", "energy-variance");
     // Var(E) = <H^2> - <H>^2
     // For a true eigenstate, Var(E) = 0
     // Computed by contracting MPS with TWO MPO layers
 
-    if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
+    if (!state || !mpo || state->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // First compute <H>
-    double E = dmrg_compute_energy(mps, mpo);
-    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
+    double E = dmrg_compute_energy(state, mpo);
+    dmrg_record_runtime_provenance("dmrg_energy_variance", "energy-variance");
     if (!isfinite(E) || E >= DMRG_ENERGY_ERROR) return DMRG_ENERGY_ERROR;
 
     // Now compute <H^2> via double-layer MPO contraction
     // Transfer tensor T has shape [chi_l, b_l, b_l, chi_l'] for double MPO layer
     // This contracts: <psi| H H |psi>
 
-    uint32_t n = mps->num_qubits;
+    uint32_t n = state->num_qubits;
 
     // Initial left boundary: T[chi=1, b=1, b'=1, chi'=1] = 1
-    uint32_t chi_0 = mps->tensors[0]->dims[0];  // Should be 1
+    uint32_t chi_0 = state->tensors[0]->dims[0];  // Should be 1
     uint32_t b_0 = mpo->tensors[0].bond_dim_left;  // Should be 1
 
     // 4D transfer tensor: [chi_l, b_l, b_l, chi_l']
@@ -3083,7 +3085,7 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
 
     // Contract through the chain
     for (uint32_t site = 0; site < n; site++) {
-        tensor_t *A = mps->tensors[site];
+        tensor_t *A = state->tensors[site];
         mpo_tensor_t *W = &mpo->tensors[site];
 
         uint32_t chi_l = A->dims[0];
@@ -3178,6 +3180,6 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
         // Otherwise return the value (might indicate numerical issues)
     }
 
-    dmrg_record_backend_trace("dmrg_energy_variance", "energy-variance");
+    dmrg_record_runtime_provenance("dmrg_energy_variance", "energy-variance");
     return variance;
 }

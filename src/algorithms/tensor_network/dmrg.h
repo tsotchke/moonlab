@@ -160,6 +160,7 @@ typedef struct {
     const char *owner;            /**< Public API or helper recording provenance */
     const char *operation;        /**< Logical operation being traced */
     const char *backend_name;     /**< "accelerate-blas", "cblas", or "scalar-c" */
+    bool backend_available;       /**< True when a concrete DMRG kernel family is active */
     bool blas_available;          /**< BLAS-backed environment kernels are compiled in */
     bool accelerate_available;    /**< Apple Accelerate is the BLAS provider */
     bool scalar_kernel;           /**< Portable scalar C kernels are the active path */
@@ -449,7 +450,7 @@ void dmrg_environments_free(dmrg_environments_t *env);
  * @brief Initialize right environments from right to left
  */
 int dmrg_init_right_environments(dmrg_environments_t *env,
-                                  const tn_mps_state_t *mps,
+                                  const tn_mps_state_t *state,
                                   const mpo_t *mpo);
 
 /**
@@ -459,14 +460,14 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
  * by contracting from left to right.
  */
 int dmrg_init_left_environments(dmrg_environments_t *env,
-                                 const tn_mps_state_t *mps,
+                                 const tn_mps_state_t *state,
                                  const mpo_t *mpo);
 
 /**
  * @brief Update left environment after optimizing site i
  */
 int dmrg_update_left_environment(dmrg_environments_t *env,
-                                  const tn_mps_state_t *mps,
+                                  const tn_mps_state_t *state,
                                   const mpo_t *mpo,
                                   uint32_t site);
 
@@ -474,7 +475,7 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
  * @brief Update right environment after optimizing site i
  */
 int dmrg_update_right_environment(dmrg_environments_t *env,
-                                   const tn_mps_state_t *mps,
+                                   const tn_mps_state_t *state,
                                    const mpo_t *mpo,
                                    uint32_t site);
 
@@ -483,26 +484,26 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
  *
  * This is the main entry point for ground state preparation.
  *
- * @param mps Initial MPS state (will be modified to ground state)
+ * @param state Initial MPS state (will be modified to ground state)
  * @param mpo Hamiltonian as MPO
  * @param config DMRG configuration
  * @return DMRG result or NULL on failure
  */
-dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
+dmrg_result_t *dmrg_ground_state(tn_mps_state_t *state,
                                   const mpo_t *mpo,
                                   const dmrg_config_t *config);
 
 /**
  * @brief Perform one DMRG sweep (left-to-right then right-to-left)
  *
- * @param mps MPS state (modified in place)
+ * @param state MPS state (modified in place)
  * @param mpo Hamiltonian
  * @param env DMRG environments
  * @param config Configuration
  * @param energy Output: energy after sweep
  * @return 0 on success
  */
-int dmrg_sweep(tn_mps_state_t *mps,
+int dmrg_sweep(tn_mps_state_t *state,
                const mpo_t *mpo,
                dmrg_environments_t *env,
                const dmrg_config_t *config,
@@ -513,7 +514,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
  *
  * Core operation for two-site DMRG.
  *
- * @param mps MPS state
+ * @param state MPS state
  * @param mpo Hamiltonian
  * @param env Environments
  * @param site Left site of the pair
@@ -522,7 +523,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
  * @param energy Output: local energy
  * @return 0 on success
  */
-int dmrg_optimize_two_site(tn_mps_state_t *mps,
+int dmrg_optimize_two_site(tn_mps_state_t *state,
                             const mpo_t *mpo,
                             dmrg_environments_t *env,
                             uint32_t site,
@@ -580,11 +581,11 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
  *
  * E = <psi|H|psi> / <psi|psi>
  *
- * @param mps MPS state
+ * @param state MPS state
  * @param mpo Hamiltonian
  * @return Energy value
  */
-double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo);
+double dmrg_compute_energy(const tn_mps_state_t *state, const mpo_t *mpo);
 
 /**
  * @brief Compute energy variance
@@ -593,11 +594,11 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo);
  *
  * Small variance indicates good approximation to eigenstate.
  *
- * @param mps MPS state
+ * @param state MPS state
  * @param mpo Hamiltonian
  * @return Energy variance
  */
-double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo);
+double dmrg_energy_variance(const tn_mps_state_t *state, const mpo_t *mpo);
 
 #ifdef __cplusplus
 }
