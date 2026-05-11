@@ -88,16 +88,6 @@ static tn_gate_error_t apply_gate(tn_mps_state_t* psi, int g, uint32_t q1, uint3
     return TN_GATE_ERROR_INVALID_GATE;
 }
 
-static tn_gate_error_t undo_gate(tn_mps_state_t* psi, int g, uint32_t q1, uint32_t q2) {
-    /* H, X, Y, Z, CNOT, CZ, SWAP are self-inverse.  S and S^dag are mutual
-     * inverses.  We just call apply_gate of the inverse. */
-    switch (g) {
-        case G_S:    return apply_gate(psi, G_SDAG, q1, q2);
-        case G_SDAG: return apply_gate(psi, G_S, q1, q2);
-        default:     return apply_gate(psi, g, q1, q2);
-    }
-}
-
 /* Greedy single-pass Clifford disentangler.  Tests each candidate on
  * a clone of @p psi (so apply/undo SVD non-idempotency doesn't drift
  * the state), then mutates @p psi only with the best accepted gate. */

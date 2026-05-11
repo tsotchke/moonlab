@@ -705,8 +705,13 @@ fn feynman_diagram_builds_and_renders() {
 
     diagram
         .add_fermion(v1, v2, "e-")
-        .add_photon(v1, v2, "gamma");
-    assert_eq!(diagram.num_propagators(), 2);
+        .add_photon(v1, v2, "gamma")
+        .add_gluon(v1, v2, "g")
+        .add_w_boson(v1, v2, "W")
+        .add_z_boson(v1, v2, "Z")
+        .add_higgs(v1, v2, "H")
+        .add_scalar(v1, v2, "phi");
+    assert_eq!(diagram.num_propagators(), 7);
 
     let qed = FeynmanDiagram::qed_vertex().unwrap();
     let compton = FeynmanDiagram::compton_scattering().unwrap();

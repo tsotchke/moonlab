@@ -532,18 +532,6 @@ error:
 // ============================================================================
 
 /**
- * @brief Helper: Convert 2D grid coordinates to snake (MPS) index
- */
-__attribute__((unused))
-static inline uint32_t grid_to_snake_idx(uint32_t x, uint32_t y, uint32_t Lx) {
-    if (y % 2 == 0) {
-        return y * Lx + x;
-    } else {
-        return y * Lx + (Lx - 1 - x);
-    }
-}
-
-/**
  * @brief Helper: Get 2D coordinates from snake index
  */
 static inline void snake_to_grid_coords(uint32_t s, uint32_t Lx,

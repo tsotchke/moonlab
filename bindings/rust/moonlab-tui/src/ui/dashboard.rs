@@ -985,11 +985,7 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
                 .gates(vec![Gate::H(0), Gate::CNOT(0, 1)])
         }
         Algorithm::GHZ => {
-            let mut gates = vec![Gate::H(0)];
-            for i in 1..n {
-                gates.push(Gate::CNOT(0, i));
-            }
-            CircuitDiagram::new(n).title("GHZ State").gates(gates)
+            CircuitDiagram::ghz_circuit(n).title("GHZ State")
         }
         Algorithm::Grover => {
             let mut gates = Vec::new();
@@ -1041,13 +1037,7 @@ fn build_circuit_for_algorithm(app: &App) -> CircuitDiagram {
         Algorithm::CaMpsGhz => {
             // Same gate sequence as GHZ -- CA-MPS just stores it in
             // the tableau instead of materialising it in MPS bonds.
-            let mut gates = vec![Gate::H(0)];
-            for i in 1..n {
-                gates.push(Gate::CNOT(0, i));
-            }
-            CircuitDiagram::new(n)
-                .title("CA-MPS GHZ (bond-dim = 1)")
-                .gates(gates)
+            CircuitDiagram::ghz_circuit(n).title("CA-MPS GHZ (bond-dim = 1)")
         }
         Algorithm::CaMpsBellWarmstart => {
             // The gauge-aware warmstart emits a Clifford circuit
