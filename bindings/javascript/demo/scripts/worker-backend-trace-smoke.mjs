@@ -71,6 +71,8 @@ globalThis.__fullTrace = lastGpuBackendTrace;
   assert(context.__missingProbe.available === false, `${path}: missing probe should be unavailable`);
   assert(context.__missingHas === false, `${path}: missing gate should be false`);
   assert(context.__missingTrace.owner === 'hasUnifiedGpuApi', `${path}: missing trace owner`);
+  assert(context.__missingTrace.backend_name === context.__missingTrace.backendName, `${path}: missing backend alias`);
+  assert(context.__missingTrace.backendAvailable === false, `${path}: missing backend availability`);
   assert(context.__missingTrace.fallbackIntentional === true, `${path}: missing fallback flag`);
   assert(
     context.__missingTrace.reason === 'unified-gpu-api-unavailable',
@@ -80,6 +82,8 @@ globalThis.__fullTrace = lastGpuBackendTrace;
   assert(context.__fullProbe.available === true, `${path}: full probe should be available`);
   assert(context.__fullHas === true, `${path}: full gate should be true`);
   assert(context.__fullTrace.owner === 'hasUnifiedGpuApi', `${path}: full trace owner`);
+  assert(context.__fullTrace.backend_name === context.__fullTrace.backendName, `${path}: full backend alias`);
+  assert(context.__fullTrace.backendAvailable === true, `${path}: full backend availability`);
   assert(context.__fullTrace.fallbackIntentional === false, `${path}: full fallback flag`);
   assert(context.__fullTrace.reason === 'ok', `${path}: full reason`);
 };

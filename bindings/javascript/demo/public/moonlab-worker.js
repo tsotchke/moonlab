@@ -26,6 +26,8 @@ const gpuSession = {
   ctxPtr: 0,
   backendType: GPU_BACKEND_NONE,
   backendName: 'none',
+  backend_name: 'none',
+  backendAvailable: false,
   preferredBackendType: GPU_BACKEND_WEBGPU,
   preferredBackendName: 'webgpu',
   nativeAccelerated: false,
@@ -43,6 +45,8 @@ let lastGpuBackendTrace = {
   available: false,
   backendType: GPU_BACKEND_NONE,
   backendName: 'none',
+  backend_name: 'none',
+  backendAvailable: false,
   preferredBackendType: GPU_BACKEND_WEBGPU,
   preferredBackendName: 'webgpu',
   nativeAccelerated: false,
@@ -58,6 +62,8 @@ const recordGpuBackendTrace = (owner, operation, details = {}) => {
     available: gpuSession.available,
     backendType: gpuSession.backendType,
     backendName: gpuSession.backendName,
+    backend_name: gpuSession.backend_name,
+    backendAvailable: gpuSession.backendAvailable,
     preferredBackendType: gpuSession.preferredBackendType,
     preferredBackendName: gpuSession.preferredBackendName,
     nativeAccelerated: gpuSession.nativeAccelerated,
@@ -66,6 +72,12 @@ const recordGpuBackendTrace = (owner, operation, details = {}) => {
     reason: gpuSession.reason,
     ...details,
   };
+  lastGpuBackendTrace.backend_name =
+    lastGpuBackendTrace.backend_name || lastGpuBackendTrace.backendName;
+  lastGpuBackendTrace.backendAvailable =
+    Object.prototype.hasOwnProperty.call(details, 'backendAvailable')
+      ? details.backendAvailable
+      : lastGpuBackendTrace.available;
   gpuSession.lastBackendTrace = lastGpuBackendTrace;
   return lastGpuBackendTrace;
 };
@@ -76,6 +88,8 @@ const resetGpuSession = () => {
   gpuSession.ctxPtr = 0;
   gpuSession.backendType = GPU_BACKEND_NONE;
   gpuSession.backendName = 'none';
+  gpuSession.backend_name = 'none';
+  gpuSession.backendAvailable = false;
   gpuSession.preferredBackendType = GPU_BACKEND_WEBGPU;
   gpuSession.preferredBackendName = 'webgpu';
   gpuSession.nativeAccelerated = false;
@@ -118,6 +132,8 @@ const disableGpuPathForModule = (module, reason) => {
   gpuSession.initialized = true;
   gpuSession.backendType = GPU_BACKEND_NONE;
   gpuSession.backendName = 'none';
+  gpuSession.backend_name = 'none';
+  gpuSession.backendAvailable = false;
   gpuSession.nativeAccelerated = false;
   gpuSession.fallbackIntentional = true;
   gpuSession.reason = reason;
@@ -467,6 +483,7 @@ const ensureGpuSession = (module) => {
     gpuSession.reason = 'gpu-context-unavailable';
     recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
       available: false,
+      backendAvailable: false,
       fallbackIntentional: true,
       reason: gpuSession.reason,
     });
@@ -476,12 +493,15 @@ const ensureGpuSession = (module) => {
   const backendType = module._gpu_get_backend_type(ctxPtr);
   gpuSession.backendType = backendType;
   gpuSession.backendName = describeGpuBackend(backendType);
+  gpuSession.backend_name = gpuSession.backendName;
+  gpuSession.backendAvailable = backendType !== GPU_BACKEND_NONE;
   gpuSession.fallbackIntentional = fallbackIntentional || backendType !== preferred;
   if (backendType !== GPU_BACKEND_WEBGPU) {
     module._gpu_compute_free(ctxPtr);
     gpuSession.reason = `non-webgpu-backend-${backendType}`;
     recordGpuBackendTrace('ensureGpuSession', 'gpu-context-selection', {
       available: false,
+      backendAvailable: gpuSession.backendAvailable,
       fallbackIntentional: true,
       reason: gpuSession.reason,
     });
