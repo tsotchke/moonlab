@@ -106,18 +106,12 @@ export class GPUBackendSession {
 
   createBufferFromInterleaved(data: Float64Array): number {
     this.ensureNotDisposed();
-    if (typeof this.module._gpu_buffer_create_from_data !== 'function') {
-      throw new Error('Unified GPU buffer API not available');
-    }
-    const bytes = data.byteLength;
-    const ptr = this.memory.alloc(bytes);
-    this.memory.writeFloat64Array(ptr, data);
-    const bufferPtr = this.module._gpu_buffer_create_from_data(this.ctxPtr, ptr, bytes);
-    this.memory.free(ptr);
-    if (!bufferPtr) {
-      throw new Error('gpu_buffer_create_from_data failed');
-    }
-    return bufferPtr;
+    return trace_gpu_backend_create_buffer_from_interleaved(
+      this.module,
+      this.memory,
+      this.ctxPtr,
+      data
+    );
   }
 
   createBufferFromComplex(data: Complex[]): number {
@@ -131,19 +125,12 @@ export class GPUBackendSession {
 
   readInterleavedBuffer(bufferPtr: number, complexCount: number): Float64Array {
     this.ensureNotDisposed();
-    if (typeof this.module._gpu_buffer_read !== 'function') {
-      throw new Error('Unified GPU buffer read API not available');
-    }
-    const bytes = complexCount * 16;
-    const outPtr = this.memory.alloc(bytes);
-    const rc = this.module._gpu_buffer_read(bufferPtr, outPtr, bytes, 0);
-    if (rc !== 0) {
-      this.memory.free(outPtr);
-      throw new Error(`gpu_buffer_read failed: ${rc}`);
-    }
-    const out = this.memory.readFloat64Array(outPtr, complexCount * 2);
-    this.memory.free(outPtr);
-    return out;
+    return trace_gpu_backend_read_interleaved_buffer(
+      this.module,
+      this.memory,
+      bufferPtr,
+      complexCount
+    );
   }
 
   readComplexBuffer(bufferPtr: number, complexCount: number): Complex[] {
@@ -247,47 +234,13 @@ export class GPUBackendSession {
 
   computeProbabilities(amplitudesBufferPtr: number, stateDim: number): Float64Array {
     this.ensureNotDisposed();
-    if (typeof this.module._gpu_buffer_create !== 'function' ||
-        typeof this.module._gpu_compute_probabilities !== 'function' ||
-        typeof this.module._gpu_buffer_read !== 'function') {
-      throw new Error('Unified GPU probability API not available');
-    }
-
-    const probabilitiesBuffer = this.module._gpu_buffer_create(this.ctxPtr, stateDim * 8);
-    if (!probabilitiesBuffer) {
-      throw new Error('gpu_buffer_create failed for probabilities');
-    }
-
-    try {
-      const rc = typeof this.module._gpu_compute_probabilities_u32 === 'function'
-        ? this.module._gpu_compute_probabilities_u32(
-            this.ctxPtr,
-            amplitudesBufferPtr,
-            probabilitiesBuffer,
-            stateDim >>> 0
-          )
-        : this.module._gpu_compute_probabilities(
-            this.ctxPtr,
-            amplitudesBufferPtr,
-            probabilitiesBuffer,
-            BigInt(stateDim)
-          );
-      if (rc !== 0) {
-        throw new Error(`gpu_compute_probabilities failed: ${rc}`);
-      }
-
-      const outPtr = this.memory.alloc(stateDim * 8);
-      const readRc = this.module._gpu_buffer_read(probabilitiesBuffer, outPtr, stateDim * 8, 0);
-      if (readRc !== 0) {
-        this.memory.free(outPtr);
-        throw new Error(`gpu_buffer_read probabilities failed: ${readRc}`);
-      }
-      const out = this.memory.readFloat64Array(outPtr, stateDim);
-      this.memory.free(outPtr);
-      return out;
-    } finally {
-      this.freeBuffer(probabilitiesBuffer);
-    }
+    return trace_gpu_backend_compute_probabilities(
+      this.module,
+      this.memory,
+      this.ctxPtr,
+      amplitudesBufferPtr,
+      stateDim
+    );
   }
 
   sumSquaredMagnitudes(amplitudesBufferPtr: number, stateDim: number): number {
@@ -340,6 +293,99 @@ export class GPUBackendSession {
   private ensureNotDisposed(): void {
     if (this.disposed) {
       throw new Error('GPUBackendSession has been disposed');
+    }
+  }
+}
+
+function trace_gpu_backend_create_buffer_from_interleaved(
+  module: MoonlabModule,
+  memory: WasmMemory,
+  ctxPtr: number,
+  data: Float64Array
+): number {
+  if (typeof module._gpu_buffer_create_from_data !== 'function') {
+    throw new Error('Unified GPU buffer API not available');
+  }
+  const bytes = data.byteLength;
+  const ptr = memory.alloc(bytes);
+  memory.writeFloat64Array(ptr, data);
+  const bufferPtr = module._gpu_buffer_create_from_data(ctxPtr, ptr, bytes);
+  memory.free(ptr);
+  if (!bufferPtr) {
+    throw new Error('gpu_buffer_create_from_data failed');
+  }
+  return bufferPtr;
+}
+
+function trace_gpu_backend_read_interleaved_buffer(
+  module: MoonlabModule,
+  memory: WasmMemory,
+  bufferPtr: number,
+  complexCount: number
+): Float64Array {
+  if (typeof module._gpu_buffer_read !== 'function') {
+    throw new Error('Unified GPU buffer read API not available');
+  }
+  const bytes = complexCount * 16;
+  const outPtr = memory.alloc(bytes);
+  const rc = module._gpu_buffer_read(bufferPtr, outPtr, bytes, 0);
+  if (rc !== 0) {
+    memory.free(outPtr);
+    throw new Error(`gpu_buffer_read failed: ${rc}`);
+  }
+  const out = memory.readFloat64Array(outPtr, complexCount * 2);
+  memory.free(outPtr);
+  return out;
+}
+
+function trace_gpu_backend_compute_probabilities(
+  module: MoonlabModule,
+  memory: WasmMemory,
+  ctxPtr: number,
+  amplitudesBufferPtr: number,
+  stateDim: number
+): Float64Array {
+  if (typeof module._gpu_buffer_create !== 'function' ||
+      typeof module._gpu_compute_probabilities !== 'function' ||
+      typeof module._gpu_buffer_read !== 'function') {
+    throw new Error('Unified GPU probability API not available');
+  }
+
+  const probabilitiesBuffer = module._gpu_buffer_create(ctxPtr, stateDim * 8);
+  if (!probabilitiesBuffer) {
+    throw new Error('gpu_buffer_create failed for probabilities');
+  }
+
+  try {
+    const rc = typeof module._gpu_compute_probabilities_u32 === 'function'
+      ? module._gpu_compute_probabilities_u32(
+          ctxPtr,
+          amplitudesBufferPtr,
+          probabilitiesBuffer,
+          stateDim >>> 0
+        )
+      : module._gpu_compute_probabilities(
+          ctxPtr,
+          amplitudesBufferPtr,
+          probabilitiesBuffer,
+          BigInt(stateDim)
+        );
+    if (rc !== 0) {
+      throw new Error(`gpu_compute_probabilities failed: ${rc}`);
+    }
+
+    const outPtr = memory.alloc(stateDim * 8);
+    const readRc = module._gpu_buffer_read(probabilitiesBuffer, outPtr, stateDim * 8, 0);
+    if (readRc !== 0) {
+      memory.free(outPtr);
+      throw new Error(`gpu_buffer_read probabilities failed: ${readRc}`);
+    }
+    const out = memory.readFloat64Array(outPtr, stateDim);
+    memory.free(outPtr);
+    return out;
+  } finally {
+    if (typeof module._gpu_buffer_free === 'function' && probabilitiesBuffer) {
+      module._gpu_buffer_free(probabilitiesBuffer);
     }
   }
 }

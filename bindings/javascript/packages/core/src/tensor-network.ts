@@ -252,6 +252,10 @@ export interface TFIMOptions {
  * (discrete Schrödinger solver on a 1D spin chain).
  */
 export async function dmrgTFIMGroundState(options: TFIMOptions): Promise<DMRGResult> {
+  return trace_dmrg_tfim_ground_state(options);
+}
+
+async function trace_dmrg_tfim_ground_state(options: TFIMOptions): Promise<DMRGResult> {
   const module = await getModule();
   const memory = new WasmMemory(module);
 

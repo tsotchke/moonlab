@@ -438,7 +438,7 @@ void opencl_get_device_info(
     }
 }
 
-void opencl_print_device_info(opencl_compute_ctx_t* ctx) {
+static void trace_opencl_device_info_report(opencl_compute_ctx_t* ctx) {
     if (!ctx) return;
 
     printf("\n");
@@ -453,6 +453,10 @@ void opencl_print_device_info(opencl_compute_ctx_t* ctx) {
     printf("  Local Memory: %llu KB\n",
            (unsigned long long)(ctx->local_mem_size / 1024));
     printf("====================================================\n\n");
+}
+
+void opencl_print_device_info(opencl_compute_ctx_t* ctx) {
+    trace_opencl_device_info_report(ctx);
 }
 
 // ============================================================================
