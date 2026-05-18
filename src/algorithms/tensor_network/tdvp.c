@@ -765,11 +765,13 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
      * Frobenius norm here is mathematically equivalent (the ground
      * state is invariant under global rescaling and the end-of-step
      * `tn_mps_norm`-based renormalisation absorbs the discarded
-     * factor) and keeps the inner numerics well-conditioned.  The
-     * real-time path conserves norm by unitarity, so this is a
-     * no-op there; we still apply it as a defensive double-check
-     * because the cost is one Frobenius norm per two-site update. */
-    {
+     * factor) and keeps the inner numerics well-conditioned.  Real
+     * time evolution is norm-preserving by unitarity, so we skip the
+     * renorm there -- the Frobenius pass + division costs one
+     * full-tensor traversal per two-site update, and the
+     * `lanczos_expm` Krylov projection already preserves norm to
+     * machine precision on real-time inputs. */
+    if (config->evolution_type == TDVP_IMAGINARY_TIME) {
         double tnorm = tensor_norm_frobenius(theta_evolved);
         if (tnorm > 0.0 && isfinite(tnorm) && tnorm != 1.0) {
             double inv = 1.0 / tnorm;
