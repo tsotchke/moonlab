@@ -428,6 +428,70 @@ double tdvp_get_time(const tdvp_engine_t *engine) {
 }
 
 // ============================================================================
+// BOND TRUNCATION (carve-out for v0.4 adaptive-bond control)
+// ============================================================================
+
+/**
+ * @brief Per-bond PID state for the entropy-feedback controller.
+ *
+ * Allocated once per inter-site bond by `tdvp_engine_t` and updated
+ * in place by `tdvp_truncate_bond` each time that bond is visited.
+ * In v0.4 step 2 the state struct is defined but only initialised
+ * to zero; the PID update lands in step 3 of the roadmap.
+ */
+typedef struct {
+    double prev_error;   /**< Previous error signal (S - S_chi). */
+    double integral;     /**< Running PID integral. */
+    uint32_t chi;        /**< Current target bond dimension. */
+    bool primed;         /**< True after the first update (no derivative on step 1). */
+} tdvp_bond_pid_state_t;
+
+/**
+ * @brief Truncate an evolved two-site tensor matrix with the
+ *        adaptive-bond controller hooked in.
+ *
+ * For v0.4 step 2 this is a behaviour-preserving carve-out of the
+ * SVD-compress call that used to live inline in
+ * `tdvp_evolve_two_site`.  When `cfg->adaptive_bond.enabled` is
+ * `false` (the legacy path), the helper performs exactly the same
+ * SVD as before: it builds an `svd_compress_config_default()`, sets
+ * `max_bond_dim` and `cutoff` from the TDVP config, and returns the
+ * compressed result.
+ *
+ * The `bond_state` parameter is allowed to be `NULL` (legacy path);
+ * step 3 will start to write the per-bond PID state through it.
+ *
+ * Returns the `svd_compress_result_t` (caller frees with
+ * `svd_compress_result_free`), or `NULL` on allocation failure.
+ */
+static svd_compress_result_t *tdvp_truncate_bond(
+    const tensor_t *mat,
+    const tdvp_config_t *cfg,
+    tdvp_bond_pid_state_t *bond_state)
+{
+    (void)bond_state;  /* unused in step 2; reserved for step 3 PID update */
+
+    svd_compress_config_t svd_cfg = svd_compress_config_default();
+    svd_cfg.max_bond_dim = cfg->max_bond_dim;
+    svd_cfg.cutoff       = cfg->svd_cutoff;
+
+    /* Adaptive-bond path: still placeholder in step 2.  When enabled,
+     * we currently route through the same fixed cap so behaviour is
+     * unchanged; step 3 replaces this with the PID-controlled per-
+     * bond chi selection. */
+    if (cfg->adaptive_bond.enabled) {
+        /* Respect chi_ceiling as the outer-bound safety even in
+         * step 2 so the public surface is already correct. */
+        if (cfg->adaptive_bond.chi_ceiling > 0 &&
+            cfg->adaptive_bond.chi_ceiling < svd_cfg.max_bond_dim) {
+            svd_cfg.max_bond_dim = cfg->adaptive_bond.chi_ceiling;
+        }
+    }
+
+    return svd_compress(mat, &svd_cfg);
+}
+
+// ============================================================================
 // TWO-SITE TDVP STEP
 // ============================================================================
 
@@ -533,11 +597,11 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
 
     if (!mat) return -1;
 
-    svd_compress_config_t svd_cfg = svd_compress_config_default();
-    svd_cfg.max_bond_dim = config->max_bond_dim;
-    svd_cfg.cutoff = config->svd_cutoff;
-
-    svd_compress_result_t *svd = svd_compress(mat, &svd_cfg);
+    /* Route the SVD compression through the v0.4 truncation helper.
+     * On the legacy path (adaptive_bond.enabled = false) this is
+     * bit-identical to the previous inline svd_compress_config_default
+     * + max_bond_dim / cutoff plumbing. */
+    svd_compress_result_t *svd = tdvp_truncate_bond(mat, config, NULL);
     tensor_free(mat);
 
     if (!svd) return -1;
