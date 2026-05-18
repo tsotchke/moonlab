@@ -7,7 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.0.)
+### Added
+
+- **Rust TDVP wrapper** (`bindings/rust/moonlab/src/tdvp.rs`):
+  closes binding parity for v0.4.  `moonlab::tdvp` re-exports
+  `Mpo::heisenberg`, `Mps::random`, `TdvpEngine::new`, and the
+  associated config builders so adaptive-bond TDVP can be driven
+  from Rust with the same API shape as the Python binding.  Commit
+  16e0f03.
+
+### Documentation
+
+- **New tutorial** `docs/tutorials/adaptive_bond_tdvp.md` walks the
+  v0.4 entropy-feedback PID bond controller end-to-end with C,
+  Python, and Rust worked examples covering real-time Heisenberg
+  evolution, imaginary-time critical-TFIM ground-state convergence,
+  PID gain tuning guidance, and acceptance-test mapping.  Indexed
+  as entry #4 in `docs/tutorials/README.md`.  Commit 392efe5.
+- **Design note polished into retrospective**.
+  `docs/research/adaptive_bond_tdvp.md` records the measured
+  validation results from the v0.4.0 suite (energy drift
+  2.4 x 10^-5, TFIM ground-state error 1.98 %, PID stability
+  27/27) alongside the original specification, and documents the
+  imag-time renormalisation fix (commit `1c7b100`).  Commit
+  392efe5.
+- **API references freshened** to v0.4 surface.
+  `docs/reference/tdvp-api.md` drops the stale "Rust wrapper on the
+  roadmap" sentence (shipped in 16e0f03), adds the `moonlab::tdvp`
+  surface, an observed-values acceptance table, and a note on the
+  imag-time stability fix.  `docs/reference/qgt-api.md` cross-links
+  the QGT research note, the topological-band-structure tutorial,
+  the v0.3.2 curvature-grid variants, and the n-band Rust surface,
+  and adds a numbered References section (Provost-Vallee 1980,
+  FHS 2005, TKNN 1982, Kane-Mele 2005, Kitaev 2001).  Commit
+  392efe5.
+- **Reference-doc ground-truthing pass**.  Three pre-v0.4 reference
+  pages were rewritten against the actual library surface:
+  `docs/reference/error-codes.md` now records the
+  `moonlab_status_t` registry (`src/utils/moonlab_status.h`), the
+  `qs_error_t` legacy enum (`src/quantum/state.h:69-76`), every
+  per-module `*_error_t` with its declaring header, and the
+  `MOONLAB_ESHKOL_OK` naming exception;
+  `docs/reference/gate-reference.md` replaces fictional
+  `quantum_state_*` names with the real `gate_*` API from
+  `src/quantum/gates.h`; `docs/reference/configuration-options.md`
+  rewrites against the `qsim_config_t` struct in
+  `src/utils/config.h` and the eight env vars actually parsed by
+  `qsim_config_from_env`.  Net diff -496 lines of fictional API.
+  ICC re-index lifts grounded-claim counts from 0 across the three
+  to 35 / 12 / 6 respectively.  Commit b894b0c.
+- **Error-codes catalog consolidated**.  The legacy
+  `docs/error_codes.md` (4/21 grounded, partial enum coverage) is
+  collapsed into a one-paragraph redirect; the canonical
+  `docs/reference/error-codes.md` absorbs its missing enums
+  (`collective_error_t`, `moonlab_eshkol_status_t`) plus the
+  "Adding a new error enum" convention block.  Commit 5981236.
 
 ## [0.4.0] - 2026-05-18
 
