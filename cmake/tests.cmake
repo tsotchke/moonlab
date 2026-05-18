@@ -269,6 +269,19 @@
     target_link_libraries(test_tdvp_adaptive_pid PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_tdvp_adaptive_pid COMMAND test_tdvp_adaptive_pid)
 
+    # Adaptive-bond TDVP step 6a (v0.4 / Phase 3B): real-time energy
+    # conservation under the entropy-feedback PID controller.
+    # Symplectic 2TDVP must preserve <H> to within the integrator's
+    # error envelope; the PID changes which singular values are kept
+    # but never the Hamiltonian, so this is the first sharp acceptance
+    # criterion from docs/research/adaptive_bond_tdvp.md.
+    add_executable(test_tdvp_adaptive_energy_conservation
+                   tests/unit/test_tdvp_adaptive_energy_conservation.c)
+    target_link_libraries(test_tdvp_adaptive_energy_conservation
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_energy_conservation
+             COMMAND test_tdvp_adaptive_energy_conservation)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
