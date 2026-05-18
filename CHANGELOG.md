@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(No unreleased changes since v0.4.0.)
+
+## [0.4.0] - 2026-05-18
+
 The v0.4 adaptive-bond two-site TDVP slice.  Phase 3B of the v0.x
 release plan -- introduces an entropy-feedback PID controller on
 top of the v0.3 fixed-bond TDVP, fixes a pre-existing imag-time
