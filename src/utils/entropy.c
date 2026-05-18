@@ -90,6 +90,12 @@ static void mix_into_state(uint64_t* state, const uint8_t* data, size_t size) {
     }
 }
 
+static uint64_t monotonic_time_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+
 // ============================================================================
 // HARDWARE RNG DETECTION AND ACCESS
 // ============================================================================
@@ -330,35 +336,43 @@ size_t entropy_jitter_bytes(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
     size_t collected = 0;
-    uint64_t accum = 0;
-    int bits = 0;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
 
-    for (size_t i = 0; collected < size && i < size * 100; i++) {
-        // Get high-resolution time
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t state = (((uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec) ^
+                     (uint64_t)(uintptr_t)buffer ^
+                     ((uint64_t)size << 21) ^
+                     (uint64_t)clock();
+    uint64_t previous_delta = monotonic_time_ns();
+    volatile uint64_t work = state | 1ULL;
 
-        // Extract low bits of nanoseconds (jitter)
-        uint64_t jitter = ts.tv_nsec & 0x1;
+    const size_t max_attempts = size * 512 + 1024;
+    for (size_t attempt = 0; collected < size && attempt < max_attempts; attempt++) {
+        uint64_t start = monotonic_time_ns();
 
-        // Add some CPU jitter
-        volatile int dummy = 0;
-        for (int j = 0; j < (ts.tv_nsec & 0xF); j++) {
-            dummy += j;
+        unsigned rounds = 48U + (unsigned)((state ^ start ^ attempt) & 0x3fU);
+        for (unsigned r = 0; r < rounds; r++) {
+            work ^= work << 13;
+            work ^= work >> 7;
+            work ^= work << 17;
+            work += 0x9e3779b97f4a7c15ULL + (uint64_t)r + state;
         }
-        (void)dummy;
 
-        // Accumulate bits
-        accum = (accum << 1) | jitter;
-        bits++;
+        uint64_t end = monotonic_time_ns();
+        uint64_t delta = end - start;
+        uint64_t jitter = delta ^ previous_delta ^ (uint64_t)work ^ (uint64_t)clock();
+        previous_delta = delta;
 
-        if (bits >= 8) {
-            buffer[collected++] = (uint8_t)(accum & 0xFF);
-            accum = 0;
-            bits = 0;
-        }
+        state ^= jitter + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2);
+        uint64_t mixed = splitmix64(&state);
+
+        size_t remaining = size - collected;
+        size_t copy = remaining < sizeof(mixed) ? remaining : sizeof(mixed);
+        memcpy(buffer + collected, &mixed, copy);
+        collected += copy;
     }
 
+    (void)work;
     return collected;
 }
 

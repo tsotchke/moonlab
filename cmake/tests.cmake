@@ -687,6 +687,11 @@
     target_link_libraries(test_entropy_pool PRIVATE quantumsim)
     add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
 
+    # Direct entropy source regression checks.
+    add_executable(test_entropy_sources tests/unit/test_entropy_sources.c)
+    target_link_libraries(test_entropy_sources PRIVATE quantumsim)
+    add_test(NAME unit_entropy_sources COMMAND test_entropy_sources)
+
     # ARM helper probing should use the compiled helper path, not ./tools.
     add_executable(test_hardware_entropy_probe
         tests/unit/test_hardware_entropy_probe.c

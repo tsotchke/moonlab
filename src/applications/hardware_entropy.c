@@ -482,10 +482,13 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
         return ENTROPY_ERROR_INVALID_PARAM;
     }
     
-    // Initialize state with high-resolution time
+    // Initialize state with high-resolution time and call-site variation.
     struct timespec ts;
     entropy_time_now(&ts);
-    uint64_t state = ((uint64_t)ts.tv_sec << 32) | ts.tv_nsec;
+    uint64_t state = (((uint64_t)ts.tv_sec << 32) | (uint64_t)ts.tv_nsec) ^
+                     get_timer_cycles() ^
+                     ((uint64_t)(uintptr_t)buffer << 7) ^
+                     ((uint64_t)size << 17);
     
     uint64_t accumulator = 0;
     uint64_t prev_delta = 0;
@@ -497,12 +500,20 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
         // Collect timing measurements with memory barrier
         uint64_t t1 = get_timer_cycles();
         
-        // CPU-intensive operation with unpredictable timing
-        volatile uint64_t dummy = state;
-        for (int i = 0; i < 50; i++) {
-            dummy = crypto_mix(dummy, i);
+        /*
+         * Run a short dependency chain whose duration varies with current
+         * microarchitectural state.  Feeding the measured work value back into
+         * the collector prevents the compiler from reducing this to a fixed
+         * delay loop while keeping jitter as the measured source.
+         */
+        volatile uint64_t work = state ^ accumulator ^ t1;
+        int rounds = 64 + (int)((state ^ t1) & 0x3fU);
+        for (int i = 0; i < rounds; i++) {
+            uint64_t x = (uint64_t)work + (uint64_t)i + t1;
+            work ^= crypto_mix(x, state ^ ((uint64_t)i << 32));
+            work = (work << 7) | (work >> 57);
         }
-        state ^= dummy; // Feed back to prevent optimization
+        state ^= (uint64_t)work;
         
         uint64_t t2 = get_timer_cycles();
         
@@ -514,7 +525,7 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
         
         // Extract entropy from timing delta
         uint64_t entropy = extract_timing_entropy(delta, prev_delta, state);
-        entropy ^= crypto_mix(sys_time, state + delta);
+        entropy ^= crypto_mix(sys_time ^ (uint64_t)work, state + delta);
         
         prev_delta = delta;
         state = crypto_mix(state, entropy);

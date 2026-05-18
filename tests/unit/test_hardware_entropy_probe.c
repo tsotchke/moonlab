@@ -25,6 +25,58 @@ static int failures = 0;
     }                                                           \
 } while (0)
 
+static int buffer_is_all_zero(const uint8_t *buffer, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        if (buffer[i] != 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int buffer_has_variation(const uint8_t *buffer, size_t size) {
+    if (size == 0) {
+        return 0;
+    }
+    for (size_t i = 1; i < size; i++) {
+        if (buffer[i] != buffer[0]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_jitter_entropy_source(void) {
+    fprintf(stdout, "\n-- jitter entropy source --\n");
+
+    uint8_t direct[64];
+    memset(direct, 0, sizeof(direct));
+    CHECK(entropy_jitter(direct, sizeof(direct)) == ENTROPY_SUCCESS,
+          "direct jitter collection succeeds");
+    CHECK(!buffer_is_all_zero(direct, sizeof(direct)),
+          "direct jitter output is not all zero");
+    CHECK(buffer_has_variation(direct, sizeof(direct)),
+          "direct jitter output has byte variation");
+
+    entropy_ctx_t ctx;
+    CHECK(entropy_init(&ctx) == ENTROPY_SUCCESS,
+          "entropy context initializes");
+
+    uint8_t routed[64];
+    memset(routed, 0, sizeof(routed));
+    CHECK(entropy_get_bytes_from_source(&ctx, routed, sizeof(routed),
+                                        ENTROPY_SOURCE_JITTER) == ENTROPY_SUCCESS,
+          "jitter source route succeeds");
+    CHECK(ctx.last_source == ENTROPY_SOURCE_JITTER,
+          "context records jitter as last source");
+    CHECK(!buffer_is_all_zero(routed, sizeof(routed)),
+          "routed jitter output is not all zero");
+    CHECK(buffer_has_variation(routed, sizeof(routed)),
+          "routed jitter output has byte variation");
+
+    entropy_free(&ctx);
+}
+
 #if defined(__aarch64__)
 static int write_malicious_helper(const char *root, const char *marker_path) {
     char tools_dir[PATH_MAX];
@@ -107,6 +159,8 @@ static void test_probe_ignores_cwd_helper(void) {
 
 int main(void) {
     fprintf(stdout, "=== hardware entropy probe tests ===\n");
+
+    test_jitter_entropy_source();
 
 #if defined(__aarch64__)
     test_probe_ignores_cwd_helper();
