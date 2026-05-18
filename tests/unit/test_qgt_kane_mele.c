@@ -24,6 +24,48 @@ static int failures = 0;
     if (!(cond)) { fprintf(stderr, "FAIL " fmt "\n", ##__VA_ARGS__); failures++; } \
 } while (0)
 
+static double max_spin_mixing(const qgt_complex_t H[16]) {
+    const int up[2] = {0, 1};
+    const int dn[2] = {2, 3};
+    double maxv = 0.0;
+    for (int a = 0; a < 2; a++) {
+        for (int b = 0; b < 2; b++) {
+            double v1 = cabs(H[up[a] * 4 + dn[b]]);
+            double v2 = cabs(H[dn[a] * 4 + up[b]]);
+            if (v1 > maxv) maxv = v1;
+            if (v2 > maxv) maxv = v2;
+        }
+    }
+    return maxv;
+}
+
+static void check_hermitian(const qgt_complex_t H[16], const char* label) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            double err = cabs(H[i * 4 + j] - conj(H[j * 4 + i]));
+            CHECK(err < 1e-10, "%s: H[%d,%d] Hermiticity err %.3e",
+                  label, i, j, err);
+        }
+    }
+}
+
+static void check_time_reversal(const qgt_complex_t Hk[16],
+                                const qgt_complex_t Hmk[16],
+                                const char* label) {
+    const int flip[4] = {2, 3, 0, 1};
+    const double eta[4] = {+1.0, +1.0, -1.0, -1.0};
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            qgt_complex_t transformed =
+                eta[flip[i]] * eta[flip[j]] *
+                conj(Hmk[flip[i] * 4 + flip[j]]);
+            double err = cabs(Hk[i * 4 + j] - transformed);
+            CHECK(err < 1e-10, "%s: TRS err H[%d,%d] %.3e",
+                  label, i, j, err);
+        }
+    }
+}
+
 int main(void) {
     fprintf(stdout, "=== Kane-Mele 4-band model + Z_2 invariant ===\n");
 
@@ -107,6 +149,56 @@ int main(void) {
                     lv, z2, expected);
             qgt_free_nband(sys);
         }
+    }
+
+    /* ---- Case 4: Rashba SOC is physically present and TRS ---------- */
+    {
+        const double lambda_v = 0.1;
+        const double lambda_r = 0.05;
+        const double k[2] = {0.41, -0.29};
+        const double mk[2] = {-k[0], -k[1]};
+        qgt_complex_t H[16], Hm[16];
+        qgt_system_n_t* sys =
+            qgt_model_kane_mele(t, lambda_so, lambda_r, lambda_v);
+        CHECK(sys != NULL, "create KM (Rashba QSH)");
+
+        int rc = qgt_eval_nband_hamiltonian(sys, k, H, 16);
+        CHECK(rc == 0, "eval Rashba H(k) rc=%d", rc);
+        rc = qgt_eval_nband_hamiltonian(sys, mk, Hm, 16);
+        CHECK(rc == 0, "eval Rashba H(-k) rc=%d", rc);
+        check_hermitian(H, "Rashba H(k)");
+        check_time_reversal(H, Hm, "Rashba Kane-Mele");
+        CHECK(max_spin_mixing(H) > 1e-3,
+              "Rashba term should mix spin sectors");
+
+        int z2 = -1;
+        rc = qgt_z2_invariant(sys, 32, &z2);
+        CHECK(rc == 0, "Rashba z2 rc=%d", rc);
+        CHECK(z2 == 1, "Rashba QSH phase: expected Z_2 = 1, got %d", z2);
+
+        qgt_berry_grid_t g;
+        rc = qgt_berry_grid_nband(sys, 32, &g);
+        CHECK(rc == 0, "Rashba berry_grid_nband rc=%d", rc);
+        if (rc == 0) {
+            int C = (int)lround(g.chern);
+            CHECK(C == 0, "Rashba C_total (TRS): expected 0, got %d", C);
+            qgt_berry_grid_free(&g);
+        }
+        qgt_free_nband(sys);
+    }
+
+    /* ---- Case 5: Rashba SOC in a trivial gapped phase -------------- */
+    {
+        const double lambda_v = 0.6;
+        const double lambda_r = 0.05;
+        qgt_system_n_t* sys =
+            qgt_model_kane_mele(t, lambda_so, lambda_r, lambda_v);
+        CHECK(sys != NULL, "create KM (Rashba trivial)");
+        int z2 = -1;
+        int rc = qgt_z2_invariant(sys, 32, &z2);
+        CHECK(rc == 0, "Rashba trivial z2 rc=%d", rc);
+        CHECK(z2 == 0, "Rashba trivial phase: expected Z_2 = 0, got %d", z2);
+        qgt_free_nband(sys);
     }
 
     if (failures == 0) {

@@ -499,6 +499,25 @@ MOONLAB_API qgt_system_n_t* qgt_create_nband(qgt_bloch_n_fn f, void* user,
 MOONLAB_API void qgt_free_nband(qgt_system_n_t* sys);
 
 /**
+ * @brief Evaluate an n-band Bloch Hamiltonian at momentum @p k.
+ *
+ * This is primarily useful for validating built-in models and for
+ * downstream tooling that needs to inspect a model Hamiltonian directly
+ * before computing topological invariants.
+ *
+ * @param sys       Multi-band system handle.
+ * @param k         Momentum coordinates accepted by the system callback.
+ * @param[out] h    Row-major output buffer.
+ * @param h_count   Number of qgt_complex_t slots in @p h; must be at
+ *                  least n_bands * n_bands.
+ * @return 0 on success, negative on invalid arguments.
+ */
+MOONLAB_API int qgt_eval_nband_hamiltonian(const qgt_system_n_t* sys,
+                                            const double k[2],
+                                            qgt_complex_t* h,
+                                            size_t h_count);
+
+/**
  * @brief Compute the (Abelian, occupied-subspace summed) Chern number
  *        on an N x N BZ grid via the non-Abelian FHS prescription.
  *
@@ -524,9 +543,8 @@ MOONLAB_API int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
                                       qgt_berry_grid_t* out);
 
 /**
- * @brief Compute the Z_2 invariant (Kane-Mele 2005) of a 4-band
- *        time-reversal-symmetric Bloch Hamiltonian via the n-field
- *        method of Fukui & Hatsugai (2007).
+ * @brief Compute the Z_2 invariant of a 4-band spinful
+ *        time-reversal-symmetric Bloch Hamiltonian.
  *
  * The Z_2 invariant nu in {0, 1} distinguishes the trivial insulator
  * (nu = 0) from the quantum spin Hall (QSH) insulator (nu = 1) of
@@ -537,12 +555,14 @@ MOONLAB_API int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
  * verify the symmetry, only computes the invariant assuming it
  * holds).
  *
- * Algorithm: Fukui-Hatsugai 2007.  Working on the half BZ
- * @f$0 \le k_y \le \pi@f$, build the discrete F_12 plaquette flux
- * using the determinant link variable, and the discrete A_1 along
- * the @f$k_y = 0@f$ and @f$k_y = \pi@f$ TRIM lines using the same
- * link variable.  The Z_2 invariant is
- *   nu = (1 / (2 pi)) [ sum_BZ-half F_12 - sum_TRIM A_1 ]  mod 2.
+ * Algorithm: if the Hamiltonian is block-diagonal in the basis
+ * (A-up, B-up, A-down, B-down), the spin-up Chern number gives
+ * @f$\nu = |C_\uparrow| \bmod 2@f$.  If spin-mixing terms are
+ * present, the routine projects @f$S_z@f$ into the occupied subspace,
+ * follows the positive projected-spin sector on the full Brillouin
+ * zone, and returns the parity of its Chern number.  This covers the
+ * Kane-Mele Rashba term while the projected spin spectrum remains
+ * gapped.
  *
  * @param sys     4-band system at half-filling.
  * @param N       Grid side; must be even, >= 8.
