@@ -107,6 +107,83 @@ typedef enum {
 } integrator_type_t;
 
 /**
+ * @brief Adaptive-bond TDVP configuration (since v0.4 / Phase 3B).
+ *
+ * Replaces the fixed `max_bond_dim` cap with an entropy-feedback PID
+ * controller that selects each bond's truncation threshold
+ * individually so the post-truncation block entropy meets a target
+ * accuracy budget.  Algorithm and validation criteria are documented
+ * in `docs/research/adaptive_bond_tdvp.md`.
+ *
+ * When `enabled == false` (the default produced by
+ * `tdvp_config_default`) the legacy fixed-cap path is used and the
+ * remaining fields are ignored; this preserves bit-exact behaviour
+ * for every v0.3 caller.
+ *
+ * Reference: arXiv:2604.03960 (entropy-feedback bond control for
+ * 2TDVP).
+ */
+typedef struct {
+    bool enabled;                /**< Use PID controller (false = legacy). */
+    double target_entropy_error; /**< Target |S - S_chi| budget. */
+    double kp;                   /**< Proportional gain. */
+    double ki;                   /**< Integral gain (per sweep). */
+    double kd;                   /**< Derivative gain (per sweep). */
+    uint32_t chi_floor;          /**< Hard lower bound on per-bond chi. */
+    uint32_t chi_ceiling;        /**< Hard upper bound on per-bond chi. */
+    double alpha;                /**< Entropy-excess -> bond-dim scale. */
+} tdvp_adaptive_bond_config_t;
+
+/**
+ * @brief Reference-paper PID gains for the adaptive-bond controller.
+ *
+ * Returns an `enabled = true` configuration with the gains validated
+ * in arXiv:2604.03960 for a 24-site Heisenberg chain.  Equivalent to
+ * filling the fields by hand with:
+ *   - target_entropy_error = eps_S
+ *   - kp = 0.5, ki = 0.05, kd = 0.1
+ *   - chi_floor = 4, chi_ceiling = 4096
+ *   - alpha = 8.0
+ *
+ * Use this when wiring adaptive bond control into a new TDVP
+ * pipeline; tune the gains afterwards if your model has a
+ * substantially different entanglement-growth profile.
+ */
+static inline tdvp_adaptive_bond_config_t
+tdvp_adaptive_bond_config_default(double target_entropy_error) {
+    return (tdvp_adaptive_bond_config_t){
+        .enabled              = true,
+        .target_entropy_error = target_entropy_error,
+        .kp                   = 0.5,
+        .ki                   = 0.05,
+        .kd                   = 0.1,
+        .chi_floor            = 4,
+        .chi_ceiling          = 4096,
+        .alpha                = 8.0,
+    };
+}
+
+/**
+ * @brief All-zero, disabled adaptive-bond config.
+ *
+ * Used inside `tdvp_config_default` to leave the adaptive path off
+ * by default so existing v0.3 callers see no behaviour change.
+ */
+static inline tdvp_adaptive_bond_config_t
+tdvp_adaptive_bond_config_disabled(void) {
+    return (tdvp_adaptive_bond_config_t){
+        .enabled              = false,
+        .target_entropy_error = 0.0,
+        .kp                   = 0.0,
+        .ki                   = 0.0,
+        .kd                   = 0.0,
+        .chi_floor            = 0,
+        .chi_ceiling          = 0,
+        .alpha                = 0.0,
+    };
+}
+
+/**
  * @brief TDVP configuration
  */
 typedef struct {
@@ -115,7 +192,7 @@ typedef struct {
     integrator_type_t integrator;           /**< Time integration method */
 
     double dt;                      /**< Time step */
-    uint32_t max_bond_dim;          /**< Maximum bond dimension */
+    uint32_t max_bond_dim;          /**< Maximum bond dimension (legacy fixed cap) */
     double svd_cutoff;              /**< SVD truncation threshold */
 
     uint32_t lanczos_max_iter;      /**< Max Lanczos iterations */
@@ -123,10 +200,24 @@ typedef struct {
 
     bool normalize;                 /**< Normalize state after each step */
     bool verbose;                   /**< Print progress information */
+
+    /**
+     * Adaptive-bond control (v0.4+).  When `adaptive_bond.enabled`
+     * is `true`, `max_bond_dim` and `svd_cutoff` are still honoured
+     * as outer-bound safeties but the per-bond truncation threshold
+     * is selected by the PID controller.  See
+     * `docs/research/adaptive_bond_tdvp.md`.
+     */
+    tdvp_adaptive_bond_config_t adaptive_bond;
 } tdvp_config_t;
 
 /**
- * @brief Default TDVP configuration
+ * @brief Default TDVP configuration (legacy fixed-bond path).
+ *
+ * `adaptive_bond.enabled` is `false`, so callers that built a
+ * `tdvp_config_t` via this helper before v0.4 continue to see the
+ * exact same behaviour: a fixed `max_bond_dim = 128` cap with
+ * `svd_cutoff = 1e-10`.
  */
 static inline tdvp_config_t tdvp_config_default(void) {
     return (tdvp_config_t){
@@ -139,8 +230,36 @@ static inline tdvp_config_t tdvp_config_default(void) {
         .lanczos_max_iter = 50,
         .lanczos_tol = 1e-12,
         .normalize = true,
-        .verbose = false
+        .verbose = false,
+        .adaptive_bond = {
+            .enabled              = false,
+            .target_entropy_error = 0.0,
+            .kp                   = 0.0,
+            .ki                   = 0.0,
+            .kd                   = 0.0,
+            .chi_floor            = 0,
+            .chi_ceiling          = 0,
+            .alpha                = 0.0,
+        },
     };
+}
+
+/**
+ * @brief Adaptive-bond TDVP configuration (since v0.4).
+ *
+ * Returns a two-site real-time TDVP config with the entropy-feedback
+ * PID controller enabled at the reference-paper gains.  The fixed
+ * `max_bond_dim` is retained as an outer-bound safety
+ * (`chi_ceiling`).
+ *
+ * @param target_entropy_error  PID error-signal budget; 1e-3 is a
+ *                              sensible default for production runs.
+ */
+static inline tdvp_config_t tdvp_config_adaptive(double target_entropy_error) {
+    tdvp_config_t cfg = tdvp_config_default();
+    cfg.adaptive_bond = tdvp_adaptive_bond_config_default(target_entropy_error);
+    cfg.max_bond_dim  = cfg.adaptive_bond.chi_ceiling;
+    return cfg;
 }
 
 // ============================================================================

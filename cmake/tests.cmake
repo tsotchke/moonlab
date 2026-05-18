@@ -252,6 +252,14 @@
     target_link_libraries(test_qgt_phase_diagram_2d PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qgt_phase_diagram_2d COMMAND test_qgt_phase_diagram_2d)
 
+    # Adaptive-bond TDVP step 1 (v0.4 / Phase 3B): backwards-compat
+    # regression on the tdvp_adaptive_bond_config_t surface and the
+    # tdvp_config_default / tdvp_config_adaptive helpers.  See
+    # docs/research/adaptive_bond_tdvp.md for the full roadmap.
+    add_executable(test_tdvp_adaptive_config tests/unit/test_tdvp_adaptive_config.c)
+    target_link_libraries(test_tdvp_adaptive_config PRIVATE quantumsim)
+    add_test(NAME unit_tdvp_adaptive_config COMMAND test_tdvp_adaptive_config)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
