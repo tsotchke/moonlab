@@ -12,8 +12,8 @@ Get running with Moonlab Quantum Simulator in under 5 minutes. This guide walks 
 
 ```bash
 git clone https://github.com/tsotchke/moonlab.git
-cd quantum-simulator
-make
+cd moonlab
+cmake -S . -B build && cmake --build build -j
 ```
 
 On Apple Silicon, the build automatically detects your M-series chip and enables hardware acceleration.

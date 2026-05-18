@@ -298,7 +298,7 @@ where $\|\cdot\|_F$ is the Frobenius norm.
 New states are initialized to $|0\ldots0\rangle$:
 
 ```c
-quantum_state_t* quantum_state_create(uint32_t num_qubits) {
+quantum_state_t* quantum_state_init(uint32_t num_qubits) {
     quantum_state_t* state = malloc(sizeof(quantum_state_t));
     state->num_qubits = num_qubits;
     state->num_amplitudes = 1ULL << num_qubits;

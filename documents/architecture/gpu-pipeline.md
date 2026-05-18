@@ -15,7 +15,7 @@ Moonlab uses Apple's Metal framework to accelerate quantum simulation on Apple S
 │                        CPU Side                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
 │  │                   C Core Library                         │ │
-│  │  quantum_state_h(state, qubit)                           │ │
+│  │  gate_hadamard(state, qubit)                           │ │
 │  └─────────────────────────┬────────────────────────────────┘ │
 │                            │                                  │
 │  ┌─────────────────────────▼────────────────────────────────┐ │

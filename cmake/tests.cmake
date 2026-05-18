@@ -98,19 +98,6 @@
     endif()
     add_test(NAME unit_simd_dispatch COMMAND test_simd_dispatch)
 
-    add_executable(test_stride_gates tests/unit/test_stride_gates.c
-                   src/optimization/stride_gates.c)
-    target_include_directories(test_stride_gates PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_stride_gates PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
-    if(QSIM_HAS_OPENMP)
-        qsim_target_link_openmp(test_stride_gates)
-        if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-            target_compile_options(test_stride_gates PRIVATE -Xpreprocessor -fopenmp)
-        endif()
-        target_compile_definitions(test_stride_gates PRIVATE HAS_OPENMP=1)
-    endif()
-    add_test(NAME unit_stride_gates COMMAND test_stride_gates)
-
     # Tensor-network unit test — the 800+ line suite that exercises
     # tensors, SVD, MPS, gate application via tensor networks,
     # measurement, and entanglement. Already in-tree but historically
@@ -1102,7 +1089,7 @@
         unit_correctness_properties unit_measurement unit_entanglement
         unit_noise unit_composite_noise unit_fusion unit_povm
         unit_mutual_info unit_zne unit_simd_dispatch unit_simd_parity
-        unit_stride_gates unit_memory_align gate_test fast_measurement
+        unit_memory_align gate_test fast_measurement
         comprehensive correlation_test unit_hermitian_eigen
         unit_matrix_math unit_svd_compress unit_metal_parity)
     qsim_label_tests(tn

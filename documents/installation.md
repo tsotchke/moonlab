@@ -124,7 +124,7 @@ Or install dependencies and use directly:
 
 ```bash
 pip install numpy
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/quantum-simulator
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/moonlab
 python -c "from moonlab import QuantumState; print('OK')"
 ```
 
@@ -139,7 +139,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moonlab = { path = "/path/to/quantum-simulator/bindings/rust/moonlab" }
+moonlab = { path = "/path/to/moonlab/bindings/rust/moonlab" }
 ```
 
 Or build the static library for FFI:

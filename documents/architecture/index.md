@@ -250,17 +250,17 @@ printf("Threads: %d\n", features.num_threads);
 // Thread-safe: each thread has own state
 #pragma omp parallel
 {
-    quantum_state_t* local_state = quantum_state_create(20);
+    quantum_state_t* local_state = quantum_state_init(20);
     // ... operations on local_state
-    quantum_state_destroy(local_state);
+    quantum_state_free(local_state);
 }
 
 // NOT thread-safe: shared state
-quantum_state_t* shared = quantum_state_create(20);
+quantum_state_t* shared = quantum_state_init(20);
 #pragma omp parallel
 {
     // WRONG: concurrent modification
-    quantum_state_h(shared, omp_get_thread_num());
+    gate_hadamard(shared, omp_get_thread_num());
 }
 ```
 
@@ -285,7 +285,7 @@ typedef enum {
 ### Error Handling Pattern
 
 ```c
-qsim_error_t err = quantum_state_h(state, qubit);
+qsim_error_t err = gate_hadamard(state, qubit);
 if (err != QSIM_SUCCESS) {
     const char* msg = qsim_error_message(err);
     fprintf(stderr, "Error: %s\n", msg);

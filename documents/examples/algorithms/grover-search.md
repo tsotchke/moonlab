@@ -277,11 +277,11 @@ uint64_t grover_manual(int n_qubits, int target) {
     printf("Searching %d items for target %d\n", N, target);
     printf("Optimal iterations: %d\n", optimal_iter);
 
-    quantum_state_t* state = quantum_state_create(n_qubits);
+    quantum_state_t* state = quantum_state_init(n_qubits);
 
     // Initialize superposition
     for (int q = 0; q < n_qubits; q++) {
-        quantum_state_h(state, q);
+        gate_hadamard(state, q);
     }
 
     // Grover iterations
@@ -295,7 +295,7 @@ uint64_t grover_manual(int n_qubits, int target) {
 
     // Measure
     uint64_t result = quantum_state_measure_all(state);
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 
     return result;
 }
@@ -308,25 +308,25 @@ void grover_diffusion(quantum_state_t* state) {
 
     // H on all
     for (int q = 0; q < n_qubits; q++) {
-        quantum_state_h(state, q);
+        gate_hadamard(state, q);
     }
 
     // X on all
     for (int q = 0; q < n_qubits; q++) {
-        quantum_state_x(state, q);
+        gate_pauli_x(state, q);
     }
 
     // Multi-controlled Z
-    quantum_state_mcz(state, n_qubits);
+    gate_mcz(state, n_qubits);
 
     // X on all
     for (int q = 0; q < n_qubits; q++) {
-        quantum_state_x(state, q);
+        gate_pauli_x(state, q);
     }
 
     // H on all
     for (int q = 0; q < n_qubits; q++) {
-        quantum_state_h(state, q);
+        gate_hadamard(state, q);
     }
 }
 

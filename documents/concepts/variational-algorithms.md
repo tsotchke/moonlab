@@ -62,11 +62,11 @@ Layer 2:    Ry──Rz────●────────────
 // Create hardware-efficient ansatz
 for (int layer = 0; layer < num_layers; layer++) {
     for (int q = 0; q < num_qubits; q++) {
-        quantum_state_ry(state, q, theta[layer][q][0]);
-        quantum_state_rz(state, q, theta[layer][q][1]);
+        gate_ry(state, q, theta[layer][q][0]);
+        gate_rz(state, q, theta[layer][q][1]);
     }
     for (int q = 0; q < num_qubits - 1; q++) {
-        quantum_state_cnot(state, q, q + 1);
+        gate_cnot(state, q, q + 1);
     }
 }
 ```

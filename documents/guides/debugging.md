@@ -122,12 +122,12 @@ make SANITIZE=address
 
 ```c
 // WRONG: Accessing freed state
-quantum_state_t* state = quantum_state_create(10);
-quantum_state_destroy(state);
+quantum_state_t* state = quantum_state_init(10);
+quantum_state_free(state);
 gate_hadamard(state, 0);  // Use after free!
 
 // WRONG: Buffer overflow
-quantum_state_t* state = quantum_state_create(5);
+quantum_state_t* state = quantum_state_init(5);
 gate_hadamard(state, 10);  // Qubit index out of bounds!
 
 // CORRECT: Bounds checking

@@ -71,7 +71,7 @@ Index 7: |111⟩
 ### Allocation
 
 ```c
-quantum_state_t* quantum_state_create(uint32_t num_qubits) {
+quantum_state_t* quantum_state_init(uint32_t num_qubits) {
     // Validate input
     if (num_qubits > QSIM_MAX_QUBITS) {
         return NULL;
@@ -448,7 +448,7 @@ void quantum_state_normalize(quantum_state_t* state) {
 
 ```c
 quantum_state_t* quantum_state_copy(const quantum_state_t* state) {
-    quantum_state_t* copy = quantum_state_create(state->num_qubits);
+    quantum_state_t* copy = quantum_state_init(state->num_qubits);
     if (!copy) return NULL;
 
     memcpy(copy->amplitudes, state->amplitudes, state->dim * sizeof(Complex));
@@ -537,7 +537,7 @@ quantum_state_t* quantum_state_load(const char* filename) {
     }
 
     // Create state
-    quantum_state_t* state = quantum_state_create(num_qubits);
+    quantum_state_t* state = quantum_state_init(num_qubits);
     if (!state) {
         fclose(f);
         return NULL;

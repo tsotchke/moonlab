@@ -47,7 +47,7 @@ $$X = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$$
 - Eigenvectors: $|+\rangle, |-\rangle$
 
 ```c
-quantum_state_x(state, qubit);
+gate_pauli_x(state, qubit);
 ```
 
 ### Pauli-Y
@@ -61,7 +61,7 @@ $$Y = \begin{pmatrix} 0 & -i \\ i & 0 \end{pmatrix}$$
 - $Y = iXZ$
 
 ```c
-quantum_state_y(state, qubit);
+gate_pauli_y(state, qubit);
 ```
 
 ### Pauli-Z
@@ -75,7 +75,7 @@ $$Z = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$$
 - Diagonal in computational basis
 
 ```c
-quantum_state_z(state, qubit);
+gate_pauli_z(state, qubit);
 ```
 
 ### Pauli Algebra
@@ -100,7 +100,7 @@ $$H|1\rangle = |-\rangle = \frac{|0\rangle - |1\rangle}{\sqrt{2}}$$
 - Rotates X-basis to Z-basis
 
 ```c
-quantum_state_h(state, qubit);
+gate_hadamard(state, qubit);
 ```
 
 ## Phase Gates
@@ -114,7 +114,7 @@ $$S = \begin{pmatrix} 1 & 0 \\ 0 & i \end{pmatrix} = \sqrt{Z}$$
 **Action**: $|1\rangle \to i|1\rangle$
 
 ```c
-quantum_state_s(state, qubit);
+gate_s(state, qubit);
 ```
 
 ### S-dagger
@@ -122,7 +122,7 @@ quantum_state_s(state, qubit);
 $$S^\dagger = \begin{pmatrix} 1 & 0 \\ 0 & -i \end{pmatrix}$$
 
 ```c
-quantum_state_sdg(state, qubit);
+gate_s_dagger(state, qubit);
 ```
 
 ### T Gate (pi/8 Gate)
@@ -136,7 +136,7 @@ $$T = \begin{pmatrix} 1 & 0 \\ 0 & e^{i\pi/4} \end{pmatrix} = \sqrt{S}$$
 **Importance**: T gate + Clifford gates = universal gate set
 
 ```c
-quantum_state_t(state, qubit);
+gate_t(state, qubit);
 ```
 
 ### T-dagger
@@ -144,7 +144,7 @@ quantum_state_t(state, qubit);
 $$T^\dagger = \begin{pmatrix} 1 & 0 \\ 0 & e^{-i\pi/4} \end{pmatrix}$$
 
 ```c
-quantum_state_tdg(state, qubit);
+gate_t_dagger(state, qubit);
 ```
 
 ## Rotation Gates
@@ -156,7 +156,7 @@ $$R_X(\theta) = e^{-i\theta X/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 $$R_X(\theta) = \begin{pmatrix} \cos\frac{\theta}{2} & -i\sin\frac{\theta}{2} \\ -i\sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$$
 
 ```c
-quantum_state_rx(state, qubit, theta);
+gate_rx(state, qubit, theta);
 ```
 
 ### Rotation About Y-Axis
@@ -166,7 +166,7 @@ $$R_Y(\theta) = e^{-i\theta Y/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 $$R_Y(\theta) = \begin{pmatrix} \cos\frac{\theta}{2} & -\sin\frac{\theta}{2} \\ \sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$$
 
 ```c
-quantum_state_ry(state, qubit, theta);
+gate_ry(state, qubit, theta);
 ```
 
 ### Rotation About Z-Axis
@@ -176,7 +176,7 @@ $$R_Z(\theta) = e^{-i\theta Z/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 $$R_Z(\theta) = \begin{pmatrix} e^{-i\theta/2} & 0 \\ 0 & e^{i\theta/2} \end{pmatrix}$$
 
 ```c
-quantum_state_rz(state, qubit, theta);
+gate_rz(state, qubit, theta);
 ```
 
 ### Phase Gate (General)
@@ -186,7 +186,7 @@ $$P(\phi) = \begin{pmatrix} 1 & 0 \\ 0 & e^{i\phi} \end{pmatrix}$$
 Relation to $R_Z$: $P(\phi) = e^{i\phi/2} R_Z(\phi)$
 
 ```c
-quantum_state_phase(state, qubit, phi);
+gate_phase(state, qubit, phi);
 ```
 
 ## Universal Single-Qubit Gates
@@ -206,7 +206,7 @@ Any single-qubit gate can be expressed as $U_3$ (up to global phase).
 - $U_3(\pi/2, 0, \pi) = H$
 
 ```c
-quantum_state_u3(state, qubit, theta, phi, lambda);
+gate_u3(state, qubit, theta, phi, lambda);
 ```
 
 ### Euler Decomposition
@@ -234,7 +234,7 @@ $$|10\rangle \to |11\rangle, \quad |11\rangle \to |10\rangle$$
 **Creates entanglement**: $\text{CNOT}(H \otimes I)|00\rangle = \frac{|00\rangle + |11\rangle}{\sqrt{2}}$
 
 ```c
-quantum_state_cnot(state, control, target);
+gate_cnot(state, control, target);
 ```
 
 ### CZ (Controlled-Z)
@@ -248,7 +248,7 @@ $$\text{CZ} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\
 - $\text{CZ} = (I \otimes H) \cdot \text{CNOT} \cdot (I \otimes H)$
 
 ```c
-quantum_state_cz(state, qubit1, qubit2);
+gate_cz(state, qubit1, qubit2);
 ```
 
 ### SWAP
@@ -260,7 +260,7 @@ $$\text{SWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 1 & 0 & 0 
 **Decomposition**: SWAP = CNOT(a,b) CNOT(b,a) CNOT(a,b)
 
 ```c
-quantum_state_swap(state, qubit1, qubit2);
+gate_swap(state, qubit1, qubit2);
 ```
 
 ### iSWAP
@@ -303,7 +303,7 @@ where $I_6$ is the $6 \times 6$ identity.
 - Self-inverse
 
 ```c
-quantum_state_toffoli(state, control1, control2, target);
+gate_toffoli(state, control1, control2, target);
 ```
 
 ### Fredkin (CSWAP)
@@ -311,7 +311,7 @@ quantum_state_toffoli(state, control1, control2, target);
 Swaps two qubits if control is $|1\rangle$:
 
 ```c
-quantum_state_fredkin(state, control, target1, target2);
+gate_fredkin(state, control, target1, target2);
 ```
 
 ## Clifford Group
@@ -378,9 +378,9 @@ Multiple consecutive gates can be fused into a single operation:
 
 ```c
 // Instead of:
-quantum_state_h(state, 0);
-quantum_state_t(state, 0);
-quantum_state_h(state, 0);
+gate_hadamard(state, 0);
+gate_t(state, 0);
+gate_hadamard(state, 0);
 
 // Use fused gate:
 double fused[8];

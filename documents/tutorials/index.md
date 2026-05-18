@@ -74,9 +74,9 @@ print(state.probabilities())
 ```c
 #include "quantum_sim.h"
 
-quantum_state_t* state = quantum_state_create(2);
-quantum_state_h(state, 0);
-quantum_state_cnot(state, 0, 1);
+quantum_state_t* state = quantum_state_init(2);
+gate_hadamard(state, 0);
+gate_cnot(state, 0, 1);
 ```
 
 ### JavaScript

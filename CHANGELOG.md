@@ -7,7 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.1.)
+(No unreleased changes since v0.4.2.)
+
+## [0.4.2] - 2026-05-18
+
+The "plug every gap" release.  v0.4.1 wrapped up the TDVP audit
+punch list; v0.4.2 widens the same lens across the rest of the tree
+and closes everything that surfaced.  Three external-audit reports
+(stub triage, `documents/` tree currency, binding parity)
+generated the punch list; this release ships fixes for every item
+that wasn't already on the v0.5 research scope.  Test gauntlet:
+114/114 ctest, 183/183 pytest, 60/60 cargo test.
+
+### Added
+
+- **Bell-variant Python parity** (`bindings/python/moonlab/algorithms.py`):
+  `BellTest.mermin_ghz_test` and `BellTest.mermin_klyshko_test`
+  wrap the C entry points `bell_test_mermin_ghz` and
+  `bell_test_mermin_klyshko` (`src/algorithms/bell_tests.h:359-384`),
+  which shipped in v0.2 but were never bound.  Pytest cases pin
+  3-qubit GHZ |M| > 2.5 and Mermin-Klyshko |M_N| > 1.1 (classical
+  bound is 1).
+
+### Changed
+
+- **Bindings versions bumped to 0.4.2** across the 10 manifests in
+  `bindings/{python,javascript,rust}/`.  Caught by the
+  `bindings_version_sync` ctest entry that compares VERSION.txt to
+  each manifest; v0.4.1 forgot to bump them.
+
+### Documentation
+
+- **`documents/` tree refresh**: 190 fictional `quantum_state_<verb>(`
+  references replaced with the real `gate_<canonical>(` from
+  `src/quantum/gates.h` across 25 files (tutorials, algorithm
+  walkthroughs, architecture pages, examples, contributing guide,
+  API reference).  Also stripped fictional
+  `from moonlab import configure / diagnose / gpu_diagnose / set_backend / set_seed / Profiler / MemoryProfiler`
+  Python references in `documents/troubleshooting.md` and rewrote
+  the surrounding guidance against the real env-var-driven config
+  surface (`QSIM_BACKEND`, `QSIM_SIMD`, `QSIM_THREADS`,
+  `QSIM_LOG_LEVEL`, `QSIM_SEED`, `MOONLAB_TENSOR_GPU_THRESHOLD_MUL`).
+  `documents/index.md` version bumped 0.3.0 -> 0.4.2;
+  `documents/installation.md` and `documents/quickstart.md`
+  standardised on the `moonlab` directory name.
+
+### Removed
+
+- **`src/optimization/stride_gates.{c,h}`** (1592 LOC) and its
+  ctest entry `unit_stride_gates`: exploratory module that was
+  build-linked + unit-tested but never wired into the production
+  `gate_*` dispatch (the header's own NOTE flagged this).  The
+  production stride-based traversal in `src/quantum/gates.c`
+  already covers the same ground.
+- **`dmrg_config_t.two_site`** field (`src/algorithms/tensor_network/dmrg.h:88`):
+  user-facing toggle whose `false` branch printed
+  "DMRG: one-site H_eff path is not implemented" and returned -1
+  from the Lanczos matvec.  The flag was effectively a `true`/abort
+  toggle in v0.4.1; now removed from the public config so callers
+  can't accidentally request the unimplemented path.  In-tree
+  callers (`examples/topological/skyrmion_ground_state.c`,
+  `examples/topological/kitaev_chain.c`) updated.  The internal
+  `effective_hamiltonian_t.two_site` dispatch flag stays as is
+  (always set true by every producer).
+
+### Fixed
+
+- **Stale `moonlab` directory name** in `documents/installation.md`
+  and `documents/quickstart.md` (`/path/to/quantum-simulator` and
+  `cd quantum-simulator` -> `cd moonlab`).
 
 ## [0.4.1] - 2026-05-18
 

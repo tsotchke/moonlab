@@ -1,6 +1,6 @@
 [package]
 name = "moonlab-sys"
-version = "0.4.0"
+version = "0.4.2"
 edition = "2021"
 authors = ["Moonlab Team"]
 description = "Low-level FFI bindings to the Moonlab quantum simulator C library"

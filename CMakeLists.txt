@@ -613,7 +613,6 @@ set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/memory_align.c
     src/optimization/simd_dispatch.c
     src/optimization/simd_ops.c
-    src/optimization/stride_gates.c
     src/optimization/parallel_ops.c
     src/optimization/accelerate_ops.c
     src/optimization/fusion/fusion.c

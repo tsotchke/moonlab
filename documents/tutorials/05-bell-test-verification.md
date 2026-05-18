@@ -277,23 +277,23 @@ double compute_correlation(double angle_a, double angle_b, int shots) {
     int same = 0, different = 0;
 
     for (int i = 0; i < shots; i++) {
-        quantum_state_t* state = quantum_state_create(2);
+        quantum_state_t* state = quantum_state_init(2);
 
         // Create Bell state
-        quantum_state_h(state, 0);
-        quantum_state_cnot(state, 0, 1);
+        gate_hadamard(state, 0);
+        gate_cnot(state, 0, 1);
 
         // Measure in rotated bases
-        quantum_state_ry(state, 0, -2 * angle_a);
+        gate_ry(state, 0, -2 * angle_a);
         int result_a = quantum_state_measure(state, 0);
 
-        quantum_state_ry(state, 1, -2 * angle_b);
+        gate_ry(state, 1, -2 * angle_b);
         int result_b = quantum_state_measure(state, 1);
 
         if (result_a == result_b) same++;
         else different++;
 
-        quantum_state_destroy(state);
+        quantum_state_free(state);
     }
 
     return (double)(same - different) / shots;
