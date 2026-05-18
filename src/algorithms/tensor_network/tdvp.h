@@ -268,6 +268,15 @@ static inline tdvp_config_t tdvp_config_adaptive(double target_entropy_error) {
 
 /**
  * @brief TDVP step result
+ *
+ * Callers may pass a stack-allocated, zero-initialised
+ * `tdvp_result_t` into `tdvp_step`; the engine fills the scalar
+ * fields and (only when the adaptive-bond controller is enabled)
+ * lazily allocates a heap buffer for `bond_chi_distribution`.  The
+ * buffer is reused across calls if its size matches; otherwise it
+ * is realloc-ed.  Before discarding the result (or letting it go out
+ * of scope) the caller must invoke `tdvp_result_clear` to free the
+ * heap allocation.
  */
 typedef struct {
     double time;                /**< Current time after step */
@@ -276,10 +285,35 @@ typedef struct {
     double truncation_error;    /**< Truncation error in this step */
     uint32_t max_bond_dim;      /**< Maximum bond dimension reached */
     double step_time;           /**< Wall time for this step (seconds) */
+
+    /**
+     * Per-bond chi snapshot from the adaptive-bond controller
+     * (since v0.4).  Length `n_bonds = num_qubits - 1` when the
+     * controller is enabled; otherwise `bond_chi_distribution` is
+     * `NULL` and `n_bonds = 0`.  Heap-owned; free via
+     * `tdvp_result_clear`.
+     */
+    uint32_t *bond_chi_distribution;
+    uint32_t  n_bonds;
 } tdvp_result_t;
 
 /**
+ * @brief Free the heap fields of a `tdvp_result_t` and zero the
+ *        struct in place.
+ *
+ * Safe to call on a zero-initialised result (no-op) or repeatedly
+ * (subsequent calls are no-ops).
+ */
+void tdvp_result_clear(tdvp_result_t *result);
+
+/**
  * @brief TDVP evolution history (for observables)
+ *
+ * `bond_chi_history` (since v0.4) is a flat `capacity * n_bonds`
+ * buffer storing the per-bond chi snapshot for each recorded step
+ * row-major; entry `(step, bond)` lives at index
+ * `step * n_bonds + bond`.  Only allocated when the first added
+ * result actually carries a non-NULL `bond_chi_distribution`.
  */
 typedef struct {
     double *times;              /**< Array of times */
@@ -288,6 +322,9 @@ typedef struct {
     double *observables;        /**< Array of measured observables */
     uint32_t num_steps;         /**< Number of recorded steps */
     uint32_t capacity;          /**< Allocated capacity */
+
+    uint32_t *bond_chi_history; /**< Flat capacity * n_bonds buffer, or NULL */
+    uint32_t  n_bonds;          /**< Stride of the chi history (0 = unused) */
 } tdvp_history_t;
 
 /**
