@@ -265,7 +265,8 @@ _lib.qgt_model_hofstadter.restype = ctypes.c_void_p
 
 def berry_grid_qwz(m: float, N: int = 32) -> np.ndarray:
     """Return an (N, N) NumPy array of per-plaquette Berry curvature
-    for the QWZ model at mass ``m``. Units: radians per plaquette, so
+    for the QWZ model at mass ``m`` via the Fukui-Hatsugai-Suzuki
+    link-variable integrator.  Units: radians per plaquette, so
     ``sum(grid) / (2*pi) == Chern`` up to discretisation.
 
     Useful for plotting phase diagrams and visualising concentration
@@ -281,6 +282,74 @@ def berry_grid_qwz(m: float, N: int = 32) -> np.ndarray:
     if rc != 0:
         _lib.qgt_free(sys)
         raise RuntimeError(f"qgt_berry_grid failed (rc={rc})")
+    arr = np.ctypeslib.as_array(cg.berry, shape=(N * N,)).reshape(N, N).copy()
+    _lib.qgt_berry_grid_free(ctypes.byref(cg))
+    _lib.qgt_free(sys)
+    return arr
+
+
+def berry_grid_qwz_proj(m: float, N: int = 48) -> np.ndarray:
+    """Per-plaquette Berry curvature of the QWZ model on an N x N
+    Brillouin-zone grid via the gauge-free projector-trace integrator
+    ``F_xy(k) = -2 Im Tr[ P (d_x P) (d_y P) ]``.
+
+    Returns the same units as :func:`berry_grid_qwz` (radians per
+    plaquette; ``arr.sum() / (2*pi)`` integrates to the Chern number).
+    The projector-trace formulation is preferred for plotting near
+    gap closings, where link-variable methods can carry gauge
+    artefacts.
+
+    Args:
+        m: QWZ mass parameter.
+        N: BZ grid size per axis; must be >= 4.
+
+    Returns:
+        ``(N, N)`` float64 NumPy array.
+    """
+    if N < 4:
+        raise ValueError(f"N must be >= 4, got {N}")
+    sys = _lib.qgt_model_qwz(ctypes.c_double(m))
+    if not sys:
+        raise MemoryError("qgt_model_qwz returned NULL")
+    cg = _CBerryGrid()
+    rc = _lib.qgt_berry_grid_proj(sys, ctypes.c_size_t(N), ctypes.byref(cg))
+    if rc != 0:
+        _lib.qgt_free(sys)
+        raise RuntimeError(f"qgt_berry_grid_proj failed (rc={rc})")
+    arr = np.ctypeslib.as_array(cg.berry, shape=(N * N,)).reshape(N, N).copy()
+    _lib.qgt_berry_grid_free(ctypes.byref(cg))
+    _lib.qgt_free(sys)
+    return arr
+
+
+def berry_grid_qwz_pt(m: float, N: int = 48) -> np.ndarray:
+    """Per-plaquette Berry curvature of the QWZ model on an N x N
+    Brillouin-zone grid via the parallel-transport-gauge integrator.
+
+    Companion to :func:`berry_grid_qwz` and :func:`berry_grid_qwz_proj`:
+    on every gapped phase point all three return arrays that integrate
+    to the same integer Chern number, but their per-plaquette
+    distributions differ near gap closings where gauge fixing matters.
+    Use this routine when you need the curvature distribution under a
+    smooth (parallel-transported) gauge.
+
+    Args:
+        m: QWZ mass parameter.
+        N: BZ grid size per axis; must be >= 4.
+
+    Returns:
+        ``(N, N)`` float64 NumPy array.
+    """
+    if N < 4:
+        raise ValueError(f"N must be >= 4, got {N}")
+    sys = _lib.qgt_model_qwz(ctypes.c_double(m))
+    if not sys:
+        raise MemoryError("qgt_model_qwz returned NULL")
+    cg = _CBerryGrid()
+    rc = _lib.qgt_berry_grid_pt(sys, ctypes.c_size_t(N), ctypes.byref(cg))
+    if rc != 0:
+        _lib.qgt_free(sys)
+        raise RuntimeError(f"qgt_berry_grid_pt failed (rc={rc})")
     arr = np.ctypeslib.as_array(cg.berry, shape=(N * N,)).reshape(N, N).copy()
     _lib.qgt_berry_grid_free(ctypes.byref(cg))
     _lib.qgt_free(sys)
@@ -529,4 +598,6 @@ __all__ = [
     # v0.3: gauge-invariant integrators + n-band primitives.
     "chern_qwz_proj", "chern_qwz_parallel_transport",
     "kane_mele_z2", "bhz_z2", "kitaev_chain_z2", "hofstadter_chern",
+    # v0.3.2: curvature grids for the gauge-invariant integrators.
+    "berry_grid_qwz_proj", "berry_grid_qwz_pt",
 ]

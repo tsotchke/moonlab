@@ -7,10 +7,14 @@ against the analytical phase boundaries in the literature.
 
 from __future__ import annotations
 
+import math
+
+import numpy as np
 import pytest
 
 import moonlab
 from moonlab.topology import (
+    berry_grid_qwz, berry_grid_qwz_proj, berry_grid_qwz_pt,
     chern_qwz_proj, chern_qwz_parallel_transport,
     kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
     qwz_chern, ssh_winding,
@@ -92,3 +96,49 @@ def test_input_validation():
         hofstadter_chern(q=1)
     with pytest.raises(ValueError):
         hofstadter_chern(q=3, n_occupied=3)
+
+
+# --- v0.3.2 curvature-grid variants ----------------------------------
+
+def test_berry_grid_proj_shape_and_chern():
+    """Per-plaquette curvature grid has shape (N, N) and integrates to
+    the integer Chern number to within discretisation error."""
+    N = 32
+    grid = berry_grid_qwz_proj(-1.0, N=N)
+    assert grid.shape == (N, N)
+    assert grid.dtype == np.float64
+    chern = grid.sum() / (2.0 * math.pi)
+    assert abs(round(chern) - chern) < 0.1
+    assert round(chern) == chern_qwz_proj(-1.0, N=N)
+
+
+def test_berry_grid_pt_shape_and_chern():
+    """Parallel-transport curvature grid: same contract as proj."""
+    N = 32
+    grid = berry_grid_qwz_pt(+1.5, N=N)
+    assert grid.shape == (N, N)
+    assert grid.dtype == np.float64
+    chern = grid.sum() / (2.0 * math.pi)
+    assert round(chern) == chern_qwz_parallel_transport(+1.5, N=N)
+
+
+def test_three_grids_have_equal_integer_chern():
+    """FHS link, projector trace, and parallel-transport curvature
+    grids must all integrate to the same integer Chern on every
+    gapped phase point."""
+    for m in (-1.5, -0.5, 0.5, 1.5):
+        N = 32
+        g_fhs = berry_grid_qwz(m, N=N).sum() / (2.0 * math.pi)
+        g_proj = berry_grid_qwz_proj(m, N=N).sum() / (2.0 * math.pi)
+        g_pt = berry_grid_qwz_pt(m, N=N).sum() / (2.0 * math.pi)
+        assert round(g_fhs) == round(g_proj) == round(g_pt), (
+            f"integrator disagreement at m={m}: "
+            f"fhs={g_fhs:.4f}, proj={g_proj:.4f}, pt={g_pt:.4f}"
+        )
+
+
+def test_berry_grid_proj_rejects_tiny_N():
+    with pytest.raises(ValueError):
+        berry_grid_qwz_proj(0.0, N=3)
+    with pytest.raises(ValueError):
+        berry_grid_qwz_pt(0.0, N=3)
