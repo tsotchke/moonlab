@@ -84,8 +84,10 @@ module-specific and documented in the listed header.
 | Clifford backend              | `clifford_error_t`     | `src/backends/clifford/clifford.h`                      |
 | State partition (MPI)         | `partition_error_t`    | `src/distributed/state_partition.h`                     |
 | Distributed gates (MPI)       | `dist_gate_error_t`    | `src/distributed/distributed_gates.h`                   |
+| Distributed collectives (MPI) | `collective_error_t`   | `src/distributed/collective_ops.h`                      |
 | MPI bridge                    | `mpi_bridge_error_t`   | `src/distributed/mpi_bridge.h`                          |
 | GPU backend                   | `gpu_error_t`          | `src/optimization/gpu/gpu_backend.h`                    |
+| Eshkol fp64-on-Metal interop  | `moonlab_eshkol_status_t` | `src/optimization/gpu/backends/gpu_eshkol.h`         |
 
 Notable module-specific extensions:
 
@@ -120,6 +122,38 @@ Modules that maintain their own `*_error_string` helper (e.g.
 `contract_error_string` in `contraction.h:460`,
 `svd_compress_error_string` in `svd_compress.h:359`) are equivalent
 single-module shortcuts.
+
+### Naming exception: `MOONLAB_ESHKOL_OK`
+
+The Eshkol fp64-on-Metal interop enum
+(`src/optimization/gpu/backends/gpu_eshkol.h:58-65`) predates the
+`*_SUCCESS` convention and spells its zero member
+`MOONLAB_ESHKOL_OK`.  The semantics are identical -- success is
+still `== 0` and errors are still negative.  Negative codes:
+`MOONLAB_ESHKOL_NOT_BUILT (-1)` when `QSIM_ENABLE_ESHKOL` was off
+at compile time, `MOONLAB_ESHKOL_NO_GPU (-2)`,
+`MOONLAB_ESHKOL_INVALID_ARGS (-3)`,
+`MOONLAB_ESHKOL_DISPATCH_FAILED (-4)`,
+`MOONLAB_ESHKOL_OOM (-5)`.  A separate enum
+`moonlab_eshkol_precision_t` (tiers 0..3) is *not* a status code
+and does not follow this convention -- it parameterises the gemm
+call, not its return value.
+
+## Adding a new error enum
+
+When adding a new module that needs a return code:
+
+1. Make the zero member `MODULE_SUCCESS = 0`.
+2. Use negative integers for failure codes; reserve `-1`, `-2`,
+   `-3`, `-4` for `INVALID`, `QUBIT`, `OOM`, `BACKEND` when the
+   module has the corresponding concept.
+3. Pick a `MODULE_ERROR_*` prefix that is short and unique so it
+   greps cleanly.
+4. Append the enum to the per-module table above so future
+   contributors find it without grepping `src/`.
+5. Do **not** add a code to a sibling module's enum because the
+   value happens to fit -- error codes are scoped to the module
+   that returns them.
 
 ## Usage
 
