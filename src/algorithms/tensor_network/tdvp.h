@@ -310,6 +310,17 @@ void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result);
 // ============================================================================
 
 /**
+ * @brief Opaque per-bond PID state for the adaptive-bond controller.
+ *
+ * Defined in `tdvp.c`.  The engine owns one slot per inter-site bond
+ * when `config.adaptive_bond.enabled` is true and forwards the
+ * appropriate slot into the truncation helper on each two-site
+ * update; on the legacy path `bond_states` is NULL and the field is
+ * never read.
+ */
+typedef struct tdvp_bond_pid_state tdvp_bond_pid_state_t;
+
+/**
  * @brief TDVP evolution engine
  *
  * Maintains state and environments for efficient multi-step evolution.
@@ -320,6 +331,16 @@ typedef struct {
     dmrg_environments_t *env;       /**< Left/right environments */
     tdvp_config_t config;           /**< Configuration */
     double current_time;            /**< Current evolution time */
+
+    /**
+     * Per-bond PID controller state for adaptive-bond TDVP (since
+     * v0.4).  Length `num_bond_states = mps->num_qubits - 1` when
+     * `config.adaptive_bond.enabled`, NULL on the legacy path.  The
+     * engine owns this allocation and frees it in
+     * `tdvp_engine_free`.
+     */
+    tdvp_bond_pid_state_t *bond_states;
+    uint32_t num_bond_states;
 } tdvp_engine_t;
 
 /**
@@ -333,6 +354,22 @@ typedef struct {
 tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
                                    mpo_t *mpo,
                                    const tdvp_config_t *config);
+
+/**
+ * @brief Read the current per-bond chi from the adaptive-bond
+ *        controller.
+ *
+ * Returns the target bond dimension the entropy-feedback PID has
+ * settled on for the given inter-site bond after the most recent
+ * sweep, or `0` if `bond` is out of range, the engine is `NULL`, or
+ * the adaptive controller is disabled (in which case no per-bond
+ * state is allocated).
+ *
+ * Primarily intended for tests, instrumentation, and the
+ * `bond_chi_distribution` reporting path that the v0.4 result
+ * struct will add in a future patch.
+ */
+uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
 
 /**
  * @brief Free TDVP engine

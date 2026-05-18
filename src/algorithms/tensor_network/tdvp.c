@@ -26,6 +26,22 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/**
+ * @brief Per-bond PID state for the adaptive-bond controller (v0.4).
+ *
+ * The forward declaration lives in `tdvp.h` so `tdvp_engine_t` can
+ * hold a pointer; the full definition is private to this translation
+ * unit.  The struct is defined up front (rather than alongside the
+ * bond-truncation helpers below) so that `tdvp_engine_create` can
+ * `sizeof` it when allocating the per-bond array.
+ */
+struct tdvp_bond_pid_state {
+    double prev_error;   /**< Previous error signal (S - S_chi). */
+    double integral;     /**< Running PID integral across sweeps. */
+    uint32_t chi;        /**< Current target bond dimension. */
+    bool primed;         /**< True after the first update (no derivative on step 1). */
+};
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -389,6 +405,8 @@ tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
     engine->mpo = mpo;
     engine->config = *config;
     engine->current_time = 0.0;
+    engine->bond_states = NULL;
+    engine->num_bond_states = 0;
 
     // Create environments
     engine->env = dmrg_environments_create(mps->num_qubits);
@@ -410,13 +428,37 @@ tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
         return NULL;
     }
 
+    /* Allocate the per-bond PID state array when the adaptive-bond
+     * controller is enabled.  An n-qubit chain has (n - 1) inter-site
+     * bonds; each entry is zero-initialised (chi=0 primes on first
+     * visit, integral starts at 0, primed=false). */
+    if (config->adaptive_bond.enabled && mps->num_qubits >= 2) {
+        engine->num_bond_states = mps->num_qubits - 1;
+        engine->bond_states =
+            (struct tdvp_bond_pid_state *)calloc(
+                engine->num_bond_states,
+                sizeof(struct tdvp_bond_pid_state));
+        if (!engine->bond_states) {
+            dmrg_environments_free(engine->env);
+            free(engine);
+            return NULL;
+        }
+    }
+
     return engine;
 }
 
 void tdvp_engine_free(tdvp_engine_t *engine) {
     if (!engine) return;
+    free(engine->bond_states);
     dmrg_environments_free(engine->env);
     free(engine);
+}
+
+uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond) {
+    if (!engine || !engine->bond_states) return 0;
+    if (bond >= engine->num_bond_states) return 0;
+    return engine->bond_states[bond].chi;
 }
 
 void tdvp_set_dt(tdvp_engine_t *engine, double dt) {
@@ -428,38 +470,90 @@ double tdvp_get_time(const tdvp_engine_t *engine) {
 }
 
 // ============================================================================
-// BOND TRUNCATION (carve-out for v0.4 adaptive-bond control)
+// BOND TRUNCATION (entropy-feedback PID for v0.4 adaptive-bond TDVP)
 // ============================================================================
 
 /**
- * @brief Per-bond PID state for the entropy-feedback controller.
+ * @brief Compute the von Neumann entropy of a singular-value
+ *        spectrum and the entropy of its first `chi` components.
  *
- * Allocated once per inter-site bond by `tdvp_engine_t` and updated
- * in place by `tdvp_truncate_bond` each time that bond is visited.
- * In v0.4 step 2 the state struct is defined but only initialised
- * to zero; the PID update lands in step 3 of the roadmap.
+ * Both quantities are normalised so that the underlying probability
+ * distributions sum to 1.  `sv` is assumed sorted in descending
+ * order, as produced by `svd_compress`.
  */
-typedef struct {
-    double prev_error;   /**< Previous error signal (S - S_chi). */
-    double integral;     /**< Running PID integral. */
-    uint32_t chi;        /**< Current target bond dimension. */
-    bool primed;         /**< True after the first update (no derivative on step 1). */
-} tdvp_bond_pid_state_t;
+static void tdvp_spectrum_entropy(const double *sv, uint32_t n,
+                                   uint32_t chi,
+                                   double *S_full, double *S_chi) {
+    double total = 0.0;
+    for (uint32_t i = 0; i < n; i++) total += sv[i] * sv[i];
+    double Sf = 0.0;
+    if (total > 0.0) {
+        for (uint32_t i = 0; i < n; i++) {
+            double p = (sv[i] * sv[i]) / total;
+            if (p > 1e-30) Sf -= p * log(p);
+        }
+    }
+    *S_full = Sf;
+
+    uint32_t k = chi < n ? chi : n;
+    double partial = 0.0;
+    for (uint32_t i = 0; i < k; i++) partial += sv[i] * sv[i];
+    double Sc = 0.0;
+    if (partial > 0.0) {
+        for (uint32_t i = 0; i < k; i++) {
+            double p = (sv[i] * sv[i]) / partial;
+            if (p > 1e-30) Sc -= p * log(p);
+        }
+    }
+    *S_chi = Sc;
+}
 
 /**
- * @brief Truncate an evolved two-site tensor matrix with the
- *        adaptive-bond controller hooked in.
+ * @brief PID update for one bond: returns the new target bond
+ *        dimension given the current PID state and the entropy
+ *        error signal `e = S_full - S_chi`.
+ */
+static uint32_t tdvp_pid_select_chi(
+    const tdvp_adaptive_bond_config_t *cfg,
+    struct tdvp_bond_pid_state *state,
+    double e, uint32_t chi_current)
+{
+    double derivative = 0.0;
+    if (state->primed) derivative = e - state->prev_error;
+    state->integral  += e;
+    state->prev_error = e;
+    state->primed     = true;
+
+    double signal = cfg->kp * e
+                  + cfg->ki * state->integral
+                  + cfg->kd * derivative;
+
+    /* Map the entropy-domain signal into bond-dim increments via
+     * `alpha / eps_S`; clamp to [chi_floor, chi_ceiling]. */
+    double scale = (cfg->target_entropy_error > 0.0)
+                 ? cfg->alpha / cfg->target_entropy_error
+                 : cfg->alpha;
+    int64_t delta = (int64_t)llround(scale * signal);
+
+    int64_t target = (int64_t)chi_current + delta;
+    if (target < (int64_t)cfg->chi_floor)  target = cfg->chi_floor;
+    if (target > (int64_t)cfg->chi_ceiling) target = cfg->chi_ceiling;
+    return (uint32_t)target;
+}
+
+/**
+ * @brief Truncate an evolved two-site tensor matrix.
  *
- * For v0.4 step 2 this is a behaviour-preserving carve-out of the
- * SVD-compress call that used to live inline in
- * `tdvp_evolve_two_site`.  When `cfg->adaptive_bond.enabled` is
- * `false` (the legacy path), the helper performs exactly the same
- * SVD as before: it builds an `svd_compress_config_default()`, sets
- * `max_bond_dim` and `cutoff` from the TDVP config, and returns the
- * compressed result.
+ * Two paths:
  *
- * The `bond_state` parameter is allowed to be `NULL` (legacy path);
- * step 3 will start to write the per-bond PID state through it.
+ *   * Legacy (`cfg->adaptive_bond.enabled == false` or
+ *     `bond_state == NULL`): single SVD with `max_bond_dim` /
+ *     `svd_cutoff` from the TDVP config; behaviour is bit-identical
+ *     to v0.3.1.
+ *
+ *   * Adaptive: first SVD at `chi_ceiling` to expose the spectrum,
+ *     entropy-feedback PID picks `target_chi`, and (if necessary) a
+ *     second SVD re-truncates to that bond dimension.
  *
  * Returns the `svd_compress_result_t` (caller frees with
  * `svd_compress_result_free`), or `NULL` on allocation failure.
@@ -467,27 +561,51 @@ typedef struct {
 static svd_compress_result_t *tdvp_truncate_bond(
     const tensor_t *mat,
     const tdvp_config_t *cfg,
-    tdvp_bond_pid_state_t *bond_state)
+    struct tdvp_bond_pid_state *bond_state)
 {
-    (void)bond_state;  /* unused in step 2; reserved for step 3 PID update */
-
-    svd_compress_config_t svd_cfg = svd_compress_config_default();
-    svd_cfg.max_bond_dim = cfg->max_bond_dim;
-    svd_cfg.cutoff       = cfg->svd_cutoff;
-
-    /* Adaptive-bond path: still placeholder in step 2.  When enabled,
-     * we currently route through the same fixed cap so behaviour is
-     * unchanged; step 3 replaces this with the PID-controlled per-
-     * bond chi selection. */
-    if (cfg->adaptive_bond.enabled) {
-        /* Respect chi_ceiling as the outer-bound safety even in
-         * step 2 so the public surface is already correct. */
-        if (cfg->adaptive_bond.chi_ceiling > 0 &&
-            cfg->adaptive_bond.chi_ceiling < svd_cfg.max_bond_dim) {
-            svd_cfg.max_bond_dim = cfg->adaptive_bond.chi_ceiling;
-        }
+    /* ---- Legacy path ------------------------------------------------ */
+    if (!cfg->adaptive_bond.enabled || bond_state == NULL) {
+        svd_compress_config_t svd_cfg = svd_compress_config_default();
+        svd_cfg.max_bond_dim = cfg->max_bond_dim;
+        svd_cfg.cutoff       = cfg->svd_cutoff;
+        return svd_compress(mat, &svd_cfg);
     }
 
+    /* ---- Adaptive path: PID controller ----------------------------- */
+    const tdvp_adaptive_bond_config_t *ab = &cfg->adaptive_bond;
+
+    /* Pass 1: SVD at chi_ceiling to obtain the spectrum the PID will
+     * reason over.  We honour `svd_cutoff` as a floor so the spectrum
+     * still discards numerical noise. */
+    svd_compress_config_t svd_cfg = svd_compress_config_default();
+    svd_cfg.max_bond_dim = ab->chi_ceiling;
+    svd_cfg.cutoff       = cfg->svd_cutoff;
+    svd_compress_result_t *first = svd_compress(mat, &svd_cfg);
+    if (!first) return NULL;
+
+    /* Prime the bond's chi on the first visit. */
+    if (bond_state->chi == 0) bond_state->chi = first->bond_dim;
+
+    /* Compute the entropy error e = S_full - S_chi at the current
+     * working chi. */
+    double S_full = 0.0, S_chi = 0.0;
+    tdvp_spectrum_entropy(first->singular_values, first->bond_dim,
+                          bond_state->chi, &S_full, &S_chi);
+    double e = S_full - S_chi;
+
+    uint32_t target_chi = tdvp_pid_select_chi(ab, bond_state, e,
+                                               bond_state->chi);
+    bond_state->chi = target_chi;
+
+    /* If the PID-selected chi covers (or exceeds) what we got from
+     * pass 1, return that result directly. */
+    if (target_chi >= first->bond_dim) {
+        return first;
+    }
+
+    /* Otherwise, redo the SVD at the controller-selected chi. */
+    svd_compress_result_free(first);
+    svd_cfg.max_bond_dim = target_chi;
     return svd_compress(mat, &svd_cfg);
 }
 
@@ -497,6 +615,11 @@ static svd_compress_result_t *tdvp_truncate_bond(
 
 /**
  * @brief Evolve two-site tensor
+ *
+ * @param bond_state Per-bond PID state for the adaptive-bond
+ *                   controller, or NULL on the legacy fixed-cap
+ *                   path.  The pointer is owned by the engine and
+ *                   updated in-place each visit.
  */
 static int tdvp_evolve_two_site(tn_mps_state_t *mps,
                                  const mpo_t *mpo,
@@ -504,6 +627,7 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
                                  uint32_t site,
                                  double complex dt,
                                  const tdvp_config_t *config,
+                                 struct tdvp_bond_pid_state *bond_state,
                                  double *truncation_error) {
     if (!mps || !mpo || !env || site >= mps->num_qubits - 1) return -1;
 
@@ -598,10 +722,12 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
     if (!mat) return -1;
 
     /* Route the SVD compression through the v0.4 truncation helper.
-     * On the legacy path (adaptive_bond.enabled = false) this is
-     * bit-identical to the previous inline svd_compress_config_default
-     * + max_bond_dim / cutoff plumbing. */
-    svd_compress_result_t *svd = tdvp_truncate_bond(mat, config, NULL);
+     * On the legacy path (adaptive_bond.enabled = false, or
+     * bond_state == NULL) this is bit-identical to the previous
+     * inline svd_compress_config_default + max_bond_dim / cutoff
+     * plumbing.  When both are set, the helper runs the
+     * entropy-feedback PID and may re-truncate to a smaller chi. */
+    svd_compress_result_t *svd = tdvp_truncate_bond(mat, config, bond_state);
     tensor_free(mat);
 
     if (!svd) return -1;
@@ -671,8 +797,12 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Left-to-right sweep with dt/2
     for (uint32_t site = 0; site < n - 1; site++) {
         double trunc_err;
+        struct tdvp_bond_pid_state *bs =
+            (engine->bond_states && site < engine->num_bond_states)
+                ? &engine->bond_states[site]
+                : NULL;
         if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, &trunc_err) != 0) {
+                                  &engine->config, bs, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %u (L->R)\n", site);
             return -1;
         }
@@ -694,8 +824,13 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Right-to-left sweep with dt/2
     for (int site = n - 2; site >= 0; site--) {
         double trunc_err;
+        struct tdvp_bond_pid_state *bs =
+            (engine->bond_states &&
+             (uint32_t)site < engine->num_bond_states)
+                ? &engine->bond_states[site]
+                : NULL;
         if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, &trunc_err) != 0) {
+                                  &engine->config, bs, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %d (R->L)\n", site);
             return -1;
         }
