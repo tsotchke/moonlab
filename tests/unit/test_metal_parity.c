@@ -107,6 +107,39 @@ static double l2_rel_diff(const complex_t* ref, const fcomplex_t* got, size_t n)
     return (den > 0.0) ? sqrt(num / den) : sqrt(num);
 }
 
+static double complex fcomplex_load(const fcomplex_t* data, size_t idx) {
+    return (double)data[idx].re + (double)data[idx].im * I;
+}
+
+static double metal_svd_reconstruction_error(const fcomplex_t* original,
+                                             const fcomplex_t* U,
+                                             const float* S,
+                                             const fcomplex_t* Vt,
+                                             uint32_t m,
+                                             uint32_t n,
+                                             uint32_t rank) {
+    double err_sq = 0.0;
+    double ref_sq = 0.0;
+
+    for (uint32_t i = 0; i < m; i++) {
+        for (uint32_t j = 0; j < n; j++) {
+            double complex reconstructed = 0.0;
+            for (uint32_t k = 0; k < rank; k++) {
+                reconstructed += fcomplex_load(U, (size_t)i * rank + k) *
+                                 (double)S[k] *
+                                 fcomplex_load(Vt, (size_t)k * n + j);
+            }
+
+            double complex ref = fcomplex_load(original, (size_t)i * n + j);
+            double complex diff = reconstructed - ref;
+            err_sq += creal(diff) * creal(diff) + cimag(diff) * cimag(diff);
+            ref_sq += creal(ref) * creal(ref) + cimag(ref) * cimag(ref);
+        }
+    }
+
+    return ref_sq > 0.0 ? sqrt(err_sq / ref_sq) : sqrt(err_sq);
+}
+
 typedef int (*metal_gate1q_fn)(metal_compute_ctx_t*, metal_buffer_t*,
                                uint32_t, uint32_t);
 typedef qs_error_t (*cpu_gate1q_fn)(quantum_state_t*, int);
@@ -197,6 +230,67 @@ static void test_batch_grover_trace(metal_compute_ctx_t* ctx) {
     metal_buffer_free(batch_states);
 }
 
+static void test_svd_cpu_fallback(metal_compute_ctx_t* ctx) {
+    fprintf(stdout, "\n-- Metal SVD CPU fallback --\n");
+
+    const uint32_t m = 3;
+    const uint32_t n = 2;
+    const uint32_t rank_capacity = 2;
+    fcomplex_t input[m * n] = {
+        {3.0f, 0.0f}, {0.5f, 0.25f},
+        {0.0f, 0.0f}, {2.0f, 0.0f},
+        {0.25f, -0.5f}, {0.0f, 0.0f}
+    };
+
+    metal_buffer_t* A = metal_buffer_create(ctx, sizeof(input));
+    metal_buffer_t* U = metal_buffer_create(ctx, (size_t)m * rank_capacity * sizeof(fcomplex_t));
+    metal_buffer_t* S = metal_buffer_create(ctx, rank_capacity * sizeof(float));
+    metal_buffer_t* Vt = metal_buffer_create(ctx, (size_t)rank_capacity * n * sizeof(fcomplex_t));
+
+    CHECK(A && U && S && Vt, "SVD fallback buffers allocated");
+    if (!A || !U || !S || !Vt) {
+        if (A) metal_buffer_free(A);
+        if (U) metal_buffer_free(U);
+        if (S) metal_buffer_free(S);
+        if (Vt) metal_buffer_free(Vt);
+        return;
+    }
+
+    memcpy(metal_buffer_contents(A), input, sizeof(input));
+    memset(metal_buffer_contents(U), 0, (size_t)m * rank_capacity * sizeof(fcomplex_t));
+    memset(metal_buffer_contents(S), 0, rank_capacity * sizeof(float));
+    memset(metal_buffer_contents(Vt), 0, (size_t)rank_capacity * n * sizeof(fcomplex_t));
+
+    setenv("MOONLAB_METAL_FORCE_SVD_CPU_FALLBACK", "1", 1);
+    uint32_t actual_rank = 0;
+    int rc = metal_svd_truncate(ctx, A, U, S, Vt, m, n, rank_capacity, 0.0, &actual_rank);
+    unsetenv("MOONLAB_METAL_FORCE_SVD_CPU_FALLBACK");
+
+    CHECK(rc == 0, "forced SVD CPU fallback returns success");
+    CHECK(actual_rank == rank_capacity,
+          "forced SVD CPU fallback keeps full rank (%u)", actual_rank);
+
+    const float* s_values = (const float*)metal_buffer_contents(S);
+    CHECK(s_values[0] >= s_values[1] && s_values[1] > 0.0f,
+          "fallback singular values are sorted and positive");
+
+    double rel = metal_svd_reconstruction_error(
+        input,
+        (const fcomplex_t*)metal_buffer_contents(U),
+        s_values,
+        (const fcomplex_t*)metal_buffer_contents(Vt),
+        m,
+        n,
+        actual_rank);
+    CHECK(rel < 2e-5,
+          "forced SVD CPU fallback reconstructs matrix, rel %.3e", rel);
+
+    metal_buffer_free(A);
+    metal_buffer_free(U);
+    metal_buffer_free(S);
+    metal_buffer_free(Vt);
+}
+
 #endif  /* METAL_PRESENT */
 
 int main(void) {
@@ -247,6 +341,7 @@ int main(void) {
     test_gate_parity(ctx, "Pauli X",  gate_pauli_x,  metal_pauli_x,  5, 4);
     test_gate_parity(ctx, "Pauli Z",  gate_pauli_z,  metal_pauli_z,  5, 0);
     test_gate_parity(ctx, "Pauli Z",  gate_pauli_z,  metal_pauli_z,  5, 3);
+    test_svd_cpu_fallback(ctx);
 
     metal_compute_free(ctx);
 #else

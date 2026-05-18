@@ -1,6 +1,16 @@
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
 #include "gpu_metal.h"
+#if defined(__cplusplus)
+#define MOONLAB_RESTORE_COMPLEX_KEYWORD
+#define complex _Complex
+#endif
+#include "../algorithms/tensor_network/tensor.h"
+#if defined(MOONLAB_RESTORE_COMPLEX_KEYWORD)
+#undef complex
+#undef MOONLAB_RESTORE_COMPLEX_KEYWORD
+#endif
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -106,6 +116,96 @@ static double get_time_seconds() {
     
     uint64_t time = mach_absolute_time();
     return (double)time * timebase_info.numer / timebase_info.denom / 1e9;
+}
+
+static int metal_force_svd_cpu_fallback(void) {
+    const char* value = getenv("MOONLAB_METAL_FORCE_SVD_CPU_FALLBACK");
+    return value && (value[0] == '1' || value[0] == 'y' || value[0] == 'Y');
+}
+
+static int metal_svd_truncate_cpu(
+    metal_buffer_t* A,
+    metal_buffer_t* U,
+    metal_buffer_t* S,
+    metal_buffer_t* Vt,
+    uint32_t m,
+    uint32_t n,
+    uint32_t max_rank,
+    double cutoff,
+    uint32_t* actual_rank
+) {
+    if (!A || !U || !S || !Vt || !actual_rank || m == 0 || n == 0 || max_rank == 0) {
+        return -1;
+    }
+
+    const uint32_t min_mn = MIN(m, n);
+    const uint32_t capacity = MIN(max_rank, min_mn);
+    uint32_t dims[2] = {m, n};
+    tensor_t* mat = tensor_create(2, dims);
+    if (!mat) {
+        return -1;
+    }
+
+    const float* A_ptr = (const float*)metal_buffer_contents(A);
+    for (uint32_t i = 0; i < m; i++) {
+        for (uint32_t j = 0; j < n; j++) {
+            size_t idx = ((size_t)i * n + j) * 2;
+            double _Complex value = 0.0;
+            __real__ value = (double)A_ptr[idx];
+            __imag__ value = (double)A_ptr[idx + 1];
+            mat->data[(size_t)i * n + j] = value;
+        }
+    }
+
+    tensor_svd_result_t* svd = tensor_svd(mat, 0, 0.0);
+    tensor_free(mat);
+    if (!svd || svd->k == 0 || !svd->U || !svd->S || !svd->Vh) {
+        tensor_svd_free(svd);
+        return -1;
+    }
+
+    uint32_t rank = 0;
+    const double max_sv = svd->S[0];
+    const double threshold = cutoff > 0.0 ? cutoff * max_sv : 0.0;
+    for (uint32_t i = 0; i < capacity && i < svd->k; i++) {
+        if (cutoff <= 0.0 || svd->S[i] > threshold) {
+            rank = i + 1;
+        } else {
+            break;
+        }
+    }
+    if (rank == 0) {
+        rank = 1;
+    }
+
+    float* U_ptr = (float*)metal_buffer_contents(U);
+    float* S_ptr = (float*)metal_buffer_contents(S);
+    float* Vt_ptr = (float*)metal_buffer_contents(Vt);
+    memset(U_ptr, 0, (size_t)m * capacity * sizeof(float) * 2);
+    memset(S_ptr, 0, (size_t)capacity * sizeof(float));
+    memset(Vt_ptr, 0, (size_t)capacity * n * sizeof(float) * 2);
+
+    for (uint32_t k = 0; k < rank; k++) {
+        S_ptr[k] = (float)svd->S[k];
+
+        for (uint32_t i = 0; i < m; i++) {
+            double _Complex z = svd->U->data[(size_t)i * svd->U->dims[1] + k];
+            size_t idx = ((size_t)i * capacity + k) * 2;
+            U_ptr[idx] = (float)__real__ z;
+            U_ptr[idx + 1] = (float)__imag__ z;
+        }
+
+        for (uint32_t j = 0; j < n; j++) {
+            double _Complex z = svd->Vh->data[(size_t)k * svd->Vh->dims[1] + j];
+            size_t idx = ((size_t)k * n + j) * 2;
+            Vt_ptr[idx] = (float)__real__ z;
+            Vt_ptr[idx + 1] = (float)__imag__ z;
+        }
+    }
+
+    tensor_svd_free(svd);
+    *actual_rank = rank;
+    return 0;
 }
 
 static void set_error(metal_compute_ctx_t* ctx, NSString* error) {
@@ -1575,6 +1675,10 @@ int metal_svd_truncate(
     @autoreleasepool {
         uint32_t min_mn = MIN(m, n);
 
+        if (!ctx->jacobiRotationPipeline || metal_force_svd_cpu_fallback()) {
+            return metal_svd_truncate_cpu(A, U, S, Vt, m, n, max_rank, cutoff, actual_rank);
+        }
+
         // Initialize V as identity matrix (float precision for Metal)
         size_t V_size = n * n * sizeof(float) * 2;
         metal_buffer_t* V = metal_buffer_create(ctx, V_size);
@@ -1594,12 +1698,6 @@ int metal_svd_truncate(
             // Process column pairs
             for (uint32_t i = 0; i < n - 1; i++) {
                 for (uint32_t j = i + 1; j < n; j++) {
-                    if (!ctx->jacobiRotationPipeline) {
-                        // Fall back to CPU Jacobi rotation
-                        // (In production, implement CPU fallback)
-                        continue;
-                    }
-
                     metal_buffer_t* buffers[] = {A, V};
                     uint32_t constants[] = {m, n, i, j};
 
