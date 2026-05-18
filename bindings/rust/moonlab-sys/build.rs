@@ -167,6 +167,9 @@ fn main() {
 #include "{root}/src/algorithms/topology_realspace/chern_marker.h"
 #include "{root}/src/algorithms/quantum_geometry/qgt.h"
 #include "{root}/src/optimization/fusion/fusion.h"
+#include "{root}/src/algorithms/tensor_network/tn_state.h"
+#include "{root}/src/algorithms/tensor_network/dmrg.h"
+#include "{root}/src/algorithms/tensor_network/tdvp.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -368,6 +371,36 @@ fn main() {
         .allowlist_function("moonlab_mpdo_apply_phase_flip_1q")
         .allowlist_function("moonlab_mpdo_apply_bit_phase_flip_1q")
         .allowlist_function("moonlab_mpdo_expect_pauli_1q")
+        // TDVP + MPO + MPS surface (v0.4 adaptive-bond TDVP).
+        .allowlist_type("tn_mps_state_t")
+        .allowlist_type("tn_state_config_t")
+        .allowlist_type("tn_canonical_form_t")
+        .allowlist_type("mpo_t")
+        .allowlist_type("tdvp_config_t")
+        .allowlist_type("tdvp_adaptive_bond_config_t")
+        .allowlist_type("tdvp_result_t")
+        .allowlist_type("tdvp_history_t")
+        .allowlist_type("tdvp_engine_t")
+        .allowlist_type("tdvp_evolution_type_t")
+        .allowlist_type("tdvp_variant_t")
+        .allowlist_type("integrator_type_t")
+        .allowlist_function("tn_state_config_create")
+        .allowlist_function("tn_mps_free")
+        .allowlist_function("mpo_heisenberg_create")
+        .allowlist_function("mpo_tfim_create")
+        .allowlist_function("mpo_free")
+        .allowlist_function("dmrg_init_random_mps")
+        .allowlist_function("tdvp_engine_create")
+        .allowlist_function("tdvp_engine_free")
+        .allowlist_function("tdvp_step")
+        .allowlist_function("tdvp_evolve_to")
+        .allowlist_function("tdvp_set_dt")
+        .allowlist_function("tdvp_get_time")
+        .allowlist_function("tdvp_bond_chi")
+        .allowlist_function("tdvp_result_clear")
+        .allowlist_function("tdvp_history_create")
+        .allowlist_function("tdvp_history_free")
+        .allowlist_function("tdvp_history_add")
         // Clifford stabilizer backend
         .allowlist_type("clifford_tableau_t")
         .allowlist_type("clifford_error_t")

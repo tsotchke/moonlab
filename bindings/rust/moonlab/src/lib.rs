@@ -42,6 +42,7 @@ pub mod error;
 pub mod feynman;
 pub mod mpdo;
 pub mod state;
+pub mod tdvp;
 pub mod topology;
 
 // Re-export main types
