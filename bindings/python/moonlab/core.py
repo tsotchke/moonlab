@@ -253,7 +253,6 @@ _lib.entanglement_negativity_2qubit.restype = ctypes.c_double
 
 class QuantumError(Exception):
     """Exception raised for quantum computing errors"""
-    pass
 
 # ============================================================================
 # QUANTUM STATE - Full Implementation

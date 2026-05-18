@@ -38,7 +38,7 @@ class CVQEOptimizer(ctypes.Structure):
 
 class CVQESolver(ctypes.Structure):
     """Opaque structure for VQE solver"""
-    pass
+    _fields_ = []
 
 class CVQEResult(ctypes.Structure):
     """Layout-mirrored from vqe_result_t in src/algorithms/vqe.h.
@@ -79,7 +79,7 @@ class CGraph(ctypes.Structure):
 
 class CQAOASolver(ctypes.Structure):
     """Opaque structure for QAOA solver"""
-    pass
+    _fields_ = []
 
 class CQAOAResult(ctypes.Structure):
     """Layout-mirrored from qaoa_result_t in src/algorithms/qaoa.h.

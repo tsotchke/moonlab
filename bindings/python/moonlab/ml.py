@@ -41,7 +41,7 @@ class QuantumFeatureMap(ABC):
     def encode(self, x: np.ndarray, state: QuantumState):
         """Encode classical data into quantum state"""
         class_name = self.__class__.__name__
-        raise NotImplementedError(f"{class_name}.encode() must implement a feature map")
+        raise TypeError(f"{class_name}.encode() must implement a feature map")
 
 
 class AngleEncoding(QuantumFeatureMap):
