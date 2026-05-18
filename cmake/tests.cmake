@@ -260,6 +260,15 @@
     target_link_libraries(test_tdvp_adaptive_config PRIVATE quantumsim)
     add_test(NAME unit_tdvp_adaptive_config COMMAND test_tdvp_adaptive_config)
 
+    # Adaptive-bond TDVP steps 3+4 (v0.4 / Phase 3B): end-to-end smoke
+    # over the entropy-feedback PID controller + per-bond state array.
+    # Verifies engine allocation/free, a short imaginary-time
+    # Heisenberg run, and per-bond chi staying inside the configured
+    # [chi_floor, chi_ceiling] band.
+    add_executable(test_tdvp_adaptive_pid tests/unit/test_tdvp_adaptive_pid.c)
+    target_link_libraries(test_tdvp_adaptive_pid PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_pid COMMAND test_tdvp_adaptive_pid)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
