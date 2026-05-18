@@ -58,6 +58,8 @@ from .topology import (
     # v0.3 additions
     chern_qwz_proj, chern_qwz_parallel_transport,
     kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
+    # v0.3.2 curvature-grid variants
+    berry_grid_qwz_proj, berry_grid_qwz_pt,
 )
 from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
 from . import crypto
@@ -118,6 +120,8 @@ __all__ = [
     'bhz_z2',
     'kitaev_chain_z2',
     'hofstadter_chern',
+    'berry_grid_qwz_proj',
+    'berry_grid_qwz_pt',
     'DiffCircuit',
     'PauliTerm',
     'OBS_Z',
