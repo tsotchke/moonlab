@@ -1000,17 +1000,12 @@ int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
         if (owns_temps) free(temp3);
     }
     else {
-        /* One-site DMRG path is not implemented.  The 2-site sweeps
-         * exposed by dmrg_ground_state, dmrg_optimize_two_site and
-         * dmrg_run_sweep are the only paths exercised by the test
-         * suite, so the public dmrg_config_t.two_site flag is
-         * effectively a 2-site/abort toggle until someone wires the
-         * 1-site branch properly.  Failing fast here is better than
-         * silently returning y = 0 to a Lanczos iterator that would
-         * then "converge" at lambda = 0. */
-        fprintf(stderr,
-                "DMRG: one-site H_eff path is not implemented; set "
-                "config.two_site = true (the default).\n");
+        /* One-site DMRG path is internal-only and not currently
+         * implemented; every in-tree producer of effective_hamiltonian_t
+         * sets `two_site = true`.  Reach here only if a future caller
+         * wires the one-site branch through Lanczos directly, in
+         * which case implement the H_eff @ theta_1s contraction
+         * before unblocking this. */
         return -1;
     }
 

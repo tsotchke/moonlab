@@ -95,17 +95,17 @@ print(f"Result: {result}")  # Either "00" or "11"
 
 int main() {
     // Create 2-qubit state
-    quantum_state_t* state = quantum_state_create(2);
+    quantum_state_t* state = quantum_state_init(2);
 
     // Create Bell state
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
 
     // Measure
     uint64_t result = quantum_state_measure_all(state);
     printf("Result: %llu\n", result);
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
     return 0;
 }
 ```

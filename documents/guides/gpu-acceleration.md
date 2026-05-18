@@ -80,11 +80,11 @@ gpu_metal_init();
 quantum_state_t* state = quantum_state_create_gpu(24);
 
 // Operations automatically use GPU
-quantum_state_h(state, 0);
-quantum_state_cnot(state, 0, 1);
+gate_hadamard(state, 0);
+gate_cnot(state, 0, 1);
 
 // Cleanup
-quantum_state_destroy(state);
+quantum_state_free(state);
 gpu_metal_cleanup();
 ```
 

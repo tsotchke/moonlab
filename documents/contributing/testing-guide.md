@@ -100,7 +100,7 @@ We use a minimal custom test framework. Basic structure:
  * Test quantum state creation.
  */
 TEST(test_state_create) {
-    quantum_state_t* state = quantum_state_create(4);
+    quantum_state_t* state = quantum_state_init(4);
 
     ASSERT_NOT_NULL(state);
     ASSERT_EQ(quantum_state_num_qubits(state), 4);
@@ -112,16 +112,16 @@ TEST(test_state_create) {
         ASSERT_COMPLEX_EQ(amps[i], 0.0 + 0.0 * I);
     }
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 /**
  * Test Hadamard gate.
  */
 TEST(test_hadamard_gate) {
-    quantum_state_t* state = quantum_state_create(1);
+    quantum_state_t* state = quantum_state_init(1);
 
-    quantum_state_h(state, 0);
+    gate_hadamard(state, 0);
 
     double complex* amps = quantum_state_get_amplitudes(state);
     double inv_sqrt2 = 1.0 / sqrt(2.0);
@@ -129,7 +129,7 @@ TEST(test_hadamard_gate) {
     ASSERT_COMPLEX_NEAR(amps[0], inv_sqrt2, 1e-10);
     ASSERT_COMPLEX_NEAR(amps[1], inv_sqrt2, 1e-10);
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 /**
@@ -169,43 +169,43 @@ int main(void) {
  */
 TEST(test_gate_unitary) {
     // Create superposition
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_h(state, 1);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_hadamard(state, 1);
 
     double norm_before = quantum_state_norm(state);
 
     // Apply various gates
-    quantum_state_x(state, 0);
-    quantum_state_y(state, 1);
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_t(state, 0);
+    gate_pauli_x(state, 0);
+    gate_pauli_y(state, 1);
+    gate_cnot(state, 0, 1);
+    gate_t(state, 0);
 
     double norm_after = quantum_state_norm(state);
 
     // Norm should be preserved
     ASSERT_NEAR(norm_before, norm_after, 1e-10);
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 /**
  * Verify gate inverse.
  */
 TEST(test_gate_inverse) {
-    quantum_state_t* state = quantum_state_create(2);
+    quantum_state_t* state = quantum_state_init(2);
 
     // Random initial state
-    quantum_state_rx(state, 0, 1.234);
-    quantum_state_ry(state, 1, 2.345);
-    quantum_state_cnot(state, 0, 1);
+    gate_rx(state, 0, 1.234);
+    gate_ry(state, 1, 2.345);
+    gate_cnot(state, 0, 1);
 
     // Save amplitudes
     double complex* initial = copy_amplitudes(state);
 
     // Apply and unapply gate
-    quantum_state_h(state, 0);
-    quantum_state_h(state, 0);  // H is self-inverse
+    gate_hadamard(state, 0);
+    gate_hadamard(state, 0);  // H is self-inverse
 
     // Should return to initial state
     double complex* final = quantum_state_get_amplitudes(state);
@@ -214,7 +214,7 @@ TEST(test_gate_inverse) {
     }
 
     free(initial);
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 ```
 
@@ -449,28 +449,28 @@ mod tests {
 #include "quantum_sim.h"
 
 BENCHMARK(bench_hadamard_20_qubits) {
-    quantum_state_t* state = quantum_state_create(20);
+    quantum_state_t* state = quantum_state_init(20);
 
     BENCH_START();
     for (int i = 0; i < 1000; i++) {
-        quantum_state_h(state, 0);
+        gate_hadamard(state, 0);
     }
     BENCH_END();
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 BENCHMARK(bench_cnot_20_qubits) {
-    quantum_state_t* state = quantum_state_create(20);
-    quantum_state_h(state, 0);
+    quantum_state_t* state = quantum_state_init(20);
+    gate_hadamard(state, 0);
 
     BENCH_START();
     for (int i = 0; i < 1000; i++) {
-        quantum_state_cnot(state, 0, 1);
+        gate_cnot(state, 0, 1);
     }
     BENCH_END();
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 ```
 
@@ -519,17 +519,17 @@ FUZZ_TARGET(fuzz_gates) {
     int qubit1 = data[2] % n_qubits;
     int qubit2 = data[3] % n_qubits;
 
-    quantum_state_t* state = quantum_state_create(n_qubits);
+    quantum_state_t* state = quantum_state_init(n_qubits);
 
     // Apply gate based on type
     switch (gate_type) {
-        case 0: quantum_state_h(state, qubit1); break;
-        case 1: quantum_state_x(state, qubit1); break;
-        case 2: quantum_state_y(state, qubit1); break;
-        case 3: quantum_state_z(state, qubit1); break;
+        case 0: gate_hadamard(state, qubit1); break;
+        case 1: gate_pauli_x(state, qubit1); break;
+        case 2: gate_pauli_y(state, qubit1); break;
+        case 3: gate_pauli_z(state, qubit1); break;
         case 4:
             if (qubit1 != qubit2) {
-                quantum_state_cnot(state, qubit1, qubit2);
+                gate_cnot(state, qubit1, qubit2);
             }
             break;
         // ... more cases
@@ -540,7 +540,7 @@ FUZZ_TARGET(fuzz_gates) {
     ASSERT(isfinite(norm));
     ASSERT(fabs(norm - 1.0) < 0.01);
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 ```
 

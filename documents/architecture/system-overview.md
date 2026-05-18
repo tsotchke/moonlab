@@ -162,7 +162,7 @@ typedef struct {
 ### Gate Application
 
 ```
-quantum_state_h(state, qubit)
+gate_hadamard(state, qubit)
          │
          ▼
 ┌────────────────────┐
@@ -322,7 +322,7 @@ void* pool_alloc(memory_pool_t* pool, size_t size) {
 
 ```c
 // All public functions return error codes
-qsim_error_t quantum_state_h(quantum_state_t* state, uint32_t qubit) {
+qsim_error_t gate_hadamard(quantum_state_t* state, uint32_t qubit) {
     if (state == NULL) {
         return QSIM_ERROR_NULL_POINTER;
     }

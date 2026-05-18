@@ -4,17 +4,24 @@ Solutions to common issues when using Moonlab.
 
 ## Quick Diagnostics
 
-Run the diagnostic tool to identify common issues:
+To verify a working install, run the test gauntlet:
 
 ```bash
-moonlab-diagnose
+cmake -S . -B build
+cmake --build build -j
+ctest --test-dir build --output-on-failure
 ```
 
-Or in Python:
+A clean install exits with `100% tests passed`.  For the Python and
+Rust bindings:
 
-```python
-from moonlab import diagnose
-diagnose()
+```bash
+MOONLAB_LIB_DIR="$(pwd)/build" \
+  PYTHONPATH="$(pwd)/bindings/python" \
+  python3 -m pytest bindings/python/tests -q
+
+cd bindings/rust/moonlab
+MOONLAB_LIB_DIR="$(realpath ../../../build)" cargo test
 ```
 
 ## Installation Issues
@@ -103,12 +110,18 @@ False
 ```
 
 **Diagnosis:**
-```python
-from moonlab import gpu_diagnose
-result = gpu_diagnose()
-print(result['issue'])
-print(result['solution'])
+Probe each backend explicitly via the C API
+(`qsim_backend_available`, `src/utils/config.h:438`); the bindings
+forward to the same function.  On macOS the canonical check is
+
+```bash
+system_profiler SPDisplaysDataType | grep -i metal
 ```
+
+If Metal is available but Moonlab cannot bind it, force the backend
+selection with the `QSIM_BACKEND=gpu_metal` environment variable and
+rerun.  A failure trace then identifies whether the issue is build
+gating (`-DQSIM_ENABLE_GPU=OFF`), driver, or capability detection.
 
 **Common Causes:**
 
@@ -144,10 +157,9 @@ RuntimeError: GPU memory allocation failed (requested 8.0 GB, available 4.2 GB)
    state = QuantumState(26)  # Instead of 28
    ```
 
-2. Use CPU for large states:
-   ```python
-   from moonlab import set_backend
-   set_backend('cpu')
+2. Use CPU for large states by forcing the backend at process start:
+   ```bash
+   QSIM_BACKEND=cpu python3 your_script.py
    ```
 
 3. Close other GPU applications
@@ -166,23 +178,21 @@ RuntimeError: GPU memory allocation failed (requested 8.0 GB, available 4.2 GB)
 
 **Solutions:**
 
-1. Increase GPU threshold:
-   ```python
-   from moonlab import configure
-   configure(gpu_threshold=20)  # Only use GPU for 20+ qubits
+1. Raise the GPU dispatch threshold for tensor-network kernels:
+   ```bash
+   # Multiplier on the default GPU-vs-CPU crossover; values > 1 keep
+   # work on the CPU for longer.  Read by tn_gates.c at runtime.
+   export MOONLAB_TENSOR_GPU_THRESHOLD_MUL=2.0
    ```
 
-2. Use automatic selection:
-   ```python
-   set_backend('auto')
+2. Use the auto-selecting backend (default):
+   ```bash
+   QSIM_BACKEND=auto python3 your_script.py
    ```
 
-3. Batch operations to amortize overhead:
-   ```python
-   with gpu_context() as ctx:
-       state = ctx.create_state(24)
-       # All operations batched on GPU
-   ```
+3. Batch operations into a single kernel pipeline via the gate-fusion
+   DAG in `src/optimization/fusion/`; `fuse_circuit_*` + `fuse_compile`
+   collapse adjacent gates so the GPU pays one launch instead of many.
 
 ## Numerical Issues
 
@@ -236,15 +246,12 @@ array([nan+nanj, nan+nanj, ...])
    state.normalize()
    ```
 
-2. Enable automatic renormalization:
-   ```python
-   configure(auto_normalize=True)
-   ```
-
-3. Check for numerical precision issues with single precision:
-   ```python
-   configure(precision='double')  # More accurate
-   ```
+2. Moonlab always runs in double precision; there is no
+   single-precision Python configuration knob.  Numerical drift in
+   long simulations is normally a sign of a missing
+   ``state.normalize()`` call after a non-unitary operation (noise
+   channel, post-selection, imag-time evolution).  See
+   ``src/quantum/state.h::quantum_state_normalize``.
 
 ### Incorrect Measurement Statistics
 
@@ -268,83 +275,76 @@ for i, (t, m) in enumerate(zip(theoretical, measured)):
    results = state.sample(shots=100000)  # More shots
    ```
 
-2. Check random seed for reproducibility:
-   ```python
-   from moonlab import set_seed
-   set_seed(42)
+2. Pin the random seed for reproducibility (env var read by the
+   C config layer at `src/utils/config.c::qsim_config_from_env`):
+   ```bash
+   QSIM_SEED=42 python3 your_script.py
    ```
 
 ## Performance Issues
 
 ### Simulation Too Slow
 
-**Diagnosis:**
-```python
-from moonlab import Profiler
-
-with Profiler(detailed=True) as p:
-    # Your simulation
-    pass
-
-p.print_summary()
-# Shows where time is spent
-```
+**Diagnosis:** the C library ships a per-host throughput harness at
+``benchmarks/harness/`` and a per-step profiler in
+``tools/profiler/profiler.c``.  The Python bindings do not expose a
+``Profiler`` wrapper; instead time individual operations with
+``time.perf_counter()`` around them, or run a known benchmark
+(``cmake --build build --target bench_state_vector`` etc.) and
+compare against the ``benchmarks/results/`` baselines.
 
 **Solutions:**
 
-1. **Enable GPU** (for 18+ qubits):
-   ```python
-   set_backend('metal')
+1. **Pick the GPU backend** (typical break-even is 18+ qubits):
+   ```bash
+   QSIM_BACKEND=gpu_metal python3 your_script.py
    ```
 
-2. **Enable SIMD**:
-   ```python
-   configure(simd_level='auto')
+2. **Force a specific SIMD level** (auto-detect is the default;
+   override only when measuring):
+   ```bash
+   QSIM_SIMD=avx512   # or neon, sve, avx2, sse2, none
    ```
 
-3. **Increase threads**:
-   ```python
-   configure(num_threads=8)
+3. **Set the OpenMP / thread count**:
+   ```bash
+   QSIM_THREADS=8 python3 your_script.py
+   # or
+   OMP_NUM_THREADS=8 python3 your_script.py
    ```
 
-4. **Use batching**:
-   ```python
-   # Instead of individual measurements
-   results = state.sample(1000)  # Batch sample
-   ```
+4. **Use the gate-fusion DAG** at ``src/optimization/fusion/`` to
+   collapse adjacent gates before dispatch.
 
-5. **Consider tensor networks** for low-entanglement states
+5. **Consider tensor networks** for low-entanglement states; see
+   ``moonlab.tdvp`` and ``moonlab.mpdo``.
 
 ### Memory Usage Too High
 
-**Diagnosis:**
+**Diagnosis:** dense state-vector memory is `16 * 2^N` bytes
+(double-precision complex), so estimation is trivial in head: `N=24
+-> 256 MB`, `N=28 -> 4 GB`, `N=32 -> 64 GB`.  No `estimate_memory()`
+helper is exposed in the Python bindings -- compute directly:
+
 ```python
-from moonlab import estimate_memory, MemoryProfiler
-
-print(f"Estimated: {estimate_memory(28):.1f} GB")
-
-with MemoryProfiler() as mp:
-    state = QuantumState(28)
-print(f"Actual: {mp.peak_mb:.1f} MB")
+import math
+print(f"{16 * 2**28 / 2**30:.1f} GB")
 ```
 
 **Solutions:**
 
-1. Use single precision:
+1. There is no runtime "single precision" toggle in v0.4.2; the C
+   state vector is always `double _Complex`.  To halve memory you
+   must drop to a tensor-network representation:
    ```python
-   configure(precision='single')  # Half memory
+   from moonlab.tdvp import random_mps, mpo_heisenberg, TdvpEngine
+   mps = random_mps(num_sites=50, chi_init=8, max_bond_dim=100)
    ```
 
-2. Enable memory-efficient mode:
-   ```python
-   configure(memory_efficient=True)
-   ```
-
-3. Use tensor networks:
-   ```python
-   from moonlab.tensor_network import MPS
-   mps = MPS(50, max_bond_dim=100)
-   ```
+2. The TDVP and MPDO engines scale polynomially in bond dimension,
+   not exponentially in qubit count.  For a 50-qubit chain with
+   moderate entanglement they replace a 16 EB state vector with a
+   buffer measured in MB.
 
 ## Algorithm-Specific Issues
 
@@ -523,14 +523,8 @@ When reporting bugs, include:
 
 ### Debug Mode
 
-Enable verbose logging:
-
-```python
-from moonlab import configure
-configure(log_level='DEBUG')
-```
-
-Or via environment variable:
+Enable verbose logging via the environment variable parsed by
+`qsim_config_from_env`:
 
 ```bash
 export MOONLAB_LOG_LEVEL=DEBUG

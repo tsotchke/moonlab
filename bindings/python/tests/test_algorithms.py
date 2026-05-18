@@ -418,3 +418,58 @@ class TestCHSHCorrelations:
         # E(a,b) ≈ 1/sqrt(2) ≈ 0.707
         # These are statistical, so allow wide tolerance
         assert abs(result['correlations']['E(a,b)']) > 0.3
+
+
+class TestBellMerminVariants:
+    """Mermin / Mermin-Klyshko Bell-variant smoke tests (v0.4.2)."""
+
+    def test_mermin_ghz_three_qubit(self):
+        """3-qubit GHZ should violate the Mermin inequality.
+
+        Classical bound is |M| <= 2; the Mermin polynomial on a
+        |GHZ_3> = (|000> + |111>) / sqrt(2) state reaches |M| = 4.
+        We allow a generous statistical floor; the assertion is just
+        that the Python wrapper round-trips the C result and the
+        measured value exceeds the classical bound by a sane margin.
+        """
+        state = QuantumState(3)
+        state.h(0)
+        state.cnot(0, 1)
+        state.cnot(0, 2)
+
+        result = BellTest.mermin_ghz_test(state, 0, 1, 2,
+                                           num_measurements=4000)
+
+        assert 'mermin' in result
+        assert 'correlations' in result
+        assert {'XYY', 'YXY', 'YYX', 'XXX'} <= set(result['correlations'])
+        assert result['classical_bound'] == pytest.approx(2.0)
+        assert result['quantum_bound'] == pytest.approx(4.0)
+        # GHZ should comfortably clear the classical bound (4 is the
+        # asymptotic peak; >2.5 is plenty to catch a wiring regression).
+        assert abs(result['mermin']) > 2.5, (
+            f"Mermin polynomial on |GHZ_3> measured at "
+            f"{result['mermin']:.3f}, expected > 2.5"
+        )
+
+    def test_mermin_klyshko_normalised_value(self):
+        """N-qubit Mermin-Klyshko returns the normalised |M_N|.
+
+        Classical bound is 1.  For N = 3 on a GHZ state the
+        asymptotic quantum value is 2^((3-1)/2) = 2.  The wrapper
+        should round-trip the C return.
+        """
+        state = QuantumState(3)
+        state.h(0)
+        state.cnot(0, 1)
+        state.cnot(0, 2)
+
+        mk = BellTest.mermin_klyshko_test(state, num_qubits=3,
+                                           num_measurements=4000)
+
+        assert isinstance(mk, float)
+        # Classical bound is 1; GHZ should clear it.
+        assert mk > 1.1, (
+            f"|M_N| on |GHZ_3> measured at {mk:.3f}, expected > 1.1 "
+            "(classical bound is 1.0)"
+        )

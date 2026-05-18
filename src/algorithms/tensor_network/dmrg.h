@@ -85,7 +85,6 @@ typedef struct {
     uint32_t lanczos_max_iter;  /**< Max Lanczos iterations per site */
     double lanczos_tol;         /**< Lanczos convergence tolerance */
     bool verbose;               /**< Print progress information */
-    bool two_site;              /**< Use two-site DMRG (more robust) */
 
     // Noise perturbation (injects noise into the SVD input to encourage
     // bond-dimension growth and escape local minima). Not true subspace
@@ -114,7 +113,6 @@ static inline dmrg_config_t dmrg_config_default(void) {
         .lanczos_max_iter = 100,
         .lanczos_tol = 1e-12,
         .verbose = false,
-        .two_site = true,
         // Noise-perturbation defaults
         .noise_strength = 1e-4,
         .noise_decay = 0.5,

@@ -50,13 +50,13 @@ Initial probabilities: [1.0, 0.0]
 
 int main() {
     // Create a 1-qubit state
-    quantum_state_t* state = quantum_state_create(1);
+    quantum_state_t* state = quantum_state_init(1);
 
     // Print initial probabilities
     printf("P(|0>) = %f\n", quantum_state_probability(state, 0));
     printf("P(|1>) = %f\n", quantum_state_probability(state, 1));
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
     return 0;
 }
 ```
@@ -104,7 +104,7 @@ Probabilities: [0.5, 0.5]
 
 ```c
 // Apply Hadamard gate
-quantum_state_h(state, 0);
+gate_hadamard(state, 0);
 
 // Print new probabilities
 printf("After H gate:\n");
@@ -158,7 +158,7 @@ After measurement: [1.0, 0.0]
 ```c
 // Reset and create fresh superposition
 quantum_state_reset(state);
-quantum_state_h(state, 0);
+gate_hadamard(state, 0);
 
 // Measure the qubit
 int result = quantum_state_measure(state, 0);
@@ -206,7 +206,7 @@ int zeros = 0, ones = 0;
 
 for (int i = 0; i < 1000; i++) {
     quantum_state_reset(state);
-    quantum_state_h(state, 0);
+    gate_hadamard(state, 0);
     int result = quantum_state_measure(state, 0);
     if (result == 0) zeros++;
     else ones++;
@@ -280,14 +280,14 @@ int main() {
     printf("=== Hello Quantum ===\n\n");
 
     // Create 1-qubit state
-    quantum_state_t* state = quantum_state_create(1);
+    quantum_state_t* state = quantum_state_init(1);
     printf("1. Created qubit in |0> state\n");
     printf("   P(0)=%.2f, P(1)=%.2f\n\n",
            quantum_state_probability(state, 0),
            quantum_state_probability(state, 1));
 
     // Apply Hadamard
-    quantum_state_h(state, 0);
+    gate_hadamard(state, 0);
     printf("2. Applied Hadamard gate - now in superposition\n");
     printf("   P(0)=%.2f, P(1)=%.2f\n\n",
            quantum_state_probability(state, 0),
@@ -303,7 +303,7 @@ int main() {
     int zeros = 0, ones = 0;
     for (int i = 0; i < 1000; i++) {
         quantum_state_reset(state);
-        quantum_state_h(state, 0);
+        gate_hadamard(state, 0);
         if (quantum_state_measure(state, 0) == 0) zeros++;
         else ones++;
     }
@@ -312,7 +312,7 @@ int main() {
 
     printf("Congratulations! You've run your first quantum program.\n");
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
     return 0;
 }
 ```

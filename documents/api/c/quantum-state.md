@@ -143,7 +143,7 @@ quantum_state_free(&state);  // Always call when done
 Allocate and initialize a quantum state on the heap.
 
 ```c
-quantum_state_t* quantum_state_create(int num_qubits);
+quantum_state_t* quantum_state_init(int num_qubits);
 ```
 
 **Parameters**:
@@ -151,16 +151,16 @@ quantum_state_t* quantum_state_create(int num_qubits);
 
 **Returns**: Pointer to new state, or `NULL` on error
 
-**Notes**: Caller must call `quantum_state_destroy()` when finished.
+**Notes**: Caller must call `quantum_state_free()` when finished.
 
 **Example**:
 ```c
-quantum_state_t *state = quantum_state_create(8);
+quantum_state_t *state = quantum_state_init(8);
 if (state == NULL) {
     // Handle error
 }
 // ... use state ...
-quantum_state_destroy(state);
+quantum_state_free(state);
 ```
 
 ### quantum_state_destroy
@@ -168,7 +168,7 @@ quantum_state_destroy(state);
 Free a heap-allocated quantum state.
 
 ```c
-void quantum_state_destroy(quantum_state_t *state);
+void quantum_state_free(quantum_state_t *state);
 ```
 
 **Parameters**:

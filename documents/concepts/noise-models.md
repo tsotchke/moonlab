@@ -155,7 +155,7 @@ $$T_2^* \leq T_2 \leq 2T_1$$
 **Depolarizing gate error**:
 ```c
 // Apply noisy CNOT
-quantum_state_cnot(state, control, target);
+gate_cnot(state, control, target);
 quantum_noise_depolarizing_2q(state, control, target, error_rate);
 ```
 
@@ -163,7 +163,7 @@ quantum_noise_depolarizing_2q(state, control, target, error_rate);
 ```c
 // Gate with calibration error
 double noisy_angle = ideal_angle * (1.0 + calibration_error);
-quantum_state_rx(state, qubit, noisy_angle);
+gate_rx(state, qubit, noisy_angle);
 ```
 
 ### Gate Error Rates
@@ -238,7 +238,7 @@ crosstalk_model_t* ct = crosstalk_model_create(num_qubits);
 crosstalk_add_coupling(ct, qubit_a, qubit_b, coupling_strength);
 
 // Apply gate with cross-talk
-quantum_state_rx(state, qubit_a, theta);
+gate_rx(state, qubit_a, theta);
 crosstalk_apply(ct, state, qubit_a);
 ```
 

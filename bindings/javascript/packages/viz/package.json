@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-viz",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "Quantum state visualizations for Moonlab",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

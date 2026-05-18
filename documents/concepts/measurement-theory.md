@@ -103,7 +103,7 @@ Measuring in the X basis:
 
 ```c
 // X-basis measurement on qubit q
-quantum_state_h(state, q);
+gate_hadamard(state, q);
 int outcome = quantum_state_measure(state, q);
 // outcome: 0 → |+⟩, 1 → |−⟩
 ```
