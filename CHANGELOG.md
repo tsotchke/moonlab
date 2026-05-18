@@ -7,7 +7,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.3.1.)
+The v0.4 adaptive-bond two-site TDVP slice.  Phase 3B of the v0.x
+release plan -- introduces an entropy-feedback PID controller on
+top of the v0.3 fixed-bond TDVP, fixes a pre-existing imag-time
+numerical underflow that bit both the legacy and adaptive paths,
+ships the full validation suite, and brings the v0.4 surface to
+Python.
+
+### Added
+
+#### Adaptive-bond TDVP (`src/algorithms/tensor_network/tdvp.{c,h}`)
+
+- New `tdvp_adaptive_bond_config_t` carrying the PID controller
+  knobs: `enabled`, `target_entropy_error` budget, three PID
+  gains (`kp`, `ki`, `kd`), per-bond `chi_floor` and `chi_ceiling`,
+  and the `alpha` entropy-to-bond-dim scaling factor.
+- Header helpers `tdvp_adaptive_bond_config_default(eps)` (reference
+  paper gains from arXiv:2604.03960: kp=0.5, ki=0.05, kd=0.1,
+  chi_floor=4, chi_ceiling=4096, alpha=8) and
+  `tdvp_adaptive_bond_config_disabled()`.
+- `tdvp_config_t` extended with `adaptive_bond` field;
+  `tdvp_config_default()` leaves it disabled so every v0.3.1 caller
+  sees bit-identical behaviour, and new `tdvp_config_adaptive(eps)`
+  builds a fully-wired adaptive configuration.
+- `tdvp_engine_t` gains a heap-owned `bond_states` array of length
+  `num_qubits - 1` (allocated only when the controller is enabled)
+  plus `num_bond_states`.  Per-bond state persists across sweeps
+  so the integral and derivative terms accumulate physical history.
+- New public accessor `tdvp_bond_chi(engine, bond)` reports the
+  current PID-selected chi for any inter-site bond.
+- Two-site SVD-truncation lifted into a static helper
+  `tdvp_truncate_bond`.  Legacy path is a single SVD at
+  `max_bond_dim`; adaptive path runs a first SVD at `chi_ceiling`
+  to expose the spectrum, the PID picks `target_chi`, and a second
+  SVD re-truncates when needed.
+
+#### Result + history reporting
+
+- `tdvp_result_t` extended with `bond_chi_distribution`
+  (heap-owned `uint32_t` array, length `n_bonds`) and `n_bonds`.
+  Lazy-allocated and reused across calls.
+- New `tdvp_result_clear()` frees the heap fields and zeroes the
+  struct in place; idempotent.
+- `tdvp_history_t` extended with a flat row-major
+  `bond_chi_history` buffer (length `capacity * n_bonds`) and
+  `n_bonds`.  Lazy-allocated on the first added result that
+  actually carries a distribution; legacy histories pay no extra
+  memory.  `tdvp_history_free` and `tdvp_history_add` updated to
+  manage it.
+
+#### Pre-existing TDVP fix
+
+Imaginary-time TDVP previously failed with "Failed at site X (R->L)"
+after roughly five steps on Heisenberg and at step 0 on TFIM, on
+both the legacy and adaptive paths.  Root cause: `exp(-H * dt) @
+theta` shrinks the two-site tensor geometrically per update, and
+the end-of-step renormalisation fired too late to keep the inner
+SVD / Lanczos numerics well-conditioned.  Fix: renormalise
+`theta_evolved` to unit Frobenius norm after each `lanczos_expm`
+call.  Mathematically equivalent (ground state invariant under
+rescaling; end-of-step renormalisation absorbs the discarded
+factor) and a defensive no-op on the unitary real-time path.
+Verified: 30 imag-time TDVP steps on the 8-site critical TFIM
+reach |E - E_DMRG| / |E_DMRG| = 1.98% at tau = 1.5.
+
+#### Validation
+
+Five new unit tests pin the design-note acceptance criteria:
+
+- `tests/unit/test_tdvp_adaptive_config.c` (5 cases) -- backwards
+  compatibility regression on the config layer.
+- `tests/unit/test_tdvp_adaptive_pid.c` (3 cases) -- engine
+  lifecycle, allocation contract, imag-time PID smoke.
+- `tests/unit/test_tdvp_adaptive_energy_conservation.c` --
+  real-time |E(t) - E(0)| / |E(0)| < 5e-3 over five steps with
+  mean chi safely below the ceiling.  Observed: 2.4e-5 drift,
+  mean chi 8.3 (vs ceiling 32).
+- `tests/unit/test_tdvp_adaptive_tfim_ground.c` -- 30 imag-time
+  steps on the 8-site critical TFIM converge to within 3% of the
+  DMRG reference.  Observed: 1.98% at tau = 1.5.
+- `tests/unit/test_tdvp_adaptive_pid_stability.c` -- 3x3x3 sweep
+  over (kp, ki, kd) around the reference defaults; at least 80%
+  (22/27) of grid points stable.  Observed: 27/27 stable.
+
+#### Python binding (`moonlab.tdvp`)
+
+- `bindings/python/moonlab/tdvp.py` -- ctypes wrapper exposing the
+  v0.4 surface idiomatically.  Surface: `EvolutionType`, `Variant`,
+  `IntegratorType` enums; `TdvpAdaptiveBondConfig` and `TdvpConfig`
+  dataclasses with `default()` / `adaptive(eps)` classmethods;
+  `TdvpResult` (with `bond_chi_distribution` as a NumPy `uint32`
+  array); `TdvpEngine` (`step`, `bond_chi`); MPO factories
+  `mpo_heisenberg` and `mpo_tfim`; initial-state helper
+  `random_mps`.
+- `bindings/python/tests/test_tdvp.py` (9 cases): config defaults,
+  adaptive gains, lifecycle, legacy + adaptive engine paths,
+  real-time energy conservation, imag-time convergence direction,
+  and the module-export contract.
+- `bindings/python/moonlab/__init__.py`: `moonlab.tdvp` is
+  re-exported under an optional-import guard matching MPDO.
+
+#### Documentation
+
+- `docs/research/adaptive_bond_tdvp.md` (already in v0.3.1):
+  algorithm specification + four acceptance criteria.
+- `docs/reference/tdvp-api.md` (new): full TDVP API reference with
+  the v0.4 surface, the Python binding example, and the
+  acceptance-test matrix.
+
+### Verified
+
+- `cmake --build build_release/quantumsim`: clean.
+- `ctest -R "tdvp|qgt|mpdo|dmrg|svd|clifford|skyrmion"`: 22/22.
+- `pytest bindings/python/tests`: 179 passing (170 v0.3.1 baseline
+  + 9 new TDVP cases).
+- `cargo test --lib` (moonlab crate): 29 passing.
+
+### Deferred
+
+- 24-site benchmark target (energy conservation under tighter
+  tolerance + half-wall-time DMRG comparison) -- requires a
+  benchmark harness; outside the ctest scope.
+- Rust wrapper of `moonlab::tdvp`.  Today the v0.4 surface is
+  reachable through `moonlab_sys` for callers who need it.
 
 ## [0.3.1] - 2026-05-09
 
