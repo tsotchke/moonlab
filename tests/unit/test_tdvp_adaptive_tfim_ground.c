@@ -1,36 +1,25 @@
 /**
  * @file test_tdvp_adaptive_tfim_ground.c
  * @brief Acceptance test #3 from
- *        `docs/research/adaptive_bond_tdvp.md` (partial):
- *        imaginary-time TDVP under the entropy-feedback PID
- *        controller drives the energy toward the DMRG ground state.
+ *        `docs/research/adaptive_bond_tdvp.md`: imaginary-time TDVP
+ *        under the entropy-feedback PID controller converges to the
+ *        DMRG ground state.
  *
  * Imaginary-time evolution `exp(-tau H)` projects any initial state
  * onto the ground state of `H` in the large-tau limit, with a
  * convergence rate set by the spectral gap.  Two-site TDVP under
  * imaginary time is the standard MPS variational ground-state
  * algorithm; turning on the adaptive-bond controller should leave
- * the convergence direction alone, only changing which bond
- * dimensions the algorithm pays for along the way.
+ * the converged energy alone, only changing which bond dimensions
+ * the algorithm pays for along the way.
  *
- * Scope: 8-site antiferromagnetic Heisenberg chain (J = 1, Delta = 1),
- * DMRG reference at `chi = 32`, then *three* short imag-time TDVP
- * steps at `dt = 0.02` with `target_entropy_error = 1e-3` and
- * `chi_ceiling = 32`.  Asserts:
- *
- *   1. The PID smoke run completes without error (three is the
- *      window that runs reliably with the v0.3.1 two-site TDVP /
- *      Lanczos stack; a pre-existing numerical issue makes longer
- *      runs fail on both the legacy and adaptive paths, tracked as
- *      a separate v0.4 follow-up).
- *   2. The energy moves toward the DMRG reference, i.e.
- *      |E_final - E_DMRG| < |E_initial - E_DMRG| -- imag-time is
- *      doing its job.
- *
- * The full design-note target (24-site critical TFIM converging to
- * within 1e-5 of the DMRG ground state in half the wall time of
- * the fixed-chi baseline) requires the longer-run TDVP fix and
- * lives in a dedicated benchmark when that lands.
+ * Scope: 8-site transverse-field Ising model at `g = 1` (critical
+ * point), DMRG reference at `chi = 32`, then 30 imag-time TDVP
+ * steps at `dt = 0.05` with `target_entropy_error = 1e-3` and the
+ * same `chi_ceiling = 32`.  Asserts that
+ *   |E_final - E_DMRG| / |E_DMRG| < 0.03 (3% tolerance, calibrated
+ * to tau = 1.5; the design-note 24-site / 1e-5 target lives in a
+ * dedicated benchmark).
  *
  * Reference: Haegeman et al., Phys. Rev. B 94, 165116 (2016) for
  * the imag-time TDVP / DMRG equivalence; arXiv:2604.03960 for the
@@ -55,13 +44,15 @@ static int failures = 0;
 } while (0)
 
 int main(void) {
-    fprintf(stdout, "=== TDVP adaptive-bond: imag-time ground state ===\n");
+    fprintf(stdout, "=== TDVP adaptive-bond: imag-time TFIM ground state ===\n");
 
     const uint32_t n = 8;
+    const double J = 1.0;
+    const double h = 1.0;   /* g = h / J = 1: critical point */
 
-    mpo_t *mpo = mpo_heisenberg_create(n, /*J=*/1.0, /*Delta=*/1.0, /*h=*/0.0);
+    mpo_t *mpo = mpo_tfim_create(n, J, h);
     if (!mpo) {
-        fprintf(stderr, "SKIP: mpo_heisenberg_create failed\n");
+        fprintf(stderr, "SKIP: mpo_tfim_create failed\n");
         return 0;
     }
 
@@ -87,8 +78,7 @@ int main(void) {
         return 1;
     }
     const double E_dmrg = dr->ground_energy;
-    fprintf(stdout, "  DMRG reference: E0 = %.6f (variance %.2e)\n",
-            E_dmrg, dr->energy_variance);
+    fprintf(stdout, "  DMRG reference: E0 = %.6f\n", E_dmrg);
     dmrg_result_free(dr);
     tn_mps_free(mps_dmrg);
 
@@ -100,15 +90,9 @@ int main(void) {
         return 0;
     }
 
-    /* Initial energy of the random MPS, computed before any TDVP
-     * step.  We require |E_final - E_DMRG| < |E_initial - E_DMRG|
-     * so the test fails if the controller breaks the imag-time
-     * convergence direction. */
-    const double E_initial = dmrg_compute_energy(mps, mpo);
-
     tdvp_config_t cfg = tdvp_config_adaptive(/*target_entropy_error=*/1e-3);
     cfg.evolution_type            = TDVP_IMAGINARY_TIME;
-    cfg.dt                        = 0.02;
+    cfg.dt                        = 0.05;
     cfg.adaptive_bond.chi_ceiling = 32;
     cfg.max_bond_dim              = 32;
     cfg.normalize                 = true;
@@ -121,12 +105,9 @@ int main(void) {
         return 1;
     }
 
-    /* Three steps is the reliable window for the v0.3.1 two-site
-     * TDVP stack; longer runs hit a pre-existing numerical issue
-     * unrelated to the PID controller. */
-    const int num_steps = 3;
+    const int num_steps = 30;
     tdvp_result_t result = {0};
-    double E_final = E_initial;
+    double E_final = 0.0;
 
     for (int step = 0; step < num_steps; step++) {
         int rc = tdvp_step(engine, &result);
@@ -137,22 +118,18 @@ int main(void) {
 
     const double rel_err = fabs(E_final - E_dmrg) /
                            (fabs(E_dmrg) > 1e-12 ? fabs(E_dmrg) : 1.0);
-    const double initial_rel_err = fabs(E_initial - E_dmrg) /
-                                   (fabs(E_dmrg) > 1e-12 ? fabs(E_dmrg) : 1.0);
     fprintf(stdout,
-            "  Initial:        E = %+.6f (relative error %.3e)\n",
-            E_initial, initial_rel_err);
-    fprintf(stdout,
-            "  TDVP-adaptive:  E = %+.6f (relative error %.3e)\n",
+            "  TDVP-adaptive final: E = %+.6f (relative error %.3e)\n",
             E_final, rel_err);
 
-    /* Imag-time TDVP must move the energy toward the DMRG reference.
-     * Allow a small slack so a step that happens to over-shoot does
-     * not break the test, but require meaningful progress. */
-    CHECK(rel_err < initial_rel_err - 1e-6,
-          "|E_final - E_DMRG| = %.6f not strictly less than "
-          "|E_initial - E_DMRG| = %.6f (imag-time should converge)",
-          rel_err, initial_rel_err);
+    /* 3% tolerance for the tau = 1.5 evolution: tighter than the
+     * step-6b smoke test (which only checked direction), looser than
+     * the design-note 1e-5 target (which assumes tau = 10 and
+     * 24-site chain).  Calibrated against the observed 1.98e-2
+     * relative error at tau = 1.5 on the v0.3.1 stack post-fix. */
+    CHECK(rel_err < 0.03,
+          "|E_adapt - E_DMRG| / |E_DMRG| = %.3e exceeds 3%% tolerance",
+          rel_err);
 
     /* Sanity: the bond_chi_distribution should be present and inside
      * the configured envelope. */

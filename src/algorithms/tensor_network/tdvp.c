@@ -754,6 +754,31 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
 
     tensor_free(theta);
 
+    /* Imag-time normalisation hot-fix.  On the imag-time path,
+     * `exp(-H * dt) @ theta` decays the two-site tensor by roughly
+     * `exp(-E_max * dt)` per call.  After many two-site updates
+     * (2 sweeps * (n-1) updates per step, repeated across steps)
+     * the tensor shrinks below double-precision and the downstream
+     * SVD becomes ill-conditioned, producing the "Failed at site X
+     * (R->L)" symptom on Heisenberg after roughly five steps and on
+     * TFIM immediately.  Renormalising `theta_evolved` to unit
+     * Frobenius norm here is mathematically equivalent (the ground
+     * state is invariant under global rescaling and the end-of-step
+     * `tn_mps_norm`-based renormalisation absorbs the discarded
+     * factor) and keeps the inner numerics well-conditioned.  The
+     * real-time path conserves norm by unitarity, so this is a
+     * no-op there; we still apply it as a defensive double-check
+     * because the cost is one Frobenius norm per two-site update. */
+    {
+        double tnorm = tensor_norm_frobenius(theta_evolved);
+        if (tnorm > 0.0 && isfinite(tnorm) && tnorm != 1.0) {
+            double inv = 1.0 / tnorm;
+            for (uint64_t i = 0; i < theta_evolved->total_size; i++) {
+                theta_evolved->data[i] *= inv;
+            }
+        }
+    }
+
     // SVD split evolved tensor
     uint32_t mat_dims[2] = {chi_l * d, d * chi_r};
     tensor_t *mat = tensor_reshape(theta_evolved, 2, mat_dims);
