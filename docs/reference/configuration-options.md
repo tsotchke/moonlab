@@ -1,572 +1,266 @@
-# Configuration Options Reference
+# Configuration options reference
 
-Complete reference for all Moonlab configuration settings.
+Moonlab's runtime configuration is owned by the `qsim_config_t`
+struct declared in
+[`src/utils/config.h`](../../src/utils/config.h).  This document
+records the public fields, the typed setter/getter functions, the
+environment variables parsed by `qsim_config_from_env`, and the
+preset helpers.  Every option name on this page maps directly to a
+declaration in `src/utils/config.h`; nothing else is part of the
+public surface.
 
 ## Overview
 
-Moonlab can be configured through:
+Configuration flows from highest to lowest priority:
 
-1. **Runtime API** - `configure()` function
-2. **Environment variables** - `MOONLAB_*` prefix
-3. **Configuration file** - `~/.moonlab/config.toml`
+1. **API**: direct field assignment or typed setters on a
+   `qsim_config_t *` (`src/utils/config.h:255-323`).
+2. **JSON / INI**: `qsim_config_load(path)` and
+   `qsim_config_from_json(json)` (`src/utils/config.h:366-383`).
+3. **Environment**: `qsim_config_from_env(config)` reads the
+   `QSIM_*` variables listed below (`src/utils/config.h:413`).
+4. **Defaults**: applied by `qsim_config_create` /
+   `qsim_config_reset` (`src/utils/config.h:228, 250`).
 
-Priority: API > Environment > Config File > Defaults
+A process-global configuration exists for convenience -- see
+`qsim_config_global`, `qsim_config_init`, `qsim_config_cleanup`
+(`src/utils/config.h:205-217`).  Validation routines
+(`qsim_config_validate`, `qsim_backend_available`,
+`qsim_simd_available`) flag invalid combinations against the
+current host.
 
-## Configuration Methods
+## Backend selection
 
-### Python API
+| Field | Type | Setter | Values |
+|-------|------|--------|--------|
+| `config->backend` | `qsim_backend_t` | `qsim_config_set_backend(config, backend)` | `QSIM_BACKEND_AUTO`, `QSIM_BACKEND_CPU`, `QSIM_BACKEND_CPU_SIMD`, `QSIM_BACKEND_GPU_METAL`, `QSIM_BACKEND_GPU_OPENCL`, `QSIM_BACKEND_GPU_VULKAN`, `QSIM_BACKEND_GPU_CUDA`, `QSIM_BACKEND_DISTRIBUTED`, `QSIM_BACKEND_GPU_WEBGPU` |
 
-```python
-from moonlab import configure, get_config
+Enumeration declared at `src/utils/config.h:53-63`.  Use
+`qsim_backend_available(backend)` to test whether the current build
+links the corresponding backend before forcing it.
 
-# Set options
-configure(
-    backend='auto',
-    gpu_threshold=18,
-    num_threads=8,
-    precision='double'
-)
+| Field | Type | Setter | Values |
+|-------|------|--------|--------|
+| `config->simd` | `qsim_simd_t` | `qsim_config_set_simd(config, simd)` | `QSIM_SIMD_NONE`, `QSIM_SIMD_SSE2`, `QSIM_SIMD_AVX`, `QSIM_SIMD_AVX2`, `QSIM_SIMD_AVX512`, `QSIM_SIMD_NEON`, `QSIM_SIMD_SVE` |
 
-# Get current configuration
-config = get_config()
-print(config)
-```
+Enumeration declared at `src/utils/config.h:68-76`.  Auto-detection
+via `qsim_detect_simd()` picks the highest level the host supports.
 
-### C API
+## Limits
+
+| Field | Type | Setter | Notes |
+|-------|------|--------|-------|
+| `config->max_qubits`    | `int`      | `qsim_config_set_max_qubits(config, n)` | `0` means "no library-imposed cap" (the state-vector backend still caps at `MOONLAB_MAX_QUBITS = 32`). |
+| `config->max_state_dim` | `uint64_t` | direct assignment                       | Manual cap on $2^N$, overrides `max_qubits` when smaller.  |
+
+## Threading
+
+`config->threading` is a `qsim_thread_config_t`
+(`src/utils/config.h:131-136`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `model`           | `qsim_threading_t` | `QSIM_THREADING_NONE`, `QSIM_THREADING_OPENMP`, `QSIM_THREADING_PTHREADS`, `QSIM_THREADING_GCD` |
+| `num_threads`     | `int`              | `0` => auto-detect via `qsim_detect_threads()` |
+| `thread_affinity` | `int`              | non-zero enables CPU pinning where supported |
+
+Setter shortcut: `qsim_config_set_threads(config, n)`
+(`src/utils/config.h:274`).
+
+## GPU
+
+`config->gpu` is a `qsim_gpu_config_t`
+(`src/utils/config.h:141-146`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `device_id`       | `int`     | `-1` = auto-select |
+| `max_vram`        | `size_t`  | byte cap; 0 = unlimited |
+| `async_transfers` | `int`     | enable async host/device copies |
+| `kernel_fusion`   | `int`     | enable Metal/WebGPU kernel fusion |
+
+Setter shortcut: `qsim_config_set_gpu_device(config, id)`
+(`src/utils/config.h:313`).
+
+## Noise
+
+`config->noise` is a `qsim_noise_config_t`
+(`src/utils/config.h:107-117`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `enabled`            | `int`    | non-zero to apply noise after every gate |
+| `depolarizing_rate`  | `double` | per-gate depolarising probability |
+| `amplitude_damping`  | `double` | per-gate amplitude-damping rate |
+| `phase_damping`      | `double` | per-gate phase-damping rate |
+| `t1_time`, `t2_time` | `double` | T1 / T2 relaxation times (µs) |
+| `gate_time`          | `double` | gate execution time (µs) |
+| `readout_error_0`    | `double` | P(1\|0) measurement error |
+| `readout_error_1`    | `double` | P(0\|1) measurement error |
+
+Helpers: `qsim_config_set_noise_enabled`,
+`qsim_config_set_noise_params(depol, ad, pd)`,
+`qsim_config_set_thermal(t1, t2, gate_time)`
+(`src/utils/config.h:289-303`).  The MPDO simulator
+(`src/quantum/noise_mpdo.h`) uses its own configuration struct; see
+[mpdo-api.md](mpdo-api.md).
+
+## Memory
+
+`config->memory` is a `qsim_memory_config_t`
+(`src/utils/config.h:122-127`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `max_memory`     | `size_t` | byte cap on host RAM; `0` = unlimited |
+| `alignment`      | `size_t` | state-vector alignment in bytes |
+| `use_huge_pages` | `int`    | request transparent huge pages |
+| `preallocate`    | `int`    | reserve state memory at init time |
+
+Setter shortcut: `qsim_config_set_max_memory(config, bytes)`
+(`src/utils/config.h:308`).
+
+## Algorithm parameters
+
+`config->algorithm` is a `qsim_algorithm_config_t`
+(`src/utils/config.h:151-156`):
+
+| Field | Type | Default | Purpose |
+|-------|------|--------:|---------|
+| `max_measurements`            | `size_t` | 1024 | circular buffer cap on measurement history |
+| `jacobi_max_iter`             | `int`    |  100 | Jacobi eigenvalue iteration cap |
+| `jacobi_tolerance`            | `double` | 1e-12 | Jacobi convergence threshold |
+| `grover_analysis_max_qubits`  | `int`    |   12 | upper bound for Grover analysis kernels |
+
+## Validation and tolerance
+
+Top-level fields in `qsim_config_t` (`src/utils/config.h:182-189`):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `validate_states`     | `int`    | check state-norm invariants per op |
+| `check_unitarity`     | `int`    | verify `U†U = I` for incoming gate matrices |
+| `tolerance`           | `double` | numerical-comparison threshold |
+| `enable_caching`      | `int`    | cache gate matrices keyed by signature |
+| `gate_fusion`         | `int`    | fuse adjacent commuting gates |
+| `circuit_optimization`| `int`    | run circuit-level optimisations before execution |
+
+Setter shortcut: `qsim_config_set_tolerance(config, tol)`
+(`src/utils/config.h:323`).
+
+## Logging
+
+| Field | Type | Setter | Values |
+|-------|------|--------|--------|
+| `config->log_level` | `qsim_log_level_t` | `qsim_config_set_log_level(config, level)` | `QSIM_LOG_NONE`, `QSIM_LOG_ERROR`, `QSIM_LOG_WARN`, `QSIM_LOG_INFO`, `QSIM_LOG_DEBUG`, `QSIM_LOG_TRACE` |
+| `config->log_file`  | `const char *`     | `qsim_config_set_log_file(config, path)`   | `NULL` => stderr |
+
+Enumeration declared at `src/utils/config.h:91-98`.  The
+`qsim_log_level_to_string` / `qsim_log_level_from_string` helpers
+(`src/utils/config.h:507-512`) translate to and from the canonical
+strings used by `QSIM_LOG_LEVEL`.
+
+## Random-number generation
+
+| Field | Type | Setter | Notes |
+|-------|------|--------|-------|
+| `config->use_quantum_rng` | `int`      | direct                              | route measurement randomness through the Bell-verified QRNG |
+| `config->seed`            | `uint64_t` | `qsim_config_set_seed(config, seed)` | `0` => seed from system entropy   |
+
+QRNG hardware-init can be skipped via the `MOONLAB_SKIP_HW_ENTROPY`
+environment variable (see [Environment variables](#environment-variables)).
+
+## Environment variables
+
+`qsim_config_from_env(config)` (`src/utils/config.h:413`, body in
+`src/utils/config.c:299-348`) reads the following.  Unset variables
+leave the corresponding field at its current value.
+
+| Variable             | Mapped field                  | Parser                                 |
+|----------------------|-------------------------------|----------------------------------------|
+| `QSIM_BACKEND`       | `config->backend`             | `qsim_backend_from_string`             |
+| `QSIM_SIMD`          | `config->simd`                | `qsim_simd_from_string`                |
+| `QSIM_MAX_QUBITS`    | `config->max_qubits`          | base-10 integer                        |
+| `QSIM_THREADS`       | `config->threading.num_threads` | base-10 integer (`0` = auto)         |
+| `QSIM_LOG_LEVEL`     | `config->log_level`           | `qsim_log_level_from_string`           |
+| `QSIM_LOG_FILE`      | `config->log_file`            | filesystem path                        |
+| `QSIM_NOISE`         | `config->noise.enabled`       | `0` / `1`                              |
+| `QSIM_SEED`          | `config->seed`                | base-10 `uint64_t`                     |
+
+Additional environment variables consulted elsewhere in the tree
+(outside `qsim_config_from_env`):
+
+| Variable                          | Read by                                | Purpose |
+|-----------------------------------|----------------------------------------|---------|
+| `MOONLAB_SKIP_HW_ENTROPY`         | `src/applications/qrng.c`              | bypass hardware-entropy probe at QRNG init (CI / aarch64). |
+| `MOONLAB_TENSOR_GPU_THRESHOLD_MUL`| `src/algorithms/tensor_network/tn_gates.c` | scale the tensor-GPU dispatch crossover. |
+| `MOONLAB_BENCH_N`                 | `src/utils/bench_stats.h:81` (`bench_stats_n_runs`) | timing-replica count for benchmark harnesses. |
+| `MOONLAB_LIB_DIR`                 | `bindings/python/moonlab/core.py:38` and `bindings/rust/moonlab/build.rs:15` | directory containing the built `libquantumsim` library; the Python and Rust bindings dlopen / link against it. |
+
+## File I/O
+
+`qsim_config_load(path)` (`src/utils/config.h:366`) supports JSON
+and INI inputs (the docstring lists both; INI parsing lives next to
+the JSON path in `src/utils/config.c`).  `qsim_config_save` and
+`qsim_config_to_json` are the round-trip counterparts.  There is no
+TOML loader and no `~/.moonlab/config.toml` lookup.
+
+## Presets
+
+`src/utils/config.h:518-545` declares four preset helpers that
+stamp a known-good configuration over an existing struct:
+
+| Preset                              | Purpose                                                    |
+|-------------------------------------|------------------------------------------------------------|
+| `qsim_config_preset_performance`    | enables all optimisations, picks the GPU backend if present |
+| `qsim_config_preset_accuracy`       | enables validation, disables approximations                 |
+| `qsim_config_preset_low_memory`     | minimises memory at the cost of speed                       |
+| `qsim_config_preset_noisy(t1, t2, gate_error)` | populates the noise sub-config from device numbers |
+
+## Worked example (C)
 
 ```c
-#include "config.h"
+#include "utils/config.h"
 
-// Set options
-qsim_config_set_string("backend", "auto");
-qsim_config_set_int("gpu.threshold", 18);
-qsim_config_set_int("cpu.threads", 8);
+qsim_config_t *cfg = qsim_config_create();
 
-// Get options
-const char* backend = qsim_config_get_string("backend");
-int threshold = qsim_config_get_int("gpu.threshold");
+qsim_config_preset_performance(cfg);
+qsim_config_set_threads(cfg, 8);
+qsim_config_set_log_level(cfg, QSIM_LOG_INFO);
+
+qsim_config_from_env(cfg);              /* environment overrides */
+
+char err[128];
+if (qsim_config_validate(cfg, err, sizeof err) != 0) {
+    fprintf(stderr, "bad config: %s\n", err);
+    return 1;
+}
+
+/* ... run simulation against cfg ... */
+
+qsim_config_destroy(cfg);
 ```
 
-### Environment Variables
-
-```bash
-export MOONLAB_BACKEND=metal
-export MOONLAB_GPU_THRESHOLD=20
-export MOONLAB_NUM_THREADS=8
-export MOONLAB_LOG_LEVEL=DEBUG
-```
-
-### Configuration File
-
-`~/.moonlab/config.toml`:
-
-```toml
-[backend]
-default = "auto"
-gpu_threshold = 18
-
-[cpu]
-num_threads = 8
-simd_level = "auto"
-
-[gpu]
-enabled = true
-max_memory_gb = 8.0
-
-[precision]
-default = "double"
-
-[logging]
-level = "INFO"
-```
-
-## Backend Configuration
-
-### `backend`
-
-Select the compute backend.
-
-| Option | Description |
-|--------|-------------|
-| `"cpu"` | CPU only (SIMD optimized) |
-| `"metal"` | Apple Metal GPU |
-| `"auto"` | Automatic selection based on system and problem size |
-
-**Default**: `"auto"`
-
-```python
-configure(backend='metal')  # Force GPU
-configure(backend='cpu')    # Force CPU
-configure(backend='auto')   # Let system decide
-```
-
-**Environment**: `MOONLAB_BACKEND`
-
-### `gpu_threshold`
-
-Minimum qubits for automatic GPU selection.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 1-32 | 18 |
-
-GPU typically provides benefit for 18+ qubits due to kernel launch overhead.
-
-```python
-configure(gpu_threshold=16)  # Use GPU earlier
-configure(gpu_threshold=22)  # Use GPU later
-```
-
-**Environment**: `MOONLAB_GPU_THRESHOLD`
-
-## CPU Configuration
-
-### `num_threads`
-
-Number of CPU threads for parallel operations.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 1-256 | Auto (system core count) |
-
-```python
-configure(num_threads=4)   # Use 4 threads
-configure(num_threads=0)   # Auto-detect
-```
-
-**Environment**: `MOONLAB_NUM_THREADS` or `OMP_NUM_THREADS`
-
-### `simd_level`
-
-SIMD instruction set level.
-
-| Option | Description |
-|--------|-------------|
-| `"auto"` | Auto-detect best available |
-| `"scalar"` | No SIMD (debugging) |
-| `"neon"` | ARM NEON |
-| `"sse4"` | Intel SSE4.2 |
-| `"avx2"` | Intel AVX2 |
-| `"avx512"` | Intel AVX-512 |
-
-**Default**: `"auto"`
-
-```python
-configure(simd_level='avx2')
-```
-
-**Environment**: `MOONLAB_SIMD_LEVEL`
-
-### `cache_block_size`
-
-Memory block size for cache optimization (bytes).
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 1024-1048576 | 262144 (256 KB) |
-
-```python
-configure(cache_block_size=128 * 1024)  # 128 KB blocks
-```
-
-## GPU Configuration
-
-### `gpu_enabled`
-
-Enable/disable GPU acceleration.
-
-| Type | Default |
-|------|---------|
-| Boolean | True (if available) |
-
-```python
-configure(gpu_enabled=False)  # Disable GPU
-```
-
-### `gpu_max_memory_gb`
-
-Maximum GPU memory usage in gigabytes.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Float | 0.1-∞ | Unlimited |
-
-```python
-configure(gpu_max_memory_gb=8.0)  # Limit to 8 GB
-```
-
-### `gpu_threadgroup_size`
-
-Metal compute threadgroup size.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 32-1024 | 256 |
-
-Must be power of 2. Optimal value depends on GPU.
-
-```python
-configure(gpu_threadgroup_size=512)
-```
-
-### `gpu_kernel_fusion`
-
-Enable automatic kernel fusion for sequential operations.
-
-| Type | Default |
-|------|---------|
-| Boolean | True |
-
-```python
-configure(gpu_kernel_fusion=True)
-```
-
-### `gpu_verify`
-
-Enable GPU result verification against CPU.
-
-| Type | Default |
-|------|---------|
-| Boolean | False |
-
-Useful for debugging. Significant performance penalty.
-
-```python
-configure(gpu_verify=True)  # Compare results with CPU
-```
-
-## Precision Configuration
-
-### `precision`
-
-Floating-point precision for state vector.
-
-| Option | Memory per amplitude | Description |
-|--------|---------------------|-------------|
-| `"single"` | 8 bytes | 32-bit float complex |
-| `"double"` | 16 bytes | 64-bit double complex |
-
-**Default**: `"double"`
-
-```python
-configure(precision='single')  # Half memory, ~6-7 decimal digits
-configure(precision='double')  # Full precision, ~15-16 decimal digits
-```
-
-**Environment**: `MOONLAB_PRECISION`
-
-## Memory Configuration
-
-### `memory_efficient`
-
-Enable memory-efficient mode (slower but less memory).
-
-| Type | Default |
-|------|---------|
-| Boolean | False |
-
-```python
-configure(memory_efficient=True)
-```
-
-### `auto_normalize`
-
-Automatically normalize state after operations.
-
-| Type | Default |
-|------|---------|
-| Boolean | False |
-
-```python
-configure(auto_normalize=True)
-```
-
-### `memory_pool_size_mb`
-
-Size of pre-allocated memory pool.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 0-65536 | 0 (disabled) |
-
-```python
-configure(memory_pool_size_mb=1024)  # 1 GB pool
-```
-
-## Algorithm Configuration
-
-### `default_shots`
-
-Default number of measurement shots.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 1-10000000 | 1000 |
-
-```python
-configure(default_shots=10000)
-```
-
-### `parallel_hamiltonian`
-
-Parallelize Hamiltonian term evaluation.
-
-| Type | Default |
-|------|---------|
-| Boolean | True |
-
-```python
-configure(parallel_hamiltonian=True)
-```
-
-### `dmrg_svd_method`
-
-SVD algorithm for DMRG.
-
-| Option | Description |
-|--------|-------------|
-| `"gesdd"` | Divide and conquer (fastest) |
-| `"gesvd"` | Standard algorithm (more stable) |
-
-**Default**: `"gesdd"`
-
-```python
-configure(dmrg_svd_method='gesvd')
-```
-
-### `dmrg_cutoff`
-
-SVD truncation threshold for DMRG.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Float | 1e-16 to 1e-1 | 1e-10 |
-
-```python
-configure(dmrg_cutoff=1e-8)
-```
-
-## Logging Configuration
-
-### `log_level`
-
-Logging verbosity level.
-
-| Option | Description |
-|--------|-------------|
-| `"OFF"` | No logging |
-| `"ERROR"` | Errors only |
-| `"WARN"` | Warnings and errors |
-| `"INFO"` | General information |
-| `"DEBUG"` | Detailed debug info |
-| `"TRACE"` | Very detailed tracing |
-
-**Default**: `"INFO"`
-
-```python
-configure(log_level='DEBUG')
-```
-
-**Environment**: `MOONLAB_LOG_LEVEL`
-
-### `log_file`
-
-File path for log output.
-
-| Type | Default |
-|------|---------|
-| String | None (stderr) |
-
-```python
-configure(log_file='/path/to/moonlab.log')
-```
-
-**Environment**: `MOONLAB_LOG_FILE`
-
-### `error_verbosity`
-
-Error message detail level.
-
-| Option | Description |
-|--------|-------------|
-| `"minimal"` | Short error message |
-| `"normal"` | Standard error message |
-| `"detailed"` | Include stack trace and suggestions |
-
-**Default**: `"normal"`
-
-```python
-configure(error_verbosity='detailed')
-```
-
-## Random Number Configuration
-
-### `seed`
-
-Random seed for reproducibility.
-
-| Type | Range | Default |
-|------|-------|---------|
-| Integer | 0-2^64 | Random |
-
-```python
-configure(seed=42)  # Reproducible results
-```
-
-### `rng_source`
-
-Random number generator source.
-
-| Option | Description |
-|--------|-------------|
-| `"hardware"` | Hardware RNG (RDRAND, etc.) |
-| `"urandom"` | OS /dev/urandom |
-| `"mersenne"` | Mersenne Twister PRNG |
-
-**Default**: `"hardware"` (if available)
-
-```python
-configure(rng_source='hardware')
-```
-
-## MPI Configuration
-
-### `mpi_enabled`
-
-Enable MPI distributed computing.
-
-| Type | Default |
-|------|---------|
-| Boolean | False |
-
-```python
-configure(mpi_enabled=True)
-```
-
-### `mpi_partition_strategy`
-
-State vector partitioning strategy.
-
-| Option | Description |
-|--------|-------------|
-| `"qubit"` | Partition by qubit index |
-| `"amplitude"` | Partition by amplitude index |
-| `"hybrid"` | Adaptive partitioning |
-
-**Default**: `"qubit"`
-
-```python
-configure(mpi_partition_strategy='hybrid')
-```
-
-## Complete Configuration Example
-
-### Python
-
-```python
-from moonlab import configure
-
-configure(
-    # Backend
-    backend='auto',
-    gpu_threshold=18,
-
-    # CPU
-    num_threads=8,
-    simd_level='auto',
-    cache_block_size=256 * 1024,
-
-    # GPU
-    gpu_enabled=True,
-    gpu_max_memory_gb=16.0,
-    gpu_threadgroup_size=256,
-    gpu_kernel_fusion=True,
-
-    # Precision
-    precision='double',
-
-    # Memory
-    memory_efficient=False,
-    auto_normalize=False,
-
-    # Algorithms
-    default_shots=1000,
-    parallel_hamiltonian=True,
-    dmrg_svd_method='gesdd',
-    dmrg_cutoff=1e-10,
-
-    # Logging
-    log_level='INFO',
-
-    # Random
-    seed=None,
-    rng_source='hardware'
-)
-```
-
-### Environment Variables
-
-```bash
-# .bashrc or .zshrc
-export MOONLAB_BACKEND=auto
-export MOONLAB_GPU_THRESHOLD=18
-export MOONLAB_NUM_THREADS=8
-export MOONLAB_PRECISION=double
-export MOONLAB_LOG_LEVEL=INFO
-```
-
-### Configuration File
-
-`~/.moonlab/config.toml`:
-
-```toml
-[backend]
-default = "auto"
-gpu_threshold = 18
-
-[cpu]
-num_threads = 8
-simd_level = "auto"
-cache_block_size = 262144
-
-[gpu]
-enabled = true
-max_memory_gb = 16.0
-threadgroup_size = 256
-kernel_fusion = true
-verify = false
-
-[precision]
-default = "double"
-
-[memory]
-efficient_mode = false
-auto_normalize = false
-pool_size_mb = 0
-
-[algorithms]
-default_shots = 1000
-parallel_hamiltonian = true
-dmrg_svd_method = "gesdd"
-dmrg_cutoff = 1e-10
-
-[logging]
-level = "INFO"
-file = ""
-error_verbosity = "normal"
-
-[random]
-seed = 0  # 0 = random
-source = "hardware"
-
-[mpi]
-enabled = false
-partition_strategy = "qubit"
-```
-
-## See Also
-
-- [Performance Tuning](../guides/performance-tuning.md) - Optimization guide
-- [GPU Acceleration](../guides/gpu-acceleration.md) - GPU configuration
-- [Troubleshooting](../troubleshooting.md) - Common issues
-
+## Language bindings
+
+The Python (`bindings/python/moonlab/`) and Rust
+(`bindings/rust/moonlab/`) bindings do not currently expose
+`qsim_config_t` directly.  Configuration is controlled through:
+
+- the environment variables above (preferred for Python / Rust
+  callers since they affect the loaded `libquantumsim` at init), and
+- module-specific dataclasses such as `moonlab.tdvp.TdvpConfig`,
+  `moonlab.mpdo.MpdoConfig`, and the equivalents in the Rust
+  surface, which pass typed structs into the algorithm modules.
+
+When the bindings need to influence the global C config they call
+`qsim_config_global` and the typed setters via ctypes / FFI rather
+than wrapping the struct opaquely.
+
+## See also
+
+- [Error codes](error-codes.md) -- meaning of the `int` return
+  codes from `qsim_config_*` functions.
+- [TDVP API](tdvp-api.md), [QGT API](qgt-api.md),
+  [MPDO API](mpdo-api.md) -- module-level config structs that layer
+  on top of `qsim_config_t`.
