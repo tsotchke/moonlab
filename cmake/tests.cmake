@@ -282,6 +282,18 @@
     add_test(NAME unit_tdvp_adaptive_energy_conservation
              COMMAND test_tdvp_adaptive_energy_conservation)
 
+    # Adaptive-bond TDVP step 6b (v0.4 / Phase 3B): imaginary-time
+    # ground-state convergence on the 8-site TFIM at g=1.  Runs DMRG
+    # for a reference energy at chi=32, then asserts that 30
+    # imag-time TDVP steps with the adaptive controller land within
+    # 5% of the DMRG ground state.
+    add_executable(test_tdvp_adaptive_tfim_ground
+                   tests/unit/test_tdvp_adaptive_tfim_ground.c)
+    target_link_libraries(test_tdvp_adaptive_tfim_ground
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_tfim_ground
+             COMMAND test_tdvp_adaptive_tfim_ground)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
