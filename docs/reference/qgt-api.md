@@ -2,12 +2,22 @@
 
 `src/algorithms/quantum_geometry/qgt.{c,h}` — momentum-space topology
 calculator for parameterised band Hamiltonians.  Computes Berry
-curvature, Chern numbers, Z_2 invariants, and the Fubini-Study metric
-on user-supplied 1D and 2D Bloch Hamiltonians.
+curvature [1], Chern numbers [2,3], Z_2 invariants [4,5], and the
+Fubini-Study metric [1] on user-supplied 1D and 2D Bloch
+Hamiltonians.
 
 Status: stable.  v0.3.0 expanded the module from a 2-band core to a
 full n-band path with 4-band TI primitives and three independent
 gauge-aware Chern integrators.
+
+For the full bibliography (Provost-Vallee 1980, Berry 1984,
+Fukui-Hatsugai-Suzuki 2005, Kane-Mele 2005, Bernevig-Hughes-Zhang
+2006, Kitaev 2001, Hofstadter 1976, TKNN 1982, Zak 1989,
+Fukui-Hatsugai 2007, Bianco-Resta 2011, Bernevig-Hughes 2013) and
+the derivations behind the three integrators see
+[`../research/quantum_geometry_tensor.md`](../research/quantum_geometry_tensor.md).
+For a hands-on walkthrough across six canonical models see
+[`../tutorials/topological_band_structure.md`](../tutorials/topological_band_structure.md).
 
 ## Concepts
 
@@ -203,17 +213,57 @@ regression-pinned reference data.
   `chern_qwz_parallel_transport`, `kane_mele_z2`, `bhz_z2`,
   `kitaev_chain_z2`, `hofstadter_chern`, plus the v0.2
   `qwz_chern`, `berry_grid_qwz`, `berry_grid_haldane`, and
-  `ssh_winding`.  Validated by
-  `bindings/python/tests/test_topology_v03.py`.
+  `ssh_winding`.  Curvature-grid variants `berry_grid_qwz_proj`
+  and `berry_grid_qwz_pt` (v0.3.2) return NumPy `float64` arrays
+  for plotting and integration cross-checks.  Validated by
+  `bindings/python/tests/test_topology.py`.
 - **Rust** (`moonlab::topology`): `qwz_chern`, `ssh_winding`,
-  and `ChernKpm`; the n-band v0.3 surface is reachable through
-  `moonlab_sys` for callers that need it.
+  `ChernKpm`, plus the v0.3.x n-band surface
+  (`chern_qwz_proj`, `chern_qwz_parallel_transport`,
+  `kane_mele_z2`, `bhz_z2`, `kitaev_chain_z2`,
+  `hofstadter_chern`).  See `bindings/rust/moonlab/examples/topology_demo.rs`.
 
 ## See also
 
-- `docs/research/quantum_geometry_tensor.md` — module theory and design
-  rationale.
-- `docs/tutorials/topological_band_structure.md` — full walkthrough
-  across SSH, QWZ, Haldane, Kane-Mele, BHZ, and Hofstadter with
-  primary-source citations.
-- `tests/unit/test_qgt_*.c` — minimal example callers.
+- [`../research/quantum_geometry_tensor.md`](../research/quantum_geometry_tensor.md):
+  module theory, derivations of the three integrators, and the
+  full reference bibliography.
+- [`../tutorials/topological_band_structure.md`](../tutorials/topological_band_structure.md):
+  full hands-on walkthrough across SSH, QWZ, Haldane, Kane-Mele,
+  BHZ, and Hofstadter with primary-source citations.
+- `tests/unit/test_qgt_*.c` (10 cases, all passing): minimal
+  example callers covering every integrator and model.
+- `examples/topological/qgt_phase_diagrams.py` and
+  `bindings/rust/moonlab/examples/topology_demo.rs`: Python and
+  Rust worked examples that reproduce every phase boundary in the
+  tutorial.
+
+## References
+
+The bracketed numbers in the body correspond to:
+
+[1] J. P. Provost and G. Vallee, "Riemannian structure on manifolds
+    of quantum states", *Commun. Math. Phys.* **76**, 289 (1980).
+    Berry-curvature / Fubini-Study metric definitions.
+
+[2] T. Fukui, Y. Hatsugai, and H. Suzuki, "Chern numbers in
+    discretized Brillouin zone", *J. Phys. Soc. Jpn.* **74**, 1674
+    (2005); arXiv:cond-mat/0503172.  Link-variable plaquette
+    construction used by `qgt_berry_grid` and `qgt_berry_grid_nband`.
+
+[3] D. J. Thouless, M. Kohmoto, M. P. Nightingale, and M. den Nijs,
+    "Quantized Hall conductance in a two-dimensional periodic
+    potential", *Phys. Rev. Lett.* **49**, 405 (1982).  TKNN
+    Diophantine equation for the Hofstadter Chern numbers.
+
+[4] C. L. Kane and E. J. Mele, "Z_2 topological order and the
+    quantum spin Hall effect", *Phys. Rev. Lett.* **95**, 146802
+    (2005).  Kane-Mele model and `qgt_z2_invariant` for 4-band TR
+    systems.
+
+[5] A. Y. Kitaev, "Unpaired Majorana fermions in quantum wires",
+    *Physics-Uspekhi* **44**, 131 (2001).
+    `qgt_z2_invariant_1d_bdg` Pfaffian construction.
+
+Additional sources used throughout the module documentation are
+listed in [`../research/quantum_geometry_tensor.md`](../research/quantum_geometry_tensor.md).
