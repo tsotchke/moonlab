@@ -24,6 +24,7 @@ from moonlab.tdvp import (
     TdvpAdaptiveBondConfig,
     TdvpConfig,
     TdvpEngine,
+    TdvpHistory,
     Variant,
     mpo_heisenberg,
     mpo_tfim,
@@ -183,10 +184,87 @@ def test_module_exports():
     assert hasattr(moonlab, "tdvp")
     from moonlab import tdvp as _t
     for name in [
-        "TdvpConfig", "TdvpEngine", "TdvpResult",
+        "TdvpConfig", "TdvpEngine", "TdvpResult", "TdvpHistory",
         "TdvpAdaptiveBondConfig", "EvolutionType",
         "Variant", "IntegratorType",
         "mpo_heisenberg", "mpo_tfim", "random_mps",
         "Mpo", "Mps",
     ]:
         assert hasattr(_t, name), f"moonlab.tdvp is missing {name}"
+
+
+# ---- History + evolve_to --------------------------------------------------
+
+
+def test_evolve_to_records_history():
+    n = 6
+    mpo = mpo_tfim(num_sites=n, J=1.0, h=1.0)
+    mps = random_mps(num_sites=n, chi_init=8, max_bond_dim=16)
+
+    cfg = TdvpConfig.adaptive(target_entropy_error=1e-3)
+    cfg.evolution_type = EvolutionType.IMAGINARY_TIME
+    cfg.dt = 0.05
+    cfg.adaptive_bond.chi_ceiling = 16
+    cfg.max_bond_dim = 16
+
+    engine = TdvpEngine(mps, mpo, cfg)
+    history = TdvpHistory(initial_capacity=8)
+    assert history.num_steps == 0
+    assert history.observables is None
+    assert history.bond_chi_history is None
+
+    engine.evolve_to(target_time=0.2, history=history)
+
+    assert history.num_steps >= 3
+    assert history.times.shape == (history.num_steps,)
+    assert history.energies.shape == (history.num_steps,)
+    assert history.norms.shape == (history.num_steps,)
+    # times must be strictly increasing.
+    diffs = np.diff(history.times)
+    assert np.all(diffs > 0), f"times not monotonic: {history.times}"
+    # Adaptive controller: per-bond chi recorded.
+    chi_hist = history.bond_chi_history
+    assert chi_hist is not None
+    assert chi_hist.shape == (history.num_steps, n - 1)
+    assert chi_hist.dtype == np.uint32
+    # observables column should still be unallocated.
+    assert history.observables is None
+
+
+def test_evolve_with_observable_records_callback_values():
+    n = 6
+    mpo = mpo_tfim(num_sites=n, J=1.0, h=1.0)
+    mps = random_mps(num_sites=n, chi_init=8, max_bond_dim=16)
+
+    cfg = TdvpConfig.adaptive(target_entropy_error=1e-3)
+    cfg.evolution_type = EvolutionType.IMAGINARY_TIME
+    cfg.dt = 0.05
+    cfg.adaptive_bond.chi_ceiling = 16
+    cfg.max_bond_dim = 16
+
+    engine = TdvpEngine(mps, mpo, cfg)
+    history = TdvpHistory(initial_capacity=8)
+
+    seen_times = []
+
+    def observable(_mps_handle: int, time: float) -> float:
+        seen_times.append(time)
+        # Trivial observable: the time itself.  Pins the value
+        # round-trip across the ctypes callback boundary.
+        return time
+
+    engine.evolve_with_observable(
+        target_time=0.2, history=history, observable_fn=observable,
+    )
+
+    assert history.num_steps >= 3
+    obs = history.observables
+    assert obs is not None
+    assert obs.shape == (history.num_steps,)
+    # Observable values must equal the recorded times to within
+    # roundoff (the callback returned the time verbatim).
+    assert np.allclose(obs, history.times, atol=1e-12), (
+        f"observables {obs.tolist()} != times {history.times.tolist()}"
+    )
+    # Callback was actually invoked at every step.
+    assert len(seen_times) >= history.num_steps

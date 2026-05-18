@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import ctypes
 import enum
+import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -67,6 +68,7 @@ __all__ = [
     "TdvpConfig",
     "TdvpResult",
     "TdvpEngine",
+    "TdvpHistory",
     "Mpo",
     "Mps",
     "mpo_heisenberg",
@@ -204,6 +206,46 @@ _lib.tdvp_result_clear.restype = None
 
 _lib.tdvp_bond_chi.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
 _lib.tdvp_bond_chi.restype = ctypes.c_uint32
+
+
+class _CTdvpHistory(ctypes.Structure):
+    _fields_ = [
+        ("times",             ctypes.POINTER(ctypes.c_double)),
+        ("energies",          ctypes.POINTER(ctypes.c_double)),
+        ("norms",             ctypes.POINTER(ctypes.c_double)),
+        ("observables",       ctypes.POINTER(ctypes.c_double)),
+        ("num_steps",         ctypes.c_uint32),
+        ("capacity",          ctypes.c_uint32),
+        ("bond_chi_history",  ctypes.POINTER(ctypes.c_uint32)),
+        ("n_bonds",           ctypes.c_uint32),
+    ]
+
+
+_lib.tdvp_history_create.argtypes = [ctypes.c_uint32]
+_lib.tdvp_history_create.restype = ctypes.POINTER(_CTdvpHistory)
+
+_lib.tdvp_history_free.argtypes = [ctypes.POINTER(_CTdvpHistory)]
+_lib.tdvp_history_free.restype = None
+
+_lib.tdvp_evolve_to.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_double,
+    ctypes.POINTER(_CTdvpHistory),
+]
+_lib.tdvp_evolve_to.restype = ctypes.c_int
+
+_ObservableCallbackC = ctypes.CFUNCTYPE(
+    ctypes.c_double, ctypes.c_void_p, ctypes.c_double, ctypes.c_void_p,
+)
+
+_lib.tdvp_evolve_to_with_observable.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_double,
+    ctypes.POINTER(_CTdvpHistory),
+    _ObservableCallbackC,
+    ctypes.c_void_p,
+]
+_lib.tdvp_evolve_to_with_observable.restype = ctypes.c_int
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +550,68 @@ class TdvpEngine:
         """
         return int(_lib.tdvp_bond_chi(self._handle, ctypes.c_uint32(bond)))
 
+    def evolve_to(self,
+                  target_time: float,
+                  history: Optional["TdvpHistory"] = None) -> None:
+        """Advance the state until the engine's clock reaches
+        @p target_time, recording each step into @p history when given.
+
+        Internally calls :c:func:`tdvp_evolve_to` and adjusts the last
+        ``dt`` so the final time lands exactly on @p target_time.
+        """
+        hist_ptr = history._struct_ptr if history is not None else None
+        rc = _lib.tdvp_evolve_to(
+            self._handle, ctypes.c_double(target_time), hist_ptr,
+        )
+        if rc != 0:
+            raise RuntimeError(f"tdvp_evolve_to failed (rc={rc})")
+
+    def evolve_with_observable(self,
+                                target_time: float,
+                                history: "TdvpHistory",
+                                observable_fn) -> None:
+        """Evolve to ``target_time``, recording one scalar observable
+        per step.
+
+        Args:
+            target_time:    Stop-time.
+            history:        Output history (must not be ``None``); each
+                            step's observable lands in
+                            ``history.observables``.
+            observable_fn:  Python callable ``(mps_handle: int,
+                            time: float) -> float`` invoked after every
+                            step.  The first argument is an opaque
+                            C ``tn_mps_state_t *`` handle (as an
+                            integer); pass it back into other Moonlab
+                            FFI calls that take a state pointer.
+        """
+        if history is None:
+            raise ValueError("history must not be None")
+
+        def _trampoline(mps_ptr, time, _user_data):
+            try:
+                return float(observable_fn(int(mps_ptr), float(time)))
+            except Exception:  # pragma: no cover  -- defensive
+                # Bubble the failure as 0.0; the C side has no exception
+                # channel, but Python re-raises after the C call returns.
+                _trampoline._error = sys.exc_info()
+                return 0.0
+
+        _trampoline._error = None
+        cb = _ObservableCallbackC(_trampoline)
+        rc = _lib.tdvp_evolve_to_with_observable(
+            self._handle,
+            ctypes.c_double(target_time),
+            history._struct_ptr,
+            cb,
+            None,
+        )
+        if _trampoline._error:
+            raise _trampoline._error[1].with_traceback(_trampoline._error[2])
+        if rc != 0:
+            raise RuntimeError(
+                f"tdvp_evolve_to_with_observable failed (rc={rc})")
+
     def _snapshot(self) -> TdvpResult:
         r = self._result
         n = int(r.n_bonds)
@@ -525,3 +629,96 @@ class TdvpEngine:
             step_time=float(r.step_time),
             bond_chi_distribution=arr,
         )
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+class TdvpHistory:
+    """Owned wrapper around a C ``tdvp_history_t``.
+
+    Records the per-step time / energy / norm trajectory of a TDVP
+    evolution, plus the per-bond chi distribution (when the adaptive
+    controller is enabled) and an optional scalar observable
+    (populated by
+    :meth:`TdvpEngine.evolve_with_observable`).  Pass an instance to
+    :meth:`TdvpEngine.evolve_to` or
+    :meth:`TdvpEngine.evolve_with_observable`; the buffers grow
+    automatically as new steps land.
+    """
+
+    __slots__ = ("_struct_ptr",)
+
+    def __init__(self, initial_capacity: int = 64):
+        ptr = _lib.tdvp_history_create(ctypes.c_uint32(initial_capacity))
+        if not ptr:
+            raise MemoryError("tdvp_history_create returned NULL")
+        self._struct_ptr = ptr
+
+    def __del__(self) -> None:
+        p = getattr(self, "_struct_ptr", None)
+        if p:
+            _lib.tdvp_history_free(p)
+            self._struct_ptr = None
+
+    @property
+    def num_steps(self) -> int:
+        return int(self._struct_ptr.contents.num_steps)
+
+    @property
+    def times(self) -> np.ndarray:
+        n = self.num_steps
+        if n == 0:
+            return np.zeros(0, dtype=np.float64)
+        return np.ctypeslib.as_array(
+            self._struct_ptr.contents.times, shape=(n,)).copy()
+
+    @property
+    def energies(self) -> np.ndarray:
+        n = self.num_steps
+        if n == 0:
+            return np.zeros(0, dtype=np.float64)
+        return np.ctypeslib.as_array(
+            self._struct_ptr.contents.energies, shape=(n,)).copy()
+
+    @property
+    def norms(self) -> np.ndarray:
+        n = self.num_steps
+        if n == 0:
+            return np.zeros(0, dtype=np.float64)
+        return np.ctypeslib.as_array(
+            self._struct_ptr.contents.norms, shape=(n,)).copy()
+
+    @property
+    def observables(self) -> Optional[np.ndarray]:
+        """Per-step scalar observable, or ``None`` if no
+        ``evolve_with_observable`` step has recorded one yet."""
+        struct = self._struct_ptr.contents
+        if not struct.observables:
+            return None
+        n = struct.num_steps
+        if n == 0:
+            return np.zeros(0, dtype=np.float64)
+        return np.ctypeslib.as_array(struct.observables, shape=(n,)).copy()
+
+    @property
+    def bond_chi_history(self) -> Optional[np.ndarray]:
+        """Per-step per-bond chi snapshot, shape ``(num_steps,
+        n_bonds)``; ``None`` if the adaptive controller never recorded
+        a distribution."""
+        struct = self._struct_ptr.contents
+        if not struct.bond_chi_history or struct.n_bonds == 0:
+            return None
+        n_steps = int(struct.num_steps)
+        n_bonds = int(struct.n_bonds)
+        if n_steps == 0:
+            return np.zeros((0, n_bonds), dtype=np.uint32)
+        flat = np.ctypeslib.as_array(
+            struct.bond_chi_history,
+            shape=(int(struct.capacity) * n_bonds,),
+        )
+        # Only the first num_steps rows are populated; copy out the
+        # active region so the buffer survives history reuse / free.
+        return flat[: n_steps * n_bonds].reshape(n_steps, n_bonds).copy()

@@ -7,8 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(No unreleased changes since v0.4.1.)
+
+## [0.4.1] - 2026-05-18
+
+The v0.4 audit-driven point release: dead-code cleanup on the public
+TDVP header, an end-to-end stable-ABI TDVP surface for downstream
+binding consumers, the `tdvp_history_t.observables` column wired
+through new opt-in entry points (with Python + Rust binding parity), a
+real-time perf gate that drops one full-tensor traversal per two-site
+update, and a focused second-SVD consistency test covering the
+adaptive-bond truncation branch.  Full test gauntlet stays green:
+115/115 ctest, 181/181 pytest, 96/96 cargo test.
+
 ### Added
 
+- **Stable-ABI TDVP wrapper** (`src/applications/moonlab_tdvp_export.c`,
+  `src/applications/moonlab_export.h`): new opaque
+  `moonlab_tdvp_engine_t` handle plus convenience constructors
+  `moonlab_tdvp_create_heisenberg` / `moonlab_tdvp_create_tfim`,
+  driver entries `moonlab_tdvp_step` / `moonlab_tdvp_evolve_to`,
+  accessors `moonlab_tdvp_current_{time,energy,norm,max_bond_dim}` /
+  `moonlab_tdvp_num_bonds` / `moonlab_tdvp_bond_chi`, history accessors
+  `moonlab_tdvp_history_{num_steps,get_step,get_bond_chi}`, and
+  `moonlab_tdvp_engine_free`.  Bumps `MOONLAB_ABI_VERSION_MINOR` from
+  2 to 3; ABI smoke test in `tests/abi/test_moonlab_export_abi.c`
+  exercises the full lifecycle (TFIM imag-time adaptive + Heisenberg
+  legacy paths).
+- **Observable-recording evolve surface**.  New
+  `tdvp_history_add_with_observable` and
+  `tdvp_evolve_to_with_observable` (with `observable_value_callback_t`
+  typedef) record a per-step scalar measurement into
+  `tdvp_history_t.observables`, which was declared but unwired in
+  v0.4.0.  Both ship in the C library, the Python binding
+  (`TdvpHistory`, `TdvpEngine.evolve_to`,
+  `TdvpEngine.evolve_with_observable`), and the Rust binding
+  (`TdvpHistory`, `TdvpEngine::evolve_to`,
+  `TdvpEngine::evolve_with_observable`) with pytest and cargo tests
+  pinning the round-trip.
 - **Rust TDVP wrapper** (`bindings/rust/moonlab/src/tdvp.rs`):
   closes binding parity for v0.4.  `moonlab::tdvp` re-exports
   `Mpo::heisenberg`, `Mps::random`, `TdvpEngine::new`, and the
@@ -62,6 +98,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/reference/error-codes.md` absorbs its missing enums
   (`collective_error_t`, `moonlab_eshkol_status_t`) plus the
   "Adding a new error enum" convention block.  Commit 5981236.
+
+### Changed
+
+- **TDVP Frobenius renormalisation gated on imag-time only**
+  (`src/algorithms/tensor_network/tdvp.c:772-781`).  The
+  `tensor_norm_frobenius` + in-place division loop that protects
+  the imag-time path from `exp(-H dt)` underflow was firing on every
+  two-site update regardless of evolution type.  Real-time evolution
+  is norm-preserving by unitarity (the Krylov projection in
+  `lanczos_expm` is unitary on real-time inputs), so the renorm is
+  now skipped on the real-time path -- one full-tensor traversal
+  saved per two-site update.  All five v0.4 acceptance tests stay
+  green.
+
+### Fixed
+
+- **`tdvp_evolve_to`, `tdvp_evolve_with_observables`, and
+  `tdvp_single_step` zero-init their `tdvp_result_t`** before passing
+  to `tdvp_step`.  The adaptive branch in `tdvp_step` frees
+  `result->bond_chi_distribution` when its size doesn't match the
+  engine's bond count; stack-garbage initial values would either
+  crash on free or leak a buffer.  Latent since v0.4.0; the legacy
+  fixed-bond path was the only caller and never triggered it, but
+  the new ABI surface in this release does.  All three now also
+  call `tdvp_result_clear` before returning so the buffer never
+  leaks across long evolutions.
+- **Stale `MOONLAB_VERSION_*` macros removed from
+  `src/utils/config.h:26-29`** (replaced with a comment pointing at
+  the cmake-generated `moonlab_build_info.h`).  The hand-edited
+  `"0.1.0"` redefinition shadowed the CMake-generated value
+  depending on include order, producing a manifest-version test
+  flake.
+
+### Removed
+
+- **Dead STT public declarations** in
+  `src/algorithms/tensor_network/tdvp.h`.  `stt_params_t`,
+  `mpo_stt_create`, and `tdvp_evolve_with_stt` were aspirational
+  v0.5+ scope inherited from the skyrmion module spec: STT is a
+  non-Hermitian Landau-Lifshitz-Gilbert problem that does not fit
+  the Hermitian-TDVP framework these declarations sat in.  Removed
+  from the public header rather than shipping broken signatures.
+  The stranded `#include "lattice_2d.h"` also dropped.
+
+### Tests
+
+- `tests/unit/test_tdvp_adaptive_second_svd.c`: drives the
+  entropy-feedback PID into `target_chi < first->bond_dim` so the
+  second SVD pass in `tdvp_truncate_bond` actually fires; pins
+  bond-chi never exceeds `chi_ceiling`, controller settles between
+  the first and second halves of the run, and the final state's
+  energy + truncation error stay finite.  Branch-coverage smoke
+  for the otherwise-implicit second-pass code path documented at
+  `tdvp.c:680-689`.
 
 ## [0.4.0] - 2026-05-18
 

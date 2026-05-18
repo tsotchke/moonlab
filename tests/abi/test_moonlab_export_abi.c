@@ -405,6 +405,151 @@ int main(void) {
         fprintf(stdout, "moonlab_ca_mps_gauge_warmstart dlsym OK\n");
     }
 
+    /* v0.4.1 adaptive-bond TDVP ABI: dlsym every entry point and run
+     * a TFIM imag-time short evolve end-to-end to pin the full create
+     * -> step -> history -> free lifecycle. */
+    typedef void* (*tdvp_create_tfim_fn)(uint32_t, double, double, uint32_t,
+                                          uint32_t, double, int, double);
+    typedef int   (*tdvp_step_fn)(void*);
+    typedef int   (*tdvp_evolve_to_fn)(void*, double);
+    typedef double (*tdvp_dbl_fn)(const void*);
+    typedef uint32_t (*tdvp_u32_fn)(const void*);
+    typedef uint32_t (*tdvp_bond_fn)(const void*, uint32_t);
+    typedef int   (*tdvp_hist_step_fn)(const void*, uint32_t,
+                                        double*, double*, double*);
+    typedef int   (*tdvp_hist_chi_fn)(const void*, uint32_t,
+                                       uint32_t*, uint32_t);
+    typedef void  (*tdvp_free_fn)(void*);
+    typedef void* (*tdvp_create_heis_fn)(uint32_t, double, double, double,
+                                          uint32_t, uint32_t, double,
+                                          int, double);
+
+    tdvp_create_tfim_fn create_tfim =
+        (tdvp_create_tfim_fn)dlsym(h, "moonlab_tdvp_create_tfim");
+    tdvp_create_heis_fn create_heis =
+        (tdvp_create_heis_fn)dlsym(h, "moonlab_tdvp_create_heisenberg");
+    tdvp_step_fn step_fn =
+        (tdvp_step_fn)dlsym(h, "moonlab_tdvp_step");
+    tdvp_evolve_to_fn evolve_to =
+        (tdvp_evolve_to_fn)dlsym(h, "moonlab_tdvp_evolve_to");
+    tdvp_dbl_fn cur_time =
+        (tdvp_dbl_fn)dlsym(h, "moonlab_tdvp_current_time");
+    tdvp_dbl_fn cur_energy =
+        (tdvp_dbl_fn)dlsym(h, "moonlab_tdvp_current_energy");
+    tdvp_dbl_fn cur_norm =
+        (tdvp_dbl_fn)dlsym(h, "moonlab_tdvp_current_norm");
+    tdvp_u32_fn cur_chi =
+        (tdvp_u32_fn)dlsym(h, "moonlab_tdvp_current_max_bond_dim");
+    tdvp_u32_fn nbonds =
+        (tdvp_u32_fn)dlsym(h, "moonlab_tdvp_num_bonds");
+    tdvp_bond_fn bond_chi =
+        (tdvp_bond_fn)dlsym(h, "moonlab_tdvp_bond_chi");
+    tdvp_u32_fn hist_steps =
+        (tdvp_u32_fn)dlsym(h, "moonlab_tdvp_history_num_steps");
+    tdvp_hist_step_fn hist_step =
+        (tdvp_hist_step_fn)dlsym(h, "moonlab_tdvp_history_get_step");
+    tdvp_hist_chi_fn hist_chi =
+        (tdvp_hist_chi_fn)dlsym(h, "moonlab_tdvp_history_get_bond_chi");
+    tdvp_free_fn engine_free =
+        (tdvp_free_fn)dlsym(h, "moonlab_tdvp_engine_free");
+
+    if (!create_tfim || !create_heis || !step_fn || !evolve_to ||
+        !cur_time || !cur_energy || !cur_norm || !cur_chi ||
+        !nbonds || !bond_chi || !hist_steps || !hist_step ||
+        !hist_chi || !engine_free) {
+        fprintf(stderr,
+                "dlsym for one or more moonlab_tdvp_* symbols failed\n");
+        failures++;
+    } else {
+        /* Drive a TFIM imag-time evolution at critical g = 1 with the
+         * adaptive controller on.  Just three steps -- this is an ABI
+         * smoke, not a physics test (the physics is covered by
+         * tests/unit/test_tdvp_adaptive_tfim_ground.c). */
+        void *engine = create_tfim(
+            /*N=*/8, /*J=*/1.0, /*h=*/1.0,
+            /*chi_init=*/8, /*chi_max=*/32, /*dt=*/0.05,
+            /*imag_time=*/1, /*adaptive_target_entropy=*/1e-3);
+        if (!engine) {
+            fprintf(stderr, "moonlab_tdvp_create_tfim returned NULL\n");
+            failures++;
+        } else {
+            int rc = step_fn(engine);
+            if (rc != 0) {
+                fprintf(stderr, "moonlab_tdvp_step rc=%d\n", rc);
+                failures++;
+            }
+            rc = evolve_to(engine, cur_time(engine) + 0.1);
+            if (rc != 0) {
+                fprintf(stderr, "moonlab_tdvp_evolve_to rc=%d\n", rc);
+                failures++;
+            }
+            uint32_t steps = hist_steps(engine);
+            if (steps == 0) {
+                fprintf(stderr, "tdvp history empty after step+evolve\n");
+                failures++;
+            }
+            double t = 0, e = 0, n = 0;
+            if (hist_step(engine, 0, &t, &e, &n) != 0) {
+                fprintf(stderr, "hist_step(0) failed\n");
+                failures++;
+            }
+            uint32_t nb = nbonds(engine);
+            if (nb != 7) {
+                fprintf(stderr, "nbonds expected 7, got %u\n", nb);
+                failures++;
+            }
+            /* Bond-chi readback. */
+            uint32_t buf[7] = {0};
+            if (hist_chi(engine, steps - 1, buf, 7) != 0) {
+                fprintf(stderr, "hist_chi readback failed\n");
+                failures++;
+            }
+            /* Adaptive controller is on; at least one bond should have
+             * received a non-zero chi assignment. */
+            uint32_t any_nonzero = 0;
+            for (uint32_t b = 0; b < 7; b++) any_nonzero |= buf[b];
+            if (any_nonzero == 0) {
+                fprintf(stderr,
+                        "all per-bond chi readings are zero with "
+                        "adaptive controller enabled\n");
+                failures++;
+            }
+            /* Current-energy / norm should be finite. */
+            double E = cur_energy(engine);
+            double N = cur_norm(engine);
+            uint32_t MaxChi = cur_chi(engine);
+            if (!(E == E) || !(N == N) || MaxChi == 0) {
+                fprintf(stderr,
+                        "current accessors: E=%g N=%g MaxChi=%u\n",
+                        E, N, MaxChi);
+                failures++;
+            }
+            engine_free(engine);
+
+            /* Also exercise Heisenberg constructor + legacy
+             * (adaptive_target_entropy = 0) path. */
+            void *eh = create_heis(/*N=*/6, /*J=*/1.0, /*Delta=*/1.0,
+                                    /*h=*/0.0, /*chi_init=*/8,
+                                    /*chi_max=*/16, /*dt=*/0.05,
+                                    /*imag_time=*/0,
+                                    /*adaptive=*/0.0);
+            if (!eh) {
+                fprintf(stderr,
+                        "moonlab_tdvp_create_heisenberg (legacy) returned NULL\n");
+                failures++;
+            } else {
+                if (step_fn(eh) != 0) {
+                    fprintf(stderr, "Heisenberg legacy step failed\n");
+                    failures++;
+                }
+                engine_free(eh);
+            }
+            if (!failures) {
+                fprintf(stdout, "moonlab_tdvp_* ABI smoke OK\n");
+            }
+        }
+    }
+
     dlclose(h);
 
     if (failures) {

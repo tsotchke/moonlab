@@ -110,15 +110,27 @@ void tdvp_history_free(tdvp_history_t *hist) {
     free(hist);
 }
 
-void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
-    if (!hist || !result) return;
-
-    // Expand if needed
+/* Append a row to the history's scalar columns and the lazy
+ * bond-chi snapshot.  Shared by tdvp_history_add and
+ * tdvp_history_add_with_observable; the observable column is
+ * handled by the caller because it has its own lazy-allocation
+ * trigger. */
+static void tdvp_history_grow_and_record(tdvp_history_t *hist,
+                                          const tdvp_result_t *result) {
     if (hist->num_steps >= hist->capacity) {
         uint32_t new_cap = hist->capacity * 2;
         hist->times = (double *)realloc(hist->times, new_cap * sizeof(double));
         hist->energies = (double *)realloc(hist->energies, new_cap * sizeof(double));
         hist->norms = (double *)realloc(hist->norms, new_cap * sizeof(double));
+        if (hist->observables) {
+            hist->observables = (double *)realloc(
+                hist->observables, new_cap * sizeof(double));
+            /* Zero-fill the freshly grown tail so unrecorded slots
+             * read as 0 rather than undefined. */
+            for (uint32_t i = hist->capacity; i < new_cap; i++) {
+                hist->observables[i] = 0.0;
+            }
+        }
         if (hist->bond_chi_history && hist->n_bonds > 0) {
             hist->bond_chi_history = (uint32_t *)realloc(
                 hist->bond_chi_history,
@@ -149,7 +161,35 @@ void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
             }
         }
     }
+}
 
+void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
+    if (!hist || !result) return;
+    tdvp_history_grow_and_record(hist, result);
+    /* Legacy entry point: do not touch the observables column.  If
+     * it has been lazily allocated by a prior
+     * tdvp_history_add_with_observable call, leave this step's slot
+     * at zero -- callers can interleave the two add functions and
+     * tell which steps recorded an observable by checking that the
+     * observables pointer is non-NULL. */
+    hist->num_steps++;
+}
+
+void tdvp_history_add_with_observable(tdvp_history_t *hist,
+                                       const tdvp_result_t *result,
+                                       double observable) {
+    if (!hist || !result) return;
+    tdvp_history_grow_and_record(hist, result);
+
+    /* Lazy-allocate the observables column on first use.  Zero-fill
+     * any earlier steps that were recorded without an observable so
+     * the column stays aligned with `num_steps`. */
+    if (!hist->observables) {
+        hist->observables = (double *)calloc(hist->capacity, sizeof(double));
+    }
+    if (hist->observables) {
+        hist->observables[hist->num_steps] = observable;
+    }
     hist->num_steps++;
 }
 
@@ -975,6 +1015,15 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
                     tdvp_history_t *history) {
     if (!engine) return -1;
 
+    /* Zero-init: tdvp_step's adaptive-bond branch dereferences and
+     * frees result->bond_chi_distribution if it isn't NULL, so we
+     * must not pass it stack garbage on the first iteration.  The
+     * struct is reused across iterations -- tdvp_step realloc's in
+     * place if the bond count is stable, which it is for an engine
+     * with a fixed MPS. */
+    tdvp_result_t result = {0};
+    int rc = 0;
+
     while (engine->current_time < target_time) {
         // Adjust dt for last step if needed
         double remaining = target_time - engine->current_time;
@@ -982,9 +1031,9 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
             engine->config.dt = remaining;
         }
 
-        tdvp_result_t result;
         if (tdvp_step(engine, &result) != 0) {
-            return -1;
+            rc = -1;
+            break;
         }
 
         if (history) {
@@ -998,7 +1047,8 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
         }
     }
 
-    return 0;
+    tdvp_result_clear(&result);
+    return rc;
 }
 
 // ============================================================================
@@ -1019,11 +1069,15 @@ int tdvp_single_step(tn_mps_state_t *mps,
     tdvp_engine_t *engine = tdvp_engine_create(mps, (mpo_t *)mpo, &cfg);
     if (!engine) return -1;
 
-    tdvp_result_t result;
+    /* Zero-init mirrors the contract in tdvp_evolve_to: the adaptive
+     * branch in tdvp_step may free this result's bond_chi_distribution
+     * if non-NULL. */
+    tdvp_result_t result = {0};
     int ret = tdvp_step(engine, &result);
 
     if (energy) *energy = result.energy;
 
+    tdvp_result_clear(&result);
     tdvp_engine_free(engine);
     return ret;
 }
@@ -1040,6 +1094,8 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
     if (!engine) return -1;
 
     uint32_t step_count = 0;
+    tdvp_result_t result = {0};
+    int rc = 0;
 
     while (engine->current_time < target_time) {
         double remaining = target_time - engine->current_time;
@@ -1047,22 +1103,59 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
             engine->config.dt = remaining;
         }
 
-        tdvp_result_t result;
         if (tdvp_step(engine, &result) != 0) {
-            return -1;
+            rc = -1;
+            break;
         }
 
         step_count++;
 
-        if (callback && (step_count % measure_interval == 0)) {
+        if (callback && measure_interval > 0
+            && (step_count % measure_interval == 0)) {
             callback(engine->mps, engine->current_time, user_data);
         }
     }
 
     // Final measurement
-    if (callback) {
+    if (rc == 0 && callback) {
         callback(engine->mps, engine->current_time, user_data);
     }
 
-    return 0;
+    tdvp_result_clear(&result);
+    return rc;
+}
+
+int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
+                                    double target_time,
+                                    tdvp_history_t *history,
+                                    observable_value_callback_t observable_fn,
+                                    void *user_data) {
+    if (!engine || !history) return -1;
+
+    tdvp_result_t result = {0};
+    int rc = 0;
+
+    while (engine->current_time < target_time) {
+        double remaining = target_time - engine->current_time;
+        if (remaining < engine->config.dt) {
+            engine->config.dt = remaining;
+        }
+
+        if (tdvp_step(engine, &result) != 0) {
+            rc = -1;
+            break;
+        }
+
+        if (observable_fn) {
+            double obs = observable_fn(engine->mps,
+                                        engine->current_time,
+                                        user_data);
+            tdvp_history_add_with_observable(history, &result, obs);
+        } else {
+            tdvp_history_add(history, &result);
+        }
+    }
+
+    tdvp_result_clear(&result);
+    return rc;
 }
