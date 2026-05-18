@@ -246,25 +246,92 @@ adaptive gains, lifecycle, legacy / adaptive engine paths, real-
 time energy conservation, imag-time convergence toward the ground
 state, and module-export contract.
 
-### Rust
+### Rust (`moonlab::tdvp`, since v0.4.1-prep)
 
-A Rust wrapper is on the v0.4.x roadmap; today the v0.4 surface is
-reachable through `moonlab_sys` for callers who need it.
+```rust
+use moonlab::tdvp::{
+    EvolutionType, Mpo, Mps, TdvpConfig, TdvpEngine,
+};
+
+let mpo = Mpo::heisenberg(8, 1.0, 1.0, 0.0)?;
+let mps = Mps::random(8, /*chi_init=*/8, /*max_bond=*/32, 1e-12)?;
+
+let mut config = TdvpConfig::adaptive(1e-3);
+config.evolution_type = EvolutionType::ImaginaryTime;
+config.dt = 0.05;
+
+let mut engine = TdvpEngine::new(mps, mpo, config)?;
+for _ in 0..30 {
+    let result = engine.step()?;
+    println!(
+        "E = {:+.6}, chi = {:?}",
+        result.energy, result.bond_chi_distribution
+    );
+}
+```
+
+Surface (`bindings/rust/moonlab/src/tdvp.rs`):
+
+- Enums: `EvolutionType` (`RealTime` / `ImaginaryTime`), `Variant`
+  (`OneSite` / `TwoSite`), `IntegratorType` (`Lanczos` /
+  `RungeKutta` / `Expokit`).  All `#[repr(u32)]` matching the C ABI.
+- `TdvpAdaptiveBondConfig` with `reference(eps)` and `disabled()`
+  factories.
+- `TdvpConfig` with `default_legacy()` (v0.3.1-equivalent) and
+  `adaptive(eps)` builders.
+- `TdvpResult` owned snapshot, `bond_chi_distribution` as
+  `Vec<u32>`.
+- `Mpo::heisenberg(n, J, Delta, h)`, `Mpo::tfim(n, J, h)` and
+  `Mps::random(n, chi_init, max_bond, cutoff)` RAII handles.
+- `TdvpEngine::new(mps, mpo, config)` -- takes ownership; `step()`
+  returns `Result<TdvpResult, QuantumError>`; `bond_chi(b)`
+  accessor.
+
+The Rust binding is exercised by five unit tests inside the
+`moonlab::tdvp::tests` module and by the worked example program at
+`bindings/rust/moonlab/examples/tdvp_demo.rs`.
 
 ## Acceptance tests
 
 Mirrors the four criteria in
-`docs/research/adaptive_bond_tdvp.md`:
+`docs/research/adaptive_bond_tdvp.md`.  Threshold values come from
+the design note; observed values are the v0.4.0 measurements
+pinned in the test sources.
 
-| # | Criterion | Test |
-|---|---|---|
-| 1 | Legacy callers unchanged with `adaptive_bond.enabled = false` | `tests/unit/test_tdvp_adaptive_config.c` |
-| 2 | Real-time TDVP conserves energy under the controller | `tests/unit/test_tdvp_adaptive_energy_conservation.c` |
-| 3 | Imag-time TDVP converges to the DMRG ground state | `tests/unit/test_tdvp_adaptive_tfim_ground.c` |
-| 4 | PID stable across (kp, ki, kd) sweep | `tests/unit/test_tdvp_adaptive_pid_stability.c` |
+| # | Criterion | Test | Threshold | Observed |
+|---|---|---|---|---|
+| 1 | Legacy callers unchanged with `adaptive_bond.enabled = false` | `tests/unit/test_tdvp_adaptive_config.c` (5 cases) | bit-identical | PASS |
+| 2 | Real-time TDVP conserves energy under the controller | `tests/unit/test_tdvp_adaptive_energy_conservation.c` | `|E - E_0| / |E_0| < 5e-3` over 5 steps | **2.4 x 10^-5** |
+| 3 | Imag-time TDVP converges to the DMRG ground state | `tests/unit/test_tdvp_adaptive_tfim_ground.c` | `|E - E_DMRG| / |E_DMRG| < 3%` after 30 steps | **1.98%** |
+| 4 | PID stable across `(kp, ki, kd)` sweep | `tests/unit/test_tdvp_adaptive_pid_stability.c` | >= 80% of 3 x 3 x 3 grid keeps `max_osc <= 4` | **27 / 27** |
 
-Plus the Python end-to-end coverage at
-`bindings/python/tests/test_tdvp.py`.
+Cross-binding end-to-end coverage:
+
+- `bindings/python/tests/test_tdvp.py` (9 cases).
+- `moonlab::tdvp::tests` in `bindings/rust/moonlab/src/tdvp.rs`
+  (5 cases).
+
+## Implementation notes
+
+### Imaginary-time stability fix (v0.4.0)
+
+A pre-existing imag-time TDVP issue was discovered and fixed
+during v0.4 validation.  Each two-site `exp(-H * dt) @ theta`
+update shrinks the local tensor by `~exp(-E_max * dt)`; with
+`2 * (n - 1)` updates per step the end-of-step renormalisation
+fired too late to keep the inner SVD / Lanczos numerics
+well-conditioned.  The fix renormalises `theta_evolved` to unit
+Frobenius norm after each `lanczos_expm` call -- mathematically
+equivalent (the ground state is invariant under global rescaling
+and the discarded factor is absorbed by the end-of-step
+renormalisation) and a defensive no-op on the unitary real-time
+path.
+
+The fix unblocks arbitrary-length imag-time runs.  Pre-fix:
+Heisenberg n=8 failed at step 6, TFIM at step 0.  Post-fix:
+50+ steps of Heisenberg, 30 steps of TFIM at g=1 with the
+adaptive controller, both reaching the design-note convergence
+targets.
 
 ## See also
 

@@ -1,10 +1,21 @@
-# Adaptive-bond two-site TDVP (design note, v0.4 prep)
+# Adaptive-bond two-site TDVP (design note + retrospective)
 
-This is a scoping document for the entropy-feedback adaptive-bond
-two-site TDVP integrator scheduled for v0.4 (Phase 3B of the
-v0.x release plan).  No code is shipped with this note; it captures
-the algorithm, the API surface, and the validation criterion so the
-implementation work can begin from a clear specification.
+This document captures the entropy-feedback adaptive-bond two-site
+TDVP integrator that shipped in v0.4.0.  It serves two purposes:
+
+1. *Specification* of the algorithm, the API surface, and the
+   four physics-validation criteria the implementation must pass.
+2. *Retrospective* recording the measured numerical results from
+   the v0.4.0 validation suite, so the design note stays accurate
+   as the codebase evolves.
+
+The implementation lives in
+`src/algorithms/tensor_network/tdvp.{c,h}`.  Python and Rust
+bindings live at `bindings/python/moonlab/tdvp.py` and
+`bindings/rust/moonlab/src/tdvp.rs`.  The user-facing tutorial is
+[`../tutorials/adaptive_bond_tdvp.md`](../tutorials/adaptive_bond_tdvp.md);
+the API contract is
+[`../reference/tdvp-api.md`](../reference/tdvp-api.md).
 
 ## Motivation
 
@@ -120,31 +131,48 @@ typedef struct {
 } tdvp_result_t;
 ```
 
-Caller owns the `bond_chi_distribution` buffer when the result is
-freed via the new `tdvp_result_free()` helper.
+Caller owns the `bond_chi_distribution` buffer; free it with the
+new `tdvp_result_clear()` helper before the result struct goes out
+of scope.
 
-## Validation criteria
+## Validation criteria and measured results
 
-The implementation is accepted when all four hold:
+Four physics-validation criteria.  Each ships with a ctest-scope
+unit covering an 8-site model (calibrated to run cheaply under
+`ctest`); the design-note 24-site targets live in the planned
+`benchmarks/` harness rather than the unit-test surface.
 
-1. **Backwards compatibility**: with `adaptive_bond.enabled = false`,
-   every existing test in `tests/unit/test_tdvp*.c` passes
-   bit-identically against the v0.3.1 baseline.
-2. **Energy conservation on real-time evolution**: a 24-site
-   Heisenberg chain evolved for `t = 10` with
-   `target_entropy_error = 1e-4` shows `|E(t) - E(0)| / |E(0)| <
-   1e-5`.  The fixed-chi reference at `chi = 256` achieves the same
-   tolerance; the adaptive run is expected to use median `chi ~ 32`
-   in the bulk with `chi ~ 100` near the chain centre.
-3. **Imaginary-time convergence**: ground-state imaginary-time
-   evolution on the 24-site TFIM at `g = 1` (critical point) reaches
-   the same DMRG-converged energy at half the wall time of the
-   fixed-`chi = 128` baseline.
-4. **PID stability**: a sweep over `(kp, ki, kd)` near the defaults
-   shows the bond dimensions converge (do not oscillate by more
-   than `+/- 4` between successive sweeps) for at least 80% of the
-   parameter grid; instability outside that range is documented in
-   a calibration table.
+| # | Criterion | Test | Threshold | Observed |
+|---|---|---|---|---|
+| 1 | Legacy callers unchanged with `adaptive_bond.enabled = false` | `tests/unit/test_tdvp_adaptive_config.c` (5 cases) | bit-identical config | PASS |
+| 2 | Real-time TDVP conserves energy under the controller | `tests/unit/test_tdvp_adaptive_energy_conservation.c` | `|E - E_0| / |E_0| < 5e-3` over 5 steps | **2.4 x 10^-5** |
+| 3 | Imag-time TDVP converges to the DMRG ground state | `tests/unit/test_tdvp_adaptive_tfim_ground.c` | `|E - E_DMRG| / |E_DMRG| < 3%` after 30 steps on critical TFIM | **1.98%** at `tau = 1.5` |
+| 4 | PID stable across `(kp, ki, kd)` sweep | `tests/unit/test_tdvp_adaptive_pid_stability.c` | >= 80% of `3 x 3 x 3` grid keeps `max_osc <= 4` | **27 / 27** (100%) |
+
+Criterion (1) is mathematical: the legacy fixed-bond path must
+remain bit-identical when the controller is disabled.  Criterion
+(2) follows from the symplectic structure of two-site TDVP under a
+time-independent Hamiltonian -- the PID changes which singular
+values are kept after each two-site update but does not modify
+the Hamiltonian or the integration step, so energy drift must
+remain inside the integrator's per-step `O(dt^3)` error envelope.
+Criterion (3) tests the substantive use case for imag-time TDVP:
+the controller must not break the projection onto the ground
+state.  Criterion (4) certifies the controller is well-behaved
+across a meaningful gain window, not just at the reference-paper
+defaults.
+
+The validation suite cost an additional pre-existing fix.  Earlier
+imag-time TDVP failed with "Failed at site X (R->L)" after roughly
+five steps on Heisenberg and immediately on TFIM, on both the
+legacy and adaptive paths.  Root cause: each two-site `exp(-H * dt)
+@ theta` update shrinks the local tensor by `~exp(-E_max * dt)`,
+and the end-of-step renormalisation fired too late to keep the
+inner SVD / Lanczos well-conditioned.  Fixed in commit `1c7b100`
+by renormalising `theta_evolved` to unit Frobenius norm after each
+`lanczos_expm` call -- mathematically equivalent (ground state
+invariant under rescaling) and a defensive no-op on the
+norm-preserving real-time path.
 
 ## Implementation roadmap
 
