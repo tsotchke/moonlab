@@ -73,6 +73,15 @@ try:
 except (ImportError, AttributeError, OSError):
     _MPDO_AVAILABLE = False
 
+# Adaptive-bond time-dependent variational principle (since v0.4).
+# Same optional-import policy as MPDO.
+try:
+    from . import tdvp as _tdvp_module
+    tdvp = _tdvp_module
+    _TDVP_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _TDVP_AVAILABLE = False
+
 # Clifford-Assisted MPS + var-D + gauge-aware warmstart + Z2 LGT.
 # Optional import: a stripped libquantumsim build without these
 # entry points (e.g. WASM size-trimmed) should still import the
@@ -132,3 +141,5 @@ if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
 if _MPDO_AVAILABLE:
     __all__ += ['Mpdo']
+if _TDVP_AVAILABLE:
+    __all__ += ['tdvp']
