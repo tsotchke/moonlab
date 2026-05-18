@@ -1,95 +1,74 @@
-# Gate Reference
+# Gate reference
 
-Quick reference for quantum gates.
+Quick reference for Moonlab's state-vector gate API.  Every entry
+pins the C symbol to the declaration in
+[`src/quantum/gates.h`](../../src/quantum/gates.h); every signature
+takes a `quantum_state_t *` and returns a `qs_error_t` (see
+[error-codes.md](error-codes.md) for the return-code convention).
+Mathematical conventions match
+[Quantum gates (concepts)](../concepts/quantum-gates.md).
 
-## Single-Qubit Gates
+## Single-qubit gates
 
-### Pauli Gates
+### Pauli gates
 
 | Gate | Matrix | Action | C API |
 |------|--------|--------|-------|
-| **X** | $\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$ | Bit flip: $\|0\rangle \leftrightarrow \|1\rangle$ | `quantum_state_x(s, q)` |
-| **Y** | $\begin{pmatrix} 0 & -i \\ i & 0 \end{pmatrix}$ | Bit + phase flip | `quantum_state_y(s, q)` |
-| **Z** | $\begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$ | Phase flip: $\|1\rangle \to -\|1\rangle$ | `quantum_state_z(s, q)` |
+| **X** | $\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$ | Bit flip | `gate_pauli_x(state, qubit)` |
+| **Y** | $\begin{pmatrix} 0 & -i \\ i & 0 \end{pmatrix}$ | Bit + phase flip | `gate_pauli_y(state, qubit)` |
+| **Z** | $\begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$ | Phase flip | `gate_pauli_z(state, qubit)` |
 
 ### Hadamard
 
 | Gate | Matrix | Action | C API |
 |------|--------|--------|-------|
-| **H** | $\frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}$ | Creates superposition | `quantum_state_h(s, q)` |
+| **H** | $\frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}$ | Creates superposition | `gate_hadamard(state, qubit)` |
 
-$$H|0\rangle = |+\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
-$$H|1\rangle = |-\rangle = \frac{|0\rangle - |1\rangle}{\sqrt{2}}$$
+$$H\lvert0\rangle = \lvert+\rangle, \qquad H\lvert1\rangle = \lvert-\rangle.$$
 
-### Phase Gates
+### Phase gates
 
 | Gate | Matrix | Action | C API |
 |------|--------|--------|-------|
-| **S** | $\begin{pmatrix} 1 & 0 \\ 0 & i \end{pmatrix}$ | $\|1\rangle \to i\|1\rangle$ | `quantum_state_s(s, q)` |
-| **S†** | $\begin{pmatrix} 1 & 0 \\ 0 & -i \end{pmatrix}$ | $\|1\rangle \to -i\|1\rangle$ | `quantum_state_sdg(s, q)` |
-| **T** | $\begin{pmatrix} 1 & 0 \\ 0 & e^{i\pi/4} \end{pmatrix}$ | $\|1\rangle \to e^{i\pi/4}\|1\rangle$ | `quantum_state_t(s, q)` |
-| **T†** | $\begin{pmatrix} 1 & 0 \\ 0 & e^{-i\pi/4} \end{pmatrix}$ | $\|1\rangle \to e^{-i\pi/4}\|1\rangle$ | `quantum_state_tdg(s, q)` |
+| **S**       | $\begin{pmatrix} 1 & 0 \\ 0 & i \end{pmatrix}$       | $\lvert1\rangle \to i\lvert1\rangle$       | `gate_s(state, qubit)`        |
+| **S<sup>†</sup>** | $\begin{pmatrix} 1 & 0 \\ 0 & -i \end{pmatrix}$ | $\lvert1\rangle \to -i\lvert1\rangle$     | `gate_s_dagger(state, qubit)` |
+| **T**       | $\begin{pmatrix} 1 & 0 \\ 0 & e^{i\pi/4} \end{pmatrix}$  | $\lvert1\rangle \to e^{i\pi/4}\lvert1\rangle$  | `gate_t(state, qubit)`        |
+| **T<sup>†</sup>** | $\begin{pmatrix} 1 & 0 \\ 0 & e^{-i\pi/4} \end{pmatrix}$ | $\lvert1\rangle \to e^{-i\pi/4}\lvert1\rangle$ | `gate_t_dagger(state, qubit)` |
 
-**Relations**: $S = T^2$, $Z = S^2 = T^4$
+Identities: $S = T^2$, $Z = S^2 = T^4$.
 
-### Rotation Gates
-
-| Gate | Matrix | C API |
-|------|--------|-------|
-| **Rx(θ)** | $\begin{pmatrix} \cos\frac{\theta}{2} & -i\sin\frac{\theta}{2} \\ -i\sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$ | `quantum_state_rx(s, q, θ)` |
-| **Ry(θ)** | $\begin{pmatrix} \cos\frac{\theta}{2} & -\sin\frac{\theta}{2} \\ \sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$ | `quantum_state_ry(s, q, θ)` |
-| **Rz(θ)** | $\begin{pmatrix} e^{-i\theta/2} & 0 \\ 0 & e^{i\theta/2} \end{pmatrix}$ | `quantum_state_rz(s, q, θ)` |
-
-**Common angles**:
-
-| θ | Rx(θ) | Ry(θ) | Rz(θ) |
-|---|-------|-------|-------|
-| π | iX | iY | iZ |
-| π/2 | √X | √Y | S |
-| π/4 | | | T |
-
-### General Phase
+### Rotation gates
 
 | Gate | Matrix | C API |
 |------|--------|-------|
-| **P(φ)** | $\begin{pmatrix} 1 & 0 \\ 0 & e^{i\phi} \end{pmatrix}$ | `quantum_state_phase(s, q, φ)` |
+| **R<sub>x</sub>(θ)** | $\begin{pmatrix} \cos\tfrac{\theta}{2} & -i\sin\tfrac{\theta}{2} \\ -i\sin\tfrac{\theta}{2} & \cos\tfrac{\theta}{2} \end{pmatrix}$ | `gate_rx(state, qubit, theta)` |
+| **R<sub>y</sub>(θ)** | $\begin{pmatrix} \cos\tfrac{\theta}{2} & -\sin\tfrac{\theta}{2} \\ \sin\tfrac{\theta}{2} & \cos\tfrac{\theta}{2} \end{pmatrix}$ | `gate_ry(state, qubit, theta)` |
+| **R<sub>z</sub>(θ)** | $\begin{pmatrix} e^{-i\theta/2} & 0 \\ 0 & e^{i\theta/2} \end{pmatrix}$ | `gate_rz(state, qubit, theta)` |
 
-**Relation**: $P(\phi) = e^{i\phi/2} R_z(\phi)$
-
-### Universal Gate
+### General phase
 
 | Gate | Matrix | C API |
 |------|--------|-------|
-| **U3(θ,φ,λ)** | $\begin{pmatrix} \cos\frac{\theta}{2} & -e^{i\lambda}\sin\frac{\theta}{2} \\ e^{i\phi}\sin\frac{\theta}{2} & e^{i(\phi+\lambda)}\cos\frac{\theta}{2} \end{pmatrix}$ | `quantum_state_u3(s, q, θ, φ, λ)` |
+| **P(φ)** | $\begin{pmatrix} 1 & 0 \\ 0 & e^{i\phi} \end{pmatrix}$ | `gate_phase(state, qubit, phi)` |
 
-Any single-qubit gate can be written as U3 (up to global phase).
+Identity: $P(\phi) = e^{i\phi/2} R_z(\phi)$.
 
-## Two-Qubit Gates
+### Universal gate
 
-### Controlled-NOT (CNOT, CX)
+| Gate | Matrix | C API |
+|------|--------|-------|
+| **U3(θ,φ,λ)** | $\begin{pmatrix} \cos\tfrac{\theta}{2} & -e^{i\lambda}\sin\tfrac{\theta}{2} \\ e^{i\phi}\sin\tfrac{\theta}{2} & e^{i(\phi+\lambda)}\cos\tfrac{\theta}{2} \end{pmatrix}$ | `gate_u3(state, qubit, theta, phi, lambda)` |
+
+Any single-qubit gate decomposes as `U3` up to a global phase.
+
+## Two-qubit gates
+
+### Controlled-NOT (CNOT)
 
 $$\text{CNOT} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 1 & 0 \end{pmatrix}$$
 
-| Input | Output |
-|-------|--------|
-| \|00⟩ | \|00⟩ |
-| \|01⟩ | \|01⟩ |
-| \|10⟩ | \|11⟩ |
-| \|11⟩ | \|10⟩ |
-
 ```c
-quantum_state_cnot(state, control, target);
-quantum_state_cx(state, control, target);  // Alias
-```
-
-### Controlled-Z (CZ)
-
-$$\text{CZ} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & -1 \end{pmatrix}$$
-
-Symmetric: CZ(a,b) = CZ(b,a)
-
-```c
-quantum_state_cz(state, qubit1, qubit2);
+gate_cnot(state, control, target);
 ```
 
 ### Controlled-Y (CY)
@@ -97,155 +76,132 @@ quantum_state_cz(state, qubit1, qubit2);
 $$\text{CY} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & -i \\ 0 & 0 & i & 0 \end{pmatrix}$$
 
 ```c
-quantum_state_cy(state, control, target);
+gate_cy(state, control, target);
+```
+
+### Controlled-Z (CZ)
+
+$$\text{CZ} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & -1 \end{pmatrix}$$
+
+Symmetric: `CZ(a, b)` equals `CZ(b, a)`.
+
+```c
+gate_cz(state, control, target);
 ```
 
 ### SWAP
 
 $$\text{SWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & 1 \end{pmatrix}$$
 
-Exchanges two qubits: $|ab\rangle \to |ba\rangle$
-
 ```c
-quantum_state_swap(state, qubit1, qubit2);
+gate_swap(state, qubit1, qubit2);
 ```
 
-**Decomposition**: SWAP = CNOT(a,b) · CNOT(b,a) · CNOT(a,b)
+Decomposition: `SWAP = CNOT(a,b) · CNOT(b,a) · CNOT(a,b)`.
 
-### iSWAP
-
-$$\text{iSWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & i & 0 \\ 0 & i & 0 & 0 \\ 0 & 0 & 0 & 1 \end{pmatrix}$$
-
-```c
-quantum_state_iswap(state, qubit1, qubit2);
-```
-
-### Controlled Rotations
-
-| Gate | Matrix | C API |
-|------|--------|-------|
-| **CRx(θ)** | $\text{diag}(I, R_x(\theta))$ | `quantum_state_crx(s, c, t, θ)` |
-| **CRy(θ)** | $\text{diag}(I, R_y(\theta))$ | `quantum_state_cry(s, c, t, θ)` |
-| **CRz(θ)** | $\text{diag}(I, R_z(\theta))$ | `quantum_state_crz(s, c, t, θ)` |
-| **CP(φ)** | $\text{diag}(1, 1, 1, e^{i\phi})$ | `quantum_state_cphase(s, c, t, φ)` |
-
-### XX, YY, ZZ Interactions
+### Controlled rotations
 
 | Gate | Definition | C API |
 |------|------------|-------|
-| **Rxx(θ)** | $e^{-i\theta X \otimes X / 2}$ | `quantum_state_rxx(s, q1, q2, θ)` |
-| **Ryy(θ)** | $e^{-i\theta Y \otimes Y / 2}$ | `quantum_state_ryy(s, q1, q2, θ)` |
-| **Rzz(θ)** | $e^{-i\theta Z \otimes Z / 2}$ | `quantum_state_rzz(s, q1, q2, θ)` |
+| **CR<sub>x</sub>(θ)** | $\mathrm{diag}(I, R_x(\theta))$ | `gate_crx(state, control, target, theta)` |
+| **CR<sub>y</sub>(θ)** | $\mathrm{diag}(I, R_y(\theta))$ | `gate_cry(state, control, target, theta)` |
+| **CR<sub>z</sub>(θ)** | $\mathrm{diag}(I, R_z(\theta))$ | `gate_crz(state, control, target, theta)` |
+| **CP(φ)** | $\mathrm{diag}(1, 1, 1, e^{i\phi})$ | `gate_cphase(state, control, target, phi)` |
 
-## Three-Qubit Gates
+## Three-qubit gates
 
-### Toffoli (CCNOT, CCX)
+### Toffoli (CCNOT)
 
-Flips target if both controls are |1⟩:
-
-| Input | Output |
-|-------|--------|
-| \|110⟩ | \|111⟩ |
-| \|111⟩ | \|110⟩ |
-| other | unchanged |
+Flips target if both controls are $\lvert1\rangle$:
 
 ```c
-quantum_state_toffoli(state, control1, control2, target);
-quantum_state_ccx(state, control1, control2, target);  // Alias
+gate_toffoli(state, control1, control2, target);
 ```
 
 ### Fredkin (CSWAP)
 
-Swaps two qubits if control is |1⟩:
-
-| Input | Output |
-|-------|--------|
-| \|100⟩ | \|100⟩ |
-| \|101⟩ | \|110⟩ |
-| \|110⟩ | \|101⟩ |
-| \|111⟩ | \|111⟩ |
+Swaps two qubits if control is $\lvert1\rangle$:
 
 ```c
-quantum_state_fredkin(state, control, target1, target2);
-quantum_state_cswap(state, control, target1, target2);  // Alias
+gate_fredkin(state, control, target1, target2);
 ```
 
-## Multi-Qubit Operations
+## Multi-controlled gates
 
-### Quantum Fourier Transform
-
-$$\text{QFT}|j\rangle = \frac{1}{\sqrt{N}} \sum_{k=0}^{N-1} e^{2\pi ijk/N} |k\rangle$$
+Variadic-control X and Z, with the control list passed as an array:
 
 ```c
-quantum_state_qft(state, qubits, num_qubits);
-quantum_state_iqft(state, qubits, num_qubits);  // Inverse
+int controls[] = {0, 1, 2, 3};
+gate_mcx(state, controls, 4 /* num_controls */, 5 /* target */);
+gate_mcz(state, controls, 4, 5);
 ```
 
-## Gate Identities
+Declared at `src/quantum/gates.h:` (search `gate_mcx`, `gate_mcz`).
+
+## Quantum Fourier transform
+
+`gate_qft` and `gate_iqft` operate on a contiguous or arbitrary
+subset of qubits, supplied as an index array:
+
+$$\text{QFT}\lvert j\rangle = \frac{1}{\sqrt{N}} \sum_{k=0}^{N-1} e^{2\pi ijk/N} \lvert k\rangle$$
+
+```c
+int qubits[] = {0, 1, 2, 3};
+gate_qft(state, qubits, 4);
+gate_iqft(state, qubits, 4);
+```
+
+## Gate identities
 
 ### Conjugation
 
-$$HXH = Z, \quad HYH = -Y, \quad HZH = X$$
-$$SXS^\dagger = Y, \quad SYS^\dagger = -X$$
+$$HXH = Z, \quad HYH = -Y, \quad HZH = X.$$
+$$S X S^\dagger = Y, \quad S Y S^\dagger = -X.$$
 
 ### Commutation
 
-$$[X, Y] = 2iZ, \quad [Y, Z] = 2iX, \quad [Z, X] = 2iY$$
+$$[X, Y] = 2iZ, \quad [Y, Z] = 2iX, \quad [Z, X] = 2iY.$$
 
-### CNOT Relations
+### CNOT relations
 
-$$\text{CNOT} = (I \otimes H) \cdot \text{CZ} \cdot (I \otimes H)$$
-$$\text{CNOT}^2 = I$$
+$$\text{CNOT} = (I \otimes H) \cdot \text{CZ} \cdot (I \otimes H), \qquad \text{CNOT}^2 = I.$$
 
-### Swap Decomposition
+## Bloch-sphere action
 
-```
-SWAP = ──●──X──●──
-         │  │  │
-       ──X──●──X──
-```
+For $\lvert\psi\rangle = \cos\tfrac{\theta}{2}\lvert0\rangle + e^{i\phi}\sin\tfrac{\theta}{2}\lvert1\rangle$:
 
-## Gate Costs
+| Gate | Bloch-sphere action |
+|------|----------------------|
+| X    | 180° rotation about X-axis  |
+| Y    | 180° rotation about Y-axis  |
+| Z    | 180° rotation about Z-axis  |
+| H    | 180° rotation about (X+Z)/√2 |
+| S    | 90° rotation about Z-axis   |
+| T    | 45° rotation about Z-axis   |
+| R<sub>x</sub>(θ) | θ rotation about X-axis   |
+| R<sub>y</sub>(θ) | θ rotation about Y-axis   |
+| R<sub>z</sub>(θ) | θ rotation about Z-axis   |
 
-### In Terms of Native Gates
+## Language bindings
 
-Assuming native gate set: {Rz, √X, CNOT}
+The Python bindings expose the gate set as methods on
+`moonlab.QuantumState` (see `bindings/python/moonlab/core.py:252`
+onwards): `state.h(q)`, `state.x(q)`, `state.y(q)`, `state.z(q)`,
+`state.s(q)`, `state.sdg(q)`, `state.t(q)`, `state.tdg(q)`,
+`state.rx(q, theta)`, `state.ry(q, theta)`, `state.rz(q, theta)`,
+`state.cnot(c, t)`, etc.  Method names are short forms of the C
+symbols above; the underlying ABI call is identical.
 
-| Gate | Cost |
-|------|------|
-| X | 2 √X |
-| Y | 2 √X + 2 Rz |
-| Z | 2 Rz |
-| H | 2 Rz + √X |
-| S | 1 Rz |
-| T | 1 Rz |
-| Rx(θ) | 2 Rz + 2 √X |
-| Ry(θ) | 2 Rz + 2 √X |
-| Rz(θ) | 1 Rz |
-| CNOT | 1 CNOT |
-| CZ | 2 H + 1 CNOT |
-| SWAP | 3 CNOT |
-| Toffoli | 6 CNOT + single-qubit |
+The Rust bindings live in `bindings/rust/moonlab/src/state.rs` and
+mirror the C signatures one-to-one inside `impl QuantumState`.
 
-## Bloch Sphere Visualization
+## See also
 
-Single-qubit state: $|\psi\rangle = \cos\frac{\theta}{2}|0\rangle + e^{i\phi}\sin\frac{\theta}{2}|1\rangle$
-
-| Gate | Bloch Sphere Action |
-|------|---------------------|
-| X | 180° rotation about X-axis |
-| Y | 180° rotation about Y-axis |
-| Z | 180° rotation about Z-axis |
-| H | 180° rotation about X+Z axis |
-| S | 90° rotation about Z-axis |
-| T | 45° rotation about Z-axis |
-| Rx(θ) | θ rotation about X-axis |
-| Ry(θ) | θ rotation about Y-axis |
-| Rz(θ) | θ rotation about Z-axis |
-
-## See Also
-
-- [Quantum Gates (Concepts)](../concepts/quantum-gates.md) - Full mathematical details
-- [C API: Gates](../api/c/gates.md) - Complete C API reference
-- [Python API: Core](../api/python/core.md) - Python gate methods
-
+- [Quantum gates (concepts)](../concepts/quantum-gates.md) -- full
+  mathematical treatment.
+- [C API: gates header](../../src/quantum/gates.h) -- canonical
+  signatures.
+- [Python API: core](../api/python/core.md) -- Python wrapper
+  surface.
+- [Error codes](error-codes.md) -- meaning of the `qs_error_t`
+  return values.
