@@ -142,21 +142,43 @@ static int test_imag_time_run_completes(void) {
         if (rc != 0) { ok = -1; break; }
     }
 
-    /* Every per-bond chi should be inside the configured range.
-     * We read through the public accessor tdvp_bond_chi rather than
-     * the opaque struct internals. */
+    /* Step 5 acceptance: tdvp_step must populate
+     * result.bond_chi_distribution when the adaptive controller is
+     * enabled.  Each entry should match the accessor and live inside
+     * [chi_floor, chi_ceiling]. */
     if (ok == 0) {
-        for (uint32_t b = 0; b < engine->num_bond_states; b++) {
-            uint32_t chi = tdvp_bond_chi(engine, b);
-            CHECK(chi == 0 ||
-                  (chi >= cfg.adaptive_bond.chi_floor &&
-                   chi <= cfg.adaptive_bond.chi_ceiling),
-                  "bond %u chi=%u out of [%u, %u]",
-                  b, chi,
-                  cfg.adaptive_bond.chi_floor,
-                  cfg.adaptive_bond.chi_ceiling);
+        CHECK(result.bond_chi_distribution != NULL,
+              "result.bond_chi_distribution populated");
+        CHECK(result.n_bonds == n - 1,
+              "result.n_bonds = %u (expected %u)", result.n_bonds, n - 1);
+        if (result.bond_chi_distribution) {
+            for (uint32_t b = 0; b < result.n_bonds; b++) {
+                uint32_t chi_res = result.bond_chi_distribution[b];
+                uint32_t chi_acc = tdvp_bond_chi(engine, b);
+                CHECK(chi_res == chi_acc,
+                      "bond %u: distribution=%u != accessor=%u",
+                      b, chi_res, chi_acc);
+                CHECK(chi_res == 0 ||
+                      (chi_res >= cfg.adaptive_bond.chi_floor &&
+                       chi_res <= cfg.adaptive_bond.chi_ceiling),
+                      "bond %u chi=%u out of [%u, %u]",
+                      b, chi_res,
+                      cfg.adaptive_bond.chi_floor,
+                      cfg.adaptive_bond.chi_ceiling);
+            }
         }
     }
+
+    /* Free the heap-owned bond_chi_distribution before letting the
+     * stack-allocated result go out of scope. */
+    tdvp_result_clear(&result);
+
+    /* Calling tdvp_result_clear twice (or on a zeroed result) is
+     * defined to be safe; assert via the second call. */
+    tdvp_result_clear(&result);
+    CHECK(result.bond_chi_distribution == NULL,
+          "double tdvp_result_clear leaves distribution NULL");
+    CHECK(result.n_bonds == 0, "double tdvp_result_clear zeroes n_bonds");
 
     tdvp_engine_free(engine);
     tn_mps_free(mps);

@@ -106,6 +106,7 @@ void tdvp_history_free(tdvp_history_t *hist) {
     free(hist->energies);
     free(hist->norms);
     free(hist->observables);
+    free(hist->bond_chi_history);
     free(hist);
 }
 
@@ -114,16 +115,55 @@ void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
 
     // Expand if needed
     if (hist->num_steps >= hist->capacity) {
-        hist->capacity *= 2;
-        hist->times = (double *)realloc(hist->times, hist->capacity * sizeof(double));
-        hist->energies = (double *)realloc(hist->energies, hist->capacity * sizeof(double));
-        hist->norms = (double *)realloc(hist->norms, hist->capacity * sizeof(double));
+        uint32_t new_cap = hist->capacity * 2;
+        hist->times = (double *)realloc(hist->times, new_cap * sizeof(double));
+        hist->energies = (double *)realloc(hist->energies, new_cap * sizeof(double));
+        hist->norms = (double *)realloc(hist->norms, new_cap * sizeof(double));
+        if (hist->bond_chi_history && hist->n_bonds > 0) {
+            hist->bond_chi_history = (uint32_t *)realloc(
+                hist->bond_chi_history,
+                (size_t)new_cap * hist->n_bonds * sizeof(uint32_t));
+        }
+        hist->capacity = new_cap;
     }
 
     hist->times[hist->num_steps] = result->time;
     hist->energies[hist->num_steps] = result->energy;
     hist->norms[hist->num_steps] = result->norm;
+
+    /* Bond-chi snapshot: lazy-allocate on the first result that
+     * actually carries a distribution.  Subsequent calls write into
+     * the same flat row-major buffer.  Results without a
+     * distribution (legacy path) leave the row zeroed. */
+    if (result->bond_chi_distribution && result->n_bonds > 0) {
+        if (!hist->bond_chi_history) {
+            hist->n_bonds = result->n_bonds;
+            hist->bond_chi_history = (uint32_t *)calloc(
+                (size_t)hist->capacity * hist->n_bonds, sizeof(uint32_t));
+        }
+        if (hist->bond_chi_history && result->n_bonds == hist->n_bonds) {
+            uint32_t *row = hist->bond_chi_history
+                          + (size_t)hist->num_steps * hist->n_bonds;
+            for (uint32_t b = 0; b < hist->n_bonds; b++) {
+                row[b] = result->bond_chi_distribution[b];
+            }
+        }
+    }
+
     hist->num_steps++;
+}
+
+void tdvp_result_clear(tdvp_result_t *result) {
+    if (!result) return;
+    free(result->bond_chi_distribution);
+    result->bond_chi_distribution = NULL;
+    result->n_bonds = 0;
+    result->time = 0.0;
+    result->energy = 0.0;
+    result->norm = 0.0;
+    result->truncation_error = 0.0;
+    result->max_bond_dim = 0;
+    result->step_time = 0.0;
 }
 
 // ============================================================================
@@ -869,6 +909,35 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
         result->truncation_error = total_trunc_error;
         result->max_bond_dim = max_bond;
         result->step_time = get_time_sec() - start_time;
+
+        /* Per-bond chi snapshot from the adaptive-bond controller.
+         * Lazy-allocate the buffer on first call; reuse it if the
+         * size matches (engine bond count is fixed for the engine's
+         * lifetime, so realloc is only needed if the caller swaps
+         * the result between differently sized engines). */
+        if (engine->bond_states && engine->num_bond_states > 0) {
+            if (result->bond_chi_distribution == NULL ||
+                result->n_bonds != engine->num_bond_states) {
+                free(result->bond_chi_distribution);
+                result->bond_chi_distribution = (uint32_t *)calloc(
+                    engine->num_bond_states, sizeof(uint32_t));
+                result->n_bonds = engine->num_bond_states;
+            }
+            if (result->bond_chi_distribution) {
+                for (uint32_t b = 0; b < engine->num_bond_states; b++) {
+                    result->bond_chi_distribution[b] =
+                        engine->bond_states[b].chi;
+                }
+            }
+        } else {
+            /* Legacy path: keep the result clean.  If a buffer is
+             * left over from an earlier adaptive run, free it. */
+            if (result->bond_chi_distribution) {
+                free(result->bond_chi_distribution);
+                result->bond_chi_distribution = NULL;
+                result->n_bonds = 0;
+            }
+        }
     }
 
     return 0;
