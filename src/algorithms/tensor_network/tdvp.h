@@ -68,7 +68,6 @@
 #include "tn_state.h"
 #include "dmrg.h"
 #include "tensor.h"
-#include "lattice_2d.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
@@ -339,8 +338,27 @@ void tdvp_history_free(tdvp_history_t *hist);
 
 /**
  * @brief Add result to history
+ *
+ * Records `result->time`, `result->energy`, `result->norm`, and the
+ * per-bond chi snapshot from `result->bond_chi_distribution` (lazily
+ * allocated on the first result that carries a distribution).  Does
+ * not touch `tdvp_history_t::observables`; use
+ * ::tdvp_history_add_with_observable for that.
  */
 void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result);
+
+/**
+ * @brief Add a result to history together with one scalar observable.
+ *
+ * Equivalent to ::tdvp_history_add but additionally writes
+ * @p observable into `tdvp_history_t::observables` at the new step's
+ * index.  The `observables` array is lazily allocated on the first
+ * call to this function; calls to ::tdvp_history_add on the same
+ * history leave the corresponding observable slot at zero.
+ */
+void tdvp_history_add_with_observable(tdvp_history_t *hist,
+                                       const tdvp_result_t *result,
+                                       double observable);
 
 // ============================================================================
 // TDVP ENGINE
@@ -498,69 +516,37 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
                   tensor_t *y);
 
 // ============================================================================
-// SPIN DYNAMICS (SKYRMION SPECIFIC)
-// ============================================================================
-
-/**
- * @brief Spin-transfer torque parameters
- *
- * For current-driven skyrmion motion.
- */
-typedef struct {
-    double jx;      /**< Current density x-component */
-    double jy;      /**< Current density y-component */
-    double beta;    /**< Non-adiabaticity parameter */
-    double alpha;   /**< Gilbert damping */
-} stt_params_t;
-
-/**
- * @brief Create MPO for spin-transfer torque Hamiltonian
- *
- * H_STT = sum_i j · ∇S_i (adiabatic) + β j · (S_i × ∇S_i) (non-adiabatic)
- *
- * This is added to the base Hamiltonian to drive skyrmion motion.
- *
- * @param lat 2D lattice
- * @param stt STT parameters
- * @return MPO for STT Hamiltonian
- */
-mpo_t *mpo_stt_create(const lattice_2d_t *lat, const stt_params_t *stt);
-
-/**
- * @brief Evolve skyrmion under current drive
- *
- * Combines base Hamiltonian with STT for current-driven dynamics.
- *
- * @param mps MPS state
- * @param mpo_base Base Hamiltonian (exchange + DMI + ...)
- * @param stt STT parameters
- * @param config TDVP configuration
- * @param total_time Total evolution time
- * @param history Output history
- * @return 0 on success
- */
-int tdvp_evolve_with_stt(tn_mps_state_t *mps,
-                          const mpo_t *mpo_base,
-                          const stt_params_t *stt,
-                          const tdvp_config_t *config,
-                          double total_time,
-                          tdvp_history_t *history);
-
-// ============================================================================
 // OBSERVABLES DURING EVOLUTION
 // ============================================================================
 
 /**
- * @brief Observable callback type
+ * @brief Observable-side-effect callback type.
  *
- * Called after each TDVP step to compute observables.
+ * Called after each TDVP step.  The callback is free to compute any
+ * expectation value or write any side effect from `mps`; it does not
+ * report a value back to the engine.  Use
+ * ::observable_value_callback_t with ::tdvp_evolve_to_with_observable
+ * if you want the engine to record the measured value into history.
  */
 typedef void (*observable_callback_t)(const tn_mps_state_t *mps,
                                        double time,
                                        void *user_data);
 
 /**
- * @brief Evolve with observable measurement
+ * @brief Observable-returning callback type.
+ *
+ * Same shape as ::observable_callback_t, but returns a `double` that
+ * ::tdvp_evolve_to_with_observable writes into the history's
+ * `observables` array at the corresponding step index.  Typical
+ * implementations return an expectation value of some operator, the
+ * MPS norm, an entanglement entropy, or similar scalar diagnostic.
+ */
+typedef double (*observable_value_callback_t)(const tn_mps_state_t *mps,
+                                               double time,
+                                               void *user_data);
+
+/**
+ * @brief Evolve with observable measurement (side-effect callback).
  *
  * @param engine TDVP engine
  * @param target_time Target time
@@ -574,6 +560,28 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
                                   observable_callback_t callback,
                                   void *user_data,
                                   uint32_t measure_interval);
+
+/**
+ * @brief Evolve to a target time, recording each step + a scalar
+ *        observable into history.
+ *
+ * Mirrors ::tdvp_evolve_to but additionally invokes @p observable_fn
+ * after every step (when non-NULL) and stores its return value via
+ * ::tdvp_history_add_with_observable.  When @p observable_fn is NULL
+ * the call degrades to ::tdvp_evolve_to.
+ *
+ * @param engine        TDVP engine.
+ * @param target_time   Target time (real or imag, sign-agnostic).
+ * @param history       Output history; may not be NULL.
+ * @param observable_fn Per-step observable callback, or NULL.
+ * @param user_data     User data passed verbatim to @p observable_fn.
+ * @return 0 on success, negative on integrator failure.
+ */
+int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
+                                    double target_time,
+                                    tdvp_history_t *history,
+                                    observable_value_callback_t observable_fn,
+                                    void *user_data);
 
 #ifdef __cplusplus
 }

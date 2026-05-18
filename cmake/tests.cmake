@@ -306,6 +306,20 @@
     add_test(NAME unit_tdvp_adaptive_pid_stability
              COMMAND test_tdvp_adaptive_pid_stability)
 
+    # Adaptive-bond TDVP second-SVD re-truncation (v0.4.1): drives the
+    # entropy-feedback PID into target_chi < first->bond_dim so the
+    # second SVD pass in tdvp_truncate_bond actually fires, then pins
+    # invariants on the resulting per-bond chi history, truncation
+    # error, and final energy.  Branch-coverage smoke for the
+    # otherwise-implicit second-pass code path documented in
+    # docs/research/adaptive_bond_tdvp.md.
+    add_executable(test_tdvp_adaptive_second_svd
+                   tests/unit/test_tdvp_adaptive_second_svd.c)
+    target_link_libraries(test_tdvp_adaptive_second_svd
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_second_svd
+             COMMAND test_tdvp_adaptive_second_svd)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the

@@ -41,9 +41,11 @@ use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     dmrg_init_random_mps, mpo_free, mpo_heisenberg_create, mpo_tfim_create,
     tdvp_adaptive_bond_config_t, tdvp_bond_chi, tdvp_config_t, tdvp_engine_create,
-    tdvp_engine_free, tdvp_engine_t, tdvp_result_clear, tdvp_result_t,
-    tdvp_step, tn_mps_free, tn_state_config_create,
+    tdvp_engine_free, tdvp_engine_t, tdvp_evolve_to, tdvp_evolve_to_with_observable,
+    tdvp_history_create, tdvp_history_free, tdvp_history_t, tdvp_result_clear,
+    tdvp_result_t, tdvp_step, tn_mps_free, tn_state_config_create,
 };
+use std::os::raw::c_void;
 use std::ptr;
 use std::slice;
 
@@ -377,6 +379,100 @@ impl TdvpEngine {
         unsafe { tdvp_bond_chi(self.handle, bond) }
     }
 
+    /// Evolve to `target_time`, optionally recording every step into
+    /// `history`.  Equivalent to looping [`Self::step`] and pushing
+    /// each result through [`TdvpHistory::add`].
+    pub fn evolve_to(
+        &mut self,
+        target_time: f64,
+        history: Option<&mut TdvpHistory>,
+    ) -> Result<()> {
+        let hist_ptr = match history {
+            Some(h) => h.handle,
+            None => ptr::null_mut(),
+        };
+        let rc = unsafe { tdvp_evolve_to(self.handle, target_time, hist_ptr) };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!(
+                "tdvp_evolve_to rc={rc}"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Evolve to `target_time`, invoking `observable_fn` after every
+    /// step and storing its return value in `history.observables`.
+    ///
+    /// `observable_fn` receives the live MPS pointer and the current
+    /// time; it must return a scalar measurement.  Panics inside the
+    /// closure are caught and surfaced as a Rust error (the C side
+    /// has no exception channel).
+    pub fn evolve_with_observable<F>(
+        &mut self,
+        target_time: f64,
+        history: &mut TdvpHistory,
+        observable_fn: F,
+    ) -> Result<()>
+    where
+        F: FnMut(*const moonlab_sys::tn_mps_state_t, f64) -> f64,
+    {
+        struct Closure<F: FnMut(*const moonlab_sys::tn_mps_state_t, f64) -> f64> {
+            f: F,
+            panic: Option<Box<dyn std::any::Any + Send + 'static>>,
+        }
+        let mut state = Closure {
+            f: observable_fn,
+            panic: None,
+        };
+
+        unsafe extern "C" fn trampoline<F>(
+            mps: *const moonlab_sys::tn_mps_state_t,
+            time: f64,
+            user: *mut c_void,
+        ) -> f64
+        where
+            F: FnMut(*const moonlab_sys::tn_mps_state_t, f64) -> f64,
+        {
+            let state = &mut *(user as *mut Closure<F>);
+            if state.panic.is_some() {
+                return 0.0;
+            }
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                (state.f)(mps, time)
+            })) {
+                Ok(v) => v,
+                Err(e) => {
+                    state.panic = Some(e);
+                    0.0
+                }
+            }
+        }
+
+        let cb: unsafe extern "C" fn(
+            *const moonlab_sys::tn_mps_state_t,
+            f64,
+            *mut c_void,
+        ) -> f64 = trampoline::<F>;
+        let rc = unsafe {
+            tdvp_evolve_to_with_observable(
+                self.handle,
+                target_time,
+                history.handle,
+                Some(std::mem::transmute::<_, _>(cb)),
+                &mut state as *mut _ as *mut c_void,
+            )
+        };
+        if let Some(p) = state.panic.take() {
+            std::panic::resume_unwind(p);
+        }
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!(
+                "tdvp_evolve_to_with_observable rc={rc}"
+            )));
+        }
+        Ok(())
+    }
+
     fn snapshot(&self) -> TdvpResult {
         let r = &self.result;
         let dist = if !r.bond_chi_distribution.is_null() && r.n_bonds > 0 {
@@ -406,6 +502,119 @@ impl Drop for TdvpEngine {
             // before freeing the engine itself.
             unsafe { tdvp_result_clear(&mut self.result) };
             unsafe { tdvp_engine_free(self.handle) };
+            self.handle = ptr::null_mut();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+/// Step-by-step record of a TDVP evolution.
+///
+/// Records the time, energy, norm, optional scalar observable, and
+/// per-bond chi snapshot for each step accepted via
+/// [`TdvpEngine::evolve_to`] or
+/// [`TdvpEngine::evolve_with_observable`].  Buffers grow automatically
+/// as new steps land.
+pub struct TdvpHistory {
+    handle: *mut tdvp_history_t,
+}
+
+// SAFETY: TdvpHistory owns its handle and is not shared across
+// threads without external synchronization.
+unsafe impl Send for TdvpHistory {}
+
+impl TdvpHistory {
+    /// Construct an empty history with the requested initial
+    /// capacity.  Passing 0 selects the C default (64).
+    pub fn new(initial_capacity: u32) -> Result<Self> {
+        let handle = unsafe { tdvp_history_create(initial_capacity) };
+        if handle.is_null() {
+            return Err(QuantumError::AllocationFailed(0));
+        }
+        Ok(Self { handle })
+    }
+
+    fn as_ref_struct(&self) -> &tdvp_history_t {
+        unsafe { &*self.handle }
+    }
+
+    /// Number of steps recorded so far.
+    pub fn num_steps(&self) -> u32 {
+        self.as_ref_struct().num_steps
+    }
+
+    /// Copy of the per-step time column.
+    pub fn times(&self) -> Vec<f64> {
+        let s = self.as_ref_struct();
+        if s.times.is_null() || s.num_steps == 0 {
+            return Vec::new();
+        }
+        unsafe { slice::from_raw_parts(s.times, s.num_steps as usize) }.to_vec()
+    }
+
+    /// Copy of the per-step energy column.
+    pub fn energies(&self) -> Vec<f64> {
+        let s = self.as_ref_struct();
+        if s.energies.is_null() || s.num_steps == 0 {
+            return Vec::new();
+        }
+        unsafe { slice::from_raw_parts(s.energies, s.num_steps as usize) }
+            .to_vec()
+    }
+
+    /// Copy of the per-step norm column.
+    pub fn norms(&self) -> Vec<f64> {
+        let s = self.as_ref_struct();
+        if s.norms.is_null() || s.num_steps == 0 {
+            return Vec::new();
+        }
+        unsafe { slice::from_raw_parts(s.norms, s.num_steps as usize) }
+            .to_vec()
+    }
+
+    /// Copy of the per-step observable column.  Returns `None` if
+    /// no observable has ever been recorded into this history.
+    pub fn observables(&self) -> Option<Vec<f64>> {
+        let s = self.as_ref_struct();
+        if s.observables.is_null() {
+            return None;
+        }
+        if s.num_steps == 0 {
+            return Some(Vec::new());
+        }
+        Some(
+            unsafe {
+                slice::from_raw_parts(s.observables, s.num_steps as usize)
+            }
+            .to_vec(),
+        )
+    }
+
+    /// Copy of the per-step per-bond chi snapshot, shape
+    /// `(num_steps, n_bonds)` flattened row-major.  Returns `None`
+    /// when the adaptive controller never recorded a distribution.
+    pub fn bond_chi_history(&self) -> Option<(Vec<u32>, u32)> {
+        let s = self.as_ref_struct();
+        if s.bond_chi_history.is_null() || s.n_bonds == 0 || s.num_steps == 0 {
+            return None;
+        }
+        let stride = s.n_bonds as usize;
+        let len = (s.num_steps as usize) * stride;
+        let row_major = unsafe {
+            slice::from_raw_parts(s.bond_chi_history, len)
+        }
+        .to_vec();
+        Some((row_major, s.n_bonds))
+    }
+}
+
+impl Drop for TdvpHistory {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            unsafe { tdvp_history_free(self.handle) };
             self.handle = ptr::null_mut();
         }
     }
@@ -502,5 +711,68 @@ mod tests {
             .map(|e| (e - e0).abs() / e0.abs().max(1e-12))
             .fold(0.0_f64, f64::max);
         assert!(max_drift < 5e-3, "max relative drift {max_drift:.3e}");
+    }
+
+    #[test]
+    fn evolve_to_records_history() {
+        let n: u32 = 6;
+        let mpo = Mpo::tfim(n, 1.0, 1.0).unwrap();
+        let mps = Mps::random(n, 8, 16, 1e-12).unwrap();
+        let mut cfg = TdvpConfig::adaptive(1e-3);
+        cfg.evolution_type = EvolutionType::ImaginaryTime;
+        cfg.dt = 0.05;
+        cfg.adaptive_bond.chi_ceiling = 16;
+        cfg.max_bond_dim = 16;
+        let mut engine = TdvpEngine::new(mps, mpo, cfg).unwrap();
+        let mut hist = TdvpHistory::new(8).unwrap();
+        assert_eq!(hist.num_steps(), 0);
+        assert!(hist.observables().is_none());
+        assert!(hist.bond_chi_history().is_none());
+
+        engine.evolve_to(0.2, Some(&mut hist)).unwrap();
+
+        assert!(hist.num_steps() >= 3);
+        let times = hist.times();
+        assert_eq!(times.len(), hist.num_steps() as usize);
+        // Times must be strictly increasing.
+        for w in times.windows(2) {
+            assert!(w[1] > w[0]);
+        }
+        // Adaptive controller is on; bond-chi history present.
+        let chi_hist = hist.bond_chi_history();
+        assert!(chi_hist.is_some());
+        let (flat, stride) = chi_hist.unwrap();
+        assert_eq!(stride, n - 1);
+        assert_eq!(flat.len(), (hist.num_steps() as usize) * (stride as usize));
+        // observables column still unallocated.
+        assert!(hist.observables().is_none());
+    }
+
+    #[test]
+    fn evolve_with_observable_records_callback_values() {
+        let n: u32 = 6;
+        let mpo = Mpo::tfim(n, 1.0, 1.0).unwrap();
+        let mps = Mps::random(n, 8, 16, 1e-12).unwrap();
+        let mut cfg = TdvpConfig::adaptive(1e-3);
+        cfg.evolution_type = EvolutionType::ImaginaryTime;
+        cfg.dt = 0.05;
+        cfg.adaptive_bond.chi_ceiling = 16;
+        cfg.max_bond_dim = 16;
+        let mut engine = TdvpEngine::new(mps, mpo, cfg).unwrap();
+        let mut hist = TdvpHistory::new(8).unwrap();
+
+        // Trivial observable: the time itself.  Pins the value
+        // round-trip across the FFI callback boundary.
+        engine
+            .evolve_with_observable(0.2, &mut hist, |_mps, time| time)
+            .unwrap();
+
+        assert!(hist.num_steps() >= 3);
+        let obs = hist.observables().expect("observables column was allocated");
+        let times = hist.times();
+        assert_eq!(obs.len(), times.len());
+        for (o, t) in obs.iter().zip(times.iter()) {
+            assert!((o - t).abs() < 1e-12, "obs {o} != time {t}");
+        }
     }
 }

@@ -54,7 +54,7 @@ extern "C" {
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 2
+#define MOONLAB_ABI_VERSION_MINOR 3
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -503,6 +503,179 @@ int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
 int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
                                   uint32_t site_x,
                                   uint8_t* out_pauli);
+
+/* ---- Adaptive-bond two-site TDVP (stable from 0.4.1) --------------- */
+
+/**
+ * @brief Opaque handle for a v0.4 adaptive-bond two-site TDVP engine.
+ *
+ * Bundles the internal `tn_mps_state_t`, the Hamiltonian MPO, the
+ * `tdvp_engine_t` state (including per-bond PID controller slots when
+ * the adaptive controller is enabled), and a step-by-step
+ * `tdvp_history_t`.  All members are private to libquantumsim;
+ * downstream consumers manipulate the handle only through the
+ * `moonlab_tdvp_*` accessors below.
+ *
+ * @since 0.4.1
+ */
+typedef struct moonlab_tdvp_engine_t moonlab_tdvp_engine_t;
+
+/**
+ * @brief Build a TDVP engine wrapping a Heisenberg-XXZ Hamiltonian.
+ *
+ * Constructs the Heisenberg MPO @c H = J * sum_i (X_i X_{i+1} + Y_i
+ * Y_{i+1} + Delta * Z_i Z_{i+1}) - h * sum_i Z_i, seeds a random
+ * initial MPS state of width @p initial_bond_dim (clamped to
+ * @p max_bond_dim), and returns an engine configured for either
+ * real-time or imag-time evolution.  When
+ * @p adaptive_target_entropy is strictly positive the entropy-feedback
+ * PID controller is enabled with reference-paper gains
+ * (arXiv:2604.03960); pass 0 (or any non-positive value) to retain the
+ * fixed-bond legacy path.
+ *
+ * @param num_sites               Chain length (>= 2).
+ * @param J                       Exchange coupling.
+ * @param Delta                   XXZ anisotropy (Delta = 1 for isotropic).
+ * @param h                       Longitudinal field.
+ * @param initial_bond_dim        Initial MPS bond dimension.
+ * @param max_bond_dim            Legacy / adaptive ceiling cap.
+ * @param dt                      Time-step size (positive).
+ * @param imag_time               Non-zero for imag-time evolution
+ *                                (exp(-H dt)); zero for real-time
+ *                                (exp(-i H dt)).
+ * @param adaptive_target_entropy Entropy-error budget for the PID
+ *                                controller; <= 0 disables the
+ *                                controller and runs at the fixed cap.
+ * @return Engine handle on success, NULL on allocation failure.
+ *
+ * @since 0.4.1
+ */
+MOONLAB_API moonlab_tdvp_engine_t*
+moonlab_tdvp_create_heisenberg(uint32_t num_sites,
+                                double J,
+                                double Delta,
+                                double h,
+                                uint32_t initial_bond_dim,
+                                uint32_t max_bond_dim,
+                                double dt,
+                                int imag_time,
+                                double adaptive_target_entropy);
+
+/**
+ * @brief Build a TDVP engine wrapping a transverse-field Ising
+ *        Hamiltonian.
+ *
+ * Constructs @c H = -J * sum_i Z_i Z_{i+1} - h * sum_i X_i, seeds a
+ * random initial MPS, and configures the engine identically to
+ * ::moonlab_tdvp_create_heisenberg.
+ *
+ * @since 0.4.1
+ */
+MOONLAB_API moonlab_tdvp_engine_t*
+moonlab_tdvp_create_tfim(uint32_t num_sites,
+                          double J,
+                          double h,
+                          uint32_t initial_bond_dim,
+                          uint32_t max_bond_dim,
+                          double dt,
+                          int imag_time,
+                          double adaptive_target_entropy);
+
+/**
+ * @brief Advance the engine by one TDVP step.
+ *
+ * Performs a left-to-right + right-to-left two-site sweep with
+ * step-size dt as configured at engine creation; appends the resulting
+ * (time, energy, norm, bond-chi distribution) to the engine's internal
+ * history.
+ *
+ * @return 0 on success, negative on integrator failure.
+ * @since 0.4.1
+ */
+MOONLAB_API int moonlab_tdvp_step(moonlab_tdvp_engine_t* engine);
+
+/**
+ * @brief Advance the engine repeatedly until current time reaches
+ *        @p target_time.
+ *
+ * Equivalent to calling ::moonlab_tdvp_step in a loop with dt
+ * adjusted to land exactly on @p target_time.  Every step is recorded
+ * in the engine's history.
+ *
+ * @return 0 on success, negative on integrator failure.
+ * @since 0.4.1
+ */
+MOONLAB_API int moonlab_tdvp_evolve_to(moonlab_tdvp_engine_t* engine,
+                                        double target_time);
+
+/** Current evolution time accumulated by the engine. */
+MOONLAB_API double moonlab_tdvp_current_time(const moonlab_tdvp_engine_t* engine);
+
+/** Current variational energy @c <psi|H|psi> evaluated after the
+ *  most recent step (or at engine creation if no steps have run). */
+MOONLAB_API double moonlab_tdvp_current_energy(const moonlab_tdvp_engine_t* engine);
+
+/** Current MPS norm @c <psi|psi>^{1/2}. */
+MOONLAB_API double moonlab_tdvp_current_norm(const moonlab_tdvp_engine_t* engine);
+
+/** Peak bond dimension across the MPS factor after the latest step. */
+MOONLAB_API uint32_t moonlab_tdvp_current_max_bond_dim(const moonlab_tdvp_engine_t* engine);
+
+/** Number of inter-site bonds (n_qubits - 1). */
+MOONLAB_API uint32_t moonlab_tdvp_num_bonds(const moonlab_tdvp_engine_t* engine);
+
+/**
+ * @brief Current PID-selected chi for bond @p bond.
+ *
+ * Returns 0 when the adaptive controller is disabled or @p bond is
+ * out of range; otherwise returns the dimension the controller chose
+ * on the most recent two-site update of that bond.
+ *
+ * @since 0.4.1
+ */
+MOONLAB_API uint32_t moonlab_tdvp_bond_chi(const moonlab_tdvp_engine_t* engine,
+                                            uint32_t bond);
+
+/** Number of steps currently recorded in the engine's history. */
+MOONLAB_API uint32_t moonlab_tdvp_history_num_steps(const moonlab_tdvp_engine_t* engine);
+
+/**
+ * @brief Read the scalar fields of step @p step from the engine's
+ *        history.
+ *
+ * @param[in]  engine  Engine handle.
+ * @param[in]  step    Step index; must be < ::moonlab_tdvp_history_num_steps.
+ * @param[out] time    Out-time (may be NULL).
+ * @param[out] energy  Out-energy (may be NULL).
+ * @param[out] norm    Out-norm (may be NULL).
+ * @return 0 on success, -1 if @p engine is NULL or @p step is out of
+ *         range.
+ * @since 0.4.1
+ */
+MOONLAB_API int moonlab_tdvp_history_get_step(const moonlab_tdvp_engine_t* engine,
+                                               uint32_t step,
+                                               double* time,
+                                               double* energy,
+                                               double* norm);
+
+/**
+ * @brief Read the recorded per-bond chi snapshot for step @p step into
+ *        a caller-provided buffer.
+ *
+ * Writes ::moonlab_tdvp_num_bonds values into @p out_chi.  When the
+ * adaptive controller was disabled at engine creation the buffer is
+ * filled with zeroes (the legacy path does not record per-bond chi).
+ *
+ * @return 0 on success, -1 on out-of-range step or NULL buffer.
+ * @since 0.4.1
+ */
+MOONLAB_API int moonlab_tdvp_history_get_bond_chi(const moonlab_tdvp_engine_t* engine,
+                                                   uint32_t step,
+                                                   uint32_t* out_chi,
+                                                   uint32_t buf_capacity);
+
+/** Release the engine and all internal allocations. */
+MOONLAB_API void moonlab_tdvp_engine_free(moonlab_tdvp_engine_t* engine);
 
 /* ---- Diagnostic stringifier (stable from 0.2.1) -------------------- */
 

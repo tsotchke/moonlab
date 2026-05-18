@@ -663,6 +663,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/qrng.c
     src/applications/qrng_di.c
     src/applications/moonlab_qrng_export.c
+    src/applications/moonlab_tdvp_export.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
     # HEP / lattice gauge theory bench primitives.  The 1+1D Z2 LGT Pauli-sum
