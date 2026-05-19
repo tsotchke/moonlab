@@ -171,6 +171,7 @@ fn main() {
 #include "{root}/src/algorithms/tensor_network/tn_state.h"
 #include "{root}/src/algorithms/tensor_network/dmrg.h"
 #include "{root}/src/algorithms/tensor_network/tdvp.h"
+#include "{root}/src/algorithms/tensor_network/ca_peps.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -312,6 +313,36 @@ fn main() {
         .allowlist_function("entanglement_negativity_2qubit")
         .allowlist_function("entanglement_renyi_entropy")
         .allowlist_function("entanglement_mutual_information")
+        // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
+        .allowlist_type("ca_peps_error_t")
+        .allowlist_type("moonlab_ca_peps_t")
+        .allowlist_function("moonlab_ca_peps_create")
+        .allowlist_function("moonlab_ca_peps_free")
+        .allowlist_function("moonlab_ca_peps_clone")
+        .allowlist_function("moonlab_ca_peps_lx")
+        .allowlist_function("moonlab_ca_peps_ly")
+        .allowlist_function("moonlab_ca_peps_num_qubits")
+        .allowlist_function("moonlab_ca_peps_max_bond_dim")
+        .allowlist_function("moonlab_ca_peps_current_bond_dim")
+        .allowlist_function("moonlab_ca_peps_max_half_cut_entropy")
+        .allowlist_function("moonlab_ca_peps_h")
+        .allowlist_function("moonlab_ca_peps_s")
+        .allowlist_function("moonlab_ca_peps_sdag")
+        .allowlist_function("moonlab_ca_peps_x")
+        .allowlist_function("moonlab_ca_peps_y")
+        .allowlist_function("moonlab_ca_peps_z")
+        .allowlist_function("moonlab_ca_peps_cnot")
+        .allowlist_function("moonlab_ca_peps_cz")
+        .allowlist_function("moonlab_ca_peps_rx")
+        .allowlist_function("moonlab_ca_peps_ry")
+        .allowlist_function("moonlab_ca_peps_rz")
+        .allowlist_function("moonlab_ca_peps_t_gate")
+        .allowlist_function("moonlab_ca_peps_t_dagger")
+        .allowlist_function("moonlab_ca_peps_phase")
+        .allowlist_function("moonlab_ca_peps_normalize")
+        .allowlist_function("moonlab_ca_peps_norm")
+        .allowlist_function("moonlab_ca_peps_expect_pauli")
+        .allowlist_function("moonlab_ca_peps_prob_z")
         // Single-qubit Kraus noise channels (since 0.2.1; Rust wrapper from 0.4.8).
         .allowlist_function("noise_depolarizing_single")
         .allowlist_function("noise_depolarizing_two_qubit")
