@@ -7,7 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.6.)
+(No unreleased changes since v0.6.7.)
+
+## [0.6.7] - 2026-05-19
+
+Decoder-bench harness scaffold.  Five-slot dispatcher for the
+QEC decoder zoo: GREEDY + MWPM_EXACT in-tree (always available),
+SBNN + LIBIRREP_SS + PYMATCHING slots returning
+`MOONLAB_DECODER_NOT_BUILT` until v0.6.8 wires external linkage.
+
+### Added
+
+- `src/applications/decoder_bench.{c,h}`: unified dispatcher with
+  `moonlab_decoder_decode(slot, input)` taking
+  `{code_geometry, syndromes[], corrections[]}`.  In-tree GREEDY
+  implementation does nearest-pair matching on the toric d x d
+  lattice with shortest-path edge selection.
+- `moonlab_decoder_slot_available(slot)` and
+  `moonlab_decoder_slot_name(slot)` for runtime introspection +
+  JSON output.
+- Numerically stable slot tags (0..4) so bench JSONs can dispatch
+  by ID across versions.
+
+### Verified
+
+`test_decoder_bench` exercises 21 assertions covering:
+- Slot availability table matches v0.6.7 contract.
+- Name round-trip for all five slots.
+- GREEDY on zero syndrome -> 0 flips.
+- GREEDY on two adjacent torus defects -> 1 edge flipped.
+- SBNN / LIBIRREP_SS / PYMATCHING -> `NOT_BUILT`.
+- Error paths: NULL input / code / syndromes rejected; distance
+  < 2 rejected.
+
+### Next phases
+
+- v0.6.8: wire SBNN slot to `~/Desktop/spin_based_neural_network/
+  include/qec_decoder/qec_decoder.h`'s `qec_decoder_*` API
+  (greedy / MWPM / transformer / mamba kinds) behind
+  `QSIM_ENABLE_SBNN`.  Wire LIBIRREP_SS slot to
+  `irrep_single_shot_*` from `~/Desktop/libirrep`.  Stim
+  pymatching slot via Python bridge.
+- v0.6.9: lift the exact-MWPM + 2-opt path out of
+  `examples/applications/surface_code_threshold.c` into a
+  library function and point MWPM_EXACT at it (currently
+  shares GREEDY).
+- v0.7.0: distributed scheduler atop `src/distributed/`.
 
 ## [0.6.6] - 2026-05-19
 

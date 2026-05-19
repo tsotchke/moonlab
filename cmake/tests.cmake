@@ -773,6 +773,17 @@
         TIMEOUT 60
     )
 
+    # Multi-decoder bench harness scaffold (since v0.6.7).  Five
+    # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
+    # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
+    add_executable(test_decoder_bench tests/unit/test_decoder_bench.c)
+    target_link_libraries(test_decoder_bench PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_decoder_bench COMMAND test_decoder_bench)
+    set_tests_properties(unit_decoder_bench PROPERTIES
+        LABELS "qec"
+        TIMEOUT 30
+    )
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
