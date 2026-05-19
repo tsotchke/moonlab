@@ -46,9 +46,11 @@ pub mod fusion;
 pub mod grover;
 pub mod mpdo;
 pub mod noise;
+pub mod qaoa;
 pub mod state;
 pub mod tdvp;
 pub mod topology;
+pub mod vqe;
 pub mod z2_lgt;
 
 // Re-export main types

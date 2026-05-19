@@ -7,7 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.8.)
+(No unreleased changes since v0.4.9.)
+
+## [0.4.9] - 2026-05-18
+
+The final algorithm-tier Rust-side gap closure: VQE and QAOA, the
+two variational solvers Python has had since v0.2.0 and Rust didn't.
+After this release every algorithm with a Python class has a Rust
+analog wrapping the same C entry points.
+
+### Added
+
+- **`moonlab::vqe`** wrapping `src/algorithms/vqe.{c,h}`:
+  - `PauliHamiltonian::h2(bond_distance)`,
+    `PauliHamiltonian::lih(bond_distance)`,
+    `PauliHamiltonian::builder(num_qubits, num_terms)` for custom
+    Hamiltonians, and `exact_ground_state_energy()` for the
+    `O(4^n)` direct-diagonalisation reference value.
+  - `OptimizerType` enum (`Cobyla`, `Lbfgs`, `Adam`,
+    `GradientDescent`) mirroring `vqe_optimizer_type_t`.
+  - `VqeSolver::new(hamiltonian, num_layers, optimizer_type)`
+    constructs the `(hamiltonian, ansatz, optimizer, entropy)`
+    quadruple and tears it down in drop order.  `solve()` returns
+    a `VqeResult` with the ground-state energy, the optimal
+    variational parameters (copied into an owned `Vec<f64>`),
+    iteration count, gradient norm at exit, and a `converged`
+    flag.  `compute_energy(&params)` evaluates the objective
+    without running the optimizer.
+  - Internal `EntropyGuard` RAII type leases a
+    `quantum_entropy_ctx_t` for the solver's lifetime (mirrors the
+    pattern in [`crate::bell`] and [`crate::grover`]).
+- **`moonlab::qaoa`** wrapping `src/algorithms/qaoa.{c,h}`:
+  - `Graph::new(num_vertices, edges)` builds a weighted graph and
+    `IsingModel::from_maxcut(&graph)` produces the corresponding
+    Ising encoding.  `IsingModel::new(num_qubits)` opens the
+    fluent path; `set_coupling(i, j, value)` + `set_field(i, h_i)`
+    populate it.  `evaluate(bitstring)` returns the classical
+    Ising energy.
+  - `QaoaSolver::new(ising, num_layers)` builds the
+    `(ising, p, entropy)` triple.  `solve()` returns a
+    `QaoaResult` with the best bitstring, the best energy, the
+    optimal `(gamma, beta)` angle vectors copied into owned
+    `Vec<f64>`s, iteration count, approximation ratio,
+    `converged` flag, and total shot count.
+    `compute_expectation(&gamma, &beta)` evaluates the QAOA
+    objective at a fixed angle pair.
+- 7 new unit tests across the two modules: H2 layout, custom
+  builder round-trip (`H = 0.5 Z`, `E_0 = -0.5`), Adam-driven
+  H2 solve, MaxCut triangle Ising-energy ordering, p=1 QAOA on a
+  triangle, compute-expectation finite-value smoke test, and
+  graph-edge bounds checking.
+
+### Changed
+
+- `moonlab-sys` allowlist extended with
+  `vqe_create_h2o_hamiltonian`, `vqe_exact_ground_state_energy`,
+  `vqe_hartree_to_kcalmol`, `pauli_hamiltonian_create`,
+  `pauli_hamiltonian_add_term`, `ising_model_create`,
+  `ising_model_set_coupling`, `ising_model_set_field`, and
+  `ising_model_evaluate`.
+
+Manifests bumped 0.4.8 -> 0.4.9 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest (re-used; no C changes), 193/193 pytest,
+cargo test 73 + 48 + 20 = 141 (was 132; +9 from the two new modules).
 
 ## [0.4.8] - 2026-05-18
 
