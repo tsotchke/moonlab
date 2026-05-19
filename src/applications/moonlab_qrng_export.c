@@ -178,8 +178,8 @@ static double trace_heisenberg_ground_energy_export(uint32_t num_sites,
                                                      max_bond_dim, num_sweeps);     \
     }
 
-ML_TFIM_ENERGY_EXPORT_API(moonlab_dmrg_tfim_energy)
-ML_HEISENBERG_ENERGY_EXPORT_API(moonlab_dmrg_heisenberg_energy)
+ML_TFIM_ENERGY_EXPORT_API(moonlab_dmrg_tfim_energy) /* macro-generated API */
+ML_HEISENBERG_ENERGY_EXPORT_API(moonlab_dmrg_heisenberg_energy) /* macro-generated API */
 
 /* ================================================================== */
 /*  Variational-D ABI wrappers (since 0.2.1).                          */

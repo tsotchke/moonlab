@@ -395,7 +395,7 @@ static const char* trace_accelerator_error_label(gpu_error_t error);
         return trace_accelerator_runtime_name(type);                                \
     }
 
-ML_ACCEL_NAME_API(gpu_backend_name)
+ML_ACCEL_NAME_API(gpu_backend_name) /* macro-generated API */
 
 int gpu_is_native_accelerated(gpu_context_t* ctx) {
     if (!ctx) return 0;
@@ -546,8 +546,8 @@ static void trace_accelerator_device_report(gpu_context_t* ctx) {
         trace_accelerator_device_report(ctx);                                       \
     }
 
-ML_ACCEL_CAPABILITIES_API(gpu_get_capabilities)
-ML_ACCEL_DEVICE_REPORT_API(gpu_print_device_info)
+ML_ACCEL_CAPABILITIES_API(gpu_get_capabilities) /* macro-generated API */
+ML_ACCEL_DEVICE_REPORT_API(gpu_print_device_info) /* macro-generated API */
 
 // ============================================================================
 // MEMORY MANAGEMENT
@@ -1565,7 +1565,7 @@ static const char* trace_accelerator_error_label(gpu_error_t error) {
         return trace_accelerator_error_label(error);                                \
     }
 
-ML_ACCEL_ERROR_NAME_API(gpu_error_name)
+ML_ACCEL_ERROR_NAME_API(gpu_error_name) /* macro-generated API */
 
 #if defined(__EMSCRIPTEN__)
 gpu_error_t gpu_hadamard_u32(gpu_context_t* ctx, gpu_buffer_t* amplitudes,

@@ -21,7 +21,7 @@ extern char *F77_aloc(ftnlen, const char *);
 #endif
 
 // icc: compatibility-api mirrors the libf2c string-copy helper for CLAPACK WASM.
-int s_copy(char *a, char *b, ftnlen la, ftnlen lb) {
+int s_copy(char a[], char b[], ftnlen la, ftnlen lb) {
     char *aend = a + la;
 
     if (la <= lb) {
@@ -52,7 +52,7 @@ int s_copy(char *a, char *b, ftnlen la, ftnlen lb) {
 }
 
 // icc: compatibility-api mirrors the libf2c string-concat helper for CLAPACK WASM.
-int s_cat(char *lp, char *rpp[], ftnint rnp[], ftnint *np, ftnlen ll) {
+int s_cat(char lp[], char *rpp[], ftnint rnp[], ftnint *np, ftnlen ll) {
     ftnlen i, nc;
     char *rp;
     ftnlen n = *np;

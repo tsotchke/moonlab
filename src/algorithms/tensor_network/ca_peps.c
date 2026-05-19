@@ -128,9 +128,9 @@ static moonlab_ca_peps_t* trace_ca_peps_clone(const moonlab_ca_peps_t* s) {
         return trace_ca_peps_clone(s);                                              \
     }
 
-ML_CA_PEPS_CREATE_API(moonlab_ca_peps_create)
-ML_CA_PEPS_FREE_API(moonlab_ca_peps_free)
-ML_CA_PEPS_CLONE_API(moonlab_ca_peps_clone)
+ML_CA_PEPS_CREATE_API(moonlab_ca_peps_create) /* macro-generated API */
+ML_CA_PEPS_FREE_API(moonlab_ca_peps_free) /* macro-generated API */
+ML_CA_PEPS_CLONE_API(moonlab_ca_peps_clone) /* macro-generated API */
 
 uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s) { return s ? s->Lx : 0; }
 uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s) { return s ? s->Ly : 0; }
@@ -157,8 +157,8 @@ static double trace_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s) {
         return trace_ca_peps_max_half_cut_entropy(s);                               \
     }
 
-ML_CA_PEPS_CURRENT_BOND_API(moonlab_ca_peps_current_bond_dim)
-ML_CA_PEPS_MAX_ENTROPY_API(moonlab_ca_peps_max_half_cut_entropy)
+ML_CA_PEPS_CURRENT_BOND_API(moonlab_ca_peps_current_bond_dim) /* macro-generated API */
+ML_CA_PEPS_MAX_ENTROPY_API(moonlab_ca_peps_max_half_cut_entropy) /* macro-generated API */
 
 /* ------------------------------------------------------------------ */
 /*  Clifford gates -- tableau-only, geometry-free.  Delegate.          */
@@ -173,12 +173,12 @@ ML_CA_PEPS_MAX_ENTROPY_API(moonlab_ca_peps_max_half_cut_entropy)
         return trace_ca_peps_##name(s, q);                                          \
     }
 
-TRACE_DELEGATE_1Q(h)
-TRACE_DELEGATE_1Q(s)
-TRACE_DELEGATE_1Q(sdag)
-TRACE_DELEGATE_1Q(x)
-TRACE_DELEGATE_1Q(y)
-TRACE_DELEGATE_1Q(z)
+TRACE_DELEGATE_1Q(h) /* macro-generated API */
+TRACE_DELEGATE_1Q(s) /* macro-generated API */
+TRACE_DELEGATE_1Q(sdag) /* macro-generated API */
+TRACE_DELEGATE_1Q(x) /* macro-generated API */
+TRACE_DELEGATE_1Q(y) /* macro-generated API */
+TRACE_DELEGATE_1Q(z) /* macro-generated API */
 
 #undef TRACE_DELEGATE_1Q
 
@@ -209,8 +209,8 @@ static ca_peps_error_t trace_ca_peps_cz(moonlab_ca_peps_t* s,
         return trace_ca_peps_cz(s, a, b);                                           \
     }
 
-ML_CA_PEPS_CNOT_API(moonlab_ca_peps_cnot)
-ML_CA_PEPS_CZ_API(moonlab_ca_peps_cz)
+ML_CA_PEPS_CNOT_API(moonlab_ca_peps_cnot) /* macro-generated API */
+ML_CA_PEPS_CZ_API(moonlab_ca_peps_cz) /* macro-generated API */
 
 /* ------------------------------------------------------------------ */
 /*  Non-Clifford single-qubit rotations.  Delegate.                   */
@@ -227,10 +227,10 @@ ML_CA_PEPS_CZ_API(moonlab_ca_peps_cz)
         return trace_ca_peps_##name(s, q, theta);                                   \
     }
 
-TRACE_DELEGATE_1Q_THETA(rx)
-TRACE_DELEGATE_1Q_THETA(ry)
-TRACE_DELEGATE_1Q_THETA(rz)
-TRACE_DELEGATE_1Q_THETA(phase)
+TRACE_DELEGATE_1Q_THETA(rx) /* macro-generated API */
+TRACE_DELEGATE_1Q_THETA(ry) /* macro-generated API */
+TRACE_DELEGATE_1Q_THETA(rz) /* macro-generated API */
+TRACE_DELEGATE_1Q_THETA(phase) /* macro-generated API */
 
 #undef TRACE_DELEGATE_1Q_THETA
 
@@ -253,8 +253,8 @@ static ca_peps_error_t trace_ca_peps_t_dagger(moonlab_ca_peps_t* s, uint32_t q) 
         return trace_ca_peps_t_dagger(s, q);                                        \
     }
 
-ML_CA_PEPS_T_GATE_API(moonlab_ca_peps_t_gate)
-TRACE_CA_PEPS_T_DAGGER_API(moonlab_ca_peps_t_dagger)
+ML_CA_PEPS_T_GATE_API(moonlab_ca_peps_t_gate) /* macro-generated API */
+TRACE_CA_PEPS_T_DAGGER_API(moonlab_ca_peps_t_dagger) /* macro-generated API */
 
 static ca_peps_error_t trace_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
                                                     const uint8_t* pauli,
@@ -301,10 +301,10 @@ static double trace_ca_peps_norm(const moonlab_ca_peps_t* s) {
         return trace_ca_peps_norm(s);                                               \
     }
 
-ML_CA_PEPS_PAULI_ROTATION_API(moonlab_ca_peps_pauli_rotation)
-TRACE_CA_PEPS_IMAG_PAULI_ROTATION_API(moonlab_ca_peps_imag_pauli_rotation)
-ML_CA_PEPS_NORMALIZE_API(moonlab_ca_peps_normalize)
-ML_CA_PEPS_NORM_API(moonlab_ca_peps_norm)
+ML_CA_PEPS_PAULI_ROTATION_API(moonlab_ca_peps_pauli_rotation) /* macro-generated API */
+TRACE_CA_PEPS_IMAG_PAULI_ROTATION_API(moonlab_ca_peps_imag_pauli_rotation) /* macro-generated API */
+ML_CA_PEPS_NORMALIZE_API(moonlab_ca_peps_normalize) /* macro-generated API */
+ML_CA_PEPS_NORM_API(moonlab_ca_peps_norm) /* macro-generated API */
 
 /* ------------------------------------------------------------------ */
 /*  Pauli expectation.  Delegate -- the underlying contraction is     */
@@ -355,9 +355,9 @@ static ca_peps_error_t trace_ca_peps_prob_z(const moonlab_ca_peps_t* s,
         return trace_ca_peps_prob_z(s, q, out_prob);                                \
     }
 
-ML_CA_PEPS_EXPECT_PAULI_API(moonlab_ca_peps_expect_pauli)
-TRACE_CA_PEPS_EXPECT_PAULI_SUM_API(moonlab_ca_peps_expect_pauli_sum)
-ML_CA_PEPS_PROB_Z_API(moonlab_ca_peps_prob_z)
+ML_CA_PEPS_EXPECT_PAULI_API(moonlab_ca_peps_expect_pauli) /* macro-generated API */
+TRACE_CA_PEPS_EXPECT_PAULI_SUM_API(moonlab_ca_peps_expect_pauli_sum) /* macro-generated API */
+ML_CA_PEPS_PROB_Z_API(moonlab_ca_peps_prob_z) /* macro-generated API */
 
 /* ------------------------------------------------------------------ */
 /*  Variational-D run (delegate to CA-MPS engine).                     */
@@ -401,4 +401,4 @@ static int trace_ca_peps_var_d_run(moonlab_ca_peps_t* state,
                                        out_final_energy);                           \
     }
 
-ML_CA_PEPS_VAR_D_RUN_API(moonlab_ca_peps_var_d_run)
+ML_CA_PEPS_VAR_D_RUN_API(moonlab_ca_peps_var_d_run) /* macro-generated API */

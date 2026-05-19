@@ -83,7 +83,7 @@ static void parse_args(int argc, char **argv, config_t *config) {
     config->max_depth = DEFAULT_MAX_DEPTH;
     config->min_bond = DEFAULT_MIN_BOND;
     config->max_bond = DEFAULT_MAX_BOND;
-    strcpy(config->output_file, "benchmark_results.csv");
+    snprintf(config->output_file, sizeof(config->output_file), "%s", "benchmark_results.csv");
     config->bench_state = 1;
     config->bench_tensor = 1;
 
@@ -121,7 +121,7 @@ static void parse_args(int argc, char **argv, config_t *config) {
                 }
                 break;
             case 'o':
-                strncpy(config->output_file, optarg, sizeof(config->output_file) - 1);
+                snprintf(config->output_file, sizeof(config->output_file), "%s", optarg);
                 break;
             case 't':
                 if (strcmp(optarg, "state") == 0) {

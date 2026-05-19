@@ -259,7 +259,7 @@ static void trace_config_accelerator_device_selection(qsim_config_t* config,
         trace_config_accelerator_device_selection(config, device_id);               \
     }
 
-ML_CONFIG_ACCELERATOR_DEVICE_API(qsim_config_set_gpu_device)
+ML_CONFIG_ACCELERATOR_DEVICE_API(qsim_config_set_gpu_device) /* macro-generated API */
 
 void qsim_config_set_seed(qsim_config_t* config, uint64_t seed) {
     if (config) config->seed = seed;
@@ -425,7 +425,7 @@ static int trace_config_validation(const qsim_config_t* config,
         return trace_config_validation(config, error_msg, error_len);               \
     }
 
-ML_CONFIG_VALIDATE_API(qsim_config_validate)
+ML_CONFIG_VALIDATE_API(qsim_config_validate) /* macro-generated API */
 
 // ============================================================================
 // AUTO-DETECTION
@@ -492,7 +492,7 @@ static int trace_config_runtime_availability(qsim_backend_t backend) {
         return trace_config_runtime_availability(backend);                          \
     }
 
-ML_CONFIG_BACKEND_AVAILABILITY_API(qsim_backend_available)
+ML_CONFIG_BACKEND_AVAILABILITY_API(qsim_backend_available) /* macro-generated API */
 
 /**
  * @brief Runtime CPUID check for x86 SIMD features
@@ -749,7 +749,7 @@ static qsim_backend_t trace_config_backend_from_string(const char* str) {
         return trace_config_backend_from_string(str);                               \
     }
 
-ML_CONFIG_BACKEND_PARSE_API(qsim_backend_from_string)
+ML_CONFIG_BACKEND_PARSE_API(qsim_backend_from_string) /* macro-generated API */
 
 const char* qsim_simd_to_string(qsim_simd_t simd) {
     switch (simd) {
@@ -828,7 +828,7 @@ static void trace_config_performance_preset(qsim_config_t* config) {
         trace_config_performance_preset(config);                                    \
     }
 
-ML_CONFIG_PERFORMANCE_PRESET_API(qsim_config_preset_performance)
+ML_CONFIG_PERFORMANCE_PRESET_API(qsim_config_preset_performance) /* macro-generated API */
 
 void qsim_config_preset_accuracy(qsim_config_t* config) {
     if (!config) return;

@@ -419,7 +419,7 @@ static tdvp_engine_t *trace_tdvp_engine_context(tn_mps_state_t *mps,
         return trace_tdvp_engine_context(mps, mpo, config);                         \
     }
 
-ML_TDVP_ENGINE_CREATE_API(tdvp_engine_create)
+ML_TDVP_ENGINE_CREATE_API(tdvp_engine_create) /* macro-generated API */
 
 void tdvp_engine_free(tdvp_engine_t *engine) {
     if (!engine) return;
@@ -688,7 +688,7 @@ static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
         return trace_tdvp_step(engine, result);                                      \
     }
 
-ML_TDVP_STEP_API(tdvp_step)
+ML_TDVP_STEP_API(tdvp_step) /* macro-generated API */
 
 int tdvp_evolve_to(tdvp_engine_t *engine,
                     double target_time,
@@ -754,7 +754,7 @@ static int trace_tdvp_single_step(tn_mps_state_t *mps,
         return trace_tdvp_single_step(mps, mpo, dt, config, energy);                \
     }
 
-ML_TDVP_SINGLE_STEP_API(tdvp_single_step)
+ML_TDVP_SINGLE_STEP_API(tdvp_single_step) /* macro-generated API */
 
 // ============================================================================
 // EVOLUTION WITH OBSERVABLES
@@ -803,4 +803,4 @@ static int trace_tdvp_observable_evolution(tdvp_engine_t *engine,
                                                user_data, measure_interval);        \
     }
 
-ML_TDVP_OBSERVABLE_EVOLUTION_API(tdvp_evolve_with_observables)
+ML_TDVP_OBSERVABLE_EVOLUTION_API(tdvp_evolve_with_observables) /* macro-generated API */

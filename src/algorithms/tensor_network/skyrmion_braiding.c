@@ -624,7 +624,7 @@ static braid_result_t *trace_skyrmion_braid_protocol(tn_mps_state_t *mps,
         return trace_skyrmion_braid_protocol(mps, mpo, lat, path, config);          \
     }
 
-ML_SKYRMION_BRAID_API(skyrmion_braid)
+ML_SKYRMION_BRAID_API(skyrmion_braid) /* macro-generated API */
 
 static braid_result_t *trace_skyrmion_double_braid_protocol(tn_mps_state_t *mps,
                                                             const mpo_t *mpo,
@@ -737,7 +737,7 @@ static braid_result_t *trace_skyrmion_double_braid_protocol(tn_mps_state_t *mps,
                                                     path1, path2, config);          \
     }
 
-ML_SKYRMION_DOUBLE_BRAID_API(skyrmion_double_braid)
+ML_SKYRMION_DOUBLE_BRAID_API(skyrmion_double_braid) /* macro-generated API */
 
 // ============================================================================
 // PHASE EXTRACTION
@@ -993,9 +993,9 @@ static int trace_topological_gate_apply(topo_qubit_t *qubit,
         return trace_topological_gate_apply(qubit, gate, config);                   \
     }
 
-ML_TOPO_QUBIT_CREATE_API(topo_qubit_create)
-ML_TOPO_QUBIT_FREE_API(topo_qubit_free)
-ML_TOPO_GATE_APPLY_API(topo_gate_apply)
+ML_TOPO_QUBIT_CREATE_API(topo_qubit_create) /* macro-generated API */
+ML_TOPO_QUBIT_FREE_API(topo_qubit_free) /* macro-generated API */
+ML_TOPO_GATE_APPLY_API(topo_gate_apply) /* macro-generated API */
 
 int topo_qubit_measure_z(const topo_qubit_t *qubit) {
     if (!qubit) return 0;

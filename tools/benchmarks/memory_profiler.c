@@ -106,7 +106,7 @@ static void parse_args(int argc, char **argv, profiler_config_t *config) {
     config->min_qubits = DEFAULT_MIN_QUBITS;
     config->max_qubits = DEFAULT_MAX_QUBITS;
     config->iterations = DEFAULT_ITERATIONS;
-    strcpy(config->output_file, "memory_profile.csv");
+    snprintf(config->output_file, sizeof(config->output_file), "%s", "memory_profile.csv");
     config->profile_state = 1;
     config->profile_tensor = 1;
 
@@ -141,7 +141,7 @@ static void parse_args(int argc, char **argv, profiler_config_t *config) {
                 }
                 break;
             case 'o':
-                strncpy(config->output_file, optarg, sizeof(config->output_file) - 1);
+                snprintf(config->output_file, sizeof(config->output_file), "%s", optarg);
                 break;
             case 'h':
                 print_usage(argv[0]);
