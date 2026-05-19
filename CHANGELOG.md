@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.6.)
+(No unreleased changes since v0.5.7.)
+
+## [0.5.7] - 2026-05-19
+
+Rust examples coverage: 3/14 -> 9/14 modules now have a runnable
+`cargo run --example` demo.  Each demonstrates the full happy path
+of one binding and prints physically-meaningful output that can be
+eyeballed against textbook expectations.
+
+### Added
+
+- `bindings/rust/moonlab/examples/bell_demo.rs`: CHSH across all
+  four Bell pairs (S = 2.816 on |Phi+>, |Phi->, |Psi-> -- |Psi+>
+  fails Tsirelson by construction); Mermin-GHZ |M| = 4.0 (max
+  quantum); Mermin-Klyshko hits the GHZ ideal `2^((n-1)/2)` at
+  n in 2..5.
+- `bindings/rust/moonlab/examples/vqe_demo.rs`: H2 at R=0.74 A
+  converges to E = -1.142171 Ha (matches exact diag);
+  H = 0.5 Z exact GS = -0.500000; LiH at R=1.6 A -> -7.741795 Ha.
+- `bindings/rust/moonlab/examples/grover_demo.rs`: sweeps n in
+  [4, 8] -- P(success) in [0.961, 0.9999], all above the 1 - 1/N
+  ceiling.
+- `bindings/rust/moonlab/examples/clifford_demo.rs`: GHZ states
+  on 8 / 32 / 64 qubits, sampleAll() reproducibly lands on
+  aligned bitstrings under a seeded splitmix64 RNG.
+- `bindings/rust/moonlab/examples/qaoa_demo.rs`: triangle MaxCut
+  at p = 1, 2, 3; p=3 converges to 100% approximation ratio (cuts
+  2 of 3 edges).
+- `bindings/rust/moonlab/examples/fusion_demo.rs`: hardware-
+  efficient ansatzes (n x L = 4x3, 6x3, 8x5, 10x5) -- fusion
+  compresses gate count to ~47-49% of original across all four
+  configurations.
+
+### Verified
+
+- All 6 new examples compile + run cleanly via
+  `cargo run --example NAME -p moonlab`.
+
+Manifests bumped 0.5.6 -> 0.5.7.
 
 ## [0.5.6] - 2026-05-19
 
