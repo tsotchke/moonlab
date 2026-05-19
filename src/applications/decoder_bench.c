@@ -11,6 +11,7 @@
  */
 
 #include "decoder_bench.h"
+#include "mwpm_exact.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -200,8 +201,20 @@ int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
 
     switch (slot) {
     case MOONLAB_DECODER_GREEDY:
-    case MOONLAB_DECODER_MWPM_EXACT: /* shares GREEDY for now; v0.7+ separates */
         return decoder_greedy(in);
+    case MOONLAB_DECODER_MWPM_EXACT: {
+        /* Real exact MWPM (brute-force enumeration up to n=10 defects,
+         * greedy + 2-opt past that).  Falls back to greedy on
+         * INFEASIBLE / OOM. */
+        memset(in->corrections, 0, (size_t)in->code->num_qubits);
+        const int rc = moonlab_mwpm_exact_decode_toric(
+            in->code->distance, in->syndromes,
+            in->num_stabilisers, in->corrections);
+        if (rc == MOONLAB_MWPM_OK || rc == MOONLAB_MWPM_INFEASIBLE) {
+            return MOONLAB_DECODER_OK;
+        }
+        return MOONLAB_DECODER_OOM;
+    }
     case MOONLAB_DECODER_LIBIRREP_SS:
 #ifdef MOONLAB_HAS_LIBIRREP
         return decoder_libirrep_ss(in);

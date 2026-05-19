@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.1.)
+(No unreleased changes since v0.7.2.)
+
+## [0.7.2] - 2026-05-19
+
+Exact MWPM lifted from the threshold-sweep example into the
+stable library.  Decoder-bench `MOONLAB_DECODER_MWPM_EXACT` slot
+now runs the real algorithm instead of falling through to GREEDY.
+
+### Added
+
+- `src/applications/mwpm_exact.{c,h}`:
+  `moonlab_mwpm_exact_decode_toric(distance, syndromes, num_stabs,
+  corrections)`.  Brute-force enumeration up to 10 defects (945
+  matchings), greedy + 2-opt past that.  Geodesic correction path
+  along the shorter wrap.  Lifted intact from
+  `examples/applications/surface_code_threshold.c`.
+- `decoder_bench.c`: MWPM_EXACT slot wires through to the new
+  library function; falls back to OK on INFEASIBLE (odd defect
+  count on closed surface).
+
+### Verified
+
+`test_decoder_bench` gains 2 new MWPM_EXACT scenarios:
+- Two defects on d=5 torus separated by L1 distance 4 -> exactly
+  4 flips (single geodesic).
+- Six defects (three adjacent pairs) -> 3 flips total (optimal
+  pairing recovered).
+
+### Cross-language parity (closing v0.7.2)
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Scheduler         | YES | YES | YES | YES |
+| Decoder bench     | YES | --  | --  | -- |
+| MWPM_EXACT        | YES | --  | --  | -- |
+
+Decoder-bench cross-language bindings land in v0.7.3.
 
 ## [0.7.1] - 2026-05-19
 
