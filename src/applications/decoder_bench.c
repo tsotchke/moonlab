@@ -24,6 +24,11 @@
 #include <irrep/types.h>
 #endif
 
+#ifdef MOONLAB_HAS_SBNN
+#include <qec_decoder/qec_decoder.h>
+#include <toric_code.h>
+#endif
+
 const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot)
 {
     switch (slot) {
@@ -49,8 +54,13 @@ int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot)
         return 0;
 #endif
     case MOONLAB_DECODER_SBNN:
+#ifdef MOONLAB_HAS_SBNN
+        return 1;
+#else
+        return 0;
+#endif
     case MOONLAB_DECODER_PYMATCHING:
-        return 0; /* v0.7+ wires these. */
+        return 0; /* v0.7.6+ wires pymatching. */
     default:
         return 0;
     }
@@ -151,6 +161,63 @@ static int decoder_greedy(const moonlab_decoder_input_t *in)
     return MOONLAB_DECODER_OK;
 }
 
+#ifdef MOONLAB_HAS_SBNN
+/* SBNN: route the syndrome through SbNN's qec_decoder_t.  Default to
+ * the MWPM kind (always available in SbNN v0.4+); the TRANSFORMER /
+ * MAMBA kinds in SbNN fall back to MWPM with a stderr warning, so
+ * this slot is honest even when the learned models are unimplemented
+ * upstream.  Translates moonlab's syndrome byte layout (row-major,
+ * `[a*d + b]`) into SbNN's `plaquette_syndrome` int layout
+ * (`[a*Ly + b]`), runs the decoder, translates SbNN's interleaved
+ * `x_errors[2*(x*Ly+y) + dir]` corrections back into moonlab's
+ * `[0, d*d)` horizontal + `[d*d, 2*d*d)` vertical layout. */
+static int decoder_sbnn(const moonlab_decoder_input_t *in)
+{
+    if (!in->code->is_toric) return MOONLAB_DECODER_INFEASIBLE;
+    const int d = in->code->distance;
+
+    ToricCode *code = initialize_toric_code(d, d);
+    if (!code) return MOONLAB_DECODER_OOM;
+
+    /* Push our syndromes into SbNN's plaquette array. */
+    for (int a = 0; a < d; a++) {
+        for (int b = 0; b < d; b++) {
+            code->plaquette_syndrome[a * d + b] =
+                in->syndromes[a * d + b] ? 1 : 0;
+        }
+    }
+    /* Zero error accumulators so the decoder writes into a clean slate. */
+    for (int q = 0; q < code->num_links; q++) {
+        code->x_errors[q] = 0;
+        code->z_errors[q] = 0;
+    }
+
+    qec_decoder_t dec = qec_decoder_create(QEC_DECODER_MWPM);
+    const int rc = qec_decoder_run(&dec, code);
+    if (rc != 0) {
+        free_toric_code(code);
+        return MOONLAB_DECODER_OOM;
+    }
+
+    /* Translate SbNN's interleaved link-index layout into moonlab's
+     * horizontal-then-vertical layout.  SbNN: `2*(x*Ly + y) + dir`
+     * with dir=0 east (horizontal) and dir=1 north (vertical).
+     * Moonlab: `h_idx(x, y) = x*d + y`, `v_idx(x, y) = d*d + x*d + y`. */
+    memset(in->corrections, 0, (size_t)in->code->num_qubits);
+    for (int x = 0; x < d; x++) {
+        for (int y = 0; y < d; y++) {
+            const int h_sbnn = 2 * (x * d + y);
+            const int v_sbnn = 2 * (x * d + y) + 1;
+            if (code->x_errors[h_sbnn]) in->corrections[x * d + y] ^= 1;
+            if (code->x_errors[v_sbnn]) in->corrections[d * d + x * d + y] ^= 1;
+        }
+    }
+
+    free_toric_code(code);
+    return MOONLAB_DECODER_OK;
+}
+#endif
+
 #ifdef MOONLAB_HAS_LIBIRREP
 /* LIBIRREP_SS: build the matching libirrep toric code, lift it to a
  * single-shot code (Quintavalle-Vasmer-Roffe-Campbell 2021), verify
@@ -222,6 +289,11 @@ int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
         return MOONLAB_DECODER_NOT_BUILT;
 #endif
     case MOONLAB_DECODER_SBNN:
+#ifdef MOONLAB_HAS_SBNN
+        return decoder_sbnn(in);
+#else
+        return MOONLAB_DECODER_NOT_BUILT;
+#endif
     case MOONLAB_DECODER_PYMATCHING:
         return MOONLAB_DECODER_NOT_BUILT;
     default:

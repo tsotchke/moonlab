@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.4.)
+(No unreleased changes since v0.7.5.)
+
+## [0.7.5] - 2026-05-19
+
+**SBNN decoder slot wired real.**  All three external decoder
+slots in the v0.6.7 bench dispatcher now have an implementation
+path; only PYMATCHING remains stubbed.
+
+### Added
+
+- `option(QSIM_ENABLE_SBNN OFF)` + `QSIM_SBNN_ROOT` CMake config.
+- SbNN's `libthqcp` does not currently expose
+  `qec_decoder_*` / `toric_code_*` symbols (the SDK library only
+  carries `libthqcp_coupling` + `libthqcp_sdk`), so the bridge
+  **vendors** SbNN's `src/qec_decoder/qec_decoder.c`,
+  `src/toric_code.c`, and `src/kitaev_model.c` directly into
+  libquantumsim's source list when `QSIM_ENABLE_SBNN=ON`.  All
+  three TUs are stdlib-only -- no transitive deps to chase.
+- `decoder_bench.c::decoder_sbnn`: translates moonlab's
+  row-major syndrome bytes -> SbNN's `plaquette_syndrome[]`,
+  runs `qec_decoder_create(QEC_DECODER_MWPM)` +
+  `qec_decoder_run(&dec, code)`, translates the resulting
+  `x_errors[2*(x*Ly+y) + dir]` interleaved layout back to
+  moonlab's horizontal-then-vertical correction array.
+- `moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN)` returns
+  `1` when SbNN is linked; returns `0` otherwise.
+
+### Verified
+
+```
+=== decoder-bench dispatcher (v0.6.7 scaffold) ===
+  OK    GREEDY available
+  OK    MWPM_EXACT available
+  OK    SBNN available = 1 (build-conditional since v0.7.5)
+  OK    SBNN on zero syndrome -> 0 (SbNN linked, rc=0)
+=== 0 failures ===
+```
+
+### Strategic milestone
+
+This closes the **third strategic pillar** from the v0.6.0 frame:
+all three sibling libraries (libirrep, SbNN, QGTL) plus moonlab's
+in-tree algorithms reach the decoder dispatcher.  The four-pillar
+hardware-design workbench is now operationally complete:
+
+| Pillar              | Status |
+|---------------------|--------|
+| libirrep QEC zoo    | 8 codes / 4 bindings (v0.6.x) |
+| QGTL ingestion      | C / Python / Rust / JS (v0.6.6, v0.6.8) |
+| Distributed scheduler | OpenMP + MPI cross-process (v0.7.0, v0.7.4) |
+| Decoder bench       | GREEDY + MWPM_EXACT + LIBIRREP_SS + SBNN real (v0.6.7-v0.7.5) |
+
+### Next phases
+
+- v0.7.6: state-vector sharding for >32 qubits via
+  `src/distributed/state_partition.{c,h}`.
+- v0.7.7: gRPC / HTTP/2 control plane.
+- v0.7.8: PYMATCHING slot via Python-bridge subprocess.
 
 ## [0.7.4] - 2026-05-19
 

@@ -80,6 +80,9 @@ set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
 option(QSIM_ENABLE_LIBIRREP "Link libirrep for QEC + sector ED + rep theory primitives (since v0.6.0)" OFF)
 set(QSIM_LIBIRREP_ROOT "$ENV{LIBIRREP_ROOT}" CACHE PATH
     "Root of a libirrep source/build tree (fallback when find_package + pkg-config both fail).")
+option(QSIM_ENABLE_SBNN "Link SbNN for the learned QEC-decoder slot (since v0.7.5)" OFF)
+set(QSIM_SBNN_ROOT "$ENV{SBNN_ROOT}" CACHE PATH
+    "Root of a SbNN source/build tree.  Expected layout: <root>/include/qec_decoder/qec_decoder.h, <root>/build/libthqcp.{a,dylib,so}.")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
@@ -597,6 +600,40 @@ else()
     set(QSIM_HAS_LIBIRREP OFF)
 endif()
 
+# SbNN -- learned QEC decoder + ToricCode + equivariant ML.
+# Wires the decoder-bench SBNN slot to qec_decoder_run() via the
+# `libthqcp.{a,dylib,so}` SbNN ships in `<root>/build/`.
+if(QSIM_ENABLE_SBNN)
+    set(QSIM_HAS_SBNN OFF)
+    if(QSIM_SBNN_ROOT)
+        set(_sbnn_inc "${QSIM_SBNN_ROOT}/include")
+        find_library(QSIM_SBNN_LIB
+            NAMES thqcp libthqcp
+            PATHS
+                "${QSIM_SBNN_ROOT}/build"
+                "${QSIM_SBNN_ROOT}/build/lib"
+                "${QSIM_SBNN_ROOT}/lib"
+            NO_DEFAULT_PATH)
+        if(EXISTS "${_sbnn_inc}/qec_decoder/qec_decoder.h" AND QSIM_SBNN_LIB)
+            message(STATUS "SbNN: Found at ${QSIM_SBNN_ROOT} (lib: ${QSIM_SBNN_LIB})")
+            add_library(qsim_sbnn_import INTERFACE)
+            target_include_directories(qsim_sbnn_import INTERFACE "${_sbnn_inc}")
+            target_link_libraries(qsim_sbnn_import INTERFACE "${QSIM_SBNN_LIB}")
+            set(QSIM_HAS_SBNN ON)
+            set(QSIM_SBNN_TARGET qsim_sbnn_import)
+        endif()
+    endif()
+    if(NOT QSIM_HAS_SBNN)
+        message(FATAL_ERROR
+            "QSIM_ENABLE_SBNN=ON but SbNN could not be located.  "
+            "Pass -DQSIM_SBNN_ROOT=<path> pointing at a tree with "
+            "include/qec_decoder/qec_decoder.h + build/libthqcp.{a,dylib,so}.  "
+            "Re-run with -DQSIM_ENABLE_SBNN=OFF to skip this dependency.")
+    endif()
+else()
+    set(QSIM_HAS_SBNN OFF)
+endif()
+
 # ==============================================================================
 # Source Files
 # ==============================================================================
@@ -878,6 +915,21 @@ endif()
 # itself stays in QSIM_INTEGRATION_SOURCES (compiled unconditionally so
 # the API symbols always exist); MOONLAB_HAS_LIBIRREP=1 selects the
 # implementation that actually calls into libirrep.
+if(QSIM_HAS_SBNN)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_SBNN=1)
+    target_include_directories(quantumsim PRIVATE "${QSIM_SBNN_ROOT}/include")
+    # SbNN's libthqcp (the public coupling SDK) doesn't include the
+    # qec_decoder + toric_code + kitaev_model object files, so we
+    # vendor their TUs directly when QSIM_ENABLE_SBNN=ON.  All three
+    # are stdlib-only -- no transitive deps to chase.
+    target_sources(quantumsim PRIVATE
+        "${QSIM_SBNN_ROOT}/src/qec_decoder/qec_decoder.c"
+        "${QSIM_SBNN_ROOT}/src/toric_code.c"
+        "${QSIM_SBNN_ROOT}/src/kitaev_model.c"
+    )
+    message(STATUS "SbNN decoder slot: ON (vendored qec_decoder + toric_code from ${QSIM_SBNN_ROOT})")
+endif()
+
 if(QSIM_HAS_LIBIRREP)
     target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_LIBIRREP=1)
     target_link_libraries(quantumsim PRIVATE ${QSIM_LIBIRREP_TARGET})
