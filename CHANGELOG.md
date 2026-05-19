@@ -7,7 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.0.)
+(No unreleased changes since v0.6.1.)
+
+## [0.6.1] - 2026-05-19
+
+Two substantial bridge extensions on top of v0.6.0's CMake scaffold:
+a **sector-resolved Heisenberg ED** entry point that unlocks N > 14
+ground-state diagonalisation moonlab cannot reach via
+`mpo_to_matrix`, and a **CSS-code handle layer** opening the door to
+libirrep's full 18-module QEC zoo behind one opaque type.
+
+### Added — sector-ED bridge
+
+- `moonlab_libirrep_heisenberg_sector_e0()` in
+  `src/integration/libirrep_bridge.{c,h}`: builds a lattice via
+  `irrep_lattice_build`, a space group via `irrep_space_group_build`,
+  a rep table at fixed popcount via `irrep_sg_rep_table_build`, the
+  Heisenberg Hamiltonian, and runs full-reorth Lanczos with
+  `irrep_heisenberg_apply_in_sector` as the matvec on the orbit-
+  representative basis.  Supports kagome / triangular / honeycomb /
+  square lattices and the seven wallpaper groups libirrep ships
+  (`P1`, `P6MM`, `P4MM`, `P3M1`, `P2`, `P6`, `P4`, `P31M`).
+- `moonlab_libirrep_lattice_kind_t` + `moonlab_libirrep_wallpaper_t`
+  enums; numeric values match libirrep's underlying enums for
+  zero-cost interop.
+- `tests/unit/test_libirrep_sector_ed.c` (140 LOC, 3 cluster sizes):
+  - N = 12 kagome 2x2 Sz=0: reproduces the full-ED reference
+    `-5.44487522` to <1e-6 (singlet GS lives in this sector).
+  - N = 18 kagome 3x2 Sz=0: out of moonlab's `mpo_to_matrix` reach;
+    reports E_0 + per-site value.
+  - N = 24 kagome 4x2 Sz=0: out of any moonlab path; demonstrates
+    the new reach (~337k sector dim vs 16 777 216 full Hilbert).
+  Test gracefully exits 77 (CTest SKIP) when libirrep isn't linked.
+
+### Added — CSS-code bridge
+
+- `moonlab_libirrep_qec_t` opaque handle wrapping `irrep_css_code_t`,
+  plus `moonlab_libirrep_surface_code_new(distance)` first factory.
+- Accessors: `_n_qubits`, `_n_x_stabs`, `_n_z_stabs`,
+  `_logical_qubits`, `_distance` (with brute-force enumeration
+  cache), `_get_x_check_row` + `_get_z_check_row` (flat 0/1 byte
+  buffers).
+- `tests/unit/test_libirrep_css.c`: surface code d=3 confirms
+  `(n=9, m_X=4, m_Z=4, k=1, d=3)`; d=5 confirms structural shape;
+  error paths (d<2 reject, NULL output reject, idempotent
+  `qec_free(NULL)`) covered.
+
+### Verified
+
+- libirrep ON:
+  `cmake -DQSIM_ENABLE_LIBIRREP=ON -DQSIM_LIBIRREP_ROOT=/Users/tyr/Desktop/libirrep`
+  builds clean, both new tests pass.  Surface-code d=3 brute-force
+  distance is exact.  Sector-ED N=12 matches PRB 83, 212401 to
+  <1e-6.
+- libirrep OFF (default): bridge entry points compile to stubs
+  returning `MOONLAB_LIBIRREP_NOT_BUILT`; both new tests
+  exit 77 (CTest "skip"); no other test regression.
+
+### Next phases
+
+- v0.6.2: expand the CSS-code bridge with toric, color, BB qLDPC,
+  hypergraph-product, and X-cube factories.  Wire moonlab's
+  existing JS / Python / Rust `SurfaceCode` binding so it
+  dispatches via libirrep when available.
+- v0.6.3: QGTL `moonlab_backend.c` — moonlab becomes the
+  simulator backend QGTL ships circuits through before deploying
+  to IBM Quantum / Rigetti / IonQ / D-Wave hardware.
+- v0.6.4: SbNN decoder bench harness wiring the libirrep
+  `single_shot.h` decoder against Stim's pymatching.
 
 ## [0.6.0] - 2026-05-19
 
