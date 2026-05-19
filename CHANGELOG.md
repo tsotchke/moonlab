@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.8.)
+(No unreleased changes since v0.6.9.)
+
+## [0.6.9] - 2026-05-19
+
+LIBIRREP_SS decoder slot wired real.  When
+`-DQSIM_ENABLE_LIBIRREP=ON` at configure time,
+`moonlab_decoder_decode(MOONLAB_DECODER_LIBIRREP_SS, ...)`:
+
+1. Builds the matching libirrep toric code via `irrep_toric_init`
+   + `irrep_toric_code_build_css`.
+2. Lifts to a single-shot code (Quintavalle-Vasmer-Roffe-Campbell
+   2021) via `irrep_single_shot_lift`, which auto-computes
+   meta-check matrices `(M_X, M_Z)` from the F2 left-nullspaces.
+3. Verifies `M_X * H_X = 0` and `M_Z * H_Z = 0` via
+   `irrep_single_shot_verify_meta`.  Returns INFEASIBLE if the
+   code has no meta-check redundancy (e.g. plain rotated surface,
+   not natively single-shot).
+4. Delegates to in-tree GREEDY for the data-qubit correction.
+
+The libirrep call's purpose is to validate the code is
+single-shot-compatible -- a precondition for a full single-shot
+decoder.  Routing the meta-syndrome into the decoding logic to
+filter measurement errors is the v0.7+ piece.
+
+### Verified
+
+`test_decoder_bench` exercises the slot in both build modes:
+- libirrep ON: slot reports available, rc=0 on zero syndrome,
+  meta-check lift succeeds for the toric d=3 cube redundancy.
+- libirrep OFF: slot reports unavailable, returns
+  `MOONLAB_DECODER_NOT_BUILT`.
+
+### Cross-language parity status (closing v0.6)
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Decoder bench     | YES | --  | --  | -- |
+| LIBIRREP_SS slot  | YES (real) | -- | -- | -- |
+
+### Next phases
+
+- v0.6.10: Python / Rust / JS bindings for the decoder bench
+  dispatcher (closes the decoder-bench cross-language parity row).
+- v0.7.0: distributed scheduler MVP atop `src/distributed/` --
+  cloud-platform foundation.  Bell circuit end-to-end across N
+  MPI ranks with JSON job spec + result store.
 
 ## [0.6.8] - 2026-05-19
 

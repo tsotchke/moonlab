@@ -16,6 +16,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef MOONLAB_HAS_LIBIRREP
+#include <irrep/css_code.h>
+#include <irrep/single_shot.h>
+#include <irrep/toric_code.h>
+#include <irrep/types.h>
+#endif
+
 const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot)
 {
     switch (slot) {
@@ -34,10 +41,15 @@ int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot)
     case MOONLAB_DECODER_GREEDY:
     case MOONLAB_DECODER_MWPM_EXACT:
         return 1;
-    case MOONLAB_DECODER_SBNN:
     case MOONLAB_DECODER_LIBIRREP_SS:
+#ifdef MOONLAB_HAS_LIBIRREP
+        return 1;
+#else
+        return 0;
+#endif
+    case MOONLAB_DECODER_SBNN:
     case MOONLAB_DECODER_PYMATCHING:
-        return 0; /* v0.6.8 flips these. */
+        return 0; /* v0.7+ wires these. */
     default:
         return 0;
     }
@@ -138,6 +150,43 @@ static int decoder_greedy(const moonlab_decoder_input_t *in)
     return MOONLAB_DECODER_OK;
 }
 
+#ifdef MOONLAB_HAS_LIBIRREP
+/* LIBIRREP_SS: build the matching libirrep toric code, lift it to a
+ * single-shot code (Quintavalle-Vasmer-Roffe-Campbell 2021), verify
+ * the meta-check property, then defer to greedy for the data-qubit
+ * correction.  The libirrep call's purpose is to confirm the code's
+ * meta-check matrices exist + are valid -- a precondition for a real
+ * single-shot decoder.  Full single-shot decoding (using the
+ * meta-syndrome to filter measurement errors) is a v0.7+ piece. */
+static int decoder_libirrep_ss(const moonlab_decoder_input_t *in)
+{
+    if (!in->code->is_toric) return MOONLAB_DECODER_INFEASIBLE;
+
+    irrep_toric_params_t p;
+    if (irrep_toric_init(&p, in->code->distance, in->code->distance) != IRREP_OK) {
+        return MOONLAB_DECODER_OOM;
+    }
+    irrep_css_code_t css;
+    if (irrep_toric_code_build_css(&p, &css) != IRREP_OK) {
+        return MOONLAB_DECODER_OOM;
+    }
+    irrep_single_shot_code_t ss;
+    irrep_status_t st = irrep_single_shot_lift(&css, &ss);
+    if (st != IRREP_OK) {
+        irrep_css_code_free(&css);
+        return MOONLAB_DECODER_OOM;
+    }
+    st = irrep_single_shot_verify_meta(&ss);
+    irrep_single_shot_code_free(&ss);
+    irrep_css_code_free(&css);
+    if (st != IRREP_OK) {
+        return MOONLAB_DECODER_INFEASIBLE; /* meta-check failed: code not single-shot */
+    }
+    /* Single-shot lift verified.  Defer to greedy for correction. */
+    return decoder_greedy(in);
+}
+#endif
+
 int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
                            const moonlab_decoder_input_t  *in)
 {
@@ -151,10 +200,15 @@ int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
 
     switch (slot) {
     case MOONLAB_DECODER_GREEDY:
-    case MOONLAB_DECODER_MWPM_EXACT: /* shares GREEDY for now; v0.6.8 separates */
+    case MOONLAB_DECODER_MWPM_EXACT: /* shares GREEDY for now; v0.7+ separates */
         return decoder_greedy(in);
-    case MOONLAB_DECODER_SBNN:
     case MOONLAB_DECODER_LIBIRREP_SS:
+#ifdef MOONLAB_HAS_LIBIRREP
+        return decoder_libirrep_ss(in);
+#else
+        return MOONLAB_DECODER_NOT_BUILT;
+#endif
+    case MOONLAB_DECODER_SBNN:
     case MOONLAB_DECODER_PYMATCHING:
         return MOONLAB_DECODER_NOT_BUILT;
     default:
