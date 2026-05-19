@@ -761,6 +761,18 @@
         SKIP_RETURN_CODE 77
     )
 
+    # QGTL-shaped circuit-ingestion surface (since v0.6.6).  Validates
+    # the moonlab_qgtl_* contract QGTL plugs into to route circuits
+    # through moonlab's state-vector backend before paying for IBM /
+    # Rigetti / IonQ shots.
+    add_executable(test_qgtl_backend tests/unit/test_qgtl_backend.c)
+    target_link_libraries(test_qgtl_backend PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgtl_backend COMMAND test_qgtl_backend)
+    set_tests_properties(unit_qgtl_backend PROPERTIES
+        LABELS "qgtl"
+        TIMEOUT 60
+    )
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
