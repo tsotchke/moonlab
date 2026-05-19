@@ -7,7 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.10.)
+(No unreleased changes since v0.4.11.)
+
+## [0.4.11] - 2026-05-18
+
+Rust-side parity for the 2D Clifford-Assisted PEPS simulator that
+Python has had since v0.2.1 and Rust didn't.  CA-PEPS uses the same
+Clifford-tableau + physical-MPS split as CA-MPS but on an Lx x Ly
+square lattice.
+
+### Added
+
+- **`moonlab::ca_peps`** module wrapping
+  `src/algorithms/tensor_network/ca_peps.{c,h}`:
+  - `CaPeps::new(lx, ly, chi_bond)` constructor;
+    `Clone`-via-`moonlab_ca_peps_clone`; RAII-managed handle.
+  - Introspection: `lx`, `ly`, `num_qubits`, `max_bond_dim`,
+    `current_bond_dim`, `norm`, `max_half_cut_entropy`.
+  - All six single-qubit Clifford gates (`h`, `s`, `sdag`, `x`,
+    `y`, `z`) plus `cnot` and `cz` on adjacent linear-index pairs,
+    fluent (return `Result<&mut Self>`).
+  - Non-Clifford gates: `rx`, `ry`, `rz`, `t_gate`, `t_dagger`,
+    `phase`.
+  - `normalize` and `prob_z(q)`.
+  - `expect_pauli(&pauli)` returns the complex
+    `<psi | P | psi>` for an n-qubit Pauli string;
+    `expect_pauli_single(q, PauliCode)` is the convenience helper
+    for single-site observables.
+- `PauliCode` enum (`I=0, X=1, Y=2, Z=3`) mirrors the Python
+  surface and the [`crate::mpdo::PauliCode`] enum from v0.3.0.
+- 6 unit tests covering fresh-state `<Z>` invariant, Hadamard
+  zeros `<Z>`, Bell-pair `<ZZ> = 1`, dimension validation, unit
+  norm, and clone-independence after divergent gates.
+
+### Changed
+
+- `moonlab-sys` allowlist gains 26 `moonlab_ca_peps_*` entries
+  plus the `ca_peps_error_t` enum.
+- `wrapper.h` template now `#include`s
+  `src/algorithms/tensor_network/ca_peps.h`.
+
+Manifests bumped 0.4.10 -> 0.4.11 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest (re-used; no C changes), 193/193
+pytest, cargo test 79 + 48 + 21 = 148 (was 141; +7 from the new
+module).
 
 ## [0.4.10] - 2026-05-18
 

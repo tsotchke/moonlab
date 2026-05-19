@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-core",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "description": "WebAssembly quantum computing simulator core",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

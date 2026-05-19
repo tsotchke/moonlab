@@ -39,6 +39,7 @@
 
 pub mod bell;
 pub mod ca_mps;
+pub mod ca_peps;
 pub mod clifford;
 pub mod error;
 pub mod feynman;
