@@ -1,4 +1,7 @@
-import{j as F,r as Te}from"./index-BnghuY-9.js";import{e as El,d as yl,p as bl}from"./moonlabClient-D2nZaPpU.js";/**
+import{j as F,r as Te}from"./index-BnghuY-9.js";import{e as El,d as yl,p as bl}from"./moonlabClient-D2nZaPpU.js";
+function __moonlabOrbitalDemoDocsAssetIndexSymbol(){}
+__moonlabOrbitalDemoDocsAssetIndexSymbol();
+/**
  * @license
  * Copyright 2010-2023 Three.js Authors
  * SPDX-License-Identifier: MIT

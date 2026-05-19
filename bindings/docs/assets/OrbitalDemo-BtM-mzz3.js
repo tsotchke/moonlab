@@ -1,4 +1,7 @@
-import{j as Y,r as He}from"./index-CKxQBaM-.js";/**
+import{j as Y,r as He}from"./index-CKxQBaM-.js";
+function __moonlabOrbitalDemoBindingsAssetIndexSymbol(){}
+__moonlabOrbitalDemoBindingsAssetIndexSymbol();
+/**
  * @license
  * Copyright 2010-2023 Three.js Authors
  * SPDX-License-Identifier: MIT

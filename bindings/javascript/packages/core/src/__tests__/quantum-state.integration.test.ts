@@ -9,6 +9,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { QuantumState } from '../quantum-state';
 import { magnitudeSquared } from '../complex';
 
+function expectProbabilities(
+  probabilities: ArrayLike<number>,
+  expectedByBasisState: Record<number, number>,
+): void {
+  for (const [basisState, expectedProbability] of Object.entries(expectedByBasisState)) {
+    expect(probabilities[Number(basisState)]).toBeCloseTo(expectedProbability);
+  }
+}
+
 describe('QuantumState Creation', () => {
   let state: QuantumState;
 
@@ -31,10 +40,12 @@ describe('QuantumState Creation', () => {
   it('initializes to |0...0> state', async () => {
     state = await QuantumState.create({ numQubits: 2 });
     const probs = state.getProbabilities();
-    expect(probs[0]).toBeCloseTo(1); // |00> has probability 1
-    expect(probs[1]).toBeCloseTo(0);
-    expect(probs[2]).toBeCloseTo(0);
-    expect(probs[3]).toBeCloseTo(0);
+    expectProbabilities(probs, {
+      0: 1, // |00> has probability 1
+      1: 0,
+      2: 0,
+      3: 0,
+    });
   });
 
   it('rejects invalid qubit counts', async () => {
@@ -164,10 +175,12 @@ describe('Two-Qubit Gates', () => {
     state = await QuantumState.create({ numQubits: 2 });
     state.h(0).cnot(0, 1); // (|00> + |11>)/√2
     const probs = state.getProbabilities();
-    expect(probs[0b00]).toBeCloseTo(0.5);
-    expect(probs[0b01]).toBeCloseTo(0);
-    expect(probs[0b10]).toBeCloseTo(0);
-    expect(probs[0b11]).toBeCloseTo(0.5);
+    expectProbabilities(probs, {
+      0b00: 0.5,
+      0b01: 0,
+      0b10: 0,
+      0b11: 0.5,
+    });
   });
 
   it('applies CZ gate', async () => {
