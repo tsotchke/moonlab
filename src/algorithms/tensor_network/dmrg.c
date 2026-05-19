@@ -855,7 +855,7 @@ int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
     // Initialize y to zero
     memset(y->data, 0, y->total_size * sizeof(double complex));
 
-    if (H_eff->two_site) {
+    {
         // Validate environment tensors
         if (!H_eff->L || !H_eff->R) return -1;
         if (!H_eff->L->data || !H_eff->R->data) return -1;
@@ -998,15 +998,6 @@ int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
         }
 
         if (owns_temps) free(temp3);
-    }
-    else {
-        /* One-site DMRG path is internal-only and not currently
-         * implemented; every in-tree producer of effective_hamiltonian_t
-         * sets `two_site = true`.  Reach here only if a future caller
-         * wires the one-site branch through Lanczos directly, in
-         * which case implement the H_eff @ theta_1s contraction
-         * before unblocking this. */
-        return -1;
     }
 
     return 0;
@@ -1153,7 +1144,7 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
     uint32_t chi_l = H_eff->chi_l;
     uint32_t chi_r = H_eff->chi_r;
     uint32_t d = H_eff->phys_dim;
-    uint64_t vec_size = H_eff->two_site ? chi_l * d * d * chi_r : chi_l * d * chi_r;
+    uint64_t vec_size = (uint64_t)chi_l * d * d * chi_r;
 
     /* Persistent H_eff-apply scratch; declared up front so every
      * goto cleanup path can free it unconditionally.  All other
@@ -1206,16 +1197,10 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
     double prev_eigenvalue = 1e30;
     uint32_t num_iter = 0;
 
-    // Create temporary tensors
-    uint32_t dims[4];
-    if (H_eff->two_site) {
-        dims[0] = chi_l; dims[1] = d; dims[2] = d; dims[3] = chi_r;
-    } else {
-        dims[0] = chi_l; dims[1] = d; dims[2] = chi_r; dims[3] = 0;
-    }
-
-    tensor_t *x_tensor = tensor_create(H_eff->two_site ? 4 : 3, dims);
-    tensor_t *y_tensor = tensor_create(H_eff->two_site ? 4 : 3, dims);
+    // Create temporary tensors (theta is rank-4 [chi_l, d, d, chi_r]).
+    uint32_t dims[4] = { chi_l, d, d, chi_r };
+    tensor_t *x_tensor = tensor_create(4, dims);
+    tensor_t *y_tensor = tensor_create(4, dims);
 
     if (!x_tensor || !y_tensor) {
         if (x_tensor) tensor_free(x_tensor);
@@ -1311,15 +1296,10 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
         result->num_iterations = num_iter;
     }
 
-    // Reconstruct eigenvector: psi = sum_i evec[i] * V[i]
-    uint32_t edims[4];
-    if (H_eff->two_site) {
-        edims[0] = chi_l; edims[1] = d; edims[2] = d; edims[3] = chi_r;
-        result->eigenvector = tensor_create(4, edims);
-    } else {
-        edims[0] = chi_l; edims[1] = d; edims[2] = chi_r;
-        result->eigenvector = tensor_create(3, edims);
-    }
+    // Reconstruct eigenvector: psi = sum_i evec[i] * V[i]; theta is
+    // rank-4 [chi_l, d, d, chi_r] for the two-site sweep.
+    uint32_t edims[4] = { chi_l, d, d, chi_r };
+    result->eigenvector = tensor_create(4, edims);
 
     if (result->eigenvector) {
         memset(result->eigenvector->data, 0, vec_size * sizeof(double complex));
@@ -2206,7 +2186,6 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
         .chi_l = chi_l,
         .chi_r = chi_r,
         .phys_dim = d,
-        .two_site = true
     };
 
     // Form initial theta from A @ B

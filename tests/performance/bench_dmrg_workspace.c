@@ -63,7 +63,7 @@ static void run_case(uint32_t chi, uint32_t iters) {
         .W_left  = &mpo->tensors[3],
         .W_right = &mpo->tensors[4],
         .chi_l = chi, .chi_r = chi,
-        .phys_dim = d, .two_site = true
+        .phys_dim = d,
     };
 
     uint32_t dims[4] = {chi, d, d, chi};

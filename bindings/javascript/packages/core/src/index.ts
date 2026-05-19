@@ -120,6 +120,15 @@ export type {
   TFIMOptions,
 } from './tensor-network';
 
+// Adaptive-bond two-site TDVP (since 0.4.3).
+export { TdvpEngine, EvolutionType } from './tdvp';
+export type {
+  TdvpCommonOptions,
+  HeisenbergOptions,
+  TfimOptions,
+  TdvpHistoryStep,
+} from './tdvp';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,
