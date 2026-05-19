@@ -38,8 +38,10 @@
 //! All memory is automatically managed through Rust's ownership system.
 
 pub mod ca_mps;
+pub mod clifford;
 pub mod error;
 pub mod feynman;
+pub mod fusion;
 pub mod mpdo;
 pub mod state;
 pub mod tdvp;
