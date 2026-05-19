@@ -1,12 +1,63 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.5.9-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
 > topological QC, chemistry / VQE with native autograd, error
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
+
+## New in v0.5 (2026-05-19)
+
+The v0.5 cycle is a production-quality push across all three
+language bindings: every algorithm class that exists in Python now
+has a working Rust analog and a working JavaScript / WebAssembly
+wrapper, with end-to-end integration tests gated by CI.
+
+- **WASM build resurrection (v0.5.0)** — a silent `_Static_assert`
+  break that landed in v0.2.4 had been quietly failing the
+  emscripten build for ~12 days.  `MOONLAB_MAX_QUBITS` is now
+  adaptive (30 on wasm32, 32 on native 64-bit hosts); the
+  ABI-export module is split into a qrng-free lean half that the
+  WASM build can include, surfacing `moonlab_qwz_chern` +
+  `moonlab_abi_version` + DMRG / CA-MPS / Z2-LGT shims to JS.
+
+- **JS binding parity (v0.5.4 - v0.5.6)** — Bell tests / Grover /
+  VQE / QAOA / topology are all callable from `@moonlab/quantum-
+  core` now.  Hardware entropy backed by `crypto.getRandomValues()`
+  via a WASM-only `hardware_entropy_wasm.c` shim unblocks every
+  shot-noise-sampling C entry point.  Eight topological-invariant
+  helpers in `topology.ts` cover QWZ Chern (3 integrators), SSH
+  winding, Kitaev BdG Z_2, Kane-Mele / BHZ Z_2, Hofstadter sub-band
+  Chern.
+
+- **JS integration test gate (v0.5.1 + v0.5.3)** — 141 vitest
+  integration tests cover every TS wrapper that previously had
+  zero coverage; CI now runs them after every WASM rebuild, so
+  the kind of silent symbol-export break that bit v0.5.0 cannot
+  recur.
+
+- **Rust examples coverage (v0.5.7 + v0.5.8)** — 3/14 -> 14/14
+  modules have a runnable `cargo run --example` demo with
+  textbook-correct output: CHSH = 2.82 on the Bell pair, H2
+  exact ground at -1.142 Ha, Mermin-Klyshko hits the GHZ ideal
+  `2^((n-1)/2)` at every n in 2..5, triangle MaxCut at p=3
+  converges to 100% approximation ratio, etc.
+
+- **Kane-Mele Rashba silent-correctness fix (v0.5.9)** — the
+  C-side `qgt_model_kane_mele` had been silently dropping the
+  `lambda_r` parameter, returning the S_z-conserving Z_2
+  invariant when the caller passed non-zero Rashba.  Now rejects
+  `lambda_r != 0.0` rather than emitting wrong physics; the full
+  Pfaffian-based Rashba Z_2 stays on the v0.3.1 milestone list.
+
+- **Rust build hygiene (v0.5.2)** — 326 `unused-unsafe` warnings
+  collapsed to 0 by setting the crate-level `unsafe_code` lint to
+  `allow` (matching `moonlab-sys`; the FFI surface is unsafe by
+  construction).
+
+Full version-by-version notes in [CHANGELOG.md](CHANGELOG.md#050---2026-05-19).
 
 ## New in v0.3.0 (2026-05-08)
 
@@ -931,7 +982,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.2.3},
+    version      = {v0.5.9},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

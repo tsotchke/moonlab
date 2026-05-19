@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.9.)
+(No unreleased changes since v0.5.10.)
+
+## [0.5.10] - 2026-05-19
+
+README docs refresh: the version badge had been stuck at 0.3.0,
+the highlights block had been the v0.3.0 release notes (5+
+releases stale), and the bibtex citation pinned v0.2.3.
+
+### Changed
+
+- `README.md` version badge bumped to v0.5.9.
+- Added a "New in v0.5 (2026-05-19)" highlights section before
+  the historical v0.3.0 block.  Calls out the WASM resurrection,
+  JS binding parity push (Bell / Grover / VQE / QAOA / topology),
+  Rust 14/14 examples, Kane-Mele Rashba silent-correctness fix,
+  and Rust build-hygiene cleanup.
+- `bibtex` citation block bumped to v0.5.9.
+
+Manifests bumped 0.5.9 -> 0.5.10.
 
 ## [0.5.9] - 2026-05-19
 
