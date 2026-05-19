@@ -278,8 +278,11 @@ _entanglement_negativity_2qubit
 # so they must be present in every WASM build.
 # =============================================================================
 _moonlab_qwz_chern
-_moonlab_qrng_bytes
 _moonlab_abi_version
+# Note: _moonlab_qrng_bytes is intentionally NOT exported in the WASM
+# build -- it depends on hardware_entropy.c which is host-only.  JS
+# callers needing crypto-grade randomness should use the browser's
+# crypto.getRandomValues() instead.
 
 # =============================================================================
 # Stable ABI: adaptive-bond two-site TDVP (since 0.4.1).

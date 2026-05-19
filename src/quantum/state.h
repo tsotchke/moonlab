@@ -36,15 +36,24 @@ typedef double _Complex complex_t;
  * same name, so we rename to `MOONLAB_MAX_QUBITS` and leave a
  * deprecated alias for one cycle.  The deprecated alias will be
  * removed in v0.3.0; new code should use the prefixed name. */
+/* On wasm32 (emscripten default), size_t is 32 bits.  Bound the
+ * compile-time cap so `(size_t)1 << MOONLAB_MAX_QUBITS` cannot
+ * overflow size_t on that target.  Native 64-bit hosts keep the
+ * historical 32-qubit cap (4.3B amps x 16 B = 68.7 GB). */
+#if defined(__wasm32__) || (defined(__EMSCRIPTEN__) && !defined(__wasm64__))
+#define MOONLAB_MAX_QUBITS         30  /* 1.07B amps x 16 B = 17.2 GB; size_t = 32-bit. */
+#else
 #define MOONLAB_MAX_QUBITS         32  /* 4.3B amps × 16 B = 68.7 GB. */
-#define MOONLAB_MAX_STATE_DIM      (1ULL << MOONLAB_MAX_QUBITS)
+#endif
+#define MOONLAB_MAX_STATE_DIM      ((size_t)1 << MOONLAB_MAX_QUBITS)
 #define MOONLAB_RECOMMENDED_QUBITS 28  /* 268M amps = 4.3 GB. */
 
-/* Static guards against silent shift-overflow if a future patch raises
- * MOONLAB_MAX_QUBITS past 63 or builds on a 32-bit host. */
+/* Static guards against silent shift-overflow if a future patch
+ * raises MOONLAB_MAX_QUBITS past the available size_t width on the
+ * current target. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-_Static_assert(sizeof(size_t) >= 8,
-               "Moonlab requires a 64-bit size_t.");
+_Static_assert(MOONLAB_MAX_QUBITS < (int)(sizeof(size_t) * 8),
+               "MOONLAB_MAX_QUBITS must fit in size_t on this target.");
 _Static_assert(MOONLAB_MAX_QUBITS <= 63,
                "MOONLAB_MAX_QUBITS must be <= 63 to avoid 1ULL shift overflow.");
 #endif
