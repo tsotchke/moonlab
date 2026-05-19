@@ -1047,7 +1047,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.8.0},
+    version      = {v0.8.1},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,
