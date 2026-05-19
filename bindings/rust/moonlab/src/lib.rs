@@ -37,15 +37,18 @@
 //! This crate provides safe wrappers around the `moonlab-sys` FFI bindings.
 //! All memory is automatically managed through Rust's ownership system.
 
+pub mod bell;
 pub mod ca_mps;
 pub mod clifford;
 pub mod error;
 pub mod feynman;
 pub mod fusion;
+pub mod grover;
 pub mod mpdo;
 pub mod state;
 pub mod tdvp;
 pub mod topology;
+pub mod z2_lgt;
 
 // Re-export main types
 pub use ca_mps::{

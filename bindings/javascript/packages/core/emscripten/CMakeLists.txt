@@ -82,6 +82,8 @@ set(UTILS_SOURCES
 set(OPTIMIZATION_SOURCES
     ${QSIM_ROOT}/src/optimization/memory_align.c
     ${QSIM_ROOT}/src/optimization/simd_ops.c
+    # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
+    ${QSIM_ROOT}/src/optimization/fusion/fusion.c
     ${QSIM_ROOT}/src/optimization/gpu/gpu_backend.c
     # Eshkol symbols are referenced unconditionally from tensor.c; in
     # the WASM build we don't have the C++ implementation so link the

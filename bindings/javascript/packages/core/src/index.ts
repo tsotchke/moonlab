@@ -133,6 +133,10 @@ export type {
 export { CliffordTableau } from './clifford';
 export type { MeasureResult, SampleAllResult } from './clifford';
 
+// Single-qubit gate-fusion DAG (since 0.4.7).
+export { FusedCircuit } from './fusion';
+export type { FuseStats, FuseCompileResult } from './fusion';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

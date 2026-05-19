@@ -7,7 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.6.)
+(No unreleased changes since v0.4.7.)
+
+## [0.4.7] - 2026-05-18
+
+Cross-language parity closure for four subsystems that v0.4.6 left
+half-bound.  After this release: every algorithm with a Python
+binding has a Rust analog, and every C-side surface in the WASM
+build has a TypeScript wrapper.
+
+### Added
+
+- **`moonlab::z2_lgt`** (Rust safe wrapper around the 1+1D Z2
+  lattice gauge theory builder in `src/applications/z2_lgt/`).
+  `Z2LgtHamiltonian::build(num_matter_sites, t_hop, h_link, mass,
+  gauss_penalty)` returns an owned `(paulis, coeffs, num_terms,
+  num_qubits)` quadruple by copying out of the C-allocated
+  scratch buffers and freeing them via `libc::free`.
+  `gauss_law(num_matter_sites, site_x)` returns the gauge-generator
+  bitstring at site `x`.  3 unit tests pinning Hamiltonian
+  non-emptiness, generator layout, and the `num_matter_sites < 2`
+  rejection path.
+- **`moonlab::bell`** (Rust safe wrapper around the Bell-inequality
+  battery in `src/algorithms/bell_tests.{c,h}`).  Covers all three
+  variants the v0.4.2 Python `moonlab.algorithms.BellTest` exposes:
+  `chsh_test(state, qa, qb, N)` (Tsirelson optimal angles wired
+  through `bell_get_optimal_settings`), `mermin_ghz_test(state, qa,
+  qb, qc, N)`, and `mermin_klyshko_test(state, num_qubits, N)`.
+  `create_bell_state(state, q1, q2, BellState::{PhiPlus, PhiMinus,
+  PsiPlus, PsiMinus})` prepares the four canonical pairs.  Internal
+  `EntropyGuard` RAII type leases a `quantum_entropy_ctx_t` for the
+  duration of each call (C-side refuses `NULL` entropy).  4 unit
+  tests covering `|Phi+>` probability amplitudes, CHSH > 2.4 on a
+  clean pair, Mermin-GHZ `|M| > 2.5` at 4000 shots, and normalised
+  Mermin-Klyshko `|M_N| > 1.1` on 3-qubit GHZ.
+- **`moonlab::grover`** (Rust safe wrapper around Grover's search
+  in `src/algorithms/grover.{c,h}`).  `search(state, marked_state,
+  Option<num_iterations>)` runs the full algorithm with either an
+  explicit iteration count or the optimal `floor(pi sqrt(N) / 4)`
+  (passes `use_optimal_iterations = 1`); same `EntropyGuard` RAII
+  pattern as `moonlab::bell`.  `optimal_iterations(num_qubits)`
+  exposes the helper for sizing curves.  3 unit tests: optimal-N
+  formula at n=4, `P(success) > 0.9` on `|1010>` at n=4 with
+  optimal iterations, and explicit iteration count honored.
+- **JavaScript gate-fusion binding**
+  (`bindings/javascript/packages/core/src/fusion.ts`).  New
+  `FusedCircuit` class mirroring the v0.4.4 Python `FusedCircuit`
+  and v0.4.6 Rust `moonlab::fusion`: all 21 gate-append methods
+  (8 1q non-parameterised, 4 1q one-parameter, `u3`, 4 2q
+  non-parameterised, 4 2q one-parameter) returning `this` for
+  fluent chains, `compile()` returning `{ fused, stats }`, and
+  `execute(state: QuantumState)` calling through to `fuse_execute`.
+  `FuseStats` ergonomics: `originalGates`, `fusedGates`,
+  `mergesApplied` reading the 12-byte `fuse_stats_t` directly out
+  of HEAPU32.
+- 26 `_fuse_*` symbols added to
+  `bindings/javascript/packages/core/emscripten/exports.txt`.
+- `${QSIM_ROOT}/src/optimization/fusion/fusion.c` added to the
+  WASM build's `OPTIMIZATION_SOURCES` in
+  `bindings/javascript/packages/core/emscripten/CMakeLists.txt`
+  (the C source had been excluded from the WASM build until now).
+- `moonlab-sys` allowlist extended with `bell_state_type_t`,
+  `bell_test_result_t`, `bell_measurement_settings_t`, the five
+  Bell-state constructors, `bell_get_optimal_settings`,
+  `calculate_chsh_parameter`, the three Bell-test entry points,
+  and `quantum_entropy_ctx_create_hw` / `quantum_entropy_ctx_destroy`.
+  `wrapper.h` now also pulls in `src/algorithms/bell_tests.h`.
+
+### Changed
+
+- `FusedCircuit`, `FuseStats`, and `FuseCompileResult` re-exported
+  from `@moonlab/quantum-core` top-level index.
+
+Manifests bumped 0.4.6 -> 0.4.7 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest, 193/193 pytest, cargo test 59 + 48 +
+17 = 124 (was 111; gained 13 from the three new safe-wrapper test
+modules).  `tsc --noEmit` clean on `@moonlab/quantum-core` with the
+new `fusion.ts` module.
 
 ## [0.4.6] - 2026-05-18
 
