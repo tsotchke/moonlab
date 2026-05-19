@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.2.)
+(No unreleased changes since v0.6.3.)
+
+## [0.6.3] - 2026-05-19
+
+The libirrep QEC zoo gets a Python binding and a tagged ABI
+surface.  Eight CSS-code families reach Python consumers through
+one class with one accessor surface.
+
+### Added
+
+- Every `moonlab_libirrep_*` entry point now carries the
+  `MOONLAB_API` visibility tag.  Symbols stay exported under
+  `QSIM_HIDDEN_VISIBILITY=ON` (forward-compat with the v0.3 ABI
+  tightening plan); 19 new entries join the stable surface.
+- `bindings/python/moonlab/libirrep_qec.py`: `LibirrepQecCode`
+  class with eight class-method factories
+  (`surface(d)`, `toric(Lx, Ly)`, `steane()`, `hamming_15_7_3()`,
+  `bb_72_12_6()`, `bb_144_12_12()`, `bb_288_12_18()`,
+  `hgp_repetition(d)`).  Accessors mirror the C layer:
+  `n_qubits`, `n_x_stabs`, `n_z_stabs`, `logical_qubits`,
+  `distance`, `x_check_row(row)`, `z_check_row(row)`.
+- `LibirrepError` / `LibirrepNotBuiltError` exception hierarchy
+  -- the latter raises with the rebuild-with hint when moonlab
+  was compiled without the bridge.
+- `moonlab.libirrep_is_available()` re-export for callers
+  wanting "use libirrep when available, else fall back" semantics.
+- `bindings/python/tests/test_libirrep_qec.py`: 12 pytest cases,
+  one per factory family plus error-path coverage.  Tests skip
+  cleanly when libirrep isn't linked.
+
+### Verified
+
+- With libirrep ON: 12/12 pytest cases pass.  Steane
+  brute-force distance returns 3; all eight factories report
+  the published `[[n, k, d]]` parameters.
+- With libirrep OFF: pytest skips the whole module (no module
+  import failure -- the `_LIBIRREP_QEC_AVAILABLE` flag in
+  `__init__.py` cleanly silences the binding).
+
+### Next phases
+
+- v0.6.4: Rust binding (`moonlab::libirrep_qec::QecCode`) for
+  binding-target parity with Python.
+- v0.6.5: JS / WASM binding so the QEC zoo reaches the
+  browser-runnable demo surface.
+- v0.6.6: QGTL `moonlab_backend.c` integration so QGTL can
+  cross-validate IBM / Rigetti / IonQ circuits against
+  libirrep's QEC zoo before paying for hardware shots.
 
 ## [0.6.2] - 2026-05-19
 
