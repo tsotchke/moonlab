@@ -129,6 +129,10 @@ export type {
   TdvpHistoryStep,
 } from './tdvp';
 
+// Standalone Aaronson-Gottesman Clifford tableau (since 0.4.5).
+export { CliffordTableau } from './clifford';
+export type { MeasureResult, SampleAllResult } from './clifford';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

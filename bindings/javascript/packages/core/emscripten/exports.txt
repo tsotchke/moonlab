@@ -302,3 +302,24 @@ _moonlab_tdvp_history_num_steps
 _moonlab_tdvp_history_get_step
 _moonlab_tdvp_history_get_bond_chi
 _moonlab_tdvp_engine_free
+
+# =============================================================================
+# Stable ABI: standalone Aaronson-Gottesman Clifford tableau (since 0.2.0).
+# Implemented in src/backends/clifford/clifford.c; bound by src/clifford.ts.
+# Used by the WASM build for n>32-qubit GHZ / stabiliser-code experiments
+# that exceed the dense state-vector ceiling.
+# =============================================================================
+_clifford_tableau_create
+_clifford_tableau_free
+_clifford_num_qubits
+_clifford_h
+_clifford_s
+_clifford_s_dag
+_clifford_x
+_clifford_y
+_clifford_z
+_clifford_cnot
+_clifford_cz
+_clifford_swap
+_clifford_measure
+_clifford_sample_all
