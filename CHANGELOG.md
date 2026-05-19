@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.9.)
+(No unreleased changes since v0.8.0.)
+
+## [0.8.0] - 2026-05-19
+
+**Sharded state-vector scales past N=24.**  Closes the N>=26 segfault
+gap identified in v0.7.9.
+
+### Fixed
+
+- `src/distributed/state_partition.c`: the per-rank `send_buffer` /
+  `recv_buffer` were hard-capped at `2^20` complex doubles (16 MB)
+  via `(state->local_qubits > 20 ? 20 : ...)`.  Cross-rank gates
+  (`dist_cnot`, `dist_swap`, ...) exchange up to `local_count`
+  amplitudes per partition-boundary CNOT.  At N>=26 with 8 ranks
+  the cap was smaller than the required exchange and overflowed.
+  Buffers now scale to `local_count * sizeof(double complex)`,
+  clamped at 1 GB so individual ranks never devote more than
+  1 GB to comm staging regardless of shard size.  Explicit
+  `comm_buffer_size` on the config still wins.
+
+### Verified
+
+```
+N=24  /  8 ranks:   256 MB total,   32 MB/rank, t = 0.062 s
+N=26  /  8 ranks:  1024 MB total,  128 MB/rank, t = 0.275 s
+N=28  /  8 ranks:  4096 MB total,  512 MB/rank, t = 1.181 s
+```
+
+All produce P(|0...0>) = P(|1...1>) = 0.5 exactly, with the
+GHZ-amplitudes-non-extremal-rank check passing under
+`mpi_allreduce_sum_double`.
 
 ## [0.7.9] - 2026-05-19
 
