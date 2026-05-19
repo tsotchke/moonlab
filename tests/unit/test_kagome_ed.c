@@ -36,6 +36,11 @@
 #include "../../src/algorithms/tensor_network/mpo_2d.h"
 #include "../../src/algorithms/tensor_network/dmrg.h"
 #include "../../src/algorithms/tensor_network/tensor.h"
+/* libirrep bridge (since v0.6.0).  Compiles in two modes: when the
+ * library was found at configure time the call really runs; otherwise
+ * the bridge returns MOONLAB_LIBIRREP_NOT_BUILT and the test prints
+ * "(skipped)" and falls back to the hardcoded reference. */
+#include "../../src/integration/libirrep_bridge.h"
 
 #ifdef __APPLE__
 #include <Accelerate/Accelerate.h>
@@ -189,16 +194,38 @@ int main(void) {
     CHECK(info == 0, "zheev_ returns info = 0");
 
     const double E0 = w[0];
-    const double E0_libirrep = LIBIRREP_KAGOME12_E0;
-    const double diff = fabs(E0 - E0_libirrep);
+    const double E0_libirrep_hardcoded = LIBIRREP_KAGOME12_E0;
+    const double diff_hardcoded = fabs(E0 - E0_libirrep_hardcoded);
 
     fprintf(stdout, "\n    Moonlab E_0 (J=0.25 Pauli) = %.8f\n", E0);
-    fprintf(stdout, "    libirrep E_0 (J=1 spin)    = %.8f\n", E0_libirrep);
-    fprintf(stdout, "    |diff|                     = %.3e\n\n", diff);
+    fprintf(stdout, "    libirrep E_0 (hardcoded)   = %.8f\n", E0_libirrep_hardcoded);
+    fprintf(stdout, "    |diff vs hardcoded|        = %.3e\n", diff_hardcoded);
 
     /* Agreement to ~1e-8 is what we expect from two independent
      * Lanczos-precision computations on a 4096-dim problem. */
-    CHECK(diff < 1e-7, "Moonlab agrees with libirrep to <1e-7");
+    CHECK(diff_hardcoded < 1e-7, "Moonlab agrees with libirrep (hardcoded) to <1e-7");
+
+    /* Optional live cross-check via libirrep (since v0.6.0).  When the
+     * bridge is linked (`-DQSIM_ENABLE_LIBIRREP=ON` at configure time)
+     * we re-derive the reference at runtime from the same Hamiltonian
+     * structure, eliminating the trust-the-hardcoded-paste-value
+     * failure mode.  When it isn't linked the call returns
+     * MOONLAB_LIBIRREP_NOT_BUILT and we record it as "(skipped)". */
+    double E0_live = 0.0;
+    const int rc = moonlab_libirrep_kagome12_e0(&E0_live);
+    if (rc == 0) {
+        const double diff_live = fabs(E0 - E0_live);
+        fprintf(stdout, "    libirrep E_0 (live ED)     = %+.10f  (|diff| = %.3e)\n\n",
+                E0_live, diff_live);
+        CHECK(diff_live < 1e-7, "Moonlab agrees with libirrep (live) to <1e-7");
+        const double drift = fabs(E0_live - E0_libirrep_hardcoded);
+        CHECK(drift < 1e-7,
+              "live libirrep agrees with hardcoded reference (drift = %.3e)",
+              drift);
+    } else {
+        fprintf(stdout, "    libirrep E_0 (live ED)     = (skipped, rc=%d, available=%d)\n\n",
+                rc, moonlab_libirrep_available());
+    }
 
     /* Also print the full low spectrum for context. */
     fprintf(stdout, "\n    Lowest 6 eigenvalues:\n");

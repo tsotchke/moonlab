@@ -1,12 +1,45 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.5.9-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
 > topological QC, chemistry / VQE with native autograd, error
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
+
+## New in v0.6 (2026-05-19)
+
+v0.6.0 opens the libirrep-integration arc.  libirrep is a
+production-grade C library covering 18 QEC codes (toric, surface,
+color, bivariate bicycle, hypergraph + lifted product, honeycomb +
+CSS Floquet, 3D toric, X-cube fracton, HaPPY, single-shot,
+Bacon-Shor, Steane * Steane, BdG-skyrmion), rep-theory primitives
+(SO(3) / SU(2) / O(3) / SE(3)), and a verified spin-1/2 Heisenberg
+sector-ED stack.  Moonlab has been treating it as a paper reference
+(the `LIBIRREP_KAGOME12_E0 = -5.44487522` constant in the kagome
+tests is a number copied out of libirrep's `PHYSICS_RESULTS.md`);
+this release wires in the first real link.
+
+Build with `-DQSIM_ENABLE_LIBIRREP=ON`; detection tries
+`find_package(libirrep CONFIG)`, then `pkg-config libirrep`, then
+`-DQSIM_LIBIRREP_ROOT=<path>` / `$LIBIRREP_ROOT` env-var pointing
+at a source tree with `build/lib/liblibirrep.{a,dylib,so}`.  When
+detected, `tests/unit/test_kagome_ed` re-derives the libirrep
+reference at runtime (live `irrep_lanczos_eigvals_reorth` on the
+`irrep_heisenberg_t` built from `irrep_lattice_build(KAGOME, 2,
+2)`) and confirms agreement to machine precision (3.553e-15
+disagreement with moonlab's MPO + zheev path).  Default is OFF;
+when off the bridge compiles to stubs returning
+`MOONLAB_LIBIRREP_NOT_BUILT` and the test prints `(skipped)`.
+
+Next phases: v0.6.1 routes `moonlab_surface_code_clifford_*`
+through `irrep_surface_*` + `irrep_css_code_t`, picking up the
+other 17 codes for free behind the same JS / Python / Rust binding
+surface that v0.5.12-14 shipped.  v0.6.2 expands to wrappers for
+the toric / color / BB / X-cube / Floquet / HaPPY family.  v0.6.3+
+exposes Clebsch-Gordan + reduction tables to the existing QGT /
+DMRG paths.
 
 ## New in v0.5 (2026-05-19)
 

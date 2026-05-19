@@ -7,7 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.14.)
+(No unreleased changes since v0.6.0.)
+
+## [0.6.0] - 2026-05-19
+
+Opens the libirrep-integration arc.  libirrep
+(`/Users/tyr/Desktop/libirrep`, v1.5.0) ships a production-grade
+QEC substrate (18 modules: toric, surface, color, bivariate
+bicycle, hypergraph + lifted product, honeycomb + CSS Floquet,
+3D toric, X-cube fracton, HaPPY, single-shot, Bacon-Shor,
+Steane * Steane, BdG-skyrmion), rep-theory primitives (SO(3) /
+SU(2) / O(3) / SE(3) Clebsch-Gordan + reduction tables), and a
+verified spin-1/2 Heisenberg sector-ED stack.  Moonlab has been
+treating the library as a paper reference -- this release wires
+in the first real link.
+
+### Added
+
+- `option(QSIM_ENABLE_LIBIRREP "..." OFF)` in `CMakeLists.txt`,
+  with a three-stage detection chain: `find_package(libirrep
+  CONFIG)`, then `pkg_check_modules(LIBIRREP_PC libirrep)`, then
+  `-DQSIM_LIBIRREP_ROOT=<path>` / `$LIBIRREP_ROOT` env-var
+  pointing at a source tree carrying
+  `build/lib/liblibirrep.{a,dylib,so}`.  Mirrors the
+  vendored-submodule pattern SbNN already uses for the same
+  dependency.  When detected, the library link adds
+  `MOONLAB_HAS_LIBIRREP=1` and links the discovered target /
+  pkg-config result / static-lib path into libquantumsim.
+- `src/integration/libirrep_bridge.{c,h}`: first bridge entry
+  point.  `int moonlab_libirrep_kagome12_e0(double *out_energy)`
+  builds the 2x2 kagome torus via `irrep_lattice_build`,
+  harvests the NN bond list via `irrep_lattice_fill_bonds_nn`,
+  constructs `H = J * sum_<i,j> S_i.S_j` via
+  `irrep_heisenberg_new` (J = 1, S = 1/2), and extracts E_0 with
+  `irrep_lanczos_eigvals_reorth` over the full 4096-dim Hilbert
+  space.  Returns 0 on success or a negative
+  `MOONLAB_LIBIRREP_*` code on failure.  Compiles in two modes:
+  when `MOONLAB_HAS_LIBIRREP=1` the real path links; otherwise
+  the TU compiles to stubs returning `MOONLAB_LIBIRREP_NOT_BUILT
+  = -201`, so callers can use the API unconditionally.
+- `tests/unit/test_kagome_ed.c`: optional live cross-check.
+  When the bridge is linked the test re-derives the
+  libirrep-side reference at runtime and asserts that (a)
+  moonlab's MPO + zheev value agrees with the live ED to <1e-7
+  and (b) the live ED agrees with the historic hardcoded
+  reference to <1e-7.  When the bridge is off the test prints
+  `(skipped, rc=-201, available=0)` and falls back to the
+  hardcoded comparison.
+
+### Verified
+
+- `cmake -DQSIM_ENABLE_LIBIRREP=ON
+  -DQSIM_LIBIRREP_ROOT=/Users/tyr/Desktop/libirrep ...` followed
+  by `./test_kagome_ed` reports:
+  - moonlab MPO+zheev E_0 = -5.44487522 (3.028e-09 vs hardcoded)
+  - libirrep live ED     E_0 = -5.4448752170 (3.553e-15 vs MPO)
+  - drift vs hardcoded reference: 3.028e-09 (the historic
+    8-digit reference value rounds to the same 8-digit point).
+- `cmake -DQSIM_ENABLE_LIBIRREP=OFF ...` (the default) leaves
+  the build untouched: bridge stubs link in, the test prints
+  `(skipped, rc=-201, available=0)`, hardcoded-reference branch
+  still passes.
+
+### Why now
+
+Continuing to copy-paste the historic `-5.44487522` constant
+out of `libirrep/docs/PHYSICS_RESULTS.md` makes moonlab a
+silent downstream consumer of a tabulated value.  Re-deriving
+the same number from libirrep's own builder + Lanczos at
+runtime closes that gap and provides the scaffolding for the
+v0.6.1+ phases that delegate surface / toric / color / Floquet
+/ X-cube / BB code construction to libirrep instead of
+duplicating the work in `src/algorithms/topological/`.
+
+### Next phases
+
+- v0.6.1: route `moonlab_surface_code_clifford_*` through
+  libirrep's `irrep_surface_*` + `irrep_css_code_t` so the JS
+  / Python / Rust surface-code bindings shipped in 0.5.12-14
+  pick up the 17 additional QEC codes for free.
+- v0.6.2: bridge wrappers for libirrep's 2D / 3D toric, color,
+  BB qLDPC, hypergraph + lifted product, Honeycomb-Floquet,
+  X-cube fracton, HaPPY, single-shot, Bacon-Shor, Steane *
+  Steane, BdG-skyrmion modules.
+- v0.6.3+: rep-theory primitives -- expose Clebsch-Gordan +
+  reduction tables for SO(3) / SU(2) / O(3) / SE(3) through a
+  rep-aware tensor-network adapter so the existing
+  `qgt_berry_grid` / DMRG paths gain projective-rep awareness.
 
 ## [0.5.14] - 2026-05-19
 

@@ -77,6 +77,9 @@ option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
 option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II / SF64)" OFF)
 set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
     "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
+option(QSIM_ENABLE_LIBIRREP "Link libirrep for QEC + sector ED + rep theory primitives (since v0.6.0)" OFF)
+set(QSIM_LIBIRREP_ROOT "$ENV{LIBIRREP_ROOT}" CACHE PATH
+    "Root of a libirrep source/build tree (fallback when find_package + pkg-config both fail).")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
@@ -520,6 +523,80 @@ if(QSIM_ENABLE_MPI)
     endif()
 endif()
 
+# libirrep -- QEC + rep-theory + sector ED substrate.
+# Detection order:
+#   1. find_package(libirrep CONFIG)  -- preferred, picks up the installed
+#      libirrepTargets that libirrep emits via install(EXPORT ...).
+#   2. pkg-config (libirrep.pc).
+#   3. QSIM_LIBIRREP_ROOT / LIBIRREP_ROOT pointing at a source tree with a
+#      pre-built build/lib/liblibirrep.{a,dylib,so}.
+# Mirrors SbNN's IRREP_ENABLE pattern.  When the option is OFF the bridge
+# layer compiles down to stub functions that return
+# MOONLAB_STATUS_UNSUPPORTED, so consumers can build moonlab without
+# libirrep installed.
+if(QSIM_ENABLE_LIBIRREP)
+    set(QSIM_HAS_LIBIRREP OFF)
+
+    find_package(libirrep CONFIG QUIET)
+    if(libirrep_FOUND)
+        message(STATUS "libirrep: Found via find_package(libirrep CONFIG)")
+        set(QSIM_HAS_LIBIRREP ON)
+        set(QSIM_LIBIRREP_TARGET libirrep::libirrep)
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(LIBIRREP_PC QUIET libirrep)
+            if(LIBIRREP_PC_FOUND)
+                message(STATUS "libirrep: Found via pkg-config (${LIBIRREP_PC_VERSION})")
+                add_library(qsim_libirrep_import INTERFACE)
+                target_include_directories(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_INCLUDE_DIRS})
+                target_link_directories(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_LIBRARY_DIRS})
+                target_link_libraries(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_LIBRARIES})
+                set(QSIM_HAS_LIBIRREP ON)
+                set(QSIM_LIBIRREP_TARGET qsim_libirrep_import)
+            endif()
+        endif()
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP AND QSIM_LIBIRREP_ROOT)
+        set(_libirrep_inc "${QSIM_LIBIRREP_ROOT}/include")
+        find_library(QSIM_LIBIRREP_LIB
+            NAMES libirrep irrep
+            PATHS
+                "${QSIM_LIBIRREP_ROOT}/build/lib"
+                "${QSIM_LIBIRREP_ROOT}/lib"
+                "${QSIM_LIBIRREP_ROOT}/build"
+            NO_DEFAULT_PATH)
+        if(EXISTS "${_libirrep_inc}/irrep/irrep.h" AND QSIM_LIBIRREP_LIB)
+            message(STATUS "libirrep: Found at ${QSIM_LIBIRREP_ROOT} "
+                           "(lib: ${QSIM_LIBIRREP_LIB})")
+            add_library(qsim_libirrep_import INTERFACE)
+            target_include_directories(qsim_libirrep_import INTERFACE
+                "${_libirrep_inc}")
+            target_link_libraries(qsim_libirrep_import INTERFACE
+                "${QSIM_LIBIRREP_LIB}")
+            set(QSIM_HAS_LIBIRREP ON)
+            set(QSIM_LIBIRREP_TARGET qsim_libirrep_import)
+        endif()
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP)
+        message(FATAL_ERROR
+            "QSIM_ENABLE_LIBIRREP=ON but libirrep could not be located.  "
+            "Install libirrep (provides libirrepConfig.cmake or libirrep.pc) "
+            "or pass -DQSIM_LIBIRREP_ROOT=<path> pointing at a source tree "
+            "with build/lib/liblibirrep.{a,dylib,so}.  Re-run with "
+            "-DQSIM_ENABLE_LIBIRREP=OFF to skip this dependency.")
+    endif()
+else()
+    set(QSIM_HAS_LIBIRREP OFF)
+endif()
+
 # ==============================================================================
 # Source Files
 # ==============================================================================
@@ -654,6 +731,15 @@ set(QSIM_UTILS_SOURCES
     src/utils/moonlab_status.c
 )
 
+# External-library bridges.  Each translation unit compiles in two modes
+# selected at preprocessor time: when MOONLAB_HAS_<LIB>=1 the real
+# linkage path is active; otherwise the entry points return
+# MOONLAB_STATUS_UNSUPPORTED so callers can treat the dependency as
+# optional without conditional compilation at every call site.
+set(QSIM_INTEGRATION_SOURCES
+    src/integration/libirrep_bridge.c
+)
+
 set(QSIM_APPLICATIONS_SOURCES
     src/applications/health_tests.c
     src/applications/bell_test.c
@@ -693,6 +779,7 @@ set(QSIM_ALL_SOURCES
     ${QSIM_OPTIMIZATION_SOURCES}
     ${QSIM_GPU_SOURCES}
     ${QSIM_UTILS_SOURCES}
+    ${QSIM_INTEGRATION_SOURCES}
     ${QSIM_APPLICATIONS_SOURCES}
     ${QSIM_PROFILER_SOURCES}
 )
@@ -780,6 +867,17 @@ if(QSIM_ENABLE_ESHKOL)
     )
     set_property(TARGET quantumsim PROPERTY CXX_STANDARD 17)
     message(STATUS "Eshkol bridge: ON (lib=${_eshkol_libfn})")
+endif()
+
+# libirrep bridge -- activate the real linkage path when libirrep was
+# located by the detection block earlier.  The bridge translation unit
+# itself stays in QSIM_INTEGRATION_SOURCES (compiled unconditionally so
+# the API symbols always exist); MOONLAB_HAS_LIBIRREP=1 selects the
+# implementation that actually calls into libirrep.
+if(QSIM_HAS_LIBIRREP)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_LIBIRREP=1)
+    target_link_libraries(quantumsim PRIVATE ${QSIM_LIBIRREP_TARGET})
+    message(STATUS "libirrep bridge: ON (target=${QSIM_LIBIRREP_TARGET})")
 endif()
 
 # Include directories
