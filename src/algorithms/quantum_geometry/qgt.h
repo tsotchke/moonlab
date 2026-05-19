@@ -567,11 +567,18 @@ MOONLAB_API int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N,
  *
  * @param t           Nearest-neighbour hopping.
  * @param lambda_so   Intrinsic spin-orbit coupling (Z_2 driver).
- * @param lambda_r    Rashba SOC.  Set to 0 for the canonical KM.
+ * @param lambda_r    Rashba SOC.  **Must be 0.0** in the current
+ *                    implementation -- non-zero values are rejected
+ *                    (returns NULL) since the S_z-conserving Z_2
+ *                    integrator gives the wrong answer when Rashba
+ *                    mixes the spin sectors.  Full-Rashba support
+ *                    via the Pfaffian formula is a v0.3.1
+ *                    milestone.
  * @param lambda_v    Sublattice mass / staggering.
  *
  * @return Newly-owned 4-band system at half-filling (n_occupied = 2),
- *         or NULL on alloc failure.
+ *         NULL on alloc failure, or NULL if `lambda_r != 0` (see
+ *         note above).
  */
 MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                                  double lambda_r,

@@ -1108,6 +1108,18 @@ static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
 
 qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                      double lambda_r, double lambda_v) {
+    /* The S_z-conserving Z_2 invariant computed by qgt_z2_invariant
+     * is only valid when the Rashba coupling lambda_r is zero -- a
+     * non-zero Rashba term mixes the spin sectors so the Z_2
+     * invariant requires the full Pfaffian formula (Kane-Mele 2005,
+     * v0.3.1 milestone).  Until that's implemented, reject non-zero
+     * lambda_r at the constructor instead of silently returning a
+     * wrong Z_2.  Callers that need S_z-non-conserving Kane-Mele
+     * should track the v0.3.1 milestone or use the BHZ 4-band model
+     * which has an exact n-band Z_2 path. */
+    if (lambda_r != 0.0) {
+        return NULL;
+    }
     km_params_t* p = malloc(sizeof(*p));
     if (!p) return NULL;
     p->t = t;
