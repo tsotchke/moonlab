@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.3.)
+(No unreleased changes since v0.6.4.)
+
+## [0.6.4] - 2026-05-19
+
+The libirrep QEC zoo lands in Rust.  All eight CSS-code factories
+mirror the Python binding shipped in v0.6.3 -- same accessor
+surface, same safe-Rust ownership rules.
+
+### Added
+
+- `bindings/rust/moonlab/src/libirrep_qec.rs`: `QecCode` struct
+  with eight associated constructors (`surface`, `toric`,
+  `steane`, `hamming_15_7_3`, `bb_72_12_6`, `bb_144_12_12`,
+  `bb_288_12_18`, `hgp_repetition`).  Drop runs the C-side free.
+- `is_available()` probe.  Constructors that fail when libirrep
+  isn't linked return `Err(QuantumError::Ffi("...NOT_BUILT..."))`
+  with the rebuild-with hint.
+- 22 new `allowlist_function` / `allowlist_type` lines in
+  `bindings/rust/moonlab-sys/build.rs` covering the bridge ABI
+  surface promoted to MOONLAB_API in v0.6.3.  Wrapper header
+  picks up `src/integration/libirrep_bridge.h`.
+- 8 in-module tests covering each factory.  Tests soft-skip
+  (return early with stderr note) when libirrep isn't linked
+  -- same as the Python tests' `pytestmark.skipif` pattern.
+
+### Verified
+
+- `cargo test --lib libirrep_qec:: --release` passes 8/8 when
+  libirrep is linked.
+- Soft-skip path returns immediately when `is_available()` is
+  false; cargo build still succeeds without libirrep.
+
+### Cross-language parity status
+
+| Family            | C  | Python | Rust |
+|-------------------|----|--------|------|
+| Surface code      | YES | YES   | YES  |
+| Toric code        | YES | YES   | YES  |
+| Steane / Hamming  | YES | YES   | YES  |
+| IBM BB Gross      | YES | YES   | YES  |
+| HGP repetition    | YES | YES   | YES  |
+
+JS / WASM land in v0.6.5 to close out the 3-binding triad.
 
 ## [0.6.3] - 2026-05-19
 

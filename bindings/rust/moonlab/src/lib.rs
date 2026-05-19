@@ -45,6 +45,7 @@ pub mod error;
 pub mod feynman;
 pub mod fusion;
 pub mod grover;
+pub mod libirrep_qec;
 pub mod mpdo;
 pub mod noise;
 pub mod qaoa;
