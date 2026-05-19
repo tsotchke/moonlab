@@ -7,7 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.8.)
+(No unreleased changes since v0.7.9.)
+
+## [0.7.9] - 2026-05-19
+
+**Sharded GHZ example up to N=24.**  Concrete demonstration that
+moonlab's partitioned-state path scales across MPI ranks with
+real circuit depth, not just the v0.7.6 toy 4-qubit case.
+
+### Added
+
+- `examples/distributed/large_state_ghz.c`: builds an N-qubit GHZ
+  state via `dist_hadamard(0)` + `dist_cnot(0, k)` for k=1..N-1
+  collectively across the MPI communicator.  Each rank reports
+  whether the (|0...0>, |1...1>) amplitudes have the right
+  `1/sqrt(2)` magnitude; rank-0 vs other-rank amplitudes get
+  reduced via `mpi_allreduce_sum_double` so the verification
+  works regardless of which rank owns the extremal indices.
+
+### Verified
+
+```
+=== Sharded GHZ demo: N=24 across 8 ranks ===
+    total amplitudes: 2^24 = 16777216
+    total memory:     256.00 MB
+    per-rank memory:  32.00 MB
+    simulation time:  ~0.1 s (wall, rank 0)
+    P(|0...0>)   = 0.500000  (owned by rank 0)
+    P(|1...1>)   = 0.500000  (owned by rank 7, reduced)
+    GHZ verified across 8 MPI ranks at N=24
+```
+
+### Known limit
+
+`N >= 26` with the current `dist_*` substrate segfaults on the
+CNOT chain at large per-rank local sizes.  Triaged as a
+pre-existing `dist_cnot` / `partition_plan_2q_exchange` buffer
+sizing bug -- the test never exercised end-to-end before v0.7.6.
+Tracked as v0.8.0 work: audit `src/distributed/{state_partition,
+distributed_gates,collective_ops}.c` allocations + malloc NULL
+checks.  The architectural path to >32 qubits is unchanged; the
+substrate just needs hardening.
+
+### Strategic frame status
+
+Five-pillar surface, all backed by working code + verified output:
+
+| Pillar | Status |
+|--------|--------|
+| libirrep QEC zoo | 8 codes / 4 bindings, Steane d=3 brute distance |
+| QGTL ingestion | 4 bindings, gate-type compatible |
+| Distributed scheduler | OpenMP + MPI 4-rank Bell verified |
+| State-vector shard | **N=24 GHZ across 8 ranks bit-perfect** |
+| Decoder bench | 5 slots, real shoot-out (d=5 numbers committed) |
+
+### Next phases
+
+- v0.8.0: fix `dist_*` N>=26 buffer-size bug.
+- v0.8.1: gRPC / HTTP/2 control plane.
+- v0.8.2: documentation roll-up + v0.6-v0.7 arc retrospective.
 
 ## [0.7.8] - 2026-05-19
 
