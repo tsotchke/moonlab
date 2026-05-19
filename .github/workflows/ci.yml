@@ -574,6 +574,19 @@ jobs:
           cd bindings/javascript/packages/core
           pnpm install --ignore-scripts
           pnpm run build:ts
+      - name: Run JS unit tests (vitest)
+        run: |
+          cd bindings/javascript/packages/core
+          pnpm run test:unit
+      - name: Run JS integration tests against fresh WASM
+        run: |
+          cd bindings/javascript/packages/core
+          # vitest.integration.config.ts pulls dist/moonlab.{js,wasm}
+          # which the Build WASM step above wrote.  The 107-test
+          # suite exercises tdvp / clifford / fusion / mpdo / ca-peps
+          # plus the existing quantum-state / circuit / gpu-backend
+          # / webgpu modules.
+          pnpm run test:integration
       - name: Run WebGPU unified smoke
         run: |
           cd bindings/javascript/packages/core

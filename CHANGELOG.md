@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.2.)
+(No unreleased changes since v0.5.3.)
+
+## [0.5.3] - 2026-05-19
+
+JS test wiring into CI.  v0.5.1 added 107 vitest integration tests
+across 5 modules; CI built WASM but never ran them.  This release
+closes that gap.
+
+### Changed
+
+- `.github/workflows/ci.yml` `wasm:` job now runs
+  `pnpm run test:unit` and `pnpm run test:integration` after the
+  WASM build + TypeScript build steps, before the WebGPU smoke.
+  The integration config reads `dist/moonlab.{js,wasm}` from the
+  fresh build, so every silent ABI break on the v0.4.5--v0.4.12
+  surfaces is now caught at PR time.
+
+### Verified
+
+- `pnpm run test:unit`: 2 files / 90 tests (complex + circuit).
+- `pnpm run test:integration`: 8 files / 107 tests (tdvp, clifford,
+  fusion, mpdo, ca-peps, quantum-state, gpu-backend, webgpu).
+
+Manifests bumped 0.5.2 -> 0.5.3.
 
 ## [0.5.2] - 2026-05-19
 
