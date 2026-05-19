@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.11.)
+(No unreleased changes since v0.5.12.)
+
+## [0.5.12] - 2026-05-19
+
+First binding for the surface code: Rust wrapper for the
+polynomial-scaling Clifford-tableau variant
+(`surface_code_clifford_t`) of `src/algorithms/topological/
+topological.{c,h}`.  The dense state-vector surface code is
+limited to tiny `d`; the tableau path is what makes threshold
+sweeps on `d in {3, 5, 7}` tractable, and that's what callers
+get from Rust now.
+
+### Added
+
+- `bindings/rust/moonlab/src/surface_code.rs` (~200 LOC).  Eight
+  entry points exposed:
+  - `SurfaceCode::new(distance, rng_seed)` -- rotated lattice,
+    `d` odd, `d >= 3` enforced.
+  - `distance`, `num_data_qubits`, `num_ancillas_per_sector`.
+  - `data_index(row, col)` -- `(d x d)` -> linear.
+  - `apply_error(q, 'X' | 'Y' | 'Z')` -- single-qubit Pauli
+    injection for syndrome sampling.
+  - `measure_z_syndromes` + `measure_x_syndromes` -- ancilla-
+    mediated stabiliser measurements.
+  - `syndrome_weight` -- set-bit count across both syndromes.
+
+  Decoding is *not* part of this surface yet: callers receive the
+  raw syndrome data and plug their own decoder (e.g.
+  `pymatching` via Python interop) -- the existing
+  `tests/test_surface_code_threshold.c` runs the same stabiliser
+  layer underneath.
+
+- `moonlab-sys` allowlist gains 7 `surface_code_clifford_*`
+  functions + `surface_code_clifford_t` type.  `wrapper.h`
+  template now `#include`s `topological.h`.
+
+- 7 unit tests pin the surface against regression: distance-3
+  layout, even / too-small distance rejected, Z-stabiliser
+  measurement idempotent on `|0...0>`, X error lights Z
+  syndromes, Z error lights X syndromes, unknown error type
+  rejected, qubit-range bounds.
+
+### Verified
+
+- `cargo test`: 87 + 48 + 22 = 157 tests pass (was 148 in v0.5.9;
+  surface_code adds 7 + 2 doctests).
+
+Manifests bumped 0.5.11 -> 0.5.12.
 
 ## [0.5.11] - 2026-05-19
 

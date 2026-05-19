@@ -49,6 +49,7 @@ pub mod mpdo;
 pub mod noise;
 pub mod qaoa;
 pub mod state;
+pub mod surface_code;
 pub mod tdvp;
 pub mod topology;
 pub mod vqe;
