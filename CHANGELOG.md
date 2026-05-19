@@ -7,7 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.1.)
+(No unreleased changes since v0.6.2.)
+
+## [0.6.2] - 2026-05-19
+
+Six QEC families plug into the `moonlab_libirrep_qec_t` opaque
+handle that v0.6.1 introduced.  The surface code is now one of
+eight named CSS instances; binding consumers (JS / Python / Rust
+`SurfaceCode` shipped in v0.5.12-14) become QEC-zoo dispatchers in
+v0.6.3.
+
+### Added -- new CSS-code factories
+
+All return `moonlab_libirrep_qec_t *` so the existing accessors
+(`_n_qubits`, `_n_x_stabs`, `_n_z_stabs`, `_logical_qubits`,
+`_distance`, `_get_x_check_row`, `_get_z_check_row`) work uniformly.
+
+| Factory                                     | [[n, k, d]]      | Source                          |
+|---------------------------------------------|------------------|---------------------------------|
+| `moonlab_libirrep_toric_code_new(Lx, Ly)`   | [[2 L^2, 2, L]]  | Kitaev 1997                     |
+| `moonlab_libirrep_color_steane_new`         | [[7, 1, 3]]      | Steane 1996 / Bombin-Martin-Delgado |
+| `moonlab_libirrep_color_hamming_15_7_3_new` | [[15, 7, 3]]     | Hamming CSS recast              |
+| `moonlab_libirrep_bb_72_12_6_new`           | [[72, 12, 6]]    | Bravyi et al. 2024 Nature 627, 778 |
+| `moonlab_libirrep_bb_144_12_12_new`         | [[144, 12, 12]]  | Bravyi et al. 2024              |
+| `moonlab_libirrep_bb_288_12_18_new`         | [[288, 12, 18]]  | Bravyi et al. 2024              |
+| `moonlab_libirrep_hgp_repetition_new(d)`    | [[13/25/41, 1, d]] | Tillich-Zemor 2009            |
+
+Implementation: a `qec_factory()` helper threads a builder closure
+through the common `calloc + irrep_css_build + return-handle`
+boilerplate, so per-family code is a 3-line static.
+
+### Verified
+
+`test_libirrep_css` exercises every factory against published
+[[n, k, d]] parameters.  Highlights:
+- Steane [[7,1,3]]: brute-force distance reported as 3 (full match).
+- Toric L=3 -> [[18, 2, 3]], L=4 -> [[32, 2, 4]] (n, m_X, m_Z, k all
+  match Kitaev's analytical formulas).
+- IBM BB Gross codes: [[72,12,6]], [[144,12,12]], [[288,12,18]]
+  reproduce the Bravyi-Nature 627 Table 3 instances exactly.
+- HGP repetition ladder: [[13,1,3]], [[25,1,4]], [[41,1,5]] confirm
+  Tillich-Zemor scaling `n_HGP = d^2 + (d-1)^2`.
+- libirrep OFF: factories return `MOONLAB_LIBIRREP_NOT_BUILT`; test
+  exits 77 (CTest SKIP); no regression on default CI matrix.
+
+### Next phases
+
+- v0.6.3: dispatch the existing JS / Python / Rust `SurfaceCode`
+  binding through this opaque-handle layer when libirrep is
+  available -- one binding -> eight QEC families.
+- v0.6.4: QGTL `moonlab_backend.c` integration.
+- v0.6.5: SbNN decoder bench harness (neural decoder + libirrep
+  `single_shot.h` + Stim pymatching head-to-head).
 
 ## [0.6.1] - 2026-05-19
 
