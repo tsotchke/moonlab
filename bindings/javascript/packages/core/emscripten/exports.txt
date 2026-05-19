@@ -364,6 +364,36 @@ _surface_code_clifford_measure_x_syndromes
 _surface_code_clifford_syndrome_weight
 
 # =============================================================================
+# libirrep QEC zoo bridge (since v0.6.0 native; JS binding from v0.6.5).
+#
+# Eight CSS-code families (surface, toric, Steane, Hamming, three IBM Gross
+# BB qLDPC, three Tillich-Zemor hypergraph product) plus a unified
+# opaque-handle accessor surface, plumbed from src/integration/libirrep_bridge.{c,h}.
+# Built only when -DQSIM_ENABLE_LIBIRREP=ON; the WASM build skips libirrep
+# (it lives outside the WASM toolchain), so these symbols resolve to
+# MOONLAB_LIBIRREP_NOT_BUILT-returning stubs at run time.  Callers should
+# probe is_available() first.
+_moonlab_libirrep_available
+_moonlab_libirrep_kagome12_e0
+_moonlab_libirrep_heisenberg_sector_e0
+_moonlab_libirrep_surface_code_new
+_moonlab_libirrep_toric_code_new
+_moonlab_libirrep_color_steane_new
+_moonlab_libirrep_color_hamming_15_7_3_new
+_moonlab_libirrep_bb_72_12_6_new
+_moonlab_libirrep_bb_144_12_12_new
+_moonlab_libirrep_bb_288_12_18_new
+_moonlab_libirrep_hgp_repetition_new
+_moonlab_libirrep_qec_free
+_moonlab_libirrep_qec_n_qubits
+_moonlab_libirrep_qec_n_x_stabs
+_moonlab_libirrep_qec_n_z_stabs
+_moonlab_libirrep_qec_logical_qubits
+_moonlab_libirrep_qec_distance
+_moonlab_libirrep_qec_get_x_check_row
+_moonlab_libirrep_qec_get_z_check_row
+
+# =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
 # Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
 # Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
