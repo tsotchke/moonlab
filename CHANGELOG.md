@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.4.)
+(No unreleased changes since v0.4.5.)
+
+## [0.4.5] - 2026-05-18
+
+Binding-parity continuation: the standalone Aaronson-Gottesman
+Clifford tableau (`src/backends/clifford/clifford.{c,h}`, the v0.2.0
+stabiliser backend) now has a TypeScript wrapper.  Python has
+`moonlab.clifford.Clifford` since v0.2.1; Rust binds it as
+`moonlab::backends::clifford`; JavaScript was the last gap.
+
+### Added
+
+- **JavaScript Clifford tableau binding**
+  (`bindings/javascript/packages/core/src/clifford.ts`).  New
+  `CliffordTableau` class with the full Clifford gate surface
+  (`h`, `s`, `sdag`, `x`, `y`, `z`, `cnot`, `cz`, `swap`),
+  Z-basis `measure(q)` that reports both the outcome and whether it
+  was deterministic vs random, and `sampleAll()` that draws a full
+  computational-basis bitstring (up to 64 qubits) in one call.
+  The splitmix64 RNG state is hidden behind the class; callers can
+  pin it for reproducibility via `setRngSeed(seed: bigint)`.
+- 14 `_clifford_*` symbols added to
+  `bindings/javascript/packages/core/emscripten/exports.txt`; the
+  C source was already in the WASM build (52 of CMakeLists.txt).
+- `CliffordTableau`, `MeasureResult`, and `SampleAllResult` are
+  re-exported from `@moonlab/quantum-core`'s top-level index so
+  callers reach them as `import { CliffordTableau } from
+  '@moonlab/quantum-core'`.
+- `tsc --noEmit` runs clean on `@moonlab/quantum-core` with the new
+  module.  End-to-end runtime testing happens on the next WASM
+  rebuild (`pnpm build:wasm`); the TS surface is shippable as is.
 
 ## [0.4.4] - 2026-05-18
 
