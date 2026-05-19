@@ -102,26 +102,8 @@ async function loadModule(options?: LoadOptions): Promise<MoonlabModule> {
 /**
  * Load module in Node.js/Deno environment
  */
-async function loadServerModule(_options?: LoadOptions): Promise<MoonlabModule> {
-  const candidates: string[] = [];
-  const metaUrl =
-    typeof import.meta !== 'undefined' &&
-    typeof import.meta.url === 'string' &&
-    import.meta.url.length > 0
-      ? import.meta.url
-      : null;
-
-  if (metaUrl) {
-    candidates.push(new URL('../dist/moonlab.js', metaUrl).href);
-    candidates.push(new URL('../emscripten/build/moonlab.js', metaUrl).href);
-  }
-
-  if (typeof __dirname === 'string') {
-    const path = await import('node:path');
-    const url = await import('node:url');
-    candidates.push(url.pathToFileURL(path.resolve(__dirname, 'moonlab.js')).href);
-    candidates.push(url.pathToFileURL(path.resolve(__dirname, '../emscripten/build/moonlab.js')).href);
-  }
+async function loadServerModule(options?: LoadOptions): Promise<MoonlabModule> {
+  const candidates = await serverModuleCandidates(options);
 
   let lastError: unknown = null;
   for (const candidate of candidates) {
@@ -136,7 +118,7 @@ async function loadServerModule(_options?: LoadOptions): Promise<MoonlabModule> 
         throw new Error(`Module factory missing in ${candidate}`);
       }
 
-      const module = await MoonlabModuleFactory();
+      const module = await MoonlabModuleFactory(createServerModuleConfig(options, candidate));
       await (module as MoonlabModule).ready;
       return module as MoonlabModule;
     } catch (error) {
@@ -148,6 +130,66 @@ async function loadServerModule(_options?: LoadOptions): Promise<MoonlabModule> 
   throw new Error(
     `Failed to load Moonlab WASM module in server runtime. Tried: ${tried}. Last error: ${lastError instanceof Error ? lastError.message : String(lastError)}`
   );
+}
+
+async function serverModuleCandidates(options?: LoadOptions): Promise<string[]> {
+  const path = await import('node:path');
+  const url = await import('node:url');
+  const moduleApi = await import('node:module');
+  const candidates: string[] = [];
+
+  const addCandidate = (candidate: string): void => {
+    const href = /^(file|https?):/i.test(candidate)
+      ? candidate
+      : url.pathToFileURL(path.resolve(candidate)).href;
+    if (!candidates.includes(href)) {
+      candidates.push(href);
+    }
+  };
+
+  if (options?.jsPath) {
+    addCandidate(options.jsPath);
+  }
+
+  if (typeof __dirname === 'string') {
+    addCandidate(path.resolve(__dirname, 'moonlab.js'));
+    addCandidate(path.resolve(__dirname, '../emscripten/build/moonlab.js'));
+  }
+
+  const cwd =
+    typeof process !== 'undefined' && typeof process.cwd === 'function'
+      ? process.cwd()
+      : '.';
+  const requireFromCwd = moduleApi.createRequire(
+    url.pathToFileURL(path.resolve(cwd, 'moonlab-consumer.js')).href
+  );
+  try {
+    const resolvedEntry = requireFromCwd.resolve('@moonlab/quantum-core');
+    const distDir = path.dirname(resolvedEntry);
+    addCandidate(path.join(distDir, 'moonlab.js'));
+    addCandidate(path.resolve(distDir, '../emscripten/build/moonlab.js'));
+  } catch {
+    // Package self-resolution is unavailable in some source-tree test layouts.
+  }
+
+  addCandidate(path.resolve(cwd, 'dist/moonlab.js'));
+  addCandidate(path.resolve(cwd, 'emscripten/build/moonlab.js'));
+
+  return candidates;
+}
+
+function createServerModuleConfig(options: LoadOptions | undefined, candidate: string): Record<string, unknown> {
+  return {
+    locateFile: (file: string, scriptDirectory: string) => {
+      if (file.endsWith('.wasm') && options?.wasmPath) {
+        return options.wasmPath;
+      }
+      if (scriptDirectory) {
+        return scriptDirectory + file;
+      }
+      return new URL(file, candidate).href;
+    },
+  };
 }
 
 function isDenoRuntime(): boolean {

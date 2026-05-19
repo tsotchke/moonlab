@@ -140,17 +140,19 @@ export const AmplitudeBars = defineComponent({
         animated: props.animated,
       });
 
-      viz.on('click', (event: { basisState?: number }) => {
-        if (event.basisState !== undefined) {
-          const bitString = event.basisState.toString(2).padStart(getNumQubits(), '0');
-          emit('barClick', { basisState: event.basisState, bitString });
+      viz.on('click', (event: unknown) => {
+        const basisState = (event as { basisState?: number }).basisState;
+        if (basisState !== undefined) {
+          const bitString = basisState.toString(2).padStart(getNumQubits(), '0');
+          emit('barClick', { basisState, bitString });
         }
       });
 
-      viz.on('hover', (event: { basisState?: number }) => {
-        if (event.basisState !== undefined) {
-          const bitString = event.basisState.toString(2).padStart(getNumQubits(), '0');
-          emit('barHover', { basisState: event.basisState, bitString });
+      viz.on('hover', (event: unknown) => {
+        const basisState = (event as { basisState?: number }).basisState;
+        if (basisState !== undefined) {
+          const bitString = basisState.toString(2).padStart(getNumQubits(), '0');
+          emit('barHover', { basisState, bitString });
         } else {
           emit('barHover', null);
         }

@@ -115,20 +115,22 @@ export function AmplitudeBars({
 
     // Setup click listener
     if (onBarClick) {
-      vizRef.current.on('click', (event: { basisState?: number }) => {
-        if (event.basisState !== undefined) {
-          const bitString = event.basisState.toString(2).padStart(effectiveNumQubits, '0');
-          onBarClick(event.basisState, bitString);
+      vizRef.current.on('click', (event: unknown) => {
+        const basisState = (event as { basisState?: number }).basisState;
+        if (basisState !== undefined) {
+          const bitString = basisState.toString(2).padStart(effectiveNumQubits, '0');
+          onBarClick(basisState, bitString);
         }
       });
     }
 
     // Setup hover listener
     if (onBarHover) {
-      vizRef.current.on('hover', (event: { basisState?: number }) => {
-        if (event.basisState !== undefined) {
-          const bitString = event.basisState.toString(2).padStart(effectiveNumQubits, '0');
-          onBarHover(event.basisState, bitString);
+      vizRef.current.on('hover', (event: unknown) => {
+        const basisState = (event as { basisState?: number }).basisState;
+        if (basisState !== undefined) {
+          const bitString = basisState.toString(2).padStart(effectiveNumQubits, '0');
+          onBarHover(basisState, bitString);
         } else {
           onBarHover(null, null);
         }

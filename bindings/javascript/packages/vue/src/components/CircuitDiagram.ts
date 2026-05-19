@@ -106,14 +106,16 @@ export const CircuitDiagram = defineComponent({
         scrollable: props.scrollable,
       });
 
-      viz.on('click', (event: { gateIndex?: number }) => {
-        if (event.gateIndex !== undefined) {
-          emit('gateClick', event.gateIndex);
+      viz.on('click', (event: unknown) => {
+        const gateIndex = (event as { gateIndex?: number }).gateIndex;
+        if (gateIndex !== undefined) {
+          emit('gateClick', gateIndex);
         }
       });
 
-      viz.on('hover', (event: { gateIndex?: number }) => {
-        emit('gateHover', event.gateIndex ?? null);
+      viz.on('hover', (event: unknown) => {
+        const gateIndex = (event as { gateIndex?: number }).gateIndex;
+        emit('gateHover', gateIndex ?? null);
       });
 
       // Set initial circuit

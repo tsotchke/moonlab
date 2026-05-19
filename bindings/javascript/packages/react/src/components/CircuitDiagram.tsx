@@ -99,17 +99,19 @@ export function CircuitDiagram({
 
     // Setup click listener
     if (onGateClick) {
-      vizRef.current.on('click', (event: { gateIndex?: number }) => {
-        if (event.gateIndex !== undefined) {
-          onGateClick(event.gateIndex);
+      vizRef.current.on('click', (event: unknown) => {
+        const gateIndex = (event as { gateIndex?: number }).gateIndex;
+        if (gateIndex !== undefined) {
+          onGateClick(gateIndex);
         }
       });
     }
 
     // Setup hover listener
     if (onGateHover) {
-      vizRef.current.on('hover', (event: { gateIndex?: number }) => {
-        onGateHover(event.gateIndex ?? null);
+      vizRef.current.on('hover', (event: unknown) => {
+        const gateIndex = (event as { gateIndex?: number }).gateIndex;
+        onGateHover(gateIndex ?? null);
       });
     }
 

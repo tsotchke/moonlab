@@ -104,7 +104,9 @@ export function BlochSphere({
 
     // Setup state change listener
     if (onStateChange) {
-      vizRef.current.on('stateChange', onStateChange);
+      vizRef.current.on('stateChange', (state: unknown) => {
+        onStateChange(state as { theta: number; phi: number; x: number; y: number; z: number });
+      });
     }
 
     return () => {

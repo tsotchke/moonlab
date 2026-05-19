@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./wasm": {
       "import": "./dist/moonlab.wasm"
@@ -21,7 +21,8 @@
   "scripts": {
     "build:wasm": "cd emscripten && cmake -B build -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake && cmake --build build",
     "build:ts": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "build": "pnpm build:wasm && pnpm build:ts",
+    "build:assets": "cp emscripten/build/moonlab.js dist/moonlab.js && cp emscripten/build/moonlab.wasm dist/moonlab.wasm",
+    "build": "pnpm build:wasm && pnpm build:ts && pnpm build:assets",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.config.ts",

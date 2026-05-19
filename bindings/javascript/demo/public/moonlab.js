@@ -3,22 +3,12 @@
 
 // Single threaded MINIMAL_RUNTIME programs do not need access to
 // document.currentScript, so a simple export declaration is enough.
-function build_moonlab_module_factory() {
-  return (() => {
+var MoonlabModule = (() => {
   // When MODULARIZE this JS may be executed later,
   // after document.currentScript is gone, so we save it.
   // In EXPORT_ES6 mode we can just use 'import.meta.url'.
   var _scriptName = globalThis.document?.currentScript?.src;
   return async function(moduleArg = {}) {
-    if (typeof MoonlabModule !== 'undefined' &&
-        typeof MoonlabModule.recordBackendRuntimeProbe === 'function') {
-      MoonlabModule.recordBackendRuntimeProbe({
-        operation: 'factory-invocation',
-        moduleReady: false,
-        backendAvailable: false,
-        reason: 'factory-loading',
-      });
-    }
     var moduleRtn;
 
 // include: shell.js
@@ -94,7 +84,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /home/cos/projects/moonlab/bindings/javascript/packages/core/emscripten/pre.js
+// include: /Users/tyr/Desktop/quantum_geometric_tensor/external/moonlab/bindings/javascript/packages/core/emscripten/pre.js
 /**
  * Moonlab WASM Pre-initialization Script
  *
@@ -138,7 +128,7 @@ Module['_onError'] = function(error) {
 Module['onRuntimeInitialized'] = function() {
   Module['_onReady']();
 };
-// end include: /home/cos/projects/moonlab/bindings/javascript/packages/core/emscripten/pre.js
+// end include: /Users/tyr/Desktop/quantum_geometric_tensor/external/moonlab/bindings/javascript/packages/core/emscripten/pre.js
 
 
 var arguments_ = [];
@@ -297,7 +287,7 @@ if (!globalThis.WebAssembly) {
 var ABORT = false;
 
 // set by exit() and abort().  Passed to 'onExit' handler.
-// NOTE: This is also used as the process return code in shell environments
+// NOTE: This is also used as the process return code code in shell environments
 // but only when noExitRuntime is false.
 var EXITSTATUS;
 
@@ -617,7 +607,7 @@ function getBinarySync(file) {
   if (readBinary) {
     return readBinary(file);
   }
-  // Throwing a plain string here, even though it not normally advisable since
+  // Throwing a plain string here, even though it not normally adviables since
   // this gets turning into an `abort` in instantiateArrayBuffer.
   throw 'both async and sync fetching of the wasm failed';
 }
@@ -1627,7 +1617,7 @@ async function createWasm() {
               // `Asyncify.handleSleepReturnValue`.
               // `Asyncify.handleSleepReturnValue` contains the return
               // value of the last C function to have executed
-              // `Asyncify.handleSleep()`, whereas `asyncWasmReturnValue`
+              // `Asyncify.handleSleep()`, where as `asyncWasmReturnValue`
               // contains the return value of the exported WASM function
               // that may have called C functions that
               // call `Asyncify.handleSleep()`.
@@ -1768,7 +1758,7 @@ async function createWasm() {
         // either. The only valid combination is to have no change in the async
         // data (so we either had one in flight and left it alone, or we didn't have
         // one), or to have nothing in flight and to start one.
-        assert(!(previousAsync && Asyncify.currData), 'We cannot start an async operation when one is already in flight');
+        assert(!(previousAsync && Asyncify.currData), 'We cannot start an async operation when one is already flight');
         assert(!(previousAsync && !Asyncify.currData), 'We cannot stop an async operation in flight');
         // This is a new async operation. The wasm is paused and has unwound its stack.
         // We need to return a Promise that resolves the return value
@@ -2128,14 +2118,17 @@ unexportedSymbols.forEach(unexportedRuntimeSymbol);
 function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
-function moonlab_webgpu_runtime_available() { try { if (typeof navigator === 'undefined' || !navigator.gpu) { return 0; } if (typeof self !== 'undefined' && self.isSecureContext === false) { return 0; } return 1; } catch (err) { return 0; } }
-function moonlab_webgpu_native_dispatch_supported() { try { if (typeof navigator === 'undefined' || !navigator.gpu) { return 0; } if (typeof Deno !== 'undefined' && Deno.env && typeof Deno.env.get === 'function') { try { if (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE') !== '1') { return 0; } if (Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE') === '1') { return 0; } } catch (_err) { return 0; } } return 1; } catch (err) { return 0; } }
-function moonlab_webgpu_tn_native_dispatch_supported() { try { if (!moonlab_webgpu_native_dispatch_supported()) { return 0; } if (typeof Deno !== 'undefined' && Deno.env && typeof Deno.env.get === 'function') { try { if (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE_TN') !== '1') { return 0; } if (Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE_TN') === '1') { return 0; } } catch (_err) { return 0; } } return 1; } catch (err) { return 0; } }
-function __asyncjs__moonlab_webgpu_init_async() { return Asyncify.handleAsync(async () => { try { if (typeof navigator === 'undefined' || !navigator.gpu) { return 0; } const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {}); if (state.device && state.hadamardPipeline && state.pauliXPipeline && state.pauliZPipeline && state.cnotPipeline && state.probabilitiesPipeline && state.mpsApplyGateThetaPipeline && state.mpsExpectationZCanonicalPipeline) { return 1; } if (!state.initPromise) { state.initPromise = (async () => { const adapter = await navigator.gpu.requestAdapter(); if (!adapter) { return 0; } const device = await adapter.requestDevice(); const shaderCode = ` struct HadamardParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> hadamard_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> hadamard_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> hadamard_params: HadamardParams; @compute @workgroup_size(256) fn hadamard_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = hadamard_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let stride = 1u << hadamard_params.qubit; let i0 = (pair_index / stride) * (2u * stride) + (pair_index % stride); let i1 = i0 + stride; let v0 = hadamard_src[i0]; let v1 = hadamard_src[i1]; let inv_sqrt2 = 0.7071067811865476; hadamard_dst[i0] = (v0 + v1) * inv_sqrt2; hadamard_dst[i1] = (v0 - v1) * inv_sqrt2; } struct PauliXParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> pauli_x_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> pauli_x_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> pauli_x_params: PauliXParams; @compute @workgroup_size(256) fn pauli_x_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = pauli_x_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let stride = 1u << pauli_x_params.qubit; let i0 = (pair_index / stride) * (2u * stride) + (pair_index % stride); let i1 = i0 + stride; pauli_x_dst[i0] = pauli_x_src[i1]; pauli_x_dst[i1] = pauli_x_src[i0]; } struct PauliZParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> pauli_z_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> pauli_z_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> pauli_z_params: PauliZParams; @compute @workgroup_size(256) fn pauli_z_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= pauli_z_params.state_dim) { return; } var v = pauli_z_src[i]; if ((i & (1u << pauli_z_params.qubit)) != 0u) { v = -v; } pauli_z_dst[i] = v; } struct CnotParams { control: u32, target: u32, state_dim: u32, _pad0: u32, }; @group(0) @binding(0) var<storage, read> cnot_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> cnot_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> cnot_params: CnotParams; @compute @workgroup_size(256) fn cnot_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = cnot_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let target_stride = 1u << cnot_params.target; let i0 = (pair_index / target_stride) * (2u * target_stride) + (pair_index % target_stride); let i1 = i0 + target_stride; if ((i0 & (1u << cnot_params.control)) != 0u) { cnot_dst[i0] = cnot_src[i1]; cnot_dst[i1] = cnot_src[i0]; } else { cnot_dst[i0] = cnot_src[i0]; cnot_dst[i1] = cnot_src[i1]; } } struct ProbabilityParams { state_dim: u32, _pad0: u32, _pad1: u32, _pad2: u32, }; @group(0) @binding(0) var<storage, read> prob_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> prob_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> prob_params: ProbabilityParams; @compute @workgroup_size(256) fn probabilities_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= prob_params.state_dim) { return; } let amp = prob_src[i]; prob_dst[i] = vec2<f32>(dot(amp, amp), 0.0); } fn complex_mul(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> { return vec2<f32>( a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x ); } struct MpsGateParams { chi_l: u32, chi_r: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> mps_theta_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> mps_theta_dst: array<vec2<f32>>; @group(0) @binding(2) var<storage, read> mps_gate: array<vec2<f32>>; @group(0) @binding(3) var<uniform> mps_gate_params: MpsGateParams; @compute @workgroup_size(256) fn mps_apply_gate_theta_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair = gid.x; let total_pairs = mps_gate_params.chi_l * mps_gate_params.chi_r; if (pair >= total_pairs) { return; } let base = pair * 4u; let t0 = mps_theta_src[base + 0u]; let t1 = mps_theta_src[base + 1u]; let t2 = mps_theta_src[base + 2u]; let t3 = mps_theta_src[base + 3u]; let g00 = mps_gate[0u]; let g01 = mps_gate[1u]; let g02 = mps_gate[2u]; let g03 = mps_gate[3u]; let g10 = mps_gate[4u]; let g11 = mps_gate[5u]; let g12 = mps_gate[6u]; let g13 = mps_gate[7u]; let g20 = mps_gate[8u]; let g21 = mps_gate[9u]; let g22 = mps_gate[10u]; let g23 = mps_gate[11u]; let g30 = mps_gate[12u]; let g31 = mps_gate[13u]; let g32 = mps_gate[14u]; let g33 = mps_gate[15u]; mps_theta_dst[base + 0u] = complex_mul(g00, t0) + complex_mul(g01, t1) + complex_mul(g02, t2) + complex_mul(g03, t3); mps_theta_dst[base + 1u] = complex_mul(g10, t0) + complex_mul(g11, t1) + complex_mul(g12, t2) + complex_mul(g13, t3); mps_theta_dst[base + 2u] = complex_mul(g20, t0) + complex_mul(g21, t1) + complex_mul(g22, t2) + complex_mul(g23, t3); mps_theta_dst[base + 3u] = complex_mul(g30, t0) + complex_mul(g31, t1) + complex_mul(g32, t2) + complex_mul(g33, t3); } struct MpsExpectationParams { chi_l: u32, chi_r: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> mps_tensor: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> mps_pair_probs: array<vec2<f32>>; @group(0) @binding(2) var<uniform> mps_expect_params: MpsExpectationParams; @compute @workgroup_size(256) fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair = gid.x; let total_pairs = mps_expect_params.chi_l * mps_expect_params.chi_r; if (pair >= total_pairs) { return; } let base = pair * 2u; let a0 = mps_tensor[base + 0u]; let a1 = mps_tensor[base + 1u]; let p0 = dot(a0, a0); let p1 = dot(a1, a1); mps_pair_probs[pair] = vec2<f32>(p0, p1); } `; const shaderModule = device.createShaderModule({ code: shaderCode }); const hadamardPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'hadamard_kernel', }, }); const pauliXPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'pauli_x_kernel', }, }); const pauliZPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'pauli_z_kernel', }, }); const cnotPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'cnot_kernel', }, }); const probabilitiesPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'probabilities_kernel', }, }); const mpsApplyGateThetaPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'mps_apply_gate_theta_kernel', }, }); const mpsExpectationZCanonicalPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'mps_expectation_z_canonical_kernel', }, }); state.adapter = adapter; state.device = device; state.hadamardPipeline = hadamardPipeline; state.pauliXPipeline = pauliXPipeline; state.pauliZPipeline = pauliZPipeline; state.cnotPipeline = cnotPipeline; state.probabilitiesPipeline = probabilitiesPipeline; state.mpsApplyGateThetaPipeline = mpsApplyGateThetaPipeline; state.mpsExpectationZCanonicalPipeline = mpsExpectationZCanonicalPipeline; state.workgroupSize = 256; return 1; })().catch((_err) => 0); } const ok = await state.initPromise; if (!ok) { state.initPromise = null; } return ok ? 1 : 0; } catch (err) { return 0; } }); }
+function moonlab_webgpu_runtime_available() { let available = 0; try { available = (typeof navigator !== 'undefined' && !!navigator.gpu && !(typeof self !== 'undefined' && self.isSecureContext === false)) ? 1 : 0; } catch (err) { if (typeof Module !== 'undefined') { Module.__moonlabWebGPULastError = String(err && err.message ? err.message : err); } available = 0; } return available; }
+function moonlab_webgpu_native_dispatch_supported() { let supported = 0; try { supported = (typeof navigator !== 'undefined' && !!navigator.gpu) ? 1 : 0; if (supported && typeof Deno !== 'undefined' && Deno.env && typeof Deno.env.get === 'function') { try { supported = (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE') === '1' && Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE') !== '1') ? 1 : 0; } catch (_err) { if (typeof Module !== 'undefined') { Module.__moonlabWebGPULastError = String(_err && _err.message ? _err.message : _err); } supported = 0; } } } catch (err) { if (typeof Module !== 'undefined') { Module.__moonlabWebGPULastError = String(err && err.message ? err.message : err); } supported = 0; } return supported; }
+function moonlab_webgpu_tn_native_dispatch_supported() { let supported = 0; try { supported = moonlab_webgpu_native_dispatch_supported() ? 1 : 0; if (supported && typeof Deno !== 'undefined' && Deno.env && typeof Deno.env.get === 'function') { try { supported = (Deno.env.get('MOONLAB_WEBGPU_ENABLE_DENO_NATIVE_TN') === '1' && Deno.env.get('MOONLAB_WEBGPU_DISABLE_DENO_NATIVE_TN') !== '1') ? 1 : 0; } catch (_err) { if (typeof Module !== 'undefined') { Module.__moonlabWebGPULastError = String(_err && _err.message ? _err.message : _err); } supported = 0; } } } catch (err) { if (typeof Module !== 'undefined') { Module.__moonlabWebGPULastError = String(err && err.message ? err.message : err); } supported = 0; } return supported; }
+function __asyncjs__moonlab_webgpu_init_async() { return Asyncify.handleAsync(async () => { try { if (typeof navigator === 'undefined' || !navigator.gpu) { return 0; } const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {}); if (state.device && state.hadamardPipeline && state.pauliXPipeline && state.pauliZPipeline && state.cnotPipeline && state.rzPipeline && state.czPipeline && state.swapPipeline && state.probabilitiesPipeline && state.mpsApplyGateThetaPipeline && state.mpsExpectationZCanonicalPipeline) { return 1; } if (!state.initPromise) { state.initPromise = (async () => { const adapter = await navigator.gpu.requestAdapter(); if (!adapter) { return 0; } const device = await adapter.requestDevice(); const shaderCode = ` struct HadamardParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> hadamard_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> hadamard_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> hadamard_params: HadamardParams; @compute @workgroup_size(256) fn hadamard_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = hadamard_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let stride = 1u << hadamard_params.qubit; let i0 = (pair_index / stride) * (2u * stride) + (pair_index % stride); let i1 = i0 + stride; let v0 = hadamard_src[i0]; let v1 = hadamard_src[i1]; let inv_sqrt2 = 0.7071067811865476; hadamard_dst[i0] = (v0 + v1) * inv_sqrt2; hadamard_dst[i1] = (v0 - v1) * inv_sqrt2; } struct PauliXParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> pauli_x_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> pauli_x_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> pauli_x_params: PauliXParams; @compute @workgroup_size(256) fn pauli_x_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = pauli_x_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let stride = 1u << pauli_x_params.qubit; let i0 = (pair_index / stride) * (2u * stride) + (pair_index % stride); let i1 = i0 + stride; pauli_x_dst[i0] = pauli_x_src[i1]; pauli_x_dst[i1] = pauli_x_src[i0]; } struct PauliZParams { qubit: u32, state_dim: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> pauli_z_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> pauli_z_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> pauli_z_params: PauliZParams; @compute @workgroup_size(256) fn pauli_z_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= pauli_z_params.state_dim) { return; } var v = pauli_z_src[i]; if ((i & (1u << pauli_z_params.qubit)) != 0u) { v = -v; } pauli_z_dst[i] = v; } struct PhaseRzParams { qubit: u32, state_dim: u32, cos_half: f32, sin_half: f32, }; @group(0) @binding(0) var<storage, read> rz_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> rz_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> rz_params: PhaseRzParams; @compute @workgroup_size(256) fn rz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= rz_params.state_dim) { return; } let v = rz_src[i]; let bit = (i & (1u << rz_params.qubit)) != 0u; let s = select(-1.0, 1.0, bit); let c = rz_params.cos_half; let ssin = s * rz_params.sin_half; rz_dst[i] = vec2<f32>( c * v.x + ssin * v.y, c * v.y - ssin * v.x ); } struct SwapParams { qubit_a: u32, qubit_b: u32, state_dim: u32, _pad0: u32, }; @group(0) @binding(0) var<storage, read> swap_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> swap_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> swap_params: SwapParams; @compute @workgroup_size(256) fn swap_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= swap_params.state_dim) { return; } let bit_a = (i >> swap_params.qubit_a) & 1u; let bit_b = (i >> swap_params.qubit_b) & 1u; if (bit_a == bit_b) { swap_dst[i] = swap_src[i]; return; } let j = i ^ (1u << swap_params.qubit_a) ^ (1u << swap_params.qubit_b); swap_dst[i] = swap_src[j]; } struct CzParams { control: u32, target: u32, state_dim: u32, _pad0: u32, }; @group(0) @binding(0) var<storage, read> cz_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> cz_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> cz_params: CzParams; @compute @workgroup_size(256) fn cz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= cz_params.state_dim) { return; } let bit_c = (i >> cz_params.control) & 1u; let bit_t = (i >> cz_params.target) & 1u; var v = cz_src[i]; if (bit_c == 1u && bit_t == 1u) { v = -v; } cz_dst[i] = v; } struct CnotParams { control: u32, target: u32, state_dim: u32, _pad0: u32, }; @group(0) @binding(0) var<storage, read> cnot_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> cnot_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> cnot_params: CnotParams; @compute @workgroup_size(256) fn cnot_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair_index = gid.x; let pair_count = cnot_params.state_dim / 2u; if (pair_index >= pair_count) { return; } let target_stride = 1u << cnot_params.target; let i0 = (pair_index / target_stride) * (2u * target_stride) + (pair_index % target_stride); let i1 = i0 + target_stride; if ((i0 & (1u << cnot_params.control)) != 0u) { cnot_dst[i0] = cnot_src[i1]; cnot_dst[i1] = cnot_src[i0]; } else { cnot_dst[i0] = cnot_src[i0]; cnot_dst[i1] = cnot_src[i1]; } } struct ProbabilityParams { state_dim: u32, _pad0: u32, _pad1: u32, _pad2: u32, }; @group(0) @binding(0) var<storage, read> prob_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> prob_dst: array<vec2<f32>>; @group(0) @binding(2) var<uniform> prob_params: ProbabilityParams; @compute @workgroup_size(256) fn probabilities_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let i = gid.x; if (i >= prob_params.state_dim) { return; } let amp = prob_src[i]; prob_dst[i] = vec2<f32>(dot(amp, amp), 0.0); } fn complex_mul(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> { return vec2<f32>( a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x ); } struct MpsGateParams { chi_l: u32, chi_r: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> mps_theta_src: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> mps_theta_dst: array<vec2<f32>>; @group(0) @binding(2) var<storage, read> mps_gate: array<vec2<f32>>; @group(0) @binding(3) var<uniform> mps_gate_params: MpsGateParams; @compute @workgroup_size(256) fn mps_apply_gate_theta_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair = gid.x; let total_pairs = mps_gate_params.chi_l * mps_gate_params.chi_r; if (pair >= total_pairs) { return; } let base = pair * 4u; let t0 = mps_theta_src[base + 0u]; let t1 = mps_theta_src[base + 1u]; let t2 = mps_theta_src[base + 2u]; let t3 = mps_theta_src[base + 3u]; let g00 = mps_gate[0u]; let g01 = mps_gate[1u]; let g02 = mps_gate[2u]; let g03 = mps_gate[3u]; let g10 = mps_gate[4u]; let g11 = mps_gate[5u]; let g12 = mps_gate[6u]; let g13 = mps_gate[7u]; let g20 = mps_gate[8u]; let g21 = mps_gate[9u]; let g22 = mps_gate[10u]; let g23 = mps_gate[11u]; let g30 = mps_gate[12u]; let g31 = mps_gate[13u]; let g32 = mps_gate[14u]; let g33 = mps_gate[15u]; mps_theta_dst[base + 0u] = complex_mul(g00, t0) + complex_mul(g01, t1) + complex_mul(g02, t2) + complex_mul(g03, t3); mps_theta_dst[base + 1u] = complex_mul(g10, t0) + complex_mul(g11, t1) + complex_mul(g12, t2) + complex_mul(g13, t3); mps_theta_dst[base + 2u] = complex_mul(g20, t0) + complex_mul(g21, t1) + complex_mul(g22, t2) + complex_mul(g23, t3); mps_theta_dst[base + 3u] = complex_mul(g30, t0) + complex_mul(g31, t1) + complex_mul(g32, t2) + complex_mul(g33, t3); } struct MpsExpectationParams { chi_l: u32, chi_r: u32, _pad0: u32, _pad1: u32, }; @group(0) @binding(0) var<storage, read> mps_tensor: array<vec2<f32>>; @group(0) @binding(1) var<storage, read_write> mps_pair_probs: array<vec2<f32>>; @group(0) @binding(2) var<uniform> mps_expect_params: MpsExpectationParams; @compute @workgroup_size(256) fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u32>) { let pair = gid.x; let total_pairs = mps_expect_params.chi_l * mps_expect_params.chi_r; if (pair >= total_pairs) { return; } let base = pair * 2u; let a0 = mps_tensor[base + 0u]; let a1 = mps_tensor[base + 1u]; let p0 = dot(a0, a0); let p1 = dot(a1, a1); mps_pair_probs[pair] = vec2<f32>(p0, p1); } `; const shaderModule = device.createShaderModule({ code: shaderCode }); const hadamardPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'hadamard_kernel', }, }); const pauliXPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'pauli_x_kernel', }, }); const pauliZPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'pauli_z_kernel', }, }); const cnotPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'cnot_kernel', }, }); const rzPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'rz_kernel', }, }); const czPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'cz_kernel', }, }); const swapPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'swap_kernel', }, }); const probabilitiesPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'probabilities_kernel', }, }); const mpsApplyGateThetaPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'mps_apply_gate_theta_kernel', }, }); const mpsExpectationZCanonicalPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'mps_expectation_z_canonical_kernel', }, }); state.adapter = adapter; state.device = device; state.hadamardPipeline = hadamardPipeline; state.pauliXPipeline = pauliXPipeline; state.pauliZPipeline = pauliZPipeline; state.cnotPipeline = cnotPipeline; state.rzPipeline = rzPipeline; state.czPipeline = czPipeline; state.swapPipeline = swapPipeline; state.probabilitiesPipeline = probabilitiesPipeline; state.mpsApplyGateThetaPipeline = mpsApplyGateThetaPipeline; state.mpsExpectationZCanonicalPipeline = mpsExpectationZCanonicalPipeline; state.workgroupSize = 256; return 1; })().catch((_err) => 0); } const ok = await state.initPromise; if (!ok) { state.initPromise = null; } return ok ? 1 : 0; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_hadamard_dispatch_async(amplitudes_ptr,qubit_index,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([qubit_index >>> 0, n, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.hadamardPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.hadamardPipeline); pass.setBindGroup(0, bindGroup); const pairs = n >>> 1; const workgroups = Math.max(1, Math.ceil(pairs / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_pauli_x_dispatch_async(amplitudes_ptr,qubit_index,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([qubit_index >>> 0, n, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.pauliXPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.pauliXPipeline); pass.setBindGroup(0, bindGroup); const pairs = n >>> 1; const workgroups = Math.max(1, Math.ceil(pairs / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_pauli_z_dispatch_async(amplitudes_ptr,qubit_index,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([qubit_index >>> 0, n, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.pauliZPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.pauliZPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_cnot_dispatch_async(amplitudes_ptr,control,target,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([control >>> 0, target >>> 0, n, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.cnotPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.cnotPipeline); pass.setBindGroup(0, bindGroup); const pairs = n >>> 1; const workgroups = Math.max(1, Math.ceil(pairs / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
+function __asyncjs__moonlab_webgpu_rz_dispatch_async(amplitudes_ptr,qubit_index,cos_half,sin_half,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const paramsBytes = 16; const paramsBuf = device.createBuffer({ size: paramsBytes, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); const paramsAB = new ArrayBuffer(paramsBytes); const paramsU32 = new Uint32Array(paramsAB); const paramsF32 = new Float32Array(paramsAB); paramsU32[0] = qubit_index >>> 0; paramsU32[1] = n; paramsF32[2] = cos_half; paramsF32[3] = sin_half; device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, paramsAB, 0, paramsBytes); const bindGroup = device.createBindGroup({ layout: state.rzPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.rzPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
+function __asyncjs__moonlab_webgpu_cz_dispatch_async(amplitudes_ptr,control,target,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([control >>> 0, target >>> 0, n, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.czPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.czPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
+function __asyncjs__moonlab_webgpu_swap_dispatch_async(amplitudes_ptr,qubit_a,qubit_b,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const valueCount = n * 2; const heapOffset = amplitudes_ptr >>> 3; const amplitudesF32 = new Float32Array(valueCount); for (let i = 0; i < valueCount; i++) { amplitudesF32[i] = HEAPF64[heapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([qubit_a >>> 0, qubit_b >>> 0, n, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.swapPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.swapPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, amplitudesBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < valueCount; i++) { HEAPF64[heapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_probabilities_dispatch_async(amplitudes_ptr,probabilities_ptr,state_dim) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const n = state_dim >>> 0; const amplitudesCount = n * 2; const amplitudesHeapOffset = amplitudes_ptr >>> 3; const probabilitiesHeapOffset = probabilities_ptr >>> 3; const amplitudesF32 = new Float32Array(amplitudesCount); for (let i = 0; i < amplitudesCount; i++) { amplitudesF32[i] = HEAPF64[amplitudesHeapOffset + i]; } const amplitudesBytes = amplitudesF32.byteLength; const probabilitiesBytes = n * 8; const src = device.createBuffer({ size: amplitudesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: probabilitiesBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: probabilitiesBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([n, 0, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, amplitudesF32.buffer, amplitudesF32.byteOffset, amplitudesF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.probabilitiesPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.probabilitiesPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(n / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, probabilitiesBytes); device.queue.submit([encoder.finish()]); if (typeof device.queue.onSubmittedWorkDone === 'function') { await device.queue.onSubmittedWorkDone(); } await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < n; i++) { HEAPF64[probabilitiesHeapOffset + i] = resultF32[i * 2]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_mps_apply_gate_theta_dispatch_async(theta_ptr,gate_ptr,chi_l,chi_r) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const pairs = (chi_l >>> 0) * (chi_r >>> 0); const thetaComplexCount = pairs * 4; const thetaValueCount = thetaComplexCount * 2; const thetaHeapOffset = theta_ptr >>> 3; const gateHeapOffset = gate_ptr >>> 3; const thetaF32 = new Float32Array(thetaValueCount); for (let i = 0; i < thetaValueCount; i++) { thetaF32[i] = HEAPF64[thetaHeapOffset + i]; } const gateF32 = new Float32Array(32); for (let i = 0; i < 32; i++) { gateF32[i] = HEAPF64[gateHeapOffset + i]; } const thetaBytes = thetaF32.byteLength; const src = device.createBuffer({ size: thetaBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: thetaBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: thetaBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const gateBuf = device.createBuffer({ size: gateF32.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const params = new Uint32Array([chi_l >>> 0, chi_r >>> 0, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, thetaF32.buffer, thetaF32.byteOffset, thetaF32.byteLength); device.queue.writeBuffer(gateBuf, 0, gateF32.buffer, gateF32.byteOffset, gateF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.mpsApplyGateThetaPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: gateBuf } }, { binding: 3, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.mpsApplyGateThetaPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(pairs / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, thetaBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const resultF32 = new Float32Array(mapped.slice(0)); readback.unmap(); for (let i = 0; i < thetaValueCount; i++) { HEAPF64[thetaHeapOffset + i] = resultF32[i]; } if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof gateBuf.destroy === 'function') gateBuf.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
 function __asyncjs__moonlab_webgpu_mps_expectation_z_canonical_dispatch_async(tensor_ptr,chi_l,chi_r,expectation_out_ptr) { return Asyncify.handleAsync(async () => { try { const initialized = await moonlab_webgpu_init_async(); if (!initialized) { return 0; } const state = Module.__moonlabWebGPU; const device = state.device; const pairs = (chi_l >>> 0) * (chi_r >>> 0); const tensorComplexCount = pairs * 2; const tensorValueCount = tensorComplexCount * 2; const tensorHeapOffset = tensor_ptr >>> 3; const outHeapOffset = expectation_out_ptr >>> 3; const tensorF32 = new Float32Array(tensorValueCount); for (let i = 0; i < tensorValueCount; i++) { tensorF32[i] = HEAPF64[tensorHeapOffset + i]; } const tensorBytes = tensorF32.byteLength; const pairBytes = pairs * 8; const src = device.createBuffer({ size: tensorBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }); const dst = device.createBuffer({ size: pairBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }); const readback = device.createBuffer({ size: pairBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, }); const params = new Uint32Array([chi_l >>> 0, chi_r >>> 0, 0, 0]); const paramsBuf = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, }); device.queue.writeBuffer(src, 0, tensorF32.buffer, tensorF32.byteOffset, tensorF32.byteLength); device.queue.writeBuffer(paramsBuf, 0, params.buffer, params.byteOffset, params.byteLength); const bindGroup = device.createBindGroup({ layout: state.mpsExpectationZCanonicalPipeline.getBindGroupLayout(0), entries: [ { binding: 0, resource: { buffer: src } }, { binding: 1, resource: { buffer: dst } }, { binding: 2, resource: { buffer: paramsBuf } }, ], }); const encoder = device.createCommandEncoder(); const pass = encoder.beginComputePass(); pass.setPipeline(state.mpsExpectationZCanonicalPipeline); pass.setBindGroup(0, bindGroup); const workgroups = Math.max(1, Math.ceil(pairs / state.workgroupSize)); pass.dispatchWorkgroups(workgroups); pass.end(); encoder.copyBufferToBuffer(dst, 0, readback, 0, pairBytes); device.queue.submit([encoder.finish()]); await readback.mapAsync(GPUMapMode.READ); const mapped = readback.getMappedRange(); const pairProbs = new Float32Array(mapped.slice(0)); readback.unmap(); let numerator = 0.0; let denominator = 0.0; for (let i = 0; i < pairs; i++) { const p0 = pairProbs[i * 2]; const p1 = pairProbs[i * 2 + 1]; numerator += p0 - p1; denominator += p0 + p1; } HEAPF64[outHeapOffset] = denominator > 1e-30 ? (numerator / denominator) : 0.0; if (typeof src.destroy === 'function') src.destroy(); if (typeof dst.destroy === 'function') dst.destroy(); if (typeof readback.destroy === 'function') readback.destroy(); if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy(); return 1; } catch (err) { return 0; } }); }
@@ -2187,6 +2180,19 @@ var _measurement_expectation_x = Module['_measurement_expectation_x'] = makeInva
 var _measurement_expectation_y = Module['_measurement_expectation_y'] = makeInvalidEarlyAccess('_measurement_expectation_y');
 var _measurement_correlation_zz = Module['_measurement_correlation_zz'] = makeInvalidEarlyAccess('_measurement_correlation_zz');
 var _malloc = Module['_malloc'] = makeInvalidEarlyAccess('_malloc');
+var _entanglement_entropy_bipartition = Module['_entanglement_entropy_bipartition'] = makeInvalidEarlyAccess('_entanglement_entropy_bipartition');
+var _entanglement_mutual_information = Module['_entanglement_mutual_information'] = makeInvalidEarlyAccess('_entanglement_mutual_information');
+var _entanglement_concurrence_2qubit = Module['_entanglement_concurrence_2qubit'] = makeInvalidEarlyAccess('_entanglement_concurrence_2qubit');
+var _entanglement_negativity_2qubit = Module['_entanglement_negativity_2qubit'] = makeInvalidEarlyAccess('_entanglement_negativity_2qubit');
+var _noise_depolarizing_single = Module['_noise_depolarizing_single'] = makeInvalidEarlyAccess('_noise_depolarizing_single');
+var _noise_depolarizing_two_qubit = Module['_noise_depolarizing_two_qubit'] = makeInvalidEarlyAccess('_noise_depolarizing_two_qubit');
+var _noise_amplitude_damping = Module['_noise_amplitude_damping'] = makeInvalidEarlyAccess('_noise_amplitude_damping');
+var _noise_phase_damping = Module['_noise_phase_damping'] = makeInvalidEarlyAccess('_noise_phase_damping');
+var _noise_pure_dephasing = Module['_noise_pure_dephasing'] = makeInvalidEarlyAccess('_noise_pure_dephasing');
+var _noise_bit_flip = Module['_noise_bit_flip'] = makeInvalidEarlyAccess('_noise_bit_flip');
+var _noise_phase_flip = Module['_noise_phase_flip'] = makeInvalidEarlyAccess('_noise_phase_flip');
+var _noise_bit_phase_flip = Module['_noise_bit_phase_flip'] = makeInvalidEarlyAccess('_noise_bit_phase_flip');
+var _noise_thermal_relaxation = Module['_noise_thermal_relaxation'] = makeInvalidEarlyAccess('_noise_thermal_relaxation');
 var _grover_oracle = Module['_grover_oracle'] = makeInvalidEarlyAccess('_grover_oracle');
 var _grover_diffusion = Module['_grover_diffusion'] = makeInvalidEarlyAccess('_grover_diffusion');
 var _grover_iteration = Module['_grover_iteration'] = makeInvalidEarlyAccess('_grover_iteration');
@@ -2268,6 +2274,36 @@ var _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = makeInva
 var _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = makeInvalidEarlyAccess('_tn_mps_truncate_bond');
 var _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = makeInvalidEarlyAccess('_tn_mps_grow_bond');
 var _tn_mps_fidelity = Module['_tn_mps_fidelity'] = makeInvalidEarlyAccess('_tn_mps_fidelity');
+var _moonlab_ca_mps_create = Module['_moonlab_ca_mps_create'] = makeInvalidEarlyAccess('_moonlab_ca_mps_create');
+var _moonlab_ca_mps_free = Module['_moonlab_ca_mps_free'] = makeInvalidEarlyAccess('_moonlab_ca_mps_free');
+var _moonlab_ca_mps_clone = Module['_moonlab_ca_mps_clone'] = makeInvalidEarlyAccess('_moonlab_ca_mps_clone');
+var _moonlab_ca_mps_num_qubits = Module['_moonlab_ca_mps_num_qubits'] = makeInvalidEarlyAccess('_moonlab_ca_mps_num_qubits');
+var _moonlab_ca_mps_max_bond_dim = Module['_moonlab_ca_mps_max_bond_dim'] = makeInvalidEarlyAccess('_moonlab_ca_mps_max_bond_dim');
+var _moonlab_ca_mps_current_bond_dim = Module['_moonlab_ca_mps_current_bond_dim'] = makeInvalidEarlyAccess('_moonlab_ca_mps_current_bond_dim');
+var _moonlab_ca_mps_h = Module['_moonlab_ca_mps_h'] = makeInvalidEarlyAccess('_moonlab_ca_mps_h');
+var _moonlab_ca_mps_s = Module['_moonlab_ca_mps_s'] = makeInvalidEarlyAccess('_moonlab_ca_mps_s');
+var _moonlab_ca_mps_sdag = Module['_moonlab_ca_mps_sdag'] = makeInvalidEarlyAccess('_moonlab_ca_mps_sdag');
+var _moonlab_ca_mps_x = Module['_moonlab_ca_mps_x'] = makeInvalidEarlyAccess('_moonlab_ca_mps_x');
+var _moonlab_ca_mps_y = Module['_moonlab_ca_mps_y'] = makeInvalidEarlyAccess('_moonlab_ca_mps_y');
+var _moonlab_ca_mps_z = Module['_moonlab_ca_mps_z'] = makeInvalidEarlyAccess('_moonlab_ca_mps_z');
+var _moonlab_ca_mps_cnot = Module['_moonlab_ca_mps_cnot'] = makeInvalidEarlyAccess('_moonlab_ca_mps_cnot');
+var _moonlab_ca_mps_cz = Module['_moonlab_ca_mps_cz'] = makeInvalidEarlyAccess('_moonlab_ca_mps_cz');
+var _moonlab_ca_mps_swap = Module['_moonlab_ca_mps_swap'] = makeInvalidEarlyAccess('_moonlab_ca_mps_swap');
+var _moonlab_ca_mps_rx = Module['_moonlab_ca_mps_rx'] = makeInvalidEarlyAccess('_moonlab_ca_mps_rx');
+var _moonlab_ca_mps_ry = Module['_moonlab_ca_mps_ry'] = makeInvalidEarlyAccess('_moonlab_ca_mps_ry');
+var _moonlab_ca_mps_rz = Module['_moonlab_ca_mps_rz'] = makeInvalidEarlyAccess('_moonlab_ca_mps_rz');
+var _moonlab_ca_mps_t_gate = Module['_moonlab_ca_mps_t_gate'] = makeInvalidEarlyAccess('_moonlab_ca_mps_t_gate');
+var _moonlab_ca_mps_t_dagger = Module['_moonlab_ca_mps_t_dagger'] = makeInvalidEarlyAccess('_moonlab_ca_mps_t_dagger');
+var _moonlab_ca_mps_phase = Module['_moonlab_ca_mps_phase'] = makeInvalidEarlyAccess('_moonlab_ca_mps_phase');
+var _moonlab_ca_mps_normalize = Module['_moonlab_ca_mps_normalize'] = makeInvalidEarlyAccess('_moonlab_ca_mps_normalize');
+var _moonlab_ca_mps_norm = Module['_moonlab_ca_mps_norm'] = makeInvalidEarlyAccess('_moonlab_ca_mps_norm');
+var _moonlab_ca_mps_optimize_var_d_clifford_only = Module['_moonlab_ca_mps_optimize_var_d_clifford_only'] = makeInvalidEarlyAccess('_moonlab_ca_mps_optimize_var_d_clifford_only');
+var _moonlab_ca_mps_optimize_var_d_alternating = Module['_moonlab_ca_mps_optimize_var_d_alternating'] = makeInvalidEarlyAccess('_moonlab_ca_mps_optimize_var_d_alternating');
+var _moonlab_ca_mps_apply_stab_subgroup_warmstart = Module['_moonlab_ca_mps_apply_stab_subgroup_warmstart'] = makeInvalidEarlyAccess('_moonlab_ca_mps_apply_stab_subgroup_warmstart');
+var _z2_lgt_1d_num_qubits = Module['_z2_lgt_1d_num_qubits'] = makeInvalidEarlyAccess('_z2_lgt_1d_num_qubits');
+var _z2_lgt_1d_build_pauli_sum = Module['_z2_lgt_1d_build_pauli_sum'] = makeInvalidEarlyAccess('_z2_lgt_1d_build_pauli_sum');
+var _z2_lgt_1d_gauss_law_pauli = Module['_z2_lgt_1d_gauss_law_pauli'] = makeInvalidEarlyAccess('_z2_lgt_1d_gauss_law_pauli');
+var _moonlab_status_to_string = Module['_moonlab_status_to_string'] = makeInvalidEarlyAccess('_moonlab_status_to_string');
 var _gpu_compute_init = Module['_gpu_compute_init'] = makeInvalidEarlyAccess('_gpu_compute_init');
 var _gpu_compute_free = Module['_gpu_compute_free'] = makeInvalidEarlyAccess('_gpu_compute_free');
 var _gpu_is_available = Module['_gpu_is_available'] = makeInvalidEarlyAccess('_gpu_is_available');
@@ -2284,6 +2320,9 @@ var _gpu_pauli_x = Module['_gpu_pauli_x'] = makeInvalidEarlyAccess('_gpu_pauli_x
 var _gpu_pauli_z = Module['_gpu_pauli_z'] = makeInvalidEarlyAccess('_gpu_pauli_z');
 var _gpu_phase = Module['_gpu_phase'] = makeInvalidEarlyAccess('_gpu_phase');
 var _gpu_cnot = Module['_gpu_cnot'] = makeInvalidEarlyAccess('_gpu_cnot');
+var _gpu_rz = Module['_gpu_rz'] = makeInvalidEarlyAccess('_gpu_rz');
+var _gpu_cz = Module['_gpu_cz'] = makeInvalidEarlyAccess('_gpu_cz');
+var _gpu_swap = Module['_gpu_swap'] = makeInvalidEarlyAccess('_gpu_swap');
 var _gpu_compute_probabilities = Module['_gpu_compute_probabilities'] = makeInvalidEarlyAccess('_gpu_compute_probabilities');
 var _gpu_normalize = Module['_gpu_normalize'] = makeInvalidEarlyAccess('_gpu_normalize');
 var _gpu_sum_squared_magnitudes = Module['_gpu_sum_squared_magnitudes'] = makeInvalidEarlyAccess('_gpu_sum_squared_magnitudes');
@@ -2293,6 +2332,9 @@ var _gpu_pauli_x_u32 = Module['_gpu_pauli_x_u32'] = makeInvalidEarlyAccess('_gpu
 var _gpu_pauli_z_u32 = Module['_gpu_pauli_z_u32'] = makeInvalidEarlyAccess('_gpu_pauli_z_u32');
 var _gpu_phase_u32 = Module['_gpu_phase_u32'] = makeInvalidEarlyAccess('_gpu_phase_u32');
 var _gpu_cnot_u32 = Module['_gpu_cnot_u32'] = makeInvalidEarlyAccess('_gpu_cnot_u32');
+var _gpu_rz_u32 = Module['_gpu_rz_u32'] = makeInvalidEarlyAccess('_gpu_rz_u32');
+var _gpu_cz_u32 = Module['_gpu_cz_u32'] = makeInvalidEarlyAccess('_gpu_cz_u32');
+var _gpu_swap_u32 = Module['_gpu_swap_u32'] = makeInvalidEarlyAccess('_gpu_swap_u32');
 var _gpu_compute_probabilities_u32 = Module['_gpu_compute_probabilities_u32'] = makeInvalidEarlyAccess('_gpu_compute_probabilities_u32');
 var _gpu_normalize_u32 = Module['_gpu_normalize_u32'] = makeInvalidEarlyAccess('_gpu_normalize_u32');
 var _gpu_sum_squared_magnitudes_u32 = Module['_gpu_sum_squared_magnitudes_u32'] = makeInvalidEarlyAccess('_gpu_sum_squared_magnitudes_u32');
@@ -2365,6 +2407,19 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['measurement_expectation_y'] != 'undefined', 'missing Wasm export: measurement_expectation_y');
   assert(typeof wasmExports['measurement_correlation_zz'] != 'undefined', 'missing Wasm export: measurement_correlation_zz');
   assert(typeof wasmExports['malloc'] != 'undefined', 'missing Wasm export: malloc');
+  assert(typeof wasmExports['entanglement_entropy_bipartition'] != 'undefined', 'missing Wasm export: entanglement_entropy_bipartition');
+  assert(typeof wasmExports['entanglement_mutual_information'] != 'undefined', 'missing Wasm export: entanglement_mutual_information');
+  assert(typeof wasmExports['entanglement_concurrence_2qubit'] != 'undefined', 'missing Wasm export: entanglement_concurrence_2qubit');
+  assert(typeof wasmExports['entanglement_negativity_2qubit'] != 'undefined', 'missing Wasm export: entanglement_negativity_2qubit');
+  assert(typeof wasmExports['noise_depolarizing_single'] != 'undefined', 'missing Wasm export: noise_depolarizing_single');
+  assert(typeof wasmExports['noise_depolarizing_two_qubit'] != 'undefined', 'missing Wasm export: noise_depolarizing_two_qubit');
+  assert(typeof wasmExports['noise_amplitude_damping'] != 'undefined', 'missing Wasm export: noise_amplitude_damping');
+  assert(typeof wasmExports['noise_phase_damping'] != 'undefined', 'missing Wasm export: noise_phase_damping');
+  assert(typeof wasmExports['noise_pure_dephasing'] != 'undefined', 'missing Wasm export: noise_pure_dephasing');
+  assert(typeof wasmExports['noise_bit_flip'] != 'undefined', 'missing Wasm export: noise_bit_flip');
+  assert(typeof wasmExports['noise_phase_flip'] != 'undefined', 'missing Wasm export: noise_phase_flip');
+  assert(typeof wasmExports['noise_bit_phase_flip'] != 'undefined', 'missing Wasm export: noise_bit_phase_flip');
+  assert(typeof wasmExports['noise_thermal_relaxation'] != 'undefined', 'missing Wasm export: noise_thermal_relaxation');
   assert(typeof wasmExports['grover_oracle'] != 'undefined', 'missing Wasm export: grover_oracle');
   assert(typeof wasmExports['grover_diffusion'] != 'undefined', 'missing Wasm export: grover_diffusion');
   assert(typeof wasmExports['grover_iteration'] != 'undefined', 'missing Wasm export: grover_iteration');
@@ -2446,6 +2501,36 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['tn_mps_truncate_bond'] != 'undefined', 'missing Wasm export: tn_mps_truncate_bond');
   assert(typeof wasmExports['tn_mps_grow_bond'] != 'undefined', 'missing Wasm export: tn_mps_grow_bond');
   assert(typeof wasmExports['tn_mps_fidelity'] != 'undefined', 'missing Wasm export: tn_mps_fidelity');
+  assert(typeof wasmExports['moonlab_ca_mps_create'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_create');
+  assert(typeof wasmExports['moonlab_ca_mps_free'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_free');
+  assert(typeof wasmExports['moonlab_ca_mps_clone'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_clone');
+  assert(typeof wasmExports['moonlab_ca_mps_num_qubits'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_num_qubits');
+  assert(typeof wasmExports['moonlab_ca_mps_max_bond_dim'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_max_bond_dim');
+  assert(typeof wasmExports['moonlab_ca_mps_current_bond_dim'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_current_bond_dim');
+  assert(typeof wasmExports['moonlab_ca_mps_h'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_h');
+  assert(typeof wasmExports['moonlab_ca_mps_s'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_s');
+  assert(typeof wasmExports['moonlab_ca_mps_sdag'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_sdag');
+  assert(typeof wasmExports['moonlab_ca_mps_x'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_x');
+  assert(typeof wasmExports['moonlab_ca_mps_y'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_y');
+  assert(typeof wasmExports['moonlab_ca_mps_z'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_z');
+  assert(typeof wasmExports['moonlab_ca_mps_cnot'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_cnot');
+  assert(typeof wasmExports['moonlab_ca_mps_cz'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_cz');
+  assert(typeof wasmExports['moonlab_ca_mps_swap'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_swap');
+  assert(typeof wasmExports['moonlab_ca_mps_rx'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_rx');
+  assert(typeof wasmExports['moonlab_ca_mps_ry'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_ry');
+  assert(typeof wasmExports['moonlab_ca_mps_rz'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_rz');
+  assert(typeof wasmExports['moonlab_ca_mps_t_gate'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_t_gate');
+  assert(typeof wasmExports['moonlab_ca_mps_t_dagger'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_t_dagger');
+  assert(typeof wasmExports['moonlab_ca_mps_phase'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_phase');
+  assert(typeof wasmExports['moonlab_ca_mps_normalize'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_normalize');
+  assert(typeof wasmExports['moonlab_ca_mps_norm'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_norm');
+  assert(typeof wasmExports['moonlab_ca_mps_optimize_var_d_clifford_only'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_optimize_var_d_clifford_only');
+  assert(typeof wasmExports['moonlab_ca_mps_optimize_var_d_alternating'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_optimize_var_d_alternating');
+  assert(typeof wasmExports['moonlab_ca_mps_apply_stab_subgroup_warmstart'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_apply_stab_subgroup_warmstart');
+  assert(typeof wasmExports['z2_lgt_1d_num_qubits'] != 'undefined', 'missing Wasm export: z2_lgt_1d_num_qubits');
+  assert(typeof wasmExports['z2_lgt_1d_build_pauli_sum'] != 'undefined', 'missing Wasm export: z2_lgt_1d_build_pauli_sum');
+  assert(typeof wasmExports['z2_lgt_1d_gauss_law_pauli'] != 'undefined', 'missing Wasm export: z2_lgt_1d_gauss_law_pauli');
+  assert(typeof wasmExports['moonlab_status_to_string'] != 'undefined', 'missing Wasm export: moonlab_status_to_string');
   assert(typeof wasmExports['gpu_compute_init'] != 'undefined', 'missing Wasm export: gpu_compute_init');
   assert(typeof wasmExports['gpu_compute_free'] != 'undefined', 'missing Wasm export: gpu_compute_free');
   assert(typeof wasmExports['gpu_is_available'] != 'undefined', 'missing Wasm export: gpu_is_available');
@@ -2462,6 +2547,9 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['gpu_pauli_z'] != 'undefined', 'missing Wasm export: gpu_pauli_z');
   assert(typeof wasmExports['gpu_phase'] != 'undefined', 'missing Wasm export: gpu_phase');
   assert(typeof wasmExports['gpu_cnot'] != 'undefined', 'missing Wasm export: gpu_cnot');
+  assert(typeof wasmExports['gpu_rz'] != 'undefined', 'missing Wasm export: gpu_rz');
+  assert(typeof wasmExports['gpu_cz'] != 'undefined', 'missing Wasm export: gpu_cz');
+  assert(typeof wasmExports['gpu_swap'] != 'undefined', 'missing Wasm export: gpu_swap');
   assert(typeof wasmExports['gpu_compute_probabilities'] != 'undefined', 'missing Wasm export: gpu_compute_probabilities');
   assert(typeof wasmExports['gpu_normalize'] != 'undefined', 'missing Wasm export: gpu_normalize');
   assert(typeof wasmExports['gpu_sum_squared_magnitudes'] != 'undefined', 'missing Wasm export: gpu_sum_squared_magnitudes');
@@ -2471,6 +2559,9 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['gpu_pauli_z_u32'] != 'undefined', 'missing Wasm export: gpu_pauli_z_u32');
   assert(typeof wasmExports['gpu_phase_u32'] != 'undefined', 'missing Wasm export: gpu_phase_u32');
   assert(typeof wasmExports['gpu_cnot_u32'] != 'undefined', 'missing Wasm export: gpu_cnot_u32');
+  assert(typeof wasmExports['gpu_rz_u32'] != 'undefined', 'missing Wasm export: gpu_rz_u32');
+  assert(typeof wasmExports['gpu_cz_u32'] != 'undefined', 'missing Wasm export: gpu_cz_u32');
+  assert(typeof wasmExports['gpu_swap_u32'] != 'undefined', 'missing Wasm export: gpu_swap_u32');
   assert(typeof wasmExports['gpu_compute_probabilities_u32'] != 'undefined', 'missing Wasm export: gpu_compute_probabilities_u32');
   assert(typeof wasmExports['gpu_normalize_u32'] != 'undefined', 'missing Wasm export: gpu_normalize_u32');
   assert(typeof wasmExports['gpu_sum_squared_magnitudes_u32'] != 'undefined', 'missing Wasm export: gpu_sum_squared_magnitudes_u32');
@@ -2540,6 +2631,19 @@ function assignWasmExports(wasmExports) {
   _measurement_expectation_y = Module['_measurement_expectation_y'] = createExportWrapper('measurement_expectation_y', 2);
   _measurement_correlation_zz = Module['_measurement_correlation_zz'] = createExportWrapper('measurement_correlation_zz', 3);
   _malloc = Module['_malloc'] = createExportWrapper('malloc', 1);
+  _entanglement_entropy_bipartition = Module['_entanglement_entropy_bipartition'] = createExportWrapper('entanglement_entropy_bipartition', 3);
+  _entanglement_mutual_information = Module['_entanglement_mutual_information'] = createExportWrapper('entanglement_mutual_information', 5);
+  _entanglement_concurrence_2qubit = Module['_entanglement_concurrence_2qubit'] = createExportWrapper('entanglement_concurrence_2qubit', 1);
+  _entanglement_negativity_2qubit = Module['_entanglement_negativity_2qubit'] = createExportWrapper('entanglement_negativity_2qubit', 1);
+  _noise_depolarizing_single = Module['_noise_depolarizing_single'] = createExportWrapper('noise_depolarizing_single', 4);
+  _noise_depolarizing_two_qubit = Module['_noise_depolarizing_two_qubit'] = createExportWrapper('noise_depolarizing_two_qubit', 5);
+  _noise_amplitude_damping = Module['_noise_amplitude_damping'] = createExportWrapper('noise_amplitude_damping', 4);
+  _noise_phase_damping = Module['_noise_phase_damping'] = createExportWrapper('noise_phase_damping', 4);
+  _noise_pure_dephasing = Module['_noise_pure_dephasing'] = createExportWrapper('noise_pure_dephasing', 4);
+  _noise_bit_flip = Module['_noise_bit_flip'] = createExportWrapper('noise_bit_flip', 4);
+  _noise_phase_flip = Module['_noise_phase_flip'] = createExportWrapper('noise_phase_flip', 4);
+  _noise_bit_phase_flip = Module['_noise_bit_phase_flip'] = createExportWrapper('noise_bit_phase_flip', 4);
+  _noise_thermal_relaxation = Module['_noise_thermal_relaxation'] = createExportWrapper('noise_thermal_relaxation', 6);
   _grover_oracle = Module['_grover_oracle'] = createExportWrapper('grover_oracle', 2);
   _grover_diffusion = Module['_grover_diffusion'] = createExportWrapper('grover_diffusion', 1);
   _grover_iteration = Module['_grover_iteration'] = createExportWrapper('grover_iteration', 2);
@@ -2621,6 +2725,36 @@ function assignWasmExports(wasmExports) {
   _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = createExportWrapper('tn_mps_truncate_bond', 4);
   _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = createExportWrapper('tn_mps_grow_bond', 3);
   _tn_mps_fidelity = Module['_tn_mps_fidelity'] = createExportWrapper('tn_mps_fidelity', 2);
+  _moonlab_ca_mps_create = Module['_moonlab_ca_mps_create'] = createExportWrapper('moonlab_ca_mps_create', 2);
+  _moonlab_ca_mps_free = Module['_moonlab_ca_mps_free'] = createExportWrapper('moonlab_ca_mps_free', 1);
+  _moonlab_ca_mps_clone = Module['_moonlab_ca_mps_clone'] = createExportWrapper('moonlab_ca_mps_clone', 1);
+  _moonlab_ca_mps_num_qubits = Module['_moonlab_ca_mps_num_qubits'] = createExportWrapper('moonlab_ca_mps_num_qubits', 1);
+  _moonlab_ca_mps_max_bond_dim = Module['_moonlab_ca_mps_max_bond_dim'] = createExportWrapper('moonlab_ca_mps_max_bond_dim', 1);
+  _moonlab_ca_mps_current_bond_dim = Module['_moonlab_ca_mps_current_bond_dim'] = createExportWrapper('moonlab_ca_mps_current_bond_dim', 1);
+  _moonlab_ca_mps_h = Module['_moonlab_ca_mps_h'] = createExportWrapper('moonlab_ca_mps_h', 2);
+  _moonlab_ca_mps_s = Module['_moonlab_ca_mps_s'] = createExportWrapper('moonlab_ca_mps_s', 2);
+  _moonlab_ca_mps_sdag = Module['_moonlab_ca_mps_sdag'] = createExportWrapper('moonlab_ca_mps_sdag', 2);
+  _moonlab_ca_mps_x = Module['_moonlab_ca_mps_x'] = createExportWrapper('moonlab_ca_mps_x', 2);
+  _moonlab_ca_mps_y = Module['_moonlab_ca_mps_y'] = createExportWrapper('moonlab_ca_mps_y', 2);
+  _moonlab_ca_mps_z = Module['_moonlab_ca_mps_z'] = createExportWrapper('moonlab_ca_mps_z', 2);
+  _moonlab_ca_mps_cnot = Module['_moonlab_ca_mps_cnot'] = createExportWrapper('moonlab_ca_mps_cnot', 3);
+  _moonlab_ca_mps_cz = Module['_moonlab_ca_mps_cz'] = createExportWrapper('moonlab_ca_mps_cz', 3);
+  _moonlab_ca_mps_swap = Module['_moonlab_ca_mps_swap'] = createExportWrapper('moonlab_ca_mps_swap', 3);
+  _moonlab_ca_mps_rx = Module['_moonlab_ca_mps_rx'] = createExportWrapper('moonlab_ca_mps_rx', 3);
+  _moonlab_ca_mps_ry = Module['_moonlab_ca_mps_ry'] = createExportWrapper('moonlab_ca_mps_ry', 3);
+  _moonlab_ca_mps_rz = Module['_moonlab_ca_mps_rz'] = createExportWrapper('moonlab_ca_mps_rz', 3);
+  _moonlab_ca_mps_t_gate = Module['_moonlab_ca_mps_t_gate'] = createExportWrapper('moonlab_ca_mps_t_gate', 2);
+  _moonlab_ca_mps_t_dagger = Module['_moonlab_ca_mps_t_dagger'] = createExportWrapper('moonlab_ca_mps_t_dagger', 2);
+  _moonlab_ca_mps_phase = Module['_moonlab_ca_mps_phase'] = createExportWrapper('moonlab_ca_mps_phase', 3);
+  _moonlab_ca_mps_normalize = Module['_moonlab_ca_mps_normalize'] = createExportWrapper('moonlab_ca_mps_normalize', 1);
+  _moonlab_ca_mps_norm = Module['_moonlab_ca_mps_norm'] = createExportWrapper('moonlab_ca_mps_norm', 1);
+  _moonlab_ca_mps_optimize_var_d_clifford_only = Module['_moonlab_ca_mps_optimize_var_d_clifford_only'] = createExportWrapper('moonlab_ca_mps_optimize_var_d_clifford_only', 6);
+  _moonlab_ca_mps_optimize_var_d_alternating = Module['_moonlab_ca_mps_optimize_var_d_alternating'] = createExportWrapper('moonlab_ca_mps_optimize_var_d_alternating', 6);
+  _moonlab_ca_mps_apply_stab_subgroup_warmstart = Module['_moonlab_ca_mps_apply_stab_subgroup_warmstart'] = createExportWrapper('moonlab_ca_mps_apply_stab_subgroup_warmstart', 3);
+  _z2_lgt_1d_num_qubits = Module['_z2_lgt_1d_num_qubits'] = createExportWrapper('z2_lgt_1d_num_qubits', 1);
+  _z2_lgt_1d_build_pauli_sum = Module['_z2_lgt_1d_build_pauli_sum'] = createExportWrapper('z2_lgt_1d_build_pauli_sum', 5);
+  _z2_lgt_1d_gauss_law_pauli = Module['_z2_lgt_1d_gauss_law_pauli'] = createExportWrapper('z2_lgt_1d_gauss_law_pauli', 3);
+  _moonlab_status_to_string = Module['_moonlab_status_to_string'] = createExportWrapper('moonlab_status_to_string', 2);
   _gpu_compute_init = Module['_gpu_compute_init'] = createExportWrapper('gpu_compute_init', 1);
   _gpu_compute_free = Module['_gpu_compute_free'] = createExportWrapper('gpu_compute_free', 1);
   _gpu_is_available = Module['_gpu_is_available'] = createExportWrapper('gpu_is_available', 0);
@@ -2637,6 +2771,9 @@ function assignWasmExports(wasmExports) {
   _gpu_pauli_z = Module['_gpu_pauli_z'] = createExportWrapper('gpu_pauli_z', 4);
   _gpu_phase = Module['_gpu_phase'] = createExportWrapper('gpu_phase', 5);
   _gpu_cnot = Module['_gpu_cnot'] = createExportWrapper('gpu_cnot', 5);
+  _gpu_rz = Module['_gpu_rz'] = createExportWrapper('gpu_rz', 5);
+  _gpu_cz = Module['_gpu_cz'] = createExportWrapper('gpu_cz', 5);
+  _gpu_swap = Module['_gpu_swap'] = createExportWrapper('gpu_swap', 5);
   _gpu_compute_probabilities = Module['_gpu_compute_probabilities'] = createExportWrapper('gpu_compute_probabilities', 4);
   _gpu_normalize = Module['_gpu_normalize'] = createExportWrapper('gpu_normalize', 4);
   _gpu_sum_squared_magnitudes = Module['_gpu_sum_squared_magnitudes'] = createExportWrapper('gpu_sum_squared_magnitudes', 4);
@@ -2646,6 +2783,9 @@ function assignWasmExports(wasmExports) {
   _gpu_pauli_z_u32 = Module['_gpu_pauli_z_u32'] = createExportWrapper('gpu_pauli_z_u32', 4);
   _gpu_phase_u32 = Module['_gpu_phase_u32'] = createExportWrapper('gpu_phase_u32', 5);
   _gpu_cnot_u32 = Module['_gpu_cnot_u32'] = createExportWrapper('gpu_cnot_u32', 5);
+  _gpu_rz_u32 = Module['_gpu_rz_u32'] = createExportWrapper('gpu_rz_u32', 5);
+  _gpu_cz_u32 = Module['_gpu_cz_u32'] = createExportWrapper('gpu_cz_u32', 5);
+  _gpu_swap_u32 = Module['_gpu_swap_u32'] = createExportWrapper('gpu_swap_u32', 5);
   _gpu_compute_probabilities_u32 = Module['_gpu_compute_probabilities_u32'] = createExportWrapper('gpu_compute_probabilities_u32', 4);
   _gpu_normalize_u32 = Module['_gpu_normalize_u32'] = createExportWrapper('gpu_normalize_u32', 4);
   _gpu_sum_squared_magnitudes_u32 = Module['_gpu_sum_squared_magnitudes_u32'] = createExportWrapper('gpu_sum_squared_magnitudes_u32', 4);
@@ -2675,6 +2815,8 @@ var wasmImports = {
   /** @export */
   __asyncjs__moonlab_webgpu_cnot_dispatch_async,
   /** @export */
+  __asyncjs__moonlab_webgpu_cz_dispatch_async,
+  /** @export */
   __asyncjs__moonlab_webgpu_hadamard_dispatch_async,
   /** @export */
   __asyncjs__moonlab_webgpu_mps_apply_gate_theta_dispatch_async,
@@ -2684,6 +2826,10 @@ var wasmImports = {
   __asyncjs__moonlab_webgpu_pauli_z_dispatch_async,
   /** @export */
   __asyncjs__moonlab_webgpu_probabilities_dispatch_async,
+  /** @export */
+  __asyncjs__moonlab_webgpu_rz_dispatch_async,
+  /** @export */
+  __asyncjs__moonlab_webgpu_swap_dispatch_async,
   /** @export */
   __syscall_dup3: ___syscall_dup3,
   /** @export */
@@ -2833,7 +2979,7 @@ run();
 
 // end include: postamble.js
 
-// include: /home/cos/projects/moonlab/bindings/javascript/packages/core/emscripten/post.js
+// include: /Users/tyr/Desktop/quantum_geometric_tensor/external/moonlab/bindings/javascript/packages/core/emscripten/post.js
 /**
  * Moonlab WASM Post-initialization Script
  *
@@ -2946,14 +3092,14 @@ Module['version'] = {
   core: '0.1.1',
   wasm: true
 };
-// end include: /home/cos/projects/moonlab/bindings/javascript/packages/core/emscripten/post.js
+// end include: /Users/tyr/Desktop/quantum_geometric_tensor/external/moonlab/bindings/javascript/packages/core/emscripten/post.js
 
 // include: postamble_modularize.js
 // In MODULARIZE mode we wrap the generated code in a factory function
 // and return either the Module itself, or a promise of the module.
 //
 // We assign to the `moduleRtn` global here and configure closure to see
-// this as an extern so it won't get minified.
+// this as and extern so it won't get minified.
 
 if (runtimeInitialized)  {
   moduleRtn = Module;
@@ -2984,156 +3130,9 @@ for (const prop of Object.keys(Module)) {
 
 
 
-    if (typeof MoonlabModule !== 'undefined' &&
-        typeof MoonlabModule.recordBackendRuntimeProbe === 'function') {
-      MoonlabModule.recordBackendRuntimeProbe({
-        operation: 'factory-ready',
-        moduleReady: true,
-        backendAvailable: true,
-        reason: 'wasm-runtime-ready',
-      });
-    }
     return moduleRtn;
   };
-  })();
-}
-
-var MoonlabModule = build_moonlab_module_factory();
-
-MoonlabModule.lastBackendRuntimeProbe = {
-  owner: 'MoonlabModule',
-  operation: 'factory-definition',
-  backendName: 'wasm-factory',
-  backend_name: 'wasm-factory',
-  backendAvailable: false,
-  moduleReady: false,
-  missingUnifiedGpuApi: [],
-  fallbackIntentional: false,
-  reason: 'not-probed',
-};
-
-MoonlabModule.recordBackendRuntimeProbe = function(details = {}) {
-  MoonlabModule.lastBackendRuntimeProbe = {
-    owner: 'MoonlabModule',
-    operation: details.operation || 'factory-event',
-    backendName: 'wasm-factory',
-    backend_name: 'wasm-factory',
-    backendAvailable: Boolean(details.backendAvailable),
-    moduleReady: Boolean(details.moduleReady),
-    missingUnifiedGpuApi: details.missingUnifiedGpuApi || [],
-    fallbackIntentional: Boolean(details.fallbackIntentional),
-    reason: details.reason || 'factory-event',
-  };
-  return MoonlabModule.getLastBackendRuntimeProbe();
-};
-
-MoonlabModule.getLastBackendRuntimeProbe = function() {
-  return JSON.parse(JSON.stringify(MoonlabModule.lastBackendRuntimeProbe));
-};
-
-MoonlabModule.probeBackendRuntime = async function(moduleArg = {}) {
-  const instance = await MoonlabModule(moduleArg);
-  if (instance && instance.ready) {
-    await instance.ready;
-  }
-
-  const trace_runtime_name_for_type = (backendType) => {
-    switch (backendType) {
-      case 0: return 'none';
-      case 1: return 'metal';
-      case 2: return 'webgpu';
-      case 3: return 'opencl';
-      case 4: return 'vulkan';
-      case 5: return 'cuda';
-      case 6: return 'cuquantum';
-      case 7: return 'auto';
-      default: return 'unknown';
-    }
-  };
-
-  const requiredUnifiedGpuApi = [
-    '_gpu_compute_init',
-    '_gpu_compute_free',
-    '_gpu_get_backend_type',
-    '_gpu_buffer_create_from_data',
-    '_gpu_buffer_create',
-    '_gpu_buffer_read',
-    '_gpu_buffer_free',
-    '_gpu_compute_probabilities',
-  ];
-  const missingUnifiedGpuApi = requiredUnifiedGpuApi.filter((name) => {
-    if (name === '_gpu_compute_probabilities') {
-      return (
-        typeof instance._gpu_compute_probabilities_u32 !== 'function' &&
-        typeof instance._gpu_compute_probabilities !== 'function'
-      );
-    }
-    return typeof instance[name] !== 'function';
-  });
-
-  const trace_runtime_backend_selection = (preferredBackendType) => {
-    if (missingUnifiedGpuApi.length > 0) {
-      return {
-        preferredBackendType,
-        ctxCreated: false,
-        backendType: 0,
-        backendName: 'none',
-        backend_name: 'none',
-        nativeAccelerated: false,
-        fallbackIntentional: true,
-        reason: 'unified-gpu-api-unavailable',
-      };
-    }
-
-    const ctxPtr = instance._gpu_compute_init(preferredBackendType);
-    if (!ctxPtr) {
-      return {
-        preferredBackendType,
-        ctxCreated: false,
-        backendType: 0,
-        backendName: 'none',
-        backend_name: 'none',
-        nativeAccelerated: false,
-        fallbackIntentional: true,
-        reason: 'gpu-context-unavailable',
-      };
-    }
-
-    const backendType = instance._gpu_get_backend_type(ctxPtr);
-    const nativeAccelerated =
-      typeof instance._gpu_is_native_accelerated === 'function' &&
-      instance._gpu_is_native_accelerated(ctxPtr) !== 0;
-    instance._gpu_compute_free(ctxPtr);
-    return {
-      preferredBackendType,
-      ctxCreated: true,
-      backendType,
-      backendName: trace_runtime_name_for_type(backendType),
-      backend_name: trace_runtime_name_for_type(backendType),
-      nativeAccelerated,
-      fallbackIntentional: backendType !== preferredBackendType,
-      reason: backendType === preferredBackendType ? 'ok' : `selected-backend-${backendType}`,
-    };
-  };
-
-  const trace = {
-    owner: 'MoonlabModule',
-    operation: 'probeBackendRuntime',
-    backendName: 'wasm-unified-gpu',
-    backend_name: 'wasm-unified-gpu',
-    backendAvailable: missingUnifiedGpuApi.length === 0,
-    moduleReady: true,
-    missingUnifiedGpuApi,
-    webgpu: trace_runtime_backend_selection(2),
-    auto: trace_runtime_backend_selection(7),
-  };
-  trace.fallbackIntentional =
-    missingUnifiedGpuApi.length > 0 || trace.webgpu.fallbackIntentional;
-  trace.reason =
-    missingUnifiedGpuApi.length > 0 ? 'unified-gpu-api-unavailable' : trace.webgpu.reason;
-  MoonlabModule.lastBackendRuntimeProbe = trace;
-  return trace;
-};
+})();
 
 // Export using a UMD style export, or ES6 exports if selected
 if (typeof exports === 'object' && typeof module === 'object') {
