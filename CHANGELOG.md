@@ -7,7 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.7.)
+(No unreleased changes since v0.4.8.)
+
+## [0.4.8] - 2026-05-18
+
+Rust-side parity push for two surfaces Python has had since v0.2.1
+and Rust didn't:  the eight single-qubit Kraus noise channels under
+`src/quantum/noise.h`, and the `entanglement_mutual_information`
+metric.  Both are deterministic, entropy-free APIs -- the caller
+feeds in the uniform-`[0, 1)` sample for the Kraus selection, so the
+wrapper has no `EntropyGuard` overhead.
+
+### Added
+
+- **`moonlab::noise`** module wrapping nine entry points from
+  `src/quantum/noise.{c,h}`:
+  - `depolarizing_single(state, q, p, r)` and
+    `depolarizing_two_qubit(state, q1, q2, p, r)`
+  - `amplitude_damping`, `phase_damping`, `pure_dephasing`
+  - `bit_flip`, `phase_flip`, `bit_phase_flip`
+  - `thermal_relaxation(state, q, t1, t2, time, &[r1, r2])`
+  - `readout_error(outcome: bool, e01, e10, r) -> bool`
+
+  Every channel checks the qubit index against
+  `state.num_qubits()` and returns `Result<()>`.
+- **`QuantumState::mutual_information(qubits_a, qubits_b)`**
+  exposes `entanglement_mutual_information` from
+  `src/quantum/entanglement.{c,h}`.  Returns `I(A:B) = S(A) + S(B)
+  - S(AB)` in bits; on a pure state of `A u B`, equals `2 S(A)`.
+- 7 unit tests in `noise::tests` covering zero-probability
+  no-op, full-probability bit/phase-flip, amplitude-damping decay,
+  bounds-checking, classical readout-error threshold, and Bell-pair
+  `I(A:B) = 2` round-trip.
+
+### Changed
+
+- `moonlab-sys` allowlist gains the nine noise entry points and
+  `entanglement_mutual_information`.
+
+Manifests bumped 0.4.7 -> 0.4.8 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest (re-used from v0.4.7 -- no C changes),
+193/193 pytest, cargo test 66 + 48 + 18 = 132 (was 124; gained 8
+from the noise module's tests + mutual_information).
 
 ## [0.4.7] - 2026-05-18
 

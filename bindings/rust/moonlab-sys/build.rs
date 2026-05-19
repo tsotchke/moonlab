@@ -302,6 +302,18 @@ fn main() {
         .allowlist_function("entanglement_concurrence_2qubit")
         .allowlist_function("entanglement_negativity_2qubit")
         .allowlist_function("entanglement_renyi_entropy")
+        .allowlist_function("entanglement_mutual_information")
+        // Single-qubit Kraus noise channels (since 0.2.1; Rust wrapper from 0.4.8).
+        .allowlist_function("noise_depolarizing_single")
+        .allowlist_function("noise_depolarizing_two_qubit")
+        .allowlist_function("noise_amplitude_damping")
+        .allowlist_function("noise_phase_damping")
+        .allowlist_function("noise_pure_dephasing")
+        .allowlist_function("noise_bit_flip")
+        .allowlist_function("noise_phase_flip")
+        .allowlist_function("noise_bit_phase_flip")
+        .allowlist_function("noise_thermal_relaxation")
+        .allowlist_function("noise_readout_error")
         // Configuration
         .allowlist_type("qsim_config_t")
         .allowlist_type("qsim_backend_t")
