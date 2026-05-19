@@ -813,6 +813,22 @@
             LABELS "distributed;mpi"
             TIMEOUT 120
         )
+
+        # State-vector sharding (since v0.7.6) -- partitioned_state_t
+        # driven through dist_hadamard + dist_cnot across MPI ranks.
+        add_executable(test_partitioned_state tests/unit/test_partitioned_state.c)
+        target_link_libraries(test_partitioned_state PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
+        if(MPIRUN_EXECUTABLE)
+            add_test(NAME unit_partitioned_state
+                     COMMAND ${MPIRUN_EXECUTABLE} -n 2
+                             $<TARGET_FILE:test_partitioned_state>)
+        else()
+            add_test(NAME unit_partitioned_state COMMAND test_partitioned_state)
+        endif()
+        set_tests_properties(unit_partitioned_state PROPERTIES
+            LABELS "distributed;mpi"
+            TIMEOUT 60
+        )
     endif()
 
     # Skyrmion braid path generators.
