@@ -159,6 +159,13 @@ export type { VqeResult } from './vqe';
 export { Graph, IsingModel, QaoaSolver } from './qaoa';
 export type { QaoaResult } from './qaoa';
 
+// Topological invariants (since 0.5.6).
+export {
+  qwzChern, chernQwzProj, chernQwzParallelTransport,
+  sshWinding, kitaevChainZ2,
+  kaneMeleZ2, bhzZ2, hofstadterChern,
+} from './topology';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

@@ -293,6 +293,13 @@ _entanglement_negativity_2qubit
 # so they must be present in every WASM build.
 # =============================================================================
 _moonlab_qwz_chern
+_moonlab_chern_qwz_proj
+_moonlab_chern_qwz_pt
+_moonlab_ssh_winding
+_moonlab_kitaev_chain_z2
+_moonlab_kane_mele_z2
+_moonlab_bhz_z2
+_moonlab_hofstadter_chern
 _moonlab_abi_version
 # Note: _moonlab_qrng_bytes is intentionally NOT exported in the WASM
 # build -- it depends on hardware_entropy.c which is host-only.  JS
