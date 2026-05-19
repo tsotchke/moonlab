@@ -13,6 +13,11 @@
     if(QSIM_HAS_MPI)
         add_executable(large_state_ghz examples/distributed/large_state_ghz.c)
         target_link_libraries(large_state_ghz PRIVATE quantumsim MPI::MPI_C)
+
+        # Sharded QFT (since v0.8.1) -- N-qubit textbook QFT under
+        # dist_hadamard + dist_cphase + dist_swap across MPI ranks.
+        add_executable(large_state_qft examples/distributed/large_state_qft.c)
+        target_link_libraries(large_state_qft PRIVATE quantumsim MPI::MPI_C)
     endif()
 
     # Grover examples
