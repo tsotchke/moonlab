@@ -35,8 +35,12 @@ static void test_slot_availability(void)
           "GREEDY available");
     CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_MWPM_EXACT) == 1,
           "MWPM_EXACT available");
-    CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN) == 0,
-          "SBNN deferred to v0.7+");
+    /* SBNN slot availability is build-conditional from v0.7.5. */
+    {
+        const int avail = moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN);
+        CHECK(avail == 0 || avail == 1,
+              "SBNN available = %d (build-conditional since v0.7.5)", avail);
+    }
     /* LIBIRREP_SS slot availability is build-conditional: ON when
      * QSIM_ENABLE_LIBIRREP=ON, OFF otherwise.  Either is valid. */
     {
@@ -182,11 +186,19 @@ static void test_external_slots(void)
         .corrections = corrections,
         .num_stabilisers = 9,
     };
-    /* SBNN + PYMATCHING are always NOT_BUILT in v0.6.9. */
-    CHECK(moonlab_decoder_decode(MOONLAB_DECODER_SBNN, &in) == MOONLAB_DECODER_NOT_BUILT,
-          "SBNN -> NOT_BUILT");
+    /* PYMATCHING is always NOT_BUILT until v0.7.6+.  SBNN is
+     * build-conditional (ON when QSIM_ENABLE_SBNN=ON since v0.7.5). */
     CHECK(moonlab_decoder_decode(MOONLAB_DECODER_PYMATCHING, &in) == MOONLAB_DECODER_NOT_BUILT,
           "PYMATCHING -> NOT_BUILT");
+    {
+        const int sbnn_rc = moonlab_decoder_decode(MOONLAB_DECODER_SBNN, &in);
+        if (moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN)) {
+            CHECK(sbnn_rc == 0, "SBNN on zero syndrome -> 0 (SbNN linked, rc=%d)", sbnn_rc);
+        } else {
+            CHECK(sbnn_rc == MOONLAB_DECODER_NOT_BUILT,
+                  "SBNN -> NOT_BUILT (SbNN unlinked, rc=%d)", sbnn_rc);
+        }
+    }
 
     /* LIBIRREP_SS: when linked, exercises irrep_single_shot_lift to
      * verify the toric code's meta-checks, then delegates to greedy.
