@@ -137,6 +137,9 @@ export type { MeasureResult, SampleAllResult } from './clifford';
 export { FusedCircuit } from './fusion';
 export type { FuseStats, FuseCompileResult } from './fusion';
 
+// MPDO mixed-state simulator (since 0.4.10).
+export { Mpdo, PauliCode } from './mpdo';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

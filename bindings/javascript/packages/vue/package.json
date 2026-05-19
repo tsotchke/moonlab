@@ -1,6 +1,6 @@
 {
   "name": "@moonlab/quantum-vue",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Vue components for Moonlab quantum simulator",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
