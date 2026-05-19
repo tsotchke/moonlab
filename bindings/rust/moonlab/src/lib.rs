@@ -50,6 +50,7 @@ pub mod mpdo;
 pub mod qgtl;
 pub mod noise;
 pub mod qaoa;
+pub mod scheduler;
 pub mod state;
 pub mod surface_code;
 pub mod tdvp;

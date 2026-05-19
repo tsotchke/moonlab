@@ -176,6 +176,7 @@ fn main() {
 #include "{root}/src/integration/libirrep_bridge.h"
 #include "{root}/src/applications/moonlab_qgtl_backend.h"
 #include "{root}/src/applications/decoder_bench.h"
+#include "{root}/src/distributed/scheduler.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -370,6 +371,22 @@ fn main() {
         .allowlist_function("moonlab_decoder_decode")
         .allowlist_function("moonlab_decoder_slot_available")
         .allowlist_function("moonlab_decoder_slot_name")
+        // Distributed scheduler (since v0.7.0).
+        .allowlist_type("moonlab_job")
+        .allowlist_type("moonlab_job_results_t")
+        .allowlist_function("moonlab_job_create")
+        .allowlist_function("moonlab_job_free")
+        .allowlist_function("moonlab_job_add_gate")
+        .allowlist_function("moonlab_job_set_num_shots")
+        .allowlist_function("moonlab_job_set_num_workers")
+        .allowlist_function("moonlab_job_set_rng_seed")
+        .allowlist_function("moonlab_job_num_qubits")
+        .allowlist_function("moonlab_job_num_gates")
+        .allowlist_function("moonlab_job_num_shots")
+        .allowlist_function("moonlab_job_num_workers")
+        .allowlist_function("moonlab_scheduler_run")
+        .allowlist_function("moonlab_job_results_free")
+        .allowlist_function("moonlab_job_to_json")
         // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
         .allowlist_type("ca_peps_error_t")
         .allowlist_type("moonlab_ca_peps_t")

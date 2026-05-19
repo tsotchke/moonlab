@@ -7,7 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.0.)
+(No unreleased changes since v0.7.1.)
+
+## [0.7.1] - 2026-05-19
+
+Distributed scheduler cross-language bindings.  The v0.7.0 C
+contract reaches every binding target.  Python + Rust + JS all
+ship a fluent `Job` builder + `execute()` + JSON serialisation.
+
+### Added
+
+- `bindings/python/moonlab/scheduler.py`: `Job` class +
+  `JobResults` dataclass.  9 pytest cases pass (Bell 1 / 4
+  workers, GHZ 3 workers, JSON round-trip, introspection, four
+  error paths).
+- `bindings/rust/moonlab/src/scheduler.rs`: `Job` struct +
+  `JobResults`.  Drop runs C-side free.  5 cargo tests pass.
+- `bindings/javascript/packages/core/src/scheduler.ts`: async
+  `Job.create` + fluent setters + `execute()` + `toJson()`.
+  4 vitest cases auto-skip pending the next WASM rebuild.
+- 14 new bindgen allowlist entries + 13 new WASM exports.
+- `src/applications/moonlab_qgtl_backend.c`,
+  `src/applications/decoder_bench.c`, and
+  `src/distributed/scheduler.c` added to the WASM build's
+  `APPLICATION_SOURCES`.  After the next WASM rebuild, the
+  cloud-platform contract reaches the browser.
+
+### Cross-language parity status (closing v0.7.1)
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Scheduler         | YES | YES | YES | YES |
+| Decoder bench     | YES | --  | --  | -- |
+
+### Next phases
+
+- v0.7.2: lift exact MWPM out of
+  `examples/applications/surface_code_threshold.c` into a
+  library function; point MWPM_EXACT slot at it (currently
+  shares GREEDY).
+- v0.7.3: Python / Rust / JS bindings for the decoder bench.
+- v0.7.4: MPI transport for `moonlab_scheduler_run` (real
+  cross-process distributed execution).
 
 ## [0.7.0] - 2026-05-19
 
