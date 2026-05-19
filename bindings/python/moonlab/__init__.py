@@ -82,6 +82,13 @@ try:
 except (ImportError, AttributeError, OSError):
     _TDVP_AVAILABLE = False
 
+# Single-qubit gate-fusion DAG (since v0.4.4).
+try:
+    from .fusion import FusedCircuit, FuseStats
+    _FUSION_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _FUSION_AVAILABLE = False
+
 # Clifford-Assisted MPS + var-D + gauge-aware warmstart + Z2 LGT.
 # Optional import: a stripped libquantumsim build without these
 # entry points (e.g. WASM size-trimmed) should still import the
@@ -143,3 +150,5 @@ if _MPDO_AVAILABLE:
     __all__ += ['Mpdo']
 if _TDVP_AVAILABLE:
     __all__ += ['tdvp']
+if _FUSION_AVAILABLE:
+    __all__ += ['FusedCircuit', 'FuseStats']
