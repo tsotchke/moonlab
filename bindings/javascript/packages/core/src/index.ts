@@ -166,6 +166,10 @@ export {
   kaneMeleZ2, bhzZ2, hofstadterChern,
 } from './topology';
 
+// Surface code (Clifford-tableau variant; since 0.5.14).
+export { SurfaceCode } from './surface-code';
+export type { PauliError } from './surface-code';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.13.)
+(No unreleased changes since v0.5.14.)
+
+## [0.5.14] - 2026-05-19
+
+JS surface-code binding completes the Rust + Python + JS triad
+for the polynomial-scaling Clifford-tableau surface code.
+
+### Added
+
+- `src/algorithms/topological/topological.c` added to the WASM
+  build's `BACKEND_SOURCES` neighbour (`TOPOLOGICAL_SOURCES`).
+  Pulls in `clifford.c` + `gates.c` + `matrix_math.c` -- all
+  already in the build.
+- `bindings/javascript/packages/core/src/surface-code.ts` (~150
+  LOC): `SurfaceCode.create(distance, rngSeed)` lifecycle,
+  `distance` / `numDataQubits` / `numAncillasPerSector`
+  accessors, `dataIndex(row, col)` lattice mapping,
+  `applyError(qubit, 'X' | 'Y' | 'Z')`, `measureZSyndromes` /
+  `measureXSyndromes`, `syndromeWeight`.  `rngSeed` is a
+  `bigint` to preserve the C-side `uint64_t`.
+- 7 `_surface_code_clifford_*` symbols added to
+  `bindings/javascript/packages/core/emscripten/exports.txt`.
+- 10 `surface-code.integration.test.ts` cases mirror the Rust +
+  Python suites: distance-3 layout, even / d<3 rejected, dispose
+  idempotent, lattice geometry coverage + bounds, Z-stabiliser
+  idempotence on `|0...0>`, X error -> Z syndromes, Z error -> X
+  syndromes, unknown error type rejected, qubit-range bounds.
+- Top-level `index.ts` re-exports `SurfaceCode` and the
+  `PauliError` type alias.
+
+### Verified
+
+- WASM build clean (`486 KB` -> `~510 KB` after adding
+  topological.c).
+- End-to-end through Node: distance-3 surface code, X error at
+  `(1, 1)` lights 4 Z syndromes (the centre qubit's neighbours).
+- Full integration suite: 14 files / 151 passed in 1.43 s (was
+  141 in v0.5.6; surface-code adds 10).
+
+Manifests bumped 0.5.13 -> 0.5.14.
 
 ## [0.5.13] - 2026-05-19
 

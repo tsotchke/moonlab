@@ -54,6 +54,13 @@ set(BACKEND_SOURCES
     ${QSIM_ROOT}/src/backends/clifford/clifford.c
 )
 
+# Source files - Topological QC (surface code Clifford-tableau variant,
+# since 0.5.14 in WASM).  Pulls in clifford.c + gates.c + matrix_math.c,
+# all already in the build above.
+set(TOPOLOGICAL_SOURCES
+    ${QSIM_ROOT}/src/algorithms/topological/topological.c
+)
+
 # Source files - HEP applications (since 0.2.1).
 # Note: moonlab_qrng_export.c (the qrng-backed half of the
 # v0.2.1 stable ABI) deliberately stays out of the WASM build
@@ -119,6 +126,7 @@ set(ALL_SOURCES
     ${ALGORITHM_SOURCES}
     ${TENSOR_NETWORK_SOURCES}
     ${BACKEND_SOURCES}
+    ${TOPOLOGICAL_SOURCES}
     ${APPLICATION_SOURCES}
     ${UTILS_SOURCES}
     ${OPTIMIZATION_SOURCES}
