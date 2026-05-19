@@ -85,8 +85,17 @@ _create_bell_state_phi_minus
 _create_bell_state_psi_plus
 _create_bell_state_psi_minus
 _bell_test_chsh
+_bell_test_mermin_ghz
+_bell_test_mermin_klyshko
 _bell_get_optimal_settings
 _calculate_chsh_parameter
+# Hardware-backed quantum entropy context (since 0.5.4).
+# Required by every C-side algorithm that samples measurement
+# outcomes -- Bell, Grover, VQE, QAOA.  In the WASM build the
+# underlying getentropy(3) syscall is emulated by emscripten via
+# the browser's crypto.getRandomValues().
+_quantum_entropy_ctx_create_hw
+_quantum_entropy_ctx_destroy
 
 # =============================================================================
 # TIER 3: VQE

@@ -7,7 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.3.)
+(No unreleased changes since v0.5.4.)
+
+## [0.5.4] - 2026-05-19
+
+Unblocks four entire algorithm classes -- Bell tests, Grover, VQE,
+QAOA -- from the JavaScript binding by resolving the long-standing
+"hardware-entropy ctx is host-only" problem.  The previous WASM
+build deliberately excluded `hardware_entropy.c` because of its
+RDRAND / `/dev/urandom` / jitter dependencies; every algorithm that
+needed shot-noise sampling refused to run on `entropy == NULL` and
+was therefore unusable from JS.  This release ships a
+WASM-targeted entropy stack and the first two TS wrappers that
+consume it (Bell + Grover).
+
+### Added
+
+- `src/compat/hardware_entropy_wasm.c`: WASM-only implementation of
+  `entropy_init` / `entropy_get_bytes` / `entropy_free` backed by
+  `getentropy(3)`, which emscripten polyfills via the browser's
+  `crypto.getRandomValues()`.  Guarded by `#ifdef __EMSCRIPTEN__`
+  so native builds continue to use the full `hardware_entropy.c`.
+- `bindings/javascript/packages/core/src/bell.ts`: ``BellState``
+  enum (PhiPlus / PhiMinus / PsiPlus / PsiMinus), ``createBellState``,
+  ``chshTest`` (Tsirelson-optimal angles via
+  `bell_get_optimal_settings`), ``merminGhzTest``, and
+  ``merminKlyshkoTest``.  Each call leases a hardware-entropy ctx
+  via an internal `withEntropy` helper and releases it on return,
+  mirroring the Rust ``EntropyGuard`` pattern from v0.4.7.  The
+  128-byte ``bell_test_result_t`` is decoded directly from the
+  WASM heap into a ``BellTestResult`` interface.
+- `bindings/javascript/packages/core/src/grover.ts`: ``groverSearch``
+  with optional explicit iteration count (default: optimal
+  `floor(pi sqrt(N) / 4)`), plus ``groverOptimalIterations``.
+  `markedState` is a `bigint` so the marshalling preserves the C
+  ABI's `uint64_t` width.
+- 6 `bell.integration.test.ts` cases: Bell-state probabilities for
+  PhiPlus / PsiPlus, CHSH violates classical on |Phi+> with
+  S in (2.4, 2.9), measurements count > 0, Mermin-GHZ |M| > 2.5
+  on |GHZ_3>, normalised Mermin-Klyshko > 1.1.
+- 4 `grover.integration.test.ts` cases: optimal-iteration formula
+  at n=4 (3) and n=6 (6), search finds marked state with P > 0.9,
+  explicit iteration count honoured, fidelity in [0, 1].
+
+### Changed
+
+- WASM ``emscripten/CMakeLists.txt`` ``UTILS_SOURCES`` now includes
+  ``hardware_entropy_wasm.c`` and ``quantum_entropy.c``; together
+  they provide the `quantum_entropy_ctx_create_hw` /
+  `quantum_entropy_ctx_destroy` surface that Bell / Grover / VQE /
+  QAOA call through.
+- ``emscripten/exports.txt`` adds
+  `_quantum_entropy_ctx_create_hw`, `_quantum_entropy_ctx_destroy`,
+  `_bell_test_mermin_ghz`, `_bell_test_mermin_klyshko`.
+- `bindings/javascript/packages/core/src/index.ts` re-exports
+  ``BellState`` / ``createBellState`` / ``chshTest`` /
+  ``merminGhzTest`` / ``merminKlyshkoTest`` / ``BellTestResult``
+  and ``groverSearch`` / ``groverOptimalIterations`` /
+  ``GroverResult``.
+
+### Verified
+
+- WASM build configures + links cleanly with the new entropy
+  sources.
+- End-to-end through Node against the rebuilt WASM:
+  CHSH `S = 2.816` on |Phi+> (Tsirelson bound 2.828).
+- `pnpm run test:integration`: 10 files / 117 passed in 601 ms (up
+  from 107 in v0.5.1; the new Bell + Grover tests add 10).
+- `npx tsc --noEmit` clean on @moonlab/quantum-core.
+
+Manifests bumped 0.5.3 -> 0.5.4.
 
 ## [0.5.3] - 2026-05-19
 
