@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.6.1-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.6.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -9,6 +9,15 @@
 > seeded by that QRNG.**
 
 ## New in v0.6 (2026-05-19)
+
+**v0.6.2** extends the CSS-code handle to 6 QEC families behind one
+opaque type.  Surface code, toric, 2D color (Steane + Hamming),
+IBM bivariate-bicycle qLDPC (the three Bravyi-Nature 627 "Gross"
+codes), and hypergraph-product CSS codes.  Every instance is
+validated against its published [[n, k, d]] shape.  The
+`SurfaceCode` JS / Python / Rust bindings shipped in v0.5.12-14
+become QEC-zoo dispatchers in v0.6.3 -- one binding, eight code
+families.
 
 **v0.6.1** extends the v0.6.0 bridge with two substantial entry
 points.  First, `moonlab_libirrep_heisenberg_sector_e0()` runs
@@ -19,9 +28,7 @@ N = 24 kagome 4x2 the sector dim is ~337k vs 16 777 216 full Hilbert,
 making N > 14 ground-state ED a workstation problem instead of an
 mpo_to_matrix OOM.  Second, a CSS-code handle layer
 (`moonlab_libirrep_qec_t`) starts wrapping libirrep's 18-module QEC
-zoo behind one opaque type — surface code d=3, d=5 are exposed
-today; toric, color, bivariate-bicycle, hypergraph-product, and
-X-cube land in v0.6.2 behind the same surface.
+zoo behind one opaque type.
 
 **v0.6.0** opens the libirrep-integration arc.  libirrep is a
 production-grade C library covering 18 QEC codes (toric, surface,
@@ -1028,7 +1035,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.6.1},
+    version      = {v0.6.2},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

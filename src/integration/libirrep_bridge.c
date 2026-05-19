@@ -22,6 +22,10 @@
 #include <irrep/config_project.h>
 #include <irrep/css_code.h>
 #include <irrep/surface_code.h>
+#include <irrep/toric_code.h>
+#include <irrep/color_code.h>
+#include <irrep/bivariate_bicycle.h>
+#include <irrep/hypergraph_product.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -217,25 +221,133 @@ struct moonlab_libirrep_qec {
     int distance_cached;  /**< -1 until first lookup, then memoised. */
 };
 
-int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out)
+/* Common helper for the QEC zoo: allocate a moonlab_libirrep_qec_t, run
+ * the caller-supplied libirrep builder against its `css` field, and
+ * return MOONLAB_LIBIRREP_OK on success.  Each factory function only
+ * has to provide the builder closure -- this keeps the per-family
+ * boilerplate to one line. */
+typedef int (*css_builder_fn)(irrep_css_code_t *out, void *ctx);
+
+static int qec_factory(moonlab_libirrep_qec_t **out,
+                       css_builder_fn build, void *ctx)
 {
-    if (!out || distance < 2) return MOONLAB_LIBIRREP_BAD_ARG;
-
-    irrep_surface_params_t p;
-    if (irrep_surface_init(&p, distance) != IRREP_OK) {
-        return MOONLAB_LIBIRREP_INTERNAL;
-    }
-
+    if (!out) return MOONLAB_LIBIRREP_BAD_ARG;
     moonlab_libirrep_qec_t *q = (moonlab_libirrep_qec_t *)calloc(1, sizeof(*q));
     if (!q) return MOONLAB_LIBIRREP_OOM;
     q->distance_cached = -1;
-
-    if (irrep_surface_build(&p, &q->css) != IRREP_OK) {
+    if (build(&q->css, ctx) != 0) {
         free(q);
         return MOONLAB_LIBIRREP_INTERNAL;
     }
     *out = q;
     return MOONLAB_LIBIRREP_OK;
+}
+
+static int build_surface(irrep_css_code_t *out, void *ctx)
+{
+    const int distance = *(const int *)ctx;
+    irrep_surface_params_t p;
+    if (irrep_surface_init(&p, distance) != IRREP_OK) return -1;
+    return (irrep_surface_build(&p, out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out)
+{
+    if (distance < 2) return MOONLAB_LIBIRREP_BAD_ARG;
+    int d = distance;
+    return qec_factory(out, build_surface, &d);
+}
+
+typedef struct { int Lx; int Ly; } toric_args_t;
+
+static int build_toric(irrep_css_code_t *out, void *ctx)
+{
+    const toric_args_t *a = (const toric_args_t *)ctx;
+    irrep_toric_params_t p;
+    if (irrep_toric_init(&p, a->Lx, a->Ly) != IRREP_OK) return -1;
+    return (irrep_toric_code_build_css(&p, out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_toric_code_new(int Lx, int Ly, moonlab_libirrep_qec_t **out)
+{
+    if (Lx < 2 || Ly < 2) return MOONLAB_LIBIRREP_BAD_ARG;
+    toric_args_t a = { .Lx = Lx, .Ly = Ly };
+    return qec_factory(out, build_toric, &a);
+}
+
+static int build_color_steane(irrep_css_code_t *out, void *ctx)
+{
+    (void)ctx;
+    return (irrep_color_steane(out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_color_steane_new(moonlab_libirrep_qec_t **out)
+{
+    return qec_factory(out, build_color_steane, NULL);
+}
+
+static int build_color_hamming(irrep_css_code_t *out, void *ctx)
+{
+    (void)ctx;
+    return (irrep_color_hamming_15_7_3(out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_color_hamming_15_7_3_new(moonlab_libirrep_qec_t **out)
+{
+    return qec_factory(out, build_color_hamming, NULL);
+}
+
+static int build_bb_72(irrep_css_code_t *out, void *ctx)
+{
+    (void)ctx;
+    return (irrep_bb_code_ibm_72_12_6(out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_bb_72_12_6_new(moonlab_libirrep_qec_t **out)
+{
+    return qec_factory(out, build_bb_72, NULL);
+}
+
+static int build_bb_144(irrep_css_code_t *out, void *ctx)
+{
+    (void)ctx;
+    return (irrep_bb_code_ibm_144_12_12(out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_bb_144_12_12_new(moonlab_libirrep_qec_t **out)
+{
+    return qec_factory(out, build_bb_144, NULL);
+}
+
+static int build_bb_288(irrep_css_code_t *out, void *ctx)
+{
+    (void)ctx;
+    return (irrep_bb_code_ibm_288_12_18(out) == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out)
+{
+    return qec_factory(out, build_bb_288, NULL);
+}
+
+static int build_hgp(irrep_css_code_t *out, void *ctx)
+{
+    const int d = *(const int *)ctx;
+    irrep_status_t st;
+    switch (d) {
+    case 3: st = irrep_hgp_repetition_3_13_1_3(out); break;
+    case 4: st = irrep_hgp_repetition_4_25_1_4(out); break;
+    case 5: st = irrep_hgp_repetition_5_41_1_5(out); break;
+    default: return -1;
+    }
+    return (st == IRREP_OK) ? 0 : -1;
+}
+
+int moonlab_libirrep_hgp_repetition_new(int d, moonlab_libirrep_qec_t **out)
+{
+    if (d < 3 || d > 5) return MOONLAB_LIBIRREP_BAD_ARG;
+    int dd = d;
+    return qec_factory(out, build_hgp, &dd);
 }
 
 void moonlab_libirrep_qec_free(moonlab_libirrep_qec_t *q)
@@ -339,6 +451,27 @@ int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out
     (void)distance; (void)out;
     return MOONLAB_LIBIRREP_NOT_BUILT;
 }
+
+int moonlab_libirrep_toric_code_new(int Lx, int Ly, moonlab_libirrep_qec_t **out)
+{ (void)Lx; (void)Ly; (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_color_steane_new(moonlab_libirrep_qec_t **out)
+{ (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_color_hamming_15_7_3_new(moonlab_libirrep_qec_t **out)
+{ (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_bb_72_12_6_new(moonlab_libirrep_qec_t **out)
+{ (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_bb_144_12_12_new(moonlab_libirrep_qec_t **out)
+{ (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out)
+{ (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
+
+int moonlab_libirrep_hgp_repetition_new(int d, moonlab_libirrep_qec_t **out)
+{ (void)d; (void)out; return MOONLAB_LIBIRREP_NOT_BUILT; }
 
 void moonlab_libirrep_qec_free(moonlab_libirrep_qec_t *q) { (void)q; }
 

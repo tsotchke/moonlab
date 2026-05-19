@@ -212,6 +212,41 @@ typedef struct moonlab_libirrep_qec moonlab_libirrep_qec_t;
  *  @return     MOONLAB_LIBIRREP_OK on success or a negative status code. */
 int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out);
 
+/** @brief Construct the Kitaev 2D toric code on an `Lx x Ly` torus.
+ *
+ *  The toric code at `(Lx, Ly)` has `n = 2 Lx Ly` physical qubits
+ *  (one per torus edge), `Lx Ly` X-stabilisers (one per vertex),
+ *  `Lx Ly` Z-stabilisers (one per plaquette), `k = 2` logical qubits
+ *  (the two homology classes of the torus), and code distance
+ *  `d = min(Lx, Ly)`. */
+int moonlab_libirrep_toric_code_new(int Lx, int Ly, moonlab_libirrep_qec_t **out);
+
+/** @brief Steane [[7, 1, 3]] color code -- the smallest 2D color code,
+ *         self-dual (X-stabilisers = Z-stabilisers in support). */
+int moonlab_libirrep_color_steane_new(moonlab_libirrep_qec_t **out);
+
+/** @brief [[15, 7, 3]] Hamming code recast as a CSS code. */
+int moonlab_libirrep_color_hamming_15_7_3_new(moonlab_libirrep_qec_t **out);
+
+/** @brief IBM bivariate-bicycle [[72, 12, 6]] qLDPC code.
+ *  Bravyi et al. 2024 (Nature 627, 778), Table 3 instance 1. */
+int moonlab_libirrep_bb_72_12_6_new(moonlab_libirrep_qec_t **out);
+
+/** @brief IBM bivariate-bicycle [[144, 12, 12]] qLDPC code. */
+int moonlab_libirrep_bb_144_12_12_new(moonlab_libirrep_qec_t **out);
+
+/** @brief IBM bivariate-bicycle [[288, 12, 18]] qLDPC code. */
+int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out);
+
+/** @brief Hypergraph-product CSS code from a `[d, 1, d]` repetition
+ *  code on each side.  Yields:
+ *    d = 3 -> [[13, 1, 3]]
+ *    d = 4 -> [[25, 1, 4]]
+ *    d = 5 -> [[41, 1, 5]]
+ *  Only these three published instances are supported in v0.6.2;
+ *  arbitrary `d` falls back to MOONLAB_LIBIRREP_BAD_ARG. */
+int moonlab_libirrep_hgp_repetition_new(int d, moonlab_libirrep_qec_t **out);
+
 /** @brief Release a handle returned by any
  *         `moonlab_libirrep_<family>_code_new` factory.  Safe to call
  *         with `NULL`. */
