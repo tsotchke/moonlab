@@ -645,20 +645,20 @@ double qaoa_compute_expectation(
      */
     
     if (!solver || !gamma || !beta) {
-        return INFINITY;
+        return DBL_MAX;
     }
     
     // Create quantum state
     quantum_state_t state;
     if (quantum_state_init(&state, solver->ising->num_qubits) != QS_SUCCESS) {
-        return INFINITY;
+        return DBL_MAX;
     }
     
     // Apply QAOA circuit
     if (qaoa_apply_circuit(&state, solver->ising, gamma, beta, 
                           solver->config.num_layers) != QS_SUCCESS) {
         quantum_state_free(&state);
-        return INFINITY;
+        return DBL_MAX;
     }
     
     // Sample to estimate expectation
@@ -697,7 +697,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
     qaoa_result_t result = {0};
     
     if (!solver) {
-        result.best_energy = INFINITY;
+        result.best_energy = DBL_MAX;
         return result;
     }
     
@@ -710,7 +710,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
         free(result.optimal_gamma);
         free(result.optimal_beta);
         free(result.energy_history);
-        result.best_energy = INFINITY;
+        result.best_energy = DBL_MAX;
         return result;
     }
     
@@ -718,8 +718,8 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
     memcpy(result.optimal_gamma, solver->current_gamma, result.num_layers * sizeof(double));
     memcpy(result.optimal_beta, solver->current_beta, result.num_layers * sizeof(double));
     
-    double best_energy = INFINITY;
-    double prev_energy = INFINITY;
+    double best_energy = DBL_MAX;
+    double prev_energy = DBL_MAX;
     
     // Gradient buffers
     double *grad_gamma = malloc(result.num_layers * sizeof(double));
@@ -806,7 +806,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
         // Sample multiple times and keep best
         size_t num_samples = 1000;
         uint64_t best_bitstring = 0;
-        double best_sample_energy = INFINITY;
+        double best_sample_energy = DBL_MAX;
         
         for (size_t s = 0; s < num_samples; s++) {
             quantum_state_t sample_state;

@@ -17,8 +17,16 @@
 
 #include "../../src/optimization/gpu/gpu_backend.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
+
+static void expect_close(const char* label, double got, double expected, int* failures) {
+    if (fabs(got - expected) > 1e-12) {
+        fprintf(stderr, "FAIL %s got %.17g, expected %.17g\n", label, got, expected);
+        (*failures)++;
+    }
+}
 
 int main(void) {
     int failures = 0;
@@ -54,6 +62,76 @@ int main(void) {
     gpu_context_t* none = gpu_compute_init(GPU_BACKEND_NONE);
     if (none) {
         /* Legal: some builds treat NONE as a no-op context. */
+        complex_t amplitudes[4] = {
+            1.0 + 0.0 * I,
+            0.5 + 0.5 * I,
+            -0.25 + 0.25 * I,
+            0.0 + 0.0 * I,
+        };
+        const double expected_norm2 = 1.625;
+
+        gpu_buffer_t* amp_buffer = gpu_buffer_create_from_data(
+            none, amplitudes, sizeof(amplitudes));
+        gpu_buffer_t* probability_buffer = gpu_buffer_create(
+            none, 4 * sizeof(double));
+        if (!amp_buffer || !probability_buffer) {
+            fprintf(stderr, "FAIL GPU_BACKEND_NONE host buffers were not created\n");
+            failures++;
+        } else {
+            double norm2 = 0.0;
+            gpu_error_t rc = gpu_sum_squared_magnitudes(
+                none, amp_buffer, 4, &norm2);
+            if (rc != GPU_SUCCESS) {
+                fprintf(stderr, "FAIL gpu_sum_squared_magnitudes(NONE) rc=%d\n", (int)rc);
+                failures++;
+            } else {
+                expect_close("none norm2", norm2, expected_norm2, &failures);
+            }
+
+            rc = gpu_compute_probabilities(none, amp_buffer, probability_buffer, 4);
+            if (rc != GPU_SUCCESS) {
+                fprintf(stderr, "FAIL gpu_compute_probabilities(NONE) rc=%d\n", (int)rc);
+                failures++;
+            } else {
+                double probabilities[4] = {0};
+                rc = gpu_buffer_read(probability_buffer, probabilities,
+                                     sizeof(probabilities), 0);
+                if (rc != GPU_SUCCESS) {
+                    fprintf(stderr, "FAIL gpu_buffer_read probabilities rc=%d\n", (int)rc);
+                    failures++;
+                } else {
+                    expect_close("prob[0]", probabilities[0], 1.0, &failures);
+                    expect_close("prob[1]", probabilities[1], 0.5, &failures);
+                    expect_close("prob[2]", probabilities[2], 0.125, &failures);
+                    expect_close("prob[3]", probabilities[3], 0.0, &failures);
+                }
+            }
+
+            rc = gpu_normalize(none, amp_buffer, sqrt(expected_norm2), 4);
+            if (rc != GPU_SUCCESS) {
+                fprintf(stderr, "FAIL gpu_normalize(NONE) rc=%d\n", (int)rc);
+                failures++;
+            } else {
+                norm2 = 0.0;
+                rc = gpu_sum_squared_magnitudes(none, amp_buffer, 4, &norm2);
+                if (rc != GPU_SUCCESS) {
+                    fprintf(stderr, "FAIL normalized sum rc=%d\n", (int)rc);
+                    failures++;
+                } else {
+                    expect_close("normalized norm2", norm2, 1.0, &failures);
+                }
+            }
+
+            rc = gpu_hadamard(none, amp_buffer, 0, 4);
+            if (rc != GPU_ERROR_NOT_SUPPORTED) {
+                fprintf(stderr, "FAIL gpu_hadamard(NONE) rc=%d, expected %d\n",
+                        (int)rc, (int)GPU_ERROR_NOT_SUPPORTED);
+                failures++;
+            }
+        }
+
+        gpu_buffer_free(probability_buffer);
+        gpu_buffer_free(amp_buffer);
         gpu_compute_free(none);
     }
     printf("gpu_compute_init(NONE) did not crash -- OK\n");

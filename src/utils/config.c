@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #define strcasecmp _stricmp
@@ -44,6 +45,12 @@
 
 static qsim_config_t* g_config = NULL;
 static int g_initialized = 0;
+
+#if !defined(__APPLE__)
+static size_t qsim_size_from_u64(uint64_t bytes) {
+    return bytes > (uint64_t)SIZE_MAX ? SIZE_MAX : (size_t)bytes;
+}
+#endif
 
 // ============================================================================
 // DEFAULT VALUES
@@ -683,9 +690,11 @@ int qsim_detect_max_qubits(void) {
 #elif defined(__linux__)
     long pages = sysconf(_SC_PHYS_PAGES);
     long page_size = sysconf(_SC_PAGE_SIZE);
-    mem_bytes = pages * page_size;
+    if (pages > 0 && page_size > 0) {
+        mem_bytes = qsim_size_from_u64((uint64_t)pages * (uint64_t)page_size);
+    }
 #else
-    mem_bytes = 8ULL * 1024 * 1024 * 1024;  // Assume 8 GB
+    mem_bytes = qsim_size_from_u64(8ULL * 1024 * 1024 * 1024);  // Assume 8 GB
 #endif
 
     // Use 80% of available memory
@@ -695,7 +704,7 @@ int qsim_detect_max_qubits(void) {
     int qubits = 0;
     size_t state_size = 16;  // One amplitude
 
-    while (state_size * 2 <= mem_bytes && qubits < 40) {
+    while (state_size <= mem_bytes / 2 && qubits < 40) {
         state_size *= 2;
         qubits++;
     }

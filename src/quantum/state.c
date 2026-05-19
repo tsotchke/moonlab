@@ -9,10 +9,28 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <limits.h>
 
 #define NORMALIZATION_TOLERANCE 1e-10
 #define SMALL_PROBABILITY 1e-15
 #define DEFAULT_MAX_MEASUREMENTS 1024
+
+static int quantum_state_compute_dimension(size_t num_qubits, size_t *out_dim) {
+    if (!out_dim || num_qubits == 0 || num_qubits > MAX_QUBITS) {
+        return 0;
+    }
+    if (num_qubits >= sizeof(size_t) * CHAR_BIT) {
+        return 0;
+    }
+
+    size_t dim = (size_t)1 << num_qubits;
+    if (dim > SIZE_MAX / sizeof(complex_t)) {
+        return 0;
+    }
+
+    *out_dim = dim;
+    return 1;
+}
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -20,12 +38,15 @@
 
 qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     if (!state) return QS_ERROR_INVALID_STATE;
-    if (num_qubits == 0 || num_qubits > MAX_QUBITS) return QS_ERROR_INVALID_DIMENSION;
+    size_t state_dim = 0;
+    if (!quantum_state_compute_dimension(num_qubits, &state_dim)) {
+        return QS_ERROR_INVALID_DIMENSION;
+    }
     
     memset(state, 0, sizeof(quantum_state_t));
     
     state->num_qubits = num_qubits;
-    state->state_dim = 1ULL << num_qubits;
+    state->state_dim = state_dim;
     
     // Phase 4: Allocate AMX-aligned memory for optimal M2 Ultra performance
     // Uses 64-byte alignment for Apple Silicon AMX hardware acceleration

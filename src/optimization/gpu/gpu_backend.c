@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 // Backend-specific includes (conditionally compiled)
 #ifdef HAS_METAL
@@ -122,6 +123,70 @@ struct gpu_buffer {
     void* vulkan_buffer;
     void* cuda_buffer;
 };
+
+static gpu_error_t validate_host_buffer_span(gpu_buffer_t* buffer,
+                                             uint64_t elements,
+                                             size_t element_size) {
+    if (!buffer || !buffer->host_ptr || element_size == 0) {
+        return GPU_ERROR_INVALID_PARAM;
+    }
+    if (elements > SIZE_MAX / element_size) {
+        return GPU_ERROR_INVALID_PARAM;
+    }
+    size_t bytes = (size_t)elements * element_size;
+    return bytes <= buffer->size ? GPU_SUCCESS : GPU_ERROR_INVALID_PARAM;
+}
+
+static gpu_error_t cpu_compute_probabilities(gpu_buffer_t* amplitudes,
+                                             gpu_buffer_t* probabilities,
+                                             uint64_t state_dim) {
+    gpu_error_t rc = validate_host_buffer_span(amplitudes, state_dim, sizeof(complex_t));
+    if (rc != GPU_SUCCESS) return rc;
+    rc = validate_host_buffer_span(probabilities, state_dim, sizeof(double));
+    if (rc != GPU_SUCCESS) return rc;
+
+    const complex_t* amps = (const complex_t*)amplitudes->host_ptr;
+    double* probs = (double*)probabilities->host_ptr;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        double real = creal(amps[i]);
+        double imag = cimag(amps[i]);
+        probs[i] = real * real + imag * imag;
+    }
+    return GPU_SUCCESS;
+}
+
+static gpu_error_t cpu_normalize_amplitudes(gpu_buffer_t* amplitudes,
+                                            double norm,
+                                            uint64_t state_dim) {
+    if (fabs(norm) < 1e-18) return GPU_ERROR_INVALID_PARAM;
+
+    gpu_error_t rc = validate_host_buffer_span(amplitudes, state_dim, sizeof(complex_t));
+    if (rc != GPU_SUCCESS) return rc;
+
+    complex_t* amps = (complex_t*)amplitudes->host_ptr;
+    double inv_norm = 1.0 / norm;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        amps[i] *= inv_norm;
+    }
+    return GPU_SUCCESS;
+}
+
+static gpu_error_t cpu_sum_squared_magnitudes(gpu_buffer_t* amplitudes,
+                                              uint64_t state_dim,
+                                              double* result) {
+    gpu_error_t rc = validate_host_buffer_span(amplitudes, state_dim, sizeof(complex_t));
+    if (rc != GPU_SUCCESS) return rc;
+
+    const complex_t* amps = (const complex_t*)amplitudes->host_ptr;
+    double sum = 0.0;
+    for (uint64_t i = 0; i < state_dim; i++) {
+        double real = creal(amps[i]);
+        double imag = cimag(amps[i]);
+        sum += real * real + imag * imag;
+    }
+    *result = sum;
+    return GPU_SUCCESS;
+}
 
 // ============================================================================
 // BACKEND DETECTION
@@ -692,6 +757,7 @@ gpu_buffer_t* gpu_buffer_create_from_data(gpu_context_t* ctx, void* data, size_t
 #endif
         default:
             // For other backends, create buffer and copy data
+            free(buffer);
             buffer = gpu_buffer_create(ctx, size);
             if (buffer) {
                 gpu_buffer_write(buffer, data, size, 0);
@@ -1379,6 +1445,8 @@ gpu_error_t gpu_compute_probabilities(gpu_context_t* ctx, gpu_buffer_t* amplitud
                                               probabilities->cuda_buffer, state_dim)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+        case GPU_BACKEND_NONE:
+            return cpu_compute_probabilities(amplitudes, probabilities, state_dim);
         default:
             return GPU_ERROR_NOT_SUPPORTED;
     }
@@ -1413,6 +1481,8 @@ gpu_error_t gpu_normalize(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                                         norm, state_dim)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+        case GPU_BACKEND_NONE:
+            return cpu_normalize_amplitudes(amplitudes, norm, state_dim);
         default:
             return GPU_ERROR_NOT_SUPPORTED;
     }
@@ -1454,6 +1524,8 @@ gpu_error_t gpu_sum_squared_magnitudes(gpu_context_t* ctx, gpu_buffer_t* amplitu
                                                state_dim, result)
                    == 0 ? GPU_SUCCESS : GPU_ERROR_KERNEL_FAILED;
 #endif
+        case GPU_BACKEND_NONE:
+            return cpu_sum_squared_magnitudes(amplitudes, state_dim, result);
         default:
             return GPU_ERROR_NOT_SUPPORTED;
     }

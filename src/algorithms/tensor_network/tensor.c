@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <stdint.h>
 
 // Cross-platform BLAS/LAPACK support
 #ifdef __APPLE__
@@ -746,6 +747,14 @@ bool tensor_allclose(const tensor_t *a, const tensor_t *b, double tol) {
  * Override at runtime via the integer-valued env var
  * MOONLAB_TENSOR_GPU_THRESHOLD_MUL (work = M*K*N), which takes
  * precedence over the per-tier defaults. */
+static size_t tensor_unreachable_gpu_threshold(void) {
+#if SIZE_MAX > UINT32_MAX
+    return (size_t)1 << 33;
+#else
+    return SIZE_MAX;
+#endif
+}
+
 static size_t tensor_matmul_gpu_threshold(void) {
     const char* env = getenv("MOONLAB_TENSOR_GPU_THRESHOLD_MUL");
     if (env && *env) {
@@ -755,7 +764,7 @@ static size_t tensor_matmul_gpu_threshold(void) {
     }
     switch (moonlab_eshkol_get_precision()) {
         case MOONLAB_ESHKOL_PRECISION_EXACT:
-            return (size_t)1 << 33;   /* SF64/Ozaki-II: never wins at realistic sizes today */
+            return tensor_unreachable_gpu_threshold(); /* SF64/Ozaki-II: never wins at realistic sizes today */
         case MOONLAB_ESHKOL_PRECISION_HIGH:
             return (size_t)1 << 28;   /* df64 (buggy 1e-7): crossover ~ 512^3 complex */
         case MOONLAB_ESHKOL_PRECISION_FAST:
@@ -763,7 +772,7 @@ static size_t tensor_matmul_gpu_threshold(void) {
         case MOONLAB_ESHKOL_PRECISION_ML:
             return (size_t)1 << 27;   /* fp24: same band as FAST */
     }
-    return (size_t)1 << 33;
+    return tensor_unreachable_gpu_threshold();
 }
 
 tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b) {

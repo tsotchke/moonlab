@@ -34,7 +34,7 @@ const NUM_QUBITS_OFFSET = 0;
  */
 export interface QuantumStateOptions {
   /**
-   * Number of qubits (1-20 recommended, up to 30 possible)
+   * Number of qubits (1-20 recommended, up to 26 possible in the wasm backend)
    */
   numQubits: number;
 
@@ -81,8 +81,8 @@ export class QuantumState {
    * Create a new quantum state
    */
   static async create(options: QuantumStateOptions): Promise<QuantumState> {
-    if (options.numQubits < 1 || options.numQubits > 30) {
-      throw new Error('numQubits must be between 1 and 30');
+    if (options.numQubits < 1 || options.numQubits > 26) {
+      throw new Error('numQubits must be between 1 and 26');
     }
 
     const module = await getModule();

@@ -50,7 +50,7 @@ describe('QuantumState Creation', () => {
 
   it('rejects invalid qubit counts', async () => {
     await expect(QuantumState.create({ numQubits: 0 })).rejects.toThrow();
-    await expect(QuantumState.create({ numQubits: 31 })).rejects.toThrow();
+    await expect(QuantumState.create({ numQubits: 27 })).rejects.toThrow();
   });
 
   it('creates state with initial amplitudes', async () => {

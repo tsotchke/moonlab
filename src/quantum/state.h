@@ -19,7 +19,9 @@ typedef double _Complex complex_t;
  * @brief Advanced quantum state vector simulation engine
  *
  * Implements full quantum circuit simulation with:
- * - Up to 32 qubits (4.3B dimensional state space) - Phase 4 scaling
+ * - Up to 32 qubits on native 64-bit hosts (4.3B dimensional state space)
+ * - Up to 26 qubits in wasm32 builds, where state vectors must fit the
+ *   browser/WebAssembly linear-memory budget
  * - Universal gate set (Pauli, Hadamard, Phase, CNOT, Toffoli)
  * - Wavefunction collapse on measurement
  * - Quantum entanglement and superposition
@@ -36,17 +38,26 @@ typedef double _Complex complex_t;
  * same name, so we rename to `MOONLAB_MAX_QUBITS` and leave a
  * deprecated alias for one cycle.  The deprecated alias will be
  * removed in v0.3.0; new code should use the prefixed name. */
+#if defined(WASM_BUILD) || defined(__EMSCRIPTEN__)
+#define MOONLAB_MAX_QUBITS         26  /* 67M amps × 16 B = 1.1 GB. */
+#define MOONLAB_RECOMMENDED_QUBITS 20  /* 1M amps = 16 MB. */
+#else
 #define MOONLAB_MAX_QUBITS         32  /* 4.3B amps × 16 B = 68.7 GB. */
-#define MOONLAB_MAX_STATE_DIM      (1ULL << MOONLAB_MAX_QUBITS)
 #define MOONLAB_RECOMMENDED_QUBITS 28  /* 268M amps = 4.3 GB. */
+#endif
+#define MOONLAB_MAX_STATE_DIM      (1ULL << MOONLAB_MAX_QUBITS)
 
 /* Static guards against silent shift-overflow if a future patch raises
- * MOONLAB_MAX_QUBITS past 63 or builds on a 32-bit host. */
+ * MOONLAB_MAX_QUBITS past 63 or beyond addressable amplitude storage. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#if !defined(WASM_BUILD) && !defined(__EMSCRIPTEN__)
 _Static_assert(sizeof(size_t) >= 8,
-               "Moonlab requires a 64-bit size_t.");
+               "Native Moonlab state vectors require a 64-bit size_t.");
+#endif
 _Static_assert(MOONLAB_MAX_QUBITS <= 63,
                "MOONLAB_MAX_QUBITS must be <= 63 to avoid 1ULL shift overflow.");
+_Static_assert(MOONLAB_MAX_STATE_DIM <= SIZE_MAX / sizeof(complex_t),
+               "MOONLAB_MAX_STATE_DIM must fit the target address space.");
 #endif
 
 /* Deprecated unprefixed aliases (removal scheduled for v0.3.0). */
@@ -110,7 +121,8 @@ typedef struct {
 /**
  * @brief Initialize quantum state in |0...0⟩
  *
- * Phase 4: Scales to 32 qubits (4.3B states, 68.7GB with 192GB RAM)
+ * Phase 4: Scales to 32 qubits on native hosts (4.3B states, 68.7GB with 192GB RAM)
+ * and 26 qubits in wasm32 builds.
  * Uses Accelerate framework with AMX-aligned memory (64-byte boundaries)
  * for optimal M2 Ultra performance.
  *
@@ -124,7 +136,7 @@ typedef struct {
  * - 32 qubits: 4.3B states = 68.7GB (feasible with 192GB RAM!)
  *
  * @param state Pointer to quantum state structure
- * @param num_qubits Number of qubits (1-32, recommended 28 for speed/memory balance)
+ * @param num_qubits Number of qubits (1-MOONLAB_MAX_QUBITS)
  * @return QS_SUCCESS or error code
  */
 MOONLAB_API qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);

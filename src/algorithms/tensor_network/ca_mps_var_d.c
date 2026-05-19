@@ -21,6 +21,7 @@
 #include "ca_mps_var_d_stab_warmstart.h"
 
 #include <complex.h>
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -347,7 +348,7 @@ static int cand_affected_qubits(const cand_t* c, uint32_t* out_qs) {
  * improvement is the dominant Phase B speedup.
  *
  * Each thread keeps a private CA-MPS clone and a per-thread
- * scratch flag buffer; the master @p state is not mutated.  INFINITY is
+ * scratch flag buffer; the master @p state is not mutated.  DBL_MAX is
  * written for any candidate whose apply() failed.
  */
 static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
@@ -365,7 +366,7 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
         double _Complex* cz_master =
             (double _Complex*)calloc(num_terms, sizeof(double _Complex));
         if (!cz_master) {
-            for (size_t i = 0; i < n_cands; i++) out_energies[i] = INFINITY;
+            for (size_t i = 0; i < n_cands; i++) out_energies[i] = DBL_MAX;
             return;
         }
         for (uint32_t i = 0; i < num_terms; i++)
@@ -376,9 +377,9 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
             moonlab_ca_mps_t* my = moonlab_ca_mps_clone(state);
             #pragma omp for schedule(dynamic, 1)
             for (size_t i = 0; i < n_cands; i++) {
-                if (!my) { out_energies[i] = INFINITY; continue; }
+                if (!my) { out_energies[i] = DBL_MAX; continue; }
                 const cand_t* c = &cands[i];
-                if (cand_apply(my, c) != 0) { out_energies[i] = INFINITY; continue; }
+                if (cand_apply(my, c) != 0) { out_energies[i] = DBL_MAX; continue; }
                 double _Complex out = 0.0;
                 moonlab_ca_mps_expect_pauli_sum(my, paulis, cz_master, num_terms, &out);
                 out_energies[i] = creal(out);
@@ -401,7 +402,7 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
         #pragma omp for schedule(dynamic, 1)
         for (size_t i = 0; i < n_cands; i++) {
             if (!my || !affected_flag || !affected_list) {
-                out_energies[i] = INFINITY;
+                out_energies[i] = DBL_MAX;
                 continue;
             }
             const cand_t* c = &cands[i];
@@ -427,7 +428,7 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
                 /* Candidate failed; clear the flag scratch and report INF. */
                 for (uint32_t r = 0; r < n_affected; r++)
                     affected_flag[affected_list[r]] = 0;
-                out_energies[i] = INFINITY;
+                out_energies[i] = DBL_MAX;
                 continue;
             }
 
@@ -438,7 +439,7 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
                 const uint8_t* P_k = &paulis[(size_t)k * n];
                 double _Complex zk = 0.0;
                 if (moonlab_ca_mps_expect_pauli(my, P_k, &zk) != CA_MPS_SUCCESS) {
-                    dE = INFINITY;
+                    dE = DBL_MAX;
                     break;
                 }
                 const double new_v = coeffs[k] * creal(zk);
@@ -451,7 +452,7 @@ static void evaluate_candidates_parallel(const moonlab_ca_mps_t* state,
 
             cand_undo(my, c);
 
-            out_energies[i] = isfinite(dE) ? cache.E_total + dE : INFINITY;
+            out_energies[i] = isfinite(dE) ? cache.E_total + dE : DBL_MAX;
         }
 
         if (my) moonlab_ca_mps_free(my);

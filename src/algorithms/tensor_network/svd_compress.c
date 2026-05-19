@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 // ============================================================================
 // CONFIGURATION MANAGEMENT
@@ -813,7 +814,7 @@ svd_compress_stats_t svd_compress_stats_init(void) {
         .max_single_error = 0.0,
         .num_truncations = 0,
         .total_discarded = 0,
-        .min_singular_kept = HUGE_VAL,
+        .min_singular_kept = DBL_MAX,
         .max_singular_kept = 0.0
     };
     return stats;
