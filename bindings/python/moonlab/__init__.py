@@ -146,6 +146,17 @@ try:
 except (ImportError, AttributeError, OSError):
     _SCHEDULER_AVAILABLE = False
 
+try:
+    from .decoder import (
+        DecoderSlot, DecoderError, DecoderNotBuiltError,
+        decode as decoder_decode,
+        slot_available as decoder_slot_available,
+        slot_name as decoder_slot_name,
+    )
+    _DECODER_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _DECODER_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',

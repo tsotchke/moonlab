@@ -207,6 +207,24 @@ export type { QgtlExecOptions, QgtlResults } from './qgtl';
 // until the next WASM rebuild picks up the v0.7.0 surface.
 export { Job, SchedulerError } from './scheduler';
 export type { JobResults } from './scheduler';
+
+// Decoder-bench dispatcher (since 0.7.3).  Five-slot QEC decoder zoo
+// reachable from JS.  Same auto-skip pattern in tests pending WASM
+// rebuild.
+export {
+  DecoderSlot,
+  DecoderError,
+  DecoderNotBuiltError,
+  decode as decoderDecode,
+  slotAvailable as decoderSlotAvailable,
+  slotName as decoderSlotName,
+  MOONLAB_DECODER_OK,
+  MOONLAB_DECODER_NOT_BUILT,
+  MOONLAB_DECODER_BAD_ARG,
+  MOONLAB_DECODER_INFEASIBLE,
+  MOONLAB_DECODER_OOM,
+} from './decoder';
+export type { CodeGeometry } from './decoder';
 export {
   MOONLAB_SCHED_OK,
   MOONLAB_SCHED_BAD_ARG,

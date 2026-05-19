@@ -427,6 +427,12 @@ _moonlab_job_results_free
 _moonlab_job_to_json
 
 # =============================================================================
+# Decoder-bench dispatcher (since v0.6.7 native, JS from v0.7.3).
+_moonlab_decoder_decode
+_moonlab_decoder_slot_available
+_moonlab_decoder_slot_name
+
+# =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
 # Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
 # Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
