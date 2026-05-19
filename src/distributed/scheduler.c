@@ -1,0 +1,282 @@
+/**
+ * @file    scheduler.c
+ * @brief   Distributed-execution scheduler MVP -- in-process workers.
+ *
+ * The job record duplicates the gate-record format from
+ * `moonlab_qgtl_backend.c` so we don't have to expose the latter's
+ * internals.  Each worker reconstructs a fresh `moonlab_qgtl_circuit_t`
+ * from the recorded gates, executes its shot slice, and writes
+ * outcomes into the shared output buffer at its offset.
+ *
+ * OpenMP is the transport in v0.7.0.  The contract -- gate list +
+ * shot slice + per-worker outcome write -- is identical to what an
+ * MPI / gRPC worker would do, so v0.7.1+ can swap the loop without
+ * touching the API.
+ */
+
+#include "scheduler.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
+typedef struct {
+    moonlab_qgtl_gate_t type;
+    int     target;
+    int     control;
+    double  theta;
+    int     has_param;
+} sched_gate_record_t;
+
+struct moonlab_job {
+    int                  num_qubits;
+    int                  num_shots;
+    int                  num_workers;
+    uint64_t             rng_seed;
+    int                  num_gates;
+    int                  cap;
+    sched_gate_record_t *gates;
+};
+
+moonlab_job_t *moonlab_job_create(int num_qubits)
+{
+    if (num_qubits < 1 || num_qubits > 32) return NULL;
+    moonlab_job_t *j = (moonlab_job_t *)calloc(1, sizeof(*j));
+    if (!j) return NULL;
+    j->num_qubits  = num_qubits;
+    j->num_workers = 1;
+    return j;
+}
+
+void moonlab_job_free(moonlab_job_t *j)
+{
+    if (!j) return;
+    free(j->gates);
+    free(j);
+}
+
+int moonlab_job_num_qubits(const moonlab_job_t *j) {
+    return j ? j->num_qubits : MOONLAB_SCHED_BAD_ARG;
+}
+int moonlab_job_num_gates(const moonlab_job_t *j) {
+    return j ? j->num_gates : MOONLAB_SCHED_BAD_ARG;
+}
+int moonlab_job_num_shots(const moonlab_job_t *j) {
+    return j ? j->num_shots : MOONLAB_SCHED_BAD_ARG;
+}
+int moonlab_job_num_workers(const moonlab_job_t *j) {
+    return j ? j->num_workers : MOONLAB_SCHED_BAD_ARG;
+}
+
+static int gate_takes_param_local(moonlab_qgtl_gate_t t)
+{
+    return t == MOONLAB_QGTL_GATE_RX ||
+           t == MOONLAB_QGTL_GATE_RY ||
+           t == MOONLAB_QGTL_GATE_RZ;
+}
+
+int moonlab_job_add_gate(moonlab_job_t *j,
+                         moonlab_qgtl_gate_t type,
+                         int target, int control,
+                         const double *params)
+{
+    if (!j) return MOONLAB_SCHED_BAD_ARG;
+    if (gate_takes_param_local(type) && params == NULL) return MOONLAB_SCHED_BAD_ARG;
+    if (j->num_gates >= j->cap) {
+        const int new_cap = j->cap ? j->cap * 2 : 16;
+        sched_gate_record_t *n = (sched_gate_record_t *)
+            realloc(j->gates, (size_t)new_cap * sizeof(*n));
+        if (!n) return MOONLAB_SCHED_OOM;
+        j->gates = n;
+        j->cap   = new_cap;
+    }
+    sched_gate_record_t *g = &j->gates[j->num_gates++];
+    g->type      = type;
+    g->target    = target;
+    g->control   = control;
+    g->theta     = gate_takes_param_local(type) ? params[0] : 0.0;
+    g->has_param = gate_takes_param_local(type) ? 1 : 0;
+    return MOONLAB_SCHED_OK;
+}
+
+int moonlab_job_set_num_shots(moonlab_job_t *j, int n) {
+    if (!j || n < 0) return MOONLAB_SCHED_BAD_ARG;
+    j->num_shots = n;
+    return MOONLAB_SCHED_OK;
+}
+
+int moonlab_job_set_num_workers(moonlab_job_t *j, int n) {
+    if (!j || n < 1) return MOONLAB_SCHED_BAD_ARG;
+    j->num_workers = n;
+    return MOONLAB_SCHED_OK;
+}
+
+int moonlab_job_set_rng_seed(moonlab_job_t *j, uint64_t seed) {
+    if (!j) return MOONLAB_SCHED_BAD_ARG;
+    j->rng_seed = seed;
+    return MOONLAB_SCHED_OK;
+}
+
+/* splitmix64 step -- worker derives its seed as
+ * splitmix64(base XOR worker_id_hi). */
+static inline uint64_t splitmix64(uint64_t x)
+{
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d49bb133111ebbULL;
+    return x ^ (x >> 31);
+}
+
+/* Build a fresh moonlab_qgtl_circuit from the job, run a shot
+ * slice, write outcomes into [out_offset, out_offset+slice). */
+static int run_worker_slice(const moonlab_job_t *j,
+                             int slice_start, int slice_end,
+                             int worker_id,
+                             uint64_t *outcomes_out)
+{
+    moonlab_qgtl_circuit_t *c = moonlab_qgtl_circuit_create(j->num_qubits);
+    if (!c) return MOONLAB_SCHED_OOM;
+    for (int g = 0; g < j->num_gates; g++) {
+        const sched_gate_record_t *gr = &j->gates[g];
+        const double param = gr->theta;
+        const int rc = moonlab_qgtl_add_gate(
+            c, gr->type, gr->target, gr->control,
+            gr->has_param ? &param : NULL);
+        if (rc != 0) { moonlab_qgtl_circuit_free(c); return MOONLAB_SCHED_INTERNAL; }
+    }
+    const int slice_size = slice_end - slice_start;
+    if (slice_size <= 0) {
+        moonlab_qgtl_circuit_free(c);
+        return MOONLAB_SCHED_OK;
+    }
+    const uint64_t seed = j->rng_seed
+        ? splitmix64(j->rng_seed ^ ((uint64_t)worker_id << 32))
+        : (uint64_t)(time(NULL) ^ ((uint64_t)worker_id << 32) ^ 0x9e3779b97f4a7c15ULL);
+    const moonlab_qgtl_exec_options_t opts = {
+        .num_shots = slice_size,
+        .rng_seed  = seed,
+        .return_probabilities = 0,
+    };
+    moonlab_qgtl_results_t res = {0};
+    const int rc = moonlab_qgtl_execute(c, &opts, &res);
+    moonlab_qgtl_circuit_free(c);
+    if (rc != 0) return MOONLAB_SCHED_INTERNAL;
+    /* Copy slice outcomes into the merged buffer. */
+    memcpy(&outcomes_out[slice_start], res.outcomes,
+           (size_t)slice_size * sizeof(uint64_t));
+    moonlab_qgtl_results_free(&res);
+    return MOONLAB_SCHED_OK;
+}
+
+int moonlab_scheduler_run(moonlab_job_t         *j,
+                          moonlab_job_results_t *out)
+{
+    if (!j || !out) return MOONLAB_SCHED_BAD_ARG;
+    if (j->num_shots <= 0) return MOONLAB_SCHED_BAD_ARG;
+
+    const int total_shots = j->num_shots;
+    int num_workers = j->num_workers;
+    if (num_workers > total_shots) num_workers = total_shots;
+
+    memset(out, 0, sizeof(*out));
+    out->num_qubits       = j->num_qubits;
+    out->total_shots      = total_shots;
+    out->num_workers_used = num_workers;
+    out->outcomes = (uint64_t *)malloc((size_t)total_shots * sizeof(uint64_t));
+    out->worker_seconds = (double *)calloc((size_t)num_workers, sizeof(double));
+    if (!out->outcomes || !out->worker_seconds) {
+        moonlab_job_results_free(out);
+        return MOONLAB_SCHED_OOM;
+    }
+
+    /* Slice boundaries: shots `[w * total / N, (w + 1) * total / N)`. */
+    int rc_first_err = MOONLAB_SCHED_OK;
+
+#if defined(_OPENMP)
+    #pragma omp parallel for schedule(static)
+#endif
+    for (int w = 0; w < num_workers; w++) {
+        const int start = (int)((long long)w * total_shots / num_workers);
+        const int end   = (int)((long long)(w + 1) * total_shots / num_workers);
+
+        const clock_t t0 = clock();
+        const int rc = run_worker_slice(j, start, end, w, out->outcomes);
+        const clock_t t1 = clock();
+        out->worker_seconds[w] = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+
+        if (rc != MOONLAB_SCHED_OK) {
+#if defined(_OPENMP)
+            #pragma omp critical
+#endif
+            if (rc_first_err == MOONLAB_SCHED_OK) rc_first_err = rc;
+        }
+    }
+
+    if (rc_first_err != MOONLAB_SCHED_OK) {
+        moonlab_job_results_free(out);
+        return rc_first_err;
+    }
+    return MOONLAB_SCHED_OK;
+}
+
+void moonlab_job_results_free(moonlab_job_results_t *r)
+{
+    if (!r) return;
+    free(r->outcomes);
+    free(r->worker_seconds);
+    r->outcomes = NULL;
+    r->worker_seconds = NULL;
+}
+
+/* -------- JSON serialisation -------- */
+
+int moonlab_job_to_json(const moonlab_job_t *j,
+                        char *buf, size_t bufsize)
+{
+    if (!j) return MOONLAB_SCHED_BAD_ARG;
+
+    /* Render to a local growable string, then snprintf into buf at
+     * the end.  For an MVP we render directly into buf and use
+     * snprintf's tail-pointer trick. */
+    int total = 0;
+    #define APPEND(...) do { \
+        int needed = snprintf(buf ? buf + total : NULL, \
+                              buf ? (bufsize > (size_t)total ? bufsize - total : 0) : 0, \
+                              __VA_ARGS__); \
+        if (needed < 0) return MOONLAB_SCHED_INTERNAL; \
+        total += needed; \
+    } while (0)
+
+    APPEND("{\n");
+    APPEND("  \"schema\": \"moonlab/job/v0.7.0\",\n");
+    APPEND("  \"num_qubits\": %d,\n", j->num_qubits);
+    APPEND("  \"num_shots\": %d,\n", j->num_shots);
+    APPEND("  \"num_workers\": %d,\n", j->num_workers);
+    APPEND("  \"rng_seed\": \"0x%016llx\",\n",
+           (unsigned long long)j->rng_seed);
+    APPEND("  \"gates\": [");
+    for (int g = 0; g < j->num_gates; g++) {
+        const sched_gate_record_t *gr = &j->gates[g];
+        APPEND("\n    { \"type\": %d, \"target\": %d",
+               (int)gr->type, gr->target);
+        if (gr->type == MOONLAB_QGTL_GATE_CNOT ||
+            gr->type == MOONLAB_QGTL_GATE_CY   ||
+            gr->type == MOONLAB_QGTL_GATE_CZ   ||
+            gr->type == MOONLAB_QGTL_GATE_SWAP) {
+            APPEND(", \"control\": %d", gr->control);
+        }
+        if (gr->has_param) {
+            APPEND(", \"theta\": %.17g", gr->theta);
+        }
+        APPEND(" }%s", g + 1 < j->num_gates ? "," : "");
+    }
+    APPEND("\n  ]\n");
+    APPEND("}\n");
+    #undef APPEND
+
+    return total;
+}
