@@ -173,6 +173,7 @@ fn main() {
 #include "{root}/src/algorithms/tensor_network/tdvp.h"
 #include "{root}/src/algorithms/tensor_network/ca_peps.h"
 #include "{root}/src/algorithms/topological/topological.h"
+#include "{root}/src/integration/libirrep_bridge.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -323,6 +324,31 @@ fn main() {
         .allowlist_function("surface_code_clifford_measure_z_syndromes")
         .allowlist_function("surface_code_clifford_measure_x_syndromes")
         .allowlist_function("surface_code_clifford_syndrome_weight")
+        // libirrep bridge (since v0.6.0) -- behind QSIM_ENABLE_LIBIRREP
+        // at the C build level; the symbols always link (no-op stubs
+        // when libirrep isn't found), so the Rust surface is uniform.
+        .allowlist_type("moonlab_libirrep_qec_t")
+        .allowlist_type("moonlab_libirrep_lattice_kind_t")
+        .allowlist_type("moonlab_libirrep_wallpaper_t")
+        .allowlist_function("moonlab_libirrep_available")
+        .allowlist_function("moonlab_libirrep_kagome12_e0")
+        .allowlist_function("moonlab_libirrep_heisenberg_sector_e0")
+        .allowlist_function("moonlab_libirrep_surface_code_new")
+        .allowlist_function("moonlab_libirrep_toric_code_new")
+        .allowlist_function("moonlab_libirrep_color_steane_new")
+        .allowlist_function("moonlab_libirrep_color_hamming_15_7_3_new")
+        .allowlist_function("moonlab_libirrep_bb_72_12_6_new")
+        .allowlist_function("moonlab_libirrep_bb_144_12_12_new")
+        .allowlist_function("moonlab_libirrep_bb_288_12_18_new")
+        .allowlist_function("moonlab_libirrep_hgp_repetition_new")
+        .allowlist_function("moonlab_libirrep_qec_free")
+        .allowlist_function("moonlab_libirrep_qec_n_qubits")
+        .allowlist_function("moonlab_libirrep_qec_n_x_stabs")
+        .allowlist_function("moonlab_libirrep_qec_n_z_stabs")
+        .allowlist_function("moonlab_libirrep_qec_logical_qubits")
+        .allowlist_function("moonlab_libirrep_qec_distance")
+        .allowlist_function("moonlab_libirrep_qec_get_x_check_row")
+        .allowlist_function("moonlab_libirrep_qec_get_z_check_row")
         // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
         .allowlist_type("ca_peps_error_t")
         .allowlist_type("moonlab_ca_peps_t")
