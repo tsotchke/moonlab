@@ -114,6 +114,8 @@ _vqe_solver_free
 _vqe_solve
 _vqe_compute_energy
 _vqe_hartree_to_kcalmol
+_vqe_create_lih_hamiltonian
+_vqe_exact_ground_state_energy
 
 # =============================================================================
 # TIER 3: QAOA
@@ -128,6 +130,10 @@ _qaoa_solver_free
 _qaoa_solve
 _qaoa_compute_expectation
 _qaoa_apply_circuit
+_graph_create
+_graph_free
+_graph_add_edge
+_ising_encode_maxcut
 
 # =============================================================================
 # Tensor Network (MPS) Core
