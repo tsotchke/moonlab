@@ -117,6 +117,12 @@ try:
 except (ImportError, AttributeError, OSError):
     _CAPEPS_AVAILABLE = False
 
+try:
+    from .surface_code import SurfaceCode
+    _SURFACE_CODE_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _SURFACE_CODE_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',
@@ -152,3 +158,5 @@ if _TDVP_AVAILABLE:
     __all__ += ['tdvp']
 if _FUSION_AVAILABLE:
     __all__ += ['FusedCircuit', 'FuseStats']
+if _SURFACE_CODE_AVAILABLE:
+    __all__ += ['SurfaceCode']
