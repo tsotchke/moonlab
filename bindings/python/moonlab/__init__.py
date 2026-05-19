@@ -140,6 +140,12 @@ try:
 except (ImportError, AttributeError, OSError):
     _QGTL_AVAILABLE = False
 
+try:
+    from .scheduler import Job, JobResults, SchedulerError
+    _SCHEDULER_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _SCHEDULER_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',

@@ -85,6 +85,13 @@ set(APPLICATION_SOURCES
     # MOONLAB_LIBIRREP_NOT_BUILT from every factory.  JS callers
     # gate on libirrep.is_available() before constructing codes.
     ${QSIM_ROOT}/src/integration/libirrep_bridge.c
+    # QGTL ingestion + scheduler (v0.6.6 / v0.7.0).  Both ship into the
+    # WASM build as the foundation for browser-runnable cloud-platform
+    # demos.  Scheduler uses OpenMP in-process when available, which
+    # Emscripten compiles as a no-op (single-threaded fan-out).
+    ${QSIM_ROOT}/src/applications/moonlab_qgtl_backend.c
+    ${QSIM_ROOT}/src/applications/decoder_bench.c
+    ${QSIM_ROOT}/src/distributed/scheduler.c
 )
 
 # Source files - Utilities

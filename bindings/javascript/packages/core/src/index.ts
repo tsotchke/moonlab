@@ -201,6 +201,20 @@ export {
 } from './qgtl';
 export type { QgtlExecOptions, QgtlResults } from './qgtl';
 
+// Distributed scheduler MVP (since 0.7.0).  Cloud-platform contract:
+// circuit + shot count + worker fan-out -> merged outcomes.  Same as
+// QGTL the symbols link into the WASM build but tests auto-skip
+// until the next WASM rebuild picks up the v0.7.0 surface.
+export { Job, SchedulerError } from './scheduler';
+export type { JobResults } from './scheduler';
+export {
+  MOONLAB_SCHED_OK,
+  MOONLAB_SCHED_BAD_ARG,
+  MOONLAB_SCHED_OOM,
+  MOONLAB_SCHED_INTERNAL,
+  MOONLAB_SCHED_BUFFER_TOO_SMALL,
+} from './scheduler';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

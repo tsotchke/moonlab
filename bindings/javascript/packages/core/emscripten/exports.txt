@@ -408,6 +408,25 @@ _moonlab_qgtl_circuit_num_qubits
 _moonlab_qgtl_circuit_num_gates
 
 # =============================================================================
+# Distributed scheduler MVP (since v0.7.0 native, JS from v0.7.1).
+#
+# Job + worker fan-out atop the QGTL ingestion surface.  OpenMP transport
+# in-process today; MPI / gRPC / HTTP/2 swap-in v0.7.2+.
+_moonlab_job_create
+_moonlab_job_free
+_moonlab_job_add_gate
+_moonlab_job_set_num_shots
+_moonlab_job_set_num_workers
+_moonlab_job_set_rng_seed
+_moonlab_job_num_qubits
+_moonlab_job_num_gates
+_moonlab_job_num_shots
+_moonlab_job_num_workers
+_moonlab_scheduler_run
+_moonlab_job_results_free
+_moonlab_job_to_json
+
+# =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
 # Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
 # Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
