@@ -7,7 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.12.)
+(No unreleased changes since v0.5.0.)
+
+## [0.5.0] - 2026-05-19
+
+**WASM build resurrection.**  The emscripten WASM build had been
+silently broken for ~12 days (since v0.2.4's `_Static_assert(sizeof
+(size_t) >= 8, ...)` landed in `src/quantum/state.h`).  The shipped
+`dist/moonlab.wasm` artifact was stale relative to every v0.4.x
+binding source addition.  This release refactors the C library to
+make the WASM build green again and to actually contain the
+v0.4.5--v0.4.12 surfaces.
+
+### Added
+
+- `src/applications/moonlab_export_lean.c`: the WASM-safe half of
+  the v0.2.x stable C export surface.  Contains
+  `moonlab_abi_version`, `moonlab_qwz_chern`,
+  `moonlab_dmrg_tfim_energy`, `moonlab_dmrg_heisenberg_energy`,
+  `moonlab_ca_mps_var_d_run` (+ `_v2`),
+  `moonlab_ca_mps_gauge_warmstart`, `moonlab_z2_lgt_1d_build`,
+  `moonlab_z2_lgt_1d_gauss_law`, `moonlab_status_string`.  Depends
+  only on qgt + dmrg + ca_mps + lattice_z2 + status -- no qrng /
+  hardware_entropy.
+- `src/algorithms/quantum_geometry/qgt.c` added to the WASM build,
+  closing the `moonlab_qwz_chern` link gap.
+
+### Changed
+
+- `src/quantum/state.h`: `MOONLAB_MAX_QUBITS` is now adaptive --
+  `30` on wasm32 (size_t = 4 bytes), `32` on native 64-bit
+  hosts.  The previous unconditional
+  `_Static_assert(sizeof(size_t) >= 8)` broke the WASM build
+  on every C source that included this header.  The replacement
+  asserts only the actually-required invariant: `MOONLAB_MAX_QUBITS
+  < sizeof(size_t) * 8`.  `MOONLAB_MAX_STATE_DIM` is now
+  `((size_t)1 << MOONLAB_MAX_QUBITS)` so the shift width matches
+  size_t on the current target.
+- `src/applications/moonlab_qrng_export.c` is now slimmed down to
+  only `moonlab_qrng_bytes` and its qrng-v3 static state.  The
+  other ten functions moved to `moonlab_export_lean.c`; the public
+  ABI declared in `moonlab_export.h` is unchanged.
+- WASM `emscripten/CMakeLists.txt` adds `moonlab_export_lean.c` +
+  `qgt.c` to `APPLICATION_SOURCES`, replacing the stale "deliberately
+  kept out" comment.
+- WASM `emscripten/exports.txt` removes the broken
+  `_moonlab_qrng_bytes` entry (the C definition isn't in the WASM
+  build's source list) and replaces it with a comment pointing
+  callers at `crypto.getRandomValues()` for browser-grade entropy.
+
+### Verified
+
+- WASM build configures + links + emits artifacts cleanly.
+  Fresh `dist/moonlab.wasm` is 486 KB.
+- End-to-end runtime smoke through the rebuilt WASM:
+  - `_moonlab_abi_version` returns `(0, 3, 0)`.
+  - `_moonlab_qwz_chern(m=1, N=16)` returns `-1` (topological
+    phase confirmed against the qgt model).
+  - `_moonlab_mpdo_create(4, 16)` allocates an MPDO with
+    `Tr(rho) = 1.0`; `apply_depolarizing(p=0.1)` produces
+    `<Z_0> = 0.866` on the perturbed state.
+  - `_moonlab_ca_peps_create(2, 2, 4)` + H(0) + CNOT(0, 1) gives
+    `<ZZ I I> = 1.0` on the Bell pair (perfect correlation).
+  - All seven critical symbols across MPDO, CA-PEPS, fusion,
+    Clifford, TDVP, and topology resolve as functions on the
+    Module object.
+- Native C build green; ctest subset across `bell|ca_mps|clifford|
+  core|gpu|long|tn|topology` (68 tests) passes.
+
+Manifests bumped 0.4.12 -> 0.5.0 across the 10 binding
+pyproject.toml / Cargo.toml / package.json files plus VERSION.txt.
 
 ## [0.4.12] - 2026-05-18
 

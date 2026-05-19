@@ -55,21 +55,24 @@ set(BACKEND_SOURCES
 )
 
 # Source files - HEP applications (since 0.2.1).
-# Note: moonlab_qrng_export.c (the v0.2.1 ABI wrappers exposed via
-# moonlab_export.h) deliberately stays out of the WASM build because it
-# pulls in qgt + qrng + hardware_entropy (heavy, much of it
-# host-only).  The WASM TS layer calls the underlying internal C
-# functions directly using their real names; see exports.txt and
-# bindings/javascript/packages/core/src/ca-mps.ts.
+# Note: moonlab_qrng_export.c (the qrng-backed half of the
+# v0.2.1 stable ABI) deliberately stays out of the WASM build
+# because it pulls in qrng + hardware_entropy (heavy, much of
+# it host-only).  The lean half -- abi_version, qwz_chern,
+# dmrg_*, ca_mps_var_d_*, ca_mps_gauge_warmstart, z2_lgt_1d_*,
+# status_string -- lives in moonlab_export_lean.c and IS
+# included below; it pulls in only qgt + dmrg + ca_mps + status,
+# all of which are already in the WASM build (since 0.5.0).
 #
-# moonlab_tdvp_export.c (v0.4.3 adaptive-bond TDVP wrapper) has lean
-# deps -- tn_state + dmrg + tdvp, all of which are already in the WASM
-# build -- so we include it and the TS layer in src/tdvp.ts calls
-# through the primitive-arg ABI rather than marshalling
-# `tdvp_config_t` byte-by-byte.
+# moonlab_tdvp_export.c (v0.4.3 adaptive-bond TDVP wrapper) has
+# lean deps too: tn_state + dmrg + tdvp.
 set(APPLICATION_SOURCES
     ${QSIM_ROOT}/src/applications/hep/lattice_z2_1d.c
+    ${QSIM_ROOT}/src/applications/moonlab_export_lean.c
     ${QSIM_ROOT}/src/applications/moonlab_tdvp_export.c
+    # qgt.c powers moonlab_qwz_chern; topology binding TS layer
+    # also needs the lower-level qgt_* surface (since 0.5.0).
+    ${QSIM_ROOT}/src/algorithms/quantum_geometry/qgt.c
 )
 
 # Source files - Utilities
