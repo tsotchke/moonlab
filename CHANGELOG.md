@@ -7,7 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.5.)
+(No unreleased changes since v0.6.6.)
+
+## [0.6.6] - 2026-05-19
+
+Strategic move: the **moonlab-side ingestion contract** QGTL plugs
+into when routing circuits through moonlab's simulator backend
+before paying for IBM Quantum / Rigetti / IonQ / D-Wave shots.
+moonlab becomes the cross-validation engine in the four-library
+trio (moonlab + libirrep + SbNN + QGTL).
+
+### Added
+
+- `src/applications/moonlab_qgtl_backend.{c,h}`: four-call ABI for
+  circuit ingestion.
+  - `moonlab_qgtl_circuit_create(num_qubits)` -> opaque handle
+  - `moonlab_qgtl_add_gate(c, type, target, control, params)`
+  - `moonlab_qgtl_execute(c, opts, results)`
+  - `moonlab_qgtl_circuit_free(c)` + `moonlab_qgtl_results_free(r)`
+  - Plus `_num_qubits` / `_num_gates` introspection getters.
+- `moonlab_qgtl_gate_t` enum numerically matching QGTL's
+  `quantum_geometric/core/quantum_base_types.h::gate_type_t`
+  (I, X, Y, Z, H, S, T, RX, RY, RZ, CNOT, CY, CZ, SWAP).  QGTL's
+  backend wrapper casts directly:
+  `(moonlab_qgtl_gate_t)qgtl_gate.type` -- zero translation cost.
+- Execute supports either probability-vector dump or shot sampling
+  via xorshift64 PRNG (deterministic seed for reproducibility).
+
+### Verified
+
+`test_qgtl_backend` exercises five canonical circuits:
+
+| Circuit                | Gate sequence            | Assertion                  |
+|------------------------|--------------------------|----------------------------|
+| Bell pair              | H_0 + CNOT_01            | P(\|00>) = P(\|11>) = 0.5  |
+| 3-qubit GHZ            | H + 2 CNOTs              | P(\|000>) = P(\|111>) = 0.5 |
+| Shot sampling          | Bell + 1024 shots        | n00 = 485, n11 = 539, n_other = 0 |
+| Grover N=2 (marked 11) | H H CZ + diffusion       | P(\|11>) = 1.000000        |
+| RY(pi/2) on \|0>       | single rotation          | P(\|0>) = P(\|1>) = 0.5    |
+
+Plus error paths: num_qubits=0 rejected, num_qubits=33 rejected,
+gate-on-out-of-range qubit rejected, CNOT with control==target
+rejected, RX with NULL params rejected, `circuit_free(NULL)` safe.
+
+### How QGTL plugs in
+
+QGTL's `~/Desktop/quantum_geometric_tensor` adds a
+`src/quantum_geometric/hardware/moonlab_backend.c` that:
+
+1. Includes `<moonlab_qgtl_backend.h>` from libquantumsim's
+   install root.
+2. For each `QuantumCircuit` -> `quantum_circuit_to_moonlab`:
+   - `moonlab_qgtl_circuit_create(n)`
+   - For each gate `(type, target, control, params)`:
+     `moonlab_qgtl_add_gate(c, (moonlab_qgtl_gate_t)type, ...)`
+3. `moonlab_qgtl_execute(c, &opts, &results)` returns the
+   probability distribution / shot counts.
+4. QGTL maps results back into its own `ExecutionResult` and
+   compares against the IBM / Rigetti / IonQ shot histogram for
+   cross-validation.
+
+No moonlab build option needed; the ABI is unconditional and
+MOONLAB_API-tagged.
+
+### Next phases
+
+- v0.6.7: SbNN decoder bench harness (neural decoder vs Stim
+  pymatching vs libirrep `single_shot.h` on shared syndromes).
+- v0.6.8: Python / Rust / JS bindings for the QGTL ingestion
+  surface so non-C callers (Jupyter, browser apps) can drive
+  moonlab as a backend.
+- v0.7.0: distributed scheduler atop `src/distributed/` --
+  cloud platform foundation.
 
 ## [0.6.5] - 2026-05-19
 
