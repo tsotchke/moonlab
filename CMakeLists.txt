@@ -877,6 +877,18 @@ endif()
 if(QSIM_HAS_LIBIRREP)
     target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_LIBIRREP=1)
     target_link_libraries(quantumsim PRIVATE ${QSIM_LIBIRREP_TARGET})
+    # Bake the libirrep library path into libquantumsim's runtime-rpath
+    # so test executables don't need DYLD_LIBRARY_PATH at run time.
+    # Only adds an entry when QSIM_LIBIRREP_ROOT pointed at a source
+    # tree (the find_package + pkg-config paths handle this through
+    # the imported target).
+    if(QSIM_LIBIRREP_ROOT)
+        set(_libirrep_libdir "${QSIM_LIBIRREP_ROOT}/build/lib")
+        if(EXISTS "${_libirrep_libdir}")
+            set_property(TARGET quantumsim APPEND PROPERTY
+                BUILD_RPATH "${_libirrep_libdir}")
+        endif()
+    endif()
     message(STATUS "libirrep bridge: ON (target=${QSIM_LIBIRREP_TARGET})")
 endif()
 

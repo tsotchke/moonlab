@@ -733,6 +733,34 @@
         )
     endif()
 
+    # libirrep sector-ED bridge (since v0.6.1).  Validates the
+    # space-group + rep-table + Lanczos-on-orbits pipeline at
+    # N = 12, 18, 24 kagome (Sz = 0 sector).  When libirrep is OFF
+    # the test gracefully exits 77 (CTest "skip") so the CI matrix
+    # without libirrep stays green.
+    add_executable(test_libirrep_sector_ed tests/unit/test_libirrep_sector_ed.c)
+    target_link_libraries(test_libirrep_sector_ed PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_libirrep_sector_ed COMMAND test_libirrep_sector_ed)
+    set_tests_properties(unit_libirrep_sector_ed PROPERTIES
+        LABELS "long;libirrep"
+        TIMEOUT 600
+        SKIP_RETURN_CODE 77
+    )
+
+    # libirrep CSS-code bridge (since v0.6.1).  Surface code d = 3, 5
+    # built via irrep_surface_init + irrep_surface_build, plumbed
+    # through the moonlab_libirrep_qec_t opaque handle.  Foundation
+    # for the v0.6.2 expansion to toric / color / BB / hypergraph
+    # families behind the same surface.
+    add_executable(test_libirrep_css tests/unit/test_libirrep_css.c)
+    target_link_libraries(test_libirrep_css PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_libirrep_css COMMAND test_libirrep_css)
+    set_tests_properties(unit_libirrep_css PROPERTIES
+        LABELS "libirrep"
+        TIMEOUT 120
+        SKIP_RETURN_CODE 77
+    )
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
