@@ -155,6 +155,7 @@ fn main() {
 #include "{root}/src/quantum/noise.h"
 #include "{root}/src/quantum/noise_mpdo.h"
 #include "{root}/src/algorithms/grover.h"
+#include "{root}/src/algorithms/bell_tests.h"
 #include "{root}/src/algorithms/vqe.h"
 #include "{root}/src/algorithms/qaoa.h"
 #include "{root}/src/utils/quantum_entropy.h"
@@ -294,6 +295,8 @@ fn main() {
         .allowlist_type("quantum_entropy_fn")
         .allowlist_function("quantum_entropy_init")
         .allowlist_function("quantum_entropy_get_bytes")
+        .allowlist_function("quantum_entropy_ctx_create_hw")
+        .allowlist_function("quantum_entropy_ctx_destroy")
         // Entanglement
         .allowlist_function("entanglement_entropy_bipartition")
         .allowlist_function("entanglement_concurrence_2qubit")
@@ -548,6 +551,21 @@ fn main() {
         .allowlist_function("moonlab_z2_lgt_1d_build")
         .allowlist_function("moonlab_z2_lgt_1d_gauss_law")
         .allowlist_function("moonlab_status_string")
+        // Bell tests + CHSH/Mermin/Mermin-Klyshko variants
+        // (since 0.2.0; safe Rust wrapper from 0.4.7).
+        .allowlist_type("bell_state_type_t")
+        .allowlist_type("bell_test_result_t")
+        .allowlist_type("bell_measurement_settings_t")
+        .allowlist_function("create_bell_state")
+        .allowlist_function("create_bell_state_phi_plus")
+        .allowlist_function("create_bell_state_phi_minus")
+        .allowlist_function("create_bell_state_psi_plus")
+        .allowlist_function("create_bell_state_psi_minus")
+        .allowlist_function("bell_get_optimal_settings")
+        .allowlist_function("calculate_chsh_parameter")
+        .allowlist_function("bell_test_chsh")
+        .allowlist_function("bell_test_mermin_ghz")
+        .allowlist_function("bell_test_mermin_klyshko")
         // Layout settings
         .derive_debug(true)
         .derive_default(true)

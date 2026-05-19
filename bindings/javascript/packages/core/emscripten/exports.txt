@@ -323,3 +323,36 @@ _clifford_cz
 _clifford_swap
 _clifford_measure
 _clifford_sample_all
+
+# =============================================================================
+# Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
+# Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
+# Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
+# =============================================================================
+_fuse_circuit_create
+_fuse_circuit_free
+_fuse_circuit_len
+_fuse_circuit_num_qubits
+_fuse_append_h
+_fuse_append_x
+_fuse_append_y
+_fuse_append_z
+_fuse_append_s
+_fuse_append_sdg
+_fuse_append_t
+_fuse_append_tdg
+_fuse_append_phase
+_fuse_append_rx
+_fuse_append_ry
+_fuse_append_rz
+_fuse_append_u3
+_fuse_append_cnot
+_fuse_append_cz
+_fuse_append_cy
+_fuse_append_swap
+_fuse_append_cphase
+_fuse_append_crx
+_fuse_append_cry
+_fuse_append_crz
+_fuse_compile
+_fuse_execute
