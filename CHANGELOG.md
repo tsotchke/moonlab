@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.12.)
+(No unreleased changes since v0.5.13.)
+
+## [0.5.13] - 2026-05-19
+
+Python surface-code binding: parity with v0.5.12 Rust wrapper.
+Both bindings now share the same `surface_code_clifford_*` C
+surface; the Rust wrapper covers `cargo test`, the Python one
+extends the pytest suite to 203 tests.
+
+### Added
+
+- `bindings/python/moonlab/surface_code.py` (~150 LOC):
+  `SurfaceCode` class with `distance` / `num_data_qubits` /
+  `num_ancillas_per_sector` properties, `data_index(row, col)`
+  lattice mapping, `apply_error(qubit, type)` for Pauli error
+  injection, `measure_z_syndromes` / `measure_x_syndromes` for
+  ancilla-mediated stabiliser measurement, `syndrome_weight()`
+  diagnostic.  RAII via `__slots__` + `__del__`.
+- `bindings/python/tests/test_surface_code.py`: 10 pytest cases
+  mirror the Rust unit tests -- distance-3 layout, even / d<3
+  rejected, Z-stabiliser idempotence on `|0...0>`,
+  X error -> Z syndromes, Z error -> X syndromes, unknown error
+  type rejected, lattice-coord + qubit-range bounds.
+- `bindings/python/moonlab/__init__.py` registers `SurfaceCode`
+  with an `_SURFACE_CODE_AVAILABLE` import guard so consumers
+  without the surface-code symbols (older builds) don't crash on
+  `import moonlab`.
+
+### Verified
+
+- `pytest bindings/python/tests/`: 203 tests pass (was 193 in
+  v0.5.4; surface_code adds 10).
+
+Manifests bumped 0.5.12 -> 0.5.13.
 
 ## [0.5.12] - 2026-05-19
 
