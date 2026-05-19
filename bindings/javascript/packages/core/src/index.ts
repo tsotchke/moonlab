@@ -151,6 +151,14 @@ export type { BellTestResult } from './bell';
 export { groverSearch, groverOptimalIterations } from './grover';
 export type { GroverResult } from './grover';
 
+// Variational Quantum Eigensolver (since 0.5.5).
+export { PauliHamiltonian, PauliHamiltonianBuilder, VqeSolver, OptimizerType } from './vqe';
+export type { VqeResult } from './vqe';
+
+// Quantum Approximate Optimization Algorithm (since 0.5.5).
+export { Graph, IsingModel, QaoaSolver } from './qaoa';
+export type { QaoaResult } from './qaoa';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

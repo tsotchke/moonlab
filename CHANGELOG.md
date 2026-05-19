@@ -7,7 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.4.)
+(No unreleased changes since v0.5.5.)
+
+## [0.5.5] - 2026-05-19
+
+Two more algorithm classes -- VQE and QAOA -- now have first-class
+JS wrappers, completing the algorithm-tier parity push the v0.5.4
+entropy resolution made possible.  Every algorithm class with a
+Python class now has a TS class too.
+
+### Added
+
+- `bindings/javascript/packages/core/src/vqe.ts` (350 LOC):
+  `PauliHamiltonian` with `h2(R)` / `lih(R)` / fluent builder for
+  custom Pauli sums + `exactGroundStateEnergy()` reference value;
+  `OptimizerType` enum (Cobyla / Lbfgs / Adam / GradientDescent);
+  `VqeSolver` that bundles (Hamiltonian, ansatz, optimizer,
+  entropy) and tears them down in drop order on `dispose()`.
+  `solve()` returns a `VqeResult` with the ground-state energy
+  (Hartree + kcal/mol), iteration count, gradient norm, converged
+  flag, and `optimalParameters` copied out of WASM memory into an
+  owned `Float64Array`.  `computeEnergy(params)` evaluates the
+  objective at any parameter vector.
+- `bindings/javascript/packages/core/src/qaoa.ts` (300 LOC):
+  `Graph.create(numVertices, edges)`; `IsingModel.create(n)` +
+  `IsingModel.fromMaxcut(graph)` + `setCoupling` / `setField` /
+  `evaluate(bitstring)`; `QaoaSolver.create(ising, numLayers)`
+  with `solve()` returning a `QaoaResult` (best bitstring, energy,
+  approximation ratio, gamma/beta angle vectors) and
+  `computeExpectation(gamma, beta)` for landscape probes.  All
+  pointer-returning fields are decoded into owned `Float64Array`s
+  / `bigint` so the C-side memory can be freed safely on
+  `dispose()`.
+- 5 `vqe.integration.test.ts` cases: H2 / LiH layout, H2 exact
+  ground state in [-1.3, -1.0] Ha, custom `H = 0.5 Z` -> E = -0.5,
+  Adam-driven VQE solve produces a finite bounded energy,
+  `computeEnergy` at arbitrary parameters returns finite.
+- 7 `qaoa.integration.test.ts` cases: triangle graph builds, bad
+  edge rejected, MaxCut energy ordering (all-zeros > one-flipped),
+  p=1 QAOA on triangle, `computeExpectation` at fixed angles,
+  numLayers validation.
+
+### Changed
+
+- WASM ``emscripten/exports.txt`` adds 6 symbols:
+  `_vqe_create_lih_hamiltonian`, `_vqe_exact_ground_state_energy`,
+  `_graph_create`, `_graph_free`, `_graph_add_edge`,
+  `_ising_encode_maxcut`.
+- `bindings/javascript/packages/core/src/index.ts` re-exports
+  `PauliHamiltonian` / `VqeSolver` / `OptimizerType` /
+  `VqeResult` and `Graph` / `IsingModel` / `QaoaSolver` /
+  `QaoaResult`.
+
+### Verified
+
+- C-side probe under emcc 4.0.22 pins
+  `sizeof(vqe_result_t) = sizeof(qaoa_result_t) = 64 bytes` and
+  every field offset used by the TS heap-readers.
+- Full integration suite: 12 files / 129 passed in 1.47 s (up
+  from 117 in v0.5.4; VQE + QAOA add 12).
+
+Manifests bumped 0.5.4 -> 0.5.5.
 
 ## [0.5.4] - 2026-05-19
 
