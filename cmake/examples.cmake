@@ -18,6 +18,12 @@
         # dist_hadamard + dist_cphase + dist_swap across MPI ranks.
         add_executable(large_state_qft examples/distributed/large_state_qft.c)
         target_link_libraries(large_state_qft PRIVATE quantumsim MPI::MPI_C)
+
+        # Sharded random RZ+CNOT circuit (since v0.8.2) -- depth
+        # layers of per-qubit RZ + alternating-parity CNOT chain.
+        # Exercises dist_rz + dist_cnot under cross-rank traffic.
+        add_executable(large_state_random_circuit examples/distributed/large_state_random_circuit.c)
+        target_link_libraries(large_state_random_circuit PRIVATE quantumsim MPI::MPI_C)
     endif()
 
     # Grover examples
