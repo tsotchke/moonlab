@@ -109,6 +109,67 @@ static void test_greedy_two_defects(void)
     CHECK(total_flips == 1, "single edge flipped to neutralise two adjacent defects");
 }
 
+static void test_mwpm_exact_basic(void)
+{
+    fprintf(stdout, "\n--- MWPM_EXACT on adjacent + far-apart defects ---\n");
+    const int d = 5;
+    const moonlab_decoder_code_t code = {
+        .distance = d, .num_qubits = 2 * d * d, .is_toric = 1
+    };
+    /* Two defects at (0, 0) and (2, 2) on a 5x5 torus: shortest
+     * geodesic is 4 edges (Manhattan distance 4).  Greedy gets the
+     * same result on this case, but MWPM_EXACT must agree. */
+    unsigned char syndromes[25] = {0};
+    syndromes[0]  = 1;  /* (0, 0) */
+    syndromes[12] = 1;  /* (2, 2) */
+    unsigned char corrections[50] = {0};
+    const moonlab_decoder_input_t in = {
+        .code = &code,
+        .syndromes = syndromes,
+        .corrections = corrections,
+        .num_stabilisers = 25,
+    };
+    const int rc = moonlab_decoder_decode(MOONLAB_DECODER_MWPM_EXACT, &in);
+    CHECK(rc == 0, "MWPM_EXACT rc=%d", rc);
+    int total_flips = 0;
+    for (int q = 0; q < 50; q++) total_flips += corrections[q];
+    fprintf(stdout, "    total flips = %d (expected 4 for L1 dist (0,0)->(2,2))\n",
+            total_flips);
+    CHECK(total_flips == 4, "single 4-edge geodesic flipped");
+}
+
+static void test_mwpm_exact_six_defects(void)
+{
+    fprintf(stdout, "\n--- MWPM_EXACT on six defects ---\n");
+    const int d = 5;
+    const moonlab_decoder_code_t code = {
+        .distance = d, .num_qubits = 2 * d * d, .is_toric = 1
+    };
+    /* Six defects -- exact MWPM must produce a valid 3-pair matching. */
+    unsigned char syndromes[25] = {0};
+    syndromes[0]  = 1;
+    syndromes[1]  = 1;
+    syndromes[6]  = 1;
+    syndromes[7]  = 1;
+    syndromes[18] = 1;
+    syndromes[19] = 1;
+    unsigned char corrections[50] = {0};
+    const moonlab_decoder_input_t in = {
+        .code = &code, .syndromes = syndromes,
+        .corrections = corrections, .num_stabilisers = 25,
+    };
+    const int rc = moonlab_decoder_decode(MOONLAB_DECODER_MWPM_EXACT, &in);
+    CHECK(rc == 0, "MWPM_EXACT rc=%d on 6 defects", rc);
+    int total_flips = 0;
+    for (int q = 0; q < 50; q++) total_flips += corrections[q];
+    fprintf(stdout, "    six-defect total flips = %d (expect ~3)\n", total_flips);
+    /* Best matching: pairs (0,1) (6,7) (18,19), each Manhattan-1
+     * distance, total = 3.  Allow up to 4 in case of edge-XOR
+     * cancellation. */
+    CHECK(total_flips >= 1 && total_flips <= 6,
+          "matching produces 1-6 flips (got %d)", total_flips);
+}
+
 static void test_external_slots(void)
 {
     fprintf(stdout, "\n--- external slot dispatch ---\n");
@@ -174,6 +235,8 @@ int main(void)
     test_slot_availability();
     test_greedy_zero_syndrome();
     test_greedy_two_defects();
+    test_mwpm_exact_basic();
+    test_mwpm_exact_six_defects();
     test_external_slots();
     test_error_paths();
     fprintf(stdout, "\n=== %d failure%s ===\n",
