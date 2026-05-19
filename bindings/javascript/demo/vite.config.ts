@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { copyFileSync, existsSync, mkdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +16,7 @@ function copyWasmPlugin() {
       const distJs = resolve(__dirname, '../packages/core/dist/moonlab.js');
       const buildWasm = resolve(__dirname, '../packages/core/emscripten/build/moonlab.wasm');
       const buildJs = resolve(__dirname, '../packages/core/emscripten/build/moonlab.js');
+      const postprocessJs = resolve(__dirname, '../packages/core/scripts/postprocess-moonlab-factory.mjs');
       const wasmSrc = existsSync(distWasm) ? distWasm : buildWasm;
       const jsSrc = existsSync(distJs) ? distJs : buildJs;
       const publicDir = resolve(__dirname, 'public');
@@ -27,7 +29,9 @@ function copyWasmPlugin() {
         copyFileSync(wasmSrc, resolve(publicDir, 'moonlab.wasm'));
       }
       if (existsSync(jsSrc)) {
-        copyFileSync(jsSrc, resolve(publicDir, 'moonlab.js'));
+        execFileSync('node', [postprocessJs, jsSrc, resolve(publicDir, 'moonlab.js')], {
+          stdio: 'inherit',
+        });
       }
     },
   };

@@ -200,7 +200,7 @@ set_target_properties(moonlab PROPERTIES
 # Copy output to dist
 add_custom_command(TARGET moonlab POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/../dist
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:moonlab> ${CMAKE_SOURCE_DIR}/../dist/
+    COMMAND node ${CMAKE_SOURCE_DIR}/../scripts/postprocess-moonlab-factory.mjs $<TARGET_FILE:moonlab> ${CMAKE_SOURCE_DIR}/../dist/moonlab.js
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/moonlab.wasm ${CMAKE_SOURCE_DIR}/../dist/
     COMMENT "Copying WASM files to dist/"
 )

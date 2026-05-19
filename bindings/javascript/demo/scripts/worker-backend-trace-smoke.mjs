@@ -92,6 +92,7 @@ globalThis.__fullTrace = lastGpuBackendTrace;
 };
 
 assertMoonlabModuleProbeSurface(resolve(demoRoot, 'public/moonlab.js'));
+assertMoonlabModuleProbeSurface(resolve(demoRoot, '../packages/core/dist/moonlab.js'));
 assertMoonlabModuleProbeSurface(resolve(repoRoot, 'docs/moonlab.js'));
 assertWorkerGpuGateTrace(resolve(demoRoot, 'public/moonlab-worker.js'));
 assertWorkerGpuGateTrace(resolve(repoRoot, 'docs/moonlab-worker.js'));
