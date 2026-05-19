@@ -81,6 +81,17 @@ set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/matrix_math.c
     ${QSIM_ROOT}/src/utils/config.c
     ${QSIM_ROOT}/src/utils/moonlab_status.c
+    # WASM-only quantum-entropy stack (since 0.5.4): the native
+    # hardware_entropy.c pulls in RDRAND / /dev/urandom / jitter
+    # paths that don't make sense on wasm32.  hardware_entropy_wasm.c
+    # provides the same `entropy_init` / `entropy_get_bytes` /
+    # `entropy_free` surface backed by getentropy(3) (which
+    # emscripten polyfills via crypto.getRandomValues).  Plus the
+    # non-inline `quantum_entropy_ctx_create_hw` / `_destroy`
+    # helpers that VQE / QAOA / Bell / Grover ctypes / FFI consumers
+    # call through.
+    ${QSIM_ROOT}/src/compat/hardware_entropy_wasm.c
+    ${QSIM_ROOT}/src/utils/quantum_entropy.c
 )
 
 # Source files - Optimization (SIMD operations with scalar fallbacks for WASM)

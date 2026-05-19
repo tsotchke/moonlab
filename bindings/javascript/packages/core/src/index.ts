@@ -143,6 +143,14 @@ export { Mpdo, PauliCode } from './mpdo';
 // CA-PEPS 2D Clifford-assisted simulator (since 0.4.12).
 export { CaPeps } from './ca-peps';
 
+// Bell inequality + Mermin GHZ/Klyshko tests (since 0.5.4).
+export { BellState, createBellState, chshTest, merminGhzTest, merminKlyshkoTest } from './bell';
+export type { BellTestResult } from './bell';
+
+// Grover's quantum search (since 0.5.4).
+export { groverSearch, groverOptimalIterations } from './grover';
+export type { GroverResult } from './grover';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,
