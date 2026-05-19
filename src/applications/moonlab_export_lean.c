@@ -228,6 +228,100 @@ int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
 }
 
 /* ================================================================== */
+/*  Topology one-shot convenience wrappers (since 0.5.6).              */
+/*                                                                     */
+/*  Each function bundles `qgt_model_*` + invariant calculation +     */
+/*  `qgt_free_*` into a single call returning the integer invariant.  */
+/*  Designed for binding consumers that don't want to marshal opaque  */
+/*  struct pointers across the FFI boundary -- notably the JS / WASM  */
+/*  TS layer.  All return `INT_MIN` on allocation / argument error.   */
+/* ================================================================== */
+
+int moonlab_ssh_winding(double t1, double t2, size_t N) {
+    if (N < 4) return INT_MIN;
+    qgt_system_1d_t* sys = qgt_model_ssh(t1, t2);
+    if (!sys) return INT_MIN;
+    double raw = 0.0;
+    int w = qgt_winding_1d(sys, N, &raw);
+    qgt_free_1d(sys);
+    return w;
+}
+
+int moonlab_kitaev_chain_z2(double t, double mu, double delta) {
+    qgt_system_1d_t* sys = qgt_model_kitaev_chain(t, mu, delta);
+    if (!sys) return INT_MIN;
+    int z2 = -1;
+    int rc = qgt_z2_invariant_1d_bdg(sys, &z2);
+    qgt_free_1d(sys);
+    return (rc == 0) ? z2 : INT_MIN;
+}
+
+int moonlab_chern_qwz_proj(double m, size_t N) {
+    if (N < 4) return INT_MIN;
+    qgt_system_t* sys = qgt_model_qwz(m);
+    if (!sys) return INT_MIN;
+    qgt_berry_grid_t g = {0};
+    int rc = qgt_berry_grid_proj(sys, N, &g);
+    if (rc != 0) { qgt_free(sys); return INT_MIN; }
+    int c = (int)lround(g.chern);
+    qgt_berry_grid_free(&g);
+    qgt_free(sys);
+    return c;
+}
+
+int moonlab_chern_qwz_pt(double m, size_t N) {
+    if (N < 4) return INT_MIN;
+    qgt_system_t* sys = qgt_model_qwz(m);
+    if (!sys) return INT_MIN;
+    qgt_berry_grid_t g = {0};
+    int rc = qgt_berry_grid_pt(sys, N, &g);
+    if (rc != 0) { qgt_free(sys); return INT_MIN; }
+    int c = (int)lround(g.chern);
+    qgt_berry_grid_free(&g);
+    qgt_free(sys);
+    return c;
+}
+
+int moonlab_kane_mele_z2(double t, double lambda_so,
+                          double lambda_r, double lambda_v,
+                          size_t N) {
+    if (N < 8 || (N & 1u)) return INT_MIN;
+    qgt_system_n_t* sys = qgt_model_kane_mele(t, lambda_so,
+                                                lambda_r, lambda_v);
+    if (!sys) return INT_MIN;
+    int z2 = -1;
+    int rc = qgt_z2_invariant(sys, N, &z2);
+    qgt_free_nband(sys);
+    return (rc == 0) ? z2 : INT_MIN;
+}
+
+int moonlab_bhz_z2(double A, double B, double M, size_t N) {
+    if (N < 8 || (N & 1u)) return INT_MIN;
+    qgt_system_n_t* sys = qgt_model_bhz(A, B, M);
+    if (!sys) return INT_MIN;
+    int z2 = -1;
+    int rc = qgt_z2_invariant(sys, N, &z2);
+    qgt_free_nband(sys);
+    return (rc == 0) ? z2 : INT_MIN;
+}
+
+int moonlab_hofstadter_chern(double t, size_t p, size_t q,
+                              size_t n_occupied, size_t N) {
+    if (N < 4 || q < 2 || n_occupied < 1 || n_occupied >= q) {
+        return INT_MIN;
+    }
+    qgt_system_n_t* sys = qgt_model_hofstadter(t, p, q, n_occupied);
+    if (!sys) return INT_MIN;
+    qgt_berry_grid_t g = {0};
+    int rc = qgt_berry_grid_nband(sys, N, &g);
+    if (rc != 0) { qgt_free_nband(sys); return INT_MIN; }
+    int c = (int)lround(g.chern);
+    qgt_berry_grid_free(&g);
+    qgt_free_nband(sys);
+    return c;
+}
+
+/* ================================================================== */
 /*  Diagnostic stringifier (since 0.2.1).                              */
 /* ================================================================== */
 

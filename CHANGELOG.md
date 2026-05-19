@@ -7,7 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.5.)
+(No unreleased changes since v0.5.6.)
+
+## [0.5.6] - 2026-05-19
+
+JS-side topology parity.  Python ``moonlab.topology`` and Rust
+``moonlab::topology`` have had Chern / winding / Z_2 invariants
+since v0.3.0; this release ships the TS analog backed by seven new
+single-call C convenience wrappers.  No opaque struct pointer
+crosses the FFI boundary.
+
+### Added
+
+- `src/applications/moonlab_export_lean.c` gains 7 topology
+  helpers: `moonlab_chern_qwz_proj(m, N)`,
+  `moonlab_chern_qwz_pt(m, N)`,
+  `moonlab_ssh_winding(t1, t2, N)`,
+  `moonlab_kitaev_chain_z2(t, mu, delta)`,
+  `moonlab_kane_mele_z2(t, lambdaSo, lambdaR, lambdaV, N)`,
+  `moonlab_bhz_z2(A, B, M, N)`, and
+  `moonlab_hofstadter_chern(t, p, q, n_occupied, N)`.  Each one
+  builds the model, computes the invariant, frees the system in a
+  single call.  All return ``INT_MIN`` on bad arguments / alloc
+  failure.
+- `bindings/javascript/packages/core/src/topology.ts` (~150 LOC):
+  ``qwzChern``, ``chernQwzProj``, ``chernQwzParallelTransport``
+  (cross-validation), ``sshWinding``, ``kitaevChainZ2``,
+  ``kaneMeleZ2``, ``bhzZ2``, ``hofstadterChern``.  Each surface
+  takes a single options object with sensible defaults
+  (`n = 16`, `t = 1`, etc.); the TS layer checks for the
+  ``INT_MIN`` sentinel and throws.
+- 12 ``topology.integration.test.ts`` cases pinning physical
+  expectations: QWZ topological at `|m| < 2`, three integrators
+  agree at a phase point, SSH topological/trivial windows, Kitaev
+  Z2 across the gap closing, Kane-Mele QSH phase, BHZ topological
+  window, Hofstadter lowest band Chern = +1 at phi = 1/3.
+
+### Changed
+
+- WASM ``emscripten/exports.txt`` adds 7 new `_moonlab_*` topology
+  symbols.
+- `bindings/javascript/packages/core/src/index.ts` re-exports the
+  eight topology helpers.
+
+### Verified
+
+- WASM rebuild succeeds with new C wrappers.
+- End-to-end through Node: every physical expectation lands
+  (QWZ proj/pt/qwz_chern all return -1 at m=1; SSH topological at
+  t2>t1; Kitaev Z2=1 inside mu<2t window; etc.).
+- Full integration suite: 13 files / 141 passed in 1.06 s (up
+  from 129 in v0.5.5; topology adds 12).
+
+Manifests bumped 0.5.5 -> 0.5.6.
 
 ## [0.5.5] - 2026-05-19
 
