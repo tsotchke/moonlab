@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.8.)
+(No unreleased changes since v0.5.9.)
+
+## [0.5.9] - 2026-05-19
+
+Kane-Mele Rashba: turn a silent-correctness bug into an explicit
+rejection.
+
+### Fixed
+
+- `src/algorithms/quantum_geometry/qgt.c` `qgt_model_kane_mele`
+  now returns `NULL` immediately when `lambda_r != 0.0`.  The
+  S_z-conserving Z_2 integrator that follows
+  (`qgt_z2_invariant`) silently ignored Rashba coupling under the
+  old code path -- callers with a non-zero `lambda_r` got the
+  spin-conserving answer, which is the wrong physics whenever
+  Rashba actually mixes the spin sectors.  Implementing the full
+  Pfaffian-based Z_2 to support arbitrary Rashba is still a
+  v0.3.1 milestone; until then, refusing to run is strictly
+  safer than returning a wrong number.
+
+### Documented
+
+- `src/algorithms/quantum_geometry/qgt.h` Kane-Mele docstring now
+  states the constraint explicitly: `lambda_r` must be `0.0`.
+- `bindings/rust/moonlab/src/topology.rs` `kane_mele_z2`
+  docstring mirrors the same constraint.
+
+### Added
+
+- `kane_mele_rejects_nonzero_rashba` Rust test pins the new
+  behaviour against regression.
+
+Manifests bumped 0.5.8 -> 0.5.9.
 
 ## [0.5.8] - 2026-05-19
 

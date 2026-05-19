@@ -143,6 +143,12 @@ pub fn chern_qwz_parallel_transport(m: f64, n: usize) -> Result<i32> {
 /// `|lambda_v| < 3 sqrt(3) |lambda_so|` and `0` (trivial) otherwise.
 /// The S_z-conserving regime is selected by `lambda_r = 0`.
 ///
+/// **`lambda_r` must be `0.0`** in the current implementation.  The
+/// underlying C-side `qgt_model_kane_mele` returns NULL for non-zero
+/// Rashba coupling (the S_z-conserving Z_2 integrator gives the wrong
+/// answer when Rashba mixes the spin sectors).  Full Rashba support
+/// via the Pfaffian formula is a v0.3.1 milestone.
+///
 /// `n` is the Brillouin-zone grid side and must be even and `>= 8`.
 pub fn kane_mele_z2(
     t: f64,
@@ -430,6 +436,19 @@ mod tests {
         assert_eq!(
             kane_mele_z2(1.0, 0.06, 0.0, 0.40, 24).unwrap(),
             0
+        );
+    }
+
+    #[test]
+    fn kane_mele_rejects_nonzero_rashba() {
+        // Non-zero Rashba is not supported by the S_z-conserving Z_2
+        // integrator -- the C side returns NULL rather than silently
+        // emitting the wrong (S_z = 0) answer.  v0.5.9 hardens this
+        // path; older builds silently dropped lambda_r.
+        let r = kane_mele_z2(1.0, 0.06, 0.05, 0.10, 24);
+        assert!(
+            r.is_err(),
+            "expected lambda_r != 0 to be rejected, got {:?}", r,
         );
     }
 
