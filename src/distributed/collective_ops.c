@@ -893,7 +893,7 @@ collective_error_t collective_expectation_pauli(const partitioned_state_t* state
             for (uint32_t q = 0; q < state->num_qubits; q++) {
                 char op = pauli_string[state->num_qubits - 1 - q];
                 int bit_i = (global_i >> q) & 1;
-                int bit_j = (global_j >> q) & 1;
+                (void)((global_j >> q) & 1); /* bit_j reserved for future Pauli wiring */
 
                 if (op == 'Z' || op == 'z') {
                     // Z|0⟩ = |0⟩, Z|1⟩ = -|1⟩

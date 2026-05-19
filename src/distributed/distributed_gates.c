@@ -116,23 +116,22 @@ static inline int get_bit(uint64_t value, uint32_t bit) {
     return (value >> bit) & 1;
 }
 
-/**
- * @brief Set bit at position
- */
+/* Bit-manipulation helpers retained for the inline-amplitude paths
+ * even though no caller in this TU references them today; tagged
+ * `__attribute__((unused))` so -Wunused-function in QSIM_WERROR
+ * builds doesn't flag them.  Removing entirely would silently
+ * regress the local-gate kernels that historically used them. */
+__attribute__((unused))
 static inline uint64_t set_bit(uint64_t value, uint32_t bit) {
     return value | (1ULL << bit);
 }
 
-/**
- * @brief Clear bit at position
- */
+__attribute__((unused))
 static inline uint64_t clear_bit(uint64_t value, uint32_t bit) {
     return value & ~(1ULL << bit);
 }
 
-/**
- * @brief Flip bit at position
- */
+__attribute__((unused))
 static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {
     return value ^ (1ULL << bit);
 }
@@ -818,7 +817,7 @@ dist_gate_error_t dist_cz(partitioned_state_t* state,
     int rank = mpi_get_rank(state->dist_ctx);
 
     for (uint64_t i = 0; i < state->local_count; i++) {
-        uint64_t global_idx = partition_local_to_global(state, i);
+        (void)partition_local_to_global(state, i); /* reserved for future global-index need */
 
         int bit1 = q1_partition
                    ? ((rank >> (qubit1 - state->local_qubits)) & 1)
@@ -1237,10 +1236,11 @@ dist_gate_error_t dist_grover_search(partitioned_state_t* state,
     }
 
     // Ensure uniform superposition
-    dist_gate_error_t err = partition_init_uniform(state);
-    if (err != PARTITION_SUCCESS) return DIST_GATE_ERROR_NOT_INITIALIZED;
+    partition_error_t perr = partition_init_uniform(state);
+    if (perr != PARTITION_SUCCESS) return DIST_GATE_ERROR_NOT_INITIALIZED;
 
     // Run iterations
+    dist_gate_error_t err;
     for (uint32_t i = 0; i < num_iterations; i++) {
         err = dist_grover_iteration(state, target_state);
         if (err != DIST_GATE_SUCCESS) return err;

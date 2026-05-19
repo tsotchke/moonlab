@@ -25,6 +25,10 @@
 #include <omp.h>
 #endif
 
+#if defined(HAS_MPI)
+#include "mpi_bridge.h"
+#endif
+
 typedef struct {
     moonlab_qgtl_gate_t type;
     int     target;
@@ -279,4 +283,169 @@ int moonlab_job_to_json(const moonlab_job_t *j,
     #undef APPEND
 
     return total;
+}
+
+/* ============================================================================
+ * MPI transport (v0.7.4) -- collective entry point.
+ * ========================================================================= */
+
+int moonlab_scheduler_run_mpi(moonlab_job_t         *job,
+                              moonlab_job_results_t *out,
+                              void                  *ctx_opaque)
+{
+#if defined(HAS_MPI)
+    distributed_ctx_t *ctx = (distributed_ctx_t *)ctx_opaque;
+    if (!out) return MOONLAB_SCHED_BAD_ARG;
+    if (!ctx) {
+        /* No MPI context -- fall back to the in-process worker fan-out. */
+        if (!job) return MOONLAB_SCHED_BAD_ARG;
+        return moonlab_scheduler_run(job, out);
+    }
+
+    const int rank = mpi_get_rank(ctx);
+    const int size = mpi_get_size(ctx);
+
+    /* Broadcast the job header: { num_qubits, num_shots, num_gates,
+     * rng_seed_lo, rng_seed_hi, reserved }. */
+    int header[6] = {0};
+    if (rank == 0) {
+        if (!job || job->num_shots <= 0) return MOONLAB_SCHED_BAD_ARG;
+        header[0] = job->num_qubits;
+        header[1] = job->num_shots;
+        header[2] = job->num_gates;
+        header[3] = (int)(uint32_t)(job->rng_seed & 0xFFFFFFFFu);
+        header[4] = (int)(uint32_t)((job->rng_seed >> 32) & 0xFFFFFFFFu);
+    }
+    if (mpi_broadcast(ctx, header, sizeof(header), 0) != 0) {
+        return MOONLAB_SCHED_INTERNAL;
+    }
+
+    const int num_qubits  = header[0];
+    const int total_shots = header[1];
+    const int num_gates   = header[2];
+    const uint64_t rng_seed =
+        ((uint64_t)(uint32_t)header[3]) |
+        ((uint64_t)(uint32_t)header[4] << 32);
+
+    if (num_qubits < 1 || total_shots < 1) {
+        return MOONLAB_SCHED_BAD_ARG;
+    }
+
+    /* Broadcast the gate list. */
+    sched_gate_record_t *gates = NULL;
+    if (num_gates > 0) {
+        gates = (sched_gate_record_t *)
+            malloc((size_t)num_gates * sizeof(sched_gate_record_t));
+        if (!gates) return MOONLAB_SCHED_OOM;
+        if (rank == 0) memcpy(gates, job->gates,
+                              (size_t)num_gates * sizeof(sched_gate_record_t));
+        if (mpi_broadcast(ctx, gates,
+                          (size_t)num_gates * sizeof(sched_gate_record_t),
+                          0) != 0) {
+            free(gates);
+            return MOONLAB_SCHED_INTERNAL;
+        }
+    }
+
+    /* Per-rank slice [start, end). */
+    const int slice_start = (int)((long long)rank * total_shots / size);
+    const int slice_end   = (int)((long long)(rank + 1) * total_shots / size);
+    const int slice_size  = slice_end - slice_start;
+
+    /* Build a working job from the broadcast gate list. */
+    moonlab_job_t local = {
+        .num_qubits  = num_qubits,
+        .num_shots   = slice_size,
+        .num_workers = 1,
+        .rng_seed    = rng_seed,
+        .num_gates   = num_gates,
+        .cap         = num_gates,
+        .gates       = gates,
+    };
+
+    uint64_t *slice_outcomes = NULL;
+    int rc = MOONLAB_SCHED_OK;
+    if (slice_size > 0) {
+        slice_outcomes = (uint64_t *)malloc((size_t)slice_size * sizeof(uint64_t));
+        if (!slice_outcomes) { free(gates); return MOONLAB_SCHED_OOM; }
+        rc = run_worker_slice(&local, 0, slice_size, rank, slice_outcomes);
+    }
+
+    /* Allgather per-rank slice sizes; mpi_gather contract is uniform-
+     * size so we pad to max_slice when gathering outcomes. */
+    int *slice_sizes = (int *)malloc((size_t)size * sizeof(int));
+    if (!slice_sizes) {
+        free(gates); free(slice_outcomes);
+        return MOONLAB_SCHED_OOM;
+    }
+    int my_slice = slice_size;
+    if (mpi_allgather(ctx, &my_slice, sizeof(int), slice_sizes) != 0) {
+        free(gates); free(slice_outcomes); free(slice_sizes);
+        return MOONLAB_SCHED_INTERNAL;
+    }
+
+    int max_slice = 0;
+    for (int r = 0; r < size; r++) if (slice_sizes[r] > max_slice) max_slice = slice_sizes[r];
+
+    uint64_t *padded = (uint64_t *)calloc((size_t)max_slice, sizeof(uint64_t));
+    if (!padded) {
+        free(gates); free(slice_outcomes); free(slice_sizes);
+        return MOONLAB_SCHED_OOM;
+    }
+    if (slice_outcomes) memcpy(padded, slice_outcomes,
+                                (size_t)slice_size * sizeof(uint64_t));
+
+    uint64_t *gathered = NULL;
+    if (rank == 0) {
+        gathered = (uint64_t *)malloc((size_t)max_slice * (size_t)size * sizeof(uint64_t));
+        if (!gathered) {
+            free(gates); free(slice_outcomes); free(slice_sizes); free(padded);
+            return MOONLAB_SCHED_OOM;
+        }
+    }
+    if (mpi_gather(ctx, padded, (size_t)max_slice * sizeof(uint64_t),
+                   gathered, 0) != 0) {
+        free(gates); free(slice_outcomes); free(slice_sizes);
+        free(padded); free(gathered);
+        return MOONLAB_SCHED_INTERNAL;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->num_qubits       = num_qubits;
+    out->num_workers_used = size;
+
+    if (rank == 0) {
+        out->total_shots = total_shots;
+        out->outcomes = (uint64_t *)malloc((size_t)total_shots * sizeof(uint64_t));
+        out->worker_seconds = (double *)calloc((size_t)size, sizeof(double));
+        if (!out->outcomes || !out->worker_seconds) {
+            moonlab_job_results_free(out);
+            free(gates); free(slice_outcomes); free(slice_sizes);
+            free(padded); free(gathered);
+            return MOONLAB_SCHED_OOM;
+        }
+        /* Trim per-rank padding while merging. */
+        int off = 0;
+        for (int r = 0; r < size; r++) {
+            memcpy(&out->outcomes[off],
+                   &gathered[(size_t)r * (size_t)max_slice],
+                   (size_t)slice_sizes[r] * sizeof(uint64_t));
+            off += slice_sizes[r];
+        }
+    } else {
+        out->total_shots = slice_size;
+        out->outcomes = slice_outcomes;  /* transfer ownership */
+        slice_outcomes = NULL;
+    }
+
+    free(gates);
+    free(slice_outcomes);
+    free(slice_sizes);
+    free(padded);
+    free(gathered);
+    return rc;
+#else
+    (void)job; (void)out; (void)ctx_opaque;
+    return MOONLAB_SCHED_NOT_BUILT;
+#endif
 }

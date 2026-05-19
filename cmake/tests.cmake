@@ -795,6 +795,26 @@
         TIMEOUT 60
     )
 
+    # MPI scheduler transport (since v0.7.4) -- only built when
+    # QSIM_ENABLE_MPI=ON, runs under mpirun -n 4 if available.
+    if(QSIM_HAS_MPI)
+        add_executable(test_scheduler_mpi tests/unit/test_scheduler_mpi.c)
+        target_link_libraries(test_scheduler_mpi PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
+        find_program(MPIRUN_EXECUTABLE mpirun)
+        if(MPIRUN_EXECUTABLE)
+            add_test(NAME unit_scheduler_mpi
+                     COMMAND ${MPIRUN_EXECUTABLE} -n 4
+                             $<TARGET_FILE:test_scheduler_mpi>)
+        else()
+            # Fall back to single-rank run if mpirun is unavailable.
+            add_test(NAME unit_scheduler_mpi COMMAND test_scheduler_mpi)
+        endif()
+        set_tests_properties(unit_scheduler_mpi PROPERTIES
+            LABELS "distributed;mpi"
+            TIMEOUT 120
+        )
+    endif()
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)

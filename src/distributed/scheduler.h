@@ -121,6 +121,50 @@ moonlab_scheduler_run(moonlab_job_t           *job,
 MOONLAB_API void
 moonlab_job_results_free(moonlab_job_results_t *r);
 
+/* ------------------------------------------------------------------
+ * MPI transport (since v0.7.4)
+ *
+ * Cross-process distributed execution.  Every rank in the MPI
+ * communicator calls `moonlab_scheduler_run_mpi` collectively.
+ * Rank 0's `job` is the source -- its content is broadcast to all
+ * ranks.  Each rank computes its shot slice via the same
+ * moonlab_qgtl_execute path used by the in-process scheduler;
+ * outcomes are gathered to rank 0.
+ *
+ * On rank 0, `out` receives the merged outcomes from all ranks
+ * (length `total_shots`).  On non-root ranks, `out` holds the
+ * rank's local slice (so a caller wanting per-rank visibility can
+ * still inspect it).
+ *
+ * Build-conditional: returns `MOONLAB_SCHED_NOT_BUILT` when
+ * `QSIM_ENABLE_MPI=OFF` at compile time.  The `ctx` parameter is
+ * an opaque `distributed_ctx_t *` from `src/distributed/mpi_bridge.h`.
+ * ------------------------------------------------------------------ */
+
+#define MOONLAB_SCHED_NOT_BUILT       (-505) /**< MPI transport unavailable. */
+
+/**
+ * @brief Run the job across MPI ranks.  Must be called collectively
+ *        by every rank in `ctx`'s communicator.
+ *
+ * @param[in]  job  Job to execute.  Significant only on rank 0;
+ *                  non-root ranks may pass NULL.  Rank 0's job is
+ *                  the source of truth and is broadcast.
+ * @param[out] out  Receives the rank's outcomes.  On rank 0,
+ *                  `outcomes` has length `total_shots` (the full
+ *                  merged buffer).  On non-root ranks, `outcomes`
+ *                  holds the rank's local slice (length =
+ *                  `total_shots / size + (rank < remainder ? 1 : 0)`).
+ * @param[in]  ctx_opaque  Pointer to a `distributed_ctx_t` from
+ *                  `src/distributed/mpi_bridge.h`, passed as `void *`
+ *                  so scheduler.h doesn't drag MPI headers in.
+ *                  Pass NULL to fall back to the in-process scheduler.
+ */
+MOONLAB_API int
+moonlab_scheduler_run_mpi(moonlab_job_t           *job,
+                          moonlab_job_results_t   *out,
+                          void                    *ctx_opaque);
+
 /**
  * @brief Serialise a job to JSON.  Format (one example):
  *

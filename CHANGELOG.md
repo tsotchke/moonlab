@@ -7,7 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.3.)
+(No unreleased changes since v0.7.4.)
+
+## [0.7.4] - 2026-05-19
+
+**Real cross-process MPI distributed execution.** Strategic
+milestone: moonlab is no longer "in-process distributed via
+OpenMP" -- it now sharded a Bell circuit across 4 separate
+OS processes via MPI and merged the outcomes back into one
+buffer with bit-perfect correlation.
+
+### Added
+
+- `moonlab_scheduler_run_mpi(job, results, ctx)`: collective
+  MPI entry point.  Every rank calls it with the same signature;
+  rank 0's job is broadcast (header + gate list) to all ranks;
+  each rank computes its shot slice via the same QGTL ingestion
+  path as the in-process scheduler; rank 0 gathers slice outcomes
+  into the merged buffer.  Non-root ranks keep their local
+  outcomes for per-rank visibility.
+- Build-conditional behind `-DQSIM_ENABLE_MPI=ON`; returns
+  `MOONLAB_SCHED_NOT_BUILT` (-505) otherwise.
+- `tests/unit/test_scheduler_mpi.c`: standalone MPI test program;
+  ctest runs it under `mpirun -n 4` when available.
+
+### Verified
+
+```
+$ mpirun -n 4 build_v074/test_scheduler_mpi
+=== MPI scheduler transport on 4 ranks ===
+  OK    scheduler_run_mpi rc=0
+  OK    merged buffer has 1024 outcomes (got 1024)
+  OK    num_workers_used = MPI size (4)
+    counts: |00>=505  |11>=519  other=0 (across 4 ranks)
+  OK    no off-Bell outcomes across MPI ranks
+  OK    all 1024 outcomes Bell-correlated
+  OK    n00 = 505 within statistical bounds of 512
+=== 0 failures ===
+```
+
+Four separate OS processes; rank 0 collected the merged Bell
+histogram from rank 1, 2, 3 via `MPI_Gather`.
+
+### Also fixed
+
+Pre-existing `-Werror` issues in `src/distributed/{distributed_gates,
+collective_ops}.c` that blocked the MPI build:
+- Unused-variable warnings for `global_idx`, `bit_j` -> converted
+  to explicit `(void)` to document intentional discard.
+- Enum-conversion warning for `partition_error_t -> dist_gate_error_t`
+  -> typed the local result correctly as `partition_error_t`.
+- Unused-static-function warnings on `set_bit / clear_bit / flip_bit`
+  -> tagged `__attribute__((unused))` (helpers retained for the
+  inline-amplitude kernels even if currently unreferenced).
+
+### Strategic milestone
+
+This closes the second strategic pillar from the v0.6.0 frame:
+**moonlab is now a distributed cloud quantum platform.**
+- libirrep QEC zoo: 8 codes across 4 bindings (v0.6.x)
+- QGTL ingestion: cross-validation contract for IBM/Rigetti/IonQ (v0.6.6, v0.6.8)
+- Scheduler: in-process + MPI cross-process (v0.7.0, v0.7.1, v0.7.4)
+- Decoder bench: 5-slot dispatcher with real MWPM + LIBIRREP_SS (v0.6.7, v0.6.9, v0.7.2, v0.7.3)
+
+### Next phases
+
+- v0.7.5: gRPC / HTTP/2 control plane (worker daemon reads JSON
+  job spec from socket).
+- v0.7.6: state-vector sharding for >32 qubits via
+  `src/distributed/state_partition.{c,h}`.
+- v0.7.7: cluster-aware scheduling (workers across nodes).
 
 ## [0.7.3] - 2026-05-19
 
