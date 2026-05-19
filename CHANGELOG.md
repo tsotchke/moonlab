@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.1.)
+(No unreleased changes since v0.8.2.)
+
+## [0.8.2] - 2026-05-19
+
+**Sharded random RZ+CNOT circuit + N=30 demo headroom.**  Third
+sharded example, completing coverage of every distributed gate
+primitive.  GHZ now demonstrated at N=30 (16 GB state vector,
+2^30 amplitudes) on a single-node 192 GB box across 8 MPI ranks.
+
+### Added
+
+- `examples/distributed/large_state_random_circuit.c`: depth
+  layers of per-qubit `dist_rz(theta_i)` + alternating-parity
+  `dist_cnot(i, i+1)` chain.  Reproducible per-rank-agreed RNG
+  (`splitmix64`).  Verifies unitarity via the global L2 norm.
+
+### Verified
+
+```
+Random circuit  N=22 depth=8 / 8 ranks:   64 MB,  0.25 s, norm 1.0000000000
+Random circuit  N=26 depth=8 / 8 ranks: 1024 MB,  3.78 s, norm 1.0000000000
+
+GHZ             N=30      / 8 ranks: 16384 MB,  6.25 s, P(|0>)=P(|1>)=0.5
+```
+
+N=30 = 2^30 = 1.07 billion amplitudes, 16 GB total, 2 GB per rank.
+
+### Known
+
+- N=32 on macOS hits `aligned_alloc` failure at 8 GB per rank
+  (per-process VM permissions).  Pre-existing platform limit,
+  not a moonlab bug; on Linux clusters the same code is expected
+  to reach the cluster RAM ceiling.
 
 ## [0.8.1] - 2026-05-19
 
