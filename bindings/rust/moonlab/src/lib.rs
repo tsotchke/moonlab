@@ -45,6 +45,7 @@ pub mod feynman;
 pub mod fusion;
 pub mod grover;
 pub mod mpdo;
+pub mod noise;
 pub mod state;
 pub mod tdvp;
 pub mod topology;
