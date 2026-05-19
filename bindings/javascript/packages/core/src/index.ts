@@ -170,6 +170,22 @@ export {
 export { SurfaceCode } from './surface-code';
 export type { PauliError } from './surface-code';
 
+// libirrep QEC zoo (since 0.6.5).  Eight CSS-code families behind
+// one class.  Bridge symbols link into the WASM build but the
+// underlying libirrep library does NOT (it lives outside the WASM
+// toolchain) -- callers must probe LibirrepQecCode.isAvailable()
+// first; expect `false` in the browser today.
+export {
+  LibirrepQecCode,
+  LibirrepError,
+  LibirrepNotBuiltError,
+  MOONLAB_LIBIRREP_OK,
+  MOONLAB_LIBIRREP_NOT_BUILT,
+  MOONLAB_LIBIRREP_BAD_ARG,
+  MOONLAB_LIBIRREP_INTERNAL,
+  MOONLAB_LIBIRREP_OOM,
+} from './libirrep-qec';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

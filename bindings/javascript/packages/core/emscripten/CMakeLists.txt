@@ -80,6 +80,11 @@ set(APPLICATION_SOURCES
     # qgt.c powers moonlab_qwz_chern; topology binding TS layer
     # also needs the lower-level qgt_* surface (since 0.5.0).
     ${QSIM_ROOT}/src/algorithms/quantum_geometry/qgt.c
+    # libirrep bridge (since v0.6.0).  WASM build never has libirrep
+    # linked, so the TU compiles to the no-op stub path that returns
+    # MOONLAB_LIBIRREP_NOT_BUILT from every factory.  JS callers
+    # gate on libirrep.is_available() before constructing codes.
+    ${QSIM_ROOT}/src/integration/libirrep_bridge.c
 )
 
 # Source files - Utilities
