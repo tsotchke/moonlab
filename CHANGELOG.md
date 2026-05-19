@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.2.)
+(No unreleased changes since v0.4.3.)
+
+## [0.4.3] - 2026-05-18
+
+Cleanup release: the last two known gaps from the v0.4.2 audit
+(JS TDVP binding + the dead `effective_hamiltonian_t.two_site`
+branches I left after removing the public flag) both land here.
+Test gauntlet: 114/114 ctest, 183/183 pytest, 60/60 cargo test,
+plus `tsc --noEmit` on `@moonlab/quantum-core`.
+
+### Added
+
+- **JavaScript / WebAssembly TDVP binding**
+  (`bindings/javascript/packages/core/src/tdvp.ts`): new
+  `TdvpEngine` class with `createHeisenberg` / `createTfim`
+  factories, `step` / `evolveTo` drivers, `currentTime` /
+  `currentEnergy` / `currentNorm` / `currentMaxBondDim` /
+  `numBonds` / `bondChi(bond)` accessors, and
+  `historyNumSteps` / `historyStep(s)` / `historyBondChi(s)` for
+  the per-step record.  Closes the binding-parity audit's last
+  P0: the C TDVP shipped in v0.4.0, the Python wrapper in v0.4.0,
+  the Rust wrapper in v0.4.1, and the JS wrapper in this release.
+- `moonlab_tdvp_export.c` joins the WASM build
+  (`bindings/javascript/packages/core/emscripten/CMakeLists.txt`)
+  with its 14 `moonlab_tdvp_*` symbols added to `exports.txt`, so
+  the TS wrapper binds the same primitive-arg ABI that the Python
+  and Rust bindings use.
+
+### Removed
+
+- **`effective_hamiltonian_t.two_site`** field
+  (`src/algorithms/tensor_network/dmrg.h`).  Every in-tree producer
+  always set it `true`; the false branches in
+  `effective_hamiltonian_apply` /
+  `effective_hamiltonian_apply_ws` (dmrg.c lines ~858-1010,
+  ~1156, ~1211, ~1217-1218, ~1316) and `lanczos_expm` (tdvp.c
+  lines ~341, ~378, ~384-385) were dead code.  Strip the field
+  and all the dead branches; downstream initialisers in
+  `tdvp.c::tdvp_evolve_two_site`,
+  `dmrg.c::dmrg_optimize_two_site`, and
+  `tests/performance/bench_dmrg_workspace.c` updated to drop the
+  `.two_site = true` designators.  Net `-110` LOC of dead
+  conditionals.
 
 ## [0.4.2] - 2026-05-18
 

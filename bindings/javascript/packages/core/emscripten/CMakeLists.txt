@@ -59,8 +59,15 @@ set(BACKEND_SOURCES
 # host-only).  The WASM TS layer calls the underlying internal C
 # functions directly using their real names; see exports.txt and
 # bindings/javascript/packages/core/src/ca-mps.ts.
+#
+# moonlab_tdvp_export.c (v0.4.3 adaptive-bond TDVP wrapper) has lean
+# deps -- tn_state + dmrg + tdvp, all of which are already in the WASM
+# build -- so we include it and the TS layer in src/tdvp.ts calls
+# through the primitive-arg ABI rather than marshalling
+# `tdvp_config_t` byte-by-byte.
 set(APPLICATION_SOURCES
     ${QSIM_ROOT}/src/applications/hep/lattice_z2_1d.c
+    ${QSIM_ROOT}/src/applications/moonlab_tdvp_export.c
 )
 
 # Source files - Utilities

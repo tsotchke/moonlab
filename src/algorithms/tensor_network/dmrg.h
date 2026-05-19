@@ -302,11 +302,21 @@ typedef struct {
     tensor_t *L;                 /**< Left environment [chi_l][b_l][chi_l] */
     tensor_t *R;                 /**< Right environment [chi_r][b_r][chi_r] */
     mpo_tensor_t *W_left;        /**< Left MPO tensor */
-    mpo_tensor_t *W_right;       /**< Right MPO tensor (NULL for 1-site) */
+    mpo_tensor_t *W_right;       /**< Right MPO tensor */
     uint32_t chi_l;              /**< Left MPS bond dimension */
     uint32_t chi_r;              /**< Right MPS bond dimension */
     uint32_t phys_dim;           /**< Physical dimension */
-    bool two_site;               /**< Two-site or one-site */
+    /* The struct used to carry a `bool two_site` flag.  In v0.4.2
+     * the public `dmrg_config_t.two_site` toggle was removed
+     * because the false branch was unimplemented; v0.4.3 removes
+     * the corresponding internal flag here too.  Every producer in
+     * the tree (DMRG sweeps, TDVP two-site Lanczos, the
+     * bench_dmrg_workspace harness) constructs an
+     * effective_hamiltonian_t for a two-site theta of shape
+     * [chi_l, d, d, chi_r].  Re-add the flag and the one-site
+     * branches in dmrg.c / tdvp.c when (and if) a single-site
+     * variant is wired through Lanczos with its own H_eff @
+     * theta_1s contraction. */
 } effective_hamiltonian_t;
 
 /**

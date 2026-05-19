@@ -338,7 +338,7 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     uint32_t chi_l = H_eff->chi_l;
     uint32_t chi_r = H_eff->chi_r;
     uint32_t d = H_eff->phys_dim;
-    uint64_t vec_size = H_eff->two_site ? chi_l * d * d * chi_r : chi_l * d * chi_r;
+    uint64_t vec_size = (uint64_t)chi_l * d * d * chi_r;
 
     // Lanczos vectors
     double complex *v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
@@ -373,16 +373,11 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     lanczos_beta[0] = 0.0;
     uint32_t num_iter = 0;
 
-    // Create tensors for H_eff application
-    uint32_t dims[4];
-    if (H_eff->two_site) {
-        dims[0] = chi_l; dims[1] = d; dims[2] = d; dims[3] = chi_r;
-    } else {
-        dims[0] = chi_l; dims[1] = d; dims[2] = chi_r; dims[3] = 0;
-    }
-
-    tensor_t *x_temp = tensor_create(H_eff->two_site ? 4 : 3, dims);
-    tensor_t *y_temp = tensor_create(H_eff->two_site ? 4 : 3, dims);
+    // Create tensors for H_eff application (theta is rank-4
+    // [chi_l, d, d, chi_r] for the two-site Krylov projection).
+    uint32_t dims[4] = { chi_l, d, d, chi_r };
+    tensor_t *x_temp = tensor_create(4, dims);
+    tensor_t *y_temp = tensor_create(4, dims);
 
     if (!x_temp || !y_temp) {
         if (x_temp) tensor_free(x_temp);
@@ -731,7 +726,6 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
         .chi_l = chi_l,
         .chi_r = chi_r,
         .phys_dim = d,
-        .two_site = true
     };
 
     // Form theta = A @ B.  Both tensors are row-major rank-3 with the
