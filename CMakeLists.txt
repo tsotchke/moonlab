@@ -1338,6 +1338,11 @@ if(QSIM_BUILD_BENCHMARKS)
         src/optimization/parallel_ops.c
     )
     target_link_libraries(grover_parallel_benchmark PRIVATE quantumsim)
+
+    # Decoder-zoo shoot-out (since v0.7.8) -- runs all available
+    # decoder slots at varying physical error rates, emits JSON.
+    add_executable(decoder_shootout benchmarks/decoder_shootout.c)
+    target_link_libraries(decoder_shootout PRIVATE quantumsim)
     if(QSIM_HAS_OPENMP)
         qsim_target_link_openmp(grover_parallel_benchmark)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
