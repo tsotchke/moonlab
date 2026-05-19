@@ -140,6 +140,9 @@ export type { FuseStats, FuseCompileResult } from './fusion';
 // MPDO mixed-state simulator (since 0.4.10).
 export { Mpdo, PauliCode } from './mpdo';
 
+// CA-PEPS 2D Clifford-assisted simulator (since 0.4.12).
+export { CaPeps } from './ca-peps';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

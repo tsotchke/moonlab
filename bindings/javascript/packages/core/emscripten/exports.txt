@@ -377,3 +377,36 @@ _moonlab_mpdo_apply_bit_flip_1q
 _moonlab_mpdo_apply_phase_flip_1q
 _moonlab_mpdo_apply_bit_phase_flip_1q
 _moonlab_mpdo_expect_pauli_1q
+
+# =============================================================================
+# CA-PEPS 2D Clifford-Assisted simulator (since 0.2.1; JS binding from 0.4.12).
+# Implemented in src/algorithms/tensor_network/ca_peps.c; bound by src/ca-peps.ts.
+# Mirrors Python moonlab.ca_peps.CAPEPS + Rust moonlab::ca_peps::CaPeps.
+# =============================================================================
+_moonlab_ca_peps_create
+_moonlab_ca_peps_free
+_moonlab_ca_peps_clone
+_moonlab_ca_peps_lx
+_moonlab_ca_peps_ly
+_moonlab_ca_peps_num_qubits
+_moonlab_ca_peps_max_bond_dim
+_moonlab_ca_peps_current_bond_dim
+_moonlab_ca_peps_max_half_cut_entropy
+_moonlab_ca_peps_h
+_moonlab_ca_peps_s
+_moonlab_ca_peps_sdag
+_moonlab_ca_peps_x
+_moonlab_ca_peps_y
+_moonlab_ca_peps_z
+_moonlab_ca_peps_cnot
+_moonlab_ca_peps_cz
+_moonlab_ca_peps_rx
+_moonlab_ca_peps_ry
+_moonlab_ca_peps_rz
+_moonlab_ca_peps_t_gate
+_moonlab_ca_peps_t_dagger
+_moonlab_ca_peps_phase
+_moonlab_ca_peps_normalize
+_moonlab_ca_peps_norm
+_moonlab_ca_peps_expect_pauli
+_moonlab_ca_peps_prob_z

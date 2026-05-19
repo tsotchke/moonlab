@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.11.)
+(No unreleased changes since v0.4.12.)
+
+## [0.4.12] - 2026-05-18
+
+JavaScript-side parity for the 2D CA-PEPS simulator that Python has
+had since v0.2.1 and Rust just got in v0.4.11.  The C source
+`ca_peps.c` was already in the WASM build; only the exports + TS
+wrapper were missing.
+
+### Added
+
+- **`CaPeps`** class in
+  `bindings/javascript/packages/core/src/ca-peps.ts` wrapping the
+  full `moonlab_ca_peps_*` C surface.  `CaPeps.create(lx, ly,
+  chiBond)` + `dispose()` lifecycle, `clone()` deep copy,
+  introspection (`lx`, `ly`, `numQubits`, `maxBondDim`,
+  `currentBondDim`, `norm`, `maxHalfCutEntropy`), six Clifford
+  gates + `cnot` + `cz`, six non-Clifford gates (`rx`, `ry`, `rz`,
+  `t`, `tdg`, `phase`), `normalize()`, `probZ(q)`,
+  `expectPauli(pauli)` returning `[re, im]` of the complex
+  expectation, and `expectPauliSingle(q, PauliCode)` for
+  single-site observables.
+- 28 `_moonlab_ca_peps_*` symbols added to
+  `bindings/javascript/packages/core/emscripten/exports.txt`.
+- `CaPeps` re-exported from `@moonlab/quantum-core`'s top-level
+  index; the `PauliCode` enum is re-used from the v0.4.10 MPDO
+  module.
+
+Manifests bumped 0.4.11 -> 0.4.12 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 148 (all
+unchanged -- this release only touches the JS surface).
+`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`ca-peps.ts` module.
 
 ## [0.4.11] - 2026-05-18
 
