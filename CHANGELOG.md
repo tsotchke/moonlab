@@ -7,7 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.0.)
+(No unreleased changes since v0.8.1.)
+
+## [0.8.1] - 2026-05-19
+
+**Sharded textbook QFT, end-to-end across MPI ranks.**  Concrete
+non-trivial circuit beyond GHZ, exercising every distributed
+gate primitive.
+
+### Added
+
+- `examples/distributed/large_state_qft.c`: textbook N-qubit
+  Quantum Fourier Transform under `dist_hadamard` +
+  `dist_cphase(k, j; pi/2^(k-j))` + `dist_swap`.  Hits all three
+  distributed gate primitives in a single circuit.  Verifies
+  `QFT|0..0>` produces the uniform superposition by checking
+  the global L2 norm (= 1) and `P(|0..0>)` (= 1/2^N) on rank 0.
+
+### Verified
+
+```
+N=16 / 8 ranks:   1 MB total, 0.0017 s,    norm = 1.0000000000
+N=24 / 8 ranks: 256 MB total, 0.6260 s,    norm = 1.0000000000
+N=26 / 8 ranks:  1 GB total, 2.6358 s,    norm = 1.0000000000
+```
+
+`P(|0..0>) = 1/2^N` matches to machine precision in every case.
 
 ## [0.8.0] - 2026-05-19
 

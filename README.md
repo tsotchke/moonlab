@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.8.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.8.1-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
