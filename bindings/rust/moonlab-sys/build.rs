@@ -172,6 +172,7 @@ fn main() {
 #include "{root}/src/algorithms/tensor_network/dmrg.h"
 #include "{root}/src/algorithms/tensor_network/tdvp.h"
 #include "{root}/src/algorithms/tensor_network/ca_peps.h"
+#include "{root}/src/algorithms/topological/topological.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -313,6 +314,15 @@ fn main() {
         .allowlist_function("entanglement_negativity_2qubit")
         .allowlist_function("entanglement_renyi_entropy")
         .allowlist_function("entanglement_mutual_information")
+        // Surface code (Clifford-tableau variant; Rust wrapper from 0.5.12).
+        .allowlist_type("surface_code_clifford_t")
+        .allowlist_function("surface_code_clifford_create")
+        .allowlist_function("surface_code_clifford_free")
+        .allowlist_function("surface_code_clifford_data_index")
+        .allowlist_function("surface_code_clifford_apply_error")
+        .allowlist_function("surface_code_clifford_measure_z_syndromes")
+        .allowlist_function("surface_code_clifford_measure_x_syndromes")
+        .allowlist_function("surface_code_clifford_syndrome_weight")
         // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
         .allowlist_type("ca_peps_error_t")
         .allowlist_type("moonlab_ca_peps_t")
