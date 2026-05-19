@@ -350,6 +350,20 @@ _clifford_measure
 _clifford_sample_all
 
 # =============================================================================
+# Surface code (Clifford-tableau variant; since 0.5.14 in WASM).
+# Implemented in src/algorithms/topological/topological.c; bound by
+# src/surface-code.ts.  Mirrors Python moonlab.surface_code +
+# Rust moonlab::surface_code.
+# =============================================================================
+_surface_code_clifford_create
+_surface_code_clifford_free
+_surface_code_clifford_data_index
+_surface_code_clifford_apply_error
+_surface_code_clifford_measure_z_syndromes
+_surface_code_clifford_measure_x_syndromes
+_surface_code_clifford_syndrome_weight
+
+# =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
 # Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
 # Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
