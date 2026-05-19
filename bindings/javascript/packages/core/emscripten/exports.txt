@@ -356,3 +356,24 @@ _fuse_append_cry
 _fuse_append_crz
 _fuse_compile
 _fuse_execute
+
+# =============================================================================
+# MPDO mixed-state simulator (since 0.3.0; JS binding from 0.4.10).
+# Implemented in src/quantum/noise_mpdo.c; bound by src/mpdo.ts.
+# Mirrors Python moonlab.mpdo + Rust moonlab::mpdo.
+# =============================================================================
+_moonlab_mpdo_create
+_moonlab_mpdo_free
+_moonlab_mpdo_clone
+_moonlab_mpdo_num_qubits
+_moonlab_mpdo_max_bond_dim
+_moonlab_mpdo_current_bond_dim
+_moonlab_mpdo_trace
+_moonlab_mpdo_apply_kraus_1q
+_moonlab_mpdo_apply_depolarizing_1q
+_moonlab_mpdo_apply_amplitude_damping_1q
+_moonlab_mpdo_apply_phase_damping_1q
+_moonlab_mpdo_apply_bit_flip_1q
+_moonlab_mpdo_apply_phase_flip_1q
+_moonlab_mpdo_apply_bit_phase_flip_1q
+_moonlab_mpdo_expect_pauli_1q

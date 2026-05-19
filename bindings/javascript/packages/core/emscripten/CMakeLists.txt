@@ -14,6 +14,8 @@ set(QUANTUM_SOURCES
     ${QSIM_ROOT}/src/quantum/measurement.c
     ${QSIM_ROOT}/src/quantum/entanglement.c
     ${QSIM_ROOT}/src/quantum/noise.c
+    # MPDO mixed-state simulator (since 0.3.0; JS binding from 0.4.10).
+    ${QSIM_ROOT}/src/quantum/noise_mpdo.c
 )
 
 # Source files - Algorithms

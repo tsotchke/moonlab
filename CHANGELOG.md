@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.9.)
+(No unreleased changes since v0.4.10.)
+
+## [0.4.10] - 2026-05-18
+
+JavaScript-side parity for the MPDO mixed-state simulator
+(`src/quantum/noise_mpdo.{c,h}`).  Python has had this since v0.3.0
+and Rust since v0.3.0; this release closes the last big TS gap that
+doesn't depend on the hardware-entropy context.
+
+### Added
+
+- **`Mpdo`** class in `bindings/javascript/packages/core/src/mpdo.ts`
+  wrapping the v0.3.0 MPDO surface.  Lifecycle through
+  `Mpdo.create(numQubits, maxBondDim)` + `dispose()`, with `clone()`
+  for deep copies.  Introspection (`numQubits`, `maxBondDim`,
+  `currentBondDim`, `trace()`) and seven channel applicators
+  (`applyDepolarizing`, `applyAmplitudeDamping`, `applyPhaseDamping`,
+  `applyBitFlip`, `applyPhaseFlip`, `applyBitPhaseFlip`,
+  `applyKraus`).  `expectPauli(qubit, PauliCode)` returns the
+  single-site Pauli expectation `Tr(rho * P_q)`.
+- `PauliCode` enum (`I=0, X=1, Y=2, Z=3`) mirrors the Python and
+  Rust enums.
+- 15 `_moonlab_mpdo_*` symbols added to
+  `bindings/javascript/packages/core/emscripten/exports.txt`.
+- `${QSIM_ROOT}/src/quantum/noise_mpdo.c` added to the WASM build's
+  `QUANTUM_SOURCES` in
+  `bindings/javascript/packages/core/emscripten/CMakeLists.txt`
+  (the C source had been excluded until now).
+
+### Changed
+
+- `Mpdo` and `PauliCode` re-exported from `@moonlab/quantum-core`'s
+  top-level index so callers can `import { Mpdo, PauliCode } from
+  '@moonlab/quantum-core'`.
+
+Manifests bumped 0.4.9 -> 0.4.10 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 73 + 48 + 20 = 141
+(all unchanged -- this release only touches the JS surface).
+`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`mpdo.ts` module.
 
 ## [0.4.9] - 2026-05-18
 
