@@ -7,6 +7,14 @@
 # block.  Same-scope include() so the file reads root-defined
 # variables (QSIM_HAS_*) and macros (qsim_target_link_openmp).
 
+    # Sharded GHZ example (since v0.7.9) -- demonstrates >32-qubit
+    # state-vector reach via MPI partitions.  Built only when MPI
+    # is enabled; runs under `mpirun -n 4`.
+    if(QSIM_HAS_MPI)
+        add_executable(large_state_ghz examples/distributed/large_state_ghz.c)
+        target_link_libraries(large_state_ghz PRIVATE quantumsim MPI::MPI_C)
+    endif()
+
     # Grover examples
     add_executable(grover_hash_collision examples/quantum/grover_hash_collision.c)
     target_link_libraries(grover_hash_collision PRIVATE quantumsim)
