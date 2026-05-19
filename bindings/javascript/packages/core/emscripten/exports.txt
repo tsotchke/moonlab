@@ -394,6 +394,20 @@ _moonlab_libirrep_qec_get_x_check_row
 _moonlab_libirrep_qec_get_z_check_row
 
 # =============================================================================
+# QGTL-shaped circuit-ingestion surface (since v0.6.6 native, JS from v0.6.8).
+#
+# Numeric gate-type enum matches QGTL gate_type_t.  Used by QGTL to route
+# circuits through moonlab's state-vector backend before paying for hardware
+# shots.
+_moonlab_qgtl_circuit_create
+_moonlab_qgtl_circuit_free
+_moonlab_qgtl_add_gate
+_moonlab_qgtl_execute
+_moonlab_qgtl_results_free
+_moonlab_qgtl_circuit_num_qubits
+_moonlab_qgtl_circuit_num_gates
+
+# =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
 # Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
 # Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
