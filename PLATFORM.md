@@ -1,6 +1,14 @@
 # Moonlab Platform Specification
 
-**Version:** 0.2.0-dev · **Status:** design contract · **Owner:** tsotchke
+**Written for:** 0.2.0-dev (the document's original baseline).
+**Current shipping version:** 0.5.10.
+**Status:** design contract; the 0.2 -> 0.3 migration laid out in
+section 5 has substantially happened (the v0.3 + v0.4 + v0.5 release
+arcs delivered most of the "Phase 1 - 6" items).  This document is
+preserved as the platform contract that produced those releases; it
+is not actively rewritten on every release.  For current-state
+descriptions see `README.md` and the `New in v0.5` section there.
+**Owner:** tsotchke
 
 This document is the architectural contract for Moonlab as a
 platform. It is the successor to `ARCHITECTURE.md` (descriptive) and

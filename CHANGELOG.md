@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.10.)
+(No unreleased changes since v0.5.11.)
+
+## [0.5.11] - 2026-05-19
+
+PLATFORM + AUDIT doc-state notes: the v0.2.0-era contracts and
+diagnostics no longer reflect shipping reality.  Rather than
+rewrite the historical contract (whose value is preserved as
+the platform spec that produced v0.3 - v0.5), add explicit
+"resolved" annotations where bullets describe pre-v0.3 state.
+
+### Changed
+
+- `PLATFORM.md` header now records the doc's original baseline
+  (0.2.0-dev), the current shipping version (0.5.10 -> 0.5.11),
+  and explicitly notes the document is preserved as the platform
+  contract that produced the v0.3 + v0.4 + v0.5 release arcs --
+  not actively rewritten per release.  Section 5's Phase 1 - 6
+  migration plan has substantially happened.
+- `AUDIT.md` adds parenthetical "resolved" notes to two bullets
+  whose state changed between v0.2.0-dev and v0.5.x:
+  - **Version split:** the binding manifests and VERSION.txt are
+    now kept in lockstep by the `bindings_version_sync` ctest
+    (since v0.2.x).
+  - **Stable ABI:** the surface now covers DMRG / CA-MPS / Z2 LGT
+    / full topology (8 invariants) / TDVP via the lean export +
+    TDVP-opaque-handle paths.
+
+Manifests bumped 0.5.10 -> 0.5.11.
 
 ## [0.5.10] - 2026-05-19
 
