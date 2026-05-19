@@ -7,7 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.2.)
+(No unreleased changes since v0.7.3.)
+
+## [0.7.3] - 2026-05-19
+
+Decoder-bench cross-language bindings.  Python + Rust + JS all
+reach the decoder dispatcher from v0.6.7 through v0.7.2's real
+MWPM_EXACT + LIBIRREP_SS slots.
+
+### Added
+
+- `bindings/python/moonlab/decoder.py`: `DecoderSlot` IntEnum +
+  `decode(slot, ...)` + `slot_available` / `slot_name`.  6
+  pytest cases verify GREEDY + MWPM_EXACT + SBNN-not-built paths.
+- `bindings/rust/moonlab/src/decoder.rs`: `DecoderSlot` u32 enum
+  + `CodeGeometry` struct + `decode` / `slot_available` /
+  `slot_name`.  5 cargo tests pass.
+- `bindings/javascript/packages/core/src/decoder.ts`: async
+  `decode` + `slotAvailable` / `slotName`.  Tests auto-skip
+  pending WASM rebuild.
+- 3 WASM exports for the dispatcher surface.
+
+### Cross-language parity status (CLOSING v0.7.3)
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Scheduler         | YES | YES | YES | YES |
+| Decoder bench     | YES | YES | YES | YES |
+
+**All four pillar surfaces now reach all four binding targets.**
+
+### Next phases
+
+- v0.7.4: MPI transport for `moonlab_scheduler_run` -- real
+  cross-process distributed execution atop the existing
+  `src/distributed/mpi_bridge.{c,h}` scaffolding.
+- v0.7.5: gRPC / HTTP/2 control plane (worker binary reads JSON
+  job spec from endpoint).
+- v0.7.6: state-vector sharding for >32 qubits via
+  `src/distributed/state_partition.{c,h}`.
 
 ## [0.7.2] - 2026-05-19
 

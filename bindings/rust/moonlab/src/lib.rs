@@ -41,6 +41,7 @@ pub mod bell;
 pub mod ca_mps;
 pub mod ca_peps;
 pub mod clifford;
+pub mod decoder;
 pub mod error;
 pub mod feynman;
 pub mod fusion;
