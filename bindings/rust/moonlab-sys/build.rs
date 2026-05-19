@@ -174,6 +174,8 @@ fn main() {
 #include "{root}/src/algorithms/tensor_network/ca_peps.h"
 #include "{root}/src/algorithms/topological/topological.h"
 #include "{root}/src/integration/libirrep_bridge.h"
+#include "{root}/src/applications/moonlab_qgtl_backend.h"
+#include "{root}/src/applications/decoder_bench.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -349,6 +351,25 @@ fn main() {
         .allowlist_function("moonlab_libirrep_qec_distance")
         .allowlist_function("moonlab_libirrep_qec_get_x_check_row")
         .allowlist_function("moonlab_libirrep_qec_get_z_check_row")
+        // QGTL ingestion surface (since v0.6.6).
+        .allowlist_type("moonlab_qgtl_circuit")
+        .allowlist_type("moonlab_qgtl_gate_t")
+        .allowlist_type("moonlab_qgtl_exec_options_t")
+        .allowlist_type("moonlab_qgtl_results_t")
+        .allowlist_function("moonlab_qgtl_circuit_create")
+        .allowlist_function("moonlab_qgtl_circuit_free")
+        .allowlist_function("moonlab_qgtl_add_gate")
+        .allowlist_function("moonlab_qgtl_execute")
+        .allowlist_function("moonlab_qgtl_results_free")
+        .allowlist_function("moonlab_qgtl_circuit_num_qubits")
+        .allowlist_function("moonlab_qgtl_circuit_num_gates")
+        // Decoder-bench dispatcher (since v0.6.7).
+        .allowlist_type("moonlab_decoder_kind_t")
+        .allowlist_type("moonlab_decoder_code_t")
+        .allowlist_type("moonlab_decoder_input_t")
+        .allowlist_function("moonlab_decoder_decode")
+        .allowlist_function("moonlab_decoder_slot_available")
+        .allowlist_function("moonlab_decoder_slot_name")
         // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
         .allowlist_type("ca_peps_error_t")
         .allowlist_type("moonlab_ca_peps_t")

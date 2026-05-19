@@ -134,6 +134,12 @@ try:
 except (ImportError, AttributeError, OSError):
     _LIBIRREP_QEC_AVAILABLE = False
 
+try:
+    from .qgtl import QgtlCircuit, QgtlResults, QgtlError, GateType as QgtlGateType
+    _QGTL_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _QGTL_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',

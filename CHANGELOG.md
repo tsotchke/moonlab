@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.7.)
+(No unreleased changes since v0.6.8.)
+
+## [0.6.8] - 2026-05-19
+
+Python + Rust + JS QGTL ingestion bindings.  The v0.6.6 C contract
+now has cross-language parity with the libirrep QEC zoo (v0.6.3-5).
+
+### Added
+
+- `bindings/python/moonlab/qgtl.py`: `QgtlCircuit` + `GateType`
+  IntEnum + `QgtlResults` dataclass.  10 pytest cases (Bell, GHZ,
+  shot sampling, Grover N=2, RY pi/2, four error paths, gate-type
+  numerical contract).
+- `bindings/rust/moonlab/src/qgtl.rs`: `QgtlCircuit` struct +
+  `GateType` u32 enum + `QgtlResults`.  7 cargo tests.  Drop runs
+  C-side free.
+- `bindings/javascript/packages/core/src/qgtl.ts`: `QgtlCircuit`
+  class + `GateType` enum + `QgtlResults` interface.  5 vitest
+  cases (auto-skip when WASM lacks v0.6.6 symbols).
+- 7 WASM exports for the bridge surface.
+
+### Verified
+
+- Python: 10/10 pytest cases pass against build_v068 libquantumsim.
+- Rust:    7/7 cargo tests pass under `cargo test --lib qgtl::`.
+- JS:      All 163 integration tests pass (5 new QGTL cases
+           auto-skip pending the next WASM rebuild).
+
+### Cross-language parity status (closing v0.6 round)
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Decoder bench     | YES | --  | --  | -- |
+
+### Next phases
+
+- v0.6.9: wire LIBIRREP_SS decoder slot real (replaces NOT_BUILT
+  stub with `irrep_single_shot_*` calls when libirrep linked).
+- v0.7.0: distributed scheduler MVP atop `src/distributed/` --
+  cloud-platform foundation.
 
 ## [0.6.7] - 2026-05-19
 

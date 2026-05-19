@@ -186,6 +186,21 @@ export {
   MOONLAB_LIBIRREP_OOM,
 } from './libirrep-qec';
 
+// QGTL-shaped circuit-ingestion surface (since 0.6.8).  Mirrors the
+// v0.6.6 C contract; gate-type enum matches QGTL's gate_type_t
+// numerically so codes copied from QGTL examples work unchanged.
+export {
+  QgtlCircuit,
+  QgtlError,
+  GateType as QgtlGateType,
+  MOONLAB_QGTL_OK,
+  MOONLAB_QGTL_BAD_ARG,
+  MOONLAB_QGTL_OOM,
+  MOONLAB_QGTL_UNSUPPORTED,
+  MOONLAB_QGTL_INTERNAL,
+} from './qgtl';
+export type { QgtlExecOptions, QgtlResults } from './qgtl';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,
