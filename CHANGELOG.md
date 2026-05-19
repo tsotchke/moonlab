@@ -7,7 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.5.)
+(No unreleased changes since v0.4.6.)
+
+## [0.4.6] - 2026-05-18
+
+Two safe Rust wrappers around C surfaces moonlab-sys had FFI for
+but the moonlab crate didn't bind idiomatically.  Closes the
+Rust-side gap on the Clifford and fusion subsystems; Python has
+both since v0.2.1 / v0.4.4, JavaScript since v0.4.5 / TBD.
+
+### Added
+
+- **`moonlab::clifford::CliffordTableau`** (Rust safe wrapper around
+  the standalone Aaronson-Gottesman backend in
+  `src/backends/clifford/`).  RAII-managed handle; fluent
+  `h` / `s` / `sdag` / `x` / `y` / `z` / `cnot` / `cz` / `swap`
+  gates returning `Result<&mut Self>`; `measure(q) -> MeasureResult`
+  exposing the deterministic-vs-random branch; `sample_all() -> u64`
+  for one-shot computational-basis sampling (up to 64 qubits).
+  Internal splitmix64 RNG; `set_rng_seed(seed: u64)` for
+  reproducibility.  6 unit tests covering construction, range
+  checks, ground-state measurement determinism, GHZ-sample
+  aligned-bitstring invariant, and RNG-seed reproducibility.
+- **`moonlab::fusion::FusedCircuit`** (Rust safe wrapper around the
+  single-qubit gate-fusion DAG in `src/optimization/fusion/`).
+  Mirrors the v0.4.4 Python `FusedCircuit` and covers all 21
+  supported gate kinds, `compile() -> (FusedCircuit, FuseStats)`,
+  and `execute(state: &mut QuantumState)`.  6 unit tests covering
+  lifecycle, run-length fusion math (3 1q gates -> 1 FUSED_1Q + 2
+  merges), pass-through, Bell-state execution, and
+  fused-vs-unfused equivalence on a multi-layer circuit.
+- `QuantumState::as_ptr` promoted to `pub(crate)` so sibling
+  modules (`fusion`, future `clifford` state-vector integrations)
+  can pass the raw pointer back through FFI without going through
+  the safe gate API.
+
+Manifests bumped 0.4.5 -> 0.4.6 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
+
+Full gauntlet: 114/114 ctest, 193/193 pytest, 49 + 48 + 14 = 111
+cargo test (was 60; gained 11 from the two new safe-wrapper test
+modules).
 
 ## [0.4.5] - 2026-05-18
 

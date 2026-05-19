@@ -115,9 +115,12 @@ impl QuantumState {
         1 << self.num_qubits
     }
 
-    /// Get a reference to the underlying state pointer.
+    /// Get a reference to the underlying state pointer.  Crate-only
+    /// so sibling modules (`fusion`, future `clifford` etc.) can
+    /// pass the raw pointer back through FFI without going through
+    /// the safe gate API.
     #[inline]
-    fn as_ptr(&self) -> *mut ffi::quantum_state_t {
+    pub(crate) fn as_ptr(&self) -> *mut ffi::quantum_state_t {
         self.inner.as_ptr()
     }
 
