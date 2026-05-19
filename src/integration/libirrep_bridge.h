@@ -37,6 +37,8 @@
 #ifndef MOONLAB_LIBIRREP_BRIDGE_H
 #define MOONLAB_LIBIRREP_BRIDGE_H
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -73,7 +75,7 @@ extern "C" {
  *         when moonlab was compiled without libirrep, or a negative
  *         status code when a libirrep call fails.
  */
-int moonlab_libirrep_kagome12_e0(double *out_energy);
+MOONLAB_API int moonlab_libirrep_kagome12_e0(double *out_energy);
 
 /**
  * @brief  Indicates whether moonlab was compiled with the libirrep
@@ -84,7 +86,7 @@ int moonlab_libirrep_kagome12_e0(double *out_energy);
  *         gate "use libirrep when available, else fall back" logic on
  *         this without parsing build configuration.
  */
-int moonlab_libirrep_available(void);
+MOONLAB_API int moonlab_libirrep_available(void);
 
 /* ============================================================================
  * Sector-ED: spin-1/2 Heisenberg on a 2D lattice with Sz conservation.
@@ -175,7 +177,7 @@ typedef enum {
  *          with `N`), MOONLAB_LIBIRREP_OOM on allocation failure, or
  *          MOONLAB_LIBIRREP_INTERNAL for libirrep call failures.
  */
-int moonlab_libirrep_heisenberg_sector_e0(
+MOONLAB_API int moonlab_libirrep_heisenberg_sector_e0(
     moonlab_libirrep_lattice_kind_t lattice_kind,
     int Lx, int Ly,
     moonlab_libirrep_wallpaper_t    wallpaper,
@@ -210,7 +212,7 @@ typedef struct moonlab_libirrep_qec moonlab_libirrep_qec_t;
  *  @param[out] out       Receives an owning handle on success.  Caller
  *                        must release with @ref moonlab_libirrep_qec_free.
  *  @return     MOONLAB_LIBIRREP_OK on success or a negative status code. */
-int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out);
 
 /** @brief Construct the Kitaev 2D toric code on an `Lx x Ly` torus.
  *
@@ -219,24 +221,24 @@ int moonlab_libirrep_surface_code_new(int distance, moonlab_libirrep_qec_t **out
  *  `Lx Ly` Z-stabilisers (one per plaquette), `k = 2` logical qubits
  *  (the two homology classes of the torus), and code distance
  *  `d = min(Lx, Ly)`. */
-int moonlab_libirrep_toric_code_new(int Lx, int Ly, moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_toric_code_new(int Lx, int Ly, moonlab_libirrep_qec_t **out);
 
 /** @brief Steane [[7, 1, 3]] color code -- the smallest 2D color code,
  *         self-dual (X-stabilisers = Z-stabilisers in support). */
-int moonlab_libirrep_color_steane_new(moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_color_steane_new(moonlab_libirrep_qec_t **out);
 
 /** @brief [[15, 7, 3]] Hamming code recast as a CSS code. */
-int moonlab_libirrep_color_hamming_15_7_3_new(moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_color_hamming_15_7_3_new(moonlab_libirrep_qec_t **out);
 
 /** @brief IBM bivariate-bicycle [[72, 12, 6]] qLDPC code.
  *  Bravyi et al. 2024 (Nature 627, 778), Table 3 instance 1. */
-int moonlab_libirrep_bb_72_12_6_new(moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_bb_72_12_6_new(moonlab_libirrep_qec_t **out);
 
 /** @brief IBM bivariate-bicycle [[144, 12, 12]] qLDPC code. */
-int moonlab_libirrep_bb_144_12_12_new(moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_bb_144_12_12_new(moonlab_libirrep_qec_t **out);
 
 /** @brief IBM bivariate-bicycle [[288, 12, 18]] qLDPC code. */
-int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out);
 
 /** @brief Hypergraph-product CSS code from a `[d, 1, d]` repetition
  *  code on each side.  Yields:
@@ -245,28 +247,28 @@ int moonlab_libirrep_bb_288_12_18_new(moonlab_libirrep_qec_t **out);
  *    d = 5 -> [[41, 1, 5]]
  *  Only these three published instances are supported in v0.6.2;
  *  arbitrary `d` falls back to MOONLAB_LIBIRREP_BAD_ARG. */
-int moonlab_libirrep_hgp_repetition_new(int d, moonlab_libirrep_qec_t **out);
+MOONLAB_API int moonlab_libirrep_hgp_repetition_new(int d, moonlab_libirrep_qec_t **out);
 
 /** @brief Release a handle returned by any
  *         `moonlab_libirrep_<family>_code_new` factory.  Safe to call
  *         with `NULL`. */
-void moonlab_libirrep_qec_free(moonlab_libirrep_qec_t *q);
+MOONLAB_API void moonlab_libirrep_qec_free(moonlab_libirrep_qec_t *q);
 
 /** @brief Number of physical qubits `n`. */
-int moonlab_libirrep_qec_n_qubits(const moonlab_libirrep_qec_t *q);
+MOONLAB_API int moonlab_libirrep_qec_n_qubits(const moonlab_libirrep_qec_t *q);
 
 /** @brief Number of X-stabiliser generators. */
-int moonlab_libirrep_qec_n_x_stabs(const moonlab_libirrep_qec_t *q);
+MOONLAB_API int moonlab_libirrep_qec_n_x_stabs(const moonlab_libirrep_qec_t *q);
 
 /** @brief Number of Z-stabiliser generators. */
-int moonlab_libirrep_qec_n_z_stabs(const moonlab_libirrep_qec_t *q);
+MOONLAB_API int moonlab_libirrep_qec_n_z_stabs(const moonlab_libirrep_qec_t *q);
 
 /** @brief Number of logical qubits, `k = n - rank(H_X) - rank(H_Z)`.  */
-int moonlab_libirrep_qec_logical_qubits(const moonlab_libirrep_qec_t *q);
+MOONLAB_API int moonlab_libirrep_qec_logical_qubits(const moonlab_libirrep_qec_t *q);
 
 /** @brief Code distance (brute-force over the stabiliser group up to
  *         the natural distance bound).  Cached after the first call. */
-int moonlab_libirrep_qec_distance(moonlab_libirrep_qec_t *q);
+MOONLAB_API int moonlab_libirrep_qec_distance(moonlab_libirrep_qec_t *q);
 
 /** @brief Read the qubit supports of an X-stabiliser row into a flat
  *         length-`n_qubits` byte buffer (0 / 1 per qubit).
@@ -276,11 +278,11 @@ int moonlab_libirrep_qec_distance(moonlab_libirrep_qec_t *q);
  *  @param[out] support   Caller-allocated, length `n_qubits`.  Filled
  *                        with 0 / 1 per qubit on success.
  *  @return     MOONLAB_LIBIRREP_OK or a negative status code. */
-int moonlab_libirrep_qec_get_x_check_row(const moonlab_libirrep_qec_t *q,
+MOONLAB_API int moonlab_libirrep_qec_get_x_check_row(const moonlab_libirrep_qec_t *q,
                                          int row, unsigned char *support);
 
 /** @brief Z-row counterpart of @ref moonlab_libirrep_qec_get_x_check_row. */
-int moonlab_libirrep_qec_get_z_check_row(const moonlab_libirrep_qec_t *q,
+MOONLAB_API int moonlab_libirrep_qec_get_z_check_row(const moonlab_libirrep_qec_t *q,
                                          int row, unsigned char *support);
 
 #ifdef __cplusplus

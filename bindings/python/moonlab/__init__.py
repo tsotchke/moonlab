@@ -123,6 +123,17 @@ try:
 except (ImportError, AttributeError, OSError):
     _SURFACE_CODE_AVAILABLE = False
 
+try:
+    from .libirrep_qec import (
+        LibirrepQecCode,
+        LibirrepError,
+        LibirrepNotBuiltError,
+        is_available as libirrep_is_available,
+    )
+    _LIBIRREP_QEC_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _LIBIRREP_QEC_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',
