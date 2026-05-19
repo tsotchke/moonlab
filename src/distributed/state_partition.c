@@ -149,10 +149,19 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
     }
     state->owns_memory = 1;
 
-    // Allocate communication buffers
+    // Allocate communication buffers.  CNOT / SWAP exchanges along
+    // the partition-boundary qubit need to send half the local state
+    // (`local_count / 2`) in one shot; the historical 2^20 cap (=16 MB)
+    // overflowed when `local_count > 2^21`, segfaulting at N>=26 with
+    // 8 ranks.  Scale to local_count and clamp at 1 GB so the buffer
+    // doesn't dominate per-rank memory for genuinely huge shards.
+    const size_t per_rank_max_bytes = (size_t)1 << 30; /* 1 GB cap. */
+    const size_t needed_bytes = state->local_count * sizeof(double complex);
     size_t buffer_size = config && config->comm_buffer_size > 0
                          ? config->comm_buffer_size
-                         : (1ULL << (state->local_qubits > 20 ? 20 : state->local_qubits)) * sizeof(double complex);
+                         : (needed_bytes < per_rank_max_bytes
+                                ? needed_bytes
+                                : per_rank_max_bytes);
 
     state->buffer_size = buffer_size / sizeof(double complex);
 
