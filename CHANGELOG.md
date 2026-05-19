@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.7.)
+(No unreleased changes since v0.5.8.)
+
+## [0.5.8] - 2026-05-19
+
+Rust examples coverage 9/14 -> 14/14.  Every binding module now
+has a runnable demo verified end-to-end.
+
+### Added
+
+- `bindings/rust/moonlab/examples/ca_mps_demo.rs`: GHZ via
+  Clifford-only gates (bond_dim stays 1), Z2 LGT Hamiltonian
+  inspection, var-D ground-state search on 6-site TFIM.
+- `bindings/rust/moonlab/examples/ca_peps_demo.rs`: 2x3 CA-PEPS,
+  Bell-pair `<ZZ> = 1`, clone independence after divergent gates.
+- `bindings/rust/moonlab/examples/noise_demo.rs`: sweep through
+  all 7 Kraus channels on |+>, full depolarising at p=3/4 sends
+  `<Z>` to 0, thermal relaxation + classical readout error.
+- `bindings/rust/moonlab/examples/z2_lgt_demo.rs`: print the first
+  6 Pauli-string terms of the N=4 Hamiltonian and the Gauss-law
+  generators at the two interior sites
+  (`G_1 = X_1 Z_2 X_3`, `G_2 = X_3 Z_4 X_5`).
+- `bindings/rust/moonlab/examples/feynman_demo.rs`: ASCII-render
+  four canonical QED diagrams (e+e- -> mu+mu-, Compton, pair
+  annihilation, QED vertex).
+
+### Verified
+
+- All 5 new examples build cleanly and produce textbook-correct
+  output end-to-end via
+  `cargo run --example NAME -p moonlab`.
+
+Manifests bumped 0.5.7 -> 0.5.8.
 
 ## [0.5.7] - 2026-05-19
 
