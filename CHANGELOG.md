@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.4.3.)
+(No unreleased changes since v0.4.4.)
+
+## [0.4.4] - 2026-05-18
+
+Binding-parity continuation: the gate-fusion DAG (`fusion.h` /
+`fusion.c`, the v0.2.0 single-qubit run-length fuser) now has a
+Python wrapper.  The C surface was already exercised by
+`tests/unit/test_fusion.c`; this release exposes the same surface
+to user code that does not want to drop into C.  Test gauntlet:
+114/114 ctest, 193/193 pytest, 60/60 cargo.
+
+### Added
+
+- **Python gate-fusion binding** (`bindings/python/moonlab/fusion.py`).
+  New `FusedCircuit` class with a fluent gate-append surface
+  (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `phase`, `rx`, `ry`,
+  `rz`, `u3`, `cnot`, `cz`, `cy`, `swap`, `cphase`, `crx`, `cry`,
+  `crz`), plus `compile()` -> `(FusedCircuit, FuseStats)` and
+  `execute(state)` that applies the (optionally fused) circuit to a
+  `QuantumState` in place.  Re-exported from the top-level
+  `moonlab` namespace as `FusedCircuit` and `FuseStats`.
+- 10 pytest cases (`bindings/python/tests/test_fusion.py`) covering
+  lifecycle, fluent append, run-length fusion statistics (3 1q
+  gates on the same qubit -> 1 FUSED_1Q + 2 merges), pass-through
+  when no fusion is possible, Bell-state execution, equivalence
+  between fused and unfused execution on a non-trivial multi-layer
+  circuit, all 4 two-qubit parameterised gates, and the U3
+  three-parameter appender.
 
 ## [0.4.3] - 2026-05-18
 

@@ -1,6 +1,6 @@
 {
   "name": "moonlab-javascript",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "description": "Moonlab Quantum Simulator - JavaScript/WebAssembly Bindings",
   "scripts": {
