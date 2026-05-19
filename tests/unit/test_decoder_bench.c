@@ -36,11 +36,16 @@ static void test_slot_availability(void)
     CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_MWPM_EXACT) == 1,
           "MWPM_EXACT available");
     CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN) == 0,
-          "SBNN deferred to v0.6.8");
-    CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_LIBIRREP_SS) == 0,
-          "LIBIRREP_SS deferred to v0.6.8");
+          "SBNN deferred to v0.7+");
+    /* LIBIRREP_SS slot availability is build-conditional: ON when
+     * QSIM_ENABLE_LIBIRREP=ON, OFF otherwise.  Either is valid. */
+    {
+        const int avail = moonlab_decoder_slot_available(MOONLAB_DECODER_LIBIRREP_SS);
+        CHECK(avail == 0 || avail == 1,
+              "LIBIRREP_SS available = %d (build-conditional)", avail);
+    }
     CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_PYMATCHING) == 0,
-          "PYMATCHING deferred to v0.6.8");
+          "PYMATCHING deferred to v0.7+");
 
     CHECK(strcmp(moonlab_decoder_slot_name(MOONLAB_DECODER_GREEDY),     "greedy") == 0,
           "GREEDY -> greedy");
@@ -104,9 +109,9 @@ static void test_greedy_two_defects(void)
     CHECK(total_flips == 1, "single edge flipped to neutralise two adjacent defects");
 }
 
-static void test_external_slots_not_built(void)
+static void test_external_slots(void)
 {
-    fprintf(stdout, "\n--- SBNN / LIBIRREP_SS / PYMATCHING return NOT_BUILT ---\n");
+    fprintf(stdout, "\n--- external slot dispatch ---\n");
     const moonlab_decoder_code_t code = {.distance = 3, .num_qubits = 18, .is_toric = 1};
     unsigned char syndromes[9] = {0};
     unsigned char corrections[18] = {0};
@@ -116,12 +121,23 @@ static void test_external_slots_not_built(void)
         .corrections = corrections,
         .num_stabilisers = 9,
     };
+    /* SBNN + PYMATCHING are always NOT_BUILT in v0.6.9. */
     CHECK(moonlab_decoder_decode(MOONLAB_DECODER_SBNN, &in) == MOONLAB_DECODER_NOT_BUILT,
           "SBNN -> NOT_BUILT");
-    CHECK(moonlab_decoder_decode(MOONLAB_DECODER_LIBIRREP_SS, &in) == MOONLAB_DECODER_NOT_BUILT,
-          "LIBIRREP_SS -> NOT_BUILT");
     CHECK(moonlab_decoder_decode(MOONLAB_DECODER_PYMATCHING, &in) == MOONLAB_DECODER_NOT_BUILT,
           "PYMATCHING -> NOT_BUILT");
+
+    /* LIBIRREP_SS: when linked, exercises irrep_single_shot_lift to
+     * verify the toric code's meta-checks, then delegates to greedy.
+     * Toric d=3 has nontrivial cube redundancy so the lift succeeds. */
+    const int rc = moonlab_decoder_decode(MOONLAB_DECODER_LIBIRREP_SS, &in);
+    if (moonlab_decoder_slot_available(MOONLAB_DECODER_LIBIRREP_SS)) {
+        CHECK(rc == 0,
+              "LIBIRREP_SS on zero syndrome -> 0 (libirrep linked, rc=%d)", rc);
+    } else {
+        CHECK(rc == MOONLAB_DECODER_NOT_BUILT,
+              "LIBIRREP_SS -> NOT_BUILT (libirrep unlinked, rc=%d)", rc);
+    }
 }
 
 static void test_error_paths(void)
@@ -158,7 +174,7 @@ int main(void)
     test_slot_availability();
     test_greedy_zero_syndrome();
     test_greedy_two_defects();
-    test_external_slots_not_built();
+    test_external_slots();
     test_error_paths();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
