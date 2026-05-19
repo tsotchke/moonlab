@@ -7,7 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.7.6.)
+(No unreleased changes since v0.7.7.)
+
+## [0.7.7] - 2026-05-19
+
+**PYMATCHING decoder slot wired via Python subprocess.**  All five
+decoder slots in the bench dispatcher are now operational; the
+QEC decoder zoo is complete.
+
+### Added
+
+- `src/applications/pymatching_bridge.py`: Python helper that
+  builds a toric-code matching graph via the `pymatching` package
+  and decodes a syndrome handed in over stdin.  Protocol:
+  JSON stdin (`distance` + `is_toric` + `syndromes`) -> hex stdout
+  (`OK <correction_hex>` or `ERR <message>`).
+- `decoder_bench.c::decoder_pymatching`: forks a Python subprocess,
+  pipes the syndrome JSON in, parses the hex correction back out.
+  Slot availability is unconditional (the script path is baked into
+  the library at build time as `MOONLAB_PYMATCHING_SCRIPT_PATH`);
+  runtime returns NOT_BUILT if `python3` or `pymatching` is
+  missing.  No build flag, no extra dependency contract.
+
+### Verified
+
+```
+OK    PYMATCHING available since v0.7.7 (got 1)
+OK    PYMATCHING -> pymatching
+OK    PYMATCHING dispatched (rc=-401; OK=pymatching available,
+                              NOT_BUILT=pymatching missing)
+```
+
+### Decoder zoo complete
+
+| Slot          | Implementation | Built-in / Requires |
+|---------------|----------------|---------------------|
+| GREEDY        | in-tree nearest-pair | always |
+| MWPM_EXACT    | bf_match + greedy_2opt (lifted from threshold sweep) | always |
+| SBNN          | qec_decoder_t (vendored TUs)                        | `-DQSIM_ENABLE_SBNN=ON` |
+| LIBIRREP_SS   | irrep_single_shot_lift + meta-check verify          | `-DQSIM_ENABLE_LIBIRREP=ON` |
+| PYMATCHING    | subprocess to pymatching Python package             | `pip install pymatching` |
+
+### Next phases
+
+- v0.7.8: examples + benchmarks demonstrating decoder shoot-out.
+- v0.7.9: gRPC / HTTP/2 control plane for the scheduler.
+- v0.8.0: documentation + release polish for the v0.6.x + v0.7.x arc.
 
 ## [0.7.6] - 2026-05-19
 

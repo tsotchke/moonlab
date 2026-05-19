@@ -29,6 +29,22 @@
 #include <toric_code.h>
 #endif
 
+/* PYMATCHING bridge: invoke a Python subprocess that wraps the
+ * pymatching package.  The bridge script lives at
+ * `src/applications/pymatching_bridge.py`; its path is baked into
+ * the library at compile time as MOONLAB_PYMATCHING_SCRIPT_PATH so
+ * tests + the installed library both find it without env-var
+ * fiddling.  Available unconditionally -- Python subprocess + JSON
+ * I/O works on any platform with python3 on PATH and pymatching
+ * pip-installed, so we don't need a build flag. */
+#ifndef MOONLAB_PYMATCHING_SCRIPT_PATH
+#  define MOONLAB_PYMATCHING_SCRIPT_PATH NULL
+#endif
+
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot)
 {
     switch (slot) {
@@ -60,7 +76,10 @@ int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot)
         return 0;
 #endif
     case MOONLAB_DECODER_PYMATCHING:
-        return 0; /* v0.7.6+ wires pymatching. */
+        /* Unconditional: a python3 + pymatching subprocess is the
+         * transport.  Availability check is runtime (errors from
+         * the subprocess if python or pymatching is missing). */
+        return MOONLAB_PYMATCHING_SCRIPT_PATH != NULL ? 1 : 0;
     default:
         return 0;
     }
@@ -255,6 +274,100 @@ static int decoder_libirrep_ss(const moonlab_decoder_input_t *in)
 }
 #endif
 
+/* PYMATCHING: pipe a JSON syndrome record over the Python subprocess'
+ * stdin, parse the hex-encoded correction vector from its stdout.
+ * Falls back to OOM/BAD_ARG if Python or pymatching isn't installed
+ * (subprocess emits "ERR import:" line); falls back to GREEDY's
+ * result only on caller request -- here we just propagate the error. */
+static int decoder_pymatching(const moonlab_decoder_input_t *in)
+{
+    if (!in->code->is_toric) return MOONLAB_DECODER_INFEASIBLE;
+    if (!MOONLAB_PYMATCHING_SCRIPT_PATH) return MOONLAB_DECODER_NOT_BUILT;
+
+    const int d = in->code->distance;
+    const int n_s = in->num_stabilisers;
+    const int n_q = in->code->num_qubits;
+
+    /* Serialise input JSON.  Worst case for syndrome len d^2 <= 1024:
+     * "[0, 1, 0, ...]" -> 4 bytes/entry. */
+    const size_t json_cap = 256 + (size_t)n_s * 4;
+    char *json = (char *)malloc(json_cap);
+    if (!json) return MOONLAB_DECODER_OOM;
+    int off = snprintf(json, json_cap,
+        "{\"distance\":%d,\"is_toric\":true,\"rng_seed\":%llu,\"syndromes\":[",
+        d, (unsigned long long)in->rng_seed);
+    for (int i = 0; i < n_s; i++) {
+        off += snprintf(json + off, json_cap - (size_t)off, "%s%d",
+                        i ? "," : "", in->syndromes[i] ? 1 : 0);
+    }
+    off += snprintf(json + off, json_cap - (size_t)off, "]}");
+
+    /* Set up stdin / stdout pipes around python3. */
+    int in_pipe[2];   /* parent writes, child reads */
+    int out_pipe[2];  /* child writes, parent reads */
+    if (pipe(in_pipe) != 0 || pipe(out_pipe) != 0) {
+        free(json); return MOONLAB_DECODER_OOM;
+    }
+    const pid_t pid = fork();
+    if (pid < 0) {
+        free(json); return MOONLAB_DECODER_OOM;
+    }
+    if (pid == 0) {
+        /* Child: wire pipes to stdin/stdout, exec python3. */
+        dup2(in_pipe[0], 0);
+        dup2(out_pipe[1], 1);
+        close(in_pipe[0]); close(in_pipe[1]);
+        close(out_pipe[0]); close(out_pipe[1]);
+        execlp("python3", "python3", MOONLAB_PYMATCHING_SCRIPT_PATH, (char *)NULL);
+        _exit(127);
+    }
+    /* Parent. */
+    close(in_pipe[0]);
+    close(out_pipe[1]);
+    /* Write JSON to child stdin. */
+    const ssize_t written = write(in_pipe[1], json, (size_t)off);
+    close(in_pipe[1]);
+    free(json);
+    if (written != off) {
+        close(out_pipe[0]);
+        return MOONLAB_DECODER_OOM;
+    }
+
+    /* Read child stdout. */
+    char buf[8192];
+    size_t total = 0;
+    ssize_t r;
+    while ((r = read(out_pipe[0], buf + total, sizeof(buf) - 1 - total)) > 0) {
+        total += (size_t)r;
+        if (total >= sizeof(buf) - 1) break;
+    }
+    close(out_pipe[0]);
+    buf[total] = '\0';
+
+    /* Reap child. */
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {}
+
+    /* Parse response: "OK <hex>" on success, "ERR ..." on failure. */
+    if (strncmp(buf, "OK ", 3) != 0) {
+        return MOONLAB_DECODER_NOT_BUILT; /* pymatching unavailable */
+    }
+    const char *hex = buf + 3;
+    memset(in->corrections, 0, (size_t)n_q);
+    for (int q = 0; q < n_q; q++) {
+        const char c1 = hex[2 * q];
+        const char c2 = hex[2 * q + 1];
+        if (c1 == '\0' || c1 == '\n') break;
+        const int hi = (c1 >= '0' && c1 <= '9') ? (c1 - '0') :
+                       (c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : -1;
+        const int lo = (c2 >= '0' && c2 <= '9') ? (c2 - '0') :
+                       (c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : -1;
+        if (hi < 0 || lo < 0) return MOONLAB_DECODER_OOM;
+        in->corrections[q] = (unsigned char)((hi << 4) | lo) & 1;
+    }
+    return MOONLAB_DECODER_OK;
+}
+
 int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
                            const moonlab_decoder_input_t  *in)
 {
@@ -295,7 +408,7 @@ int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
         return MOONLAB_DECODER_NOT_BUILT;
 #endif
     case MOONLAB_DECODER_PYMATCHING:
-        return MOONLAB_DECODER_NOT_BUILT;
+        return decoder_pymatching(in);
     default:
         return MOONLAB_DECODER_BAD_ARG;
     }

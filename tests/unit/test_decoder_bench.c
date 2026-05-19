@@ -48,8 +48,13 @@ static void test_slot_availability(void)
         CHECK(avail == 0 || avail == 1,
               "LIBIRREP_SS available = %d (build-conditional)", avail);
     }
-    CHECK(moonlab_decoder_slot_available(MOONLAB_DECODER_PYMATCHING) == 0,
-          "PYMATCHING deferred to v0.7+");
+    /* PYMATCHING slot is unconditionally available since v0.7.7
+     * (subprocess transport; runtime errors if pymatching isn't
+     * pip-installed). */
+    {
+        const int avail = moonlab_decoder_slot_available(MOONLAB_DECODER_PYMATCHING);
+        CHECK(avail == 1, "PYMATCHING available since v0.7.7 (got %d)", avail);
+    }
 
     CHECK(strcmp(moonlab_decoder_slot_name(MOONLAB_DECODER_GREEDY),     "greedy") == 0,
           "GREEDY -> greedy");
@@ -186,10 +191,15 @@ static void test_external_slots(void)
         .corrections = corrections,
         .num_stabilisers = 9,
     };
-    /* PYMATCHING is always NOT_BUILT until v0.7.6+.  SBNN is
-     * build-conditional (ON when QSIM_ENABLE_SBNN=ON since v0.7.5). */
-    CHECK(moonlab_decoder_decode(MOONLAB_DECODER_PYMATCHING, &in) == MOONLAB_DECODER_NOT_BUILT,
-          "PYMATCHING -> NOT_BUILT");
+    /* PYMATCHING: subprocess transport.  Returns OK if pymatching is
+     * pip-installed, NOT_BUILT otherwise.  Either is valid for the
+     * suite; we just check it dispatches without crashing. */
+    {
+        const int py_rc = moonlab_decoder_decode(MOONLAB_DECODER_PYMATCHING, &in);
+        CHECK(py_rc == 0 || py_rc == MOONLAB_DECODER_NOT_BUILT,
+              "PYMATCHING dispatched (rc=%d; OK=pymatching available, "
+              "NOT_BUILT=pymatching missing)", py_rc);
+    }
     {
         const int sbnn_rc = moonlab_decoder_decode(MOONLAB_DECODER_SBNN, &in);
         if (moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN)) {

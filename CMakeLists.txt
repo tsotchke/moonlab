@@ -866,6 +866,7 @@ endif()
 add_dependencies(quantumsim hw_rng_probe)
 target_compile_definitions(quantumsim PRIVATE
     MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
+    MOONLAB_PYMATCHING_SCRIPT_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/src/applications/pymatching_bridge.py\"
 )
 
 # Test-only knobs that force the in-tree QR / SVD fallback codepaths in
