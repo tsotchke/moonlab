@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.1.)
+(No unreleased changes since v0.5.2.)
+
+## [0.5.2] - 2026-05-19
+
+Rust build hygiene: collapse 326 unused-unsafe warnings to 0.
+
+### Changed
+
+- `bindings/rust/moonlab/Cargo.toml` flips `unsafe_code` from
+  `warn` to `allow`.  The crate is a thin safe-Rust facade over the
+  C FFI in `moonlab-sys`; every wrapper method has to call into C
+  through an `unsafe { ... }` block, so the warn-by-default
+  setting produced 314 + 11 + 1 = 326 lines of pure noise on every
+  build (one per FFI call site, plus 11 `unsafe impl Send` /
+  `unsafe impl Sync` and 1 `unsafe fn`).  Matches the
+  long-standing `unsafe_code = "allow"` setting on `moonlab-sys`.
+  Genuine "is this unsafe block actually safe?" reviews continue
+  to happen in code review at PR time, where the signal isn't
+  drowned by 300 lines of FFI noise.
+
+### Verified
+
+- `cargo build --manifest-path bindings/rust/moonlab/Cargo.toml`
+  is now warning-free.
+- `cargo test` still 79 + 48 + 21 = 148 passing.
+
+Manifests bumped 0.5.1 -> 0.5.2.
 
 ## [0.5.1] - 2026-05-19
 
