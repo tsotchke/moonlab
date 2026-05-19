@@ -7,7 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.5.0.)
+(No unreleased changes since v0.5.1.)
+
+## [0.5.1] - 2026-05-19
+
+JS integration-test coverage for the five wrapper modules that
+shipped through v0.4.5 to v0.4.12 with no `*.integration.test.ts`:
+tdvp, clifford, fusion, mpdo, ca-peps.  All tests run against the
+freshly rebuilt v0.5.0 WASM.
+
+### Added
+
+- `src/__tests__/clifford.integration.test.ts` (11 tests):
+  lifecycle (create / dispose idempotency / numQubits rejection),
+  GHZ aligned-bitstring invariant on 8 qubits via `sampleAll`,
+  H|0> measurement outcome-kind = random, |0...0> measurement
+  outcome = 0 / deterministic, `S Sdag` on `|+>` round-trip,
+  RNG-seed reproducibility, sampleAll 64-qubit cap, gate
+  range-checks.
+- `src/__tests__/fusion.integration.test.ts` (11 tests):
+  lifecycle, fluent chain length, u3 + two-qubit parameterised
+  gates, run-length fusion (3 1q gates -> 1 FUSED_1Q + 2 merges),
+  multi-qubit-gate barrier flushes, Bell-pair fused execution
+  against `QuantumState` (probabilities match `[0.5, 0, 0, 0.5]`),
+  fused-vs-unfused state-vector equivalence on a 3-qubit
+  multi-layer circuit.
+- `src/__tests__/mpdo.integration.test.ts` (12 tests): lifecycle
+  (numQubits / maxBondDim rejection / dispose idempotency),
+  initial trace = 1 + bond dim = 1, clone independence, single-
+  qubit channel correctness (zero-prob is identity, full
+  amplitude-damping resets `<Z>` to +1, full depolarising = I/2,
+  bit/phase/bit-phase flip semantics), trace conservation under
+  mixed-channel sequence, `PauliCode.I` returns 1 exactly,
+  range-checks.
+- `src/__tests__/ca-peps.integration.test.ts` (13 tests):
+  lifecycle, initial `norm = 1`, dimension validation,
+  `clone` independence, `|0...0>` has `<Z_q> = 1`, Hadamard
+  zeros `<Z_0>` only, Bell-pair `<ZZ I I> = 1`,
+  `probZ` matches H|0> probability, non-Clifford gates apply,
+  Pauli-string length validation, qubit range-checks, throw
+  after dispose.
+- `src/__tests__/tdvp.integration.test.ts` (11 tests):
+  TFIM lifecycle (numSites validation / dispose idempotency),
+  single-step time advance, `evolveTo` lands on target, norm
+  stability through 5 steps, history recording,
+  imaginary-time energy cooling, Heisenberg variant, bondChi
+  range check.
+
+All 8 integration-test files run in 570 ms; 107/107 pass.
+
+Manifests bumped 0.5.0 -> 0.5.1 across the 10 binding pyproject.toml /
+Cargo.toml / package.json files plus VERSION.txt.
 
 ## [0.5.0] - 2026-05-19
 
