@@ -7,7 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.6.9.)
+(No unreleased changes since v0.7.0.)
+
+## [0.7.0] - 2026-05-19
+
+**Distributed scheduler MVP.**  The first piece of moonlab's
+cloud-platform foundation lands.  `src/distributed/scheduler.{c,h}`
+ships a job-spec + worker-fan-out contract that runs in-process
+today (OpenMP) and is shaped to swap MPI / gRPC / HTTP/2 as the
+transport in v0.7.1+ without API changes.
+
+### Added
+
+- `src/distributed/scheduler.h`: `moonlab_job_t` opaque handle
+  + four-call builder (`create`, `add_gate`, `set_num_shots`,
+  `set_num_workers`) + introspection getters + execute / free.
+- `moonlab_scheduler_run(job, results)` splits `total_shots`
+  into `num_workers` contiguous slices, dispatches each via
+  `moonlab_qgtl_execute` (from v0.6.6), and merges outcomes
+  into one shared buffer.  Worker `i` derives its PRNG seed as
+  `splitmix64(base XOR i_hi32)` for reproducibility under fixed
+  seeds.  OpenMP `#pragma omp parallel for` is the transport.
+- `moonlab_job_to_json` emits the schema-versioned JSON
+  representation needed for cross-process / wire dispatch:
+  ```json
+  {
+    "schema": "moonlab/job/v0.7.0",
+    "num_qubits": 2, "num_shots": 1024, "num_workers": 4,
+    "rng_seed": "0xdeadbeef",
+    "gates": [
+      { "type": 4, "target": 0 },
+      { "type": 10, "target": 1, "control": 0 }
+    ]
+  }
+  ```
+  JSON parsing (the inverse direction) is v0.7.1+ scope along
+  with wire transport.
+- `moonlab_job_results_t` carries `outcomes[num_shots]` and a
+  `worker_seconds[num_workers_used]` timing vector for the
+  per-worker wall-clock report.
+
+### Verified
+
+`test_scheduler` exercises **33 assertions** across 6 scenarios:
+- Introspection getters round-trip.
+- Single-worker Bell 1024 shots: all outcomes Bell-correlated.
+- **4-worker Bell 1024 shots**: 505 / 519 / 0 (perfect Bell
+  correlation across workers, no off-correlated outcomes).
+- **3-worker GHZ 3000 shots**: 1507 / 1493 / 0.
+- JSON serialisation: size-probe -> exact write, schema field
+  present, gate-type IDs 4 + 10 + control field round-trip.
+- Error paths: num_qubits=0/33 rejected, negative shots, zero
+  workers, zero-shot run all rejected; `job_free(NULL)` safe.
+
+### Strategic milestone
+
+This is the **distributed cloud computing platform** axis from
+the v0.6.0 strategic frame.  moonlab + libirrep (QEC zoo) + QGTL
+(hardware bridge) + scheduler (distributed execution) form the
+core four-pillar surface.  Real MPI transport, gRPC control plane,
+state-vector sharding for >32 qubits, and a worker-pool job-store
+land in v0.7.x.
+
+### Cross-language status
+
+| Surface           | C | Python | Rust | JS |
+|-------------------|---|--------|------|----|
+| libirrep QEC zoo  | YES | YES | YES | YES |
+| QGTL ingestion    | YES | YES | YES | YES |
+| Decoder bench     | YES | --  | --  | -- |
+| Scheduler         | YES | --  | --  | -- |
+
+### Next phases (v0.7.x)
+
+- v0.7.1: MPI transport for `moonlab_scheduler_run` -- swap the
+  OpenMP `for` loop for `MPI_Scatter`/`Gather` over the same
+  slice contract.  Reuses `src/distributed/mpi_bridge.{c,h}`.
+- v0.7.2: gRPC / HTTP/2 control plane for over-the-wire job
+  dispatch.  Worker binary reads JSON job spec from stdin or
+  endpoint, executes its slice, returns outcomes via the same
+  schema.
+- v0.7.3: state-vector sharding for >32 qubits via
+  `src/distributed/state_partition.{c,h}` (existing scaffold).
+- v0.7.4: Python / Rust / JS bindings for the scheduler so the
+  cloud platform is usable from non-C entry points.
 
 ## [0.6.9] - 2026-05-19
 

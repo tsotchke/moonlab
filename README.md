@@ -1,12 +1,24 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.6.9-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
 > topological QC, chemistry / VQE with native autograd, error
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
+
+## New in v0.7 (2026-05-19)
+
+**v0.7.0** ships the distributed-scheduler MVP -- the first piece
+of moonlab's cloud-platform foundation.  `moonlab_job_t` carries
+a circuit description + shot count + worker fan-out;
+`moonlab_scheduler_run` splits the shots across N OpenMP workers
+in-process today, with the same contract shaped to swap MPI /
+gRPC / HTTP/2 as the transport in v0.7.1+.  4-worker Bell circuit
+verified at 1024 shots: 505 / 519 / 0 -- perfect Bell correlation
+across workers.  Schema-versioned JSON job spec
+(`moonlab/job/v0.7.0`) enables over-the-wire dispatch.
 
 ## New in v0.6 (2026-05-19)
 
@@ -1035,7 +1047,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.6.9},
+    version      = {v0.7.0},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

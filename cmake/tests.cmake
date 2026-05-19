@@ -784,6 +784,17 @@
         TIMEOUT 30
     )
 
+    # Distributed scheduler MVP (since v0.7.0).  In-process worker
+    # fan-out atop the QGTL ingestion surface.  Bell + GHZ verified
+    # across 3 / 4 workers.
+    add_executable(test_scheduler tests/unit/test_scheduler.c)
+    target_link_libraries(test_scheduler PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_scheduler COMMAND test_scheduler)
+    set_tests_properties(unit_scheduler PROPERTIES
+        LABELS "distributed"
+        TIMEOUT 60
+    )
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
