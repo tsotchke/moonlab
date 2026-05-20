@@ -250,10 +250,136 @@ static void test_error_paths(void)
           "distance < 2 rejected");
 }
 
+/* ------------------------------------------------------------------
+ * Decoder runtime registry tests (v1.0.3)
+ * ------------------------------------------------------------------ */
+
+/* Custom decoder for the registry test: marks the first byte of the
+ * corrections buffer with a sentinel.  ctx is a uint8_t* whose value
+ * is written into corrections[0], so we can prove ctx threads through. */
+static int sentinel_decoder(const moonlab_decoder_input_t *in, void *ctx)
+{
+    const unsigned char *sentinel = (const unsigned char *)ctx;
+    memset(in->corrections, 0, (size_t)in->code->num_qubits);
+    if (sentinel) in->corrections[0] = *sentinel;
+    return MOONLAB_DECODER_OK;
+}
+
+static void test_decoder_registry_builtins(void)
+{
+    fprintf(stdout, "\n--- decoder registry: built-in entries ---\n");
+    const int n = moonlab_num_decoders();
+    CHECK(n >= 5, "registry has >= 5 built-in decoders (n=%d)", n);
+
+    const char *names[16] = {0};
+    const int copied = moonlab_list_decoders(names, 16);
+    CHECK(copied == n, "list_decoders copied %d == num_decoders %d", copied, n);
+
+    int saw_greedy = 0, saw_mwpm = 0, saw_sbnn = 0, saw_ss = 0, saw_pym = 0;
+    for (int i = 0; i < copied; i++) {
+        if (!names[i]) continue;
+        if (strcmp(names[i], "greedy")               == 0) saw_greedy = 1;
+        if (strcmp(names[i], "mwpm_exact")           == 0) saw_mwpm   = 1;
+        if (strcmp(names[i], "sbnn")                 == 0) saw_sbnn   = 1;
+        if (strcmp(names[i], "libirrep_single_shot") == 0) saw_ss     = 1;
+        if (strcmp(names[i], "pymatching")           == 0) saw_pym    = 1;
+    }
+    CHECK(saw_greedy && saw_mwpm && saw_sbnn && saw_ss && saw_pym,
+          "all five built-in names registered (greedy=%d mwpm=%d sbnn=%d ss=%d pym=%d)",
+          saw_greedy, saw_mwpm, saw_sbnn, saw_ss, saw_pym);
+
+    const moonlab_decoder_entry_t *g = moonlab_lookup_decoder("greedy");
+    CHECK(g != NULL && g->fn != NULL, "lookup greedy returns entry with fn");
+    CHECK(moonlab_lookup_decoder("does-not-exist") == NULL,
+          "unknown decoder name returns NULL");
+}
+
+static void test_decoder_registry_register_custom(void)
+{
+    fprintf(stdout, "\n--- decoder registry: register custom decoder ---\n");
+    const unsigned char sentinel = 0xA5;
+    CHECK(moonlab_register_decoder(
+              "tsotchke-test-sentinel", sentinel_decoder,
+              (void *)&sentinel, "test-only sentinel decoder") == 0,
+          "register custom decoder");
+
+    const moonlab_decoder_entry_t *e =
+        moonlab_lookup_decoder("tsotchke-test-sentinel");
+    CHECK(e != NULL, "lookup returns custom entry");
+    CHECK(e && e->fn == sentinel_decoder, "fn pointer round-trips");
+    CHECK(e && e->ctx == &sentinel, "ctx pointer round-trips");
+    CHECK(e && e->description &&
+              strstr(e->description, "sentinel decoder") != NULL,
+          "description round-trips");
+
+    /* Dispatch by name. */
+    const moonlab_decoder_code_t code = {
+        .distance = 3, .num_qubits = 18, .is_toric = 1
+    };
+    unsigned char syndromes[9]   = {0};
+    unsigned char corrections[18] = {0};
+    const moonlab_decoder_input_t in = {
+        .code = &code, .syndromes = syndromes,
+        .corrections = corrections, .num_stabilisers = 9,
+    };
+    CHECK(moonlab_decoder_decode_by_name("tsotchke-test-sentinel", &in) == 0,
+          "decode_by_name dispatches to custom");
+    CHECK(corrections[0] == 0xA5,
+          "custom decoder ran and wrote sentinel (got 0x%02X)",
+          corrections[0]);
+
+    /* Unregister. */
+    CHECK(moonlab_unregister_decoder("tsotchke-test-sentinel") == 0,
+          "unregister custom decoder");
+    CHECK(moonlab_lookup_decoder("tsotchke-test-sentinel") == NULL,
+          "lookup after unregister returns NULL");
+    CHECK(moonlab_unregister_decoder("nonexistent") != 0,
+          "unregister nonexistent reports error");
+}
+
+static void test_decoder_registry_override_builtin(void)
+{
+    /* The registry is the single source of truth: re-registering
+     * "greedy" with a custom fn makes both `decode_by_name("greedy")`
+     * AND `decode(MOONLAB_DECODER_GREEDY, ...)` route through it.
+     * After the test we restore the original entry. */
+    fprintf(stdout, "\n--- decoder registry: override built-in slot ---\n");
+    const moonlab_decoder_entry_t *orig = moonlab_lookup_decoder("greedy");
+    CHECK(orig != NULL, "original greedy entry exists");
+    if (!orig) return;
+    const moonlab_decoder_fn original_fn  = orig->fn;
+    void *const                original_ctx = orig->ctx;
+
+    const unsigned char sentinel = 0x7F;
+    CHECK(moonlab_register_decoder("greedy", sentinel_decoder,
+                                   (void *)&sentinel, NULL) == 0,
+          "re-register greedy with sentinel");
+
+    const moonlab_decoder_code_t code = {
+        .distance = 3, .num_qubits = 18, .is_toric = 1
+    };
+    unsigned char syndromes[9]   = {0};
+    unsigned char corrections[18] = {0};
+    const moonlab_decoder_input_t in = {
+        .code = &code, .syndromes = syndromes,
+        .corrections = corrections, .num_stabilisers = 9,
+    };
+    CHECK(moonlab_decoder_decode(MOONLAB_DECODER_GREEDY, &in) == 0,
+          "enum dispatcher fired after override");
+    CHECK(corrections[0] == 0x7F,
+          "enum dispatch routed through re-registered fn (got 0x%02X)",
+          corrections[0]);
+
+    /* Restore the original built-in. */
+    CHECK(moonlab_register_decoder("greedy", original_fn, original_ctx,
+                                   "In-tree nearest-pair matching baseline") == 0,
+          "restore original greedy");
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    fprintf(stdout, "=== decoder-bench dispatcher (v0.6.7 scaffold) ===\n");
+    fprintf(stdout, "=== decoder-bench dispatcher + registry ===\n");
     test_slot_availability();
     test_greedy_zero_syndrome();
     test_greedy_two_defects();
@@ -261,6 +387,9 @@ int main(void)
     test_mwpm_exact_six_defects();
     test_external_slots();
     test_error_paths();
+    test_decoder_registry_builtins();
+    test_decoder_registry_register_custom();
+    test_decoder_registry_override_builtin();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

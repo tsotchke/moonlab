@@ -13,6 +13,7 @@
 #include "decoder_bench.h"
 #include "mwpm_exact.h"
 
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -378,8 +379,224 @@ static int decoder_pymatching(const moonlab_decoder_input_t *in)
     return MOONLAB_DECODER_OK;
 }
 
-int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
-                           const moonlab_decoder_input_t  *in)
+/* ------------------------------------------------------------------
+ * Decoder runtime registry (since v1.0.3)
+ *
+ * Single source of truth for both the enum dispatcher and the name
+ * dispatcher.  The five baked-in decoders auto-register on first use
+ * (pthread_once).  External callers (the private overlay, QGTL, etc.)
+ * use moonlab_register_decoder() at any time.
+ * ------------------------------------------------------------------ */
+
+#define DECODER_REGISTRY_MAX 32
+
+typedef struct {
+    char               *name;        /**< owned strdup */
+    moonlab_decoder_fn  fn;
+    void               *ctx;
+    char               *description; /**< owned strdup, may be NULL */
+} decoder_slot_t;
+
+static decoder_slot_t  g_decoders[DECODER_REGISTRY_MAX];
+static int             g_n_decoders = 0;
+static pthread_mutex_t g_decoder_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t  g_decoder_init_once = PTHREAD_ONCE_INIT;
+
+/* Trampolines: each baked-in decoder has the runtime fn signature
+ * (in, ctx).  ctx is ignored for the built-ins -- their behaviour is
+ * fixed by the source. */
+static int decoder_greedy_trampoline(const moonlab_decoder_input_t *in, void *ctx)
+{
+    (void)ctx;
+    return decoder_greedy(in);
+}
+
+static int decoder_mwpm_exact_trampoline(const moonlab_decoder_input_t *in, void *ctx)
+{
+    (void)ctx;
+    memset(in->corrections, 0, (size_t)in->code->num_qubits);
+    const int rc = moonlab_mwpm_exact_decode_toric(
+        in->code->distance, in->syndromes,
+        in->num_stabilisers, in->corrections);
+    if (rc == MOONLAB_MWPM_OK || rc == MOONLAB_MWPM_INFEASIBLE) {
+        return MOONLAB_DECODER_OK;
+    }
+    return MOONLAB_DECODER_OOM;
+}
+
+static int decoder_sbnn_trampoline(const moonlab_decoder_input_t *in, void *ctx)
+{
+    (void)ctx;
+#ifdef MOONLAB_HAS_SBNN
+    return decoder_sbnn(in);
+#else
+    (void)in;
+    return MOONLAB_DECODER_NOT_BUILT;
+#endif
+}
+
+static int decoder_libirrep_ss_trampoline(const moonlab_decoder_input_t *in, void *ctx)
+{
+    (void)ctx;
+#ifdef MOONLAB_HAS_LIBIRREP
+    return decoder_libirrep_ss(in);
+#else
+    (void)in;
+    return MOONLAB_DECODER_NOT_BUILT;
+#endif
+}
+
+static int decoder_pymatching_trampoline(const moonlab_decoder_input_t *in, void *ctx)
+{
+    (void)ctx;
+    return decoder_pymatching(in);
+}
+
+/* Caller holds g_decoder_lock.  Returns existing slot index for
+ * `name`, or -1 if absent. */
+static int find_decoder_locked(const char *name)
+{
+    for (int i = 0; i < g_n_decoders; i++) {
+        if (g_decoders[i].name && strcmp(g_decoders[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Caller holds g_decoder_lock.  Installs (or replaces) `name`. */
+static int install_decoder_locked(const char         *name,
+                                  moonlab_decoder_fn  fn,
+                                  void               *ctx,
+                                  const char         *description)
+{
+    int idx = find_decoder_locked(name);
+    if (idx < 0) {
+        if (g_n_decoders >= DECODER_REGISTRY_MAX) {
+            return MOONLAB_DECODER_BAD_ARG; /* registry full */
+        }
+        idx = g_n_decoders++;
+        g_decoders[idx].name = NULL;
+        g_decoders[idx].description = NULL;
+    }
+    char *new_name = strdup(name);
+    char *new_desc = description ? strdup(description) : NULL;
+    if (!new_name || (description && !new_desc)) {
+        free(new_name);
+        free(new_desc);
+        return MOONLAB_DECODER_OOM;
+    }
+    free(g_decoders[idx].name);
+    free(g_decoders[idx].description);
+    g_decoders[idx].name        = new_name;
+    g_decoders[idx].fn          = fn;
+    g_decoders[idx].ctx         = ctx;
+    g_decoders[idx].description = new_desc;
+    return 0;
+}
+
+static void register_builtin_decoders(void)
+{
+    pthread_mutex_lock(&g_decoder_lock);
+    install_decoder_locked("greedy", decoder_greedy_trampoline, NULL,
+        "In-tree nearest-pair matching baseline (always available)");
+    install_decoder_locked("mwpm_exact", decoder_mwpm_exact_trampoline, NULL,
+        "Built-in exact MWPM (brute force <=10 defects, greedy + 2-opt past)");
+    install_decoder_locked("sbnn", decoder_sbnn_trampoline, NULL,
+        "SbNN learned decoder (gated on MOONLAB_HAS_SBNN)");
+    install_decoder_locked("libirrep_single_shot", decoder_libirrep_ss_trampoline,
+                           NULL,
+        "libirrep single-shot decoder (gated on MOONLAB_HAS_LIBIRREP)");
+    install_decoder_locked("pymatching", decoder_pymatching_trampoline, NULL,
+        "Stim-pymatching reference via python3 subprocess (gated on bridge script)");
+    pthread_mutex_unlock(&g_decoder_lock);
+}
+
+static void ensure_decoders_initialised(void)
+{
+    pthread_once(&g_decoder_init_once, register_builtin_decoders);
+}
+
+int moonlab_register_decoder(const char         *name,
+                             moonlab_decoder_fn  fn,
+                             void               *ctx,
+                             const char         *description)
+{
+    if (!name || !fn) return MOONLAB_DECODER_BAD_ARG;
+    ensure_decoders_initialised();
+    pthread_mutex_lock(&g_decoder_lock);
+    const int rc = install_decoder_locked(name, fn, ctx, description);
+    pthread_mutex_unlock(&g_decoder_lock);
+    return rc;
+}
+
+int moonlab_unregister_decoder(const char *name)
+{
+    if (!name) return MOONLAB_DECODER_BAD_ARG;
+    ensure_decoders_initialised();
+    pthread_mutex_lock(&g_decoder_lock);
+    const int idx = find_decoder_locked(name);
+    if (idx < 0) {
+        pthread_mutex_unlock(&g_decoder_lock);
+        return MOONLAB_DECODER_BAD_ARG;
+    }
+    free(g_decoders[idx].name);
+    free(g_decoders[idx].description);
+    /* Compact: move tail entry into the freed slot to keep the table dense. */
+    const int last = g_n_decoders - 1;
+    if (idx != last) g_decoders[idx] = g_decoders[last];
+    memset(&g_decoders[last], 0, sizeof(g_decoders[last]));
+    g_n_decoders--;
+    pthread_mutex_unlock(&g_decoder_lock);
+    return 0;
+}
+
+const moonlab_decoder_entry_t *moonlab_lookup_decoder(const char *name)
+{
+    /* Returns a pointer into a per-thread static buffer so callers
+     * get a stable snapshot while still seeing live ctx updates if
+     * they re-call.  Registry rows can move when entries are
+     * unregistered (compaction), so we copy out instead of leaking
+     * the slot pointer. */
+    static __thread moonlab_decoder_entry_t snapshot;
+    if (!name) return NULL;
+    ensure_decoders_initialised();
+    pthread_mutex_lock(&g_decoder_lock);
+    const int idx = find_decoder_locked(name);
+    if (idx < 0) {
+        pthread_mutex_unlock(&g_decoder_lock);
+        return NULL;
+    }
+    snapshot.name        = g_decoders[idx].name;
+    snapshot.fn          = g_decoders[idx].fn;
+    snapshot.ctx         = g_decoders[idx].ctx;
+    snapshot.description = g_decoders[idx].description;
+    pthread_mutex_unlock(&g_decoder_lock);
+    return &snapshot;
+}
+
+int moonlab_num_decoders(void)
+{
+    ensure_decoders_initialised();
+    pthread_mutex_lock(&g_decoder_lock);
+    const int n = g_n_decoders;
+    pthread_mutex_unlock(&g_decoder_lock);
+    return n;
+}
+
+int moonlab_list_decoders(const char **out_names, int max)
+{
+    if (!out_names || max <= 0) return 0;
+    ensure_decoders_initialised();
+    pthread_mutex_lock(&g_decoder_lock);
+    const int n = g_n_decoders < max ? g_n_decoders : max;
+    for (int i = 0; i < n; i++) out_names[i] = g_decoders[i].name;
+    pthread_mutex_unlock(&g_decoder_lock);
+    return n;
+}
+
+int moonlab_decoder_decode_by_name(const char                     *name,
+                                   const moonlab_decoder_input_t  *in)
 {
     if (!in || !in->code || !in->syndromes || !in->corrections) {
         return MOONLAB_DECODER_BAD_ARG;
@@ -388,38 +605,33 @@ int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
         in->num_stabilisers < 0) {
         return MOONLAB_DECODER_BAD_ARG;
     }
-
-    switch (slot) {
-    case MOONLAB_DECODER_GREEDY:
-        return decoder_greedy(in);
-    case MOONLAB_DECODER_MWPM_EXACT: {
-        /* Real exact MWPM (brute-force enumeration up to n=10 defects,
-         * greedy + 2-opt past that).  Falls back to greedy on
-         * INFEASIBLE / OOM. */
-        memset(in->corrections, 0, (size_t)in->code->num_qubits);
-        const int rc = moonlab_mwpm_exact_decode_toric(
-            in->code->distance, in->syndromes,
-            in->num_stabilisers, in->corrections);
-        if (rc == MOONLAB_MWPM_OK || rc == MOONLAB_MWPM_INFEASIBLE) {
-            return MOONLAB_DECODER_OK;
-        }
-        return MOONLAB_DECODER_OOM;
-    }
-    case MOONLAB_DECODER_LIBIRREP_SS:
-#ifdef MOONLAB_HAS_LIBIRREP
-        return decoder_libirrep_ss(in);
-#else
-        return MOONLAB_DECODER_NOT_BUILT;
-#endif
-    case MOONLAB_DECODER_SBNN:
-#ifdef MOONLAB_HAS_SBNN
-        return decoder_sbnn(in);
-#else
-        return MOONLAB_DECODER_NOT_BUILT;
-#endif
-    case MOONLAB_DECODER_PYMATCHING:
-        return decoder_pymatching(in);
-    default:
+    if (!name) return MOONLAB_DECODER_BAD_ARG;
+    ensure_decoders_initialised();
+    /* Take a snapshot of the (fn, ctx) under lock so an unregister
+     * racing us can't observe a torn pointer. */
+    pthread_mutex_lock(&g_decoder_lock);
+    const int idx = find_decoder_locked(name);
+    if (idx < 0) {
+        pthread_mutex_unlock(&g_decoder_lock);
         return MOONLAB_DECODER_BAD_ARG;
     }
+    moonlab_decoder_fn fn = g_decoders[idx].fn;
+    void              *ctx = g_decoders[idx].ctx;
+    pthread_mutex_unlock(&g_decoder_lock);
+    return fn(in, ctx);
+}
+
+int moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
+                           const moonlab_decoder_input_t  *in)
+{
+    /* Enum surface: translate slot -> built-in name and delegate to
+     * the registry dispatcher.  This makes the registry the single
+     * source of truth: any private overlay that re-registers
+     * "mwpm_exact" with its own implementation transparently takes
+     * over the enum path too. */
+    const char *name = moonlab_decoder_slot_name(slot);
+    if (!name || strcmp(name, "unknown") == 0) {
+        return MOONLAB_DECODER_BAD_ARG;
+    }
+    return moonlab_decoder_decode_by_name(name, in);
 }
