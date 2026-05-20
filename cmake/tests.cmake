@@ -1002,6 +1002,23 @@
         TIMEOUT 60
     )
 
+    # GPU backend correctness smoke (since v1.1).  Where the existing
+    # test_gpu_backend_discovery only checks that init / shutdown
+    # doesn't crash, this one actually applies a Hadamard on the
+    # GPU backend and verifies the resulting amplitudes match the
+    # analytic |+0>.  Skips cleanly when no backend / no software
+    # ICD is present; on a POCL or lavapipe CI runner it exercises
+    # the GPU kernel dispatch path through software.
+    add_executable(test_gpu_backend_correctness
+        tests/integration/test_gpu_backend_correctness.c)
+    target_link_libraries(test_gpu_backend_correctness PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME integration_gpu_backend_correctness
+             COMMAND test_gpu_backend_correctness)
+    set_tests_properties(integration_gpu_backend_correctness PROPERTIES
+        LABELS "gpu"
+        TIMEOUT 60
+    )
+
     # Cross-repo platform integration smoke (since v1.1) -- exercises
     # the moonlab + QGTL + libirrep + SbNN integration contract.
     # Verifies QGTL ingestion + scheduler + vendor-noise dispatch

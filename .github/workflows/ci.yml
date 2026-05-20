@@ -272,7 +272,7 @@ jobs:
         run: ctest --test-dir build -LE long --output-on-failure --timeout 300
 
   linux-opencl:
-    name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, compile + fallback smoke)
+    name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, POCL correctness smoke)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -287,11 +287,15 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_OPENCL=ON
       - name: Build
         run: cmake --build build -j
-      - name: Run discovery smoke
-        run: ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+      - name: Run discovery + correctness smoke
+        run: |
+          ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+          # Hadamard-correctness check via the POCL ICD.  Verifies
+          # the OpenCL kernel dispatch actually produces |+0>.
+          ctest --test-dir build -R integration_gpu_backend_correctness --output-on-failure --timeout 60
 
   linux-vulkan:
-    name: Linux x86_64 (-DQSIM_ENABLE_VULKAN=ON, compile + fallback smoke)
+    name: Linux x86_64 (-DQSIM_ENABLE_VULKAN=ON, lavapipe correctness smoke)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -306,8 +310,13 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_VULKAN=ON
       - name: Build
         run: cmake --build build -j
-      - name: Run discovery smoke
-        run: ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+      - name: Run discovery + correctness smoke
+        run: |
+          ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
+          # Hadamard-correctness check via the lavapipe software
+          # rasterizer.  Verifies the Vulkan compute kernel dispatch
+          # produces |+0>.
+          ctest --test-dir build -R integration_gpu_backend_correctness --output-on-failure --timeout 60
 
   # CUDA compile-only smoke (since v0.10.0).  No GPU available on
   # GitHub runners; we just confirm the gpu_cuda.cu / gpu_cuda.c
