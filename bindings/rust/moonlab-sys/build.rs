@@ -177,6 +177,7 @@ fn main() {
 #include "{root}/src/applications/moonlab_qgtl_backend.h"
 #include "{root}/src/applications/decoder_bench.h"
 #include "{root}/src/distributed/scheduler.h"
+#include "{root}/src/control/control_plane.h"
 "#, root = project_root.display());
 
     let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
@@ -369,6 +370,9 @@ fn main() {
         .allowlist_function("moonlab_qgtl_circuit_deserialize")
         .allowlist_function("moonlab_qgtl_circuit_save")
         .allowlist_function("moonlab_qgtl_circuit_load")
+        // TCP control plane (since v0.8.7).
+        .allowlist_function("moonlab_control_serve")
+        .allowlist_function("moonlab_control_submit_circuit")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")

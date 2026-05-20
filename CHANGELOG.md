@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.8.)
+(No unreleased changes since v0.8.9.)
+
+## [0.8.9] - 2026-05-19
+
+**Rust control-plane client.**  Pure-stdlib TCP client for the
+v0.8.7 server.  Brings remote circuit submission to Rust with no
+new crate dependencies.
+
+### Added
+
+- `bindings/rust/moonlab/src/control_plane.rs`:
+  - `submit_circuit(host, port, text) -> Result<Vec<f64>>`
+  - `submit_circuit_with_timeout(host, port, text, Duration)`
+
+  Uses `std::net::TcpStream` and `std::io::BufReader::read_line` --
+  no `tokio`, no `hyper`.  Decodes the `OK <N>\n` header, reads
+  `N*8` bytes, unpacks as little-endian `f64` via
+  `f64::from_le_bytes`.
+
+- `bindings/rust/moonlab-sys/build.rs`: bindgen allowlist adds
+  `moonlab_control_serve` + `moonlab_control_submit_circuit` and
+  the wrapper header includes `src/control/control_plane.h`.
+
+- `bindings/rust/moonlab/tests/control_plane_e2e.rs`: integration
+  test that spawns the C server in a worker thread on
+  `127.0.0.1:0`, submits a Bell circuit via the Rust client over
+  TCP, verifies `P[00] = P[11] = 0.5`, submits garbage and
+  verifies an `Err` containing "server rejected".  Port handoff
+  via an `Arc<AtomicU16>` whose underlying storage is passed to
+  the C `out_port` parameter -- main thread observes the bound
+  port before the server enters accept().
+
+### Verified
+
+```
+running 1 test
+test bell_circuit_round_trips_over_tcp ... ok
+test result: ok. 1 passed; 0 failed
+```
 
 ## [0.8.8] - 2026-05-19
 

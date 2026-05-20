@@ -41,6 +41,7 @@ pub mod bell;
 pub mod ca_mps;
 pub mod ca_peps;
 pub mod clifford;
+pub mod control_plane;
 pub mod decoder;
 pub mod error;
 pub mod feynman;
