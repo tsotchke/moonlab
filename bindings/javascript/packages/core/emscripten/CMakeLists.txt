@@ -91,6 +91,9 @@ set(APPLICATION_SOURCES
     # Emscripten compiles as a no-op (single-threaded fan-out).
     ${QSIM_ROOT}/src/applications/moonlab_qgtl_backend.c
     ${QSIM_ROOT}/src/applications/decoder_bench.c
+    # Exact MWPM decoder for the toric code -- referenced by
+    # decoder_bench.c via moonlab_mwpm_exact_decode_toric.
+    ${QSIM_ROOT}/src/applications/mwpm_exact.c
     ${QSIM_ROOT}/src/distributed/scheduler.c
 )
 

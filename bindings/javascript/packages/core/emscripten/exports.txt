@@ -259,6 +259,8 @@ _moonlab_ca_mps_t_dagger
 _moonlab_ca_mps_phase
 _moonlab_ca_mps_normalize
 _moonlab_ca_mps_norm
+# Born-rule sequential sampling (since v0.10.0).
+_moonlab_ca_mps_sample_z
 # Variational-D + gauge warmstart + Z2 LGT + status -- internal symbols
 # (the v0.2.1 ABI wrappers in moonlab_qrng_export.c live behind moonlab_*
 # names but pull in qgt + qrng, which we keep out of the WASM build to
