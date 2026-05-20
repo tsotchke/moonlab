@@ -174,17 +174,18 @@ counters above capture the rejection.
 ## 5. Metrics endpoint
 
 `GET /` analog: connect to the control port and send `METRICS\n`.
-Response is Prometheus 0.0.4 text exposition with eight counters:
+Response is Prometheus 0.0.4 text exposition.  The per-verb request
+counter carries a `verb` label; defensive counters are unlabelled:
 
 ```
-moonlab_control_requests_circuit_total          Successful CIRCUIT requests
-moonlab_control_requests_shots_total            Successful SHOTS requests
-moonlab_control_requests_health_total           HEALTH probes served
-moonlab_control_requests_metrics_total          METRICS scrapes served
-moonlab_control_rejected_total                  Requests rejected after accept
-moonlab_control_rate_limited_total              Connections refused by token bucket
-moonlab_control_tls_handshake_failed_total      SSL_accept failures
-moonlab_control_max_concurrent_rejected_total   Connections refused by concurrency cap
+moonlab_control_requests_total{verb="CIRCUIT"}   Successful CIRCUIT requests
+moonlab_control_requests_total{verb="SHOTS"}     Successful SHOTS requests
+moonlab_control_requests_total{verb="HEALTH"}    HEALTH probes served
+moonlab_control_requests_total{verb="METRICS"}   METRICS scrapes served
+moonlab_control_rejected_total                   Requests rejected post-accept
+moonlab_control_rate_limited_total               Connections refused by token bucket
+moonlab_control_tls_handshake_failed_total       SSL_accept failures
+moonlab_control_max_concurrent_rejected_total    Connections refused by concurrency cap
 ```
 
 A typical scrape config:
