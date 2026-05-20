@@ -791,6 +791,9 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/decoder_bench.c
     src/applications/mwpm_exact.c
     src/distributed/scheduler.c
+    # Control plane (since v0.8.7): POSIX-socket TCP transport for the
+    # v0.8.3 moonlab-circuit v1 wire format.
+    src/control/control_plane.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
     # HEP / lattice gauge theory bench primitives.  The 1+1D Z2 LGT Pauli-sum

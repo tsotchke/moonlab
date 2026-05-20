@@ -782,6 +782,16 @@
         TIMEOUT 30
     )
 
+    # TCP control plane (since v0.8.7).
+    add_executable(test_control_plane tests/integration/test_control_plane.c)
+    target_link_libraries(test_control_plane
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane COMMAND test_control_plane)
+    set_tests_properties(integration_control_plane PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
