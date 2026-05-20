@@ -44,7 +44,7 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 | Haldane / Kane-Mele / BHZ / Kitaev / Hofstadter models | ✅ | `topology.py` | `topology.rs` | `topology.ts` |
 | Kane-Mele full Rashba (since v0.10)     | ✅  | `topology.py` | `topology.rs`   | `topology.ts`     |
 | Z_2 invariant (block-Chern + Wilson-loop, since v0.10) | ✅ | `topology.py` | `topology.rs` | `topology.ts` |
-| Quasicrystal Chern mosaic (10^8 sites)  | ✅  | ◐ ⁶        | ◐ ⁶              | ✗                |
+| Quasicrystal Chern mosaic (Bianco-Resta KPM, L=O(300)) | ✅  | `topology.py` | `topology.rs` ⁶ | ✗ ⁶             |
 
 ## Topological QC + QEC
 
@@ -55,7 +55,7 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 | Decoder zoo (MWPM, MWPM-exact, BP, SBNN, PyMatching) | ✅ | `decoder.py` | `decoder.rs` | `decoder.ts` |
 | QGTL circuit ingestion                  | ✅  | `qgtl.py`   | `qgtl.rs`         | `qgtl.ts`         |
 | libirrep QEC zoo bridge (opt-in)        | ✅ ⁷ | `libirrep_qec.py` | `libirrep_qec.rs` | `libirrep-qec.ts` |
-| Z_2 1+1D lattice gauge theory           | ✅  | ◐ ⁶        | `z2_lgt.rs`       | ✗                |
+| Z_2 1+1D lattice gauge theory           | ✅  | `ca_mps.py` | `z2_lgt.rs`      | `ca-mps.ts`       |
 
 ## Distributed + cloud
 
@@ -112,9 +112,14 @@ randomValues)` against the rebuilt WASM blob; integration test in
 ⁵ JS binds the MPS state through `tensor-network.ts` but the
 adaptive-bond TDVP driver is in the separate `tdvp.ts` module.
 
-⁶ The chern-mosaic 10^8-site kernel + Z2 LGT have C and Rust drivers;
-the Python driver exists for the smaller-scale benchmarks but the
-production 10^8 kernel is exercised from the C harness only.
+⁶ The Bianco-Resta Chern marker (`chern_kpm_*` API) is exposed in all
+three high-level bindings.  The current ceiling on the sparse-stencil
+backend is L = O(300) (~90 000 sites); the C-side
+`tests/performance/bench_chern_mosaic_hq.c` harness drives this directly
+and ships the canonical PRL-reproduction artefacts.  No Python or Rust
+driver currently re-implements the full PPM-emitting + manifest pipeline.
+JS is `✗` because the chern_kpm symbols are not in the WASM exports list
+(the kernel is heavy and not a browser-target).
 
 ⁷ libirrep bridge requires `-DQSIM_ENABLE_LIBIRREP=ON` at build time.
 Without it the bridge entries return `MOONLAB_LIBIRREP_NOT_BUILT = -201`
