@@ -13,6 +13,7 @@ unit test or benchmark in the source tree.
 | 2 | [mpdo_noise.md](mpdo_noise.md) | Polynomial-cost noisy circuit simulation via the v0.3 matrix-product density-operator engine. |
 | 3 | [topological_band_structure.md](topological_band_structure.md) | Chern and Z_2 invariants on the SSH, Qi-Wu-Zhang, Haldane, Kane-Mele, Bernevig-Hughes-Zhang, and Hofstadter models with the v0.3 quantum-geometric-tensor module. |
 | 4 | [adaptive_bond_tdvp.md](adaptive_bond_tdvp.md) | Real- and imaginary-time evolution of MPS states with the v0.4 entropy-feedback PID bond-dimension controller; C, Python, and Rust worked examples. |
+| 5 | [research_workflow.md](research_workflow.md) | End-to-end single-thread walkthrough across every binding: DMRG ground state (Python) -> TDVP MPS preparation (Rust) -> CA-MPS var-D (JS) -> topology sanity check (Python) -> vendor-noise pre-flight on IBM / Rigetti / IonQ (Python) -> cloud control-plane submission. |
 
 ## Conventions
 
