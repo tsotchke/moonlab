@@ -80,11 +80,20 @@ type QgtlModule = {
   _moonlab_qgtl_results_free: (r: number) => void;
   _moonlab_qgtl_circuit_num_qubits: (h: number) => number;
   _moonlab_qgtl_circuit_num_gates: (h: number) => number;
+  // v0.8.6 serialization surface.  Optional: present iff WASM was
+  // built from libquantumsim >= v0.8.3.
+  _moonlab_qgtl_circuit_serialize?: (h: number, buf: number, bufSize: number, outWritten: number) => number;
+  _moonlab_qgtl_circuit_deserialize?: (buf: number, bufSize: number, outStatus: number) => number;
   _malloc: (n: number) => number;
   _free: (p: number) => void;
+  HEAP8: Int8Array;
+  HEAPU8: Uint8Array;
   HEAP32: Int32Array;
   HEAPU32: Uint32Array;
   HEAPF64: Float64Array;
+  lengthBytesUTF8?: (s: string) => number;
+  stringToUTF8?: (s: string, p: number, n: number) => void;
+  UTF8ToString?: (p: number, n?: number) => string;
 };
 
 export class QgtlCircuit {
@@ -193,6 +202,81 @@ export class QgtlCircuit {
     } finally {
       this.mod._free(optsPtr);
       this.mod._free(resPtr);
+    }
+  }
+
+  // ---- v0.8.6: portable circuit serialization ----
+
+  /** Serialize the circuit to a portable text string (moonlab-circuit v1).
+   *  Throws QgtlError if libquantumsim predates v0.8.3 (WASM built before
+   *  the serialization surface). */
+  serialize(): string {
+    if (!this.mod._moonlab_qgtl_circuit_serialize) {
+      throw new QgtlError(
+        'moonlab_qgtl_circuit_serialize unavailable -- WASM build predates libquantumsim v0.8.3',
+        MOONLAB_QGTL_UNSUPPORTED,
+      );
+    }
+
+    // Size-query: pass NULL buf, 0 size, get back required bytes via outWritten.
+    const sizePtr = this.mod._malloc(8); // size_t = u32 on wasm32, allocate 8 for safety
+    try {
+      this.mod.HEAPU32[sizePtr >> 2] = 0;
+      this.mod.HEAPU32[(sizePtr >> 2) + 1] = 0;
+
+      let rc = this.mod._moonlab_qgtl_circuit_serialize(this.handle, 0, 0, sizePtr);
+      if (rc !== 0) {
+        throw new QgtlError(`serialize size-query: rc=${rc}`, rc);
+      }
+      const needed = this.mod.HEAPU32[sizePtr >> 2];
+      if (needed === 0) return '';
+
+      const bufPtr = this.mod._malloc(needed + 1);
+      try {
+        rc = this.mod._moonlab_qgtl_circuit_serialize(this.handle, bufPtr, needed + 1, 0);
+        if (rc !== 0) {
+          throw new QgtlError(`serialize: rc=${rc}`, rc);
+        }
+        if (this.mod.UTF8ToString) {
+          return this.mod.UTF8ToString(bufPtr, needed + 1);
+        }
+        // Fallback when emscripten runtime helpers aren't exported: decode by hand.
+        const bytes = this.mod.HEAPU8.subarray(bufPtr, bufPtr + needed);
+        return new TextDecoder('utf-8').decode(bytes);
+      } finally {
+        this.mod._free(bufPtr);
+      }
+    } finally {
+      this.mod._free(sizePtr);
+    }
+  }
+
+  /** Reconstruct a QgtlCircuit from a serialized text string. */
+  static async deserialize(text: string): Promise<QgtlCircuit> {
+    const mod = (await getModule()) as unknown as QgtlModule;
+    if (!mod._moonlab_qgtl_circuit_deserialize) {
+      throw new QgtlError(
+        'moonlab_qgtl_circuit_deserialize unavailable -- WASM build predates libquantumsim v0.8.3',
+        MOONLAB_QGTL_UNSUPPORTED,
+      );
+    }
+
+    const encoded = new TextEncoder().encode(text);
+    const bufPtr = mod._malloc(encoded.length);
+    const statusPtr = mod._malloc(4);
+    try {
+      mod.HEAPU8.set(encoded, bufPtr);
+      mod.HEAP32[statusPtr >> 2] = 0;
+      const handle = mod._moonlab_qgtl_circuit_deserialize(bufPtr, encoded.length, statusPtr);
+      if (!handle) {
+        const status = mod.HEAP32[statusPtr >> 2];
+        throw new QgtlError(`deserialize: status=${status}`, status);
+      }
+      const n = mod._moonlab_qgtl_circuit_num_qubits(handle);
+      return new QgtlCircuit(handle, mod, n);
+    } finally {
+      mod._free(bufPtr);
+      mod._free(statusPtr);
     }
   }
 }

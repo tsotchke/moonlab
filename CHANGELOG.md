@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.5.)
+(No unreleased changes since v0.8.6.)
+
+## [0.8.6] - 2026-05-19
+
+**JS/WASM binding for v0.8.3 circuit serialization.**  Completes
+Python / Rust / JS trifecta on the portable circuit format.
+
+### Added
+
+- `bindings/javascript/.../emscripten/exports.txt`:
+  `_moonlab_qgtl_circuit_serialize` and `_deserialize` exported.
+
+- `QgtlCircuit.serialize(): string` -- size-query then malloc into
+  WASM linear memory; decodes via the emscripten `UTF8ToString`
+  helper, with `TextDecoder` fallback when the helper isn't
+  bundled.
+
+- `static QgtlCircuit.deserialize(text: string): Promise<QgtlCircuit>`
+  -- encodes via `TextEncoder`, writes into WASM, calls the C
+  deserializer, wraps the returned handle in a `QgtlCircuit`.
+
+Backward-compat by design: both new methods inspect
+`mod._moonlab_qgtl_circuit_serialize` and throw
+`MOONLAB_QGTL_UNSUPPORTED` with a clear message when the binding
+runs against a WASM build older than v0.8.3.
+
+### Notes
+
+The WASM artifact must be rebuilt to surface the new symbols at
+runtime; the source-of-truth (`exports.txt` + TS wrappers + types)
+all land here, so the next emscripten build is the only step
+remaining to enable the methods in production.
 
 ## [0.8.5] - 2026-05-19
 
