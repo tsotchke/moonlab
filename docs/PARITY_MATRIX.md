@@ -28,7 +28,7 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 | MPS state + SVD truncation              | ✅  | `tdvp.py`   | `tdvp.rs`         | `tensor-network.ts` ⁵ |
 | Two-site adaptive TDVP (entropy-PID)    | ✅  | `tdvp.py`   | `tdvp.rs`         | `tdvp.ts`         |
 | MPDO noise simulator                    | ✅  | `mpdo.py`   | `mpdo.rs`         | `mpdo.ts`         |
-| DMRG (variational ground state)         | ✅  | `algorithms.py` ¹ | `tdvp.rs` ¹ | ◐ ²              |
+| DMRG (variational ground state)         | ✅  | `dmrg.py`   | `dmrg.rs`         | `tensor-network.ts` ¹ |
 | CA-MPS (Clifford-assisted MPS)          | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
 | CA-MPS variational-D (Clifford search)  | ✅  | `ca_mps.py` | `ca_mps.rs`       | ◐ ³              |
 | CA-MPS Born-rule sampling (since v0.10) | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
@@ -90,12 +90,13 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 
 ## Footnotes
 
-¹ Python and Rust expose DMRG via the algorithms / tdvp wrappers; the
-two-site DMRG primitive itself is C-only.
-
-² JS has tensor-network primitives (MPS state, gates, SVD) but no
-high-level DMRG driver; build one out of the primitives or use Python
-/ Rust.
+¹ All four bindings expose the v0.10.0 stable-ABI DMRG energy entries
+(`moonlab_dmrg_tfim_energy`, `moonlab_dmrg_heisenberg_energy`).  JS
+additionally exposes `dmrgTFIMGroundState` from `tensor-network.ts`
+which returns the converged MPS handle plus a result struct via the
+internal `_dmrg_tfim_ground_state` entry.  Two-site DMRG with caller-
+supplied MPO is still C-only -- drop to `dmrg_ground_state` via FFI
+for that.
 
 ³ JS exposes CA-MPS gates but not the variational-D Clifford search;
 the inner loop wants tight C-side coupling.
