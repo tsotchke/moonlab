@@ -22,7 +22,7 @@ use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
     moonlab_control_server_open, moonlab_control_server_run,
     moonlab_control_server_set_secret, moonlab_control_server_shutdown,
-    moonlab_control_server_t,
+    moonlab_control_server_t, moonlab_control_submit_circuit_tls,
 };
 use std::ffi::CString;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -367,4 +367,71 @@ impl Drop for ControlPlaneServer {
             unsafe { moonlab_control_server_close(ptr); }
         }
     }
+}
+
+/// Submit a circuit over a TLS-wrapped TCP connection -- since v0.8.18.
+///
+/// FFI thunk over the C `moonlab_control_submit_circuit_tls`, which is
+/// built into the library when `-DQSIM_ENABLE_TLS=ON`.  Returns
+/// `QuantumError::Ffi` if the library was built without TLS.
+///
+/// # Parameters
+///
+/// - `ca_path`: PEM CA bundle pin against the server's cert.  Required
+///   for production; pass `None` together with `insecure = true` for
+///   development / self-signed certificates only.
+/// - `insecure`: skip peer verification.  Tests / dev only.
+/// - `secret`: optional HMAC-SHA3-256 shared secret.  Composes with
+///   TLS -- the server must have both `use_tls` and `set_secret`
+///   configured when both are provided.
+pub fn submit_circuit_tls(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    ca_path: Option<&str>,
+    insecure: bool,
+    secret: Option<&[u8]>,
+) -> Result<Vec<f64>> {
+    let host_c = CString::new(host)
+        .map_err(|e| QuantumError::Ffi(format!("invalid host: {e}")))?;
+    let ca_c = match ca_path {
+        Some(p) => Some(CString::new(p)
+            .map_err(|e| QuantumError::Ffi(format!("invalid ca_path: {e}")))?),
+        None => None,
+    };
+    let bytes = circuit_text.as_bytes();
+
+    let mut probs_ptr: *mut f64 = std::ptr::null_mut();
+    let mut num_probs: usize = 0;
+    let (secret_ptr, secret_len) = match secret {
+        Some(s) => (s.as_ptr(), s.len()),
+        None    => (std::ptr::null(), 0usize),
+    };
+
+    let rc = unsafe {
+        moonlab_control_submit_circuit_tls(
+            host_c.as_ptr(),
+            port,
+            ca_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null()),
+            if insecure { 1 } else { 0 },
+            secret_ptr,
+            secret_len,
+            bytes.as_ptr() as *const i8,
+            bytes.len(),
+            &mut probs_ptr as *mut *mut f64,
+            &mut num_probs as *mut usize,
+        )
+    };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(format!("submit_circuit_tls rc={rc}")));
+    }
+    if probs_ptr.is_null() || num_probs == 0 {
+        return Err(QuantumError::Ffi("submit_circuit_tls returned no probs".into()));
+    }
+    // Copy out + free the C buffer.
+    let probs = unsafe {
+        std::slice::from_raw_parts(probs_ptr, num_probs).to_vec()
+    };
+    unsafe { libc::free(probs_ptr as *mut libc::c_void); }
+    Ok(probs)
 }

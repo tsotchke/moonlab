@@ -7,7 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.17.)
+(No unreleased changes since v0.8.18.)
+
+## [0.8.18] - 2026-05-19
+
+**Python + Rust TLS clients.**  Brings the v0.8.17 TLS transport to
+binding-language users so they can authenticate and encrypt against
+remote moonlab control planes without dropping to C.
+
+### Added
+
+- Python `moonlab.control_plane.submit_circuit_tls(host, port, text,
+  ca_path=None, insecure=False, timeout=30.0, secret=None)`:
+  pure-stdlib using `ssl.create_default_context(cafile=...)` /
+  `_create_unverified_context()`, wraps `socket.create_connection`,
+  composes with the v0.8.16 HMAC `secret` kwarg (AUTH prelude sent
+  inside the encrypted channel).
+
+- Rust `moonlab::control_plane::submit_circuit_tls(host, port,
+  text, ca_path, insecure, secret)`: FFI thunk over the C
+  `moonlab_control_submit_circuit_tls` (shares the OpenSSL link
+  the C library already pulls in -- no `openssl` or `rustls` crate
+  added).  Copies the probability buffer out and `libc::free`s the
+  C-side malloc'd buffer.
+
+- `moonlab-sys` allowlist gains `moonlab_control_server_use_tls`
+  and `moonlab_control_submit_circuit_tls`.
+
+- `bindings/rust/moonlab/tests/control_plane_tls_e2e.rs`:
+  cargo integration test that shells out to `openssl req` for a
+  one-day self-signed cert, configures the C server via FFI
+  `use_tls`, then drives the Rust TLS client with
+  `insecure = true`, and asserts the Bell signature came back
+  bit-perfect through TLS.
+
+### Verified
+
+```
+Python:                                          (smoke)
+  server up on port 54621 with TLS
+  P[00]=0.500000, P[11]=0.500000
+  OK Bell over TLS via Python stdlib ssl
+
+Rust:                                            (cargo test)
+  test bell_circuit_round_trips_over_tls ... ok
+```
 
 ## [0.8.17] - 2026-05-19
 
