@@ -30,7 +30,7 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 | MPDO noise simulator                    | ✅  | `mpdo.py`   | `mpdo.rs`         | `mpdo.ts`         |
 | DMRG (variational ground state)         | ✅  | `dmrg.py`   | `dmrg.rs`         | `tensor-network.ts` ¹ |
 | CA-MPS (Clifford-assisted MPS)          | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
-| CA-MPS variational-D (Clifford search)  | ✅  | `ca_mps.py` | `ca_mps.rs`       | ◐ ³              |
+| CA-MPS variational-D (Clifford search)  | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
 | CA-MPS Born-rule sampling (since v0.10) | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
 | CA-PEPS 2D                              | ✅  | `ca_peps.py`| `ca_peps.rs`      | `ca-peps.ts`      |
 
@@ -98,8 +98,11 @@ internal `_dmrg_tfim_ground_state` entry.  Two-site DMRG with caller-
 supplied MPO is still C-only -- drop to `dmrg_ground_state` via FFI
 for that.
 
-³ JS exposes CA-MPS gates but not the variational-D Clifford search;
-the inner loop wants tight C-side coupling.
+³ All four bindings expose the variational-D Clifford search: JS as
+`varDRun` in `ca-mps.ts`, Python as `ca_mps.var_d_run_v2`, Rust as
+`moonlab::ca_mps::var_d_run`.  The TS layer marshals the
+`ca_mps_var_d_alt_config_t` + `ca_mps_var_d_alt_result_t` structs into
+the WASM heap by hand (offsets pinned in the source).
 
 ⁴ `moonlab_ca_mps_sample_z` reaches all four bindings (C + Python +
 Rust + JS) on the v1.0 line.  JS calls `CaMps.sampleZ(numSamples,

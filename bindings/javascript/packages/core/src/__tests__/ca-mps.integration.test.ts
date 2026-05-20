@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { CaMps } from '../ca-mps';
+import { CaMps, varDRun, Warmstart } from '../ca-mps';
 
 /** Reproducible LCG matching the Rust test so distributions line up. */
 class Lcg {
@@ -89,5 +89,58 @@ describe('CaMps.sampleZ Born-rule sequential sampler', () => {
     s = await CaMps.create(3, 8);
     const tooShort = new Float64Array(5);   // need 4 * 3 = 12
     expect(() => s!.sampleZ(4, tooShort)).toThrow(/randomValues.length/);
+  });
+});
+
+describe('varDRun (alternating Clifford + imag-time minimisation)', () => {
+  let s: CaMps | null = null;
+  afterEach(() => { s?.dispose(); s = null; });
+
+  function tfimPauliSum(n: number, g: number): {
+    paulis: Uint8Array; coeffs: Float64Array; numTerms: number;
+  } {
+    // H = -sum_i Z_i Z_{i+1} - g sum_i X_i.  Convention: Pauli byte
+    // 1=X, 2=Y, 3=Z (matches the C-side enum used by var-D).
+    const numTerms = (n - 1) + n;
+    const paulis = new Uint8Array(numTerms * n);
+    const coeffs = new Float64Array(numTerms);
+    let row = 0;
+    for (let i = 0; i < n - 1; i++) {
+      paulis[row * n + i] = 3;
+      paulis[row * n + i + 1] = 3;
+      coeffs[row] = -1.0;
+      row++;
+    }
+    for (let i = 0; i < n; i++) {
+      paulis[row * n + i] = 1;
+      coeffs[row] = -g;
+      row++;
+    }
+    return { paulis, coeffs, numTerms };
+  }
+
+  it('TFIM critical point N=4 returns a finite energy below initial', async () => {
+    s = await CaMps.create(4, 16);
+    const { paulis, coeffs, numTerms } = tfimPauliSum(4, 1.0);
+    const result = await varDRun(s, paulis, coeffs, numTerms, {
+      maxOuterIters: 4,
+      imagTimeDtau: 0.1,
+      imagTimeStepsPerOuter: 3,
+      cliffordPassesPerOuter: 4,
+      warmstart: Warmstart.HAll,
+    });
+    expect(Number.isFinite(result.initialEnergy)).toBe(true);
+    expect(Number.isFinite(result.finalEnergy)).toBe(true);
+    expect(result.finalEnergy).toBeLessThanOrEqual(result.initialEnergy);
+    expect(result.outerIterations).toBeGreaterThan(0);
+  });
+
+  it('rejects mismatched Pauli/coeff shapes', async () => {
+    s = await CaMps.create(3, 8);
+    const paulis = new Uint8Array(3);  // 1 term, n=3
+    const coeffs = new Float64Array(2); // mismatch
+    await expect(
+      varDRun(s, paulis, coeffs, 1, { maxOuterIters: 1 }),
+    ).rejects.toThrow(/does not match/);
   });
 });
