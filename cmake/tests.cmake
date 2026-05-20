@@ -890,6 +890,18 @@
         TIMEOUT 30
     )
 
+    # Prometheus METRICS endpoint (since v0.8.23).
+    add_executable(test_control_plane_metrics
+        tests/integration/test_control_plane_metrics.c)
+    target_link_libraries(test_control_plane_metrics
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_metrics
+        COMMAND test_control_plane_metrics)
+    set_tests_properties(integration_control_plane_metrics PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.

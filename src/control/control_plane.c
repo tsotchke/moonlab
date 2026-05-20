@@ -44,6 +44,7 @@ static int io_recv_tls(SSL *ssl,       void *buf, size_t len);
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <stdatomic.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -92,6 +93,15 @@ static void hmac_sha3_256(const uint8_t *key, size_t key_len,
                           uint8_t out[HMAC_DIGEST_SIZE]);
 static void hex_encode(const uint8_t *bin, size_t len, char *hex_out);
 static int  ct_memcmp(const void *a, const void *b, size_t n);
+
+/* Forward declarations for v0.8.23 metric counters (defined alongside
+ * the server lifecycle struct). */
+extern _Atomic uint64_t g_count_circuit;
+extern _Atomic uint64_t g_count_shots;
+extern _Atomic uint64_t g_count_health;
+extern _Atomic uint64_t g_count_metrics;
+extern _Atomic uint64_t g_count_rejected;
+extern _Atomic uint64_t g_count_rate_limited;
 
 /* ------------------------------------------------------------------
  * Wire helpers.
@@ -225,6 +235,9 @@ static int handle_one_request(moonlab_io_t  *io,
     int          log_rc         = MOONLAB_CONTROL_OK;
 #define LOG_AND_RETURN(rc_value) do {                                 \
     log_rc = (rc_value);                                              \
+    if (log_rc != MOONLAB_CONTROL_OK) {                               \
+        atomic_fetch_add(&g_count_rejected, 1);                       \
+    }                                                                 \
     if (log_enabled()) {                                              \
         const double dt = monotonic_ms() - t0;                        \
         fprintf(stderr,                                               \
@@ -254,9 +267,54 @@ static int handle_one_request(moonlab_io_t  *io,
     if (strncmp(first, "HEALTH", 6) == 0 &&
         (first_len == 6 || first[6] == '\n')) {
         log_verb = "HEALTH";
+        atomic_fetch_add(&g_count_health, 1);
         const char *resp = "OK alive\n";
         (void)send_all(io, resp, strlen(resp));
         LOG_AND_RETURN(MOONLAB_CONTROL_OK);
+    }
+
+    /* Metrics scrape (v0.8.23).  Same unauth justification as HEALTH:
+     * monitoring scrapers shouldn't need credentials.  Emits a
+     * Prometheus text-format exposition based on the process-wide
+     * atomic counters. */
+    if (strncmp(first, "METRICS", 7) == 0 &&
+        (first_len == 7 || first[7] == '\n')) {
+        log_verb = "METRICS";
+        atomic_fetch_add(&g_count_metrics, 1);
+
+        char body[1024];
+        int n = snprintf(body, sizeof(body),
+            "# HELP moonlab_control_requests_total Total control-plane requests by verb.\n"
+            "# TYPE moonlab_control_requests_total counter\n"
+            "moonlab_control_requests_total{verb=\"CIRCUIT\"} %llu\n"
+            "moonlab_control_requests_total{verb=\"SHOTS\"} %llu\n"
+            "moonlab_control_requests_total{verb=\"HEALTH\"} %llu\n"
+            "moonlab_control_requests_total{verb=\"METRICS\"} %llu\n"
+            "# HELP moonlab_control_rejected_total Requests rejected by the server (bad input, auth, execute failure).\n"
+            "# TYPE moonlab_control_rejected_total counter\n"
+            "moonlab_control_rejected_total %llu\n"
+            "# HELP moonlab_control_rate_limited_total Requests refused at the accept-loop by the per-IP token bucket.\n"
+            "# TYPE moonlab_control_rate_limited_total counter\n"
+            "moonlab_control_rate_limited_total %llu\n",
+            (unsigned long long)atomic_load(&g_count_circuit),
+            (unsigned long long)atomic_load(&g_count_shots),
+            (unsigned long long)atomic_load(&g_count_health),
+            (unsigned long long)atomic_load(&g_count_metrics),
+            (unsigned long long)atomic_load(&g_count_rejected),
+            (unsigned long long)atomic_load(&g_count_rate_limited));
+        if (n < 0 || (size_t)n >= sizeof(body)) {
+            LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
+        }
+        char hdr[64];
+        int hn = snprintf(hdr, sizeof(hdr), "METRICS %d\n", n);
+        if (hn < 0 || (size_t)hn >= sizeof(hdr)) {
+            LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
+        }
+        int rc2 = send_all(io, hdr, (size_t)hn);
+        if (rc2 == MOONLAB_CONTROL_OK) {
+            rc2 = send_all(io, body, (size_t)n);
+        }
+        LOG_AND_RETURN(rc2);
     }
 
     if (strncmp(first, "AUTH ", 5) == 0) {
@@ -312,6 +370,7 @@ static int handle_one_request(moonlab_io_t  *io,
 
     if (strncmp(hdr, "CIRCUIT ", 8) == 0) {
         log_verb = "CIRCUIT";
+        atomic_fetch_add(&g_count_circuit, 1);
         if (sscanf(hdr + 8, "%ld", &body_bytes) != 1) {
             send_err(io, MOONLAB_CONTROL_PROTOCOL,
                      "expected CIRCUIT <N>");
@@ -319,6 +378,7 @@ static int handle_one_request(moonlab_io_t  *io,
         }
     } else if (strncmp(hdr, "SHOTS ", 6) == 0) {
         log_verb = "SHOTS";
+        atomic_fetch_add(&g_count_shots, 1);
         if (sscanf(hdr + 6, "%ld %ld", &num_shots, &body_bytes) != 2) {
             send_err(io, MOONLAB_CONTROL_PROTOCOL,
                      "expected SHOTS <shots> <bytes>");
@@ -567,6 +627,19 @@ typedef struct {
     double         last_refill_ms;
 } rl_bucket_t;
 
+/* Process-wide atomic metric counters (since v0.8.23).  Indexed by
+ * verb; rejected / rate-limited are aggregate.  Atomic so worker
+ * threads can increment without contending on the rate-limit mutex.
+ * One shared instance: even with multiple `moonlab_control_server_t`
+ * handles in-process, all requests roll up to the same counters --
+ * matches Prometheus' "per-process" exposition model. */
+_Atomic uint64_t g_count_circuit      = 0;
+_Atomic uint64_t g_count_shots        = 0;
+_Atomic uint64_t g_count_health       = 0;
+_Atomic uint64_t g_count_metrics      = 0;
+_Atomic uint64_t g_count_rejected     = 0;
+_Atomic uint64_t g_count_rate_limited = 0;
+
 struct moonlab_control_server {
     int     srv_fd;
     int     wake_pipe[2];   /* [0] = read end, [1] = write end. */
@@ -719,6 +792,7 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
          * IPv6 deferred.  Failed clients receive a single short
          * ERR line then we close the socket. */
         if (!rl_take_token(s, peer.sin_addr.s_addr)) {
+            atomic_fetch_add(&g_count_rate_limited, 1);
             const char *resp = "ERR -408 rate limited\n";
             (void)send(client, resp, strlen(resp), 0);
             close(client);
@@ -1492,6 +1566,55 @@ int moonlab_control_submit_circuit_tls(const char    *host,
  * TCP, expects `OK alive\n`.  No AUTH, no TLS -- intentionally simple
  * so a load-balancer probe can verify the listener without secrets.
  * ------------------------------------------------------------------ */
+int moonlab_control_submit_metrics(const char *host, uint16_t port,
+                                   char **out_text)
+{
+    if (!host || !out_text) return MOONLAB_CONTROL_BAD_ARG;
+    *out_text = NULL;
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd); return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd); return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
+
+    int rc = send_all(&plain_io, "METRICS\n", 8);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    char resp_hdr[64];
+    size_t resp_len = 0;
+    rc = recv_until_newline(&plain_io, resp_hdr, sizeof(resp_hdr), &resp_len);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+    if (strncmp(resp_hdr, "METRICS ", 8) != 0) {
+        close(fd); return MOONLAB_CONTROL_PROTOCOL;
+    }
+
+    long body_bytes = -1;
+    if (sscanf(resp_hdr + 8, "%ld", &body_bytes) != 1 ||
+        body_bytes <= 0 || body_bytes > (1L << 18)) {
+        close(fd); return MOONLAB_CONTROL_PROTOCOL;
+    }
+
+    char *body = (char *)malloc((size_t)body_bytes + 1);
+    if (!body) { close(fd); return MOONLAB_CONTROL_OOM; }
+    rc = recv_all(&plain_io, body, (size_t)body_bytes);
+    close(fd);
+    if (rc != MOONLAB_CONTROL_OK) { free(body); return rc; }
+    body[body_bytes] = '\0';
+    *out_text = body;
+    return MOONLAB_CONTROL_OK;
+}
+
 int moonlab_control_submit_health(const char *host, uint16_t port)
 {
     if (!host) return MOONLAB_CONTROL_BAD_ARG;
