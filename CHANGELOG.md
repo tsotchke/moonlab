@@ -7,7 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.9.4.)
+(No unreleased changes since v0.10.0.)
+
+## [0.10.0] - 2026-05-20
+
+**v1.0 prep -- algorithm + transport gaps closed.**  Three real
+implementation TODOs from the v0.3.x / v0.8.x era removed from the
+public surface, replaced by production-grade implementations with
+end-to-end tests.
+
+### Added
+
+- **CA-MPS Born-rule sequential sampling**
+  (`moonlab_ca_mps_sample_z`).  Earlier the module advertised it as
+  "not yet implemented" in the header doc.  Algorithm: for each
+  qubit walk left to right; compute the conditional Pauli
+  `g_i = C^dagger Z_i C` via the existing tableau conjugation, draw
+  v_i = +-1 with P(+1) = (1 + <phi|g_i|phi>)/2, and project |phi>
+  onto the v_i-eigenspace via the `(I + v g_i)/2` MPO.  Cost per
+  sample O(n * (n^2 + chi^2 n + chi^3)).  Validated against the
+  dense state-vector on Bell, GHZ_4, and a non-Clifford H-wall+T
+  state at 4096-8192 shots; empirical marginals and full bitstring
+  frequencies agree within 5/sqrt(shots).
+
+- **Kane-Mele full Rashba terms + Wilson-loop Z_2** (since v0.10.0,
+  previously gated by a v0.3.1 TODO).  The `lambda_r != 0` rejection
+  in `qgt_model_kane_mele` is gone; the Bloch Hamiltonian now wires
+  the genuine `i lambda_r sum_n c_A^dag (s x d_n)_z c_B` Rashba
+  spin-orbit term across the off-block spin sectors.
+
+- `qgt_z2_invariant_pfaffian` (since v0.10.0): Wilson-loop /
+  Wannier-center-spectrum Z_2 for 4-band, 2-occupied,
+  TR-symmetric models.  Works for Hamiltonians where S_z is NOT
+  conserved (Kane-Mele with Rashba, in particular).  Tracks the
+  Wannier center theta_0(k_y) across the half-BZ with a continuous
+  unwrap and counts crossings of theta_ref = pi/2.
+
+- **IPv6 transport for the control plane**
+  (since v0.10.0; previously "IPv6 deferred").  Server binds on
+  any v4 or v6 host -- pass `::` for a dual-stack listener (default
+  `IPV6_V6ONLY=0`); pass `::1` for a v6-only loopback.  Rate-limit
+  key extended to a 16-byte canonical IPv6 representation: v4
+  peers are mapped to `::ffff:a.b.c.d` so a host's v4 and v6
+  traffic share one bucket.  All seven client paths
+  (`moonlab_control_submit_*`) route through a single
+  `getaddrinfo`-backed `client_connect` helper so v4 / v6 / DNS
+  names all work.
+
+### Verified
+
+```
+$ ctest --test-dir build-mpi -L "control_plane|ca_mps|topology"
+100% tests passed, 0 tests failed out of 44
+```
+
+Includes the new `unit_ca_mps_sample`,
+`unit_qgt_kane_mele_rashba`, and
+`integration_control_plane_ipv6` test targets.
 
 ## [0.9.4] - 2026-05-20
 
