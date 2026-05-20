@@ -394,6 +394,8 @@ fn main() {
         .allowlist_function("moonlab_control_submit_health")
         // METRICS (since v0.8.23).
         .allowlist_function("moonlab_control_submit_metrics")
+        // Per-request socket timeout (since v0.8.26).
+        .allowlist_function("moonlab_control_server_set_request_timeout")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")
