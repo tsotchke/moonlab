@@ -266,6 +266,15 @@ try:
 except AttributeError:
     _REQUEST_TIMEOUT_API_AVAILABLE = False
 
+try:
+    _lib.moonlab_control_server_set_max_concurrent.argtypes = [
+        ctypes.c_void_p, ctypes.c_int,
+    ]
+    _lib.moonlab_control_server_set_max_concurrent.restype = ctypes.c_int
+    _MAX_CONCURRENT_API_AVAILABLE = True
+except AttributeError:
+    _MAX_CONCURRENT_API_AVAILABLE = False
+
 
 class ControlPlaneServer:
     """In-process control-plane server, since v0.8.14.
@@ -298,7 +307,8 @@ class ControlPlaneServer:
                  client_ca: Optional[str] = None,
                  rate_limit_rps: int = 0,
                  rate_limit_burst: int = 0,
-                 request_timeout_secs: int = 0) -> None:
+                 request_timeout_secs: int = 0,
+                 max_concurrent: int = 0) -> None:
         """Spin up an in-process control-plane server.
 
         Optional kwargs (all applied before the worker thread starts
@@ -330,6 +340,7 @@ class ControlPlaneServer:
         self._cfg_rate_rps  = int(rate_limit_rps)
         self._cfg_burst     = int(rate_limit_burst)
         self._cfg_timeout   = int(request_timeout_secs)
+        self._cfg_max_conc  = int(max_concurrent)
 
     @property
     def port(self) -> int:
@@ -357,6 +368,8 @@ class ControlPlaneServer:
             self.set_rate_limit(self._cfg_rate_rps, self._cfg_burst)
         if self._cfg_timeout > 0:
             self.set_request_timeout(self._cfg_timeout)
+        if self._cfg_max_conc > 0:
+            self.set_max_concurrent(self._cfg_max_conc)
 
         def runner() -> None:
             self._run_rc = _lib.moonlab_control_server_run(
@@ -441,6 +454,22 @@ class ControlPlaneServer:
             ctypes.c_void_p(self._handle), int(timeout_secs))
         if rc != 0:
             raise ControlPlaneError(f"set_request_timeout rc={rc}")
+
+    def set_max_concurrent(self, max_concurrent: int) -> None:
+        """Cap the number of concurrent in-flight requests (since v0.9.0
+        Python / v0.9.0 server).  0 disables the cap.  Excess clients
+        receive `ERR -409 server busy`."""
+        if not _MAX_CONCURRENT_API_AVAILABLE:
+            raise ControlPlaneError(
+                "set_max_concurrent unavailable -- libquantumsim "
+                "predates v0.9.0"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        rc = _lib.moonlab_control_server_set_max_concurrent(
+            ctypes.c_void_p(self._handle), int(max_concurrent))
+        if rc != 0:
+            raise ControlPlaneError(f"set_max_concurrent rc={rc}")
 
     def set_rate_limit(self, rate_rps: int, burst: int = 0) -> None:
         """Configure the per-source-IP token-bucket rate limit (since

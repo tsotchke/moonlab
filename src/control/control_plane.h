@@ -59,6 +59,7 @@ extern "C" {
 #define MOONLAB_CONTROL_REJECTED      (-405) /**< server rejected the circuit. */
 #define MOONLAB_CONTROL_TIMEOUT       (-406)
 #define MOONLAB_CONTROL_RATE_LIMITED  (-408) /**< client tripped per-IP rate limit. */
+#define MOONLAB_CONTROL_SERVER_BUSY   (-409) /**< server at concurrent-cap; try again later. */
 
 /**
  * @brief Run a single-shot, blocking control-plane server on
@@ -323,6 +324,22 @@ moonlab_control_server_set_rate_limit(moonlab_control_server_t *server,
 MOONLAB_API int
 moonlab_control_server_set_request_timeout(moonlab_control_server_t *server,
                                            int timeout_secs);
+
+/**
+ * @brief Cap the number of concurrent in-flight requests (since v0.9.0).
+ *        When the worker pool is at capacity any new accepted client
+ *        receives `ERR -409 server busy\n` and the connection is
+ *        closed.  Pass `max_concurrent = 0` to disable the ceiling.
+ *
+ *        Caps coexist with the per-IP rate limiter (v0.8.21): the rate
+ *        limiter bounds per-source request rate; this cap bounds total
+ *        in-flight server work.  Both can be active simultaneously.
+ *
+ * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ */
+MOONLAB_API int
+moonlab_control_server_set_max_concurrent(moonlab_control_server_t *server,
+                                          int max_concurrent);
 
 /**
  * @brief Health-check submit -- sends `HEALTH\n`, expects `OK alive\n`.

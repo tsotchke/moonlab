@@ -21,8 +21,8 @@ use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
     moonlab_control_server_open, moonlab_control_server_run,
-    moonlab_control_server_set_rate_limit, moonlab_control_server_set_request_timeout,
-    moonlab_control_server_set_secret,
+    moonlab_control_server_set_max_concurrent, moonlab_control_server_set_rate_limit,
+    moonlab_control_server_set_request_timeout, moonlab_control_server_set_secret,
     moonlab_control_server_shutdown, moonlab_control_server_t,
     moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
     moonlab_control_submit_health, moonlab_control_submit_metrics,
@@ -384,6 +384,20 @@ impl ControlPlaneServer {
         let rc = unsafe { moonlab_control_server_set_request_timeout(ptr, timeout_secs) };
         if rc != 0 {
             return Err(QuantumError::Ffi(format!("set_request_timeout rc={rc}")));
+        }
+        Ok(())
+    }
+
+    /// Cap the number of concurrent in-flight requests (since v0.9.0).
+    /// `0` disables.  Excess clients receive `ERR -409 server busy\n`.
+    pub fn set_max_concurrent(&self, max_concurrent: i32) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let rc = unsafe { moonlab_control_server_set_max_concurrent(ptr, max_concurrent) };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("set_max_concurrent rc={rc}")));
         }
         Ok(())
     }

@@ -7,7 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.28.)
+(No unreleased changes since v0.9.0.)
+
+## [0.9.0] - 2026-05-20
+
+**Production hardening: concurrency ceiling, TLS observability, mTLS
+audit log, deployment guide.**  Consolidates the v0.8.x defensive
+work into a deployable control-plane surface.  The wire protocol is
+unchanged; bindings gain one new method each.
+
+### Added
+
+- `moonlab_control_server_set_max_concurrent(server, n)` caps
+  in-flight worker threads.  The accept loop reserves a slot before
+  `pthread_create`; if `active_workers >= n` the server emits
+  `ERR -409 server busy\n` (`MOONLAB_CONTROL_SERVER_BUSY`), closes
+  the socket, and increments
+  `moonlab_control_max_concurrent_rejected_total`.
+
+- `MOONLAB_CONTROL_SERVER_BUSY` status code (-409) for the above.
+
+- TLS handshake observability:
+  `moonlab_control_tls_handshake_failed_total` counts every connection
+  that reached `SSL_accept` and failed -- bad cert, protocol
+  mismatch, plain TCP to a TLS port, etc.  A non-zero scrape rate
+  after deployment is the signal that a worker shipped without its
+  client cert.
+
+- mTLS peer-CN extraction.  When `require_client_cert` is configured
+  and a client connects with a valid chain, the request log line
+  gains a `peer_cn=<subject-cn>` field (text format) or
+  `"peer_cn":"<subject-cn>"` (JSON format).  Lets ops attribute every
+  audit-log line to a specific worker identity.
+
+- Python `ControlPlaneServer(max_concurrent=N)` constructor kwarg
+  and `.set_max_concurrent(N)` runtime method.
+
+- Rust `ControlPlaneServer::set_max_concurrent(i32) -> Result<()>`
+  method.  `moonlab-sys` bindgen allowlist updated.
+
+- `docs/CONTROL_PLANE.md` -- the production deployment guide.
+  Wire-protocol reference, defensive-layer table, metrics catalog,
+  binding cookbooks (C / Python / Rust), and an operational runbook
+  covering concurrency tuning, mTLS rollout, graceful shutdown, and
+  live debugging.
+
+- `tests/integration/test_control_plane_hardening.c` exercises the
+  new code paths end-to-end.  Caps a server at `max_concurrent=2`,
+  fires six parallel CIRCUIT requests, and confirms (a) every
+  request lands as either OK or REJECTED, (b) the
+  `max_concurrent_rejected_total` counter matches the REJECTED count,
+  (c) three plain-TCP connections to a TLS port don't crash the
+  server.  Wired into ctest under the `control_plane` label.
+
+### Verified
+
+```
+=== test_control_plane_hardening (v0.9.0) ===
+
+--- path 1: max_concurrent = 2, fire 6 parallel ---
+  OK    server_open rc=0
+  OK    set_max_concurrent(2) rc=0
+    6 parallel: 2 OK, 4 busy (rc breakdown)
+  OK    all 6 accounted for (2 + 4)
+  OK    METRICS scrape rc=0
+    max_concurrent_rejected_total = 4
+  OK    metric present (got 4)
+  OK    counter (4) >= REJECTED count (4)
+
+--- path 2: tls_failed counter ---
+  OK    server_open rc=0
+  OK    use_tls rc=0
+    tls_failed path exercised (3 junk handshakes)
+
+=== 0 failure(s) ===
+```
+
+Four of six parallel CIRCUIT requests hit the cap, the counter
+matches exactly, and the TLS failure path runs without crashing
+the server.
 
 ## [0.8.28] - 2026-05-20
 

@@ -29,7 +29,8 @@
 typedef struct {
     int   fd;
 #ifdef MOONLAB_HAVE_TLS
-    void *ssl; /* SSL* when TLS-wrapped, else NULL. */
+    void *ssl;          /* SSL* when TLS-wrapped, else NULL. */
+    char  peer_cn[128]; /* mTLS peer subject CN (since v0.9.0); empty if no client cert. */
 #endif
 } moonlab_io_t;
 
@@ -115,6 +116,8 @@ extern _Atomic uint64_t g_count_health;
 extern _Atomic uint64_t g_count_metrics;
 extern _Atomic uint64_t g_count_rejected;
 extern _Atomic uint64_t g_count_rate_limited;
+extern _Atomic uint64_t g_count_tls_failed;
+extern _Atomic uint64_t g_count_max_concurrent;
 
 /* ------------------------------------------------------------------
  * Wire helpers.
@@ -246,6 +249,35 @@ static int handle_one_request(moonlab_io_t  *io,
     long         log_body_bytes = -1;
     long         log_shots      = 0;
     int          log_rc         = MOONLAB_CONTROL_OK;
+    /* peer_cn suffix for the log line.  Pre-baked into a stack buffer
+     * once so the macro doesn't need to know about TLS conditionally. */
+    char         log_peer_buf[256];
+    log_peer_buf[0] = '\0';
+    const char  *log_peer_suffix = "";
+#ifdef MOONLAB_HAVE_TLS
+    if (io && io->peer_cn[0]) {
+        if (log_format_json()) {
+            snprintf(log_peer_buf, sizeof(log_peer_buf),
+                     ",\"peer_cn\":\"%s\"", io->peer_cn);
+        } else {
+            snprintf(log_peer_buf, sizeof(log_peer_buf),
+                     " peer_cn=\"%s\"", io->peer_cn);
+        }
+        log_peer_suffix = log_peer_buf;
+    }
+#endif
+#ifdef MOONLAB_HAVE_TLS
+#  define LOG_PEER_CN_TEXT     " peer_cn=\"%s\""
+#  define LOG_PEER_CN_JSON     ",\"peer_cn\":\"%s\""
+#  define LOG_PEER_CN_VAL      , io->peer_cn
+#  define LOG_PEER_CN_EMIT(fmt) (io && io->peer_cn[0] ? fmt : "")
+#else
+#  define LOG_PEER_CN_TEXT     ""
+#  define LOG_PEER_CN_JSON     ""
+#  define LOG_PEER_CN_VAL
+#  define LOG_PEER_CN_EMIT(fmt) ""
+#endif
+
 #define LOG_AND_RETURN(rc_value) do {                                 \
     log_rc = (rc_value);                                              \
     if (log_rc != MOONLAB_CONTROL_OK) {                               \
@@ -257,15 +289,15 @@ static int handle_one_request(moonlab_io_t  *io,
             fprintf(stderr,                                           \
                 "{\"event\":\"moonlab.control\",\"verb\":\"%s\","     \
                 "\"n_qubits\":%d,\"body\":%ld,\"shots\":%ld,"         \
-                "\"wall_ms\":%.2f,\"rc\":%d}\n",                      \
+                "\"wall_ms\":%.2f,\"rc\":%d%s}\n",                    \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc);                                          \
+                dt, log_rc, log_peer_suffix);                         \
         } else {                                                      \
             fprintf(stderr,                                           \
                 "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
-                " wall_ms=%.2f rc=%d\n",                              \
+                " wall_ms=%.2f rc=%d%s\n",                            \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc);                                          \
+                dt, log_rc, log_peer_suffix);                         \
         }                                                             \
         fflush(stderr);                                               \
     }                                                                 \
@@ -304,7 +336,7 @@ static int handle_one_request(moonlab_io_t  *io,
         log_verb = "METRICS";
         atomic_fetch_add(&g_count_metrics, 1);
 
-        char body[1024];
+        char body[2048];
         int n = snprintf(body, sizeof(body),
             "# HELP moonlab_control_requests_total Total control-plane requests by verb.\n"
             "# TYPE moonlab_control_requests_total counter\n"
@@ -317,13 +349,21 @@ static int handle_one_request(moonlab_io_t  *io,
             "moonlab_control_rejected_total %llu\n"
             "# HELP moonlab_control_rate_limited_total Requests refused at the accept-loop by the per-IP token bucket.\n"
             "# TYPE moonlab_control_rate_limited_total counter\n"
-            "moonlab_control_rate_limited_total %llu\n",
+            "moonlab_control_rate_limited_total %llu\n"
+            "# HELP moonlab_control_tls_handshake_failed_total TLS handshakes that failed in SSL_accept (bad cert, protocol mismatch, etc).\n"
+            "# TYPE moonlab_control_tls_handshake_failed_total counter\n"
+            "moonlab_control_tls_handshake_failed_total %llu\n"
+            "# HELP moonlab_control_max_concurrent_rejected_total Connections refused by the bounded thread-pool ceiling.\n"
+            "# TYPE moonlab_control_max_concurrent_rejected_total counter\n"
+            "moonlab_control_max_concurrent_rejected_total %llu\n",
             (unsigned long long)atomic_load(&g_count_circuit),
             (unsigned long long)atomic_load(&g_count_shots),
             (unsigned long long)atomic_load(&g_count_health),
             (unsigned long long)atomic_load(&g_count_metrics),
             (unsigned long long)atomic_load(&g_count_rejected),
-            (unsigned long long)atomic_load(&g_count_rate_limited));
+            (unsigned long long)atomic_load(&g_count_rate_limited),
+            (unsigned long long)atomic_load(&g_count_tls_failed),
+            (unsigned long long)atomic_load(&g_count_max_concurrent));
         if (n < 0 || (size_t)n >= sizeof(body)) {
             LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
@@ -522,12 +562,19 @@ typedef struct {
     uint8_t        secret[256];
     size_t         secret_len;
     int            request_timeout_secs;
+    /* Pointer back to the server's active-workers counter so the worker
+     * thread can decrement on exit, holding the concurrency cap.  NULL
+     * when no cap is configured (max_concurrent == 0). */
+    _Atomic int   *active_counter;
 } worker_ctx_t;
 
 static int handle_one_request(moonlab_io_t  *io,
                               const uint8_t *secret,
                               size_t         secret_len);
 static int rl_take_token(moonlab_control_server_t *s, uint32_t ip);
+#ifdef MOONLAB_HAVE_TLS
+static int tls_peer_cn(SSL *ssl, char *out, size_t cap);
+#endif
 
 #ifdef MOONLAB_HAVE_TLS
 /* Defined just below.  Wraps an accepted client fd in TLS using the
@@ -543,6 +590,8 @@ static void *worker_thread(void *arg)
     uint8_t sec[256];
     size_t  slen = ctx->secret_len;
     memcpy(sec, ctx->secret, slen);
+    /* Capture the active-counter pointer before we free the heap ctx. */
+    _Atomic int *ctx_active_counter = ctx->active_counter;
 
     /* Apply per-request socket timeout if configured (v0.8.26).  We set
      * SO_RCVTIMEO / SO_SNDTIMEO on the accepted fd so any recv()/send()
@@ -562,15 +611,21 @@ static void *worker_thread(void *arg)
     io.fd = fd;
 #ifdef MOONLAB_HAVE_TLS
     io.ssl = NULL;
+    io.peer_cn[0] = '\0';
     if (ctx->ssl_ctx) {
         io.ssl = tls_accept_fd((SSL_CTX *)ctx->ssl_ctx, fd);
         if (!io.ssl) {
+            atomic_fetch_add(&g_count_tls_failed, 1);
             memset(sec, 0, sizeof(sec));
             memset(ctx->secret, 0, sizeof(ctx->secret));
+            if (ctx_active_counter) atomic_fetch_sub(ctx_active_counter, 1);
             free(ctx);
             close(fd);
             return NULL;
         }
+        /* mTLS audit (since v0.9.0): if the peer presented a cert,
+         * stash the CN on the io struct so the log line includes it. */
+        (void)tls_peer_cn((SSL *)io.ssl, io.peer_cn, sizeof(io.peer_cn));
     }
 #endif
     memset(ctx->secret, 0, sizeof(ctx->secret));
@@ -586,6 +641,10 @@ static void *worker_thread(void *arg)
 #endif
     memset(sec, 0, sizeof(sec));
     close(fd);
+    /* Decrement the in-flight counter, balancing the increment that
+     * the accept loop performed before pthread_create.  Done last so
+     * the slot only frees up after the fd is actually closed. */
+    if (ctx_active_counter) atomic_fetch_sub(ctx_active_counter, 1);
     return NULL;
 }
 
@@ -670,12 +729,14 @@ typedef struct {
  * One shared instance: even with multiple `moonlab_control_server_t`
  * handles in-process, all requests roll up to the same counters --
  * matches Prometheus' "per-process" exposition model. */
-_Atomic uint64_t g_count_circuit      = 0;
-_Atomic uint64_t g_count_shots        = 0;
-_Atomic uint64_t g_count_health       = 0;
-_Atomic uint64_t g_count_metrics      = 0;
-_Atomic uint64_t g_count_rejected     = 0;
-_Atomic uint64_t g_count_rate_limited = 0;
+_Atomic uint64_t g_count_circuit        = 0;
+_Atomic uint64_t g_count_shots          = 0;
+_Atomic uint64_t g_count_health         = 0;
+_Atomic uint64_t g_count_metrics        = 0;
+_Atomic uint64_t g_count_rejected       = 0;
+_Atomic uint64_t g_count_rate_limited   = 0;
+_Atomic uint64_t g_count_tls_failed     = 0;
+_Atomic uint64_t g_count_max_concurrent = 0;
 
 struct moonlab_control_server {
     int     srv_fd;
@@ -693,6 +754,9 @@ struct moonlab_control_server {
     /* Per-request socket timeout in seconds (since v0.8.26).
      * 0 = no timeout (legacy default). */
     int             request_timeout_secs;
+    /* Concurrent in-flight cap (since v0.9.0).  0 = no cap. */
+    int             max_concurrent;
+    _Atomic int     active_workers;
 };
 
 #ifdef MOONLAB_HAVE_TLS
@@ -718,6 +782,36 @@ static SSL *tls_accept_fd(SSL_CTX *ctx, int fd)
         return NULL;
     }
     return ssl;
+}
+
+/* Extract the CN= component from the connected client cert's subject,
+ * if any (since v0.9.0).  Writes up to `cap-1` bytes + NUL into `out`.
+ * Returns 1 if a CN was extracted, 0 otherwise (no peer cert, or
+ * the CN was empty / too long). */
+static int tls_peer_cn(SSL *ssl, char *out, size_t cap)
+{
+    if (!ssl || !out || cap < 2) return 0;
+    out[0] = '\0';
+    X509 *peer = SSL_get_peer_certificate(ssl);
+    if (!peer) return 0;
+    X509_NAME *name = X509_get_subject_name(peer);
+    int idx = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
+    int ok = 0;
+    if (idx >= 0) {
+        X509_NAME_ENTRY *e = X509_NAME_get_entry(name, idx);
+        ASN1_STRING *s = X509_NAME_ENTRY_get_data(e);
+        if (s) {
+            const unsigned char *u = ASN1_STRING_get0_data(s);
+            int len = ASN1_STRING_length(s);
+            if (u && len > 0 && (size_t)len < cap) {
+                memcpy(out, u, (size_t)len);
+                out[len] = '\0';
+                ok = 1;
+            }
+        }
+    }
+    X509_free(peer);
+    return ok;
 }
 #endif
 
@@ -840,6 +934,22 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             continue;
         }
 
+        /* Concurrent-cap check (since v0.9.0).  Reserve a slot before
+         * pthread_create; the worker decrements on exit.  If the cap
+         * is hit, send ERR -409 + close + bump the metric. */
+        if (s->max_concurrent > 0) {
+            int current = atomic_load(&s->active_workers);
+            if (current >= s->max_concurrent) {
+                atomic_fetch_add(&g_count_max_concurrent, 1);
+                const char *resp = "ERR -409 server busy\n";
+                (void)send(client, resp, strlen(resp), 0);
+                close(client);
+                served++;
+                continue;
+            }
+            atomic_fetch_add(&s->active_workers, 1);
+        }
+
         worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
         if (!ctx) {
             moonlab_io_t inline_io = { 0 };
@@ -858,6 +968,7 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
         ctx->secret_len = s->secret_len;
         if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
         ctx->request_timeout_secs = s->request_timeout_secs;
+        ctx->active_counter = (s->max_concurrent > 0) ? &s->active_workers : NULL;
 
         if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
             moonlab_io_t inline_io = { 0 };
@@ -867,6 +978,9 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
                                      ctx->secret_len);
             close(client);
             memset(ctx->secret, 0, sizeof(ctx->secret));
+            /* The worker never ran; balance the active-counter
+             * reservation we made above the malloc(). */
+            if (ctx->active_counter) atomic_fetch_sub(ctx->active_counter, 1);
             free(ctx);
         } else {
             worker_count++;
@@ -994,6 +1108,14 @@ int moonlab_control_server_set_request_timeout(moonlab_control_server_t *s,
 {
     if (!s || timeout_secs < 0) return MOONLAB_CONTROL_BAD_ARG;
     s->request_timeout_secs = timeout_secs;
+    return MOONLAB_CONTROL_OK;
+}
+
+int moonlab_control_server_set_max_concurrent(moonlab_control_server_t *s,
+                                              int max_concurrent)
+{
+    if (!s || max_concurrent < 0) return MOONLAB_CONTROL_BAD_ARG;
+    s->max_concurrent = max_concurrent;
     return MOONLAB_CONTROL_OK;
 }
 
