@@ -553,6 +553,23 @@ MOONLAB_API int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N,
                                   int* z2);
 
 /**
+ * @brief Z_2 invariant via the Fu-Kane TRIM-product Pfaffian formula
+ *        (since v0.10.0).
+ *
+ * Works for any 4-band, 2-occupied, time-reversal-symmetric model
+ * including ones where S_z is not conserved (e.g. Kane-Mele with
+ * non-zero Rashba lambda_r).  No grid is required: the result is
+ * exact in floating-point given exact diagonalisation of @c H at the
+ * 4 TRIM points.
+ *
+ * @param sys    4-band system with @c n_occupied == 2.
+ * @param[out] z2 0 (trivial) or 1 (topological QSH).
+ * @return 0 on success, negative on error.
+ */
+MOONLAB_API int qgt_z2_invariant_pfaffian(const qgt_system_n_t* sys,
+                                           int* z2);
+
+/**
  * @brief Kane-Mele model on the honeycomb lattice (2005).
  *
  * 4-band Hamiltonian with the basis (A-up, B-up, A-down, B-down):

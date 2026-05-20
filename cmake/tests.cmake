@@ -211,6 +211,24 @@
     target_link_libraries(test_ca_mps_prob PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_prob COMMAND test_ca_mps_prob)
 
+    # Born-rule sequential sampling (since v0.10.0).  Bell + GHZ_4 +
+    # H-wall+T regimes; empirical marginals + bitstring frequencies
+    # cross-checked against the dense state-vector backend at 4096-8192
+    # shots.
+    add_executable(test_ca_mps_sample tests/unit/test_ca_mps_sample.c)
+    target_link_libraries(test_ca_mps_sample PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_sample COMMAND test_ca_mps_sample)
+    set_tests_properties(unit_ca_mps_sample PROPERTIES LABELS "ca_mps")
+
+    # Kane-Mele Rashba + Pfaffian Z2 (since v0.10.0).  Validates the
+    # Fu-Kane TRIM-product formula agrees with the block-Chern path at
+    # lambda_r = 0 and tracks the QSH/trivial phase boundary for
+    # non-zero Rashba.
+    add_executable(test_qgt_kane_mele_rashba tests/unit/test_qgt_kane_mele_rashba.c)
+    target_link_libraries(test_qgt_kane_mele_rashba PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgt_kane_mele_rashba COMMAND test_qgt_kane_mele_rashba)
+    set_tests_properties(unit_qgt_kane_mele_rashba PROPERTIES LABELS "topology")
+
     # Direct unit tests for the SVD compression layer that every MPS
     # truncation goes through.  Closes a 19-Apr audit gap: previously
     # exercised only indirectly via mps_vs_exact and the CA-MPS suite.
@@ -910,6 +928,20 @@
     add_test(NAME integration_control_plane_timeout
         COMMAND test_control_plane_timeout)
     set_tests_properties(integration_control_plane_timeout PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # IPv6 (since v0.10.0): dual-stack listener + IPv6-canonical
+    # rate-limit key.  Exercises bind on ::1, accept v6 client,
+    # METRICS + CIRCUIT round-trip.
+    add_executable(test_control_plane_ipv6
+        tests/integration/test_control_plane_ipv6.c)
+    target_link_libraries(test_control_plane_ipv6
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_ipv6
+        COMMAND test_control_plane_ipv6)
+    set_tests_properties(integration_control_plane_ipv6 PROPERTIES
         LABELS "control_plane"
         TIMEOUT 30
     )

@@ -46,6 +46,7 @@ static int io_recv_tls(SSL *ssl,       void *buf, size_t len);
 #include <fcntl.h>
 #include <math.h>
 #include <stdatomic.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -568,10 +569,15 @@ typedef struct {
     _Atomic int   *active_counter;
 } worker_ctx_t;
 
+#define RL_KEY_BYTES 16  /* IPv6-canonical 16-byte rate-limit key. */
+
 static int handle_one_request(moonlab_io_t  *io,
                               const uint8_t *secret,
                               size_t         secret_len);
-static int rl_take_token(moonlab_control_server_t *s, uint32_t ip);
+static int rl_take_token(moonlab_control_server_t *s,
+                         const uint8_t key[RL_KEY_BYTES]);
+static int rl_extract_key(const struct sockaddr_storage *peer,
+                          uint8_t out[RL_KEY_BYTES]);
 #ifdef MOONLAB_HAVE_TLS
 static int tls_peer_cn(SSL *ssl, char *out, size_t cap);
 #endif
@@ -713,12 +719,16 @@ static int ct_memcmp(const void *a, const void *b, size_t n)
 }
 
 /* Token bucket for per-IP rate limiting (since v0.8.21).  Indexed by
- * source IPv4 address (network byte order).  Small fixed-size hash
- * table; on collision we evict the oldest entry.  Protected by a
- * pthread_mutex when accessed by accept-loop + worker threads. */
+ * source address.  Since v0.10.0 the key is 16 bytes, holding either
+ * an IPv6 address verbatim or an IPv4 address mapped into the
+ * ::ffff:0:0/96 prefix (RFC 4291 IPv4-mapped IPv6).  ``occupied = 0``
+ * marks empty slots; on collision we evict the existing entry.
+ * Protected by a pthread_mutex when accessed by accept-loop + worker
+ * threads. */
 #define RL_TABLE_SIZE 256
 typedef struct {
-    uint32_t       ip;            /* 0 = empty slot */
+    uint8_t        key[RL_KEY_BYTES];
+    int            occupied;      /* 0 = empty slot */
     double         tokens;
     double         last_refill_ms;
 } rl_bucket_t;
@@ -838,33 +848,64 @@ int moonlab_control_server_open(const char                 *host,
     int flags = fcntl(s->wake_pipe[0], F_GETFL, 0);
     fcntl(s->wake_pipe[0], F_SETFL, flags | O_NONBLOCK);
 
-    s->srv_fd = socket(AF_INET, SOCK_STREAM, 0);
+    /* Pick address family from the host string.  Any ":" → IPv6;
+     * otherwise IPv4.  Since v0.10.0 IPv6 listeners default to
+     * dual-stack (IPV6_V6ONLY=0) so a single ``::`` bind handles
+     * both v4 and v6 clients. */
+    int   af;
+    struct sockaddr_storage bind_addr;
+    socklen_t               bind_len;
+    memset(&bind_addr, 0, sizeof(bind_addr));
+    if (strchr(host, ':') != NULL) {
+        struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&bind_addr;
+        a6->sin6_family = AF_INET6;
+        a6->sin6_port   = htons(port);
+        if (inet_pton(AF_INET6, host, &a6->sin6_addr) != 1) {
+            moonlab_control_server_close(s);
+            return MOONLAB_CONTROL_BAD_ARG;
+        }
+        af       = AF_INET6;
+        bind_len = sizeof(*a6);
+    } else {
+        struct sockaddr_in *a4 = (struct sockaddr_in *)&bind_addr;
+        a4->sin_family = AF_INET;
+        a4->sin_port   = htons(port);
+        if (inet_pton(AF_INET, host, &a4->sin_addr) != 1) {
+            moonlab_control_server_close(s);
+            return MOONLAB_CONTROL_BAD_ARG;
+        }
+        af       = AF_INET;
+        bind_len = sizeof(*a4);
+    }
+
+    s->srv_fd = socket(af, SOCK_STREAM, 0);
     if (s->srv_fd < 0) {
         moonlab_control_server_close(s);
         return MOONLAB_CONTROL_IO_ERROR;
     }
     int yes = 1;
     setsockopt(s->srv_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        moonlab_control_server_close(s);
-        return MOONLAB_CONTROL_BAD_ARG;
+    if (af == AF_INET6) {
+        /* Dual-stack: accept IPv4-mapped clients too. */
+        int v6only = 0;
+        setsockopt(s->srv_fd, IPPROTO_IPV6, IPV6_V6ONLY,
+                   &v6only, sizeof(v6only));
     }
 
-    if (bind(s->srv_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    if (bind(s->srv_fd, (struct sockaddr *)&bind_addr, bind_len) < 0) {
         moonlab_control_server_close(s);
         return MOONLAB_CONTROL_IO_ERROR;
     }
 
     if (out_port) {
-        struct sockaddr_in actual;
+        struct sockaddr_storage actual;
         socklen_t alen = sizeof(actual);
         if (getsockname(s->srv_fd, (struct sockaddr *)&actual, &alen) == 0) {
-            *out_port = ntohs(actual.sin_port);
+            if (actual.ss_family == AF_INET6) {
+                *out_port = ntohs(((struct sockaddr_in6 *)&actual)->sin6_port);
+            } else {
+                *out_port = ntohs(((struct sockaddr_in *)&actual)->sin_port);
+            }
         }
     }
 
@@ -913,8 +954,8 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 
         if (!FD_ISSET(s->srv_fd, &readfds)) continue;
 
-        struct sockaddr_in peer;
-        socklen_t          peerlen = sizeof(peer);
+        struct sockaddr_storage peer;
+        socklen_t               peerlen = sizeof(peer);
         int client = accept(s->srv_fd, (struct sockaddr *)&peer, &peerlen);
         if (client < 0) {
             if (errno == EINTR) continue;
@@ -922,10 +963,21 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             break;
         }
 
-        /* Rate-limit check (since v0.8.21).  IPv4 source address only;
-         * IPv6 deferred.  Failed clients receive a single short
-         * ERR line then we close the socket. */
-        if (!rl_take_token(s, peer.sin_addr.s_addr)) {
+        /* Rate-limit check (since v0.8.21; IPv6 added v0.10.0).  IPv4
+         * peers are keyed under their ::ffff:a.b.c.d mapped address so
+         * a host's v4 and v6 traffic share one bucket.  Failed
+         * clients receive a single short ERR line then we close. */
+        uint8_t rl_key[RL_KEY_BYTES];
+        if (rl_extract_key(&peer, rl_key) != 0) {
+            /* Unknown address family: deny safely. */
+            atomic_fetch_add(&g_count_rate_limited, 1);
+            const char *resp = "ERR -408 rate limited\n";
+            (void)send(client, resp, strlen(resp), 0);
+            close(client);
+            served++;
+            continue;
+        }
+        if (!rl_take_token(s, rl_key)) {
             atomic_fetch_add(&g_count_rate_limited, 1);
             const char *resp = "ERR -408 rate limited\n";
             (void)send(client, resp, strlen(resp), 0);
@@ -1132,20 +1184,36 @@ int moonlab_control_server_set_rate_limit(moonlab_control_server_t *s,
     return MOONLAB_CONTROL_OK;
 }
 
-/* Returns 1 if the request from `ip` is permitted; 0 if the bucket is
- * empty (rate-limited).  Refills proportional to elapsed wall time. */
-static int rl_take_token(moonlab_control_server_t *s, uint32_t ip)
+/* FNV-1a over the 16-byte canonical key; spreads IPv4-mapped and
+ * native IPv6 addresses evenly across the small slot table. */
+static uint32_t rl_hash_key(const uint8_t key[RL_KEY_BYTES]) {
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < RL_KEY_BYTES; i++) {
+        h ^= key[i];
+        h *= 16777619u;
+    }
+    return h;
+}
+
+/* Returns 1 if the request keyed by ``key`` is permitted; 0 if the
+ * bucket is empty (rate-limited).  Refills proportional to elapsed
+ * wall time.  IPv4 callers should pass the 16-byte
+ * ``::ffff:a.b.c.d`` encoding so v4 and v6 traffic from the same
+ * underlying host hash to the same slot. */
+static int rl_take_token(moonlab_control_server_t *s,
+                         const uint8_t key[RL_KEY_BYTES])
 {
     if (s->rate_rps <= 0) return 1;
 
     const double now_ms = monotonic_ms();
-    const size_t slot   = (ip * 2654435761u) & (RL_TABLE_SIZE - 1);
+    const size_t slot   = rl_hash_key(key) & (RL_TABLE_SIZE - 1);
 
     pthread_mutex_lock(&s->rl_lock);
     rl_bucket_t *b = &s->rl_table[slot];
-    if (b->ip != ip) {
+    if (!b->occupied || memcmp(b->key, key, RL_KEY_BYTES) != 0) {
         /* Collision or empty slot.  Evict + reset. */
-        b->ip             = ip;
+        memcpy(b->key, key, RL_KEY_BYTES);
+        b->occupied       = 1;
         b->tokens         = (double)s->burst;
         b->last_refill_ms = now_ms;
     } else {
@@ -1158,6 +1226,57 @@ static int rl_take_token(moonlab_control_server_t *s, uint32_t ip)
     if (b->tokens >= 1.0) { b->tokens -= 1.0; ok = 1; }
     pthread_mutex_unlock(&s->rl_lock);
     return ok;
+}
+
+/* Dual-stack client connect (since v0.10.0).  Resolves @p host via
+ * getaddrinfo so any v4 / v6 literal or DNS name works, and returns
+ * the first connected socket.  Returns -1 on failure (with errno set
+ * by the last attempt). */
+static int client_connect(const char *host, uint16_t port) {
+    char portbuf[8];
+    snprintf(portbuf, sizeof(portbuf), "%u", (unsigned)port);
+
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags    = AI_NUMERICSERV;
+
+    struct addrinfo *res = NULL;
+    if (getaddrinfo(host, portbuf, &hints, &res) != 0) return -1;
+
+    int fd = -1;
+    for (struct addrinfo *p = res; p; p = p->ai_next) {
+        fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, p->ai_addr, p->ai_addrlen) == 0) break;
+        close(fd);
+        fd = -1;
+    }
+    freeaddrinfo(res);
+    return fd;
+}
+
+/* Extract the 16-byte canonical key from a peer sockaddr.  IPv4
+ * addresses are mapped into ::ffff:0:0/96.  Returns 0 on success,
+ * -1 if the address family is unsupported. */
+static int rl_extract_key(const struct sockaddr_storage *peer,
+                          uint8_t out[RL_KEY_BYTES])
+{
+    memset(out, 0, RL_KEY_BYTES);
+    if (peer->ss_family == AF_INET) {
+        const struct sockaddr_in *p = (const struct sockaddr_in *)peer;
+        out[10] = 0xff;
+        out[11] = 0xff;
+        memcpy(&out[12], &p->sin_addr.s_addr, 4);
+        return 0;
+    }
+    if (peer->ss_family == AF_INET6) {
+        const struct sockaddr_in6 *p = (const struct sockaddr_in6 *)peer;
+        memcpy(out, p->sin6_addr.s6_addr, 16);
+        return 0;
+    }
+    return -1;
 }
 
 int moonlab_control_server_set_secret(moonlab_control_server_t *s,
@@ -1210,22 +1329,8 @@ int moonlab_control_submit_circuit(const char *host,
     if (text_len == 0) text_len = strlen(circuit_text);
     if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd);
-        return MOONLAB_CONTROL_BAD_ARG;
-    }
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd);
-        return MOONLAB_CONTROL_IO_ERROR;
-    }
     moonlab_io_t plain_io = { 0 };
     plain_io.fd = fd;
 
@@ -1284,21 +1389,8 @@ int moonlab_control_submit_circuit_auth(const char    *host,
     if (text_len == 0) text_len = strlen(circuit_text);
     if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd);
-        return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd);
-        return MOONLAB_CONTROL_IO_ERROR;
-    }
     moonlab_io_t plain_io = { 0 };
     plain_io.fd = fd;
 
@@ -1372,21 +1464,8 @@ int moonlab_control_submit_circuit_shots(const char *host,
     if (text_len == 0) text_len = strlen(circuit_text);
     if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd);
-        return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd);
-        return MOONLAB_CONTROL_IO_ERROR;
-    }
     moonlab_io_t plain_io = { 0 };
     plain_io.fd = fd;
 
@@ -1482,18 +1561,8 @@ static int tls_client_submit_impl(const char *host, uint16_t port,
         }
     }
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) { SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR; }
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR;
-    }
 
     SSL *ssl = SSL_new(ctx);
     if (!ssl || SSL_set_fd(ssl, fd) != 1) {
@@ -1645,18 +1714,8 @@ int moonlab_control_submit_circuit_tls(const char    *host,
         }
     }
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) { SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR; }
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR;
-    }
 
     SSL *ssl = SSL_new(ctx);
     if (!ssl || SSL_set_fd(ssl, fd) != 1) {
@@ -1743,18 +1802,8 @@ int moonlab_control_submit_metrics(const char *host, uint16_t port,
     if (!host || !out_text) return MOONLAB_CONTROL_BAD_ARG;
     *out_text = NULL;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd); return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd); return MOONLAB_CONTROL_IO_ERROR;
-    }
 
     moonlab_io_t plain_io = { 0 };
     plain_io.fd = fd;
@@ -1790,19 +1839,8 @@ int moonlab_control_submit_health(const char *host, uint16_t port)
 {
     if (!host) return MOONLAB_CONTROL_BAD_ARG;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = client_connect(host, port);
     if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(fd); return MOONLAB_CONTROL_BAD_ARG;
-    }
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd); return MOONLAB_CONTROL_IO_ERROR;
-    }
 
     moonlab_io_t plain_io = { 0 };
     plain_io.fd = fd;

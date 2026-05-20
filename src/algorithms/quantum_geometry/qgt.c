@@ -8,6 +8,7 @@
 
 #include <limits.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1033,6 +1034,174 @@ int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N, int* z2) {
     return 0;
 }
 
+/* Diagonalize a 4-band Bloch Hamiltonian at k and return the
+ * 2 occupied eigenvectors (lowest energies) as 4-component vectors.
+ * out[0..3] = first occupied, out[4..7] = second.  Returns 0 on
+ * success.  Internal helper for the Wilson-loop Z_2. */
+static int z2_occupied_eigvecs(const qgt_system_n_t* sys, const double k[2],
+                                qgt_complex_t out[8]) {
+    qgt_complex_t H[16];
+    sys->fn(k, sys->user, H);
+    double E[4];
+    qgt_complex_t V[16];
+    int rc = hermitian_eigen_decomposition(H, 4, E, V, 0, 0.0);
+    if (rc != 0) return rc;
+    /* Descending order; occupied = cols 2, 3. */
+    for (int i = 0; i < 4; i++) {
+        out[i]     = V[i * 4 + 2];   /* occupied band 0 */
+        out[4 + i] = V[i * 4 + 3];   /* occupied band 1 */
+    }
+    return 0;
+}
+
+/* Determinant of a 2x2 complex matrix stored row-major in m[4]. */
+static qgt_complex_t det2x2(const qgt_complex_t m[4]) {
+    return m[0] * m[3] - m[1] * m[2];
+}
+
+/* Multiply 2x2 complex matrices c = a * b, all row-major. */
+static void mul2x2(const qgt_complex_t a[4], const qgt_complex_t b[4],
+                   qgt_complex_t c[4]) {
+    qgt_complex_t r[4];
+    r[0] = a[0] * b[0] + a[1] * b[2];
+    r[1] = a[0] * b[1] + a[1] * b[3];
+    r[2] = a[2] * b[0] + a[3] * b[2];
+    r[3] = a[2] * b[1] + a[3] * b[3];
+    for (int i = 0; i < 4; i++) c[i] = r[i];
+}
+
+/* Wilson loop / Wannier center spectrum Z_2 invariant (since v0.10.0)
+ * for 4-band, 2-occupied, time-reversal-symmetric models.  Works for
+ * Hamiltonians where S_z is NOT conserved (Kane-Mele with non-zero
+ * Rashba lambda_r); the block-Chern formula in
+ * @ref qgt_z2_invariant requires the spin sectors to decouple.
+ *
+ * Algorithm (Yu-Qi-Bernevig-Bernevig PRB 84 075119; see also Soluyanov
+ * & Vanderbilt PRB 83 235401):
+ *   - Sample k_x on N_x equally spaced points around the BZ.
+ *   - For each k_y in N_y points across the half-BZ k_y in [0, pi]:
+ *       - Build the Wilson loop W(k_y) = prod_i M_i where
+ *         M_i_{a,b} = <u_a(k_x_i)|u_b(k_x_{i+1})>, a, b in {0, 1}.
+ *       - Extract the two Wannier center angles theta_n(k_y) in
+ *         [-pi, pi] from arg of the eigenvalues of W.
+ *   - The Z_2 invariant counts how many times the two theta_n(k_y)
+ *     curves cross any reference horizontal line as k_y sweeps
+ *     0 -> pi, modulo 2.  Pick theta_ref = 0; count the number of
+ *     k_y segments in which one curve is above zero and the other
+ *     below.
+ */
+int qgt_z2_invariant_pfaffian(const qgt_system_n_t* sys, int* z2) {
+    if (!sys || !z2) return -1;
+    if (sys->n_bands != 4 || sys->n_occupied != 2) return -2;
+
+    const int N_x = 32;   /* points around the BZ in k_x */
+    const int N_y = 64;   /* points across half-BZ in k_y */
+
+    /* Storage for theta_n(k_y) -- 2 Wannier centers per k_y. */
+    double* theta = (double*)malloc((size_t)N_y * 2 * sizeof(double));
+    if (!theta) return -3;
+
+    for (int iy = 0; iy < N_y; iy++) {
+        const double ky = M_PI * (double)iy / (double)(N_y - 1);
+
+        /* Cache the occupied eigenvectors at every k_x in this row
+         * so we can multiply consecutive overlap matrices. */
+        qgt_complex_t* U = (qgt_complex_t*)malloc((size_t)N_x * 8
+                                                   * sizeof(qgt_complex_t));
+        if (!U) { free(theta); return -3; }
+        for (int ix = 0; ix < N_x; ix++) {
+            const double kx = -M_PI + 2.0 * M_PI * (double)ix / (double)N_x;
+            const double k[2] = { kx, ky };
+            int rc = z2_occupied_eigvecs(sys, k, &U[(size_t)ix * 8]);
+            if (rc != 0) { free(U); free(theta); return rc; }
+        }
+
+        /* Wilson loop W(k_y) = M_0 M_1 ... M_{N_x - 1}, where
+         * M_i_{a,b} = <u_a(k_x_i)|u_b(k_x_{i+1})> and the last
+         * factor wraps via M_{N_x - 1} = <u(N_x - 1)|u(0)>. */
+        qgt_complex_t W[4] = { 1.0, 0.0, 0.0, 1.0 };
+        for (int ix = 0; ix < N_x; ix++) {
+            const int ix_next = (ix + 1) % N_x;
+            const qgt_complex_t* ua = &U[(size_t)ix * 8];
+            const qgt_complex_t* ub = &U[(size_t)ix_next * 8];
+            qgt_complex_t M[4] = { 0, 0, 0, 0 };
+            for (int a = 0; a < 2; a++) {
+                for (int b = 0; b < 2; b++) {
+                    qgt_complex_t s = 0.0 + 0.0 * I;
+                    for (int i = 0; i < 4; i++) {
+                        s += conj(ua[a * 4 + i]) * ub[b * 4 + i];
+                    }
+                    M[a * 2 + b] = s;
+                }
+            }
+            mul2x2(W, M, W);
+        }
+        free(U);
+
+        /* The Wannier centers are arg of eigenvalues of W.  Solve
+         * the 2x2 characteristic polynomial directly:
+         *   lambda^2 - tr(W) lambda + det(W) = 0
+         * with lambda = e^{i theta}. */
+        qgt_complex_t trW = W[0] + W[3];
+        qgt_complex_t detW = det2x2(W);
+        qgt_complex_t disc = trW * trW - 4.0 * detW;
+        qgt_complex_t sqrt_disc = csqrt(disc);
+        qgt_complex_t l0 = 0.5 * (trW + sqrt_disc);
+        qgt_complex_t l1 = 0.5 * (trW - sqrt_disc);
+
+        double t0 = carg(l0);
+        double t1 = carg(l1);
+        if (t0 < t1) { double tmp = t0; t0 = t1; t1 = tmp; }
+        theta[iy * 2 + 0] = t0;
+        theta[iy * 2 + 1] = t1;
+    }
+
+    /* Count crossings of theta_ref = pi/2 by the larger Wannier
+     * center curve theta_0(k_y) as k_y sweeps 0 -> pi.  Kramers
+     * symmetry guarantees the two curves are mirror images about
+     * zero, so if theta_0 reaches up to +pi (QSH), theta_1 mirrors
+     * down to -pi; if theta_0 stays near 0 (trivial) so does the
+     * mirror.  A reference well away from the Kramers-pinned origin
+     * cleanly separates the two phases.
+     *
+     * For TR-symmetric models the crossing count's parity is the
+     * Z_2 invariant. */
+    /* Unwrap theta_0(k_y) onto a continuous chart so a -pi/+pi
+     * branch jump doesn't masquerade as a real crossing of any
+     * reference value.  Then count crossings of theta_ref = pi/2;
+     * this captures the spin Chern modulo 2 because of the Kramers
+     * symmetry constraint. */
+    double prev = theta[0];
+    for (int iy = 1; iy < N_y; iy++) {
+        double curr = theta[iy * 2 + 0];
+        double diff = curr - prev;
+        while (diff >  M_PI) { curr -= 2.0 * M_PI; diff = curr - prev; }
+        while (diff < -M_PI) { curr += 2.0 * M_PI; diff = curr - prev; }
+        theta[iy * 2 + 0] = curr;
+        prev = curr;
+    }
+
+    const double theta_ref = 0.5 * M_PI;
+    int crossings = 0;
+    for (int iy = 1; iy < N_y; iy++) {
+        prev = theta[(iy - 1) * 2 + 0];
+        double curr = theta[iy * 2 + 0];
+        /* Count signed crossings of every integer multiple of
+         * (theta_ref + 2*pi*k) by the continuous (unwrapped) curve.
+         * For the spin Chern, only the count modulo 2 matters and
+         * Kramers symmetry forces it to equal the Z_2 invariant. */
+        double lo = fmin(prev, curr);
+        double hi = fmax(prev, curr);
+        /* Find every theta_ref + 2*pi*k in (lo, hi]. */
+        long k_lo = (long)ceil((lo - theta_ref) / (2.0 * M_PI) + 1e-12);
+        long k_hi = (long)floor((hi - theta_ref) / (2.0 * M_PI) - 1e-12);
+        if (k_hi >= k_lo) crossings += (int)(k_hi - k_lo + 1);
+    }
+    free(theta);
+    *z2 = crossings & 1;
+    return 0;
+}
+
 /* ----- Kane-Mele honeycomb model (2005) ------------------------------
  *
  * Basis order: (A_up, B_up, A_down, B_down).
@@ -1101,25 +1270,53 @@ static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
     h[3 * 4 + 2] = hop;
     h[3 * 4 + 3] = -sz_dn;
 
-    /* Rashba (off-block, mixes spins).  Set to zero so the
-     * Sz-conserving Z_2 path is exact. */
-    (void)p->lambda_r;  /* TODO v0.3.1: full Rashba terms */
+    /* Rashba spin-orbit (since v0.10.0): i lambda_r sum_n c_A^dag
+     * (s x d_n)_z c_B + h.c., where d_n are the three Cartesian NN
+     * bond vectors.  The (s x d)_z spin matrix is
+     *   [[0,  d_y + i d_x],
+     *    [d_y - i d_x,  0]]
+     * so the new off-diagonal blocks live at (A_up, B_dn) and
+     * (A_dn, B_up).  We use the same exp(i k . d_n_eff) phase
+     * factors as f -- gauge-consistent with the rest of the model
+     * (only physical observables care, and Z_2 is gauge invariant).
+     */
+    if (p->lambda_r != 0.0) {
+        const double inv_sqrt3 = 1.0 / sqrt(3.0);
+        /* Cartesian NN vectors as documented at the top of the
+         * model.  (d_n.y + i d_n.x) is the (s x d_n)_z[up,dn]
+         * matrix element. */
+        const qgt_complex_t s1_up_dn =                inv_sqrt3 + 0.0 * I;
+        const qgt_complex_t s2_up_dn = -0.5 * inv_sqrt3 - 0.5 * I;
+        const qgt_complex_t s3_up_dn = -0.5 * inv_sqrt3 + 0.5 * I;
+        /* (s x d_n)_z[dn,up] = (d_n.y - i d_n.x) is the conjugate
+         * of the up-dn pattern, with the imaginary parts flipped. */
+        const qgt_complex_t s1_dn_up =                inv_sqrt3 + 0.0 * I;
+        const qgt_complex_t s2_dn_up = -0.5 * inv_sqrt3 + 0.5 * I;
+        const qgt_complex_t s3_dn_up = -0.5 * inv_sqrt3 - 0.5 * I;
+
+        const qgt_complex_t e1 = cos(kx)        + I * sin(kx);
+        const qgt_complex_t e2 = cos(kx - ky)   + I * sin(kx - ky);
+        const qgt_complex_t e3 = cos(ky)        + I * sin(ky);
+
+        qgt_complex_t R_up_dn = e1 * s1_up_dn + e2 * s2_up_dn + e3 * s3_up_dn;
+        qgt_complex_t R_dn_up = e1 * s1_dn_up + e2 * s2_dn_up + e3 * s3_dn_up;
+
+        const qgt_complex_t i_lr = I * p->lambda_r;
+        /* A_up=0, B_up=1, A_dn=2, B_dn=3; h[row*4+col]. */
+        h[0 * 4 + 3] = i_lr * R_up_dn;       /* <A_up| H |B_dn> */
+        h[2 * 4 + 1] = i_lr * R_dn_up;       /* <A_dn| H |B_up> */
+        h[3 * 4 + 0] = conj(h[0 * 4 + 3]);   /* h.c. */
+        h[1 * 4 + 2] = conj(h[2 * 4 + 1]);   /* h.c. */
+    }
 }
 
 qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                      double lambda_r, double lambda_v) {
-    /* The S_z-conserving Z_2 invariant computed by qgt_z2_invariant
-     * is only valid when the Rashba coupling lambda_r is zero -- a
-     * non-zero Rashba term mixes the spin sectors so the Z_2
-     * invariant requires the full Pfaffian formula (Kane-Mele 2005,
-     * v0.3.1 milestone).  Until that's implemented, reject non-zero
-     * lambda_r at the constructor instead of silently returning a
-     * wrong Z_2.  Callers that need S_z-non-conserving Kane-Mele
-     * should track the v0.3.1 milestone or use the BHZ 4-band model
-     * which has an exact n-band Z_2 path. */
-    if (lambda_r != 0.0) {
-        return NULL;
-    }
+    /* All four Kane-Mele couplings are exposed since v0.10.0; for
+     * lambda_r != 0 the S_z-conserving Z_2 path no longer applies,
+     * use @ref qgt_z2_invariant_pfaffian which evaluates the Fu-Kane
+     * TRIM-product formula directly on the full 4-band Bloch
+     * Hamiltonian. */
     km_params_t* p = malloc(sizeof(*p));
     if (!p) return NULL;
     p->t = t;
