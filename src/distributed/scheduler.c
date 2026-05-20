@@ -45,6 +45,9 @@ struct moonlab_job {
     int                  num_gates;
     int                  cap;
     sched_gate_record_t *gates;
+    /* Backend plug-in (since v1.1): NULL => default "simulator".
+     * Heap-owned copy of the caller's string. */
+    char                *backend_name;
 };
 
 moonlab_job_t *moonlab_job_create(int num_qubits)
@@ -61,6 +64,7 @@ void moonlab_job_free(moonlab_job_t *j)
 {
     if (!j) return;
     free(j->gates);
+    free(j->backend_name);
     free(j);
 }
 
@@ -176,28 +180,31 @@ static int run_worker_slice(const moonlab_job_t *j,
     return MOONLAB_SCHED_OK;
 }
 
-int moonlab_scheduler_run(moonlab_job_t         *j,
-                          moonlab_job_results_t *out)
+/* Default in-process simulator backend.  Splits shots across OpenMP
+ * workers; each worker reconstructs the QGTL circuit and runs its
+ * slice via moonlab_qgtl_execute. */
+static int simulator_backend_execute(const moonlab_job_t       *j,
+                                     moonlab_job_results_t     *out,
+                                     void                      *ctx)
 {
+    (void)ctx;
     if (!j || !out) return MOONLAB_SCHED_BAD_ARG;
     if (j->num_shots <= 0) return MOONLAB_SCHED_BAD_ARG;
 
     const int total_shots = j->num_shots;
     int num_workers = j->num_workers;
     if (num_workers > total_shots) num_workers = total_shots;
+    if (num_workers < 1) num_workers = 1;
 
-    memset(out, 0, sizeof(*out));
     out->num_qubits       = j->num_qubits;
     out->total_shots      = total_shots;
     out->num_workers_used = num_workers;
     out->outcomes = (uint64_t *)malloc((size_t)total_shots * sizeof(uint64_t));
     out->worker_seconds = (double *)calloc((size_t)num_workers, sizeof(double));
     if (!out->outcomes || !out->worker_seconds) {
-        moonlab_job_results_free(out);
         return MOONLAB_SCHED_OOM;
     }
 
-    /* Slice boundaries: shots `[w * total / N, (w + 1) * total / N)`. */
     int rc_first_err = MOONLAB_SCHED_OK;
 
 #if defined(_OPENMP)
@@ -220,9 +227,166 @@ int moonlab_scheduler_run(moonlab_job_t         *j,
         }
     }
 
-    if (rc_first_err != MOONLAB_SCHED_OK) {
+    return rc_first_err;
+}
+
+/* ============================================================ */
+/* Backend registry (since v1.1.0).                              */
+/*                                                                */
+/* Small static array; 16 slots is plenty for the foreseeable    */
+/* set ("simulator" + ~3 vendor-noise emulators + a few user     */
+/* slots).  Mutex-protected so register/unregister/find are      */
+/* thread-safe.                                                   */
+/* ============================================================ */
+
+#include <pthread.h>
+
+#define MOONLAB_SCHED_MAX_BACKENDS 16
+
+static moonlab_backend_t g_backends[MOONLAB_SCHED_MAX_BACKENDS];
+static int g_num_backends = 0;
+static pthread_mutex_t g_backend_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t  g_backend_init_once = PTHREAD_ONCE_INIT;
+
+static void register_default_simulator_backend(void)
+{
+    /* Direct-store; we hold no lock during the once init because
+     * pthread_once serialises us against other registrars. */
+    g_backends[g_num_backends].name        = "simulator";
+    g_backends[g_num_backends].execute     = simulator_backend_execute;
+    g_backends[g_num_backends].ctx         = NULL;
+    g_backends[g_num_backends].description =
+        "In-process moonlab simulator (OpenMP shot fan-out via moonlab_qgtl_execute).";
+    g_num_backends = 1;
+}
+
+static void ensure_default_backend(void)
+{
+    pthread_once(&g_backend_init_once, register_default_simulator_backend);
+}
+
+int moonlab_register_backend(const moonlab_backend_t *backend)
+{
+    if (!backend || !backend->name || !backend->execute) {
+        return MOONLAB_SCHED_BAD_ARG;
+    }
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    /* Replace if name already exists. */
+    for (int i = 0; i < g_num_backends; i++) {
+        if (strcmp(g_backends[i].name, backend->name) == 0) {
+            g_backends[i] = *backend;
+            pthread_mutex_unlock(&g_backend_lock);
+            return MOONLAB_SCHED_OK;
+        }
+    }
+    if (g_num_backends >= MOONLAB_SCHED_MAX_BACKENDS) {
+        pthread_mutex_unlock(&g_backend_lock);
+        return MOONLAB_SCHED_OOM;
+    }
+    g_backends[g_num_backends++] = *backend;
+    pthread_mutex_unlock(&g_backend_lock);
+    return MOONLAB_SCHED_OK;
+}
+
+int moonlab_unregister_backend(const char *name)
+{
+    if (!name) return MOONLAB_SCHED_BAD_ARG;
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    for (int i = 0; i < g_num_backends; i++) {
+        if (strcmp(g_backends[i].name, name) == 0) {
+            /* Shift the tail down. */
+            for (int j = i; j < g_num_backends - 1; j++) {
+                g_backends[j] = g_backends[j + 1];
+            }
+            g_num_backends--;
+            pthread_mutex_unlock(&g_backend_lock);
+            return MOONLAB_SCHED_OK;
+        }
+    }
+    pthread_mutex_unlock(&g_backend_lock);
+    return MOONLAB_SCHED_BACKEND_NOT_FOUND;
+}
+
+const moonlab_backend_t *moonlab_find_backend(const char *name)
+{
+    if (!name) return NULL;
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    const moonlab_backend_t *hit = NULL;
+    for (int i = 0; i < g_num_backends; i++) {
+        if (strcmp(g_backends[i].name, name) == 0) {
+            hit = &g_backends[i];
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_backend_lock);
+    return hit;
+}
+
+int moonlab_num_backends(void)
+{
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    const int n = g_num_backends;
+    pthread_mutex_unlock(&g_backend_lock);
+    return n;
+}
+
+int moonlab_list_backends(const char **out_names, int max)
+{
+    if (!out_names || max <= 0) return 0;
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    const int n = g_num_backends < max ? g_num_backends : max;
+    for (int i = 0; i < n; i++) {
+        out_names[i] = g_backends[i].name;
+    }
+    pthread_mutex_unlock(&g_backend_lock);
+    return n;
+}
+
+int moonlab_job_set_backend(moonlab_job_t *j, const char *backend_name)
+{
+    if (!j) return MOONLAB_SCHED_BAD_ARG;
+    free(j->backend_name);
+    j->backend_name = NULL;
+    if (!backend_name) return MOONLAB_SCHED_OK;
+    const size_t len = strlen(backend_name);
+    j->backend_name = (char *)malloc(len + 1);
+    if (!j->backend_name) return MOONLAB_SCHED_OOM;
+    memcpy(j->backend_name, backend_name, len + 1);
+    return MOONLAB_SCHED_OK;
+}
+
+const char *moonlab_job_backend(const moonlab_job_t *j)
+{
+    return j ? j->backend_name : NULL;
+}
+
+int moonlab_scheduler_run(moonlab_job_t         *j,
+                          moonlab_job_results_t *out)
+{
+    if (!j || !out) return MOONLAB_SCHED_BAD_ARG;
+    if (j->num_shots <= 0) return MOONLAB_SCHED_BAD_ARG;
+
+    memset(out, 0, sizeof(*out));
+
+    /* Backend dispatch (since v1.1.0): the job may pin a non-default
+     * backend ("ibm-noise", "rigetti-noise", QPU drivers, ...).  An
+     * unset backend_name routes to "simulator" (auto-registered).
+     * An unknown name is a hard error -- silently falling back to
+     * the simulator would hide config bugs in production deploys. */
+    const char *bname = j->backend_name ? j->backend_name : "simulator";
+    const moonlab_backend_t *be = moonlab_find_backend(bname);
+    if (!be) {
+        return MOONLAB_SCHED_BACKEND_NOT_FOUND;
+    }
+    const int rc = be->execute(j, out, be->ctx);
+    if (rc != MOONLAB_SCHED_OK) {
         moonlab_job_results_free(out);
-        return rc_first_err;
+        return rc;
     }
     return MOONLAB_SCHED_OK;
 }

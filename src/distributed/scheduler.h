@@ -38,6 +38,8 @@ extern "C" {
 #define MOONLAB_SCHED_OOM             (-502)
 #define MOONLAB_SCHED_INTERNAL        (-503)
 #define MOONLAB_SCHED_BUFFER_TOO_SMALL (-504)
+#define MOONLAB_SCHED_BACKEND_NOT_FOUND (-506)
+#define MOONLAB_SCHED_BACKEND_BUSY    (-507)
 
 /** @brief Opaque job-spec handle. */
 typedef struct moonlab_job moonlab_job_t;
@@ -164,6 +166,103 @@ MOONLAB_API int
 moonlab_scheduler_run_mpi(moonlab_job_t           *job,
                           moonlab_job_results_t   *out,
                           void                    *ctx_opaque);
+
+/* ------------------------------------------------------------------
+ * Backend plug-in surface (since v1.1.0)
+ *
+ * A backend takes a job and produces results.  The default backend
+ * registered at scheduler-init time is named "simulator" and routes
+ * through the existing moonlab_qgtl_execute path with OpenMP shot
+ * fan-out.  Vendor-noise emulators (IBM heavy-hex / Rigetti octagon /
+ * D-Wave Chimera) and real-QPU drivers (delivered by the QGTL sibling
+ * library) register additional backends via moonlab_register_backend.
+ *
+ * Contract:
+ *   - execute(job, out, ctx) is called synchronously by the scheduler.
+ *     It may block while submitting to a remote service.
+ *   - Out is pre-zeroed by the scheduler; the backend allocates
+ *     `outcomes` of length `total_shots` and `worker_seconds` of
+ *     length `num_workers_used` (>= 1) and fills them.  The scheduler
+ *     frees these via moonlab_job_results_free on the caller's behalf.
+ *   - Return MOONLAB_SCHED_OK or a negative status code.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Backend execute callback.  See contract above.
+ */
+typedef int (*moonlab_backend_execute_fn)(
+    const moonlab_job_t       *job,
+    moonlab_job_results_t     *out,
+    void                      *ctx);
+
+/**
+ * @brief Backend descriptor.
+ *
+ * The struct is copied into the registry on @ref moonlab_register_backend;
+ * the function pointer and `ctx` lifetime are the caller's responsibility
+ * (must outlive the registry entry).
+ */
+typedef struct {
+    const char                 *name;         /**< short identifier, e.g. "simulator", "ibm-noise". */
+    moonlab_backend_execute_fn  execute;      /**< synchronous execute. */
+    void                       *ctx;          /**< opaque backend state (calibration data, session handle...). */
+    const char                 *description;  /**< human-readable; may be NULL. */
+} moonlab_backend_t;
+
+/**
+ * @brief Register a backend.  If a backend with the same name is
+ *        already registered, the new one replaces it (allows hot-swap
+ *        of vendor backends across calibration generations).
+ *
+ * @return MOONLAB_SCHED_OK / MOONLAB_SCHED_BAD_ARG / MOONLAB_SCHED_OOM.
+ */
+MOONLAB_API int moonlab_register_backend(const moonlab_backend_t *backend);
+
+/**
+ * @brief Unregister a backend by name.  Returns MOONLAB_SCHED_OK or
+ *        MOONLAB_SCHED_BACKEND_NOT_FOUND.
+ */
+MOONLAB_API int moonlab_unregister_backend(const char *name);
+
+/**
+ * @brief Look up a backend by name.  Returns NULL when not present.
+ *
+ *        The "simulator" backend is auto-registered on the first
+ *        call to any backend function or any scheduler_run; callers
+ *        can rely on `moonlab_find_backend("simulator") != NULL`.
+ */
+MOONLAB_API const moonlab_backend_t *moonlab_find_backend(const char *name);
+
+/**
+ * @brief Number of currently registered backends.
+ */
+MOONLAB_API int moonlab_num_backends(void);
+
+/**
+ * @brief Populate @p out_names with up to @p max backend names
+ *        (pointers into the registry's storage; valid until the
+ *        respective backends are unregistered).
+ *
+ * @return Actual number of names written (<= max).
+ */
+MOONLAB_API int moonlab_list_backends(const char **out_names, int max);
+
+/**
+ * @brief Choose which backend the scheduler should use for this job.
+ *        Pass NULL to clear -- the job will run on the default
+ *        "simulator" backend.
+ *
+ *        The backend need not be registered at the time of this call;
+ *        lookup happens at @ref moonlab_scheduler_run.
+ */
+MOONLAB_API int moonlab_job_set_backend(moonlab_job_t *job, const char *backend_name);
+
+/**
+ * @brief Return the configured backend name, or NULL if the default
+ *        ("simulator") is being used.  Pointer is owned by the job
+ *        and is valid until the next set_backend call / job_free.
+ */
+MOONLAB_API const char *moonlab_job_backend(const moonlab_job_t *job);
 
 /**
  * @brief Serialise a job to JSON.  Format (one example):
