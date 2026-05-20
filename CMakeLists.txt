@@ -1394,6 +1394,21 @@ if(QSIM_BUILD_BENCHMARKS)
         target_compile_definitions(grover_parallel_benchmark PRIVATE HAS_OPENMP=1)
     endif()
 
+    # v1.0 head-to-head comparison harnesses (since v1.0).  Each emits a
+    # JSON file with the moonlab side of one published comparison; the
+    # competitor side runs separately -- see docs/benchmarks/v1_comparison.md.
+    add_executable(ca_mps_kagome_bench
+        benchmarks/v1_comparison/ca_mps_kagome_bench.c)
+    target_link_libraries(ca_mps_kagome_bench PRIVATE quantumsim ${MATH_LIBRARY})
+
+    add_executable(surface_threshold_bench
+        benchmarks/v1_comparison/surface_threshold_bench.c)
+    target_link_libraries(surface_threshold_bench PRIVATE quantumsim ${MATH_LIBRARY})
+
+    add_executable(sv_random_bench
+        benchmarks/v1_comparison/sv_random_bench.c)
+    target_link_libraries(sv_random_bench PRIVATE quantumsim ${MATH_LIBRARY})
+
     message(STATUS "Benchmarks: Enabled")
 endif()
 

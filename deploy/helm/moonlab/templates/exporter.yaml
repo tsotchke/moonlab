@@ -1,0 +1,60 @@
+{{- if .Values.exporter.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-exporter
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  replicas: {{ .Values.exporter.replicas }}
+  selector:
+    matchLabels:
+      {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moonlab.labels" . | nindent 8 }}
+        app.kubernetes.io/component: exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9090"
+        prometheus.io/path:   "/metrics"
+    spec:
+      containers:
+        - name: exporter
+          image: {{ .Values.image.registry }}/{{ .Values.image.repository }}/control-exporter:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --target={{ .Release.Name }}-control:{{ .Values.controlPlane.service.port }}
+            - --listen=0.0.0.0:9090
+            - --log-level=INFO
+          ports:
+            - containerPort: 9090
+              name: http
+          livenessProbe:
+            httpGet: { path: /metrics, port: http }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /metrics, port: http }
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-exporter
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  type: {{ .Values.exporter.service.type }}
+  ports:
+    - port: {{ .Values.exporter.service.port }}
+      targetPort: 9090
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "exporter") | nindent 4 }}
+{{- end }}

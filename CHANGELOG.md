@@ -7,7 +7,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.10.0.)
+(No unreleased changes since v1.0.0.)
+
+## [1.0.0] - 2026-05-20
+
+**Moonlab v1.0 -- production distributed quantum compute platform.**
+
+The v1.0 milestone marks moonlab's transition from "active
+development library" to "production-deployable distributed quantum
+platform."  Three commitments come with v1.0:
+
+1. **API stability.**  Every `MOONLAB_API` symbol -- 224 entries
+   across 20+ public headers -- is part of the v1.0 contract,
+   semver-pinned.  Same for the four binding surfaces (C, Python,
+   Rust, JS) and the control-plane wire protocol.  See
+   `docs/STABLE_ABI.md` for the explicit contract.
+
+2. **Every advertised capability works.**  No "compiles but never
+   smoke-tested" subsystem, no `NOT_IMPLEMENTED` on the public
+   surface, no scaling claim without a measurement.  An audit pass
+   verified ~30 load-bearing README and CHANGELOG claims against the
+   code; one stale section (CA-PEPS scaffold description) was
+   corrected.
+
+3. **Deployable in one command.**  `docker compose -f
+   deploy/docker/docker-compose.yml up` brings the control plane,
+   Prometheus exporter, WebSocket gateway, and Prometheus UI online.
+   The same stack ships as a Helm chart under `deploy/helm/moonlab/`
+   for Kubernetes clusters.
+
+### New since v0.10.0
+
+#### Production deployment
+
+- `deploy/docker/` -- 3-service compose stack (control plane +
+  Prometheus exporter + Prometheus + optional WebSocket gateway) on a
+  private bridge network with health-gated startup.  Hardening
+  recipe in `deploy/docker/README.md` for TLS + mTLS + HMAC-SHA3.
+- `tools/moonlab-control-server.c` -- the production CLI daemon.
+  Reads `--host / --port / --tls-cert / --tls-key / --client-ca /
+  --secret-file / --rate-limit-* / --request-timeout /
+  --max-concurrent / --log-format`; installs SIGINT/SIGTERM
+  graceful-shutdown handlers.  Lives at
+  `/usr/local/bin/moonlab-control-server` inside the Docker image.
+- `deploy/helm/moonlab/` -- Helm v3 chart; passes `helm lint`.
+  Templates for control-plane Deployment + Service, exporter
+  Deployment + Service (annotated for Prometheus auto-discovery),
+  optional WebSocket gateway, plus value-driven TLS secret mount and
+  HMAC secret mount.
+- `tools/gateway/moonlab_websocket_gateway.py` -- browser-facing
+  WebSocket bridge.  One JSON request -> one line-protocol round
+  trip on the moonlab side, one JSON reply back.  Six-case pytest
+  suite (CIRCUIT / SHOTS / HEALTH / METRICS / unknown-verb / bad-
+  JSON) all pass.
+
+#### Documentation
+
+- `docs/PARITY_MATRIX.md` -- cross-language capability matrix.
+  Every public capability has a row showing C/Python/Rust/JS
+  coverage with explicit ✗ for intentional gaps (MPI bindings,
+  crypto in Rust/JS, GPU-backend selection).
+- `docs/STABLE_ABI.md` -- v1.0 stability contract.  What's covered
+  (signatures, behaviour, return codes, wire protocol), what's not
+  (struct layouts, performance characteristics, env vars).
+  Deprecation policy.  Per-binding semver contracts.
+- `docs/INTEGRATION_libirrep_SbNN.md` -- v1.0 commitment for the
+  two opt-in sibling-library bridges.  6 QEC factories live behind
+  `QSIM_ENABLE_LIBIRREP=ON`; SBNN decoder slot lives behind
+  `QSIM_ENABLE_SBNN=ON`; both deliberately return explicit
+  `_NOT_BUILT` codes (not silent stubs) when unconfigured.
+- `docs/getting-started.md` -- 215-line onboarding tutorial:
+  `git clone` -> Bell circuit in C / Python / Rust / JS / via the
+  cloud control plane in 15 minutes.
+- `docs/benchmarks/v1_comparison.md` -- the head-to-head benchmark
+  REPRODUCIBILITY PROTOCOL (not a snapshot of numbers).  Three
+  comparisons (CA-MPS vs ITensor, surface code vs Stim, SV vs
+  Qiskit-Aer); moonlab-side harnesses ship as runnable binaries;
+  competitor-side invocations are documented for the user to run.
+- `examples/qgtl_hardware_demo/` -- end-to-end Python demo that
+  builds a circuit, runs it through the moonlab simulation path,
+  and documents the one-line change to swap in QGTL's hardware
+  backend instead.
+
+#### Benchmarks
+
+- `benchmarks/v1_comparison/ca_mps_kagome_bench.c` (287 lines) --
+  CA-MPS 12-site kagome AFM ground-state energy + wall-clock vs
+  chi.  Compares against the libirrep reference E0 = -5.44487522.
+- `benchmarks/v1_comparison/surface_threshold_bench.c` (404 lines)
+  -- surface code threshold sweep at d in {3, 5, 7}, p across the
+  threshold.
+- `benchmarks/v1_comparison/sv_random_bench.c` (285 lines) --
+  random Clifford+T circuit at N in {20..30}, depth 50, 1024
+  shots.  Reports wall-clock + peak resident memory.
+- `benchmarks/mpi_scaling/run_scaling.sh` + `README.md` -- driver
+  for the distributed MPI scaling chart at N = {32, 34, 36} on
+  ranks in {1, 4, 16}.
+
+#### CI
+
+- `linux-cuda` -- compile-only smoke for `QSIM_ENABLE_CUDA=ON` on
+  ubuntu-22.04 with nvidia-cuda-toolkit.  No GPU available on
+  GitHub runners; the gate ensures the .cu paths still compile
+  against a real nvcc toolchain.
+- `linux-cuquantum` -- compile-only smoke for
+  `QSIM_ENABLE_CUQUANTUM=ON`, allow-failure when the cuQuantum SDK
+  apt index is unavailable.
+
+### Verified
+
+- ctest: 11 `control_plane` integration tests + 14 `ca_mps` unit
+  tests + 18 `topology` unit tests pass; new
+  `unit_ca_mps_sample`, `unit_qgt_kane_mele_rashba`,
+  `integration_control_plane_ipv6` all green.
+- `helm lint deploy/helm/moonlab` -> 0 failures.
+- `helm template my-moonlab deploy/helm/moonlab` -> clean Service +
+  Deployment YAML for control-plane + exporter.
+- Python gateway pytest: 6/6 pass.
+- Python control-plane pytest: 8/8 pass.
+- Rust control-plane cargo tests: 4/4 pass.
+- JS control-plane vitest: 9/9 unit + 4/4 cross-language integration.
+- All three v1_comparison benchmark binaries build and emit
+  schema-conformant JSON.
+
+### Out of scope for v1.0
+
+Explicitly listed in `docs/PARITY_MATRIX.md` under "v1.0 parity
+gaps acknowledged":
+
+- JS control-plane client stays Node-only.  Browsers go through the
+  WebSocket gateway.
+- MPI bindings stay C-only.  No high-level runtime co-hosts an MPI
+  rank cleanly.
+- Crypto bindings stay C-only.  ML-KEM + QRNG are reachable from
+  Python; Rust and JS skip them.
+- GPU backend selection is a C-side runtime decision; no
+  language-level toggle.
 
 ## [0.10.0] - 2026-05-20
 

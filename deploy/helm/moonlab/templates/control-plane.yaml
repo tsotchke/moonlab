@@ -1,0 +1,110 @@
+{{- if .Values.controlPlane.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-control
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control-plane
+spec:
+  replicas: {{ .Values.controlPlane.replicas }}
+  selector:
+    matchLabels:
+      {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "control-plane") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moonlab.labels" . | nindent 8 }}
+        app.kubernetes.io/component: control-plane
+    spec:
+      containers:
+        - name: moonlab-control
+          image: {{ .Values.image.registry }}/{{ .Values.image.repository }}/control-plane:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --host=::
+            - --port=7070
+            - --max-concurrent={{ .Values.controlPlane.maxConcurrent }}
+            - --request-timeout={{ .Values.controlPlane.requestTimeoutSec }}
+            - --rate-limit-rps={{ .Values.controlPlane.rateLimitRps }}
+            - --rate-limit-burst={{ .Values.controlPlane.rateLimitBurst }}
+            {{- if .Values.controlPlane.tls.enabled }}
+            - --tls-cert=/etc/moonlab/tls/tls.crt
+            - --tls-key=/etc/moonlab/tls/tls.key
+            {{- if .Values.controlPlane.tls.requireClientCert }}
+            - --client-ca=/etc/moonlab/tls/ca.crt
+            {{- end }}
+            {{- end }}
+            {{- if .Values.controlPlane.auth.enabled }}
+            - --secret-file=/etc/moonlab/auth/hmac.bin
+            {{- end }}
+          ports:
+            - containerPort: 7070
+              name: line-proto
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "printf 'HEALTH\\n' | nc -w 1 127.0.0.1 7070 | grep -q 'OK alive'"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "printf 'HEALTH\\n' | nc -w 1 127.0.0.1 7070 | grep -q 'OK alive'"
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.controlPlane.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.controlPlane.tls.enabled }}
+            - name: tls
+              mountPath: /etc/moonlab/tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.controlPlane.auth.enabled }}
+            - name: auth
+              mountPath: /etc/moonlab/auth
+              readOnly: true
+            {{- end }}
+      volumes:
+        {{- if .Values.controlPlane.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.controlPlane.tls.secretName }}
+        {{- end }}
+        {{- if .Values.controlPlane.auth.enabled }}
+        - name: auth
+          secret:
+            secretName: {{ .Values.controlPlane.auth.secretName }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-control
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control-plane
+spec:
+  type: {{ .Values.controlPlane.service.type }}
+  ports:
+    - port: {{ .Values.controlPlane.service.port }}
+      targetPort: 7070
+      protocol: TCP
+      name: line-proto
+  selector:
+    {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "control-plane") | nindent 4 }}
+{{- end }}

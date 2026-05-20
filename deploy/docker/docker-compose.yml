@@ -51,6 +51,19 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     restart: unless-stopped
 
+  moonlab-websocket-gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.gateway
+    image: moonlab/websocket-gateway:0.10.0
+    container_name: moonlab-websocket-gateway
+    depends_on:
+      moonlab-control:
+        condition: service_healthy
+    networks: [moonlab]
+    ports: ["8765:8765"]
+    restart: unless-stopped
+
 networks:
   moonlab:
     driver: bridge
