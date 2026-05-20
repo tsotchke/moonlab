@@ -200,6 +200,45 @@ jobs:
           path: |
             build/libquantumsim.*dylib
 
+  # Hygiene gate: public moonlab must not contain proprietary-overlay
+  # leakage.  Cheap insurance against accidental inclusion of code
+  # that belongs in the private moonlab-private or qgtl-private
+  # overlays.  Markers grepped: explicit tags + the obvious leak
+  # patterns ("internal-use-only" / "do not commit upstream" / ...).
+  public-hygiene:
+    name: Public-source hygiene (proprietary-marker grep)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Grep for proprietary markers
+        run: |
+          set -e
+          # Tag patterns that must not appear in public-moonlab source.
+          # The grep requires a leading marker prefix (comment-anchored)
+          # so architectural commentary that descriptively mentions
+          # "the private overlay" or "proprietary calibration data"
+          # does NOT trigger.  Only files that contain an actual
+          # PROPRIETARY/ENTERPRISE/TSOTCHKE-INTERNAL tag prefix fail.
+          PATTERNS='(//|#|\*) ?(PROPRIETARY|ENTERPRISE|TSOTCHKE-INTERNAL|PRIVATE-ONLY|DO NOT COMMIT UPSTREAM):'
+          PATTERNS+='|tsotchke-internal'    # hyphenated form is also a clear marker
+          PATTERNS+='|do not commit upstream'  # belt-and-braces
+          # Search in source-bearing directories only; skip docs that
+          # legitimately discuss the open-core architecture and may
+          # reference these words descriptively.
+          if grep -rEn --include='*.c' --include='*.h' --include='*.cpp' \
+                --include='*.mm' --include='*.py' --include='*.rs' \
+                --include='*.ts' --include='*.js' --include='*.mjs' \
+                "$PATTERNS" src/ bindings/ tests/ examples/ benchmarks/ \
+                tools/ deploy/ scripts/ 2>/dev/null; then
+            echo "::error::Proprietary marker detected in public source." >&2
+            echo "::error::Move the offending code to the moonlab-private overlay" >&2
+            echo "::error::or register it through the public plug-in surface" >&2
+            echo "::error::(moonlab_register_backend / _decoder / _vendor_noise_profile" >&2
+            echo "::error::or moonlab_scheduler_set_completion_hook)." >&2
+            exit 1
+          fi
+          echo "OK -- no proprietary markers found in public source."
+
   macos-werror:
     name: macOS arm64 (Release + -Werror)
     runs-on: macos-14

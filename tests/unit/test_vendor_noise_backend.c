@@ -87,9 +87,79 @@ static void test_register_all(void)
     fprintf(stdout, "\n--- vendor-noise: register backends ---\n");
     const int rc = moonlab_register_vendor_noise_backends();
     CHECK(rc == 0, "register_all rc=%d", rc);
-    CHECK(moonlab_find_backend("ibm-falcon")    != NULL, "ibm-falcon registered");
-    CHECK(moonlab_find_backend("rigetti-aspen") != NULL, "rigetti-aspen registered");
-    CHECK(moonlab_find_backend("ionq-forte")    != NULL, "ionq-forte registered");
+    /* Canonical "-emu" names (the new recommended surface). */
+    CHECK(moonlab_find_backend("ibm-falcon-emu")    != NULL,
+          "ibm-falcon-emu registered (canonical)");
+    CHECK(moonlab_find_backend("rigetti-aspen-emu") != NULL,
+          "rigetti-aspen-emu registered (canonical)");
+    CHECK(moonlab_find_backend("ionq-forte-emu")    != NULL,
+          "ionq-forte-emu registered (canonical)");
+    /* Legacy bare names (one release of compat). */
+    CHECK(moonlab_find_backend("ibm-falcon")    != NULL,
+          "ibm-falcon registered (legacy alias)");
+    CHECK(moonlab_find_backend("rigetti-aspen") != NULL,
+          "rigetti-aspen registered (legacy alias)");
+    CHECK(moonlab_find_backend("ionq-forte")    != NULL,
+          "ionq-forte registered (legacy alias)");
+}
+
+static void test_profile_registry(void)
+{
+    fprintf(stdout, "\n--- vendor-noise: profile registry ---\n");
+
+    /* The six baked-in profile entries are auto-registered. */
+    const int n_baked = moonlab_num_vendor_noise_profiles();
+    CHECK(n_baked >= 6,
+          "registry has >= 6 baked-in profiles (canonical + legacy) (n=%d)",
+          n_baked);
+
+    /* Register a custom profile -- simulates the private-overlay
+     * live-calibration scraper installing today's IBM device snapshot. */
+    const moonlab_vendor_noise_profile_t custom = {
+        .p_gate_1q   = 0.0015,
+        .p_gate_2q   = 0.012,
+        .p_readout   = 0.018,
+        .description = "IBM Falcon (2026-05-20 live snapshot)"
+    };
+    CHECK(moonlab_register_vendor_noise_profile(
+              "ibm-falcon-2026-05-20", &custom) == 0,
+          "register custom profile");
+    const moonlab_vendor_noise_profile_t *back =
+        moonlab_lookup_vendor_noise_profile("ibm-falcon-2026-05-20");
+    CHECK(back != NULL, "lookup custom profile");
+    if (back) {
+        CHECK(back->p_gate_2q > 0.011 && back->p_gate_2q < 0.013,
+              "custom p_gate_2q round-trips (%.4f)", back->p_gate_2q);
+        CHECK(strstr(back->description, "live snapshot") != NULL,
+              "description round-trips");
+    }
+
+    /* Update the custom profile in place -- the registry copies, so
+     * future runs see the update. */
+    const moonlab_vendor_noise_profile_t updated = {
+        .p_gate_1q   = 0.0008,    /* improved calibration */
+        .p_gate_2q   = 0.008,
+        .p_readout   = 0.012,
+        .description = "IBM Falcon (2026-05-21 live snapshot, improved)"
+    };
+    CHECK(moonlab_register_vendor_noise_profile(
+              "ibm-falcon-2026-05-20", &updated) == 0,
+          "register replaces existing profile in place");
+    back = moonlab_lookup_vendor_noise_profile("ibm-falcon-2026-05-20");
+    CHECK(back != NULL && back->p_gate_2q < 0.009,
+          "in-place update visible (p_gate_2q = %.4f)",
+          back ? back->p_gate_2q : -1.0);
+
+    /* Unregister cleanly. */
+    CHECK(moonlab_unregister_vendor_noise_profile(
+              "ibm-falcon-2026-05-20") == 0,
+          "unregister custom profile");
+    CHECK(moonlab_lookup_vendor_noise_profile(
+              "ibm-falcon-2026-05-20") == NULL,
+          "lookup after unregister returns NULL");
+    CHECK(moonlab_unregister_vendor_noise_profile(
+              "nonexistent") != 0,
+          "unregister nonexistent profile reports error");
 }
 
 static void test_backend_runs_and_noise_fires(const char *backend_name,
@@ -135,7 +205,7 @@ static void test_ionq_cleaner_than_rigetti(void)
     fprintf(stdout, "\n--- vendor-noise: ionq cleaner than rigetti ---\n");
     moonlab_job_t *ja = make_bell_job(16384);
     moonlab_job_set_rng_seed(ja, 0xfeedfaceULL);
-    moonlab_job_set_backend(ja, "rigetti-aspen");
+    moonlab_job_set_backend(ja, "rigetti-aspen-emu");
     moonlab_job_results_t ra = {0};
     moonlab_scheduler_run(ja, &ra);
     int rigetti_other = 0;
@@ -145,7 +215,7 @@ static void test_ionq_cleaner_than_rigetti(void)
 
     moonlab_job_t *jb = make_bell_job(16384);
     moonlab_job_set_rng_seed(jb, 0xfeedfaceULL);
-    moonlab_job_set_backend(jb, "ionq-forte");
+    moonlab_job_set_backend(jb, "ionq-forte-emu");
     moonlab_job_results_t rb = {0};
     moonlab_scheduler_run(jb, &rb);
     int ionq_other = 0;
@@ -170,14 +240,15 @@ int main(void)
 
     test_profile_lookup();
     test_register_all();
+    test_profile_registry();
 
-    /* Expected off-Bell fractions per circuit (1 CNOT + 2-qubit readout):
-     *   ibm:     p2q + 2 * p_readout ~ 1.0% + 4.0% = 5.0% (rough)
-     *   rigetti: p2q + 2 * p_readout ~ 1.5% + 5.0% = 6.5%
-     *   ionq:    p2q + 2 * p_readout ~ 0.4% + 1.0% = 1.4% */
-    test_backend_runs_and_noise_fires("ibm-falcon",    0.01, 0.15);
-    test_backend_runs_and_noise_fires("rigetti-aspen", 0.01, 0.18);
-    test_backend_runs_and_noise_fires("ionq-forte",    0.001, 0.08);
+    /* Canonical "-emu" names exercise the noise pipeline. */
+    test_backend_runs_and_noise_fires("ibm-falcon-emu",    0.01, 0.15);
+    test_backend_runs_and_noise_fires("rigetti-aspen-emu", 0.01, 0.18);
+    test_backend_runs_and_noise_fires("ionq-forte-emu",    0.001, 0.08);
+
+    /* Legacy bare-name aliases must produce equivalent behavior. */
+    test_backend_runs_and_noise_fires("ibm-falcon",        0.01, 0.15);
 
     test_ionq_cleaner_than_rigetti();
 

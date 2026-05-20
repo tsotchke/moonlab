@@ -248,6 +248,13 @@ static int g_num_backends = 0;
 static pthread_mutex_t g_backend_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_once_t  g_backend_init_once = PTHREAD_ONCE_INIT;
 
+/* Completion hook (since v1.1.0).  Protected by the same lock as
+ * the backend registry -- install/clear/fire are serialised so
+ * the private overlay can swap hooks at runtime without racing the
+ * scheduler. */
+static moonlab_completion_hook_fn g_completion_hook = NULL;
+static void                      *g_completion_hook_ctx = NULL;
+
 static void register_default_simulator_backend(void)
 {
     /* Direct-store; we hold no lock during the once init because
@@ -365,6 +372,16 @@ const char *moonlab_job_backend(const moonlab_job_t *j)
     return j ? j->backend_name : NULL;
 }
 
+int moonlab_scheduler_set_completion_hook(moonlab_completion_hook_fn hook, void *ctx)
+{
+    ensure_default_backend();
+    pthread_mutex_lock(&g_backend_lock);
+    g_completion_hook     = hook;
+    g_completion_hook_ctx = ctx;
+    pthread_mutex_unlock(&g_backend_lock);
+    return MOONLAB_SCHED_OK;
+}
+
 int moonlab_scheduler_run(moonlab_job_t         *j,
                           moonlab_job_results_t *out)
 {
@@ -388,6 +405,21 @@ int moonlab_scheduler_run(moonlab_job_t         *j,
         moonlab_job_results_free(out);
         return rc;
     }
+
+    /* Completion hook (since v1.1.0): private overlay uses this for
+     * billing / audit / customer-dashboard event push.  Snapshot
+     * under the lock so a concurrent set_completion_hook() can't
+     * race us.  Hook fires synchronously on the caller's thread; if
+     * it's long-running, the overlay is expected to hand off to a
+     * worker pool itself. */
+    pthread_mutex_lock(&g_backend_lock);
+    moonlab_completion_hook_fn hook = g_completion_hook;
+    void *hook_ctx = g_completion_hook_ctx;
+    pthread_mutex_unlock(&g_backend_lock);
+    if (hook) {
+        hook(j, out, bname, hook_ctx);
+    }
+
     return MOONLAB_SCHED_OK;
 }
 
