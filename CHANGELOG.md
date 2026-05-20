@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.25.)
+(No unreleased changes since v0.8.26.)
+
+## [0.8.26] - 2026-05-20
+
+**Per-request socket timeout.**  Protects worker threads against
+slowloris-style clients that open a connection and then refuse to
+send (or read) data.
+
+### Added
+
+- `moonlab_control_server_set_request_timeout(server, timeout_secs)`:
+  configures `SO_RCVTIMEO` + `SO_SNDTIMEO` on every accepted client
+  fd before the (optional) TLS handshake runs.  Default 0 = no
+  timeout, so existing deployments are unaffected.
+
+- Applies *before* `SSL_accept` so even a misbehaving TLS peer
+  can't hang the worker indefinitely.
+
+- `tests/integration/test_control_plane_timeout.c`: opens a TCP
+  connection to a server with `timeout = 1s`, sends nothing,
+  measures how long `recv()` blocks before the server closes the
+  socket; must be within 0.5..3.0 s.  Then submits a normal Bell
+  circuit through a second connection and confirms it still
+  completes inside the timeout window.
+
+### Verified
+
+```
+--- path 1: silent client times out ~1s ---
+  OK    connect to silent-test port
+    recv() returned 0 after 1.004 s
+  OK    server closed silent connection
+  OK    closed within 3s (got 1.004)
+  OK    took >=0.5s to close (got 1.004)
+
+--- path 2: normal Bell still works inside timeout ---
+  OK    Bell submit rc=0 num=4
+  OK    P[00] = 0.500000
+  OK    P[11] = 0.500000
+```
 
 ## [0.8.25] - 2026-05-20
 
