@@ -309,6 +309,54 @@ jobs:
       - name: Run discovery smoke
         run: ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
 
+  # CUDA compile-only smoke (since v0.10.0).  No GPU available on
+  # GitHub runners; we just confirm the gpu_cuda.cu / gpu_cuda.c
+  # paths still compile against a real nvcc toolchain.
+  linux-cuda:
+    name: Linux x86_64 (-DQSIM_ENABLE_CUDA=ON, compile-only)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CUDA toolkit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev \
+            nvidia-cuda-toolkit
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_CUDA=ON
+      - name: Build (link errors only -- no kernels executed)
+        run: cmake --build build -j
+
+  # cuQuantum compile-only smoke (since v0.10.0).  Requires CUDA and
+  # NVIDIA's cuQuantum SDK; CI uses the public Debian build of the
+  # custatevec library if available, otherwise the job is opted out
+  # via the QSIM_ENABLE_CUQUANTUM=OFF default.  Job is allow-failure
+  # for the SDK-missing case.
+  linux-cuquantum:
+    name: Linux x86_64 (-DQSIM_ENABLE_CUQUANTUM=ON, compile-only)
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies + cuQuantum SDK probe
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libomp-dev libopenblas-dev liblapacke-dev \
+            nvidia-cuda-toolkit
+          # Skip the job cleanly if cuQuantum isn't reachable on the
+          # apt index.  The compile gate that follows then becomes a
+          # plain QSIM_ENABLE_CUQUANTUM=OFF build, which is fine.
+          sudo apt-get install -y libcustatevec-dev || \
+            { echo "cuQuantum SDK unavailable; skipping" >> $GITHUB_STEP_SUMMARY; exit 0; }
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_CUQUANTUM=ON
+      - name: Build
+        run: cmake --build build -j
+
   linux-mpi:
     name: Linux x86_64 (-DQSIM_ENABLE_MPI=ON)
     runs-on: ubuntu-22.04

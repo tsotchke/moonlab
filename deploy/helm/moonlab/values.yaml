@@ -1,0 +1,94 @@
+# Default values for moonlab.
+# Override with `helm install ... -f my-values.yaml` or `--set k=v`.
+
+image:
+  registry:  docker.io
+  repository: moonlab
+  tag:        "0.10.0"
+  pullPolicy: IfNotPresent
+
+# ----------------------------------------------------------------------
+# Control-plane daemon
+# ----------------------------------------------------------------------
+controlPlane:
+  enabled:  true
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 7070
+
+  # Defensive layers (see docs/CONTROL_PLANE.md).
+  maxConcurrent:   64
+  requestTimeoutSec: 60
+  rateLimitRps:    100
+  rateLimitBurst:  200
+
+  # Optional TLS bundle.  Provide via the named Secret below; leave
+  # blank to disable TLS.
+  tls:
+    enabled: false
+    # Secret must contain: tls.crt, tls.key, optional ca.crt for mTLS.
+    secretName: ""
+    requireClientCert: false
+
+  # Optional HMAC-SHA3-256 shared secret (raw bytes file).
+  auth:
+    enabled: false
+    # Secret must contain key `hmac.bin`.
+    secretName: ""
+
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits:   {cpu: 2,    memory: 2Gi}
+
+# ----------------------------------------------------------------------
+# Prometheus exporter sidecar
+# ----------------------------------------------------------------------
+exporter:
+  enabled:  true
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 9090
+
+  # If controlPlane.tls.enabled, the exporter scrape can be configured
+  # to use TLS via these fields.  Defaults to plain TCP on the private
+  # service network.
+  scrapeTls:
+    enabled:        false
+    caSecretName:   ""    # CA bundle to verify the control plane cert
+    clientCertSecretName: ""  # for mTLS scrape
+
+  resources:
+    requests: {cpu: 50m,  memory: 64Mi}
+    limits:   {cpu: 500m, memory: 256Mi}
+
+# ----------------------------------------------------------------------
+# WebSocket gateway (browser-facing)
+# ----------------------------------------------------------------------
+websocketGateway:
+  enabled:  false   # off by default; opt-in for browser-side clients
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8765
+
+  resources:
+    requests: {cpu: 50m,  memory: 64Mi}
+    limits:   {cpu: 500m, memory: 256Mi}
+
+# ----------------------------------------------------------------------
+# Prometheus + Grafana shipped alongside (optional).  In production
+# clusters that already have observability infra you'd point the
+# scrape config at the exporter ClusterIP from outside this chart.
+# ----------------------------------------------------------------------
+observability:
+  prometheus:
+    enabled: false  # opt-in; assume external Prom by default
+
+# ----------------------------------------------------------------------
+# Pod scheduling
+# ----------------------------------------------------------------------
+nodeSelector: {}
+tolerations:  []
+affinity:     {}

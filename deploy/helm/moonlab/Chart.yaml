@@ -1,0 +1,19 @@
+apiVersion: v2
+name: moonlab
+description: |
+  Moonlab v1.0 distributed quantum compute platform.
+
+  Deploys the control-plane daemon, Prometheus exporter sidecar, and
+  optionally the WebSocket gateway for browser-facing clients.
+
+type: application
+version: 0.10.0
+appVersion: "0.10.0"
+
+home: https://github.com/tsotchke/moonlab
+sources:
+  - https://github.com/tsotchke/moonlab
+
+maintainers:
+  - name: tsotchke
+    url: https://github.com/tsotchke

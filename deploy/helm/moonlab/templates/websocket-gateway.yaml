@@ -1,0 +1,50 @@
+{{- if .Values.websocketGateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-websocket-gateway
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: websocket-gateway
+spec:
+  replicas: {{ .Values.websocketGateway.replicas }}
+  selector:
+    matchLabels:
+      {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "websocket-gateway") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moonlab.labels" . | nindent 8 }}
+        app.kubernetes.io/component: websocket-gateway
+    spec:
+      containers:
+        - name: gateway
+          image: {{ .Values.image.registry }}/{{ .Values.image.repository }}/websocket-gateway:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --target={{ .Release.Name }}-control:{{ .Values.controlPlane.service.port }}
+            - --listen=0.0.0.0:8765
+            - --log-level=INFO
+          ports:
+            - containerPort: 8765
+              name: ws
+          resources:
+            {{- toYaml .Values.websocketGateway.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-websocket-gateway
+  labels:
+    {{- include "moonlab.labels" . | nindent 4 }}
+    app.kubernetes.io/component: websocket-gateway
+spec:
+  type: {{ .Values.websocketGateway.service.type }}
+  ports:
+    - port: {{ .Values.websocketGateway.service.port }}
+      targetPort: 8765
+      protocol: TCP
+      name: ws
+  selector:
+    {{- include "moonlab.selectorLabels" (dict "Chart" .Chart "Release" .Release "component" "websocket-gateway") | nindent 4 }}
+{{- end }}

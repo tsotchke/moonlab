@@ -1,0 +1,14 @@
+# WebSocket gateway -- browser-facing bridge for the line protocol.
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir websockets==14.1
+
+COPY tools/gateway/moonlab_websocket_gateway.py \
+     /usr/local/bin/moonlab-websocket-gateway
+RUN chmod +x /usr/local/bin/moonlab-websocket-gateway
+
+EXPOSE 8765
+ENTRYPOINT ["python3", "/usr/local/bin/moonlab-websocket-gateway"]
+CMD ["--target", "moonlab-control:7070", \
+     "--listen", "0.0.0.0:8765", \
+     "--log-level", "INFO"]
