@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.2.)
+(No unreleased changes since v0.8.3.)
+
+## [0.8.3] - 2026-05-19
+
+**Portable circuit serialization.**  Unlocks RPC transport,
+on-disk persistence, cross-language circuit sharing, and the
+moonlab <-> QGTL <-> libirrep <-> SbNN exchange surface.
+
+### Added
+
+- `moonlab_qgtl_circuit_serialize(c, buf, buf_size, out_written)`
+- `moonlab_qgtl_circuit_deserialize(buf, buf_size, out_status)`
+- `moonlab_qgtl_circuit_save(c, path)`
+- `moonlab_qgtl_circuit_load(path, out_status)`
+
+  Format: line-oriented text, `# moonlab-circuit v1` magic,
+  `NUM_QUBITS <n>`, then one gate per line:
+  `<GATE> <target> [control] [theta]`.  Theta uses `%.17g` so
+  doubles roundtrip exactly bit-for-bit.  Gate names map 1:1
+  to the existing `moonlab_qgtl_gate_t` enum.  Comments (`#`)
+  and blank lines are tolerated by the parser.
+
+  All four functions carry MOONLAB_API and join the stable
+  surface QGTL plugs into.
+
+- `tests/unit/test_qgtl_circuit_io.c` (ctest label `qgtl`):
+  30 assertions across size-query, byte-exact serialize-then-
+  deserialize-then-serialize roundtrip, file save/load, OOM
+  path reporting required size, and bad-input rejection.
+
+### Verified
+
+```
+=== test_qgtl_circuit_io (v0.8.3) ===
+  ... 30 OK / 0 FAIL
+```
+
+14-gate full-coverage circuit (every enum value, including all
+three RX/RY/RZ parametrized gates) serializes to 168 bytes and
+roundtrips byte-exact.
 
 ## [0.8.2] - 2026-05-19
 

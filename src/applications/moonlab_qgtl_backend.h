@@ -174,6 +174,85 @@ MOONLAB_API int moonlab_qgtl_circuit_num_qubits(const moonlab_qgtl_circuit_t *c)
 /** @brief Number of gates recorded in the circuit. */
 MOONLAB_API int moonlab_qgtl_circuit_num_gates(const moonlab_qgtl_circuit_t *c);
 
+/* ------------------------------------------------------------------
+ * Serialization surface (since v0.8.3).
+ *
+ * Portable line-oriented text format so the same circuit can move
+ * between moonlab, QGTL, libirrep, SbNN, and any language binding
+ * without dragging in a JSON dependency.  Format:
+ *
+ *     # moonlab-circuit v1
+ *     NUM_QUBITS <n>
+ *     <GATE> <target> [control] [theta]
+ *     ...
+ *
+ * Gate names match the enum: I X Y Z H S T RX RY RZ CNOT CY CZ SWAP.
+ * Lines starting with '#' or blank are ignored.  Theta uses '%.17g'
+ * so doubles roundtrip exactly.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Serialize a circuit to a portable text buffer.
+ *
+ * @param[in]   c            Circuit handle.
+ * @param[out]  buf          Output buffer.  May be NULL only when
+ *                           `buf_size == 0` (size-query mode).
+ * @param[in]   buf_size     Bytes available at `buf`.
+ * @param[out]  out_written  Optional.  On success, set to the byte
+ *                           count written (excluding terminating NUL,
+ *                           which is always emitted when `buf_size > 0`).
+ *                           In size-query mode this is the size you
+ *                           would have to pass for a successful call.
+ *
+ * @return MOONLAB_QGTL_OK on success, MOONLAB_QGTL_BAD_ARG on NULL
+ *         circuit, or MOONLAB_QGTL_OOM if `buf_size > 0 && buf_size`
+ *         is insufficient.  In the OOM case `*out_written` reports
+ *         the required size.
+ */
+MOONLAB_API int
+moonlab_qgtl_circuit_serialize(const moonlab_qgtl_circuit_t *c,
+                               char  *buf,
+                               size_t buf_size,
+                               size_t *out_written);
+
+/**
+ * @brief Parse a circuit from a text buffer produced by
+ *        @ref moonlab_qgtl_circuit_serialize (or written by hand).
+ *
+ * @param[in]   buf        Input buffer.
+ * @param[in]   buf_size   Bytes to read at `buf` (use SIZE_MAX to
+ *                         scan until a NUL).
+ * @param[out]  out_status Optional.  Set to MOONLAB_QGTL_OK on
+ *                         success or a negative code on failure.
+ *
+ * @return Owned circuit handle on success, NULL on failure.  Free
+ *         via @ref moonlab_qgtl_circuit_free.
+ */
+MOONLAB_API moonlab_qgtl_circuit_t *
+moonlab_qgtl_circuit_deserialize(const char *buf,
+                                 size_t      buf_size,
+                                 int        *out_status);
+
+/**
+ * @brief Save a circuit to a file in the same text format as
+ *        @ref moonlab_qgtl_circuit_serialize.
+ *
+ * @return MOONLAB_QGTL_OK on success, MOONLAB_QGTL_BAD_ARG / OOM
+ *         / INTERNAL (= I/O) on failure.
+ */
+MOONLAB_API int
+moonlab_qgtl_circuit_save(const moonlab_qgtl_circuit_t *c,
+                          const char *path);
+
+/**
+ * @brief Load a circuit previously written by
+ *        @ref moonlab_qgtl_circuit_save.
+ *
+ * @return Owned handle, or NULL on failure.
+ */
+MOONLAB_API moonlab_qgtl_circuit_t *
+moonlab_qgtl_circuit_load(const char *path, int *out_status);
+
 #ifdef __cplusplus
 }
 #endif
