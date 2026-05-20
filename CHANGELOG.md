@@ -7,7 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.24.)
+(No unreleased changes since v0.8.25.)
+
+## [0.8.25] - 2026-05-20
+
+**Python `ControlPlaneServer` full lifecycle config parity.**
+HMAC secret, TLS cert pair, mTLS client CA, and per-IP rate limit
+are now exposed as constructor kwargs *and* runtime methods on
+the context manager.
+
+### Added
+
+- Constructor kwargs on `ControlPlaneServer.__init__`:
+  ``secret``, ``tls_cert``, ``tls_key``, ``client_ca``,
+  ``rate_limit_rps``, ``rate_limit_burst``.  All applied in
+  ``__enter__`` between `open()` and the runner-thread start so
+  there's no race against `accept()`.
+
+- Runtime methods on `ControlPlaneServer`:
+  - ``set_secret(secret)``
+  - ``use_tls(cert_path, key_path)``
+  - ``require_client_cert(ca_path)``
+  - ``set_rate_limit(rate_rps, burst=0)``
+
+  Each probes the underlying libquantumsim symbol at module load
+  and raises a clear `ControlPlaneError` if the library predates
+  the corresponding C entry point (HMAC v0.8.15, TLS v0.8.17,
+  mTLS v0.8.19, rate-limit v0.8.21).
+
+### Verified
+
+```python
+with ControlPlaneServer(secret=SECRET, rate_limit_rps=20) as srv:
+    probs = submit_circuit('127.0.0.1', srv.port, text, secret=SECRET)
+    # ...
+
+  server up on port 58500 (HMAC + 20rps rate-limit)
+  OK   Bell over HMAC via Python ControlPlaneServer kwargs
+  OK   unauth client rejected
+  OK   METRICS scrape unaffected by HMAC
+  OK   clean shutdown
+```
 
 ## [0.8.24] - 2026-05-19
 

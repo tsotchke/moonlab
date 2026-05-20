@@ -223,6 +223,40 @@ try:
 except AttributeError:
     _SERVER_API_AVAILABLE = False
 
+# v0.8.25 extended server config -- probe defensively; binding still
+# loads (with NotImplementedError on the methods) if the loaded
+# libquantumsim predates v0.8.15/v0.8.17/v0.8.21.
+try:
+    _lib.moonlab_control_server_set_secret.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t,
+    ]
+    _lib.moonlab_control_server_set_secret.restype = ctypes.c_int
+    _SECRET_API_AVAILABLE = True
+except AttributeError:
+    _SECRET_API_AVAILABLE = False
+
+try:
+    _lib.moonlab_control_server_use_tls.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p,
+    ]
+    _lib.moonlab_control_server_use_tls.restype = ctypes.c_int
+    _lib.moonlab_control_server_require_client_cert.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p,
+    ]
+    _lib.moonlab_control_server_require_client_cert.restype = ctypes.c_int
+    _TLS_API_AVAILABLE = True
+except AttributeError:
+    _TLS_API_AVAILABLE = False
+
+try:
+    _lib.moonlab_control_server_set_rate_limit.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+    ]
+    _lib.moonlab_control_server_set_rate_limit.restype = ctypes.c_int
+    _RATE_LIMIT_API_AVAILABLE = True
+except AttributeError:
+    _RATE_LIMIT_API_AVAILABLE = False
+
 
 class ControlPlaneServer:
     """In-process control-plane server, since v0.8.14.
@@ -248,7 +282,23 @@ class ControlPlaneServer:
     """
 
     def __init__(self, host: str = "127.0.0.1", port: int = 0,
-                 max_iters: int = (1 << 30)) -> None:
+                 max_iters: int = (1 << 30),
+                 secret: Optional[Union[bytes, str]] = None,
+                 tls_cert: Optional[str] = None,
+                 tls_key: Optional[str] = None,
+                 client_ca: Optional[str] = None,
+                 rate_limit_rps: int = 0,
+                 rate_limit_burst: int = 0) -> None:
+        """Spin up an in-process control-plane server.
+
+        Optional kwargs (all applied before the worker thread starts
+        accept()ing, so they're free of TOCTTOU races):
+
+        - ``secret``: HMAC-SHA3-256 shared secret (v0.8.15+).
+        - ``tls_cert`` + ``tls_key``: PEM paths for TLS (v0.8.17+).
+        - ``client_ca``: enable mTLS; requires ``tls_cert``+``tls_key`` set.
+        - ``rate_limit_rps`` / ``rate_limit_burst``: token bucket (v0.8.21+).
+        """
         if not _SERVER_API_AVAILABLE:
             raise ControlPlaneError(
                 "ControlPlaneServer unavailable -- libquantumsim is older "
@@ -261,6 +311,14 @@ class ControlPlaneServer:
         self._thread: Optional[threading.Thread] = None
         self._actual_port = ctypes.c_uint16(0)
         self._run_rc: Optional[int] = None
+        # v0.8.25 config -- applied in __enter__ after open() but before
+        # the runner thread starts.
+        self._cfg_secret    = secret
+        self._cfg_tls_cert  = tls_cert
+        self._cfg_tls_key   = tls_key
+        self._cfg_client_ca = client_ca
+        self._cfg_rate_rps  = int(rate_limit_rps)
+        self._cfg_burst     = int(rate_limit_burst)
 
     @property
     def port(self) -> int:
@@ -276,6 +334,17 @@ class ControlPlaneServer:
             raise ControlPlaneError(f"server_open rc={rc}")
         self._handle = handle.value
 
+        # Apply v0.8.25 config before the runner starts -- avoids races
+        # with the accept loop.
+        if self._cfg_secret is not None:
+            self.set_secret(self._cfg_secret)
+        if self._cfg_tls_cert is not None or self._cfg_tls_key is not None:
+            self.use_tls(self._cfg_tls_cert, self._cfg_tls_key)
+        if self._cfg_client_ca is not None:
+            self.require_client_cert(self._cfg_client_ca)
+        if self._cfg_rate_rps > 0:
+            self.set_rate_limit(self._cfg_rate_rps, self._cfg_burst)
+
         def runner() -> None:
             self._run_rc = _lib.moonlab_control_server_run(
                 ctypes.c_void_p(self._handle), self._max_iters)
@@ -288,6 +357,77 @@ class ControlPlaneServer:
         """Signal the server to stop after the current in-flight request."""
         if self._handle is not None:
             _lib.moonlab_control_server_shutdown(ctypes.c_void_p(self._handle))
+
+    def set_secret(self, secret: Union[bytes, str, None]) -> None:
+        """Set / clear the HMAC-SHA3-256 shared secret (since v0.8.25).
+        Pass ``None`` or an empty value to disable authentication.
+
+        Must be called before any client connects.
+        """
+        if not _SECRET_API_AVAILABLE:
+            raise ControlPlaneError(
+                "set_secret unavailable -- libquantumsim predates v0.8.15"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        key = b"" if secret is None else (
+            secret.encode("utf-8") if isinstance(secret, str) else secret
+        )
+        rc = _lib.moonlab_control_server_set_secret(
+            ctypes.c_void_p(self._handle), key, len(key))
+        if rc != 0:
+            raise ControlPlaneError(f"set_secret rc={rc}")
+
+    def use_tls(self,
+                cert_path: Optional[str],
+                key_path: Optional[str]) -> None:
+        """Configure TLS (since v0.8.25 / v0.8.17 server).  Pass both
+        ``None`` to disable an already-configured TLS server."""
+        if not _TLS_API_AVAILABLE:
+            raise ControlPlaneError(
+                "use_tls unavailable -- libquantumsim predates v0.8.17 "
+                "or was built without QSIM_ENABLE_TLS=ON"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        cp = None if cert_path is None else cert_path.encode("utf-8")
+        kp = None if key_path  is None else key_path.encode("utf-8")
+        rc = _lib.moonlab_control_server_use_tls(
+            ctypes.c_void_p(self._handle), cp, kp)
+        if rc != 0:
+            raise ControlPlaneError(f"use_tls rc={rc}")
+
+    def require_client_cert(self, ca_path: Optional[str]) -> None:
+        """Require CA-signed client certificates for mTLS (since v0.8.25
+        / v0.8.19 server).  Must be called after ``use_tls``.  Pass
+        ``None`` to disable the requirement."""
+        if not _TLS_API_AVAILABLE:
+            raise ControlPlaneError(
+                "require_client_cert unavailable -- libquantumsim predates "
+                "v0.8.19 or was built without QSIM_ENABLE_TLS=ON"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        cp = None if ca_path is None else ca_path.encode("utf-8")
+        rc = _lib.moonlab_control_server_require_client_cert(
+            ctypes.c_void_p(self._handle), cp)
+        if rc != 0:
+            raise ControlPlaneError(f"require_client_cert rc={rc}")
+
+    def set_rate_limit(self, rate_rps: int, burst: int = 0) -> None:
+        """Configure the per-source-IP token-bucket rate limit (since
+        v0.8.25 / v0.8.21 server).  Pass ``rate_rps=0`` to disable.
+        ``burst <= 0`` defaults to ``2 * rate_rps``."""
+        if not _RATE_LIMIT_API_AVAILABLE:
+            raise ControlPlaneError(
+                "set_rate_limit unavailable -- libquantumsim predates v0.8.21"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        rc = _lib.moonlab_control_server_set_rate_limit(
+            ctypes.c_void_p(self._handle), int(rate_rps), int(burst))
+        if rc != 0:
+            raise ControlPlaneError(f"set_rate_limit rc={rc}")
 
     def __exit__(self, *exc) -> None:
         self.shutdown()
