@@ -313,6 +313,18 @@ moonlab_control_server_set_rate_limit(moonlab_control_server_t *server,
                                       int burst);
 
 /**
+ * @brief Set the per-request socket timeout in seconds (since v0.8.26).
+ *        Applies to recv() on the body and send() on the response;
+ *        also protects against a hostile client that opens a connection
+ *        and never sends a verb line.  Default 0 = no timeout (legacy).
+ *
+ * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ */
+MOONLAB_API int
+moonlab_control_server_set_request_timeout(moonlab_control_server_t *server,
+                                           int timeout_secs);
+
+/**
  * @brief Health-check submit -- sends `HEALTH\n`, expects `OK alive\n`.
  *        Since v0.8.21.  Returns MOONLAB_CONTROL_OK if the server is
  *        reachable and responsive, or a negative status otherwise.

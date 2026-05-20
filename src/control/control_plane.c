@@ -499,6 +499,7 @@ typedef struct {
 #endif
     uint8_t        secret[256];
     size_t         secret_len;
+    int            request_timeout_secs;
 } worker_ctx_t;
 
 static int handle_one_request(moonlab_io_t  *io,
@@ -520,6 +521,20 @@ static void *worker_thread(void *arg)
     uint8_t sec[256];
     size_t  slen = ctx->secret_len;
     memcpy(sec, ctx->secret, slen);
+
+    /* Apply per-request socket timeout if configured (v0.8.26).  We set
+     * SO_RCVTIMEO / SO_SNDTIMEO on the accepted fd so any recv()/send()
+     * inside handle_one_request fails with EAGAIN once the timeout
+     * elapses -- the helpers map that to IO_ERROR and the connection
+     * is dropped cleanly.  Set BEFORE the optional TLS handshake so
+     * SSL_accept itself can't hang on a misbehaving peer. */
+    if (ctx->request_timeout_secs > 0) {
+        struct timeval tv;
+        tv.tv_sec  = ctx->request_timeout_secs;
+        tv.tv_usec = 0;
+        (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    }
 
     moonlab_io_t io;
     io.fd = fd;
@@ -653,6 +668,9 @@ struct moonlab_control_server {
     int             burst;
     pthread_mutex_t rl_lock;
     rl_bucket_t     rl_table[RL_TABLE_SIZE];
+    /* Per-request socket timeout in seconds (since v0.8.26).
+     * 0 = no timeout (legacy default). */
+    int             request_timeout_secs;
 };
 
 #ifdef MOONLAB_HAVE_TLS
@@ -817,6 +835,7 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 #endif
         ctx->secret_len = s->secret_len;
         if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
+        ctx->request_timeout_secs = s->request_timeout_secs;
 
         if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
             moonlab_io_t inline_io = { 0 };
@@ -946,6 +965,14 @@ void moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
                                    uint8_t        out_digest[32])
 {
     hmac_sha3_256(secret, secret_len, msg, msg_len, out_digest);
+}
+
+int moonlab_control_server_set_request_timeout(moonlab_control_server_t *s,
+                                               int timeout_secs)
+{
+    if (!s || timeout_secs < 0) return MOONLAB_CONTROL_BAD_ARG;
+    s->request_timeout_secs = timeout_secs;
+    return MOONLAB_CONTROL_OK;
 }
 
 int moonlab_control_server_set_rate_limit(moonlab_control_server_t *s,
