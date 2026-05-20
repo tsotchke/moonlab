@@ -43,6 +43,7 @@ static int io_recv_tls(SSL *ssl,       void *buf, size_t len);
 
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -248,6 +249,16 @@ static int handle_one_request(moonlab_io_t  *io,
     int rc = recv_until_newline(io, first, sizeof(first), &first_len);
     if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
 
+    /* Health probe (v0.8.21).  Short-circuit before AUTH /
+     * CIRCUIT parsing -- load-balancer probes are unauthenticated. */
+    if (strncmp(first, "HEALTH", 6) == 0 &&
+        (first_len == 6 || first[6] == '\n')) {
+        log_verb = "HEALTH";
+        const char *resp = "OK alive\n";
+        (void)send_all(io, resp, strlen(resp));
+        LOG_AND_RETURN(MOONLAB_CONTROL_OK);
+    }
+
     if (strncmp(first, "AUTH ", 5) == 0) {
         /* Pull the 64-hex token. */
         if (first_len < 5 + 64 + 1) {
@@ -433,6 +444,7 @@ typedef struct {
 static int handle_one_request(moonlab_io_t  *io,
                               const uint8_t *secret,
                               size_t         secret_len);
+static int rl_take_token(moonlab_control_server_t *s, uint32_t ip);
 
 #ifdef MOONLAB_HAVE_TLS
 /* Defined just below.  Wraps an accepted client fd in TLS using the
@@ -544,19 +556,30 @@ static int ct_memcmp(const void *a, const void *b, size_t n)
     return diff;
 }
 
+/* Token bucket for per-IP rate limiting (since v0.8.21).  Indexed by
+ * source IPv4 address (network byte order).  Small fixed-size hash
+ * table; on collision we evict the oldest entry.  Protected by a
+ * pthread_mutex when accessed by accept-loop + worker threads. */
+#define RL_TABLE_SIZE 256
+typedef struct {
+    uint32_t       ip;            /* 0 = empty slot */
+    double         tokens;
+    double         last_refill_ms;
+} rl_bucket_t;
+
 struct moonlab_control_server {
     int     srv_fd;
     int     wake_pipe[2];   /* [0] = read end, [1] = write end. */
-    /* HMAC shared secret (since v0.8.15).  Empty by default
-     * (unauthenticated, backward-compatible with v0.8.7..v0.8.14). */
     uint8_t secret[256];
     size_t  secret_len;
 #ifdef MOONLAB_HAVE_TLS
-    /* Shared SSL_CTX (since v0.8.17).  When non-NULL, every accepted
-     * connection is wrapped in TLS via SSL_accept() before reaching
-     * handle_one_request().  Owned by the server; workers borrow it. */
     SSL_CTX *ssl_ctx;
 #endif
+    /* Rate limit (since v0.8.21).  rate_rps == 0 disables. */
+    int             rate_rps;
+    int             burst;
+    pthread_mutex_t rl_lock;
+    rl_bucket_t     rl_table[RL_TABLE_SIZE];
 };
 
 #ifdef MOONLAB_HAVE_TLS
@@ -598,6 +621,7 @@ int moonlab_control_server_open(const char                 *host,
     s->srv_fd      = -1;
     s->wake_pipe[0] = -1;
     s->wake_pipe[1] = -1;
+    pthread_mutex_init(&s->rl_lock, NULL);
 
     if (pipe(s->wake_pipe) != 0) {
         free(s);
@@ -682,11 +706,24 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 
         if (!FD_ISSET(s->srv_fd, &readfds)) continue;
 
-        int client = accept(s->srv_fd, NULL, NULL);
+        struct sockaddr_in peer;
+        socklen_t          peerlen = sizeof(peer);
+        int client = accept(s->srv_fd, (struct sockaddr *)&peer, &peerlen);
         if (client < 0) {
             if (errno == EINTR) continue;
             rc = MOONLAB_CONTROL_IO_ERROR;
             break;
+        }
+
+        /* Rate-limit check (since v0.8.21).  IPv4 source address only;
+         * IPv6 deferred.  Failed clients receive a single short
+         * ERR line then we close the socket. */
+        if (!rl_take_token(s, peer.sin_addr.s_addr)) {
+            const char *resp = "ERR -408 rate limited\n";
+            (void)send(client, resp, strlen(resp), 0);
+            close(client);
+            served++;
+            continue;
         }
 
         worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
@@ -746,6 +783,7 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     if (s->srv_fd      >= 0) { close(s->srv_fd);      s->srv_fd      = -1; }
     if (s->wake_pipe[0] >= 0) { close(s->wake_pipe[0]); s->wake_pipe[0] = -1; }
     if (s->wake_pipe[1] >= 0) { close(s->wake_pipe[1]); s->wake_pipe[1] = -1; }
+    pthread_mutex_destroy(&s->rl_lock);
 #ifdef MOONLAB_HAVE_TLS
     if (s->ssl_ctx) { SSL_CTX_free(s->ssl_ctx); s->ssl_ctx = NULL; }
 #endif
@@ -834,6 +872,47 @@ void moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
                                    uint8_t        out_digest[32])
 {
     hmac_sha3_256(secret, secret_len, msg, msg_len, out_digest);
+}
+
+int moonlab_control_server_set_rate_limit(moonlab_control_server_t *s,
+                                          int rate_rps,
+                                          int burst)
+{
+    if (!s || rate_rps < 0 || burst < 0) return MOONLAB_CONTROL_BAD_ARG;
+    pthread_mutex_lock(&s->rl_lock);
+    s->rate_rps = rate_rps;
+    s->burst    = burst > 0 ? burst : (rate_rps > 0 ? rate_rps * 2 : 0);
+    memset(s->rl_table, 0, sizeof(s->rl_table));
+    pthread_mutex_unlock(&s->rl_lock);
+    return MOONLAB_CONTROL_OK;
+}
+
+/* Returns 1 if the request from `ip` is permitted; 0 if the bucket is
+ * empty (rate-limited).  Refills proportional to elapsed wall time. */
+static int rl_take_token(moonlab_control_server_t *s, uint32_t ip)
+{
+    if (s->rate_rps <= 0) return 1;
+
+    const double now_ms = monotonic_ms();
+    const size_t slot   = (ip * 2654435761u) & (RL_TABLE_SIZE - 1);
+
+    pthread_mutex_lock(&s->rl_lock);
+    rl_bucket_t *b = &s->rl_table[slot];
+    if (b->ip != ip) {
+        /* Collision or empty slot.  Evict + reset. */
+        b->ip             = ip;
+        b->tokens         = (double)s->burst;
+        b->last_refill_ms = now_ms;
+    } else {
+        const double dt_s = (now_ms - b->last_refill_ms) / 1000.0;
+        b->tokens         = fmin((double)s->burst,
+                                 b->tokens + dt_s * (double)s->rate_rps);
+        b->last_refill_ms = now_ms;
+    }
+    int ok = 0;
+    if (b->tokens >= 1.0) { b->tokens -= 1.0; ok = 1; }
+    pthread_mutex_unlock(&s->rl_lock);
+    return ok;
 }
 
 int moonlab_control_server_set_secret(moonlab_control_server_t *s,
@@ -1406,4 +1485,43 @@ int moonlab_control_submit_circuit_tls(const char    *host,
     SSL_CTX_free(ctx);
     return final_rc;
 #endif
+}
+
+/* ------------------------------------------------------------------
+ * Health-check client (since v0.8.21).  Sends `HEALTH\n` over plain
+ * TCP, expects `OK alive\n`.  No AUTH, no TLS -- intentionally simple
+ * so a load-balancer probe can verify the listener without secrets.
+ * ------------------------------------------------------------------ */
+int moonlab_control_submit_health(const char *host, uint16_t port)
+{
+    if (!host) return MOONLAB_CONTROL_BAD_ARG;
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd); return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd); return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
+
+    int rc = send_all(&plain_io, "HEALTH\n", 7);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    char resp[64];
+    size_t resp_len = 0;
+    rc = recv_until_newline(&plain_io, resp, sizeof(resp), &resp_len);
+    close(fd);
+    if (rc != MOONLAB_CONTROL_OK) return rc;
+    if (strncmp(resp, "OK alive", 8) == 0) return MOONLAB_CONTROL_OK;
+    if (strncmp(resp, "ERR -408", 8) == 0) return MOONLAB_CONTROL_RATE_LIMITED;
+    return MOONLAB_CONTROL_REJECTED;
 }

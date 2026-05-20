@@ -22,6 +22,12 @@
  *              `SAMPLES <num_shots>\n<num_shots * 8 bytes of
  *               little-endian uint64 bitstring outcomes>`
  *
+ *   Request (health probe, v0.8.21+):
+ *              `HEALTH\n`
+ *
+ *   Response (health):
+ *              `OK alive\n`
+ *
  *   Response on failure:
  *              `ERR <status_code> <message>\n`
  *
@@ -52,6 +58,7 @@ extern "C" {
 #define MOONLAB_CONTROL_PROTOCOL      (-404) /**< malformed wire frame. */
 #define MOONLAB_CONTROL_REJECTED      (-405) /**< server rejected the circuit. */
 #define MOONLAB_CONTROL_TIMEOUT       (-406)
+#define MOONLAB_CONTROL_RATE_LIMITED  (-408) /**< client tripped per-IP rate limit. */
 
 /**
  * @brief Run a single-shot, blocking control-plane server on
@@ -289,6 +296,31 @@ moonlab_control_server_use_tls(moonlab_control_server_t *server,
 MOONLAB_API int
 moonlab_control_server_require_client_cert(moonlab_control_server_t *server,
                                            const char               *client_ca_path);
+
+/**
+ * @brief Configure a per-source-IP rate limit (since v0.8.21).
+ *        Uses a token bucket: each IP gets `burst` initial tokens and
+ *        regenerates `rate_rps` tokens per second.  A request when the
+ *        bucket is empty receives `ERR -408 rate limited`.
+ *
+ *        Pass `rate_rps = 0` to disable rate limiting (default).
+ *
+ * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ */
+MOONLAB_API int
+moonlab_control_server_set_rate_limit(moonlab_control_server_t *server,
+                                      int rate_rps,
+                                      int burst);
+
+/**
+ * @brief Health-check submit -- sends `HEALTH\n`, expects `OK alive\n`.
+ *        Since v0.8.21.  Returns MOONLAB_CONTROL_OK if the server is
+ *        reachable and responsive, or a negative status otherwise.
+ *        Skips both AUTH and TLS-cert layers so it can be used by a
+ *        load-balancer probe before secrets are configured.
+ */
+MOONLAB_API int
+moonlab_control_submit_health(const char *host, uint16_t port);
 
 /**
  * @brief Submit a circuit over a TLS-wrapped connection.

@@ -7,7 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.20.)
+(No unreleased changes since v0.8.21.)
+
+## [0.8.21] - 2026-05-19
+
+**Health probe + per-IP rate limit.**  Two production-deployment
+features: a load-balancer-friendly health endpoint that bypasses
+AUTH/TLS, and a token-bucket rate limiter that protects the worker
+thread pool from a misbehaving client.
+
+### Added
+
+- Wire protocol: `HEALTH\n` -> `OK alive\n`.  No AUTH, no TLS-cert
+  required (load balancers probe before secrets are configured).
+
+- `moonlab_control_submit_health(host, port)`: C client that does
+  exactly one HEALTH round-trip and returns OK / RATE_LIMITED /
+  IO_ERROR.
+
+- `moonlab_control_server_set_rate_limit(server, rate_rps, burst)`:
+  configure a per-source-IP token bucket.  Default off (`rate_rps =
+  0`).  Bucket holds up to `burst` tokens, regenerates `rate_rps`
+  per second.  Backed by a 256-slot hash table (open-addressed,
+  collision-evicts), `pthread_mutex_t`-protected.
+
+- `MOONLAB_CONTROL_RATE_LIMITED (-408)`: new status; the server
+  sends `ERR -408 rate limited\n` and closes the socket when the
+  bucket is empty for the source IP.
+
+- `tests/integration/test_control_plane_health_rate.c`: drives
+  HEALTH probe end-to-end, then with `set_rate_limit(5, 5)` fires
+  12 probes from one source IP and verifies exactly 5 succeed +
+  7 are rate-limited (burst budget exhausted).
+
+### Verified
+
+```
+--- path 1: HEALTH probe ---
+  OK    submit_health rc=0
+
+--- path 2: per-IP rate limit ---
+    fired 12 probes: 5 OK, 7 rate-limited
+  OK    at least burst=5 succeed (got 5)
+  OK    rate limiter kicks in (got 7 limited)
+  OK    every probe accounted for (5 + 7 == 12)
+```
+
+The pre-existing single-client, auth, and mTLS tests all pass
+unmodified under the new accept-loop.
 
 ## [0.8.20] - 2026-05-19
 
