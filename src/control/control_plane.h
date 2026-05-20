@@ -323,6 +323,29 @@ MOONLAB_API int
 moonlab_control_submit_health(const char *host, uint16_t port);
 
 /**
+ * @brief Submit the v0.8.23 `METRICS\n` probe and read back a
+ *        Prometheus-text-format exposition.  Result is malloc'd and
+ *        NUL-terminated; caller `free()`s `*out_text`.
+ *
+ * Lines emitted:
+ *
+ *   # HELP moonlab_control_requests_total ...
+ *   # TYPE moonlab_control_requests_total counter
+ *   moonlab_control_requests_total{verb="CIRCUIT"} 7
+ *   moonlab_control_requests_total{verb="SHOTS"}   2
+ *   moonlab_control_requests_total{verb="HEALTH"}  120
+ *   moonlab_control_requests_total{verb="METRICS"} 1
+ *   moonlab_control_rejected_total                 3
+ *   moonlab_control_rate_limited_total             7
+ *
+ * Bypasses AUTH and TLS-cert layers (same justification as HEALTH:
+ * monitoring scrapers ought not need credentials).
+ */
+MOONLAB_API int
+moonlab_control_submit_metrics(const char *host, uint16_t port,
+                               char **out_text);
+
+/**
  * @brief Submit a circuit over a TLS-wrapped connection.
  *
  * @param[in]  ca_path   Optional CA bundle to pin against the server's

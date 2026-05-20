@@ -7,7 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.22.)
+(No unreleased changes since v0.8.23.)
+
+## [0.8.23] - 2026-05-19
+
+**Prometheus `METRICS` endpoint.**  Atomic per-verb request counters
+plus aggregate rejected / rate-limited counters, exposed in standard
+Prometheus text-format exposition.
+
+### Added
+
+- Wire verb `METRICS\n` -> `METRICS <bytes>\n<exposition>`.  Bypasses
+  AUTH + TLS-cert (same justification as HEALTH -- monitoring
+  scrapers ought not need credentials).
+
+- Process-wide atomic counters (`_Atomic uint64_t`, lock-free):
+  - `moonlab_control_requests_total{verb="CIRCUIT"|"SHOTS"|"HEALTH"|"METRICS"}`
+  - `moonlab_control_rejected_total` (incremented on any non-OK
+    return from `handle_one_request`)
+  - `moonlab_control_rate_limited_total` (incremented in the accept
+    loop when the per-IP bucket is exhausted)
+
+- `moonlab_control_submit_metrics(host, port, **out_text)`: C client
+  that scrapes the endpoint and returns the malloc'd exposition body.
+
+- `tests/integration/test_control_plane_metrics.c`: drives 1 CIRCUIT
+  + 2 SHOTS + 2 HEALTH + 1 METRICS request, scrapes the result,
+  parses every counter and confirms each is `>=` the expected
+  increment.
+
+### Verified
+
+```
+--- metrics body ---
+# HELP moonlab_control_requests_total Total control-plane requests by verb.
+# TYPE moonlab_control_requests_total counter
+moonlab_control_requests_total{verb="CIRCUIT"} 1
+moonlab_control_requests_total{verb="SHOTS"} 2
+moonlab_control_requests_total{verb="HEALTH"} 2
+moonlab_control_requests_total{verb="METRICS"} 1
+# HELP moonlab_control_rejected_total ...
+moonlab_control_rejected_total 0
+# HELP moonlab_control_rate_limited_total ...
+moonlab_control_rate_limited_total 0
+
+  OK    CIRCUIT counter >= 1 (got 1)
+  OK    SHOTS counter   >= 2 (got 2)
+  OK    HEALTH counter  >= 2 (got 2)
+  OK    METRICS counter >= 1 (got 1)
+```
+
+### Notes
+
+Counters are process-wide (single shared instance across all
+`moonlab_control_server_t` handles in the same library load).  This
+matches Prometheus' "per-process" exposition model -- two servers
+in one process scrape the same totals.  Multi-server deployments
+should run one server per process to isolate metrics.
 
 ## [0.8.22] - 2026-05-19
 
