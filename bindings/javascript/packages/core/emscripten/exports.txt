@@ -406,6 +406,9 @@ _moonlab_qgtl_execute
 _moonlab_qgtl_results_free
 _moonlab_qgtl_circuit_num_qubits
 _moonlab_qgtl_circuit_num_gates
+# Portable circuit serialization (since v0.8.3 native, JS from v0.8.6).
+_moonlab_qgtl_circuit_serialize
+_moonlab_qgtl_circuit_deserialize
 
 # =============================================================================
 # Distributed scheduler MVP (since v0.7.0 native, JS from v0.7.1).
