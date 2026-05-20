@@ -276,6 +276,21 @@ moonlab_control_server_use_tls(moonlab_control_server_t *server,
                                const char               *key_path);
 
 /**
+ * @brief Require every incoming client to present a TLS certificate
+ *        signed by the CA at @p client_ca_path (since v0.8.19).
+ *        Composes with @ref moonlab_control_server_use_tls -- you must
+ *        configure the server cert first.  Pass NULL to disable the
+ *        client-cert requirement.
+ *
+ * @return MOONLAB_CONTROL_OK or a negative code.
+ *         MOONLAB_CONTROL_BAD_ARG if the library was built without TLS
+ *         or `use_tls()` has not been called yet.
+ */
+MOONLAB_API int
+moonlab_control_server_require_client_cert(moonlab_control_server_t *server,
+                                           const char               *client_ca_path);
+
+/**
  * @brief Submit a circuit over a TLS-wrapped connection.
  *
  * @param[in]  ca_path   Optional CA bundle to pin against the server's
@@ -297,6 +312,30 @@ moonlab_control_submit_circuit_tls(const char    *host,
                                    size_t         text_len,
                                    double       **out_probs,
                                    size_t        *out_num);
+
+/**
+ * @brief mTLS client variant -- presents a client cert + key in
+ *        addition to the server-CA pin.  Required when the server
+ *        was configured with @ref moonlab_control_server_require_client_cert.
+ *        Since v0.8.19.
+ *
+ * @param[in] client_cert_path  PEM client certificate (signed by the
+ *                              CA the server is configured to trust).
+ * @param[in] client_key_path   PEM client private key.
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_mtls(const char    *host,
+                                    uint16_t       port,
+                                    const char    *server_ca_path,
+                                    const char    *client_cert_path,
+                                    const char    *client_key_path,
+                                    int            insecure,
+                                    const uint8_t *secret,
+                                    size_t         secret_len,
+                                    const char    *circuit_text,
+                                    size_t         text_len,
+                                    double       **out_probs,
+                                    size_t        *out_num);
 
 #ifdef __cplusplus
 }

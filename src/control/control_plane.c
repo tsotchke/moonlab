@@ -754,6 +754,35 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     free(s);
 }
 
+int moonlab_control_server_require_client_cert(moonlab_control_server_t *s,
+                                               const char               *client_ca_path)
+{
+#ifdef MOONLAB_HAVE_TLS
+    if (!s) return MOONLAB_CONTROL_BAD_ARG;
+    if (!s->ssl_ctx) return MOONLAB_CONTROL_BAD_ARG; /* must use_tls() first */
+
+    if (!client_ca_path) {
+        /* Clear mode: stop demanding client certs. */
+        SSL_CTX_set_verify(s->ssl_ctx, SSL_VERIFY_NONE, NULL);
+        return MOONLAB_CONTROL_OK;
+    }
+
+    if (SSL_CTX_load_verify_locations(s->ssl_ctx, client_ca_path, NULL) <= 0) {
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+    /* SSL_VERIFY_FAIL_IF_NO_PEER_CERT makes accept() reject any client
+     * that doesn't present a cert at all.  SSL_VERIFY_PEER alone would
+     * skip the check when no cert is offered. */
+    SSL_CTX_set_verify(s->ssl_ctx,
+                       SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+                       NULL);
+    return MOONLAB_CONTROL_OK;
+#else
+    (void)s; (void)client_ca_path;
+    return MOONLAB_CONTROL_BAD_ARG;
+#endif
+}
+
 int moonlab_control_server_use_tls(moonlab_control_server_t *s,
                                    const char               *cert_path,
                                    const char               *key_path)
@@ -1074,6 +1103,176 @@ int moonlab_control_submit_circuit_shots(const char *host,
         close(fd);
         return MOONLAB_CONTROL_REJECTED;
     }
+}
+
+#ifdef MOONLAB_HAVE_TLS
+/* Shared TLS client core.  Both submit_circuit_tls (no client cert)
+ * and submit_circuit_mtls (with client cert) delegate here. */
+static int tls_client_submit_impl(const char *host, uint16_t port,
+                                  const char *server_ca,
+                                  const char *client_cert,
+                                  const char *client_key,
+                                  int insecure,
+                                  const uint8_t *secret, size_t secret_len,
+                                  const char *circuit_text, size_t text_len,
+                                  double **out_probs, size_t *out_num)
+{
+    if (!host || !circuit_text || !out_probs || !out_num) {
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    *out_probs = NULL;
+    *out_num   = 0;
+    if (text_len == 0) text_len = strlen(circuit_text);
+    if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
+
+    tls_init_once();
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) return MOONLAB_CONTROL_TLS_ERROR;
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    if (insecure) {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    } else {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+        if (server_ca) {
+            if (SSL_CTX_load_verify_locations(ctx, server_ca, NULL) <= 0) {
+                SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+            }
+        } else if (SSL_CTX_set_default_verify_paths(ctx) <= 0) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+        }
+    }
+
+    if (client_cert) {
+        if (SSL_CTX_use_certificate_file(ctx, client_cert, SSL_FILETYPE_PEM) <= 0) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+        }
+        if (!client_key) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_BAD_ARG;
+        }
+        if (SSL_CTX_use_PrivateKey_file(ctx, client_key, SSL_FILETYPE_PEM) <= 0) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+        }
+        if (SSL_CTX_check_private_key(ctx) <= 0) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+        }
+    }
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR; }
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    SSL *ssl = SSL_new(ctx);
+    if (!ssl || SSL_set_fd(ssl, fd) != 1) {
+        if (ssl) SSL_free(ssl);
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+    }
+    if (!insecure) SSL_set_tlsext_host_name(ssl, host);
+    if (SSL_connect(ssl) <= 0) {
+        SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+
+    moonlab_io_t tls_io = { 0 };
+    tls_io.fd  = fd;
+    tls_io.ssl = ssl;
+
+    char verb_line[64];
+    int vn = snprintf(verb_line, sizeof(verb_line), "CIRCUIT %zu\n", text_len);
+    if (vn < 0 || (size_t)vn >= sizeof(verb_line)) {
+        SSL_shutdown(ssl); SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+    int rc = MOONLAB_CONTROL_OK;
+    if (secret && secret_len > 0) {
+        uint8_t tok[HMAC_DIGEST_SIZE];
+        hmac_sha3_256(secret, secret_len,
+                      (const uint8_t *)verb_line, (size_t)vn, tok);
+        char auth_line[5 + 2 * HMAC_DIGEST_SIZE + 2];
+        memcpy(auth_line, "AUTH ", 5);
+        hex_encode(tok, HMAC_DIGEST_SIZE, auth_line + 5);
+        auth_line[5 + 64] = '\n';
+        rc = send_all(&tls_io, auth_line, 5 + 64 + 1);
+    }
+    if (rc == MOONLAB_CONTROL_OK) rc = send_all(&tls_io, verb_line, (size_t)vn);
+    if (rc == MOONLAB_CONTROL_OK) rc = send_all(&tls_io, circuit_text, text_len);
+    if (rc != MOONLAB_CONTROL_OK) {
+        SSL_shutdown(ssl); SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return rc;
+    }
+
+    char resp_hdr[128];
+    size_t resp_len = 0;
+    rc = recv_until_newline(&tls_io, resp_hdr, sizeof(resp_hdr), &resp_len);
+    int final_rc = MOONLAB_CONTROL_PROTOCOL;
+    if (rc == MOONLAB_CONTROL_OK && strncmp(resp_hdr, "OK ", 3) == 0) {
+        size_t num = 0;
+        if (sscanf(resp_hdr + 3, "%zu", &num) == 1 && num > 0 && num <= (1ULL << 30)) {
+            double *probs = (double *)malloc(num * sizeof(double));
+            if (probs) {
+                if (recv_all(&tls_io, probs, num * sizeof(double)) == MOONLAB_CONTROL_OK) {
+                    *out_probs = probs;
+                    *out_num   = num;
+                    final_rc   = MOONLAB_CONTROL_OK;
+                } else {
+                    free(probs);
+                    final_rc = MOONLAB_CONTROL_IO_ERROR;
+                }
+            } else {
+                final_rc = MOONLAB_CONTROL_OOM;
+            }
+        }
+    } else if (rc == MOONLAB_CONTROL_OK && strncmp(resp_hdr, "ERR ", 4) == 0) {
+        final_rc = MOONLAB_CONTROL_REJECTED;
+    } else if (rc != MOONLAB_CONTROL_OK) {
+        final_rc = rc;
+    }
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(fd);
+    SSL_CTX_free(ctx);
+    return final_rc;
+}
+#endif
+
+int moonlab_control_submit_circuit_mtls(const char    *host,
+                                        uint16_t       port,
+                                        const char    *server_ca_path,
+                                        const char    *client_cert_path,
+                                        const char    *client_key_path,
+                                        int            insecure,
+                                        const uint8_t *secret,
+                                        size_t         secret_len,
+                                        const char    *circuit_text,
+                                        size_t         text_len,
+                                        double       **out_probs,
+                                        size_t        *out_num)
+{
+#ifndef MOONLAB_HAVE_TLS
+    (void)host; (void)port; (void)server_ca_path;
+    (void)client_cert_path; (void)client_key_path; (void)insecure;
+    (void)secret; (void)secret_len; (void)circuit_text; (void)text_len;
+    (void)out_probs; (void)out_num;
+    return MOONLAB_CONTROL_BAD_ARG;
+#else
+    return tls_client_submit_impl(host, port,
+                                  server_ca_path,
+                                  client_cert_path, client_key_path,
+                                  insecure,
+                                  secret, secret_len,
+                                  circuit_text, text_len,
+                                  out_probs, out_num);
+#endif
 }
 
 /* ------------------------------------------------------------------

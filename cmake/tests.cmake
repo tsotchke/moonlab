@@ -861,6 +861,21 @@
             LABELS "control_plane;tls"
             TIMEOUT 30
         )
+
+        # mTLS (since v0.8.19): server demands a CA-signed client cert.
+        add_executable(test_control_plane_mtls
+            tests/integration/test_control_plane_mtls.c)
+        target_link_libraries(test_control_plane_mtls
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads
+                    OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_mtls
+            PRIVATE MOONLAB_HAVE_TLS=1)
+        add_test(NAME integration_control_plane_mtls
+            COMMAND test_control_plane_mtls)
+        set_tests_properties(integration_control_plane_mtls PROPERTIES
+            LABELS "control_plane;tls"
+            TIMEOUT 30
+        )
     endif()
 
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five

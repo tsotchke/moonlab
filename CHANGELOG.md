@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.18.)
+(No unreleased changes since v0.8.19.)
+
+## [0.8.19] - 2026-05-19
+
+**Mutual TLS (client certificate verification).**  HMAC is shared
+secret; mTLS gives every client an X.509 identity signed by an
+operator-controlled CA, enabling zero-trust deployments where
+each client is uniquely revocable.
+
+### Added
+
+- `moonlab_control_server_require_client_cert(server, client_ca_path)`:
+  load a PEM CA at `client_ca_path`, enable
+  `SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT` on the server's
+  `SSL_CTX`.  Compose with `use_tls()` (TLS must already be
+  configured).  Pass NULL to disable the requirement.
+
+- `moonlab_control_submit_circuit_mtls(host, port, server_ca,
+  client_cert, client_key, insecure, secret, secret_len, text,
+  text_len, **out_probs, *out_num)`: client that presents a
+  CA-signed cert + private key alongside the optional CA-pin.
+  Composes with HMAC `AUTH` (sent inside the encrypted +
+  authenticated channel).
+
+- `tests/integration/test_control_plane_mtls.c` (ctest label
+  `control_plane;tls`): generates a CA, signs server + client
+  certs with it via `X509_sign`, verifies both happy and
+  unauthenticated paths -- client with CA-signed cert produces
+  P[00] = P[11] = 0.5; client without cert is rejected at TLS
+  handshake (rc -403 IO_ERROR from `recv_until_newline` after the
+  server closes the connection).
+
+### Verified
+
+```
+--- path 1: client presents CA-signed cert ---
+  OK    submit_circuit_mtls rc=0
+  OK    P[00] = 0.500000 over mTLS
+  OK    P[11] = 0.500000 over mTLS
+
+--- path 2: no client cert -> handshake fail ---
+  OK    unauthenticated client rejected (rc=-403)
+=== 0 failure(s) ===
+```
+
+### Notes
+
+mTLS + HMAC compose to "the client is who their cert says they are
+AND knows the secret".  Either alone is incomplete:
+
+- HMAC alone: anyone with the secret can submit -- one-secret-
+  compromised-everywhere risk.
+- TLS alone: encryption + server identity but no client identity --
+  anyone can submit if they can route to the server.
+- mTLS alone: client identity but no per-request integrity binding
+  (HMAC keys the body length into the verb-line MAC).
+
+The session here demonstrates all three layers stack cleanly.
 
 ## [0.8.18] - 2026-05-19
 
