@@ -34,6 +34,8 @@ MOONLAB_SCHED_BAD_ARG = -501
 MOONLAB_SCHED_OOM = -502
 MOONLAB_SCHED_INTERNAL = -503
 MOONLAB_SCHED_BUFFER_TOO_SMALL = -504
+MOONLAB_SCHED_BACKEND_NOT_FOUND = -506
+MOONLAB_SCHED_BACKEND_BUSY = -507
 
 
 class SchedulerError(RuntimeError):
@@ -91,6 +93,25 @@ _lib.moonlab_job_results_free.restype = None
 
 _lib.moonlab_job_to_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
 _lib.moonlab_job_to_json.restype = ctypes.c_int
+
+# Backend plug-in surface (since v1.1).
+_HAS_BACKEND_API = hasattr(_lib, "moonlab_job_set_backend")
+if _HAS_BACKEND_API:
+    _lib.moonlab_job_set_backend.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    _lib.moonlab_job_set_backend.restype = ctypes.c_int
+    _lib.moonlab_job_backend.argtypes = [ctypes.c_void_p]
+    _lib.moonlab_job_backend.restype = ctypes.c_char_p
+    _lib.moonlab_num_backends.argtypes = []
+    _lib.moonlab_num_backends.restype = ctypes.c_int
+    _lib.moonlab_list_backends.argtypes = [
+        ctypes.POINTER(ctypes.c_char_p), ctypes.c_int]
+    _lib.moonlab_list_backends.restype = ctypes.c_int
+
+# Vendor-noise emulator registration (since v1.1).
+_HAS_VENDOR_NOISE = hasattr(_lib, "moonlab_register_vendor_noise_backends")
+if _HAS_VENDOR_NOISE:
+    _lib.moonlab_register_vendor_noise_backends.argtypes = []
+    _lib.moonlab_register_vendor_noise_backends.restype = ctypes.c_int
 
 
 def _check(rc: int, ctx: str) -> None:
@@ -174,6 +195,32 @@ class Job:
                f"set_rng_seed({seed})")
         return self
 
+    def set_backend(self, backend_name: Optional[str]) -> "Job":
+        """Pin this job to a registered backend.
+
+        Pass None to clear (routes to the default ``"simulator"``).
+        Vendor-noise emulators are registered via
+        :func:`register_vendor_noise_backends`.  Raises ``SchedulerError``
+        if the backend isn't found at the next ``execute()``.
+        """
+        if not _HAS_BACKEND_API:
+            raise SchedulerError(
+                "set_backend requires libquantumsim >= v1.1 "
+                "(symbol moonlab_job_set_backend not exported)")
+        name = backend_name.encode("utf-8") if backend_name else None
+        _check(_lib.moonlab_job_set_backend(self._handle, name),
+               f"set_backend({backend_name!r})")
+        return self
+
+    @property
+    def backend(self) -> Optional[str]:
+        """Backend name pinned via :py:meth:`set_backend`, or None for
+        the default simulator."""
+        if not _HAS_BACKEND_API:
+            return None
+        raw = _lib.moonlab_job_backend(self._handle)
+        return raw.decode("utf-8") if raw else None
+
     def execute(self) -> JobResults:
         """Run the job's worker fan-out and return merged outcomes."""
         res = _JobResults()
@@ -203,4 +250,52 @@ class Job:
         return buf.value.decode("utf-8")
 
 
-__all__ = ["Job", "JobResults", "SchedulerError"]
+def register_vendor_noise_backends() -> None:
+    """Install the three pre-baked vendor-noise emulator backends
+    (``ibm-falcon``, ``rigetti-aspen``, ``ionq-forte``) into the
+    scheduler's backend registry.
+
+    Idempotent.  Raises :class:`SchedulerError` on failure.
+
+    Example::
+
+        >>> from moonlab.scheduler import Job, register_vendor_noise_backends
+        >>> register_vendor_noise_backends()
+        >>> j = Job(num_qubits=2)
+        >>> j.add_gate(GateType.H, 0).add_gate(GateType.CNOT, 1, 0)
+        >>> j.set_num_shots(8192).set_backend("ibm-falcon")
+        >>> r = j.execute()
+        # Roughly 5% of outcomes will be off-Bell -- the device noise
+        # signature you would see on a real IBM Falcon r5.11.
+    """
+    if not _HAS_VENDOR_NOISE:
+        raise SchedulerError(
+            "register_vendor_noise_backends requires libquantumsim >= v1.1 "
+            "(symbol moonlab_register_vendor_noise_backends not exported)")
+    _check(_lib.moonlab_register_vendor_noise_backends(),
+           "register_vendor_noise_backends")
+
+
+def list_backends() -> list[str]:
+    """Return the names of all currently-registered scheduler backends.
+
+    The default ``"simulator"`` backend is always present after the
+    first scheduler call.
+    """
+    if not _HAS_BACKEND_API:
+        return []
+    n = int(_lib.moonlab_num_backends())
+    if n <= 0:
+        return []
+    arr = (ctypes.c_char_p * n)()
+    written = int(_lib.moonlab_list_backends(arr, n))
+    return [arr[i].decode("utf-8") for i in range(written)]
+
+
+__all__ = [
+    "Job",
+    "JobResults",
+    "SchedulerError",
+    "register_vendor_noise_backends",
+    "list_backends",
+]
