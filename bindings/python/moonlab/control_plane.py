@@ -25,6 +25,7 @@ import ctypes
 import hashlib
 import hmac as _stdlib_hmac
 import socket
+import ssl
 import struct
 import threading
 from typing import List, Optional, Union
@@ -300,9 +301,71 @@ class ControlPlaneServer:
             raise ControlPlaneError(f"server_run rc={self._run_rc}")
 
 
+def submit_circuit_tls(host: str,
+                       port: int,
+                       circuit_text: str,
+                       ca_path: Optional[str] = None,
+                       insecure: bool = False,
+                       timeout: Optional[float] = 30.0,
+                       secret: Optional[Union[bytes, str]] = None) -> List[float]:
+    """Submit a circuit over a TLS-wrapped TCP connection -- since v0.8.18.
+
+    Mirrors the C ``moonlab_control_submit_circuit_tls`` API.
+
+    Parameters
+    ----------
+    ca_path : str, optional
+        PEM CA bundle to pin against the server's certificate.  Required
+        for production deployments; pass ``insecure=True`` to skip
+        verification (development / self-signed certs only).
+    insecure : bool
+        When True, peer verification is disabled.  Only safe for tests.
+    secret : bytes or str, optional
+        HMAC-SHA3-256 shared secret.  When provided, sends an
+        ``AUTH <token>`` line inside the encrypted channel before the
+        verb line.  Composes with the TLS wrapper -- the server must
+        be configured with both ``use_tls`` and ``set_secret``.
+    """
+    encoded = circuit_text.encode("utf-8")
+    verb_line = f"CIRCUIT {len(encoded)}\n".encode("ascii")
+
+    if insecure:
+        ctx = ssl._create_unverified_context()  # noqa: SLF001
+    else:
+        ctx = ssl.create_default_context(cafile=ca_path)
+
+    with socket.create_connection((host, port), timeout=timeout) as raw_sock:
+        with ctx.wrap_socket(raw_sock, server_hostname=host) as sock:
+            if secret is not None:
+                key = secret.encode("utf-8") if isinstance(secret, str) else secret
+                tok = _hmac_sha3_256(key, verb_line).hex()
+                sock.sendall(f"AUTH {tok}\n".encode("ascii"))
+            sock.sendall(verb_line)
+            sock.sendall(encoded)
+
+            resp_hdr = _recv_until_newline(sock)
+            if resp_hdr.startswith("OK "):
+                try:
+                    num = int(resp_hdr[3:].strip())
+                except ValueError as e:
+                    raise ControlPlaneError(
+                        f"malformed OK header: {resp_hdr!r}"
+                    ) from e
+                if num <= 0 or num > (1 << 30):
+                    raise ControlPlaneError(f"implausible num_probs {num}")
+                raw = _recv_exact(sock, num * 8)
+                probs = struct.unpack(f"<{num}d", raw)
+                return list(probs)
+            elif resp_hdr.startswith("ERR "):
+                raise ControlPlaneError(f"server rejected: {resp_hdr.strip()}")
+            else:
+                raise ControlPlaneError(f"unrecognized response: {resp_hdr!r}")
+
+
 __all__ = [
     "submit_circuit",
     "submit_circuit_shots",
+    "submit_circuit_tls",
     "ControlPlaneServer",
     "ControlPlaneError",
 ]

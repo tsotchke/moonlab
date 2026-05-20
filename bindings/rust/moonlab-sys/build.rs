@@ -383,6 +383,9 @@ fn main() {
         .allowlist_function("moonlab_control_server_set_secret")
         .allowlist_function("moonlab_control_submit_circuit_auth")
         .allowlist_function("moonlab_control_hmac_sha3_256")
+        // TLS transport (since v0.8.17).
+        .allowlist_function("moonlab_control_server_use_tls")
+        .allowlist_function("moonlab_control_submit_circuit_tls")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")
