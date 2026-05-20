@@ -122,6 +122,69 @@ moonlab_control_submit_circuit_shots(const char *host,
                                      uint64_t  **out_outcomes,
                                      size_t     *out_num);
 
+/* ------------------------------------------------------------------
+ * Server lifecycle handle (since v0.8.13).
+ *
+ * Two-phase API for production deployment:
+ *   1. `moonlab_control_server_open`  creates the listener (returns
+ *      immediately; the OS-chosen port is filled into `out_port`).
+ *   2. `moonlab_control_server_run`   blocks serving on the calling
+ *      thread until shutdown is signalled or max_iters connections
+ *      have been served.
+ *   3. `moonlab_control_server_shutdown` may be called from any
+ *      thread (or a signal handler) to wake the accept() in progress.
+ *   4. `moonlab_control_server_close` releases the listener handle.
+ *
+ * The legacy `moonlab_control_serve` is still supported and is now
+ * implemented atop these primitives.
+ * ------------------------------------------------------------------ */
+
+typedef struct moonlab_control_server moonlab_control_server_t;
+
+/**
+ * @brief Create + bind a control-plane listener without blocking.
+ *
+ * @param[in]  host       Bind address (e.g. "127.0.0.1" or "0.0.0.0").
+ * @param[in]  port       TCP port; pass 0 to let the OS choose.
+ * @param[out] out_server Owned handle.  Free via close().
+ * @param[out] out_port   Optional.  Bound port (useful when port=0).
+ *
+ * @return MOONLAB_CONTROL_OK on success or a negative code.
+ */
+MOONLAB_API int
+moonlab_control_server_open(const char                 *host,
+                            uint16_t                    port,
+                            moonlab_control_server_t  **out_server,
+                            uint16_t                   *out_port);
+
+/**
+ * @brief Block serving on this thread until shutdown is signalled or
+ *        `max_iters` connections have been served, whichever comes
+ *        first.  Each accepted connection is dispatched to its own
+ *        pthread; the function joins every worker before returning.
+ *
+ * @param[in]  server     Handle from `moonlab_control_server_open`.
+ * @param[in]  max_iters  Max accepted connections.  Use `INT_MAX` for
+ *                        daemon mode.
+ *
+ * @return MOONLAB_CONTROL_OK on clean shutdown, negative on I/O error.
+ */
+MOONLAB_API int
+moonlab_control_server_run(moonlab_control_server_t *server,
+                           int                       max_iters);
+
+/**
+ * @brief Signal a running server to stop after the current request.
+ *        Thread-safe and safe to call from a signal handler (writes a
+ *        single byte to a self-pipe; no malloc, no printf).
+ */
+MOONLAB_API void
+moonlab_control_server_shutdown(moonlab_control_server_t *server);
+
+/** @brief Release listener + self-pipe; idempotent on NULL. */
+MOONLAB_API void
+moonlab_control_server_close(moonlab_control_server_t *server);
+
 #ifdef __cplusplus
 }
 #endif

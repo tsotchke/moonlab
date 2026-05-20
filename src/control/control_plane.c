@@ -19,10 +19,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+
+/* ------------------------------------------------------------------
+ * Request observability (since v0.8.13).
+ *
+ * One line per request to stderr, gated by `MOONLAB_CONTROL_LOG`:
+ *   `[moonlab.control] <verb> n_qubits=<n> body=<bytes> shots=<N>
+ *    wall_ms=<ms> rc=<status>`
+ * ------------------------------------------------------------------ */
+
+static int log_enabled(void)
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char *v = getenv("MOONLAB_CONTROL_LOG");
+        cached = (v && *v && *v != '0') ? 1 : 0;
+    }
+    return cached;
+}
+
+static double monotonic_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
+}
 
 /* ------------------------------------------------------------------
  * Wire helpers.
@@ -104,57 +132,82 @@ static int send_err(int fd, int status, const char *msg)
 
 static int handle_one_request(int client_fd)
 {
+    const double t0 = log_enabled() ? monotonic_ms() : 0.0;
+    const char  *log_verb       = "?";
+    int          log_n_qubits   = -1;
+    long         log_body_bytes = -1;
+    long         log_shots      = 0;
+    int          log_rc         = MOONLAB_CONTROL_OK;
+#define LOG_AND_RETURN(rc_value) do {                                 \
+    log_rc = (rc_value);                                              \
+    if (log_enabled()) {                                              \
+        const double dt = monotonic_ms() - t0;                        \
+        fprintf(stderr,                                               \
+            "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
+            " wall_ms=%.2f rc=%d\n",                                  \
+            log_verb, log_n_qubits, log_body_bytes, log_shots,        \
+            dt, log_rc);                                              \
+        fflush(stderr);                                               \
+    }                                                                 \
+    return log_rc;                                                    \
+} while (0)
+
     /* Header.  Two verbs:
      *   CIRCUIT <bytes>\n         -- probability mode (v0.8.7+)
      *   SHOTS   <shots> <bytes>\n -- shots       mode (v0.8.11+) */
     char hdr[96];
     size_t hdr_len = 0;
     int rc = recv_until_newline(client_fd, hdr, sizeof(hdr), &hdr_len);
-    if (rc != MOONLAB_CONTROL_OK) return rc;
+    if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
 
     int  mode_shots = 0;
     long num_shots  = 0;
     long body_bytes = -1;
 
     if (strncmp(hdr, "CIRCUIT ", 8) == 0) {
+        log_verb = "CIRCUIT";
         if (sscanf(hdr + 8, "%ld", &body_bytes) != 1) {
             send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
                      "expected CIRCUIT <N>");
-            return MOONLAB_CONTROL_PROTOCOL;
+            LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
     } else if (strncmp(hdr, "SHOTS ", 6) == 0) {
+        log_verb = "SHOTS";
         if (sscanf(hdr + 6, "%ld %ld", &num_shots, &body_bytes) != 2) {
             send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
                      "expected SHOTS <shots> <bytes>");
-            return MOONLAB_CONTROL_PROTOCOL;
+            LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
         if (num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
             send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
                      "shots out of range");
-            return MOONLAB_CONTROL_BAD_ARG;
+            LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
         }
         mode_shots = 1;
+        log_shots  = num_shots;
     } else {
         send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
                  "unknown verb");
-        return MOONLAB_CONTROL_PROTOCOL;
+        LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
     }
+
+    log_body_bytes = body_bytes;
 
     if (body_bytes <= 0 || body_bytes > MOONLAB_CONTROL_MAX_BODY_BYTES) {
         send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
                  "body bytes out of range");
-        return MOONLAB_CONTROL_BAD_ARG;
+        LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
     }
 
     char *body = (char *)malloc((size_t)body_bytes + 1);
     if (!body) {
         send_err(client_fd, MOONLAB_CONTROL_OOM, "body alloc");
-        return MOONLAB_CONTROL_OOM;
+        LOG_AND_RETURN(MOONLAB_CONTROL_OOM);
     }
     rc = recv_all(client_fd, body, (size_t)body_bytes);
     if (rc != MOONLAB_CONTROL_OK) {
         free(body);
-        return rc;
+        LOG_AND_RETURN(rc);
     }
     body[body_bytes] = '\0';
 
@@ -164,8 +217,9 @@ static int handle_one_request(int client_fd)
     free(body);
     if (!c) {
         send_err(client_fd, MOONLAB_CONTROL_REJECTED, "deserialize");
-        return MOONLAB_CONTROL_REJECTED;
+        LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
     }
+    log_n_qubits = moonlab_qgtl_circuit_num_qubits(c);
 
     moonlab_qgtl_exec_options_t opts;
     memset(&opts, 0, sizeof(opts));
@@ -185,20 +239,20 @@ static int handle_one_request(int client_fd)
     if (er != 0) {
         moonlab_qgtl_results_free(&res);
         send_err(client_fd, MOONLAB_CONTROL_REJECTED, "execute");
-        return MOONLAB_CONTROL_REJECTED;
+        LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
     }
 
     if (mode_shots) {
         if (!res.outcomes) {
             moonlab_qgtl_results_free(&res);
             send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no outcomes");
-            return MOONLAB_CONTROL_REJECTED;
+            LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
         char ok_hdr[64];
         int hn = snprintf(ok_hdr, sizeof(ok_hdr), "SAMPLES %d\n", res.num_shots);
         if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
             moonlab_qgtl_results_free(&res);
-            return MOONLAB_CONTROL_IO_ERROR;
+            LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
         rc = send_all(client_fd, ok_hdr, (size_t)hn);
         if (rc == MOONLAB_CONTROL_OK) {
@@ -206,27 +260,28 @@ static int handle_one_request(int client_fd)
                           (size_t)res.num_shots * sizeof(uint64_t));
         }
         moonlab_qgtl_results_free(&res);
-        return rc;
+        LOG_AND_RETURN(rc);
     } else {
         if (!res.probabilities) {
             moonlab_qgtl_results_free(&res);
             send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no probabilities");
-            return MOONLAB_CONTROL_REJECTED;
+            LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
         const size_t dim = (size_t)1 << res.num_qubits;
         char ok_hdr[64];
         int hn = snprintf(ok_hdr, sizeof(ok_hdr), "OK %zu\n", dim);
         if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
             moonlab_qgtl_results_free(&res);
-            return MOONLAB_CONTROL_IO_ERROR;
+            LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
         rc = send_all(client_fd, ok_hdr, (size_t)hn);
         if (rc == MOONLAB_CONTROL_OK) {
             rc = send_all(client_fd, res.probabilities, dim * sizeof(double));
         }
         moonlab_qgtl_results_free(&res);
-        return rc;
+        LOG_AND_RETURN(rc);
     }
+#undef LOG_AND_RETURN
 }
 
 /* Per-connection worker thread context: owns the client fd. */
@@ -244,61 +299,119 @@ static void *worker_thread(void *arg)
     return NULL;
 }
 
-int moonlab_control_serve(const char *host,
-                          uint16_t    port,
-                          int         max_iters,
-                          uint16_t   *out_port)
+/* ------------------------------------------------------------------
+ * Server lifecycle handle (since v0.8.13).
+ *
+ * A self-pipe wakes any blocked accept() when shutdown is signalled.
+ * The select() call multiplexes the listen socket and the read end of
+ * the pipe; whichever fires first determines whether we accept or
+ * exit the loop.  pthreads servicing in-flight requests are joined
+ * before close() returns.
+ * ------------------------------------------------------------------ */
+
+struct moonlab_control_server {
+    int srv_fd;
+    int wake_pipe[2];   /* [0] = read end, [1] = write end. */
+};
+
+int moonlab_control_server_open(const char                 *host,
+                                uint16_t                    port,
+                                moonlab_control_server_t  **out_server,
+                                uint16_t                   *out_port)
 {
-    if (!host || max_iters < 1) return MOONLAB_CONTROL_BAD_ARG;
+    if (!host || !out_server) return MOONLAB_CONTROL_BAD_ARG;
+    *out_server = NULL;
 
-    int srv = socket(AF_INET, SOCK_STREAM, 0);
-    if (srv < 0) return MOONLAB_CONTROL_IO_ERROR;
+    moonlab_control_server_t *s = (moonlab_control_server_t *)calloc(1, sizeof(*s));
+    if (!s) return MOONLAB_CONTROL_OOM;
+    s->srv_fd      = -1;
+    s->wake_pipe[0] = -1;
+    s->wake_pipe[1] = -1;
 
+    if (pipe(s->wake_pipe) != 0) {
+        free(s);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+    /* Non-blocking read end so we never stall in select() processing. */
+    int flags = fcntl(s->wake_pipe[0], F_GETFL, 0);
+    fcntl(s->wake_pipe[0], F_SETFL, flags | O_NONBLOCK);
+
+    s->srv_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (s->srv_fd < 0) {
+        moonlab_control_server_close(s);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
     int yes = 1;
-    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    setsockopt(s->srv_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(port);
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        close(srv);
+        moonlab_control_server_close(s);
         return MOONLAB_CONTROL_BAD_ARG;
     }
 
-    if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(srv);
+    if (bind(s->srv_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        moonlab_control_server_close(s);
         return MOONLAB_CONTROL_IO_ERROR;
     }
 
-    /* If `port == 0`, surface the OS-chosen port back to the caller. */
     if (out_port) {
         struct sockaddr_in actual;
         socklen_t alen = sizeof(actual);
-        if (getsockname(srv, (struct sockaddr *)&actual, &alen) == 0) {
+        if (getsockname(s->srv_fd, (struct sockaddr *)&actual, &alen) == 0) {
             *out_port = ntohs(actual.sin_port);
         }
     }
 
-    if (listen(srv, 64) < 0) {
-        close(srv);
+    if (listen(s->srv_fd, 64) < 0) {
+        moonlab_control_server_close(s);
         return MOONLAB_CONTROL_IO_ERROR;
     }
 
-    /* Thread-per-connection (since v0.8.10).  Each request runs in
-     * its own pthread so a slow QFT doesn't block a queued Bell pair.
-     * The main thread accept-loops and dispatches; before returning
-     * we join every worker so callers that pass `max_iters < INT_MAX`
-     * see synchronous "all done" semantics. */
+    *out_server = s;
+    return MOONLAB_CONTROL_OK;
+}
+
+int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
+{
+    if (!s || s->srv_fd < 0 || max_iters < 1) return MOONLAB_CONTROL_BAD_ARG;
+
     pthread_t *workers = (pthread_t *)calloc((size_t)max_iters, sizeof(pthread_t));
-    if (!workers) { close(srv); return MOONLAB_CONTROL_OOM; }
+    if (!workers) return MOONLAB_CONTROL_OOM;
 
     int worker_count = 0;
     int served = 0;
     int rc = MOONLAB_CONTROL_OK;
+    int shutting_down = 0;
 
-    while (served < max_iters) {
-        int client = accept(srv, NULL, NULL);
+    while (served < max_iters && !shutting_down) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(s->srv_fd, &readfds);
+        FD_SET(s->wake_pipe[0], &readfds);
+        int maxfd = s->srv_fd > s->wake_pipe[0] ? s->srv_fd : s->wake_pipe[0];
+
+        int nr = select(maxfd + 1, &readfds, NULL, NULL, NULL);
+        if (nr < 0) {
+            if (errno == EINTR) continue;
+            rc = MOONLAB_CONTROL_IO_ERROR;
+            break;
+        }
+
+        if (FD_ISSET(s->wake_pipe[0], &readfds)) {
+            /* Drain the pipe so a future open()->run() pair starts clean. */
+            char drain[16];
+            while (read(s->wake_pipe[0], drain, sizeof(drain)) > 0) { }
+            shutting_down = 1;
+            break;
+        }
+
+        if (!FD_ISSET(s->srv_fd, &readfds)) continue;
+
+        int client = accept(s->srv_fd, NULL, NULL);
         if (client < 0) {
             if (errno == EINTR) continue;
             rc = MOONLAB_CONTROL_IO_ERROR;
@@ -307,7 +420,6 @@ int moonlab_control_serve(const char *host,
 
         worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
         if (!ctx) {
-            /* OOM: fall back to in-line handling so we don't drop the request. */
             (void)handle_one_request(client);
             close(client);
             served++;
@@ -325,14 +437,43 @@ int moonlab_control_serve(const char *host,
         served++;
     }
 
-    /* Join every spawned worker.  Detached threads would race teardown
-     * against `close(srv)` and the surrounding shared library state. */
     for (int i = 0; i < worker_count; i++) {
         pthread_join(workers[i], NULL);
     }
     free(workers);
+    return rc;
+}
 
-    close(srv);
+void moonlab_control_server_shutdown(moonlab_control_server_t *s)
+{
+    if (!s || s->wake_pipe[1] < 0) return;
+    const char b = 1;
+    /* `write` on a pipe with a single byte is async-signal-safe.
+     * Ignore the result -- a closed pipe just means we already shut
+     * down, and any partial-write retry isn't useful here. */
+    ssize_t ignored = write(s->wake_pipe[1], &b, 1);
+    (void)ignored;
+}
+
+void moonlab_control_server_close(moonlab_control_server_t *s)
+{
+    if (!s) return;
+    if (s->srv_fd      >= 0) { close(s->srv_fd);      s->srv_fd      = -1; }
+    if (s->wake_pipe[0] >= 0) { close(s->wake_pipe[0]); s->wake_pipe[0] = -1; }
+    if (s->wake_pipe[1] >= 0) { close(s->wake_pipe[1]); s->wake_pipe[1] = -1; }
+    free(s);
+}
+
+int moonlab_control_serve(const char *host,
+                          uint16_t    port,
+                          int         max_iters,
+                          uint16_t   *out_port)
+{
+    moonlab_control_server_t *s = NULL;
+    int rc = moonlab_control_server_open(host, port, &s, out_port);
+    if (rc != MOONLAB_CONTROL_OK) return rc;
+    rc = moonlab_control_server_run(s, max_iters);
+    moonlab_control_server_close(s);
     return rc;
 }
 

@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.12.)
+(No unreleased changes since v0.8.13.)
+
+## [0.8.13] - 2026-05-19
+
+**Graceful shutdown + request observability.**  Two production
+deltas on the control plane: signal a clean stop without abandoning
+in-flight requests, and emit a structured one-line trace per
+served request for ops.
+
+### Added
+
+- Lifecycle API:
+  - `moonlab_control_server_open(host, port, **server, *out_port)`
+  - `moonlab_control_server_run(server, max_iters)` -- blocks on the
+    calling thread, joins workers before returning.
+  - `moonlab_control_server_shutdown(server)` -- async-signal-safe,
+    writes a single byte to a self-pipe to wake any blocked accept().
+    Safe to call from any thread including a signal handler.
+  - `moonlab_control_server_close(server)` -- idempotent on NULL.
+
+- Self-pipe wakeup: `select()` multiplexes the listen socket and
+  the read end of the pipe; whichever fires first decides whether
+  to accept or exit.  Workers spawned for accepted connections
+  are joined before `run()` returns, so an in-flight request
+  always completes even if shutdown is signalled mid-flight.
+
+- Structured request log gated by env var `MOONLAB_CONTROL_LOG`:
+  ```
+  [moonlab.control] verb=CIRCUIT n_qubits=2 body=47 shots=0 wall_ms=3.60 rc=0
+  ```
+  One line per request to stderr; uses `clock_gettime(CLOCK_MONOTONIC)`
+  for wall-time, prints qubit count, body bytes, shot count, status.
+
+- `tests/integration/test_control_plane_shutdown.c` (ctest label
+  `control_plane`): three paths -- idle accept() shutdown,
+  in-flight request survives shutdown, idempotent `close(NULL)`.
+
+### Changed
+
+- `moonlab_control_serve` is now a thin shim over open() + run() +
+  close().  Existing single-client / concurrent / shots tests all
+  pass unmodified.
+
+### Verified
+
+```
+--- path 1: shutdown drains idle accept() ---
+  OK    run() returned cleanly after idle shutdown (rc=0)
+
+--- path 2: in-flight request survives shutdown ---
+  OK    in-flight submit rc=0
+  OK    P[00] = 0.500000
+  OK    P[11] = 0.500000
+  OK    run() rc=0 after in-flight + shutdown
+
+--- path 3: idempotent close() ---
+  OK    close(NULL) is a no-op
+```
 
 ## [0.8.12] - 2026-05-19
 
