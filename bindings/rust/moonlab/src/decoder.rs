@@ -105,10 +105,15 @@ mod tests {
 
     #[test]
     fn slot_availability() {
+        // GREEDY + MWPM_EXACT always available; SBNN gated by build
+        // flag (default off); PYMATCHING + LIBIRREP_SS depend on
+        // optional linkage.
         assert!(slot_available(DecoderSlot::Greedy));
         assert!(slot_available(DecoderSlot::MwpmExact));
         assert!(!slot_available(DecoderSlot::Sbnn));
-        assert!(!slot_available(DecoderSlot::Pymatching));
+        // PYMATCHING + LIBIRREP_SS: either availability is acceptable.
+        let _ = slot_available(DecoderSlot::Pymatching);
+        let _ = slot_available(DecoderSlot::LibirrepSs);
     }
 
     #[test]

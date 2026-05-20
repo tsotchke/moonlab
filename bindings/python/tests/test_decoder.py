@@ -19,13 +19,15 @@ def test_slot_naming():
 
 
 def test_slot_availability():
-    """GREEDY + MWPM_EXACT always available; SBNN + PYMATCHING never;
-    LIBIRREP_SS depends on build flags."""
+    """GREEDY + MWPM_EXACT always available; SBNN gated by build flag;
+    PYMATCHING + LIBIRREP_SS depend on optional linkage."""
     assert slot_available(DecoderSlot.GREEDY) is True
     assert slot_available(DecoderSlot.MWPM_EXACT) is True
+    # SBNN requires QSIM_ENABLE_SBNN=ON; default OFF.
     assert slot_available(DecoderSlot.SBNN) is False
-    assert slot_available(DecoderSlot.PYMATCHING) is False
-    # LIBIRREP_SS: either OK is acceptable.
+    # PYMATCHING + LIBIRREP_SS: either availability is acceptable.
+    _ = slot_available(DecoderSlot.PYMATCHING)
+    _ = slot_available(DecoderSlot.LIBIRREP_SS)
 
 
 def test_greedy_zero_syndrome():

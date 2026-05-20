@@ -440,15 +440,17 @@ mod tests {
     }
 
     #[test]
-    fn kane_mele_rejects_nonzero_rashba() {
-        // Non-zero Rashba is not supported by the S_z-conserving Z_2
-        // integrator -- the C side returns NULL rather than silently
-        // emitting the wrong (S_z = 0) answer.  v0.5.9 hardens this
-        // path; older builds silently dropped lambda_r.
+    fn kane_mele_accepts_nonzero_rashba() {
+        // v0.10.0+: Rashba is fully wired (km_bloch off-diagonals);
+        // the block-Chern Z_2 path here corresponds to the S_z-
+        // conserving formula and is still informative for small
+        // lambda_r (Z_2 is adiabatically connected to the lambda_r=0
+        // limit).  The C constructor no longer rejects lambda_r != 0;
+        // for fully Sz-non-conserving Z_2 use qgt_z2_invariant_pfaffian.
         let r = kane_mele_z2(1.0, 0.06, 0.05, 0.10, 24);
         assert!(
-            r.is_err(),
-            "expected lambda_r != 0 to be rejected, got {:?}", r,
+            r.is_ok(),
+            "v0.10.0 should accept lambda_r != 0, got {:?}", r,
         );
     }
 
