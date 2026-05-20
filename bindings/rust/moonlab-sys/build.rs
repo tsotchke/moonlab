@@ -379,6 +379,10 @@ fn main() {
         .allowlist_function("moonlab_control_server_run")
         .allowlist_function("moonlab_control_server_shutdown")
         .allowlist_function("moonlab_control_server_close")
+        // HMAC-SHA3-256 auth (since v0.8.15).
+        .allowlist_function("moonlab_control_server_set_secret")
+        .allowlist_function("moonlab_control_submit_circuit_auth")
+        .allowlist_function("moonlab_control_hmac_sha3_256")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")
