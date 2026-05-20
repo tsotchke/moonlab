@@ -433,6 +433,18 @@ _moonlab_job_num_workers
 _moonlab_scheduler_run
 _moonlab_job_results_free
 _moonlab_job_to_json
+# Backend plug-in surface (since v1.1).
+_moonlab_register_backend
+_moonlab_unregister_backend
+_moonlab_find_backend
+_moonlab_num_backends
+_moonlab_list_backends
+_moonlab_job_set_backend
+_moonlab_job_backend
+# Vendor-noise emulator backends (since v1.1).
+_moonlab_register_vendor_noise_backends
+_moonlab_register_vendor_noise_backend_with_profile
+_moonlab_lookup_vendor_noise_profile
 
 # =============================================================================
 # Decoder-bench dispatcher (since v0.6.7 native, JS from v0.7.3).
