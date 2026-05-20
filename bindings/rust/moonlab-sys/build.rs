@@ -364,6 +364,11 @@ fn main() {
         .allowlist_function("moonlab_qgtl_results_free")
         .allowlist_function("moonlab_qgtl_circuit_num_qubits")
         .allowlist_function("moonlab_qgtl_circuit_num_gates")
+        // Portable circuit serialization (since v0.8.3).
+        .allowlist_function("moonlab_qgtl_circuit_serialize")
+        .allowlist_function("moonlab_qgtl_circuit_deserialize")
+        .allowlist_function("moonlab_qgtl_circuit_save")
+        .allowlist_function("moonlab_qgtl_circuit_load")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")
