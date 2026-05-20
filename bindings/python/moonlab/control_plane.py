@@ -116,7 +116,56 @@ def submit_circuit(host: str,
             raise ControlPlaneError(f"unrecognized response: {resp_hdr!r}")
 
 
+def submit_circuit_shots(host: str,
+                         port: int,
+                         circuit_text: str,
+                         num_shots: int,
+                         timeout: Optional[float] = 30.0) -> List[int]:
+    """Submit a moonlab-circuit v1 payload requesting `num_shots`
+    measurement samples instead of the full probability vector.
+
+    Returns a list of integer bitstring outcomes -- bit 0 is qubit 0,
+    bit 1 is qubit 1, ...  Use ``outcome & (1 << k)`` to test qubit k.
+
+    Wire format: ``SHOTS <num_shots> <bytes>\\n<circuit-text>`` ->
+    ``SAMPLES <num_shots>\\n<num_shots * 8-byte LE uint64>``.
+    Since v0.8.12 (Python) / v0.8.11 (C server).
+    """
+    if num_shots <= 0 or num_shots > (1 << 20):
+        raise ControlPlaneError(
+            f"num_shots {num_shots} out of range [1, 2^20]"
+        )
+
+    encoded = circuit_text.encode("utf-8")
+
+    with socket.create_connection((host, port), timeout=timeout) as sock:
+        header = f"SHOTS {num_shots} {len(encoded)}\n".encode("ascii")
+        sock.sendall(header)
+        sock.sendall(encoded)
+
+        resp_hdr = _recv_until_newline(sock)
+        if resp_hdr.startswith("SAMPLES "):
+            try:
+                shots_back = int(resp_hdr[len("SAMPLES "):].strip())
+            except ValueError as e:
+                raise ControlPlaneError(
+                    f"malformed SAMPLES header: {resp_hdr!r}"
+                ) from e
+            if shots_back <= 0 or shots_back > (1 << 20):
+                raise ControlPlaneError(
+                    f"implausible shots_back {shots_back}"
+                )
+            raw = _recv_exact(sock, shots_back * 8)
+            outcomes = struct.unpack(f"<{shots_back}Q", raw)
+            return list(outcomes)
+        elif resp_hdr.startswith("ERR "):
+            raise ControlPlaneError(f"server rejected: {resp_hdr.strip()}")
+        else:
+            raise ControlPlaneError(f"unrecognized response: {resp_hdr!r}")
+
+
 __all__ = [
     "submit_circuit",
+    "submit_circuit_shots",
     "ControlPlaneError",
 ]
