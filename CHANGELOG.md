@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.9.)
+(No unreleased changes since v0.8.10.)
+
+## [0.8.10] - 2026-05-19
+
+**Thread-per-connection control plane.**  Production servers can't
+be single-threaded; v0.8.10 spawns a pthread per accepted client so
+a slow QFT doesn't block a queued Bell pair.
+
+### Changed
+
+- `src/control/control_plane.c`: the accept-loop now allocates a
+  `worker_ctx_t` per client and spawns `worker_thread` for
+  `handle_one_request`.  Server joins every worker before returning,
+  so callers that pass finite `max_iters` still see synchronous
+  "all done" semantics.  `listen()` backlog raised from 8 to 64.
+
+### Added
+
+- `tests/integration/test_control_plane_concurrent.c` (ctest label
+  `control_plane`): server with `max_iters = 8`, 8 client pthreads
+  fired in parallel, each submits a Bell circuit, every one of
+  them must come back with `P[00] = P[11] = 0.5`.
+
+### Verified
+
+```
+=== test_control_plane_concurrent (v0.8.10) ===
+--- spinning up threaded server for 8 concurrent clients ---
+  OK    server bound to port 51300
+--- launching 8 parallel client pthreads ---
+  OK    all 8 clients succeeded (got 8)
+    wall time: 0.0146 s for 8 concurrent submissions
+=== 0 failure(s) ===
+```
+
+The pre-existing single-client `test_control_plane` still passes
+unmodified.
 
 ## [0.8.9] - 2026-05-19
 
