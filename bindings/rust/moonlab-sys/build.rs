@@ -171,6 +171,7 @@ fn main() {
 #include "{root}/src/algorithms/tensor_network/tn_state.h"
 #include "{root}/src/algorithms/tensor_network/dmrg.h"
 #include "{root}/src/algorithms/tensor_network/tdvp.h"
+#include "{root}/src/algorithms/tensor_network/ca_mps.h"
 #include "{root}/src/algorithms/tensor_network/ca_peps.h"
 #include "{root}/src/algorithms/topological/topological.h"
 #include "{root}/src/integration/libirrep_bridge.h"
@@ -703,6 +704,8 @@ fn main() {
         .allowlist_function("moonlab_ca_mps_phase")
         .allowlist_function("moonlab_ca_mps_normalize")
         .allowlist_function("moonlab_ca_mps_norm")
+        // Born-rule sequential sampling (since v0.10.0).
+        .allowlist_function("moonlab_ca_mps_sample_z")
         // var-D, gauge warmstart, Z2 LGT, status (since 0.2.1).
         .allowlist_function("moonlab_ca_mps_var_d_run")
         // var-D v2 with explicit convergence_eps (since 0.2.4).
