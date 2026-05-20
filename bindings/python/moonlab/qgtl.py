@@ -107,6 +107,38 @@ _lib.moonlab_qgtl_circuit_num_qubits.restype = ctypes.c_int
 _lib.moonlab_qgtl_circuit_num_gates.argtypes = [ctypes.c_void_p]
 _lib.moonlab_qgtl_circuit_num_gates.restype = ctypes.c_int
 
+# v0.8.4 serialization surface (libquantumsim v0.8.3+).  Bind defensively
+# so older shared libraries still load and only raise on call.
+try:
+    _lib.moonlab_qgtl_circuit_serialize.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    _lib.moonlab_qgtl_circuit_serialize.restype = ctypes.c_int
+
+    _lib.moonlab_qgtl_circuit_deserialize.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_int),
+    ]
+    _lib.moonlab_qgtl_circuit_deserialize.restype = ctypes.c_void_p
+
+    _lib.moonlab_qgtl_circuit_save.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p,
+    ]
+    _lib.moonlab_qgtl_circuit_save.restype = ctypes.c_int
+
+    _lib.moonlab_qgtl_circuit_load.argtypes = [
+        ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+    ]
+    _lib.moonlab_qgtl_circuit_load.restype = ctypes.c_void_p
+
+    _SERIALIZATION_AVAILABLE = True
+except AttributeError:
+    _SERIALIZATION_AVAILABLE = False
+
 
 def _check(rc: int, ctx: str) -> None:
     if rc != MOONLAB_QGTL_OK:
@@ -198,6 +230,79 @@ class QgtlCircuit:
         )
         _lib.moonlab_qgtl_results_free(ctypes.byref(res))
         return out
+
+    # ----- serialization (since v0.8.4 binding / v0.8.3 library) -----
+
+    def serialize(self) -> str:
+        """Serialize the circuit to the portable text format.
+
+        Returns a ``str`` containing the moonlab-circuit v1 text
+        representation.  Raises ``QgtlError`` if the underlying
+        library predates v0.8.3.
+        """
+        if not _SERIALIZATION_AVAILABLE:
+            raise QgtlError(
+                "moonlab_qgtl_circuit_serialize unavailable -- "
+                "libquantumsim is older than v0.8.3"
+            )
+        needed = ctypes.c_size_t(0)
+        rc = _lib.moonlab_qgtl_circuit_serialize(
+            self._handle, None, 0, ctypes.byref(needed))
+        _check(rc, "serialize size-query")
+        buf = ctypes.create_string_buffer(needed.value + 1)
+        rc = _lib.moonlab_qgtl_circuit_serialize(
+            self._handle, buf, needed.value + 1, None)
+        _check(rc, "serialize")
+        return buf.value.decode("utf-8")
+
+    def save(self, path: str) -> None:
+        """Save the circuit to a file in the portable text format."""
+        if not _SERIALIZATION_AVAILABLE:
+            raise QgtlError(
+                "moonlab_qgtl_circuit_save unavailable -- "
+                "libquantumsim is older than v0.8.3"
+            )
+        rc = _lib.moonlab_qgtl_circuit_save(
+            self._handle, path.encode("utf-8"))
+        _check(rc, f"save({path!r})")
+
+    @classmethod
+    def deserialize(cls, text: str) -> "QgtlCircuit":
+        """Construct a circuit from a moonlab-circuit v1 text string."""
+        if not _SERIALIZATION_AVAILABLE:
+            raise QgtlError(
+                "moonlab_qgtl_circuit_deserialize unavailable -- "
+                "libquantumsim is older than v0.8.3"
+            )
+        encoded = text.encode("utf-8")
+        status = ctypes.c_int(0)
+        handle = _lib.moonlab_qgtl_circuit_deserialize(
+            encoded, len(encoded), ctypes.byref(status))
+        if not handle:
+            raise QgtlError(f"deserialize: status={status.value}")
+        # Build a QgtlCircuit by borrowing the handle (skip _create).
+        obj = cls.__new__(cls)
+        obj._handle = handle
+        obj._n = int(_lib.moonlab_qgtl_circuit_num_qubits(handle))
+        return obj
+
+    @classmethod
+    def load(cls, path: str) -> "QgtlCircuit":
+        """Load a circuit previously written with ``save``."""
+        if not _SERIALIZATION_AVAILABLE:
+            raise QgtlError(
+                "moonlab_qgtl_circuit_load unavailable -- "
+                "libquantumsim is older than v0.8.3"
+            )
+        status = ctypes.c_int(0)
+        handle = _lib.moonlab_qgtl_circuit_load(
+            path.encode("utf-8"), ctypes.byref(status))
+        if not handle:
+            raise QgtlError(f"load({path!r}): status={status.value}")
+        obj = cls.__new__(cls)
+        obj._handle = handle
+        obj._n = int(_lib.moonlab_qgtl_circuit_num_qubits(handle))
+        return obj
 
 
 __all__ = [
