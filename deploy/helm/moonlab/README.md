@@ -15,6 +15,16 @@ the images locally first (`docker compose -f deploy/docker/docker-compose.yml bu
 and push them to your registry, or override `image.registry` /
 `image.repository` to point at a published copy.
 
+## Verification status (v1.0.2)
+
+The chart passes `helm lint deploy/helm/moonlab` and `helm template
+my-moonlab deploy/helm/moonlab` (default + tls-enabled values) without
+errors.  Apply against a real cluster (kind / minikube / production
+k8s) is NOT recorded in this repo; it is on the v1.1 list.  Treat
+this chart as a working starting template that needs cluster-specific
+review of resource requests, storage classes, and image-registry
+provenance before going to production.
+
 ## Install
 
 ```

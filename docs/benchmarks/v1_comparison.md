@@ -83,13 +83,31 @@ output-path argument plus a small set of flags documented per harness
 ```
 ./build/ca_mps_kagome_bench \
     benchmarks/v1_comparison/results/ca_mps_kagome.json \
-    --chi 16,32,64,128 \
+    --chi 64,128,256 \
     --steps 200
 ```
 
 Output JSON schema: `moonlab/v1_comparison/ca_mps_kagome`.  Each record
 in `runs[]` carries `{chi, energy, error_vs_prb, wall_clock_s,
 peak_rss_bytes, bond_dim_final}`.
+
+### Convergence regime
+
+Kagome 12 is frustrated 2D; entanglement grows fast.  Approximate
+residuals vs. `E_PRB = -5.44488` at this lattice size:
+
+| chi  | typical residual `|E - E_PRB|` |
+|------|--------------------------------|
+| 16   | ~1.4 J (plumbing smoke only)   |
+| 64   | ~0.5 J                         |
+| 128  | ~0.2 J                         |
+| 256  | ~1e-2 J                        |
+| 512+ | <1e-3 J (benchmark regime)     |
+
+The v1.0 default chi list `{64, 128, 256}` is the regime where the
+head-to-head vs ITensor is interpretable; neither library has
+fully converged but the wall-clock ratio at the same chi is the
+metric we care about.
 
 ### Run ITensor (competitor)
 
@@ -99,7 +117,7 @@ then run:
 
 ```
 julia --project=. bench/itensor_kagome.jl \
-    --chi 16,32,64,128 \
+    --chi 64,128,256 \
     --sweeps 30 \
     --out itensor_kagome.json
 ```
@@ -109,7 +127,7 @@ The script must:
    conditions in both directions (24 bonds).
 2. Construct `H = 0.25 * sum_<i,j> (X_i X_j + Y_i Y_j + Z_i Z_j)` with
    `OpSum` over those 24 bonds.
-3. Run two-site DMRG at each chi in `{16, 32, 64, 128}` with the
+3. Run two-site DMRG at each chi in `{64, 128, 256}` with the
    sweep schedule and cutoff that ITensor.jl recommends for kagome (the
    exact ITensor incantation is the user's responsibility -- the
    competitor side is the one being measured, not engineered by

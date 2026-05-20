@@ -27,6 +27,27 @@ The same guarantees apply transitively to the Python / Rust / JS
 binding surfaces, modulo idiomatic adaptation (e.g. Rust's
 `Result<T, Error>` vs C's `int` return code).
 
+### Header install namespace (v1.0 historical wart)
+
+Headers install into `<prefix>/include/quantumsim/` (not
+`/moonlab/`) -- a residue from the project's pre-rename name when
+the C library was called `libquantumsim`.  v1.0 keeps the
+`quantumsim/` install path so existing FFI consumers don't break;
+the `moonlab` brand applies to the project, the binding crates,
+and the public API symbols (`MOONLAB_API`, `moonlab_*`), not the
+include directory.
+
+Application code includes headers as:
+
+```c
+#include <quantumsim/quantum/state.h>
+#include <quantumsim/control/control_plane.h>
+```
+
+A migration to `<moonlab/...>` is on the v2.0 list; this is a
+v1.0 ABI-stability commitment (the include path cannot move
+inside the 1.x line).
+
 ## Symbol catalog by module
 
 `grep -rn "^MOONLAB_API " src/ --include="*.h"` returns 224
