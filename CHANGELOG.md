@@ -7,7 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.10.)
+(No unreleased changes since v0.8.11.)
+
+## [0.8.11] - 2026-05-19
+
+**Shots-mode wire verb + payload size limits.**  Control plane can
+now return measurement samples instead of full probability vectors
+(saves N=30 sample from being a 16 GB transfer).  Hostile-payload
+ceilings refuse abusive bodies before allocating memory.
+
+### Added
+
+- Wire protocol:
+  - `SHOTS <num_shots> <bytes>\n<circuit-text>` -- request samples
+  - `SAMPLES <num_shots>\n<num_shots * 8-byte LE uint64>` -- response
+
+- `moonlab_control_submit_circuit_shots(host, port, text, len,
+  num_shots, **out_outcomes, *out_num)`: C client for the shots
+  path.  Mirrors the v0.8.7 `submit_circuit` signature.
+
+- `tests/integration/test_control_plane_shots.c` (ctest label
+  `control_plane`): submits a Bell circuit with `num_shots=2048`,
+  verifies every outcome is in {0, 3} (the |00>/|11> Bell support),
+  and that the 50/50 split is within 3-sigma.
+
+### Changed
+
+- Server header parser supports both `CIRCUIT` and `SHOTS` verbs.
+- Body-size cap: `MOONLAB_CONTROL_MAX_BODY_BYTES = 4 MB` (32-qubit
+  full gate list comfortably fits; payloads larger than this are
+  refused with `BAD_ARG` before the malloc).
+- Shots cap: `MOONLAB_CONTROL_MAX_SHOTS = 1 M`.
+
+### Verified
+
+```
+--- shots-mode: 2048 Bell samples ---
+  OK    submit_circuit_shots rc=0
+  OK    got 2048 shots
+    |00>: 1021   |11>: 1027   other: 0
+  OK    no off-Bell outcomes (got 0)
+  OK    Bell split |00>-|11| = -6 within 3-sigma
+```
+
+Pre-existing single-client + concurrent control-plane tests still
+pass; the legacy `CIRCUIT` verb is byte-compatible with v0.8.7.
 
 ## [0.8.10] - 2026-05-19
 

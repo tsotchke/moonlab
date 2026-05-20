@@ -95,35 +95,72 @@ static int send_err(int fd, int status, const char *msg)
  * Server: one request, one response.
  * ------------------------------------------------------------------ */
 
+/* Maximum bytes the server accepts in a single CIRCUIT/SHOTS payload.
+ * Tuned for the moonlab-circuit v1 format -- a 32-qubit dense gate list
+ * (~30k gates) fits comfortably in 4 MB.  Larger payloads are likely
+ * abusive; we ERR out before allocating. */
+#define MOONLAB_CONTROL_MAX_BODY_BYTES (1L << 22)   /* 4 MB. */
+#define MOONLAB_CONTROL_MAX_SHOTS      (1L << 20)   /* 1 M samples (8 MB). */
+
 static int handle_one_request(int client_fd)
 {
-    /* Header: "CIRCUIT <N>\n" */
-    char hdr[64];
+    /* Header.  Two verbs:
+     *   CIRCUIT <bytes>\n         -- probability mode (v0.8.7+)
+     *   SHOTS   <shots> <bytes>\n -- shots       mode (v0.8.11+) */
+    char hdr[96];
     size_t hdr_len = 0;
     int rc = recv_until_newline(client_fd, hdr, sizeof(hdr), &hdr_len);
     if (rc != MOONLAB_CONTROL_OK) return rc;
 
-    long n = -1;
-    if (sscanf(hdr, "CIRCUIT %ld", &n) != 1 || n <= 0 || n > (1L << 22)) {
-        send_err(client_fd, MOONLAB_CONTROL_PROTOCOL, "expected CIRCUIT <N>");
+    int  mode_shots = 0;
+    long num_shots  = 0;
+    long body_bytes = -1;
+
+    if (strncmp(hdr, "CIRCUIT ", 8) == 0) {
+        if (sscanf(hdr + 8, "%ld", &body_bytes) != 1) {
+            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+                     "expected CIRCUIT <N>");
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+    } else if (strncmp(hdr, "SHOTS ", 6) == 0) {
+        if (sscanf(hdr + 6, "%ld %ld", &num_shots, &body_bytes) != 2) {
+            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+                     "expected SHOTS <shots> <bytes>");
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        if (num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
+            send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
+                     "shots out of range");
+            return MOONLAB_CONTROL_BAD_ARG;
+        }
+        mode_shots = 1;
+    } else {
+        send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+                 "unknown verb");
         return MOONLAB_CONTROL_PROTOCOL;
     }
 
-    char *body = (char *)malloc((size_t)n + 1);
+    if (body_bytes <= 0 || body_bytes > MOONLAB_CONTROL_MAX_BODY_BYTES) {
+        send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
+                 "body bytes out of range");
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+
+    char *body = (char *)malloc((size_t)body_bytes + 1);
     if (!body) {
         send_err(client_fd, MOONLAB_CONTROL_OOM, "body alloc");
         return MOONLAB_CONTROL_OOM;
     }
-    rc = recv_all(client_fd, body, (size_t)n);
+    rc = recv_all(client_fd, body, (size_t)body_bytes);
     if (rc != MOONLAB_CONTROL_OK) {
         free(body);
         return rc;
     }
-    body[n] = '\0';
+    body[body_bytes] = '\0';
 
     int status = 0;
     moonlab_qgtl_circuit_t *c =
-        moonlab_qgtl_circuit_deserialize(body, (size_t)n, &status);
+        moonlab_qgtl_circuit_deserialize(body, (size_t)body_bytes, &status);
     free(body);
     if (!c) {
         send_err(client_fd, MOONLAB_CONTROL_REJECTED, "deserialize");
@@ -132,7 +169,12 @@ static int handle_one_request(int client_fd)
 
     moonlab_qgtl_exec_options_t opts;
     memset(&opts, 0, sizeof(opts));
-    opts.return_probabilities = 1;
+    if (mode_shots) {
+        opts.num_shots = (int)num_shots;
+        opts.rng_seed  = 0; /* clock-based */
+    } else {
+        opts.return_probabilities = 1;
+    }
 
     moonlab_qgtl_results_t res;
     memset(&res, 0, sizeof(res));
@@ -140,25 +182,51 @@ static int handle_one_request(int client_fd)
     int er = moonlab_qgtl_execute(c, &opts, &res);
     moonlab_qgtl_circuit_free(c);
 
-    if (er != 0 || !res.probabilities) {
+    if (er != 0) {
         moonlab_qgtl_results_free(&res);
         send_err(client_fd, MOONLAB_CONTROL_REJECTED, "execute");
         return MOONLAB_CONTROL_REJECTED;
     }
 
-    const size_t dim = (size_t)1 << res.num_qubits;
-    char ok_hdr[64];
-    int hn = snprintf(ok_hdr, sizeof(ok_hdr), "OK %zu\n", dim);
-    if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
+    if (mode_shots) {
+        if (!res.outcomes) {
+            moonlab_qgtl_results_free(&res);
+            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no outcomes");
+            return MOONLAB_CONTROL_REJECTED;
+        }
+        char ok_hdr[64];
+        int hn = snprintf(ok_hdr, sizeof(ok_hdr), "SAMPLES %d\n", res.num_shots);
+        if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
+            moonlab_qgtl_results_free(&res);
+            return MOONLAB_CONTROL_IO_ERROR;
+        }
+        rc = send_all(client_fd, ok_hdr, (size_t)hn);
+        if (rc == MOONLAB_CONTROL_OK) {
+            rc = send_all(client_fd, res.outcomes,
+                          (size_t)res.num_shots * sizeof(uint64_t));
+        }
         moonlab_qgtl_results_free(&res);
-        return MOONLAB_CONTROL_IO_ERROR;
+        return rc;
+    } else {
+        if (!res.probabilities) {
+            moonlab_qgtl_results_free(&res);
+            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no probabilities");
+            return MOONLAB_CONTROL_REJECTED;
+        }
+        const size_t dim = (size_t)1 << res.num_qubits;
+        char ok_hdr[64];
+        int hn = snprintf(ok_hdr, sizeof(ok_hdr), "OK %zu\n", dim);
+        if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
+            moonlab_qgtl_results_free(&res);
+            return MOONLAB_CONTROL_IO_ERROR;
+        }
+        rc = send_all(client_fd, ok_hdr, (size_t)hn);
+        if (rc == MOONLAB_CONTROL_OK) {
+            rc = send_all(client_fd, res.probabilities, dim * sizeof(double));
+        }
+        moonlab_qgtl_results_free(&res);
+        return rc;
     }
-    rc = send_all(client_fd, ok_hdr, (size_t)hn);
-    if (rc == MOONLAB_CONTROL_OK) {
-        rc = send_all(client_fd, res.probabilities, dim * sizeof(double));
-    }
-    moonlab_qgtl_results_free(&res);
-    return rc;
 }
 
 /* Per-connection worker thread context: owns the client fd. */
@@ -335,6 +403,79 @@ int moonlab_control_submit_circuit(const char *host,
         if (rc != MOONLAB_CONTROL_OK) { free(probs); return rc; }
         *out_probs = probs;
         *out_num   = num;
+        return MOONLAB_CONTROL_OK;
+    } else {
+        close(fd);
+        return MOONLAB_CONTROL_REJECTED;
+    }
+}
+
+int moonlab_control_submit_circuit_shots(const char *host,
+                                         uint16_t    port,
+                                         const char *circuit_text,
+                                         size_t      text_len,
+                                         int         num_shots,
+                                         uint64_t  **out_outcomes,
+                                         size_t     *out_num)
+{
+    if (!host || !circuit_text || !out_outcomes || !out_num ||
+        num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    *out_outcomes = NULL;
+    *out_num      = 0;
+
+    if (text_len == 0) text_len = strlen(circuit_text);
+    if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd);
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    char hdr[96];
+    int hn = snprintf(hdr, sizeof(hdr), "SHOTS %d %zu\n",
+                      num_shots, text_len);
+    if (hn < 0 || (size_t)hn >= sizeof(hdr)) {
+        close(fd);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+    int rc = send_all(fd, hdr, (size_t)hn);
+    if (rc == MOONLAB_CONTROL_OK) {
+        rc = send_all(fd, circuit_text, text_len);
+    }
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    char resp_hdr[128];
+    size_t resp_len = 0;
+    rc = recv_until_newline(fd, resp_hdr, sizeof(resp_hdr), &resp_len);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    if (strncmp(resp_hdr, "SAMPLES ", 8) == 0) {
+        long shots_back = 0;
+        if (sscanf(resp_hdr + 8, "%ld", &shots_back) != 1 ||
+            shots_back <= 0 || shots_back > MOONLAB_CONTROL_MAX_SHOTS) {
+            close(fd);
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        uint64_t *buf = (uint64_t *)malloc((size_t)shots_back * sizeof(uint64_t));
+        if (!buf) { close(fd); return MOONLAB_CONTROL_OOM; }
+        rc = recv_all(fd, buf, (size_t)shots_back * sizeof(uint64_t));
+        close(fd);
+        if (rc != MOONLAB_CONTROL_OK) { free(buf); return rc; }
+        *out_outcomes = buf;
+        *out_num      = (size_t)shots_back;
         return MOONLAB_CONTROL_OK;
     } else {
         close(fd);
