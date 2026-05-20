@@ -105,20 +105,30 @@ static int torus_edge_between(int d, int a, int b, unsigned char *flip)
     if (dx > d / 2) dx -= d;
     if (dy > d / 2) dy -= d;
     /* Walk in y first, then in x; flip each crossed edge.  The
-     * edge-index convention matches the existing
-     * surface_code_threshold.c harness: horizontal edge h(x, y) at
-     * index `x * d + y`, vertical edge v(x, y) at `d * d + x * d + y`. */
+     * edge-index convention matches compute_syndrome (and the
+     * surface_code_threshold.c harness): horizontal edge h(x, y) at
+     * index `x * d + y` connects vertex (x, y) to vertex (x+1, y),
+     * so h(x, y) runs in the +X direction.  Vertical edge v(x, y)
+     * at index `d*d + x*d + y` connects (x, y) to (x, y+1) and runs
+     * in the +Y direction.  Therefore: walking the defect from
+     * vertex (ax, ay) to (bx, by), a Y-step crosses VERTICAL
+     * edges, and an X-step crosses HORIZONTAL edges.  An earlier
+     * version of this function had the index families swapped,
+     * which inflated logical-error rates and erased below-threshold
+     * scaling. */
     int x = ax, y = ay;
     while (y != by) {
         const int step = (dy > 0) ? 1 : -1;
-        const int e = x * d + ((step > 0) ? y : (y + d - 1) % d);
+        const int y_edge = (step > 0) ? y : (y + d - 1) % d;
+        const int e = d * d + x * d + y_edge;  /* v(x, y_edge) */
         flip[e] ^= 1;
         y = (y + step + d) % d;
         dy -= step;
     }
     while (x != bx) {
         const int step = (dx > 0) ? 1 : -1;
-        const int e = d * d + ((step > 0) ? x : (x + d - 1) % d) * d + y;
+        const int x_edge = (step > 0) ? x : (x + d - 1) % d;
+        const int e = x_edge * d + y;          /* h(x_edge, y) */
         flip[e] ^= 1;
         x = (x + step + d) % d;
         dx -= step;
