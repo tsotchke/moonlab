@@ -301,6 +301,26 @@ class ControlPlaneServer:
             raise ControlPlaneError(f"server_run rc={self._run_rc}")
 
 
+def submit_health(host: str,
+                  port: int,
+                  timeout: Optional[float] = 5.0) -> bool:
+    """Submit the v0.8.21 HEALTH probe and return True if the server
+    is alive.  Bypasses AUTH and TLS-cert layers so load-balancer
+    probes work against any control plane.
+
+    Raises :class:`ControlPlaneError` on transport failure;
+    returns False if the server returned `ERR -408 rate limited`.
+    """
+    with socket.create_connection((host, port), timeout=timeout) as sock:
+        sock.sendall(b"HEALTH\n")
+        resp = _recv_until_newline(sock, cap=128)
+    if resp.startswith("OK alive"):
+        return True
+    if resp.startswith("ERR -408"):
+        return False
+    raise ControlPlaneError(f"unrecognized HEALTH response: {resp!r}")
+
+
 def submit_circuit_tls(host: str,
                        port: int,
                        circuit_text: str,
@@ -376,6 +396,7 @@ __all__ = [
     "submit_circuit",
     "submit_circuit_shots",
     "submit_circuit_tls",
+    "submit_health",
     "ControlPlaneServer",
     "ControlPlaneError",
 ]
