@@ -462,14 +462,17 @@ gauge-link Pauli sum; `examples/hep/z2_gauge_var_d.c` runs the
 full var-D pipeline with the gauge-aware warmstart.  Math write-up:
 `docs/research/var_d_lattice_gauge_theory.md`.
 
-### CA-PEPS (2D scaffold)
+### CA-PEPS (2D)
 
-`src/algorithms/tensor_network/ca_peps.{c,h}` ships the public-API
-scaffold for the 2D extension of CA-MPS.  Symbols are stable so
-downstream binders can wire against them now; gate-application and
-contraction logic land in v0.3.  Smoke test:
-`tests/unit/test_ca_peps.c` (returns `NOT_IMPLEMENTED` until the
-core ships).
+`src/algorithms/tensor_network/ca_peps.{c,h}` ships the 2D extension
+of CA-MPS via a row-major-MPS embedding over `Lx * Ly` qubits.
+Clifford gates (H, S, Sdag, X, Y, Z, CNOT, CZ) update the tableau
+in-place; non-Clifford rotations and the T family push into the
+inner MPS factor the same way CA-MPS does.  Validation lives in
+`tests/unit/test_ca_peps.c`: runs a mixed Clifford + rotation
+circuit on a 3x3 lattice through both `moonlab_ca_peps_*` and the
+equivalent CA-MPS linear index, and checks every Pauli-string
+expectation agrees to <1e-10.  Wired into ctest as `unit_ca_peps`.
 
 ## Quantum Algorithms
 

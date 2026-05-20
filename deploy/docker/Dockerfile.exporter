@@ -1,0 +1,12 @@
+# Prometheus exporter sidecar -- bridges Moonlab's line-protocol
+# METRICS endpoint to standard HTTP /metrics.
+FROM python:3.12-slim
+
+COPY tools/exporter/moonlab_control_exporter.py /usr/local/bin/moonlab-control-exporter
+RUN chmod +x /usr/local/bin/moonlab-control-exporter
+
+EXPOSE 9090
+ENTRYPOINT ["python3", "/usr/local/bin/moonlab-control-exporter"]
+CMD ["--target", "moonlab-control:7070", \
+     "--listen", "0.0.0.0:9090", \
+     "--log-level", "INFO"]
