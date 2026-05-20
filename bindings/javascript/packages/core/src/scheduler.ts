@@ -147,10 +147,9 @@ export class Job {
   }
 
   setRngSeed(seed: bigint): this {
-    /* Emscripten exposes uint64 args as two i32s when JS interop. */
-    const lo = Number(seed & 0xFFFFFFFFn);
-    const hi = Number((seed >> 32n) & 0xFFFFFFFFn);
-    _check(this.mod._moonlab_job_set_rng_seed(this.handle, lo, hi),
+    /* Emscripten 3.0+ defaults to WASM_BIGINT, so i64 maps to a single
+     * BigInt arg.  Pass the seed directly. */
+    _check(this.mod._moonlab_job_set_rng_seed(this.handle, seed),
            `setRngSeed`);
     return this;
   }

@@ -181,6 +181,55 @@ export class CaMps {
     return this;
   }
 
+  /** Born-rule sequential sampler over the Z basis.
+   *
+   * Wires directly to `moonlab_ca_mps_sample_z` (since v0.10.0 on the C
+   * side, JS parity since v1.0).  Caller supplies `numSamples * n`
+   * uniform reals in `[0, 1)` — these are consumed in row-major order
+   * `(sample, qubit)` so deterministic seeds give reproducible bit
+   * strings.  Returns a `Uint8Array` of length `numSamples * n` where
+   * `out[s * n + i]` is the i-th bit of the s-th sample.
+   *
+   * Note: the underlying MPS factor is mutated by the sequential
+   * projection-and-renormalise loop; if you want to sample multiple
+   * batches from the same `|psi>` snapshot, sample once or clone the
+   * state ahead of time (the C API documents the same caveat).
+   */
+  sampleZ(numSamples: number, randomValues: Float64Array): Uint8Array {
+    const n = this.numQubits;
+    const need = numSamples * n;
+    if (randomValues.length !== need) {
+      throw new Error(
+        `sampleZ: randomValues.length=${randomValues.length} must equal numSamples*n=${need}`);
+    }
+    if (numSamples === 0) {
+      return new Uint8Array(0);
+    }
+    const m = this.mod as unknown as {
+      _moonlab_ca_mps_sample_z: (
+        h: number, n_samples: number, r_ptr: number, b_ptr: number,
+      ) => number;
+      HEAPU8: Uint8Array;
+      HEAPF64: Float64Array;
+      _malloc: (n: number) => number;
+      _free: (p: number) => void;
+    };
+    const rPtr = m._malloc(need * 8);
+    const bPtr = m._malloc(need);
+    try {
+      m.HEAPF64.set(randomValues, rPtr >>> 3);
+      const rc = m._moonlab_ca_mps_sample_z(this.handle, numSamples, rPtr, bPtr);
+      if (rc !== 0) {
+        throw new Error(
+          `moonlab_ca_mps_sample_z -> ${statusString(StatusModule.CaMps, rc)}`);
+      }
+      return new Uint8Array(m.HEAPU8.buffer, bPtr, need).slice();
+    } finally {
+      m._free(rPtr);
+      m._free(bPtr);
+    }
+  }
+
   /** Apply the gauge-aware warmstart Clifford in place.  See
    * {@link gaugeWarmstart}. */
   gaugeWarmstart(paulis: Uint8Array, numGens: number): this {
