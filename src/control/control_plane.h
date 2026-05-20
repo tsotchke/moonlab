@@ -8,11 +8,19 @@
  *
  * Wire protocol (server side, ASCII header + binary body):
  *
- *   Request:   `CIRCUIT <bytes>\n<bytes-of-moonlab-circuit-v1-text>`
+ *   Request (probability mode, v0.8.7+):
+ *              `CIRCUIT <bytes>\n<bytes-of-moonlab-circuit-v1-text>`
  *
- *   Response on success:
+ *   Request (shots mode, v0.8.11+):
+ *              `SHOTS <num_shots> <bytes>\n<bytes-of-...>`
+ *
+ *   Response on probability success:
  *              `OK <num_probabilities>\n<num_probabilities * 8 bytes of
  *               little-endian IEEE-754 doubles>`
+ *
+ *   Response on shots success:
+ *              `SAMPLES <num_shots>\n<num_shots * 8 bytes of
+ *               little-endian uint64 bitstring outcomes>`
  *
  *   Response on failure:
  *              `ERR <status_code> <message>\n`
@@ -93,6 +101,26 @@ moonlab_control_submit_circuit(const char *host,
                                size_t      text_len,
                                double    **out_probs,
                                size_t     *out_num);
+
+/**
+ * @brief Submit a circuit and request `num_shots` measurement
+ *        samples rather than the full probability vector.  Returned
+ *        outcomes are bitstring integers (least-significant bit =
+ *        qubit 0); use bit tests against the result to score events.
+ *
+ * Since v0.8.11.
+ *
+ * @return MOONLAB_CONTROL_OK on success or a negative code.
+ *         On any failure, `*out_outcomes` is left NULL.
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_shots(const char *host,
+                                     uint16_t    port,
+                                     const char *circuit_text,
+                                     size_t      text_len,
+                                     int         num_shots,
+                                     uint64_t  **out_outcomes,
+                                     size_t     *out_num);
 
 #ifdef __cplusplus
 }
