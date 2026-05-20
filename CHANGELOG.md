@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.9.0.)
+(No unreleased changes since v0.9.1.)
+
+## [0.9.1] - 2026-05-20
+
+**Binding parity for the v0.9.0 control-plane surface.**  Python had
+zero control-plane test coverage before this release; Rust had no
+test for the new max_concurrent setter.  Both gaps are now closed
+with end-to-end tests that drive the actual server.
+
+### Added
+
+- `bindings/python/tests/test_control_plane.py` -- 8 tests covering
+  lifecycle, HEALTH, METRICS (with v0.9.0 counters), CIRCUIT Bell
+  probabilities, `set_request_timeout`, `set_max_concurrent`,
+  `max_concurrent` constructor kwarg, and the slow-marked
+  `cap=2` 6-parallel cap-enforcement check.
+
+- `bindings/rust/moonlab/tests/control_plane_max_concurrent_e2e.rs`
+  -- 2 tests: setter via wrapper plus the same 6-parallel cap-enforcement
+  check using `mpsc` channels.  Mirrors the Python test.
+
+### Fixed
+
+- `docs/CONTROL_PLANE.md` METRICS table had stale exposition names
+  (`moonlab_control_requests_circuit_total` etc).  The actual schema
+  uses a single labelled counter
+  `moonlab_control_requests_total{verb="..."}`.  Doc corrected.
+
+### Verified
+
+```
+$ python3 -m pytest bindings/python/tests/test_control_plane.py -v
+.........                                                        [100%]
+8 passed in 0.12s
+
+$ cargo test --test control_plane_max_concurrent_e2e
+test cap_rejects_some_of_six_parallel ... ok
+test set_max_concurrent_via_wrapper    ... ok
+test result: ok. 2 passed
+```
 
 ## [0.9.0] - 2026-05-20
 
