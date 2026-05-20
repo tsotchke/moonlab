@@ -71,17 +71,17 @@ Server responses begin with one of:
 ```
 CIRCUIT <body_len>\n               -- run circuit; body = moonlab-circuit v1 text
 <body bytes>
-            <- OK <n>\n<binary probabilities, n = 2^q * 8 bytes>
+            <- OK <num_doubles>\n<num_doubles * 8 bytes of LE doubles>
 
 SHOTS <shots> <body_len>\n         -- sample shots from circuit
 <body bytes>
-            <- OK <n>\n<binary outcome counts>
+            <- SAMPLES <num_outcomes>\n<num_outcomes * 8 bytes of LE uint64>
 
 HEALTH\n                           -- liveness ping
             <- OK\n
 
 METRICS\n                          -- Prometheus text exposition
-            <- METRICS <n>\n<n bytes of metrics text>
+            <- METRICS <num_bytes>\n<num_bytes of metrics text>
 
 AUTH <hexdigest>\n                 -- HMAC-SHA3-256 of next request body
                                       under the shared secret
@@ -89,6 +89,10 @@ AUTH <hexdigest>\n                 -- HMAC-SHA3-256 of next request body
 CIRCUIT_AUTH <body_len> <hexdigest>\n
 <body bytes>
 ```
+
+Note that the integer field after the verb has different units per
+reply: ``OK <n>`` is a *count of doubles*, ``SAMPLES <n>`` is a
+*count of uint64 outcomes*, ``METRICS <n>`` is *byte length*.
 
 The `CIRCUIT_AUTH` form is a single-shot variant that bundles auth +
 payload; both forms compute the digest over the raw body bytes.
