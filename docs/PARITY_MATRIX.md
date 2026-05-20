@@ -145,9 +145,23 @@ circuits.  Same Python image is used in `deploy/docker/`.
 runs the control plane + exporter + Prometheus.
 
 ¹³ CUDA / OpenCL / Vulkan / cuQuantum compile under their respective
-`QSIM_ENABLE_*` opt-in flags but the moonlab CI does not currently run
-on machines with those SDKs.  The code paths are present (1000+ LOC
-each) but smoke-tested manually only.
+`QSIM_ENABLE_*` opt-in flags.  Today's CI lanes:
+
+- `linux-opencl`: builds against the POCL CPU ICD and runs the
+  `integration_gpu_backend_correctness` test (verifies a Hadamard
+  applied on the GPU code path produces |+0> to 1e-6).
+- `linux-vulkan`: builds against the mesa lavapipe software
+  rasterizer and runs the same correctness test through the
+  Vulkan compute kernel dispatch.
+- `linux-cuda` / `linux-cuquantum`: compile-only smoke against
+  the public CUDA toolkit + cuQuantum SDK.  GitHub's hosted
+  runners don't have NVIDIA GPUs, so the correctness check can't
+  run there without a self-hosted runner.
+
+Two GPU lanes (OpenCL + Vulkan) execute real kernel dispatches in
+software in CI; two (CUDA + cuQuantum) compile but await a hosted
+NVIDIA GPU.  Apple Metal builds locally on macOS hosts but isn't
+covered by CI today.
 
 ## v1.0 parity gaps acknowledged
 
