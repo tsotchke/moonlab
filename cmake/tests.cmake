@@ -831,6 +831,19 @@
         TIMEOUT 30
     )
 
+    # HMAC-SHA3-256 auth (since v0.8.15): four paths through the
+    # AUTH wire verb -- matching / missing / wrong / graceful.
+    add_executable(test_control_plane_auth
+        tests/integration/test_control_plane_auth.c)
+    target_link_libraries(test_control_plane_auth
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_auth
+        COMMAND test_control_plane_auth)
+    set_tests_properties(integration_control_plane_auth PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.

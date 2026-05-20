@@ -185,6 +185,57 @@ moonlab_control_server_shutdown(moonlab_control_server_t *server);
 MOONLAB_API void
 moonlab_control_server_close(moonlab_control_server_t *server);
 
+/* ------------------------------------------------------------------
+ * Authentication (since v0.8.15).
+ *
+ * Optional HMAC-SHA3-256 shared-secret token.  When a server is
+ * configured with a non-empty secret, every request must arrive with
+ * an `AUTH <hex-token>` line *before* the verb line:
+ *
+ *   AUTH 64-hex-char-HMAC\n
+ *   CIRCUIT <bytes>\n<body>
+ *
+ * The token is `HMAC-SHA3-256(secret, verb-line)` -- i.e. the secret
+ * is keyed across the second line, which itself carries the body
+ * length.  An attacker who replays the wire then mutates the body
+ * length will mismatch the HMAC and be rejected.  Tokens are
+ * compared in constant time.
+ *
+ * The default (NULL or empty `secret`) is the legacy unauthenticated
+ * mode for backward compatibility with the v0.8.7..v0.8.14 wire.
+ * Set the env var `MOONLAB_CONTROL_SECRET` on the server to require
+ * authentication; pass the same secret to the client via
+ * `moonlab_control_submit_*_auth`.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Set / clear the HMAC shared secret for this server.
+ *        Pass NULL or empty `secret` to disable authentication.
+ *        Safe to call after `open()` but before `run()`.
+ *
+ * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ */
+MOONLAB_API int
+moonlab_control_server_set_secret(moonlab_control_server_t *server,
+                                  const uint8_t            *secret,
+                                  size_t                    secret_len);
+
+/**
+ * @brief Submit a circuit with an HMAC-SHA3-256 authentication token.
+ *        Pass `secret = NULL` / `secret_len = 0` to fall back to the
+ *        unauthenticated path (equivalent to
+ *        `moonlab_control_submit_circuit`).
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_auth(const char    *host,
+                                    uint16_t       port,
+                                    const uint8_t *secret,
+                                    size_t         secret_len,
+                                    const char    *circuit_text,
+                                    size_t         text_len,
+                                    double       **out_probs,
+                                    size_t        *out_num);
+
 #ifdef __cplusplus
 }
 #endif

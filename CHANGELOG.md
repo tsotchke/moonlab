@@ -7,7 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.14.)
+(No unreleased changes since v0.8.15.)
+
+## [0.8.15] - 2026-05-19
+
+**HMAC-SHA3-256 shared-secret authentication.**  Production servers
+can now refuse unauthenticated submissions while staying byte-
+compatible with the v0.8.7..v0.8.14 wire (unauth mode is the default).
+
+### Added
+
+- Wire protocol:
+  ```
+  AUTH <64-hex-token>\n
+  CIRCUIT <bytes>\n<body>
+  ```
+  The token is `HMAC-SHA3-256(secret, verb_line)` -- the same
+  HMAC construction defined in FIPS 198 with SHA3-256 as the inner
+  hash (block rate 136 bytes, digest 32 bytes).  Keying across the
+  verb line cryptographically binds the body length: an attacker
+  who replays the AUTH then mutates `<bytes>` will fail
+  verification.
+
+- `moonlab_control_server_set_secret(server, secret, secret_len)`:
+  configures the shared secret; pass NULL / 0 to clear it.
+
+- `moonlab_control_submit_circuit_auth(host, port, secret,
+  secret_len, text, text_len, **out_probs, *out_num)`: client.
+  When `secret == NULL`, falls back to legacy unauthenticated path.
+
+- Constant-time token comparison (`ct_memcmp`) to neutralize
+  timing-side-channel guesses on the token.
+
+- `tests/integration/test_control_plane_auth.c` (ctest label
+  `control_plane`): four paths --
+  1. matching secret -> OK Bell signature,
+  2. missing AUTH against authed server -> REJECTED,
+  3. wrong secret -> REJECTED (server cleans up gracefully),
+  4. unauthed server tolerates client AUTH (forward-compat).
+
+### Notes
+
+- Default mode is unauthenticated -- no behaviour change for
+  existing v0.8.x clients or tests.
+- Secret is wiped from the server handle in `server_close()` and
+  from worker-thread stack copies after the request completes
+  (best-effort hygiene; no formal guarantees against compiler
+  dead-store elimination).
+- HMAC alone does not provide confidentiality -- pair with TLS
+  in untrusted networks.  TLS transport tracked for v0.8.16+.
+
+### Verified
+
+```
+--- path 1: matching secret -> OK Bell ---
+  OK    OK Bell with matching secret (rc=0, num=4)
+  OK    P[00] = 0.500000
+  OK    P[11] = 0.500000
+
+--- path 2: missing AUTH -> REJECTED ---
+  OK    unauth client -> REJECTED (rc=-405)
+
+--- path 3: wrong secret -> REJECTED ---
+  OK    wrong-secret -> REJECTED (rc=-405)
+
+--- path 4: unauthed server tolerates client AUTH ---
+  OK    unauthed server still accepts AUTH-carrying client (rc=0)
+```
 
 ## [0.8.14] - 2026-05-19
 

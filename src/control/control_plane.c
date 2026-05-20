@@ -10,6 +10,7 @@
 #include "control_plane.h"
 
 #include "../applications/moonlab_qgtl_backend.h"
+#include "../crypto/sha3/sha3.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -51,6 +52,16 @@ static double monotonic_ms(void)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
 }
+
+/* Forward declarations for the v0.8.15 HMAC helpers (defined later
+ * in the file alongside the server lifecycle handle). */
+#define HMAC_BLOCK_SIZE  136
+#define HMAC_DIGEST_SIZE 32
+static void hmac_sha3_256(const uint8_t *key, size_t key_len,
+                          const uint8_t *msg, size_t msg_len,
+                          uint8_t out[HMAC_DIGEST_SIZE]);
+static void hex_encode(const uint8_t *bin, size_t len, char *hex_out);
+static int  ct_memcmp(const void *a, const void *b, size_t n);
 
 /* ------------------------------------------------------------------
  * Wire helpers.
@@ -130,7 +141,9 @@ static int send_err(int fd, int status, const char *msg)
 #define MOONLAB_CONTROL_MAX_BODY_BYTES (1L << 22)   /* 4 MB. */
 #define MOONLAB_CONTROL_MAX_SHOTS      (1L << 20)   /* 1 M samples (8 MB). */
 
-static int handle_one_request(int client_fd)
+static int handle_one_request(int client_fd,
+                              const uint8_t *secret,
+                              size_t         secret_len)
 {
     const double t0 = log_enabled() ? monotonic_ms() : 0.0;
     const char  *log_verb       = "?";
@@ -152,13 +165,64 @@ static int handle_one_request(int client_fd)
     return log_rc;                                                    \
 } while (0)
 
-    /* Header.  Two verbs:
-     *   CIRCUIT <bytes>\n         -- probability mode (v0.8.7+)
-     *   SHOTS   <shots> <bytes>\n -- shots       mode (v0.8.11+) */
-    char hdr[96];
-    size_t hdr_len = 0;
-    int rc = recv_until_newline(client_fd, hdr, sizeof(hdr), &hdr_len);
+    /* Optional auth prelude (v0.8.15):
+     *   AUTH <64-hex-chars>\n
+     * If the server has a secret configured, the AUTH line is
+     * required and the token must be HMAC-SHA3-256(secret, verb_line).
+     */
+    char client_token_hex[128];
+    int  saw_auth = 0;
+    char first[96];
+    size_t first_len = 0;
+    int rc = recv_until_newline(client_fd, first, sizeof(first), &first_len);
     if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
+
+    if (strncmp(first, "AUTH ", 5) == 0) {
+        /* Pull the 64-hex token. */
+        if (first_len < 5 + 64 + 1) {
+            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL, "short AUTH");
+            LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+        }
+        memcpy(client_token_hex, first + 5, 64);
+        client_token_hex[64] = '\0';
+        saw_auth = 1;
+    }
+
+    /* Verb line.  When AUTH preceded, this is the second physical line.
+     * When no AUTH, it's the first line we already received. */
+    char hdr[96];
+    size_t hdr_len = first_len;
+    if (saw_auth) {
+        rc = recv_until_newline(client_fd, hdr, sizeof(hdr), &hdr_len);
+        if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
+    } else {
+        memcpy(hdr, first, first_len);
+        hdr[first_len] = '\0';
+    }
+
+    /* If the server requires auth, validate the token against the
+     * verb line.  HMAC keyed on `secret`, message = the verb line
+     * (`hdr`, including its trailing newline). */
+    if (secret_len > 0) {
+        if (!saw_auth) {
+            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "missing AUTH");
+            LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
+        }
+        uint8_t expected[HMAC_DIGEST_SIZE];
+        hmac_sha3_256(secret, secret_len,
+                      (const uint8_t *)hdr, hdr_len, expected);
+        char expected_hex[2 * HMAC_DIGEST_SIZE + 1];
+        hex_encode(expected, HMAC_DIGEST_SIZE, expected_hex);
+        if (ct_memcmp(expected_hex, client_token_hex, 64) != 0) {
+            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "bad token");
+            LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
+        }
+    } else if (saw_auth) {
+        /* Server doesn't require auth but client sent one.  Accept
+         * gracefully -- this lets a client probe authenticated paths
+         * before the server is configured with a secret. */
+    }
+
 
     int  mode_shots = 0;
     long num_shots  = 0;
@@ -286,15 +350,32 @@ static int handle_one_request(int client_fd)
 
 /* Per-connection worker thread context: owns the client fd. */
 typedef struct {
-    int client_fd;
+    int            client_fd;
+    /* Snapshot of the server's secret at accept time.  Stored by value
+     * so the worker doesn't need to hold a lock against
+     * `set_secret` racing during handoff. */
+    uint8_t        secret[256];
+    size_t         secret_len;
 } worker_ctx_t;
+
+static int handle_one_request(int client_fd,
+                              const uint8_t *secret,
+                              size_t         secret_len);
 
 static void *worker_thread(void *arg)
 {
     worker_ctx_t *ctx = (worker_ctx_t *)arg;
-    int fd = ctx->client_fd;
+    int    fd  = ctx->client_fd;
+    /* Copy the secret onto the worker's stack so we can wipe the
+     * heap-allocated ctx before handling the request. */
+    uint8_t sec[256];
+    size_t  slen = ctx->secret_len;
+    memcpy(sec, ctx->secret, slen);
+    memset(ctx->secret, 0, sizeof(ctx->secret));
     free(ctx);
-    (void)handle_one_request(fd);
+    (void)handle_one_request(fd, slen > 0 ? sec : NULL, slen);
+    /* Zero the secret on the worker stack as a hygiene measure. */
+    memset(sec, 0, sizeof(sec));
     close(fd);
     return NULL;
 }
@@ -309,9 +390,67 @@ static void *worker_thread(void *arg)
  * before close() returns.
  * ------------------------------------------------------------------ */
 
+/* HMAC-SHA3-256 (rate 136 bytes for SHA3-256). */
+static void hmac_sha3_256(const uint8_t *key, size_t key_len,
+                          const uint8_t *msg, size_t msg_len,
+                          uint8_t out[HMAC_DIGEST_SIZE])
+{
+    uint8_t k_pad[HMAC_BLOCK_SIZE];
+    if (key_len > HMAC_BLOCK_SIZE) {
+        sha3_256(key, key_len, k_pad);
+        memset(k_pad + HMAC_DIGEST_SIZE, 0, HMAC_BLOCK_SIZE - HMAC_DIGEST_SIZE);
+    } else {
+        memcpy(k_pad, key, key_len);
+        memset(k_pad + key_len, 0, HMAC_BLOCK_SIZE - key_len);
+    }
+
+    uint8_t ipad[HMAC_BLOCK_SIZE], opad[HMAC_BLOCK_SIZE];
+    for (size_t i = 0; i < HMAC_BLOCK_SIZE; i++) {
+        ipad[i] = k_pad[i] ^ 0x36;
+        opad[i] = k_pad[i] ^ 0x5C;
+    }
+
+    sha3_ctx_t inner;
+    sha3_256_init(&inner);
+    sha3_update(&inner, ipad, HMAC_BLOCK_SIZE);
+    sha3_update(&inner, msg, msg_len);
+    uint8_t inner_digest[HMAC_DIGEST_SIZE];
+    sha3_final(&inner, inner_digest);
+
+    sha3_ctx_t outer;
+    sha3_256_init(&outer);
+    sha3_update(&outer, opad, HMAC_BLOCK_SIZE);
+    sha3_update(&outer, inner_digest, HMAC_DIGEST_SIZE);
+    sha3_final(&outer, out);
+}
+
+static void hex_encode(const uint8_t *bin, size_t len, char *hex_out)
+{
+    static const char digits[] = "0123456789abcdef";
+    for (size_t i = 0; i < len; i++) {
+        hex_out[2 * i]     = digits[(bin[i] >> 4) & 0xF];
+        hex_out[2 * i + 1] = digits[ bin[i]       & 0xF];
+    }
+    hex_out[2 * len] = '\0';
+}
+
+/* Constant-time comparison.  Returns 0 if equal, nonzero otherwise. */
+static int ct_memcmp(const void *a, const void *b, size_t n)
+{
+    const uint8_t *aa = (const uint8_t *)a;
+    const uint8_t *bb = (const uint8_t *)b;
+    uint8_t diff = 0;
+    for (size_t i = 0; i < n; i++) diff |= aa[i] ^ bb[i];
+    return diff;
+}
+
 struct moonlab_control_server {
-    int srv_fd;
-    int wake_pipe[2];   /* [0] = read end, [1] = write end. */
+    int     srv_fd;
+    int     wake_pipe[2];   /* [0] = read end, [1] = write end. */
+    /* HMAC shared secret (since v0.8.15).  Empty by default
+     * (unauthenticated, backward-compatible with v0.8.7..v0.8.14). */
+    uint8_t secret[256];
+    size_t  secret_len;
 };
 
 int moonlab_control_server_open(const char                 *host,
@@ -420,16 +559,23 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 
         worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
         if (!ctx) {
-            (void)handle_one_request(client);
+            (void)handle_one_request(client,
+                                     s->secret_len > 0 ? s->secret : NULL,
+                                     s->secret_len);
             close(client);
             served++;
             continue;
         }
-        ctx->client_fd = client;
+        ctx->client_fd  = client;
+        ctx->secret_len = s->secret_len;
+        if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
 
         if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
-            (void)handle_one_request(client);
+            (void)handle_one_request(client,
+                                     ctx->secret_len > 0 ? ctx->secret : NULL,
+                                     ctx->secret_len);
             close(client);
+            memset(ctx->secret, 0, sizeof(ctx->secret));
             free(ctx);
         } else {
             worker_count++;
@@ -461,7 +607,29 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     if (s->srv_fd      >= 0) { close(s->srv_fd);      s->srv_fd      = -1; }
     if (s->wake_pipe[0] >= 0) { close(s->wake_pipe[0]); s->wake_pipe[0] = -1; }
     if (s->wake_pipe[1] >= 0) { close(s->wake_pipe[1]); s->wake_pipe[1] = -1; }
+    /* Wipe the secret before free() returns the heap chunk to the
+     * allocator -- best-effort hygiene against later-allocator reuse
+     * exposing key material. */
+    memset(s->secret, 0, sizeof(s->secret));
+    s->secret_len = 0;
     free(s);
+}
+
+int moonlab_control_server_set_secret(moonlab_control_server_t *s,
+                                      const uint8_t *secret,
+                                      size_t         secret_len)
+{
+    if (!s) return MOONLAB_CONTROL_BAD_ARG;
+    if (secret_len > sizeof(s->secret)) return MOONLAB_CONTROL_BAD_ARG;
+
+    memset(s->secret, 0, sizeof(s->secret));
+    if (secret && secret_len > 0) {
+        memcpy(s->secret, secret, secret_len);
+        s->secret_len = secret_len;
+    } else {
+        s->secret_len = 0;
+    }
+    return MOONLAB_CONTROL_OK;
 }
 
 int moonlab_control_serve(const char *host,
@@ -521,6 +689,92 @@ int moonlab_control_submit_circuit(const char *host,
         return MOONLAB_CONTROL_IO_ERROR;
     }
     int rc = send_all(fd, hdr, (size_t)hn);
+    if (rc == MOONLAB_CONTROL_OK) {
+        rc = send_all(fd, circuit_text, text_len);
+    }
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    char resp_hdr[128];
+    size_t resp_len = 0;
+    rc = recv_until_newline(fd, resp_hdr, sizeof(resp_hdr), &resp_len);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    if (strncmp(resp_hdr, "OK ", 3) == 0) {
+        size_t num = 0;
+        if (sscanf(resp_hdr + 3, "%zu", &num) != 1 || num == 0 || num > (1ULL << 30)) {
+            close(fd);
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        double *probs = (double *)malloc(num * sizeof(double));
+        if (!probs) { close(fd); return MOONLAB_CONTROL_OOM; }
+        rc = recv_all(fd, probs, num * sizeof(double));
+        close(fd);
+        if (rc != MOONLAB_CONTROL_OK) { free(probs); return rc; }
+        *out_probs = probs;
+        *out_num   = num;
+        return MOONLAB_CONTROL_OK;
+    } else {
+        close(fd);
+        return MOONLAB_CONTROL_REJECTED;
+    }
+}
+
+int moonlab_control_submit_circuit_auth(const char    *host,
+                                        uint16_t       port,
+                                        const uint8_t *secret,
+                                        size_t         secret_len,
+                                        const char    *circuit_text,
+                                        size_t         text_len,
+                                        double       **out_probs,
+                                        size_t        *out_num)
+{
+    if (!host || !circuit_text || !out_probs || !out_num) {
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    *out_probs = NULL;
+    *out_num   = 0;
+
+    if (text_len == 0) text_len = strlen(circuit_text);
+    if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd);
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    char verb_line[64];
+    int  vn = snprintf(verb_line, sizeof(verb_line),
+                       "CIRCUIT %zu\n", text_len);
+    if (vn < 0 || (size_t)vn >= sizeof(verb_line)) {
+        close(fd);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    int rc = MOONLAB_CONTROL_OK;
+    if (secret && secret_len > 0) {
+        uint8_t tok[HMAC_DIGEST_SIZE];
+        hmac_sha3_256(secret, secret_len,
+                      (const uint8_t *)verb_line, (size_t)vn, tok);
+        char auth_line[5 + 2 * HMAC_DIGEST_SIZE + 2];
+        memcpy(auth_line, "AUTH ", 5);
+        hex_encode(tok, HMAC_DIGEST_SIZE, auth_line + 5);
+        auth_line[5 + 64] = '\n';
+        rc = send_all(fd, auth_line, 5 + 64 + 1);
+    }
+    if (rc == MOONLAB_CONTROL_OK) {
+        rc = send_all(fd, verb_line, (size_t)vn);
+    }
     if (rc == MOONLAB_CONTROL_OK) {
         rc = send_all(fd, circuit_text, text_len);
     }
