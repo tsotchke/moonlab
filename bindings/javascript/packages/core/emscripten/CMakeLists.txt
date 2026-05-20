@@ -94,6 +94,10 @@ set(APPLICATION_SOURCES
     # Exact MWPM decoder for the toric code -- referenced by
     # decoder_bench.c via moonlab_mwpm_exact_decode_toric.
     ${QSIM_ROOT}/src/applications/mwpm_exact.c
+    # Vendor-noise emulator backends (since v1.1) -- IBM Falcon /
+    # Rigetti Aspen / IonQ Forte stochastic-Pauli emulators that
+    # plug into the scheduler's backend registry.
+    ${QSIM_ROOT}/src/applications/vendor_noise_backend.c
     ${QSIM_ROOT}/src/distributed/scheduler.c
 )
 
