@@ -182,6 +182,112 @@ static void test_error_paths(void)
     moonlab_job_free(NULL); /* must not crash */
 }
 
+/* ----------------------------------------------------------------
+ * Backend plug-in surface (since v1.1.0)
+ * ---------------------------------------------------------------- */
+
+/* Stub backend that always emits outcome `0xA5` regardless of the
+ * circuit.  Useful for confirming the scheduler dispatches through
+ * the registry rather than the default simulator path. */
+static int stub_backend_execute(const moonlab_job_t       *job,
+                                moonlab_job_results_t     *out,
+                                void                      *ctx)
+{
+    int *call_count = (int *)ctx;
+    if (call_count) (*call_count)++;
+    const int total = moonlab_job_num_shots(job);
+    out->num_qubits       = moonlab_job_num_qubits(job);
+    out->total_shots      = total;
+    out->num_workers_used = 1;
+    out->outcomes        = (uint64_t *)malloc((size_t)total * sizeof(uint64_t));
+    out->worker_seconds  = (double *)calloc(1, sizeof(double));
+    if (!out->outcomes || !out->worker_seconds) return MOONLAB_SCHED_OOM;
+    for (int s = 0; s < total; s++) out->outcomes[s] = 0xA5;
+    out->worker_seconds[0] = 0.0;
+    return MOONLAB_SCHED_OK;
+}
+
+static void test_backend_default_simulator_registered(void)
+{
+    fprintf(stdout, "\n--- backend: default simulator auto-registered ---\n");
+    const moonlab_backend_t *sim = moonlab_find_backend("simulator");
+    CHECK(sim != NULL, "find_backend(\"simulator\") returns non-NULL");
+    if (sim) {
+        CHECK(strcmp(sim->name, "simulator") == 0, "name = \"simulator\"");
+        CHECK(sim->execute != NULL, "execute fn set");
+    }
+    /* num_backends >= 1 (could include later-registered backends). */
+    CHECK(moonlab_num_backends() >= 1, "num_backends >= 1");
+}
+
+static void test_backend_register_dispatch(void)
+{
+    fprintf(stdout, "\n--- backend: register + dispatch through stub ---\n");
+    int hits = 0;
+    moonlab_backend_t stub = {
+        .name        = "test-stub",
+        .execute     = stub_backend_execute,
+        .ctx         = &hits,
+        .description = "stub backend: every outcome = 0xA5"
+    };
+    CHECK(moonlab_register_backend(&stub) == 0, "register OK");
+    CHECK(moonlab_find_backend("test-stub") != NULL, "lookup succeeds");
+
+    moonlab_job_t *j = make_bell_job(64, 1);
+    CHECK(moonlab_job_set_backend(j, "test-stub") == 0, "set_backend OK");
+    CHECK(strcmp(moonlab_job_backend(j), "test-stub") == 0,
+          "job_backend round-trips");
+
+    moonlab_job_results_t res = {0};
+    CHECK(moonlab_scheduler_run(j, &res) == 0, "scheduler_run via stub");
+    CHECK(hits == 1, "stub executed exactly once (hits = %d)", hits);
+    CHECK(res.total_shots == 64, "outcomes carry through");
+    int n_a5 = 0;
+    for (int s = 0; s < res.total_shots; s++) {
+        if (res.outcomes[s] == 0xA5) n_a5++;
+    }
+    CHECK(n_a5 == 64, "every outcome is the stub sentinel 0xA5 (got %d)", n_a5);
+
+    moonlab_job_results_free(&res);
+    moonlab_job_free(j);
+    CHECK(moonlab_unregister_backend("test-stub") == 0, "unregister OK");
+    CHECK(moonlab_find_backend("test-stub") == NULL,
+          "lookup fails after unregister");
+}
+
+static void test_backend_unknown_name_fails(void)
+{
+    fprintf(stdout, "\n--- backend: unknown name -> hard error ---\n");
+    moonlab_job_t *j = make_bell_job(8, 1);
+    CHECK(moonlab_job_set_backend(j, "does-not-exist") == 0, "set name OK");
+    moonlab_job_results_t res = {0};
+    const int rc = moonlab_scheduler_run(j, &res);
+    CHECK(rc == MOONLAB_SCHED_BACKEND_NOT_FOUND,
+          "unknown backend -> BACKEND_NOT_FOUND (got %d)", rc);
+    moonlab_job_results_free(&res);
+    moonlab_job_free(j);
+}
+
+static void test_backend_clear_uses_simulator(void)
+{
+    fprintf(stdout, "\n--- backend: NULL clears to simulator default ---\n");
+    moonlab_job_t *j = make_bell_job(256, 2);
+    CHECK(moonlab_job_set_backend(j, "test-clear") == 0, "set a name first");
+    CHECK(moonlab_job_set_backend(j, NULL) == 0, "set NULL clears");
+    CHECK(moonlab_job_backend(j) == NULL, "job_backend now NULL");
+
+    moonlab_job_results_t res = {0};
+    CHECK(moonlab_scheduler_run(j, &res) == 0, "scheduler_run uses simulator");
+    /* Bell outcomes again. */
+    int n_other = 0;
+    for (int s = 0; s < 256; s++) {
+        if (res.outcomes[s] != 0 && res.outcomes[s] != 3) n_other++;
+    }
+    CHECK(n_other == 0, "default-path outcomes still Bell-correlated");
+    moonlab_job_results_free(&res);
+    moonlab_job_free(j);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -192,6 +298,10 @@ int main(void)
     test_ghz_3_workers();
     test_json_serialisation();
     test_error_paths();
+    test_backend_default_simulator_registered();
+    test_backend_register_dispatch();
+    test_backend_unknown_name_fails();
+    test_backend_clear_uses_simulator();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
