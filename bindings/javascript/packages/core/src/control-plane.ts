@@ -27,6 +27,7 @@
 import net from 'node:net';
 import tls from 'node:tls';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import type { Socket } from 'node:net';
 
 /** Status codes mirror the C control_plane.h enum.  Negative on
@@ -70,6 +71,11 @@ export interface SubmitCircuitArgs {
   /** Per-request socket timeout in milliseconds.  Default 30s. */
   timeoutMs?: number;
   tls?: TlsOptions;
+  /** HMAC-SHA3-256 shared secret.  When set, an ``AUTH <hexdigest>``
+   *  line is sent before the verb line.  The server must have the
+   *  matching secret configured via
+   *  ``moonlab_control_server_set_secret``. */
+  secret?: Buffer | string;
 }
 
 export interface SubmitShotsArgs extends SubmitCircuitArgs {
@@ -250,6 +256,18 @@ function parseHeader(line: Buffer, rest: Buffer): ReplyFraming {
   };
 }
 
+/** Compute the AUTH-prelude hexdigest for a given verb line.  The
+ *  message is the verb line *including* the trailing newline -- this
+ *  matches the C server's `hmac_sha3_256(secret, hdr, hdr_len)`
+ *  call where `hdr_len` includes the `\n`. */
+function authPrelude(secret: Buffer | string, verbLine: Buffer): Buffer {
+  const key = typeof secret === 'string' ? Buffer.from(secret, 'utf-8') : secret;
+  const h = crypto.createHmac('sha3-256', key);
+  h.update(verbLine);
+  const hex = h.digest('hex');
+  return Buffer.from(`AUTH ${hex}\n`, 'ascii');
+}
+
 function rejectionFromErr(remainder: string): ControlPlaneError {
   // remainder is "<code> <msg>" from the server's "ERR <code> <msg>\n".
   const sp = remainder.indexOf(' ');
@@ -274,8 +292,11 @@ export async function submitCircuit(args: SubmitCircuitArgs): Promise<number[]> 
   const sock = await openSocket({ ...args, timeoutMs });
   try {
     const body = Buffer.from(args.circuitText, 'utf-8');
-    const header = `CIRCUIT ${body.length}\n`;
-    sock.write(header);
+    const verbLine = Buffer.from(`CIRCUIT ${body.length}\n`, 'ascii');
+    if (args.secret) {
+      sock.write(authPrelude(args.secret, verbLine));
+    }
+    sock.write(verbLine);
     sock.write(body);
     const { line, rest } = await readUntilNewline(sock, timeoutMs);
     const fr = parseHeader(line, rest);
@@ -305,8 +326,12 @@ export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
   const sock = await openSocket({ ...args, timeoutMs });
   try {
     const body = Buffer.from(args.circuitText, 'utf-8');
-    const header = `SHOTS ${args.numShots} ${body.length}\n`;
-    sock.write(header);
+    const verbLine = Buffer.from(
+      `SHOTS ${args.numShots} ${body.length}\n`, 'ascii');
+    if (args.secret) {
+      sock.write(authPrelude(args.secret, verbLine));
+    }
+    sock.write(verbLine);
     sock.write(body);
     const { line, rest } = await readUntilNewline(sock, timeoutMs);
     const fr = parseHeader(line, rest);

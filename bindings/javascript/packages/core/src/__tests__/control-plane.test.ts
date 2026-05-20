@@ -204,6 +204,53 @@ describe('control-plane Node client', () => {
     }
   });
 
+  it('AUTH prelude HMAC matches the verb line including \\n', async () => {
+    // The fake server captures the first two lines (AUTH + verb) and
+    // verifies them by recomputing the HMAC against the verb line.
+    let observedAuth: string | null = null;
+    let observedVerb: string | null = null;
+    const SECRET = Buffer.from('topsecret');
+    const server = await spinFakeServer(async (sock) => {
+      const line1 = await readUntilNewline(sock);
+      // Strip up to first newline -- may include verb-line bytes too
+      const nl = line1.indexOf(0x0a);
+      observedAuth = line1.subarray(0, nl).toString('ascii');
+      const after = line1.subarray(nl + 1);
+      // The verb line might already be in `after`; if not, read more.
+      let rest = after;
+      const nl2 = rest.indexOf(0x0a);
+      if (nl2 < 0) {
+        const more = await readUntilNewline(sock);
+        rest = Buffer.concat([rest, more]);
+      }
+      const nl3 = rest.indexOf(0x0a);
+      observedVerb = rest.subarray(0, nl3).toString('ascii') + '\n';
+      const buf = Buffer.alloc(32);
+      buf.writeDoubleLE(0.5, 0); buf.writeDoubleLE(0.5, 24);
+      sock.write('OK 4\n');
+      sock.write(buf);
+      sock.end();
+    });
+    try {
+      await submitCircuit({
+        host: '127.0.0.1', port: server.port,
+        circuitText: 'whatever',
+        secret: SECRET,
+      });
+    } finally {
+      await server.close();
+    }
+    expect(observedAuth).toMatch(/^AUTH [0-9a-f]{64}$/);
+    expect(observedVerb).toBe('CIRCUIT 8\n');
+
+    // Cross-check the hex against an independent HMAC computation.
+    const h = (await import('node:crypto'))
+      .createHmac('sha3-256', SECRET);
+    h.update(Buffer.from(observedVerb!, 'ascii'));
+    const expected = h.digest('hex');
+    expect(observedAuth).toBe(`AUTH ${expected}`);
+  });
+
   it('connection refused surfaces as a rejected promise', async () => {
     await expect(
       submitHealth({ host: '127.0.0.1', port: 1, timeoutMs: 500 }),

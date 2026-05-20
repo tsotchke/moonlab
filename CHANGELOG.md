@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.9.3.)
+(No unreleased changes since v0.9.4.)
+
+## [0.9.4] - 2026-05-20
+
+**JS control-plane HMAC-SHA3 auth.**  Closes the last cross-language
+parity gap on the secured-server path -- the JS client now matches
+Python and Rust on the AUTH prelude.
+
+### Added
+
+- `submitCircuit` and `submitShots` in the Node control-plane client
+  accept an optional ``secret: Buffer | string``.  When set, the
+  client sends an ``AUTH <hex>`` line before the verb header, where
+  ``<hex>`` is ``HMAC-SHA3-256(secret, verb_line_with_newline)``
+  computed via Node's ``crypto.createHmac('sha3-256', ...)``.
+  Matches the C server's ``hmac_sha3_256`` over ``hdr_len`` (which
+  includes the framing ``\n``).
+
+- Vitest unit test (`control-plane.test.ts`) verifies the AUTH line
+  matches an independent HMAC computation, with the verb line bytes
+  observed exactly as the server would see them.
+
+- Vitest cross-language integration test
+  (`control-plane.integration.test.ts`) runs three-way against a
+  real Python-hosted ``ControlPlaneServer`` configured with a shared
+  secret: rejects without a secret, succeeds with the matching
+  secret on a Bell pair, rejects with a wrong secret.
+
+### Verified
+
+```
+$ npx vitest run src/__tests__/control-plane.test.ts
+9 passed in 92ms
+
+$ npx vitest run --config vitest.integration.config.ts \
+     src/__tests__/control-plane.integration.test.ts
+4 passed in 687ms      (real libquantumsim + secured Python harness
+                        + JS client across no-secret / right-secret
+                        / wrong-secret paths)
+```
 
 ## [0.9.3] - 2026-05-20
 
