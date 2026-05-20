@@ -24,7 +24,7 @@ use moonlab_sys::{
     moonlab_control_server_set_rate_limit, moonlab_control_server_set_secret,
     moonlab_control_server_shutdown, moonlab_control_server_t,
     moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
-    moonlab_control_submit_health,
+    moonlab_control_submit_health, moonlab_control_submit_metrics,
 };
 use std::ffi::CString;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -372,6 +372,28 @@ impl ControlPlaneServer {
         }
         Ok(())
     }
+}
+
+/// Scrape the v0.8.23 METRICS endpoint and return the Prometheus
+/// text-format exposition body.  Since v0.8.24 (Rust binding).
+pub fn submit_metrics(host: &str, port: u16) -> Result<String> {
+    let host_c = CString::new(host)
+        .map_err(|e| QuantumError::Ffi(format!("invalid host: {e}")))?;
+    let mut text_ptr: *mut std::ffi::c_char = std::ptr::null_mut();
+    let rc = unsafe {
+        moonlab_control_submit_metrics(host_c.as_ptr(), port, &mut text_ptr as *mut _)
+    };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(format!("submit_metrics rc={rc}")));
+    }
+    if text_ptr.is_null() {
+        return Err(QuantumError::Ffi("submit_metrics returned NULL body".into()));
+    }
+    let body = unsafe { std::ffi::CStr::from_ptr(text_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { libc::free(text_ptr as *mut libc::c_void); }
+    Ok(body)
 }
 
 /// HEALTH probe -- since v0.8.22 (Rust binding) / v0.8.21 (C server).
