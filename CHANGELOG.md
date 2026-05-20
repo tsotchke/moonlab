@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.11.)
+(No unreleased changes since v0.8.12.)
+
+## [0.8.12] - 2026-05-19
+
+**Python + Rust shots-mode clients.**  Completes binding parity on
+the v0.8.11 wire verb across all three languages.
+
+### Added
+
+- `moonlab.control_plane.submit_circuit_shots(host, port, text,
+  num_shots, timeout=30.0) -> list[int]` -- stdlib socket / struct.
+- `moonlab::control_plane::submit_circuit_shots(host, port, text,
+  num_shots) -> Result<Vec<u64>>` -- stdlib TcpStream / BufReader.
+- `bindings/rust/moonlab/tests/control_plane_shots_e2e.rs`:
+  1024 Bell samples requested, every outcome must be 0 or 3.
+
+### Verified
+
+```
+got 1024 outcomes: 1024 Bell, 0 off-Bell      (Python)
+test bell_shots_round_trip ... ok              (Rust cargo test)
+```
 
 ## [0.8.11] - 2026-05-19
 
