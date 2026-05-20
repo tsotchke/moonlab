@@ -829,6 +829,9 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/moonlab_qgtl_backend.c
     src/applications/decoder_bench.c
     src/applications/mwpm_exact.c
+    # Vendor-noise emulator backends (IBM Falcon / Rigetti Aspen / IonQ Forte)
+    # consume QGTL circuits via the scheduler's backend plug-in surface.
+    src/applications/vendor_noise_backend.c
     src/distributed/scheduler.c
     # Control plane (since v0.8.7): POSIX-socket TCP transport for the
     # v0.8.3 moonlab-circuit v1 wire format.  v0.8.17 OpenSSL TLS path

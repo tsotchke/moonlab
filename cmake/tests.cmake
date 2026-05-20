@@ -988,6 +988,20 @@
         TIMEOUT 60
     )
 
+    # Vendor-noise emulator backends (since v1.1).  IBM Falcon /
+    # Rigetti Aspen / IonQ Forte stochastic-Pauli emulators plug
+    # into the scheduler's backend registry.  Bell-pair shot
+    # statistics verify noise actually fires and that cleaner
+    # gates (IonQ) yield fewer off-Bell outcomes than noisier
+    # gates (Rigetti) on the same seed.
+    add_executable(test_vendor_noise_backend tests/unit/test_vendor_noise_backend.c)
+    target_link_libraries(test_vendor_noise_backend PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_vendor_noise_backend COMMAND test_vendor_noise_backend)
+    set_tests_properties(unit_vendor_noise_backend PROPERTIES
+        LABELS "distributed"
+        TIMEOUT 60
+    )
+
     # MPI scheduler transport (since v0.7.4) -- only built when
     # QSIM_ENABLE_MPI=ON, runs under mpirun -n 4 if available.
     if(QSIM_HAS_MPI)
