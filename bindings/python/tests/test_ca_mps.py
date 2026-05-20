@@ -91,3 +91,50 @@ def test_var_d_run_short_smoke():
     )
     assert np.isfinite(energy)
     assert abs(s.norm - 1.0) < 1e-3   # imag-time renormalises
+
+
+def test_sample_z_bell():
+    """Bell-pair Born-rule sampling: 4096 shots, only 00 and 11
+    outcomes, ~50/50 split."""
+    s = moonlab.CAMPS(num_qubits=2, max_bond_dim=16)
+    s.h(0)
+    s.cnot(0, 1)
+
+    rng = np.random.default_rng(seed=2026)
+    bits = s.sample_z(num_samples=4096, rng=rng)
+
+    assert bits.shape == (4096, 2)
+    assert bits.dtype == np.uint8
+
+    int_outcomes = bits[:, 0].astype(int) * 2 + bits[:, 1].astype(int)
+    assert set(np.unique(int_outcomes).tolist()) <= {0, 3}
+
+    p00 = float(np.sum(int_outcomes == 0)) / 4096
+    p11 = float(np.sum(int_outcomes == 3)) / 4096
+    assert abs(p00 - 0.5) < 0.08
+    assert abs(p11 - 0.5) < 0.08
+    assert abs(p00 + p11 - 1.0) < 1e-12
+
+
+def test_sample_z_ghz4():
+    """GHZ_4: only 0000 and 1111 outcomes."""
+    n = 4
+    s = moonlab.CAMPS(num_qubits=n, max_bond_dim=16)
+    s.h(0)
+    for k in range(1, n):
+        s.cnot(k - 1, k)
+
+    rng = np.random.default_rng(seed=2027)
+    bits = s.sample_z(num_samples=4096, rng=rng)
+
+    int_outcomes = sum((bits[:, i].astype(int) << i) for i in range(n))
+    support = set(int(x) for x in np.unique(int_outcomes))
+    assert support <= {0, 15}, f"GHZ_4 support escaped: {support}"
+
+
+def test_sample_z_zero_shots():
+    """Zero-shot returns empty (0, n) array without crashing."""
+    s = moonlab.CAMPS(num_qubits=3, max_bond_dim=8)
+    bits = s.sample_z(num_samples=0)
+    assert bits.shape == (0, 3)
+    assert bits.dtype == np.uint8

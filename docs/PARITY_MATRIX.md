@@ -31,7 +31,7 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 | DMRG (variational ground state)         | ✅  | `algorithms.py` ¹ | `tdvp.rs` ¹ | ◐ ²              |
 | CA-MPS (Clifford-assisted MPS)          | ✅  | `ca_mps.py` | `ca_mps.rs`       | `ca-mps.ts`       |
 | CA-MPS variational-D (Clifford search)  | ✅  | `ca_mps.py` | `ca_mps.rs`       | ◐ ³              |
-| CA-MPS Born-rule sampling (since v0.10) | ✅  | ◐ ⁴        | ◐ ⁴              | ◐ ⁴              |
+| CA-MPS Born-rule sampling (since v0.10) | ✅  | `ca_mps.py` | `ca_mps.rs`       | ◐ ⁴              |
 | CA-PEPS 2D                              | ✅  | `ca_peps.py`| `ca_peps.rs`      | `ca-peps.ts`      |
 
 ## Quantum geometry + topology
@@ -100,8 +100,10 @@ high-level DMRG driver; build one out of the primitives or use Python
 ³ JS exposes CA-MPS gates but not the variational-D Clifford search;
 the inner loop wants tight C-side coupling.
 
-⁴ `moonlab_ca_mps_sample_z` is C-only as of v1.0.  The header tags
-mark it for binding parity in v1.1.
+⁴ `moonlab_ca_mps_sample_z` is C + Python + Rust as of the v1.0 line;
+JS still uses the WASM build that predates the v0.10.0 symbol.  Once
+the WASM rebuilds against the current libquantumsim the JS wrapper
+trivially follows (no algorithmic work).
 
 ⁵ JS binds the MPS state through `tensor-network.ts` but the
 adaptive-bond TDVP driver is in the separate `tdvp.ts` module.
