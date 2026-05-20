@@ -105,6 +105,75 @@ MOONLAB_API int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot);
 /** @brief Human-readable name for a slot, useful for JSON output. */
 MOONLAB_API const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot);
 
+/* ------------------------------------------------------------------
+ * Runtime decoder registry (since v1.0.3)
+ *
+ * Parallel to moonlab_register_backend in the scheduler.  Lets
+ * private overlays plug new decoders in at runtime under a name,
+ * without touching the moonlab_decoder_kind_t enum (which stays the
+ * stable wire-level slot tag).  Five baked-in decoders auto-register
+ * at first use: "greedy", "mwpm_exact", "sbnn", "libirrep_single_shot",
+ * "pymatching".  Their availability is governed by the same build
+ * flags as the enum dispatcher (CPU-only decoders always available;
+ * SBNN / LIBIRREP_SS gated on link-time presence; PYMATCHING gated
+ * on the bridge script path).
+ *
+ * Use cases for the registry:
+ *
+ *   - Private overlay registers a proprietary decoder ("tsotchke-bp-osd")
+ *     without code changes in the public moonlab tree.
+ *   - Benchmarks can compare across registered names instead of
+ *     enumerating slots, so adding a decoder is a one-line registry call.
+ *   - QGTL or any external project can swap in a hardware-decoded path
+ *     by registering a thin wrapper that submits to its decoder service.
+ * ------------------------------------------------------------------ */
+
+/** @brief Decoder function signature.  Same semantics as the enum
+ *  dispatcher: read `in->syndromes`, write `in->corrections`, return
+ *  MOONLAB_DECODER_OK on success or a negative status code on
+ *  failure.  `ctx` is the opaque pointer passed at registration. */
+typedef int (*moonlab_decoder_fn)(const moonlab_decoder_input_t *in,
+                                  void                          *ctx);
+
+/** @brief Registered decoder record.  Names are stored as a strdup'd
+ *  copy so callers may free their string after register; descriptions
+ *  are likewise copied. */
+typedef struct {
+    const char         *name;        /**< stable, registry-owned */
+    moonlab_decoder_fn  fn;          /**< implementation pointer */
+    void               *ctx;         /**< user context, passed to fn */
+    const char         *description; /**< human-readable, registry-owned */
+} moonlab_decoder_entry_t;
+
+/** @brief Register (or replace) a decoder under `name`.  Returns 0
+ *  on success, MOONLAB_DECODER_BAD_ARG on NULL input or registry-full. */
+MOONLAB_API int moonlab_register_decoder(const char         *name,
+                                         moonlab_decoder_fn  fn,
+                                         void               *ctx,
+                                         const char         *description);
+
+/** @brief Remove a decoder from the registry.  Returns 0 on success,
+ *  negative on not-found. */
+MOONLAB_API int moonlab_unregister_decoder(const char *name);
+
+/** @brief Look up a decoder by name.  Returns NULL if not registered. */
+MOONLAB_API const moonlab_decoder_entry_t *
+moonlab_lookup_decoder(const char *name);
+
+/** @brief Dispatch decode-by-name.  Equivalent to looking up `name`
+ *  and calling its fn.  Returns MOONLAB_DECODER_BAD_ARG if `name` is
+ *  not registered (which is the runtime equivalent of an unknown enum). */
+MOONLAB_API int
+moonlab_decoder_decode_by_name(const char                     *name,
+                               const moonlab_decoder_input_t  *in);
+
+/** @brief Number of decoders currently registered. */
+MOONLAB_API int moonlab_num_decoders(void);
+
+/** @brief Copy up to `max` registered decoder names into `out_names`.
+ *  Returns the number copied. */
+MOONLAB_API int moonlab_list_decoders(const char **out_names, int max);
+
 #ifdef __cplusplus
 }
 #endif
