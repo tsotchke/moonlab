@@ -1002,6 +1002,19 @@
         TIMEOUT 60
     )
 
+    # Cross-repo platform integration smoke (since v1.1) -- exercises
+    # the moonlab + QGTL + libirrep + SbNN integration contract.
+    # Verifies QGTL ingestion + scheduler + vendor-noise dispatch
+    # + libirrep bridge availability honesty + SbNN decoder slot
+    # availability honesty all match the documented surface.
+    add_executable(test_platform_integration tests/integration/test_platform_integration.c)
+    target_link_libraries(test_platform_integration PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME integration_platform COMMAND test_platform_integration)
+    set_tests_properties(integration_platform PROPERTIES
+        LABELS "platform;distributed"
+        TIMEOUT 60
+    )
+
     # MPI scheduler transport (since v0.7.4) -- only built when
     # QSIM_ENABLE_MPI=ON, runs under mpirun -n 4 if available.
     if(QSIM_HAS_MPI)
