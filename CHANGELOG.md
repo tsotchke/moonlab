@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.19.)
+(No unreleased changes since v0.8.20.)
+
+## [0.8.20] - 2026-05-19
+
+**Python + Rust mTLS clients.**  Binding-language parity for the
+v0.8.19 mutual-TLS surface.  Each client can now present an X.509
+identity card to the server.
+
+### Added
+
+- Python `submit_circuit_tls(..., client_cert_path=..., client_key_path=...)`:
+  opt-in mTLS via `ssl.SSLContext.load_cert_chain`.  Same function
+  as the v0.8.18 entry; mTLS becomes active when both cert + key
+  paths are non-None.  Composes with the v0.8.16 `secret` kwarg.
+
+- Rust `submit_circuit_mtls(host, port, text, server_ca_path,
+  client_cert_path, client_key_path, insecure, secret)`: FFI thunk
+  over the C `moonlab_control_submit_circuit_mtls`.  Mirrors the
+  `submit_circuit_tls` shape, adds two required cert/key string
+  args, and the same optional HMAC `secret`.
+
+- `moonlab-sys` allowlist adds
+  `moonlab_control_server_require_client_cert` and
+  `moonlab_control_submit_circuit_mtls`.
+
+- `bindings/rust/moonlab/tests/control_plane_mtls_e2e.rs`:
+  shells out to `openssl req` + `openssl x509` to mint a CA,
+  server-cert, and client-cert; configures the C server with
+  `use_tls` + `require_client_cert`, then exercises both:
+   - Path 1: client with CA-signed cert -> Bell signature OK
+   - Path 2: client without cert via `submit_circuit_tls` -> Err
+
+### Verified
+
+```
+Rust:     test bell_round_trips_over_mtls ... ok
+Python:   server up on port 55639 (mTLS)
+          OK   client with cert -> Bell over mTLS
+```
 
 ## [0.8.19] - 2026-05-19
 
