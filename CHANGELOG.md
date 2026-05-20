@@ -7,7 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.16.)
+(No unreleased changes since v0.8.17.)
+
+## [0.8.17] - 2026-05-19
+
+**TLS via OpenSSL.**  Wire confidentiality + server identity on the
+control plane, gated by `-DQSIM_ENABLE_TLS=ON`.
+
+### Added
+
+- `QSIM_ENABLE_TLS` CMake option (default OFF).  When ON, calls
+  `find_package(OpenSSL)` -- finds Homebrew openssl@3 on macOS
+  automatically, system openssl on Linux -- and defines
+  `MOONLAB_HAVE_TLS=1`.  Hard-fails configure if requested but
+  OpenSSL is missing (consistent with the other `QSIM_ENABLE_*`
+  options).
+
+- Transport abstraction: every send/recv now routes through a
+  `moonlab_io_t` whose `ssl` member, when non-NULL, switches the
+  helpers to `SSL_read` / `SSL_write`.  Plain-TCP unchanged.
+
+- Server: `moonlab_control_server_use_tls(server, cert_path, key_path)`
+  loads a PEM certificate + private key into an `SSL_CTX` stored on
+  the server handle.  Every accepted connection then runs
+  `SSL_accept` inside the worker thread before
+  `handle_one_request`.  Pass `cert_path = key_path = NULL` to
+  disable TLS on an already-configured server.
+
+- Client: `moonlab_control_submit_circuit_tls(host, port, ca_path,
+  insecure, secret, secret_len, text, text_len, **out_probs,
+  *out_num)`.  Composes with HMAC (`secret` non-NULL adds the
+  AUTH prelude inside the TLS channel) and with the CA-pinning /
+  insecure-mode toggle.  TLS 1.2 minimum.
+
+- New status code `MOONLAB_CONTROL_TLS_ERROR (-407)` for
+  certificate-load and handshake failures.
+
+- `tests/integration/test_control_plane_tls.c` (ctest label
+  `control_plane;tls`, only added when `QSIM_HAS_TLS=ON`):
+  generates a self-signed RSA-2048/SHA-256 cert + key in-process
+  via `EVP_RSA_gen` + `X509_sign`, writes them to /tmp, spins up
+  the server with `use_tls`, drives a Bell circuit via
+  `submit_circuit_tls(insecure=1)`, verifies P[00] = P[11] = 0.5
+  came back bit-perfect through TLS.  Cleans up cert/key files
+  on exit.
+
+### Changed
+
+- `moonlab_control_serve` / `submit_circuit{,_auth,_shots}` are
+  unchanged on the wire; the transport refactor is internal.  All
+  five pre-existing control-plane tests pass without modification.
+
+### Verified
+
+```
+--- generating self-signed cert ---
+  OK    self-signed RSA-2048/SHA-256 cert at /tmp/moonlab_tls_cert.pem
+    server bound to port 54370 with TLS enabled
+
+--- submit Bell circuit over TLS (insecure) ---
+  OK    submit_circuit_tls rc=0
+  OK    got 4 probabilities (got 4)
+  OK    P[00] = 0.500000 over TLS
+  OK    P[11] = 0.500000 over TLS
+=== 0 failure(s) ===
+```
+
+Pre-existing tests under the TLS-enabled build:
+
+```
+test_control_plane           : 0 failures
+test_control_plane_concurrent: 0 failures
+test_control_plane_shots     : 0 failures
+test_control_plane_shutdown  : 0 failures
+test_control_plane_auth      : 0 failures
+```
+
+### Notes
+
+- HMAC and TLS compose: a server with both `use_tls` and
+  `set_secret` requires both the encrypted channel and the
+  matching AUTH token.
+- The default-OFF gate means the standard build is untouched;
+  callers opting in pay for the OpenSSL link.
+- v0.8.18 will add Python + Rust TLS clients.
 
 ## [0.8.16] - 2026-05-19
 

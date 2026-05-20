@@ -12,6 +12,35 @@
 #include "../applications/moonlab_qgtl_backend.h"
 #include "../crypto/sha3/sha3.h"
 
+#ifdef MOONLAB_HAVE_TLS
+#  include <openssl/ssl.h>
+#  include <openssl/err.h>
+#endif
+
+/* ------------------------------------------------------------------
+ * Transport abstraction (since v0.8.17).
+ *
+ * A `moonlab_io_t` is a thin polymorphism between plain TCP and
+ * TLS-wrapped fd.  When `ssl` is non-NULL the helpers go through
+ * SSL_read / SSL_write; otherwise they call recv / send on the fd
+ * directly.  All other code paths -- header parsing, HMAC verify,
+ * body alloc, execute, response framing -- stay transport-blind.
+ * ------------------------------------------------------------------ */
+typedef struct {
+    int   fd;
+#ifdef MOONLAB_HAVE_TLS
+    void *ssl; /* SSL* when TLS-wrapped, else NULL. */
+#endif
+} moonlab_io_t;
+
+static int io_send(moonlab_io_t *io, const void *buf, size_t len);
+static int io_recv(moonlab_io_t *io,       void *buf, size_t len);
+
+#ifdef MOONLAB_HAVE_TLS
+static int io_send_tls(SSL *ssl, const void *buf, size_t len);
+static int io_recv_tls(SSL *ssl,       void *buf, size_t len);
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -67,52 +96,43 @@ static int  ct_memcmp(const void *a, const void *b, size_t n);
  * Wire helpers.
  * ------------------------------------------------------------------ */
 
-static int send_all(int fd, const void *buf, size_t len)
+static int send_all(moonlab_io_t *io, const void *buf, size_t len)
 {
     const char *p = (const char *)buf;
     while (len > 0) {
-        ssize_t n = send(fd, p, len, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            return MOONLAB_CONTROL_IO_ERROR;
-        }
-        if (n == 0) return MOONLAB_CONTROL_IO_ERROR;
-        p   += (size_t)n;
-        len -= (size_t)n;
+        int sent = io_send(io, p, len);
+        if (sent < 0) return MOONLAB_CONTROL_IO_ERROR;
+        if (sent == 0) return MOONLAB_CONTROL_IO_ERROR;
+        p   += (size_t)sent;
+        len -= (size_t)sent;
     }
     return MOONLAB_CONTROL_OK;
 }
 
-static int recv_all(int fd, void *buf, size_t len)
+static int recv_all(moonlab_io_t *io, void *buf, size_t len)
 {
     char *p = (char *)buf;
     while (len > 0) {
-        ssize_t n = recv(fd, p, len, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            return MOONLAB_CONTROL_IO_ERROR;
-        }
-        if (n == 0) return MOONLAB_CONTROL_PROTOCOL; /* short read */
-        p   += (size_t)n;
-        len -= (size_t)n;
+        int got = io_recv(io, p, len);
+        if (got < 0) return MOONLAB_CONTROL_IO_ERROR;
+        if (got == 0) return MOONLAB_CONTROL_PROTOCOL; /* short read */
+        p   += (size_t)got;
+        len -= (size_t)got;
     }
     return MOONLAB_CONTROL_OK;
 }
 
 /* Read up to `cap-1` bytes, stopping after a '\n' (which is included).
  * NUL-terminates.  Returns OK on success or an error code. */
-static int recv_until_newline(int fd, char *buf, size_t cap, size_t *out_len)
+static int recv_until_newline(moonlab_io_t *io, char *buf, size_t cap, size_t *out_len)
 {
     if (cap < 2) return MOONLAB_CONTROL_BAD_ARG;
     size_t pos = 0;
     while (pos + 1 < cap) {
         char c;
-        ssize_t n = recv(fd, &c, 1, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            return MOONLAB_CONTROL_IO_ERROR;
-        }
-        if (n == 0) return MOONLAB_CONTROL_PROTOCOL;
+        int got = io_recv(io, &c, 1);
+        if (got < 0) return MOONLAB_CONTROL_IO_ERROR;
+        if (got == 0) return MOONLAB_CONTROL_PROTOCOL;
         buf[pos++] = c;
         if (c == '\n') break;
     }
@@ -121,14 +141,65 @@ static int recv_until_newline(int fd, char *buf, size_t cap, size_t *out_len)
     return MOONLAB_CONTROL_OK;
 }
 
-static int send_err(int fd, int status, const char *msg)
+static int send_err(moonlab_io_t *io, int status, const char *msg)
 {
     char hdr[128];
     int n = snprintf(hdr, sizeof(hdr), "ERR %d %s\n",
                      status, msg ? msg : "error");
     if (n < 0 || (size_t)n >= sizeof(hdr)) return MOONLAB_CONTROL_IO_ERROR;
-    return send_all(fd, hdr, (size_t)n);
+    return send_all(io, hdr, (size_t)n);
 }
+
+/* Transport dispatch.  Plain TCP routes through recv()/send(); TLS
+ * routes through SSL_read()/SSL_write() when MOONLAB_HAVE_TLS. */
+static int io_send(moonlab_io_t *io, const void *buf, size_t len)
+{
+#ifdef MOONLAB_HAVE_TLS
+    if (io->ssl) return io_send_tls((SSL *)io->ssl, buf, len);
+#endif
+    while (1) {
+        ssize_t n = send(io->fd, buf, len, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        return (int)n;
+    }
+}
+
+static int io_recv(moonlab_io_t *io, void *buf, size_t len)
+{
+#ifdef MOONLAB_HAVE_TLS
+    if (io->ssl) return io_recv_tls((SSL *)io->ssl, buf, len);
+#endif
+    while (1) {
+        ssize_t n = recv(io->fd, buf, len, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        return (int)n;
+    }
+}
+
+#ifdef MOONLAB_HAVE_TLS
+static int io_send_tls(SSL *ssl, const void *buf, size_t len)
+{
+    int n = SSL_write(ssl, buf, (int)len);
+    if (n <= 0) return -1;
+    return n;
+}
+static int io_recv_tls(SSL *ssl, void *buf, size_t len)
+{
+    int n = SSL_read(ssl, buf, (int)len);
+    if (n <= 0) {
+        int err = SSL_get_error(ssl, n);
+        if (err == SSL_ERROR_ZERO_RETURN) return 0; /* clean shutdown */
+        return -1;
+    }
+    return n;
+}
+#endif
 
 /* ------------------------------------------------------------------
  * Server: one request, one response.
@@ -141,7 +212,7 @@ static int send_err(int fd, int status, const char *msg)
 #define MOONLAB_CONTROL_MAX_BODY_BYTES (1L << 22)   /* 4 MB. */
 #define MOONLAB_CONTROL_MAX_SHOTS      (1L << 20)   /* 1 M samples (8 MB). */
 
-static int handle_one_request(int client_fd,
+static int handle_one_request(moonlab_io_t  *io,
                               const uint8_t *secret,
                               size_t         secret_len)
 {
@@ -174,13 +245,13 @@ static int handle_one_request(int client_fd,
     int  saw_auth = 0;
     char first[96];
     size_t first_len = 0;
-    int rc = recv_until_newline(client_fd, first, sizeof(first), &first_len);
+    int rc = recv_until_newline(io, first, sizeof(first), &first_len);
     if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
 
     if (strncmp(first, "AUTH ", 5) == 0) {
         /* Pull the 64-hex token. */
         if (first_len < 5 + 64 + 1) {
-            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL, "short AUTH");
+            send_err(io, MOONLAB_CONTROL_PROTOCOL, "short AUTH");
             LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
         memcpy(client_token_hex, first + 5, 64);
@@ -193,7 +264,7 @@ static int handle_one_request(int client_fd,
     char hdr[96];
     size_t hdr_len = first_len;
     if (saw_auth) {
-        rc = recv_until_newline(client_fd, hdr, sizeof(hdr), &hdr_len);
+        rc = recv_until_newline(io, hdr, sizeof(hdr), &hdr_len);
         if (rc != MOONLAB_CONTROL_OK) LOG_AND_RETURN(rc);
     } else {
         memcpy(hdr, first, first_len);
@@ -205,7 +276,7 @@ static int handle_one_request(int client_fd,
      * (`hdr`, including its trailing newline). */
     if (secret_len > 0) {
         if (!saw_auth) {
-            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "missing AUTH");
+            send_err(io, MOONLAB_CONTROL_REJECTED, "missing AUTH");
             LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
         uint8_t expected[HMAC_DIGEST_SIZE];
@@ -214,7 +285,7 @@ static int handle_one_request(int client_fd,
         char expected_hex[2 * HMAC_DIGEST_SIZE + 1];
         hex_encode(expected, HMAC_DIGEST_SIZE, expected_hex);
         if (ct_memcmp(expected_hex, client_token_hex, 64) != 0) {
-            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "bad token");
+            send_err(io, MOONLAB_CONTROL_REJECTED, "bad token");
             LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
     } else if (saw_auth) {
@@ -231,26 +302,26 @@ static int handle_one_request(int client_fd,
     if (strncmp(hdr, "CIRCUIT ", 8) == 0) {
         log_verb = "CIRCUIT";
         if (sscanf(hdr + 8, "%ld", &body_bytes) != 1) {
-            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+            send_err(io, MOONLAB_CONTROL_PROTOCOL,
                      "expected CIRCUIT <N>");
             LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
     } else if (strncmp(hdr, "SHOTS ", 6) == 0) {
         log_verb = "SHOTS";
         if (sscanf(hdr + 6, "%ld %ld", &num_shots, &body_bytes) != 2) {
-            send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+            send_err(io, MOONLAB_CONTROL_PROTOCOL,
                      "expected SHOTS <shots> <bytes>");
             LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
         if (num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
-            send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
+            send_err(io, MOONLAB_CONTROL_BAD_ARG,
                      "shots out of range");
             LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
         }
         mode_shots = 1;
         log_shots  = num_shots;
     } else {
-        send_err(client_fd, MOONLAB_CONTROL_PROTOCOL,
+        send_err(io, MOONLAB_CONTROL_PROTOCOL,
                  "unknown verb");
         LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
     }
@@ -258,17 +329,17 @@ static int handle_one_request(int client_fd,
     log_body_bytes = body_bytes;
 
     if (body_bytes <= 0 || body_bytes > MOONLAB_CONTROL_MAX_BODY_BYTES) {
-        send_err(client_fd, MOONLAB_CONTROL_BAD_ARG,
+        send_err(io, MOONLAB_CONTROL_BAD_ARG,
                  "body bytes out of range");
         LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
     }
 
     char *body = (char *)malloc((size_t)body_bytes + 1);
     if (!body) {
-        send_err(client_fd, MOONLAB_CONTROL_OOM, "body alloc");
+        send_err(io, MOONLAB_CONTROL_OOM, "body alloc");
         LOG_AND_RETURN(MOONLAB_CONTROL_OOM);
     }
-    rc = recv_all(client_fd, body, (size_t)body_bytes);
+    rc = recv_all(io, body, (size_t)body_bytes);
     if (rc != MOONLAB_CONTROL_OK) {
         free(body);
         LOG_AND_RETURN(rc);
@@ -280,7 +351,7 @@ static int handle_one_request(int client_fd,
         moonlab_qgtl_circuit_deserialize(body, (size_t)body_bytes, &status);
     free(body);
     if (!c) {
-        send_err(client_fd, MOONLAB_CONTROL_REJECTED, "deserialize");
+        send_err(io, MOONLAB_CONTROL_REJECTED, "deserialize");
         LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
     }
     log_n_qubits = moonlab_qgtl_circuit_num_qubits(c);
@@ -302,14 +373,14 @@ static int handle_one_request(int client_fd,
 
     if (er != 0) {
         moonlab_qgtl_results_free(&res);
-        send_err(client_fd, MOONLAB_CONTROL_REJECTED, "execute");
+        send_err(io, MOONLAB_CONTROL_REJECTED, "execute");
         LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
     }
 
     if (mode_shots) {
         if (!res.outcomes) {
             moonlab_qgtl_results_free(&res);
-            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no outcomes");
+            send_err(io, MOONLAB_CONTROL_REJECTED, "no outcomes");
             LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
         char ok_hdr[64];
@@ -318,9 +389,9 @@ static int handle_one_request(int client_fd,
             moonlab_qgtl_results_free(&res);
             LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
-        rc = send_all(client_fd, ok_hdr, (size_t)hn);
+        rc = send_all(io, ok_hdr, (size_t)hn);
         if (rc == MOONLAB_CONTROL_OK) {
-            rc = send_all(client_fd, res.outcomes,
+            rc = send_all(io, res.outcomes,
                           (size_t)res.num_shots * sizeof(uint64_t));
         }
         moonlab_qgtl_results_free(&res);
@@ -328,7 +399,7 @@ static int handle_one_request(int client_fd,
     } else {
         if (!res.probabilities) {
             moonlab_qgtl_results_free(&res);
-            send_err(client_fd, MOONLAB_CONTROL_REJECTED, "no probabilities");
+            send_err(io, MOONLAB_CONTROL_REJECTED, "no probabilities");
             LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
         const size_t dim = (size_t)1 << res.num_qubits;
@@ -338,9 +409,9 @@ static int handle_one_request(int client_fd,
             moonlab_qgtl_results_free(&res);
             LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
-        rc = send_all(client_fd, ok_hdr, (size_t)hn);
+        rc = send_all(io, ok_hdr, (size_t)hn);
         if (rc == MOONLAB_CONTROL_OK) {
-            rc = send_all(client_fd, res.probabilities, dim * sizeof(double));
+            rc = send_all(io, res.probabilities, dim * sizeof(double));
         }
         moonlab_qgtl_results_free(&res);
         LOG_AND_RETURN(rc);
@@ -348,33 +419,62 @@ static int handle_one_request(int client_fd,
 #undef LOG_AND_RETURN
 }
 
-/* Per-connection worker thread context: owns the client fd. */
+/* Per-connection worker thread context: owns the client fd + optional
+ * TLS handle. */
 typedef struct {
     int            client_fd;
-    /* Snapshot of the server's secret at accept time.  Stored by value
-     * so the worker doesn't need to hold a lock against
-     * `set_secret` racing during handoff. */
+#ifdef MOONLAB_HAVE_TLS
+    void          *ssl_ctx;  /* SSL_CTX*, owned by the server (shared). */
+#endif
     uint8_t        secret[256];
     size_t         secret_len;
 } worker_ctx_t;
 
-static int handle_one_request(int client_fd,
+static int handle_one_request(moonlab_io_t  *io,
                               const uint8_t *secret,
                               size_t         secret_len);
+
+#ifdef MOONLAB_HAVE_TLS
+/* Defined just below.  Wraps an accepted client fd in TLS using the
+ * server's SSL_CTX; returns a new SSL* on success or NULL on
+ * handshake failure (caller closes the fd). */
+static SSL *tls_accept_fd(SSL_CTX *ctx, int fd);
+#endif
 
 static void *worker_thread(void *arg)
 {
     worker_ctx_t *ctx = (worker_ctx_t *)arg;
-    int    fd  = ctx->client_fd;
-    /* Copy the secret onto the worker's stack so we can wipe the
-     * heap-allocated ctx before handling the request. */
+    int     fd   = ctx->client_fd;
     uint8_t sec[256];
     size_t  slen = ctx->secret_len;
     memcpy(sec, ctx->secret, slen);
+
+    moonlab_io_t io;
+    io.fd = fd;
+#ifdef MOONLAB_HAVE_TLS
+    io.ssl = NULL;
+    if (ctx->ssl_ctx) {
+        io.ssl = tls_accept_fd((SSL_CTX *)ctx->ssl_ctx, fd);
+        if (!io.ssl) {
+            memset(sec, 0, sizeof(sec));
+            memset(ctx->secret, 0, sizeof(ctx->secret));
+            free(ctx);
+            close(fd);
+            return NULL;
+        }
+    }
+#endif
     memset(ctx->secret, 0, sizeof(ctx->secret));
     free(ctx);
-    (void)handle_one_request(fd, slen > 0 ? sec : NULL, slen);
-    /* Zero the secret on the worker stack as a hygiene measure. */
+
+    (void)handle_one_request(&io, slen > 0 ? sec : NULL, slen);
+
+#ifdef MOONLAB_HAVE_TLS
+    if (io.ssl) {
+        SSL_shutdown((SSL *)io.ssl);
+        SSL_free((SSL *)io.ssl);
+    }
+#endif
     memset(sec, 0, sizeof(sec));
     close(fd);
     return NULL;
@@ -451,7 +551,39 @@ struct moonlab_control_server {
      * (unauthenticated, backward-compatible with v0.8.7..v0.8.14). */
     uint8_t secret[256];
     size_t  secret_len;
+#ifdef MOONLAB_HAVE_TLS
+    /* Shared SSL_CTX (since v0.8.17).  When non-NULL, every accepted
+     * connection is wrapped in TLS via SSL_accept() before reaching
+     * handle_one_request().  Owned by the server; workers borrow it. */
+    SSL_CTX *ssl_ctx;
+#endif
 };
+
+#ifdef MOONLAB_HAVE_TLS
+/* One-time OpenSSL library init.  In OpenSSL 3 this is mostly a no-op
+ * (the library auto-inits on first use), but call OPENSSL_init_ssl
+ * explicitly with default-config-disabled so the test binary doesn't
+ * accidentally pick up a system openssl.cnf. */
+static void tls_init_once(void)
+{
+    static int done = 0;
+    if (done) return;
+    OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL);
+    done = 1;
+}
+
+static SSL *tls_accept_fd(SSL_CTX *ctx, int fd)
+{
+    SSL *ssl = SSL_new(ctx);
+    if (!ssl) return NULL;
+    if (SSL_set_fd(ssl, fd) != 1) { SSL_free(ssl); return NULL; }
+    if (SSL_accept(ssl) <= 0) {
+        SSL_free(ssl);
+        return NULL;
+    }
+    return ssl;
+}
+#endif
 
 int moonlab_control_server_open(const char                 *host,
                                 uint16_t                    port,
@@ -559,7 +691,9 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 
         worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
         if (!ctx) {
-            (void)handle_one_request(client,
+            moonlab_io_t inline_io = { 0 };
+            inline_io.fd = client;
+            (void)handle_one_request(&inline_io,
                                      s->secret_len > 0 ? s->secret : NULL,
                                      s->secret_len);
             close(client);
@@ -567,11 +701,16 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             continue;
         }
         ctx->client_fd  = client;
+#ifdef MOONLAB_HAVE_TLS
+        ctx->ssl_ctx    = s->ssl_ctx;
+#endif
         ctx->secret_len = s->secret_len;
         if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
 
         if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
-            (void)handle_one_request(client,
+            moonlab_io_t inline_io = { 0 };
+            inline_io.fd = client;
+            (void)handle_one_request(&inline_io,
                                      ctx->secret_len > 0 ? ctx->secret : NULL,
                                      ctx->secret_len);
             close(client);
@@ -607,12 +746,54 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     if (s->srv_fd      >= 0) { close(s->srv_fd);      s->srv_fd      = -1; }
     if (s->wake_pipe[0] >= 0) { close(s->wake_pipe[0]); s->wake_pipe[0] = -1; }
     if (s->wake_pipe[1] >= 0) { close(s->wake_pipe[1]); s->wake_pipe[1] = -1; }
-    /* Wipe the secret before free() returns the heap chunk to the
-     * allocator -- best-effort hygiene against later-allocator reuse
-     * exposing key material. */
+#ifdef MOONLAB_HAVE_TLS
+    if (s->ssl_ctx) { SSL_CTX_free(s->ssl_ctx); s->ssl_ctx = NULL; }
+#endif
     memset(s->secret, 0, sizeof(s->secret));
     s->secret_len = 0;
     free(s);
+}
+
+int moonlab_control_server_use_tls(moonlab_control_server_t *s,
+                                   const char               *cert_path,
+                                   const char               *key_path)
+{
+#ifdef MOONLAB_HAVE_TLS
+    if (!s) return MOONLAB_CONTROL_BAD_ARG;
+    tls_init_once();
+
+    /* Clearing path: cert == NULL disables TLS for future accepts. */
+    if (!cert_path && !key_path) {
+        if (s->ssl_ctx) { SSL_CTX_free(s->ssl_ctx); s->ssl_ctx = NULL; }
+        return MOONLAB_CONTROL_OK;
+    }
+    if (!cert_path || !key_path) return MOONLAB_CONTROL_BAD_ARG;
+
+    SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) return MOONLAB_CONTROL_TLS_ERROR;
+
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    if (SSL_CTX_use_certificate_file(ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+    if (SSL_CTX_check_private_key(ctx) <= 0) {
+        SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+
+    if (s->ssl_ctx) SSL_CTX_free(s->ssl_ctx);
+    s->ssl_ctx = ctx;
+    return MOONLAB_CONTROL_OK;
+#else
+    (void)s; (void)cert_path; (void)key_path;
+    return MOONLAB_CONTROL_BAD_ARG;
+#endif
 }
 
 /* Public wrapper around the internal HMAC -- since v0.8.16, so
@@ -692,6 +873,8 @@ int moonlab_control_submit_circuit(const char *host,
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
     }
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
 
     char hdr[64];
     int hn = snprintf(hdr, sizeof(hdr), "CIRCUIT %zu\n", text_len);
@@ -699,15 +882,15 @@ int moonlab_control_submit_circuit(const char *host,
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
     }
-    int rc = send_all(fd, hdr, (size_t)hn);
+    int rc = send_all(&plain_io, hdr, (size_t)hn);
     if (rc == MOONLAB_CONTROL_OK) {
-        rc = send_all(fd, circuit_text, text_len);
+        rc = send_all(&plain_io, circuit_text, text_len);
     }
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     char resp_hdr[128];
     size_t resp_len = 0;
-    rc = recv_until_newline(fd, resp_hdr, sizeof(resp_hdr), &resp_len);
+    rc = recv_until_newline(&plain_io, resp_hdr, sizeof(resp_hdr), &resp_len);
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     if (strncmp(resp_hdr, "OK ", 3) == 0) {
@@ -718,7 +901,7 @@ int moonlab_control_submit_circuit(const char *host,
         }
         double *probs = (double *)malloc(num * sizeof(double));
         if (!probs) { close(fd); return MOONLAB_CONTROL_OOM; }
-        rc = recv_all(fd, probs, num * sizeof(double));
+        rc = recv_all(&plain_io, probs, num * sizeof(double));
         close(fd);
         if (rc != MOONLAB_CONTROL_OK) { free(probs); return rc; }
         *out_probs = probs;
@@ -763,6 +946,8 @@ int moonlab_control_submit_circuit_auth(const char    *host,
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
     }
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
 
     char verb_line[64];
     int  vn = snprintf(verb_line, sizeof(verb_line),
@@ -781,19 +966,19 @@ int moonlab_control_submit_circuit_auth(const char    *host,
         memcpy(auth_line, "AUTH ", 5);
         hex_encode(tok, HMAC_DIGEST_SIZE, auth_line + 5);
         auth_line[5 + 64] = '\n';
-        rc = send_all(fd, auth_line, 5 + 64 + 1);
+        rc = send_all(&plain_io, auth_line, 5 + 64 + 1);
     }
     if (rc == MOONLAB_CONTROL_OK) {
-        rc = send_all(fd, verb_line, (size_t)vn);
+        rc = send_all(&plain_io, verb_line, (size_t)vn);
     }
     if (rc == MOONLAB_CONTROL_OK) {
-        rc = send_all(fd, circuit_text, text_len);
+        rc = send_all(&plain_io, circuit_text, text_len);
     }
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     char resp_hdr[128];
     size_t resp_len = 0;
-    rc = recv_until_newline(fd, resp_hdr, sizeof(resp_hdr), &resp_len);
+    rc = recv_until_newline(&plain_io, resp_hdr, sizeof(resp_hdr), &resp_len);
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     if (strncmp(resp_hdr, "OK ", 3) == 0) {
@@ -804,7 +989,7 @@ int moonlab_control_submit_circuit_auth(const char    *host,
         }
         double *probs = (double *)malloc(num * sizeof(double));
         if (!probs) { close(fd); return MOONLAB_CONTROL_OOM; }
-        rc = recv_all(fd, probs, num * sizeof(double));
+        rc = recv_all(&plain_io, probs, num * sizeof(double));
         close(fd);
         if (rc != MOONLAB_CONTROL_OK) { free(probs); return rc; }
         *out_probs = probs;
@@ -849,6 +1034,8 @@ int moonlab_control_submit_circuit_shots(const char *host,
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
     }
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
 
     char hdr[96];
     int hn = snprintf(hdr, sizeof(hdr), "SHOTS %d %zu\n",
@@ -857,15 +1044,15 @@ int moonlab_control_submit_circuit_shots(const char *host,
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
     }
-    int rc = send_all(fd, hdr, (size_t)hn);
+    int rc = send_all(&plain_io, hdr, (size_t)hn);
     if (rc == MOONLAB_CONTROL_OK) {
-        rc = send_all(fd, circuit_text, text_len);
+        rc = send_all(&plain_io, circuit_text, text_len);
     }
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     char resp_hdr[128];
     size_t resp_len = 0;
-    rc = recv_until_newline(fd, resp_hdr, sizeof(resp_hdr), &resp_len);
+    rc = recv_until_newline(&plain_io, resp_hdr, sizeof(resp_hdr), &resp_len);
     if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
 
     if (strncmp(resp_hdr, "SAMPLES ", 8) == 0) {
@@ -877,7 +1064,7 @@ int moonlab_control_submit_circuit_shots(const char *host,
         }
         uint64_t *buf = (uint64_t *)malloc((size_t)shots_back * sizeof(uint64_t));
         if (!buf) { close(fd); return MOONLAB_CONTROL_OOM; }
-        rc = recv_all(fd, buf, (size_t)shots_back * sizeof(uint64_t));
+        rc = recv_all(&plain_io, buf, (size_t)shots_back * sizeof(uint64_t));
         close(fd);
         if (rc != MOONLAB_CONTROL_OK) { free(buf); return rc; }
         *out_outcomes = buf;
@@ -887,4 +1074,137 @@ int moonlab_control_submit_circuit_shots(const char *host,
         close(fd);
         return MOONLAB_CONTROL_REJECTED;
     }
+}
+
+/* ------------------------------------------------------------------
+ * TLS client (since v0.8.17).
+ * ------------------------------------------------------------------ */
+int moonlab_control_submit_circuit_tls(const char    *host,
+                                       uint16_t       port,
+                                       const char    *ca_path,
+                                       int            insecure,
+                                       const uint8_t *secret,
+                                       size_t         secret_len,
+                                       const char    *circuit_text,
+                                       size_t         text_len,
+                                       double       **out_probs,
+                                       size_t        *out_num)
+{
+#ifndef MOONLAB_HAVE_TLS
+    (void)host; (void)port; (void)ca_path; (void)insecure;
+    (void)secret; (void)secret_len; (void)circuit_text; (void)text_len;
+    (void)out_probs; (void)out_num;
+    return MOONLAB_CONTROL_BAD_ARG;
+#else
+    if (!host || !circuit_text || !out_probs || !out_num) {
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    *out_probs = NULL;
+    *out_num   = 0;
+    if (text_len == 0) text_len = strlen(circuit_text);
+    if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
+
+    tls_init_once();
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) return MOONLAB_CONTROL_TLS_ERROR;
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+
+    if (insecure) {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    } else {
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+        if (ca_path) {
+            if (SSL_CTX_load_verify_locations(ctx, ca_path, NULL) <= 0) {
+                SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+            }
+        } else if (SSL_CTX_set_default_verify_paths(ctx) <= 0) {
+            SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+        }
+    }
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR; }
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_BAD_ARG;
+    }
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    SSL *ssl = SSL_new(ctx);
+    if (!ssl || SSL_set_fd(ssl, fd) != 1) {
+        if (ssl) SSL_free(ssl);
+        close(fd); SSL_CTX_free(ctx); return MOONLAB_CONTROL_TLS_ERROR;
+    }
+    if (!insecure) SSL_set_tlsext_host_name(ssl, host);
+    if (SSL_connect(ssl) <= 0) {
+        SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_TLS_ERROR;
+    }
+
+    moonlab_io_t tls_io = { 0 };
+    tls_io.fd  = fd;
+    tls_io.ssl = ssl;
+
+    char verb_line[64];
+    int vn = snprintf(verb_line, sizeof(verb_line), "CIRCUIT %zu\n", text_len);
+    if (vn < 0 || (size_t)vn >= sizeof(verb_line)) {
+        SSL_shutdown(ssl); SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+    int rc = MOONLAB_CONTROL_OK;
+    if (secret && secret_len > 0) {
+        uint8_t tok[HMAC_DIGEST_SIZE];
+        hmac_sha3_256(secret, secret_len,
+                      (const uint8_t *)verb_line, (size_t)vn, tok);
+        char auth_line[5 + 2 * HMAC_DIGEST_SIZE + 2];
+        memcpy(auth_line, "AUTH ", 5);
+        hex_encode(tok, HMAC_DIGEST_SIZE, auth_line + 5);
+        auth_line[5 + 64] = '\n';
+        rc = send_all(&tls_io, auth_line, 5 + 64 + 1);
+    }
+    if (rc == MOONLAB_CONTROL_OK) rc = send_all(&tls_io, verb_line, (size_t)vn);
+    if (rc == MOONLAB_CONTROL_OK) rc = send_all(&tls_io, circuit_text, text_len);
+    if (rc != MOONLAB_CONTROL_OK) {
+        SSL_shutdown(ssl); SSL_free(ssl); close(fd); SSL_CTX_free(ctx);
+        return rc;
+    }
+
+    char resp_hdr[128];
+    size_t resp_len = 0;
+    rc = recv_until_newline(&tls_io, resp_hdr, sizeof(resp_hdr), &resp_len);
+    int final_rc = MOONLAB_CONTROL_PROTOCOL;
+    if (rc == MOONLAB_CONTROL_OK && strncmp(resp_hdr, "OK ", 3) == 0) {
+        size_t num = 0;
+        if (sscanf(resp_hdr + 3, "%zu", &num) == 1 && num > 0 && num <= (1ULL << 30)) {
+            double *probs = (double *)malloc(num * sizeof(double));
+            if (probs) {
+                if (recv_all(&tls_io, probs, num * sizeof(double)) == MOONLAB_CONTROL_OK) {
+                    *out_probs = probs;
+                    *out_num   = num;
+                    final_rc   = MOONLAB_CONTROL_OK;
+                } else {
+                    free(probs);
+                    final_rc = MOONLAB_CONTROL_IO_ERROR;
+                }
+            } else {
+                final_rc = MOONLAB_CONTROL_OOM;
+            }
+        }
+    } else if (rc == MOONLAB_CONTROL_OK && strncmp(resp_hdr, "ERR ", 4) == 0) {
+        final_rc = MOONLAB_CONTROL_REJECTED;
+    } else if (rc != MOONLAB_CONTROL_OK) {
+        final_rc = rc;
+    }
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(fd);
+    SSL_CTX_free(ctx);
+    return final_rc;
+#endif
 }

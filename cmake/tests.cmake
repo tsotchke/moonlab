@@ -844,6 +844,25 @@
         TIMEOUT 30
     )
 
+    # TLS transport (since v0.8.17): only built when the library was
+    # configured with -DQSIM_ENABLE_TLS=ON.  Generates a self-signed
+    # cert in-process, then drives a Bell circuit through TLS.
+    if(QSIM_HAS_TLS)
+        add_executable(test_control_plane_tls
+            tests/integration/test_control_plane_tls.c)
+        target_link_libraries(test_control_plane_tls
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads
+                    OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_tls
+            PRIVATE MOONLAB_HAVE_TLS=1)
+        add_test(NAME integration_control_plane_tls
+            COMMAND test_control_plane_tls)
+        set_tests_properties(integration_control_plane_tls PROPERTIES
+            LABELS "control_plane;tls"
+            TIMEOUT 30
+        )
+    endif()
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
