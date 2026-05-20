@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,6 +161,21 @@ static int handle_one_request(int client_fd)
     return rc;
 }
 
+/* Per-connection worker thread context: owns the client fd. */
+typedef struct {
+    int client_fd;
+} worker_ctx_t;
+
+static void *worker_thread(void *arg)
+{
+    worker_ctx_t *ctx = (worker_ctx_t *)arg;
+    int fd = ctx->client_fd;
+    free(ctx);
+    (void)handle_one_request(fd);
+    close(fd);
+    return NULL;
+}
+
 int moonlab_control_serve(const char *host,
                           uint16_t    port,
                           int         max_iters,
@@ -196,13 +212,23 @@ int moonlab_control_serve(const char *host,
         }
     }
 
-    if (listen(srv, 8) < 0) {
+    if (listen(srv, 64) < 0) {
         close(srv);
         return MOONLAB_CONTROL_IO_ERROR;
     }
 
+    /* Thread-per-connection (since v0.8.10).  Each request runs in
+     * its own pthread so a slow QFT doesn't block a queued Bell pair.
+     * The main thread accept-loops and dispatches; before returning
+     * we join every worker so callers that pass `max_iters < INT_MAX`
+     * see synchronous "all done" semantics. */
+    pthread_t *workers = (pthread_t *)calloc((size_t)max_iters, sizeof(pthread_t));
+    if (!workers) { close(srv); return MOONLAB_CONTROL_OOM; }
+
+    int worker_count = 0;
     int served = 0;
     int rc = MOONLAB_CONTROL_OK;
+
     while (served < max_iters) {
         int client = accept(srv, NULL, NULL);
         if (client < 0) {
@@ -210,10 +236,34 @@ int moonlab_control_serve(const char *host,
             rc = MOONLAB_CONTROL_IO_ERROR;
             break;
         }
-        (void)handle_one_request(client);
-        close(client);
+
+        worker_ctx_t *ctx = (worker_ctx_t *)malloc(sizeof(*ctx));
+        if (!ctx) {
+            /* OOM: fall back to in-line handling so we don't drop the request. */
+            (void)handle_one_request(client);
+            close(client);
+            served++;
+            continue;
+        }
+        ctx->client_fd = client;
+
+        if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
+            (void)handle_one_request(client);
+            close(client);
+            free(ctx);
+        } else {
+            worker_count++;
+        }
         served++;
     }
+
+    /* Join every spawned worker.  Detached threads would race teardown
+     * against `close(srv)` and the surrounding shared library state. */
+    for (int i = 0; i < worker_count; i++) {
+        pthread_join(workers[i], NULL);
+    }
+    free(workers);
+
     close(srv);
     return rc;
 }
