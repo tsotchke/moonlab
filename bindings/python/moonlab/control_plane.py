@@ -18,9 +18,13 @@ Example:
 
 from __future__ import annotations
 
+import ctypes
 import socket
 import struct
+import threading
 from typing import List, Optional
+
+from .core import _lib
 
 
 class ControlPlaneError(RuntimeError):
@@ -164,8 +168,106 @@ def submit_circuit_shots(host: str,
             raise ControlPlaneError(f"unrecognized response: {resp_hdr!r}")
 
 
+# ----- v0.8.14 server lifecycle binding -----
+# Probe at module load -- a libquantumsim older than v0.8.13 doesn't
+# export these, in which case ControlPlaneServer raises a clear error.
+try:
+    _lib.moonlab_control_server_open.argtypes = [
+        ctypes.c_char_p, ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_uint16),
+    ]
+    _lib.moonlab_control_server_open.restype = ctypes.c_int
+    _lib.moonlab_control_server_run.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    _lib.moonlab_control_server_run.restype = ctypes.c_int
+    _lib.moonlab_control_server_shutdown.argtypes = [ctypes.c_void_p]
+    _lib.moonlab_control_server_shutdown.restype = None
+    _lib.moonlab_control_server_close.argtypes = [ctypes.c_void_p]
+    _lib.moonlab_control_server_close.restype = None
+    _SERVER_API_AVAILABLE = True
+except AttributeError:
+    _SERVER_API_AVAILABLE = False
+
+
+class ControlPlaneServer:
+    """In-process control-plane server, since v0.8.14.
+
+    Wraps the C lifecycle API.  Use as a context manager so the
+    server is opened on enter, run on a background daemon thread,
+    and shut down + joined on exit.  The bound port is available on
+    the ``port`` attribute as soon as ``__enter__`` returns.
+
+    Example::
+
+        from moonlab.qgtl import QgtlCircuit, GateType
+        from moonlab.control_plane import (
+            ControlPlaneServer, submit_circuit,
+        )
+
+        with ControlPlaneServer(host="127.0.0.1", port=0) as srv:
+            c = QgtlCircuit(num_qubits=2)
+            c.add_gate(GateType.H, target=0)
+            c.add_gate(GateType.CNOT, target=1, control=0)
+            probs = submit_circuit("127.0.0.1", srv.port, c.serialize())
+            assert abs(probs[0] - 0.5) < 1e-9
+    """
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 0,
+                 max_iters: int = (1 << 30)) -> None:
+        if not _SERVER_API_AVAILABLE:
+            raise ControlPlaneError(
+                "ControlPlaneServer unavailable -- libquantumsim is older "
+                "than v0.8.13 (no moonlab_control_server_* exports)"
+            )
+        self._host = host.encode("utf-8")
+        self._port_in = int(port)
+        self._max_iters = int(max_iters)
+        self._handle: Optional[int] = None
+        self._thread: Optional[threading.Thread] = None
+        self._actual_port = ctypes.c_uint16(0)
+        self._run_rc: Optional[int] = None
+
+    @property
+    def port(self) -> int:
+        """Bound TCP port (the OS-chosen one when constructed with port=0)."""
+        return int(self._actual_port.value)
+
+    def __enter__(self) -> "ControlPlaneServer":
+        handle = ctypes.c_void_p(0)
+        rc = _lib.moonlab_control_server_open(
+            self._host, self._port_in,
+            ctypes.byref(handle), ctypes.byref(self._actual_port))
+        if rc != 0 or not handle.value:
+            raise ControlPlaneError(f"server_open rc={rc}")
+        self._handle = handle.value
+
+        def runner() -> None:
+            self._run_rc = _lib.moonlab_control_server_run(
+                ctypes.c_void_p(self._handle), self._max_iters)
+
+        self._thread = threading.Thread(target=runner, daemon=True)
+        self._thread.start()
+        return self
+
+    def shutdown(self) -> None:
+        """Signal the server to stop after the current in-flight request."""
+        if self._handle is not None:
+            _lib.moonlab_control_server_shutdown(ctypes.c_void_p(self._handle))
+
+    def __exit__(self, *exc) -> None:
+        self.shutdown()
+        if self._thread is not None:
+            self._thread.join()
+            self._thread = None
+        if self._handle is not None:
+            _lib.moonlab_control_server_close(ctypes.c_void_p(self._handle))
+            self._handle = None
+        if self._run_rc is not None and self._run_rc != 0:
+            raise ControlPlaneError(f"server_run rc={self._run_rc}")
+
+
 __all__ = [
     "submit_circuit",
     "submit_circuit_shots",
+    "ControlPlaneServer",
     "ControlPlaneError",
 ]

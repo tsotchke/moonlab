@@ -373,6 +373,12 @@ fn main() {
         // TCP control plane (since v0.8.7).
         .allowlist_function("moonlab_control_serve")
         .allowlist_function("moonlab_control_submit_circuit")
+        .allowlist_function("moonlab_control_submit_circuit_shots")
+        // Lifecycle API (since v0.8.13).
+        .allowlist_function("moonlab_control_server_open")
+        .allowlist_function("moonlab_control_server_run")
+        .allowlist_function("moonlab_control_server_shutdown")
+        .allowlist_function("moonlab_control_server_close")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")

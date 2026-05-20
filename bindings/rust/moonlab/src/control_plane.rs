@@ -18,8 +18,17 @@
 //! ```
 
 use crate::error::{QuantumError, Result};
+use moonlab_sys::{
+    moonlab_control_server_close, moonlab_control_server_open,
+    moonlab_control_server_run, moonlab_control_server_shutdown,
+    moonlab_control_server_t,
+};
+use std::ffi::CString;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// Send a `moonlab-circuit v1` text payload to a control-plane server
@@ -195,5 +204,109 @@ pub fn submit_circuit_shots_with_timeout(
         Err(QuantumError::Ffi(format!("server rejected: {}", resp_hdr.trim_end())))
     } else {
         Err(QuantumError::Ffi(format!("unrecognized response: {resp_hdr:?}")))
+    }
+}
+
+/// In-process control-plane server (since v0.8.14).
+///
+/// Owns the C lifecycle handle, runs `moonlab_control_server_run` on a
+/// background thread, exposes the bound port, and shuts down + joins
+/// cleanly via Drop.
+///
+/// ## Example
+///
+/// ```no_run
+/// use moonlab::control_plane::{ControlPlaneServer, submit_circuit};
+/// use moonlab::qgtl::{GateType, QgtlCircuit};
+///
+/// let srv = ControlPlaneServer::open("127.0.0.1", 0).unwrap();
+/// let port = srv.port();
+///
+/// let mut c = QgtlCircuit::new(2).unwrap();
+/// c.add_gate(GateType::H, 0, -1, &[]).unwrap();
+/// c.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
+/// let probs = submit_circuit("127.0.0.1", port, &c.serialize().unwrap()).unwrap();
+/// assert!((probs[0] - 0.5).abs() < 1e-9);
+///
+/// // srv drops here -- background thread is signalled and joined.
+/// ```
+pub struct ControlPlaneServer {
+    handle: Arc<AtomicPtr<moonlab_control_server_t>>,
+    port:   u16,
+    runner: Option<JoinHandle<i32>>,
+}
+
+// SAFETY: the C lifecycle API is internally synchronized around the
+// listen socket fd and self-pipe.  The opaque handle pointer is only
+// dereferenced inside the C library, which is thread-safe for the
+// shutdown/close path (the run loop and shutdown writes are
+// independent fds).
+unsafe impl Send for ControlPlaneServer {}
+unsafe impl Sync for ControlPlaneServer {}
+
+impl ControlPlaneServer {
+    /// Open a listener on `host:port` and start the worker thread.
+    /// Pass `port = 0` for an OS-chosen port (read back via `.port()`).
+    pub fn open(host: &str, port: u16) -> Result<Self> {
+        Self::open_with_max_iters(host, port, i32::MAX)
+    }
+
+    /// Same as `open` but caps the number of served connections.
+    pub fn open_with_max_iters(host: &str, port: u16, max_iters: i32) -> Result<Self> {
+        let host_c = CString::new(host)
+            .map_err(|e| QuantumError::Ffi(format!("invalid host: {e}")))?;
+        let mut handle_raw: *mut moonlab_control_server_t = std::ptr::null_mut();
+        let mut bound_port: u16 = 0;
+
+        let rc = unsafe {
+            moonlab_control_server_open(
+                host_c.as_ptr(),
+                port,
+                &mut handle_raw as *mut *mut moonlab_control_server_t,
+                &mut bound_port as *mut u16,
+            )
+        };
+        if rc != 0 || handle_raw.is_null() {
+            return Err(QuantumError::Ffi(format!("server_open rc={rc}")));
+        }
+
+        let handle = Arc::new(AtomicPtr::new(handle_raw));
+        let runner_handle = Arc::clone(&handle);
+        let runner = std::thread::spawn(move || -> i32 {
+            let ptr = runner_handle.load(Ordering::SeqCst);
+            unsafe { moonlab_control_server_run(ptr, max_iters) }
+        });
+
+        Ok(Self {
+            handle,
+            port: bound_port,
+            runner: Some(runner),
+        })
+    }
+
+    /// Bound TCP port (OS-chosen when constructed with `port = 0`).
+    pub fn port(&self) -> u16 { self.port }
+
+    /// Signal the server to stop after the current in-flight request.
+    /// Idempotent.  The Drop impl also calls this, so explicit usage
+    /// is only required when you want to observe the join before drop.
+    pub fn shutdown(&self) {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if !ptr.is_null() {
+            unsafe { moonlab_control_server_shutdown(ptr); }
+        }
+    }
+}
+
+impl Drop for ControlPlaneServer {
+    fn drop(&mut self) {
+        self.shutdown();
+        if let Some(jh) = self.runner.take() {
+            let _ = jh.join();
+        }
+        let ptr = self.handle.swap(std::ptr::null_mut(), Ordering::SeqCst);
+        if !ptr.is_null() {
+            unsafe { moonlab_control_server_close(ptr); }
+        }
     }
 }
