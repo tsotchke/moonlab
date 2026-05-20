@@ -301,6 +301,37 @@ class ControlPlaneServer:
             raise ControlPlaneError(f"server_run rc={self._run_rc}")
 
 
+def submit_metrics(host: str,
+                   port: int,
+                   timeout: Optional[float] = 5.0) -> str:
+    """Scrape the v0.8.23 METRICS endpoint and return the Prometheus
+    text-format exposition body.
+
+    No AUTH or TLS-cert required (monitoring scrapers run without
+    credentials by convention).
+
+    Raises :class:`ControlPlaneError` on transport failure or
+    malformed response framing.
+    """
+    with socket.create_connection((host, port), timeout=timeout) as sock:
+        sock.sendall(b"METRICS\n")
+        resp_hdr = _recv_until_newline(sock, cap=64)
+        if not resp_hdr.startswith("METRICS "):
+            raise ControlPlaneError(
+                f"unrecognized METRICS response: {resp_hdr!r}"
+            )
+        try:
+            num_bytes = int(resp_hdr[len("METRICS "):].strip())
+        except ValueError as e:
+            raise ControlPlaneError(
+                f"malformed METRICS header: {resp_hdr!r}"
+            ) from e
+        if num_bytes <= 0 or num_bytes > (1 << 18):
+            raise ControlPlaneError(f"implausible metrics size {num_bytes}")
+        body = _recv_exact(sock, num_bytes)
+    return body.decode("utf-8")
+
+
 def submit_health(host: str,
                   port: int,
                   timeout: Optional[float] = 5.0) -> bool:
@@ -397,6 +428,7 @@ __all__ = [
     "submit_circuit_shots",
     "submit_circuit_tls",
     "submit_health",
+    "submit_metrics",
     "ControlPlaneServer",
     "ControlPlaneError",
 ]

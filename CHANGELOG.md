@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.23.)
+(No unreleased changes since v0.8.24.)
+
+## [0.8.24] - 2026-05-19
+
+**Python + Rust METRICS clients.**  Completes binding-language parity
+for the v0.8.23 Prometheus exposition endpoint.
+
+### Added
+
+- Python `moonlab.control_plane.submit_metrics(host, port,
+  timeout=5.0) -> str`.  Pure stdlib socket; parses the
+  `METRICS <bytes>\n<body>` frame and returns the body as `str`.
+
+- Rust `moonlab::control_plane::submit_metrics(host, port)
+  -> Result<String>`.  FFI thunk over the v0.8.23 C entry point;
+  `libc::free`s the C-side malloc'd body.
+
+- `moonlab-sys` allowlist adds `moonlab_control_submit_metrics`.
+
+- `bindings/rust/moonlab/tests/control_plane_metrics_e2e.rs`:
+  drives 3 HEALTH probes then scrapes METRICS, asserts the body
+  contains both the `# HELP` line and per-verb counters.
+
+### Verified
+
+```
+Rust:                                            (cargo test)
+  test metrics_scrape_after_health_probes ... ok
+
+Python:                                          (smoke)
+  moonlab_control_requests_total{verb="HEALTH"} 2
+  moonlab_control_requests_total{verb="METRICS"} 1
+  OK   Python metrics scrape
+```
 
 ## [0.8.23] - 2026-05-19
 
