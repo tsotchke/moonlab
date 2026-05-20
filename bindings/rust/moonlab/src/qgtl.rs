@@ -19,11 +19,14 @@
 
 use crate::error::{QuantumError, Result};
 use moonlab_sys::{
-    moonlab_qgtl_add_gate, moonlab_qgtl_circuit_create, moonlab_qgtl_circuit_free,
-    moonlab_qgtl_circuit_num_gates, moonlab_qgtl_circuit_num_qubits,
-    moonlab_qgtl_exec_options_t, moonlab_qgtl_execute, moonlab_qgtl_results_free,
-    moonlab_qgtl_results_t,
+    moonlab_qgtl_add_gate, moonlab_qgtl_circuit_create,
+    moonlab_qgtl_circuit_deserialize, moonlab_qgtl_circuit_free,
+    moonlab_qgtl_circuit_load, moonlab_qgtl_circuit_num_gates,
+    moonlab_qgtl_circuit_num_qubits, moonlab_qgtl_circuit_save,
+    moonlab_qgtl_circuit_serialize, moonlab_qgtl_exec_options_t,
+    moonlab_qgtl_execute, moonlab_qgtl_results_free, moonlab_qgtl_results_t,
 };
+use std::ffi::CString;
 use std::ptr;
 
 /// Gate-type tag matching `moonlab_qgtl_gate_t` numerically.
@@ -158,6 +161,95 @@ impl QgtlCircuit {
     }
 }
 
+impl QgtlCircuit {
+    /// Serialize the circuit to a portable text string
+    /// (moonlab-circuit v1 format, since v0.8.3 C surface).
+    pub fn serialize(&self) -> Result<String> {
+        let mut needed: usize = 0;
+        let rc = unsafe {
+            moonlab_qgtl_circuit_serialize(
+                self.ptr as *const _,
+                ptr::null_mut(),
+                0,
+                &mut needed,
+            )
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!(
+                "serialize size-query: rc={rc}"
+            )));
+        }
+        let mut buf: Vec<u8> = vec![0u8; needed + 1];
+        let rc = unsafe {
+            moonlab_qgtl_circuit_serialize(
+                self.ptr as *const _,
+                buf.as_mut_ptr() as *mut i8,
+                buf.len(),
+                ptr::null_mut(),
+            )
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("serialize: rc={rc}")));
+        }
+        if let Some(nul_at) = buf.iter().position(|&b| b == 0) {
+            buf.truncate(nul_at);
+        }
+        String::from_utf8(buf).map_err(|e| {
+            QuantumError::Ffi(format!("serialize: non-utf8 output: {e}"))
+        })
+    }
+
+    /// Construct a circuit from a moonlab-circuit v1 text string.
+    pub fn deserialize(text: &str) -> Result<Self> {
+        let bytes = text.as_bytes();
+        let mut status: i32 = 0;
+        let p = unsafe {
+            moonlab_qgtl_circuit_deserialize(
+                bytes.as_ptr() as *const i8,
+                bytes.len(),
+                &mut status,
+            )
+        };
+        if p.is_null() {
+            return Err(QuantumError::Ffi(format!(
+                "deserialize: status={status}"
+            )));
+        }
+        Ok(Self { ptr: p as *mut std::ffi::c_void })
+    }
+
+    /// Save the circuit to a file in the portable text format.
+    pub fn save(&self, path: &str) -> Result<()> {
+        let cpath = CString::new(path).map_err(|e| {
+            QuantumError::Ffi(format!("save: invalid path: {e}"))
+        })?;
+        let rc = unsafe {
+            moonlab_qgtl_circuit_save(self.ptr as *const _, cpath.as_ptr())
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("save({path}): rc={rc}")));
+        }
+        Ok(())
+    }
+
+    /// Load a circuit from a file previously written by `save`.
+    pub fn load(path: &str) -> Result<Self> {
+        let cpath = CString::new(path).map_err(|e| {
+            QuantumError::Ffi(format!("load: invalid path: {e}"))
+        })?;
+        let mut status: i32 = 0;
+        let p = unsafe {
+            moonlab_qgtl_circuit_load(cpath.as_ptr(), &mut status)
+        };
+        if p.is_null() {
+            return Err(QuantumError::Ffi(format!(
+                "load({path}): status={status}"
+            )));
+        }
+        Ok(Self { ptr: p as *mut std::ffi::c_void })
+    }
+}
+
 impl Drop for QgtlCircuit {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
@@ -237,5 +329,56 @@ mod tests {
         assert_eq!(GateType::H as u32, 4);
         assert_eq!(GateType::Cnot as u32, 10);
         assert_eq!(GateType::Swap as u32, 13);
+    }
+
+    // ---- v0.8.5 circuit serialization ----
+
+    #[test]
+    fn serialize_roundtrip_byte_exact() {
+        let mut c = QgtlCircuit::new(4).unwrap();
+        c.add_gate(GateType::H, 0, -1, &[]).unwrap();
+        c.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
+        c.add_gate(GateType::Rz, 2, -1, &[std::f64::consts::FRAC_PI_3]).unwrap();
+        c.add_gate(GateType::Swap, 3, 2, &[]).unwrap();
+
+        let text = c.serialize().unwrap();
+        assert!(text.contains("# moonlab-circuit v1"));
+        assert!(text.contains("NUM_QUBITS 4"));
+        assert!(text.contains("CNOT 1 0"));
+
+        let c2 = QgtlCircuit::deserialize(&text).unwrap();
+        assert_eq!(c2.num_qubits(), 4);
+        assert_eq!(c2.num_gates(), 4);
+        assert_eq!(c2.serialize().unwrap(), text);
+    }
+
+    #[test]
+    fn save_load_roundtrip() {
+        let mut c = QgtlCircuit::new(3).unwrap();
+        c.add_gate(GateType::H, 0, -1, &[]).unwrap();
+        c.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
+        c.add_gate(GateType::Cnot, 2, 1, &[]).unwrap();
+
+        let path = std::env::temp_dir().join("moonlab_qgtl_rs_test.qcir");
+        let path_str = path.to_str().unwrap();
+
+        c.save(path_str).unwrap();
+        let mut c2 = QgtlCircuit::load(path_str).unwrap();
+        assert_eq!(c2.num_qubits(), 3);
+        assert_eq!(c2.num_gates(), 3);
+
+        // Verify it actually runs.
+        let r = c2.execute(0, 0, true).unwrap();
+        let p = r.probabilities.unwrap();
+        assert!((p[0] - 0.5).abs() < 1e-9);
+        assert!((p[7] - 0.5).abs() < 1e-9);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn deserialize_rejects_garbage() {
+        assert!(QgtlCircuit::deserialize("garbage\n").is_err());
+        assert!(QgtlCircuit::deserialize("NUM_QUBITS 99\nH 0\n").is_err());
     }
 }

@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.4.)
+(No unreleased changes since v0.8.5.)
+
+## [0.8.5] - 2026-05-19
+
+**Rust binding for v0.8.3 circuit serialization.**  Brings the
+portable circuit format to the Rust ecosystem.
+
+### Added
+
+- `moonlab-sys`: bindgen allowlist now generates FFI for
+  `moonlab_qgtl_circuit_serialize` / `_deserialize` / `_save` /
+  `_load`.
+
+- `moonlab::qgtl::QgtlCircuit::serialize() -> Result<String>`
+- `moonlab::qgtl::QgtlCircuit::deserialize(text) -> Result<Self>`
+- `moonlab::qgtl::QgtlCircuit::save(path)` / `load(path)`
+
+### Verified
+
+  qgtl::tests::serialize_roundtrip_byte_exact ... ok
+  qgtl::tests::save_load_roundtrip ............. ok
+  qgtl::tests::deserialize_rejects_garbage ..... ok
+
+  test result: 10 passed; 0 failed (3 new + 7 pre-existing)
+
+The `save_load_roundtrip` test writes a 3-qubit GHZ circuit to
+disk, loads it back, executes it, and confirms P[0] = P[7] = 0.5.
 
 ## [0.8.4] - 2026-05-19
 
