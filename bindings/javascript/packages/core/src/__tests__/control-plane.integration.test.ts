@@ -63,6 +63,22 @@ finally:
     srv.__exit__(None, None, None)
 `;
 
+const AUTH_HARNESS_PY = `
+import sys, time, os
+sys.path.insert(0, ${JSON.stringify(PYTHON_BINDINGS)})
+from moonlab.control_plane import ControlPlaneServer
+srv = ControlPlaneServer(host="127.0.0.1", port=0, secret=b"shared-key-bytes")
+srv.__enter__()
+print(srv.port, flush=True)
+try:
+    while True:
+        time.sleep(0.5)
+except KeyboardInterrupt:
+    pass
+finally:
+    srv.__exit__(None, None, None)
+`;
+
 (CAN_RUN ? describe : describe.skip)('control-plane JS <-> real C server', () => {
   let proc: ChildProcessWithoutNullStreams;
   let port = 0;
@@ -118,6 +134,73 @@ finally:
     expect(body).toContain('moonlab_control_max_concurrent_rejected_total');
     expect(body).toContain('moonlab_control_tls_handshake_failed_total');
   });
+
+  it('CIRCUIT against an HMAC-secured server with matching secret', async () => {
+    // Stand up a separate authed server harness.
+    const authProc = spawn('python3', ['-c', AUTH_HARNESS_PY], {
+      env: {
+        ...process.env,
+        DYLD_LIBRARY_PATH: LIB_DIR!,
+        MOONLAB_LIB: LIB_PATH!,
+      },
+    });
+    try {
+      const authPort = await new Promise<number>((resolve, reject) => {
+        let buf = '';
+        const timer = setTimeout(() => reject(
+          new Error('auth harness did not print a port within 5s')), 5000);
+        authProc.stdout.on('data', (chunk: Buffer) => {
+          buf += chunk.toString('utf-8');
+          const nl = buf.indexOf('\n');
+          if (nl >= 0) {
+            const n = parseInt(buf.slice(0, nl).trim(), 10);
+            if (Number.isFinite(n) && n > 0) {
+              clearTimeout(timer);
+              resolve(n);
+            }
+          }
+        });
+        authProc.stderr.on('data', (c) =>
+          process.stderr.write(`[auth] ${c.toString('utf-8')}`));
+        authProc.once('exit', (code) => {
+          clearTimeout(timer);
+          reject(new Error(`auth harness exited early (code=${code})`));
+        });
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const text = [
+        '# moonlab-circuit v1',
+        'NUM_QUBITS 2',
+        'H 0',
+        'CNOT 1 0',
+        '',
+      ].join('\n');
+
+      // Without secret -- must be rejected.
+      await expect(submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
+
+      // With matching secret -- must succeed.
+      const probs = await submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        secret: Buffer.from('shared-key-bytes'),
+      });
+      expect(probs).toHaveLength(4);
+      expect(probs[0]).toBeCloseTo(0.5, 10);
+      expect(probs[3]).toBeCloseTo(0.5, 10);
+
+      // With wrong secret -- must be rejected.
+      await expect(submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        secret: Buffer.from('wrong-key'),
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
+    } finally {
+      authProc.kill('SIGINT');
+      await new Promise((r) => authProc.once('exit', r));
+    }
+  }, 15_000);
 
   it('CIRCUIT bell-pair returns the right probabilities', async () => {
     const text = [
