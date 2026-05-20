@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.9.1.)
+(No unreleased changes since v0.9.2.)
+
+## [0.9.2] - 2026-05-20
+
+**Prometheus exporter sidecar + control-plane error codes in the
+reference doc.**  Removes two `docs/CONTROL_PLANE.md` references to
+artifacts that did not exist.
+
+### Added
+
+- `tools/exporter/moonlab_control_exporter.py` -- threading HTTP
+  server that bridges Prometheus to the control plane's line-protocol
+  `METRICS` endpoint.  Invokes the upstream over TCP, returns the
+  body verbatim as `text/plain; version=0.0.4; charset=utf-8`.
+  Smoke-tested against an in-process `ControlPlaneServer`.
+- `tools/exporter/README.md` -- quickstart, sample `prometheus.yml`,
+  flag table, failure-mode table.
+- `docs/reference/error-codes.md` -- adds the control-plane row to
+  the per-module enum table and a dedicated table listing every
+  `MOONLAB_CONTROL_*` code from `-400` through `-409` with its meaning
+  and the rationale for the `-4xx` range.
+
+### Fixed
+
+- `docs/CONTROL_PLANE.md` had the METRICS reply framed as
+  `OK <n>\n<bytes>` -- the server actually emits
+  `METRICS <n>\n<bytes>`.  Doc corrected.
+
+### Verified
+
+Exporter smoke: stood up a Python `ControlPlaneServer`, launched the
+exporter, scraped `http://127.0.0.1:9988/metrics`, confirmed the
+response body contained `moonlab_control_requests_total` and
+`moonlab_control_max_concurrent_rejected_total`.
 
 ## [0.9.1] - 2026-05-20
 

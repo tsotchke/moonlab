@@ -88,6 +88,7 @@ module-specific and documented in the listed header.
 | MPI bridge                    | `mpi_bridge_error_t`   | `src/distributed/mpi_bridge.h`                          |
 | GPU backend                   | `gpu_error_t`          | `src/optimization/gpu/gpu_backend.h`                    |
 | Eshkol fp64-on-Metal interop  | `moonlab_eshkol_status_t` | `src/optimization/gpu/backends/gpu_eshkol.h`         |
+| Control plane                 | `MOONLAB_CONTROL_*`       | `src/control/control_plane.h`                        |
 
 Notable module-specific extensions:
 
@@ -103,6 +104,25 @@ Notable module-specific extensions:
   (`src/algorithms/tensor_network/ca_peps.h:51-57`).
 - `mpi_bridge_error_t` adds `TIMEOUT (-7)` for collective ops with
   a deadline (`src/distributed/mpi_bridge.h:82-90`).
+- Control plane uses HTTP-style codes in the `-4xx` range
+  (`src/control/control_plane.h:54-62`):
+
+  | Macro                            | Value | Meaning                                  |
+  |----------------------------------|------:|------------------------------------------|
+  | `MOONLAB_CONTROL_OK`             |     0 | success                                  |
+  | `MOONLAB_CONTROL_BAD_ARG`        |  -400 | malformed request                        |
+  | `MOONLAB_CONTROL_AUTH_REQUIRED`  |  -401 | server requires HMAC; client did not auth|
+  | `MOONLAB_CONTROL_AUTH_BAD`       |  -402 | HMAC verification failed                 |
+  | `MOONLAB_CONTROL_IO_ERROR`       |  -403 | socket-level failure                     |
+  | `MOONLAB_CONTROL_REJECTED`       |  -405 | server rejected the payload              |
+  | `MOONLAB_CONTROL_OOM`            |  -407 | out of memory                            |
+  | `MOONLAB_CONTROL_RATE_LIMITED`   |  -408 | per-IP token bucket refused              |
+  | `MOONLAB_CONTROL_SERVER_BUSY`    |  -409 | concurrent-connection cap hit (v0.9.0+)  |
+
+  The `-4xx` range deliberately departs from the `(-99, 0)` window
+  reserved for cross-module-safe generic codes; the control plane
+  borrows the HTTP convention because its wire protocol emits the
+  numeric code directly to clients.
 
 ## Diagnostic helper
 

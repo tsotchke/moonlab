@@ -81,7 +81,7 @@ HEALTH\n                           -- liveness ping
             <- OK\n
 
 METRICS\n                          -- Prometheus text exposition
-            <- OK <n>\n<n bytes of metrics text>
+            <- METRICS <n>\n<n bytes of metrics text>
 
 AUTH <hexdigest>\n                 -- HMAC-SHA3-256 of next request body
                                       under the shared secret
