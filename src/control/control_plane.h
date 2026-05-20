@@ -247,6 +247,57 @@ moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
                               const uint8_t *msg,    size_t msg_len,
                               uint8_t        out_digest[32]);
 
+/* ------------------------------------------------------------------
+ * TLS transport (since v0.8.17, gated by `MOONLAB_HAVE_TLS`).
+ *
+ * Wraps each connection in OpenSSL TLS 1.3.  HMAC auth still applies
+ * inside the encrypted channel.  Server is configured with a PEM
+ * certificate + private key; client either pins a CA bundle or runs
+ * with `insecure = 1` for dev / self-signed certificates.
+ *
+ * `moonlab_control_*` calls return `MOONLAB_CONTROL_BAD_ARG` when the
+ * shared library was built without `QSIM_ENABLE_TLS=ON`.
+ * ------------------------------------------------------------------ */
+
+/** @brief Status: TLS handshake / cert load / verification failure. */
+#define MOONLAB_CONTROL_TLS_ERROR     (-407)
+
+/**
+ * @brief Configure the server to wrap every accepted connection in TLS.
+ *        Loads the certificate + private key from PEM files.  Pass
+ *        NULL for both to disable TLS on a previously configured server.
+ *
+ * @return MOONLAB_CONTROL_OK or a negative code.  Returns
+ *         MOONLAB_CONTROL_BAD_ARG if the library was built without TLS.
+ */
+MOONLAB_API int
+moonlab_control_server_use_tls(moonlab_control_server_t *server,
+                               const char               *cert_path,
+                               const char               *key_path);
+
+/**
+ * @brief Submit a circuit over a TLS-wrapped connection.
+ *
+ * @param[in]  ca_path   Optional CA bundle to pin against the server's
+ *                       certificate.  Pass NULL when `insecure = 1`.
+ * @param[in]  insecure  Set to 1 to skip peer verification (development /
+ *                       self-signed certs).  Production deployments
+ *                       should set 0 and supply `ca_path`.
+ * @param[in]  secret / secret_len  Optional HMAC auth (matches the
+ *                       v0.8.15 / v0.8.16 in-band AUTH prelude).
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_tls(const char    *host,
+                                   uint16_t       port,
+                                   const char    *ca_path,
+                                   int            insecure,
+                                   const uint8_t *secret,
+                                   size_t         secret_len,
+                                   const char    *circuit_text,
+                                   size_t         text_len,
+                                   double       **out_probs,
+                                   size_t        *out_num);
+
 #ifdef __cplusplus
 }
 #endif

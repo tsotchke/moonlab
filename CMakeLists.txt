@@ -74,6 +74,7 @@ option(QSIM_ENABLE_OPENCL "Enable OpenCL GPU backend" OFF)
 option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
 option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
+option(QSIM_ENABLE_TLS "Link OpenSSL for TLS-wrapped control-plane transport (since v0.8.17)" OFF)
 option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II / SF64)" OFF)
 set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
     "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
@@ -526,6 +527,31 @@ if(QSIM_ENABLE_MPI)
     endif()
 endif()
 
+# TLS via OpenSSL (since v0.8.17).  Used by the control-plane transport;
+# Homebrew on macOS installs to /opt/homebrew/opt/openssl@3 which is not
+# in CMake's default search path, so probe for it explicitly.
+if(QSIM_ENABLE_TLS)
+    if(APPLE AND NOT OPENSSL_ROOT_DIR)
+        execute_process(COMMAND brew --prefix openssl@3
+                        OUTPUT_VARIABLE _brew_openssl
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                        ERROR_QUIET)
+        if(_brew_openssl)
+            set(OPENSSL_ROOT_DIR "${_brew_openssl}")
+        endif()
+    endif()
+    find_package(OpenSSL)
+    if(OPENSSL_FOUND)
+        message(STATUS "OpenSSL: ${OPENSSL_VERSION} at ${OPENSSL_INCLUDE_DIR}")
+        set(QSIM_HAS_TLS ON)
+    else()
+        message(FATAL_ERROR
+            "QSIM_ENABLE_TLS=ON but OpenSSL was not found.  "
+            "Install via apt install libssl-dev / brew install openssl@3, "
+            "or re-run with -DQSIM_ENABLE_TLS=OFF.")
+    endif()
+endif()
+
 # libirrep -- QEC + rep-theory + sector ED substrate.
 # Detection order:
 #   1. find_package(libirrep CONFIG)  -- preferred, picks up the installed
@@ -792,7 +818,8 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/mwpm_exact.c
     src/distributed/scheduler.c
     # Control plane (since v0.8.7): POSIX-socket TCP transport for the
-    # v0.8.3 moonlab-circuit v1 wire format.
+    # v0.8.3 moonlab-circuit v1 wire format.  v0.8.17 OpenSSL TLS path
+    # is gated via #ifdef MOONLAB_HAVE_TLS inside the same TU.
     src/control/control_plane.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
@@ -1021,6 +1048,11 @@ target_link_libraries(quantumsim
     PRIVATE
         Threads::Threads
 )
+
+if(QSIM_HAS_TLS)
+    target_link_libraries(quantumsim PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAVE_TLS=1)
+endif()
 
 # ==============================================================================
 # Platform-Specific Configuration
