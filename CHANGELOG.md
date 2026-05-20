@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.7.)
+(No unreleased changes since v0.8.8.)
+
+## [0.8.8] - 2026-05-19
+
+**Python control-plane client.**  Pure-stdlib TCP client for the
+v0.8.7 server.  Brings remote circuit submission to Python with
+no third-party dependencies.
+
+### Added
+
+- `bindings/python/moonlab/control_plane.py`:
+  - `submit_circuit(host, port, circuit_text, timeout=30.0)` ->
+    `list[float]` -- sends a moonlab-circuit v1 payload over a
+    `socket.create_connection`, decodes the `OK <N>\n` header,
+    unpacks `<Nd` (little-endian f64) probabilities via `struct`.
+  - `ControlPlaneError` -- raised on `ERR` responses or transport
+    failures (short reads, malformed framing, ...).
+
+### Verified
+
+End-to-end smoke: C server in a Python pthread on `127.0.0.1:0`,
+Python client submits a Bell circuit, gets back
+`[0.5, 0.0, 0.0, 0.5]` matching to 1e-9.  Garbage payload triggers
+`ControlPlaneError("server rejected: ERR -405 deserialize")`.
+
+Wire format matches v0.8.7 C client byte-for-byte; either client
+can drive any moonlab control-plane server.
 
 ## [0.8.7] - 2026-05-19
 
