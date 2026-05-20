@@ -41,9 +41,19 @@ static inline int h_idx(int d, int a, int b) { return a * d + b; }
 static inline int v_idx(int d, int a, int b) { return d * d + a * d + b; }
 
 /* Apply the geodesic correction path between two paired defects.
- * Walks columns first (flipping horizontal edges), then rows
- * (flipping vertical edges).  Each step flips one edge -- XOR into
- * `corr` so adjacent corrections cancel. */
+ *
+ * Edge convention (matches compute_syndrome in the toric harness):
+ *   h(a, b) at index `a*d + b`           connects vertex (a, b) to (a+1, b)
+ *                                         -- horizontal-edge / along +a axis
+ *   v(a, b) at index `d*d + a*d + b`     connects vertex (a, b) to (a, b+1)
+ *                                         -- vertical-edge   / along +b axis
+ *
+ * Walking the defect from p to q: a-steps cross h-edges, b-steps
+ * cross v-edges.  An earlier version of this function had the index
+ * families swapped (h-edges flipped during b-steps), which left
+ * residual syndrome and inflated logical-error rates across the
+ * shoot-out.  Fix paired with the same-shape correction in
+ * decoder_bench.c torus_edge_between. */
 static void apply_path(int d, point_t p, point_t q, unsigned char *corr)
 {
     int db_fwd = ((q.b - p.b) % d + d) % d;
@@ -61,13 +71,13 @@ static void apply_path(int d, point_t p, point_t q, unsigned char *corr)
     int b = p.b;
     for (int s = 0; s < db_steps; s++) {
         int b_edge = (db_dir == +1) ? b : ((b + d - 1) % d);
-        corr[h_idx(d, p.a, b_edge)] ^= 1;
+        corr[v_idx(d, p.a, b_edge)] ^= 1;   /* b-step crosses v-edge */
         b = (b + db_dir + d) % d;
     }
     int a = p.a;
     for (int s = 0; s < da_steps; s++) {
         int a_edge = (da_dir == +1) ? a : ((a + d - 1) % d);
-        corr[v_idx(d, a_edge, q.b)] ^= 1;
+        corr[h_idx(d, a_edge, q.b)] ^= 1;   /* a-step crosses h-edge */
         a = (a + da_dir + d) % d;
     }
 }
