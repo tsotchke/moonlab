@@ -307,7 +307,9 @@ def submit_circuit_tls(host: str,
                        ca_path: Optional[str] = None,
                        insecure: bool = False,
                        timeout: Optional[float] = 30.0,
-                       secret: Optional[Union[bytes, str]] = None) -> List[float]:
+                       secret: Optional[Union[bytes, str]] = None,
+                       client_cert_path: Optional[str] = None,
+                       client_key_path: Optional[str] = None) -> List[float]:
     """Submit a circuit over a TLS-wrapped TCP connection -- since v0.8.18.
 
     Mirrors the C ``moonlab_control_submit_circuit_tls`` API.
@@ -333,6 +335,14 @@ def submit_circuit_tls(host: str,
         ctx = ssl._create_unverified_context()  # noqa: SLF001
     else:
         ctx = ssl.create_default_context(cafile=ca_path)
+
+    # mTLS: present client cert when both files are provided (v0.8.20).
+    if client_cert_path is not None or client_key_path is not None:
+        if not (client_cert_path and client_key_path):
+            raise ControlPlaneError(
+                "client_cert_path and client_key_path must both be provided"
+            )
+        ctx.load_cert_chain(certfile=client_cert_path, keyfile=client_key_path)
 
     with socket.create_connection((host, port), timeout=timeout) as raw_sock:
         with ctx.wrap_socket(raw_sock, server_hostname=host) as sock:
