@@ -257,6 +257,15 @@ try:
 except AttributeError:
     _RATE_LIMIT_API_AVAILABLE = False
 
+try:
+    _lib.moonlab_control_server_set_request_timeout.argtypes = [
+        ctypes.c_void_p, ctypes.c_int,
+    ]
+    _lib.moonlab_control_server_set_request_timeout.restype = ctypes.c_int
+    _REQUEST_TIMEOUT_API_AVAILABLE = True
+except AttributeError:
+    _REQUEST_TIMEOUT_API_AVAILABLE = False
+
 
 class ControlPlaneServer:
     """In-process control-plane server, since v0.8.14.
@@ -288,7 +297,8 @@ class ControlPlaneServer:
                  tls_key: Optional[str] = None,
                  client_ca: Optional[str] = None,
                  rate_limit_rps: int = 0,
-                 rate_limit_burst: int = 0) -> None:
+                 rate_limit_burst: int = 0,
+                 request_timeout_secs: int = 0) -> None:
         """Spin up an in-process control-plane server.
 
         Optional kwargs (all applied before the worker thread starts
@@ -319,6 +329,7 @@ class ControlPlaneServer:
         self._cfg_client_ca = client_ca
         self._cfg_rate_rps  = int(rate_limit_rps)
         self._cfg_burst     = int(rate_limit_burst)
+        self._cfg_timeout   = int(request_timeout_secs)
 
     @property
     def port(self) -> int:
@@ -344,6 +355,8 @@ class ControlPlaneServer:
             self.require_client_cert(self._cfg_client_ca)
         if self._cfg_rate_rps > 0:
             self.set_rate_limit(self._cfg_rate_rps, self._cfg_burst)
+        if self._cfg_timeout > 0:
+            self.set_request_timeout(self._cfg_timeout)
 
         def runner() -> None:
             self._run_rc = _lib.moonlab_control_server_run(
@@ -413,6 +426,21 @@ class ControlPlaneServer:
             ctypes.c_void_p(self._handle), cp)
         if rc != 0:
             raise ControlPlaneError(f"require_client_cert rc={rc}")
+
+    def set_request_timeout(self, timeout_secs: int) -> None:
+        """Set per-request socket timeout in seconds (since v0.8.27 /
+        v0.8.26 server).  0 disables the timeout (legacy default)."""
+        if not _REQUEST_TIMEOUT_API_AVAILABLE:
+            raise ControlPlaneError(
+                "set_request_timeout unavailable -- libquantumsim "
+                "predates v0.8.26"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        rc = _lib.moonlab_control_server_set_request_timeout(
+            ctypes.c_void_p(self._handle), int(timeout_secs))
+        if rc != 0:
+            raise ControlPlaneError(f"set_request_timeout rc={rc}")
 
     def set_rate_limit(self, rate_rps: int, burst: int = 0) -> None:
         """Configure the per-source-IP token-bucket rate limit (since

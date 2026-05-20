@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.26.)
+(No unreleased changes since v0.8.27.)
+
+## [0.8.27] - 2026-05-20
+
+**Python + Rust per-request timeout parity.**  Completes binding
+coverage of the v0.8.26 socket-timeout safety net.
+
+### Added
+
+- Python `ControlPlaneServer.set_request_timeout(timeout_secs)`
+  + `request_timeout_secs` constructor kwarg.
+
+- Rust `ControlPlaneServer::set_request_timeout(timeout_secs)`
+  method.
+
+- `moonlab-sys` allowlist adds
+  `moonlab_control_server_set_request_timeout`.
+
+### Verified
+
+```
+Rust:    test set_request_timeout_via_wrapper ... ok
+Python:  OK   Python ControlPlaneServer(request_timeout_secs=2) -> Bell
+```
 
 ## [0.8.26] - 2026-05-20
 

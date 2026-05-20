@@ -21,7 +21,8 @@ use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
     moonlab_control_server_open, moonlab_control_server_run,
-    moonlab_control_server_set_rate_limit, moonlab_control_server_set_secret,
+    moonlab_control_server_set_rate_limit, moonlab_control_server_set_request_timeout,
+    moonlab_control_server_set_secret,
     moonlab_control_server_shutdown, moonlab_control_server_t,
     moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
     moonlab_control_submit_health, moonlab_control_submit_metrics,
@@ -369,6 +370,20 @@ impl ControlPlaneServer {
         let rc = unsafe { moonlab_control_server_set_rate_limit(ptr, rate_rps, burst) };
         if rc != 0 {
             return Err(QuantumError::Ffi(format!("set_rate_limit rc={rc}")));
+        }
+        Ok(())
+    }
+
+    /// Set per-request socket timeout in seconds (since v0.8.27 /
+    /// v0.8.26 server).  `0` disables (legacy default).
+    pub fn set_request_timeout(&self, timeout_secs: i32) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let rc = unsafe { moonlab_control_server_set_request_timeout(ptr, timeout_secs) };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("set_request_timeout rc={rc}")));
         }
         Ok(())
     }
