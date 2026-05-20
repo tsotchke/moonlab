@@ -25,6 +25,7 @@
 
 #include "vendor_noise_backend.h"
 
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,14 +70,155 @@ static const moonlab_vendor_noise_profile_t IONQ_FORTE_TYPICAL = {
     .description = "IonQ Forte all-to-all ion-trap typical (public reports)"
 };
 
+/* ============================================================ */
+/* Profile registry (since v1.1.0).                              */
+/*                                                                */
+/* The three pre-baked typical profiles are auto-registered on   */
+/* first access under both their canonical "-emu" names and the  */
+/* legacy bare names (one release cycle of compatibility).       */
+/* Sibling libraries can register additional profiles under      */
+/* arbitrary names via moonlab_register_vendor_noise_profile.    */
+/* Up to 32 slots; the registry is mutex-protected.              */
+/* ============================================================ */
+
+#define MOONLAB_VENDOR_NOISE_MAX_PROFILES 32
+
+typedef struct {
+    char                              *name;     /* heap-owned copy */
+    moonlab_vendor_noise_profile_t     profile;  /* by-value copy */
+    char                              *description_copy; /* if profile.description was non-NULL */
+    int                                in_use;
+} profile_slot_t;
+
+static profile_slot_t g_profiles[MOONLAB_VENDOR_NOISE_MAX_PROFILES];
+static int            g_num_profiles = 0;
+static pthread_mutex_t g_profile_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t  g_profile_init_once = PTHREAD_ONCE_INIT;
+
+/* Internal: install a slot.  Caller holds the lock.  Replaces an
+ * existing entry with the same name.  Returns the slot pointer or
+ * NULL on OOM/full. */
+static profile_slot_t *install_profile_locked(
+    const char *name, const moonlab_vendor_noise_profile_t *profile)
+{
+    /* Replace if name already exists. */
+    for (int i = 0; i < g_num_profiles; i++) {
+        if (g_profiles[i].in_use && strcmp(g_profiles[i].name, name) == 0) {
+            free(g_profiles[i].description_copy);
+            g_profiles[i].description_copy = NULL;
+            g_profiles[i].profile = *profile;
+            if (profile->description) {
+                g_profiles[i].description_copy = strdup(profile->description);
+                g_profiles[i].profile.description = g_profiles[i].description_copy;
+            }
+            return &g_profiles[i];
+        }
+    }
+    if (g_num_profiles >= MOONLAB_VENDOR_NOISE_MAX_PROFILES) return NULL;
+    profile_slot_t *s = &g_profiles[g_num_profiles];
+    s->name = strdup(name);
+    if (!s->name) return NULL;
+    s->profile = *profile;
+    s->description_copy = NULL;
+    if (profile->description) {
+        s->description_copy = strdup(profile->description);
+        s->profile.description = s->description_copy;
+    }
+    s->in_use = 1;
+    g_num_profiles++;
+    return s;
+}
+
+static void register_baked_profiles(void)
+{
+    /* No lock needed during pthread_once initialiser. */
+    install_profile_locked("ibm-falcon-emu",    &IBM_FALCON_TYPICAL);
+    install_profile_locked("rigetti-aspen-emu", &RIGETTI_ASPEN_TYPICAL);
+    install_profile_locked("ionq-forte-emu",    &IONQ_FORTE_TYPICAL);
+    /* Legacy aliases (one release of compatibility -- new code
+     * should use the -emu suffix; the bare "ionq-forte" name is
+     * reserved for the live-hardware backend that QGTL registers). */
+    install_profile_locked("ibm-falcon",    &IBM_FALCON_TYPICAL);
+    install_profile_locked("rigetti-aspen", &RIGETTI_ASPEN_TYPICAL);
+    install_profile_locked("ionq-forte",    &IONQ_FORTE_TYPICAL);
+}
+
+static void ensure_profile_registry(void)
+{
+    pthread_once(&g_profile_init_once, register_baked_profiles);
+}
+
+int moonlab_register_vendor_noise_profile(
+    const char *name, const moonlab_vendor_noise_profile_t *profile)
+{
+    if (!name || !profile) return MOONLAB_SCHED_BAD_ARG;
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    profile_slot_t *s = install_profile_locked(name, profile);
+    pthread_mutex_unlock(&g_profile_lock);
+    return s ? MOONLAB_SCHED_OK : MOONLAB_SCHED_OOM;
+}
+
+int moonlab_unregister_vendor_noise_profile(const char *name)
+{
+    if (!name) return MOONLAB_SCHED_BAD_ARG;
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    for (int i = 0; i < g_num_profiles; i++) {
+        if (g_profiles[i].in_use && strcmp(g_profiles[i].name, name) == 0) {
+            free(g_profiles[i].name);
+            free(g_profiles[i].description_copy);
+            /* Shift the tail down. */
+            for (int j = i; j < g_num_profiles - 1; j++) {
+                g_profiles[j] = g_profiles[j + 1];
+            }
+            memset(&g_profiles[g_num_profiles - 1], 0, sizeof(profile_slot_t));
+            g_num_profiles--;
+            pthread_mutex_unlock(&g_profile_lock);
+            return MOONLAB_SCHED_OK;
+        }
+    }
+    pthread_mutex_unlock(&g_profile_lock);
+    return MOONLAB_SCHED_BACKEND_NOT_FOUND;
+}
+
 const moonlab_vendor_noise_profile_t *
 moonlab_lookup_vendor_noise_profile(const char *name)
 {
     if (!name) return NULL;
-    if (strcmp(name, "ibm-falcon")    == 0) return &IBM_FALCON_TYPICAL;
-    if (strcmp(name, "rigetti-aspen") == 0) return &RIGETTI_ASPEN_TYPICAL;
-    if (strcmp(name, "ionq-forte")    == 0) return &IONQ_FORTE_TYPICAL;
-    return NULL;
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    const moonlab_vendor_noise_profile_t *hit = NULL;
+    for (int i = 0; i < g_num_profiles; i++) {
+        if (g_profiles[i].in_use && strcmp(g_profiles[i].name, name) == 0) {
+            hit = &g_profiles[i].profile;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_profile_lock);
+    return hit;
+}
+
+int moonlab_num_vendor_noise_profiles(void)
+{
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    const int n = g_num_profiles;
+    pthread_mutex_unlock(&g_profile_lock);
+    return n;
+}
+
+int moonlab_list_vendor_noise_profiles(const char **out_names, int max)
+{
+    if (!out_names || max <= 0) return 0;
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    const int n = g_num_profiles < max ? g_num_profiles : max;
+    for (int i = 0; i < n; i++) {
+        out_names[i] = g_profiles[i].name;
+    }
+    pthread_mutex_unlock(&g_profile_lock);
+    return n;
 }
 
 /* ---- Backend implementation ---- */
@@ -205,14 +347,22 @@ static uint64_t apply_pauli_noise_shot(uint64_t shot,
 }
 
 /* Execute fn: runs the noiseless simulator first, then post-
- * processes each shot with stochastic Pauli + readout noise. */
+ * processes each shot with stochastic Pauli + readout noise.
+ *
+ * The backend's ctx is a `const char *` -- the name of the noise
+ * profile to look up in the profile registry at execute time.
+ * This indirection lets live-calibration scrapers update a
+ * profile in place and have future runs of the same backend pick
+ * up the new calibration without re-registering the backend. */
 static int vendor_noise_execute(const moonlab_job_t   *job,
                                 moonlab_job_results_t *out,
                                 void                  *ctx)
 {
+    const char *profile_name = (const char *)ctx;
+    if (!profile_name) return MOONLAB_SCHED_BAD_ARG;
     const moonlab_vendor_noise_profile_t *profile =
-        (const moonlab_vendor_noise_profile_t *)ctx;
-    if (!profile) return MOONLAB_SCHED_BAD_ARG;
+        moonlab_lookup_vendor_noise_profile(profile_name);
+    if (!profile) return MOONLAB_SCHED_BACKEND_NOT_FOUND;
 
     /* Extract gate-list footprint (target / control / 1q-vs-2q) up
      * front so we can post-process each shot in a single pass.  The
@@ -264,24 +414,73 @@ int moonlab_register_vendor_noise_backend_with_profile(
         const moonlab_vendor_noise_profile_t *profile)
 {
     if (!name || !profile) return MOONLAB_SCHED_BAD_ARG;
+    /* Step 1: install the profile in the registry under @p name.
+     * It gets copied; the caller's storage can be freed after
+     * this call. */
+    const int rc_p = moonlab_register_vendor_noise_profile(name, profile);
+    if (rc_p != MOONLAB_SCHED_OK) return rc_p;
+
+    /* Step 2: look the just-registered profile back up to get the
+     * registry-owned name pointer (stable for the profile's
+     * lifetime, which is what the backend's ctx needs). */
+    ensure_profile_registry();
+    pthread_mutex_lock(&g_profile_lock);
+    const char *stable_name = NULL;
+    for (int i = 0; i < g_num_profiles; i++) {
+        if (g_profiles[i].in_use &&
+            strcmp(g_profiles[i].name, name) == 0) {
+            stable_name = g_profiles[i].name;
+            break;
+        }
+    }
+    /* Look up the description too, for the backend record. */
+    const char *desc = NULL;
+    for (int i = 0; i < g_num_profiles; i++) {
+        if (g_profiles[i].in_use &&
+            strcmp(g_profiles[i].name, name) == 0) {
+            desc = g_profiles[i].profile.description;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_profile_lock);
+    if (!stable_name) return MOONLAB_SCHED_INTERNAL;
+
     const moonlab_backend_t be = {
-        .name        = name,
+        .name        = stable_name,
         .execute     = vendor_noise_execute,
-        .ctx         = (void *)profile,
-        .description = profile->description
+        .ctx         = (void *)stable_name,
+        .description = desc
     };
     return moonlab_register_backend(&be);
 }
 
 int moonlab_register_vendor_noise_backends(void)
 {
+    /* Canonical names ("-emu" suffix).  These are the new
+     * recommended names; "ionq-forte" without the suffix is
+     * reserved for the live-hardware backend QGTL registers. */
     int rc = moonlab_register_vendor_noise_backend_with_profile(
-        "ibm-falcon", &IBM_FALCON_TYPICAL);
+        "ibm-falcon-emu",    &IBM_FALCON_TYPICAL);
+    if (rc != MOONLAB_SCHED_OK) return rc;
+    rc = moonlab_register_vendor_noise_backend_with_profile(
+        "rigetti-aspen-emu", &RIGETTI_ASPEN_TYPICAL);
+    if (rc != MOONLAB_SCHED_OK) return rc;
+    rc = moonlab_register_vendor_noise_backend_with_profile(
+        "ionq-forte-emu",    &IONQ_FORTE_TYPICAL);
+    if (rc != MOONLAB_SCHED_OK) return rc;
+
+    /* Legacy aliases (one release of compat).  Same profile data
+     * but registered under the bare names so existing code that
+     * hard-codes "ibm-falcon" etc. keeps working.  Deprecated;
+     * QGTL's live IonQ backend will replace "ionq-forte" in the
+     * next release. */
+    rc = moonlab_register_vendor_noise_backend_with_profile(
+        "ibm-falcon",    &IBM_FALCON_TYPICAL);
     if (rc != MOONLAB_SCHED_OK) return rc;
     rc = moonlab_register_vendor_noise_backend_with_profile(
         "rigetti-aspen", &RIGETTI_ASPEN_TYPICAL);
     if (rc != MOONLAB_SCHED_OK) return rc;
     rc = moonlab_register_vendor_noise_backend_with_profile(
-        "ionq-forte", &IONQ_FORTE_TYPICAL);
+        "ionq-forte",    &IONQ_FORTE_TYPICAL);
     return rc;
 }

@@ -268,6 +268,92 @@ static void test_backend_unknown_name_fails(void)
     moonlab_job_free(j);
 }
 
+/* ----------------------------------------------------------------
+ * Completion hook (since v1.1.0)
+ * ---------------------------------------------------------------- */
+
+typedef struct {
+    int call_count;
+    int last_num_qubits;
+    int last_total_shots;
+    char last_backend[64];
+    int ctx_round_trip;
+} hook_observer_t;
+
+static void completion_hook_recorder(
+    const moonlab_job_t         *job,
+    const moonlab_job_results_t *out,
+    const char                  *backend_name,
+    void                        *ctx)
+{
+    hook_observer_t *obs = (hook_observer_t *)ctx;
+    obs->call_count++;
+    obs->last_num_qubits  = moonlab_job_num_qubits(job);
+    obs->last_total_shots = out ? out->total_shots : -1;
+    if (backend_name) {
+        snprintf(obs->last_backend, sizeof(obs->last_backend), "%s", backend_name);
+    }
+    obs->ctx_round_trip = 1;
+}
+
+static void test_completion_hook_fires(void)
+{
+    fprintf(stdout, "\n--- completion hook: fires once with correct args ---\n");
+    hook_observer_t obs = {0};
+    CHECK(moonlab_scheduler_set_completion_hook(completion_hook_recorder, &obs) == 0,
+          "set_completion_hook OK");
+
+    moonlab_job_t *j = make_bell_job(512, 2);
+    moonlab_job_results_t res = {0};
+    CHECK(moonlab_scheduler_run(j, &res) == 0, "scheduler_run OK");
+    CHECK(obs.call_count == 1, "hook fired exactly once (count = %d)", obs.call_count);
+    CHECK(obs.last_num_qubits  == 2, "job num_qubits round-tripped (%d)", obs.last_num_qubits);
+    CHECK(obs.last_total_shots == 512, "results total_shots round-tripped (%d)", obs.last_total_shots);
+    CHECK(strcmp(obs.last_backend, "simulator") == 0,
+          "backend name round-tripped (\"%s\")", obs.last_backend);
+    CHECK(obs.ctx_round_trip == 1, "ctx passed through to hook");
+
+    /* Second run -- count climbs to 2. */
+    moonlab_job_results_free(&res);
+    moonlab_job_t *j2 = make_bell_job(256, 1);
+    moonlab_job_results_t res2 = {0};
+    moonlab_scheduler_run(j2, &res2);
+    CHECK(obs.call_count == 2, "hook fired again (count = %d)", obs.call_count);
+    moonlab_job_results_free(&res2);
+    moonlab_job_free(j2);
+
+    /* Clear the hook -- subsequent runs do not fire. */
+    CHECK(moonlab_scheduler_set_completion_hook(NULL, NULL) == 0,
+          "clear hook OK");
+    moonlab_job_t *j3 = make_bell_job(128, 1);
+    moonlab_job_results_t res3 = {0};
+    moonlab_scheduler_run(j3, &res3);
+    CHECK(obs.call_count == 2, "hook does not fire after clear (count = %d)",
+          obs.call_count);
+    moonlab_job_results_free(&res3);
+    moonlab_job_free(j3);
+    moonlab_job_free(j);
+}
+
+static void test_completion_hook_not_fired_on_error(void)
+{
+    fprintf(stdout, "\n--- completion hook: skipped when run fails ---\n");
+    hook_observer_t obs = {0};
+    moonlab_scheduler_set_completion_hook(completion_hook_recorder, &obs);
+
+    /* Pin to an unknown backend so dispatch fails. */
+    moonlab_job_t *j = make_bell_job(64, 1);
+    moonlab_job_set_backend(j, "does-not-exist");
+    moonlab_job_results_t res = {0};
+    const int rc = moonlab_scheduler_run(j, &res);
+    CHECK(rc != 0, "scheduler_run errored as expected (rc = %d)", rc);
+    CHECK(obs.call_count == 0, "hook did not fire on failure (count = %d)",
+          obs.call_count);
+    moonlab_job_results_free(&res);
+    moonlab_job_free(j);
+    moonlab_scheduler_set_completion_hook(NULL, NULL);
+}
+
 static void test_backend_clear_uses_simulator(void)
 {
     fprintf(stdout, "\n--- backend: NULL clears to simulator default ---\n");
@@ -302,6 +388,8 @@ int main(void)
     test_backend_register_dispatch();
     test_backend_unknown_name_fails();
     test_backend_clear_uses_simulator();
+    test_completion_hook_fires();
+    test_completion_hook_not_fired_on_error();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

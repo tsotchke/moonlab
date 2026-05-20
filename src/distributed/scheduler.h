@@ -264,6 +264,43 @@ MOONLAB_API int moonlab_job_set_backend(moonlab_job_t *job, const char *backend_
  */
 MOONLAB_API const char *moonlab_job_backend(const moonlab_job_t *job);
 
+/* ------------------------------------------------------------------
+ * Scheduler completion hook (since v1.1.0)
+ *
+ * Fires exactly once after every successful @ref moonlab_scheduler_run,
+ * with the job, its results, and the backend name that handled the
+ * dispatch.  The private overlay uses this for:
+ *
+ *   - billing meter: count shots * tier rate, post to Stripe
+ *   - audit log: write a per-job entry to immutable storage
+ *   - customer dashboard: push a "job completed" event
+ *
+ * Public moonlab installs no hook by default; the absence is a no-op.
+ * Failed runs (rc != MOONLAB_SCHED_OK) do NOT fire the hook.
+ *
+ * The hook is invoked synchronously on the calling thread after the
+ * backend's execute returns.  Long-running hooks should hand off to
+ * a worker pool inside the callback rather than blocking the
+ * scheduler.  The hook must not free or mutate its arguments.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Completion-hook signature.
+ */
+typedef void (*moonlab_completion_hook_fn)(
+    const moonlab_job_t          *job,
+    const moonlab_job_results_t  *out,
+    const char                   *backend_name,
+    void                         *ctx);
+
+/**
+ * @brief Install a completion hook.  Pass NULL to clear.  Only one
+ *        hook is registered at a time; a subsequent call replaces
+ *        the previous hook.  Thread-safe.
+ */
+MOONLAB_API int moonlab_scheduler_set_completion_hook(
+    moonlab_completion_hook_fn hook, void *ctx);
+
 /**
  * @brief Serialise a job to JSON.  Format (one example):
  *
