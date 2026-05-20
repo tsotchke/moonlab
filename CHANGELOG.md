@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.3.)
+(No unreleased changes since v0.8.4.)
+
+## [0.8.4] - 2026-05-19
+
+**Python binding for v0.8.3 circuit serialization.**  Brings the
+portable circuit format to the Python ecosystem.
+
+### Added
+
+- `QgtlCircuit.serialize() -> str` -- emit moonlab-circuit v1 text
+- `QgtlCircuit.deserialize(text) -> QgtlCircuit` -- classmethod
+- `QgtlCircuit.save(path)` / `QgtlCircuit.load(path)` -- on-disk
+- All four bound through ctypes against the four MOONLAB_API
+  entry points; the binding probes `libquantumsim` lazily so
+  older shared libraries still import (calls raise `QgtlError`
+  with a clear "predates v0.8.3" message).
+
+### Verified
+
+End-to-end smoke test: 4-qubit circuit built via Python ->
+`serialize()` -> 168-byte text -> `deserialize()` -> byte-exact
+roundtrip; same circuit written via `save()` -> `load()` ->
+`execute(return_probabilities=True)` yields the expected Bell-pair
+signature P[0] = P[3] = 0.5.
 
 ## [0.8.3] - 2026-05-19
 
