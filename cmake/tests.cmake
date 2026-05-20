@@ -914,6 +914,26 @@
         TIMEOUT 30
     )
 
+    # Production hardening (since v0.9.0): max_concurrent ceiling +
+    # tls_failed counter + mTLS peer audit.  Requires TLS for the
+    # tls_failed path; max_concurrent path runs unconditionally.
+    add_executable(test_control_plane_hardening
+        tests/integration/test_control_plane_hardening.c)
+    target_link_libraries(test_control_plane_hardening
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    if(QSIM_HAS_TLS)
+        target_link_libraries(test_control_plane_hardening
+            PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_hardening
+            PRIVATE MOONLAB_HAVE_TLS=1)
+    endif()
+    add_test(NAME integration_control_plane_hardening
+        COMMAND test_control_plane_hardening)
+    set_tests_properties(integration_control_plane_hardening PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
