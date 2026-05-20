@@ -7,7 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.13.)
+(No unreleased changes since v0.8.14.)
+
+## [0.8.14] - 2026-05-19
+
+**Lifecycle API binding parity (Python + Rust).**  Surfaces the
+v0.8.13 C server lifecycle through idiomatic in-process wrappers
+in both binding languages.
+
+### Added
+
+- `moonlab.control_plane.ControlPlaneServer` (Python):
+  - Context manager: ``with ControlPlaneServer() as srv: ...``
+  - `.port` reports the bound port (OS-chosen when `port=0`)
+  - `.shutdown()` from any thread; `__exit__` joins + closes
+  - Probes libquantumsim symbols at module load; raises a clear
+    `ControlPlaneError` if the loaded library predates v0.8.13.
+
+- `moonlab::control_plane::ControlPlaneServer` (Rust):
+  - `ControlPlaneServer::open(host, port)` / `::open_with_max_iters`
+  - `.port()`, `.shutdown()`
+  - `Drop` impl drives shutdown + join + close
+  - `Send + Sync` (the C lifecycle handle is internally
+    synchronized around independent file descriptors).
+
+- `moonlab-sys`: bindgen allowlist gains
+  `moonlab_control_server_open` / `_run` / `_shutdown` / `_close`
+  and `moonlab_control_submit_circuit_shots`.
+
+- `bindings/rust/moonlab/tests/control_plane_lifecycle_e2e.rs`:
+  two cargo tests -- `lifecycle_wrapper_round_trip` submits a Bell
+  circuit through the wrapped server, and
+  `lifecycle_shutdown_signaled_externally` verifies explicit
+  `.shutdown()` then drop.
+
+### Verified
+
+```
+running 2 tests                                  (Rust)
+test lifecycle_shutdown_signaled_externally ... ok
+test lifecycle_wrapper_round_trip ... ok
+```
+
+```
+  server up on port 52415                        (Python)
+  Bell verified through ControlPlaneServer context manager
+  server cleanly shut down
+```
 
 ## [0.8.13] - 2026-05-19
 
