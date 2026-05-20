@@ -236,6 +236,17 @@ moonlab_control_submit_circuit_auth(const char    *host,
                                     double       **out_probs,
                                     size_t        *out_num);
 
+/**
+ * @brief Compute HMAC-SHA3-256(secret, msg).  Public so binding-language
+ *        clients can construct the AUTH token themselves when they want
+ *        to handle the socket directly rather than going through
+ *        @ref moonlab_control_submit_circuit_auth.  Output is 32 bytes.
+ */
+MOONLAB_API void
+moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
+                              const uint8_t *msg,    size_t msg_len,
+                              uint8_t        out_digest[32]);
+
 #ifdef __cplusplus
 }
 #endif

@@ -19,8 +19,9 @@
 
 use crate::error::{QuantumError, Result};
 use moonlab_sys::{
-    moonlab_control_server_close, moonlab_control_server_open,
-    moonlab_control_server_run, moonlab_control_server_shutdown,
+    moonlab_control_hmac_sha3_256, moonlab_control_server_close,
+    moonlab_control_server_open, moonlab_control_server_run,
+    moonlab_control_server_set_secret, moonlab_control_server_shutdown,
     moonlab_control_server_t,
 };
 use std::ffi::CString;
@@ -30,6 +31,32 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
+
+/// Compute `HMAC-SHA3-256(secret, msg)` via the moonlab C
+/// implementation.  Used by `submit_circuit_auth` to construct the
+/// `AUTH <token>` prelude.  Exposed publicly so callers handling the
+/// socket directly can use the same code path.
+pub fn hmac_sha3_256(secret: &[u8], msg: &[u8]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    unsafe {
+        moonlab_control_hmac_sha3_256(
+            secret.as_ptr(),
+            secret.len(),
+            msg.as_ptr(),
+            msg.len(),
+            out.as_mut_ptr(),
+        );
+    }
+    out
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{:02x}", b));
+    }
+    s
+}
 
 /// Send a `moonlab-circuit v1` text payload to a control-plane server
 /// and collect the probability vector back.
@@ -42,16 +69,40 @@ use std::time::Duration;
 /// connection is closed prematurely, or the response framing is
 /// malformed.
 pub fn submit_circuit(host: &str, port: u16, circuit_text: &str) -> Result<Vec<f64>> {
-    submit_circuit_with_timeout(host, port, circuit_text, Duration::from_secs(30))
+    submit_circuit_full(host, port, circuit_text, None, Duration::from_secs(30))
 }
 
-/// Same as [`submit_circuit`] but with an explicit socket timeout.
+/// Same as [`submit_circuit`] with an explicit socket timeout.
 pub fn submit_circuit_with_timeout(
     host: &str,
     port: u16,
     circuit_text: &str,
     timeout: Duration,
 ) -> Result<Vec<f64>> {
+    submit_circuit_full(host, port, circuit_text, None, timeout)
+}
+
+/// Same as [`submit_circuit`] but with an optional shared secret for
+/// HMAC-SHA3-256 authentication (since v0.8.16).  When `secret` is
+/// `None`, behaves identically to [`submit_circuit_with_timeout`].
+pub fn submit_circuit_auth(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    secret: Option<&[u8]>,
+) -> Result<Vec<f64>> {
+    submit_circuit_full(host, port, circuit_text, secret, Duration::from_secs(30))
+}
+
+fn submit_circuit_full(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    secret: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<Vec<f64>> {
+    /* Body identical to the legacy submit_circuit_with_timeout path
+     * with an optional AUTH prelude when `secret` is Some. */
     let addr_str = format!("{host}:{port}");
     let mut addrs = addr_str
         .to_socket_addrs()
@@ -71,6 +122,13 @@ pub fn submit_circuit_with_timeout(
 
     let bytes = circuit_text.as_bytes();
     let header = format!("CIRCUIT {}\n", bytes.len());
+    if let Some(key) = secret {
+        let tok = hmac_sha3_256(key, header.as_bytes());
+        let auth = format!("AUTH {}\n", hex_encode(&tok));
+        stream
+            .write_all(auth.as_bytes())
+            .map_err(|e| QuantumError::Ffi(format!("send AUTH: {e}")))?;
+    }
     stream
         .write_all(header.as_bytes())
         .map_err(|e| QuantumError::Ffi(format!("send header: {e}")))?;

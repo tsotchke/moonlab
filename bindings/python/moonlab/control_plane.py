@@ -4,6 +4,9 @@ Talks to a `moonlab_control_serve()` server (v0.8.7 native) over a
 plain TCP socket using the moonlab-circuit v1 wire format.  No third-
 party dependencies -- stdlib socket / struct only.
 
+HMAC-SHA3-256 authentication (since v0.8.16 / v0.8.15 server) uses
+``hashlib.sha3_256`` (Python 3.6+ stdlib).
+
 Example:
 
     >>> from moonlab.qgtl import QgtlCircuit, GateType
@@ -19,12 +22,29 @@ Example:
 from __future__ import annotations
 
 import ctypes
+import hashlib
+import hmac as _stdlib_hmac
 import socket
 import struct
 import threading
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from .core import _lib
+
+
+_HMAC_BLOCK_SIZE  = 136      # SHA3-256 rate.
+_HMAC_DIGEST_SIZE = 32
+
+
+def _hmac_sha3_256(key: bytes, msg: bytes) -> bytes:
+    """HMAC-SHA3-256 per FIPS 198.
+
+    Stdlib `hmac.new(...)` defaults to MD5 in older Python; we feed in
+    `digestmod=hashlib.sha3_256` and rely on the well-tested stdlib
+    HMAC construction.  Block size = 136 bytes (SHA3-256 rate).
+    """
+    h = _stdlib_hmac.new(key, msg, digestmod=hashlib.sha3_256)
+    return h.digest()
 
 
 class ControlPlaneError(RuntimeError):
@@ -62,7 +82,8 @@ def _recv_until_newline(sock: socket.socket, cap: int = 4096) -> str:
 def submit_circuit(host: str,
                    port: int,
                    circuit_text: str,
-                   timeout: Optional[float] = 30.0) -> List[float]:
+                   timeout: Optional[float] = 30.0,
+                   secret: Optional[Union[bytes, str]] = None) -> List[float]:
     """Submit a moonlab-circuit v1 text payload to a control-plane
     server at ``host:port`` and return the probability vector.
 
@@ -78,6 +99,11 @@ def submit_circuit(host: str,
     timeout : float, optional
         Socket timeout in seconds.  Default 30 s.  Pass ``None`` for
         blocking I/O.
+    secret : bytes or str, optional
+        HMAC-SHA3-256 shared secret (since v0.8.16).  When provided,
+        sends an ``AUTH <token>`` prelude before the verb line; the
+        server must be configured with the same secret via
+        ``moonlab_control_server_set_secret``.
 
     Returns
     -------
@@ -91,10 +117,14 @@ def submit_circuit(host: str,
         the response framing was malformed.
     """
     encoded = circuit_text.encode("utf-8")
+    verb_line = f"CIRCUIT {len(encoded)}\n".encode("ascii")
 
     with socket.create_connection((host, port), timeout=timeout) as sock:
-        header = f"CIRCUIT {len(encoded)}\n".encode("ascii")
-        sock.sendall(header)
+        if secret is not None:
+            key = secret.encode("utf-8") if isinstance(secret, str) else secret
+            tok = _hmac_sha3_256(key, verb_line).hex()
+            sock.sendall(f"AUTH {tok}\n".encode("ascii"))
+        sock.sendall(verb_line)
         sock.sendall(encoded)
 
         resp_hdr = _recv_until_newline(sock)
@@ -124,7 +154,8 @@ def submit_circuit_shots(host: str,
                          port: int,
                          circuit_text: str,
                          num_shots: int,
-                         timeout: Optional[float] = 30.0) -> List[int]:
+                         timeout: Optional[float] = 30.0,
+                         secret: Optional[Union[bytes, str]] = None) -> List[int]:
     """Submit a moonlab-circuit v1 payload requesting `num_shots`
     measurement samples instead of the full probability vector.
 
@@ -141,10 +172,14 @@ def submit_circuit_shots(host: str,
         )
 
     encoded = circuit_text.encode("utf-8")
+    verb_line = f"SHOTS {num_shots} {len(encoded)}\n".encode("ascii")
 
     with socket.create_connection((host, port), timeout=timeout) as sock:
-        header = f"SHOTS {num_shots} {len(encoded)}\n".encode("ascii")
-        sock.sendall(header)
+        if secret is not None:
+            key = secret.encode("utf-8") if isinstance(secret, str) else secret
+            tok = _hmac_sha3_256(key, verb_line).hex()
+            sock.sendall(f"AUTH {tok}\n".encode("ascii"))
+        sock.sendall(verb_line)
         sock.sendall(encoded)
 
         resp_hdr = _recv_until_newline(sock)

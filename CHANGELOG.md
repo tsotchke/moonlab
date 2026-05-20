@@ -7,7 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.15.)
+(No unreleased changes since v0.8.16.)
+
+## [0.8.16] - 2026-05-19
+
+**Python + Rust auth-client parity.**  Completes the v0.8.15 HMAC
+story so binding-language clients can drive authenticated servers.
+
+### Added
+
+- C surface: `moonlab_control_hmac_sha3_256(secret, secret_len, msg,
+  msg_len, out_digest[32])` -- public wrapper around the existing
+  internal helper, lets binding-language clients construct AUTH
+  tokens via FFI rather than reimplementing the HMAC construction.
+
+- Python `submit_circuit(..., secret=...)` and
+  `submit_circuit_shots(..., secret=...)`: opt-in `secret` kwarg
+  (`bytes | str | None`); when set, prepends `AUTH <hex-token>\n`
+  computed via stdlib `hmac.new(key, msg, hashlib.sha3_256)`.
+
+- Rust `submit_circuit_auth(host, port, text, secret)` plus a public
+  `hmac_sha3_256(secret, msg)` wrapper that calls through the new C
+  entry point.  Internal refactor: `submit_circuit_with_timeout`,
+  `submit_circuit`, and `submit_circuit_auth` all delegate to a
+  single `submit_circuit_full` that takes an `Option<&[u8]>` secret.
+
+- `bindings/rust/moonlab/tests/control_plane_auth_e2e.rs`: spawns
+  the C server with `moonlab_control_server_set_secret`, exercises
+  matching / wrong / missing-AUTH paths through the Rust client.
+
+### Verified
+
+```
+running 1 test                                   (Rust)
+test auth_client_round_trip ... ok
+
+  OK   matching secret -> Bell                   (Python)
+  OK   wrong secret rejected
+  OK   missing AUTH rejected
+```
 
 ## [0.8.15] - 2026-05-19
 

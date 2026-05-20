@@ -615,6 +615,17 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     free(s);
 }
 
+/* Public wrapper around the internal HMAC -- since v0.8.16, so
+ * binding-language clients (Rust binding) can construct AUTH tokens
+ * without re-implementing HMAC-SHA3-256.  Python uses `hashlib +
+ * hmac` directly and doesn't need this entry point. */
+void moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
+                                   const uint8_t *msg,    size_t msg_len,
+                                   uint8_t        out_digest[32])
+{
+    hmac_sha3_256(secret, secret_len, msg, msg_len, out_digest);
+}
+
 int moonlab_control_server_set_secret(moonlab_control_server_t *s,
                                       const uint8_t *secret,
                                       size_t         secret_len)
