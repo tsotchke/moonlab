@@ -389,6 +389,9 @@ fn main() {
         // mTLS (since v0.8.19).
         .allowlist_function("moonlab_control_server_require_client_cert")
         .allowlist_function("moonlab_control_submit_circuit_mtls")
+        // HEALTH + rate limit (since v0.8.21).
+        .allowlist_function("moonlab_control_server_set_rate_limit")
+        .allowlist_function("moonlab_control_submit_health")
         // Decoder-bench dispatcher (since v0.6.7).
         .allowlist_type("moonlab_decoder_kind_t")
         .allowlist_type("moonlab_decoder_code_t")

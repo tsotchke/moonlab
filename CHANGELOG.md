@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.21.)
+(No unreleased changes since v0.8.22.)
+
+## [0.8.22] - 2026-05-19
+
+**Python + Rust binding parity for v0.8.21 HEALTH + rate-limit.**
+Completes binding coverage of the production deployment features:
+load-balancer probes and DoS protection are now accessible from
+every supported language.
+
+### Added
+
+- Python `moonlab.control_plane.submit_health(host, port,
+  timeout=5.0) -> bool`.  `True` on `OK alive`, `False` on
+  `ERR -408 rate limited`; raises `ControlPlaneError` on transport
+  failure.  Pure stdlib socket.
+
+- Rust `moonlab::control_plane::submit_health(host, port)
+  -> Result<bool>`.  FFI thunk over the v0.8.21 C entry point.
+
+- Rust `ControlPlaneServer::set_rate_limit(rate_rps, burst)
+  -> Result<()>`.  Wraps `moonlab_control_server_set_rate_limit`
+  so binding-language operators can configure rate limits without
+  dropping to raw FFI.
+
+- `moonlab-sys` allowlist adds
+  `moonlab_control_server_set_rate_limit` and
+  `moonlab_control_submit_health`.
+
+- `bindings/rust/moonlab/tests/control_plane_health_e2e.rs`:
+  two cargo tests -- one drives HEALTH against a fresh
+  `ControlPlaneServer`; the other configures `(3 rps, 3 burst)`
+  and confirms exactly the burst budget gets through.
+
+### Verified
+
+```
+Rust:                                            (cargo test)
+  test health_probe ... ok
+  test rate_limit_via_wrapper ... ok
+
+Python:                                          (smoke)
+  OK   submit_health -> True
+```
 
 ## [0.8.21] - 2026-05-19
 

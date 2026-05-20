@@ -21,9 +21,10 @@ use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
     moonlab_control_server_open, moonlab_control_server_run,
-    moonlab_control_server_set_secret, moonlab_control_server_shutdown,
-    moonlab_control_server_t, moonlab_control_submit_circuit_mtls,
-    moonlab_control_submit_circuit_tls,
+    moonlab_control_server_set_rate_limit, moonlab_control_server_set_secret,
+    moonlab_control_server_shutdown, moonlab_control_server_t,
+    moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
+    moonlab_control_submit_health,
 };
 use std::ffi::CString;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -354,6 +355,36 @@ impl ControlPlaneServer {
         if !ptr.is_null() {
             unsafe { moonlab_control_server_shutdown(ptr); }
         }
+    }
+}
+
+impl ControlPlaneServer {
+    /// Configure a per-source-IP rate limit (since v0.8.22).
+    /// `rate_rps = 0` disables.  Burst <= 0 defaults to 2 * rate_rps.
+    pub fn set_rate_limit(&self, rate_rps: i32, burst: i32) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let rc = unsafe { moonlab_control_server_set_rate_limit(ptr, rate_rps, burst) };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("set_rate_limit rc={rc}")));
+        }
+        Ok(())
+    }
+}
+
+/// HEALTH probe -- since v0.8.22 (Rust binding) / v0.8.21 (C server).
+/// Returns `Ok(true)` if the server is alive, `Ok(false)` on rate-limit,
+/// or `Err` on transport failure.
+pub fn submit_health(host: &str, port: u16) -> Result<bool> {
+    let host_c = CString::new(host)
+        .map_err(|e| QuantumError::Ffi(format!("invalid host: {e}")))?;
+    let rc = unsafe { moonlab_control_submit_health(host_c.as_ptr(), port) };
+    match rc {
+        0 => Ok(true),
+        -408 => Ok(false), // MOONLAB_CONTROL_RATE_LIMITED
+        _ => Err(QuantumError::Ffi(format!("submit_health rc={rc}"))),
     }
 }
 
