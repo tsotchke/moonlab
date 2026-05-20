@@ -10,7 +10,7 @@
 //!
 //! let mut c = QgtlCircuit::new(2).unwrap();
 //! c.add_gate(GateType::H, 0, -1, &[]).unwrap();
-//! c.add_gate(GateType::CNOT, 1, 0, &[]).unwrap();
+//! c.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
 //! let r = c.execute(0, 0, true).unwrap();
 //! let p = r.probabilities.unwrap();
 //! assert!((p[0] - 0.5).abs() < 1e-9);
