@@ -8,6 +8,17 @@ A three-container compose stack that brings up:
 | `moonlab-exporter`  | 9090 | HTTP `/metrics` Prometheus bridge                    |
 | `prometheus`        | 9091 | Prometheus UI scraping the exporter                  |
 
+## Runtime-verification status (v1.0.2)
+
+The Dockerfiles + compose YAML pass static inspection.  An end-to-end
+boot on a real Linux host has NOT yet been recorded in this repo.
+The `moonlab-control-server` binary the image runs HAS been smoke-
+tested natively (`HEALTH` / `METRICS` round-trip on macOS arm64);
+the same binary runs unchanged in the Debian-slim layer.  Filing
+real-cluster boot logs is on the v1.1 punch list -- in the meantime,
+treat the compose stack as "produce-and-test-locally" infra rather
+than a turn-key cloud distribution.
+
 ## Quickstart
 
 ```

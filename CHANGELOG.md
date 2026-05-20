@@ -7,7 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v1.0.1.)
+(No unreleased changes since v1.0.2.)
+
+## [1.0.2] - 2026-05-20
+
+**Audit-response follow-up: convergence honesty + binding sync that
+v1.0.1 missed + production-deploy verification status documented.**
+
+### Fixed
+
+- **`bindings_version_sync` was a false pass in v1.0.1.**  The
+  v1.0.1 commit synced binding manifests to literal `"1.0.0"`
+  (sed-target typo) but bumped VERSION.txt to `"1.0.1"`.  The test
+  ran at commit-time when VERSION.txt was still `"1.0.0"`, so it
+  reported green; bumping VERSION.txt afterwards left the
+  invariant broken in the released tag.  All 10 manifests now sync
+  to `1.0.2` against `VERSION.txt=1.0.2`.
+
+- **CA-MPS kagome bench default `chi=16` was misleading.**  At
+  chi=16 with the full 200-step Trotter schedule the residual to
+  `E_PRB = -5.44488` is ~1.4 J -- not converged.  Defaults rebumped
+  to `{64, 128, 256}` (the regime where the head-to-head against
+  ITensor is interpretable; both libraries struggle below chi=64 on
+  this lattice).  `--help` now prints a convergence table; bench
+  doc-string warns explicitly.
+
+### Documented
+
+- `deploy/docker/README.md` -- "Runtime-verification status" section
+  honestly notes the compose stack passes static inspection but has
+  NOT yet been booted end-to-end on a real Linux host inside this
+  repo's CI.  v1.1 commitment.
+- `deploy/helm/moonlab/README.md` -- same honesty for the Helm
+  chart: `helm lint` + `helm template` pass; `kubectl apply` against
+  a live cluster is v1.1 work.
+- `docs/STABLE_ABI.md` -- documents the historical `quantumsim/`
+  header install namespace as a v1.0 stability commitment.  The
+  project brand is `moonlab` but the include path is `quantumsim/`
+  because that's where pre-rename FFI consumers look; migrating to
+  `<moonlab/...>` is a v2.0 break.
+- `docs/benchmarks/v1_comparison.md` -- new "Convergence regime"
+  table for the kagome harness lists the expected residual at chi
+  16 / 64 / 128 / 256 / 512+ so users running the bench know what
+  they're looking at.
+
+### Verified
+
+```
+$ ctest --test-dir build-mpi -LE long
+100% tests passed, 0 tests failed out of 129
+```
+
+Including `bindings_version_sync` (now actually green at commit
+time, not just at intermediate state).
 
 ## [1.0.1] - 2026-05-20
 
