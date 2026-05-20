@@ -1,0 +1,63 @@
+# Production image for the Moonlab control-plane daemon.
+#
+# Multi-stage build: stage 1 compiles libquantumsim + the
+# moonlab-control-server binary against a minimal toolchain; stage 2
+# ships only the runtime artefacts.
+
+# -----------------------------------------------------------------
+# Stage 1: build
+# -----------------------------------------------------------------
+FROM debian:12-slim AS build
+
+ARG MOONLAB_VERSION=0.10.0
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    pkg-config \
+    libomp-dev \
+    libopenblas-dev \
+    liblapacke-dev \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . /src/
+
+RUN cmake -S /src -B /build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DQSIM_ENABLE_TLS=ON \
+        -DQSIM_BUILD_TESTS=OFF \
+        -DQSIM_BUILD_EXAMPLES=OFF \
+        -DQSIM_BUILD_BENCHMARKS=OFF \
+    && cmake --build /build --target moonlab-control-server -j
+
+# -----------------------------------------------------------------
+# Stage 2: runtime
+# -----------------------------------------------------------------
+FROM debian:12-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libomp5 \
+    libopenblas0 \
+    liblapacke \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /build/moonlab-control-server      /usr/local/bin/
+COPY --from=build /build/libquantumsim.so*            /usr/local/lib/
+
+RUN ldconfig
+
+EXPOSE 7070
+# `--host ::` means dual-stack: accepts both IPv4 (via ::ffff:0:0/96)
+# and IPv6 clients on the same socket.
+ENTRYPOINT ["/usr/local/bin/moonlab-control-server"]
+CMD ["--host", "::", "--port", "7070", \
+     "--max-concurrent", "64", \
+     "--request-timeout", "60", \
+     "--rate-limit-rps", "100", "--rate-limit-burst", "200"]

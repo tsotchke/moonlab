@@ -1,0 +1,56 @@
+# Moonlab v1.0 production stack.
+#
+#   docker compose -f deploy/docker/docker-compose.yml up
+#
+# Brings up:
+#   - moonlab-control       : the control-plane daemon on TCP :7070
+#   - moonlab-exporter      : Prometheus-format /metrics on HTTP :9090
+#   - prometheus            : scrapes the exporter, serves UI on :9091
+#
+# All three live on a private bridge network; only the host-facing
+# ports below are exposed.
+
+services:
+  moonlab-control:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.control-plane
+    image: moonlab/control-plane:0.10.0
+    container_name: moonlab-control
+    networks: [moonlab]
+    ports: ["7070:7070"]
+    restart: unless-stopped
+    healthcheck:
+      # `HEALTH` is unauth and returns "OK alive" on the live socket.
+      test: ["CMD-SHELL",
+             "printf 'HEALTH\\n' | nc -w 1 127.0.0.1 7070 | grep -q 'OK alive'"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  moonlab-exporter:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.exporter
+    image: moonlab/control-exporter:0.10.0
+    container_name: moonlab-exporter
+    depends_on:
+      moonlab-control:
+        condition: service_healthy
+    networks: [moonlab]
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: moonlab-prometheus
+    depends_on: [moonlab-exporter]
+    networks: [moonlab]
+    ports: ["9091:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+networks:
+  moonlab:
+    driver: bridge

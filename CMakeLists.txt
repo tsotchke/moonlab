@@ -873,6 +873,10 @@ endif()
 # Standalone helper for safe ARM hardware-RNG probing.
 add_executable(hw_rng_probe tools/hw_rng_probe.c)
 
+# Production control-plane daemon (since v0.10.0).  Bound + run via
+# deploy/docker/docker-compose.yml.
+add_executable(moonlab-control-server tools/moonlab-control-server.c)
+
 # ==============================================================================
 # Library Target
 # ==============================================================================
@@ -1053,6 +1057,10 @@ if(QSIM_HAS_TLS)
     target_link_libraries(quantumsim PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(quantumsim PRIVATE MOONLAB_HAVE_TLS=1)
 endif()
+
+# Wire the production control-plane daemon binary to quantumsim.
+target_link_libraries(moonlab-control-server PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+install(TARGETS moonlab-control-server RUNTIME DESTINATION bin)
 
 # ==============================================================================
 # Platform-Specific Configuration
