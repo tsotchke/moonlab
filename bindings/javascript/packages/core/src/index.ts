@@ -233,6 +233,31 @@ export {
   MOONLAB_SCHED_BUFFER_TOO_SMALL,
 } from './scheduler';
 
+// Control-plane Node client (since v0.9.4).  Node-only -- needs raw
+// TCP, so browsers must go through a WebSocket gateway (separate).
+export {
+  submitCircuit as controlPlaneSubmitCircuit,
+  submitShots   as controlPlaneSubmitShots,
+  submitHealth  as controlPlaneSubmitHealth,
+  submitMetrics as controlPlaneSubmitMetrics,
+  ControlPlaneError,
+  MOONLAB_CONTROL_OK,
+  MOONLAB_CONTROL_BAD_ARG,
+  MOONLAB_CONTROL_AUTH_REQUIRED,
+  MOONLAB_CONTROL_AUTH_BAD,
+  MOONLAB_CONTROL_IO_ERROR,
+  MOONLAB_CONTROL_REJECTED,
+  MOONLAB_CONTROL_OOM,
+  MOONLAB_CONTROL_RATE_LIMITED,
+  MOONLAB_CONTROL_SERVER_BUSY,
+} from './control-plane';
+export type {
+  TlsOptions as ControlPlaneTlsOptions,
+  SubmitCircuitArgs as ControlPlaneSubmitCircuitArgs,
+  SubmitShotsArgs as ControlPlaneSubmitShotsArgs,
+  SubmitMetricsArgs as ControlPlaneSubmitMetricsArgs,
+} from './control-plane';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

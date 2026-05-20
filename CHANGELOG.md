@@ -7,7 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.9.2.)
+(No unreleased changes since v0.9.3.)
+
+## [0.9.3] - 2026-05-20
+
+**Exporter TLS support, exporter test suite, JS control-plane client,
+wire-protocol doc correction.**  The control-plane surface is now
+end-to-end testable from JS, exporter operates in mTLS-deployed
+production, and the published wire-protocol framing matches what the
+C server actually emits.
+
+### Added
+
+- `tools/exporter/moonlab_control_exporter.py` gains TLS and mTLS
+  scrape support: `--tls-ca`, `--client-cert`, `--client-key`,
+  `--tls-insecure`, `--tls-server-name`.  Connection setup uses
+  `ssl.create_default_context` and supports all four combinations
+  (plain / TLS-CA / mTLS / insecure-skip).
+
+- `tools/exporter/tests/test_exporter.py`: 9 pytest tests covering
+  plain TCP scrape, large body, malformed framing, unreachable
+  upstream, TLS with `--tls-insecure`, TLS with an explicit CA, and
+  HTTP handler returning 200 / 404 / 502 paths.  Uses an
+  in-TypeScript-process fake control plane so the suite has no
+  libquantumsim dependency.
+
+- `bindings/javascript/packages/core/src/control-plane.ts`:
+  Node-only client library.  Mirrors the Python + Rust client surface
+  with `submitCircuit`, `submitShots`, `submitHealth`,
+  `submitMetrics`, plus a `ControlPlaneError` with a parsed
+  `statusCode`.  Supports TLS / mTLS via `TlsOptions`.  Re-exported
+  from the package barrel as `controlPlaneSubmit*`.
+
+- `bindings/javascript/packages/core/src/__tests__/control-plane.test.ts`:
+  8 vitest unit tests against an in-Node fake server -- plain CIRCUIT,
+  METRICS, HEALTH, ERR -409 / -405 parsing, SHOTS, connection refused,
+  TLS with insecure-skip.
+
+- `bindings/javascript/packages/core/src/__tests__/control-plane.integration.test.ts`:
+  3 cross-language integration tests that spawn a real Python-hosted
+  `ControlPlaneServer` (backed by libquantumsim) and drive the JS
+  client against it -- HEALTH, METRICS (with v0.9.0 counters), and a
+  CIRCUIT Bell pair that round-trips through the real C server.
+  Auto-skips when `build-mpi/libquantumsim.dylib` isn't present.
+
+### Fixed
+
+- `docs/CONTROL_PLANE.md` had the CIRCUIT reply framed as
+  `OK <body_bytes>` -- the server actually emits `OK <num_doubles>`
+  (a count, not a byte length).  Same misframing on SHOTS: actual is
+  `SAMPLES <num_outcomes>`.  Wire-protocol section corrected with an
+  explicit unit-per-verb note.  The JS client also carried the same
+  bug; both fixed and proven against the real C server.
+
+### Verified
+
+```
+$ python3 -m pytest tools/exporter/tests/ -v
+9 passed in 1.70s
+
+$ npx vitest run src/__tests__/control-plane.test.ts
+8 passed in 137ms
+
+$ npx vitest run --config vitest.integration.config.ts \
+     src/__tests__/control-plane.integration.test.ts
+3 passed in 346ms     (real libquantumsim + Python harness + JS client)
+```
 
 ## [0.9.2] - 2026-05-20
 
