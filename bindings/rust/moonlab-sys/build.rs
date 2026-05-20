@@ -714,6 +714,9 @@ fn main() {
         .allowlist_function("moonlab_z2_lgt_1d_build")
         .allowlist_function("moonlab_z2_lgt_1d_gauss_law")
         .allowlist_function("moonlab_status_string")
+        // DMRG scalar-energy convenience entries (since 0.10.0).
+        .allowlist_function("moonlab_dmrg_tfim_energy")
+        .allowlist_function("moonlab_dmrg_heisenberg_energy")
         // Bell tests + CHSH/Mermin/Mermin-Klyshko variants
         // (since 0.2.0; safe Rust wrapper from 0.4.7).
         .allowlist_type("bell_state_type_t")

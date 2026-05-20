@@ -43,6 +43,7 @@ pub mod ca_peps;
 pub mod clifford;
 pub mod control_plane;
 pub mod decoder;
+pub mod dmrg;
 pub mod error;
 pub mod feynman;
 pub mod fusion;
