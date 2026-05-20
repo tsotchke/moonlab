@@ -74,7 +74,29 @@ option(QSIM_ENABLE_OPENCL "Enable OpenCL GPU backend" OFF)
 option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
 option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
-option(QSIM_ENABLE_TLS "Link OpenSSL for TLS-wrapped control-plane transport (since v0.8.17)" OFF)
+# TLS defaults ON if OpenSSL is detectable at config time: the control-plane
+# transport's TLS/mTLS/HMAC-SHA3 path is part of the v1.0 stable ABI, and
+# silently dropping back to plaintext on a build that didn't pass the flag
+# (the v1.0 release of build_release shipped this way and broke binding TLS
+# tests) is worse than a hard error.  Set -DQSIM_ENABLE_TLS=OFF explicitly
+# to opt out, or the build will fail-fast with a clear error below.
+include(CMakeDependentOption)
+if(APPLE AND NOT OPENSSL_ROOT_DIR)
+    execute_process(COMMAND brew --prefix openssl@3
+                    OUTPUT_VARIABLE _qsim_brew_openssl
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    if(_qsim_brew_openssl)
+        set(OPENSSL_ROOT_DIR "${_qsim_brew_openssl}" CACHE PATH "OpenSSL root (Homebrew-probed default)")
+    endif()
+endif()
+find_package(OpenSSL QUIET)
+if(OPENSSL_FOUND)
+    set(_qsim_tls_default ON)
+else()
+    set(_qsim_tls_default OFF)
+endif()
+option(QSIM_ENABLE_TLS "Link OpenSSL for TLS-wrapped control-plane transport (since v0.8.17, default ON when OpenSSL is found)" ${_qsim_tls_default})
 option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II / SF64)" OFF)
 set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
     "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
@@ -527,19 +549,10 @@ if(QSIM_ENABLE_MPI)
     endif()
 endif()
 
-# TLS via OpenSSL (since v0.8.17).  Used by the control-plane transport;
-# Homebrew on macOS installs to /opt/homebrew/opt/openssl@3 which is not
-# in CMake's default search path, so probe for it explicitly.
+# TLS via OpenSSL (since v0.8.17).  The Homebrew probe + initial
+# detection happen up at the option block so the option default tracks
+# OpenSSL availability; here we re-verify and emit the status message.
 if(QSIM_ENABLE_TLS)
-    if(APPLE AND NOT OPENSSL_ROOT_DIR)
-        execute_process(COMMAND brew --prefix openssl@3
-                        OUTPUT_VARIABLE _brew_openssl
-                        OUTPUT_STRIP_TRAILING_WHITESPACE
-                        ERROR_QUIET)
-        if(_brew_openssl)
-            set(OPENSSL_ROOT_DIR "${_brew_openssl}")
-        endif()
-    endif()
     find_package(OpenSSL)
     if(OPENSSL_FOUND)
         message(STATUS "OpenSSL: ${OPENSSL_VERSION} at ${OPENSSL_INCLUDE_DIR}")
