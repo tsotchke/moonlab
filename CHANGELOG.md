@@ -7,7 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.6.)
+(No unreleased changes since v0.8.7.)
+
+## [0.8.7] - 2026-05-19
+
+**TCP control plane.**  Distributed cloud platform takes a real
+shape: remote clients submit circuits and collect probability
+vectors over the network, built on the v0.8.3 wire format.
+
+### Added
+
+- `src/control/control_plane.{c,h}`: POSIX-sockets transport.
+  Server uses `socket` / `bind` / `listen` / `accept` / `recv` /
+  `send`; client uses `connect` / `send` / `recv`.  Zero external
+  dependencies -- no HTTP, no protobuf, no gRPC.
+
+  Surface (all MOONLAB_API):
+
+      int moonlab_control_serve(host, port, max_iters, *out_port);
+      int moonlab_control_submit_circuit(host, port, text, len,
+                                         **out_probs, *out_num);
+
+  Wire format:
+  - Request:   `CIRCUIT <bytes>\n<bytes-of-moonlab-circuit-v1>`
+  - Response (OK): `OK <num_probs>\n<num_probs * 8 bytes little-
+                    endian IEEE-754 doubles>`
+  - Response (error): `ERR <status> <message>\n`
+
+- `tests/integration/test_control_plane.c` (ctest label
+  `control_plane`): spawns the server in a pthread on port 0
+  (OS-chosen), submits a Bell circuit over loopback, verifies
+  `P[00] = P[11] = 0.5` bit-perfect, then submits a garbage
+  payload and verifies `MOONLAB_CONTROL_REJECTED`.
+
+### Verified
+
+```
+=== test_control_plane (v0.8.7) ===
+--- spinning up server on 127.0.0.1:0 ---
+  OK    server bound to port 49900
+--- submit Bell circuit ---
+  OK    P[00] = 0.500000 (expected 0.5)
+  OK    P[11] = 0.500000 (expected 0.5)
+--- submit garbage circuit (expect ERR) ---
+  OK    submit_circuit on garbage -> REJECTED (rc=-405)
+=== 0 failure(s) ===
+```
+
+Server -> client round-trip on the same machine over loopback.
+Same code expected to function unchanged across networked hosts.
+
+### Notes
+
+Server is single-threaded blocking, one request per connection.
+This is sufficient as the v0.8.x distributed-cloud MVP.  Future
+work: thread-pool / kqueue / TLS / HTTP/2 (these can swap in
+behind the same wire protocol without API changes).
 
 ## [0.8.6] - 2026-05-19
 
