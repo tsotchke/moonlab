@@ -955,11 +955,16 @@ tracked for 0.2.
 
 ### Distributed (MPI)
 
-`distributed_gates` exercises the MPI bridge: init, allreduce,
-sendrecv and barrier round-trip on ≥2 ranks. End-to-end distributed
-state-vector gate application across partitions is still in progress —
-the scaling table that used to live here was not reproducibly
-measured and has been removed.
+State-vector sharding across MPI ranks is wired end-to-end in
+`src/distributed/`: `dist_gate_1q`, `dist_hadamard`, `dist_pauli_*`,
+`dist_cnot`, etc. handle both local-partition and cross-partition
+gates with the necessary `MPI_Sendrecv` exchange.  The
+`tests/integration/test_distributed_*` harnesses validate Bell + GHZ
+round-trips on `mpirun -np 2..4`.  Cross-rank scaling above N = 32
+qubits (which exercises the dist_* buffer-size path fixed in v0.8.0)
+runs on dev hosts but has not yet been published with a peer-host
+reproducible scaling table -- that's tracked as part of the
+post-v1.0 scaling-honesty pass.
 
 ## Building
 
