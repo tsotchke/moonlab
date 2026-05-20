@@ -77,6 +77,19 @@ static int log_enabled(void)
     return cached;
 }
 
+/* JSON-format log mode (since v0.8.28) -- env-gated by
+ * `MOONLAB_CONTROL_LOG_FORMAT=json`.  Default is the legacy
+ * "k=v" plain-text format. */
+static int log_format_json(void)
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char *v = getenv("MOONLAB_CONTROL_LOG_FORMAT");
+        cached = (v && (strcmp(v, "json") == 0 || strcmp(v, "JSON") == 0)) ? 1 : 0;
+    }
+    return cached;
+}
+
 static double monotonic_ms(void)
 {
     struct timespec ts;
@@ -240,11 +253,20 @@ static int handle_one_request(moonlab_io_t  *io,
     }                                                                 \
     if (log_enabled()) {                                              \
         const double dt = monotonic_ms() - t0;                        \
-        fprintf(stderr,                                               \
-            "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
-            " wall_ms=%.2f rc=%d\n",                                  \
-            log_verb, log_n_qubits, log_body_bytes, log_shots,        \
-            dt, log_rc);                                              \
+        if (log_format_json()) {                                      \
+            fprintf(stderr,                                           \
+                "{\"event\":\"moonlab.control\",\"verb\":\"%s\","     \
+                "\"n_qubits\":%d,\"body\":%ld,\"shots\":%ld,"         \
+                "\"wall_ms\":%.2f,\"rc\":%d}\n",                      \
+                log_verb, log_n_qubits, log_body_bytes, log_shots,    \
+                dt, log_rc);                                          \
+        } else {                                                      \
+            fprintf(stderr,                                           \
+                "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
+                " wall_ms=%.2f rc=%d\n",                              \
+                log_verb, log_n_qubits, log_body_bytes, log_shots,    \
+                dt, log_rc);                                          \
+        }                                                             \
         fflush(stderr);                                               \
     }                                                                 \
     return log_rc;                                                    \

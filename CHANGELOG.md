@@ -7,7 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v0.8.27.)
+(No unreleased changes since v0.8.28.)
+
+## [0.8.28] - 2026-05-20
+
+**JSON-format request log.**  Log aggregators (Loki, Splunk, Datadog,
+ELK) want one JSON object per line, not k=v text.  Opt-in via env
+var so default behaviour for `tail -f` ops is unchanged.
+
+### Added
+
+- `MOONLAB_CONTROL_LOG_FORMAT=json` switches the v0.8.13 structured
+  request log from the legacy ``[moonlab.control] verb=CIRCUIT ...``
+  format to a single-line JSON object:
+
+  ```
+  {"event":"moonlab.control","verb":"CIRCUIT","n_qubits":2,
+   "body":47,"shots":0,"wall_ms":1.04,"rc":0}
+  ```
+
+  Toggles independently of `MOONLAB_CONTROL_LOG` (which still
+  gates whether anything is emitted at all).
+
+### Verified
+
+```
+--- text mode ---
+[moonlab.control] verb=CIRCUIT n_qubits=2 body=47 shots=0 wall_ms=1.28 rc=0
+[moonlab.control] verb=CIRCUIT n_qubits=-1 body=39 shots=0 wall_ms=0.02 rc=-405
+
+--- json mode ---
+{"event":"moonlab.control","verb":"CIRCUIT","n_qubits":2,"body":47,"shots":0,"wall_ms":1.04,"rc":0}
+{"event":"moonlab.control","verb":"CIRCUIT","n_qubits":-1,"body":39,"shots":0,"wall_ms":0.02,"rc":-405}
+```
+
+Both formats carry identical fields; ops can switch via env var
+without restarting the embedding application.
 
 ## [0.8.27] - 2026-05-20
 
