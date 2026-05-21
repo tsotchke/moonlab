@@ -806,6 +806,7 @@ set(QSIM_UTILS_SOURCES
     src/utils/quantum_entropy.c
     src/utils/moonlab_status.c
     src/utils/token_bucket.c
+    src/utils/audit_buffer.c
 )
 
 # External-library bridges.  Each translation unit compiles in two modes
