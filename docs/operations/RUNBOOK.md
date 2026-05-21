@@ -195,6 +195,78 @@ const int   n_shots    = results->total_shots;
 - The completion hook is single-slot; install your overlay's hook
   at process start and never swap it mid-run.
 
+## 6.5 Customer client examples
+
+Every binding exposes the tenant-form AUTH submission.  Each
+example assumes the customer has been issued a shared HMAC secret
+and a tenant_id by the operator.
+
+### Python (`bindings/python/moonlab/control_plane.py`)
+
+```python
+from moonlab.control_plane import submit_circuit
+from moonlab.qgtl import GateType, QgtlCircuit
+
+c = (QgtlCircuit(num_qubits=2)
+       .add_gate(GateType.H, target=0)
+       .add_gate(GateType.CNOT, target=1, control=0))
+
+probs = submit_circuit(
+    "moonlab.example.com", 8443,
+    c.serialize(),
+    secret=b"<32-byte HMAC secret from operator>",
+    tenant_id="acme-corp",
+)
+# probs == [0.5, 0.0, 0.0, 0.5]
+```
+
+### Rust (`bindings/rust/moonlab/src/control_plane.rs`)
+
+```rust
+use moonlab::control_plane::submit_circuit_auth_tenant;
+use moonlab::qgtl::{GateType, QgtlCircuit};
+
+let mut c = QgtlCircuit::new(2)?;
+c.add_gate(GateType::H, 0, -1, &[])?;
+c.add_gate(GateType::Cnot, 1, 0, &[])?;
+let text = c.serialize()?;
+
+let probs = submit_circuit_auth_tenant(
+    "moonlab.example.com", 8443,
+    &text,
+    b"<32-byte HMAC secret from operator>",
+    "acme-corp",
+)?;
+// probs == vec![0.5, 0.0, 0.0, 0.5]
+```
+
+### JavaScript / Node (`@moonlab/quantum-core/control-plane`)
+
+```typescript
+import { submitCircuit } from '@moonlab/quantum-core/control-plane';
+
+const probs = await submitCircuit({
+  host: 'moonlab.example.com', port: 8443,
+  circuitText: bellCircuitText(),
+  secret: Buffer.from('<32-byte HMAC secret from operator>'),
+  tenantId: 'acme-corp',
+});
+// probs === [0.5, 0, 0, 0.5]
+```
+
+### Wire format under all three
+
+```
+AUTH acme-corp:<64-hex-HMAC-SHA3-256>\n
+CIRCUIT <N>\n
+<N bytes of moonlab-circuit-v1 text>
+```
+
+The HMAC is keyed on the operator-issued shared secret and computed
+over the verb line including its trailing newline.  Tenant_id is
+the identity claim; HMAC is the AUTHN check.  All three bindings
+reject malformed tenant_ids client-side before connecting.
+
 ## 7. Reading the Prometheus metrics
 
 The `METRICS` verb returns Prometheus text-format counters.  Scrape
