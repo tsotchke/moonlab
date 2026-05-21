@@ -1403,6 +1403,14 @@ if(QSIM_BUILD_BENCHMARKS)
     # decoder slots at varying physical error rates, emits JSON.
     add_executable(decoder_shootout benchmarks/decoder_shootout.c)
     target_link_libraries(decoder_shootout PRIVATE quantumsim)
+
+    # Control-plane load test (since v1.0.3) -- N concurrent clients
+    # against a running moonlab-control-server; throughput + P50/P90/P99
+    # latency.  Validates the runbook capacity numbers and the
+    # FLEET_DEPLOYMENT.md per-replica budgets.
+    add_executable(control_plane_loadtest benchmarks/control_plane_loadtest.c)
+    target_link_libraries(control_plane_loadtest
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
     if(QSIM_HAS_OPENMP)
         qsim_target_link_openmp(grover_parallel_benchmark)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
