@@ -141,7 +141,14 @@ arc, all frozen under the same v1.x ABI policy:
   - `moonlab_audit_buffer_reset_drops(buf)`
     + the `moonlab_audit_buffer_t` struct (caller-owned storage +
       caller-owned slots block; capacity does NOT need to be a
-      power of two -- mutex-guarded ring uses `% capacity`)
+      power of two -- mutex-guarded ring uses `% capacity`).
+    + struct layout includes a `pthread_mutex_t lock` and an
+      `_Atomic int state` field added in v1.0.5; do NOT rely on
+      the layout being identical across patch versions, since the
+      mutex/state are implementation details.  Treat the struct
+      as caller-allocated opaque storage and access it ONLY via
+      the public API.  Caller MUST zero-initialise the struct
+      before the first `init()` (e.g. `audit_buffer_t b = {0};`).
 
 See `docs/EXTENSION_SURFACES.md` for the integration guide that
 shows each surface with C / Python / Rust / JavaScript snippets.

@@ -408,7 +408,7 @@ static void test_concurrent_consumer(void)
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
-    fprintf(stdout, "=== moonlab_audit_buffer_t (Vyukov MPSC) ===\n");
+    fprintf(stdout, "=== moonlab_audit_buffer_t (mutex MPMC) ===\n");
     test_init_empty();
     test_bad_input_unusable();
     test_push_pop_fifo();
