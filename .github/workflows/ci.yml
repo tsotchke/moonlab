@@ -751,3 +751,65 @@ jobs:
         run: |
           cd bindings/javascript/packages/core
           node scripts/webgpu-unified-smoke.mjs
+
+  # ----------------------------------------------------------------------
+  # Docker image build (since v1.0.3): every PR builds the three
+  # production images (control-plane / exporter / gateway) so a
+  # broken Dockerfile cannot reach the fleet rollout.  We don't push
+  # to a registry from CI; that's a release-time action.
+  # ----------------------------------------------------------------------
+  docker-image-build:
+    name: Docker images build cleanly
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build moonlab/control-plane:ci
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.control-plane
+          push: false
+          load: true
+          tags: moonlab/control-plane:ci
+          build-args: |
+            MOONLAB_VERSION=ci
+      - name: Build moonlab/control-exporter:ci
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.exporter
+          push: false
+          load: true
+          tags: moonlab/control-exporter:ci
+      - name: Build moonlab/websocket-gateway:ci
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.gateway
+          push: false
+          load: true
+          tags: moonlab/websocket-gateway:ci
+      - name: Smoke-run the control-plane image
+        run: |
+          # Start the daemon in the background; HEALTH probe; tear down.
+          # If the image is structurally broken (bad ENTRYPOINT, missing
+          # binary, missing shared lib), this step catches it.
+          docker run -d --rm --name moonlab-ci \
+              -p 17070:7070 \
+              moonlab/control-plane:ci
+          # Wait up to 15 s for the daemon to bind.
+          for i in $(seq 1 15); do
+              if printf 'HEALTH\n' | nc -w 1 127.0.0.1 17070 2>/dev/null \
+                  | grep -q 'OK alive'; then
+                  echo "control-plane HEALTH OK on attempt $i"
+                  docker stop moonlab-ci
+                  exit 0
+              fi
+              sleep 1
+          done
+          echo "control-plane did not respond to HEALTH within 15 s"
+          docker logs moonlab-ci || true
+          docker stop moonlab-ci || true
+          exit 1
