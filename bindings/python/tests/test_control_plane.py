@@ -124,3 +124,75 @@ def test_max_concurrent_enforces_cap():
     assert counter_line is not None, body
     counter_val = int(counter_line.split()[-1])
     assert counter_val >= denied
+
+
+# ---- v1.0.3 tenant-form AUTH ----
+
+def test_tenant_form_auth_round_trip():
+    """Submit a circuit with AUTH <tenant_id>:<hmac> and verify the
+    server accepts it.  Mirrors the C-side integration test
+    test_control_plane_tenant.c."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+    with ControlPlaneServer(host="127.0.0.1", port=0, secret=secret) as srv:
+        probs = submit_circuit(
+            "127.0.0.1", srv.port, text,
+            secret=secret, tenant_id="acme-corp",
+        )
+    assert len(probs) == 4
+    assert abs(probs[0] - 0.5) < 1e-9
+    assert abs(probs[3] - 0.5) < 1e-9
+
+
+def test_tenant_id_without_secret_rejected():
+    """Helper enforces secret-required when tenant_id is set; this
+    matches the C client and prevents callers from sending a tenant
+    claim that the server cannot authenticate."""
+    text = _bell_circuit_text()
+    with pytest.raises(ControlPlaneError):
+        submit_circuit(
+            "127.0.0.1", 9999, text,
+            tenant_id="acme-corp",  # no secret
+        )
+
+
+def test_tenant_id_illegal_chars_rejected():
+    """Tenant_id charset is [A-Za-z0-9_.-]; anything else gets
+    refused client-side before send."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+    with pytest.raises(ControlPlaneError):
+        submit_circuit(
+            "127.0.0.1", 9999, text,
+            secret=secret,
+            tenant_id="acme;rm -rf /",
+        )
+
+
+def test_tenant_id_length_bounds():
+    """Length must be in [1, 63]."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+    with pytest.raises(ControlPlaneError):
+        submit_circuit("127.0.0.1", 9999, text,
+                       secret=secret, tenant_id="")
+    with pytest.raises(ControlPlaneError):
+        submit_circuit("127.0.0.1", 9999, text,
+                       secret=secret, tenant_id="x" * 64)
+
+
+def test_two_tenants_in_sequence():
+    """A real customer flow: tenant A submits, then tenant B
+    submits, both get correct results.  The server treats them as
+    independent; the python helper builds the right AUTH line for
+    each."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+    with ControlPlaneServer(host="127.0.0.1", port=0, secret=secret) as srv:
+        for tenant in ("acme-corp", "beta-startup", "gamma.industries"):
+            probs = submit_circuit(
+                "127.0.0.1", srv.port, text,
+                secret=secret, tenant_id=tenant,
+            )
+            assert abs(probs[0] - 0.5) < 1e-9, tenant
+            assert abs(probs[3] - 0.5) < 1e-9, tenant

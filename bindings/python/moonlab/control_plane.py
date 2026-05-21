@@ -80,11 +80,32 @@ def _recv_until_newline(sock: socket.socket, cap: int = 4096) -> str:
     return out.decode("ascii", errors="replace")
 
 
+_TENANT_OK_CHARS = set(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-"
+)
+
+
+def _validate_tenant_id(tenant_id: str) -> None:
+    """Mirror the server-side rule: 1..63 chars, [A-Za-z0-9_.-]."""
+    if not isinstance(tenant_id, str):
+        raise ControlPlaneError(f"tenant_id must be str, got {type(tenant_id)!r}")
+    if not (1 <= len(tenant_id) <= 63):
+        raise ControlPlaneError(
+            f"tenant_id length {len(tenant_id)} out of range [1, 63]"
+        )
+    for c in tenant_id:
+        if c not in _TENANT_OK_CHARS:
+            raise ControlPlaneError(
+                f"tenant_id contains illegal char {c!r}; allowed [A-Za-z0-9_.-]"
+            )
+
+
 def submit_circuit(host: str,
                    port: int,
                    circuit_text: str,
                    timeout: Optional[float] = 30.0,
-                   secret: Optional[Union[bytes, str]] = None) -> List[float]:
+                   secret: Optional[Union[bytes, str]] = None,
+                   tenant_id: Optional[str] = None) -> List[float]:
     """Submit a moonlab-circuit v1 text payload to a control-plane
     server at ``host:port`` and return the probability vector.
 
@@ -105,6 +126,14 @@ def submit_circuit(host: str,
         sends an ``AUTH <token>`` prelude before the verb line; the
         server must be configured with the same secret via
         ``moonlab_control_server_set_secret``.
+    tenant_id : str, optional
+        Tenant identifier for multi-tenant deployments (since
+        v1.0.3).  When set together with ``secret``, the prelude
+        becomes ``AUTH <tenant_id>:<token>\n``; the server plumbs
+        the tenant through to its scheduler completion hook (used
+        by the overlay's billing / audit / quota layer).  Requires
+        ``secret``; pass without it raises ``ControlPlaneError``.
+        Characters restricted to ``[A-Za-z0-9_.-]``; length 1..63.
 
     Returns
     -------
@@ -120,11 +149,23 @@ def submit_circuit(host: str,
     encoded = circuit_text.encode("utf-8")
     verb_line = f"CIRCUIT {len(encoded)}\n".encode("ascii")
 
+    if tenant_id is not None:
+        if secret is None:
+            raise ControlPlaneError(
+                "tenant_id requires secret; the server uses HMAC to "
+                "authenticate the request regardless of tenant identity"
+            )
+        _validate_tenant_id(tenant_id)
+
     with socket.create_connection((host, port), timeout=timeout) as sock:
         if secret is not None:
             key = secret.encode("utf-8") if isinstance(secret, str) else secret
             tok = _hmac_sha3_256(key, verb_line).hex()
-            sock.sendall(f"AUTH {tok}\n".encode("ascii"))
+            if tenant_id is not None:
+                auth_line = f"AUTH {tenant_id}:{tok}\n".encode("ascii")
+            else:
+                auth_line = f"AUTH {tok}\n".encode("ascii")
+            sock.sendall(auth_line)
         sock.sendall(verb_line)
         sock.sendall(encoded)
 
