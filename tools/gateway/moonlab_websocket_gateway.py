@@ -11,10 +11,17 @@ protocol on the TCP side.
 
 Request envelope::
 
-    { "verb": "CIRCUIT" | "SHOTS" | "HEALTH" | "METRICS",
+    { "verb":    "CIRCUIT" | "SHOTS" | "HEALTH" | "METRICS",
       "circuit": "<moonlab-circuit-v1 text>",
       "shots":   <int>,             // SHOTS verb only
-      "secret":  "<hex-bytes>"      // optional HMAC-SHA3 shared secret
+      "secret":  "<hex-bytes>",     // optional HMAC-SHA3 shared secret
+      "tenant":  "<tenant_id>"      // optional tenant identifier (v1.0.3);
+                                     // requires `secret`; charset [A-Za-z0-9_.-],
+                                     // length 1..63.  When set, the gateway
+                                     // emits `AUTH <tenant>:<hmac>\n` upstream
+                                     // and the control plane's scheduler
+                                     // completion hook attributes the run to
+                                     // this tenant for billing/audit.
     }
 
 Reply envelope::
@@ -95,15 +102,50 @@ def _recv_exact(sock: socket.socket, want: int, seed: bytes) -> bytes:
     return buf[:want]
 
 
+_TENANT_OK = set(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-"
+)
+
+
+def _validate_tenant_id(tenant_id: str) -> None:
+    """Mirror the server-side AUTH parser's tenant_id rules."""
+    if not isinstance(tenant_id, str):
+        raise ValueError(f"tenant must be str, got {type(tenant_id).__name__}")
+    if not (1 <= len(tenant_id) <= 63):
+        raise ValueError(
+            f"tenant length {len(tenant_id)} out of range [1, 63]"
+        )
+    for c in tenant_id:
+        if c not in _TENANT_OK:
+            raise ValueError(
+                f"tenant contains illegal char {c!r}; allowed [A-Za-z0-9_.-]"
+            )
+
+
 def _line_submit(target_host: str, target_port: int, timeout: float,
                  verb_line: bytes, body: bytes = b"",
-                 secret: bytes | None = None) -> tuple[str, bytes, str]:
+                 secret: bytes | None = None,
+                 tenant_id: str | None = None) -> tuple[str, bytes, str]:
     """Open a TCP connection, send the verb (with optional AUTH prelude)
-    and body, return (header_verb, body_bytes, remainder_after_verb)."""
+    and body, return (header_verb, body_bytes, remainder_after_verb).
+
+    When ``tenant_id`` is set together with ``secret``, the AUTH
+    prelude takes the v1.0.3 form ``AUTH <tenant_id>:<hmac>\\n``
+    instead of the legacy ``AUTH <hmac>\\n``."""
+    if tenant_id is not None:
+        if secret is None:
+            raise ValueError(
+                "tenant requires secret; the control plane uses HMAC to "
+                "authenticate the request regardless of tenant identity"
+            )
+        _validate_tenant_id(tenant_id)
     with socket.create_connection((target_host, target_port), timeout=timeout) as s:
         if secret is not None:
             tok = _hmac_sha3_256(secret, verb_line).hex()
-            s.sendall(f"AUTH {tok}\n".encode("ascii"))
+            if tenant_id is not None:
+                s.sendall(f"AUTH {tenant_id}:{tok}\n".encode("ascii"))
+            else:
+                s.sendall(f"AUTH {tok}\n".encode("ascii"))
         s.sendall(verb_line)
         if body:
             s.sendall(body)
@@ -147,8 +189,13 @@ def _handle_circuit(target: tuple[str, int], timeout: float, req: dict) -> dict:
     text = req.get("circuit", "")
     body = text.encode("utf-8")
     secret = _parse_secret(req.get("secret"))
+    tenant = req.get("tenant")
     verb = f"CIRCUIT {len(body)}\n".encode("ascii")
-    head, payload, rest = _line_submit(target[0], target[1], timeout, verb, body, secret)
+    try:
+        head, payload, rest = _line_submit(
+            target[0], target[1], timeout, verb, body, secret, tenant)
+    except ValueError as e:
+        return {"status": "ERR", "code": -400, "message": str(e)}
     if head == "OK":
         num = len(payload) // 8
         probs = list(struct.unpack(f"<{num}d", payload))
@@ -163,8 +210,13 @@ def _handle_shots(target: tuple[str, int], timeout: float, req: dict) -> dict:
         return {"status": "ERR", "code": -400, "message": "shots must be > 0"}
     body = text.encode("utf-8")
     secret = _parse_secret(req.get("secret"))
+    tenant = req.get("tenant")
     verb = f"SHOTS {shots} {len(body)}\n".encode("ascii")
-    head, payload, rest = _line_submit(target[0], target[1], timeout, verb, body, secret)
+    try:
+        head, payload, rest = _line_submit(
+            target[0], target[1], timeout, verb, body, secret, tenant)
+    except ValueError as e:
+        return {"status": "ERR", "code": -400, "message": str(e)}
     if head == "SAMPLES":
         num = len(payload) // 8
         counts = list(struct.unpack(f"<{num}Q", payload))

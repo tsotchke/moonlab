@@ -28,6 +28,9 @@ class FakeControlPlane:
         self.port: int = self._srv.getsockname()[1]
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._serve, daemon=True)
+        # Captures the AUTH line of every request that started with one,
+        # so tests can assert the gateway emitted the right wire form.
+        self.auth_lines: list[str] = []
 
     def __enter__(self) -> "FakeControlPlane":
         self._thread.start()
@@ -54,6 +57,18 @@ class FakeControlPlane:
                 buf += chunk
             verb_line, _, rest = buf.partition(b"\n")
             text = verb_line.decode("ascii", errors="replace")
+            # v1.0.3: AUTH prelude.  Capture for assertions, advance to
+            # the next newline-delimited line as the actual verb.
+            if text.startswith("AUTH "):
+                self.auth_lines.append(text)
+                buf = rest
+                while b"\n" not in buf:
+                    chunk = conn.recv(64)
+                    if not chunk:
+                        return
+                    buf += chunk
+                verb_line, _, rest = buf.partition(b"\n")
+                text = verb_line.decode("ascii", errors="replace")
             if text == "HEALTH":
                 conn.sendall(b"OK alive\n")
                 return
@@ -115,7 +130,7 @@ def gateway_pair():
         actual_port = srv_handle.sockets[0].getsockname()[1]
 
         try:
-            yield actual_port
+            yield actual_port, cp
         finally:
             async def shutdown():
                 srv_handle.close()
@@ -137,18 +152,21 @@ async def _send(port: int, payload: dict) -> dict:
 
 
 def test_health_round_trip(gateway_pair):
-    reply = asyncio.run(_send(gateway_pair, {"verb": "HEALTH"}))
+    port, _ = gateway_pair
+    reply = asyncio.run(_send(port, {"verb": "HEALTH"}))
     assert reply == {"status": "OK", "code": 0, "message": "alive"}
 
 
 def test_metrics_round_trip(gateway_pair):
-    reply = asyncio.run(_send(gateway_pair, {"verb": "METRICS"}))
+    port, _ = gateway_pair
+    reply = asyncio.run(_send(port, {"verb": "METRICS"}))
     assert reply["status"] == "OK"
     assert "moonlab_control_requests_total" in reply["body"]
 
 
 def test_circuit_round_trip(gateway_pair):
-    reply = asyncio.run(_send(gateway_pair, {
+    port, _ = gateway_pair
+    reply = asyncio.run(_send(port, {
         "verb": "CIRCUIT",
         "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
     }))
@@ -157,7 +175,8 @@ def test_circuit_round_trip(gateway_pair):
 
 
 def test_shots_round_trip(gateway_pair):
-    reply = asyncio.run(_send(gateway_pair, {
+    port, _ = gateway_pair
+    reply = asyncio.run(_send(port, {
         "verb": "SHOTS",
         "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
         "shots": 1000,
@@ -166,17 +185,93 @@ def test_shots_round_trip(gateway_pair):
     assert reply["counts"] == [500, 0, 0, 500]
 
 
+def test_tenant_form_auth_propagates_through_gateway(gateway_pair):
+    """v1.0.3: browser request with `tenant` field -> gateway emits
+    `AUTH <tenant>:<hmac>\\n` upstream.  Verify the fake control
+    plane saw the exact wire form, including a 64-hex HMAC."""
+    port, cp = gateway_pair
+    import re
+    reply = asyncio.run(_send(port, {
+        "verb": "CIRCUIT",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "secret": "shared-key-bytes".encode("utf-8").hex(),
+        "tenant": "acme-corp",
+    }))
+    assert reply["status"] == "OK", reply
+    assert reply["probs"] == [0.5, 0.0, 0.0, 0.5]
+    assert len(cp.auth_lines) == 1
+    assert re.fullmatch(r"AUTH acme-corp:[0-9a-f]{64}", cp.auth_lines[0]), \
+        f"unexpected upstream AUTH line: {cp.auth_lines[0]!r}"
+
+
+def test_tenant_without_secret_rejected_clientside(gateway_pair):
+    port, cp = gateway_pair
+    reply = asyncio.run(_send(port, {
+        "verb": "CIRCUIT",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "tenant": "acme-corp",
+    }))
+    assert reply["status"] == "ERR"
+    assert reply["code"] == -400
+    assert "secret" in reply["message"].lower()
+    assert cp.auth_lines == [], "gateway should not have contacted upstream"
+
+
+def test_tenant_illegal_char_rejected_clientside(gateway_pair):
+    port, cp = gateway_pair
+    reply = asyncio.run(_send(port, {
+        "verb": "CIRCUIT",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "secret": "shared-key-bytes".encode("utf-8").hex(),
+        "tenant": "acme;rm -rf /",
+    }))
+    assert reply["status"] == "ERR"
+    assert reply["code"] == -400
+    assert cp.auth_lines == []
+
+
+def test_tenant_oversize_rejected_clientside(gateway_pair):
+    port, cp = gateway_pair
+    reply = asyncio.run(_send(port, {
+        "verb": "CIRCUIT",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "secret": "shared-key-bytes".encode("utf-8").hex(),
+        "tenant": "x" * 64,
+    }))
+    assert reply["status"] == "ERR"
+    assert reply["code"] == -400
+    assert cp.auth_lines == []
+
+
+def test_legacy_auth_form_when_no_tenant(gateway_pair):
+    """Sanity: with `secret` but no `tenant`, gateway emits the
+    legacy `AUTH <hex>\\n` form, not the tenant variant."""
+    port, cp = gateway_pair
+    import re
+    reply = asyncio.run(_send(port, {
+        "verb": "CIRCUIT",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "secret": "shared-key-bytes".encode("utf-8").hex(),
+    }))
+    assert reply["status"] == "OK"
+    assert len(cp.auth_lines) == 1
+    assert re.fullmatch(r"AUTH [0-9a-f]{64}", cp.auth_lines[0]), \
+        f"unexpected upstream AUTH line: {cp.auth_lines[0]!r}"
+
+
 def test_unknown_verb_returns_400(gateway_pair):
-    reply = asyncio.run(_send(gateway_pair, {"verb": "BANANA"}))
+    port, _ = gateway_pair
+    reply = asyncio.run(_send(port, {"verb": "BANANA"}))
     assert reply["status"] == "ERR"
     assert reply["code"] == -400
 
 
 def test_bad_json_returns_400(gateway_pair):
+    port, _ = gateway_pair
     import websockets
 
     async def go():
-        async with websockets.connect(f"ws://127.0.0.1:{gateway_pair}/") as ws:
+        async with websockets.connect(f"ws://127.0.0.1:{port}/") as ws:
             await ws.send("not-json")
             return json.loads(await ws.recv())
     reply = asyncio.run(go())
