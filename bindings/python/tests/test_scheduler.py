@@ -181,3 +181,79 @@ def test_ionq_cleaner_than_rigetti_same_seed():
     n_ionq    = sum(1 for o in r_ionq.outcomes if o not in (0, 3))
     assert n_ionq < n_rigetti, (
         f"ionq off-Bell ({n_ionq}) should be < rigetti ({n_rigetti})")
+
+
+# ---- Vendor-noise profile runtime registry tests (v1.0.3) ----
+
+from moonlab.scheduler import (
+    VendorNoiseProfile, lookup_vendor_noise_profile,
+    register_vendor_noise_profile, unregister_vendor_noise_profile,
+    list_vendor_noise_profiles, set_completion_hook, clear_completion_hook,
+)
+
+
+def test_baked_noise_profiles_present():
+    """The six baked-in noise profiles auto-register on first lookup."""
+    names = list_vendor_noise_profiles()
+    for required in ("ibm-falcon-emu", "rigetti-aspen-emu", "ionq-forte-emu",
+                     "ibm-falcon", "rigetti-aspen", "ionq-forte"):
+        assert required in names
+
+
+def test_noise_profile_register_lookup_unregister_round_trip():
+    p = VendorNoiseProfile(
+        p_gate_1q=0.0015, p_gate_2q=0.012, p_readout=0.018,
+        description="IBM Falcon (2026-05-20 live snapshot)")
+    register_vendor_noise_profile("ibm-falcon-2026-05-20", p)
+    try:
+        back = lookup_vendor_noise_profile("ibm-falcon-2026-05-20")
+        assert back is not None
+        assert abs(back.p_gate_2q - 0.012) < 1e-9
+        assert "live snapshot" in back.description
+        # In-place update.
+        register_vendor_noise_profile("ibm-falcon-2026-05-20",
+            VendorNoiseProfile(0.0008, 0.008, 0.012, "improved calibration"))
+        back2 = lookup_vendor_noise_profile("ibm-falcon-2026-05-20")
+        assert abs(back2.p_gate_2q - 0.008) < 1e-9
+    finally:
+        unregister_vendor_noise_profile("ibm-falcon-2026-05-20")
+    assert lookup_vendor_noise_profile("ibm-falcon-2026-05-20") is None
+
+
+def test_unknown_noise_profile_lookup_returns_none():
+    assert lookup_vendor_noise_profile("does-not-exist") is None
+
+
+# ---- Scheduler completion hook tests (v1.0.3) ----
+
+def test_completion_hook_fires_with_args():
+    calls = []
+
+    def hook(num_qubits, total_shots, backend):
+        calls.append((num_qubits, total_shots, backend))
+
+    set_completion_hook(hook)
+    try:
+        j = (Job(num_qubits=2)
+             .add_gate(GateType.H, 0)
+             .add_gate(GateType.CNOT, 1, 0)
+             .set_num_shots(256).set_num_workers(1))
+        j.execute()
+        assert len(calls) == 1
+        n_q, n_s, backend = calls[0]
+        assert n_q == 2
+        assert n_s == 256
+        # backend defaults to "simulator" when not pinned.
+        assert backend == "simulator"
+    finally:
+        clear_completion_hook()
+
+
+def test_completion_hook_clears():
+    calls = []
+    set_completion_hook(lambda n_q, n_s, b: calls.append(1))
+    clear_completion_hook()
+    j = (Job(num_qubits=1).add_gate(GateType.H, 0)
+         .set_num_shots(64).set_num_workers(1))
+    j.execute()
+    assert calls == []

@@ -113,6 +113,55 @@ if _HAS_VENDOR_NOISE:
     _lib.moonlab_register_vendor_noise_backends.argtypes = []
     _lib.moonlab_register_vendor_noise_backends.restype = ctypes.c_int
 
+# Vendor-noise profile runtime registry (since v1.0.3).
+_HAS_NOISE_PROFILE_REG = hasattr(_lib, "moonlab_register_vendor_noise_profile")
+
+
+class _VendorNoiseProfile(ctypes.Structure):
+    _fields_ = [
+        ("p_gate_1q",   ctypes.c_double),
+        ("p_gate_2q",   ctypes.c_double),
+        ("p_readout",   ctypes.c_double),
+        ("description", ctypes.c_char_p),
+    ]
+
+
+if _HAS_NOISE_PROFILE_REG:
+    _lib.moonlab_register_vendor_noise_profile.argtypes = [
+        ctypes.c_char_p, ctypes.POINTER(_VendorNoiseProfile)]
+    _lib.moonlab_register_vendor_noise_profile.restype = ctypes.c_int
+
+    _lib.moonlab_unregister_vendor_noise_profile.argtypes = [ctypes.c_char_p]
+    _lib.moonlab_unregister_vendor_noise_profile.restype = ctypes.c_int
+
+    _lib.moonlab_lookup_vendor_noise_profile.argtypes = [ctypes.c_char_p]
+    _lib.moonlab_lookup_vendor_noise_profile.restype = ctypes.POINTER(
+        _VendorNoiseProfile)
+
+    _lib.moonlab_num_vendor_noise_profiles.argtypes = []
+    _lib.moonlab_num_vendor_noise_profiles.restype = ctypes.c_int
+
+    _lib.moonlab_list_vendor_noise_profiles.argtypes = [
+        ctypes.POINTER(ctypes.c_char_p), ctypes.c_int]
+    _lib.moonlab_list_vendor_noise_profiles.restype = ctypes.c_int
+
+# Scheduler completion hook (since v1.0.3).
+_HAS_COMPLETION_HOOK = hasattr(_lib, "moonlab_scheduler_set_completion_hook")
+# Hook signature: (const moonlab_job_t*, const moonlab_job_results_t*,
+#                  const char *backend_name, void *ctx) -> void.
+_CompletionHookCFn = ctypes.CFUNCTYPE(
+    None,
+    ctypes.c_void_p,                       # job
+    ctypes.POINTER(_JobResults),           # results
+    ctypes.c_char_p,                       # backend name
+    ctypes.c_void_p,                       # ctx (we don't thread Python ctx through)
+)
+
+if _HAS_COMPLETION_HOOK:
+    _lib.moonlab_scheduler_set_completion_hook.argtypes = [
+        _CompletionHookCFn, ctypes.c_void_p]
+    _lib.moonlab_scheduler_set_completion_hook.restype = ctypes.c_int
+
 
 def _check(rc: int, ctx: str) -> None:
     if rc != MOONLAB_SCHED_OK:
@@ -292,10 +341,147 @@ def list_backends() -> list[str]:
     return [arr[i].decode("utf-8") for i in range(written)]
 
 
+@dataclass
+class VendorNoiseProfile:
+    """Snapshot of a hardware-noise profile -- 1q, 2q, and readout
+    Pauli-channel rates plus a human-readable label.  Returned by
+    :func:`lookup_vendor_noise_profile`; passed to
+    :func:`register_vendor_noise_profile`."""
+    p_gate_1q: float
+    p_gate_2q: float
+    p_readout: float
+    description: str = ""
+
+
+def register_vendor_noise_profile(name: str,
+                                  profile: VendorNoiseProfile) -> None:
+    """Install or replace a noise profile under ``name``.
+
+    Lets a live-calibration scraper push today's device snapshot into
+    the registry; existing backends registered against ``name`` see the
+    update on the next ``execute()`` (the backend's ctx is the name, not
+    a profile pointer, so updates take effect in place)."""
+    if not _HAS_NOISE_PROFILE_REG:
+        raise SchedulerError(
+            "register_vendor_noise_profile requires libquantumsim with the "
+            "v1.0.3+ vendor-noise profile registry compiled in")
+    cprof = _VendorNoiseProfile(
+        p_gate_1q=float(profile.p_gate_1q),
+        p_gate_2q=float(profile.p_gate_2q),
+        p_readout=float(profile.p_readout),
+        description=(profile.description or "").encode("utf-8"),
+    )
+    _check(_lib.moonlab_register_vendor_noise_profile(
+        name.encode("utf-8"), ctypes.byref(cprof)),
+        f"register_vendor_noise_profile({name!r})")
+
+
+def unregister_vendor_noise_profile(name: str) -> None:
+    """Remove a noise profile from the registry."""
+    if not _HAS_NOISE_PROFILE_REG:
+        raise SchedulerError(
+            "unregister_vendor_noise_profile requires libquantumsim >= v1.0.3")
+    _check(_lib.moonlab_unregister_vendor_noise_profile(name.encode("utf-8")),
+           f"unregister_vendor_noise_profile({name!r})")
+
+
+def lookup_vendor_noise_profile(name: str) -> Optional[VendorNoiseProfile]:
+    """Look up a noise profile by name.  Returns None if not registered."""
+    if not _HAS_NOISE_PROFILE_REG:
+        return None
+    p = _lib.moonlab_lookup_vendor_noise_profile(name.encode("utf-8"))
+    if not p:
+        return None
+    raw = p.contents
+    desc = raw.description.decode("utf-8") if raw.description else ""
+    return VendorNoiseProfile(
+        p_gate_1q=float(raw.p_gate_1q),
+        p_gate_2q=float(raw.p_gate_2q),
+        p_readout=float(raw.p_readout),
+        description=desc,
+    )
+
+
+def list_vendor_noise_profiles() -> list[str]:
+    """Return the names of all currently-registered noise profiles."""
+    if not _HAS_NOISE_PROFILE_REG:
+        return []
+    n = int(_lib.moonlab_num_vendor_noise_profiles())
+    if n <= 0:
+        return []
+    arr = (ctypes.c_char_p * n)()
+    written = int(_lib.moonlab_list_vendor_noise_profiles(arr, n))
+    return [arr[i].decode("utf-8") for i in range(written)]
+
+
+# ---- Completion hook ---------------------------------------------
+
+# Module-global holder for the active Python hook so the ctypes
+# trampoline does not get garbage-collected while installed.
+_active_completion_hook: Optional[_CompletionHookCFn] = None
+_active_completion_callback = None
+
+
+def set_completion_hook(callback: Optional[callable]) -> None:
+    """Install a Python callback that fires after every successful
+    ``scheduler.run`` (and only successful runs -- failed dispatches
+    do not fire the hook).
+
+    The callback receives ``(num_qubits, total_shots, backend_name)``;
+    if ``callback`` is None the hook is cleared.
+
+    Use cases: billing meter, audit log, customer dashboard.  Runs
+    synchronously on the caller thread, so keep the work short."""
+    global _active_completion_hook, _active_completion_callback
+    if not _HAS_COMPLETION_HOOK:
+        raise SchedulerError(
+            "set_completion_hook requires libquantumsim with the v1.0.3+ "
+            "scheduler completion hook compiled in")
+
+    if callback is None:
+        # Pass a NULL fn pointer to clear; the C scheduler checks for
+        # NULL before firing, so this is the right idempotent disable.
+        # ctypes accepts None for a CFUNCTYPE argument and passes NULL.
+        _lib.moonlab_scheduler_set_completion_hook(
+            ctypes.cast(None, _CompletionHookCFn), None)
+        _active_completion_hook = None
+        _active_completion_callback = None
+        return
+
+    def trampoline(job, results, backend_name, ctx):
+        try:
+            res = results.contents
+            backend = backend_name.decode("utf-8") if backend_name else None
+            callback(res.num_qubits, res.total_shots, backend)
+        except Exception:
+            # Hook errors must not propagate into the C runtime.
+            import traceback
+            traceback.print_exc()
+
+    cfn = _CompletionHookCFn(trampoline)
+    _check(_lib.moonlab_scheduler_set_completion_hook(cfn, None),
+           "set_completion_hook")
+    _active_completion_hook = cfn
+    _active_completion_callback = callback
+
+
+def clear_completion_hook() -> None:
+    """Detach the active completion hook.  Equivalent to
+    ``set_completion_hook(None)``."""
+    set_completion_hook(None)
+
+
 __all__ = [
     "Job",
     "JobResults",
     "SchedulerError",
+    "VendorNoiseProfile",
     "register_vendor_noise_backends",
+    "register_vendor_noise_profile",
+    "unregister_vendor_noise_profile",
+    "lookup_vendor_noise_profile",
+    "list_vendor_noise_profiles",
     "list_backends",
+    "set_completion_hook",
+    "clear_completion_hook",
 ]
