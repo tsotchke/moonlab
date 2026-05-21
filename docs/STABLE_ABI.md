@@ -50,32 +50,63 @@ inside the 1.x line).
 
 ## Symbol catalog by module
 
-`grep -rn "^MOONLAB_API " src/ --include="*.h"` returns 224
-declarations as of v1.0.  Distribution by header (highest first):
+`grep -rn "^MOONLAB_API " src/ --include="*.h"` returns 245
+declarations as of v1.0.3.  Distribution by header (highest first):
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|
 | `src/applications/moonlab_export.h`          |  36     |
+| `src/distributed/scheduler.h`                |  22     |
 | `src/integration/libirrep_bridge.h`          |  19     |
 | `src/control/control_plane.h`                |  19     |
 | `src/algorithms/quantum_geometry/qgt.h`      |  18     |
 | `src/quantum/gates.h`                        |  17     |
 | `src/quantum/noise_mpdo.h`                   |  15     |
 | `src/algorithms/tensor_network/ca_mps.h`     |  15     |
-| `src/distributed/scheduler.h`                |  14     |
 | `src/algorithms/qaoa.h`                      |  13     |
 | `src/algorithms/vqe.h`                       |  12     |
 | `src/applications/moonlab_qgtl_backend.h`    |  11     |
+| `src/applications/decoder_bench.h`           |   9     |
+| `src/applications/vendor_noise_backend.h`    |   7     |
 | `src/quantum/state.h`                        |   7     |
 | `src/algorithms/topology_realspace/chern_kpm.h` | 7   |
 | `src/algorithms/bell_tests.h`                |   6     |
 | `src/algorithms/grover.h`                    |   5     |
 | `src/backends/clifford/clifford.h`           |   4     |
-| `src/applications/decoder_bench.h`           |   3     |
 | (others, 1 each)                             |   3     |
 
 The authoritative list is the source.  This doc is not the
 catalogue -- treat the `MOONLAB_API` annotation as the contract.
+
+### v1.0.3 additions
+
+Three modules grew runtime registries; eleven new public symbols.
+All are frozen by the v1.0 ABI policy below: new names and meanings
+are stable across the v1.x line.
+
+`scheduler.h`:
+  - `moonlab_scheduler_set_completion_hook(fn, ctx)` + the
+    `moonlab_completion_hook_fn` typedef.
+
+`vendor_noise_backend.h`:
+  - `moonlab_register_vendor_noise_profile(name, profile)`
+  - `moonlab_unregister_vendor_noise_profile(name)`
+  - `moonlab_lookup_vendor_noise_profile(name)`
+  - `moonlab_num_vendor_noise_profiles()`
+  - `moonlab_list_vendor_noise_profiles(out_names, max)`
+
+`decoder_bench.h`:
+  - `moonlab_register_decoder(name, fn, ctx, description)`
+    + the `moonlab_decoder_fn` typedef
+    + the `moonlab_decoder_entry_t` struct
+  - `moonlab_unregister_decoder(name)`
+  - `moonlab_lookup_decoder(name)`
+  - `moonlab_decoder_decode_by_name(name, in)`
+  - `moonlab_num_decoders()`
+  - `moonlab_list_decoders(out_names, max)`
+
+See `docs/EXTENSION_SURFACES.md` for the integration guide that
+shows each surface with C / Python / Rust / JavaScript snippets.
 
 ## Wire protocol contract
 
