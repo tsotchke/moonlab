@@ -218,6 +218,15 @@
     target_link_libraries(example_surface_code_threshold PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Open-core overlay demo (since v1.0.3): exercises every public
+    # plug-in surface (backend, vendor-noise profile, decoder, and
+    # scheduler completion hook) in a single executable.  Reference
+    # for private overlays + sibling libraries that consume moonlab.
+    add_executable(example_open_core_overlay_demo
+        examples/extensions/open_core_overlay_demo.c)
+    target_link_libraries(example_open_core_overlay_demo PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
@@ -239,6 +248,11 @@
         add_test(NAME example_ca_peps_2d_tfim_smoke
                  COMMAND example_ca_peps_2d_tfim
                          /tmp/ca_peps_tfim_smoke.json 2 2 8 0.1 30)
+        # Open-core overlay demo: registers all four runtime surfaces
+        # and runs three jobs; smoke-test catches link + dispatch
+        # regressions in the plug-in registry pipeline.
+        add_test(NAME example_open_core_overlay_demo
+                 COMMAND example_open_core_overlay_demo)
         # quantum_critical_point is a multi-minute finite-size-scaling
         # demo and is deliberately excluded from the CI smoke.
         set_tests_properties(
@@ -248,6 +262,7 @@
             example_quantum_spin_chain_small
             example_phase3_phase4_benchmark
             example_ca_peps_2d_tfim_smoke
+            example_open_core_overlay_demo
             PROPERTIES TIMEOUT 120
         )
     endif()
