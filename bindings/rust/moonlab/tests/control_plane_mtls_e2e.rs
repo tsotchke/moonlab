@@ -24,8 +24,11 @@ fn run(args: &[&str]) {
 
 #[test]
 fn bell_round_trips_over_mtls() {
-    let dir = "/tmp/moonlab_rs_mtls";
-    let _ = std::fs::create_dir_all(dir);
+    /* Per-process dir so parallel cargo test runs don't race on
+     * cert generation. */
+    let pid = std::process::id();
+    let dir = format!("/tmp/moonlab_rs_mtls_{pid}");
+    let _ = std::fs::create_dir_all(&dir);
     let ca_crt  = format!("{dir}/ca.crt");
     let ca_key  = format!("{dir}/ca.key");
     let srv_crt = format!("{dir}/server.crt");

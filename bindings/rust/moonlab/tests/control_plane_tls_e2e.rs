@@ -19,15 +19,20 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn bell_circuit_round_trips_over_tls() {
-    let cert_path = "/tmp/moonlab_rs_tls.crt";
-    let key_path  = "/tmp/moonlab_rs_tls.key";
+    /* Per-test cert paths.  Multiple TLS tests run in parallel
+     * under `cargo test`; sharing /tmp/moonlab_rs_tls.* races on
+     * openssl-generates-cert vs server-reads-cert and is the root
+     * cause of the rust_bindings_smoke flake. */
+    let pid = std::process::id();
+    let cert_path = format!("/tmp/moonlab_rs_tls_{pid}.crt");
+    let key_path  = format!("/tmp/moonlab_rs_tls_{pid}.key");
 
     // Self-signed cert via openssl CLI -- avoids pulling in the
     // openssl crate.  Always present on macOS / Linux dev environments.
     let status = Command::new("openssl")
         .args([
             "req", "-x509", "-newkey", "rsa:2048",
-            "-keyout", key_path, "-out", cert_path,
+            "-keyout", &key_path, "-out", &cert_path,
             "-days", "1", "-nodes",
             "-subj", "/CN=127.0.0.1",
             "-addext", "subjectAltName=IP:127.0.0.1",
@@ -37,8 +42,8 @@ fn bell_circuit_round_trips_over_tls() {
     assert!(status.success());
 
     let host = CString::new("127.0.0.1").unwrap();
-    let cert_c = CString::new(cert_path).unwrap();
-    let key_c  = CString::new(key_path).unwrap();
+    let cert_c = CString::new(cert_path.clone()).unwrap();
+    let key_c  = CString::new(key_path.clone()).unwrap();
     let bind_port = Arc::new(AtomicU16::new(0));
 
     let runner = {
@@ -92,6 +97,6 @@ fn bell_circuit_round_trips_over_tls() {
     let rc = runner.join().unwrap();
     assert_eq!(rc, 0);
 
-    let _ = std::fs::remove_file(cert_path);
-    let _ = std::fs::remove_file(key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 }

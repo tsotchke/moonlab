@@ -163,6 +163,50 @@ static void test_reinit_destroys_old_mutex(void)
     free(slots2);
 }
 
+static void test_destroy_then_init(void)
+{
+    fprintf(stdout, "\n--- destroy() then init() roundtrip ---\n");
+    moonlab_audit_buffer_t b = {0};
+    void *slots = alloc_slots(sizeof(rec_t), 4);
+    moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 4);
+    rec_t r = { .producer = 1, .seq = 11, .magic = REC_MAGIC };
+    CHECK(moonlab_audit_buffer_push(&b, &r) == 1, "pre-destroy push works");
+
+    moonlab_audit_buffer_destroy(&b);
+    /* Push after destroy must no-op (state == DEAD), NOT crash. */
+    rec_t r2 = { .producer = 1, .seq = 22, .magic = REC_MAGIC };
+    CHECK(moonlab_audit_buffer_push(&b, &r2) == 0,
+          "push on destroyed buffer returns 0 (state DEAD)");
+    rec_t out;
+    CHECK(moonlab_audit_buffer_pop(&b, &out) == 0,
+          "pop on destroyed buffer returns 0");
+    CHECK(moonlab_audit_buffer_len(&b) == 0,
+          "len on destroyed buffer returns 0");
+
+    /* Re-init on a previously-destroyed buffer must succeed and
+     * leave the buffer in LIVE state with no contents.  Mutex was
+     * destroyed in destroy() so init() must NOT try to destroy it
+     * again -- state is DEAD, not LIVE. */
+    void *slots2 = alloc_slots(sizeof(rec_t), 8);
+    moonlab_audit_buffer_init(&b, slots2, sizeof(rec_t), 8);
+    rec_t r3 = { .producer = 2, .seq = 33, .magic = REC_MAGIC };
+    CHECK(moonlab_audit_buffer_push(&b, &r3) == 1,
+          "push after destroy+init works");
+    rec_t got;
+    CHECK(moonlab_audit_buffer_pop(&b, &got) == 1,
+          "pop after destroy+init works");
+    CHECK(got.seq == 33,
+          "pop returns the post-reinit pushed record (got seq=%llu)",
+          (unsigned long long)got.seq);
+
+    moonlab_audit_buffer_destroy(&b);
+    /* Double-destroy must no-op safely. */
+    moonlab_audit_buffer_destroy(&b);
+
+    free(slots);
+    free(slots2);
+}
+
 static void test_reset_drops(void)
 {
     fprintf(stdout, "\n--- reset_drops zeroes the counter ---\n");
@@ -370,6 +414,7 @@ int main(void)
     test_push_pop_fifo();
     test_overflow_drops_oldest();
     test_reinit_destroys_old_mutex();
+    test_destroy_then_init();
     test_reset_drops();
     test_concurrent_consumer();
     fprintf(stdout, "\n=== %d failure%s ===\n",

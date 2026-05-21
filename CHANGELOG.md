@@ -5,6 +5,54 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-05-21
+
+**Round 3 + 4 audit response.**  Two more recursive adversarial
+audits, finding test theater + design footguns + the destroy/push
+race I explicitly deferred at the end of round 2.
+
+### Added
+
+- **`test_destroy_then_init` in test_audit_buffer.c.**  Exercises
+  the lifecycle path explicitly: init, push, destroy, push (must
+  no-op), pop (no-op), len=0, init again, push, pop verifies the
+  post-reinit record, double-destroy is safe.
+- **`(producer, seq)` bitset assertion in audit-buffer concurrent
+  test.**  The "drained + drops == 1000" invariant balances the
+  bookkeeping but silently passes if a record is delivered twice.
+  Bitset of every (producer, seq) pair now asserts
+  `dup_count == 0`.
+- **`completion_hook_fires_total >= 3` value assertion in
+  test_control_plane_tenant.**  Previous test only checked the
+  counter LINE was present in METRICS body, not that its value
+  actually incremented when the hook fired.
+
+### Changed
+
+- **`completion_hook_fires_total` counter now bumps AFTER the
+  hook returns.**  Pre-call bump counted "we were about to run
+  the hook"; post-call counts "hook ran and returned to C".  The
+  difference matters when an overlay's hook panics: the C-side
+  counter undercounts (matches reality — the work was lost)
+  rather than overcounting (gave a false impression of success).
+  Operators should treat the divergence
+  `rate(circuit_total) - rate(completion_hook_fires_total)` as
+  the alert signal.
+
+### Fixed
+
+- **`moonlab_audit_buffer_destroy` racing with concurrent
+  push/pop (UB).**  Round-2 audit noted the contract problem but
+  deferred the fix.  Round 4 closes it: added an atomic `state`
+  field (UNINIT/LIVE/DEAD).  push/pop check state before locking,
+  re-check under the lock; destroy flips state to DEAD UNDER the
+  lock so an in-flight push finishes first.  Documented in the
+  header.  All ops on a DEAD buffer no-op cleanly.
+- **Rust TLS / mTLS tests flaked under parallel `cargo test`.**
+  Two tests shared `/tmp/moonlab_rs_tls.{crt,key}` and
+  `/tmp/moonlab_rs_mtls/` -- openssl-cert-generation raced
+  server-cert-read.  Per-process PID embedded in paths.
+
 ## [1.0.4] - 2026-05-21
 
 **v1.0.3 audit-response release.**  Two rounds of recursive

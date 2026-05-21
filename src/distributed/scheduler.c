@@ -424,8 +424,16 @@ void moonlab_scheduler_fire_completion_hook(
     void *hook_ctx = g_completion_hook_ctx;
     pthread_mutex_unlock(&g_backend_lock);
     if (hook) {
-        atomic_fetch_add(&g_count_completion_hook_fires, 1);
         hook(job, results, backend_name, hook_ctx);
+        /* Bump AFTER the hook returns so the counter measures
+         * "hook ran without aborting the process" rather than
+         * "hook was about to run".  For overlays that crash
+         * inside the hook (e.g. Stripe API down + uncaught
+         * exception in C), the counter will undercount; the
+         * billing-sink-side counter is the source of truth, and
+         * a divergence (CIRCUIT_total - completion_hook_fires_total)
+         * is the SRE alert. */
+        atomic_fetch_add(&g_count_completion_hook_fires, 1);
     }
 }
 
@@ -464,8 +472,8 @@ int moonlab_scheduler_run(moonlab_job_t         *j,
     void *hook_ctx = g_completion_hook_ctx;
     pthread_mutex_unlock(&g_backend_lock);
     if (hook) {
-        atomic_fetch_add(&g_count_completion_hook_fires, 1);
         hook(j, out, bname, hook_ctx);
+        atomic_fetch_add(&g_count_completion_hook_fires, 1);
     }
 
     return MOONLAB_SCHED_OK;
