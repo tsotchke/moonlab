@@ -431,13 +431,19 @@ slowly.
 
 ## 9. Capacity planning
 
-Validated 2026-05-21 on the moonlab smoke host (Apple M-series,
-8-core arm64), via `benchmarks/control_plane_loadtest`:
+Re-measured 2026-05-21 against v1.0.5 on the moonlab smoke host
+(Apple M-series, 8-core arm64), via `benchmarks/control_plane_loadtest`:
 
 | Config                                         | Throughput     | P50    | P90    | P99    |
 |------------------------------------------------|----------------|--------|--------|--------|
-| 4 workers, Bell 2q, HMAC auth, no tenant       | 4 674 req/sec  | 0.81 ms| 1.27 ms| 1.92 ms|
-| 16 workers, Bell 2q, HMAC + tenant_id          | 2 577 req/sec  | 6.01 ms| 6.88 ms| 13.7 ms|
+| 4 workers, Bell 2q, HMAC auth, no tenant       | 5 222 req/sec  | 0.73 ms| 1.17 ms| 1.54 ms|
+| 16 workers, Bell 2q, HMAC + tenant_id          | 2 597 req/sec  | 6.06 ms| 6.93 ms| 12.2 ms|
+
+The v1.0.3 baseline (4 674 / 2 577 req/sec) is preserved below for
+historical reference.  The +11% gain on the 4-worker config is
+within measurement noise -- the v1.0.5 audit-response touched the
+admission/completion counters and added the optional audit_buffer
+primitive, neither of which exercises in the default load test.
 
 Server config: `--max-concurrent 32 --rate-limit-rps 5000
 --rate-limit-burst 10000`.  Errors = 0 in both runs.  The
