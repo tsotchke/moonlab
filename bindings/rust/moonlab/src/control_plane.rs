@@ -72,7 +72,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 /// connection is closed prematurely, or the response framing is
 /// malformed.
 pub fn submit_circuit(host: &str, port: u16, circuit_text: &str) -> Result<Vec<f64>> {
-    submit_circuit_full(host, port, circuit_text, None, Duration::from_secs(30))
+    submit_circuit_full(host, port, circuit_text, None, None, Duration::from_secs(30))
 }
 
 /// Same as [`submit_circuit`] with an explicit socket timeout.
@@ -82,7 +82,7 @@ pub fn submit_circuit_with_timeout(
     circuit_text: &str,
     timeout: Duration,
 ) -> Result<Vec<f64>> {
-    submit_circuit_full(host, port, circuit_text, None, timeout)
+    submit_circuit_full(host, port, circuit_text, None, None, timeout)
 }
 
 /// Same as [`submit_circuit`] but with an optional shared secret for
@@ -94,7 +94,49 @@ pub fn submit_circuit_auth(
     circuit_text: &str,
     secret: Option<&[u8]>,
 ) -> Result<Vec<f64>> {
-    submit_circuit_full(host, port, circuit_text, secret, Duration::from_secs(30))
+    submit_circuit_full(host, port, circuit_text, secret, None, Duration::from_secs(30))
+}
+
+/// Submit with a tenant identifier carried in the AUTH line (since
+/// v1.0.3).  The wire prelude becomes `AUTH <tenant_id>:<hmac>\n`;
+/// the server plumbs `tenant_id` through to its scheduler
+/// completion hook so a private overlay can attribute the run to a
+/// billing account.
+///
+/// `tenant_id` must be 1..=63 chars from `[A-Za-z0-9_.-]` and
+/// `secret` must be `Some` (the server uses HMAC to authenticate
+/// the request regardless of which tenant_id is claimed).  Passing
+/// a `tenant_id` with `None` secret returns `QuantumError::Ffi`.
+pub fn submit_circuit_auth_tenant(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    secret: &[u8],
+    tenant_id: &str,
+) -> Result<Vec<f64>> {
+    validate_tenant_id(tenant_id)?;
+    submit_circuit_full(
+        host, port, circuit_text,
+        Some(secret), Some(tenant_id),
+        Duration::from_secs(30),
+    )
+}
+
+fn validate_tenant_id(tenant_id: &str) -> Result<()> {
+    if tenant_id.is_empty() || tenant_id.len() > 63 {
+        return Err(QuantumError::Ffi(format!(
+            "tenant_id length {} out of range [1, 63]", tenant_id.len()
+        )));
+    }
+    for c in tenant_id.chars() {
+        let ok = c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-';
+        if !ok {
+            return Err(QuantumError::Ffi(format!(
+                "tenant_id contains illegal char {c:?}; allowed [A-Za-z0-9_.-]"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn submit_circuit_full(
@@ -102,6 +144,7 @@ fn submit_circuit_full(
     port: u16,
     circuit_text: &str,
     secret: Option<&[u8]>,
+    tenant_id: Option<&str>,
     timeout: Duration,
 ) -> Result<Vec<f64>> {
     /* Body identical to the legacy submit_circuit_with_timeout path
@@ -127,7 +170,11 @@ fn submit_circuit_full(
     let header = format!("CIRCUIT {}\n", bytes.len());
     if let Some(key) = secret {
         let tok = hmac_sha3_256(key, header.as_bytes());
-        let auth = format!("AUTH {}\n", hex_encode(&tok));
+        let auth = if let Some(tid) = tenant_id {
+            format!("AUTH {}:{}\n", tid, hex_encode(&tok))
+        } else {
+            format!("AUTH {}\n", hex_encode(&tok))
+        };
         stream
             .write_all(auth.as_bytes())
             .map_err(|e| QuantumError::Ffi(format!("send AUTH: {e}")))?;
