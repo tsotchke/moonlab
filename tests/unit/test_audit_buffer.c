@@ -215,6 +215,8 @@ typedef struct {
     int                    *per_producer;   /* [4] */
     int                    *torn;
     int                    *n_drained;
+    int                    *dup_count;
+    uint8_t                *seen;           /* [4 * 250] bitset */
 } cons_arg_t;
 
 static void *consumer_thread(void *arg)
@@ -227,9 +229,20 @@ static void *consumer_thread(void *arg)
         if (moonlab_audit_buffer_pop(a->buf, &got) == 1) {
             if (got.magic != REC_MAGIC ||
                 got.producer >= 4 ||
-                got.seq >= 100000ULL) {
+                got.seq >= 250ULL) {
                 (*a->torn)++;
                 continue;
+            }
+            /* Track unique (producer, seq) pairs.  If any pair
+             * appears twice, increment dup_count.  Index into the
+             * 1000-bit bitset: producer * 250 + seq. */
+            const size_t bit_idx = (size_t)got.producer * 250 + (size_t)got.seq;
+            const size_t byte    = bit_idx >> 3;
+            const uint8_t mask   = (uint8_t)(1u << (bit_idx & 7));
+            if (a->seen[byte] & mask) {
+                (*a->dup_count)++;
+            } else {
+                a->seen[byte] |= mask;
             }
             a->per_producer[(int)got.producer]++;
             (*a->n_drained)++;
@@ -243,7 +256,16 @@ static void *consumer_thread(void *arg)
                 if (moonlab_audit_buffer_pop(a->buf, &got) == 1) {
                     if (got.magic == REC_MAGIC &&
                         got.producer < 4 &&
-                        got.seq < 100000ULL) {
+                        got.seq < 250ULL) {
+                        const size_t bit_idx =
+                            (size_t)got.producer * 250 + (size_t)got.seq;
+                        const size_t byte  = bit_idx >> 3;
+                        const uint8_t mask = (uint8_t)(1u << (bit_idx & 7));
+                        if (a->seen[byte] & mask) {
+                            (*a->dup_count)++;
+                        } else {
+                            a->seen[byte] |= mask;
+                        }
                         a->per_producer[(int)got.producer]++;
                         (*a->n_drained)++;
                     } else {
@@ -275,6 +297,9 @@ static void test_concurrent_consumer(void)
     int per_producer[4] = {0,0,0,0};
     int torn = 0;
     int n_drained = 0;
+    int dup_count = 0;
+    /* 4 producers * 250 seqs = 1000 bits => 125 bytes. */
+    uint8_t seen[125] = {0};
     _Atomic int producers_done = 0;
 
     cons_arg_t carg = {
@@ -283,6 +308,8 @@ static void test_concurrent_consumer(void)
         .per_producer = per_producer,
         .torn = &torn,
         .n_drained = &n_drained,
+        .dup_count = &dup_count,
+        .seen = seen,
     };
     pthread_t consumer;
     pthread_create(&consumer, NULL, consumer_thread, &carg);
@@ -301,6 +328,13 @@ static void test_concurrent_consumer(void)
 
     CHECK(torn == 0,
           "no torn payloads observed by consumer (got %d)", torn);
+    /* Round-3 audit: the previous "bookkeeping balances" assertion
+     * caught lost records but would silently pass if a record were
+     * DUPLICATED (popped twice with same payload).  Bitset of
+     * (producer, seq) pairs catches that case. */
+    CHECK(dup_count == 0,
+          "no (producer, seq) pair delivered twice (got %d duplicates)",
+          dup_count);
     /* Records drained + records dropped should equal records pushed.
      * Concurrent consumer may pop slots before they overflow, so we
      * don't expect EXACTLY (1000 - drops) drained; we expect that
