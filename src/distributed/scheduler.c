@@ -382,6 +382,29 @@ int moonlab_scheduler_set_completion_hook(moonlab_completion_hook_fn hook, void 
     return MOONLAB_SCHED_OK;
 }
 
+/* Thread-local per-request context.  No locking needed -- one
+ * connection / one request handler / one scheduler_run / one hook
+ * fire all live on the same thread. */
+static __thread const char *t_request_tenant_id = NULL;
+static __thread const char *t_request_id        = NULL;
+
+void moonlab_scheduler_set_request_context(const char *tenant_id,
+                                           const char *request_id)
+{
+    t_request_tenant_id = tenant_id;
+    t_request_id        = request_id;
+}
+
+const char *moonlab_scheduler_current_tenant_id(void)
+{
+    return t_request_tenant_id;
+}
+
+const char *moonlab_scheduler_current_request_id(void)
+{
+    return t_request_id;
+}
+
 int moonlab_scheduler_run(moonlab_job_t         *j,
                           moonlab_job_results_t *out)
 {

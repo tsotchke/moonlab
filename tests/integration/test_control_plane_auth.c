@@ -152,6 +152,41 @@ int main(void)
     pthread_join(tid, NULL);
     moonlab_control_server_close(server);
 
+    /* ---- Path 5: tenant-form AUTH (v1.0.3) ---- */
+    fprintf(stdout, "\n--- path 5: AUTH tenant_id:hex form -> OK Bell ---\n");
+    rc = moonlab_control_server_open("127.0.0.1", 0, &server, &port);
+    CHECK(rc == 0, "server_open rc=%d", rc);
+    moonlab_control_server_set_secret(server, correct_secret,
+                                      sizeof(correct_secret) - 1);
+    ra.server = server; ra.rc = 0;
+    pthread_create(&tid, NULL, run_thread, &ra);
+
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port,
+        "acme-corp",
+        correct_secret, sizeof(correct_secret) - 1,
+        text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "tenant-form AUTH accepted (rc=%d, num=%zu)", rc, num);
+    free(probs);
+
+    moonlab_control_server_shutdown(server);
+    pthread_join(tid, NULL);
+    moonlab_control_server_close(server);
+
+    /* ---- Path 6: tenant_id with illegal chars rejected client-side ---- */
+    fprintf(stdout, "\n--- path 6: bad tenant_id rejected before send ---\n");
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", 1,            /* port doesn't matter, won't connect */
+        "acme;rm -rf /",           /* shell-metachar -> client rejects */
+        correct_secret, sizeof(correct_secret) - 1,
+        text, 0, &probs, &num);
+    CHECK(rc == MOONLAB_CONTROL_BAD_ARG,
+          "illegal-char tenant_id rejected client-side (rc=%d)", rc);
+    CHECK(probs == NULL, "no probs returned for rejected tenant_id");
+
     free(text);
     fprintf(stdout, "\n=== %d failure(s) ===\n", failures);
     return failures ? 1 : 0;
