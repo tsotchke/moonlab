@@ -72,7 +72,8 @@ option(QSIM_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
 option(QSIM_ENABLE_METAL "Enable Metal GPU backend (macOS)" ON)
 option(QSIM_ENABLE_OPENCL "Enable OpenCL GPU backend" OFF)
 option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
-option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
+option(QSIM_ENABLE_CUDA      "Enable moonlab native CUDA backend (Jetson/Tegra + discrete)" OFF)
+option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend (implies QSIM_ENABLE_CUDA; not supported on Jetson)" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
 # TLS defaults ON if OpenSSL is detectable at config time: the control-plane
 # transport's TLS/mTLS/HMAC-SHA3 path is part of the v1.0 stable ABI, and
@@ -471,7 +472,17 @@ if(QSIM_ENABLE_VULKAN)
 endif()
 
 # CUDA / cuQuantum
-if(QSIM_ENABLE_CUQUANTUM)
+# QSIM_ENABLE_CUDA      -- our own state-vector backend.  Works on
+#                          Jetson (Tegra194 / Tegra234 / Orin) AND on
+#                          discrete PCIe GPUs.  cudaMallocManaged path.
+# QSIM_ENABLE_CUQUANTUM -- additionally link NVIDIA's cuStateVec /
+#                          cuTensorNet.  Implies CUDA.  Not supported
+#                          on Jetson: NVIDIA does not publish a
+#                          cuQuantum build for L4T/Tegra, so cmake
+#                          will fall back to the moonlab CUDA backend
+#                          without cuQuantum if the libraries are
+#                          missing on a Tegra host.
+if(QSIM_ENABLE_CUDA OR QSIM_ENABLE_CUQUANTUM)
     include(CheckLanguage)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
@@ -481,7 +492,7 @@ if(QSIM_ENABLE_CUQUANTUM)
             message(STATUS "CUDA: Found (version ${CUDAToolkit_VERSION})")
             set(QSIM_HAS_CUDA ON)
 
-            # Look for cuQuantum
+            # Look for cuQuantum (optional even when QSIM_ENABLE_CUDA=ON).
             find_path(CUQUANTUM_INCLUDE_DIR custatevec.h
                 HINTS
                     ${CUQUANTUM_ROOT}/include
@@ -516,25 +527,35 @@ if(QSIM_ENABLE_CUQUANTUM)
                     message(STATUS "cuQuantum: Found (cuTensorNet)")
                     set(QSIM_HAS_CUTENSORNET ON)
                 endif()
-            else()
+            elseif(QSIM_ENABLE_CUQUANTUM)
                 message(FATAL_ERROR
                     "QSIM_ENABLE_CUQUANTUM=ON and CUDA was found, but the "
                     "cuQuantum headers (custatevec.h) or cuStateVec library "
                     "could not be located.  Set CUQUANTUM_ROOT or "
                     "$ENV{CUQUANTUM_ROOT} to the cuQuantum install root, or "
                     "re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+            else()
+                message(STATUS "cuQuantum: not found (OK -- only QSIM_ENABLE_CUDA was set; moonlab CUDA backend works without it)")
             endif()
-        else()
+        elseif(QSIM_ENABLE_CUQUANTUM)
             message(FATAL_ERROR
                 "QSIM_ENABLE_CUQUANTUM=ON but the CUDA Toolkit was not "
                 "found by find_package(CUDAToolkit).  Install the CUDA "
                 "Toolkit or re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+        else()
+            message(WARNING
+                "QSIM_ENABLE_CUDA=ON but the CUDA Toolkit was not found.  "
+                "Falling back to CPU-only build.")
         endif()
-    else()
+    elseif(QSIM_ENABLE_CUQUANTUM)
         message(FATAL_ERROR
             "QSIM_ENABLE_CUQUANTUM=ON but no CUDA compiler is available. "
             "Install the CUDA Toolkit (which provides nvcc) or re-run "
             "with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+    else()
+        message(WARNING
+            "QSIM_ENABLE_CUDA=ON but no CUDA compiler (nvcc) is available.  "
+            "Falling back to CPU-only build.")
     endif()
 endif()
 
@@ -791,8 +812,14 @@ endif()
 if(QSIM_ENABLE_VULKAN)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_vulkan.c)
 endif()
-if(QSIM_ENABLE_CUQUANTUM)
+# gpu_cuda.cu provides the cuda_compute_ctx / cuda_buffer interface
+# that tensor.c references whenever HAS_CUDA is defined.  Build it
+# under either flag.  gpu_cuquantum.cu is the cuStateVec adapter
+# proper -- only under QSIM_ENABLE_CUQUANTUM.
+if(QSIM_HAS_CUDA)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuda.cu)
+endif()
+if(QSIM_ENABLE_CUQUANTUM AND QSIM_HAS_CUDA)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuquantum.cu)
 endif()
 # The Eshkol GPU bridge compiles regardless of whether Eshkol itself
@@ -1299,10 +1326,23 @@ if(QSIM_HAS_CUDA)
     target_compile_definitions(quantumsim PRIVATE HAS_CUDA=1)
     target_include_directories(quantumsim PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
-    # Set CUDA architectures
+    # Set CUDA architectures.  72 = Xavier (Volta integrated), 87 = Orin
+    # (Ampere integrated).  Other lines: 70 V100, 75 Turing, 80 A100,
+    # 86 Ada, 89 RTX 40-series, 90 H100.  Override via
+    # -DCMAKE_CUDA_ARCHITECTURES=NN to target a specific device.
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86 89 90)
+        set(CMAKE_CUDA_ARCHITECTURES 70 72 75 80 86 87 89 90)
     endif()
+
+    # Compile the moonlab CUDA backend.  cuda_tegra_probe.c is plain
+    # C (no CUDA dependency in the .c itself; the .h is C-visible),
+    # but we still gate it on QSIM_HAS_CUDA because nothing else
+    # needs the runtime probe yet.
+    target_sources(quantumsim PRIVATE
+        src/backends/cuda_tegra_probe.c
+        src/backends/cuda_statevec.cu
+    )
+
     set_target_properties(quantumsim PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
