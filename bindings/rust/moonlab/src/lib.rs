@@ -37,6 +37,7 @@
 //! This crate provides safe wrappers around the `moonlab-sys` FFI bindings.
 //! All memory is automatically managed through Rust's ownership system.
 
+pub mod admission_hook;
 pub mod bell;
 pub mod ca_mps;
 pub mod ca_peps;
