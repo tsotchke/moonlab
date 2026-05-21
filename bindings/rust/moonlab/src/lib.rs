@@ -58,6 +58,7 @@ pub mod scheduler;
 pub mod state;
 pub mod surface_code;
 pub mod tdvp;
+pub mod token_bucket;
 pub mod topology;
 pub mod vqe;
 pub mod z2_lgt;
