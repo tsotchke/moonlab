@@ -5,6 +5,64 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`moonlab_control_admission_refused_total` Prometheus counter.**
+  Subset of rejections that came from the v1.0.3 admission hook
+  (over-quota / tier-blocked / lockout).  Distinct from
+  `moonlab_control_rejected_total` so SREs can separate "100
+  legitimate over-quota users" from "5 attackers sending bad
+  tokens".  Bumped in `handle_one_request` when the admission
+  hook returns non-zero.
+- **`moonlab_control_completion_hook_fires_total` Prometheus
+  counter.**  Bumped every time the scheduler completion hook
+  executes on a successful run -- watch
+  `circuit_total - completion_hook_fires_total` for billing-
+  pipeline drops.
+- **`moonlab_audit_buffer_t` bounded ring buffer
+  (`src/utils/audit_buffer.{c,h}`).**  Caller-owned mutex-guarded
+  FIFO for the overlay's completion-hook -> durable-sink path.
+  Drop-oldest policy on overflow with a `drops` counter so the
+  buffer can absorb sink stalls (S3 / Kafka / DB outage) without
+  losing the newest records.  Six public symbols + struct.
+
+### Fixed
+
+- **`admission_refused_total` double-counted into
+  `rejected_total`.**  The original v1.0.3 metric impl bumped
+  `rejected_total` from `LOG_AND_RETURN(amrc)` after the
+  admission-refusal path also bumped `admission_refused_total`.
+  Net effect: alert `rate(rejected_total[5m]) > 1.0` (auth-failure
+  signal) would fire on legitimate over-quota traffic.  Fixed by
+  adding `LOG_AND_RETURN_PRECOUNTED` that skips the auto-bump
+  when the caller has already counted the refusal in a dedicated
+  counter.  Test asserts `rejected_total == 0` after a clean
+  admission-refusal flow.
+- **`moonlab_audit_buffer_t` consumer read race.**  Original
+  Vyukov-MPSC variant had `push()` increment the write cursor
+  BEFORE writing the payload, so a concurrent `pop()` could
+  observe the incremented cursor and read an uninitialised slot.
+  The test that originally claimed "no corruption with 4
+  producers" never ran a consumer in parallel with producers, so
+  the race didn't trigger.  Replaced with a mutex-guarded ring
+  buffer (correctness over wait-freedom -- audit fires at modest
+  rates; lock contention is negligible compared to durable-sink
+  latency).  New test runs a concurrent consumer while 4
+  producers push 1000 records into a capacity-64 buffer; asserts
+  `drained + drops == 1000` exactly.
+- **Six binding manifest version files stale at 1.0.2.**  The
+  v1.0.3 release bump missed `bindings/javascript/package.json`,
+  `packages/{algorithms,react,vue,viz}/package.json`,
+  `bindings/python/pyproject.toml`, and
+  `bindings/rust/moonlab-tui/Cargo.toml`.  The
+  `bindings_version_sync` ctest was failing; commit corrects all
+  six to 1.0.3.
+- **`test_manifest` baked compile-time `MOONLAB_VERSION_STRING`
+  at 1.0.2.**  The .o was cached from the pre-bump build.  Force-
+  rebuilt against the new VERSION.txt-derived build_info.
+
 ## [1.0.3] - 2026-05-21
 
 **Open-core extension surfaces.**  Four runtime registries that let

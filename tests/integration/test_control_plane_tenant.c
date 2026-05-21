@@ -234,16 +234,29 @@ int main(void)
     if (metrics_body) {
         /* Anchor on '\n' so strstr finds the metric LINE rather than
          * the matching prefix inside the `# HELP` or `# TYPE` lines. */
-        const char *line_prefix =
+        const char *adm_prefix =
             "\nmoonlab_control_admission_refused_total ";
-        const char *p = strstr(metrics_body, line_prefix);
+        const char *p = strstr(metrics_body, adm_prefix);
         CHECK(p != NULL,
               "admission_refused_total counter present in METRICS body");
+        long adm = -1;
         if (p) {
-            long v = -1;
-            sscanf(p + strlen(line_prefix), "%ld", &v);
-            CHECK(v >= 1, "admission_refused_total >= 1 (got %ld)", v);
+            sscanf(p + strlen(adm_prefix), "%ld", &adm);
+            CHECK(adm >= 1, "admission_refused_total >= 1 (got %ld)", adm);
         }
+        /* Partition invariant: an admission refusal should bump
+         * admission_refused_total but NOT rejected_total.  If both
+         * counters bumped, alerts like rate(rejected_total) >
+         * threshold would false-fire on legitimate over-quota
+         * traffic.  rejected_total is reserved for transport / auth
+         * / parser refusals. */
+        const char *rej_prefix = "\nmoonlab_control_rejected_total ";
+        const char *q = strstr(metrics_body, rej_prefix);
+        long rej = -1;
+        if (q) sscanf(q + strlen(rej_prefix), "%ld", &rej);
+        CHECK(rej == 0,
+              "rejected_total = 0 (admission refusal doesn't double-count, got %ld)",
+              rej);
         free(metrics_body);
     }
 
