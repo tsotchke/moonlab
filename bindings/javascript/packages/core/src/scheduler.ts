@@ -52,7 +52,7 @@ type SchedulerModule = {
   _moonlab_job_add_gate: (h: number, type: number, target: number, control: number, params: number) => number;
   _moonlab_job_set_num_shots: (h: number, n: number) => number;
   _moonlab_job_set_num_workers: (h: number, n: number) => number;
-  _moonlab_job_set_rng_seed: (h: number, seed_lo: number, seed_hi: number) => number;
+  _moonlab_job_set_rng_seed: (h: number, seed: bigint) => number;
   _moonlab_job_num_qubits: (h: number) => number;
   _moonlab_job_num_gates: (h: number) => number;
   _moonlab_job_num_shots: (h: number) => number;
@@ -60,12 +60,24 @@ type SchedulerModule = {
   _moonlab_scheduler_run: (h: number, res: number) => number;
   _moonlab_job_results_free: (res: number) => void;
   _moonlab_job_to_json: (h: number, buf: number, bufsize: number) => number;
+  // Vendor-noise profile registry (since v1.0.3).
+  _moonlab_register_vendor_noise_profile?: (name: number, prof: number) => number;
+  _moonlab_unregister_vendor_noise_profile?: (name: number) => number;
+  _moonlab_lookup_vendor_noise_profile?: (name: number) => number;
+  _moonlab_num_vendor_noise_profiles?: () => number;
+  _moonlab_list_vendor_noise_profiles?: (out: number, max: number) => number;
+  // Scheduler completion hook (since v1.0.3).
+  _moonlab_scheduler_set_completion_hook?: (fn: number, ctx: number) => number;
   _malloc: (n: number) => number;
   _free: (p: number) => void;
   HEAP32: Int32Array;
   HEAPU32: Uint32Array;
   HEAPF64: Float64Array;
   HEAPU8: Uint8Array;
+  UTF8ToString: (ptr: number) => string;
+  stringToUTF8: (s: string, ptr: number, max: number) => void;
+  addFunction?: (fn: Function, sig: string) => number;
+  removeFunction?: (ptr: number) => void;
 };
 
 function _check(rc: number, ctx: string): void {
@@ -206,4 +218,204 @@ export class Job {
       this.mod._free(buf);
     }
   }
+}
+
+// ===================================================================
+// Vendor-noise profile runtime registry (since v1.0.3)
+// ===================================================================
+
+/** Hardware-noise profile snapshot.  Mirror of the C struct. */
+export interface VendorNoiseProfile {
+  pGate1q: number;
+  pGate2q: number;
+  pReadout: number;
+  description: string;
+}
+
+function jsStringToHeapSched(mod: SchedulerModule, s: string | undefined): number {
+  if (!s) return 0;
+  const len = new TextEncoder().encode(s).length + 1;
+  const ptr = mod._malloc(len);
+  mod.stringToUTF8(s, ptr, len);
+  return ptr;
+}
+
+/** Whether this WASM build exports the v1.0.3 noise-profile registry. */
+export async function vendorNoiseProfileRegistryAvailable(): Promise<boolean> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  return typeof mod._moonlab_register_vendor_noise_profile === 'function';
+}
+
+export async function registerVendorNoiseProfile(
+  name: string,
+  profile: VendorNoiseProfile,
+): Promise<void> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  if (!mod._moonlab_register_vendor_noise_profile) {
+    throw new SchedulerError(
+      'WASM build lacks the v1.0.3 vendor-noise profile registry',
+      MOONLAB_SCHED_BAD_ARG,
+    );
+  }
+  // moonlab_vendor_noise_profile_t: 3 doubles + 1 char* = 32 bytes.
+  const profPtr = mod._malloc(32);
+  const namePtr = jsStringToHeapSched(mod, name);
+  const descPtr = jsStringToHeapSched(mod, profile.description);
+  try {
+    mod.HEAPF64[profPtr >> 3]       = profile.pGate1q;
+    mod.HEAPF64[(profPtr >> 3) + 1] = profile.pGate2q;
+    mod.HEAPF64[(profPtr >> 3) + 2] = profile.pReadout;
+    mod.HEAPU32[(profPtr >> 2) + 6] = descPtr;
+    const rc = mod._moonlab_register_vendor_noise_profile(namePtr, profPtr);
+    if (rc !== MOONLAB_SCHED_OK) {
+      throw new SchedulerError(
+        `register_vendor_noise_profile(${name}): rc=${rc}`, rc);
+    }
+  } finally {
+    mod._free(profPtr);
+    mod._free(namePtr);
+    if (descPtr) mod._free(descPtr);
+  }
+}
+
+export async function unregisterVendorNoiseProfile(name: string): Promise<void> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  if (!mod._moonlab_unregister_vendor_noise_profile) return;
+  const namePtr = jsStringToHeapSched(mod, name);
+  try {
+    const rc = mod._moonlab_unregister_vendor_noise_profile(namePtr);
+    if (rc !== MOONLAB_SCHED_OK) {
+      throw new SchedulerError(
+        `unregister_vendor_noise_profile(${name}): rc=${rc}`, rc);
+    }
+  } finally {
+    mod._free(namePtr);
+  }
+}
+
+export async function lookupVendorNoiseProfile(
+  name: string,
+): Promise<VendorNoiseProfile | null> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  if (!mod._moonlab_lookup_vendor_noise_profile) return null;
+  const namePtr = jsStringToHeapSched(mod, name);
+  try {
+    const p = mod._moonlab_lookup_vendor_noise_profile(namePtr);
+    if (p === 0) return null;
+    const pf64 = p >> 3;
+    const descPtr = mod.HEAPU32[(p >> 2) + 6];
+    return {
+      pGate1q: mod.HEAPF64[pf64],
+      pGate2q: mod.HEAPF64[pf64 + 1],
+      pReadout: mod.HEAPF64[pf64 + 2],
+      description: descPtr ? mod.UTF8ToString(descPtr) : '',
+    };
+  } finally {
+    mod._free(namePtr);
+  }
+}
+
+export async function listVendorNoiseProfiles(): Promise<string[]> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  if (!mod._moonlab_num_vendor_noise_profiles ||
+      !mod._moonlab_list_vendor_noise_profiles) return [];
+  const n = mod._moonlab_num_vendor_noise_profiles();
+  if (n <= 0) return [];
+  const buf = mod._malloc(n * 4);
+  try {
+    const written = mod._moonlab_list_vendor_noise_profiles(buf, n);
+    const names: string[] = [];
+    for (let i = 0; i < written; i++) {
+      const ptr = mod.HEAPU32[(buf >> 2) + i];
+      if (ptr) names.push(mod.UTF8ToString(ptr));
+    }
+    return names;
+  } finally {
+    mod._free(buf);
+  }
+}
+
+// ===================================================================
+// Scheduler completion hook (since v1.0.3)
+// ===================================================================
+
+/** Subset of the job-results struct surfaced to the JS callback. */
+export interface CompletionInfo {
+  numQubits: number;
+  totalShots: number;
+  backendName: string | null;
+}
+
+export type CompletionCallback = (info: CompletionInfo) => void;
+
+// One-slot global state mirroring the C runtime's single hook.
+let activeHookFnPtr: number | null = null;
+let activeCallback: CompletionCallback | null = null;
+
+/** Install a JS callback that fires after every successful
+ *  scheduler.run().  Failed runs do not fire the hook.  Pass `null`
+ *  to clear.  Since v1.0.3. */
+export async function setCompletionHook(
+  callback: CompletionCallback | null,
+): Promise<void> {
+  const mod = (await getModule()) as unknown as SchedulerModule;
+  if (!mod._moonlab_scheduler_set_completion_hook) {
+    throw new SchedulerError(
+      'WASM build lacks the v1.0.3 scheduler completion hook',
+      MOONLAB_SCHED_BAD_ARG,
+    );
+  }
+  // Always tear down any prior installation first.
+  if (activeHookFnPtr !== null) {
+    mod.removeFunction?.(activeHookFnPtr);
+    activeHookFnPtr = null;
+    activeCallback = null;
+  }
+  if (callback === null) {
+    const rc = mod._moonlab_scheduler_set_completion_hook(0, 0);
+    if (rc !== MOONLAB_SCHED_OK) {
+      throw new SchedulerError(`clear_completion_hook: rc=${rc}`, rc);
+    }
+    return;
+  }
+  if (!mod.addFunction) {
+    throw new SchedulerError(
+      'WASM build lacks addFunction; rebuild with ALLOW_TABLE_GROWTH=1',
+      MOONLAB_SCHED_BAD_ARG,
+    );
+  }
+  // C signature: void(*)(const job*, const results*, const char*, void*).
+  // emscripten sig 'viiii' (void, 4 i32 args; pointers + ctx).
+  const trampoline = (
+    _jobPtr: number, resultsPtr: number, backendNamePtr: number, _ctx: number,
+  ) => {
+    try {
+      if (!activeCallback || resultsPtr === 0) return;
+      // moonlab_job_results_t: { num_qubits, total_shots, outcomes*,
+      // num_workers_used, worker_seconds* }.  We only read the int fields.
+      const r32 = resultsPtr >> 2;
+      const info: CompletionInfo = {
+        numQubits: mod.HEAP32[r32],
+        totalShots: mod.HEAP32[r32 + 1],
+        backendName: backendNamePtr ? mod.UTF8ToString(backendNamePtr) : null,
+      };
+      activeCallback(info);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('JS completion hook threw:', e);
+    }
+  };
+  activeHookFnPtr = mod.addFunction(trampoline, 'viiii');
+  activeCallback = callback;
+  const rc = mod._moonlab_scheduler_set_completion_hook(activeHookFnPtr, 0);
+  if (rc !== MOONLAB_SCHED_OK) {
+    mod.removeFunction?.(activeHookFnPtr);
+    activeHookFnPtr = null;
+    activeCallback = null;
+    throw new SchedulerError(`set_completion_hook: rc=${rc}`, rc);
+  }
+}
+
+export async function clearCompletionHook(): Promise<void> {
+  return setCompletionHook(null);
 }

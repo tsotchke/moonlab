@@ -223,14 +223,35 @@ export {
   MOONLAB_DECODER_BAD_ARG,
   MOONLAB_DECODER_INFEASIBLE,
   MOONLAB_DECODER_OOM,
+  // Decoder runtime registry (since v1.0.3).
+  decoderRegistryAvailable,
+  numDecoders,
+  listDecoders,
+  lookupDecoder,
+  registerDecoder,
+  unregisterDecoder,
+  decodeByName,
 } from './decoder';
-export type { CodeGeometry } from './decoder';
+export type { CodeGeometry, DecoderCallback } from './decoder';
 export {
   MOONLAB_SCHED_OK,
   MOONLAB_SCHED_BAD_ARG,
   MOONLAB_SCHED_OOM,
   MOONLAB_SCHED_INTERNAL,
   MOONLAB_SCHED_BUFFER_TOO_SMALL,
+  // Vendor-noise profile registry + completion hook (since v1.0.3).
+  vendorNoiseProfileRegistryAvailable,
+  registerVendorNoiseProfile,
+  unregisterVendorNoiseProfile,
+  lookupVendorNoiseProfile,
+  listVendorNoiseProfiles,
+  setCompletionHook,
+  clearCompletionHook,
+} from './scheduler';
+export type {
+  VendorNoiseProfile,
+  CompletionInfo,
+  CompletionCallback,
 } from './scheduler';
 
 // Control-plane Node client (since v0.9.4).  Node-only -- needs raw

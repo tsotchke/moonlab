@@ -445,12 +445,26 @@ _moonlab_job_backend
 _moonlab_register_vendor_noise_backends
 _moonlab_register_vendor_noise_backend_with_profile
 _moonlab_lookup_vendor_noise_profile
+# Vendor-noise profile runtime registry (since v1.0.3).
+_moonlab_register_vendor_noise_profile
+_moonlab_unregister_vendor_noise_profile
+_moonlab_num_vendor_noise_profiles
+_moonlab_list_vendor_noise_profiles
+# Scheduler completion hook (since v1.0.3).
+_moonlab_scheduler_set_completion_hook
 
 # =============================================================================
 # Decoder-bench dispatcher (since v0.6.7 native, JS from v0.7.3).
 _moonlab_decoder_decode
 _moonlab_decoder_slot_available
 _moonlab_decoder_slot_name
+# Decoder runtime registry (since v1.0.3).
+_moonlab_register_decoder
+_moonlab_unregister_decoder
+_moonlab_lookup_decoder
+_moonlab_decoder_decode_by_name
+_moonlab_num_decoders
+_moonlab_list_decoders
 
 # =============================================================================
 # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
