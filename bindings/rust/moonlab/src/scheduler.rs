@@ -25,9 +25,15 @@ use moonlab_sys::{
     moonlab_job_num_workers, moonlab_job_results_free, moonlab_job_results_t,
     moonlab_job_set_num_shots, moonlab_job_set_num_workers,
     moonlab_job_set_rng_seed, moonlab_job_to_json, moonlab_scheduler_run,
+    moonlab_list_vendor_noise_profiles, moonlab_lookup_vendor_noise_profile,
+    moonlab_num_vendor_noise_profiles, moonlab_register_vendor_noise_profile,
+    moonlab_scheduler_set_completion_hook, moonlab_unregister_vendor_noise_profile,
+    moonlab_vendor_noise_profile_t,
 };
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr, CString};
+use std::os::raw::c_char;
 use std::ptr;
+use std::sync::Mutex;
 
 /// Execution outputs.
 #[derive(Debug, Default)]
@@ -227,5 +233,233 @@ mod tests {
     fn rejects_zero_workers() {
         let mut j = Job::new(2).unwrap();
         assert!(j.set_num_workers(0).is_err());
+    }
+}
+
+// ===================================================================
+// Vendor-noise profile runtime registry (since v1.0.3)
+// ===================================================================
+
+/// Snapshot of a hardware-noise profile.  Returned by
+/// [`lookup_vendor_noise_profile`]; passed to
+/// [`register_vendor_noise_profile`].
+#[derive(Debug, Clone)]
+pub struct VendorNoiseProfile {
+    pub p_gate_1q: f64,
+    pub p_gate_2q: f64,
+    pub p_readout: f64,
+    pub description: String,
+}
+
+pub fn register_vendor_noise_profile(name: &str,
+                                     profile: &VendorNoiseProfile) -> Result<()> {
+    let c_name = CString::new(name)
+        .map_err(|e| QuantumError::Ffi(format!("bad profile name: {e}")))?;
+    let c_desc = CString::new(profile.description.as_str())
+        .map_err(|e| QuantumError::Ffi(format!("bad description: {e}")))?;
+    let c_prof = moonlab_vendor_noise_profile_t {
+        p_gate_1q: profile.p_gate_1q,
+        p_gate_2q: profile.p_gate_2q,
+        p_readout: profile.p_readout,
+        description: c_desc.as_ptr(),
+    };
+    let rc = unsafe {
+        moonlab_register_vendor_noise_profile(c_name.as_ptr(), &c_prof)
+    };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(
+            format!("register_vendor_noise_profile({name:?}): rc={rc}")));
+    }
+    Ok(())
+}
+
+pub fn unregister_vendor_noise_profile(name: &str) -> Result<()> {
+    let c_name = CString::new(name)
+        .map_err(|e| QuantumError::Ffi(format!("bad profile name: {e}")))?;
+    let rc = unsafe { moonlab_unregister_vendor_noise_profile(c_name.as_ptr()) };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(
+            format!("unregister_vendor_noise_profile({name:?}): rc={rc}")));
+    }
+    Ok(())
+}
+
+pub fn lookup_vendor_noise_profile(name: &str) -> Option<VendorNoiseProfile> {
+    let c_name = CString::new(name).ok()?;
+    let p = unsafe { moonlab_lookup_vendor_noise_profile(c_name.as_ptr()) };
+    if p.is_null() { return None; }
+    unsafe {
+        let raw = &*p;
+        let desc = if raw.description.is_null() { String::new() } else {
+            CStr::from_ptr(raw.description).to_str().unwrap_or("").to_owned()
+        };
+        Some(VendorNoiseProfile {
+            p_gate_1q: raw.p_gate_1q,
+            p_gate_2q: raw.p_gate_2q,
+            p_readout: raw.p_readout,
+            description: desc,
+        })
+    }
+}
+
+pub fn num_vendor_noise_profiles() -> i32 {
+    unsafe { moonlab_num_vendor_noise_profiles() }
+}
+
+pub fn list_vendor_noise_profiles() -> Vec<String> {
+    let n = num_vendor_noise_profiles();
+    if n <= 0 { return Vec::new(); }
+    let mut buf: Vec<*const c_char> = vec![ptr::null(); n as usize];
+    let written = unsafe {
+        moonlab_list_vendor_noise_profiles(buf.as_mut_ptr(), n) as usize
+    };
+    buf.into_iter().take(written).filter_map(|p| {
+        if p.is_null() { None } else {
+            unsafe { CStr::from_ptr(p).to_str().ok().map(|s| s.to_owned()) }
+        }
+    }).collect()
+}
+
+// ===================================================================
+// Scheduler completion hook (since v1.0.3)
+// ===================================================================
+
+/// Subset of the job results that the Rust hook callback receives.
+/// We don't surface the raw job pointer to keep the safe wrapper
+/// independent of the FFI handle type.
+#[derive(Debug, Clone)]
+pub struct CompletionInfo {
+    pub num_qubits: i32,
+    pub total_shots: i32,
+    pub backend: Option<String>,
+}
+
+/// Boxed callback fired after every successful scheduler.run().
+pub type CompletionCallback = Box<dyn Fn(&CompletionInfo) + Send + Sync>;
+
+// One slot, mutex-guarded so set/clear don't race the C side.  The
+// trampoline reads the slot under lock to get a stable Arc on the
+// callback before invoking it.
+static COMPLETION_CALLBACK: Mutex<Option<std::sync::Arc<CompletionCallback>>> =
+    Mutex::new(None);
+
+extern "C" fn rust_completion_trampoline(
+    _job: *const moonlab_sys::moonlab_job,
+    results: *const moonlab_job_results_t,
+    backend_name: *const c_char,
+    _ctx: *mut c_void,
+) {
+    let arc_opt = COMPLETION_CALLBACK.lock().ok().and_then(|g| g.clone());
+    let Some(arc) = arc_opt else { return; };
+    if results.is_null() { return; }
+    unsafe {
+        let r = &*results;
+        let backend = if backend_name.is_null() { None } else {
+            CStr::from_ptr(backend_name).to_str().ok().map(|s| s.to_owned())
+        };
+        let info = CompletionInfo {
+            num_qubits: r.num_qubits,
+            total_shots: r.total_shots,
+            backend,
+        };
+        // Catch panics so a panicking callback can't unwind into C.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (arc)(&info);
+        }));
+    }
+}
+
+/// Install a Rust callback that fires after every successful
+/// scheduler.run().  Failed runs do not fire the hook.  Use cases:
+/// billing meter, audit log, customer dashboard.  Since v1.0.3.
+pub fn set_completion_hook<F>(f: F) -> Result<()>
+where
+    F: Fn(&CompletionInfo) + Send + Sync + 'static,
+{
+    let boxed: CompletionCallback = Box::new(f);
+    *COMPLETION_CALLBACK.lock().unwrap() = Some(std::sync::Arc::new(boxed));
+    let rc = unsafe {
+        moonlab_scheduler_set_completion_hook(
+            Some(rust_completion_trampoline), ptr::null_mut())
+    };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(
+            format!("set_completion_hook: rc={rc}")));
+    }
+    Ok(())
+}
+
+/// Detach the active completion hook.
+pub fn clear_completion_hook() -> Result<()> {
+    *COMPLETION_CALLBACK.lock().unwrap() = None;
+    let rc = unsafe {
+        moonlab_scheduler_set_completion_hook(None, ptr::null_mut())
+    };
+    if rc != 0 {
+        return Err(QuantumError::Ffi(
+            format!("clear_completion_hook: rc={rc}")));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    #[test]
+    fn baked_noise_profiles_present() {
+        let names = list_vendor_noise_profiles();
+        for required in ["ibm-falcon-emu", "rigetti-aspen-emu", "ionq-forte-emu",
+                         "ibm-falcon", "rigetti-aspen", "ionq-forte"] {
+            assert!(names.contains(&required.to_string()),
+                    "baked profile {required:?} missing; got {names:?}");
+        }
+    }
+
+    #[test]
+    fn noise_profile_round_trip() {
+        let p = VendorNoiseProfile {
+            p_gate_1q: 0.0015, p_gate_2q: 0.012, p_readout: 0.018,
+            description: "IBM Falcon (2026-05-20 snapshot)".to_string(),
+        };
+        register_vendor_noise_profile("rs-test-profile", &p).unwrap();
+        let back = lookup_vendor_noise_profile("rs-test-profile").unwrap();
+        assert!((back.p_gate_2q - 0.012).abs() < 1e-9);
+        assert!(back.description.contains("snapshot"));
+        unregister_vendor_noise_profile("rs-test-profile").unwrap();
+        assert!(lookup_vendor_noise_profile("rs-test-profile").is_none());
+    }
+
+    #[test]
+    fn completion_hook_fires_with_args() {
+        use std::sync::atomic::{AtomicI32, Ordering};
+        use std::sync::Arc;
+        let count = Arc::new(AtomicI32::new(0));
+        let last_qubits = Arc::new(AtomicI32::new(-1));
+        let last_shots = Arc::new(AtomicI32::new(-1));
+        let count2 = count.clone();
+        let last_q = last_qubits.clone();
+        let last_s = last_shots.clone();
+        set_completion_hook(move |info| {
+            count2.fetch_add(1, Ordering::SeqCst);
+            last_q.store(info.num_qubits, Ordering::SeqCst);
+            last_s.store(info.total_shots, Ordering::SeqCst);
+        }).unwrap();
+
+        let mut j = Job::new(2).unwrap();
+        j.add_gate(GateType::H, 0, -1, &[]).unwrap();
+        j.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
+        j.set_num_shots(128).unwrap();
+        j.set_num_workers(1).unwrap();
+        let _ = j.execute().unwrap();
+
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        assert_eq!(last_qubits.load(Ordering::SeqCst), 2);
+        assert_eq!(last_shots.load(Ordering::SeqCst), 128);
+
+        clear_completion_hook().unwrap();
+        let _ = j.execute().unwrap();
+        // Count should NOT advance after clear.
+        assert_eq!(count.load(Ordering::SeqCst), 1);
     }
 }
