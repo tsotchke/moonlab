@@ -16,10 +16,19 @@
 
 #include "scheduler.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+/* v1.0.3 multi-tenant metric -- defined in src/control/control_plane.c
+ * alongside the other process-wide request counters.  Declared
+ * here as extern so both the inline scheduler_run path and the
+ * external scheduler_fire_completion_hook path increment the same
+ * counter.  Operators see this as
+ * `moonlab_control_completion_hook_fires_total` in METRICS. */
+extern _Atomic uint64_t g_count_completion_hook_fires;
 
 #if defined(_OPENMP)
 #include <omp.h>
@@ -415,6 +424,7 @@ void moonlab_scheduler_fire_completion_hook(
     void *hook_ctx = g_completion_hook_ctx;
     pthread_mutex_unlock(&g_backend_lock);
     if (hook) {
+        atomic_fetch_add(&g_count_completion_hook_fires, 1);
         hook(job, results, backend_name, hook_ctx);
     }
 }
@@ -454,6 +464,7 @@ int moonlab_scheduler_run(moonlab_job_t         *j,
     void *hook_ctx = g_completion_hook_ctx;
     pthread_mutex_unlock(&g_backend_lock);
     if (hook) {
+        atomic_fetch_add(&g_count_completion_hook_fires, 1);
         hook(j, out, bname, hook_ctx);
     }
 
