@@ -222,6 +222,34 @@ product instead of an architectural sketch:
 - **Use-after-free in control-plane worker thread**: see top of
   "Fixed" section -- listed once.
 
+### Tri-language tenant binding parity
+
+Bindings for the v1.0.3 tenant-form AUTH protocol added to all
+three customer SDKs.  Each helper validates the tenant_id charset
+([A-Za-z0-9_.-], length 1..63) client-side before connecting, and
+rejects tenant_id-without-secret with a clear error.
+
+- **Python** (`bindings/python/moonlab/control_plane.py`):
+  `submit_circuit(..., tenant_id="acme-corp", secret=b"...")` now
+  emits the new `AUTH <tenant>:<hmac>\n` prelude.  Five new pytest
+  cases.
+
+- **Rust** (`bindings/rust/moonlab/src/control_plane.rs`): new
+  `submit_circuit_auth_tenant(host, port, text, secret, tenant_id)`.
+  Five new cargo tests (tenant_round_trip, three_tenants_in_sequence,
+  illegal_char_clientside, empty_clientside, oversize_clientside).
+
+- **JavaScript / Node** (`@moonlab/quantum-core/control-plane`):
+  `SubmitCircuitArgs` / `SubmitShotsArgs` gain a `tenantId` field;
+  authPrelude builds the tenant-form line when set.  Six new
+  assertions inside the existing JS<->C integration test; full JS
+  suite (99 unit + 190 integration) remains green.
+
+- **Runbook customer-client examples** (`docs/operations/RUNBOOK.md`
+  section 6.5): Python, Rust, and TypeScript snippets showing the
+  exact code a customer writes to submit under `AUTH acme-corp:hex`
+  including the wire format the bindings emit underneath.
+
 ### Verified end-to-end on the smoke host
 
 - `test_control_plane_tenant` integration test: client submits
