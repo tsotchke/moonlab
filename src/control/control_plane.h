@@ -371,6 +371,68 @@ MOONLAB_API int
 moonlab_control_server_set_max_concurrent(moonlab_control_server_t *server,
                                           int max_concurrent);
 
+/* ------------------------------------------------------------------
+ * Admission hook (since v1.0.3)
+ *
+ * Private overlays use this to enforce per-tenant policy BEFORE the
+ * server runs the job:
+ *
+ *   - daily / monthly shot quotas
+ *   - per-tenant rate limits (beyond the per-IP one)
+ *   - paid-tier gating ("free tier cannot run > 16 qubits")
+ *   - circuit-size caps
+ *   - emergency tenant lockout
+ *
+ * Public moonlab installs no admission hook by default; every
+ * authenticated request that passes the existing HMAC + per-IP rate
+ * limit dispatches.  Setting a hook makes its return value an
+ * additional gate: the verb handler calls it after parsing the
+ * verb header (so it knows num_qubits / num_shots) but before
+ * touching the circuit body, and if the hook returns non-zero the
+ * server sends `ERR <code> <msg>` and closes.
+ *
+ * The hook returns a status code (positive integer treated as the
+ * `ERR` numeric, zero = allow):
+ *
+ *   0                                  allow
+ *   MOONLAB_CONTROL_RATE_LIMITED       per-tenant rate limit
+ *   MOONLAB_CONTROL_REJECTED           tenant rejected (policy)
+ *   MOONLAB_CONTROL_BAD_ARG            tenant unknown / malformed
+ *   any other negative status          custom overlay-defined code
+ *
+ * The hook must be thread-safe; the server may call it from
+ * multiple connection-handler threads concurrently.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Admission-hook signature.  `tenant_id` is whatever the
+ *        client sent in `AUTH <tenant>:<hmac>` (NULL for legacy
+ *        bare-token auth).  `verb` is `"CIRCUIT"` or `"SHOTS"`.
+ *        `num_qubits` and `num_shots` are parsed from the verb
+ *        line (`num_shots == 0` for the probabilities-mode
+ *        CIRCUIT verb).  `ctx` is the value passed at register
+ *        time.
+ *
+ * @return 0 to allow, a negative status code to refuse.
+ */
+typedef int (*moonlab_admission_hook_fn)(const char *tenant_id,
+                                         const char *verb,
+                                         int         num_qubits,
+                                         int         num_shots,
+                                         void       *ctx);
+
+/**
+ * @brief Install an admission hook.  Pass NULL to clear.  Only one
+ *        hook is registered at a time.  Thread-safe.
+ *
+ * @return MOONLAB_CONTROL_OK on success, MOONLAB_CONTROL_BAD_ARG on
+ *         NULL server.
+ */
+MOONLAB_API int
+moonlab_control_server_set_admission_hook(moonlab_control_server_t  *server,
+                                          moonlab_admission_hook_fn  hook,
+                                          void                      *ctx);
+
 /**
  * @brief Health-check submit -- sends `HEALTH\n`, expects `OK alive\n`.
  *        Since v0.8.21.  Returns MOONLAB_CONTROL_OK if the server is
