@@ -21,6 +21,7 @@
  */
 
 #include "simd_sve.h"
+#include <stdio.h>   /* snprintf -- only transitively included on x86_64 */
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
