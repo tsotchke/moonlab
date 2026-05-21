@@ -8,6 +8,27 @@
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
 
+## New in v1.0.3 (2026-05-20)
+
+**Open-core extension surfaces.**  Four runtime registries let private
+overlays, sibling libraries (QGTL / libirrep / SbNN), and customer
+applications plug new behavior into a stock moonlab build without
+touching its source:
+
+| Surface                                          | What it adds                                                                                                                  |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `moonlab_register_backend`                       | New execution backends (live hardware, GPU cluster, alternative simulator) -- dispatch by name from `moonlab_job_set_backend`. |
+| `moonlab_register_vendor_noise_profile`          | Live calibration scrapers push device snapshots into the registry; backends look profiles up by name at execute time.          |
+| `moonlab_register_decoder`                       | Custom QEC decoders (BP-OSD, GNN, hardware-decoded) join the same dispatcher as the five built-ins.                            |
+| `moonlab_scheduler_set_completion_hook`          | Synchronous hook for billing meters, audit logs, customer dashboards -- fires after every successful run with `(num_qubits, total_shots, backend_name)`. |
+
+Demo `examples/extensions/open_core_overlay_demo.c` exercises all four
+surfaces in one executable (ctest-gated).  Each registry is bound from
+Python, Rust, and JS -- see `bindings/{python,rust,javascript}` for the
+language-specific signatures.  A public-CI hygiene grep rejects any
+`PROPRIETARY:` / `TSOTCHKE-INTERNAL:` markers landing in the public
+moonlab tree.
+
 ## New in v0.7 (2026-05-19)
 
 **v0.7.0** ships the distributed-scheduler MVP -- the first piece
