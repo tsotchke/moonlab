@@ -2397,7 +2397,8 @@ tensor_gpu_context_t *tensor_gpu_context_create(void) {
 #endif
 
 #ifdef HAS_CUDA
-    ctx->cuda_ctx = cuda_compute_init();
+    /* Use device 0 -- caller can override via tensor_gpu_context_create_on */
+    ctx->cuda_ctx = cuda_context_create(0);
     if (ctx->cuda_ctx) {
         ctx->backend = 2;
         g_gpu_ctx = ctx;
@@ -2430,7 +2431,7 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx) {
 
 #ifdef HAS_CUDA
     if (ctx->cuda_ctx) {
-        cuda_compute_cleanup(ctx->cuda_ctx);
+        cuda_context_free(ctx->cuda_ctx);
     }
 #endif
 
@@ -2599,7 +2600,7 @@ tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     if (ctx->backend == 2) {
         size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
-        if (cuda_buffer_upload(buf, tensor->data, size) == 0) {
+        if (cuda_buffer_write(ctx->cuda_ctx, buf, tensor->data, size) == 0) {
             tensor->gpu_valid = true;
             return TENSOR_SUCCESS;
         }
@@ -2649,7 +2650,7 @@ tensor_error_t tensor_sync_to_cpu(tensor_t *tensor) {
     if (g_gpu_ctx && g_gpu_ctx->backend == 2) {
         size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
-        if (cuda_buffer_download(buf, tensor->data, size) == 0) {
+        if (cuda_buffer_read(g_gpu_ctx->cuda_ctx, buf, tensor->data, size) == 0) {
             tensor->cpu_valid = true;
             return TENSOR_SUCCESS;
         }
