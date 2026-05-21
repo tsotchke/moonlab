@@ -800,16 +800,62 @@ jobs:
               -p 17070:7070 \
               moonlab/control-plane:ci
           # Wait up to 15 s for the daemon to bind.
+          BOUND=0
           for i in $(seq 1 15); do
               if printf 'HEALTH\n' | nc -w 1 127.0.0.1 17070 2>/dev/null \
                   | grep -q 'OK alive'; then
                   echo "control-plane HEALTH OK on attempt $i"
-                  docker stop moonlab-ci
-                  exit 0
+                  BOUND=1
+                  break
               fi
               sleep 1
           done
-          echo "control-plane did not respond to HEALTH within 15 s"
-          docker logs moonlab-ci || true
-          docker stop moonlab-ci || true
-          exit 1
+          if [ "$BOUND" -ne 1 ]; then
+              echo "control-plane did not respond to HEALTH within 15 s"
+              docker logs moonlab-ci || true
+              docker stop moonlab-ci || true
+              exit 1
+          fi
+
+          # v1.0.3 Bell-flow smoke: submit a Bell CIRCUIT directly over
+          # raw TCP and verify the wire response is the expected 4-vector
+          # {0.5, 0, 0, 0.5}.  Catches end-to-end breakage that a HEALTH
+          # probe alone misses (e.g. scheduler dispatch regression,
+          # response framing regression).  Uses python's stdlib socket
+          # module so we don't need any moonlab binding at runtime.
+          python3 - <<'PYEOF'
+          import socket, struct, sys
+          circuit = b"# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n"
+          verb    = f"CIRCUIT {len(circuit)}\n".encode("ascii")
+          with socket.create_connection(("127.0.0.1", 17070), timeout=10) as s:
+              s.sendall(verb)
+              s.sendall(circuit)
+              # Read response header line ("OK <N>\n" or "ERR ...").
+              hdr = b""
+              while not hdr.endswith(b"\n"):
+                  c = s.recv(1)
+                  if not c: break
+                  hdr += c
+              if not hdr.startswith(b"OK "):
+                  print("UNEXPECTED HEADER:", hdr); sys.exit(1)
+              n = int(hdr[3:].strip())
+              raw = b""
+              while len(raw) < n * 8:
+                  chunk = s.recv(n * 8 - len(raw))
+                  if not chunk: break
+                  raw += chunk
+              probs = struct.unpack(f"<{n}d", raw)
+          assert len(probs) == 4 and \
+                 abs(probs[0] - 0.5) < 1e-9 and \
+                 abs(probs[3] - 0.5) < 1e-9, f"unexpected probs: {probs}"
+          print("LIVE-IMAGE BELL OK:", list(probs))
+          PYEOF
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+              echo "control-plane image rejected a Bell CIRCUIT submission (rc=$rc)"
+              docker logs moonlab-ci || true
+              docker stop moonlab-ci || true
+              exit 1
+          fi
+          docker stop moonlab-ci
+          exit 0
