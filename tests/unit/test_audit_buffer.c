@@ -47,7 +47,7 @@ static void test_init_empty(void)
 {
     fprintf(stdout, "\n--- init -> empty ---\n");
     void *slots = alloc_slots(sizeof(rec_t), 4);
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 4);
     CHECK(moonlab_audit_buffer_len(&b) == 0, "len = 0 after init");
     rec_t out;
@@ -61,7 +61,7 @@ static void test_init_empty(void)
 static void test_bad_input_unusable(void)
 {
     fprintf(stdout, "\n--- bad init input -> unusable ---\n");
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     /* Zero record_size is invalid. */
     moonlab_audit_buffer_init(&b, (void *)0xDEAD, 0, 4);
     rec_t r = { .producer = 1, .seq = 1, .magic = REC_MAGIC };
@@ -79,7 +79,7 @@ static void test_push_pop_fifo(void)
 {
     fprintf(stdout, "\n--- push * 3, pop * 3 FIFO order ---\n");
     void *slots = alloc_slots(sizeof(rec_t), 8);
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 8);
     for (uint64_t i = 0; i < 3; i++) {
         rec_t r = { .producer = 1, .seq = i, .magic = REC_MAGIC };
@@ -107,7 +107,7 @@ static void test_overflow_drops_oldest(void)
 {
     fprintf(stdout, "\n--- push 6 into capacity=4: drops oldest 2 ---\n");
     void *slots = alloc_slots(sizeof(rec_t), 4);
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 4);
     int n_clean = 0;
     for (uint64_t i = 0; i < 6; i++) {
@@ -134,11 +134,40 @@ static void test_overflow_drops_oldest(void)
     free(slots);
 }
 
+static void test_reinit_destroys_old_mutex(void)
+{
+    fprintf(stdout, "\n--- re-init on live buffer cleans up previous mutex ---\n");
+    /* Zero-init mandatory for the FIRST init.  After that, re-init
+     * on a live (capacity != 0) buffer must destroy the previous
+     * mutex before initialising the new one. */
+    moonlab_audit_buffer_t b = {0};
+    void *slots1 = alloc_slots(sizeof(rec_t), 4);
+    moonlab_audit_buffer_init(&b, slots1, sizeof(rec_t), 4);
+    rec_t r = { .producer = 1, .seq = 7, .magic = REC_MAGIC };
+    CHECK(moonlab_audit_buffer_push(&b, &r) == 1, "first-init push works");
+
+    /* Re-init with a different (smaller) capacity.  Old mutex is
+     * destroyed inside init() and replaced.  Push/pop must still
+     * work; previous contents are gone (we lost the slots1
+     * backing, but the new init points at slots2). */
+    void *slots2 = alloc_slots(sizeof(rec_t), 8);
+    moonlab_audit_buffer_init(&b, slots2, sizeof(rec_t), 8);
+    CHECK(moonlab_audit_buffer_len(&b) == 0, "re-init -> empty");
+    CHECK(moonlab_audit_buffer_push(&b, &r) == 1, "re-init push works");
+    rec_t got;
+    CHECK(moonlab_audit_buffer_pop(&b, &got) == 1, "re-init pop works");
+    CHECK(got.seq == 7, "pop returns the post-reinit pushed record");
+
+    moonlab_audit_buffer_destroy(&b);
+    free(slots1);
+    free(slots2);
+}
+
 static void test_reset_drops(void)
 {
     fprintf(stdout, "\n--- reset_drops zeroes the counter ---\n");
     void *slots = alloc_slots(sizeof(rec_t), 2);
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 2);
     for (uint64_t i = 0; i < 5; i++) {
         rec_t r = { .producer = 1, .seq = i, .magic = REC_MAGIC };
@@ -240,7 +269,7 @@ static void test_concurrent_consumer(void)
     /* Capacity 64 << total pushes 1000.  This forces overflow during
      * the race and exercises the producer-shoves-read-cursor path. */
     void *slots = alloc_slots(sizeof(rec_t), 64);
-    moonlab_audit_buffer_t b;
+    moonlab_audit_buffer_t b = {0};
     moonlab_audit_buffer_init(&b, slots, sizeof(rec_t), 64);
 
     int per_producer[4] = {0,0,0,0};
@@ -306,6 +335,7 @@ int main(void)
     test_bad_input_unusable();
     test_push_pop_fifo();
     test_overflow_drops_oldest();
+    test_reinit_destroys_old_mutex();
     test_reset_drops();
     test_concurrent_consumer();
     fprintf(stdout, "\n=== %d failure%s ===\n",

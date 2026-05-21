@@ -24,10 +24,17 @@ void moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
                                size_t                  capacity)
 {
     if (!buf) return;
+    /* If this is a re-init on a live buffer, destroy the existing
+     * mutex first.  Without this, the second pthread_mutex_init
+     * leaks the previous mutex's kernel state.  capacity == 0 means
+     * the buffer is either fresh-allocated (zero-initialised by the
+     * caller) or was previously destroy()'d -- either way, no
+     * mutex to clean up. */
+    if (buf->capacity != 0) {
+        pthread_mutex_destroy(&buf->lock);
+    }
     if (!slots || record_size == 0 || capacity == 0) {
         memset(buf, 0, sizeof(*buf));
-        /* Leave the mutex uninitialised; destroy() handles the
-         * never-init case via a zero-check. */
         return;
     }
     buf->slots       = (uint8_t *)slots;
