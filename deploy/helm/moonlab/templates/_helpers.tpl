@@ -19,7 +19,7 @@ app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
 {{/*
-Fully-qualified image name like "docker.io/moonlab/control-plane:0.10.0".
+Fully-qualified image name like "docker.io/moonlab/control-plane:1.0.3".
 Takes a component name (control-plane / control-exporter / websocket-gateway).
 */}}
 {{- define "moonlab.image" -}}
