@@ -70,6 +70,14 @@
     target_link_libraries(test_constants PRIVATE ${MATH_LIBRARY})
     add_test(NAME unit_constants COMMAND test_constants)
 
+    # Token-bucket primitive (since v1.0.3): per-tenant rate-limit
+    # mechanism for private-overlay admission hooks.
+    add_executable(test_token_bucket tests/unit/test_token_bucket.c)
+    target_link_libraries(test_token_bucket
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME unit_token_bucket COMMAND test_token_bucket)
+    set_tests_properties(unit_token_bucket PROPERTIES TIMEOUT 10)
+
     add_executable(test_correctness_properties tests/unit/test_correctness_properties.c)
     target_link_libraries(test_correctness_properties PRIVATE quantumsim)
     add_test(NAME unit_correctness_properties COMMAND test_correctness_properties)
