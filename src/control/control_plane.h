@@ -245,6 +245,36 @@ moonlab_control_submit_circuit_auth(const char    *host,
                                     size_t        *out_num);
 
 /**
+ * @brief Like `moonlab_control_submit_circuit_auth` but carries an
+ *        optional tenant identifier in the AUTH line so the server's
+ *        scheduler completion hook can attribute the run to a
+ *        billing account.
+ *
+ *        Wire format (since v1.0.3):
+ *
+ *            AUTH <tenant_id>:<64-hex-HMAC>\n
+ *            CIRCUIT <bytes>\n<body>
+ *
+ *        `tenant_id` may be at most 63 chars, drawn from
+ *        `[A-Za-z0-9_.-]`.  Pass NULL or empty to use the legacy
+ *        bare-token form (equivalent to
+ *        `moonlab_control_submit_circuit_auth`).  The HMAC is
+ *        computed over the verb line as before; the tenant_id is
+ *        plumbed through to the scheduler's thread-local request
+ *        context for the duration of the run.
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_auth_tenant(const char    *host,
+                                           uint16_t       port,
+                                           const char    *tenant_id,
+                                           const uint8_t *secret,
+                                           size_t         secret_len,
+                                           const char    *circuit_text,
+                                           size_t         text_len,
+                                           double       **out_probs,
+                                           size_t        *out_num);
+
+/**
  * @brief Compute HMAC-SHA3-256(secret, msg).  Public so binding-language
  *        clients can construct the AUTH token themselves when they want
  *        to handle the socket directly rather than going through

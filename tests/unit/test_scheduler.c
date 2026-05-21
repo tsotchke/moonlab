@@ -277,6 +277,8 @@ typedef struct {
     int last_num_qubits;
     int last_total_shots;
     char last_backend[64];
+    char last_tenant[64];      /**< tenant_id observed by the hook, or "" */
+    char last_request_id[64];  /**< request_id observed by the hook, or "" */
     int ctx_round_trip;
 } hook_observer_t;
 
@@ -293,6 +295,12 @@ static void completion_hook_recorder(
     if (backend_name) {
         snprintf(obs->last_backend, sizeof(obs->last_backend), "%s", backend_name);
     }
+    const char *tid = moonlab_scheduler_current_tenant_id();
+    const char *rid = moonlab_scheduler_current_request_id();
+    snprintf(obs->last_tenant,     sizeof(obs->last_tenant),
+             "%s", tid ? tid : "");
+    snprintf(obs->last_request_id, sizeof(obs->last_request_id),
+             "%s", rid ? rid : "");
     obs->ctx_round_trip = 1;
 }
 
@@ -333,6 +341,59 @@ static void test_completion_hook_fires(void)
     moonlab_job_results_free(&res3);
     moonlab_job_free(j3);
     moonlab_job_free(j);
+}
+
+static void test_completion_hook_reads_request_context(void)
+{
+    fprintf(stdout, "\n--- completion hook: reads tenant_id / request_id ---\n");
+    hook_observer_t obs = {0};
+    moonlab_scheduler_set_completion_hook(completion_hook_recorder, &obs);
+
+    /* Sanity: with no context set, the hook sees empty strings. */
+    moonlab_scheduler_set_request_context(NULL, NULL);
+    moonlab_job_t *j_anon = make_bell_job(64, 1);
+    moonlab_job_results_t res_anon = {0};
+    moonlab_scheduler_run(j_anon, &res_anon);
+    CHECK(obs.last_tenant[0] == '\0',
+          "no tenant set -> hook sees empty (%.20s)", obs.last_tenant);
+    moonlab_job_results_free(&res_anon);
+    moonlab_job_free(j_anon);
+
+    /* Set tenant + request id, run, verify the hook sees them. */
+    moonlab_scheduler_set_request_context("acme-corp", "req-42");
+    moonlab_job_t *j1 = make_bell_job(64, 1);
+    moonlab_job_results_t res1 = {0};
+    moonlab_scheduler_run(j1, &res1);
+    CHECK(strcmp(obs.last_tenant, "acme-corp") == 0,
+          "tenant_id round-trips to hook (%s)", obs.last_tenant);
+    CHECK(strcmp(obs.last_request_id, "req-42") == 0,
+          "request_id round-trips to hook (%s)", obs.last_request_id);
+    moonlab_job_results_free(&res1);
+    moonlab_job_free(j1);
+
+    /* Switch tenants between runs; the hook reflects the latest. */
+    moonlab_scheduler_set_request_context("beta-startup", "req-43");
+    moonlab_job_t *j2 = make_bell_job(64, 1);
+    moonlab_job_results_t res2 = {0};
+    moonlab_scheduler_run(j2, &res2);
+    CHECK(strcmp(obs.last_tenant, "beta-startup") == 0,
+          "second tenant_id observed (%s)", obs.last_tenant);
+    CHECK(strcmp(obs.last_request_id, "req-43") == 0,
+          "second request_id observed (%s)", obs.last_request_id);
+    moonlab_job_results_free(&res2);
+    moonlab_job_free(j2);
+
+    /* Clear the context.  Next run sees empty. */
+    moonlab_scheduler_set_request_context(NULL, NULL);
+    moonlab_job_t *j3 = make_bell_job(64, 1);
+    moonlab_job_results_t res3 = {0};
+    moonlab_scheduler_run(j3, &res3);
+    CHECK(obs.last_tenant[0] == '\0',
+          "context cleared -> tenant empty (%.20s)", obs.last_tenant);
+    moonlab_job_results_free(&res3);
+    moonlab_job_free(j3);
+
+    moonlab_scheduler_set_completion_hook(NULL, NULL);
 }
 
 static void test_completion_hook_not_fired_on_error(void)
@@ -389,6 +450,7 @@ int main(void)
     test_backend_unknown_name_fails();
     test_backend_clear_uses_simulator();
     test_completion_hook_fires();
+    test_completion_hook_reads_request_context();
     test_completion_hook_not_fired_on_error();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");

@@ -11,6 +11,7 @@
 
 #include "../applications/moonlab_qgtl_backend.h"
 #include "../crypto/sha3/sha3.h"
+#include "../distributed/scheduler.h"
 
 #ifdef MOONLAB_HAVE_TLS
 #  include <openssl/ssl.h>
@@ -309,8 +310,18 @@ static int handle_one_request(moonlab_io_t  *io,
      *   AUTH <64-hex-chars>\n
      * If the server has a secret configured, the AUTH line is
      * required and the token must be HMAC-SHA3-256(secret, verb_line).
+     *
+     * Tenant identity (v1.0.3):
+     *   AUTH <tenant_id>:<64-hex-chars>\n
+     * The HMAC is unchanged (single server secret keyed across the
+     * verb line); the tenant_id is plumbed through to the scheduler
+     * via the per-request thread-local context.  Private overlays
+     * use it to attribute jobs to billing accounts.  Backward
+     * compatible: legacy clients that send the bare token form get
+     * a NULL tenant_id and dispatch as before.
      */
     char client_token_hex[128];
+    char client_tenant_id[64] = {0};
     int  saw_auth = 0;
     char first[96];
     size_t first_len = 0;
@@ -381,13 +392,65 @@ static int handle_one_request(moonlab_io_t  *io,
     }
 
     if (strncmp(first, "AUTH ", 5) == 0) {
-        /* Pull the 64-hex token. */
-        if (first_len < 5 + 64 + 1) {
-            send_err(io, MOONLAB_CONTROL_PROTOCOL, "short AUTH");
-            LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+        /* Pull the token.  Two accepted forms:
+         *
+         *   AUTH <64-hex>           legacy, no tenant
+         *   AUTH <tenant>:<64-hex>  v1.0.3+; tenant_id <= 63 chars,
+         *                          [A-Za-z0-9_.-], no embedded colons,
+         *                          captured for scheduler dispatch.
+         *
+         * In either form, the HMAC token is the last 64 hex chars
+         * before the newline.  Walk first[5..first_len) to extract.
+         */
+        const char *auth_payload     = first + 5;
+        size_t      auth_payload_len = (first_len > 5) ? first_len - 5 : 0;
+        /* Strip a trailing newline if present.  The recv layer keeps
+         * the '\n' as part of first; first_len typically includes it. */
+        if (auth_payload_len > 0 && auth_payload[auth_payload_len - 1] == '\n') {
+            auth_payload_len--;
         }
-        memcpy(client_token_hex, first + 5, 64);
-        client_token_hex[64] = '\0';
+        /* Look for a colon: 'tenant:hextoken'.  At most one colon
+         * permitted; anything else is malformed. */
+        const char *colon = NULL;
+        for (size_t i = 0; i < auth_payload_len; i++) {
+            if (auth_payload[i] == ':') { colon = &auth_payload[i]; break; }
+        }
+        if (colon != NULL) {
+            const size_t tid_len = (size_t)(colon - auth_payload);
+            const size_t tok_len = auth_payload_len - tid_len - 1;
+            if (tid_len == 0 || tid_len >= sizeof(client_tenant_id) ||
+                tok_len != 64) {
+                send_err(io, MOONLAB_CONTROL_PROTOCOL, "bad AUTH form");
+                LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+            }
+            /* Validate tenant_id character set: [A-Za-z0-9_.-].
+             * Reject anything else so the tenant cannot inject
+             * separators / shell metachars into downstream sinks. */
+            for (size_t i = 0; i < tid_len; i++) {
+                const char c = auth_payload[i];
+                const int ok =
+                    (c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '_' || c == '.' || c == '-';
+                if (!ok) {
+                    send_err(io, MOONLAB_CONTROL_PROTOCOL, "bad tenant_id");
+                    LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+                }
+            }
+            memcpy(client_tenant_id, auth_payload, tid_len);
+            client_tenant_id[tid_len] = '\0';
+            memcpy(client_token_hex, colon + 1, 64);
+            client_token_hex[64] = '\0';
+        } else {
+            /* Legacy bare-token form. */
+            if (auth_payload_len != 64) {
+                send_err(io, MOONLAB_CONTROL_PROTOCOL, "short AUTH");
+                LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+            }
+            memcpy(client_token_hex, auth_payload, 64);
+            client_token_hex[64] = '\0';
+        }
         saw_auth = 1;
     }
 
@@ -502,7 +565,16 @@ static int handle_one_request(moonlab_io_t  *io,
     moonlab_qgtl_results_t res;
     memset(&res, 0, sizeof(res));
 
+    /* Plumb tenant identity into the scheduler thread-local so
+     * registered completion hooks (billing, audit) can attribute
+     * this run.  client_tenant_id is empty for legacy bare-token
+     * auth or unauthenticated requests; pass NULL in that case so
+     * downstream hooks see the same "no tenant" signal regardless. */
+    const char *tenant_to_set =
+        (client_tenant_id[0] != '\0') ? client_tenant_id : NULL;
+    moonlab_scheduler_set_request_context(tenant_to_set, NULL);
     int er = moonlab_qgtl_execute(c, &opts, &res);
+    moonlab_scheduler_set_request_context(NULL, NULL);
     moonlab_qgtl_circuit_free(c);
 
     if (er != 0) {
@@ -1429,6 +1501,105 @@ int moonlab_control_submit_circuit_auth(const char    *host,
     if (strncmp(resp_hdr, "OK ", 3) == 0) {
         size_t num = 0;
         if (sscanf(resp_hdr + 3, "%zu", &num) != 1 || num == 0 || num > (1ULL << 30)) {
+            close(fd);
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        double *probs = (double *)malloc(num * sizeof(double));
+        if (!probs) { close(fd); return MOONLAB_CONTROL_OOM; }
+        rc = recv_all(&plain_io, probs, num * sizeof(double));
+        close(fd);
+        if (rc != MOONLAB_CONTROL_OK) { free(probs); return rc; }
+        *out_probs = probs;
+        *out_num   = num;
+        return MOONLAB_CONTROL_OK;
+    } else {
+        close(fd);
+        return MOONLAB_CONTROL_REJECTED;
+    }
+}
+
+int moonlab_control_submit_circuit_auth_tenant(const char    *host,
+                                               uint16_t       port,
+                                               const char    *tenant_id,
+                                               const uint8_t *secret,
+                                               size_t         secret_len,
+                                               const char    *circuit_text,
+                                               size_t         text_len,
+                                               double       **out_probs,
+                                               size_t        *out_num)
+{
+    /* Empty / NULL tenant_id is a degenerate case -- behaves exactly
+     * like the legacy helper.  Lets callers thread the tenant_id
+     * conditionally without two code paths. */
+    if (tenant_id == NULL || tenant_id[0] == '\0') {
+        return moonlab_control_submit_circuit_auth(
+            host, port, secret, secret_len, circuit_text, text_len,
+            out_probs, out_num);
+    }
+    if (!host || !circuit_text || !out_probs || !out_num) {
+        return MOONLAB_CONTROL_BAD_ARG;
+    }
+    const size_t tid_len = strlen(tenant_id);
+    if (tid_len == 0 || tid_len >= 64) return MOONLAB_CONTROL_BAD_ARG;
+    /* Validate the tenant_id character set client-side so we get a
+     * clear error rather than a server-side "bad tenant_id" reject. */
+    for (size_t i = 0; i < tid_len; i++) {
+        const char c = tenant_id[i];
+        const int ok =
+            (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';
+        if (!ok) return MOONLAB_CONTROL_BAD_ARG;
+    }
+    *out_probs = NULL;
+    *out_num   = 0;
+    if (text_len == 0) text_len = strlen(circuit_text);
+    if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
+
+    int fd = client_connect(host, port);
+    if (fd < 0) return MOONLAB_CONTROL_IO_ERROR;
+    moonlab_io_t plain_io = { 0 };
+    plain_io.fd = fd;
+
+    char verb_line[64];
+    int  vn = snprintf(verb_line, sizeof(verb_line),
+                       "CIRCUIT %zu\n", text_len);
+    if (vn < 0 || (size_t)vn >= sizeof(verb_line)) {
+        close(fd);
+        return MOONLAB_CONTROL_IO_ERROR;
+    }
+
+    int rc = MOONLAB_CONTROL_OK;
+    if (secret && secret_len > 0) {
+        uint8_t tok[HMAC_DIGEST_SIZE];
+        hmac_sha3_256(secret, secret_len,
+                      (const uint8_t *)verb_line, (size_t)vn, tok);
+        /* Wire: "AUTH " + tenant + ":" + 64hex + "\n" */
+        char auth_line[5 + 63 + 1 + 2 * HMAC_DIGEST_SIZE + 2];
+        size_t off = 0;
+        memcpy(auth_line + off, "AUTH ", 5); off += 5;
+        memcpy(auth_line + off, tenant_id, tid_len); off += tid_len;
+        auth_line[off++] = ':';
+        hex_encode(tok, HMAC_DIGEST_SIZE, auth_line + off); off += 64;
+        auth_line[off++] = '\n';
+        rc = send_all(&plain_io, auth_line, off);
+    }
+    if (rc == MOONLAB_CONTROL_OK) {
+        rc = send_all(&plain_io, verb_line, (size_t)vn);
+    }
+    if (rc == MOONLAB_CONTROL_OK) {
+        rc = send_all(&plain_io, circuit_text, text_len);
+    }
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    char resp_hdr[128];
+    size_t resp_len = 0;
+    rc = recv_until_newline(&plain_io, resp_hdr, sizeof(resp_hdr), &resp_len);
+    if (rc != MOONLAB_CONTROL_OK) { close(fd); return rc; }
+
+    if (strncmp(resp_hdr, "OK ", 3) == 0) {
+        size_t num = 0;
+        if (sscanf(resp_hdr + 3, "%zu", &num) != 1 || num == 0 ||
+            num > (1ULL << 30)) {
             close(fd);
             return MOONLAB_CONTROL_PROTOCOL;
         }

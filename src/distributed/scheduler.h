@@ -329,6 +329,62 @@ MOONLAB_API int
 moonlab_job_to_json(const moonlab_job_t *job,
                     char *buf, size_t bufsize);
 
+/* ------------------------------------------------------------------
+ * Per-request context (since v1.0.3)
+ *
+ * Thread-local scratch space the caller sets before invoking
+ * @ref moonlab_scheduler_run so the completion hook (and any
+ * registered backend) can read who initiated the request.  The
+ * public moonlab does not enforce any policy on these strings --
+ * it is the private overlay's job to:
+ *
+ *   - decide that an empty tenant_id means "anonymous" or reject it,
+ *   - assign request_ids from a tamper-resistant generator,
+ *   - bill the correct customer based on tenant_id.
+ *
+ * Thread-local because the scheduler is invoked synchronously on
+ * the caller thread; one HTTP / control-plane request -> one
+ * scheduler_run -> one hook fire.  All four getters return the
+ * pointer the setter was last called with on the same thread,
+ * or NULL if nothing was set.
+ *
+ * The setter does not copy; the strings must remain valid until
+ * the matching scheduler_run returns (i.e. through the completion
+ * hook callback).  Callers typically set this on stack scope:
+ *
+ *     moonlab_scheduler_set_request_context("acme-corp", "req-42");
+ *     int rc = moonlab_scheduler_run(job, &out);
+ *     moonlab_scheduler_set_request_context(NULL, NULL);
+ *
+ * Public moonlab itself never sets this; the control plane or the
+ * overlay's HTTP front-end is the typical caller.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Set the current thread's request context.  Pass NULL for
+ *        either field to clear it.  Strings are NOT copied; caller
+ *        owns the storage and must keep it alive until cleared
+ *        (typically through the end of scheduler_run + hook fire).
+ */
+MOONLAB_API void
+moonlab_scheduler_set_request_context(const char *tenant_id,
+                                      const char *request_id);
+
+/**
+ * @brief Read the current thread's tenant_id.  Returns NULL if no
+ *        request context is set.  Pointer is valid only until the
+ *        caller calls set_request_context again on the same thread.
+ */
+MOONLAB_API const char *
+moonlab_scheduler_current_tenant_id(void);
+
+/**
+ * @brief Read the current thread's request_id.  Returns NULL if no
+ *        request context is set.
+ */
+MOONLAB_API const char *
+moonlab_scheduler_current_request_id(void);
+
 #ifdef __cplusplus
 }
 #endif
