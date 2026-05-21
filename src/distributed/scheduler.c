@@ -405,6 +405,20 @@ const char *moonlab_scheduler_current_request_id(void)
     return t_request_id;
 }
 
+void moonlab_scheduler_fire_completion_hook(
+    const moonlab_job_t          *job,
+    const moonlab_job_results_t  *results,
+    const char                   *backend_name)
+{
+    pthread_mutex_lock(&g_backend_lock);
+    moonlab_completion_hook_fn hook = g_completion_hook;
+    void *hook_ctx = g_completion_hook_ctx;
+    pthread_mutex_unlock(&g_backend_lock);
+    if (hook) {
+        hook(job, results, backend_name, hook_ctx);
+    }
+}
+
 int moonlab_scheduler_run(moonlab_job_t         *j,
                           moonlab_job_results_t *out)
 {

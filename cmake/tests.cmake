@@ -862,6 +862,22 @@
         TIMEOUT 30
     )
 
+    # End-to-end tenant-identity smoke (v1.0.3): proves AUTH
+    # <tenant>:<hmac> -> control plane -> scheduler request context
+    # -> completion hook captures the right tenant_id.  Canonical
+    # premium-tier demonstration that customer-submitted jobs
+    # actually reach billing/audit attributed to the right account.
+    add_executable(test_control_plane_tenant
+        tests/integration/test_control_plane_tenant.c)
+    target_link_libraries(test_control_plane_tenant
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_tenant
+        COMMAND test_control_plane_tenant)
+    set_tests_properties(integration_control_plane_tenant PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
     # TLS transport (since v0.8.17): only built when the library was
     # configured with -DQSIM_ENABLE_TLS=ON.  Generates a self-signed
     # cert in-process, then drives a Bell circuit through TLS.

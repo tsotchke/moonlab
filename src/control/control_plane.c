@@ -574,14 +574,29 @@ static int handle_one_request(moonlab_io_t  *io,
         (client_tenant_id[0] != '\0') ? client_tenant_id : NULL;
     moonlab_scheduler_set_request_context(tenant_to_set, NULL);
     int er = moonlab_qgtl_execute(c, &opts, &res);
-    moonlab_scheduler_set_request_context(NULL, NULL);
     moonlab_qgtl_circuit_free(c);
 
     if (er != 0) {
         moonlab_qgtl_results_free(&res);
+        moonlab_scheduler_set_request_context(NULL, NULL);
         send_err(io, MOONLAB_CONTROL_REJECTED, "execute");
         LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
     }
+
+    /* Fire the scheduler completion hook so a registered billing /
+     * audit overlay can attribute this run to the current tenant.
+     * qgtl_execute bypasses scheduler_run, so its own hook fire
+     * never happens; we synthesize a moonlab_job_results_t with the
+     * fields the hook actually reads (num_qubits, total_shots) and
+     * invoke explicitly.  The hook reads tenant_id via the
+     * thread-local set above. */
+    {
+        moonlab_job_results_t hook_res = {0};
+        hook_res.num_qubits  = (int)res.num_qubits;
+        hook_res.total_shots = mode_shots ? (int)res.num_shots : 0;
+        moonlab_scheduler_fire_completion_hook(NULL, &hook_res, "control_plane");
+    }
+    moonlab_scheduler_set_request_context(NULL, NULL);
 
     if (mode_shots) {
         if (!res.outcomes) {
