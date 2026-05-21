@@ -107,7 +107,7 @@ host-exposed port instead and pass `--tls-ca`, `--client-cert`,
 
 ```
 docker compose -f deploy/docker/docker-compose.yml down
-docker rmi moonlab/control-plane:1.0.3 moonlab/control-exporter:1.0.3
+docker rmi moonlab/control-plane:1.0.4 moonlab/control-exporter:1.0.4
 ```
 
 ## Architecture
