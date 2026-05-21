@@ -103,7 +103,58 @@ the pre-fix decoder and should not be quoted.
 The pymatching slot is wired as a Python subprocess shim
 (`src/applications/pymatching_bridge.py`); it returns numbers if
 both `python3` and the `pymatching` package are visible at runtime
-on the moonlab host.  This run reports `n/a` because the harness
-process did not successfully exchange JSON with the subprocess;
-diagnosing that subprocess setup is tracked separately and does
-not block the in-tree `greedy` / `mwpm_exact` comparison.
+on the moonlab host.  The 2026-05-20 archived run reports `n/a`
+because the harness did not have `pymatching` pip-installed and
+because of an edge-index bug in the bridge that has since been
+fixed (see next section).
+
+## 2026-05-20 post-fix: pymatching tracks mwpm_exact
+
+A horizontal / vertical edge-index swap in the pymatching bridge
+caused corrections to come back transposed across the lattice
+diagonal.  The bridge assigned fault_ids `[0, d*d)` to +Y-direction
+edges and `[d*d, 2*d*d)` to +X-direction edges, exactly the
+opposite of moonlab's `torus_edge_between` convention.  Round-trip
+left residual syndrome on the corrected state and inflated logical
+error rates roughly 20x at d=5 p=0.01 (~9% pymatching vs ~0.4% on
+mwpm_exact).
+
+Fixed in `src/applications/pymatching_bridge.py`; permanent
+regression test in `tests/unit/test_decoder_bench.c` asserts that
+a (0,0)-(1,0) defect pair flips exactly one horizontal edge and
+zero vertical edges.  Post-fix, pymatching tracks mwpm_exact
+across the noise sweep (within Monte-Carlo shot noise):
+
+### Distance 3 (18 data qubits), 200 trials per cell, post-fix
+
+| p     | greedy | mwpm_exact | pymatching |
+|-------|--------|------------|------------|
+| 0.01  | 0.005  | 0.005      | 0.000      |
+| 0.02  | 0.005  | 0.005      | 0.000      |
+| 0.04  | 0.030  | 0.020      | 0.015      |
+| 0.06  | 0.090  | 0.085      | 0.060      |
+| 0.08  | 0.115  | 0.105      | 0.090      |
+| 0.10  | 0.170  | 0.140      | 0.160      |
+
+Archived as `benchmarks/results/decoder_shootout_2026-05-20_postfix/d3.json`.
+
+The pymatching column is within 1-2 sigma of `mwpm_exact` at 200
+trials, and trends parallel to it -- the same Monte-Carlo noise
+fingerprint you would expect from two implementations of
+minimum-weight perfect matching.  The pre-fix bug would have
+shown pymatching consistently 10-20x above mwpm_exact.
+
+Re-run on your host:
+
+```bash
+./build/decoder_shootout 3 200 > d3.json
+./build/decoder_shootout 5 1000 > d5.json   # ~10 min with pymatching
+./build/decoder_shootout 7 1000 > d7.json   # ~25 min
+./build/decoder_shootout 9 1000 > d9.json   # ~60 min
+```
+
+The pre-fix d=5 / d=7 / d=9 archives under
+`benchmarks/results/decoder_shootout_2026-05-20/` remain in tree
+for historical reference; their `pymatching: null` cells are
+correct (the bug meant pymatching was effectively unusable at the
+time of that archive).
