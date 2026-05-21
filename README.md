@@ -8,6 +8,18 @@
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
 
+## Community And Commercial Use
+
+This repository is the public **Moonlab Community Edition**. It remains a
+useful MIT-licensed simulator/runtime for local use, research, education,
+public integrations, and commercial embedding. Commercial Moonlab/QGTL products
+should build around this public core with hosted execution, private provider
+overlays, enterprise deployment, billing/audit hooks, support, and certified
+packages.
+
+See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
+boundary.
+
 ## New in v1.0.3 (2026-05-20)
 
 **Open-core extension surfaces.**  Four runtime registries let private
