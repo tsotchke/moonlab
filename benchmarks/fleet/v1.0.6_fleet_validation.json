@@ -195,6 +195,115 @@
         "errors_total": 0,
         "note": "browser-emulating WS clients hit gateway over Tailscale, gateway forwards line-protocol to TCP server, Bell circuit verified end-to-end"
       }
+    },
+    "mpi_random_circuit_scaling": {
+      "harness": "benchmarks/mpi_scaling/run_scaling.sh",
+      "binary": "build/large_state_random_circuit",
+      "host": "old-donkey",
+      "depth": 4,
+      "seed": 42,
+      "grid": [
+        {
+          "N": 28,
+          "ranks": 2,
+          "wall_s": 91.524,
+          "sim_s": 70.9698,
+          "norm": 1.0
+        },
+        {
+          "N": 28,
+          "ranks": 4,
+          "wall_s": 78.778,
+          "sim_s": 63.9695,
+          "norm": 1.0
+        },
+        {
+          "N": 28,
+          "ranks": 8,
+          "wall_s": 62.081,
+          "sim_s": 48.6903,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 2,
+          "wall_s": 483.499,
+          "sim_s": 356.2723,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 4,
+          "wall_s": 277.576,
+          "sim_s": 223.6082,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 8,
+          "wall_s": 176.515,
+          "sim_s": 136.5942,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 2,
+          "wall_s": 2128.209,
+          "sim_s": 1749.4879,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 4,
+          "wall_s": 1177.558,
+          "sim_s": 918.1669,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 8,
+          "wall_s": 909.953,
+          "sim_s": 704.2124,
+          "norm": 1.0
+        }
+      ],
+      "notes": "9-point N x ranks sweep; norm=1.0 everywhere confirms the v1.0.6 dist gate buffer fix holds across the full sweep up to N=32/8r/64 GiB"
+    },
+    "jetson_cuda_statevec": {
+      "files": [
+        "src/backends/cuda_tegra_probe.{h,c}",
+        "src/backends/cuda_statevec.{h,cu}",
+        "examples/cuda/bell_jetson.cu"
+      ],
+      "host": "xavier (Jetson AGX Xavier, Volta GPU cc 7.2, 8 SMs, 30 GB unified)",
+      "memory_model": "cudaMallocManaged (unified) -- the tegra-correct path",
+      "smoke_results": [
+        {
+          "N": 12,
+          "state_bytes": "64 KB",
+          "bell": "PASS",
+          "wall_s": 0.01
+        },
+        {
+          "N": 20,
+          "state_bytes": "16 MB",
+          "bell": "PASS",
+          "wall_s": 0.1
+        },
+        {
+          "N": 24,
+          "state_bytes": "256 MB",
+          "bell": "PASS",
+          "wall_s": 0.38
+        },
+        {
+          "N": 27,
+          "state_bytes": "2 GB",
+          "bell": "PASS",
+          "wall_s": 17.6
+        }
+      ],
+      "notes": "first GPU backend on the fleet; tegra runtime probe auto-detected; wall time at N=27 dominated by final host-side state copy, not the kernels themselves"
     }
   }
 }
