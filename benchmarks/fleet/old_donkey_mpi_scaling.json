@@ -1,0 +1,19 @@
+{
+  "harness":  "moonlab/mpi-scaling/v1.0",
+  "host":     "old-donkey",
+  "date":     "2026-05-21T21:49:43Z",
+  "depth":    4,
+  "seed":     42,
+  "binary":   "build/large_state_random_circuit",
+  "points":   [
+    {"N": 28, "ranks": 2, "wall_s": 91.524, "sim_s": 70.9698, "norm": 1.0000000000}    ,
+    {"N": 28, "ranks": 4, "wall_s": 78.778, "sim_s": 63.9695, "norm": 1.0000000000}    ,
+    {"N": 28, "ranks": 8, "wall_s": 62.081, "sim_s": 48.6903, "norm": 1.0000000000}    ,
+    {"N": 30, "ranks": 2, "wall_s": 483.499, "sim_s": 356.2723, "norm": 1.0000000000}    ,
+    {"N": 30, "ranks": 4, "wall_s": 277.576, "sim_s": 223.6082, "norm": 1.0000000000}    ,
+    {"N": 30, "ranks": 8, "wall_s": 176.515, "sim_s": 136.5942, "norm": 1.0000000000}    ,
+    {"N": 32, "ranks": 2, "wall_s": 2128.209, "sim_s": 1749.4879, "norm": 1.0000000000}    ,
+    {"N": 32, "ranks": 4, "wall_s": 1177.558, "sim_s": 918.1669, "norm": 1.0000000000}    ,
+    {"N": 32, "ranks": 8, "wall_s": 909.953, "sim_s": 704.2124, "norm": 1.0000000000}
+  ]
+}
