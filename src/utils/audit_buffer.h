@@ -31,12 +31,24 @@
 #include "../applications/moonlab_api.h"
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Internal state machine: protects against the destroy / push
+ * race.  push/pop check state under the lock; destroy flips
+ * state to DEAD atomically AND under the lock so a thread that
+ * grabbed the lock before destroy can finish cleanly and a
+ * thread that came after sees the DEAD state and bails. */
+enum {
+    MOONLAB_AUDIT_STATE_UNINIT = 0,
+    MOONLAB_AUDIT_STATE_LIVE   = 1,
+    MOONLAB_AUDIT_STATE_DEAD   = 2,
+};
 
 /**
  * @brief Opaque audit-buffer state.  Caller owns the struct
@@ -48,16 +60,19 @@ typedef struct {
     size_t            record_size;  /* payload bytes per slot */
     size_t            capacity;     /* number of slots */
 
-    /* head = next slot to write; tail = next slot to read.
-     * head - tail (mod 2*capacity) gives the count of pending
-     * records, with the special case head == tail meaning empty
-     * (NOT full).  We track `count` explicitly to avoid the
-     * ambiguity.  All three under `lock`. */
+    /* Cursors + count + drops.  All under `lock`. */
     size_t            head;
     size_t            tail;
-    size_t            count;        /* pending records */
-    uint64_t          drops;        /* cumulative oldest-dropped count */
+    size_t            count;
+    uint64_t          drops;
     pthread_mutex_t   lock;
+
+    /* MOONLAB_AUDIT_STATE_*.  Loaded atomically before each
+     * operation.  Mutated only under the lock (except for the
+     * very first transition UNINIT -> LIVE inside init() and
+     * the final LIVE -> DEAD inside destroy(), both of which
+     * are single-threaded by the caller's contract). */
+    _Atomic int       state;
 } moonlab_audit_buffer_t;
 
 /**
