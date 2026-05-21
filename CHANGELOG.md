@@ -7,7 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-(No unreleased changes since v1.0.2.)
+**Open-core extension surfaces.**  Four runtime registries that let
+private overlays, sibling libraries (QGTL / libirrep / SbNN), and
+customer applications plug new behavior into a stock moonlab build
+without touching its source.  Public C ABI is the contract; no
+proprietary code lives in this repository.  CI hygiene grep rejects
+`PROPRIETARY:` / `TSOTCHKE-INTERNAL:` marker prefixes.
+
+### Added
+
+- **Vendor-noise profile runtime registry**
+  (`src/applications/vendor_noise_backend.{c,h}`).  Profile data
+  decoupled from backend registration so live-calibration scrapers
+  can push today's IBM Falcon / Rigetti Aspen / IonQ Forte snapshot
+  into a 32-slot mutex-protected registry; backends look profiles up
+  by name at execute time, so updates take effect in place.  Six
+  baked-in profiles auto-register via `pthread_once`:
+  `ibm-falcon-emu`, `rigetti-aspen-emu`, `ionq-forte-emu` plus
+  legacy bare-name aliases.  `moonlab_register_vendor_noise_profile`,
+  `_unregister`, `_lookup`, `_num`, `_list`.
+
+- **Decoder runtime registry**
+  (`src/applications/decoder_bench.{c,h}`).  Parallel to
+  `moonlab_register_backend`.  Five built-in decoders (`greedy`,
+  `mwpm_exact`, `sbnn`, `libirrep_single_shot`, `pymatching`)
+  auto-register on first use.  Enum dispatcher
+  (`moonlab_decoder_decode(slot, ...)`) now translates slot -> name
+  and delegates to the registry, so re-registering `"greedy"` with a
+  private implementation transparently takes over the enum path too.
+  New surface: `moonlab_register_decoder`, `_unregister`, `_lookup`,
+  `_decode_by_name`, `_num`, `_list`.
+
+- **Scheduler completion hook for billing / audit**
+  (`src/distributed/scheduler.{c,h}`).
+  `moonlab_scheduler_set_completion_hook(fn, ctx)` fires
+  synchronously on the caller thread after every successful
+  `scheduler_run` (skipped on backend errors) with the
+  `(job, results, backend_name, ctx)` tuple.  Use cases: billing
+  meter, audit log, customer dashboard.  Thread-safe via the
+  existing backend lock.
+
+- **Public-CI hygiene gate** (`.github/workflows/ci.yml`).  New
+  `public-hygiene` job greps src / bindings / tests / examples /
+  benchmarks / tools / deploy / scripts for explicit tag-prefix
+  markers (`// PROPRIETARY:`, `# ENTERPRISE:`,
+  `* TSOTCHKE-INTERNAL:`, `DO NOT COMMIT UPSTREAM:`).  Comment
+  anchoring keeps descriptive architectural commentary (text that
+  mentions "the private overlay" while explaining the design) from
+  false-positiving.
+
+- **`ionq-forte` -> `ionq-forte-emu` rename via the registry.**
+  Frees the bare `ionq-forte` namespace for QGTL's live IonQ
+  hardware backend.  Canonical `-emu` names are the recommended
+  surface; the three legacy bare names ship as aliases for one
+  release of compat.  Same RNG seed produces identical numbers
+  through alias and canonical paths.
+
+- **Python bindings for the new surfaces**
+  (`bindings/python/moonlab/{decoder.py,scheduler.py}`).
+  `VendorNoiseProfile` dataclass; `register_vendor_noise_profile`,
+  `lookup`, `unregister`, `list`; `set_completion_hook` /
+  `clear_completion_hook` with a ctypes trampoline that catches
+  Python exceptions before they unwind into C; `register_decoder`
+  / `unregister` / `lookup` / `list` / `decode_by_name`.  31 new
+  tests; full pytest suite green (262 passed, 12 libirrep-skipped).
+
+- **Rust bindings for the new surfaces**
+  (`bindings/rust/moonlab/src/{decoder.rs,scheduler.rs}` +
+  `bindings/rust/moonlab-sys/build.rs`).  `VendorNoiseProfile`
+  struct; `register_vendor_noise_profile` family; `CompletionInfo`
+  + `set_completion_hook(closure)` with a panic-catching
+  trampoline; `register_decoder(name, description, closure)` with
+  boxed-and-leaked slot pointers so the C runtime's ctx is always
+  valid even after unregister.  Bindgen wrapper extended to
+  include `vendor_noise_backend.h` and allowlist 11 new symbols.
+  9 decoder tests + 8 scheduler tests, 0 failures.
+
+- **JS / WASM bindings for the new surfaces**
+  (`bindings/javascript/packages/core/src/{decoder.ts,scheduler.ts}`
+  + `emscripten/{exports.txt,CMakeLists.txt}`).  Emscripten config
+  now exports `addFunction` / `removeFunction` with
+  `ALLOW_TABLE_GROWTH=1` so JS closures can be installed as C
+  function pointers.  `VendorNoiseProfile` interface;
+  `registerVendorNoiseProfile` family; `CompletionInfo` +
+  `setCompletionHook(cb)` / `clearCompletionHook`;
+  `registerDecoder` / `unregisterDecoder` / `lookupDecoder` /
+  `decodeByName` / `listDecoders` (all `async`).  7 new
+  integration tests that auto-skip until the WASM is rebuilt with
+  the new exports.
+
+- **Open-core overlay demo**
+  (`examples/extensions/open_core_overlay_demo.c`).  Single
+  executable that registers a custom backend, a custom vendor-noise
+  profile, a custom decoder, and a billing completion hook; runs
+  three Bell-pair jobs across `simulator` / `overlay-deterministic`
+  / live-snapshot backends; prints a $3.09 billing summary across
+  6144 shots.  Wired into ctest as `example_open_core_overlay_demo`
+  so the plug-in pipeline gets a link + dispatch smoke test on
+  every CI run.
+
+- **`COMMUNITY_EDITION.md`** documenting the public / commercial
+  product boundary, the open-core rules, and the release gate.
+
+### Fixed
+
+- **pymatching bridge edge-index convention**
+  (`src/applications/pymatching_bridge.py`).  The bridge built the
+  matching graph with horizontal and vertical edge loops swapped
+  relative to moonlab's `torus_edge_between` convention, so
+  corrections came back transposed across the lattice diagonal.
+  Inflated logical-error rates roughly 20x at d=5 p=0.01 -- same
+  shape as the pre-fix geodesic bug in `torus_edge_between`
+  itself.  Permanent regression test in
+  `tests/unit/test_decoder_bench.c` asserts a (0,0)-(1,0) defect
+  pair flips exactly one H edge and zero V edges.
+
+- **JS `_moonlab_job_set_rng_seed` ctypes signature.**  Type
+  declared 3 args (`h, seed_lo, seed_hi`) but the call site (and
+  Emscripten 3.0+ WASM_BIGINT mapping) passes a single bigint.
+  Pre-existing type bug masked because TypeScript wasn't being
+  strict-checked.  Fixed to `(h: number, seed: bigint)`.
 
 ## [1.0.2] - 2026-05-20
 
