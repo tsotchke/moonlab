@@ -431,6 +431,8 @@ slowly.
 
 ## 9. Capacity planning
 
+### Single-host (localhost / loopback)
+
 Re-measured 2026-05-21 against v1.0.5 on the moonlab smoke host
 (Apple M-series, 8-core arm64), via `benchmarks/control_plane_loadtest`:
 
@@ -450,6 +452,52 @@ Server config: `--max-concurrent 32 --rate-limit-rps 5000
 tenant-form AUTH adds a few microseconds of HMAC + protocol
 parsing per request; at 16 concurrent clients on 8 cores the
 worker pool is the binding constraint, not the AUTH overhead.
+
+### Cross-host (real WAN via Tailscale WireGuard tunnel)
+
+Measured 2026-05-21 against v1.0.5 across the moonlab fleet:
+server on atlas (macOS arm64, 8c), clients on cosbox (linux 6.8
+x86_64, 12c) and old-donkey (linux 7.0 x86_64, 88c).  Tunnel RTT
+atlas <-> cosbox: 146-156 ms (DERP-relayed, not direct).  Client
+runner: `tools/fleet_loadtest.py` (stdlib-only python; no moonlab
+build required on remote hosts).  Server config: `--max-concurrent
+64 --rate-limit-rps 20000 --rate-limit-burst 40000`.
+
+| Scenario                              | Throughput  | P50      | Errors |
+|---------------------------------------|-------------|----------|--------|
+| cosbox 8w solo, HMAC no tenant        |  19.6 req/s | 413 ms   | 0      |
+| cosbox 64w + donkey 64w concurrent    | ~300 req/s  | ~421 ms  | 84 / 2401 (3.5%) |
+| cosbox 16w tenant=acme-corp           |  41.4 req/s | 399 ms   | 0      |
+
+Per-request latency floor is ~400 ms = 3 RTT (TCP handshake +
+AUTH + verb/body + response) under the 150 ms tunnel RTT.
+Throughput scales with worker count up to the server's
+`--max-concurrent` ceiling; beyond that,
+`max_concurrent_rejected_total` counts the backpressure refusals.
+Errors at 128 concurrent workers (cosbox 64 + donkey 64) against
+max-concurrent=64 are expected backpressure, not protocol
+failures -- bump `--max-concurrent` to 256 to drop them to 0.
+
+Counters scraped post-cross-host-load on the v1.0.5 server hold
+the round-1 partition invariant: `rejected_total` counts only
+bad-input / auth / execute failures, `admission_refused_total` is
+independent (was 0 in this run since no admission hook was
+installed).  `max_concurrent_rejected_total = 9` was the genuine
+backpressure signal.
+
+### Re-run cross-host
+
+```bash
+# On the server host (e.g. atlas):
+build/moonlab-control-server --host 0.0.0.0 --port 17075 \
+    --secret-file /tmp/fleet-secret.bin \
+    --max-concurrent 256 --rate-limit-rps 20000 --rate-limit-burst 40000 &
+
+# On any client host with python3.6+ (no moonlab build needed):
+python3 tools/fleet_loadtest.py --host <server-ip> --port 17075 \
+    --secret <ascii-secret> --workers 32 --duration 10 \
+    [--tenant acme-corp]
+```
 
 Re-run on your host:
 
