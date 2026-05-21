@@ -37,6 +37,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Admission-hook observer shared with the test function defined below. */
+typedef struct { int n_calls; char last_tenant[64]; } admission_obs_t;
+
+static int admission_hook_refuse_acme(const char *tid, const char *verb,
+                                      int n_qubits, int n_shots,
+                                      void *ctx_p)
+{
+    (void)verb; (void)n_qubits; (void)n_shots;
+    admission_obs_t *o = (admission_obs_t *)ctx_p;
+    o->n_calls++;
+    snprintf(o->last_tenant, sizeof(o->last_tenant),
+             "%s", tid ? tid : "");
+    /* Reject acme-corp, allow everything else (including no tenant). */
+    if (tid && strcmp(tid, "acme-corp") == 0) {
+        return MOONLAB_CONTROL_REJECTED;
+    }
+    return 0;
+}
+
 static int failures = 0;
 #define CHECK(cond, fmt, ...) do {                              \
     if (!(cond)) {                                              \
@@ -169,6 +188,47 @@ int main(void)
     }
 
     moonlab_scheduler_set_completion_hook(NULL, NULL);
+
+    /* ---- Admission hook: refuse one tenant, allow another ---- */
+    fprintf(stdout, "\n--- admission hook: refuse acme, allow beta ---\n");
+    admission_obs_t aobs = {0};
+
+    rc = moonlab_control_server_open("127.0.0.1", 0, &server, &port);
+    CHECK(rc == 0, "server_open rc=%d", rc);
+    moonlab_control_server_set_secret(server, shared_secret,
+                                      sizeof(shared_secret) - 1);
+    moonlab_control_server_set_admission_hook(
+        server, admission_hook_refuse_acme, &aobs);
+    ra.server = server; ra.rc = 0;
+    pthread_create(&tid, NULL, run_thread, &ra);
+
+    /* acme-corp -> hook refuses with REJECTED. */
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port, "acme-corp",
+        shared_secret, sizeof(shared_secret) - 1, text, 0, &probs, &num);
+    CHECK(rc == MOONLAB_CONTROL_REJECTED,
+          "acme-corp refused by admission hook (rc=%d expected -405)", rc);
+    free(probs);
+
+    /* beta-startup -> hook allows. */
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port, "beta-startup",
+        shared_secret, sizeof(shared_secret) - 1, text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "beta-startup allowed by admission hook (rc=%d num=%zu)",
+          rc, num);
+    free(probs);
+
+    moonlab_control_server_shutdown(server);
+    pthread_join(tid, NULL);
+    moonlab_control_server_close(server);
+
+    CHECK(aobs.n_calls == 2, "admission hook fired twice (got %d)", aobs.n_calls);
+    CHECK(strcmp(aobs.last_tenant, "beta-startup") == 0,
+          "hook last saw beta-startup (got %s)", aobs.last_tenant);
+
     free(text);
     fprintf(stdout, "\n=== %d failure(s) ===\n", failures);
     return failures ? 1 : 0;

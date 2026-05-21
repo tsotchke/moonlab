@@ -241,9 +241,11 @@ static int io_recv_tls(SSL *ssl, void *buf, size_t len)
 #define MOONLAB_CONTROL_MAX_BODY_BYTES (1L << 22)   /* 4 MB. */
 #define MOONLAB_CONTROL_MAX_SHOTS      (1L << 20)   /* 1 M samples (8 MB). */
 
-static int handle_one_request(moonlab_io_t  *io,
-                              const uint8_t *secret,
-                              size_t         secret_len)
+static int handle_one_request(moonlab_io_t              *io,
+                              const uint8_t             *secret,
+                              size_t                     secret_len,
+                              moonlab_admission_hook_fn  admission_hook,
+                              void                      *admission_hook_ctx)
 {
     const double t0 = log_enabled() ? monotonic_ms() : 0.0;
     const char  *log_verb       = "?";
@@ -531,6 +533,30 @@ static int handle_one_request(moonlab_io_t  *io,
         LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
     }
 
+    /* Admission hook (v1.0.3): pre-dispatch refusal for per-tenant
+     * quotas / rate limits / tier gating.  num_qubits is not known
+     * yet (it comes from the circuit body); we pass -1 in that slot
+     * so the hook knows it has not been parsed.  Overlays that need
+     * num_qubits enforcement should pre-bound it via a circuit-size
+     * cap on body_bytes, or accept that the qubit count is checked
+     * post-deserialise inside execute. */
+    if (admission_hook) {
+        const char *tid =
+            (client_tenant_id[0] != '\0') ? client_tenant_id : NULL;
+        const int amrc = admission_hook(
+            tid, log_verb, /*num_qubits=*/-1,
+            mode_shots ? (int)num_shots : 0,
+            admission_hook_ctx);
+        if (amrc != 0) {
+            const char *msg =
+                (amrc == MOONLAB_CONTROL_RATE_LIMITED) ? "tenant rate-limited"
+                : (amrc == MOONLAB_CONTROL_REJECTED)   ? "tenant rejected"
+                                                       : "admission refused";
+            send_err(io, amrc, msg);
+            LOG_AND_RETURN(amrc);
+        }
+    }
+
     char *body = (char *)malloc((size_t)body_bytes + 1);
     if (!body) {
         send_err(io, MOONLAB_CONTROL_OOM, "body alloc");
@@ -654,13 +680,22 @@ typedef struct {
      * thread can decrement on exit, holding the concurrency cap.  NULL
      * when no cap is configured (max_concurrent == 0). */
     _Atomic int   *active_counter;
+    /* Admission hook (since v1.0.3); NULL when no hook is installed.
+     * Copied from the server struct into each worker_ctx so the
+     * handler thread can dispatch into it without touching the
+     * server struct (which may be mutated by a concurrent
+     * set_admission_hook from a different thread). */
+    moonlab_admission_hook_fn admission_hook;
+    void                     *admission_hook_ctx;
 } worker_ctx_t;
 
 #define RL_KEY_BYTES 16  /* IPv6-canonical 16-byte rate-limit key. */
 
-static int handle_one_request(moonlab_io_t  *io,
-                              const uint8_t *secret,
-                              size_t         secret_len);
+static int handle_one_request(moonlab_io_t              *io,
+                              const uint8_t             *secret,
+                              size_t                     secret_len,
+                              moonlab_admission_hook_fn  admission_hook,
+                              void                      *admission_hook_ctx);
 static int rl_take_token(moonlab_control_server_t *s,
                          const uint8_t key[RL_KEY_BYTES]);
 static int rl_extract_key(const struct sockaddr_storage *peer,
@@ -685,6 +720,11 @@ static void *worker_thread(void *arg)
     memcpy(sec, ctx->secret, slen);
     /* Capture the active-counter pointer before we free the heap ctx. */
     _Atomic int *ctx_active_counter = ctx->active_counter;
+    /* Capture the admission hook + ctx the same way -- the heap
+     * ctx is freed before handle_one_request runs, so we must not
+     * dereference it inside the call. */
+    moonlab_admission_hook_fn ctx_admission_hook     = ctx->admission_hook;
+    void                     *ctx_admission_hook_ctx = ctx->admission_hook_ctx;
 
     /* Apply per-request socket timeout if configured (v0.8.26).  We set
      * SO_RCVTIMEO / SO_SNDTIMEO on the accepted fd so any recv()/send()
@@ -724,7 +764,9 @@ static void *worker_thread(void *arg)
     memset(ctx->secret, 0, sizeof(ctx->secret));
     free(ctx);
 
-    (void)handle_one_request(&io, slen > 0 ? sec : NULL, slen);
+    (void)handle_one_request(&io, slen > 0 ? sec : NULL, slen,
+                             ctx_admission_hook,
+                             ctx_admission_hook_ctx);
 
 #ifdef MOONLAB_HAVE_TLS
     if (io.ssl) {
@@ -854,6 +896,12 @@ struct moonlab_control_server {
     /* Concurrent in-flight cap (since v0.9.0).  0 = no cap. */
     int             max_concurrent;
     _Atomic int     active_workers;
+    /* Admission hook (since v1.0.3).  Called after the verb header
+     * is parsed but before the circuit body is read; the overlay
+     * uses it to refuse jobs that exceed per-tenant quotas / paid-
+     * tier limits.  NULL = allow everything (default). */
+    moonlab_admission_hook_fn admission_hook;
+    void                     *admission_hook_ctx;
 };
 
 #ifdef MOONLAB_HAVE_TLS
@@ -1095,7 +1143,9 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             inline_io.fd = client;
             (void)handle_one_request(&inline_io,
                                      s->secret_len > 0 ? s->secret : NULL,
-                                     s->secret_len);
+                                     s->secret_len,
+                                     s->admission_hook,
+                                     s->admission_hook_ctx);
             close(client);
             served++;
             continue;
@@ -1108,13 +1158,17 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
         if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
         ctx->request_timeout_secs = s->request_timeout_secs;
         ctx->active_counter = (s->max_concurrent > 0) ? &s->active_workers : NULL;
+        ctx->admission_hook     = s->admission_hook;
+        ctx->admission_hook_ctx = s->admission_hook_ctx;
 
         if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
             moonlab_io_t inline_io = { 0 };
             inline_io.fd = client;
             (void)handle_one_request(&inline_io,
                                      ctx->secret_len > 0 ? ctx->secret : NULL,
-                                     ctx->secret_len);
+                                     ctx->secret_len,
+                                     ctx->admission_hook,
+                                     ctx->admission_hook_ctx);
             close(client);
             memset(ctx->secret, 0, sizeof(ctx->secret));
             /* The worker never ran; balance the active-counter
@@ -1247,6 +1301,20 @@ int moonlab_control_server_set_request_timeout(moonlab_control_server_t *s,
 {
     if (!s || timeout_secs < 0) return MOONLAB_CONTROL_BAD_ARG;
     s->request_timeout_secs = timeout_secs;
+    return MOONLAB_CONTROL_OK;
+}
+
+int moonlab_control_server_set_admission_hook(moonlab_control_server_t  *s,
+                                              moonlab_admission_hook_fn  hook,
+                                              void                      *ctx)
+{
+    if (!s) return MOONLAB_CONTROL_BAD_ARG;
+    /* Single-slot.  Atomic-ish on most archs since this is a pointer
+     * write; a connection-thread reading in parallel will see either
+     * the old or new hook, not a torn value.  Caller is expected to
+     * install the hook before run() and not toggle it mid-flight. */
+    s->admission_hook     = hook;
+    s->admission_hook_ctx = ctx;
     return MOONLAB_CONTROL_OK;
 }
 
