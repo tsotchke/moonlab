@@ -385,6 +385,28 @@ moonlab_scheduler_current_tenant_id(void);
 MOONLAB_API const char *
 moonlab_scheduler_current_request_id(void);
 
+/**
+ * @brief Synchronously fire the currently-installed completion hook
+ *        with caller-supplied arguments.  Used by execution paths
+ *        that do not go through @ref moonlab_scheduler_run -- in
+ *        particular the control plane's `moonlab_qgtl_execute`
+ *        dispatch, which still needs to attribute jobs to the
+ *        registered billing / audit hook.
+ *
+ *        No-op if no hook is registered.  The hook reads the
+ *        current thread's request context via
+ *        @ref moonlab_scheduler_current_tenant_id, so the caller
+ *        must have set it before the underlying execute.
+ *
+ *        Hook ctx is the value passed at set_completion_hook time;
+ *        the caller does not supply it.  job + results + backend_name
+ *        pass through directly.
+ */
+MOONLAB_API void
+moonlab_scheduler_fire_completion_hook(const moonlab_job_t          *job,
+                                       const moonlab_job_results_t  *results,
+                                       const char                   *backend_name);
+
 #ifdef __cplusplus
 }
 #endif
