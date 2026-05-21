@@ -4,7 +4,7 @@
 image:
   registry:  docker.io
   repository: moonlab
-  tag:        "0.10.0"
+  tag:        "1.0.3"
   pullPolicy: IfNotPresent
 
 # ----------------------------------------------------------------------
