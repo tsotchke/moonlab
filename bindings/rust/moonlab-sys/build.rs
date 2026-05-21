@@ -177,6 +177,7 @@ fn main() {
 #include "{root}/src/integration/libirrep_bridge.h"
 #include "{root}/src/applications/moonlab_qgtl_backend.h"
 #include "{root}/src/applications/decoder_bench.h"
+#include "{root}/src/applications/vendor_noise_backend.h"
 #include "{root}/src/distributed/scheduler.h"
 #include "{root}/src/control/control_plane.h"
 "#, root = project_root.display());
@@ -406,6 +407,25 @@ fn main() {
         .allowlist_function("moonlab_decoder_decode")
         .allowlist_function("moonlab_decoder_slot_available")
         .allowlist_function("moonlab_decoder_slot_name")
+        // Decoder runtime registry (since v1.0.3).
+        .allowlist_type("moonlab_decoder_fn")
+        .allowlist_type("moonlab_decoder_entry_t")
+        .allowlist_function("moonlab_register_decoder")
+        .allowlist_function("moonlab_unregister_decoder")
+        .allowlist_function("moonlab_lookup_decoder")
+        .allowlist_function("moonlab_decoder_decode_by_name")
+        .allowlist_function("moonlab_num_decoders")
+        .allowlist_function("moonlab_list_decoders")
+        // Vendor-noise profile registry (since v1.0.3).
+        .allowlist_type("moonlab_vendor_noise_profile_t")
+        .allowlist_function("moonlab_register_vendor_noise_profile")
+        .allowlist_function("moonlab_unregister_vendor_noise_profile")
+        .allowlist_function("moonlab_lookup_vendor_noise_profile")
+        .allowlist_function("moonlab_num_vendor_noise_profiles")
+        .allowlist_function("moonlab_list_vendor_noise_profiles")
+        // Scheduler completion hook (since v1.0.3).
+        .allowlist_type("moonlab_completion_hook_fn")
+        .allowlist_function("moonlab_scheduler_set_completion_hook")
         // Distributed scheduler (since v0.7.0).
         .allowlist_type("moonlab_job")
         .allowlist_type("moonlab_job_results_t")
