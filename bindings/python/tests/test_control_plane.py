@@ -181,6 +181,76 @@ def test_tenant_id_length_bounds():
                        secret=secret, tenant_id="x" * 64)
 
 
+def test_admission_hook_refuses_acme_allows_beta():
+    """v1.0.3: install a python admission hook that refuses acme-corp
+    and allows beta-startup.  Mirrors the C-side check in
+    tests/integration/test_control_plane_tenant.c."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+
+    fired = []
+
+    def admission(tenant_id, verb, num_qubits, num_shots):
+        fired.append((tenant_id, verb, num_qubits, num_shots))
+        if tenant_id == "acme-corp":
+            return -405      # MOONLAB_CONTROL_REJECTED
+        return 0
+
+    with ControlPlaneServer(host="127.0.0.1", port=0, secret=secret) as srv:
+        srv.set_admission_hook(admission)
+        with pytest.raises(ControlPlaneError):
+            submit_circuit("127.0.0.1", srv.port, text,
+                           secret=secret, tenant_id="acme-corp")
+        probs = submit_circuit("127.0.0.1", srv.port, text,
+                               secret=secret, tenant_id="beta-startup")
+        assert abs(probs[0] - 0.5) < 1e-9
+        assert abs(probs[3] - 0.5) < 1e-9
+        assert len(fired) == 2
+        assert fired[0][0] == "acme-corp"
+        assert fired[1][0] == "beta-startup"
+        # Verb is CIRCUIT in both
+        assert fired[0][1] == "CIRCUIT"
+        assert fired[1][1] == "CIRCUIT"
+
+
+def test_admission_hook_clear_via_none():
+    """Clearing the hook removes it; subsequent requests go through."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+
+    def refuse_everything(_tid, _verb, _nq, _ns):
+        return -405
+
+    with ControlPlaneServer(host="127.0.0.1", port=0, secret=secret) as srv:
+        srv.set_admission_hook(refuse_everything)
+        with pytest.raises(ControlPlaneError):
+            submit_circuit("127.0.0.1", srv.port, text,
+                           secret=secret, tenant_id="alpha")
+        # Clear it.
+        srv.set_admission_hook(None)
+        probs = submit_circuit("127.0.0.1", srv.port, text,
+                               secret=secret, tenant_id="alpha")
+        assert abs(probs[0] - 0.5) < 1e-9
+
+
+def test_admission_hook_swallows_python_exception():
+    """A misbehaving hook that raises must not destabilise the server;
+    the trampoline catches and refuses."""
+    text = _bell_circuit_text()
+    secret = b"python-tenant-smoke-2026"
+
+    def buggy(_tid, _verb, _nq, _ns):
+        raise RuntimeError("intentional fault")
+
+    with ControlPlaneServer(host="127.0.0.1", port=0, secret=secret) as srv:
+        srv.set_admission_hook(buggy)
+        with pytest.raises(ControlPlaneError):
+            submit_circuit("127.0.0.1", srv.port, text,
+                           secret=secret, tenant_id="gamma")
+        # Server is still healthy -- prove with HEALTH probe.
+        submit_health("127.0.0.1", srv.port)
+
+
 def test_two_tenants_in_sequence():
     """A real customer flow: tenant A submits, then tenant B
     submits, both get correct results.  The server treats them as
