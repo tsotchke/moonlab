@@ -170,6 +170,27 @@ int main(void)
           "submit_circuit_auth (legacy) rc=%d num=%zu", rc, num);
     free(probs);
 
+    /* v1.0.4 metric: verify completion_hook_fires_total actually
+     * increments alongside the python-side hook.n_fires count.
+     * Without this assertion the C-side counter could be silently
+     * stuck at 0 and the existing test_control_plane_metrics
+     * "line is present" check would still pass. */
+    char *cmetrics = NULL;
+    rc = moonlab_control_submit_metrics("127.0.0.1", port, &cmetrics);
+    CHECK(rc == 0 && cmetrics != NULL,
+          "metrics scrape during completion-hook leg rc=%d", rc);
+    if (cmetrics) {
+        const char *cf_prefix =
+            "\nmoonlab_control_completion_hook_fires_total ";
+        const char *p = strstr(cmetrics, cf_prefix);
+        long fires = -1;
+        if (p) sscanf(p + strlen(cf_prefix), "%ld", &fires);
+        CHECK(fires >= 3,
+              "completion_hook_fires_total >= 3 after 3 hook invocations "
+              "(got %ld)", fires);
+        free(cmetrics);
+    }
+
     moonlab_control_server_shutdown(server);
     pthread_join(tid, NULL);
     moonlab_control_server_close(server);
