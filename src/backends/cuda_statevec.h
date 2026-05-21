@@ -102,6 +102,59 @@ moonlab_cuda_apply_cnot(moonlab_cuda_state_t *state,
                         uint32_t target);
 
 /**
+ * @brief Apply an arbitrary 4x4 unitary to qubits (q0, q1).
+ *        ``m`` is 32 doubles: row-major 16 complex entries in
+ *        {re, im} pairs.  Basis ordering is |q1 q0> with q0 the
+ *        low bit -- matching CNOT(control=q1, target=q0) when
+ *        the 4x4 is the standard CNOT matrix.
+ *
+ *        Kernel structure: one thread per quadruple
+ *        (i00, i01, i10, i11) -- the four state indices that
+ *        share all other-qubit values and differ only in (q0, q1).
+ *        Each thread does a 4x4 complex matvec.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_2q(moonlab_cuda_state_t *state,
+                      uint32_t q0,
+                      uint32_t q1,
+                      const double m[32]);
+
+/**
+ * @brief Probability of measuring qubit `target` as |1>.
+ *        Sums |amps[k]|^2 over all k with bit `target` set.
+ *
+ *        Kernel: parallel reduction on the GPU, single double
+ *        scalar returned to host.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_prob_z(const moonlab_cuda_state_t *state,
+                    uint32_t target,
+                    double *out_prob);
+
+/**
+ * @brief Total state-vector squared norm.  For an ideal unitary
+ *        circuit this stays at 1.0; useful as a quick health
+ *        check on numerical drift through long circuits.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_norm(const moonlab_cuda_state_t *state,
+                  double *out_norm);
+
+/**
+ * @brief Convenience: apply Pauli-X (NOT) to a qubit.  Equivalent
+ *        to apply_1q with [[0,1],[1,0]] but avoids the matmul.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_x(moonlab_cuda_state_t *state, uint32_t target);
+
+/**
+ * @brief Convenience: apply Hadamard to a qubit.  Same as
+ *        apply_1q with (1/sqrt(2)) [[1,1],[1,-1]].
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_h(moonlab_cuda_state_t *state, uint32_t target);
+
+/**
  * @brief Copy amplitudes out to caller-provided host buffer.
  *        ``out`` must hold dim * 2 doubles (real, imag interleaved).
  *

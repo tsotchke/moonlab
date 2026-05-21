@@ -1346,7 +1346,13 @@ if(QSIM_HAS_CUDA)
     set_target_properties(quantumsim PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
-        CUDA_SEPARABLE_COMPILATION ON
+        # CUDA_SEPARABLE_COMPILATION=ON triggers the nvlink device-link step
+        # which fails on jetpack-nixos ("elfLink linker library load error")
+        # because nvlink expects nvptxcompiler libs in paths the nix runtime
+        # closure doesn't expose by default.  Our kernels don't __device__-
+        # call each other across .cu files, so separable compilation is
+        # unnecessary -- turn it OFF and rely on whole-program compile.
+        CUDA_SEPARABLE_COMPILATION OFF
     )
 endif()
 
