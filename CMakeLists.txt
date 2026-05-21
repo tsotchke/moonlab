@@ -483,6 +483,51 @@ endif()
 #                          without cuQuantum if the libraries are
 #                          missing on a Tegra host.
 if(QSIM_ENABLE_CUDA OR QSIM_ENABLE_CUQUANTUM)
+    # Normalize CUDA_ARCHITECTURES before enable_language so cmake
+    # picks up the "-real" suffix.  Bare numbers like "72" produce
+    # the bracket form code=[compute_72,sm_72] which includes
+    # device-LTO IR and triggers `-dlto` at device-link time.
+    # On jetpack-nixos that fails ("elfLink linker library load
+    # error") because the LTO plugin isn't on nvlink's dlopen path.
+    # "-real" suffix tells cmake to emit only SASS for that arch,
+    # which avoids LTO entirely.
+    if(DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(_qsim_cuda_arch_real)
+        foreach(_a IN LISTS CMAKE_CUDA_ARCHITECTURES)
+            if(_a MATCHES "^[0-9]+$")
+                list(APPEND _qsim_cuda_arch_real "${_a}-real")
+            else()
+                list(APPEND _qsim_cuda_arch_real "${_a}")
+            endif()
+        endforeach()
+        set(CMAKE_CUDA_ARCHITECTURES ${_qsim_cuda_arch_real} CACHE STRING "" FORCE)
+        message(STATUS "CUDA: arch normalized -> ${CMAKE_CUDA_ARCHITECTURES}")
+    endif()
+
+    # jetpack-nixos auto-wiring -- happens BEFORE enable_language(CUDA)
+    # so the CUDA compiler identification probe finds cuda_runtime.h.
+    # On stock jetpack-nixos the cudatoolkit is split into several
+    # /nix/store paths (cuda-merged-X.Y has the includes, cuda_nvcc-X.Y
+    # has nvcc).  nvcc auto-finds its own include but not the merged
+    # tree.  Pre-seed CMAKE_CUDA_FLAGS so the probe + every TU sees it.
+    if(EXISTS "/etc/nv_tegra_release")
+        message(STATUS "CUDA: jetpack-nixos detected, pre-seeding include path")
+        # Glob the nix store for a cuda-merged tree containing cuda_runtime.h.
+        file(GLOB _qsim_cuda_merged_globs
+            "/nix/store/*-cuda-merged-*/include/cuda_runtime.h"
+            "/nix/store/*-cuda_cudart-*/include/cuda_runtime.h")
+        if(_qsim_cuda_merged_globs)
+            list(GET _qsim_cuda_merged_globs 0 _qsim_cuda_runtime_h)
+            get_filename_component(QSIM_CUDA_MERGED_INCLUDE "${_qsim_cuda_runtime_h}" DIRECTORY)
+            message(STATUS "  cuda_runtime.h: ${QSIM_CUDA_MERGED_INCLUDE}")
+            # Inject into CUDA flags BEFORE enable_language so the compiler
+            # identification probe and every subsequent .cu file finds it.
+            set(CMAKE_CUDA_FLAGS_INIT "-isystem=${QSIM_CUDA_MERGED_INCLUDE} ${CMAKE_CUDA_FLAGS_INIT}")
+            set(CMAKE_CUDA_FLAGS      "-isystem=${QSIM_CUDA_MERGED_INCLUDE} ${CMAKE_CUDA_FLAGS}")
+        endif()
+        set(QSIM_PLATFORM_JETPACK_NIXOS ON)
+    endif()
+
     include(CheckLanguage)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
@@ -1330,8 +1375,22 @@ if(QSIM_HAS_CUDA)
     # (Ampere integrated).  Other lines: 70 V100, 75 Turing, 80 A100,
     # 86 Ada, 89 RTX 40-series, 90 H100.  Override via
     # -DCMAKE_CUDA_ARCHITECTURES=NN to target a specific device.
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 70 72 75 80 86 87 89 90)
+    #
+    # The "-real" suffix tells cmake to emit only SASS for that arch
+    # (no embedded PTX, no LTO-IR).  We need this because the
+    # bracket-notation cmake otherwise generates (code=[compute_X,sm_X])
+    # triggers `-dlto` in the device-link step, which fails on
+    # jetpack-nixos with "nvlink fatal: elfLink linker library load
+    # error" because the LTO plugin isn't resolvable from nvlink's
+    # dlopen path.  We forfeit forward-JIT compatibility (PTX
+    # embedded) for a working build; this is the right trade for
+    # in-tree backend kernels where we control the deployment target.
+    # Architecture list -- only fires when caller didn't pass one.
+    # The bare numbers here would be auto-promoted by the normalization
+    # block above when CMAKE_CUDA_ARCHITECTURES is already set; this
+    # default path provides "-real" directly.
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+        set(CMAKE_CUDA_ARCHITECTURES 70-real 72-real 75-real 80-real 86-real 87-real 89-real 90-real)
     endif()
 
     # Compile the moonlab CUDA backend.  cuda_tegra_probe.c is plain
@@ -1343,17 +1402,46 @@ if(QSIM_HAS_CUDA)
         src/backends/cuda_statevec.cu
     )
 
+    # Separable-compilation policy.
+    #
+    # CMake 4.x emits `-dlto` (device LTO) at the device-link step
+    # whenever CUDA_SEPARABLE_COMPILATION=ON, with no documented
+    # off-switch -- not via INTERPROCEDURAL_OPTIMIZATION, not via the
+    # "-real" arch suffix.  On jetpack-nixos R35 (CUDA 11.4) the nvlink
+    # binary can't dlopen the LTO IR plugin from its nix-store path,
+    # so any separable-compilation build fails with "nvlink fatal:
+    # elfLink linker library load error".
+    #
+    # Our backend doesn't require cross-TU device-symbol resolution:
+    # each .cu file defines its own __global__ kernels, and the only
+    # __constant__ memory block (k_apply_2q_M in cuda_statevec.cu) is
+    # referenced only from kernels in the same TU.  So we don't
+    # actually need separable compilation, and turning it OFF is the
+    # correct platform-aware choice -- not a workaround.
+    #
+    # If a future kernel needs to share device symbols across TUs,
+    # the conditions to turn this back ON are:
+    #   - on jetpack-nixos: nvlink's LTO plugin path becomes resolvable
+    #     (jetpack-nixos contributes a wrapper, or CUDA 12.6+ removes
+    #     the LTO dep at device link)
+    #   - on stock linux + CUDA 12+: should already work
     set_target_properties(quantumsim PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
-        # CUDA_SEPARABLE_COMPILATION=ON triggers the nvlink device-link step
-        # which fails on jetpack-nixos ("elfLink linker library load error")
-        # because nvlink expects nvptxcompiler libs in paths the nix runtime
-        # closure doesn't expose by default.  Our kernels don't __device__-
-        # call each other across .cu files, so separable compilation is
-        # unnecessary -- turn it OFF and rely on whole-program compile.
         CUDA_SEPARABLE_COMPILATION OFF
     )
+
+    # jetpack-nixos rpath wiring (include path was set pre-enable_language).
+    # The L4T driver stub libcuda.so.1 lives in nixpkgs's GL-driver compat
+    # path.  Add it to BUILD_RPATH so binaries linked against quantumsim
+    # find the driver at runtime without LD_LIBRARY_PATH boilerplate.
+    if(QSIM_PLATFORM_JETPACK_NIXOS AND EXISTS "/run/opengl-driver/lib/libcuda.so.1")
+        message(STATUS "CUDA: jetpack-nixos libcuda stub at /run/opengl-driver/lib")
+        set_property(TARGET quantumsim APPEND PROPERTY
+            BUILD_RPATH    "/run/opengl-driver/lib")
+        set_property(TARGET quantumsim APPEND PROPERTY
+            INSTALL_RPATH  "/run/opengl-driver/lib")
+    endif()
 endif()
 
 if(QSIM_HAS_CUQUANTUM)
