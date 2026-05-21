@@ -196,6 +196,47 @@ finally:
         host: '127.0.0.1', port: authPort, circuitText: text,
         secret: Buffer.from('wrong-key'),
       })).rejects.toMatchObject({ name: 'ControlPlaneError' });
+
+      // v1.0.3: tenant-form AUTH (`AUTH <tenant>:<hmac>\n`).
+      const tenantProbs = await submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        secret: Buffer.from('shared-key-bytes'),
+        tenantId: 'acme-corp',
+      });
+      expect(tenantProbs).toHaveLength(4);
+      expect(tenantProbs[0]).toBeCloseTo(0.5, 10);
+      expect(tenantProbs[3]).toBeCloseTo(0.5, 10);
+
+      // Two distinct tenants in sequence -- both succeed.
+      for (const tid of ['beta-startup', 'gamma.industries', 'delta_inc']) {
+        const p = await submitCircuit({
+          host: '127.0.0.1', port: authPort, circuitText: text,
+          secret: Buffer.from('shared-key-bytes'),
+          tenantId: tid,
+        });
+        expect(p[0]).toBeCloseTo(0.5, 10);
+        expect(p[3]).toBeCloseTo(0.5, 10);
+      }
+
+      // tenantId without secret -- rejected client-side.
+      await expect(submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        tenantId: 'acme-corp',
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
+
+      // Illegal-char tenant_id -- rejected client-side.
+      await expect(submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        secret: Buffer.from('shared-key-bytes'),
+        tenantId: 'acme;rm -rf /',
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
+
+      // Oversize tenant_id -- rejected client-side.
+      await expect(submitCircuit({
+        host: '127.0.0.1', port: authPort, circuitText: text,
+        secret: Buffer.from('shared-key-bytes'),
+        tenantId: 'x'.repeat(64),
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
     } finally {
       authProc.kill('SIGINT');
       await new Promise((r) => authProc.once('exit', r));

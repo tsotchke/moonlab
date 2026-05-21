@@ -76,6 +76,12 @@ export interface SubmitCircuitArgs {
    *  matching secret configured via
    *  ``moonlab_control_server_set_secret``. */
   secret?: Buffer | string;
+  /** Tenant identifier (since v1.0.3).  When set with ``secret``,
+   *  the prelude becomes ``AUTH <tenantId>:<hexdigest>\n`` and the
+   *  server's scheduler completion hook reads the tenant_id for
+   *  billing / audit attribution.  Charset ``[A-Za-z0-9_.-]``,
+   *  length 1..63.  Passing without ``secret`` rejects client-side. */
+  tenantId?: string;
 }
 
 export interface SubmitShotsArgs extends SubmitCircuitArgs {
@@ -259,13 +265,34 @@ function parseHeader(line: Buffer, rest: Buffer): ReplyFraming {
 /** Compute the AUTH-prelude hexdigest for a given verb line.  The
  *  message is the verb line *including* the trailing newline -- this
  *  matches the C server's `hmac_sha3_256(secret, hdr, hdr_len)`
- *  call where `hdr_len` includes the `\n`. */
-function authPrelude(secret: Buffer | string, verbLine: Buffer): Buffer {
+ *  call where `hdr_len` includes the `\n`.  Optional tenant_id
+ *  (since v1.0.3) produces the ``AUTH <tenant>:<hex>\n`` wire form. */
+function authPrelude(secret: Buffer | string, verbLine: Buffer,
+                     tenantId?: string): Buffer {
   const key = typeof secret === 'string' ? Buffer.from(secret, 'utf-8') : secret;
   const h = crypto.createHmac('sha3-256', key);
   h.update(verbLine);
   const hex = h.digest('hex');
+  if (tenantId) {
+    return Buffer.from(`AUTH ${tenantId}:${hex}\n`, 'ascii');
+  }
   return Buffer.from(`AUTH ${hex}\n`, 'ascii');
+}
+
+const TENANT_ID_RE = /^[A-Za-z0-9_.-]{1,63}$/;
+
+function validateTenantId(tenantId: string, secret: Buffer | string | undefined): void {
+  if (secret === undefined) {
+    throw new ControlPlaneError(
+      'tenantId requires secret; the server uses HMAC to authenticate ' +
+      'the request regardless of tenant identity',
+      MOONLAB_CONTROL_BAD_ARG);
+  }
+  if (!TENANT_ID_RE.test(tenantId)) {
+    throw new ControlPlaneError(
+      `tenantId ${JSON.stringify(tenantId)} must match [A-Za-z0-9_.-]{1,63}`,
+      MOONLAB_CONTROL_BAD_ARG);
+  }
 }
 
 function rejectionFromErr(remainder: string): ControlPlaneError {
@@ -291,10 +318,11 @@ export async function submitCircuit(args: SubmitCircuitArgs): Promise<number[]> 
   const timeoutMs = args.timeoutMs ?? 30_000;
   const sock = await openSocket({ ...args, timeoutMs });
   try {
+    if (args.tenantId !== undefined) validateTenantId(args.tenantId, args.secret);
     const body = Buffer.from(args.circuitText, 'utf-8');
     const verbLine = Buffer.from(`CIRCUIT ${body.length}\n`, 'ascii');
     if (args.secret) {
-      sock.write(authPrelude(args.secret, verbLine));
+      sock.write(authPrelude(args.secret, verbLine, args.tenantId));
     }
     sock.write(verbLine);
     sock.write(body);
@@ -325,11 +353,12 @@ export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
   const timeoutMs = args.timeoutMs ?? 30_000;
   const sock = await openSocket({ ...args, timeoutMs });
   try {
+    if (args.tenantId !== undefined) validateTenantId(args.tenantId, args.secret);
     const body = Buffer.from(args.circuitText, 'utf-8');
     const verbLine = Buffer.from(
       `SHOTS ${args.numShots} ${body.length}\n`, 'ascii');
     if (args.secret) {
-      sock.write(authPrelude(args.secret, verbLine));
+      sock.write(authPrelude(args.secret, verbLine, args.tenantId));
     }
     sock.write(verbLine);
     sock.write(body);
