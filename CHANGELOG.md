@@ -282,6 +282,28 @@ JS server host in moonlab is the Python test harness, not a
 Node-built server; pure-Node overlays should write the server in
 Python or Rust and use the JS client only for submission.
 
+### Token-bucket bindings for overlay rate-limit policies
+
+Native Python and Rust ports of `moonlab_token_bucket_t` so overlay
+admission hooks can rate-limit per tenant without crossing the FFI
+boundary on every admission decision.
+
+- **Python** (`bindings/python/moonlab/token_bucket.py`):
+  `TokenBucket(burst, refill_per_sec)` with `take(n) -> bool`,
+  `refill(n)`, `peek()`.  threading.Lock-based internal state.
+  Seven new pytest cases, including the 8-thread x 1000 attempt
+  race that proves exactly 500 takes succeed on a burst=500 bucket.
+
+- **Rust** (`bindings/rust/moonlab/src/token_bucket.rs`):
+  `TokenBucket::new(burst, refill_per_sec)` with the same surface.
+  std::sync::Mutex internal state.  Seven inline cargo tests, all
+  pass.  Same 8-thread race invariant.
+
+- **Runbook section 5 examples**: the v1.0.3 admission-hook
+  installation section now ships Python and Rust overlays that
+  combine `set_admission_hook` + per-tenant `TokenBucket` so an
+  operator can drop the snippets in verbatim.
+
 ### CI live-image tenant smoke
 
 The docker-image-build lane now does a full end-to-end check

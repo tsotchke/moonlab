@@ -164,6 +164,69 @@ Typical overlay structure:
 - A blocking hook stalls the worker; if your tenant lookup is over
   the network, cache aggressively.
 
+### Python overlay (v1.0.3)
+
+```python
+from moonlab.control_plane import ControlPlaneServer
+from moonlab.token_bucket import TokenBucket
+from moonlab.constants import MOONLAB_CONTROL_RATE_LIMITED, MOONLAB_CONTROL_REJECTED
+
+# per-tenant buckets: refill 100 shots/sec, burst 1000.
+buckets: dict[str, TokenBucket] = {}
+locked_out = {"banned-tenant"}
+
+def admission(tenant_id, verb, num_qubits, num_shots):
+    if tenant_id is None:
+        return MOONLAB_CONTROL_REJECTED   # require AUTH <tenant>:<hmac>
+    if tenant_id in locked_out:
+        return MOONLAB_CONTROL_REJECTED
+    b = buckets.setdefault(tenant_id, TokenBucket(burst=1000, refill_per_sec=100))
+    cost = num_shots if num_shots > 0 else 1
+    if not b.take(cost):
+        return MOONLAB_CONTROL_RATE_LIMITED
+    return 0
+
+with ControlPlaneServer(host="0.0.0.0", port=7070,
+                        secret=open("/etc/moonlab/hmac.bin", "rb").read()) as srv:
+    srv.set_admission_hook(admission)
+    srv.run()
+```
+
+### Rust overlay (v1.0.3)
+
+```rust
+use moonlab::admission_hook::{AdmissionDecision, AdmissionHook};
+use moonlab::token_bucket::TokenBucket;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+let buckets: Mutex<HashMap<String, TokenBucket>> = Mutex::new(HashMap::new());
+
+let hook = AdmissionHook::new(move |req| {
+    let Some(tid) = req.tenant_id() else {
+        return AdmissionDecision::Refused(-405);  // require AUTH <tenant>:<hmac>
+    };
+    let mut tab = buckets.lock().unwrap();
+    let bkt = tab.entry(tid.to_string())
+        .or_insert_with(|| TokenBucket::new(1000, 100));
+    let cost = if req.num_shots() > 0 { req.num_shots() as u64 } else { 1 };
+    if bkt.take(cost) {
+        AdmissionDecision::Admitted
+    } else {
+        AdmissionDecision::Refused(-408)  // MOONLAB_CONTROL_RATE_LIMITED
+    }
+});
+// Caller manages the moonlab_control_server_t lifetime (see
+// bindings/rust/moonlab/tests/admission_hook_e2e.rs for the
+// full pattern) and installs the hook via `hook.install(server)?`.
+```
+
+Both snippets use the language-native [TokenBucket] port
+(`bindings/python/moonlab/token_bucket.py`,
+`bindings/rust/moonlab/src/token_bucket.rs`) so the overlay does
+not need to call out to the C primitive across the FFI boundary
+on every admission decision.
+
 ## 6. Installing the completion hook (billing / audit / dashboard)
 
 The completion hook fires after every **successful** scheduler run
