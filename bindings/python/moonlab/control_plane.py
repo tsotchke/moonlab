@@ -316,6 +316,27 @@ try:
 except AttributeError:
     _MAX_CONCURRENT_API_AVAILABLE = False
 
+# v1.0.3 admission hook -- private overlays implement per-tenant policy
+# (quotas, paid-tier gating, lockouts) in pure Python and install it
+# via ControlPlaneServer.set_admission_hook(callback).
+_AdmissionHookCB = ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.c_char_p,   # tenant_id (NUL-terminated, may be NULL)
+    ctypes.c_char_p,   # verb (CIRCUIT / SHOTS / ...)
+    ctypes.c_int,      # num_qubits (-1 if unknown at admission time)
+    ctypes.c_int,      # num_shots (0 if not a shots request)
+    ctypes.c_void_p,   # ctx (we always pass NULL; the python closure
+                       # holds whatever state the user wants)
+)
+try:
+    _lib.moonlab_control_server_set_admission_hook.argtypes = [
+        ctypes.c_void_p, _AdmissionHookCB, ctypes.c_void_p,
+    ]
+    _lib.moonlab_control_server_set_admission_hook.restype = ctypes.c_int
+    _ADMISSION_HOOK_API_AVAILABLE = True
+except AttributeError:
+    _ADMISSION_HOOK_API_AVAILABLE = False
+
 
 class ControlPlaneServer:
     """In-process control-plane server, since v0.8.14.
@@ -372,6 +393,10 @@ class ControlPlaneServer:
         self._thread: Optional[threading.Thread] = None
         self._actual_port = ctypes.c_uint16(0)
         self._run_rc: Optional[int] = None
+        # v1.0.3 admission hook -- holds the live ctypes thunk so it
+        # isn't GC'd while the server still has a function pointer to
+        # it.  None until set_admission_hook() is called.
+        self._admission_cb_ref = None
         # v0.8.25 config -- applied in __enter__ after open() but before
         # the runner thread starts.
         self._cfg_secret    = secret
@@ -526,6 +551,73 @@ class ControlPlaneServer:
             ctypes.c_void_p(self._handle), int(rate_rps), int(burst))
         if rc != 0:
             raise ControlPlaneError(f"set_rate_limit rc={rc}")
+
+    def set_admission_hook(self, callback) -> None:
+        """Install a per-tenant admission hook (since v1.0.3).
+
+        The callback fires AFTER auth + verb parsing but BEFORE the
+        body is read; returning 0 admits the request, returning a
+        negative status code (e.g.  ``MOONLAB_CONTROL_RATE_LIMITED``
+        ``-408``, ``MOONLAB_CONTROL_REJECTED`` ``-405``) refuses it
+        with ``ERR <code> <msg>``.  Overlay-defined codes are
+        allowed and sent verbatim to the client.
+
+        Signature::
+
+            callback(tenant_id: str | None, verb: str,
+                     num_qubits: int, num_shots: int) -> int
+
+        The callback fires on the worker thread and must be
+        thread-safe.  ``tenant_id`` is ``None`` when the request
+        used the legacy ``AUTH <hex>`` form; ``verb`` is one of
+        ``"CIRCUIT"``, ``"SHOTS"``.  ``num_qubits`` is -1 when not
+        known at admission time; ``num_shots`` is 0 on non-shots
+        requests.
+
+        Pass ``None`` to clear an installed hook.
+        """
+        if not _ADMISSION_HOOK_API_AVAILABLE:
+            raise ControlPlaneError(
+                "set_admission_hook unavailable -- libquantumsim predates v1.0.3"
+            )
+        if self._handle is None:
+            raise ControlPlaneError("server not opened")
+        if callback is None:
+            # Install a null hook -- the C layer takes NULL as "no hook".
+            # ctypes won't let us pass python None for a CFUNCTYPE parameter,
+            # so cast a 0 function pointer through c_void_p.
+            self._admission_cb_ref = None
+            rc = _lib.moonlab_control_server_set_admission_hook(
+                ctypes.c_void_p(self._handle),
+                ctypes.cast(0, _AdmissionHookCB),
+                None)
+            if rc != 0:
+                raise ControlPlaneError(f"set_admission_hook rc={rc}")
+            return
+
+        if not callable(callback):
+            raise ControlPlaneError("callback must be callable or None")
+
+        # Wrap the python callable so the C side sees the right shape.
+        def _trampoline(tenant_id_p, verb_p, n_qubits, n_shots, _ctx):
+            try:
+                tid = tenant_id_p.decode("utf-8") if tenant_id_p else None
+                verb = verb_p.decode("ascii") if verb_p else ""
+                rc = callback(tid, verb, int(n_qubits), int(n_shots))
+                return int(rc) if rc is not None else 0
+            except Exception:
+                # Don't let a python exception unwind into C; treat it
+                # as a refusal so the server is not destabilised.
+                return -405
+
+        cb = _AdmissionHookCB(_trampoline)
+        # Keep a reference so ctypes doesn't GC the thunk while the
+        # server still holds a function pointer to it.
+        self._admission_cb_ref = cb
+        rc = _lib.moonlab_control_server_set_admission_hook(
+            ctypes.c_void_p(self._handle), cb, None)
+        if rc != 0:
+            raise ControlPlaneError(f"set_admission_hook rc={rc}")
 
     def __exit__(self, *exc) -> None:
         self.shutdown()
