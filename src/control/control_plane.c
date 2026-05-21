@@ -289,6 +289,39 @@ static int handle_one_request(moonlab_io_t              *io,
 #  define LOG_PEER_CN_EMIT(fmt) ""
 #endif
 
+/* LOG_AND_RETURN: auto-bumps g_count_rejected for any non-OK rc.
+ * Use for transport / parser / auth refusals.
+ *
+ * LOG_AND_RETURN_PRECOUNTED: skips the rejected bump because the
+ * caller has ALREADY accounted for this refusal in a dedicated
+ * counter (e.g.  g_count_admission_refused).  Prevents the same
+ * refusal from being counted in BOTH counters, which would make
+ * `rejected_total - admission_refused_total` meaningless. */
+#define LOG_AND_RETURN_PRECOUNTED(rc_value) do {                      \
+    log_rc = (rc_value);                                              \
+    /* Skip g_count_rejected -- caller already bumped a dedicated     \
+     * counter for this rc. */                                        \
+    if (log_enabled()) {                                              \
+        const double dt = monotonic_ms() - t0;                        \
+        if (log_format_json()) {                                      \
+            fprintf(stderr,                                           \
+                "{\"event\":\"moonlab.control\",\"verb\":\"%s\","     \
+                "\"n_qubits\":%d,\"body\":%ld,\"shots\":%ld,"         \
+                "\"wall_ms\":%.2f,\"rc\":%d%s}\n",                    \
+                log_verb, log_n_qubits, log_body_bytes, log_shots,    \
+                dt, log_rc, log_peer_suffix);                         \
+        } else {                                                      \
+            fprintf(stderr,                                           \
+                "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
+                " wall_ms=%.2f rc=%d%s\n",                            \
+                log_verb, log_n_qubits, log_body_bytes, log_shots,    \
+                dt, log_rc, log_peer_suffix);                         \
+        }                                                             \
+        fflush(stderr);                                               \
+    }                                                                 \
+    return log_rc;                                                    \
+} while (0)
+
 #define LOG_AND_RETURN(rc_value) do {                                 \
     log_rc = (rc_value);                                              \
     if (log_rc != MOONLAB_CONTROL_OK) {                               \
@@ -569,7 +602,10 @@ static int handle_one_request(moonlab_io_t              *io,
                 : (amrc == MOONLAB_CONTROL_REJECTED)   ? "tenant rejected"
                                                        : "admission refused";
             send_err(io, amrc, msg);
-            LOG_AND_RETURN(amrc);
+            /* admission_refused already bumped; suppress the
+             * automatic g_count_rejected bump in LOG_AND_RETURN so
+             * the two counters partition the refusal space. */
+            LOG_AND_RETURN_PRECOUNTED(amrc);
         }
     }
 

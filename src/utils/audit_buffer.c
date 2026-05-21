@@ -1,24 +1,17 @@
 /**
  * @file  audit_buffer.c
- * @brief Lock-free bounded ring buffer impl (see audit_buffer.h).
+ * @brief Mutex-guarded bounded ring buffer impl (see audit_buffer.h).
  *
- * Algorithm: each slot has a byte payload + a separate ``seq``
- * word that advances when the slot is published / retired.  This
- * avoids the classic SPSC race where a consumer reads a payload
- * the producer is still writing.
+ * Cursors and count protected by a single mutex.  Push/pop hold
+ * the lock long enough to memcpy the payload (record_size bytes,
+ * typically ~64 bytes).  At a few-hundred-per-second push rate
+ * the lock contention is invisible compared to the durable-sink
+ * latency the buffer is sized to absorb.
  *
- * For simplicity (compliance-grade not high-performance), we
- * serialise PUSH with a CAS on the write cursor.  Each producer
- * atomically claims a slot, copies the payload, then publishes
- * by advancing a slot-local seq counter past the write index.
- * The consumer reads the slot, verifies the seq matches its
- * expected read index, and advances the read cursor.
- *
- * Mode: when the buffer is full (write - read == capacity), the
- * push overwrites the oldest slot and bumps the read cursor by
- * one.  Drops are counted in `drops` for visibility.  This matches
- * the SOC2 spec: lose oldest before failing the request that
- * generated the record.
+ * Overflow policy: drop OLDEST.  When push() finds count ==
+ * capacity, it overwrites tail and advances tail; drops counter
+ * increments.  Newest records are preserved because they're the
+ * most actionable for SREs and the most expensive to recompute.
  */
 
 #include "audit_buffer.h"
@@ -30,93 +23,95 @@ void moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
                                size_t                  record_size,
                                size_t                  capacity)
 {
-    if (!buf || !slots || record_size == 0 || capacity == 0) return;
+    if (!buf) return;
+    if (!slots || record_size == 0 || capacity == 0) {
+        memset(buf, 0, sizeof(*buf));
+        /* Leave the mutex uninitialised; destroy() handles the
+         * never-init case via a zero-check. */
+        return;
+    }
     buf->slots       = (uint8_t *)slots;
     buf->record_size = record_size;
     buf->capacity    = capacity;
-    atomic_store(&buf->write, 0);
-    atomic_store(&buf->read,  0);
-    atomic_store(&buf->drops, 0);
+    buf->head        = 0;
+    buf->tail        = 0;
+    buf->count       = 0;
+    buf->drops       = 0;
+    pthread_mutex_init(&buf->lock, NULL);
+}
+
+void moonlab_audit_buffer_destroy(moonlab_audit_buffer_t *buf)
+{
+    if (!buf || buf->capacity == 0) return;
+    pthread_mutex_destroy(&buf->lock);
+    /* Mark unusable so future calls no-op. */
+    buf->capacity = 0;
 }
 
 int moonlab_audit_buffer_push(moonlab_audit_buffer_t *buf,
                               const void             *record)
 {
-    if (!buf || !record) return 0;
-    /* Claim the next write slot. */
-    const uint64_t w = atomic_fetch_add(&buf->write, 1);
-    const uint64_t r = atomic_load(&buf->read);
+    if (!buf || !record || buf->capacity == 0) return 0;
+    pthread_mutex_lock(&buf->lock);
 
     int dropped = 0;
-    if (w - r >= buf->capacity) {
-        /* Buffer is full -- this push will overwrite an
-         * unread record.  Bump the read cursor past the
-         * slot we're about to clobber so the next pop sees
-         * the right oldest entry. */
-        const uint64_t new_read = w - buf->capacity + 1;
-        uint64_t       expected = r;
-        /* The consumer may have advanced concurrently; only
-         * shove if our view is still authoritative. */
-        if (new_read > expected) {
-            (void)atomic_compare_exchange_strong(
-                &buf->read, &expected, new_read);
-        }
-        atomic_fetch_add(&buf->drops, 1);
+    if (buf->count == buf->capacity) {
+        /* Buffer full -- overwrite oldest.  tail advances; count
+         * stays at capacity. */
+        buf->tail = (buf->tail + 1) % buf->capacity;
+        buf->drops += 1;
         dropped = 1;
+    } else {
+        buf->count += 1;
     }
-
-    const size_t   idx = (size_t)(w % buf->capacity);
-    uint8_t       *dst = buf->slots + idx * buf->record_size;
+    uint8_t *dst = buf->slots + buf->head * buf->record_size;
     memcpy(dst, record, buf->record_size);
+    buf->head = (buf->head + 1) % buf->capacity;
 
-    /* Memory fence so a concurrent pop observes the payload
-     * before observing the bumped write cursor.  atomic_store
-     * here would be a no-op (write is already past w+1); the
-     * fence is the protocol guarantee. */
-    atomic_thread_fence(memory_order_release);
-
+    pthread_mutex_unlock(&buf->lock);
     return dropped ? 0 : 1;
 }
 
 int moonlab_audit_buffer_pop(moonlab_audit_buffer_t *buf, void *out)
 {
-    if (!buf || !out) return 0;
-    const uint64_t r = atomic_load(&buf->read);
-    const uint64_t w = atomic_load_explicit(&buf->write, memory_order_acquire);
-    if (r >= w) return 0;        /* empty */
+    if (!buf || !out || buf->capacity == 0) return 0;
+    pthread_mutex_lock(&buf->lock);
 
-    const size_t   idx = (size_t)(r % buf->capacity);
-    const uint8_t *src = buf->slots + idx * buf->record_size;
+    if (buf->count == 0) {
+        pthread_mutex_unlock(&buf->lock);
+        return 0;
+    }
+    const uint8_t *src = buf->slots + buf->tail * buf->record_size;
     memcpy(out, src, buf->record_size);
+    buf->tail   = (buf->tail + 1) % buf->capacity;
+    buf->count -= 1;
 
-    /* Advance the read cursor.  We're the only consumer
-     * (single-consumer invariant) so a plain store is safe;
-     * we use atomic_store to keep memory ordering explicit. */
-    atomic_store(&buf->read, r + 1);
+    pthread_mutex_unlock(&buf->lock);
     return 1;
 }
 
-size_t moonlab_audit_buffer_len(const moonlab_audit_buffer_t *buf)
+size_t moonlab_audit_buffer_len(moonlab_audit_buffer_t *buf)
 {
-    if (!buf) return 0;
-    const uint64_t w =
-        atomic_load(&((moonlab_audit_buffer_t *)buf)->write);
-    const uint64_t r =
-        atomic_load(&((moonlab_audit_buffer_t *)buf)->read);
-    if (w <= r) return 0;
-    const uint64_t pending = w - r;
-    return pending > buf->capacity ? buf->capacity : (size_t)pending;
+    if (!buf || buf->capacity == 0) return 0;
+    pthread_mutex_lock(&buf->lock);
+    const size_t n = buf->count;
+    pthread_mutex_unlock(&buf->lock);
+    return n;
 }
 
-uint64_t moonlab_audit_buffer_drops(const moonlab_audit_buffer_t *buf)
+uint64_t moonlab_audit_buffer_drops(moonlab_audit_buffer_t *buf)
 {
-    if (!buf) return 0;
-    return atomic_load(
-        &((moonlab_audit_buffer_t *)buf)->drops);
+    if (!buf || buf->capacity == 0) return 0;
+    pthread_mutex_lock(&buf->lock);
+    const uint64_t d = buf->drops;
+    pthread_mutex_unlock(&buf->lock);
+    return d;
 }
 
 void moonlab_audit_buffer_reset_drops(moonlab_audit_buffer_t *buf)
 {
-    if (!buf) return;
-    atomic_store(&buf->drops, 0);
+    if (!buf || buf->capacity == 0) return;
+    pthread_mutex_lock(&buf->lock);
+    buf->drops = 0;
+    pthread_mutex_unlock(&buf->lock);
 }

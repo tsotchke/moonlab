@@ -133,13 +133,15 @@ arc, all frozen under the same v1.x ABI policy:
 
 `utils/audit_buffer.h`:
   - `moonlab_audit_buffer_init(buf, slots, record_size, capacity)`
+  - `moonlab_audit_buffer_destroy(buf)`
   - `moonlab_audit_buffer_push(buf, record)` -> 1 clean / 0 dropped
   - `moonlab_audit_buffer_pop(buf, out)` -> 1 on success / 0 empty
   - `moonlab_audit_buffer_len(buf)`
   - `moonlab_audit_buffer_drops(buf)`
   - `moonlab_audit_buffer_reset_drops(buf)`
     + the `moonlab_audit_buffer_t` struct (caller-owned storage +
-      caller-owned slots block)
+      caller-owned slots block; capacity does NOT need to be a
+      power of two -- mutex-guarded ring uses `% capacity`)
 
 See `docs/EXTENSION_SURFACES.md` for the integration guide that
 shows each surface with C / Python / Rust / JavaScript snippets.
