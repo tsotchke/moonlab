@@ -67,7 +67,17 @@ typedef struct {
  *        ``record_size * capacity`` bytes the caller keeps alive
  *        for the lifetime of the buffer.  Init does not malloc.
  *
- * @param[out] buf          Buffer to initialise.
+ *        ``buf`` MUST be zero-initialised the first time init() is
+ *        called on it.  Stack-allocated structs use
+ *        ``moonlab_audit_buffer_t b = {0};`` or memset() before
+ *        passing in.  Failing to do so makes a re-init detect-and-
+ *        destroy the (uninit'd) mutex -- undefined behavior.
+ *
+ *        Calling init() again on a live buffer (capacity != 0) is
+ *        safe -- the previous mutex is destroyed first.
+ *
+ * @param[out] buf          Buffer to initialise.  Zero-init'd or
+ *                          previously destroy()'d.
  * @param[in]  slots        Caller-owned storage block.
  * @param[in]  record_size  Bytes per record.  Must be > 0.
  * @param[in]  capacity     Number of records.  Must be > 0.
