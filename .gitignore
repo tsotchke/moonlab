@@ -13,6 +13,10 @@ tests/test_*
 examples/**/[a-z]*
 !examples/**/*.c
 !examples/**/*.h
+# Open-core extension demos -- committed source; lift out of the
+# binary-pattern ignore.
+!examples/extensions/
+!examples/extensions/**
 tools/benchmarks/*_benchmark
 tools/benchmarks/*_profiler
 !tools/benchmarks/*.c
