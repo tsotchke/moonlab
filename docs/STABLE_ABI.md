@@ -105,8 +105,37 @@ are stable across the v1.x line.
   - `moonlab_num_decoders()`
   - `moonlab_list_decoders(out_names, max)`
 
+#### v1.0.3 multi-tenant additions (second wave)
+
+Seven additional public symbols added during the multi-tenant
+arc, all frozen under the same v1.x ABI policy:
+
+`control_plane.h`:
+  - `moonlab_control_submit_circuit_auth_tenant(host, port,
+    tenant_id, secret, secret_len, body, body_len,
+    out_probs, out_n)`
+  - `moonlab_control_server_set_admission_hook(server, fn, ctx)`
+    + the `moonlab_admission_hook_fn` typedef
+
+`scheduler.h`:
+  - `moonlab_scheduler_set_request_context(tenant_id, request_id)`
+  - `moonlab_scheduler_current_tenant_id()`
+  - `moonlab_scheduler_current_request_id()`
+  - `moonlab_scheduler_fire_completion_hook(job, results,
+    backend_name)`
+
+`utils/token_bucket.h`:
+  - `moonlab_token_bucket_init(bkt, burst, refill_per_sec)`
+  - `moonlab_token_bucket_take(bkt, n)`
+  - `moonlab_token_bucket_refill(bkt, n)`
+  - `moonlab_token_bucket_peek(bkt)`
+    + the `moonlab_token_bucket_t` struct (caller-owned storage)
+
 See `docs/EXTENSION_SURFACES.md` for the integration guide that
 shows each surface with C / Python / Rust / JavaScript snippets.
+See `examples/extensions/open_core_overlay_demo.c` (C) and
+`examples/extensions/python_overlay_demo.py` (Python) for runnable
+overlays that exercise the full plug-in arc.
 
 ## Wire protocol contract
 

@@ -41,6 +41,26 @@ language-specific signatures.  A public-CI hygiene grep rejects any
 `PROPRIETARY:` / `TSOTCHKE-INTERNAL:` markers landing in the public
 moonlab tree.
 
+**Multi-tenant productization (second wave).**  The control plane
+now speaks an `AUTH <tenant_id>:<hmac>` wire form, propagates the
+tenant identity through to the scheduler completion hook for
+billing attribution, and exposes a pre-dispatch admission hook that
+private overlays use for per-tenant quotas, paid-tier gating, and
+emergency lockouts.  Five additional surfaces shipped:
+
+| Surface                                              | What it adds                                                                                  |
+|------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `moonlab_control_submit_circuit_auth_tenant`         | C / Python / Rust / JS client emits `AUTH <tenant>:<hmac>\n CIRCUIT <N>\n <body>`.            |
+| `moonlab_control_server_set_admission_hook`          | Pre-dispatch refusal (`-405`/`-408`) on quotas, tier gates, lockouts.  Bound from Python + Rust. |
+| `moonlab_scheduler_set_request_context` + getters    | Tenant_id + request_id flow into the scheduler thread-local; completion hook reads both.      |
+| `moonlab_token_bucket_*`                             | Lock-free per-tenant rate-limit primitive for admission hooks.  Native Python + Rust ports.    |
+| `docs/operations/{RUNBOOK,FLEET_DEPLOYMENT}.md`      | SRE runbook + fleet-rollout guide; measured throughput 4674 req/sec Bell 2q HMAC @ P99=1.92ms. |
+
+Runnable Python overlay at `examples/extensions/python_overlay_demo.py`
+boots an HMAC-secured control plane with a per-tenant TokenBucket-backed
+admission hook, submits Bell circuits from three tenants + one banned
+tenant + one over-quota tenant, and prints the resulting billing ledger.
+
 ## New in v0.7 (2026-05-19)
 
 **v0.7.0** ships the distributed-scheduler MVP -- the first piece
