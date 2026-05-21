@@ -138,6 +138,25 @@ across the noise sweep (within Monte-Carlo shot noise):
 
 Archived as `benchmarks/results/decoder_shootout_2026-05-20_postfix/d3.json`.
 
+### Distance 5 (50 data qubits), 200 trials per cell, post-fix
+
+| p     | greedy | mwpm_exact | pymatching |
+|-------|--------|------------|------------|
+| 0.01  | 0.005  | 0.005      | 0.000      |
+| 0.02  | 0.020  | 0.015      | 0.010      |
+| 0.04  | 0.060  | 0.055      | 0.035      |
+| 0.06  | 0.145  | 0.110      | 0.085      |
+| 0.08  | 0.115  | 0.120      | 0.115      |
+| 0.10  | 0.245  | 0.200      | 0.230      |
+
+Archived as `benchmarks/results/decoder_shootout_2026-05-20_postfix/d5.json`.
+
+Pymatching tracks mwpm_exact across the sweep; at low p it sits
+slightly *below* mwpm_exact (0.000 vs 0.005 at p=0.01) because
+moonlab's in-tree `mwpm_exact` falls back to greedy + 2-opt past
+10 defects, while pymatching computes true minimum-weight at
+every cell.  At high p both are within shot noise of each other.
+
 The pymatching column is within 1-2 sigma of `mwpm_exact` at 200
 trials, and trends parallel to it -- the same Monte-Carlo noise
 fingerprint you would expect from two implementations of
