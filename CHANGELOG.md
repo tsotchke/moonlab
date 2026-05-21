@@ -128,6 +128,116 @@ proprietary code lives in this repository.  CI hygiene grep rejects
   Pre-existing type bug masked because TypeScript wasn't being
   strict-checked.  Fixed to `(h: number, seed: bigint)`.
 
+- **Use-after-free in control-plane worker thread**
+  (`src/control/control_plane.c`).  The worker captured
+  `ctx_active_counter` before `free(ctx)` but read
+  `ctx->admission_hook` AFTER the free.  Discovered via integration
+  test on the v1.0.3 admission hook -- the hook appeared installed
+  but never fired because the post-free read landed on zeroed
+  memory.  Fixed: capture admission hook + ctx into locals before
+  free(ctx), same pattern as ctx_active_counter.
+
+**Multi-tenant productization (v1.0.3 second wave).**  Three
+additional surfaces that make a private overlay a real commercial
+product instead of an architectural sketch:
+
+### Added (multi-tenant)
+
+- **AUTH protocol tenant_id form**
+  (`src/control/control_plane.{c,h}`).  Wire protocol now accepts
+  `AUTH <tenant_id>:<64-hex-HMAC>\n` alongside the legacy bare-
+  token form.  Tenant ids are at most 63 chars, drawn from
+  `[A-Za-z0-9_.-]`, rejected on malformed inputs with
+  `MOONLAB_CONTROL_PROTOCOL`.  HMAC computation is unchanged
+  (single server secret keyed across the verb line); tenant_id is
+  the IDENTITY claim, HMAC is the AUTHN check.  A private overlay
+  that wants per-tenant secrets installs a tenant-resolver hook on
+  top of this surface.
+
+- **Thread-local scheduler request context**
+  (`src/distributed/scheduler.{c,h}`).
+  `moonlab_scheduler_set_request_context(tenant_id, request_id)`,
+  `moonlab_scheduler_current_tenant_id()`,
+  `moonlab_scheduler_current_request_id()`, and
+  `moonlab_scheduler_fire_completion_hook(job, results, backend_name)`
+  let execution paths that do not go through
+  `moonlab_scheduler_run` (the control plane's qgtl_execute, future
+  hardware bridge) still attribute their runs to a tenant.
+
+- **Control-plane admission hook**
+  (`src/control/control_plane.{c,h}`).
+  `moonlab_control_server_set_admission_hook(server, fn, ctx)` adds
+  a per-tenant policy gate that fires AFTER auth + verb parsing
+  but BEFORE body read.  Hook returns 0 to allow, negative status
+  code (`MOONLAB_CONTROL_RATE_LIMITED`, `MOONLAB_CONTROL_REJECTED`,
+  overlay-defined) to refuse.  Overlay uses it for per-tenant
+  quotas, paid-tier qubit-count caps, emergency lockouts.
+
+- **Per-tenant token-bucket primitive**
+  (`src/utils/token_bucket.{c,h}`).  Free-standing lock-free
+  rate-limit mechanism overlays use inside their admission hook.
+  Fixed-point uint64 internal state (tokens * 1e6) survives
+  high-concurrency CAS loops; lazy time-based refill computed
+  inside every take/peek; 8-thread race test asserts exactly 500
+  takes succeed on a burst=500 bucket across 8000 attempts.
+  Public moonlab provides the mechanism; the overlay decides which
+  tenants get which burst/refill.
+
+- **Control-plane load-test harness**
+  (`benchmarks/control_plane_loadtest.c`).  N concurrent clients
+  against a running moonlab-control-server; reports throughput +
+  P50/P90/P99 latency.  Quiet-mode emits a single-line summary
+  for CI assertions.  Validated 2026-05-21 on Apple M-series
+  8-core: 4 workers Bell 2q HMAC auth -> 4674 req/sec, P99 1.92 ms;
+  16 workers Bell 2q HMAC + tenant -> 2577 req/sec, P99 13.7 ms.
+  Errors = 0.
+
+- **SRE operations runbook** (`docs/operations/RUNBOOK.md`).
+  Concrete: secret + cert rotation, admission/completion hook
+  installation, Prometheus alert thresholds, error-code triage
+  table, capacity planning at MAX_CONCURRENT=32, disaster
+  recovery scope.
+
+- **Fleet deployment guide** (`docs/operations/FLEET_DEPLOYMENT.md`).
+  Multi-replica topology, image build + push procedure, secret
+  distribution across N hosts via Kubernetes Secrets, rate-limit +
+  concurrent-cap arithmetic at N replicas, admission-hook
+  integration sketch with shared-store quota, rolling-upgrade
+  procedure, validation procedure post-rollout, measured capacity
+  table, failure-mode quick-reference.
+
+- **Docker CI image-build lane** (`.github/workflows/ci.yml`).
+  Every PR builds `moonlab/control-plane`, `moonlab/control-exporter`,
+  `moonlab/websocket-gateway` from their respective Dockerfiles
+  and smoke-runs the control-plane image with a HEALTH probe.
+  Catches Dockerfile rot before fleet rollout.
+
+- **Deploy artifacts bumped to v1.0.3.**
+  `deploy/docker/{Dockerfile.control-plane,docker-compose.yml,README.md}`,
+  `deploy/helm/moonlab/{Chart.yaml,values.yaml,README.md,templates/_helpers.tpl}`
+  all aligned with the runtime version.
+
+### Fixed (multi-tenant)
+
+- **Use-after-free in control-plane worker thread**: see top of
+  "Fixed" section -- listed once.
+
+### Verified end-to-end on the smoke host
+
+- `test_control_plane_tenant` integration test: client submits
+  `AUTH acme-corp:hex CIRCUIT` -> control plane parses tenant_id
+  -> scheduler thread-local set -> completion hook reads
+  `tenant_id == "acme-corp"`.  Three round trips (acme, beta-startup,
+  legacy bare-token) all verified in one process; hook fired 3
+  times with the correct tenant_id sequence.
+- `test_control_plane_tenant` admission-hook leg: hook refuses
+  `acme-corp` with -405, allows `beta-startup`; client sees the
+  correct status codes.
+- `moonlab-control-server` binary booted on a real socket
+  (127.0.0.1:17070), HEALTH + METRICS + two CIRCUIT submissions
+  under tenant-form AUTH all confirmed; Prometheus CIRCUIT counter
+  increments to 2 with 0 rejections.
+
 ## [1.0.2] - 2026-05-20
 
 **Audit-response follow-up: convergence honesty + binding sync that
