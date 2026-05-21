@@ -78,6 +78,14 @@
     add_test(NAME unit_token_bucket COMMAND test_token_bucket)
     set_tests_properties(unit_token_bucket PROPERTIES TIMEOUT 10)
 
+    # Audit ring buffer (since v1.0.3): bounded lock-free buffer for
+    # SOC2-grade completion record retention.
+    add_executable(test_audit_buffer tests/unit/test_audit_buffer.c)
+    target_link_libraries(test_audit_buffer
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME unit_audit_buffer COMMAND test_audit_buffer)
+    set_tests_properties(unit_audit_buffer PROPERTIES TIMEOUT 10)
+
     add_executable(test_correctness_properties tests/unit/test_correctness_properties.c)
     target_link_libraries(test_correctness_properties PRIVATE quantumsim)
     add_test(NAME unit_correctness_properties COMMAND test_correctness_properties)
