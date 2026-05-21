@@ -172,6 +172,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(QSIM_PLATFORM_LINUX ON)
     set(QSIM_PLATFORM_NAME "Linux")
+    # _GNU_SOURCE exposes strptime, asprintf, etc. (POSIX 2001 + GNU
+    # extensions).  Required by src/utils/manifest.c on glibc-based
+    # systems where the default feature-test macros hide strptime.
+    add_compile_definitions(_GNU_SOURCE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(QSIM_PLATFORM_WINDOWS ON)
     set(QSIM_PLATFORM_NAME "Windows")
