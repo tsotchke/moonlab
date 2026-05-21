@@ -250,6 +250,49 @@ rejects tenant_id-without-secret with a clear error.
   exact code a customer writes to submit under `AUTH acme-corp:hex`
   including the wire format the bindings emit underneath.
 
+### Server-side admission-hook bindings
+
+The v1.0.3 admission hook is now installable from a Python or
+Rust process, not just C.  Customers building their commercial
+overlay in either language can write the per-tenant policy
+(quotas, paid-tier gating, lockouts) as a callback in their
+preferred language.
+
+- **Python** (`ControlPlaneServer.set_admission_hook`).  Pure
+  python callback with signature
+  `(tenant_id, verb, num_qubits, num_shots) -> int`.  Three new
+  pytest cases: refuse-acme-allow-beta, clear-via-None, swallow-
+  python-exception.  Implementation wraps the callable in a
+  ctypes thunk held on the server instance so it survives GC
+  while the C side holds the function pointer.
+
+- **Rust** (`moonlab::admission_hook::AdmissionHook`).  Safe
+  wrapper around `Fn(&AdmissionRequest) -> AdmissionDecision +
+  Send + Sync + 'static`.  Stored ctx is `Box<Arc<HookFn>>` for
+  a thin C pointer; `extern "C"` trampoline uses
+  `std::panic::catch_unwind` so a panicking hook converts to
+  `-405` rather than tearing down the server.  Two new cargo
+  tests: refuse-acme-allow-beta, panic-is-caught.  moonlab-sys
+  allowlist gains `moonlab_admission_hook_fn`,
+  `moonlab_control_server_set_admission_hook`,
+  `moonlab_control_submit_circuit_auth_tenant`.
+
+JS does not get a server-side admission-hook binding because the
+JS server host in moonlab is the Python test harness, not a
+Node-built server; pure-Node overlays should write the server in
+Python or Rust and use the JS client only for submission.
+
+### CI live-image tenant smoke
+
+The docker-image-build lane now does a full end-to-end check
+after the HEALTH probe: submits a Bell `CIRCUIT` over raw TCP
+against the just-built `moonlab/control-plane:ci` image and
+asserts the response is `{0.5, 0, 0, 0.5}`.  Catches breakage
+the HEALTH probe alone misses -- AUTH parser regression,
+scheduler dispatch regression, response framing regression.
+Uses Python stdlib only so the lane doesn't need libquantumsim
+or any moonlab binding installed.
+
 ### Verified end-to-end on the smoke host
 
 - `test_control_plane_tenant` integration test: client submits
