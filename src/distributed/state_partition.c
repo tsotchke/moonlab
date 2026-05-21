@@ -152,16 +152,28 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
     // Allocate communication buffers.  CNOT / SWAP exchanges along
     // the partition-boundary qubit need to send half the local state
     // (`local_count / 2`) in one shot; the historical 2^20 cap (=16 MB)
-    // overflowed when `local_count > 2^21`, segfaulting at N>=26 with
-    // 8 ranks.  Scale to local_count and clamp at 1 GB so the buffer
-    // doesn't dominate per-rank memory for genuinely huge shards.
-    const size_t per_rank_max_bytes = (size_t)1 << 30; /* 1 GB cap. */
+    // ARCHITECTURAL CONSTRAINT (v1.0.6, after fleet validation on
+    // old-donkey 88c found the bug at N=31 / 4 GiB per-rank):
+    // mpi_exchange_amplitudes() and the unchunked gate-apply loops
+    // in distributed_gates.c assume send_buffer and recv_buffer can
+    // each hold `local_count` complex amplitudes in one shot.  Any
+    // cap smaller than that overruns the buffer during the first
+    // remote-qubit gate (e.g. dist_hadamard(0) at N=31, 8 ranks
+    // writes 2^28 amplitudes into a 2^26-element capped buffer ->
+    // heap corruption -> glibc abort on next free()).
+    //
+    // Prior versions clamped this to 1 GB.  That was correct for
+    // small N (limits comm-buffer memory bloat when the state is
+    // tiny) but silently incorrect for large N where the buffers
+    // ARE the state size.  Drop the cap entirely: buffers are
+    // sized to local_count regardless of how big that is.  Caller
+    // can still override via config->comm_buffer_size, but ONLY
+    // if they also chunk the exchange themselves -- the in-tree
+    // gate-apply path does not.
     const size_t needed_bytes = state->local_count * sizeof(double complex);
     size_t buffer_size = config && config->comm_buffer_size > 0
                          ? config->comm_buffer_size
-                         : (needed_bytes < per_rank_max_bytes
-                                ? needed_bytes
-                                : per_rank_max_bytes);
+                         : needed_bytes;
 
     state->buffer_size = buffer_size / sizeof(double complex);
 

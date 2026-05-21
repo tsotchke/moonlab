@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import hmac
 import socket
+import ssl
 import struct
 import sys
 import threading
@@ -33,12 +34,13 @@ def hmac_sha3_256(key: bytes, msg: bytes) -> str:
 
 
 def submit_bell_circuit(host: str, port: int, secret: bytes,
-                        tenant) -> float:
+                        tenant, tls_ctx=None) -> float:
     """Submit one Bell 2q CIRCUIT job; return wall-clock seconds."""
     encoded = BELL_2Q
     verb_line = f"CIRCUIT {len(encoded)}\n".encode("ascii")
     t0 = time.perf_counter()
-    s = socket.create_connection((host, port), timeout=10.0)
+    raw = socket.create_connection((host, port), timeout=10.0)
+    s = tls_ctx.wrap_socket(raw, server_hostname=host) if tls_ctx else raw
     try:
         tok = hmac_sha3_256(secret, verb_line)
         if tenant:
@@ -70,11 +72,12 @@ def submit_bell_circuit(host: str, port: int, secret: bytes,
     return time.perf_counter() - t0
 
 
-def worker(host: str, port: int, secret: bytes, tenant: str | None,
-           deadline: float, lats: list[float], errs_box: list[int]) -> None:
+def worker(host, port, secret, tenant, deadline, lats, errs_box,
+           tls_ctx=None):
     while time.perf_counter() < deadline:
         try:
-            lats.append(submit_bell_circuit(host, port, secret, tenant))
+            lats.append(submit_bell_circuit(host, port, secret, tenant,
+                                            tls_ctx=tls_ctx))
         except Exception:
             errs_box[0] += 1
 
@@ -87,19 +90,35 @@ def main() -> int:
     ap.add_argument("--tenant", default=None)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--duration", type=float, default=5.0)
+    ap.add_argument("--tls", action="store_true",
+                    help="wrap socket in TLS")
+    ap.add_argument("--tls-ca", default=None,
+                    help="CA cert path to verify server (TLS only)")
+    ap.add_argument("--tls-insecure", action="store_true",
+                    help="TLS without cert verification (smoke only)")
     args = ap.parse_args()
 
     secret = args.secret.encode("ascii")
     deadline = time.perf_counter() + args.duration
 
-    threads: list[threading.Thread] = []
-    per_worker_lats: list[list[float]] = [[] for _ in range(args.workers)]
-    per_worker_errs: list[list[int]] = [[0] for _ in range(args.workers)]
+    tls_ctx = None
+    if args.tls:
+        tls_ctx = ssl.create_default_context()
+        if args.tls_ca:
+            tls_ctx.load_verify_locations(cafile=args.tls_ca)
+        if args.tls_insecure:
+            tls_ctx.check_hostname = False
+            tls_ctx.verify_mode = ssl.CERT_NONE
+
+    threads = []
+    per_worker_lats = [[] for _ in range(args.workers)]
+    per_worker_errs = [[0] for _ in range(args.workers)]
     for i in range(args.workers):
         t = threading.Thread(
             target=worker,
             args=(args.host, args.port, secret, args.tenant,
                   deadline, per_worker_lats[i], per_worker_errs[i]),
+            kwargs={"tls_ctx": tls_ctx},
             daemon=True,
         )
         threads.append(t)
