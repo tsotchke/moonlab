@@ -5,7 +5,12 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.4] - 2026-05-21
+
+**v1.0.3 audit-response release.**  Two rounds of recursive
+adversarial audit on the v1.0.3 shipping bits caught seven real
+issues that v1.0.3's "all green" claim was hiding.  This release
+contains the fixes plus two new operator-visible features.
 
 ### Added
 
@@ -62,6 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`test_manifest` baked compile-time `MOONLAB_VERSION_STRING`
   at 1.0.2.**  The .o was cached from the pre-bump build.  Force-
   rebuilt against the new VERSION.txt-derived build_info.
+- **`moonlab_audit_buffer_init` leaked mutex on re-init.**  Round-2
+  audit caught a follow-on bug: when init() is called twice on
+  the same struct, the second pthread_mutex_init() ran without
+  destroying the first one.  Operator resize at runtime would
+  leak a kernel mutex each call.  Fixed: detect capacity != 0 on
+  entry and destroy first.  Caller contract documented (zero-init
+  required for FIRST init; subsequent re-inits handled safely).
 
 ## [1.0.3] - 2026-05-21
 

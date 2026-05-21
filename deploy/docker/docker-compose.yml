@@ -15,7 +15,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.control-plane
-    image: moonlab/control-plane:1.0.3
+    image: moonlab/control-plane:1.0.4
     container_name: moonlab-control
     networks: [moonlab]
     ports: ["7070:7070"]
@@ -32,7 +32,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.exporter
-    image: moonlab/control-exporter:1.0.3
+    image: moonlab/control-exporter:1.0.4
     container_name: moonlab-exporter
     depends_on:
       moonlab-control:
@@ -55,7 +55,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.gateway
-    image: moonlab/websocket-gateway:1.0.3
+    image: moonlab/websocket-gateway:1.0.4
     container_name: moonlab-websocket-gateway
     depends_on:
       moonlab-control:

@@ -10,7 +10,7 @@ Deploys the three core services from `deploy/docker/`:
 | Prometheus exporter     | on      | 9090         |
 | WebSocket gateway       | off     | 8765         |
 
-Image registry defaults to `docker.io/moonlab/{component}:1.0.3`.  Build
+Image registry defaults to `docker.io/moonlab/{component}:1.0.4`.  Build
 the images locally first (`docker compose -f deploy/docker/docker-compose.yml build`)
 and push them to your registry, or override `image.registry` /
 `image.repository` to point at a published copy.
