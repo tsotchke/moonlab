@@ -239,6 +239,70 @@ jobs:
           fi
           echo "OK -- no proprietary markers found in public source."
 
+      - name: Grep for credential / secret patterns
+        run: |
+          set -e
+          # Operationalizes open-core rule #4: public examples must
+          # not require private credentials.  Catches the obvious
+          # shapes -- AWS access keys, GitHub PATs, OpenAI keys,
+          # Slack tokens, JWT tokens, private RSA / OpenSSH keys,
+          # IBM Quantum API tokens, .env-style assignments to
+          # well-known secret names.
+          #
+          # Anchored to file content so a docstring that says
+          # "looks like ghp_xxxx" does not false-positive: each
+          # pattern requires the literal prefix that real keys use.
+          #
+          # If a legitimate test fixture needs one of these shapes
+          # (e.g. a JWT signed with a published example secret),
+          # add an explicit allowlist entry rather than relaxing
+          # the pattern.
+
+          # Build a single -E pattern joined with '|'.  Each entry
+          # is a distinct credential shape.
+          PATTERNS=''
+          # AWS access key id: 'AKIA' + 16 chars; or 'ASIA' for STS.
+          PATTERNS+='(AKIA|ASIA)[0-9A-Z]{16}'
+          # AWS secret access key: 40-char base64 after literal label.
+          PATTERNS+='|aws_secret_access_key[[:space:]]*=[[:space:]]*[A-Za-z0-9/+=]{40}'
+          # GitHub personal access token / installation token /
+          # OAuth token (these prefixes are GitHub-fixed).
+          PATTERNS+='|gh[opsu]_[A-Za-z0-9]{36,}'
+          # OpenAI API keys.
+          PATTERNS+='|sk-[A-Za-z0-9]{32,}'
+          # Slack tokens.
+          PATTERNS+='|xox[abprs]-[A-Za-z0-9-]{10,}'
+          # JWT (literal three-part base64 separated by dots,
+          # leading 'eyJ' which is base64 of '{"').
+          PATTERNS+='|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
+          # IBM Quantum API token (typical 64-char hex after the
+          # IBMQ_API_TOKEN= or similar label).
+          PATTERNS+='|IBMQ?_API_TOKEN[[:space:]]*=[[:space:]]*[A-Fa-f0-9]{32,}'
+          # Generic API_KEY / SECRET assignments with long values.
+          PATTERNS+='|(API_KEY|API_SECRET|CLIENT_SECRET|PRIVATE_KEY)[[:space:]]*=[[:space:]]*["'\'']?[A-Za-z0-9/_+=-]{24,}'
+          # PEM private key armor.
+          PATTERNS+='|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----'
+          # OpenSSH private key armor.
+          PATTERNS+='|-----BEGIN OPENSSH PRIVATE KEY-----'
+
+          if grep -rEn -- "$PATTERNS" \
+                src/ bindings/ tests/ examples/ benchmarks/ \
+                tools/ deploy/ scripts/ docs/ \
+                --include='*.c' --include='*.h' --include='*.cpp' \
+                --include='*.mm' --include='*.py' --include='*.rs' \
+                --include='*.ts' --include='*.js' --include='*.mjs' \
+                --include='*.yaml' --include='*.yml' --include='*.toml' \
+                --include='*.json' --include='*.md' --include='*.env' \
+                --include='*.sh' --include='*.txt' \
+                2>/dev/null; then
+            echo "::error::Credential-shaped string detected in public source." >&2
+            echo "::error::Replace with a placeholder, move to a private overlay," >&2
+            echo "::error::or document an explicit allowlist exemption here if it" >&2
+            echo "::error::is a known public test fixture." >&2
+            exit 1
+          fi
+          echo "OK -- no credential-shaped strings found in public source."
+
   macos-werror:
     name: macOS arm64 (Release + -Werror)
     runs-on: macos-14
