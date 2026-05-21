@@ -235,7 +235,8 @@ set_target_properties(moonlab PROPERTIES
         -s MODULARIZE=1 \
         -s EXPORT_NAME='MoonlabModule' \
         -s EXPORTED_FUNCTIONS='[${EXPORTED_FUNCTIONS}]' \
-        -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"getValue\",\"setValue\",\"UTF8ToString\",\"stringToUTF8\",\"HEAP8\",\"HEAPU8\",\"HEAP32\",\"HEAPU32\",\"HEAPF64\"]' \
+        -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"getValue\",\"setValue\",\"UTF8ToString\",\"stringToUTF8\",\"HEAP8\",\"HEAPU8\",\"HEAP32\",\"HEAPU32\",\"HEAPF64\",\"addFunction\",\"removeFunction\"]' \
+        -s ALLOW_TABLE_GROWTH=1 \
         -s ALLOW_MEMORY_GROWTH=1 \
         -s MAXIMUM_MEMORY=2GB \
         -s INITIAL_MEMORY=67108864 \
