@@ -1,0 +1,51 @@
+{
+  "harness":  "moonlab/fleet-validation/v1.0",
+  "date":     "2026-05-21",
+  "fleet":    {
+    "atlas":      {"role": "control-plane host",  "os": "macOS",        "arch": "arm64",   "cores": 8,  "ram_gb": 16,  "tailscale_ip": "100.96.130.16"},
+    "cosbox":     {"role": "linux compute node",  "os": "Linux 6.8",   "arch": "x86_64",  "cores": 12, "ram_gb": 32,  "tailscale_ip": "100.86.83.35"},
+    "old-donkey": {"role": "linux big iron",      "os": "Linux 7.0",   "arch": "x86_64",  "cores": 88, "ram_gb": 499, "tailscale_ip": "100.121.14.68"}
+  },
+  "experiments": {
+    "ghz_sharding_validation": {
+      "binary": "examples/distributed/large_state_ghz",
+      "host":   "old-donkey",
+      "points": [
+        {"N": 30, "ranks":  8, "state_gib":  16, "wall_s":  20.5, "verified": true, "notes": "P(|0...0>)=P(|1...1>)=0.5"},
+        {"N": 31, "ranks":  8, "state_gib":  32, "wall_s":  37.7, "verified": true, "notes": "post-buffer-overflow-fix"},
+        {"N": 32, "ranks":  8, "state_gib":  64, "wall_s":  86.2, "verified": true, "notes": "post-buffer-overflow-fix"},
+        {"N": 33, "ranks": 16, "state_gib": 128, "wall_s": 144.1, "verified": true, "notes": "biggest sharded state validated"}
+      ],
+      "bug_discovered_and_fixed": {
+        "symptom":   "glibc free(): invalid size at N>=31",
+        "cause":     "src/distributed/state_partition.c capped send/recv buffer at 1 GB while distributed_gates.c assumed buffer holds local_count amplitudes (4 GiB+ at N>=31)",
+        "fix":       "drop 1 GB cap; size to local_count unconditionally",
+        "commit":    "919305b"
+      }
+    },
+    "cross_host_load": {
+      "binary":   "tools/fleet_loadtest.py",
+      "scenarios": [
+        {"clients_host": "cosbox",     "workers":  8, "duration_s":  5, "tenant": null,          "tls": false, "rps":  19.6, "p50_ms": 413, "errors":   0},
+        {"clients_host": "cosbox+old-donkey", "workers": "64+64", "duration_s": 8, "tenant": null, "tls": false, "rps_aggregate": 300, "p50_ms": 421, "errors": 84, "note": "84/2401=3.5% backpressure on max-concurrent=64 server"},
+        {"clients_host": "cosbox",     "workers": 16, "duration_s":  5, "tenant": "acme-corp",   "tls": false, "rps":  41.4, "p50_ms": 399, "errors":   0},
+        {"clients_host": "cosbox+old-donkey+atlas-loopback", "workers": "64+64+16", "duration_s": 10, "tenant": "3 distinct IDs", "tls": false, "rps_aggregate": 3653, "p50_ms_atlas": 4.3, "p50_ms_fleet": 408, "errors": 472, "note": "atlas localhost saturates at 3377 rps; 3 tenant IDs verified"}
+      ]
+    },
+    "cross_host_tls": {
+      "binary":     "tools/fleet_loadtest.py --tls --tls-ca",
+      "cert":       "self-signed RSA-2048, SAN=IP:100.96.130.16,DNS:atlas.tail5c077c.ts.net",
+      "result":     {"clients_host": "cosbox", "workers": 4, "duration_s": 5, "reqs": 36, "rps": 7.2, "p50_ms": 549, "p99_ms": 577, "errors": 0},
+      "tls_overhead_ms": "~140 ms (1 extra RTT on top of plain TCP)"
+    },
+    "websocket_gateway_fanout": {
+      "binary":     "tools/fleet_ws_load.py",
+      "gateway":    "tools/gateway/moonlab_websocket_gateway.py on atlas:8765 -> 127.0.0.1:7070",
+      "scenarios": [
+        {"clients_host": "cosbox",     "workers": 8, "duration_s": 5, "reqs": 72, "rps": 14.4, "p50_ms": 417, "errors": 0},
+        {"clients_host": "old-donkey", "workers": 8, "duration_s": 5, "reqs": 75, "rps": 15.0, "p50_ms": 420, "errors": 0}
+      ],
+      "aggregate":  {"reqs_total": 147, "errors_total": 0, "note": "browser-emulating WS clients hit gateway over Tailscale, gateway forwards line-protocol to TCP server, Bell circuit verified end-to-end"}
+    }
+  }
+}
