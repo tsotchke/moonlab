@@ -200,6 +200,36 @@ static void test_external_slots(void)
               "PYMATCHING dispatched (rc=%d; OK=pymatching available, "
               "NOT_BUILT=pymatching missing)", py_rc);
     }
+    /* PYMATCHING edge-index convention regression: defects at
+     * vertex (0, 0) and (1, 0) are one +X step apart, so a correct
+     * pymatching bridge must flip horizontal edge h(0, 0) at byte
+     * index 0 -- NOT vertical edge v(0, 0) at byte index d*d.  An
+     * earlier bridge had the H/V loops swapped, which transposed
+     * corrections across the lattice diagonal and inflated logical
+     * error rates ~20x at d=5 p=0.01.  This test catches the
+     * regression on every pymatching-available CI run. */
+    if (moonlab_decoder_slot_available(MOONLAB_DECODER_PYMATCHING) &&
+        getenv("MOONLAB_TEST_PYMATCHING_AVAILABLE")) {
+        const moonlab_decoder_code_t code_d3 = {
+            .distance = 3, .num_qubits = 18, .is_toric = 1,
+        };
+        unsigned char syn_x[9]   = {1, 0, 0, 1, 0, 0, 0, 0, 0};
+        unsigned char corr_x[18] = {0};
+        const moonlab_decoder_input_t in_x = {
+            .code = &code_d3, .syndromes = syn_x,
+            .corrections = corr_x, .num_stabilisers = 9,
+        };
+        const int rc = moonlab_decoder_decode(MOONLAB_DECODER_PYMATCHING, &in_x);
+        if (rc == 0) {
+            int x_flips = 0, y_flips = 0;
+            for (int q = 0; q < 9; q++)  x_flips += corr_x[q];
+            for (int q = 9; q < 18; q++) y_flips += corr_x[q];
+            CHECK(x_flips == 1 && y_flips == 0,
+                  "PYMATCHING (0,0)-(1,0) defect pair flips H edge only "
+                  "(H=%d, V=%d) -- catches h/v swap regression",
+                  x_flips, y_flips);
+        }
+    }
     {
         const int sbnn_rc = moonlab_decoder_decode(MOONLAB_DECODER_SBNN, &in);
         if (moonlab_decoder_slot_available(MOONLAB_DECODER_SBNN)) {
