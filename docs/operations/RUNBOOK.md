@@ -348,6 +348,8 @@ Stable counters (since v0.8.23):
 | `moonlab_control_rate_limited_total`            | Requests refused by the per-IP token bucket               |
 | `moonlab_control_tls_handshake_failed_total`    | TLS handshakes that failed in SSL_accept                  |
 | `moonlab_control_max_concurrent_rejected_total` | Connections refused by the bounded thread-pool ceiling    |
+| `moonlab_control_admission_refused_total`       | Requests refused by the v1.0.3 admission hook (over-quota / tier-blocked / lockout) |
+| `moonlab_control_completion_hook_fires_total`   | Successful runs whose completion hook executed -- watch alongside CIRCUIT/SHOTS to confirm billing pipeline keeps up |
 
 Alerting suggestions:
 
@@ -359,6 +361,17 @@ Alerting suggestions:
   `MOONLAB_CONTROL_MAX_CONCURRENT`.
 - `rate(moonlab_control_tls_handshake_failed_total[5m]) > 0.1` --
   client cert problems; correlate with the mTLS audit log.
+- `rate(moonlab_control_admission_refused_total[5m]) > 5` -- the
+  overlay's admission policy is refusing a non-trivial volume of
+  requests; correlate with the overlay's per-tenant quota dashboard
+  to find which tenant is over-budget (legitimate spikes) or
+  driving toward a hostile pattern (security concern).
+- `rate(moonlab_control_circuit_total[5m]) -
+   rate(moonlab_control_completion_hook_fires_total[5m]) > 1` --
+  successful CIRCUIT submissions are NOT firing the completion
+  hook at the same rate.  Either the hook isn't installed
+  (overlay misconfig) or the billing/audit pipeline is dropping
+  events; investigate before they accumulate.
 
 ## 8. Debugging common errors
 

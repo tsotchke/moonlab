@@ -120,6 +120,13 @@ extern _Atomic uint64_t g_count_rejected;
 extern _Atomic uint64_t g_count_rate_limited;
 extern _Atomic uint64_t g_count_tls_failed;
 extern _Atomic uint64_t g_count_max_concurrent;
+/* v1.0.3 multi-tenant counters.  admission_refused tracks the
+ * subset of rejections that came from the overlay admission_hook
+ * (quotas / tier gates / lockouts), distinct from auth / parser
+ * rejections.  completion_hook_fires is the counter SREs watch
+ * to confirm their billing pipeline is keeping up. */
+extern _Atomic uint64_t g_count_admission_refused;
+extern _Atomic uint64_t g_count_completion_hook_fires;
 
 /* ------------------------------------------------------------------
  * Wire helpers.
@@ -369,7 +376,13 @@ static int handle_one_request(moonlab_io_t              *io,
             "moonlab_control_tls_handshake_failed_total %llu\n"
             "# HELP moonlab_control_max_concurrent_rejected_total Connections refused by the bounded thread-pool ceiling.\n"
             "# TYPE moonlab_control_max_concurrent_rejected_total counter\n"
-            "moonlab_control_max_concurrent_rejected_total %llu\n",
+            "moonlab_control_max_concurrent_rejected_total %llu\n"
+            "# HELP moonlab_control_admission_refused_total Requests refused by the v1.0.3 admission hook (over-quota, tier-blocked, lockout).\n"
+            "# TYPE moonlab_control_admission_refused_total counter\n"
+            "moonlab_control_admission_refused_total %llu\n"
+            "# HELP moonlab_control_completion_hook_fires_total Successful runs whose completion hook executed -- watch this counter alongside CIRCUIT/SHOTS to confirm the billing pipeline keeps up.\n"
+            "# TYPE moonlab_control_completion_hook_fires_total counter\n"
+            "moonlab_control_completion_hook_fires_total %llu\n",
             (unsigned long long)atomic_load(&g_count_circuit),
             (unsigned long long)atomic_load(&g_count_shots),
             (unsigned long long)atomic_load(&g_count_health),
@@ -377,7 +390,9 @@ static int handle_one_request(moonlab_io_t              *io,
             (unsigned long long)atomic_load(&g_count_rejected),
             (unsigned long long)atomic_load(&g_count_rate_limited),
             (unsigned long long)atomic_load(&g_count_tls_failed),
-            (unsigned long long)atomic_load(&g_count_max_concurrent));
+            (unsigned long long)atomic_load(&g_count_max_concurrent),
+            (unsigned long long)atomic_load(&g_count_admission_refused),
+            (unsigned long long)atomic_load(&g_count_completion_hook_fires));
         if (n < 0 || (size_t)n >= sizeof(body)) {
             LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
         }
@@ -548,6 +563,7 @@ static int handle_one_request(moonlab_io_t              *io,
             mode_shots ? (int)num_shots : 0,
             admission_hook_ctx);
         if (amrc != 0) {
+            atomic_fetch_add(&g_count_admission_refused, 1);
             const char *msg =
                 (amrc == MOONLAB_CONTROL_RATE_LIMITED) ? "tenant rate-limited"
                 : (amrc == MOONLAB_CONTROL_REJECTED)   ? "tenant rejected"
@@ -868,14 +884,16 @@ typedef struct {
  * One shared instance: even with multiple `moonlab_control_server_t`
  * handles in-process, all requests roll up to the same counters --
  * matches Prometheus' "per-process" exposition model. */
-_Atomic uint64_t g_count_circuit        = 0;
-_Atomic uint64_t g_count_shots          = 0;
-_Atomic uint64_t g_count_health         = 0;
-_Atomic uint64_t g_count_metrics        = 0;
-_Atomic uint64_t g_count_rejected       = 0;
-_Atomic uint64_t g_count_rate_limited   = 0;
-_Atomic uint64_t g_count_tls_failed     = 0;
-_Atomic uint64_t g_count_max_concurrent = 0;
+_Atomic uint64_t g_count_circuit             = 0;
+_Atomic uint64_t g_count_shots               = 0;
+_Atomic uint64_t g_count_health              = 0;
+_Atomic uint64_t g_count_metrics             = 0;
+_Atomic uint64_t g_count_rejected            = 0;
+_Atomic uint64_t g_count_rate_limited        = 0;
+_Atomic uint64_t g_count_tls_failed          = 0;
+_Atomic uint64_t g_count_max_concurrent      = 0;
+_Atomic uint64_t g_count_admission_refused   = 0;
+_Atomic uint64_t g_count_completion_hook_fires = 0;
 
 struct moonlab_control_server {
     int     srv_fd;

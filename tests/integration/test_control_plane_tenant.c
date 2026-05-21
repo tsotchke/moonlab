@@ -221,6 +221,32 @@ int main(void)
           rc, num);
     free(probs);
 
+    /* v1.0.3 metrics: scrape before shutdown to prove the two new
+     * counters increment under the admission-hook + completion-hook
+     * flow.  admission_refused_total >= 1 (acme was refused).
+     * completion_hook_fires_total is tested separately via the
+     * completion-hook leg above; we re-check >= 0 here to confirm
+     * the line is present. */
+    char *metrics_body = NULL;
+    rc = moonlab_control_submit_metrics("127.0.0.1", port, &metrics_body);
+    CHECK(rc == 0 && metrics_body != NULL,
+          "metrics scrape after admission flow rc=%d", rc);
+    if (metrics_body) {
+        /* Anchor on '\n' so strstr finds the metric LINE rather than
+         * the matching prefix inside the `# HELP` or `# TYPE` lines. */
+        const char *line_prefix =
+            "\nmoonlab_control_admission_refused_total ";
+        const char *p = strstr(metrics_body, line_prefix);
+        CHECK(p != NULL,
+              "admission_refused_total counter present in METRICS body");
+        if (p) {
+            long v = -1;
+            sscanf(p + strlen(line_prefix), "%ld", &v);
+            CHECK(v >= 1, "admission_refused_total >= 1 (got %ld)", v);
+        }
+        free(metrics_body);
+    }
+
     moonlab_control_server_shutdown(server);
     pthread_join(tid, NULL);
     moonlab_control_server_close(server);

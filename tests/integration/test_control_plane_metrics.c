@@ -130,6 +130,18 @@ int main(void)
         CHECK(c_shots   >= 2, "SHOTS counter   >= 2 (got %ld)", c_shots);
         CHECK(c_health  >= 2, "HEALTH counter  >= 2 (got %ld)", c_health);
         CHECK(c_metrics >= 1, "METRICS counter >= 1 (got %ld)", c_metrics);
+
+        /* v1.0.3: admission_refused_total and completion_hook_fires_total
+         * should be present in the exposition.  Their values are >= 0;
+         * this test does not install an admission hook so refused
+         * stays at 0, but the LINE must be present so SREs can scrape
+         * a fresh server without seeing an "absent" gap. */
+        CHECK(strstr(metrics,
+            "moonlab_control_admission_refused_total") != NULL,
+            "admission_refused_total counter present in METRICS body");
+        CHECK(strstr(metrics,
+            "moonlab_control_completion_hook_fires_total") != NULL,
+            "completion_hook_fires_total counter present in METRICS body");
     }
     free(metrics);
 
