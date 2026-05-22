@@ -143,9 +143,30 @@ static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {
 /**
  * @brief Apply single-qubit gate to local qubit
  */
+/* Weak link to the CUDA backend's apply_1q kernel.  Resolves when
+ * libquantumsim is built with QSIM_HAS_CUDA. */
+extern int moonlab_cuda_apply_1q(void *state, uint32_t target, const double m[8])
+    __attribute__((weak));
+
 static dist_gate_error_t apply_local_1q(partitioned_state_t* state,
                                         uint32_t target,
                                         const gate_matrix_2x2_t* matrix) {
+    /* GPU dispatch: when state has a GPU shard, apply the gate
+     * directly on device.  The local shard has 2^local_qubits
+     * amplitudes; the target index here is < local_qubits so the
+     * kernel sees a valid 1q gate on its local state. */
+    if (state->gpu_state && moonlab_cuda_apply_1q != NULL) {
+        /* Convert the gate_matrix_2x2_t (4 complex doubles) to the
+         * 8-double (re, im) layout the kernel expects. */
+        double m[8];
+        for (int i = 0; i < 4; i++) {
+            m[2 * i    ] = creal(matrix->m[i]);
+            m[2 * i + 1] = cimag(matrix->m[i]);
+        }
+        int rc = moonlab_cuda_apply_1q(state->gpu_state, target, m);
+        return (rc == 0) ? DIST_GATE_SUCCESS : DIST_GATE_ERROR_COMM;
+    }
+
     uint64_t stride = 1ULL << target;
 
     // Iterate over pairs of amplitudes differing in target bit
@@ -184,6 +205,18 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
     if (!desc.requires_exchange) {
         partition_free_exchange_desc(&desc);
         return apply_local_1q(state, target, matrix);
+    }
+
+    /* GPU sharded path: pull the local shard into the host buffer
+     * before MPI exchange, run the existing CPU exchange/apply logic
+     * against the host buffer, then push the result back to GPU.
+     * One round-trip per partition-crossing gate -- acceptable since
+     * MPI exchange already dominates the cost of such gates. */
+    if (state->gpu_state) {
+        if (partition_sync_to_host(state) != PARTITION_SUCCESS) {
+            partition_free_exchange_desc(&desc);
+            return DIST_GATE_ERROR_COMM;
+        }
     }
 
     int rank = mpi_get_rank(state->dist_ctx);
@@ -246,6 +279,15 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
 
     if (mpi_err != MPI_BRIDGE_SUCCESS) {
         return DIST_GATE_ERROR_COMM;
+    }
+
+    /* Push the now-correct host shard back into GPU memory if we
+     * have one, so subsequent local gates see the post-exchange
+     * amplitudes. */
+    if (state->gpu_state) {
+        if (partition_sync_from_host(state) != PARTITION_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
+        }
     }
 
     return DIST_GATE_SUCCESS;
@@ -704,6 +746,11 @@ dist_gate_error_t dist_gate_2q(partitioned_state_t* state,
     return apply_remote_2q_both_partition(state, qubit1, qubit2, matrix);
 }
 
+/* Weak link to the GPU CNOT routing (in libquantumsim only when
+ * QSIM_HAS_CUDA is on). */
+extern int moonlab_cuda_apply_cnot(void *state, uint32_t control, uint32_t target)
+    __attribute__((weak));
+
 dist_gate_error_t dist_cnot(partitioned_state_t* state,
                             uint32_t control,
                             uint32_t target) {
@@ -719,6 +766,28 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
 
     int ctrl_partition = partition_is_partition_qubit(state, control);
     int tgt_partition = partition_is_partition_qubit(state, target);
+
+    /* GPU-sharded fast path: when both qubits are local, route the
+     * CNOT through moonlab_cuda_apply_cnot on the local shard.  No
+     * MPI needed, no GPU<->host sync. */
+    if (state->gpu_state && !ctrl_partition && !tgt_partition
+        && moonlab_cuda_apply_cnot != NULL)
+    {
+        int rc = moonlab_cuda_apply_cnot(state->gpu_state, control, target);
+        return (rc == 0) ? DIST_GATE_SUCCESS : DIST_GATE_ERROR_COMM;
+    }
+
+    /* When at least one qubit is on the partition side, the existing
+     * CPU paths below operate on state->amplitudes (host buffer).
+     * For GPU states we sync GPU->host before, then host->GPU after,
+     * so the partition-crossing logic doesn't need to know about GPU. */
+    if (state->gpu_state) {
+        if (partition_sync_to_host(state) != PARTITION_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
+        }
+    }
+
+    dist_gate_error_t rc = DIST_GATE_SUCCESS;
 
     // Both local
     if (!ctrl_partition && !tgt_partition) {
@@ -736,7 +805,7 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
                 }
             }
         }
-        return DIST_GATE_SUCCESS;
+        goto sync_out;
     }
 
     // Target is partition qubit - need exchange
@@ -768,7 +837,8 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
         );
 
         if (err != MPI_BRIDGE_SUCCESS) {
-            return DIST_GATE_ERROR_COMM;
+            rc = DIST_GATE_ERROR_COMM;
+            goto sync_out;
         }
 
         // Unpack
@@ -779,7 +849,7 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
             }
         }
 
-        return DIST_GATE_SUCCESS;
+        goto sync_out;
     }
 
     // Control is partition qubit
@@ -789,14 +859,23 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
         int control_is_one = (rank >> partition_bit) & 1;
 
         if (control_is_one) {
-            // Apply X to target locally
+            // Apply X to target locally; dist_pauli_x handles its
+            // own GPU dispatch, so don't double-sync.
             return dist_pauli_x(state, target);
         }
         // Control is 0 - do nothing
-        return DIST_GATE_SUCCESS;
+        goto sync_out;
     }
 
-    return DIST_GATE_SUCCESS;
+sync_out:
+    /* Push the post-gate host buffer back to GPU so subsequent gates
+     * see the updated amplitudes. */
+    if (state->gpu_state && rc == DIST_GATE_SUCCESS) {
+        if (partition_sync_from_host(state) != PARTITION_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
+        }
+    }
+    return rc;
 }
 
 dist_gate_error_t dist_cz(partitioned_state_t* state,
