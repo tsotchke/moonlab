@@ -77,18 +77,28 @@ class Complex(ctypes.Structure):
 
 # Quantum state structure (opaque in Python, managed in C)
 class CQuantumState(ctypes.Structure):
+    # Layout MUST match src/quantum/state.h exactly.  The previous
+    # binding included four bogus fields (global_phase / entropy /
+    # purity / fidelity) that don't exist in the C struct; they were
+    # never read but caused a layout mismatch on writes (the C struct
+    # is the source of truth; the Python view was simply wrong about
+    # where measurement_outcomes etc. live in memory).
+    #
+    # With v1.1's gpu_state / gpu_backend fields appended in C, the
+    # bogus fields became a hard problem: ctypes.byref(self._state)
+    # passes Python's struct to C, but C writes past the Python end
+    # when touching gpu_state.  Fixing the layout here was overdue.
     _fields_ = [
-        ("num_qubits", ctypes.c_size_t),
-        ("state_dim", ctypes.c_size_t),
-        ("amplitudes", ctypes.POINTER(Complex)),
-        ("global_phase", ctypes.c_double),
-        ("entanglement_entropy", ctypes.c_double),
-        ("purity", ctypes.c_double),
-        ("fidelity", ctypes.c_double),
-        ("measurement_outcomes", ctypes.POINTER(ctypes.c_uint64)),
-        ("num_measurements", ctypes.c_size_t),
-        ("max_measurements", ctypes.c_size_t),
-        ("owns_memory", ctypes.c_int),
+        ("num_qubits",            ctypes.c_size_t),
+        ("state_dim",             ctypes.c_size_t),
+        ("amplitudes",            ctypes.POINTER(Complex)),
+        ("measurement_outcomes",  ctypes.POINTER(ctypes.c_uint64)),
+        ("num_measurements",      ctypes.c_size_t),
+        ("max_measurements",      ctypes.c_size_t),
+        ("owns_memory",           ctypes.c_int),
+        # v1.1 GPU arc -- opaque CUDA backing.
+        ("gpu_state",             ctypes.c_void_p),
+        ("gpu_backend",           ctypes.c_int),
     ]
 
 # Measurement result
@@ -109,6 +119,27 @@ _lib.quantum_state_init.restype = ctypes.c_int
 
 _lib.quantum_state_free.argtypes = [ctypes.POINTER(CQuantumState)]
 _lib.quantum_state_free.restype = None
+
+# v1.1 GPU surface.  These are present in libquantumsim regardless of
+# whether CUDA was compiled in -- the weak stub in state.c returns
+# QS_ERROR_NOT_SUPPORTED (-7) when CUDA isn't available, the strong
+# definition in state_gpu.cu allocates a real CUDA-backed state.
+try:
+    _lib.quantum_state_create_gpu.argtypes = [
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.POINTER(CQuantumState)),
+    ]
+    _lib.quantum_state_create_gpu.restype = ctypes.c_int
+
+    _lib.quantum_state_sync_to_host.argtypes = [ctypes.POINTER(CQuantumState)]
+    _lib.quantum_state_sync_to_host.restype = ctypes.c_int
+
+    _lib.quantum_state_sync_from_host.argtypes = [ctypes.POINTER(CQuantumState)]
+    _lib.quantum_state_sync_from_host.restype = ctypes.c_int
+    _HAS_GPU_SYMBOLS = True
+except AttributeError:
+    # libquantumsim built from a pre-v1.1 source tree.
+    _HAS_GPU_SYMBOLS = False
 
 _lib.quantum_state_clone.argtypes = [ctypes.POINTER(CQuantumState), ctypes.POINTER(CQuantumState)]
 _lib.quantum_state_clone.restype = ctypes.c_int
@@ -297,6 +328,99 @@ class QuantumState:
     # State Operations
     # ========================================================================
     
+    # ========================================================================
+    # GPU-backed construction (v1.1) -- the existing gate methods
+    # below transparently dispatch to CUDA when self._state.gpu_state
+    # is non-NULL, so post-construction the API is identical to a CPU
+    # state.  Call sync_to_host() before reading the amplitudes array.
+    # ========================================================================
+
+    @classmethod
+    def create_gpu(cls, num_qubits: int) -> 'QuantumState':
+        """Create a quantum state with amplitudes living on a CUDA GPU.
+
+        After this returns, every gate call (e.g. state.h(0), state.cnot(0,1))
+        transparently dispatches to the appropriate CUDA kernel rather than
+        touching the host amplitudes buffer.  Call sync_to_host() to refresh
+        the host view before reading state.amplitudes.
+
+        Raises QuantumError if libquantumsim was built without
+        QSIM_ENABLE_CUDA, or if no compatible NVIDIA device is visible.
+
+        Args:
+            num_qubits: 1..31
+
+        Example:
+            >>> s = QuantumState.create_gpu(10)
+            >>> s.h(0).cnot(0, 1)
+            >>> s.sync_to_host()
+            >>> probs = s.probabilities()
+        """
+        if not 1 <= num_qubits <= 31:
+            raise ValueError(f"num_qubits must be in [1, 31] for GPU state, got {num_qubits}")
+        if not _HAS_GPU_SYMBOLS:
+            raise QuantumError(
+                "GPU surface unavailable: libquantumsim was built without "
+                "the v1.1 GPU symbols (quantum_state_create_gpu).  Rebuild "
+                "with -DQSIM_ENABLE_CUDA=ON."
+            )
+
+        out_ptr = ctypes.POINTER(CQuantumState)()
+        rc = _lib.quantum_state_create_gpu(num_qubits, ctypes.byref(out_ptr))
+        if rc != 0:
+            raise QuantumError(
+                f"quantum_state_create_gpu failed: error code {rc} "
+                f"(-7 = QS_ERROR_NOT_SUPPORTED, typically means no CUDA "
+                f"device or library built without QSIM_ENABLE_CUDA)"
+            )
+
+        # Adopt the C-allocated state into a Python instance.  The C side
+        # malloc'd the struct; we own it on the Python side now.  Mirror
+        # the layout into a stack-allocated CQuantumState so the gate
+        # methods can call ctypes.byref(self._state) consistently with
+        # the CPU code path.
+        inst = cls.__new__(cls)
+        inst.num_qubits = num_qubits
+        inst.state_dim  = 1 << num_qubits
+        inst._state     = out_ptr.contents
+        # The C struct was heap-allocated by quantum_state_create_gpu.
+        # Keep a reference to the original pointer so we can free it
+        # correctly in __del__ via quantum_state_destroy (which frees
+        # both gpu and host buffers).
+        inst._heap_ptr  = out_ptr
+        return inst
+
+    def sync_to_host(self) -> 'QuantumState':
+        """Copy GPU amplitudes back into the host buffer.  No-op for CPU states.
+
+        Call this before reading state.amplitudes, probabilities(), etc.
+        on a GPU-backed state -- otherwise the host buffer is stale.
+        Returns self for chaining.
+        """
+        if _HAS_GPU_SYMBOLS:
+            rc = _lib.quantum_state_sync_to_host(ctypes.byref(self._state))
+            if rc != 0:
+                raise QuantumError(f"sync_to_host failed: error code {rc}")
+        return self
+
+    def sync_from_host(self) -> 'QuantumState':
+        """Push host amplitudes back into GPU memory.  No-op for CPU states.
+
+        Use after directly mutating state.amplitudes from Python (e.g. to
+        seed the GPU state from a precomputed wavefunction).  Returns
+        self for chaining.
+        """
+        if _HAS_GPU_SYMBOLS:
+            rc = _lib.quantum_state_sync_from_host(ctypes.byref(self._state))
+            if rc != 0:
+                raise QuantumError(f"sync_from_host failed: error code {rc}")
+        return self
+
+    @property
+    def is_gpu(self) -> bool:
+        """True iff this state's amplitudes live on a CUDA GPU."""
+        return bool(self._state.gpu_state)
+
     def clone(self) -> 'QuantumState':
         """Create deep copy of quantum state"""
         new_state = QuantumState.__new__(QuantumState)
