@@ -322,10 +322,35 @@ void pauli_frame_batch_bit_flip(pauli_frame_batch_t* b, size_t q,
                                  double p, uint64_t* rng_state) {
     if (!b || q >= b->n || !rng_state || p <= 0.0) return;
     bf_word_t* xq = row_x(b, q);
-    const uint64_t threshold = (uint64_t)((double)UINT64_MAX * p);
     const size_t S = b->s;
     const size_t W = b->words_per_row;
 
+    /* The threshold computation (uint64_t)((double)UINT64_MAX * p) is
+     * unsafe at p = 1.0: (double)UINT64_MAX = 2^64 exactly (double can't
+     * represent 2^64 - 1), and the conversion 2^64 -> uint64_t is out
+     * of range.  Older glibc / gcc gave UINT64_MAX; gcc 15.2 / glibc
+     * 2.41 gives 0, so the comparison `u < 0` is never true and no
+     * shots get flipped.  Treat p >= 1.0 as an unconditional flip of
+     * all shots so the deterministic p=1.0 case behaves predictably
+     * across toolchains. */
+    if (p >= 1.0) {
+        for (size_t w = 0; w < W; w++) {
+            const size_t s_lo = w * BF_BITS_PER_WORD;
+            const size_t s_hi = s_lo + BF_BITS_PER_WORD <= S ? s_lo + BF_BITS_PER_WORD : S;
+            /* Advance rng_state by the same number of draws as the
+             * non-special-case path would, so callers that interleave
+             * other rng-using ops still see deterministic state. */
+            for (size_t s = s_lo; s < s_hi; s++) (void)sm64_next(rng_state);
+            const size_t bits_in_word = s_hi - s_lo;
+            const bf_word_t mask = (bits_in_word == BF_BITS_PER_WORD)
+                ? (~(bf_word_t)0)
+                : (((bf_word_t)1 << bits_in_word) - 1);
+            xq[w] ^= mask;
+        }
+        return;
+    }
+
+    const uint64_t threshold = (uint64_t)((double)UINT64_MAX * p);
     for (size_t w = 0; w < W; w++) {
         const size_t s_lo = w * BF_BITS_PER_WORD;
         const size_t s_hi = s_lo + BF_BITS_PER_WORD <= S ? s_lo + BF_BITS_PER_WORD : S;

@@ -109,10 +109,26 @@ int main(void) {
     /* ---- Case 4: phase boundary sweep -------------------------
      * In the lattice regularization the QSH window extends from
      * M=0 (Gamma closing) to M=8B (M-corner closing).  The X
-     * closings at M=4B cancel and don't change Z_2. */
+     * closings at M=4B cancel and don't change Z_2.
+     *
+     * We sample just BELOW and just ABOVE M=4B to validate the
+     * cancellation claim.  We do NOT sample exactly at M=4B, where
+     * the spin-up Bloch h_+(k) has an exact band touching at the
+     * X-points -- the Z_2 invariant is mathematically undefined at
+     * a phase boundary, and any finite FHS / projector grid hits
+     * this limitation: with the standard half-step shift the
+     * grid-points adjacent to X have mass = M - 4B exactly
+     * (cos(pi+/-)+cos() symmetric cancellation), so the projector
+     * is ill-defined at one or two grid plaquettes.  This is
+     * fundamental to the integrator at gap closings, not a bug
+     * in qgt_z2_invariant. */
     {
         fprintf(stdout, "  -- M sweep at A=B=1, QSH window 0 < M < 8 --\n");
-        double Ms[] = { -2.0, -0.5, 0.5, 1.0, 2.0, 4.0, 6.0, 7.5, 8.5, 10.0 };
+        double Ms[] = { -2.0, -0.5, 0.5, 1.0, 2.0,
+                        /* probe the X-closing cancellation from both sides
+                         * (skip exactly M=4B where Z_2 is undefined) */
+                        3.9, 4.1,
+                        6.0, 7.5, 8.5, 10.0 };
         for (size_t i = 0; i < sizeof(Ms) / sizeof(Ms[0]); i++) {
             double M = Ms[i];
             qgt_system_n_t* sys = qgt_model_bhz(A, B, M);
