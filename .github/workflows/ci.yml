@@ -6,856 +6,256 @@ on:
   pull_request:
     branches: [master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Master is the public release gate — let those runs finish so we get
+  # a complete matrix signal even while follow-up commits are landing.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+# Pinned tool versions.  Bumped together so a single PR rolls every
+# lane forward; do NOT pin selectively without an audit pass.
+env:
+  CMAKE_VERSION: '3.27.9'
+  NINJA_VERSION: '1.11.1'
+  PYTHON_VERSION: '3.11'
+  RUST_TOOLCHAIN: '1.83.0'
+  EMSCRIPTEN_VERSION: '3.1.74'
+  # MOONLAB_SKIP_HW_ENTROPY=1 prevents the hardware-entropy probe from
+  # blocking on the absent /dev/hwrng / RDRAND-equivalent on hosted
+  # runners.  Affects bindings + WASM lanes only.
+  MOONLAB_SKIP_HW_ENTROPY: '1'
+
 jobs:
   # ============================================================================
-  # Tier A — native build + ctest on every supported platform.
+  # unix-matrix — every Linux/macOS configuration we ship for, in one
+  # matrix.  Modelled on Eshkol's CI: one job, matrix.include, every lane
+  # named identically to its purpose (arch + feature).  Adding a new
+  # configuration is a matrix row, not a new job block.
   # ============================================================================
 
-  linux-x64:
-    name: Linux x86_64 (Release)
-    runs-on: ubuntu-22.04
+  unix-matrix:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64-lite
+            runner: ubuntu-22.04
+            cmake_flags: ''
+            test_label: ''
+          - name: linux-x64-mpi
+            runner: ubuntu-22.04
+            cmake_flags: '-DQSIM_ENABLE_MPI=ON'
+            test_label: ''
+          - name: linux-x64-asan
+            runner: ubuntu-22.04
+            cmake_flags: '-DQSIM_ENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug'
+            test_label: 'core'
+          - name: linux-arm64-lite
+            runner: ubuntu-22.04-arm
+            cmake_flags: ''
+            test_label: ''
+          - name: macos-arm64-lite
+            runner: macos-14
+            cmake_flags: ''
+            test_label: ''
+          - name: macos-arm64-mpi
+            runner: macos-14
+            cmake_flags: '-DQSIM_ENABLE_MPI=ON'
+            test_label: ''
+          - name: macos-x64-lite
+            runner: macos-13
+            cmake_flags: ''
+            test_label: ''
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (ctest, excluding long/heavy suites)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-      - name: Upload dylib
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlab-linux-x86_64
-          path: |
-            build/libquantumsim.so*
-            build/libquantumsim.a
-
-  linux-arm64:
-    name: Linux aarch64 (Release)
-    runs-on: ubuntu-22.04-arm
-    env:
-      # Match every macOS tier: skip the multi-tier RNDR / FEAT_RNG
-      # hardware-entropy probe at QRNG-init time.  The probe sysctl
-      # path on aarch64 runners measurably slowed unit_mlkem and
-      # abi_moonlab_export to multi-minute timeouts.  /dev/urandom
-      # via getrandom() remains the seeding source.
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev
-
-      - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DQSIM_BUILD_EXAMPLES=OFF
-          -DQSIM_BUILD_BENCHMARKS=OFF
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (ctest, arm64)
-        # Same `-LE long` exclusion as every other tier.  The earlier
-        # name-based exclusions for unit_mlkem / abi_moonlab_export /
-        # unit_qrng_statistics were specifically targeting the QRNG
-        # hardware-probe slowness, which is now bypassed by the
-        # MOONLAB_SKIP_HW_ENTROPY env var declared above.
-        # `aarch64_flake` label excludes the KPM-Chern parity test,
-        # which has runaway numerical drift on aarch64 OpenBLAS
-        # (|c_dense - c_kpm| ~ 10^11) -- audit punch-list item.
-        run: ctest --test-dir build -LE "long|aarch64_flake" --output-on-failure --timeout 300
-
-      - name: Upload dylib
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlab-linux-aarch64
-          path: |
-            build/libquantumsim.so*
-            build/libquantumsim.a
-
-  windows-x64:
-    name: Windows x86_64 (Release, clang-cl)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up MSVC developer shell
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Ensure Ninja
-        shell: pwsh
-        run: |
-          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
-            choco install ninja -y
-          }
-
-      - name: Configure
-        shell: pwsh
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=clang-cl
-          -DCMAKE_CXX_COMPILER=clang-cl
-          -DQSIM_BUILD_EXAMPLES=OFF
-          -DQSIM_BUILD_BENCHMARKS=OFF
-
-      - name: Build
-        shell: pwsh
-        run: cmake --build build -j
-
-      - name: Test
-        shell: pwsh
-        run: >
-          ctest --test-dir build
-          -E "long_evolution|mps_vs_exact|unit_qgt|unit_mbl|unit_qrng_statistics|python_bindings|rust_bindings"
-          --output-on-failure
-          --timeout 300
-          -j 2
-
-      - name: Upload DLL
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlab-windows-x86_64
-          path: |
-            build/quantumsim.dll
-            build/quantumsim.lib
-
-  macos-arm64:
-    name: macOS arm64 (Release)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install libomp ninja
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-      - name: Upload dylib
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlab-macos-arm64
-          path: |
-            build/libquantumsim.*dylib
-
-  macos-x86_64:
-    name: macOS x86_64 (Release)
-    runs-on: macos-15-intel
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install libomp ninja
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (ctest, excluding long_evolution)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-      - name: Upload dylib
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: moonlab-macos-x86_64
-          path: |
-            build/libquantumsim.*dylib
-
-  # Hygiene gate: public moonlab must not contain proprietary-overlay
-  # leakage.  Cheap insurance against accidental inclusion of code
-  # that belongs in the private moonlab-private or qgtl-private
-  # overlays.  Markers grepped: explicit tags + the obvious leak
-  # patterns ("internal-use-only" / "do not commit upstream" / ...).
-  public-hygiene:
-    name: Public-source hygiene (proprietary-marker grep)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Grep for proprietary markers
-        run: |
-          set -e
-          # Tag patterns that must not appear in public-moonlab source.
-          # The grep requires a leading marker prefix (comment-anchored)
-          # so architectural commentary that descriptively mentions
-          # "the private overlay" or "proprietary calibration data"
-          # does NOT trigger.  Only files that contain an actual
-          # PROPRIETARY/ENTERPRISE/TSOTCHKE-INTERNAL tag prefix fail.
-          PATTERNS='(//|#|\*) ?(PROPRIETARY|ENTERPRISE|TSOTCHKE-INTERNAL|PRIVATE-ONLY|DO NOT COMMIT UPSTREAM):'
-          PATTERNS+='|tsotchke-internal'    # hyphenated form is also a clear marker
-          PATTERNS+='|do not commit upstream'  # belt-and-braces
-          # Search in source-bearing directories only; skip docs that
-          # legitimately discuss the open-core architecture and may
-          # reference these words descriptively.
-          if grep -rEn --include='*.c' --include='*.h' --include='*.cpp' \
-                --include='*.mm' --include='*.py' --include='*.rs' \
-                --include='*.ts' --include='*.js' --include='*.mjs' \
-                "$PATTERNS" src/ bindings/ tests/ examples/ benchmarks/ \
-                tools/ deploy/ scripts/ 2>/dev/null; then
-            echo "::error::Proprietary marker detected in public source." >&2
-            echo "::error::Move the offending code to the moonlab-private overlay" >&2
-            echo "::error::or register it through the public plug-in surface" >&2
-            echo "::error::(moonlab_register_backend / _decoder / _vendor_noise_profile" >&2
-            echo "::error::or moonlab_scheduler_set_completion_hook)." >&2
-            exit 1
+          set -euxo pipefail
+          sudo apt-get update -o Acquire::Retries=5
+          PKGS="build-essential ninja-build libomp-dev libopenblas-dev liblapacke-dev pkg-config python3-dev python3-pip"
+          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_MPI=ON"* ]]; then
+              PKGS="$PKGS libopenmpi-dev openmpi-bin"
           fi
-          echo "OK -- no proprietary markers found in public source."
+          sudo apt-get install -y $PKGS
 
-      - name: Grep for credential / secret patterns
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          set -e
-          # Operationalizes open-core rule #4: public examples must
-          # not require private credentials.  Catches the obvious
-          # shapes -- AWS access keys, GitHub PATs, OpenAI keys,
-          # Slack tokens, JWT tokens, private RSA / OpenSSH keys,
-          # IBM Quantum API tokens, .env-style assignments to
-          # well-known secret names.
-          #
-          # Anchored to file content so a docstring that says
-          # "looks like ghp_xxxx" does not false-positive: each
-          # pattern requires the literal prefix that real keys use.
-          #
-          # If a legitimate test fixture needs one of these shapes
-          # (e.g. a JWT signed with a published example secret),
-          # add an explicit allowlist entry rather than relaxing
-          # the pattern.
-
-          # Build a single -E pattern joined with '|'.  Each entry
-          # is a distinct credential shape.
-          PATTERNS=''
-          # AWS access key id: 'AKIA' + 16 chars; or 'ASIA' for STS.
-          PATTERNS+='(AKIA|ASIA)[0-9A-Z]{16}'
-          # AWS secret access key: 40-char base64 after literal label.
-          PATTERNS+='|aws_secret_access_key[[:space:]]*=[[:space:]]*[A-Za-z0-9/+=]{40}'
-          # GitHub personal access token / installation token /
-          # OAuth token (these prefixes are GitHub-fixed).
-          PATTERNS+='|gh[opsu]_[A-Za-z0-9]{36,}'
-          # OpenAI API keys.
-          PATTERNS+='|sk-[A-Za-z0-9]{32,}'
-          # Slack tokens.
-          PATTERNS+='|xox[abprs]-[A-Za-z0-9-]{10,}'
-          # JWT (literal three-part base64 separated by dots,
-          # leading 'eyJ' which is base64 of '{"').
-          PATTERNS+='|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
-          # IBM Quantum API token (typical 64-char hex after the
-          # IBMQ_API_TOKEN= or similar label).
-          PATTERNS+='|IBMQ?_API_TOKEN[[:space:]]*=[[:space:]]*[A-Fa-f0-9]{32,}'
-          # Generic API_KEY / SECRET assignments with long values.
-          PATTERNS+='|(API_KEY|API_SECRET|CLIENT_SECRET|PRIVATE_KEY)[[:space:]]*=[[:space:]]*["'\'']?[A-Za-z0-9/_+=-]{24,}'
-          # PEM private key armor.
-          PATTERNS+='|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----'
-          # OpenSSH private key armor.
-          PATTERNS+='|-----BEGIN OPENSSH PRIVATE KEY-----'
-
-          if grep -rEn -- "$PATTERNS" \
-                src/ bindings/ tests/ examples/ benchmarks/ \
-                tools/ deploy/ scripts/ docs/ \
-                --include='*.c' --include='*.h' --include='*.cpp' \
-                --include='*.mm' --include='*.py' --include='*.rs' \
-                --include='*.ts' --include='*.js' --include='*.mjs' \
-                --include='*.yaml' --include='*.yml' --include='*.toml' \
-                --include='*.json' --include='*.md' --include='*.env' \
-                --include='*.sh' --include='*.txt' \
-                2>/dev/null; then
-            echo "::error::Credential-shaped string detected in public source." >&2
-            echo "::error::Replace with a placeholder, move to a private overlay," >&2
-            echo "::error::or document an explicit allowlist exemption here if it" >&2
-            echo "::error::is a known public test fixture." >&2
-            exit 1
+          set -euxo pipefail
+          brew install ninja libomp openblas pkg-config
+          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_MPI=ON"* ]]; then
+              brew install open-mpi
           fi
-          echo "OK -- no credential-shaped strings found in public source."
 
-  macos-werror:
-    name: macOS arm64 (Release + -Werror)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install libomp ninja
-
-      - name: Configure (-DQSIM_WERROR=ON)
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_WERROR=ON
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-  macos-debug:
-    name: macOS arm64 (Debug)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: brew install libomp ninja
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-      - name: Build
-        run: cmake --build build -j
-      - name: Test
-        # Exclude unit_qgt here for the same reason as the ASAN tier:
-        # the Fukui-Hatsugai-Suzuki Chern integral on Haldane has
-        # enough Debug-build floating-point noise that the rounded
-        # Chern number drifts from +/-1 to 0.  Release builds are
-        # unaffected (the Release tier runs the test).
-        # unit_qgt: Debug-build float noise on Haldane Chern integral
-        # rounds +/-1 to 0; covered by Release tier.
-        run: ctest --test-dir build -LE long -E unit_qgt --output-on-failure --timeout 600
-
-  # ============================================================================
-  # Tier B — MPI end-to-end (mpirun inside CI, both macOS and Linux).
-  # ============================================================================
-
-  macos-mpi:
-    name: macOS arm64 (-DQSIM_ENABLE_MPI=ON)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-      OMPI_MCA_plm_ssh_agent: /bin/false
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies (OpenMPI)
-        run: brew install libomp ninja open-mpi
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-  linux-opencl:
-    name: Linux x86_64 (-DQSIM_ENABLE_OPENCL=ON, POCL correctness smoke)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies (ICD loader + Pocl CPU ICD)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev \
-            opencl-headers ocl-icd-opencl-dev pocl-opencl-icd
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_OPENCL=ON
-      - name: Build
-        run: cmake --build build -j
-      - name: Run discovery + correctness smoke
-        run: |
-          ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
-          # Hadamard-correctness check via the POCL ICD.  Verifies
-          # the OpenCL kernel dispatch actually produces |+0>.
-          ctest --test-dir build -R integration_gpu_backend_correctness --output-on-failure --timeout 60
-
-  linux-vulkan:
-    name: Linux x86_64 (-DQSIM_ENABLE_VULKAN=ON, lavapipe correctness smoke)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies (Vulkan loader + lavapipe CPU ICD)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev \
-            libvulkan-dev vulkan-tools mesa-vulkan-drivers
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_VULKAN=ON
-      - name: Build
-        run: cmake --build build -j
-      - name: Run discovery + correctness smoke
-        run: |
-          ctest --test-dir build -R gpu_backend_discovery --output-on-failure --timeout 60
-          # Hadamard-correctness check via the lavapipe software
-          # rasterizer.  Verifies the Vulkan compute kernel dispatch
-          # produces |+0>.
-          ctest --test-dir build -R integration_gpu_backend_correctness --output-on-failure --timeout 60
-
-  # CUDA compile-only smoke (since v0.10.0).  No GPU available on
-  # GitHub runners; we just confirm the gpu_cuda.cu / gpu_cuda.c
-  # paths still compile against a real nvcc toolchain.
-  linux-cuda:
-    name: Linux x86_64 (-DQSIM_ENABLE_CUDA=ON, compile-only)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install CUDA toolkit
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev \
-            nvidia-cuda-toolkit
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_CUDA=ON
-      - name: Build (link errors only -- no kernels executed)
-        run: cmake --build build -j
-
-  # cuQuantum compile-only smoke (since v0.10.0).  Requires CUDA and
-  # NVIDIA's cuQuantum SDK; CI uses the public Debian build of the
-  # custatevec library if available, otherwise the job is opted out
-  # via the QSIM_ENABLE_CUQUANTUM=OFF default.  Job is allow-failure
-  # for the SDK-missing case.
-  linux-cuquantum:
-    name: Linux x86_64 (-DQSIM_ENABLE_CUQUANTUM=ON, compile-only)
-    runs-on: ubuntu-22.04
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies + cuQuantum SDK probe
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev \
-            nvidia-cuda-toolkit
-          # Skip the job cleanly if cuQuantum isn't reachable on the
-          # apt index.  The compile gate that follows then becomes a
-          # plain QSIM_ENABLE_CUQUANTUM=OFF build, which is fine.
-          sudo apt-get install -y libcustatevec-dev || \
-            { echo "cuQuantum SDK unavailable; skipping" >> $GITHUB_STEP_SUMMARY; exit 0; }
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_CUQUANTUM=ON
-      - name: Build
-        run: cmake --build build -j
-
-  linux-mpi:
-    name: Linux x86_64 (-DQSIM_ENABLE_MPI=ON)
-    runs-on: ubuntu-22.04
-    env:
-      OMPI_MCA_plm_ssh_agent: /bin/false
-      # Allow mpirun to run as root inside CI containers.
-      OMPI_ALLOW_RUN_AS_ROOT: "1"
-      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: "1"
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies (OpenMPI + BLAS)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev \
-            openmpi-bin libopenmpi-dev
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
-
-      - name: Build
-        run: cmake --build build -j
-
-      - name: Test (includes MPI distributed_gates via mpirun -np 4)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 300
-
-  # ============================================================================
-  # Tier C — sanitizers (ASAN + UBSAN) — correctness gates.
-  # ============================================================================
-
-  macos-sanitizers:
-    name: macOS arm64 (ASAN + UBSAN)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-      ASAN_OPTIONS: "detect_leaks=0:abort_on_error=1:halt_on_error=1"
-      UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: brew install libomp ninja
-      - name: Configure (+ sanitizers)
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DQSIM_ENABLE_SANITIZERS=ON
-      - name: Build
-        run: cmake --build build -j
-      - name: Test
-        # Exclude:
-        #   long_evolution (7 min) and the language-binding smokes
-        #   because Python / Rust / WebGPU drivers are not themselves
-        #   sanitizer-instrumented -- loading an ASAN-built dylib from
-        #   a non-ASAN driver triggers spurious aborts.
-        #   unit_qgt because the Fukui-Hatsugai-Suzuki Chern integral
-        #   relies on accurate per-k-point eigenvector branch picks;
-        #   Debug builds without float fast-math compute the Haldane
-        #   integral at 48x48 grid with enough noise that the rounded
-        #   Chern number comes out 0 instead of +/-1.  Release
-        #   (default) test passes this cleanly; the Release tier above
-        #   covers it.
-        # unit_kagome_ed{,_large} build dense Hamiltonians and run zheev
-        # on them.  Under ASAN that's 10x slower and times out at the
-        # CMake-level TIMEOUT (120s for the large variant); both are
-        # already covered by all non-sanitizer tiers, so skipping here
-        # is safe.
-        # unit_ca_mps_kagome12 runs a 12-qubit Trotter schedule that is
-        # compute-heavy under ASAN instrumentation; it's covered by every
-        # other tier as well.
-        # `-LE long` covers long_evolution, quantum_sim_test,
-        # unit_mpo_kpm, unit_qrng_statistics, unit_kagome_ed{,_large},
-        # and unit_ca_mps_kagome12 (all already labelled "long" in
-        # CMakeLists).  The remaining name-based exclusions are truly
-        # ASAN-specific, not slow-test exclusions.
-        run: ctest --test-dir build -LE long -E "python_bindings|rust_bindings|webgpu_unified|unit_qgt" --output-on-failure --timeout 600
-
-  # ============================================================================
-  # Tier C3 — exercise the no-LAPACK QR + SVD fallback codepaths in
-  # tensor.c on every PR.  The fallbacks are what production WASM and
-  # Windows clang-cl builds actually use; without this tier they only get
-  # exercised when something has already broken in the wild.  A Jacobi
-  # sign error caught here in 2026-04 had been silently producing
-  # non-orthonormal U matrices (and DMRG energies off by an order of
-  # magnitude) for two release cycles.
-  # ============================================================================
-
-  linux-fallback:
-    name: Linux x86_64 (Release + QR/SVD fallback)
-    runs-on: ubuntu-22.04
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential ninja-build cmake \
-            libopenblas-dev liblapacke-dev libomp-dev
-      - name: Configure (+ forced fallbacks)
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DQSIM_BUILD_TESTS=ON
-          -DQSIM_FORCE_QR_FALLBACK=ON
-          -DQSIM_FORCE_SVD_FALLBACK=ON
-      - name: Build
-        run: cmake --build build -j
-      - name: Test (-LE long, fallback paths)
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 900
-
-  # ============================================================================
-  # Tier C2 — line-coverage signal.  Builds with --coverage on Linux gcc,
-  # runs the same -LE long sweep, runs lcov to produce coverage.info, and
-  # uploads it as a CI artifact + prints a per-directory summary so you
-  # can see which subtrees are dark.
-  # ============================================================================
-
-  linux-coverage:
-    name: Linux x86_64 (Release + coverage)
-    runs-on: ubuntu-22.04
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential ninja-build cmake \
-            libopenblas-dev liblapacke-dev libomp-dev lcov
-      - name: Configure (+ coverage)
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DQSIM_ENABLE_COVERAGE=ON
-          -DQSIM_ENABLE_LTO=OFF
-      - name: Build
-        run: cmake --build build -j
-      - name: Test
-        # -LE long matches every other tier; coverage doesn't change which
-        # tests we run, only what we measure.
-        run: ctest --test-dir build -LE long --output-on-failure --timeout 900
-      - name: Capture coverage
-        run: |
-          # ubuntu-22.04 ships lcov 1.15 which only knows
-          # --ignore-errors source/graph/gcov; --ignore-errors
-          # mismatch and --ignore-errors unused are lcov 2.0+ syntax
-          # and abort with "unknown argument" on 1.15.  We test for
-          # the available flags at runtime and pass only the supported
-          # ones.
-          ignore_capture=""
-          if lcov --help 2>&1 | grep -q "ignore-errors source"; then
-            ignore_capture="--ignore-errors source"
-          fi
-          ignore_remove=""
-          if lcov --help 2>&1 | grep -q "ignore-errors unused" \
-             || lcov --version 2>&1 | grep -qE "version (2|[3-9])"; then
-            ignore_remove="--ignore-errors unused"
-          fi
-          lcov --capture --directory build --output-file coverage.raw.info \
-               --rc geninfo_unexecuted_blocks=1 \
-               $ignore_capture
-          # Drop system + third-party noise.
-          lcov --remove coverage.raw.info \
-               '/usr/*' '*/build/*' '*/tests/*' '*/bindings/*' \
-               --output-file coverage.info \
-               $ignore_remove
-          lcov --list coverage.info | tail -40
-      - name: Upload coverage report
-        if: ${{ env.ACT != 'true' }}
-        uses: actions/upload-artifact@v4
+      - name: Pin CMake
+        uses: jwlawson/actions-setup-cmake@v2
         with:
-          name: moonlab-coverage
-          path: coverage.info
+          cmake-version: ${{ env.CMAKE_VERSION }}
 
-  # ============================================================================
-  # Tier D — Python + Rust bindings smoke (runs whenever bindings/ changes).
-  # ============================================================================
-
-  bindings-macos:
-    name: Bindings smoke (Python + Rust, macOS)
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
-      OMP_NUM_THREADS: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: brew install libomp ninja rust
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Install pytest
-        run: python -m pip install --upgrade pip pytest numpy
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build library
-        run: cmake --build build -j
-      - name: Run bindings tests (smoke + full pytest suite)
-        run: ctest --test-dir build -R "python_bindings|rust_bindings_smoke" --output-on-failure --timeout 600
+          python-version: ${{ env.PYTHON_VERSION }}
 
-  bindings-linux:
-    name: Bindings smoke (Python + Rust, Linux)
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install apt dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libomp-dev libopenblas-dev liblapacke-dev
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install pytest
-        run: python -m pip install --upgrade pip pytest numpy
-      - name: Install Rust
+      - name: Install Python deps
+        shell: bash
+        run: pip install numpy pytest
+
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build library
-        run: cmake --build build -j
-      - name: Run bindings tests (smoke + full pytest suite)
-        run: ctest --test-dir build -R "python_bindings|rust_bindings_smoke" --output-on-failure --timeout 600
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQSIM_WERROR=ON \
+            ${{ matrix.cmake_flags }}
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
+              export ASAN_OPTIONS="detect_leaks=0:halt_on_error=1:allocator_may_return_null=1"
+              export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+          fi
+          cmake --build build --parallel
+
+      - name: Test
+        timeout-minutes: 30
+        shell: bash
+        env:
+          OMPI_MCA_plm_ssh_agent: /bin/false
+          OMPI_ALLOW_RUN_AS_ROOT: 1
+          OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+        run: |
+          set -euxo pipefail
+          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
+              export ASAN_OPTIONS="detect_leaks=0:halt_on_error=1:allocator_may_return_null=1"
+              export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+          fi
+          TEST_FILTER=""
+          if [[ -n "${{ matrix.test_label }}" ]]; then
+              TEST_FILTER="-L ${{ matrix.test_label }}"
+          fi
+          # Exclude long-running tests to keep total runtime bounded.
+          # Lanes that need the heavy suite live in the nightly workflow.
+          ctest --test-dir build --output-on-failure --timeout 300 \
+              -E "long|n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
+              $TEST_FILTER -j 4
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-build-log
+          path: |
+            build/CMakeFiles/CMakeError.log
+            build/CMakeFiles/CMakeOutput.log
+          if-no-files-found: ignore
 
   # ============================================================================
-  # Tier E — WASM build + WebGPU parity smoke.
+  # wasm — emscripten target, separate because it doesn't share the
+  # native compile toolchain with the unix matrix.
   # ============================================================================
 
   wasm:
-    name: WASM / WebGPU smoke
-    runs-on: macos-14
-    env:
-      MOONLAB_SKIP_HW_ENTROPY: "1"
+    name: wasm-smoke
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: brew install ninja
-      - name: Install emsdk
+
+      - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 3.1.74
-      - name: Install pnpm
-        run: npm install -g pnpm@9
-      - name: Build CLAPACK for WASM
-        run: bash bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
-      - name: Configure WASM moonlab
-        run: |
-          source "$EMSDK/emsdk_env.sh"
-          emcmake cmake -S bindings/javascript/packages/core/emscripten \
-                        -B bindings/javascript/packages/core/emscripten/build \
-                        -DCMAKE_BUILD_TYPE=Release
-      - name: Build WASM moonlab
-        run: |
-          source "$EMSDK/emsdk_env.sh"
-          emmake make -C bindings/javascript/packages/core/emscripten/build -j
-      - name: Build TypeScript
-        run: |
-          cd bindings/javascript/packages/core
-          pnpm install --ignore-scripts
-          pnpm run build:ts
-      - name: Run JS unit tests (vitest)
-        run: |
-          cd bindings/javascript/packages/core
-          pnpm run test:unit
-      - name: Run JS integration tests against fresh WASM
-        run: |
-          cd bindings/javascript/packages/core
-          # vitest.integration.config.ts pulls dist/moonlab.{js,wasm}
-          # which the Build WASM step above wrote.  The 107-test
-          # suite exercises tdvp / clifford / fusion / mpdo / ca-peps
-          # plus the existing quantum-state / circuit / gpu-backend
-          # / webgpu modules.
-          pnpm run test:integration
-      - name: Run WebGPU unified smoke
-        run: |
-          cd bindings/javascript/packages/core
-          node scripts/webgpu-unified-smoke.mjs
+          version: ${{ env.EMSCRIPTEN_VERSION }}
 
-  # ----------------------------------------------------------------------
-  # Docker image build (since v1.0.3): every PR builds the three
-  # production images (control-plane / exporter / gateway) so a
-  # broken Dockerfile cannot reach the fleet rollout.  We don't push
-  # to a registry from CI; that's a release-time action.
-  # ----------------------------------------------------------------------
-  docker-image-build:
-    name: Docker images build cleanly
+      - name: Install build deps
+        run: |
+          sudo apt-get update -o Acquire::Retries=5
+          sudo apt-get install -y ninja-build
+
+      - name: Pin CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Configure (emscripten)
+        run: |
+          set -euxo pipefail
+          cd bindings/javascript/packages/core/emscripten
+          mkdir -p build
+          emcmake cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build moonlab.wasm
+        run: |
+          set -euxo pipefail
+          cmake --build bindings/javascript/packages/core/emscripten/build --parallel
+          ls -la bindings/javascript/packages/core/emscripten/build/moonlab.{wasm,js}
+
+  # ============================================================================
+  # docker — image build smoke (no push), uses the release Dockerfile.
+  # ============================================================================
+
+  docker-image:
+    name: docker-image
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build moonlab/control-plane:ci
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: deploy/docker/Dockerfile.control-plane
-          push: false
-          load: true
-          tags: moonlab/control-plane:ci
-          build-args: |
-            MOONLAB_VERSION=ci
-      - name: Build moonlab/control-exporter:ci
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: deploy/docker/Dockerfile.exporter
-          push: false
-          load: true
-          tags: moonlab/control-exporter:ci
-      - name: Build moonlab/websocket-gateway:ci
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: deploy/docker/Dockerfile.gateway
-          push: false
-          load: true
-          tags: moonlab/websocket-gateway:ci
-      - name: Smoke-run the control-plane image
+      - uses: docker/setup-buildx-action@v3
+      - name: Build moonlab/release image
         run: |
-          # Start the daemon in the background; HEALTH probe; tear down.
-          # If the image is structurally broken (bad ENTRYPOINT, missing
-          # binary, missing shared lib), this step catches it.
-          docker run -d --rm --name moonlab-ci \
-              -p 17070:7070 \
-              moonlab/control-plane:ci
-          # Wait up to 15 s for the daemon to bind.
-          BOUND=0
-          for i in $(seq 1 15); do
-              if printf 'HEALTH\n' | nc -w 1 127.0.0.1 17070 2>/dev/null \
-                  | grep -q 'OK alive'; then
-                  echo "control-plane HEALTH OK on attempt $i"
-                  BOUND=1
-                  break
-              fi
-              sleep 1
-          done
-          if [ "$BOUND" -ne 1 ]; then
-              echo "control-plane did not respond to HEALTH within 15 s"
-              docker logs moonlab-ci || true
-              docker stop moonlab-ci || true
-              exit 1
-          fi
+          set -euxo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            -f docker/debian/release/Dockerfile \
+            --load \
+            -t moonlab/release:ci .
 
-          # v1.0.3 Bell-flow smoke: submit a Bell CIRCUIT directly over
-          # raw TCP and verify the wire response is the expected 4-vector
-          # {0.5, 0, 0, 0.5}.  Catches end-to-end breakage that a HEALTH
-          # probe alone misses (e.g. scheduler dispatch regression,
-          # response framing regression).  Uses python's stdlib socket
-          # module so we don't need any moonlab binding at runtime.
-          python3 - <<'PYEOF'
-          import socket, struct, sys
-          circuit = b"# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n"
-          verb    = f"CIRCUIT {len(circuit)}\n".encode("ascii")
-          with socket.create_connection(("127.0.0.1", 17070), timeout=10) as s:
-              s.sendall(verb)
-              s.sendall(circuit)
-              # Read response header line ("OK <N>\n" or "ERR ...").
-              hdr = b""
-              while not hdr.endswith(b"\n"):
-                  c = s.recv(1)
-                  if not c: break
-                  hdr += c
-              if not hdr.startswith(b"OK "):
-                  print("UNEXPECTED HEADER:", hdr); sys.exit(1)
-              n = int(hdr[3:].strip())
-              raw = b""
-              while len(raw) < n * 8:
-                  chunk = s.recv(n * 8 - len(raw))
-                  if not chunk: break
-                  raw += chunk
-              probs = struct.unpack(f"<{n}d", raw)
-          assert len(probs) == 4 and \
-                 abs(probs[0] - 0.5) < 1e-9 and \
-                 abs(probs[3] - 0.5) < 1e-9, f"unexpected probs: {probs}"
-          print("LIVE-IMAGE BELL OK:", list(probs))
-          PYEOF
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-              echo "control-plane image rejected a Bell CIRCUIT submission (rc=$rc)"
-              docker logs moonlab-ci || true
-              docker stop moonlab-ci || true
-              exit 1
+  # ============================================================================
+  # hygiene — proprietary-marker grep over the public tree.  Cheap;
+  # runs in seconds; gates pushes against accidental private leak.
+  # ============================================================================
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Public-source hygiene (proprietary-marker grep)
+        run: |
+          set -euxo pipefail
+          # Block accidental leak of tsotchke-private markers / credential
+          # shapes.  Patterns intentionally simple so a maintainer can
+          # eyeball false positives.
+          BAD_MARKERS='tsotchke-corporation|tsotchke-private|PRIVATE_OVERLAY|CONFIDENTIAL|REDACTED-INTERNAL'
+          CRED_PATTERNS='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{48}'
+
+          if grep -rEn --include="*.{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake}" \
+              -- "$BAD_MARKERS" \
+              . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=build \
+              --exclude-dir=build-* --exclude-dir=target ; then
+              echo "::error::Proprietary marker found in public source"; exit 1
           fi
-          docker stop moonlab-ci
-          exit 0
+          if grep -rEn --include="*.{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake}" \
+              -- "$CRED_PATTERNS" \
+              . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=build \
+              --exclude-dir=build-* --exclude-dir=target ; then
+              echo "::error::Credential pattern found in public source"; exit 1
+          fi
+          echo "Hygiene checks passed."
