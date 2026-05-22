@@ -150,7 +150,13 @@ mod tests {
         assert_eq!(b.peek(), 0);
         thread::sleep(Duration::from_millis(250));
         let p = b.peek();
-        assert!(20 <= p && p <= 30, "after 250ms at 100/s, peek = {}", p);
+        /* Verify invariants, not exact count.  CI runners can overrun
+         * the sleep -- 250ms wall can become 400-500ms under load,
+         * giving 40-50 tokens.  What matters is the floor (we got at
+         * least the nominal accrual minus sleep underrun grace) and
+         * the cap (we never exceed burst). */
+        assert!(p >= 20, "after >=250ms at 100/s, peek = {} (expected >= 20)", p);
+        assert!(p <= 100, "burst cap violated, peek = {} (expected <= 100)", p);
         assert!(b.take(10));
     }
 

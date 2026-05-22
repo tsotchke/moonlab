@@ -4,7 +4,7 @@
 
 use moonlab::control_plane::{submit_circuit, submit_metrics, ControlPlaneServer};
 use moonlab::qgtl::{GateType, QgtlCircuit};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Barrier};
 use std::thread;
 
 #[test]
@@ -26,10 +26,19 @@ fn cap_rejects_some_of_six_parallel() {
     let text = c.serialize().unwrap();
 
     let (tx, rx) = mpsc::channel();
+    /* Barrier ensures all 6 threads connect within microseconds of
+     * each other.  Without it, threads can serialise: the first
+     * submission completes before the second connects, so the cap
+     * is never observed and the test flakes.  With the barrier, all
+     * 6 are guaranteed in-flight simultaneously, forcing at least
+     * (6 - cap) rejections. */
+    let barrier = Arc::new(Barrier::new(6));
     for _ in 0..6 {
         let tx = tx.clone();
         let text = text.clone();
+        let barrier = barrier.clone();
         thread::spawn(move || {
+            barrier.wait();
             let r = submit_circuit("127.0.0.1", port, &text);
             tx.send(r.is_ok()).unwrap();
         });

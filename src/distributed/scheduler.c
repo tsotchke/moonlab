@@ -28,11 +28,17 @@
  * external scheduler_fire_completion_hook path increment the same
  * counter.  Operators see this as
  * `moonlab_control_completion_hook_fires_total` in METRICS. */
-/* Weak fallback so builds that exclude control_plane.c (e.g. the
- * WASM bundle in bindings/javascript/packages/core/emscripten) still
- * resolve the symbol at link time.  control_plane.c provides the
- * strong definition on full builds, which overrides this stub. */
-__attribute__((weak)) _Atomic uint64_t g_count_completion_hook_fires = 0;
+extern _Atomic uint64_t g_count_completion_hook_fires;
+
+#if defined(__EMSCRIPTEN__)
+/* WASM bundle in bindings/javascript/packages/core/emscripten excludes
+ * control_plane.c (the strong definition's TU), so the wasm-ld step
+ * fails on the unresolved extern.  Provide a TU-local definition only
+ * on the WASM target so the regular library build is unaffected.  Not
+ * weak -- there is no strong definition in the WASM source list, so
+ * this is the only definition and no override conflict can arise. */
+_Atomic uint64_t g_count_completion_hook_fires = 0;
+#endif
 
 #if defined(_OPENMP)
 #include <omp.h>

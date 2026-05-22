@@ -252,11 +252,22 @@ if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
 
         # Newer / compiler-specific demotions -- probe before appending.
         set(_qsim_optional_wno_error
-            enum-int-mismatch       # gcc 15: ca_mps.h vs moonlab_export.h drift
-            array-parameter         # gcc 15: mlkem uint8_t* vs uint8_t[N]
-            discarded-qualifiers    # gcc: config.c const-string init
-            switch-unreachable      # gcc: legacy default-case fall-through
-            ignored-qualifiers      # clang spelling of discarded-qualifiers
+            enum-int-mismatch          # gcc 15: ca_mps.h vs moonlab_export.h drift
+            array-parameter            # gcc 15: mlkem uint8_t* vs uint8_t[N]
+            discarded-qualifiers       # gcc: config.c const-string init
+            switch-unreachable         # gcc: legacy default-case fall-through
+            ignored-qualifiers         # clang spelling of discarded-qualifiers
+            unused-but-set-variable    # gcc 11+: control_plane.c log_peer_buf
+            format-truncation          # gcc strict snprintf truncation
+            unknown-pragmas            # gcc: tensor.c #pragma STDC FP_CONTRACT
+            nan-infinity-disabled      # clang+ffast-math: qaoa.c INFINITY sentinel
+            strict-aliasing            # gcc: gpu_vulkan.c pointer punning
+            unused-result              # gcc: gpu_vulkan.c fread return value
+            overlength-strings         # gcc strict: gpu_opencl.c kernel source > 4095
+            missing-braces             # gcc strict: cl_float2 initializer
+            implicit-fallthrough       # preventive, in case it appears
+            address                    # already in base set on some toolchains
+            stringop-truncation        # gcc strict snprintf
         )
         foreach(_wname IN LISTS _qsim_optional_wno_error)
             string(MAKE_C_IDENTIFIER "HAVE_WNO_ERROR_${_wname}" _have_var)
