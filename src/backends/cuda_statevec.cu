@@ -310,6 +310,27 @@ __global__ void k_apply_h(double2 * __restrict__ amps,
     amps[i1] = out1;
 }
 
+/* Runtime probe of "is there a discrete CUDA GPU?".
+ * Called by cuda_tegra_probe.c when the device-tree check fails
+ * (i.e. we're not on a Jetson but might be on a stock PCIe NVIDIA).
+ * Returns 1=discrete present, 0=no devices, -1=integrated, -2=error.
+ * Marked extern "C" so the C-side weak symbol resolves correctly. */
+extern "C"
+int moonlab_cuda_runtime_probe_discrete(void)
+{
+    int n = 0;
+    cudaError_t err = cudaGetDeviceCount(&n);
+    if (err != cudaSuccess) return -2;
+    if (n <= 0) return 0;
+    /* Look at device 0.  If it's integrated, return -1 so the
+     * caller can decide.  If not, we have at least one discrete
+     * GPU visible to the runtime. */
+    cudaDeviceProp props;
+    err = cudaGetDeviceProperties(&props, 0);
+    if (err != cudaSuccess) return -2;
+    return props.integrated ? -1 : 1;
+}
+
 /* ---------- public dispatch ---------- */
 
 extern "C"
