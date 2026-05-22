@@ -193,8 +193,18 @@ static int io_send(moonlab_io_t *io, const void *buf, size_t len)
 #ifdef MOONLAB_HAVE_TLS
     if (io->ssl) return io_send_tls((SSL *)io->ssl, buf, len);
 #endif
+    /* MSG_NOSIGNAL suppresses SIGPIPE on Linux when the peer has
+     * closed the socket; on macOS the same effect is achieved via
+     * SO_NOSIGPIPE in client_connect().  Without one of these, a
+     * server hangup (cap reject, shutdown, TLS handshake fail)
+     * kills the entire calling process. */
+#ifdef MSG_NOSIGNAL
+    const int send_flags = MSG_NOSIGNAL;
+#else
+    const int send_flags = 0;
+#endif
     while (1) {
-        ssize_t n = send(io->fd, buf, len, 0);
+        ssize_t n = send(io->fd, buf, len, send_flags);
         if (n < 0) {
             if (errno == EINTR) continue;
             return -1;
@@ -1463,6 +1473,19 @@ static int client_connect(const char *host, uint16_t port) {
         fd = -1;
     }
     freeaddrinfo(res);
+
+    /* Suppress SIGPIPE on writes to a peer-closed socket.  Without
+     * this, a server closing the connection (e.g. cap-reject, TLS
+     * handshake failure, shutdown) terminates the entire client
+     * process the next time it calls send().  macOS supports the
+     * per-socket SO_NOSIGPIPE; Linux uses MSG_NOSIGNAL on each send
+     * call instead, applied in io_send() below. */
+#ifdef SO_NOSIGPIPE
+    if (fd >= 0) {
+        int yes = 1;
+        (void)setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+    }
+#endif
     return fd;
 }
 
