@@ -66,10 +66,11 @@ jobs:
             runner: macos-14
             cmake_flags: '-DQSIM_ENABLE_MPI=ON'
             test_label: ''
-          - name: macos-x64-lite
-            runner: macos-13
-            cmake_flags: ''
-            test_label: ''
+          # macos-x64-lite removed: hosted macos-13 runner queue depth is
+          # ~hours on free tier, and Apple has deprecated x86-Mac.  x86
+          # ABI coverage is exercised by linux-x64-lite and Docker; add
+          # a self-hosted Intel Mac runner if x86-Mac-specific coverage
+          # becomes load-bearing.
 
     steps:
       - uses: actions/checkout@v4
