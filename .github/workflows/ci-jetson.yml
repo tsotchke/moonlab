@@ -1,0 +1,114 @@
+name: CI (Jetson / aarch64 + CUDA)
+
+# Self-hosted runner lane for the v1.1 GPU arc.  This lane targets
+# the NVIDIA Jetson Xavier (aarch64 + Volta cc 7.2) running
+# Anduril's jetpack-nixos; it exercises the on-chip CUDA path that
+# no GitHub-hosted runner provides (all hosted runners are x86_64
+# with optional CUDA via larger Ada/Hopper images, not aarch64 +
+# Volta-class GPU).
+#
+# Runner expectations (set up via Settings -> Actions -> Runners):
+#   - Labels: [self-hosted, linux, ARM64, jetpack, cuda]
+#   - Working directory in an HDD-backed dir (xavier has only ~32 GB
+#     onboard eMMC; the runner home should live on /storage/...)
+#   - Nix already installed; the workflow drops into the flake.nix
+#     dev shell rather than using apt
+#
+# Trigger criteria:
+#   - All pushes to master + the active feature branches
+#   - All PRs that target master
+#   - Manual via workflow_dispatch
+# We do NOT run this lane on every push to all branches because
+# Volta cc 7.2 builds take ~6 min and the host is shared with other
+# work.
+
+on:
+  push:
+    branches: [master, 'feat/v1.1*', 'feat/v1.2*', 'chore/cuda*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Cancel in-progress runs on the same branch when a new commit lands.
+concurrency:
+  group: jetson-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jetson-cuda:
+    name: Jetson Xavier (jetpack-nixos, CUDA 11.4, Volta cc 7.2)
+    runs-on: [self-hosted, linux, ARM64, jetpack, cuda]
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Show host fingerprint
+        run: |
+          uname -a
+          /usr/bin/nvidia-smi || true
+          ls /usr/local/cuda*/bin/nvcc 2>/dev/null || true
+          # Show what jetpack-nixos exposes
+          nix --version
+          nix flake info --json --extra-experimental-features 'nix-command flakes' \
+            | head -20 || true
+
+      - name: Configure (Release, CUDA arch sm_72 Volta)
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' develop \
+            --command bash -lc '
+              cmake -S . -B build_jetson \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DQSIM_ENABLE_CUDA=ON \
+                -DCMAKE_CUDA_ARCHITECTURES=72 \
+                -DCMAKE_C_FLAGS="-O2" \
+                -DCMAKE_CXX_FLAGS="-O2"
+            '
+
+      - name: Build libquantumsim + tests + examples
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' develop \
+            --command bash -lc '
+              cmake --build build_jetson -j 8 --target quantumsim
+              cmake --build build_jetson -j 8 --target tests examples
+            '
+
+      - name: Run GPU parity examples
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' develop \
+            --command bash -lc '
+              # Verify the v1.1.0-rc and follow-up GPU paths on Volta
+              ./build_jetson/state_gpu_bell
+              ./build_jetson/state_gpu_circuit 8
+              ./build_jetson/state_gpu_multiq 8
+            '
+
+      - name: Run ctest (subset; full suite skipped for runtime cap)
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' develop \
+            --command bash -lc '
+              cd build_jetson
+              # Exclude the heaviest tests for the per-PR loop; the full
+              # suite runs on the nightly cron lane (separate workflow).
+              ctest --output-on-failure --timeout 120 \
+                -E "unit_qgt_hofstadter|unit_kagome_ed_n18|n34_to_n40" \
+                -j 4
+            '
+
+      - name: Smoke MPI + CUDA on a single host (2 ranks, 1 GPU)
+        # Xavier has a single Volta tile -- both ranks share it via
+        # CUDA's default scheduler.  Validates the v1.1 follow-up #6
+        # sharded path without needing a second physical GPU.
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' develop \
+            --command bash -lc '
+              # mpirun is provided by the flake.nix dev shell
+              mpirun -n 2 ./build_jetson/large_state_ghz_gpu 8 || \
+                echo "mpi+cuda demo failed (non-fatal until #6 lands in flake)"
+            '
+
+      - name: Show ccache stats (if enabled)
+        run: ccache --show-stats 2>/dev/null || true
+        if: always()
