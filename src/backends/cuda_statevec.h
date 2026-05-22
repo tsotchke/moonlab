@@ -179,6 +179,41 @@ moonlab_cuda_state_copy_from_host(moonlab_cuda_state_t *state,
                                   const double *in);
 
 /**
+ * @brief Multi-control X (flip target when all controls are |1>).
+ *
+ *        ``control_mask`` is a bitmask over qubits: bit i set means
+ *        qubit i is a control.  The kernel checks (idx & mask) ==
+ *        mask before flipping the target bit.  Covers Toffoli (mask
+ *        with 2 bits), n-Toffoli (n bits), and plain CNOT (mask
+ *        with 1 bit).  The target bit must NOT be in control_mask.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_mcx(moonlab_cuda_state_t *state,
+                       uint64_t control_mask,
+                       uint32_t target);
+
+/**
+ * @brief Multi-control Z (phase -1 when all qubits in all_mask are |1>).
+ *
+ *        ``all_mask`` includes BOTH the controls and the target --
+ *        the kernel is diagonal so there's no distinction.  Covers
+ *        CCZ (3-bit mask), n-CZ (n bits), and plain Z (1-bit mask).
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_mcz(moonlab_cuda_state_t *state,
+                       uint64_t all_mask);
+
+/**
+ * @brief Fredkin gate (controlled-SWAP).
+ *        When control bit is 1, swap the (t1, t2) bits.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_apply_fredkin(moonlab_cuda_state_t *state,
+                           uint32_t control,
+                           uint32_t t1,
+                           uint32_t t2);
+
+/**
  * @brief Synchronize the device stream.  Useful for benchmarks
  *        and for ensuring the result of asynchronous gate calls
  *        has settled before reading the state.

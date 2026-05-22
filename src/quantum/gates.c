@@ -44,6 +44,9 @@ extern int qsim_gpu_route_pauli_x          (quantum_state_t *state, int qubit) _
 extern int qsim_gpu_route_cnot             (quantum_state_t *state, int control, int target) __attribute__((weak));
 extern int qsim_gpu_route_apply_1q_matrix  (quantum_state_t *state, int qubit, const double m[8]) __attribute__((weak));
 extern int qsim_gpu_route_apply_2q_matrix  (quantum_state_t *state, int q0, int q1, const double m[32]) __attribute__((weak));
+extern int qsim_gpu_route_mcx              (quantum_state_t *state, uint64_t control_mask, int target) __attribute__((weak));
+extern int qsim_gpu_route_mcz              (quantum_state_t *state, uint64_t all_mask) __attribute__((weak));
+extern int qsim_gpu_route_fredkin          (quantum_state_t *state, int control, int t1, int t2) __attribute__((weak));
 
 /* Inline dispatch helpers: return 1 if the gate ran on GPU
  * (caller should propagate *out as its return); 0 if no GPU
@@ -906,7 +909,14 @@ qs_error_t gate_toffoli(quantum_state_t *state, int control1, int control2, int 
     if (control1 == control2 || control1 == target || control2 == target) {
         return QS_ERROR_INVALID_QUBIT;
     }
-    
+
+    /* GPU dispatch: Toffoli = MCX with 2-bit control mask. */
+    if (qsim_gpu_route_mcx != NULL && state->gpu_state) {
+        uint64_t mask = ((uint64_t)1 << control1) | ((uint64_t)1 << control2);
+        return qsim_gpu_route_mcx(state, mask, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Toffoli (CCNOT): flip target if both controls are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control1) && get_bit(i, control2) && !get_bit(i, target)) {
@@ -928,7 +938,13 @@ qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int ta
     if (control == target1 || control == target2 || target1 == target2) {
         return QS_ERROR_INVALID_QUBIT;
     }
-    
+
+    /* GPU dispatch: dedicated controlled-swap kernel. */
+    if (qsim_gpu_route_fredkin != NULL && state->gpu_state) {
+        return qsim_gpu_route_fredkin(state, control, target1, target2) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Fredkin (CSWAP): swap two targets if control is |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control)) {
@@ -967,7 +983,16 @@ qs_error_t gate_mcx(quantum_state_t *state, const int *controls, size_t num_cont
             if (controls[i] == controls[j]) return QS_ERROR_INVALID_QUBIT;
         }
     }
-    
+
+    /* GPU dispatch: build the bitmask from the controls array, route
+     * through the single MCX kernel. */
+    if (qsim_gpu_route_mcx != NULL && state->gpu_state) {
+        uint64_t mask = 0;
+        for (size_t i = 0; i < num_controls; i++) mask |= ((uint64_t)1 << controls[i]);
+        return qsim_gpu_route_mcx(state, mask, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Multi-controlled X: flip target if all controls are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         // Check if all control qubits are |1⟩
@@ -994,7 +1019,15 @@ qs_error_t gate_mcz(quantum_state_t *state, const int *controls, size_t num_cont
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!controls || num_controls == 0) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: MCZ is diagonal, build all_mask = controls | target. */
+    if (qsim_gpu_route_mcz != NULL && state->gpu_state) {
+        uint64_t mask = ((uint64_t)1 << target);
+        for (size_t i = 0; i < num_controls; i++) mask |= ((uint64_t)1 << controls[i]);
+        return qsim_gpu_route_mcz(state, mask) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Multi-controlled Z: apply phase -1 if all controls and target are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         int all_one = get_bit(i, target);

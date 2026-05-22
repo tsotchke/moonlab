@@ -102,6 +102,18 @@ int qsim_gpu_route_apply_2q_matrix(quantum_state_t *s, int q0, int q1, const dou
     (void)s; (void)q0; (void)q1; (void)m; return -1;
 }
 __attribute__((weak))
+int qsim_gpu_route_mcx(quantum_state_t *s, uint64_t mask, int t) {
+    (void)s; (void)mask; (void)t; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_mcz(quantum_state_t *s, uint64_t mask) {
+    (void)s; (void)mask; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_fredkin(quantum_state_t *s, int c, int t1, int t2) {
+    (void)s; (void)c; (void)t1; (void)t2; return -1;
+}
+__attribute__((weak))
 int moonlab_cuda_runtime_probe_discrete(void) { return 0; }
 #endif
 

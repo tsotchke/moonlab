@@ -310,6 +310,85 @@ __global__ void k_apply_h(double2 * __restrict__ amps,
     amps[i1] = out1;
 }
 
+/* Multi-control kernels.  Variable number of controls is encoded as
+ * a bitmask: control_mask has bit set for each control qubit.  A
+ * thread processes one state index k; the gate fires iff
+ * (k & control_mask) == control_mask (all controls are 1). */
+
+/* MCX: flip the target bit when all controls are 1.  Each thread
+ * handles ONE PAIR (i_with_target_0, i_with_target_1), so dim/2
+ * threads total.  We split the index space using the same
+ * bit-insertion trick as the 1q apply_x kernel. */
+__global__ void k_apply_mcx(double2 * __restrict__ amps,
+                             uint64_t              dim,
+                             uint64_t              control_mask,
+                             uint32_t              target)
+{
+    uint64_t pair = (uint64_t)blockIdx.x * (uint64_t)blockDim.x
+                  +  (uint64_t)threadIdx.x;
+    uint64_t n_pairs = dim >> 1;
+    if (pair >= n_pairs) return;
+
+    uint64_t mask_lo = ((uint64_t)1 << target) - 1ULL;
+    uint64_t low  = pair & mask_lo;
+    uint64_t high = pair >> target;
+    uint64_t i0   = (high << (target + 1)) | low;
+    uint64_t i1   = i0 | ((uint64_t)1 << target);
+
+    /* Both indices i0 and i1 differ ONLY in the target bit.  The
+     * control mask shouldn't include the target.  We test the
+     * controls on i0 (== controls on i1 since target isn't in mask). */
+    if ((i0 & control_mask) != control_mask) return;
+
+    double2 tmp = amps[i0];
+    amps[i0] = amps[i1];
+    amps[i1] = tmp;
+}
+
+/* MCZ: apply phase -1 when all controls AND target are 1 (i.e.,
+ * the full "controls+target" bitmask matches the index).  No
+ * pairing -- diagonal action, one thread per amplitude. */
+__global__ void k_apply_mcz(double2 * __restrict__ amps,
+                             uint64_t              dim,
+                             uint64_t              all_mask)
+{
+    uint64_t k = (uint64_t)blockIdx.x * (uint64_t)blockDim.x
+              +  (uint64_t)threadIdx.x;
+    if (k >= dim) return;
+    if ((k & all_mask) == all_mask) {
+        amps[k].x = -amps[k].x;
+        amps[k].y = -amps[k].y;
+    }
+}
+
+/* Fredkin (CSWAP): when control bit is 1, swap target1 and target2
+ * bits.  Each thread handles one pair of amplitudes whose indices
+ * differ only in (target1, target2) -- specifically (target1=0,
+ * target2=1) <-> (target1=1, target2=0).  When the control bit is
+ * 0, no swap (identity).  When control is 1 AND (t1, t2) bits are
+ * (0, 1) or (1, 0), the two indices swap. */
+__global__ void k_apply_fredkin(double2 * __restrict__ amps,
+                                 uint64_t              dim,
+                                 uint32_t              control,
+                                 uint32_t              t1,
+                                 uint32_t              t2)
+{
+    uint64_t k = (uint64_t)blockIdx.x * (uint64_t)blockDim.x
+              +  (uint64_t)threadIdx.x;
+    if (k >= dim) return;
+    /* Only do the swap once per pair: act when target1 bit = 0 AND
+     * target2 bit = 1, swap amps[k] with amps[k ^ (1<<t1) ^ (1<<t2)]. */
+    uint64_t t1_bit = ((uint64_t)1 << t1);
+    uint64_t t2_bit = ((uint64_t)1 << t2);
+    if ((k & t1_bit) || !(k & t2_bit)) return;
+    if (!((k >> control) & 1)) return;
+
+    uint64_t k_swap = (k & ~t2_bit) | t1_bit;
+    double2 tmp = amps[k];
+    amps[k] = amps[k_swap];
+    amps[k_swap] = tmp;
+}
+
 /* Runtime probe of "is there a discrete CUDA GPU?".
  * Called by cuda_tegra_probe.c when the device-tree check fails
  * (i.e. we're not on a Jetson but might be on a stock PCIe NVIDIA).
@@ -654,5 +733,75 @@ moonlab_cuda_norm(const moonlab_cuda_state_t *state, double *out_norm)
     for (int i = 0; i < blocks; i++) sum += partials[i];
     cudaFree(partials);
     *out_norm = sum;
+    return MOONLAB_CUDA_OK;
+}
+
+/* ---------- multi-control public dispatch ---------- */
+
+extern "C"
+moonlab_cuda_status_t
+moonlab_cuda_apply_mcx(moonlab_cuda_state_t *state,
+                       uint64_t control_mask,
+                       uint32_t target)
+{
+    if (!state) return MOONLAB_CUDA_ERR_NUM_QUBITS;
+    if (target >= state->n_qubits) return MOONLAB_CUDA_ERR_INVALID_QUBIT;
+    /* Target bit must not be in control_mask. */
+    if (control_mask & ((uint64_t)1 << target)) return MOONLAB_CUDA_ERR_INVALID_QUBIT;
+    /* Pure 1q X when control_mask == 0 -- fall through to k_apply_x by
+     * launching with mask 0 (the check (i0 & 0) == 0 is always true,
+     * so this works correctly). */
+
+    uint64_t n_pairs = state->dim >> 1;
+    int  threads = 256;
+    uint64_t blocks_u = (n_pairs + threads - 1) / threads;
+    if (blocks_u > (uint64_t)2147483647ULL) blocks_u = 2147483647ULL;
+    int blocks = (int)blocks_u;
+    if (blocks < 1) blocks = 1;
+    k_apply_mcx<<<blocks, threads, 0, state->stream>>>(
+        state->amps, state->dim, control_mask, target);
+    CUDA_TRY(cudaGetLastError());
+    return MOONLAB_CUDA_OK;
+}
+
+extern "C"
+moonlab_cuda_status_t
+moonlab_cuda_apply_mcz(moonlab_cuda_state_t *state,
+                       uint64_t all_mask)
+{
+    if (!state) return MOONLAB_CUDA_ERR_NUM_QUBITS;
+
+    int  threads = 256;
+    uint64_t blocks_u = (state->dim + threads - 1) / threads;
+    if (blocks_u > (uint64_t)2147483647ULL) blocks_u = 2147483647ULL;
+    int blocks = (int)blocks_u;
+    if (blocks < 1) blocks = 1;
+    k_apply_mcz<<<blocks, threads, 0, state->stream>>>(
+        state->amps, state->dim, all_mask);
+    CUDA_TRY(cudaGetLastError());
+    return MOONLAB_CUDA_OK;
+}
+
+extern "C"
+moonlab_cuda_status_t
+moonlab_cuda_apply_fredkin(moonlab_cuda_state_t *state,
+                           uint32_t control,
+                           uint32_t t1,
+                           uint32_t t2)
+{
+    if (!state) return MOONLAB_CUDA_ERR_NUM_QUBITS;
+    if (control >= state->n_qubits || t1 >= state->n_qubits || t2 >= state->n_qubits)
+        return MOONLAB_CUDA_ERR_INVALID_QUBIT;
+    if (control == t1 || control == t2 || t1 == t2)
+        return MOONLAB_CUDA_ERR_INVALID_QUBIT;
+
+    int  threads = 256;
+    uint64_t blocks_u = (state->dim + threads - 1) / threads;
+    if (blocks_u > (uint64_t)2147483647ULL) blocks_u = 2147483647ULL;
+    int blocks = (int)blocks_u;
+    if (blocks < 1) blocks = 1;
+    k_apply_fredkin<<<blocks, threads, 0, state->stream>>>(
+        state->amps, state->dim, control, t1, t2);
+    CUDA_TRY(cudaGetLastError());
     return MOONLAB_CUDA_OK;
 }
