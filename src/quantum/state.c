@@ -62,9 +62,24 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     return QS_SUCCESS;
 }
 
+/* Weak link to the CUDA backend's state-free entry point.  When
+ * libquantumsim was built with QSIM_HAS_CUDA, this resolves to
+ * moonlab_cuda_state_free() and we tear down GPU memory before
+ * the host-side free.  When CUDA isn't compiled in, the weak ref
+ * stays NULL and the gpu_state slot is always NULL anyway. */
+extern void moonlab_cuda_state_free(void *)
+    __attribute__((weak));
+
 void quantum_state_free(quantum_state_t *state) {
     if (!state) return;
-    
+
+    /* GPU backing first (if any), then host buffer. */
+    if (state->gpu_state && moonlab_cuda_state_free != NULL) {
+        moonlab_cuda_state_free(state->gpu_state);
+        state->gpu_state   = NULL;
+        state->gpu_backend = 0;
+    }
+
     if (state->owns_memory) {
         if (state->amplitudes) {
             // Secure zero before freeing (prevent memory dumps)
@@ -563,4 +578,32 @@ void quantum_state_destroy(quantum_state_t* state) {
 
     quantum_state_free(state);
     free(state);
+}
+
+/* ---------- GPU-backed state, weak fallbacks ----------
+ *
+ * When libquantumsim is built with QSIM_HAS_CUDA, state_gpu.cu
+ * defines strong versions of these two functions.  When CUDA
+ * isn't compiled in, callers get these weak stubs which return
+ * a clear "not supported" status instead of an undefined symbol
+ * at link time.
+ */
+
+__attribute__((weak))
+qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state)
+{
+    (void)num_qubits;
+    if (out_state) *out_state = NULL;
+    return QS_ERROR_NOT_SUPPORTED;
+}
+
+__attribute__((weak))
+qs_error_t quantum_state_sync_to_host(quantum_state_t *state)
+{
+    if (!state) return QS_ERROR_INVALID_PARAM;
+    /* No GPU backing == no-op == success.  If the caller managed
+     * to set state->gpu_state without CUDA being compiled in,
+     * that's a configuration error, not a runtime one. */
+    if (!state->gpu_state) return QS_SUCCESS;
+    return QS_ERROR_NOT_SUPPORTED;
 }

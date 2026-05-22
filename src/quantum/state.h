@@ -81,7 +81,10 @@ typedef enum {
     QS_ERROR_INVALID_STATE = -2,
     QS_ERROR_NOT_NORMALIZED = -3,
     QS_ERROR_OUT_OF_MEMORY = -4,
-    QS_ERROR_INVALID_DIMENSION = -5
+    QS_ERROR_INVALID_DIMENSION = -5,
+    QS_ERROR_INVALID_PARAM = -6,
+    QS_ERROR_NOT_SUPPORTED = -7,
+    QS_ERROR_DRIVER = -8
 } qs_error_t;
 
 /**
@@ -110,6 +113,21 @@ typedef struct {
 
     /* Memory management. */
     int owns_memory;                /* 1 if we allocated amplitudes */
+
+    /* Optional GPU backing.  When non-NULL, the state lives on the
+     * GPU (in moonlab_cuda_state_t) and the gate primitives dispatch
+     * to CUDA kernels rather than touching `amplitudes`.  The host
+     * `amplitudes` buffer is stale until quantum_state_sync_to_host()
+     * is called.
+     *
+     *   gpu_state == NULL   -> classical CPU state, no change.
+     *   gpu_state != NULL   -> opaque moonlab_cuda_state_t*; gate
+     *                          primitives auto-dispatch to GPU.
+     *
+     * `gpu_backend` records the chosen backend kind (0=none/CPU,
+     * 1=CUDA).  Reserved for future backends (Metal, ROCm, OpenCL). */
+    void *gpu_state;                /* opaque moonlab_cuda_state_t* */
+    int   gpu_backend;              /* 0 = CPU, 1 = CUDA */
 } quantum_state_t;
 
 // ============================================================================
@@ -373,6 +391,38 @@ void quantum_state_destroy(quantum_state_t* state);
 static inline void quantum_state_init_zero(quantum_state_t* state) {
     quantum_state_reset(state);
 }
+
+// ============================================================================
+// GPU-BACKED STATE (opt-in; requires QSIM_HAS_CUDA at build time)
+// ============================================================================
+
+/**
+ * @brief Create a quantum state whose amplitudes live on a CUDA GPU.
+ *
+ * The returned state behaves like a normal quantum_state_t but the
+ * gate primitives dispatch to CUDA kernels instead of touching the
+ * host `amplitudes` buffer.  The host buffer is allocated but stays
+ * stale until quantum_state_sync_to_host() is called.
+ *
+ * Only available when libquantumsim was built with QSIM_HAS_CUDA.
+ * If CUDA isn't compiled in, returns QS_ERROR_NOT_SUPPORTED.
+ *
+ * @param num_qubits Number of qubits (1..31)
+ * @param out_state  Receives the newly-allocated state on success
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state);
+
+/**
+ * @brief Copy the GPU state into the host `amplitudes` buffer.
+ *
+ * After this call, state->amplitudes is fresh.  If state has no
+ * GPU backing, this is a no-op (returns QS_SUCCESS).
+ *
+ * @param state GPU-backed state (must have non-NULL gpu_state)
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
 
 #ifdef __cplusplus
 }
