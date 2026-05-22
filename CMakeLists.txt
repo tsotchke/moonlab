@@ -1414,6 +1414,7 @@ if(QSIM_HAS_CUDA)
     target_sources(quantumsim PRIVATE
         src/backends/cuda_tegra_probe.c
         src/backends/cuda_statevec.cu
+        src/quantum/state_gpu.cu
     )
 
     # Separable-compilation policy.

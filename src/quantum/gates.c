@@ -23,6 +23,13 @@
 #endif
 #define SQRT2_INV QC_SQRT2_INV
 
+/* GPU routing entry points provided by state_gpu.cu (compiled
+ * when QSIM_HAS_CUDA).  Marked weak so this TU links cleanly
+ * when CUDA is off: the gate code checks for NULL before calling. */
+extern int qsim_gpu_route_hadamard(quantum_state_t *state, int qubit) __attribute__((weak));
+extern int qsim_gpu_route_pauli_x (quantum_state_t *state, int qubit) __attribute__((weak));
+extern int qsim_gpu_route_cnot    (quantum_state_t *state, int control, int target) __attribute__((weak));
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -60,6 +67,14 @@ static inline int get_bit(uint64_t n, int bit_pos) {
 qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch (when state has CUDA backing).  Returns without
+     * touching the host amplitudes buffer -- which stays stale until
+     * quantum_state_sync_to_host() is called explicitly. */
+    if (qsim_gpu_route_pauli_x != NULL && state->gpu_state) {
+        return qsim_gpu_route_pauli_x(state, qubit) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
 
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
@@ -139,6 +154,12 @@ qs_error_t gate_pauli_z(quantum_state_t *state, int qubit) {
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch (when state has CUDA backing). */
+    if (qsim_gpu_route_hadamard != NULL && state->gpu_state) {
+        return qsim_gpu_route_hadamard(state, qubit) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
 
     /* Stride-based block traversal; inner kernel is the SIMD
      * primitive simd_hadamard_pair (NEON / AVX-512 / SSE2 / scalar).
@@ -410,6 +431,12 @@ qs_error_t gate_cnot(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch (when state has CUDA backing). */
+    if (qsim_gpu_route_cnot != NULL && state->gpu_state) {
+        return qsim_gpu_route_cnot(state, control, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
 
     /* CNOT: flip target when control == |1>. Stride-based traversal;
      * simd_complex_swap (NEON / SSE2 / scalar) handles contiguous
