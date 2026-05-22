@@ -81,6 +81,19 @@ qs_error_t quantum_state_sync_to_host(quantum_state_t *state)
     return QS_SUCCESS;
 }
 
+extern "C"
+qs_error_t quantum_state_sync_from_host(quantum_state_t *state)
+{
+    if (!state) return QS_ERROR_INVALID_PARAM;
+    if (!state->gpu_state) return QS_SUCCESS;
+
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_state_copy_from_host(
+        gpu, (const double *)state->amplitudes);
+    if (rc != MOONLAB_CUDA_OK) return QS_ERROR_DRIVER;
+    return QS_SUCCESS;
+}
+
 /* ---------- routing entry points used by gates.c ---------- */
 /* These are looked up as weak externs from gates.c.  When CUDA
  * is compiled in, they resolve here; otherwise gates.c sees NULL

@@ -424,6 +424,20 @@ qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_sta
  */
 qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
 
+/**
+ * @brief Push the host `amplitudes` buffer back into the GPU state.
+ *
+ * Counterpart to sync_to_host.  Used after MPI exchange (where the
+ * host buffer is the comm buffer) and any other path that mutates
+ * amplitudes on the host side and needs the GPU view refreshed.
+ *
+ * If state has no GPU backing, this is a no-op (returns QS_SUCCESS).
+ *
+ * @param state GPU-backed state (must have non-NULL gpu_state)
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_sync_from_host(quantum_state_t *state);
+
 #ifdef __cplusplus
 }
 #endif

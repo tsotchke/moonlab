@@ -27,6 +27,7 @@
 #include "../../src/algorithms/topology_realspace/chern_marker.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
