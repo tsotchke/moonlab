@@ -249,8 +249,19 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
     return state;
 }
 
+/* Weak link to the CUDA state-free entry point, so non-CUDA builds
+ * still link.  On CUDA builds this resolves to moonlab_cuda_state_free
+ * defined in cuda_statevec.cu.  On non-CUDA builds the state.c
+ * fallback stub catches the reference. */
+extern void moonlab_cuda_state_free(void *) __attribute__((weak));
+
 void partition_state_free(partitioned_state_t* state) {
     if (!state) return;
+
+    if (state->gpu_state && moonlab_cuda_state_free != NULL) {
+        moonlab_cuda_state_free(state->gpu_state);
+        state->gpu_state = NULL;
+    }
 
     if (state->owns_memory && state->amplitudes) {
         aligned_free_impl(state->amplitudes);
@@ -260,6 +271,75 @@ void partition_state_free(partitioned_state_t* state) {
     if (state->recv_buffer) aligned_free_impl(state->recv_buffer);
 
     free(state);
+}
+
+/* ============================================================================
+ * GPU-backed partitioned state (v1.1 follow-up #6)
+ * ============================================================================
+ *
+ * Each rank's local shard lives on a CUDA GPU; the host `amplitudes`
+ * buffer is allocated for staging during MPI exchange.  See the
+ * header for the high-level semantics.
+ */
+
+/* Forward references to the CUDA state ABI; weak so a non-CUDA build
+ * gets these as NULL and the create_gpu function returns NULL up-front.
+ * MOONLAB_CUDA_OK = 0 (from moonlab_cuda_statevec_status_t).  The void*
+ * here is moonlab_cuda_state_t* opaqued at the boundary so we don't
+ * need to pull cuda_statevec.h into the partition TU. */
+extern int  moonlab_cuda_state_create        (uint32_t n_qubits, void** out_state) __attribute__((weak));
+extern int  moonlab_cuda_state_copy_to_host  (const void *state, double *out)      __attribute__((weak));
+extern int  moonlab_cuda_state_copy_from_host(void *state, const double *in)        __attribute__((weak));
+
+partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
+                                                uint32_t num_qubits,
+                                                const partition_config_t* config)
+{
+    /* Reject early if the weak CUDA symbols aren't bound. */
+    if (moonlab_cuda_state_create == NULL) return NULL;
+
+    /* Get the CPU-backed partitioned state first; we'll then attach
+     * a GPU shard sized to its local_qubits. */
+    partitioned_state_t* st = partition_state_create(dist_ctx, num_qubits, config);
+    if (!st) return NULL;
+
+    /* Allocate a CUDA state of size 2^local_qubits.  Each rank
+     * gets its own independent CUDA context implicitly. */
+    void* gpu = NULL;
+    int rc = moonlab_cuda_state_create((uint32_t)st->local_qubits, &gpu);
+    if (rc != 0 || gpu == NULL) {
+        partition_state_free(st);
+        return NULL;
+    }
+    st->gpu_state = gpu;
+    st->gpu_backend = 1;
+
+    /* Seed the GPU shard from the (already-initialized) host shard. */
+    if (moonlab_cuda_state_copy_from_host != NULL) {
+        moonlab_cuda_state_copy_from_host(gpu, (const double*)st->amplitudes);
+    }
+
+    return st;
+}
+
+partition_error_t partition_sync_to_host(partitioned_state_t* state)
+{
+    if (!state) return PARTITION_ERROR_NOT_INITIALIZED;
+    if (!state->gpu_state) return PARTITION_SUCCESS;
+    if (moonlab_cuda_state_copy_to_host == NULL) return PARTITION_ERROR_NOT_INITIALIZED;
+    int rc = moonlab_cuda_state_copy_to_host(state->gpu_state,
+                                              (double*)state->amplitudes);
+    return (rc == 0) ? PARTITION_SUCCESS : PARTITION_ERROR_ALLOC;
+}
+
+partition_error_t partition_sync_from_host(partitioned_state_t* state)
+{
+    if (!state) return PARTITION_ERROR_NOT_INITIALIZED;
+    if (!state->gpu_state) return PARTITION_SUCCESS;
+    if (moonlab_cuda_state_copy_from_host == NULL) return PARTITION_ERROR_NOT_INITIALIZED;
+    int rc = moonlab_cuda_state_copy_from_host(state->gpu_state,
+                                                (const double*)state->amplitudes);
+    return (rc == 0) ? PARTITION_SUCCESS : PARTITION_ERROR_ALLOC;
 }
 
 // ============================================================================
