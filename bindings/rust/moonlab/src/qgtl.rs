@@ -27,6 +27,7 @@ use moonlab_sys::{
     moonlab_qgtl_execute, moonlab_qgtl_results_free, moonlab_qgtl_results_t,
 };
 use std::ffi::CString;
+use std::os::raw::c_char;
 use std::ptr;
 
 /// Gate-type tag matching `moonlab_qgtl_gate_t` numerically.
@@ -183,7 +184,7 @@ impl QgtlCircuit {
         let rc = unsafe {
             moonlab_qgtl_circuit_serialize(
                 self.ptr as *const _,
-                buf.as_mut_ptr() as *mut i8,
+                buf.as_mut_ptr() as *mut c_char,
                 buf.len(),
                 ptr::null_mut(),
             )
@@ -205,7 +206,7 @@ impl QgtlCircuit {
         let mut status: i32 = 0;
         let p = unsafe {
             moonlab_qgtl_circuit_deserialize(
-                bytes.as_ptr() as *const i8,
+                bytes.as_ptr() as *const c_char,
                 bytes.len(),
                 &mut status,
             )

@@ -151,7 +151,9 @@ impl Job {
             return Err(QuantumError::Ffi(format!("to_json size-probe: rc={needed}")));
         }
         let cap = needed as usize + 1;
-        let mut buf = vec![0i8; cap];
+        /* c_char so the as_mut_ptr() return type matches the FFI prototype
+         * on both x86_64 (signed) and aarch64 (unsigned) platforms. */
+        let mut buf = vec![0 as c_char; cap];
         let written = unsafe {
             moonlab_job_to_json(self.ptr as *const _, buf.as_mut_ptr(), cap)
         };

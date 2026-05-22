@@ -28,7 +28,11 @@
  * external scheduler_fire_completion_hook path increment the same
  * counter.  Operators see this as
  * `moonlab_control_completion_hook_fires_total` in METRICS. */
-extern _Atomic uint64_t g_count_completion_hook_fires;
+/* Weak fallback so builds that exclude control_plane.c (e.g. the
+ * WASM bundle in bindings/javascript/packages/core/emscripten) still
+ * resolve the symbol at link time.  control_plane.c provides the
+ * strong definition on full builds, which overrides this stub. */
+__attribute__((weak)) _Atomic uint64_t g_count_completion_hook_fires = 0;
 
 #if defined(_OPENMP)
 #include <omp.h>
