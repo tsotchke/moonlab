@@ -122,3 +122,37 @@ int qsim_gpu_route_pauli_x(quantum_state_t *state, int qubit)
     moonlab_cuda_status_t rc = moonlab_cuda_apply_x(gpu, (uint32_t)qubit);
     return rc == MOONLAB_CUDA_OK ? 0 : -1;
 }
+
+/* Generic single-qubit unitary: apply any 2x2 complex matrix.
+ * Matrix layout matches the kernel -- 8 doubles, row-major,
+ * with each complex entry stored as (real, imag) pair:
+ *   m[0..1] = M[0][0]   m[2..3] = M[0][1]
+ *   m[4..5] = M[1][0]   m[6..7] = M[1][1]
+ *
+ * All single-qubit gates that don't have a specialized fast path
+ * (apply_h, apply_x) route through here. */
+extern "C"
+int qsim_gpu_route_apply_1q_matrix(quantum_state_t *state, int qubit, const double m[8])
+{
+    if (!state || !state->gpu_state || !m) return -1;
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_apply_1q(gpu, (uint32_t)qubit, m);
+    return rc == MOONLAB_CUDA_OK ? 0 : -1;
+}
+
+/* Generic two-qubit unitary: apply any 4x4 complex matrix on
+ * (q0, q1).  32 doubles, row-major, basis |q1 q0>:
+ *   m[0..7]   = row 0 (|00>)
+ *   m[8..15]  = row 1 (|01>)
+ *   m[16..23] = row 2 (|10>)
+ *   m[24..31] = row 3 (|11>)
+ *
+ * CZ, SWAP, cphase, cy, crx, cry, crz all route through here. */
+extern "C"
+int qsim_gpu_route_apply_2q_matrix(quantum_state_t *state, int q0, int q1, const double m[32])
+{
+    if (!state || !state->gpu_state || !m) return -1;
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_apply_2q(gpu, (uint32_t)q0, (uint32_t)q1, m);
+    return rc == MOONLAB_CUDA_OK ? 0 : -1;
+}
