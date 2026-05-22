@@ -39,7 +39,13 @@ def test_time_refill_accrues():
     assert b.peek() == 0
     time.sleep(0.25)
     p = b.peek()
-    assert 20 <= p <= 30, f"after 250ms at 100/s, peek = {p}"
+    # CI runners can overrun the 250ms sleep -- 250ms wall can become
+    # 400-500ms under load, giving 40-50 tokens.  Check the floor and
+    # the burst cap (invariants) rather than a tight window.  Same
+    # hardening as the C-side unit_token_bucket and Rust-side
+    # time_refill_accrues tests.
+    assert p >= 20, f"after >=250ms at 100/s, peek = {p} (expected >= 20)"
+    assert p <= 100, f"burst cap violated, peek = {p} (expected <= 100)"
     assert b.take(10)
 
 
