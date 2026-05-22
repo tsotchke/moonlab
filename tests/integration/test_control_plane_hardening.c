@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,6 +101,14 @@ static long parse_counter(const char *body, const char *name)
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
+    /* macOS BSD sockets deliver SIGPIPE on write() to a peer-closed
+     * connection.  Default disposition is process termination; on the
+     * hosted macos-14 runner this kills the test with SIGPIPE before
+     * path 1 finishes (race between server cap-reject closing the
+     * connection and the client thread's next write).  Ignore it; the
+     * client-side write() then returns EPIPE which the test code
+     * already handles as a normal failed-submit. */
+    signal(SIGPIPE, SIG_IGN);
     fprintf(stdout, "=== test_control_plane_hardening (v0.9.0) ===\n\n");
 
     /* ---- Path 1: max_concurrent ceiling ---- */
