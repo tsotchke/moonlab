@@ -504,28 +504,42 @@ if(QSIM_ENABLE_CUDA OR QSIM_ENABLE_CUQUANTUM)
         message(STATUS "CUDA: arch normalized -> ${CMAKE_CUDA_ARCHITECTURES}")
     endif()
 
-    # jetpack-nixos auto-wiring -- happens BEFORE enable_language(CUDA)
-    # so the CUDA compiler identification probe finds cuda_runtime.h.
-    # On stock jetpack-nixos the cudatoolkit is split into several
-    # /nix/store paths (cuda-merged-X.Y has the includes, cuda_nvcc-X.Y
-    # has nvcc).  nvcc auto-finds its own include but not the merged
-    # tree.  Pre-seed CMAKE_CUDA_FLAGS so the probe + every TU sees it.
-    if(EXISTS "/etc/nv_tegra_release")
-        message(STATUS "CUDA: jetpack-nixos detected, pre-seeding include path")
-        # Glob the nix store for a cuda-merged tree containing cuda_runtime.h.
+    # Pre-seed CMAKE_CUDA_FLAGS with the cuda_runtime.h include dir
+    # BEFORE enable_language(CUDA), so the cmake compiler-identification
+    # probe finds the header.  nvcc on its own often doesn't pass its
+    # toolkit include dir to the host gcc, depending on how the toolkit
+    # was packaged:
+    #   - jetpack-nixos:  multiple /nix/store subpackages, no auto-include
+    #   - Ubuntu / /usr/local/cuda-X.Y:  nvcc inside .../cuda-X.Y/bin
+    #     doesn't always self-locate .../cuda-X.Y/include
+    # So: probe several common locations and inject -isystem.
+    set(_qsim_cuda_runtime_h "")
+    # 1. User-provided CUDAToolkit_ROOT (most explicit).
+    if(DEFINED CUDAToolkit_ROOT AND EXISTS "${CUDAToolkit_ROOT}/include/cuda_runtime.h")
+        set(_qsim_cuda_runtime_h "${CUDAToolkit_ROOT}/include/cuda_runtime.h")
+    endif()
+    # 2. /usr/local/cuda* (stock Ubuntu / RHEL CUDA install).
+    if(NOT _qsim_cuda_runtime_h)
+        file(GLOB _qsim_cuda_local_globs "/usr/local/cuda*/include/cuda_runtime.h")
+        if(_qsim_cuda_local_globs)
+            list(GET _qsim_cuda_local_globs 0 _qsim_cuda_runtime_h)
+        endif()
+    endif()
+    # 3. jetpack-nixos split-toolkit store paths.
+    if(NOT _qsim_cuda_runtime_h AND EXISTS "/etc/nv_tegra_release")
         file(GLOB _qsim_cuda_merged_globs
             "/nix/store/*-cuda-merged-*/include/cuda_runtime.h"
             "/nix/store/*-cuda_cudart-*/include/cuda_runtime.h")
         if(_qsim_cuda_merged_globs)
             list(GET _qsim_cuda_merged_globs 0 _qsim_cuda_runtime_h)
-            get_filename_component(QSIM_CUDA_MERGED_INCLUDE "${_qsim_cuda_runtime_h}" DIRECTORY)
-            message(STATUS "  cuda_runtime.h: ${QSIM_CUDA_MERGED_INCLUDE}")
-            # Inject into CUDA flags BEFORE enable_language so the compiler
-            # identification probe and every subsequent .cu file finds it.
-            set(CMAKE_CUDA_FLAGS_INIT "-isystem=${QSIM_CUDA_MERGED_INCLUDE} ${CMAKE_CUDA_FLAGS_INIT}")
-            set(CMAKE_CUDA_FLAGS      "-isystem=${QSIM_CUDA_MERGED_INCLUDE} ${CMAKE_CUDA_FLAGS}")
         endif()
         set(QSIM_PLATFORM_JETPACK_NIXOS ON)
+    endif()
+    if(_qsim_cuda_runtime_h)
+        get_filename_component(QSIM_CUDA_INCLUDE "${_qsim_cuda_runtime_h}" DIRECTORY)
+        message(STATUS "CUDA: pre-seeding cuda_runtime.h from ${QSIM_CUDA_INCLUDE}")
+        set(CMAKE_CUDA_FLAGS_INIT "-isystem=${QSIM_CUDA_INCLUDE} ${CMAKE_CUDA_FLAGS_INIT}")
+        set(CMAKE_CUDA_FLAGS      "-isystem=${QSIM_CUDA_INCLUDE} ${CMAKE_CUDA_FLAGS}")
     endif()
 
     include(CheckLanguage)
