@@ -63,6 +63,9 @@ static int tensor_gpu_backend_code_measure(void) {
     return tensor_gpu_backend_type(gpu_ctx);
 }
 
+/* Only referenced from inside HAS_METAL / HAS_WEBGPU blocks below;
+ * unused on plain CPU builds.  The -Wno-error=unused-function in the
+ * top-level CMake demotes the warning so the file compiles cleanly. */
 static double quiet_nan_value(void) {
     union {
         uint64_t bits;
