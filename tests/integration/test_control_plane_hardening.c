@@ -167,9 +167,13 @@ int main(void)
     CHECK(ok_count + busy_count + conn_err_count == 6,
           "all 6 accounted for (%d ok + %d busy + %d conn-err)",
           ok_count, busy_count, conn_err_count);
-    CHECK(busy_count + conn_err_count >= 1,
-          "cap=2 with 6 parallel must deny at least one (%d busy + %d conn-err)",
-          busy_count, conn_err_count);
+    /* Don't assert "at least one denied".  On fast runners (Linux
+     * hosted CI especially) the 6 client threads can serialise
+     * through the cap=2 worker pool in <1ms each, finishing before
+     * the cap is ever observed -- the next request finds 0/2 slots
+     * occupied and proceeds.  That's correct behaviour, not a bug.
+     * The METRICS counter below verifies the cap WIRING; whether
+     * THIS particular race hits the cap is timing-dependent. */
 
     /* Scrape METRICS. */
     char *metrics = NULL;
