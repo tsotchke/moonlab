@@ -141,18 +141,38 @@ mod tests {
 
     #[test]
     fn search_finds_marked_state_at_n4() {
-        // 4-qubit Grover with optimal iterations should succeed
-        // with > 95% probability on noiseless simulation.
-        let mut state = QuantumState::new(4).unwrap();
-        let r = search(&mut state, 0b1010, None).unwrap();
-        assert!(
-            r.success_probability > 0.9,
-            "Grover P(success) = {:.3} on 4-qubit |1010>; expected > 0.9",
-            r.success_probability
-        );
-        assert!(r.found_marked_state);
-        assert_eq!(r.found_state, 0b1010);
-        assert_eq!(r.iterations_performed, optimal_iterations(4));
+        // 4-qubit Grover with optimal iterations succeeds with
+        // ~96% probability on noiseless simulation -- the textbook
+        // single-shot success probability is sin^2((2k+1) theta)
+        // with k=3, theta=arcsin(1/4) = 0.9613... = 96.13%.  The
+        // `found_marked_state` flag is a Born-rule sample of that
+        // distribution, so it can come up wrong on the ~4% tail.
+        //
+        // Verify the algorithmic invariant (probability mass is
+        // concentrated on |1010>) with high confidence; retry the
+        // Born sample a few times if it lands on the unlucky branch.
+        // 3 retries puts the false-fail rate at 0.04^3 = 0.0064%
+        // per run, which is below the noise floor of CI flake.
+        for attempt in 0..3 {
+            let mut state = QuantumState::new(4).unwrap();
+            let r = search(&mut state, 0b1010, None).unwrap();
+            // Algorithmic invariant -- always true.
+            assert!(
+                r.success_probability > 0.9,
+                "Grover P(success) = {:.3} on 4-qubit |1010>; expected > 0.9",
+                r.success_probability
+            );
+            assert_eq!(r.iterations_performed, optimal_iterations(4));
+            // Born-rule sample -- usually but not always lands on |1010>.
+            if r.found_marked_state && r.found_state == 0b1010 {
+                return;
+            }
+            eprintln!("search_finds_marked_state_at_n4: attempt {} \
+                       landed off-target (found_state={:#06b}); retrying",
+                       attempt, r.found_state);
+        }
+        panic!("Grover Born sample missed marked state 3x in a row \
+                -- chance is 0.0064%, investigate");
     }
 
     #[test]
