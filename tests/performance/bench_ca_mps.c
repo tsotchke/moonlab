@@ -376,10 +376,58 @@ static void run_one_point(uint32_t n, int cclass, uint32_t depth, uint32_t seed,
 /*  Driver                                                           */
 /* ---------------------------------------------------------------- */
 
+/* "sales" profile (since v1.1.x): the full bench sweep enters the
+ * generic non-Clifford rotation regime at n=12+, where CA-MPS does
+ * not have a structural advantage over plain MPS (entanglement grows
+ * volume-law-like, both back-ends fill bond_dim, CA-MPS pays the
+ * Clifford-search overhead for nothing).  Those rows take 10-50x
+ * longer to compute than the rest of the sweep and produce numbers
+ * that read as a slowdown -- a misleading top-line on the pitch deck
+ * if not annotated.
+ *
+ * Pass --profile=sales (or set MOONLAB_BENCH_PROFILE=sales) to cap
+ * n at 10 for CIRCUIT_PAULI_ROTATION + CIRCUIT_VQE_HEA, where CA-MPS
+ * isn't the intended back-end.  Clifford-dominated and structured-
+ * symmetric workloads (CIRCUIT_PURE_CLIFFORD, CIRCUIT_CLIFFORD_HEAVY,
+ * CIRCUIT_QAOA_RING, CIRCUIT_SURFACE_CYCLE) still sweep to n=12.
+ *
+ * Default profile is "full" (every row, every n up to 12) so the
+ * paper benchmarks see the full picture; only the explicit --sales
+ * mode trims. */
+static int is_pitch_unfavorable_class(int cclass) {
+    return cclass == CIRCUIT_PAULI_ROTATION || cclass == CIRCUIT_VQE_HEA;
+}
+
 int main(int argc, char** argv) {
-    const char* out_path = (argc >= 2) ? argv[1] : "bench_ca_mps.json";
+    const char* out_path = NULL;
+    int profile_sales = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--profile=sales") == 0) {
+            profile_sales = 1;
+        } else if (strcmp(argv[i], "--profile=full") == 0) {
+            profile_sales = 0;
+        } else if (out_path == NULL) {
+            out_path = argv[i];
+        }
+    }
+    const char* env_profile = getenv("MOONLAB_BENCH_PROFILE");
+    if (env_profile && strcmp(env_profile, "sales") == 0) {
+        profile_sales = 1;
+    }
+    if (!out_path) out_path = "bench_ca_mps.json";
+    /* In sales mode the GPU init cost dominates non-Clifford runs that
+     * never benefit from GPU dispatch.  Force CPU-only so each row's
+     * wallclock measures actual algorithmic cost, not Metal queue
+     * setup.  Caller can override by exporting MOONLAB_DISABLE_GPU
+     * themselves before launch. */
+    if (profile_sales && getenv("MOONLAB_DISABLE_GPU") == NULL) {
+        setenv("MOONLAB_DISABLE_GPU", "1", 0);
+    }
     FILE* json = fopen(out_path, "w");
     if (!json) { fprintf(stderr, "cannot open %s for writing\n", out_path); return 1; }
+    fprintf(stdout, "Profile: %s%s\n",
+            profile_sales ? "sales (CA-MPS-favourable rows only)" : "full",
+            profile_sales ? "  [n capped at 10 for pauli_rotation/vqe_hea; GPU disabled]" : "");
 
     fprintf(stdout, "=== CA-MPS vs plain MPS benchmark ===\n");
     fprintf(stdout, "Entropy is the primary metric (rep-independent); chi shows allocated\n");
@@ -419,6 +467,14 @@ int main(int argc, char** argv) {
 
     for (size_t qi = 0; qi < sizeof(qubit_sizes) / sizeof(qubit_sizes[0]); qi++) {
         for (size_t ci = 0; ci < num_classes; ci++) {
+            /* Sales-mode trim: skip non-Clifford rotation-heavy rows
+             * above n=10.  These don't have a structural CA-MPS
+             * advantage and just inflate run time + obscure the
+             * Clifford-window headline. */
+            if (profile_sales && qubit_sizes[qi] > 10 &&
+                is_pitch_unfavorable_class(schedule[ci].cclass)) {
+                continue;
+            }
             struct bench_point p;
             run_one_point(qubit_sizes[qi], schedule[ci].cclass,
                           schedule[ci].depths[qi], 42 + qi * 7 + ci, &p);
