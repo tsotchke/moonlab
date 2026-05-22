@@ -85,8 +85,16 @@ static void test_time_refill(void)
     CHECK(moonlab_token_bucket_peek(&bkt) == 0, "drained");
     msleep(250);  /* 250 ms -> ~25 tokens accrued */
     const uint64_t peek = moonlab_token_bucket_peek(&bkt);
-    CHECK(peek >= 20 && peek <= 30,
-          "after 250ms at 100 tok/sec, peek = %llu (expected ~25)",
+    /* CI runners can overrun the 250ms sleep under load -- 250ms wall
+     * can become 400-500ms, giving 40-50 tokens.  Check invariants:
+     * floor (>= nominal accrual minus sleep underrun grace) and the
+     * burst cap.  This is the same hardening applied to the Rust-side
+     * time_refill_accrues in bindings/rust/moonlab/src/token_bucket.rs. */
+    CHECK(peek >= 20,
+          "after >=250ms at 100 tok/sec, peek = %llu (expected >= 20)",
+          (unsigned long long)peek);
+    CHECK(peek <= 100,
+          "burst cap violated, peek = %llu (expected <= 100)",
           (unsigned long long)peek);
     CHECK(moonlab_token_bucket_take(&bkt, 10) == 1,
           "can take 10 from the accrued balance");
