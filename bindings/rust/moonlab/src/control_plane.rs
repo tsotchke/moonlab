@@ -29,6 +29,7 @@ use moonlab_sys::{
 };
 use std::ffi::CString;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::os::raw::c_char;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
@@ -557,7 +558,7 @@ pub fn submit_circuit_mtls(
             if insecure { 1 } else { 0 },
             secret_ptr,
             secret_len,
-            bytes.as_ptr() as *const i8,
+            bytes.as_ptr() as *const c_char,
             bytes.len(),
             &mut probs_ptr as *mut *mut f64,
             &mut num_probs as *mut usize,
@@ -608,7 +609,7 @@ pub fn submit_circuit_tls(
             if insecure { 1 } else { 0 },
             secret_ptr,
             secret_len,
-            bytes.as_ptr() as *const i8,
+            bytes.as_ptr() as *const c_char,
             bytes.len(),
             &mut probs_ptr as *mut *mut f64,
             &mut num_probs as *mut usize,

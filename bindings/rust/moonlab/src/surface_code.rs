@@ -39,6 +39,7 @@
 //! ```
 
 use crate::error::{QuantumError, Result};
+use std::os::raw::c_char;
 use moonlab_sys::{
     surface_code_clifford_apply_error, surface_code_clifford_create,
     surface_code_clifford_data_index, surface_code_clifford_free,
@@ -115,9 +116,9 @@ impl SurfaceCode {
             });
         }
         let c = match error_type {
-            'X' | 'x' => b'X' as i8,
-            'Y' | 'y' => b'Y' as i8,
-            'Z' | 'z' => b'Z' as i8,
+            'X' | 'x' => b'X' as c_char,
+            'Y' | 'y' => b'Y' as c_char,
+            'Z' | 'z' => b'Z' as c_char,
             _ => return Err(QuantumError::Ffi(format!(
                 "error_type must be one of X / Y / Z, got '{error_type}'"
             ))),
