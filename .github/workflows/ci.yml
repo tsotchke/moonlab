@@ -7,10 +7,11 @@ on:
     branches: [master]
 
 concurrency:
+  # New pushes cancel older in-flight runs in the same group.  We
+  # want fast feedback over "complete signal on every commit" -- the
+  # latest commit always supersedes.
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Master is the public release gate — let those runs finish so we get
-  # a complete matrix signal even while follow-up commits are landing.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: true
 
 # Pinned tool versions.  Bumped together so a single PR rolls every
 # lane forward; do NOT pin selectively without an audit pass.
@@ -53,10 +54,10 @@ jobs:
             runner: ubuntu-22.04
             cmake_flags: '-DQSIM_ENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug'
             test_label: 'core'
-          - name: linux-arm64-lite
-            runner: ubuntu-22.04-arm
-            cmake_flags: ''
-            test_label: ''
+          # linux-arm64 lane is exercised on the self-hosted Jetson
+          # runner via .github/workflows/ci-jetson.yml; not duplicated
+          # here because ubuntu-22.04-arm hosted runners cost double
+          # the per-minute rate of ubuntu-22.04.
           - name: macos-arm64-lite
             runner: macos-14
             cmake_flags: ''
