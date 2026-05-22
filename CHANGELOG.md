@@ -5,6 +5,133 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0-rc] - 2026-05-22
+
+**v1.1 GPU arc.**  Brings the moonlab CUDA backend online end-to-end
+on real silicon and wires it into the existing algorithm surface
+via transparent dispatch.  No new gate API surface area; the same
+`gate_hadamard` / `gate_cnot` / etc. calls that 350+ existing CPU
+tests use now route to GPU kernels when the state was created with
+the new `quantum_state_create_gpu()` constructor.
+
+### Added
+
+- **`src/backends/cuda_tegra_probe.{h,c}`** -- platform detection
+  that distinguishes TEGRA (unified memory on Jetson) from DISCRETE
+  (stock NVIDIA PCIe).  No CUDA runtime dependency in the C path;
+  the discrete check lives in `cuda_statevec.cu` and is reached via
+  a weak symbol that resolves only when QSIM_HAS_CUDA is on.
+- **`src/backends/cuda_statevec.{h,cu}`** -- self-contained CUDA
+  state-vector backend with `state_create / state_free /
+  apply_{1q,2q,cnot,x,h} / prob_z / norm / state_copy_{to,from}_host /
+  synchronize`.  Uses cudaMallocManaged so the same code path works
+  on Tegra (unified) and discrete (lazy migration).
+- **`src/quantum/state_gpu.cu`** -- CUDA-only TU that provides the
+  GPU lifecycle for `quantum_state_t` (the new
+  `quantum_state_create_gpu()` constructor, host/device sync) plus
+  the routing entry points `qsim_gpu_route_*` that `gates.c` looks
+  up via weak externs.
+- **`quantum_state_create_gpu()` / `quantum_state_sync_{to,from}_host()`**
+  -- new public surface in `src/quantum/state.h`.  Weak fallbacks in
+  `state.c` return `QS_ERROR_NOT_SUPPORTED` cleanly when CUDA isn't
+  compiled in, so non-CUDA builds still link.
+- **Transparent GPU dispatch in `src/quantum/gates.c`.**  21 gate
+  primitives now check `state->gpu_state` and route to CUDA kernels:
+  H, X, Y, Z, S, S^dag, T, T^dag, phase, RX, RY, RZ, U3, CNOT, CZ,
+  SWAP, CPHASE, CY, CRX, CRY, CRZ.  CY/CRX/CRY/CRZ use exact
+  decompositions through already-dispatched primitives (no new
+  asymmetric-matrix kernels).
+- **`flake.nix`** with `jetpack-nixos` input -- declarative build
+  on Jetson via `nix develop` (auto-finds the cuda-merged store
+  path, sets PATH and LD_LIBRARY_PATH for libcuda.so.1 driver stub).
+- **`examples/cuda/`** with five end-to-end demos:
+  `bell_jetson.cu` (standalone CUDA), `bell_lib.c` (libquantumsim-
+  linked Bell), `state_gpu_bell.c` (transparent dispatch proof),
+  `state_gpu_circuit.c` (20-gate CPU/GPU parity test),
+  `mpi_gpu_search.c` (MPI + CUDA coexistence: 4 ranks x independent
+  GPU contexts x MPI_Allreduce).
+
+### Changed
+
+- **`CMakeLists.txt`** auto-discovers `cuda_runtime.h` from
+  `${CUDAToolkit_ROOT}`, `/usr/local/cuda*`, or jetpack-nixos store
+  paths BEFORE `enable_language(CUDA)`, so the compiler-id probe
+  finds the header without `NVCC_PREPEND_FLAGS` boilerplate.
+  Auto-rpaths `/run/opengl-driver/lib` on jetpack-nixos for the L4T
+  libcuda.so.1.  Promotes bare `CMAKE_CUDA_ARCHITECTURES` numbers
+  to `-real` to avoid the LTO codegen that nvlink on jetpack can't
+  resolve.  Disables `CUDA_SEPARABLE_COMPILATION` (documented as the
+  correct platform-aware choice for the current kernel set, not a
+  workaround).
+- **`quantum_state_t`** gains two optional fields: `void *gpu_state`
+  (NULL on CPU states) and `int gpu_backend` (0=CPU, 1=CUDA).
+  `quantum_state_init` and `quantum_state_create` memset the whole
+  struct, so all existing CPU paths see `gpu_state == NULL` and run
+  bit-identically to v1.0.5.
+- **`qs_error_t`** adds `QS_ERROR_INVALID_PARAM`,
+  `QS_ERROR_NOT_SUPPORTED`, `QS_ERROR_DRIVER` for the new GPU surface.
+
+### Fixed
+
+- **`src/algorithms/tensor_network/tensor.c`** -- renamed stale CUDA
+  API callsites to current names (`cuda_compute_init` ->
+  `cuda_context_create`, etc.) so the file actually compiles when
+  QSIM_ENABLE_CUDA=ON.
+- **`src/optimization/gpu/backends/gpu_cuda.cu`** -- CUDA 13 removed
+  `cudaDeviceProp::memoryClockRate`; conditional fallback to
+  `cudaDeviceGetAttribute(cudaDevAttrMemoryClockRate)` for
+  CUDART_VERSION >= 13000.
+- **`tests/unit/test_qgt_vs_chern_marker.c`** -- add `<stdint.h>`
+  for `INT32_MIN` (gcc 15.2 stricter about transitive includes).
+- **`tests/unit/test_mlkem_poly.c`** -- rename local helper
+  `canonicalize` -> `canonicalize_poly` to sidestep a gcc 15.2 /
+  glibc 2.41 name clash.
+
+### Validated
+
+- **xavier** (Jetson AGX Xavier, Volta cc 7.2, jetpack-nixos CUDA 11.4):
+  Bell N=12..27 standalone PASS; Bell N=16-18 via libquantumsim PASS;
+  20-gate CPU/GPU parity at machine precision (max amp err 4.5e-16);
+  MPI+CUDA 4-rank PASS; ctest 137 / 138 effective pass (1 real pre-
+  existing failure `unit_qgt_bhz` at M=4.00, gauge edge case in BHZ
+  Z2 sweep with zero churn since v1.0.5; remaining 8 first-pass
+  failures are slow tests that need >120s on the aarch64 cores --
+  vqe/qaoa/mlkem/kagome_ed/mpo_kpm/qrng/abi_export/quantum_sim_test
+  /bell_test/vqe_h2/qaoa_maxcut/grover_hash/phase3_4_bench -- all
+  pass given enough time; not regressions).
+- **old-donkey** (RTX 3050 Ampere cc 8.6, Ubuntu CUDA 13.1):
+  Bell N=16 via libquantumsim PASS; 20-gate parity (max err 4.5e-16);
+  MPI+CUDA 4-rank PASS; ctest 137 / 142 at the v1.1-rc commit
+  (`0d51db7`) -- 1 real pre-existing failure `unit_pauli_frame` under
+  gcc 15.2 / glibc 2.41 (zero churn in pauli_frame code since v1.0.5),
+  4 slow-test timeouts at the 600s cap (long_evolution, ca_mps_kagome12,
+  mpo_kpm, kagome_ed -- heavy compute, not regressions).
+
+### Known issues (not regressions)
+
+- `unit_qgt_bhz` fails at M=4.00 on aarch64 / gcc 14.3.  Zero churn
+  in qgt code since v1.0.5; gauge / Wilson-loop edge case at one
+  specific lattice configuration.  To be fixed in a follow-up
+  topology-numerics arc.
+- `unit_pauli_frame` fails on linux 7 / gcc 15.2 / glibc 2.41.  Zero
+  churn in pauli_frame code since v1.0.5; the new toolchain exposes
+  what looks like an rng init or batch-reduction edge case.  To be
+  fixed in a follow-up linux-7-portability arc.
+- 4-6 known-heavy tests hit the 600-900s ctest --timeout cap on
+  slow aarch64 cores (vqe / qaoa / mlkem / kagome_ed / mpo_kpm).
+  They pass when given enough time; not regressions.
+
+### Deferred (next arc)
+
+- Multi-qubit GPU kernels (Toffoli, Fredkin, MCX, MCZ).
+- True sharded MPI+CUDA via `partitioned_state_t` learning about
+  `gpu_state` so >32-qubit state vectors live across multiple GPUs
+  with inter-rank halo swaps.
+- cosbox RTX 3090 lane (needs driver/userspace mismatch fix --
+  user-side sudo action).
+- Python binding for `quantum_state_create_gpu()`.
+- Jetson CI runner.
+
 ## [1.0.5] - 2026-05-21
 
 **Round 3 + 4 audit response.**  Two more recursive adversarial
