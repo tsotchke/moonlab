@@ -50,20 +50,43 @@ static int read_compatible_has_tegra(void)
     return 0;
 }
 
+/* Discrete-GPU detection lives in the CUDA-compiled TU (where the
+ * runtime symbols are available) -- see cuda_statevec.cu.  When
+ * QSIM_HAS_CUDA is on, the symbol resolves and we get a real
+ * answer.  When the library is built without CUDA, the weak ref
+ * stays NULL and we report UNKNOWN.  Returns one of:
+ *   1  = at least one CUDA device present and NOT integrated
+ *        (discrete PCIe GPU; cudaMemcpy is the fast path)
+ *   0  = no CUDA devices visible to the runtime
+ *  -1  = at least one CUDA device, but it's integrated
+ *        (still report TEGRA after the device-tree probe; this
+ *        branch is mostly a safety net for non-Jetson Tegra-like
+ *        platforms where /proc/device-tree isn't conclusive)
+ *  -2  = CUDA runtime call failed for an unrelated reason
+ */
+extern int moonlab_cuda_runtime_probe_discrete(void)
+    __attribute__((weak));
+
 static void probe_init(void)
 {
     if (read_compatible_has_tegra()) {
         s_cached_kind = MOONLAB_GPU_KIND_TEGRA;
         return;
     }
-    /* Without the device-tree hint we don't try cudaGetDeviceCount
-     * here: this file is compiled without the CUDA runtime, and
-     * splitting probe into a separate _cuda.cu file just to detect
-     * "is discrete GPU present" adds dependency weight for marginal
-     * benefit.  The discrete code path is responsible for its own
-     * cudaGetDeviceCount; this probe just answers "is this a
-     * Jetson?".  Anything else -> UNKNOWN, and the caller falls
-     * back to the discrete-style memory model OR the CPU path. */
+    /* Not a Jetson.  Try the runtime probe if we're linked with CUDA. */
+    if (moonlab_cuda_runtime_probe_discrete != NULL) {
+        int rc = moonlab_cuda_runtime_probe_discrete();
+        if (rc == 1) {
+            s_cached_kind = MOONLAB_GPU_KIND_DISCRETE;
+            return;
+        }
+        if (rc == 0) {
+            s_cached_kind = MOONLAB_GPU_KIND_NONE;
+            return;
+        }
+        /* rc == -1 (integrated) or -2 (runtime error) -> fall
+         * through to UNKNOWN so the caller can decide. */
+    }
     s_cached_kind = MOONLAB_GPU_KIND_UNKNOWN;
 }
 
