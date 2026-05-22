@@ -154,8 +154,21 @@ jobs:
           fi
           # Exclude long-running tests to keep total runtime bounded.
           # Lanes that need the heavy suite live in the nightly workflow.
-          ctest --test-dir build --output-on-failure --timeout 300 \
-              -E "long|n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
+          #
+          # -LE: label-exclude.  Tests carrying the "long" or
+          # "memory_heavy" labels (quantum_sim_test, unit_kagome_ed_large,
+          # unit_qrng_statistics, unit_libirrep_sector_ed) burn 200-300s
+          # each and tip the run over its 30 min timeout when stacked
+          # behind a slow ubuntu-22.04 shared runner.
+          # -E: also name-exclude a few specific large tests that aren't
+          # in those labels (state-vector sharding at n=34, hofstadter
+          # full sweep, kagome ED at n=18).
+          # --timeout 600: individual test ceiling -- generous enough
+          # that unit_qrng_statistics doesn't false-positive a
+          # near-timeout pass when the runner is loaded.
+          ctest --test-dir build --output-on-failure --timeout 600 \
+              -LE "long|memory_heavy" \
+              -E "n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
               $TEST_FILTER -j 4
 
       - name: Upload Build Log on Failure
