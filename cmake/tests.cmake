@@ -1071,8 +1071,17 @@
         target_link_libraries(test_scheduler_mpi PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
         find_program(MPIRUN_EXECUTABLE mpirun)
         if(MPIRUN_EXECUTABLE)
+            # --oversubscribe lets mpirun launch -n 4 processes even
+            # when there are fewer hardware cores available -- needed
+            # on GitHub-hosted ubuntu-22.04 runners (2 cores) so the
+            # 4-rank coverage matches what local laptops/desktops get.
+            # --allow-run-as-root is needed under the docker images
+            # that root-by-default; on a normal user account it's a
+            # no-op.
             add_test(NAME unit_scheduler_mpi
-                     COMMAND ${MPIRUN_EXECUTABLE} -n 4
+                     COMMAND ${MPIRUN_EXECUTABLE}
+                             --oversubscribe
+                             -n 4
                              $<TARGET_FILE:test_scheduler_mpi>)
         else()
             # Fall back to single-rank run if mpirun is unavailable.
@@ -1089,7 +1098,9 @@
         target_link_libraries(test_partitioned_state PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
         if(MPIRUN_EXECUTABLE)
             add_test(NAME unit_partitioned_state
-                     COMMAND ${MPIRUN_EXECUTABLE} -n 2
+                     COMMAND ${MPIRUN_EXECUTABLE}
+                             --oversubscribe
+                             -n 2
                              $<TARGET_FILE:test_partitioned_state>)
         else()
             add_test(NAME unit_partitioned_state COMMAND test_partitioned_state)
