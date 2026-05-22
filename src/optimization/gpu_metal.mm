@@ -3,6 +3,7 @@
 #include "gpu_metal.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <mach/mach_time.h>
 
 /**
@@ -86,6 +87,41 @@ static void set_error(metal_compute_ctx_t* ctx, NSString* error) {
     }
 }
 
+static NSString* load_metal_source(NSString* relativePath, NSError** outError) {
+    NSMutableArray<NSString*>* candidates = [NSMutableArray array];
+    const char* root = getenv("MOONLAB_ROOT");
+
+    if (root && root[0]) {
+        NSString* rootPath = [NSString stringWithUTF8String:root];
+        [candidates addObject:[rootPath stringByAppendingPathComponent:relativePath]];
+    }
+    [candidates addObject:relativePath];
+    [candidates addObject:[@"deps/moonlab" stringByAppendingPathComponent:relativePath]];
+
+    NSString* resourceName = [[relativePath lastPathComponent] stringByDeletingPathExtension];
+    NSString* resourceType = [relativePath pathExtension];
+    NSString* bundlePath = [[NSBundle mainBundle] pathForResource:resourceName
+                                                           ofType:resourceType];
+    if (bundlePath) {
+        [candidates addObject:bundlePath];
+    }
+
+    for (NSString* candidate in candidates) {
+        NSError* error = nil;
+        NSString* source = [NSString stringWithContentsOfFile:candidate
+                                                     encoding:NSUTF8StringEncoding
+                                                        error:&error];
+        if (source) {
+            return source;
+        }
+        if (outError && error) {
+            *outError = error;
+        }
+    }
+
+    return nil;
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -122,9 +158,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         NSString* shaderPath = @"src/optimization/kernels/quantum_kernels.metal";
         
         // Try to compile from source
-        NSString* shaderSource = [NSString stringWithContentsOfFile:shaderPath
-                                                           encoding:NSUTF8StringEncoding
-                                                              error:&error];
+        NSString* shaderSource = load_metal_source(shaderPath, &error);
         
         if (shaderSource) {
             ctx->library = [ctx->device newLibraryWithSource:shaderSource
@@ -147,9 +181,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         // Load batch kernels
         NSError* batchError = nil;
         NSString* batchPath = @"src/optimization/kernels/quantum_kernels_batch.metal";
-        NSString* batchSource = [NSString stringWithContentsOfFile:batchPath
-                                                           encoding:NSUTF8StringEncoding
-                                                              error:&batchError];
+        NSString* batchSource = load_metal_source(batchPath, &batchError);
         
         if (batchSource) {
             id<MTLLibrary> batchLibrary = [ctx->device newLibraryWithSource:batchSource
@@ -241,9 +273,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         // Load tensor network kernels
         NSError* tensorError = nil;
         NSString* tensorPath = @"src/optimization/kernels/tensor_kernels.metal";
-        NSString* tensorSource = [NSString stringWithContentsOfFile:tensorPath
-                                                           encoding:NSUTF8StringEncoding
-                                                              error:&tensorError];
+        NSString* tensorSource = load_metal_source(tensorPath, &tensorError);
 
         if (tensorSource) {
             MTLCompileOptions* options = [[MTLCompileOptions alloc] init];
