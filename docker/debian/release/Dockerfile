@@ -24,20 +24,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# Build library
-RUN make clean && make
+# Build library with CMake (the Makefile path is legacy and doesn't
+# generate moonlab_build_info.h that src/utils/manifest.c needs).
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build -j --target quantumsim
 
-# Build tests
-RUN make tests unit_tests || echo "Tests built"
-
-# Run unit tests
-RUN make test_unit || echo "Unit tests completed"
-
-# Run integration tests
-RUN make test || echo "Integration tests completed"
-
-# Create lib directory if it doesn't exist
-RUN mkdir -p lib
+# Stage artefacts under /app/lib for the release.yml extractor.
+# Keep both libquantumsim.so symlinks and the static, where built.
+RUN mkdir -p lib && \
+    cp build/libquantumsim.* lib/ 2>/dev/null || true
 
 # Keep container running for file extraction
 CMD ["sleep", "infinity"]

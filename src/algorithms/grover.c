@@ -275,13 +275,15 @@ void grover_print_result(const grover_result_t *result, const grover_config_t *c
     printf("║                                                           ║\n");
     printf("║  Search Configuration:                                    ║\n");
     printf("║    Qubits:              %6zu                            ║\n", config->num_qubits);
-    printf("║    Search Space:        %6llu (2^%zu)                   ║\n", 
-           1ULL << config->num_qubits, config->num_qubits);
-    printf("║    Target State:        %6llu                            ║\n", config->marked_state);
+    printf("║    Search Space:        %6llu (2^%zu)                   ║\n",
+           (unsigned long long)(1ULL << config->num_qubits), config->num_qubits);
+    printf("║    Target State:        %6llu                            ║\n",
+           (unsigned long long)config->marked_state);
     printf("║    Iterations:          %6zu                            ║\n", result->iterations_performed);
     printf("║                                                           ║\n");
     printf("║  Results:                                                 ║\n");
-    printf("║    Found State:         %6llu                            ║\n", result->found_state);
+    printf("║    Found State:         %6llu                            ║\n",
+           (unsigned long long)result->found_state);
     printf("║    Success:             %s                              ║\n",
            result->found_marked_state ? "✓ YES" : "✗ NO ");
     printf("║    Success Probability: %6.4f                          ║\n", result->success_probability);
