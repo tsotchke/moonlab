@@ -169,3 +169,34 @@ int qsim_gpu_route_apply_2q_matrix(quantum_state_t *state, int q0, int q1, const
     moonlab_cuda_status_t rc = moonlab_cuda_apply_2q(gpu, (uint32_t)q0, (uint32_t)q1, m);
     return rc == MOONLAB_CUDA_OK ? 0 : -1;
 }
+
+/* Multi-control routing entry points -- one for X-flavoured gates
+ * (CNOT, CCX/Toffoli, MCX), one for Z-flavoured (CZ, CCZ, MCZ),
+ * and one for Fredkin (CSWAP). */
+extern "C"
+int qsim_gpu_route_mcx(quantum_state_t *state, uint64_t control_mask, int target)
+{
+    if (!state || !state->gpu_state) return -1;
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_apply_mcx(gpu, control_mask, (uint32_t)target);
+    return rc == MOONLAB_CUDA_OK ? 0 : -1;
+}
+
+extern "C"
+int qsim_gpu_route_mcz(quantum_state_t *state, uint64_t all_mask)
+{
+    if (!state || !state->gpu_state) return -1;
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_apply_mcz(gpu, all_mask);
+    return rc == MOONLAB_CUDA_OK ? 0 : -1;
+}
+
+extern "C"
+int qsim_gpu_route_fredkin(quantum_state_t *state, int control, int t1, int t2)
+{
+    if (!state || !state->gpu_state) return -1;
+    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
+    moonlab_cuda_status_t rc = moonlab_cuda_apply_fredkin(
+        gpu, (uint32_t)control, (uint32_t)t1, (uint32_t)t2);
+    return rc == MOONLAB_CUDA_OK ? 0 : -1;
+}
