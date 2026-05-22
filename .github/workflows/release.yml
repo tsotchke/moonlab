@@ -47,7 +47,8 @@ jobs:
             ```bash
             git clone https://github.com/tsotchke/moonlab.git
             cd moonlab
-            make
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build -j
             ```
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
@@ -83,20 +84,38 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install libomp
 
+      - name: Install build tools
+        run: cmake --version
+
+      - name: Configure (CMake, Release)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
       - name: Build
         run: |
-          make clean && make
-          make tests unit_tests
+          cmake --build build -j --target quantumsim
 
       - name: Run Smoke Tests
         run: |
-          make test_unit || echo "Tests completed"
+          # ctest is best-effort during release builds; an upstream
+          # test regression shouldn't block the release artefact.
+          # Builds that needed gating already went through the CI lane
+          # before the tag was pushed.
+          (cd build && ctest --output-on-failure --timeout 60 \
+              -L "(core|abi|topology)" -j 4) || echo "ctest completed"
 
       - name: Package
         run: |
           mkdir -p pkg/lib pkg/include
-          cp lib/libquantum_sim.a pkg/lib/
-          cp -r include/*.h pkg/include/ 2>/dev/null || true
+          # CMake produces shared (and static, when enabled) libraries
+          # under build/.  Copy whatever is present.
+          cp build/libquantumsim.* pkg/lib/ 2>/dev/null || true
+          # Public headers live under src/ -- ship the ones moonlab
+          # consumers depend on.
+          for h in src/quantum/*.h src/backends/*.h src/algorithms/*.h \
+                   src/distributed/*.h src/abi/*.h; do
+              cp "$h" pkg/include/ 2>/dev/null || true
+          done
           cp README.md LICENSE pkg/ 2>/dev/null || true
           tar -czvf moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz -C pkg .
 
@@ -135,7 +154,13 @@ jobs:
         run: |
           docker create --name arm64-build moonlab-arm64:latest
           mkdir -p pkg/lib pkg/include
-          docker cp arm64-build:/app/lib/libquantum_sim.a pkg/lib/ || true
+          # CMake-built artefacts under /app/lib (see docker/debian/release/Dockerfile).
+          for lib in libquantumsim.so libquantumsim.a; do
+              docker cp "arm64-build:/app/lib/$lib" pkg/lib/ 2>/dev/null || true
+          done
+          for h in src/quantum src/backends src/algorithms src/distributed src/abi; do
+              docker cp "arm64-build:/app/$h" pkg/include/ 2>/dev/null || true
+          done
           docker rm arm64-build
           cp README.md LICENSE pkg/ 2>/dev/null || true
           tar -czvf moonlab-${{ github.ref_name }}-linux-arm64.tar.gz -C pkg .
@@ -162,9 +187,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake ninja-build libomp-dev libopenblas-dev liblapacke-dev dpkg-dev
 
-      - name: Build
+      - name: Build (CMake)
         run: |
-          make clean && make
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j --target quantumsim
 
       - name: Build Debian Package
         id: deb
@@ -293,7 +319,7 @@ jobs:
           pip install build twine numpy
 
       - name: Build C Library
-        run: make clean && make
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
 
       - name: Build Python Package
         run: |
@@ -332,7 +358,7 @@ jobs:
         uses: dtolnay/rust-action@stable
 
       - name: Build C Library
-        run: make clean && make
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
 
       - name: Publish to crates.io
         env:
@@ -385,7 +411,7 @@ jobs:
           version: 9
 
       - name: Build C Library
-        run: make clean && make
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
 
       - name: Install JS Dependencies
         run: |
