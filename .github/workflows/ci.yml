@@ -194,6 +194,17 @@ jobs:
         with:
           cmake-version: ${{ env.CMAKE_VERSION }}
 
+      - name: Build CLAPACK for WASM
+        # CLAPACK is a hard dep for the moonlab wasm build; the
+        # CMakeLists fail-fasts if neither openblas-wasm nor
+        # clapack-wasm is staged.  This step fetches CLAPACK 3.2.1
+        # from netlib.org and builds it through emcc.  Takes ~3-5 min
+        # on the ubuntu-22.04 runner.
+        run: |
+          set -euxo pipefail
+          cd bindings/javascript/packages/core/emscripten
+          bash build-clapack-wasm.sh
+
       - name: Configure (emscripten)
         run: |
           set -euxo pipefail
