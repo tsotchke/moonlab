@@ -1334,12 +1334,23 @@
 
     # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
     # if the crate root and Cargo are present.
+    #
+    # --test-threads=1 is mandatory: many of the tests touch C-side
+    # singletons (g_completion_hook, g_admission_hook, the control_plane
+    # server lock, the scheduler backend registry).  cargo test's default
+    # of "one OS thread per test function in the same process" lets two
+    # concurrent set_completion_hook(...) calls overwrite each other,
+    # so the hook count assertions in `completion_hook_fires_with_args`
+    # see 3 invocations instead of 1.  Serializing the test functions
+    # within this binary fixes the singleton race; cargo still
+    # parallelizes ACROSS test binaries, which is plenty.
     find_program(CARGO_EXECUTABLE cargo)
     if(CARGO_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
         add_test(NAME rust_bindings_smoke
                  COMMAND ${CARGO_EXECUTABLE} test --manifest-path
                          ${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml
-                         --no-fail-fast)
+                         --no-fail-fast
+                         -- --test-threads=1)
         set_tests_properties(rust_bindings_smoke PROPERTIES
             ENVIRONMENT
                 "MOONLAB_LIB_DIR=$<TARGET_FILE_DIR:quantumsim>;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
