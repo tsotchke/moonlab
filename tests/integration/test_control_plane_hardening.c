@@ -148,15 +148,28 @@ int main(void)
     }
     for (int i = 0; i < 6; i++) pthread_join(cthreads[i], NULL);
 
-    int ok_count = 0, busy_count = 0;
+    int ok_count = 0, busy_count = 0, conn_err_count = 0;
     for (int i = 0; i < 6; i++) {
         if (cargs[i].rc == MOONLAB_CONTROL_OK) ok_count++;
         else if (cargs[i].rc == MOONLAB_CONTROL_REJECTED) busy_count++;
+        /* Any negative rc that isn't REJECTED is the server hanging
+         * up on us mid-write -- counts as "server refused work",
+         * functionally identical to busy from the cap test's POV.
+         * On macOS hosted CI the server's cap-reject close can race
+         * the client write() so we see EPIPE here on one or two
+         * threads instead of a clean REJECTED rc.  Bucketing them
+         * lets us still assert that ALL 6 requests were accounted
+         * for and at least one was denied. */
+        else if (cargs[i].rc < 0) conn_err_count++;
     }
-    fprintf(stdout, "    6 parallel: %d OK, %d busy (rc breakdown)\n",
-            ok_count, busy_count);
-    CHECK(ok_count + busy_count == 6,
-          "all 6 accounted for (%d + %d)", ok_count, busy_count);
+    fprintf(stdout, "    6 parallel: %d OK, %d busy, %d conn-err (rc breakdown)\n",
+            ok_count, busy_count, conn_err_count);
+    CHECK(ok_count + busy_count + conn_err_count == 6,
+          "all 6 accounted for (%d ok + %d busy + %d conn-err)",
+          ok_count, busy_count, conn_err_count);
+    CHECK(busy_count + conn_err_count >= 1,
+          "cap=2 with 6 parallel must deny at least one (%d busy + %d conn-err)",
+          busy_count, conn_err_count);
 
     /* Scrape METRICS. */
     char *metrics = NULL;
