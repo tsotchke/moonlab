@@ -65,10 +65,45 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
 /* Weak link to the CUDA backend's state-free entry point.  When
  * libquantumsim was built with QSIM_HAS_CUDA, this resolves to
  * moonlab_cuda_state_free() and we tear down GPU memory before
- * the host-side free.  When CUDA isn't compiled in, the weak ref
- * stays NULL and the gpu_state slot is always NULL anyway. */
+ * the host-side free.  When CUDA isn't compiled in, gpu_state is
+ * always NULL and this is never called -- but the symbol still
+ * needs to resolve at link time on platforms where weak imports
+ * aren't supported by default (Mach-O on macOS).  Provide a
+ * fallback stub when QSIM_HAS_CUDA is off. */
 extern void moonlab_cuda_state_free(void *)
     __attribute__((weak));
+
+#ifndef QSIM_HAS_CUDA
+/* Fallback stubs for the GPU routing symbols.  When CUDA isn't
+ * compiled in, gates.c + cuda_tegra_probe.c declare these via
+ * weak externs that they expect to find in cuda_statevec.cu /
+ * state_gpu.cu.  On ELF systems the weak refs resolve to NULL at
+ * link time, but Mach-O on macOS rejects unresolved weak imports
+ * by default -- so we provide always-defined NULL-equivalent
+ * stubs here.  None are ever called because state->gpu_state is
+ * always NULL on a non-CUDA build. */
+__attribute__((weak))
+void moonlab_cuda_state_free(void *p) { (void)p; }
+
+__attribute__((weak))
+int qsim_gpu_route_hadamard(quantum_state_t *s, int q) { (void)s; (void)q; return -1; }
+__attribute__((weak))
+int qsim_gpu_route_pauli_x(quantum_state_t *s, int q) { (void)s; (void)q; return -1; }
+__attribute__((weak))
+int qsim_gpu_route_cnot(quantum_state_t *s, int c, int t) {
+    (void)s; (void)c; (void)t; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_apply_1q_matrix(quantum_state_t *s, int q, const double m[8]) {
+    (void)s; (void)q; (void)m; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_apply_2q_matrix(quantum_state_t *s, int q0, int q1, const double m[32]) {
+    (void)s; (void)q0; (void)q1; (void)m; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_runtime_probe_discrete(void) { return 0; }
+#endif
 
 void quantum_state_free(quantum_state_t *state) {
     if (!state) return;
