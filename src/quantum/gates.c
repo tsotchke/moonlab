@@ -660,7 +660,19 @@ qs_error_t gate_cy(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch via decomposition: CY = (I⊗S)·CNOT·(I⊗S†).
+     * Each gate_* below is itself GPU-dispatched in step 9 / 9b,
+     * so on a gpu_state we get 3 kernel launches with no host
+     * round-trips between them. */
+    if (state->gpu_state) {
+        qs_error_t e;
+        if ((e = gate_s_dagger(state, target))         != QS_SUCCESS) return e;
+        if ((e = gate_cnot    (state, control, target))!= QS_SUCCESS) return e;
+        if ((e = gate_s       (state, target))         != QS_SUCCESS) return e;
+        return QS_SUCCESS;
+    }
+
     // CY: apply Y gate to target if control is |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control) && !get_bit(i, target)) {
@@ -744,12 +756,34 @@ qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double t
     return QS_SUCCESS;
 }
 
+/* GPU dispatch for controlled-rotation gates uses standard textbook
+ * decompositions into already-dispatched primitives (H, RZ, CNOT,
+ * S, S†).  Each decomposition is exact (no extra phase). */
+static qs_error_t gpu_dispatch_crz(quantum_state_t *s, int c, int t, double theta) {
+    /* CRZ(θ) = (I⊗RZ(θ/2)) · CNOT · (I⊗RZ(-θ/2)) · CNOT */
+    qs_error_t e;
+    if ((e = gate_cnot(s, c, t))             != QS_SUCCESS) return e;
+    if ((e = gate_rz  (s, t, -theta / 2.0))  != QS_SUCCESS) return e;
+    if ((e = gate_cnot(s, c, t))             != QS_SUCCESS) return e;
+    if ((e = gate_rz  (s, t,  theta / 2.0))  != QS_SUCCESS) return e;
+    return QS_SUCCESS;
+}
+
 qs_error_t gate_crx(quantum_state_t *state, int control, int target, double theta) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: CRX(θ) = (I⊗H) · CRZ(θ) · (I⊗H). */
+    if (state->gpu_state) {
+        qs_error_t e;
+        if ((e = gate_hadamard(state, target))                != QS_SUCCESS) return e;
+        if ((e = gpu_dispatch_crz(state, control, target, theta)) != QS_SUCCESS) return e;
+        if ((e = gate_hadamard(state, target))                != QS_SUCCESS) return e;
+        return QS_SUCCESS;
+    }
+
     // Controlled-RX: apply RX to target if control is |1⟩
     double cos_half = cos(theta / 2.0);
     double sin_half = sin(theta / 2.0);
@@ -773,7 +807,19 @@ qs_error_t gate_cry(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: CRY(θ) = (I⊗S) · CRX(θ) · (I⊗S†)  (since RY = S·RX·S†).
+     * CRX itself decomposes through gpu_dispatch_crz above. */
+    if (state->gpu_state) {
+        qs_error_t e;
+        if ((e = gate_s_dagger(state, target))                  != QS_SUCCESS) return e;
+        if ((e = gate_hadamard(state, target))                  != QS_SUCCESS) return e;
+        if ((e = gpu_dispatch_crz(state, control, target, theta)) != QS_SUCCESS) return e;
+        if ((e = gate_hadamard(state, target))                  != QS_SUCCESS) return e;
+        if ((e = gate_s(state, target))                         != QS_SUCCESS) return e;
+        return QS_SUCCESS;
+    }
+
     // Controlled-RY
     double cos_half = cos(theta / 2.0);
     double sin_half = sin(theta / 2.0);
@@ -797,7 +843,12 @@ qs_error_t gate_crz(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch via the shared CRZ decomposition. */
+    if (state->gpu_state) {
+        return gpu_dispatch_crz(state, control, target, theta);
+    }
+
     // Controlled-RZ
     complex_t phase_0 = cexp(-I * theta / 2.0);
     complex_t phase_1 = cexp(I * theta / 2.0);

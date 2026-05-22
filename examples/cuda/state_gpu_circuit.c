@@ -54,6 +54,11 @@ static void run_circuit(quantum_state_t *s) {
     gate_cz       (s, 1, 2);
     gate_swap     (s, 2, 3);
     gate_cphase   (s, 0, 3, 0.4);
+    /* Step 9c additions: controlled-rotation surface via decomposition. */
+    gate_cy       (s, 0, 2);
+    gate_crx      (s, 1, 3, 0.6);
+    gate_cry      (s, 2, 0, 0.9);
+    gate_crz      (s, 3, 1, 1.2);
 }
 
 int main(int argc, char **argv)
