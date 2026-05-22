@@ -115,6 +115,38 @@ int qsim_gpu_route_fredkin(quantum_state_t *s, int c, int t1, int t2) {
 }
 __attribute__((weak))
 int moonlab_cuda_runtime_probe_discrete(void) { return 0; }
+
+/* distributed_gates.c (apply_local_1q, dist_cnot) and
+ * state_partition.c (partition_state_create_gpu + sync_to_host +
+ * sync_from_host) declare these as weak externs.  On a non-CUDA
+ * build the strong definitions in cuda_statevec.cu / state_gpu.cu
+ * are absent.  ELF treats unresolved weak refs as NULL at runtime;
+ * Mach-O (macOS) refuses to link without a resolvable definition.
+ * Provide always-defined fallbacks here -- the callers either
+ * check the symbol or only invoke when state->gpu_state != NULL,
+ * so these are never actually called on non-CUDA builds. */
+__attribute__((weak))
+int moonlab_cuda_apply_1q(void *state, uint32_t target, const double m[8]) {
+    (void)state; (void)target; (void)m; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_apply_cnot(void *state, uint32_t control, uint32_t target) {
+    (void)state; (void)control; (void)target; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_create(uint32_t n_qubits, void **out_state) {
+    (void)n_qubits;
+    if (out_state) *out_state = NULL;
+    return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_copy_to_host(const void *state, double *out) {
+    (void)state; (void)out; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_copy_from_host(void *state, const double *in) {
+    (void)state; (void)in; return -1;
+}
 #endif
 
 void quantum_state_free(quantum_state_t *state) {
