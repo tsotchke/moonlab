@@ -607,3 +607,11 @@ qs_error_t quantum_state_sync_to_host(quantum_state_t *state)
     if (!state->gpu_state) return QS_SUCCESS;
     return QS_ERROR_NOT_SUPPORTED;
 }
+
+__attribute__((weak))
+qs_error_t quantum_state_sync_from_host(quantum_state_t *state)
+{
+    if (!state) return QS_ERROR_INVALID_PARAM;
+    if (!state->gpu_state) return QS_SUCCESS;
+    return QS_ERROR_NOT_SUPPORTED;
+}

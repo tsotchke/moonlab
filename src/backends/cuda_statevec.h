@@ -166,6 +166,19 @@ moonlab_cuda_state_copy_to_host(const moonlab_cuda_state_t *state,
                                 double *out);
 
 /**
+ * @brief Push the host-side amplitudes back to the GPU state.
+ *        ``in`` must hold dim * 2 doubles (real, imag interleaved).
+ *
+ *        Counterpart to copy_to_host.  Used by the MPI bridge so
+ *        the host-side exchange buffer can be uploaded back to
+ *        device memory after a halo swap, and by any algorithm
+ *        that wants to seed the GPU from a precomputed state.
+ */
+moonlab_cuda_status_t
+moonlab_cuda_state_copy_from_host(moonlab_cuda_state_t *state,
+                                  const double *in);
+
+/**
  * @brief Synchronize the device stream.  Useful for benchmarks
  *        and for ensuring the result of asynchronous gate calls
  *        has settled before reading the state.

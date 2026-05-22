@@ -62,7 +62,7 @@ static void fill_random(mlkem_poly_t *p, int mod) {
     }
 }
 
-static void canonicalize(mlkem_poly_t *p) {
+static void canonicalize_poly(mlkem_poly_t *p) {
     for (int i = 0; i < N; i++) {
         int16_t v = p->coeffs[i] % Q;
         if (v < 0) v += Q;
@@ -82,11 +82,11 @@ static void test_ntt_roundtrip(void) {
     const int32_t R = 2285;
     mlkem_poly_t p, q;
     fill_random(&p, 8);
-    canonicalize(&p);
+    canonicalize_poly(&p);
     q = p;
     mlkem_poly_ntt(&q);
     mlkem_poly_invntt(&q);
-    canonicalize(&q);
+    canonicalize_poly(&q);
     int ok = 1;
     for (int i = 0; i < N; i++) {
         int32_t expected = ((int32_t)p.coeffs[i] * R) % Q;
@@ -103,8 +103,8 @@ static void test_ntt_roundtrip(void) {
 static void test_ntt_multiplication(void) {
     fprintf(stdout, "\n-- Schoolbook == inv(basemul(ntt(a), ntt(b))) --\n");
     mlkem_poly_t a, b, ref, via_ntt;
-    fill_random(&a, 10);  canonicalize(&a);
-    fill_random(&b, 8);   canonicalize(&b);
+    fill_random(&a, 10);  canonicalize_poly(&a);
+    fill_random(&b, 8);   canonicalize_poly(&b);
     /* b uses a different stride so they differ. */
     for (int i = 0; i < N; i++) b.coeffs[i] = (int16_t)((i * 131) % Q);
 
@@ -115,7 +115,7 @@ static void test_ntt_multiplication(void) {
     mlkem_poly_ntt(&bn);
     mlkem_poly_basemul(&via_ntt, &an, &bn);
     mlkem_poly_invntt(&via_ntt);
-    canonicalize(&via_ntt);
+    canonicalize_poly(&via_ntt);
 
     int ok = 1;
     int first_bad = -1;

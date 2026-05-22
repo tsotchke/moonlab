@@ -463,6 +463,22 @@ moonlab_cuda_state_copy_to_host(const moonlab_cuda_state_t *state,
 
 extern "C"
 moonlab_cuda_status_t
+moonlab_cuda_state_copy_from_host(moonlab_cuda_state_t *state,
+                                  const double *in)
+{
+    if (!state || !in) return MOONLAB_CUDA_ERR_NUM_QUBITS;
+    /* Same symmetry as copy_to_host: on managed memory both Tegra
+     * and discrete just see this as memcpy + lazy migration on
+     * next kernel launch.  We stream-sync first to make sure no
+     * in-flight kernel is reading the buffer when we overwrite. */
+    CUDA_TRY(cudaStreamSynchronize(state->stream));
+    size_t bytes = (size_t)state->dim * sizeof(double2);
+    memcpy(state->amps, in, bytes);
+    return MOONLAB_CUDA_OK;
+}
+
+extern "C"
+moonlab_cuda_status_t
 moonlab_cuda_synchronize(moonlab_cuda_state_t *state)
 {
     if (!state) return MOONLAB_CUDA_ERR_NUM_QUBITS;
