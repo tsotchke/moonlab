@@ -74,6 +74,14 @@ static inline int gpu_try_apply_2q(quantum_state_t *state, int q0, int q1,
     return 0;
 }
 
+/* Forward declarations -- definitions live below.  The controlled-1q
+ * helper builds a 4x4 controlled-U matrix from the inner 2x2 and
+ * dispatches through apply_2q (gate_cy / gate_crx / gate_cry /
+ * gate_crz all share this path). */
+static qs_error_t gpu_dispatch_controlled_1q(quantum_state_t *s,
+                                              int control, int target,
+                                              const double U[8]);
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -661,16 +669,12 @@ qs_error_t gate_cy(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
 
-    /* GPU dispatch via decomposition: CY = (I⊗S)·CNOT·(I⊗S†).
-     * Each gate_* below is itself GPU-dispatched in step 9 / 9b,
-     * so on a gpu_state we get 3 kernel launches with no host
-     * round-trips between them. */
+    /* GPU dispatch: single apply_2q kernel call with the 4x4 CY matrix
+     * (built from the inner 2x2 Y = [[0,-i],[i,0]]). */
     if (state->gpu_state) {
-        qs_error_t e;
-        if ((e = gate_s_dagger(state, target))         != QS_SUCCESS) return e;
-        if ((e = gate_cnot    (state, control, target))!= QS_SUCCESS) return e;
-        if ((e = gate_s       (state, target))         != QS_SUCCESS) return e;
-        return QS_SUCCESS;
+        static const double Y[8] = {  0,0, 0,-1,
+                                       0,1, 0, 0 };
+        return gpu_dispatch_controlled_1q(state, control, target, Y);
     }
 
     // CY: apply Y gate to target if control is |1⟩
@@ -756,17 +760,37 @@ qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double t
     return QS_SUCCESS;
 }
 
-/* GPU dispatch for controlled-rotation gates uses standard textbook
- * decompositions into already-dispatched primitives (H, RZ, CNOT,
- * S, S†).  Each decomposition is exact (no extra phase). */
-static qs_error_t gpu_dispatch_crz(quantum_state_t *s, int c, int t, double theta) {
-    /* CRZ(θ) = (I⊗RZ(θ/2)) · CNOT · (I⊗RZ(-θ/2)) · CNOT */
-    qs_error_t e;
-    if ((e = gate_cnot(s, c, t))             != QS_SUCCESS) return e;
-    if ((e = gate_rz  (s, t, -theta / 2.0))  != QS_SUCCESS) return e;
-    if ((e = gate_cnot(s, c, t))             != QS_SUCCESS) return e;
-    if ((e = gate_rz  (s, t,  theta / 2.0))  != QS_SUCCESS) return e;
-    return QS_SUCCESS;
+/* GPU dispatch for controlled-1q gates routes through apply_2q
+ * with a 4x4 controlled-U matrix built from the inner 2x2.  Single
+ * kernel launch per gate (3-8x fewer than the decomposition path),
+ * exact same numerical answer at machine precision.
+ *
+ * Convention: caller passes (control, target).  Matrix is expressed
+ * in basis |target control> with control as the LOW bit.  The kernel
+ * dispatcher in apply_2q handles the control >/< target ordering by
+ * permuting the matrix internally. */
+static inline void build_controlled_1q_matrix(const double U[8], double m[32]) {
+    for (int i = 0; i < 32; i++) m[i] = 0.0;
+    /* M[0][0] = 1, M[2][2] = 1 (identity on c=0 sector). */
+    m[0]  = 1.0;
+    m[20] = 1.0;
+    /* M[1][1] = U[0,0], M[1][3] = U[0,1] (U applied to target when c=1).
+     * 32-double layout: m[row*8 + col*2 + (0=re|1=im)] */
+    m[10] = U[0]; m[11] = U[1];   /* M[1][1] = U[0,0] */
+    m[14] = U[2]; m[15] = U[3];   /* M[1][3] = U[0,1] */
+    m[26] = U[4]; m[27] = U[5];   /* M[3][1] = U[1,0] */
+    m[30] = U[6]; m[31] = U[7];   /* M[3][3] = U[1,1] */
+}
+
+static qs_error_t gpu_dispatch_controlled_1q(quantum_state_t *s,
+                                              int control, int target,
+                                              const double U[8])
+{
+    double m[32];
+    build_controlled_1q_matrix(U, m);
+    qs_error_t out;
+    if (gpu_try_apply_2q(s, control, target, m, &out)) return out;
+    return QS_ERROR_NOT_SUPPORTED;  /* shouldn't reach -- caller checked gpu_state */
 }
 
 qs_error_t gate_crx(quantum_state_t *state, int control, int target, double theta) {
@@ -775,13 +799,13 @@ qs_error_t gate_crx(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
 
-    /* GPU dispatch: CRX(θ) = (I⊗H) · CRZ(θ) · (I⊗H). */
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RX. */
     if (state->gpu_state) {
-        qs_error_t e;
-        if ((e = gate_hadamard(state, target))                != QS_SUCCESS) return e;
-        if ((e = gpu_dispatch_crz(state, control, target, theta)) != QS_SUCCESS) return e;
-        if ((e = gate_hadamard(state, target))                != QS_SUCCESS) return e;
-        return QS_SUCCESS;
+        const double c = cos(theta / 2.0);
+        const double s = sin(theta / 2.0);
+        const double RX[8] = {  c, 0.0,        0.0, -s,
+                                 0.0, -s,       c, 0.0 };
+        return gpu_dispatch_controlled_1q(state, control, target, RX);
     }
 
     // Controlled-RX: apply RX to target if control is |1⟩
@@ -808,16 +832,13 @@ qs_error_t gate_cry(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
 
-    /* GPU dispatch: CRY(θ) = (I⊗S) · CRX(θ) · (I⊗S†)  (since RY = S·RX·S†).
-     * CRX itself decomposes through gpu_dispatch_crz above. */
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RY. */
     if (state->gpu_state) {
-        qs_error_t e;
-        if ((e = gate_s_dagger(state, target))                  != QS_SUCCESS) return e;
-        if ((e = gate_hadamard(state, target))                  != QS_SUCCESS) return e;
-        if ((e = gpu_dispatch_crz(state, control, target, theta)) != QS_SUCCESS) return e;
-        if ((e = gate_hadamard(state, target))                  != QS_SUCCESS) return e;
-        if ((e = gate_s(state, target))                         != QS_SUCCESS) return e;
-        return QS_SUCCESS;
+        const double c = cos(theta / 2.0);
+        const double s = sin(theta / 2.0);
+        const double RY[8] = {  c, 0.0,  -s, 0.0,
+                                 s, 0.0,   c, 0.0 };
+        return gpu_dispatch_controlled_1q(state, control, target, RY);
     }
 
     // Controlled-RY
@@ -844,9 +865,16 @@ qs_error_t gate_crz(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
 
-    /* GPU dispatch via the shared CRZ decomposition. */
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RZ. */
     if (state->gpu_state) {
-        return gpu_dispatch_crz(state, control, target, theta);
+        const double cn = cos(-theta / 2.0);
+        const double sn = sin(-theta / 2.0);
+        const double cp = cos( theta / 2.0);
+        const double sp = sin( theta / 2.0);
+        /* RZ(theta) = diag(e^{-i theta/2}, e^{+i theta/2}) */
+        const double RZ[8] = {  cn, sn,   0.0, 0.0,
+                                 0.0, 0.0,  cp, sp };
+        return gpu_dispatch_controlled_1q(state, control, target, RZ);
     }
 
     // Controlled-RZ
