@@ -1,0 +1,13 @@
+Moonlab WebGPU Eval
+Date: 2026-05-11T14:42:58.104Z
+Seed: 1337
+Cases: 20
+WebGPU runtime available: false
+Backend initialized: false
+Active tensor GPU backend: none
+Require active WebGPU backend: false
+Tolerance (max abs error): 1e-8
+Observed max abs error: 0
+Backend requirement failed: false
+Failures: 0
+Result: PASS

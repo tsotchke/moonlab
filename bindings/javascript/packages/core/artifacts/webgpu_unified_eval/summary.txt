@@ -1,0 +1,13 @@
+Moonlab WebGPU Unified Eval
+Date: 2026-05-11T14:34:39.924Z
+Seed: 20260307
+Cases: 24
+Backend: none
+Native accelerated: false
+Require WebGPU backend: false
+Require native acceleration: false
+Tolerance (max abs diff): 0.00001
+Observed max abs diff: 0
+Failures: 0
+Result: PASS
+Reason: No GPU backend available in this runtime

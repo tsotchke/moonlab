@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-05-11T14:34:39.924Z",
+  "seed": 20260307,
+  "numCases": 24,
+  "maxAbsTolerance": 0.00001,
+  "requireWebGPU": false,
+  "requireNative": false,
+  "sessionCreated": true,
+  "backend": "none",
+  "nativeAccelerated": false,
+  "failures": 0,
+  "maxObservedAbsDiff": 0,
+  "cases": [],
+  "passed": true,
+  "reason": "No GPU backend available in this runtime"
+}
