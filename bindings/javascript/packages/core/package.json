@@ -38,6 +38,7 @@
     "webgpu:smoke:deno:native": "pnpm build && cp emscripten/build/moonlab.js dist/moonlab.js && cp emscripten/build/moonlab.wasm dist/moonlab.wasm && MOONLAB_WEBGPU_ENABLE_DENO_NATIVE=1 MOONLAB_WEBGPU_SMOKE_REQUIRE_BACKEND=1 MOONLAB_WEBGPU_SMOKE_REQUIRE_NATIVE=1 deno run -A --unstable-bare-node-builtins scripts/webgpu-unified-smoke.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "ulg:artifact": "node scripts/emit-ulg-quantum-response-artifact.mjs",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist build"
   },
