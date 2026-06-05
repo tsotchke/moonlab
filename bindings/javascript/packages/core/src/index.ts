@@ -88,6 +88,22 @@ export type { LoadOptions } from './wasm-loader';
 export { WasmMemory } from './memory';
 export type { MoonlabModule } from './memory';
 
+export {
+  buildUlgBellStateArtifact,
+  canonicalJson,
+  validateUlgQuantumResponseArtifact,
+  DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA,
+  ULG_QUANTUM_RESPONSE_SCHEMA_TITLE,
+} from './ulg-quantum-response-artifact';
+export type {
+  QuantumResponseArtifactSchema,
+  QuantumResponseArtifactSchemaProperty,
+  UlgArtifactValidation,
+  UlgArtifactValidationCheck,
+  UlgBellStateArtifactOptions,
+  UlgQuantumResponseArtifact,
+} from './ulg-quantum-response-artifact';
+
 // ============================================================================
 // Version Info
 // ============================================================================

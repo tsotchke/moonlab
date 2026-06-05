@@ -28,6 +28,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "ulg:artifact": "node scripts/emit-ulg-quantum-response-artifact.mjs",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist build"
   },

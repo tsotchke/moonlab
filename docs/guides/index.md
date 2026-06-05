@@ -14,6 +14,7 @@ These guides provide step-by-step instructions for specific tasks. Unlike tutori
 |-------|-------------|
 | [Building from Source](building-from-source.md) | Compile Moonlab with custom options |
 | [GPU Acceleration](gpu-acceleration.md) | Enable and configure Metal GPU support |
+| [ULG Quantum Response Artifact](ulg-quantum-response-artifact.md) | Emit a schema-compatible Bell-state readiness artifact |
 
 ### Performance
 
@@ -68,4 +69,3 @@ make -j$(nproc)
 - [Tutorials](../tutorials/index.md) - Learn concepts step by step
 - [API Reference](../api/index.md) - Complete function documentation
 - [Troubleshooting](../troubleshooting.md) - Common problems and solutions
-
