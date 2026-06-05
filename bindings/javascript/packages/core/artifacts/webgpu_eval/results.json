@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-05-11T14:42:58.104Z",
+  "seed": 1337,
+  "numCases": 20,
+  "thresholds": {
+    "maxAbsError": 1e-8
+  },
+  "runtime": {
+    "webgpuAvailable": false,
+    "backendInit": false,
+    "activeBackend": "none"
+  },
+  "summary": {
+    "failures": 0,
+    "maxObservedError": 0,
+    "backendRequirementFailed": false,
+    "passed": true
+  },
+  "cases": [
+    {
+      "caseId": 1,
+      "numQubits": 2,
+      "depth": 10,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 2,
+      "numQubits": 2,
+      "depth": 8,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 3,
+      "numQubits": 2,
+      "depth": 32,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 4,
+      "numQubits": 3,
+      "depth": 17,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 5,
+      "numQubits": 6,
+      "depth": 25,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 6,
+      "numQubits": 2,
+      "depth": 15,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 7,
+      "numQubits": 5,
+      "depth": 8,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 8,
+      "numQubits": 6,
+      "depth": 9,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 9,
+      "numQubits": 2,
+      "depth": 23,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 10,
+      "numQubits": 4,
+      "depth": 18,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 11,
+      "numQubits": 3,
+      "depth": 24,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 12,
+      "numQubits": 2,
+      "depth": 17,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 13,
+      "numQubits": 6,
+      "depth": 19,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 14,
+      "numQubits": 6,
+      "depth": 5,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 15,
+      "numQubits": 5,
+      "depth": 30,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 16,
+      "numQubits": 6,
+      "depth": 33,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 17,
+      "numQubits": 3,
+      "depth": 16,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 18,
+      "numQubits": 2,
+      "depth": 11,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 19,
+      "numQubits": 3,
+      "depth": 12,
+      "maxAbsError": 0,
+      "passed": true
+    },
+    {
+      "caseId": 20,
+      "numQubits": 5,
+      "depth": 14,
+      "maxAbsError": 0,
+      "passed": true
+    }
+  ]
+}

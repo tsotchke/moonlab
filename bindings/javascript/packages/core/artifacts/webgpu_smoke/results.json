@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-05-11T14:34:24.179Z",
+  "requireWebGPU": false,
+  "requireNativeWebGPU": false,
+  "sessionCreated": true,
+  "backend": "none",
+  "nativeAccelerated": false,
+  "hadamardRc": -7,
+  "pauliXRc": -7,
+  "pauliZRc": -7,
+  "cnotRc1": -7,
+  "cnotRc2": -7,
+  "probabilities": null,
+  "passed": true,
+  "reason": "PASS"
+}
