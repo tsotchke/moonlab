@@ -232,15 +232,15 @@ double quantum_state_purity(const quantum_state_t *state) {
     
     // For pure state: Tr(ρ²) = (Σ|αᵢ|²)² = 1
     // For mixed state: Tr(ρ²) < 1
-    double purity = 0.0;
+    double norm_squared = 0.0;
     
     for (size_t i = 0; i < state->state_dim; i++) {
         double prob = cabs(state->amplitudes[i]);
         prob = prob * prob;
-        purity += prob * prob;
+        norm_squared += prob;
     }
     
-    return purity;
+    return norm_squared * norm_squared;
 }
 
 double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2) {

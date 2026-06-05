@@ -4,17 +4,6 @@
  * This runs after the WASM module is loaded.
  */
 
-// Call ready callback
-if (Module['onRuntimeInitialized']) {
-  var originalOnInit = Module['onRuntimeInitialized'];
-  Module['onRuntimeInitialized'] = function() {
-    originalOnInit();
-    Module['_onReady']();
-  };
-} else {
-  Module['onRuntimeInitialized'] = Module['_onReady'];
-}
-
 /**
  * Generate cryptographically secure random number [0, 1)
  * Falls back to Math.random if crypto API unavailable

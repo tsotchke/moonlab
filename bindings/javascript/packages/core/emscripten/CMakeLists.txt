@@ -12,6 +12,7 @@ set(QUANTUM_SOURCES
     ${QSIM_ROOT}/src/quantum/gates.c
     ${QSIM_ROOT}/src/quantum/measurement.c
     ${QSIM_ROOT}/src/quantum/entanglement.c
+    ${QSIM_ROOT}/src/quantum/noise.c
 )
 
 # Source files - Algorithms
@@ -27,6 +28,12 @@ set(ALGORITHM_SOURCES
 set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/entropy.c
     ${QSIM_ROOT}/src/utils/matrix_math.c
+    ${QSIM_ROOT}/src/utils/config.c
+)
+
+# Source files - Scalar/SIMD fallback operations used by state and gates
+set(OPTIMIZATION_SOURCES
+    ${QSIM_ROOT}/src/optimization/simd_ops.c
 )
 
 # Combine all sources
@@ -34,6 +41,7 @@ set(ALL_SOURCES
     ${QUANTUM_SOURCES}
     ${ALGORITHM_SOURCES}
     ${UTILS_SOURCES}
+    ${OPTIMIZATION_SOURCES}
 )
 
 # Create the WASM executable
@@ -45,6 +53,7 @@ target_include_directories(moonlab PRIVATE
     ${QSIM_ROOT}/src/quantum
     ${QSIM_ROOT}/src/algorithms
     ${QSIM_ROOT}/src/utils
+    ${QSIM_ROOT}/src/optimization
 )
 
 # Compiler flags
@@ -55,15 +64,19 @@ target_compile_options(moonlab PRIVATE
     -Wno-unused-function
 )
 
-# Read exported functions from file
-file(READ "${CMAKE_SOURCE_DIR}/exports.txt" EXPORTED_FUNCTIONS)
-string(REGEX REPLACE "\n" "," EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
-string(REGEX REPLACE ",$" "" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
-string(REGEX REPLACE "#[^\n]*," "" EXPORTED_FUNCTIONS "${EXPORTED_FUNCTIONS}")
+# Read exported functions from file, ignoring comments and blank lines.
+file(STRINGS "${CMAKE_SOURCE_DIR}/exports.txt" EXPORTED_FUNCTION_LINES REGEX "^[ \t]*_[A-Za-z0-9_]+")
+set(EXPORTED_FUNCTION_LIST "")
+foreach(EXPORTED_FUNCTION_LINE IN LISTS EXPORTED_FUNCTION_LINES)
+    string(STRIP "${EXPORTED_FUNCTION_LINE}" EXPORTED_FUNCTION_LINE)
+    list(APPEND EXPORTED_FUNCTION_LIST "${EXPORTED_FUNCTION_LINE}")
+endforeach()
+list(JOIN EXPORTED_FUNCTION_LIST "," EXPORTED_FUNCTIONS)
 
 # Emscripten link flags
 set_target_properties(moonlab PROPERTIES
     SUFFIX ".js"
+    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/pre.js;${CMAKE_SOURCE_DIR}/post.js;${CMAKE_SOURCE_DIR}/exports.txt"
     LINK_FLAGS "\
         -s WASM=1 \
         -s MODULARIZE=1 \

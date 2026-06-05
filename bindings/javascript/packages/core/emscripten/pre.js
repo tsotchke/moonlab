@@ -25,6 +25,15 @@ Module['_onReady'] = function() {
   }
 };
 
+// Register runtime initialization before Emscripten consumes the callback.
+var originalOnRuntimeInitialized = Module['onRuntimeInitialized'];
+Module['onRuntimeInitialized'] = function() {
+  if (originalOnRuntimeInitialized) {
+    originalOnRuntimeInitialized();
+  }
+  Module['_onReady']();
+};
+
 // Error handling
 Module['_onError'] = function(error) {
   console.error('[Moonlab WASM] Initialization error:', error);

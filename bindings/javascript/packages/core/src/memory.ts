@@ -318,7 +318,7 @@ export interface MoonlabModule {
     qubit: number,
     randomValue: number
   ): number;
-  _measurement_all_qubits(statePtr: number, randomValue: number): number;
+  _measurement_all_qubits(statePtr: number, randomValue: number): number | bigint;
   _measurement_expectation_z(statePtr: number, qubit: number): number;
   _measurement_expectation_x(statePtr: number, qubit: number): number;
   _measurement_expectation_y(statePtr: number, qubit: number): number;

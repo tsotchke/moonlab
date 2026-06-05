@@ -19,7 +19,7 @@ const STATE_STRUCT_SIZE = 256;
  * Offset of amplitudes pointer in quantum_state_t
  * This depends on the C struct layout
  */
-const AMPLITUDES_OFFSET = 24;
+const AMPLITUDES_OFFSET = 8;
 
 /**
  * Offset of num_qubits in quantum_state_t
@@ -597,7 +597,7 @@ export class QuantumState {
   measureAll(): number {
     this.checkDisposed();
     const randomValue = Math.random();
-    return this.module._measurement_all_qubits(this.statePtr, randomValue);
+    return Number(this.module._measurement_all_qubits(this.statePtr, randomValue));
   }
 
   /**

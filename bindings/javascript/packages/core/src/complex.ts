@@ -60,7 +60,8 @@ export function phase(c: Complex): number {
  * Complex conjugate z* = a - bi
  */
 export function conjugate(c: Complex): Complex {
-  return { real: c.real, imag: -c.imag };
+  const imag = c.imag === 0 ? 0 : -c.imag;
+  return { real: c.real, imag };
 }
 
 /**
