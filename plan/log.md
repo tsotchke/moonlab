@@ -108,3 +108,54 @@ Failures or open questions:
 - A build rerun failed during DTS generation because `model` was possibly undefined after tightening optional chaining; fixed the builder to use a non-null local `liveModel` and reran successfully.
 - The patch intentionally does not touch PeerCompute or ULG repos.
 - The magnetar probe is a physically labeled dipole-to-Ising calibration/handoff primitive. It does not simulate plasma, radiation, relativistic corrections, or MHD evolution.
+
+## 2026-06-05T23:46:04-08:00
+
+Prompt: "You are the MoonLab sidecar for the ULG/PeerCompute/MoonLab/Eshkol integration. Work in /home/cos/projects/moonlab only. Read AGENTS/agents instructions if present. Task: inspect the current magnetar dipole Ising calibration artifact and identify the next narrow schema/field additions needed for PeerCompute to treat it as a reference/tolerance input rather than a generic calibration smoke. Do not push. Prefer read-only analysis unless the change is clearly small and local to MoonLab docs/tests/artifact emission; if you edit, keep it disjoint to MoonLab files and list exact paths. Final answer should include: files inspected, proposed/changed files, recommended field names, commands/tests run, and blockers."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md` and MoonLab plan/status/test/log files. No MoonLab-local AGENTS file was present.
+- Confirmed branch `ulg` was ahead locally and no push was attempted.
+- Inspected the magnetar dipole Ising artifact builder, CLI emitter, integration tests, guide, and emitted JSON from the current artifact.
+- Identified the narrow PeerCompute gap: the artifact had all numerical ingredients, but PeerCompute had to infer reference semantics from generic `outputs`, `parity`, and `uncertainty` fields.
+- Added an additive nested `outputs.reference` contract for the magnetar artifact with stable schema/role, Hamiltonian, reference energy spectrum, ground state, absolute energy tolerance, and validation deltas.
+- Kept the change local to MoonLab artifact emission, tests, docs, and plan files.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `find .. -maxdepth 2 \( -iname 'AGENTS.md' -o -iname 'agents.md' \) -print`
+- `sed` inspections of `/home/cos/projects/AGENTS.md`, MoonLab plan files, artifact source, CLI, tests, and guide.
+- `git status --short --branch`
+- `git log --oneline --decorate -8`
+- `rg` searches for magnetar, dipole, Ising, calibration, tolerance, reference, and artifact fields.
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-sidecar-magnetar.json`
+- `node` JSON inspection snippets against `/tmp/moonlab-sidecar-magnetar.json`
+- `date -Is`
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-sidecar-magnetar-reference.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-sidecar-magnetar-reference.json`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `git diff --check`
+- `git diff --stat`
+- `git add bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts docs/guides/ulg-quantum-response-artifact.md plan/implementation-status.md plan/tests.md plan/log.md`
+- `git commit -m "Add magnetar reference contract fields"`
+
+Test results:
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`: passed. Vitest ran 3 integration files, 44 tests total, including the magnetar artifact reference contract assertions.
+- `pnpm build`: passed. `build:ts` and `build:wasm` completed; tsup repeated the pre-existing package export-order warning for `types`.
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-sidecar-magnetar-reference.json`: passed. Generated artifact kept `validation.schemaCompatible=true` and `parity.passed=true`, with `outputs.reference.schema=moonlab.magnetar-dipole-ising-reference.v0`, `outputs.reference.role=peercompute-reference-tolerance-input`, 8 spectrum rows, ground state `000`, and `tolerances.energyAbs=1e-9`.
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`: passed. Vitest ran 3 unit files, 95 tests total.
+- `git diff --check`: passed.
+- Local commit created for the MoonLab-only patch. No push was attempted.
+
+Failures or open questions:
+- The current artifact passed ULG schema validation before and after this patch, but PeerCompute still needs consumer-side parsing for `outputs.reference`.
+- No push was attempted.
