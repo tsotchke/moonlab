@@ -2,6 +2,8 @@ export const MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA =
   'moonlab.webgpu.complex64-parity-scope.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA =
   'moonlab.webgpu.complex64-probability-kernel-probe.v0';
+export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA =
+  'moonlab.webgpu.complex64-native-operation-probe.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF = 1e-5;
 
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED = [
@@ -16,10 +18,16 @@ export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED = [
   'phase',
 ] as const;
 
+export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS = [
+  'hadamard',
+] as const;
+
 type NativeCoverageRequired =
   typeof MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED[number];
 type NativeCoverageExcluded =
   typeof MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED[number];
+type NativeOperationProbeOperation =
+  typeof MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS[number];
 type FixtureOperationName = NativeCoverageRequired | NativeCoverageExcluded;
 
 interface ComplexValue {
@@ -38,6 +46,13 @@ interface ReducedFixtureDefinition {
   fixtureId: string;
   qubitCount: number;
   operations: FixtureOperation[];
+}
+
+interface NativeOperationProbeFixtureDefinition {
+  fixtureId: string;
+  qubitCount: number;
+  operation: FixtureOperation & { operation: NativeOperationProbeOperation };
+  inputState: ComplexValue[];
 }
 
 export interface MoonlabWebGpuComplex64BackendDetection {
@@ -104,6 +119,45 @@ export interface MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe {
   reason: string;
 }
 
+export interface MoonlabBrowserWebGpuComplex64NativeOperationProbeFixture {
+  fixtureId: string;
+  qubitCount: number;
+  amplitudeCount: number;
+  operation: NativeOperationProbeOperation;
+  referenceRepresentation: 'cpu-complex64-interleaved-f32';
+  complex64Representation: 'complex64-interleaved-f32';
+  browserWebGpuKernel: NativeOperationProbeOperation;
+  inputAmplitudes: number[];
+  referenceAmplitudes: number[];
+  browserWebGpuAmplitudes: number[];
+  maxAmplitudeAbsDiff: number;
+  passed: boolean;
+}
+
+export interface MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult {
+  operation: NativeOperationProbeOperation;
+  executed: boolean;
+  passed: boolean;
+  covered: boolean;
+  fixtureResults: MoonlabBrowserWebGpuComplex64NativeOperationProbeFixture[];
+  maxAmplitudeAbsDiff: number | null;
+  tolerance: number;
+  blocker?: string;
+  reason: string;
+}
+
+export interface MoonlabBrowserWebGpuComplex64NativeOperationProbe {
+  schema: typeof MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA;
+  probeKind: 'browser-webgpu-complex64-native-operation-probe';
+  executed: boolean;
+  passed: boolean;
+  coveredNativeOperations: NativeOperationProbeOperation[];
+  operationResults: MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult[];
+  maxAmplitudeAbsDiff: number | null;
+  tolerance: number;
+  reason: string;
+}
+
 export interface MoonlabWebGpuComplex64ParityValidation {
   valid: boolean;
   errors: string[];
@@ -166,6 +220,7 @@ export interface MoonlabWebGpuComplex64ParityScopeArtifact {
     reason: string;
   };
   browserKernelProbe: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
+  browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe;
   blockers: string[];
   contractValidation: MoonlabWebGpuComplex64ParityValidation;
 }
@@ -177,6 +232,7 @@ export interface BuildMoonlabWebGpuComplex64ParityScopeOptions {
   requireBackend?: boolean;
   coveredNativeOperations?: NativeCoverageRequired[];
   browserKernelProbe?: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
+  browserNativeOperationProbe?: MoonlabBrowserWebGpuComplex64NativeOperationProbe;
   webgpuParity?: {
     executed: boolean;
     passed: boolean;
@@ -191,10 +247,20 @@ export interface RunMoonlabBrowserWebGpuComplex64ProbabilityKernelProbeOptions {
   workgroupSize?: number;
 }
 
+export interface RunMoonlabBrowserWebGpuComplex64NativeOperationProbeOptions {
+  gpu?: MoonlabBrowserWebGpu | null;
+  runtime?: string;
+  workgroupSize?: number;
+}
+
 export interface BuildMoonlabWebGpuComplex64ParityScopeWithBrowserProbeOptions
   extends Omit<
     BuildMoonlabWebGpuComplex64ParityScopeOptions,
-    'backendDetection' | 'backendAvailable' | 'coveredNativeOperations' | 'browserKernelProbe'
+    | 'backendDetection'
+    | 'backendAvailable'
+    | 'coveredNativeOperations'
+    | 'browserKernelProbe'
+    | 'browserNativeOperationProbe'
   > {
   gpu?: MoonlabBrowserWebGpu | null;
   runtime?: string;
@@ -294,10 +360,19 @@ export function buildMoonlabWebGpuComplex64ParityScope(
         ? 'browser WebGPU probability kernel probe not executed; native MoonLab gate kernels are not wired on this branch'
         : 'browser WebGPU probability kernel probe not executed because no adapter/runtime was available'
     );
+  const browserNativeOperationProbe = options.browserNativeOperationProbe
+    ?? buildNotExecutedNativeOperationProbe(
+      backendAvailable
+        ? 'browser WebGPU native operation probe not executed for hadamard on this branch'
+        : 'browser WebGPU native operation probe not executed because no adapter/runtime was available'
+    );
   const coveredOperations = new Set<NativeCoverageRequired>([
     ...(options.coveredNativeOperations ?? []),
     ...(browserKernelProbe.executed && browserKernelProbe.passed
       ? browserKernelProbe.coveredNativeOperations
+      : []),
+    ...(browserNativeOperationProbe.executed
+      ? browserNativeOperationProbe.coveredNativeOperations
       : []),
   ]);
   const nativeCoverage = MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED.map(
@@ -392,6 +467,7 @@ export function buildMoonlabWebGpuComplex64ParityScope(
       reason: webgpuParity.reason ?? '',
     },
     browserKernelProbe,
+    browserNativeOperationProbe,
     blockers,
   } satisfies Omit<MoonlabWebGpuComplex64ParityScopeArtifact, 'contractValidation'>;
 
@@ -409,10 +485,18 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
     runtime: options.runtime,
     workgroupSize: options.workgroupSize,
   });
+  const browserNativeOperationProbe =
+    await runMoonlabBrowserWebGpuComplex64NativeOperationProbe({
+      gpu: options.gpu,
+      runtime: options.runtime,
+      workgroupSize: options.workgroupSize,
+    });
+  const browserProbeExecuted =
+    browserKernelProbe.executed || browserNativeOperationProbe.executed;
   const backendDetection: MoonlabWebGpuComplex64BackendDetection = {
-    available: browserKernelProbe.executed,
+    available: browserProbeExecuted,
     runtime: options.runtime ?? detectRuntime(),
-    reason: browserKernelProbe.reason,
+    reason: joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
   };
 
   return buildMoonlabWebGpuComplex64ParityScope({
@@ -420,13 +504,14 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
     requireBackend: options.requireBackend,
     backendDetection,
     browserKernelProbe,
+    browserNativeOperationProbe,
     webgpuParity: {
       executed: false,
       passed: false,
       maxProbabilityAbsDiff: browserKernelProbe.maxProbabilityAbsDiff,
-      reason: browserKernelProbe.executed
-        ? 'browser WebGPU compute_probabilities kernel ran, but native gate kernels are not wired; full reduced-fixture WebGPU parity was not executed'
-        : browserKernelProbe.reason,
+      reason: browserProbeExecuted
+        ? 'browser WebGPU probe(s) ran, but full required native operation coverage is incomplete; full reduced-fixture WebGPU parity was not executed'
+        : joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
     },
   });
 }
@@ -521,6 +606,85 @@ export async function runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe(
   }
 }
 
+export async function runMoonlabBrowserWebGpuComplex64NativeOperationProbe(
+  options: RunMoonlabBrowserWebGpuComplex64NativeOperationProbeOptions = {}
+): Promise<MoonlabBrowserWebGpuComplex64NativeOperationProbe> {
+  const gpu = options.gpu === undefined ? detectGlobalBrowserWebGpu() : options.gpu;
+  if (!gpu || typeof gpu.requestAdapter !== 'function') {
+    return buildNotExecutedNativeOperationProbe(
+      'navigator.gpu.requestAdapter is unavailable in this JavaScript runtime'
+    );
+  }
+
+  let adapter: MoonlabBrowserWebGpuAdapter | null;
+  try {
+    adapter = await gpu.requestAdapter();
+  } catch (error) {
+    return buildNotExecutedNativeOperationProbe(
+      `navigator.gpu.requestAdapter failed: ${errorMessage(error)}`
+    );
+  }
+
+  if (!adapter) {
+    return buildNotExecutedNativeOperationProbe(
+      'navigator.gpu.requestAdapter returned no adapter'
+    );
+  }
+
+  let device: MoonlabBrowserWebGpuDevice;
+  try {
+    device = await adapter.requestDevice();
+  } catch (error) {
+    return buildNotExecutedNativeOperationProbe(
+      `GPUAdapter.requestDevice failed: ${errorMessage(error)}`
+    );
+  }
+
+  try {
+    const constants = browserWebGpuConstants();
+    const workgroupSize = normalizeWorkgroupSize(options.workgroupSize);
+    const operationResults: MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult[] = [];
+    for (const operation of MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS) {
+      operationResults.push(
+        await runNativeOperationProbeOperation({
+          device,
+          constants,
+          operation,
+          workgroupSize,
+        })
+      );
+    }
+
+    const coveredNativeOperations = operationResults
+      .filter((result) => result.covered)
+      .map((result) => result.operation);
+    const maxAmplitudeAbsDiff = maxNullable(
+      operationResults.map((result) => result.maxAmplitudeAbsDiff)
+    );
+    const passed = operationResults.length > 0
+      && operationResults.every((result) => result.passed);
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-native-operation-probe',
+      executed: operationResults.some((result) => result.executed),
+      passed,
+      coveredNativeOperations,
+      operationResults,
+      maxAmplitudeAbsDiff,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: passed
+        ? 'browser WebGPU native hadamard operation kernel matched reduced complex64 fixture amplitudes'
+        : 'one or more browser WebGPU native operation kernels exceeded reduced fixture tolerance',
+    };
+  } catch (error) {
+    return buildFailedNativeOperationProbe(
+      `browser WebGPU native operation probe failed: ${errorMessage(error)}`
+    );
+  } finally {
+    device.destroy?.();
+  }
+}
+
 export function validateMoonlabWebGpuComplex64ParityScope(
   value: unknown
 ): MoonlabWebGpuComplex64ParityValidation {
@@ -608,6 +772,15 @@ export function validateMoonlabWebGpuComplex64ParityScope(
   addCheck(
     checks,
     errors,
+    'webgpu-pass-requires-executed-native-probe-evidence',
+    artifact.webgpuParity?.passed !== true
+      || MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED.every((operation) => (
+        hasExecutedNativeOperationEvidence(artifact, operation)
+      ))
+  );
+  addCheck(
+    checks,
+    errors,
     'browser-probability-kernel-probe-contract',
     artifact.browserKernelProbe?.schema
       === MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA
@@ -616,6 +789,26 @@ export function validateMoonlabWebGpuComplex64ParityScope(
         || artifact.browserKernelProbe.executed === true)
       && (!artifact.browserKernelProbe.passed
         || artifact.browserKernelProbe.coveredNativeOperations.includes('compute_probabilities'))
+  );
+  addCheck(
+    checks,
+    errors,
+    'browser-native-operation-probe-contract',
+    artifact.browserNativeOperationProbe?.schema
+      === MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA
+      && artifact.browserNativeOperationProbe.probeKind
+        === 'browser-webgpu-complex64-native-operation-probe'
+      && (artifact.browserNativeOperationProbe.passed !== true
+        || artifact.browserNativeOperationProbe.executed === true)
+      && artifact.browserNativeOperationProbe.operationResults.every((entry) => (
+        MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS.includes(entry.operation)
+        && (entry.passed !== true || entry.executed === true)
+        && (!entry.covered || (entry.executed === true && entry.passed === true))
+        && (!entry.covered
+          || artifact.browserNativeOperationProbe?.coveredNativeOperations.includes(
+            entry.operation
+          ))
+      ))
   );
   addCheck(
     checks,
@@ -701,6 +894,56 @@ function buildFailedProbabilityKernelProbe(
   return {
     ...buildNotExecutedProbabilityKernelProbe(reason),
     executed: true,
+  };
+}
+
+function buildNotExecutedNativeOperationProbe(
+  reason: string
+): MoonlabBrowserWebGpuComplex64NativeOperationProbe {
+  return {
+    schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+    probeKind: 'browser-webgpu-complex64-native-operation-probe',
+    executed: false,
+    passed: false,
+    coveredNativeOperations: [],
+    operationResults: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS.map(
+      (operation): MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult => ({
+        operation,
+        executed: false,
+        passed: false,
+        covered: false,
+        fixtureResults: [],
+        maxAmplitudeAbsDiff: null,
+        tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+        blocker: 'native-operation-probe-not-executed',
+        reason,
+      })
+    ),
+    maxAmplitudeAbsDiff: null,
+    tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+    reason,
+  };
+}
+
+function buildFailedNativeOperationProbe(
+  reason: string
+): MoonlabBrowserWebGpuComplex64NativeOperationProbe {
+  return {
+    ...buildNotExecutedNativeOperationProbe(reason),
+    executed: true,
+    operationResults: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS.map(
+      (operation): MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult => ({
+        operation,
+        executed: true,
+        passed: false,
+        covered: false,
+        fixtureResults: [],
+        maxAmplitudeAbsDiff: null,
+        tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+        blocker: 'native-operation-probe-failed',
+        reason,
+      })
+    ),
   };
 }
 
@@ -848,6 +1091,211 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
 `;
 }
 
+async function runNativeOperationProbeOperation({
+  device,
+  constants,
+  operation,
+  workgroupSize,
+}: {
+  device: MoonlabBrowserWebGpuDevice;
+  constants: BrowserWebGpuConstants;
+  operation: NativeOperationProbeOperation;
+  workgroupSize: number;
+}): Promise<MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult> {
+  const fixtureResults: MoonlabBrowserWebGpuComplex64NativeOperationProbeFixture[] = [];
+  for (const fixture of nativeOperationProbeFixtureDefinitions(operation)) {
+    const inputState = fixture.inputState.map(froundComplex);
+    const referenceState = applyOperation(
+      inputState,
+      fixture.qubitCount,
+      fixture.operation,
+      true
+    );
+    const browserWebGpuState = await runNativeOperationKernelFixture({
+      device,
+      constants,
+      state: inputState,
+      operation: fixture.operation,
+      qubitCount: fixture.qubitCount,
+      workgroupSize,
+    });
+    const inputAmplitudes = flattenComplexValues(inputState, true);
+    const referenceAmplitudes = flattenComplexValues(referenceState, true);
+    const browserWebGpuAmplitudes = flattenComplexValues(browserWebGpuState, true);
+    const maxAmplitudeAbsDiff = maxAbsDiff(referenceAmplitudes, browserWebGpuAmplitudes);
+
+    fixtureResults.push({
+      fixtureId: fixture.fixtureId,
+      qubitCount: fixture.qubitCount,
+      amplitudeCount: inputState.length,
+      operation,
+      referenceRepresentation: 'cpu-complex64-interleaved-f32',
+      complex64Representation: 'complex64-interleaved-f32',
+      browserWebGpuKernel: operation,
+      inputAmplitudes,
+      referenceAmplitudes,
+      browserWebGpuAmplitudes,
+      maxAmplitudeAbsDiff,
+      passed: maxAmplitudeAbsDiff <= MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+    });
+  }
+
+  const maxAmplitudeAbsDiff = Math.max(
+    ...fixtureResults.map((fixture) => fixture.maxAmplitudeAbsDiff)
+  );
+  const passed = fixtureResults.every((fixture) => fixture.passed);
+  return {
+    operation,
+    executed: true,
+    passed,
+    covered: passed,
+    fixtureResults,
+    maxAmplitudeAbsDiff,
+    tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+    reason: passed
+      ? `browser WebGPU native ${operation} operation kernel matched reduced complex64 fixture amplitudes`
+      : `browser WebGPU native ${operation} operation kernel exceeded reduced fixture tolerance`,
+  };
+}
+
+async function runNativeOperationKernelFixture({
+  device,
+  constants,
+  state,
+  operation,
+  qubitCount,
+  workgroupSize,
+}: {
+  device: MoonlabBrowserWebGpuDevice;
+  constants: BrowserWebGpuConstants;
+  state: ComplexValue[];
+  operation: FixtureOperation;
+  qubitCount: number;
+  workgroupSize: number;
+}): Promise<ComplexValue[]> {
+  const amplitudeData = new Float32Array(flattenComplexValues(state, true));
+  const inputBuffer = device.createBuffer({
+    size: amplitudeData.byteLength,
+    usage: constants.bufferUsage.STORAGE,
+    mappedAtCreation: true,
+  });
+  new Float32Array(inputBuffer.getMappedRange()).set(amplitudeData);
+  inputBuffer.unmap();
+
+  const outputByteLength = amplitudeData.byteLength;
+  const outputBuffer = device.createBuffer({
+    size: outputByteLength,
+    usage: constants.bufferUsage.STORAGE | constants.bufferUsage.COPY_SRC,
+  });
+  const readBuffer = device.createBuffer({
+    size: outputByteLength,
+    usage: constants.bufferUsage.COPY_DST | constants.bufferUsage.MAP_READ,
+  });
+
+  try {
+    const shaderModule = device.createShaderModule({
+      code: nativeOperationKernelWgsl({
+        operation,
+        elementCount: state.length,
+        qubitCount,
+        workgroupSize,
+      }),
+    });
+    const pipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: {
+        module: shaderModule,
+        entryPoint: 'main',
+      },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: inputBuffer },
+        },
+        {
+          binding: 1,
+          resource: { buffer: outputBuffer },
+        },
+      ],
+    });
+
+    const commandEncoder = device.createCommandEncoder();
+    const pass = commandEncoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(state.length / workgroupSize));
+    pass.end();
+    commandEncoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputByteLength);
+    device.queue.submit([commandEncoder.finish()]);
+    await device.queue.onSubmittedWorkDone?.();
+    await readBuffer.mapAsync(constants.mapMode.READ);
+    const mapped = readBuffer.getMappedRange();
+    const result = complexValuesFromFloat32(
+      new Float32Array(mapped.slice(0, outputByteLength))
+    );
+    readBuffer.unmap();
+    return result;
+  } finally {
+    inputBuffer.destroy?.();
+    outputBuffer.destroy?.();
+    readBuffer.destroy?.();
+  }
+}
+
+function nativeOperationKernelWgsl({
+  operation,
+  elementCount,
+  qubitCount,
+  workgroupSize,
+}: {
+  operation: FixtureOperation;
+  elementCount: number;
+  qubitCount: number;
+  workgroupSize: number;
+}): string {
+  if (operation.operation === 'hadamard') {
+    const qubit = requiredQubit(operation);
+    assertQubit(qubit, qubitCount);
+    return hadamardKernelWgsl(elementCount, qubit, workgroupSize);
+  }
+  throw new Error(`Unsupported native operation probe kernel: ${operation.operation}`);
+}
+
+function hadamardKernelWgsl(
+  elementCount: number,
+  qubit: number,
+  workgroupSize: number
+): string {
+  const qubitMask = 1 << qubit;
+  return `
+@group(0) @binding(0) var<storage, read> inputAmplitudes: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> outputAmplitudes: array<vec2<f32>>;
+
+@compute @workgroup_size(${workgroupSize})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let zeroIndex = globalId.x;
+  if (zeroIndex >= ${elementCount}u || (zeroIndex & ${qubitMask}u) != 0u) {
+    return;
+  }
+  let oneIndex = zeroIndex | ${qubitMask}u;
+  let zero = inputAmplitudes[zeroIndex];
+  let one = inputAmplitudes[oneIndex];
+  let invSqrt2 = 0.70710678118654752440f;
+  outputAmplitudes[zeroIndex] = vec2<f32>(
+    (zero.x + one.x) * invSqrt2,
+    (zero.y + one.y) * invSqrt2
+  );
+  outputAmplitudes[oneIndex] = vec2<f32>(
+    (zero.x - one.x) * invSqrt2,
+    (zero.y - one.y) * invSqrt2
+  );
+}
+`;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -906,6 +1354,33 @@ function reducedFixtureDefinitions(): ReducedFixtureDefinition[] {
       ],
     },
   ];
+}
+
+function nativeOperationProbeFixtureDefinitions(
+  operation: NativeOperationProbeOperation
+): NativeOperationProbeFixtureDefinition[] {
+  if (operation === 'hadamard') {
+    return [
+      {
+        fixtureId: 'hadamard-1q-zero-state-amplitudes',
+        qubitCount: 1,
+        operation: { operation: 'hadamard', qubit: 0 },
+        inputState: initialState(1),
+      },
+      {
+        fixtureId: 'hadamard-2q-qubit-1-complex-amplitudes',
+        qubitCount: 2,
+        operation: { operation: 'hadamard', qubit: 1 },
+        inputState: [
+          { real: Math.SQRT1_2, imag: 0 },
+          { real: 0, imag: 0 },
+          { real: 0, imag: Math.SQRT1_2 },
+          { real: 0, imag: 0 },
+        ],
+      },
+    ];
+  }
+  throw new Error(`Unsupported native operation probe fixture: ${operation}`);
 }
 
 function runFixture(fixture: ReducedFixtureDefinition, complex64: boolean): ComplexValue[] {
@@ -1035,10 +1510,55 @@ function froundComplex(value: ComplexValue): ComplexValue {
   };
 }
 
+function flattenComplexValues(state: ComplexValue[], complex64: boolean): number[] {
+  return state.flatMap((amplitude) => {
+    const real = complex64 ? Math.fround(amplitude.real) : amplitude.real;
+    const imag = complex64 ? Math.fround(amplitude.imag) : amplitude.imag;
+    return [real, imag];
+  });
+}
+
+function complexValuesFromFloat32(values: Float32Array): ComplexValue[] {
+  const state: ComplexValue[] = [];
+  for (let index = 0; index < values.length; index += 2) {
+    state.push({
+      real: Math.fround(values[index] ?? 0),
+      imag: Math.fround(values[index + 1] ?? 0),
+    });
+  }
+  return state;
+}
+
 function maxAbsDiff(left: number[], right: number[]): number {
   return left.reduce((maxDiff, value, index) => (
     Math.max(maxDiff, Math.abs(value - (right[index] ?? Number.NaN)))
   ), 0);
+}
+
+function maxNullable(values: Array<number | null>): number | null {
+  const numbers = values.filter((value): value is number => typeof value === 'number');
+  return numbers.length === 0 ? null : Math.max(...numbers);
+}
+
+function joinProbeReasons(...reasons: string[]): string {
+  return [...new Set(reasons.filter((reason) => reason.length > 0))].join('; ');
+}
+
+function hasExecutedNativeOperationEvidence(
+  artifact: Partial<MoonlabWebGpuComplex64ParityScopeArtifact>,
+  operation: NativeCoverageRequired
+): boolean {
+  if (operation === 'compute_probabilities') {
+    return artifact.browserKernelProbe?.executed === true
+      && artifact.browserKernelProbe.passed === true
+      && artifact.browserKernelProbe.coveredNativeOperations.includes(operation);
+  }
+  return artifact.browserNativeOperationProbe?.operationResults.some((result) => (
+    result.operation === operation
+    && result.executed === true
+    && result.passed === true
+    && result.covered === true
+  )) === true;
 }
 
 function requiredQubit(op: FixtureOperation): number {
