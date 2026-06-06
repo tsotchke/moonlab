@@ -657,3 +657,72 @@ Failures or open questions:
 - Passing a browser WebGPU parity probe must not be treated as full magnetar
   physics validation.
 - No push was attempted.
+
+## 2026-06-06 12:41:16 AKDT - Canonical normalized reference suite export
+
+Prompt: "Big dog asked to keep going. Please work in /home/cos/projects/moonlab
+only. Do not push. Find the next small, high-value MoonLab-side ULG magnetar
+integration slice after the normalized reference-suite/WebGPU complex64 blocker
+documentation: prefer hardening the reduced calibrated reference artifact
+export or tests without requiring a full WebGPU fix. If you make changes,
+commit locally and report commit hash, files, and verification commands. Avoid
+broad refactors."
+
+Actions attempted:
+- Confirmed the worktree started clean on branch `ulg`, ahead of `origin/ulg`.
+- Re-read MoonLab plan/status/test notes and the ULG quantum-response artifact
+  source, CLI, guide, and integration coverage.
+- Identified the smallest post-normalization hardening gap: downstream systems
+  can emit a normalized suite, but did not have an opt-in byte-stable JSON
+  export mode to hash or diff.
+- Added CLI `--canonical` output for artifact JSON, reference-validation
+  reports, and normalized reference-suite reports using MoonLab's existing
+  recursive canonical JSON ordering.
+- Added integration coverage for the checked-in reduced calibrated reference
+  suite's canonical normalized output and pinned its SHA-256 digest.
+- Documented the canonical export command and digest while preserving the
+  reduced fixture/fidelity runtime scope.
+
+Files touched:
+- `bindings/javascript/packages/core/scripts/emit-ulg-quantum-response-artifact.mjs`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg -n "MoonLab|magnetar|normalized reference|normalized-reference|reference suite|webgpu|complex64|fidelity-runtime" /home/cos/.codex/memories/MEMORY.md`
+- `git status --short --branch`
+- `find /home/cos/projects/moonlab -maxdepth 3 \( -name AGENTS.md -o -name agents.md \) -print`
+- `sed`, `tail`, `find`, and `rg` inspections of MoonLab plan files,
+  JavaScript core source, CLI, tests, package metadata, and guide docs.
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `node -e` canonical-suite digest smoke against
+  `scripts/emit-ulg-quantum-response-artifact.mjs --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --canonical`
+- `node --check scripts/emit-ulg-quantum-response-artifact.mjs`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts -t "canonical checked-in normalized reference suite"`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `git diff --check`
+- `date '+%Y-%m-%d %H:%M:%S %Z'`
+
+Test results:
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: canonical-suite digest smoke emitted a 15,082-byte JSON payload with
+  SHA-256
+  `sha256:e88c1ba87216aca7b8df77e7f7347c3e1cc506ab5d1b3c06979cc92b4a925b65`
+  excluding the trailing newline.
+- PASS: CLI script syntax check completed.
+- PASS: focused canonical integration test passed `1/1`.
+- PASS: WASM rebuild completed after `build:ts` restored the JS dist files.
+- PASS: full ULG artifact integration file passed `8/8`.
+- PASS: final `git diff --check` reported no whitespace errors.
+
+Failures or open questions:
+- Canonical export makes the reduced reference-suite artifact byte-stable for
+  hashing and diffing. It does not add authoritative PIC, radiation transport,
+  GR/GRMHD, full MHD/force-free data, a WebGPU runtime, or full magnetar
+  physics validation.
+- No push was attempted.

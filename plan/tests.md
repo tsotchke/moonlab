@@ -163,3 +163,29 @@ complex64 GPU versus float64 WASM reference tolerances, separate native WebGPU
 coverage from CPU fallback coverage, and keep
 `fullFidelityMagnetarSimulation = false` plus
 `fullPhysicsValidation = false`.
+
+## Canonical Normalized Reference Suite Export
+
+Targeted validation for byte-stable reduced reference-suite export:
+
+- Run the TypeScript build so the CLI imports the updated `dist/index.mjs`:
+  `pnpm --dir bindings/javascript/packages/core build:ts`
+- Run the focused integration test that emits canonical normalized suite JSON
+  and checks its pinned SHA-256 digest:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts -t "canonical checked-in normalized reference suite"`
+- Run the full ULG artifact integration file to preserve the existing
+  non-canonical validation and artifact CLI paths:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Rebuild WASM after `build:ts` cleans `dist/`, preserving the existing package
+  artifact layout for later ULG staging:
+  `pnpm --dir bindings/javascript/packages/core build:wasm`
+- Check formatting/whitespace before commit:
+  `git diff --check`
+
+Current result on 2026-06-06: TypeScript build passed with the existing package
+export-order warning, CLI syntax check passed, canonical normalized-suite smoke
+emitted a 15,082-byte canonical payload with SHA-256
+`sha256:e88c1ba87216aca7b8df77e7f7347c3e1cc506ab5d1b3c06979cc92b4a925b65`,
+the focused canonical integration test passed `1/1`, the full ULG artifact
+integration file passed `8/8`, WASM rebuild passed, and `git diff --check`
+passed after the final log append.
