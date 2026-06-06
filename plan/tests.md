@@ -145,6 +145,10 @@ Current `ulg` branch state:
 - The browser-executable probability-kernel probe exists, but it only covers
   `compute_probabilities` over CPU-prepared complex64 fixture states when a
   real adapter is present.
+- The browser-executable native-operation probe declares `hadamard`, `pauli_x`,
+  and `pauli_z` reduced complex64 amplitude fixtures. Default Node/no-adapter
+  CLI output must keep those operation results `executed=false` and
+  `covered=false`.
 - Existing older WebGPU artifacts remain stale no-backend records and should not
   be treated as native parity evidence.
 - The default CLI emits explicit `backendAvailable = false` scope evidence when
@@ -174,9 +178,10 @@ CPU fallback coverage, and keep
 `fullFidelityMagnetarSimulation = false` plus
 `fullPhysicsValidation = false`.
 
-A passing probability-kernel probe alone must not set `webgpuParity.passed`.
-Full WebGPU parity remains blocked until all required native operations are
-covered.
+A passing probability-kernel probe or partial native-operation probe alone must
+not set `webgpuParity.passed`. Full WebGPU parity remains blocked until all
+required native operations are covered by executed browser WebGPU evidence;
+`cnot` still has no native operation probe.
 
 ## Canonical Normalized Reference Suite Export
 
