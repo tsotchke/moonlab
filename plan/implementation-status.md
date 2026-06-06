@@ -140,3 +140,21 @@ before MoonLab has accepted parity evidence. The next safe slice is the
 `moonlab.webgpu.complex64-parity-scope.v0` reduced-fixture probe described in
 `plan/browser-webgpu-complex64-parity.md`. It must preserve
 `fullFidelityMagnetarSimulation = false` and `fullPhysicsValidation = false`.
+
+## Canonical Normalized Reference Suite Export
+
+- [x] Identify the next reduced-reference hardening gap after the normalized
+  suite and WebGPU blocker note: downstream systems need byte-stable suite JSON
+  they can hash or diff without reimplementing MoonLab canonicalization.
+- [x] Add opt-in CLI `--canonical` output for artifact, reference-validation,
+  and normalized-reference-suite JSON.
+- [x] Add integration coverage that emits the checked-in normalized reference
+  suite canonically and pins its SHA-256 digest.
+- [x] Keep the canonical suite scoped to reduced fixture data with
+  `fullFidelityMagnetarSimulation = false` and
+  `fullPhysicsValidation = false`.
+
+Current blocker: canonical export hardens the reduced reference artifact
+handoff, but it still only covers reduced scalar contracts. Full magnetar
+readiness remains blocked on authoritative PIC, radiation transport, GR/GRMHD,
+and full MHD/force-free validation data.

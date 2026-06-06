@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -7,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildUlgBellStateArtifact,
   buildUlgMagnetarDipoleIsingArtifact,
+  canonicalJson,
 } from '../ulg-quantum-response-artifact';
 
 const testFilePath = fileURLToPath(import.meta.url);
@@ -19,6 +21,8 @@ const magnetarReferenceContractsPath = resolve(
 const TEST_MAGNETAR_INPUT_HASH = `sha256:${'0'.repeat(64)}`;
 const VALID_RADIATION_CONTRACT_HASH = `sha256:${'1'.repeat(64)}`;
 const VALID_RADIATION_UNITS_HASH = `sha256:${'2'.repeat(64)}`;
+const EXPECTED_CANONICAL_NORMALIZED_SUITE_HASH =
+  'sha256:e88c1ba87216aca7b8df77e7f7347c3e1cc506ab5d1b3c06979cc92b4a925b65';
 
 describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('runs the core WASM Bell task and emits parity-ready artifact JSON', async () => {
@@ -515,6 +519,35 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     expect(suite.validation.errors).toEqual([]);
     expect(suite.blockers).toEqual([]);
     expect(suite.errors).toEqual([]);
+  });
+
+  it('emits canonical checked-in normalized reference suite JSON with a stable digest', () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        emitArtifactCli,
+        '--normalize-references',
+        magnetarReferenceContractsPath,
+        '--strict',
+        '--canonical',
+      ],
+      {
+        cwd: coreRoot,
+        encoding: 'utf8',
+      }
+    );
+    const json = stdout.trimEnd();
+    const suite = JSON.parse(json);
+    const digest = `sha256:${createHash('sha256').update(json).digest('hex')}`;
+
+    expect(stdout.endsWith('\n')).toBe(true);
+    expect(json).not.toContain('\n');
+    expect(json).toBe(canonicalJson(suite));
+    expect(suite.schema).toBe('moonlab.magnetar.normalized-reference-suite.v0');
+    expect(suite.ready).toBe(true);
+    expect(suite.fidelityRuntimeScope.fullFidelityMagnetarSimulation).toBe(false);
+    expect(suite.fidelityRuntimeScope.fullPhysicsValidation).toBe(false);
+    expect(digest).toBe(EXPECTED_CANONICAL_NORMALIZED_SUITE_HASH);
   });
 });
 

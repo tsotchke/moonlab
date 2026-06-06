@@ -46,9 +46,18 @@ Reference contracts can also be normalized into a standalone four-family suite:
 
 ```bash
 pnpm ulg:artifact -- --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --out artifacts/magnetar_normalized_reference_suite.json
+pnpm ulg:artifact -- --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --canonical --out artifacts/magnetar_normalized_reference_suite.canonical.json
 ```
 
 The normalized-suite report uses schema `moonlab.magnetar.normalized-reference-suite.v0`, merges valid supplied contracts with the built-in analytic magnetosphere reference, emits exactly the four magnetar reference families in canonical order, includes the validation report, and preserves blockers/errors for invalid or partial inputs. Supplied `contractHash` and `unitsHash` values must be full `sha256:` digests with 64 hex characters; accepted hashes are normalized to lowercase.
+
+Use `--canonical` when downstream ULG or PeerCompute checks need a stable
+byte-for-byte JSON payload to hash or diff. Canonical output sorts object keys
+recursively and emits a single JSON line plus a trailing newline; it does not
+change the reduced fixture scope or add full-physics validation claims.
+The checked-in reduced reference suite currently canonicalizes to SHA-256
+`sha256:e88c1ba87216aca7b8df77e7f7347c3e1cc506ab5d1b3c06979cc92b4a925b65`
+when the trailing newline is excluded from the digest.
 
 The emitted JSON includes the schema-required fields plus:
 

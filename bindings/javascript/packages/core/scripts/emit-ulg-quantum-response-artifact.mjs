@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildUlgBellStateArtifact,
   buildUlgMagnetarDipoleIsingArtifact,
+  canonicalJson,
   normalizeMagnetarReferenceContractSuite,
   validateMagnetarReferenceContracts,
   validateUlgQuantumResponseArtifact,
@@ -27,7 +28,9 @@ if (validationReferencesPath) {
   const report = validateMagnetarReferenceContracts(
     JSON.parse(readFileSync(validationReferencesPath, 'utf8'))
   );
-  writeJson(report, args.out ? resolve(args.out) : undefined);
+  writeJson(report, args.out ? resolve(args.out) : undefined, {
+    canonical: args.canonical,
+  });
   if (args.strict && !report.ready) {
     process.exitCode = 1;
   }
@@ -40,7 +43,9 @@ if (normalizeReferencesPath) {
   const suite = normalizeMagnetarReferenceContractSuite(
     JSON.parse(readFileSync(normalizeReferencesPath, 'utf8'))
   );
-  writeJson(suite, args.out ? resolve(args.out) : undefined);
+  writeJson(suite, args.out ? resolve(args.out) : undefined, {
+    canonical: args.canonical,
+  });
   if (args.strict && !suite.ready) {
     process.exitCode = 1;
   }
@@ -108,7 +113,7 @@ if (existsSync(schemaPath)) {
   ];
 }
 
-writeJson(artifact, outputPath);
+writeJson(artifact, outputPath, { canonical: args.canonical });
 
 if (!artifact.validation.schemaCompatible || artifact.parity.passed !== true) {
   process.exitCode = 1;
@@ -134,9 +139,11 @@ function parseArgs(argv) {
       parsed.normalizeReferences = argv[++index];
     } else if (arg === '--strict') {
       parsed.strict = true;
+    } else if (arg === '--canonical') {
+      parsed.canonical = true;
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path] [--validate-references path] [--normalize-references path] [--strict]\n'
+        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path] [--validate-references path] [--normalize-references path] [--strict] [--canonical]\n'
       );
       process.exit(0);
     } else {
@@ -167,8 +174,9 @@ function inspectFile(path) {
   };
 }
 
-function writeJson(value, outputPath) {
-  const json = `${JSON.stringify(value, null, 2)}\n`;
+function writeJson(value, outputPath, options = {}) {
+  const jsonBody = options.canonical ? canonicalJson(value) : JSON.stringify(value, null, 2);
+  const json = `${jsonBody}\n`;
   if (outputPath) {
     mkdirSync(dirname(outputPath), { recursive: true });
     writeFileSync(outputPath, json);
