@@ -25,3 +25,12 @@ Current blocker: none.
 - [x] Commit locally after passing validation.
 
 Current blocker: none.
+
+## PeerCompute Magnetar Reference Contract
+
+- [x] Inspect the emitted magnetar dipole Ising artifact shape.
+- [x] Identify the narrow PeerCompute consumption gap: explicit reference/tolerance fields.
+- [x] Add nested `outputs.reference` with Hamiltonian, reference spectrum, ground state, and absolute energy tolerance.
+- [x] Add integration assertions and guide updates for the reference contract.
+
+Current blocker: PeerCompute still needs to ingest `outputs.reference` as a reference/tolerance input rather than only summarizing the artifact as a generic MoonLab calibration.

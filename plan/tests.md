@@ -31,3 +31,14 @@ Targeted validation for this slice:
   `pnpm ulg:artifact -- --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-ulg-bell-response.json`
 
 This calibration slice remains CPU/WASM-only. It does not exercise networking, relay processes, GPU scheduling, plasma dynamics, radiation transport, relativistic corrections, or MHD evolution.
+
+## PeerCompute Magnetar Reference Contract
+
+Targeted validation for the reference/tolerance handoff fields:
+
+- Run the JavaScript core integration test that builds the magnetar artifact and asserts `outputs.reference`:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Emit and validate the magnetar artifact against the ULG schema, then inspect `outputs.reference.schema`, `outputs.reference.role`, `outputs.reference.observables`, and `outputs.reference.tolerances`:
+  `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-sidecar-magnetar-reference.json`
+
+This remains an additive MoonLab artifact contract. PeerCompute ingestion still needs its own consumer-side parser/assertions.

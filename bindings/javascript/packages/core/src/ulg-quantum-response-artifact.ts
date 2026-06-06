@@ -335,6 +335,51 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
     const groundState = evaluations.reduce((best, evaluation) => {
       return evaluation.observedEnergy < best.observedEnergy ? evaluation : best;
     }, evaluations[0]);
+    const energyUnits = 'normalized-ising';
+    const referenceContract = {
+      schema: 'moonlab.magnetar-dipole-ising-reference.v0',
+      role: 'peercompute-reference-tolerance-input',
+      target: 'magnetar-dipole-normalized-ising',
+      contractHash: inputHash,
+      energyUnits,
+      hamiltonian: {
+        form: 'H=sum_i localFields[i]*spins[i]+sum_c couplings[c].value*spins[c.qubit1]*spins[c.qubit2]',
+        localFields: isingModel.localFields,
+        couplings: isingModel.couplings,
+        fieldScaleTesla: isingModel.fieldScaleTesla,
+        physicalModel: isingModel.physicalModel,
+        spinConvention: isingModel.spinConvention,
+        input: {
+          surfaceMagneticFieldTesla: input.surfaceMagneticFieldTesla,
+          stellarRadiusMeters: input.stellarRadiusMeters,
+          radialSamplesMeters: input.radialSamplesMeters,
+          couplingStrength: input.couplingStrength,
+        },
+      },
+      observables: {
+        groundState: {
+          bitstring: groundState.bitstring,
+          bitString: groundState.bitString,
+          referenceEnergy: groundState.referenceEnergy,
+        },
+        energySpectrum: evaluations.map((evaluation) => ({
+          bitstring: evaluation.bitstring,
+          bitString: evaluation.bitString,
+          spins: evaluation.spins,
+          referenceEnergy: evaluation.referenceEnergy,
+        })),
+      },
+      tolerances: {
+        energyAbs: tolerance,
+        maxObservedEnergyDelta: normalizeNumber(maxEnergyDelta),
+        numericPrecision: 'float64',
+      },
+      validation: {
+        parityPassed,
+        maxEnergyDelta: normalizeNumber(maxEnergyDelta),
+        evaluatedBitstrings: evaluations.length,
+      },
+    };
 
     const artifact: UlgQuantumResponseArtifact = {
       artifactId:
@@ -349,6 +394,7 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
         radialSamples,
         isingModel,
         evaluations,
+        reference: referenceContract,
         summary: {
           numQubits,
           evaluatedBitstrings: evaluations.length,
@@ -356,6 +402,8 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
             bitstring: groundState.bitstring,
             bitString: groundState.bitString,
             observedEnergy: groundState.observedEnergy,
+            referenceEnergy: groundState.referenceEnergy,
+            energyUnits,
           },
           scope: 'calibration-probe-not-full-magnetar-simulation',
         },
@@ -364,6 +412,7 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
         stochastic: false,
         shots: 0,
         energyTolerance: tolerance,
+        energyToleranceAbs: tolerance,
         numericPrecision: 'float64',
         modelAssumptions: [
           'axisymmetric dipole falloff B(r)=B_surface*(R/r)^3',
@@ -396,6 +445,7 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
         expectedEnergies: evaluations.map((evaluation) => evaluation.referenceEnergy),
         maxEnergyDelta: normalizeNumber(maxEnergyDelta),
         tolerance,
+        energyToleranceAbs: tolerance,
         passed: parityPassed,
       },
     };
