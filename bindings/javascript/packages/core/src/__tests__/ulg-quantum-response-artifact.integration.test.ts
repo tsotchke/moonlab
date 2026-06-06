@@ -59,6 +59,18 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
           evaluatedBitstrings: number;
         };
       };
+      references: Array<{
+        family: string;
+        status: string;
+        ready: boolean;
+        scientificCoverage: boolean;
+        scope: string;
+        validation: {
+          status: string;
+          evidence: string[];
+        };
+        blockers: string[];
+      }>;
       summary: {
         groundState: {
           bitstring: number;
@@ -100,6 +112,36 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     expect(outputs.reference.tolerances.maxObservedEnergyDelta).toBe(0);
     expect(outputs.reference.validation.parityPassed).toBe(true);
     expect(outputs.reference.validation.evaluatedBitstrings).toBe(8);
+    expect(outputs.references.map((reference) => reference.id)).toEqual([
+      'magnetosphere-mhd-reference',
+      'pic-kinetic-plasma-reference',
+      'radiation-transport-reference',
+      'relativistic-correction-reference',
+    ]);
+    expect(outputs.references.map((reference) => reference.family)).toEqual([
+      'magnetosphere-mhd',
+      'pic-kinetic-plasma',
+      'radiation-transport',
+      'relativistic-correction',
+    ]);
+    for (const reference of outputs.references) {
+      expect(reference.schema).toBe('moonlab.magnetar.calibrated-reference.v0');
+      expect(reference.role).toBe('peercompute-scientific-tolerance-input');
+      expect(reference.contractHash).toBeNull();
+      expect(reference.unitsHash).toBeNull();
+      expect(reference.fieldMap).toBeNull();
+      expect(reference.fieldTolerances).toBeNull();
+      expect(reference.fieldObservedDeltas).toBeNull();
+      expect(reference.status).toBe('calibrated-reference-missing');
+      expect(reference.ready).toBe(false);
+      expect(reference.scientificCoverage).toBe(false);
+      expect(reference.scope).toBe('inventory-only-not-scientific-reference');
+      expect(reference.validationStatus).toBe('missing');
+      expect(reference.validation.status).toBe('missing');
+      expect(reference.validation.evidence).toEqual([]);
+      expect(reference.blocker).toMatch(/^calibrated-.*-reference-missing$/);
+      expect(reference.blockers.length).toBeGreaterThan(0);
+    }
     expect(outputs.evaluations[0].observedEnergy).toBe(outputs.evaluations[0].referenceEnergy);
   });
 });
