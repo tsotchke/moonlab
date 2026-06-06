@@ -137,6 +137,14 @@ describe('ULG QuantumResponseArtifact schema helpers', () => {
     expect(suite.readyCount).toBe(2);
     expect(suite.suppliedCount).toBe(1);
     expect(suite.source.builtInReferenceFamilies).toEqual(['magnetosphere-mhd']);
+    expect(suite.fidelityRuntimeScope).toMatchObject({
+      schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+      fidelityTier: 'reduced-calibrated-runtime-fixture',
+      runtimeScope: 'reduced-scalar-reference-suite',
+      readinessClaim: 'integration-tolerance-gate-only',
+      fullFidelityMagnetarSimulation: false,
+      fullPhysicsValidation: false,
+    });
     expect(suite.references.map((entry) => entry.family)).toEqual([
       'magnetosphere-mhd',
       'pic-kinetic-plasma',
@@ -145,6 +153,12 @@ describe('ULG QuantumResponseArtifact schema helpers', () => {
     ]);
     expect(radiation?.ready).toBe(true);
     expect(radiation?.contractHash).toBe(VALID_UPPERCASE_CONTRACT_HASH.toLowerCase());
+    expect(radiation?.fidelityRuntimeScope).toMatchObject({
+      schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+      runtimeScope: 'reduced-scalar-reference-contract',
+      fullFidelityMagnetarSimulation: false,
+      fullPhysicsValidation: false,
+    });
     expect(radiationValidation?.supplied).toBe(true);
     expect(radiationValidation?.ready).toBe(true);
   });
@@ -186,6 +200,55 @@ describe('ULG QuantumResponseArtifact schema helpers', () => {
     expect(pic?.unitsHashValid).toBe(false);
     expect(pic?.errors).toContain('contractHash must be a sha256 digest');
     expect(pic?.errors).toContain('unitsHash must be a sha256 digest');
+  });
+
+  it('requires supplied references to declare reduced fidelity runtime scope', () => {
+    const report = validateMagnetarReferenceContracts([
+      readyReferenceContract({
+        id: 'pic-kinetic-plasma-reference',
+        family: 'pic-kinetic-plasma',
+        fidelityRuntimeScope: undefined,
+      }),
+    ]);
+    const pic = report.entries.find((entry) => entry.family === 'pic-kinetic-plasma');
+
+    expect(report.status).toBe('reference-contract-suite-invalid');
+    expect(pic?.ready).toBe(false);
+    expect(pic?.checks.fidelityRuntimeScope).toBe(false);
+    expect(pic?.errors).toContain(
+      'fidelityRuntimeScope must declare reduced runtime scope and no full-fidelity/full-physics validation'
+    );
+  });
+
+  it('rejects supplied references that overclaim full-fidelity physics scope', () => {
+    const report = validateMagnetarReferenceContracts([
+      readyReferenceContract({
+        id: 'pic-kinetic-plasma-reference',
+        family: 'pic-kinetic-plasma',
+        fidelityRuntimeScope: {
+          schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+          fidelityTier: 'reduced-calibrated-runtime-fixture',
+          runtimeScope: 'reduced-scalar-reference-contract',
+          readinessClaim: 'integration-tolerance-gate-only',
+          reducedCalibratedRuntimeFixture: true,
+          hostRuntimeSmokeFixture: false,
+          fullFidelityMagnetarSimulation: true,
+          fullPhysicsValidation: true,
+          excludedPhysics: [
+            'charge-conserving-pic',
+            'spectral-angular-radiation-transport',
+          ],
+        } as unknown as UlgMagnetarReferenceFamilyInventoryEntry['fidelityRuntimeScope'],
+      }),
+    ]);
+    const pic = report.entries.find((entry) => entry.family === 'pic-kinetic-plasma');
+
+    expect(report.status).toBe('reference-contract-suite-invalid');
+    expect(pic?.ready).toBe(false);
+    expect(pic?.checks.fidelityRuntimeScope).toBe(false);
+    expect(pic?.errors).toContain(
+      'fidelityRuntimeScope must declare reduced runtime scope and no full-fidelity/full-physics validation'
+    );
   });
 
   it('reports empty field maps on supplied references', () => {
@@ -278,6 +341,23 @@ function readyReferenceContract(
     status: 'calibrated-reference-ready',
     ready: true,
     scientificCoverage: true,
+    fidelityRuntimeScope: {
+      schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+      fidelityTier: 'reduced-calibrated-runtime-fixture',
+      runtimeScope: 'reduced-scalar-reference-contract',
+      readinessClaim: 'integration-tolerance-gate-only',
+      reducedCalibratedRuntimeFixture: true,
+      hostRuntimeSmokeFixture: false,
+      fullFidelityMagnetarSimulation: false,
+      fullPhysicsValidation: false,
+      excludedPhysics: [
+        'charge-conserving-pic',
+        'spectral-angular-radiation-transport',
+        'gr-or-grmhd-spacetime-solve',
+        'full-resistive-mhd-or-force-free-magnetosphere',
+        'validated-production-magnetar-closure',
+      ],
+    },
     scope: 'supplied-calibrated-reference-contract',
     validationStatus: 'pass',
     validation: {

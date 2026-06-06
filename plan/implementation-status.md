@@ -101,3 +101,21 @@ Current blocker: the four-family contract payload clears MoonLab reference inven
 - [x] Add focused unit and integration coverage for normalized-suite output.
 
 Current blocker: normalized-suite artifacts still normalize reduced scalar contracts only. Replacing them with authoritative external PIC, radiation transport, GR/GRMHD, and full MHD/force-free contracts remains a future data/science task.
+
+## Magnetar Fidelity Runtime Scope Contract
+
+- [x] Add `ulg.magnetar.fidelity-runtime-scope.v0` to the normalized reference
+  suite and every canonical magnetar calibrated reference.
+- [x] Keep reduced fixture references explicit with
+  `fullFidelityMagnetarSimulation = false` and
+  `fullPhysicsValidation = false`.
+- [x] Preserve scope metadata when evaluating supplied reference contracts.
+- [x] Add unit and integration coverage for suite-level and per-reference scope
+  propagation.
+- [x] Run focused TypeScript build, unit tests, integration tests, and WASM build
+  before staging into ULG.
+
+Current blocker: the scope contract prevents overclaiming, but the payload still
+contains reduced scalar fixture data. Full magnetar validation still requires
+authoritative PIC, radiation transport, GR/GRMHD, and full MHD/force-free
+reference data.

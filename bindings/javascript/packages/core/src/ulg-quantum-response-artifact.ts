@@ -135,6 +135,7 @@ export interface UlgMagnetarReferenceFamilyInventoryEntry {
   status: 'calibrated-reference-ready' | 'calibrated-reference-missing';
   ready: boolean;
   scientificCoverage: boolean;
+  fidelityRuntimeScope: UlgMagnetarFidelityRuntimeScope;
   scope:
     | 'analytic-dipole-magnetosphere-reference-not-full-mhd'
     | 'supplied-calibrated-reference-contract'
@@ -173,6 +174,18 @@ export interface UlgMagnetarReferenceContractValidationReport {
   errors: string[];
 }
 
+export interface UlgMagnetarFidelityRuntimeScope {
+  schema: 'ulg.magnetar.fidelity-runtime-scope.v0';
+  fidelityTier: string;
+  runtimeScope: string;
+  readinessClaim: string;
+  reducedCalibratedRuntimeFixture: boolean;
+  hostRuntimeSmokeFixture: boolean;
+  fullFidelityMagnetarSimulation: false;
+  fullPhysicsValidation: false;
+  excludedPhysics: string[];
+}
+
 export interface UlgMagnetarReferenceContractNormalizedSuite {
   schema: 'moonlab.magnetar.normalized-reference-suite.v0';
   status: UlgMagnetarReferenceContractValidationReport['status'];
@@ -187,6 +200,7 @@ export interface UlgMagnetarReferenceContractNormalizedSuite {
     contractHash: string;
     builtInReferenceFamilies: Array<UlgMagnetarReferenceFamilyInventoryEntry['family']>;
   };
+  fidelityRuntimeScope: UlgMagnetarFidelityRuntimeScope;
   references: UlgMagnetarReferenceFamilyInventoryEntry[];
   validation: UlgMagnetarReferenceContractValidationReport;
   blockers: string[];
@@ -217,6 +231,7 @@ export interface UlgMagnetarReferenceContractValidationEntry {
 export interface UlgMagnetarReferenceContractValidationChecks {
   readyFlag: boolean;
   scientificCoverageFlag: boolean;
+  fidelityRuntimeScope: boolean;
   solverId: boolean;
   contractHash: boolean;
   unitsHash: boolean;
@@ -272,6 +287,14 @@ const DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH =
   'sha256:f85763af06f271c414d55e29884ee7b0d5738a4a7ec9351493964b98f8d4e1ec';
 const SUPPLIED_REFERENCE_NOT_READY_BLOCKER =
   'Supplied calibrated reference did not satisfy readiness requirements.';
+const MAGNETAR_FIDELITY_RUNTIME_SCOPE_SCHEMA = 'ulg.magnetar.fidelity-runtime-scope.v0';
+const REDUCED_MAGNETAR_EXCLUDED_PHYSICS = [
+  'charge-conserving-pic',
+  'spectral-angular-radiation-transport',
+  'gr-or-grmhd-spacetime-solve',
+  'full-resistive-mhd-or-force-free-magnetosphere',
+  'validated-production-magnetar-closure',
+];
 const DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT = {
   surfaceMagneticFieldTesla: 1e11,
   stellarRadiusMeters: 10_000,
@@ -731,6 +754,10 @@ export function buildMagnetarReferenceFamilyInventory(
       status: 'calibrated-reference-missing',
       ready: false,
       scientificCoverage: false,
+      fidelityRuntimeScope: createMagnetarFidelityRuntimeScope({
+        readinessClaim: 'inventory-only-not-ready',
+        reducedCalibratedRuntimeFixture: false,
+      }),
       scope: 'inventory-only-not-scientific-reference',
       validationStatus: 'missing',
       validation: {
@@ -760,6 +787,10 @@ export function buildMagnetarReferenceFamilyInventory(
       status: 'calibrated-reference-missing',
       ready: false,
       scientificCoverage: false,
+      fidelityRuntimeScope: createMagnetarFidelityRuntimeScope({
+        readinessClaim: 'inventory-only-not-ready',
+        reducedCalibratedRuntimeFixture: false,
+      }),
       scope: 'inventory-only-not-scientific-reference',
       validationStatus: 'missing',
       validation: {
@@ -789,6 +820,10 @@ export function buildMagnetarReferenceFamilyInventory(
       status: 'calibrated-reference-missing',
       ready: false,
       scientificCoverage: false,
+      fidelityRuntimeScope: createMagnetarFidelityRuntimeScope({
+        readinessClaim: 'inventory-only-not-ready',
+        reducedCalibratedRuntimeFixture: false,
+      }),
       scope: 'inventory-only-not-scientific-reference',
       validationStatus: 'missing',
       validation: {
@@ -928,6 +963,13 @@ export function normalizeMagnetarReferenceContractSuite(
       contractHash,
       builtInReferenceFamilies: ['magnetosphere-mhd'],
     },
+    fidelityRuntimeScope: createMagnetarFidelityRuntimeScope({
+      fidelityTier: 'reduced-calibrated-runtime-fixture',
+      runtimeScope: 'reduced-scalar-reference-suite',
+      readinessClaim: 'integration-tolerance-gate-only',
+      reducedCalibratedRuntimeFixture: true,
+      hostRuntimeSmokeFixture: false,
+    }),
     references: normalizedReferences,
     validation,
     blockers: validation.blockers,
@@ -973,6 +1015,13 @@ function createAnalyticMagnetosphereMhdReference(
     status: 'calibrated-reference-ready',
     ready: true,
     scientificCoverage: true,
+    fidelityRuntimeScope: createMagnetarFidelityRuntimeScope({
+      fidelityTier: 'reduced-calibrated-runtime-fixture',
+      runtimeScope: 'reduced-analytic-dipole-reference-contract',
+      readinessClaim: 'integration-tolerance-gate-only',
+      reducedCalibratedRuntimeFixture: true,
+      hostRuntimeSmokeFixture: false,
+    }),
     scope: 'analytic-dipole-magnetosphere-reference-not-full-mhd',
     validationStatus: 'pass',
     validation: {
@@ -1030,6 +1079,7 @@ function evaluateSuppliedMagnetarReferenceContract(
   const solverId = typeof supplied.solverId === 'string' && supplied.solverId.length > 0
     ? supplied.solverId
     : null;
+  const fidelityRuntimeScope = normalizeMagnetarFidelityRuntimeScope(supplied.fidelityRuntimeScope);
   const evidence = Array.isArray(validation.evidence)
     ? validation.evidence.map((entry: unknown) => String(entry))
     : [];
@@ -1039,6 +1089,7 @@ function evaluateSuppliedMagnetarReferenceContract(
   const checks = {
     readyFlag: supplied.ready === true,
     scientificCoverageFlag: supplied.scientificCoverage === true,
+    fidelityRuntimeScope: fidelityRuntimeScope != null,
     solverId: solverId != null,
     contractHash: contractHash != null,
     unitsHash: unitsHash != null,
@@ -1074,7 +1125,7 @@ function evaluateSuppliedMagnetarReferenceContract(
     errors,
   };
 
-  if (!ready) {
+  if (!ready || fidelityRuntimeScope == null) {
     return {
       entry: {
         ...fallback,
@@ -1104,6 +1155,7 @@ function evaluateSuppliedMagnetarReferenceContract(
       status: 'calibrated-reference-ready',
       ready: true,
       scientificCoverage: true,
+      fidelityRuntimeScope,
       scope: supplied.scope === 'analytic-dipole-magnetosphere-reference-not-full-mhd'
         ? supplied.scope
         : 'supplied-calibrated-reference-contract',
@@ -1135,6 +1187,7 @@ function createInventoryReferenceValidationEntry(
   const checks = {
     readyFlag: entry.ready,
     scientificCoverageFlag: entry.scientificCoverage,
+    fidelityRuntimeScope: magnetarFidelityRuntimeScopeReady(entry.fidelityRuntimeScope),
     solverId: entry.solverId != null,
     contractHash: contractHashValid,
     unitsHash: unitsHashValid,
@@ -1175,6 +1228,9 @@ function suppliedReferenceValidationErrors(
   const errors: string[] = [];
   if (!checks.readyFlag) errors.push('ready must be true');
   if (!checks.scientificCoverageFlag) errors.push('scientificCoverage must be true');
+  if (!checks.fidelityRuntimeScope) {
+    errors.push('fidelityRuntimeScope must declare reduced runtime scope and no full-fidelity/full-physics validation');
+  }
   if (!checks.solverId) errors.push('solverId must be a non-empty string');
   if (!checks.contractHash) errors.push('contractHash must be a sha256 digest');
   if (!checks.unitsHash) errors.push('unitsHash must be a sha256 digest');
@@ -1235,6 +1291,63 @@ function normalizeToleranceValue(value: unknown): number | null {
 
 function cloneRecordOrNull(value: unknown): Record<string, unknown> | null {
   return isRecord(value) && Object.keys(value).length > 0 ? { ...value } : null;
+}
+
+function createMagnetarFidelityRuntimeScope(
+  overrides: Partial<UlgMagnetarFidelityRuntimeScope> = {}
+): UlgMagnetarFidelityRuntimeScope {
+  return {
+    schema: MAGNETAR_FIDELITY_RUNTIME_SCOPE_SCHEMA,
+    fidelityTier: nonEmptyString(overrides.fidelityTier) || 'reduced-calibrated-runtime-fixture',
+    runtimeScope: nonEmptyString(overrides.runtimeScope) || 'reduced-scalar-reference-contract',
+    readinessClaim: nonEmptyString(overrides.readinessClaim) || 'integration-tolerance-gate-only',
+    reducedCalibratedRuntimeFixture: overrides.reducedCalibratedRuntimeFixture !== false,
+    hostRuntimeSmokeFixture: overrides.hostRuntimeSmokeFixture === true,
+    fullFidelityMagnetarSimulation: false,
+    fullPhysicsValidation: false,
+    excludedPhysics: normalizeStringList(overrides.excludedPhysics, REDUCED_MAGNETAR_EXCLUDED_PHYSICS),
+  };
+}
+
+function normalizeMagnetarFidelityRuntimeScope(value: unknown): UlgMagnetarFidelityRuntimeScope | null {
+  if (!magnetarFidelityRuntimeScopeReady(value)) {
+    return null;
+  }
+  const scope = value;
+  return createMagnetarFidelityRuntimeScope({
+    fidelityTier: nonEmptyString(scope.fidelityTier) || undefined,
+    runtimeScope: nonEmptyString(scope.runtimeScope) || undefined,
+    readinessClaim: nonEmptyString(scope.readinessClaim) || undefined,
+    reducedCalibratedRuntimeFixture: scope.reducedCalibratedRuntimeFixture !== false,
+    hostRuntimeSmokeFixture: scope.hostRuntimeSmokeFixture === true,
+    excludedPhysics: Array.isArray(scope.excludedPhysics) ? scope.excludedPhysics : undefined,
+  });
+}
+
+function magnetarFidelityRuntimeScopeReady(value: unknown): value is UlgMagnetarFidelityRuntimeScope {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return value.schema === MAGNETAR_FIDELITY_RUNTIME_SCOPE_SCHEMA &&
+    nonEmptyString(value.fidelityTier) != null &&
+    nonEmptyString(value.runtimeScope) != null &&
+    nonEmptyString(value.readinessClaim) != null &&
+    typeof value.reducedCalibratedRuntimeFixture === 'boolean' &&
+    typeof value.hostRuntimeSmokeFixture === 'boolean' &&
+    value.fullFidelityMagnetarSimulation === false &&
+    value.fullPhysicsValidation === false &&
+    normalizeStringList(value.excludedPhysics, []).length > 0;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeStringList(value: unknown, fallback: string[]): string[] {
+  const entries = Array.isArray(value)
+    ? value.map((entry) => nonEmptyString(entry)).filter((entry): entry is string => entry != null)
+    : [];
+  return entries.length > 0 ? entries : [...fallback];
 }
 
 function digestOrNull(value: unknown): string | null {

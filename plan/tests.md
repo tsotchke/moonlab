@@ -117,3 +117,22 @@ Targeted validation for the standalone normalized four-family contract artifact:
 The normalized suite must use schema `moonlab.magnetar.normalized-reference-suite.v0`, include exactly the canonical magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction references, carry the validation report, and require full 64-hex SHA-256 `contractHash`/`unitsHash` values for supplied contracts.
 
 Current result on 2026-06-06: unit passed `102/102`, package build passed with the existing package export-order warning, integration passed `49/49`, strict CLI normalization emitted `reference-contract-suite-ready` with four canonical ready references, valid 64-hex SHA-256 hashes, no blockers, and no errors.
+
+## Magnetar Fidelity Runtime Scope Contract
+
+Targeted validation for the reduced-runtime scope contract:
+
+- Run the TypeScript build for the JavaScript core package:
+  `pnpm --dir bindings/javascript/packages/core build:ts`
+- Run the focused unit suite:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Run the focused integration suite:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Rebuild WASM after `build:ts` cleans `dist/`, so ULG staging has
+  `dist/moonlab.js` and `dist/moonlab.wasm` available:
+  `pnpm --dir bindings/javascript/packages/core build:wasm`
+
+Current result on 2026-06-06: TypeScript build passed, focused unit passed
+`14/14`, focused integration passed `7/7`, and WASM build passed. The scope
+contract is present at suite and reference level with
+`fullFidelityMagnetarSimulation = false` and `fullPhysicsValidation = false`.
