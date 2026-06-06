@@ -91,3 +91,13 @@ Current blocker: the validator can certify contract shape and tolerance deltas, 
 - [x] Run focused unit/integration/build/CLI validation.
 
 Current blocker: the four-family contract payload clears MoonLab reference inventory readiness for PeerCompute tolerance plumbing, but it is still reduced scalar reference data. Full magnetar scientific readiness still requires authoritative calibrated PIC, radiation transport, GR/GRMHD, and full MHD/force-free validation.
+
+## Normalized Magnetar Reference Suite
+
+- [x] Identify the next bounded MoonLab-side gap after the reduced checked-in contracts: a producer artifact that emits the merged canonical four-family reference suite, not only validation pass/fail or a full quantum-response artifact.
+- [x] Export `normalizeMagnetarReferenceContractSuite()` from the JavaScript core package.
+- [x] Add CLI `--normalize-references <json>` support with `--strict` behavior matching the validator.
+- [x] Tighten supplied `contractHash` and `unitsHash` checks to full 64-hex SHA-256 digests and normalize accepted hashes to lowercase.
+- [x] Add focused unit and integration coverage for normalized-suite output.
+
+Current blocker: normalized-suite artifacts still normalize reduced scalar contracts only. Replacing them with authoritative external PIC, radiation transport, GR/GRMHD, and full MHD/force-free contracts remains a future data/science task.

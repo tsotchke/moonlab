@@ -42,6 +42,14 @@ pnpm ulg:artifact -- --validate-references magnetar-reference-contracts.json --s
 
 The validation report uses schema `moonlab.magnetar.reference-contract-validation-report.v0` and reports each calibrated family, supplied/ready flags, hash validity, field-map/tolerance/delta readiness, tolerance failures, blockers, and errors. Without `--strict`, invalid or partial reports still exit `0` so the JSON can be inspected. With `--strict`, the CLI exits nonzero unless all four magnetar reference families are ready and no supplied reference is invalid or unknown.
 
+Reference contracts can also be normalized into a standalone four-family suite:
+
+```bash
+pnpm ulg:artifact -- --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --out artifacts/magnetar_normalized_reference_suite.json
+```
+
+The normalized-suite report uses schema `moonlab.magnetar.normalized-reference-suite.v0`, merges valid supplied contracts with the built-in analytic magnetosphere reference, emits exactly the four magnetar reference families in canonical order, includes the validation report, and preserves blockers/errors for invalid or partial inputs. Supplied `contractHash` and `unitsHash` values must be full `sha256:` digests with 64 hex characters; accepted hashes are normalized to lowercase.
+
 The emitted JSON includes the schema-required fields plus:
 
 - `validation`: schema compatibility, probe parity, no-networking, and no-GPU-scheduling checks.
