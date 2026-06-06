@@ -154,6 +154,72 @@ export interface UlgMagnetarReferenceFamilyInventoryEntry {
   blockers: string[];
 }
 
+export interface UlgMagnetarReferenceContractValidationReport {
+  schema: 'moonlab.magnetar.reference-contract-validation-report.v0';
+  status:
+    | 'reference-contract-suite-ready'
+    | 'reference-contract-suite-partial'
+    | 'reference-contract-suite-invalid';
+  ready: boolean;
+  familyCount: number;
+  readyCount: number;
+  suppliedCount: number;
+  suppliedReadyCount: number;
+  invalidSuppliedCount: number;
+  unknownCount: number;
+  entries: UlgMagnetarReferenceContractValidationEntry[];
+  unknownReferences: UlgMagnetarReferenceContractUnknownReference[];
+  blockers: string[];
+  errors: string[];
+}
+
+export interface UlgMagnetarReferenceContractValidationEntry {
+  id: UlgMagnetarReferenceFamilyInventoryEntry['id'];
+  family: UlgMagnetarReferenceFamilyInventoryEntry['family'];
+  supplied: boolean;
+  status: UlgMagnetarReferenceFamilyInventoryEntry['status'];
+  ready: boolean;
+  scientificCoverage: boolean;
+  solverId: string | null;
+  validationStatus: UlgMagnetarReferenceFamilyInventoryEntry['validationStatus'];
+  contractHashValid: boolean;
+  unitsHashValid: boolean;
+  fieldMapReady: boolean;
+  fieldTolerancesReady: boolean;
+  fieldObservedDeltasReady: boolean;
+  fieldDeltasWithinTolerance: boolean;
+  toleranceFailures: UlgMagnetarReferenceContractToleranceFailure[];
+  checks: UlgMagnetarReferenceContractValidationChecks;
+  blockers: string[];
+  errors: string[];
+}
+
+export interface UlgMagnetarReferenceContractValidationChecks {
+  readyFlag: boolean;
+  scientificCoverageFlag: boolean;
+  solverId: boolean;
+  contractHash: boolean;
+  unitsHash: boolean;
+  fieldMap: boolean;
+  fieldTolerances: boolean;
+  fieldObservedDeltas: boolean;
+  validationPass: boolean;
+  fieldDeltasWithinTolerance: boolean;
+}
+
+export interface UlgMagnetarReferenceContractToleranceFailure {
+  field: string;
+  observed: number | null;
+  tolerance: number | null;
+}
+
+export interface UlgMagnetarReferenceContractUnknownReference {
+  index: number;
+  id: string | null;
+  family: string | null;
+  errors: string[];
+}
+
 interface BellTaskInput {
   numQubits: 2;
   circuit: [
@@ -183,6 +249,8 @@ const MAGNETOSPHERE_MHD_ANALYTIC_UNITS_HASH =
   'sha256:b9ef2d46ec5f2d0c1fb8a2866012e9340a67f188ebc8a579b93ce61e72f4b4a5';
 const DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH =
   'sha256:f85763af06f271c414d55e29884ee7b0d5738a4a7ec9351493964b98f8d4e1ec';
+const SUPPLIED_REFERENCE_NOT_READY_BLOCKER =
+  'Supplied calibrated reference did not satisfy readiness requirements.';
 const DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT = {
   surfaceMagneticFieldTesla: 1e11,
   stellarRadiusMeters: 10_000,
@@ -717,6 +785,100 @@ export function buildMagnetarReferenceFamilyInventory(
   return mergeSuppliedMagnetarReferenceContracts(inventory, suppliedReferences);
 }
 
+export function validateMagnetarReferenceContracts(
+  suppliedReferences: unknown = [],
+  options: { contractHash?: string } = {}
+): UlgMagnetarReferenceContractValidationReport {
+  const contractHash = options.contractHash ?? DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH;
+  const inventory = buildMagnetarReferenceFamilyInventory(contractHash);
+  const { references, errors: inputErrors } = normalizeReferenceContractInput(suppliedReferences);
+  const suppliedByInventoryId = new Map<
+    UlgMagnetarReferenceFamilyInventoryEntry['id'],
+    Partial<UlgMagnetarReferenceFamilyInventoryEntry>
+  >();
+  const unknownReferences: UlgMagnetarReferenceContractUnknownReference[] = [];
+
+  references.forEach((candidate, index) => {
+    if (!isRecord(candidate)) {
+      unknownReferences.push({
+        index,
+        id: null,
+        family: null,
+        errors: ['reference contract entry must be an object'],
+      });
+      return;
+    }
+    const match = inventory.find((entry) => (
+      candidate.id === entry.id || candidate.family === entry.family
+    ));
+    const suppliedId = typeof candidate.id === 'string' ? candidate.id : null;
+    const suppliedFamily = typeof candidate.family === 'string' ? candidate.family : null;
+    if (!match) {
+      unknownReferences.push({
+        index,
+        id: suppliedId,
+        family: suppliedFamily,
+        errors: ['reference contract id or family is not part of the magnetar reference inventory'],
+      });
+      return;
+    }
+    if (suppliedByInventoryId.has(match.id)) {
+      unknownReferences.push({
+        index,
+        id: suppliedId,
+        family: suppliedFamily,
+        errors: [`duplicate reference contract for family ${match.family}`],
+      });
+      return;
+    }
+    suppliedByInventoryId.set(match.id, candidate as Partial<UlgMagnetarReferenceFamilyInventoryEntry>);
+  });
+
+  const entries = inventory.map((entry) => {
+    const supplied = suppliedByInventoryId.get(entry.id);
+    return supplied
+      ? evaluateSuppliedMagnetarReferenceContract(entry, supplied).validation
+      : createInventoryReferenceValidationEntry(entry);
+  });
+  const readyCount = entries.filter((entry) => entry.ready).length;
+  const suppliedReadyCount = entries.filter((entry) => entry.supplied && entry.ready).length;
+  const invalidSuppliedCount = entries.filter((entry) => entry.supplied && !entry.ready).length;
+  const unknownErrors = unknownReferences.flatMap((reference) => reference.errors);
+  const entryErrors = entries.flatMap((entry) => entry.errors);
+  const errors = [...inputErrors, ...unknownErrors, ...entryErrors];
+  const blockers = uniqueStrings([
+    ...entries.flatMap((entry) => entry.blockers),
+    ...unknownErrors,
+    ...inputErrors,
+  ]);
+  const ready =
+    readyCount === entries.length &&
+    invalidSuppliedCount === 0 &&
+    unknownReferences.length === 0 &&
+    inputErrors.length === 0;
+  const status = ready
+    ? 'reference-contract-suite-ready'
+    : errors.length > 0
+      ? 'reference-contract-suite-invalid'
+      : 'reference-contract-suite-partial';
+
+  return {
+    schema: 'moonlab.magnetar.reference-contract-validation-report.v0',
+    status,
+    ready,
+    familyCount: entries.length,
+    readyCount,
+    suppliedCount: suppliedByInventoryId.size,
+    suppliedReadyCount,
+    invalidSuppliedCount,
+    unknownCount: unknownReferences.length,
+    entries,
+    unknownReferences,
+    blockers,
+    errors,
+  };
+}
+
 function createAnalyticMagnetosphereMhdReference(
   contractHash: string
 ): UlgMagnetarReferenceFamilyInventoryEntry {
@@ -790,6 +952,16 @@ function normalizeSuppliedMagnetarReferenceContract(
   fallback: UlgMagnetarReferenceFamilyInventoryEntry,
   supplied: Partial<UlgMagnetarReferenceFamilyInventoryEntry>
 ): UlgMagnetarReferenceFamilyInventoryEntry {
+  return evaluateSuppliedMagnetarReferenceContract(fallback, supplied).entry;
+}
+
+function evaluateSuppliedMagnetarReferenceContract(
+  fallback: UlgMagnetarReferenceFamilyInventoryEntry,
+  supplied: Partial<UlgMagnetarReferenceFamilyInventoryEntry>
+): {
+  entry: UlgMagnetarReferenceFamilyInventoryEntry;
+  validation: UlgMagnetarReferenceContractValidationEntry;
+} {
   const fieldMap = cloneRecordOrNull(supplied.fieldMap);
   const fieldTolerances = cloneRecordOrNull(supplied.fieldTolerances);
   const fieldObservedDeltas = cloneRecordOrNull(supplied.fieldObservedDeltas);
@@ -805,55 +977,159 @@ function normalizeSuppliedMagnetarReferenceContract(
   const evidence = Array.isArray(validation.evidence)
     ? validation.evidence.map((entry: unknown) => String(entry))
     : [];
-  const ready = supplied.ready === true
-    && supplied.scientificCoverage === true
-    && solverId != null
-    && contractHash != null
-    && unitsHash != null
-    && fieldMap != null
-    && fieldTolerances != null
-    && fieldObservedDeltas != null
-    && validationStatus === 'pass'
-    && fieldDeltasWithinTolerances(fieldObservedDeltas, fieldTolerances);
+  const toleranceFailures = fieldObservedDeltas != null && fieldTolerances != null
+    ? fieldDeltaToleranceFailures(fieldObservedDeltas, fieldTolerances)
+    : [];
+  const checks = {
+    readyFlag: supplied.ready === true,
+    scientificCoverageFlag: supplied.scientificCoverage === true,
+    solverId: solverId != null,
+    contractHash: contractHash != null,
+    unitsHash: unitsHash != null,
+    fieldMap: fieldMap != null,
+    fieldTolerances: fieldTolerances != null,
+    fieldObservedDeltas: fieldObservedDeltas != null,
+    validationPass: validationStatus === 'pass',
+    fieldDeltasWithinTolerance:
+      fieldObservedDeltas != null &&
+      fieldTolerances != null &&
+      fieldDeltasWithinTolerances(fieldObservedDeltas, fieldTolerances),
+  };
+  const errors = suppliedReferenceValidationErrors(checks);
+  const ready = Object.values(checks).every(Boolean);
+  const validationEntry: UlgMagnetarReferenceContractValidationEntry = {
+    id: fallback.id,
+    family: fallback.family,
+    supplied: true,
+    status: ready ? 'calibrated-reference-ready' : 'calibrated-reference-missing',
+    ready,
+    scientificCoverage: supplied.scientificCoverage === true,
+    solverId,
+    validationStatus,
+    contractHashValid: contractHash != null,
+    unitsHashValid: unitsHash != null,
+    fieldMapReady: fieldMap != null,
+    fieldTolerancesReady: fieldTolerances != null,
+    fieldObservedDeltasReady: fieldObservedDeltas != null,
+    fieldDeltasWithinTolerance: checks.fieldDeltasWithinTolerance,
+    toleranceFailures,
+    checks,
+    blockers: ready ? [] : [SUPPLIED_REFERENCE_NOT_READY_BLOCKER, ...errors],
+    errors,
+  };
 
   if (!ready) {
     return {
-      ...fallback,
-      blockers: [
-        ...fallback.blockers,
-        'Supplied calibrated reference did not satisfy readiness requirements.',
-      ],
+      entry: {
+        ...fallback,
+        blockers: [
+          ...fallback.blockers,
+          SUPPLIED_REFERENCE_NOT_READY_BLOCKER,
+        ],
+      },
+      validation: validationEntry,
     };
   }
 
   return {
-    id: fallback.id,
-    family: fallback.family,
-    provider: 'moonlab',
-    solverId,
-    schema: 'moonlab.magnetar.calibrated-reference.v0',
-    role: 'peercompute-scientific-tolerance-input',
-    contractHash,
-    unitsHash,
-    fieldMap,
-    fieldTolerances,
-    fieldObservedDeltas,
-    label: typeof supplied.label === 'string' && supplied.label.length > 0 ? supplied.label : fallback.label,
-    status: 'calibrated-reference-ready',
-    ready: true,
-    scientificCoverage: true,
-    scope: supplied.scope === 'analytic-dipole-magnetosphere-reference-not-full-mhd'
-      ? supplied.scope
-      : 'supplied-calibrated-reference-contract',
-    validationStatus: 'pass',
-    validation: {
-      status: 'pass',
-      evidence,
-      maxObservedDeltas: fieldObservedDeltas,
+    entry: {
+      id: fallback.id,
+      family: fallback.family,
+      provider: 'moonlab',
+      solverId,
+      schema: 'moonlab.magnetar.calibrated-reference.v0',
+      role: 'peercompute-scientific-tolerance-input',
+      contractHash,
+      unitsHash,
+      fieldMap,
+      fieldTolerances,
+      fieldObservedDeltas,
+      label: typeof supplied.label === 'string' && supplied.label.length > 0 ? supplied.label : fallback.label,
+      status: 'calibrated-reference-ready',
+      ready: true,
+      scientificCoverage: true,
+      scope: supplied.scope === 'analytic-dipole-magnetosphere-reference-not-full-mhd'
+        ? supplied.scope
+        : 'supplied-calibrated-reference-contract',
+      validationStatus: 'pass',
+      validation: {
+        status: 'pass',
+        evidence,
+        maxObservedDeltas: fieldObservedDeltas ?? undefined,
+      },
+      blocker: null,
+      blockers: [],
     },
-    blocker: null,
-    blockers: [],
+    validation: validationEntry,
   };
+}
+
+function createInventoryReferenceValidationEntry(
+  entry: UlgMagnetarReferenceFamilyInventoryEntry
+): UlgMagnetarReferenceContractValidationEntry {
+  const contractHashValid = digestOrNull(entry.contractHash) != null;
+  const unitsHashValid = digestOrNull(entry.unitsHash) != null;
+  const fieldMapReady = cloneRecordOrNull(entry.fieldMap) != null;
+  const fieldTolerancesReady = cloneRecordOrNull(entry.fieldTolerances) != null;
+  const fieldObservedDeltasReady = cloneRecordOrNull(entry.fieldObservedDeltas) != null;
+  const fieldDeltasWithinTolerance =
+    entry.fieldObservedDeltas != null &&
+    entry.fieldTolerances != null &&
+    fieldDeltasWithinTolerances(entry.fieldObservedDeltas, entry.fieldTolerances);
+  const checks = {
+    readyFlag: entry.ready,
+    scientificCoverageFlag: entry.scientificCoverage,
+    solverId: entry.solverId != null,
+    contractHash: contractHashValid,
+    unitsHash: unitsHashValid,
+    fieldMap: fieldMapReady,
+    fieldTolerances: fieldTolerancesReady,
+    fieldObservedDeltas: fieldObservedDeltasReady,
+    validationPass: entry.validationStatus === 'pass' || entry.validation.status === 'pass',
+    fieldDeltasWithinTolerance,
+  };
+
+  return {
+    id: entry.id,
+    family: entry.family,
+    supplied: false,
+    status: entry.status,
+    ready: entry.ready,
+    scientificCoverage: entry.scientificCoverage,
+    solverId: entry.solverId,
+    validationStatus: entry.validationStatus,
+    contractHashValid,
+    unitsHashValid,
+    fieldMapReady,
+    fieldTolerancesReady,
+    fieldObservedDeltasReady,
+    fieldDeltasWithinTolerance,
+    toleranceFailures: entry.fieldObservedDeltas != null && entry.fieldTolerances != null
+      ? fieldDeltaToleranceFailures(entry.fieldObservedDeltas, entry.fieldTolerances)
+      : [],
+    checks,
+    blockers: entry.blockers.slice(),
+    errors: [],
+  };
+}
+
+function suppliedReferenceValidationErrors(
+  checks: UlgMagnetarReferenceContractValidationChecks
+): string[] {
+  const errors: string[] = [];
+  if (!checks.readyFlag) errors.push('ready must be true');
+  if (!checks.scientificCoverageFlag) errors.push('scientificCoverage must be true');
+  if (!checks.solverId) errors.push('solverId must be a non-empty string');
+  if (!checks.contractHash) errors.push('contractHash must be a sha256 digest');
+  if (!checks.unitsHash) errors.push('unitsHash must be a sha256 digest');
+  if (!checks.fieldMap) errors.push('fieldMap must be a non-empty object');
+  if (!checks.fieldTolerances) errors.push('fieldTolerances must be a non-empty object');
+  if (!checks.fieldObservedDeltas) errors.push('fieldObservedDeltas must be a non-empty object');
+  if (!checks.validationPass) errors.push('validation.status or validationStatus must be pass');
+  if (!checks.fieldDeltasWithinTolerance) {
+    errors.push('fieldObservedDeltas must be within fieldTolerances');
+  }
+  return errors;
 }
 
 function fieldDeltasWithinTolerances(
@@ -862,12 +1138,28 @@ function fieldDeltasWithinTolerances(
 ): boolean {
   const entries = Object.entries(tolerances);
   if (entries.length === 0) return false;
-  return entries.every(([key, tolerance]) => {
+  return fieldDeltaToleranceFailures(observed, tolerances).length === 0;
+}
+
+function fieldDeltaToleranceFailures(
+  observed: Record<string, unknown>,
+  tolerances: Record<string, unknown>
+): UlgMagnetarReferenceContractToleranceFailure[] {
+  return Object.entries(tolerances).flatMap(([key, tolerance]) => {
     const observedValue = Number(observed[key]);
     const toleranceValue = normalizeToleranceValue(tolerance);
-    return Number.isFinite(observedValue)
-      && toleranceValue != null
-      && Math.abs(observedValue) <= toleranceValue;
+    if (
+      Number.isFinite(observedValue) &&
+      toleranceValue != null &&
+      Math.abs(observedValue) <= toleranceValue
+    ) {
+      return [];
+    }
+    return [{
+      field: key,
+      observed: Number.isFinite(observedValue) ? observedValue : null,
+      tolerance: toleranceValue,
+    }];
   });
 }
 
@@ -891,6 +1183,36 @@ function cloneRecordOrNull(value: unknown): Record<string, unknown> | null {
 
 function digestOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.startsWith('sha256:') ? value : null;
+}
+
+function normalizeReferenceContractInput(
+  value: unknown
+): {
+  references: unknown[];
+  errors: string[];
+} {
+  if (value == null) {
+    return { references: [], errors: [] };
+  }
+  if (Array.isArray(value)) {
+    return { references: value, errors: [] };
+  }
+  if (isRecord(value)) {
+    if (Array.isArray(value.references)) {
+      return { references: value.references, errors: [] };
+    }
+    if (isRecord(value.outputs) && Array.isArray(value.outputs.references)) {
+      return { references: value.outputs.references, errors: [] };
+    }
+  }
+  return {
+    references: [],
+    errors: ['reference contract input must be an array or contain references[]'],
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
 }
 
 export function validateUlgQuantumResponseArtifact(

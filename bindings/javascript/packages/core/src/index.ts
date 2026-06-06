@@ -130,6 +130,7 @@ export {
   buildUlgMagnetarDipoleIsingArtifact,
   canonicalJson,
   evaluateIsingReferenceEnergy,
+  validateMagnetarReferenceContracts,
   validateUlgQuantumResponseArtifact,
   DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA,
   ULG_QUANTUM_RESPONSE_SCHEMA_TITLE,
@@ -143,6 +144,12 @@ export type {
   UlgMagnetarDipoleIsingArtifactOptions,
   UlgMagnetarDipoleIsingInput,
   UlgMagnetarDipoleIsingModel,
+  UlgMagnetarReferenceContractToleranceFailure,
+  UlgMagnetarReferenceContractUnknownReference,
+  UlgMagnetarReferenceContractValidationChecks,
+  UlgMagnetarReferenceContractValidationEntry,
+  UlgMagnetarReferenceContractValidationReport,
+  UlgMagnetarReferenceFamilyInventoryEntry,
   UlgQuantumResponseArtifact,
 } from './ulg-quantum-response-artifact';
 
