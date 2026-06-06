@@ -215,3 +215,94 @@ Failures or open questions:
 - The inventory is deliberately not a scientific reference set. Calibrated MHD, PIC, radiation, and relativity benchmark data, validation runs, and tolerance contracts remain missing.
 - PeerCompute still needs consumer-side behavior for either the singular `outputs.reference` contract or the new blockers-only `outputs.references[]` inventory.
 - No push was attempted.
+
+## 2026-06-06 02:06:14 AKDT - Scoped analytic magnetosphere reference
+
+Prompt: Continued from the multi-repo ULG status prompt and the live PeerCompute
+handoff checkpoint. Standing instructions remain: keep commits local, do not
+push, and do not claim full magnetar scientific readiness without validation.
+
+Actions attempted:
+- Identified the next safe producer-side slice as one scoped calibrated family
+  reference rather than clearing all scientific blockers.
+- Promoted the `magnetosphere-mhd` inventory entry to a reduced analytic dipole
+  field benchmark with solver id `moonlab-analytic-dipole-field-v0`.
+- Added SHA-256-shaped contract and units hashes, field maps, field tolerances,
+  zero observed deltas, pass validation, and evidence text for that scoped
+  exterior-field reference.
+- Kept PIC kinetic plasma, radiation transport, and relativistic correction
+  entries blocked with missing validation.
+- Updated the integration test, guide docs, implementation status, and testing
+  strategy notes.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-mhd-reference.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-magnetar-mhd-reference.json`
+
+Test results:
+- PASS: focused integration suite passed `44/44`.
+- PASS: focused unit suite passed `95/95`.
+- PASS: package build completed; tsup repeated the existing package export-order
+  warning for `types`.
+- PASS: emitted magnetar artifact remained schema compatible and parity passing.
+- PASS: emitted `outputs.references[]` reported one ready/scientific
+  `magnetosphere-mhd` entry with solver id
+  `moonlab-analytic-dipole-field-v0`, contract hash
+  `sha256:f85763af06f271c414d55e29884ee7b0d5738a4a7ec9351493964b98f8d4e1ec`,
+  units hash
+  `sha256:b9ef2d46ec5f2d0c1fb8a2866012e9340a67f188ebc8a579b93ce61e72f4b4a5`,
+  and zero observed deltas keyed to the field tolerances; the remaining three
+  families stayed blocked.
+
+Failures or open questions:
+- This is a reduced analytic exterior dipole-field reference. It is not full
+  resistive-MHD, force-free magnetosphere, PIC, radiation, relativity, or full
+  magnetar simulation validation.
+- No push was attempted.
+
+## 2026-06-06 02:16:20 AKDT - Analytic reference delta-key alignment
+
+Prompt: User asked for current status and whether the overall plan remains on
+track.
+
+Actions attempted:
+- Matched the analytic magnetosphere reference's observed-delta keys to its
+  tolerance keys so PeerCompute/Multiscale can validate each field delta without
+  a producer/consumer key mismatch.
+- Re-ran focused MoonLab tests, package build, artifact emission, and JSON
+  inspection.
+
+Commands run:
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-mhd-reference.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-magnetar-mhd-reference.json`
+- `git diff --check`
+
+Test results:
+- PASS: focused integration suite passed `44/44`.
+- PASS: focused unit suite passed `95/95`.
+- PASS: package build completed; tsup repeated the existing package export-order
+  warning for `types`.
+- PASS: emitted artifact reported four calibrated-reference inventory entries,
+  one ready/scientific `magnetosphere-mhd` entry, and `fieldObservedDeltas`
+  matching `fieldTolerances` with zero deltas.
+- PASS: `git diff --check` reported no whitespace errors.
+
+Failures or open questions:
+- This remains a scoped analytic exterior dipole-field reference only. PIC,
+  radiation, relativity, full MHD/force-free coverage, and full magnetar
+  scientific readiness remain blocked.
+- No push was attempted.

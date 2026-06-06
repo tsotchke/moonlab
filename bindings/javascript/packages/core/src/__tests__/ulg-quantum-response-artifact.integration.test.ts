@@ -60,15 +60,26 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
         };
       };
       references: Array<{
+        id: string;
         family: string;
+        schema: string;
+        role: string;
+        solverId: string | null;
+        contractHash: string | null;
+        unitsHash: string | null;
+        fieldMap: Record<string, unknown> | null;
+        fieldTolerances: Record<string, unknown> | null;
+        fieldObservedDeltas: Record<string, unknown> | null;
         status: string;
         ready: boolean;
         scientificCoverage: boolean;
         scope: string;
+        validationStatus: string;
         validation: {
           status: string;
           evidence: string[];
         };
+        blocker: string | null;
         blockers: string[];
       }>;
       summary: {
@@ -124,7 +135,39 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
       'radiation-transport',
       'relativistic-correction',
     ]);
-    for (const reference of outputs.references) {
+    const magnetosphereReference = outputs.references[0];
+    expect(magnetosphereReference.schema).toBe('moonlab.magnetar.calibrated-reference.v0');
+    expect(magnetosphereReference.role).toBe('peercompute-scientific-tolerance-input');
+    expect(magnetosphereReference.solverId).toBe('moonlab-analytic-dipole-field-v0');
+    expect(magnetosphereReference.contractHash).toBe(artifact.inputHash);
+    expect(magnetosphereReference.unitsHash).toBe(
+      'sha256:b9ef2d46ec5f2d0c1fb8a2866012e9340a67f188ebc8a579b93ce61e72f4b4a5'
+    );
+    expect(magnetosphereReference.fieldMap).toMatchObject({
+      radiusMeters: 'outputs.radialSamples[].radiusMeters',
+      magneticFieldTesla: 'outputs.radialSamples[].magneticFieldTesla',
+    });
+    expect(magnetosphereReference.fieldTolerances).toMatchObject({
+      magneticFieldTeslaRel: 1e-12,
+      normalizedFieldAbs: 1e-12,
+    });
+    expect(magnetosphereReference.fieldObservedDeltas).toMatchObject({
+      magneticFieldTeslaRel: 0,
+      normalizedFieldAbs: 0,
+      radialPowerLawAbs: 0,
+      divergenceProxyAbs: 0,
+    });
+    expect(magnetosphereReference.status).toBe('calibrated-reference-ready');
+    expect(magnetosphereReference.ready).toBe(true);
+    expect(magnetosphereReference.scientificCoverage).toBe(true);
+    expect(magnetosphereReference.scope).toBe('analytic-dipole-magnetosphere-reference-not-full-mhd');
+    expect(magnetosphereReference.validationStatus).toBe('pass');
+    expect(magnetosphereReference.validation.status).toBe('pass');
+    expect(magnetosphereReference.validation.evidence.length).toBeGreaterThan(0);
+    expect(magnetosphereReference.blocker).toBeNull();
+    expect(magnetosphereReference.blockers).toEqual([]);
+
+    for (const reference of outputs.references.slice(1)) {
       expect(reference.schema).toBe('moonlab.magnetar.calibrated-reference.v0');
       expect(reference.role).toBe('peercompute-scientific-tolerance-input');
       expect(reference.contractHash).toBeNull();

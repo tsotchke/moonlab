@@ -46,3 +46,13 @@ Current blocker: none for the normalized Ising reference handoff; PeerCompute no
 - [x] Add focused integration assertions and guide updates for the inventory semantics.
 
 Current blocker: the inventory is intentionally not a scientific reference set. Calibrated magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction benchmark data, validation runs, field maps, units hashes, and tolerance contracts are still missing.
+
+## Analytic Magnetosphere Reference
+
+- [x] Add a scoped `magnetosphere-mhd` analytic dipole-field reference entry.
+- [x] Provide solver id, contract hash, units hash, field maps, field tolerances, observed deltas, pass validation, and evidence text.
+- [x] Align observed-delta keys with tolerance keys so downstream PeerCompute/Multiscale readiness checks can evaluate the scoped reference.
+- [x] Keep the scope explicit as an analytic exterior dipole-field benchmark, not full resistive-MHD or force-free magnetosphere validation.
+- [x] Keep PIC kinetic plasma, radiation transport, and relativistic correction entries blocked.
+
+Current blocker: full magnetar scientific readiness still needs calibrated PIC kinetic plasma, radiation transport, relativistic correction, and fuller MHD/force-free benchmark coverage beyond the analytic dipole-field reference.
