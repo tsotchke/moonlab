@@ -14,7 +14,7 @@ These guides provide step-by-step instructions for specific tasks. Unlike tutori
 |-------|-------------|
 | [Building from Source](building-from-source.md) | Compile Moonlab with custom options |
 | [GPU Acceleration](gpu-acceleration.md) | Enable and configure Metal GPU support |
-| [ULG Quantum Response Artifact](ulg-quantum-response-artifact.md) | Emit a schema-compatible Bell-state readiness artifact |
+| [ULG Quantum Response Artifact](ulg-quantum-response-artifact.md) | Emit schema-compatible Bell-state and magnetar calibration readiness artifacts |
 
 ### Performance
 

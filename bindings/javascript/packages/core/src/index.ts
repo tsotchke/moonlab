@@ -121,9 +121,15 @@ export type { LoadOptions } from './wasm-loader';
 export { WasmMemory } from './memory';
 export type { MoonlabModule } from './memory';
 
+export { IsingModel } from './ising-model';
+export type { IsingModelOptions } from './ising-model';
+
 export {
   buildUlgBellStateArtifact,
+  buildMagnetarDipoleIsingInput,
+  buildUlgMagnetarDipoleIsingArtifact,
   canonicalJson,
+  evaluateIsingReferenceEnergy,
   validateUlgQuantumResponseArtifact,
   DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA,
   ULG_QUANTUM_RESPONSE_SCHEMA_TITLE,
@@ -134,6 +140,9 @@ export type {
   UlgArtifactValidation,
   UlgArtifactValidationCheck,
   UlgBellStateArtifactOptions,
+  UlgMagnetarDipoleIsingArtifactOptions,
+  UlgMagnetarDipoleIsingInput,
+  UlgMagnetarDipoleIsingModel,
   UlgQuantumResponseArtifact,
 } from './ulg-quantum-response-artifact';
 

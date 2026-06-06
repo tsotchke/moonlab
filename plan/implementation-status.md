@@ -12,3 +12,16 @@
 - [x] Commit locally after passing validation.
 
 Current blocker: none.
+
+## ULG Magnetar Dipole Ising Calibration Probe
+
+- [x] Read workspace instructions and MoonLab plan/log/tests before editing.
+- [x] Identify next bounded magnetar-relevant gap after WASM readiness.
+- [x] Expose the existing WASM Ising evaluator through the JavaScript core package.
+- [x] Add additive ULG magnetar dipole Ising calibration artifact builder.
+- [x] Add CLI probe selection for Bell vs magnetar calibration artifacts.
+- [x] Add unit/integration tests and guide updates.
+- [x] Run targeted unit/integration/build/schema validation.
+- [x] Commit locally after passing validation.
+
+Current blocker: none.

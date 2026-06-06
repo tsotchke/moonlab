@@ -4,6 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildUlgBellStateArtifact,
+  buildUlgMagnetarDipoleIsingArtifact,
   validateUlgQuantumResponseArtifact,
 } from '../dist/index.mjs';
 
@@ -17,19 +18,30 @@ const defaultSchemaPath = resolve(
 );
 
 const args = parseArgs(process.argv.slice(2));
+const probe = args.probe ?? 'bell-state';
+if (!['bell-state', 'magnetar-dipole-ising'].includes(probe)) {
+  throw new Error(`Unknown probe: ${probe}`);
+}
 const schemaPath = resolve(args.schema ?? process.env.ULG_QUANTUM_RESPONSE_SCHEMA ?? defaultSchemaPath);
 const outputPath = args.out ? resolve(args.out) : undefined;
 
-const artifact = await buildUlgBellStateArtifact({
-  schemaPath,
-  provenance: {
-    cli: relative(moonlabRoot, scriptPath),
-    dist: {
-      moonlabJs: inspectFile(resolve(coreRoot, 'dist/moonlab.js')),
-      moonlabWasm: inspectFile(resolve(coreRoot, 'dist/moonlab.wasm')),
-    },
+const provenance = {
+  cli: relative(moonlabRoot, scriptPath),
+  dist: {
+    moonlabJs: inspectFile(resolve(coreRoot, 'dist/moonlab.js')),
+    moonlabWasm: inspectFile(resolve(coreRoot, 'dist/moonlab.wasm')),
   },
-});
+};
+
+const artifact = probe === 'magnetar-dipole-ising'
+  ? await buildUlgMagnetarDipoleIsingArtifact({
+      schemaPath,
+      provenance,
+    })
+  : await buildUlgBellStateArtifact({
+      schemaPath,
+      provenance,
+    });
 
 if (existsSync(schemaPath)) {
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
@@ -85,9 +97,11 @@ function parseArgs(argv) {
       parsed.schema = argv[++index];
     } else if (arg === '--out') {
       parsed.out = argv[++index];
+    } else if (arg === '--probe') {
+      parsed.probe = argv[++index];
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--schema path] [--out path]\n'
+        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path]\n'
       );
       process.exit(0);
     } else {
