@@ -133,13 +133,20 @@ reference data.
   float64/interleaved.
 - [x] Keep the next step bounded to a precision/parity contract and browser
   probe before any runtime backend port.
+- [x] Add the `moonlab.webgpu.complex64-parity-scope.v0` contract builder,
+  package export, CLI command, and focused unit coverage.
+- [x] Preserve reduced fixture scope with
+  `fullFidelityMagnetarSimulation = false` and
+  `fullPhysicsValidation = false`.
+- [x] Emit explicit no-backend scope artifacts by default, with required-backend
+  mode failing when no browser WebGPU adapter/runtime parity execution exists.
 
-Current blocker: importing the old WebGPU backend directly would add broad
-browser/Emscripten runtime wiring and a float64-to-complex64 precision downgrade
-before MoonLab has accepted parity evidence. The next safe slice is the
-`moonlab.webgpu.complex64-parity-scope.v0` reduced-fixture probe described in
-`plan/browser-webgpu-complex64-parity.md`. It must preserve
-`fullFidelityMagnetarSimulation = false` and `fullPhysicsValidation = false`.
+Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
+scope artifact and CLI, but it still has no active native browser WebGPU kernel
+runtime on `ulg`. Required-backend parity remains blocked until a browser
+adapter and narrowly wired runtime kernels record native coverage for hadamard,
+pauli_x, pauli_z, cnot, and compute_probabilities without counting `phase`
+CPU fallback as native coverage.
 
 ## Canonical Normalized Reference Suite Export
 

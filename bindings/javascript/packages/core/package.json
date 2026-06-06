@@ -30,6 +30,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "ulg:artifact": "node scripts/emit-ulg-quantum-response-artifact.mjs",
+    "webgpu:complex64:parity": "node scripts/webgpu-complex64-parity.mjs",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist build"
   },

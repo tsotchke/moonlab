@@ -92,6 +92,24 @@ export { IsingModel } from './ising-model';
 export type { IsingModelOptions } from './ising-model';
 
 export {
+  buildMoonlabWebGpuComplex64ParityScope,
+  validateMoonlabWebGpuComplex64ParityScope,
+  MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+  MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED,
+  MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED,
+  MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
+} from './webgpu-complex64-parity';
+export type {
+  BuildMoonlabWebGpuComplex64ParityScopeOptions,
+  MoonlabWebGpuComplex64BackendDetection,
+  MoonlabWebGpuComplex64FallbackCoverageEntry,
+  MoonlabWebGpuComplex64NativeCoverageEntry,
+  MoonlabWebGpuComplex64ParityScopeArtifact,
+  MoonlabWebGpuComplex64ParityValidation,
+  MoonlabWebGpuComplex64ReducedFixtureResult,
+} from './webgpu-complex64-parity';
+
+export {
   buildUlgBellStateArtifact,
   buildMagnetarDipoleIsingInput,
   buildUlgMagnetarDipoleIsingArtifact,

@@ -726,3 +726,91 @@ Failures or open questions:
   GR/GRMHD, full MHD/force-free data, a WebGPU runtime, or full magnetar
   physics validation.
 - No push was attempted.
+
+## 2026-06-06 13:20:00 AKDT - WebGPU complex64 parity scope contract
+
+Prompt: "You are a sidecar agent for the ULG/MoonLab/Eshkol magnetar
+integration. Work only in /home/cos/projects/moonlab. Read the repo
+instructions first (AGENTS.md/agents.md if present) and inspect the current
+branch. Do not push. Keep commits local if you make a change. Task: implement
+or prepare the next bounded MoonLab slice from the current plan:
+`moonlab.webgpu.complex64-parity-scope.v0` reduced-fixture browser/WebGPU
+parity scope. Avoid broad old-webgpu backend imports. Preserve reduced-fixture
+scope with `fullFidelityMagnetarSimulation = false` and
+`fullPhysicsValidation = false`. Prefer a small schema/contract/CLI/test patch
+if feasible. Final report must include changed files, commands run, commit hash
+if committed, and blockers. Do not modify PeerCompute, ULG, or Eshkol."
+
+Actions attempted:
+- Confirmed no `AGENTS.md`/`agents.md` exists in the MoonLab checkout with the
+  normal repo search.
+- Confirmed current branch `ulg`, starting at local commit `a792acd`, with a
+  clean worktree.
+- Re-read the WebGPU complex64 blocker plan, status, tests, package exports,
+  package scripts, existing stale WebGPU artifacts, and ULG magnetar reduced
+  fidelity guardrails.
+- Added an exported `moonlab.webgpu.complex64-parity-scope.v0` contract builder
+  and validator that record complex64 interleaved f32 versus WASM float64
+  tolerances, deterministic reduced fixture preflight, required native coverage,
+  `phase` CPU fallback exclusion, and explicit blockers.
+- Added a dependency-free CLI `webgpu:complex64:parity` that emits explicit
+  `backendAvailable = false` scope evidence by default and exits nonzero when
+  required-backend mode is requested without executed browser WebGPU parity.
+- Preserved `fullFidelityMagnetarSimulation = false`,
+  `fullPhysicsValidation = false`, and `reducedFixtureOnly = true`.
+- Avoided old `webgpu` branch backend imports and did not modify ULG,
+  PeerCompute, or Eshkol.
+
+Files touched:
+- `bindings/javascript/packages/core/package.json`
+- `bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg --files -g 'AGENTS.md' -g 'agents.md'`
+- `git branch --show-current && git status --short && git log -1 --oneline`
+- `find /home/cos/projects/moonlab -maxdepth 4 -iname 'agents.md' -o -iname 'agent.md' -o -iname 'codex.md' -o -iname 'README.md'`
+- `rg`/`sed` inspections of MoonLab plan files, package metadata, source,
+  scripts, tests, and existing WebGPU artifacts.
+- `node --check scripts/webgpu-complex64-parity.mjs`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json --generated-at 2026-06-06T20:00:00.000Z`
+- `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity-required.json --generated-at 2026-06-06T20:00:00.000Z`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `jq` inspections of the default and required-backend emitted artifacts.
+- `pnpm --dir bindings/javascript/packages/core test:unit`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+- `git diff --check`
+
+Test results:
+- PASS: CLI syntax check completed.
+- PASS: focused WebGPU complex64 parity scope unit suite passed `3/3`.
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: default parity CLI emitted schema
+  `moonlab.webgpu.complex64-parity-scope.v0`, `backendAvailable=false`,
+  `fullFidelityMagnetarSimulation=false`, `fullPhysicsValidation=false`,
+  `complex64Preflight.passed=true`, and `contractValidation.valid=true`.
+- PASS: required-backend CLI mode exited nonzero on this Node runtime with
+  blockers for missing browser WebGPU backend and unexecuted kernel parity.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: full JavaScript core unit suite passed `107/107`.
+- PASS: WASM rebuild completed after `build:ts` restored the JS dist files.
+- PASS: final `git diff --check` reported no whitespace errors.
+
+Failures or open questions:
+- This slice adds the contract, preflight, CLI, and tests only. It does not add
+  a native browser WebGPU runtime, `HAS_WEBGPU`, Asyncify wiring, Emscripten
+  exports, or old backend C imports.
+- Native browser WebGPU parity remains blocked until the minimal runtime kernels
+  record coverage for hadamard, pauli_x, pauli_z, cnot, and
+  compute_probabilities. `phase` fallback must stay excluded from native
+  coverage.
+- No push was attempted.

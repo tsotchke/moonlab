@@ -7,9 +7,10 @@ accepted for the reduced ULG fixture path.
 
 ## Current Branch State
 
-- `bindings/javascript/packages/core` on `ulg` has no browser WebGPU runtime
-  source, no JS WebGPU API export, no `HAS_WEBGPU` build switch, no Asyncify
-  wiring, and no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
+- `bindings/javascript/packages/core` on `ulg` has a reduced-fixture WebGPU
+  complex64 parity-scope contract and CLI. It still has no active browser
+  WebGPU runtime source, no JS WebGPU API export, no `HAS_WEBGPU` build switch,
+  no Asyncify wiring, and no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
 - Current branch WebGPU artifacts are stale no-backend evidence only:
   - `bindings/javascript/packages/core/artifacts/webgpu_smoke/results.json`
   - `bindings/javascript/packages/core/artifacts/webgpu_unified_eval/results.json`
@@ -42,9 +43,9 @@ reduced fixture contract states what WebGPU parity means.
 
 ## Smallest Safe Next Patch
 
-Add a browser-only precision/parity probe before enabling runtime acceleration.
-The probe should emit a deterministic reduced fixture artifact rather than a
-full physics claim.
+The first safe patch has been implemented as a contract/preflight CLI before
+runtime acceleration. It emits a deterministic reduced fixture artifact rather
+than a full physics claim.
 
 Suggested artifact contract:
 
@@ -71,21 +72,18 @@ Suggested artifact contract:
 }
 ```
 
-Implementation slice:
+Implemented slice:
 
-1. Add a browser-gated parity probe script under
-   `bindings/javascript/packages/core/scripts/`, for example
-   `webgpu-complex64-parity.mjs`.
-2. Add a small TypeScript contract builder under
-   `bindings/javascript/packages/core/src/`, for example
-   `webgpu-complex64-parity.ts`, that records the fields above and per-op
-   native/fallback coverage.
-3. Add a package script such as `webgpu:complex64:parity` that requires a real
-   browser WebGPU adapter when `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1` is set
-   and otherwise writes an explicit `backendAvailable = false` artifact.
-4. Only after that artifact exists, port the old branch C backend in a separate
-   commit with explicit `HAS_WEBGPU`, Asyncify, export-list, and browser-only
-   tests.
+1. Added `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`.
+2. Added `bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`.
+3. Added package script `webgpu:complex64:parity`.
+4. Added focused unit coverage for no-backend, required-backend, and overclaim
+   rejection paths.
+
+The next patch after this artifact should port only the minimal native browser
+WebGPU runtime needed for the required reduced fixture operations. Keep that
+separate from this contract patch and avoid counting `phase` CPU fallback as
+native WebGPU coverage.
 
 The first parity probe should avoid claiming magnetar simulation validation.
 It should only demonstrate that reduced deterministic quantum fixtures can
@@ -94,17 +92,13 @@ tolerance.
 
 ## Acceptance Commands
 
-Current docs-only note:
-
-```sh
-git diff --check
-```
-
-Future parity patch:
+Current parity-scope patch:
 
 ```sh
 pnpm --dir bindings/javascript/packages/core build:ts
+pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts
 pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts
+pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json
 MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity
 ```
 
