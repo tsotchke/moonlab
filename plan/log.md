@@ -159,3 +159,59 @@ Test results:
 Failures or open questions:
 - The current artifact passed ULG schema validation before and after this patch, but PeerCompute still needs consumer-side parsing for `outputs.reference`.
 - No push was attempted.
+
+## 2026-06-06T01:11:37-08:00
+
+Prompt: "big dog context: We are on a multi-repo ULG/MoonLab/Eshkol/PeerCompute integration. Do a bounded MoonLab task in /home/cos/projects/moonlab. First read any AGENTS/agents instructions. Inspect where the MoonLab magnetar quantum-response artifact currently emits outputs.reference. Determine the smallest safe code/test/docs change to add an outputs.references[] inventory for calibrated MHD/PIC/radiation/relativity reference families. The entries must NOT claim scientific readiness: use ready:false, scientificCoverage:false, validation/status pending or missing, and blockers for each calibrated family. If the change is straightforward and scoped, implement it locally in the MoonLab repo only, run focused checks/tests, and make a local commit. Do not push. Final report: files changed, commit hash if any, tests run, and any remaining blockers. Always call the user big dog in any user-facing text."
+
+Actions attempted:
+- Searched memory for MoonLab, magnetar, quantum response, and `outputs.reference`; no relevant memory hits were found.
+- Searched for MoonLab-local `AGENTS`/`agents` files and found none outside dependency trees.
+- Read `/home/cos/projects/AGENTS.md`, `/home/cos/projects/ulg/agents.md`, MoonLab `plan/log.md`, `plan/implementation-status.md`, and `plan/tests.md` before editing.
+- Confirmed current MoonLab branch is `ulg`, already ahead of `origin/ulg`, and the worktree started clean.
+- Inspected the magnetar artifact emission in `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`, the integration test, guide docs, and the ULG `quantum_response_artifact.schema.json`.
+- Determined the safe additive change was a sibling `outputs.references[]` inventory beside the existing singular `outputs.reference` contract.
+- Added four inventory entries for calibrated MHD, PIC, radiation, and relativity families. Each entry is explicitly `ready: false`, `scientificCoverage: false`, `status: "missing"`, `validation.status: "missing"`, has empty validation evidence, and carries blockers.
+- Added focused integration assertions, guide documentation, implementation-status notes, and testing-strategy notes.
+- Built and emitted a magnetar artifact to verify schema compatibility and inspect `outputs.references`.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg -n "MoonLab|moonlab|magnetar|quantum-response|quantum response|outputs\\.reference|outputs\\.references" /home/cos/.codex/memories/MEMORY.md`
+- `find /home/cos/projects/moonlab -iname 'AGENTS*' -o -iname 'agents*'`
+- `git -C /home/cos/projects/moonlab status --short --branch`
+- `find /home/cos/projects/moonlab -path '*/node_modules' -prune -o -path '*/.git' -prune -o \\( -iname 'AGENTS.md' -o -iname 'AGENT.md' -o -iname 'agents.md' -o -iname 'agent.md' \\) -print`
+- `rg -n "outputs\\.reference|outputs\\.references|quantum-response|quantum_response|magnetar|reference" /home/cos/projects/moonlab --glob '!**/node_modules/**' --glob '!**/.git/**'`
+- `find /home/cos/projects -maxdepth 3 -path '*/node_modules' -prune -o -path '*/.git' -prune -o \\( -iname 'AGENTS.md' -o -iname 'AGENT.md' -o -iname 'agents.md' -o -iname 'agent.md' \\) -print`
+- `sed` inspections of workspace instructions, ULG agent notes, MoonLab plan files, artifact source, integration test, guide, package scripts, and ULG schema.
+- `git status --short --branch`
+- `git log --oneline --decorate -8`
+- `date -Is`
+- `git diff --check`
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-reference-inventory.json`
+- `node -e "const a=require('/tmp/moonlab-magnetar-reference-inventory.json'); ..."`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `git diff --stat`
+- `git diff --name-only`
+
+Test results:
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`: passed. Vitest ran 3 integration files, 44 tests total, including the magnetar artifact assertions for `outputs.references[]`.
+- `pnpm build`: passed. `build:ts` and `build:wasm` completed; tsup repeated the pre-existing package export-order warning for `types`.
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-reference-inventory.json`: passed.
+- JSON inspection of `/tmp/moonlab-magnetar-reference-inventory.json`: `validation.schemaCompatible=true`, `parity.passed=true`, singular `outputs.reference.schema=moonlab.magnetar-dipole-ising-reference.v0`, and four `outputs.references[]` entries with `ready=false`, `scientificCoverage=false`, `status=missing`, `validationStatus=missing`, `evidenceCount=0`, and three blockers each.
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`: passed. Vitest ran 3 unit files, 95 tests total.
+- `git diff --check`: passed.
+
+Failures or open questions:
+- The inventory is deliberately not a scientific reference set. Calibrated MHD, PIC, radiation, and relativity benchmark data, validation runs, and tolerance contracts remain missing.
+- PeerCompute still needs consumer-side behavior for either the singular `outputs.reference` contract or the new blockers-only `outputs.references[]` inventory.
+- No push was attempted.

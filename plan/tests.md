@@ -41,4 +41,15 @@ Targeted validation for the reference/tolerance handoff fields:
 - Emit and validate the magnetar artifact against the ULG schema, then inspect `outputs.reference.schema`, `outputs.reference.role`, `outputs.reference.observables`, and `outputs.reference.tolerances`:
   `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-sidecar-magnetar-reference.json`
 
-This remains an additive MoonLab artifact contract. PeerCompute ingestion still needs its own consumer-side parser/assertions.
+This remains an additive MoonLab artifact contract. PeerCompute now has a consumer-side parser/assertion path for the summary fields.
+
+## Magnetar Reference Family Inventory
+
+Targeted validation for the non-readiness inventory:
+
+- Run the JavaScript core integration test that builds the magnetar artifact and asserts `outputs.references[]` ids/families, downstream role, null contract/unit/field tolerance fields, `ready: false`, `scientificCoverage: false`, missing validation status, and blockers:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Emit and validate the magnetar artifact against the ULG schema, then inspect `outputs.references`:
+  `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-reference-inventory.json`
+
+This inventory does not make magnetosphere MHD, PIC kinetic plasma, radiation transport, or relativistic correction scientific readiness claims. The entries remain blockers-only placeholders until calibrated benchmark data, validation runs, field maps, units hashes, and tolerance contracts exist.

@@ -33,4 +33,16 @@ Current blocker: none.
 - [x] Add nested `outputs.reference` with Hamiltonian, reference spectrum, ground state, and absolute energy tolerance.
 - [x] Add integration assertions and guide updates for the reference contract.
 
-Current blocker: PeerCompute still needs to ingest `outputs.reference` as a reference/tolerance input rather than only summarizing the artifact as a generic MoonLab calibration.
+Current blocker: none for the normalized Ising reference handoff; PeerCompute now ingests the `outputs.reference` summary.
+
+## Magnetar Reference Family Inventory
+
+- [x] Read workspace and ULG agent instructions before editing.
+- [x] Confirm MoonLab has no local `AGENTS.md` file and inspect current plan/log/test notes.
+- [x] Inspect the magnetar quantum-response artifact emission path for `outputs.reference`.
+- [x] Add additive `outputs.references[]` inventory entries for magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction families.
+- [x] Mark every inventory entry as not ready and not scientifically covered, with missing validation status and blockers.
+- [x] Align inventory ids, family names, role, and blocker ids with the PeerCompute/Multiscale tolerance-suite contract.
+- [x] Add focused integration assertions and guide updates for the inventory semantics.
+
+Current blocker: the inventory is intentionally not a scientific reference set. Calibrated magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction benchmark data, validation runs, field maps, units hashes, and tolerance contracts are still missing.

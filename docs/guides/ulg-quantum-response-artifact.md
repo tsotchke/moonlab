@@ -23,5 +23,6 @@ The emitted JSON includes the schema-required fields plus:
 - `parity`: expected and observed Bell probabilities or Ising energies with max delta and tolerance.
 - `provenance`: runtime, package, circuit or core primitive, CLI, WASM asset inspection, and schema path metadata.
 - `outputs.reference`: for the magnetar probe, a PeerCompute-facing reference contract with `schema`, `role`, `contractHash`, `hamiltonian`, `observables.groundState`, `observables.energySpectrum`, `tolerances.energyAbs`, and validation deltas.
+- `outputs.references`: for the magnetar probe, an inventory of calibrated magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction reference families. These entries use the downstream PeerCompute ids and family names, but remain blockers-only placeholders with `ready: false`, `scientificCoverage: false`, `status: "calibrated-reference-missing"`, null contract/unit hashes, null field maps/tolerances/deltas, and `validation.status: "missing"`; they do not claim scientific readiness or coverage.
 
 These slices are intentionally CPU/WASM-only. They do not open sockets, start relay clients, or claim ownership of GPU placement. The magnetar dipole Ising probe is a calibration and handoff primitive, not a full magnetar simulation; it does not include plasma, radiation, relativistic, or MHD evolution.
