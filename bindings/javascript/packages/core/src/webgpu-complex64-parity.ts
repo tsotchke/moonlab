@@ -21,6 +21,7 @@ export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED = [
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS = [
   'hadamard',
   'pauli_x',
+  'pauli_z',
 ] as const;
 
 type NativeCoverageRequired =
@@ -1267,6 +1268,11 @@ function nativeOperationKernelWgsl({
     assertQubit(qubit, qubitCount);
     return pauliXKernelWgsl(elementCount, qubit, workgroupSize);
   }
+  if (operation.operation === 'pauli_z') {
+    const qubit = requiredQubit(operation);
+    assertQubit(qubit, qubitCount);
+    return pauliZKernelWgsl(elementCount, qubit, workgroupSize);
+  }
   throw new Error(`Unsupported native operation probe kernel: ${operation.operation}`);
 }
 
@@ -1321,6 +1327,32 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let oneIndex = zeroIndex | ${qubitMask}u;
   outputAmplitudes[zeroIndex] = inputAmplitudes[oneIndex];
   outputAmplitudes[oneIndex] = inputAmplitudes[zeroIndex];
+}
+`;
+}
+
+function pauliZKernelWgsl(
+  elementCount: number,
+  qubit: number,
+  workgroupSize: number
+): string {
+  const qubitMask = 1 << qubit;
+  return `
+@group(0) @binding(0) var<storage, read> inputAmplitudes: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> outputAmplitudes: array<vec2<f32>>;
+
+@compute @workgroup_size(${workgroupSize})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let index = globalId.x;
+  if (index >= ${elementCount}u) {
+    return;
+  }
+  let amplitude = inputAmplitudes[index];
+  if ((index & ${qubitMask}u) == 0u) {
+    outputAmplitudes[index] = amplitude;
+    return;
+  }
+  outputAmplitudes[index] = vec2<f32>(-amplitude.x, -amplitude.y);
 }
 `;
 }
@@ -1421,6 +1453,30 @@ function nativeOperationProbeFixtureDefinitions(
         fixtureId: 'pauli-x-2q-qubit-1-complex-amplitudes',
         qubitCount: 2,
         operation: { operation: 'pauli_x', qubit: 1 },
+        inputState: [
+          { real: 0.25, imag: -0.5 },
+          { real: 0.125, imag: 0.375 },
+          { real: -0.75, imag: 0.0625 },
+          { real: 0.5, imag: -0.25 },
+        ],
+      },
+    ];
+  }
+  if (operation === 'pauli_z') {
+    return [
+      {
+        fixtureId: 'pauli-z-1q-one-state-amplitudes',
+        qubitCount: 1,
+        operation: { operation: 'pauli_z', qubit: 0 },
+        inputState: [
+          { real: 0, imag: 0 },
+          { real: 1, imag: 0 },
+        ],
+      },
+      {
+        fixtureId: 'pauli-z-2q-qubit-1-complex-amplitudes',
+        qubitCount: 2,
+        operation: { operation: 'pauli_z', qubit: 1 },
         inputState: [
           { real: 0.25, imag: -0.5 },
           { real: 0.125, imag: 0.375 },

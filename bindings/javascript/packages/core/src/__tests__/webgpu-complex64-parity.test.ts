@@ -94,6 +94,15 @@ describe('WebGPU complex64 parity scope contract', () => {
         blocker: 'native-operation-probe-not-executed',
       })
     );
+    expect(artifact.browserNativeOperationProbe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'pauli_z',
+        executed: false,
+        passed: false,
+        covered: false,
+        blocker: 'native-operation-probe-not-executed',
+      })
+    );
     expect(artifact.blockers).toContain('browser-webgpu-adapter-unavailable');
     expect(artifact.blockers).toContain('browser-webgpu-kernel-parity-not-executed');
     expect(artifact.contractValidation.valid).toBe(true);
@@ -251,6 +260,11 @@ describe('WebGPU complex64 parity scope contract', () => {
           status: 'not-run-runtime-backend-not-wired',
         }),
         expect.objectContaining({
+          operation: 'pauli_z',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+        expect.objectContaining({
           operation: 'cnot',
           covered: false,
           status: 'not-run-runtime-backend-not-wired',
@@ -316,6 +330,85 @@ describe('WebGPU complex64 parity scope contract', () => {
         }),
         expect.objectContaining({
           operation: 'hadamard',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+        expect.objectContaining({
+          operation: 'compute_probabilities',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+        expect.objectContaining({
+          operation: 'pauli_z',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+      ])
+    );
+    expect(artifact.webgpuParity.executed).toBe(false);
+    expect(artifact.webgpuParity.passed).toBe(false);
+    expect(artifact.blockers).toContain('native-webgpu-operation-coverage-not-yet-recorded');
+    expect(artifact.contractValidation.valid).toBe(true);
+  });
+
+  it('records a partial browser native pauli_z probe without claiming full parity', () => {
+    const browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe = {
+      schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-native-operation-probe',
+      executed: true,
+      passed: false,
+      coveredNativeOperations: ['pauli_z'],
+      operationResults: [
+        {
+          operation: 'pauli_z',
+          executed: true,
+          passed: true,
+          covered: true,
+          fixtureResults: [
+            {
+              fixtureId: 'pauli-z-test-fixture',
+              qubitCount: 1,
+              amplitudeCount: 2,
+              operation: 'pauli_z',
+              referenceRepresentation: 'cpu-complex64-interleaved-f32',
+              complex64Representation: 'complex64-interleaved-f32',
+              browserWebGpuKernel: 'pauli_z',
+              inputAmplitudes: [0, 0, 1, 0],
+              referenceAmplitudes: [0, 0, -1, 0],
+              browserWebGpuAmplitudes: [0, 0, -1, 0],
+              maxAmplitudeAbsDiff: 0,
+              passed: true,
+            },
+          ],
+          maxAmplitudeAbsDiff: 0,
+          tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+          reason: 'test browser pauli_z kernel matched',
+        },
+      ],
+      maxAmplitudeAbsDiff: 0,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: 'test browser pauli_z kernel matched; remaining native operation probes not executed',
+    };
+    const artifact = buildMoonlabWebGpuComplex64ParityScope({
+      generatedAt: '2026-06-06T20:00:00.000Z',
+      backendAvailable: true,
+      browserNativeOperationProbe,
+    });
+
+    expect(artifact.coverage.nativeWebGpu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: 'pauli_z',
+          covered: true,
+          status: 'covered-by-browser-webgpu',
+        }),
+        expect.objectContaining({
+          operation: 'hadamard',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+        expect.objectContaining({
+          operation: 'pauli_x',
           covered: false,
           status: 'not-run-runtime-backend-not-wired',
         }),
@@ -448,6 +541,15 @@ describe('WebGPU complex64 parity scope contract', () => {
         blocker: 'native-operation-probe-not-executed',
       })
     );
+    expect(probe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'pauli_z',
+        executed: false,
+        passed: false,
+        covered: false,
+        blocker: 'native-operation-probe-not-executed',
+      })
+    );
     expect(probe.reason).toContain('navigator.gpu.requestAdapter is unavailable');
   });
 
@@ -469,6 +571,13 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.browserNativeOperationProbe.operationResults).toContainEqual(
       expect.objectContaining({
         operation: 'pauli_x',
+        executed: false,
+        passed: false,
+      })
+    );
+    expect(artifact.browserNativeOperationProbe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'pauli_z',
         executed: false,
         passed: false,
       })

@@ -8,9 +8,11 @@ accepted for the reduced ULG fixture path.
 ## Current Branch State
 
 - `bindings/javascript/packages/core` on `ulg` has a reduced-fixture WebGPU
-  complex64 parity-scope contract and CLI. It still has no active browser
-  WebGPU runtime source, no JS WebGPU API export, no `HAS_WEBGPU` build switch,
-  no Asyncify wiring, and no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
+  complex64 parity-scope contract and CLI. It now has standalone
+  browser-executable probe helpers for `compute_probabilities`, `hadamard`,
+  `pauli_x`, and `pauli_z`, but it still has no full browser WebGPU runtime
+  source, no JS WebGPU API export, no `HAS_WEBGPU` build switch, no Asyncify
+  wiring, and no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
 - Current branch WebGPU artifacts are stale no-backend evidence only:
   - `bindings/javascript/packages/core/artifacts/webgpu_smoke/results.json`
   - `bindings/javascript/packages/core/artifacts/webgpu_unified_eval/results.json`
@@ -85,18 +87,23 @@ Implemented slice:
 6. Tightened the contract so `webgpuParity.passed` requires all required native
    operations to be covered; a passing probability-kernel probe alone remains
    partial evidence.
+7. Added standalone browser-executable native-operation WGSL probe helpers for
+   `hadamard`, `pauli_x`, and `pauli_z`. These report fixture coverage only
+   when a real browser WebGPU adapter/device executes them; the default
+   Node/no-adapter artifact keeps them `executed=false` and `covered=false`.
 
-The next patch after this probability-kernel probe should port only the
-minimal native browser WebGPU gate kernels needed for the remaining required
-reduced fixture operations. Keep that separate from broad backend imports and
-avoid counting `phase` CPU fallback as native WebGPU coverage.
+The next patch after these probability/native-operation probes should stay
+minimal: add the remaining required `cnot` native operation probe or wire a real
+browser adapter harness that records execution evidence. Keep that separate
+from broad backend imports and avoid counting `phase` CPU fallback as native
+WebGPU coverage.
 
 The first parity probe should avoid claiming magnetar simulation validation.
 It should only demonstrate that reduced deterministic quantum fixtures can
 round-trip through browser complex64 WebGPU kernels within the accepted
-tolerance. The current probe only exercises browser WebGPU probability readback
-from CPU-prepared complex64 fixture states; it is not full reduced-fixture
-WebGPU gate parity.
+tolerance. The current probes cover only reduced standalone probability and
+single-qubit gate fixtures when a real adapter executes them; they are not full
+reduced-fixture WebGPU gate parity.
 
 ## Acceptance Commands
 
