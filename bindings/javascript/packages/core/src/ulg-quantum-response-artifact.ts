@@ -87,6 +87,7 @@ export interface UlgMagnetarDipoleIsingArtifactOptions {
   taskKind?: string;
   tolerance?: number;
   input?: Partial<UlgMagnetarDipoleIsingInput>;
+  references?: Array<Partial<UlgMagnetarReferenceFamilyInventoryEntry>>;
   inputHash?: string;
   artifactId?: string;
   packageVersion?: string;
@@ -136,6 +137,7 @@ export interface UlgMagnetarReferenceFamilyInventoryEntry {
   scientificCoverage: boolean;
   scope:
     | 'analytic-dipole-magnetosphere-reference-not-full-mhd'
+    | 'supplied-calibrated-reference-contract'
     | 'inventory-only-not-scientific-reference';
   validationStatus: 'pass' | 'missing';
   validation: {
@@ -426,7 +428,7 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
         evaluatedBitstrings: evaluations.length,
       },
     };
-    const referenceFamilyInventory = buildMagnetarReferenceFamilyInventory(inputHash);
+    const referenceFamilyInventory = buildMagnetarReferenceFamilyInventory(inputHash, options.references);
 
     const artifact: UlgQuantumResponseArtifact = {
       artifactId:
@@ -619,9 +621,10 @@ export function evaluateIsingReferenceEnergy(
 }
 
 export function buildMagnetarReferenceFamilyInventory(
-  contractHash: string = DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH
+  contractHash: string = DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH,
+  suppliedReferences: Array<Partial<UlgMagnetarReferenceFamilyInventoryEntry>> = []
 ): UlgMagnetarReferenceFamilyInventoryEntry[] {
-  return [
+  const inventory: UlgMagnetarReferenceFamilyInventoryEntry[] = [
     createAnalyticMagnetosphereMhdReference(contractHash),
     {
       id: 'pic-kinetic-plasma-reference',
@@ -711,6 +714,7 @@ export function buildMagnetarReferenceFamilyInventory(
       ],
     },
   ];
+  return mergeSuppliedMagnetarReferenceContracts(inventory, suppliedReferences);
 }
 
 function createAnalyticMagnetosphereMhdReference(
@@ -765,6 +769,128 @@ function createAnalyticMagnetosphereMhdReference(
     blocker: null,
     blockers: [],
   };
+}
+
+function mergeSuppliedMagnetarReferenceContracts(
+  inventory: UlgMagnetarReferenceFamilyInventoryEntry[],
+  suppliedReferences: Array<Partial<UlgMagnetarReferenceFamilyInventoryEntry>> = []
+): UlgMagnetarReferenceFamilyInventoryEntry[] {
+  if (!Array.isArray(suppliedReferences) || suppliedReferences.length === 0) {
+    return inventory;
+  }
+  return inventory.map((entry) => {
+    const supplied = suppliedReferences.find((candidate) => (
+      candidate?.id === entry.id || candidate?.family === entry.family
+    ));
+    return supplied ? normalizeSuppliedMagnetarReferenceContract(entry, supplied) : entry;
+  });
+}
+
+function normalizeSuppliedMagnetarReferenceContract(
+  fallback: UlgMagnetarReferenceFamilyInventoryEntry,
+  supplied: Partial<UlgMagnetarReferenceFamilyInventoryEntry>
+): UlgMagnetarReferenceFamilyInventoryEntry {
+  const fieldMap = cloneRecordOrNull(supplied.fieldMap);
+  const fieldTolerances = cloneRecordOrNull(supplied.fieldTolerances);
+  const fieldObservedDeltas = cloneRecordOrNull(supplied.fieldObservedDeltas);
+  const validation: Record<string, unknown> = isRecord(supplied.validation) ? supplied.validation : {};
+  const validationStatus = supplied.validationStatus === 'pass' || validation.status === 'pass'
+    ? 'pass'
+    : 'missing';
+  const contractHash = digestOrNull(supplied.contractHash);
+  const unitsHash = digestOrNull(supplied.unitsHash);
+  const solverId = typeof supplied.solverId === 'string' && supplied.solverId.length > 0
+    ? supplied.solverId
+    : null;
+  const evidence = Array.isArray(validation.evidence)
+    ? validation.evidence.map((entry: unknown) => String(entry))
+    : [];
+  const ready = supplied.ready === true
+    && supplied.scientificCoverage === true
+    && solverId != null
+    && contractHash != null
+    && unitsHash != null
+    && fieldMap != null
+    && fieldTolerances != null
+    && fieldObservedDeltas != null
+    && validationStatus === 'pass'
+    && fieldDeltasWithinTolerances(fieldObservedDeltas, fieldTolerances);
+
+  if (!ready) {
+    return {
+      ...fallback,
+      blockers: [
+        ...fallback.blockers,
+        'Supplied calibrated reference did not satisfy readiness requirements.',
+      ],
+    };
+  }
+
+  return {
+    id: fallback.id,
+    family: fallback.family,
+    provider: 'moonlab',
+    solverId,
+    schema: 'moonlab.magnetar.calibrated-reference.v0',
+    role: 'peercompute-scientific-tolerance-input',
+    contractHash,
+    unitsHash,
+    fieldMap,
+    fieldTolerances,
+    fieldObservedDeltas,
+    label: typeof supplied.label === 'string' && supplied.label.length > 0 ? supplied.label : fallback.label,
+    status: 'calibrated-reference-ready',
+    ready: true,
+    scientificCoverage: true,
+    scope: supplied.scope === 'analytic-dipole-magnetosphere-reference-not-full-mhd'
+      ? supplied.scope
+      : 'supplied-calibrated-reference-contract',
+    validationStatus: 'pass',
+    validation: {
+      status: 'pass',
+      evidence,
+      maxObservedDeltas: fieldObservedDeltas,
+    },
+    blocker: null,
+    blockers: [],
+  };
+}
+
+function fieldDeltasWithinTolerances(
+  observed: Record<string, unknown>,
+  tolerances: Record<string, unknown>
+): boolean {
+  const entries = Object.entries(tolerances);
+  if (entries.length === 0) return false;
+  return entries.every(([key, tolerance]) => {
+    const observedValue = Number(observed[key]);
+    const toleranceValue = normalizeToleranceValue(tolerance);
+    return Number.isFinite(observedValue)
+      && toleranceValue != null
+      && Math.abs(observedValue) <= toleranceValue;
+  });
+}
+
+function normalizeToleranceValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.abs(value);
+  }
+  if (!isRecord(value)) return null;
+  for (const key of ['abs', 'rel', 'value']) {
+    const candidate = Number(value[key]);
+    if (Number.isFinite(candidate)) {
+      return Math.abs(candidate);
+    }
+  }
+  return null;
+}
+
+function cloneRecordOrNull(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) && Object.keys(value).length > 0 ? { ...value } : null;
+}
+
+function digestOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.startsWith('sha256:') ? value : null;
 }
 
 export function validateUlgQuantumResponseArtifact(

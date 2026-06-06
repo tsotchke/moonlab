@@ -187,4 +187,71 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     }
     expect(outputs.evaluations[0].observedEnergy).toBe(outputs.evaluations[0].referenceEnergy);
   });
+
+  it('merges supplied calibrated reference contracts into the magnetar inventory', async () => {
+    const artifact = await buildUlgMagnetarDipoleIsingArtifact({
+      createdAt: '2026-06-05T00:00:00.000Z',
+      inputHash: 'sha256:test-magnetar-input',
+      references: [
+        {
+          id: 'radiation-transport-reference',
+          family: 'radiation-transport',
+          provider: 'moonlab',
+          solverId: 'moonlab-grey-radiation-transport-reference-v0',
+          schema: 'moonlab.magnetar.calibrated-reference.v0',
+          role: 'peercompute-scientific-tolerance-input',
+          contractHash: 'sha256:radiation-transport-contract',
+          unitsHash: 'sha256:radiation-transport-units',
+          fieldMap: {
+            opticalDepth: 'outputs.radiationReference.opticalDepth',
+            luminosityFlux: 'outputs.radiationReference.luminosityFlux',
+          },
+          fieldTolerances: {
+            opticalDepthAbs: 1e-6,
+            luminosityFluxRel: 1e-6,
+          },
+          fieldObservedDeltas: {
+            opticalDepthAbs: 0,
+            luminosityFluxRel: 0,
+          },
+          label: 'Supplied grey radiation transport reference',
+          status: 'calibrated-reference-ready',
+          ready: true,
+          scientificCoverage: true,
+          scope: 'supplied-calibrated-reference-contract',
+          validationStatus: 'pass',
+          validation: {
+            status: 'pass',
+            evidence: ['Supplied reduced grey-radiation benchmark contract.'],
+          },
+          blocker: null,
+          blockers: [],
+        },
+      ],
+    });
+    const outputs = artifact.outputs as {
+      references: Array<{
+        id: string;
+        family: string;
+        solverId: string | null;
+        status: string;
+        ready: boolean;
+        scientificCoverage: boolean;
+        scope: string;
+        validationStatus: string;
+        blocker: string | null;
+      }>;
+    };
+
+    const radiationReference = outputs.references.find((reference) => reference.family === 'radiation-transport');
+    expect(radiationReference?.id).toBe('radiation-transport-reference');
+    expect(radiationReference?.solverId).toBe('moonlab-grey-radiation-transport-reference-v0');
+    expect(radiationReference?.status).toBe('calibrated-reference-ready');
+    expect(radiationReference?.ready).toBe(true);
+    expect(radiationReference?.scientificCoverage).toBe(true);
+    expect(radiationReference?.scope).toBe('supplied-calibrated-reference-contract');
+    expect(radiationReference?.validationStatus).toBe('pass');
+    expect(radiationReference?.blocker).toBeNull();
+    expect(outputs.references.filter((reference) => reference.ready)).toHaveLength(2);
+  });
 });
