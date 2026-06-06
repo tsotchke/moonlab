@@ -136,3 +136,30 @@ Current result on 2026-06-06: TypeScript build passed, focused unit passed
 `14/14`, focused integration passed `7/7`, and WASM build passed. The scope
 contract is present at suite and reference level with
 `fullFidelityMagnetarSimulation = false` and `fullPhysicsValidation = false`.
+
+## Browser WebGPU Complex64 Parity Probe
+
+Current `ulg` branch state:
+
+- No active browser WebGPU runtime or parity probe exists on this branch.
+- Existing WebGPU artifacts are stale no-backend records only and should not be
+  treated as parity evidence.
+- This docs-only blocker review is validated with:
+  `git diff --check`
+
+Targeted validation for the next bounded parity patch:
+
+- Run the TypeScript build for any new contract/probe exports:
+  `pnpm --dir bindings/javascript/packages/core build:ts`
+- Run the focused ULG artifact unit suite to ensure the reduced magnetar scope
+  contract still prevents full-physics overclaims:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Run a browser-required WebGPU parity command only when a real adapter is
+  available:
+  `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity`
+
+The parity command must emit `moonlab.webgpu.complex64-parity-scope.v0`, record
+complex64 GPU versus float64 WASM reference tolerances, separate native WebGPU
+coverage from CPU fallback coverage, and keep
+`fullFidelityMagnetarSimulation = false` plus
+`fullPhysicsValidation = false`.

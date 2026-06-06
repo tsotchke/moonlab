@@ -119,3 +119,24 @@ Current blocker: the scope contract prevents overclaiming, but the payload still
 contains reduced scalar fixture data. Full magnetar validation still requires
 authoritative PIC, radiation transport, GR/GRMHD, and full MHD/force-free
 reference data.
+
+## Browser WebGPU Complex64 Parity Blocker
+
+- [x] Inspect the current `ulg` branch for browser WebGPU source, build wiring,
+  JS API exports, and runtime artifacts.
+- [x] Confirm the current branch contains only stale no-backend WebGPU artifacts
+  and no active browser WebGPU runtime.
+- [x] Inspect the old `webgpu` branch backend, shader representation, parity
+  script, and branch divergence without switching branches.
+- [x] Identify the precision blocker: old browser WebGPU kernels use
+  complex64/interleaved `vec2<f32>` buffers while the CPU/WASM reference path is
+  float64/interleaved.
+- [x] Keep the next step bounded to a precision/parity contract and browser
+  probe before any runtime backend port.
+
+Current blocker: importing the old WebGPU backend directly would add broad
+browser/Emscripten runtime wiring and a float64-to-complex64 precision downgrade
+before MoonLab has accepted parity evidence. The next safe slice is the
+`moonlab.webgpu.complex64-parity-scope.v0` reduced-fixture probe described in
+`plan/browser-webgpu-complex64-parity.md`. It must preserve
+`fullFidelityMagnetarSimulation = false` and `fullPhysicsValidation = false`.

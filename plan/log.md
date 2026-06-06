@@ -590,3 +590,70 @@ Failures or open questions:
   authoritative charge-conserving PIC, spectral radiation transport, GR/GRMHD,
   full MHD/force-free, or complete magnetar simulation data.
 - No push was attempted.
+
+## 2026-06-06 11:27:16 AKDT - Browser WebGPU complex64 parity blocker review
+
+Prompt: "You are the MoonLab sidecar for the ULG work. Keep commits local and
+do not push. Please inspect /home/cos/projects/moonlab on its current branch
+and review the remaining browser WebGPU complex64/parity blocker. Produce a
+concrete bounded next-step patch or a short implementation note if the patch is
+too risky. Scope: MoonLab only. Preserve the reduced fixture/fidelity runtime
+scope contract and avoid claiming full physics validation. Report changed
+files, commands run, and blockers."
+
+Actions attempted:
+- Read MoonLab plan/status/test logs and confirmed no MoonLab-local
+  `AGENTS.md`/`agents.md` was present.
+- Confirmed the working branch was `ulg`, ahead of `origin/ulg`, and the
+  worktree started clean.
+- Inspected the current JavaScript core package for browser WebGPU source,
+  build wiring, exports, scripts, artifacts, and memory-module declarations.
+- Inspected the old `webgpu` branch without switching branches, including its
+  backend C file, JS WebGPU API, unified eval script, and branch diff against
+  `ulg`.
+- Decided not to port the backend in this slice because the old branch is
+  broad and divergent, and the complex64 browser precision contract is not yet
+  accepted for the reduced ULG fixture path.
+- Added a MoonLab-only implementation note describing the next bounded
+  precision/parity probe.
+
+Files touched:
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `find /home/cos/projects/moonlab -maxdepth 3 \( -name AGENTS.md -o -name agents.md \) -print`
+- `git status --short --branch`
+- `sed` and `tail` inspections of MoonLab plan files, core package exports,
+  Emscripten build/export files, package scripts, and memory declarations.
+- `find bindings/javascript/packages/core -maxdepth 6 -type f`
+- `rg -n "webgpu|WebGPU|GPUDevice|navigator\.gpu|complex64|Complex64|WGSL|shader|parity" -S --glob '!node_modules/**' --glob '!dist/**' --glob '!emscripten/build/**' .`
+- `git log --oneline --decorate --all --max-count=30`
+- `git grep -n "webgpu\|WebGPU\|GPUDevice\|navigator\.gpu\|complex64\|Complex64\|WGSL\|shader\|parity" webgpu -- bindings/javascript/packages/core src docs plan`
+- `git diff --stat ulg..webgpu`
+- `git show webgpu:webgpuplan.md`
+- `git show webgpu:src/optimization/gpu/backends/gpu_webgpu.c`
+- `git show webgpu:src/optimization/gpu/backends/gpu_webgpu.h`
+- `git show webgpu:bindings/javascript/packages/core/scripts/webgpu-unified-eval.mjs`
+- `git show webgpu:bindings/javascript/packages/core/src/gpu-backend.ts`
+- `git show webgpu:bindings/javascript/packages/core/src/webgpu.ts`
+- `date '+%Y-%m-%d %H:%M:%S %Z'`
+
+Test results:
+- PASS: `git diff --check` reported no whitespace errors.
+- No runtime code tests were run because no runtime code was changed.
+
+Failures or open questions:
+- Current `ulg` contains no active browser WebGPU runtime. It only carries stale
+  no-backend WebGPU artifacts.
+- The old WebGPU backend uses complex64/interleaved `vec2<f32>` browser
+  buffers with float64 CPU/WASM references and a `1e-5` tolerance, so it needs
+  explicit reduced-fixture parity evidence before use.
+- The old eval path includes `phase`, while the old WebGPU backend handles that
+  through CPU fallback. Native WebGPU coverage and fallback coverage must be
+  recorded separately.
+- Passing a browser WebGPU parity probe must not be treated as full magnetar
+  physics validation.
+- No push was attempted.
