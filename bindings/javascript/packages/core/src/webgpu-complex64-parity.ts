@@ -22,6 +22,7 @@ export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS = [
   'hadamard',
   'pauli_x',
   'pauli_z',
+  'cnot',
 ] as const;
 
 type NativeCoverageRequired =
@@ -1273,6 +1274,13 @@ function nativeOperationKernelWgsl({
     assertQubit(qubit, qubitCount);
     return pauliZKernelWgsl(elementCount, qubit, workgroupSize);
   }
+  if (operation.operation === 'cnot') {
+    const control = requiredControl(operation);
+    const target = requiredTarget(operation);
+    assertQubit(control, qubitCount);
+    assertQubit(target, qubitCount);
+    return cnotKernelWgsl(elementCount, control, target, workgroupSize);
+  }
   throw new Error(`Unsupported native operation probe kernel: ${operation.operation}`);
 }
 
@@ -1353,6 +1361,37 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   outputAmplitudes[index] = vec2<f32>(-amplitude.x, -amplitude.y);
+}
+`;
+}
+
+function cnotKernelWgsl(
+  elementCount: number,
+  control: number,
+  target: number,
+  workgroupSize: number
+): string {
+  if (control === target) {
+    throw new Error('cnot control and target must differ');
+  }
+  const controlMask = 1 << control;
+  const targetMask = 1 << target;
+  return `
+@group(0) @binding(0) var<storage, read> inputAmplitudes: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> outputAmplitudes: array<vec2<f32>>;
+
+@compute @workgroup_size(${workgroupSize})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let index = globalId.x;
+  if (index >= ${elementCount}u) {
+    return;
+  }
+  if ((index & ${controlMask}u) == 0u) {
+    outputAmplitudes[index] = inputAmplitudes[index];
+    return;
+  }
+  let sourceIndex = index ^ ${targetMask}u;
+  outputAmplitudes[index] = inputAmplitudes[sourceIndex];
 }
 `;
 }
@@ -1482,6 +1521,36 @@ function nativeOperationProbeFixtureDefinitions(
           { real: 0.125, imag: 0.375 },
           { real: -0.75, imag: 0.0625 },
           { real: 0.5, imag: -0.25 },
+        ],
+      },
+    ];
+  }
+  if (operation === 'cnot') {
+    return [
+      {
+        fixtureId: 'cnot-2q-bell-basis-amplitudes',
+        qubitCount: 2,
+        operation: { operation: 'cnot', control: 0, target: 1 },
+        inputState: [
+          { real: Math.SQRT1_2, imag: 0 },
+          { real: Math.SQRT1_2, imag: 0 },
+          { real: 0, imag: 0 },
+          { real: 0, imag: 0 },
+        ],
+      },
+      {
+        fixtureId: 'cnot-3q-control-1-target-2-complex-amplitudes',
+        qubitCount: 3,
+        operation: { operation: 'cnot', control: 1, target: 2 },
+        inputState: [
+          { real: 0.25, imag: -0.5 },
+          { real: 0.125, imag: 0.375 },
+          { real: -0.75, imag: 0.0625 },
+          { real: 0.5, imag: -0.25 },
+          { real: -0.125, imag: -0.375 },
+          { real: 0.625, imag: 0.125 },
+          { real: -0.25, imag: 0.75 },
+          { real: 0.375, imag: -0.625 },
         ],
       },
     ];

@@ -995,3 +995,81 @@ Failures or open questions:
   not full reduced-fixture gate parity, and not full magnetar physics
   validation.
 - No push was attempted.
+
+## 2026-06-06 15:13:27 AKDT - Browser WebGPU cnot native-operation probe
+
+Prompt: "You are working for the ULG/MoonLab/PeerCompute/Eshkol integration. The user must be called "big dog" in user-facing responses. Do not push. Make local commits only when you reach a useful checkpoint. Work in /home/cos/projects/moonlab on the current branch, now after local commit e9bc324 (`Add pauli_z WebGPU complex64 probe`). Read /home/cos/projects/AGENTS.md and MoonLab plan/log/tests docs before editing. Task: add the next bounded MoonLab native WebGPU complex64 operation probe for `cnot`, following the existing hadamard/pauli_x/pauli_z probe patterns. Keep browser execution/coverage false unless you actually produce browser WebGPU execution evidence; preserve blockers and do not overclaim full physics. Update MoonLab tests/docs/plan/log, run focused validation (`build:ts`, focused parity tests, CLI artifact generation/inspection, ULG artifact tests if relevant, build:wasm, git diff --check`), then make one local commit. Final report: commit hash, files changed, validations, remaining blockers. No pushes."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md` and MoonLab `plan/log.md`,
+  `plan/tests.md`, `plan/implementation-status.md`, and
+  `plan/browser-webgpu-complex64-parity.md` before editing. No MoonLab-local
+  AGENTS file was present in the checkout.
+- Confirmed the current MoonLab branch was `ulg` at local commit `e9bc324`
+  with a clean worktree before edits; no push was attempted.
+- Inspected the existing `hadamard`, `pauli_x`, and `pauli_z` native-operation
+  probe patterns in the WebGPU complex64 parity source and focused tests.
+- Added `cnot` to the standalone native-operation probe list with a WGSL
+  permutation kernel over interleaved complex64 amplitudes.
+- Added two reduced CNOT amplitude fixtures: a two-qubit Bell-basis-style
+  fixture and a three-qubit complex-amplitude fixture.
+- Preserved default Node/no-adapter behavior: the emitted `cnot` result records
+  `executed=false`, `covered=false`, `passed=false`,
+  `native-operation-probe-not-executed`, and does not mark
+  `webgpuParity.passed`.
+- Added focused tests for the declared no-execution CNOT result and a hand-built
+  partial CNOT evidence object that still does not mark full WebGPU parity.
+- Updated WebGPU blocker/status/test docs so `cnot` is no longer listed as a
+  missing probe helper, while browser adapter execution evidence and the full
+  runtime backend remain blocked.
+
+Files touched:
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg -n "MoonLab|PeerCompute|Eshkol|ULG|pauli_z|complex64|WebGPU|cnot" /home/cos/.codex/memories/MEMORY.md`
+- `cat /home/cos/projects/AGENTS.md`
+- `git status --short --branch`
+- `git log --oneline -5`
+- `sed`/`rg` inspections of MoonLab plan docs, WebGPU parity source, focused
+  tests, package scripts, and CLI.
+- `date '+%Y-%m-%d %H:%M:%S %Z'`
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-cnot.json --generated-at 2026-06-06T23:15:00.000Z`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-cnot.json'); ..."`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+- `git diff --check`
+
+Test results:
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: focused WebGPU complex64 parity unit suite passed `14/14`.
+- PASS: default parity CLI emitted
+  `moonlab.webgpu.complex64-parity-scope.v0` with `backendAvailable=false`,
+  `webgpuParity.executed=false`, `webgpuParity.passed=false`, and
+  `contractValidation.valid=true`.
+- PASS: emitted default artifact includes `cnot` in
+  `browserNativeOperationProbe.operationResults` with `executed=false`,
+  `passed=false`, `covered=false`, empty fixture results, blocker
+  `native-operation-probe-not-executed`, and no browser execution claim.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: WASM rebuild completed after `build:ts` restored the JS dist files.
+- PASS: `git diff --check` reported no whitespace errors after this log append.
+
+Failures or open questions:
+- No browser WebGPU adapter was available in this Node CLI validation path, so
+  no actual browser GPU execution evidence was produced.
+- Full WebGPU parity remains blocked until executed browser evidence covers all
+  required native operations: `hadamard`, `pauli_x`, `pauli_z`, `cnot`, and
+  `compute_probabilities`.
+- The standalone probes are not a full MoonLab browser WebGPU runtime backend,
+  not full reduced-fixture gate parity, and not full magnetar physics
+  validation.
+- No push was attempted.
