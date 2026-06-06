@@ -79,16 +79,24 @@ Implemented slice:
 3. Added package script `webgpu:complex64:parity`.
 4. Added focused unit coverage for no-backend, required-backend, and overclaim
    rejection paths.
+5. Added a browser-executable `compute_probabilities` WGSL probe over the
+   reduced complex64 fixture states. This records only probability-kernel
+   coverage when a real browser WebGPU adapter is present.
+6. Tightened the contract so `webgpuParity.passed` requires all required native
+   operations to be covered; a passing probability-kernel probe alone remains
+   partial evidence.
 
-The next patch after this artifact should port only the minimal native browser
-WebGPU runtime needed for the required reduced fixture operations. Keep that
-separate from this contract patch and avoid counting `phase` CPU fallback as
-native WebGPU coverage.
+The next patch after this probability-kernel probe should port only the
+minimal native browser WebGPU gate kernels needed for the remaining required
+reduced fixture operations. Keep that separate from broad backend imports and
+avoid counting `phase` CPU fallback as native WebGPU coverage.
 
 The first parity probe should avoid claiming magnetar simulation validation.
 It should only demonstrate that reduced deterministic quantum fixtures can
 round-trip through browser complex64 WebGPU kernels within the accepted
-tolerance.
+tolerance. The current probe only exercises browser WebGPU probability readback
+from CPU-prepared complex64 fixture states; it is not full reduced-fixture
+WebGPU gate parity.
 
 ## Acceptance Commands
 
@@ -98,6 +106,7 @@ Current parity-scope patch:
 pnpm --dir bindings/javascript/packages/core build:ts
 pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts
 pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts
+pnpm --dir bindings/javascript/packages/core test
 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json
 MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity
 ```

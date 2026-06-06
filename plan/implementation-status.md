@@ -140,13 +140,18 @@ reference data.
   `fullPhysicsValidation = false`.
 - [x] Emit explicit no-backend scope artifacts by default, with required-backend
   mode failing when no browser WebGPU adapter/runtime parity execution exists.
+- [x] Add the first browser-executable WGSL helper for reduced complex64
+  `compute_probabilities` kernel probing.
+- [x] Keep `compute_probabilities` probe evidence partial: it can mark only
+  that native operation covered, and a full `webgpuParity.passed` claim now
+  requires all required native operations to be covered.
 
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
-scope artifact and CLI, but it still has no active native browser WebGPU kernel
-runtime on `ulg`. Required-backend parity remains blocked until a browser
-adapter and narrowly wired runtime kernels record native coverage for hadamard,
-pauli_x, pauli_z, cnot, and compute_probabilities without counting `phase`
-CPU fallback as native coverage.
+scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
+probe. It still has no active native browser WebGPU gate kernels on `ulg`.
+Required-backend parity remains blocked until a browser adapter and narrowly
+wired runtime kernels record native coverage for hadamard, pauli_x, pauli_z,
+and cnot, without counting `phase` CPU fallback as native coverage.
 
 ## Canonical Normalized Reference Suite Export
 

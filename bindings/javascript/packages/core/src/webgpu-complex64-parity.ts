@@ -1,5 +1,7 @@
 export const MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA =
   'moonlab.webgpu.complex64-parity-scope.v0';
+export const MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA =
+  'moonlab.webgpu.complex64-probability-kernel-probe.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF = 1e-5;
 
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED = [
@@ -76,6 +78,32 @@ export interface MoonlabWebGpuComplex64ReducedFixtureResult {
   passed: boolean;
 }
 
+export interface MoonlabBrowserWebGpuComplex64ProbabilityKernelProbeFixture {
+  fixtureId: string;
+  qubitCount: number;
+  amplitudeCount: number;
+  referenceRepresentation: 'wasm-float64-interleaved';
+  complex64Representation: 'complex64-interleaved-f32';
+  browserWebGpuKernel: 'compute_probabilities';
+  referenceProbabilities: number[];
+  browserWebGpuProbabilities: number[];
+  maxProbabilityAbsDiff: number;
+  passed: boolean;
+}
+
+export interface MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe {
+  schema: typeof MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA;
+  probeKind: 'browser-webgpu-complex64-probability-kernel';
+  kernel: 'compute_probabilities';
+  executed: boolean;
+  passed: boolean;
+  coveredNativeOperations: Array<Extract<NativeCoverageRequired, 'compute_probabilities'>>;
+  fixtureResults: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbeFixture[];
+  maxProbabilityAbsDiff: number | null;
+  tolerance: number;
+  reason: string;
+}
+
 export interface MoonlabWebGpuComplex64ParityValidation {
   valid: boolean;
   errors: string[];
@@ -137,6 +165,7 @@ export interface MoonlabWebGpuComplex64ParityScopeArtifact {
     tolerance: number;
     reason: string;
   };
+  browserKernelProbe: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
   blockers: string[];
   contractValidation: MoonlabWebGpuComplex64ParityValidation;
 }
@@ -147,12 +176,99 @@ export interface BuildMoonlabWebGpuComplex64ParityScopeOptions {
   backendAvailable?: boolean;
   requireBackend?: boolean;
   coveredNativeOperations?: NativeCoverageRequired[];
+  browserKernelProbe?: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
   webgpuParity?: {
     executed: boolean;
     passed: boolean;
-    maxProbabilityAbsDiff: number;
+    maxProbabilityAbsDiff: number | null;
     reason?: string;
   };
+}
+
+export interface RunMoonlabBrowserWebGpuComplex64ProbabilityKernelProbeOptions {
+  gpu?: MoonlabBrowserWebGpu | null;
+  runtime?: string;
+  workgroupSize?: number;
+}
+
+export interface BuildMoonlabWebGpuComplex64ParityScopeWithBrowserProbeOptions
+  extends Omit<
+    BuildMoonlabWebGpuComplex64ParityScopeOptions,
+    'backendDetection' | 'backendAvailable' | 'coveredNativeOperations' | 'browserKernelProbe'
+  > {
+  gpu?: MoonlabBrowserWebGpu | null;
+  runtime?: string;
+  workgroupSize?: number;
+}
+
+export interface MoonlabBrowserWebGpu {
+  requestAdapter(): Promise<MoonlabBrowserWebGpuAdapter | null>;
+}
+
+export interface MoonlabBrowserWebGpuAdapter {
+  requestDevice(): Promise<MoonlabBrowserWebGpuDevice>;
+  requestAdapterInfo?(): Promise<Record<string, unknown>>;
+}
+
+export interface MoonlabBrowserWebGpuDevice {
+  createBuffer(options: {
+    size: number;
+    usage: number;
+    mappedAtCreation?: boolean;
+  }): MoonlabBrowserWebGpuBuffer;
+  createShaderModule(options: { code: string }): unknown;
+  createComputePipeline(options: {
+    layout: 'auto';
+    compute: {
+      module: unknown;
+      entryPoint: string;
+    };
+  }): MoonlabBrowserWebGpuComputePipeline;
+  createBindGroup(options: {
+    layout: unknown;
+    entries: Array<{
+      binding: number;
+      resource: {
+        buffer: MoonlabBrowserWebGpuBuffer;
+      };
+    }>;
+  }): unknown;
+  createCommandEncoder(): MoonlabBrowserWebGpuCommandEncoder;
+  queue: {
+    submit(commandBuffers: unknown[]): void;
+    onSubmittedWorkDone?(): Promise<void>;
+  };
+  destroy?(): void;
+}
+
+export interface MoonlabBrowserWebGpuBuffer {
+  getMappedRange(): ArrayBuffer;
+  unmap(): void;
+  mapAsync(mode: number): Promise<void>;
+  destroy?(): void;
+}
+
+export interface MoonlabBrowserWebGpuComputePipeline {
+  getBindGroupLayout(index: number): unknown;
+}
+
+export interface MoonlabBrowserWebGpuCommandEncoder {
+  beginComputePass(): MoonlabBrowserWebGpuComputePassEncoder;
+  copyBufferToBuffer(
+    source: MoonlabBrowserWebGpuBuffer,
+    sourceOffset: number,
+    destination: MoonlabBrowserWebGpuBuffer,
+    destinationOffset: number,
+    size: number
+  ): void;
+  finish(): unknown;
+}
+
+export interface MoonlabBrowserWebGpuComputePassEncoder {
+  setPipeline(pipeline: MoonlabBrowserWebGpuComputePipeline): void;
+  setBindGroup(index: number, bindGroup: unknown): void;
+  dispatchWorkgroups(workgroupCountX: number): void;
+  end(): void;
 }
 
 export function buildMoonlabWebGpuComplex64ParityScope(
@@ -172,7 +288,18 @@ export function buildMoonlabWebGpuComplex64ParityScope(
   const preflightMaxDiff = Math.max(
     ...reducedFixtures.map((fixture) => fixture.maxProbabilityAbsDiff)
   );
-  const coveredOperations = new Set(options.coveredNativeOperations ?? []);
+  const browserKernelProbe = options.browserKernelProbe
+    ?? buildNotExecutedProbabilityKernelProbe(
+      backendAvailable
+        ? 'browser WebGPU probability kernel probe not executed; native MoonLab gate kernels are not wired on this branch'
+        : 'browser WebGPU probability kernel probe not executed because no adapter/runtime was available'
+    );
+  const coveredOperations = new Set<NativeCoverageRequired>([
+    ...(options.coveredNativeOperations ?? []),
+    ...(browserKernelProbe.executed && browserKernelProbe.passed
+      ? browserKernelProbe.coveredNativeOperations
+      : []),
+  ]);
   const nativeCoverage = MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED.map(
     (operation): MoonlabWebGpuComplex64NativeCoverageEntry => {
       const covered = coveredOperations.has(operation);
@@ -264,6 +391,7 @@ export function buildMoonlabWebGpuComplex64ParityScope(
       tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
       reason: webgpuParity.reason ?? '',
     },
+    browserKernelProbe,
     blockers,
   } satisfies Omit<MoonlabWebGpuComplex64ParityScopeArtifact, 'contractValidation'>;
 
@@ -271,6 +399,126 @@ export function buildMoonlabWebGpuComplex64ParityScope(
     ...artifactWithoutValidation,
     contractValidation: validateMoonlabWebGpuComplex64ParityScope(artifactWithoutValidation),
   };
+}
+
+export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
+  options: BuildMoonlabWebGpuComplex64ParityScopeWithBrowserProbeOptions = {}
+): Promise<MoonlabWebGpuComplex64ParityScopeArtifact> {
+  const browserKernelProbe = await runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe({
+    gpu: options.gpu,
+    runtime: options.runtime,
+    workgroupSize: options.workgroupSize,
+  });
+  const backendDetection: MoonlabWebGpuComplex64BackendDetection = {
+    available: browserKernelProbe.executed,
+    runtime: options.runtime ?? detectRuntime(),
+    reason: browserKernelProbe.reason,
+  };
+
+  return buildMoonlabWebGpuComplex64ParityScope({
+    generatedAt: options.generatedAt,
+    requireBackend: options.requireBackend,
+    backendDetection,
+    browserKernelProbe,
+    webgpuParity: {
+      executed: false,
+      passed: false,
+      maxProbabilityAbsDiff: browserKernelProbe.maxProbabilityAbsDiff,
+      reason: browserKernelProbe.executed
+        ? 'browser WebGPU compute_probabilities kernel ran, but native gate kernels are not wired; full reduced-fixture WebGPU parity was not executed'
+        : browserKernelProbe.reason,
+    },
+  });
+}
+
+export async function runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe(
+  options: RunMoonlabBrowserWebGpuComplex64ProbabilityKernelProbeOptions = {}
+): Promise<MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe> {
+  const gpu = options.gpu === undefined ? detectGlobalBrowserWebGpu() : options.gpu;
+  if (!gpu || typeof gpu.requestAdapter !== 'function') {
+    return buildNotExecutedProbabilityKernelProbe(
+      'navigator.gpu.requestAdapter is unavailable in this JavaScript runtime'
+    );
+  }
+
+  let adapter: MoonlabBrowserWebGpuAdapter | null;
+  try {
+    adapter = await gpu.requestAdapter();
+  } catch (error) {
+    return buildNotExecutedProbabilityKernelProbe(
+      `navigator.gpu.requestAdapter failed: ${errorMessage(error)}`
+    );
+  }
+
+  if (!adapter) {
+    return buildNotExecutedProbabilityKernelProbe('navigator.gpu.requestAdapter returned no adapter');
+  }
+
+  let device: MoonlabBrowserWebGpuDevice;
+  try {
+    device = await adapter.requestDevice();
+  } catch (error) {
+    return buildNotExecutedProbabilityKernelProbe(
+      `GPUAdapter.requestDevice failed: ${errorMessage(error)}`
+    );
+  }
+
+  try {
+    const constants = browserWebGpuConstants();
+    const workgroupSize = normalizeWorkgroupSize(options.workgroupSize);
+    const fixtureResults: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbeFixture[] = [];
+    for (const fixture of reducedFixtureDefinitions()) {
+      const complex64State = runFixture(fixture, true);
+      const referenceProbabilities = probabilities(complex64State, true);
+      const browserWebGpuProbabilities = await runProbabilityKernelFixture({
+        device,
+        constants,
+        state: complex64State,
+        workgroupSize,
+      });
+      const maxProbabilityAbsDiff = maxAbsDiff(
+        referenceProbabilities,
+        browserWebGpuProbabilities
+      );
+      fixtureResults.push({
+        fixtureId: fixture.fixtureId,
+        qubitCount: fixture.qubitCount,
+        amplitudeCount: complex64State.length,
+        referenceRepresentation: 'wasm-float64-interleaved',
+        complex64Representation: 'complex64-interleaved-f32',
+        browserWebGpuKernel: 'compute_probabilities',
+        referenceProbabilities,
+        browserWebGpuProbabilities,
+        maxProbabilityAbsDiff,
+        passed: maxProbabilityAbsDiff <= MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      });
+    }
+
+    const maxProbabilityAbsDiff = Math.max(
+      ...fixtureResults.map((fixture) => fixture.maxProbabilityAbsDiff)
+    );
+    const passed = fixtureResults.every((fixture) => fixture.passed);
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-probability-kernel',
+      kernel: 'compute_probabilities',
+      executed: true,
+      passed,
+      coveredNativeOperations: passed ? ['compute_probabilities'] : [],
+      fixtureResults,
+      maxProbabilityAbsDiff,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: passed
+        ? 'browser WebGPU compute_probabilities kernel matched reduced complex64 fixture probabilities'
+        : 'browser WebGPU compute_probabilities kernel exceeded reduced fixture tolerance',
+    };
+  } catch (error) {
+    return buildFailedProbabilityKernelProbe(
+      `browser WebGPU compute_probabilities kernel failed: ${errorMessage(error)}`
+    );
+  } finally {
+    device.destroy?.();
+  }
 }
 
 export function validateMoonlabWebGpuComplex64ParityScope(
@@ -353,6 +601,25 @@ export function validateMoonlabWebGpuComplex64ParityScope(
   addCheck(
     checks,
     errors,
+    'webgpu-pass-requires-full-native-coverage',
+    artifact.webgpuParity?.passed !== true
+      || artifact.coverage?.nativeWebGpu?.every((entry) => entry.covered === true) === true
+  );
+  addCheck(
+    checks,
+    errors,
+    'browser-probability-kernel-probe-contract',
+    artifact.browserKernelProbe?.schema
+      === MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA
+      && artifact.browserKernelProbe.kernel === 'compute_probabilities'
+      && (artifact.browserKernelProbe.passed !== true
+        || artifact.browserKernelProbe.executed === true)
+      && (!artifact.browserKernelProbe.passed
+        || artifact.browserKernelProbe.coveredNativeOperations.includes('compute_probabilities'))
+  );
+  addCheck(
+    checks,
+    errors,
     'complex64-preflight-within-tolerance',
     artifact.complex64Preflight?.executed === true
       && artifact.complex64Preflight.passed === true
@@ -397,6 +664,192 @@ function buildBlockers({
     blockers.push('browser-webgpu-kernel-parity-failed');
   }
   return blockers;
+}
+
+interface BrowserWebGpuConstants {
+  bufferUsage: {
+    MAP_READ: number;
+    COPY_SRC: number;
+    COPY_DST: number;
+    STORAGE: number;
+  };
+  mapMode: {
+    READ: number;
+  };
+}
+
+function buildNotExecutedProbabilityKernelProbe(
+  reason: string
+): MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe {
+  return {
+    schema: MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
+    probeKind: 'browser-webgpu-complex64-probability-kernel',
+    kernel: 'compute_probabilities',
+    executed: false,
+    passed: false,
+    coveredNativeOperations: [],
+    fixtureResults: [],
+    maxProbabilityAbsDiff: null,
+    tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+    reason,
+  };
+}
+
+function buildFailedProbabilityKernelProbe(
+  reason: string
+): MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe {
+  return {
+    ...buildNotExecutedProbabilityKernelProbe(reason),
+    executed: true,
+  };
+}
+
+function normalizeWorkgroupSize(workgroupSize: number | undefined): number {
+  if (workgroupSize === undefined || !Number.isFinite(workgroupSize)) {
+    return 64;
+  }
+  return Math.max(1, Math.floor(workgroupSize));
+}
+
+function detectGlobalBrowserWebGpu(): MoonlabBrowserWebGpu | null {
+  const nav = globalThis.navigator;
+  const maybeGpu = nav && typeof nav === 'object' && 'gpu' in nav
+    ? (nav as { gpu?: unknown }).gpu
+    : undefined;
+  if (!maybeGpu || typeof maybeGpu !== 'object' || !('requestAdapter' in maybeGpu)) {
+    return null;
+  }
+  return maybeGpu as MoonlabBrowserWebGpu;
+}
+
+function detectRuntime(): string {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    return 'browser';
+  }
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return `node-${process.versions.node}`;
+  }
+  return 'unknown-js-runtime';
+}
+
+function browserWebGpuConstants(): BrowserWebGpuConstants {
+  const webGpuGlobal = globalThis as typeof globalThis & {
+    GPUBufferUsage?: Partial<BrowserWebGpuConstants['bufferUsage']>;
+    GPUMapMode?: Partial<BrowserWebGpuConstants['mapMode']>;
+  };
+  return {
+    bufferUsage: {
+      MAP_READ: webGpuGlobal.GPUBufferUsage?.MAP_READ ?? 1,
+      COPY_SRC: webGpuGlobal.GPUBufferUsage?.COPY_SRC ?? 4,
+      COPY_DST: webGpuGlobal.GPUBufferUsage?.COPY_DST ?? 8,
+      STORAGE: webGpuGlobal.GPUBufferUsage?.STORAGE ?? 128,
+    },
+    mapMode: {
+      READ: webGpuGlobal.GPUMapMode?.READ ?? 1,
+    },
+  };
+}
+
+async function runProbabilityKernelFixture({
+  device,
+  constants,
+  state,
+  workgroupSize,
+}: {
+  device: MoonlabBrowserWebGpuDevice;
+  constants: BrowserWebGpuConstants;
+  state: ComplexValue[];
+  workgroupSize: number;
+}): Promise<number[]> {
+  const amplitudeData = new Float32Array(state.length * 2);
+  state.forEach((amplitude, index) => {
+    amplitudeData[index * 2] = Math.fround(amplitude.real);
+    amplitudeData[index * 2 + 1] = Math.fround(amplitude.imag);
+  });
+
+  const inputBuffer = device.createBuffer({
+    size: amplitudeData.byteLength,
+    usage: constants.bufferUsage.STORAGE,
+    mappedAtCreation: true,
+  });
+  new Float32Array(inputBuffer.getMappedRange()).set(amplitudeData);
+  inputBuffer.unmap();
+
+  const outputByteLength = state.length * Float32Array.BYTES_PER_ELEMENT;
+  const outputBuffer = device.createBuffer({
+    size: outputByteLength,
+    usage: constants.bufferUsage.STORAGE | constants.bufferUsage.COPY_SRC,
+  });
+  const readBuffer = device.createBuffer({
+    size: outputByteLength,
+    usage: constants.bufferUsage.COPY_DST | constants.bufferUsage.MAP_READ,
+  });
+
+  try {
+    const shaderModule = device.createShaderModule({
+      code: probabilityKernelWgsl(state.length, workgroupSize),
+    });
+    const pipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: {
+        module: shaderModule,
+        entryPoint: 'main',
+      },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: { buffer: inputBuffer },
+        },
+        {
+          binding: 1,
+          resource: { buffer: outputBuffer },
+        },
+      ],
+    });
+
+    const commandEncoder = device.createCommandEncoder();
+    const pass = commandEncoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(state.length / workgroupSize));
+    pass.end();
+    commandEncoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputByteLength);
+    device.queue.submit([commandEncoder.finish()]);
+    await device.queue.onSubmittedWorkDone?.();
+    await readBuffer.mapAsync(constants.mapMode.READ);
+    const mapped = readBuffer.getMappedRange();
+    const result = Array.from(new Float32Array(mapped.slice(0, outputByteLength)));
+    readBuffer.unmap();
+    return result;
+  } finally {
+    inputBuffer.destroy?.();
+    outputBuffer.destroy?.();
+    readBuffer.destroy?.();
+  }
+}
+
+function probabilityKernelWgsl(elementCount: number, workgroupSize: number): string {
+  return `
+@group(0) @binding(0) var<storage, read> amplitudes: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> outputProbabilities: array<f32>;
+
+@compute @workgroup_size(${workgroupSize})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let index = globalId.x;
+  if (index >= ${elementCount}u) {
+    return;
+  }
+  let amplitude = amplitudes[index];
+  outputProbabilities[index] = amplitude.x * amplitude.x + amplitude.y * amplitude.y;
+}
+`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function buildReducedFixtureResults(): MoonlabWebGpuComplex64ReducedFixtureResult[] {
