@@ -497,3 +497,59 @@ Failures or open questions:
   charge-conserving PIC, spectral radiation transport, GR/GRMHD, full MHD, or a
   complete magnetar simulation.
 - No push was attempted.
+
+## 2026-06-06 05:15:01 AKDT - Normalized magnetar reference suite
+
+Prompt: "You are a sidecar coding agent for the ongoing ULG/MoonLab/Eshkol/PeerCompute magnetar plan. Work only in /home/cos/projects/moonlab. First read any agents.md/AGENTS.md and relevant plan/log files. Keep all commits local and do not push. Objective: make the next small, bounded MoonLab-side change that materially advances authoritative magnetar reference/runtime validation artifacts beyond the reduced calibrated contracts already committed on branch ulg. Avoid PeerCompute, ULG, and Eshkol files. Good candidate: producer/CLI/test support for supplying or normalizing real four-family magnetar calibrated reference contracts if not already present. If a safe code change is clear, implement it, run focused tests/builds, update MoonLab plan/log docs, and make a local commit. If no safe code change is clear, produce a concise final with exact blockers and the next files/contracts to touch. Final must list changed files, commit hash if any, and validation commands/results."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md`, MoonLab `plan/log.md`, `plan/implementation-status.md`, and `plan/tests.md` before editing. No MoonLab-local `AGENTS.md` or `plan/plan.md` was present.
+- Confirmed current branch was `ulg`, ahead of `origin/ulg`, and the worktree started clean.
+- Inspected the checked-in reduced contract payload, magnetar artifact builder, reference validator, CLI emitter, tests, and guide docs.
+- Identified the next bounded MoonLab-side gap: the CLI could validate and consume references, but did not emit a standalone normalized canonical four-family reference-suite artifact for downstream runtime validation.
+- Exported `normalizeMagnetarReferenceContractSuite()` from the JavaScript core package.
+- Added CLI `--normalize-references <json>` support with `--strict` exit behavior matching the validator.
+- Tightened supplied `contractHash` and `unitsHash` validation to full 64-hex SHA-256 digest strings and normalized accepted hashes to lowercase.
+- Added unit and integration coverage for normalized-suite output and strict digest handling.
+- Updated the ULG quantum-response artifact guide, implementation status, testing strategy, and this log.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/scripts/emit-ulg-quantum-response-artifact.mjs`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg -n "MoonLab|magnetar|ULG|ulg|four-family|calibrated|PeerCompute|Eshkol" /home/cos/.codex/memories/MEMORY.md`
+- `find .. -maxdepth 2 \\( -name AGENTS.md -o -name agents.md \\) -print`
+- `sed` inspections of `/home/cos/projects/AGENTS.md`, MoonLab plan files, artifact source, CLI, tests, package exports, guide docs, and checked-in reference contracts.
+- `git status --short --branch`
+- `git log --oneline -8 --decorate`
+- `node --version`
+- `git diff --check`
+- `node --check scripts/emit-ulg-quantum-response-artifact.mjs`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm build`
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm ulg:artifact -- --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --out /tmp/moonlab-normalized-reference-suite.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-normalized-reference-suite.json`
+- `date -Is`
+
+Test results:
+- PASS: `git diff --check` reported no whitespace errors before the plan/log append.
+- PASS: CLI script syntax check completed.
+- PASS: focused unit suite passed `102/102`.
+- PASS: package build completed; tsup repeated the existing package export-order warning for `types`.
+- PASS: focused integration suite passed `49/49`, including the new normalized-suite CLI assertion.
+- PASS: strict CLI normalization wrote `/tmp/moonlab-normalized-reference-suite.json`.
+- PASS: normalized-suite JSON inspection reported schema `moonlab.magnetar.normalized-reference-suite.v0`, status `reference-contract-suite-ready`, `ready=true`, canonical families `magnetosphere-mhd`, `pic-kinetic-plasma`, `radiation-transport`, and `relativistic-correction`, `readyCount=4`, `suppliedCount=3`, valid 64-hex SHA-256 hashes, `validationReady=true`, zero blockers, and zero errors.
+
+Failures or open questions:
+- The normalized suite still normalizes the reduced scalar reference contracts already present in MoonLab. It does not create authoritative charge-conserving PIC, spectral radiation transport, GR/GRMHD, full MHD/force-free, or complete magnetar simulation reference data.
+- No PeerCompute, ULG, or Eshkol files were modified.
+- No push was attempted.

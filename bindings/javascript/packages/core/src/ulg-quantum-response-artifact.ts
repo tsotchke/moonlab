@@ -173,6 +173,26 @@ export interface UlgMagnetarReferenceContractValidationReport {
   errors: string[];
 }
 
+export interface UlgMagnetarReferenceContractNormalizedSuite {
+  schema: 'moonlab.magnetar.normalized-reference-suite.v0';
+  status: UlgMagnetarReferenceContractValidationReport['status'];
+  ready: boolean;
+  familyCount: number;
+  readyCount: number;
+  suppliedCount: number;
+  suppliedReadyCount: number;
+  invalidSuppliedCount: number;
+  unknownCount: number;
+  source: {
+    contractHash: string;
+    builtInReferenceFamilies: Array<UlgMagnetarReferenceFamilyInventoryEntry['family']>;
+  };
+  references: UlgMagnetarReferenceFamilyInventoryEntry[];
+  validation: UlgMagnetarReferenceContractValidationReport;
+  blockers: string[];
+  errors: string[];
+}
+
 export interface UlgMagnetarReferenceContractValidationEntry {
   id: UlgMagnetarReferenceFamilyInventoryEntry['id'];
   family: UlgMagnetarReferenceFamilyInventoryEntry['family'];
@@ -245,6 +265,7 @@ const DEFAULT_BELL_TASK_INPUT: BellTaskInput = {
 
 const EXPECTED_BELL_PROBABILITIES = [0.5, 0, 0, 0.5];
 const DEFAULT_TOLERANCE = 1e-9;
+const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/i;
 const MAGNETOSPHERE_MHD_ANALYTIC_UNITS_HASH =
   'sha256:b9ef2d46ec5f2d0c1fb8a2866012e9340a67f188ebc8a579b93ce61e72f4b4a5';
 const DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH =
@@ -879,6 +900,41 @@ export function validateMagnetarReferenceContracts(
   };
 }
 
+export function normalizeMagnetarReferenceContractSuite(
+  suppliedReferences: unknown = [],
+  options: { contractHash?: string } = {}
+): UlgMagnetarReferenceContractNormalizedSuite {
+  const contractHash = options.contractHash ?? DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH;
+  const { references } = normalizeReferenceContractInput(suppliedReferences);
+  const normalizedReferences = buildMagnetarReferenceFamilyInventory(
+    contractHash,
+    references as Array<Partial<UlgMagnetarReferenceFamilyInventoryEntry>>
+  );
+  const validation = validateMagnetarReferenceContracts(suppliedReferences, {
+    contractHash,
+  });
+
+  return {
+    schema: 'moonlab.magnetar.normalized-reference-suite.v0',
+    status: validation.status,
+    ready: validation.ready,
+    familyCount: validation.familyCount,
+    readyCount: validation.readyCount,
+    suppliedCount: validation.suppliedCount,
+    suppliedReadyCount: validation.suppliedReadyCount,
+    invalidSuppliedCount: validation.invalidSuppliedCount,
+    unknownCount: validation.unknownCount,
+    source: {
+      contractHash,
+      builtInReferenceFamilies: ['magnetosphere-mhd'],
+    },
+    references: normalizedReferences,
+    validation,
+    blockers: validation.blockers,
+    errors: validation.errors,
+  };
+}
+
 function createAnalyticMagnetosphereMhdReference(
   contractHash: string
 ): UlgMagnetarReferenceFamilyInventoryEntry {
@@ -1182,7 +1238,9 @@ function cloneRecordOrNull(value: unknown): Record<string, unknown> | null {
 }
 
 function digestOrNull(value: unknown): string | null {
-  return typeof value === 'string' && value.startsWith('sha256:') ? value : null;
+  return typeof value === 'string' && SHA256_DIGEST_PATTERN.test(value)
+    ? value.toLowerCase()
+    : null;
 }
 
 function normalizeReferenceContractInput(

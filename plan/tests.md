@@ -100,3 +100,20 @@ Targeted validation for the checked-in reduced four-family reference payload:
   `pnpm ulg:artifact -- --probe magnetar-dipole-ising --references references/magnetar-calibrated-reference-contracts.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-four-family-reference-artifact.json`
 
 Current result on 2026-06-06: integration passed `48/48`, unit passed `100/100`, strict validator reported `reference-contract-suite-ready` with ready count `4`, package build passed with the existing package export-order warning, and the artifact smoke reported reference/scientific coverage counts `4/4` with no blockers.
+
+## Normalized Magnetar Reference Suite
+
+Targeted validation for the standalone normalized four-family contract artifact:
+
+- Run the JavaScript core unit suite, including normalization and strict SHA-256 digest checks:
+  `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Build the JavaScript core before CLI validation so `dist/index.mjs` exports the normalization helper:
+  `pnpm build`
+- Run the JavaScript core integration suite, which invokes the CLI normalization path against the checked-in reference payload:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Strictly normalize the checked-in payload and inspect the emitted four-family suite:
+  `pnpm ulg:artifact -- --normalize-references references/magnetar-calibrated-reference-contracts.json --strict --out /tmp/moonlab-normalized-reference-suite.json`
+
+The normalized suite must use schema `moonlab.magnetar.normalized-reference-suite.v0`, include exactly the canonical magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction references, carry the validation report, and require full 64-hex SHA-256 `contractHash`/`unitsHash` values for supplied contracts.
+
+Current result on 2026-06-06: unit passed `102/102`, package build passed with the existing package export-order warning, integration passed `49/49`, strict CLI normalization emitted `reference-contract-suite-ready` with four canonical ready references, valid 64-hex SHA-256 hashes, no blockers, and no errors.

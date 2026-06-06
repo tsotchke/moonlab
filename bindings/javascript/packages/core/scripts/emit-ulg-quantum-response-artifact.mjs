@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildUlgBellStateArtifact,
   buildUlgMagnetarDipoleIsingArtifact,
+  normalizeMagnetarReferenceContractSuite,
   validateMagnetarReferenceContracts,
   validateUlgQuantumResponseArtifact,
 } from '../dist/index.mjs';
@@ -28,6 +29,19 @@ if (validationReferencesPath) {
   );
   writeJson(report, args.out ? resolve(args.out) : undefined);
   if (args.strict && !report.ready) {
+    process.exitCode = 1;
+  }
+  process.exit();
+}
+const normalizeReferencesPath = args.normalizeReferences
+  ? resolve(args.normalizeReferences)
+  : undefined;
+if (normalizeReferencesPath) {
+  const suite = normalizeMagnetarReferenceContractSuite(
+    JSON.parse(readFileSync(normalizeReferencesPath, 'utf8'))
+  );
+  writeJson(suite, args.out ? resolve(args.out) : undefined);
+  if (args.strict && !suite.ready) {
     process.exitCode = 1;
   }
   process.exit();
@@ -116,11 +130,13 @@ function parseArgs(argv) {
       parsed.references = argv[++index];
     } else if (arg === '--validate-references') {
       parsed.validateReferences = argv[++index];
+    } else if (arg === '--normalize-references') {
+      parsed.normalizeReferences = argv[++index];
     } else if (arg === '--strict') {
       parsed.strict = true;
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path] [--validate-references path] [--strict]\n'
+        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path] [--validate-references path] [--normalize-references path] [--strict]\n'
       );
       process.exit(0);
     } else {

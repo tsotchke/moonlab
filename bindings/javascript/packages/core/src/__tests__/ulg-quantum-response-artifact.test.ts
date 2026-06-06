@@ -5,11 +5,16 @@ import {
   canonicalJson,
   DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA,
   evaluateIsingReferenceEnergy,
+  normalizeMagnetarReferenceContractSuite,
   validateMagnetarReferenceContracts,
   validateUlgQuantumResponseArtifact,
   type UlgMagnetarReferenceFamilyInventoryEntry,
   type UlgQuantumResponseArtifact,
 } from '../ulg-quantum-response-artifact';
+
+const VALID_CONTRACT_HASH = `sha256:${'a'.repeat(64)}`;
+const VALID_UNITS_HASH = `sha256:${'b'.repeat(64)}`;
+const VALID_UPPERCASE_CONTRACT_HASH = `sha256:${'C'.repeat(64)}`;
 
 describe('ULG QuantumResponseArtifact schema helpers', () => {
   it('canonicalizes JSON objects with stable key ordering', () => {
@@ -109,6 +114,41 @@ describe('ULG QuantumResponseArtifact schema helpers', () => {
     expect(radiation?.errors).toEqual([]);
   });
 
+  it('normalizes supplied reference contracts into a four-family suite', () => {
+    const suite = normalizeMagnetarReferenceContractSuite({
+      references: [
+        readyReferenceContract({
+          id: 'radiation-transport-reference',
+          family: 'radiation-transport',
+          solverId: 'moonlab-grey-radiation-transport-reference-v0',
+          contractHash: VALID_UPPERCASE_CONTRACT_HASH,
+        }),
+      ],
+    });
+    const radiation = suite.references.find((entry) => entry.family === 'radiation-transport');
+    const radiationValidation = suite.validation.entries.find((entry) => (
+      entry.family === 'radiation-transport'
+    ));
+
+    expect(suite.schema).toBe('moonlab.magnetar.normalized-reference-suite.v0');
+    expect(suite.status).toBe('reference-contract-suite-partial');
+    expect(suite.ready).toBe(false);
+    expect(suite.familyCount).toBe(4);
+    expect(suite.readyCount).toBe(2);
+    expect(suite.suppliedCount).toBe(1);
+    expect(suite.source.builtInReferenceFamilies).toEqual(['magnetosphere-mhd']);
+    expect(suite.references.map((entry) => entry.family)).toEqual([
+      'magnetosphere-mhd',
+      'pic-kinetic-plasma',
+      'radiation-transport',
+      'relativistic-correction',
+    ]);
+    expect(radiation?.ready).toBe(true);
+    expect(radiation?.contractHash).toBe(VALID_UPPERCASE_CONTRACT_HASH.toLowerCase());
+    expect(radiationValidation?.supplied).toBe(true);
+    expect(radiationValidation?.ready).toBe(true);
+  });
+
   it('reports missing contract and unit hashes on supplied references', () => {
     const report = validateMagnetarReferenceContracts([
       readyReferenceContract({
@@ -122,6 +162,25 @@ describe('ULG QuantumResponseArtifact schema helpers', () => {
 
     expect(report.status).toBe('reference-contract-suite-invalid');
     expect(report.invalidSuppliedCount).toBe(1);
+    expect(pic?.ready).toBe(false);
+    expect(pic?.contractHashValid).toBe(false);
+    expect(pic?.unitsHashValid).toBe(false);
+    expect(pic?.errors).toContain('contractHash must be a sha256 digest');
+    expect(pic?.errors).toContain('unitsHash must be a sha256 digest');
+  });
+
+  it('requires supplied contract hashes to be full SHA-256 hex digests', () => {
+    const report = validateMagnetarReferenceContracts([
+      readyReferenceContract({
+        id: 'pic-kinetic-plasma-reference',
+        family: 'pic-kinetic-plasma',
+        contractHash: 'sha256:reference-contract',
+        unitsHash: 'sha256:reference-units',
+      }),
+    ]);
+    const pic = report.entries.find((entry) => entry.family === 'pic-kinetic-plasma');
+
+    expect(report.status).toBe('reference-contract-suite-invalid');
     expect(pic?.ready).toBe(false);
     expect(pic?.contractHashValid).toBe(false);
     expect(pic?.unitsHashValid).toBe(false);
@@ -204,8 +263,8 @@ function readyReferenceContract(
     solverId: 'moonlab-reference-solver-v0',
     schema: 'moonlab.magnetar.calibrated-reference.v0',
     role: 'peercompute-scientific-tolerance-input',
-    contractHash: 'sha256:reference-contract',
-    unitsHash: 'sha256:reference-units',
+    contractHash: VALID_CONTRACT_HASH,
+    unitsHash: VALID_UNITS_HASH,
     fieldMap: {
       opticalDepth: 'outputs.reference.opticalDepth',
     },

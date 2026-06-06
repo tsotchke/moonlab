@@ -16,6 +16,9 @@ const magnetarReferenceContractsPath = resolve(
   coreRoot,
   'references/magnetar-calibrated-reference-contracts.json'
 );
+const TEST_MAGNETAR_INPUT_HASH = `sha256:${'0'.repeat(64)}`;
+const VALID_RADIATION_CONTRACT_HASH = `sha256:${'1'.repeat(64)}`;
+const VALID_RADIATION_UNITS_HASH = `sha256:${'2'.repeat(64)}`;
 
 describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('runs the core WASM Bell task and emits parity-ready artifact JSON', async () => {
@@ -36,7 +39,7 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('runs the WASM Ising primitive for a magnetar dipole calibration artifact', async () => {
     const artifact = await buildUlgMagnetarDipoleIsingArtifact({
       createdAt: '2026-06-05T00:00:00.000Z',
-      inputHash: 'sha256:test-magnetar-input',
+      inputHash: TEST_MAGNETAR_INPUT_HASH,
     });
     const outputs = artifact.outputs as {
       radialSamples: Array<{ radiusMeters: number; magneticFieldTesla: number }>;
@@ -204,7 +207,7 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('merges supplied calibrated reference contracts into the magnetar inventory', async () => {
     const artifact = await buildUlgMagnetarDipoleIsingArtifact({
       createdAt: '2026-06-05T00:00:00.000Z',
-      inputHash: 'sha256:test-magnetar-input',
+      inputHash: TEST_MAGNETAR_INPUT_HASH,
       references: [
         {
           id: 'radiation-transport-reference',
@@ -213,8 +216,8 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
           solverId: 'moonlab-grey-radiation-transport-reference-v0',
           schema: 'moonlab.magnetar.calibrated-reference.v0',
           role: 'peercompute-scientific-tolerance-input',
-          contractHash: 'sha256:radiation-transport-contract',
-          unitsHash: 'sha256:radiation-transport-units',
+          contractHash: VALID_RADIATION_CONTRACT_HASH,
+          unitsHash: VALID_RADIATION_UNITS_HASH,
           fieldMap: {
             opticalDepth: 'outputs.radiationReference.opticalDepth',
             luminosityFlux: 'outputs.radiationReference.luminosityFlux',
@@ -338,7 +341,7 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     const references = JSON.parse(readFileSync(magnetarReferenceContractsPath, 'utf8'));
     const artifact = await buildUlgMagnetarDipoleIsingArtifact({
       createdAt: '2026-06-05T00:00:00.000Z',
-      inputHash: 'sha256:test-magnetar-input',
+      inputHash: TEST_MAGNETAR_INPUT_HASH,
       references: references.references,
     });
     const outputs = artifact.outputs as {
@@ -418,6 +421,74 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     expect(report.unknownCount).toBe(0);
     expect(report.blockers).toEqual([]);
   });
+
+  it('normalizes checked-in magnetar reference contracts through the artifact CLI', () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [emitArtifactCli, '--normalize-references', magnetarReferenceContractsPath, '--strict'],
+      {
+        cwd: coreRoot,
+        encoding: 'utf8',
+      }
+    );
+    const suite = JSON.parse(stdout) as {
+      schema: string;
+      status: string;
+      ready: boolean;
+      familyCount: number;
+      readyCount: number;
+      suppliedCount: number;
+      suppliedReadyCount: number;
+      invalidSuppliedCount: number;
+      unknownCount: number;
+      source: {
+        builtInReferenceFamilies: string[];
+      };
+      references: Array<{
+        family: string;
+        ready: boolean;
+        scientificCoverage: boolean;
+        contractHash: string | null;
+        unitsHash: string | null;
+      }>;
+      validation: {
+        ready: boolean;
+        errors: string[];
+      };
+      blockers: string[];
+      errors: string[];
+    };
+
+    expect(suite.schema).toBe('moonlab.magnetar.normalized-reference-suite.v0');
+    expect(suite.status).toBe('reference-contract-suite-ready');
+    expect(suite.ready).toBe(true);
+    expect(suite.familyCount).toBe(4);
+    expect(suite.readyCount).toBe(4);
+    expect(suite.suppliedCount).toBe(3);
+    expect(suite.suppliedReadyCount).toBe(3);
+    expect(suite.invalidSuppliedCount).toBe(0);
+    expect(suite.unknownCount).toBe(0);
+    expect(suite.source.builtInReferenceFamilies).toEqual(['magnetosphere-mhd']);
+    expect(suite.references).toHaveLength(4);
+    expect(suite.references.map((reference) => reference.family)).toEqual([
+      'magnetosphere-mhd',
+      'pic-kinetic-plasma',
+      'radiation-transport',
+      'relativistic-correction',
+    ]);
+    expect(suite.references.every((reference) => reference.ready)).toBe(true);
+    expect(suite.references.every((reference) => reference.scientificCoverage)).toBe(true);
+    expect(suite.references.every((reference) => (
+      reference.contractHash?.match(/^sha256:[0-9a-f]{64}$/)
+    ))).toBe(true);
+    expect(suite.references.every((reference) => (
+      reference.unitsHash?.match(/^sha256:[0-9a-f]{64}$/)
+    ))).toBe(true);
+    expect(suite.validation.ready).toBe(true);
+    expect(suite.validation.errors).toEqual([]);
+    expect(suite.blockers).toEqual([]);
+    expect(suite.errors).toEqual([]);
+  });
 });
 
 function readyCliReference(id: string, family: string, solverId: string) {
@@ -428,8 +499,8 @@ function readyCliReference(id: string, family: string, solverId: string) {
     solverId,
     schema: 'moonlab.magnetar.calibrated-reference.v0',
     role: 'peercompute-scientific-tolerance-input',
-    contractHash: `sha256:${family}-contract`,
-    unitsHash: `sha256:${family}-units`,
+    contractHash: `sha256:${'3'.repeat(64)}`,
+    unitsHash: `sha256:${'4'.repeat(64)}`,
     fieldMap: {
       scalar: `outputs.${family}.scalar`,
     },
