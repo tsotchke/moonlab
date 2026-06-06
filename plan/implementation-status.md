@@ -146,8 +146,8 @@ reference data.
   that native operation covered, and a full `webgpuParity.passed` claim now
   requires all required native operations to be covered.
 - [x] Add bounded browser-executable native-operation probe kernels for
-  `hadamard`, `pauli_x`, and `pauli_z`, with fixture-level complex64 amplitude
-  checks when a real browser WebGPU adapter is available.
+  `hadamard`, `pauli_x`, `pauli_z`, and `cnot`, with fixture-level complex64
+  amplitude checks when a real browser WebGPU adapter is available.
 - [x] Preserve default no-backend evidence: in Node/no-adapter runs the native
   operation probe still records `executed=false`, `covered=false`, and
   `native-operation-probe-not-executed` for each declared gate.
@@ -155,10 +155,10 @@ reference data.
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
 scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
 probe plus standalone native-operation WGSL probes for `hadamard`, `pauli_x`,
-and `pauli_z`. It still has no full MoonLab browser WebGPU runtime backend,
-no local browser adapter execution evidence in the Node CLI path, and no
-native `cnot` operation probe. Required-backend parity remains blocked until a
-browser adapter records native coverage for every required operation
+`pauli_z`, and `cnot`. It still has no full MoonLab browser WebGPU runtime
+backend and no local browser adapter execution evidence in the Node CLI path.
+Required-backend parity remains blocked until a browser adapter records native
+coverage for every required operation
 (`hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities`),
 without counting `phase` CPU fallback as native coverage.
 
