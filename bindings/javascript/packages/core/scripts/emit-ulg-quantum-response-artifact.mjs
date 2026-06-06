@@ -24,6 +24,8 @@ if (!['bell-state', 'magnetar-dipole-ising'].includes(probe)) {
 }
 const schemaPath = resolve(args.schema ?? process.env.ULG_QUANTUM_RESPONSE_SCHEMA ?? defaultSchemaPath);
 const outputPath = args.out ? resolve(args.out) : undefined;
+const referencesPath = args.references ? resolve(args.references) : undefined;
+const references = referencesPath ? readReferenceContracts(referencesPath) : undefined;
 
 const provenance = {
   cli: relative(moonlabRoot, scriptPath),
@@ -31,12 +33,14 @@ const provenance = {
     moonlabJs: inspectFile(resolve(coreRoot, 'dist/moonlab.js')),
     moonlabWasm: inspectFile(resolve(coreRoot, 'dist/moonlab.wasm')),
   },
+  referenceContracts: referencesPath ? inspectFile(referencesPath) : undefined,
 };
 
 const artifact = probe === 'magnetar-dipole-ising'
   ? await buildUlgMagnetarDipoleIsingArtifact({
       schemaPath,
       provenance,
+      references,
     })
   : await buildUlgBellStateArtifact({
       schemaPath,
@@ -99,9 +103,11 @@ function parseArgs(argv) {
       parsed.out = argv[++index];
     } else if (arg === '--probe') {
       parsed.probe = argv[++index];
+    } else if (arg === '--references') {
+      parsed.references = argv[++index];
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path]\n'
+        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path]\n'
       );
       process.exit(0);
     } else {
@@ -109,6 +115,14 @@ function parseArgs(argv) {
     }
   }
   return parsed;
+}
+
+function readReferenceContracts(path) {
+  const parsed = JSON.parse(readFileSync(path, 'utf8'));
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.references)) return parsed.references;
+  if (Array.isArray(parsed?.outputs?.references)) return parsed.outputs.references;
+  throw new Error(`Reference contract file must be an array or contain references[]: ${path}`);
 }
 
 function inspectFile(path) {

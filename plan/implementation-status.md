@@ -56,3 +56,14 @@ Current blocker: the inventory is intentionally not a scientific reference set. 
 - [x] Keep PIC kinetic plasma, radiation transport, and relativistic correction entries blocked.
 
 Current blocker: full magnetar scientific readiness still needs calibrated PIC kinetic plasma, radiation transport, relativistic correction, and fuller MHD/force-free benchmark coverage beyond the analytic dipole-field reference.
+
+## Supplied Magnetar Reference Contracts
+
+- [x] Add an optional builder input for externally supplied calibrated reference contracts.
+- [x] Add CLI `--references <json>` support for JSON arrays, `{ "references": [...] }`, and `{ "outputs": { "references": [...] } }` shapes.
+- [x] Merge supplied contracts by inventory `id` or `family`.
+- [x] Require ready/scientific flags, solver id, SHA-256 contract/unit hashes, field maps, field tolerances, observed deltas, pass validation, and observed deltas within tolerance before replacing a blocker.
+- [x] Keep invalid supplied contracts blocked instead of granting scientific coverage.
+- [x] Add integration coverage and CLI smoke validation.
+
+Current blocker: real calibrated PIC, radiation, relativity, and fuller MHD/force-free reference contract files still need to be generated and validated before full magnetar scientific readiness can advance.

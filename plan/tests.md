@@ -54,3 +54,18 @@ Targeted validation for the calibrated-reference inventory:
 - The analytic entry's `fieldObservedDeltas` must use the same keys as `fieldTolerances` (`magneticFieldTeslaRel`, `normalizedFieldAbs`, `radialPowerLawAbs`, `divergenceProxyAbs`) so PeerCompute/Multiscale can verify every observed delta is within tolerance.
 
 This inventory now carries one reduced analytic magnetosphere dipole-field reference. It still does not provide full MHD, PIC kinetic plasma, radiation transport, or relativistic correction scientific readiness; those entries remain blockers until calibrated benchmark data, validation runs, field maps, units hashes, and tolerance contracts exist.
+
+## Supplied Magnetar Reference Contracts
+
+Targeted validation for optional calibrated-reference contract input:
+
+- Run the JavaScript core integration test that supplies a ready radiation transport reference and asserts it replaces the `radiation-transport` placeholder while the existing analytic magnetosphere entry remains ready:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Run the JavaScript core unit suite to ensure the additive builder changes do not regress Bell or magnetar helper behavior:
+  `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Build the JavaScript core so DTS generation verifies the optional reference input types:
+  `pnpm build`
+- Emit a magnetar artifact with CLI-supplied reference contracts and inspect the ready counts and provenance:
+  `pnpm ulg:artifact -- --probe magnetar-dipole-ising --references /tmp/moonlab-supplied-references.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-supplied-reference-artifact.json`
+
+Current result on 2026-06-06: focused integration passed `45/45`, focused unit passed `95/95`, package build passed with the existing package export-order warning, and the CLI smoke emitted four calibrated family entries with two ready/scientific entries after a supplied radiation contract.

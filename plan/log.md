@@ -306,3 +306,60 @@ Failures or open questions:
   radiation, relativity, full MHD/force-free coverage, and full magnetar
   scientific readiness remain blocked.
 - No push was attempted.
+
+## 2026-06-06 02:46:03 AKDT - Supplied calibrated reference contract input
+
+Prompt: User asked whether the overall ULG plan remains on track. Standing
+instructions remain local commits only, no push, and no full magnetar scientific
+readiness claims without validation.
+
+Actions attempted:
+- Added an optional `references` input to the magnetar dipole Ising artifact
+  builder so externally supplied calibrated contracts can replace inventory
+  placeholders.
+- Added CLI `--references <json>` support for JSON arrays,
+  `{ "references": [...] }`, and `{ "outputs": { "references": [...] } }`.
+- Merged supplied contracts by inventory `id` or `family`, but only marked a
+  supplied contract ready when it had ready/scientific flags, solver id,
+  SHA-256 contract/unit hashes, non-empty field maps/tolerances/observed deltas,
+  pass validation, and every observed delta within tolerance.
+- Added integration coverage for a supplied radiation transport reference.
+- Updated the ULG quantum-response artifact guide, implementation status,
+  testing strategy, and this log.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/scripts/emit-ulg-quantum-response-artifact.mjs`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --references /tmp/moonlab-supplied-references.json --out /tmp/moonlab-supplied-reference-artifact.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-supplied-reference-artifact.json`
+
+Test results:
+- Initial focused MoonLab tests failed because the in-progress patch duplicated
+  the existing `isRecord` helper; the duplicate helper was removed.
+- Initial `pnpm build` failed during DTS generation because the validation record
+  was not explicitly typed; the validation object and evidence map parameter
+  were annotated.
+- PASS: focused integration suite passed `45/45`.
+- PASS: focused unit suite passed `95/95`.
+- PASS: package build completed; tsup repeated the existing package export-order
+  warning for `types`.
+- PASS: CLI smoke emitted four calibrated family entries with two ready entries,
+  including supplied `radiation-transport` solver
+  `moonlab-grey-radiation-transport-reference-v0`, scope
+  `supplied-calibrated-reference-contract`, and no blocker.
+
+Failures or open questions:
+- This is plumbing for validated supplied reference contracts. It does not
+  provide real PIC, radiation, relativity, full MHD/force-free coverage, or full
+  magnetar scientific readiness by itself.
+- No push was attempted.
