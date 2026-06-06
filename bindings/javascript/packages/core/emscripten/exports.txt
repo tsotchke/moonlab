@@ -8,6 +8,8 @@ _free
 # =============================================================================
 _quantum_state_init
 _quantum_state_free
+_quantum_state_create
+_quantum_state_destroy
 _quantum_state_reset
 _quantum_state_clone
 _quantum_state_normalize
