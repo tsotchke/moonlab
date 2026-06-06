@@ -234,6 +234,23 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
           status: 'calibrated-reference-ready',
           ready: true,
           scientificCoverage: true,
+          fidelityRuntimeScope: {
+            schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+            fidelityTier: 'reduced-calibrated-runtime-fixture',
+            runtimeScope: 'reduced-scalar-reference-contract',
+            readinessClaim: 'integration-tolerance-gate-only',
+            reducedCalibratedRuntimeFixture: true,
+            hostRuntimeSmokeFixture: false,
+            fullFidelityMagnetarSimulation: false,
+            fullPhysicsValidation: false,
+            excludedPhysics: [
+              'charge-conserving-pic',
+              'spectral-angular-radiation-transport',
+              'gr-or-grmhd-spacetime-solve',
+              'full-resistive-mhd-or-force-free-magnetosphere',
+              'validated-production-magnetar-closure',
+            ],
+          },
           scope: 'supplied-calibrated-reference-contract',
           validationStatus: 'pass',
           validation: {
@@ -478,6 +495,16 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     ]);
     expect(suite.references.every((reference) => reference.ready)).toBe(true);
     expect(suite.references.every((reference) => reference.scientificCoverage)).toBe(true);
+    expect(suite.fidelityRuntimeScope).toMatchObject({
+      schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+      runtimeScope: 'reduced-scalar-reference-suite',
+      fullFidelityMagnetarSimulation: false,
+      fullPhysicsValidation: false,
+    });
+    expect(suite.references.every((reference) => (
+      reference.fidelityRuntimeScope.fullFidelityMagnetarSimulation === false
+      && reference.fidelityRuntimeScope.fullPhysicsValidation === false
+    ))).toBe(true);
     expect(suite.references.every((reference) => (
       reference.contractHash?.match(/^sha256:[0-9a-f]{64}$/)
     ))).toBe(true);
@@ -514,6 +541,23 @@ function readyCliReference(id: string, family: string, solverId: string) {
     status: 'calibrated-reference-ready',
     ready: true,
     scientificCoverage: true,
+    fidelityRuntimeScope: {
+      schema: 'ulg.magnetar.fidelity-runtime-scope.v0',
+      fidelityTier: 'reduced-calibrated-runtime-fixture',
+      runtimeScope: 'reduced-scalar-reference-contract',
+      readinessClaim: 'integration-tolerance-gate-only',
+      reducedCalibratedRuntimeFixture: true,
+      hostRuntimeSmokeFixture: false,
+      fullFidelityMagnetarSimulation: false,
+      fullPhysicsValidation: false,
+      excludedPhysics: [
+        'charge-conserving-pic',
+        'spectral-angular-radiation-transport',
+        'gr-or-grmhd-spacetime-solve',
+        'full-resistive-mhd-or-force-free-magnetosphere',
+        'validated-production-magnetar-closure',
+      ],
+    },
     scope: 'supplied-calibrated-reference-contract',
     validationStatus: 'pass',
     validation: {

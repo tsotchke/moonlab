@@ -553,3 +553,40 @@ Failures or open questions:
 - The normalized suite still normalizes the reduced scalar reference contracts already present in MoonLab. It does not create authoritative charge-conserving PIC, spectral radiation transport, GR/GRMHD, full MHD/force-free, or complete magnetar simulation reference data.
 - No PeerCompute, ULG, or Eshkol files were modified.
 - No push was attempted.
+
+## 2026-06-06 11:06:16 AKDT - Magnetar fidelity runtime scope contract
+
+Actions attempted:
+- Added the additive `ulg.magnetar.fidelity-runtime-scope.v0` object to the
+  normalized magnetar reference suite and every calibrated reference entry.
+- Added helper normalization so supplied reference contracts preserve the scope
+  while still forcing `fullFidelityMagnetarSimulation = false` and
+  `fullPhysicsValidation = false`.
+- Marked inventory-only fallback references with an inventory-only readiness
+  claim and no reduced calibrated runtime fixture claim.
+- Updated the checked-in reduced calibrated reference-contract JSON with
+  suite-level and per-reference scope metadata.
+- Added focused unit and integration assertions for the suite/reference scope.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/references/magnetar-calibrated-reference-contracts.json`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Test results:
+- PASS: `pnpm --dir bindings/javascript/packages/core build:ts`.
+- PASS: `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts` passed `14/14`.
+- PASS: `pnpm --dir bindings/javascript/packages/core exec vitest run --config vitest.integration.config.ts src/__tests__/ulg-quantum-response-artifact.integration.test.ts` passed `7/7`.
+- PASS: `pnpm --dir bindings/javascript/packages/core build:wasm`.
+
+Failures or open questions:
+- This contract scopes the reduced fixture data and prevents overclaiming.
+  Supplied references without an explicit reduced fidelity/runtime scope, or
+  with full-fidelity/full-physics overclaims, now stay invalid. It does not add
+  authoritative charge-conserving PIC, spectral radiation transport, GR/GRMHD,
+  full MHD/force-free, or complete magnetar simulation data.
+- No push was attempted.
