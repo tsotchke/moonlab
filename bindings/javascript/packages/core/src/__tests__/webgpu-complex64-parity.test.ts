@@ -5,10 +5,13 @@ import {
   MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED,
+  MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
+  runMoonlabBrowserWebGpuComplex64NativeOperationProbe,
   runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   validateMoonlabWebGpuComplex64ParityScope,
+  type MoonlabBrowserWebGpuComplex64NativeOperationProbe,
   type MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   type MoonlabWebGpuComplex64ParityScopeArtifact,
 } from '../webgpu-complex64-parity';
@@ -60,6 +63,23 @@ describe('WebGPU complex64 parity scope contract', () => {
         executed: false,
         passed: false,
         coveredNativeOperations: [],
+      })
+    );
+    expect(artifact.browserNativeOperationProbe).toEqual(
+      expect.objectContaining({
+        schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+        executed: false,
+        passed: false,
+        coveredNativeOperations: [],
+      })
+    );
+    expect(artifact.browserNativeOperationProbe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'hadamard',
+        executed: false,
+        passed: false,
+        covered: false,
+        blocker: 'native-operation-probe-not-executed',
       })
     );
     expect(artifact.blockers).toContain('browser-webgpu-adapter-unavailable');
@@ -157,6 +177,75 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.contractValidation.valid).toBe(true);
   });
 
+  it('records a partial browser native hadamard probe without claiming full parity', () => {
+    const browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe = {
+      schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-native-operation-probe',
+      executed: true,
+      passed: true,
+      coveredNativeOperations: ['hadamard'],
+      operationResults: [
+        {
+          operation: 'hadamard',
+          executed: true,
+          passed: true,
+          covered: true,
+          fixtureResults: [
+            {
+              fixtureId: 'hadamard-test-fixture',
+              qubitCount: 1,
+              amplitudeCount: 2,
+              operation: 'hadamard',
+              referenceRepresentation: 'cpu-complex64-interleaved-f32',
+              complex64Representation: 'complex64-interleaved-f32',
+              browserWebGpuKernel: 'hadamard',
+              inputAmplitudes: [1, 0, 0, 0],
+              referenceAmplitudes: [Math.SQRT1_2, 0, Math.SQRT1_2, 0],
+              browserWebGpuAmplitudes: [Math.SQRT1_2, 0, Math.SQRT1_2, 0],
+              maxAmplitudeAbsDiff: 0,
+              passed: true,
+            },
+          ],
+          maxAmplitudeAbsDiff: 0,
+          tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+          reason: 'test browser hadamard kernel matched',
+        },
+      ],
+      maxAmplitudeAbsDiff: 0,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: 'test browser hadamard kernel matched',
+    };
+    const artifact = buildMoonlabWebGpuComplex64ParityScope({
+      generatedAt: '2026-06-06T20:00:00.000Z',
+      backendAvailable: true,
+      browserNativeOperationProbe,
+    });
+
+    expect(artifact.coverage.nativeWebGpu).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: 'hadamard',
+          covered: true,
+          status: 'covered-by-browser-webgpu',
+        }),
+        expect.objectContaining({
+          operation: 'compute_probabilities',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+        expect.objectContaining({
+          operation: 'cnot',
+          covered: false,
+          status: 'not-run-runtime-backend-not-wired',
+        }),
+      ])
+    );
+    expect(artifact.webgpuParity.executed).toBe(false);
+    expect(artifact.webgpuParity.passed).toBe(false);
+    expect(artifact.blockers).toContain('native-webgpu-operation-coverage-not-yet-recorded');
+    expect(artifact.contractValidation.valid).toBe(true);
+  });
+
   it('rejects a WebGPU parity pass when native gate coverage is partial', () => {
     const artifact = buildMoonlabWebGpuComplex64ParityScope({
       generatedAt: '2026-06-06T20:00:00.000Z',
@@ -221,6 +310,27 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(probe.reason).toContain('navigator.gpu.requestAdapter is unavailable');
   });
 
+  it('exposes a no-adapter browser native-operation probe path', async () => {
+    const probe = await runMoonlabBrowserWebGpuComplex64NativeOperationProbe({
+      gpu: null,
+    });
+
+    expect(probe.schema).toBe(MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA);
+    expect(probe.executed).toBe(false);
+    expect(probe.passed).toBe(false);
+    expect(probe.coveredNativeOperations).toEqual([]);
+    expect(probe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'hadamard',
+        executed: false,
+        passed: false,
+        covered: false,
+        blocker: 'native-operation-probe-not-executed',
+      })
+    );
+    expect(probe.reason).toContain('navigator.gpu.requestAdapter is unavailable');
+  });
+
   it('builds a probe-aware scope artifact without executing WebGPU outside an adapter', async () => {
     const artifact = await buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe({
       generatedAt: '2026-06-06T20:00:00.000Z',
@@ -228,6 +338,14 @@ describe('WebGPU complex64 parity scope contract', () => {
     });
 
     expect(artifact.browserKernelProbe.executed).toBe(false);
+    expect(artifact.browserNativeOperationProbe.executed).toBe(false);
+    expect(artifact.browserNativeOperationProbe.operationResults).toContainEqual(
+      expect.objectContaining({
+        operation: 'hadamard',
+        executed: false,
+        passed: false,
+      })
+    );
     expect(artifact.webgpuParity.executed).toBe(false);
     expect(artifact.webgpuParity.passed).toBe(false);
     expect(artifact.blockers).toContain('browser-webgpu-adapter-unavailable');

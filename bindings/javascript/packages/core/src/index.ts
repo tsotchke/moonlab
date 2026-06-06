@@ -94,11 +94,14 @@ export type { IsingModelOptions } from './ising-model';
 export {
   buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
   buildMoonlabWebGpuComplex64ParityScope,
+  runMoonlabBrowserWebGpuComplex64NativeOperationProbe,
   runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   validateMoonlabWebGpuComplex64ParityScope,
   MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED,
+  MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS,
+  MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
 } from './webgpu-complex64-parity';
@@ -109,6 +112,9 @@ export type {
   MoonlabBrowserWebGpuAdapter,
   MoonlabBrowserWebGpuBuffer,
   MoonlabBrowserWebGpuCommandEncoder,
+  MoonlabBrowserWebGpuComplex64NativeOperationProbe,
+  MoonlabBrowserWebGpuComplex64NativeOperationProbeFixture,
+  MoonlabBrowserWebGpuComplex64NativeOperationProbeOperationResult,
   MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   MoonlabBrowserWebGpuComplex64ProbabilityKernelProbeFixture,
   MoonlabBrowserWebGpuComputePassEncoder,
@@ -120,6 +126,7 @@ export type {
   MoonlabWebGpuComplex64ParityScopeArtifact,
   MoonlabWebGpuComplex64ParityValidation,
   MoonlabWebGpuComplex64ReducedFixtureResult,
+  RunMoonlabBrowserWebGpuComplex64NativeOperationProbeOptions,
   RunMoonlabBrowserWebGpuComplex64ProbabilityKernelProbeOptions,
 } from './webgpu-complex64-parity';
 
