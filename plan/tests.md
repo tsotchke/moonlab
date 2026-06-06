@@ -141,16 +141,20 @@ contract is present at suite and reference level with
 
 Current `ulg` branch state:
 
-- No active browser WebGPU runtime or parity probe exists on this branch.
-- Existing WebGPU artifacts are stale no-backend records only and should not be
-  treated as parity evidence.
-- This docs-only blocker review is validated with:
-  `git diff --check`
+- The reduced-fixture parity-scope contract and CLI exist on this branch.
+- Existing older WebGPU artifacts remain stale no-backend records and should not
+  be treated as native parity evidence.
+- The default CLI emits explicit `backendAvailable = false` scope evidence when
+  no browser WebGPU adapter/runtime is available.
 
-Targeted validation for the next bounded parity patch:
+Targeted validation:
 
 - Run the TypeScript build for any new contract/probe exports:
   `pnpm --dir bindings/javascript/packages/core build:ts`
+- Run the focused parity-scope unit coverage:
+  `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- Emit the default no-backend reduced-fixture scope artifact:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json`
 - Run the focused ULG artifact unit suite to ensure the reduced magnetar scope
   contract still prevents full-physics overclaims:
   `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
