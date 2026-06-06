@@ -1,4 +1,5 @@
 import { QuantumState } from './quantum-state';
+import { IsingModel } from './ising-model';
 
 export const ULG_QUANTUM_RESPONSE_SCHEMA_TITLE =
   'ULG Quantum Response Artifact v0.5';
@@ -81,6 +82,34 @@ export interface UlgBellStateArtifactOptions {
   provenance?: Record<string, unknown>;
 }
 
+export interface UlgMagnetarDipoleIsingArtifactOptions {
+  createdAt?: string;
+  taskKind?: string;
+  tolerance?: number;
+  input?: Partial<UlgMagnetarDipoleIsingInput>;
+  inputHash?: string;
+  artifactId?: string;
+  packageVersion?: string;
+  schemaPath?: string;
+  provenance?: Record<string, unknown>;
+}
+
+export interface UlgMagnetarDipoleIsingInput {
+  surfaceMagneticFieldTesla: number;
+  stellarRadiusMeters: number;
+  radialSamplesMeters: number[];
+  couplingStrength: number;
+  bitstrings: number[];
+}
+
+export interface UlgMagnetarDipoleIsingModel {
+  localFields: number[];
+  couplings: Array<{ qubit1: number; qubit2: number; value: number }>;
+  fieldScaleTesla: number;
+  physicalModel: 'axisymmetric-dipole-falloff';
+  spinConvention: 'bit-0-plus-one-bit-1-minus-one';
+}
+
 interface BellTaskInput {
   numQubits: 2;
   circuit: [
@@ -106,6 +135,12 @@ const DEFAULT_BELL_TASK_INPUT: BellTaskInput = {
 
 const EXPECTED_BELL_PROBABILITIES = [0.5, 0, 0, 0.5];
 const DEFAULT_TOLERANCE = 1e-9;
+const DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT = {
+  surfaceMagneticFieldTesla: 1e11,
+  stellarRadiusMeters: 10_000,
+  radialSamplesMeters: [10_000, 15_000, 20_000],
+  couplingStrength: 0.125,
+} satisfies Omit<UlgMagnetarDipoleIsingInput, 'bitstrings'>;
 
 export async function buildUlgBellStateArtifact(
   options: UlgBellStateArtifactOptions = {}
@@ -237,6 +272,254 @@ export async function buildUlgBellStateArtifact(
   }
 }
 
+export async function buildUlgMagnetarDipoleIsingArtifact(
+  options: UlgMagnetarDipoleIsingArtifactOptions = {}
+): Promise<UlgQuantumResponseArtifact> {
+  const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
+  const taskKind = options.taskKind ?? 'magnetar-dipole-ising-calibration';
+  const createdAt = options.createdAt ?? new Date().toISOString();
+  const input = buildMagnetarDipoleIsingInput(options.input);
+  const numQubits = input.radialSamplesMeters.length;
+  const isingModel = buildMagnetarDipoleIsingModel(input);
+  const canonicalInput = canonicalJson({
+    input,
+    isingModel,
+  });
+  const inputHash = options.inputHash ?? await sha256Hex(canonicalInput);
+
+  let model: IsingModel | undefined;
+  try {
+    const liveModel = await IsingModel.create({ numQubits });
+    model = liveModel;
+    for (let qubit = 0; qubit < isingModel.localFields.length; qubit += 1) {
+      liveModel.setField(qubit, isingModel.localFields[qubit]);
+    }
+    for (const coupling of isingModel.couplings) {
+      liveModel.setCoupling(coupling.qubit1, coupling.qubit2, coupling.value);
+    }
+
+    const radialSamples = input.radialSamplesMeters.map((radiusMeters, index) => {
+      const magneticFieldTesla = magnetarDipoleFieldTesla(input, radiusMeters);
+      return {
+        qubit: index,
+        radiusMeters,
+        magneticFieldTesla: normalizeNumber(magneticFieldTesla),
+        normalizedField: normalizeNumber(magneticFieldTesla / isingModel.fieldScaleTesla),
+        localField: isingModel.localFields[index],
+      };
+    });
+    const evaluations = input.bitstrings.map((bitstring) => {
+      const observedEnergy = normalizeNumber(liveModel.evaluate(bitstring));
+      const referenceEnergy = normalizeNumber(
+        evaluateIsingReferenceEnergy(isingModel, bitstring)
+      );
+      return {
+        bitstring,
+        bitString: basisBitString(bitstring, numQubits),
+        spins: spinsFromBitstring(bitstring, numQubits),
+        observedEnergy,
+        referenceEnergy,
+        energyDelta: normalizeNumber(Math.abs(observedEnergy - referenceEnergy)),
+      };
+    });
+    const maxEnergyDelta = evaluations.reduce((maxDelta, evaluation) => {
+      return Math.max(maxDelta, evaluation.energyDelta);
+    }, 0);
+    const parityPassed = maxEnergyDelta <= tolerance;
+    const monotonicFieldPassed = radialSamples.every((sample, index) => {
+      if (index === 0) {
+        return true;
+      }
+      return sample.magneticFieldTesla <= radialSamples[index - 1].magneticFieldTesla;
+    });
+    const groundState = evaluations.reduce((best, evaluation) => {
+      return evaluation.observedEnergy < best.observedEnergy ? evaluation : best;
+    }, evaluations[0]);
+
+    const artifact: UlgQuantumResponseArtifact = {
+      artifactId:
+        options.artifactId ?? `moonlab-${taskKind}-${inputHash.replace(/^sha256:/, '').slice(0, 16)}`,
+      sourceService: 'moonlab',
+      taskKind,
+      inputHash,
+      method: 'moonlab-js-core-wasm-ising-evaluator',
+      representation: 'magnetar-dipole-normalized-ising-calibration',
+      outputs: {
+        taskInput: input,
+        radialSamples,
+        isingModel,
+        evaluations,
+        summary: {
+          numQubits,
+          evaluatedBitstrings: evaluations.length,
+          groundState: {
+            bitstring: groundState.bitstring,
+            bitString: groundState.bitString,
+            observedEnergy: groundState.observedEnergy,
+          },
+          scope: 'calibration-probe-not-full-magnetar-simulation',
+        },
+      },
+      uncertainty: {
+        stochastic: false,
+        shots: 0,
+        energyTolerance: tolerance,
+        numericPrecision: 'float64',
+        modelAssumptions: [
+          'axisymmetric dipole falloff B(r)=B_surface*(R/r)^3',
+          'normalized local Ising fields only',
+          'nearest-neighbor ferromagnetic coupling only',
+          'no plasma, radiation, relativistic, or MHD evolution',
+        ],
+      },
+      validation: {
+        schemaCompatible: false,
+        schemaTitle: DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA.title,
+        schemaPath: options.schemaPath,
+        checks: [],
+        errors: [],
+      },
+      provenance: {
+        createdAt,
+        packageName: '@moonlab/quantum-core',
+        packageVersion: options.packageVersion ?? '0.1.1',
+        runtime: runtimeLabel(),
+        executionTarget: 'wasm-cpu',
+        corePrimitive: 'ising_model_evaluate',
+        networkingStarted: false,
+        gpuSchedulingStarted: false,
+        ...options.provenance,
+      },
+      parity: {
+        reference: 'javascript-ising-energy-reference',
+        observedEnergies: evaluations.map((evaluation) => evaluation.observedEnergy),
+        expectedEnergies: evaluations.map((evaluation) => evaluation.referenceEnergy),
+        maxEnergyDelta: normalizeNumber(maxEnergyDelta),
+        tolerance,
+        passed: parityPassed,
+      },
+    };
+
+    const schemaResult = validateUlgQuantumResponseArtifact(
+      artifact,
+      DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA
+    );
+    artifact.validation = {
+      schemaCompatible: schemaResult.valid,
+      schemaTitle: DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA.title,
+      schemaPath: options.schemaPath,
+      checks: [
+        {
+          name: 'ulg-schema-required-fields',
+          passed: schemaResult.valid,
+          details: { errors: schemaResult.errors },
+        },
+        {
+          name: 'ising-energy-parity',
+          passed: parityPassed,
+          details: {
+            maxEnergyDelta: artifact.parity.maxEnergyDelta,
+            tolerance,
+          },
+        },
+        {
+          name: 'dipole-field-monotonicity',
+          passed: monotonicFieldPassed,
+          details: {
+            radialSamples: radialSamples.map((sample) => ({
+              radiusMeters: sample.radiusMeters,
+              magneticFieldTesla: sample.magneticFieldTesla,
+            })),
+          },
+        },
+        {
+          name: 'no-networking',
+          passed: true,
+          details: { networkingStarted: false },
+        },
+        {
+          name: 'no-gpu-scheduling',
+          passed: true,
+          details: { gpuSchedulingStarted: false },
+        },
+      ],
+      errors: schemaResult.errors,
+    };
+
+    return artifact;
+  } finally {
+    model?.dispose();
+  }
+}
+
+export function buildMagnetarDipoleIsingInput(
+  input: Partial<UlgMagnetarDipoleIsingInput> = {}
+): UlgMagnetarDipoleIsingInput {
+  const radialSamplesMeters =
+    input.radialSamplesMeters?.slice() ??
+    DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT.radialSamplesMeters.slice();
+  const defaultBitstrings = allBitstringsForQubits(radialSamplesMeters.length);
+  const result = {
+    surfaceMagneticFieldTesla:
+      input.surfaceMagneticFieldTesla ??
+      DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT.surfaceMagneticFieldTesla,
+    stellarRadiusMeters:
+      input.stellarRadiusMeters ??
+      DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT.stellarRadiusMeters,
+    radialSamplesMeters,
+    couplingStrength:
+      input.couplingStrength ??
+      DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT.couplingStrength,
+    bitstrings: input.bitstrings?.slice() ?? defaultBitstrings,
+  };
+
+  validateMagnetarDipoleIsingInput(result);
+  return result;
+}
+
+export function buildMagnetarDipoleIsingModel(
+  input: UlgMagnetarDipoleIsingInput
+): UlgMagnetarDipoleIsingModel {
+  validateMagnetarDipoleIsingInput(input);
+
+  const magneticFieldsTesla = input.radialSamplesMeters.map((radiusMeters) => {
+    return magnetarDipoleFieldTesla(input, radiusMeters);
+  });
+  const fieldScaleTesla = Math.max(...magneticFieldsTesla.map(Math.abs));
+  const localFields = magneticFieldsTesla.map((fieldTesla) => {
+    return normalizeNumber(-fieldTesla / fieldScaleTesla);
+  });
+  const couplings = input.radialSamplesMeters.slice(1).map((_, index) => ({
+    qubit1: index,
+    qubit2: index + 1,
+    value: normalizeNumber(-input.couplingStrength),
+  }));
+
+  return {
+    localFields,
+    couplings,
+    fieldScaleTesla: normalizeNumber(fieldScaleTesla),
+    physicalModel: 'axisymmetric-dipole-falloff',
+    spinConvention: 'bit-0-plus-one-bit-1-minus-one',
+  };
+}
+
+export function evaluateIsingReferenceEnergy(
+  model: UlgMagnetarDipoleIsingModel,
+  bitstring: number
+): number {
+  const numQubits = model.localFields.length;
+  validateBitstring(bitstring, numQubits);
+  const spins = spinsFromBitstring(bitstring, numQubits);
+  const fieldEnergy = model.localFields.reduce((energy, field, index) => {
+    return energy + field * spins[index];
+  }, 0);
+  const couplingEnergy = model.couplings.reduce((energy, coupling) => {
+    return energy + coupling.value * spins[coupling.qubit1] * spins[coupling.qubit2];
+  }, 0);
+  return normalizeNumber(fieldEnergy + couplingEnergy);
+}
+
 export function validateUlgQuantumResponseArtifact(
   artifact: unknown,
   schema: QuantumResponseArtifactSchema = DEFAULT_ULG_QUANTUM_RESPONSE_SCHEMA
@@ -315,6 +598,85 @@ function byteToHex(byte: number): string {
 
 function basisBitString(index: number, numQubits: number): string {
   return index.toString(2).padStart(numQubits, '0');
+}
+
+function allBitstringsForQubits(numQubits: number): number[] {
+  validateNumQubits(numQubits);
+  return Array.from({ length: 2 ** numQubits }, (_, index) => index);
+}
+
+function magnetarDipoleFieldTesla(
+  input: UlgMagnetarDipoleIsingInput,
+  radiusMeters: number
+): number {
+  return input.surfaceMagneticFieldTesla *
+    (input.stellarRadiusMeters / radiusMeters) ** 3;
+}
+
+function spinsFromBitstring(bitstring: number, numQubits: number): number[] {
+  validateBitstring(bitstring, numQubits);
+  return Array.from({ length: numQubits }, (_, qubit) => {
+    return (bitstring >> qubit) & 1 ? -1 : 1;
+  });
+}
+
+function validateMagnetarDipoleIsingInput(input: UlgMagnetarDipoleIsingInput): void {
+  assertPositiveFinite(input.surfaceMagneticFieldTesla, 'surfaceMagneticFieldTesla');
+  assertPositiveFinite(input.stellarRadiusMeters, 'stellarRadiusMeters');
+  assertFiniteNumber(input.couplingStrength, 'couplingStrength');
+  if (input.couplingStrength < 0) {
+    throw new Error('couplingStrength must be non-negative');
+  }
+  validateNumQubits(input.radialSamplesMeters.length);
+
+  for (const radiusMeters of input.radialSamplesMeters) {
+    assertPositiveFinite(radiusMeters, 'radialSamplesMeters');
+    if (radiusMeters < input.stellarRadiusMeters) {
+      throw new Error('radialSamplesMeters must be at or outside stellarRadiusMeters');
+    }
+  }
+  for (let index = 1; index < input.radialSamplesMeters.length; index += 1) {
+    if (input.radialSamplesMeters[index] < input.radialSamplesMeters[index - 1]) {
+      throw new Error('radialSamplesMeters must be sorted from inner to outer radius');
+    }
+  }
+  if (input.bitstrings.length === 0) {
+    throw new Error('bitstrings must contain at least one value');
+  }
+  for (const bitstring of input.bitstrings) {
+    validateBitstring(bitstring, input.radialSamplesMeters.length);
+  }
+}
+
+function validateNumQubits(numQubits: number): void {
+  if (!Number.isInteger(numQubits) || numQubits < 1 || numQubits > 12) {
+    throw new Error('magnetar dipole Ising probe supports 1 to 12 radial samples');
+  }
+}
+
+function validateBitstring(bitstring: number, numQubits: number): void {
+  const maxBitstring = 2 ** numQubits;
+  if (
+    !Number.isInteger(bitstring) ||
+    bitstring < 0 ||
+    bitstring >= maxBitstring ||
+    !Number.isSafeInteger(bitstring)
+  ) {
+    throw new Error(`bitstring must be an integer between 0 and ${maxBitstring - 1}`);
+  }
+}
+
+function assertPositiveFinite(value: number, label: string): void {
+  assertFiniteNumber(value, label);
+  if (value <= 0) {
+    throw new Error(`${label} must be positive`);
+  }
+}
+
+function assertFiniteNumber(value: number, label: string): void {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be finite`);
+  }
 }
 
 function normalizeNumber(value: number): number {

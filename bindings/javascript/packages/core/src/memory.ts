@@ -363,6 +363,18 @@ export interface MoonlabModule {
     qubit2: number
   ): number;
 
+  // Ising/QAOA primitives
+  _ising_model_create(numQubits: number): number;
+  _ising_model_free(modelPtr: number): void;
+  _ising_model_set_coupling(
+    modelPtr: number,
+    qubit1: number,
+    qubit2: number,
+    value: number
+  ): number;
+  _ising_model_set_field(modelPtr: number, qubit: number, value: number): number;
+  _ising_model_evaluate(modelPtr: number, bitstring: bigint): number;
+
   // Ready promise
   ready: Promise<MoonlabModule>;
 
