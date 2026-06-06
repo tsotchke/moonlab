@@ -67,3 +67,16 @@ Current blocker: full magnetar scientific readiness still needs calibrated PIC k
 - [x] Add integration coverage and CLI smoke validation.
 
 Current blocker: real calibrated PIC, radiation, relativity, and fuller MHD/force-free reference contract files still need to be generated and validated before full magnetar scientific readiness can advance.
+
+## Magnetar Reference Contract Validator
+
+- [x] Read the current supplied-reference merge rules and keep validation aligned with them.
+- [x] Export `validateMagnetarReferenceContracts()` from the JavaScript core package.
+- [x] Report the four magnetar calibrated-reference families with ready/scientific flags, hash validity, field-map/tolerance/delta readiness, tolerance failures, blockers, and errors.
+- [x] Report unknown ids/families and duplicate family submissions without silently dropping them.
+- [x] Add CLI `--validate-references <json>` support with `--strict` controlling nonzero exit behavior.
+- [x] Add focused unit tests for valid supplied references, missing hashes, empty field maps, unknown ids/families, and deltas exceeding tolerance.
+- [x] Add CLI integration coverage against the built package export.
+- [x] Run focused unit/integration/build/manual CLI validation.
+
+Current blocker: the validator can certify contract shape and tolerance deltas, but it still needs real calibrated PIC, radiation, relativity, and fuller MHD/force-free reference files before full magnetar scientific readiness can pass.

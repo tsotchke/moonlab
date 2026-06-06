@@ -1,8 +1,17 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   buildUlgBellStateArtifact,
   buildUlgMagnetarDipoleIsingArtifact,
 } from '../ulg-quantum-response-artifact';
+
+const testFilePath = fileURLToPath(import.meta.url);
+const coreRoot = resolve(dirname(testFilePath), '../..');
+const emitArtifactCli = resolve(coreRoot, 'scripts/emit-ulg-quantum-response-artifact.mjs');
 
 describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('runs the core WASM Bell task and emits parity-ready artifact JSON', async () => {
@@ -254,4 +263,104 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     expect(radiationReference?.blocker).toBeNull();
     expect(outputs.references.filter((reference) => reference.ready)).toHaveLength(2);
   });
+
+  it('validates supplied reference contracts through the artifact CLI', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'moonlab-reference-contracts-'));
+    const referencesPath = join(tempDir, 'references.json');
+    writeFileSync(
+      referencesPath,
+      JSON.stringify(
+        [
+          readyCliReference(
+            'pic-kinetic-plasma-reference',
+            'pic-kinetic-plasma',
+            'moonlab-pic-reference-v0'
+          ),
+          readyCliReference(
+            'radiation-transport-reference',
+            'radiation-transport',
+            'moonlab-radiation-reference-v0'
+          ),
+          readyCliReference(
+            'relativistic-correction-reference',
+            'relativistic-correction',
+            'moonlab-relativity-reference-v0'
+          ),
+        ],
+        null,
+        2
+      )
+    );
+
+    const stdout = execFileSync(
+      process.execPath,
+      [emitArtifactCli, '--validate-references', referencesPath, '--strict'],
+      {
+        cwd: coreRoot,
+        encoding: 'utf8',
+      }
+    );
+    const report = JSON.parse(stdout) as {
+      schema: string;
+      status: string;
+      ready: boolean;
+      familyCount: number;
+      readyCount: number;
+      suppliedCount: number;
+      suppliedReadyCount: number;
+      invalidSuppliedCount: number;
+      unknownCount: number;
+      entries: Array<{
+        family: string;
+        supplied: boolean;
+        ready: boolean;
+      }>;
+    };
+
+    expect(report.schema).toBe('moonlab.magnetar.reference-contract-validation-report.v0');
+    expect(report.status).toBe('reference-contract-suite-ready');
+    expect(report.ready).toBe(true);
+    expect(report.familyCount).toBe(4);
+    expect(report.readyCount).toBe(4);
+    expect(report.suppliedCount).toBe(3);
+    expect(report.suppliedReadyCount).toBe(3);
+    expect(report.invalidSuppliedCount).toBe(0);
+    expect(report.unknownCount).toBe(0);
+    expect(report.entries.find((entry) => entry.family === 'magnetosphere-mhd')?.supplied).toBe(false);
+    expect(report.entries.filter((entry) => entry.supplied && entry.ready)).toHaveLength(3);
+  });
 });
+
+function readyCliReference(id: string, family: string, solverId: string) {
+  return {
+    id,
+    family,
+    provider: 'moonlab',
+    solverId,
+    schema: 'moonlab.magnetar.calibrated-reference.v0',
+    role: 'peercompute-scientific-tolerance-input',
+    contractHash: `sha256:${family}-contract`,
+    unitsHash: `sha256:${family}-units`,
+    fieldMap: {
+      scalar: `outputs.${family}.scalar`,
+    },
+    fieldTolerances: {
+      scalarAbs: 1e-6,
+    },
+    fieldObservedDeltas: {
+      scalarAbs: 0,
+    },
+    label: `${family} supplied reference`,
+    status: 'calibrated-reference-ready',
+    ready: true,
+    scientificCoverage: true,
+    scope: 'supplied-calibrated-reference-contract',
+    validationStatus: 'pass',
+    validation: {
+      status: 'pass',
+      evidence: [`${family} reduced reference contract.`],
+    },
+    blocker: null,
+    blockers: [],
+  };
+}

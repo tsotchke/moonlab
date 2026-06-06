@@ -25,6 +25,15 @@ pnpm ulg:artifact -- --probe magnetar-dipole-ising --references magnetar-referen
 
 The references file may be a JSON array, `{ "references": [...] }`, or `{ "outputs": { "references": [...] } }`. A supplied entry only replaces its inventory placeholder when it names a known `id` or `family`, declares `ready: true` and `scientificCoverage: true`, includes a solver id, SHA-256 contract and units hashes, field maps, tolerances, observed deltas, and pass validation, with every observed delta within its tolerance. Invalid supplied entries leave the original blocker in place and add a supplied-reference readiness blocker.
 
+Reference contracts can also be validated without emitting a new artifact:
+
+```bash
+pnpm ulg:artifact -- --validate-references magnetar-reference-contracts.json
+pnpm ulg:artifact -- --validate-references magnetar-reference-contracts.json --strict
+```
+
+The validation report uses schema `moonlab.magnetar.reference-contract-validation-report.v0` and reports each calibrated family, supplied/ready flags, hash validity, field-map/tolerance/delta readiness, tolerance failures, blockers, and errors. Without `--strict`, invalid or partial reports still exit `0` so the JSON can be inspected. With `--strict`, the CLI exits nonzero unless all four magnetar reference families are ready and no supplied reference is invalid or unknown.
+
 The emitted JSON includes the schema-required fields plus:
 
 - `validation`: schema compatibility, probe parity, no-networking, and no-GPU-scheduling checks.

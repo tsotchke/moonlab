@@ -363,3 +363,70 @@ Failures or open questions:
   provide real PIC, radiation, relativity, full MHD/force-free coverage, or full
   magnetar scientific readiness by itself.
 - No push was attempted.
+
+## 2026-06-06 03:19:33 AKDT - Standalone magnetar reference contract validator
+
+Prompt: User asked whether the overall ULG plan remains on track and instructed
+continued local-only work. A read-only MoonLab sidecar recommended a validation
+slice instead of pretending MoonLab already has missing magnetar solvers.
+
+Actions attempted:
+- Added exported `validateMagnetarReferenceContracts()` so calibrated magnetar
+  reference contracts can be checked without emitting a new artifact.
+- Reused the same readiness rules as supplied-reference merging: ready and
+  scientific flags, solver id, SHA-256 contract and units hashes, non-empty
+  field maps/tolerances/observed deltas, pass validation, and observed deltas
+  within tolerance.
+- Added per-family validation reports for magnetosphere MHD, PIC kinetic plasma,
+  radiation transport, and relativistic correction families.
+- Added unknown id/family and duplicate-family reporting.
+- Added CLI `--validate-references <json>` and `--strict`. Non-strict mode emits
+  JSON and exits `0`; strict mode exits nonzero unless the full four-family suite
+  is ready.
+- Added unit tests for valid supplied references, missing hashes, empty field
+  maps, unknown ids/families, and observed deltas exceeding tolerance.
+- Added integration coverage that invokes the CLI against the built package.
+- Updated the ULG quantum-response artifact guide, implementation status,
+  testing strategy, and this log.
+
+Files touched:
+- `bindings/javascript/packages/core/src/ulg-quantum-response-artifact.ts`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/scripts/emit-ulg-quantum-response-artifact.mjs`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `node --check bindings/javascript/packages/core/scripts/emit-ulg-quantum-response-artifact.mjs`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm build:ts`
+- `pnpm build`
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Manual `node` smoke that invokes
+  `scripts/emit-ulg-quantum-response-artifact.mjs --validate-references`
+  with and without `--strict` against an invalid supplied reference.
+
+Test results:
+- PASS: CLI script syntax check completed.
+- PASS: focused unit suite passed `100/100`.
+- PASS: `pnpm build:ts` completed after fixing one DTS nullability issue; tsup
+  repeated the existing package export-order warning for `types`.
+- Initial integration run failed because `pnpm build:ts` had cleaned `dist/` and
+  left `dist/moonlab.js`/`dist/moonlab.wasm` absent. This was an artifact
+  availability failure, not a validator behavior failure.
+- PASS: full `pnpm build` restored `dist/index.mjs`, `dist/index.d.ts`,
+  `dist/moonlab.js`, and `dist/moonlab.wasm`.
+- PASS: integration suite passed `46/46` after the full build.
+- PASS: manual invalid-reference CLI smoke returned non-strict exit `0`, strict
+  exit `1`, `reference-contract-suite-invalid`, missing contract/unit hash
+  errors, and a scalar tolerance failure.
+
+Failures or open questions:
+- This validator certifies contract structure and tolerance deltas only. Real
+  calibrated PIC, radiation, relativity, and fuller MHD/force-free contract
+  files are still required before full magnetar scientific readiness can pass.
+- No push was attempted.

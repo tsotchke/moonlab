@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildUlgBellStateArtifact,
   buildUlgMagnetarDipoleIsingArtifact,
+  validateMagnetarReferenceContracts,
   validateUlgQuantumResponseArtifact,
 } from '../dist/index.mjs';
 
@@ -18,6 +19,20 @@ const defaultSchemaPath = resolve(
 );
 
 const args = parseArgs(process.argv.slice(2));
+const validationReferencesPath = args.validateReferences
+  ? resolve(args.validateReferences)
+  : undefined;
+if (validationReferencesPath) {
+  const report = validateMagnetarReferenceContracts(
+    JSON.parse(readFileSync(validationReferencesPath, 'utf8'))
+  );
+  writeJson(report, args.out ? resolve(args.out) : undefined);
+  if (args.strict && !report.ready) {
+    process.exitCode = 1;
+  }
+  process.exit();
+}
+
 const probe = args.probe ?? 'bell-state';
 if (!['bell-state', 'magnetar-dipole-ising'].includes(probe)) {
   throw new Error(`Unknown probe: ${probe}`);
@@ -79,13 +94,7 @@ if (existsSync(schemaPath)) {
   ];
 }
 
-const json = `${JSON.stringify(artifact, null, 2)}\n`;
-if (outputPath) {
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, json);
-} else {
-  process.stdout.write(json);
-}
+writeJson(artifact, outputPath);
 
 if (!artifact.validation.schemaCompatible || artifact.parity.passed !== true) {
   process.exitCode = 1;
@@ -105,9 +114,13 @@ function parseArgs(argv) {
       parsed.probe = argv[++index];
     } else if (arg === '--references') {
       parsed.references = argv[++index];
+    } else if (arg === '--validate-references') {
+      parsed.validateReferences = argv[++index];
+    } else if (arg === '--strict') {
+      parsed.strict = true;
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path]\n'
+        'Usage: node scripts/emit-ulg-quantum-response-artifact.mjs [--probe bell-state|magnetar-dipole-ising] [--schema path] [--out path] [--references path] [--validate-references path] [--strict]\n'
       );
       process.exit(0);
     } else {
@@ -136,4 +149,14 @@ function inspectFile(path) {
     bytes: stat.size,
     modifiedAt: stat.mtime.toISOString(),
   };
+}
+
+function writeJson(value, outputPath) {
+  const json = `${JSON.stringify(value, null, 2)}\n`;
+  if (outputPath) {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, json);
+  } else {
+    process.stdout.write(json);
+  }
 }

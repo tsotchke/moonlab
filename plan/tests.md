@@ -69,3 +69,17 @@ Targeted validation for optional calibrated-reference contract input:
   `pnpm ulg:artifact -- --probe magnetar-dipole-ising --references /tmp/moonlab-supplied-references.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-supplied-reference-artifact.json`
 
 Current result on 2026-06-06: focused integration passed `45/45`, focused unit passed `95/95`, package build passed with the existing package export-order warning, and the CLI smoke emitted four calibrated family entries with two ready/scientific entries after a supplied radiation contract.
+
+## Magnetar Reference Contract Validator
+
+Targeted validation for standalone calibrated-reference contract reports:
+
+- Run the JavaScript core unit suite with focused validator cases:
+  `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Build the JavaScript core before CLI validation so `dist/index.mjs`, `dist/moonlab.js`, and `dist/moonlab.wasm` are present:
+  `pnpm build`
+- Run the JavaScript core integration suite with the CLI report assertion:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Manually smoke the validator CLI against an invalid supplied reference both without and with `--strict`; non-strict should exit `0`, strict should exit `1`, and the JSON should report missing hashes plus tolerance failures.
+
+Current result on 2026-06-06: focused unit passed `100/100`, full package build passed with the existing package export-order warning, integration passed `46/46` after the full build restored `dist/moonlab.js` and `dist/moonlab.wasm`, and the manual invalid-reference CLI smoke returned non-strict exit `0` and strict exit `1`.
