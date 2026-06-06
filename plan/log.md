@@ -430,3 +430,70 @@ Failures or open questions:
   calibrated PIC, radiation, relativity, and fuller MHD/force-free contract
   files are still required before full magnetar scientific readiness can pass.
 - No push was attempted.
+
+## 2026-06-06 04:18:31 AKDT - Checked-in magnetar reference contracts
+
+Prompt: User asked for continued work on the MoonLab/Eshkol/PeerCompute/ULG
+implementation plan, local commits only, no push. PeerCompute now needs the
+MoonLab/ULG handoff to supply all calibrated reference families before the
+tolerance-suite blocker can clear.
+
+Actions attempted:
+- Added
+  `bindings/javascript/packages/core/references/magnetar-calibrated-reference-contracts.json`
+  as a checked-in reduced calibrated-reference payload.
+- The payload supplies PIC kinetic plasma, grey-radiation, and post-Newtonian
+  scalar reference contracts; the existing built-in analytic magnetosphere MHD
+  reference remains the fourth ready family.
+- Kept every supplied contract explicitly scoped as
+  `supplied-calibrated-reference-contract` with evidence text that it is reduced
+  tolerance plumbing, not full PIC/radiation/GR/GRMHD/magnetar science.
+- Included `references` in the core package `files` list.
+- Added integration coverage that strictly validates the checked-in asset and
+  emits a four-family ready magnetar artifact from it.
+- Updated the ULG quantum-response artifact guide, implementation status, and
+  testing strategy.
+
+Files touched:
+- `bindings/javascript/packages/core/references/magnetar-calibrated-reference-contracts.json`
+- `bindings/javascript/packages/core/package.json`
+- `bindings/javascript/packages/core/src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `docs/guides/ulg-quantum-response-artifact.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `node --check scripts/emit-ulg-quantum-response-artifact.mjs`
+- `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm ulg:artifact -- --validate-references references/magnetar-calibrated-reference-contracts.json --strict`
+- `pnpm build`
+- `pnpm ulg:artifact -- --probe magnetar-dipole-ising --references references/magnetar-calibrated-reference-contracts.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-four-family-reference-artifact.json`
+- `node` JSON inspection snippet against `/tmp/moonlab-four-family-reference-artifact.json`
+- `git diff --check`
+
+Test results:
+- Initial integration run failed because the direct builder test passed the full
+  `{ references: [...] }` object into a builder option that intentionally takes
+  an array; the test was corrected to pass `references.references`. The CLI and
+  strict validator continue to accept the full object shape.
+- PASS: CLI script syntax check completed.
+- PASS: focused integration suite passed `48/48`.
+- PASS: focused unit suite passed `100/100`.
+- PASS: strict validator reported `reference-contract-suite-ready`, family
+  count `4`, ready count `4`, supplied count `3`, supplied ready count `3`,
+  and no blockers/errors.
+- PASS: package build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: artifact smoke emitted a magnetar artifact with schema compatibility
+  true, parity pass true, four references, four ready/scientific references, and
+  no reference blockers.
+- PASS: `git diff --check` reported no whitespace errors.
+
+Failures or open questions:
+- This clears MoonLab's reduced four-family reference inventory for
+  PeerCompute/ULG tolerance plumbing only. It does not provide calibrated
+  charge-conserving PIC, spectral radiation transport, GR/GRMHD, full MHD, or a
+  complete magnetar simulation.
+- No push was attempted.

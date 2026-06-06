@@ -16,7 +16,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "references"
   ],
   "scripts": {
     "build:wasm": "cd emscripten && cmake -B build -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake && cmake --build build && cmake -E make_directory ../dist && cmake -E copy build/moonlab.js ../dist/moonlab.js && cmake -E copy build/moonlab.wasm ../dist/moonlab.wasm",

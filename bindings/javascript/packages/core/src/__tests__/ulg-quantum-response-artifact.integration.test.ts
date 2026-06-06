@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,10 @@ import {
 const testFilePath = fileURLToPath(import.meta.url);
 const coreRoot = resolve(dirname(testFilePath), '../..');
 const emitArtifactCli = resolve(coreRoot, 'scripts/emit-ulg-quantum-response-artifact.mjs');
+const magnetarReferenceContractsPath = resolve(
+  coreRoot,
+  'references/magnetar-calibrated-reference-contracts.json'
+);
 
 describe('ULG QuantumResponseArtifact Bell state readiness', () => {
   it('runs the core WASM Bell task and emits parity-ready artifact JSON', async () => {
@@ -328,6 +332,91 @@ describe('ULG QuantumResponseArtifact Bell state readiness', () => {
     expect(report.unknownCount).toBe(0);
     expect(report.entries.find((entry) => entry.family === 'magnetosphere-mhd')?.supplied).toBe(false);
     expect(report.entries.filter((entry) => entry.supplied && entry.ready)).toHaveLength(3);
+  });
+
+  it('emits a four-family magnetar artifact from checked-in reference contracts', async () => {
+    const references = JSON.parse(readFileSync(magnetarReferenceContractsPath, 'utf8'));
+    const artifact = await buildUlgMagnetarDipoleIsingArtifact({
+      createdAt: '2026-06-05T00:00:00.000Z',
+      inputHash: 'sha256:test-magnetar-input',
+      references: references.references,
+    });
+    const outputs = artifact.outputs as {
+      references: Array<{
+        id: string;
+        family: string;
+        solverId: string | null;
+        contractHash: string | null;
+        unitsHash: string | null;
+        fieldMap: Record<string, unknown> | null;
+        fieldTolerances: Record<string, unknown> | null;
+        fieldObservedDeltas: Record<string, unknown> | null;
+        status: string;
+        ready: boolean;
+        scientificCoverage: boolean;
+        scope: string;
+        validationStatus: string;
+        blocker: string | null;
+      }>;
+    };
+
+    expect(outputs.references).toHaveLength(4);
+    expect(outputs.references.every((reference) => reference.ready)).toBe(true);
+    expect(outputs.references.every((reference) => reference.scientificCoverage)).toBe(true);
+    expect(outputs.references.every((reference) => reference.validationStatus === 'pass')).toBe(true);
+    expect(outputs.references.every((reference) => reference.contractHash?.startsWith('sha256:'))).toBe(true);
+    expect(outputs.references.every((reference) => reference.unitsHash?.startsWith('sha256:'))).toBe(true);
+    expect(outputs.references.every((reference) => reference.fieldMap != null)).toBe(true);
+    expect(outputs.references.every((reference) => reference.fieldTolerances != null)).toBe(true);
+    expect(outputs.references.every((reference) => reference.fieldObservedDeltas != null)).toBe(true);
+    expect(outputs.references.every((reference) => reference.blocker == null)).toBe(true);
+    expect(outputs.references.map((reference) => reference.family)).toEqual([
+      'magnetosphere-mhd',
+      'pic-kinetic-plasma',
+      'radiation-transport',
+      'relativistic-correction',
+    ]);
+    expect(outputs.references.find((reference) => (
+      reference.family === 'pic-kinetic-plasma'
+    ))?.solverId).toBe('moonlab-reduced-pic-kinetic-plasma-reference-v0');
+    expect(outputs.references.find((reference) => (
+      reference.family === 'radiation-transport'
+    ))?.solverId).toBe('moonlab-reduced-grey-radiation-reference-v0');
+    expect(outputs.references.find((reference) => (
+      reference.family === 'relativistic-correction'
+    ))?.solverId).toBe('moonlab-reduced-post-newtonian-reference-v0');
+  });
+
+  it('strictly validates the checked-in magnetar reference contract asset', () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [emitArtifactCli, '--validate-references', magnetarReferenceContractsPath, '--strict'],
+      {
+        cwd: coreRoot,
+        encoding: 'utf8',
+      }
+    );
+    const report = JSON.parse(stdout) as {
+      status: string;
+      ready: boolean;
+      familyCount: number;
+      readyCount: number;
+      suppliedCount: number;
+      suppliedReadyCount: number;
+      invalidSuppliedCount: number;
+      unknownCount: number;
+      blockers: string[];
+    };
+
+    expect(report.status).toBe('reference-contract-suite-ready');
+    expect(report.ready).toBe(true);
+    expect(report.familyCount).toBe(4);
+    expect(report.readyCount).toBe(4);
+    expect(report.suppliedCount).toBe(3);
+    expect(report.suppliedReadyCount).toBe(3);
+    expect(report.invalidSuppliedCount).toBe(0);
+    expect(report.unknownCount).toBe(0);
+    expect(report.blockers).toEqual([]);
   });
 });
 
