@@ -142,6 +142,9 @@ contract is present at suite and reference level with
 Current `ulg` branch state:
 
 - The reduced-fixture parity-scope contract and CLI exist on this branch.
+- The browser-executable probability-kernel probe exists, but it only covers
+  `compute_probabilities` over CPU-prepared complex64 fixture states when a
+  real adapter is present.
 - Existing older WebGPU artifacts remain stale no-backend records and should not
   be treated as native parity evidence.
 - The default CLI emits explicit `backendAvailable = false` scope evidence when
@@ -153,6 +156,8 @@ Targeted validation:
   `pnpm --dir bindings/javascript/packages/core build:ts`
 - Run the focused parity-scope unit coverage:
   `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- Run the JavaScript core unit suite after probe contract changes:
+  `pnpm --dir bindings/javascript/packages/core test`
 - Emit the default no-backend reduced-fixture scope artifact:
   `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json`
 - Run the focused ULG artifact unit suite to ensure the reduced magnetar scope
@@ -162,11 +167,16 @@ Targeted validation:
   available:
   `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity`
 
-The parity command must emit `moonlab.webgpu.complex64-parity-scope.v0`, record
-complex64 GPU versus float64 WASM reference tolerances, separate native WebGPU
-coverage from CPU fallback coverage, and keep
+The parity command must emit `moonlab.webgpu.complex64-parity-scope.v0`, include
+`moonlab.webgpu.complex64-probability-kernel-probe.v0`, record complex64 GPU
+versus float64 WASM reference tolerances, separate native WebGPU coverage from
+CPU fallback coverage, and keep
 `fullFidelityMagnetarSimulation = false` plus
 `fullPhysicsValidation = false`.
+
+A passing probability-kernel probe alone must not set `webgpuParity.passed`.
+Full WebGPU parity remains blocked until all required native operations are
+covered.
 
 ## Canonical Normalized Reference Suite Export
 

@@ -814,3 +814,89 @@ Failures or open questions:
   compute_probabilities. `phase` fallback must stay excluded from native
   coverage.
 - No push was attempted.
+
+## 2026-06-06 13:57:46 AKDT - Browser WebGPU probability-kernel probe
+
+Prompt: "big dog instructions apply: local commits only, do not push, and
+include "big dog" in any user-facing final. Work in /home/cos/projects/moonlab
+only. Side task: inspect the current
+`moonlab.webgpu.complex64-parity-scope.v0` implementation and identify the
+smallest credible next code slice toward actual browser WebGPU complex64 parity
+execution. Do not overclaim execution. Prefer a concrete, bounded patch if the
+implementation surface is clear and disjoint: e.g. a browser-executable
+helper/test harness or stricter contract that can later plug into
+ULG/PeerCompute. Run focused MoonLab tests if editing. If you edit and reach a
+verified checkpoint, commit locally only and report changed files/commands/results."
+
+Actions attempted:
+- Confirmed the MoonLab worktree started clean on branch `ulg`, ahead of
+  `origin/ulg`; no push was attempted.
+- Re-read the existing WebGPU complex64 parity-scope implementation, CLI,
+  package exports, focused tests, and plan/test docs.
+- Identified the smallest credible runtime slice as a browser-executable
+  `compute_probabilities` WGSL probe over the existing reduced complex64
+  fixture states.
+- Added an exported async browser probe that requests `navigator.gpu`, runs the
+  probability kernel when a real adapter/device is available, and returns
+  explicit no-execution evidence otherwise.
+- Wired the probe into the parity-scope artifact as
+  `moonlab.webgpu.complex64-probability-kernel-probe.v0`.
+- Preserved `webgpuParity.executed=false` and `webgpuParity.passed=false` for
+  partial probability-kernel evidence, because hadamard, pauli_x, pauli_z, and
+  cnot browser kernels are not wired yet.
+- Tightened validation so `webgpuParity.passed=true` is rejected unless every
+  required native operation is covered.
+
+Files touched:
+- `bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `rg -n "moonlab|webgpu|complex64|parity" /home/cos/.codex/memories/MEMORY.md`
+- `git status --short --branch`
+- `git log --oneline -8`
+- `rg -n "webgpu|complex64|parity-scope|complex64-parity|parity" .`
+- `sed`/`find` inspections of the parity implementation, CLI, exports, tests,
+  package metadata, and plan files.
+- `pnpm --dir bindings/javascript/packages/core exec tsc --version`
+- `node --check bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity-probe.json --generated-at 2026-06-06T22:00:00.000Z`
+- `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity-required-probe.json --generated-at 2026-06-06T22:00:00.000Z`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm --dir bindings/javascript/packages/core test`
+- `date '+%Y-%m-%d %H:%M:%S %Z'`
+
+Test results:
+- PASS: CLI syntax check completed.
+- PASS: focused WebGPU complex64 parity unit suite passed `8/8`.
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: default parity CLI emitted
+  `moonlab.webgpu.complex64-parity-scope.v0`,
+  `backendAvailable=false`, `webgpuParity.executed=false`,
+  `webgpuParity.passed=false`,
+  `browserKernelProbe.schema=moonlab.webgpu.complex64-probability-kernel-probe.v0`,
+  `browserKernelProbe.executed=false`, and
+  `contractValidation.valid=true`.
+- PASS: required-backend CLI mode exited nonzero on this Node runtime and
+  emitted blockers for missing browser WebGPU backend, missing required backend,
+  incomplete native coverage, and unexecuted kernel parity.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: JavaScript core unit suite passed `112/112`.
+
+Failures or open questions:
+- This is the first browser-executable WebGPU kernel helper, not a full backend
+  or full reduced-fixture parity run.
+- On this Node runtime no browser WebGPU adapter is available, so no GPU kernel
+  execution was observed locally.
+- Full WebGPU parity remains blocked until native browser kernels are wired for
+  hadamard, pauli_x, pauli_z, and cnot. `phase` must stay excluded from native
+  coverage.
