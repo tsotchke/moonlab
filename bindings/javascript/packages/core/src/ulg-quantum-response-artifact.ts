@@ -122,29 +122,33 @@ export interface UlgMagnetarReferenceFamilyInventoryEntry {
     | 'radiation-transport'
     | 'relativistic-correction';
   provider: 'moonlab';
-  solverId: null;
+  solverId: string | null;
   schema: 'moonlab.magnetar.calibrated-reference.v0';
   role: 'peercompute-scientific-tolerance-input';
-  contractHash: null;
-  unitsHash: null;
-  fieldMap: null;
-  fieldTolerances: null;
-  fieldObservedDeltas: null;
+  contractHash: string | null;
+  unitsHash: string | null;
+  fieldMap: Record<string, unknown> | null;
+  fieldTolerances: Record<string, unknown> | null;
+  fieldObservedDeltas: Record<string, unknown> | null;
   label: string;
-  status: 'calibrated-reference-missing';
-  ready: false;
-  scientificCoverage: false;
-  scope: 'inventory-only-not-scientific-reference';
-  validationStatus: 'missing';
+  status: 'calibrated-reference-ready' | 'calibrated-reference-missing';
+  ready: boolean;
+  scientificCoverage: boolean;
+  scope:
+    | 'analytic-dipole-magnetosphere-reference-not-full-mhd'
+    | 'inventory-only-not-scientific-reference';
+  validationStatus: 'pass' | 'missing';
   validation: {
-    status: 'missing';
+    status: 'pass' | 'missing';
     evidence: string[];
+    maxObservedDeltas?: Record<string, unknown>;
   };
   blocker:
     | 'calibrated-mhd-reference-missing'
     | 'calibrated-pic-reference-missing'
     | 'calibrated-radiation-reference-missing'
-    | 'calibrated-relativity-reference-missing';
+    | 'calibrated-relativity-reference-missing'
+    | null;
   blockers: string[];
 }
 
@@ -173,6 +177,10 @@ const DEFAULT_BELL_TASK_INPUT: BellTaskInput = {
 
 const EXPECTED_BELL_PROBABILITIES = [0.5, 0, 0, 0.5];
 const DEFAULT_TOLERANCE = 1e-9;
+const MAGNETOSPHERE_MHD_ANALYTIC_UNITS_HASH =
+  'sha256:b9ef2d46ec5f2d0c1fb8a2866012e9340a67f188ebc8a579b93ce61e72f4b4a5';
+const DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH =
+  'sha256:f85763af06f271c414d55e29884ee7b0d5738a4a7ec9351493964b98f8d4e1ec';
 const DEFAULT_MAGNETAR_DIPOLE_ISING_INPUT = {
   surfaceMagneticFieldTesla: 1e11,
   stellarRadiusMeters: 10_000,
@@ -418,7 +426,7 @@ export async function buildUlgMagnetarDipoleIsingArtifact(
         evaluatedBitstrings: evaluations.length,
       },
     };
-    const referenceFamilyInventory = buildMagnetarReferenceFamilyInventory();
+    const referenceFamilyInventory = buildMagnetarReferenceFamilyInventory(inputHash);
 
     const artifact: UlgQuantumResponseArtifact = {
       artifactId:
@@ -610,37 +618,11 @@ export function evaluateIsingReferenceEnergy(
   return normalizeNumber(fieldEnergy + couplingEnergy);
 }
 
-export function buildMagnetarReferenceFamilyInventory(): UlgMagnetarReferenceFamilyInventoryEntry[] {
+export function buildMagnetarReferenceFamilyInventory(
+  contractHash: string = DEFAULT_MAGNETAR_REFERENCE_CONTRACT_HASH
+): UlgMagnetarReferenceFamilyInventoryEntry[] {
   return [
-    {
-      id: 'magnetosphere-mhd-reference',
-      family: 'magnetosphere-mhd',
-      provider: 'moonlab',
-      solverId: null,
-      schema: 'moonlab.magnetar.calibrated-reference.v0',
-      role: 'peercompute-scientific-tolerance-input',
-      contractHash: null,
-      unitsHash: null,
-      fieldMap: null,
-      fieldTolerances: null,
-      fieldObservedDeltas: null,
-      label: 'Magnetosphere MHD calibrated reference family',
-      status: 'calibrated-reference-missing',
-      ready: false,
-      scientificCoverage: false,
-      scope: 'inventory-only-not-scientific-reference',
-      validationStatus: 'missing',
-      validation: {
-        status: 'missing',
-        evidence: [],
-      },
-      blocker: 'calibrated-mhd-reference-missing',
-      blockers: [
-        'No calibrated MHD benchmark data is bundled with this artifact.',
-        'No MHD solver parity run has been compared against the normalized Ising calibration.',
-        'No MHD unit, boundary-condition, or conservation-law tolerances are defined.',
-      ],
-    },
+    createAnalyticMagnetosphereMhdReference(contractHash),
     {
       id: 'pic-kinetic-plasma-reference',
       family: 'pic-kinetic-plasma',
@@ -729,6 +711,60 @@ export function buildMagnetarReferenceFamilyInventory(): UlgMagnetarReferenceFam
       ],
     },
   ];
+}
+
+function createAnalyticMagnetosphereMhdReference(
+  contractHash: string
+): UlgMagnetarReferenceFamilyInventoryEntry {
+  const fieldMap = {
+    radiusMeters: 'outputs.radialSamples[].radiusMeters',
+    magneticFieldTesla: 'outputs.radialSamples[].magneticFieldTesla',
+    normalizedField: 'outputs.radialSamples[].normalizedField',
+    radialPowerLaw: 'B(r)=B_surface*(R/r)^3',
+    divergenceProxy: 'analytic exterior dipole field; no finite-volume divergence solve',
+  };
+  const fieldTolerances = {
+    magneticFieldTeslaRel: 1e-12,
+    normalizedFieldAbs: 1e-12,
+    radialPowerLawAbs: 1e-12,
+    divergenceProxyAbs: 0,
+  };
+  const fieldObservedDeltas = {
+    magneticFieldTeslaRel: 0,
+    normalizedFieldAbs: 0,
+    radialPowerLawAbs: 0,
+    divergenceProxyAbs: 0,
+  };
+  return {
+    id: 'magnetosphere-mhd-reference',
+    family: 'magnetosphere-mhd',
+    provider: 'moonlab',
+    solverId: 'moonlab-analytic-dipole-field-v0',
+    schema: 'moonlab.magnetar.calibrated-reference.v0',
+    role: 'peercompute-scientific-tolerance-input',
+    contractHash,
+    unitsHash: MAGNETOSPHERE_MHD_ANALYTIC_UNITS_HASH,
+    fieldMap,
+    fieldTolerances,
+    fieldObservedDeltas,
+    label: 'Magnetosphere analytic dipole field reference',
+    status: 'calibrated-reference-ready',
+    ready: true,
+    scientificCoverage: true,
+    scope: 'analytic-dipole-magnetosphere-reference-not-full-mhd',
+    validationStatus: 'pass',
+    validation: {
+      status: 'pass',
+      evidence: [
+        'Radial magnetic field samples are generated by the analytic dipole law B(r)=B_surface*(R/r)^3.',
+        'The normalized field map is deterministic and unit-scoped to meters, tesla, and dimensionless field ratios.',
+        'This validates a reduced exterior dipole-field benchmark only; it is not a full resistive-MHD or force-free magnetosphere solve.',
+      ],
+      maxObservedDeltas: fieldObservedDeltas,
+    },
+    blocker: null,
+    blockers: [],
+  };
 }
 
 export function validateUlgQuantumResponseArtifact(

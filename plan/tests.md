@@ -45,11 +45,12 @@ This remains an additive MoonLab artifact contract. PeerCompute now has a consum
 
 ## Magnetar Reference Family Inventory
 
-Targeted validation for the non-readiness inventory:
+Targeted validation for the calibrated-reference inventory:
 
-- Run the JavaScript core integration test that builds the magnetar artifact and asserts `outputs.references[]` ids/families, downstream role, null contract/unit/field tolerance fields, `ready: false`, `scientificCoverage: false`, missing validation status, and blockers:
+- Run the JavaScript core integration test that builds the magnetar artifact and asserts `outputs.references[]` ids/families, downstream role, the ready scoped analytic `magnetosphere-mhd` entry, its contract/unit hashes, field maps/tolerances/observed deltas, pass validation, and the remaining blocked PIC/radiation/relativity entries:
   `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
 - Emit and validate the magnetar artifact against the ULG schema, then inspect `outputs.references`:
   `pnpm ulg:artifact -- --probe magnetar-dipole-ising --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-magnetar-reference-inventory.json`
+- The analytic entry's `fieldObservedDeltas` must use the same keys as `fieldTolerances` (`magneticFieldTeslaRel`, `normalizedFieldAbs`, `radialPowerLawAbs`, `divergenceProxyAbs`) so PeerCompute/Multiscale can verify every observed delta is within tolerance.
 
-This inventory does not make magnetosphere MHD, PIC kinetic plasma, radiation transport, or relativistic correction scientific readiness claims. The entries remain blockers-only placeholders until calibrated benchmark data, validation runs, field maps, units hashes, and tolerance contracts exist.
+This inventory now carries one reduced analytic magnetosphere dipole-field reference. It still does not provide full MHD, PIC kinetic plasma, radiation transport, or relativistic correction scientific readiness; those entries remain blockers until calibrated benchmark data, validation runs, field maps, units hashes, and tolerance contracts exist.
