@@ -20,6 +20,7 @@ export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED = [
 
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS = [
   'hadamard',
+  'pauli_x',
 ] as const;
 
 type NativeCoverageRequired =
@@ -363,7 +364,7 @@ export function buildMoonlabWebGpuComplex64ParityScope(
   const browserNativeOperationProbe = options.browserNativeOperationProbe
     ?? buildNotExecutedNativeOperationProbe(
       backendAvailable
-        ? 'browser WebGPU native operation probe not executed for hadamard on this branch'
+        ? 'browser WebGPU native operation probe not executed for declared operations on this branch'
         : 'browser WebGPU native operation probe not executed because no adapter/runtime was available'
     );
   const coveredOperations = new Set<NativeCoverageRequired>([
@@ -673,7 +674,7 @@ export async function runMoonlabBrowserWebGpuComplex64NativeOperationProbe(
       maxAmplitudeAbsDiff,
       tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
       reason: passed
-        ? 'browser WebGPU native hadamard operation kernel matched reduced complex64 fixture amplitudes'
+        ? `browser WebGPU native operation kernels (${MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS.join(', ')}) matched reduced complex64 fixture amplitudes`
         : 'one or more browser WebGPU native operation kernels exceeded reduced fixture tolerance',
     };
   } catch (error) {
@@ -1261,6 +1262,11 @@ function nativeOperationKernelWgsl({
     assertQubit(qubit, qubitCount);
     return hadamardKernelWgsl(elementCount, qubit, workgroupSize);
   }
+  if (operation.operation === 'pauli_x') {
+    const qubit = requiredQubit(operation);
+    assertQubit(qubit, qubitCount);
+    return pauliXKernelWgsl(elementCount, qubit, workgroupSize);
+  }
   throw new Error(`Unsupported native operation probe kernel: ${operation.operation}`);
 }
 
@@ -1292,6 +1298,29 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
     (zero.x - one.x) * invSqrt2,
     (zero.y - one.y) * invSqrt2
   );
+}
+`;
+}
+
+function pauliXKernelWgsl(
+  elementCount: number,
+  qubit: number,
+  workgroupSize: number
+): string {
+  const qubitMask = 1 << qubit;
+  return `
+@group(0) @binding(0) var<storage, read> inputAmplitudes: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> outputAmplitudes: array<vec2<f32>>;
+
+@compute @workgroup_size(${workgroupSize})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let zeroIndex = globalId.x;
+  if (zeroIndex >= ${elementCount}u || (zeroIndex & ${qubitMask}u) != 0u) {
+    return;
+  }
+  let oneIndex = zeroIndex | ${qubitMask}u;
+  outputAmplitudes[zeroIndex] = inputAmplitudes[oneIndex];
+  outputAmplitudes[oneIndex] = inputAmplitudes[zeroIndex];
 }
 `;
 }
@@ -1376,6 +1405,27 @@ function nativeOperationProbeFixtureDefinitions(
           { real: 0, imag: 0 },
           { real: 0, imag: Math.SQRT1_2 },
           { real: 0, imag: 0 },
+        ],
+      },
+    ];
+  }
+  if (operation === 'pauli_x') {
+    return [
+      {
+        fixtureId: 'pauli-x-1q-zero-state-amplitudes',
+        qubitCount: 1,
+        operation: { operation: 'pauli_x', qubit: 0 },
+        inputState: initialState(1),
+      },
+      {
+        fixtureId: 'pauli-x-2q-qubit-1-complex-amplitudes',
+        qubitCount: 2,
+        operation: { operation: 'pauli_x', qubit: 1 },
+        inputState: [
+          { real: 0.25, imag: -0.5 },
+          { real: 0.125, imag: 0.375 },
+          { real: -0.75, imag: 0.0625 },
+          { real: 0.5, imag: -0.25 },
         ],
       },
     ];
