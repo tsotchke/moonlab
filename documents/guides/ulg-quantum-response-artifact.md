@@ -23,6 +23,14 @@ The magnetar probe can merge externally supplied calibrated reference contracts:
 pnpm ulg:artifact -- --probe magnetar-dipole-ising --references magnetar-reference-contracts.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out artifacts/ulg_magnetar_dipole_ising.json
 ```
 
+Moonlab ships a reduced three-family contract payload that complements the
+built-in analytic magnetosphere reference:
+
+```bash
+pnpm ulg:artifact -- --validate-references references/magnetar-calibrated-reference-contracts.json --strict
+pnpm ulg:artifact -- --probe magnetar-dipole-ising --references references/magnetar-calibrated-reference-contracts.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out artifacts/ulg_magnetar_dipole_ising.json
+```
+
 The references file may be a JSON array, `{ "references": [...] }`, or `{ "outputs": { "references": [...] } }`. A supplied entry only replaces its inventory placeholder when it names a known `id` or `family`, declares `ready: true` and `scientificCoverage: true`, includes a solver id, SHA-256 contract and units hashes, field maps, tolerances, observed deltas, and pass validation, with every observed delta within its tolerance. Invalid supplied entries leave the original blocker in place and add a supplied-reference readiness blocker.
 
 Reference contracts can also be validated without emitting a new artifact:
@@ -40,6 +48,6 @@ The emitted JSON includes the schema-required fields plus:
 - `parity`: expected and observed Bell probabilities or Ising energies with max delta and tolerance.
 - `provenance`: runtime, package, circuit or core primitive, CLI, WASM asset inspection, and schema path metadata.
 - `outputs.reference`: for the magnetar probe, a PeerCompute-facing reference contract with `schema`, `role`, `contractHash`, `hamiltonian`, `observables.groundState`, `observables.energySpectrum`, `tolerances.energyAbs`, and validation deltas.
-- `outputs.references`: for the magnetar probe, an inventory of calibrated magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction reference families. The magnetosphere entry now provides a scoped analytic dipole-field benchmark with solver id `moonlab-analytic-dipole-field-v0`, field maps/tolerances/deltas, SHA-256 contract and units hashes, `ready: true`, and `scientificCoverage: true` for that reduced exterior-field reference only. PIC, radiation, and relativistic entries remain blockers-only placeholders unless valid supplied calibrated reference contracts are provided.
+- `outputs.references`: for the magnetar probe, an inventory of calibrated magnetosphere MHD, PIC kinetic plasma, radiation transport, and relativistic correction reference families. The magnetosphere entry now provides a scoped analytic dipole-field benchmark with solver id `moonlab-analytic-dipole-field-v0`, field maps/tolerances/deltas, SHA-256 contract and units hashes, `ready: true`, and `scientificCoverage: true` for that reduced exterior-field reference only. The checked-in `references/magnetar-calibrated-reference-contracts.json` file supplies reduced PIC, grey-radiation, and post-Newtonian scalar contracts that can make all four inventory entries ready for PeerCompute tolerance plumbing.
 
-These slices are intentionally CPU/WASM-only. They do not open sockets, start relay clients, or claim ownership of GPU placement. The magnetar dipole Ising probe and analytic dipole-field reference are calibration and handoff primitives, not a full magnetar simulation; they do not include plasma, radiation, relativistic, or full MHD evolution.
+These slices are intentionally CPU/WASM-only. They do not open sockets, start relay clients, or claim ownership of GPU placement. The magnetar dipole Ising probe, analytic dipole-field reference, and reduced supplied contracts are calibration and handoff primitives, not a full magnetar simulation; they do not include calibrated PIC, spectral radiation transport, GR/GRMHD, or full MHD evolution.

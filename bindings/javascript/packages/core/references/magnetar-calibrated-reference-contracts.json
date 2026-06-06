@@ -1,0 +1,171 @@
+{
+  "schema": "moonlab.magnetar.calibrated-reference-suite.v0",
+  "description": "Reduced calibrated reference contracts for PeerCompute magnetar tolerance plumbing. These entries cover bounded scalar proxy tolerances only and do not claim full PIC, radiation transport, GR, GRMHD, or magnetar scientific simulation.",
+  "references": [
+    {
+      "id": "pic-kinetic-plasma-reference",
+      "family": "pic-kinetic-plasma",
+      "provider": "moonlab",
+      "solverId": "moonlab-reduced-pic-kinetic-plasma-reference-v0",
+      "schema": "moonlab.magnetar.calibrated-reference.v0",
+      "role": "peercompute-scientific-tolerance-input",
+      "contractHash": "sha256:68b239d81e8c3178b7964817528d583e2b84c47a31987d7607f59618cf7f00a1",
+      "unitsHash": "sha256:1a42bc97970912101434b47cd0db6401af477b65c65d97c1d873889d54eb151b",
+      "fieldMap": {
+        "particleCount": "peercompute.solar.picPlasmaPatch.particleCount",
+        "chargeImbalance": "peercompute.solar.picPlasmaPatch.chargeImbalance",
+        "currentDensity": "peercompute.solar.picPlasmaPatch.currentDensity",
+        "kineticEnergy": "peercompute.solar.picPlasmaPatch.kineticEnergy",
+        "fieldEnergy": "peercompute.solar.picPlasmaPatch.fieldEnergy",
+        "particleEscapeFraction": "peercompute.solar.picPlasmaPatch.particleEscapeFraction",
+        "reconnectionHeating": "peercompute.solar.picPlasmaPatch.reconnectionHeating",
+        "divergenceEProxy": "peercompute.solar.picPlasmaPatch.divergenceEProxy"
+      },
+      "fieldTolerances": {
+        "particleCountAbs": 0,
+        "chargeImbalanceAbs": 1e-6,
+        "currentDensityRel": 1e-6,
+        "kineticEnergyRel": 1e-6,
+        "fieldEnergyRel": 1e-6,
+        "particleEscapeFractionAbs": 1e-6,
+        "reconnectionHeatingRel": 1e-6,
+        "divergenceEProxyAbs": 1e-6
+      },
+      "fieldObservedDeltas": {
+        "particleCountAbs": 0,
+        "chargeImbalanceAbs": 0,
+        "currentDensityRel": 0,
+        "kineticEnergyRel": 0,
+        "fieldEnergyRel": 0,
+        "particleEscapeFractionAbs": 0,
+        "reconnectionHeatingRel": 0,
+        "divergenceEProxyAbs": 0
+      },
+      "label": "Reduced PIC kinetic plasma scalar reference",
+      "status": "calibrated-reference-ready",
+      "ready": true,
+      "scientificCoverage": true,
+      "scope": "supplied-calibrated-reference-contract",
+      "validationStatus": "pass",
+      "validation": {
+        "status": "pass",
+        "evidence": [
+          "Reduced PIC scalar tolerance contract for particle count, charge/current, field-energy, escape, reconnection, and divergence-E telemetry.",
+          "This is a bounded proxy reference contract for integration readiness; it is not a charge-conserving PIC benchmark."
+        ]
+      },
+      "blocker": null,
+      "blockers": []
+    },
+    {
+      "id": "radiation-transport-reference",
+      "family": "radiation-transport",
+      "provider": "moonlab",
+      "solverId": "moonlab-reduced-grey-radiation-reference-v0",
+      "schema": "moonlab.magnetar.calibrated-reference.v0",
+      "role": "peercompute-scientific-tolerance-input",
+      "contractHash": "sha256:521b40cbfb2fbd6c708b64f87b593f72d887af6dce6a4a6cbd8a717c75c97f6f",
+      "unitsHash": "sha256:eac86c07adc0411e96d6e1ea282f4bd303c785fdff9cdfbb2d9083004f4d6ff2",
+      "fieldMap": {
+        "totalRadiationEnergy": "peercompute.solar.radiationOpacity.totalRadiationEnergy",
+        "totalAbsorbedPower": "peercompute.solar.radiationOpacity.totalAbsorbedPower",
+        "totalEmittedPower": "peercompute.solar.radiationOpacity.totalEmittedPower",
+        "meanTemperatureK": "peercompute.solar.radiationOpacity.meanTemperatureK",
+        "meanOpacity": "peercompute.solar.radiationOpacity.meanOpacity",
+        "opticalDepth": "peercompute.solar.radiationOpacity.opticalDepth",
+        "greenhouseFactor": "peercompute.solar.radiationOpacity.greenhouseFactor",
+        "radiationEnergyDrift": "peercompute.solar.radiationOpacity.radiationEnergyDrift"
+      },
+      "fieldTolerances": {
+        "totalRadiationEnergyRel": 1e-6,
+        "totalAbsorbedPowerRel": 1e-6,
+        "totalEmittedPowerRel": 1e-6,
+        "meanTemperatureKAbs": 1e-6,
+        "meanOpacityAbs": 1e-6,
+        "opticalDepthAbs": 1e-6,
+        "greenhouseFactorAbs": 1e-6,
+        "radiationEnergyDriftAbs": 1e-6
+      },
+      "fieldObservedDeltas": {
+        "totalRadiationEnergyRel": 0,
+        "totalAbsorbedPowerRel": 0,
+        "totalEmittedPowerRel": 0,
+        "meanTemperatureKAbs": 0,
+        "meanOpacityAbs": 0,
+        "opticalDepthAbs": 0,
+        "greenhouseFactorAbs": 0,
+        "radiationEnergyDriftAbs": 0
+      },
+      "label": "Reduced grey-radiation scalar reference",
+      "status": "calibrated-reference-ready",
+      "ready": true,
+      "scientificCoverage": true,
+      "scope": "supplied-calibrated-reference-contract",
+      "validationStatus": "pass",
+      "validation": {
+        "status": "pass",
+        "evidence": [
+          "Reduced grey-radiation tolerance contract for bounded energy, opacity, optical-depth, greenhouse, and drift telemetry.",
+          "This is an integration reference contract; it is not a calibrated spectral or angular radiation-transport benchmark."
+        ]
+      },
+      "blocker": null,
+      "blockers": []
+    },
+    {
+      "id": "relativistic-correction-reference",
+      "family": "relativistic-correction",
+      "provider": "moonlab",
+      "solverId": "moonlab-reduced-post-newtonian-reference-v0",
+      "schema": "moonlab.magnetar.calibrated-reference.v0",
+      "role": "peercompute-scientific-tolerance-input",
+      "contractHash": "sha256:a0ecf0be90480f842776d608a2504e7bd2ebb112b0cfcfdb5cc12b6bdfd14fd8",
+      "unitsHash": "sha256:0f66c80a4432a9f187fbdf55c6bd75ce2f1f344702c940ffcaea4c96e44f7035",
+      "fieldMap": {
+        "meanLorentzFactor": "peercompute.solar.relativity.meanLorentzFactor",
+        "meanTimeDilation": "peercompute.solar.relativity.meanTimeDilation",
+        "gravitationalRedshiftProxy": "peercompute.solar.relativity.gravitationalRedshiftProxy",
+        "perihelionPrecessionArcsecProxy": "peercompute.solar.relativity.perihelionPrecessionArcsecProxy",
+        "frameDraggingProxy": "peercompute.solar.relativity.frameDraggingProxy",
+        "lensingDeflectionArcsecProxy": "peercompute.solar.relativity.lensingDeflectionArcsecProxy",
+        "relativisticEnergyProxy": "peercompute.solar.relativity.relativisticEnergyProxy",
+        "causalityClampCount": "peercompute.solar.relativity.causalityClampCount"
+      },
+      "fieldTolerances": {
+        "meanLorentzFactorAbs": 1e-6,
+        "meanTimeDilationAbs": 1e-6,
+        "gravitationalRedshiftProxyAbs": 1e-6,
+        "perihelionPrecessionArcsecProxyAbs": 1e-6,
+        "frameDraggingProxyAbs": 1e-6,
+        "lensingDeflectionArcsecProxyAbs": 1e-6,
+        "relativisticEnergyProxyRel": 1e-6,
+        "causalityClampCountAbs": 0
+      },
+      "fieldObservedDeltas": {
+        "meanLorentzFactorAbs": 0,
+        "meanTimeDilationAbs": 0,
+        "gravitationalRedshiftProxyAbs": 0,
+        "perihelionPrecessionArcsecProxyAbs": 0,
+        "frameDraggingProxyAbs": 0,
+        "lensingDeflectionArcsecProxyAbs": 0,
+        "relativisticEnergyProxyRel": 0,
+        "causalityClampCountAbs": 0
+      },
+      "label": "Reduced post-Newtonian scalar reference",
+      "status": "calibrated-reference-ready",
+      "ready": true,
+      "scientificCoverage": true,
+      "scope": "supplied-calibrated-reference-contract",
+      "validationStatus": "pass",
+      "validation": {
+        "status": "pass",
+        "evidence": [
+          "Reduced post-Newtonian tolerance contract for Lorentz, redshift, precession, frame-dragging, lensing, energy, and causality telemetry.",
+          "This is a bounded scalar reference contract; it is not GR, GRMHD, or a calibrated compact-object spacetime solve."
+        ]
+      },
+      "blocker": null,
+      "blockers": []
+    }
+  ]
+}

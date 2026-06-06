@@ -83,3 +83,20 @@ Targeted validation for standalone calibrated-reference contract reports:
 - Manually smoke the validator CLI against an invalid supplied reference both without and with `--strict`; non-strict should exit `0`, strict should exit `1`, and the JSON should report missing hashes plus tolerance failures.
 
 Current result on 2026-06-06: focused unit passed `100/100`, full package build passed with the existing package export-order warning, integration passed `46/46` after the full build restored `dist/moonlab.js` and `dist/moonlab.wasm`, and the manual invalid-reference CLI smoke returned non-strict exit `0` and strict exit `1`.
+
+## Checked-In Magnetar Reference Contracts
+
+Targeted validation for the checked-in reduced four-family reference payload:
+
+- Strictly validate the payload:
+  `pnpm ulg:artifact -- --validate-references references/magnetar-calibrated-reference-contracts.json --strict`
+- Run the JavaScript core integration suite, which now proves the checked-in payload emits four ready/scientific calibrated reference entries when merged with the built-in analytic MHD reference:
+  `pnpm test:integration -- src/__tests__/ulg-quantum-response-artifact.integration.test.ts`
+- Run the JavaScript core unit suite for non-regression:
+  `pnpm test:unit -- src/__tests__/ulg-quantum-response-artifact.test.ts`
+- Build the package so DTS and WASM artifacts remain valid:
+  `pnpm build`
+- Emit a magnetar artifact with the checked-in references and inspect the counts:
+  `pnpm ulg:artifact -- --probe magnetar-dipole-ising --references references/magnetar-calibrated-reference-contracts.json --schema /home/cos/projects/ulg/ulg-gpu-abi/src/schemas/quantum_response_artifact.schema.json --out /tmp/moonlab-four-family-reference-artifact.json`
+
+Current result on 2026-06-06: integration passed `48/48`, unit passed `100/100`, strict validator reported `reference-contract-suite-ready` with ready count `4`, package build passed with the existing package export-order warning, and the artifact smoke reported reference/scientific coverage counts `4/4` with no blockers.

@@ -80,3 +80,14 @@ Current blocker: real calibrated PIC, radiation, relativity, and fuller MHD/forc
 - [x] Run focused unit/integration/build/manual CLI validation.
 
 Current blocker: the validator can certify contract shape and tolerance deltas, but it still needs real calibrated PIC, radiation, relativity, and fuller MHD/force-free reference files before full magnetar scientific readiness can pass.
+
+## Checked-In Magnetar Reference Contracts
+
+- [x] Add `references/magnetar-calibrated-reference-contracts.json` to the JavaScript core package.
+- [x] Provide reduced PIC kinetic plasma, grey-radiation, and post-Newtonian scalar contracts that complement the built-in analytic magnetosphere reference.
+- [x] Keep every supplied contract explicitly scoped as reduced tolerance plumbing, not a calibrated full-physics solver benchmark.
+- [x] Include the `references` directory in the package file list.
+- [x] Add integration coverage proving the checked-in payload validates strictly and emits a four-family ready magnetar artifact.
+- [x] Run focused unit/integration/build/CLI validation.
+
+Current blocker: the four-family contract payload clears MoonLab reference inventory readiness for PeerCompute tolerance plumbing, but it is still reduced scalar reference data. Full magnetar scientific readiness still requires authoritative calibrated PIC, radiation transport, GR/GRMHD, and full MHD/force-free validation.
