@@ -1246,3 +1246,103 @@ Failures or open questions:
   Asyncify/Emscripten export patch, not an old `webgpu` branch import, and not
   full magnetar physics validation. It is reduced fixture browser evidence only.
 - No PeerCompute, ULG, or Eshkol files were edited. No push was attempted.
+
+## 2026-06-06 20:11:57 AKDT - WebGPU parity handoff summary
+
+Prompt: "We are continuing the ULG triad implementation. Read /home/cos/projects/AGENTS.md and /home/cos/projects/moonlab/AGENTS.md if present. Work only in /home/cos/projects/moonlab, do not push, and keep commits local only if you commit. Task: inspect the current MoonLab branch/plan/log/tests and identify the next bounded implementation slice that advances the ULG integration without touching PeerCompute, Eshkol, or ULG files. Prefer a small direct code+test improvement if the plan makes it obvious; otherwise produce a concise repo-grounded status/next-step report. Update MoonLab plan/log/tests if you make changes. Do not modify unrelated files. Report exact files changed, commands run, and blockers."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md`; no MoonLab-local `AGENTS.md` was
+  present.
+- Read MoonLab `plan/implementation-status.md`,
+  `plan/browser-webgpu-complex64-parity.md`, `plan/tests.md`, and recent
+  `plan/log.md` entries before editing.
+- Confirmed branch `ulg` was clean and ahead of origin before editing; no push
+  was attempted.
+- Identified the bounded next MoonLab-only slice: downstream ULG handoff checks
+  need compact browser WebGPU parity evidence rather than the full fixture
+  artifact.
+- Added exported `moonlab.webgpu.complex64-parity-handoff-summary.v0` summary
+  generation from the existing parity artifact.
+- Added `--summary` output to the Node parity CLI and browser smoke harness,
+  including canonical summary output.
+- Kept summary semantics explicitly reduced-scope:
+  `runtimeBackendReady=false`, `fullFidelityMagnetarSimulation=false`, and
+  `fullPhysicsValidation=false` even when reduced fixture WebGPU parity passes.
+- Added focused unit coverage for no-backend summaries and passing reduced
+  parity summaries, plus harness assertions for summary emission.
+- Updated MoonLab plan/status/test docs.
+
+Files touched:
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`
+- `bindings/javascript/packages/core/scripts/webgpu-complex64-browser-smoke.mjs`
+- `bindings/javascript/packages/core/browser/webgpu-complex64-parity.html`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `sed -n '1,220p' /home/cos/projects/AGENTS.md`
+- `if [ -f AGENTS.md ]; then sed -n '1,220p' AGENTS.md; else printf 'NO_MOONLAB_AGENTS\n'; fi`
+- `rg -n "MoonLab|moonlab|ULG|ulg|multiscale|handoff|magnetar|plan|tests" /home/cos/.codex/memories/MEMORY.md`
+- `git status --short --branch`
+- `rg --files`
+- `git log --oneline -8`
+- `find plan -maxdepth 2 -type f -print`
+- `sed` inspections of MoonLab plan docs, WebGPU parity source/tests, browser
+  harness, package exports, and CLI scripts.
+- `date '+%Y-%m-%d %H:%M:%S %Z'`
+- `node --check bindings/javascript/packages/core/scripts/webgpu-complex64-parity.mjs`
+- `node --check bindings/javascript/packages/core/scripts/webgpu-complex64-browser-smoke.mjs`
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-summary.json --generated-at 2026-06-07T04:20:00.000Z`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-summary.json'); ..."`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-browser-summary.json --generated-at 2026-06-07T04:20:00.000Z`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-browser-summary.json'); ..."`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --require-backend --out /tmp/moonlab-webgpu-complex64-browser-summary-required.json --generated-at 2026-06-07T04:20:00.000Z`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-browser-summary-required.json'); ..."`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm --dir bindings/javascript/packages/core test`
+- `kill 2008204 2008258 2008324 2008325`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/complex.test.ts`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/circuit.test.ts`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+
+Test results:
+- PASS: CLI syntax checks for both WebGPU parity scripts.
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: focused WebGPU parity unit suite passed `20/20`.
+- PASS: Node/no-adapter summary emitted
+  `moonlab.webgpu.complex64-parity-handoff-summary.v0` with
+  `reducedFixtureWebGpuParityReady=false`, stage
+  `navigator-gpu-unavailable`, all five required operations missing, and
+  `fullPhysicsValidation=false`.
+- PASS: browser smoke summary emitted
+  `moonlab.webgpu.complex64-parity-handoff-summary.v0` with
+  `reducedFixtureWebGpuParityReady=true`, stage `device-acquired`,
+  `webgpuParity.executed=true`, and `webgpuParity.passed=true`.
+- PASS: required-backend browser smoke summary exited `0` and covered
+  `hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities` while
+  keeping `runtimeBackendReady=false` and `fullPhysicsValidation=false`.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: isolated complex unit suite passed `42/42`.
+- PASS: isolated circuit unit suite passed `48/48`.
+- PASS: WASM rebuild completed after `build:ts` refreshed `dist`.
+- FAIL: aggregate `pnpm --dir bindings/javascript/packages/core test` printed
+  all four test files passing `124/124`, then Node/Vitest aborted during
+  teardown with `FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`; the stuck
+  test process was terminated.
+
+Failures or open questions:
+- The aggregate Vitest command has a post-run Node/Vitest crash on this host
+  after assertions pass. Focused and isolated test files pass cleanly.
+- This slice still does not add a full MoonLab browser WebGPU runtime backend,
+  Asyncify/Emscripten exports, old `webgpu` branch backend code, or full
+  magnetar physics validation.
+- No PeerCompute, ULG, or Eshkol files were edited. No push was attempted.

@@ -171,17 +171,25 @@ Targeted validation:
   `pnpm --dir bindings/javascript/packages/core test`
 - Emit the default no-backend reduced-fixture scope artifact:
   `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json`
+- Emit the compact handoff summary for downstream ULG gating:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-summary.json`
 - Run the dependency-free browser smoke harness through an installed
   Chrome-compatible browser. This serves the package on localhost, loads
   `browser/webgpu-complex64-parity.html`, and extracts the artifact JSON from
   the real browser context:
   `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --out /tmp/moonlab-webgpu-complex64-browser-smoke.json`
+- Run the browser smoke summary path to verify the compact handoff shape can be
+  emitted from browser evidence:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-browser-summary.json`
 - Run the focused ULG artifact unit suite to ensure the reduced magnetar scope
   contract still prevents full-physics overclaims:
   `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
 - Run the browser smoke harness in required-backend mode only when a real
   browser WebGPU adapter is available:
   `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --require-backend --out /tmp/moonlab-webgpu-complex64-browser-smoke-required.json`
+- Run the required-backend browser summary path when a real browser WebGPU
+  adapter is available:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --require-backend --out /tmp/moonlab-webgpu-complex64-browser-summary-required.json`
 - The Node parity CLI still has no browser `navigator.gpu`, so required-backend
   mode is expected to fail there unless a browser runtime is injected:
   `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity`
@@ -201,6 +209,15 @@ all required native operations are covered by executed browser WebGPU evidence.
 The local browser-smoke run on 2026-06-06 acquired a device and covered
 `hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities`; the Node
 CLI path still has no browser adapter execution evidence.
+
+Current summary result on 2026-06-06: Node/no-adapter summary emitted
+`moonlab.webgpu.complex64-parity-handoff-summary.v0` with
+`reducedFixtureWebGpuParityReady=false`, stage `navigator-gpu-unavailable`, all
+five required operations missing, and `fullPhysicsValidation=false`. Browser
+smoke summary in required-backend mode emitted the same summary schema with
+`reducedFixtureWebGpuParityReady=true`, stage `device-acquired`, all five
+required operations covered, `runtimeBackendReady=false`, and
+`fullPhysicsValidation=false`.
 
 ## Canonical Normalized Reference Suite Export
 

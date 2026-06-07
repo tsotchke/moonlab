@@ -9,11 +9,13 @@ import {
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+  MOONLAB_WEBGPU_COMPLEX64_PARITY_HANDOFF_SUMMARY_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
   runMoonlabBrowserWebGpuComplex64BackendPreflight,
   runMoonlabBrowserWebGpuComplex64NativeOperationProbe,
   runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
+  summarizeMoonlabWebGpuComplex64ParityScope,
   validateMoonlabWebGpuComplex64ParityScope,
   type MoonlabBrowserWebGpu,
   type MoonlabBrowserWebGpuComplex64NativeOperationProbe,
@@ -119,6 +121,32 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.blockers).toContain('browser-webgpu-adapter-unavailable');
     expect(artifact.blockers).toContain('browser-webgpu-kernel-parity-not-executed');
     expect(artifact.contractValidation.valid).toBe(true);
+  });
+
+  it('summarizes no-backend parity evidence without a runtime or physics claim', () => {
+    const artifact = buildMoonlabWebGpuComplex64ParityScope({
+      generatedAt: '2026-06-06T20:00:00.000Z',
+      backendDetection: {
+        available: false,
+        runtime: 'node-test',
+        reason: 'test runtime has no browser WebGPU adapter',
+      },
+    });
+    const summary = summarizeMoonlabWebGpuComplex64ParityScope(artifact);
+
+    expect(summary.schema).toBe(MOONLAB_WEBGPU_COMPLEX64_PARITY_HANDOFF_SUMMARY_SCHEMA);
+    expect(summary.sourceSchema).toBe(MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA);
+    expect(summary.reducedFixtureWebGpuParityReady).toBe(false);
+    expect(summary.contractValidationValid).toBe(true);
+    expect(summary.runtimeBackendReady).toBe(false);
+    expect(summary.fullFidelityMagnetarSimulation).toBe(false);
+    expect(summary.fullPhysicsValidation).toBe(false);
+    expect(summary.nativeCoverage.covered).toEqual([]);
+    expect(summary.nativeCoverage.missing).toEqual(
+      MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED
+    );
+    expect(summary.blockers).toContain('browser-webgpu-adapter-unavailable');
+    expect(summary.validationErrors).toEqual([]);
   });
 
   it('marks a required missing backend as blocked without changing reduced scope', () => {
@@ -581,6 +609,19 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.blockers).not.toContain('native-webgpu-operation-coverage-not-yet-recorded');
     expect(artifact.blockers).not.toContain('browser-webgpu-kernel-parity-not-executed');
     expect(artifact.contractValidation.valid).toBe(true);
+
+    const summary = summarizeMoonlabWebGpuComplex64ParityScope(artifact);
+    expect(summary.reducedFixtureWebGpuParityReady).toBe(true);
+    expect(summary.runtimeBackendReady).toBe(false);
+    expect(summary.fullFidelityMagnetarSimulation).toBe(false);
+    expect(summary.fullPhysicsValidation).toBe(false);
+    expect(summary.nativeCoverage.covered).toEqual(
+      MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED
+    );
+    expect(summary.nativeCoverage.missing).toEqual([]);
+    expect(summary.probes.nativeOperations.operations.every((operation) => (
+      operation.fixtureCount === 0
+    ))).toBe(true);
   });
 
   it('rejects a WebGPU parity pass when native gate coverage is partial', () => {
@@ -910,9 +951,12 @@ describe('WebGPU complex64 parity scope contract', () => {
 
     expect(harness).toContain("await import('../dist/index.mjs')");
     expect(harness).toContain('buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe');
+    expect(harness).toContain('summarizeMoonlabWebGpuComplex64ParityScope');
     expect(harness).toContain('validateMoonlabWebGpuComplex64ParityScope');
+    expect(harness).toContain("params.get('summary')");
     expect(harness).toContain('id="artifact-json"');
     expect(harness).toContain('window.__moonlabWebGpuComplex64ParityArtifact');
+    expect(harness).toContain('window.__moonlabWebGpuComplex64ParitySummary');
     expect(harness).not.toContain('webgpuParity.passed = true');
   });
 });

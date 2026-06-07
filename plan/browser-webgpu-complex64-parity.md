@@ -106,11 +106,16 @@ Implemented slice:
    real `navigator.gpu` adapter is available. The runner extracts the browser
    artifact JSON and keeps required-backend mode nonzero unless probe execution
    is actually recorded.
+10. Added `moonlab.webgpu.complex64-parity-handoff-summary.v0` and `--summary`
+    output for both the Node parity CLI and browser smoke runner. This gives
+    downstream ULG handoff checks a compact readiness shape with covered/missing
+    native operations, preflight stage, blockers, and explicit reduced-scope
+    flags.
 
-The next patch after this browser harness should stay minimal: decide whether
-to check in a stable browser-smoke evidence artifact or continue toward a real
-runtime backend adapter. Keep that separate from broad backend imports and avoid
-counting `phase` CPU fallback as native WebGPU coverage.
+The next patch after this browser harness and handoff summary should stay
+minimal: either check in stable browser-smoke evidence, or continue toward a
+real runtime backend adapter. Keep that separate from broad backend imports and
+avoid counting `phase` CPU fallback as native WebGPU coverage.
 
 The first parity probe should avoid claiming magnetar simulation validation.
 It should only demonstrate that reduced deterministic quantum fixtures can
@@ -129,8 +134,11 @@ pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgp
 pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts
 pnpm --dir bindings/javascript/packages/core test
 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json
+pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-summary.json
 pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --out /tmp/moonlab-webgpu-complex64-browser-smoke.json
+pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --out /tmp/moonlab-webgpu-complex64-browser-summary.json
 pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --require-backend --out /tmp/moonlab-webgpu-complex64-browser-smoke-required.json
+pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --summary --canonical --require-backend --out /tmp/moonlab-webgpu-complex64-browser-summary-required.json
 MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity
 ```
 

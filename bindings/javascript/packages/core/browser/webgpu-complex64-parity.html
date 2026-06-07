@@ -66,11 +66,13 @@
       const generatedAt = params.get('generatedAt') || undefined;
       const requireBackend = parseBoolean(params.get('requireBackend'));
       const canonical = parseBoolean(params.get('canonical'));
+      const summary = parseBoolean(params.get('summary'));
 
       try {
         const {
           buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
           canonicalJson,
+          summarizeMoonlabWebGpuComplex64ParityScope,
           validateMoonlabWebGpuComplex64ParityScope,
         } = await import('../dist/index.mjs');
         const artifact = await buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe({
@@ -83,13 +85,17 @@
           ...artifact,
           contractValidation,
         };
+        const outputValue = summary
+          ? summarizeMoonlabWebGpuComplex64ParityScope(artifactWithValidation)
+          : artifactWithValidation;
         const json = canonical
-          ? canonicalJson(artifactWithValidation)
-          : JSON.stringify(artifactWithValidation, null, 2);
+          ? canonicalJson(outputValue)
+          : JSON.stringify(outputValue, null, 2);
         const complete = contractValidation.valid
           && (!requireBackend || artifactWithValidation.webgpuParity.executed);
 
         window.__moonlabWebGpuComplex64ParityArtifact = artifactWithValidation;
+        window.__moonlabWebGpuComplex64ParitySummary = summary ? outputValue : undefined;
         outputEl.textContent = json;
         outputEl.dataset.ready = 'true';
         document.documentElement.dataset.moonlabStatus = complete ? 'complete' : 'blocked';
