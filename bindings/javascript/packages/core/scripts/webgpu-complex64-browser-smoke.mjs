@@ -46,10 +46,19 @@ try {
     process.stdout.write(output);
   }
 
+  const contractValid = artifact.schema
+    === 'moonlab.webgpu.complex64-parity-handoff-summary.v0'
+    ? artifact.contractValidationValid === true
+    : artifact.contractValidation?.valid === true;
+  const parityExecuted = artifact.schema
+    === 'moonlab.webgpu.complex64-parity-handoff-summary.v0'
+    ? artifact.webgpuParity?.executed === true
+    : artifact.webgpuParity?.executed === true;
+
   if (
     artifact.schema === 'moonlab.webgpu.complex64-browser-harness-error.v0'
-    || artifact.contractValidation?.valid !== true
-    || (args.requireBackend && artifact.webgpuParity?.executed !== true)
+    || !contractValid
+    || (args.requireBackend && !parityExecuted)
   ) {
     process.exitCode = 1;
   }
@@ -76,6 +85,8 @@ function parseArgs(argv) {
       parsed.port = Number.parseInt(argv[++index], 10);
     } else if (arg === '--canonical') {
       parsed.canonical = true;
+    } else if (arg === '--summary') {
+      parsed.summary = true;
     } else if (arg === '--require-backend') {
       parsed.requireBackend = true;
     } else if (arg === '--keep-profile') {
@@ -90,6 +101,7 @@ function parseArgs(argv) {
           '  --out <path>           Write extracted artifact JSON',
           '  --generated-at <iso>   Override artifact timestamp',
           '  --canonical            Emit canonical JSON from the browser harness',
+          '  --summary              Emit compact handoff summary JSON',
           '  --require-backend      Exit nonzero unless browser WebGPU probe executed',
           '  --port <number>        Static server port, default is ephemeral',
           '  --keep-profile         Keep the temporary browser profile',
@@ -182,6 +194,9 @@ function buildHarnessUrl(port, options) {
   }
   if (options.canonical) {
     params.set('canonical', '1');
+  }
+  if (options.summary) {
+    params.set('summary', '1');
   }
   if (options.requireBackend) {
     params.set('requireBackend', '1');

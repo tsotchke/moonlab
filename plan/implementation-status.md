@@ -163,6 +163,9 @@ reference data.
 - [x] Set top-level reduced `webgpuParity` pass/executed only when the browser
   smoke path records device acquisition, a passing probability probe, and
   passing executed coverage for every required native operation.
+- [x] Add compact `moonlab.webgpu.complex64-parity-handoff-summary.v0`
+  output for downstream ULG handoff checks, available from both Node parity and
+  browser smoke paths via `--summary`.
 
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
 scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
@@ -175,8 +178,29 @@ MoonLab browser WebGPU runtime backend. The browser smoke runner can collect
 browser-context evidence; on the local Chrome run it acquired a device and
 covered every required reduced operation (`hadamard`, `pauli_x`, `pauli_z`,
 `cnot`, and `compute_probabilities`) without counting `phase` CPU fallback as
-native coverage. Full runtime backend wiring, Asyncify/Emscripten export
-changes, and full magnetar physics validation remain blocked.
+native coverage. The compact handoff summary now exposes that reduced parity
+state without carrying fixture arrays and still reports
+`runtimeBackendReady = false`, `fullFidelityMagnetarSimulation = false`, and
+`fullPhysicsValidation = false`. Full runtime backend wiring,
+Asyncify/Emscripten export changes, and full magnetar physics validation remain
+blocked.
+
+## Browser WebGPU Parity Handoff Summary
+
+- [x] Identify the next bounded MoonLab integration gap after browser smoke:
+  downstream systems need a compact, stable pass/fail summary rather than the
+  full fixture artifact.
+- [x] Export `summarizeMoonlabWebGpuComplex64ParityScope()`.
+- [x] Add `moonlab.webgpu.complex64-parity-handoff-summary.v0`.
+- [x] Add `--summary` output to the Node parity CLI and browser smoke harness.
+- [x] Preserve reduced-scope semantics: summary readiness can pass only for
+  reduced fixture WebGPU parity and keeps runtime backend/full-physics flags
+  false.
+- [x] Add focused unit coverage and CLI/browser smoke validation.
+
+Current blocker: the summary is a handoff gate for reduced browser complex64
+parity only. It is not a full MoonLab WebGPU runtime backend and not magnetar
+scientific validation.
 
 ## Canonical Normalized Reference Suite Export
 

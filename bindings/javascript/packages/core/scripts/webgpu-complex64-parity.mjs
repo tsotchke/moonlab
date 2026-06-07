@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import {
   buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
   canonicalJson,
+  summarizeMoonlabWebGpuComplex64ParityScope,
   validateMoonlabWebGpuComplex64ParityScope,
 } from '../dist/index.mjs';
 
@@ -15,12 +16,16 @@ const artifact = await buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe({
   requireBackend,
 });
 const validation = validateMoonlabWebGpuComplex64ParityScope(artifact);
-const outputPath = args.out ? resolve(args.out) : undefined;
-
-writeJson({
+const artifactWithValidation = {
   ...artifact,
   contractValidation: validation,
-}, outputPath, { canonical: args.canonical });
+};
+const outputValue = args.summary
+  ? summarizeMoonlabWebGpuComplex64ParityScope(artifactWithValidation)
+  : artifactWithValidation;
+const outputPath = args.out ? resolve(args.out) : undefined;
+
+writeJson(outputValue, outputPath, { canonical: args.canonical });
 
 if (!validation.valid || (requireBackend && !artifact.webgpuParity.executed)) {
   process.exitCode = 1;
@@ -36,13 +41,15 @@ function parseArgs(argv) {
       parsed.out = argv[++index];
     } else if (arg === '--canonical') {
       parsed.canonical = true;
+    } else if (arg === '--summary') {
+      parsed.summary = true;
     } else if (arg === '--generated-at') {
       parsed.generatedAt = argv[++index];
     } else if (arg === '--require-backend') {
       parsed.requireBackend = true;
     } else if (arg === '--help' || arg === '-h') {
       process.stdout.write(
-        'Usage: node scripts/webgpu-complex64-parity.mjs [--out path] [--canonical] [--generated-at iso] [--require-backend]\n'
+        'Usage: node scripts/webgpu-complex64-parity.mjs [--out path] [--canonical] [--summary] [--generated-at iso] [--require-backend]\n'
       );
       process.exit(0);
     } else {

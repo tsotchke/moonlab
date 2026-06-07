@@ -6,6 +6,8 @@ export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA =
   'moonlab.webgpu.complex64-native-operation-probe.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA =
   'moonlab.webgpu.complex64-browser-backend-preflight.v0';
+export const MOONLAB_WEBGPU_COMPLEX64_PARITY_HANDOFF_SUMMARY_SCHEMA =
+  'moonlab.webgpu.complex64-parity-handoff-summary.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF = 1e-5;
 
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED = [
@@ -259,6 +261,69 @@ export interface MoonlabWebGpuComplex64ParityScopeArtifact {
   browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe;
   blockers: string[];
   contractValidation: MoonlabWebGpuComplex64ParityValidation;
+}
+
+export interface MoonlabWebGpuComplex64ParityHandoffSummary {
+  schema: typeof MOONLAB_WEBGPU_COMPLEX64_PARITY_HANDOFF_SUMMARY_SCHEMA;
+  artifactKind: 'browser-webgpu-complex64-parity-handoff-summary';
+  sourceSchema: typeof MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA;
+  generatedAt: string;
+  status: MoonlabWebGpuComplex64ParityScopeArtifact['status'];
+  reducedFixtureWebGpuParityReady: boolean;
+  contractValidationValid: boolean;
+  backendAvailable: boolean;
+  requireBackend: boolean;
+  runtimeBackendReady: false;
+  reducedFixtureOnly: true;
+  fullFidelityMagnetarSimulation: false;
+  fullPhysicsValidation: false;
+  readinessClaim: string;
+  webgpuParity: {
+    executed: boolean;
+    passed: boolean;
+    maxProbabilityAbsDiff: number | null;
+    tolerance: number;
+  };
+  backendPreflight: {
+    runtime: string;
+    stage: MoonlabBrowserWebGpuComplex64BackendPreflight['stage'];
+    navigatorGpuAvailable: boolean;
+    adapterAvailable: boolean;
+    deviceAcquired: boolean;
+  };
+  nativeCoverage: {
+    required: NativeCoverageRequired[];
+    covered: NativeCoverageRequired[];
+    missing: NativeCoverageRequired[];
+    excluded: NativeCoverageExcluded[];
+  };
+  probes: {
+    probabilityKernel: {
+      executed: boolean;
+      passed: boolean;
+      maxProbabilityAbsDiff: number | null;
+      tolerance: number;
+      coveredNativeOperations: Array<Extract<NativeCoverageRequired, 'compute_probabilities'>>;
+    };
+    nativeOperations: {
+      executed: boolean;
+      passed: boolean;
+      maxAmplitudeAbsDiff: number | null;
+      tolerance: number;
+      coveredNativeOperations: NativeOperationProbeOperation[];
+      operations: Array<{
+        operation: NativeOperationProbeOperation;
+        executed: boolean;
+        passed: boolean;
+        covered: boolean;
+        maxAmplitudeAbsDiff: number | null;
+        fixtureCount: number;
+        blocker?: string;
+      }>;
+    };
+  };
+  blockers: string[];
+  validationErrors: string[];
 }
 
 export interface BuildMoonlabWebGpuComplex64ParityScopeOptions {
@@ -519,6 +584,90 @@ export function buildMoonlabWebGpuComplex64ParityScope(
   return {
     ...artifactWithoutValidation,
     contractValidation: validateMoonlabWebGpuComplex64ParityScope(artifactWithoutValidation),
+  };
+}
+
+export function summarizeMoonlabWebGpuComplex64ParityScope(
+  artifact: MoonlabWebGpuComplex64ParityScopeArtifact
+): MoonlabWebGpuComplex64ParityHandoffSummary {
+  const contractValidation =
+    artifact.contractValidation ?? validateMoonlabWebGpuComplex64ParityScope(artifact);
+  const covered = artifact.coverage.nativeWebGpu
+    .filter((entry) => entry.covered)
+    .map((entry) => entry.operation);
+  const missing = artifact.coverage.nativeWebGpu
+    .filter((entry) => !entry.covered)
+    .map((entry) => entry.operation);
+  const reducedFixtureWebGpuParityReady =
+    contractValidation.valid
+    && artifact.webgpuParity.executed
+    && artifact.webgpuParity.passed
+    && artifact.reducedFixtureOnly === true
+    && artifact.fullFidelityMagnetarSimulation === false
+    && artifact.fullPhysicsValidation === false
+    && missing.length === 0;
+
+  return {
+    schema: MOONLAB_WEBGPU_COMPLEX64_PARITY_HANDOFF_SUMMARY_SCHEMA,
+    artifactKind: 'browser-webgpu-complex64-parity-handoff-summary',
+    sourceSchema: MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
+    generatedAt: artifact.generatedAt,
+    status: artifact.status,
+    reducedFixtureWebGpuParityReady,
+    contractValidationValid: contractValidation.valid,
+    backendAvailable: artifact.backendAvailable,
+    requireBackend: artifact.requireBackend,
+    runtimeBackendReady: false,
+    reducedFixtureOnly: true,
+    fullFidelityMagnetarSimulation: false,
+    fullPhysicsValidation: false,
+    readinessClaim: artifact.fidelityRuntimeScope.readinessClaim,
+    webgpuParity: {
+      executed: artifact.webgpuParity.executed,
+      passed: artifact.webgpuParity.passed,
+      maxProbabilityAbsDiff: artifact.webgpuParity.maxProbabilityAbsDiff,
+      tolerance: artifact.webgpuParity.tolerance,
+    },
+    backendPreflight: {
+      runtime: artifact.browserBackendPreflight.runtime,
+      stage: artifact.browserBackendPreflight.stage,
+      navigatorGpuAvailable: artifact.browserBackendPreflight.navigatorGpuAvailable,
+      adapterAvailable: artifact.browserBackendPreflight.adapterAvailable,
+      deviceAcquired: artifact.browserBackendPreflight.deviceAcquired,
+    },
+    nativeCoverage: {
+      required: [...MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED],
+      covered,
+      missing,
+      excluded: [...MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED],
+    },
+    probes: {
+      probabilityKernel: {
+        executed: artifact.browserKernelProbe.executed,
+        passed: artifact.browserKernelProbe.passed,
+        maxProbabilityAbsDiff: artifact.browserKernelProbe.maxProbabilityAbsDiff,
+        tolerance: artifact.browserKernelProbe.tolerance,
+        coveredNativeOperations: [...artifact.browserKernelProbe.coveredNativeOperations],
+      },
+      nativeOperations: {
+        executed: artifact.browserNativeOperationProbe.executed,
+        passed: artifact.browserNativeOperationProbe.passed,
+        maxAmplitudeAbsDiff: artifact.browserNativeOperationProbe.maxAmplitudeAbsDiff,
+        tolerance: artifact.browserNativeOperationProbe.tolerance,
+        coveredNativeOperations: [...artifact.browserNativeOperationProbe.coveredNativeOperations],
+        operations: artifact.browserNativeOperationProbe.operationResults.map((result) => ({
+          operation: result.operation,
+          executed: result.executed,
+          passed: result.passed,
+          covered: result.covered,
+          maxAmplitudeAbsDiff: result.maxAmplitudeAbsDiff,
+          fixtureCount: result.fixtureResults.length,
+          blocker: result.blocker,
+        })),
+      },
+    },
+    blockers: [...artifact.blockers],
+    validationErrors: [...contractValidation.errors],
   };
 }
 
