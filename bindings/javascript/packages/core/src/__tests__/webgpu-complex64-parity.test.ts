@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
@@ -526,6 +527,62 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.contractValidation.valid).toBe(true);
   });
 
+  it('accepts a reduced WebGPU parity pass with complete executed browser coverage', () => {
+    const browserKernelProbe: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe = {
+      schema: MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-probability-kernel',
+      kernel: 'compute_probabilities',
+      executed: true,
+      passed: true,
+      coveredNativeOperations: ['compute_probabilities'],
+      fixtureResults: [],
+      maxProbabilityAbsDiff: 0,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: 'test browser probability kernel matched',
+    };
+    const browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe = {
+      schema: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
+      probeKind: 'browser-webgpu-complex64-native-operation-probe',
+      executed: true,
+      passed: true,
+      coveredNativeOperations: [...MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS],
+      operationResults: MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_OPERATIONS.map(
+        (operation) => ({
+          operation,
+          executed: true,
+          passed: true,
+          covered: true,
+          fixtureResults: [],
+          maxAmplitudeAbsDiff: 0,
+          tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+          reason: `test browser ${operation} kernel matched`,
+        })
+      ),
+      maxAmplitudeAbsDiff: 0,
+      tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
+      reason: 'test browser native operation kernels matched',
+    };
+    const artifact = buildMoonlabWebGpuComplex64ParityScope({
+      generatedAt: '2026-06-06T20:00:00.000Z',
+      backendAvailable: true,
+      browserKernelProbe,
+      browserNativeOperationProbe,
+      webgpuParity: {
+        executed: true,
+        passed: true,
+        maxProbabilityAbsDiff: 0,
+        reason: 'test complete reduced browser WebGPU coverage',
+      },
+    });
+
+    expect(artifact.coverage.nativeWebGpu.every((entry) => entry.covered)).toBe(true);
+    expect(artifact.webgpuParity.executed).toBe(true);
+    expect(artifact.webgpuParity.passed).toBe(true);
+    expect(artifact.blockers).not.toContain('native-webgpu-operation-coverage-not-yet-recorded');
+    expect(artifact.blockers).not.toContain('browser-webgpu-kernel-parity-not-executed');
+    expect(artifact.contractValidation.valid).toBe(true);
+  });
+
   it('rejects a WebGPU parity pass when native gate coverage is partial', () => {
     const artifact = buildMoonlabWebGpuComplex64ParityScope({
       generatedAt: '2026-06-06T20:00:00.000Z',
@@ -843,5 +900,19 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(artifact.webgpuParity.passed).toBe(false);
     expect(artifact.blockers).toContain('browser-webgpu-adapter-unavailable');
     expect(artifact.contractValidation.valid).toBe(true);
+  });
+
+  it('ships a browser harness for real navigator.gpu probe execution', () => {
+    const harness = readFileSync(
+      new URL('../../browser/webgpu-complex64-parity.html', import.meta.url),
+      'utf8'
+    );
+
+    expect(harness).toContain("await import('../dist/index.mjs')");
+    expect(harness).toContain('buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe');
+    expect(harness).toContain('validateMoonlabWebGpuComplex64ParityScope');
+    expect(harness).toContain('id="artifact-json"');
+    expect(harness).toContain('window.__moonlabWebGpuComplex64ParityArtifact');
+    expect(harness).not.toContain('webgpuParity.passed = true');
   });
 });

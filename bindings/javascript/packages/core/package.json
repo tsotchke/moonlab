@@ -31,6 +31,7 @@
     "test:coverage": "vitest run --coverage",
     "ulg:artifact": "node scripts/emit-ulg-quantum-response-artifact.mjs",
     "webgpu:complex64:parity": "node scripts/webgpu-complex64-parity.mjs",
+    "webgpu:complex64:browser-smoke": "node scripts/webgpu-complex64-browser-smoke.mjs",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist build"
   },

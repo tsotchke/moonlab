@@ -171,11 +171,19 @@ Targeted validation:
   `pnpm --dir bindings/javascript/packages/core test`
 - Emit the default no-backend reduced-fixture scope artifact:
   `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json`
+- Run the dependency-free browser smoke harness through an installed
+  Chrome-compatible browser. This serves the package on localhost, loads
+  `browser/webgpu-complex64-parity.html`, and extracts the artifact JSON from
+  the real browser context:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --out /tmp/moonlab-webgpu-complex64-browser-smoke.json`
 - Run the focused ULG artifact unit suite to ensure the reduced magnetar scope
   contract still prevents full-physics overclaims:
   `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
-- Run a browser-required WebGPU parity command only when a real adapter is
-  available:
+- Run the browser smoke harness in required-backend mode only when a real
+  browser WebGPU adapter is available:
+  `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --require-backend --out /tmp/moonlab-webgpu-complex64-browser-smoke-required.json`
+- The Node parity CLI still has no browser `navigator.gpu`, so required-backend
+  mode is expected to fail there unless a browser runtime is injected:
   `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity`
 
 The parity command must emit `moonlab.webgpu.complex64-parity-scope.v0`, include
@@ -188,10 +196,11 @@ coverage, and keep
 `fullPhysicsValidation = false`.
 
 A passing probability-kernel probe or partial native-operation probe alone must
-not set `webgpuParity.passed`. Full WebGPU parity remains blocked until all
-required native operations are covered by executed browser WebGPU evidence.
-The `cnot` probe helper exists now, but local Node CLI validation still has no
-browser adapter execution evidence.
+not set `webgpuParity.passed`. Reduced-fixture browser parity can pass only when
+all required native operations are covered by executed browser WebGPU evidence.
+The local browser-smoke run on 2026-06-06 acquired a device and covered
+`hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities`; the Node
+CLI path still has no browser adapter execution evidence.
 
 ## Canonical Normalized Reference Suite Export
 
