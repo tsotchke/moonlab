@@ -4,6 +4,8 @@ export const MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA =
   'moonlab.webgpu.complex64-probability-kernel-probe.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA =
   'moonlab.webgpu.complex64-native-operation-probe.v0';
+export const MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA =
+  'moonlab.webgpu.complex64-browser-backend-preflight.v0';
 export const MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF = 1e-5;
 
 export const MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED = [
@@ -62,7 +64,37 @@ export interface MoonlabWebGpuComplex64BackendDetection {
   available: boolean;
   runtime: string;
   reason?: string;
+  preflightStage?:
+    | 'not-run-synthetic-detection'
+    | 'navigator-gpu-unavailable'
+    | 'request-adapter-failed'
+    | 'adapter-unavailable'
+    | 'request-device-failed'
+    | 'device-acquired';
+  navigatorGpuAvailable?: boolean;
+  adapterAvailable?: boolean;
+  deviceAcquired?: boolean;
   adapterInfo?: Record<string, unknown>;
+  adapterInfoError?: string;
+}
+
+export interface MoonlabBrowserWebGpuComplex64BackendPreflight {
+  schema: typeof MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA;
+  probeKind: 'browser-webgpu-adapter-device-preflight';
+  runtime: string;
+  stage:
+    | 'not-run-synthetic-detection'
+    | 'navigator-gpu-unavailable'
+    | 'request-adapter-failed'
+    | 'adapter-unavailable'
+    | 'request-device-failed'
+    | 'device-acquired';
+  navigatorGpuAvailable: boolean;
+  adapterAvailable: boolean;
+  deviceAcquired: boolean;
+  adapterInfo?: Record<string, unknown>;
+  adapterInfoError?: string;
+  reason: string;
 }
 
 export interface MoonlabWebGpuComplex64NativeCoverageEntry {
@@ -222,6 +254,7 @@ export interface MoonlabWebGpuComplex64ParityScopeArtifact {
     tolerance: number;
     reason: string;
   };
+  browserBackendPreflight: MoonlabBrowserWebGpuComplex64BackendPreflight;
   browserKernelProbe: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
   browserNativeOperationProbe: MoonlabBrowserWebGpuComplex64NativeOperationProbe;
   blockers: string[];
@@ -234,6 +267,7 @@ export interface BuildMoonlabWebGpuComplex64ParityScopeOptions {
   backendAvailable?: boolean;
   requireBackend?: boolean;
   coveredNativeOperations?: NativeCoverageRequired[];
+  browserBackendPreflight?: MoonlabBrowserWebGpuComplex64BackendPreflight;
   browserKernelProbe?: MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe;
   browserNativeOperationProbe?: MoonlabBrowserWebGpuComplex64NativeOperationProbe;
   webgpuParity?: {
@@ -262,6 +296,7 @@ export interface BuildMoonlabWebGpuComplex64ParityScopeWithBrowserProbeOptions
     | 'backendDetection'
     | 'backendAvailable'
     | 'coveredNativeOperations'
+    | 'browserBackendPreflight'
     | 'browserKernelProbe'
     | 'browserNativeOperationProbe'
   > {
@@ -277,6 +312,7 @@ export interface MoonlabBrowserWebGpu {
 export interface MoonlabBrowserWebGpuAdapter {
   requestDevice(): Promise<MoonlabBrowserWebGpuDevice>;
   requestAdapterInfo?(): Promise<Record<string, unknown>>;
+  info?: Record<string, unknown>;
 }
 
 export interface MoonlabBrowserWebGpuDevice {
@@ -353,6 +389,11 @@ export function buildMoonlabWebGpuComplex64ParityScope(
       ? undefined
       : 'navigator.gpu adapter unavailable; no browser WebGPU backend was executed',
   };
+  const browserBackendPreflight = options.browserBackendPreflight
+    ?? buildSyntheticBrowserBackendPreflight({
+      backendAvailable,
+      backendDetection,
+    });
   const reducedFixtures = buildReducedFixtureResults();
   const preflightMaxDiff = Math.max(
     ...reducedFixtures.map((fixture) => fixture.maxProbabilityAbsDiff)
@@ -469,6 +510,7 @@ export function buildMoonlabWebGpuComplex64ParityScope(
       tolerance: MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
       reason: webgpuParity.reason ?? '',
     },
+    browserBackendPreflight,
     browserKernelProbe,
     browserNativeOperationProbe,
     blockers,
@@ -483,22 +525,35 @@ export function buildMoonlabWebGpuComplex64ParityScope(
 export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
   options: BuildMoonlabWebGpuComplex64ParityScopeWithBrowserProbeOptions = {}
 ): Promise<MoonlabWebGpuComplex64ParityScopeArtifact> {
-  const browserKernelProbe = await runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe({
+  const browserBackendPreflight = await runMoonlabBrowserWebGpuComplex64BackendPreflight({
     gpu: options.gpu,
     runtime: options.runtime,
-    workgroupSize: options.workgroupSize,
   });
-  const browserNativeOperationProbe =
-    await runMoonlabBrowserWebGpuComplex64NativeOperationProbe({
+  const browserKernelProbe = browserBackendPreflight.deviceAcquired
+    ? await runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe({
       gpu: options.gpu,
       runtime: options.runtime,
       workgroupSize: options.workgroupSize,
-    });
+    })
+    : buildNotExecutedProbabilityKernelProbe(browserBackendPreflight.reason);
+  const browserNativeOperationProbe = browserBackendPreflight.deviceAcquired
+    ? await runMoonlabBrowserWebGpuComplex64NativeOperationProbe({
+      gpu: options.gpu,
+      runtime: options.runtime,
+      workgroupSize: options.workgroupSize,
+    })
+    : buildNotExecutedNativeOperationProbe(browserBackendPreflight.reason);
   const browserProbeExecuted =
     browserKernelProbe.executed || browserNativeOperationProbe.executed;
   const backendDetection: MoonlabWebGpuComplex64BackendDetection = {
-    available: browserProbeExecuted,
-    runtime: options.runtime ?? detectRuntime(),
+    available: browserBackendPreflight.deviceAcquired || browserProbeExecuted,
+    runtime: browserBackendPreflight.runtime,
+    preflightStage: browserBackendPreflight.stage,
+    navigatorGpuAvailable: browserBackendPreflight.navigatorGpuAvailable,
+    adapterAvailable: browserBackendPreflight.adapterAvailable,
+    deviceAcquired: browserBackendPreflight.deviceAcquired,
+    adapterInfo: browserBackendPreflight.adapterInfo,
+    adapterInfoError: browserBackendPreflight.adapterInfoError,
     reason: joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
   };
 
@@ -506,6 +561,7 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
     generatedAt: options.generatedAt,
     requireBackend: options.requireBackend,
     backendDetection,
+    browserBackendPreflight,
     browserKernelProbe,
     browserNativeOperationProbe,
     webgpuParity: {
@@ -517,6 +573,92 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
         : joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
     },
   });
+}
+
+export async function runMoonlabBrowserWebGpuComplex64BackendPreflight({
+  gpu,
+  runtime,
+}: {
+  gpu?: MoonlabBrowserWebGpu | null;
+  runtime?: string;
+} = {}): Promise<MoonlabBrowserWebGpuComplex64BackendPreflight> {
+  const detectedRuntime = runtime ?? detectRuntime();
+  const resolvedGpu = gpu === undefined ? detectGlobalBrowserWebGpu() : gpu;
+  if (!resolvedGpu || typeof resolvedGpu.requestAdapter !== 'function') {
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+      probeKind: 'browser-webgpu-adapter-device-preflight',
+      runtime: detectedRuntime,
+      stage: 'navigator-gpu-unavailable',
+      navigatorGpuAvailable: false,
+      adapterAvailable: false,
+      deviceAcquired: false,
+      reason: 'navigator.gpu.requestAdapter is unavailable in this JavaScript runtime',
+    };
+  }
+
+  let adapter: MoonlabBrowserWebGpuAdapter | null;
+  try {
+    adapter = await resolvedGpu.requestAdapter();
+  } catch (error) {
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+      probeKind: 'browser-webgpu-adapter-device-preflight',
+      runtime: detectedRuntime,
+      stage: 'request-adapter-failed',
+      navigatorGpuAvailable: true,
+      adapterAvailable: false,
+      deviceAcquired: false,
+      reason: `navigator.gpu.requestAdapter failed: ${errorMessage(error)}`,
+    };
+  }
+
+  if (!adapter) {
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+      probeKind: 'browser-webgpu-adapter-device-preflight',
+      runtime: detectedRuntime,
+      stage: 'adapter-unavailable',
+      navigatorGpuAvailable: true,
+      adapterAvailable: false,
+      deviceAcquired: false,
+      reason: 'navigator.gpu.requestAdapter returned no adapter',
+    };
+  }
+
+  const adapterInfoResult = await readBrowserWebGpuAdapterInfo(adapter);
+  let device: MoonlabBrowserWebGpuDevice;
+  try {
+    device = await adapter.requestDevice();
+  } catch (error) {
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+      probeKind: 'browser-webgpu-adapter-device-preflight',
+      runtime: detectedRuntime,
+      stage: 'request-device-failed',
+      navigatorGpuAvailable: true,
+      adapterAvailable: true,
+      deviceAcquired: false,
+      ...adapterInfoResult,
+      reason: `GPUAdapter.requestDevice failed: ${errorMessage(error)}`,
+    };
+  }
+
+  try {
+    return {
+      schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+      probeKind: 'browser-webgpu-adapter-device-preflight',
+      runtime: detectedRuntime,
+      stage: 'device-acquired',
+      navigatorGpuAvailable: true,
+      adapterAvailable: true,
+      deviceAcquired: true,
+      ...adapterInfoResult,
+      reason: 'browser WebGPU adapter and device were acquired for reduced-fixture probe execution',
+    };
+  } finally {
+    device.destroy?.();
+  }
 }
 
 export async function runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe(
@@ -816,6 +958,27 @@ export function validateMoonlabWebGpuComplex64ParityScope(
   addCheck(
     checks,
     errors,
+    'browser-backend-preflight-contract',
+    artifact.browserBackendPreflight?.schema
+      === MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA
+      && artifact.browserBackendPreflight.probeKind
+        === 'browser-webgpu-adapter-device-preflight'
+      && isBackendPreflightStage(artifact.browserBackendPreflight.stage)
+      && (artifact.browserBackendPreflight.adapterAvailable !== true
+        || artifact.browserBackendPreflight.navigatorGpuAvailable === true)
+      && (artifact.browserBackendPreflight.deviceAcquired !== true
+        || (artifact.browserBackendPreflight.navigatorGpuAvailable === true
+          && artifact.browserBackendPreflight.adapterAvailable === true))
+      && (artifact.browserBackendPreflight.stage !== 'device-acquired'
+        || artifact.browserBackendPreflight.deviceAcquired === true)
+      && (artifact.browserBackendPreflight.stage !== 'navigator-gpu-unavailable'
+        || (artifact.browserBackendPreflight.navigatorGpuAvailable === false
+          && artifact.browserBackendPreflight.adapterAvailable === false
+          && artifact.browserBackendPreflight.deviceAcquired === false))
+  );
+  addCheck(
+    checks,
+    errors,
     'complex64-preflight-within-tolerance',
     artifact.complex64Preflight?.executed === true
       && artifact.complex64Preflight.passed === true
@@ -860,6 +1023,34 @@ function buildBlockers({
     blockers.push('browser-webgpu-kernel-parity-failed');
   }
   return blockers;
+}
+
+function buildSyntheticBrowserBackendPreflight({
+  backendAvailable,
+  backendDetection,
+}: {
+  backendAvailable: boolean;
+  backendDetection: MoonlabWebGpuComplex64BackendDetection;
+}): MoonlabBrowserWebGpuComplex64BackendPreflight {
+  const stage = backendDetection.preflightStage ?? 'not-run-synthetic-detection';
+  const navigatorGpuAvailable = backendDetection.navigatorGpuAvailable ?? false;
+  const adapterAvailable = backendDetection.adapterAvailable ?? false;
+  const deviceAcquired = backendDetection.deviceAcquired ?? false;
+  return {
+    schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+    probeKind: 'browser-webgpu-adapter-device-preflight',
+    runtime: backendDetection.runtime,
+    stage,
+    navigatorGpuAvailable,
+    adapterAvailable,
+    deviceAcquired,
+    adapterInfo: backendDetection.adapterInfo,
+    adapterInfoError: backendDetection.adapterInfoError,
+    reason: backendDetection.reason
+      ?? (backendAvailable
+        ? 'backend availability was supplied externally; browser adapter preflight was not run'
+        : 'browser adapter preflight was not run; no browser WebGPU backend was executed'),
+  };
 }
 
 interface BrowserWebGpuConstants {
@@ -994,6 +1185,32 @@ function browserWebGpuConstants(): BrowserWebGpuConstants {
       READ: webGpuGlobal.GPUMapMode?.READ ?? 1,
     },
   };
+}
+
+async function readBrowserWebGpuAdapterInfo(
+  adapter: MoonlabBrowserWebGpuAdapter
+): Promise<{
+  adapterInfo?: Record<string, unknown>;
+  adapterInfoError?: string;
+}> {
+  if (adapter.info && typeof adapter.info === 'object') {
+    return {
+      adapterInfo: copyRecord(adapter.info),
+    };
+  }
+  if (typeof adapter.requestAdapterInfo !== 'function') {
+    return {};
+  }
+  try {
+    const adapterInfo = await adapter.requestAdapterInfo();
+    return {
+      adapterInfo: copyRecord(adapterInfo),
+    };
+  } catch (error) {
+    return {
+      adapterInfoError: errorMessage(error),
+    };
+  }
 }
 
 async function runProbabilityKernelFixture({
@@ -1719,6 +1936,10 @@ function joinProbeReasons(...reasons: string[]): string {
   return [...new Set(reasons.filter((reason) => reason.length > 0))].join('; ');
 }
 
+function copyRecord(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value));
+}
+
 function hasExecutedNativeOperationEvidence(
   artifact: Partial<MoonlabWebGpuComplex64ParityScopeArtifact>,
   operation: NativeCoverageRequired
@@ -1767,6 +1988,15 @@ function arraysEqual(left: readonly string[] | undefined, right: readonly string
   return Array.isArray(left)
     && left.length === right.length
     && left.every((value, index) => value === right[index]);
+}
+
+function isBackendPreflightStage(value: unknown): value is MoonlabBrowserWebGpuComplex64BackendPreflight['stage'] {
+  return value === 'not-run-synthetic-detection'
+    || value === 'navigator-gpu-unavailable'
+    || value === 'request-adapter-failed'
+    || value === 'adapter-unavailable'
+    || value === 'request-device-failed'
+    || value === 'device-acquired';
 }
 
 function addCheck(

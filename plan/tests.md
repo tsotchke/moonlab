@@ -149,6 +149,13 @@ Current `ulg` branch state:
   `pauli_z`, and `cnot` reduced complex64 amplitude fixtures. Default
   Node/no-adapter CLI output must keep those operation results
   `executed=false` and `covered=false`.
+- The browser backend preflight records
+  `moonlab.webgpu.complex64-browser-backend-preflight.v0` evidence before
+  kernel probes. No-adapter output must record
+  `stage=navigator-gpu-unavailable`, `navigatorGpuAvailable=false`,
+  `adapterAvailable=false`, and `deviceAcquired=false`. Adapter-without-device
+  output must keep the kernel probes `executed=false` and all required native
+  operations `covered=false`.
 - Existing older WebGPU artifacts remain stale no-backend records and should not
   be treated as native parity evidence.
 - The default CLI emits explicit `backendAvailable = false` scope evidence when
@@ -172,9 +179,11 @@ Targeted validation:
   `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity`
 
 The parity command must emit `moonlab.webgpu.complex64-parity-scope.v0`, include
-`moonlab.webgpu.complex64-probability-kernel-probe.v0`, record complex64 GPU
-versus float64 WASM reference tolerances, separate native WebGPU coverage from
-CPU fallback coverage, and keep
+`moonlab.webgpu.complex64-probability-kernel-probe.v0` and
+`moonlab.webgpu.complex64-browser-backend-preflight.v0`, record complex64 GPU
+versus float64 WASM reference tolerances, separate browser adapter/device
+availability from kernel execution and native WebGPU coverage from CPU fallback
+coverage, and keep
 `fullFidelityMagnetarSimulation = false` plus
 `fullPhysicsValidation = false`.
 

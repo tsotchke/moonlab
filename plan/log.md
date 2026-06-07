@@ -1073,3 +1073,91 @@ Failures or open questions:
   not full reduced-fixture gate parity, and not full magnetar physics
   validation.
 - No push was attempted.
+
+## 2026-06-06 15:58:26 AKDT - Browser WebGPU adapter/device preflight evidence
+
+Prompt: "You are a MoonLab sidecar for the ULG/MoonLab/Eshkol/PeerCompute integration. Work only in /home/cos/projects/moonlab. Do not push. Keep commits local only. Current MoonLab head includes local commit fbc2ddf and should be clean. Task: advance the remaining MoonLab browser WebGPU blocker without overclaiming coverage. Inspect the current WebGPU complex64 parity/native-operation probe artifact and tests. If feasible, implement a small tested step toward real browser WebGPU execution for declared operations hadamard, pauli_x, pauli_z, cnot, or compute_probabilities: e.g. add executable WGSL/kernel descriptors, a browser-adapter execution harness that runs only when navigator.gpu is available, or stronger no-adapter evidence that keeps executed=false/passed=false unless real WebGPU runs. Do not mark operations covered/executed in no-adapter environments. Run focused tests/builds. Final response: files changed, commands run, validation, commit hash if any, and remaining blockers. Avoid /home/cos/projects/ulg, /home/cos/projects/peercompute, and /home/cos/projects/eshkol edits."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md`, MoonLab plan/status/test docs, current
+  WebGPU complex64 parity source, focused tests, package exports, and CLI.
+- Confirmed the MoonLab worktree was clean at local commit `fbc2ddf` before
+  editing; no push was attempted.
+- Added `moonlab.webgpu.complex64-browser-backend-preflight.v0` evidence to the
+  parity artifact. It records `navigatorGpuAvailable`, `adapterAvailable`,
+  `deviceAcquired`, optional adapter info/error, runtime, preflight stage, and
+  reason.
+- Updated `buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe` so the
+  browser kernel and native-operation probes are skipped unless preflight
+  acquires a device. No-adapter and adapter-without-device paths now keep
+  `executed=false`, `passed=false`, and no native operation coverage.
+- Preserved the existing operation/probability probe coverage rules:
+  preflight device acquisition alone does not mark `compute_probabilities`,
+  `hadamard`, `pauli_x`, `pauli_z`, or `cnot` covered.
+- Added validation so preflight evidence cannot claim a device without
+  navigator GPU support and an adapter.
+- Added focused tests for no-adapter preflight, adapter-without-device
+  preflight, and device-acquired preflight using mock WebGPU objects.
+- Updated WebGPU blocker/status/test plan docs with the new preflight schema
+  and remaining browser execution blocker.
+
+Files touched:
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/index.ts`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `sed -n '1,260p' /home/cos/projects/AGENTS.md`
+- `git status --short --branch`
+- `git log --oneline -5`
+- `rg`/`sed` inspections of the WebGPU parity source, focused tests, package
+  exports, CLI, and MoonLab plan docs.
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json --generated-at 2026-06-06T23:57:00.000Z`
+- `MOONLAB_WEBGPU_PARITY_REQUIRE_BACKEND=1 pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity-required.json --generated-at 2026-06-06T23:57:00.000Z`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-parity.json'); ..."`
+- `node -e "const a=require('/tmp/moonlab-webgpu-complex64-parity-required.json'); ..."`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm --dir bindings/javascript/packages/core test`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+- `git diff --check`
+
+Test results:
+- PASS: TypeScript build completed; tsup repeated the existing package
+  export-order warning for `types`.
+- PASS: focused WebGPU complex64 parity unit suite passed `17/17`.
+- PASS: default parity CLI emitted
+  `moonlab.webgpu.complex64-parity-scope.v0` with
+  `browserBackendPreflight.schema=moonlab.webgpu.complex64-browser-backend-preflight.v0`,
+  `stage=navigator-gpu-unavailable`, `navigatorGpuAvailable=false`,
+  `adapterAvailable=false`, `deviceAcquired=false`,
+  `backendAvailable=false`, `webgpuParity.executed=false`,
+  `webgpuParity.passed=false`, and `contractValidation.valid=true`.
+- PASS: default artifact keeps `compute_probabilities`, `hadamard`, `pauli_x`,
+  `pauli_z`, and `cnot` unexecuted/uncovered in the Node/no-adapter path.
+- EXPECTED FAIL: required-backend parity command exited `1` in this Node
+  no-adapter environment. The emitted artifact stayed contract-valid and
+  included blockers `browser-webgpu-adapter-unavailable`,
+  `required-browser-webgpu-backend-missing`,
+  `native-webgpu-operation-coverage-not-yet-recorded`, and
+  `browser-webgpu-kernel-parity-not-executed`.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: JavaScript core unit suite passed `121/121` across 4 test files.
+- PASS: WASM rebuild completed after `build:ts` refreshed `dist`.
+- PASS: `git diff --check` reported no whitespace errors.
+
+Failures or open questions:
+- No browser WebGPU adapter was available in this Node CLI validation path, so
+  no actual browser GPU execution evidence was produced.
+- Full WebGPU parity remains blocked until executed browser evidence covers all
+  required native operations: `hadamard`, `pauli_x`, `pauli_z`, `cnot`, and
+  `compute_probabilities`.
+- The preflight/probes are still not a full MoonLab browser WebGPU runtime
+  backend, not full reduced-fixture gate parity, and not full magnetar physics
+  validation.
+- No push was attempted.

@@ -151,14 +151,22 @@ reference data.
 - [x] Preserve default no-backend evidence: in Node/no-adapter runs the native
   operation probe still records `executed=false`, `covered=false`, and
   `native-operation-probe-not-executed` for each declared gate.
+- [x] Add explicit browser adapter/device preflight evidence with
+  `navigatorGpuAvailable`, `adapterAvailable`, `deviceAcquired`, and
+  preflight-stage fields. Kernel probes are skipped unless a real device is
+  acquired, so no-adapter and adapter-without-device paths stay
+  `executed=false` and `covered=false`.
 
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
 scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
 probe plus standalone native-operation WGSL probes for `hadamard`, `pauli_x`,
-`pauli_z`, and `cnot`. It still has no full MoonLab browser WebGPU runtime
-backend and no local browser adapter execution evidence in the Node CLI path.
-Required-backend parity remains blocked until a browser adapter records native
-coverage for every required operation
+`pauli_z`, and `cnot`, plus browser backend preflight evidence. The local Node
+CLI path records `stage=navigator-gpu-unavailable`,
+`navigatorGpuAvailable=false`, `adapterAvailable=false`, and
+`deviceAcquired=false`, with all kernel probes unexecuted. It still has no full
+MoonLab browser WebGPU runtime backend and no local browser adapter execution
+evidence. Required-backend parity remains blocked until a browser adapter
+records native coverage for every required operation
 (`hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities`),
 without counting `phase` CPU fallback as native coverage.
 

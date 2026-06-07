@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
   buildMoonlabWebGpuComplex64ParityScope,
+  MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_MAX_PROBABILITY_ABS_DIFF,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_EXCLUDED,
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED,
@@ -9,9 +10,11 @@ import {
   MOONLAB_WEBGPU_COMPLEX64_NATIVE_OPERATION_PROBE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PARITY_SCOPE_SCHEMA,
   MOONLAB_WEBGPU_COMPLEX64_PROBABILITY_KERNEL_PROBE_SCHEMA,
+  runMoonlabBrowserWebGpuComplex64BackendPreflight,
   runMoonlabBrowserWebGpuComplex64NativeOperationProbe,
   runMoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   validateMoonlabWebGpuComplex64ParityScope,
+  type MoonlabBrowserWebGpu,
   type MoonlabBrowserWebGpuComplex64NativeOperationProbe,
   type MoonlabBrowserWebGpuComplex64ProbabilityKernelProbe,
   type MoonlabWebGpuComplex64ParityScopeArtifact,
@@ -608,6 +611,146 @@ describe('WebGPU complex64 parity scope contract', () => {
     expect(probe.passed).toBe(false);
     expect(probe.coveredNativeOperations).toEqual([]);
     expect(probe.reason).toContain('navigator.gpu.requestAdapter is unavailable');
+  });
+
+  it('records no-adapter backend preflight without claiming execution', async () => {
+    const preflight = await runMoonlabBrowserWebGpuComplex64BackendPreflight({
+      gpu: null,
+      runtime: 'node-test',
+    });
+
+    expect(preflight).toEqual(
+      expect.objectContaining({
+        schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+        probeKind: 'browser-webgpu-adapter-device-preflight',
+        runtime: 'node-test',
+        stage: 'navigator-gpu-unavailable',
+        navigatorGpuAvailable: false,
+        adapterAvailable: false,
+        deviceAcquired: false,
+      })
+    );
+    expect(preflight.reason).toContain('navigator.gpu.requestAdapter is unavailable');
+  });
+
+  it('records adapter-without-device preflight without running kernels', async () => {
+    const gpu: MoonlabBrowserWebGpu = {
+      async requestAdapter() {
+        return {
+          async requestAdapterInfo() {
+            return {
+              vendor: 'moonlab-test',
+            };
+          },
+          async requestDevice() {
+            throw new Error('test device unavailable');
+          },
+        };
+      },
+    };
+
+    const preflight = await runMoonlabBrowserWebGpuComplex64BackendPreflight({
+      gpu,
+      runtime: 'browser-test',
+    });
+    expect(preflight).toEqual(
+      expect.objectContaining({
+        schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+        runtime: 'browser-test',
+        stage: 'request-device-failed',
+        navigatorGpuAvailable: true,
+        adapterAvailable: true,
+        deviceAcquired: false,
+        adapterInfo: {
+          vendor: 'moonlab-test',
+        },
+      })
+    );
+    expect(preflight.reason).toContain('GPUAdapter.requestDevice failed');
+
+    const artifact = await buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe({
+      generatedAt: '2026-06-06T20:00:00.000Z',
+      gpu,
+      runtime: 'browser-test',
+    });
+    expect(artifact.backendAvailable).toBe(false);
+    expect(artifact.backendDetection).toEqual(
+      expect.objectContaining({
+        preflightStage: 'request-device-failed',
+        navigatorGpuAvailable: true,
+        adapterAvailable: true,
+        deviceAcquired: false,
+      })
+    );
+    expect(artifact.browserBackendPreflight.deviceAcquired).toBe(false);
+    expect(artifact.browserKernelProbe.executed).toBe(false);
+    expect(artifact.browserNativeOperationProbe.executed).toBe(false);
+    expect(artifact.coverage.nativeWebGpu.every((entry) => entry.covered === false)).toBe(true);
+    expect(artifact.webgpuParity.executed).toBe(false);
+    expect(artifact.webgpuParity.passed).toBe(false);
+    expect(artifact.contractValidation.valid).toBe(true);
+  });
+
+  it('records device-acquired preflight without treating preflight as kernel coverage', async () => {
+    let destroyed = false;
+    const gpu: MoonlabBrowserWebGpu = {
+      async requestAdapter() {
+        return {
+          info: {
+            vendor: 'moonlab-test',
+            architecture: 'mock',
+          },
+          async requestDevice() {
+            return {
+              createBuffer: () => {
+                throw new Error('not used by preflight');
+              },
+              createShaderModule: () => {
+                throw new Error('not used by preflight');
+              },
+              createComputePipeline: () => {
+                throw new Error('not used by preflight');
+              },
+              createBindGroup: () => {
+                throw new Error('not used by preflight');
+              },
+              createCommandEncoder: () => {
+                throw new Error('not used by preflight');
+              },
+              queue: {
+                submit() {
+                  throw new Error('not used by preflight');
+                },
+              },
+              destroy() {
+                destroyed = true;
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const preflight = await runMoonlabBrowserWebGpuComplex64BackendPreflight({
+      gpu,
+      runtime: 'browser-test',
+    });
+
+    expect(preflight).toEqual(
+      expect.objectContaining({
+        schema: MOONLAB_WEBGPU_COMPLEX64_BACKEND_PREFLIGHT_SCHEMA,
+        runtime: 'browser-test',
+        stage: 'device-acquired',
+        navigatorGpuAvailable: true,
+        adapterAvailable: true,
+        deviceAcquired: true,
+        adapterInfo: {
+          vendor: 'moonlab-test',
+          architecture: 'mock',
+        },
+      })
+    );
+    expect(destroyed).toBe(true);
   });
 
   it('exposes a no-adapter browser native-operation probe path', async () => {

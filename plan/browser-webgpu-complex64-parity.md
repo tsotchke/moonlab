@@ -10,9 +10,10 @@ accepted for the reduced ULG fixture path.
 - `bindings/javascript/packages/core` on `ulg` has a reduced-fixture WebGPU
   complex64 parity-scope contract and CLI. It now has standalone
   browser-executable probe helpers for `compute_probabilities`, `hadamard`,
-  `pauli_x`, `pauli_z`, and `cnot`, but it still has no full browser WebGPU
-  runtime source, no JS WebGPU API export, no `HAS_WEBGPU` build switch, no
-  Asyncify wiring, and no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
+  `pauli_x`, `pauli_z`, and `cnot`, plus explicit browser adapter/device
+  preflight evidence. It still has no full browser WebGPU runtime source, no
+  JS WebGPU API export, no `HAS_WEBGPU` build switch, no Asyncify wiring, and
+  no `_gpu_*` / `_tensor_gpu_webgpu_available` exports.
 - Current branch WebGPU artifacts are stale no-backend evidence only:
   - `bindings/javascript/packages/core/artifacts/webgpu_smoke/results.json`
   - `bindings/javascript/packages/core/artifacts/webgpu_unified_eval/results.json`
@@ -91,11 +92,16 @@ Implemented slice:
    `hadamard`, `pauli_x`, `pauli_z`, and `cnot`. These report fixture coverage
    only when a real browser WebGPU adapter/device executes them; the default
    Node/no-adapter artifact keeps them `executed=false` and `covered=false`.
+8. Added `moonlab.webgpu.complex64-browser-backend-preflight.v0` adapter/device
+   evidence. It records `navigatorGpuAvailable`, `adapterAvailable`,
+   `deviceAcquired`, adapter info when available, and the current preflight
+   stage. Kernel probes are skipped unless the preflight acquires a real device.
 
 The next patch after these probability/native-operation probes should stay
-minimal: wire a real browser adapter harness that records execution evidence.
-Keep that separate from broad backend imports and avoid counting `phase` CPU
-fallback as native WebGPU coverage.
+minimal: run the existing preflight/probe path inside an actual browser WebGPU
+adapter environment and record execution evidence. Keep that separate from
+broad backend imports and avoid counting `phase` CPU fallback as native WebGPU
+coverage.
 
 The first parity probe should avoid claiming magnetar simulation validation.
 It should only demonstrate that reduced deterministic quantum fixtures can
