@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-moonlab-status="running">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MoonLab WebGPU Complex64 Parity Harness</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #080c0a;
+        color: #d4f8dc;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      body {
+        margin: 0;
+        padding: 16px;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 12px;
+      }
+
+      .status {
+        display: inline-block;
+        border: 1px solid #33513a;
+        padding: 4px 8px;
+        margin-bottom: 12px;
+        color: #8ff0a4;
+        background: #101912;
+      }
+
+      pre {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 70vh;
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        border: 1px solid #33513a;
+        background: #030504;
+        color: #d4f8dc;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MoonLab WebGPU Complex64 Parity Harness</h1>
+      <div class="status" id="status">running</div>
+      <pre id="artifact-json" data-ready="false">{}</pre>
+    </main>
+    <script type="module">
+      const statusEl = document.getElementById('status');
+      const outputEl = document.getElementById('artifact-json');
+      const params = new URLSearchParams(window.location.search);
+      const generatedAt = params.get('generatedAt') || undefined;
+      const requireBackend = parseBoolean(params.get('requireBackend'));
+      const canonical = parseBoolean(params.get('canonical'));
+
+      try {
+        const {
+          buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
+          canonicalJson,
+          validateMoonlabWebGpuComplex64ParityScope,
+        } = await import('../dist/index.mjs');
+        const artifact = await buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe({
+          generatedAt,
+          requireBackend,
+          runtime: 'browser-harness',
+        });
+        const contractValidation = validateMoonlabWebGpuComplex64ParityScope(artifact);
+        const artifactWithValidation = {
+          ...artifact,
+          contractValidation,
+        };
+        const json = canonical
+          ? canonicalJson(artifactWithValidation)
+          : JSON.stringify(artifactWithValidation, null, 2);
+        const complete = contractValidation.valid
+          && (!requireBackend || artifactWithValidation.webgpuParity.executed);
+
+        window.__moonlabWebGpuComplex64ParityArtifact = artifactWithValidation;
+        outputEl.textContent = json;
+        outputEl.dataset.ready = 'true';
+        document.documentElement.dataset.moonlabStatus = complete ? 'complete' : 'blocked';
+        statusEl.textContent = complete ? 'complete' : 'blocked';
+      } catch (error) {
+        const failure = {
+          schema: 'moonlab.webgpu.complex64-browser-harness-error.v0',
+          artifactKind: 'browser-webgpu-complex64-parity-harness-error',
+          generatedAt: generatedAt || new Date().toISOString(),
+          message: error instanceof Error ? error.message : String(error),
+        };
+        outputEl.textContent = JSON.stringify(failure, null, 2);
+        outputEl.dataset.ready = 'true';
+        document.documentElement.dataset.moonlabStatus = 'error';
+        statusEl.textContent = 'error';
+      }
+
+      function parseBoolean(value) {
+        return value === '1' || value === 'true';
+      }
+    </script>
+  </body>
+</html>

@@ -156,6 +156,13 @@ reference data.
   preflight-stage fields. Kernel probes are skipped unless a real device is
   acquired, so no-adapter and adapter-without-device paths stay
   `executed=false` and `covered=false`.
+- [x] Add a dependency-free localhost browser smoke harness and
+  Chrome-compatible runner that executes the existing probe path from a real
+  browser context and extracts the artifact JSON without marking coverage unless
+  the browser records WebGPU execution.
+- [x] Set top-level reduced `webgpuParity` pass/executed only when the browser
+  smoke path records device acquisition, a passing probability probe, and
+  passing executed coverage for every required native operation.
 
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
 scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
@@ -164,11 +171,12 @@ probe plus standalone native-operation WGSL probes for `hadamard`, `pauli_x`,
 CLI path records `stage=navigator-gpu-unavailable`,
 `navigatorGpuAvailable=false`, `adapterAvailable=false`, and
 `deviceAcquired=false`, with all kernel probes unexecuted. It still has no full
-MoonLab browser WebGPU runtime backend and no local browser adapter execution
-evidence. Required-backend parity remains blocked until a browser adapter
-records native coverage for every required operation
-(`hadamard`, `pauli_x`, `pauli_z`, `cnot`, and `compute_probabilities`),
-without counting `phase` CPU fallback as native coverage.
+MoonLab browser WebGPU runtime backend. The browser smoke runner can collect
+browser-context evidence; on the local Chrome run it acquired a device and
+covered every required reduced operation (`hadamard`, `pauli_x`, `pauli_z`,
+`cnot`, and `compute_probabilities`) without counting `phase` CPU fallback as
+native coverage. Full runtime backend wiring, Asyncify/Emscripten export
+changes, and full magnetar physics validation remain blocked.
 
 ## Canonical Normalized Reference Suite Export
 

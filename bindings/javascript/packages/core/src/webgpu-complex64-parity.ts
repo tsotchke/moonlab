@@ -545,6 +545,25 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
     : buildNotExecutedNativeOperationProbe(browserBackendPreflight.reason);
   const browserProbeExecuted =
     browserKernelProbe.executed || browserNativeOperationProbe.executed;
+  const browserProbeCoveredOperations = new Set<NativeCoverageRequired>([
+    ...(browserKernelProbe.executed && browserKernelProbe.passed
+      ? browserKernelProbe.coveredNativeOperations
+      : []),
+    ...(browserNativeOperationProbe.executed
+      ? browserNativeOperationProbe.coveredNativeOperations
+      : []),
+  ]);
+  const browserProbeCoversAllRequiredOperations =
+    MOONLAB_WEBGPU_COMPLEX64_NATIVE_COVERAGE_REQUIRED.every((operation) => (
+      browserProbeCoveredOperations.has(operation)
+    ));
+  const browserProbeParityPassed =
+    browserBackendPreflight.deviceAcquired
+    && browserKernelProbe.executed
+    && browserKernelProbe.passed
+    && browserNativeOperationProbe.executed
+    && browserNativeOperationProbe.passed
+    && browserProbeCoversAllRequiredOperations;
   const backendDetection: MoonlabWebGpuComplex64BackendDetection = {
     available: browserBackendPreflight.deviceAcquired || browserProbeExecuted,
     runtime: browserBackendPreflight.runtime,
@@ -565,12 +584,14 @@ export async function buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe(
     browserKernelProbe,
     browserNativeOperationProbe,
     webgpuParity: {
-      executed: false,
-      passed: false,
+      executed: browserProbeParityPassed,
+      passed: browserProbeParityPassed,
       maxProbabilityAbsDiff: browserKernelProbe.maxProbabilityAbsDiff,
-      reason: browserProbeExecuted
-        ? 'browser WebGPU probe(s) ran, but full required native operation coverage is incomplete; full reduced-fixture WebGPU parity was not executed'
-        : joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
+      reason: browserProbeParityPassed
+        ? 'browser WebGPU probes covered all required reduced complex64 operations within tolerance; full runtime backend and full physics validation remain out of scope'
+        : browserProbeExecuted
+          ? 'browser WebGPU probe(s) ran, but full required native operation coverage is incomplete; reduced-fixture WebGPU parity did not pass'
+          : joinProbeReasons(browserKernelProbe.reason, browserNativeOperationProbe.reason),
     },
   });
 }

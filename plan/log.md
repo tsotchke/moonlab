@@ -1161,3 +1161,88 @@ Failures or open questions:
   backend, not full reduced-fixture gate parity, and not full magnetar physics
   validation.
 - No push was attempted.
+
+## 2026-06-06 16:43:58 AKDT - Browser WebGPU smoke harness and reduced parity evidence
+
+Prompt: "You are working as a sidecar for the user's multi-repo MoonLab/ULG/PeerCompute/Eshkol effort. Work only in /home/cos/projects/moonlab. First read any AGENTS.md/agents.md and plan/log files that govern the repo. Do not push. Keep commits local only. Do not use or print any passwords. Task: identify the next bounded implementation step for MoonLab that materially advances the ULG/MoonLab backend/runtime plan, then implement it only if the plan and repo context make it clear and low-risk. Use existing repo patterns, run focused tests/builds, and if you make changes, create a local commit. Final report should include changed files, commit hash if any, tests run, and any blockers. Do not edit PeerCompute, ULG, or Eshkol."
+
+Actions attempted:
+- Read `/home/cos/projects/AGENTS.md`, confirmed no MoonLab-local
+  `AGENTS.md`/`agents.md` exists outside dependency trees, and read MoonLab
+  `plan/log.md`, `plan/tests.md`, `plan/implementation-status.md`, and
+  `plan/browser-webgpu-complex64-parity.md` before editing.
+- Confirmed the MoonLab worktree started clean on branch `ulg`, ahead of
+  `origin/ulg`; no push was attempted.
+- Identified the next bounded backend/runtime step from the WebGPU plan: run
+  the existing reduced complex64 browser probe path from an actual browser
+  context without importing the old divergent WebGPU backend.
+- Added a dependency-free localhost browser harness page that imports the built
+  core package, runs `buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe`,
+  and writes the resulting artifact JSON into the page without claiming full
+  magnetar physics.
+- Added a dependency-free Chrome-compatible smoke runner using Node core HTTP,
+  process spawning, and Chrome DevTools Protocol over Node's built-in
+  `WebSocket`. It serves the package on localhost, launches the installed
+  browser, polls the harness for JSON, writes `--out`, and exits nonzero in
+  `--require-backend` mode unless browser WebGPU execution is recorded.
+- Tightened top-level reduced `webgpuParity` semantics so it passes only when a
+  browser device is acquired, the probability probe passes, and every required
+  native operation (`hadamard`, `pauli_x`, `pauli_z`, `cnot`, and
+  `compute_probabilities`) has executed passing WebGPU evidence.
+- Updated focused tests and the WebGPU plan/status/testing docs.
+
+Files touched:
+- `bindings/javascript/packages/core/browser/webgpu-complex64-parity.html`
+- `bindings/javascript/packages/core/scripts/webgpu-complex64-browser-smoke.mjs`
+- `bindings/javascript/packages/core/package.json`
+- `bindings/javascript/packages/core/src/webgpu-complex64-parity.ts`
+- `bindings/javascript/packages/core/src/__tests__/webgpu-complex64-parity.test.ts`
+- `plan/browser-webgpu-complex64-parity.md`
+- `plan/implementation-status.md`
+- `plan/tests.md`
+- `plan/log.md`
+
+Commands run:
+- `find /home/cos/projects/moonlab ... AGENTS/agents/plan/log discovery`
+- `sed` inspections of `/home/cos/projects/AGENTS.md`, MoonLab plan docs,
+  WebGPU parity source/tests, package scripts, and prior WebGPU artifacts.
+- `git status --short --branch`
+- `git log --oneline -8`
+- `node -v`
+- `google-chrome --version`
+- `node --check bindings/javascript/packages/core/scripts/webgpu-complex64-browser-smoke.mjs`
+- `pnpm --dir bindings/javascript/packages/core build:ts`
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/webgpu-complex64-parity.test.ts`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:parity -- --out /tmp/moonlab-webgpu-complex64-parity.json --generated-at 2026-06-07T08:10:00.000Z`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --out /tmp/moonlab-webgpu-complex64-browser-smoke.json --generated-at 2026-06-07T08:10:00.000Z`
+- `pnpm --dir bindings/javascript/packages/core webgpu:complex64:browser-smoke -- --require-backend --out /tmp/moonlab-webgpu-complex64-browser-smoke-required.json --generated-at 2026-06-07T08:10:00.000Z`
+- `node` inspection snippets for the emitted browser-smoke artifacts.
+- `pnpm --dir bindings/javascript/packages/core exec vitest run src/__tests__/ulg-quantum-response-artifact.test.ts`
+- `pnpm --dir bindings/javascript/packages/core test`
+- `pnpm --dir bindings/javascript/packages/core build:wasm`
+- `git diff --stat`
+
+Test results:
+- PASS: `node --check bindings/javascript/packages/core/scripts/webgpu-complex64-browser-smoke.mjs`.
+- PASS: `pnpm --dir bindings/javascript/packages/core build:ts`; tsup repeated the existing package export-order warning for `types`.
+- PASS: focused WebGPU parity unit suite passed `19/19`.
+- PASS: Node parity CLI emitted the default no-browser artifact to `/tmp/moonlab-webgpu-complex64-parity.json`.
+- PASS: browser smoke emitted `/tmp/moonlab-webgpu-complex64-browser-smoke.json`.
+- PASS: required-backend browser smoke emitted `/tmp/moonlab-webgpu-complex64-browser-smoke-required.json` and exited `0` on this host. The artifact reported `browserBackendPreflight.stage=device-acquired`, `backendAvailable=true`, `browserKernelProbe.executed=true`, `browserNativeOperationProbe.executed=true`, all five required native coverage entries `covered=true`, `webgpuParity.executed=true`, `webgpuParity.passed=true`, `maxProbabilityAbsDiff=0`, no blockers, and `contractValidation.valid=true`.
+- PASS: focused ULG artifact unit suite passed `14/14`.
+- PASS: JavaScript core unit suite passed `123/123` across 4 files.
+- PASS: WASM rebuild completed after `build:ts` refreshed `dist`.
+
+Failures or open questions:
+- First manual patch attempt failed due a plan-doc context mismatch; no files
+  were changed by that failed patch.
+- The first browser smoke implementation used `--dump-dom`; Chrome returned the
+  initial DOM before artifact JSON was available, so the runner was replaced
+  with a CDP polling path.
+- Before the reduced-parity semantics were tightened, `--require-backend`
+  correctly failed because executed browser coverage existed but top-level
+  `webgpuParity.executed` was still hard-coded false.
+- This is still not a full MoonLab browser WebGPU runtime backend, not an
+  Asyncify/Emscripten export patch, not an old `webgpu` branch import, and not
+  full magnetar physics validation. It is reduced fixture browser evidence only.
+- No PeerCompute, ULG, or Eshkol files were edited. No push was attempted.
