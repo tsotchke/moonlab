@@ -72,11 +72,41 @@ option(QSIM_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
 option(QSIM_ENABLE_METAL "Enable Metal GPU backend (macOS)" ON)
 option(QSIM_ENABLE_OPENCL "Enable OpenCL GPU backend" OFF)
 option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
-option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend" OFF)
+option(QSIM_ENABLE_CUDA      "Enable moonlab native CUDA backend (Jetson/Tegra + discrete)" OFF)
+option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend (implies QSIM_ENABLE_CUDA; not supported on Jetson)" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
+# TLS defaults ON if OpenSSL is detectable at config time: the control-plane
+# transport's TLS/mTLS/HMAC-SHA3 path is part of the v1.0 stable ABI, and
+# silently dropping back to plaintext on a build that didn't pass the flag
+# (the v1.0 release of build_release shipped this way and broke binding TLS
+# tests) is worse than a hard error.  Set -DQSIM_ENABLE_TLS=OFF explicitly
+# to opt out, or the build will fail-fast with a clear error below.
+include(CMakeDependentOption)
+if(APPLE AND NOT OPENSSL_ROOT_DIR)
+    execute_process(COMMAND brew --prefix openssl@3
+                    OUTPUT_VARIABLE _qsim_brew_openssl
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    if(_qsim_brew_openssl)
+        set(OPENSSL_ROOT_DIR "${_qsim_brew_openssl}" CACHE PATH "OpenSSL root (Homebrew-probed default)")
+    endif()
+endif()
+find_package(OpenSSL QUIET)
+if(OPENSSL_FOUND)
+    set(_qsim_tls_default ON)
+else()
+    set(_qsim_tls_default OFF)
+endif()
+option(QSIM_ENABLE_TLS "Link OpenSSL for TLS-wrapped control-plane transport (since v0.8.17, default ON when OpenSSL is found)" ${_qsim_tls_default})
 option(QSIM_ENABLE_ESHKOL "Link Eshkol GPU backend for fp64-on-Metal (Ozaki-II / SF64)" OFF)
 set(QSIM_ESHKOL_ROOT "$ENV{HOME}/Desktop/eshkol" CACHE PATH
     "Root directory of the Eshkol source tree (for headers + libeshkol-static.a).")
+option(QSIM_ENABLE_LIBIRREP "Link libirrep for QEC + sector ED + rep theory primitives (since v0.6.0)" OFF)
+set(QSIM_LIBIRREP_ROOT "$ENV{LIBIRREP_ROOT}" CACHE PATH
+    "Root of a libirrep source/build tree (fallback when find_package + pkg-config both fail).")
+option(QSIM_ENABLE_SBNN "Link SbNN for the learned QEC-decoder slot (since v0.7.5)" OFF)
+set(QSIM_SBNN_ROOT "$ENV{SBNN_ROOT}" CACHE PATH
+    "Root of a SbNN source/build tree.  Expected layout: <root>/include/qec_decoder/qec_decoder.h, <root>/build/libthqcp.{a,dylib,so}.")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
@@ -143,6 +173,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(QSIM_PLATFORM_LINUX ON)
     set(QSIM_PLATFORM_NAME "Linux")
+    # _GNU_SOURCE exposes strptime, asprintf, etc. (POSIX 2001 + GNU
+    # extensions).  Required by src/utils/manifest.c on glibc-based
+    # systems where the default feature-test macros hide strptime.
+    add_compile_definitions(_GNU_SOURCE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(QSIM_PLATFORM_WINDOWS ON)
     set(QSIM_PLATFORM_NAME "Windows")
@@ -187,18 +221,61 @@ set(QSIM_WARNING_FLAGS)
 if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
     list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
     if(QSIM_WERROR)
-        # -Werror everywhere our code is responsible. Exclusions:
-        #  * -Wpedantic: libomp's <omp.h> is a system header and uses
-        #    enumerator values outside the ISO C range.
-        #  * -Wdeprecated-declarations: Apple CLAPACK (zheev_, zgesvd_,
-        #    zgeqrf_, zungqr_, cblas_zgemm, cblas_zgemv, ...) was
-        #    deprecated in macOS 13.3 in favour of ACCELERATE_NEW_LAPACK.
-        #    Migration is a Phase 1G task; we still want the warning
-        #    visible but not build-breaking.
+        # -Werror everywhere our code is responsible.
+        #
+        # Demoted to warnings (not errors) -- categories where there is
+        # significant pre-existing accumulation in legacy code (gpu_
+        # backend.c stub plumbing, ca_mps.h vs moonlab_export.h
+        # signature drift, config.c string-literal const-handling), or
+        # where the check itself was added in gcc 15 and breaks code
+        # that compiled cleanly on gcc 13/14.
+        #
+        # Each flag is feature-detected: older gcc (11/12 on stock
+        # ubuntu-22.04 runners) doesn't know about gcc-15 -W names like
+        # -Wenum-int-mismatch and would refuse the matching -Wno-error=
+        # form with "no option '-Wenum-int-mismatch'".  CheckCCompilerFlag
+        # tries each in isolation and only appends the ones the current
+        # toolchain accepts.
+        include(CheckCCompilerFlag)
+        list(APPEND QSIM_WARNING_FLAGS -Werror)
+
+        # The base "demote to warning" set has been here since gcc 11
+        # and is also recognised by clang -- always add unconditionally.
         list(APPEND QSIM_WARNING_FLAGS
-             -Werror
              -Wno-error=pedantic
-             -Wno-error=deprecated-declarations)
+             -Wno-error=deprecated-declarations
+             -Wno-error=unused-parameter
+             -Wno-error=unused-variable
+             -Wno-error=unused-function
+             -Wno-error=unused-but-set-variable
+             -Wno-error=address)
+
+        # Newer / compiler-specific demotions -- probe before appending.
+        set(_qsim_optional_wno_error
+            enum-int-mismatch          # gcc 15: ca_mps.h vs moonlab_export.h drift
+            array-parameter            # gcc 15: mlkem uint8_t* vs uint8_t[N]
+            discarded-qualifiers       # gcc: config.c const-string init
+            switch-unreachable         # gcc: legacy default-case fall-through
+            ignored-qualifiers         # clang spelling of discarded-qualifiers
+            unused-but-set-variable    # gcc 11+: control_plane.c log_peer_buf
+            format-truncation          # gcc strict snprintf truncation
+            unknown-pragmas            # gcc: tensor.c #pragma STDC FP_CONTRACT
+            nan-infinity-disabled      # clang+ffast-math: qaoa.c INFINITY sentinel
+            strict-aliasing            # gcc: gpu_vulkan.c pointer punning
+            unused-result              # gcc: gpu_vulkan.c fread return value
+            overlength-strings         # gcc strict: gpu_opencl.c kernel source > 4095
+            missing-braces             # gcc strict: cl_float2 initializer
+            implicit-fallthrough       # preventive, in case it appears
+            address                    # already in base set on some toolchains
+            stringop-truncation        # gcc strict snprintf
+        )
+        foreach(_wname IN LISTS _qsim_optional_wno_error)
+            string(MAKE_C_IDENTIFIER "HAVE_WNO_ERROR_${_wname}" _have_var)
+            check_c_compiler_flag("-Wno-error=${_wname}" ${_have_var})
+            if(${_have_var})
+                list(APPEND QSIM_WARNING_FLAGS "-Wno-error=${_wname}")
+            endif()
+        endforeach()
     endif()
 elseif(QSIM_COMPILER_MSVC)
     list(APPEND QSIM_WARNING_FLAGS /W4)
@@ -438,7 +515,76 @@ if(QSIM_ENABLE_VULKAN)
 endif()
 
 # CUDA / cuQuantum
-if(QSIM_ENABLE_CUQUANTUM)
+# QSIM_ENABLE_CUDA      -- our own state-vector backend.  Works on
+#                          Jetson (Tegra194 / Tegra234 / Orin) AND on
+#                          discrete PCIe GPUs.  cudaMallocManaged path.
+# QSIM_ENABLE_CUQUANTUM -- additionally link NVIDIA's cuStateVec /
+#                          cuTensorNet.  Implies CUDA.  Not supported
+#                          on Jetson: NVIDIA does not publish a
+#                          cuQuantum build for L4T/Tegra, so cmake
+#                          will fall back to the moonlab CUDA backend
+#                          without cuQuantum if the libraries are
+#                          missing on a Tegra host.
+if(QSIM_ENABLE_CUDA OR QSIM_ENABLE_CUQUANTUM)
+    # Normalize CUDA_ARCHITECTURES before enable_language so cmake
+    # picks up the "-real" suffix.  Bare numbers like "72" produce
+    # the bracket form code=[compute_72,sm_72] which includes
+    # device-LTO IR and triggers `-dlto` at device-link time.
+    # On jetpack-nixos that fails ("elfLink linker library load
+    # error") because the LTO plugin isn't on nvlink's dlopen path.
+    # "-real" suffix tells cmake to emit only SASS for that arch,
+    # which avoids LTO entirely.
+    if(DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(_qsim_cuda_arch_real)
+        foreach(_a IN LISTS CMAKE_CUDA_ARCHITECTURES)
+            if(_a MATCHES "^[0-9]+$")
+                list(APPEND _qsim_cuda_arch_real "${_a}-real")
+            else()
+                list(APPEND _qsim_cuda_arch_real "${_a}")
+            endif()
+        endforeach()
+        set(CMAKE_CUDA_ARCHITECTURES ${_qsim_cuda_arch_real} CACHE STRING "" FORCE)
+        message(STATUS "CUDA: arch normalized -> ${CMAKE_CUDA_ARCHITECTURES}")
+    endif()
+
+    # Pre-seed CMAKE_CUDA_FLAGS with the cuda_runtime.h include dir
+    # BEFORE enable_language(CUDA), so the cmake compiler-identification
+    # probe finds the header.  nvcc on its own often doesn't pass its
+    # toolkit include dir to the host gcc, depending on how the toolkit
+    # was packaged:
+    #   - jetpack-nixos:  multiple /nix/store subpackages, no auto-include
+    #   - Ubuntu / /usr/local/cuda-X.Y:  nvcc inside .../cuda-X.Y/bin
+    #     doesn't always self-locate .../cuda-X.Y/include
+    # So: probe several common locations and inject -isystem.
+    set(_qsim_cuda_runtime_h "")
+    # 1. User-provided CUDAToolkit_ROOT (most explicit).
+    if(DEFINED CUDAToolkit_ROOT AND EXISTS "${CUDAToolkit_ROOT}/include/cuda_runtime.h")
+        set(_qsim_cuda_runtime_h "${CUDAToolkit_ROOT}/include/cuda_runtime.h")
+    endif()
+    # 2. /usr/local/cuda* (stock Ubuntu / RHEL CUDA install).
+    if(NOT _qsim_cuda_runtime_h)
+        file(GLOB _qsim_cuda_local_globs "/usr/local/cuda*/include/cuda_runtime.h")
+        if(_qsim_cuda_local_globs)
+            list(GET _qsim_cuda_local_globs 0 _qsim_cuda_runtime_h)
+        endif()
+    endif()
+    # 3. jetpack-nixos split-toolkit store paths.
+    if(NOT _qsim_cuda_runtime_h AND EXISTS "/etc/nv_tegra_release")
+        file(GLOB _qsim_cuda_merged_globs
+            "/nix/store/*-cuda-merged-*/include/cuda_runtime.h"
+            "/nix/store/*-cuda_cudart-*/include/cuda_runtime.h")
+        if(_qsim_cuda_merged_globs)
+            list(GET _qsim_cuda_merged_globs 0 _qsim_cuda_runtime_h)
+        endif()
+        set(QSIM_PLATFORM_JETPACK_NIXOS ON)
+    endif()
+    if(_qsim_cuda_runtime_h)
+        get_filename_component(QSIM_CUDA_INCLUDE "${_qsim_cuda_runtime_h}" DIRECTORY)
+        message(STATUS "CUDA: pre-seeding cuda_runtime.h from ${QSIM_CUDA_INCLUDE}")
+        set(CMAKE_CUDA_FLAGS_INIT "-isystem=${QSIM_CUDA_INCLUDE} ${CMAKE_CUDA_FLAGS_INIT}")
+        set(CMAKE_CUDA_FLAGS      "-isystem=${QSIM_CUDA_INCLUDE} ${CMAKE_CUDA_FLAGS}")
+    endif()
+
     include(CheckLanguage)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
@@ -448,7 +594,7 @@ if(QSIM_ENABLE_CUQUANTUM)
             message(STATUS "CUDA: Found (version ${CUDAToolkit_VERSION})")
             set(QSIM_HAS_CUDA ON)
 
-            # Look for cuQuantum
+            # Look for cuQuantum (optional even when QSIM_ENABLE_CUDA=ON).
             find_path(CUQUANTUM_INCLUDE_DIR custatevec.h
                 HINTS
                     ${CUQUANTUM_ROOT}/include
@@ -483,25 +629,35 @@ if(QSIM_ENABLE_CUQUANTUM)
                     message(STATUS "cuQuantum: Found (cuTensorNet)")
                     set(QSIM_HAS_CUTENSORNET ON)
                 endif()
-            else()
+            elseif(QSIM_ENABLE_CUQUANTUM)
                 message(FATAL_ERROR
                     "QSIM_ENABLE_CUQUANTUM=ON and CUDA was found, but the "
                     "cuQuantum headers (custatevec.h) or cuStateVec library "
                     "could not be located.  Set CUQUANTUM_ROOT or "
                     "$ENV{CUQUANTUM_ROOT} to the cuQuantum install root, or "
                     "re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+            else()
+                message(STATUS "cuQuantum: not found (OK -- only QSIM_ENABLE_CUDA was set; moonlab CUDA backend works without it)")
             endif()
-        else()
+        elseif(QSIM_ENABLE_CUQUANTUM)
             message(FATAL_ERROR
                 "QSIM_ENABLE_CUQUANTUM=ON but the CUDA Toolkit was not "
                 "found by find_package(CUDAToolkit).  Install the CUDA "
                 "Toolkit or re-run with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+        else()
+            message(WARNING
+                "QSIM_ENABLE_CUDA=ON but the CUDA Toolkit was not found.  "
+                "Falling back to CPU-only build.")
         endif()
-    else()
+    elseif(QSIM_ENABLE_CUQUANTUM)
         message(FATAL_ERROR
             "QSIM_ENABLE_CUQUANTUM=ON but no CUDA compiler is available. "
             "Install the CUDA Toolkit (which provides nvcc) or re-run "
             "with -DQSIM_ENABLE_CUQUANTUM=OFF.")
+    else()
+        message(WARNING
+            "QSIM_ENABLE_CUDA=ON but no CUDA compiler (nvcc) is available.  "
+            "Falling back to CPU-only build.")
     endif()
 endif()
 
@@ -518,6 +674,130 @@ if(QSIM_ENABLE_MPI)
             "macOS: brew install open-mpi) or re-run with "
             "-DQSIM_ENABLE_MPI=OFF.")
     endif()
+endif()
+
+# TLS via OpenSSL (since v0.8.17).  The Homebrew probe + initial
+# detection happen up at the option block so the option default tracks
+# OpenSSL availability; here we re-verify and emit the status message.
+if(QSIM_ENABLE_TLS)
+    find_package(OpenSSL)
+    if(OPENSSL_FOUND)
+        message(STATUS "OpenSSL: ${OPENSSL_VERSION} at ${OPENSSL_INCLUDE_DIR}")
+        set(QSIM_HAS_TLS ON)
+    else()
+        message(FATAL_ERROR
+            "QSIM_ENABLE_TLS=ON but OpenSSL was not found.  "
+            "Install via apt install libssl-dev / brew install openssl@3, "
+            "or re-run with -DQSIM_ENABLE_TLS=OFF.")
+    endif()
+endif()
+
+# libirrep -- QEC + rep-theory + sector ED substrate.
+# Detection order:
+#   1. find_package(libirrep CONFIG)  -- preferred, picks up the installed
+#      libirrepTargets that libirrep emits via install(EXPORT ...).
+#   2. pkg-config (libirrep.pc).
+#   3. QSIM_LIBIRREP_ROOT / LIBIRREP_ROOT pointing at a source tree with a
+#      pre-built build/lib/liblibirrep.{a,dylib,so}.
+# Mirrors SbNN's IRREP_ENABLE pattern.  When the option is OFF the bridge
+# layer compiles down to stub functions that return
+# MOONLAB_STATUS_UNSUPPORTED, so consumers can build moonlab without
+# libirrep installed.
+if(QSIM_ENABLE_LIBIRREP)
+    set(QSIM_HAS_LIBIRREP OFF)
+
+    find_package(libirrep CONFIG QUIET)
+    if(libirrep_FOUND)
+        message(STATUS "libirrep: Found via find_package(libirrep CONFIG)")
+        set(QSIM_HAS_LIBIRREP ON)
+        set(QSIM_LIBIRREP_TARGET libirrep::libirrep)
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP)
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(LIBIRREP_PC QUIET libirrep)
+            if(LIBIRREP_PC_FOUND)
+                message(STATUS "libirrep: Found via pkg-config (${LIBIRREP_PC_VERSION})")
+                add_library(qsim_libirrep_import INTERFACE)
+                target_include_directories(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_INCLUDE_DIRS})
+                target_link_directories(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_LIBRARY_DIRS})
+                target_link_libraries(qsim_libirrep_import INTERFACE
+                    ${LIBIRREP_PC_LIBRARIES})
+                set(QSIM_HAS_LIBIRREP ON)
+                set(QSIM_LIBIRREP_TARGET qsim_libirrep_import)
+            endif()
+        endif()
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP AND QSIM_LIBIRREP_ROOT)
+        set(_libirrep_inc "${QSIM_LIBIRREP_ROOT}/include")
+        find_library(QSIM_LIBIRREP_LIB
+            NAMES libirrep irrep
+            PATHS
+                "${QSIM_LIBIRREP_ROOT}/build/lib"
+                "${QSIM_LIBIRREP_ROOT}/lib"
+                "${QSIM_LIBIRREP_ROOT}/build"
+            NO_DEFAULT_PATH)
+        if(EXISTS "${_libirrep_inc}/irrep/irrep.h" AND QSIM_LIBIRREP_LIB)
+            message(STATUS "libirrep: Found at ${QSIM_LIBIRREP_ROOT} "
+                           "(lib: ${QSIM_LIBIRREP_LIB})")
+            add_library(qsim_libirrep_import INTERFACE)
+            target_include_directories(qsim_libirrep_import INTERFACE
+                "${_libirrep_inc}")
+            target_link_libraries(qsim_libirrep_import INTERFACE
+                "${QSIM_LIBIRREP_LIB}")
+            set(QSIM_HAS_LIBIRREP ON)
+            set(QSIM_LIBIRREP_TARGET qsim_libirrep_import)
+        endif()
+    endif()
+
+    if(NOT QSIM_HAS_LIBIRREP)
+        message(FATAL_ERROR
+            "QSIM_ENABLE_LIBIRREP=ON but libirrep could not be located.  "
+            "Install libirrep (provides libirrepConfig.cmake or libirrep.pc) "
+            "or pass -DQSIM_LIBIRREP_ROOT=<path> pointing at a source tree "
+            "with build/lib/liblibirrep.{a,dylib,so}.  Re-run with "
+            "-DQSIM_ENABLE_LIBIRREP=OFF to skip this dependency.")
+    endif()
+else()
+    set(QSIM_HAS_LIBIRREP OFF)
+endif()
+
+# SbNN -- learned QEC decoder + ToricCode + equivariant ML.
+# Wires the decoder-bench SBNN slot to qec_decoder_run() via the
+# `libthqcp.{a,dylib,so}` SbNN ships in `<root>/build/`.
+if(QSIM_ENABLE_SBNN)
+    set(QSIM_HAS_SBNN OFF)
+    if(QSIM_SBNN_ROOT)
+        set(_sbnn_inc "${QSIM_SBNN_ROOT}/include")
+        find_library(QSIM_SBNN_LIB
+            NAMES thqcp libthqcp
+            PATHS
+                "${QSIM_SBNN_ROOT}/build"
+                "${QSIM_SBNN_ROOT}/build/lib"
+                "${QSIM_SBNN_ROOT}/lib"
+            NO_DEFAULT_PATH)
+        if(EXISTS "${_sbnn_inc}/qec_decoder/qec_decoder.h" AND QSIM_SBNN_LIB)
+            message(STATUS "SbNN: Found at ${QSIM_SBNN_ROOT} (lib: ${QSIM_SBNN_LIB})")
+            add_library(qsim_sbnn_import INTERFACE)
+            target_include_directories(qsim_sbnn_import INTERFACE "${_sbnn_inc}")
+            target_link_libraries(qsim_sbnn_import INTERFACE "${QSIM_SBNN_LIB}")
+            set(QSIM_HAS_SBNN ON)
+            set(QSIM_SBNN_TARGET qsim_sbnn_import)
+        endif()
+    endif()
+    if(NOT QSIM_HAS_SBNN)
+        message(FATAL_ERROR
+            "QSIM_ENABLE_SBNN=ON but SbNN could not be located.  "
+            "Pass -DQSIM_SBNN_ROOT=<path> pointing at a tree with "
+            "include/qec_decoder/qec_decoder.h + build/libthqcp.{a,dylib,so}.  "
+            "Re-run with -DQSIM_ENABLE_SBNN=OFF to skip this dependency.")
+    endif()
+else()
+    set(QSIM_HAS_SBNN OFF)
 endif()
 
 # ==============================================================================
@@ -613,7 +893,6 @@ set(QSIM_OPTIMIZATION_SOURCES
     src/optimization/memory_align.c
     src/optimization/simd_dispatch.c
     src/optimization/simd_ops.c
-    src/optimization/stride_gates.c
     src/optimization/parallel_ops.c
     src/optimization/accelerate_ops.c
     src/optimization/fusion/fusion.c
@@ -635,8 +914,14 @@ endif()
 if(QSIM_ENABLE_VULKAN)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_vulkan.c)
 endif()
-if(QSIM_ENABLE_CUQUANTUM)
+# gpu_cuda.cu provides the cuda_compute_ctx / cuda_buffer interface
+# that tensor.c references whenever HAS_CUDA is defined.  Build it
+# under either flag.  gpu_cuquantum.cu is the cuStateVec adapter
+# proper -- only under QSIM_ENABLE_CUQUANTUM.
+if(QSIM_HAS_CUDA)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuda.cu)
+endif()
+if(QSIM_ENABLE_CUQUANTUM AND QSIM_HAS_CUDA)
     list(APPEND QSIM_GPU_SOURCES src/optimization/gpu/backends/gpu_cuquantum.cu)
 endif()
 # The Eshkol GPU bridge compiles regardless of whether Eshkol itself
@@ -653,6 +938,17 @@ set(QSIM_UTILS_SOURCES
     src/utils/manifest.c
     src/utils/quantum_entropy.c
     src/utils/moonlab_status.c
+    src/utils/token_bucket.c
+    src/utils/audit_buffer.c
+)
+
+# External-library bridges.  Each translation unit compiles in two modes
+# selected at preprocessor time: when MOONLAB_HAS_<LIB>=1 the real
+# linkage path is active; otherwise the entry points return
+# MOONLAB_STATUS_UNSUPPORTED so callers can treat the dependency as
+# optional without conditional compilation at every call site.
+set(QSIM_INTEGRATION_SOURCES
+    src/integration/libirrep_bridge.c
 )
 
 set(QSIM_APPLICATIONS_SOURCES
@@ -663,6 +959,19 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/qrng.c
     src/applications/qrng_di.c
     src/applications/moonlab_qrng_export.c
+    src/applications/moonlab_export_lean.c
+    src/applications/moonlab_tdvp_export.c
+    src/applications/moonlab_qgtl_backend.c
+    src/applications/decoder_bench.c
+    src/applications/mwpm_exact.c
+    # Vendor-noise emulator backends (IBM Falcon / Rigetti Aspen / IonQ Forte)
+    # consume QGTL circuits via the scheduler's backend plug-in surface.
+    src/applications/vendor_noise_backend.c
+    src/distributed/scheduler.c
+    # Control plane (since v0.8.7): POSIX-socket TCP transport for the
+    # v0.8.3 moonlab-circuit v1 wire format.  v0.8.17 OpenSSL TLS path
+    # is gated via #ifdef MOONLAB_HAVE_TLS inside the same TU.
+    src/control/control_plane.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
     # HEP / lattice gauge theory bench primitives.  The 1+1D Z2 LGT Pauli-sum
@@ -692,6 +1001,7 @@ set(QSIM_ALL_SOURCES
     ${QSIM_OPTIMIZATION_SOURCES}
     ${QSIM_GPU_SOURCES}
     ${QSIM_UTILS_SOURCES}
+    ${QSIM_INTEGRATION_SOURCES}
     ${QSIM_APPLICATIONS_SOURCES}
     ${QSIM_PROFILER_SOURCES}
 )
@@ -713,6 +1023,10 @@ endif()
 
 # Standalone helper for safe ARM hardware-RNG probing.
 add_executable(hw_rng_probe tools/hw_rng_probe.c)
+
+# Production control-plane daemon (since v0.10.0).  Bound + run via
+# deploy/docker/docker-compose.yml.
+add_executable(moonlab-control-server tools/moonlab-control-server.c)
 
 # ==============================================================================
 # Library Target
@@ -737,7 +1051,7 @@ endif()
 add_dependencies(quantumsim hw_rng_probe)
 target_compile_definitions(quantumsim PRIVATE
     MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
-    MOONLAB_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"
+    MOONLAB_PYMATCHING_SCRIPT_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/src/applications/pymatching_bridge.py\"
 )
 
 # Test-only knobs that force the in-tree QR / SVD fallback codepaths in
@@ -780,6 +1094,44 @@ if(QSIM_ENABLE_ESHKOL)
     )
     set_property(TARGET quantumsim PROPERTY CXX_STANDARD 17)
     message(STATUS "Eshkol bridge: ON (lib=${_eshkol_libfn})")
+endif()
+
+# libirrep bridge -- activate the real linkage path when libirrep was
+# located by the detection block earlier.  The bridge translation unit
+# itself stays in QSIM_INTEGRATION_SOURCES (compiled unconditionally so
+# the API symbols always exist); MOONLAB_HAS_LIBIRREP=1 selects the
+# implementation that actually calls into libirrep.
+if(QSIM_HAS_SBNN)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_SBNN=1)
+    target_include_directories(quantumsim PRIVATE "${QSIM_SBNN_ROOT}/include")
+    # SbNN's libthqcp (the public coupling SDK) doesn't include the
+    # qec_decoder + toric_code + kitaev_model object files, so we
+    # vendor their TUs directly when QSIM_ENABLE_SBNN=ON.  All three
+    # are stdlib-only -- no transitive deps to chase.
+    target_sources(quantumsim PRIVATE
+        "${QSIM_SBNN_ROOT}/src/qec_decoder/qec_decoder.c"
+        "${QSIM_SBNN_ROOT}/src/toric_code.c"
+        "${QSIM_SBNN_ROOT}/src/kitaev_model.c"
+    )
+    message(STATUS "SbNN decoder slot: ON (vendored qec_decoder + toric_code from ${QSIM_SBNN_ROOT})")
+endif()
+
+if(QSIM_HAS_LIBIRREP)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAS_LIBIRREP=1)
+    target_link_libraries(quantumsim PRIVATE ${QSIM_LIBIRREP_TARGET})
+    # Bake the libirrep library path into libquantumsim's runtime-rpath
+    # so test executables don't need DYLD_LIBRARY_PATH at run time.
+    # Only adds an entry when QSIM_LIBIRREP_ROOT pointed at a source
+    # tree (the find_package + pkg-config paths handle this through
+    # the imported target).
+    if(QSIM_LIBIRREP_ROOT)
+        set(_libirrep_libdir "${QSIM_LIBIRREP_ROOT}/build/lib")
+        if(EXISTS "${_libirrep_libdir}")
+            set_property(TARGET quantumsim APPEND PROPERTY
+                BUILD_RPATH "${_libirrep_libdir}")
+        endif()
+    endif()
+    message(STATUS "libirrep bridge: ON (target=${QSIM_LIBIRREP_TARGET})")
 endif()
 
 # Include directories
@@ -851,6 +1203,15 @@ target_link_libraries(quantumsim
     PRIVATE
         Threads::Threads
 )
+
+if(QSIM_HAS_TLS)
+    target_link_libraries(quantumsim PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(quantumsim PRIVATE MOONLAB_HAVE_TLS=1)
+endif()
+
+# Wire the production control-plane daemon binary to quantumsim.
+target_link_libraries(moonlab-control-server PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+install(TARGETS moonlab-control-server RUNTIME DESTINATION bin)
 
 # ==============================================================================
 # Platform-Specific Configuration
@@ -1067,15 +1428,78 @@ if(QSIM_HAS_CUDA)
     target_compile_definitions(quantumsim PRIVATE HAS_CUDA=1)
     target_include_directories(quantumsim PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
-    # Set CUDA architectures
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86 89 90)
+    # Set CUDA architectures.  72 = Xavier (Volta integrated), 87 = Orin
+    # (Ampere integrated).  Other lines: 70 V100, 75 Turing, 80 A100,
+    # 86 Ada, 89 RTX 40-series, 90 H100.  Override via
+    # -DCMAKE_CUDA_ARCHITECTURES=NN to target a specific device.
+    #
+    # The "-real" suffix tells cmake to emit only SASS for that arch
+    # (no embedded PTX, no LTO-IR).  We need this because the
+    # bracket-notation cmake otherwise generates (code=[compute_X,sm_X])
+    # triggers `-dlto` in the device-link step, which fails on
+    # jetpack-nixos with "nvlink fatal: elfLink linker library load
+    # error" because the LTO plugin isn't resolvable from nvlink's
+    # dlopen path.  We forfeit forward-JIT compatibility (PTX
+    # embedded) for a working build; this is the right trade for
+    # in-tree backend kernels where we control the deployment target.
+    # Architecture list -- only fires when caller didn't pass one.
+    # The bare numbers here would be auto-promoted by the normalization
+    # block above when CMAKE_CUDA_ARCHITECTURES is already set; this
+    # default path provides "-real" directly.
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+        set(CMAKE_CUDA_ARCHITECTURES 70-real 72-real 75-real 80-real 86-real 87-real 89-real 90-real)
     endif()
+
+    # Compile the moonlab CUDA backend.  cuda_tegra_probe.c is plain
+    # C (no CUDA dependency in the .c itself; the .h is C-visible),
+    # but we still gate it on QSIM_HAS_CUDA because nothing else
+    # needs the runtime probe yet.
+    target_sources(quantumsim PRIVATE
+        src/backends/cuda_tegra_probe.c
+        src/backends/cuda_statevec.cu
+        src/quantum/state_gpu.cu
+    )
+
+    # Separable-compilation policy.
+    #
+    # CMake 4.x emits `-dlto` (device LTO) at the device-link step
+    # whenever CUDA_SEPARABLE_COMPILATION=ON, with no documented
+    # off-switch -- not via INTERPROCEDURAL_OPTIMIZATION, not via the
+    # "-real" arch suffix.  On jetpack-nixos R35 (CUDA 11.4) the nvlink
+    # binary can't dlopen the LTO IR plugin from its nix-store path,
+    # so any separable-compilation build fails with "nvlink fatal:
+    # elfLink linker library load error".
+    #
+    # Our backend doesn't require cross-TU device-symbol resolution:
+    # each .cu file defines its own __global__ kernels, and the only
+    # __constant__ memory block (k_apply_2q_M in cuda_statevec.cu) is
+    # referenced only from kernels in the same TU.  So we don't
+    # actually need separable compilation, and turning it OFF is the
+    # correct platform-aware choice -- not a workaround.
+    #
+    # If a future kernel needs to share device symbols across TUs,
+    # the conditions to turn this back ON are:
+    #   - on jetpack-nixos: nvlink's LTO plugin path becomes resolvable
+    #     (jetpack-nixos contributes a wrapper, or CUDA 12.6+ removes
+    #     the LTO dep at device link)
+    #   - on stock linux + CUDA 12+: should already work
     set_target_properties(quantumsim PROPERTIES
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
-        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_SEPARABLE_COMPILATION OFF
     )
+
+    # jetpack-nixos rpath wiring (include path was set pre-enable_language).
+    # The L4T driver stub libcuda.so.1 lives in nixpkgs's GL-driver compat
+    # path.  Add it to BUILD_RPATH so binaries linked against quantumsim
+    # find the driver at runtime without LD_LIBRARY_PATH boilerplate.
+    if(QSIM_PLATFORM_JETPACK_NIXOS AND EXISTS "/run/opengl-driver/lib/libcuda.so.1")
+        message(STATUS "CUDA: jetpack-nixos libcuda stub at /run/opengl-driver/lib")
+        set_property(TARGET quantumsim APPEND PROPERTY
+            BUILD_RPATH    "/run/opengl-driver/lib")
+        set_property(TARGET quantumsim APPEND PROPERTY
+            INSTALL_RPATH  "/run/opengl-driver/lib")
+    endif()
 endif()
 
 if(QSIM_HAS_CUQUANTUM)
@@ -1171,6 +1595,19 @@ if(QSIM_BUILD_BENCHMARKS)
         src/optimization/parallel_ops.c
     )
     target_link_libraries(grover_parallel_benchmark PRIVATE quantumsim)
+
+    # Decoder-zoo shoot-out (since v0.7.8) -- runs all available
+    # decoder slots at varying physical error rates, emits JSON.
+    add_executable(decoder_shootout benchmarks/decoder_shootout.c)
+    target_link_libraries(decoder_shootout PRIVATE quantumsim)
+
+    # Control-plane load test (since v1.0.3) -- N concurrent clients
+    # against a running moonlab-control-server; throughput + P50/P90/P99
+    # latency.  Validates the runbook capacity numbers and the
+    # FLEET_DEPLOYMENT.md per-replica budgets.
+    add_executable(control_plane_loadtest benchmarks/control_plane_loadtest.c)
+    target_link_libraries(control_plane_loadtest
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
     if(QSIM_HAS_OPENMP)
         qsim_target_link_openmp(grover_parallel_benchmark)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
@@ -1178,6 +1615,21 @@ if(QSIM_BUILD_BENCHMARKS)
         endif()
         target_compile_definitions(grover_parallel_benchmark PRIVATE HAS_OPENMP=1)
     endif()
+
+    # v1.0 head-to-head comparison harnesses (since v1.0).  Each emits a
+    # JSON file with the moonlab side of one published comparison; the
+    # competitor side runs separately -- see docs/benchmarks/v1_comparison.md.
+    add_executable(ca_mps_kagome_bench
+        benchmarks/v1_comparison/ca_mps_kagome_bench.c)
+    target_link_libraries(ca_mps_kagome_bench PRIVATE quantumsim ${MATH_LIBRARY})
+
+    add_executable(surface_threshold_bench
+        benchmarks/v1_comparison/surface_threshold_bench.c)
+    target_link_libraries(surface_threshold_bench PRIVATE quantumsim ${MATH_LIBRARY})
+
+    add_executable(sv_random_bench
+        benchmarks/v1_comparison/sv_random_bench.c)
+    target_link_libraries(sv_random_bench PRIVATE quantumsim ${MATH_LIBRARY})
 
     message(STATUS "Benchmarks: Enabled")
 endif()

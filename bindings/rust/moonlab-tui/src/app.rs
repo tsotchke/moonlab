@@ -2,7 +2,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use moonlab::{
-    CaMps, FeynmanDiagram, QuantumState, VarDConfig, Warmstart,
+    CaMps, FeynmanDiagram, Mpdo, PauliCode, QuantumState, VarDConfig, Warmstart,
+    qwz_chern, ssh_winding,
     var_d_run, z2_lgt_1d_build, z2_lgt_1d_gauss_law,
 };
 use std::time::Instant;
@@ -55,6 +56,18 @@ pub enum Algorithm {
     /// Exercises the full v0.2.1 var-D pipeline including the Trotter
     /// imag-time |phi>-update and the greedy Clifford D-update.
     CaMpsVarDTfim,
+    /// Topology phase diagram: sweeps the QWZ mass `m` across [-3, 3]
+    /// and reports the integer Chern number at each grid point.
+    /// Renders an ASCII bar chart of the Chern landscape so you can
+    /// see the +1 / -1 / 0 plateaus and the gap-closing transitions
+    /// at m = -2, 0, +2 in a single screen.  Since v0.3.0.
+    TopologyPhaseDiagram,
+    /// MPDO noise tour: takes a 4-qubit `|+>^⊗4` initial state and
+    /// applies depolarising / amplitude-damping / phase-damping
+    /// channels at increasing strengths, reporting the resulting
+    /// `<Z>` and `<X>` trajectories as ASCII ribbons.  Demonstrates
+    /// the v0.3 polynomial-cost noisy circuit simulator.
+    MpdoNoiseTour,
 }
 
 impl Algorithm {
@@ -70,6 +83,8 @@ impl Algorithm {
             Self::CaMpsBellWarmstart => "CA-MPS gauge warmstart (Bell)",
             Self::Z2LgtBuild => "1+1D Z2 LGT Hamiltonian",
             Self::CaMpsVarDTfim => "var-D ground state (4-qubit TFIM, g=1)",
+            Self::TopologyPhaseDiagram => "Topology phase diagram (QWZ Chern sweep)",
+            Self::MpdoNoiseTour => "MPDO noise tour (depolarising / T1 / T2 ribbons)",
         }
     }
 
@@ -94,6 +109,12 @@ impl Algorithm {
             Self::CaMpsVarDTfim => {
                 "Alternating greedy-Clifford D-update + imag-time |phi>-update on 4-qubit TFIM at criticality, with the H_all + CNOT-chain (Kramers-Wannier dual) warmstart"
             }
+            Self::TopologyPhaseDiagram => {
+                "QWZ Chern number sweep over m in [-3, 3] via FHS link-variable integration on a 32x32 BZ grid; visualises the +1 / -1 / 0 plateaus and the gap-closing transitions at m = -2, 0, +2"
+            }
+            Self::MpdoNoiseTour => {
+                "Three single-qubit channels at swept strength on |+>: depolarising (kills <Z>=1-4p/3 and <X>=1-4p/3), amplitude-damping (T_1; resets to |0>), phase-damping (T_2; preserves <Z>, kills <X> by sqrt(1-lambda))"
+            }
         }
     }
 
@@ -109,6 +130,8 @@ impl Algorithm {
             Self::CaMpsBellWarmstart,
             Self::Z2LgtBuild,
             Self::CaMpsVarDTfim,
+            Self::TopologyPhaseDiagram,
+            Self::MpdoNoiseTour,
         ]
     }
 }
@@ -904,6 +927,91 @@ impl App {
                 self.status = format!(
                     "TFIM g=1, n=4: var-D final E={:.4} (exact GS = -4.7588), bond_dim={}, norm={:.3}",
                     energy, ca.bond_dim(), ca.norm());
+            }
+            Algorithm::TopologyPhaseDiagram => {
+                // Sweep QWZ mass m across [-3, 3] in 31 steps, computing
+                // Chern via the stable moonlab_qwz_chern ABI on a 32x32
+                // BZ grid.  Render a one-line "phase ribbon" showing
+                // each plateau and the transitions between them.
+                //
+                // Cross-check the SSH winding at one representative t2
+                // value too, so the status line carries both 1D and 2D
+                // topological invariants in a single screen.
+                let mut chern: Vec<i32> = Vec::with_capacity(31);
+                for i in 0..31 {
+                    let m = -3.0 + (i as f64) * (6.0 / 30.0);
+                    chern.push(qwz_chern(m, 32));
+                }
+                let ribbon: String = chern.iter().map(|&c| match c {
+                    1  => '+',
+                    -1 => '-',
+                    0  => '.',
+                    _  => '?',
+                }).collect();
+                let ssh_top = ssh_winding(1.0, 2.0, 64);   // topological
+                let ssh_triv = ssh_winding(2.0, 1.0, 64);  // trivial
+                if n >= 1 { state.h(0); }
+                self.total_steps = chern.len();
+                self.status = format!(
+                    "QWZ phase ribbon (m=-3 -> +3, '+'=C+1, '-'=C-1, '.'=trivial): [{ribbon}]  |  SSH: t2>t1 W={ssh_top}, t1>t2 W={ssh_triv}");
+            }
+            Algorithm::MpdoNoiseTour => {
+                // Three single-qubit channels swept across 11 strength
+                // points on a 4-qubit |0000> initial state.  At each
+                // step we re-create the MPDO, apply the channel at
+                // strength p, and read <Z_0>.  The ribbons let you see
+                // each channel's analytical decay law at a glance:
+                //   depolarising:        <Z> = 1 - 4p/3      (linear, ends -1/3)
+                //   amplitude damping:   <Z> = 1 - gamma/2   (resets toward |0>)
+                //   phase damping:       <Z> = 1             (preserved exactly)
+                // Cell symbols quantise the <Z> magnitude:
+                //   #  |<Z>| > 0.7      +  |<Z>| > 0.3
+                //   .  |<Z>| > 0.05         else (near zero)
+                let symbol = |v: f64| -> char {
+                    let a = v.abs();
+                    if a > 0.7 { '#' }
+                    else if a > 0.3 { '+' }
+                    else if a > 0.05 { '.' }
+                    else { ' ' }
+                };
+
+                let mut depol_ribbon = String::with_capacity(11);
+                let mut amp_ribbon = String::with_capacity(11);
+                let mut phase_ribbon = String::with_capacity(11);
+                let mut depol_end = f64::NAN;
+                let mut amp_end = f64::NAN;
+                let mut phase_end = f64::NAN;
+
+                for i in 0..=10 {
+                    let p = (i as f64) / 10.0;
+
+                    if let Ok(mut m) = Mpdo::new(4, 16) {
+                        let _ = m.apply_depolarizing(0, p);
+                        let z = m.expect_pauli(0, PauliCode::Z).unwrap_or(f64::NAN);
+                        depol_ribbon.push(symbol(z));
+                        if i == 10 { depol_end = z; }
+                    }
+                    if let Ok(mut m) = Mpdo::new(4, 16) {
+                        let _ = m.apply_amplitude_damping(0, p);
+                        let z = m.expect_pauli(0, PauliCode::Z).unwrap_or(f64::NAN);
+                        amp_ribbon.push(symbol(z));
+                        if i == 10 { amp_end = z; }
+                    }
+                    if let Ok(mut m) = Mpdo::new(4, 16) {
+                        let _ = m.apply_phase_damping(0, p);
+                        let z = m.expect_pauli(0, PauliCode::Z).unwrap_or(f64::NAN);
+                        phase_ribbon.push(symbol(z));
+                        if i == 10 { phase_end = z; }
+                    }
+                }
+
+                if n >= 1 { state.h(0); }
+                self.total_steps = 11;
+                self.status = format!(
+                    "MPDO noise tour (4q, p=0..1, <Z_0>): \
+                     depol [{depol_ribbon}] end={depol_end:.3}  |  \
+                     amp_damp [{amp_ribbon}] end={amp_end:.3}  |  \
+                     phase_damp [{phase_ribbon}] end={phase_end:.3}");
             }
         }
 

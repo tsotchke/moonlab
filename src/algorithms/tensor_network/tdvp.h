@@ -68,7 +68,6 @@
 #include "tn_state.h"
 #include "dmrg.h"
 #include "tensor.h"
-#include "lattice_2d.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
@@ -107,6 +106,83 @@ typedef enum {
 } integrator_type_t;
 
 /**
+ * @brief Adaptive-bond TDVP configuration (since v0.4 / Phase 3B).
+ *
+ * Replaces the fixed `max_bond_dim` cap with an entropy-feedback PID
+ * controller that selects each bond's truncation threshold
+ * individually so the post-truncation block entropy meets a target
+ * accuracy budget.  Algorithm and validation criteria are documented
+ * in `docs/research/adaptive_bond_tdvp.md`.
+ *
+ * When `enabled == false` (the default produced by
+ * `tdvp_config_default`) the legacy fixed-cap path is used and the
+ * remaining fields are ignored; this preserves bit-exact behaviour
+ * for every v0.3 caller.
+ *
+ * Reference: arXiv:2604.03960 (entropy-feedback bond control for
+ * 2TDVP).
+ */
+typedef struct {
+    bool enabled;                /**< Use PID controller (false = legacy). */
+    double target_entropy_error; /**< Target |S - S_chi| budget. */
+    double kp;                   /**< Proportional gain. */
+    double ki;                   /**< Integral gain (per sweep). */
+    double kd;                   /**< Derivative gain (per sweep). */
+    uint32_t chi_floor;          /**< Hard lower bound on per-bond chi. */
+    uint32_t chi_ceiling;        /**< Hard upper bound on per-bond chi. */
+    double alpha;                /**< Entropy-excess -> bond-dim scale. */
+} tdvp_adaptive_bond_config_t;
+
+/**
+ * @brief Reference-paper PID gains for the adaptive-bond controller.
+ *
+ * Returns an `enabled = true` configuration with the gains validated
+ * in arXiv:2604.03960 for a 24-site Heisenberg chain.  Equivalent to
+ * filling the fields by hand with:
+ *   - target_entropy_error = eps_S
+ *   - kp = 0.5, ki = 0.05, kd = 0.1
+ *   - chi_floor = 4, chi_ceiling = 4096
+ *   - alpha = 8.0
+ *
+ * Use this when wiring adaptive bond control into a new TDVP
+ * pipeline; tune the gains afterwards if your model has a
+ * substantially different entanglement-growth profile.
+ */
+static inline tdvp_adaptive_bond_config_t
+tdvp_adaptive_bond_config_default(double target_entropy_error) {
+    return (tdvp_adaptive_bond_config_t){
+        .enabled              = true,
+        .target_entropy_error = target_entropy_error,
+        .kp                   = 0.5,
+        .ki                   = 0.05,
+        .kd                   = 0.1,
+        .chi_floor            = 4,
+        .chi_ceiling          = 4096,
+        .alpha                = 8.0,
+    };
+}
+
+/**
+ * @brief All-zero, disabled adaptive-bond config.
+ *
+ * Used inside `tdvp_config_default` to leave the adaptive path off
+ * by default so existing v0.3 callers see no behaviour change.
+ */
+static inline tdvp_adaptive_bond_config_t
+tdvp_adaptive_bond_config_disabled(void) {
+    return (tdvp_adaptive_bond_config_t){
+        .enabled              = false,
+        .target_entropy_error = 0.0,
+        .kp                   = 0.0,
+        .ki                   = 0.0,
+        .kd                   = 0.0,
+        .chi_floor            = 0,
+        .chi_ceiling          = 0,
+        .alpha                = 0.0,
+    };
+}
+
+/**
  * @brief TDVP configuration
  */
 typedef struct {
@@ -115,7 +191,7 @@ typedef struct {
     integrator_type_t integrator;           /**< Time integration method */
 
     double dt;                      /**< Time step */
-    uint32_t max_bond_dim;          /**< Maximum bond dimension */
+    uint32_t max_bond_dim;          /**< Maximum bond dimension (legacy fixed cap) */
     double svd_cutoff;              /**< SVD truncation threshold */
 
     uint32_t lanczos_max_iter;      /**< Max Lanczos iterations */
@@ -123,10 +199,24 @@ typedef struct {
 
     bool normalize;                 /**< Normalize state after each step */
     bool verbose;                   /**< Print progress information */
+
+    /**
+     * Adaptive-bond control (v0.4+).  When `adaptive_bond.enabled`
+     * is `true`, `max_bond_dim` and `svd_cutoff` are still honoured
+     * as outer-bound safeties but the per-bond truncation threshold
+     * is selected by the PID controller.  See
+     * `docs/research/adaptive_bond_tdvp.md`.
+     */
+    tdvp_adaptive_bond_config_t adaptive_bond;
 } tdvp_config_t;
 
 /**
- * @brief Default TDVP configuration
+ * @brief Default TDVP configuration (legacy fixed-bond path).
+ *
+ * `adaptive_bond.enabled` is `false`, so callers that built a
+ * `tdvp_config_t` via this helper before v0.4 continue to see the
+ * exact same behaviour: a fixed `max_bond_dim = 128` cap with
+ * `svd_cutoff = 1e-10`.
  */
 static inline tdvp_config_t tdvp_config_default(void) {
     return (tdvp_config_t){
@@ -139,8 +229,36 @@ static inline tdvp_config_t tdvp_config_default(void) {
         .lanczos_max_iter = 50,
         .lanczos_tol = 1e-12,
         .normalize = true,
-        .verbose = false
+        .verbose = false,
+        .adaptive_bond = {
+            .enabled              = false,
+            .target_entropy_error = 0.0,
+            .kp                   = 0.0,
+            .ki                   = 0.0,
+            .kd                   = 0.0,
+            .chi_floor            = 0,
+            .chi_ceiling          = 0,
+            .alpha                = 0.0,
+        },
     };
+}
+
+/**
+ * @brief Adaptive-bond TDVP configuration (since v0.4).
+ *
+ * Returns a two-site real-time TDVP config with the entropy-feedback
+ * PID controller enabled at the reference-paper gains.  The fixed
+ * `max_bond_dim` is retained as an outer-bound safety
+ * (`chi_ceiling`).
+ *
+ * @param target_entropy_error  PID error-signal budget; 1e-3 is a
+ *                              sensible default for production runs.
+ */
+static inline tdvp_config_t tdvp_config_adaptive(double target_entropy_error) {
+    tdvp_config_t cfg = tdvp_config_default();
+    cfg.adaptive_bond = tdvp_adaptive_bond_config_default(target_entropy_error);
+    cfg.max_bond_dim  = cfg.adaptive_bond.chi_ceiling;
+    return cfg;
 }
 
 // ============================================================================
@@ -149,6 +267,15 @@ static inline tdvp_config_t tdvp_config_default(void) {
 
 /**
  * @brief TDVP step result
+ *
+ * Callers may pass a stack-allocated, zero-initialised
+ * `tdvp_result_t` into `tdvp_step`; the engine fills the scalar
+ * fields and (only when the adaptive-bond controller is enabled)
+ * lazily allocates a heap buffer for `bond_chi_distribution`.  The
+ * buffer is reused across calls if its size matches; otherwise it
+ * is realloc-ed.  Before discarding the result (or letting it go out
+ * of scope) the caller must invoke `tdvp_result_clear` to free the
+ * heap allocation.
  */
 typedef struct {
     double time;                /**< Current time after step */
@@ -157,10 +284,35 @@ typedef struct {
     double truncation_error;    /**< Truncation error in this step */
     uint32_t max_bond_dim;      /**< Maximum bond dimension reached */
     double step_time;           /**< Wall time for this step (seconds) */
+
+    /**
+     * Per-bond chi snapshot from the adaptive-bond controller
+     * (since v0.4).  Length `n_bonds = num_qubits - 1` when the
+     * controller is enabled; otherwise `bond_chi_distribution` is
+     * `NULL` and `n_bonds = 0`.  Heap-owned; free via
+     * `tdvp_result_clear`.
+     */
+    uint32_t *bond_chi_distribution;
+    uint32_t  n_bonds;
 } tdvp_result_t;
 
 /**
+ * @brief Free the heap fields of a `tdvp_result_t` and zero the
+ *        struct in place.
+ *
+ * Safe to call on a zero-initialised result (no-op) or repeatedly
+ * (subsequent calls are no-ops).
+ */
+void tdvp_result_clear(tdvp_result_t *result);
+
+/**
  * @brief TDVP evolution history (for observables)
+ *
+ * `bond_chi_history` (since v0.4) is a flat `capacity * n_bonds`
+ * buffer storing the per-bond chi snapshot for each recorded step
+ * row-major; entry `(step, bond)` lives at index
+ * `step * n_bonds + bond`.  Only allocated when the first added
+ * result actually carries a non-NULL `bond_chi_distribution`.
  */
 typedef struct {
     double *times;              /**< Array of times */
@@ -169,6 +321,9 @@ typedef struct {
     double *observables;        /**< Array of measured observables */
     uint32_t num_steps;         /**< Number of recorded steps */
     uint32_t capacity;          /**< Allocated capacity */
+
+    uint32_t *bond_chi_history; /**< Flat capacity * n_bonds buffer, or NULL */
+    uint32_t  n_bonds;          /**< Stride of the chi history (0 = unused) */
 } tdvp_history_t;
 
 /**
@@ -183,12 +338,42 @@ void tdvp_history_free(tdvp_history_t *hist);
 
 /**
  * @brief Add result to history
+ *
+ * Records `result->time`, `result->energy`, `result->norm`, and the
+ * per-bond chi snapshot from `result->bond_chi_distribution` (lazily
+ * allocated on the first result that carries a distribution).  Does
+ * not touch `tdvp_history_t::observables`; use
+ * ::tdvp_history_add_with_observable for that.
  */
 void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result);
+
+/**
+ * @brief Add a result to history together with one scalar observable.
+ *
+ * Equivalent to ::tdvp_history_add but additionally writes
+ * @p observable into `tdvp_history_t::observables` at the new step's
+ * index.  The `observables` array is lazily allocated on the first
+ * call to this function; calls to ::tdvp_history_add on the same
+ * history leave the corresponding observable slot at zero.
+ */
+void tdvp_history_add_with_observable(tdvp_history_t *hist,
+                                       const tdvp_result_t *result,
+                                       double observable);
 
 // ============================================================================
 // TDVP ENGINE
 // ============================================================================
+
+/**
+ * @brief Opaque per-bond PID state for the adaptive-bond controller.
+ *
+ * Defined in `tdvp.c`.  The engine owns one slot per inter-site bond
+ * when `config.adaptive_bond.enabled` is true and forwards the
+ * appropriate slot into the truncation helper on each two-site
+ * update; on the legacy path `bond_states` is NULL and the field is
+ * never read.
+ */
+typedef struct tdvp_bond_pid_state tdvp_bond_pid_state_t;
 
 /**
  * @brief TDVP evolution engine
@@ -201,6 +386,16 @@ typedef struct {
     dmrg_environments_t *env;       /**< Left/right environments */
     tdvp_config_t config;           /**< Configuration */
     double current_time;            /**< Current evolution time */
+
+    /**
+     * Per-bond PID controller state for adaptive-bond TDVP (since
+     * v0.4).  Length `num_bond_states = mps->num_qubits - 1` when
+     * `config.adaptive_bond.enabled`, NULL on the legacy path.  The
+     * engine owns this allocation and frees it in
+     * `tdvp_engine_free`.
+     */
+    tdvp_bond_pid_state_t *bond_states;
+    uint32_t num_bond_states;
 } tdvp_engine_t;
 
 /**
@@ -214,6 +409,22 @@ typedef struct {
 tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
                                    mpo_t *mpo,
                                    const tdvp_config_t *config);
+
+/**
+ * @brief Read the current per-bond chi from the adaptive-bond
+ *        controller.
+ *
+ * Returns the target bond dimension the entropy-feedback PID has
+ * settled on for the given inter-site bond after the most recent
+ * sweep, or `0` if `bond` is out of range, the engine is `NULL`, or
+ * the adaptive controller is disabled (in which case no per-bond
+ * state is allocated).
+ *
+ * Primarily intended for tests, instrumentation, and the
+ * `bond_chi_distribution` reporting path that the v0.4 result
+ * struct will add in a future patch.
+ */
+uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
 
 /**
  * @brief Free TDVP engine
@@ -305,69 +516,37 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
                   tensor_t *y);
 
 // ============================================================================
-// SPIN DYNAMICS (SKYRMION SPECIFIC)
-// ============================================================================
-
-/**
- * @brief Spin-transfer torque parameters
- *
- * For current-driven skyrmion motion.
- */
-typedef struct {
-    double jx;      /**< Current density x-component */
-    double jy;      /**< Current density y-component */
-    double beta;    /**< Non-adiabaticity parameter */
-    double alpha;   /**< Gilbert damping */
-} stt_params_t;
-
-/**
- * @brief Create MPO for spin-transfer torque Hamiltonian
- *
- * H_STT = sum_i j · ∇S_i (adiabatic) + β j · (S_i × ∇S_i) (non-adiabatic)
- *
- * This is added to the base Hamiltonian to drive skyrmion motion.
- *
- * @param lat 2D lattice
- * @param stt STT parameters
- * @return MPO for STT Hamiltonian
- */
-mpo_t *mpo_stt_create(const lattice_2d_t *lat, const stt_params_t *stt);
-
-/**
- * @brief Evolve skyrmion under current drive
- *
- * Combines base Hamiltonian with STT for current-driven dynamics.
- *
- * @param mps MPS state
- * @param mpo_base Base Hamiltonian (exchange + DMI + ...)
- * @param stt STT parameters
- * @param config TDVP configuration
- * @param total_time Total evolution time
- * @param history Output history
- * @return 0 on success
- */
-int tdvp_evolve_with_stt(tn_mps_state_t *mps,
-                          const mpo_t *mpo_base,
-                          const stt_params_t *stt,
-                          const tdvp_config_t *config,
-                          double total_time,
-                          tdvp_history_t *history);
-
-// ============================================================================
 // OBSERVABLES DURING EVOLUTION
 // ============================================================================
 
 /**
- * @brief Observable callback type
+ * @brief Observable-side-effect callback type.
  *
- * Called after each TDVP step to compute observables.
+ * Called after each TDVP step.  The callback is free to compute any
+ * expectation value or write any side effect from `mps`; it does not
+ * report a value back to the engine.  Use
+ * ::observable_value_callback_t with ::tdvp_evolve_to_with_observable
+ * if you want the engine to record the measured value into history.
  */
 typedef void (*observable_callback_t)(const tn_mps_state_t *mps,
                                        double time,
                                        void *user_data);
 
 /**
- * @brief Evolve with observable measurement
+ * @brief Observable-returning callback type.
+ *
+ * Same shape as ::observable_callback_t, but returns a `double` that
+ * ::tdvp_evolve_to_with_observable writes into the history's
+ * `observables` array at the corresponding step index.  Typical
+ * implementations return an expectation value of some operator, the
+ * MPS norm, an entanglement entropy, or similar scalar diagnostic.
+ */
+typedef double (*observable_value_callback_t)(const tn_mps_state_t *mps,
+                                               double time,
+                                               void *user_data);
+
+/**
+ * @brief Evolve with observable measurement (side-effect callback).
  *
  * @param engine TDVP engine
  * @param target_time Target time
@@ -381,6 +560,28 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
                                   observable_callback_t callback,
                                   void *user_data,
                                   uint32_t measure_interval);
+
+/**
+ * @brief Evolve to a target time, recording each step + a scalar
+ *        observable into history.
+ *
+ * Mirrors ::tdvp_evolve_to but additionally invokes @p observable_fn
+ * after every step (when non-NULL) and stores its return value via
+ * ::tdvp_history_add_with_observable.  When @p observable_fn is NULL
+ * the call degrades to ::tdvp_evolve_to.
+ *
+ * @param engine        TDVP engine.
+ * @param target_time   Target time (real or imag, sign-agnostic).
+ * @param history       Output history; may not be NULL.
+ * @param observable_fn Per-step observable callback, or NULL.
+ * @param user_data     User data passed verbatim to @p observable_fn.
+ * @return 0 on success, negative on integrator failure.
+ */
+int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
+                                    double target_time,
+                                    tdvp_history_t *history,
+                                    observable_value_callback_t observable_fn,
+                                    void *user_data);
 
 #ifdef __cplusplus
 }

@@ -94,11 +94,11 @@ int main() {
     uint64_t target = 13;  // Item to find
 
     // Create state
-    quantum_state_t* state = quantum_state_create(n_qubits);
+    quantum_state_t* state = quantum_state_init(n_qubits);
 
     // Initialize to uniform superposition
     for (int i = 0; i < n_qubits; i++) {
-        quantum_state_h(state, i);
+        gate_hadamard(state, i);
     }
 
     // Calculate optimal iterations
@@ -117,7 +117,7 @@ int main() {
     uint64_t result = quantum_state_measure_all(state);
     printf("Found: %llu (target was %llu)\n", result, target);
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
     return 0;
 }
 ```
@@ -248,15 +248,15 @@ void phase_oracle(quantum_state_t* state,
     quantum_state_t* full = quantum_state_extend(state, 1);
     int ancilla = state->num_qubits;
 
-    quantum_state_x(full, ancilla);
-    quantum_state_h(full, ancilla);
+    gate_pauli_x(full, ancilla);
+    gate_hadamard(full, ancilla);
 
     // Apply controlled operations based on f
     // (Specific implementation depends on f)
 
     // Uncompute ancilla
-    quantum_state_h(full, ancilla);
-    quantum_state_x(full, ancilla);
+    gate_hadamard(full, ancilla);
+    gate_pauli_x(full, ancilla);
 }
 ```
 

@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-0.2.3-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-1.0.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -8,7 +8,206 @@
 > mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
 > seeded by that QRNG.**
 
-Moonlab v0.2.0 is the first release with an honest end-to-end
+## Community And Commercial Use
+
+This repository is the public **Moonlab Community Edition**. It remains a
+useful MIT-licensed simulator/runtime for local use, research, education,
+public integrations, and commercial embedding. Commercial Moonlab/QGTL products
+should build around this public core with hosted execution, private provider
+overlays, enterprise deployment, billing/audit hooks, support, and certified
+packages.
+
+See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
+boundary.
+
+## New in v1.0.3 (2026-05-20)
+
+**Open-core extension surfaces.**  Four runtime registries let private
+overlays, sibling libraries (QGTL / libirrep / SbNN), and customer
+applications plug new behavior into a stock moonlab build without
+touching its source:
+
+| Surface                                          | What it adds                                                                                                                  |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `moonlab_register_backend`                       | New execution backends (live hardware, GPU cluster, alternative simulator) -- dispatch by name from `moonlab_job_set_backend`. |
+| `moonlab_register_vendor_noise_profile`          | Live calibration scrapers push device snapshots into the registry; backends look profiles up by name at execute time.          |
+| `moonlab_register_decoder`                       | Custom QEC decoders (BP-OSD, GNN, hardware-decoded) join the same dispatcher as the five built-ins.                            |
+| `moonlab_scheduler_set_completion_hook`          | Synchronous hook for billing meters, audit logs, customer dashboards -- fires after every successful run with `(num_qubits, total_shots, backend_name)`. |
+
+Demo `examples/extensions/open_core_overlay_demo.c` exercises all four
+surfaces in one executable (ctest-gated).  Each registry is bound from
+Python, Rust, and JS -- see `bindings/{python,rust,javascript}` for the
+language-specific signatures.  A public-CI hygiene grep rejects any
+`PROPRIETARY:` / `TSOTCHKE-INTERNAL:` markers landing in the public
+moonlab tree.
+
+**Multi-tenant productization (second wave).**  The control plane
+now speaks an `AUTH <tenant_id>:<hmac>` wire form, propagates the
+tenant identity through to the scheduler completion hook for
+billing attribution, and exposes a pre-dispatch admission hook that
+private overlays use for per-tenant quotas, paid-tier gating, and
+emergency lockouts.  Five additional surfaces shipped:
+
+| Surface                                              | What it adds                                                                                  |
+|------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `moonlab_control_submit_circuit_auth_tenant`         | C / Python / Rust / JS client emits `AUTH <tenant>:<hmac>\n CIRCUIT <N>\n <body>`.            |
+| `moonlab_control_server_set_admission_hook`          | Pre-dispatch refusal (`-405`/`-408`) on quotas, tier gates, lockouts.  Bound from Python + Rust. |
+| `moonlab_scheduler_set_request_context` + getters    | Tenant_id + request_id flow into the scheduler thread-local; completion hook reads both.      |
+| `moonlab_token_bucket_*`                             | Lock-free per-tenant rate-limit primitive for admission hooks.  Native Python + Rust ports.    |
+| `docs/operations/{RUNBOOK,FLEET_DEPLOYMENT}.md`      | SRE runbook + fleet-rollout guide; measured throughput 4674 req/sec Bell 2q HMAC @ P99=1.92ms. |
+
+Runnable Python overlay at `examples/extensions/python_overlay_demo.py`
+boots an HMAC-secured control plane with a per-tenant TokenBucket-backed
+admission hook, submits Bell circuits from three tenants + one banned
+tenant + one over-quota tenant, and prints the resulting billing ledger.
+
+## New in v0.7 (2026-05-19)
+
+**v0.7.0** ships the distributed-scheduler MVP -- the first piece
+of moonlab's cloud-platform foundation.  `moonlab_job_t` carries
+a circuit description + shot count + worker fan-out;
+`moonlab_scheduler_run` splits the shots across N OpenMP workers
+in-process today, with the same contract shaped to swap MPI /
+gRPC / HTTP/2 as the transport in v0.7.1+.  4-worker Bell circuit
+verified at 1024 shots: 505 / 519 / 0 -- perfect Bell correlation
+across workers.  Schema-versioned JSON job spec
+(`moonlab/job/v0.7.0`) enables over-the-wire dispatch.
+
+## New in v0.6 (2026-05-19)
+
+**v0.6.2** extends the CSS-code handle to 6 QEC families behind one
+opaque type.  Surface code, toric, 2D color (Steane + Hamming),
+IBM bivariate-bicycle qLDPC (the three Bravyi-Nature 627 "Gross"
+codes), and hypergraph-product CSS codes.  Every instance is
+validated against its published [[n, k, d]] shape.  The
+`SurfaceCode` JS / Python / Rust bindings shipped in v0.5.12-14
+become QEC-zoo dispatchers in v0.6.3 -- one binding, eight code
+families.
+
+**v0.6.1** extends the v0.6.0 bridge with two substantial entry
+points.  First, `moonlab_libirrep_heisenberg_sector_e0()` runs
+sector-resolved Heisenberg ground-state ED on the orbit-representative
+basis: lattice -> space group -> rep table at fixed Sz -> full-reorth
+Lanczos with `irrep_heisenberg_apply_in_sector` as the matvec.  At
+N = 24 kagome 4x2 the sector dim is ~337k vs 16 777 216 full Hilbert,
+making N > 14 ground-state ED a workstation problem instead of an
+mpo_to_matrix OOM.  Second, a CSS-code handle layer
+(`moonlab_libirrep_qec_t`) starts wrapping libirrep's 18-module QEC
+zoo behind one opaque type.
+
+**v0.6.0** opens the libirrep-integration arc.  libirrep is a
+production-grade C library covering 18 QEC codes (toric, surface,
+color, bivariate bicycle, hypergraph + lifted product, honeycomb +
+CSS Floquet, 3D toric, X-cube fracton, HaPPY, single-shot,
+Bacon-Shor, Steane * Steane, BdG-skyrmion), rep-theory primitives
+(SO(3) / SU(2) / O(3) / SE(3)), and a verified spin-1/2 Heisenberg
+sector-ED stack.  Moonlab has been treating it as a paper reference
+(the `LIBIRREP_KAGOME12_E0 = -5.44487522` constant in the kagome
+tests is a number copied out of libirrep's `PHYSICS_RESULTS.md`);
+this release wires in the first real link.
+
+Build with `-DQSIM_ENABLE_LIBIRREP=ON`; detection tries
+`find_package(libirrep CONFIG)`, then `pkg-config libirrep`, then
+`-DQSIM_LIBIRREP_ROOT=<path>` / `$LIBIRREP_ROOT` env-var pointing
+at a source tree with `build/lib/liblibirrep.{a,dylib,so}`.  When
+detected, `tests/unit/test_kagome_ed` re-derives the libirrep
+reference at runtime (live `irrep_lanczos_eigvals_reorth` on the
+`irrep_heisenberg_t` built from `irrep_lattice_build(KAGOME, 2,
+2)`) and confirms agreement to machine precision (3.553e-15
+disagreement with moonlab's MPO + zheev path).  Default is OFF;
+when off the bridge compiles to stubs returning
+`MOONLAB_LIBIRREP_NOT_BUILT` and the test prints `(skipped)`.
+
+Next phases: v0.6.1 routes `moonlab_surface_code_clifford_*`
+through `irrep_surface_*` + `irrep_css_code_t`, picking up the
+other 17 codes for free behind the same JS / Python / Rust binding
+surface that v0.5.12-14 shipped.  v0.6.2 expands to wrappers for
+the toric / color / BB / X-cube / Floquet / HaPPY family.  v0.6.3+
+exposes Clebsch-Gordan + reduction tables to the existing QGT /
+DMRG paths.
+
+## New in v0.5 (2026-05-19)
+
+The v0.5 cycle is a production-quality push across all three
+language bindings: every algorithm class that exists in Python now
+has a working Rust analog and a working JavaScript / WebAssembly
+wrapper, with end-to-end integration tests gated by CI.
+
+- **WASM build resurrection (v0.5.0)** — a silent `_Static_assert`
+  break that landed in v0.2.4 had been quietly failing the
+  emscripten build for ~12 days.  `MOONLAB_MAX_QUBITS` is now
+  adaptive (30 on wasm32, 32 on native 64-bit hosts); the
+  ABI-export module is split into a qrng-free lean half that the
+  WASM build can include, surfacing `moonlab_qwz_chern` +
+  `moonlab_abi_version` + DMRG / CA-MPS / Z2-LGT shims to JS.
+
+- **JS binding parity (v0.5.4 - v0.5.6)** — Bell tests / Grover /
+  VQE / QAOA / topology are all callable from `@moonlab/quantum-
+  core` now.  Hardware entropy backed by `crypto.getRandomValues()`
+  via a WASM-only `hardware_entropy_wasm.c` shim unblocks every
+  shot-noise-sampling C entry point.  Eight topological-invariant
+  helpers in `topology.ts` cover QWZ Chern (3 integrators), SSH
+  winding, Kitaev BdG Z_2, Kane-Mele / BHZ Z_2, Hofstadter sub-band
+  Chern.
+
+- **JS integration test gate (v0.5.1 + v0.5.3)** — 141 vitest
+  integration tests cover every TS wrapper that previously had
+  zero coverage; CI now runs them after every WASM rebuild, so
+  the kind of silent symbol-export break that bit v0.5.0 cannot
+  recur.
+
+- **Rust examples coverage (v0.5.7 + v0.5.8)** — 3/14 -> 14/14
+  modules have a runnable `cargo run --example` demo with
+  textbook-correct output: CHSH = 2.82 on the Bell pair, H2
+  exact ground at -1.142 Ha, Mermin-Klyshko hits the GHZ ideal
+  `2^((n-1)/2)` at every n in 2..5, triangle MaxCut at p=3
+  converges to 100% approximation ratio, etc.
+
+- **Kane-Mele Rashba silent-correctness fix (v0.5.9)** — the
+  C-side `qgt_model_kane_mele` had been silently dropping the
+  `lambda_r` parameter, returning the S_z-conserving Z_2
+  invariant when the caller passed non-zero Rashba.  Now rejects
+  `lambda_r != 0.0` rather than emitting wrong physics; the full
+  Pfaffian-based Rashba Z_2 stays on the v0.3.1 milestone list.
+
+- **Rust build hygiene (v0.5.2)** — 326 `unused-unsafe` warnings
+  collapsed to 0 by setting the crate-level `unsafe_code` lint to
+  `allow` (matching `moonlab-sys`; the FFI surface is unsafe by
+  construction).
+
+Full version-by-version notes in [CHANGELOG.md](CHANGELOG.md#050---2026-05-19).
+
+## New in v0.3.0 (2026-05-08)
+
+- **Matrix-product density operator (MPDO) noise simulator** — polynomial-
+  cost simulation of noisy circuits with named single-qubit channels
+  (depolarising, amplitude damping, phase damping, bit/phase/bit-phase
+  flip).  Up to ~100 qubits at single-qubit error rates of 1e-3 in
+  quasi-1D layouts.  See `src/quantum/noise_mpdo.{c,h}`.
+
+- **n-band quantum geometric tensor (QGT) module** — opaque-handle
+  multi-band Bloch-Hamiltonian primitives + three Berry-grid Chern
+  integrators (eigvec FHS, parallel-transport, projector-trace,
+  rigorously gauge-free).  Z_2 invariant for 4-band TR-symmetric and
+  1D BdG systems.  Cross-checked against the existing real-space
+  Bianco-Resta `chern_marker` on QWZ.
+
+- **New topological-band-structure model primitives**: Kane-Mele
+  (4-band honeycomb QSH), BHZ (4-band square-lattice TI), Kitaev
+  p-wave chain (1D BdG topological superconductor), Harper-Hofstadter
+  (q-band magnetic-flux lattice).  Every model reproduces its
+  analytical phase boundary exactly.  Hofstadter sub-band Chern
+  numbers match the canonical TKNN values.
+
+- **Critical Haldane fix** — the existing 2-band Haldane Hamiltonian's
+  NNN antisymmetric sum vanished at the Dirac points in this
+  primitive-coord convention; restored to the canonical form, which
+  reproduces the textbook `|M| < 3*sqrt(3)*|t2*sin(phi)|` boundary.
+
+See [CHANGELOG.md](CHANGELOG.md#030---2026-05-08) for the full
+breakdown.
+
+Moonlab v0.2.0 was the first release with an honest end-to-end
 "quantum-source to quantum-safe" pipeline in one library: the
 Bell-verified quantum RNG generates 32-byte seeds that feed directly
 into NIST-standard ML-KEM-512 / 768 / 1024 key generation via a single
@@ -316,14 +515,17 @@ gauge-link Pauli sum; `examples/hep/z2_gauge_var_d.c` runs the
 full var-D pipeline with the gauge-aware warmstart.  Math write-up:
 `docs/research/var_d_lattice_gauge_theory.md`.
 
-### CA-PEPS (2D scaffold)
+### CA-PEPS (2D)
 
-`src/algorithms/tensor_network/ca_peps.{c,h}` ships the public-API
-scaffold for the 2D extension of CA-MPS.  Symbols are stable so
-downstream binders can wire against them now; gate-application and
-contraction logic land in v0.3.  Smoke test:
-`tests/unit/test_ca_peps.c` (returns `NOT_IMPLEMENTED` until the
-core ships).
+`src/algorithms/tensor_network/ca_peps.{c,h}` ships the 2D extension
+of CA-MPS via a row-major-MPS embedding over `Lx * Ly` qubits.
+Clifford gates (H, S, Sdag, X, Y, Z, CNOT, CZ) update the tableau
+in-place; non-Clifford rotations and the T family push into the
+inner MPS factor the same way CA-MPS does.  Validation lives in
+`tests/unit/test_ca_peps.c`: runs a mixed Clifford + rotation
+circuit on a 3x3 lattice through both `moonlab_ca_peps_*` and the
+equivalent CA-MPS linear index, and checks every Pauli-string
+expectation agrees to <1e-10.  Wired into ctest as `unit_ca_peps`.
 
 ## Quantum Algorithms
 
@@ -806,11 +1008,16 @@ tracked for 0.2.
 
 ### Distributed (MPI)
 
-`distributed_gates` exercises the MPI bridge: init, allreduce,
-sendrecv and barrier round-trip on ≥2 ranks. End-to-end distributed
-state-vector gate application across partitions is still in progress —
-the scaling table that used to live here was not reproducibly
-measured and has been removed.
+State-vector sharding across MPI ranks is wired end-to-end in
+`src/distributed/`: `dist_gate_1q`, `dist_hadamard`, `dist_pauli_*`,
+`dist_cnot`, etc. handle both local-partition and cross-partition
+gates with the necessary `MPI_Sendrecv` exchange.  The
+`tests/integration/test_distributed_*` harnesses validate Bell + GHZ
+round-trips on `mpirun -np 2..4`.  Cross-rank scaling above N = 32
+qubits (which exercises the dist_* buffer-size path fixed in v0.8.0)
+runs on dev hosts but has not yet been published with a peer-host
+reproducible scaling table -- that's tracked as part of the
+post-v1.0 scaling-honesty pass.
 
 ## Building
 
@@ -901,7 +1108,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v0.2.3},
+    version      = {v1.0.2},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

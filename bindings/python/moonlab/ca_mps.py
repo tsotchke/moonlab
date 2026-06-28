@@ -124,6 +124,19 @@ _lib.moonlab_ca_mps_t_dagger.restype = ctypes.c_int
 _lib.moonlab_ca_mps_normalize.argtypes = [ctypes.c_void_p]
 _lib.moonlab_ca_mps_normalize.restype = ctypes.c_int
 
+# Sequential Born-rule sampling (since v0.10.0).  Older libquantumsim
+# builds do not export it; flag at import time so the binding raises
+# a clear error instead of segfaulting.
+_HAS_SAMPLE_Z = hasattr(_lib, "moonlab_ca_mps_sample_z")
+if _HAS_SAMPLE_Z:
+    _lib.moonlab_ca_mps_sample_z.argtypes = [
+        ctypes.c_void_p,                    # state
+        ctypes.c_uint32,                    # num_samples
+        ctypes.POINTER(ctypes.c_double),    # random_values, length num_samples*n
+        ctypes.POINTER(ctypes.c_uint8),     # out_bits, length num_samples*n
+    ]
+    _lib.moonlab_ca_mps_sample_z.restype = ctypes.c_int
+
 # var-D run (v0.2.1 entry point).
 _lib.moonlab_ca_mps_var_d_run.argtypes = [
     ctypes.c_void_p,                    # state
@@ -270,6 +283,63 @@ class CAMPS:
 
     def normalize(self) -> None:
         _check(_lib.moonlab_ca_mps_normalize(self._h))
+
+    def sample_z(self,
+                 num_samples: int,
+                 rng: Optional[np.random.Generator] = None,
+                 ) -> np.ndarray:
+        """Draw computational-basis bitstrings from |<x|psi>|^2.
+
+        Walks qubits left-to-right per sample, conjugating Z_i through
+        the Clifford layer to get the conditional Pauli, sampling its
+        eigenvalue from the Born-rule probability, and projecting the
+        MPS factor onto the chosen eigenspace.  Implementation lives
+        in `moonlab_ca_mps_sample_z` (since v0.10.0); this method is
+        the Python parity wrapper.
+
+        Parameters
+        ----------
+        num_samples : int
+            Number of bitstrings to draw.
+        rng : numpy.random.Generator, optional
+            Source of the U[0,1) randoms one per (sample, qubit) pair.
+            Defaults to `np.random.default_rng()`.
+
+        Returns
+        -------
+        bits : ndarray of shape (num_samples, n), dtype uint8
+            `bits[s, i]` is the i-th measured bit of the s-th sample,
+            with 0 == Z_i = +1 and 1 == Z_i = -1.
+
+        Raises
+        ------
+        RuntimeError
+            If linked against a libquantumsim older than v0.10.0
+            (which did not export sample_z), or if any per-qubit
+            projection fails.
+        """
+        if not _HAS_SAMPLE_Z:
+            raise RuntimeError(
+                "moonlab_ca_mps_sample_z is not exported by the linked "
+                "libquantumsim (needs v0.10.0 or newer)")
+        if num_samples <= 0:
+            n = self.num_qubits
+            return np.empty((0, n), dtype=np.uint8)
+
+        n = self.num_qubits
+        if rng is None:
+            rng = np.random.default_rng()
+        randoms = np.ascontiguousarray(
+            rng.random(size=(num_samples, n)), dtype=np.float64)
+        bits = np.zeros((num_samples, n), dtype=np.uint8)
+
+        _check(_lib.moonlab_ca_mps_sample_z(
+            self._h,
+            ctypes.c_uint32(num_samples),
+            randoms.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+            bits.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+        ))
+        return bits
 
 
 def _check(rc: int) -> None:

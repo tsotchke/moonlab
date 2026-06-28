@@ -37,8 +37,7 @@ class CVQEOptimizer(ctypes.Structure):
     ]
 
 class CVQESolver(ctypes.Structure):
-    """Opaque structure for VQE solver"""
-    _fields_ = []
+    """Opaque ctypes handle for ``vqe_solver_t`` from ``src/algorithms/vqe.h``."""
 
 class CVQEResult(ctypes.Structure):
     """Layout-mirrored from vqe_result_t in src/algorithms/vqe.h.
@@ -78,8 +77,7 @@ class CGraph(ctypes.Structure):
     ]
 
 class CQAOASolver(ctypes.Structure):
-    """Opaque structure for QAOA solver"""
-    _fields_ = []
+    """Opaque ctypes handle for ``qaoa_solver_t`` from ``src/algorithms/qaoa.h``."""
 
 class CQAOAResult(ctypes.Structure):
     """Layout-mirrored from qaoa_result_t in src/algorithms/qaoa.h.
@@ -311,6 +309,23 @@ _lib.bell_get_optimal_settings.restype = None
 
 _lib.calculate_chsh_parameter.argtypes = [ctypes.c_double * 4]
 _lib.calculate_chsh_parameter.restype = ctypes.c_double
+
+# v0.4.2: Mermin-GHZ + Mermin-Klyshko Bell variants.
+_lib.bell_test_mermin_ghz.argtypes = [
+    ctypes.POINTER(CQuantumState),
+    ctypes.c_int, ctypes.c_int, ctypes.c_int,  # qubit_a, qubit_b, qubit_c
+    ctypes.c_size_t,                            # num_measurements
+    ctypes.c_void_p,                            # entropy context
+]
+_lib.bell_test_mermin_ghz.restype = CBellTestResult
+
+_lib.bell_test_mermin_klyshko.argtypes = [
+    ctypes.POINTER(CQuantumState),
+    ctypes.c_size_t,    # num_qubits
+    ctypes.c_size_t,    # num_measurements
+    ctypes.c_void_p,    # entropy context
+]
+_lib.bell_test_mermin_klyshko.restype = ctypes.c_double
 
 
 # ============================================================================
@@ -919,6 +934,85 @@ class BellTest:
         BellTest.create_bell_state(state, 0, 1, BellTest.PHI_PLUS)
         return BellTest.chsh_test(state, 0, 1, num_measurements)
 
+    @staticmethod
+    def mermin_ghz_test(state: QuantumState,
+                        qubit_a: int, qubit_b: int, qubit_c: int,
+                        num_measurements: int = 10000) -> Dict[str, Any]:
+        """Mermin inequality on a 3-qubit GHZ state.
+
+        Polynomial M = <XYY> + <YXY> + <YYX> - <XXX>; classical bound
+        |M| <= 2, Tsirelson-style quantum bound |M| = 4.  Wraps
+        ``bell_test_mermin_ghz`` (``src/algorithms/bell_tests.h:359``).
+        The result struct reuses ``chsh_value`` for |M| and the four
+        correlation fields for the {XYY, YXY, YYX, XXX} correlators
+        in that order.
+
+        Args:
+            state: GHZ-prepared state on at least 3 qubits.
+            qubit_a/b/c: Indices of the three measured qubits.
+            num_measurements: Total measurement budget (split four
+                              ways).
+
+        Returns:
+            Dict with ``mermin``, ``correlations``, classical /
+            quantum bounds, and statistics flags.
+        """
+        result = _lib.bell_test_mermin_ghz(
+            ctypes.byref(state._state),
+            ctypes.c_int(qubit_a),
+            ctypes.c_int(qubit_b),
+            ctypes.c_int(qubit_c),
+            ctypes.c_size_t(num_measurements),
+            _DEFAULT_ENTROPY_CTX,
+        )
+        return {
+            'mermin': result.chsh_value,
+            'correlations': {
+                'XYY': result.correlation_ab,
+                'YXY': result.correlation_ab_prime,
+                'YYX': result.correlation_a_prime_b,
+                'XXX': result.correlation_a_prime_b_prime,
+            },
+            'classical_bound': result.classical_bound,
+            'quantum_bound': result.quantum_bound,
+            'violates_classical': bool(result.violates_classical),
+            'confirms_quantum': bool(result.confirms_quantum),
+            'statistically_significant': bool(result.statistically_significant),
+            'num_measurements': result.measurements,
+            'standard_error': result.standard_error,
+            'p_value': result.p_value,
+        }
+
+    @staticmethod
+    def mermin_klyshko_test(state: QuantumState,
+                             num_qubits: int,
+                             num_measurements: int = 10000) -> float:
+        """N-qubit Mermin-Klyshko Bell inequality, normalised so the
+        classical (LHV) bound is 1 and the ideal GHZ quantum value is
+        ``2 ** ((N-1) / 2)``.
+
+        For N = 2 the returned value coincides with CHSH /
+        (2 sqrt(2)); for N = 3 with Mermin / 4.  Wraps
+        ``bell_test_mermin_klyshko``
+        (``src/algorithms/bell_tests.h:380``).
+
+        Args:
+            state: N-qubit GHZ-prepared state.
+            num_qubits: Number of qubits to test; uses qubit indices
+                        ``0..num_qubits-1``.
+            num_measurements: Total measurement budget for the
+                              polynomial.
+
+        Returns:
+            The normalised |M_N| value; 0.0 on argument error.
+        """
+        return float(_lib.bell_test_mermin_klyshko(
+            ctypes.byref(state._state),
+            ctypes.c_size_t(num_qubits),
+            ctypes.c_size_t(num_measurements),
+            _DEFAULT_ENTROPY_CTX,
+        ))
+
 
 # ============================================================================
 # CONVENIENCE FUNCTIONS
@@ -937,35 +1031,6 @@ def run_vqe_h2(bond_distance: float = 0.74, num_layers: int = 2) -> Dict[str, An
     """
     vqe = VQE(num_qubits=2, num_layers=num_layers)
     return vqe.solve_h2(bond_distance)
-
-
-def run_vqe_lih(bond_distance: float = 1.6, num_layers: int = 2) -> Dict[str, Any]:
-    """
-    Quick VQE run for LiH molecule
-
-    Args:
-        bond_distance: Li-H distance in Angstroms
-        num_layers: Ansatz depth
-
-    Returns:
-        VQE result dictionary
-    """
-    vqe = VQE(num_qubits=4, num_layers=num_layers)
-    return vqe.solve_lih(bond_distance)
-
-
-def run_vqe_h2o(num_layers: int = 2) -> Dict[str, Any]:
-    """
-    Quick VQE run for H2O molecule
-
-    Args:
-        num_layers: Ansatz depth
-
-    Returns:
-        VQE result dictionary
-    """
-    vqe = VQE(num_qubits=8, num_layers=num_layers)
-    return vqe.solve_h2o()
 
 
 def run_qaoa_maxcut(edges: List[Tuple[int, int]],

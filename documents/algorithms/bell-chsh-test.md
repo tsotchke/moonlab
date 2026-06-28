@@ -58,9 +58,9 @@ int main() {
     int shots = 10000;
 
     // Create Bell state |Φ+⟩
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
 
     // Measurement angles (optimal for CHSH)
     double a1 = 0;              // A
@@ -82,7 +82,7 @@ int main() {
     printf("Quantum bound: %.4f\n", 2 * sqrt(2));
     printf("Violation: %s\n", fabs(S) > 2.0 ? "YES" : "NO");
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
     return 0;
 }
 ```

@@ -1,0 +1,414 @@
+/**
+ * @file    scheduler.h
+ * @brief   Distributed-execution scheduler MVP (v0.7.0).
+ *
+ * The first piece of moonlab's cloud-platform foundation.  A
+ * `moonlab_job_t` carries a circuit description + shot count + worker
+ * fan-out; `moonlab_scheduler_run` splits the shots across N workers,
+ * dispatches each piece, and merges the outcomes.
+ *
+ * v0.7.0 transport: OpenMP threads in-process.  v0.7.1+ swaps in MPI
+ * (existing `src/distributed/mpi_bridge.{c,h}` scaffolding) and v0.7.2+
+ * adds gRPC / HTTP/2 control-plane.  The contract -- gate list +
+ * shot count + worker-side execution + result merge -- stays stable.
+ *
+ * JSON serialisation is supported one-way (`moonlab_job_to_json`) so
+ * a remote-worker process can be handed a job description over the
+ * wire.  Parsing is v0.7.1+ scope.
+ *
+ * @since v0.7.0
+ */
+
+#ifndef MOONLAB_SCHEDULER_H
+#define MOONLAB_SCHEDULER_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "../applications/moonlab_api.h"
+#include "../applications/moonlab_qgtl_backend.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Status codes for the distributed scheduler. */
+#define MOONLAB_SCHED_OK              ( 0)
+#define MOONLAB_SCHED_BAD_ARG         (-501)
+#define MOONLAB_SCHED_OOM             (-502)
+#define MOONLAB_SCHED_INTERNAL        (-503)
+#define MOONLAB_SCHED_BUFFER_TOO_SMALL (-504)
+#define MOONLAB_SCHED_BACKEND_NOT_FOUND (-506)
+#define MOONLAB_SCHED_BACKEND_BUSY    (-507)
+
+/** @brief Opaque job-spec handle. */
+typedef struct moonlab_job moonlab_job_t;
+
+/** @brief Output buffer for `moonlab_scheduler_run`.  `outcomes`
+ *  has length `total_shots`; entries are bitstrings (uint64 packed).
+ *  `worker_seconds[i]` is the wall-clock time worker `i` spent on
+ *  its slice. */
+typedef struct {
+    int       num_qubits;
+    int       total_shots;
+    uint64_t *outcomes;
+    int       num_workers_used;
+    double   *worker_seconds;
+} moonlab_job_results_t;
+
+/**
+ * @brief Allocate a job with `num_qubits` qubits, fan-out 1, shot
+ *        count 0.  Call `moonlab_job_add_gate` and
+ *        `moonlab_job_set_num_shots` / `_set_num_workers` to flesh
+ *        it out before scheduling.
+ */
+MOONLAB_API moonlab_job_t *
+moonlab_job_create(int num_qubits);
+
+/** @brief Release a job handle. */
+MOONLAB_API void moonlab_job_free(moonlab_job_t *job);
+
+/** @brief Append a gate.  Same contract as
+ *         @ref moonlab_qgtl_add_gate. */
+MOONLAB_API int
+moonlab_job_add_gate(moonlab_job_t *job,
+                     moonlab_qgtl_gate_t type,
+                     int target, int control,
+                     const double *params);
+
+/** @brief Set the total shot count.  The scheduler splits this
+ *         across `num_workers` slices internally. */
+MOONLAB_API int
+moonlab_job_set_num_shots(moonlab_job_t *job, int num_shots);
+
+/** @brief Set the worker fan-out.  Default 1.  Capped at
+ *         `OMP_NUM_THREADS` when OpenMP is enabled; otherwise the
+ *         scheduler runs everything serially regardless. */
+MOONLAB_API int
+moonlab_job_set_num_workers(moonlab_job_t *job, int num_workers);
+
+/** @brief Optional reproducibility seed for the per-worker PRNGs.
+ *         Worker `i` derives its seed as
+ *         `splitmix64(base_seed XOR i_in_hi32)`. */
+MOONLAB_API int
+moonlab_job_set_rng_seed(moonlab_job_t *job, uint64_t seed);
+
+/* Introspection. */
+MOONLAB_API int moonlab_job_num_qubits(const moonlab_job_t *job);
+MOONLAB_API int moonlab_job_num_gates(const moonlab_job_t *job);
+MOONLAB_API int moonlab_job_num_shots(const moonlab_job_t *job);
+MOONLAB_API int moonlab_job_num_workers(const moonlab_job_t *job);
+
+/**
+ * @brief Run the job across the worker fan-out.
+ *
+ * Splits `total_shots` into `num_workers` contiguous slices; each
+ * worker clones the gate list into a `moonlab_qgtl_circuit_t`,
+ * executes its slice via `moonlab_qgtl_execute`, and writes its
+ * outcomes into the merged buffer.  When built with OpenMP, the
+ * worker loop is `#pragma omp parallel for`.
+ *
+ * `out` is caller-allocated and zero-initialised; the call
+ * allocates `outcomes` (length `total_shots`) and
+ * `worker_seconds` (length `num_workers_used`).  Release with
+ * `moonlab_job_results_free`.
+ *
+ * @return MOONLAB_SCHED_OK on success or a negative status code.
+ */
+MOONLAB_API int
+moonlab_scheduler_run(moonlab_job_t           *job,
+                      moonlab_job_results_t   *out);
+
+/** @brief Release buffers attached to a results record. */
+MOONLAB_API void
+moonlab_job_results_free(moonlab_job_results_t *r);
+
+/* ------------------------------------------------------------------
+ * MPI transport (since v0.7.4)
+ *
+ * Cross-process distributed execution.  Every rank in the MPI
+ * communicator calls `moonlab_scheduler_run_mpi` collectively.
+ * Rank 0's `job` is the source -- its content is broadcast to all
+ * ranks.  Each rank computes its shot slice via the same
+ * moonlab_qgtl_execute path used by the in-process scheduler;
+ * outcomes are gathered to rank 0.
+ *
+ * On rank 0, `out` receives the merged outcomes from all ranks
+ * (length `total_shots`).  On non-root ranks, `out` holds the
+ * rank's local slice (so a caller wanting per-rank visibility can
+ * still inspect it).
+ *
+ * Build-conditional: returns `MOONLAB_SCHED_NOT_BUILT` when
+ * `QSIM_ENABLE_MPI=OFF` at compile time.  The `ctx` parameter is
+ * an opaque `distributed_ctx_t *` from `src/distributed/mpi_bridge.h`.
+ * ------------------------------------------------------------------ */
+
+#define MOONLAB_SCHED_NOT_BUILT       (-505) /**< MPI transport unavailable. */
+
+/**
+ * @brief Run the job across MPI ranks.  Must be called collectively
+ *        by every rank in `ctx`'s communicator.
+ *
+ * @param[in]  job  Job to execute.  Significant only on rank 0;
+ *                  non-root ranks may pass NULL.  Rank 0's job is
+ *                  the source of truth and is broadcast.
+ * @param[out] out  Receives the rank's outcomes.  On rank 0,
+ *                  `outcomes` has length `total_shots` (the full
+ *                  merged buffer).  On non-root ranks, `outcomes`
+ *                  holds the rank's local slice (length =
+ *                  `total_shots / size + (rank < remainder ? 1 : 0)`).
+ * @param[in]  ctx_opaque  Pointer to a `distributed_ctx_t` from
+ *                  `src/distributed/mpi_bridge.h`, passed as `void *`
+ *                  so scheduler.h doesn't drag MPI headers in.
+ *                  Pass NULL to fall back to the in-process scheduler.
+ */
+MOONLAB_API int
+moonlab_scheduler_run_mpi(moonlab_job_t           *job,
+                          moonlab_job_results_t   *out,
+                          void                    *ctx_opaque);
+
+/* ------------------------------------------------------------------
+ * Backend plug-in surface (since v1.1.0)
+ *
+ * A backend takes a job and produces results.  The default backend
+ * registered at scheduler-init time is named "simulator" and routes
+ * through the existing moonlab_qgtl_execute path with OpenMP shot
+ * fan-out.  Vendor-noise emulators (IBM heavy-hex / Rigetti octagon /
+ * D-Wave Chimera) and real-QPU drivers (delivered by the QGTL sibling
+ * library) register additional backends via moonlab_register_backend.
+ *
+ * Contract:
+ *   - execute(job, out, ctx) is called synchronously by the scheduler.
+ *     It may block while submitting to a remote service.
+ *   - Out is pre-zeroed by the scheduler; the backend allocates
+ *     `outcomes` of length `total_shots` and `worker_seconds` of
+ *     length `num_workers_used` (>= 1) and fills them.  The scheduler
+ *     frees these via moonlab_job_results_free on the caller's behalf.
+ *   - Return MOONLAB_SCHED_OK or a negative status code.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Backend execute callback.  See contract above.
+ */
+typedef int (*moonlab_backend_execute_fn)(
+    const moonlab_job_t       *job,
+    moonlab_job_results_t     *out,
+    void                      *ctx);
+
+/**
+ * @brief Backend descriptor.
+ *
+ * The struct is copied into the registry on @ref moonlab_register_backend;
+ * the function pointer and `ctx` lifetime are the caller's responsibility
+ * (must outlive the registry entry).
+ */
+typedef struct {
+    const char                 *name;         /**< short identifier, e.g. "simulator", "ibm-noise". */
+    moonlab_backend_execute_fn  execute;      /**< synchronous execute. */
+    void                       *ctx;          /**< opaque backend state (calibration data, session handle...). */
+    const char                 *description;  /**< human-readable; may be NULL. */
+} moonlab_backend_t;
+
+/**
+ * @brief Register a backend.  If a backend with the same name is
+ *        already registered, the new one replaces it (allows hot-swap
+ *        of vendor backends across calibration generations).
+ *
+ * @return MOONLAB_SCHED_OK / MOONLAB_SCHED_BAD_ARG / MOONLAB_SCHED_OOM.
+ */
+MOONLAB_API int moonlab_register_backend(const moonlab_backend_t *backend);
+
+/**
+ * @brief Unregister a backend by name.  Returns MOONLAB_SCHED_OK or
+ *        MOONLAB_SCHED_BACKEND_NOT_FOUND.
+ */
+MOONLAB_API int moonlab_unregister_backend(const char *name);
+
+/**
+ * @brief Look up a backend by name.  Returns NULL when not present.
+ *
+ *        The "simulator" backend is auto-registered on the first
+ *        call to any backend function or any scheduler_run; callers
+ *        can rely on `moonlab_find_backend("simulator") != NULL`.
+ */
+MOONLAB_API const moonlab_backend_t *moonlab_find_backend(const char *name);
+
+/**
+ * @brief Number of currently registered backends.
+ */
+MOONLAB_API int moonlab_num_backends(void);
+
+/**
+ * @brief Populate @p out_names with up to @p max backend names
+ *        (pointers into the registry's storage; valid until the
+ *        respective backends are unregistered).
+ *
+ * @return Actual number of names written (<= max).
+ */
+MOONLAB_API int moonlab_list_backends(const char **out_names, int max);
+
+/**
+ * @brief Choose which backend the scheduler should use for this job.
+ *        Pass NULL to clear -- the job will run on the default
+ *        "simulator" backend.
+ *
+ *        The backend need not be registered at the time of this call;
+ *        lookup happens at @ref moonlab_scheduler_run.
+ */
+MOONLAB_API int moonlab_job_set_backend(moonlab_job_t *job, const char *backend_name);
+
+/**
+ * @brief Return the configured backend name, or NULL if the default
+ *        ("simulator") is being used.  Pointer is owned by the job
+ *        and is valid until the next set_backend call / job_free.
+ */
+MOONLAB_API const char *moonlab_job_backend(const moonlab_job_t *job);
+
+/* ------------------------------------------------------------------
+ * Scheduler completion hook (since v1.1.0)
+ *
+ * Fires exactly once after every successful @ref moonlab_scheduler_run,
+ * with the job, its results, and the backend name that handled the
+ * dispatch.  The private overlay uses this for:
+ *
+ *   - billing meter: count shots * tier rate, post to Stripe
+ *   - audit log: write a per-job entry to immutable storage
+ *   - customer dashboard: push a "job completed" event
+ *
+ * Public moonlab installs no hook by default; the absence is a no-op.
+ * Failed runs (rc != MOONLAB_SCHED_OK) do NOT fire the hook.
+ *
+ * The hook is invoked synchronously on the calling thread after the
+ * backend's execute returns.  Long-running hooks should hand off to
+ * a worker pool inside the callback rather than blocking the
+ * scheduler.  The hook must not free or mutate its arguments.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Completion-hook signature.
+ */
+typedef void (*moonlab_completion_hook_fn)(
+    const moonlab_job_t          *job,
+    const moonlab_job_results_t  *out,
+    const char                   *backend_name,
+    void                         *ctx);
+
+/**
+ * @brief Install a completion hook.  Pass NULL to clear.  Only one
+ *        hook is registered at a time; a subsequent call replaces
+ *        the previous hook.  Thread-safe.
+ */
+MOONLAB_API int moonlab_scheduler_set_completion_hook(
+    moonlab_completion_hook_fn hook, void *ctx);
+
+/**
+ * @brief Serialise a job to JSON.  Format (one example):
+ *
+ *     {
+ *       "schema": "moonlab/job/v0.7.0",
+ *       "num_qubits": 2,
+ *       "num_shots": 1024,
+ *       "num_workers": 4,
+ *       "rng_seed": "0xdeadbeef",
+ *       "gates": [
+ *         { "type": 4, "target": 0 },
+ *         { "type": 10, "target": 1, "control": 0 }
+ *       ]
+ *     }
+ *
+ * @param[in]  job      Job to serialise.
+ * @param[out] buf      Caller-allocated output buffer.
+ * @param[in]  bufsize  Capacity of `buf` in bytes (including NUL).
+ * @return  Number of bytes that *would* be written if `buf` were
+ *          unlimited (excluding the terminating NUL).  When this
+ *          exceeds `bufsize`, the output is truncated; pass a
+ *          NULL `buf` and `bufsize = 0` to size-probe.
+ *          Negative on bad argument.
+ */
+MOONLAB_API int
+moonlab_job_to_json(const moonlab_job_t *job,
+                    char *buf, size_t bufsize);
+
+/* ------------------------------------------------------------------
+ * Per-request context (since v1.0.3)
+ *
+ * Thread-local scratch space the caller sets before invoking
+ * @ref moonlab_scheduler_run so the completion hook (and any
+ * registered backend) can read who initiated the request.  The
+ * public moonlab does not enforce any policy on these strings --
+ * it is the private overlay's job to:
+ *
+ *   - decide that an empty tenant_id means "anonymous" or reject it,
+ *   - assign request_ids from a tamper-resistant generator,
+ *   - bill the correct customer based on tenant_id.
+ *
+ * Thread-local because the scheduler is invoked synchronously on
+ * the caller thread; one HTTP / control-plane request -> one
+ * scheduler_run -> one hook fire.  All four getters return the
+ * pointer the setter was last called with on the same thread,
+ * or NULL if nothing was set.
+ *
+ * The setter does not copy; the strings must remain valid until
+ * the matching scheduler_run returns (i.e. through the completion
+ * hook callback).  Callers typically set this on stack scope:
+ *
+ *     moonlab_scheduler_set_request_context("acme-corp", "req-42");
+ *     int rc = moonlab_scheduler_run(job, &out);
+ *     moonlab_scheduler_set_request_context(NULL, NULL);
+ *
+ * Public moonlab itself never sets this; the control plane or the
+ * overlay's HTTP front-end is the typical caller.
+ * ------------------------------------------------------------------ */
+
+/**
+ * @brief Set the current thread's request context.  Pass NULL for
+ *        either field to clear it.  Strings are NOT copied; caller
+ *        owns the storage and must keep it alive until cleared
+ *        (typically through the end of scheduler_run + hook fire).
+ */
+MOONLAB_API void
+moonlab_scheduler_set_request_context(const char *tenant_id,
+                                      const char *request_id);
+
+/**
+ * @brief Read the current thread's tenant_id.  Returns NULL if no
+ *        request context is set.  Pointer is valid only until the
+ *        caller calls set_request_context again on the same thread.
+ */
+MOONLAB_API const char *
+moonlab_scheduler_current_tenant_id(void);
+
+/**
+ * @brief Read the current thread's request_id.  Returns NULL if no
+ *        request context is set.
+ */
+MOONLAB_API const char *
+moonlab_scheduler_current_request_id(void);
+
+/**
+ * @brief Synchronously fire the currently-installed completion hook
+ *        with caller-supplied arguments.  Used by execution paths
+ *        that do not go through @ref moonlab_scheduler_run -- in
+ *        particular the control plane's `moonlab_qgtl_execute`
+ *        dispatch, which still needs to attribute jobs to the
+ *        registered billing / audit hook.
+ *
+ *        No-op if no hook is registered.  The hook reads the
+ *        current thread's request context via
+ *        @ref moonlab_scheduler_current_tenant_id, so the caller
+ *        must have set it before the underlying execute.
+ *
+ *        Hook ctx is the value passed at set_completion_hook time;
+ *        the caller does not supply it.  job + results + backend_name
+ *        pass through directly.
+ */
+MOONLAB_API void
+moonlab_scheduler_fire_completion_hook(const moonlab_job_t          *job,
+                                       const moonlab_job_results_t  *results,
+                                       const char                   *backend_name);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MOONLAB_SCHEDULER_H */

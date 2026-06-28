@@ -14,6 +14,8 @@ set(QUANTUM_SOURCES
     ${QSIM_ROOT}/src/quantum/measurement.c
     ${QSIM_ROOT}/src/quantum/entanglement.c
     ${QSIM_ROOT}/src/quantum/noise.c
+    # MPDO mixed-state simulator (since 0.3.0; JS binding from 0.4.10).
+    ${QSIM_ROOT}/src/quantum/noise_mpdo.c
 )
 
 # Source files - Algorithms
@@ -52,15 +54,51 @@ set(BACKEND_SOURCES
     ${QSIM_ROOT}/src/backends/clifford/clifford.c
 )
 
+# Source files - Topological QC (surface code Clifford-tableau variant,
+# since 0.5.14 in WASM).  Pulls in clifford.c + gates.c + matrix_math.c,
+# all already in the build above.
+set(TOPOLOGICAL_SOURCES
+    ${QSIM_ROOT}/src/algorithms/topological/topological.c
+)
+
 # Source files - HEP applications (since 0.2.1).
-# Note: moonlab_qrng_export.c (the v0.2.1 ABI wrappers exposed via
-# moonlab_export.h) deliberately stays out of the WASM build because it
-# pulls in qgt + qrng + hardware_entropy (heavy, much of it
-# host-only).  The WASM TS layer calls the underlying internal C
-# functions directly using their real names; see exports.txt and
-# bindings/javascript/packages/core/src/ca-mps.ts.
+# Note: moonlab_qrng_export.c (the qrng-backed half of the
+# v0.2.1 stable ABI) deliberately stays out of the WASM build
+# because it pulls in qrng + hardware_entropy (heavy, much of
+# it host-only).  The lean half -- abi_version, qwz_chern,
+# dmrg_*, ca_mps_var_d_*, ca_mps_gauge_warmstart, z2_lgt_1d_*,
+# status_string -- lives in moonlab_export_lean.c and IS
+# included below; it pulls in only qgt + dmrg + ca_mps + status,
+# all of which are already in the WASM build (since 0.5.0).
+#
+# moonlab_tdvp_export.c (v0.4.3 adaptive-bond TDVP wrapper) has
+# lean deps too: tn_state + dmrg + tdvp.
 set(APPLICATION_SOURCES
     ${QSIM_ROOT}/src/applications/hep/lattice_z2_1d.c
+    ${QSIM_ROOT}/src/applications/moonlab_export_lean.c
+    ${QSIM_ROOT}/src/applications/moonlab_tdvp_export.c
+    # qgt.c powers moonlab_qwz_chern; topology binding TS layer
+    # also needs the lower-level qgt_* surface (since 0.5.0).
+    ${QSIM_ROOT}/src/algorithms/quantum_geometry/qgt.c
+    # libirrep bridge (since v0.6.0).  WASM build never has libirrep
+    # linked, so the TU compiles to the no-op stub path that returns
+    # MOONLAB_LIBIRREP_NOT_BUILT from every factory.  JS callers
+    # gate on libirrep.is_available() before constructing codes.
+    ${QSIM_ROOT}/src/integration/libirrep_bridge.c
+    # QGTL ingestion + scheduler (v0.6.6 / v0.7.0).  Both ship into the
+    # WASM build as the foundation for browser-runnable cloud-platform
+    # demos.  Scheduler uses OpenMP in-process when available, which
+    # Emscripten compiles as a no-op (single-threaded fan-out).
+    ${QSIM_ROOT}/src/applications/moonlab_qgtl_backend.c
+    ${QSIM_ROOT}/src/applications/decoder_bench.c
+    # Exact MWPM decoder for the toric code -- referenced by
+    # decoder_bench.c via moonlab_mwpm_exact_decode_toric.
+    ${QSIM_ROOT}/src/applications/mwpm_exact.c
+    # Vendor-noise emulator backends (since v1.1) -- IBM Falcon /
+    # Rigetti Aspen / IonQ Forte stochastic-Pauli emulators that
+    # plug into the scheduler's backend registry.
+    ${QSIM_ROOT}/src/applications/vendor_noise_backend.c
+    ${QSIM_ROOT}/src/distributed/scheduler.c
 )
 
 # Source files - Utilities
@@ -69,12 +107,25 @@ set(UTILS_SOURCES
     ${QSIM_ROOT}/src/utils/matrix_math.c
     ${QSIM_ROOT}/src/utils/config.c
     ${QSIM_ROOT}/src/utils/moonlab_status.c
+    # WASM-only quantum-entropy stack (since 0.5.4): the native
+    # hardware_entropy.c pulls in RDRAND / /dev/urandom / jitter
+    # paths that don't make sense on wasm32.  hardware_entropy_wasm.c
+    # provides the same `entropy_init` / `entropy_get_bytes` /
+    # `entropy_free` surface backed by getentropy(3) (which
+    # emscripten polyfills via crypto.getRandomValues).  Plus the
+    # non-inline `quantum_entropy_ctx_create_hw` / `_destroy`
+    # helpers that VQE / QAOA / Bell / Grover ctypes / FFI consumers
+    # call through.
+    ${QSIM_ROOT}/src/compat/hardware_entropy_wasm.c
+    ${QSIM_ROOT}/src/utils/quantum_entropy.c
 )
 
 # Source files - Optimization (SIMD operations with scalar fallbacks for WASM)
 set(OPTIMIZATION_SOURCES
     ${QSIM_ROOT}/src/optimization/memory_align.c
     ${QSIM_ROOT}/src/optimization/simd_ops.c
+    # Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
+    ${QSIM_ROOT}/src/optimization/fusion/fusion.c
     ${QSIM_ROOT}/src/optimization/gpu/gpu_backend.c
     # Eshkol symbols are referenced unconditionally from tensor.c; in
     # the WASM build we don't have the C++ implementation so link the
@@ -94,6 +145,7 @@ set(ALL_SOURCES
     ${ALGORITHM_SOURCES}
     ${TENSOR_NETWORK_SOURCES}
     ${BACKEND_SOURCES}
+    ${TOPOLOGICAL_SOURCES}
     ${APPLICATION_SOURCES}
     ${UTILS_SOURCES}
     ${OPTIMIZATION_SOURCES}
@@ -183,7 +235,8 @@ set_target_properties(moonlab PROPERTIES
         -s MODULARIZE=1 \
         -s EXPORT_NAME='MoonlabModule' \
         -s EXPORTED_FUNCTIONS='[${EXPORTED_FUNCTIONS}]' \
-        -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"getValue\",\"setValue\",\"UTF8ToString\",\"stringToUTF8\",\"HEAP8\",\"HEAPU8\",\"HEAP32\",\"HEAPU32\",\"HEAPF64\"]' \
+        -s EXPORTED_RUNTIME_METHODS='[\"ccall\",\"cwrap\",\"getValue\",\"setValue\",\"UTF8ToString\",\"stringToUTF8\",\"HEAP8\",\"HEAPU8\",\"HEAP32\",\"HEAPU32\",\"HEAPF64\",\"addFunction\",\"removeFunction\"]' \
+        -s ALLOW_TABLE_GROWTH=1 \
         -s ALLOW_MEMORY_GROWTH=1 \
         -s MAXIMUM_MEMORY=2GB \
         -s INITIAL_MEMORY=67108864 \

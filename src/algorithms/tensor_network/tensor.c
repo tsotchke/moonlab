@@ -2406,7 +2406,8 @@ tensor_gpu_context_t *tensor_gpu_context_create(void) {
 #endif
 
 #ifdef HAS_CUDA
-    ctx->cuda_ctx = cuda_compute_init();
+    /* Use device 0 -- caller can override via tensor_gpu_context_create_on */
+    ctx->cuda_ctx = cuda_context_create(0);
     if (ctx->cuda_ctx) {
         ctx->backend = 2;
         g_gpu_ctx = ctx;
@@ -2439,7 +2440,7 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx) {
 
 #ifdef HAS_CUDA
     if (ctx->cuda_ctx) {
-        cuda_compute_cleanup(ctx->cuda_ctx);
+        cuda_context_free(ctx->cuda_ctx);
     }
 #endif
 
@@ -2455,7 +2456,27 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx) {
     free(ctx);
 }
 
+/* Honour MOONLAB_DISABLE_GPU=1 to short-circuit Metal / WebGPU / CUDA
+ * initialization on CPU-only paths.  Set this on bench rigs / sales-
+ * profile sweeps where GPU dispatch is pure overhead -- the lazy
+ * tensor_gpu_get_context() inside tn_gates.c / tn_measurement.c would
+ * otherwise create a Metal command queue (~seconds on macOS arm64)
+ * the first time any bond crosses GPU_BOND_THRESHOLD, which is the
+ * dominant wall-clock cost in non-Clifford rotation benches that the
+ * CA-MPS pitch isn't targeting anyway.
+ *
+ * Checked once and cached; subsequent calls are a load+branch. */
+static int qsim_gpu_is_disabled(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *env = getenv("MOONLAB_DISABLE_GPU");
+        cached = (env != NULL && env[0] == '1') ? 1 : 0;
+    }
+    return cached;
+}
+
 bool tensor_gpu_available(void) {
+    if (qsim_gpu_is_disabled()) return false;
     if (g_gpu_ctx && g_gpu_ctx->backend > 0) {
         return true;
     }
@@ -2466,6 +2487,7 @@ bool tensor_gpu_available(void) {
 }
 
 tensor_gpu_context_t *tensor_gpu_get_context(void) {
+    if (qsim_gpu_is_disabled()) return NULL;
     if (!g_gpu_ctx) {
         tensor_gpu_context_create();
     }
@@ -2608,7 +2630,7 @@ tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor) {
     if (ctx->backend == 2) {
         size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
-        if (cuda_buffer_upload(buf, tensor->data, size) == 0) {
+        if (cuda_buffer_write(ctx->cuda_ctx, buf, tensor->data, size) == 0) {
             tensor->gpu_valid = true;
             return TENSOR_SUCCESS;
         }
@@ -2658,7 +2680,7 @@ tensor_error_t tensor_sync_to_cpu(tensor_t *tensor) {
     if (g_gpu_ctx && g_gpu_ctx->backend == 2) {
         size_t size = tensor->total_size * sizeof(double complex);
         cuda_buffer_t *buf = (cuda_buffer_t *)tensor->gpu_buffer;
-        if (cuda_buffer_download(buf, tensor->data, size) == 0) {
+        if (cuda_buffer_read(g_gpu_ctx->cuda_ctx, buf, tensor->data, size) == 0) {
             tensor->cpu_valid = true;
             return TENSOR_SUCCESS;
         }

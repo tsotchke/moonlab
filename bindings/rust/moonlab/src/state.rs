@@ -115,9 +115,12 @@ impl QuantumState {
         1 << self.num_qubits
     }
 
-    /// Get a reference to the underlying state pointer.
+    /// Get a reference to the underlying state pointer.  Crate-only
+    /// so sibling modules (`fusion`, future `clifford` etc.) can
+    /// pass the raw pointer back through FFI without going through
+    /// the safe gate API.
     #[inline]
-    fn as_ptr(&self) -> *mut ffi::quantum_state_t {
+    pub(crate) fn as_ptr(&self) -> *mut ffi::quantum_state_t {
         self.inner.as_ptr()
     }
 
@@ -242,6 +245,31 @@ impl QuantumState {
             });
         }
         Ok(unsafe { ffi::entanglement_negativity_2qubit(self.as_ptr()) })
+    }
+
+    /// Quantum mutual information `I(A : B) = S(A) + S(B) - S(AB)`
+    /// in bits.  `qubits_a` and `qubits_b` must be disjoint; any
+    /// qubit not in `A u B` is traced out first.  On a pure state of
+    /// `A u B`, `I = 2 S(A)`.
+    pub fn mutual_information(
+        &self,
+        qubits_a: &[usize],
+        qubits_b: &[usize],
+    ) -> Result<f64> {
+        for &q in qubits_a.iter().chain(qubits_b.iter()) {
+            self.check_qubit(q)?;
+        }
+        let a: Vec<i32> = qubits_a.iter().map(|&q| q as i32).collect();
+        let b: Vec<i32> = qubits_b.iter().map(|&q| q as i32).collect();
+        Ok(unsafe {
+            ffi::entanglement_mutual_information(
+                self.as_ptr(),
+                a.as_ptr(),
+                a.len() as i32,
+                b.as_ptr(),
+                b.len() as i32,
+            )
+        })
     }
 
     /// Compute the purity of the state: Tr(ρ²).

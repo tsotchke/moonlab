@@ -85,8 +85,17 @@ _create_bell_state_phi_minus
 _create_bell_state_psi_plus
 _create_bell_state_psi_minus
 _bell_test_chsh
+_bell_test_mermin_ghz
+_bell_test_mermin_klyshko
 _bell_get_optimal_settings
 _calculate_chsh_parameter
+# Hardware-backed quantum entropy context (since 0.5.4).
+# Required by every C-side algorithm that samples measurement
+# outcomes -- Bell, Grover, VQE, QAOA.  In the WASM build the
+# underlying getentropy(3) syscall is emulated by emscripten via
+# the browser's crypto.getRandomValues().
+_quantum_entropy_ctx_create_hw
+_quantum_entropy_ctx_destroy
 
 # =============================================================================
 # TIER 3: VQE
@@ -105,6 +114,8 @@ _vqe_solver_free
 _vqe_solve
 _vqe_compute_energy
 _vqe_hartree_to_kcalmol
+_vqe_create_lih_hamiltonian
+_vqe_exact_ground_state_energy
 
 # =============================================================================
 # TIER 3: QAOA
@@ -119,6 +130,10 @@ _qaoa_solver_free
 _qaoa_solve
 _qaoa_compute_expectation
 _qaoa_apply_circuit
+_graph_create
+_graph_free
+_graph_add_edge
+_ising_encode_maxcut
 
 # =============================================================================
 # Tensor Network (MPS) Core
@@ -244,6 +259,11 @@ _moonlab_ca_mps_t_dagger
 _moonlab_ca_mps_phase
 _moonlab_ca_mps_normalize
 _moonlab_ca_mps_norm
+# Born-rule sequential sampling (since v0.10.0).
+_moonlab_ca_mps_sample_z
+# DMRG scalar-energy convenience entries (since v0.10.0).
+_moonlab_dmrg_tfim_energy
+_moonlab_dmrg_heisenberg_energy
 # Variational-D + gauge warmstart + Z2 LGT + status -- internal symbols
 # (the v0.2.1 ABI wrappers in moonlab_qrng_export.c live behind moonlab_*
 # names but pull in qgt + qrng, which we keep out of the WASM build to
@@ -271,3 +291,264 @@ _entanglement_entropy_bipartition
 _entanglement_mutual_information
 _entanglement_concurrence_2qubit
 _entanglement_negativity_2qubit
+
+# =============================================================================
+# Stable ABI: topology + QRNG (since 0.3.0).  These are the symbols
+# that QGTL / SbNN / lilirrep / the web demo dlsym from libquantumsim,
+# so they must be present in every WASM build.
+# =============================================================================
+_moonlab_qwz_chern
+_moonlab_chern_qwz_proj
+_moonlab_chern_qwz_pt
+_moonlab_ssh_winding
+_moonlab_kitaev_chain_z2
+_moonlab_kane_mele_z2
+_moonlab_bhz_z2
+_moonlab_hofstadter_chern
+_moonlab_abi_version
+# Note: _moonlab_qrng_bytes is intentionally NOT exported in the WASM
+# build -- it depends on hardware_entropy.c which is host-only.  JS
+# callers needing crypto-grade randomness should use the browser's
+# crypto.getRandomValues() instead.
+
+# =============================================================================
+# Stable ABI: adaptive-bond two-site TDVP (since 0.4.1).
+# Implemented in src/applications/moonlab_tdvp_export.c; bound by
+# src/tdvp.ts.  The opaque moonlab_tdvp_engine_t bundles MPS + MPO +
+# tdvp_engine + tdvp_history so the JS side never has to marshal the
+# nested tdvp_config_t.
+# =============================================================================
+_moonlab_tdvp_create_heisenberg
+_moonlab_tdvp_create_tfim
+_moonlab_tdvp_step
+_moonlab_tdvp_evolve_to
+_moonlab_tdvp_current_time
+_moonlab_tdvp_current_energy
+_moonlab_tdvp_current_norm
+_moonlab_tdvp_current_max_bond_dim
+_moonlab_tdvp_num_bonds
+_moonlab_tdvp_bond_chi
+_moonlab_tdvp_history_num_steps
+_moonlab_tdvp_history_get_step
+_moonlab_tdvp_history_get_bond_chi
+_moonlab_tdvp_engine_free
+
+# =============================================================================
+# Stable ABI: standalone Aaronson-Gottesman Clifford tableau (since 0.2.0).
+# Implemented in src/backends/clifford/clifford.c; bound by src/clifford.ts.
+# Used by the WASM build for n>32-qubit GHZ / stabiliser-code experiments
+# that exceed the dense state-vector ceiling.
+# =============================================================================
+_clifford_tableau_create
+_clifford_tableau_free
+_clifford_num_qubits
+_clifford_h
+_clifford_s
+_clifford_s_dag
+_clifford_x
+_clifford_y
+_clifford_z
+_clifford_cnot
+_clifford_cz
+_clifford_swap
+_clifford_measure
+_clifford_sample_all
+
+# =============================================================================
+# Surface code (Clifford-tableau variant; since 0.5.14 in WASM).
+# Implemented in src/algorithms/topological/topological.c; bound by
+# src/surface-code.ts.  Mirrors Python moonlab.surface_code +
+# Rust moonlab::surface_code.
+# =============================================================================
+_surface_code_clifford_create
+_surface_code_clifford_free
+_surface_code_clifford_data_index
+_surface_code_clifford_apply_error
+_surface_code_clifford_measure_z_syndromes
+_surface_code_clifford_measure_x_syndromes
+_surface_code_clifford_syndrome_weight
+
+# =============================================================================
+# libirrep QEC zoo bridge (since v0.6.0 native; JS binding from v0.6.5).
+#
+# Eight CSS-code families (surface, toric, Steane, Hamming, three IBM Gross
+# BB qLDPC, three Tillich-Zemor hypergraph product) plus a unified
+# opaque-handle accessor surface, plumbed from src/integration/libirrep_bridge.{c,h}.
+# Built only when -DQSIM_ENABLE_LIBIRREP=ON; the WASM build skips libirrep
+# (it lives outside the WASM toolchain), so these symbols resolve to
+# MOONLAB_LIBIRREP_NOT_BUILT-returning stubs at run time.  Callers should
+# probe is_available() first.
+_moonlab_libirrep_available
+_moonlab_libirrep_kagome12_e0
+_moonlab_libirrep_heisenberg_sector_e0
+_moonlab_libirrep_surface_code_new
+_moonlab_libirrep_toric_code_new
+_moonlab_libirrep_color_steane_new
+_moonlab_libirrep_color_hamming_15_7_3_new
+_moonlab_libirrep_bb_72_12_6_new
+_moonlab_libirrep_bb_144_12_12_new
+_moonlab_libirrep_bb_288_12_18_new
+_moonlab_libirrep_hgp_repetition_new
+_moonlab_libirrep_qec_free
+_moonlab_libirrep_qec_n_qubits
+_moonlab_libirrep_qec_n_x_stabs
+_moonlab_libirrep_qec_n_z_stabs
+_moonlab_libirrep_qec_logical_qubits
+_moonlab_libirrep_qec_distance
+_moonlab_libirrep_qec_get_x_check_row
+_moonlab_libirrep_qec_get_z_check_row
+
+# =============================================================================
+# QGTL-shaped circuit-ingestion surface (since v0.6.6 native, JS from v0.6.8).
+#
+# Numeric gate-type enum matches QGTL gate_type_t.  Used by QGTL to route
+# circuits through moonlab's state-vector backend before paying for hardware
+# shots.
+_moonlab_qgtl_circuit_create
+_moonlab_qgtl_circuit_free
+_moonlab_qgtl_add_gate
+_moonlab_qgtl_execute
+_moonlab_qgtl_results_free
+_moonlab_qgtl_circuit_num_qubits
+_moonlab_qgtl_circuit_num_gates
+# Portable circuit serialization (since v0.8.3 native, JS from v0.8.6).
+_moonlab_qgtl_circuit_serialize
+_moonlab_qgtl_circuit_deserialize
+
+# =============================================================================
+# Distributed scheduler MVP (since v0.7.0 native, JS from v0.7.1).
+#
+# Job + worker fan-out atop the QGTL ingestion surface.  OpenMP transport
+# in-process today; MPI / gRPC / HTTP/2 swap-in v0.7.2+.
+_moonlab_job_create
+_moonlab_job_free
+_moonlab_job_add_gate
+_moonlab_job_set_num_shots
+_moonlab_job_set_num_workers
+_moonlab_job_set_rng_seed
+_moonlab_job_num_qubits
+_moonlab_job_num_gates
+_moonlab_job_num_shots
+_moonlab_job_num_workers
+_moonlab_scheduler_run
+_moonlab_job_results_free
+_moonlab_job_to_json
+# Backend plug-in surface (since v1.1).
+_moonlab_register_backend
+_moonlab_unregister_backend
+_moonlab_find_backend
+_moonlab_num_backends
+_moonlab_list_backends
+_moonlab_job_set_backend
+_moonlab_job_backend
+# Vendor-noise emulator backends (since v1.1).
+_moonlab_register_vendor_noise_backends
+_moonlab_register_vendor_noise_backend_with_profile
+_moonlab_lookup_vendor_noise_profile
+# Vendor-noise profile runtime registry (since v1.0.3).
+_moonlab_register_vendor_noise_profile
+_moonlab_unregister_vendor_noise_profile
+_moonlab_num_vendor_noise_profiles
+_moonlab_list_vendor_noise_profiles
+# Scheduler completion hook (since v1.0.3).
+_moonlab_scheduler_set_completion_hook
+
+# =============================================================================
+# Decoder-bench dispatcher (since v0.6.7 native, JS from v0.7.3).
+_moonlab_decoder_decode
+_moonlab_decoder_slot_available
+_moonlab_decoder_slot_name
+# Decoder runtime registry (since v1.0.3).
+_moonlab_register_decoder
+_moonlab_unregister_decoder
+_moonlab_lookup_decoder
+_moonlab_decoder_decode_by_name
+_moonlab_num_decoders
+_moonlab_list_decoders
+
+# =============================================================================
+# Single-qubit gate-fusion DAG (since 0.2.0; JS binding from 0.4.7).
+# Implemented in src/optimization/fusion/fusion.c; bound by src/fusion.ts.
+# Mirrors Python moonlab.fusion.FusedCircuit + Rust moonlab::fusion.
+# =============================================================================
+_fuse_circuit_create
+_fuse_circuit_free
+_fuse_circuit_len
+_fuse_circuit_num_qubits
+_fuse_append_h
+_fuse_append_x
+_fuse_append_y
+_fuse_append_z
+_fuse_append_s
+_fuse_append_sdg
+_fuse_append_t
+_fuse_append_tdg
+_fuse_append_phase
+_fuse_append_rx
+_fuse_append_ry
+_fuse_append_rz
+_fuse_append_u3
+_fuse_append_cnot
+_fuse_append_cz
+_fuse_append_cy
+_fuse_append_swap
+_fuse_append_cphase
+_fuse_append_crx
+_fuse_append_cry
+_fuse_append_crz
+_fuse_compile
+_fuse_execute
+
+# =============================================================================
+# MPDO mixed-state simulator (since 0.3.0; JS binding from 0.4.10).
+# Implemented in src/quantum/noise_mpdo.c; bound by src/mpdo.ts.
+# Mirrors Python moonlab.mpdo + Rust moonlab::mpdo.
+# =============================================================================
+_moonlab_mpdo_create
+_moonlab_mpdo_free
+_moonlab_mpdo_clone
+_moonlab_mpdo_num_qubits
+_moonlab_mpdo_max_bond_dim
+_moonlab_mpdo_current_bond_dim
+_moonlab_mpdo_trace
+_moonlab_mpdo_apply_kraus_1q
+_moonlab_mpdo_apply_depolarizing_1q
+_moonlab_mpdo_apply_amplitude_damping_1q
+_moonlab_mpdo_apply_phase_damping_1q
+_moonlab_mpdo_apply_bit_flip_1q
+_moonlab_mpdo_apply_phase_flip_1q
+_moonlab_mpdo_apply_bit_phase_flip_1q
+_moonlab_mpdo_expect_pauli_1q
+
+# =============================================================================
+# CA-PEPS 2D Clifford-Assisted simulator (since 0.2.1; JS binding from 0.4.12).
+# Implemented in src/algorithms/tensor_network/ca_peps.c; bound by src/ca-peps.ts.
+# Mirrors Python moonlab.ca_peps.CAPEPS + Rust moonlab::ca_peps::CaPeps.
+# =============================================================================
+_moonlab_ca_peps_create
+_moonlab_ca_peps_free
+_moonlab_ca_peps_clone
+_moonlab_ca_peps_lx
+_moonlab_ca_peps_ly
+_moonlab_ca_peps_num_qubits
+_moonlab_ca_peps_max_bond_dim
+_moonlab_ca_peps_current_bond_dim
+_moonlab_ca_peps_max_half_cut_entropy
+_moonlab_ca_peps_h
+_moonlab_ca_peps_s
+_moonlab_ca_peps_sdag
+_moonlab_ca_peps_x
+_moonlab_ca_peps_y
+_moonlab_ca_peps_z
+_moonlab_ca_peps_cnot
+_moonlab_ca_peps_cz
+_moonlab_ca_peps_rx
+_moonlab_ca_peps_ry
+_moonlab_ca_peps_rz
+_moonlab_ca_peps_t_gate
+_moonlab_ca_peps_t_dagger
+_moonlab_ca_peps_phase
+_moonlab_ca_peps_normalize
+_moonlab_ca_peps_norm
+_moonlab_ca_peps_expect_pauli
+_moonlab_ca_peps_prob_z

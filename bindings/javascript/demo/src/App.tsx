@@ -6,6 +6,7 @@ const Examples = lazy(() => import('./examples/Examples'));
 const Gallery = lazy(() => import('./gallery/Gallery'));
 const GalleryDetail = lazy(() => import('./gallery/GalleryDetail'));
 const Orbitals = lazy(() => import('./orbitals/OrbitalDemo'));
+const Topology = lazy(() => import('./topology/TopologyDemo'));
 
 const renderLoadingFallback = (): React.ReactNode => LoadingSpinner({});
 
@@ -69,6 +70,13 @@ export const App: React.FC = () => {
             >
               Schrödinger
             </NavLink>
+            <NavLink
+              to="/topology"
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+              onClick={closeNav}
+            >
+              Topology
+            </NavLink>
             <a
               href="https://github.com/tsotchke/moonlab"
               className="nav-link nav-link-external"
@@ -99,6 +107,7 @@ export const App: React.FC = () => {
             <Route path="/gallery" element={<Gallery />} />
             <Route path="/gallery/:id" element={<GalleryDetail />} />
             <Route path="/schrodinger" element={<Orbitals />} />
+            <Route path="/topology" element={<Topology />} />
           </Routes>
         </Suspense>
       </main>

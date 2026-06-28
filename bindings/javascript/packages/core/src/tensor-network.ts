@@ -304,3 +304,54 @@ async function trace_dmrg_tfim_ground_state(options: TFIMOptions): Promise<DMRGR
     converged,
   };
 }
+
+// ===========================================================================
+// DMRG scalar-energy convenience (mirrors moonlab.dmrg in Python / Rust)
+// ===========================================================================
+
+/**
+ * DMRG ground-state energy of the 1D transverse-field Ising model
+ * `H = -sum_i Z_i Z_{i+1} - g sum_i X_i` (J = 1).
+ *
+ * Lighter-weight than {@link dmrgTFIMGroundState} -- returns just the
+ * scalar energy, no MPS handle, no result struct.  Wires through to
+ * `moonlab_dmrg_tfim_energy` on the v0.10.0 stable ABI.
+ *
+ * Returns `Infinity` on invalid input.
+ */
+export async function dmrgTFIMGroundEnergy(
+  numSites: number,
+  g: number,
+  maxBondDim: number = 32,
+  numSweeps: number = 10,
+): Promise<number> {
+  const module = await getModule();
+  return (module as unknown as {
+    _moonlab_dmrg_tfim_energy: (
+      n: number, g: number, chi: number, sweeps: number) => number;
+  })._moonlab_dmrg_tfim_energy(numSites, g, maxBondDim, numSweeps);
+}
+
+/**
+ * DMRG ground-state energy of the 1D XXZ chain with longitudinal field
+ * `H = J sum_i (X_i X_{i+1} + Y_i Y_{i+1} + Delta Z_i Z_{i+1})
+ *       - h sum_i Z_i`.
+ *
+ * Wires through to `moonlab_dmrg_heisenberg_energy` on the v0.10.0
+ * stable ABI.  Returns `Infinity` on invalid input.
+ */
+export async function dmrgHeisenbergGroundEnergy(
+  numSites: number,
+  J: number = 1.0,
+  Delta: number = 1.0,
+  h: number = 0.0,
+  maxBondDim: number = 32,
+  numSweeps: number = 10,
+): Promise<number> {
+  const module = await getModule();
+  return (module as unknown as {
+    _moonlab_dmrg_heisenberg_energy: (
+      n: number, j: number, d: number, h: number,
+      chi: number, sweeps: number) => number;
+  })._moonlab_dmrg_heisenberg_energy(numSites, J, Delta, h, maxBondDim, numSweeps);
+}

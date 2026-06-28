@@ -19,9 +19,7 @@ typedef double _Complex complex_t;
  * @brief Advanced quantum state vector simulation engine
  *
  * Implements full quantum circuit simulation with:
- * - Up to 32 qubits on native 64-bit hosts (4.3B dimensional state space)
- * - Up to 26 qubits in wasm32 builds, where state vectors must fit the
- *   browser/WebAssembly linear-memory budget
+ * - Up to 32 qubits (4.3B dimensional state space) - Phase 4 scaling
  * - Universal gate set (Pauli, Hadamard, Phase, CNOT, Toffoli)
  * - Wavefunction collapse on measurement
  * - Quantum entanglement and superposition
@@ -38,26 +36,26 @@ typedef double _Complex complex_t;
  * same name, so we rename to `MOONLAB_MAX_QUBITS` and leave a
  * deprecated alias for one cycle.  The deprecated alias will be
  * removed in v0.3.0; new code should use the prefixed name. */
-#if defined(WASM_BUILD) || defined(__EMSCRIPTEN__)
-#define MOONLAB_MAX_QUBITS         26  /* 67M amps × 16 B = 1.1 GB. */
-#define MOONLAB_RECOMMENDED_QUBITS 20  /* 1M amps = 16 MB. */
+/* On wasm32 (emscripten default), size_t is 32 bits.  Bound the
+ * compile-time cap so `(size_t)1 << MOONLAB_MAX_QUBITS` cannot
+ * overflow size_t on that target.  Native 64-bit hosts keep the
+ * historical 32-qubit cap (4.3B amps x 16 B = 68.7 GB). */
+#if defined(__wasm32__) || (defined(__EMSCRIPTEN__) && !defined(__wasm64__))
+#define MOONLAB_MAX_QUBITS         30  /* 1.07B amps x 16 B = 17.2 GB; size_t = 32-bit. */
 #else
 #define MOONLAB_MAX_QUBITS         32  /* 4.3B amps × 16 B = 68.7 GB. */
+#endif
+#define MOONLAB_MAX_STATE_DIM      ((size_t)1 << MOONLAB_MAX_QUBITS)
 #define MOONLAB_RECOMMENDED_QUBITS 28  /* 268M amps = 4.3 GB. */
-#endif
-#define MOONLAB_MAX_STATE_DIM      (1ULL << MOONLAB_MAX_QUBITS)
 
-/* Static guards against silent shift-overflow if a future patch raises
- * MOONLAB_MAX_QUBITS past 63 or beyond addressable amplitude storage. */
+/* Static guards against silent shift-overflow if a future patch
+ * raises MOONLAB_MAX_QUBITS past the available size_t width on the
+ * current target. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-#if !defined(WASM_BUILD) && !defined(__EMSCRIPTEN__)
-_Static_assert(sizeof(size_t) >= 8,
-               "Native Moonlab state vectors require a 64-bit size_t.");
-#endif
+_Static_assert(MOONLAB_MAX_QUBITS < (int)(sizeof(size_t) * 8),
+               "MOONLAB_MAX_QUBITS must fit in size_t on this target.");
 _Static_assert(MOONLAB_MAX_QUBITS <= 63,
                "MOONLAB_MAX_QUBITS must be <= 63 to avoid 1ULL shift overflow.");
-_Static_assert(MOONLAB_MAX_STATE_DIM <= SIZE_MAX / sizeof(complex_t),
-               "MOONLAB_MAX_STATE_DIM must fit the target address space.");
 #endif
 
 /* Deprecated unprefixed aliases (removal scheduled for v0.3.0). */
@@ -83,7 +81,10 @@ typedef enum {
     QS_ERROR_INVALID_STATE = -2,
     QS_ERROR_NOT_NORMALIZED = -3,
     QS_ERROR_OUT_OF_MEMORY = -4,
-    QS_ERROR_INVALID_DIMENSION = -5
+    QS_ERROR_INVALID_DIMENSION = -5,
+    QS_ERROR_INVALID_PARAM = -6,
+    QS_ERROR_NOT_SUPPORTED = -7,
+    QS_ERROR_DRIVER = -8
 } qs_error_t;
 
 /**
@@ -112,6 +113,21 @@ typedef struct {
 
     /* Memory management. */
     int owns_memory;                /* 1 if we allocated amplitudes */
+
+    /* Optional GPU backing.  When non-NULL, the state lives on the
+     * GPU (in moonlab_cuda_state_t) and the gate primitives dispatch
+     * to CUDA kernels rather than touching `amplitudes`.  The host
+     * `amplitudes` buffer is stale until quantum_state_sync_to_host()
+     * is called.
+     *
+     *   gpu_state == NULL   -> classical CPU state, no change.
+     *   gpu_state != NULL   -> opaque moonlab_cuda_state_t*; gate
+     *                          primitives auto-dispatch to GPU.
+     *
+     * `gpu_backend` records the chosen backend kind (0=none/CPU,
+     * 1=CUDA).  Reserved for future backends (Metal, ROCm, OpenCL). */
+    void *gpu_state;                /* opaque moonlab_cuda_state_t* */
+    int   gpu_backend;              /* 0 = CPU, 1 = CUDA */
 } quantum_state_t;
 
 // ============================================================================
@@ -121,8 +137,7 @@ typedef struct {
 /**
  * @brief Initialize quantum state in |0...0⟩
  *
- * Phase 4: Scales to 32 qubits on native hosts (4.3B states, 68.7GB with 192GB RAM)
- * and 26 qubits in wasm32 builds.
+ * Phase 4: Scales to 32 qubits (4.3B states, 68.7GB with 192GB RAM)
  * Uses Accelerate framework with AMX-aligned memory (64-byte boundaries)
  * for optimal M2 Ultra performance.
  *
@@ -136,7 +151,7 @@ typedef struct {
  * - 32 qubits: 4.3B states = 68.7GB (feasible with 192GB RAM!)
  *
  * @param state Pointer to quantum state structure
- * @param num_qubits Number of qubits (1-MOONLAB_MAX_QUBITS)
+ * @param num_qubits Number of qubits (1-32, recommended 28 for speed/memory balance)
  * @return QS_SUCCESS or error code
  */
 MOONLAB_API qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
@@ -376,6 +391,52 @@ void quantum_state_destroy(quantum_state_t* state);
 static inline void quantum_state_init_zero(quantum_state_t* state) {
     quantum_state_reset(state);
 }
+
+// ============================================================================
+// GPU-BACKED STATE (opt-in; requires QSIM_HAS_CUDA at build time)
+// ============================================================================
+
+/**
+ * @brief Create a quantum state whose amplitudes live on a CUDA GPU.
+ *
+ * The returned state behaves like a normal quantum_state_t but the
+ * gate primitives dispatch to CUDA kernels instead of touching the
+ * host `amplitudes` buffer.  The host buffer is allocated but stays
+ * stale until quantum_state_sync_to_host() is called.
+ *
+ * Only available when libquantumsim was built with QSIM_HAS_CUDA.
+ * If CUDA isn't compiled in, returns QS_ERROR_NOT_SUPPORTED.
+ *
+ * @param num_qubits Number of qubits (1..31)
+ * @param out_state  Receives the newly-allocated state on success
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state);
+
+/**
+ * @brief Copy the GPU state into the host `amplitudes` buffer.
+ *
+ * After this call, state->amplitudes is fresh.  If state has no
+ * GPU backing, this is a no-op (returns QS_SUCCESS).
+ *
+ * @param state GPU-backed state (must have non-NULL gpu_state)
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
+
+/**
+ * @brief Push the host `amplitudes` buffer back into the GPU state.
+ *
+ * Counterpart to sync_to_host.  Used after MPI exchange (where the
+ * host buffer is the comm buffer) and any other path that mutates
+ * amplitudes on the host side and needs the GPU view refreshed.
+ *
+ * If state has no GPU backing, this is a no-op (returns QS_SUCCESS).
+ *
+ * @param state GPU-backed state (must have non-NULL gpu_state)
+ * @return QS_SUCCESS or an error code
+ */
+qs_error_t quantum_state_sync_from_host(quantum_state_t *state);
 
 #ifdef __cplusplus
 }

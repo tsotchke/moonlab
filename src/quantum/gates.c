@@ -23,6 +23,68 @@
 #endif
 #define SQRT2_INV QC_SQRT2_INV
 
+/* GPU routing entry points provided by state_gpu.cu (compiled
+ * when QSIM_HAS_CUDA).  Marked weak so this TU links cleanly
+ * when CUDA is off: the gate code checks for NULL before calling.
+ *
+ *   Fast paths (no matrix upload):
+ *     hadamard, pauli_x       -- specialized kernels
+ *     cnot                    -- specialized kernel
+ *   Generic paths (one matrix upload via __constant__ memory):
+ *     apply_1q_matrix(m[8])   -- any 2x2 unitary
+ *     apply_2q_matrix(m[32])  -- any 4x4 unitary
+ *
+ * All non-fast-path single-qubit gates compute their 2x2 matrix
+ * and route via apply_1q_matrix.  Two-qubit gates that don't have
+ * a fast path (CZ, SWAP, CY, CRX, CRY, CRZ, CPHASE) compute their
+ * 4x4 matrix and route via apply_2q_matrix.
+ */
+extern int qsim_gpu_route_hadamard         (quantum_state_t *state, int qubit) __attribute__((weak));
+extern int qsim_gpu_route_pauli_x          (quantum_state_t *state, int qubit) __attribute__((weak));
+extern int qsim_gpu_route_cnot             (quantum_state_t *state, int control, int target) __attribute__((weak));
+extern int qsim_gpu_route_apply_1q_matrix  (quantum_state_t *state, int qubit, const double m[8]) __attribute__((weak));
+extern int qsim_gpu_route_apply_2q_matrix  (quantum_state_t *state, int q0, int q1, const double m[32]) __attribute__((weak));
+extern int qsim_gpu_route_mcx              (quantum_state_t *state, uint64_t control_mask, int target) __attribute__((weak));
+extern int qsim_gpu_route_mcz              (quantum_state_t *state, uint64_t all_mask) __attribute__((weak));
+extern int qsim_gpu_route_fredkin          (quantum_state_t *state, int control, int t1, int t2) __attribute__((weak));
+
+/* Inline dispatch helpers: return 1 if the gate ran on GPU
+ * (caller should propagate *out as its return); 0 if no GPU
+ * backing (caller continues with the CPU path).
+ *
+ * The matrix layout follows moonlab_cuda_apply_1q / apply_2q
+ * exactly -- row-major, complex stored as (real, imag) pairs.
+ */
+static inline int gpu_try_apply_1q(quantum_state_t *state, int qubit,
+                                   const double m[8], qs_error_t *out)
+{
+    if (qsim_gpu_route_apply_1q_matrix != NULL && state && state->gpu_state) {
+        int rc = qsim_gpu_route_apply_1q_matrix(state, qubit, m);
+        *out = (rc == 0) ? QS_SUCCESS : QS_ERROR_DRIVER;
+        return 1;
+    }
+    return 0;
+}
+
+static inline int gpu_try_apply_2q(quantum_state_t *state, int q0, int q1,
+                                   const double m[32], qs_error_t *out)
+{
+    if (qsim_gpu_route_apply_2q_matrix != NULL && state && state->gpu_state) {
+        int rc = qsim_gpu_route_apply_2q_matrix(state, q0, q1, m);
+        *out = (rc == 0) ? QS_SUCCESS : QS_ERROR_DRIVER;
+        return 1;
+    }
+    return 0;
+}
+
+/* Forward declarations -- definitions live below.  The controlled-1q
+ * helper builds a 4x4 controlled-U matrix from the inner 2x2 and
+ * dispatches through apply_2q (gate_cy / gate_crx / gate_cry /
+ * gate_crz all share this path). */
+static qs_error_t gpu_dispatch_controlled_1q(quantum_state_t *s,
+                                              int control, int target,
+                                              const double U[8]);
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -61,6 +123,14 @@ qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
+    /* GPU dispatch (when state has CUDA backing).  Returns without
+     * touching the host amplitudes buffer -- which stays stale until
+     * quantum_state_sync_to_host() is called explicitly. */
+    if (qsim_gpu_route_pauli_x != NULL && state->gpu_state) {
+        return qsim_gpu_route_pauli_x(state, qubit) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
@@ -85,6 +155,14 @@ qs_error_t gate_pauli_x(quantum_state_t *state, int qubit) {
 qs_error_t gate_pauli_y(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch: Y = [[0, -i], [i, 0]]. */
+    {
+        static const double m[8] = { 0,0,  0,-1,
+                                     0,1,  0, 0 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
 
     /* Y = swap then multiply old-|0> block by -i and old-|1> by +i.
      * After the swap, [base..base+stride) was |1> (gets -i) and
@@ -116,6 +194,14 @@ qs_error_t gate_pauli_z(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
+    /* GPU dispatch: Z = diag(1, -1). */
+    {
+        static const double m[8] = { 1,0,  0, 0,
+                                     0,0, -1, 0 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     /* Z negates the |1> half of each block. */
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
@@ -139,6 +225,12 @@ qs_error_t gate_pauli_z(quantum_state_t *state, int qubit) {
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch (when state has CUDA backing). */
+    if (qsim_gpu_route_hadamard != NULL && state->gpu_state) {
+        return qsim_gpu_route_hadamard(state, qubit) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
 
     /* Stride-based block traversal; inner kernel is the SIMD
      * primitive simd_hadamard_pair (NEON / AVX-512 / SSE2 / scalar).
@@ -185,6 +277,15 @@ static qs_error_t qs_phase_on_one(quantum_state_t *state, int qubit,
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
+    /* GPU dispatch: diag(1, phase).  Covers gate_t, gate_t_dagger,
+     * gate_phase via their shared phase-on-|1> implementation. */
+    {
+        const double m[8] = { 1.0, 0.0,         0.0, 0.0,
+                              0.0, 0.0,  creal(phase), cimag(phase) };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
@@ -209,6 +310,14 @@ qs_error_t gate_s(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
+    /* GPU dispatch: S = diag(1, i). */
+    {
+        static const double m[8] = { 1,0,  0,0,
+                                     0,0,  0,1 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
@@ -232,6 +341,14 @@ qs_error_t gate_s_dagger(quantum_state_t *state, int qubit) {
     /* |1> -> -i|1>. */
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch: S^dagger = diag(1, -i). */
+    {
+        static const double m[8] = { 1,0,  0, 0,
+                                     0,0,  0,-1 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
 
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
@@ -273,6 +390,15 @@ qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta) {
 
     const double cos_half = cos(theta / 2.0);
     const double sin_half = sin(theta / 2.0);
+
+    /* GPU dispatch. */
+    {
+        const double m[8] = {  cos_half, 0.0,        0.0, -sin_half,
+                                    0.0, -sin_half, cos_half,    0.0 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
@@ -313,6 +439,16 @@ qs_error_t gate_ry(quantum_state_t *state, int qubit, double theta) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
 
+    /* GPU dispatch: RY = [[c, -s], [s, c]] (all real). */
+    {
+        const double c = cos(theta / 2.0);
+        const double s = sin(theta / 2.0);
+        const double m[8] = {  c, 0.0, -s, 0.0,
+                                s, 0.0,  c, 0.0 };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const double cos_half = cos(theta / 2.0);
     const double sin_half = sin(theta / 2.0);
     const uint64_t stride = 1ULL << qubit;
@@ -350,6 +486,16 @@ qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta) {
 
     const complex_t phase_0 = cexp(-I * theta / 2.0);
     const complex_t phase_1 = cexp(+I * theta / 2.0);
+
+    /* GPU dispatch: RZ = diag(phase_0, phase_1). */
+    {
+        const double m[8] = {  creal(phase_0), cimag(phase_0), 0.0, 0.0,
+                                          0.0,            0.0,
+                                creal(phase_1), cimag(phase_1) };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     const int64_t  n_blocks = (int64_t)(state->state_dim / block_size);
@@ -382,6 +528,22 @@ qs_error_t gate_u3(quantum_state_t *state, int qubit, double theta, double phi, 
     const complex_t e_phi = cexp(I * phi);
     const complex_t e_lambda = cexp(I * lambda);
     const complex_t e_phi_lambda = cexp(I * (phi + lambda));
+
+    /* GPU dispatch: full U3 matrix
+     *   [[  cos(θ/2),         -e^{iλ} sin(θ/2)   ],
+     *    [  e^{iφ} sin(θ/2),   e^{i(φ+λ)} cos(θ/2) ]] */
+    {
+        const complex_t m01 = -e_lambda      * sin_half;
+        const complex_t m10 =  e_phi         * sin_half;
+        const complex_t m11 =  e_phi_lambda  * cos_half;
+        const double m[8] = {
+            cos_half,    0.0,         creal(m01), cimag(m01),
+            creal(m10),  cimag(m10),  creal(m11), cimag(m11),
+        };
+        qs_error_t out;
+        if (gpu_try_apply_1q(state, qubit, m, &out)) return out;
+    }
+
     const uint64_t stride = 1ULL << qubit;
     const uint64_t block_size = stride << 1;
     
@@ -410,6 +572,12 @@ qs_error_t gate_cnot(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
+
+    /* GPU dispatch (when state has CUDA backing). */
+    if (qsim_gpu_route_cnot != NULL && state->gpu_state) {
+        return qsim_gpu_route_cnot(state, control, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
 
     /* CNOT: flip target when control == |1>. Stride-based traversal;
      * simd_complex_swap (NEON / SSE2 / scalar) handles contiguous
@@ -474,7 +642,20 @@ qs_error_t gate_cz(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: CZ = diag(1, 1, 1, -1) -- symmetric in (control,
+     * target) so the matrix is the same regardless of qubit ordering. */
+    {
+        static const double m[32] = {
+            1,0, 0,0, 0,0,  0,0,
+            0,0, 1,0, 0,0,  0,0,
+            0,0, 0,0, 1,0,  0,0,
+            0,0, 0,0, 0,0, -1,0,
+        };
+        qs_error_t out;
+        if (gpu_try_apply_2q(state, control, target, m, &out)) return out;
+    }
+
     // CZ: apply phase -1 if both qubits are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control) && get_bit(i, target)) {
@@ -490,7 +671,15 @@ qs_error_t gate_cy(quantum_state_t *state, int control, int target) {
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: single apply_2q kernel call with the 4x4 CY matrix
+     * (built from the inner 2x2 Y = [[0,-i],[i,0]]). */
+    if (state->gpu_state) {
+        static const double Y[8] = {  0,0, 0,-1,
+                                       0,1, 0, 0 };
+        return gpu_dispatch_controlled_1q(state, control, target, Y);
+    }
+
     // CY: apply Y gate to target if control is |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control) && !get_bit(i, target)) {
@@ -511,7 +700,19 @@ qs_error_t gate_swap(quantum_state_t *state, int qubit1, int qubit2) {
     if (!check_qubit_valid(state, qubit1)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, qubit2)) return QS_ERROR_INVALID_QUBIT;
     if (qubit1 == qubit2) return QS_SUCCESS;
-    
+
+    /* GPU dispatch: SWAP swaps the |01> and |10> rows.  Symmetric. */
+    {
+        static const double m[32] = {
+            1,0, 0,0, 0,0, 0,0,
+            0,0, 0,0, 1,0, 0,0,
+            0,0, 1,0, 0,0, 0,0,
+            0,0, 0,0, 0,0, 1,0,
+        };
+        qs_error_t out;
+        if (gpu_try_apply_2q(state, qubit1, qubit2, m, &out)) return out;
+    }
+
     // SWAP: exchange states of two qubits
     for (uint64_t i = 0; i < state->state_dim; i++) {
         int bit1 = get_bit(i, qubit1);
@@ -537,10 +738,22 @@ qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double t
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
     // Controlled-Phase: apply phase if control is |1⟩
     complex_t phase = cexp(I * theta);
-    
+
+    /* GPU dispatch: CPHASE = diag(1, 1, 1, phase) -- symmetric. */
+    {
+        const double m[32] = {
+            1,0, 0,0, 0,0, 0,0,
+            0,0, 1,0, 0,0, 0,0,
+            0,0, 0,0, 1,0, 0,0,
+            0,0, 0,0, 0,0, creal(phase), cimag(phase),
+        };
+        qs_error_t out;
+        if (gpu_try_apply_2q(state, control, target, m, &out)) return out;
+    }
+
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control) && get_bit(i, target)) {
             state->amplitudes[i] *= phase;
@@ -550,12 +763,54 @@ qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double t
     return QS_SUCCESS;
 }
 
+/* GPU dispatch for controlled-1q gates routes through apply_2q
+ * with a 4x4 controlled-U matrix built from the inner 2x2.  Single
+ * kernel launch per gate (3-8x fewer than the decomposition path),
+ * exact same numerical answer at machine precision.
+ *
+ * Convention: caller passes (control, target).  Matrix is expressed
+ * in basis |target control> with control as the LOW bit.  The kernel
+ * dispatcher in apply_2q handles the control >/< target ordering by
+ * permuting the matrix internally. */
+static inline void build_controlled_1q_matrix(const double U[8], double m[32]) {
+    for (int i = 0; i < 32; i++) m[i] = 0.0;
+    /* M[0][0] = 1, M[2][2] = 1 (identity on c=0 sector). */
+    m[0]  = 1.0;
+    m[20] = 1.0;
+    /* M[1][1] = U[0,0], M[1][3] = U[0,1] (U applied to target when c=1).
+     * 32-double layout: m[row*8 + col*2 + (0=re|1=im)] */
+    m[10] = U[0]; m[11] = U[1];   /* M[1][1] = U[0,0] */
+    m[14] = U[2]; m[15] = U[3];   /* M[1][3] = U[0,1] */
+    m[26] = U[4]; m[27] = U[5];   /* M[3][1] = U[1,0] */
+    m[30] = U[6]; m[31] = U[7];   /* M[3][3] = U[1,1] */
+}
+
+static qs_error_t gpu_dispatch_controlled_1q(quantum_state_t *s,
+                                              int control, int target,
+                                              const double U[8])
+{
+    double m[32];
+    build_controlled_1q_matrix(U, m);
+    qs_error_t out;
+    if (gpu_try_apply_2q(s, control, target, m, &out)) return out;
+    return QS_ERROR_NOT_SUPPORTED;  /* shouldn't reach -- caller checked gpu_state */
+}
+
 qs_error_t gate_crx(quantum_state_t *state, int control, int target, double theta) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RX. */
+    if (state->gpu_state) {
+        const double c = cos(theta / 2.0);
+        const double s = sin(theta / 2.0);
+        const double RX[8] = {  c, 0.0,        0.0, -s,
+                                 0.0, -s,       c, 0.0 };
+        return gpu_dispatch_controlled_1q(state, control, target, RX);
+    }
+
     // Controlled-RX: apply RX to target if control is |1⟩
     double cos_half = cos(theta / 2.0);
     double sin_half = sin(theta / 2.0);
@@ -579,7 +834,16 @@ qs_error_t gate_cry(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RY. */
+    if (state->gpu_state) {
+        const double c = cos(theta / 2.0);
+        const double s = sin(theta / 2.0);
+        const double RY[8] = {  c, 0.0,  -s, 0.0,
+                                 s, 0.0,   c, 0.0 };
+        return gpu_dispatch_controlled_1q(state, control, target, RY);
+    }
+
     // Controlled-RY
     double cos_half = cos(theta / 2.0);
     double sin_half = sin(theta / 2.0);
@@ -603,7 +867,19 @@ qs_error_t gate_crz(quantum_state_t *state, int control, int target, double thet
     if (!check_qubit_valid(state, control)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
     if (control == target) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: single apply_2q kernel with the 4x4 controlled-RZ. */
+    if (state->gpu_state) {
+        const double cn = cos(-theta / 2.0);
+        const double sn = sin(-theta / 2.0);
+        const double cp = cos( theta / 2.0);
+        const double sp = sin( theta / 2.0);
+        /* RZ(theta) = diag(e^{-i theta/2}, e^{+i theta/2}) */
+        const double RZ[8] = {  cn, sn,   0.0, 0.0,
+                                 0.0, 0.0,  cp, sp };
+        return gpu_dispatch_controlled_1q(state, control, target, RZ);
+    }
+
     // Controlled-RZ
     complex_t phase_0 = cexp(-I * theta / 2.0);
     complex_t phase_1 = cexp(I * theta / 2.0);
@@ -633,7 +909,14 @@ qs_error_t gate_toffoli(quantum_state_t *state, int control1, int control2, int 
     if (control1 == control2 || control1 == target || control2 == target) {
         return QS_ERROR_INVALID_QUBIT;
     }
-    
+
+    /* GPU dispatch: Toffoli = MCX with 2-bit control mask. */
+    if (qsim_gpu_route_mcx != NULL && state->gpu_state) {
+        uint64_t mask = ((uint64_t)1 << control1) | ((uint64_t)1 << control2);
+        return qsim_gpu_route_mcx(state, mask, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Toffoli (CCNOT): flip target if both controls are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control1) && get_bit(i, control2) && !get_bit(i, target)) {
@@ -655,7 +938,13 @@ qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int ta
     if (control == target1 || control == target2 || target1 == target2) {
         return QS_ERROR_INVALID_QUBIT;
     }
-    
+
+    /* GPU dispatch: dedicated controlled-swap kernel. */
+    if (qsim_gpu_route_fredkin != NULL && state->gpu_state) {
+        return qsim_gpu_route_fredkin(state, control, target1, target2) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Fredkin (CSWAP): swap two targets if control is |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, control)) {
@@ -694,7 +983,16 @@ qs_error_t gate_mcx(quantum_state_t *state, const int *controls, size_t num_cont
             if (controls[i] == controls[j]) return QS_ERROR_INVALID_QUBIT;
         }
     }
-    
+
+    /* GPU dispatch: build the bitmask from the controls array, route
+     * through the single MCX kernel. */
+    if (qsim_gpu_route_mcx != NULL && state->gpu_state) {
+        uint64_t mask = 0;
+        for (size_t i = 0; i < num_controls; i++) mask |= ((uint64_t)1 << controls[i]);
+        return qsim_gpu_route_mcx(state, mask, target) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Multi-controlled X: flip target if all controls are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         // Check if all control qubits are |1⟩
@@ -721,7 +1019,15 @@ qs_error_t gate_mcz(quantum_state_t *state, const int *controls, size_t num_cont
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!controls || num_controls == 0) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, target)) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: MCZ is diagonal, build all_mask = controls | target. */
+    if (qsim_gpu_route_mcz != NULL && state->gpu_state) {
+        uint64_t mask = ((uint64_t)1 << target);
+        for (size_t i = 0; i < num_controls; i++) mask |= ((uint64_t)1 << controls[i]);
+        return qsim_gpu_route_mcz(state, mask) == 0
+            ? QS_SUCCESS : QS_ERROR_DRIVER;
+    }
+
     // Multi-controlled Z: apply phase -1 if all controls and target are |1⟩
     for (uint64_t i = 0; i < state->state_dim; i++) {
         int all_one = get_bit(i, target);

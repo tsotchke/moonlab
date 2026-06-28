@@ -270,14 +270,44 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t
  *
  * Returns P(Z_q = +1) = (1 + <psi|Z_q|psi>) / 2, in [0, 1] up to imag-noise
  * tolerance.  Marginal only -- ignores correlations with other qubits.  For
- * correlated multi-qubit sampling use the Pauli-rotation MPO + sequential
- * Born-rule sampling layer (not yet implemented).
+ * correlated multi-qubit sampling use @ref moonlab_ca_mps_sample_z (since
+ * v0.10.0).
  *
  * Cost: O(n^2 + n chi^2), same as a single Pauli-string expectation.
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit,
                                       double* out_prob);
+
+/**
+ * @brief Sequential Born-rule sampling of computational-basis bitstrings.
+ *
+ * Draws @p num_samples independent bitstrings from the distribution
+ * |<x|psi>|^2 where |psi> = C|phi>.  For each sample the algorithm walks
+ * qubits left to right; at qubit i it computes the conditional Pauli
+ * @c g_i = C^dagger Z_i C, evaluates m_i = <phi|g_i|phi>, samples
+ * @c v_i in {+1, -1} with P(v_i = +1) = (1 + m_i)/2, and projects |phi>
+ * onto the v_i-eigenspace of g_i.  The Clifford layer remains unchanged.
+ *
+ * @param s              CA-MPS state to sample from.
+ * @param num_samples    Number of bitstrings to draw.
+ * @param random_values  Flat array of @p num_samples * @c n uniforms in
+ *                       [0,1).  Caller supplies the RNG (cryptographic,
+ *                       moonlab_qrng, deterministic seed, ...).
+ * @param out_bits       Output buffer of @p num_samples * @c n bytes;
+ *                       byte (s*n + i) is the i-th bit of the s-th
+ *                       sample, in {0, 1}.
+ *
+ * Cost per sample: O(n * (n^2 + chi^2 n + chi^3)) where chi is the
+ * current MPS bond dimension.  Each projection step inflates chi by 2x
+ * before SVD-truncation back to @c max_bond_dim.
+ *
+ * @return CA_MPS_SUCCESS or a negative error code.
+ */
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_sample_z(const moonlab_ca_mps_t* s,
+                                       uint32_t num_samples,
+                                       const double* random_values,
+                                       uint8_t* out_bits);
 
 #ifdef __cplusplus
 }

@@ -126,6 +126,165 @@ export type {
   TFIMOptions,
 } from './tensor-network';
 
+// Adaptive-bond two-site TDVP (since 0.4.3).
+export { TdvpEngine, EvolutionType } from './tdvp';
+export type {
+  TdvpCommonOptions,
+  HeisenbergOptions,
+  TfimOptions,
+  TdvpHistoryStep,
+} from './tdvp';
+
+// Standalone Aaronson-Gottesman Clifford tableau (since 0.4.5).
+export { CliffordTableau } from './clifford';
+export type { MeasureResult, SampleAllResult } from './clifford';
+
+// Single-qubit gate-fusion DAG (since 0.4.7).
+export { FusedCircuit } from './fusion';
+export type { FuseStats, FuseCompileResult } from './fusion';
+
+// MPDO mixed-state simulator (since 0.4.10).
+export { Mpdo, PauliCode } from './mpdo';
+
+// CA-PEPS 2D Clifford-assisted simulator (since 0.4.12).
+export { CaPeps } from './ca-peps';
+
+// Bell inequality + Mermin GHZ/Klyshko tests (since 0.5.4).
+export { BellState, createBellState, chshTest, merminGhzTest, merminKlyshkoTest } from './bell';
+export type { BellTestResult } from './bell';
+
+// Grover's quantum search (since 0.5.4).
+export { groverSearch, groverOptimalIterations } from './grover';
+export type { GroverResult } from './grover';
+
+// Variational Quantum Eigensolver (since 0.5.5).
+export { PauliHamiltonian, PauliHamiltonianBuilder, VqeSolver, OptimizerType } from './vqe';
+export type { VqeResult } from './vqe';
+
+// Quantum Approximate Optimization Algorithm (since 0.5.5).
+export { Graph, IsingModel, QaoaSolver } from './qaoa';
+export type { QaoaResult } from './qaoa';
+
+// Topological invariants (since 0.5.6).
+export {
+  qwzChern, chernQwzProj, chernQwzParallelTransport,
+  sshWinding, kitaevChainZ2,
+  kaneMeleZ2, bhzZ2, hofstadterChern,
+} from './topology';
+
+// Surface code (Clifford-tableau variant; since 0.5.14).
+export { SurfaceCode } from './surface-code';
+export type { PauliError } from './surface-code';
+
+// libirrep QEC zoo (since 0.6.5).  Eight CSS-code families behind
+// one class.  Bridge symbols link into the WASM build but the
+// underlying libirrep library does NOT (it lives outside the WASM
+// toolchain) -- callers must probe LibirrepQecCode.isAvailable()
+// first; expect `false` in the browser today.
+export {
+  LibirrepQecCode,
+  LibirrepError,
+  LibirrepNotBuiltError,
+  MOONLAB_LIBIRREP_OK,
+  MOONLAB_LIBIRREP_NOT_BUILT,
+  MOONLAB_LIBIRREP_BAD_ARG,
+  MOONLAB_LIBIRREP_INTERNAL,
+  MOONLAB_LIBIRREP_OOM,
+} from './libirrep-qec';
+
+// QGTL-shaped circuit-ingestion surface (since 0.6.8).  Mirrors the
+// v0.6.6 C contract; gate-type enum matches QGTL's gate_type_t
+// numerically so codes copied from QGTL examples work unchanged.
+export {
+  QgtlCircuit,
+  QgtlError,
+  GateType as QgtlGateType,
+  MOONLAB_QGTL_OK,
+  MOONLAB_QGTL_BAD_ARG,
+  MOONLAB_QGTL_OOM,
+  MOONLAB_QGTL_UNSUPPORTED,
+  MOONLAB_QGTL_INTERNAL,
+} from './qgtl';
+export type { QgtlExecOptions, QgtlResults } from './qgtl';
+
+// Distributed scheduler MVP (since 0.7.0).  Cloud-platform contract:
+// circuit + shot count + worker fan-out -> merged outcomes.  Same as
+// QGTL the symbols link into the WASM build but tests auto-skip
+// until the next WASM rebuild picks up the v0.7.0 surface.
+export { Job, SchedulerError } from './scheduler';
+export type { JobResults } from './scheduler';
+
+// Decoder-bench dispatcher (since 0.7.3).  Five-slot QEC decoder zoo
+// reachable from JS.  Same auto-skip pattern in tests pending WASM
+// rebuild.
+export {
+  DecoderSlot,
+  DecoderError,
+  DecoderNotBuiltError,
+  decode as decoderDecode,
+  slotAvailable as decoderSlotAvailable,
+  slotName as decoderSlotName,
+  MOONLAB_DECODER_OK,
+  MOONLAB_DECODER_NOT_BUILT,
+  MOONLAB_DECODER_BAD_ARG,
+  MOONLAB_DECODER_INFEASIBLE,
+  MOONLAB_DECODER_OOM,
+  // Decoder runtime registry (since v1.0.3).
+  decoderRegistryAvailable,
+  numDecoders,
+  listDecoders,
+  lookupDecoder,
+  registerDecoder,
+  unregisterDecoder,
+  decodeByName,
+} from './decoder';
+export type { CodeGeometry, DecoderCallback } from './decoder';
+export {
+  MOONLAB_SCHED_OK,
+  MOONLAB_SCHED_BAD_ARG,
+  MOONLAB_SCHED_OOM,
+  MOONLAB_SCHED_INTERNAL,
+  MOONLAB_SCHED_BUFFER_TOO_SMALL,
+  // Vendor-noise profile registry + completion hook (since v1.0.3).
+  vendorNoiseProfileRegistryAvailable,
+  registerVendorNoiseProfile,
+  unregisterVendorNoiseProfile,
+  lookupVendorNoiseProfile,
+  listVendorNoiseProfiles,
+  setCompletionHook,
+  clearCompletionHook,
+} from './scheduler';
+export type {
+  VendorNoiseProfile,
+  CompletionInfo,
+  CompletionCallback,
+} from './scheduler';
+
+// Control-plane Node client (since v0.9.4).  Node-only -- needs raw
+// TCP, so browsers must go through a WebSocket gateway (separate).
+export {
+  submitCircuit as controlPlaneSubmitCircuit,
+  submitShots   as controlPlaneSubmitShots,
+  submitHealth  as controlPlaneSubmitHealth,
+  submitMetrics as controlPlaneSubmitMetrics,
+  ControlPlaneError,
+  MOONLAB_CONTROL_OK,
+  MOONLAB_CONTROL_BAD_ARG,
+  MOONLAB_CONTROL_AUTH_REQUIRED,
+  MOONLAB_CONTROL_AUTH_BAD,
+  MOONLAB_CONTROL_IO_ERROR,
+  MOONLAB_CONTROL_REJECTED,
+  MOONLAB_CONTROL_OOM,
+  MOONLAB_CONTROL_RATE_LIMITED,
+  MOONLAB_CONTROL_SERVER_BUSY,
+} from './control-plane';
+export type {
+  TlsOptions as ControlPlaneTlsOptions,
+  SubmitCircuitArgs as ControlPlaneSubmitCircuitArgs,
+  SubmitShotsArgs as ControlPlaneSubmitShotsArgs,
+  SubmitMetricsArgs as ControlPlaneSubmitMetricsArgs,
+} from './control-plane';
+
 export {
   isWebGPUAvailable,
   initializeWebGPUBackend,

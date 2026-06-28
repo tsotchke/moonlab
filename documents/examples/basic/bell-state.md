@@ -226,9 +226,9 @@ if __name__ == "__main__":
  * Create |Φ+⟩ = (|00⟩ + |11⟩)/√2
  */
 quantum_state_t* create_bell_phi_plus(void) {
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
     return state;
 }
 
@@ -236,10 +236,10 @@ quantum_state_t* create_bell_phi_plus(void) {
  * Create |Φ-⟩ = (|00⟩ - |11⟩)/√2
  */
 quantum_state_t* create_bell_phi_minus(void) {
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_z(state, 0);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
+    gate_pauli_z(state, 0);
     return state;
 }
 
@@ -247,10 +247,10 @@ quantum_state_t* create_bell_phi_minus(void) {
  * Create |Ψ+⟩ = (|01⟩ + |10⟩)/√2
  */
 quantum_state_t* create_bell_psi_plus(void) {
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_x(state, 1);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
+    gate_pauli_x(state, 1);
     return state;
 }
 
@@ -258,11 +258,11 @@ quantum_state_t* create_bell_psi_plus(void) {
  * Create |Ψ-⟩ = (|01⟩ - |10⟩)/√2
  */
 quantum_state_t* create_bell_psi_minus(void) {
-    quantum_state_t* state = quantum_state_create(2);
-    quantum_state_h(state, 0);
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_x(state, 1);
-    quantum_state_z(state, 0);
+    quantum_state_t* state = quantum_state_init(2);
+    gate_hadamard(state, 0);
+    gate_cnot(state, 0, 1);
+    gate_pauli_x(state, 1);
+    gate_pauli_z(state, 0);
     return state;
 }
 
@@ -278,7 +278,7 @@ void analyze_correlations(const char* name,
         quantum_state_t* state = create_fn();
         uint64_t result = quantum_state_measure_all(state);
         counts[result]++;
-        quantum_state_destroy(state);
+        quantum_state_free(state);
     }
 
     printf("\n%s Measurement Statistics (%d shots)\n", name, shots);
@@ -329,7 +329,7 @@ void verify_entanglement(void) {
     printf("\nResults are %s!\n",
            result_0 == result_1 ? "correlated" : "anti-correlated");
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 /**
@@ -352,7 +352,7 @@ void bell_state_tomography(void) {
     printf("\nGlobal purity: %.4f\n", purity);
     printf("(Pure state = 1.0)\n");
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 int main(void) {

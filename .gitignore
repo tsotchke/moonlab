@@ -13,6 +13,12 @@ tests/test_*
 examples/**/[a-z]*
 !examples/**/*.c
 !examples/**/*.h
+!examples/**/*.cu
+!examples/**/*.cuh
+# Open-core extension demos -- committed source; lift out of the
+# binary-pattern ignore.
+!examples/extensions/
+!examples/extensions/**
 tools/benchmarks/*_benchmark
 tools/benchmarks/*_profiler
 !tools/benchmarks/*.c
@@ -44,6 +50,10 @@ tools/hw_rng_probe
 doc/private/
 reference/
 doc/*
+
+# Allow public docs/ subtree (top-level reference, tutorials, research)
+!docs/reference/
+!docs/reference/**
 
 # Build directories
 build/

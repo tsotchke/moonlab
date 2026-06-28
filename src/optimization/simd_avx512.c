@@ -18,6 +18,7 @@
  */
 
 #include "simd_avx512.h"
+#include <stdio.h>   /* snprintf used in the APPEND_FEATURE macro below */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

@@ -476,6 +476,58 @@ static ca_mps_error_t apply_conjugated_imag(moonlab_ca_mps_t* s,
     return (e == TN_GATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
 }
 
+/* Apply the Pauli-eigenspace projector (I + v * sign(phase_in) * P) / 2 to
+ * |phi>.  The caller is responsible for the renormalize step.  Returns
+ * CA_MPS_SUCCESS or a backend error.
+ *
+ *   phase_in: i-power in {0, 1, 2, 3} carried from the Clifford
+ *             conjugation.  For our Born-rule call site phase_in is
+ *             always 0 or 2 (Hermitian conjugated Pauli), so the sign
+ *             factor is real +-1; we assert that and refuse otherwise.
+ *   v:        +1 or -1, the sampled eigenvalue.
+ *
+ * For the weight-0 (identity) case the projector is (1 + v * sign) / 2:
+ *   - sign = +1: projector is 1 (v=+1) or 0 (v=-1).  P(+1)=1 always.
+ *   - sign = -1: projector is 0 (v=+1) or 1 (v=-1).  P(-1)=1 always.
+ *   We scale |phi> by that scalar (0 or 1).  A zero scalar yields a
+ *   zero-norm state, which the sampler must avoid by clamping the
+ *   sampling probabilities first.
+ */
+static ca_mps_error_t apply_conjugated_z_projector(moonlab_ca_mps_t* s,
+                                                   const uint8_t* pauli,
+                                                   int phase_in,
+                                                   int v) {
+    int w = pauli_weight(pauli, s->n);
+    double _Complex i_pow[4] = { 1.0, 1.0*I, -1.0, -1.0*I };
+    double _Complex sign = i_pow[phase_in & 3];
+    if (cimag(sign) != 0.0) {
+        /* Non-Hermitian conjugated Pauli is a bug at the call site. */
+        return CA_MPS_ERR_INVALID;
+    }
+    double sign_r = creal(sign);
+
+    if (w == 0) {
+        /* Projector is the scalar (1 + v * sign_r) / 2 in {0, 1}.  No
+         * MPO application; if the scalar is zero the state collapses
+         * to zero (the sampler must clamp probabilities so this never
+         * runs with the zero branch). */
+        double scalar = 0.5 * (1.0 + (double)v * sign_r);
+        if (scalar > 0.5) return CA_MPS_SUCCESS;
+        /* Zero-projection branch: should be unreachable. */
+        return CA_MPS_ERR_INVALID;
+    }
+
+    double _Complex cos_coef = 0.5;
+    double _Complex branch_coef = 0.5 * (double)v * sign_r;
+
+    tn_mpo_t* mpo = build_pauli_mixture_mpo(s->n, pauli, cos_coef, branch_coef);
+    if (!mpo) return CA_MPS_ERR_OOM;
+    double trunc = 0.0;
+    tn_gate_error_t e = tn_apply_mpo(s->phi, mpo, &trunc);
+    tn_mpo_free(mpo);
+    return (e == TN_GATE_SUCCESS) ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Non-Clifford single-qubit rotations:                               */
 /*  exp(i theta P_q)|psi> = C (C^dagger exp(i theta P_q) C) |phi>      */
@@ -650,6 +702,77 @@ ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
     if (pr > 1.0) pr = 1.0;
     *out_prob = pr;
     return CA_MPS_SUCCESS;
+}
+
+ca_mps_error_t moonlab_ca_mps_sample_z(const moonlab_ca_mps_t* s,
+                                       uint32_t num_samples,
+                                       const double* random_values,
+                                       uint8_t* out_bits) {
+    if (!s || !random_values || !out_bits) return CA_MPS_ERR_INVALID;
+    if (num_samples == 0) return CA_MPS_SUCCESS;
+
+    uint32_t n = s->n;
+    uint8_t* z_q   = (uint8_t*)calloc(n, sizeof(uint8_t));
+    uint8_t* g_pauli = (uint8_t*)calloc(n, sizeof(uint8_t));
+    if (!z_q || !g_pauli) { free(z_q); free(g_pauli); return CA_MPS_ERR_OOM; }
+
+    /* PROBABILITY_FLOOR: when |m_i| > 1 - PROBABILITY_FLOOR the branch
+     * with conditional probability ~0 is clamped away.  Keeps the
+     * projector helper from being asked to apply a zero-norm projector
+     * on numerical noise. */
+    const double PROBABILITY_FLOOR = 1e-12;
+
+    ca_mps_error_t status = CA_MPS_SUCCESS;
+    for (uint32_t sample = 0; sample < num_samples && status == CA_MPS_SUCCESS;
+         sample++) {
+        moonlab_ca_mps_t* work = moonlab_ca_mps_clone(s);
+        if (!work) { status = CA_MPS_ERR_OOM; break; }
+
+        for (uint32_t i = 0; i < n; i++) {
+            /* Build Z_i in the n-qubit Pauli encoding. */
+            memset(z_q, 0, n * sizeof(uint8_t));
+            z_q[i] = 3;  /* Z */
+
+            /* g_i = C^dagger Z_i C, as a Pauli on the phi basis (plus
+             * an i-power phase). */
+            int phase = 0;
+            clifford_conjugate_pauli_inverse(work->D, z_q, 0,
+                                              g_pauli, &phase);
+
+            /* m_i = <phi | g_i | phi> (real for Hermitian g_i). */
+            double _Complex raw = tn_expectation_pauli_string(work->phi, g_pauli);
+            double _Complex i_pow[4] = { 1.0, 1.0*I, -1.0, -1.0*I };
+            double m = creal(raw * i_pow[phase & 3]);
+            if (m > 1.0)  m = 1.0;
+            if (m < -1.0) m = -1.0;
+
+            double p_plus = 0.5 * (1.0 + m);
+            if (p_plus < PROBABILITY_FLOOR) p_plus = 0.0;
+            if (p_plus > 1.0 - PROBABILITY_FLOOR) p_plus = 1.0;
+
+            double u = random_values[sample * (size_t)n + i];
+            int v = (u < p_plus) ? +1 : -1;
+
+            /* Project |phi> onto v-eigenspace of g_i, then renormalize. */
+            ca_mps_error_t pe = apply_conjugated_z_projector(work, g_pauli,
+                                                             phase, v);
+            if (pe != CA_MPS_SUCCESS) { status = pe; break; }
+            tn_state_error_t ne = tn_mps_normalize(work->phi);
+            if (ne != TN_STATE_SUCCESS) {
+                status = CA_MPS_ERR_BACKEND;
+                break;
+            }
+
+            /* bit = 0 if Z_i = +1 (v = +1), bit = 1 if Z_i = -1. */
+            out_bits[sample * (size_t)n + i] = (uint8_t)((1 - v) / 2);
+        }
+
+        moonlab_ca_mps_free(work);
+    }
+
+    free(z_q);
+    free(g_pauli);
+    return status;
 }
 
 ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,

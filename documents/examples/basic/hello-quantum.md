@@ -121,16 +121,16 @@ if __name__ == "__main__":
  */
 int quantum_coin_flip(void) {
     // Create 1-qubit state |0⟩
-    quantum_state_t* state = quantum_state_create(1);
+    quantum_state_t* state = quantum_state_init(1);
 
     // Apply Hadamard: |0⟩ → (|0⟩ + |1⟩)/√2
-    quantum_state_h(state, 0);
+    gate_hadamard(state, 0);
 
     // Measure qubit 0
     int result = quantum_state_measure(state, 0);
 
     // Cleanup
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 
     return result;
 }
@@ -159,7 +159,7 @@ void run_statistics(int num_trials) {
  * Examine state amplitudes.
  */
 void examine_amplitudes(void) {
-    quantum_state_t* state = quantum_state_create(1);
+    quantum_state_t* state = quantum_state_init(1);
 
     printf("Initial state |0⟩:\n");
     double complex* amps = quantum_state_get_amplitudes(state);
@@ -167,7 +167,7 @@ void examine_amplitudes(void) {
     printf("  α₁ = %.4f + %.4fi\n", creal(amps[1]), cimag(amps[1]));
 
     // Apply Hadamard
-    quantum_state_h(state, 0);
+    gate_hadamard(state, 0);
 
     printf("\nAfter Hadamard (superposition):\n");
     amps = quantum_state_get_amplitudes(state);
@@ -177,7 +177,7 @@ void examine_amplitudes(void) {
            creal(amps[0]) * creal(amps[0]) + cimag(amps[0]) * cimag(amps[0]),
            creal(amps[1]) * creal(amps[1]) + cimag(amps[1]) * cimag(amps[1]));
 
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 }
 
 int main(void) {

@@ -104,6 +104,47 @@ impl CaMps {
         check(unsafe { ffi::moonlab_ca_mps_normalize(self.handle.as_ptr()) })
     }
 
+    /// Sequential Born-rule sampling of computational-basis bitstrings.
+    ///
+    /// For each of `num_samples` samples, walks qubits 0..n-1
+    /// computing the conditional Pauli `g_i = C^dagger Z_i C`,
+    /// drawing `v_i in {+1, -1}` with `P(+1) = (1 + <phi|g_i|phi>) / 2`,
+    /// and projecting `|phi>` onto the `v_i`-eigenspace of `g_i`.
+    /// Returns a `Vec<u8>` of length `num_samples * n` where
+    /// `bits[s * n + i]` is the i-th measured bit of the s-th sample
+    /// (`0 == Z_i = +1`, `1 == Z_i = -1`).
+    ///
+    /// `random_values` must be `num_samples * n` uniforms in `[0, 1)`;
+    /// supply them via your own RNG (e.g. `rand::thread_rng`) so the
+    /// stream is reproducible when the caller seeds it.
+    ///
+    /// Available since libquantumsim v0.10.0.
+    pub fn sample_z(
+        &self,
+        num_samples: u32,
+        random_values: &[f64],
+    ) -> Result<Vec<u8>> {
+        let n = self.num_qubits() as usize;
+        let needed = (num_samples as usize) * n;
+        if random_values.len() != needed {
+            return Err(QuantumError::Algorithm(format!(
+                "sample_z: random_values length {} != num_samples * n = {}",
+                random_values.len(),
+                needed,
+            )));
+        }
+        let mut bits = vec![0u8; needed];
+        check(unsafe {
+            ffi::moonlab_ca_mps_sample_z(
+                self.handle.as_ptr(),
+                num_samples,
+                random_values.as_ptr(),
+                bits.as_mut_ptr(),
+            )
+        })?;
+        Ok(bits)
+    }
+
     // --- Clifford gates: tableau-only, no MPS cost. ---
 
     pub fn h(&mut self, q: u32) -> Result<()> {

@@ -37,11 +37,31 @@
 //! This crate provides safe wrappers around the `moonlab-sys` FFI bindings.
 //! All memory is automatically managed through Rust's ownership system.
 
+pub mod admission_hook;
+pub mod bell;
 pub mod ca_mps;
+pub mod ca_peps;
+pub mod clifford;
+pub mod control_plane;
+pub mod decoder;
+pub mod dmrg;
 pub mod error;
 pub mod feynman;
+pub mod fusion;
+pub mod grover;
+pub mod libirrep_qec;
+pub mod mpdo;
+pub mod qgtl;
+pub mod noise;
+pub mod qaoa;
+pub mod scheduler;
 pub mod state;
+pub mod surface_code;
+pub mod tdvp;
+pub mod token_bucket;
 pub mod topology;
+pub mod vqe;
+pub mod z2_lgt;
 
 // Re-export main types
 pub use ca_mps::{
@@ -50,8 +70,12 @@ pub use ca_mps::{
 };
 pub use error::{QuantumError, Result};
 pub use feynman::{FeynmanDiagram, ParticleType};
+pub use mpdo::{Mpdo, PauliCode};
 pub use state::{QuantumState, MAX_QUBITS};
-pub use topology::{qwz_chern, ssh_winding, ChernKpm};
+pub use topology::{
+    bhz_z2, chern_qwz_parallel_transport, chern_qwz_proj, hofstadter_chern,
+    kane_mele_z2, kitaev_chain_z2, qwz_chern, ssh_winding, ChernKpm,
+};
 
 /// Prelude module for convenient imports.
 ///
@@ -62,6 +86,11 @@ pub mod prelude {
     pub use crate::ca_mps::{CaMps, VarDConfig, Warmstart};
     pub use crate::error::{QuantumError, Result};
     pub use crate::feynman::{FeynmanDiagram, ParticleType};
+    pub use crate::mpdo::{Mpdo, PauliCode};
     pub use crate::state::{QuantumState, MAX_QUBITS};
-    pub use crate::topology::{qwz_chern, ssh_winding, ChernKpm};
+    pub use crate::topology::{
+        bhz_z2, chern_qwz_parallel_transport, chern_qwz_proj,
+        hofstadter_chern, kane_mele_z2, kitaev_chain_z2, qwz_chern,
+        ssh_winding, ChernKpm,
+    };
 }

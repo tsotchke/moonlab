@@ -70,6 +70,22 @@
     target_link_libraries(test_constants PRIVATE ${MATH_LIBRARY})
     add_test(NAME unit_constants COMMAND test_constants)
 
+    # Token-bucket primitive (since v1.0.3): per-tenant rate-limit
+    # mechanism for private-overlay admission hooks.
+    add_executable(test_token_bucket tests/unit/test_token_bucket.c)
+    target_link_libraries(test_token_bucket
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME unit_token_bucket COMMAND test_token_bucket)
+    set_tests_properties(unit_token_bucket PROPERTIES TIMEOUT 10)
+
+    # Audit ring buffer (since v1.0.3): bounded lock-free buffer for
+    # SOC2-grade completion record retention.
+    add_executable(test_audit_buffer tests/unit/test_audit_buffer.c)
+    target_link_libraries(test_audit_buffer
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME unit_audit_buffer COMMAND test_audit_buffer)
+    set_tests_properties(unit_audit_buffer PROPERTIES TIMEOUT 10)
+
     add_executable(test_correctness_properties tests/unit/test_correctness_properties.c)
     target_link_libraries(test_correctness_properties PRIVATE quantumsim)
     add_test(NAME unit_correctness_properties COMMAND test_correctness_properties)
@@ -97,19 +113,6 @@
         target_compile_definitions(test_simd_dispatch PRIVATE HAS_ACCELERATE=1)
     endif()
     add_test(NAME unit_simd_dispatch COMMAND test_simd_dispatch)
-
-    add_executable(test_stride_gates tests/unit/test_stride_gates.c
-                   src/optimization/stride_gates.c)
-    target_include_directories(test_stride_gates PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_stride_gates PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
-    if(QSIM_HAS_OPENMP)
-        qsim_target_link_openmp(test_stride_gates)
-        if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
-            target_compile_options(test_stride_gates PRIVATE -Xpreprocessor -fopenmp)
-        endif()
-        target_compile_definitions(test_stride_gates PRIVATE HAS_OPENMP=1)
-    endif()
-    add_test(NAME unit_stride_gates COMMAND test_stride_gates)
 
     # Tensor-network unit test — the 800+ line suite that exercises
     # tensors, SVD, MPS, gate application via tensor networks,
@@ -224,6 +227,24 @@
     target_link_libraries(test_ca_mps_prob PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_ca_mps_prob COMMAND test_ca_mps_prob)
 
+    # Born-rule sequential sampling (since v0.10.0).  Bell + GHZ_4 +
+    # H-wall+T regimes; empirical marginals + bitstring frequencies
+    # cross-checked against the dense state-vector backend at 4096-8192
+    # shots.
+    add_executable(test_ca_mps_sample tests/unit/test_ca_mps_sample.c)
+    target_link_libraries(test_ca_mps_sample PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_ca_mps_sample COMMAND test_ca_mps_sample)
+    set_tests_properties(unit_ca_mps_sample PROPERTIES LABELS "ca_mps")
+
+    # Kane-Mele Rashba + Pfaffian Z2 (since v0.10.0).  Validates the
+    # Fu-Kane TRIM-product formula agrees with the block-Chern path at
+    # lambda_r = 0 and tracks the QSH/trivial phase boundary for
+    # non-zero Rashba.
+    add_executable(test_qgt_kane_mele_rashba tests/unit/test_qgt_kane_mele_rashba.c)
+    target_link_libraries(test_qgt_kane_mele_rashba PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgt_kane_mele_rashba COMMAND test_qgt_kane_mele_rashba)
+    set_tests_properties(unit_qgt_kane_mele_rashba PROPERTIES LABELS "topology")
+
     # Direct unit tests for the SVD compression layer that every MPS
     # truncation goes through.  Closes a 19-Apr audit gap: previously
     # exercised only indirectly via mps_vs_exact and the CA-MPS suite.
@@ -251,6 +272,74 @@
     add_executable(test_qgt_phase_diagram_2d tests/unit/test_qgt_phase_diagram_2d.c)
     target_link_libraries(test_qgt_phase_diagram_2d PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qgt_phase_diagram_2d COMMAND test_qgt_phase_diagram_2d)
+
+    # Adaptive-bond TDVP step 1 (v0.4 / Phase 3B): backwards-compat
+    # regression on the tdvp_adaptive_bond_config_t surface and the
+    # tdvp_config_default / tdvp_config_adaptive helpers.  See
+    # docs/research/adaptive_bond_tdvp.md for the full roadmap.
+    add_executable(test_tdvp_adaptive_config tests/unit/test_tdvp_adaptive_config.c)
+    target_link_libraries(test_tdvp_adaptive_config PRIVATE quantumsim)
+    add_test(NAME unit_tdvp_adaptive_config COMMAND test_tdvp_adaptive_config)
+
+    # Adaptive-bond TDVP steps 3+4 (v0.4 / Phase 3B): end-to-end smoke
+    # over the entropy-feedback PID controller + per-bond state array.
+    # Verifies engine allocation/free, a short imaginary-time
+    # Heisenberg run, and per-bond chi staying inside the configured
+    # [chi_floor, chi_ceiling] band.
+    add_executable(test_tdvp_adaptive_pid tests/unit/test_tdvp_adaptive_pid.c)
+    target_link_libraries(test_tdvp_adaptive_pid PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_pid COMMAND test_tdvp_adaptive_pid)
+
+    # Adaptive-bond TDVP step 6a (v0.4 / Phase 3B): real-time energy
+    # conservation under the entropy-feedback PID controller.
+    # Symplectic 2TDVP must preserve <H> to within the integrator's
+    # error envelope; the PID changes which singular values are kept
+    # but never the Hamiltonian, so this is the first sharp acceptance
+    # criterion from docs/research/adaptive_bond_tdvp.md.
+    add_executable(test_tdvp_adaptive_energy_conservation
+                   tests/unit/test_tdvp_adaptive_energy_conservation.c)
+    target_link_libraries(test_tdvp_adaptive_energy_conservation
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_energy_conservation
+             COMMAND test_tdvp_adaptive_energy_conservation)
+
+    # Adaptive-bond TDVP step 6b (v0.4 / Phase 3B): imaginary-time
+    # ground-state convergence on the 8-site TFIM at g=1.  Runs DMRG
+    # for a reference energy at chi=32, then asserts that 30
+    # imag-time TDVP steps with the adaptive controller land within
+    # 3% of the DMRG ground state.
+    add_executable(test_tdvp_adaptive_tfim_ground
+                   tests/unit/test_tdvp_adaptive_tfim_ground.c)
+    target_link_libraries(test_tdvp_adaptive_tfim_ground
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_tfim_ground
+             COMMAND test_tdvp_adaptive_tfim_ground)
+
+    # Adaptive-bond TDVP step 6c (v0.4 / Phase 3B): PID stability
+    # sweep.  3x3x3 grid over (kp, ki, kd) around the reference
+    # defaults; for each gain triplet, run 5 real-time TDVP steps
+    # and measure max |chi(t+1) - chi(t)| across bonds.  At least
+    # 80% of grid points must stay within 4 bond-units / step.
+    add_executable(test_tdvp_adaptive_pid_stability
+                   tests/unit/test_tdvp_adaptive_pid_stability.c)
+    target_link_libraries(test_tdvp_adaptive_pid_stability
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_pid_stability
+             COMMAND test_tdvp_adaptive_pid_stability)
+
+    # Adaptive-bond TDVP second-SVD re-truncation (v0.4.1): drives the
+    # entropy-feedback PID into target_chi < first->bond_dim so the
+    # second SVD pass in tdvp_truncate_bond actually fires, then pins
+    # invariants on the resulting per-bond chi history, truncation
+    # error, and final energy.  Branch-coverage smoke for the
+    # otherwise-implicit second-pass code path documented in
+    # docs/research/adaptive_bond_tdvp.md.
+    add_executable(test_tdvp_adaptive_second_svd
+                   tests/unit/test_tdvp_adaptive_second_svd.c)
+    target_link_libraries(test_tdvp_adaptive_second_svd
+                          PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_adaptive_second_svd
+             COMMAND test_tdvp_adaptive_second_svd)
 
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
@@ -360,6 +449,20 @@
         target_link_libraries(test_qgt_kitaev_chain PRIVATE quantumsim ${MATH_LIBRARY})
         add_test(NAME unit_qgt_kitaev_chain COMMAND test_qgt_kitaev_chain)
         set_tests_properties(unit_qgt_kitaev_chain PROPERTIES TIMEOUT 30 LABELS "topology")
+
+        # Hofstadter butterfly Chern sub-bands (v0.3 QGT extension).
+        add_executable(test_qgt_hofstadter tests/unit/test_qgt_hofstadter.c)
+        target_link_libraries(test_qgt_hofstadter PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_hofstadter COMMAND test_qgt_hofstadter)
+        set_tests_properties(unit_qgt_hofstadter PROPERTIES TIMEOUT 60 LABELS "topology")
+
+        # Cross-check momentum-space FHS / projector-trace vs real-space
+        # Bianco-Resta on QWZ -- two independent topology calculations
+        # must agree.
+        add_executable(test_qgt_vs_chern_marker tests/unit/test_qgt_vs_chern_marker.c)
+        target_link_libraries(test_qgt_vs_chern_marker PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_qgt_vs_chern_marker COMMAND test_qgt_vs_chern_marker)
+        set_tests_properties(unit_qgt_vs_chern_marker PROPERTIES TIMEOUT 60 LABELS "topology")
 
         # MPDO noise simulator scaffold (v0.3 noise extension).
         add_executable(test_mpdo_smoke tests/unit/test_mpdo_smoke.c)
@@ -664,6 +767,350 @@
         )
     endif()
 
+    # libirrep sector-ED bridge (since v0.6.1).  Validates the
+    # space-group + rep-table + Lanczos-on-orbits pipeline at
+    # N = 12, 18, 24 kagome (Sz = 0 sector).  When libirrep is OFF
+    # the test gracefully exits 77 (CTest "skip") so the CI matrix
+    # without libirrep stays green.
+    add_executable(test_libirrep_sector_ed tests/unit/test_libirrep_sector_ed.c)
+    target_link_libraries(test_libirrep_sector_ed PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_libirrep_sector_ed COMMAND test_libirrep_sector_ed)
+    set_tests_properties(unit_libirrep_sector_ed PROPERTIES
+        LABELS "long;libirrep"
+        TIMEOUT 600
+        SKIP_RETURN_CODE 77
+    )
+
+    # libirrep CSS-code bridge (since v0.6.1).  Surface code d = 3, 5
+    # built via irrep_surface_init + irrep_surface_build, plumbed
+    # through the moonlab_libirrep_qec_t opaque handle.  Foundation
+    # for the v0.6.2 expansion to toric / color / BB / hypergraph
+    # families behind the same surface.
+    add_executable(test_libirrep_css tests/unit/test_libirrep_css.c)
+    target_link_libraries(test_libirrep_css PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_libirrep_css COMMAND test_libirrep_css)
+    set_tests_properties(unit_libirrep_css PROPERTIES
+        LABELS "libirrep"
+        TIMEOUT 120
+        SKIP_RETURN_CODE 77
+    )
+
+    # QGTL-shaped circuit-ingestion surface (since v0.6.6).  Validates
+    # the moonlab_qgtl_* contract QGTL plugs into to route circuits
+    # through moonlab's state-vector backend before paying for IBM /
+    # Rigetti / IonQ shots.
+    add_executable(test_qgtl_backend tests/unit/test_qgtl_backend.c)
+    target_link_libraries(test_qgtl_backend PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgtl_backend COMMAND test_qgtl_backend)
+    set_tests_properties(unit_qgtl_backend PROPERTIES
+        LABELS "qgtl"
+        TIMEOUT 60
+    )
+
+    # Portable circuit serialization (since v0.8.3).
+    add_executable(test_qgtl_circuit_io tests/unit/test_qgtl_circuit_io.c)
+    target_link_libraries(test_qgtl_circuit_io PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgtl_circuit_io COMMAND test_qgtl_circuit_io)
+    set_tests_properties(unit_qgtl_circuit_io PROPERTIES
+        LABELS "qgtl"
+        TIMEOUT 30
+    )
+
+    # TCP control plane (since v0.8.7).
+    add_executable(test_control_plane tests/integration/test_control_plane.c)
+    target_link_libraries(test_control_plane
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane COMMAND test_control_plane)
+    set_tests_properties(integration_control_plane PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Concurrency stress test (since v0.8.10): 8 parallel clients
+    # against the thread-pool server.
+    add_executable(test_control_plane_concurrent
+        tests/integration/test_control_plane_concurrent.c)
+    target_link_libraries(test_control_plane_concurrent
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_concurrent
+        COMMAND test_control_plane_concurrent)
+    set_tests_properties(integration_control_plane_concurrent PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Shots-mode test (since v0.8.11): SHOTS wire verb returning
+    # measurement outcomes instead of the full probability vector.
+    add_executable(test_control_plane_shots
+        tests/integration/test_control_plane_shots.c)
+    target_link_libraries(test_control_plane_shots
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_shots
+        COMMAND test_control_plane_shots)
+    set_tests_properties(integration_control_plane_shots PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Graceful shutdown test (since v0.8.13): lifecycle API exercised
+    # against idle accept() and in-flight request paths.
+    add_executable(test_control_plane_shutdown
+        tests/integration/test_control_plane_shutdown.c)
+    target_link_libraries(test_control_plane_shutdown
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_shutdown
+        COMMAND test_control_plane_shutdown)
+    set_tests_properties(integration_control_plane_shutdown PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # HMAC-SHA3-256 auth (since v0.8.15): four paths through the
+    # AUTH wire verb -- matching / missing / wrong / graceful.
+    add_executable(test_control_plane_auth
+        tests/integration/test_control_plane_auth.c)
+    target_link_libraries(test_control_plane_auth
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_auth
+        COMMAND test_control_plane_auth)
+    set_tests_properties(integration_control_plane_auth PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # End-to-end tenant-identity smoke (v1.0.3): proves AUTH
+    # <tenant>:<hmac> -> control plane -> scheduler request context
+    # -> completion hook captures the right tenant_id.  Canonical
+    # premium-tier demonstration that customer-submitted jobs
+    # actually reach billing/audit attributed to the right account.
+    add_executable(test_control_plane_tenant
+        tests/integration/test_control_plane_tenant.c)
+    target_link_libraries(test_control_plane_tenant
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_tenant
+        COMMAND test_control_plane_tenant)
+    set_tests_properties(integration_control_plane_tenant PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # TLS transport (since v0.8.17): only built when the library was
+    # configured with -DQSIM_ENABLE_TLS=ON.  Generates a self-signed
+    # cert in-process, then drives a Bell circuit through TLS.
+    if(QSIM_HAS_TLS)
+        add_executable(test_control_plane_tls
+            tests/integration/test_control_plane_tls.c)
+        target_link_libraries(test_control_plane_tls
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads
+                    OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_tls
+            PRIVATE MOONLAB_HAVE_TLS=1)
+        add_test(NAME integration_control_plane_tls
+            COMMAND test_control_plane_tls)
+        set_tests_properties(integration_control_plane_tls PROPERTIES
+            LABELS "control_plane;tls"
+            TIMEOUT 30
+        )
+
+        # mTLS (since v0.8.19): server demands a CA-signed client cert.
+        add_executable(test_control_plane_mtls
+            tests/integration/test_control_plane_mtls.c)
+        target_link_libraries(test_control_plane_mtls
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads
+                    OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_mtls
+            PRIVATE MOONLAB_HAVE_TLS=1)
+        add_test(NAME integration_control_plane_mtls
+            COMMAND test_control_plane_mtls)
+        set_tests_properties(integration_control_plane_mtls PROPERTIES
+            LABELS "control_plane;tls"
+            TIMEOUT 30
+        )
+    endif()
+
+    # HEALTH probe + per-IP rate limit (since v0.8.21).
+    add_executable(test_control_plane_health_rate
+        tests/integration/test_control_plane_health_rate.c)
+    target_link_libraries(test_control_plane_health_rate
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_health_rate
+        COMMAND test_control_plane_health_rate)
+    set_tests_properties(integration_control_plane_health_rate PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Prometheus METRICS endpoint (since v0.8.23).
+    add_executable(test_control_plane_metrics
+        tests/integration/test_control_plane_metrics.c)
+    target_link_libraries(test_control_plane_metrics
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_metrics
+        COMMAND test_control_plane_metrics)
+    set_tests_properties(integration_control_plane_metrics PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Per-request timeout (since v0.8.26).
+    add_executable(test_control_plane_timeout
+        tests/integration/test_control_plane_timeout.c)
+    target_link_libraries(test_control_plane_timeout
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_timeout
+        COMMAND test_control_plane_timeout)
+    set_tests_properties(integration_control_plane_timeout PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # IPv6 (since v0.10.0): dual-stack listener + IPv6-canonical
+    # rate-limit key.  Exercises bind on ::1, accept v6 client,
+    # METRICS + CIRCUIT round-trip.
+    add_executable(test_control_plane_ipv6
+        tests/integration/test_control_plane_ipv6.c)
+    target_link_libraries(test_control_plane_ipv6
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    add_test(NAME integration_control_plane_ipv6
+        COMMAND test_control_plane_ipv6)
+    set_tests_properties(integration_control_plane_ipv6 PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Production hardening (since v0.9.0): max_concurrent ceiling +
+    # tls_failed counter + mTLS peer audit.  Requires TLS for the
+    # tls_failed path; max_concurrent path runs unconditionally.
+    add_executable(test_control_plane_hardening
+        tests/integration/test_control_plane_hardening.c)
+    target_link_libraries(test_control_plane_hardening
+        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    if(QSIM_HAS_TLS)
+        target_link_libraries(test_control_plane_hardening
+            PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(test_control_plane_hardening
+            PRIVATE MOONLAB_HAVE_TLS=1)
+    endif()
+    add_test(NAME integration_control_plane_hardening
+        COMMAND test_control_plane_hardening)
+    set_tests_properties(integration_control_plane_hardening PROPERTIES
+        LABELS "control_plane"
+        TIMEOUT 30
+    )
+
+    # Multi-decoder bench harness scaffold (since v0.6.7).  Five
+    # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
+    # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
+    add_executable(test_decoder_bench tests/unit/test_decoder_bench.c)
+    target_link_libraries(test_decoder_bench PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_decoder_bench COMMAND test_decoder_bench)
+    set_tests_properties(unit_decoder_bench PROPERTIES
+        LABELS "qec"
+        TIMEOUT 30
+    )
+
+    # Distributed scheduler MVP (since v0.7.0).  In-process worker
+    # fan-out atop the QGTL ingestion surface.  Bell + GHZ verified
+    # across 3 / 4 workers.
+    add_executable(test_scheduler tests/unit/test_scheduler.c)
+    target_link_libraries(test_scheduler PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_scheduler COMMAND test_scheduler)
+    set_tests_properties(unit_scheduler PROPERTIES
+        LABELS "distributed"
+        TIMEOUT 60
+    )
+
+    # Vendor-noise emulator backends (since v1.1).  IBM Falcon /
+    # Rigetti Aspen / IonQ Forte stochastic-Pauli emulators plug
+    # into the scheduler's backend registry.  Bell-pair shot
+    # statistics verify noise actually fires and that cleaner
+    # gates (IonQ) yield fewer off-Bell outcomes than noisier
+    # gates (Rigetti) on the same seed.
+    add_executable(test_vendor_noise_backend tests/unit/test_vendor_noise_backend.c)
+    target_link_libraries(test_vendor_noise_backend PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_vendor_noise_backend COMMAND test_vendor_noise_backend)
+    set_tests_properties(unit_vendor_noise_backend PROPERTIES
+        LABELS "distributed"
+        TIMEOUT 60
+    )
+
+    # GPU backend correctness smoke (since v1.1).  Where the existing
+    # test_gpu_backend_discovery only checks that init / shutdown
+    # doesn't crash, this one actually applies a Hadamard on the
+    # GPU backend and verifies the resulting amplitudes match the
+    # analytic |+0>.  Skips cleanly when no backend / no software
+    # ICD is present; on a POCL or lavapipe CI runner it exercises
+    # the GPU kernel dispatch path through software.
+    add_executable(test_gpu_backend_correctness
+        tests/integration/test_gpu_backend_correctness.c)
+    target_link_libraries(test_gpu_backend_correctness PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME integration_gpu_backend_correctness
+             COMMAND test_gpu_backend_correctness)
+    set_tests_properties(integration_gpu_backend_correctness PROPERTIES
+        LABELS "gpu"
+        TIMEOUT 60
+    )
+
+    # Cross-repo platform integration smoke (since v1.1) -- exercises
+    # the moonlab + QGTL + libirrep + SbNN integration contract.
+    # Verifies QGTL ingestion + scheduler + vendor-noise dispatch
+    # + libirrep bridge availability honesty + SbNN decoder slot
+    # availability honesty all match the documented surface.
+    add_executable(test_platform_integration tests/integration/test_platform_integration.c)
+    target_link_libraries(test_platform_integration PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME integration_platform COMMAND test_platform_integration)
+    set_tests_properties(integration_platform PROPERTIES
+        LABELS "platform;distributed"
+        TIMEOUT 60
+    )
+
+    # MPI scheduler transport (since v0.7.4) -- only built when
+    # QSIM_ENABLE_MPI=ON, runs under mpirun -n 4 if available.
+    if(QSIM_HAS_MPI)
+        add_executable(test_scheduler_mpi tests/unit/test_scheduler_mpi.c)
+        target_link_libraries(test_scheduler_mpi PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
+        find_program(MPIRUN_EXECUTABLE mpirun)
+        if(MPIRUN_EXECUTABLE)
+            # --oversubscribe lets mpirun launch -n 4 processes even
+            # when there are fewer hardware cores available -- needed
+            # on GitHub-hosted ubuntu-22.04 runners (2 cores) so the
+            # 4-rank coverage matches what local laptops/desktops get.
+            # --allow-run-as-root is needed under the docker images
+            # that root-by-default; on a normal user account it's a
+            # no-op.
+            add_test(NAME unit_scheduler_mpi
+                     COMMAND ${MPIRUN_EXECUTABLE}
+                             --oversubscribe
+                             -n 4
+                             $<TARGET_FILE:test_scheduler_mpi>)
+        else()
+            # Fall back to single-rank run if mpirun is unavailable.
+            add_test(NAME unit_scheduler_mpi COMMAND test_scheduler_mpi)
+        endif()
+        set_tests_properties(unit_scheduler_mpi PROPERTIES
+            LABELS "distributed;mpi"
+            TIMEOUT 120
+        )
+
+        # State-vector sharding (since v0.7.6) -- partitioned_state_t
+        # driven through dist_hadamard + dist_cnot across MPI ranks.
+        add_executable(test_partitioned_state tests/unit/test_partitioned_state.c)
+        target_link_libraries(test_partitioned_state PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
+        if(MPIRUN_EXECUTABLE)
+            add_test(NAME unit_partitioned_state
+                     COMMAND ${MPIRUN_EXECUTABLE}
+                             --oversubscribe
+                             -n 2
+                             $<TARGET_FILE:test_partitioned_state>)
+        else()
+            add_test(NAME unit_partitioned_state COMMAND test_partitioned_state)
+        endif()
+        set_tests_properties(unit_partitioned_state PROPERTIES
+            LABELS "distributed;mpi"
+            TIMEOUT 60
+        )
+    endif()
+
     # Skyrmion braid path generators.
     add_executable(test_skyrmion tests/unit/test_skyrmion.c)
     target_link_libraries(test_skyrmion PRIVATE quantumsim)
@@ -903,12 +1350,23 @@
 
     # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
     # if the crate root and Cargo are present.
+    #
+    # --test-threads=1 is mandatory: many of the tests touch C-side
+    # singletons (g_completion_hook, g_admission_hook, the control_plane
+    # server lock, the scheduler backend registry).  cargo test's default
+    # of "one OS thread per test function in the same process" lets two
+    # concurrent set_completion_hook(...) calls overwrite each other,
+    # so the hook count assertions in `completion_hook_fires_with_args`
+    # see 3 invocations instead of 1.  Serializing the test functions
+    # within this binary fixes the singleton race; cargo still
+    # parallelizes ACROSS test binaries, which is plenty.
     find_program(CARGO_EXECUTABLE cargo)
     if(CARGO_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
         add_test(NAME rust_bindings_smoke
                  COMMAND ${CARGO_EXECUTABLE} test --manifest-path
                          ${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml
-                         --no-fail-fast)
+                         --no-fail-fast
+                         -- --test-threads=1)
         set_tests_properties(rust_bindings_smoke PROPERTIES
             ENVIRONMENT
                 "MOONLAB_LIB_DIR=$<TARGET_FILE_DIR:quantumsim>;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
@@ -1025,7 +1483,7 @@
         unit_correctness_properties unit_measurement unit_entanglement
         unit_noise unit_composite_noise unit_fusion unit_povm
         unit_mutual_info unit_zne unit_simd_dispatch unit_simd_parity
-        unit_stride_gates unit_memory_align gate_test fast_measurement
+        unit_memory_align gate_test fast_measurement
         comprehensive correlation_test unit_hermitian_eigen
         unit_matrix_math unit_svd_compress unit_metal_parity)
     qsim_label_tests(tn

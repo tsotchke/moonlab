@@ -7,6 +7,25 @@
 # block.  Same-scope include() so the file reads root-defined
 # variables (QSIM_HAS_*) and macros (qsim_target_link_openmp).
 
+    # Sharded GHZ example (since v0.7.9) -- demonstrates >32-qubit
+    # state-vector reach via MPI partitions.  Built only when MPI
+    # is enabled; runs under `mpirun -n 4`.
+    if(QSIM_HAS_MPI)
+        add_executable(large_state_ghz examples/distributed/large_state_ghz.c)
+        target_link_libraries(large_state_ghz PRIVATE quantumsim MPI::MPI_C)
+
+        # Sharded QFT (since v0.8.1) -- N-qubit textbook QFT under
+        # dist_hadamard + dist_cphase + dist_swap across MPI ranks.
+        add_executable(large_state_qft examples/distributed/large_state_qft.c)
+        target_link_libraries(large_state_qft PRIVATE quantumsim MPI::MPI_C)
+
+        # Sharded random RZ+CNOT circuit (since v0.8.2) -- depth
+        # layers of per-qubit RZ + alternating-parity CNOT chain.
+        # Exercises dist_rz + dist_cnot under cross-rank traffic.
+        add_executable(large_state_random_circuit examples/distributed/large_state_random_circuit.c)
+        target_link_libraries(large_state_random_circuit PRIVATE quantumsim MPI::MPI_C)
+    endif()
+
     # Grover examples
     add_executable(grover_hash_collision examples/quantum/grover_hash_collision.c)
     target_link_libraries(grover_hash_collision PRIVATE quantumsim)
@@ -150,6 +169,26 @@
     target_link_libraries(example_ca_peps_2d_tfim_var_d_vs_ed PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # v0.3 QGT topology examples: each demonstrates one new model
+    # primitive (Kane-Mele, BHZ, Hofstadter, Kitaev p-wave chain) and
+    # prints the topological invariant across its phase diagram.
+    add_executable(example_qgt_kane_mele
+        examples/topological/qgt_kane_mele.c)
+    target_link_libraries(example_qgt_kane_mele PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_bhz
+        examples/topological/qgt_bhz.c)
+    target_link_libraries(example_qgt_bhz PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_hofstadter
+        examples/topological/qgt_hofstadter.c)
+    target_link_libraries(example_qgt_hofstadter PRIVATE
+        quantumsim ${MATH_LIBRARY})
+    add_executable(example_qgt_kitaev_z2
+        examples/topological/qgt_kitaev_z2.c)
+    target_link_libraries(example_qgt_kitaev_z2 PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Bell-CHSH multi-run aggregate: runs the CHSH test N>=5 times and
     # reports median + IQR + min/max + violation rate.  Closes the
     # paper §4.2 todo about reporting a statistically-honest CHSH
@@ -179,6 +218,15 @@
     target_link_libraries(example_surface_code_threshold PRIVATE
         quantumsim ${MATH_LIBRARY})
 
+    # Open-core overlay demo (since v1.0.3): exercises every public
+    # plug-in surface (backend, vendor-noise profile, decoder, and
+    # scheduler completion hook) in a single executable.  Reference
+    # for private overlays + sibling libraries that consume moonlab.
+    add_executable(example_open_core_overlay_demo
+        examples/extensions/open_core_overlay_demo.c)
+    target_link_libraries(example_open_core_overlay_demo PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     # Execute a representative subset of examples under ctest so CI
     # catches link-time success followed by runtime crashes. Heavy
     # examples (quantum_spin_chain at 100 qubits, grover_large_scale)
@@ -200,6 +248,11 @@
         add_test(NAME example_ca_peps_2d_tfim_smoke
                  COMMAND example_ca_peps_2d_tfim
                          /tmp/ca_peps_tfim_smoke.json 2 2 8 0.1 30)
+        # Open-core overlay demo: registers all four runtime surfaces
+        # and runs three jobs; smoke-test catches link + dispatch
+        # regressions in the plug-in registry pipeline.
+        add_test(NAME example_open_core_overlay_demo
+                 COMMAND example_open_core_overlay_demo)
         # quantum_critical_point is a multi-minute finite-size-scaling
         # demo and is deliberately excluded from the CI smoke.
         set_tests_properties(
@@ -209,6 +262,7 @@
             example_quantum_spin_chain_small
             example_phase3_phase4_benchmark
             example_ca_peps_2d_tfim_smoke
+            example_open_core_overlay_demo
             PROPERTIES TIMEOUT 120
         )
     endif()

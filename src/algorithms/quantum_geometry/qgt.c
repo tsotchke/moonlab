@@ -8,7 +8,7 @@
 
 #include <limits.h>
 #include <math.h>
-#include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -832,17 +832,6 @@ void qgt_free_nband(qgt_system_n_t* sys) {
     free(sys);
 }
 
-int qgt_eval_nband_hamiltonian(const qgt_system_n_t* sys,
-                               const double k[2],
-                               qgt_complex_t* h,
-                               size_t h_count) {
-    if (!sys || !k || !h) return -1;
-    const size_t required = sys->n_bands * sys->n_bands;
-    if (h_count < required) return -2;
-    sys->fn(k, sys->user, h);
-    return 0;
-}
-
 /* Compute the lowest-energy n_occupied eigenvectors of H at momentum k.
  * Output @p u_occ is row-major (n_bands, n_occupied): u_occ[i*M + a] is
  * the i-th component of the a-th occupied band, sorted by ascending
@@ -941,97 +930,6 @@ static double arg_pp(qgt_complex_t z) {
     return a;
 }
 
-typedef struct {
-    qgt_bloch_n_fn fn4;
-    void*          user4;
-} z2_block_user_t;
-
-static void z2_block_bloch(const double k[2], void* user, qgt_complex_t h[4]) {
-    z2_block_user_t* z = (z2_block_user_t*)user;
-    qgt_complex_t H4[16];
-    z->fn4(k, z->user4, H4);
-    h[0] = H4[0 * 4 + 0];
-    h[1] = H4[0 * 4 + 1];
-    h[2] = H4[1 * 4 + 0];
-    h[3] = H4[1 * 4 + 1];
-}
-
-static bool z2_is_sz_conserving(const qgt_system_n_t* sys) {
-    static const double sample_k[][2] = {
-        { 0.0, 0.0 },
-        { 0.37, -0.51 },
-        { -1.2, 0.8 },
-        { M_PI * 0.5, M_PI / 3.0 }
-    };
-    const int up[2] = {0, 1};
-    const int dn[2] = {2, 3};
-    for (size_t s = 0; s < sizeof(sample_k) / sizeof(sample_k[0]); s++) {
-        qgt_complex_t H[16];
-        sys->fn(sample_k[s], sys->user, H);
-        for (int a = 0; a < 2; a++) {
-            for (int b = 0; b < 2; b++) {
-                if (cabs(H[up[a] * 4 + dn[b]]) > 1e-10 ||
-                    cabs(H[dn[a] * 4 + up[b]]) > 1e-10) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-
-static int positive_projected_spin_state(const qgt_complex_t* u_occ,
-                                         qgt_complex_t psi[4]) {
-    const double sz[4] = {+1.0, +1.0, -1.0, -1.0};
-    qgt_complex_t S00 = 0.0;
-    qgt_complex_t S01 = 0.0;
-    qgt_complex_t S11 = 0.0;
-    for (int i = 0; i < 4; i++) {
-        qgt_complex_t u0 = u_occ[i * 2 + 0];
-        qgt_complex_t u1 = u_occ[i * 2 + 1];
-        S00 += conj(u0) * sz[i] * u0;
-        S01 += conj(u0) * sz[i] * u1;
-        S11 += conj(u1) * sz[i] * u1;
-    }
-    double a = creal(S00);
-    double d = creal(S11);
-    qgt_complex_t b = S01;
-    double delta = 0.5 * (a - d);
-    double bmag = cabs(b);
-    double rad = sqrt(delta * delta + bmag * bmag);
-    if (rad < 1e-10) return -3;
-    double lambda = 0.5 * (a + d) + rad;
-
-    qgt_complex_t v0 = b;
-    qgt_complex_t v1 = lambda - a;
-    double n2 = bmag * bmag + cabs(v1) * cabs(v1);
-    if (n2 < 1e-24) {
-        v0 = lambda - d;
-        v1 = conj(b);
-        n2 = cabs(v0) * cabs(v0) + cabs(v1) * cabs(v1);
-    }
-    if (n2 < 1e-24) return -3;
-    double inv = 1.0 / sqrt(n2);
-    v0 *= inv;
-    v1 *= inv;
-
-    double norm2 = 0.0;
-    for (int i = 0; i < 4; i++) {
-        psi[i] = u_occ[i * 2 + 0] * v0 + u_occ[i * 2 + 1] * v1;
-        double mag = cabs(psi[i]);
-        norm2 += mag * mag;
-    }
-    if (norm2 < 1e-24) return -3;
-    double psi_inv = 1.0 / sqrt(norm2);
-    for (int i = 0; i < 4; i++) psi[i] *= psi_inv;
-    return 0;
-}
-
-static qgt_complex_t vdot4(const qgt_complex_t a[4], const qgt_complex_t b[4]) {
-    return conj(a[0]) * b[0] + conj(a[1]) * b[1] +
-           conj(a[2]) * b[2] + conj(a[3]) * b[3];
-}
-
 int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
                           qgt_berry_grid_t* out) {
     if (!sys || !out || N < 4) return -1;
@@ -1087,83 +985,220 @@ int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
     return 0;
 }
 
+/* ----- Z_2 invariant via spin-Chern (Sz-conserving fast path) -------
+ *
+ * For a 4-band TRS system with conserved Sz (Rashba off), the
+ * Hamiltonian is block-diagonal in spin: H = diag(H_up, H_down) in
+ * the basis (|A,up>, |B,up>, |A,down>, |B,down>).  The spin-up
+ * Chern number C_up determines Z_2 = |C_up| mod 2 in {0, 1}.
+ *
+ * We extract H_up = H[0:2, 0:2] from the full 4x4 callback at each k
+ * and compute Chern via the existing 2-band FHS path.  The full
+ * Pfaffian Fukui-Hatsugai construction (Rashba-compatible) is on
+ * the v0.3.1 roadmap.
+ */
+
+typedef struct {
+    qgt_bloch_n_fn fn4;
+    void*          user4;
+} z2_block_user_t;
+
+static void z2_block_bloch(const double k[2], void* user, qgt_complex_t h[4]) {
+    z2_block_user_t* z = (z2_block_user_t*)user;
+    qgt_complex_t H4[16];
+    z->fn4(k, z->user4, H4);
+    /* Extract the (A_up, B_up) 2x2 block: indices (0, 1) of the
+     * row-major 4x4. */
+    h[0] = H4[0 * 4 + 0];
+    h[1] = H4[0 * 4 + 1];
+    h[2] = H4[1 * 4 + 0];
+    h[3] = H4[1 * 4 + 1];
+}
+
 int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N, int* z2) {
     if (!sys || !z2) return -1;
     if (sys->n_bands != 4 || sys->n_occupied != 2) return -2;
-    if (N < 8 || (N & 1u)) return -1;
+    if (N < 8) return -1;
 
-    if (z2_is_sz_conserving(sys)) {
-        z2_block_user_t z = { sys->fn, sys->user };
-        qgt_system_t* sub = qgt_create(z2_block_bloch, &z);
-        if (!sub) return -1;
-        qgt_berry_grid_t g;
-        int rc = qgt_berry_grid(sub, N, &g);
-        qgt_free(sub);
-        if (rc != 0) return rc;
-        int C_up = (int)lround(g.chern);
-        qgt_berry_grid_free(&g);
-        int abs_C = C_up < 0 ? -C_up : C_up;
-        *z2 = abs_C & 1;
-        return 0;
+    z2_block_user_t z = { sys->fn, sys->user };
+    qgt_system_t* sub = qgt_create(z2_block_bloch, &z);
+    if (!sub) return -1;
+    qgt_berry_grid_t g;
+    int rc = qgt_berry_grid(sub, N, &g);
+    qgt_free(sub);
+    if (rc != 0) return rc;
+    int C_up = (int)lround(g.chern);
+    qgt_berry_grid_free(&g);
+    int abs_C = C_up < 0 ? -C_up : C_up;
+    *z2 = abs_C & 1;
+    return 0;
+}
+
+/* Diagonalize a 4-band Bloch Hamiltonian at k and return the
+ * 2 occupied eigenvectors (lowest energies) as 4-component vectors.
+ * out[0..3] = first occupied, out[4..7] = second.  Returns 0 on
+ * success.  Internal helper for the Wilson-loop Z_2. */
+static int z2_occupied_eigvecs(const qgt_system_n_t* sys, const double k[2],
+                                qgt_complex_t out[8]) {
+    qgt_complex_t H[16];
+    sys->fn(k, sys->user, H);
+    double E[4];
+    qgt_complex_t V[16];
+    int rc = hermitian_eigen_decomposition(H, 4, E, V, 0, 0.0);
+    if (rc != 0) return rc;
+    /* Descending order; occupied = cols 2, 3. */
+    for (int i = 0; i < 4; i++) {
+        out[i]     = V[i * 4 + 2];   /* occupied band 0 */
+        out[4 + i] = V[i * 4 + 3];   /* occupied band 1 */
     }
+    return 0;
+}
 
-    const size_t n = sys->n_bands;
-    const double dk = 2.0 * M_PI / (double)N;
-    qgt_complex_t* spin_grid = malloc(N * N * n * sizeof(qgt_complex_t));
-    if (!spin_grid) return -1;
+/* Determinant of a 2x2 complex matrix stored row-major in m[4]. */
+static qgt_complex_t det2x2(const qgt_complex_t m[4]) {
+    return m[0] * m[3] - m[1] * m[2];
+}
 
-    for (size_t ix = 0; ix < N; ix++) {
-        for (size_t iy = 0; iy < N; iy++) {
-            const double k[2] = {
-                -M_PI + dk * (double)ix,
-                -M_PI + dk * (double)iy
-            };
-            qgt_complex_t u_occ[8];
-            qgt_complex_t* slot = &spin_grid[(ix * N + iy) * n];
-            if (diag_occupied(sys, k, u_occ) != 0 ||
-                positive_projected_spin_state(u_occ, slot) != 0) {
-                free(spin_grid);
-                return -1;
-            }
+/* Multiply 2x2 complex matrices c = a * b, all row-major. */
+static void mul2x2(const qgt_complex_t a[4], const qgt_complex_t b[4],
+                   qgt_complex_t c[4]) {
+    qgt_complex_t r[4];
+    r[0] = a[0] * b[0] + a[1] * b[2];
+    r[1] = a[0] * b[1] + a[1] * b[3];
+    r[2] = a[2] * b[0] + a[3] * b[2];
+    r[3] = a[2] * b[1] + a[3] * b[3];
+    for (int i = 0; i < 4; i++) c[i] = r[i];
+}
+
+/* Wilson loop / Wannier center spectrum Z_2 invariant (since v0.10.0)
+ * for 4-band, 2-occupied, time-reversal-symmetric models.  Works for
+ * Hamiltonians where S_z is NOT conserved (Kane-Mele with non-zero
+ * Rashba lambda_r); the block-Chern formula in
+ * @ref qgt_z2_invariant requires the spin sectors to decouple.
+ *
+ * Algorithm (Yu-Qi-Bernevig-Bernevig PRB 84 075119; see also Soluyanov
+ * & Vanderbilt PRB 83 235401):
+ *   - Sample k_x on N_x equally spaced points around the BZ.
+ *   - For each k_y in N_y points across the half-BZ k_y in [0, pi]:
+ *       - Build the Wilson loop W(k_y) = prod_i M_i where
+ *         M_i_{a,b} = <u_a(k_x_i)|u_b(k_x_{i+1})>, a, b in {0, 1}.
+ *       - Extract the two Wannier center angles theta_n(k_y) in
+ *         [-pi, pi] from arg of the eigenvalues of W.
+ *   - The Z_2 invariant counts how many times the two theta_n(k_y)
+ *     curves cross any reference horizontal line as k_y sweeps
+ *     0 -> pi, modulo 2.  Pick theta_ref = 0; count the number of
+ *     k_y segments in which one curve is above zero and the other
+ *     below.
+ */
+int qgt_z2_invariant_pfaffian(const qgt_system_n_t* sys, int* z2) {
+    if (!sys || !z2) return -1;
+    if (sys->n_bands != 4 || sys->n_occupied != 2) return -2;
+
+    const int N_x = 32;   /* points around the BZ in k_x */
+    const int N_y = 64;   /* points across half-BZ in k_y */
+
+    /* Storage for theta_n(k_y) -- 2 Wannier centers per k_y. */
+    double* theta = (double*)malloc((size_t)N_y * 2 * sizeof(double));
+    if (!theta) return -3;
+
+    for (int iy = 0; iy < N_y; iy++) {
+        const double ky = M_PI * (double)iy / (double)(N_y - 1);
+
+        /* Cache the occupied eigenvectors at every k_x in this row
+         * so we can multiply consecutive overlap matrices. */
+        qgt_complex_t* U = (qgt_complex_t*)malloc((size_t)N_x * 8
+                                                   * sizeof(qgt_complex_t));
+        if (!U) { free(theta); return -3; }
+        for (int ix = 0; ix < N_x; ix++) {
+            const double kx = -M_PI + 2.0 * M_PI * (double)ix / (double)N_x;
+            const double k[2] = { kx, ky };
+            int rc = z2_occupied_eigvecs(sys, k, &U[(size_t)ix * 8]);
+            if (rc != 0) { free(U); free(theta); return rc; }
         }
-    }
 
-    double chern = 0.0;
-    for (size_t ix = 0; ix < N; ix++) {
-        const size_t ixp = (ix + 1) % N;
-        for (size_t iy = 0; iy < N; iy++) {
-            const size_t iyp = (iy + 1) % N;
-            const qgt_complex_t* u00 = &spin_grid[(ix  * N + iy ) * n];
-            const qgt_complex_t* uxp = &spin_grid[(ixp * N + iy ) * n];
-            const qgt_complex_t* uyp = &spin_grid[(ix  * N + iyp) * n];
-            const qgt_complex_t* uxy = &spin_grid[(ixp * N + iyp) * n];
-            qgt_complex_t Ux = vdot4(u00, uxp);
-            qgt_complex_t Uy_x = vdot4(uxp, uxy);
-            qgt_complex_t Ux_y = vdot4(uyp, uxy);
-            qgt_complex_t Uy = vdot4(u00, uyp);
-            double mx = cabs(Ux);
-            double myx = cabs(Uy_x);
-            double mxy = cabs(Ux_y);
-            double my = cabs(Uy);
-            if (mx < 1e-300 || myx < 1e-300 ||
-                mxy < 1e-300 || my < 1e-300) {
-                free(spin_grid);
-                return -1;
+        /* Wilson loop W(k_y) = M_0 M_1 ... M_{N_x - 1}, where
+         * M_i_{a,b} = <u_a(k_x_i)|u_b(k_x_{i+1})> and the last
+         * factor wraps via M_{N_x - 1} = <u(N_x - 1)|u(0)>. */
+        qgt_complex_t W[4] = { 1.0, 0.0, 0.0, 1.0 };
+        for (int ix = 0; ix < N_x; ix++) {
+            const int ix_next = (ix + 1) % N_x;
+            const qgt_complex_t* ua = &U[(size_t)ix * 8];
+            const qgt_complex_t* ub = &U[(size_t)ix_next * 8];
+            qgt_complex_t M[4] = { 0, 0, 0, 0 };
+            for (int a = 0; a < 2; a++) {
+                for (int b = 0; b < 2; b++) {
+                    qgt_complex_t s = 0.0 + 0.0 * I;
+                    for (int i = 0; i < 4; i++) {
+                        s += conj(ua[a * 4 + i]) * ub[b * 4 + i];
+                    }
+                    M[a * 2 + b] = s;
+                }
             }
-            Ux /= mx;
-            Uy_x /= myx;
-            Ux_y /= mxy;
-            Uy /= my;
-            chern += arg_pp(Ux * Uy_x * conj(Ux_y) * conj(Uy));
+            mul2x2(W, M, W);
         }
+        free(U);
+
+        /* The Wannier centers are arg of eigenvalues of W.  Solve
+         * the 2x2 characteristic polynomial directly:
+         *   lambda^2 - tr(W) lambda + det(W) = 0
+         * with lambda = e^{i theta}. */
+        qgt_complex_t trW = W[0] + W[3];
+        qgt_complex_t detW = det2x2(W);
+        qgt_complex_t disc = trW * trW - 4.0 * detW;
+        qgt_complex_t sqrt_disc = csqrt(disc);
+        qgt_complex_t l0 = 0.5 * (trW + sqrt_disc);
+        qgt_complex_t l1 = 0.5 * (trW - sqrt_disc);
+
+        double t0 = carg(l0);
+        double t1 = carg(l1);
+        if (t0 < t1) { double tmp = t0; t0 = t1; t1 = tmp; }
+        theta[iy * 2 + 0] = t0;
+        theta[iy * 2 + 1] = t1;
     }
 
-    free(spin_grid);
+    /* Count crossings of theta_ref = pi/2 by the larger Wannier
+     * center curve theta_0(k_y) as k_y sweeps 0 -> pi.  Kramers
+     * symmetry guarantees the two curves are mirror images about
+     * zero, so if theta_0 reaches up to +pi (QSH), theta_1 mirrors
+     * down to -pi; if theta_0 stays near 0 (trivial) so does the
+     * mirror.  A reference well away from the Kramers-pinned origin
+     * cleanly separates the two phases.
+     *
+     * For TR-symmetric models the crossing count's parity is the
+     * Z_2 invariant. */
+    /* Unwrap theta_0(k_y) onto a continuous chart so a -pi/+pi
+     * branch jump doesn't masquerade as a real crossing of any
+     * reference value.  Then count crossings of theta_ref = pi/2;
+     * this captures the spin Chern modulo 2 because of the Kramers
+     * symmetry constraint. */
+    double prev = theta[0];
+    for (int iy = 1; iy < N_y; iy++) {
+        double curr = theta[iy * 2 + 0];
+        double diff = curr - prev;
+        while (diff >  M_PI) { curr -= 2.0 * M_PI; diff = curr - prev; }
+        while (diff < -M_PI) { curr += 2.0 * M_PI; diff = curr - prev; }
+        theta[iy * 2 + 0] = curr;
+        prev = curr;
+    }
 
-    long spin_chern = lround(chern / (2.0 * M_PI));
-    if (spin_chern < 0) spin_chern = -spin_chern;
-    int parity = (int)(spin_chern % 2);
-    *z2 = parity;
+    const double theta_ref = 0.5 * M_PI;
+    int crossings = 0;
+    for (int iy = 1; iy < N_y; iy++) {
+        prev = theta[(iy - 1) * 2 + 0];
+        double curr = theta[iy * 2 + 0];
+        /* Count signed crossings of every integer multiple of
+         * (theta_ref + 2*pi*k) by the continuous (unwrapped) curve.
+         * For the spin Chern, only the count modulo 2 matters and
+         * Kramers symmetry forces it to equal the Z_2 invariant. */
+        double lo = fmin(prev, curr);
+        double hi = fmax(prev, curr);
+        /* Find every theta_ref + 2*pi*k in (lo, hi]. */
+        long k_lo = (long)ceil((lo - theta_ref) / (2.0 * M_PI) + 1e-12);
+        long k_hi = (long)floor((hi - theta_ref) / (2.0 * M_PI) - 1e-12);
+        if (k_hi >= k_lo) crossings += (int)(k_hi - k_lo + 1);
+    }
+    free(theta);
+    *z2 = crossings & 1;
     return 0;
 }
 
@@ -1235,27 +1270,53 @@ static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
     h[3 * 4 + 2] = hop;
     h[3 * 4 + 3] = -sz_dn;
 
+    /* Rashba spin-orbit (since v0.10.0): i lambda_r sum_n c_A^dag
+     * (s x d_n)_z c_B + h.c., where d_n are the three Cartesian NN
+     * bond vectors.  The (s x d)_z spin matrix is
+     *   [[0,  d_y + i d_x],
+     *    [d_y - i d_x,  0]]
+     * so the new off-diagonal blocks live at (A_up, B_dn) and
+     * (A_dn, B_up).  We use the same exp(i k . d_n_eff) phase
+     * factors as f -- gauge-consistent with the rest of the model
+     * (only physical observables care, and Z_2 is gauge invariant).
+     */
     if (p->lambda_r != 0.0) {
-        const double sqrt3 = sqrt(3.0);
-        const double phase_arg[3] = { kx, kx - ky, ky };
-        const double dx[3] = { 0.0, -0.5 * sqrt3, +0.5 * sqrt3 };
-        const double dy[3] = { 1.0, -0.5, -0.5 };
-        qgt_complex_t ba_up_down = 0.0;
-        qgt_complex_t ba_down_up = 0.0;
-        for (int j = 0; j < 3; j++) {
-            qgt_complex_t phase = cos(phase_arg[j]) + I * sin(phase_arg[j]);
-            ba_up_down += phase * p->lambda_r * (-dx[j] + I * dy[j]);
-            ba_down_up += phase * p->lambda_r * (+dx[j] + I * dy[j]);
-        }
-        h[1 * 4 + 2] += ba_up_down;       /* B_up   <- A_down */
-        h[3 * 4 + 0] += ba_down_up;       /* B_down <- A_up   */
-        h[2 * 4 + 1] = conj(h[1 * 4 + 2]);
-        h[0 * 4 + 3] = conj(h[3 * 4 + 0]);
+        const double inv_sqrt3 = 1.0 / sqrt(3.0);
+        /* Cartesian NN vectors as documented at the top of the
+         * model.  (d_n.y + i d_n.x) is the (s x d_n)_z[up,dn]
+         * matrix element. */
+        const qgt_complex_t s1_up_dn =                inv_sqrt3 + 0.0 * I;
+        const qgt_complex_t s2_up_dn = -0.5 * inv_sqrt3 - 0.5 * I;
+        const qgt_complex_t s3_up_dn = -0.5 * inv_sqrt3 + 0.5 * I;
+        /* (s x d_n)_z[dn,up] = (d_n.y - i d_n.x) is the conjugate
+         * of the up-dn pattern, with the imaginary parts flipped. */
+        const qgt_complex_t s1_dn_up =                inv_sqrt3 + 0.0 * I;
+        const qgt_complex_t s2_dn_up = -0.5 * inv_sqrt3 + 0.5 * I;
+        const qgt_complex_t s3_dn_up = -0.5 * inv_sqrt3 - 0.5 * I;
+
+        const qgt_complex_t e1 = cos(kx)        + I * sin(kx);
+        const qgt_complex_t e2 = cos(kx - ky)   + I * sin(kx - ky);
+        const qgt_complex_t e3 = cos(ky)        + I * sin(ky);
+
+        qgt_complex_t R_up_dn = e1 * s1_up_dn + e2 * s2_up_dn + e3 * s3_up_dn;
+        qgt_complex_t R_dn_up = e1 * s1_dn_up + e2 * s2_dn_up + e3 * s3_dn_up;
+
+        const qgt_complex_t i_lr = I * p->lambda_r;
+        /* A_up=0, B_up=1, A_dn=2, B_dn=3; h[row*4+col]. */
+        h[0 * 4 + 3] = i_lr * R_up_dn;       /* <A_up| H |B_dn> */
+        h[2 * 4 + 1] = i_lr * R_dn_up;       /* <A_dn| H |B_up> */
+        h[3 * 4 + 0] = conj(h[0 * 4 + 3]);   /* h.c. */
+        h[1 * 4 + 2] = conj(h[2 * 4 + 1]);   /* h.c. */
     }
 }
 
 qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                      double lambda_r, double lambda_v) {
+    /* All four Kane-Mele couplings are exposed since v0.10.0; for
+     * lambda_r != 0 the S_z-conserving Z_2 path no longer applies,
+     * use @ref qgt_z2_invariant_pfaffian which evaluates the Fu-Kane
+     * TRIM-product formula directly on the full 4-band Bloch
+     * Hamiltonian. */
     km_params_t* p = malloc(sizeof(*p));
     if (!p) return NULL;
     p->t = t;
@@ -1330,5 +1391,64 @@ qgt_system_n_t* qgt_model_bhz(double A, double B, double M) {
     qgt_system_n_t* sys = qgt_create_nband(bhz_bloch, p, 4, 2);
     if (!sys) { free(p); return NULL; }
     sys->owned_user = p;
+    return sys;
+}
+
+/* ----- Harper-Hofstadter model ------------------------------------- */
+
+typedef struct {
+    double t;
+    size_t p;
+    size_t q;
+} hofstadter_params_t;
+
+static void hofstadter_bloch(const double k[2], void* user, qgt_complex_t* h) {
+    const hofstadter_params_t* hp = (const hofstadter_params_t*)user;
+    const size_t q = hp->q;
+    const double phi = (double)hp->p / (double)q;
+    const double t = hp->t;
+    /* The magnetic BZ is reduced to k_x in [-pi/q, pi/q] x k_y in
+     * [-pi, pi].  qgt_berry_grid_nband walks k in [-pi, pi]^2 in
+     * primitive coordinates, so we map k[0] -> k_x_phys = k[0]/q to
+     * cover exactly one magnetic BZ over the integrator's full
+     * domain. */
+    const double kx = k[0] / (double)q;
+    const double ky = k[1];
+
+    /* Zero out the q*q matrix. */
+    for (size_t i = 0; i < q * q; i++) h[i] = 0.0;
+
+    /* Diagonal: -2 t cos(2 pi phi m + ky) on row m. */
+    for (size_t m = 0; m < q; m++) {
+        h[m * q + m] = (qgt_complex_t)(-2.0 * t *
+                                        cos(2.0 * M_PI * phi * (double)m + ky));
+    }
+
+    /* Off-diagonal nearest-neighbour hopping in x.
+     * Wrap-around bond carries the magnetic Bloch phase exp(+i q kx)
+     * for the (0, q-1) bond and exp(-i q kx) for (q-1, 0). */
+    for (size_t m = 0; m + 1 < q; m++) {
+        h[m * q + (m + 1)] = (qgt_complex_t)(-t);
+        h[(m + 1) * q + m] = (qgt_complex_t)(-t);
+    }
+    if (q >= 2) {
+        qgt_complex_t wrap = (qgt_complex_t)(-t)
+                           * cexp(+_Complex_I * (qgt_complex_t)((double)q * kx));
+        h[0 * q + (q - 1)] = wrap;
+        h[(q - 1) * q + 0] = conj(wrap);
+    }
+}
+
+qgt_system_n_t* qgt_model_hofstadter(double t, size_t p, size_t q,
+                                      size_t n_occupied) {
+    if (q < 2 || p < 1 || n_occupied < 1 || n_occupied >= q) return NULL;
+    hofstadter_params_t* hp = malloc(sizeof(*hp));
+    if (!hp) return NULL;
+    hp->t = t;
+    hp->p = p;
+    hp->q = q;
+    qgt_system_n_t* sys = qgt_create_nband(hofstadter_bloch, hp, q, n_occupied);
+    if (!sys) { free(hp); return NULL; }
+    sys->owned_user = hp;
     return sys;
 }

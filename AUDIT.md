@@ -212,10 +212,21 @@ The honest gap list, in one breath:
 - **Fifteen distinct error enums** across the tree.
 - **Version split:** C core + Rust are `0.2.0-dev`; JS + Python are
   still `0.1.2`.
+  (*Resolved in v0.2.x: all 10 binding manifests and VERSION.txt are
+  now kept in lockstep by the `bindings_version_sync` ctest.  Current
+  shipping version is 0.5.10.*)
 - **Stable ABI exposes exactly three symbols** (`moonlab_abi_version`,
   `moonlab_qrng_bytes`, `moonlab_qwz_chern`). QGTL / SbNN have no
   first-class path to VQE, DMRG, TDVP, topological invariants beyond
   Chern-QWZ, or tensor-network primitives.
+  (*Resolved over v0.2.1 - v0.5.x: the lean export surface in
+  `moonlab_export_lean.c` now covers DMRG (TFIM + Heisenberg
+  energy), CA-MPS (var-D + gauge warmstart), Z2 LGT (Pauli sum +
+  Gauss law), full topology (Kane-Mele / BHZ / Kitaev / Hofstadter
+  / SSH / QWZ via 3 integrators), and the `moonlab_status_string`
+  diagnostic.  TDVP gets its own opaque-handle ABI in
+  `moonlab_tdvp_export.c`.  See exports.txt for the WASM-visible
+  subset.*)
 
 The C code is mostly correct. The platform around it is not.
 

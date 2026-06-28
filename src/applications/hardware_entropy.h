@@ -245,14 +245,30 @@ ssize_t entropy_dev_urandom(entropy_ctx_t *ctx, uint8_t *buffer, size_t size);
 // ============================================================================
 
 /**
- * @brief Get entropy from CPU timing jitter
- * 
- * Measures timing variations in CPU execution to extract entropy.
- * Based on CPU timing uncertainty principle.
- * 
- * @param buffer Output buffer
- * @param size Number of bytes to generate
- * @return ENTROPY_SUCCESS or error code
+ * @brief Fallback entropy source: CPU timing-jitter sampler.
+ *
+ * IMPORTANT: This is a *fallback* path, intended only for systems
+ * where every other hardware/OS entropy source has been exhausted
+ * (RDRAND/RDSEED/ARM RNG/getrandom/dev_urandom all unavailable or
+ * failing).  CPU timing jitter on a quiescent system has poor
+ * documented entropy density and should not be used as a primary
+ * source.  The runtime entropy stack only invokes this routine when
+ * stronger sources fail; callers must not call it directly as a
+ * substitute for `entropy_pool_get_bytes`.
+ *
+ * Method: measures fine-grained timing variations in a controlled
+ * CPU loop, von-Neumann debiases the resulting bits, and folds
+ * cycle counts into the output stream.  Reference: M. Hamburg,
+ * P. Kocher, M. E. Marson, "Analysis of Intel's Ivy Bridge digital
+ * random number generator", 2012; J. Mueller, "CPU Time Jitter
+ * Based Non-Physical True Random Number Generator" (LRNG, 2018).
+ *
+ * @param buffer Output buffer.
+ * @param size   Number of bytes to generate.
+ * @return ENTROPY_SUCCESS, or an error code if the timer is
+ *         unavailable or the jitter measurements have insufficient
+ *         entropy (the routine self-tests via SP 800-90B-style
+ *         estimators before returning).
  */
 entropy_error_t entropy_jitter(uint8_t *buffer, size_t size);
 

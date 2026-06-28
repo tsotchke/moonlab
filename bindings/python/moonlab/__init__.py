@@ -24,30 +24,14 @@ Quick Start:
     >>> result = state.measure(0)  # Measure qubit 0
 """
 
-__version__ = "0.2.1"
+__version__ = "0.4.0"
 __author__ = "tsotchke"
 
 from .core import (
     QuantumState,
     Gates,
     Measurement,
-    QuantumError,
-    create_bell_state,
-    create_ghz_state,
-    statevector_to_numpy,
-    numpy_to_statevector,
-)
-from .ml import (
-    QuantumFeatureMap,
-    AngleEncoding,
-    AmplitudeEncoding,
-    IQPEncoding,
-    QuantumKernel,
-    QSVM,
-    VariationalCircuit,
-    QuantumPCA,
-    quantum_kernel_matrix,
-    train_qsvm,
+    QuantumError
 )
 
 # Algorithm wrappers. These historically failed to load because of an
@@ -61,12 +45,6 @@ try:
         QAOA,
         Grover,
         BellTest,
-        run_vqe_h2,
-        run_vqe_lih,
-        run_vqe_h2o,
-        run_qaoa_maxcut,
-        run_grover,
-        run_bell_test,
     )
     _ALGO_AVAILABLE = True
 except (ImportError, AttributeError):
@@ -77,9 +55,39 @@ from .clifford import Clifford
 from .topology import (
     ChernKPM, qwz_chern, berry_grid_qwz,
     berry_grid_haldane, ssh_winding,
+    # v0.3 additions
+    chern_qwz_proj, chern_qwz_parallel_transport,
+    kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
+    # v0.3.2 curvature-grid variants
+    berry_grid_qwz_proj, berry_grid_qwz_pt,
 )
 from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
 from . import crypto
+
+# Matrix-product density operator noise simulator (since v0.3.0).
+# Optional import: a stripped libquantumsim build without these
+# entry points is still a usable Moonlab.
+try:
+    from .mpdo import Mpdo
+    _MPDO_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _MPDO_AVAILABLE = False
+
+# Adaptive-bond time-dependent variational principle (since v0.4).
+# Same optional-import policy as MPDO.
+try:
+    from . import tdvp as _tdvp_module
+    tdvp = _tdvp_module
+    _TDVP_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _TDVP_AVAILABLE = False
+
+# Single-qubit gate-fusion DAG (since v0.4.4).
+try:
+    from .fusion import FusedCircuit, FuseStats
+    _FUSION_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _FUSION_AVAILABLE = False
 
 # Clifford-Assisted MPS + var-D + gauge-aware warmstart + Z2 LGT.
 # Optional import: a stripped libquantumsim build without these
@@ -109,25 +117,51 @@ try:
 except (ImportError, AttributeError, OSError):
     _CAPEPS_AVAILABLE = False
 
+try:
+    from .surface_code import SurfaceCode
+    _SURFACE_CODE_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _SURFACE_CODE_AVAILABLE = False
+
+try:
+    from .libirrep_qec import (
+        LibirrepQecCode,
+        LibirrepError,
+        LibirrepNotBuiltError,
+        is_available as libirrep_is_available,
+    )
+    _LIBIRREP_QEC_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _LIBIRREP_QEC_AVAILABLE = False
+
+try:
+    from .qgtl import QgtlCircuit, QgtlResults, QgtlError, GateType as QgtlGateType
+    _QGTL_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _QGTL_AVAILABLE = False
+
+try:
+    from .scheduler import Job, JobResults, SchedulerError
+    _SCHEDULER_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _SCHEDULER_AVAILABLE = False
+
+try:
+    from .decoder import (
+        DecoderSlot, DecoderError, DecoderNotBuiltError,
+        decode as decoder_decode,
+        slot_available as decoder_slot_available,
+        slot_name as decoder_slot_name,
+    )
+    _DECODER_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _DECODER_AVAILABLE = False
+
 __all__ = [
     'QuantumState',
     'Gates',
     'Measurement',
     'QuantumError',
-    'create_bell_state',
-    'create_ghz_state',
-    'statevector_to_numpy',
-    'numpy_to_statevector',
-    'QuantumFeatureMap',
-    'AngleEncoding',
-    'AmplitudeEncoding',
-    'IQPEncoding',
-    'QuantumKernel',
-    'QSVM',
-    'VariationalCircuit',
-    'QuantumPCA',
-    'quantum_kernel_matrix',
-    'train_qsvm',
     'quantum_volume',
     'QuantumVolumeResult',
     'Clifford',
@@ -136,6 +170,14 @@ __all__ = [
     'berry_grid_qwz',
     'berry_grid_haldane',
     'ssh_winding',
+    'chern_qwz_proj',
+    'chern_qwz_parallel_transport',
+    'kane_mele_z2',
+    'bhz_z2',
+    'kitaev_chain_z2',
+    'hofstadter_chern',
+    'berry_grid_qwz_proj',
+    'berry_grid_qwz_pt',
     'DiffCircuit',
     'PauliTerm',
     'OBS_Z',
@@ -143,15 +185,12 @@ __all__ = [
     'OBS_Y',
 ]
 if _ALGO_AVAILABLE:
-    __all__ += [
-        'VQE',
-        'QAOA',
-        'Grover',
-        'BellTest',
-        'run_vqe_h2',
-        'run_vqe_lih',
-        'run_vqe_h2o',
-        'run_qaoa_maxcut',
-        'run_grover',
-        'run_bell_test',
-    ]
+    __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
+if _MPDO_AVAILABLE:
+    __all__ += ['Mpdo']
+if _TDVP_AVAILABLE:
+    __all__ += ['tdvp']
+if _FUSION_AVAILABLE:
+    __all__ += ['FusedCircuit', 'FuseStats']
+if _SURFACE_CODE_AVAILABLE:
+    __all__ += ['SurfaceCode']

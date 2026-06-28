@@ -1,0 +1,295 @@
+/**
+ * @file  test_control_plane_tenant.c
+ * @brief End-to-end smoke for the v1.0.3 tenant-identity pipeline.
+ *
+ * Proves the whole loop works:
+ *
+ *   client submits   AUTH <tenant>:<hmac>\n CIRCUIT <n>\n<body>
+ *        |
+ *        v
+ *   control plane parses tenant_id, validates HMAC
+ *        |
+ *        v
+ *   control plane sets scheduler thread-local request context
+ *        |
+ *        v
+ *   scheduler runs the job, fires the completion hook
+ *        |
+ *        v
+ *   hook reads moonlab_scheduler_current_tenant_id() and records it
+ *        |
+ *        v
+ *   test asserts the captured tenant_id matches what the client sent.
+ *
+ * Without this end-to-end test the multi-tenant pipeline could
+ * silently lose the tenant_id at any layer; the smoke is the
+ * canonical premium-tier demonstration that a customer-submitted
+ * job actually reaches a billing/audit overlay attributed to the
+ * right account.
+ */
+
+#include "../../src/control/control_plane.h"
+#include "../../src/distributed/scheduler.h"
+#include "../../src/applications/moonlab_qgtl_backend.h"
+
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Admission-hook observer shared with the test function defined below. */
+typedef struct { int n_calls; char last_tenant[64]; } admission_obs_t;
+
+static int admission_hook_refuse_acme(const char *tid, const char *verb,
+                                      int n_qubits, int n_shots,
+                                      void *ctx_p)
+{
+    (void)verb; (void)n_qubits; (void)n_shots;
+    admission_obs_t *o = (admission_obs_t *)ctx_p;
+    o->n_calls++;
+    snprintf(o->last_tenant, sizeof(o->last_tenant),
+             "%s", tid ? tid : "");
+    /* Reject acme-corp, allow everything else (including no tenant). */
+    if (tid && strcmp(tid, "acme-corp") == 0) {
+        return MOONLAB_CONTROL_REJECTED;
+    }
+    return 0;
+}
+
+static int failures = 0;
+#define CHECK(cond, fmt, ...) do {                              \
+    if (!(cond)) {                                              \
+        fprintf(stderr, "  FAIL  " fmt "\n", ##__VA_ARGS__);    \
+        failures++;                                             \
+    } else {                                                    \
+        fprintf(stdout, "  OK    " fmt "\n", ##__VA_ARGS__);    \
+    }                                                           \
+} while (0)
+
+/* Captures every hook fire so we can replay the sequence in the
+ * asserts.  64 fires is well past anything this test generates. */
+typedef struct {
+    int  n_fires;
+    char tenants[64][64];
+    int  shot_counts[64];
+} hook_record_t;
+
+static void recording_hook(const moonlab_job_t          *job,
+                           const moonlab_job_results_t  *out,
+                           const char                   *backend_name,
+                           void                         *ctx)
+{
+    (void)job; (void)backend_name;
+    hook_record_t *r = (hook_record_t *)ctx;
+    if (r->n_fires >= (int)(sizeof(r->tenants) / sizeof(r->tenants[0]))) return;
+    const char *tid = moonlab_scheduler_current_tenant_id();
+    snprintf(r->tenants[r->n_fires], sizeof(r->tenants[0]),
+             "%s", tid ? tid : "");
+    r->shot_counts[r->n_fires] = out ? out->total_shots : 0;
+    r->n_fires++;
+}
+
+typedef struct {
+    moonlab_control_server_t *server;
+    int                       rc;
+} run_args_t;
+
+static void *run_thread(void *arg)
+{
+    run_args_t *a = (run_args_t *)arg;
+    a->rc = moonlab_control_server_run(a->server, 64);
+    return NULL;
+}
+
+static char *serialize_bell(void)
+{
+    moonlab_qgtl_circuit_t *c = moonlab_qgtl_circuit_create(2);
+    moonlab_qgtl_add_gate(c, MOONLAB_QGTL_GATE_H,    0, 0, NULL);
+    moonlab_qgtl_add_gate(c, MOONLAB_QGTL_GATE_CNOT, 1, 0, NULL);
+    size_t needed = 0;
+    moonlab_qgtl_circuit_serialize(c, NULL, 0, &needed);
+    char *buf = (char *)malloc(needed + 1);
+    moonlab_qgtl_circuit_serialize(c, buf, needed + 1, NULL);
+    moonlab_qgtl_circuit_free(c);
+    return buf;
+}
+
+int main(void)
+{
+    fprintf(stdout, "=== test_control_plane_tenant: end-to-end smoke ===\n\n");
+
+    const uint8_t shared_secret[] = "moonlab-shared-2026";
+    char *text = serialize_bell();
+    hook_record_t hook = {0};
+    moonlab_scheduler_set_completion_hook(recording_hook, &hook);
+
+    moonlab_control_server_t *server = NULL;
+    uint16_t port = 0;
+    int rc = moonlab_control_server_open("127.0.0.1", 0, &server, &port);
+    CHECK(rc == 0, "server_open rc=%d", rc);
+    rc = moonlab_control_server_set_secret(server, shared_secret,
+                                           sizeof(shared_secret) - 1);
+    CHECK(rc == 0, "set_secret rc=%d", rc);
+
+    run_args_t ra = { server, 0 };
+    pthread_t  tid;
+    pthread_create(&tid, NULL, run_thread, &ra);
+
+    /* ---- Submit as acme-corp ---- */
+    fprintf(stdout, "--- submit as acme-corp ---\n");
+    double *probs = NULL; size_t num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port,
+        "acme-corp",
+        shared_secret, sizeof(shared_secret) - 1,
+        text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "submit_circuit_auth_tenant(acme-corp) rc=%d num=%zu", rc, num);
+    free(probs);
+
+    /* ---- Submit as beta-startup ---- */
+    fprintf(stdout, "\n--- submit as beta-startup ---\n");
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port,
+        "beta-startup",
+        shared_secret, sizeof(shared_secret) - 1,
+        text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "submit_circuit_auth_tenant(beta-startup) rc=%d num=%zu", rc, num);
+    free(probs);
+
+    /* ---- Submit with no tenant (legacy AUTH form) ---- */
+    fprintf(stdout, "\n--- submit with no tenant (legacy form) ---\n");
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth(
+        "127.0.0.1", port,
+        shared_secret, sizeof(shared_secret) - 1,
+        text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "submit_circuit_auth (legacy) rc=%d num=%zu", rc, num);
+    free(probs);
+
+    /* v1.0.4 metric: verify completion_hook_fires_total actually
+     * increments alongside the python-side hook.n_fires count.
+     * Without this assertion the C-side counter could be silently
+     * stuck at 0 and the existing test_control_plane_metrics
+     * "line is present" check would still pass. */
+    char *cmetrics = NULL;
+    rc = moonlab_control_submit_metrics("127.0.0.1", port, &cmetrics);
+    CHECK(rc == 0 && cmetrics != NULL,
+          "metrics scrape during completion-hook leg rc=%d", rc);
+    if (cmetrics) {
+        const char *cf_prefix =
+            "\nmoonlab_control_completion_hook_fires_total ";
+        const char *p = strstr(cmetrics, cf_prefix);
+        long fires = -1;
+        if (p) sscanf(p + strlen(cf_prefix), "%ld", &fires);
+        CHECK(fires >= 3,
+              "completion_hook_fires_total >= 3 after 3 hook invocations "
+              "(got %ld)", fires);
+        free(cmetrics);
+    }
+
+    moonlab_control_server_shutdown(server);
+    pthread_join(tid, NULL);
+    moonlab_control_server_close(server);
+
+    /* ---- Assert the hook saw the right tenants in the right order ---- */
+    fprintf(stdout, "\n--- hook observations ---\n");
+    CHECK(hook.n_fires == 3, "hook fired 3 times (got %d)", hook.n_fires);
+    if (hook.n_fires >= 3) {
+        CHECK(strcmp(hook.tenants[0], "acme-corp") == 0,
+              "fire #0 tenant = %s (expected acme-corp)", hook.tenants[0]);
+        CHECK(strcmp(hook.tenants[1], "beta-startup") == 0,
+              "fire #1 tenant = %s (expected beta-startup)", hook.tenants[1]);
+        CHECK(hook.tenants[2][0] == '\0',
+              "fire #2 tenant = empty for legacy AUTH (got %s)",
+              hook.tenants[2]);
+    }
+
+    moonlab_scheduler_set_completion_hook(NULL, NULL);
+
+    /* ---- Admission hook: refuse one tenant, allow another ---- */
+    fprintf(stdout, "\n--- admission hook: refuse acme, allow beta ---\n");
+    admission_obs_t aobs = {0};
+
+    rc = moonlab_control_server_open("127.0.0.1", 0, &server, &port);
+    CHECK(rc == 0, "server_open rc=%d", rc);
+    moonlab_control_server_set_secret(server, shared_secret,
+                                      sizeof(shared_secret) - 1);
+    moonlab_control_server_set_admission_hook(
+        server, admission_hook_refuse_acme, &aobs);
+    ra.server = server; ra.rc = 0;
+    pthread_create(&tid, NULL, run_thread, &ra);
+
+    /* acme-corp -> hook refuses with REJECTED. */
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port, "acme-corp",
+        shared_secret, sizeof(shared_secret) - 1, text, 0, &probs, &num);
+    CHECK(rc == MOONLAB_CONTROL_REJECTED,
+          "acme-corp refused by admission hook (rc=%d expected -405)", rc);
+    free(probs);
+
+    /* beta-startup -> hook allows. */
+    probs = NULL; num = 0;
+    rc = moonlab_control_submit_circuit_auth_tenant(
+        "127.0.0.1", port, "beta-startup",
+        shared_secret, sizeof(shared_secret) - 1, text, 0, &probs, &num);
+    CHECK(rc == 0 && num == 4,
+          "beta-startup allowed by admission hook (rc=%d num=%zu)",
+          rc, num);
+    free(probs);
+
+    /* v1.0.3 metrics: scrape before shutdown to prove the two new
+     * counters increment under the admission-hook + completion-hook
+     * flow.  admission_refused_total >= 1 (acme was refused).
+     * completion_hook_fires_total is tested separately via the
+     * completion-hook leg above; we re-check >= 0 here to confirm
+     * the line is present. */
+    char *metrics_body = NULL;
+    rc = moonlab_control_submit_metrics("127.0.0.1", port, &metrics_body);
+    CHECK(rc == 0 && metrics_body != NULL,
+          "metrics scrape after admission flow rc=%d", rc);
+    if (metrics_body) {
+        /* Anchor on '\n' so strstr finds the metric LINE rather than
+         * the matching prefix inside the `# HELP` or `# TYPE` lines. */
+        const char *adm_prefix =
+            "\nmoonlab_control_admission_refused_total ";
+        const char *p = strstr(metrics_body, adm_prefix);
+        CHECK(p != NULL,
+              "admission_refused_total counter present in METRICS body");
+        long adm = -1;
+        if (p) {
+            sscanf(p + strlen(adm_prefix), "%ld", &adm);
+            CHECK(adm >= 1, "admission_refused_total >= 1 (got %ld)", adm);
+        }
+        /* Partition invariant: an admission refusal should bump
+         * admission_refused_total but NOT rejected_total.  If both
+         * counters bumped, alerts like rate(rejected_total) >
+         * threshold would false-fire on legitimate over-quota
+         * traffic.  rejected_total is reserved for transport / auth
+         * / parser refusals. */
+        const char *rej_prefix = "\nmoonlab_control_rejected_total ";
+        const char *q = strstr(metrics_body, rej_prefix);
+        long rej = -1;
+        if (q) sscanf(q + strlen(rej_prefix), "%ld", &rej);
+        CHECK(rej == 0,
+              "rejected_total = 0 (admission refusal doesn't double-count, got %ld)",
+              rej);
+        free(metrics_body);
+    }
+
+    moonlab_control_server_shutdown(server);
+    pthread_join(tid, NULL);
+    moonlab_control_server_close(server);
+
+    CHECK(aobs.n_calls == 2, "admission hook fired twice (got %d)", aobs.n_calls);
+    CHECK(strcmp(aobs.last_tenant, "beta-startup") == 0,
+          "hook last saw beta-startup (got %s)", aobs.last_tenant);
+
+    free(text);
+    fprintf(stdout, "\n=== %d failure(s) ===\n", failures);
+    return failures ? 1 : 0;
+}

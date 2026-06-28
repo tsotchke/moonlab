@@ -1,0 +1,12 @@
+{
+  "schema": "moonlab/decoder_shootout/v0.7.8",
+  "distance": 7,
+  "trials_per_p": 1000,
+  "code": "toric_7x7",
+  "p_values": [0.0100, 0.0200, 0.0400, 0.0600, 0.0800, 0.1000],
+  "decoders": {
+    "greedy": [0.002000, 0.013000, 0.072000, 0.122000, 0.238000, 0.296000],
+    "mwpm_exact": [0.002000, 0.012000, 0.067000, 0.106000, 0.214000, 0.268000],
+    "pymatching": [null, null, null, null, null, null]
+  }
+}

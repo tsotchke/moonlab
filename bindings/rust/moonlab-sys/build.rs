@@ -14,103 +14,33 @@ fn openmp_link_library_exists(dir: &Path) -> bool {
         || dir.join("libomp.lib").exists()
 }
 
-const CARGO_LINK_SEARCH_PREFIX: &str = concat!("cargo:rustc-link-search=", "nat", "ive=");
-const CARGO_LINK_APPLE_GRAPHICS_FRAMEWORK: &str =
-    concat!("cargo:rustc-link-lib=framework=", "Met", "al");
-
-fn emit_link_search_dir(dir: impl AsRef<Path>) {
-    println!("{}{}", CARGO_LINK_SEARCH_PREFIX, dir.as_ref().display());
-}
-
 fn emit_openmp_search_dir_if_present(dir: impl AsRef<Path>) -> bool {
     let dir = dir.as_ref();
     if openmp_link_library_exists(dir) {
-        emit_link_search_dir(dir);
+        println!("cargo:rustc-link-search=native={}", dir.display());
         true
     } else {
         false
     }
 }
 
-fn quantumsim_library_exists(dir: &Path) -> bool {
-    [
-        "libquantumsim.a",
-        "libquantumsim.dylib",
-        "libquantumsim.so",
-        "quantumsim.dll",
-        "quantumsim.lib",
-    ]
-    .iter()
-    .any(|name| dir.join(name).exists())
-}
-
-fn emit_quantumsim_rerun_paths(project_root: &Path) {
-    for candidate in [
-        project_root.join("build-qgtl-vendor"),
-        project_root.join("build"),
-        project_root.to_path_buf(),
-    ] {
-        if candidate.exists() {
-            println!("cargo:rerun-if-changed={}", candidate.display());
-        }
-    }
-}
-
-fn default_quantumsim_lib_dir(project_root: &Path) -> PathBuf {
-    for candidate in [
-        project_root.join("build-qgtl-vendor"),
-        project_root.join("build"),
-        project_root.to_path_buf(),
-    ] {
-        if quantumsim_library_exists(&candidate) {
-            return candidate;
-        }
-    }
-
-    project_root.join("build")
-}
-
 fn main() {
     // Get the project root (3 levels up from bindings/rust/moonlab-sys)
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let project_root = PathBuf::from(&manifest_dir)
-        .parent()
-        .unwrap() // rust/
-        .parent()
-        .unwrap() // bindings/
-        .parent()
-        .unwrap() // project root
+        .parent().unwrap()  // rust/
+        .parent().unwrap()  // bindings/
+        .parent().unwrap()  // project root
         .to_path_buf();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!(
-        "cargo:rerun-if-changed={}/src/quantum/state.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/quantum/gates.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/quantum/measurement.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/algorithms/grover.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/algorithms/vqe.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/algorithms/qaoa.h",
-        project_root.display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h",
-        project_root.display()
-    );
+    println!("cargo:rerun-if-changed={}/src/quantum/state.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/quantum/gates.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/quantum/measurement.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/algorithms/grover.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/algorithms/vqe.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/algorithms/qaoa.h", project_root.display());
+    println!("cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h", project_root.display());
 
     // Link against the quantum simulator library. Prefer MOONLAB_LIB_DIR
     // if the build system sets it (e.g. CMake CTest), fall back to the
@@ -124,11 +54,10 @@ fn main() {
     // build-werror) links against the stale path and fails with
     // "library 'quantumsim' not found".
     println!("cargo:rerun-if-env-changed=MOONLAB_LIB_DIR");
-    emit_quantumsim_rerun_paths(&project_root);
     let lib_dir = env::var("MOONLAB_LIB_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| default_quantumsim_lib_dir(&project_root));
-    emit_link_search_dir(&lib_dir);
+        .unwrap_or_else(|_| project_root.join("build"));
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     let static_present = lib_dir.join("libquantumsim.a").exists();
     if static_present {
@@ -150,7 +79,7 @@ fn main() {
     let mut found_openmp_dir = false;
     for var in ["MOONLAB_OMP_DIR", "MOONLAB_OPENMP_LIB_DIR"] {
         if let Ok(dir) = env::var(var) {
-            emit_link_search_dir(PathBuf::from(dir));
+            println!("cargo:rustc-link-search=native={dir}");
             found_openmp_dir = true;
             break;
         }
@@ -197,7 +126,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     {
         println!("cargo:rustc-link-lib=framework=Accelerate");
-        println!("{CARGO_LINK_APPLE_GRAPHICS_FRAMEWORK}");
+        println!("cargo:rustc-link-lib=framework=Metal");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=Security");
     }
@@ -217,15 +146,16 @@ fn main() {
     }
 
     // Create wrapper header that includes all needed headers
-    let wrapper_content = format!(
-        r#"
+    let wrapper_content = format!(r#"
 // Wrapper header for bindgen
 #include "{root}/src/quantum/state.h"
 #include "{root}/src/quantum/gates.h"
 #include "{root}/src/quantum/measurement.h"
 #include "{root}/src/quantum/entanglement.h"
 #include "{root}/src/quantum/noise.h"
+#include "{root}/src/quantum/noise_mpdo.h"
 #include "{root}/src/algorithms/grover.h"
+#include "{root}/src/algorithms/bell_tests.h"
 #include "{root}/src/algorithms/vqe.h"
 #include "{root}/src/algorithms/qaoa.h"
 #include "{root}/src/utils/quantum_entropy.h"
@@ -238,12 +168,21 @@ fn main() {
 #include "{root}/src/algorithms/topology_realspace/chern_marker.h"
 #include "{root}/src/algorithms/quantum_geometry/qgt.h"
 #include "{root}/src/optimization/fusion/fusion.h"
-"#,
-        root = project_root.display()
-    );
+#include "{root}/src/algorithms/tensor_network/tn_state.h"
+#include "{root}/src/algorithms/tensor_network/dmrg.h"
+#include "{root}/src/algorithms/tensor_network/tdvp.h"
+#include "{root}/src/algorithms/tensor_network/ca_mps.h"
+#include "{root}/src/algorithms/tensor_network/ca_peps.h"
+#include "{root}/src/algorithms/topological/topological.h"
+#include "{root}/src/integration/libirrep_bridge.h"
+#include "{root}/src/applications/moonlab_qgtl_backend.h"
+#include "{root}/src/applications/decoder_bench.h"
+#include "{root}/src/applications/vendor_noise_backend.h"
+#include "{root}/src/distributed/scheduler.h"
+#include "{root}/src/control/control_plane.h"
+"#, root = project_root.display());
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let wrapper_path = out_path.join("wrapper.h");
+    let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
     std::fs::write(&wrapper_path, wrapper_content).expect("Failed to write wrapper.h");
 
     // Generate bindings
@@ -330,6 +269,7 @@ fn main() {
         .allowlist_type("vqe_result_t")
         .allowlist_function("vqe_create_h2_hamiltonian")
         .allowlist_function("vqe_create_lih_hamiltonian")
+        .allowlist_function("vqe_create_h2o_hamiltonian")
         .allowlist_function("vqe_create_hardware_efficient_ansatz")
         .allowlist_function("vqe_create_uccsd_ansatz")
         .allowlist_function("vqe_optimizer_create")
@@ -340,6 +280,10 @@ fn main() {
         .allowlist_function("vqe_compute_energy")
         .allowlist_function("vqe_compute_gradient")
         .allowlist_function("vqe_apply_ansatz")
+        .allowlist_function("vqe_exact_ground_state_energy")
+        .allowlist_function("vqe_hartree_to_kcalmol")
+        .allowlist_function("pauli_hamiltonian_create")
+        .allowlist_function("pauli_hamiltonian_add_term")
         .allowlist_function("pauli_hamiltonian_free")
         .allowlist_function("vqe_ansatz_free")
         // QAOA types and functions
@@ -349,6 +293,11 @@ fn main() {
         .allowlist_type("qaoa_result_t")
         .allowlist_type("qaoa_solver_t")
         .allowlist_function("ising_encode_maxcut")
+        .allowlist_function("ising_model_create")
+        .allowlist_function("ising_model_free")
+        .allowlist_function("ising_model_set_coupling")
+        .allowlist_function("ising_model_set_field")
+        .allowlist_function("ising_model_evaluate")
         .allowlist_function("qaoa_solver_create")
         .allowlist_function("qaoa_solver_free")
         .allowlist_function("qaoa_solve")
@@ -359,17 +308,185 @@ fn main() {
         .allowlist_function("graph_create")
         .allowlist_function("graph_free")
         .allowlist_function("graph_add_edge")
-        .allowlist_function("ising_model_free")
         // Entropy context
         .allowlist_type("quantum_entropy_ctx_t")
         .allowlist_type("quantum_entropy_fn")
         .allowlist_function("quantum_entropy_init")
         .allowlist_function("quantum_entropy_get_bytes")
+        .allowlist_function("quantum_entropy_ctx_create_hw")
+        .allowlist_function("quantum_entropy_ctx_destroy")
         // Entanglement
         .allowlist_function("entanglement_entropy_bipartition")
         .allowlist_function("entanglement_concurrence_2qubit")
         .allowlist_function("entanglement_negativity_2qubit")
         .allowlist_function("entanglement_renyi_entropy")
+        .allowlist_function("entanglement_mutual_information")
+        // Surface code (Clifford-tableau variant; Rust wrapper from 0.5.12).
+        .allowlist_type("surface_code_clifford_t")
+        .allowlist_function("surface_code_clifford_create")
+        .allowlist_function("surface_code_clifford_free")
+        .allowlist_function("surface_code_clifford_data_index")
+        .allowlist_function("surface_code_clifford_apply_error")
+        .allowlist_function("surface_code_clifford_measure_z_syndromes")
+        .allowlist_function("surface_code_clifford_measure_x_syndromes")
+        .allowlist_function("surface_code_clifford_syndrome_weight")
+        // libirrep bridge (since v0.6.0) -- behind QSIM_ENABLE_LIBIRREP
+        // at the C build level; the symbols always link (no-op stubs
+        // when libirrep isn't found), so the Rust surface is uniform.
+        .allowlist_type("moonlab_libirrep_qec_t")
+        .allowlist_type("moonlab_libirrep_lattice_kind_t")
+        .allowlist_type("moonlab_libirrep_wallpaper_t")
+        .allowlist_function("moonlab_libirrep_available")
+        .allowlist_function("moonlab_libirrep_kagome12_e0")
+        .allowlist_function("moonlab_libirrep_heisenberg_sector_e0")
+        .allowlist_function("moonlab_libirrep_surface_code_new")
+        .allowlist_function("moonlab_libirrep_toric_code_new")
+        .allowlist_function("moonlab_libirrep_color_steane_new")
+        .allowlist_function("moonlab_libirrep_color_hamming_15_7_3_new")
+        .allowlist_function("moonlab_libirrep_bb_72_12_6_new")
+        .allowlist_function("moonlab_libirrep_bb_144_12_12_new")
+        .allowlist_function("moonlab_libirrep_bb_288_12_18_new")
+        .allowlist_function("moonlab_libirrep_hgp_repetition_new")
+        .allowlist_function("moonlab_libirrep_qec_free")
+        .allowlist_function("moonlab_libirrep_qec_n_qubits")
+        .allowlist_function("moonlab_libirrep_qec_n_x_stabs")
+        .allowlist_function("moonlab_libirrep_qec_n_z_stabs")
+        .allowlist_function("moonlab_libirrep_qec_logical_qubits")
+        .allowlist_function("moonlab_libirrep_qec_distance")
+        .allowlist_function("moonlab_libirrep_qec_get_x_check_row")
+        .allowlist_function("moonlab_libirrep_qec_get_z_check_row")
+        // QGTL ingestion surface (since v0.6.6).
+        .allowlist_type("moonlab_qgtl_circuit")
+        .allowlist_type("moonlab_qgtl_gate_t")
+        .allowlist_type("moonlab_qgtl_exec_options_t")
+        .allowlist_type("moonlab_qgtl_results_t")
+        .allowlist_function("moonlab_qgtl_circuit_create")
+        .allowlist_function("moonlab_qgtl_circuit_free")
+        .allowlist_function("moonlab_qgtl_add_gate")
+        .allowlist_function("moonlab_qgtl_execute")
+        .allowlist_function("moonlab_qgtl_results_free")
+        .allowlist_function("moonlab_qgtl_circuit_num_qubits")
+        .allowlist_function("moonlab_qgtl_circuit_num_gates")
+        // Portable circuit serialization (since v0.8.3).
+        .allowlist_function("moonlab_qgtl_circuit_serialize")
+        .allowlist_function("moonlab_qgtl_circuit_deserialize")
+        .allowlist_function("moonlab_qgtl_circuit_save")
+        .allowlist_function("moonlab_qgtl_circuit_load")
+        // TCP control plane (since v0.8.7).
+        .allowlist_function("moonlab_control_serve")
+        .allowlist_function("moonlab_control_submit_circuit")
+        .allowlist_function("moonlab_control_submit_circuit_shots")
+        // Lifecycle API (since v0.8.13).
+        .allowlist_function("moonlab_control_server_open")
+        .allowlist_function("moonlab_control_server_run")
+        .allowlist_function("moonlab_control_server_shutdown")
+        .allowlist_function("moonlab_control_server_close")
+        // HMAC-SHA3-256 auth (since v0.8.15).
+        .allowlist_function("moonlab_control_server_set_secret")
+        .allowlist_function("moonlab_control_submit_circuit_auth")
+        .allowlist_function("moonlab_control_hmac_sha3_256")
+        // TLS transport (since v0.8.17).
+        .allowlist_function("moonlab_control_server_use_tls")
+        .allowlist_function("moonlab_control_submit_circuit_tls")
+        // mTLS (since v0.8.19).
+        .allowlist_function("moonlab_control_server_require_client_cert")
+        .allowlist_function("moonlab_control_submit_circuit_mtls")
+        // HEALTH + rate limit (since v0.8.21).
+        .allowlist_function("moonlab_control_server_set_rate_limit")
+        .allowlist_function("moonlab_control_submit_health")
+        // METRICS (since v0.8.23).
+        .allowlist_function("moonlab_control_submit_metrics")
+        // Per-request socket timeout (since v0.8.26).
+        .allowlist_function("moonlab_control_server_set_request_timeout")
+        // Concurrent-connection cap (since v0.9.0).
+        .allowlist_function("moonlab_control_server_set_max_concurrent")
+        // Tenant identity + admission hook (since v1.0.3).
+        .allowlist_function("moonlab_control_submit_circuit_auth_tenant")
+        .allowlist_function("moonlab_control_server_set_admission_hook")
+        .allowlist_type("moonlab_admission_hook_fn")
+        // Decoder-bench dispatcher (since v0.6.7).
+        .allowlist_type("moonlab_decoder_kind_t")
+        .allowlist_type("moonlab_decoder_code_t")
+        .allowlist_type("moonlab_decoder_input_t")
+        .allowlist_function("moonlab_decoder_decode")
+        .allowlist_function("moonlab_decoder_slot_available")
+        .allowlist_function("moonlab_decoder_slot_name")
+        // Decoder runtime registry (since v1.0.3).
+        .allowlist_type("moonlab_decoder_fn")
+        .allowlist_type("moonlab_decoder_entry_t")
+        .allowlist_function("moonlab_register_decoder")
+        .allowlist_function("moonlab_unregister_decoder")
+        .allowlist_function("moonlab_lookup_decoder")
+        .allowlist_function("moonlab_decoder_decode_by_name")
+        .allowlist_function("moonlab_num_decoders")
+        .allowlist_function("moonlab_list_decoders")
+        // Vendor-noise profile registry (since v1.0.3).
+        .allowlist_type("moonlab_vendor_noise_profile_t")
+        .allowlist_function("moonlab_register_vendor_noise_profile")
+        .allowlist_function("moonlab_unregister_vendor_noise_profile")
+        .allowlist_function("moonlab_lookup_vendor_noise_profile")
+        .allowlist_function("moonlab_num_vendor_noise_profiles")
+        .allowlist_function("moonlab_list_vendor_noise_profiles")
+        // Scheduler completion hook (since v1.0.3).
+        .allowlist_type("moonlab_completion_hook_fn")
+        .allowlist_function("moonlab_scheduler_set_completion_hook")
+        // Distributed scheduler (since v0.7.0).
+        .allowlist_type("moonlab_job")
+        .allowlist_type("moonlab_job_results_t")
+        .allowlist_function("moonlab_job_create")
+        .allowlist_function("moonlab_job_free")
+        .allowlist_function("moonlab_job_add_gate")
+        .allowlist_function("moonlab_job_set_num_shots")
+        .allowlist_function("moonlab_job_set_num_workers")
+        .allowlist_function("moonlab_job_set_rng_seed")
+        .allowlist_function("moonlab_job_num_qubits")
+        .allowlist_function("moonlab_job_num_gates")
+        .allowlist_function("moonlab_job_num_shots")
+        .allowlist_function("moonlab_job_num_workers")
+        .allowlist_function("moonlab_scheduler_run")
+        .allowlist_function("moonlab_job_results_free")
+        .allowlist_function("moonlab_job_to_json")
+        // CA-PEPS 2D Clifford-assisted simulator (since 0.2.1; Rust wrapper from 0.4.11).
+        .allowlist_type("ca_peps_error_t")
+        .allowlist_type("moonlab_ca_peps_t")
+        .allowlist_function("moonlab_ca_peps_create")
+        .allowlist_function("moonlab_ca_peps_free")
+        .allowlist_function("moonlab_ca_peps_clone")
+        .allowlist_function("moonlab_ca_peps_lx")
+        .allowlist_function("moonlab_ca_peps_ly")
+        .allowlist_function("moonlab_ca_peps_num_qubits")
+        .allowlist_function("moonlab_ca_peps_max_bond_dim")
+        .allowlist_function("moonlab_ca_peps_current_bond_dim")
+        .allowlist_function("moonlab_ca_peps_max_half_cut_entropy")
+        .allowlist_function("moonlab_ca_peps_h")
+        .allowlist_function("moonlab_ca_peps_s")
+        .allowlist_function("moonlab_ca_peps_sdag")
+        .allowlist_function("moonlab_ca_peps_x")
+        .allowlist_function("moonlab_ca_peps_y")
+        .allowlist_function("moonlab_ca_peps_z")
+        .allowlist_function("moonlab_ca_peps_cnot")
+        .allowlist_function("moonlab_ca_peps_cz")
+        .allowlist_function("moonlab_ca_peps_rx")
+        .allowlist_function("moonlab_ca_peps_ry")
+        .allowlist_function("moonlab_ca_peps_rz")
+        .allowlist_function("moonlab_ca_peps_t_gate")
+        .allowlist_function("moonlab_ca_peps_t_dagger")
+        .allowlist_function("moonlab_ca_peps_phase")
+        .allowlist_function("moonlab_ca_peps_normalize")
+        .allowlist_function("moonlab_ca_peps_norm")
+        .allowlist_function("moonlab_ca_peps_expect_pauli")
+        .allowlist_function("moonlab_ca_peps_prob_z")
+        // Single-qubit Kraus noise channels (since 0.2.1; Rust wrapper from 0.4.8).
+        .allowlist_function("noise_depolarizing_single")
+        .allowlist_function("noise_depolarizing_two_qubit")
+        .allowlist_function("noise_amplitude_damping")
+        .allowlist_function("noise_phase_damping")
+        .allowlist_function("noise_pure_dephasing")
+        .allowlist_function("noise_bit_flip")
+        .allowlist_function("noise_phase_flip")
+        .allowlist_function("noise_bit_phase_flip")
+        .allowlist_function("noise_thermal_relaxation")
+        .allowlist_function("noise_readout_error")
         // Configuration
         .allowlist_type("qsim_config_t")
         .allowlist_type("qsim_backend_t")
@@ -423,6 +540,73 @@ fn main() {
         .allowlist_function("moonlab_abi_version")
         .allowlist_function("moonlab_qrng_bytes")
         .allowlist_function("moonlab_qwz_chern")
+        // MPDO noise simulator (v0.3)
+        .allowlist_type("moonlab_mpdo_t")
+        .allowlist_type("mpdo_complex_t")
+        .allowlist_type("mpdo_error_t")
+        .allowlist_function("moonlab_mpdo_create")
+        .allowlist_function("moonlab_mpdo_free")
+        .allowlist_function("moonlab_mpdo_clone")
+        .allowlist_function("moonlab_mpdo_num_qubits")
+        .allowlist_function("moonlab_mpdo_max_bond_dim")
+        .allowlist_function("moonlab_mpdo_current_bond_dim")
+        .allowlist_function("moonlab_mpdo_trace")
+        .allowlist_function("moonlab_mpdo_apply_kraus_1q")
+        .allowlist_function("moonlab_mpdo_apply_depolarizing_1q")
+        .allowlist_function("moonlab_mpdo_apply_amplitude_damping_1q")
+        .allowlist_function("moonlab_mpdo_apply_phase_damping_1q")
+        .allowlist_function("moonlab_mpdo_apply_bit_flip_1q")
+        .allowlist_function("moonlab_mpdo_apply_phase_flip_1q")
+        .allowlist_function("moonlab_mpdo_apply_bit_phase_flip_1q")
+        .allowlist_function("moonlab_mpdo_expect_pauli_1q")
+        // TDVP + MPO + MPS surface (v0.4 adaptive-bond TDVP).
+        .allowlist_type("tn_mps_state_t")
+        .allowlist_type("tn_state_config_t")
+        .allowlist_type("tn_canonical_form_t")
+        .allowlist_type("mpo_t")
+        .allowlist_type("tdvp_config_t")
+        .allowlist_type("tdvp_adaptive_bond_config_t")
+        .allowlist_type("tdvp_result_t")
+        .allowlist_type("tdvp_history_t")
+        .allowlist_type("tdvp_engine_t")
+        .allowlist_type("tdvp_evolution_type_t")
+        .allowlist_type("tdvp_variant_t")
+        .allowlist_type("integrator_type_t")
+        .allowlist_function("tn_state_config_create")
+        .allowlist_function("tn_mps_free")
+        .allowlist_function("mpo_heisenberg_create")
+        .allowlist_function("mpo_tfim_create")
+        .allowlist_function("mpo_free")
+        .allowlist_function("dmrg_init_random_mps")
+        .allowlist_function("tdvp_engine_create")
+        .allowlist_function("tdvp_engine_free")
+        .allowlist_function("tdvp_step")
+        .allowlist_function("tdvp_evolve_to")
+        .allowlist_function("tdvp_set_dt")
+        .allowlist_function("tdvp_get_time")
+        .allowlist_function("tdvp_bond_chi")
+        .allowlist_function("tdvp_result_clear")
+        .allowlist_function("tdvp_history_create")
+        .allowlist_function("tdvp_history_free")
+        .allowlist_function("tdvp_history_add")
+        .allowlist_function("tdvp_history_add_with_observable")
+        .allowlist_function("tdvp_evolve_to_with_observable")
+        .allowlist_function("tdvp_evolve_with_observables")
+        // v0.4.1 stable-ABI TDVP wrapper surface.
+        .allowlist_function("moonlab_tdvp_create_heisenberg")
+        .allowlist_function("moonlab_tdvp_create_tfim")
+        .allowlist_function("moonlab_tdvp_step")
+        .allowlist_function("moonlab_tdvp_evolve_to")
+        .allowlist_function("moonlab_tdvp_current_time")
+        .allowlist_function("moonlab_tdvp_current_energy")
+        .allowlist_function("moonlab_tdvp_current_norm")
+        .allowlist_function("moonlab_tdvp_current_max_bond_dim")
+        .allowlist_function("moonlab_tdvp_num_bonds")
+        .allowlist_function("moonlab_tdvp_bond_chi")
+        .allowlist_function("moonlab_tdvp_history_num_steps")
+        .allowlist_function("moonlab_tdvp_history_get_step")
+        .allowlist_function("moonlab_tdvp_history_get_bond_chi")
+        .allowlist_function("moonlab_tdvp_engine_free")
         // Clifford stabilizer backend
         .allowlist_type("clifford_tableau_t")
         .allowlist_type("clifford_error_t")
@@ -471,9 +655,22 @@ fn main() {
         .allowlist_function("qgt_free_1d")
         .allowlist_function("qgt_winding_1d")
         .allowlist_function("qgt_berry_grid")
+        .allowlist_function("qgt_berry_grid_proj")
+        .allowlist_function("qgt_berry_grid_pt")
         .allowlist_function("qgt_berry_grid_free")
         .allowlist_function("qgt_metric_at")
         .allowlist_function("qgt_wilson_loop")
+        // v0.3: n-band Bloch surface + 4-band Z_2 + Pfaffian-sign 1D BdG Z_2.
+        .allowlist_type("qgt_system_n_t")
+        .allowlist_function("qgt_create_nband")
+        .allowlist_function("qgt_free_nband")
+        .allowlist_function("qgt_berry_grid_nband")
+        .allowlist_function("qgt_z2_invariant")
+        .allowlist_function("qgt_z2_invariant_1d_bdg")
+        .allowlist_function("qgt_model_kane_mele")
+        .allowlist_function("qgt_model_bhz")
+        .allowlist_function("qgt_model_kitaev_chain")
+        .allowlist_function("qgt_model_hofstadter")
         // Gate-fusion DAG
         .allowlist_type("fuse_circuit_t")
         .allowlist_type("fuse_gate_t")
@@ -531,6 +728,8 @@ fn main() {
         .allowlist_function("moonlab_ca_mps_phase")
         .allowlist_function("moonlab_ca_mps_normalize")
         .allowlist_function("moonlab_ca_mps_norm")
+        // Born-rule sequential sampling (since v0.10.0).
+        .allowlist_function("moonlab_ca_mps_sample_z")
         // var-D, gauge warmstart, Z2 LGT, status (since 0.2.1).
         .allowlist_function("moonlab_ca_mps_var_d_run")
         // var-D v2 with explicit convergence_eps (since 0.2.4).
@@ -539,6 +738,24 @@ fn main() {
         .allowlist_function("moonlab_z2_lgt_1d_build")
         .allowlist_function("moonlab_z2_lgt_1d_gauss_law")
         .allowlist_function("moonlab_status_string")
+        // DMRG scalar-energy convenience entries (since 0.10.0).
+        .allowlist_function("moonlab_dmrg_tfim_energy")
+        .allowlist_function("moonlab_dmrg_heisenberg_energy")
+        // Bell tests + CHSH/Mermin/Mermin-Klyshko variants
+        // (since 0.2.0; safe Rust wrapper from 0.4.7).
+        .allowlist_type("bell_state_type_t")
+        .allowlist_type("bell_test_result_t")
+        .allowlist_type("bell_measurement_settings_t")
+        .allowlist_function("create_bell_state")
+        .allowlist_function("create_bell_state_phi_plus")
+        .allowlist_function("create_bell_state_phi_minus")
+        .allowlist_function("create_bell_state_psi_plus")
+        .allowlist_function("create_bell_state_psi_minus")
+        .allowlist_function("bell_get_optimal_settings")
+        .allowlist_function("calculate_chsh_parameter")
+        .allowlist_function("bell_test_chsh")
+        .allowlist_function("bell_test_mermin_ghz")
+        .allowlist_function("bell_test_mermin_klyshko")
         // Layout settings
         .derive_debug(true)
         .derive_default(true)
@@ -549,7 +766,11 @@ fn main() {
         .expect("Unable to generate bindings");
 
     // Write bindings to OUT_DIR
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
+
+    // Clean up wrapper
+    let _ = std::fs::remove_file(wrapper_path);
 }

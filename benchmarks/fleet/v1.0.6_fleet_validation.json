@@ -1,0 +1,309 @@
+{
+  "harness": "moonlab/fleet-validation/v1.0",
+  "date": "2026-05-21",
+  "fleet": {
+    "atlas": {
+      "role": "control-plane host",
+      "os": "macOS",
+      "arch": "arm64",
+      "cores": 8,
+      "ram_gb": 16,
+      "tailscale_ip": "100.96.130.16"
+    },
+    "cosbox": {
+      "role": "linux compute node",
+      "os": "Linux 6.8",
+      "arch": "x86_64",
+      "cores": 12,
+      "ram_gb": 32,
+      "tailscale_ip": "100.86.83.35"
+    },
+    "old-donkey": {
+      "role": "linux big iron",
+      "os": "Linux 7.0",
+      "arch": "x86_64",
+      "cores": 88,
+      "ram_gb": 499,
+      "tailscale_ip": "100.121.14.68"
+    },
+    "xavier": {
+      "role": "Jetson aarch64 (Anduril jetpack-nixos)",
+      "os": "NixOS 25.11 (jetpack)",
+      "arch": "aarch64",
+      "cores": 8,
+      "ram_gb": 30,
+      "tailscale_ip": "100.123.137.103",
+      "notes": "ARMv8.2 Carmel + integrated GPU; CPU lane validated here, GPU lane is v1.1 arc"
+    }
+  },
+  "experiments": {
+    "ghz_sharding_validation": {
+      "binary": "examples/distributed/large_state_ghz",
+      "host": "old-donkey",
+      "points": [
+        {
+          "N": 30,
+          "ranks": 8,
+          "state_gib": 16,
+          "wall_s": 20.5,
+          "verified": true,
+          "notes": "P(|0...0>)=P(|1...1>)=0.5"
+        },
+        {
+          "N": 31,
+          "ranks": 8,
+          "state_gib": 32,
+          "wall_s": 37.7,
+          "verified": true,
+          "notes": "post-buffer-overflow-fix"
+        },
+        {
+          "N": 32,
+          "ranks": 8,
+          "state_gib": 64,
+          "wall_s": 86.2,
+          "verified": true,
+          "notes": "post-buffer-overflow-fix"
+        },
+        {
+          "N": 33,
+          "ranks": 16,
+          "state_gib": 128,
+          "wall_s": 144.1,
+          "verified": true,
+          "notes": "biggest sharded state validated"
+        },
+        {
+          "N": 26,
+          "ranks": 4,
+          "state_gib": 1,
+          "wall_s": 1.83,
+          "verified": true,
+          "host": "xavier",
+          "notes": "first aarch64 + jetpack-nixos run on the fleet; cross-arch MPI w/ x86_64 hosts works"
+        },
+        {
+          "N": 28,
+          "ranks": 8,
+          "state_gib": 4,
+          "wall_s": 5.46,
+          "verified": true,
+          "host": "xavier",
+          "notes": "ARM NEON+SVE lane exercised; near 30 GB RAM ceiling"
+        }
+      ],
+      "bug_discovered_and_fixed": {
+        "symptom": "glibc free(): invalid size at N>=31",
+        "cause": "src/distributed/state_partition.c capped send/recv buffer at 1 GB while distributed_gates.c assumed buffer holds local_count amplitudes (4 GiB+ at N>=31)",
+        "fix": "drop 1 GB cap; size to local_count unconditionally",
+        "commit": "919305b"
+      },
+      "additional_portability_fix": {
+        "symptom": "snprintf implicit declaration on gcc-aarch64 in src/optimization/simd_sve.c",
+        "cause": "transitive include of <stdio.h> via SVE intrinsics + glibc differs from x86_64; aarch64 build with SVE has no implicit stdio",
+        "fix": "explicit #include <stdio.h>"
+      }
+    },
+    "cross_host_load": {
+      "binary": "tools/fleet_loadtest.py",
+      "scenarios": [
+        {
+          "clients_host": "cosbox",
+          "workers": 8,
+          "duration_s": 5,
+          "tenant": null,
+          "tls": false,
+          "rps": 19.6,
+          "p50_ms": 413,
+          "errors": 0
+        },
+        {
+          "clients_host": "cosbox+old-donkey",
+          "workers": "64+64",
+          "duration_s": 8,
+          "tenant": null,
+          "tls": false,
+          "rps_aggregate": 300,
+          "p50_ms": 421,
+          "errors": 84,
+          "note": "84/2401=3.5% backpressure on max-concurrent=64 server"
+        },
+        {
+          "clients_host": "cosbox",
+          "workers": 16,
+          "duration_s": 5,
+          "tenant": "acme-corp",
+          "tls": false,
+          "rps": 41.4,
+          "p50_ms": 399,
+          "errors": 0
+        },
+        {
+          "clients_host": "cosbox+old-donkey+atlas-loopback",
+          "workers": "64+64+16",
+          "duration_s": 10,
+          "tenant": "3 distinct IDs",
+          "tls": false,
+          "rps_aggregate": 3653,
+          "p50_ms_atlas": 4.3,
+          "p50_ms_fleet": 408,
+          "errors": 472,
+          "note": "atlas localhost saturates at 3377 rps; 3 tenant IDs verified"
+        }
+      ]
+    },
+    "cross_host_tls": {
+      "binary": "tools/fleet_loadtest.py --tls --tls-ca",
+      "cert": "self-signed RSA-2048, SAN=IP:100.96.130.16,DNS:atlas.tail5c077c.ts.net",
+      "result": {
+        "clients_host": "cosbox",
+        "workers": 4,
+        "duration_s": 5,
+        "reqs": 36,
+        "rps": 7.2,
+        "p50_ms": 549,
+        "p99_ms": 577,
+        "errors": 0
+      },
+      "tls_overhead_ms": "~140 ms (1 extra RTT on top of plain TCP)"
+    },
+    "websocket_gateway_fanout": {
+      "binary": "tools/fleet_ws_load.py",
+      "gateway": "tools/gateway/moonlab_websocket_gateway.py on atlas:8765 -> 127.0.0.1:7070",
+      "scenarios": [
+        {
+          "clients_host": "cosbox",
+          "workers": 8,
+          "duration_s": 5,
+          "reqs": 72,
+          "rps": 14.4,
+          "p50_ms": 417,
+          "errors": 0
+        },
+        {
+          "clients_host": "old-donkey",
+          "workers": 8,
+          "duration_s": 5,
+          "reqs": 75,
+          "rps": 15.0,
+          "p50_ms": 420,
+          "errors": 0
+        }
+      ],
+      "aggregate": {
+        "reqs_total": 147,
+        "errors_total": 0,
+        "note": "browser-emulating WS clients hit gateway over Tailscale, gateway forwards line-protocol to TCP server, Bell circuit verified end-to-end"
+      }
+    },
+    "mpi_random_circuit_scaling": {
+      "harness": "benchmarks/mpi_scaling/run_scaling.sh",
+      "binary": "build/large_state_random_circuit",
+      "host": "old-donkey",
+      "depth": 4,
+      "seed": 42,
+      "grid": [
+        {
+          "N": 28,
+          "ranks": 2,
+          "wall_s": 91.524,
+          "sim_s": 70.9698,
+          "norm": 1.0
+        },
+        {
+          "N": 28,
+          "ranks": 4,
+          "wall_s": 78.778,
+          "sim_s": 63.9695,
+          "norm": 1.0
+        },
+        {
+          "N": 28,
+          "ranks": 8,
+          "wall_s": 62.081,
+          "sim_s": 48.6903,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 2,
+          "wall_s": 483.499,
+          "sim_s": 356.2723,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 4,
+          "wall_s": 277.576,
+          "sim_s": 223.6082,
+          "norm": 1.0
+        },
+        {
+          "N": 30,
+          "ranks": 8,
+          "wall_s": 176.515,
+          "sim_s": 136.5942,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 2,
+          "wall_s": 2128.209,
+          "sim_s": 1749.4879,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 4,
+          "wall_s": 1177.558,
+          "sim_s": 918.1669,
+          "norm": 1.0
+        },
+        {
+          "N": 32,
+          "ranks": 8,
+          "wall_s": 909.953,
+          "sim_s": 704.2124,
+          "norm": 1.0
+        }
+      ],
+      "notes": "9-point N x ranks sweep; norm=1.0 everywhere confirms the v1.0.6 dist gate buffer fix holds across the full sweep up to N=32/8r/64 GiB"
+    },
+    "jetson_cuda_statevec": {
+      "files": [
+        "src/backends/cuda_tegra_probe.{h,c}",
+        "src/backends/cuda_statevec.{h,cu}",
+        "examples/cuda/bell_jetson.cu"
+      ],
+      "host": "xavier (Jetson AGX Xavier, Volta GPU cc 7.2, 8 SMs, 30 GB unified)",
+      "memory_model": "cudaMallocManaged (unified) -- the tegra-correct path",
+      "smoke_results": [
+        {
+          "N": 12,
+          "state_bytes": "64 KB",
+          "bell": "PASS",
+          "wall_s": 0.01
+        },
+        {
+          "N": 20,
+          "state_bytes": "16 MB",
+          "bell": "PASS",
+          "wall_s": 0.1
+        },
+        {
+          "N": 24,
+          "state_bytes": "256 MB",
+          "bell": "PASS",
+          "wall_s": 0.38
+        },
+        {
+          "N": 27,
+          "state_bytes": "2 GB",
+          "bell": "PASS",
+          "wall_s": 17.6
+        }
+      ],
+      "notes": "first GPU backend on the fleet; tegra runtime probe auto-detected; wall time at N=27 dominated by final host-side state copy, not the kernels themselves"
+    }
+  }
+}

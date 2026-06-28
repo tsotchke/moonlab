@@ -83,9 +83,103 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     return QS_SUCCESS;
 }
 
+/* Weak link to the CUDA backend's state-free entry point.  When
+ * libquantumsim was built with QSIM_HAS_CUDA, this resolves to
+ * moonlab_cuda_state_free() and we tear down GPU memory before
+ * the host-side free.  When CUDA isn't compiled in, gpu_state is
+ * always NULL and this is never called -- but the symbol still
+ * needs to resolve at link time on platforms where weak imports
+ * aren't supported by default (Mach-O on macOS).  Provide a
+ * fallback stub when QSIM_HAS_CUDA is off. */
+extern void moonlab_cuda_state_free(void *)
+    __attribute__((weak));
+
+#ifndef QSIM_HAS_CUDA
+/* Fallback stubs for the GPU routing symbols.  When CUDA isn't
+ * compiled in, gates.c + cuda_tegra_probe.c declare these via
+ * weak externs that they expect to find in cuda_statevec.cu /
+ * state_gpu.cu.  On ELF systems the weak refs resolve to NULL at
+ * link time, but Mach-O on macOS rejects unresolved weak imports
+ * by default -- so we provide always-defined NULL-equivalent
+ * stubs here.  None are ever called because state->gpu_state is
+ * always NULL on a non-CUDA build. */
+__attribute__((weak))
+void moonlab_cuda_state_free(void *p) { (void)p; }
+
+__attribute__((weak))
+int qsim_gpu_route_hadamard(quantum_state_t *s, int q) { (void)s; (void)q; return -1; }
+__attribute__((weak))
+int qsim_gpu_route_pauli_x(quantum_state_t *s, int q) { (void)s; (void)q; return -1; }
+__attribute__((weak))
+int qsim_gpu_route_cnot(quantum_state_t *s, int c, int t) {
+    (void)s; (void)c; (void)t; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_apply_1q_matrix(quantum_state_t *s, int q, const double m[8]) {
+    (void)s; (void)q; (void)m; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_apply_2q_matrix(quantum_state_t *s, int q0, int q1, const double m[32]) {
+    (void)s; (void)q0; (void)q1; (void)m; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_mcx(quantum_state_t *s, uint64_t mask, int t) {
+    (void)s; (void)mask; (void)t; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_mcz(quantum_state_t *s, uint64_t mask) {
+    (void)s; (void)mask; return -1;
+}
+__attribute__((weak))
+int qsim_gpu_route_fredkin(quantum_state_t *s, int c, int t1, int t2) {
+    (void)s; (void)c; (void)t1; (void)t2; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_runtime_probe_discrete(void) { return 0; }
+
+/* distributed_gates.c (apply_local_1q, dist_cnot) and
+ * state_partition.c (partition_state_create_gpu + sync_to_host +
+ * sync_from_host) declare these as weak externs.  On a non-CUDA
+ * build the strong definitions in cuda_statevec.cu / state_gpu.cu
+ * are absent.  ELF treats unresolved weak refs as NULL at runtime;
+ * Mach-O (macOS) refuses to link without a resolvable definition.
+ * Provide always-defined fallbacks here -- the callers either
+ * check the symbol or only invoke when state->gpu_state != NULL,
+ * so these are never actually called on non-CUDA builds. */
+__attribute__((weak))
+int moonlab_cuda_apply_1q(void *state, uint32_t target, const double m[8]) {
+    (void)state; (void)target; (void)m; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_apply_cnot(void *state, uint32_t control, uint32_t target) {
+    (void)state; (void)control; (void)target; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_create(uint32_t n_qubits, void **out_state) {
+    (void)n_qubits;
+    if (out_state) *out_state = NULL;
+    return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_copy_to_host(const void *state, double *out) {
+    (void)state; (void)out; return -1;
+}
+__attribute__((weak))
+int moonlab_cuda_state_copy_from_host(void *state, const double *in) {
+    (void)state; (void)in; return -1;
+}
+#endif
+
 void quantum_state_free(quantum_state_t *state) {
     if (!state) return;
-    
+
+    /* GPU backing first (if any), then host buffer. */
+    if (state->gpu_state && moonlab_cuda_state_free != NULL) {
+        moonlab_cuda_state_free(state->gpu_state);
+        state->gpu_state   = NULL;
+        state->gpu_backend = 0;
+    }
+
     if (state->owns_memory) {
         if (state->amplitudes) {
             // Secure zero before freeing (prevent memory dumps)
@@ -584,4 +678,40 @@ void quantum_state_destroy(quantum_state_t* state) {
 
     quantum_state_free(state);
     free(state);
+}
+
+/* ---------- GPU-backed state, weak fallbacks ----------
+ *
+ * When libquantumsim is built with QSIM_HAS_CUDA, state_gpu.cu
+ * defines strong versions of these two functions.  When CUDA
+ * isn't compiled in, callers get these weak stubs which return
+ * a clear "not supported" status instead of an undefined symbol
+ * at link time.
+ */
+
+__attribute__((weak))
+qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state)
+{
+    (void)num_qubits;
+    if (out_state) *out_state = NULL;
+    return QS_ERROR_NOT_SUPPORTED;
+}
+
+__attribute__((weak))
+qs_error_t quantum_state_sync_to_host(quantum_state_t *state)
+{
+    if (!state) return QS_ERROR_INVALID_PARAM;
+    /* No GPU backing == no-op == success.  If the caller managed
+     * to set state->gpu_state without CUDA being compiled in,
+     * that's a configuration error, not a runtime one. */
+    if (!state->gpu_state) return QS_SUCCESS;
+    return QS_ERROR_NOT_SUPPORTED;
+}
+
+__attribute__((weak))
+qs_error_t quantum_state_sync_from_host(quantum_state_t *state)
+{
+    if (!state) return QS_ERROR_INVALID_PARAM;
+    if (!state->gpu_state) return QS_SUCCESS;
+    return QS_ERROR_NOT_SUPPORTED;
 }

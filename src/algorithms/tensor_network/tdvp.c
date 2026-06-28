@@ -26,6 +26,22 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/**
+ * @brief Per-bond PID state for the adaptive-bond controller (v0.4).
+ *
+ * The forward declaration lives in `tdvp.h` so `tdvp_engine_t` can
+ * hold a pointer; the full definition is private to this translation
+ * unit.  The struct is defined up front (rather than alongside the
+ * bond-truncation helpers below) so that `tdvp_engine_create` can
+ * `sizeof` it when allocating the per-bond array.
+ */
+struct tdvp_bond_pid_state {
+    double prev_error;   /**< Previous error signal (S - S_chi). */
+    double integral;     /**< Running PID integral across sweeps. */
+    uint32_t chi;        /**< Current target bond dimension. */
+    bool primed;         /**< True after the first update (no derivative on step 1). */
+};
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -90,24 +106,104 @@ void tdvp_history_free(tdvp_history_t *hist) {
     free(hist->energies);
     free(hist->norms);
     free(hist->observables);
+    free(hist->bond_chi_history);
     free(hist);
 }
 
-void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
-    if (!hist || !result) return;
-
-    // Expand if needed
+/* Append a row to the history's scalar columns and the lazy
+ * bond-chi snapshot.  Shared by tdvp_history_add and
+ * tdvp_history_add_with_observable; the observable column is
+ * handled by the caller because it has its own lazy-allocation
+ * trigger. */
+static void tdvp_history_grow_and_record(tdvp_history_t *hist,
+                                          const tdvp_result_t *result) {
     if (hist->num_steps >= hist->capacity) {
-        hist->capacity *= 2;
-        hist->times = (double *)realloc(hist->times, hist->capacity * sizeof(double));
-        hist->energies = (double *)realloc(hist->energies, hist->capacity * sizeof(double));
-        hist->norms = (double *)realloc(hist->norms, hist->capacity * sizeof(double));
+        uint32_t new_cap = hist->capacity * 2;
+        hist->times = (double *)realloc(hist->times, new_cap * sizeof(double));
+        hist->energies = (double *)realloc(hist->energies, new_cap * sizeof(double));
+        hist->norms = (double *)realloc(hist->norms, new_cap * sizeof(double));
+        if (hist->observables) {
+            hist->observables = (double *)realloc(
+                hist->observables, new_cap * sizeof(double));
+            /* Zero-fill the freshly grown tail so unrecorded slots
+             * read as 0 rather than undefined. */
+            for (uint32_t i = hist->capacity; i < new_cap; i++) {
+                hist->observables[i] = 0.0;
+            }
+        }
+        if (hist->bond_chi_history && hist->n_bonds > 0) {
+            hist->bond_chi_history = (uint32_t *)realloc(
+                hist->bond_chi_history,
+                (size_t)new_cap * hist->n_bonds * sizeof(uint32_t));
+        }
+        hist->capacity = new_cap;
     }
 
     hist->times[hist->num_steps] = result->time;
     hist->energies[hist->num_steps] = result->energy;
     hist->norms[hist->num_steps] = result->norm;
+
+    /* Bond-chi snapshot: lazy-allocate on the first result that
+     * actually carries a distribution.  Subsequent calls write into
+     * the same flat row-major buffer.  Results without a
+     * distribution (legacy path) leave the row zeroed. */
+    if (result->bond_chi_distribution && result->n_bonds > 0) {
+        if (!hist->bond_chi_history) {
+            hist->n_bonds = result->n_bonds;
+            hist->bond_chi_history = (uint32_t *)calloc(
+                (size_t)hist->capacity * hist->n_bonds, sizeof(uint32_t));
+        }
+        if (hist->bond_chi_history && result->n_bonds == hist->n_bonds) {
+            uint32_t *row = hist->bond_chi_history
+                          + (size_t)hist->num_steps * hist->n_bonds;
+            for (uint32_t b = 0; b < hist->n_bonds; b++) {
+                row[b] = result->bond_chi_distribution[b];
+            }
+        }
+    }
+}
+
+void tdvp_history_add(tdvp_history_t *hist, const tdvp_result_t *result) {
+    if (!hist || !result) return;
+    tdvp_history_grow_and_record(hist, result);
+    /* Legacy entry point: do not touch the observables column.  If
+     * it has been lazily allocated by a prior
+     * tdvp_history_add_with_observable call, leave this step's slot
+     * at zero -- callers can interleave the two add functions and
+     * tell which steps recorded an observable by checking that the
+     * observables pointer is non-NULL. */
     hist->num_steps++;
+}
+
+void tdvp_history_add_with_observable(tdvp_history_t *hist,
+                                       const tdvp_result_t *result,
+                                       double observable) {
+    if (!hist || !result) return;
+    tdvp_history_grow_and_record(hist, result);
+
+    /* Lazy-allocate the observables column on first use.  Zero-fill
+     * any earlier steps that were recorded without an observable so
+     * the column stays aligned with `num_steps`. */
+    if (!hist->observables) {
+        hist->observables = (double *)calloc(hist->capacity, sizeof(double));
+    }
+    if (hist->observables) {
+        hist->observables[hist->num_steps] = observable;
+    }
+    hist->num_steps++;
+}
+
+void tdvp_result_clear(tdvp_result_t *result) {
+    if (!result) return;
+    free(result->bond_chi_distribution);
+    result->bond_chi_distribution = NULL;
+    result->n_bonds = 0;
+    result->time = 0.0;
+    result->energy = 0.0;
+    result->norm = 0.0;
+    result->truncation_error = 0.0;
+    result->max_bond_dim = 0;
+    result->step_time = 0.0;
 }
 
 // ============================================================================
@@ -242,7 +338,7 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     uint32_t chi_l = H_eff->chi_l;
     uint32_t chi_r = H_eff->chi_r;
     uint32_t d = H_eff->phys_dim;
-    uint64_t vec_size = H_eff->two_site ? chi_l * d * d * chi_r : chi_l * d * chi_r;
+    uint64_t vec_size = (uint64_t)chi_l * d * d * chi_r;
 
     // Lanczos vectors
     double complex *v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
@@ -277,16 +373,11 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     lanczos_beta[0] = 0.0;
     uint32_t num_iter = 0;
 
-    // Create tensors for H_eff application
-    uint32_t dims[4];
-    if (H_eff->two_site) {
-        dims[0] = chi_l; dims[1] = d; dims[2] = d; dims[3] = chi_r;
-    } else {
-        dims[0] = chi_l; dims[1] = d; dims[2] = chi_r; dims[3] = 0;
-    }
-
-    tensor_t *x_temp = tensor_create(H_eff->two_site ? 4 : 3, dims);
-    tensor_t *y_temp = tensor_create(H_eff->two_site ? 4 : 3, dims);
+    // Create tensors for H_eff application (theta is rank-4
+    // [chi_l, d, d, chi_r] for the two-site Krylov projection).
+    uint32_t dims[4] = { chi_l, d, d, chi_r };
+    tensor_t *x_temp = tensor_create(4, dims);
+    tensor_t *y_temp = tensor_create(4, dims);
 
     if (!x_temp || !y_temp) {
         if (x_temp) tensor_free(x_temp);
@@ -377,9 +468,9 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
 // TDVP ENGINE
 // ============================================================================
 
-static tdvp_engine_t *trace_tdvp_engine_context(tn_mps_state_t *mps,
-                                                mpo_t *mpo,
-                                                const tdvp_config_t *config) {
+tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
+                                   mpo_t *mpo,
+                                   const tdvp_config_t *config) {
     if (!mps || !mpo || !config) return NULL;
 
     tdvp_engine_t *engine = (tdvp_engine_t *)calloc(1, sizeof(tdvp_engine_t));
@@ -389,6 +480,8 @@ static tdvp_engine_t *trace_tdvp_engine_context(tn_mps_state_t *mps,
     engine->mpo = mpo;
     engine->config = *config;
     engine->current_time = 0.0;
+    engine->bond_states = NULL;
+    engine->num_bond_states = 0;
 
     // Create environments
     engine->env = dmrg_environments_create(mps->num_qubits);
@@ -410,21 +503,37 @@ static tdvp_engine_t *trace_tdvp_engine_context(tn_mps_state_t *mps,
         return NULL;
     }
 
+    /* Allocate the per-bond PID state array when the adaptive-bond
+     * controller is enabled.  An n-qubit chain has (n - 1) inter-site
+     * bonds; each entry is zero-initialised (chi=0 primes on first
+     * visit, integral starts at 0, primed=false). */
+    if (config->adaptive_bond.enabled && mps->num_qubits >= 2) {
+        engine->num_bond_states = mps->num_qubits - 1;
+        engine->bond_states =
+            (struct tdvp_bond_pid_state *)calloc(
+                engine->num_bond_states,
+                sizeof(struct tdvp_bond_pid_state));
+        if (!engine->bond_states) {
+            dmrg_environments_free(engine->env);
+            free(engine);
+            return NULL;
+        }
+    }
+
     return engine;
 }
 
-#define ML_TDVP_ENGINE_CREATE_API(symbol)                                           \
-    tdvp_engine_t *symbol(tn_mps_state_t *mps, mpo_t *mpo,                          \
-                          const tdvp_config_t *config) {                           \
-        return trace_tdvp_engine_context(mps, mpo, config);                         \
-    }
-
-ML_TDVP_ENGINE_CREATE_API(tdvp_engine_create) /* macro-generated API */
-
 void tdvp_engine_free(tdvp_engine_t *engine) {
     if (!engine) return;
+    free(engine->bond_states);
     dmrg_environments_free(engine->env);
     free(engine);
+}
+
+uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond) {
+    if (!engine || !engine->bond_states) return 0;
+    if (bond >= engine->num_bond_states) return 0;
+    return engine->bond_states[bond].chi;
 }
 
 void tdvp_set_dt(tdvp_engine_t *engine, double dt) {
@@ -436,19 +545,165 @@ double tdvp_get_time(const tdvp_engine_t *engine) {
 }
 
 // ============================================================================
+// BOND TRUNCATION (entropy-feedback PID for v0.4 adaptive-bond TDVP)
+// ============================================================================
+
+/**
+ * @brief Compute the von Neumann entropy of a singular-value
+ *        spectrum and the entropy of its first `chi` components.
+ *
+ * Both quantities are normalised so that the underlying probability
+ * distributions sum to 1.  `sv` is assumed sorted in descending
+ * order, as produced by `svd_compress`.
+ */
+static void tdvp_spectrum_entropy(const double *sv, uint32_t n,
+                                   uint32_t chi,
+                                   double *S_full, double *S_chi) {
+    double total = 0.0;
+    for (uint32_t i = 0; i < n; i++) total += sv[i] * sv[i];
+    double Sf = 0.0;
+    if (total > 0.0) {
+        for (uint32_t i = 0; i < n; i++) {
+            double p = (sv[i] * sv[i]) / total;
+            if (p > 1e-30) Sf -= p * log(p);
+        }
+    }
+    *S_full = Sf;
+
+    uint32_t k = chi < n ? chi : n;
+    double partial = 0.0;
+    for (uint32_t i = 0; i < k; i++) partial += sv[i] * sv[i];
+    double Sc = 0.0;
+    if (partial > 0.0) {
+        for (uint32_t i = 0; i < k; i++) {
+            double p = (sv[i] * sv[i]) / partial;
+            if (p > 1e-30) Sc -= p * log(p);
+        }
+    }
+    *S_chi = Sc;
+}
+
+/**
+ * @brief PID update for one bond: returns the new target bond
+ *        dimension given the current PID state and the entropy
+ *        error signal `e = S_full - S_chi`.
+ */
+static uint32_t tdvp_pid_select_chi(
+    const tdvp_adaptive_bond_config_t *cfg,
+    struct tdvp_bond_pid_state *state,
+    double e, uint32_t chi_current)
+{
+    double derivative = 0.0;
+    if (state->primed) derivative = e - state->prev_error;
+    state->integral  += e;
+    state->prev_error = e;
+    state->primed     = true;
+
+    double signal = cfg->kp * e
+                  + cfg->ki * state->integral
+                  + cfg->kd * derivative;
+
+    /* Map the entropy-domain signal into bond-dim increments via
+     * `alpha / eps_S`; clamp to [chi_floor, chi_ceiling]. */
+    double scale = (cfg->target_entropy_error > 0.0)
+                 ? cfg->alpha / cfg->target_entropy_error
+                 : cfg->alpha;
+    int64_t delta = (int64_t)llround(scale * signal);
+
+    int64_t target = (int64_t)chi_current + delta;
+    if (target < (int64_t)cfg->chi_floor)  target = cfg->chi_floor;
+    if (target > (int64_t)cfg->chi_ceiling) target = cfg->chi_ceiling;
+    return (uint32_t)target;
+}
+
+/**
+ * @brief Truncate an evolved two-site tensor matrix.
+ *
+ * Two paths:
+ *
+ *   * Legacy (`cfg->adaptive_bond.enabled == false` or
+ *     `bond_state == NULL`): single SVD with `max_bond_dim` /
+ *     `svd_cutoff` from the TDVP config; behaviour is bit-identical
+ *     to v0.3.1.
+ *
+ *   * Adaptive: first SVD at `chi_ceiling` to expose the spectrum,
+ *     entropy-feedback PID picks `target_chi`, and (if necessary) a
+ *     second SVD re-truncates to that bond dimension.
+ *
+ * Returns the `svd_compress_result_t` (caller frees with
+ * `svd_compress_result_free`), or `NULL` on allocation failure.
+ */
+static svd_compress_result_t *tdvp_truncate_bond(
+    const tensor_t *mat,
+    const tdvp_config_t *cfg,
+    struct tdvp_bond_pid_state *bond_state)
+{
+    /* ---- Legacy path ------------------------------------------------ */
+    if (!cfg->adaptive_bond.enabled || bond_state == NULL) {
+        svd_compress_config_t svd_cfg = svd_compress_config_default();
+        svd_cfg.max_bond_dim = cfg->max_bond_dim;
+        svd_cfg.cutoff       = cfg->svd_cutoff;
+        return svd_compress(mat, &svd_cfg);
+    }
+
+    /* ---- Adaptive path: PID controller ----------------------------- */
+    const tdvp_adaptive_bond_config_t *ab = &cfg->adaptive_bond;
+
+    /* Pass 1: SVD at chi_ceiling to obtain the spectrum the PID will
+     * reason over.  We honour `svd_cutoff` as a floor so the spectrum
+     * still discards numerical noise. */
+    svd_compress_config_t svd_cfg = svd_compress_config_default();
+    svd_cfg.max_bond_dim = ab->chi_ceiling;
+    svd_cfg.cutoff       = cfg->svd_cutoff;
+    svd_compress_result_t *first = svd_compress(mat, &svd_cfg);
+    if (!first) return NULL;
+
+    /* Prime the bond's chi on the first visit. */
+    if (bond_state->chi == 0) bond_state->chi = first->bond_dim;
+
+    /* Compute the entropy error e = S_full - S_chi at the current
+     * working chi. */
+    double S_full = 0.0, S_chi = 0.0;
+    tdvp_spectrum_entropy(first->singular_values, first->bond_dim,
+                          bond_state->chi, &S_full, &S_chi);
+    double e = S_full - S_chi;
+
+    uint32_t target_chi = tdvp_pid_select_chi(ab, bond_state, e,
+                                               bond_state->chi);
+    bond_state->chi = target_chi;
+
+    /* If the PID-selected chi covers (or exceeds) what we got from
+     * pass 1, return that result directly. */
+    if (target_chi >= first->bond_dim) {
+        return first;
+    }
+
+    /* Otherwise, redo the SVD at the controller-selected chi. */
+    svd_compress_result_free(first);
+    svd_cfg.max_bond_dim = target_chi;
+    return svd_compress(mat, &svd_cfg);
+}
+
+// ============================================================================
 // TWO-SITE TDVP STEP
 // ============================================================================
 
 /**
  * @brief Evolve two-site tensor
+ *
+ * @param bond_state Per-bond PID state for the adaptive-bond
+ *                   controller, or NULL on the legacy fixed-cap
+ *                   path.  The pointer is owned by the engine and
+ *                   updated in-place each visit.
  */
-static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
-                                      const mpo_t *mpo,
-                                      dmrg_environments_t *env,
-                                      uint32_t site,
-                                      double complex dt,
-                                      const tdvp_config_t *config,
-                                      double *truncation_error) {
+static int tdvp_evolve_two_site(tn_mps_state_t *mps,
+                                 const mpo_t *mpo,
+                                 dmrg_environments_t *env,
+                                 uint32_t site,
+                                 double complex dt,
+                                 const tdvp_config_t *config,
+                                 struct tdvp_bond_pid_state *bond_state,
+                                 double *truncation_error) {
     if (!mps || !mpo || !env || site >= mps->num_qubits - 1) return -1;
 
     tensor_t *A = mps->tensors[site];
@@ -471,7 +726,6 @@ static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
         .chi_l = chi_l,
         .chi_r = chi_r,
         .phys_dim = d,
-        .two_site = true
     };
 
     // Form theta = A @ B.  Both tensors are row-major rank-3 with the
@@ -534,6 +788,33 @@ static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
 
     tensor_free(theta);
 
+    /* Imag-time normalisation hot-fix.  On the imag-time path,
+     * `exp(-H * dt) @ theta` decays the two-site tensor by roughly
+     * `exp(-E_max * dt)` per call.  After many two-site updates
+     * (2 sweeps * (n-1) updates per step, repeated across steps)
+     * the tensor shrinks below double-precision and the downstream
+     * SVD becomes ill-conditioned, producing the "Failed at site X
+     * (R->L)" symptom on Heisenberg after roughly five steps and on
+     * TFIM immediately.  Renormalising `theta_evolved` to unit
+     * Frobenius norm here is mathematically equivalent (the ground
+     * state is invariant under global rescaling and the end-of-step
+     * `tn_mps_norm`-based renormalisation absorbs the discarded
+     * factor) and keeps the inner numerics well-conditioned.  Real
+     * time evolution is norm-preserving by unitarity, so we skip the
+     * renorm there -- the Frobenius pass + division costs one
+     * full-tensor traversal per two-site update, and the
+     * `lanczos_expm` Krylov projection already preserves norm to
+     * machine precision on real-time inputs. */
+    if (config->evolution_type == TDVP_IMAGINARY_TIME) {
+        double tnorm = tensor_norm_frobenius(theta_evolved);
+        if (tnorm > 0.0 && isfinite(tnorm) && tnorm != 1.0) {
+            double inv = 1.0 / tnorm;
+            for (uint64_t i = 0; i < theta_evolved->total_size; i++) {
+                theta_evolved->data[i] *= inv;
+            }
+        }
+    }
+
     // SVD split evolved tensor
     uint32_t mat_dims[2] = {chi_l * d, d * chi_r};
     tensor_t *mat = tensor_reshape(theta_evolved, 2, mat_dims);
@@ -541,11 +822,13 @@ static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
 
     if (!mat) return -1;
 
-    svd_compress_config_t svd_cfg = svd_compress_config_default();
-    svd_cfg.max_bond_dim = config->max_bond_dim;
-    svd_cfg.cutoff = config->svd_cutoff;
-
-    svd_compress_result_t *svd = svd_compress(mat, &svd_cfg);
+    /* Route the SVD compression through the v0.4 truncation helper.
+     * On the legacy path (adaptive_bond.enabled = false, or
+     * bond_state == NULL) this is bit-identical to the previous
+     * inline svd_compress_config_default + max_bond_dim / cutoff
+     * plumbing.  When both are set, the helper runs the
+     * entropy-feedback PID and may re-truncate to a smaller chi. */
+    svd_compress_result_t *svd = tdvp_truncate_bond(mat, config, bond_state);
     tensor_free(mat);
 
     if (!svd) return -1;
@@ -589,7 +872,7 @@ static int trace_tdvp_two_site_update(tn_mps_state_t *mps,
 // TDVP STEP
 // ============================================================================
 
-static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
+int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     if (!engine) return -1;
 
     double start_time = get_time_sec();
@@ -615,8 +898,12 @@ static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Left-to-right sweep with dt/2
     for (uint32_t site = 0; site < n - 1; site++) {
         double trunc_err;
-        if (trace_tdvp_two_site_update(mps, mpo, env, site, dt / 2,
-                                       &engine->config, &trunc_err) != 0) {
+        struct tdvp_bond_pid_state *bs =
+            (engine->bond_states && site < engine->num_bond_states)
+                ? &engine->bond_states[site]
+                : NULL;
+        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
+                                  &engine->config, bs, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %u (L->R)\n", site);
             return -1;
         }
@@ -638,8 +925,13 @@ static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     // Right-to-left sweep with dt/2
     for (int site = n - 2; site >= 0; site--) {
         double trunc_err;
-        if (trace_tdvp_two_site_update(mps, mpo, env, site, dt / 2,
-                                       &engine->config, &trunc_err) != 0) {
+        struct tdvp_bond_pid_state *bs =
+            (engine->bond_states &&
+             (uint32_t)site < engine->num_bond_states)
+                ? &engine->bond_states[site]
+                : NULL;
+        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
+                                  &engine->config, bs, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %d (R->L)\n", site);
             return -1;
         }
@@ -678,22 +970,53 @@ static int trace_tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
         result->truncation_error = total_trunc_error;
         result->max_bond_dim = max_bond;
         result->step_time = get_time_sec() - start_time;
+
+        /* Per-bond chi snapshot from the adaptive-bond controller.
+         * Lazy-allocate the buffer on first call; reuse it if the
+         * size matches (engine bond count is fixed for the engine's
+         * lifetime, so realloc is only needed if the caller swaps
+         * the result between differently sized engines). */
+        if (engine->bond_states && engine->num_bond_states > 0) {
+            if (result->bond_chi_distribution == NULL ||
+                result->n_bonds != engine->num_bond_states) {
+                free(result->bond_chi_distribution);
+                result->bond_chi_distribution = (uint32_t *)calloc(
+                    engine->num_bond_states, sizeof(uint32_t));
+                result->n_bonds = engine->num_bond_states;
+            }
+            if (result->bond_chi_distribution) {
+                for (uint32_t b = 0; b < engine->num_bond_states; b++) {
+                    result->bond_chi_distribution[b] =
+                        engine->bond_states[b].chi;
+                }
+            }
+        } else {
+            /* Legacy path: keep the result clean.  If a buffer is
+             * left over from an earlier adaptive run, free it. */
+            if (result->bond_chi_distribution) {
+                free(result->bond_chi_distribution);
+                result->bond_chi_distribution = NULL;
+                result->n_bonds = 0;
+            }
+        }
     }
 
     return 0;
 }
 
-#define ML_TDVP_STEP_API(symbol)                                                    \
-    int symbol(tdvp_engine_t *engine, tdvp_result_t *result) {                      \
-        return trace_tdvp_step(engine, result);                                      \
-    }
-
-ML_TDVP_STEP_API(tdvp_step) /* macro-generated API */
-
 int tdvp_evolve_to(tdvp_engine_t *engine,
                     double target_time,
                     tdvp_history_t *history) {
     if (!engine) return -1;
+
+    /* Zero-init: tdvp_step's adaptive-bond branch dereferences and
+     * frees result->bond_chi_distribution if it isn't NULL, so we
+     * must not pass it stack garbage on the first iteration.  The
+     * struct is reused across iterations -- tdvp_step realloc's in
+     * place if the bond count is stable, which it is for an engine
+     * with a fixed MPS. */
+    tdvp_result_t result = {0};
+    int rc = 0;
 
     while (engine->current_time < target_time) {
         // Adjust dt for last step if needed
@@ -702,9 +1025,9 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
             engine->config.dt = remaining;
         }
 
-        tdvp_result_t result;
         if (tdvp_step(engine, &result) != 0) {
-            return -1;
+            rc = -1;
+            break;
         }
 
         if (history) {
@@ -718,18 +1041,19 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
         }
     }
 
-    return 0;
+    tdvp_result_clear(&result);
+    return rc;
 }
 
 // ============================================================================
 // SINGLE-STEP STATELESS VERSION
 // ============================================================================
 
-static int trace_tdvp_single_step(tn_mps_state_t *mps,
-                                  const mpo_t *mpo,
-                                  double dt,
-                                  const tdvp_config_t *config,
-                                  double *energy) {
+int tdvp_single_step(tn_mps_state_t *mps,
+                      const mpo_t *mpo,
+                      double dt,
+                      const tdvp_config_t *config,
+                      double *energy) {
     if (!mps || !mpo || !config) return -1;
 
     // Create temporary engine
@@ -739,35 +1063,33 @@ static int trace_tdvp_single_step(tn_mps_state_t *mps,
     tdvp_engine_t *engine = tdvp_engine_create(mps, (mpo_t *)mpo, &cfg);
     if (!engine) return -1;
 
-    tdvp_result_t result;
+    /* Zero-init mirrors the contract in tdvp_evolve_to: the adaptive
+     * branch in tdvp_step may free this result's bond_chi_distribution
+     * if non-NULL. */
+    tdvp_result_t result = {0};
     int ret = tdvp_step(engine, &result);
 
     if (energy) *energy = result.energy;
 
+    tdvp_result_clear(&result);
     tdvp_engine_free(engine);
     return ret;
 }
-
-#define ML_TDVP_SINGLE_STEP_API(symbol)                                             \
-    int symbol(tn_mps_state_t *mps, const mpo_t *mpo, double dt,                    \
-               const tdvp_config_t *config, double *energy) {                      \
-        return trace_tdvp_single_step(mps, mpo, dt, config, energy);                \
-    }
-
-ML_TDVP_SINGLE_STEP_API(tdvp_single_step) /* macro-generated API */
 
 // ============================================================================
 // EVOLUTION WITH OBSERVABLES
 // ============================================================================
 
-static int trace_tdvp_observable_evolution(tdvp_engine_t *engine,
-                                           double target_time,
-                                           observable_callback_t callback,
-                                           void *user_data,
-                                           uint32_t measure_interval) {
+int tdvp_evolve_with_observables(tdvp_engine_t *engine,
+                                  double target_time,
+                                  observable_callback_t callback,
+                                  void *user_data,
+                                  uint32_t measure_interval) {
     if (!engine) return -1;
 
     uint32_t step_count = 0;
+    tdvp_result_t result = {0};
+    int rc = 0;
 
     while (engine->current_time < target_time) {
         double remaining = target_time - engine->current_time;
@@ -775,32 +1097,59 @@ static int trace_tdvp_observable_evolution(tdvp_engine_t *engine,
             engine->config.dt = remaining;
         }
 
-        tdvp_result_t result;
         if (tdvp_step(engine, &result) != 0) {
-            return -1;
+            rc = -1;
+            break;
         }
 
         step_count++;
 
-        if (callback && (step_count % measure_interval == 0)) {
+        if (callback && measure_interval > 0
+            && (step_count % measure_interval == 0)) {
             callback(engine->mps, engine->current_time, user_data);
         }
     }
 
     // Final measurement
-    if (callback) {
+    if (rc == 0 && callback) {
         callback(engine->mps, engine->current_time, user_data);
     }
 
-    return 0;
+    tdvp_result_clear(&result);
+    return rc;
 }
 
-#define ML_TDVP_OBSERVABLE_EVOLUTION_API(symbol)                                    \
-    int symbol(tdvp_engine_t *engine, double target_time,                           \
-               observable_callback_t callback, void *user_data,                     \
-               uint32_t measure_interval) {                                        \
-        return trace_tdvp_observable_evolution(engine, target_time, callback,       \
-                                               user_data, measure_interval);        \
+int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
+                                    double target_time,
+                                    tdvp_history_t *history,
+                                    observable_value_callback_t observable_fn,
+                                    void *user_data) {
+    if (!engine || !history) return -1;
+
+    tdvp_result_t result = {0};
+    int rc = 0;
+
+    while (engine->current_time < target_time) {
+        double remaining = target_time - engine->current_time;
+        if (remaining < engine->config.dt) {
+            engine->config.dt = remaining;
+        }
+
+        if (tdvp_step(engine, &result) != 0) {
+            rc = -1;
+            break;
+        }
+
+        if (observable_fn) {
+            double obs = observable_fn(engine->mps,
+                                        engine->current_time,
+                                        user_data);
+            tdvp_history_add_with_observable(history, &result, obs);
+        } else {
+            tdvp_history_add(history, &result);
+        }
     }
 
-ML_TDVP_OBSERVABLE_EVOLUTION_API(tdvp_evolve_with_observables) /* macro-generated API */
+    tdvp_result_clear(&result);
+    return rc;
+}

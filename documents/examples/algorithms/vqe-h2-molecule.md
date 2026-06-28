@@ -368,37 +368,37 @@ hamiltonian_t* h2_hamiltonian(double bond_length) {
  * Create UCCSD-inspired ansatz.
  */
 quantum_state_t* create_ansatz(double* params) {
-    quantum_state_t* state = quantum_state_create(4);
+    quantum_state_t* state = quantum_state_init(4);
 
     // Hartree-Fock reference |0011⟩
-    quantum_state_x(state, 0);
-    quantum_state_x(state, 1);
+    gate_pauli_x(state, 0);
+    gate_pauli_x(state, 1);
 
     // Single excitations
     double theta1 = params[0];
-    quantum_state_ry(state, 1, theta1 / 2);
-    quantum_state_cnot(state, 1, 2);
-    quantum_state_ry(state, 2, theta1 / 2);
-    quantum_state_cnot(state, 1, 2);
+    gate_ry(state, 1, theta1 / 2);
+    gate_cnot(state, 1, 2);
+    gate_ry(state, 2, theta1 / 2);
+    gate_cnot(state, 1, 2);
 
     double theta2 = params[1];
-    quantum_state_ry(state, 0, theta2 / 2);
-    quantum_state_cnot(state, 0, 3);
-    quantum_state_ry(state, 3, theta2 / 2);
-    quantum_state_cnot(state, 0, 3);
+    gate_ry(state, 0, theta2 / 2);
+    gate_cnot(state, 0, 3);
+    gate_ry(state, 3, theta2 / 2);
+    gate_cnot(state, 0, 3);
 
     // Double excitation
     double theta3 = params[2];
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_cnot(state, 2, 3);
-    quantum_state_ry(state, 0, theta3 / 4);
-    quantum_state_ry(state, 2, theta3 / 4);
-    quantum_state_cnot(state, 0, 2);
-    quantum_state_ry(state, 0, -theta3 / 4);
-    quantum_state_ry(state, 2, theta3 / 4);
-    quantum_state_cnot(state, 0, 2);
-    quantum_state_cnot(state, 0, 1);
-    quantum_state_cnot(state, 2, 3);
+    gate_cnot(state, 0, 1);
+    gate_cnot(state, 2, 3);
+    gate_ry(state, 0, theta3 / 4);
+    gate_ry(state, 2, theta3 / 4);
+    gate_cnot(state, 0, 2);
+    gate_ry(state, 0, -theta3 / 4);
+    gate_ry(state, 2, theta3 / 4);
+    gate_cnot(state, 0, 2);
+    gate_cnot(state, 0, 1);
+    gate_cnot(state, 2, 3);
 
     return state;
 }
@@ -415,7 +415,7 @@ double objective_function(double* params, int n_params, void* context) {
 
     quantum_state_t* state = create_ansatz(params);
     double energy = hamiltonian_expectation(ctx->H, state, 10000);
-    quantum_state_destroy(state);
+    quantum_state_free(state);
 
     return energy;
 }

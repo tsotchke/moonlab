@@ -571,8 +571,23 @@ int cuda_get_capabilities(cuda_compute_ctx_t* ctx, cuda_capabilities_t* caps) {
     caps->warp_size = ctx->device_props.warpSize;
     caps->multiprocessor_count = ctx->device_props.multiProcessorCount;
     caps->supports_unified_memory = (ctx->device_props.managedMemory != 0);
+    /* memoryClockRate (kHz) was removed in CUDA 13.  CUDART_VERSION
+     * is defined in driver_types.h; we test it to pick the right
+     * field.  Until CUDA 13 the legacy field is the only one
+     * available; from CUDA 13 onward we call
+     * cudaDeviceGetAttribute(cudaDevAttrMemoryClockRate). */
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+    {
+        int mem_clock_khz = 0;
+        cudaDeviceGetAttribute(&mem_clock_khz,
+            cudaDevAttrMemoryClockRate, ctx->device_id);
+        caps->memory_bandwidth_gbps = (ctx->device_props.memoryBusWidth / 8.0) *
+                                       (mem_clock_khz * 2.0 / 1e6);
+    }
+#else
     caps->memory_bandwidth_gbps = (ctx->device_props.memoryBusWidth / 8.0) *
                                    (ctx->device_props.memoryClockRate * 2.0 / 1e6);
+#endif
 
     return 0;
 }

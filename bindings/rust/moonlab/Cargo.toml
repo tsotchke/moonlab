@@ -1,6 +1,6 @@
 [package]
 name = "moonlab"
-version = "0.2.5"
+version = "1.1.0-rc"
 edition = "2021"
 authors = ["Moonlab Team"]
 description = "Safe, idiomatic Rust bindings for the Moonlab quantum simulator"
@@ -25,7 +25,14 @@ approx = "0.5"
 default = []
 
 [lints.rust]
-unsafe_code = "warn"
+# This crate is a thin safe-Rust facade over the C ABI in moonlab-sys.
+# Every wrapper method must call into C through `unsafe { ... }`, so the
+# default `unsafe_code = "warn"` produces 300+ warnings of pure noise.
+# We set it to "allow" the same way moonlab-sys does.  If a non-FFI
+# unsafe block ever shows up (say, a custom data-structure built on
+# raw pointers), it should be reviewed in code review rather than
+# caught by this lint -- the FFI noise drowns out the signal.
+unsafe_code = "allow"
 
 [lints.clippy]
 all = "warn"

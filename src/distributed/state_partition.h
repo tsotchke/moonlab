@@ -62,6 +62,13 @@ typedef struct {
     double complex* send_buffer;     /**< Pre-allocated send buffer */
     double complex* recv_buffer;     /**< Pre-allocated recv buffer */
     size_t buffer_size;              /**< Buffer capacity */
+
+    /* Optional GPU backing for the LOCAL shard.  When non-NULL, the
+     * rank's local_count amplitudes live on a CUDA GPU; the host
+     * `amplitudes` buffer is used as a staging area for MPI exchange
+     * (sync'd from GPU before send, sync'd to GPU after recv). */
+    void* gpu_state;                 /**< opaque moonlab_cuda_state_t* */
+    int   gpu_backend;               /**< 0 = CPU, 1 = CUDA */
 } partitioned_state_t;
 
 /**
@@ -139,6 +146,38 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
  * @param state Partitioned state to free
  */
 void partition_state_free(partitioned_state_t* state);
+
+/**
+ * @brief Create a partitioned state whose LOCAL SHARD lives on a CUDA GPU.
+ *
+ * Each rank gets its own moonlab_cuda_state_t holding local_qubits
+ * qubits' worth of amplitudes.  The host `amplitudes` buffer is
+ * also allocated (used as the staging area for MPI exchange), but
+ * the gate primitives dispatch to GPU kernels and the host buffer
+ * is only refreshed at exchange boundaries.
+ *
+ * Only available when libquantumsim was built with QSIM_HAS_CUDA.
+ * Returns NULL on a non-CUDA build or when no GPU is available.
+ */
+partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
+                                                uint32_t num_qubits,
+                                                const partition_config_t* config);
+
+/**
+ * @brief Sync the GPU shard back into the host amplitudes buffer.
+ *
+ * No-op for CPU-only states.  Use before reading or sending the
+ * host amplitudes (the MPI exchange path does this automatically).
+ */
+partition_error_t partition_sync_to_host(partitioned_state_t* state);
+
+/**
+ * @brief Push the host amplitudes buffer back into the GPU shard.
+ *
+ * No-op for CPU-only states.  Use after writing to the host
+ * amplitudes from MPI receive or any other host-side mutation.
+ */
+partition_error_t partition_sync_from_host(partitioned_state_t* state);
 
 // ============================================================================
 // STATE INITIALIZATION
