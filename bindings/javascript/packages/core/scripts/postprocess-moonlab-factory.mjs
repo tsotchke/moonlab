@@ -168,34 +168,39 @@ export function postprocessMoonlabFactorySource(source) {
   }
 
   let output = source;
-  const factoryStart = 'var MoonlabModule = (() => {';
-  if (!output.includes(factoryStart)) {
+  const factoryStart = /var\s+MoonlabModule\s*=\s*\(\(\)\s*=>\s*\{/;
+  if (!factoryStart.test(output)) {
     throw new Error('moonlab.js does not contain the expected MODULARIZE factory start');
   }
   output = output.replace(factoryStart, 'function build_moonlab_module_factory() {\n  return (() => {');
 
-  const moduleReturn = '    return moduleRtn;';
-  const moduleReturnIndex = output.lastIndexOf(moduleReturn);
-  if (moduleReturnIndex < 0) {
+  const moduleReturn = /(^|\n)([ \t]*)return\s+moduleRtn\s*;/g;
+  let moduleReturnMatch = null;
+  for (const match of output.matchAll(moduleReturn)) {
+    moduleReturnMatch = match;
+  }
+  if (!moduleReturnMatch) {
     throw new Error('moonlab.js does not contain the expected factory return');
   }
+  const moduleReturnIndex = moduleReturnMatch.index + moduleReturnMatch[1].length;
   output = `${output.slice(0, moduleReturnIndex)}${readyTrace}${output.slice(moduleReturnIndex)}`;
 
-  const invocationNeedle = '  return async function(moduleArg = {}) {\n';
-  if (!output.includes(invocationNeedle)) {
+  const invocationNeedle = /(^|\n)([ \t]*)return\s+async\s+function\s*\(\s*moduleArg\s*=\s*\{\}\s*\)\s*\{\s*\n?/;
+  if (!invocationNeedle.test(output)) {
     throw new Error('moonlab.js does not contain the expected async factory entry');
   }
-  output = output.replace(invocationNeedle, `${invocationNeedle}${invocationTrace}`);
+  output = output.replace(invocationNeedle, (match) => `${match}${invocationTrace}`);
 
-  const exportMarker = '\n// Export using a UMD style export, or ES6 exports if selected';
-  const closeNeedle = '\n})();\n\n// Export using a UMD style export, or ES6 exports if selected';
-  if (!output.includes(closeNeedle)) {
+  const exportMarker = '// Export using a UMD style export, or ES6 exports if selected';
+  const exportMarkerIndex = output.indexOf(exportMarker);
+  const closeIndex = exportMarkerIndex >= 0 ? output.lastIndexOf('})();', exportMarkerIndex) : -1;
+  if (exportMarkerIndex < 0 || closeIndex < 0) {
     throw new Error('moonlab.js does not contain the expected factory close before exports');
   }
-  output = output.replace(
-    closeNeedle,
-    `\n  })();\n}\n\nvar MoonlabModule = build_moonlab_module_factory();\n\n${probeSurface}\n${exportMarker}`
-  );
+  output =
+    `${output.slice(0, closeIndex)}  })();\n}\n\n` +
+    `var MoonlabModule = build_moonlab_module_factory();\n\n${probeSurface}\n` +
+    output.slice(exportMarkerIndex);
 
   return output;
 }
