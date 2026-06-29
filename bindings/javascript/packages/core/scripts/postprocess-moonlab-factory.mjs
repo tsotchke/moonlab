@@ -185,7 +185,7 @@ export function postprocessMoonlabFactorySource(source) {
   const moduleReturnIndex = moduleReturnMatch.index + moduleReturnMatch[1].length;
   output = `${output.slice(0, moduleReturnIndex)}${readyTrace}${output.slice(moduleReturnIndex)}`;
 
-  const invocationNeedle = /(^|\n)([ \t]*)return\s+(?:async\s+)?function\s*\(\s*moduleArg\s*=\s*\{\}\s*\)\s*\{\s*\n?/;
+  const invocationNeedle = /(^|\n)([ \t]*)return\s*\(?\s*(?:async\s+)?function\s*\([^)]*\)\s*\{\s*\n?/;
   if (!invocationNeedle.test(output)) {
     throw new Error('moonlab.js does not contain the expected factory entry');
   }
