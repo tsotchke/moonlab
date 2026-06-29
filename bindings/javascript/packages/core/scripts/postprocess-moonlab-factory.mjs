@@ -191,16 +191,15 @@ export function postprocessMoonlabFactorySource(source) {
   }
   output = output.replace(invocationNeedle, (match) => `${match}${invocationTrace}`);
 
-  const exportMarker = '// Export using a UMD style export, or ES6 exports if selected';
-  const exportMarkerIndex = output.indexOf(exportMarker);
-  const closeIndex = exportMarkerIndex >= 0 ? output.lastIndexOf('})();', exportMarkerIndex) : -1;
-  if (exportMarkerIndex < 0 || closeIndex < 0) {
+  const closeNeedle = '})();';
+  const closeIndex = output.lastIndexOf(closeNeedle);
+  if (closeIndex < 0) {
     throw new Error('moonlab.js does not contain the expected factory close before exports');
   }
   output =
     `${output.slice(0, closeIndex)}  })();\n}\n\n` +
     `var MoonlabModule = build_moonlab_module_factory();\n\n${probeSurface}\n` +
-    output.slice(exportMarkerIndex);
+    output.slice(closeIndex + closeNeedle.length);
 
   return output;
 }
