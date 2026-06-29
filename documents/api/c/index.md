@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: C API Reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # C API Reference
 
 The C library is the core of Moonlab Quantum Simulator, providing maximum performance and direct hardware access. All language bindings are built on top of this library.
@@ -29,7 +36,7 @@ The C API is organized into modules:
 
 ## Quick Start
 
-```c
+[archived fence delimiter: ```c]
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 #include "src/quantum/measurement.h"
@@ -63,7 +70,7 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Core Types
 
@@ -71,7 +78,7 @@ int main(void) {
 
 The primary data structure representing a quantum state:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;              // Number of qubits (1-32)
     size_t state_dim;               // 2^num_qubits
@@ -91,21 +98,21 @@ typedef struct {
     // Memory management
     int owns_memory;                // 1 if we allocated amplitudes
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 ### complex_t
 
 Complex number type (C99 `double _Complex`):
 
-```c
+[archived fence delimiter: ```c]
 typedef double _Complex complex_t;
-```
+[archived fence delimiter: ```]
 
 ### qs_error_t
 
 Error codes returned by most functions:
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_SUCCESS = 0,
     QS_ERROR_INVALID_QUBIT = -1,
@@ -114,7 +121,7 @@ typedef enum {
     QS_ERROR_OUT_OF_MEMORY = -4,
     QS_ERROR_INVALID_DIMENSION = -5
 } qs_error_t;
-```
+[archived fence delimiter: ```]
 
 ## State Management Functions
 
@@ -122,9 +129,9 @@ typedef enum {
 
 Initialize a quantum state in $|0\cdots0\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Pointer to uninitialized quantum_state_t
@@ -135,20 +142,20 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
 **Memory**: Allocates $2^n \times 16$ bytes
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 if (quantum_state_init(&state, 10) != QS_SUCCESS) {
     // Handle error
 }
-```
+[archived fence delimiter: ```]
 
 ### quantum_state_free
 
 Release quantum state resources:
 
-```c
+[archived fence delimiter: ```c]
 void quantum_state_free(quantum_state_t *state);
-```
+[archived fence delimiter: ```]
 
 **Important**: Always call this to avoid memory leaks.
 
@@ -156,17 +163,17 @@ void quantum_state_free(quantum_state_t *state);
 
 Create a copy of a quantum state:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src);
-```
+[archived fence delimiter: ```]
 
 ### quantum_state_reset
 
 Reset state to $|0\cdots0\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 void quantum_state_reset(quantum_state_t *state);
-```
+[archived fence delimiter: ```]
 
 ## Gate Functions
 
@@ -174,7 +181,7 @@ All gates return `qs_error_t` and take the state and target qubit(s):
 
 ### Single-Qubit Gates
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t gate_pauli_x(quantum_state_t *state, int qubit);
 qs_error_t gate_pauli_y(quantum_state_t *state, int qubit);
 qs_error_t gate_pauli_z(quantum_state_t *state, int qubit);
@@ -183,35 +190,35 @@ qs_error_t gate_s(quantum_state_t *state, int qubit);
 qs_error_t gate_s_dagger(quantum_state_t *state, int qubit);
 qs_error_t gate_t(quantum_state_t *state, int qubit);
 qs_error_t gate_t_dagger(quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 ### Rotation Gates
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t gate_rx(quantum_state_t *state, int qubit, double theta);
 qs_error_t gate_ry(quantum_state_t *state, int qubit, double theta);
 qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta);
 qs_error_t gate_phase(quantum_state_t *state, int qubit, double theta);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `theta`: Rotation angle in radians
 
 ### Two-Qubit Gates
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t gate_cnot(quantum_state_t *state, int control, int target);
 qs_error_t gate_cz(quantum_state_t *state, int control, int target);
 qs_error_t gate_swap(quantum_state_t *state, int qubit1, int qubit2);
 qs_error_t gate_cphase(quantum_state_t *state, int control, int target, double theta);
-```
+[archived fence delimiter: ```]
 
 ### Three-Qubit Gates
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t gate_toffoli(quantum_state_t *state, int control1, int control2, int target);
 qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int target2);
-```
+[archived fence delimiter: ```]
 
 ## Measurement Functions
 
@@ -219,26 +226,26 @@ qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int ta
 
 Get probability of measuring a specific basis state:
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_get_probability(const quantum_state_t *state, uint64_t basis_state);
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 double p_zero = quantum_state_get_probability(&state, 0);  // P(|00...0⟩)
-```
+[archived fence delimiter: ```]
 
 ### quantum_measure_all
 
 Measure all qubits:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t quantum_measure_all(
     quantum_state_t *state,
     measurement_result_t *result,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Note**: Collapses the state to the measured outcome.
 
@@ -248,44 +255,44 @@ qs_error_t quantum_measure_all(
 
 Calculate von Neumann entropy of a subsystem:
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_entanglement_entropy(
     const quantum_state_t *state,
     const int *subsystem_qubits,
     size_t num_subsystem_qubits
 );
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 int qubits_a[] = {0, 1};
 double S = quantum_state_entanglement_entropy(&state, qubits_a, 2);
-```
+[archived fence delimiter: ```]
 
 ## Compilation
 
 ### Basic Build
 
-```bash
+[archived fence delimiter: ```bash]
 make
-```
+[archived fence delimiter: ```]
 
 ### Linking
 
-```bash
+[archived fence delimiter: ```bash]
 gcc -O3 your_program.c -L. -lquantumsim -lm -o your_program
-```
+[archived fence delimiter: ```]
 
 ### Include Paths
 
-```c
+[archived fence delimiter: ```c]
 // Include from project root
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 
 // Or set include path: -I/path/to/quantum-simulator/src
 #include "quantum/state.h"
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -297,10 +304,10 @@ gcc -O3 your_program.c -L. -lquantumsim -lm -o your_program
 
 Moonlab uses 64-byte aligned allocations for optimal SIMD and AMX performance:
 
-```c
+[archived fence delimiter: ```c]
 // Internal: allocates aligned memory
 state->amplitudes = aligned_alloc(64, state_dim * sizeof(complex_t));
-```
+[archived fence delimiter: ```]
 
 ## Performance Tips
 
@@ -311,7 +318,7 @@ state->amplitudes = aligned_alloc(64, state_dim * sizeof(complex_t));
 
 ## Error Handling Pattern
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t err;
 
 err = quantum_state_init(&state, num_qubits);
@@ -330,31 +337,32 @@ if (err != QS_SUCCESS) {
 
 quantum_state_free(&state);
 return QS_SUCCESS;
-```
+[archived fence delimiter: ```]
 
 ## Platform-Specific Features
 
 ### macOS / Apple Silicon
 
-```c
+[archived fence delimiter: ```c]
 #include "src/optimization/gpu_metal.h"
 
 // Enable Metal GPU acceleration
 metal_init();
 metal_gate_hadamard(&state, qubit);
 metal_cleanup();
-```
+[archived fence delimiter: ```]
 
 ### Linux with OpenMP
 
-```c
+[archived fence delimiter: ```c]
 // Automatically uses OpenMP if compiled with -fopenmp
 // Set thread count:
 export OMP_NUM_THREADS=8
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Quantum State](quantum-state.md) - Full state management reference
 - [Gates](gates.md) - Complete gate documentation
 - [Performance Tuning](../../guides/performance-tuning.md) - Optimization guide
+```

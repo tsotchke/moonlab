@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab WASM WebGPU Plan
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab WASM WebGPU Plan
 
 ## Objective
@@ -195,3 +202,4 @@ Pass criteria:
 - Phase 3 done:
   - At least one MPS compute path runs on WebGPU and matches CPU within tolerances.
   - Eval loop runs unattended and enforces parity thresholds.
+```

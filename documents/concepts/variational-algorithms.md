@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Variational Algorithms
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Variational Algorithms
 
 Hybrid quantum-classical optimization.
@@ -47,7 +54,7 @@ Good ansätze are:
 
 Alternating rotation and entanglement layers:
 
-```
+[archived fence delimiter: ```]
 Layer 1:    Ry──Rz────●────────────
             Ry──Rz────X───●────────
             Ry──Rz────────X───●────
@@ -56,9 +63,9 @@ Layer 1:    Ry──Rz────●────────────
 Layer 2:    Ry──Rz────●────────────
             Ry──Rz────X───●────────
             ...
-```
+[archived fence delimiter: ```]
 
-```c
+[archived fence delimiter: ```c]
 // Create hardware-efficient ansatz
 for (int layer = 0; layer < num_layers; layer++) {
     for (int q = 0; q < num_qubits; q++) {
@@ -69,7 +76,7 @@ for (int layer = 0; layer < num_layers; layer++) {
         gate_cnot(state, q, q + 1);
     }
 }
-```
+[archived fence delimiter: ```]
 
 #### UCCSD Ansatz (Chemistry)
 
@@ -79,10 +86,10 @@ $$U(\theta) = e^{T(\theta) - T^\dagger(\theta)}$$
 
 where $T = T_1 + T_2$ includes single and double excitations.
 
-```c
+[archived fence delimiter: ```c]
 // Apply UCCSD excitation operator
 vqe_apply_uccsd_ansatz(state, theta, molecular_orbitals);
-```
+[archived fence delimiter: ```]
 
 #### QAOA Ansatz
 
@@ -90,7 +97,7 @@ Alternating cost and mixer unitaries:
 
 $$|\gamma, \beta\rangle = \prod_{p=1}^{P} e^{-i\beta_p B} e^{-i\gamma_p C} |+\rangle^{\otimes n}$$
 
-```c
+[archived fence delimiter: ```c]
 // QAOA layer
 for (int p = 0; p < num_layers; p++) {
     // Cost unitary
@@ -98,7 +105,7 @@ for (int p = 0; p < num_layers; p++) {
     // Mixer unitary
     qaoa_apply_mixer_unitary(state, beta[p]);
 }
-```
+[archived fence delimiter: ```]
 
 ## Gradient Computation
 
@@ -110,13 +117,13 @@ $$\frac{\partial C}{\partial \theta} = \frac{C(\theta + \pi/2) - C(\theta - \pi/
 
 This is exact (not finite difference approximation).
 
-```c
+[archived fence delimiter: ```c]
 // Compute gradient via parameter shift
 double gradient = 0.5 * (
     compute_cost(theta + M_PI/2) -
     compute_cost(theta - M_PI/2)
 );
-```
+[archived fence delimiter: ```]
 
 ### General Parameter Shift
 
@@ -145,7 +152,7 @@ Requires only 2 circuit evaluations per iteration (vs. $2p$ for parameter shift 
 | **L-BFGS** | Quasi-Newton, good for smooth landscapes |
 | **Natural Gradient** | Uses quantum Fisher information |
 
-```c
+[archived fence delimiter: ```c]
 // Adam optimizer
 typedef struct {
     double learning_rate;
@@ -165,7 +172,7 @@ void adam_step(adam_optimizer_t* opt, double* theta, double* grad, int n) {
     }
     opt->t++;
 }
-```
+[archived fence delimiter: ```]
 
 ### Gradient-Free
 
@@ -176,7 +183,7 @@ void adam_step(adam_optimizer_t* opt, double* theta, double* grad, int n) {
 | **Powell** | Direction set method |
 | **Bayesian** | Gaussian process surrogate |
 
-```c
+[archived fence delimiter: ```c]
 // COBYLA configuration
 cobyla_config_t config = {
     .max_evaluations = 1000,
@@ -185,7 +192,7 @@ cobyla_config_t config = {
 };
 
 cobyla_minimize(cost_function, theta, num_params, &config);
-```
+[archived fence delimiter: ```]
 
 ## VQE (Variational Quantum Eigensolver)
 
@@ -205,18 +212,18 @@ $$H = \sum_i c_i P_i$$
 
 Measure each $\langle P_i \rangle$ separately:
 
-```c
+[archived fence delimiter: ```c]
 // Measure Hamiltonian expectation
 double energy = 0.0;
 for (int i = 0; i < num_terms; i++) {
     double exp_val = measure_pauli_string(state, paulis[i], qubits[i]);
     energy += coefficients[i] * exp_val;
 }
-```
+[archived fence delimiter: ```]
 
 ### Example: H2 Molecule
 
-```c
+[archived fence delimiter: ```c]
 // Create VQE solver
 vqe_solver_t* vqe = vqe_create(4, 2, VQE_OPTIMIZER_ADAM);
 
@@ -228,7 +235,7 @@ vqe_result_t result = vqe_solve(vqe);
 
 printf("Ground state energy: %.6f Hartree\n", result.energy);
 printf("Converged in %d iterations\n", result.num_iterations);
-```
+[archived fence delimiter: ```]
 
 ## QAOA (Quantum Approximate Optimization)
 
@@ -248,7 +255,7 @@ Cost function:
 
 $$C = \sum_{(i,j) \in E} \frac{1 - Z_i Z_j}{2}$$
 
-```c
+[archived fence delimiter: ```c]
 // Create QAOA solver
 qaoa_solver_t* qaoa = qaoa_create(num_vertices, num_layers);
 
@@ -262,7 +269,7 @@ qaoa_result_t result = qaoa_solve(qaoa);
 
 printf("Best cut value: %d\n", result.best_cost);
 printf("Best solution: %s\n", result.best_bitstring);
-```
+[archived fence delimiter: ```]
 
 ### Approximation Ratio
 
@@ -290,7 +297,7 @@ $$\text{Var}[\partial_\theta C] \sim O(1/2^n)$$
 4. **Warm starting**: Initialize near known good state
 5. **Structured ansätze**: Exploit problem symmetry
 
-```c
+[archived fence delimiter: ```c]
 // Layer-wise training
 for (int layer = 0; layer < num_layers; layer++) {
     // Only train parameters in current layer
@@ -300,7 +307,7 @@ for (int layer = 0; layer < num_layers; layer++) {
         update_layer_params(layer, grad);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Noise Effects
 
@@ -316,7 +323,7 @@ Variational algorithms can be made noise-resilient:
 1. Decompose ideal gates as noisy gate combinations
 2. Apply quasi-probability corrections
 
-```c
+[archived fence delimiter: ```c]
 // Zero-noise extrapolation
 double noise_levels[] = {1.0, 1.5, 2.0};
 double energies[3];
@@ -327,7 +334,7 @@ for (int i = 0; i < 3; i++) {
 }
 
 double extrapolated = richardson_extrapolate(noise_levels, energies, 3);
-```
+[archived fence delimiter: ```]
 
 ## Convergence
 
@@ -340,7 +347,7 @@ double extrapolated = richardson_extrapolate(noise_levels, energies, 3);
 
 ### Typical Behavior
 
-```
+[archived fence delimiter: ```]
 Iteration | Energy    | Gradient Norm
 ----------|-----------|---------------
 0         | -0.5000   | 0.8234
@@ -349,7 +356,7 @@ Iteration | Energy    | Gradient Norm
 100       | -1.1364   | 0.0089
 150       | -1.1371   | 0.0012
 200       | -1.1372   | 0.0001  ✓ Converged
-```
+[archived fence delimiter: ```]
 
 ## References
 
@@ -374,3 +381,4 @@ Iteration | Energy    | Gradient Norm
 - [C API: VQE](../api/c/vqe.md) - VQE function reference
 - [C API: QAOA](../api/c/qaoa.md) - QAOA function reference
 
+```

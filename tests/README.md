@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Quantum Simulator - Test Suite
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Quantum Simulator - Test Suite
 
 Comprehensive test infrastructure for production-ready quantum simulation.
@@ -16,24 +23,24 @@ The Moonlab test suite provides extensive coverage across:
 ## Quick Start
 
 ### Run All Tests
-```bash
+[archived fence delimiter: ```bash]
 make test
-```
+[archived fence delimiter: ```]
 
 ### Run Unit Tests Only
-```bash
+[archived fence delimiter: ```bash]
 make test_unit
-```
+[archived fence delimiter: ```]
 
 ### Generate Coverage Report
-```bash
+[archived fence delimiter: ```bash]
 ./tools/test_coverage.sh
-```
+[archived fence delimiter: ```]
 Opens HTML coverage report in browser (macOS) showing line-by-line coverage.
 
 ## Test Structure
 
-```
+[archived fence delimiter: ```]
 tests/
 ├── unit/                          # Unit tests (NEW)
 │   ├── test_quantum_state.c      # State management (25+ tests)
@@ -47,7 +54,7 @@ tests/
 ├── bell_test_demo.c              # Bell inequality verification
 ├── gate_test.c                   # Basic gate correctness
 └── correlation_test.c            # Entanglement correlation
-```
+[archived fence delimiter: ```]
 
 ## Unit Tests
 
@@ -65,9 +72,9 @@ Tests include:
 - ✅ Large state support (16 qubits, 65K dimensions)
 
 **Run**:
-```bash
+[archived fence delimiter: ```bash]
 ./tests/unit/test_quantum_state
-```
+[archived fence delimiter: ```]
 
 ### Quantum Gates (`test_quantum_gates.c`)
 **Coverage**: 80%+ of [`gates.c`](../src/quantum/gates.c)
@@ -85,9 +92,9 @@ Tests include:
 - ✅ Error handling
 
 **Run**:
-```bash
+[archived fence delimiter: ```bash]
 ./tests/unit/test_quantum_gates
-```
+[archived fence delimiter: ```]
 
 ## Integration Tests
 
@@ -101,9 +108,9 @@ Comprehensive Quantum RNG v3.0 validation:
 - ARM hardware entropy
 
 **Run**:
-```bash
+[archived fence delimiter: ```bash]
 ./qsim_test
-```
+[archived fence delimiter: ```]
 
 ### Health Tests (`health_tests_test.c`)
 NIST SP 800-90B compliance:
@@ -113,9 +120,9 @@ NIST SP 800-90B compliance:
 - Statistical analysis
 
 **Run**:
-```bash
+[archived fence delimiter: ```bash]
 ./tests/health_tests_test
-```
+[archived fence delimiter: ```]
 
 ### Bell Inequality Test (`bell_test_demo.c`)
 Proves genuine quantum behavior:
@@ -125,9 +132,9 @@ Proves genuine quantum behavior:
 - Expected CHSH ≈ 2.828
 
 **Run**:
-```bash
+[archived fence delimiter: ```bash]
 ./tests/bell_test_demo
-```
+[archived fence delimiter: ```]
 
 ## CI/CD Pipeline
 
@@ -160,19 +167,19 @@ Located in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 ### Running CI Locally
 
 **Full test suite**:
-```bash
+[archived fence delimiter: ```bash]
 make clean && make && make test
-```
+[archived fence delimiter: ```]
 
 **With coverage**:
-```bash
+[archived fence delimiter: ```bash]
 ./tools/test_coverage.sh
-```
+[archived fence delimiter: ```]
 
 **Memory leak check** (requires Valgrind):
-```bash
+[archived fence delimiter: ```bash]
 valgrind --leak-check=full ./tests/unit/test_quantum_state
-```
+[archived fence delimiter: ```]
 
 ## Test Coverage Goals
 
@@ -190,7 +197,7 @@ valgrind --leak-check=full ./tests/unit/test_quantum_state
 
 ### Unit Test Template
 
-```c
+[archived fence delimiter: ```c]
 #include "../../src/module/header.h"
 #include <stdio.h>
 #include <assert.h>
@@ -233,12 +240,12 @@ int main(void) {
     printf("Tests: %d/%d passed\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;
 }
-```
+[archived fence delimiter: ```]
 
 ### Add to Build System
 
 Edit [`Makefile`](../Makefile):
-```makefile
+[archived fence delimiter: ```makefile]
 # Add test executable
 NEW_TEST = tests/unit/test_new_feature
 
@@ -248,12 +255,12 @@ ALL_TESTS = ... $(NEW_TEST)
 # Build rule
 $(NEW_TEST): $(TEST_DIR)/unit/test_new_feature.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
-```
+[archived fence delimiter: ```]
 
 ## Performance Testing
 
 ### Benchmarks
-```bash
+[archived fence delimiter: ```bash]
 # Run performance benchmarks
 make benchmarks
 
@@ -261,17 +268,17 @@ make benchmarks
 ./examples/applications/vqe_h2_molecule
 ./examples/applications/qaoa_maxcut
 ./examples/quantum/grover_parallel_benchmark
-```
+[archived fence delimiter: ```]
 
 ### Profiling
-```bash
+[archived fence delimiter: ```bash]
 # Build with profiling
 make CFLAGS="-pg" clean all
 
 # Run and generate gprof report
 ./tests/unit/test_quantum_state
 gprof ./tests/unit/test_quantum_state gmon.out > analysis.txt
-```
+[archived fence delimiter: ```]
 
 ## Continuous Improvement
 
@@ -292,14 +299,14 @@ gprof ./tests/unit/test_quantum_state gmon.out > analysis.txt
 ## Troubleshooting
 
 ### Build Issues
-```bash
+[archived fence delimiter: ```bash]
 # Clean rebuild
 make clean && make tests unit_tests
 
 # Check dependencies
 brew install libomp lcov  # macOS
 apt install libomp-dev lcov  # Linux
-```
+[archived fence delimiter: ```]
 
 ### Test Failures
 1. Check error messages in test output
@@ -308,7 +315,7 @@ apt install libomp-dev lcov  # Linux
 4. Check CI logs for platform-specific issues
 
 ### Coverage Issues
-```bash
+[archived fence delimiter: ```bash]
 # Ensure gcov is installed
 gcov --version
 
@@ -317,7 +324,7 @@ gcov --version
 
 # View detailed HTML report
 open coverage_report/index.html
-```
+[archived fence delimiter: ```]
 
 ## Contributing
 
@@ -336,4 +343,4 @@ open coverage_report/index.html
 
 ---
 
-**Questions?** See the [contributing documentation](../docs/contributing/index.md) or open an issue.
+**Questions?** See the [contributing documentation](../docs/contributing/index.md) or open an issue.```

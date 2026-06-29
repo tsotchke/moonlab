@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab v1.0 head-to-head benchmark report
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab v1.0 head-to-head benchmark report
 
 This document defines the three head-to-head benchmarks that Moonlab v1.0
@@ -38,12 +45,12 @@ run on the target hardware.  The competitor numbers below are listed as
 
 The shared build command:
 
-```
+[archived fence delimiter: ```]
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target ca_mps_kagome_bench
 cmake --build build --target surface_threshold_bench
 cmake --build build --target sv_random_bench
-```
+[archived fence delimiter: ```]
 
 All three binaries land at `build/<target>` and accept a positional
 output-path argument plus a small set of flags documented per harness
@@ -58,9 +65,9 @@ output-path argument plus a small set of flags documented per harness
 - **Lattice**: 6 x 2 kagome torus with full periodic boundary conditions
   in both directions; 12 sites, 24 unique bonds.
 - **Hamiltonian** (Pauli convention):
-  ```
+[archived fence delimiter:   ```]
   H = 0.25 * sum_<i,j>  (X_i X_j + Y_i Y_j + Z_i Z_j)
-  ```
+[archived fence delimiter:   ```]
   which is the spin-1/2 Heisenberg AFM with J_spin = 1.
 - **Reference energy**: E_0 = -5.444875216, from Lauchli-Sudan-Sorensen
   PRB 83, 212401 (2011) Table I cluster "12", cross-checked by libirrep
@@ -80,12 +87,12 @@ output-path argument plus a small set of flags documented per harness
 
 ### Run Moonlab
 
-```
+[archived fence delimiter: ```]
 ./build/ca_mps_kagome_bench \
     benchmarks/v1_comparison/results/ca_mps_kagome.json \
     --chi 64,128,256 \
     --steps 200
-```
+[archived fence delimiter: ```]
 
 Output JSON schema: `moonlab/v1_comparison/ca_mps_kagome`.  Each record
 in `runs[]` carries `{chi, energy, error_vs_prb, wall_clock_s,
@@ -115,12 +122,12 @@ ITensor.jl DMRG on the same lattice and Hamiltonian.  Save the script
 below as `bench/itensor_kagome.jl` in a directory of the user's choice,
 then run:
 
-```
+[archived fence delimiter: ```]
 julia --project=. bench/itensor_kagome.jl \
     --chi 64,128,256 \
     --sweeps 30 \
     --out itensor_kagome.json
-```
+[archived fence delimiter: ```]
 
 The script must:
 1. Build the same 6 x 2 kagome bond list with full periodic boundary
@@ -178,11 +185,11 @@ Peak RSS at chi = 128: Moonlab TBD MB, ITensor TBD MB.
 
 ### Run Moonlab
 
-```
+[archived fence delimiter: ```]
 ./build/surface_threshold_bench \
     benchmarks/v1_comparison/results/surface_threshold.json \
     --shots 10000
-```
+[archived fence delimiter: ```]
 
 Output JSON schema: `moonlab/v1_comparison/surface_threshold`.  Each
 record in `runs[]` carries `{d, p, shots, fails, p_logical, std_error,
@@ -193,13 +200,13 @@ wall_clock_s, peak_rss_bytes}`.
 Stim + PyMatching on the same code-capacity model.  Save the script
 below as `bench/stim_threshold.py` and run:
 
-```
+[archived fence delimiter: ```]
 python bench/stim_threshold.py \
     --distances 3,5,7 \
     --p 0.001,0.003,0.01,0.03,0.1 \
     --shots 10000 \
     --out stim_threshold.json
-```
+[archived fence delimiter: ```]
 
 The script must:
 1. For each d, build a Stim circuit for the toric code with X-only
@@ -276,13 +283,13 @@ Fill this table from the median of three runs each.
 
 ### Run Moonlab
 
-```
+[archived fence delimiter: ```]
 ./build/sv_random_bench \
     benchmarks/v1_comparison/results/sv_random.json \
     --qubits 20,22,24,26,28,30 \
     --depth 50 \
     --shots 1024
-```
+[archived fence delimiter: ```]
 
 Output JSON schema: `moonlab/v1_comparison/sv_random`.  Each record in
 `runs[]` carries `{N, depth, shots, wall_clock_s, circuit_s, sampling_s,
@@ -293,13 +300,13 @@ peak_rss_bytes, expected_state_dim_bytes}`.
 Qiskit-Aer's statevector backend with the same circuit family.  Save
 the script below as `bench/qiskit_aer_random.py` and run:
 
-```
+[archived fence delimiter: ```]
 python bench/qiskit_aer_random.py \
     --qubits 20,22,24,26,28,30 \
     --depth 50 \
     --shots 1024 \
     --out qiskit_aer_random.json
-```
+[archived fence delimiter: ```]
 
 The script must:
 1. Match the Moonlab RNG seed and the Mezzadri 2007 Haar construction
@@ -331,7 +338,7 @@ Fill this table from the median of three runs each.
 
 From a clean checkout:
 
-```
+[archived fence delimiter: ```]
 # 1. Configure + build all three v1 comparison harnesses.
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target ca_mps_kagome_bench
@@ -353,10 +360,11 @@ done
 
 # 4. Pick the median of three runs per cell, populate the tables in
 #    this document, and commit.
-```
+[archived fence delimiter: ```]
 
 When the tables are populated, drop the `TBD` entries and add a
 "results provenance" footer listing the machine, OS, compiler version,
 and date of the run.  Anything that has not been measured stays `TBD` --
 a v1.0 claim that this document is the head-to-head report only holds
 once every cell has a number behind it.
+```

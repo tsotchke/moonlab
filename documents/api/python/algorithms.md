@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Python Algorithms API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Python Algorithms API
 
 Complete reference for quantum algorithms in the Python API.
@@ -19,13 +26,13 @@ Find ground state energies of molecular Hamiltonians using variational optimizat
 
 ### VQE Class
 
-```python
+[archived fence delimiter: ```python]
 VQE(
     num_qubits: int,
     num_layers: int = 2,
     optimizer_type: int = VQE.OPTIMIZER_ADAM
 )
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits for the ansatz
@@ -42,9 +49,9 @@ VQE(
 
 #### solve_h2
 
-```python
+[archived fence delimiter: ```python]
 solve_h2(bond_distance: float = 0.74) -> dict
-```
+[archived fence delimiter: ```]
 
 Find ground state of H$_2$ molecule.
 
@@ -54,7 +61,7 @@ Find ground state of H$_2$ molecule.
 **Returns**: Dictionary with results
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 
 vqe = VQE(num_qubits=4, num_layers=2)
@@ -64,13 +71,13 @@ print(f"Energy: {result['energy']:.6f} Hartree")
 print(f"Energy: {result['energy_kcal_mol']:.2f} kcal/mol")
 print(f"Converged: {result['converged']}")
 print(f"Iterations: {result['num_iterations']}")
-```
+[archived fence delimiter: ```]
 
 #### solve_lih
 
-```python
+[archived fence delimiter: ```python]
 solve_lih(bond_distance: float = 1.6) -> dict
-```
+[archived fence delimiter: ```]
 
 Find ground state of LiH molecule.
 
@@ -79,25 +86,25 @@ Find ground state of LiH molecule.
 
 #### solve_h2o
 
-```python
+[archived fence delimiter: ```python]
 solve_h2o() -> dict
-```
+[archived fence delimiter: ```]
 
 Find ground state of H$_2$O molecule.
 
 #### solve
 
-```python
+[archived fence delimiter: ```python]
 solve(hamiltonian: MolecularHamiltonian) -> dict
-```
+[archived fence delimiter: ```]
 
 Solve for custom Hamiltonian.
 
 #### compute_energy
 
-```python
+[archived fence delimiter: ```python]
 compute_energy(params: np.ndarray) -> float
-```
+[archived fence delimiter: ```]
 
 Compute energy for given variational parameters.
 
@@ -116,7 +123,7 @@ Compute energy for given variational parameters.
 
 Build custom Hamiltonians as sums of Pauli strings.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import MolecularHamiltonian, VQE
 
 # Create 4-qubit Hamiltonian
@@ -128,7 +135,7 @@ H.add_term(0.2, "IIZI")   # Z on qubit 1
 # Solve
 vqe = VQE(num_qubits=4, num_layers=3)
 result = vqe.solve(H)
-```
+[archived fence delimiter: ```]
 
 ## QAOA (Quantum Approximate Optimization Algorithm)
 
@@ -136,9 +143,9 @@ Solve combinatorial optimization problems.
 
 ### QAOA Class
 
-```python
+[archived fence delimiter: ```python]
 QAOA(num_qubits: int, num_layers: int = 3)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits (vertices in MaxCut)
@@ -148,12 +155,12 @@ QAOA(num_qubits: int, num_layers: int = 3)
 
 #### solve_maxcut
 
-```python
+[archived fence delimiter: ```python]
 solve_maxcut(
     edges: List[Tuple[int, int]],
     weights: Optional[List[float]] = None
 ) -> dict
-```
+[archived fence delimiter: ```]
 
 Solve MaxCut problem on a graph.
 
@@ -162,7 +169,7 @@ Solve MaxCut problem on a graph.
 - `weights`: Optional edge weights (default: all 1.0)
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 
 # Pentagon graph
@@ -174,13 +181,13 @@ result = qaoa.solve_maxcut(edges)
 print(f"Best cut: {result['best_bitstring']:05b}")
 print(f"Cut value: {result['best_cost']}")
 print(f"Expectation: {result['expectation']:.4f}")
-```
+[archived fence delimiter: ```]
 
 #### solve_ising
 
-```python
+[archived fence delimiter: ```python]
 solve_ising(J: np.ndarray, h: np.ndarray) -> dict
-```
+[archived fence delimiter: ```]
 
 Solve general Ising model: $H = \sum_{ij} J_{ij} \sigma_i \sigma_j + \sum_i h_i \sigma_i$
 
@@ -189,7 +196,7 @@ Solve general Ising model: $H = \sum_{ij} J_{ij} \sigma_i \sigma_j + \sum_i h_i 
 - `h`: Field vector (n,)
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 
 # 4-spin Ising model
@@ -203,21 +210,21 @@ h = np.array([0.1, 0, -0.1, 0])
 
 qaoa = QAOA(num_qubits=4, num_layers=4)
 result = qaoa.solve_ising(J, h)
-```
+[archived fence delimiter: ```]
 
 #### compute_expectation
 
-```python
+[archived fence delimiter: ```python]
 compute_expectation(gamma: np.ndarray, beta: np.ndarray) -> float
-```
+[archived fence delimiter: ```]
 
 Compute cost expectation for given QAOA parameters.
 
 #### evaluate_bitstring
 
-```python
+[archived fence delimiter: ```python]
 evaluate_bitstring(bitstring: int) -> float
-```
+[archived fence delimiter: ```]
 
 Evaluate cost of a specific solution.
 
@@ -238,9 +245,9 @@ Quadratic speedup for unstructured search.
 
 ### Grover Class
 
-```python
+[archived fence delimiter: ```python]
 Grover(num_qubits: int)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Search space size = $2^{\text{num\_qubits}}$
@@ -256,12 +263,12 @@ Grover(num_qubits: int)
 
 #### search
 
-```python
+[archived fence delimiter: ```python]
 search(
     marked_state: int,
     num_iterations: Optional[int] = None
 ) -> dict
-```
+[archived fence delimiter: ```]
 
 Search for marked state.
 
@@ -270,7 +277,7 @@ Search for marked state.
 - `num_iterations`: Iterations (default: optimal)
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import Grover
 
 grover = Grover(num_qubits=10)  # Search space of 1024
@@ -281,37 +288,37 @@ print(f"Found: {result['found_state']}")
 print(f"Success: {result['success']}")
 print(f"Probability: {result['probability']:.4f}")
 print(f"Iterations: {result['iterations_used']}")
-```
+[archived fence delimiter: ```]
 
 #### step
 
-```python
+[archived fence delimiter: ```python]
 step(marked_state: int) -> None
-```
+[archived fence delimiter: ```]
 
 Perform single Grover iteration.
 
 #### oracle
 
-```python
+[archived fence delimiter: ```python]
 oracle(marked_state: int) -> None
-```
+[archived fence delimiter: ```]
 
 Apply Grover oracle (phase flip on marked state).
 
 #### diffusion
 
-```python
+[archived fence delimiter: ```python]
 diffusion() -> None
-```
+[archived fence delimiter: ```]
 
 Apply diffusion operator (inversion about mean).
 
 #### probabilities
 
-```python
+[archived fence delimiter: ```python]
 probabilities() -> np.ndarray
-```
+[archived fence delimiter: ```]
 
 Get measurement probabilities.
 
@@ -326,7 +333,7 @@ Get measurement probabilities.
 
 ### Step-by-Step Example
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import Grover
 import matplotlib.pyplot as plt
 
@@ -349,7 +356,7 @@ plt.xlabel("Iteration")
 plt.ylabel("P(marked)")
 plt.title("Grover's Algorithm Amplitude Amplification")
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## BellTest (CHSH Inequality)
 
@@ -357,38 +364,38 @@ Verify quantum correlations violate classical bounds.
 
 ### Bell State Types
 
-```python
+[archived fence delimiter: ```python]
 BellTest.PHI_PLUS   # |Φ+⟩ = (|00⟩ + |11⟩)/√2
 BellTest.PHI_MINUS  # |Φ-⟩ = (|00⟩ - |11⟩)/√2
 BellTest.PSI_PLUS   # |Ψ+⟩ = (|01⟩ + |10⟩)/√2
 BellTest.PSI_MINUS  # |Ψ-⟩ = (|01⟩ - |10⟩)/√2
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
 #### create_bell_state
 
-```python
+[archived fence delimiter: ```python]
 BellTest.create_bell_state(
     state: QuantumState,
     qubit_a: int,
     qubit_b: int,
     bell_type: int = BellTest.PHI_PLUS
 ) -> None
-```
+[archived fence delimiter: ```]
 
 Create Bell state on two qubits.
 
 #### chsh_test
 
-```python
+[archived fence delimiter: ```python]
 BellTest.chsh_test(
     state: QuantumState,
     qubit_a: int,
     qubit_b: int,
     num_measurements: int = 10000
 ) -> dict
-```
+[archived fence delimiter: ```]
 
 Perform CHSH Bell test.
 
@@ -396,7 +403,7 @@ Perform CHSH Bell test.
 **Quantum bound**: $S \leq 2\sqrt{2} \approx 2.828$
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.algorithms import BellTest
 
@@ -410,16 +417,16 @@ print(f"Violates classical bound: {result['violates_classical']}")
 print(f"Correlations:")
 for key, val in result['correlations'].items():
     print(f"  {key}: {val:.4f}")
-```
+[archived fence delimiter: ```]
 
 #### quick_test
 
-```python
+[archived fence delimiter: ```python]
 BellTest.quick_test(
     num_qubits: int = 2,
     num_measurements: int = 1000
 ) -> dict
-```
+[archived fence delimiter: ```]
 
 Quick Bell test with automatic state preparation.
 
@@ -437,39 +444,39 @@ Quick Bell test with automatic state preparation.
 
 ### run_vqe_h2
 
-```python
+[archived fence delimiter: ```python]
 run_vqe_h2(bond_distance: float = 0.74, num_layers: int = 2) -> dict
-```
+[archived fence delimiter: ```]
 
 Quick VQE for H$_2$ molecule.
 
 ### run_qaoa_maxcut
 
-```python
+[archived fence delimiter: ```python]
 run_qaoa_maxcut(edges: List[Tuple[int, int]], num_layers: int = 3) -> dict
-```
+[archived fence delimiter: ```]
 
 Quick QAOA for MaxCut.
 
 ### run_grover
 
-```python
+[archived fence delimiter: ```python]
 run_grover(num_qubits: int, marked_state: int) -> dict
-```
+[archived fence delimiter: ```]
 
 Quick Grover search.
 
 ### run_bell_test
 
-```python
+[archived fence delimiter: ```python]
 run_bell_test(num_measurements: int = 10000) -> dict
-```
+[archived fence delimiter: ```]
 
 Quick Bell test.
 
 ## Complete Example: VQE Energy Surface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 import numpy as np
 import matplotlib.pyplot as plt
@@ -492,7 +499,7 @@ plt.title("H₂ Potential Energy Curve (VQE)")
 plt.axhline(y=-1.137, color='r', linestyle='--', label='Exact')
 plt.legend()
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -501,3 +508,4 @@ plt.show()
 - [C API: VQE](../c/vqe.md) - Low-level VQE reference
 - [C API: QAOA](../c/qaoa.md) - Low-level QAOA reference
 - [C API: Grover](../c/grover.md) - Low-level Grover reference
+```

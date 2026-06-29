@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Clifford-Assisted MPS (CA-MPS), variational-D, and the gauge-aware warmstart
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Clifford-Assisted MPS (CA-MPS), variational-D, and the gauge-aware warmstart
 
 `@since` v0.2.1.  Source: `src/algorithms/tensor_network/ca_mps*.{c,h}`,
@@ -38,7 +45,7 @@ Non-Clifford gates of the form `exp(-i theta P/2)` for a Pauli string
 `P` are applied via tableau-side conjugation `P' = D^dagger P D`,
 followed by a Pauli-rotation MPO applied to `|phi>`:
 
-```c
+[archived fence delimiter: ```c]
 moonlab_ca_mps_t* s = moonlab_ca_mps_create(n, /*max_bond=*/32);
 
 // Clifford layer: free in MPS cost.
@@ -58,17 +65,17 @@ double _Complex e;
 moonlab_ca_mps_expect_pauli(s, P, &e);
 
 moonlab_ca_mps_free(s);
-```
+[archived fence delimiter: ```]
 
 ## Variational-D (var-D)
 
 Given a Pauli-sum Hamiltonian `H = sum_k c_k P_k`, var-D searches
 `(D, |phi>)` to minimise
 
-```
+[archived fence delimiter: ```]
 E(D, |phi>) = <psi|H|psi>
             = sum_k c_k <phi| (D^dagger P_k D) |phi>
-```
+[archived fence delimiter: ```]
 
 The optimisation alternates two updates:
 
@@ -101,7 +108,7 @@ Warmstart options seed `D` in productive Clifford basins:
 | 3 | `FERRO_TFIM` | `H` on qubit 0 then a CNOT chain.  Cat-state encoder; needed in TFIM's deep ferro regime. |
 | 4 | `STABILIZER_SUBGROUP` | Gauge-aware: see below. |
 
-```c
+[archived fence delimiter: ```c]
 ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
 cfg.warmstart = CA_MPS_WARMSTART_DUAL_TFIM;
 cfg.composite_2gate = 1;
@@ -110,7 +117,7 @@ cfg.max_outer_iters = 25;
 ca_mps_var_d_alt_result_t res = {0};
 moonlab_ca_mps_optimize_var_d_alternating(
     state, paulis, coeffs, num_terms, &cfg, &res);
-```
+[archived fence delimiter: ```]
 
 ## Gauge-aware warmstart
 
@@ -148,14 +155,14 @@ Cost: O(n^2) Clifford gates, O(k * n^2) tableau ops.  See
 `src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.c` for the
 implementation.
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
 
 // Generators g_0, ..., g_{k-1} laid out (k, n) row-major in
 // Moonlab's Pauli-byte encoding (0=I, 1=X, 2=Y, 3=Z), pairwise
 // commuting and independent.
 moonlab_ca_mps_apply_stab_subgroup_warmstart(state, generators, k);
-```
+[archived fence delimiter: ```]
 
 ## First HEP application: 1+1D Z2 lattice gauge theory
 
@@ -163,20 +170,20 @@ The Schwinger-style 1D chain with N matter sites + (N - 1) link
 qubits (total `2N - 1`).  Hamiltonian (after JW with parallel
 transport, with exactly gauge-invariant kinetic terms):
 
-```
+[archived fence delimiter: ```]
 H = -(t/2) sum_x [ X_{2x} Y_{2x+1} Y_{2x+2}
                  - Y_{2x} Y_{2x+1} X_{2x+2} ]   (matter + gauge link)
     - h sum_x Z_{2x+1}                          (electric field)
     + (m/2) sum_x (-1)^x Z_{2x}                 (staggered mass)
     + lambda sum_{x=1..N-2} (I - G_x)            (Gauss-law penalty)
-```
+[archived fence delimiter: ```]
 
 with the interior Gauss-law operator
 `G_x = X_{2x-1} Z_{2x} X_{2x+1}`.  Each kinetic-term Pauli string
 commutes term-by-term with every `G_y`, so `H` preserves the gauge
 sector exactly under any unitary or imag-time evolution.
 
-```c
+[archived fence delimiter: ```c]
 #include "applications/hep/lattice_z2_1d.h"
 
 z2_lgt_config_t cfg = {.num_matter_sites = 4, .t_hop = 1.0,
@@ -203,7 +210,7 @@ vcfg.warmstart_stab_num_gens  = k;
 ca_mps_var_d_alt_result_t res = {0};
 moonlab_ca_mps_optimize_var_d_alternating(
     s, paulis, coeffs, T, &vcfg, &res);
-```
+[archived fence delimiter: ```]
 
 ## Bindings
 
@@ -245,3 +252,4 @@ The full v0.2.1 ABI is exposed via:
 - Z2 LGT: `docs/research/var_d_lattice_gauge_theory.md`.
 - Examples: `examples/tensor_network/ca_mps_var_d_*.c`,
   `examples/hep/z2_gauge_var_d.c`.
+```

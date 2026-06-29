@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Memory Requirements
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Memory Requirements
 
 Detailed memory analysis for quantum simulation at various scales.
@@ -48,7 +55,7 @@ Each amplitude is a `complex double` (16 bytes: 8 bytes real + 8 bytes imaginary
 
 Total memory includes:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct quantum_state {
     size_t num_qubits;              // 8 bytes
     size_t state_dim;               // 8 bytes
@@ -62,7 +69,7 @@ typedef struct quantum_state {
     double fidelity;                // 8 bytes
     int owns_memory;                // 4 bytes
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 Additional allocations:
 - Measurement history: `max_measurements * 8 bytes` (default: 8 KB)
@@ -82,7 +89,7 @@ Operations requiring temporary memory:
 
 ### Memory Profiler Output
 
-```
+[archived fence delimiter: ```]
 ╔══════════════════════════════════════════════════════════════╗
 ║       QUANTUM SIMULATOR MEMORY PROFILER                      ║
 ╠══════════════════════════════════════════════════════════════╣
@@ -102,7 +109,7 @@ qubits,theoretical_mb,actual_mb,alloc_us,free_us,overhead_pct
 20,16.00,16.24,3200,650,1.5
 22,64.00,64.48,12000,2400,0.75
 24,256.00,257.28,48000,9500,0.5
-```
+[archived fence delimiter: ```]
 
 ## Tensor Network Memory
 
@@ -173,14 +180,14 @@ $$\text{Memory per rank} = \frac{2^n \times 16}{P} = 2^{n-p} \times 16 \text{ by
 
 Additional per-rank memory for MPI:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct distributed_state {
     // ...
     complex_t* send_buffer;    // local_size / 2
     complex_t* recv_buffer;    // local_size / 2
     MPI_Request* requests;     // Small
 } distributed_state_t;
-```
+[archived fence delimiter: ```]
 
 Communication buffers: ~50% additional memory per rank.
 
@@ -190,20 +197,20 @@ Communication buffers: ~50% additional memory per rank.
 
 Moonlab uses 64-byte alignment for optimal SIMD/AMX performance:
 
-```c
+[archived fence delimiter: ```c]
 // AMX-aligned allocation on Apple Silicon
 #if HAS_ACCELERATE
 state->amplitudes = accelerate_alloc_complex_array(state->state_dim);
 #else
 state->amplitudes = aligned_alloc(64, state->state_dim * sizeof(complex_t));
 #endif
-```
+[archived fence delimiter: ```]
 
 ### Secure Zeroing
 
 Sensitive quantum state data is securely zeroed before freeing:
 
-```c
+[archived fence delimiter: ```c]
 void quantum_state_free(quantum_state_t *state) {
     if (state->owns_memory && state->amplitudes) {
         // Prevent memory dump attacks
@@ -211,13 +218,13 @@ void quantum_state_free(quantum_state_t *state) {
         free(state->amplitudes);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Memory Pool
 
 For repeated allocations (e.g., in VQE):
 
-```c
+[archived fence delimiter: ```c]
 // Pre-allocate pool for circuit evaluations
 typedef struct memory_pool {
     complex_t* buffers[MAX_BUFFERS];
@@ -232,13 +239,13 @@ complex_t* pool_alloc(memory_pool_t* pool) {
 void pool_free(memory_pool_t* pool) {
     pool->next_free = 0;  // Reset without deallocation
 }
-```
+[archived fence delimiter: ```]
 
 ## Checking Memory Availability
 
 ### C API
 
-```c
+[archived fence delimiter: ```c]
 #include <sys/sysctl.h>
 
 size_t get_available_memory(void) {
@@ -260,11 +267,11 @@ int can_simulate_qubits(size_t num_qubits) {
     // Use at most 80% of physical memory
     return required < available * 0.8;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python API
 
-```python
+[archived fence delimiter: ```python]
 import moonlab
 import psutil
 
@@ -280,13 +287,13 @@ def max_qubits_for_system():
     return qubits - 1
 
 print(f"Maximum qubits: {max_qubits_for_system()}")
-```
+[archived fence delimiter: ```]
 
 ## Memory Fragmentation
 
 ### Analysis Tool Output
 
-```
+[archived fence delimiter: ```]
 === Memory Fragmentation Analysis ===
   Allocating 20 quantum states of varying sizes...
   Initial: allocated=12.5 MB, resident=14.2 MB, frag=12%
@@ -296,7 +303,7 @@ print(f"Maximum qubits: {max_qubits_for_system()}")
 
   Reallocating freed slots...
   After realloc: allocated=13.1 MB, resident=15.5 MB, frag=15%
-```
+[archived fence delimiter: ```]
 
 ### Mitigation Strategies
 
@@ -308,11 +315,11 @@ print(f"Maximum qubits: {max_qubits_for_system()}")
 
 ### Memory Formula
 
-```
+[archived fence delimiter: ```]
 State vector:  2^n × 16 bytes
 MPS:           n × χ² × 4 × 16 bytes
 Distributed:   2^(n-p) × 16 bytes per rank
-```
+[archived fence delimiter: ```]
 
 ### Rules of Thumb
 
@@ -323,7 +330,7 @@ Distributed:   2^(n-p) × 16 bytes per rank
 
 ### Estimating Requirements
 
-```c
+[archived fence delimiter: ```c]
 // Quick memory estimate
 double estimate_memory_gb(int qubits) {
     return (1ULL << qubits) * 16.0 / (1024.0 * 1024.0 * 1024.0);
@@ -332,7 +339,7 @@ double estimate_memory_gb(int qubits) {
 printf("28 qubits: %.1f GB\n", estimate_memory_gb(28));  // 4.0 GB
 printf("30 qubits: %.1f GB\n", estimate_memory_gb(30));  // 16.0 GB
 printf("32 qubits: %.1f GB\n", estimate_memory_gb(32));  // 64.0 GB
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -340,3 +347,4 @@ printf("32 qubits: %.1f GB\n", estimate_memory_gb(32));  // 64.0 GB
 - [GPU Performance](gpu-performance.md)
 - [Distributed Simulation Guide](../guides/distributed-simulation.md)
 - [Tensor Networks Concept](../concepts/tensor-networks.md)
+```

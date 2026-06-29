@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Code Examples
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Code Examples
 
 Working examples demonstrating Moonlab capabilities.
@@ -38,23 +45,23 @@ Real-world applications of quantum computing:
 
 ### Python
 
-```bash
+[archived fence delimiter: ```bash]
 # Install Moonlab
 pip install moonlab
 
 # Run an example
 python examples/basic/hello_quantum.py
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```bash
+[archived fence delimiter: ```bash]
 # Build examples (from project root)
 make examples
 
 # Run an example
 ./examples/quantum/hello_quantum
-```
+[archived fence delimiter: ```]
 
 ## Example Structure
 
@@ -71,7 +78,7 @@ Each example follows a consistent structure:
 
 ### Minimal Python Example
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 # Create a 2-qubit system
@@ -86,11 +93,11 @@ state.cnot(0, 1)
 # Measure
 result = state.measure_all()
 print(f"Result: {result}")  # Either "00" or "11"
-```
+[archived fence delimiter: ```]
 
 ### Minimal C Example
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 
 int main() {
@@ -108,7 +115,7 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## By Concept
 
@@ -147,3 +154,4 @@ We welcome new examples! See [Contributing Guide](../contributing/index.md) for 
 - [API Reference](../api/index.md) - Complete function documentation
 - [Algorithms](../algorithms/index.md) - Algorithm theory
 
+```

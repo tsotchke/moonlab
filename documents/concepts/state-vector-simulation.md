@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: State Vector Simulation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # State Vector Simulation
 
 How Moonlab represents and manipulates quantum states.
@@ -41,11 +48,11 @@ where $i = \sum_{k=0}^{n-1} b_k \cdot 2^k$.
 
 Moonlab stores the state as an array of complex numbers:
 
-```
+[archived fence delimiter: ```]
 Index:     0        1        2        3       ...    2^n - 1
 State:   |00...0⟩  |00...1⟩  |00...10⟩ |00...11⟩ ...  |11...1⟩
 Array:   [α₀,      α₁,      α₂,      α₃,      ...   α_{N-1}]
-```
+[archived fence delimiter: ```]
 
 Each complex amplitude $\alpha_i$ is stored as a pair of double-precision floats:
 - Real part: `amplitudes[2*i]`
@@ -70,14 +77,14 @@ The memory required for state vector simulation grows exponentially with qubit c
 
 Moonlab uses aligned memory for SIMD optimization:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint32_t num_qubits;          // Number of qubits
     uint64_t num_amplitudes;      // 2^num_qubits
     double* amplitudes;           // Aligned complex array
     size_t stride;                // Memory stride
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 Memory is aligned to:
 - 16 bytes for SSE2
@@ -93,12 +100,12 @@ A single-qubit gate $U$ acting on qubit $q$ transforms amplitudes in pairs. For 
 $$\begin{pmatrix} \alpha_i' \\ \alpha_{i'}' \end{pmatrix} = U \begin{pmatrix} \alpha_i \\ \alpha_{i'} \end{pmatrix}$$
 
 **Algorithm**:
-```
+[archived fence delimiter: ```]
 for i in 0 to 2^n - 1:
     if bit q of i is 0:
         i' = i XOR (1 << q)
         (α[i], α[i']) = U · (α[i], α[i'])
-```
+[archived fence delimiter: ```]
 
 **Complexity**: $O(2^n)$ - each amplitude visited once.
 
@@ -116,19 +123,19 @@ where subscripts indicate bits $q_1$ and $q_2$.
 
 Controlled gates only modify amplitudes where control qubits are $|1\rangle$:
 
-```
+[archived fence delimiter: ```]
 for i in 0 to 2^n - 1:
     if control bits are all 1 AND target bit is 0:
         apply gate to (i, i XOR (1 << target))
-```
+[archived fence delimiter: ```]
 
 CNOT example for control=0, target=1:
-```
+[archived fence delimiter: ```]
 |00⟩ → |00⟩  (control=0, no change)
 |01⟩ → |01⟩  (control=0, no change)
 |10⟩ → |11⟩  (control=1, flip target)
 |11⟩ → |10⟩  (control=1, flip target)
-```
+[archived fence delimiter: ```]
 
 ## Optimization Techniques
 
@@ -148,26 +155,26 @@ Moonlab uses SIMD instructions to process multiple amplitudes simultaneously:
 - 2 complex numbers per instruction
 - Apple Silicon optimization
 
-```c
+[archived fence delimiter: ```c]
 // AVX2 complex multiply-add example
 __m256d a_re = _mm256_load_pd(&amplitudes[i]);
 __m256d a_im = _mm256_load_pd(&amplitudes[i + 4]);
 // ... matrix multiply
 _mm256_store_pd(&amplitudes[i], result_re);
 _mm256_store_pd(&amplitudes[i + 4], result_im);
-```
+[archived fence delimiter: ```]
 
 ### Parallelization
 
 State vector simulation is embarrassingly parallel:
 
 **OpenMP**:
-```c
+[archived fence delimiter: ```c]
 #pragma omp parallel for
 for (uint64_t i = 0; i < num_amplitudes; i += stride) {
     apply_gate_block(state, gate, i);
 }
-```
+[archived fence delimiter: ```]
 
 **GPU (Metal)**:
 - State vector in GPU memory
@@ -191,13 +198,13 @@ The probability of measuring basis state $|i\rangle$ is:
 $$P(i) = |\alpha_i|^2 = \text{Re}(\alpha_i)^2 + \text{Im}(\alpha_i)^2$$
 
 **Implementation**:
-```c
+[archived fence delimiter: ```c]
 double probability(const quantum_state_t* state, uint64_t index) {
     double re = state->amplitudes[2 * index];
     double im = state->amplitudes[2 * index + 1];
     return re * re + im * im;
 }
-```
+[archived fence delimiter: ```]
 
 ### State Collapse
 
@@ -208,7 +215,7 @@ Measuring qubit $q$ collapses the state:
 3. Zero out amplitudes inconsistent with outcome
 4. Renormalize remaining amplitudes
 
-```c
+[archived fence delimiter: ```c]
 void measure_qubit(quantum_state_t* state, int qubit) {
     double p0 = 0.0, p1 = 0.0;
 
@@ -237,7 +244,7 @@ void measure_qubit(quantum_state_t* state, int qubit) {
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Numerical Considerations
 
@@ -257,9 +264,9 @@ Precision limits:
 
 After many gate operations, accumulated floating-point errors can cause $\|\psi\|^2$ to drift from 1. Moonlab provides:
 
-```c
+[archived fence delimiter: ```c]
 void quantum_state_normalize(quantum_state_t* state);
-```
+[archived fence delimiter: ```]
 
 **Automatic normalization**: Triggered when norm deviates by > $10^{-14}$.
 
@@ -297,7 +304,7 @@ where $\|\cdot\|_F$ is the Frobenius norm.
 
 New states are initialized to $|0\ldots0\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t* quantum_state_init(uint32_t num_qubits) {
     quantum_state_t* state = malloc(sizeof(quantum_state_t));
     state->num_qubits = num_qubits;
@@ -314,7 +321,7 @@ quantum_state_t* quantum_state_init(uint32_t num_qubits) {
 
     return state;
 }
-```
+[archived fence delimiter: ```]
 
 ### Qubit Ordering
 
@@ -323,13 +330,13 @@ Moonlab uses little-endian qubit ordering:
 - $|q_{n-1} \ldots q_1 q_0\rangle$ corresponds to index $\sum_i q_i 2^i$
 
 Example for 3 qubits:
-```
+[archived fence delimiter: ```]
 Index 0: |000⟩ = |q2=0, q1=0, q0=0⟩
 Index 1: |001⟩ = |q2=0, q1=0, q0=1⟩
 Index 2: |010⟩ = |q2=0, q1=1, q0=0⟩
 ...
 Index 7: |111⟩ = |q2=1, q1=1, q0=1⟩
-```
+[archived fence delimiter: ```]
 
 ## Performance Benchmarks
 
@@ -359,3 +366,4 @@ Typical single-qubit gate times on modern hardware:
 - [Tensor Networks](tensor-networks.md) - Alternative simulation approach
 - [GPU Acceleration Guide](../guides/gpu-acceleration.md) - Metal optimization
 
+```

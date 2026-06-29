@@ -1,5 +1,6 @@
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
+#include <Accelerate/Accelerate.h>
 #include "gpu_metal.h"
 #include <stdio.h>
 #include <string.h>
@@ -120,6 +121,243 @@ static NSString* load_metal_source(NSString* relativePath, NSError** outError) {
     }
 
     return nil;
+}
+
+static char g_metal_trace_device_name[256] = "unavailable";
+
+static metal_backend_trace_t g_metal_last_backend_trace = {
+    .owner = "metal_backend_probe",
+    .operation = "probe",
+    .backend_name = "metal",
+    .device_name = g_metal_trace_device_name,
+    .metal_available = 0,
+    .device_created = 0,
+    .command_queue_created = 0,
+    .shader_library_loaded = 0,
+    .batch_search_pipeline_loaded = 0,
+    .tensor_library_loaded = 0,
+    .tensor_pipelines_loaded = 0,
+    .tensor_pipelines_expected = 13,
+    .fallback_intentional = 1,
+    .last_status = 0
+};
+
+static const char* metal_trace_device_name(id<MTLDevice> device) {
+    const char* name = "unavailable";
+    if (device) {
+        NSString* deviceName = [device name];
+        if (deviceName) {
+            name = [deviceName UTF8String];
+        }
+    }
+    snprintf(g_metal_trace_device_name, sizeof(g_metal_trace_device_name),
+             "%s", name ? name : "unavailable");
+    return g_metal_trace_device_name;
+}
+
+static int metal_count_tensor_pipelines(metal_compute_ctx_t* ctx) {
+    if (!ctx) return 0;
+    int count = 0;
+    if (ctx->tensorContract2SitePipeline) count++;
+    if (ctx->applyGateThetaPipeline) count++;
+    if (ctx->computeColumnNormsPipeline) count++;
+    if (ctx->jacobiRotationPipeline) count++;
+    if (ctx->extractSingularValuesPipeline) count++;
+    if (ctx->normalizeAndTruncateUPipeline) count++;
+    if (ctx->truncateVPipeline) count++;
+    if (ctx->transferMatrixZPipeline) count++;
+    if (ctx->transferMatrixIdentityPipeline) count++;
+    if (ctx->contractTransferPipeline) count++;
+    if (ctx->transferTracePipeline) count++;
+    if (ctx->tensorNormSquaredPipeline) count++;
+    if (ctx->tensorScalePipeline) count++;
+    return count;
+}
+
+metal_backend_trace_t metal_backend_probe(const char* owner,
+                                          const char* operation) {
+    @autoreleasepool {
+        id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+        int available = device != nil;
+        metal_backend_trace_t trace = {
+            .owner = owner ? owner : "metal_backend_probe",
+            .operation = operation ? operation : "probe",
+            .backend_name = "metal",
+            .device_name = metal_trace_device_name(device),
+            .metal_available = available,
+            .device_created = available,
+            .command_queue_created = 0,
+            .shader_library_loaded = 0,
+            .batch_search_pipeline_loaded = 0,
+            .tensor_library_loaded = 0,
+            .tensor_pipelines_loaded = 0,
+            .tensor_pipelines_expected = 13,
+            .fallback_intentional = available ? 0 : 1,
+            .last_status = 0
+        };
+        return trace;
+    }
+}
+
+const metal_backend_trace_t* metal_get_last_backend_trace(void) {
+    return &g_metal_last_backend_trace;
+}
+
+static void metal_record_backend_trace(metal_compute_ctx_t* ctx,
+                                       const char* owner,
+                                       const char* operation,
+                                       int status) {
+    metal_backend_trace_t trace = metal_backend_probe(owner, operation);
+    trace.device_name = metal_trace_device_name(ctx ? ctx->device : nil);
+    trace.metal_available = ctx && ctx->device ? 1 : trace.metal_available;
+    trace.device_created = ctx && ctx->device ? 1 : 0;
+    trace.command_queue_created = ctx && ctx->commandQueue ? 1 : 0;
+    trace.shader_library_loaded = ctx && ctx->library ? 1 : 0;
+    trace.batch_search_pipeline_loaded = ctx && ctx->batchSearchPipeline ? 1 : 0;
+    trace.tensor_library_loaded = ctx && ctx->tensorLibrary ? 1 : 0;
+    trace.tensor_pipelines_loaded = metal_count_tensor_pipelines(ctx);
+    trace.fallback_intentional = trace.metal_available ? 0 : 1;
+    trace.last_status = status;
+    g_metal_last_backend_trace = trace;
+}
+
+static bool metal_env_enabled(const char* name) {
+    const char* value = getenv(name);
+    return value && value[0] && strcmp(value, "0") != 0;
+}
+
+static int metal_svd_truncate_cpu(
+    metal_buffer_t* A,
+    metal_buffer_t* U,
+    metal_buffer_t* S,
+    metal_buffer_t* Vt,
+    uint32_t m,
+    uint32_t n,
+    uint32_t max_rank,
+    double cutoff,
+    uint32_t* actual_rank
+) {
+    const uint32_t min_mn = MIN(m, n);
+    if (min_mn == 0 || max_rank == 0) return -1;
+
+    __CLPK_doublecomplex* a_col = (__CLPK_doublecomplex*)calloc((size_t)m * n, sizeof(*a_col));
+    __CLPK_doublecomplex* u_col = (__CLPK_doublecomplex*)calloc((size_t)m * m, sizeof(*u_col));
+    __CLPK_doublecomplex* vt_col = (__CLPK_doublecomplex*)calloc((size_t)n * n, sizeof(*vt_col));
+    double* s = (double*)calloc(min_mn, sizeof(*s));
+    double* rwork = (double*)calloc((size_t)5 * min_mn, sizeof(*rwork));
+    if (!a_col || !u_col || !vt_col || !s || !rwork) {
+        free(a_col);
+        free(u_col);
+        free(vt_col);
+        free(s);
+        free(rwork);
+        return -1;
+    }
+
+    float* A_ptr = (float*)metal_buffer_contents(A);
+    for (uint32_t row = 0; row < m; row++) {
+        for (uint32_t col = 0; col < n; col++) {
+            size_t src = ((size_t)row * n + col) * 2;
+            size_t dst = (size_t)col * m + row;
+            a_col[dst].r = (double)A_ptr[src];
+            a_col[dst].i = (double)A_ptr[src + 1];
+        }
+    }
+
+    __CLPK_integer M = (__CLPK_integer)m;
+    __CLPK_integer N = (__CLPK_integer)n;
+    __CLPK_integer lda = (__CLPK_integer)m;
+    __CLPK_integer ldu = (__CLPK_integer)m;
+    __CLPK_integer ldvt = (__CLPK_integer)n;
+    __CLPK_integer info = 0;
+    __CLPK_integer lwork = -1;
+    __CLPK_doublecomplex work_query;
+    char jobu = 'A';
+    char jobvt = 'A';
+
+    zgesvd_(&jobu, &jobvt, &M, &N, a_col, &lda, s, u_col, &ldu, vt_col, &ldvt,
+            &work_query, &lwork, rwork, &info);
+    if (info != 0) {
+        free(a_col);
+        free(u_col);
+        free(vt_col);
+        free(s);
+        free(rwork);
+        return -1;
+    }
+
+    lwork = (__CLPK_integer)work_query.r + 1;
+    if (lwork < 1) lwork = 1;
+    __CLPK_doublecomplex* work = (__CLPK_doublecomplex*)malloc((size_t)lwork * sizeof(*work));
+    if (!work) {
+        free(a_col);
+        free(u_col);
+        free(vt_col);
+        free(s);
+        free(rwork);
+        return -1;
+    }
+
+    for (uint32_t row = 0; row < m; row++) {
+        for (uint32_t col = 0; col < n; col++) {
+            size_t src = ((size_t)row * n + col) * 2;
+            size_t dst = (size_t)col * m + row;
+            a_col[dst].r = (double)A_ptr[src];
+            a_col[dst].i = (double)A_ptr[src + 1];
+        }
+    }
+
+    zgesvd_(&jobu, &jobvt, &M, &N, a_col, &lda, s, u_col, &ldu, vt_col, &ldvt,
+            work, &lwork, rwork, &info);
+    free(work);
+    free(a_col);
+    free(rwork);
+    if (info != 0) {
+        free(u_col);
+        free(vt_col);
+        free(s);
+        return -1;
+    }
+
+    uint32_t rank = 0;
+    double max_sv = s[0];
+    for (uint32_t i = 0; i < min_mn && i < max_rank; i++) {
+        if (s[i] > cutoff * max_sv) {
+            rank = i + 1;
+        } else {
+            break;
+        }
+    }
+    if (rank == 0) rank = 1;
+    *actual_rank = rank;
+
+    float* U_ptr = (float*)metal_buffer_contents(U);
+    float* S_ptr = (float*)metal_buffer_contents(S);
+    float* Vt_ptr = (float*)metal_buffer_contents(Vt);
+    memset(U_ptr, 0, (size_t)m * max_rank * sizeof(float) * 2);
+    memset(S_ptr, 0, (size_t)max_rank * sizeof(float));
+    memset(Vt_ptr, 0, (size_t)max_rank * n * sizeof(float) * 2);
+
+    for (uint32_t k = 0; k < rank; k++) {
+        S_ptr[k] = (float)s[k];
+        for (uint32_t row = 0; row < m; row++) {
+            size_t src = (size_t)k * m + row;
+            size_t dst = ((size_t)row * rank + k) * 2;
+            U_ptr[dst] = (float)u_col[src].r;
+            U_ptr[dst + 1] = (float)u_col[src].i;
+        }
+        for (uint32_t col = 0; col < n; col++) {
+            size_t src = (size_t)col * n + k;
+            size_t dst = ((size_t)k * n + col) * 2;
+            Vt_ptr[dst] = (float)vt_col[src].r;
+            Vt_ptr[dst + 1] = (float)vt_col[src].i;
+        }
+    }
+
+    free(u_col);
+    free(vt_col);
+    free(s);
+    return 0;
 }
 
 // ============================================================================
@@ -375,6 +613,7 @@ metal_compute_ctx_t* metal_compute_init(void) {
         printf("Metal: Compute pipelines compiled successfully\n");
         printf("Metal: Ready for GPU acceleration (%u cores)\n", num_cores);
 
+        metal_record_backend_trace(ctx, "metal_compute_init", "initialize", 0);
         return ctx;
     }
 }
@@ -888,6 +1127,8 @@ int metal_grover_batch_search(
             
             if (!ctx->batchSearchPipeline) {
                 fprintf(stderr, "Metal: Failed to load batch search kernel\n");
+                metal_record_backend_trace(ctx, "metal_grover_batch_search",
+                                           "batch-grover-search", -1);
                 return -1;
             }
         }
@@ -940,8 +1181,11 @@ int metal_grover_batch_search(
         
         metal_buffer_free(targets_buf);
         metal_buffer_free(results_buf);
-        
-        return ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+
+        int status = ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+        metal_record_backend_trace(ctx, "metal_grover_batch_search",
+                                   "batch-grover-search", status);
+        return status;
     }
 }
 // SYNCHRONIZATION & UTILITIES
@@ -955,6 +1199,8 @@ void metal_wait_completion(metal_compute_ctx_t* ctx) {
         id<MTLCommandBuffer> commandBuffer = [ctx->commandQueue commandBuffer];
         [commandBuffer commit];
         [commandBuffer waitUntilCompleted];
+        int status = ([commandBuffer status] == MTLCommandBufferStatusCompleted) ? 0 : -1;
+        metal_record_backend_trace(ctx, "metal_wait_completion", "synchronize", status);
     }
 }
 
@@ -1365,6 +1611,11 @@ int metal_svd_truncate(
     uint32_t* actual_rank
 ) {
     if (!ctx || !A || !U || !S || !Vt || !actual_rank) return -1;
+
+    if (metal_env_enabled("MOONLAB_METAL_FORCE_SVD_CPU_FALLBACK")) {
+        return metal_svd_truncate_cpu(A, U, S, Vt, m, n, max_rank, cutoff,
+                                      actual_rank);
+    }
 
     @autoreleasepool {
         uint32_t min_mn = MIN(m, n);

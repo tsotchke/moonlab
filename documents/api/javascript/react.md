@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: React Integration
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # React Integration
 
 React hooks and components for quantum simulation.
@@ -15,17 +22,17 @@ The `@moonlab/quantum-react` package provides idiomatic React integration for qu
 
 ## Installation
 
-```bash
+[archived fence delimiter: ```bash]
 npm install @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
 # or
 yarn add @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
 # or
 pnpm add @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```tsx
+[archived fence delimiter: ```tsx]
 import React from 'react';
 import {
   QuantumProvider,
@@ -59,7 +66,7 @@ function App() {
 }
 
 export default App;
-```
+[archived fence delimiter: ```]
 
 ## QuantumProvider
 
@@ -67,7 +74,7 @@ Context provider for quantum simulation resources.
 
 ### Usage
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { QuantumProvider } from '@moonlab/quantum-react';
 
 function App() {
@@ -81,24 +88,24 @@ function App() {
     </QuantumProvider>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### Props
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface QuantumProviderProps {
   children: React.ReactNode;
   wasmPath?: string;           // Custom WASM path
   onLoad?: () => void;         // Load success callback
   onError?: (error: Error) => void;  // Load error callback
 }
-```
+[archived fence delimiter: ```]
 
 ### useQuantumContext
 
 Access provider context directly.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { useQuantumContext } from '@moonlab/quantum-react';
 
 function DebugInfo() {
@@ -112,7 +119,7 @@ function DebugInfo() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ## Hooks
 
@@ -120,20 +127,20 @@ function DebugInfo() {
 
 Create and manage a quantum state.
 
-```typescript
+[archived fence delimiter: ```typescript]
 function useQuantumState(options: UseQuantumStateOptions): UseQuantumStateResult
-```
+[archived fence delimiter: ```]
 
 **Options**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface UseQuantumStateOptions {
   numQubits: number;           // Number of qubits (1-30)
   initialAmplitudes?: Complex[];  // Optional initial state
 }
-```
+[archived fence delimiter: ```]
 
 **Result**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface UseQuantumStateResult {
   state: QuantumState | null;  // The quantum state (null while loading)
   isLoading: boolean;          // Whether WASM is loading
@@ -143,10 +150,10 @@ interface UseQuantumStateResult {
   measure: (qubit: number) => number;  // Measure qubit
   measureAll: () => number;    // Measure all qubits
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```tsx
+[archived fence delimiter: ```tsx]
 import { useQuantumState } from '@moonlab/quantum-react';
 
 function QuantumCircuit() {
@@ -180,18 +187,18 @@ function QuantumCircuit() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### useCircuit
 
 Build reusable quantum circuits.
 
-```typescript
+[archived fence delimiter: ```typescript]
 function useCircuit(numQubits: number): UseCircuitResult
-```
+[archived fence delimiter: ```]
 
 **Result**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface UseCircuitResult {
   circuit: Circuit;            // Circuit builder
   gates: GateRecord[];         // List of applied gates
@@ -214,10 +221,10 @@ interface CircuitStats {
   twoQubitGates: number;
   threeQubitGates: number;
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```tsx
+[archived fence delimiter: ```tsx]
 import { useCircuit, useQuantumState } from '@moonlab/quantum-react';
 
 function CircuitBuilder() {
@@ -254,18 +261,18 @@ function CircuitBuilder() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### useMeasurement
 
 Perform repeated measurements with statistics.
 
-```typescript
+[archived fence delimiter: ```typescript]
 function useMeasurement(state: QuantumState | null): UseMeasurementResult
-```
+[archived fence delimiter: ```]
 
 **Result**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface UseMeasurementResult {
   measure: (shots: number) => MeasurementResults;
   results: MeasurementResults | null;
@@ -279,10 +286,10 @@ interface MeasurementResults {
   mostFrequent: number;
   probabilities: Map<number, number>;
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```tsx
+[archived fence delimiter: ```tsx]
 import { useQuantumState, useMeasurement } from '@moonlab/quantum-react';
 
 function MeasurementDemo() {
@@ -312,18 +319,18 @@ function MeasurementDemo() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### useBlochCoordinates
 
 Extract Bloch sphere coordinates from single-qubit state.
 
-```typescript
+[archived fence delimiter: ```typescript]
 function useBlochCoordinates(state: QuantumState | null, qubit?: number): BlochCoords
-```
+[archived fence delimiter: ```]
 
 **Result**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface BlochCoords {
   theta: number;   // Polar angle (0 to π)
   phi: number;     // Azimuthal angle (0 to 2π)
@@ -331,10 +338,10 @@ interface BlochCoords {
   y: number;       // Cartesian y
   z: number;       // Cartesian z
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```tsx
+[archived fence delimiter: ```tsx]
 import { useQuantumState, useBlochCoordinates } from '@moonlab/quantum-react';
 
 function BlochDisplay() {
@@ -353,7 +360,7 @@ function BlochDisplay() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ## Components
 
@@ -361,7 +368,7 @@ function BlochDisplay() {
 
 Bar chart of state probabilities.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { AmplitudeBars } from '@moonlab/quantum-react';
 
 <AmplitudeBars
@@ -374,10 +381,10 @@ import { AmplitudeBars } from '@moonlab/quantum-react';
   animate={true}
   highlightStates={[0, 7]}
 />
-```
+[archived fence delimiter: ```]
 
 **Props**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface AmplitudeBarsProps {
   state: QuantumState;         // Quantum state to visualize
   width?: number;              // Chart width (default: 400)
@@ -393,13 +400,13 @@ interface AmplitudeBarsProps {
   className?: string;          // CSS class
   style?: React.CSSProperties; // Inline styles
 }
-```
+[archived fence delimiter: ```]
 
 ### BlochSphere
 
 Single-qubit Bloch sphere visualization.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { BlochSphere } from '@moonlab/quantum-react';
 
 <BlochSphere
@@ -411,10 +418,10 @@ import { BlochSphere } from '@moonlab/quantum-react';
   autoRotate={false}
   theme="dark"
 />
-```
+[archived fence delimiter: ```]
 
 **Props**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface BlochSphereProps {
   state: QuantumState;         // Single-qubit state
   size?: number;               // Canvas size (default: 200)
@@ -426,13 +433,13 @@ interface BlochSphereProps {
   className?: string;
   style?: React.CSSProperties;
 }
-```
+[archived fence delimiter: ```]
 
 ### CircuitDiagram
 
 Quantum circuit visualization.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { CircuitDiagram } from '@moonlab/quantum-react';
 
 <CircuitDiagram
@@ -443,10 +450,10 @@ import { CircuitDiagram } from '@moonlab/quantum-react';
   interactive={true}
   onGateClick={(gate) => console.log('Clicked:', gate)}
 />
-```
+[archived fence delimiter: ```]
 
 **Props**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface CircuitDiagramProps {
   state: QuantumState;           // State with gate history
   width?: number;                // Diagram width (auto if not set)
@@ -459,13 +466,13 @@ interface CircuitDiagramProps {
   className?: string;
   style?: React.CSSProperties;
 }
-```
+[archived fence delimiter: ```]
 
 ### StateVector
 
 Display full state vector with amplitudes.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { StateVector } from '@moonlab/quantum-react';
 
 <StateVector
@@ -475,10 +482,10 @@ import { StateVector } from '@moonlab/quantum-react';
   threshold={0.001}
   showPhase={true}
 />
-```
+[archived fence delimiter: ```]
 
 **Props**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface StateVectorProps {
   state: QuantumState;
   format?: 'ket' | 'table' | 'matrix';  // Display format
@@ -489,13 +496,13 @@ interface StateVectorProps {
   className?: string;
   style?: React.CSSProperties;
 }
-```
+[archived fence delimiter: ```]
 
 ### MeasurementHistogram
 
 Histogram of measurement results.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { MeasurementHistogram } from '@moonlab/quantum-react';
 
 <MeasurementHistogram
@@ -505,10 +512,10 @@ import { MeasurementHistogram } from '@moonlab/quantum-react';
   height={300}
   sortBy="value"
 />
-```
+[archived fence delimiter: ```]
 
 **Props**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface MeasurementHistogramProps {
   counts: Map<number, number>;   // State → count
   shots: number;                 // Total measurements
@@ -520,7 +527,7 @@ interface MeasurementHistogramProps {
   className?: string;
   style?: React.CSSProperties;
 }
-```
+[archived fence delimiter: ```]
 
 ## Algorithm Components
 
@@ -528,33 +535,33 @@ interface MeasurementHistogramProps {
 
 Interactive Grover's algorithm demonstration.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { GroverDemo } from '@moonlab/quantum-react';
 
 <GroverDemo
   numQubits={4}
   onComplete={(result) => console.log('Found:', result)}
 />
-```
+[archived fence delimiter: ```]
 
 ### BellTestDemo
 
 CHSH Bell inequality test.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { BellTestDemo } from '@moonlab/quantum-react';
 
 <BellTestDemo
   numShots={10000}
   onResult={(chsh) => console.log('CHSH:', chsh)}
 />
-```
+[archived fence delimiter: ```]
 
 ### VQEDemo
 
 Variational Quantum Eigensolver visualization.
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { VQEDemo } from '@moonlab/quantum-react';
 
 <VQEDemo
@@ -562,13 +569,13 @@ import { VQEDemo } from '@moonlab/quantum-react';
   numLayers={2}
   onConverge={(energy) => console.log('Energy:', energy)}
 />
-```
+[archived fence delimiter: ```]
 
 ## Theming
 
 ### Built-in Themes
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { ThemeProvider, themes } from '@moonlab/quantum-react';
 
 function App() {
@@ -580,11 +587,11 @@ function App() {
     </ThemeProvider>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### Custom Theme
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { ThemeProvider, createTheme } from '@moonlab/quantum-react';
 
 const myTheme = createTheme({
@@ -621,11 +628,11 @@ function App() {
     </ThemeProvider>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ### useTheme Hook
 
-```tsx
+[archived fence delimiter: ```tsx]
 import { useTheme } from '@moonlab/quantum-react';
 
 function CustomComponent() {
@@ -641,11 +648,11 @@ function CustomComponent() {
     </div>
   );
 }
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```tsx
+[archived fence delimiter: ```tsx]
 import React, { useState } from 'react';
 import {
   QuantumProvider,
@@ -765,13 +772,13 @@ function App() {
 }
 
 export default App;
-```
+[archived fence delimiter: ```]
 
 ## TypeScript Support
 
 Full TypeScript definitions are included:
 
-```typescript
+[archived fence delimiter: ```typescript]
 import type {
   QuantumState,
   Complex,
@@ -781,13 +788,13 @@ import type {
   ThemeConfig,
   BlochCoords,
 } from '@moonlab/quantum-react';
-```
+[archived fence delimiter: ```]
 
 ## Server-Side Rendering
 
 The WASM module requires browser APIs. For SSR frameworks:
 
-```tsx
+[archived fence delimiter: ```tsx]
 import dynamic from 'next/dynamic';
 
 const QuantumProvider = dynamic(
@@ -799,40 +806,40 @@ const AmplitudeBars = dynamic(
   () => import('@moonlab/quantum-react').then(mod => mod.AmplitudeBars),
   { ssr: false }
 );
-```
+[archived fence delimiter: ```]
 
 ## Performance Tips
 
 1. **Memoize expensive operations**:
-```tsx
+[archived fence delimiter: ```tsx]
 const probabilities = useMemo(
   () => state?.getProbabilities(),
   [state, /* gate operations */]
 );
-```
+[archived fence delimiter: ```]
 
 2. **Use `React.memo` for visualization components**:
-```tsx
+[archived fence delimiter: ```tsx]
 const MemoizedBars = React.memo(AmplitudeBars);
-```
+[archived fence delimiter: ```]
 
 3. **Dispose states when unmounting**:
-```tsx
+[archived fence delimiter: ```tsx]
 useEffect(() => {
   return () => {
     state?.dispose();
   };
 }, [state]);
-```
+[archived fence delimiter: ```]
 
 4. **Limit re-renders with `useCallback`**:
-```tsx
+[archived fence delimiter: ```tsx]
 const handleMeasure = useCallback(() => {
   if (state) {
     measure(1000);
   }
 }, [state, measure]);
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -840,3 +847,4 @@ const handleMeasure = useCallback(() => {
 - [Visualization API](viz.md) - Low-level visualization
 - [Vue Integration](vue.md) - Vue composables
 
+```

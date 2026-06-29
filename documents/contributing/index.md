@@ -1,10 +1,17 @@
+# Archived Moonlab Documentation: Contributing to Moonlab
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Contributing to Moonlab
 
 Welcome to the Moonlab contributor community! This guide covers everything you need to start contributing.
 
 ## Quick Start
 
-```bash
+[archived fence delimiter: ```bash]
 # Fork and clone
 git clone https://github.com/YOUR_USERNAME/moonlab.git
 cd moonlab
@@ -19,7 +26,7 @@ make test
 
 # Create branch
 git checkout -b feature/your-feature
-```
+[archived fence delimiter: ```]
 
 ## Ways to Contribute
 
@@ -47,13 +54,13 @@ git checkout -b feature/your-feature
 
 ### 2. Fork and Branch
 
-```bash
+[archived fence delimiter: ```bash]
 # Fork via GitHub UI, then:
 git clone https://github.com/YOUR_USERNAME/moonlab.git
 cd moonlab
 git remote add upstream https://github.com/tsotchke/moonlab.git
 git checkout -b feature/your-feature
-```
+[archived fence delimiter: ```]
 
 ### 3. Develop
 
@@ -63,7 +70,7 @@ git checkout -b feature/your-feature
 
 ### 4. Test
 
-```bash
+[archived fence delimiter: ```bash]
 # Run all tests
 make test
 
@@ -72,7 +79,7 @@ make test
 
 # Run with sanitizers (debug build)
 ./bin/test_quantum_gates 2>&1
-```
+[archived fence delimiter: ```]
 
 ### 5. Submit Pull Request
 
@@ -85,7 +92,7 @@ make test
 
 ### PR Title Format
 
-```
+[archived fence delimiter: ```]
 <type>: <short description>
 
 Types:
@@ -96,11 +103,11 @@ Types:
 - docs: Documentation only
 - test: Test additions/fixes
 - chore: Build/tooling changes
-```
+[archived fence delimiter: ```]
 
 ### PR Description Template
 
-```markdown
+[archived fence delimiter: ```markdown]
 ## Summary
 Brief description of changes.
 
@@ -119,7 +126,7 @@ How was this tested?
 - [ ] Code follows style guidelines
 - [ ] Documentation updated
 - [ ] CHANGELOG updated (if applicable)
-```
+[archived fence delimiter: ```]
 
 ### Review Process
 
@@ -200,3 +207,4 @@ If something isn't covered here, please:
 
 Thank you for contributing to Moonlab!
 
+```

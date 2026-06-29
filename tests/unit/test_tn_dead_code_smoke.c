@@ -539,8 +539,8 @@ static void test_dmrg_backend_provenance_helpers(void) {
     if (tfim_mps) tn_mps_free(tfim_mps);
 }
 
-static void test_dmrg_one_site_mode(void) {
-    fprintf(stdout, "\n--- DMRG one-site mode ---\n");
+static void test_dmrg_one_site_mode_removed(void) {
+    fprintf(stdout, "\n--- DMRG removed one-site mode ---\n");
 
     uint32_t boundary_dims[3] = { 1, 1, 1 };
     tensor_t* L = tensor_create(3, boundary_dims);
@@ -576,16 +576,11 @@ static void test_dmrg_one_site_mode(void) {
             .W_right = NULL,
             .chi_l = 1,
             .chi_r = 1,
-            .phys_dim = 2,
-            .two_site = false
+            .phys_dim = 2
         };
 
-        CHECK(effective_hamiltonian_apply(&H_eff, x, y) == 0,
-              "one-site effective_hamiltonian_apply returned nonzero");
-        CHECK(cabs(y->data[0] - x->data[1]) < 1e-12,
-              "one-site H_eff y[0] mismatch");
-        CHECK(cabs(y->data[1] - x->data[0]) < 1e-12,
-              "one-site H_eff y[1] mismatch");
+        CHECK(effective_hamiltonian_apply(&H_eff, x, y) != 0,
+              "removed one-site effective_hamiltonian_apply is rejected");
     }
 
     tensor_free(L);
@@ -608,7 +603,6 @@ static void test_dmrg_one_site_mode(void) {
     }
 
     dmrg_config_t one_site_cfg = dmrg_config_default();
-    one_site_cfg.two_site = false;
     one_site_cfg.max_bond_dim = 2;
     one_site_cfg.max_sweeps = 1;
     one_site_cfg.warmup_sweeps = 0;
@@ -617,11 +611,11 @@ static void test_dmrg_one_site_mode(void) {
     one_site_cfg.dm_perturbation = 0.0;
 
     dmrg_result_t* result = dmrg_ground_state(mps, mpo, &one_site_cfg);
-    CHECK(result != NULL, "dmrg_ground_state one-site mode returned NULL");
+    CHECK(result != NULL, "dmrg_ground_state default two-site mode returned NULL");
     check_dmrg_trace_consistency(dmrg_get_last_backend_trace(), "dmrg_ground_state");
     if (result) {
         CHECK(isfinite(result->ground_energy),
-              "one-site ground energy %.6e", result->ground_energy);
+              "default two-site ground energy %.6e", result->ground_energy);
         dmrg_result_free(result);
     }
 
@@ -705,7 +699,7 @@ int main(void) {
     test_contract_mps_mpo_backend_provenance();
     test_mpo_skyrmion_create_smoke();
     test_dmrg_backend_provenance_helpers();
-    test_dmrg_one_site_mode();
+    test_dmrg_one_site_mode_removed();
     test_dmrg_energy_variance();
     test_tn_histogram_create();
     test_tensor_svd_truncate();

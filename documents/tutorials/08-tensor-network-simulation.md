@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 08: Tensor Network Simulation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 08: Tensor Network Simulation
 
 Simulate large quantum systems with MPS and DMRG.
@@ -39,7 +46,7 @@ where each $A^{[k]}$ is a $\chi \times \chi$ matrix (bond dimension $\chi$).
 
 ## Step 1: Creating an MPS
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import MPS, MPO
 import numpy as np
 
@@ -53,14 +60,14 @@ mps = MPS(n_qubits, bond_dim)
 print(f"Number of sites: {mps.num_sites}")
 print(f"Bond dimension: {mps.bond_dim}")
 print(f"Total parameters: {mps.num_parameters}")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 Number of sites: 50
 Bond dimension: 32
 Total parameters: 51200
-```
+[archived fence delimiter: ```]
 
 Compare: Full state vector would need $2^{50} \approx 10^{15}$ parameters!
 
@@ -68,7 +75,7 @@ Compare: Full state vector would need $2^{50} \approx 10^{15}$ parameters!
 
 ### Single-Qubit Gates
 
-```python
+[archived fence delimiter: ```python]
 # Apply Hadamard to first qubit
 mps.h(0)
 
@@ -77,13 +84,13 @@ mps.ry(10, np.pi/4)
 
 # Apply X gate
 mps.x(25)
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Gates
 
 Two-qubit gates can increase bond dimension:
 
-```python
+[archived fence delimiter: ```python]
 # Apply CNOT (may increase bond dimension)
 mps.cnot(5, 6)
 
@@ -92,21 +99,21 @@ mps.cz(20, 21)
 
 # Check new bond dimension
 print(f"Bond dimension after gates: {mps.bond_dim}")
-```
+[archived fence delimiter: ```]
 
 ### Compression
 
 After operations, compress to control bond dimension:
 
-```python
+[archived fence delimiter: ```python]
 # Compress to maximum bond dimension 64
 truncation_error = mps.compress(max_bond_dim=64, tolerance=1e-10)
 print(f"Truncation error: {truncation_error:.2e}")
-```
+[archived fence delimiter: ```]
 
 ## Step 3: GHZ State with MPS
 
-```python
+[archived fence delimiter: ```python]
 def create_ghz_mps(n):
     """Create n-qubit GHZ state using MPS."""
     mps = MPS(n, bond_dim=2)
@@ -127,19 +134,19 @@ ghz = create_ghz_mps(100)
 probs = ghz.get_probabilities([0, 99])  # Check first and last qubit
 print(f"P(00) = {probs['00']:.4f}")
 print(f"P(11) = {probs['11']:.4f}")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 P(00) = 0.5000
 P(11) = 0.5000
-```
+[archived fence delimiter: ```]
 
 A 100-qubit state would need $10^{30}$ amplitudes with state vector!
 
 ## Step 4: Expectation Values
 
-```python
+[archived fence delimiter: ```python]
 # Single-site expectation
 exp_z = ghz.expectation_z(50)
 print(f"⟨Z_50⟩ = {exp_z:.4f}")
@@ -151,14 +158,14 @@ print(f"⟨Z_0 Z_99⟩ = {corr_zz:.4f}")
 # Entanglement entropy
 entropy = ghz.entanglement_entropy(50)  # Bipartition at site 50
 print(f"Entanglement entropy: {entropy:.4f} bits")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 ⟨Z_50⟩ = 0.0000
 ⟨Z_0 Z_99⟩ = 1.0000
 Entanglement entropy: 1.0000 bits
-```
+[archived fence delimiter: ```]
 
 ## Step 5: DMRG Algorithm
 
@@ -168,7 +175,7 @@ Entanglement entropy: 1.0000 bits
 
 $$H = J \sum_i \vec{S}_i \cdot \vec{S}_{i+1} = \frac{J}{2} \sum_i (X_i X_{i+1} + Y_i Y_{i+1} + Z_i Z_{i+1})$$
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import DMRG, HeisenbergMPO
 
 # Create Heisenberg Hamiltonian as MPO
@@ -192,20 +199,20 @@ print(f"Energy per site: {result.energy / n_sites:.10f}")
 print(f"Final bond dimension: {result.bond_dim}")
 print(f"Converged: {result.converged}")
 print(f"Sweeps performed: {result.num_sweeps}")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 Ground state energy: -22.3178435912
 Energy per site: -0.4463568718
 Final bond dimension: 87
 Converged: True
 Sweeps performed: 12
-```
+[archived fence delimiter: ```]
 
 ### Analyzing the Ground State
 
-```python
+[archived fence delimiter: ```python]
 # Get ground state MPS
 ground_state = result.state
 
@@ -237,13 +244,13 @@ plt.ylabel('|⟨Z_0 Z_i⟩|')
 plt.title('Spin-Spin Correlation (semi-log)')
 plt.savefig('heisenberg_correlation.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## Step 6: Transverse Field Ising Model
 
 $$H = -J \sum_i Z_i Z_{i+1} - h \sum_i X_i$$
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import IsingMPO
 
 # Phase transition at h/J = 1
@@ -280,13 +287,13 @@ plt.title('Ising Model Phase Transition')
 plt.legend()
 plt.savefig('ising_phase_transition.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## Step 7: Time Evolution with TEBD
 
 **TEBD** (Time-Evolving Block Decimation) simulates time evolution:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import TEBD
 
 # Initial state: domain wall
@@ -325,7 +332,7 @@ plt.ylabel('⟨Sz⟩')
 plt.title('Domain Wall Dynamics in Heisenberg Chain')
 plt.savefig('tebd_dynamics.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## MPS Limitations
 
@@ -341,7 +348,7 @@ MPS struggles with:
 
 ### Bond Dimension Growth
 
-```python
+[archived fence delimiter: ```python]
 # Random circuit: bond dimension grows exponentially
 mps = MPS(20, bond_dim=2)
 
@@ -354,7 +361,7 @@ for depth in range(10):
 
     mps.compress(max_bond_dim=200)
     print(f"Depth {depth}: Bond dim = {mps.bond_dim}")
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -398,3 +405,4 @@ Accelerate simulations with GPU:
 - [C API: Tensor Network](../api/c/tensor-network.md) - Low-level implementation
 - Schollwöck (2011). "The density-matrix renormalization group in the age of matrix product states." Annals of Physics, 326, 96-192.
 
+```

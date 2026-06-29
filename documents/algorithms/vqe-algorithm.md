@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: VQE Algorithm
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # VQE Algorithm
 
 Complete guide to the Variational Quantum Eigensolver.
@@ -52,11 +59,11 @@ Each $\langle P_i \rangle$ is measured separately.
 
 Prepare parameterized state $|\psi(\boldsymbol{\theta})\rangle$:
 
-```
+[archived fence delimiter: ```]
 |0⟩──[Ry(θ₁)]──[Rz(θ₂)]──●────
                           │
 |0⟩──[Ry(θ₃)]──[Rz(θ₄)]──X────
-```
+[archived fence delimiter: ```]
 
 ### 2. Energy Measurement
 
@@ -82,7 +89,7 @@ Iterate until:
 
 ### Basic VQE
 
-```c
+[archived fence delimiter: ```c]
 #include "vqe.h"
 
 int main() {
@@ -117,11 +124,11 @@ int main() {
     hamiltonian_destroy(H);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python Interface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE, Hamiltonian
 
 # Create H2 Hamiltonian
@@ -142,7 +149,7 @@ result = vqe.compute_ground_state(H2)
 print(f"Energy: {result.energy:.6f} Hartree")
 print(f"Exact:  {H2.exact_ground_state():.6f} Hartree")
 print(f"Error:  {abs(result.energy - H2.exact_ground_state()):.6f} Hartree")
-```
+[archived fence delimiter: ```]
 
 ## Ansatz Design
 
@@ -150,7 +157,7 @@ print(f"Error:  {abs(result.energy - H2.exact_ground_state()):.6f} Hartree")
 
 Alternating rotation and entangling layers:
 
-```python
+[archived fence delimiter: ```python]
 def hardware_efficient_ansatz(state, params, layers):
     """
     Hardware-efficient ansatz.
@@ -169,13 +176,13 @@ def hardware_efficient_ansatz(state, params, layers):
         # Entangling layer (linear connectivity)
         for q in range(n - 1):
             state.cnot(q, q + 1)
-```
+[archived fence delimiter: ```]
 
 ### UCCSD Ansatz
 
 Unitary Coupled Cluster Singles and Doubles:
 
-```python
+[archived fence delimiter: ```python]
 def uccsd_ansatz(state, params, n_electrons, n_orbitals):
     """
     UCCSD ansatz for chemistry.
@@ -200,13 +207,13 @@ def uccsd_ansatz(state, params, n_electrons, n_orbitals):
                 for b in range(a+1, n_orbitals):
                     apply_double_excitation(state, i, j, a, b, params[idx])
                     idx += 1
-```
+[archived fence delimiter: ```]
 
 ### Symmetry-Preserving Ansatz
 
 For systems with conserved quantities:
 
-```python
+[archived fence delimiter: ```python]
 def symmetry_preserving_ansatz(state, params, symmetry):
     """
     Ansatz that preserves specified symmetry.
@@ -219,7 +226,7 @@ def symmetry_preserving_ansatz(state, params, symmetry):
             for i in range(n_qubits - 1):
                 # Givens rotation preserves particle number
                 apply_givens_rotation(state, i, i+1, params[l, i])
-```
+[archived fence delimiter: ```]
 
 ## Gradient Computation
 
@@ -229,7 +236,7 @@ For gates of the form $e^{-i\theta G/2}$ where $G^2 = I$:
 
 $$\frac{\partial E}{\partial \theta} = \frac{1}{2}\left[E\left(\theta + \frac{\pi}{2}\right) - E\left(\theta - \frac{\pi}{2}\right)\right]$$
 
-```python
+[archived fence delimiter: ```python]
 def parameter_shift_gradient(vqe, params, hamiltonian):
     """Compute gradient using parameter shift rule."""
     gradients = np.zeros_like(params)
@@ -248,13 +255,13 @@ def parameter_shift_gradient(vqe, params, hamiltonian):
         gradients[i] = (E_plus - E_minus) / 2
 
     return gradients
-```
+[archived fence delimiter: ```]
 
 ### Simultaneous Perturbation
 
 For high-dimensional parameter spaces:
 
-```python
+[archived fence delimiter: ```python]
 def spsa_gradient(vqe, params, hamiltonian, epsilon=0.1):
     """SPSA gradient estimate (2 evaluations regardless of dimension)."""
     delta = np.random.choice([-1, 1], size=len(params))
@@ -263,7 +270,7 @@ def spsa_gradient(vqe, params, hamiltonian, epsilon=0.1):
     E_minus = vqe.evaluate(params - epsilon * delta, hamiltonian)
 
     return (E_plus - E_minus) / (2 * epsilon) * delta
-```
+[archived fence delimiter: ```]
 
 ## Optimizers
 
@@ -283,7 +290,7 @@ def spsa_gradient(vqe, params, hamiltonian, epsilon=0.1):
 | L-BFGS | Smooth landscapes | Fast convergence |
 | Natural Gradient | Variational circuits | Geometry-aware |
 
-```python
+[archived fence delimiter: ```python]
 # Configure optimizer
 vqe = VQE(
     num_qubits=8,
@@ -299,7 +306,7 @@ vqe = VQE(
     optimizer='natural_gradient',
     regularization=0.01  # For metric singularities
 )
-```
+[archived fence delimiter: ```]
 
 ## Measurement Strategies
 
@@ -307,7 +314,7 @@ vqe = VQE(
 
 Pauli strings that commute can be measured simultaneously:
 
-```python
+[archived fence delimiter: ```python]
 def group_paulis(hamiltonian):
     """Group commuting Pauli strings for efficient measurement."""
     groups = []
@@ -328,13 +335,13 @@ def group_paulis(hamiltonian):
 # Example: H2 reduces from 6 to 2 measurement groups
 groups = group_paulis(H2)
 print(f"Reduced from {len(H2.terms)} to {len(groups)} measurements")
-```
+[archived fence delimiter: ```]
 
 ### Variance Reduction
 
 Allocate shots based on term variance:
 
-```python
+[archived fence delimiter: ```python]
 def optimal_shot_allocation(hamiltonian, total_shots):
     """Allocate shots to minimize energy variance."""
     variances = [abs(term.coefficient)**2 for term in hamiltonian.terms]
@@ -345,13 +352,13 @@ def optimal_shot_allocation(hamiltonian, total_shots):
         shots[term] = int(total_shots * np.sqrt(var) / total_var)
 
     return shots
-```
+[archived fence delimiter: ```]
 
 ## Error Mitigation
 
 ### Zero-Noise Extrapolation
 
-```python
+[archived fence delimiter: ```python]
 def zne_energy(vqe, params, hamiltonian, noise_factors=[1, 2, 3]):
     """Zero-noise extrapolation."""
     energies = []
@@ -363,23 +370,23 @@ def zne_energy(vqe, params, hamiltonian, noise_factors=[1, 2, 3]):
 
     # Extrapolate to zero noise
     return richardson_extrapolation(noise_factors, energies)
-```
+[archived fence delimiter: ```]
 
 ### Symmetry Verification
 
-```python
+[archived fence delimiter: ```python]
 def verify_symmetry(state, symmetry):
     """Verify state satisfies expected symmetry."""
     if symmetry == 'particle_number':
         N = sum(state.expectation_z(i) for i in range(state.num_qubits))
         return abs(N - expected_particles) < 0.1
-```
+[archived fence delimiter: ```]
 
 ## Convergence Analysis
 
 ### Energy Landscape
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 # Scan energy landscape (for 2 parameters)
@@ -397,7 +404,7 @@ plt.colorbar(label='Energy')
 plt.xlabel('θ₁')
 plt.ylabel('θ₂')
 plt.title('VQE Energy Landscape')
-```
+[archived fence delimiter: ```]
 
 ### Barren Plateaus
 
@@ -411,7 +418,7 @@ Mitigations:
 3. Identity initialization
 4. Symmetry-preserving ansätze
 
-```python
+[archived fence delimiter: ```python]
 # Layer-by-layer training to avoid barren plateaus
 def layerwise_training(vqe, hamiltonian, num_layers):
     params = np.zeros(num_layers * params_per_layer)
@@ -428,13 +435,13 @@ def layerwise_training(vqe, hamiltonian, num_layers):
         params[active_params] = result.x
 
     return params
-```
+[archived fence delimiter: ```]
 
 ## Molecular Systems
 
 ### H₂ Molecule
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 from moonlab.chemistry import Molecule
 
@@ -453,11 +460,11 @@ result = vqe.compute_ground_state(H)
 
 print(f"VQE Energy: {result.energy:.6f} Hartree")
 print(f"Chemical accuracy: {abs(result.energy - h2.fci_energy()) < 0.0016}")
-```
+[archived fence delimiter: ```]
 
 ### Potential Energy Surface
 
-```python
+[archived fence delimiter: ```python]
 distances = np.linspace(0.3, 3.0, 30)
 energies = []
 
@@ -472,7 +479,7 @@ plt.plot(distances, energies)
 plt.xlabel('Bond distance (Å)')
 plt.ylabel('Energy (Hartree)')
 plt.title('H₂ Potential Energy Surface')
-```
+[archived fence delimiter: ```]
 
 ## Complexity Analysis
 
@@ -512,3 +519,4 @@ $$N_{eval} = N_{terms} \times N_{shots} \times N_{iterations}$$
 **Ansatz Design**:
 9. Romero, J. et al. (2018). "Strategies for quantum computing molecular energies using the unitary coupled cluster ansatz." *Quantum Sci. Technol.* 4, 014008.
 
+```

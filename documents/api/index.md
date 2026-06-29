@@ -1,10 +1,17 @@
+# Archived Moonlab Documentation: API Reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # API Reference
 
 Complete API documentation for Moonlab Quantum Simulator across all supported languages. The core simulation engine is written in C, with bindings for Python, Rust, and JavaScript.
 
 ## API Overview
 
-```
+[archived fence delimiter: ```]
 ┌────────────────────────────────────────────────────────────────┐
 │                    Moonlab Quantum Simulator                   │
 ├────────────────────────────────────────────────────────────────┤
@@ -29,7 +36,7 @@ Complete API documentation for Moonlab Quantum Simulator across all supported la
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Language-Specific Documentation
 
@@ -139,7 +146,7 @@ WebAssembly-compiled core with React and Vue components.
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 
@@ -156,11 +163,11 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 state = QuantumState(2)
@@ -168,11 +175,11 @@ state.h(0).cnot(0, 1)
 
 probs = state.probabilities()
 print(f"P(|00⟩) = {probs[0]:.4f}")
-```
+[archived fence delimiter: ```]
 
 ### Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 
 fn main() {
@@ -182,11 +189,11 @@ fn main() {
     let probs = state.probabilities();
     println!("P(|00⟩) = {:.4}", probs[0]);
 }
-```
+[archived fence delimiter: ```]
 
 ### JavaScript
 
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 async function main() {
@@ -199,13 +206,13 @@ async function main() {
   state.dispose();
 }
 main();
-```
+[archived fence delimiter: ```]
 
 ## Error Handling
 
 ### C Error Codes
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_SUCCESS = 0,
     QS_ERROR_INVALID_QUBIT = -1,
@@ -214,7 +221,7 @@ typedef enum {
     QS_ERROR_OUT_OF_MEMORY = -4,
     QS_ERROR_INVALID_DIMENSION = -5
 } qs_error_t;
-```
+[archived fence delimiter: ```]
 
 ### Language-Specific Error Handling
 
@@ -295,3 +302,4 @@ Structs and enums include:
 - [FAQ](../faq.md) - Frequently asked questions
 - [Troubleshooting](../troubleshooting.md) - Common issues
 - [GitHub Issues](https://github.com/tsotchke/moonlab/issues) - Bug reports
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 05: Bell Test Verification
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 05: Bell Test Verification
 
 Verify quantum mechanics violates classical limits.
@@ -62,7 +69,7 @@ For maximum violation:
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.algorithms import BellTest
 import numpy as np
@@ -130,10 +137,10 @@ print(f"\nCHSH parameter S = {S:.4f}")
 print(f"Classical bound: |S| ≤ 2")
 print(f"Quantum bound:   |S| ≤ 2√2 ≈ 2.828")
 print(f"Violation: {abs(S) > 2}")
-```
+[archived fence delimiter: ```]
 
 **Expected Output**:
-```
+[archived fence delimiter: ```]
 Computing correlations...
 E(a, b)   = 0.7071
 E(a, b')  = -0.7071
@@ -144,11 +151,11 @@ CHSH parameter S = 2.8284
 Classical bound: |S| ≤ 2
 Quantum bound:   |S| ≤ 2√2 ≈ 2.828
 Violation: True
-```
+[archived fence delimiter: ```]
 
 ### Using the Built-in BellTest Class
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import BellTest
 from moonlab import QuantumState
 
@@ -164,7 +171,7 @@ print(f"Violates classical: {result['violates_classical']}")
 print(f"\nCorrelations:")
 for key, val in result['correlations'].items():
     print(f"  {key}: {val:.4f}")
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Results
 
@@ -194,7 +201,7 @@ The violation proves:
 
 ### Error Analysis
 
-```python
+[archived fence delimiter: ```python]
 def bell_test_with_error(num_shots=10000, num_experiments=100):
     """Run multiple Bell tests and compute statistics."""
     S_values = []
@@ -219,11 +226,11 @@ def bell_test_with_error(num_shots=10000, num_experiments=100):
     return S_values
 
 S_values = bell_test_with_error(10000, 100)
-```
+[archived fence delimiter: ```]
 
 ## Testing All Bell States
 
-```python
+[archived fence delimiter: ```python]
 bell_types = [
     (BellTest.PHI_PLUS, "|Φ+⟩"),
     (BellTest.PHI_MINUS, "|Φ-⟩"),
@@ -242,10 +249,10 @@ for bell_type, name in bell_types:
 
     violation = "Yes" if result['violates_classical'] else "No"
     print(f"{name:<10} {result['chsh']:<12.4f} {violation}")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 Bell Test Results for All Bell States:
 
 State      S Value      Violation
@@ -254,7 +261,7 @@ State      S Value      Violation
 |Φ-⟩       -2.8284      Yes
 |Ψ+⟩       2.8284       Yes
 |Ψ-⟩       -2.8284      Yes
-```
+[archived fence delimiter: ```]
 
 ## Loophole-Free Bell Tests
 
@@ -268,7 +275,7 @@ In 2015, loophole-free Bell tests confirmed quantum violations.
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 #include <stdio.h>
 #include <math.h>
 #include "quantum_sim.h"
@@ -320,7 +327,7 @@ int main() {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -362,3 +369,4 @@ Now let's apply quantum computing to chemistry:
 - [Entanglement Measures](../concepts/entanglement-measures.md) - Quantifying quantum correlations
 - Bell, J.S. (1964). "On the Einstein Podolsky Rosen Paradox." Physics, 1(3), 195-200.
 
+```

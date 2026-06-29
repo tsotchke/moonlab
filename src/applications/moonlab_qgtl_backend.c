@@ -41,8 +41,7 @@ struct moonlab_qgtl_circuit {
     qgtl_gate_record_t *gates;
 };
 
-moonlab_qgtl_circuit_t *
-moonlab_qgtl_circuit_create(int num_qubits)
+moonlab_qgtl_circuit_t *moonlab_qgtl_circuit_create(int num_qubits)
 {
     if (num_qubits < 1 || num_qubits > 32) return NULL;
     moonlab_qgtl_circuit_t *c = (moonlab_qgtl_circuit_t *)
@@ -505,8 +504,7 @@ int moonlab_qgtl_circuit_save(const moonlab_qgtl_circuit_t *c,
     return io_ok ? MOONLAB_QGTL_OK : MOONLAB_QGTL_INTERNAL;
 }
 
-moonlab_qgtl_circuit_t *
-moonlab_qgtl_circuit_load(const char *path, int *out_status)
+moonlab_qgtl_circuit_t *moonlab_qgtl_circuit_load(const char *path, int *out_status)
 {
     if (!path) {
         if (out_status) *out_status = MOONLAB_QGTL_BAD_ARG;

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: MoonLab control plane -- production deployment guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # MoonLab control plane -- production deployment guide
 
 > Audience: operators standing up a MoonLab compute node behind a load
@@ -11,7 +18,7 @@ returns simulation results.  Embeds the state-vector / MPS / CA-MPS /
 MPDO backends; speaks one line-delimited request format with a small
 RPC vocabulary; supports plain TCP, TLS, and mutual TLS.
 
-```
+[archived fence delimiter: ```]
        client app                          moonlab control plane
        ----------                          ---------------------
                                           +----------------------+
@@ -30,7 +37,7 @@ RPC vocabulary; supports plain TCP, TLS, and mutual TLS.
                                           |   simulator backend  |
                                           |   reply              |
                                           +----------------------+
-```
+[archived fence delimiter: ```]
 
 ## 2. Wire protocol
 
@@ -68,7 +75,7 @@ Server responses begin with one of:
 
 ### 2.3 Verbs
 
-```
+[archived fence delimiter: ```]
 CIRCUIT <body_len>\n               -- run circuit; body = moonlab-circuit v1 text
 <body bytes>
             <- OK <num_doubles>\n<num_doubles * 8 bytes of LE doubles>
@@ -88,7 +95,7 @@ AUTH <hexdigest>\n                 -- HMAC-SHA3-256 of next request body
 
 CIRCUIT_AUTH <body_len> <hexdigest>\n
 <body bytes>
-```
+[archived fence delimiter: ```]
 
 Note that the integer field after the verb has different units per
 reply: ``OK <n>`` is a *count of doubles*, ``SAMPLES <n>`` is a
@@ -99,7 +106,7 @@ payload; both forms compute the digest over the raw body bytes.
 
 ## 3. C API surface
 
-```c
+[archived fence delimiter: ```c]
 #include <moonlab/control/control_plane.h>
 
 moonlab_control_server_t *srv;
@@ -125,7 +132,7 @@ moonlab_control_server_set_max_concurrent(srv,  /*workers=*/ 64);
 moonlab_control_server_run(srv, /*max_iters=*/ INT_MAX);
 
 moonlab_control_server_close(srv);
-```
+[archived fence delimiter: ```]
 
 Client-side helpers `moonlab_control_submit_circuit`, `_shots`,
 `_health`, `_metrics`, `_auth`, `_tls`, and `_mtls` all return a
@@ -181,7 +188,7 @@ counters above capture the rejection.
 Response is Prometheus 0.0.4 text exposition.  The per-verb request
 counter carries a `verb` label; defensive counters are unlabelled:
 
-```
+[archived fence delimiter: ```]
 moonlab_control_requests_total{verb="CIRCUIT"}   Successful CIRCUIT requests
 moonlab_control_requests_total{verb="SHOTS"}     Successful SHOTS requests
 moonlab_control_requests_total{verb="HEALTH"}    HEALTH probes served
@@ -190,11 +197,11 @@ moonlab_control_rejected_total                   Requests rejected post-accept
 moonlab_control_rate_limited_total               Connections refused by token bucket
 moonlab_control_tls_handshake_failed_total       SSL_accept failures
 moonlab_control_max_concurrent_rejected_total    Connections refused by concurrency cap
-```
+[archived fence delimiter: ```]
 
 A typical scrape config:
 
-```yaml
+[archived fence delimiter: ```yaml]
 scrape_configs:
   - job_name: 'moonlab-control'
     static_configs:
@@ -204,7 +211,7 @@ scrape_configs:
       - source_labels: [__name__]
         regex: 'moonlab_control_(.*)'
         action: keep
-```
+[archived fence delimiter: ```]
 
 (The MoonLab control plane speaks its own line-protocol on `/`, not
 HTTP -- if your Prometheus build can't drive raw TCP, use the
@@ -214,7 +221,7 @@ HTTP -- if your Prometheus build can't drive raw TCP, use the
 
 ### 6.1 Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.control_plane import ControlPlaneServer
 
 with ControlPlaneServer(
@@ -227,19 +234,19 @@ with ControlPlaneServer(
     max_concurrent=64,
 ) as srv:
     srv.run_forever()
-```
+[archived fence delimiter: ```]
 
 Runtime tuning:
 
-```python
+[archived fence delimiter: ```python]
 srv.set_max_concurrent(128)
 srv.set_request_timeout(60)
 srv.set_rate_limit(20, 40)
-```
+[archived fence delimiter: ```]
 
 ### 6.2 Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::control_plane::ControlPlaneServer;
 
 let srv = ControlPlaneServer::open("0.0.0.0", 7070)?;
@@ -250,7 +257,7 @@ srv.set_rate_limit(10, 20)?;
 srv.set_request_timeout(30)?;
 srv.set_max_concurrent(64)?;
 srv.run(i32::MAX)?;
-```
+[archived fence delimiter: ```]
 
 ### 6.3 JavaScript / WASM
 
@@ -277,12 +284,12 @@ the LB's IP, disable rate limiting with
 
 ### 7.3 mTLS rollout
 
-```
+[archived fence delimiter: ```]
 day -7   issue worker certs from internal CA; deploy to clients
 day  0   moonlab_control_server_require_client_cert(srv, "internal-ca.pem")
 day +1   check moonlab_control_tls_handshake_failed_total; any spike
          indicates a worker that didn't pick up its cert
-```
+[archived fence delimiter: ```]
 
 The audit-log `peer_cn` field is the canonical "which worker did
 this" record once mTLS is on; pipe stdout through your aggregator and
@@ -290,18 +297,18 @@ group by `peer_cn`.
 
 ### 7.4 Graceful shutdown
 
-```c
+[archived fence delimiter: ```c]
 moonlab_control_server_shutdown(srv);   /* writes to self-pipe */
 /* wait for run() thread to return */
 moonlab_control_server_close(srv);
-```
+[archived fence delimiter: ```]
 
 The shutdown signal is async-signal-safe; call it from a SIGTERM
 handler.
 
 ### 7.5 Debugging
 
-```
+[archived fence delimiter: ```]
 # Tail-and-parse JSON request log
 MOONLAB_CONTROL_LOG=1 MOONLAB_CONTROL_LOG_FORMAT=json ./moonlab-control \
   | jq 'select(.rc != 0)'
@@ -309,7 +316,7 @@ MOONLAB_CONTROL_LOG=1 MOONLAB_CONTROL_LOG_FORMAT=json ./moonlab-control \
 # Watch the cap counter live
 watch -n1 'printf "METRICS\n" | nc 127.0.0.1 7070 \
   | grep max_concurrent_rejected_total'
-```
+[archived fence delimiter: ```]
 
 ## 8. Versioning
 
@@ -317,3 +324,4 @@ The control-plane wire protocol is stable across MoonLab 0.x; new
 verbs and status codes are additive.  Clients that see an unknown
 `OK <n>\n<bytes>` should treat the trailing bytes as opaque and pass
 through.
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: JavaScript API Reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # JavaScript API Reference
 
 WebAssembly-compiled quantum simulation with React and Vue components for building interactive web applications.
@@ -13,7 +20,7 @@ WebAssembly-compiled quantum simulation with React and Vue components for buildi
 
 ## Installation
 
-```bash
+[archived fence delimiter: ```bash]
 # npm
 npm install @moonlab/quantum-core @moonlab/quantum-viz
 
@@ -22,18 +29,18 @@ pnpm add @moonlab/quantum-core @moonlab/quantum-viz
 
 # yarn
 yarn add @moonlab/quantum-core @moonlab/quantum-viz
-```
+[archived fence delimiter: ```]
 
 For React or Vue:
-```bash
+[archived fence delimiter: ```bash]
 npm install @moonlab/quantum-react  # or @moonlab/quantum-vue
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
 ### ES Modules
 
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 async function main() {
@@ -57,11 +64,11 @@ async function main() {
 }
 
 main();
-```
+[archived fence delimiter: ```]
 
 ### CommonJS (Node.js)
 
-```javascript
+[archived fence delimiter: ```javascript]
 const { QuantumState } = require('@moonlab/quantum-core');
 
 async function main() {
@@ -72,7 +79,7 @@ async function main() {
 }
 
 main();
-```
+[archived fence delimiter: ```]
 
 ## QuantumState Class
 
@@ -80,7 +87,7 @@ main();
 
 QuantumState uses an async factory pattern (constructor is private).
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     static async create(options: QuantumStateOptions): Promise<QuantumState>;
 }
@@ -89,7 +96,7 @@ interface QuantumStateOptions {
     numQubits: number;       // 1-30 qubits
     amplitudes?: Complex[];  // Optional initial amplitudes
 }
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `numQubits`: Number of qubits (1-28 in browser, 1-30 in Node.js)
@@ -98,12 +105,12 @@ interface QuantumStateOptions {
 
 ### Properties
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface QuantumState {
     readonly numQubits: number;
     readonly stateDim: number;
 }
-```
+[archived fence delimiter: ```]
 
 ### Gate Methods
 
@@ -111,7 +118,7 @@ All gate methods return `this` for chaining.
 
 #### Single-Qubit Gates
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     x(qubit: number): this;
     y(qubit: number): this;
@@ -122,22 +129,22 @@ class QuantumState {
     t(qubit: number): this;
     tDagger(qubit: number): this;
 }
-```
+[archived fence delimiter: ```]
 
 #### Rotation Gates
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     rx(qubit: number, theta: number): this;
     ry(qubit: number, theta: number): this;
     rz(qubit: number, theta: number): this;
     phase(qubit: number, theta: number): this;
 }
-```
+[archived fence delimiter: ```]
 
 #### Multi-Qubit Gates
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     cnot(control: number, target: number): this;
     cz(control: number, target: number): this;
@@ -145,11 +152,11 @@ class QuantumState {
     cphase(control: number, target: number, theta: number): this;
     toffoli(control1: number, control2: number, target: number): this;
 }
-```
+[archived fence delimiter: ```]
 
 ### State Access
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     // Get all amplitudes as Complex[]
     getAmplitudes(): Complex[];
@@ -160,11 +167,11 @@ class QuantumState {
     // Get single probability
     probability(basisState: number): number;
 }
-```
+[archived fence delimiter: ```]
 
 ### Measurement
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     // Measure single qubit (collapses state)
     measure(qubit: number): number;  // Returns 0 or 1
@@ -172,11 +179,11 @@ class QuantumState {
     // Measure all qubits (collapses state)
     measureAll(): number;  // Returns basis state index
 }
-```
+[archived fence delimiter: ```]
 
 ### State Operations
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
     // Reset to |0...0⟩
     reset(): this;
@@ -190,13 +197,13 @@ class QuantumState {
     // Free WebAssembly memory (REQUIRED when done)
     dispose(): void;
 }
-```
+[archived fence delimiter: ```]
 
 ## TypeScript Support
 
 Full TypeScript definitions included:
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { QuantumState, Complex } from '@moonlab/quantum-core';
 
 interface Complex {
@@ -208,13 +215,13 @@ interface Complex {
 const state = await QuantumState.create({ numQubits: 4 });
 const amps: Complex[] = state.getAmplitudes();
 const prob: number = state.probability(0);
-```
+[archived fence delimiter: ```]
 
 ## Visualization (@moonlab/quantum-viz)
 
 ### CircuitDiagram
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { CircuitDiagram } from '@moonlab/quantum-viz';
 
 const diagram = new CircuitDiagram('#container', {
@@ -227,11 +234,11 @@ diagram.addGate('H', 0);
 diagram.addGate('CNOT', 0, 1);
 diagram.addGate('CNOT', 1, 2);
 diagram.render();
-```
+[archived fence delimiter: ```]
 
 ### StateVisualization
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { StateVisualization } from '@moonlab/quantum-viz';
 
 const viz = new StateVisualization('#container', state, {
@@ -243,11 +250,11 @@ const viz = new StateVisualization('#container', state, {
 // Update when state changes
 state.h(0);
 viz.update(state);
-```
+[archived fence delimiter: ```]
 
 ### BlochSphere
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { BlochSphere } from '@moonlab/quantum-viz';
 
 const bloch = new BlochSphere('#container', {
@@ -257,13 +264,13 @@ const bloch = new BlochSphere('#container', {
 });
 
 bloch.setState(state, 0);  // Show qubit 0
-```
+[archived fence delimiter: ```]
 
 ## React Components (@moonlab/quantum-react)
 
 ### QuantumCircuit
 
-```jsx
+[archived fence delimiter: ```jsx]
 import { QuantumCircuit, Gate, Measure } from '@moonlab/quantum-react';
 
 function MyCircuit() {
@@ -278,11 +285,11 @@ function MyCircuit() {
         </QuantumCircuit>
     );
 }
-```
+[archived fence delimiter: ```]
 
 ### useQuantumState Hook
 
-```jsx
+[archived fence delimiter: ```jsx]
 import { useQuantumState } from '@moonlab/quantum-react';
 
 function BellStateDemo() {
@@ -301,11 +308,11 @@ function BellStateDemo() {
         </div>
     );
 }
-```
+[archived fence delimiter: ```]
 
 ### StateVector
 
-```jsx
+[archived fence delimiter: ```jsx]
 import { StateVector } from '@moonlab/quantum-react';
 
 <StateVector
@@ -313,13 +320,13 @@ import { StateVector } from '@moonlab/quantum-react';
     format="polar"  // 'cartesian' | 'polar' | 'probability'
     precision={4}
 />
-```
+[archived fence delimiter: ```]
 
 ## Vue Components (@moonlab/quantum-vue)
 
 ### QuantumCircuit
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
     <QuantumCircuit :qubits="3" @measure="onMeasure">
         <Gate type="H" :qubit="0" />
@@ -335,11 +342,11 @@ const onMeasure = (result) => {
     console.log('Measured:', result);
 };
 </script>
-```
+[archived fence delimiter: ```]
 
 ### useQuantum Composable
 
-```vue
+[archived fence delimiter: ```vue]
 <script setup>
 import { useQuantum } from '@moonlab/quantum-vue';
 
@@ -350,13 +357,13 @@ const createBellState = () => {
     cnot(0, 1);
 };
 </script>
-```
+[archived fence delimiter: ```]
 
 ## Async Initialization
 
 The factory pattern handles WASM initialization automatically:
 
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState, preload } from '@moonlab/quantum-core';
 
 async function simulate() {
@@ -367,13 +374,13 @@ async function simulate() {
     // ... operations ...
     state.dispose();
 }
-```
+[archived fence delimiter: ```]
 
 ## Web Worker Support
 
 Run simulations in a Web Worker:
 
-```javascript
+[archived fence delimiter: ```javascript]
 // worker.js
 import { QuantumState } from '@moonlab/quantum-core';
 
@@ -401,13 +408,13 @@ worker.postMessage({
         { type: 'cnot', args: [0, 1] }
     ]
 });
-```
+[archived fence delimiter: ```]
 
 ## Memory Management
 
 WebAssembly requires manual memory management:
 
-```javascript
+[archived fence delimiter: ```javascript]
 const state = await QuantumState.create({ numQubits: 10 });
 
 try {
@@ -415,10 +422,10 @@ try {
 } finally {
     state.dispose();  // Always dispose!
 }
-```
+[archived fence delimiter: ```]
 
 With async/await pattern:
-```javascript
+[archived fence delimiter: ```javascript]
 async function simulate() {
     const state = await QuantumState.create({ numQubits: 10 });
     try {
@@ -428,7 +435,7 @@ async function simulate() {
         state.dispose();
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Browser Compatibility
 
@@ -440,9 +447,9 @@ async function simulate() {
 | Edge | 79+ | Full support |
 
 Requires WebAssembly support. Check with:
-```javascript
+[archived fence delimiter: ```javascript]
 const wasmSupported = typeof WebAssembly !== 'undefined';
-```
+[archived fence delimiter: ```]
 
 ## Bundle Size
 
@@ -460,3 +467,4 @@ const wasmSupported = typeof WebAssembly !== 'undefined';
 - [React Components](react.md) - React integration
 - [Vue Components](vue.md) - Vue integration
 - [Demo Site](https://moonlab.dev/demo) - Interactive examples
+```

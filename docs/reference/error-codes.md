@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Error codes reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Error codes reference
 
 Moonlab uses a layered return-code convention rather than a single
@@ -128,10 +135,10 @@ Notable module-specific extensions:
 
 `src/utils/moonlab_status.h:98` declares:
 
-```c
+[archived fence delimiter: ```c]
 const char *moonlab_status_to_string(moonlab_status_module_t module,
                                      moonlab_status_t status);
-```
+[archived fence delimiter: ```]
 
 The module enum (`moonlab_status_module_t`, defined in the same
 header at `:73-89`) identifies which per-module table the code
@@ -179,7 +186,7 @@ When adding a new module that needs a return code:
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum/state.h"
 #include "quantum/gates.h"
 #include "utils/moonlab_status.h"
@@ -197,7 +204,7 @@ status = gate_hadamard(&state, 0);
 if (status != QS_SUCCESS) {
     /* handle */
 }
-```
+[archived fence delimiter: ```]
 
 ### Python
 
@@ -218,3 +225,4 @@ the `pub enum QuantumError` declaration).
   configuration knobs whose validators surface these codes.
 - [TDVP API](tdvp-api.md) and [QGT API](qgt-api.md) for examples
   of subsystem-level error reporting in algorithm modules.
+```

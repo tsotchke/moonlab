@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Next Steps
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Next Steps
 
 Congratulations on completing your first quantum simulation! This guide outlines pathways for continued learning based on your interests and goals.
@@ -279,7 +286,7 @@ The headline new capabilities for downstream users:
 
 For a comprehensive understanding, we recommend this sequence:
 
-```
+[archived fence delimiter: ```]
 Getting Started (complete)
          │
          ▼
@@ -311,6 +318,7 @@ Getting Started (complete)
 │  Applications          │
 │  • Your projects!      │
 └────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 Choose your own path based on your goals. There's no single "correct" order—explore what interests you most.
+```

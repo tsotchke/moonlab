@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Architecture
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Architecture
 
 This document is the authoritative description of Moonlab's internal
@@ -63,7 +70,7 @@ planned for 0.3.
 
 ## 3. Directory Layout
 
-```
+[archived fence delimiter: ```]
 src/
   quantum/          state-vector core (state_t, gates, measurement, entanglement, noise)
   backends/
@@ -111,7 +118,7 @@ tests/
   integration/ cross-module flows
   abi/      dlsym-based stable-ABI probes
   performance/ micro-benchmarks (not in ctest by default)
-```
+[archived fence delimiter: ```]
 
 ## 4. Subsystem Summaries
 
@@ -425,3 +432,4 @@ see which warnings are still live.
 All references above were verified against live arXiv / DOI sources
 during the 2026-04-18 audit. Future additions should carry the same
 verification bar.
+```

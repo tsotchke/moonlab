@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Architecture Documentation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Architecture Documentation
 
 Internal architecture and implementation details of Moonlab.
@@ -10,7 +17,7 @@ This section provides comprehensive documentation of Moonlab's internal architec
 
 Moonlab is structured as a layered system:
 
-```
+[archived fence delimiter: ```]
 ┌────────────────────────────────────────────────────────────────┐
 │                        Language Bindings                       │
 │    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐ │
@@ -39,7 +46,7 @@ Moonlab is structured as a layered system:
 │  │   Memory Management │ Config │ Entropy │ Profiling          ││
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Component Overview
 
@@ -95,7 +102,7 @@ Moonlab is structured as a layered system:
 
 ### Gate Application
 
-```
+[archived fence delimiter: ```]
 User API Call
      │
      ▼
@@ -121,11 +128,11 @@ User API Call
                   ┌────────────────┐
                   │ State Updated  │
                   └────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Measurement Flow
 
-```
+[archived fence delimiter: ```]
 Measurement Request
         │
         ▼
@@ -145,11 +152,11 @@ Measurement Request
           │
           ▼
      Return Result
-```
+[archived fence delimiter: ```]
 
 ## Module Dependencies
 
-```
+[archived fence delimiter: ```]
                     ┌─────────┐
                     │ config  │
                     └────┬────┘
@@ -186,7 +193,7 @@ Measurement Request
 ┌─────────────┐       ┌──────────┐        ┌──────────┐
 │   grover    │       │   vqe    │        │   qaoa   │
 └─────────────┘       └──────────┘        └──────────┘
-```
+[archived fence delimiter: ```]
 
 ## Build Configuration
 
@@ -204,14 +211,14 @@ Measurement Request
 
 Runtime feature detection:
 
-```c
+[archived fence delimiter: ```c]
 qsim_features_t features = qsim_detect_features();
 
 printf("SIMD: %s\n", features.simd_level);     // "NEON", "AVX2", etc.
 printf("GPU: %s\n", features.gpu_available ? "yes" : "no");
 printf("MPI: %s\n", features.mpi_available ? "yes" : "no");
 printf("Threads: %d\n", features.num_threads);
-```
+[archived fence delimiter: ```]
 
 ## Performance Characteristics
 
@@ -246,7 +253,7 @@ printf("Threads: %d\n", features.num_threads);
 - GPU buffer transfers during computation
 - MPI collective operations
 
-```c
+[archived fence delimiter: ```c]
 // Thread-safe: each thread has own state
 #pragma omp parallel
 {
@@ -262,7 +269,7 @@ quantum_state_t* shared = quantum_state_init(20);
     // WRONG: concurrent modification
     gate_hadamard(shared, omp_get_thread_num());
 }
-```
+[archived fence delimiter: ```]
 
 ## Error Handling
 
@@ -270,7 +277,7 @@ quantum_state_t* shared = quantum_state_init(20);
 
 All C functions return status codes:
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QSIM_SUCCESS = 0,
     QSIM_ERROR_NULL_POINTER = 1,
@@ -280,24 +287,24 @@ typedef enum {
     QSIM_ERROR_INVALID_STATE = 5,
     // ... more codes
 } qsim_error_t;
-```
+[archived fence delimiter: ```]
 
 ### Error Handling Pattern
 
-```c
+[archived fence delimiter: ```c]
 qsim_error_t err = gate_hadamard(state, qubit);
 if (err != QSIM_SUCCESS) {
     const char* msg = qsim_error_message(err);
     fprintf(stderr, "Error: %s\n", msg);
     return err;
 }
-```
+[archived fence delimiter: ```]
 
 ## Profiling Integration
 
 Built-in profiling support:
 
-```c
+[archived fence delimiter: ```c]
 // Enable profiling
 qsim_profiler_start();
 
@@ -309,7 +316,7 @@ qsim_profile_t profile = qsim_profiler_stop();
 printf("Total time: %.3f ms\n", profile.total_time_ms);
 printf("Gate applications: %llu\n", profile.gate_count);
 printf("GPU transfers: %llu\n", profile.gpu_transfers);
-```
+[archived fence delimiter: ```]
 
 ## Further Reading
 
@@ -318,3 +325,4 @@ printf("GPU transfers: %llu\n", profile.gpu_transfers);
 - [Tensor Network Engine](tensor-network-engine.md) - MPS/DMRG internals
 - [Contributing Guide](../contributing/index.md) - Development setup
 
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: VQE API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # VQE API
 
 Complete reference for the Variational Quantum Eigensolver (VQE) in the C library.
@@ -34,13 +41,13 @@ The variational principle guarantees $E(\theta) \geq E_0$ where $E_0$ is the tru
 
 A single term in the Pauli Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double coefficient;       // Coefficient for this term
     char *pauli_string;      // String of Pauli operators (X,Y,Z,I)
     size_t num_qubits;       // Length of Pauli string
 } pauli_term_t;
-```
+[archived fence delimiter: ```]
 
 **Example**: The term $0.5 Z_0 Z_1 X_2 I_3$ is represented as:
 - `coefficient = 0.5`
@@ -51,7 +58,7 @@ typedef struct {
 
 Pauli Hamiltonian as a sum of Pauli string terms.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;           // Number of qubits needed
     size_t num_terms;            // Number of Pauli terms
@@ -60,7 +67,7 @@ typedef struct {
     char *molecule_name;         // Name (e.g., "H2", "LiH")
     double bond_distance;        // Internuclear distance (Angstroms)
 } pauli_hamiltonian_t;
-```
+[archived fence delimiter: ```]
 
 **Mathematical Form**:
 $$H = \sum_i c_i P_i$$
@@ -74,12 +81,12 @@ $$H = -1.05\, II + 0.40\, ZI + 0.40\, IZ - 0.22\, ZZ + 0.18\, XX$$
 
 Create a Pauli Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 pauli_hamiltonian_t* pauli_hamiltonian_create(
     size_t num_qubits,
     size_t num_terms
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits in the system
@@ -91,22 +98,22 @@ pauli_hamiltonian_t* pauli_hamiltonian_create(
 
 Free a Pauli Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 void pauli_hamiltonian_free(pauli_hamiltonian_t *hamiltonian);
-```
+[archived fence delimiter: ```]
 
 ### pauli_hamiltonian_add_term
 
 Add a Pauli term to the Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 int pauli_hamiltonian_add_term(
     pauli_hamiltonian_t *hamiltonian,
     double coefficient,
     const char *pauli_string,
     size_t term_index
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `hamiltonian`: Pauli Hamiltonian
@@ -122,9 +129,9 @@ int pauli_hamiltonian_add_term(
 
 Create H₂ (Hydrogen) molecule Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `bond_distance`: Internuclear distance in Angstroms (typical: 0.5-2.0)
@@ -132,20 +139,20 @@ pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance);
 **Returns**: 2-qubit Hamiltonian using STO-3G basis, Jordan-Wigner transformation
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // H₂ at equilibrium bond distance
 pauli_hamiltonian_t *h2 = vqe_create_h2_hamiltonian(0.735);
 printf("H₂ Hamiltonian: %zu qubits, %zu terms\n",
        h2->num_qubits, h2->num_terms);
-```
+[archived fence delimiter: ```]
 
 ### vqe_create_lih_hamiltonian
 
 Create LiH (Lithium Hydride) molecule Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `bond_distance`: Internuclear distance in Angstroms
@@ -158,9 +165,9 @@ pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance);
 
 Create H₂O (Water) molecule Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 8-qubit Hamiltonian with fixed geometry (O-H bond = 0.958 Å, H-O-H angle = 104.5°)
 
@@ -170,20 +177,20 @@ pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
 
 Ansatz types for trial state preparation.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     VQE_ANSATZ_HARDWARE_EFFICIENT,  // Hardware-efficient ansatz
     VQE_ANSATZ_UCCSD,               // Unitary Coupled Cluster (chemistry)
     VQE_ANSATZ_CUSTOM,              // User-defined ansatz
     VQE_ANSATZ_SYMMETRY_PRESERVING  // Particle-conserving Givens rotations
 } vqe_ansatz_type_t;
-```
+[archived fence delimiter: ```]
 
 ### vqe_ansatz_t
 
 Variational circuit ansatz.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     vqe_ansatz_type_t type;      // Ansatz type
     size_t num_qubits;           // Number of qubits
@@ -192,18 +199,18 @@ typedef struct {
     double *parameters;          // Current parameter values
     void *circuit_data;          // Opaque circuit description
 } vqe_ansatz_t;
-```
+[archived fence delimiter: ```]
 
 ### vqe_create_hardware_efficient_ansatz
 
 Create hardware-efficient ansatz.
 
-```c
+[archived fence delimiter: ```c]
 vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
     size_t num_qubits,
     size_t num_layers
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits
@@ -212,12 +219,12 @@ vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
 **Returns**: Ansatz with alternating rotation and entanglement layers
 
 **Circuit Structure**:
-```
+[archived fence delimiter: ```]
 Layer k:
   RY(θ₁) RY(θ₂) RY(θ₃) ...
   RZ(θ₄) RZ(θ₅) RZ(θ₆) ...
   CNOT(0,1) CNOT(1,2) CNOT(2,3) ...
-```
+[archived fence delimiter: ```]
 
 **Parameter Count**: $3 \times n \times L$ where $n$ is qubits, $L$ is layers
 
@@ -225,12 +232,12 @@ Layer k:
 
 Create UCCSD ansatz (chemistry-inspired).
 
-```c
+[archived fence delimiter: ```c]
 vqe_ansatz_t* vqe_create_uccsd_ansatz(
     size_t num_qubits,
     size_t num_electrons
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits (spin orbitals)
@@ -252,13 +259,13 @@ in a fixed-occupation sector of the Jordan-Wigner Hilbert space and is
 the right choice for small-molecule chemistry where the ground state
 lives in a single electron-count sector.
 
-```c
+[archived fence delimiter: ```c]
 vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
     size_t num_qubits,
     size_t num_occupied,
     size_t num_layers
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of spin-orbitals (= qubits)
@@ -269,10 +276,10 @@ vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
 
 **Circuit**: One Givens rotation per (occupied, virtual) qubit pair per
 layer:
-```
+[archived fence delimiter: ```]
 for each (o, v) pair:
   CNOT(q_v, q_o) · CRY(θ; control=q_o, target=q_v) · CNOT(q_v, q_o)
-```
+[archived fence delimiter: ```]
 This rotates the two-qubit {|10⟩, |01⟩} subspace while leaving |00⟩ and
 |11⟩ untouched, preserving the total electron count.
 
@@ -297,28 +304,28 @@ plus nuclear repulsion. Intended as a reference oracle for VQE
 convergence testing; complexity O(4^n) time, O(4^n) memory — safe for
 n ≤ 10 on commodity hosts.
 
-```c
+[archived fence delimiter: ```c]
 double vqe_exact_ground_state_energy(const pauli_hamiltonian_t *H);
-```
+[archived fence delimiter: ```]
 
 ### vqe_ansatz_free
 
 Free ansatz structure.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_ansatz_free(vqe_ansatz_t *ansatz);
-```
+[archived fence delimiter: ```]
 
 ### vqe_apply_ansatz
 
 Apply ansatz circuit to quantum state.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t vqe_apply_ansatz(
     quantum_state_t *state,
     const vqe_ansatz_t *ansatz
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state to prepare
@@ -332,14 +339,14 @@ qs_error_t vqe_apply_ansatz(
 
 Apply ansatz circuit with noise simulation.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t vqe_apply_ansatz_noisy(
     quantum_state_t *state,
     const vqe_ansatz_t *ansatz,
     const noise_model_t *noise,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -355,14 +362,14 @@ qs_error_t vqe_apply_ansatz_noisy(
 
 Optimizer types.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     VQE_OPTIMIZER_COBYLA,          // Constrained optimization
     VQE_OPTIMIZER_LBFGS,           // Limited-memory BFGS
     VQE_OPTIMIZER_ADAM,            // Adaptive moment estimation
     VQE_OPTIMIZER_GRADIENT_DESCENT // Simple gradient descent
 } vqe_optimizer_type_t;
-```
+[archived fence delimiter: ```]
 
 | Optimizer | Gradient-Free | Memory | Best For |
 |-----------|--------------|--------|----------|
@@ -375,7 +382,7 @@ typedef enum {
 
 Classical optimizer configuration.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     vqe_optimizer_type_t type;   // Optimizer type
     size_t max_iterations;       // Maximum iterations
@@ -383,15 +390,15 @@ typedef struct {
     double learning_rate;        // Learning rate (for gradient methods)
     int verbose;                 // Print progress
 } vqe_optimizer_t;
-```
+[archived fence delimiter: ```]
 
 ### vqe_optimizer_create
 
 Create optimizer.
 
-```c
+[archived fence delimiter: ```c]
 vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `type`: Optimizer type
@@ -402,9 +409,9 @@ vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type);
 
 Free optimizer.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_optimizer_free(vqe_optimizer_t *optimizer);
-```
+[archived fence delimiter: ```]
 
 ## VQE Solver
 
@@ -412,7 +419,7 @@ void vqe_optimizer_free(vqe_optimizer_t *optimizer);
 
 VQE solver context.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     pauli_hamiltonian_t *hamiltonian;  // Pauli Hamiltonian
     vqe_ansatz_t *ansatz;              // Variational ansatz
@@ -425,13 +432,13 @@ typedef struct {
     size_t total_measurements;         // Total measurements performed
     double total_time;                 // Total optimization time
 } vqe_solver_t;
-```
+[archived fence delimiter: ```]
 
 ### vqe_result_t
 
 VQE result.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double ground_state_energy;       // Computed ground state energy (Hartree)
     double *optimal_parameters;       // Optimal variational parameters
@@ -443,7 +450,7 @@ typedef struct {
     double hf_energy;               // Hartree-Fock energy (if available)
     double chemical_accuracy;       // Error in kcal/mol
 } vqe_result_t;
-```
+[archived fence delimiter: ```]
 
 **Note**: Chemical accuracy is 1 kcal/mol = 0.0016 Hartree
 
@@ -451,14 +458,14 @@ typedef struct {
 
 Create VQE solver.
 
-```c
+[archived fence delimiter: ```c]
 vqe_solver_t* vqe_solver_create(
     pauli_hamiltonian_t *hamiltonian,
     vqe_ansatz_t *ansatz,
     vqe_optimizer_t *optimizer,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `hamiltonian`: Molecular Hamiltonian
@@ -472,17 +479,17 @@ vqe_solver_t* vqe_solver_create(
 
 Free VQE solver.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_solver_free(vqe_solver_t *solver);
-```
+[archived fence delimiter: ```]
 
 ### vqe_solver_set_noise
 
 Set noise model for VQE solver.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_solver_set_noise(vqe_solver_t *solver, noise_model_t *noise_model);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: VQE solver context
@@ -492,12 +499,12 @@ void vqe_solver_set_noise(vqe_solver_t *solver, noise_model_t *noise_model);
 
 Compute energy expectation for given parameters.
 
-```c
+[archived fence delimiter: ```c]
 double vqe_compute_energy(
     vqe_solver_t *solver,
     const double *parameters
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: VQE solver context
@@ -509,9 +516,9 @@ double vqe_compute_energy(
 
 Run VQE optimization to find ground state.
 
-```c
+[archived fence delimiter: ```c]
 vqe_result_t vqe_solve(vqe_solver_t *solver);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: VQE solver context
@@ -531,13 +538,13 @@ vqe_result_t vqe_solve(vqe_solver_t *solver);
 
 Compute gradient of energy with respect to parameters.
 
-```c
+[archived fence delimiter: ```c]
 int vqe_compute_gradient(
     vqe_solver_t *solver,
     const double *parameters,
     double *gradient
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: VQE solver context
@@ -555,13 +562,13 @@ $$\frac{\partial E}{\partial \theta_i} = \frac{E(\theta + \frac{\pi}{2}e_i) - E(
 
 Create depolarizing noise model.
 
-```c
+[archived fence delimiter: ```c]
 noise_model_t* vqe_create_depolarizing_noise(
     double single_qubit_error,
     double two_qubit_error,
     double readout_error
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `single_qubit_error`: Single-qubit gate error probability
@@ -574,14 +581,14 @@ noise_model_t* vqe_create_depolarizing_noise(
 
 Create realistic NISQ noise model.
 
-```c
+[archived fence delimiter: ```c]
 noise_model_t* vqe_create_nisq_noise(
     double t1_us,
     double t2_us,
     double gate_error,
     double readout_error
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `t1_us`: T1 relaxation time in microseconds
@@ -597,14 +604,14 @@ noise_model_t* vqe_create_nisq_noise(
 
 Measure expectation value of a Pauli term.
 
-```c
+[archived fence delimiter: ```c]
 double vqe_measure_pauli_expectation(
     quantum_state_t *state,
     const pauli_term_t *pauli_term,
     quantum_entropy_ctx_t *entropy,
     size_t num_samples
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -618,13 +625,13 @@ double vqe_measure_pauli_expectation(
 
 Apply Pauli rotation to state.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t vqe_apply_pauli_rotation(
     quantum_state_t *state,
     const char *pauli_string,
     double angle
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -639,9 +646,9 @@ qs_error_t vqe_apply_pauli_rotation(
 
 Convert energy units.
 
-```c
+[archived fence delimiter: ```c]
 double vqe_hartree_to_kcalmol(double energy);
-```
+[archived fence delimiter: ```]
 
 **Conversion**: 1 Hartree = 627.5 kcal/mol
 
@@ -649,21 +656,21 @@ double vqe_hartree_to_kcalmol(double energy);
 
 Print VQE result.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_print_result(const vqe_result_t *result);
-```
+[archived fence delimiter: ```]
 
 ### vqe_print_hamiltonian
 
 Print Hamiltonian.
 
-```c
+[archived fence delimiter: ```c]
 void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian);
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/algorithms/vqe.h"
 #include "src/utils/quantum_entropy.h"
 
@@ -709,7 +716,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Energy Units and Chemical Accuracy
 
@@ -727,3 +734,4 @@ Chemical accuracy (1 kcal/mol) is the threshold for useful chemical predictions.
 - [Noise API](noise.md) - Noise models
 - [Algorithms: VQE](../../algorithms/vqe-algorithm.md) - Full theory
 - [Tutorial: VQE Molecular Simulation](../../tutorials/06-vqe-molecular-simulation.md)
+```

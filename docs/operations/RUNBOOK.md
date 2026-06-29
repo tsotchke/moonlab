@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Operations Runbook
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Operations Runbook
 
 > **Audience:** SREs operating a Moonlab Community Edition or Moonlab
@@ -13,11 +20,11 @@
 
 Reference deployment uses the supplied docker-compose stack:
 
-```bash
+[archived fence delimiter: ```bash]
 cd deploy/docker
 docker-compose up -d control-plane exporter
 docker-compose logs -f control-plane
-```
+[archived fence delimiter: ```]
 
 The stack brings up:
 
@@ -29,9 +36,9 @@ The stack brings up:
 
 Health-check the control plane from the host:
 
-```bash
+[archived fence delimiter: ```bash]
 printf 'HEALTH\n' | nc 127.0.0.1 8765   # expect: OK alive
-```
+[archived fence delimiter: ```]
 
 For Kubernetes deployment see `deploy/helm/moonlab/`.  The default
 values render two-replica control plane behind a NodePort, with
@@ -42,21 +49,21 @@ production use.
 
 Required env vars on the `control-plane` container:
 
-```
+[archived fence delimiter: ```]
 MOONLAB_CONTROL_SECRET           hex-encoded HMAC shared secret
 MOONLAB_CONTROL_TLS_CERT         /etc/moonlab/server.crt
 MOONLAB_CONTROL_TLS_KEY          /etc/moonlab/server.key
 MOONLAB_CONTROL_MAX_CONCURRENT   bound on in-flight jobs (e.g. 32)
 MOONLAB_CONTROL_RATE_LIMIT_RPS   per-source-IP rate ceiling (e.g. 20)
 MOONLAB_CONTROL_REQUEST_TIMEOUT  per-request socket timeout (seconds, e.g. 30)
-```
+[archived fence delimiter: ```]
 
 Optional but recommended:
 
-```
+[archived fence delimiter: ```]
 MOONLAB_CONTROL_TLS_CLIENT_CA    /etc/moonlab/clients-ca.crt   # mTLS
 MOONLAB_LOG_FORMAT               json                          # structured logs
-```
+[archived fence delimiter: ```]
 
 Public moonlab does not enforce any tenant policy.  To accept the
 `AUTH <tenant>:<hmac>` form and bill / quota per tenant, run a
@@ -78,17 +85,17 @@ The HMAC shared secret authenticates clients to the server.  Rotate
 quarterly or after any suspected leak:
 
 1. Generate a fresh 32-byte secret on the operator workstation:
-   ```bash
+[archived fence delimiter:    ```bash]
    openssl rand -hex 32 | tee new-secret.hex
-   ```
+[archived fence delimiter:    ```]
 2. Pre-stage the new secret on every server host (e.g. via the
    secrets store backing Kubernetes secrets).
 3. Reload the control plane.  The default deployment treats
    `MOONLAB_CONTROL_SECRET` as picked up on startup; rolling
    restart the pods:
-   ```bash
+[archived fence delimiter:    ```bash]
    kubectl rollout restart deployment/moonlab-control-plane
-   ```
+[archived fence delimiter:    ```]
 4. Distribute the new secret to client tenants (out-of-band; do
    not commit to the public repo -- the `public-hygiene` CI gate
    greps for the obvious shapes).
@@ -112,10 +119,10 @@ To rotate manually:
 2. `kill -HUP $(pidof moonlab_control_plane)` (or
    `kubectl exec -- kill -HUP 1`).
 3. Verify the new certificate is in effect:
-   ```bash
+[archived fence delimiter:    ```bash]
    openssl s_client -connect controlplane:8443 -servername moonlab.example </dev/null \
        | openssl x509 -noout -dates
-   ```
+[archived fence delimiter:    ```]
 
 ## 5. Installing a per-tenant admission hook (v1.0.3)
 
@@ -129,7 +136,7 @@ dispatch.  Use it for:
 
 C signature:
 
-```c
+[archived fence delimiter: ```c]
 int my_admission(const char *tenant_id,
                  const char *verb,
                  int         num_qubits,
@@ -139,7 +146,7 @@ int my_admission(const char *tenant_id,
 //        MOONLAB_CONTROL_REJECTED  (-405) for tier-blocked / locked-out.
 
 moonlab_control_server_set_admission_hook(server, my_admission, &state);
-```
+[archived fence delimiter: ```]
 
 The hook fires after AUTH succeeds and the verb header is parsed
 but **before** the circuit body is read, so refused jobs do not
@@ -166,7 +173,7 @@ Typical overlay structure:
 
 ### Python overlay (v1.0.3)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.control_plane import ControlPlaneServer
 from moonlab.token_bucket import TokenBucket
 from moonlab.constants import MOONLAB_CONTROL_RATE_LIMITED, MOONLAB_CONTROL_REJECTED
@@ -190,11 +197,11 @@ with ControlPlaneServer(host="0.0.0.0", port=7070,
                         secret=open("/etc/moonlab/hmac.bin", "rb").read()) as srv:
     srv.set_admission_hook(admission)
     srv.run()
-```
+[archived fence delimiter: ```]
 
 ### Rust overlay (v1.0.3)
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::admission_hook::{AdmissionDecision, AdmissionHook};
 use moonlab::token_bucket::TokenBucket;
 use std::collections::HashMap;
@@ -219,7 +226,7 @@ let hook = AdmissionHook::new(move |req| {
 // Caller manages the moonlab_control_server_t lifetime (see
 // bindings/rust/moonlab/tests/admission_hook_e2e.rs for the
 // full pattern) and installs the hook via `hook.install(server)?`.
-```
+[archived fence delimiter: ```]
 
 Both snippets use the language-native [TokenBucket] port
 (`bindings/python/moonlab/token_bucket.py`,
@@ -232,23 +239,23 @@ on every admission decision.
 The completion hook fires after every **successful** scheduler run
 (failed dispatches do not fire it):
 
-```c
+[archived fence delimiter: ```c]
 void my_completion(const moonlab_job_t          *job,
                    const moonlab_job_results_t  *results,
                    const char                   *backend_name,
                    void                         *ctx);
 
 moonlab_scheduler_set_completion_hook(my_completion, &state);
-```
+[archived fence delimiter: ```]
 
 Inside the hook:
 
-```c
+[archived fence delimiter: ```c]
 const char *tenant_id  = moonlab_scheduler_current_tenant_id();
 const char *request_id = moonlab_scheduler_current_request_id();
 const int   n_qubits   = results->num_qubits;
 const int   n_shots    = results->total_shots;
-```
+[archived fence delimiter: ```]
 
 - Use a worker queue inside the callback to hand off to the
   billing / audit / dashboard sinks; do NOT block the scheduler.
@@ -266,7 +273,7 @@ and a tenant_id by the operator.
 
 ### Python (`bindings/python/moonlab/control_plane.py`)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.control_plane import submit_circuit
 from moonlab.qgtl import GateType, QgtlCircuit
 
@@ -281,11 +288,11 @@ probs = submit_circuit(
     tenant_id="acme-corp",
 )
 # probs == [0.5, 0.0, 0.0, 0.5]
-```
+[archived fence delimiter: ```]
 
 ### Rust (`bindings/rust/moonlab/src/control_plane.rs`)
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::control_plane::submit_circuit_auth_tenant;
 use moonlab::qgtl::{GateType, QgtlCircuit};
 
@@ -301,11 +308,11 @@ let probs = submit_circuit_auth_tenant(
     "acme-corp",
 )?;
 // probs == vec![0.5, 0.0, 0.0, 0.5]
-```
+[archived fence delimiter: ```]
 
 ### JavaScript / Node (`@moonlab/quantum-core/control-plane`)
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { submitCircuit } from '@moonlab/quantum-core/control-plane';
 
 const probs = await submitCircuit({
@@ -315,15 +322,15 @@ const probs = await submitCircuit({
   tenantId: 'acme-corp',
 });
 // probs === [0.5, 0, 0, 0.5]
-```
+[archived fence delimiter: ```]
 
 ### Wire format under all three
 
-```
+[archived fence delimiter: ```]
 AUTH acme-corp:<64-hex-HMAC-SHA3-256>\n
 CIRCUIT <N>\n
 <N bytes of moonlab-circuit-v1 text>
-```
+[archived fence delimiter: ```]
 
 The HMAC is keyed on the operator-issued shared secret and computed
 over the verb line including its trailing newline.  Tenant_id is
@@ -335,9 +342,9 @@ reject malformed tenant_ids client-side before connecting.
 The `METRICS` verb returns Prometheus text-format counters.  Scrape
 from the exporter sidecar or directly:
 
-```bash
+[archived fence delimiter: ```bash]
 printf 'METRICS\n' | nc 127.0.0.1 8765
-```
+[archived fence delimiter: ```]
 
 Stable counters (since v0.8.23):
 
@@ -487,7 +494,7 @@ backpressure signal.
 
 ### Re-run cross-host
 
-```bash
+[archived fence delimiter: ```bash]
 # On the server host (e.g. atlas):
 build/moonlab-control-server --host 0.0.0.0 --port 17075 \
     --secret-file /tmp/fleet-secret.bin \
@@ -497,11 +504,11 @@ build/moonlab-control-server --host 0.0.0.0 --port 17075 \
 python3 tools/fleet_loadtest.py --host <server-ip> --port 17075 \
     --secret <ascii-secret> --workers 32 --duration 10 \
     [--tenant acme-corp]
-```
+[archived fence delimiter: ```]
 
 Re-run on your host:
 
-```bash
+[archived fence delimiter: ```bash]
 ./moonlab-control-server --port 17071 \
     --secret-file /etc/moonlab/hmac.bin \
     --max-concurrent 32 --rate-limit-rps 5000 --rate-limit-burst 10000 &
@@ -509,7 +516,7 @@ Re-run on your host:
 ./control_plane_loadtest --host 127.0.0.1 --port 17071 \
     --secret-file /etc/moonlab/hmac.bin \
     --tenant acme-corp --workers 16 --duration 5
-```
+[archived fence delimiter: ```]
 
 
 
@@ -573,3 +580,4 @@ there to catch the next operator's mistake.
 - `COMMUNITY_EDITION.md` -- public / commercial product boundary.
 - `examples/extensions/open_core_overlay_demo.c` -- reference
   overlay code exercising all four plug-in surfaces.
+```

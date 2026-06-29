@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: JavaScript Core API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # JavaScript Core API
 
 Complete reference for the WebAssembly quantum simulation core.
@@ -16,17 +23,17 @@ The `@moonlab/quantum-core` package provides WebAssembly-powered quantum simulat
 
 ## Installation
 
-```bash
+[archived fence delimiter: ```bash]
 npm install @moonlab/quantum-core
 # or
 yarn add @moonlab/quantum-core
 # or
 pnpm add @moonlab/quantum-core
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { QuantumState, Circuit } from '@moonlab/quantum-core';
 
 // Create a 2-qubit Bell state using fluent API
@@ -46,7 +53,7 @@ const circuit = new Circuit(2)
 const state2 = await QuantumState.create({ numQubits: 2 });
 circuit.apply(state2);
 state2.dispose();
-```
+[archived fence delimiter: ```]
 
 ## QuantumState
 
@@ -56,24 +63,24 @@ Main class for quantum state manipulation.
 
 #### create
 
-```typescript
+[archived fence delimiter: ```typescript]
 static async create(options: QuantumStateOptions): Promise<QuantumState>
-```
+[archived fence delimiter: ```]
 
 Create a new quantum state initialized to $|0\ldots0\rangle$.
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface QuantumStateOptions {
   numQubits: number;       // 1-30 qubits
   amplitudes?: Complex[];  // Optional initial amplitudes
 }
-```
+[archived fence delimiter: ```]
 
 **Returns**: Promise resolving to QuantumState
 
 **Example**:
-```typescript
+[archived fence delimiter: ```typescript]
 // Basic creation
 const state = await QuantumState.create({ numQubits: 4 });
 
@@ -87,51 +94,51 @@ const bellState = await QuantumState.create({
     { re: 1/Math.sqrt(2), im: 0 },  // |11⟩
   ]
 });
-```
+[archived fence delimiter: ```]
 
 ### Properties
 
-```typescript
+[archived fence delimiter: ```typescript]
 class QuantumState {
   readonly numQubits: number;    // Number of qubits
   readonly stateDim: number;     // State dimension (2^n)
   readonly isDisposed: boolean;  // Whether disposed
 }
-```
+[archived fence delimiter: ```]
 
 ### State Operations
 
 #### reset
 
-```typescript
+[archived fence delimiter: ```typescript]
 reset(): this
-```
+[archived fence delimiter: ```]
 
 Reset state to $|0\ldots0\rangle$.
 
-```typescript
+[archived fence delimiter: ```typescript]
 state.h(0).cnot(0, 1);
 state.reset();  // Back to |00⟩
-```
+[archived fence delimiter: ```]
 
 #### clone
 
-```typescript
+[archived fence delimiter: ```typescript]
 async clone(): Promise<QuantumState>
-```
+[archived fence delimiter: ```]
 
 Create a deep copy of the state.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const copy = await state.clone();
 // state and copy are independent
-```
+[archived fence delimiter: ```]
 
 #### normalize
 
-```typescript
+[archived fence delimiter: ```typescript]
 normalize(): this
-```
+[archived fence delimiter: ```]
 
 Normalize the state vector to unit length.
 
@@ -139,7 +146,7 @@ Normalize the state vector to unit length.
 
 All gates return `this` for method chaining.
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Pauli gates
 state.x(qubit);    // Pauli-X (NOT)
 state.y(qubit);    // Pauli-Y
@@ -162,10 +169,10 @@ state.phase(qubit, angle);  // Phase gate
 
 // General unitary
 state.u3(qubit, theta, phi, lambda);  // U3 gate
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```typescript
+[archived fence delimiter: ```typescript]
 const state = await QuantumState.create({ numQubits: 3 });
 
 // Method chaining
@@ -174,11 +181,11 @@ state
   .rx(1, Math.PI / 4)
   .t(2)
   .phase(0, Math.PI / 2);
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Gates
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Controlled gates
 state.cnot(control, target);   // CNOT (CX)
 state.cx(control, target);     // Alias for CNOT
@@ -193,11 +200,11 @@ state.crx(control, target, angle);
 state.cry(control, target, angle);
 state.crz(control, target, angle);
 state.cphase(control, target, angle);
-```
+[archived fence delimiter: ```]
 
 ### Three-Qubit Gates
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Toffoli (CCNOT)
 state.toffoli(control1, control2, target);
 state.ccx(control1, control2, target);  // Alias
@@ -205,109 +212,109 @@ state.ccx(control1, control2, target);  // Alias
 // Fredkin (CSWAP)
 state.fredkin(control, target1, target2);
 state.cswap(control, target1, target2);  // Alias
-```
+[archived fence delimiter: ```]
 
 ### Multi-Qubit Operations
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Quantum Fourier Transform
 state.qft([0, 1, 2, 3]);    // Apply to qubits 0-3
 state.iqft([0, 1, 2, 3]);   // Inverse QFT
-```
+[archived fence delimiter: ```]
 
 ### State Queries
 
 #### getAmplitudes
 
-```typescript
+[archived fence delimiter: ```typescript]
 getAmplitudes(): Complex[]
-```
+[archived fence delimiter: ```]
 
 Get all complex amplitudes.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const amps = state.getAmplitudes();
 console.log(amps[0]);  // { re: number, im: number }
-```
+[archived fence delimiter: ```]
 
 #### setAmplitudes
 
-```typescript
+[archived fence delimiter: ```typescript]
 setAmplitudes(amplitudes: Complex[]): this
-```
+[archived fence delimiter: ```]
 
 Set state amplitudes (must match state dimension).
 
 #### getProbabilities
 
-```typescript
+[archived fence delimiter: ```typescript]
 getProbabilities(): Float64Array
-```
+[archived fence delimiter: ```]
 
 Get probability distribution.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const probs = state.getProbabilities();
 // probs[i] = probability of measuring |i⟩
-```
+[archived fence delimiter: ```]
 
 #### probability
 
-```typescript
+[archived fence delimiter: ```typescript]
 probability(basisState: number): number
-```
+[archived fence delimiter: ```]
 
 Get probability of specific basis state.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const p00 = state.probability(0);  // P(|00⟩)
 const p11 = state.probability(3);  // P(|11⟩) for 2 qubits
-```
+[archived fence delimiter: ```]
 
 ### Measurement
 
 #### measure
 
-```typescript
+[archived fence delimiter: ```typescript]
 measure(qubit: number): number
-```
+[archived fence delimiter: ```]
 
 Measure single qubit (collapses state).
 
 **Returns**: 0 or 1
 
-```typescript
+[archived fence delimiter: ```typescript]
 const result = state.measure(0);
 console.log(`Qubit 0 measured: ${result}`);
-```
+[archived fence delimiter: ```]
 
 #### measureAll
 
-```typescript
+[archived fence delimiter: ```typescript]
 measureAll(): number
-```
+[archived fence delimiter: ```]
 
 Measure all qubits (collapses state).
 
 **Returns**: Basis state index (0 to 2^n - 1)
 
-```typescript
+[archived fence delimiter: ```typescript]
 const result = state.measureAll();
 console.log(`Measured: |${result.toString(2).padStart(state.numQubits, '0')}⟩`);
-```
+[archived fence delimiter: ```]
 
 #### probabilityZero / probabilityOne
 
-```typescript
+[archived fence delimiter: ```typescript]
 probabilityZero(qubit: number): number
 probabilityOne(qubit: number): number
-```
+[archived fence delimiter: ```]
 
 Get single-qubit measurement probabilities (non-destructive).
 
 ### Expectation Values
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Single-qubit Pauli expectations
 const zExp = state.expectationZ(qubit);  // ⟨Z⟩
 const xExp = state.expectationX(qubit);  // ⟨X⟩
@@ -315,11 +322,11 @@ const yExp = state.expectationY(qubit);  // ⟨Y⟩
 
 // Two-qubit correlation
 const zzCorr = state.correlationZZ(qubit1, qubit2);  // ⟨Z₁Z₂⟩
-```
+[archived fence delimiter: ```]
 
 ### State Properties
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Von Neumann entropy
 const s = state.entropy();
 
@@ -328,17 +335,17 @@ const p = state.purity();
 
 // Fidelity with another state
 const f = state.fidelity(otherState);
-```
+[archived fence delimiter: ```]
 
 ### Memory Management
 
-```typescript
+[archived fence delimiter: ```typescript]
 dispose(): void
-```
+[archived fence delimiter: ```]
 
 **IMPORTANT**: Must be called when done with state to free WASM memory.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const state = await QuantumState.create({ numQubits: 4 });
 try {
   state.h(0).cnot(0, 1);
@@ -346,7 +353,7 @@ try {
 } finally {
   state.dispose();
 }
-```
+[archived fence delimiter: ```]
 
 ## Circuit
 
@@ -354,37 +361,37 @@ Reusable circuit builder.
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new Circuit(numQubits: number)
-```
+[archived fence delimiter: ```]
 
 ### Gate Methods
 
 Same as QuantumState but builds circuit without executing.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const circuit = new Circuit(3)
   .h(0)
   .cnot(0, 1)
   .cnot(1, 2);
-```
+[archived fence delimiter: ```]
 
 ### apply
 
-```typescript
+[archived fence delimiter: ```typescript]
 apply(state: QuantumState): void
-```
+[archived fence delimiter: ```]
 
 Apply circuit to a quantum state.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const state = await QuantumState.create({ numQubits: 3 });
 circuit.apply(state);
-```
+[archived fence delimiter: ```]
 
 ### Circuit Statistics
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface CircuitStats {
   numGates: number;
   depth: number;
@@ -394,7 +401,7 @@ interface CircuitStats {
 }
 
 const stats = circuit.getStats();
-```
+[archived fence delimiter: ```]
 
 ## Complex Numbers
 
@@ -402,35 +409,35 @@ Utilities for complex arithmetic.
 
 ### Types
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface Complex {
   re: number;  // Real part
   im: number;  // Imaginary part
 }
-```
+[archived fence delimiter: ```]
 
 ### Constants
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { ZERO, ONE, I } from '@moonlab/quantum-core';
 
 ZERO  // { re: 0, im: 0 }
 ONE   // { re: 1, im: 0 }
 I     // { re: 0, im: 1 }
-```
+[archived fence delimiter: ```]
 
 ### Creation
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { complex, fromPolar } from '@moonlab/quantum-core';
 
 const c = complex(1, 2);  // 1 + 2i
 const p = fromPolar(1, Math.PI / 4);  // e^(iπ/4)
-```
+[archived fence delimiter: ```]
 
 ### Operations
 
-```typescript
+[archived fence delimiter: ```typescript]
 import {
   add, subtract, multiply, divide, scale,
   conjugate, magnitude, magnitudeSquared, phase,
@@ -452,11 +459,11 @@ phase(a);            // arg(a)
 exp(a);              // e^a
 equals(a, b);        // a == b
 toString(a);         // "1 + 2i"
-```
+[archived fence delimiter: ```]
 
 ### Array Operations
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { innerProduct, norm, normalize } from '@moonlab/quantum-core';
 
 const v = [complex(1, 0), complex(0, 1)];
@@ -464,13 +471,13 @@ const v = [complex(1, 0), complex(0, 1)];
 innerProduct(v, v);  // ⟨v|v⟩
 norm(v);             // ||v||
 normalize(v);        // v / ||v||
-```
+[archived fence delimiter: ```]
 
 ## WASM Module Management
 
 ### Preloading
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { preload, isLoaded } from '@moonlab/quantum-core';
 
 // Preload WASM module
@@ -480,21 +487,21 @@ await preload();
 if (isLoaded()) {
   // Module ready
 }
-```
+[archived fence delimiter: ```]
 
 ### Load Options
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface LoadOptions {
   wasmPath?: string;  // Custom path to WASM file
 }
 
 await preload({ wasmPath: '/custom/path/moonlab.wasm' });
-```
+[archived fence delimiter: ```]
 
 ## TypeScript Types
 
-```typescript
+[archived fence delimiter: ```typescript]
 // Basis state as binary string
 type BasisState = string;  // e.g., "00", "01", "10", "11"
 
@@ -510,11 +517,11 @@ type StateVector = Complex[];
 
 // Probability distribution
 type ProbabilityDistribution = Float64Array;
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { QuantumState, Circuit, complex } from '@moonlab/quantum-core';
 
 async function quantumTeleportation() {
@@ -547,7 +554,7 @@ async function quantumTeleportation() {
 }
 
 quantumTeleportation();
-```
+[archived fence delimiter: ```]
 
 ## Browser Support
 
@@ -566,3 +573,4 @@ Requires WebAssembly support.
 - [React Integration](react.md) - React hooks and components
 - [Vue Integration](../api/javascript/vue.md) - Vue composables
 
+```

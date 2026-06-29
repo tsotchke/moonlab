@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Testing Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Testing Guide
 
 How to write and run tests for Moonlab.
@@ -15,7 +22,7 @@ Moonlab uses a multi-tier testing strategy:
 
 ### Quick Start
 
-```bash
+[archived fence delimiter: ```bash]
 # Build with tests
 cmake -DBUILD_TESTS=ON ..
 make
@@ -25,11 +32,11 @@ make test
 
 # Or use ctest directly
 ctest --output-on-failure
-```
+[archived fence delimiter: ```]
 
 ### Specific Test Suites
 
-```bash
+[archived fence delimiter: ```bash]
 # C tests
 ./bin/test_quantum_gates
 ./bin/test_quantum_state
@@ -40,11 +47,11 @@ pytest bindings/python/tests/
 
 # Rust tests
 cd bindings/rust/moonlab && cargo test
-```
+[archived fence delimiter: ```]
 
 ### Verbose Output
 
-```bash
+[archived fence delimiter: ```bash]
 # CTest verbose
 ctest --verbose
 
@@ -53,13 +60,13 @@ ctest --verbose
 
 # Python with details
 pytest -v bindings/python/tests/
-```
+[archived fence delimiter: ```]
 
 ## Test Organization
 
 ### Directory Structure
 
-```
+[archived fence delimiter: ```]
 tests/
 ├── unit/
 │   ├── test_quantum_state.c
@@ -84,7 +91,7 @@ bindings/python/tests/
 
 bindings/rust/moonlab/tests/
 └── integration_tests.rs
-```
+[archived fence delimiter: ```]
 
 ## Writing C Tests
 
@@ -92,7 +99,7 @@ bindings/rust/moonlab/tests/
 
 We use a minimal custom test framework. Basic structure:
 
-```c
+[archived fence delimiter: ```c]
 #include "test_framework.h"
 #include "quantum_sim.h"
 
@@ -144,7 +151,7 @@ int main(void) {
     TEST_SUMMARY();
     return TEST_RESULT();
 }
-```
+[archived fence delimiter: ```]
 
 ### Assertion Macros
 
@@ -163,7 +170,7 @@ int main(void) {
 
 ### Testing Gates
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Verify gate unitarity.
  */
@@ -216,11 +223,11 @@ TEST(test_gate_inverse) {
     free(initial);
     quantum_state_free(state);
 }
-```
+[archived fence delimiter: ```]
 
 ### Testing Algorithms
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Test Grover's algorithm finds correct answer.
  */
@@ -249,13 +256,13 @@ TEST(test_grover_search) {
     double success_rate = (double)successes / trials;
     ASSERT_TRUE(success_rate > 0.9);
 }
-```
+[archived fence delimiter: ```]
 
 ## Writing Python Tests
 
 ### Test Structure
 
-```python
+[archived fence delimiter: ```python]
 """Tests for quantum state operations."""
 
 import pytest
@@ -338,11 +345,11 @@ class TestMeasurement:
         # Should be approximately 50/50
         assert 4500 < counts[0] < 5500
         assert 4500 < counts[1] < 5500
-```
+[archived fence delimiter: ```]
 
 ### Fixtures
 
-```python
+[archived fence delimiter: ```python]
 @pytest.fixture
 def bell_state():
     """Create a Bell state for testing."""
@@ -364,11 +371,11 @@ def test_entanglement_entropy(bell_state):
     """Test entanglement entropy of Bell state."""
     entropy = bell_state.entanglement_entropy(qubit=0)
     assert pytest.approx(entropy, abs=0.01) == 1.0
-```
+[archived fence delimiter: ```]
 
 ### Parametrized Tests
 
-```python
+[archived fence delimiter: ```python]
 @pytest.mark.parametrize("n_qubits", [1, 2, 4, 8, 10])
 def test_state_size(n_qubits):
     """Test states of various sizes."""
@@ -385,11 +392,11 @@ def test_single_qubit_gates(gate, expected):
     state = QuantumState(1)
     getattr(state, gate)(0)
     np.testing.assert_allclose(state.amplitudes, expected, rtol=1e-10)
-```
+[archived fence delimiter: ```]
 
 ### Slow Tests
 
-```python
+[archived fence delimiter: ```python]
 @pytest.mark.slow
 def test_large_circuit():
     """Test large circuit (slow)."""
@@ -398,13 +405,13 @@ def test_large_circuit():
         for q in range(20):
             state.h(q)
     assert pytest.approx(sum(state.probabilities)) == 1.0
-```
+[archived fence delimiter: ```]
 
 Run with: `pytest -m "not slow"` to skip slow tests.
 
 ## Writing Rust Tests
 
-```rust
+[archived fence delimiter: ```rust]
 #[cfg(test)]
 mod tests {
     use moonlab::QuantumState;
@@ -438,13 +445,13 @@ mod tests {
         assert!((probs[3] - 0.5).abs() < 1e-10);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Tests
 
 ### Benchmarking
 
-```c
+[archived fence delimiter: ```c]
 #include "benchmark.h"
 #include "quantum_sim.h"
 
@@ -472,11 +479,11 @@ BENCHMARK(bench_cnot_20_qubits) {
 
     quantum_state_free(state);
 }
-```
+[archived fence delimiter: ```]
 
 ### Python Benchmarks
 
-```python
+[archived fence delimiter: ```python]
 import pytest
 
 @pytest.mark.benchmark
@@ -493,13 +500,13 @@ def test_gate_performance(benchmark):
 
     result = benchmark(apply_gates)
     assert result.stats.mean < 0.1  # Should complete in <100ms
-```
+[archived fence delimiter: ```]
 
 ## Fuzz Testing
 
 ### Structure
 
-```c
+[archived fence delimiter: ```c]
 #include "fuzz_framework.h"
 #include "quantum_sim.h"
 
@@ -542,13 +549,13 @@ FUZZ_TARGET(fuzz_gates) {
 
     quantum_state_free(state);
 }
-```
+[archived fence delimiter: ```]
 
 ## Code Coverage
 
 ### Generate Coverage Report
 
-```bash
+[archived fence delimiter: ```bash]
 # Build with coverage
 cmake -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_C_FLAGS="--coverage" \
@@ -561,20 +568,20 @@ ctest
 
 # Generate report
 gcovr --html --html-details -o coverage.html
-```
+[archived fence delimiter: ```]
 
 ### Python Coverage
 
-```bash
+[archived fence delimiter: ```bash]
 pytest --cov=moonlab --cov-report=html bindings/python/tests/
 open htmlcov/index.html
-```
+[archived fence delimiter: ```]
 
 ## CI Integration
 
 Tests run automatically on GitHub Actions. See `.github/workflows/test.yml`:
 
-```yaml
+[archived fence delimiter: ```yaml]
 name: Tests
 
 on: [push, pull_request]
@@ -601,7 +608,7 @@ jobs:
 
       - name: Run Python Tests
         run: pytest bindings/python/tests/ -v
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -609,3 +616,4 @@ jobs:
 - [Code Style](code-style.md) - Coding standards
 - [Contributing](index.md) - Contribution process
 
+```

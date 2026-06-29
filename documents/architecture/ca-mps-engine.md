@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: CA-MPS Engine
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # CA-MPS Engine
 
 The Clifford-Assisted MPS (CA-MPS) engine implements the hybrid
@@ -34,7 +41,7 @@ speedup** over plain MPS on a random Clifford circuit
 
 ## Module layout
 
-```
+[archived fence delimiter: ```]
 src/algorithms/tensor_network/
   ca_mps.{c,h}                       -- state handle + gate surface
   ca_mps_var_d.{c,h}                 -- alternating ground-state search
@@ -46,7 +53,7 @@ src/applications/hep/
 
 src/utils/
   moonlab_status.{c,h}               -- centralised status registry
-```
+[archived fence delimiter: ```]
 
 The Clifford backend lives in `src/backends/clifford/` and is reused
 unchanged from earlier releases.
@@ -136,3 +143,4 @@ v0.2.1, all dlsym-pinned by `tests/abi/test_moonlab_export_abi.c`:
 - `MATH.md` §10-12 -- math foundations.
 - `docs/research/ca_mps.md` -- full design + benchmarks.
 - `docs/research/var_d_lattice_gauge_theory.md` -- Z2 LGT theorem.
+```

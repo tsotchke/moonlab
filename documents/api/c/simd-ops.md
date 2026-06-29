@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: SIMD Operations API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # SIMD Operations API
 
 Complete reference for SIMD-optimized operations in the C library.
@@ -21,7 +28,7 @@ The SIMD module provides vectorized implementations of performance-critical oper
 
 CPU SIMD capabilities structure.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     int has_sse2;      // SSE2 support (2001+)
     int has_sse3;      // SSE3 support (2004+)
@@ -34,33 +41,33 @@ typedef struct {
     int has_avx512dq;  // AVX-512 DQ extensions
     int has_arm_sve;   // ARM SVE support
 } simd_capabilities_t;
-```
+[archived fence delimiter: ```]
 
 ### simd_detect_capabilities
 
 Detect CPU SIMD capabilities at runtime.
 
-```c
+[archived fence delimiter: ```c]
 simd_capabilities_t simd_detect_capabilities(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Structure with detected capabilities
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 simd_capabilities_t caps = simd_detect_capabilities();
 if (caps.has_avx2) {
     printf("AVX2 available - using optimized path\n");
 }
-```
+[archived fence delimiter: ```]
 
 ### simd_capabilities_string
 
 Get CPU capabilities as human-readable string.
 
-```c
+[archived fence delimiter: ```c]
 const char* simd_capabilities_string(const simd_capabilities_t *caps);
-```
+[archived fence delimiter: ```]
 
 **Returns**: String like "SSE2 SSE3 AVX AVX2"
 
@@ -70,9 +77,9 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps);
 
 Compute sum of squared magnitudes (for normalization).
 
-```c
+[archived fence delimiter: ```c]
 double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `amplitudes`: Complex amplitude array
@@ -86,9 +93,9 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n);
 
 Normalize complex amplitude array in-place.
 
-```c
+[archived fence delimiter: ```c]
 void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `amplitudes`: Array to normalize (modified in-place)
@@ -101,13 +108,13 @@ void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm);
 
 Matrix-vector multiply for 2×2 complex matrices.
 
-```c
+[archived fence delimiter: ```c]
 void simd_matrix2x2_vec_multiply(
     const complex_t matrix[4],
     const complex_t input[2],
     complex_t output[2]
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Optimized for quantum gate operations
 
@@ -117,9 +124,9 @@ void simd_matrix2x2_vec_multiply(
 
 Vectorized complex multiplication.
 
-```c
+[archived fence delimiter: ```c]
 complex_t simd_complex_multiply(complex_t z1, complex_t z2);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Product $z_1 \times z_2$
 
@@ -127,13 +134,13 @@ complex_t simd_complex_multiply(complex_t z1, complex_t z2);
 
 Batch compute probabilities from amplitudes.
 
-```c
+[archived fence delimiter: ```c]
 void simd_compute_probabilities(
     const complex_t *amplitudes,
     double *probabilities,
     size_t n
 );
-```
+[archived fence delimiter: ```]
 
 **Action**: Computes $|α|^2$ for each amplitude
 
@@ -143,9 +150,9 @@ void simd_compute_probabilities(
 
 Vectorized complex swap for Pauli X gate.
 
-```c
+[archived fence delimiter: ```c]
 void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n);
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Pauli X and CNOT gates
 
@@ -155,9 +162,9 @@ void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n);
 
 Vectorized multiply by $±i$ for Pauli Y components.
 
-```c
+[archived fence delimiter: ```c]
 void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `amplitudes`: Array to modify
@@ -168,9 +175,9 @@ void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate);
 
 Vectorized negate for Pauli Z gate.
 
-```c
+[archived fence delimiter: ```c]
 void simd_negate(complex_t *amplitudes, size_t n);
-```
+[archived fence delimiter: ```]
 
 **Action**: Negates all amplitudes in array
 
@@ -178,9 +185,9 @@ void simd_negate(complex_t *amplitudes, size_t n);
 
 Vectorized phase multiplication.
 
-```c
+[archived fence delimiter: ```c]
 void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n);
-```
+[archived fence delimiter: ```]
 
 **Use Case**: S, T, and Phase gates
 
@@ -192,9 +199,9 @@ void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n);
 
 XOR mixing of byte arrays.
 
-```c
+[archived fence delimiter: ```c]
 void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n);
-```
+[archived fence delimiter: ```]
 
 **Action**: Performs `dest[i] ^= src[i]` using SSE2/AVX2
 
@@ -202,14 +209,14 @@ void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n);
 
 Fast entropy mixing using SIMD.
 
-```c
+[archived fence delimiter: ```c]
 void simd_mix_entropy(
     const uint8_t *state,
     const uint8_t *entropy,
     uint8_t *output,
     size_t size
 );
-```
+[archived fence delimiter: ```]
 
 **Action**: Mixes entropy buffers with cryptographic quality
 
@@ -219,13 +226,13 @@ void simd_mix_entropy(
 
 SIMD-optimized cumulative probability search.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t simd_cumulative_probability_search(
     const complex_t *amplitudes,
     size_t n,
     double random_threshold
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `amplitudes`: Complex amplitude array
@@ -240,13 +247,13 @@ uint64_t simd_cumulative_probability_search(
 
 Optimized batch measurement sampling.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t simd_fast_measurement_sample(
     const complex_t *amplitudes,
     size_t n,
     double random_threshold
 );
-```
+[archived fence delimiter: ```]
 
 **Action**: Pre-computes all probabilities with SIMD, then does fast cumulative search
 
@@ -278,7 +285,7 @@ uint64_t simd_fast_measurement_sample(
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/optimization/simd_ops.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -327,7 +334,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Usage Guidelines
 
@@ -342,14 +349,14 @@ int main(void) {
 
 For optimal SIMD performance, allocate memory with 64-byte alignment:
 
-```c
+[archived fence delimiter: ```c]
 // C11 aligned allocation
 complex_t *data = aligned_alloc(64, n * sizeof(complex_t));
 
 // Or use posix_memalign
 complex_t *data;
 posix_memalign((void**)&data, 64, n * sizeof(complex_t));
-```
+[archived fence delimiter: ```]
 
 ### Fallback Behavior
 
@@ -363,3 +370,4 @@ All SIMD functions automatically fall back to scalar implementations when:
 - [Metal GPU API](gpu-metal.md) - GPU acceleration
 - [Config API](config.md) - SIMD configuration
 - [Guides: Performance Tuning](../../guides/performance-tuning.md)
+```

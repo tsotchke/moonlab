@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Clifford-Assisted Matrix Product States (CA-MPS)
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Clifford-Assisted Matrix Product States (CA-MPS)
 
 Design document for a new Moonlab primitive that combines the production Aaronson-Gottesman tableau backend (`src/backends/clifford/`) with the production MPS/MPO stack (`src/algorithms/tensor_network/`) into a hybrid state representation that is dramatically cheaper than plain MPS for states with a large Clifford content.
@@ -13,9 +20,9 @@ For circuits dominated by Clifford gates (ubiquitous in VQE ansatzes, error-corr
 
 CA-MPS factorizes the state as
 
-```
+[archived fence delimiter: ```]
 |psi> = C |phi>
-```
+[archived fence delimiter: ```]
 
 where `C` is a Clifford unitary tracked by its Aaronson-Gottesman tableau and `|phi>` is an MPS. Clifford gates update only the tableau (free in MPS cost); non-Clifford gates modify `|phi>` with an entanglement cost proportional to the gate's Pauli-rotation weight.
 
@@ -34,18 +41,18 @@ A CA-MPS state on `n` qubits is a pair `(D, |phi>)` where:
 
 The physical state is
 
-```
+[archived fence delimiter: ```]
 |psi> = C |phi> = D† |phi>.
-```
+[archived fence delimiter: ```]
 
 Storing `D = C†` rather than `C` itself is the key design decision: the natural operations we need are
 
 - **Clifford gate application to |psi>:** `G|psi> = G C |phi>`, i.e. we update `C <- GC`. Equivalently `D <- D G†`. A single Clifford-gate update of `D` takes O(n) bit ops (Aaronson-Gottesman Alg. 1).
 - **Non-Clifford gate application to |psi>:** `T_q|psi> = T_q C |phi> = C (C† T_q C) |phi> = C · D T_q D† · |phi>`. The operator `D T_q D†` is what we must apply to `|phi>`. For `T_q = exp(i pi Z_q / 8)` up to global phase, Clifford conjugation gives
 
-  ```
+[archived fence delimiter:   ```]
   D T_q D† = D exp(i pi Z_q / 8) D† = exp(i pi (D Z_q D†) / 8) = exp(i pi P / 8)
-  ```
+[archived fence delimiter:   ```]
 
   where `P = D Z_q D†` is a multi-qubit Pauli string read directly from the Z_q column of the tableau `D`. Equivalently, the Pauli string that was `Z_q` before conjugation by `D`.
 
@@ -55,9 +62,9 @@ Storing `D` makes this a column lookup (O(n) bits). If we had stored `C` we woul
 
 **Clifford gate `G` on qubit `q` (or pair `q,r`):**
 
-```
+[archived fence delimiter: ```]
 D <- D · G†
-```
+[archived fence delimiter: ```]
 
 Cost: O(n) bit ops. No change to `|phi>`. Bond dimension unchanged.
 
@@ -65,9 +72,9 @@ Cost: O(n) bit ops. No change to `|phi>`. Bond dimension unchanged.
 
 Compute Pauli string `P = D Z_q D†` by reading column `Z_q` of the `D` tableau. Then
 
-```
+[archived fence delimiter: ```]
 |phi> <- exp(i theta P) |phi>
-```
+[archived fence delimiter: ```]
 
 Cost: applying a Pauli-string rotation to an MPS. If `|P|` denotes the Hamming weight of `P` (number of non-identity factors), this is a `|P|`-qubit gate. For weight-2 Pauli rotations, this is a standard 2-site TEBD-style gate with no bond-dim blowup beyond `chi <- min(2 chi, chi_max)`. For weight-k with `k > 2`, it requires a Pauli-rotation MPO plus variational compression.
 
@@ -77,9 +84,9 @@ Cost: applying a Pauli-string rotation to an MPS. If `|P|` denotes the Hamming w
 
 - **Pauli observable `O = P`** (Pauli string): compute `P' = D P D†` via tableau conjugation (O(n^2) bit ops). Then
 
-  ```
+[archived fence delimiter:   ```]
   <psi|O|psi> = <phi|P'|phi>
-  ```
+[archived fence delimiter:   ```]
 
   which is a standard MPS Pauli expectation (O(n chi^2)).
 
@@ -87,9 +94,9 @@ Cost: applying a Pauli-string rotation to an MPS. If `|P|` denotes the Hamming w
 
 - **Entanglement entropy S(A) between a partition A and its complement:** this is NOT just the MPS Schmidt spectrum of `|phi>` between A and its complement, because `C` reshuffles qubits across the cut. Correct formula:
 
-  ```
+[archived fence delimiter:   ```]
   rho_A = Tr_{not A} |psi><psi| = Tr_{not A} C |phi><phi| C†
-  ```
+[archived fence delimiter:   ```]
 
   To evaluate: (i) transform the partition by `C`, i.e., find the reduced set of stabilizers of `C` that act non-trivially on `A`; this defines an effective partition of `|phi>` at a generally non-local cut; (ii) compute the MPS Schmidt spectrum of `|phi>` at the transformed cut. For partitions `A` that are preserved by `C` (e.g., `C` acts within A or within not-A only), the Schmidt spectra coincide.
 
@@ -109,13 +116,13 @@ Cost: applying a Pauli-string rotation to an MPS. If `|P|` denotes the Hamming w
 
 ### 3.1 Opaque handle
 
-```c
+[archived fence delimiter: ```c]
 typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
-```
+[archived fence delimiter: ```]
 
 ### 3.2 Lifecycle
 
-```c
+[archived fence delimiter: ```c]
 moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
 void              moonlab_ca_mps_free(moonlab_ca_mps_t* s);
 
@@ -126,11 +133,11 @@ moonlab_ca_mps_t* moonlab_ca_mps_zero_state(uint32_t num_qubits, uint32_t max_bo
 uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_bond_dim(const moonlab_ca_mps_t* s);
 uint64_t moonlab_ca_mps_tableau_nnz(const moonlab_ca_mps_t* s);  /* # non-identity tableau entries */
-```
+[archived fence delimiter: ```]
 
 ### 3.3 Clifford gates (tableau only)
 
-```c
+[archived fence delimiter: ```c]
 /* All return 0 on success, negative moonlab_error_t on failure. */
 int moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
 int moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
@@ -141,11 +148,11 @@ int moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
 int moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t c, uint32_t t);
 int moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 int moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
-```
+[archived fence delimiter: ```]
 
 ### 3.4 Non-Clifford gates (push into MPS)
 
-```c
+[archived fence delimiter: ```c]
 /* Single-qubit rotation exp(i theta P) where P in {X,Y,Z}. */
 int moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
 int moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
@@ -163,11 +170,11 @@ int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
 /* Generic 2-qubit unitary via Pauli decomposition. */
 int moonlab_ca_mps_apply_2q(moonlab_ca_mps_t* s, uint32_t q1, uint32_t q2,
                             const double _Complex matrix4x4[16]);
-```
+[archived fence delimiter: ```]
 
 ### 3.5 Measurement and observables
 
-```c
+[archived fence delimiter: ```c]
 /* Expectation value <psi|P|psi> for a Pauli string P. */
 int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                 const uint8_t* pauli_string,
@@ -186,11 +193,11 @@ int moonlab_ca_mps_sample(moonlab_ca_mps_t* s, uint64_t* rng_state,
  * Accounts for the Clifford prefactor via the partition-transformation step. */
 int moonlab_ca_mps_entropy_bipartite(const moonlab_ca_mps_t* s, uint32_t split,
                                      double* out_entropy);
-```
+[archived fence delimiter: ```]
 
 ### 3.6 Optimization drivers
 
-```c
+[archived fence delimiter: ```c]
 /* Imaginary-time evolution exp(-tau H) |psi> with step tau, for n_steps steps.
  * Uses Pauli-decomposition Trotter-Suzuki internally.  Returns energy after
  * each step if `trace` is non-NULL. */
@@ -204,7 +211,7 @@ int moonlab_ca_mps_imag_time_evolve(moonlab_ca_mps_t* s,
 int moonlab_ca_mps_dmrg_ground_state(moonlab_ca_mps_t* s, const mpo_t* H,
                                      uint32_t num_sweeps, double tol,
                                      double* out_energy);
-```
+[archived fence delimiter: ```]
 
 ---
 
@@ -214,9 +221,9 @@ int moonlab_ca_mps_dmrg_ground_state(moonlab_ca_mps_t* s, const mpo_t* H,
 
 Given Pauli string `P = P_{q_1} ⊗ P_{q_2} ⊗ ... ⊗ P_{q_k}` with `q_1 < q_2 < ... < q_k`, the rotation is
 
-```
+[archived fence delimiter: ```]
 exp(i theta P) = cos(theta) I + i sin(theta) P.
-```
+[archived fence delimiter: ```]
 
 Construct this as an MPO of bond dimension 2:
 - Bond state 0 carries the identity branch.
@@ -236,9 +243,9 @@ The tableau `D` stores for each qubit `q` the Pauli string `D X_q D†` (destabi
 
 For a weight-2 Pauli input (e.g., `Z_q Z_r` in a Hamiltonian term) we compute
 
-```
+[archived fence delimiter: ```]
 P = (D Z_q D†) * (D Z_r D†)
-```
+[archived fence delimiter: ```]
 
 which is a Pauli product — bitwise XOR of the two Paulis plus a sign bit computed via the Aaronson-Gottesman `g` function.
 
@@ -257,9 +264,9 @@ This is an optional optimization. The first cut of the implementation skips it; 
 
 For `H = sum_j c_j P_j` (Pauli decomposition):
 
-```
+[archived fence delimiter: ```]
 <psi|H|psi> = sum_j c_j <phi| (D P_j D†) |phi>
-```
+[archived fence delimiter: ```]
 
 Each term is one Pauli conjugation (O(n^2) bit ops — O(n) if tableau has a cached stabilizer table) plus one MPS Pauli expectation (O(n chi^2)).
 
@@ -596,3 +603,4 @@ The API above is published in a new public header `include/moonlab/ca_mps.h` onc
 - Bravyi, Smith, Smolin, "Trading classical and quantum computational resources," Phys. Rev. X 6, 021043 (2016) — extended-stabilizer formalism.
 - Pashayan, Wallman, Bartlett, "Estimating outcome probabilities of quantum circuits using quasiprobabilities," Phys. Rev. Lett. 115, 070501 (2015) — magic-state bookkeeping.
 - Schollwöck, "The density-matrix renormalization group in the age of matrix product states," Ann. Phys. 326, 96 (2011) — canonical MPS/MPO reference; Moonlab's `src/algorithms/tensor_network/` is structured around this.
+```

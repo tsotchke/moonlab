@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: MPI scaling harness
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # MPI scaling harness
 
 Measures moonlab's distributed-state-vector wall-clock at a grid of
@@ -11,27 +18,27 @@ combination; you compute speedup curves yourself from that.
 
 ## Build
 
-```
+[archived fence delimiter: ```]
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_ENABLE_MPI=ON
 cmake --build build --target large_state_random_circuit -j
-```
+[archived fence delimiter: ```]
 
 ## Run
 
-```
+[archived fence delimiter: ```]
 ./benchmarks/mpi_scaling/run_scaling.sh \
   --binary  build/examples/distributed/large_state_random_circuit \
   --depth   8 \
   --seed    42 \
   --output  bench/mpi_scaling.json
-```
+[archived fence delimiter: ```]
 
 Default grid: N in {32, 34, 36}; ranks in {1, 4, 16}.  Override with
 `--qubits 30,32,34` / `--ranks 1,2,4,8`.
 
 ## Output
 
-```json
+[archived fence delimiter: ```json]
 {
   "harness": "moonlab/mpi-scaling/v1.0",
   "host": "node-01",
@@ -46,7 +53,7 @@ Default grid: N in {32, 34, 36}; ranks in {1, 4, 16}.  Override with
     ...
   ]
 }
-```
+[archived fence delimiter: ```]
 
 `sim_s` is the rank-0 wall-clock of just the simulation loop (no
 MPI init / teardown), as reported by the example binary.  `wall_s`
@@ -71,3 +78,4 @@ For a single-node sanity run, restrict to N ≤ 32 ranks * total_RAM/16.
 Every point reports the global L2 norm post-simulation.  For unitary
 circuits this must be 1.0 to ~1e-10; deviations indicate a numerical
 problem or a bug in the dist_* gate code.
+```

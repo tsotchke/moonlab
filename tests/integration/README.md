@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Integration Tests
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Integration Tests
 
 Comprehensive integration tests for the Moonlab Quantum Simulator algorithms.
@@ -13,7 +20,7 @@ Comprehensive integration tests for the Moonlab Quantum Simulator algorithms.
 
 ## Building
 
-```bash
+[archived fence delimiter: ```bash]
 # Build all integration tests
 make integration-tests
 
@@ -33,11 +40,11 @@ gcc -o test_grover tests/integration/test_grover_integration.c \
 gcc -o test_qpe tests/integration/test_qpe_integration.c \
     src/quantum/*.c src/algorithms/qpe.c src/utils/*.c \
     -I. -lm -O2
-```
+[archived fence delimiter: ```]
 
 ## Running Tests
 
-```bash
+[archived fence delimiter: ```bash]
 # Run all integration tests
 ./test_vqe
 ./test_qaoa
@@ -46,7 +53,7 @@ gcc -o test_qpe tests/integration/test_qpe_integration.c \
 
 # Run with verbose output
 ./test_vqe --verbose
-```
+[archived fence delimiter: ```]
 
 ## Test Coverage
 
@@ -95,7 +102,7 @@ gcc -o test_qpe tests/integration/test_qpe_integration.c \
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 ================================================================================
 VQE Integration Tests
 ================================================================================
@@ -117,12 +124,12 @@ VQE Integration Tests
 ================================================================================
 Results: 10 passed, 0 failed (2.34 seconds)
 ================================================================================
-```
+[archived fence delimiter: ```]
 
 ## Adding New Tests
 
 1. Create a new test function following the pattern:
-```c
+[archived fence delimiter: ```c]
 void test_new_feature(void) {
     printf("  Test: New Feature\n");
 
@@ -138,12 +145,12 @@ void test_new_feature(void) {
 
     TEST_PASS("New Feature");
 }
-```
+[archived fence delimiter: ```]
 
 2. Add the test call in `main()`:
-```c
+[archived fence delimiter: ```c]
 test_new_feature();
-```
+[archived fence delimiter: ```]
 
 3. Run and verify the test passes.
 
@@ -155,3 +162,4 @@ test_new_feature();
 - QPE tests: ~0.5-1 second
 
 For faster development iteration, individual tests can be run by modifying `main()` to call only specific test functions.
+```

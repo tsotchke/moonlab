@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorials
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorials
 
 Step-by-step guides for learning quantum simulation with Moonlab.
@@ -62,31 +69,31 @@ Each tutorial includes:
 Tutorials provide examples in multiple languages:
 
 ### Python
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 state = QuantumState(2)
 state.h(0).cnot(0, 1)
 print(state.probabilities())
-```
+[archived fence delimiter: ```]
 
 ### C
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 
 quantum_state_t* state = quantum_state_init(2);
 gate_hadamard(state, 0);
 gate_cnot(state, 0, 1);
-```
+[archived fence delimiter: ```]
 
 ### JavaScript
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 const state = await QuantumState.create({ numQubits: 2 });
 state.h(0).cnot(0, 1);
 console.log(state.getProbabilities());
-```
+[archived fence delimiter: ```]
 
 ## Getting Help
 
@@ -108,3 +115,4 @@ Ready to begin? Start with the first tutorial:
 
 **[01. Hello Quantum →](01-hello-quantum.md)**
 
+```

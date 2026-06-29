@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial: Topological band structure with the QGT module
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial: Topological band structure with the QGT module
 
 This tutorial walks through Moonlab's quantum-geometric-tensor (QGT)
@@ -29,7 +36,7 @@ gives an integer winding number `W in Z`; the chain is topologically
 non-trivial (`W = 1`) for `|t2| > |t1|` and trivial (`W = 0`)
 otherwise.
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/algorithms/quantum_geometry/qgt.h"
 #include <stdio.h>
 
@@ -41,7 +48,7 @@ int main(void) {
     qgt_free_1d(sys);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 The integer winding is computed from the discrete Zak phase [3]
 along the 1D Brillouin zone.  Setting `t1 = 1.0, t2 = 0.5` returns
@@ -54,14 +61,14 @@ insulator on a square lattice.  Its Chern number takes integer
 values that change by unity at the gap closings `m in {-2, 0, 2}`,
 giving a piecewise-constant phase diagram on `m in [-3, 3]`.
 
-```c
+[archived fence delimiter: ```c]
 qgt_system_t* sys = qgt_model_qwz(/*m=*/-1.5);
 qgt_berry_grid_t g;
 qgt_berry_grid_proj(sys, /*N=*/48, &g);
 printf("QWZ m=-1.5: C = %+.4f (expected +1)\n", g.chern);
 qgt_berry_grid_free(&g);
 qgt_free(sys);
-```
+[archived fence delimiter: ```]
 
 `qgt_berry_grid_proj` realises the projector-trace integrator,
 which is manifestly gauge-invariant; `qgt_berry_grid` (Fukui-
@@ -81,7 +88,7 @@ locally while preserving zero net flux.  The phase boundary is
 `|M| = 3 sqrt(3) |t_2 sin(phi)|`; at `phi = pi/2` and `t_2 = 0.06`
 the analytic boundary is `M ~= 0.31177`:
 
-```c
+[archived fence delimiter: ```c]
 for (double M = 0.0; M <= 0.5; M += 0.05) {
     qgt_system_t* sys = qgt_model_haldane(1.0, 0.06, 0.5*M_PI, M);
     qgt_berry_grid_t g;
@@ -91,11 +98,11 @@ for (double M = 0.0; M <= 0.5; M += 0.05) {
     qgt_berry_grid_free(&g);
     qgt_free(sys);
 }
-```
+[archived fence delimiter: ```]
 
 Output:
 
-```
+[archived fence delimiter: ```]
 Haldane M=0.00 -> C = -1
 Haldane M=0.05 -> C = -1
 Haldane M=0.10 -> C = -1
@@ -107,7 +114,7 @@ Haldane M=0.35 -> C = +0
 Haldane M=0.40 -> C = +0
 Haldane M=0.45 -> C = +0
 Haldane M=0.50 -> C = +0
-```
+[archived fence delimiter: ```]
 
 The numerical transition lands within one grid spacing of the
 analytic boundary `0.31177`, consistent with the half-step
@@ -120,7 +127,7 @@ insulator: a time-reversal-symmetric, four-band Hamiltonian whose
 classification is governed by a Z_2 invariant rather than an
 integer Chern number.
 
-```c
+[archived fence delimiter: ```c]
 qgt_system_n_t* sys = qgt_model_kane_mele(
     /*t=*/1.0,
     /*lambda_so=*/0.06,
@@ -130,7 +137,7 @@ int z2;
 qgt_z2_invariant(sys, /*N=*/48, &z2);
 printf("Kane-Mele lambda_v=0.10: Z_2 = %d (expected 1, QSH)\n", z2);
 qgt_free_nband(sys);
-```
+[archived fence delimiter: ```]
 
 In the S_z-conserving regime (Rashba coupling off) the Z_2
 invariant reduces to `|C_up| mod 2`, where `C_up` is the Chern
@@ -147,13 +154,13 @@ of the Brillouin zone (at `M = 4B`) cancel pairwise, and the
 M-corner closing at `M = 8B` returns the system to the trivial
 phase.
 
-```c
+[archived fence delimiter: ```c]
 qgt_system_n_t* sys = qgt_model_bhz(/*A=*/1.0, /*B=*/1.0, /*M=*/3.0);
 int z2;
 qgt_z2_invariant(sys, 48, &z2);
 printf("BHZ M=3.0: Z_2 = %d (expected 1, QSH)\n", z2);
 qgt_free_nband(sys);
-```
+[archived fence delimiter: ```]
 
 ## 6. Hofstadter model: magnetic sub-band Chern numbers
 
@@ -164,7 +171,7 @@ magnetic-Bloch Hamiltonian; the resulting spectrum is the celebrated
 (TKNN) Diophantine equation `t_r p + s_r q = r` [10] determines the
 integer Chern number of each magnetic sub-band.
 
-```c
+[archived fence delimiter: ```c]
 qgt_system_n_t* sys = qgt_model_hofstadter(/*t=*/1.0,
                                             /*p=*/1, /*q=*/3,
                                             /*n_occupied=*/1);
@@ -174,7 +181,7 @@ printf("Hofstadter q=3 lowest band: C = %+d (expected +1)\n",
        (int)lround(g.chern));
 qgt_berry_grid_free(&g);
 qgt_free_nband(sys);
-```
+[archived fence delimiter: ```]
 
 For `q = 3` the three magnetic sub-bands carry Chern numbers
 `(+1, -2, +1)`, summing to zero as required.  Filling the lowest two
@@ -187,7 +194,7 @@ provides a real-space implementation of the Bianco-Resta local
 Chern marker [11] in `src/algorithms/topology_realspace/chern_marker.h`.
 On QWZ the two representations must agree:
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/algorithms/topology_realspace/chern_marker.h"
 
 double m = -1.5;
@@ -203,7 +210,7 @@ int C_realspace = (int)lround(bulk_sum / 4.0);
 
 printf("QWZ m=%.2f: C_momentum=%+d, C_realspace=%+d (must match)\n",
        m, C_momentum, C_realspace);
-```
+[archived fence delimiter: ```]
 
 This identity is verified by `tests/unit/test_qgt_vs_chern_marker.c`,
 which asserts pointwise agreement of the two integer outputs on a
@@ -264,3 +271,4 @@ representative QWZ phase point.
 
 [11] R. Bianco and R. Resta, "Mapping topological order in
     coordinate space", Phys. Rev. B **84**, 241106(R) (2011).
+```

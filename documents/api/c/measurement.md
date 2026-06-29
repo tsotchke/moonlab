@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Measurement API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Measurement API
 
 Complete reference for quantum measurement operations in the C library.
@@ -19,9 +26,9 @@ The measurement module provides operations for extracting classical information 
 
 Compute probability of measuring a qubit in $|1\rangle$ state.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_probability_one(const quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (unchanged)
@@ -30,22 +37,22 @@ double measurement_probability_one(const quantum_state_t *state, int qubit);
 **Returns**: $P(|1\rangle)$ in range $[0, 1]$
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, 2);
 gate_hadamard(&state, 0);
 
 double p1 = measurement_probability_one(&state, 0);
 printf("P(qubit 0 = 1) = %.4f\n", p1);  // 0.5000
-```
+[archived fence delimiter: ```]
 
 ### measurement_probability_zero
 
 Compute probability of measuring a qubit in $|0\rangle$ state.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_probability_zero(const quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $P(|0\rangle) = 1 - P(|1\rangle)$
 
@@ -53,37 +60,37 @@ double measurement_probability_zero(const quantum_state_t *state, int qubit);
 
 Compute $P(|1\rangle)$ for all qubits.
 
-```c
+[archived fence delimiter: ```c]
 void measurement_all_probabilities(const quantum_state_t *state, double *probabilities);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
 - `probabilities`: Output array of size `num_qubits`
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 double probs[4];
 measurement_all_probabilities(&state, probs);
 for (int q = 0; q < 4; q++) {
     printf("P(qubit %d = 1) = %.4f\n", q, probs[q]);
 }
-```
+[archived fence delimiter: ```]
 
 ### measurement_probability_distribution
 
 Compute full probability distribution over all basis states.
 
-```c
+[archived fence delimiter: ```c]
 void measurement_probability_distribution(const quantum_state_t *state, double *distribution);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
 - `distribution`: Output array of size $2^n$
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 double *dist = malloc(state.state_dim * sizeof(double));
 measurement_probability_distribution(&state, dist);
 
@@ -93,7 +100,7 @@ for (size_t i = 0; i < state.state_dim; i++) {
     }
 }
 free(dist);
-```
+[archived fence delimiter: ```]
 
 ## Single-Qubit Measurement
 
@@ -101,9 +108,9 @@ free(dist);
 
 Measure a single qubit with state collapse.
 
-```c
+[archived fence delimiter: ```c]
 int measurement_single_qubit(quantum_state_t *state, int qubit, double random_value);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (modified)
@@ -119,7 +126,7 @@ int measurement_single_qubit(quantum_state_t *state, int qubit, double random_va
 4. Renormalizes state
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 #include <stdlib.h>
 
 quantum_state_t state;
@@ -135,15 +142,15 @@ printf("Qubit 0 measured: %d\n", result);
 // After measurement, qubit 1 is perfectly correlated
 double p1 = measurement_probability_one(&state, 1);
 printf("P(qubit 1 = %d) = %.4f\n", result, p1);  // 1.0000
-```
+[archived fence delimiter: ```]
 
 ### measurement_single_qubit_no_collapse
 
 Measure a qubit without modifying state (simulation only).
 
-```c
+[archived fence delimiter: ```c]
 int measurement_single_qubit_no_collapse(const quantum_state_t *state, int qubit, double random_value);
-```
+[archived fence delimiter: ```]
 
 **Notes**: Useful for sampling statistics without disrupting the state.
 
@@ -153,9 +160,9 @@ int measurement_single_qubit_no_collapse(const quantum_state_t *state, int qubit
 
 Measure all qubits simultaneously.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t measurement_all_qubits(quantum_state_t *state, double random_value);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (collapses to basis state)
@@ -169,7 +176,7 @@ uint64_t measurement_all_qubits(quantum_state_t *state, double random_value);
 3. All amplitudes become 0 except the measured one (which becomes 1)
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, 4);
 for (int q = 0; q < 4; q++) {
@@ -183,20 +190,20 @@ for (int q = 3; q >= 0; q--) {
     printf("%d", (int)((result >> q) & 1));
 }
 printf("⟩\n");
-```
+[archived fence delimiter: ```]
 
 ### measurement_partial
 
 Measure a subset of qubits.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t measurement_partial(
     quantum_state_t *state,
     const int *qubits,
     int num_measure,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (partially collapses)
@@ -207,14 +214,14 @@ uint64_t measurement_partial(
 **Returns**: Measurement outcomes as bit pattern (LSB = first qubit in array)
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Measure only qubits 0 and 2
 int to_measure[] = {0, 2};
 uint64_t result = measurement_partial(&state, to_measure, 2, r);
 
 int q0_outcome = result & 1;
 int q2_outcome = (result >> 1) & 1;
-```
+[archived fence delimiter: ```]
 
 ## Expectation Values
 
@@ -222,9 +229,9 @@ int q2_outcome = (result >> 1) & 1;
 
 Compute expectation value of Pauli Z operator.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_expectation_z(const quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $\langle Z \rangle$ in range $[-1, 1]$
 
@@ -232,7 +239,7 @@ double measurement_expectation_z(const quantum_state_t *state, int qubit);
 $$\langle Z \rangle = P(|0\rangle) - P(|1\rangle)$$
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // For |0⟩: ⟨Z⟩ = 1
 // For |1⟩: ⟨Z⟩ = -1
 // For |+⟩: ⟨Z⟩ = 0
@@ -243,15 +250,15 @@ printf("⟨Z⟩ for |0⟩ = %.4f\n", measurement_expectation_z(&state, 0));  // 
 
 gate_hadamard(&state, 0);
 printf("⟨Z⟩ for |+⟩ = %.4f\n", measurement_expectation_z(&state, 0));  // 0.0
-```
+[archived fence delimiter: ```]
 
 ### measurement_expectation_x
 
 Compute expectation value of Pauli X operator.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_expectation_x(const quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $\langle X \rangle$ in range $[-1, 1]$
 
@@ -261,9 +268,9 @@ double measurement_expectation_x(const quantum_state_t *state, int qubit);
 
 Compute expectation value of Pauli Y operator.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_expectation_y(const quantum_state_t *state, int qubit);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $\langle Y \rangle$ in range $[-1, 1]$
 
@@ -271,9 +278,9 @@ double measurement_expectation_y(const quantum_state_t *state, int qubit);
 
 Compute ZZ correlation between two qubits.
 
-```c
+[archived fence delimiter: ```c]
 double measurement_correlation_zz(const quantum_state_t *state, int qubit1, int qubit2);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $\langle Z_i \otimes Z_j \rangle$ in range $[-1, 1]$
 
@@ -283,7 +290,7 @@ double measurement_correlation_zz(const quantum_state_t *state, int qubit1, int 
 - $0$: No correlation
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2
 quantum_state_t state;
 quantum_state_init(&state, 2);
@@ -292,7 +299,7 @@ gate_cnot(&state, 0, 1);
 
 double corr = measurement_correlation_zz(&state, 0, 1);
 printf("⟨Z₀Z₁⟩ = %.4f\n", corr);  // 1.0 (perfect correlation)
-```
+[archived fence delimiter: ```]
 
 ## Statistical Sampling
 
@@ -300,14 +307,14 @@ printf("⟨Z₀Z₁⟩ = %.4f\n", corr);  // 1.0 (perfect correlation)
 
 Sample measurement outcomes without state collapse.
 
-```c
+[archived fence delimiter: ```c]
 void measurement_sample(
     const quantum_state_t *state,
     uint64_t *outcomes,
     int num_samples,
     const double *random_values
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (unchanged)
@@ -316,7 +323,7 @@ void measurement_sample(
 - `random_values`: Array of `num_samples` random numbers in $[0, 1)$
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 #define NUM_SHOTS 10000
 
 uint64_t outcomes[NUM_SHOTS];
@@ -338,20 +345,20 @@ for (int i = 0; i < NUM_SHOTS; i++) {
 for (int i = 0; i < 16; i++) {
     printf("|%d⟩: %d (%.2f%%)\n", i, counts[i], 100.0 * counts[i] / NUM_SHOTS);
 }
-```
+[archived fence delimiter: ```]
 
 ### measurement_estimate_probabilities
 
 Estimate probabilities from sample data.
 
-```c
+[archived fence delimiter: ```c]
 void measurement_estimate_probabilities(
     const uint64_t *samples,
     int num_samples,
     uint64_t state_dim,
     double *probabilities
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `samples`: Array of measurement outcomes
@@ -365,12 +372,12 @@ void measurement_estimate_probabilities(
 
 Performance-optimized full measurement.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t quantum_measure_all_fast(
     quantum_state_t *state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (collapses)
@@ -381,7 +388,7 @@ uint64_t quantum_measure_all_fast(
 **Performance**: 8× faster than measuring qubits individually for 8-qubit systems.
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 #include "src/utils/quantum_entropy.h"
 
 quantum_entropy_ctx_t entropy;
@@ -393,32 +400,32 @@ quantum_state_init(&state, 8);
 
 uint64_t result = quantum_measure_all_fast(&state, &entropy);
 printf("Result: %llu\n", result);
-```
+[archived fence delimiter: ```]
 
 ## Measurement Bases
 
 Defined in `gates.h`:
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     MEASURE_COMPUTATIONAL,  // Z-basis: |0⟩, |1⟩
     MEASURE_HADAMARD,       // X-basis: |+⟩, |-⟩
     MEASURE_CIRCULAR,       // Y-basis: |↻⟩, |↺⟩
     MEASURE_CUSTOM          // Custom basis
 } measurement_basis_t;
-```
+[archived fence delimiter: ```]
 
 ### Non-computational basis measurement
 
 To measure in a different basis, apply a basis-change gate first:
 
-```c
+[archived fence delimiter: ```c]
 // Measure in X-basis
 gate_hadamard(&state, qubit);  // Rotate to computational basis
 int result = measurement_single_qubit(&state, qubit, r);
 gate_hadamard(&state, qubit);  // Rotate back
 // result now corresponds to |+⟩ (0) or |-⟩ (1) in original basis
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -429,7 +436,7 @@ gate_hadamard(&state, qubit);  // Rotate back
 
 Secure measurement requires cryptographic randomness:
 
-```c
+[archived fence delimiter: ```c]
 // Using hardware entropy
 #include "src/utils/quantum_entropy.h"
 
@@ -440,10 +447,11 @@ int entropy_callback(void *ctx, uint8_t *buffer, size_t size) {
 
 quantum_entropy_ctx_t entropy;
 quantum_entropy_init(&entropy, entropy_callback, NULL);
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Quantum State API](quantum-state.md) - State management
 - [Gates API](gates.md) - Apply gates before measurement
 - [Entanglement API](entanglement.md) - Post-measurement analysis
+```

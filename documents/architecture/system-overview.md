@@ -1,10 +1,17 @@
+# Archived Moonlab Documentation: System Overview
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # System Overview
 
 High-level architecture and component interactions in Moonlab.
 
 ## Architecture Diagram
 
-```
+[archived fence delimiter: ```]
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                              User Applications                             │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -69,7 +76,7 @@ High-level architecture and component interactions in Moonlab.
 │  │  (ARM/x86)   │  │   (Metal)    │  │  (MPI/TCP)   │  │   (Files)    │    │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
 └────────────────────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Layer Descriptions
 
@@ -121,7 +128,7 @@ Supporting infrastructure:
 
 ### Quantum State
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     Complex* amplitudes;      // State vector (2^n complex numbers)
     uint32_t num_qubits;      // Number of qubits
@@ -130,11 +137,11 @@ typedef struct {
     void* gpu_buffer;         // GPU buffer (if applicable)
     void* mpi_data;           // MPI metadata (if applicable)
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 ### Gate Representation
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     Complex matrix[4][4];     // Up to 4x4 matrix (2-qubit)
     uint8_t num_qubits;       // Gate size (1, 2, or 3)
@@ -142,11 +149,11 @@ typedef struct {
     double* parameters;       // Gate parameters (angles, etc.)
     uint8_t num_parameters;   // Number of parameters
 } quantum_gate_t;
-```
+[archived fence delimiter: ```]
 
 ### Tensor Network State
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t** tensors;       // Array of site tensors
     uint32_t num_sites;       // Number of sites
@@ -155,13 +162,13 @@ typedef struct {
     uint8_t canonical_form;   // Current canonical form
     uint32_t center;          // Canonical center position
 } mps_t;
-```
+[archived fence delimiter: ```]
 
 ## Execution Flow
 
 ### Gate Application
 
-```
+[archived fence delimiter: ```]
 gate_hadamard(state, qubit)
          │
          ▼
@@ -193,11 +200,11 @@ gate_hadamard(state, qubit)
           │
           ▼
      Return success
-```
+[archived fence delimiter: ```]
 
 ### Algorithm Execution
 
-```
+[archived fence delimiter: ```]
 vqe_solve(hamiltonian, config)
          │
          ▼
@@ -227,13 +234,13 @@ vqe_solve(hamiltonian, config)
 ┌────────────────────┐                   │
 │ 3. Return result   │ ← Energy, state, params
 └────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Memory Management
 
 ### Allocation Strategy
 
-```c
+[archived fence delimiter: ```c]
 // Aligned allocation for SIMD
 void* qsim_alloc_aligned(size_t size, size_t alignment) {
     // Use posix_memalign on POSIX, _aligned_malloc on Windows
@@ -250,13 +257,13 @@ Complex* allocate_state_vector(uint64_t dim) {
     size_t size = dim * sizeof(Complex);
     return (Complex*)qsim_alloc_aligned(size, alignment);
 }
-```
+[archived fence delimiter: ```]
 
 ### Memory Pools
 
 For algorithm temporaries:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     void* base;           // Pool base address
     size_t size;          // Total pool size
@@ -275,13 +282,13 @@ void* pool_alloc(memory_pool_t* pool, size_t size) {
     pool->offset = aligned_offset + size;
     return ptr;
 }
-```
+[archived fence delimiter: ```]
 
 ## Configuration System
 
 ### Hierarchy
 
-```
+[archived fence delimiter: ```]
 ┌────────────────────────────────────────┐
 │          Compile-time defaults         │
 └────────────────────┬───────────────────┘
@@ -303,7 +310,7 @@ void* pool_alloc(memory_pool_t* pool, size_t size) {
 │         Runtime API calls              │
 │  qsim_config_set("key", "value")       │
 └────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Key Configuration Options
 
@@ -320,7 +327,7 @@ void* pool_alloc(memory_pool_t* pool, size_t size) {
 
 ### Error Propagation
 
-```c
+[archived fence delimiter: ```c]
 // All public functions return error codes
 qsim_error_t gate_hadamard(quantum_state_t* state, uint32_t qubit) {
     if (state == NULL) {
@@ -346,7 +353,7 @@ typedef struct {
 
 // Get detailed error info
 qsim_error_context_t qsim_get_last_error(void);
-```
+[archived fence delimiter: ```]
 
 ### Error Categories
 
@@ -362,13 +369,13 @@ qsim_error_context_t qsim_get_last_error(void);
 
 ### Thread-Local Storage
 
-```c
+[archived fence delimiter: ```c]
 // Thread-local error context
 static __thread qsim_error_context_t tls_error_context;
 
 // Thread-local random state
 static __thread uint64_t tls_rng_state[4];
-```
+[archived fence delimiter: ```]
 
 ### Synchronization Points
 
@@ -385,7 +392,7 @@ static __thread uint64_t tls_rng_state[4];
 
 ### Built-in Profiler
 
-```c
+[archived fence delimiter: ```c]
 // Start profiling
 qsim_profiler_enable(QSIM_PROFILE_GATES | QSIM_PROFILE_GPU);
 
@@ -400,7 +407,7 @@ printf("Gate time: %.3f ms\n", profile.gate_time_ms);
 printf("GPU kernels: %llu\n", profile.gpu_kernel_count);
 printf("GPU time: %.3f ms\n", profile.gpu_time_ms);
 printf("Memory allocated: %zu bytes\n", profile.memory_allocated);
-```
+[archived fence delimiter: ```]
 
 ### Metrics Collected
 
@@ -420,3 +427,4 @@ printf("Memory allocated: %zu bytes\n", profile.memory_allocated);
 - [GPU Pipeline](gpu-pipeline.md) - GPU acceleration architecture
 - [C API Reference](../api/c/index.md) - Complete API documentation
 
+```

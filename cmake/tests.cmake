@@ -139,11 +139,13 @@
     target_link_libraries(test_mps_vs_exact PRIVATE quantumsim)
     add_test(NAME mps_vs_exact COMMAND test_mps_vs_exact)
 
-    # Time-evolution long-run regression.
-    add_executable(test_long_evolution tests/test_long_evolution.c)
-    target_link_libraries(test_long_evolution PRIVATE quantumsim)
-    add_test(NAME long_evolution COMMAND test_long_evolution)
-    set_tests_properties(long_evolution PROPERTIES LABELS "long")
+	    # Time-evolution long-run regression.
+	    add_executable(test_long_evolution tests/test_long_evolution.c)
+	    target_link_libraries(test_long_evolution PRIVATE quantumsim)
+	    add_test(NAME long_evolution COMMAND test_long_evolution)
+	    set_tests_properties(long_evolution PROPERTIES
+	        LABELS "long"
+	        ENVIRONMENT "MOONLAB_TN_DISABLE_GPU=1")
 
     # Fast-measurement correctness test.
     add_executable(test_fast_measurement tests/test_fast_measurement.c)
@@ -1307,14 +1309,29 @@
             RESULT_VARIABLE _numpy_probe
             OUTPUT_QUIET ERROR_QUIET)
     endif()
-    if(PYTHON3_EXECUTABLE AND _numpy_probe EQUAL 0)
-        add_test(NAME python_bindings_smoke
-                 COMMAND ${PYTHON3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_bindings_smoke.py)
-        set_tests_properties(python_bindings_smoke PROPERTIES
-            ENVIRONMENT
-                "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-        )
+	    if(PYTHON3_EXECUTABLE AND _numpy_probe EQUAL 0)
+	        set(_python_bindings_dylib_path "$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH}")
+	        set(_python_bindings_ld_path "$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}")
+	        if(APPLE)
+	            execute_process(
+	                COMMAND ${PYTHON3_EXECUTABLE} -c "from pathlib import Path\ntry:\n import torch\n p = Path(torch.__file__).resolve().parent / 'lib'\n print(p if p.exists() else '', end='')\nexcept Exception:\n pass"
+	                RESULT_VARIABLE _torch_lib_probe
+	                OUTPUT_VARIABLE _torch_lib_dir
+	                ERROR_QUIET)
+	            string(STRIP "${_torch_lib_dir}" _torch_lib_dir)
+	            if(_torch_lib_probe EQUAL 0 AND _torch_lib_dir)
+	                set(_python_bindings_dylib_path "${_torch_lib_dir}:$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH}")
+	                set(_python_bindings_ld_path "${_torch_lib_dir}:$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}")
+	            endif()
+	        endif()
+
+	        add_test(NAME python_bindings_smoke
+	                 COMMAND ${PYTHON3_EXECUTABLE}
+	                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_bindings_smoke.py)
+	        set_tests_properties(python_bindings_smoke PROPERTIES
+	            ENVIRONMENT
+	                "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=${_python_bindings_dylib_path};LD_LIBRARY_PATH=${_python_bindings_ld_path}"
+	        )
 
         # Full pytest suite — covers measurement entropy-ctx, algorithms
         # (VQE/QAOA/Grover/BellTest), and state ops.  Gated on pytest
@@ -1332,11 +1349,11 @@
                              --deselect tests/test_algorithms.py::TestCHSHTest::test_chsh_high_statistics
                              ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/tests
                      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python)
-            set_tests_properties(python_bindings_pytest PROPERTIES
-                ENVIRONMENT
-                    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-            )
-        endif()
+	            set_tests_properties(python_bindings_pytest PROPERTIES
+	                ENVIRONMENT
+	                    "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/bindings/python;DYLD_LIBRARY_PATH=${_python_bindings_dylib_path};LD_LIBRARY_PATH=${_python_bindings_ld_path}"
+	            )
+	        endif()
     endif()
 
     # Binding-version sync gate.  Verifies every binding manifest's

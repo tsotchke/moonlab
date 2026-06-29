@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 04: Grover's Search
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 04: Grover's Search
 
 Implement the famous quantum search algorithm.
@@ -35,7 +42,7 @@ For $N = 1,000,000$: ~1000 queries vs ~500,000
 
 ## Step 1: Setup
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.algorithms import Grover
 import numpy as np
@@ -48,11 +55,11 @@ marked_state = 7  # We're looking for |0111⟩
 
 print(f"Search space: {2**n} items")
 print(f"Looking for: {marked_state} = |{format(marked_state, f'0{n}b')}⟩")
-```
+[archived fence delimiter: ```]
 
 ## Step 2: Initialize Superposition
 
-```python
+[archived fence delimiter: ```python]
 def initialize_grover(state):
     """Put all qubits in equal superposition."""
     for q in range(state.num_qubits):
@@ -66,7 +73,7 @@ initialize_grover(state)
 probs = state.probabilities()
 print(f"Initial probability of each state: {probs[0]:.4f}")
 # Should be 1/16 = 0.0625 for each state
-```
+[archived fence delimiter: ```]
 
 ## Step 3: The Oracle
 
@@ -74,7 +81,7 @@ The oracle marks the solution by flipping its phase:
 
 $$O|x\rangle = \begin{cases} -|x\rangle & \text{if } x = \text{solution} \\ |x\rangle & \text{otherwise} \end{cases}$$
 
-```python
+[archived fence delimiter: ```python]
 def oracle(state, marked):
     """Apply Grover oracle for a single marked state."""
     n = state.num_qubits
@@ -114,7 +121,7 @@ def apply_mcz(state):
     for i in range(n):
         for j in range(i + 1, n):
             state.crz(i, j, np.pi / (2 ** (n - 2)))
-```
+[archived fence delimiter: ```]
 
 ## Step 4: The Diffusion Operator
 
@@ -124,7 +131,7 @@ $$D = 2|s\rangle\langle s| - I$$
 
 where $|s\rangle = H^{\otimes n}|0\rangle$ is the equal superposition state.
 
-```python
+[archived fence delimiter: ```python]
 def diffusion(state):
     """Apply Grover diffusion operator."""
     n = state.num_qubits
@@ -156,11 +163,11 @@ def diffusion(state):
         state.h(q)
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Step 5: Run the Algorithm
 
-```python
+[archived fence delimiter: ```python]
 def grover_search(n, marked_state, verbose=True):
     """
     Run Grover's algorithm to find marked_state.
@@ -203,10 +210,10 @@ result, probs = grover_search(n, marked)
 
 print(f"\nResult: {result} = |{format(result, f'0{n}b')}⟩")
 print(f"Success: {result == marked}")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 Running 3 Grover iterations...
   Iteration 1: P(marked) = 0.4727
   Iteration 2: P(marked) = 0.9453
@@ -214,13 +221,13 @@ Running 3 Grover iterations...
 
 Result: 7 = |0111⟩
 Success: True
-```
+[archived fence delimiter: ```]
 
 ## Using the Built-in Grover Class
 
 Moonlab provides a convenient class:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import Grover
 
 # Create Grover instance
@@ -233,11 +240,11 @@ print(f"Found: {result['found_state']}")
 print(f"Success: {result['success']}")
 print(f"Probability: {result['probability']:.4f}")
 print(f"Iterations: {result['iterations_used']}")
-```
+[archived fence delimiter: ```]
 
 ## Visualizing Amplitude Amplification
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 # Run Grover and track all probabilities
@@ -273,7 +280,7 @@ plt.legend()
 plt.grid(True)
 plt.savefig('grover_amplification.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## Optimal Number of Iterations
 
@@ -285,7 +292,7 @@ where $\theta = \arcsin(1/\sqrt{N})$ and $k$ is the iteration count.
 
 **Optimal iterations**: $k \approx \frac{\pi}{4}\sqrt{N}$
 
-```python
+[archived fence delimiter: ```python]
 # Demonstrate the oscillation
 n = 6
 marked = 42
@@ -308,10 +315,10 @@ print("Iterations vs Probability:")
 for i, p in enumerate(probs):
     bar = '#' * int(p * 50)
     print(f"{i:2d}: {p:.4f} {bar}")
-```
+[archived fence delimiter: ```]
 
 **Output** (shows oscillation):
-```
+[archived fence delimiter: ```]
 Iterations vs Probability:
  0: 0.0156
  1: 0.1328
@@ -325,7 +332,7 @@ Iterations vs Probability:
  9: 0.1328
 10: 0.0156
 ...
-```
+[archived fence delimiter: ```]
 
 ## Multiple Solutions
 
@@ -334,7 +341,7 @@ When there are $M$ solutions out of $N$ items:
 - Optimal iterations: $\frac{\pi}{4}\sqrt{N/M}$
 - Speedup still quadratic
 
-```python
+[archived fence delimiter: ```python]
 def grover_multiple(n, marked_states):
     """Grover search with multiple solutions."""
     state = QuantumState(n)
@@ -361,13 +368,13 @@ solutions = [5, 13, 21]
 for _ in range(10):
     result, success = grover_multiple(5, solutions)
     print(f"Found {result}, is solution: {success}")
-```
+[archived fence delimiter: ```]
 
 ## Unknown Number of Solutions
 
 When $M$ is unknown, use **Quantum Counting** or iterative amplitude estimation:
 
-```python
+[archived fence delimiter: ```python]
 def grover_unknown(n, oracle_func, max_iters=None):
     """
     Grover search when number of solutions is unknown.
@@ -408,7 +415,7 @@ def grover_unknown(n, oracle_func, max_iters=None):
         m = int(m * 1.5) + 1
 
     return None, max_iters
-```
+[archived fence delimiter: ```]
 
 ## Performance Analysis
 
@@ -458,3 +465,4 @@ Let's verify quantum mechanics itself with a Bell test:
 - [C API: Grover](../api/c/grover.md) - Low-level implementation
 - [Python API: Algorithms](../api/python/algorithms.md) - High-level interface
 
+```

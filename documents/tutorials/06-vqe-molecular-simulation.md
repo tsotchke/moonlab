@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 06: VQE Molecular Simulation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 06: VQE Molecular Simulation
 
 Simulate molecular ground states with the Variational Quantum Eigensolver.
@@ -46,7 +53,7 @@ Using the Jordan-Wigner transformation, this maps to qubit operators (Pauli stri
 
 For H₂ at the equilibrium bond distance (0.74 Å):
 
-```python
+[archived fence delimiter: ```python]
 # H2 Hamiltonian coefficients (STO-3G basis)
 H2_HAMILTONIAN = {
     'II': -0.8105,
@@ -56,7 +63,7 @@ H2_HAMILTONIAN = {
     'XX': 0.0454,
     'YY': 0.0454,
 }
-```
+[archived fence delimiter: ```]
 
 The full Hamiltonian:
 $$H = -0.8105 \cdot I + 0.1721 \cdot Z_0 - 0.2257 \cdot Z_1 + 0.1689 \cdot Z_0Z_1 + 0.0454 \cdot X_0X_1 + 0.0454 \cdot Y_0Y_1$$
@@ -65,7 +72,7 @@ $$H = -0.8105 \cdot I + 0.1721 \cdot Z_0 - 0.2257 \cdot Z_1 + 0.1689 \cdot Z_0Z_
 
 We'll use a hardware-efficient ansatz:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 import numpy as np
 
@@ -97,13 +104,13 @@ params = np.random.uniform(-np.pi, np.pi, (num_layers, 2, 3))
 
 state = QuantumState(2)
 apply_ansatz(state, params)
-```
+[archived fence delimiter: ```]
 
 ## Step 3: Measuring the Energy
 
 We need to measure each Pauli term in the Hamiltonian:
 
-```python
+[archived fence delimiter: ```python]
 def measure_pauli_string(state, pauli_string, shots=1000):
     """
     Measure expectation value of a Pauli string.
@@ -149,13 +156,13 @@ def compute_energy(state, hamiltonian):
         energy += coefficient * expectation
 
     return energy
-```
+[archived fence delimiter: ```]
 
 ### More Efficient Energy Computation
 
 For simulation, we can compute exact expectation values:
 
-```python
+[archived fence delimiter: ```python]
 def compute_energy_exact(state, hamiltonian):
     """
     Compute energy using exact expectation values.
@@ -169,11 +176,11 @@ def compute_energy_exact(state, hamiltonian):
         energy += coefficient * exp_val
 
     return energy
-```
+[archived fence delimiter: ```]
 
 ## Step 4: Classical Optimization
 
-```python
+[archived fence delimiter: ```python]
 from scipy.optimize import minimize
 
 def vqe_cost(params_flat, hamiltonian, num_layers):
@@ -202,13 +209,13 @@ result = minimize(
 print(f"Optimized energy: {result.fun:.6f} Hartree")
 print(f"Exact H2 energy:  -1.137 Hartree")
 print(f"Error: {abs(result.fun - (-1.137)):.6f} Hartree")
-```
+[archived fence delimiter: ```]
 
 ## Using the Built-in VQE
 
 Moonlab provides a convenient VQE class:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 
 # Create VQE solver
@@ -221,13 +228,13 @@ print(f"Ground state energy: {result['energy']:.6f} Hartree")
 print(f"Energy in kcal/mol: {result['energy_kcal_mol']:.2f}")
 print(f"Converged: {result['converged']}")
 print(f"Iterations: {result['num_iterations']}")
-```
+[archived fence delimiter: ```]
 
 ## Step 5: Potential Energy Surface
 
 Compute energy vs. bond distance:
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 def h2_hamiltonian(distance):
@@ -267,13 +274,13 @@ plt.legend()
 plt.grid(True)
 plt.savefig('h2_pes.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## Gradient-Based Optimization
 
 The **parameter shift rule** gives exact gradients:
 
-```python
+[archived fence delimiter: ```python]
 def parameter_shift_gradient(params, hamiltonian, num_layers):
     """Compute gradient using parameter shift rule."""
     gradients = np.zeros_like(params)
@@ -311,13 +318,13 @@ for i in range(100):
         print(f"Iteration {i}: E = {energy:.6f}")
 
 print(f"Final energy: {energies[-1]:.6f}")
-```
+[archived fence delimiter: ```]
 
 ## UCCSD Ansatz for Chemistry
 
 For more accurate results, use the UCCSD (Unitary Coupled Cluster Singles Doubles) ansatz:
 
-```python
+[archived fence delimiter: ```python]
 def uccsd_ansatz(state, params):
     """
     UCCSD ansatz for 4-qubit H2 simulation.
@@ -337,13 +344,13 @@ def uccsd_ansatz(state, params):
     state.crx(1, 3, theta_2)
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Larger Molecules
 
 For larger molecules (LiH, H₂O, etc.):
 
-```python
+[archived fence delimiter: ```python]
 # LiH simulation
 vqe = VQE(num_qubits=10, num_layers=4)
 result = vqe.solve_lih(bond_distance=1.6)
@@ -355,7 +362,7 @@ vqe_h2o = VQE(num_qubits=14, num_layers=6)
 result_h2o = vqe_h2o.solve_h2o()
 
 print(f"H2O ground state: {result_h2o['energy']:.6f} Hartree")
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -396,3 +403,4 @@ Apply optimization to combinatorial problems:
 - [C API: VQE](../api/c/vqe.md) - Low-level implementation
 - Peruzzo et al. (2014). "A variational eigenvalue solver on a photonic quantum processor." Nature Communications, 5, 4213.
 
+```

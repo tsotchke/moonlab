@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Getting started with Moonlab
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Getting started with Moonlab
 
 This is the 15-minute onboarding tutorial for Moonlab v1.0. It walks you from
@@ -25,13 +32,13 @@ neural networks). One simulation kernel, every language, one wire format.
 
 ## 3. Build from source (5 min)
 
-```sh
+[archived fence delimiter: ```sh]
 git clone https://github.com/tsotchke/moonlab
 cd moonlab
 cmake -B build -DQSIM_ENABLE_TLS=ON
 cmake --build build -j
 ctest --test-dir build --output-on-failure   # ~3 minutes, 114 tests
-```
+[archived fence delimiter: ```]
 
 All 114 tests should pass. Common optional flags:
 
@@ -43,15 +50,15 @@ All 114 tests should pass. Common optional flags:
 
 The build produces `build/libquantumsim.{dylib,so}`. To install system-wide:
 
-```sh
+[archived fence delimiter: ```sh]
 sudo cmake --install build           # headers -> /usr/local/include/quantumsim/
-```
+[archived fence delimiter: ```]
 
 ## 4. Bell circuit from C
 
 Save this as `bell.c`:
 
-```c
+[archived fence delimiter: ```c]
 #include <quantumsim/quantum/state.h>
 #include <quantumsim/quantum/gates.h>
 #include <stdio.h>
@@ -72,39 +79,39 @@ int main(void) {
     quantum_state_destroy(s);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 Build and run:
 
-```sh
+[archived fence delimiter: ```sh]
 cc bell.c -lquantumsim -o bell
 ./bell
-```
+[archived fence delimiter: ```]
 
 Expected output:
 
-```
+[archived fence delimiter: ```]
 P(|0>) = 0.5000
 P(|1>) = 0.0000
 P(|2>) = 0.0000
 P(|3>) = 0.5000
-```
+[archived fence delimiter: ```]
 
 That is the Bell state `(|00> + |11>) / sqrt(2)`.
 
 ## 5. Same circuit from Python
 
-```sh
+[archived fence delimiter: ```sh]
 pip install -e bindings/python    # editable install against the local build
-```
+[archived fence delimiter: ```]
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 state = QuantumState(2)
 state.h(0).cnot(0, 1)
 print(state.probabilities())   # [0.5, 0.0, 0.0, 0.5]
-```
+[archived fence delimiter: ```]
 
 The Python `QuantumState` mirrors the C API one-to-one: every gate method
 (`h`, `x`, `y`, `z`, `s`, `t`, `cnot`, `cz`, `swap`, `toffoli`, ...) returns
@@ -115,14 +122,14 @@ the underlying C call.
 
 In `Cargo.toml`:
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab = { path = "bindings/rust/moonlab" }
-```
+[archived fence delimiter: ```]
 
 In `src/main.rs`:
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 
 fn main() {
@@ -131,7 +138,7 @@ fn main() {
     println!("{:?}", s.probabilities());
     // [0.5, 0.0, 0.0, 0.5]
 }
-```
+[archived fence delimiter: ```]
 
 Note that the Rust gate methods (`h`, `cnot`, `cx`, `rz`, ...) take `&mut self`
 and return `&mut Self` for chaining; argument validation happens inside, and
@@ -143,20 +150,20 @@ Set `MOONLAB_LIB_DIR=$(pwd)/build` if the binding cannot locate
 
 ## 7. Same circuit from JS (Node)
 
-```sh
+[archived fence delimiter: ```sh]
 cd bindings/javascript/packages/core
 pnpm install
 pnpm build
-```
+[archived fence delimiter: ```]
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 const s = await QuantumState.create({ numQubits: 2 });
 s.h(0).cnot(0, 1);
 console.log(s.getProbabilities());   // Float64Array [0.5, 0, 0, 0.5]
 s.dispose();
-```
+[archived fence delimiter: ```]
 
 The JS binding runs the same C kernel compiled to WebAssembly via Emscripten.
 `QuantumState.create` is async because it instantiates the WASM module on
@@ -169,9 +176,9 @@ The control plane (`moonlab_control_server`) accepts serialized circuits over
 TCP, dispatches them to worker simulators, and ships metrics to Prometheus.
 The whole stack ships in `deploy/docker/`:
 
-```sh
+[archived fence delimiter: ```sh]
 docker compose -f deploy/docker/docker-compose.yml up --build
-```
+[archived fence delimiter: ```]
 
 This brings up:
 
@@ -181,7 +188,7 @@ This brings up:
 
 Submit the same Bell circuit from Python:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.control_plane import submit_circuit
 from moonlab.qgtl import QgtlCircuit, GateType
 
@@ -191,7 +198,7 @@ c = (QgtlCircuit(num_qubits=2)
 
 probs = submit_circuit("127.0.0.1", 7070, c.serialize())
 print(probs)   # [0.5, 0.0, 0.0, 0.5]
-```
+[archived fence delimiter: ```]
 
 The Rust and JS bindings expose the same wire protocol via
 `moonlab::control_plane::submit_circuit` and
@@ -213,3 +220,4 @@ queue depth update in real time as you submit more jobs.
   above with entropy and CHSH analysis)
 - `bindings/python/README.md`, `bindings/rust/moonlab/README.md`,
   `bindings/javascript/README.md` -- language-specific deep dives
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Decoder shoot-out: published numbers
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Decoder shoot-out: published numbers
 
 Logical-error rates on the toric code under an i.i.d. X-error model,
@@ -18,12 +25,12 @@ Logical-error rates on the toric code under an i.i.d. X-error model,
 
 Re-run on your host:
 
-```bash
+[archived fence delimiter: ```bash]
 cmake -B build_release && cmake --build build_release --target decoder_shootout
 ./build_release/decoder_shootout 5 1000 > d5.json
 ./build_release/decoder_shootout 7 1000 > d7.json
 ./build_release/decoder_shootout 9 1000 > d9.json
-```
+[archived fence delimiter: ```]
 
 ## Logical error rate (lower is better)
 
@@ -165,15 +172,16 @@ shown pymatching consistently 10-20x above mwpm_exact.
 
 Re-run on your host:
 
-```bash
+[archived fence delimiter: ```bash]
 ./build/decoder_shootout 3 200 > d3.json
 ./build/decoder_shootout 5 1000 > d5.json   # ~10 min with pymatching
 ./build/decoder_shootout 7 1000 > d7.json   # ~25 min
 ./build/decoder_shootout 9 1000 > d9.json   # ~60 min
-```
+[archived fence delimiter: ```]
 
 The pre-fix d=5 / d=7 / d=9 archives under
 `benchmarks/results/decoder_shootout_2026-05-20/` remain in tree
 for historical reference; their `pymatching: null` cells are
 correct (the bug meant pymatching was effectively unusable at the
 time of that archive).
+```

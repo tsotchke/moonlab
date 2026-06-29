@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Performance Tuning
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Performance Tuning
 
 Optimize Moonlab simulation performance for your workload.
@@ -10,34 +17,34 @@ This guide covers optimization strategies for getting the best performance from 
 
 ### 1. Enable GPU
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import set_backend
 set_backend('metal')  # 10-100x speedup for 20+ qubits
-```
+[archived fence delimiter: ```]
 
 ### 2. Use Appropriate Precision
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 configure(precision='single')  # 2x memory, ~1.5x speed for some operations
-```
+[archived fence delimiter: ```]
 
 ### 3. Batch Operations
 
-```python
+[archived fence delimiter: ```python]
 # Instead of individual calls
 for _ in range(1000):
     state.h(0)
 
 # Use batching
 state.apply_circuit(circuit, repetitions=1000)
-```
+[archived fence delimiter: ```]
 
 ## Profiling
 
 ### Built-in Profiler
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import Profiler, QuantumState
 
 with Profiler() as p:
@@ -52,11 +59,11 @@ p.print_summary()
 # Gate applications: 200
 # Avg gate time: 0.23 ms
 # Memory peak: 16.5 MB
-```
+[archived fence delimiter: ```]
 
 ### Detailed Timing
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import Profiler
 
 p = Profiler(detailed=True)
@@ -69,11 +76,11 @@ profile = p.stop()
 # Per-operation breakdown
 for op, stats in profile['operations'].items():
     print(f"{op}: {stats['total_ms']:.2f}ms ({stats['count']} calls)")
-```
+[archived fence delimiter: ```]
 
 ### Memory Profiling
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import MemoryProfiler
 
 with MemoryProfiler() as mp:
@@ -82,13 +89,13 @@ with MemoryProfiler() as mp:
 
 print(f"Peak usage: {mp.peak_mb:.1f} MB")
 print(f"Current usage: {mp.current_mb:.1f} MB")
-```
+[archived fence delimiter: ```]
 
 ## CPU Optimization
 
 ### SIMD Configuration
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure, simd_info
 
 # Check available SIMD
@@ -97,11 +104,11 @@ print(f"SIMD level: {info['level']}")  # NEON, AVX2, AVX512
 
 # Force specific level (testing/debugging)
 configure(simd_level='AVX2')
-```
+[archived fence delimiter: ```]
 
 ### Threading
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 import os
 
@@ -110,24 +117,24 @@ configure(num_threads=8)
 
 # Or via environment
 os.environ['OMP_NUM_THREADS'] = '8'
-```
+[archived fence delimiter: ```]
 
 ### Cache Optimization
 
 For memory-bound operations:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Tune for cache size
 configure(cache_block_size=256 * 1024)  # 256 KB blocks
-```
+[archived fence delimiter: ```]
 
 ## GPU Optimization
 
 ### Kernel Selection
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Enable kernel fusion
@@ -135,13 +142,13 @@ configure(gpu_kernel_fusion=True)
 
 # Set optimal thread group size
 configure(gpu_threadgroup_size=256)
-```
+[archived fence delimiter: ```]
 
 ### Memory Transfers
 
 Minimize CPU-GPU transfers:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_context
 
 with gpu_context() as ctx:
@@ -154,11 +161,11 @@ with gpu_context() as ctx:
 
     # Single transfer at end
     result = state.measure_all()
-```
+[archived fence delimiter: ```]
 
 ### Batched Circuits
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import batch_apply, QuantumState
 
 # Run same circuit on multiple states
@@ -169,13 +176,13 @@ def circuit(s):
     return s
 
 batch_apply(circuit, states)  # Parallelized across states
-```
+[archived fence delimiter: ```]
 
 ## Algorithm-Specific Tuning
 
 ### VQE
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 
 vqe = VQE(
@@ -186,11 +193,11 @@ vqe = VQE(
     shots=1000,           # Balance accuracy vs speed
     parallel_terms=True   # Parallelize Hamiltonian terms
 )
-```
+[archived fence delimiter: ```]
 
 ### QAOA
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 
 qaoa = QAOA(
@@ -201,11 +208,11 @@ qaoa = QAOA(
     parameter_sharing=True,  # Reduce optimization dimensions
     warm_start=True          # Use previous solution
 )
-```
+[archived fence delimiter: ```]
 
 ### DMRG
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import DMRG
 
 dmrg = DMRG(
@@ -215,7 +222,7 @@ dmrg = DMRG(
     use_svd_method='gesdd',  # Fastest SVD variant
     dense_cutoff=50          # Use dense for small tensors
 )
-```
+[archived fence delimiter: ```]
 
 ## Memory Optimization
 
@@ -229,7 +236,7 @@ dmrg = DMRG(
 
 ### Reduce Memory Usage
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Use single precision (half memory)
@@ -237,11 +244,11 @@ configure(precision='single')
 
 # Enable memory-efficient mode
 configure(memory_efficient=True)
-```
+[archived fence delimiter: ```]
 
 ### Memory Pools
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import MemoryPool
 
 # Pre-allocate memory pool
@@ -251,13 +258,13 @@ pool = MemoryPool(size_mb=1024)
 with pool:
     state = QuantumState(25)
     # Temporary allocations use pool
-```
+[archived fence delimiter: ```]
 
 ## Specific Workloads
 
 ### Many Small Circuits
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import CircuitCache
 
 # Cache compiled circuits
@@ -266,11 +273,11 @@ cache = CircuitCache(max_size=1000)
 for params in parameter_sets:
     circuit = cache.get_or_compile(circuit_template, params)
     result = circuit.run()
-```
+[archived fence delimiter: ```]
 
 ### Few Large States
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Optimize for large state operations
@@ -279,11 +286,11 @@ configure(
     cache_block_size=1024 * 1024,  # 1 MB blocks
     prefetch=True
 )
-```
+[archived fence delimiter: ```]
 
 ### Parameter Sweeps
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import parallel_sweep
 
 # Parallelize parameter sweep
@@ -293,23 +300,23 @@ results = parallel_sweep(
     num_workers=8,
     backend='metal'
 )
-```
+[archived fence delimiter: ```]
 
 ## Benchmarking
 
 ### Built-in Benchmarks
 
-```bash
+[archived fence delimiter: ```bash]
 # Run standard benchmark suite
 ./bin/moonlab-benchmark
 
 # Specific benchmark
 ./bin/moonlab-benchmark --suite=gates --qubits=20,25,30
-```
+[archived fence delimiter: ```]
 
 ### Custom Benchmarks
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.benchmark import Benchmark, GateBenchmark
 
 bench = GateBenchmark(qubits=[16, 18, 20, 22, 24])
@@ -317,11 +324,11 @@ results = bench.run()
 
 bench.plot_results()
 bench.save_results('benchmark.json')
-```
+[archived fence delimiter: ```]
 
 ### Comparison
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.benchmark import compare_backends
 
 results = compare_backends(
@@ -332,7 +339,7 @@ results = compare_backends(
 
 for n, data in results.items():
     print(f"{n} qubits: CPU={data['cpu']:.2f}s, GPU={data['metal']:.2f}s")
-```
+[archived fence delimiter: ```]
 
 ## Configuration Reference
 
@@ -347,7 +354,7 @@ for n, data in results.items():
 
 ### Configuration Options
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 configure(
@@ -372,7 +379,7 @@ configure(
     default_shots=1000,
     parallel_hamiltonian=True
 )
-```
+[archived fence delimiter: ```]
 
 ## Platform-Specific Tips
 
@@ -400,3 +407,4 @@ configure(
 - [Benchmarks](../performance/benchmarks.md) - Performance data
 - [Architecture](../architecture/index.md) - Implementation details
 
+```

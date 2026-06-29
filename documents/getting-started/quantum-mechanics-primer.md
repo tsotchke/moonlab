@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quantum Mechanics Primer
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quantum Mechanics Primer
 
 This primer introduces the physical principles underlying quantum computation. No prior physics knowledge is required—we build from the mathematical foundations covered in the [Linear Algebra Review](linear-algebra-review.md).
@@ -241,11 +248,11 @@ Moonlab implements all standard gates with hardware-accelerated performance.
 
 A quantum circuit is a sequence of gates applied to a register of qubits.
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──[M]
            │
 |0⟩ ───────⊕──[M]
-```
+[archived fence delimiter: ```]
 
 **Reading a circuit**:
 - Time flows left to right
@@ -304,3 +311,4 @@ Apply these concepts in practice: [First Simulation](first-simulation.md)
 - Nielsen & Chuang, *Quantum Computation and Quantum Information*, Chapters 1-4
 - Preskill, *Lecture Notes for Physics 219*
 - Rieffel & Polak, *Quantum Computing: A Gentle Introduction*
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Adaptive-bond two-site TDVP (design note + retrospective)
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Adaptive-bond two-site TDVP (design note + retrospective)
 
 This document captures the entropy-feedback adaptive-bond two-site
@@ -91,7 +98,7 @@ sweeps.
 
 New configuration block in `tdvp_config_t`:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     bool enabled;                /* false -> use legacy fixed cap */
     double target_entropy_error; /* eps_S */
@@ -100,36 +107,36 @@ typedef struct {
     uint32_t chi_ceiling;
     double alpha;                /* entropy -> bond-dim scaling */
 } tdvp_adaptive_bond_config_t;
-```
+[archived fence delimiter: ```]
 
 Added field:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     /* ... existing fields ... */
     tdvp_adaptive_bond_config_t adaptive_bond;
 } tdvp_config_t;
-```
+[archived fence delimiter: ```]
 
 Default constructor leaves `adaptive_bond.enabled = false` so
 existing callers behave identically.  A new helper:
 
-```c
+[archived fence delimiter: ```c]
 tdvp_config_t tdvp_config_adaptive(double target_entropy_error);
-```
+[archived fence delimiter: ```]
 
 returns a configuration with `adaptive_bond.enabled = true` and the
 recommended PID gains.
 
 Result reporting gains a per-bond chi histogram:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     /* ... existing tdvp_result_t fields ... */
     uint32_t *bond_chi_distribution; /* length n_bonds */
     uint32_t  n_bonds;
 } tdvp_result_t;
-```
+[archived fence delimiter: ```]
 
 Caller owns the `bond_chi_distribution` buffer; free it with the
 new `tdvp_result_clear()` helper before the result struct goes out
@@ -205,3 +212,4 @@ norm-preserving real-time path.
     age of matrix product states", Ann. Phys. **326**, 96 (2011).
     Standard reference for the entanglement entropy / truncation
     error duality used in the PID error signal.
+```

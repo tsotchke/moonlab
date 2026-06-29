@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Debugging Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Debugging Guide
 
 Diagnose and fix common issues in quantum simulations.
@@ -6,7 +13,7 @@ Diagnose and fix common issues in quantum simulations.
 
 ### Enabling Debug Output
 
-```c
+[archived fence delimiter: ```c]
 // Compile with debug symbols
 // make DEBUG=1
 
@@ -19,7 +26,7 @@ quantum_config_set("debug.log_file", "quantum_debug.log");
 // Or via environment
 // export MOONLAB_DEBUG=2
 // export MOONLAB_LOG_FILE=debug.log
-```
+[archived fence delimiter: ```]
 
 ### Debug Levels
 
@@ -39,14 +46,14 @@ quantum_config_set("debug.log_file", "quantum_debug.log");
 **Symptom**: Measurement probabilities don't sum to 1, or NaN values appear.
 
 **Diagnosis**:
-```c
+[archived fence delimiter: ```c]
 double norm = quantum_state_norm(state);
 printf("State norm: %.15f\n", norm);
 
 if (fabs(norm - 1.0) > 1e-10) {
     printf("WARNING: State not normalized!\n");
 }
-```
+[archived fence delimiter: ```]
 
 **Causes**:
 - Applying non-unitary operations
@@ -54,7 +61,7 @@ if (fabs(norm - 1.0) > 1e-10) {
 - Bug in custom gate implementation
 
 **Solutions**:
-```c
+[archived fence delimiter: ```c]
 // Renormalize periodically
 quantum_state_normalize(state);
 
@@ -63,14 +70,14 @@ bool is_unitary = gate_check_unitary(my_gate, 1e-10);
 if (!is_unitary) {
     fprintf(stderr, "Gate is not unitary!\n");
 }
-```
+[archived fence delimiter: ```]
 
 ### 2. Incorrect Measurement Results
 
 **Symptom**: Measurement outcomes don't match expected probabilities.
 
 **Diagnosis**:
-```c
+[archived fence delimiter: ```c]
 // Print state amplitudes
 quantum_state_print(state);
 
@@ -79,7 +86,7 @@ double* probs = quantum_state_probabilities(state);
 for (size_t i = 0; i < state->dimension; i++) {
     printf("|%zu⟩: %.6f\n", i, probs[i]);
 }
-```
+[archived fence delimiter: ```]
 
 **Causes**:
 - Wrong qubit ordering (little-endian vs big-endian)
@@ -87,7 +94,7 @@ for (size_t i = 0; i < state->dimension; i++) {
 - State not properly initialized
 
 **Solutions**:
-```c
+[archived fence delimiter: ```c]
 // Verify qubit indexing convention
 // Moonlab uses little-endian: |q_{n-1}...q_1 q_0⟩
 // Index i = q_0 * 2^0 + q_1 * 2^1 + ... + q_{n-1} * 2^{n-1}
@@ -102,25 +109,25 @@ gate_x(state, 0);  // Flip q_0
 gate_x(state, 2);  // Flip q_2
 // State should be |101⟩ = index 5
 printf("Amplitude at |101⟩: %.6f\n", cabs(state->amplitudes[5]));
-```
+[archived fence delimiter: ```]
 
 ### 3. Memory Errors
 
 **Symptom**: Segmentation fault, corrupted data, or valgrind errors.
 
 **Diagnosis**:
-```bash
+[archived fence delimiter: ```bash]
 # Run with valgrind
 valgrind --leak-check=full ./my_quantum_app
 
 # Run with AddressSanitizer
 make SANITIZE=address
 ./my_quantum_app
-```
+[archived fence delimiter: ```]
 
 **Common Memory Issues**:
 
-```c
+[archived fence delimiter: ```c]
 // WRONG: Accessing freed state
 quantum_state_t* state = quantum_state_init(10);
 quantum_state_free(state);
@@ -136,10 +143,10 @@ if (qubit < state->num_qubits) {
 } else {
     fprintf(stderr, "Qubit %d out of range\n", qubit);
 }
-```
+[archived fence delimiter: ```]
 
 **Solutions**:
-```c
+[archived fence delimiter: ```c]
 // Enable bounds checking
 quantum_config_set("safety.bounds_check", "true");
 
@@ -148,14 +155,14 @@ int result = gate_hadamard_safe(state, qubit);
 if (result != QUANTUM_SUCCESS) {
     handle_error(result);
 }
-```
+[archived fence delimiter: ```]
 
 ### 4. Performance Issues
 
 **Symptom**: Simulation runs much slower than expected.
 
 **Diagnosis**:
-```c
+[archived fence delimiter: ```c]
 #include "tools/profiler/profiler.h"
 
 profiler_start();
@@ -167,7 +174,7 @@ for (int i = 0; i < 1000; i++) {
 
 profiler_stop();
 profiler_report(stdout);
-```
+[archived fence delimiter: ```]
 
 **Common Performance Issues**:
 
@@ -179,7 +186,7 @@ profiler_report(stdout);
 | GPU not used | CPU bound | Enable Metal: `make METAL=1` |
 
 **Solutions**:
-```c
+[archived fence delimiter: ```c]
 // Check optimization status
 quantum_print_capabilities();
 // Output:
@@ -190,14 +197,14 @@ quantum_print_capabilities();
 // Force GPU usage
 quantum_config_set("gpu.enabled", "true");
 quantum_config_set("gpu.threshold", "16");  // Use GPU for ≥16 qubits
-```
+[archived fence delimiter: ```]
 
 ### 5. Entanglement Issues
 
 **Symptom**: Bell state doesn't show expected correlations.
 
 **Diagnosis**:
-```c
+[archived fence delimiter: ```c]
 // Create Bell state
 quantum_state_init(state, 2);
 gate_hadamard(state, 0);
@@ -213,20 +220,20 @@ printf("|00⟩: %.6f\n", cabs(state->amplitudes[0]));  // ~0.707
 printf("|01⟩: %.6f\n", cabs(state->amplitudes[1]));  // ~0.0
 printf("|10⟩: %.6f\n", cabs(state->amplitudes[2]));  // ~0.0
 printf("|11⟩: %.6f\n", cabs(state->amplitudes[3]));  // ~0.707
-```
+[archived fence delimiter: ```]
 
 ### 6. CHSH Test Failures
 
 **Symptom**: Bell test doesn't reach theoretical maximum of 2√2.
 
 **Diagnosis**:
-```c
+[archived fence delimiter: ```c]
 bell_test_result_t result = bell_test_chsh(state, 0, 1, 10000, NULL, &entropy);
 
 printf("CHSH Value: %.4f\n", result.chsh_value);
 printf("Statistical error: %.4f\n", result.error);
 printf("Shots: %zu\n", result.num_shots);
-```
+[archived fence delimiter: ```]
 
 **Causes**:
 - Too few measurement shots (statistical noise)
@@ -234,7 +241,7 @@ printf("Shots: %zu\n", result.num_shots);
 - Wrong measurement angles
 
 **Solutions**:
-```c
+[archived fence delimiter: ```c]
 // Increase shots for better statistics
 bell_test_chsh(state, 0, 1, 100000, NULL, &entropy);
 
@@ -244,13 +251,13 @@ bell_test_settings_t settings = {
     .bob_angles = {M_PI/4, -M_PI/4}     // 45° and -45°
 };
 bell_test_chsh(state, 0, 1, 10000, &settings, &entropy);
-```
+[archived fence delimiter: ```]
 
 ## Debugging Tools
 
 ### State Visualization
 
-```c
+[archived fence delimiter: ```c]
 // ASCII visualization
 quantum_state_print_bars(state);
 // Output:
@@ -261,11 +268,11 @@ quantum_state_print_bars(state);
 
 // Export for external visualization
 quantum_state_export_json(state, "state.json");
-```
+[archived fence delimiter: ```]
 
 ### Circuit Tracing
 
-```c
+[archived fence delimiter: ```c]
 // Enable gate-by-gate logging
 quantum_config_set("trace.gates", "true");
 
@@ -274,11 +281,11 @@ gate_hadamard(state, 0);
 
 gate_cnot(state, 0, 1);
 // [TRACE] CNOT(0,1): (|00⟩+|10⟩)/√2 → (|00⟩+|11⟩)/√2
-```
+[archived fence delimiter: ```]
 
 ### Assertion Macros
 
-```c
+[archived fence delimiter: ```c]
 #include "utils/debug.h"
 
 // Verify state properties
@@ -288,11 +295,11 @@ QUANTUM_ASSERT_UNITARY(gate_matrix, dim);
 
 // Custom assertions
 QUANTUM_ASSERT(condition, "Error message: %s", details);
-```
+[archived fence delimiter: ```]
 
 ## Python Debugging
 
-```python
+[archived fence delimiter: ```python]
 import moonlab
 from moonlab.debug import enable_debug, StateInspector
 
@@ -309,11 +316,11 @@ inspector.print_amplitudes()
 inspector.print_probabilities()
 inspector.check_normalization()
 inspector.plot_state()  # Matplotlib visualization
-```
+[archived fence delimiter: ```]
 
 ## GDB Integration
 
-```bash
+[archived fence delimiter: ```bash]
 # Compile with debug symbols
 make DEBUG=1
 
@@ -326,11 +333,11 @@ gdb ./my_quantum_app
 (gdb) print *state
 (gdb) print state->amplitudes[0]
 (gdb) call quantum_state_print(state)
-```
+[archived fence delimiter: ```]
 
 ### Custom GDB Pretty Printers
 
-```python
+[archived fence delimiter: ```python]
 # ~/.gdbinit
 python
 import gdb
@@ -351,11 +358,11 @@ def quantum_lookup(val):
 
 gdb.pretty_printers.append(quantum_lookup)
 end
-```
+[archived fence delimiter: ```]
 
 ## Logging Best Practices
 
-```c
+[archived fence delimiter: ```c]
 #include "utils/logging.h"
 
 // Structured logging
@@ -372,10 +379,11 @@ if (iteration % 1000 == 0) {
     snprintf(filename, sizeof(filename), "state_%06d.bin", iteration);
     quantum_state_save(state, filename);
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Troubleshooting](../troubleshooting.md)
 - [Error Codes Reference](../reference/error-codes.md)
 - [Configuration Options](../reference/configuration-options.md)
+```

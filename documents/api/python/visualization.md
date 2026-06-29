@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Visualization API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Visualization API
 
 Complete reference for quantum circuit visualization in the Python API.
@@ -16,19 +23,19 @@ The visualization module provides tools for rendering quantum circuits in multip
 
 ## Installation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import CircuitDrawer, draw_circuit
-```
+[archived fence delimiter: ```]
 
 Optional dependencies:
-```bash
+[archived fence delimiter: ```bash]
 pip install matplotlib  # For figure output
 pip install pylatex     # For LaTeX generation
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.visualization import draw_circuit
 
@@ -38,16 +45,16 @@ state.h(0).cnot(0, 1).cnot(1, 2)
 
 # Draw in ASCII
 print(draw_circuit(state))
-```
+[archived fence delimiter: ```]
 
 Output:
-```
+[archived fence delimiter: ```]
 q0: ─H──●──────
         │
 q1: ────X──●───
            │
 q2: ───────X───
-```
+[archived fence delimiter: ```]
 
 ## CircuitDrawer
 
@@ -55,13 +62,13 @@ Main class for circuit visualization.
 
 ### Constructor
 
-```python
+[archived fence delimiter: ```python]
 CircuitDrawer(
     num_qubits: int,
     style: str = 'default',
     scale: float = 1.0
 )
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits to display
@@ -76,14 +83,14 @@ CircuitDrawer(
 
 #### add_gate
 
-```python
+[archived fence delimiter: ```python]
 add_gate(
     gate_name: str,
     qubits: Union[int, List[int]],
     params: Optional[List[float]] = None,
     label: Optional[str] = None
 ) -> CircuitDrawer
-```
+[archived fence delimiter: ```]
 
 Add a gate to the circuit diagram.
 
@@ -96,7 +103,7 @@ Add a gate to the circuit diagram.
 **Returns**: Self for method chaining
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import CircuitDrawer
 
 drawer = CircuitDrawer(3)
@@ -104,42 +111,42 @@ drawer.add_gate('H', 0)
 drawer.add_gate('CNOT', [0, 1])
 drawer.add_gate('RZ', 2, params=[3.14159])
 drawer.add_gate('TOFFOLI', [0, 1, 2])
-```
+[archived fence delimiter: ```]
 
 #### add_measurement
 
-```python
+[archived fence delimiter: ```python]
 add_measurement(
     qubit: int,
     classical_bit: Optional[int] = None
 ) -> CircuitDrawer
-```
+[archived fence delimiter: ```]
 
 Add measurement symbol.
 
-```python
+[archived fence delimiter: ```python]
 drawer.add_measurement(0)
 drawer.add_measurement(1, classical_bit=0)
-```
+[archived fence delimiter: ```]
 
 #### add_barrier
 
-```python
+[archived fence delimiter: ```python]
 add_barrier(qubits: Optional[List[int]] = None) -> CircuitDrawer
-```
+[archived fence delimiter: ```]
 
 Add visual barrier (dashed line).
 
-```python
+[archived fence delimiter: ```python]
 drawer.add_barrier()  # All qubits
 drawer.add_barrier([0, 1])  # Specific qubits
-```
+[archived fence delimiter: ```]
 
 #### add_label
 
-```python
+[archived fence delimiter: ```python]
 add_label(text: str, qubit: int) -> CircuitDrawer
-```
+[archived fence delimiter: ```]
 
 Add text label at current position.
 
@@ -147,12 +154,12 @@ Add text label at current position.
 
 #### to_ascii
 
-```python
+[archived fence delimiter: ```python]
 to_ascii(
     wire_char: str = '─',
     show_labels: bool = True
 ) -> str
-```
+[archived fence delimiter: ```]
 
 Render as ASCII art.
 
@@ -161,29 +168,29 @@ Render as ASCII art.
 - `show_labels`: Show qubit labels
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 drawer = CircuitDrawer(2)
 drawer.add_gate('H', 0)
 drawer.add_gate('CNOT', [0, 1])
 print(drawer.to_ascii())
-```
+[archived fence delimiter: ```]
 
 Output:
-```
+[archived fence delimiter: ```]
 q0: ─H──●──
         │
 q1: ────X──
-```
+[archived fence delimiter: ```]
 
 #### to_matplotlib
 
-```python
+[archived fence delimiter: ```python]
 to_matplotlib(
     figsize: Tuple[float, float] = None,
     dpi: int = 100,
     show_grid: bool = False
 ) -> matplotlib.figure.Figure
-```
+[archived fence delimiter: ```]
 
 Render as matplotlib figure.
 
@@ -193,7 +200,7 @@ Render as matplotlib figure.
 - `show_grid`: Show background grid
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 drawer = CircuitDrawer(3, style='ibm')
@@ -205,16 +212,16 @@ drawer.add_measurement(2)
 fig = drawer.to_matplotlib(figsize=(8, 4))
 fig.savefig('circuit.png', dpi=150)
 plt.show()
-```
+[archived fence delimiter: ```]
 
 #### to_latex
 
-```python
+[archived fence delimiter: ```python]
 to_latex(
     standalone: bool = True,
     package: str = 'quantikz'
 ) -> str
-```
+[archived fence delimiter: ```]
 
 Generate LaTeX source code.
 
@@ -223,17 +230,17 @@ Generate LaTeX source code.
 - `package`: LaTeX package ('quantikz' or 'qcircuit')
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 drawer = CircuitDrawer(2)
 drawer.add_gate('H', 0)
 drawer.add_gate('CNOT', [0, 1])
 
 latex_code = drawer.to_latex()
 print(latex_code)
-```
+[archived fence delimiter: ```]
 
 Output:
-```latex
+[archived fence delimiter: ```latex]
 \documentclass{standalone}
 \usepackage{quantikz}
 \begin{document}
@@ -242,35 +249,35 @@ Output:
 \lstick{$q_1$} & \qw & \targ{} & \qw
 \end{quantikz}
 \end{document}
-```
+[archived fence delimiter: ```]
 
 #### to_svg
 
-```python
+[archived fence delimiter: ```python]
 to_svg(
     width: int = 800,
     height: Optional[int] = None
 ) -> str
-```
+[archived fence delimiter: ```]
 
 Generate SVG markup.
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 svg_code = drawer.to_svg(width=600)
 with open('circuit.svg', 'w') as f:
     f.write(svg_code)
-```
+[archived fence delimiter: ```]
 
 #### save
 
-```python
+[archived fence delimiter: ```python]
 save(
     filename: str,
     format: Optional[str] = None,
     **kwargs
 ) -> None
-```
+[archived fence delimiter: ```]
 
 Save circuit to file.
 
@@ -280,25 +287,25 @@ Save circuit to file.
 
 **Supported formats**: png, pdf, svg, tex, txt
 
-```python
+[archived fence delimiter: ```python]
 drawer.save('circuit.png', dpi=300)
 drawer.save('circuit.pdf')
 drawer.save('circuit.tex', standalone=False)
 drawer.save('circuit.svg')
 drawer.save('circuit.txt')  # ASCII
-```
+[archived fence delimiter: ```]
 
 ## Convenience Functions
 
 ### draw_circuit
 
-```python
+[archived fence delimiter: ```python]
 draw_circuit(
     state: QuantumState,
     format: str = 'ascii',
     **kwargs
 ) -> Union[str, Figure]
-```
+[archived fence delimiter: ```]
 
 Draw circuit from QuantumState history.
 
@@ -307,7 +314,7 @@ Draw circuit from QuantumState history.
 - `format`: Output format ('ascii', 'matplotlib', 'latex', 'svg')
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.visualization import draw_circuit
 
@@ -320,17 +327,17 @@ print(draw_circuit(state))
 # Matplotlib figure
 fig = draw_circuit(state, format='matplotlib')
 fig.savefig('ghz.png')
-```
+[archived fence delimiter: ```]
 
 ### draw_state
 
-```python
+[archived fence delimiter: ```python]
 draw_state(
     state: QuantumState,
     basis: str = 'computational',
     format: str = 'bar'
 ) -> matplotlib.figure.Figure
-```
+[archived fence delimiter: ```]
 
 Visualize quantum state amplitudes/probabilities.
 
@@ -340,7 +347,7 @@ Visualize quantum state amplitudes/probabilities.
 - `format`: Plot type ('bar', 'hinton', 'city', 'bloch')
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.visualization import draw_state
 
@@ -355,29 +362,29 @@ fig.savefig('ghz_probs.png')
 state1 = QuantumState(1)
 state1.h(0).t(0)
 fig = draw_state(state1, format='bloch')
-```
+[archived fence delimiter: ```]
 
 ### draw_bloch
 
-```python
+[archived fence delimiter: ```python]
 draw_bloch(
     theta: float,
     phi: float,
     r: float = 1.0,
     **kwargs
 ) -> matplotlib.figure.Figure
-```
+[archived fence delimiter: ```]
 
 Draw point on Bloch sphere.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import draw_bloch
 import numpy as np
 
 # |+⟩ state
 fig = draw_bloch(theta=np.pi/2, phi=0)
 fig.savefig('plus_state.png')
-```
+[archived fence delimiter: ```]
 
 ## Gate Symbols
 
@@ -404,7 +411,7 @@ Standard gate symbols used in diagrams:
 
 ### Built-in Styles
 
-```python
+[archived fence delimiter: ```python]
 # IBM Qiskit style
 drawer = CircuitDrawer(4, style='ibm')
 
@@ -413,11 +420,11 @@ drawer = CircuitDrawer(4, style='google')
 
 # Minimal clean style
 drawer = CircuitDrawer(4, style='minimal')
-```
+[archived fence delimiter: ```]
 
 ### Custom Styles
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import CircuitStyle
 
 custom_style = CircuitStyle(
@@ -434,7 +441,7 @@ custom_style = CircuitStyle(
 )
 
 drawer = CircuitDrawer(3, style=custom_style)
-```
+[archived fence delimiter: ```]
 
 ### Style Properties
 
@@ -457,7 +464,7 @@ drawer = CircuitDrawer(3, style=custom_style)
 
 ### Interactive Display
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import CircuitDrawer
 
 drawer = CircuitDrawer(3)
@@ -467,23 +474,23 @@ drawer.add_gate('CNOT', [1, 2])
 
 # In Jupyter, displays interactively
 drawer  # Auto-renders in notebook
-```
+[archived fence delimiter: ```]
 
 ### Widget Controls
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import InteractiveCircuit
 
 # Create interactive circuit builder
 circuit = InteractiveCircuit(num_qubits=4)
 circuit.display()  # Shows drag-and-drop interface
-```
+[archived fence delimiter: ```]
 
 ## Algorithm Visualization
 
 ### Grover's Algorithm
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import draw_grover_circuit
 
 fig = draw_grover_circuit(
@@ -492,11 +499,11 @@ fig = draw_grover_circuit(
     num_iterations=3
 )
 fig.savefig('grover.png')
-```
+[archived fence delimiter: ```]
 
 ### VQE Ansatz
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import draw_vqe_ansatz
 
 fig = draw_vqe_ansatz(
@@ -505,11 +512,11 @@ fig = draw_vqe_ansatz(
     entanglement='linear'
 )
 fig.savefig('vqe_ansatz.png')
-```
+[archived fence delimiter: ```]
 
 ### QAOA Circuit
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import draw_qaoa_circuit
 
 fig = draw_qaoa_circuit(
@@ -518,13 +525,13 @@ fig = draw_qaoa_circuit(
     show_params=True
 )
 fig.savefig('qaoa.png')
-```
+[archived fence delimiter: ```]
 
 ## Animation
 
 ### Gate-by-Gate Animation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import CircuitAnimator
 
 state = QuantumState(3)
@@ -532,11 +539,11 @@ state.h(0).cnot(0, 1).cnot(1, 2)
 
 animator = CircuitAnimator(state)
 animator.save('circuit_animation.gif', fps=2)
-```
+[archived fence delimiter: ```]
 
 ### State Evolution
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import animate_state_evolution
 
 state = QuantumState(2)
@@ -549,11 +556,11 @@ state.cnot(0, 1)
 history.append(state.get_statevector().copy())
 
 animate_state_evolution(history, 'evolution.gif')
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.visualization import CircuitDrawer, draw_state
 import matplotlib.pyplot as plt
@@ -607,7 +614,7 @@ drawer.save('circuit.pdf')
 drawer.save('circuit.svg')
 print(drawer.to_latex(standalone=False))
 print(drawer.to_ascii())
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -615,3 +622,4 @@ print(drawer.to_ascii())
 - [Algorithms API](algorithms.md) - VQE, QAOA, Grover
 - [PyTorch Integration](torch-layer.md) - Neural network layers
 
+```

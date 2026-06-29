@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: VQE H₂ Molecule
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # VQE H₂ Molecule
 
 Calculate the ground state energy of molecular hydrogen using the Variational Quantum Eigensolver.
@@ -29,7 +36,7 @@ We map this to qubits using the Jordan-Wigner transformation.
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 """
 VQE for H₂ Molecule
 Calculate ground state energy of molecular hydrogen.
@@ -316,11 +323,11 @@ if __name__ == "__main__":
     min_idx = np.argmin(energies)
     print(f"\nEquilibrium bond length: {bond_lengths[min_idx]:.2f} Å")
     print(f"Minimum energy: {energies[min_idx]:.6f} Hartree")
-```
+[archived fence delimiter: ```]
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 /**
  * VQE for H₂ Molecule
  * Ground state calculation using variational method.
@@ -515,11 +522,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 ==================================================
      VQE for H₂ Molecular Ground State
 ==================================================
@@ -552,7 +559,7 @@ Error:                   0.169 mHartree
 
 Equilibrium bond length: 0.74 Å
 Minimum energy: -1.137100 Hartree
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Method
 
@@ -598,7 +605,7 @@ VQE typically achieves chemical accuracy (1 kcal/mol ≈ 1.6 mHartree).
 
 Try a hardware-efficient ansatz:
 
-```python
+[archived fence delimiter: ```python]
 def hardware_efficient_ansatz(params, layers=2):
     state = QuantumState(4)
 
@@ -611,24 +618,24 @@ def hardware_efficient_ansatz(params, layers=2):
             state.cnot(q, q + 1)
 
     return state
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Noise Effects
 
 Add noise to see how it affects accuracy:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import DepolarizingChannel
 
 noise = DepolarizingChannel(error_rate=0.01)
 # Apply after each gate in ansatz
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Parameter Shift Gradient
 
 Implement analytic gradients:
 
-```python
+[archived fence delimiter: ```python]
 def gradient(params, idx, hamiltonian):
     shift = np.pi / 2
     params_plus = params.copy()
@@ -640,7 +647,7 @@ def gradient(params, idx, hamiltonian):
     E_minus = compute_energy(params_minus, hamiltonian)
 
     return (E_plus - E_minus) / 2
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -648,3 +655,4 @@ def gradient(params, idx, hamiltonian):
 - [Custom Hamiltonians](../../guides/custom-hamiltonians.md) - Build Hamiltonians
 - [C API: VQE](../../api/c/vqe.md) - API reference
 
+```

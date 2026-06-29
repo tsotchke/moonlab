@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quantum Computing Basics
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quantum Computing Basics
 
 This document provides a comprehensive introduction to the fundamental concepts of quantum computing. We cover qubits, superposition, entanglement, and the basic operations that form the foundation of quantum computation.
@@ -125,11 +132,11 @@ These form an orthonormal basis for 2-qubit states.
 
 The Bell state $|\Phi^+\rangle$ is created by:
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──
            │
 |0⟩ ───────⊕──
-```
+[archived fence delimiter: ```]
 
 1. Start with $|00\rangle$
 2. Apply Hadamard: $\frac{1}{\sqrt{2}}(|00\rangle + |10\rangle)$
@@ -202,11 +209,11 @@ Quantum computation is typically expressed as circuits:
 - **Boxes** represent gates
 - **Measurement** is shown with a meter symbol
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──[M]───
            │
 |0⟩ ───────⊕──[M]───
-```
+[archived fence delimiter: ```]
 
 ### Common Gates
 
@@ -235,9 +242,9 @@ To apply gate $U$ to qubit $k$ in an $n$-qubit system:
 $$U_k = I^{\otimes (n-k-1)} \otimes U \otimes I^{\otimes k}$$
 
 In Moonlab, you simply specify the target qubit:
-```c
+[archived fence delimiter: ```c]
 gate_hadamard(&state, 2);  // Apply H to qubit 2
-```
+[archived fence delimiter: ```]
 
 ## Quantum Parallelism
 
@@ -293,3 +300,4 @@ Key insight: Amplitude amplification increases the amplitude of the target state
 - [Quantum Gates](quantum-gates.md): Detailed gate mathematics
 - [Measurement Theory](measurement-theory.md): Deeper dive into measurement
 - [Entanglement Measures](entanglement-measures.md): Quantifying entanglement
+```

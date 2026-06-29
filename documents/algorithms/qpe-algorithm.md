@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QPE Algorithm
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QPE Algorithm
 
 Complete guide to Quantum Phase Estimation.
@@ -32,14 +39,14 @@ $$\phi \approx 0.\phi_1\phi_2\ldots\phi_t = \sum_{j=1}^t \phi_j 2^{-j}$$
 
 ### Circuit
 
-```
+[archived fence delimiter: ```]
 |0⟩ ─────H───────────●─────────────────────[QFT†]─ φ₁
 |0⟩ ─────H───────────│────●────────────────[QFT†]─ φ₂
  ⋮                   │    │         ⋮
 |0⟩ ─────H───────────│────│────●───────────[QFT†]─ φₜ
                      │    │    │
 |u⟩ ─────────────────U────U²───U^(2^(t-1))─────────
-```
+[archived fence delimiter: ```]
 
 ### State Evolution
 
@@ -57,7 +64,7 @@ where $\tilde{\phi}$ is the $t$-bit approximation of $\phi$.
 
 ### Basic QPE
 
-```c
+[archived fence delimiter: ```c]
 #include "qpe.h"
 
 int main() {
@@ -79,11 +86,11 @@ int main() {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python Interface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QPE
 from moonlab import QuantumState
 
@@ -106,7 +113,7 @@ result = qpe.estimate(
 print(f"Estimated phase: {result['phase']:.6f}")
 print(f"Binary representation: {result['binary']}")
 print(f"Probability: {result['probability']:.4f}")
-```
+[archived fence delimiter: ```]
 
 ## Circuit Components
 
@@ -114,7 +121,7 @@ print(f"Probability: {result['probability']:.4f}")
 
 Implement $U^{2^j}$ efficiently:
 
-```python
+[archived fence delimiter: ```python]
 def controlled_u_power(state, control, targets, power):
     """
     Apply controlled-U^(2^power).
@@ -130,11 +137,11 @@ def controlled_u_power(state, control, targets, power):
         # General case: apply U 2^power times
         for _ in range(2 ** power):
             apply_controlled_u(state, control, targets)
-```
+[archived fence delimiter: ```]
 
 ### Inverse QFT
 
-```python
+[archived fence delimiter: ```python]
 def inverse_qft(state, qubits):
     """Apply inverse QFT to specified qubits."""
     n = len(qubits)
@@ -151,11 +158,11 @@ def inverse_qft(state, qubits):
     # Reverse qubit order
     for i in range(n // 2):
         state.swap(qubits[i], qubits[n - 1 - i])
-```
+[archived fence delimiter: ```]
 
 ### Full QPE Circuit
 
-```python
+[archived fence delimiter: ```python]
 def qpe_circuit(precision_qubits, target_qubits, controlled_u, eigenstate_prep):
     """
     Full QPE circuit.
@@ -184,7 +191,7 @@ def qpe_circuit(precision_qubits, target_qubits, controlled_u, eigenstate_prep):
     inverse_qft(state, range(n_precision))
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Precision Analysis
 
@@ -222,7 +229,7 @@ For Hamiltonian $H = \sum_j E_j |E_j\rangle\langle E_j|$:
 
 $$U = e^{iHt} \implies \phi_j = \frac{E_j t}{2\pi}$$
 
-```python
+[archived fence delimiter: ```python]
 def estimate_energy(hamiltonian, eigenstate, precision=8):
     """Use QPE to extract energy eigenvalue."""
     def controlled_evolution(state, control, targets, power):
@@ -238,7 +245,7 @@ def estimate_energy(hamiltonian, eigenstate, precision=8):
     # Convert phase to energy
     energy = result['phase'] * 2 * np.pi / dt
     return energy
-```
+[archived fence delimiter: ```]
 
 ### Order Finding
 
@@ -260,7 +267,7 @@ QPE on Grover operator gives $\theta$, from which $M$ is computed.
 
 For limited qubit count, use iterative phase estimation:
 
-```python
+[archived fence delimiter: ```python]
 def iterative_qpe(controlled_u, eigenstate_prep, precision, shots_per_bit=100):
     """
     Iterative QPE using single ancilla qubit.
@@ -297,13 +304,13 @@ def iterative_qpe(controlled_u, eigenstate_prep, precision, shots_per_bit=100):
     # Construct phase
     phase = sum(phase_bits[j] * 2**(-j-1) for j in range(precision))
     return phase
-```
+[archived fence delimiter: ```]
 
 ## Hadamard Test
 
 Simplified version for estimating $\text{Re}(\langle\psi|U|\psi\rangle)$:
 
-```python
+[archived fence delimiter: ```python]
 def hadamard_test(state_prep, unitary, shots=1000):
     """
     Estimate Re(⟨ψ|U|ψ⟩).
@@ -332,7 +339,7 @@ def hadamard_test(state_prep, unitary, shots=1000):
     # Re(⟨ψ|U|ψ⟩) = P(0) - P(1)
     p0 = results.count(0) / shots
     return 2 * p0 - 1
-```
+[archived fence delimiter: ```]
 
 For imaginary part, add S† before final Hadamard.
 
@@ -342,7 +349,7 @@ For imaginary part, add S† before final Hadamard.
 
 Iterative QPE is more noise-resilient than standard QPE:
 
-```python
+[archived fence delimiter: ```python]
 # Configure noise-resilient QPE
 qpe = QPE(
     precision_qubits=8,
@@ -350,11 +357,11 @@ qpe = QPE(
     error_mitigation='bayesian',
     shots_per_bit=500
 )
-```
+[archived fence delimiter: ```]
 
 ### Post-Selection
 
-```python
+[archived fence delimiter: ```python]
 def qpe_with_verification(controlled_u, eigenstate_prep, precision):
     """QPE with eigenstate verification."""
     result = qpe.estimate(controlled_u, eigenstate_prep)
@@ -368,7 +375,7 @@ def qpe_with_verification(controlled_u, eigenstate_prep, precision):
     else:
         # Retry or report failure
         return qpe_with_verification(controlled_u, eigenstate_prep, precision)
-```
+[archived fence delimiter: ```]
 
 ## Complexity Analysis
 
@@ -385,7 +392,7 @@ Where:
 
 ## Example: T Gate Phase
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QPE
 import numpy as np
 
@@ -407,7 +414,7 @@ result = qpe.estimate(
 print(f"Estimated phase: {result['phase']:.6f}")
 print(f"Expected: 0.125000")
 print(f"Binary: {result['binary']}")  # Should be 001000 (1/8)
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -421,3 +428,4 @@ print(f"Binary: {result['binary']}")  # Should be 001000 (1/8)
 2. Nielsen, M. A., & Chuang, I. L. (2010). "Quantum Computation and Quantum Information." Cambridge University Press. Chapter 5.2.
 3. Svore, K. et al. (2013). "Faster Phase Estimation." Quantum Information & Computation, 14, 306-328.
 
+```

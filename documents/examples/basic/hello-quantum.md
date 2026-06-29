@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Hello Quantum
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Hello Quantum
 
 Your first quantum program demonstrating superposition and measurement.
@@ -29,7 +36,7 @@ Measurement probabilities:
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 """
 Hello Quantum - First Quantum Program
 Demonstrates superposition and measurement with a single qubit.
@@ -102,11 +109,11 @@ if __name__ == "__main__":
     # Amplitude inspection
     print("=== Amplitude Analysis ===\n")
     examine_amplitudes()
-```
+[archived fence delimiter: ```]
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Hello Quantum - First Quantum Program
  * Demonstrates superposition and measurement.
@@ -197,11 +204,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 === Hello Quantum ===
 
 Single quantum coin flip: 1
@@ -226,15 +233,15 @@ After Hadamard (superposition):
 After measurement (collapsed to |0⟩):
   Amplitudes: [(1+0j), 0j]
   Probabilities: [1.0, 0.0]
-```
+[archived fence delimiter: ```]
 
 ## Line-by-Line Explanation
 
 ### Creating the State
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
-```
+[archived fence delimiter: ```]
 
 Creates a quantum register with 1 qubit, initialized to |0⟩. The state vector is [1, 0], meaning:
 - Amplitude of |0⟩ = 1 (100% probability)
@@ -242,9 +249,9 @@ Creates a quantum register with 1 qubit, initialized to |0⟩. The state vector 
 
 ### Applying Hadamard
 
-```python
+[archived fence delimiter: ```python]
 state.h(0)
-```
+[archived fence delimiter: ```]
 
 The Hadamard gate transforms the computational basis states:
 - H|0⟩ = (|0⟩ + |1⟩)/√2
@@ -254,9 +261,9 @@ This creates an equal superposition with amplitudes [1/√2, 1/√2] ≈ [0.707,
 
 ### Measurement
 
-```python
+[archived fence delimiter: ```python]
 result = state.measure(0)
-```
+[archived fence delimiter: ```]
 
 Measurement collapses the superposition according to the Born rule:
 - Probability of outcome is |amplitude|²
@@ -276,29 +283,29 @@ Measurement collapses the superposition according to the Born rule:
 
 Start with |1⟩ instead of |0⟩:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 state.x(0)  # Flip to |1⟩
 state.h(0)  # Apply Hadamard
 # What's different about the amplitudes?
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Multiple Qubits
 
 Create superposition of all basis states:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(3)
 for i in range(3):
     state.h(i)
 # Each of 8 basis states has equal probability
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Phase Matters
 
 Compare superposition with different phases:
 
-```python
+[archived fence delimiter: ```python]
 # |+⟩ = (|0⟩ + |1⟩)/√2
 state1 = QuantumState(1)
 state1.h(0)
@@ -309,7 +316,7 @@ state2.x(0)
 state2.h(0)
 
 # Both give 50/50 measurement, but have different phases
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -317,3 +324,4 @@ state2.h(0)
 - [Quantum Gates Tour](../../tutorials/02-quantum-gates-tour.md) - Explore more gates
 - [State Vector Simulation](../../concepts/state-vector-simulation.md) - How it works
 
+```

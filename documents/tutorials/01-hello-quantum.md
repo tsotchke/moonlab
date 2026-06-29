@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 01: Hello Quantum
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 01: Hello Quantum
 
 Create your first quantum program.
@@ -25,7 +32,7 @@ A quantum state holds the information about our qubits. Let's start with a singl
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 # Create a 1-qubit state
@@ -34,17 +41,17 @@ state = QuantumState(1)
 # Check the initial state
 print("Initial amplitudes:", state.get_amplitudes())
 print("Initial probabilities:", state.probabilities())
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 Initial amplitudes: [(1+0j), 0j]
 Initial probabilities: [1.0, 0.0]
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include <stdio.h>
 #include "quantum_sim.h"
 
@@ -59,13 +66,13 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 P(|0>) = 1.000000
 P(|1>) = 0.000000
-```
+[archived fence delimiter: ```]
 
 ### Understanding the Output
 
@@ -83,7 +90,7 @@ $$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 # Apply Hadamard gate to qubit 0
 state.h(0)
 
@@ -91,18 +98,18 @@ state.h(0)
 print("After H gate:")
 print("Amplitudes:", state.get_amplitudes())
 print("Probabilities:", state.probabilities())
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 After H gate:
 Amplitudes: [(0.707+0j), (0.707+0j)]
 Probabilities: [0.5, 0.5]
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 // Apply Hadamard gate
 gate_hadamard(state, 0);
 
@@ -110,14 +117,14 @@ gate_hadamard(state, 0);
 printf("After H gate:\n");
 printf("P(|0>) = %f\n", quantum_state_probability(state, 0));
 printf("P(|1>) = %f\n", quantum_state_probability(state, 1));
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 After H gate:
 P(|0>) = 0.500000
 P(|1>) = 0.500000
-```
+[archived fence delimiter: ```]
 
 ### What Happened?
 
@@ -134,7 +141,7 @@ When we measure, the superposition "collapses" to one definite outcome.
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 # Reset and create fresh superposition
 state.reset()
 state.h(0)
@@ -145,17 +152,17 @@ print(f"Measurement result: {result}")
 
 # Check probabilities after measurement
 print("After measurement:", state.probabilities())
-```
+[archived fence delimiter: ```]
 
 **Output** (will vary):
-```
+[archived fence delimiter: ```]
 Measurement result: 0
 After measurement: [1.0, 0.0]
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 // Reset and create fresh superposition
 quantum_state_reset(state);
 gate_hadamard(state, 0);
@@ -163,7 +170,7 @@ gate_hadamard(state, 0);
 // Measure the qubit
 int result = quantum_state_measure(state, 0);
 printf("Measurement result: %d\n", result);
-```
+[archived fence delimiter: ```]
 
 ### What Happened?
 
@@ -179,7 +186,7 @@ Let's run many measurements to see the 50/50 distribution.
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 # Run 1000 experiments
 results = {'0': 0, '1': 0}
 
@@ -191,17 +198,17 @@ for _ in range(1000):
 
 print(f"Results: {results}")
 print(f"Ratio: {results['0']/1000:.1%} zeros, {results['1']/1000:.1%} ones")
-```
+[archived fence delimiter: ```]
 
 **Output** (approximately):
-```
+[archived fence delimiter: ```]
 Results: {'0': 498, '1': 502}
 Ratio: 49.8% zeros, 50.2% ones
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 int zeros = 0, ones = 0;
 
 for (int i = 0; i < 1000; i++) {
@@ -215,7 +222,7 @@ for (int i = 0; i < 1000; i++) {
 printf("Results: %d zeros, %d ones\n", zeros, ones);
 printf("Ratio: %.1f%% zeros, %.1f%% ones\n",
        100.0 * zeros / 1000, 100.0 * ones / 1000);
-```
+[archived fence delimiter: ```]
 
 ### What This Shows
 
@@ -225,7 +232,7 @@ The measurements are truly random with a 50/50 distribution. This is fundamental
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 #!/usr/bin/env python3
 """Hello Quantum - First quantum program."""
 
@@ -266,11 +273,11 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 /* hello_quantum.c - First quantum program */
 
 #include <stdio.h>
@@ -315,7 +322,7 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -330,25 +337,25 @@ Modify the code to create other superposition states:
 
 Create a 2-qubit state and put both qubits in superposition:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.h(0)
 state.h(1)
 print(state.probabilities())  # Should be [0.25, 0.25, 0.25, 0.25]
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Bloch Sphere Visualization
 
 If using the Python API with visualization:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.visualization import draw_bloch
 
 state = QuantumState(1)
 state.h(0)
 fig = draw_bloch(state)
 fig.savefig('superposition.png')
-```
+[archived fence delimiter: ```]
 
 ## Key Takeaways
 
@@ -369,3 +376,4 @@ You've created your first quantum program! Next, we'll explore all the quantum g
 - [Quantum Gates](../concepts/quantum-gates.md) - Gate mathematics
 - [C API: Quantum State](../api/c/quantum-state.md) - Complete API reference
 
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Concepts
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Concepts
 
 This section provides comprehensive theoretical foundations for quantum computing and simulation. Each topic builds on fundamental principles with mathematical rigor while remaining accessible to those new to the field.
@@ -35,7 +42,7 @@ Understanding quantum computing requires familiarity with concepts from linear a
 
 ## Concept Map
 
-```
+[archived fence delimiter: ```]
                         ┌─────────────────────┐
                         │   Linear Algebra    │
                         │  Complex numbers    │
@@ -78,7 +85,7 @@ Understanding quantum computing requires familiarity with concepts from linear a
 │  • DMRG                                  │
 │  • Large-scale simulation                │
 └──────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Reading Guide
 
@@ -153,3 +160,4 @@ In simulation, we often set $\hbar = 1$ (natural units).
 ### Research Databases
 - arXiv quant-ph
 - Quantum journal (open access)
+```

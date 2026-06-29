@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Entanglement Measures
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Entanglement Measures
 
 Quantifying quantum correlations.
@@ -59,9 +66,9 @@ where $\rho_A = \text{Tr}_B[|\psi\rangle\langle\psi|]$ is the reduced density ma
 
 **Interpretation**: Measures quantum correlations between A and B.
 
-```c
+[archived fence delimiter: ```c]
 double entropy = quantum_state_entanglement_entropy(state, qubits_A, num_qubits_A);
-```
+[archived fence delimiter: ```]
 
 ### Examples
 
@@ -85,9 +92,9 @@ $$\gamma = \text{Tr}[\rho^2] = \sum_i \lambda_i^2$$
 - $\gamma = 1$ iff $\rho$ is pure
 - $\gamma = 1/d$ for maximally mixed state
 
-```c
+[archived fence delimiter: ```c]
 double purity = quantum_state_purity(state);
-```
+[archived fence delimiter: ```]
 
 ### Linear Entropy
 
@@ -114,9 +121,9 @@ $$F(\rho, \sigma) = \left(\text{Tr}\sqrt{\sqrt{\rho}\sigma\sqrt{\rho}}\right)^2$
 - $F = 1$ iff $\rho = \sigma$
 - $F = 0$ iff $\rho \perp \sigma$ (orthogonal support)
 
-```c
+[archived fence delimiter: ```c]
 double fidelity = quantum_state_fidelity(state1, state2);
-```
+[archived fence delimiter: ```]
 
 ### Uhlmann's Theorem
 
@@ -145,9 +152,9 @@ and $\tilde{\rho} = (Y \otimes Y) \rho^* (Y \otimes Y)$.
 - $C = 0$ for separable states
 - $C = 1$ for maximally entangled Bell states
 
-```c
+[archived fence delimiter: ```c]
 double concurrence = quantum_state_concurrence(state, qubit_a, qubit_b);
-```
+[archived fence delimiter: ```]
 
 ### Entanglement of Formation
 
@@ -255,7 +262,7 @@ This enables simulation of large systems.
 
 ### Computing Reduced Density Matrix
 
-```c
+[archived fence delimiter: ```c]
 // Get reduced density matrix for subsystem
 complex_t* rho_reduced = quantum_state_reduced_density_matrix(
     state,
@@ -273,20 +280,20 @@ for (int i = 0; i < dim; i++) {
         entropy -= eigenvalues[i] * log2(eigenvalues[i]);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Efficient Entropy Calculation
 
 For pure states, use Schmidt decomposition instead of full density matrix:
 
-```c
+[archived fence delimiter: ```c]
 // Compute entanglement entropy via singular values
 double entropy = quantum_state_entanglement_entropy_svd(
     state,
     partition_qubits,
     num_partition_qubits
 );
-```
+[archived fence delimiter: ```]
 
 Complexity: $O(2^n \cdot \min(2^{n_A}, 2^{n_B})^2)$ vs. $O(4^n)$ for full $\rho$.
 
@@ -313,3 +320,4 @@ Complexity: $O(2^n \cdot \min(2^{n_A}, 2^{n_B})^2)$ vs. $O(4^n)$ for full $\rho$
 - [Tensor Networks](tensor-networks.md) - Efficient representation of low-entanglement states
 - [C API: Entanglement](../api/c/entanglement.md) - Function reference
 
+```

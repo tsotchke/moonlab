@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Entropy API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Entropy API
 
 Complete reference for cryptographically secure random number generation in the C library.
@@ -30,7 +37,7 @@ The entropy module provides high-quality random number generation for quantum me
 
 Entropy source selection.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     ENTROPY_SOURCE_AUTO,      // Automatic best-available selection
     ENTROPY_SOURCE_HARDWARE,  // CPU hardware RNG (RDRAND/RDSEED)
@@ -39,13 +46,13 @@ typedef enum {
     ENTROPY_SOURCE_MIXED,     // Combined sources with mixing
     ENTROPY_SOURCE_QUANTUM    // Quantum hardware (if available)
 } entropy_source_type_t;
-```
+[archived fence delimiter: ```]
 
 ### entropy_config_t
 
 Entropy source configuration.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     entropy_source_type_t primary_source;    // Primary entropy source
     entropy_source_type_t fallback_source;   // Fallback if primary fails
@@ -54,13 +61,13 @@ typedef struct {
     int quality_threshold;                   // Minimum acceptable quality
     int enable_health_check;                 // Enable continuous testing
 } entropy_config_t;
-```
+[archived fence delimiter: ```]
 
 ### entropy_ctx_t
 
 Entropy context structure.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     entropy_source_type_t active_source;    // Currently active source
 
@@ -83,13 +90,13 @@ typedef struct {
     int has_rdseed;                         // RDSEED available
     int has_quantum;                        // Quantum source available
 } entropy_ctx_t;
-```
+[archived fence delimiter: ```]
 
 ### entropy_quality_t
 
 Entropy quality assessment result.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double estimated_entropy;    // Bits of entropy per byte (0-8)
     double chi_square;           // Chi-square uniformity test
@@ -99,7 +106,7 @@ typedef struct {
     int passed_poker;            // Poker test
     int overall_quality;         // 0-100 quality score
 } entropy_quality_t;
-```
+[archived fence delimiter: ```]
 
 ## Initialization and Cleanup
 
@@ -107,9 +114,9 @@ typedef struct {
 
 Create entropy context with configuration.
 
-```c
+[archived fence delimiter: ```c]
 entropy_ctx_t* entropy_create(const entropy_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `config`: Configuration (NULL for defaults)
@@ -123,7 +130,7 @@ entropy_ctx_t* entropy_create(const entropy_config_t *config);
 - Health checks enabled
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Default configuration
 entropy_ctx_t *entropy = entropy_create(NULL);
 
@@ -136,15 +143,15 @@ entropy_config_t config = {
     .enable_health_check = 1
 };
 entropy_ctx_t *entropy = entropy_create(&config);
-```
+[archived fence delimiter: ```]
 
 ### entropy_create_default
 
 Create entropy context with default settings.
 
-```c
+[archived fence delimiter: ```c]
 entropy_ctx_t* entropy_create_default(void);
-```
+[archived fence delimiter: ```]
 
 Equivalent to `entropy_create(NULL)`.
 
@@ -152,9 +159,9 @@ Equivalent to `entropy_create(NULL)`.
 
 Free entropy context and securely wipe state.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_destroy(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Security**: Zeros all internal state before freeing.
 
@@ -162,12 +169,12 @@ void entropy_destroy(entropy_ctx_t *ctx);
 
 Initialize entropy context in-place.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_init(
     entropy_ctx_t *ctx,
     const entropy_config_t *config
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ctx`: Pre-allocated context structure
@@ -179,9 +186,9 @@ int entropy_init(
 
 Clean up in-place initialized context.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_cleanup(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ## Random Number Generation
 
@@ -189,13 +196,13 @@ void entropy_cleanup(entropy_ctx_t *ctx);
 
 Generate random bytes.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_bytes(
     entropy_ctx_t *ctx,
     uint8_t *buffer,
     size_t count
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ctx`: Entropy context
@@ -205,18 +212,18 @@ int entropy_bytes(
 **Returns**: 0 on success, -1 on error
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 uint8_t random_bytes[32];
 entropy_bytes(entropy, random_bytes, sizeof(random_bytes));
-```
+[archived fence delimiter: ```]
 
 ### entropy_uint64
 
 Generate random 64-bit unsigned integer.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t entropy_uint64(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Random value in [0, UINT64_MAX]
 
@@ -224,17 +231,17 @@ uint64_t entropy_uint64(entropy_ctx_t *ctx);
 
 Generate random 32-bit unsigned integer.
 
-```c
+[archived fence delimiter: ```c]
 uint32_t entropy_uint32(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### entropy_double
 
 Generate random double in [0, 1).
 
-```c
+[archived fence delimiter: ```c]
 double entropy_double(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Uniformly distributed value in [0, 1)
 
@@ -246,25 +253,25 @@ double entropy_double(entropy_ctx_t *ctx);
 
 Generate random double in [min, max).
 
-```c
+[archived fence delimiter: ```c]
 double entropy_double_range(
     entropy_ctx_t *ctx,
     double min,
     double max
 );
-```
+[archived fence delimiter: ```]
 
 ### entropy_gaussian
 
 Generate Gaussian-distributed random value.
 
-```c
+[archived fence delimiter: ```c]
 double entropy_gaussian(
     entropy_ctx_t *ctx,
     double mean,
     double stddev
 );
-```
+[archived fence delimiter: ```]
 
 **Algorithm**: Box-Muller transform
 
@@ -274,12 +281,12 @@ double entropy_gaussian(
 
 Generate exponentially-distributed random value.
 
-```c
+[archived fence delimiter: ```c]
 double entropy_exponential(
     entropy_ctx_t *ctx,
     double lambda
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Decay times, waiting times
 
@@ -287,12 +294,12 @@ double entropy_exponential(
 
 Generate Poisson-distributed random integer.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t entropy_poisson(
     entropy_ctx_t *ctx,
     double lambda
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Photon counting, shot noise
 
@@ -302,16 +309,16 @@ uint64_t entropy_poisson(
 
 Generate threshold for quantum measurement.
 
-```c
+[archived fence delimiter: ```c]
 double entropy_measurement_threshold(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Value in [0, 1) for measurement sampling
 
 **Use Case**: Born rule sampling
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 double threshold = entropy_measurement_threshold(entropy);
 double cumulative = 0.0;
 uint64_t outcome = 0;
@@ -323,15 +330,15 @@ for (size_t i = 0; i < state_dim; i++) {
         break;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### entropy_phase
 
 Generate random phase angle.
 
-```c
+[archived fence delimiter: ```c]
 double entropy_phase(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Uniformly distributed angle in [0, 2π)
 
@@ -341,13 +348,13 @@ double entropy_phase(entropy_ctx_t *ctx);
 
 Generate random point on Bloch sphere.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_bloch_sphere(
     entropy_ctx_t *ctx,
     double *theta,
     double *phi
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `theta`: Output: polar angle [0, π]
@@ -359,12 +366,12 @@ void entropy_bloch_sphere(
 
 Generate random 2×2 unitary matrix (Haar-distributed).
 
-```c
+[archived fence delimiter: ```c]
 void entropy_unitary_2x2(
     entropy_ctx_t *ctx,
     complex_t matrix[4]
 );
-```
+[archived fence delimiter: ```]
 
 **Distribution**: Haar measure on U(2)
 
@@ -374,14 +381,14 @@ void entropy_unitary_2x2(
 
 Randomly permute array (Fisher-Yates shuffle).
 
-```c
+[archived fence delimiter: ```c]
 void entropy_shuffle(
     entropy_ctx_t *ctx,
     void *array,
     size_t element_size,
     size_t count
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Random circuit generation, measurement order
 
@@ -391,9 +398,9 @@ void entropy_shuffle(
 
 Force reseed from entropy source.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_reseed(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 0 on success, -1 on error
 
@@ -403,14 +410,14 @@ int entropy_reseed(entropy_ctx_t *ctx);
 
 Add external entropy to pool.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_add_entropy(
     entropy_ctx_t *ctx,
     const uint8_t *data,
     size_t size,
     size_t estimated_bits
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `data`: Entropy data to add
@@ -423,9 +430,9 @@ int entropy_add_entropy(
 
 Mix entropy pool without adding new entropy.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_stir(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Action**: Cryptographic mixing of pool state
 
@@ -433,9 +440,9 @@ void entropy_stir(entropy_ctx_t *ctx);
 
 Get current entropy pool level.
 
-```c
+[archived fence delimiter: ```c]
 size_t entropy_get_pool_level(const entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Estimated bits of entropy in pool
 
@@ -445,12 +452,12 @@ size_t entropy_get_pool_level(const entropy_ctx_t *ctx);
 
 Assess quality of entropy source.
 
-```c
+[archived fence delimiter: ```c]
 entropy_quality_t entropy_assess_quality(
     entropy_ctx_t *ctx,
     size_t sample_size
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ctx`: Entropy context
@@ -459,7 +466,7 @@ entropy_quality_t entropy_assess_quality(
 **Returns**: Quality assessment structure
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 entropy_quality_t quality = entropy_assess_quality(entropy, 100000);
 
 printf("Entropy: %.2f bits/byte\n", quality.estimated_entropy);
@@ -468,15 +475,15 @@ printf("Quality score: %d/100\n", quality.overall_quality);
 if (quality.overall_quality < 80) {
     fprintf(stderr, "Warning: Low entropy quality\n");
 }
-```
+[archived fence delimiter: ```]
 
 ### entropy_self_test
 
 Run self-test on entropy source.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_self_test(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if passed, 0 if failed
 
@@ -489,9 +496,9 @@ int entropy_self_test(entropy_ctx_t *ctx);
 
 Get information about active entropy source.
 
-```c
+[archived fence delimiter: ```c]
 const char* entropy_get_source_info(const entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Human-readable source description
 
@@ -501,9 +508,9 @@ const char* entropy_get_source_info(const entropy_ctx_t *ctx);
 
 Check for hardware RNG support.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_has_hardware_rng(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if RDRAND/RDSEED available, 0 otherwise
 
@@ -511,9 +518,9 @@ int entropy_has_hardware_rng(void);
 
 Check for RDSEED support (true hardware entropy).
 
-```c
+[archived fence delimiter: ```c]
 int entropy_has_rdseed(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if RDSEED available, 0 otherwise
 
@@ -523,12 +530,12 @@ int entropy_has_rdseed(void);
 
 Detect all available entropy sources.
 
-```c
+[archived fence delimiter: ```c]
 int entropy_detect_sources(
     int *sources,
     size_t max_sources
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `sources`: Output array of entropy_source_type_t values
@@ -542,22 +549,22 @@ int entropy_detect_sources(
 
 Get generation statistics.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_get_stats(
     const entropy_ctx_t *ctx,
     size_t *bytes_generated,
     size_t *reseeds,
     double *last_quality
 );
-```
+[archived fence delimiter: ```]
 
 ### entropy_reset_stats
 
 Reset statistics counters.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_reset_stats(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -565,9 +572,9 @@ void entropy_reset_stats(entropy_ctx_t *ctx);
 
 Create thread-local entropy context.
 
-```c
+[archived fence delimiter: ```c]
 entropy_ctx_t* entropy_create_thread_local(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Thread-local context (automatically cleaned up)
 
@@ -575,21 +582,21 @@ entropy_ctx_t* entropy_create_thread_local(void);
 
 Acquire lock for thread-safe access.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_lock(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### entropy_unlock
 
 Release lock.
 
-```c
+[archived fence delimiter: ```c]
 void entropy_unlock(entropy_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/utils/entropy.h"
 #include "src/quantum/state.h"
 #include <stdio.h>
@@ -665,7 +672,7 @@ int main(void) {
     entropy_destroy(entropy);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Security Considerations
 
@@ -679,3 +686,4 @@ int main(void) {
 - [Quantum State API](quantum-state.md) - Uses entropy for measurement
 - [Noise API](noise.md) - Uses entropy for stochastic channels
 - [Grover API](grover.md) - Uses entropy for quantum sampling
+```

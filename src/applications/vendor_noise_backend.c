@@ -182,8 +182,7 @@ int moonlab_unregister_vendor_noise_profile(const char *name)
     return MOONLAB_SCHED_BACKEND_NOT_FOUND;
 }
 
-const moonlab_vendor_noise_profile_t *
-moonlab_lookup_vendor_noise_profile(const char *name)
+const moonlab_vendor_noise_profile_t *moonlab_lookup_vendor_noise_profile(const char *name)
 {
     if (!name) return NULL;
     ensure_profile_registry();

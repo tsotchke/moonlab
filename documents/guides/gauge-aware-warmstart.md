@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Gauge-aware warmstart guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Gauge-aware warmstart guide
 
 How to use the v0.2.1 stabilizer-subgroup warmstart to project a
@@ -43,7 +50,7 @@ they cost nothing in MPS bond dimension.
 
 ## Calling it from C
 
-```c
+[archived fence delimiter: ```c]
 #include "applications/moonlab_export.h"
 
 moonlab_ca_mps_t* state = moonlab_ca_mps_create(num_qubits, 32);
@@ -62,11 +69,11 @@ if (rc != 0) {
 }
 
 /* state->D|0^n> is now in the +1 eigenspace of every generator. */
-```
+[archived fence delimiter: ```]
 
 ## Calling it from Python
 
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 from moonlab import CAMPS, gauge_warmstart
 
@@ -80,11 +87,11 @@ generators = np.array([
 state = CAMPS(num_qubits=3, max_bond_dim=8)
 gauge_warmstart(state, generators)
 # state is now the GHZ-3 state (|000> + |111>) / sqrt(2).
-```
+[archived fence delimiter: ```]
 
 ## Calling it from Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::{CaMps, gauge_warmstart};
 
 // Bell-pair stabilizers {XX, ZZ}.
@@ -96,11 +103,11 @@ let generators: [u8; 4] = [
 let mut state = CaMps::new(2, 8)?;
 gauge_warmstart(&mut state, &generators, /*num_gens=*/2)?;
 // state.D|00> is the Bell state.
-```
+[archived fence delimiter: ```]
 
 ## Calling it from JS / WASM
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { CaMps, gaugeWarmstart } from '@moonlab/quantum-core';
 
 const generators = new Uint8Array([
@@ -112,7 +119,7 @@ const state = await CaMps.create(2, 8);
 gaugeWarmstart(state, generators, /*numGens=*/2);
 // state.norm === 1.0
 state.dispose();
-```
+[archived fence delimiter: ```]
 
 ## Diagnosing failures
 
@@ -155,3 +162,4 @@ that constrains the greedy gate search (open research item).
 - `documents/api/c/ca-mps.md` -- C API.
 - `MATH.md` §12 -- algorithm proof.
 - `docs/research/var_d_lattice_gauge_theory.md` -- Z2 LGT case study.
+```

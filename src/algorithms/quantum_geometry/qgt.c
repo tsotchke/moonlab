@@ -832,6 +832,17 @@ void qgt_free_nband(qgt_system_n_t* sys) {
     free(sys);
 }
 
+int qgt_eval_nband_hamiltonian(const qgt_system_n_t* sys,
+                               const double k[2],
+                               qgt_complex_t* h,
+                               size_t h_count) {
+    if (!sys || !sys->fn || !k || !h) return -1;
+    const size_t n = sys->n_bands;
+    if (n == 0 || h_count / n < n) return -1;
+    sys->fn(k, sys->user, h);
+    return 0;
+}
+
 /* Compute the lowest-energy n_occupied eigenvectors of H at momentum k.
  * Output @p u_occ is row-major (n_bands, n_occupied): u_occ[i*M + a] is
  * the i-th component of the a-th occupied band, sorted by ascending

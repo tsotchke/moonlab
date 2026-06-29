@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tensor Networks
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tensor Networks
 
 Efficient representation of quantum many-body states.
@@ -41,7 +48,7 @@ A **tensor** is a multi-dimensional array. Index notation:
 
 Graphical notation for tensor operations:
 
-```
+[archived fence delimiter: ```]
 Scalar:       ●
 
 Vector:       ●──i
@@ -51,7 +58,7 @@ Matrix:    j──●──i
 3-tensor:     i
               │
             j─●─k
-```
+[archived fence delimiter: ```]
 
 Each leg represents an index. Connected legs = contraction (summation).
 
@@ -63,9 +70,9 @@ $$C_{ik} = \sum_j A_{ij} B_{jk}$$
 
 Diagrammatically:
 
-```
+[archived fence delimiter: ```]
 i──[A]──j──[B]──k   →   i──[C]──k
-```
+[archived fence delimiter: ```]
 
 ## Matrix Product States (MPS)
 
@@ -82,11 +89,11 @@ where:
 
 ### Diagram
 
-```
+[archived fence delimiter: ```]
 |i₁⟩    |i₂⟩    |i₃⟩         |iₙ⟩
   │       │       │             │
 [A¹]───[A²]───[A³]───...───[Aⁿ]
-```
+[archived fence delimiter: ```]
 
 ### Storage
 
@@ -105,7 +112,7 @@ MPS storage scales as $O(n \chi^2 d)$ where:
 
 ### MPS in Moonlab
 
-```c
+[archived fence delimiter: ```c]
 // Create MPS with bond dimension 32
 mps_state_t* mps = mps_create(num_qubits, 32);
 
@@ -121,7 +128,7 @@ double exp_z = mps_expectation_z(mps, qubit);
 
 // Get full state vector (if small enough)
 complex_t* amplitudes = mps_to_statevector(mps);
-```
+[archived fence delimiter: ```]
 
 ## Canonical Forms
 
@@ -145,18 +152,18 @@ Tensors are right-orthonormal.
 
 Left-canonical to site $k$, right-canonical from site $k+1$:
 
-```
+[archived fence delimiter: ```]
 [L]──[L]──[C]──[R]──[R]
   ↑         ↑        ↑
  left    center    right
  canonical       canonical
-```
+[archived fence delimiter: ```]
 
 Center matrix $C$ contains the Schmidt values for bipartition at $k$.
 
 ### SVD-Based Canonicalization
 
-```c
+[archived fence delimiter: ```c]
 // Put MPS in left-canonical form
 mps_canonicalize_left(mps);
 
@@ -165,7 +172,7 @@ mps_canonicalize_right(mps);
 
 // Put in mixed-canonical form with center at site k
 mps_canonicalize_mixed(mps, k);
-```
+[archived fence delimiter: ```]
 
 ## MPS Operations
 
@@ -173,19 +180,19 @@ mps_canonicalize_mixed(mps, k);
 
 **Single-qubit gate**: Absorb into local tensor
 
-```c
+[archived fence delimiter: ```c]
 // O(χ²d²) complexity
 mps_apply_gate_1q(mps, gate, site);
-```
+[archived fence delimiter: ```]
 
 **Two-qubit gate**: Contract with tensors, decompose via SVD
 
-```
+[archived fence delimiter: ```]
 [A]──[B]         [A']──[B']
  │    │    →      │     │
   ╲  ╱             ╲   ╱
    [G]             SVD
-```
+[archived fence delimiter: ```]
 
 Bond dimension may increase after 2-qubit gates.
 
@@ -198,24 +205,24 @@ After operations, compress to limit bond dimension:
 3. Truncate to keep largest $\chi$ singular values
 4. Error bounded by discarded weight
 
-```c
+[archived fence delimiter: ```c]
 // Compress with relative tolerance
 double truncation_error = mps_compress(mps, max_chi, 1e-10);
-```
+[archived fence delimiter: ```]
 
 ### Expectation Values
 
 Local observables computed in $O(n\chi^2)$:
 
-```c
+[archived fence delimiter: ```c]
 double exp = mps_expectation_local(mps, observable, site);
-```
+[archived fence delimiter: ```]
 
 Two-point correlators:
 
-```c
+[archived fence delimiter: ```c]
 double corr = mps_correlation(mps, obs1, site1, obs2, site2);
-```
+[archived fence delimiter: ```]
 
 ## Matrix Product Operators (MPO)
 
@@ -227,13 +234,13 @@ $$\hat{O} = \sum_{i,j} W^{[1]}_{i_1 j_1} W^{[2]}_{i_2 j_2} \cdots W^{[n]}_{i_n j
 
 ### Diagram
 
-```
+[archived fence delimiter: ```]
 |i₁⟩    |i₂⟩    |i₃⟩
   │       │       │
 [W¹]───[W²]───[W³]───...
   │       │       │
 ⟨j₁|    ⟨j₂|    ⟨j₃|
-```
+[archived fence delimiter: ```]
 
 ### Hamiltonians as MPO
 
@@ -249,13 +256,13 @@ $$H = J\sum_i \vec{S}_i \cdot \vec{S}_{i+1}$$
 
 MPO bond dimension: 5
 
-```c
+[archived fence delimiter: ```c]
 // Create Ising Hamiltonian MPO
 mpo_t* H = mpo_create_ising(num_sites, J, h);
 
 // Compute energy
 double energy = mps_expectation_mpo(mps, H);
-```
+[archived fence delimiter: ```]
 
 ## DMRG Algorithm
 
@@ -283,7 +290,7 @@ This is a generalized eigenvalue problem solvable by Lanczos/Davidson.
 
 ### Implementation
 
-```c
+[archived fence delimiter: ```c]
 // Create DMRG solver
 dmrg_config_t config = {
     .max_sweeps = 20,
@@ -297,7 +304,7 @@ dmrg_result_t result = dmrg_ground_state(H_mpo, initial_mps, &config);
 printf("Ground state energy: %.10f\n", result.energy);
 printf("Converged: %s\n", result.converged ? "yes" : "no");
 printf("Final bond dimension: %d\n", result.final_bond_dim);
-```
+[archived fence delimiter: ```]
 
 ### Convergence
 
@@ -316,7 +323,7 @@ For time evolution under local Hamiltonian:
 2. Apply 2-site gates sequentially
 3. Compress after each gate
 
-```c
+[archived fence delimiter: ```c]
 // Time evolve with TEBD
 tebd_config_t config = {
     .time_step = 0.01,
@@ -326,7 +333,7 @@ tebd_config_t config = {
 };
 
 tebd_evolve(mps, H_local_terms, &config);
-```
+[archived fence delimiter: ```]
 
 ### TDVP (Time-Dependent Variational Principle)
 
@@ -341,7 +348,7 @@ where $P_{T_\psi}$ projects onto tangent space of MPS manifold.
 - Better conservation of energy
 - Single-site variant preserves bond dimension
 
-```c
+[archived fence delimiter: ```c]
 // TDVP evolution
 tdvp_config_t config = {
     .time_step = 0.01,
@@ -349,7 +356,7 @@ tdvp_config_t config = {
 };
 
 tdvp_evolve(mps, H_mpo, total_time, &config);
-```
+[archived fence delimiter: ```]
 
 ## Higher-Dimensional Networks
 
@@ -357,13 +364,13 @@ tdvp_evolve(mps, H_mpo, total_time, &config);
 
 Generalization of MPS to 2D:
 
-```
+[archived fence delimiter: ```]
     │       │       │
 ──[T]───[T]───[T]──
     │       │       │
 ──[T]───[T]───[T]──
     │       │       │
-```
+[archived fence delimiter: ```]
 
 **Challenges**:
 - Contraction is #P-hard
@@ -373,7 +380,7 @@ Generalization of MPS to 2D:
 
 Hierarchical structure for critical systems:
 
-```
+[archived fence delimiter: ```]
         [top]
        /     \
     [U]       [U]
@@ -381,7 +388,7 @@ Hierarchical structure for critical systems:
  [U]   [U] [U]   [U]
   │     │   │     │
  ...   ...  ...  ...
-```
+[archived fence delimiter: ```]
 
 Captures logarithmic entanglement scaling.
 
@@ -435,3 +442,4 @@ $D$ = MPO bond dimension
 - [Entanglement Measures](entanglement-measures.md) - When tensor networks work
 - [C API: Tensor Network](../api/c/tensor-network.md) - Function reference
 
+```

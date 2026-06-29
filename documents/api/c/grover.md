@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Grover's Algorithm API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Grover's Algorithm API
 
 Complete reference for Grover's search algorithm in the C library.
@@ -20,20 +27,20 @@ Grover's algorithm provides quadratic speedup for unstructured search, finding a
 
 Algorithm configuration.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;          // Number of qubits (search space = 2^n)
     uint64_t marked_state;      // State to search for
     size_t num_iterations;      // Number of Grover iterations
     int use_optimal_iterations; // Auto-calculate optimal iterations
 } grover_config_t;
-```
+[archived fence delimiter: ```]
 
 ### grover_result_t
 
 Algorithm result.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint64_t found_state;        // Measured state
     double success_probability;  // P(measuring marked state)
@@ -42,7 +49,7 @@ typedef struct {
     double fidelity;             // |⟨target|final⟩|²
     int found_marked_state;      // 1 if found, 0 if not
 } grover_result_t;
-```
+[archived fence delimiter: ```]
 
 ## Main Algorithm
 
@@ -50,13 +57,13 @@ typedef struct {
 
 Execute Grover's search algorithm.
 
-```c
+[archived fence delimiter: ```c]
 grover_result_t grover_search(
     quantum_state_t *state,
     const grover_config_t *config,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (will be modified)
@@ -75,7 +82,7 @@ grover_result_t grover_search(
 **Complexity**: $O(\sqrt{N})$ oracle queries
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 #include "src/algorithms/grover.h"
 #include "src/utils/quantum_entropy.h"
 
@@ -101,15 +108,15 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### grover_optimal_iterations
 
 Calculate optimal number of Grover iterations.
 
-```c
+[archived fence delimiter: ```c]
 size_t grover_optimal_iterations(size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits
@@ -127,9 +134,9 @@ where $\sin(\theta) = 1/\sqrt{N}$. Maximum occurs at $k = \lfloor \frac{\pi}{4\t
 
 Apply oracle operator (phase flip on marked state).
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -143,9 +150,9 @@ qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
 
 Apply diffusion operator (inversion about average).
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_diffusion(quantum_state_t *state);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -161,9 +168,9 @@ $$D = 2|s\rangle\langle s| - I = H^{\otimes n}(2|0\rangle\langle 0| - I)H^{\otim
 
 Single Grover iteration (oracle + diffusion).
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_state);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -177,13 +184,13 @@ qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_state);
 
 Generate random number using Grover-based quantum sampling.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t grover_random_sample(
     quantum_state_t *state,
     size_t num_qubits,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (reset and used for sampling)
@@ -196,7 +203,7 @@ uint64_t grover_random_sample(
 
 Generate multiple random samples.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_random_samples(
     quantum_state_t *state,
     size_t num_qubits,
@@ -204,7 +211,7 @@ qs_error_t grover_random_samples(
     size_t num_samples,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 ## Performance Analysis
 
@@ -212,7 +219,7 @@ qs_error_t grover_random_samples(
 
 Performance statistics structure.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double success_rate;         // Fraction of successful searches
     double avg_iterations;       // Average iterations used
@@ -220,22 +227,22 @@ typedef struct {
     double measured_speedup;     // Observed speedup
     size_t total_oracle_calls;   // Total oracle queries
 } grover_analysis_t;
-```
+[archived fence delimiter: ```]
 
 ### grover_analyze_performance
 
 Run performance analysis.
 
-```c
+[archived fence delimiter: ```c]
 grover_analysis_t grover_analyze_performance(
     size_t num_qubits,
     size_t num_trials,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_entropy_ctx_t entropy;
 quantum_entropy_init(&entropy, NULL, NULL);
 
@@ -243,18 +250,18 @@ grover_analysis_t stats = grover_analyze_performance(10, 1000, &entropy);
 
 printf("Success rate: %.2f%%\n", stats.success_rate * 100);
 printf("Quantum speedup: %.1fx\n", stats.quantum_speedup);
-```
+[archived fence delimiter: ```]
 
 ### grover_print_result
 
 Print formatted result.
 
-```c
+[archived fence delimiter: ```c]
 void grover_print_result(
     const grover_result_t *result,
     const grover_config_t *config
 );
-```
+[archived fence delimiter: ```]
 
 ## Advanced Operations
 
@@ -262,13 +269,13 @@ void grover_print_result(
 
 Adaptive Grover search with automatic iteration optimization.
 
-```c
+[archived fence delimiter: ```c]
 grover_result_t grover_adaptive_search(
     quantum_state_t *state,
     uint64_t marked_state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Features**:
 - Automatically determines optimal iterations
@@ -279,14 +286,14 @@ grover_result_t grover_adaptive_search(
 
 Oracle with multiple marked states and custom phases.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_oracle_multi_phase(
     quantum_state_t *state,
     const uint64_t *marked_states,
     const double *phases,
     size_t num_marked
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `marked_states`: Array of states to mark
@@ -299,13 +306,13 @@ qs_error_t grover_oracle_multi_phase(
 
 Generalized amplitude amplification.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_amplitude_amplification(
     quantum_state_t *state,
     const double *target_amplitudes,
     size_t num_iterations
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `target_amplitudes`: Desired amplitude distribution
@@ -315,7 +322,7 @@ qs_error_t grover_amplitude_amplification(
 
 Quantum importance sampling with Grover speedup.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_importance_sampling(
     quantum_state_t *state,
     double (*importance_function)(uint64_t),
@@ -323,7 +330,7 @@ qs_error_t grover_importance_sampling(
     uint64_t *samples,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `importance_function`: Weight function for importance sampling
@@ -334,14 +341,14 @@ qs_error_t grover_importance_sampling(
 
 Quantum-enhanced MCMC step.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t grover_mcmc_step(
     quantum_state_t *state,
     double (*target_distribution)(uint64_t),
     uint64_t current_state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Quantum speedup for sampling from peaked distributions
 
@@ -384,3 +391,4 @@ Unknown $M$ requires adaptive or amplitude estimation approaches.
 - [Algorithms: Grover's Algorithm](../../algorithms/grovers-algorithm.md) - Full theory
 - [Tutorial: Grover's Search](../../tutorials/04-grovers-search.md) - Step-by-step guide
 - [GPU Metal API](gpu-metal.md) - Hardware acceleration
+```

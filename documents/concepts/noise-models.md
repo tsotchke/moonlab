@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Noise Models
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Noise Models
 
 Simulating realistic quantum hardware.
@@ -44,9 +51,9 @@ $$\mathcal{E}(\rho) = (1-p)\rho + p X\rho X$$
 **Kraus operators**:
 $$E_0 = \sqrt{1-p} \, I, \quad E_1 = \sqrt{p} \, X$$
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_bit_flip(state, qubit, probability);
-```
+[archived fence delimiter: ```]
 
 ### Phase Flip
 
@@ -57,9 +64,9 @@ $$\mathcal{E}(\rho) = (1-p)\rho + p Z\rho Z$$
 **Kraus operators**:
 $$E_0 = \sqrt{1-p} \, I, \quad E_1 = \sqrt{p} \, Z$$
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_phase_flip(state, qubit, probability);
-```
+[archived fence delimiter: ```]
 
 ### Depolarizing Channel
 
@@ -72,9 +79,9 @@ $$E_0 = \sqrt{1-p} \, I, \quad E_1 = \sqrt{p/3} \, X, \quad E_2 = \sqrt{p/3} \, 
 
 **Interpretation**: With probability $p$, apply random Pauli error.
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_depolarizing(state, qubit, probability);
-```
+[archived fence delimiter: ```]
 
 ### Amplitude Damping
 
@@ -87,9 +94,9 @@ $$E_0 = \begin{pmatrix} 1 & 0 \\ 0 & \sqrt{1-\gamma} \end{pmatrix}, \quad E_1 = 
 
 **Physical meaning**: Excited state $|1\rangle$ decays to $|0\rangle$ with probability $\gamma$.
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_amplitude_damping(state, qubit, gamma);
-```
+[archived fence delimiter: ```]
 
 ### Phase Damping (Dephasing)
 
@@ -101,9 +108,9 @@ Equivalently, off-diagonal elements decay:
 
 $$\rho_{01} \to \sqrt{1-\lambda} \, \rho_{01}$$
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_phase_damping(state, qubit, lambda);
-```
+[archived fence delimiter: ```]
 
 ### Generalized Amplitude Damping
 
@@ -113,9 +120,9 @@ $$\gamma_\uparrow = n_{\text{th}} \gamma, \quad \gamma_\downarrow = (1 + n_{\tex
 
 where $n_{\text{th}} = 1/(e^{\hbar\omega/k_B T} - 1)$ is thermal population.
 
-```c
+[archived fence delimiter: ```c]
 quantum_noise_thermal(state, qubit, gamma, temperature);
-```
+[archived fence delimiter: ```]
 
 ## Characteristic Times
 
@@ -153,18 +160,18 @@ $$T_2^* \leq T_2 \leq 2T_1$$
 ### Error Models
 
 **Depolarizing gate error**:
-```c
+[archived fence delimiter: ```c]
 // Apply noisy CNOT
 gate_cnot(state, control, target);
 quantum_noise_depolarizing_2q(state, control, target, error_rate);
-```
+[archived fence delimiter: ```]
 
 **Over/under-rotation**:
-```c
+[archived fence delimiter: ```c]
 // Gate with calibration error
 double noisy_angle = ideal_angle * (1.0 + calibration_error);
 gate_rx(state, qubit, noisy_angle);
-```
+[archived fence delimiter: ```]
 
 ### Gate Error Rates
 
@@ -176,7 +183,7 @@ gate_rx(state, qubit, noisy_angle);
 
 ### Error Insertion
 
-```c
+[archived fence delimiter: ```c]
 // Create noise model
 noise_model_t* noise = noise_model_create();
 
@@ -192,7 +199,7 @@ for (int i = 0; i < num_gates; i++) {
     apply_gate(state, circuit[i]);
     noise_model_apply(noise, state, circuit[i]);
 }
-```
+[archived fence delimiter: ```]
 
 ## Measurement Errors
 
@@ -206,25 +213,25 @@ $$P(\text{measure } 1 | \text{state } 0) = \epsilon_{1|0}$$
 **Confusion matrix**:
 $$M = \begin{pmatrix} 1-\epsilon_{1|0} & \epsilon_{0|1} \\ \epsilon_{1|0} & 1-\epsilon_{0|1} \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 // Apply measurement error
 measurement_error_t merr = {
     .p_0_given_1 = 0.02,
     .p_1_given_0 = 0.01
 };
 int result = quantum_state_measure_noisy(state, qubit, &merr);
-```
+[archived fence delimiter: ```]
 
 ### Error Mitigation
 
 **Matrix inversion**:
 $$P_{\text{ideal}} = M^{-1} P_{\text{measured}}$$
 
-```c
+[archived fence delimiter: ```c]
 // Mitigate readout errors
 double mitigated_probs[1024];
 readout_error_mitigation(measured_counts, mitigated_probs, confusion_matrix);
-```
+[archived fence delimiter: ```]
 
 ## Correlated Errors
 
@@ -232,7 +239,7 @@ readout_error_mitigation(measured_counts, mitigated_probs, confusion_matrix);
 
 Gates on one qubit affect neighbors:
 
-```c
+[archived fence delimiter: ```c]
 // Model cross-talk
 crosstalk_model_t* ct = crosstalk_model_create(num_qubits);
 crosstalk_add_coupling(ct, qubit_a, qubit_b, coupling_strength);
@@ -240,7 +247,7 @@ crosstalk_add_coupling(ct, qubit_a, qubit_b, coupling_strength);
 // Apply gate with cross-talk
 gate_rx(state, qubit_a, theta);
 crosstalk_apply(ct, state, qubit_a);
-```
+[archived fence delimiter: ```]
 
 ### Spatially Correlated Noise
 
@@ -254,7 +261,7 @@ $$\mathcal{E}_{i,j}(\rho) = (1-p)\rho + p Z_i Z_j \rho Z_i Z_j$$
 
 Sample error realizations:
 
-```c
+[archived fence delimiter: ```c]
 int counts[1024] = {0};
 for (int shot = 0; shot < num_shots; shot++) {
     quantum_state_reset(state);
@@ -262,7 +269,7 @@ for (int shot = 0; shot < num_shots; shot++) {
     int result = quantum_state_measure_all(state);
     counts[result]++;
 }
-```
+[archived fence delimiter: ```]
 
 ### Density Matrix
 
@@ -291,7 +298,7 @@ Measure average gate fidelity:
 3. Measure return to initial state
 4. Fit decay to extract error rate
 
-```c
+[archived fence delimiter: ```c]
 // Randomized benchmarking
 rb_result_t result = randomized_benchmarking(
     state,
@@ -301,7 +308,7 @@ rb_result_t result = randomized_benchmarking(
     num_shots
 );
 printf("Error per Clifford: %.4f\n", result.error_per_clifford);
-```
+[archived fence delimiter: ```]
 
 ### Process Tomography
 
@@ -320,7 +327,7 @@ Self-consistent characterization of preparation, gates, and measurement.
 
 ### Kraus Representation
 
-```c
+[archived fence delimiter: ```c]
 // Define Kraus operators for amplitude damping
 void amplitude_damping_kraus(double gamma, complex_t E0[4], complex_t E1[4]) {
     E0[0] = (complex_t){1.0, 0.0};
@@ -344,19 +351,19 @@ void apply_kraus(complex_t* rho, int dim, complex_t** kraus, int num_kraus) {
     memcpy(rho, rho_new, dim * dim * sizeof(complex_t));
     free(rho_new);
 }
-```
+[archived fence delimiter: ```]
 
 ### Pauli Twirling
 
 Convert coherent errors to incoherent:
 
-```c
+[archived fence delimiter: ```c]
 // Pauli twirl: P_i U P_i^† where P_i is random Pauli
 int pauli = random_pauli();
 apply_pauli(state, qubit, pauli);
 apply_noisy_gate(state, qubit, gate);
 apply_pauli(state, qubit, pauli);  // Same Pauli to undo
-```
+[archived fence delimiter: ```]
 
 ## References
 
@@ -382,3 +389,4 @@ apply_pauli(state, qubit, pauli);  // Same Pauli to undo
 - [C API: Noise](../api/c/noise.md) - Noise function reference
 - [Noise Simulation Guide](../guides/noise-simulation.md) - Practical guide
 
+```

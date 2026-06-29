@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: State Vector Engine
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # State Vector Engine
 
 Core simulation engine for quantum state vectors.
@@ -18,7 +25,7 @@ where $\alpha_k \in \mathbb{C}$ are complex amplitudes satisfying $\sum_k |\alph
 
 ### Memory Layout
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     Complex* amplitudes;      // Contiguous array of 2^n complex numbers
     uint32_t num_qubits;      // n
@@ -27,11 +34,11 @@ typedef struct {
     size_t alignment;         // Memory alignment
     void* gpu_buffer;         // Optional GPU mirror
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 ### Complex Number Format
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double real;
     double imag;
@@ -39,23 +46,23 @@ typedef struct {
 
 // Total size: 16 bytes per amplitude
 // For n qubits: 16 × 2^n bytes
-```
+[archived fence delimiter: ```]
 
 ### Bit Ordering Convention
 
 Moonlab uses little-endian qubit ordering:
 
-```
+[archived fence delimiter: ```]
 |q_{n-1} q_{n-2} ... q_1 q_0⟩
 
 State index k encodes:
 - Qubit 0: bit 0 of k
 - Qubit 1: bit 1 of k
 - Qubit i: bit i of k
-```
+[archived fence delimiter: ```]
 
 Example for 3 qubits:
-```
+[archived fence delimiter: ```]
 Index 0: |000⟩
 Index 1: |001⟩  (qubit 0 = 1)
 Index 2: |010⟩  (qubit 1 = 1)
@@ -64,13 +71,13 @@ Index 4: |100⟩  (qubit 2 = 1)
 Index 5: |101⟩
 Index 6: |110⟩
 Index 7: |111⟩
-```
+[archived fence delimiter: ```]
 
 ## State Creation
 
 ### Allocation
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t* quantum_state_init(uint32_t num_qubits) {
     // Validate input
     if (num_qubits > QSIM_MAX_QUBITS) {
@@ -106,7 +113,7 @@ quantum_state_t* quantum_state_init(uint32_t num_qubits) {
 
     return state;
 }
-```
+[archived fence delimiter: ```]
 
 ### Memory Requirements
 
@@ -129,7 +136,7 @@ $$|\psi'\rangle = (I^{\otimes (n-q-1)} \otimes U \otimes I^{\otimes q}) |\psi\ra
 
 Implementation iterates over pairs of amplitudes:
 
-```c
+[archived fence delimiter: ```c]
 void apply_single_qubit_gate(quantum_state_t* state,
                              uint32_t qubit,
                              const Complex U[2][2]) {
@@ -167,13 +174,13 @@ uint64_t insert_zero_bit(uint64_t value, uint32_t position) {
     uint64_t high_mask = ~low_mask;
     return ((value & high_mask) << 1) | (value & low_mask);
 }
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Gate
 
 For a two-qubit gate on qubits $q_1 < q_2$:
 
-```c
+[archived fence delimiter: ```c]
 void apply_two_qubit_gate(quantum_state_t* state,
                           uint32_t qubit1,
                           uint32_t qubit2,
@@ -216,13 +223,13 @@ void apply_two_qubit_gate(quantum_state_t* state,
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### SIMD Optimization
 
 Vectorized gate application:
 
-```c
+[archived fence delimiter: ```c]
 #include <arm_neon.h>  // For ARM NEON
 
 void apply_hadamard_simd(quantum_state_t* state, uint32_t qubit) {
@@ -252,7 +259,7 @@ void apply_hadamard_simd(quantum_state_t* state, uint32_t qubit) {
         vst1q_f64((double*)&state->amplitudes[idx1], new_a1);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Measurement
 
@@ -260,7 +267,7 @@ void apply_hadamard_simd(quantum_state_t* state, uint32_t qubit) {
 
 Collapse to computational basis state:
 
-```c
+[archived fence delimiter: ```c]
 uint64_t quantum_state_measure_all(quantum_state_t* state) {
     // Compute cumulative probabilities
     double* cumprob = malloc(state->dim * sizeof(double));
@@ -286,13 +293,13 @@ uint64_t quantum_state_measure_all(quantum_state_t* state) {
     free(cumprob);
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ### Partial Measurement
 
 Measure subset of qubits:
 
-```c
+[archived fence delimiter: ```c]
 uint64_t quantum_state_measure_qubits(quantum_state_t* state,
                                        const uint32_t* qubits,
                                        uint32_t num_qubits) {
@@ -347,13 +354,13 @@ uint64_t quantum_state_measure_qubits(quantum_state_t* state,
     free(probs);
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expectation Values
 
 ### Pauli Z Expectation
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_expectation_z(quantum_state_t* state, uint32_t qubit) {
     double expectation = 0;
     uint64_t mask = 1ULL << qubit;
@@ -371,11 +378,11 @@ double quantum_state_expectation_z(quantum_state_t* state, uint32_t qubit) {
 
     return expectation;
 }
-```
+[archived fence delimiter: ```]
 
 ### General Pauli String
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_expectation_pauli(quantum_state_t* state,
                                         const char* pauli_string) {
     // pauli_string: e.g., "XYZII" (applied to qubits 0,1,2,3,4)
@@ -400,13 +407,13 @@ double quantum_state_expectation_pauli(quantum_state_t* state,
 
     return expectation;
 }
-```
+[archived fence delimiter: ```]
 
 ## Normalization
 
 ### Check Normalization
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_norm(quantum_state_t* state) {
     double norm_sq = 0;
 
@@ -417,11 +424,11 @@ double quantum_state_norm(quantum_state_t* state) {
 
     return sqrt(norm_sq);
 }
-```
+[archived fence delimiter: ```]
 
 ### Renormalize
 
-```c
+[archived fence delimiter: ```c]
 void quantum_state_normalize(quantum_state_t* state) {
     double norm = quantum_state_norm(state);
 
@@ -440,13 +447,13 @@ void quantum_state_normalize(quantum_state_t* state) {
         state->amplitudes[i].imag *= inv_norm;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## State Operations
 
 ### Copy
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t* quantum_state_copy(const quantum_state_t* state) {
     quantum_state_t* copy = quantum_state_init(state->num_qubits);
     if (!copy) return NULL;
@@ -456,11 +463,11 @@ quantum_state_t* quantum_state_copy(const quantum_state_t* state) {
 
     return copy;
 }
-```
+[archived fence delimiter: ```]
 
 ### Inner Product
 
-```c
+[archived fence delimiter: ```c]
 Complex quantum_state_inner_product(const quantum_state_t* bra,
                                     const quantum_state_t* ket) {
     if (bra->dim != ket->dim) {
@@ -481,23 +488,23 @@ Complex quantum_state_inner_product(const quantum_state_t* bra,
 
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ### Fidelity
 
-```c
+[archived fence delimiter: ```c]
 double quantum_state_fidelity(const quantum_state_t* state1,
                               const quantum_state_t* state2) {
     Complex overlap = quantum_state_inner_product(state1, state2);
     return complex_abs_squared(overlap);
 }
-```
+[archived fence delimiter: ```]
 
 ## Serialization
 
 ### Save to File
 
-```c
+[archived fence delimiter: ```c]
 int quantum_state_save(const quantum_state_t* state, const char* filename) {
     FILE* f = fopen(filename, "wb");
     if (!f) return -1;
@@ -515,11 +522,11 @@ int quantum_state_save(const quantum_state_t* state, const char* filename) {
     fclose(f);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Load from File
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t* quantum_state_load(const char* filename) {
     FILE* f = fopen(filename, "rb");
     if (!f) return NULL;
@@ -549,7 +556,7 @@ quantum_state_t* quantum_state_load(const char* filename) {
     fclose(f);
     return state;
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Characteristics
 
@@ -569,12 +576,12 @@ quantum_state_t* quantum_state_load(const char* filename) {
 
 All O(2^n) operations parallelize over amplitude index:
 
-```c
+[archived fence delimiter: ```c]
 #pragma omp parallel for
 for (uint64_t i = 0; i < state->dim; i++) {
     // Process amplitude i
 }
-```
+[archived fence delimiter: ```]
 
 Scaling with threads:
 - Near-linear for memory-bound operations
@@ -586,3 +593,4 @@ Scaling with threads:
 - [System Overview](system-overview.md) - Architecture context
 - [C API: State](../api/c/quantum-state.md) - Public API reference
 
+```

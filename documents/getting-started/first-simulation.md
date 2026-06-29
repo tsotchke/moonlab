@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: First Simulation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # First Simulation
 
 This walkthrough guides you through building, running, and understanding your first quantum simulation with Moonlab. We'll create a Bell state, verify its properties, and explore measurement.
@@ -6,16 +13,16 @@ This walkthrough guides you through building, running, and understanding your fi
 
 Ensure Moonlab is installed (see [Installation](../installation.md)):
 
-```bash
+[archived fence delimiter: ```bash]
 cd quantum-simulator
 make
-```
+[archived fence delimiter: ```]
 
 ## Part 1: Creating a Quantum State (C)
 
 Create a file called `first_simulation.c`:
 
-```c
+[archived fence delimiter: ```c]
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 #include "src/quantum/measurement.h"
@@ -123,18 +130,18 @@ int main(void) {
     printf("\n=== Simulation Complete ===\n");
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Compile and Run
 
-```bash
+[archived fence delimiter: ```bash]
 gcc -O3 first_simulation.c -L. -lquantumsim -lm -o first_simulation
 LD_LIBRARY_PATH=. ./first_simulation
-```
+[archived fence delimiter: ```]
 
 ### Expected Output
 
-```
+[archived fence delimiter: ```]
 === Moonlab Quantum Simulator: First Simulation ===
 
 Step 1: Initialized 2-qubit state |00⟩
@@ -177,13 +184,13 @@ Step 7: Cleanup
   Resources released.
 
 === Simulation Complete ===
-```
+[archived fence delimiter: ```]
 
 ## Part 2: Python Version
 
 The same simulation in Python:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 import numpy as np
 
@@ -226,11 +233,11 @@ if abs(entropy - 1.0) < 0.001:
 print()
 
 print("=== Simulation Complete ===")
-```
+[archived fence delimiter: ```]
 
 ## Part 3: JavaScript Version
 
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 async function main() {
@@ -271,7 +278,7 @@ async function main() {
   console.log("=== Simulation Complete ===");
 }
 main();
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Simulation
 
@@ -279,27 +286,27 @@ main();
 
 Moonlab represents quantum states as complex amplitude vectors:
 
-```
+[archived fence delimiter: ```]
 |ψ⟩ = α₀|00⟩ + α₁|01⟩ + α₂|10⟩ + α₃|11⟩
-```
+[archived fence delimiter: ```]
 
 Internally stored as:
-```c
+[archived fence delimiter: ```c]
 state.amplitudes[0] = α₀  // |00⟩
 state.amplitudes[1] = α₁  // |01⟩
 state.amplitudes[2] = α₂  // |10⟩
 state.amplitudes[3] = α₃  // |11⟩
-```
+[archived fence delimiter: ```]
 
 The bit ordering convention: `|qubit₁ qubit₀⟩` where qubit 0 is the least significant bit.
 
 ### The Bell State Creation Circuit
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──
            │
 |0⟩ ───────⊕──
-```
+[archived fence delimiter: ```]
 
 **Step by step**:
 
@@ -332,25 +339,26 @@ $$S = -\frac{1}{2}\log_2\frac{1}{2} - \frac{1}{2}\log_2\frac{1}{2} = 1 \text{ bi
 ## Troubleshooting
 
 **"Library not found"**: Set the library path:
-```bash
+[archived fence delimiter: ```bash]
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)
-```
+[archived fence delimiter: ```]
 
 **"Segmentation fault"**: Ensure `quantum_state_init` succeeds before using the state:
-```c
+[archived fence delimiter: ```c]
 if (result != QS_SUCCESS) {
     // Handle error
 }
-```
+[archived fence delimiter: ```]
 
 **Python import error**: Build the library and install the Python package:
-```bash
+[archived fence delimiter: ```bash]
 make
 cd bindings/python && pip install -e .
-```
+[archived fence delimiter: ```]
 
 ## Next Steps
 
 - [Next Steps](next-steps.md): Continue your learning journey
 - [Tutorial: Quantum Gates Tour](../tutorials/02-quantum-gates-tour.md): Explore all available gates
 - [Tutorial: Grover's Search](../tutorials/04-grovers-search.md): Implement a quantum algorithm
+```

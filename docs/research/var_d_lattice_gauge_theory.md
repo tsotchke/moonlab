@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Variational-D CA-MPS for 1+1D Z₂ lattice gauge theory
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Variational-D CA-MPS for 1+1D Z₂ lattice gauge theory
 
 Connecting the var-D method to lattice gauge theory: under what conditions does the Clifford prefactor `D` absorb the Gauss-law constraints, leaving |φ⟩ with only the dynamical (gauge-invariant) entanglement?
@@ -122,9 +129,9 @@ The headline empirical run (`examples/hep/z2_gauge_var_d.c`) reports four Gauss-
 
 The fix that ships in `lattice_z2_1d.c` replaces those kinetic Pauli strings with the gauge-invariant pair derived from inserting the Z2 link operator `U_{2x+1} = X_{2x+1}` into the JW expansion (the link operator combined with the JW string `Z_{2x+1}` becomes `XZ = -iY` on the link qubit; the Hermitian symmetrisation of the resulting hop yields):
 
-```
+[archived fence delimiter: ```]
 K_x = -(t/2) X_{2x} Y_{2x+1} Y_{2x+2} + (t/2) Y_{2x} Y_{2x+1} X_{2x+2}
-```
+[archived fence delimiter: ```]
 
 For each piece the anti-commute count with `G_x = X Z X` (qubits 2x-1, 2x, 2x+1) is:
 - `XYY` vs `G_x`: qubit 2x has `X` vs `Z` (anti) and qubit 2x+1 has `Y` vs `X` (anti) → 2 → even → commute.
@@ -173,3 +180,4 @@ which means `D†|ψ_phys⟩` has support only on the `N + 1` "non-frozen" qubit
 Compare to the plain |ψ_phys⟩'s half-cut entropy, which can saturate `\log_2 2^{\lfloor n/2 \rfloor}` = `\lfloor (2N-1)/2 \rfloor \cdot \log 2` — almost twice as large for `N = O(1)` and growing twice as fast in `N`.
 
 This is the rigorous statement. Implementing `D_{\text{gauge}}` is the open task.
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quantum Random Number Generator
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quantum Random Number Generator
 
 Generate cryptographically secure random numbers using quantum measurements.
@@ -42,7 +49,7 @@ This produces unbiased output even from biased sources.
 
 Moonlab's entropy system uses multiple sources:
 
-```
+[archived fence delimiter: ```]
 ┌──────────────────────────────────────────────────────────┐
 │                     Entropy Pool                         │
 ├──────────────────────────────────────────────────────────┤
@@ -69,7 +76,7 @@ Moonlab's entropy system uses multiple sources:
 │                    └──────────────┘                      │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Source Types
 
@@ -87,7 +94,7 @@ Moonlab's entropy system uses multiple sources:
 
 ### Basic Usage
 
-```c
+[archived fence delimiter: ```c]
 #include "utils/entropy.h"
 #include <stdio.h>
 
@@ -115,11 +122,11 @@ int main(void) {
     entropy_destroy(ctx);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Quantum-Enhanced Entropy
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum/state.h"
 #include "quantum/measurement.h"
 #include "utils/entropy.h"
@@ -191,11 +198,11 @@ int main(void) {
     entropy_destroy(entropy);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Quality Assessment
 
-```c
+[archived fence delimiter: ```c]
 #include "utils/entropy.h"
 #include <stdio.h>
 
@@ -225,11 +232,11 @@ void assess_entropy_quality(void) {
     free(sample);
     entropy_destroy(ctx);
 }
-```
+[archived fence delimiter: ```]
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 import moonlab as ml
 import numpy as np
 from collections import Counter
@@ -370,7 +377,7 @@ if __name__ == "__main__":
 
     print()
     test_randomness(qrng)
-```
+[archived fence delimiter: ```]
 
 ## Entropy Mixing
 
@@ -378,7 +385,7 @@ if __name__ == "__main__":
 
 Moonlab uses XorShift128+ for fast entropy extraction:
 
-```c
+[archived fence delimiter: ```c]
 static uint64_t xorshift128plus(uint64_t* s) {
     uint64_t x = s[0];
     uint64_t y = s[1];
@@ -387,24 +394,24 @@ static uint64_t xorshift128plus(uint64_t* s) {
     s[1] = x ^ y ^ (x >> 17) ^ (y >> 26);
     return s[1] + y;
 }
-```
+[archived fence delimiter: ```]
 
 ### SplitMix64 for Seeding
 
-```c
+[archived fence delimiter: ```c]
 static uint64_t splitmix64(uint64_t* state) {
     uint64_t z = (*state += 0x9e3779b97f4a7c15ULL);
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
     z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
     return z ^ (z >> 31);
 }
-```
+[archived fence delimiter: ```]
 
 ## Use Cases
 
 ### Cryptographic Key Generation
 
-```c
+[archived fence delimiter: ```c]
 // Generate 256-bit encryption key
 uint8_t key[32];
 entropy_ctx_t* ctx = entropy_create();
@@ -412,11 +419,11 @@ entropy_bytes(ctx, key, 32);
 entropy_destroy(ctx);
 
 // Use key for encryption...
-```
+[archived fence delimiter: ```]
 
 ### Monte Carlo Simulation
 
-```python
+[archived fence delimiter: ```python]
 qrng = QuantumRNG()
 
 # Estimate π using Monte Carlo
@@ -431,11 +438,11 @@ for _ in range(total):
 
 pi_estimate = 4 * inside / total
 print(f"π ≈ {pi_estimate:.6f}")
-```
+[archived fence delimiter: ```]
 
 ### Lottery/Gaming
 
-```python
+[archived fence delimiter: ```python]
 # Fair dice roll
 def roll_dice() -> int:
     return qrng.random_int(1, 7)
@@ -447,7 +454,7 @@ def shuffle_deck(deck: list) -> list:
         j = qrng.random_int(0, i + 1)
         shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
     return shuffled
-```
+[archived fence delimiter: ```]
 
 ## Performance
 
@@ -460,7 +467,7 @@ def shuffle_deck(deck: list) -> list:
 
 ## Running the Example
 
-```bash
+[archived fence delimiter: ```bash]
 # Build
 make examples
 
@@ -469,10 +476,11 @@ make examples
 
 # Run with specific size
 ./examples/applications/quantum_rng --bytes 1024 --test
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [API: entropy.h](../../api/c/entropy.md)
 - [Concepts: Measurement Theory](../../concepts/measurement-theory.md)
 - [Guide: Debugging](../../guides/debugging.md)
+```

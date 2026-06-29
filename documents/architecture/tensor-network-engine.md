@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tensor Network Engine
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tensor Network Engine
 
 MPS and DMRG implementation internals.
@@ -10,7 +17,7 @@ The tensor network engine enables simulation of quantum systems far beyond state
 
 ### Component Diagram
 
-```
+[archived fence delimiter: ```]
 ┌───────────────────────────────────────────────────────────────────┐
 │                     Tensor Network Engine                         │
 │                                                                   │
@@ -31,13 +38,13 @@ The tensor network engine enables simulation of quantum systems far beyond state
 │  │  Dense tensors, Sparse tensors, Memory pools               │   │
 │  └────────────────────────────────────────────────────────────┘   │
 └───────────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Tensor Representation
 
 ### Dense Tensor
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     Complex* data;           // Contiguous data array
     uint32_t rank;           // Number of indices
@@ -45,13 +52,13 @@ typedef struct {
     uint64_t total_size;     // Product of dimensions
     uint32_t* strides;       // Strides for indexing
 } tensor_t;
-```
+[archived fence delimiter: ```]
 
 ### Index Convention
 
 For a tensor $T_{i_0, i_1, \ldots, i_{r-1}}$:
 
-```c
+[archived fence delimiter: ```c]
 // Linear index from multi-index
 uint64_t linear_index(tensor_t* t, uint32_t* indices) {
     uint64_t idx = 0;
@@ -69,13 +76,13 @@ Complex tensor_get(tensor_t* t, uint32_t* indices) {
 void tensor_set(tensor_t* t, uint32_t* indices, Complex value) {
     t->data[linear_index(t, indices)] = value;
 }
-```
+[archived fence delimiter: ```]
 
 ### Memory Layout
 
 Column-major (Fortran-style) for BLAS compatibility:
 
-```c
+[archived fence delimiter: ```c]
 tensor_t* tensor_create(uint32_t rank, const uint32_t* dims) {
     tensor_t* t = malloc(sizeof(tensor_t));
 
@@ -95,13 +102,13 @@ tensor_t* tensor_create(uint32_t rank, const uint32_t* dims) {
 
     return t;
 }
-```
+[archived fence delimiter: ```]
 
 ## Matrix Product State
 
 ### MPS Structure
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t** tensors;      // Site tensors A[0], A[1], ..., A[n-1]
     uint32_t num_sites;      // n
@@ -118,19 +125,19 @@ typedef struct {
     } canonical_form;
     uint32_t canonical_center;  // For mixed canonical form
 } mps_t;
-```
+[archived fence delimiter: ```]
 
 ### Tensor Shapes
 
-```
+[archived fence delimiter: ```]
 Site 0:     A[0]  shape: (d, χ_0)           - left boundary
 Site i:     A[i]  shape: (χ_{i-1}, d, χ_i)  - bulk
 Site n-1:   A[n-1] shape: (χ_{n-2}, d)      - right boundary
-```
+[archived fence delimiter: ```]
 
 ### Creation
 
-```c
+[archived fence delimiter: ```c]
 mps_t* mps_create(uint32_t num_sites, uint32_t local_dim, uint32_t bond_dim) {
     mps_t* mps = malloc(sizeof(mps_t));
 
@@ -163,13 +170,13 @@ mps_t* mps_create(uint32_t num_sites, uint32_t local_dim, uint32_t bond_dim) {
 
     return mps;
 }
-```
+[archived fence delimiter: ```]
 
 ## Tensor Contraction
 
 ### Two-Tensor Contraction
 
-```c
+[archived fence delimiter: ```c]
 tensor_t* tensor_contract(tensor_t* A, tensor_t* B,
                           uint32_t* contract_A, uint32_t* contract_B,
                           uint32_t num_contract) {
@@ -191,11 +198,11 @@ tensor_t* tensor_contract(tensor_t* A, tensor_t* B,
     free(out_dims);
     return C;
 }
-```
+[archived fence delimiter: ```]
 
 ### GEMM-based Contraction
 
-```c
+[archived fence delimiter: ```c]
 void contract_gemm(tensor_t* A, tensor_t* B, tensor_t* C,
                    uint32_t* contract_A, uint32_t* contract_B,
                    uint32_t num_contract) {
@@ -218,13 +225,13 @@ void contract_gemm(tensor_t* A, tensor_t* B, tensor_t* C,
     cblas_zgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                 m, n, k, &alpha, A_data, m, B_data, k, &beta, C->data, m);
 }
-```
+[archived fence delimiter: ```]
 
 ## Singular Value Decomposition
 
 ### SVD Interface
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t* U;         // Left singular vectors
     double* S;           // Singular values (real)
@@ -262,11 +269,11 @@ svd_result_t* tensor_svd(tensor_t* T,
     free(matrix);
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ### Truncated SVD
 
-```c
+[archived fence delimiter: ```c]
 svd_result_t* tensor_svd_truncated(tensor_t* T,
                                     uint32_t* left_indices, uint32_t num_left,
                                     uint32_t* right_indices, uint32_t num_right,
@@ -299,7 +306,7 @@ svd_result_t* tensor_svd_truncated(tensor_t* T,
 
     return full;
 }
-```
+[archived fence delimiter: ```]
 
 ## Canonical Forms
 
@@ -307,7 +314,7 @@ svd_result_t* tensor_svd_truncated(tensor_t* T,
 
 Make all tensors left-canonical (A†A = I):
 
-```c
+[archived fence delimiter: ```c]
 void mps_canonicalize_left(mps_t* mps) {
     for (uint32_t i = 0; i < mps->num_sites - 1; i++) {
         // SVD: A[i] = U * S * V†
@@ -333,11 +340,11 @@ void mps_canonicalize_left(mps_t* mps) {
 
     mps->canonical_form = CANONICAL_LEFT;
 }
-```
+[archived fence delimiter: ```]
 
 ### Right Canonicalization
 
-```c
+[archived fence delimiter: ```c]
 void mps_canonicalize_right(mps_t* mps) {
     for (int32_t i = mps->num_sites - 1; i > 0; i--) {
         // SVD: A[i] = U * S * V†
@@ -362,11 +369,11 @@ void mps_canonicalize_right(mps_t* mps) {
 
     mps->canonical_form = CANONICAL_RIGHT;
 }
-```
+[archived fence delimiter: ```]
 
 ### Mixed Canonical Form
 
-```c
+[archived fence delimiter: ```c]
 void mps_canonicalize_mixed(mps_t* mps, uint32_t center) {
     // Left-canonicalize sites 0 to center-1
     for (uint32_t i = 0; i < center; i++) {
@@ -381,13 +388,13 @@ void mps_canonicalize_mixed(mps_t* mps, uint32_t center) {
     mps->canonical_form = CANONICAL_MIXED;
     mps->canonical_center = center;
 }
-```
+[archived fence delimiter: ```]
 
 ## DMRG Implementation
 
 ### DMRG Sweep
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     mps_t* state;
     mpo_t* hamiltonian;
@@ -414,11 +421,11 @@ double dmrg_sweep(dmrg_context_t* ctx, bool direction_right) {
 
     return energy;
 }
-```
+[archived fence delimiter: ```]
 
 ### Two-Site Optimization
 
-```c
+[archived fence delimiter: ```c]
 double dmrg_optimize_two_site(dmrg_context_t* ctx, uint32_t site) {
     // Merge two site tensors
     tensor_t* theta = tensor_contract(ctx->state->tensors[site],
@@ -458,11 +465,11 @@ double dmrg_optimize_two_site(dmrg_context_t* ctx, uint32_t site) {
 
     return energy;
 }
-```
+[archived fence delimiter: ```]
 
 ### Lanczos Eigensolver
 
-```c
+[archived fence delimiter: ```c]
 double lanczos_ground_state(effective_h_t* H, tensor_t* initial) {
     const int max_iter = 100;
     const double tol = 1e-12;
@@ -511,13 +518,13 @@ double lanczos_ground_state(effective_h_t* H, tensor_t* initial) {
 
     return energy;
 }
-```
+[archived fence delimiter: ```]
 
 ## Environment Tensors
 
 ### Left Environment
 
-```c
+[archived fence delimiter: ```c]
 void dmrg_update_left_env(dmrg_context_t* ctx, uint32_t site) {
     // L[i+1] = L[i] * A[i]† * W[i] * A[i]
     //
@@ -546,11 +553,11 @@ void dmrg_update_left_env(dmrg_context_t* ctx, uint32_t site) {
     tensor_destroy(temp2);
     tensor_destroy(A_dag);
 }
-```
+[archived fence delimiter: ```]
 
 ### Right Environment
 
-```c
+[archived fence delimiter: ```c]
 void dmrg_update_right_env(dmrg_context_t* ctx, uint32_t site) {
     // R[i-1] = A[i] * W[i] * A[i]† * R[i]
 
@@ -568,13 +575,13 @@ void dmrg_update_right_env(dmrg_context_t* ctx, uint32_t site) {
     tensor_destroy(temp2);
     tensor_destroy(A_dag);
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Optimization
 
 ### Tensor Caching
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t** cache;
     uint64_t* keys;
@@ -604,11 +611,11 @@ tensor_t* cache_get_or_compute(tensor_cache_t* cache,
 
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ### Parallel Contraction
 
-```c
+[archived fence delimiter: ```c]
 tensor_t* tensor_contract_parallel(tensor_t* A, tensor_t* B, ...) {
     tensor_t* C = tensor_create(...);
 
@@ -627,7 +634,7 @@ tensor_t* tensor_contract_parallel(tensor_t* A, tensor_t* B, ...) {
 
     return C;
 }
-```
+[archived fence delimiter: ```]
 
 ## Complexity Analysis
 
@@ -651,3 +658,4 @@ Where:
 - [Tutorial: Tensor Networks](../tutorials/08-tensor-network-simulation.md) - Usage
 - [C API: Tensor Network](../api/c/tensor-network.md) - API reference
 
+```

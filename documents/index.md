@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Quantum Simulator
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Quantum Simulator
 
 A high-performance quantum computing simulation library designed for researchers, developers, and educators in quantum information science. Moonlab provides state-vector simulation for up to 32 qubits with hardware-accelerated performance on Apple Silicon, comprehensive algorithm implementations, and bindings for Python, Rust, and JavaScript.
@@ -91,3 +98,4 @@ Moonlab Quantum Simulator is open-source software. See the LICENSE file for deta
 
 **Version**: 0.4.2
 **Last Updated**: May 2026
+```

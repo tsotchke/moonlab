@@ -49,11 +49,24 @@ if ! command -v mpirun >/dev/null 2>&1; then
     exit 1
 fi
 
+require_output_file_path() {
+    local path=$1
+    if [[ -z "$path" || "$path" == "/" || -d "$path" ]]; then
+        echo "error: --output must name a writable JSON file" >&2
+        exit 2
+    fi
+    if [[ "$(dirname "$path")" == "" ]]; then
+        echo "error: --output parent directory is empty" >&2
+        exit 2
+    fi
+}
+
+require_output_file_path "$OUTPUT"
 mkdir -p "$(dirname "$OUTPUT")"
 HOSTNAME=$(hostname)
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-{
+write_report() {
     printf '{\n'
     printf '  "harness":  "moonlab/mpi-scaling/v1.0",\n'
     printf '  "host":     "%s",\n' "$HOSTNAME"
@@ -84,6 +97,9 @@ DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
     printf '\n  ]\n'
     printf '}\n'
-} > "$OUTPUT"
+}
+
+require_output_file_path "$OUTPUT"
+write_report > "$OUTPUT"
 
 echo "[mpi_scaling] results -> $OUTPUT" >&2

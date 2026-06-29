@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Topological Computing API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Topological Computing API
 
 C API for topological quantum computing simulation.
@@ -8,9 +15,9 @@ The topological computing API (`topological.h`) provides functions for simulatin
 
 ## Header
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/topological/topological.h"
-```
+[archived fence delimiter: ```]
 
 ## Anyon Models
 
@@ -20,13 +27,13 @@ The topological computing API (`topological.h`) provides functions for simulatin
 
 Anyon model enumeration.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     ANYON_MODEL_FIBONACCI,  // Fibonacci anyons (τ×τ = 1+τ)
     ANYON_MODEL_ISING,      // Ising anyons (σ×σ = 1+ψ)
     ANYON_MODEL_SU2_K       // SU(2)_k anyons
 } anyon_model_t;
-```
+[archived fence delimiter: ```]
 
 #### `anyon_charge_t`
 
@@ -34,7 +41,7 @@ Anyon charge type (alias for `uint32_t`).
 
 **Predefined charges**:
 
-```c
+[archived fence delimiter: ```c]
 // Fibonacci anyons
 #define FIB_VACUUM 0
 #define FIB_TAU    1
@@ -43,13 +50,13 @@ Anyon charge type (alias for `uint32_t`).
 #define ISING_VACUUM 0
 #define ISING_SIGMA  1
 #define ISING_PSI    2
-```
+[archived fence delimiter: ```]
 
 #### `anyon_system_t`
 
 Complete anyon model specification.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     anyon_model_t type;
     uint32_t num_charges;           // Number of distinct charges
@@ -58,7 +65,7 @@ typedef struct {
     double complex **R_matrices;    // R-symbols (braiding phases)
     uint32_t ***fusion_rules;       // N^c_{ab} fusion multiplicities
 } anyon_system_t;
-```
+[archived fence delimiter: ```]
 
 ### Functions
 
@@ -66,9 +73,9 @@ typedef struct {
 
 Create Fibonacci anyon system.
 
-```c
+[archived fence delimiter: ```c]
 anyon_system_t *anyon_system_fibonacci(void);
-```
+[archived fence delimiter: ```]
 
 Fibonacci anyons have fusion rule $\tau \times \tau = 1 + \tau$ and are universal for quantum computation via braiding alone.
 
@@ -78,9 +85,9 @@ Fibonacci anyons have fusion rule $\tau \times \tau = 1 + \tau$ and are universa
 
 Create Ising anyon system.
 
-```c
+[archived fence delimiter: ```c]
 anyon_system_t *anyon_system_ising(void);
-```
+[archived fence delimiter: ```]
 
 Ising anyons have fusion rules:
 - $\sigma \times \sigma = 1 + \psi$
@@ -93,9 +100,9 @@ Ising anyons have fusion rules:
 
 Create SU(2)_k anyon system.
 
-```c
+[archived fence delimiter: ```c]
 anyon_system_t *anyon_system_su2k(uint32_t k);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -109,17 +116,17 @@ anyon_system_t *anyon_system_su2k(uint32_t k);
 
 Free anyon system.
 
-```c
+[archived fence delimiter: ```c]
 void anyon_system_free(anyon_system_t *sys);
-```
+[archived fence delimiter: ```]
 
 #### `anyon_quantum_dimension`
 
 Get quantum dimension of an anyon charge.
 
-```c
+[archived fence delimiter: ```c]
 double anyon_quantum_dimension(const anyon_system_t *sys, anyon_charge_t charge);
-```
+[archived fence delimiter: ```]
 
 **Quantum dimensions**:
 - Fibonacci: $d_1 = 1$, $d_\tau = \phi$ (golden ratio ≈ 1.618)
@@ -131,9 +138,9 @@ double anyon_quantum_dimension(const anyon_system_t *sys, anyon_charge_t charge)
 
 Get total quantum dimension.
 
-```c
+[archived fence delimiter: ```c]
 double anyon_total_dimension(const anyon_system_t *sys);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $D = \sqrt{\sum_a d_a^2}$
 
@@ -145,7 +152,7 @@ double anyon_total_dimension(const anyon_system_t *sys);
 
 Fusion tree node.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct fusion_node {
     anyon_charge_t left;         // Left incoming charge
     anyon_charge_t right;        // Right incoming charge
@@ -154,13 +161,13 @@ typedef struct fusion_node {
     struct fusion_node *left_child;
     struct fusion_node *right_child;
 } fusion_node_t;
-```
+[archived fence delimiter: ```]
 
 #### `fusion_tree_t`
 
 Fusion tree state.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     anyon_system_t *anyon_sys;     // Anyon model
     anyon_charge_t *external;       // External (physical) anyon charges
@@ -170,7 +177,7 @@ typedef struct {
     double complex *amplitudes;     // Amplitudes for each fusion path
     uint32_t num_paths;             // Number of valid fusion paths
 } fusion_tree_t;
-```
+[archived fence delimiter: ```]
 
 ### Functions
 
@@ -178,12 +185,12 @@ typedef struct {
 
 Create fusion tree from external charges.
 
-```c
+[archived fence delimiter: ```c]
 fusion_tree_t *fusion_tree_create(anyon_system_t *sys,
                                   const anyon_charge_t *charges,
                                   uint32_t num_anyons,
                                   anyon_charge_t total_charge);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -200,20 +207,20 @@ fusion_tree_t *fusion_tree_create(anyon_system_t *sys,
 
 Free fusion tree.
 
-```c
+[archived fence delimiter: ```c]
 void fusion_tree_free(fusion_tree_t *tree);
-```
+[archived fence delimiter: ```]
 
 #### `fusion_count_paths`
 
 Count valid fusion paths.
 
-```c
+[archived fence delimiter: ```c]
 uint32_t fusion_count_paths(const anyon_system_t *sys,
                             const anyon_charge_t *charges,
                             uint32_t num_anyons,
                             anyon_charge_t total_charge);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Dimension of the fusion space.
 
@@ -223,9 +230,9 @@ uint32_t fusion_count_paths(const anyon_system_t *sys,
 
 Braid two adjacent anyons.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -241,9 +248,9 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
 
 Apply F-move (basis change).
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
-```
+[archived fence delimiter: ```]
 
 Changes fusion order: $(a \times b) \times c \leftrightarrow a \times (b \times c)$
 
@@ -251,12 +258,12 @@ Changes fusion order: $(a \times b) \times c \leftrightarrow a \times (b \times 
 
 Get F-matrix element.
 
-```c
+[archived fence delimiter: ```c]
 double complex get_F_symbol(const anyon_system_t *sys,
                             anyon_charge_t a, anyon_charge_t b,
                             anyon_charge_t c, anyon_charge_t d,
                             anyon_charge_t e, anyon_charge_t f);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $F^{abc}_d[e,f]$
 
@@ -264,11 +271,11 @@ double complex get_F_symbol(const anyon_system_t *sys,
 
 Get R-matrix element.
 
-```c
+[archived fence delimiter: ```c]
 double complex get_R_symbol(const anyon_system_t *sys,
                             anyon_charge_t a, anyon_charge_t b,
                             anyon_charge_t c);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $R^{ab}_c$ (braiding phase)
 
@@ -280,13 +287,13 @@ double complex get_R_symbol(const anyon_system_t *sys,
 
 Anyonic qubit register.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     fusion_tree_t *tree;
     anyon_system_t *sys;
     uint32_t num_logical_qubits;
 } anyonic_register_t;
-```
+[archived fence delimiter: ```]
 
 ### Functions
 
@@ -294,52 +301,52 @@ typedef struct {
 
 Create anyonic qubit register.
 
-```c
+[archived fence delimiter: ```c]
 anyonic_register_t *anyonic_register_create(anyon_system_t *sys,
                                             uint32_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 #### `anyonic_register_free`
 
 Free anyonic register.
 
-```c
+[archived fence delimiter: ```c]
 void anyonic_register_free(anyonic_register_t *reg);
-```
+[archived fence delimiter: ```]
 
 #### `anyonic_not`
 
 Apply NOT gate via braiding.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
-```
+[archived fence delimiter: ```]
 
 #### `anyonic_hadamard`
 
 Apply Hadamard-like gate via braiding.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
-```
+[archived fence delimiter: ```]
 
 #### `anyonic_T_gate`
 
 Apply T gate approximation via braiding.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
                           double precision);
-```
+[archived fence delimiter: ```]
 
 #### `anyonic_entangle`
 
 Apply two-qubit entangling gate.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t anyonic_entangle(anyonic_register_t *reg,
                             uint32_t qubit1, uint32_t qubit2);
-```
+[archived fence delimiter: ```]
 
 ## Surface Code
 
@@ -349,7 +356,7 @@ qs_error_t anyonic_entangle(anyonic_register_t *reg,
 
 Surface code lattice.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint32_t distance;           // Code distance
     uint32_t num_data_qubits;    // d²
@@ -358,7 +365,7 @@ typedef struct {
     uint8_t *x_syndrome;         // X-type syndrome measurements
     uint8_t *z_syndrome;         // Z-type syndrome measurements
 } surface_code_t;
-```
+[archived fence delimiter: ```]
 
 ### Functions
 
@@ -366,9 +373,9 @@ typedef struct {
 
 Create surface code.
 
-```c
+[archived fence delimiter: ```c]
 surface_code_t *surface_code_create(uint32_t distance);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -380,66 +387,66 @@ surface_code_t *surface_code_create(uint32_t distance);
 
 Free surface code.
 
-```c
+[archived fence delimiter: ```c]
 void surface_code_free(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_init_logical_zero`
 
 Initialize surface code in logical |0⟩.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_init_logical_zero(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_init_logical_plus`
 
 Initialize surface code in logical |+⟩.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_init_logical_plus(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_logical_X`
 
 Apply logical X gate.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_logical_X(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_logical_Z`
 
 Apply logical Z gate.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_logical_Z(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_measure_X_stabilizers`
 
 Measure X-type (plaquette) stabilizers.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_measure_X_stabilizers(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_measure_Z_stabilizers`
 
 Measure Z-type (vertex) stabilizers.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_measure_Z_stabilizers(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `surface_code_apply_error`
 
 Apply single-qubit error.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_apply_error(surface_code_t *code,
                                     uint32_t qubit, char error_type);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -452,9 +459,9 @@ qs_error_t surface_code_apply_error(surface_code_t *code,
 
 Decode syndrome and apply correction using MWPM decoder.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t surface_code_decode_correct(surface_code_t *code);
-```
+[archived fence delimiter: ```]
 
 ## Toric Code
 
@@ -464,7 +471,7 @@ qs_error_t surface_code_decode_correct(surface_code_t *code);
 
 Toric code on a torus.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint32_t L;                  // Linear size (L×L torus)
     uint32_t num_qubits;         // 2L² edge qubits
@@ -472,7 +479,7 @@ typedef struct {
     uint8_t *vertex_syndrome;    // A_v eigenvalues
     uint8_t *plaquette_syndrome; // B_p eigenvalues
 } toric_code_t;
-```
+[archived fence delimiter: ```]
 
 ### Functions
 
@@ -480,36 +487,36 @@ typedef struct {
 
 Create toric code.
 
-```c
+[archived fence delimiter: ```c]
 toric_code_t *toric_code_create(uint32_t L);
-```
+[archived fence delimiter: ```]
 
 #### `toric_code_free`
 
 Free toric code.
 
-```c
+[archived fence delimiter: ```c]
 void toric_code_free(toric_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `toric_code_init_ground_state`
 
 Initialize toric code ground state.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t toric_code_init_ground_state(toric_code_t *code);
-```
+[archived fence delimiter: ```]
 
 #### `toric_code_create_anyon_pair`
 
 Create an anyon pair.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t toric_code_create_anyon_pair(toric_code_t *code,
                                         char type,
                                         uint32_t x1, uint32_t y1,
                                         uint32_t x2, uint32_t y2);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -523,21 +530,21 @@ qs_error_t toric_code_create_anyon_pair(toric_code_t *code,
 
 Move an anyon.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t toric_code_move_anyon(toric_code_t *code, char type,
                                  uint32_t from_x, uint32_t from_y,
                                  uint32_t to_x, uint32_t to_y);
-```
+[archived fence delimiter: ```]
 
 #### `toric_code_braid`
 
 Braid anyons in toric code.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t toric_code_braid(toric_code_t *code,
                             uint32_t anyon1_x, uint32_t anyon1_y,
                             uint32_t anyon2_x, uint32_t anyon2_y);
-```
+[archived fence delimiter: ```]
 
 ## Topological Entanglement Entropy
 
@@ -545,12 +552,12 @@ qs_error_t toric_code_braid(toric_code_t *code,
 
 Compute topological entanglement entropy using Levin-Wen formula.
 
-```c
+[archived fence delimiter: ```c]
 double topological_entanglement_entropy(const quantum_state_t *state,
                                         const uint32_t *region_A, uint32_t num_A,
                                         const uint32_t *region_B, uint32_t num_B,
                                         const uint32_t *region_C, uint32_t num_C);
-```
+[archived fence delimiter: ```]
 
 Computes $S_{\text{topo}} = S_A + S_B + S_C - S_{AB} - S_{BC} - S_{AC} + S_{ABC}$
 
@@ -560,11 +567,11 @@ For topologically ordered states, $S_{\text{topo}} = \log D$ where $D$ is the to
 
 Compute Kitaev-Preskill topological entropy.
 
-```c
+[archived fence delimiter: ```c]
 double kitaev_preskill_entropy(const quantum_state_t *state,
                                const uint32_t *center_qubits, uint32_t num_center,
                                const uint32_t *ring_qubits, uint32_t num_ring);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Topological entropy $\gamma = \log D$
 
@@ -574,34 +581,34 @@ double kitaev_preskill_entropy(const quantum_state_t *state,
 
 Compute modular S-matrix.
 
-```c
+[archived fence delimiter: ```c]
 void compute_modular_S_matrix(const anyon_system_t *sys,
                               double complex *S_matrix);
-```
+[archived fence delimiter: ```]
 
 #### `compute_modular_T_matrix`
 
 Compute modular T-matrix.
 
-```c
+[archived fence delimiter: ```c]
 void compute_modular_T_matrix(const anyon_system_t *sys,
                               double complex *T_matrix);
-```
+[archived fence delimiter: ```]
 
 #### `topological_spin`
 
 Compute topological spin.
 
-```c
+[archived fence delimiter: ```c]
 double complex topological_spin(const anyon_system_t *sys,
                                 anyon_charge_t charge);
-```
+[archived fence delimiter: ```]
 
 **Returns**: $e^{2\pi i \theta_a}$ where $\theta_a$ is the topological spin.
 
 ## Example
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/topological/topological.h"
 #include <stdio.h>
 
@@ -628,10 +635,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Topological Computing Algorithm](../../algorithms/topological-computing.md) - Theory and usage guide
 - [Skyrmion Braiding API](skyrmion-braiding.md) - Skyrmion-based topological qubits
 - [Tensor Network API](tensor-network.md) - MPS and MPO operations
+```

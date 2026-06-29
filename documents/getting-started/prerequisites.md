@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Prerequisites
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Prerequisites
 
 This document outlines the mathematical and programming knowledge needed to effectively use Moonlab Quantum Simulator. Assess your current knowledge and identify areas for review.
@@ -99,7 +106,7 @@ If using the C library directly:
 - Header files and compilation
 
 **Minimum example you should understand**:
-```c
+[archived fence delimiter: ```c]
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -116,7 +123,7 @@ int main(void) {
     free(v.data);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Alternative: Python (for Python API)
 
@@ -127,7 +134,7 @@ If using Python bindings:
 - Object-oriented programming basics
 
 **Minimum example**:
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 
 class QuantumState:
@@ -137,7 +144,7 @@ class QuantumState:
 
 state = QuantumState(2)
 print(state.amplitudes)
-```
+[archived fence delimiter: ```]
 
 ### Alternative: JavaScript/TypeScript (for Web API)
 
@@ -148,7 +155,7 @@ If using JavaScript bindings:
 - TypeScript basics (recommended)
 
 **Minimum example**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface QuantumState {
     numQubits: number;
     amplitudes: Float64Array;
@@ -160,7 +167,7 @@ function createState(n: number): QuantumState {
     amplitudes[0] = 1.0; // |0⟩ amplitude
     return { numQubits: n, amplitudes };
 }
-```
+[archived fence delimiter: ```]
 
 ## No Prerequisites Required
 
@@ -212,3 +219,4 @@ Proceed to:
 - [Linear Algebra Review](linear-algebra-review.md) if you need a math refresher
 - [Quantum Mechanics Primer](quantum-mechanics-primer.md) if your math is solid
 - [First Simulation](first-simulation.md) if you're ready to code
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tensor Network API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tensor Network API
 
 Complete reference for tensor operations and tensor network simulation in the C library.
@@ -15,18 +22,18 @@ The tensor module provides arbitrary-rank complex tensor operations optimized fo
 
 ## Configuration Constants
 
-```c
+[archived fence delimiter: ```c]
 #define TENSOR_MAX_RANK     16    // Maximum tensor rank
 #define TENSOR_ALIGNMENT    64    // Memory alignment (bytes)
 #define TENSOR_DEFAULT_BOND_DIM  64   // Default MPS bond dimension
 #define TENSOR_MAX_BOND_DIM 4096  // Maximum before truncation warning
-```
+[archived fence delimiter: ```]
 
 ## Error Codes
 
 ### tensor_error_t
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     TENSOR_SUCCESS = 0,
     TENSOR_ERROR_NULL_PTR = -1,
@@ -43,7 +50,7 @@ typedef enum {
     TENSOR_ERROR_GPU_UNAVAILABLE = -12,
     TENSOR_ERROR_GPU_SYNC_FAILED = -13
 } tensor_error_t;
-```
+[archived fence delimiter: ```]
 
 ## Core Data Structures
 
@@ -51,7 +58,7 @@ typedef enum {
 
 Complex tensor with arbitrary rank.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double complex *data;           // Complex amplitude data (SIMD-aligned)
     uint32_t rank;                  // Number of dimensions (0 = scalar)
@@ -65,12 +72,12 @@ typedef struct {
     bool cpu_valid;                 // CPU data is current
     bool gpu_valid;                 // GPU data is current
 } tensor_t;
-```
+[archived fence delimiter: ```]
 
 **Memory Layout**: Row-major storage. For rank-3 tensor T[i][j][k] with dimensions [d0, d1, d2]:
-```
+[archived fence delimiter: ```]
 linear_index = i * (d1 * d2) + j * d2 + k
-```
+[archived fence delimiter: ```]
 
 **GPU Synchronization Model**:
 - `cpu_valid=true, gpu_valid=false`: Data on CPU only (initial state)
@@ -81,7 +88,7 @@ linear_index = i * (d1 * d2) + j * d2 + k
 
 SVD decomposition result: $A = U \cdot S \cdot V^\dagger$
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t *U;                    // Left singular vectors (m x k)
     double *S;                      // Singular values (k) - real, non-negative
@@ -89,29 +96,29 @@ typedef struct {
     uint32_t k;                     // Number of singular values kept
     double truncation_error;        // Frobenius norm of discarded values
 } tensor_svd_result_t;
-```
+[archived fence delimiter: ```]
 
 ### tensor_qr_result_t
 
 QR decomposition result: $A = Q \cdot R$
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tensor_t *Q;                    // Orthonormal matrix
     tensor_t *R;                    // Upper triangular matrix
 } tensor_qr_result_t;
-```
+[archived fence delimiter: ```]
 
 ### tensor_contraction_spec_t
 
 Tensor contraction specification.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint32_t num_contractions;      // Number of index pairs to contract
     tensor_axis_pair_t pairs[TENSOR_MAX_RANK]; // Pairs of axes to contract
 } tensor_contraction_spec_t;
-```
+[archived fence delimiter: ```]
 
 ## Creation and Destruction
 
@@ -119,9 +126,9 @@ typedef struct {
 
 Create a new tensor with specified dimensions.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create(uint32_t rank, const uint32_t *dims);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `rank`: Number of dimensions
@@ -130,29 +137,29 @@ tensor_t *tensor_create(uint32_t rank, const uint32_t *dims);
 **Returns**: New tensor initialized to zero, or NULL on failure
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Create rank-3 tensor with dimensions 4 x 2 x 4
 uint32_t dims[] = {4, 2, 4};
 tensor_t *T = tensor_create(3, dims);
-```
+[archived fence delimiter: ```]
 
 ### tensor_create_with_data
 
 Create tensor initialized with given data.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_with_data(uint32_t rank, const uint32_t *dims,
                                    const double complex *data);
-```
+[archived fence delimiter: ```]
 
 ### tensor_create_view
 
 Create tensor as view of existing data (no copy).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_view(uint32_t rank, const uint32_t *dims,
                               double complex *data);
-```
+[archived fence delimiter: ```]
 
 **Note**: Caller must ensure data outlives tensor. Returns tensor with `owns_data = false`.
 
@@ -160,65 +167,65 @@ tensor_t *tensor_create_view(uint32_t rank, const uint32_t *dims,
 
 Create scalar tensor (rank 0).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_scalar(double complex value);
-```
+[archived fence delimiter: ```]
 
 ### tensor_create_vector
 
 Create rank-1 tensor (vector).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_vector(uint32_t size);
-```
+[archived fence delimiter: ```]
 
 ### tensor_create_matrix
 
 Create rank-2 tensor (matrix).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_matrix(uint32_t rows, uint32_t cols);
-```
+[archived fence delimiter: ```]
 
 ### tensor_create_identity
 
 Create identity matrix tensor.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_create_identity(uint32_t size);
-```
+[archived fence delimiter: ```]
 
 ### tensor_copy
 
 Create deep copy of tensor.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_copy(const tensor_t *src);
-```
+[archived fence delimiter: ```]
 
 ### tensor_free
 
 Free tensor and its data.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_free(tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_svd_free
 
 Free SVD result structure.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_svd_free(tensor_svd_result_t *svd);
-```
+[archived fence delimiter: ```]
 
 ### tensor_qr_free
 
 Free QR result structure.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_qr_free(tensor_qr_result_t *qr);
-```
+[archived fence delimiter: ```]
 
 ## Element Access
 
@@ -226,45 +233,45 @@ void tensor_qr_free(tensor_qr_result_t *qr);
 
 Get element at indices.
 
-```c
+[archived fence delimiter: ```c]
 double complex tensor_get(const tensor_t *tensor, const uint32_t *indices);
-```
+[archived fence delimiter: ```]
 
 ### tensor_set
 
 Set element at indices.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_set(tensor_t *tensor, const uint32_t *indices,
                           double complex value);
-```
+[archived fence delimiter: ```]
 
 ### tensor_get_linear / tensor_set_linear
 
 Access by linear index.
 
-```c
+[archived fence delimiter: ```c]
 double complex tensor_get_linear(const tensor_t *tensor, uint64_t idx);
 tensor_error_t tensor_set_linear(tensor_t *tensor, uint64_t idx,
                                   double complex value);
-```
+[archived fence delimiter: ```]
 
 ### tensor_get_linear_index
 
 Convert multi-dimensional indices to linear index.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t tensor_get_linear_index(const tensor_t *tensor, const uint32_t *indices);
-```
+[archived fence delimiter: ```]
 
 ### tensor_get_multi_index
 
 Convert linear index to multi-dimensional indices.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_get_multi_index(const tensor_t *tensor, uint64_t linear_idx,
                             uint32_t *indices);
-```
+[archived fence delimiter: ```]
 
 ## Shape Operations
 
@@ -272,10 +279,10 @@ void tensor_get_multi_index(const tensor_t *tensor, uint64_t linear_idx,
 
 Reshape tensor to new dimensions.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_reshape(const tensor_t *tensor, uint32_t new_rank,
                          const uint32_t *new_dims);
-```
+[archived fence delimiter: ```]
 
 **Note**: Total size must remain the same. Returns new tensor.
 
@@ -283,9 +290,9 @@ tensor_t *tensor_reshape(const tensor_t *tensor, uint32_t new_rank,
 
 Transpose tensor axes.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_transpose(const tensor_t *tensor, const uint32_t *perm);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `perm`: Permutation of axes (length = rank)
@@ -294,33 +301,33 @@ tensor_t *tensor_transpose(const tensor_t *tensor, const uint32_t *perm);
 
 Swap two axes of tensor.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_swapaxes(const tensor_t *tensor, uint32_t axis1, uint32_t axis2);
-```
+[archived fence delimiter: ```]
 
 ### tensor_flatten
 
 Flatten tensor to 1D.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_flatten(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_expand_dims
 
 Add new dimension of size 1.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_expand_dims(const tensor_t *tensor, uint32_t axis);
-```
+[archived fence delimiter: ```]
 
 ### tensor_squeeze
 
 Remove dimensions of size 1.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_squeeze(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ## Arithmetic Operations
 
@@ -328,43 +335,43 @@ tensor_t *tensor_squeeze(const tensor_t *tensor);
 
 Element-wise addition/subtraction.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_add(const tensor_t *a, const tensor_t *b);
 tensor_t *tensor_sub(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 ### tensor_scale
 
 Multiply tensor by scalar.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_scale(const tensor_t *tensor, double complex scalar);
-```
+[archived fence delimiter: ```]
 
 ### tensor_hadamard
 
 Element-wise multiplication (Hadamard product).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_hadamard(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 ### tensor_conj
 
 Complex conjugate.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_conj(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_scale_inplace / tensor_add_inplace
 
 In-place operations.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_scale_inplace(tensor_t *tensor, double complex scalar);
 tensor_error_t tensor_add_inplace(tensor_t *tensor, const tensor_t *other);
-```
+[archived fence delimiter: ```]
 
 ## Norms and Properties
 
@@ -372,9 +379,9 @@ tensor_error_t tensor_add_inplace(tensor_t *tensor, const tensor_t *other);
 
 Frobenius norm (L2 norm of all elements).
 
-```c
+[archived fence delimiter: ```c]
 double tensor_norm_frobenius(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 **Formula**: $\|T\|_F = \sqrt{\sum |t_i|^2}$
 
@@ -382,33 +389,33 @@ double tensor_norm_frobenius(const tensor_t *tensor);
 
 Maximum absolute value norm.
 
-```c
+[archived fence delimiter: ```c]
 double tensor_norm_max(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_sum
 
 Sum of all elements.
 
-```c
+[archived fence delimiter: ```c]
 double complex tensor_sum(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_sum_axis
 
 Sum along an axis.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_sum_axis(const tensor_t *tensor, uint32_t axis);
-```
+[archived fence delimiter: ```]
 
 ### tensor_inner
 
 Frobenius inner product.
 
-```c
+[archived fence delimiter: ```c]
 double complex tensor_inner(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 **Formula**: $\langle A, B \rangle = \sum \text{conj}(a_i) \cdot b_i$
 
@@ -416,25 +423,25 @@ double complex tensor_inner(const tensor_t *a, const tensor_t *b);
 
 Check if tensors have same shape.
 
-```c
+[archived fence delimiter: ```c]
 bool tensor_shape_equal(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 ### tensor_is_zero
 
 Check if tensor is approximately zero.
 
-```c
+[archived fence delimiter: ```c]
 bool tensor_is_zero(const tensor_t *tensor, double tol);
-```
+[archived fence delimiter: ```]
 
 ### tensor_allclose
 
 Check if tensors are approximately equal.
 
-```c
+[archived fence delimiter: ```c]
 bool tensor_allclose(const tensor_t *a, const tensor_t *b, double tol);
-```
+[archived fence delimiter: ```]
 
 ## Matrix Operations
 
@@ -442,9 +449,9 @@ bool tensor_allclose(const tensor_t *a, const tensor_t *b, double tol);
 
 Matrix multiplication for rank-2 tensors.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 **Computes**: $C = A \times B$ for matrices
 
@@ -452,17 +459,17 @@ tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b);
 
 Matrix-vector multiplication.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_matvec(const tensor_t *mat, const tensor_t *vec);
-```
+[archived fence delimiter: ```]
 
 ### tensor_outer
 
 Outer product of two vectors.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_outer(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 **Formula**: $M[i,j] = a[i] \cdot b[j]$
 
@@ -470,25 +477,25 @@ tensor_t *tensor_outer(const tensor_t *a, const tensor_t *b);
 
 Tensor product (Kronecker product for matrices).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_kron(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 ### tensor_trace
 
 Matrix trace.
 
-```c
+[archived fence delimiter: ```c]
 double complex tensor_trace(const tensor_t *mat);
-```
+[archived fence delimiter: ```]
 
 ### tensor_dagger
 
 Hermitian conjugate (conjugate transpose).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_dagger(const tensor_t *mat);
-```
+[archived fence delimiter: ```]
 
 ## Decompositions
 
@@ -496,10 +503,10 @@ tensor_t *tensor_dagger(const tensor_t *mat);
 
 Singular Value Decomposition with optional truncation.
 
-```c
+[archived fence delimiter: ```c]
 tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
                                  double cutoff);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `mat`: Matrix to decompose
@@ -512,9 +519,9 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
 
 SVD with automatic rank selection based on error threshold.
 
-```c
+[archived fence delimiter: ```c]
 tensor_svd_result_t *tensor_svd_truncate(const tensor_t *mat, double max_error);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `max_error`: Maximum allowed truncation error (Frobenius norm)
@@ -523,9 +530,9 @@ tensor_svd_result_t *tensor_svd_truncate(const tensor_t *mat, double max_error);
 
 QR decomposition.
 
-```c
+[archived fence delimiter: ```c]
 tensor_qr_result_t *tensor_qr(const tensor_t *mat);
-```
+[archived fence delimiter: ```]
 
 **Returns**: QR result with $A = Q \cdot R$
 
@@ -533,9 +540,9 @@ tensor_qr_result_t *tensor_qr(const tensor_t *mat);
 
 LQ decomposition.
 
-```c
+[archived fence delimiter: ```c]
 tensor_qr_result_t *tensor_lq(const tensor_t *mat);
-```
+[archived fence delimiter: ```]
 
 ## Tensor Contraction
 
@@ -543,11 +550,11 @@ tensor_qr_result_t *tensor_lq(const tensor_t *mat);
 
 Contract two tensors over specified axes.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
                           const uint32_t *axes_a, const uint32_t *axes_b,
                           uint32_t num_contract);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `axes_a`: Axes of A to contract
@@ -560,18 +567,18 @@ tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
 
 Tensor dot product (contracts last axis of A with first axis of B).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_tensordot(const tensor_t *a, const tensor_t *b);
-```
+[archived fence delimiter: ```]
 
 ### tensor_einsum
 
 Einstein summation (limited subset).
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
                         const char *subscripts);
-```
+[archived fence delimiter: ```]
 
 **Example**: `"ij,jk->ik"` for matrix multiplication
 
@@ -585,9 +592,9 @@ Opaque GPU context handle for tensor operations.
 
 Create GPU context.
 
-```c
+[archived fence delimiter: ```c]
 tensor_gpu_context_t *tensor_gpu_context_create(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: GPU context or NULL if unavailable
 
@@ -595,75 +602,75 @@ tensor_gpu_context_t *tensor_gpu_context_create(void);
 
 Destroy GPU context.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### tensor_gpu_available
 
 Check if GPU acceleration is available.
 
-```c
+[archived fence delimiter: ```c]
 bool tensor_gpu_available(void);
-```
+[archived fence delimiter: ```]
 
 ### tensor_gpu_get_context
 
 Get global GPU context (singleton).
 
-```c
+[archived fence delimiter: ```c]
 tensor_gpu_context_t *tensor_gpu_get_context(void);
-```
+[archived fence delimiter: ```]
 
 ### tensor_gpu_alloc
 
 Allocate GPU buffer for tensor.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_gpu_alloc(tensor_gpu_context_t *ctx, tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_gpu_free
 
 Free GPU buffer.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_gpu_free(tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_sync_to_gpu
 
 Copy CPU data to GPU.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_sync_to_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_sync_to_cpu
 
 Copy GPU data back to CPU.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_sync_to_cpu(tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_ensure_cpu / tensor_ensure_gpu
 
 Ensure data is valid on CPU/GPU, syncing if needed.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_ensure_cpu(tensor_t *tensor);
 tensor_error_t tensor_ensure_gpu(tensor_gpu_context_t *ctx, tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_invalidate_cpu / tensor_invalidate_gpu
 
 Mark data as invalid after modification.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_invalidate_cpu(tensor_t *tensor);
 void tensor_invalidate_gpu(tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ## Utilities
 
@@ -671,78 +678,78 @@ void tensor_invalidate_gpu(tensor_t *tensor);
 
 Set all elements to zero.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_zero(tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_fill
 
 Set all elements to a constant.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_fill(tensor_t *tensor, double complex value);
-```
+[archived fence delimiter: ```]
 
 ### tensor_copy_data
 
 Copy data between tensors.
 
-```c
+[archived fence delimiter: ```c]
 tensor_error_t tensor_copy_data(tensor_t *dst, const tensor_t *src);
-```
+[archived fence delimiter: ```]
 
 ### tensor_print_shape
 
 Print tensor shape information.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_print_shape(const tensor_t *tensor, const char *name);
-```
+[archived fence delimiter: ```]
 
 ### tensor_print_data
 
 Print tensor data (for debugging).
 
-```c
+[archived fence delimiter: ```c]
 void tensor_print_data(const tensor_t *tensor, const char *name,
                        uint32_t max_elements);
-```
+[archived fence delimiter: ```]
 
 ### tensor_error_string
 
 Get error string.
 
-```c
+[archived fence delimiter: ```c]
 const char *tensor_error_string(tensor_error_t error);
-```
+[archived fence delimiter: ```]
 
 ### tensor_memory_usage
 
 Calculate memory usage in bytes.
 
-```c
+[archived fence delimiter: ```c]
 size_t tensor_memory_usage(const tensor_t *tensor);
-```
+[archived fence delimiter: ```]
 
 ### tensor_random_fill
 
 Fill tensor with random complex values.
 
-```c
+[archived fence delimiter: ```c]
 void tensor_random_fill(tensor_t *tensor, uint64_t seed);
-```
+[archived fence delimiter: ```]
 
 ### tensor_random_unitary
 
 Create random unitary matrix.
 
-```c
+[archived fence delimiter: ```c]
 tensor_t *tensor_random_unitary(uint32_t size, uint64_t seed);
-```
+[archived fence delimiter: ```]
 
 ## MPS Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/algorithms/tensor_network/tensor.h"
 
 // Create MPS tensors for 4-site chain with bond dimension 8
@@ -770,10 +777,11 @@ tensor_svd_free(svd);
 tensor_free(theta);
 tensor_free(A0); tensor_free(A1);
 tensor_free(A2); tensor_free(A3);
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [DMRG API](../../algorithms/dmrg-algorithm.md) - Density Matrix Renormalization Group
 - [GPU Metal API](gpu-metal.md) - GPU acceleration details
 - [Concepts: Tensor Networks](../../concepts/tensor-networks.md) - Theory
+```

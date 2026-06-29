@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Distributed Simulation Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Distributed Simulation Guide
 
 Scale quantum simulations beyond single-machine memory limits using MPI-based distributed computing.
@@ -25,7 +32,7 @@ Moonlab's distributed backend partitions the state vector across multiple nodes,
 
 ### Software Requirements
 
-```bash
+[archived fence delimiter: ```bash]
 # Install MPI (choose one)
 # macOS
 brew install open-mpi
@@ -35,11 +42,11 @@ sudo apt-get install libopenmpi-dev openmpi-bin
 
 # RHEL/CentOS
 sudo yum install openmpi openmpi-devel
-```
+[archived fence delimiter: ```]
 
 ### Building with MPI Support
 
-```bash
+[archived fence delimiter: ```bash]
 # Configure with MPI
 ./configure --enable-mpi
 
@@ -49,13 +56,13 @@ make MPI=1
 # Verify MPI support
 ./bin/moonlab --version
 # Output should include: MPI: enabled
-```
+[archived fence delimiter: ```]
 
 ## Basic Usage
 
 ### C API
 
-```c
+[archived fence delimiter: ```c]
 #include "distributed/mpi_bridge.h"
 #include "quantum/state.h"
 
@@ -90,11 +97,11 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Running with MPI
 
-```bash
+[archived fence delimiter: ```bash]
 # Single machine, 4 processes
 mpirun -np 4 ./my_quantum_app
 
@@ -103,11 +110,11 @@ mpirun -np 64 --hostfile hosts.txt ./my_quantum_app
 
 # SLURM cluster
 srun -n 128 ./my_quantum_app
-```
+[archived fence delimiter: ```]
 
 ### Python API
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.distributed import DistributedState, init_mpi, finalize_mpi
 
 # Initialize MPI
@@ -127,7 +134,7 @@ if state.rank == 0:
     print(f"Measurement result: {result}")
 
 finalize_mpi()
-```
+[archived fence delimiter: ```]
 
 ## State Partitioning
 
@@ -135,17 +142,17 @@ finalize_mpi()
 
 The state vector is partitioned by the highest-order qubits:
 
-```
+[archived fence delimiter: ```]
 32 qubits on 4 ranks:
 - Rank 0: amplitudes[0 ... 2^30 - 1]           (top 2 bits = 00)
 - Rank 1: amplitudes[2^30 ... 2×2^30 - 1]      (top 2 bits = 01)
 - Rank 2: amplitudes[2×2^30 ... 3×2^30 - 1]    (top 2 bits = 10)
 - Rank 3: amplitudes[3×2^30 ... 2^32 - 1]      (top 2 bits = 11)
-```
+[archived fence delimiter: ```]
 
 ### Local vs Global Qubits
 
-```c
+[archived fence delimiter: ```c]
 // For n qubits on P ranks (P = 2^k):
 // - Qubits 0 to n-k-1: LOCAL (no communication needed)
 // - Qubits n-k to n-1: GLOBAL (require MPI communication)
@@ -157,7 +164,7 @@ distributed_hadamard(state, 0);   // Qubit 0 is local
 
 // Global gate (requires MPI exchange)
 distributed_hadamard(state, 31);  // Qubit 31 is global
-```
+[archived fence delimiter: ```]
 
 ## Communication Patterns
 
@@ -165,7 +172,7 @@ distributed_hadamard(state, 31);  // Qubit 31 is global
 
 When applying a gate to a global qubit, ranks exchange half their data:
 
-```c
+[archived fence delimiter: ```c]
 // Gate on qubit k where k >= n - log2(P)
 // Partner rank = my_rank XOR 2^(k - (n - log2(P)))
 
@@ -186,13 +193,13 @@ void distributed_gate_global(distributed_state_t* state,
     // Apply gate using local and received data
     apply_gate_pairs(state, gate);
 }
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Global Gates
 
 CNOT between global qubits may require 4-way communication:
 
-```c
+[archived fence delimiter: ```c]
 void distributed_cnot_global(distributed_state_t* state,
                              int control, int target) {
     // Determine communication pattern based on qubit positions
@@ -214,13 +221,13 @@ void distributed_cnot_global(distributed_state_t* state,
     // Apply CNOT to regrouped data
     apply_cnot_local(state);
 }
-```
+[archived fence delimiter: ```]
 
 ## Configuration Options
 
 ### Environment Variables
 
-```bash
+[archived fence delimiter: ```bash]
 # Buffer size for MPI messages (default: auto)
 export MOONLAB_MPI_BUFFER_SIZE=67108864  # 64 MB
 
@@ -229,11 +236,11 @@ export MOONLAB_MPI_ASYNC=1
 
 # Overlap computation with communication
 export MOONLAB_MPI_OVERLAP=1
-```
+[archived fence delimiter: ```]
 
 ### Runtime Configuration
 
-```c
+[archived fence delimiter: ```c]
 distributed_config_t config = {
     .buffer_size = 64 * 1024 * 1024,  // 64 MB
     .use_async = true,
@@ -242,13 +249,13 @@ distributed_config_t config = {
 };
 
 distributed_state_t* state = distributed_state_create_config(32, &config);
-```
+[archived fence delimiter: ```]
 
 ## Performance Optimization
 
 ### Minimize Global Operations
 
-```c
+[archived fence delimiter: ```c]
 // SLOW: Many global gates
 for (int i = 0; i < 100; i++) {
     distributed_hadamard(state, 31);  // Global, requires MPI
@@ -258,11 +265,11 @@ for (int i = 0; i < 100; i++) {
 for (int i = 0; i < 100; i++) {
     distributed_hadamard(state, i % state->local_qubits);  // Local
 }
-```
+[archived fence delimiter: ```]
 
 ### Use Collective Operations
 
-```c
+[archived fence delimiter: ```c]
 // Instead of individual measurements
 for (int q = 0; q < n; q++) {
     probs[q] = distributed_measure_probability(state, q);  // Multiple collectives
@@ -270,11 +277,11 @@ for (int q = 0; q < n; q++) {
 
 // Use batched measurement
 distributed_measure_probabilities_all(state, probs);  // Single collective
-```
+[archived fence delimiter: ```]
 
 ### Overlap Communication
 
-```c
+[archived fence delimiter: ```c]
 // Start async receive
 MPI_Irecv(recv_buffer, count, MPI_DOUBLE_COMPLEX,
           partner, tag, MPI_COMM_WORLD, &recv_request);
@@ -287,11 +294,11 @@ MPI_Wait(&recv_request, MPI_STATUS_IGNORE);
 
 // Apply global operation
 apply_global_gate(state, recv_buffer);
-```
+[archived fence delimiter: ```]
 
 ## Example: Distributed Grover Search
 
-```c
+[archived fence delimiter: ```c]
 #include "distributed/mpi_bridge.h"
 #include "algorithms/grover.h"
 
@@ -337,13 +344,13 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Cluster Configuration
 
 ### SLURM Job Script
 
-```bash
+[archived fence delimiter: ```bash]
 #!/bin/bash
 #SBATCH --job-name=quantum_sim
 #SBATCH --nodes=16
@@ -359,11 +366,11 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Run simulation (64 total MPI ranks)
 srun ./distributed_grover 34  # 34 qubits
-```
+[archived fence delimiter: ```]
 
 ### PBS/Torque Job Script
 
-```bash
+[archived fence delimiter: ```bash]
 #!/bin/bash
 #PBS -N quantum_sim
 #PBS -l nodes=16:ppn=4
@@ -374,33 +381,33 @@ cd $PBS_O_WORKDIR
 module load openmpi
 
 mpirun -np 64 ./distributed_grover 34
-```
+[archived fence delimiter: ```]
 
 ## Troubleshooting
 
 ### Common Issues
 
 **MPI Initialization Failure**
-```
+[archived fence delimiter: ```]
 Error: MPI_Init failed
-```
+[archived fence delimiter: ```]
 Solution: Ensure MPI is properly installed and in PATH.
 
 **Out of Memory**
-```
+[archived fence delimiter: ```]
 Error: Cannot allocate distributed state
-```
+[archived fence delimiter: ```]
 Solution: Increase nodes or reduce qubit count. Memory per rank = 2^n × 16 / num_ranks.
 
 **Communication Timeout**
-```
+[archived fence delimiter: ```]
 Error: MPI_Recv timed out
-```
+[archived fence delimiter: ```]
 Solution: Check network connectivity, increase timeout, or reduce message size.
 
 ### Debugging
 
-```bash
+[archived fence delimiter: ```bash]
 # Run with MPI debugging
 mpirun -np 4 xterm -e gdb ./my_quantum_app
 
@@ -409,7 +416,7 @@ mpirun -np 4 valgrind ./my_quantum_app
 
 # Profile communication
 mpirun -np 4 tau_exec ./my_quantum_app
-```
+[archived fence delimiter: ```]
 
 ## Performance Benchmarks
 
@@ -428,3 +435,4 @@ mpirun -np 4 tau_exec ./my_quantum_app
 - [API Reference: MPI Bridge](../api/c/mpi-bridge.md)
 - [Architecture: Distributed Design](../architecture/distributed-architecture.md)
 - [Performance: Scaling Analysis](../performance/scaling-analysis.md)
+```

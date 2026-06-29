@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Gate reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Gate reference
 
 Quick reference for Moonlab's state-vector gate API.  Every entry
@@ -67,17 +74,17 @@ Any single-qubit gate decomposes as `U3` up to a global phase.
 
 $$\text{CNOT} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 1 & 0 \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_cnot(state, control, target);
-```
+[archived fence delimiter: ```]
 
 ### Controlled-Y (CY)
 
 $$\text{CY} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & -i \\ 0 & 0 & i & 0 \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_cy(state, control, target);
-```
+[archived fence delimiter: ```]
 
 ### Controlled-Z (CZ)
 
@@ -85,17 +92,17 @@ $$\text{CZ} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\
 
 Symmetric: `CZ(a, b)` equals `CZ(b, a)`.
 
-```c
+[archived fence delimiter: ```c]
 gate_cz(state, control, target);
-```
+[archived fence delimiter: ```]
 
 ### SWAP
 
 $$\text{SWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 0 & 1 \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_swap(state, qubit1, qubit2);
-```
+[archived fence delimiter: ```]
 
 Decomposition: `SWAP = CNOT(a,b) · CNOT(b,a) · CNOT(a,b)`.
 
@@ -114,27 +121,27 @@ Decomposition: `SWAP = CNOT(a,b) · CNOT(b,a) · CNOT(a,b)`.
 
 Flips target if both controls are $\lvert1\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 gate_toffoli(state, control1, control2, target);
-```
+[archived fence delimiter: ```]
 
 ### Fredkin (CSWAP)
 
 Swaps two qubits if control is $\lvert1\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 gate_fredkin(state, control, target1, target2);
-```
+[archived fence delimiter: ```]
 
 ## Multi-controlled gates
 
 Variadic-control X and Z, with the control list passed as an array:
 
-```c
+[archived fence delimiter: ```c]
 int controls[] = {0, 1, 2, 3};
 gate_mcx(state, controls, 4 /* num_controls */, 5 /* target */);
 gate_mcz(state, controls, 4, 5);
-```
+[archived fence delimiter: ```]
 
 Declared at `src/quantum/gates.h:` (search `gate_mcx`, `gate_mcz`).
 
@@ -145,11 +152,11 @@ subset of qubits, supplied as an index array:
 
 $$\text{QFT}\lvert j\rangle = \frac{1}{\sqrt{N}} \sum_{k=0}^{N-1} e^{2\pi ijk/N} \lvert k\rangle$$
 
-```c
+[archived fence delimiter: ```c]
 int qubits[] = {0, 1, 2, 3};
 gate_qft(state, qubits, 4);
 gate_iqft(state, qubits, 4);
-```
+[archived fence delimiter: ```]
 
 ## Gate identities
 
@@ -205,3 +212,4 @@ mirror the C signatures one-to-one inside `impl QuantumState`.
   surface.
 - [Error codes](error-codes.md) -- meaning of the `qs_error_t`
   return values.
+```

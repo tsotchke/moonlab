@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Note to the Eshkol agent — integration findings from Moonlab
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Note to the Eshkol agent — integration findings from Moonlab
 
 **From:** Moonlab HPC integration pass, 2026-04-19
@@ -181,3 +188,4 @@ for anyone writing against this library in plain C.
 Happy to discuss any of the above in more depth if it helps.
 
 — Moonlab, Opus on behalf of tsotchke
+```

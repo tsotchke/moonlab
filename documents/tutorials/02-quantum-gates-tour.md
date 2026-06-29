@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 02: Quantum Gates Tour
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 02: Quantum Gates Tour
 
 Explore the complete quantum gate library.
@@ -32,7 +39,7 @@ Quantum gates fall into several categories:
 
 ### Setup
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 import numpy as np
 
@@ -46,13 +53,13 @@ def show_state(state, name=""):
             bits = format(i, f'0{n}b')
             print(f"  |{bits}⟩: {p:.4f}")
     print()
-```
+[archived fence delimiter: ```]
 
 ### Pauli-X (NOT Gate)
 
 The X gate flips $|0\rangle \leftrightarrow |1\rangle$:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 print("Initial:", state.probabilities())  # [1, 0]
 
@@ -61,13 +68,13 @@ print("After X:", state.probabilities())  # [0, 1]
 
 state.x(0)
 print("After X again:", state.probabilities())  # [1, 0]
-```
+[archived fence delimiter: ```]
 
 **Key insight**: X² = I (applying twice returns to original).
 
 ### Pauli-Y and Pauli-Z
 
-```python
+[archived fence delimiter: ```python]
 # Y gate: combined bit and phase flip
 state = QuantumState(1)
 state.h(0)  # Create |+⟩
@@ -81,13 +88,13 @@ state.reset()
 state.h(0)  # |+⟩ state
 state.z(0)  # Now |−⟩ state
 print("After Z on |+⟩:", state.get_amplitudes())
-```
+[archived fence delimiter: ```]
 
 ### Hadamard Gate
 
 Creates equal superposition:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 state.h(0)
 show_state(state, "After H")
@@ -95,11 +102,11 @@ show_state(state, "After H")
 # H is self-inverse
 state.h(0)
 show_state(state, "After H again (back to |0⟩)")
-```
+[archived fence delimiter: ```]
 
 ### Phase Gates: S and T
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 state.h(0)  # Create superposition
 
@@ -113,7 +120,7 @@ state.reset()
 state.h(0)
 state.t(0)
 print("After T:", state.get_amplitudes())
-```
+[archived fence delimiter: ```]
 
 **Relation**: S = T², Z = S²
 
@@ -121,7 +128,7 @@ print("After T:", state.get_amplitudes())
 
 Continuous rotation around Bloch sphere axes:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 
 # Rx: rotation around X axis
@@ -138,7 +145,7 @@ state.reset()
 state.h(0)
 state.rz(0, np.pi/3)  # 60° rotation
 show_state(state, "Rz(π/3)")
-```
+[archived fence delimiter: ```]
 
 **Special cases**:
 - Rx(π) = iX
@@ -147,13 +154,13 @@ show_state(state, "Rz(π/3)")
 
 ### General Phase Gate
 
-```python
+[archived fence delimiter: ```python]
 # P(φ) adds phase e^(iφ) to |1⟩
 state = QuantumState(1)
 state.h(0)
 state.phase(0, np.pi/6)  # 30° phase
 print("After P(π/6):", state.get_amplitudes())
-```
+[archived fence delimiter: ```]
 
 ## Two-Qubit Gates
 
@@ -161,7 +168,7 @@ print("After P(π/6):", state.get_amplitudes())
 
 Flips target if control is |1⟩:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 
 # Test all input combinations
@@ -179,19 +186,19 @@ for initial in [0, 1, 2, 3]:
     bits_in = format(initial, '02b')
     bits_out = format(result, '02b')
     print(f"|{bits_in}⟩ → |{bits_out}⟩")
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 |00⟩ → |00⟩
 |01⟩ → |01⟩
 |10⟩ → |11⟩
 |11⟩ → |10⟩
-```
+[archived fence delimiter: ```]
 
 ### Creating Entanglement
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 
 # Bell state: (|00⟩ + |11⟩)/√2
@@ -200,11 +207,11 @@ state.cnot(0, 1)
 
 show_state(state, "Bell State")
 # Output: |00⟩: 0.5, |11⟩: 0.5
-```
+[archived fence delimiter: ```]
 
 ### Controlled-Z
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.h(0)
 state.h(1)  # |++⟩ state
@@ -213,7 +220,7 @@ state.cz(0, 1)
 
 show_state(state, "After CZ on |++⟩")
 # Creates entanglement!
-```
+[archived fence delimiter: ```]
 
 **Property**: CZ is symmetric - CZ(0,1) = CZ(1,0)
 
@@ -221,18 +228,18 @@ show_state(state, "After CZ on |++⟩")
 
 Exchanges two qubits:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.x(0)  # |01⟩ (qubit 0 is |1⟩)
 show_state(state, "Before SWAP")
 
 state.swap(0, 1)
 show_state(state, "After SWAP")  # Now |10⟩
-```
+[archived fence delimiter: ```]
 
 ### Controlled Rotations
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.x(0)  # Control is |1⟩
 state.h(1)  # Target in superposition
@@ -241,7 +248,7 @@ state.h(1)  # Target in superposition
 state.crz(0, 1, np.pi/2)
 
 show_state(state, "After CRz(π/2)")
-```
+[archived fence delimiter: ```]
 
 ## Three-Qubit Gates
 
@@ -249,7 +256,7 @@ show_state(state, "After CRz(π/2)")
 
 Flips target if both controls are |1⟩:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(3)
 
 # Test: |110⟩ → |111⟩
@@ -263,13 +270,13 @@ state.reset()
 state.x(2)
 state.toffoli(1, 2, 0)
 show_state(state, "Toffoli on |100⟩")
-```
+[archived fence delimiter: ```]
 
 ### Fredkin (CSWAP)
 
 Swaps two qubits if control is |1⟩:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(3)
 state.x(0)  # Set qubit 0 to |1⟩
 state.x(2)  # Control is |1⟩
@@ -277,13 +284,13 @@ state.x(2)  # Control is |1⟩
 state.fredkin(2, 0, 1)  # control=2, swap 0 and 1
 
 show_state(state, "After Fredkin")
-```
+[archived fence delimiter: ```]
 
 ## Method Chaining
 
 Moonlab supports fluent API for building circuits:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(4)
 
 # Build a GHZ state with method chaining
@@ -291,11 +298,11 @@ state.h(0).cnot(0, 1).cnot(1, 2).cnot(2, 3)
 
 show_state(state, "GHZ State")
 # Output: |0000⟩: 0.5, |1111⟩: 0.5
-```
+[archived fence delimiter: ```]
 
 ### Complex Circuit
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(3)
 
 # Quantum circuit with multiple layers
@@ -310,7 +317,7 @@ circuit_result = (
 )
 
 show_state(circuit_result, "Complex Circuit")
-```
+[archived fence delimiter: ```]
 
 ## Gate Effects Summary
 
@@ -327,7 +334,7 @@ show_state(circuit_result, "Complex Circuit")
 
 ### Useful Identities
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(1)
 
 # HZH = X
@@ -343,7 +350,7 @@ state.h(0).x(0).h(0)
 state.reset()
 state.s(0).x(0).sdg(0)
 # Same as: state.y(0) (up to phase)
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -370,11 +377,11 @@ Hint: CNOT with target first...
 
 Implement SWAP using only CNOT gates:
 
-```python
+[archived fence delimiter: ```python]
 # This should work:
 state.cnot(0, 1).cnot(1, 0).cnot(0, 1)
 # Equivalent to: state.swap(0, 1)
-```
+[archived fence delimiter: ```]
 
 Verify this works!
 
@@ -397,3 +404,4 @@ Now that you know the gates, let's use them to create entanglement:
 
 See the [Gate Reference](../reference/gate-reference.md) for complete gate matrices and identities.
 
+```

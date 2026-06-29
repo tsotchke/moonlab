@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Documentation Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Documentation Guide
 
 Standards and best practices for writing Moonlab documentation.
@@ -10,7 +17,7 @@ Moonlab documentation targets researchers and professional developers in quantum
 
 ### File Organization
 
-```
+[archived fence delimiter: ```]
 docs/
 ├── index.md                    # Landing page
 ├── quickstart.md               # 5-minute getting started
@@ -47,7 +54,7 @@ docs/
 ├── examples/                   # Code examples
 ├── contributing/               # Contributor docs
 └── reference/                  # Quick reference
-```
+[archived fence delimiter: ```]
 
 ### Page Types
 
@@ -69,13 +76,13 @@ docs/
 - **Direct**: Active voice, imperative mood for instructions
 - **Precise**: Exact terminology, no ambiguity
 
-```markdown
+[archived fence delimiter: ```markdown]
 <!-- GOOD: Direct, precise -->
 Apply the Hadamard gate to qubit 0 to create superposition:
 
 <!-- BAD: Passive, vague -->
 Superposition can be created by having the Hadamard gate applied.
-```
+[archived fence delimiter: ```]
 
 ### Audience Assumptions
 
@@ -96,7 +103,7 @@ Superposition can be created by having the Hadamard gate applied.
 
 Use ATX-style headings with proper hierarchy:
 
-```markdown
+[archived fence delimiter: ```markdown]
 # Page Title (H1 - one per page)
 
 ## Major Section (H2)
@@ -104,23 +111,23 @@ Use ATX-style headings with proper hierarchy:
 ### Subsection (H3)
 
 #### Minor Topic (H4 - use sparingly)
-```
+[archived fence delimiter: ```]
 
 ### Mathematical Notation
 
 Use LaTeX for all mathematical expressions:
 
 **Inline math**: Use `$...$`
-```markdown
+[archived fence delimiter: ```markdown]
 A qubit state $|\psi\rangle = \alpha|0\rangle + \beta|1\rangle$ satisfies $|\alpha|^2 + |\beta|^2 = 1$.
-```
+[archived fence delimiter: ```]
 
 **Display math**: Use `$$...$$`
-```markdown
+[archived fence delimiter: ```markdown]
 The Hadamard gate matrix:
 
 $$H = \frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}$$
-```
+[archived fence delimiter: ```]
 
 **Common notation**:
 
@@ -138,21 +145,21 @@ $$H = \frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}$$
 ### Code Blocks
 
 **Inline code**: Use backticks for function names, variables, file paths:
-```markdown
+[archived fence delimiter: ```markdown]
 Call `quantum_state_init()` to create a new state.
-```
+[archived fence delimiter: ```]
 
 **Code blocks**: Use fenced blocks with language identifier:
 
-````markdown
-```c
+[archived fence delimiter: ````markdown]
+[archived fence delimiter: ```c]
 qs_error_t err = quantum_state_init(&state, 10);
 if (err != QS_SUCCESS) {
     fprintf(stderr, "Failed to initialize state\n");
     return 1;
 }
-```
-````
+[archived fence delimiter: ```]
+[archived fence delimiter: ````]
 
 **Supported languages**: `c`, `python`, `rust`, `javascript`, `bash`, `json`, `yaml`
 
@@ -160,22 +167,22 @@ if (err != QS_SUCCESS) {
 
 Use tables for comparisons and reference data:
 
-```markdown
+[archived fence delimiter: ```markdown]
 | Gate | Matrix | Effect |
 |------|--------|--------|
 | X | $\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$ | Bit flip |
 | Z | $\begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$ | Phase flip |
 | H | $\frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}$ | Superposition |
-```
+[archived fence delimiter: ```]
 
 ### Diagrams
 
 Include ASCII diagrams for circuits and architecture:
 
-```markdown
+[archived fence delimiter: ```markdown]
 Quantum teleportation circuit:
 
-```
+[archived fence delimiter: ```]
        ┌───┐      ░ ┌─┐
 q0: |ψ⟩┤ H ├──■───░─┤M├─────────
        └───┘┌─┴─┐ ░ └╥┘┌─┐
@@ -185,8 +192,8 @@ q2: |0⟩───────────░──╫──╫──┤ ? ├
                   ░  ║  ║  └───┘
 c0: ═════════════════╩══╬═══════
 c1: ════════════════════╩═══════
-```
-```
+[archived fence delimiter: ```]
+[archived fence delimiter: ```]
 
 For complex diagrams, reference SVG files in `docs/_assets/images/`.
 
@@ -194,7 +201,7 @@ For complex diagrams, reference SVG files in `docs/_assets/images/`.
 
 Use blockquotes with bold prefixes for special callouts:
 
-```markdown
+[archived fence delimiter: ```markdown]
 > **Note**: Additional information that may be helpful.
 
 > **Warning**: Important caution about potential issues.
@@ -202,7 +209,7 @@ Use blockquotes with bold prefixes for special callouts:
 > **Tip**: Helpful suggestion for better results.
 
 > **Example**: Illustrative case demonstrating a concept.
-```
+[archived fence delimiter: ```]
 
 ## API Documentation
 
@@ -219,14 +226,14 @@ Document every public function with:
 
 **Template**:
 
-````markdown
+[archived fence delimiter: ````markdown]
 ## `function_name`
 
 Brief one-line description.
 
-```c
+[archived fence delimiter: ```c]
 return_type function_name(param_type1 param1, param_type2 param2);
-```
+[archived fence delimiter: ```]
 
 Detailed description with mathematical notation if applicable.
 
@@ -248,13 +255,13 @@ Description of return value. For functions returning error codes:
 
 ### Example
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 qs_error_t err = function_name(&state, 10);
 if (err != QS_SUCCESS) {
     // Handle error
 }
-```
+[archived fence delimiter: ```]
 
 ### Notes
 
@@ -265,18 +272,18 @@ if (err != QS_SUCCESS) {
 ### See Also
 
 - [`related_function`](related.md)
-````
+[archived fence delimiter: ````]
 
 ### Type Documentation
 
 Document structs and enums completely:
 
-````markdown
+[archived fence delimiter: ````markdown]
 ## `quantum_state_t`
 
 Represents a pure quantum state |ψ⟩ = Σ αᵢ|i⟩.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;
     size_t state_dim;
@@ -284,7 +291,7 @@ typedef struct {
     double entanglement_entropy;
     double purity;
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 ### Fields
 
@@ -295,7 +302,7 @@ typedef struct {
 | `amplitudes` | `complex_t*` | State vector coefficients |
 | `entanglement_entropy` | `double` | Von Neumann entropy |
 | `purity` | `double` | Tr(ρ²), 1.0 for pure states |
-````
+[archived fence delimiter: ````]
 
 ## Tutorial Writing
 
@@ -314,19 +321,19 @@ Every tutorial should follow this structure:
 
 ### Example Tutorial Section
 
-````markdown
+[archived fence delimiter: ````markdown]
 ## Step 3: Create Entanglement
 
 Now we'll create a Bell state using CNOT:
 
-```c
+[archived fence delimiter: ```c]
 // Apply CNOT with qubit 0 as control, qubit 1 as target
 qs_error_t err = gate_cnot(&state, 0, 1);
 if (err != QS_SUCCESS) {
     fprintf(stderr, "CNOT failed\n");
     return 1;
 }
-```
+[archived fence delimiter: ```]
 
 The CNOT gate flips the target qubit when the control qubit is |1⟩.
 Starting from |+0⟩ = (|0⟩ + |1⟩)|0⟩/√2, we get:
@@ -334,7 +341,7 @@ Starting from |+0⟩ = (|0⟩ + |1⟩)|0⟩/√2, we get:
 $$\text{CNOT}_{01} \cdot \frac{1}{\sqrt{2}}(|00\rangle + |10\rangle) = \frac{1}{\sqrt{2}}(|00\rangle + |11\rangle)$$
 
 This is the Bell state |Φ⁺⟩, a maximally entangled state.
-````
+[archived fence delimiter: ````]
 
 ## Cross-Referencing
 
@@ -342,39 +349,39 @@ This is the Bell state |Φ⁺⟩, a maximally entangled state.
 
 Use relative paths for internal documentation links:
 
-```markdown
+[archived fence delimiter: ```markdown]
 See the [Quantum Gates](../concepts/quantum-gates.md) documentation.
 
 For API details, see [`quantum_state_init`](../api/c/quantum-state.md#quantum_state_init).
-```
+[archived fence delimiter: ```]
 
 ### Section Links
 
 Link to specific sections using anchors:
 
-```markdown
+[archived fence delimiter: ```markdown]
 See [Error Handling](#error-handling) below.
 
 Refer to [SIMD Optimization](../architecture/gate-implementation.md#simd-optimization).
-```
+[archived fence delimiter: ```]
 
 ### See Also Sections
 
 End each document with related resources:
 
-```markdown
+[archived fence delimiter: ```markdown]
 ## See Also
 
 - [Quantum Gates Reference](../reference/gate-reference.md)
 - [State Vector Engine](../architecture/state-vector-engine.md)
 - [API: gates.h](../api/c/gates.md)
-```
+[archived fence delimiter: ```]
 
 ## Building Documentation
 
 ### Local Preview
 
-```bash
+[archived fence delimiter: ```bash]
 # Install MkDocs (if using)
 pip install mkdocs mkdocs-material
 
@@ -382,22 +389,22 @@ pip install mkdocs mkdocs-material
 mkdocs serve
 
 # Open http://localhost:8000
-```
+[archived fence delimiter: ```]
 
 ### Building Static Site
 
-```bash
+[archived fence delimiter: ```bash]
 # Build HTML
 mkdocs build
 
 # Output in site/ directory
-```
+[archived fence delimiter: ```]
 
 ### Documentation CI
 
 Documentation is built automatically on pull requests:
 
-```yaml
+[archived fence delimiter: ```yaml]
 # .github/workflows/docs.yml
 name: Documentation
 on: [push, pull_request]
@@ -408,7 +415,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build docs
         run: mkdocs build --strict
-```
+[archived fence delimiter: ```]
 
 ## Review Checklist
 
@@ -427,15 +434,15 @@ Before submitting documentation:
 
 ### Avoid These
 
-```markdown
+[archived fence delimiter: ```markdown]
 <!-- BAD: Vague descriptions -->
 This function does some stuff with the quantum state.
 
 <!-- GOOD: Specific descriptions -->
 Applies the Hadamard gate to the specified qubit, creating an equal superposition of |0⟩ and |1⟩.
-```
+[archived fence delimiter: ```]
 
-```markdown
+[archived fence delimiter: ```markdown]
 <!-- BAD: Missing error handling in examples -->
 quantum_state_init(&state, 10);
 gate_hadamard(&state, 0);
@@ -446,15 +453,15 @@ if (err != QS_SUCCESS) {
     fprintf(stderr, "Init failed: %d\n", err);
     return 1;
 }
-```
+[archived fence delimiter: ```]
 
-```markdown
+[archived fence delimiter: ```markdown]
 <!-- BAD: Undefined abbreviations -->
 The MPS representation uses SVD for truncation.
 
 <!-- GOOD: Define abbreviations first -->
 Matrix Product States (MPS) use Singular Value Decomposition (SVD) for truncation.
-```
+[archived fence delimiter: ```]
 
 ## File Naming
 
@@ -468,14 +475,15 @@ Matrix Product States (MPS) use Singular Value Decomposition (SVD) for truncatio
 - Use admonitions for deprecated features
 - Maintain changelog in `CHANGELOG.md`
 
-```markdown
+[archived fence delimiter: ```markdown]
 > **Note**: This feature requires Moonlab 2.0 or later.
 
 > **Deprecated**: Use `quantum_state_init_v2()` instead. Will be removed in version 3.0.
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Development Setup](development-setup.md) - Build environment
 - [Code Style](code-style.md) - Code formatting
 - [Testing Guide](testing-guide.md) - Testing practices
+```

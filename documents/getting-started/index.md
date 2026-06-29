@@ -1,10 +1,17 @@
+# Archived Moonlab Documentation: Getting Started
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Getting Started
 
 Welcome to quantum computing with Moonlab. This guide provides a structured learning path from foundational concepts to practical simulation skills.
 
 ## Learning Roadmap
 
-```
+[archived fence delimiter: ```]
                     ┌─────────────────────────────────────────┐
                     │          Getting Started                │
                     │                                         │
@@ -24,7 +31,7 @@ Welcome to quantum computing with Moonlab. This guide provides a structured lear
                           │ • Algorithms   │
                           │ • API Docs     │
                           └────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Path Selection
 
@@ -118,11 +125,11 @@ where $\alpha, \beta \in \mathbb{C}$ are probability amplitudes.
 
 ### Bell State Circuit
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──   →   |Φ⁺⟩ = (|00⟩ + |11⟩)/√2
            │
 |0⟩ ───────⊕──
-```
+[archived fence delimiter: ```]
 
 ## Getting Help
 
@@ -130,3 +137,4 @@ where $\alpha, \beta \in \mathbb{C}$ are probability amplitudes.
 - [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Glossary](../concepts/glossary.md) - Terminology reference
 - [GitHub Issues](https://github.com/tsotchke/moonlab/issues) - Report bugs or ask questions
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Metal GPU API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Metal GPU API
 
 Complete reference for Metal GPU acceleration on Apple Silicon in the C library.
@@ -30,17 +37,17 @@ The Metal API provides C interface to Apple's Metal compute pipeline for quantum
 
 Opaque handle to Metal compute context.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct metal_compute_ctx metal_compute_ctx_t;
-```
+[archived fence delimiter: ```]
 
 ### metal_buffer_t
 
 Metal buffer handle for GPU memory.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct metal_buffer metal_buffer_t;
-```
+[archived fence delimiter: ```]
 
 ## Initialization and Cleanup
 
@@ -48,9 +55,9 @@ typedef struct metal_buffer metal_buffer_t;
 
 Initialize Metal compute context.
 
-```c
+[archived fence delimiter: ```c]
 metal_compute_ctx_t* metal_compute_init(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Metal compute context or NULL on failure
 
@@ -60,17 +67,17 @@ Creates Metal device, command queue, and compiles compute pipeline.
 
 Free Metal compute context.
 
-```c
+[archived fence delimiter: ```c]
 void metal_compute_free(metal_compute_ctx_t* ctx);
-```
+[archived fence delimiter: ```]
 
 ### metal_is_available
 
 Check if Metal is available.
 
-```c
+[archived fence delimiter: ```c]
 int metal_is_available(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if Metal is available, 0 otherwise
 
@@ -78,14 +85,14 @@ int metal_is_available(void);
 
 Get GPU device information.
 
-```c
+[archived fence delimiter: ```c]
 void metal_get_device_info(
     metal_compute_ctx_t* ctx,
     char* name,
     uint32_t* max_threads,
     uint32_t* num_cores
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `name`: Output buffer for device name (min 256 bytes)
@@ -98,9 +105,9 @@ void metal_get_device_info(
 
 Allocate Metal buffer with zero-copy shared storage.
 
-```c
+[archived fence delimiter: ```c]
 metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ctx`: Metal compute context
@@ -114,29 +121,29 @@ Uses `MTLResourceStorageModeShared` for unified memory access - CPU and GPU acce
 
 Create Metal buffer from existing CPU memory (zero-copy).
 
-```c
+[archived fence delimiter: ```c]
 metal_buffer_t* metal_buffer_create_from_data(
     metal_compute_ctx_t* ctx,
     void* data,
     size_t size
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_buffer_contents
 
 Get CPU-accessible pointer to Metal buffer.
 
-```c
+[archived fence delimiter: ```c]
 void* metal_buffer_contents(metal_buffer_t* buffer);
-```
+[archived fence delimiter: ```]
 
 ### metal_buffer_free
 
 Free Metal buffer.
 
-```c
+[archived fence delimiter: ```c]
 void metal_buffer_free(metal_buffer_t* buffer);
-```
+[archived fence delimiter: ```]
 
 ## Quantum Gate Operations
 
@@ -144,14 +151,14 @@ void metal_buffer_free(metal_buffer_t* buffer);
 
 GPU-accelerated Hadamard gate.
 
-```c
+[archived fence delimiter: ```c]
 int metal_hadamard(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 20-40x faster than CPU
 
@@ -167,53 +174,53 @@ int metal_hadamard(
 
 GPU-accelerated Hadamard on all qubits in single dispatch.
 
-```c
+[archived fence delimiter: ```c]
 int metal_hadamard_all(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t num_qubits,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_pauli_x
 
 GPU-accelerated Pauli X gate.
 
-```c
+[archived fence delimiter: ```c]
 int metal_pauli_x(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_pauli_z
 
 GPU-accelerated Pauli Z gate.
 
-```c
+[archived fence delimiter: ```c]
 int metal_pauli_z(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_oracle
 
 GPU-accelerated oracle (phase flip on target state).
 
-```c
+[archived fence delimiter: ```c]
 int metal_oracle(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t target_state,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 50-100x faster than CPU
 
@@ -221,7 +228,7 @@ int metal_oracle(
 
 GPU-accelerated oracle with multiple marked states.
 
-```c
+[archived fence delimiter: ```c]
 int metal_oracle_multi(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
@@ -229,20 +236,20 @@ int metal_oracle_multi(
     uint32_t num_marked,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_grover_diffusion
 
 GPU-accelerated Grover diffusion operator.
 
-```c
+[archived fence delimiter: ```c]
 int metal_grover_diffusion(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t num_qubits,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 15-30x faster than CPU
 
@@ -254,14 +261,14 @@ Fused implementation: Hadamard → Inversion about mean → Hadamard
 
 Compute probabilities from amplitudes.
 
-```c
+[archived fence delimiter: ```c]
 int metal_compute_probabilities(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     metal_buffer_t* probabilities,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 30-50x faster than CPU
 
@@ -269,14 +276,14 @@ int metal_compute_probabilities(
 
 Normalize quantum state.
 
-```c
+[archived fence delimiter: ```c]
 int metal_normalize(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     float norm,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 ## Batch Operations
 
@@ -284,7 +291,7 @@ int metal_normalize(
 
 Execute complete Grover iteration (Oracle + Diffusion) in single dispatch.
 
-```c
+[archived fence delimiter: ```c]
 int metal_grover_iteration(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
@@ -292,7 +299,7 @@ int metal_grover_iteration(
     uint32_t num_qubits,
     uint32_t state_dim
 );
-```
+[archived fence delimiter: ```]
 
 Minimizes CPU↔GPU synchronization by fusing operations.
 
@@ -300,7 +307,7 @@ Minimizes CPU↔GPU synchronization by fusing operations.
 
 Execute multiple Grover iterations on GPU.
 
-```c
+[archived fence delimiter: ```c]
 int metal_grover_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
@@ -309,13 +316,13 @@ int metal_grover_search(
     uint32_t state_dim,
     uint32_t num_iterations
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_grover_batch_search
 
 Execute MULTIPLE complete Grover searches in parallel.
 
-```c
+[archived fence delimiter: ```c]
 int metal_grover_batch_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* batch_states,
@@ -325,7 +332,7 @@ int metal_grover_batch_search(
     uint32_t num_qubits,
     uint32_t num_iterations
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `batch_states`: Buffer for all quantum states (num_searches × state_dim)
@@ -345,7 +352,7 @@ int metal_grover_batch_search(
 
 Contract two adjacent MPS tensors into theta tensor.
 
-```c
+[archived fence delimiter: ```c]
 int metal_mps_contract_2site(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* A,
@@ -355,7 +362,7 @@ int metal_mps_contract_2site(
     uint32_t chi_m,
     uint32_t chi_r
 );
-```
+[archived fence delimiter: ```]
 
 **Formula**: $\theta_{l,p_1,p_2,r} = \sum_m A_{l,p_1,m} \cdot B_{m,p_2,r}$
 
@@ -365,7 +372,7 @@ int metal_mps_contract_2site(
 
 Apply 4×4 gate matrix to theta tensor in-place.
 
-```c
+[archived fence delimiter: ```c]
 int metal_mps_apply_gate_theta(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* theta,
@@ -373,7 +380,7 @@ int metal_mps_apply_gate_theta(
     uint32_t chi_l,
     uint32_t chi_r
 );
-```
+[archived fence delimiter: ```]
 
 **Formula**: $\theta'_{l,p',r} = \sum_p G_{p',p} \cdot \theta_{l,p,r}$
 
@@ -383,7 +390,7 @@ int metal_mps_apply_gate_theta(
 
 Complete 2-qubit gate application to MPS (TEBD step).
 
-```c
+[archived fence delimiter: ```c]
 int metal_mps_apply_gate_2q(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* A,
@@ -397,7 +404,7 @@ int metal_mps_apply_gate_2q(
     uint32_t* new_bond,
     double* trunc_error
 );
-```
+[archived fence delimiter: ```]
 
 Performs:
 1. Contract A, B → theta
@@ -411,7 +418,7 @@ Performs:
 
 GPU SVD with truncation using Jacobi iteration.
 
-```c
+[archived fence delimiter: ```c]
 int metal_svd_truncate(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* A,
@@ -424,7 +431,7 @@ int metal_svd_truncate(
     double cutoff,
     uint32_t* actual_rank
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 20-30x speedup for matrices > 64×64
 
@@ -432,7 +439,7 @@ int metal_svd_truncate(
 
 Compute $\langle Z_i \rangle$ expectation using transfer matrix method.
 
-```c
+[archived fence delimiter: ```c]
 double metal_mps_expectation_z(
     metal_compute_ctx_t* ctx,
     metal_buffer_t** mps_tensors,
@@ -440,7 +447,7 @@ double metal_mps_expectation_z(
     uint32_t num_sites,
     uint32_t site
 );
-```
+[archived fence delimiter: ```]
 
 **Performance**: 30-40x speedup for chains > 20 sites
 
@@ -448,7 +455,7 @@ double metal_mps_expectation_z(
 
 Compute $\langle Z_i Z_j \rangle$ two-point correlation.
 
-```c
+[archived fence delimiter: ```c]
 double metal_mps_expectation_zz(
     metal_compute_ctx_t* ctx,
     metal_buffer_t** mps_tensors,
@@ -457,32 +464,32 @@ double metal_mps_expectation_zz(
     uint32_t site_i,
     uint32_t site_j
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_tensor_norm_squared
 
 Compute tensor squared Frobenius norm.
 
-```c
+[archived fence delimiter: ```c]
 double metal_tensor_norm_squared(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* tensor,
     uint32_t size
 );
-```
+[archived fence delimiter: ```]
 
 ### metal_tensor_scale
 
 Scale tensor by constant factor.
 
-```c
+[archived fence delimiter: ```c]
 int metal_tensor_scale(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* tensor,
     uint32_t size,
     double scale
 );
-```
+[archived fence delimiter: ```]
 
 ## Synchronization and Utilities
 
@@ -490,17 +497,17 @@ int metal_tensor_scale(
 
 Wait for GPU operations to complete.
 
-```c
+[archived fence delimiter: ```c]
 void metal_wait_completion(metal_compute_ctx_t* ctx);
-```
+[archived fence delimiter: ```]
 
 ### metal_get_last_execution_time
 
 Get GPU execution time for last operation.
 
-```c
+[archived fence delimiter: ```c]
 double metal_get_last_execution_time(metal_compute_ctx_t* ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Execution time in seconds
 
@@ -508,29 +515,29 @@ double metal_get_last_execution_time(metal_compute_ctx_t* ctx);
 
 Enable/disable performance monitoring.
 
-```c
+[archived fence delimiter: ```c]
 void metal_set_performance_monitoring(metal_compute_ctx_t* ctx, int enable);
-```
+[archived fence delimiter: ```]
 
 ### metal_print_device_info
 
 Print Metal device capabilities.
 
-```c
+[archived fence delimiter: ```c]
 void metal_print_device_info(metal_compute_ctx_t* ctx);
-```
+[archived fence delimiter: ```]
 
 ### metal_get_error
 
 Get error message for last error.
 
-```c
+[archived fence delimiter: ```c]
 const char* metal_get_error(metal_compute_ctx_t* ctx);
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/optimization/gpu_metal.h"
 #include <stdio.h>
 #include <math.h>
@@ -600,7 +607,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Guidelines
 
@@ -626,3 +633,4 @@ int main(void) {
 - [Tensor Network API](tensor-network.md) - MPS operations
 - [SIMD Operations](simd-ops.md) - CPU vectorization
 - [Guides: GPU Acceleration](../../guides/gpu-acceleration.md) - Setup guide
+```

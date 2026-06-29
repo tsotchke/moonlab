@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial: Adaptive-bond TDVP
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial: Adaptive-bond TDVP
 
 This tutorial walks through Moonlab's v0.4 time-dependent variational
@@ -50,7 +57,7 @@ therefore conserves `<H>` for a time-independent Hamiltonian.  The
 PID controller only changes which singular values are kept; it
 must not break that conservation.
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/algorithms/tensor_network/tdvp.h"
 #include "moonlab/algorithms/tensor_network/dmrg.h"
 #include "moonlab/algorithms/tensor_network/tn_state.h"
@@ -90,7 +97,7 @@ int main(void) {
     mpo_free(mpo);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 The expected output on `libquantumsim.0.4.0` shows the relative
 energy drift staying near `2e-5` over five steps, well inside the
@@ -102,7 +109,7 @@ pinned by [`tests/unit/test_tdvp_adaptive_energy_conservation.c`](../../tests/un
 `moonlab.tdvp` (since v0.4.0) is an idiomatic ctypes wrapper around
 the C surface:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tdvp import (
     TdvpConfig, TdvpEngine, EvolutionType,
     mpo_heisenberg, random_mps,
@@ -123,7 +130,7 @@ for step in range(5):
     result = engine.step()
     drift = (result.energy - E0) / abs(E0)
     print(f"step {step}: E = {result.energy:+.6f}  (drift = {drift:.2e})")
-```
+[archived fence delimiter: ```]
 
 `result.bond_chi_distribution` is exposed as a NumPy `uint32` array
 of length `num_qubits - 1`, ready for plotting or assertion.
@@ -135,7 +142,7 @@ rate set by the spectral gap.  On the 8-site critical
 transverse-field Ising model (`g = 1`), 30 imag-time steps at
 `dt = 0.05` reach `|E - E_DMRG| / |E_DMRG| < 2%`.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tdvp import (
     TdvpConfig, TdvpEngine, EvolutionType,
     mpo_tfim, random_mps,
@@ -157,7 +164,7 @@ energies = [engine.step().energy for _ in range(30)]
 print(f"E_final  = {energies[-1]:+.4f}")
 print(f"E_first  = {energies[0]:+.4f}")
 print(f"dropped  = {energies[0] - energies[-1]:+.4f}")
-```
+[archived fence delimiter: ```]
 
 The energy must drop monotonically (modulo PID overshoot) over the
 30 steps -- the acceptance test pinned by
@@ -171,7 +178,7 @@ The Rust wrapper at `moonlab::tdvp` exposes the same surface plus
 RAII handles and zero-cost iteration over `Vec<u32>`
 distributions:
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::tdvp::{
     EvolutionType, Mpo, Mps, TdvpConfig, TdvpEngine,
 };
@@ -203,7 +210,7 @@ fn main() {
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 Run with
 `MOONLAB_LIB_DIR=$(pwd)/build_release cargo run --example tdvp_demo`;
@@ -225,7 +232,7 @@ For history tracking across all steps of a run, the C `tdvp_history_t`
 struct keeps a flat row-major `capacity * n_bonds` buffer.  Use it
 when you want to plot `chi(bond, time)` heatmaps:
 
-```c
+[archived fence delimiter: ```c]
 tdvp_history_t *hist = tdvp_history_create(/*initial_capacity=*/100);
 for (int step = 0; step < 100; step++) {
     tdvp_step(engine, &result);
@@ -233,7 +240,7 @@ for (int step = 0; step < 100; step++) {
 }
 // hist->bond_chi_history is now a (100, n - 1) uint32_t array.
 tdvp_history_free(hist);
-```
+[archived fence delimiter: ```]
 
 ## 7. Choosing the PID gains
 
@@ -305,3 +312,4 @@ here by more than the stated tolerances, please open an issue.
   simulation via MPDO).
 - [`topological_band_structure.md`](topological_band_structure.md):
   companion v0.3 module (quantum geometric tensor).
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Scaling Analysis
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Scaling Analysis
 
 How Moonlab's performance scales with system size, circuit depth, and hardware resources.
@@ -50,7 +57,7 @@ $$T_{\text{circuit}} = d \times T_{\text{layer}}$$
 
 **Measured Performance:**
 
-```
+[archived fence delimiter: ```]
 Benchmark: Random circuit layers (RZ, RY, CNOT pattern)
 
 10 qubits:
@@ -73,13 +80,13 @@ Benchmark: Random circuit layers (RZ, RY, CNOT pattern)
   50 layers:   240 ms
   100 layers:  480 ms
   500 layers:  2.4 s
-```
+[archived fence delimiter: ```]
 
 ### Gate Fusion Optimization
 
 Consecutive single-qubit gates on the same qubit can be fused:
 
-```c
+[archived fence delimiter: ```c]
 // Before: 3 memory passes
 apply_gate(state, 0, H);   // O(2^n)
 apply_gate(state, 0, T);   // O(2^n)
@@ -90,7 +97,7 @@ complex_t fused[2][2];
 matrix_multiply(H, T, temp);
 matrix_multiply(temp, H, fused);
 apply_gate(state, 0, fused);  // O(2^n)
-```
+[archived fence delimiter: ```]
 
 **Impact:** 3x speedup for fusible sequences.
 
@@ -242,7 +249,7 @@ where $p$ is the number of QAOA layers.
 
 Run the included benchmark to measure scaling on your hardware:
 
-```bash
+[archived fence delimiter: ```bash]
 # Build benchmark tools
 make benchmarks
 
@@ -254,11 +261,11 @@ make benchmarks
 
 # Analyze results
 python tools/analyze_benchmark.py results.csv
-```
+[archived fence delimiter: ```]
 
 ### Sample Output
 
-```
+[archived fence delimiter: ```]
 === State Vector Scaling ===
   4 qubits: mem=0.0 MB, init=12 μs, layer=8 μs, 100 layers=0.8 ms
   6 qubits: mem=0.0 MB, init=15 μs, layer=18 μs, 100 layers=1.8 ms
@@ -275,7 +282,7 @@ python tools/analyze_benchmark.py results.csv
   50 sites, χ=16: init=120 μs, layer=1.2 ms, 100 layers=120 ms
  100 sites, χ=32: init=380 μs, layer=8.5 ms, 100 layers=850 ms
  200 sites, χ=64: init=1.5 ms, layer=68 ms, 100 layers=6.8 s
-```
+[archived fence delimiter: ```]
 
 ## Recommendations
 
@@ -292,13 +299,13 @@ python tools/analyze_benchmark.py results.csv
 
 ### Memory Planning
 
-```c
+[archived fence delimiter: ```c]
 // Check available memory before allocation
 size_t required = (1ULL << num_qubits) * sizeof(complex_t);
 if (required > available_memory * 0.8) {
     // Consider distributed or tensor network
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -306,3 +313,4 @@ if (required > available_memory * 0.8) {
 - [Memory Requirements](memory-requirements.md)
 - [Distributed Simulation Guide](../guides/distributed-simulation.md)
 - [Tensor Network Concepts](../concepts/tensor-networks.md)
+```

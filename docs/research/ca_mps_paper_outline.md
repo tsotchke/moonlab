@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Paper outline: variational-D Clifford-augmented MPS
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Paper outline: variational-D Clifford-augmented MPS
 
 Working draft for the arXiv preprint covered by task #51.  Bench
@@ -122,11 +129,11 @@ Table from `benchmarks/results/ca_mps_var_d_vs_plain_dmrg_2026-04-29.json`:
 - Repo: `https://github.com/tsotchke/quantum_simulator`
 - Pinning commit SHA: ${THIS_COMMIT}
 - Reproduction:
-  ```
+[archived fence delimiter:   ```]
   cmake -S . -B build -G Ninja -DQSIM_BUILD_EXAMPLES=ON
   cmake --build build --target example_ca_mps_var_d_vs_plain_dmrg
   ./build/example_ca_mps_var_d_vs_plain_dmrg
-  ```
+[archived fence delimiter:   ```]
 - All bench JSON output in `benchmarks/results/`
 
 ---
@@ -137,3 +144,4 @@ pending experiment completion.  Next steps are to run the kagome
 test to completion, write the introduction + background, and
 prepare the figures.  Estimated 2-3 days to convert to arXiv-ready
 draft.
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 03: Creating Bell States
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 03: Creating Bell States
 
 Master quantum entanglement with Bell states.
@@ -39,7 +46,7 @@ The Bell states are maximally entangled 2-qubit states:
 
 ### Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 def create_bell_state(name):
@@ -70,10 +77,10 @@ for name in ["Phi+", "Phi-", "Psi+", "Psi-"]:
     print(f"  |10⟩: {amps[2]:.4f}")
     print(f"  |11⟩: {amps[3]:.4f}")
     print()
-```
+[archived fence delimiter: ```]
 
 **Output**:
-```
+[archived fence delimiter: ```]
 |Phi+⟩:
   |00⟩: 0.7071+0.0000j
   |01⟩: 0.0000+0.0000j
@@ -86,11 +93,11 @@ for name in ["Phi+", "Phi-", "Psi+", "Psi-"]:
   |10⟩: 0.0000+0.0000j
   |11⟩: -0.7071+0.0000j
 ...
-```
+[archived fence delimiter: ```]
 
 ### C Implementation
 
-```c
+[archived fence delimiter: ```c]
 #include <stdio.h>
 #include "quantum_sim.h"
 
@@ -136,7 +143,7 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Verifying Entanglement
 
@@ -144,7 +151,7 @@ int main() {
 
 For $|\Phi^+\rangle$, measuring both qubits always gives the same result:
 
-```python
+[archived fence delimiter: ```python]
 state = create_bell_state("Phi+")
 
 # Run 1000 measurements
@@ -161,13 +168,13 @@ for _ in range(1000):
 
 print(f"Same result: {same_count}/1000 ({same_count/10}%)")
 # Output: Same result: 1000/1000 (100%)
-```
+[archived fence delimiter: ```]
 
 ### Anti-Correlation
 
 For $|\Psi^+\rangle$, measurements are always opposite:
 
-```python
+[archived fence delimiter: ```python]
 state = create_bell_state("Psi+")
 
 opposite_count = 0
@@ -183,13 +190,13 @@ for _ in range(1000):
 
 print(f"Opposite result: {opposite_count}/1000 ({opposite_count/10}%)")
 # Output: Opposite result: 1000/1000 (100%)
-```
+[archived fence delimiter: ```]
 
 ## Entanglement Entropy
 
 A quantitative measure of entanglement:
 
-```python
+[archived fence delimiter: ```python]
 state = create_bell_state("Phi+")
 
 # Von Neumann entropy of reduced density matrix
@@ -197,7 +204,7 @@ entropy = state.entanglement_entropy([0])  # Trace out qubit 1
 
 print(f"Entanglement entropy: {entropy:.4f} bits")
 # Output: Entanglement entropy: 1.0000 bits
-```
+[archived fence delimiter: ```]
 
 **Interpretation**:
 - 0 bits: No entanglement (product state)
@@ -209,7 +216,7 @@ The GHZ (Greenberger-Horne-Zeilinger) state generalizes Bell states to $n$ qubit
 
 $$|GHZ_n\rangle = \frac{|0\rangle^{\otimes n} + |1\rangle^{\otimes n}}{\sqrt{2}}$$
 
-```python
+[archived fence delimiter: ```python]
 def create_ghz(n):
     """Create n-qubit GHZ state."""
     state = QuantumState(n)
@@ -226,7 +233,7 @@ print("4-qubit GHZ state:")
 print(f"  P(|0000⟩) = {probs[0]:.4f}")   # 0.5
 print(f"  P(|1111⟩) = {probs[15]:.4f}")  # 0.5
 # All other probabilities are 0
-```
+[archived fence delimiter: ```]
 
 ## W States
 
@@ -234,7 +241,7 @@ Another important multi-qubit entangled state:
 
 $$|W_3\rangle = \frac{|001\rangle + |010\rangle + |100\rangle}{\sqrt{3}}$$
 
-```python
+[archived fence delimiter: ```python]
 def create_w3():
     """Create 3-qubit W state."""
     state = QuantumState(3)
@@ -249,13 +256,13 @@ def create_w3():
     state.x(0)
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Quantum Teleportation
 
 Use entanglement to "teleport" quantum information:
 
-```python
+[archived fence delimiter: ```python]
 def quantum_teleport(state_to_send):
     """
     Teleport a quantum state using Bell pair.
@@ -295,11 +302,11 @@ def quantum_teleport(state_to_send):
 
 # Run teleportation
 result = quantum_teleport(None)
-```
+[archived fence delimiter: ```]
 
 ### Teleportation Circuit Diagram
 
-```
+[archived fence delimiter: ```]
 |ψ⟩ ──────●───H───M─────────────────
           │       │
 |0⟩ ──H───●───────M───────────┐
@@ -307,13 +314,13 @@ result = quantum_teleport(None)
 |0⟩ ──────X───────────────X───Z───|ψ⟩
                           │   │
               Classical ──┴───┘
-```
+[archived fence delimiter: ```]
 
 ## Superdense Coding
 
 Send 2 classical bits using 1 qubit (plus shared entanglement):
 
-```python
+[archived fence delimiter: ```python]
 def superdense_encode(bits, state):
     """
     Alice encodes 2 classical bits into her qubit.
@@ -350,7 +357,7 @@ for message in ["00", "01", "10", "11"]:
     received = superdense_decode(state)
 
     print(f"Sent: {message}, Received: {received}, Match: {message == received}")
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -391,3 +398,4 @@ Now let's use entanglement in an algorithm:
 - [Bell-CHSH Test](../algorithms/bell-chsh-test.md) - Verifying quantum correlations
 - [Quantum Teleportation Example](../examples/basic/quantum-teleportation.md) - Full implementation
 
+```

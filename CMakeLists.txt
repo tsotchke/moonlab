@@ -472,6 +472,8 @@ if(QSIM_PLATFORM_MACOS AND QSIM_ENABLE_METAL)
     if(METAL_FRAMEWORK AND FOUNDATION_FRAMEWORK)
         message(STATUS "Metal: Found")
         set(QSIM_HAS_METAL ON)
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/kernels"
+             DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/src/optimization")
     else()
         message(STATUS "Metal: Not found")
     endif()

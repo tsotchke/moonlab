@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Terminal User Interface
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Terminal User Interface
 
 Interactive terminal application for quantum simulation.
@@ -18,24 +25,24 @@ Interactive terminal application for quantum simulation.
 
 ### From Source
 
-```bash
+[archived fence delimiter: ```bash]
 cd bindings/rust/moonlab-tui
 cargo build --release
-```
+[archived fence delimiter: ```]
 
 The binary will be at `target/release/moonlab-tui`.
 
 ### Running
 
-```bash
+[archived fence delimiter: ```bash]
 ./moonlab-tui
-```
+[archived fence delimiter: ```]
 
 Or with cargo:
 
-```bash
+[archived fence delimiter: ```bash]
 cargo run --release
-```
+[archived fence delimiter: ```]
 
 ## Modes
 
@@ -162,7 +169,7 @@ Explore QED Feynman diagrams.
 
 ## User Interface Layout
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Moonlab Quantum Simulator                  │
 ├─────────────────┬───────────────────────────────────────────────┤
@@ -187,13 +194,13 @@ Explore QED Feynman diagrams.
 │  Purity: 1.000  │                                               │
 └─────────────────┴───────────────────────────────────────────────┘
  Status: Bell state: (|00⟩ + |11⟩)/√2
-```
+[archived fence delimiter: ```]
 
 ## Architecture
 
 ### Module Structure
 
-```
+[archived fence delimiter: ```]
 moonlab-tui/
 ├── src/
 │   ├── main.rs        # Entry point, terminal setup
@@ -207,11 +214,11 @@ moonlab-tui/
 │       ├── bloch.rs        # Bloch sphere visualization
 │       ├── entropy.rs      # Entanglement display
 │       └── feynman.rs      # Feynman diagram rendering
-```
+[archived fence delimiter: ```]
 
 ### App State
 
-```rust
+[archived fence delimiter: ```rust]
 pub struct App {
     /// Current mode
     pub mode: AppMode,
@@ -233,11 +240,11 @@ pub struct App {
     pub feynman_diagram: Option<FeynmanDiagram>,
     // ...
 }
-```
+[archived fence delimiter: ```]
 
 ### App Modes
 
-```rust
+[archived fence delimiter: ```rust]
 pub enum AppMode {
     AlgorithmBrowser,   // Browse and select algorithms
     AlgorithmRunning,   // Animated algorithm execution
@@ -246,7 +253,7 @@ pub enum AppMode {
     FeynmanBrowser,     // QED diagram browser
     Help,               // Help overlay
 }
-```
+[archived fence delimiter: ```]
 
 ## Dependencies
 
@@ -269,7 +276,7 @@ pub enum AppMode {
 
 ### Build Steps
 
-```bash
+[archived fence delimiter: ```bash]
 # Clone repository
 git clone https://github.com/tsotchke/moonlab.git
 cd moonlab
@@ -280,14 +287,14 @@ cargo build --release
 
 # Run
 ./target/release/moonlab-tui
-```
+[archived fence delimiter: ```]
 
 ### Development Build
 
-```bash
+[archived fence delimiter: ```bash]
 # With debug logging
 RUST_LOG=debug cargo run
-```
+[archived fence delimiter: ```]
 
 ## Customization
 
@@ -351,3 +358,4 @@ RUST_LOG=debug cargo run
 - [moonlab-sys](moonlab-sys.md) - Low-level FFI bindings
 - [Tutorials](../../tutorials/index.md) - Learning resources
 
+```

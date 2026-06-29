@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QAOA Algorithm
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QAOA Algorithm
 
 Complete guide to the Quantum Approximate Optimization Algorithm.
@@ -57,7 +64,7 @@ Each term equals 1 if vertices $i, j$ are in different partitions.
 
 ### Implementation
 
-```c
+[archived fence delimiter: ```c]
 #include "qaoa.h"
 
 int main() {
@@ -87,11 +94,11 @@ int main() {
     hamiltonian_destroy(C);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python Interface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 import numpy as np
 
@@ -108,7 +115,7 @@ print(f"Cut value: {result['best_cost']}")
 print(f"Expected value: {result['expectation']:.4f}")
 print(f"Optimal γ: {result['optimal_gamma']}")
 print(f"Optimal β: {result['optimal_beta']}")
-```
+[archived fence delimiter: ```]
 
 ## Circuit Structure
 
@@ -116,7 +123,7 @@ print(f"Optimal β: {result['optimal_beta']}")
 
 For MaxCut, apply $e^{-i\gamma Z_i Z_j}$ for each edge:
 
-```python
+[archived fence delimiter: ```python]
 def apply_cost_unitary(state, edges, gamma):
     """Apply exp(-iγC) for MaxCut."""
     for i, j in edges:
@@ -124,29 +131,29 @@ def apply_cost_unitary(state, edges, gamma):
         state.cnot(i, j)
         state.rz(j, 2 * gamma)  # Factor of 2 from ZZ decomposition
         state.cnot(i, j)
-```
+[archived fence delimiter: ```]
 
 Circuit diagram for one edge:
-```
+[archived fence delimiter: ```]
 q_i: ───●───────●───
         │       │
 q_j: ───X──Rz───X───
-```
+[archived fence delimiter: ```]
 
 ### Mixer Unitary
 
 Standard transverse-field mixer:
 
-```python
+[archived fence delimiter: ```python]
 def apply_mixer_unitary(state, n_qubits, beta):
     """Apply exp(-iβB) where B = Σ X_i."""
     for i in range(n_qubits):
         state.rx(i, 2 * beta)
-```
+[archived fence delimiter: ```]
 
 ### Full QAOA Circuit
 
-```python
+[archived fence delimiter: ```python]
 def qaoa_circuit(n_qubits, edges, gamma, beta, depth):
     """Create complete QAOA circuit."""
     state = QuantumState(n_qubits)
@@ -161,7 +168,7 @@ def qaoa_circuit(n_qubits, edges, gamma, beta, depth):
         apply_mixer_unitary(state, n_qubits, beta[l])
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Parameter Optimization
 
@@ -169,7 +176,7 @@ def qaoa_circuit(n_qubits, edges, gamma, beta, depth):
 
 For $p=1$, the energy landscape is 2D and can be visualized:
 
-```python
+[archived fence delimiter: ```python]
 def qaoa_landscape(edges, n_vertices, resolution=100):
     """Compute QAOA energy landscape for p=1."""
     gamma = np.linspace(0, 2*np.pi, resolution)
@@ -183,13 +190,13 @@ def qaoa_landscape(edges, n_vertices, resolution=100):
             E[j, i] = compute_expectation(state, edges)
 
     return gamma, beta, E
-```
+[archived fence delimiter: ```]
 
 ### Optimization Strategies
 
 #### Gradient-Free
 
-```python
+[archived fence delimiter: ```python]
 from scipy.optimize import minimize
 
 def qaoa_cost(params, n, edges, p):
@@ -201,13 +208,13 @@ def qaoa_cost(params, n, edges, p):
 result = minimize(qaoa_cost, initial_params,
                   args=(n, edges, p),
                   method='COBYLA')
-```
+[archived fence delimiter: ```]
 
 #### Gradient-Based
 
 Using parameter shift rule:
 
-```python
+[archived fence delimiter: ```python]
 def qaoa_gradient(params, n, edges, p):
     """Compute gradient using parameter shift."""
     gradient = np.zeros_like(params)
@@ -224,22 +231,22 @@ def qaoa_gradient(params, n, edges, p):
                        qaoa_cost(params_minus, n, edges, p)) / 2
 
     return gradient
-```
+[archived fence delimiter: ```]
 
 ### Parameter Initialization
 
 #### Random Initialization
 
-```python
+[archived fence delimiter: ```python]
 gamma_init = np.random.uniform(0, 2*np.pi, p)
 beta_init = np.random.uniform(0, np.pi, p)
-```
+[archived fence delimiter: ```]
 
 #### Warm Starting
 
 From smaller depth:
 
-```python
+[archived fence delimiter: ```python]
 def warm_start(optimal_p, new_p):
     """Interpolate parameters from depth p to p+1."""
     gamma_new = np.zeros(new_p)
@@ -261,7 +268,7 @@ def warm_start(optimal_p, new_p):
             beta_new[i] = optimal_p['beta'][-1]
 
     return gamma_new, beta_new
-```
+[archived fence delimiter: ```]
 
 ## Theoretical Analysis
 
@@ -296,7 +303,7 @@ For typical instances, QAOA parameters concentrate:
 
 Add penalty for violated constraints:
 
-```python
+[archived fence delimiter: ```python]
 def constrained_cost(C, constraints, penalty_weight):
     """Add penalty terms for constraints."""
     H = C.copy()
@@ -304,24 +311,24 @@ def constrained_cost(C, constraints, penalty_weight):
         # constraint = 0 when satisfied
         H += penalty_weight * constraint**2
     return H
-```
+[archived fence delimiter: ```]
 
 #### Custom Mixers
 
 Preserve feasibility with XY-mixer:
 
-```python
+[archived fence delimiter: ```python]
 def xy_mixer_unitary(state, beta, edges):
     """XY mixer for constrained subspace."""
     for i, j in edges:
         # Preserves particle number
         state.rxx(i, j, beta)
         state.ryy(i, j, beta)
-```
+[archived fence delimiter: ```]
 
 ### Weighted Problems
 
-```python
+[archived fence delimiter: ```python]
 # Weighted MaxCut
 weighted_edges = [(0, 1, 1.5), (1, 2, 2.0), (2, 3, 0.5)]
 
@@ -330,7 +337,7 @@ def weighted_cost_unitary(state, edges, gamma):
         state.cnot(i, j)
         state.rz(j, 2 * gamma * weight)
         state.cnot(i, j)
-```
+[archived fence delimiter: ```]
 
 ### QUBO Problems
 
@@ -340,7 +347,7 @@ $$\min_{\mathbf{x}} \mathbf{x}^T Q \mathbf{x}$$
 
 can be converted to Ising form:
 
-```python
+[archived fence delimiter: ```python]
 def qubo_to_ising(Q):
     """Convert QUBO matrix to Ising Hamiltonian."""
     n = Q.shape[0]
@@ -358,7 +365,7 @@ def qubo_to_ising(Q):
             offset += Q[i, j] / 4
 
     return J, h, offset
-```
+[archived fence delimiter: ```]
 
 ## Problem Encodings
 
@@ -366,7 +373,7 @@ def qubo_to_ising(Q):
 
 $k$-coloring with $n \cdot k$ qubits:
 
-```python
+[archived fence delimiter: ```python]
 def graph_coloring_hamiltonian(edges, n_vertices, k_colors):
     """
     Encode k-coloring as QAOA problem.
@@ -388,13 +395,13 @@ def graph_coloring_hamiltonian(edges, n_vertices, k_colors):
             terms.append((qubit_idx(u, c), qubit_idx(v, c), 1.0))
 
     return terms
-```
+[archived fence delimiter: ```]
 
 ### Traveling Salesman
 
 Using one-hot encoding:
 
-```python
+[archived fence delimiter: ```python]
 def tsp_hamiltonian(distances, n_cities):
     """
     Encode TSP as QAOA problem.
@@ -421,13 +428,13 @@ def tsp_hamiltonian(distances, n_cities):
     # (Added as penalty terms)
 
     return terms
-```
+[archived fence delimiter: ```]
 
 ## Performance Optimization
 
 ### Moonlab Optimizations
 
-```python
+[archived fence delimiter: ```python]
 # Enable GPU acceleration
 qaoa = QAOA(num_qubits=20, depth=5, backend='metal')
 
@@ -436,11 +443,11 @@ qaoa.use_fused_cost_layer(True)  # Fuses ZZ rotations
 
 # Parallel parameter evaluation
 results = qaoa.evaluate_parallel([params1, params2, params3])
-```
+[archived fence delimiter: ```]
 
 ### Batched Evaluation
 
-```python
+[archived fence delimiter: ```python]
 def batched_qaoa_cost(param_batch, n, edges, p):
     """Evaluate multiple parameter sets in parallel."""
     states = []
@@ -449,11 +456,11 @@ def batched_qaoa_cost(param_batch, n, edges, p):
         states.append(qaoa_circuit(n, edges, gamma, beta, p))
 
     return [compute_expectation(s, edges) for s in states]
-```
+[archived fence delimiter: ```]
 
 ## Example: Portfolio Optimization
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 import numpy as np
 
@@ -482,7 +489,7 @@ result = qaoa.solve_qubo(Q_matrix)
 
 print(f"Optimal portfolio: {result['best_bitstring']:04b}")
 print(f"Expected value: {portfolio_cost(result['best_bitstring']):.4f}")
-```
+[archived fence delimiter: ```]
 
 ## Complexity Analysis
 
@@ -515,3 +522,4 @@ print(f"Expected value: {portfolio_cost(result['best_bitstring']):.4f}")
 6. Hadfield, S. et al. (2019). "From the Quantum Approximate Optimization Algorithm to a Quantum Alternating Operator Ansatz." *Algorithms* 12(2), 34.
 7. Harrigan, M.P. et al. (2021). "Quantum approximate optimization of non-planar graph problems on a planar superconducting processor." *Nat. Phys.* 17, 332-336.
 
+```

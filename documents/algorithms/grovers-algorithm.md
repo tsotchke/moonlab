@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Grover's Algorithm
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Grover's Algorithm
 
 Complete guide to quantum search with Grover's algorithm.
@@ -78,7 +85,7 @@ $$G^k|s\rangle = \sin((2k+1)\theta)|\omega\rangle + \cos((2k+1)\theta)|s'\rangle
 
 ### Basic Grover Search
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 #include "grover.h"
 
@@ -120,11 +127,11 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Using the Built-in Solver
 
-```c
+[archived fence delimiter: ```c]
 #include "grover.h"
 
 // Simple search
@@ -143,11 +150,11 @@ grover_result_t result = grover_search_multi(
     solutions,      // Array of solution states
     num_solutions
 );
-```
+[archived fence delimiter: ```]
 
 ### Python Interface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import GroverSearch
 
 # Basic search
@@ -166,7 +173,7 @@ def my_oracle(state):
             state.phase_flip(i)
 
 result = grover.search_with_oracle(my_oracle)
-```
+[archived fence delimiter: ```]
 
 ## Advanced Topics
 
@@ -174,7 +181,7 @@ result = grover.search_with_oracle(my_oracle)
 
 When there are $M$ solutions:
 
-```python
+[archived fence delimiter: ```python]
 # Known number of solutions
 grover = GroverSearch(num_qubits=10)
 result = grover.search(
@@ -185,7 +192,7 @@ result = grover.search(
 # Unknown number of solutions
 # Use quantum counting or iterative approach
 result = grover.search_unknown_solutions(oracle)
-```
+[archived fence delimiter: ```]
 
 The success probability after $k$ iterations:
 
@@ -197,7 +204,7 @@ where $\sin\theta = \sqrt{M/N}$.
 
 Generalization when preparation isn't uniform superposition:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import AmplitudeAmplification
 
 def prepare(state):
@@ -213,13 +220,13 @@ aa = AmplitudeAmplification(
 )
 
 result = aa.amplify(iterations=2)
-```
+[archived fence delimiter: ```]
 
 ### Quantum Counting
 
 Determine the number of solutions:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QuantumCounting
 
 counter = QuantumCounting(
@@ -230,7 +237,7 @@ counter = QuantumCounting(
 count_result = counter.count(oracle)
 print(f"Estimated solutions: {count_result['count']}")
 print(f"Uncertainty: ±{count_result['uncertainty']}")
-```
+[archived fence delimiter: ```]
 
 This uses QPE on the Grover operator to estimate $\theta$, from which $M$ is computed.
 
@@ -240,7 +247,7 @@ This uses QPE on the Grover operator to estimate $\theta$, from which $M$ is com
 
 For a classical function $f(x)$:
 
-```c
+[archived fence delimiter: ```c]
 // Using phase kickback
 void phase_oracle(quantum_state_t* state,
                   bool (*f)(uint64_t)) {
@@ -258,11 +265,11 @@ void phase_oracle(quantum_state_t* state,
     gate_hadamard(full, ancilla);
     gate_pauli_x(full, ancilla);
 }
-```
+[archived fence delimiter: ```]
 
 ### Boolean SAT Oracle
 
-```python
+[archived fence delimiter: ```python]
 def sat_oracle(state, clauses):
     """
     Oracle for SAT: marks assignments satisfying all clauses.
@@ -285,7 +292,7 @@ def sat_oracle(state, clauses):
     # Uncompute
     for i, clause in enumerate(clauses):
         unevaluate_clause(state, clause, clause_ancillas[i])
-```
+[archived fence delimiter: ```]
 
 ## Performance Analysis
 
@@ -328,7 +335,7 @@ Total: $O(\sqrt{N} \cdot (\text{oracle} + n))$
 
 The diffusion operator is vectorized:
 
-```c
+[archived fence delimiter: ```c]
 // Optimized diffusion using SIMD
 void grover_diffusion_simd(quantum_state_t* state) {
     // Compute mean amplitude
@@ -337,13 +344,13 @@ void grover_diffusion_simd(quantum_state_t* state) {
     // Reflect about mean: 2*mean - amplitude
     simd_reflect_mean(state->amplitudes, mean, state->size);
 }
-```
+[archived fence delimiter: ```]
 
 ### GPU Acceleration
 
 For large search spaces:
 
-```c
+[archived fence delimiter: ```c]
 // Enable GPU
 gpu_metal_init();
 
@@ -351,19 +358,19 @@ quantum_state_t* state = quantum_state_create_gpu(20);
 
 // Grover operations use GPU automatically
 grover_search_gpu(state, oracle, iterations);
-```
+[archived fence delimiter: ```]
 
 ### Batched Oracle Evaluation
 
 When oracle can be evaluated in parallel:
 
-```python
+[archived fence delimiter: ```python]
 grover = GroverSearch(num_qubits=20, backend='metal')
 grover.enable_batched_oracle(True)
 
 result = grover.search(target)
 # Oracle evaluated on all amplitudes simultaneously
-```
+[archived fence delimiter: ```]
 
 ## Common Pitfalls
 
@@ -371,32 +378,32 @@ result = grover.search(target)
 
 Applying too many iterations decreases success probability:
 
-```python
+[archived fence delimiter: ```python]
 # Wrong: Using too many iterations
 result = grover.search(target, iterations=100)  # Likely to fail
 
 # Correct: Use optimal iterations
 optimal_k = grover.optimal_iterations(num_solutions=1)
 result = grover.search(target, iterations=optimal_k)
-```
+[archived fence delimiter: ```]
 
 ### 2. Unknown Solution Count
 
 If $M$ is unknown, the fixed iteration formula fails:
 
-```python
+[archived fence delimiter: ```python]
 # Solution: Exponential search
 for k in [1, 2, 4, 8, 16, ...]:
     result = grover.search(oracle, iterations=k)
     if verify(result['measured']):
         break
-```
+[archived fence delimiter: ```]
 
 ### 3. Oracle Phase Errors
 
 Oracle must apply exactly $-1$ phase to solutions:
 
-```python
+[archived fence delimiter: ```python]
 # Wrong: Applying i instead of -1
 def bad_oracle(state, target):
     state.amplitudes[target] *= 1j  # Incorrect!
@@ -404,11 +411,11 @@ def bad_oracle(state, target):
 # Correct: Apply -1 phase
 def good_oracle(state, target):
     state.amplitudes[target] *= -1
-```
+[archived fence delimiter: ```]
 
 ## Example: Sudoku Solver
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import GroverSearch
 
 def sudoku_oracle(state, puzzle):
@@ -431,7 +438,7 @@ result = grover.search_with_oracle(
 )
 
 print(f"Solution: {decode_sudoku(result['measured'])}")
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -446,3 +453,4 @@ print(f"Solution: {decode_sudoku(result['measured'])}")
 2. Boyer, M. et al. (1998). "Tight bounds on quantum searching." Fortschritte der Physik, 46(4-5), 493-505.
 3. Brassard, G. et al. (2002). "Quantum Amplitude Amplification and Estimation." Contemporary Mathematics, 305, 53-74.
 
+```

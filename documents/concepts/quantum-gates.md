@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quantum Gates
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quantum Gates
 
 Mathematical foundations of quantum logic gates.
@@ -46,9 +53,9 @@ $$X = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$$
 - Eigenvalues: $\pm 1$
 - Eigenvectors: $|+\rangle, |-\rangle$
 
-```c
+[archived fence delimiter: ```c]
 gate_pauli_x(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### Pauli-Y
 
@@ -60,9 +67,9 @@ $$Y = \begin{pmatrix} 0 & -i \\ i & 0 \end{pmatrix}$$
 - $Y^2 = I$
 - $Y = iXZ$
 
-```c
+[archived fence delimiter: ```c]
 gate_pauli_y(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### Pauli-Z
 
@@ -74,9 +81,9 @@ $$Z = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$$
 - $Z^2 = I$
 - Diagonal in computational basis
 
-```c
+[archived fence delimiter: ```c]
 gate_pauli_z(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### Pauli Algebra
 
@@ -99,9 +106,9 @@ $$H|1\rangle = |-\rangle = \frac{|0\rangle - |1\rangle}{\sqrt{2}}$$
 - $H = \frac{X + Z}{\sqrt{2}}$
 - Rotates X-basis to Z-basis
 
-```c
+[archived fence delimiter: ```c]
 gate_hadamard(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ## Phase Gates
 
@@ -113,17 +120,17 @@ $$S = \begin{pmatrix} 1 & 0 \\ 0 & i \end{pmatrix} = \sqrt{Z}$$
 
 **Action**: $|1\rangle \to i|1\rangle$
 
-```c
+[archived fence delimiter: ```c]
 gate_s(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### S-dagger
 
 $$S^\dagger = \begin{pmatrix} 1 & 0 \\ 0 & -i \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_s_dagger(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### T Gate (pi/8 Gate)
 
@@ -135,17 +142,17 @@ $$T = \begin{pmatrix} 1 & 0 \\ 0 & e^{i\pi/4} \end{pmatrix} = \sqrt{S}$$
 
 **Importance**: T gate + Clifford gates = universal gate set
 
-```c
+[archived fence delimiter: ```c]
 gate_t(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### T-dagger
 
 $$T^\dagger = \begin{pmatrix} 1 & 0 \\ 0 & e^{-i\pi/4} \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_t_dagger(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ## Rotation Gates
 
@@ -155,9 +162,9 @@ $$R_X(\theta) = e^{-i\theta X/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 
 $$R_X(\theta) = \begin{pmatrix} \cos\frac{\theta}{2} & -i\sin\frac{\theta}{2} \\ -i\sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_rx(state, qubit, theta);
-```
+[archived fence delimiter: ```]
 
 ### Rotation About Y-Axis
 
@@ -165,9 +172,9 @@ $$R_Y(\theta) = e^{-i\theta Y/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 
 $$R_Y(\theta) = \begin{pmatrix} \cos\frac{\theta}{2} & -\sin\frac{\theta}{2} \\ \sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_ry(state, qubit, theta);
-```
+[archived fence delimiter: ```]
 
 ### Rotation About Z-Axis
 
@@ -175,9 +182,9 @@ $$R_Z(\theta) = e^{-i\theta Z/2} = \cos\frac{\theta}{2} I - i\sin\frac{\theta}{2
 
 $$R_Z(\theta) = \begin{pmatrix} e^{-i\theta/2} & 0 \\ 0 & e^{i\theta/2} \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 gate_rz(state, qubit, theta);
-```
+[archived fence delimiter: ```]
 
 ### Phase Gate (General)
 
@@ -185,9 +192,9 @@ $$P(\phi) = \begin{pmatrix} 1 & 0 \\ 0 & e^{i\phi} \end{pmatrix}$$
 
 Relation to $R_Z$: $P(\phi) = e^{i\phi/2} R_Z(\phi)$
 
-```c
+[archived fence delimiter: ```c]
 gate_phase(state, qubit, phi);
-```
+[archived fence delimiter: ```]
 
 ## Universal Single-Qubit Gates
 
@@ -205,9 +212,9 @@ Any single-qubit gate can be expressed as $U_3$ (up to global phase).
 - $U_3(\pi, 0, \pi) = X$
 - $U_3(\pi/2, 0, \pi) = H$
 
-```c
+[archived fence delimiter: ```c]
 gate_u3(state, qubit, theta, phi, lambda);
-```
+[archived fence delimiter: ```]
 
 ### Euler Decomposition
 
@@ -233,9 +240,9 @@ $$|10\rangle \to |11\rangle, \quad |11\rangle \to |10\rangle$$
 
 **Creates entanglement**: $\text{CNOT}(H \otimes I)|00\rangle = \frac{|00\rangle + |11\rangle}{\sqrt{2}}$
 
-```c
+[archived fence delimiter: ```c]
 gate_cnot(state, control, target);
-```
+[archived fence delimiter: ```]
 
 ### CZ (Controlled-Z)
 
@@ -247,9 +254,9 @@ $$\text{CZ} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\
 - Symmetric: CZ(a,b) = CZ(b,a)
 - $\text{CZ} = (I \otimes H) \cdot \text{CNOT} \cdot (I \otimes H)$
 
-```c
+[archived fence delimiter: ```c]
 gate_cz(state, qubit1, qubit2);
-```
+[archived fence delimiter: ```]
 
 ### SWAP
 
@@ -259,9 +266,9 @@ $$\text{SWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 1 & 0 & 0 
 
 **Decomposition**: SWAP = CNOT(a,b) CNOT(b,a) CNOT(a,b)
 
-```c
+[archived fence delimiter: ```c]
 gate_swap(state, qubit1, qubit2);
-```
+[archived fence delimiter: ```]
 
 ### iSWAP
 
@@ -269,9 +276,9 @@ SWAP with phase:
 
 $$\text{iSWAP} = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & i & 0 \\ 0 & i & 0 & 0 \\ 0 & 0 & 0 & 1 \end{pmatrix}$$
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_iswap(state, qubit1, qubit2);
-```
+[archived fence delimiter: ```]
 
 ### Controlled Rotations
 
@@ -279,11 +286,11 @@ $$CR_Z(\theta) = \begin{pmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & e^{-i
 
 Similar definitions for $CR_X$ and $CR_Y$.
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_crz(state, control, target, theta);
 quantum_state_crx(state, control, target, theta);
 quantum_state_cry(state, control, target, theta);
-```
+[archived fence delimiter: ```]
 
 ## Three-Qubit Gates
 
@@ -302,17 +309,17 @@ where $I_6$ is the $6 \times 6$ identity.
 - Universal for classical computation
 - Self-inverse
 
-```c
+[archived fence delimiter: ```c]
 gate_toffoli(state, control1, control2, target);
-```
+[archived fence delimiter: ```]
 
 ### Fredkin (CSWAP)
 
 Swaps two qubits if control is $|1\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 gate_fredkin(state, control, target1, target2);
-```
+[archived fence delimiter: ```]
 
 ## Clifford Group
 
@@ -362,7 +369,7 @@ Any single-qubit gate can be approximated to precision $\epsilon$ using $O(\log^
 
 Moonlab stores gate matrices in row-major order:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double matrix[8];   // 2x2 complex matrix (4 complex = 8 doubles)
 } gate_1q_t;
@@ -370,13 +377,13 @@ typedef struct {
 typedef struct {
     double matrix[32];  // 4x4 complex matrix (16 complex = 32 doubles)
 } gate_2q_t;
-```
+[archived fence delimiter: ```]
 
 ### Fused Gates
 
 Multiple consecutive gates can be fused into a single operation:
 
-```c
+[archived fence delimiter: ```c]
 // Instead of:
 gate_hadamard(state, 0);
 gate_t(state, 0);
@@ -387,18 +394,18 @@ double fused[8];
 gate_multiply(H, T, temp);
 gate_multiply(temp, H, fused);
 quantum_state_apply_1q(state, 0, fused);
-```
+[archived fence delimiter: ```]
 
 ### Gate Caching
 
 Common gates are pre-computed at initialization:
 
-```c
+[archived fence delimiter: ```c]
 static const double PAULI_X[8] = {
     0.0, 0.0,  1.0, 0.0,   // Row 0
     1.0, 0.0,  0.0, 0.0    // Row 1
 };
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -407,3 +414,4 @@ static const double PAULI_X[8] = {
 - [Gate Reference](../reference/gate-reference.md) - Quick reference card
 - [C API: Gates](../api/c/gates.md) - C function reference
 
+```

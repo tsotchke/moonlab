@@ -1,9 +1,16 @@
+# Archived Moonlab Documentation: QGTL hardware-bridge demo
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QGTL hardware-bridge demo
 
 End-to-end demo of how a moonlab circuit reaches real quantum
 hardware via QGTL.
 
-```
+[archived fence delimiter: ```]
 moonlab Python (this demo)
     |
     +-- moonlab.qgtl.QgtlCircuit (build)
@@ -14,14 +21,14 @@ moonlab Python (this demo)
     |             |
     |             +------> qgtl.hardware.{ibm,rigetti,ionq,dwave}.submit_circuit_text
     |                          -> physical QPU job + outcome poll
-```
+[archived fence delimiter: ```]
 
 The simulation half is fully in this repo:
 
-```
+[archived fence delimiter: ```]
 docker compose -f deploy/docker/docker-compose.yml up   # spin up control plane
 python3 examples/qgtl_hardware_demo/qgtl_bridge_demo.py
-```
+[archived fence delimiter: ```]
 
 The hardware half lives in
 [QGTL](https://github.com/tsotchke/quantum_geometric_tensor); install
@@ -62,3 +69,4 @@ Workflow:
 - `docs/CONTROL_PLANE.md`   -- the line protocol the simulation path uses
 - `docs/PARITY_MATRIX.md`   -- which capabilities are in each binding
 - QGTL repo                  -- <https://github.com/tsotchke/quantum_geometric_tensor>
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Adversarial pre-release audit, 2026-04-19
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Adversarial pre-release audit, 2026-04-19
 
 Written as a hostile reviewer would.  No self-congratulation.  Items
@@ -7,11 +14,11 @@ are ordered by "how embarrassing would this be at launch".
 
 `src/algorithms/bell_tests.c:256-257` (pre-patch):
 
-```c
+[archived fence delimiter: ```c]
 // Reset to |00⟩ and create Bell state
 quantum_state_reset(&test_state);
 create_bell_state_phi_plus(&test_state, qubit_a, qubit_b);
-```
+[archived fence delimiter: ```]
 
 Every invocation of `bell_test_chsh(state, ...)` cloned the caller's
 state, **then immediately discarded it and rebuilt a hard-coded
@@ -219,3 +226,4 @@ one-pass audits are insufficient and that every external-facing
 capability claim needs a test that would *fail* if the capability
 were absent.  Most of Moonlab's current test suite only exercises
 success paths.
+```

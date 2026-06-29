@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Measurement Theory
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Measurement Theory
 
 Quantum measurement and the Born rule.
@@ -43,11 +50,11 @@ For state $|\psi\rangle = \sum_{i=0}^{2^n-1} \alpha_i |i\rangle$:
 - Probability of outcome $|i\rangle$: $P(i) = |\alpha_i|^2$
 - Post-measurement state: $|i\rangle$
 
-```c
+[archived fence delimiter: ```c]
 // Measure all qubits in computational basis
 int result = quantum_state_measure_all(state);
 // state is now |result⟩
-```
+[archived fence delimiter: ```]
 
 ### Single-Qubit Measurement
 
@@ -60,11 +67,11 @@ $$P(q=1) = \sum_{i: \text{bit } q = 1} |\alpha_i|^2$$
 If outcome is 0: zero out amplitudes with bit $q = 1$, renormalize
 If outcome is 1: zero out amplitudes with bit $q = 0$, renormalize
 
-```c
+[archived fence delimiter: ```c]
 // Measure single qubit
 int outcome = quantum_state_measure(state, qubit);
 // state is projected and renormalized
-```
+[archived fence delimiter: ```]
 
 ## Measurement Operators
 
@@ -101,12 +108,12 @@ Measuring in the X basis:
 - Eigenstates: $|+\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$, $|-\rangle = \frac{|0\rangle - |1\rangle}{\sqrt{2}}$
 - Implemented as: $H \to Z\text{-measure} \to H$
 
-```c
+[archived fence delimiter: ```c]
 // X-basis measurement on qubit q
 gate_hadamard(state, q);
 int outcome = quantum_state_measure(state, q);
 // outcome: 0 → |+⟩, 1 → |−⟩
-```
+[archived fence delimiter: ```]
 
 ### Y-Basis Measurement
 
@@ -151,11 +158,11 @@ $$\langle Z_q \rangle = P(q=0) - P(q=1)$$
 $$\langle X_q \rangle = \langle\psi|H_q Z_q H_q|\psi\rangle$$
 $$\langle Y_q \rangle = \langle\psi|S_q^\dagger H_q Z_q H_q S_q|\psi\rangle$$
 
-```c
+[archived fence delimiter: ```c]
 double z_exp = quantum_state_expectation_z(state, qubit);
 double x_exp = quantum_state_expectation_x(state, qubit);
 double y_exp = quantum_state_expectation_y(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### Multi-Qubit Correlations
 
@@ -163,9 +170,9 @@ For tensor product observables:
 
 $$\langle Z_i Z_j \rangle = \langle\psi|Z_i \otimes Z_j|\psi\rangle$$
 
-```c
+[archived fence delimiter: ```c]
 double zz_corr = quantum_state_correlation_zz(state, qubit_i, qubit_j);
-```
+[archived fence delimiter: ```]
 
 ## Measurement Statistics
 
@@ -173,7 +180,7 @@ double zz_corr = quantum_state_correlation_zz(state, qubit_i, qubit_j);
 
 Real quantum computers don't give probabilities directly. They sample:
 
-```c
+[archived fence delimiter: ```c]
 // Run 1000 measurements
 int counts[1024] = {0};  // For 10 qubits
 for (int shot = 0; shot < 1000; shot++) {
@@ -182,7 +189,7 @@ for (int shot = 0; shot < 1000; shot++) {
     int result = quantum_state_measure_all(state);
     counts[result]++;
 }
-```
+[archived fence delimiter: ```]
 
 ### Statistical Uncertainty
 
@@ -220,11 +227,11 @@ Measure system indirectly via ancilla:
 2. Entangle with system: controlled operation
 3. Measure ancilla only
 
-```
+[archived fence delimiter: ```]
 |ψ⟩ ──●──── (unmeasured)
       │
 |0⟩ ──X── [M]
-```
+[archived fence delimiter: ```]
 
 ## Weak Measurement
 
@@ -247,7 +254,7 @@ Weak values can be complex and lie outside the eigenvalue spectrum.
 
 ### Measurement in Moonlab
 
-```c
+[archived fence delimiter: ```c]
 // Non-destructive probability query
 double prob_zero = quantum_state_probability_zero(state, qubit);
 double prob_one = quantum_state_probability_one(state, qubit);
@@ -260,7 +267,7 @@ int* results = quantum_state_sample(state, num_shots);
 
 // Expectation values (non-destructive)
 double exp_z = quantum_state_expectation_z(state, qubit);
-```
+[archived fence delimiter: ```]
 
 ### Random Number Generation
 
@@ -269,13 +276,13 @@ Measurement outcomes require random sampling. Moonlab uses:
 1. **Hardware entropy**: `/dev/urandom`, CPU RDRAND
 2. **CSPRNG**: ChaCha20 for simulation reproducibility
 
-```c
+[archived fence delimiter: ```c]
 // Set seed for reproducibility
 quantum_set_seed(12345);
 
 // Or use hardware entropy
 quantum_use_hardware_entropy(true);
-```
+[archived fence delimiter: ```]
 
 ## The Measurement Problem
 
@@ -305,3 +312,4 @@ Off-diagonal elements decay exponentially, leaving classical probability distrib
 - [Noise Models](noise-models.md) - Decoherence and errors
 - [C API: Measurement](../api/c/measurement.md) - Function reference
 
+```

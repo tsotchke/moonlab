@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quick Start
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quick Start
 
 Get running with Moonlab Quantum Simulator in under 5 minutes. This guide walks through creating and measuring a Bell state—the fundamental demonstration of quantum entanglement.
@@ -10,11 +17,11 @@ Get running with Moonlab Quantum Simulator in under 5 minutes. This guide walks 
 
 ## Build the Library
 
-```bash
+[archived fence delimiter: ```bash]
 git clone https://github.com/tsotchke/moonlab.git
 cd moonlab
 cmake -S . -B build && cmake --build build -j
-```
+[archived fence delimiter: ```]
 
 On Apple Silicon, the build automatically detects your M-series chip and enables hardware acceleration.
 
@@ -22,7 +29,7 @@ On Apple Silicon, the build automatically detects your M-series chip and enables
 
 Create a file `hello_quantum.c`:
 
-```c
+[archived fence delimiter: ```c]
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 #include "src/quantum/measurement.h"
@@ -58,27 +65,27 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 Compile and run:
 
-```bash
+[archived fence delimiter: ```bash]
 gcc -O3 hello_quantum.c -L. -lquantumsim -lm -o hello_quantum
 LD_LIBRARY_PATH=. ./hello_quantum
-```
+[archived fence delimiter: ```]
 
 Expected output:
 
-```
+[archived fence delimiter: ```]
 Bell State |Φ⁺⟩ Created
 P(|00⟩) = 0.5000
 P(|11⟩) = 0.5000
 Entanglement entropy: 1.0000 bits
-```
+[archived fence delimiter: ```]
 
 ## Python Quick Start
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 # Create Bell state
@@ -93,11 +100,11 @@ print(f"P(|11⟩) = {probs[3]:.4f}")  # 0.5
 # Measure (collapses state)
 result = state.measure()
 print(f"Measured: |{result:02b}⟩")  # Either |00⟩ or |11⟩
-```
+[archived fence delimiter: ```]
 
 ## JavaScript Quick Start
 
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 
 async function main() {
@@ -117,17 +124,17 @@ async function main() {
   state.dispose();
 }
 main();
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Bell State
 
 The circuit we just built:
 
-```
+[archived fence delimiter: ```]
 |0⟩ ──[H]──●──
            │
 |0⟩ ───────⊕──
-```
+[archived fence delimiter: ```]
 
 1. **Initial state**: $|00\rangle$
 2. **After Hadamard on qubit 0**: $\frac{1}{\sqrt{2}}(|00\rangle + |10\rangle)$
@@ -152,17 +159,18 @@ This is a **maximally entangled** state:
 ## Common Issues
 
 **Library not found**
-```bash
+[archived fence delimiter: ```bash]
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)
-```
+[archived fence delimiter: ```]
 
 **OpenMP not available**
-```bash
+[archived fence delimiter: ```bash]
 # macOS with Homebrew
 brew install libomp
-```
+[archived fence delimiter: ```]
 
 **Metal GPU errors on macOS**
 Ensure you're running on actual hardware, not a VM. Metal requires native Apple Silicon or AMD GPU.
 
 See [Troubleshooting](troubleshooting.md) for more solutions.
+```

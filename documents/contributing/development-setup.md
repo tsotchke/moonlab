@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Development Setup
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Development Setup
 
 Configure your environment for Moonlab development.
@@ -27,7 +34,7 @@ Configure your environment for Moonlab development.
 
 ### macOS
 
-```bash
+[archived fence delimiter: ```bash]
 # Install Xcode command line tools
 xcode-select --install
 
@@ -42,11 +49,11 @@ brew install doxygen  # Optional: docs
 # Verify
 cmake --version
 clang --version
-```
+[archived fence delimiter: ```]
 
 ### Ubuntu/Debian
 
-```bash
+[archived fence delimiter: ```bash]
 # Update package list
 sudo apt-get update
 
@@ -63,11 +70,11 @@ sudo apt-get install libopenmpi-dev
 # Verify
 cmake --version
 gcc --version
-```
+[archived fence delimiter: ```]
 
 ### Fedora/RHEL
 
-```bash
+[archived fence delimiter: ```bash]
 # Install development tools
 sudo dnf groupinstall "Development Tools"
 sudo dnf install cmake git
@@ -78,13 +85,13 @@ sudo dnf install python3-devel
 
 # Verify
 cmake --version
-```
+[archived fence delimiter: ```]
 
 ## Clone and Build
 
 ### Fork and Clone
 
-```bash
+[archived fence delimiter: ```bash]
 # Fork via GitHub UI first, then:
 git clone https://github.com/YOUR_USERNAME/moonlab.git
 cd moonlab
@@ -94,11 +101,11 @@ git remote add upstream https://github.com/tsotchke/moonlab.git
 
 # Verify remotes
 git remote -v
-```
+[archived fence delimiter: ```]
 
 ### Debug Build
 
-```bash
+[archived fence delimiter: ```bash]
 mkdir build-debug && cd build-debug
 
 cmake -DCMAKE_BUILD_TYPE=Debug \
@@ -107,11 +114,11 @@ cmake -DCMAKE_BUILD_TYPE=Debug \
       ..
 
 make -j$(nproc)
-```
+[archived fence delimiter: ```]
 
 ### Release Build
 
-```bash
+[archived fence delimiter: ```bash]
 mkdir build-release && cd build-release
 
 cmake -DCMAKE_BUILD_TYPE=Release \
@@ -120,7 +127,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       ..
 
 make -j$(nproc)
-```
+[archived fence delimiter: ```]
 
 ### Build Options
 
@@ -149,7 +156,7 @@ make -j$(nproc)
 
 2. Create `.vscode/settings.json`:
 
-```json
+[archived fence delimiter: ```json]
 {
     "cmake.buildDirectory": "${workspaceFolder}/build-debug",
     "cmake.configureSettings": {
@@ -163,11 +170,11 @@ make -j$(nproc)
         "*.h": "c"
     }
 }
-```
+[archived fence delimiter: ```]
 
 3. Create `.vscode/launch.json`:
 
-```json
+[archived fence delimiter: ```json]
 {
     "version": "0.2.0",
     "configurations": [
@@ -189,7 +196,7 @@ make -j$(nproc)
         }
     ]
 }
-```
+[archived fence delimiter: ```]
 
 ### CLion
 
@@ -210,18 +217,18 @@ make -j$(nproc)
 
 ### Xcode (macOS)
 
-```bash
+[archived fence delimiter: ```bash]
 # Generate Xcode project
 mkdir build-xcode && cd build-xcode
 cmake -G Xcode -DBUILD_TESTS=ON ..
 open moonlab.xcodeproj
-```
+[archived fence delimiter: ```]
 
 ## Python Development
 
 ### Virtual Environment
 
-```bash
+[archived fence delimiter: ```bash]
 # Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
@@ -231,11 +238,11 @@ pip install -e "./bindings/python[dev]"
 
 # Or manually
 pip install pytest pytest-cov mypy black numpy
-```
+[archived fence delimiter: ```]
 
 ### Running Python Tests
 
-```bash
+[archived fence delimiter: ```bash]
 # All tests
 pytest bindings/python/tests/
 
@@ -244,13 +251,13 @@ pytest --cov=moonlab bindings/python/tests/
 
 # Specific test
 pytest bindings/python/tests/test_state.py -v
-```
+[archived fence delimiter: ```]
 
 ## Rust Development
 
 ### Setup
 
-```bash
+[archived fence delimiter: ```bash]
 cd bindings/rust/moonlab
 
 # Build
@@ -261,32 +268,32 @@ cargo test
 
 # Build with release optimizations
 cargo build --release
-```
+[archived fence delimiter: ```]
 
 ### Linking to C Library
 
 The Rust bindings require the C library. Set the library path:
 
-```bash
+[archived fence delimiter: ```bash]
 export LIBRARY_PATH=/path/to/moonlab/build-release/lib
 export LD_LIBRARY_PATH=/path/to/moonlab/build-release/lib
-```
+[archived fence delimiter: ```]
 
 ## Pre-Commit Hooks
 
 ### Setup
 
-```bash
+[archived fence delimiter: ```bash]
 # Install pre-commit
 pip install pre-commit
 
 # Install hooks
 pre-commit install
-```
+[archived fence delimiter: ```]
 
 ### Configuration (`.pre-commit-config.yaml`)
 
-```yaml
+[archived fence delimiter: ```yaml]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -310,13 +317,13 @@ repos:
         entry: bash -c 'cd build-debug && make test'
         language: system
         pass_filenames: false
-```
+[archived fence delimiter: ```]
 
 ## Debugging
 
 ### GDB/LLDB
 
-```bash
+[archived fence delimiter: ```bash]
 # Build with debug symbols
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 
@@ -329,28 +336,28 @@ lldb ./bin/test_quantum_gates
 gdb ./bin/test_quantum_gates
 (gdb) break quantum_state_create
 (gdb) run
-```
+[archived fence delimiter: ```]
 
 ### Address Sanitizer
 
-```bash
+[archived fence delimiter: ```bash]
 cmake -DCMAKE_BUILD_TYPE=Debug -DSANITIZE_ADDRESS=ON ..
 make
 
 # Run tests - ASan will report memory errors
 ./bin/test_quantum_gates
-```
+[archived fence delimiter: ```]
 
 ### Valgrind (Linux)
 
-```bash
+[archived fence delimiter: ```bash]
 valgrind --leak-check=full --show-leak-kinds=all \
          ./bin/test_quantum_gates
-```
+[archived fence delimiter: ```]
 
 ## Keeping Up-to-Date
 
-```bash
+[archived fence delimiter: ```bash]
 # Fetch upstream changes
 git fetch upstream
 
@@ -361,38 +368,38 @@ git merge upstream/main
 # Rebase feature branch
 git checkout feature/your-feature
 git rebase main
-```
+[archived fence delimiter: ```]
 
 ## Troubleshooting
 
 ### CMake Cache Issues
 
-```bash
+[archived fence delimiter: ```bash]
 # Clear cache and rebuild
 rm -rf build-debug
 mkdir build-debug && cd build-debug
 cmake ..
-```
+[archived fence delimiter: ```]
 
 ### Library Path Issues
 
-```bash
+[archived fence delimiter: ```bash]
 # macOS
 export DYLD_LIBRARY_PATH=/path/to/build/lib:$DYLD_LIBRARY_PATH
 
 # Linux
 export LD_LIBRARY_PATH=/path/to/build/lib:$LD_LIBRARY_PATH
-```
+[archived fence delimiter: ```]
 
 ### Python Import Issues
 
-```bash
+[archived fence delimiter: ```bash]
 # Ensure development install
 pip install -e ./bindings/python
 
 # Check installation
 python -c "import moonlab; print(moonlab.__file__)"
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -400,3 +407,4 @@ python -c "import moonlab; print(moonlab.__file__)"
 - [Testing Guide](testing-guide.md) - Testing practices
 - [Building from Source](../guides/building-from-source.md) - Detailed build options
 
+```

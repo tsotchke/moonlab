@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Quantum Teleportation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Quantum Teleportation
 
 Transfer a quantum state between qubits using entanglement and classical communication.
@@ -15,7 +22,7 @@ The original qubit's state is destroyed during teleportation (no-cloning theorem
 
 ### Circuit Diagram
 
-```
+[archived fence delimiter: ```]
         ┌───┐          ┌───┐┌───┐
 |ψ⟩ ────┤ H ├──●───────┤ M ├┤   ├─────────
         └───┘  │       └───┘│   │
@@ -25,7 +32,7 @@ The original qubit's state is destroyed during teleportation (no-cloning theorem
       │                     │ Z │  if m0
 |0⟩ ──X─────────────────────┤   ├──── |ψ⟩
                             └───┘
-```
+[archived fence delimiter: ```]
 
 ### Mathematical Description
 
@@ -48,7 +55,7 @@ The original qubit's state is destroyed during teleportation (no-cloning theorem
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum/state.h"
 #include "quantum/gates.h"
 #include "quantum/measurement.h"
@@ -151,11 +158,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 import moonlab as ml
 import numpy as np
 
@@ -224,13 +231,13 @@ print(f"Teleported state: {teleported[0]:.4f}|0⟩ + {teleported[1]:.4f}|1⟩")
 original = np.array([alpha, beta])
 fidelity = abs(np.vdot(original, teleported))**2
 print(f"\nFidelity: {fidelity:.6f}")
-```
+[archived fence delimiter: ```]
 
 ## Statistical Verification
 
 Run multiple teleportations to verify correctness:
 
-```python
+[archived fence delimiter: ```python]
 import moonlab as ml
 import numpy as np
 
@@ -267,7 +274,7 @@ def verify_teleportation(num_trials: int = 1000):
     print(f"  All trials: {'PASSED' if min_fidelity > 0.999 else 'FAILED'}")
 
 verify_teleportation()
-```
+[archived fence delimiter: ```]
 
 ## Key Concepts
 
@@ -300,17 +307,18 @@ Teleportation doesn't violate no-cloning because:
 
 ## Running the Example
 
-```bash
+[archived fence delimiter: ```bash]
 # C version
 gcc -o teleport examples/basic/teleportation.c -lmoonlab -lm
 ./teleport
 
 # Python version
 python examples/basic/teleportation.py
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Tutorial: Creating Bell States](../../tutorials/03-creating-bell-states.md)
 - [Concepts: Entanglement Measures](../../concepts/entanglement-measures.md)
 - [Example: Bell State](bell-state.md)
+```

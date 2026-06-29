@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Entanglement API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Entanglement API
 
 Complete reference for quantum entanglement analysis in the C library.
@@ -20,7 +27,7 @@ The entanglement module provides functions for analyzing quantum correlations an
 
 Compute reduced density matrix by tracing out specified qubits.
 
-```c
+[archived fence delimiter: ```c]
 int entanglement_reduced_density_matrix(
     const quantum_state_t *state,
     const int *trace_out_qubits,
@@ -28,7 +35,7 @@ int entanglement_reduced_density_matrix(
     complex_t *reduced_dm,
     uint64_t *reduced_dim
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Full quantum state
@@ -44,7 +51,7 @@ For a bipartite state $|\psi\rangle_{AB}$, the reduced density matrix of subsyst
 $$\rho_A = \text{Tr}_B(|\psi\rangle\langle\psi|)$$
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, 4);  // 4 qubits
 
@@ -61,7 +68,7 @@ complex_t *reduced_dm = malloc(4 * 4 * sizeof(complex_t));  // 2^2 × 2^2
 
 entanglement_reduced_density_matrix(&state, trace_out, 2, reduced_dm, &reduced_dim);
 // reduced_dm is now a 4×4 mixed state density matrix
-```
+[archived fence delimiter: ```]
 
 ## Entanglement Entropy
 
@@ -69,9 +76,9 @@ entanglement_reduced_density_matrix(&state, trace_out, 2, reduced_dm, &reduced_d
 
 Compute von Neumann entropy of a density matrix.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_von_neumann_entropy(const complex_t *reduced_dm, uint64_t dim);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `reduced_dm`: Density matrix (dim × dim)
@@ -93,13 +100,13 @@ where $\lambda_i$ are the eigenvalues of $\rho$.
 
 Compute Rényi entropy of order $\alpha$.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_renyi_entropy(
     const complex_t *reduced_dm,
     uint64_t dim,
     double alpha
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `reduced_dm`: Density matrix
@@ -120,13 +127,13 @@ $$S_\alpha(\rho) = \frac{1}{1-\alpha} \log_2 \text{Tr}(\rho^\alpha)$$
 
 Compute entanglement entropy for a bipartition.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_entropy_bipartition(
     const quantum_state_t *state,
     const int *subsystem_b_qubits,
     int num_b_qubits
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Full quantum state
@@ -136,7 +143,7 @@ double entanglement_entropy_bipartition(
 **Returns**: Entanglement entropy $S(\rho_A)$ in bits
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Bell state: qubits 0 and 1 maximally entangled
 quantum_state_t state;
 quantum_state_init(&state, 2);
@@ -147,7 +154,7 @@ gate_cnot(&state, 0, 1);
 int subsystem_b[] = {1};
 double S = entanglement_entropy_bipartition(&state, subsystem_b, 1);
 printf("Entanglement entropy: %.4f bits\n", S);  // 1.0000
-```
+[archived fence delimiter: ```]
 
 ## Concurrence
 
@@ -155,9 +162,9 @@ printf("Entanglement entropy: %.4f bits\n", S);  // 1.0000
 
 Compute concurrence for a pure two-qubit state.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_concurrence_2qubit(const quantum_state_t *state);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Two-qubit pure state
@@ -178,9 +185,9 @@ where $\alpha_{ij}$ are the amplitudes in the computational basis.
 
 Compute concurrence from a two-qubit density matrix.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_concurrence_mixed(const complex_t *density_matrix);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `density_matrix`: 4×4 density matrix
@@ -198,7 +205,7 @@ where $\lambda_i$ are the square roots of eigenvalues of $\rho \tilde{\rho}$ in 
 
 Compute Schmidt coefficients for a bipartite pure state.
 
-```c
+[archived fence delimiter: ```c]
 int entanglement_schmidt_coefficients(
     const quantum_state_t *state,
     const int *partition_a_qubits,
@@ -206,7 +213,7 @@ int entanglement_schmidt_coefficients(
     double *coefficients,
     int *num_coefficients
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Full quantum state
@@ -224,7 +231,7 @@ $$|\psi\rangle_{AB} = \sum_{i=1}^{r} \lambda_i |u_i\rangle_A |v_i\rangle_B$$
 where $\lambda_i > 0$ are the Schmidt coefficients and $r$ is the Schmidt rank.
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, 4);
 
@@ -243,20 +250,20 @@ printf("Schmidt rank: %d\n", num_coeffs);
 for (int i = 0; i < num_coeffs; i++) {
     printf("λ_%d = %.4f\n", i, coeffs[i]);
 }
-```
+[archived fence delimiter: ```]
 
 ### entanglement_schmidt_rank
 
 Compute Schmidt rank (number of non-zero Schmidt coefficients).
 
-```c
+[archived fence delimiter: ```c]
 int entanglement_schmidt_rank(
     const quantum_state_t *state,
     const int *partition_a_qubits,
     int num_a,
     double threshold
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -277,13 +284,13 @@ int entanglement_schmidt_rank(
 
 Check if a state is separable (not entangled).
 
-```c
+[archived fence delimiter: ```c]
 int entanglement_is_separable(
     const quantum_state_t *state,
     const int *partition_a_qubits,
     int num_a
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -298,9 +305,9 @@ int entanglement_is_separable(
 
 Compute purity of a density matrix.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_purity(const complex_t *reduced_dm, uint64_t dim);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `reduced_dm`: Density matrix
@@ -317,9 +324,9 @@ double entanglement_purity(const complex_t *reduced_dm, uint64_t dim);
 
 Compute linear entropy.
 
-```c
+[archived fence delimiter: ```c]
 double entanglement_linear_entropy(const complex_t *reduced_dm, uint64_t dim);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `reduced_dm`: Density matrix
@@ -338,7 +345,7 @@ $$S(\rho_A) \propto |\partial A|$$
 where $|\partial A|$ is the size of the boundary between subsystems A and B.
 
 **Example: Verifying Area Law**:
-```c
+[archived fence delimiter: ```c]
 // Measure entanglement entropy for increasing subsystem sizes
 quantum_state_t state;
 quantum_state_init(&state, 20);  // 20-qubit chain
@@ -355,7 +362,7 @@ for (int size = 1; size <= 10; size++) {
     double S = entanglement_entropy_bipartition(&state, subsystem, 20 - size);
     printf("Size %2d: S = %.4f bits\n", size, S);
 }
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -374,3 +381,4 @@ for (int size = 1; size <= 10; size++) {
 - [Quantum State API](quantum-state.md) - State management
 - [Measurement API](measurement.md) - Measurement operations
 - [Concepts: Entanglement Measures](../../concepts/entanglement-measures.md) - Theory
+```

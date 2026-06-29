@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: MPI Bridge API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # MPI Bridge API
 
 Complete reference for distributed quantum simulation via MPI in the C library.
@@ -17,7 +24,7 @@ The MPI bridge module enables distributed quantum simulation across multiple nod
 
 ## Architecture
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────────────────────────────────────────────┐
 │                    MPI Communicator                      │
 ├─────────────┬─────────────┬─────────────┬───────────────┤
@@ -25,7 +32,7 @@ The MPI bridge module enables distributed quantum simulation across multiple nod
 │ Amplitudes  │ Amplitudes  │ Amplitudes  │ Amplitudes    │
 │  0 to N/4   │ N/4 to N/2  │ N/2 to 3N/4 │ 3N/4 to N     │
 └─────────────┴─────────────┴─────────────┴───────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Types
 
@@ -33,7 +40,7 @@ The MPI bridge module enables distributed quantum simulation across multiple nod
 
 Distributed simulation context.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     int initialized;           // MPI initialized flag
     int world_size;            // Total number of processes
@@ -55,13 +62,13 @@ typedef struct {
     size_t messages_sent;      // Message count
     size_t bytes_transferred;  // Total bytes transferred
 } distributed_ctx_t;
-```
+[archived fence delimiter: ```]
 
 ### distributed_config_t
 
 Configuration for distributed simulation.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     int num_qubits;            // Total qubits to simulate
     int use_gpu;               // Enable GPU on each node
@@ -69,7 +76,7 @@ typedef struct {
     int overlap_compute_comm;  // Overlap computation with communication
     int use_shared_memory;     // Use shared memory within nodes
 } distributed_config_t;
-```
+[archived fence delimiter: ```]
 
 ## Initialization and Cleanup
 
@@ -77,13 +84,13 @@ typedef struct {
 
 Initialize distributed simulation context.
 
-```c
+[archived fence delimiter: ```c]
 distributed_ctx_t* distributed_init(
     int *argc,
     char ***argv,
     const distributed_config_t *config
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `argc`: Pointer to argc from main()
@@ -93,7 +100,7 @@ distributed_ctx_t* distributed_init(
 **Returns**: Distributed context or NULL on failure
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 int main(int argc, char **argv) {
     distributed_config_t config = {
         .num_qubits = 30,
@@ -114,23 +121,23 @@ int main(int argc, char **argv) {
     distributed_finalize(ctx);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### distributed_finalize
 
 Finalize distributed context and MPI.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_finalize(distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### distributed_is_root
 
 Check if this is the root process.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_is_root(const distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if rank 0, 0 otherwise
 
@@ -138,17 +145,17 @@ int distributed_is_root(const distributed_ctx_t *ctx);
 
 Get this process's rank.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_get_rank(const distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### distributed_get_size
 
 Get total number of processes.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_get_size(const distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ## State Partitioning
 
@@ -156,13 +163,13 @@ int distributed_get_size(const distributed_ctx_t *ctx);
 
 Partition quantum state across processes.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_partition_state(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     size_t num_qubits
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ctx`: Distributed context
@@ -180,13 +187,13 @@ int distributed_partition_state(
 
 Get the index range for this process.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_get_local_range(
     const distributed_ctx_t *ctx,
     size_t *start,
     size_t *end
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `start`: Output: first amplitude index (inclusive)
@@ -196,12 +203,12 @@ void distributed_get_local_range(
 
 Determine which rank owns a given amplitude index.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_index_to_rank(
     const distributed_ctx_t *ctx,
     size_t global_index
 );
-```
+[archived fence delimiter: ```]
 
 **Returns**: Rank that owns the amplitude
 
@@ -211,7 +218,7 @@ int distributed_index_to_rank(
 
 Send amplitudes to another rank.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_send_amplitudes(
     distributed_ctx_t *ctx,
     const complex_t *amplitudes,
@@ -219,7 +226,7 @@ int distributed_send_amplitudes(
     int dest_rank,
     int tag
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `amplitudes`: Array of amplitudes to send
@@ -233,7 +240,7 @@ int distributed_send_amplitudes(
 
 Receive amplitudes from another rank.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_recv_amplitudes(
     distributed_ctx_t *ctx,
     complex_t *amplitudes,
@@ -241,13 +248,13 @@ int distributed_recv_amplitudes(
     int src_rank,
     int tag
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_sendrecv_amplitudes
 
 Simultaneous send and receive (for exchanges).
 
-```c
+[archived fence delimiter: ```c]
 int distributed_sendrecv_amplitudes(
     distributed_ctx_t *ctx,
     const complex_t *send_buf,
@@ -258,7 +265,7 @@ int distributed_sendrecv_amplitudes(
     int src_rank,
     int tag
 );
-```
+[archived fence delimiter: ```]
 
 ## Collective Operations
 
@@ -266,34 +273,34 @@ int distributed_sendrecv_amplitudes(
 
 Synchronize all processes.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_barrier(distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### distributed_broadcast
 
 Broadcast data from root to all processes.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_broadcast(
     distributed_ctx_t *ctx,
     void *data,
     size_t size,
     int root
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_reduce_sum
 
 Sum values across all processes.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_reduce_sum(
     distributed_ctx_t *ctx,
     const double *local_value,
     double *global_sum
 );
-```
+[archived fence delimiter: ```]
 
 **Use Case**: Computing global normalization, total probability
 
@@ -301,32 +308,32 @@ int distributed_reduce_sum(
 
 Sum complex values across all processes.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_reduce_sum_complex(
     distributed_ctx_t *ctx,
     const complex_t *local_values,
     complex_t *global_sums,
     size_t count
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_allreduce_sum
 
 All-reduce sum (result available on all ranks).
 
-```c
+[archived fence delimiter: ```c]
 int distributed_allreduce_sum(
     distributed_ctx_t *ctx,
     const double *local_value,
     double *global_sum
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_gather
 
 Gather data from all ranks to root.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_gather(
     distributed_ctx_t *ctx,
     const void *send_data,
@@ -334,26 +341,26 @@ int distributed_gather(
     void *recv_data,
     int root
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_allgather
 
 Gather data from all ranks to all ranks.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_allgather(
     distributed_ctx_t *ctx,
     const void *send_data,
     size_t send_size,
     void *recv_data
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_scatter
 
 Scatter data from root to all ranks.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_scatter(
     distributed_ctx_t *ctx,
     const void *send_data,
@@ -361,7 +368,7 @@ int distributed_scatter(
     size_t recv_size,
     int root
 );
-```
+[archived fence delimiter: ```]
 
 ## Amplitude Exchange
 
@@ -369,14 +376,14 @@ int distributed_scatter(
 
 Exchange amplitudes between partner ranks for multi-qubit gates.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_exchange_amplitudes(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     int target_qubit,
     complex_t **partner_amplitudes
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `local_state`: Local portion of state
@@ -392,14 +399,14 @@ For an n-qubit system on P processes, qubits 0 to log2(P)-1 are "global" (span m
 
 Apply gate to a global qubit (requires communication).
 
-```c
+[archived fence delimiter: ```c]
 int distributed_apply_global_gate(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     int qubit,
     const complex_t gate[4]
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `local_state`: Local state partition
@@ -418,7 +425,7 @@ int distributed_apply_global_gate(
 
 Apply controlled gate spanning ranks.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_apply_global_controlled_gate(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
@@ -426,7 +433,7 @@ int distributed_apply_global_controlled_gate(
     int target_qubit,
     const complex_t gate[4]
 );
-```
+[archived fence delimiter: ```]
 
 ## Distributed Gates
 
@@ -434,13 +441,13 @@ int distributed_apply_global_controlled_gate(
 
 Apply Hadamard gate in distributed setting.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_hadamard(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     int qubit
 );
-```
+[archived fence delimiter: ```]
 
 Automatically handles local vs. global qubit cases.
 
@@ -448,27 +455,27 @@ Automatically handles local vs. global qubit cases.
 
 Apply CNOT gate in distributed setting.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_cnot(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     int control,
     int target
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_phase
 
 Apply phase gate in distributed setting.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_phase(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     int qubit,
     double angle
 );
-```
+[archived fence delimiter: ```]
 
 ## State Vector Operations
 
@@ -476,12 +483,12 @@ int distributed_phase(
 
 Normalize state vector across all ranks.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_normalize(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state
 );
-```
+[archived fence delimiter: ```]
 
 **Algorithm**:
 1. Compute local sum of squared magnitudes
@@ -492,25 +499,25 @@ int distributed_normalize(
 
 Compute inner product of distributed states.
 
-```c
+[archived fence delimiter: ```c]
 complex_t distributed_inner_product(
     distributed_ctx_t *ctx,
     const quantum_state_t *state1,
     const quantum_state_t *state2
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_expectation_value
 
 Compute expectation value of observable.
 
-```c
+[archived fence delimiter: ```c]
 double distributed_expectation_value(
     distributed_ctx_t *ctx,
     const quantum_state_t *local_state,
     const pauli_hamiltonian_t *hamiltonian
 );
-```
+[archived fence delimiter: ```]
 
 ## Measurement
 
@@ -518,7 +525,7 @@ double distributed_expectation_value(
 
 Perform measurement on distributed state.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t distributed_measure(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
@@ -526,7 +533,7 @@ uint64_t distributed_measure(
     double *probability,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Algorithm**:
 1. Root generates random threshold
@@ -539,13 +546,13 @@ uint64_t distributed_measure(
 
 Measure all qubits.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t distributed_measure_all(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Returns**: Measured basis state index
 
@@ -553,13 +560,13 @@ uint64_t distributed_measure_all(
 
 Sample from distribution without collapse.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t distributed_sample(
     distributed_ctx_t *ctx,
     const quantum_state_t *local_state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 ## Performance Monitoring
 
@@ -567,9 +574,9 @@ uint64_t distributed_sample(
 
 Get cumulative communication time.
 
-```c
+[archived fence delimiter: ```c]
 double distributed_get_comm_time(const distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Communication time in seconds
 
@@ -577,29 +584,29 @@ double distributed_get_comm_time(const distributed_ctx_t *ctx);
 
 Get communication statistics.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_get_stats(
     const distributed_ctx_t *ctx,
     size_t *messages,
     size_t *bytes
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_reset_stats
 
 Reset performance counters.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_reset_stats(distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ### distributed_print_stats
 
 Print performance summary.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_print_stats(const distributed_ctx_t *ctx);
-```
+[archived fence delimiter: ```]
 
 ## Utility Functions
 
@@ -607,24 +614,24 @@ void distributed_print_stats(const distributed_ctx_t *ctx);
 
 Print global state from root.
 
-```c
+[archived fence delimiter: ```c]
 void distributed_print_state(
     distributed_ctx_t *ctx,
     const quantum_state_t *local_state,
     int max_amplitudes
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_validate_state
 
 Check state consistency across ranks.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_validate_state(
     distributed_ctx_t *ctx,
     const quantum_state_t *local_state
 );
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if valid, 0 if inconsistent
 
@@ -632,29 +639,29 @@ int distributed_validate_state(
 
 Save distributed state to file.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_save_state(
     distributed_ctx_t *ctx,
     const quantum_state_t *local_state,
     const char *filename
 );
-```
+[archived fence delimiter: ```]
 
 ### distributed_load_state
 
 Load distributed state from file.
 
-```c
+[archived fence delimiter: ```c]
 int distributed_load_state(
     distributed_ctx_t *ctx,
     quantum_state_t *local_state,
     const char *filename
 );
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/distributed/mpi_bridge.h"
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
@@ -710,16 +717,16 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 **Compilation**:
-```bash
+[archived fence delimiter: ```bash]
 mpicc -O3 distributed_example.c -o distributed_example \
     -I. -L. -lmoonlab -lm
 
 # Run on 4 nodes
 mpirun -np 4 ./distributed_example
-```
+[archived fence delimiter: ```]
 
 ## Scaling Guidelines
 
@@ -754,3 +761,4 @@ mpirun -np 4 ./distributed_example
 - [GPU Metal API](gpu-metal.md) - GPU acceleration per node
 - [Guides: Distributed Simulation](../../guides/distributed-simulation.md)
 - [Architecture: Distributed Architecture](../../architecture/distributed-architecture.md)
+```

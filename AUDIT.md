@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Deep Architectural Audit — 2026-04-19
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Deep Architectural Audit — 2026-04-19
 
 > **2026-04-30 update.** Third pass (commit log `c73cd78..61ec2e0`).
@@ -344,13 +351,13 @@ differential-fuzzing harness.
 Fifteen distinct error enums, all with negative-for-error convention
 but inconsistent zero semantics:
 
-```
+[archived fence delimiter: ```]
 qs_error_t, partition_error_t, dist_gate_error_t, mpi_bridge_error_t,
 collective_error_t, gpu_error_t, clifford_error_t,
 svd_compress_error_t, tn_measure_error_t, tn_state_error_t,
 contract_error_t, tensor_error_t, tn_gate_error_t, qrng_v3_error_t,
 health_error_t, entropy_error_t
-```
+[archived fence delimiter: ```]
 
 A library consumer has to know the right enum for every call.
 Unifying to two or three families (or adopting a
@@ -678,3 +685,4 @@ Moonlab has credible architectural bones. It has not yet had the
 focused performance, validation, and deployment work that separates
 "good research code" from "a platform other researchers depend on."
 This document is the blueprint to close that gap.
+```

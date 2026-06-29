@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Rust FFI Bindings
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Rust FFI Bindings
 
 Low-level FFI bindings to the Moonlab C library.
@@ -17,10 +24,10 @@ The `moonlab-sys` crate provides raw, unsafe FFI bindings to the Moonlab C quant
 
 Add to your `Cargo.toml`:
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab-sys = { path = "bindings/rust/moonlab-sys" }
-```
+[archived fence delimiter: ```]
 
 ## Build Requirements
 
@@ -31,20 +38,20 @@ The crate requires:
 
 ### macOS
 
-```bash
+[archived fence delimiter: ```bash]
 brew install llvm
 export LIBCLANG_PATH=$(brew --prefix llvm)/lib
-```
+[archived fence delimiter: ```]
 
 ### Linux
 
-```bash
+[archived fence delimiter: ```bash]
 # Ubuntu/Debian
 sudo apt install libclang-dev
 
 # Fedora
 sudo dnf install clang-devel
-```
+[archived fence delimiter: ```]
 
 ## Safety
 
@@ -62,7 +69,7 @@ The safe wrappers in the `moonlab` crate handle these concerns automatically.
 
 The main quantum state structure (opaque).
 
-```rust
+[archived fence delimiter: ```rust]
 #[repr(C)]
 pub struct quantum_state_t {
     pub num_qubits: usize,
@@ -70,25 +77,25 @@ pub struct quantum_state_t {
     pub amplitudes: *mut complex_t,
     // ... additional internal fields
 }
-```
+[archived fence delimiter: ```]
 
 ### complex_t
 
 Complex number representation.
 
-```rust
+[archived fence delimiter: ```rust]
 #[repr(C)]
 pub struct complex_t {
     pub re: f64,
     pub im: f64,
 }
-```
+[archived fence delimiter: ```]
 
 ## Function Reference
 
 ### State Management
 
-```rust
+[archived fence delimiter: ```rust]
 /// Initialize a quantum state
 ///
 /// # Safety
@@ -118,11 +125,11 @@ pub unsafe fn quantum_state_clone(
 
 /// Reset state to |0...0⟩
 pub unsafe fn quantum_state_reset(state: *mut quantum_state_t);
-```
+[archived fence delimiter: ```]
 
 ### Quantum Gates
 
-```rust
+[archived fence delimiter: ```rust]
 /// Single-qubit gates
 pub unsafe fn gate_pauli_x(state: *mut quantum_state_t, qubit: i32) -> i32;
 pub unsafe fn gate_pauli_y(state: *mut quantum_state_t, qubit: i32) -> i32;
@@ -215,11 +222,11 @@ pub unsafe fn gate_iqft(
     qubits: *const i32,
     num_qubits: usize
 ) -> i32;
-```
+[archived fence delimiter: ```]
 
 ### Measurement
 
-```rust
+[archived fence delimiter: ```rust]
 /// Get probability of measuring |0⟩ on qubit
 pub unsafe fn measurement_probability_zero(
     state: *const quantum_state_t,
@@ -252,11 +259,11 @@ pub unsafe fn measurement_correlation_zz(
     qubit_i: i32,
     qubit_j: i32
 ) -> f64;
-```
+[archived fence delimiter: ```]
 
 ### Entanglement
 
-```rust
+[archived fence delimiter: ```rust]
 /// Von Neumann entropy of subsystem
 pub unsafe fn quantum_state_entanglement_entropy(
     state: *const quantum_state_t,
@@ -269,11 +276,11 @@ pub unsafe fn quantum_state_purity(state: *const quantum_state_t) -> f64;
 
 /// Full state entropy
 pub unsafe fn quantum_state_entropy(state: *const quantum_state_t) -> f64;
-```
+[archived fence delimiter: ```]
 
 ## Usage Example
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab_sys as ffi;
 use std::mem::MaybeUninit;
 
@@ -311,7 +318,7 @@ fn main() {
         ffi::quantum_state_free(state);
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Error Codes
 
@@ -332,7 +339,7 @@ The crate uses a `build.rs` that:
 2. Runs bindgen to generate Rust bindings
 3. Links against the compiled C library
 
-```rust
+[archived fence delimiter: ```rust]
 // build.rs (simplified)
 use std::env;
 use std::path::PathBuf;
@@ -360,13 +367,13 @@ fn main() {
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings");
 }
-```
+[archived fence delimiter: ```]
 
 ## Memory Management
 
 When using `moonlab-sys` directly, you must manually manage memory:
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab_sys as ffi;
 use std::mem::MaybeUninit;
 
@@ -384,7 +391,7 @@ unsafe {
 
     // WARNING: Do not use state_ptr after free!
 }
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -399,3 +406,4 @@ The C library is NOT thread-safe. When using `moonlab-sys`:
 - [moonlab-tui](moonlab-tui.md) - Terminal user interface
 - [C API](../c/index.md) - Complete C API reference
 
+```

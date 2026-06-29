@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Glossary
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Glossary
 
 A comprehensive reference of terminology used in quantum computing and throughout Moonlab documentation.
@@ -321,3 +328,4 @@ The quantum state $|\psi\rangle$, or in position representation, $\psi(x)$.
 | $\text{Tr}(A)$ | Trace |
 | $[A, B]$ | Commutator $AB - BA$ |
 | $\{A, B\}$ | Anticommutator $AB + BA$ |
+```

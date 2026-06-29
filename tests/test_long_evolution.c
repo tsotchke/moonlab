@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <complex.h>
 
@@ -35,8 +36,23 @@ static tn_gate_2q_t create_imag_time_zz(double tau_J) {
     return gate;
 }
 
+static int env_enabled(const char *name) {
+    const char *value = getenv(name);
+    return value && value[0] && strcmp(value, "0") != 0;
+}
+
+static int env_int(const char *name, int fallback) {
+    const char *value = getenv(name);
+    if (!value || !value[0]) return fallback;
+    char *end = NULL;
+    long parsed = strtol(value, &end, 10);
+    if (!end || *end != '\0' || parsed <= 0 || parsed > 1000) return fallback;
+    return (int)parsed;
+}
+
 void test_size(uint32_t n_qubits, int n_steps) {
     printf("\n=== Testing N=%u qubits, %d steps ===\n", n_qubits, n_steps);
+    fflush(stdout);
 
     const double J = 1.0;
     const double h = 0.5;
@@ -98,6 +114,7 @@ void test_size(uint32_t n_qubits, int n_steps) {
             }
 
             printf("  %4d   %.4f   %.4f     %u\n", step, z_bulk, zz_bulk, max_bond_dim);
+            fflush(stdout);
         }
     }
 
@@ -105,15 +122,26 @@ void test_size(uint32_t n_qubits, int n_steps) {
 }
 
 int main(void) {
-    printf("Testing longer evolution for system-size dependence\n");
-    printf("Running 50 Trotter steps (τ=0.1) for different system sizes\n");
-    printf("Finite-size effects should appear when correlation length > N/2\n");
+    int full = env_enabled("MOONLAB_LONG_EVOLUTION_FULL");
+    int n_steps = env_int("MOONLAB_LONG_EVOLUTION_STEPS", full ? 50 : 12);
+    uint32_t max_qubits = (uint32_t)env_int("MOONLAB_LONG_EVOLUTION_MAX_QUBITS",
+                                            full ? 64 : 32);
 
-    // Test small systems where finite-size effects should be visible
-    test_size(8, 50);
-    test_size(16, 50);
-    test_size(32, 50);
-    test_size(64, 50);
+    printf("Testing longer evolution for system-size dependence\n");
+    printf("Running %d Trotter steps (τ=0.1) for different system sizes\n", n_steps);
+    printf("Finite-size effects should appear when correlation length > N/2\n");
+    if (!full) {
+        printf("Set MOONLAB_LONG_EVOLUTION_FULL=1 for the 64-qubit / 50-step sweep\n");
+    }
+    fflush(stdout);
+
+    uint32_t sizes[] = {8, 16, 32, 64};
+    size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
+    for (size_t i = 0; i < num_sizes; i++) {
+        if (sizes[i] <= max_qubits) {
+            test_size(sizes[i], n_steps);
+        }
+    }
 
     printf("\nDone.\n");
     return 0;

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Frequently Asked Questions
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Frequently Asked Questions
 
 Common questions about Moonlab Quantum Simulator, organized by topic.
@@ -46,11 +53,11 @@ Yes. Moonlab is open-source software. See the LICENSE file in the repository for
 
 ### How do I install Moonlab?
 
-```bash
+[archived fence delimiter: ```bash]
 git clone https://github.com/tsotchke/moonlab.git
 cd quantum-simulator
 make
-```
+[archived fence delimiter: ```]
 
 See [Installation](installation.md) for detailed platform-specific instructions.
 
@@ -66,81 +73,81 @@ Run `make clean && make` to retry after fixing issues.
 
 ### How do I install Python bindings?
 
-```bash
+[archived fence delimiter: ```bash]
 make  # Build C library first
 cd bindings/python
 pip install -e .
-```
+[archived fence delimiter: ```]
 
 ### How do I install JavaScript packages?
 
-```bash
+[archived fence delimiter: ```bash]
 cd bindings/javascript
 pnpm install
 pnpm build
-```
+[archived fence delimiter: ```]
 
 ## Usage
 
 ### How do I create a quantum state?
 
 **C**:
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, 4);  // 4 qubits
-```
+[archived fence delimiter: ```]
 
 **Python**:
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 state = QuantumState(4)
-```
+[archived fence delimiter: ```]
 
 **JavaScript**:
-```javascript
+[archived fence delimiter: ```javascript]
 import { QuantumState } from '@moonlab/quantum-core';
 const state = await QuantumState.create({ numQubits: 4 });
-```
+[archived fence delimiter: ```]
 
 ### How do I create a Bell state?
 
 Apply Hadamard to qubit 0, then CNOT from 0 to 1:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.h(0).cnot(0, 1)
-```
+[archived fence delimiter: ```]
 
 This creates $|\Phi^+\rangle = \frac{1}{\sqrt{2}}(|00\rangle + |11\rangle)$.
 
 ### How do I measure qubits?
 
-```python
+[archived fence delimiter: ```python]
 result = state.measure()  # Collapses state, returns outcome
 print(f"Measured: |{result:02b}⟩")
-```
+[archived fence delimiter: ```]
 
 **Important**: Measurement collapses the quantum state. Use `clone()` first if you need to preserve the original state.
 
 ### How do I check the probability of a specific outcome?
 
-```python
+[archived fence delimiter: ```python]
 probs = state.probabilities()
 print(f"P(|00⟩) = {probs[0]}")
 print(f"P(|11⟩) = {probs[3]}")
-```
+[archived fence delimiter: ```]
 
 Or for a single outcome:
-```python
+[archived fence delimiter: ```python]
 p = state.probability(0)  # Probability of |00...0⟩
-```
+[archived fence delimiter: ```]
 
 ### How do I calculate entanglement entropy?
 
-```python
+[archived fence delimiter: ```python]
 entropy = state.entanglement_entropy([0])  # Entropy of qubit 0
 print(f"S = {entropy:.4f} bits")
-```
+[archived fence delimiter: ```]
 
 For a Bell state, entropy is 1.0 bit (maximum for 2 qubits).
 
@@ -162,10 +169,10 @@ Currently, you need to decompose custom unitaries into available gates. Universa
 
 On macOS with Apple Silicon, Metal is enabled by default. Verify:
 
-```bash
+[archived fence delimiter: ```bash]
 make metal_gpu
 ./examples/quantum/metal_gpu_benchmark
-```
+[archived fence delimiter: ```]
 
 For CUDA (NVIDIA GPUs), see [GPU Acceleration Guide](guides/gpu-acceleration.md).
 
@@ -184,9 +191,9 @@ State vector simulation requires $2^n \times 16$ bytes for $n$ qubits. For 25 qu
 
 Yes, via OpenMP. Set thread count:
 
-```bash
+[archived fence delimiter: ```bash]
 export OMP_NUM_THREADS=8
-```
+[archived fence delimiter: ```]
 
 ### Can I use distributed computing (MPI)?
 
@@ -196,7 +203,7 @@ Yes, for simulations exceeding single-machine memory. See [Distributed Simulatio
 
 ### How do I run Grover's search?
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import grover_search
 
 def oracle(state):
@@ -204,13 +211,13 @@ def oracle(state):
     state.cz(1, 3)  # Simplified oracle
 
 result = grover_search(4, oracle)
-```
+[archived fence delimiter: ```]
 
 See [Grover's Algorithm](algorithms/grovers-algorithm.md) for complete documentation.
 
 ### How do I use VQE?
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import vqe
 import numpy as np
 
@@ -220,17 +227,17 @@ def ansatz(state, params):
     state.ry(1, params[1])
 
 energy, params = vqe(hamiltonian, ansatz, np.random.randn(2))
-```
+[archived fence delimiter: ```]
 
 See [VQE Algorithm](algorithms/vqe-algorithm.md) for molecular simulation examples.
 
 ### How do I use QAOA?
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import qaoa
 
 result = qaoa(cost_hamiltonian, mixer_hamiltonian, p=3)
-```
+[archived fence delimiter: ```]
 
 See [QAOA Algorithm](algorithms/qaoa-algorithm.md) for optimization problems.
 
@@ -250,29 +257,29 @@ See [DMRG Algorithm](algorithms/dmrg-algorithm.md).
 
 Set the library path:
 
-```bash
+[archived fence delimiter: ```bash]
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)  # Linux
 export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$(pwd)  # macOS
-```
+[archived fence delimiter: ```]
 
 ### "Invalid qubit" error
 
 Qubit indices are 0-based and must be less than `num_qubits`:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(4)  # Qubits 0, 1, 2, 3
 state.x(4)  # Error! Max qubit is 3
-```
+[archived fence delimiter: ```]
 
 ### "Out of memory" error
 
 Reduce the number of qubits or use tensor network methods:
 
-```python
+[archived fence delimiter: ```python]
 # Instead of 32 qubits with state vector:
 from moonlab.tensor import MPS
 mps = MPS(100, bond_dimension=64)  # 100 qubits with MPS
-```
+[archived fence delimiter: ```]
 
 ### Results don't match expectations
 
@@ -283,25 +290,25 @@ mps = MPS(100, bond_dimension=64)  # 100 qubits with MPS
 
 ### Python import error
 
-```python
+[archived fence delimiter: ```python]
 ImportError: cannot find libquantumsim.so
-```
+[archived fence delimiter: ```]
 
 Build the library and set path:
-```bash
+[archived fence delimiter: ```bash]
 make
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)
-```
+[archived fence delimiter: ```]
 
 ### WebAssembly memory error
 
 In browsers, memory is limited. Reduce qubits or use Web Workers:
 
-```javascript
+[archived fence delimiter: ```javascript]
 // Max ~25 qubits in browser
 const state = await QuantumState.create({ numQubits: 20 });  // OK
 const big = await QuantumState.create({ numQubits: 30 });    // May fail
-```
+[archived fence delimiter: ```]
 
 ## Contributing
 
@@ -335,3 +342,4 @@ Open a GitHub issue with the "enhancement" label describing:
 - [API Reference](api/index.md) - Complete documentation
 - [Tutorials](tutorials/index.md) - Step-by-step guides
 - [GitHub Discussions](https://github.com/tsotchke/moonlab/discussions) - Community help
+```

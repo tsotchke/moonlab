@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Bell-CHSH Test
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Bell-CHSH Test
 
 Complete guide to Bell inequality testing and entanglement verification.
@@ -49,7 +56,7 @@ These settings achieve $S = 2\sqrt{2}$.
 
 ### Basic CHSH Test
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 #include "bell.h"
 
@@ -85,11 +92,11 @@ int main() {
     quantum_state_free(state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ### Python Interface
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import BellTest
 from moonlab import QuantumState
 import numpy as np
@@ -108,7 +115,7 @@ print(f"Classical bound: 2.0")
 print(f"Quantum bound: {2*np.sqrt(2):.4f}")
 print(f"Violation: {result['violates_classical']}")
 print(f"Significance: {result['sigma']:.1f}σ")
-```
+[archived fence delimiter: ```]
 
 ## Correlator Measurement
 
@@ -118,7 +125,7 @@ $$\langle AB \rangle = P(a=b) - P(a \neq b)$$
 
 where $a, b \in \{+1, -1\}$ are measurement outcomes.
 
-```python
+[archived fence delimiter: ```python]
 def measure_correlator(state, angle_a, angle_b, shots):
     """
     Measure correlation ⟨A(θ_a)B(θ_b)⟩.
@@ -148,13 +155,13 @@ def measure_correlator(state, angle_a, angle_b, shots):
         correlations.append(a * b)
 
     return np.mean(correlations), np.std(correlations) / np.sqrt(shots)
-```
+[archived fence delimiter: ```]
 
 ### Exact Correlator
 
 For simulation, compute exactly:
 
-```python
+[archived fence delimiter: ```python]
 def exact_correlator(state, angle_a, angle_b):
     """Compute exact correlation without sampling."""
     # Measurement operators
@@ -165,7 +172,7 @@ def exact_correlator(state, angle_a, angle_b):
     AB = np.kron(A, B)
 
     return state.expectation(AB)
-```
+[archived fence delimiter: ```]
 
 ## Bell States
 
@@ -180,7 +187,7 @@ def exact_correlator(state, angle_a, angle_b):
 
 ### Preparation Circuits
 
-```python
+[archived fence delimiter: ```python]
 def prepare_bell_state(state, variant):
     """
     Prepare Bell state.
@@ -197,13 +204,13 @@ def prepare_bell_state(state, variant):
         state.x(1)
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Statistical Analysis
 
 ### Significance Testing
 
-```python
+[archived fence delimiter: ```python]
 def chsh_significance(S, std_error, classical_bound=2.0):
     """
     Compute statistical significance of CHSH violation.
@@ -220,7 +227,7 @@ S = 2.7
 std_error = 0.02
 sigma = chsh_significance(S, std_error)
 print(f"Violation at {sigma:.1f}σ significance")
-```
+[archived fence delimiter: ```]
 
 ### Error Propagation
 
@@ -228,7 +235,7 @@ CHSH value uncertainty:
 
 $$\sigma_S = \sqrt{\sigma_{E_{AB}}^2 + \sigma_{E_{AB'}}^2 + \sigma_{E_{A'B}}^2 + \sigma_{E_{A'B'}}^2}$$
 
-```python
+[archived fence delimiter: ```python]
 def chsh_with_error(state, shots):
     """Compute CHSH with proper error analysis."""
     angles = [
@@ -250,7 +257,7 @@ def chsh_with_error(state, shots):
     sigma_S = np.sqrt(sum(e**2 for e in errors))
 
     return S, sigma_S
-```
+[archived fence delimiter: ```]
 
 ## Advanced Topics
 
@@ -260,7 +267,7 @@ def chsh_with_error(state, shots):
 
 All particles must be detected:
 
-```python
+[archived fence delimiter: ```python]
 def detection_efficiency_analysis(eta):
     """
     Analyze required detection efficiency.
@@ -269,19 +276,19 @@ def detection_efficiency_analysis(eta):
     """
     threshold = 2 / (1 + np.sqrt(2))
     return eta > threshold, threshold
-```
+[archived fence delimiter: ```]
 
 #### Locality Loophole
 
 Measurements must be space-like separated:
 
-```python
+[archived fence delimiter: ```python]
 def locality_analysis(distance, measurement_time):
     """Check if measurements are space-like separated."""
     c = 3e8  # Speed of light
     required_separation = c * measurement_time
     return distance > required_separation
-```
+[archived fence delimiter: ```]
 
 ### Non-Maximally Entangled States
 
@@ -290,7 +297,7 @@ For state $|\psi\rangle = \cos\theta|00\rangle + \sin\theta|11\rangle$:
 Maximum CHSH value:
 $$S_{max} = 2\sqrt{1 + \sin^2(2\theta)}$$
 
-```python
+[archived fence delimiter: ```python]
 def partial_entanglement_chsh(theta):
     """
     CHSH test for partially entangled state.
@@ -303,7 +310,7 @@ def partial_entanglement_chsh(theta):
     optimal_angles = compute_optimal_angles(theta)
 
     return bell.chsh_test(state, angles=optimal_angles)
-```
+[archived fence delimiter: ```]
 
 ### Multi-Party Bell Tests
 
@@ -311,7 +318,7 @@ def partial_entanglement_chsh(theta):
 
 Three-party correlation:
 
-```python
+[archived fence delimiter: ```python]
 def ghz_test(shots=10000):
     """Mermin inequality test for GHZ state."""
     state = QuantumState(3)
@@ -326,11 +333,11 @@ def ghz_test(shots=10000):
     print(f"Mermin value: {M:.4f}")
     print(f"Classical bound: 2")
     print(f"Quantum value for GHZ: 4")
-```
+[archived fence delimiter: ```]
 
 #### W State
 
-```python
+[archived fence delimiter: ```python]
 def w_state_test():
     """Bell test for W state."""
     state = QuantumState(3)
@@ -339,13 +346,13 @@ def w_state_test():
     # W state has different entanglement properties
     result = bell.multiparty_test(state, parties=3)
     return result
-```
+[archived fence delimiter: ```]
 
 ## Visualization
 
 ### Correlation Functions
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -366,11 +373,11 @@ def plot_correlation_function(state, angle_a, shots=1000):
     plt.title("Bell Correlation Function")
     plt.legend()
     plt.grid(True)
-```
+[archived fence delimiter: ```]
 
 ### CHSH Landscape
 
-```python
+[archived fence delimiter: ```python]
 def plot_chsh_landscape(state, resolution=50):
     """Plot CHSH value vs measurement angles."""
     a_prime = np.linspace(0, np.pi/2, resolution)
@@ -390,13 +397,13 @@ def plot_chsh_landscape(state, resolution=50):
     plt.xlabel("B' angle")
     plt.ylabel("A' angle")
     plt.title("CHSH Landscape (black line = classical bound)")
-```
+[archived fence delimiter: ```]
 
 ## Practical Considerations
 
 ### Finite Statistics
 
-```python
+[archived fence delimiter: ```python]
 def required_shots(target_sigma, expected_S, expected_std=0.1):
     """
     Calculate shots needed for target significance.
@@ -418,11 +425,11 @@ def required_shots(target_sigma, expected_S, expected_std=0.1):
 # Example: 5σ violation
 shots = required_shots(5.0, expected_S=2.7)
 print(f"Required shots for 5σ: {shots}")
-```
+[archived fence delimiter: ```]
 
 ### Noise Effects
 
-```python
+[archived fence delimiter: ```python]
 def noisy_chsh_test(state, noise_model, shots=10000):
     """CHSH test with realistic noise."""
 
@@ -437,11 +444,11 @@ def noisy_chsh_test(state, noise_model, shots=10000):
         print("Warning: Noise destroyed Bell violation!")
 
     return result
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import BellTest
 from moonlab import QuantumState
 import numpy as np
@@ -478,7 +485,7 @@ def full_bell_experiment():
 
 if __name__ == "__main__":
     full_bell_experiment()
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -493,3 +500,4 @@ if __name__ == "__main__":
 3. Aspect, A. et al. (1982). "Experimental Realization of Einstein-Podolsky-Rosen-Bohm Gedankenexperiment." Physical Review Letters, 49, 91.
 4. Hensen, B. et al. (2015). "Loophole-free Bell inequality violation using electron spins separated by 1.3 kilometres." Nature, 526, 682-686.
 
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: TDVP Algorithm
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # TDVP Algorithm
 
 Time-Dependent Variational Principle for quantum dynamics simulation.
@@ -56,7 +63,7 @@ This preserves the norm exactly and is preferred when bond dimension is sufficie
 
 ### Configuration
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/tdvp.h"
 
 // Get default configuration
@@ -69,7 +76,7 @@ config.integrator = INTEGRATOR_LANCZOS;  // Lanczos matrix exponential
 config.dt = 0.01;                        // Time step
 config.max_bond_dim = 128;               // Maximum bond dimension
 config.svd_cutoff = 1e-10;               // Truncation threshold
-```
+[archived fence delimiter: ```]
 
 ### Configuration Options
 
@@ -88,37 +95,37 @@ config.svd_cutoff = 1e-10;               // Truncation threshold
 
 ### Evolution Types
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     TDVP_REAL_TIME,     // exp(-iHt): unitary dynamics
     TDVP_IMAGINARY_TIME // exp(-Ht): ground state preparation
 } tdvp_evolution_type_t;
-```
+[archived fence delimiter: ```]
 
 ### Algorithm Variants
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     TDVP_ONE_SITE,      // Fixed bond dim, faster
     TDVP_TWO_SITE       // Adaptive bond dim, more accurate
 } tdvp_variant_t;
-```
+[archived fence delimiter: ```]
 
 ### Time Integrators
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     INTEGRATOR_LANCZOS,     // Lanczos matrix exponential (recommended)
     INTEGRATOR_RUNGE_KUTTA, // 4th order Runge-Kutta
     INTEGRATOR_EXPOKIT      // Krylov subspace method
 } integrator_type_t;
-```
+[archived fence delimiter: ```]
 
 ## Engine-Based Evolution
 
 For multi-step evolution, use the TDVP engine:
 
-```c
+[archived fence delimiter: ```c]
 // Create MPS and Hamiltonian
 tn_mps_state_t *mps = tn_mps_create(num_sites, phys_dim, bond_dim);
 mpo_t *mpo = mpo_heisenberg_chain(num_sites, J, 0.0);
@@ -143,7 +150,7 @@ tdvp_history_free(history);
 tdvp_engine_free(engine);
 mpo_free(mpo);
 tn_mps_free(mps);
-```
+[archived fence delimiter: ```]
 
 ### Engine Functions
 
@@ -151,71 +158,71 @@ tn_mps_free(mps);
 
 Create TDVP engine.
 
-```c
+[archived fence delimiter: ```c]
 tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
                                   mpo_t *mpo,
                                   const tdvp_config_t *config);
-```
+[archived fence delimiter: ```]
 
 #### `tdvp_engine_free`
 
 Free TDVP engine.
 
-```c
+[archived fence delimiter: ```c]
 void tdvp_engine_free(tdvp_engine_t *engine);
-```
+[archived fence delimiter: ```]
 
 #### `tdvp_step`
 
 Perform one TDVP time step.
 
-```c
+[archived fence delimiter: ```c]
 int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
-```
+[archived fence delimiter: ```]
 
 #### `tdvp_evolve_to`
 
 Evolve to target time.
 
-```c
+[archived fence delimiter: ```c]
 int tdvp_evolve_to(tdvp_engine_t *engine,
                    double target_time,
                    tdvp_history_t *history);
-```
+[archived fence delimiter: ```]
 
 #### `tdvp_set_dt`
 
 Change time step.
 
-```c
+[archived fence delimiter: ```c]
 void tdvp_set_dt(tdvp_engine_t *engine, double dt);
-```
+[archived fence delimiter: ```]
 
 #### `tdvp_get_time`
 
 Get current time.
 
-```c
+[archived fence delimiter: ```c]
 double tdvp_get_time(const tdvp_engine_t *engine);
-```
+[archived fence delimiter: ```]
 
 ## Single-Step Evolution
 
 For simple use cases:
 
-```c
+[archived fence delimiter: ```c]
 double energy;
 int err = tdvp_single_step(mps, mpo, dt, &config, &energy);
 if (err == 0) {
     printf("Energy after step: %.8f\n", energy);
 }
-```
+[archived fence delimiter: ```]
 
 ## Recording History
 
 Track evolution with `tdvp_history_t`:
 
-```c
+[archived fence delimiter: ```c]
 // Create history with capacity for 1000 steps
 tdvp_history_t *history = tdvp_history_create(1000);
 
@@ -231,13 +238,13 @@ for (uint32_t i = 0; i < history->num_steps; i++) {
 }
 
 tdvp_history_free(history);
-```
+[archived fence delimiter: ```]
 
 ### Step Results
 
 Each step produces a `tdvp_result_t`:
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double time;                // Current time after step
     double energy;              // Energy ⟨H⟩
@@ -246,13 +253,13 @@ typedef struct {
     uint32_t max_bond_dim;      // Maximum bond dimension reached
     double step_time;           // Wall time for this step (seconds)
 } tdvp_result_t;
-```
+[archived fence delimiter: ```]
 
 ## Observables During Evolution
 
 Measure observables during evolution:
 
-```c
+[archived fence delimiter: ```c]
 // Define callback
 void measure_magnetization(const tn_mps_state_t *mps,
                           double time, void *user_data) {
@@ -267,13 +274,13 @@ double mag_history[1000];
 tdvp_evolve_with_observables(engine, total_time,
                              measure_magnetization, mag_history,
                              10);  // Measure every 10 steps
-```
+[archived fence delimiter: ```]
 
 ## Imaginary Time Evolution
 
 Use imaginary time to find ground states:
 
-```c
+[archived fence delimiter: ```c]
 tdvp_config_t config = tdvp_config_default();
 config.evolution_type = TDVP_IMAGINARY_TIME;
 config.dt = 0.1;  // Can use larger steps for imaginary time
@@ -289,7 +296,7 @@ tdvp_evolve_to(engine, 100.0, NULL);  // Project onto ground state
 // Check ground state energy
 double E0 = tn_mps_expectation_mpo(mps, mpo);
 printf("Ground state energy: %.10f\n", E0);
-```
+[archived fence delimiter: ```]
 
 ## Spin Dynamics (Skyrmion Motion)
 
@@ -297,18 +304,18 @@ TDVP includes specialized support for current-driven skyrmion dynamics:
 
 ### Spin-Transfer Torque Parameters
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double jx;      // Current density x-component
     double jy;      // Current density y-component
     double beta;    // Non-adiabaticity parameter
     double alpha;   // Gilbert damping
 } stt_params_t;
-```
+[archived fence delimiter: ```]
 
 ### Skyrmion Evolution
 
-```c
+[archived fence delimiter: ```c]
 // Base Hamiltonian (exchange + DMI + anisotropy)
 mpo_t *mpo_base = mpo_heisenberg_dmi(lat, J, D, K, B);
 
@@ -330,13 +337,13 @@ tdvp_history_t *history = tdvp_history_create(10000);
 tdvp_evolve_with_stt(mps, mpo_base, &stt, &config, total_time, history);
 
 // Skyrmion moves in response to current
-```
+[archived fence delimiter: ```]
 
 ### Creating STT Hamiltonian
 
-```c
+[archived fence delimiter: ```c]
 mpo_t *mpo_stt = mpo_stt_create(lat, &stt);
-```
+[archived fence delimiter: ```]
 
 The STT Hamiltonian adds:
 $$H_{\text{STT}} = \sum_i \mathbf{j} \cdot \nabla \mathbf{S}_i + \beta \mathbf{j} \cdot (\mathbf{S}_i \times \nabla \mathbf{S}_i)$$
@@ -345,14 +352,14 @@ $$H_{\text{STT}} = \sum_i \mathbf{j} \cdot \nabla \mathbf{S}_i + \beta \mathbf{j
 
 The Lanczos algorithm efficiently computes $e^{\alpha H}|v\rangle$:
 
-```c
+[archived fence delimiter: ```c]
 int lanczos_expm(const effective_hamiltonian_t *H_eff,
                  const tensor_t *x,
                  double complex alpha,
                  uint32_t max_iter,
                  double tol,
                  tensor_t *y);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - For real time: `alpha = -I * dt`
@@ -388,7 +395,7 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
 
 Monitor energy drift to check accuracy:
 
-```c
+[archived fence delimiter: ```c]
 double E_initial = history->energies[0];
 double E_final = history->energies[history->num_steps - 1];
 double drift = fabs(E_final - E_initial) / fabs(E_initial);
@@ -396,11 +403,11 @@ double drift = fabs(E_final - E_initial) / fabs(E_initial);
 if (drift > 1e-6) {
     printf("Warning: Energy drift %.2e, consider smaller dt\n", drift);
 }
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/tdvp.h"
 #include <stdio.h>
 
@@ -453,7 +460,7 @@ int main(void) {
     printf("\n=== Done ===\n");
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## References
 
@@ -471,3 +478,4 @@ int main(void) {
 - [Tensor Networks](../concepts/tensor-networks.md) - MPS fundamentals
 - [Skyrmion Braiding](skyrmion-braiding.md) - Application to topological qubits
 - [API: tdvp.h](../api/c/tdvp.md) - Full API reference
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: GPU Acceleration Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # GPU Acceleration Guide
 
 Configure and optimize Metal GPU acceleration for Moonlab.
@@ -22,7 +29,7 @@ Moonlab uses Apple's Metal framework to accelerate quantum simulation on Apple S
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_info, gpu_available
 
 # Check if GPU is available
@@ -33,11 +40,11 @@ if gpu_available():
     print(f"GPU Cores: {info['gpu_cores']}")
 else:
     print("GPU not available")
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "gpu_metal.h"
 
 if (gpu_metal_available()) {
@@ -47,13 +54,13 @@ if (gpu_metal_available()) {
     printf("Device: %s\n", info.device_name);
     printf("Memory: %.1f GB\n", info.memory_gb);
 }
-```
+[archived fence delimiter: ```]
 
 ## Enabling GPU
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import set_backend, QuantumState
 
 # Option 1: Set global backend
@@ -65,11 +72,11 @@ state = QuantumState(24, backend='metal')
 
 # Option 3: Automatic selection
 set_backend('auto')  # Uses GPU for large states
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 #include "gpu_metal.h"
 
@@ -86,7 +93,7 @@ gate_cnot(state, 0, 1);
 // Cleanup
 quantum_state_free(state);
 gpu_metal_cleanup();
-```
+[archived fence delimiter: ```]
 
 ## Configuration
 
@@ -94,20 +101,20 @@ gpu_metal_cleanup();
 
 Set minimum qubits for GPU acceleration:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Use GPU only for 20+ qubits (default: 18)
 configure(gpu_threshold=20)
-```
+[archived fence delimiter: ```]
 
-```c
+[archived fence delimiter: ```c]
 qsim_config_set_int("gpu.threshold", 20);
-```
+[archived fence delimiter: ```]
 
 ### Memory Limits
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure, gpu_memory_info
 
 # Check available memory
@@ -116,16 +123,16 @@ print(f"Available: {mem['available_gb']:.1f} GB")
 
 # Set maximum GPU memory usage
 configure(gpu_max_memory_gb=8.0)
-```
+[archived fence delimiter: ```]
 
 ### Thread Configuration
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure
 
 # Set GPU thread group size (advanced)
 configure(gpu_threadgroup_size=256)
-```
+[archived fence delimiter: ```]
 
 ## Performance Optimization
 
@@ -133,7 +140,7 @@ configure(gpu_threadgroup_size=256)
 
 Minimize CPU-GPU transfers by batching:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, batch_apply
 
 # Inefficient: Many small transfers
@@ -148,11 +155,11 @@ def circuit(state):
     return state
 
 batch_apply(circuit, [state])  # Single transfer
-```
+[archived fence delimiter: ```]
 
 ### Keep State on GPU
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, gpu_context
 
 # Create persistent GPU context
@@ -166,13 +173,13 @@ with gpu_context() as ctx:
 
     # Only transfer at measurement
     result = state.measure_all()
-```
+[archived fence delimiter: ```]
 
 ### Kernel Fusion
 
 Enable automatic gate fusion:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure, QuantumState
 
 configure(gpu_kernel_fusion=True)
@@ -180,13 +187,13 @@ configure(gpu_kernel_fusion=True)
 state = QuantumState(24, backend='metal')
 # H-T-S-H sequence fused into single kernel
 state.h(0).t(0).s(0).h(0)
-```
+[archived fence delimiter: ```]
 
 ## Profiling
 
 ### GPU Profiler
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, GPUProfiler
 
 profiler = GPUProfiler()
@@ -205,7 +212,7 @@ print(f"Total GPU time: {profile['total_time_ms']:.2f} ms")
 print(f"Kernel launches: {profile['kernel_count']}")
 print(f"Memory transfers: {profile['transfer_count']}")
 print(f"Peak memory: {profile['peak_memory_mb']:.1f} MB")
-```
+[archived fence delimiter: ```]
 
 ### Metal System Trace
 
@@ -220,7 +227,7 @@ For detailed analysis, use Xcode's Metal System Trace:
 
 ### Memory Estimation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import estimate_memory, gpu_memory_info
 
 n_qubits = 28
@@ -232,7 +239,7 @@ print(f"Available: {available:.1f} GB")
 
 if required > available:
     print("Consider: fewer qubits, CPU backend, or hybrid mode")
-```
+[archived fence delimiter: ```]
 
 ### Memory Requirements
 
@@ -246,7 +253,7 @@ if required > available:
 
 ### Explicit Memory Control
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, gpu_transfer
 
 # Create on CPU
@@ -262,7 +269,7 @@ for _ in range(1000):
 # Transfer back for measurement
 cpu_state = gpu_transfer(gpu_state, 'to_cpu')
 result = cpu_state.measure_all()
-```
+[archived fence delimiter: ```]
 
 ## When to Use GPU
 
@@ -284,26 +291,26 @@ result = cpu_state.measure_all()
 
 ### Auto Selection
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 # Let Moonlab decide
 state = QuantumState(n_qubits, backend='auto')
 print(f"Selected: {state.backend}")  # 'metal' or 'cpu'
-```
+[archived fence delimiter: ```]
 
 ## Troubleshooting
 
 ### GPU Not Detected
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_diagnose
 
 result = gpu_diagnose()
 if result['issue']:
     print(f"Issue: {result['issue']}")
     print(f"Solution: {result['solution']}")
-```
+[archived fence delimiter: ```]
 
 Common issues:
 - macOS version too old (need 12.0+)
@@ -312,7 +319,7 @@ Common issues:
 
 ### Out of Memory
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_memory_info, estimate_memory
 
 n = 28
@@ -325,28 +332,28 @@ if needed > available:
     print("2. Use CPU backend")
     print("3. Close other GPU applications")
     print("4. Use tensor network methods")
-```
+[archived fence delimiter: ```]
 
 ### Poor Performance
 
 Check for:
 
 1. **Too few qubits**: GPU overhead exceeds benefit
-   ```python
+[archived fence delimiter:    ```python]
    configure(gpu_threshold=20)  # Adjust threshold
-   ```
+[archived fence delimiter:    ```]
 
 2. **Frequent transfers**: Keep data on GPU
-   ```python
+[archived fence delimiter:    ```python]
    with gpu_context() as ctx:
        # All operations on GPU
-   ```
+[archived fence delimiter:    ```]
 
 3. **Small batch sizes**: Batch operations together
 
 ### Incorrect Results
 
-```python
+[archived fence delimiter: ```python]
 # Enable verification mode (slower but checks correctness)
 configure(gpu_verify=True)
 
@@ -354,13 +361,13 @@ state = QuantumState(20, backend='metal')
 state.h(0)
 
 # Results compared with CPU reference
-```
+[archived fence delimiter: ```]
 
 ## Benchmarking
 
 ### Compare CPU vs GPU
 
-```python
+[archived fence delimiter: ```python]
 import time
 from moonlab import QuantumState, set_backend
 
@@ -383,7 +390,7 @@ for n in [16, 18, 20, 22, 24]:
 
     print(f"{n} qubits: CPU={cpu_time:.3f}s, GPU={gpu_time:.3f}s, "
           f"Speedup={speedup:.1f}x")
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -392,3 +399,4 @@ for n in [16, 18, 20, 22, 24]:
 - [C API: GPU Metal](../api/c/gpu-metal.md) - Low-level API reference
 - [Performance Tuning](performance-tuning.md) - General optimization
 
+```

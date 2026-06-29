@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Algorithm Documentation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Algorithm Documentation
 
 Deep dives into quantum algorithms implemented in Moonlab.
@@ -53,33 +60,33 @@ This section provides comprehensive documentation of quantum algorithms, includi
 
 ### Finding Ground States
 
-```
+[archived fence delimiter: ```]
 Is your system 1D or quasi-1D?
 ├─ Yes: Use DMRG (handles 100+ sites)
 └─ No: Is it small enough for state vector?
     ├─ Yes (≤30 qubits): Use VQE
     └─ No: Consider hybrid classical-quantum methods
-```
+[archived fence delimiter: ```]
 
 ### Optimization Problems
 
-```
+[archived fence delimiter: ```]
 Is the problem naturally quadratic?
 ├─ Yes: Use QAOA directly
 └─ No: Can it be reduced to QUBO?
     ├─ Yes: Transform and use QAOA
     └─ No: Consider specialized encodings
-```
+[archived fence delimiter: ```]
 
 ### Search Problems
 
-```
+[archived fence delimiter: ```]
 Is the search space unstructured?
 ├─ Yes: Use Grover's algorithm
 └─ No: Does it have exploitable structure?
     ├─ Yes: Use problem-specific algorithm
     └─ No: Grover's still provides speedup
-```
+[archived fence delimiter: ```]
 
 ## Common Patterns
 
@@ -87,26 +94,26 @@ Is the search space unstructured?
 
 All variational algorithms (VQE, QAOA) share this structure:
 
-```
+[archived fence delimiter: ```]
 1. Initialize parameters θ
 2. Prepare quantum state |ψ(θ)⟩
 3. Measure expectation value ⟨H⟩
 4. Classical optimizer updates θ
 5. Repeat until convergence
-```
+[archived fence delimiter: ```]
 
 ### Oracle Construction
 
 Grover's algorithm and many others require oracles:
 
-```
+[archived fence delimiter: ```]
 Oracle marks solutions: |x⟩ → (-1)^f(x)|x⟩
 
 Construction approaches:
 - Phase kickback with ancilla
 - Direct phase manipulation
 - Compiled arithmetic circuits
-```
+[archived fence delimiter: ```]
 
 ### Amplitude Amplification
 
@@ -168,3 +175,4 @@ All algorithms in Moonlab are implemented with:
 8. White, S.R. (1992). "Density matrix formulation for quantum renormalization groups." *Phys. Rev. Lett.* 69, 2863.
 9. Haegeman, J. et al. (2016). "Unifying time evolution and optimization with matrix product states." *Phys. Rev. B* 94, 165116.
 
+```

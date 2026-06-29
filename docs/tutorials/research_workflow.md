@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Research workflow: end-to-end across every binding
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Research workflow: end-to-end across every binding
 
 A realistic single-thread tutorial that walks the same problem
@@ -35,7 +42,7 @@ nothing in any stage requires a different library build.
 
 ## Stage 1: DMRG ground-state energy (Python)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.dmrg import heisenberg_ground_energy
 
 # Antiferromagnetic Heisenberg: J = 1, Delta = 1, h = 0.
@@ -43,16 +50,16 @@ for N in (8, 12, 16, 20):
     E = heisenberg_ground_energy(num_sites=N, J=1.0, Delta=1.0,
                                   h=0.0, max_bond_dim=64, num_sweeps=20)
     print(f"N={N}: E_0 = {E:.6f}, E_0/N = {E/N:.6f}")
-```
+[archived fence delimiter: ```]
 
 Expected output (chi=64, 20 sweeps):
 
-```
+[archived fence delimiter: ```]
 N=8:  E_0 = -13.499730, E_0/N = -1.687466
 N=12: E_0 = -20.568363, E_0/N = -1.714030
 N=16: E_0 = -27.646949, E_0/N = -1.727934
 N=20: E_0 = -34.729893, E_0/N = -1.736495
-```
+[archived fence delimiter: ```]
 
 For comparison, the Bethe-ansatz value `E/N -> -ln(2) - 1/4 + 1/4 = 1/4 - ln(2)`
 in the antiferromagnetic XXX limit is around `-1.773` for the open chain.
@@ -63,7 +70,7 @@ running 40 sweeps closes most of the gap.
 
 For when you need the prepared *state*, not just the energy.
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::tdvp::{TdvpConfig, TdvpEngine, EvolutionType, MpoHeisenberg, RandomMps};
 
 fn main() -> moonlab::Result<()> {
@@ -81,7 +88,7 @@ fn main() -> moonlab::Result<()> {
     }
     Ok(())
 }
-```
+[archived fence delimiter: ```]
 
 The MPS handle persists on the engine and can be cloned or measured
 between steps.  Energy converges to within 1e-4 of the DMRG result
@@ -92,7 +99,7 @@ in ~25 imaginary-time steps at dt=0.05.
 For circuits with substantial Clifford structure, CA-MPS can run
 with bond-dim that's a fraction of what plain MPS needs.
 
-```ts
+[archived fence delimiter: ```ts]
 import { CaMps, varDRun, Warmstart } from '@moonlab/core';
 
 const N = 12;
@@ -122,7 +129,7 @@ const result = await varDRun(s, paulis, coeffs, numTerms, {
 console.log(`final E = ${result.finalEnergy.toFixed(6)}, ` +
             `iters = ${result.outerIterations}`);
 s.dispose();
-```
+[archived fence delimiter: ```]
 
 The same call works in Deno, Node, or directly in a browser via
 the WASM build.  Use the `CaMps.sampleZ` Born-rule sampler to
@@ -135,7 +142,7 @@ topological invariant that survives small perturbations.  Useful
 as a sanity check before pushing the same code to the real
 research problem.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.topology import chern_kpm_create, chern_kpm_local_marker
 
 # QWZ with m = -1 (Chern = -1 phase).
@@ -143,7 +150,7 @@ ck = chern_kpm_create(L=24, m=-1.0, n_cheby=100)
 c_center = chern_kpm_local_marker(ck, x=12, y=12)
 print(f"Local Chern marker at bulk site: {c_center:.4f}")
 assert abs(c_center - (-1.0)) < 0.1, "QWZ Chern marker should be -1"
-```
+[archived fence delimiter: ```]
 
 For a true mosaic of the 2D Chern landscape under quasi-crystalline
 modulation, use the C-side `bench_chern_mosaic_hq` harness; the
@@ -156,7 +163,7 @@ Before committing time on a real QPU, run the circuit through one
 of the three pre-baked vendor-noise emulators.  Each profile uses
 public typical calibration data.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.scheduler import (
     Job, register_vendor_noise_backends, list_backends,
 )
@@ -180,16 +187,16 @@ for backend in ("ibm-falcon", "rigetti-aspen", "ionq-forte"):
     pure_ghz = sum(1 for o in r.outcomes if o in (0, 15))
     fidelity_proxy = pure_ghz / r.total_shots
     print(f"{backend}: pure-GHZ fraction = {fidelity_proxy:.4f}")
-```
+[archived fence delimiter: ```]
 
 Sample output on a recent calibration:
 
-```
+[archived fence delimiter: ```]
 Registered backends: ['simulator', 'ibm-falcon', 'rigetti-aspen', 'ionq-forte']
 ibm-falcon:     pure-GHZ fraction = 0.9016
 rigetti-aspen:  pure-GHZ fraction = 0.8765
 ionq-forte:     pure-GHZ fraction = 0.9718
-```
+[archived fence delimiter: ```]
 
 IonQ produces the highest fidelity because of its cleaner 2q gates
 (p_2q ~ 0.4% vs IBM Falcon's ~1%).  If your workflow demands >95%
@@ -203,13 +210,13 @@ it at scale, submit through the moonlab control plane.
 
 Server (in one terminal):
 
-```bash
+[archived fence delimiter: ```bash]
 docker compose -f deploy/docker/docker-compose.yml up control-plane
-```
+[archived fence delimiter: ```]
 
 Client (in another):
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.control_plane import submit_circuit
 from moonlab.qgtl import QgtlCircuit, GateType
 
@@ -225,7 +232,7 @@ probs = submit_circuit(
     insecure=False,            # set True if using a self-signed cert
 )
 print(probs[0], probs[15])     # |0000> and |1111> for the GHZ_4
-```
+[archived fence delimiter: ```]
 
 Stage 5's vendor-noise emulator backends are also available on the
 server side; the control plane's job spec lets you pin a backend
@@ -259,3 +266,4 @@ a paper draft or commit to the repo via `benchmarks/results/`.
 - `examples/qgtl_hardware_demo/` -- the QGTL hardware-bridge
   template that QGTL sibling-library users adapt for vendor
   SDKs (IBM Qiskit, Rigetti pyquil, etc.).
+```

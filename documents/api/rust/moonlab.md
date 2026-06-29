@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Rust Safe API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Rust Safe API
 
 Complete reference for the safe Moonlab Rust bindings.
@@ -17,21 +24,21 @@ The `moonlab` crate provides safe, idiomatic Rust bindings for the Moonlab quant
 
 Add to your `Cargo.toml`:
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab = { path = "bindings/rust/moonlab" }
-```
+[archived fence delimiter: ```]
 
 Or from crates.io (when published):
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab = "0.1"
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 
 fn main() -> moonlab::Result<()> {
@@ -54,7 +61,7 @@ fn main() -> moonlab::Result<()> {
 
     Ok(())
 }
-```
+[archived fence delimiter: ```]
 
 ## QuantumState
 
@@ -62,19 +69,19 @@ Main type for quantum state simulation.
 
 ### Constants
 
-```rust
+[archived fence delimiter: ```rust]
 pub const MAX_QUBITS: usize = 32;
-```
+[archived fence delimiter: ```]
 
 Maximum supported qubits (memory-limited).
 
 ### Constructor
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     pub fn new(num_qubits: usize) -> Result<Self>
 }
-```
+[archived fence delimiter: ```]
 
 Create a new quantum state initialized to $|0\ldots0\rangle$.
 
@@ -88,17 +95,17 @@ Create a new quantum state initialized to $|0\ldots0\rangle$.
 - `QuantumError::AllocationFailed` - memory allocation failed
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 
 let state = QuantumState::new(4)?;
 assert_eq!(state.num_qubits(), 4);
 assert_eq!(state.state_dim(), 16); // 2^4
-```
+[archived fence delimiter: ```]
 
 ### Properties
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Get the number of qubits
     pub fn num_qubits(&self) -> usize
@@ -106,80 +113,80 @@ impl QuantumState {
     /// Get the dimension of the state vector (2^n)
     pub fn state_dim(&self) -> usize
 }
-```
+[archived fence delimiter: ```]
 
 ### State Operations
 
 #### reset
 
-```rust
+[archived fence delimiter: ```rust]
 pub fn reset(&mut self) -> &mut Self
-```
+[archived fence delimiter: ```]
 
 Reset state to $|0\ldots0\rangle$.
 
-```rust
+[archived fence delimiter: ```rust]
 state.h(0).cnot(0, 1);
 state.reset();  // Back to |00⟩
-```
+[archived fence delimiter: ```]
 
 #### probabilities
 
-```rust
+[archived fence delimiter: ```rust]
 pub fn probabilities(&self) -> Vec<f64>
-```
+[archived fence delimiter: ```]
 
 Get probability distribution over all basis states.
 
 **Returns**: Vector of length $2^n$ where entry $i$ is $P(|i\rangle)$
 
-```rust
+[archived fence delimiter: ```rust]
 let probs = state.probabilities();
 for (i, p) in probs.iter().enumerate() {
     if *p > 0.01 {
         println!("|{:0width$b}⟩: {:.4}", i, p, width = state.num_qubits());
     }
 }
-```
+[archived fence delimiter: ```]
 
 #### amplitudes
 
-```rust
+[archived fence delimiter: ```rust]
 pub fn amplitudes(&self) -> Vec<Complex64>
-```
+[archived fence delimiter: ```]
 
 Get complex amplitudes of the state vector.
 
 **Returns**: Vector of `Complex64` values
 
-```rust
+[archived fence delimiter: ```rust]
 use num_complex::Complex64;
 
 let amps = state.amplitudes();
 let norm: f64 = amps.iter().map(|a| a.norm_sqr()).sum();
 assert!((norm - 1.0).abs() < 1e-10);
-```
+[archived fence delimiter: ```]
 
 #### prob_zero / prob_one
 
-```rust
+[archived fence delimiter: ```rust]
 pub fn prob_zero(&self, qubit: usize) -> Result<f64>
 pub fn prob_one(&self, qubit: usize) -> Result<f64>
-```
+[archived fence delimiter: ```]
 
 Get probability of measuring specific qubit value.
 
-```rust
+[archived fence delimiter: ```rust]
 let p0 = state.prob_zero(0)?;
 let p1 = state.prob_one(0)?;
 assert!((p0 + p1 - 1.0).abs() < 1e-10);
-```
+[archived fence delimiter: ```]
 
 ### Single-Qubit Gates
 
 All single-qubit gates return `&mut Self` for method chaining.
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Pauli-X (NOT) gate
     pub fn x(&mut self, qubit: usize) -> &mut Self
@@ -220,10 +227,10 @@ impl QuantumState {
     /// U3 gate (arbitrary single-qubit unitary)
     pub fn u3(&mut self, qubit: usize, theta: f64, phi: f64, lambda: f64) -> &mut Self
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 use std::f64::consts::PI;
 
 let mut state = QuantumState::new(3)?;
@@ -233,11 +240,11 @@ state.h(0)
      .rx(1, PI / 4.0)
      .t(2)
      .phase(0, PI / 2.0);
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Gates
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// CNOT (controlled-X)
     pub fn cnot(&mut self, control: usize, target: usize) -> &mut Self
@@ -266,10 +273,10 @@ impl QuantumState {
     /// Controlled phase
     pub fn cphase(&mut self, control: usize, target: usize, phi: f64) -> &mut Self
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 // Create Bell state
 state.h(0).cnot(0, 1);
 
@@ -277,11 +284,11 @@ state.h(0).cnot(0, 1);
 let probs = state.probabilities();
 assert!((probs[0] - 0.5).abs() < 1e-10); // |00⟩
 assert!((probs[3] - 0.5).abs() < 1e-10); // |11⟩
-```
+[archived fence delimiter: ```]
 
 ### Multi-Qubit Gates
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Toffoli (CCNOT)
     pub fn toffoli(&mut self, control1: usize, control2: usize, target: usize) -> &mut Self
@@ -301,10 +308,10 @@ impl QuantumState {
     /// Inverse QFT
     pub fn iqft(&mut self, qubits: &[usize]) -> &mut Self
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 // Apply QFT to all qubits
 let mut state = QuantumState::new(4)?;
 state.qft(&[0, 1, 2, 3]);
@@ -315,11 +322,11 @@ let expected = 1.0 / 16.0;
 for p in probs.iter() {
     assert!((p - expected).abs() < 1e-10);
 }
-```
+[archived fence delimiter: ```]
 
 ### Measurement and Expectation Values
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Expectation value ⟨Z⟩ on qubit
     pub fn expectation_z(&self, qubit: usize) -> Result<f64>
@@ -333,10 +340,10 @@ impl QuantumState {
     /// ZZ correlation ⟨Z_i Z_j⟩
     pub fn correlation_zz(&self, qubit_i: usize, qubit_j: usize) -> Result<f64>
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 let mut state = QuantumState::new(2)?;
 state.h(0).cnot(0, 1);  // Bell state
 
@@ -347,11 +354,11 @@ assert!((zz - 1.0).abs() < 1e-10);
 // Individual Z expectations are 0
 let z0 = state.expectation_z(0)?;
 assert!(z0.abs() < 1e-10);
-```
+[archived fence delimiter: ```]
 
 ### Entanglement Measures
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Von Neumann entropy of subsystem A
     pub fn entanglement_entropy(&self, subsystem_a: &[usize]) -> Result<f64>
@@ -362,10 +369,10 @@ impl QuantumState {
     /// Full state entropy
     pub fn entropy(&self) -> f64
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 let mut state = QuantumState::new(2)?;
 
 // Product state has zero entanglement
@@ -376,13 +383,13 @@ assert!(entropy_product < 1e-10);
 state.h(0).cnot(0, 1);
 let entropy_bell = state.entanglement_entropy(&[0])?;
 assert!(entropy_bell > 0.6); // ln(2) ≈ 0.693
-```
+[archived fence delimiter: ```]
 
 ## Error Handling
 
 ### QuantumError
 
-```rust
+[archived fence delimiter: ```rust]
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -419,10 +426,10 @@ pub enum QuantumError {
 }
 
 pub type Result<T> = std::result::Result<T, QuantumError>;
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::{QuantumState, QuantumError};
 
 fn run_circuit() -> moonlab::Result<()> {
@@ -437,7 +444,7 @@ match run_circuit() {
     Err(e) => eprintln!("Error: {}", e),
     Ok(_) => {}
 }
-```
+[archived fence delimiter: ```]
 
 ## Traits
 
@@ -445,7 +452,7 @@ match run_circuit() {
 
 `QuantumState` implements `Clone` for deep copying.
 
-```rust
+[archived fence delimiter: ```rust]
 let mut original = QuantumState::new(2)?;
 original.h(0).cnot(0, 1);
 
@@ -455,24 +462,24 @@ let copy = original.clone();
 let orig_probs = original.probabilities();
 let copy_probs = copy.probabilities();
 assert_eq!(orig_probs, copy_probs);
-```
+[archived fence delimiter: ```]
 
 ### Drop
 
 Memory is automatically freed when `QuantumState` goes out of scope.
 
-```rust
+[archived fence delimiter: ```rust]
 {
     let state = QuantumState::new(20)?;
     // Use state...
 } // Memory freed here
-```
+[archived fence delimiter: ```]
 
 ### Send
 
 `QuantumState` is `Send`, allowing transfer between threads.
 
-```rust
+[archived fence delimiter: ```rust]
 use std::thread;
 
 let state = QuantumState::new(4)?;
@@ -483,7 +490,7 @@ let handle = thread::spawn(move || {
 });
 
 let probs = handle.join().unwrap();
-```
+[archived fence delimiter: ```]
 
 **Note**: `QuantumState` is NOT `Sync`. For concurrent access, use `Arc<Mutex<QuantumState>>`.
 
@@ -491,16 +498,16 @@ let probs = handle.join().unwrap();
 
 For convenient imports:
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::prelude::*;
 
 // Now available: QuantumState, QuantumError, Result, MAX_QUBITS,
 //                FeynmanDiagram, ParticleType
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::prelude::*;
 use std::f64::consts::PI;
 
@@ -548,7 +555,7 @@ fn main() -> Result<()> {
 
     Ok(())
 }
-```
+[archived fence delimiter: ```]
 
 ## Thread Safety
 
@@ -556,7 +563,7 @@ fn main() -> Result<()> {
 - Create separate states per thread for parallel simulations
 - Use `Arc<Mutex<QuantumState>>` for shared state
 
-```rust
+[archived fence delimiter: ```rust]
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -573,7 +580,7 @@ let handles: Vec<_> = (0..4).map(|i| {
 for handle in handles {
     handle.join().unwrap();
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -581,3 +588,4 @@ for handle in handles {
 - [moonlab-tui](moonlab-tui.md) - Terminal user interface
 - [C API: Quantum State](../c/quantum-state.md) - Underlying C API
 
+```

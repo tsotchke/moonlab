@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab PQC Security Posture
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab PQC Security Posture
 
 This document describes the threat model, guarantees, and explicit
@@ -121,12 +128,12 @@ Two tiers of test:
 A FIPS 203 reviewer in possession of the official NIST
 `PQCkemKAT_*.rsp` files can validate Moonlab conformance by:
 
-```
+[archived fence delimiter: ```]
 sha3_256 < ml-kem-512-count-0-pk.bin
 sha3_256 < ml-kem-512-count-0-sk.bin
 sha3_256 < ml-kem-512-count-0-ct.bin
 sha3_256 < ml-kem-512-count-0-ss.bin
-```
+[archived fence delimiter: ```]
 
 and comparing to the fingerprints pinned in
 `tests/unit/test_mlkem_nist_kat.c`.  Match = conformance established.
@@ -180,3 +187,4 @@ We will respond within 72 hours.  A CVE will be requested for any
 issue that affects correctness of the KEM (Decaps failure mode,
 IND-CCA2 break, FO-transform bypass) or that exposes an attack
 surface not covered in this document.
+```

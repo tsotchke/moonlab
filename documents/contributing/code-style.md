@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Code Style Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Code Style Guide
 
 Coding conventions and formatting standards for Moonlab contributions.
@@ -14,7 +21,7 @@ Moonlab follows a consistent C coding style optimized for readability, performan
 - **Line length**: 100 characters maximum (soft limit)
 - **Blank lines**: One between logical sections, two between function definitions
 
-```c
+[archived fence delimiter: ```c]
 // GOOD: Proper spacing
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
@@ -38,13 +45,13 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
 
     return QS_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Braces
 
 Use K&R style (opening brace on same line):
 
-```c
+[archived fence delimiter: ```c]
 // GOOD: K&R style
 if (condition) {
     do_something();
@@ -64,13 +71,13 @@ if (condition)
 {
     do_something();
 }
-```
+[archived fence delimiter: ```]
 
 ### Pointer and Reference Alignment
 
 Attach `*` to the variable name:
 
-```c
+[archived fence delimiter: ```c]
 // GOOD
 quantum_state_t *state;
 const complex_t *amplitudes;
@@ -79,7 +86,7 @@ void *buffer;
 // BAD
 quantum_state_t* state;
 quantum_state_t * state;
-```
+[archived fence delimiter: ```]
 
 ## Naming Conventions
 
@@ -87,20 +94,20 @@ quantum_state_t * state;
 
 Use `snake_case` with module prefix:
 
-```c
+[archived fence delimiter: ```c]
 // Pattern: module_action_object()
 qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
 qs_error_t quantum_state_free(quantum_state_t *state);
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit);
 qs_error_t gate_cnot(quantum_state_t *state, int control, int target);
 grover_result_t grover_search(quantum_state_t *state, const grover_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### Variables
 
 Use `snake_case`:
 
-```c
+[archived fence delimiter: ```c]
 // GOOD
 size_t num_qubits;
 uint64_t state_dim;
@@ -111,24 +118,24 @@ double entanglement_entropy;
 size_t numQubits;      // camelCase
 uint64_t StateDim;     // PascalCase
 complex_t amp;         // Too abbreviated (unless obvious from context)
-```
+[archived fence delimiter: ```]
 
 ### Constants and Macros
 
 Use `UPPER_SNAKE_CASE`:
 
-```c
+[archived fence delimiter: ```c]
 #define MAX_QUBITS 32
 #define MAX_STATE_DIM (1ULL << MAX_QUBITS)
 #define QC_PI 3.14159265358979323846
 #define QC_SQRT2_INV 0.7071067811865476
-```
+[archived fence delimiter: ```]
 
 ### Types
 
 Use `snake_case` with `_t` suffix:
 
-```c
+[archived fence delimiter: ```c]
 typedef double _Complex complex_t;
 
 typedef enum {
@@ -144,13 +151,13 @@ typedef struct {
     size_t state_dim;
     complex_t *amplitudes;
 } quantum_state_t;
-```
+[archived fence delimiter: ```]
 
 ### Static/Private Functions
 
 Prefix with `static` and optionally use descriptive names:
 
-```c
+[archived fence delimiter: ```c]
 static inline int check_qubit_valid(const quantum_state_t *state, int qubit) {
     return (qubit >= 0 && qubit < (int)state->num_qubits);
 }
@@ -158,13 +165,13 @@ static inline int check_qubit_valid(const quantum_state_t *state, int qubit) {
 static inline uint64_t flip_bit(uint64_t n, int bit_pos) {
     return n ^ (1ULL << bit_pos);
 }
-```
+[archived fence delimiter: ```]
 
 ## File Organization
 
 ### Header Files
 
-```c
+[archived fence delimiter: ```c]
 #ifndef MODULE_NAME_H
 #define MODULE_NAME_H
 
@@ -211,11 +218,11 @@ typedef struct { ... } data_t;
 return_type function_name(param1_type param1, param2_type param2);
 
 #endif // MODULE_NAME_H
-```
+[archived fence delimiter: ```]
 
 ### Source Files
 
-```c
+[archived fence delimiter: ```c]
 // 1. Corresponding header
 #include "module_name.h"
 
@@ -245,7 +252,7 @@ static inline int helper_function(...) { ... }
 
 // 7. Public function implementations
 qs_error_t public_function(...) { ... }
-```
+[archived fence delimiter: ```]
 
 ## Documentation
 
@@ -253,7 +260,7 @@ qs_error_t public_function(...) { ... }
 
 Use Doxygen-style comments for public APIs:
 
-```c
+[archived fence delimiter: ```c]
 /**
  * @brief Initialize quantum state in |0...0⟩
  *
@@ -281,13 +288,13 @@ Use Doxygen-style comments for public APIs:
  * @endcode
  */
 qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 ### Inline Comments
 
 Use `//` for inline comments explaining non-obvious logic:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t grover_diffusion(quantum_state_t *state) {
     // Diffusion operator: D = 2|s⟩⟨s| - I
     // where |s⟩ = H⊗ⁿ|0⟩ⁿ (equal superposition)
@@ -312,13 +319,13 @@ qs_error_t grover_diffusion(quantum_state_t *state) {
 
     return QS_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Section Headers
 
 Use decorated section headers for logical groupings:
 
-```c
+[archived fence delimiter: ```c]
 // ============================================================================
 // SINGLE-QUBIT GATES
 // ============================================================================
@@ -334,7 +341,7 @@ qs_error_t gate_hadamard(...) { ... }
 
 qs_error_t gate_cnot(...) { ... }
 qs_error_t gate_cz(...) { ... }
-```
+[archived fence delimiter: ```]
 
 ## Error Handling
 
@@ -342,7 +349,7 @@ qs_error_t gate_cz(...) { ... }
 
 Always return error codes rather than using assertions for recoverable errors:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
     // Validate input
     if (!state) return QS_ERROR_INVALID_STATE;
@@ -358,13 +365,13 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
 
     return QS_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Error Propagation
 
 Check and propagate errors immediately:
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t complex_operation(quantum_state_t *state) {
     qs_error_t err;
 
@@ -376,13 +383,13 @@ qs_error_t complex_operation(quantum_state_t *state) {
 
     return QS_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Guard Clauses
 
 Use early returns for validation:
 
-```c
+[archived fence delimiter: ```c]
 // GOOD: Guard clauses at the start
 qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
@@ -403,7 +410,7 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
     }
     return QS_ERROR_INVALID_STATE;
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Patterns
 
@@ -411,16 +418,16 @@ qs_error_t gate_hadamard(quantum_state_t *state, int qubit) {
 
 Mark immutable values as `const`:
 
-```c
+[archived fence delimiter: ```c]
 // GOOD: const for values that don't change
 const uint64_t stride = 1ULL << qubit;
 const uint64_t block_size = stride << 1;
 const complex_t amp0 = state->amplitudes[idx0];
-```
+[archived fence delimiter: ```]
 
 ### Use `static inline` for Small Helpers
 
-```c
+[archived fence delimiter: ```c]
 static inline int check_qubit_valid(const quantum_state_t *state, int qubit) {
     return (qubit >= 0 && qubit < (int)state->num_qubits);
 }
@@ -428,13 +435,13 @@ static inline int check_qubit_valid(const quantum_state_t *state, int qubit) {
 static inline uint64_t flip_bit(uint64_t n, int bit_pos) {
     return n ^ (1ULL << bit_pos);
 }
-```
+[archived fence delimiter: ```]
 
 ### Platform-Specific Code
 
 Use preprocessor guards for SIMD and platform-specific optimizations:
 
-```c
+[archived fence delimiter: ```c]
 #if defined(__ARM_NEON) || defined(__aarch64__)
     // ARM NEON optimized path
     for (uint64_t base = 0; base < state->state_dim; base += block_size) {
@@ -450,13 +457,13 @@ Use preprocessor guards for SIMD and platform-specific optimizations:
         // Standard processing...
     }
 #endif
-```
+[archived fence delimiter: ```]
 
 ### Loop Optimization
 
 Use stride-based indexing for cache efficiency:
 
-```c
+[archived fence delimiter: ```c]
 // GOOD: Stride-based access pattern
 const uint64_t stride = 1ULL << qubit;
 const uint64_t block_size = stride << 1;
@@ -476,13 +483,13 @@ for (uint64_t i = 0; i < state->state_dim; i++) {
         // Process pair...
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Python Style
 
 Python bindings follow PEP 8 with these additions:
 
-```python
+[archived fence delimiter: ```python]
 """
 Module docstring with description.
 """
@@ -524,13 +531,13 @@ class QuantumState:
         """
         _gate_hadamard(self._state, qubit)
         return self
-```
+[archived fence delimiter: ```]
 
 ## Clang-Format Configuration
 
 The project uses clang-format for automatic formatting:
 
-```yaml
+[archived fence delimiter: ```yaml]
 # .clang-format
 ---
 Language: Cpp
@@ -552,11 +559,11 @@ AlignConsecutiveDeclarations: false
 AlignTrailingComments: true
 SortIncludes: false
 ...
-```
+[archived fence delimiter: ```]
 
 ### Running clang-format
 
-```bash
+[archived fence delimiter: ```bash]
 # Format a single file
 clang-format -i src/quantum/gates.c
 
@@ -565,20 +572,20 @@ find src -name '*.c' -o -name '*.h' | xargs clang-format -i
 
 # Check formatting without modifying
 clang-format --dry-run -Werror src/quantum/gates.c
-```
+[archived fence delimiter: ```]
 
 ## Git Commit Messages
 
 Follow conventional commit format:
 
-```
+[archived fence delimiter: ```]
 type(scope): brief description
 
 Longer description if needed. Explain what and why,
 not how (the code shows how).
 
 Fixes #123
-```
+[archived fence delimiter: ```]
 
 ### Types
 
@@ -594,26 +601,27 @@ Fixes #123
 
 ### Examples
 
-```
+[archived fence delimiter: ```]
 feat(gates): add parameterized rotation gates
 
 Implement RX, RY, RZ gates with arbitrary angle parameters.
 Uses SIMD optimization for rotation matrix computation.
 
 Closes #42
-```
+[archived fence delimiter: ```]
 
-```
+[archived fence delimiter: ```]
 fix(state): correct memory alignment on M1
 
 State vector was not aligned to 64-byte boundaries,
 causing suboptimal AMX utilization.
 
 Fixes #78
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
 - [Development Setup](development-setup.md) - Environment configuration
 - [Testing Guide](testing-guide.md) - Testing practices
 - [Documentation Guide](documentation-guide.md) - Writing documentation
+```

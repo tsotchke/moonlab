@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QPE API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QPE API
 
 Complete reference for Quantum Phase Estimation (QPE) in the C library.
@@ -35,7 +42,7 @@ Given a unitary $U$ and its eigenstate $|\psi\rangle$ where $U|\psi\rangle = e^{
 
 Unitary operator for QPE.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;           // Qubits operator acts on
     void *operator_data;         // Opaque operator specification
@@ -49,7 +56,7 @@ typedef struct {
     // Optional: eigenvalue for validation
     complex_t eigenvalue;
 } unitary_operator_t;
-```
+[archived fence delimiter: ```]
 
 **Fields**:
 - `num_qubits`: Number of qubits the operator acts on
@@ -62,9 +69,9 @@ typedef struct {
 
 Create unitary operator.
 
-```c
+[archived fence delimiter: ```c]
 unitary_operator_t* unitary_operator_create(size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits
@@ -75,9 +82,9 @@ unitary_operator_t* unitary_operator_create(size_t num_qubits);
 
 Free unitary operator.
 
-```c
+[archived fence delimiter: ```c]
 void unitary_operator_free(unitary_operator_t *op);
-```
+[archived fence delimiter: ```]
 
 ## Eigenstate
 
@@ -85,13 +92,13 @@ void unitary_operator_free(unitary_operator_t *op);
 
 Eigenstate of unitary operator.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     quantum_state_t *state;      // Eigenstate |ψ⟩
     complex_t eigenvalue;        // e^(2πiφ)
     double phase;                // φ ∈ [0,1)
 } eigenstate_t;
-```
+[archived fence delimiter: ```]
 
 **Mathematical Relationship**:
 $$U|\psi\rangle = e^{2\pi i \phi}|\psi\rangle$$
@@ -105,9 +112,9 @@ where:
 
 Create eigenstate.
 
-```c
+[archived fence delimiter: ```c]
 eigenstate_t* eigenstate_create(size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits
@@ -118,9 +125,9 @@ eigenstate_t* eigenstate_create(size_t num_qubits);
 
 Free eigenstate.
 
-```c
+[archived fence delimiter: ```c]
 void eigenstate_free(eigenstate_t *es);
-```
+[archived fence delimiter: ```]
 
 ## QPE Algorithm
 
@@ -128,19 +135,19 @@ void eigenstate_free(eigenstate_t *es);
 
 QPE configuration.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t precision_qubits;     // m qubits for phase estimation
     size_t system_qubits;        // n qubits for system
     double phase_accuracy;       // Target accuracy (2^(-m))
 } qpe_config_t;
-```
+[archived fence delimiter: ```]
 
 ### qpe_result_t
 
 QPE result.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double estimated_phase;      // φ estimate in [0, 1)
     complex_t estimated_eigenvalue;  // e^(2πiφ)
@@ -152,7 +159,7 @@ typedef struct {
     double true_phase;           // Known phase (for validation)
     double phase_error;          // |estimated - true|
 } qpe_result_t;
-```
+[archived fence delimiter: ```]
 
 **Fields**:
 - `estimated_phase`: Estimated phase $\phi \in [0, 1)$
@@ -167,14 +174,14 @@ typedef struct {
 
 Execute QPE algorithm.
 
-```c
+[archived fence delimiter: ```c]
 qpe_result_t qpe_estimate_phase(
     const unitary_operator_t *unitary,
     const eigenstate_t *eigenstate,
     size_t precision_qubits,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `unitary`: Unitary operator $U$
@@ -190,7 +197,7 @@ With $m$ precision qubits, the algorithm returns $\phi$ with:
 - Success probability $\geq 1 - \epsilon$ (can be amplified)
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Estimate phase of T gate (should give φ = 1/8)
 unitary_operator_t *T = qpe_create_t_gate();
 eigenstate_t *es = eigenstate_create(1);
@@ -208,13 +215,13 @@ qpe_result_t result = qpe_estimate_phase(T, es, 4, &entropy);
 printf("Estimated phase: %.4f\n", result.estimated_phase);
 printf("True phase: %.4f\n", result.true_phase);
 printf("Error: %.4f\n", result.phase_error);
-```
+[archived fence delimiter: ```]
 
 ### qpe_apply_controlled_unitary_power
 
 Apply controlled-$U^k$ operation.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t qpe_apply_controlled_unitary_power(
     quantum_state_t *state,
     int control,
@@ -222,7 +229,7 @@ qs_error_t qpe_apply_controlled_unitary_power(
     const unitary_operator_t *unitary,
     uint64_t power
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Full quantum state
@@ -239,9 +246,9 @@ qs_error_t qpe_apply_controlled_unitary_power(
 
 Convert measured bitstring to phase estimate.
 
-```c
+[archived fence delimiter: ```c]
 double qpe_bitstring_to_phase(uint64_t bitstring, size_t precision_bits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `bitstring`: Measured $m$-bit string
@@ -256,9 +263,9 @@ $$\phi = \frac{\text{bitstring}}{2^m}$$
 
 Print QPE result.
 
-```c
+[archived fence delimiter: ```c]
 void qpe_print_result(const qpe_result_t *result);
-```
+[archived fence delimiter: ```]
 
 ## Pre-built Unitaries
 
@@ -266,9 +273,9 @@ void qpe_print_result(const qpe_result_t *result);
 
 Create phase gate unitary.
 
-```c
+[archived fence delimiter: ```c]
 unitary_operator_t* qpe_create_phase_gate(double theta);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `theta`: Phase angle
@@ -279,9 +286,9 @@ unitary_operator_t* qpe_create_phase_gate(double theta);
 
 Create T gate unitary.
 
-```c
+[archived fence delimiter: ```c]
 unitary_operator_t* qpe_create_t_gate(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: T gate with eigenvalue $e^{i\pi/4}$ for $|1\rangle$
 
@@ -291,9 +298,9 @@ unitary_operator_t* qpe_create_t_gate(void);
 
 Create $R_Z(\theta)$ rotation unitary.
 
-```c
+[archived fence delimiter: ```c]
 unitary_operator_t* qpe_create_rz_gate(double theta);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `theta`: Rotation angle
@@ -316,13 +323,13 @@ QPE uses the quantum Fourier transform to encode $\phi$ in a measurement outcome
 
 ### Circuit Structure
 
-```
+[archived fence delimiter: ```]
 |0⟩ ─H─────•─────────────────────QFT†─ M → φ₁
 |0⟩ ─H─────┼──────•──────────────QFT†─ M → φ₂
 |0⟩ ─H─────┼──────┼──────•───────QFT†─ M → φ₃
      ...   │      │      │       ...
 |ψ⟩ ───────U¹─────U²─────U⁴──────────────────
-```
+[archived fence delimiter: ```]
 
 ### Precision Analysis
 
@@ -342,7 +349,7 @@ With $m$ precision qubits:
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/algorithms/qpe.h"
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
@@ -386,17 +393,17 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 **Expected Output**:
-```
+[archived fence delimiter: ```]
 === QPE Test: Phase = 0.3750 ===
 m=2: estimated=0.250000, error=0.125000, confidence=0.850
 m=3: estimated=0.375000, error=0.000000, confidence=1.000
 m=4: estimated=0.375000, error=0.000000, confidence=1.000
 m=5: estimated=0.375000, error=0.000000, confidence=1.000
 ...
-```
+[archived fence delimiter: ```]
 
 ## Precision Requirements by Application
 
@@ -430,3 +437,4 @@ QPE estimates eigenvalues of molecular Hamiltonians:
 - [Algorithms: QPE](../../algorithms/qpe-algorithm.md) - Full theory
 - [Tutorial: Phase Estimation](../../tutorials/advanced/phase-estimation.md)
 - [VQE API](vqe.md) - Alternative for ground states
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab v1.0 production stack (Docker)
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab v1.0 production stack (Docker)
 
 A three-container compose stack that brings up:
@@ -21,16 +28,16 @@ than a turn-key cloud distribution.
 
 ## Quickstart
 
-```
+[archived fence delimiter: ```]
 docker compose -f deploy/docker/docker-compose.yml up --build
-```
+[archived fence delimiter: ```]
 
 First boot builds two images (control-plane in Debian-slim,
 exporter in python-slim).  Subsequent boots are fast.
 
 Smoke-test once the stack is up:
 
-```
+[archived fence delimiter: ```]
 # HEALTH probe
 printf 'HEALTH\n' | nc -w 1 127.0.0.1 7070
 # -> OK alive
@@ -43,13 +50,13 @@ curl -s http://127.0.0.1:9090/metrics | head
 
 # Prometheus UI
 open http://127.0.0.1:9091
-```
+[archived fence delimiter: ```]
 
 ## Submit a circuit
 
 A 2-qubit Bell pair from Python (uses the `moonlab` Python binding):
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.qgtl   import QgtlCircuit, GateType
 from moonlab.control_plane import submit_circuit
 
@@ -59,7 +66,7 @@ c = (QgtlCircuit(num_qubits=2)
 
 probs = submit_circuit("127.0.0.1", 7070, c.serialize())
 print(probs)   # [0.5, 0.0, 0.0, 0.5]
-```
+[archived fence delimiter: ```]
 
 Equivalent calls exist for the Rust (`moonlab::control_plane::submit_circuit`)
 and Node.js (`@moonlab/quantum-core` `controlPlaneSubmitCircuit`)
@@ -76,7 +83,7 @@ The default `CMD` in `Dockerfile.control-plane` already enables:
 
 To enable TLS + mTLS in front of the control plane:
 
-```yaml
+[archived fence delimiter: ```yaml]
 # docker-compose.yml override
 services:
   moonlab-control:
@@ -94,7 +101,7 @@ services:
       - --request-timeout=60
       - --rate-limit-rps=100
       - --rate-limit-burst=200
-```
+[archived fence delimiter: ```]
 
 Bind-mount your PEM bundle + HMAC secret from the host; the
 exporter still sees plain-TCP `moonlab-control:7070` inside the
@@ -105,14 +112,14 @@ host-exposed port instead and pass `--tls-ca`, `--client-cert`,
 
 ## Cleaning up
 
-```
+[archived fence delimiter: ```]
 docker compose -f deploy/docker/docker-compose.yml down
 docker rmi moonlab/control-plane:1.0.5 moonlab/control-exporter:1.0.5
-```
+[archived fence delimiter: ```]
 
 ## Architecture
 
-```
+[archived fence delimiter: ```]
    client --line proto--> :7070  moonlab-control (private network)
                                    |
                                    v line proto
@@ -121,9 +128,10 @@ docker rmi moonlab/control-plane:1.0.5 moonlab/control-exporter:1.0.5
                                                        |
                                                        v
                                                   prometheus :9091
-```
+[archived fence delimiter: ```]
 
 The control plane speaks the moonlab line protocol on raw TCP.
 Browsers + Prometheus need HTTP; the exporter sidecar bridges.
 Native Python / Rust / Node clients use the line protocol
 directly, bypassing the exporter.
+```

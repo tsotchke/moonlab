@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab: Mathematical Foundations and Error Bounds
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab: Mathematical Foundations and Error Bounds
 
 This document gives the analytic underpinnings of each major
@@ -420,3 +427,4 @@ derivations in this document:
   Two Dimensions*, Lect. Notes Phys. 919, Springer (2016),
   doi:10.1007/978-3-319-25607-8. §1.5 for the SSH Zak-phase /
   winding-number sign convention adopted here.
+```

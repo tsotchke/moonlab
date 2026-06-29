@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Jetson CI runner — one-time setup
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Jetson CI runner — one-time setup
 
 This document covers bringing up the `ci-jetson.yml` workflow on a
@@ -33,7 +40,7 @@ real Jetson hardware, so the runner must live on-host.
    the runner registration token from `Settings -> Actions ->
    Runners -> New self-hosted runner` in the public moonlab repo:
 
-   ```sh
+[archived fence delimiter:    ```sh]
    mkdir -p ~/actions-runner && cd ~/actions-runner
    curl -O -L https://github.com/actions/runner/releases/download/v2.319.1/actions-runner-linux-arm64-2.319.1.tar.gz
    tar xzf actions-runner-linux-arm64-2.319.1.tar.gz
@@ -43,38 +50,38 @@ real Jetson hardware, so the runner must live on-host.
        --labels self-hosted,linux,ARM64,jetpack,cuda \
        --work _work \
        --name jetson-xavier-01
-   ```
+[archived fence delimiter:    ```]
 
 2. Install as a systemd service so it survives reboots:
 
-   ```sh
+[archived fence delimiter:    ```sh]
    sudo ./svc.sh install <runner_user>
    sudo ./svc.sh start
    sudo ./svc.sh status
-   ```
+[archived fence delimiter:    ```]
 
 3. Move the working directory off the small eMMC.  Xavier's onboard
    storage is typically ~32 GB; ctest artefacts + the flake.nix
    /nix/store easily exceed that.  Edit the systemd unit:
 
-   ```sh
+[archived fence delimiter:    ```sh]
    sudo systemctl edit actions.runner.tsotchke-moonlab.jetson-xavier-01
    # Add:
    [Service]
    WorkingDirectory=/storage/actions-runner
    Environment=RUNNER_WORK_DIR=/storage/actions-runner/_work
-   ```
+[archived fence delimiter:    ```]
 
    ...and `sudo systemctl daemon-reload && sudo systemctl restart` it.
 
 4. Pre-warm the flake.nix dev shell so the first CI run doesn't
    spend 30 min pulling cuda-merged from nixpkgs:
 
-   ```sh
+[archived fence delimiter:    ```sh]
    cd /storage/actions-runner/_work/moonlab/moonlab
    nix --extra-experimental-features 'nix-command flakes' develop \
        --command bash -lc 'echo ready'
-   ```
+[archived fence delimiter:    ```]
 
 ## What the workflow runs
 
@@ -127,3 +134,4 @@ to GitHub will trigger immediate CI runs.  Options:
 
 Option 1 is the default and matches the rest of the project's
 no-push posture.
+```

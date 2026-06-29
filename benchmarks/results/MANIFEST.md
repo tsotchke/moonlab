@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Reproducibility manifest — Moonlab v0.2.1 paper
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Reproducibility manifest — Moonlab v0.2.1 paper
 
 Each row maps a paper claim to: the harness binary that produces it, the
@@ -5,11 +12,11 @@ exact command, the archived JSON path, and the tolerance the paper
 asserts.  Re-run on your own host to confirm.
 
 Build:
-```sh
+[archived fence delimiter: ```sh]
 cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release \
   -DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_EXAMPLES=ON -DQSIM_BUILD_BENCHMARKS=ON
 cmake --build build_release -j8
-```
+[archived fence delimiter: ```]
 
 All paper-grade benches must run from a Release build.  The
 `build_type` field in each manifest-style JSON is asserted to equal
@@ -67,7 +74,7 @@ get host-specific figures.
 
 ## How to verify the manifest itself
 
-```sh
+[archived fence delimiter: ```sh]
 # 1. fresh release build
 cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release \
   -DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_EXAMPLES=ON -DQSIM_BUILD_BENCHMARKS=ON
@@ -91,4 +98,5 @@ cd build_release
 ./bench_fusion                /tmp/repro/fusion.json
 ./example_bell_chsh_aggregate /tmp/repro/bell_chsh.json 10 10000
 python3 ../tests/performance/stim_vs_moonlab.py --out /tmp/repro/stim_vs_moonlab.json
+[archived fence delimiter: ```]
 ```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: @moonlab/core
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # @moonlab/core
 
 WebAssembly + WebGPU bindings for the Moonlab quantum simulator.
@@ -12,14 +19,14 @@ The Wasm artefact is produced by Emscripten compiling the C core under
 - **emsdk** (Emscripten SDK) installed and activated.  Source it before
   building so `$EMSDK` is in the environment:
 
-  ```sh
+[archived fence delimiter:   ```sh]
   # one-time install
   git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
   cd ~/emsdk && ./emsdk install latest && ./emsdk activate latest
 
   # in every shell where you want to build
   source ~/emsdk/emsdk_env.sh
-  ```
+[archived fence delimiter:   ```]
 
   After sourcing, `which emcc` should print a path inside the emsdk
   install and `echo $EMSDK` should print the install root.  The
@@ -62,3 +69,4 @@ you want the OpenBLAS variant.
   artefact from `emscripten/build/` automatically; if you ran
   `build:ts` standalone, run `pnpm build:wasm` first or just
   `pnpm build`.
+```

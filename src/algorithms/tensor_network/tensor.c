@@ -2386,7 +2386,16 @@ struct tensor_gpu_context {
 // Global GPU context (singleton for simplicity)
 static tensor_gpu_context_t *g_gpu_ctx = NULL;
 
+static bool tensor_gpu_disabled_by_env(void) {
+    const char *value = getenv("MOONLAB_TN_DISABLE_GPU");
+    return value && value[0] && strcmp(value, "0") != 0;
+}
+
 tensor_gpu_context_t *tensor_gpu_context_create(void) {
+    if (tensor_gpu_disabled_by_env()) {
+        return NULL;
+    }
+
     if (g_gpu_ctx) {
         return g_gpu_ctx;  // Return existing context
     }

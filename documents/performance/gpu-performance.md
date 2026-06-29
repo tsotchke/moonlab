@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: GPU Performance
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # GPU Performance
 
 Metal GPU acceleration performance on Apple Silicon.
@@ -29,18 +36,18 @@ Moonlab leverages Apple's Metal API for GPU acceleration, achieving significant 
 
 ### Build Configuration
 
-```bash
+[archived fence delimiter: ```bash]
 # Build with Metal support (macOS only)
 make METAL=1
 
 # Verify GPU support
 ./bin/moonlab --version
 # Output should include: GPU: Metal (Apple M2 Ultra)
-```
+[archived fence delimiter: ```]
 
 ### Runtime Configuration
 
-```c
+[archived fence delimiter: ```c]
 #include "optimization/gpu_metal.h"
 
 // Initialize Metal context
@@ -56,15 +63,15 @@ if (gpu) {
     printf("GPU cores: %u\n", num_cores);
     printf("Max threads: %u\n", max_threads);
 }
-```
+[archived fence delimiter: ```]
 
 ### Automatic GPU Usage
 
-```c
+[archived fence delimiter: ```c]
 // Configure threshold for automatic GPU usage
 quantum_config_set("gpu.enabled", "true");
 quantum_config_set("gpu.threshold", "16");  // Use GPU for ≥16 qubits
-```
+[archived fence delimiter: ```]
 
 ## Performance Benchmarks
 
@@ -126,7 +133,7 @@ quantum_config_set("gpu.threshold", "16");  // Use GPU for ≥16 qubits
 
 ### Compute Pipeline
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Metal Compute Pipeline                     │
 ├─────────────────────────────────────────────────────────────────┤
@@ -148,7 +155,7 @@ quantum_config_set("gpu.threshold", "16");  // Use GPU for ≥16 qubits
 │  └── pauli_x / pauli_z         └── jacobi_svd_rotation         │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Available Kernels
 
@@ -166,7 +173,7 @@ quantum_config_set("gpu.threshold", "16");  // Use GPU for ≥16 qubits
 
 ### Thread Group Optimization
 
-```metal
+[archived fence delimiter: ```metal]
 // Optimal thread group size for M2 Ultra
 constant uint THREADGROUP_SIZE = 256;
 
@@ -196,7 +203,7 @@ kernel void hadamard_transform(
     amplitudes[i0] = (a0 + a1) * inv_sqrt2;
     amplitudes[i1] = (a0 - a1) * inv_sqrt2;
 }
-```
+[archived fence delimiter: ```]
 
 ## Memory Management
 
@@ -204,13 +211,13 @@ kernel void hadamard_transform(
 
 Apple Silicon's unified memory eliminates GPU memory copies:
 
-```objc
+[archived fence delimiter: ```objc]
 // Zero-copy buffer allocation
 id<MTLBuffer> stateBuffer = [device newBufferWithBytesNoCopy:amplitudes
                                                        length:size
                                                       options:MTLResourceStorageModeShared
                                                   deallocator:nil];
-```
+[archived fence delimiter: ```]
 
 ### Memory Bandwidth
 
@@ -223,7 +230,7 @@ id<MTLBuffer> stateBuffer = [device newBufferWithBytesNoCopy:amplitudes
 
 ### Buffer Sizing
 
-```c
+[archived fence delimiter: ```c]
 // Optimal buffer alignment for Metal
 size_t align_to_page(size_t size) {
     size_t page_size = 16384;  // 16 KB pages on Apple Silicon
@@ -233,7 +240,7 @@ size_t align_to_page(size_t size) {
 // Allocate aligned buffer
 size_t state_size = (1ULL << num_qubits) * sizeof(complex_t);
 size_t aligned_size = align_to_page(state_size);
-```
+[archived fence delimiter: ```]
 
 ## Performance Tuning
 
@@ -241,7 +248,7 @@ size_t aligned_size = align_to_page(state_size);
 
 Choose GPU usage threshold based on overhead crossover:
 
-```c
+[archived fence delimiter: ```c]
 // Measured crossover points (M2 Ultra)
 // Below these, CPU is faster due to dispatch overhead
 int gpu_threshold_single = 16;  // Single-qubit gates
@@ -250,13 +257,13 @@ int gpu_threshold_measure = 18; // Measurement operations
 
 quantum_config_set_int("gpu.threshold.single", gpu_threshold_single);
 quantum_config_set_int("gpu.threshold.two", gpu_threshold_two);
-```
+[archived fence delimiter: ```]
 
 ### Batch Operations
 
 Batching multiple operations reduces dispatch overhead:
 
-```c
+[archived fence delimiter: ```c]
 // Less efficient: individual dispatches
 for (int q = 0; q < num_qubits; q++) {
     metal_hadamard(gpu, state, q);  // Separate dispatch each
@@ -264,13 +271,13 @@ for (int q = 0; q < num_qubits; q++) {
 
 // More efficient: batched dispatch
 metal_hadamard_all(gpu, state, num_qubits);  // Single dispatch
-```
+[archived fence delimiter: ```]
 
 ### Pipeline Warmup
 
 First kernel invocation incurs compilation overhead:
 
-```c
+[archived fence delimiter: ```c]
 // Warmup GPU pipelines at initialization
 void warmup_gpu(metal_compute_ctx_t* gpu) {
     quantum_state_t warmup;
@@ -281,13 +288,13 @@ void warmup_gpu(metal_compute_ctx_t* gpu) {
 
     quantum_state_free(&warmup);
 }
-```
+[archived fence delimiter: ```]
 
 ## Profiling
 
 ### Enable Performance Monitoring
 
-```c
+[archived fence delimiter: ```c]
 // Enable Metal performance monitoring
 metal_set_performance_monitoring(gpu, 1);
 
@@ -297,7 +304,7 @@ metal_hadamard(gpu, state, target);
 // Get timing
 double execution_time = metal_get_last_execution_time(gpu);
 printf("Kernel time: %.3f ms\n", execution_time * 1000);
-```
+[archived fence delimiter: ```]
 
 ### Xcode GPU Profiler
 
@@ -307,7 +314,7 @@ printf("Kernel time: %.3f ms\n", execution_time * 1000);
 
 ### Command Line Profiling
 
-```bash
+[archived fence delimiter: ```bash]
 # Profile with Instruments
 xcrun xctrace record --template "Metal System Trace" \
     --launch ./my_quantum_app
@@ -315,7 +322,7 @@ xcrun xctrace record --template "Metal System Trace" \
 # Analyze shader compilation
 export MTL_SHADER_VALIDATION=1
 ./my_quantum_app
-```
+[archived fence delimiter: ```]
 
 ## Comparison: CPU vs GPU
 
@@ -333,7 +340,7 @@ export MTL_SHADER_VALIDATION=1
 
 ### Hybrid CPU/GPU
 
-```c
+[archived fence delimiter: ```c]
 // Use CPU for small operations, GPU for large
 void apply_circuit(quantum_state_t* state, circuit_t* circuit,
                    metal_compute_ctx_t* gpu) {
@@ -349,22 +356,22 @@ void apply_circuit(quantum_state_t* state, circuit_t* circuit,
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Troubleshooting
 
 ### Common Issues
 
 **GPU Not Detected**
-```
+[archived fence delimiter: ```]
 Error: Metal device not available
-```
+[archived fence delimiter: ```]
 Solution: Ensure running on macOS with Apple Silicon. Check `metal_is_available()`.
 
 **Shader Compilation Failure**
-```
+[archived fence delimiter: ```]
 Metal: Failed to compile kernel
-```
+[archived fence delimiter: ```]
 Solution: Check shader source path. Verify Metal SDK version compatibility.
 
 **Performance Regression**
@@ -374,13 +381,13 @@ Solution: Check shader source path. Verify Metal SDK version compatibility.
 
 ### Debug Mode
 
-```bash
+[archived fence delimiter: ```bash]
 # Enable Metal validation
 export MTL_DEBUG_LAYER=1
 export MTL_SHADER_VALIDATION=1
 
 ./my_quantum_app
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -388,3 +395,4 @@ export MTL_SHADER_VALIDATION=1
 - [Memory Requirements](memory-requirements.md)
 - [Architecture: GPU Pipeline](../architecture/gpu-pipeline.md)
 - [API: gpu_metal.h](../api/c/gpu-metal.md)
+```

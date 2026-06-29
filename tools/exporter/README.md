@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: moonlab-control-exporter
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # moonlab-control-exporter
 
 HTTP `/metrics` sidecar that bridges the Moonlab control plane's
@@ -9,23 +16,23 @@ directly.
 
 ## Quick start
 
-```
+[archived fence delimiter: ```]
 python3 moonlab_control_exporter.py \
   --target 127.0.0.1:7070 \
   --listen 0.0.0.0:9090
-```
+[archived fence delimiter: ```]
 
 Then point Prometheus at `http://<sidecar-host>:9090/metrics`.
 
 ## Sample `prometheus.yml`
 
-```yaml
+[archived fence delimiter: ```yaml]
 scrape_configs:
   - job_name: 'moonlab-control'
     static_configs:
       - targets: ['localhost:9090']
     metrics_path: /metrics
-```
+[archived fence delimiter: ```]
 
 ## Flags
 
@@ -43,14 +50,14 @@ scrape_configs:
 
 ## TLS / mTLS scraping
 
-```
+[archived fence delimiter: ```]
 python3 moonlab_control_exporter.py \
   --target moonlab-0.cluster.local:7070 \
   --tls-ca   /etc/moonlab/ca.pem \
   --client-cert /etc/moonlab/scraper.pem \
   --client-key  /etc/moonlab/scraper.key \
   --listen 0.0.0.0:9090
-```
+[archived fence delimiter: ```]
 
 Any of `--tls-ca`, `--client-cert`, or `--tls-insecure` enables TLS;
 all combinations of (CA-verified, mTLS, insecure-skip) are supported.
@@ -68,11 +75,12 @@ request.
 
 ## Tests
 
-```
+[archived fence delimiter: ```]
 python3 -m pytest tools/exporter/tests/ -v
-```
+[archived fence delimiter: ```]
 
 The test suite covers plain TCP scrape, large bodies, malformed
 upstream replies, unreachable upstream, TLS with `--tls-insecure`,
 TLS with an explicit `--tls-ca`, and the HTTP handler returning
 200 / 404 / 502 paths.
+```

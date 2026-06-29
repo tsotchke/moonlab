@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Portfolio Optimization with QAOA
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Portfolio Optimization with QAOA
 
 Optimize investment portfolios using the Quantum Approximate Optimization Algorithm.
@@ -40,7 +47,7 @@ Where $x_i \in \{0, 1\}$ indicates whether asset $i$ is included.
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 """
 Portfolio Optimization with QAOA
 Minimize risk while achieving target returns.
@@ -378,11 +385,11 @@ if __name__ == "__main__":
 
     # Compute efficient frontier
     efficient_frontier()
-```
+[archived fence delimiter: ```]
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Portfolio Optimization with QAOA
  * Minimize portfolio risk subject to budget constraints.
@@ -627,11 +634,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 ============================================================
      Portfolio Optimization with QAOA
 ============================================================
@@ -687,7 +694,7 @@ Portfolio Metrics:
 
 ✓ Solutions match: True
 QAOA iterations: 47
-```
+[archived fence delimiter: ```]
 
 ## Key Concepts
 
@@ -717,18 +724,18 @@ Low correlation between selected assets reduces portfolio risk. QAOA naturally t
 
 Add constraints to limit exposure to any single sector:
 
-```python
+[archived fence delimiter: ```python]
 # Add to QUBO: penalty if more than 2 assets from same sector
 for sector in sectors:
     sector_assets = [i for i, name in enumerate(asset_names) if sector in name]
     # Add constraint: sum over sector <= 2
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Transaction Costs
 
 Include transaction costs in the optimization:
 
-```python
+[archived fence delimiter: ```python]
 # Current holdings
 current_holdings = [1, 0, 1, 0, 0, 0]
 transaction_cost = 0.001  # 0.1% per trade
@@ -736,13 +743,13 @@ transaction_cost = 0.001  # 0.1% per trade
 # Add to QUBO: cost for changing positions
 for i in range(n_assets):
     Q[i, i] += transaction_cost * (1 - 2 * current_holdings[i])
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Compare with Classical Optimizer
 
 Benchmark against scipy optimization:
 
-```python
+[archived fence delimiter: ```python]
 from scipy.optimize import minimize
 
 def classical_markowitz(returns, covariance, risk_aversion):
@@ -757,7 +764,7 @@ def classical_markowitz(returns, covariance, risk_aversion):
     result = minimize(objective, np.ones(n)/n, method='SLSQP',
                      bounds=bounds, constraints=constraints)
     return result.x
-```
+[archived fence delimiter: ```]
 
 ## Real-World Applications
 
@@ -772,3 +779,4 @@ def classical_markowitz(returns, covariance, risk_aversion):
 - [C API: QAOA](../../api/c/qaoa.md) - API reference
 - [Tutorial: QAOA Optimization](../../tutorials/07-qaoa-optimization.md) - Step-by-step guide
 
+```

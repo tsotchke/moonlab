@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QGT module — design notes
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QGT module — design notes
 
 `src/algorithms/quantum_geometry/qgt.{c,h}` is moonlab's momentum-space
@@ -69,9 +76,9 @@ holonomy; this is the integer Chern.
 Uses the rank-1 projector `P_-(k) = (1 - h.σ/|h|)/2` as the gauge-
 invariant primitive.  The plaquette holonomy
 
-```
+[archived fence delimiter: ```]
 F_xy(k) = -arg Tr[P_-(k) P_-(k+x) P_-(k+x+y) P_-(k+y)]
-```
+[archived fence delimiter: ```]
 
 is gauge-free without any phase-fix scaffolding.  This is the
 canonical Wilson-loop-style construction.  Recommended for any 2-band
@@ -82,15 +89,15 @@ Bloch model where gauge sensitivity is suspect.
 `qgt_berry_grid_nband` generalises FHS to a multi-band occupied subspace
 by replacing the Abelian U(1) link variable
 
-```
+[archived fence delimiter: ```]
 U_mu(k) = <u(k) | u(k + dk_mu)>
-```
+[archived fence delimiter: ```]
 
 with the determinant SU(M) link
 
-```
+[archived fence delimiter: ```]
 U_mu(k) = det <u_occ(k) | u_occ(k + dk_mu)>
-```
+[archived fence delimiter: ```]
 
 where `u_occ` is the M-by-n_bands stack of the lowest M occupied
 eigenvectors.  The plaquette holonomy is the same FHS formula on
@@ -122,9 +129,9 @@ off-diagonal pairing at the TR-invariant momenta `k = 0, pi`.  At
 those points the Pfaffian of the 2x2 BdG matrix reduces to the
 diagonal coefficient, so the Kitaev formula
 
-```
+[archived fence delimiter: ```]
 nu = (1 - sgn(M(0)) sgn(M(pi))) / 2
-```
+[archived fence delimiter: ```]
 
 is implemented directly.  For Kitaev p-wave: `M(k) = -2t cos(k) - mu`
 at the TRIM points, giving `nu = 1` for `|mu| < 2|t|`.
@@ -142,9 +149,9 @@ in this convention are at `(0, +/-2*pi/3)` — NOT the textbook
 `(±2*pi/3, 0)` points that arise from a different (Cartesian)
 convention.  The antisymmetric NNN sum
 
-```
+[archived fence delimiter: ```]
 c2(k) = sin(ky) * (1 + 2 cos(kx)) = sin(ky) + sin(ky+kx) + sin(ky-kx)
-```
+[archived fence delimiter: ```]
 
 evaluates to `±3*sqrt(3)/2` at these primitive Dirac points and gives
 the canonical Haldane phase boundary `|M| < 3*sqrt(3)*|t2*sin(phi)|`.
@@ -229,3 +236,4 @@ Hamiltonian itself.
 [13] B. A. Bernevig and T. L. Hughes, *Topological Insulators and
     Topological Superconductors*, Princeton University Press, 2013.
     Standard textbook reference for the built-in models.
+```

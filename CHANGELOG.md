@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Changelog
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Changelog
 
 All notable changes to MoonLab Quantum Simulator will be documented in this file.
@@ -620,10 +627,10 @@ v1.0.1 missed + production-deploy verification status documented.**
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ ctest --test-dir build-mpi -LE long
 100% tests passed, 0 tests failed out of 129
-```
+[archived fence delimiter: ```]
 
 Including `bindings_version_sync` (now actually green at commit
 time, not just at intermediate state).
@@ -670,10 +677,10 @@ four broken tests on master; this release is the response.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ ctest --test-dir build-mpi -LE long
 100% tests passed, 0 tests failed out of 129
-```
+[archived fence delimiter: ```]
 
 Including the four previously-broken tests now green.
 
@@ -878,10 +885,10 @@ end-to-end tests.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ ctest --test-dir build-mpi -L "control_plane|ca_mps|topology"
 100% tests passed, 0 tests failed out of 44
-```
+[archived fence delimiter: ```]
 
 Includes the new `unit_ca_mps_sample`,
 `unit_qgt_kane_mele_rashba`, and
@@ -915,7 +922,7 @@ Python and Rust on the AUTH prelude.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ npx vitest run src/__tests__/control-plane.test.ts
 9 passed in 92ms
 
@@ -924,7 +931,7 @@ $ npx vitest run --config vitest.integration.config.ts \
 4 passed in 687ms      (real libquantumsim + secured Python harness
                         + JS client across no-secret / right-secret
                         / wrong-secret paths)
-```
+[archived fence delimiter: ```]
 
 ## [0.9.3] - 2026-05-20
 
@@ -979,7 +986,7 @@ C server actually emits.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ python3 -m pytest tools/exporter/tests/ -v
 9 passed in 1.70s
 
@@ -989,7 +996,7 @@ $ npx vitest run src/__tests__/control-plane.test.ts
 $ npx vitest run --config vitest.integration.config.ts \
      src/__tests__/control-plane.integration.test.ts
 3 passed in 346ms     (real libquantumsim + Python harness + JS client)
-```
+[archived fence delimiter: ```]
 
 ## [0.9.2] - 2026-05-20
 
@@ -1052,7 +1059,7 @@ with end-to-end tests that drive the actual server.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ python3 -m pytest bindings/python/tests/test_control_plane.py -v
 .........                                                        [100%]
 8 passed in 0.12s
@@ -1061,7 +1068,7 @@ $ cargo test --test control_plane_max_concurrent_e2e
 test cap_rejects_some_of_six_parallel ... ok
 test set_max_concurrent_via_wrapper    ... ok
 test result: ok. 2 passed
-```
+[archived fence delimiter: ```]
 
 ## [0.9.0] - 2026-05-20
 
@@ -1116,7 +1123,7 @@ unchanged; bindings gain one new method each.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === test_control_plane_hardening (v0.9.0) ===
 
 --- path 1: max_concurrent = 2, fire 6 parallel ---
@@ -1135,7 +1142,7 @@ unchanged; bindings gain one new method each.
     tls_failed path exercised (3 junk handshakes)
 
 === 0 failure(s) ===
-```
+[archived fence delimiter: ```]
 
 Four of six parallel CIRCUIT requests hit the cap, the counter
 matches exactly, and the TLS failure path runs without crashing
@@ -1153,17 +1160,17 @@ var so default behaviour for `tail -f` ops is unchanged.
   request log from the legacy ``[moonlab.control] verb=CIRCUIT ...``
   format to a single-line JSON object:
 
-  ```
+[archived fence delimiter:   ```]
   {"event":"moonlab.control","verb":"CIRCUIT","n_qubits":2,
    "body":47,"shots":0,"wall_ms":1.04,"rc":0}
-  ```
+[archived fence delimiter:   ```]
 
   Toggles independently of `MOONLAB_CONTROL_LOG` (which still
   gates whether anything is emitted at all).
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- text mode ---
 [moonlab.control] verb=CIRCUIT n_qubits=2 body=47 shots=0 wall_ms=1.28 rc=0
 [moonlab.control] verb=CIRCUIT n_qubits=-1 body=39 shots=0 wall_ms=0.02 rc=-405
@@ -1171,7 +1178,7 @@ var so default behaviour for `tail -f` ops is unchanged.
 --- json mode ---
 {"event":"moonlab.control","verb":"CIRCUIT","n_qubits":2,"body":47,"shots":0,"wall_ms":1.04,"rc":0}
 {"event":"moonlab.control","verb":"CIRCUIT","n_qubits":-1,"body":39,"shots":0,"wall_ms":0.02,"rc":-405}
-```
+[archived fence delimiter: ```]
 
 Both formats carry identical fields; ops can switch via env var
 without restarting the embedding application.
@@ -1194,10 +1201,10 @@ coverage of the v0.8.26 socket-timeout safety net.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Rust:    test set_request_timeout_via_wrapper ... ok
 Python:  OK   Python ControlPlaneServer(request_timeout_secs=2) -> Bell
-```
+[archived fence delimiter: ```]
 
 ## [0.8.26] - 2026-05-20
 
@@ -1224,7 +1231,7 @@ send (or read) data.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- path 1: silent client times out ~1s ---
   OK    connect to silent-test port
     recv() returned 0 after 1.004 s
@@ -1236,7 +1243,7 @@ send (or read) data.
   OK    Bell submit rc=0 num=4
   OK    P[00] = 0.500000
   OK    P[11] = 0.500000
-```
+[archived fence delimiter: ```]
 
 ## [0.8.25] - 2026-05-20
 
@@ -1266,7 +1273,7 @@ the context manager.
 
 ### Verified
 
-```python
+[archived fence delimiter: ```python]
 with ControlPlaneServer(secret=SECRET, rate_limit_rps=20) as srv:
     probs = submit_circuit('127.0.0.1', srv.port, text, secret=SECRET)
     # ...
@@ -1276,7 +1283,7 @@ with ControlPlaneServer(secret=SECRET, rate_limit_rps=20) as srv:
   OK   unauth client rejected
   OK   METRICS scrape unaffected by HMAC
   OK   clean shutdown
-```
+[archived fence delimiter: ```]
 
 ## [0.8.24] - 2026-05-19
 
@@ -1301,7 +1308,7 @@ for the v0.8.23 Prometheus exposition endpoint.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Rust:                                            (cargo test)
   test metrics_scrape_after_health_probes ... ok
 
@@ -1309,7 +1316,7 @@ Python:                                          (smoke)
   moonlab_control_requests_total{verb="HEALTH"} 2
   moonlab_control_requests_total{verb="METRICS"} 1
   OK   Python metrics scrape
-```
+[archived fence delimiter: ```]
 
 ## [0.8.23] - 2026-05-19
 
@@ -1340,7 +1347,7 @@ Prometheus text-format exposition.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- metrics body ---
 # HELP moonlab_control_requests_total Total control-plane requests by verb.
 # TYPE moonlab_control_requests_total counter
@@ -1357,7 +1364,7 @@ moonlab_control_rate_limited_total 0
   OK    SHOTS counter   >= 2 (got 2)
   OK    HEALTH counter  >= 2 (got 2)
   OK    METRICS counter >= 1 (got 1)
-```
+[archived fence delimiter: ```]
 
 ### Notes
 
@@ -1400,14 +1407,14 @@ every supported language.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Rust:                                            (cargo test)
   test health_probe ... ok
   test rate_limit_via_wrapper ... ok
 
 Python:                                          (smoke)
   OK   submit_health -> True
-```
+[archived fence delimiter: ```]
 
 ## [0.8.21] - 2026-05-19
 
@@ -1442,7 +1449,7 @@ thread pool from a misbehaving client.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- path 1: HEALTH probe ---
   OK    submit_health rc=0
 
@@ -1451,7 +1458,7 @@ thread pool from a misbehaving client.
   OK    at least burst=5 succeed (got 5)
   OK    rate limiter kicks in (got 7 limited)
   OK    every probe accounted for (5 + 7 == 12)
-```
+[archived fence delimiter: ```]
 
 The pre-existing single-client, auth, and mTLS tests all pass
 unmodified under the new accept-loop.
@@ -1488,11 +1495,11 @@ identity card to the server.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Rust:     test bell_round_trips_over_mtls ... ok
 Python:   server up on port 55639 (mTLS)
           OK   client with cert -> Bell over mTLS
-```
+[archived fence delimiter: ```]
 
 ## [0.8.19] - 2026-05-19
 
@@ -1526,7 +1533,7 @@ each client is uniquely revocable.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- path 1: client presents CA-signed cert ---
   OK    submit_circuit_mtls rc=0
   OK    P[00] = 0.500000 over mTLS
@@ -1535,7 +1542,7 @@ each client is uniquely revocable.
 --- path 2: no client cert -> handshake fail ---
   OK    unauthenticated client rejected (rc=-403)
 === 0 failure(s) ===
-```
+[archived fence delimiter: ```]
 
 ### Notes
 
@@ -1585,7 +1592,7 @@ remote moonlab control planes without dropping to C.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Python:                                          (smoke)
   server up on port 54621 with TLS
   P[00]=0.500000, P[11]=0.500000
@@ -1593,7 +1600,7 @@ Python:                                          (smoke)
 
 Rust:                                            (cargo test)
   test bell_circuit_round_trips_over_tls ... ok
-```
+[archived fence delimiter: ```]
 
 ## [0.8.17] - 2026-05-19
 
@@ -1646,7 +1653,7 @@ control plane, gated by `-DQSIM_ENABLE_TLS=ON`.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- generating self-signed cert ---
   OK    self-signed RSA-2048/SHA-256 cert at /tmp/moonlab_tls_cert.pem
     server bound to port 54370 with TLS enabled
@@ -1657,17 +1664,17 @@ control plane, gated by `-DQSIM_ENABLE_TLS=ON`.
   OK    P[00] = 0.500000 over TLS
   OK    P[11] = 0.500000 over TLS
 === 0 failure(s) ===
-```
+[archived fence delimiter: ```]
 
 Pre-existing tests under the TLS-enabled build:
 
-```
+[archived fence delimiter: ```]
 test_control_plane           : 0 failures
 test_control_plane_concurrent: 0 failures
 test_control_plane_shots     : 0 failures
 test_control_plane_shutdown  : 0 failures
 test_control_plane_auth      : 0 failures
-```
+[archived fence delimiter: ```]
 
 ### Notes
 
@@ -1707,14 +1714,14 @@ story so binding-language clients can drive authenticated servers.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 running 1 test                                   (Rust)
 test auth_client_round_trip ... ok
 
   OK   matching secret -> Bell                   (Python)
   OK   wrong secret rejected
   OK   missing AUTH rejected
-```
+[archived fence delimiter: ```]
 
 ## [0.8.15] - 2026-05-19
 
@@ -1725,10 +1732,10 @@ compatible with the v0.8.7..v0.8.14 wire (unauth mode is the default).
 ### Added
 
 - Wire protocol:
-  ```
+[archived fence delimiter:   ```]
   AUTH <64-hex-token>\n
   CIRCUIT <bytes>\n<body>
-  ```
+[archived fence delimiter:   ```]
   The token is `HMAC-SHA3-256(secret, verb_line)` -- the same
   HMAC construction defined in FIPS 198 with SHA3-256 as the inner
   hash (block rate 136 bytes, digest 32 bytes).  Keying across the
@@ -1766,7 +1773,7 @@ compatible with the v0.8.7..v0.8.14 wire (unauth mode is the default).
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- path 1: matching secret -> OK Bell ---
   OK    OK Bell with matching secret (rc=0, num=4)
   OK    P[00] = 0.500000
@@ -1780,7 +1787,7 @@ compatible with the v0.8.7..v0.8.14 wire (unauth mode is the default).
 
 --- path 4: unauthed server tolerates client AUTH ---
   OK    unauthed server still accepts AUTH-carrying client (rc=0)
-```
+[archived fence delimiter: ```]
 
 ## [0.8.14] - 2026-05-19
 
@@ -1816,17 +1823,17 @@ in both binding languages.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 running 2 tests                                  (Rust)
 test lifecycle_shutdown_signaled_externally ... ok
 test lifecycle_wrapper_round_trip ... ok
-```
+[archived fence delimiter: ```]
 
-```
+[archived fence delimiter: ```]
   server up on port 52415                        (Python)
   Bell verified through ControlPlaneServer context manager
   server cleanly shut down
-```
+[archived fence delimiter: ```]
 
 ## [0.8.13] - 2026-05-19
 
@@ -1853,9 +1860,9 @@ served request for ops.
   always completes even if shutdown is signalled mid-flight.
 
 - Structured request log gated by env var `MOONLAB_CONTROL_LOG`:
-  ```
+[archived fence delimiter:   ```]
   [moonlab.control] verb=CIRCUIT n_qubits=2 body=47 shots=0 wall_ms=3.60 rc=0
-  ```
+[archived fence delimiter:   ```]
   One line per request to stderr; uses `clock_gettime(CLOCK_MONOTONIC)`
   for wall-time, prints qubit count, body bytes, shot count, status.
 
@@ -1871,7 +1878,7 @@ served request for ops.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- path 1: shutdown drains idle accept() ---
   OK    run() returned cleanly after idle shutdown (rc=0)
 
@@ -1883,7 +1890,7 @@ served request for ops.
 
 --- path 3: idempotent close() ---
   OK    close(NULL) is a no-op
-```
+[archived fence delimiter: ```]
 
 ## [0.8.12] - 2026-05-19
 
@@ -1901,10 +1908,10 @@ the v0.8.11 wire verb across all three languages.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 got 1024 outcomes: 1024 Bell, 0 off-Bell      (Python)
 test bell_shots_round_trip ... ok              (Rust cargo test)
-```
+[archived fence delimiter: ```]
 
 ## [0.8.11] - 2026-05-19
 
@@ -1938,14 +1945,14 @@ ceilings refuse abusive bodies before allocating memory.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 --- shots-mode: 2048 Bell samples ---
   OK    submit_circuit_shots rc=0
   OK    got 2048 shots
     |00>: 1021   |11>: 1027   other: 0
   OK    no off-Bell outcomes (got 0)
   OK    Bell split |00>-|11| = -6 within 3-sigma
-```
+[archived fence delimiter: ```]
 
 Pre-existing single-client + concurrent control-plane tests still
 pass; the legacy `CIRCUIT` verb is byte-compatible with v0.8.7.
@@ -1973,7 +1980,7 @@ a slow QFT doesn't block a queued Bell pair.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === test_control_plane_concurrent (v0.8.10) ===
 --- spinning up threaded server for 8 concurrent clients ---
   OK    server bound to port 51300
@@ -1981,7 +1988,7 @@ a slow QFT doesn't block a queued Bell pair.
   OK    all 8 clients succeeded (got 8)
     wall time: 0.0146 s for 8 concurrent submissions
 === 0 failure(s) ===
-```
+[archived fence delimiter: ```]
 
 The pre-existing single-client `test_control_plane` still passes
 unmodified.
@@ -2018,11 +2025,11 @@ new crate dependencies.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 running 1 test
 test bell_circuit_round_trips_over_tcp ... ok
 test result: ok. 1 passed; 0 failed
-```
+[archived fence delimiter: ```]
 
 ## [0.8.8] - 2026-05-19
 
@@ -2083,7 +2090,7 @@ vectors over the network, built on the v0.8.3 wire format.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === test_control_plane (v0.8.7) ===
 --- spinning up server on 127.0.0.1:0 ---
   OK    server bound to port 49900
@@ -2093,7 +2100,7 @@ vectors over the network, built on the v0.8.3 wire format.
 --- submit garbage circuit (expect ERR) ---
   OK    submit_circuit on garbage -> REJECTED (rc=-405)
 === 0 failure(s) ===
-```
+[archived fence delimiter: ```]
 
 Server -> client round-trip on the same machine over loopback.
 Same code expected to function unchanged across networked hosts.
@@ -2215,10 +2222,10 @@ moonlab <-> QGTL <-> libirrep <-> SbNN exchange surface.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === test_qgtl_circuit_io (v0.8.3) ===
   ... 30 OK / 0 FAIL
-```
+[archived fence delimiter: ```]
 
 14-gate full-coverage circuit (every enum value, including all
 three RX/RY/RZ parametrized gates) serializes to 168 bytes and
@@ -2240,12 +2247,12 @@ primitive.  GHZ now demonstrated at N=30 (16 GB state vector,
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 Random circuit  N=22 depth=8 / 8 ranks:   64 MB,  0.25 s, norm 1.0000000000
 Random circuit  N=26 depth=8 / 8 ranks: 1024 MB,  3.78 s, norm 1.0000000000
 
 GHZ             N=30      / 8 ranks: 16384 MB,  6.25 s, P(|0>)=P(|1>)=0.5
-```
+[archived fence delimiter: ```]
 
 N=30 = 2^30 = 1.07 billion amplitudes, 16 GB total, 2 GB per rank.
 
@@ -2273,11 +2280,11 @@ gate primitive.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 N=16 / 8 ranks:   1 MB total, 0.0017 s,    norm = 1.0000000000
 N=24 / 8 ranks: 256 MB total, 0.6260 s,    norm = 1.0000000000
 N=26 / 8 ranks:  1 GB total, 2.6358 s,    norm = 1.0000000000
-```
+[archived fence delimiter: ```]
 
 `P(|0..0>) = 1/2^N` matches to machine precision in every case.
 
@@ -2301,11 +2308,11 @@ gap identified in v0.7.9.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 N=24  /  8 ranks:   256 MB total,   32 MB/rank, t = 0.062 s
 N=26  /  8 ranks:  1024 MB total,  128 MB/rank, t = 0.275 s
 N=28  /  8 ranks:  4096 MB total,  512 MB/rank, t = 1.181 s
-```
+[archived fence delimiter: ```]
 
 All produce P(|0...0>) = P(|1...1>) = 0.5 exactly, with the
 GHZ-amplitudes-non-extremal-rank check passing under
@@ -2329,7 +2336,7 @@ real circuit depth, not just the v0.7.6 toy 4-qubit case.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === Sharded GHZ demo: N=24 across 8 ranks ===
     total amplitudes: 2^24 = 16777216
     total memory:     256.00 MB
@@ -2338,7 +2345,7 @@ real circuit depth, not just the v0.7.6 toy 4-qubit case.
     P(|0...0>)   = 0.500000  (owned by rank 0)
     P(|1...1>)   = 0.500000  (owned by rank 7, reduced)
     GHZ verified across 8 MPI ranks at N=24
-```
+[archived fence delimiter: ```]
 
 ### Known limit
 
@@ -2445,12 +2452,12 @@ QEC decoder zoo is complete.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 OK    PYMATCHING available since v0.7.7 (got 1)
 OK    PYMATCHING -> pymatching
 OK    PYMATCHING dispatched (rc=-401; OK=pymatching available,
                               NOT_BUILT=pymatching missing)
-```
+[archived fence delimiter: ```]
 
 ### Decoder zoo complete
 
@@ -2476,7 +2483,7 @@ the RAM, N times the reach.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === state-vector sharding (v0.7.6) on 2 ranks ===
   OK    partition_state_create(N=4) on 2 ranks
     total_amplitudes = 16 (= 2^4)
@@ -2493,7 +2500,7 @@ the RAM, N times the reach.
   OK    Re(amp[|0011>]) = 1/sqrt(2)
   OK    P(|0001>) + P(|0010>) = 0
 === 0 failures ===
-```
+[archived fence delimiter: ```]
 
 A 4-qubit Bell circuit ran across 2 MPI ranks: rank 0 held
 amplitudes `[0, 8)`, rank 1 held `[8, 16)`.  After `dist_hadamard(0)
@@ -2572,14 +2579,14 @@ path; only PYMATCHING remains stubbed.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 === decoder-bench dispatcher (v0.6.7 scaffold) ===
   OK    GREEDY available
   OK    MWPM_EXACT available
   OK    SBNN available = 1 (build-conditional since v0.7.5)
   OK    SBNN on zero syndrome -> 0 (SbNN linked, rc=0)
 === 0 failures ===
-```
+[archived fence delimiter: ```]
 
 ### Strategic milestone
 
@@ -2626,7 +2633,7 @@ buffer with bit-perfect correlation.
 
 ### Verified
 
-```
+[archived fence delimiter: ```]
 $ mpirun -n 4 build_v074/test_scheduler_mpi
 === MPI scheduler transport on 4 ranks ===
   OK    scheduler_run_mpi rc=0
@@ -2637,7 +2644,7 @@ $ mpirun -n 4 build_v074/test_scheduler_mpi
   OK    all 1024 outcomes Bell-correlated
   OK    n00 = 505 within statistical bounds of 512
 === 0 failures ===
-```
+[archived fence delimiter: ```]
 
 Four separate OS processes; rank 0 collected the merged Bell
 histogram from rank 1, 2, 3 via `MPI_Gather`.
@@ -2813,7 +2820,7 @@ transport in v0.7.1+ without API changes.
   seeds.  OpenMP `#pragma omp parallel for` is the transport.
 - `moonlab_job_to_json` emits the schema-versioned JSON
   representation needed for cross-process / wire dispatch:
-  ```json
+[archived fence delimiter:   ```json]
   {
     "schema": "moonlab/job/v0.7.0",
     "num_qubits": 2, "num_shots": 1024, "num_workers": 4,
@@ -2823,7 +2830,7 @@ transport in v0.7.1+ without API changes.
       { "type": 10, "target": 1, "control": 0 }
     ]
   }
-  ```
+[archived fence delimiter:   ```]
   JSON parsing (the inverse direction) is v0.7.1+ scope along
   with wire transport.
 - `moonlab_job_results_t` carries `outcomes[num_shots]` and a
@@ -6805,11 +6812,12 @@ This changelog will be automatically updated by [git-cliff](https://git-cliff.or
 when new releases are tagged.
 
 To generate the changelog locally:
-```bash
+[archived fence delimiter: ```bash]
 git cliff --output CHANGELOG.md
-```
+[archived fence delimiter: ```]
 
 To generate for a specific version:
-```bash
+[archived fence delimiter: ```bash]
 git cliff --tag v1.0.0 --output CHANGELOG.md
+[archived fence delimiter: ```]
 ```

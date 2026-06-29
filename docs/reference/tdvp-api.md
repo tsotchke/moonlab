@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Time-Dependent Variational Principle (TDVP) — API reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Time-Dependent Variational Principle (TDVP) — API reference
 
 `src/algorithms/tensor_network/tdvp.{c,h}` — two-site TDVP integrator
@@ -42,7 +49,7 @@ engine and persisted across sweeps.
 
 ## Configuration
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     TDVP_REAL_TIME,
     TDVP_IMAGINARY_TIME
@@ -58,11 +65,11 @@ typedef enum {
     INTEGRATOR_RUNGE_KUTTA,
     INTEGRATOR_EXPOKIT
 } integrator_type_t;
-```
+[archived fence delimiter: ```]
 
 ### Adaptive-bond controller (since v0.4)
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     bool enabled;
     double target_entropy_error;
@@ -78,7 +85,7 @@ tdvp_adaptive_bond_config_t
 tdvp_adaptive_bond_config_default(double target_entropy_error);
 tdvp_adaptive_bond_config_t
 tdvp_adaptive_bond_config_disabled(void);
-```
+[archived fence delimiter: ```]
 
 `tdvp_adaptive_bond_config_default(eps_S)` returns the
 reference-paper gains: `kp = 0.5`, `ki = 0.05`, `kd = 0.1`,
@@ -89,7 +96,7 @@ profile.
 
 ### Top-level config
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tdvp_evolution_type_t evolution_type;
     tdvp_variant_t variant;
@@ -108,7 +115,7 @@ typedef struct {
 
 tdvp_config_t tdvp_config_default(void);
 tdvp_config_t tdvp_config_adaptive(double target_entropy_error);
-```
+[archived fence delimiter: ```]
 
 `tdvp_config_default()` leaves `adaptive_bond.enabled = false`, so
 v0.3 callers see bit-identical behaviour to the legacy fixed-bond
@@ -118,7 +125,7 @@ the reference gains and raises `max_bond_dim` to the controller's
 
 ## Result and history
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double time;
     double energy;
@@ -135,14 +142,14 @@ typedef struct {
 } tdvp_result_t;
 
 void tdvp_result_clear(tdvp_result_t *result);
-```
+[archived fence delimiter: ```]
 
 `tdvp_result_clear` frees `bond_chi_distribution` and zeroes the
 struct in place.  Idempotent and safe on a zero-initialised result.
 Always call it before letting a stack-allocated `tdvp_result_t` go
 out of scope (otherwise the bond-chi buffer leaks).
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double *times;
     double *energies;
@@ -162,7 +169,7 @@ tdvp_history_t *tdvp_history_create(uint32_t initial_capacity);
 void            tdvp_history_free(tdvp_history_t *hist);
 void            tdvp_history_add(tdvp_history_t *hist,
                                  const tdvp_result_t *result);
-```
+[archived fence delimiter: ```]
 
 `tdvp_history_add` lazy-allocates the chi buffer on the first added
 result that carries a distribution; legacy histories pay no extra
@@ -170,7 +177,7 @@ memory.
 
 ## Engine
 
-```c
+[archived fence delimiter: ```c]
 typedef struct tdvp_engine_t {
     tn_mps_state_t *mps;
     mpo_t *mpo;
@@ -193,7 +200,7 @@ int tdvp_evolve_to(tdvp_engine_t *engine, double target_time,
 uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
 void     tdvp_set_dt(tdvp_engine_t *engine, double dt);
 double   tdvp_get_time(const tdvp_engine_t *engine);
-```
+[archived fence delimiter: ```]
 
 `tdvp_step` advances the state by one `dt`.  When `adaptive_bond.
 enabled` is true the result's `bond_chi_distribution` is populated
@@ -208,7 +215,7 @@ the bond index is out of range.
 
 ### Python (`moonlab.tdvp`, since v0.4)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tdvp import (
     TdvpConfig, TdvpEngine, EvolutionType,
     mpo_heisenberg, mpo_tfim, random_mps,
@@ -225,7 +232,7 @@ engine = TdvpEngine(mps, mpo, config)
 for step in range(30):
     result = engine.step()
     print(step, result.energy, result.bond_chi_distribution)
-```
+[archived fence delimiter: ```]
 
 Surface (see `bindings/python/moonlab/tdvp.py` for the full
 docstrings):
@@ -248,7 +255,7 @@ state, and module-export contract.
 
 ### Rust (`moonlab::tdvp`, since v0.4.1-prep)
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::tdvp::{
     EvolutionType, Mpo, Mps, TdvpConfig, TdvpEngine,
 };
@@ -268,7 +275,7 @@ for _ in 0..30 {
         result.energy, result.bond_chi_distribution
     );
 }
-```
+[archived fence delimiter: ```]
 
 Surface (`bindings/rust/moonlab/src/tdvp.rs`):
 
@@ -342,3 +349,4 @@ targets.
   `dmrg_init_random_mps`).
 - `src/algorithms/tensor_network/svd_compress.h` — SVD compression
   primitive used by the truncation helper.
+```

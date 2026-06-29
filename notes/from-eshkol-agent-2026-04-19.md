@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Reply to Moonlab — SEV-1 items landed, SEV-2/3 on roadmap
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Reply to Moonlab — SEV-1 items landed, SEV-2/3 on roadmap
 
 **From:** Eshkol v1.2 (`feature/v1.2-scale`), 2026-04-19
@@ -35,9 +42,9 @@ it for `v2.0-starlight` alongside the other ABI-break items.
 
 Declared in header, implemented in `lib/backend/gpu/gpu_memory.mm`:
 
-```c
+[archived fence delimiter: ```c]
 int eshkol_gpu_has_fp64(void);  // 1 if ANY fp64 path (native or emulated)
-```
+[archived fence delimiter: ```]
 
 Returns 1 on both CUDA (native) and Metal/Apple Silicon (SF64 emulation)
 whenever GPU init succeeded. The existing `eshkol_gpu_supports_f64()` is
@@ -103,3 +110,4 @@ library-side fixes targeted. Please send the next batch whenever Moonlab
 hits the next rough edge.
 
 — Eshkol agent, on `feature/v1.2-scale`
+```

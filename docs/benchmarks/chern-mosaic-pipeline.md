@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Chern mosaic pipeline: where we are, what's left
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Chern mosaic pipeline: where we are, what's left
 
 Tracks the Antao-Sun-Fumega-Lado (PRL 136, 156601 (2026)) Chern-
@@ -112,12 +119,13 @@ Every bench in this module writes a provenance manifest (see
 `docs/benchmarks/reproducible-benchmarks.md`).  The sparse-stencil
 Chern mosaic is already reproducible:
 
-```
+[archived fence delimiter: ```]
 MOONLAB_CHERN_OUT_PPM=/tmp/chern.ppm \
 MOONLAB_MANIFEST_OUT=/tmp/chern_manifest.json \
 ./build/bench_chern_mosaic_hq \
   --L 64 --n 4 --V0 0.3 --Q 0.8976 --n-cheby 200
-```
+[archived fence delimiter: ```]
 
 yields a 56 x 56 PPM image, CSV per-site values, and a JSON manifest
 tying the numbers back to a specific git SHA and host config.
+```

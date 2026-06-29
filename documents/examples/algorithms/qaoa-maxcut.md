@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QAOA MaxCut Example
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QAOA MaxCut Example
 
 Solve the MaxCut graph partitioning problem using the Quantum Approximate Optimization Algorithm.
@@ -40,7 +47,7 @@ where $\gamma = (\gamma_1, ..., \gamma_p)$ and $\beta = (\beta_1, ..., \beta_p)$
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/qaoa.h"
 #include "quantum/state.h"
 #include "applications/entropy_pool.h"
@@ -240,11 +247,11 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 import moonlab as ml
 import numpy as np
 import networkx as nx
@@ -325,7 +332,7 @@ print(f"  QAOA cut: {best_cut} edges")
 print(f"  Best partition: {best_bits}")
 print(f"  Approximation ratio: {best_cut / best_classical:.2%}")
 print(f"  Iterations: {result.num_iterations}")
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Results
 
@@ -368,7 +375,7 @@ For weighted graphs, modify the cost Hamiltonian:
 
 $$C = \sum_{(i,j) \in E} w_{ij} \frac{1 - Z_i Z_j}{2}$$
 
-```python
+[archived fence delimiter: ```python]
 # Weighted graph
 G = nx.Graph()
 G.add_weighted_edges_from([
@@ -379,25 +386,25 @@ G.add_weighted_edges_from([
 ])
 
 ising = ml.Hamiltonian.from_maxcut(G, weighted=True)
-```
+[archived fence delimiter: ```]
 
 ### Warm-Starting QAOA
 
 Initialize parameters from classical heuristics:
 
-```python
+[archived fence delimiter: ```python]
 # Classical greedy solution for initial guess
 initial_partition = greedy_maxcut(G)
 
 # Encode as initial state (not |+⟩^n)
 qaoa = ml.QAOA(ising, num_layers=p, warm_start=initial_partition)
-```
+[archived fence delimiter: ```]
 
 ### Recursive QAOA
 
 Iteratively fix high-confidence variables:
 
-```python
+[archived fence delimiter: ```python]
 def recursive_qaoa(G, p=2, threshold=0.9):
     """RQAOA: Fix high-confidence vertices recursively."""
     fixed = {}
@@ -416,11 +423,11 @@ def recursive_qaoa(G, p=2, threshold=0.9):
         G = G.subgraph([v for v in G.nodes() if v not in fixed])
 
     return fixed
-```
+[archived fence delimiter: ```]
 
 ## Running the Example
 
-```bash
+[archived fence delimiter: ```bash]
 # Build
 make examples
 
@@ -429,11 +436,11 @@ make examples
 
 # Custom settings
 ./examples/applications/qaoa_maxcut 12 4  # 12 vertices, p=4
-```
+[archived fence delimiter: ```]
 
 Expected output:
 
-```
+[archived fence delimiter: ```]
 ╔══════════════════════════════════════════════════╗
 ║           QAOA MaxCut Demonstration              ║
 ╚══════════════════════════════════════════════════╝
@@ -471,7 +478,7 @@ Step 4: Running QAOA optimization...
 Partition found:
   Set A: {0 2 4 6 }
   Set B: {1 3 5 7 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -479,3 +486,4 @@ Partition found:
 - [Tutorial: QAOA Optimization](../../tutorials/07-qaoa-optimization.md)
 - [Guide: Custom Hamiltonians](../../guides/custom-hamiltonians.md)
 - [API: qaoa.h](../../api/c/qaoa.md)
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: PyTorch Integration API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # PyTorch Integration API
 
 Complete reference for PyTorch quantum neural network layers.
@@ -16,10 +23,10 @@ The torch_layer module provides differentiable quantum computing layers that int
 
 ## Requirements
 
-```python
+[archived fence delimiter: ```python]
 import torch
 from moonlab.torch_layer import QuantumLayer, QuantumConv1D, QuantumPooling
-```
+[archived fence delimiter: ```]
 
 Requires PyTorch >= 1.9.0.
 
@@ -29,14 +36,14 @@ General-purpose parameterized quantum circuit layer.
 
 ### Constructor
 
-```python
+[archived fence delimiter: ```python]
 QuantumLayer(
     num_qubits: int,
     num_layers: int = 2,
     encoding: str = 'angle',
     measurement: str = 'expectation'
 )
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits in the circuit
@@ -63,9 +70,9 @@ QuantumLayer(
 
 #### forward
 
-```python
+[archived fence delimiter: ```python]
 forward(x: torch.Tensor) -> torch.Tensor
-```
+[archived fence delimiter: ```]
 
 Apply quantum layer to input.
 
@@ -75,7 +82,7 @@ Apply quantum layer to input.
 **Returns**: Output tensor, shape depends on measurement type
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 import torch
 from moonlab.torch_layer import QuantumLayer
 
@@ -91,21 +98,21 @@ print(output.shape)  # torch.Size([32, 4]) for expectation
 loss = output.sum()
 loss.backward()
 print(layer.params.grad.shape)  # Gradients computed
-```
+[archived fence delimiter: ```]
 
 #### get_circuit_parameters
 
-```python
+[archived fence delimiter: ```python]
 get_circuit_parameters() -> torch.Tensor
-```
+[archived fence delimiter: ```]
 
 Get current variational parameters.
 
 #### set_circuit_parameters
 
-```python
+[archived fence delimiter: ```python]
 set_circuit_parameters(params: torch.Tensor) -> None
-```
+[archived fence delimiter: ```]
 
 Set variational parameters.
 
@@ -124,7 +131,7 @@ Quantum convolutional layer for sequence data.
 
 ### Constructor
 
-```python
+[archived fence delimiter: ```python]
 QuantumConv1D(
     in_channels: int,
     out_channels: int,
@@ -132,7 +139,7 @@ QuantumConv1D(
     stride: int = 1,
     num_layers: int = 2
 )
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `in_channels`: Input feature channels
@@ -145,9 +152,9 @@ QuantumConv1D(
 
 #### forward
 
-```python
+[archived fence delimiter: ```python]
 forward(x: torch.Tensor) -> torch.Tensor
-```
+[archived fence delimiter: ```]
 
 Apply quantum convolution.
 
@@ -157,7 +164,7 @@ Apply quantum convolution.
 **Returns**: Output tensor of shape (batch, out_channels, new_length)
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumConv1D
 
 # Quantum convolution
@@ -172,7 +179,7 @@ qconv = QuantumConv1D(
 x = torch.randn(16, 3, 64)  # Batch 16, 3 channels, length 64
 output = qconv(x)
 print(output.shape)  # torch.Size([16, 8, 32])
-```
+[archived fence delimiter: ```]
 
 ### Architecture
 
@@ -188,13 +195,13 @@ Quantum pooling layer for dimensionality reduction.
 
 ### Constructor
 
-```python
+[archived fence delimiter: ```python]
 QuantumPooling(
     pool_size: int = 2,
     num_qubits: int = 4,
     method: str = 'measure'
 )
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `pool_size`: Pooling window size
@@ -208,14 +215,14 @@ QuantumPooling(
 
 #### forward
 
-```python
+[archived fence delimiter: ```python]
 forward(x: torch.Tensor) -> torch.Tensor
-```
+[archived fence delimiter: ```]
 
 Apply quantum pooling.
 
 **Example**:
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumPooling
 
 pool = QuantumPooling(pool_size=2, num_qubits=4)
@@ -223,7 +230,7 @@ pool = QuantumPooling(pool_size=2, num_qubits=4)
 x = torch.randn(16, 8, 32)  # Batch 16, 8 channels, length 32
 output = pool(x)
 print(output.shape)  # torch.Size([16, 8, 16])
-```
+[archived fence delimiter: ```]
 
 ## Gradient Computation
 
@@ -237,7 +244,7 @@ This provides exact gradients for rotation gates.
 
 ### Custom Gradient Function
 
-```python
+[archived fence delimiter: ```python]
 class QuantumGradientFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, params, circuit):
@@ -266,7 +273,7 @@ class QuantumGradientFunction(torch.autograd.Function):
             grad_params[i] = (grad_output * (out_plus - out_minus) / 2).sum()
 
         return None, grad_params, None
-```
+[archived fence delimiter: ```]
 
 ## Hybrid Neural Networks
 
@@ -274,7 +281,7 @@ class QuantumGradientFunction(torch.autograd.Function):
 
 Complete hybrid quantum-classical classifier.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumLayer
 import torch.nn as nn
 
@@ -321,13 +328,13 @@ for epoch in range(100):
         loss = criterion(output, batch_y)
         loss.backward()
         optimizer.step()
-```
+[archived fence delimiter: ```]
 
 ### QuantumAutoencoder
 
 Hybrid quantum autoencoder.
 
-```python
+[archived fence delimiter: ```python]
 class QuantumAutoencoder(nn.Module):
     def __init__(self, input_dim, latent_qubits=4):
         super().__init__()
@@ -357,7 +364,7 @@ class QuantumAutoencoder(nn.Module):
         z = self.encoder(x)
         q = self.quantum(z)
         return self.decoder(q)
-```
+[archived fence delimiter: ```]
 
 ## Training Utilities
 
@@ -365,7 +372,7 @@ class QuantumAutoencoder(nn.Module):
 
 Learning rate scheduler for quantum layers.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumScheduler
 
 scheduler = QuantumScheduler(
@@ -378,19 +385,19 @@ scheduler = QuantumScheduler(
 for epoch in range(100):
     train_one_epoch()
     scheduler.step()
-```
+[archived fence delimiter: ```]
 
 ### GradientClipping
 
 Quantum-aware gradient clipping.
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import clip_quantum_gradients
 
 # After backward pass
 clip_quantum_gradients(model, max_norm=1.0)
 optimizer.step()
-```
+[archived fence delimiter: ```]
 
 ## Advanced Features
 
@@ -398,26 +405,26 @@ optimizer.step()
 
 Re-encode data at each layer for increased expressivity.
 
-```python
+[archived fence delimiter: ```python]
 layer = QuantumLayer(
     num_qubits=4,
     num_layers=3,
     encoding='angle',
     data_reuploading=True  # Re-encode at each layer
 )
-```
+[archived fence delimiter: ```]
 
 ### Entanglement Patterns
 
 Control entanglement structure.
 
-```python
+[archived fence delimiter: ```python]
 layer = QuantumLayer(
     num_qubits=6,
     num_layers=2,
     entanglement='linear'  # Options: 'linear', 'circular', 'full', 'none'
 )
-```
+[archived fence delimiter: ```]
 
 | Pattern | Description | CNOT Count |
 |---------|-------------|------------|
@@ -430,17 +437,17 @@ layer = QuantumLayer(
 
 Choose measurement observables.
 
-```python
+[archived fence delimiter: ```python]
 layer = QuantumLayer(
     num_qubits=4,
     num_layers=2,
     observables=['Z0', 'Z1', 'Z2', 'Z3', 'Z0Z1', 'Z2Z3']
 )
-```
+[archived fence delimiter: ```]
 
 ## Complete Training Example
 
-```python
+[archived fence delimiter: ```python]
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -495,7 +502,7 @@ for epoch in range(50):
 
 # Final accuracy
 print(f"Final accuracy: {100. * correct / total:.2f}%")
-```
+[archived fence delimiter: ```]
 
 ## Performance Tips
 
@@ -505,7 +512,7 @@ print(f"Final accuracy: {100. * correct / total:.2f}%")
 4. **Learning Rate**: Quantum parameters often need smaller LR (0.001-0.01)
 5. **Gradient Accumulation**: Use for effective larger batches
 
-```python
+[archived fence delimiter: ```python]
 # Gradient accumulation example
 accumulation_steps = 4
 
@@ -517,25 +524,25 @@ for i, (batch_x, batch_y) in enumerate(train_loader):
     if (i + 1) % accumulation_steps == 0:
         optimizer.step()
         optimizer.zero_grad()
-```
+[archived fence delimiter: ```]
 
 ## GPU Acceleration
 
 Quantum layers automatically use Metal GPU when available.
 
-```python
+[archived fence delimiter: ```python]
 # Check if quantum GPU is available
 from moonlab.torch_layer import quantum_gpu_available
 
 if quantum_gpu_available():
     print("Quantum operations will use Metal GPU")
-```
+[archived fence delimiter: ```]
 
 ## Serialization
 
 Save and load quantum models.
 
-```python
+[archived fence delimiter: ```python]
 # Save
 torch.save({
     'model_state_dict': model.state_dict(),
@@ -547,7 +554,7 @@ torch.save({
 checkpoint = torch.load('quantum_model.pt')
 model.load_state_dict(checkpoint['model_state_dict'])
 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -555,3 +562,4 @@ optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 - [ML API](ml.md) - Quantum kernels, QSVM
 - [Algorithms API](algorithms.md) - VQE, QAOA
 
+```

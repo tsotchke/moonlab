@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 07: QAOA Optimization
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 07: QAOA Optimization
 
 Solve combinatorial optimization problems with QAOA.
@@ -52,7 +59,7 @@ This equals 1 if $i$ and $j$ are in different partitions, 0 otherwise.
 Total cost:
 $$C = \sum_{(i,j) \in E} \frac{1 - Z_i Z_j}{2}$$
 
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 from moonlab import QuantumState
 
@@ -68,11 +75,11 @@ def create_maxcut_hamiltonian(edges):
     return terms
 
 hamiltonian = create_maxcut_hamiltonian(edges)
-```
+[archived fence delimiter: ```]
 
 ## Step 2: QAOA Circuit
 
-```python
+[archived fence delimiter: ```python]
 def apply_cost_unitary(state, edges, gamma):
     """
     Apply cost unitary: exp(-i * gamma * C)
@@ -111,11 +118,11 @@ def qaoa_circuit(n, edges, gamma, beta, p):
         apply_mixer_unitary(state, n, beta[layer])
 
     return state
-```
+[archived fence delimiter: ```]
 
 ## Step 3: Cost Function
 
-```python
+[archived fence delimiter: ```python]
 def evaluate_cut(bitstring, edges):
     """Evaluate MaxCut cost for a given bitstring."""
     cut_value = 0
@@ -150,11 +157,11 @@ def qaoa_cost(params, n, edges, p):
     expectation = compute_expectation(state, edges)
 
     return -expectation  # Negative because we minimize
-```
+[archived fence delimiter: ```]
 
 ## Step 4: Optimization
 
-```python
+[archived fence delimiter: ```python]
 from scipy.optimize import minimize
 
 # Parameters
@@ -181,11 +188,11 @@ optimal_beta = result.x[p:]
 print(f"Optimal gamma: {optimal_gamma}")
 print(f"Optimal beta: {optimal_beta}")
 print(f"Expected cut value: {-result.fun:.4f}")
-```
+[archived fence delimiter: ```]
 
 ## Step 5: Sample Solutions
 
-```python
+[archived fence delimiter: ```python]
 def sample_qaoa(n, edges, gamma, beta, p, shots=1000):
     """Sample from QAOA and return best solution."""
     state = qaoa_circuit(n, edges, gamma, beta, p)
@@ -216,11 +223,11 @@ for bitstring, data in sorted_solutions[:5]:
     print(f"  {bitstring}: cut = {data['cost']}, count = {data['count']}")
 
 print(f"\nBest solution: {best[0]} with cut value {best[1]['cost']}")
-```
+[archived fence delimiter: ```]
 
 ## Using the Built-in QAOA
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 
 # Define graph
@@ -238,11 +245,11 @@ print(f"Cut value: {result['best_cost']}")
 print(f"Expectation: {result['expectation']:.4f}")
 print(f"Optimal gamma: {result['optimal_gamma']}")
 print(f"Optimal beta: {result['optimal_beta']}")
-```
+[archived fence delimiter: ```]
 
 ## Visualizing the Landscape
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 def qaoa_landscape(n, edges, p=1, resolution=50):
@@ -273,13 +280,13 @@ plt.ylabel('β')
 plt.title('QAOA Landscape (p=1)')
 plt.savefig('qaoa_landscape.png')
 plt.show()
-```
+[archived fence delimiter: ```]
 
 ## Scaling QAOA
 
 ### Increasing Depth
 
-```python
+[archived fence delimiter: ```python]
 # Compare different depths
 for p in [1, 2, 3, 4, 5]:
     qaoa = QAOA(num_qubits=5, num_layers=p)
@@ -290,13 +297,13 @@ for p in [1, 2, 3, 4, 5]:
     approx_ratio = result['best_cost'] / max_cut
 
     print(f"p={p}: Cut={result['best_cost']}, Approx ratio={approx_ratio:.3f}")
-```
+[archived fence delimiter: ```]
 
 ### Warm Starting
 
 Use classical solution to initialize QAOA:
 
-```python
+[archived fence delimiter: ```python]
 def warm_start_params(edges, n, p):
     """Initialize QAOA from classical approximate solution."""
     # Use greedy algorithm for initial guess
@@ -316,13 +323,13 @@ def warm_start_params(edges, n, p):
     beta = np.ones(p) * 0.2
 
     return np.concatenate([gamma, beta])
-```
+[archived fence delimiter: ```]
 
 ## Other Optimization Problems
 
 ### Ising Model
 
-```python
+[archived fence delimiter: ```python]
 def ising_qaoa(J, h, p):
     """
     QAOA for Ising model: H = sum_ij J_ij Z_i Z_j + sum_i h_i Z_i
@@ -344,11 +351,11 @@ h = np.array([0.1, 0, -0.1, 0])
 result = ising_qaoa(J, h, p=3)
 print(f"Ground state: {result['best_bitstring']:04b}")
 print(f"Energy: {result['best_cost']:.4f}")
-```
+[archived fence delimiter: ```]
 
 ### Graph Coloring
 
-```python
+[archived fence delimiter: ```python]
 # Encode graph coloring as QUBO
 def graph_coloring_qaoa(edges, n_vertices, n_colors):
     """
@@ -357,7 +364,7 @@ def graph_coloring_qaoa(edges, n_vertices, n_colors):
     """
     # Implementation would convert to Ising form
     pass
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -398,3 +405,4 @@ Scale to larger systems with tensor networks:
 - [C API: QAOA](../api/c/qaoa.md) - Low-level implementation
 - Farhi et al. (2014). "A Quantum Approximate Optimization Algorithm." arXiv:1411.4028.
 
+```

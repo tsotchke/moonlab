@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Security Policy
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Security Policy
 
 ## Supported Versions
@@ -113,11 +120,11 @@ We do not currently operate a bug bounty program. However, we deeply appreciate 
 
 For sensitive communications, you may encrypt your message using our PGP key:
 
-```
+[archived fence delimiter: ```]
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 [PGP key will be added here]
 -----END PGP PUBLIC KEY BLOCK-----
-```
+[archived fence delimiter: ```]
 
 ## Contact
 
@@ -128,3 +135,4 @@ For sensitive communications, you may encrypt your message using our PGP key:
 ---
 
 Thank you for helping keep MoonLab Quantum Simulator and our users safe!
+```

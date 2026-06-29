@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Grover Search Example
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Grover Search Example
 
 Find a marked item in an unsorted database with quadratic speedup.
@@ -20,7 +27,7 @@ Given an unsorted database of N = 2ⁿ items, find the unique item x* that satis
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 """
 Grover's Search Algorithm
 Find a marked item in an unsorted database.
@@ -240,11 +247,11 @@ if __name__ == "__main__":
     # Multiple solutions
     print("\n=== Multiple Solutions ===")
     multiple_solutions(4, [3, 7, 11])
-```
+[archived fence delimiter: ```]
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Grover's Search Algorithm
  * Find a marked item in an unsorted database.
@@ -390,11 +397,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 ==================================================
       Grover's Search Algorithm
 ==================================================
@@ -430,7 +437,7 @@ Success probability: 0.9612
 Searching 16 items for 3 targets: [3, 7, 11]
 Optimal iterations: 1
 Success rate: 94.0%
-```
+[archived fence delimiter: ```]
 
 ## Understanding the Algorithm
 
@@ -468,17 +475,17 @@ Too many iterations: Over-rotate past maximum
 
 Try searching for different targets and verify the algorithm works:
 
-```python
+[archived fence delimiter: ```python]
 for target in [0, 5, 10, 15]:
     result = grover_manual_implementation(4, target)
     print(f"Target {target}: Found {result}")
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Scaling Analysis
 
 Measure success probability vs. number of qubits:
 
-```python
+[archived fence delimiter: ```python]
 for n in range(2, 8):
     successes = 0
     for _ in range(100):
@@ -486,19 +493,19 @@ for n in range(2, 8):
         if result == 0:
             successes += 1
     print(f"{n} qubits: {successes}% success")
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Unknown Number of Solutions
 
 When you don't know how many solutions exist, use quantum counting:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QuantumCounting
 
 counter = QuantumCounting(n_qubits=4)
 M = counter.count(oracle)
 print(f"Estimated number of solutions: {M}")
-```
+[archived fence delimiter: ```]
 
 ## Performance Analysis
 
@@ -512,7 +519,7 @@ print(f"Estimated number of solutions: {M}")
 
 ### Simulation Performance
 
-```python
+[archived fence delimiter: ```python]
 import time
 from moonlab import set_backend
 
@@ -525,7 +532,7 @@ for backend in ['cpu', 'metal']:
     elapsed = time.time() - start
 
     print(f"{backend}: {elapsed:.3f}s for 100 searches")
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -533,3 +540,4 @@ for backend in ['cpu', 'metal']:
 - [Quantum Counting](../../algorithms/grovers-algorithm.md#quantum-counting) - Count solutions
 - [C API: Grover](../../api/c/grover.md) - API reference
 
+```

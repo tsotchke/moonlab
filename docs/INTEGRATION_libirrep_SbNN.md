@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: libirrep + SbNN integration -- v1.0 commitment
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # libirrep + SbNN integration -- v1.0 commitment
 
 Moonlab pairs with two sibling libraries for the hardware-design
@@ -32,11 +39,11 @@ When built with `-DQSIM_ENABLE_LIBIRREP=ON`, the following APIs in
 
 ### Sector ED
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_libirrep_kagome12_e0(double *out_energy);
 int moonlab_libirrep_heisenberg_sector_e0(
         int N, const int *lattice_topology, ...);
-```
+[archived fence delimiter: ```]
 
 The 12-site kagome reference energy E0 = -5.44487522 used as ground
 truth in the moonlab CA-MPS validation suite is computed live, not
@@ -116,7 +123,7 @@ convention as the libirrep bridge.
 
 C consumer that opts in cleanly:
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/integration/libirrep_bridge.h"
 #include <stdio.h>
 
@@ -140,7 +147,7 @@ int main(void) {
     moonlab_libirrep_qec_free(code);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Deferred to v1.1
 
@@ -166,3 +173,4 @@ The following integration depth did NOT ship in v1.0:
 - `docs/STABLE_ABI.md` -- the v1.0 contract
 - libirrep repo: <https://github.com/tsotchke/libirrep>
 - SbNN repo: <https://github.com/tsotchke/spin-based-neural-network>
+```

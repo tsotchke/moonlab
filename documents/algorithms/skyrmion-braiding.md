@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Skyrmion Braiding
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Skyrmion Braiding
 
 Topological quantum computing with magnetic skyrmions.
@@ -57,7 +64,7 @@ This is topologically protected—small deviations in the braiding path only add
 
 ### Single Skyrmion Detection
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/skyrmion_braiding.h"
 
 // Create 2D lattice with spin configuration
@@ -74,11 +81,11 @@ if (found == 0) {
     printf("  Charge: %d\n", sky.charge);  // +1 or -1
     printf("  Helicity: %s\n", sky.helicity ? "Bloch" : "Néel");
 }
-```
+[archived fence delimiter: ```]
 
 ### Multiple Skyrmions
 
-```c
+[archived fence delimiter: ```c]
 // Track up to 10 skyrmions
 skyrmion_t skyrmions[10];
 int num_found = skyrmion_track_multiple(lat, spins, skyrmions, 10);
@@ -88,7 +95,7 @@ for (int i = 0; i < num_found; i++) {
     printf("  [%d] at (%.2f, %.2f), Q=%d\n",
            i, skyrmions[i].x, skyrmions[i].y, skyrmions[i].charge);
 }
-```
+[archived fence delimiter: ```]
 
 The tracking algorithm:
 1. Computes the local topological charge density at each site
@@ -111,7 +118,7 @@ The tracking algorithm:
 
 One skyrmion encircles another:
 
-```c
+[archived fence delimiter: ```c]
 // Create circular path around center (16, 16) with radius 5
 braid_path_t *path = braid_path_circular(
     16.0, 16.0,     // center
@@ -133,13 +140,13 @@ for (uint32_t i = 0; i < path->num_waypoints; i++) {
 }
 
 braid_path_free(path);
-```
+[archived fence delimiter: ```]
 
 ### Exchange Path
 
 Two skyrmions swap positions:
 
-```c
+[archived fence delimiter: ```c]
 // Generate exchange paths for two skyrmions
 braid_path_t *path1, *path2;
 
@@ -159,13 +166,13 @@ if (err == 0) {
 
 braid_path_free(path1);
 braid_path_free(path2);
-```
+[archived fence delimiter: ```]
 
 ## Braiding Dynamics
 
 ### Configuration
 
-```c
+[archived fence delimiter: ```c]
 // Get default configuration
 braid_config_t config = braid_config_default();
 
@@ -177,11 +184,11 @@ config.track_skyrmions = true;  // Record positions
 config.measure_phase = true;    // Compute Berry phase
 config.record_interval = 5;     // Record every 5 steps
 config.verbose = true;          // Print progress
-```
+[archived fence delimiter: ```]
 
 ### Single Braiding
 
-```c
+[archived fence delimiter: ```c]
 // Prepare MPS state with skyrmion pair
 tn_mps_state_t *mps = create_skyrmion_pair_state(lat, x1, y1, x2, y2);
 
@@ -211,13 +218,13 @@ if (result && result->success) {
 
 braid_result_free(result);
 braid_path_free(path);
-```
+[archived fence delimiter: ```]
 
 ### Double Exchange
 
 Both skyrmions move simultaneously:
 
-```c
+[archived fence delimiter: ```c]
 braid_path_t *path1, *path2;
 braid_path_exchange(x1, y1, x2, y2, BRAID_CLOCKWISE, 24, 1.0, &path1, &path2);
 
@@ -231,13 +238,13 @@ printf("Phase: %.4f\n", carg(result->phase));  // Should be ≈ π/2
 braid_path_free(path1);
 braid_path_free(path2);
 braid_result_free(result);
-```
+[archived fence delimiter: ```]
 
 ### Monitoring Dynamics
 
 The `braid_result_t` structure contains the full time evolution history:
 
-```c
+[archived fence delimiter: ```c]
 // Plot skyrmion trajectory
 FILE *fp = fopen("trajectory.csv", "w");
 fprintf(fp, "t,x,y,energy,charge\n");
@@ -251,13 +258,13 @@ for (uint32_t i = 0; i < result->num_records; i++) {
             result->charges[i]);      // topological charge
 }
 fclose(fp);
-```
+[archived fence delimiter: ```]
 
 ## Topological Qubits
 
 ### Qubit Creation
 
-```c
+[archived fence delimiter: ```c]
 // Define Hamiltonian parameters
 hamiltonian_params_t params = {
     .J = 1.0,       // Exchange coupling
@@ -279,11 +286,11 @@ topo_qubit_t *qubit = topo_qubit_create(
 printf("Initial state: |0⟩\n");
 printf("  α = %.4f + %.4fi\n", creal(qubit->alpha), cimag(qubit->alpha));
 printf("  β = %.4f + %.4fi\n", creal(qubit->beta), cimag(qubit->beta));
-```
+[archived fence delimiter: ```]
 
 ### Topological Gates
 
-```c
+[archived fence delimiter: ```c]
 braid_config_t config = braid_config_default();
 
 // Apply single braid gate: exp(iπσ/4)
@@ -299,7 +306,7 @@ topo_gate_apply(qubit, TOPO_GATE_DOUBLE_BRAID, &config);
 
 // Hadamard (requires magic state injection for Ising anyons)
 topo_gate_apply(qubit, TOPO_GATE_HADAMARD, &config);
-```
+[archived fence delimiter: ```]
 
 ### Available Gates
 
@@ -313,7 +320,7 @@ topo_gate_apply(qubit, TOPO_GATE_HADAMARD, &config);
 
 ### Measurement
 
-```c
+[archived fence delimiter: ```c]
 // Measure in Z basis (helicity comparison)
 int outcome = topo_qubit_measure_z(qubit);
 printf("Measurement result: %+d\n", outcome);  // +1 or -1
@@ -323,7 +330,7 @@ double fidelity = topo_qubit_fidelity(qubit, 1.0/sqrt(2), 1.0/sqrt(2));
 printf("Fidelity to |+⟩: %.4f\n", fidelity);
 
 topo_qubit_free(qubit);
-```
+[archived fence delimiter: ```]
 
 ## Phase Extraction
 
@@ -331,7 +338,7 @@ topo_qubit_free(qubit);
 
 The geometric (Berry) phase accumulated during braiding:
 
-```c
+[archived fence delimiter: ```c]
 // Save initial state
 tn_mps_state_t *mps_initial = tn_mps_copy(mps);
 
@@ -344,13 +351,13 @@ printf("Geometric phase: %.6f rad\n", carg(phase));
 printf("Magnitude: %.6f (should be ~1)\n", cabs(phase));
 
 tn_mps_free(mps_initial);
-```
+[archived fence delimiter: ```]
 
 ### Berry Phase from History
 
 When using TDVP with recorded history:
 
-```c
+[archived fence delimiter: ```c]
 // Configure TDVP to record states
 tdvp_config_t tdvp_cfg = tdvp_config_default();
 tdvp_cfg.record_history = true;
@@ -371,7 +378,7 @@ if (fabs(gamma - M_PI/4) < 0.1) {
 }
 
 tdvp_history_free(history);
-```
+[archived fence delimiter: ```]
 
 The Berry phase is computed as:
 
@@ -379,7 +386,7 @@ $$\gamma = -\mathrm{Im} \sum_t \ln \langle \psi(t) | \psi(t + dt) \rangle$$
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/skyrmion_braiding.h"
 #include <stdio.h>
 
@@ -444,7 +451,7 @@ int main(void) {
     printf("\n=== Done ===\n");
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Numerical Considerations
 
@@ -512,3 +519,4 @@ Current-driven velocities in real materials: $v \sim 1-100$ m/s for $j \sim 10^{
 - [Tensor Networks](../concepts/tensor-networks.md) - MPS and DMRG methods
 - [TDVP Algorithm](tdvp-algorithm.md) - Time evolution details
 - [API: skyrmion_braiding.h](../api/c/skyrmion-braiding.md) - Full API reference
+```

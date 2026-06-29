@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: MPI state-vector scaling: published numbers
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # MPI state-vector scaling: published numbers
 
 Distributed-state-vector sharding across MPI ranks, measured on the
@@ -65,7 +72,7 @@ keeping wall-time per cell under a minute.
 
 ## Reproduce
 
-```bash
+[archived fence delimiter: ```bash]
 cmake -B build-mpi -DQSIM_ENABLE_MPI=ON
 cmake --build build-mpi --target large_state_random_circuit -j 8
 mkdir -p bench/mpi_scaling
@@ -76,4 +83,5 @@ for N in 22 24 26 28; do
                > bench/mpi_scaling/N${N}_R${R}.log 2>&1
     done
 done
+[archived fence delimiter: ```]
 ```

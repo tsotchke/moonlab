@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: JavaScript Visualization API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # JavaScript Visualization API
 
 Interactive quantum state visualizations for the browser.
@@ -15,17 +22,17 @@ The `@moonlab/quantum-viz` package provides beautiful, interactive visualization
 
 ## Installation
 
-```bash
+[archived fence delimiter: ```bash]
 npm install @moonlab/quantum-viz
 # or
 yarn add @moonlab/quantum-viz
 # or
 pnpm add @moonlab/quantum-viz
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { BlochSphere, AmplitudeBars } from '@moonlab/quantum-viz';
 import { QuantumState } from '@moonlab/quantum-core';
 
@@ -48,7 +55,7 @@ singleQubit.h(0).t(0);
 const sphereContainer = document.getElementById('bloch');
 const sphere = new BlochSphere(sphereContainer, { size: 300 });
 sphere.update(singleQubit);
-```
+[archived fence delimiter: ```]
 
 ## BlochSphere
 
@@ -56,12 +63,12 @@ sphere.update(singleQubit);
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new BlochSphere(container: HTMLElement, options?: BlochSphereOptions)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface BlochSphereOptions {
   size?: number;           // Canvas size in pixels (default: 200)
   mode?: '2d' | '3d';      // Rendering mode (default: '2d')
@@ -78,30 +85,30 @@ interface BlochColors {
   state?: string;          // State vector color
   labels?: string;         // Text label color
 }
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
 #### update
 
-```typescript
+[archived fence delimiter: ```typescript]
 update(state: QuantumState | BlochCoordinates): void
-```
+[archived fence delimiter: ```]
 
 Update the displayed state.
 
 **Parameters**:
 - `state`: Single-qubit QuantumState or explicit Bloch coordinates
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface BlochCoordinates {
   theta: number;  // Polar angle (0 to π)
   phi: number;    // Azimuthal angle (0 to 2π)
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```typescript
+[archived fence delimiter: ```typescript]
 const sphere = new BlochSphere(container, { size: 300, mode: '2d' });
 
 // From QuantumState
@@ -111,50 +118,50 @@ sphere.update(state);
 
 // From coordinates
 sphere.update({ theta: Math.PI / 4, phi: Math.PI / 2 });
-```
+[archived fence delimiter: ```]
 
 #### setColors
 
-```typescript
+[archived fence delimiter: ```typescript]
 setColors(colors: Partial<BlochColors>): void
-```
+[archived fence delimiter: ```]
 
 Update color scheme.
 
-```typescript
+[archived fence delimiter: ```typescript]
 sphere.setColors({
   background: '#1a1a2e',
   state: '#ff6b6b',
   axes: '#4ecdc4'
 });
-```
+[archived fence delimiter: ```]
 
 #### resize
 
-```typescript
+[archived fence delimiter: ```typescript]
 resize(size: number): void
-```
+[archived fence delimiter: ```]
 
 Resize the visualization.
 
 #### dispose
 
-```typescript
+[archived fence delimiter: ```typescript]
 dispose(): void
-```
+[archived fence delimiter: ```]
 
 Clean up resources.
 
 ### Properties
 
-```typescript
+[archived fence delimiter: ```typescript]
 class BlochSphere {
   readonly canvas: HTMLCanvasElement;
   readonly size: number;
   theta: number;   // Current polar angle
   phi: number;     // Current azimuthal angle
 }
-```
+[archived fence delimiter: ```]
 
 ## BlochSphere3D
 
@@ -162,12 +169,12 @@ WebGL-accelerated 3D Bloch sphere with interactive rotation.
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new BlochSphere3D(container: HTMLElement, options?: BlochSphere3DOptions)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface BlochSphere3DOptions extends BlochSphereOptions {
   enableZoom?: boolean;      // Mouse wheel zoom (default: true)
   enableRotate?: boolean;    // Click-drag rotation (default: true)
@@ -175,7 +182,7 @@ interface BlochSphere3DOptions extends BlochSphereOptions {
   autoRotateSpeed?: number;  // Rotation speed (default: 1.0)
   quality?: 'low' | 'medium' | 'high';  // Mesh quality (default: 'medium')
 }
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
@@ -183,39 +190,39 @@ Inherits all BlochSphere methods plus:
 
 #### setCamera
 
-```typescript
+[archived fence delimiter: ```typescript]
 setCamera(position: { x: number; y: number; z: number }): void
-```
+[archived fence delimiter: ```]
 
 Set camera position.
 
 #### resetCamera
 
-```typescript
+[archived fence delimiter: ```typescript]
 resetCamera(): void
-```
+[archived fence delimiter: ```]
 
 Reset to default view.
 
 #### startAnimation
 
-```typescript
+[archived fence delimiter: ```typescript]
 startAnimation(): void
-```
+[archived fence delimiter: ```]
 
 Start continuous rendering loop.
 
 #### stopAnimation
 
-```typescript
+[archived fence delimiter: ```typescript]
 stopAnimation(): void
-```
+[archived fence delimiter: ```]
 
 Stop rendering loop.
 
 ### Example
 
-```typescript
+[archived fence delimiter: ```typescript]
 const sphere3d = new BlochSphere3D(container, {
   size: 400,
   autoRotate: true,
@@ -227,7 +234,7 @@ const state = await QuantumState.create({ numQubits: 1 });
 state.rx(0, Math.PI / 6);
 sphere3d.update(state);
 sphere3d.startAnimation();
-```
+[archived fence delimiter: ```]
 
 ## AmplitudeBars
 
@@ -235,12 +242,12 @@ Bar chart visualization of probability distribution.
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new AmplitudeBars(container: HTMLElement, options?: AmplitudeBarsOptions)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface AmplitudeBarsOptions {
   width?: number;          // Chart width (default: 400)
   height?: number;         // Chart height (default: 200)
@@ -260,81 +267,81 @@ interface BarColors {
   value?: string;
   grid?: string;
 }
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
 #### update
 
-```typescript
+[archived fence delimiter: ```typescript]
 update(probabilities: Float64Array | number[]): void
-```
+[archived fence delimiter: ```]
 
 Update displayed probabilities.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const bars = new AmplitudeBars(container, { width: 600, height: 300 });
 
 const state = await QuantumState.create({ numQubits: 3 });
 state.h(0).cnot(0, 1).cnot(1, 2);
 
 bars.update(state.getProbabilities());
-```
+[archived fence delimiter: ```]
 
 #### highlight
 
-```typescript
+[archived fence delimiter: ```typescript]
 highlight(indices: number[]): void
-```
+[archived fence delimiter: ```]
 
 Highlight specific basis states.
 
-```typescript
+[archived fence delimiter: ```typescript]
 bars.highlight([0, 7]);  // Highlight |000⟩ and |111⟩
-```
+[archived fence delimiter: ```]
 
 #### clearHighlight
 
-```typescript
+[archived fence delimiter: ```typescript]
 clearHighlight(): void
-```
+[archived fence delimiter: ```]
 
 Remove all highlights.
 
 #### setColors
 
-```typescript
+[archived fence delimiter: ```typescript]
 setColors(colors: Partial<BarColors>): void
-```
+[archived fence delimiter: ```]
 
 Update color scheme.
 
-```typescript
+[archived fence delimiter: ```typescript]
 bars.setColors({
   bar: ['#667eea', '#764ba2'],  // Gradient
   background: '#1a1a2e'
 });
-```
+[archived fence delimiter: ```]
 
 #### resize
 
-```typescript
+[archived fence delimiter: ```typescript]
 resize(width: number, height: number): void
-```
+[archived fence delimiter: ```]
 
 Resize the chart.
 
 #### dispose
 
-```typescript
+[archived fence delimiter: ```typescript]
 dispose(): void
-```
+[archived fence delimiter: ```]
 
 Clean up resources.
 
 ### Complex Amplitudes Mode
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface AmplitudeDisplayOptions {
   mode?: 'probability' | 'amplitude' | 'phase';
 }
@@ -347,7 +354,7 @@ const bars = new AmplitudeBars(container, {
 
 // Update with complex amplitudes
 bars.updateComplex(state.getAmplitudes());
-```
+[archived fence delimiter: ```]
 
 ## CircuitDiagram
 
@@ -355,12 +362,12 @@ Render quantum circuits as SVG.
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new CircuitDiagram(container: HTMLElement, options?: CircuitDiagramOptions)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface CircuitDiagramOptions {
   width?: number;           // SVG width (default: auto)
   height?: number;          // SVG height (default: auto)
@@ -373,23 +380,23 @@ interface CircuitDiagramOptions {
 }
 
 type CircuitStyle = 'default' | 'ibm' | 'google' | 'minimal';
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
 #### fromState
 
-```typescript
+[archived fence delimiter: ```typescript]
 static fromState(
   state: QuantumState,
   container: HTMLElement,
   options?: CircuitDiagramOptions
 ): CircuitDiagram
-```
+[archived fence delimiter: ```]
 
 Create diagram from QuantumState gate history.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const state = await QuantumState.create({ numQubits: 3 });
 state.h(0).cnot(0, 1).cnot(1, 2);
 
@@ -397,26 +404,26 @@ const diagram = CircuitDiagram.fromState(state, container, {
   style: 'ibm',
   interactive: true
 });
-```
+[archived fence delimiter: ```]
 
 #### addGate
 
-```typescript
+[archived fence delimiter: ```typescript]
 addGate(gate: GateDefinition): this
-```
+[archived fence delimiter: ```]
 
 Add gate to circuit.
 
-```typescript
+[archived fence delimiter: ```typescript]
 interface GateDefinition {
   name: string;              // Gate name ('H', 'X', 'CNOT', etc.)
   qubits: number[];          // Target qubits
   params?: number[];         // Parameters (for rotation gates)
   label?: string;            // Custom label
 }
-```
+[archived fence delimiter: ```]
 
-```typescript
+[archived fence delimiter: ```typescript]
 const diagram = new CircuitDiagram(container, { style: 'minimal' });
 
 diagram
@@ -424,76 +431,76 @@ diagram
   .addGate({ name: 'CNOT', qubits: [0, 1] })
   .addGate({ name: 'RZ', qubits: [1], params: [Math.PI / 4] })
   .render();
-```
+[archived fence delimiter: ```]
 
 #### addMeasurement
 
-```typescript
+[archived fence delimiter: ```typescript]
 addMeasurement(qubit: number, classicalBit?: number): this
-```
+[archived fence delimiter: ```]
 
 Add measurement symbol.
 
 #### addBarrier
 
-```typescript
+[archived fence delimiter: ```typescript]
 addBarrier(qubits?: number[]): this
-```
+[archived fence delimiter: ```]
 
 Add visual barrier.
 
 #### render
 
-```typescript
+[archived fence delimiter: ```typescript]
 render(): void
-```
+[archived fence delimiter: ```]
 
 Render the circuit to SVG.
 
 #### toSVG
 
-```typescript
+[archived fence delimiter: ```typescript]
 toSVG(): string
-```
+[archived fence delimiter: ```]
 
 Get SVG markup string.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const svgString = diagram.toSVG();
 // Use for download, server-side rendering, etc.
-```
+[archived fence delimiter: ```]
 
 #### download
 
-```typescript
+[archived fence delimiter: ```typescript]
 download(filename?: string): void
-```
+[archived fence delimiter: ```]
 
 Download as SVG file.
 
-```typescript
+[archived fence delimiter: ```typescript]
 diagram.download('my-circuit.svg');
-```
+[archived fence delimiter: ```]
 
 #### clear
 
-```typescript
+[archived fence delimiter: ```typescript]
 clear(): void
-```
+[archived fence delimiter: ```]
 
 Clear all gates.
 
 #### dispose
 
-```typescript
+[archived fence delimiter: ```typescript]
 dispose(): void
-```
+[archived fence delimiter: ```]
 
 Clean up resources.
 
 ### Gate Click Handlers
 
-```typescript
+[archived fence delimiter: ```typescript]
 const diagram = new CircuitDiagram(container, { interactive: true });
 
 diagram.on('gateClick', (event) => {
@@ -503,7 +510,7 @@ diagram.on('gateClick', (event) => {
 diagram.on('gateHover', (event) => {
   // Show tooltip
 });
-```
+[archived fence delimiter: ```]
 
 ## StateCity
 
@@ -511,12 +518,12 @@ diagram.on('gateHover', (event) => {
 
 ### Constructor
 
-```typescript
+[archived fence delimiter: ```typescript]
 new StateCity(container: HTMLElement, options?: StateCityOptions)
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
-```typescript
+[archived fence delimiter: ```typescript]
 interface StateCityOptions {
   width?: number;
   height?: number;
@@ -524,19 +531,19 @@ interface StateCityOptions {
   enableRotate?: boolean;
   enableZoom?: boolean;
 }
-```
+[archived fence delimiter: ```]
 
 ### Methods
 
 #### update
 
-```typescript
+[archived fence delimiter: ```typescript]
 update(amplitudes: Complex[]): void
-```
+[archived fence delimiter: ```]
 
 Update displayed amplitudes.
 
-```typescript
+[archived fence delimiter: ```typescript]
 const city = new StateCity(container, {
   width: 600,
   height: 400,
@@ -547,13 +554,13 @@ const state = await QuantumState.create({ numQubits: 4 });
 state.h(0).h(1).cz(0, 1);
 
 city.update(state.getAmplitudes());
-```
+[archived fence delimiter: ```]
 
 ## Color Schemes
 
 ### Built-in Themes
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { themes } from '@moonlab/quantum-viz';
 
 const bars = new AmplitudeBars(container, {
@@ -565,11 +572,11 @@ const bars = new AmplitudeBars(container, {
 // themes.dark  - Dark background
 // themes.ibm   - IBM Quantum style
 // themes.google - Cirq style
-```
+[archived fence delimiter: ```]
 
 ### Custom Theme
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { createTheme } from '@moonlab/quantum-viz';
 
 const myTheme = createTheme({
@@ -582,7 +589,7 @@ const myTheme = createTheme({
 
 const bars = new AmplitudeBars(container, { colors: myTheme.bars });
 const sphere = new BlochSphere(container, { colors: myTheme.bloch });
-```
+[archived fence delimiter: ```]
 
 ## Animation Utilities
 
@@ -590,7 +597,7 @@ const sphere = new BlochSphere(container, { colors: myTheme.bloch });
 
 Track state evolution with smooth transitions.
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { AnimatedState } from '@moonlab/quantum-viz';
 
 const animated = new AnimatedState({
@@ -610,13 +617,13 @@ animated.setState(state);  // Animates to new probabilities
 
 state.cnot(0, 1);
 animated.setState(state);  // Animates again
-```
+[archived fence delimiter: ```]
 
 ### Timeline
 
 Step through circuit execution.
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { Timeline } from '@moonlab/quantum-viz';
 
 const state = await QuantumState.create({ numQubits: 3 });
@@ -632,11 +639,11 @@ timeline.step();      // Apply H(0)
 timeline.step();      // Apply CNOT(0,1)
 timeline.stepBack();  // Undo CNOT(0,1)
 timeline.reset();     // Back to |000⟩
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { QuantumState } from '@moonlab/quantum-core';
 import {
   BlochSphere,
@@ -690,7 +697,7 @@ async function visualizeGHZ() {
 }
 
 visualizeGHZ();
-```
+[archived fence delimiter: ```]
 
 ## Browser Support
 
@@ -709,3 +716,4 @@ visualizeGHZ();
 - [React Integration](react.md) - React components
 - [Vue Integration](vue.md) - Vue composables
 
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Topological Quantum Computing
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Topological Quantum Computing
 
 Fault-tolerant quantum computation using topologically protected degrees of freedom.
@@ -67,7 +74,7 @@ For Fibonacci anyons: $D = \sqrt{1 + \phi^2} = \sqrt{2 + \phi}$
 
 ### Creating Anyon Models
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/topological/topological.h"
 
 // Fibonacci anyons (universal for quantum computing)
@@ -84,13 +91,13 @@ double d_tau = anyon_quantum_dimension(fib, FIB_TAU);  // φ
 double D = anyon_total_dimension(fib);  // √(2+φ)
 
 anyon_system_free(fib);
-```
+[archived fence delimiter: ```]
 
 ### Fusion Trees
 
 A **fusion tree** represents how multiple anyons fuse to a definite total charge:
 
-```c
+[archived fence delimiter: ```c]
 // Create 4 tau anyons with total charge 1 (vacuum)
 anyon_charge_t charges[] = {FIB_TAU, FIB_TAU, FIB_TAU, FIB_TAU};
 fusion_tree_t *tree = fusion_tree_create(fib, charges, 4, FIB_VACUUM);
@@ -100,7 +107,7 @@ uint32_t dim = fusion_count_paths(fib, charges, 4, FIB_VACUUM);
 printf("Fusion space dimension: %u\n", dim);  // 2 (one qubit)
 
 fusion_tree_free(tree);
-```
+[archived fence delimiter: ```]
 
 The fusion tree amplitudes encode the quantum state in the topologically protected subspace.
 
@@ -110,22 +117,22 @@ The fusion tree amplitudes encode the quantum state in the topologically protect
 
 $$(a \times b) \times c \xleftrightarrow{F} a \times (b \times c)$$
 
-```c
+[archived fence delimiter: ```c]
 // Get F-symbol F^{τττ}_τ[1, τ]
 double complex F = get_F_symbol(fib,
     FIB_TAU, FIB_TAU, FIB_TAU, FIB_TAU,  // a,b,c,d
     FIB_VACUUM, FIB_TAU);                 // e,f
-```
+[archived fence delimiter: ```]
 
 **R-matrices** encode the phase acquired during braiding:
 
 $$R^{ab}_c = \text{phase when exchanging } a \text{ and } b \text{ that fuse to } c$$
 
-```c
+[archived fence delimiter: ```c]
 // Get braiding phase R^{ττ}_τ
 double complex R = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);
 // R = e^{4πi/5} for Fibonacci anyons
-```
+[archived fence delimiter: ```]
 
 ## Braiding Operations
 
@@ -133,13 +140,13 @@ double complex R = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);
 
 Braiding is the fundamental operation in TQC. When anyon $i$ is exchanged with anyon $i+1$:
 
-```c
+[archived fence delimiter: ```c]
 // Braid anyons at positions 1 and 2 (clockwise)
 qs_error_t err = braid_anyons(tree, 1, true);
 
 // Counter-clockwise (inverse braid)
 braid_anyons(tree, 1, false);
-```
+[archived fence delimiter: ```]
 
 The braiding operation:
 1. Applies R-matrix for the direct phase
@@ -150,10 +157,10 @@ The braiding operation:
 
 F-moves change the fusion order without braiding:
 
-```c
+[archived fence delimiter: ```c]
 // Apply F-move at vertex 2
 apply_F_move(tree, 2);
-```
+[archived fence delimiter: ```]
 
 This is essential for computing composite braids involving non-adjacent anyons.
 
@@ -166,18 +173,18 @@ For Fibonacci anyons, a single qubit is encoded in 4 anyons with total charge 1:
 $$|0\rangle \sim (\tau \times \tau \to 1) \times (\tau \times \tau \to 1) \to 1$$
 $$|1\rangle \sim (\tau \times \tau \to \tau) \times (\tau \times \tau \to \tau) \to 1$$
 
-```c
+[archived fence delimiter: ```c]
 // Create a 2-qubit anyonic register
 anyonic_register_t *reg = anyonic_register_create(fib, 2);
 
 // Qubits are initialized in |0⟩ state
-```
+[archived fence delimiter: ```]
 
 ### Anyonic Gates
 
 Gates are implemented via braiding sequences:
 
-```c
+[archived fence delimiter: ```c]
 // NOT gate (via middle anyon braids)
 anyonic_not(reg, 0);
 
@@ -191,7 +198,7 @@ anyonic_T_gate(reg, 0, 1e-6);
 anyonic_entangle(reg, 0, 1);
 
 anyonic_register_free(reg);
-```
+[archived fence delimiter: ```]
 
 ### Universality
 
@@ -213,7 +220,7 @@ A distance-$d$ surface code has:
 - $(d-1)^2$ Z-type (vertex) stabilizers
 - 1 logical qubit
 
-```c
+[archived fence delimiter: ```c]
 // Create distance-5 surface code
 surface_code_t *code = surface_code_create(5);
 
@@ -222,11 +229,11 @@ surface_code_init_logical_zero(code);
 
 // Or logical |+⟩
 surface_code_init_logical_plus(code);
-```
+[archived fence delimiter: ```]
 
 ### Stabilizer Measurements
 
-```c
+[archived fence delimiter: ```c]
 // Measure all X-type stabilizers (plaquettes)
 surface_code_measure_X_stabilizers(code);
 
@@ -238,23 +245,23 @@ for (int i = 0; i < code->num_ancilla_qubits; i++) {
     printf("X-syndrome[%d] = %d\n", i, code->x_syndrome[i]);
     printf("Z-syndrome[%d] = %d\n", i, code->z_syndrome[i]);
 }
-```
+[archived fence delimiter: ```]
 
 ### Logical Operations
 
 Logical gates are implemented via strings of physical operations:
 
-```c
+[archived fence delimiter: ```c]
 // Logical X: string from left to right edge
 surface_code_logical_X(code);
 
 // Logical Z: string from top to bottom edge
 surface_code_logical_Z(code);
-```
+[archived fence delimiter: ```]
 
 ### Error Correction
 
-```c
+[archived fence delimiter: ```c]
 // Introduce error on qubit 7
 surface_code_apply_error(code, 7, 'X');
 
@@ -266,7 +273,7 @@ surface_code_measure_Z_stabilizers(code);
 surface_code_decode_correct(code);
 
 surface_code_free(code);
-```
+[archived fence delimiter: ```]
 
 ### Error Threshold
 
@@ -278,13 +285,13 @@ The toric code is defined on a torus (periodic boundary conditions) and encodes 
 
 ### Code Structure
 
-```c
+[archived fence delimiter: ```c]
 // Create L×L toric code (2L² physical qubits, 2 logical qubits)
 toric_code_t *toric = toric_code_create(6);
 
 // Initialize to ground state (+1 eigenstate of all stabilizers)
 toric_code_init_ground_state(toric);
-```
+[archived fence delimiter: ```]
 
 ### Anyon Excitations
 
@@ -292,7 +299,7 @@ The toric code has two types of anyons:
 - **e-anyons** (electric): Created by Z-string endpoints at vertices
 - **m-anyons** (magnetic): Created by X-string endpoints at plaquettes
 
-```c
+[archived fence delimiter: ```c]
 // Create e-anyon pair at (1,1) and (3,3)
 toric_code_create_anyon_pair(toric, 'e', 1, 1, 3, 3);
 
@@ -304,15 +311,15 @@ toric_code_move_anyon(toric, 'e', 3, 3, 4, 3);
 
 // Braid an e-anyon around an m-anyon
 toric_code_braid(toric, 1, 1, 2, 2);
-```
+[archived fence delimiter: ```]
 
 ### Mutual Statistics
 
 When an e-anyon encircles an m-anyon, the state acquires a phase of -1. This mutual statistics is the defining feature of the toric code's topological order.
 
-```c
+[archived fence delimiter: ```c]
 toric_code_free(toric);
-```
+[archived fence delimiter: ```]
 
 ## Topological Entanglement Entropy
 
@@ -324,7 +331,7 @@ where $\gamma = \log D$ is the **topological entanglement entropy**.
 
 ### Levin-Wen Formula
 
-```c
+[archived fence delimiter: ```c]
 // Define three regions forming an annular partition
 uint32_t region_A[] = {0, 1, 2, 3};
 uint32_t region_B[] = {4, 5, 6, 7};
@@ -339,17 +346,17 @@ double S_topo = topological_entanglement_entropy(
 
 printf("Topological entropy: %.4f\n", S_topo);
 printf("Expected log(D) = %.4f\n", log(anyon_total_dimension(sys)));
-```
+[archived fence delimiter: ```]
 
 ### Kitaev-Preskill Formula
 
-```c
+[archived fence delimiter: ```c]
 // Alternative using disk and ring regions
 uint32_t center[] = {0, 1, 2, 3, 4};
 uint32_t ring[] = {5, 6, 7, 8, 9, 10, 11, 12};
 
 double gamma = kitaev_preskill_entropy(state, center, 5, ring, 8);
-```
+[archived fence delimiter: ```]
 
 ## Modular Matrices
 
@@ -357,7 +364,7 @@ The modular S and T matrices characterize the topological order and determine an
 
 ### S-Matrix
 
-```c
+[archived fence delimiter: ```c]
 size_t n = sys->num_charges;
 double complex *S = malloc(n * n * sizeof(double complex));
 
@@ -365,25 +372,25 @@ compute_modular_S_matrix(sys, S);
 
 // S-matrix is symmetric and unitary
 // S_{ab} relates to braiding statistics
-```
+[archived fence delimiter: ```]
 
 ### T-Matrix
 
-```c
+[archived fence delimiter: ```c]
 double complex *T = malloc(n * n * sizeof(double complex));
 
 compute_modular_T_matrix(sys, T);
 
 // T is diagonal: T_{aa} = e^{2πi θ_a}
-```
+[archived fence delimiter: ```]
 
 ### Topological Spin
 
-```c
+[archived fence delimiter: ```c]
 // Get topological spin of tau anyon
 double complex theta = topological_spin(fib, FIB_TAU);
 // θ_τ = 4/5 for Fibonacci anyons
-```
+[archived fence delimiter: ```]
 
 ## Physical Realizations
 
@@ -399,7 +406,7 @@ double complex theta = topological_spin(fib, FIB_TAU);
 
 Complete example of a topologically protected qubit:
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/topological/topological.h"
 #include <stdio.h>
 
@@ -436,7 +443,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## References
 
@@ -458,3 +465,4 @@ int main(void) {
 - [Tensor Networks](../concepts/tensor-networks.md) - MPS methods used in anyon simulations
 - [Skyrmion Braiding](skyrmion-braiding.md) - Another topological qubit platform
 - [API: topological.h](../api/c/topological.md) - Full API reference
+```

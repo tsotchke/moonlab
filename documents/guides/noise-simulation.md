@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Noise Simulation Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Noise Simulation Guide
 
 Add realistic noise to quantum simulations.
@@ -12,7 +19,7 @@ Real quantum computers experience various types of noise and errors. Moonlab can
 
 Randomly applies X, Y, or Z with probability p/3 each:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.noise import DepolarizingChannel
 
@@ -21,13 +28,13 @@ noise = DepolarizingChannel(error_rate=0.01)
 
 state.h(0)
 noise.apply(state, qubit=0)  # 1% chance of X, Y, or Z error
-```
+[archived fence delimiter: ```]
 
 ### Amplitude Damping
 
 Models energy relaxation (T1 decay):
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import AmplitudeDamping
 
 # T1 = 50 μs, gate time = 20 ns
@@ -36,13 +43,13 @@ damping = AmplitudeDamping(gamma=gamma)
 
 state.x(0)  # Prepare |1⟩
 damping.apply(state, 0)  # Some decay to |0⟩
-```
+[archived fence delimiter: ```]
 
 ### Phase Damping
 
 Models dephasing (T2 decay):
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import PhaseDamping
 
 # T2 = 70 μs, gate time = 20 ns
@@ -51,37 +58,37 @@ dephasing = PhaseDamping(gamma=gamma)
 
 state.h(0)  # Create superposition
 dephasing.apply(state, 0)  # Lose phase coherence
-```
+[archived fence delimiter: ```]
 
 ### Bit Flip
 
 Classical bit-flip error:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import BitFlip
 
 bit_flip = BitFlip(probability=0.001)
 state.h(0)
 bit_flip.apply(state, 0)
-```
+[archived fence delimiter: ```]
 
 ### Phase Flip
 
 Random phase error:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import PhaseFlip
 
 phase_flip = PhaseFlip(probability=0.001)
 state.h(0)
 phase_flip.apply(state, 0)
-```
+[archived fence delimiter: ```]
 
 ## Noise After Gates
 
 ### Per-Gate Noise
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.noise import DepolarizingChannel
 
@@ -96,11 +103,11 @@ noise_1q.apply(state, 0)
 state.cnot(0, 1)
 noise_2q.apply(state, 0)
 noise_2q.apply(state, 1)
-```
+[archived fence delimiter: ```]
 
 ### Automatic Noise Insertion
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import NoisyCircuit
 from moonlab.noise import DepolarizingChannel
 
@@ -117,7 +124,7 @@ circuit.h(2)
 circuit.cnot(2, 3)
 
 state = circuit.run()
-```
+[archived fence delimiter: ```]
 
 ## Kraus Operators
 
@@ -125,7 +132,7 @@ state = circuit.run()
 
 Define noise via Kraus operators:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import KrausChannel
 import numpy as np
 
@@ -135,23 +142,23 @@ K1 = np.sqrt(0.01) * np.array([[1, 0], [0, -1]])
 
 channel = KrausChannel([K0, K1])
 channel.apply(state, qubit=0)
-```
+[archived fence delimiter: ```]
 
 ### Verify Channel
 
-```python
+[archived fence delimiter: ```python]
 # Check trace preservation: sum(K†K) = I
 from moonlab.noise import verify_channel
 
 is_valid = verify_channel(channel)
 print(f"Valid CPTP channel: {is_valid}")
-```
+[archived fence delimiter: ```]
 
 ## Measurement Errors
 
 ### Readout Errors
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import ReadoutError
 
 # Confusion matrix: P(measured | actual)
@@ -163,11 +170,11 @@ state.x(0)  # Prepare |1⟩
 
 # Measure with readout error
 result = readout.measure(state, 0)  # May incorrectly return 0
-```
+[archived fence delimiter: ```]
 
 ### Correlated Readout Errors
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import CorrelatedReadoutError
 
 # Full 2^n x 2^n confusion matrix
@@ -179,13 +186,13 @@ confusion = np.array([
 ])
 
 readout = CorrelatedReadoutError(confusion)
-```
+[archived fence delimiter: ```]
 
 ## Device-Based Noise
 
 ### IBM Backend Model
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import IBMNoiseModel
 
 # Create noise model from device properties
@@ -201,11 +208,11 @@ noise = IBMNoiseModel(
 
 # Apply to circuit
 circuit = NoisyCircuit(2, noise_model=noise)
-```
+[archived fence delimiter: ```]
 
 ### Custom Device Model
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import DeviceNoiseModel
 
 device = DeviceNoiseModel(
@@ -217,13 +224,13 @@ device = DeviceNoiseModel(
     two_qubit_error=0.01,
     readout_error=0.02
 )
-```
+[archived fence delimiter: ```]
 
 ## Thermal Relaxation
 
 ### Combined T1/T2
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import ThermalRelaxation
 
 relaxation = ThermalRelaxation(
@@ -235,11 +242,11 @@ relaxation = ThermalRelaxation(
 state = QuantumState(1)
 state.h(0)
 relaxation.apply(state, 0)
-```
+[archived fence delimiter: ```]
 
 ### Temperature Effects
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.noise import ThermalRelaxation
 
 # Excited state population at finite temperature
@@ -255,13 +262,13 @@ relaxation = ThermalRelaxation(
     gate_time=20e-9,
     excited_population=excited_pop
 )
-```
+[archived fence delimiter: ```]
 
 ## Error Mitigation
 
 ### Zero-Noise Extrapolation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.error_mitigation import ZNE
 
 def circuit_with_noise(noise_scale):
@@ -278,11 +285,11 @@ def circuit_with_noise(noise_scale):
 zne = ZNE(noise_factors=[1, 2, 3])
 mitigated = zne.extrapolate(circuit_with_noise)
 print(f"Mitigated expectation: {mitigated:.4f}")
-```
+[archived fence delimiter: ```]
 
 ### Measurement Error Mitigation
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.error_mitigation import MeasurementMitigation
 
 # Calibrate
@@ -292,13 +299,13 @@ calibrator.calibrate(shots=10000)
 # Apply correction
 raw_counts = {'0000': 450, '0001': 50, ...}
 corrected_counts = calibrator.correct(raw_counts)
-```
+[archived fence delimiter: ```]
 
 ## Noise Analysis
 
 ### Fidelity Under Noise
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.noise import DepolarizingChannel
 
@@ -320,11 +327,11 @@ def circuit_fidelity(error_rate, depth):
 for rate in [0.001, 0.01, 0.1]:
     fidelity = circuit_fidelity(rate, depth=10)
     print(f"Error rate {rate}: Fidelity = {fidelity:.4f}")
-```
+[archived fence delimiter: ```]
 
 ### Error Accumulation
 
-```python
+[archived fence delimiter: ```python]
 import matplotlib.pyplot as plt
 
 depths = range(1, 51)
@@ -337,11 +344,11 @@ plt.plot(depths, fidelities)
 plt.xlabel('Circuit Depth')
 plt.ylabel('Fidelity')
 plt.title('Fidelity Decay with Depth (1% error rate)')
-```
+[archived fence delimiter: ```]
 
 ## Example: VQE with Noise
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 from moonlab.noise import DeviceNoiseModel
 
@@ -370,7 +377,7 @@ result_ideal = vqe.compute_ground_state(H2_hamiltonian)
 print(f"Ideal energy: {result_ideal.energy:.6f}")
 print(f"Noisy energy: {result_noisy.energy:.6f}")
 print(f"Error: {abs(result_noisy.energy - result_ideal.energy):.6f}")
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -378,3 +385,4 @@ print(f"Error: {abs(result_noisy.energy - result_ideal.energy):.6f}")
 - [C API: Noise](../api/c/noise.md) - Low-level noise API
 - [Tutorial: Noise Effects](../tutorials/06-vqe-molecular-simulation.md#noise-effects) - Noise in VQE
 
+```

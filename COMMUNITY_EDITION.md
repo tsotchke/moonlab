@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Community Edition
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Community Edition
 
 Moonlab Community Edition is the public MIT-licensed simulator, scheduler,
@@ -77,3 +84,4 @@ A public release candidate should pass:
 - Evidence-gated documentation review for performance, provider, distributed,
   or commercial-readiness claims.
 
+```

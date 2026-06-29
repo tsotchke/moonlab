@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Quantum Simulator
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Quantum Simulator
 
 [![Version](https://img.shields.io/badge/version-1.0.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
@@ -268,7 +275,7 @@ and integrates it directly into the VQE driver.  See
 
 ## Quick Start
 
-```bash
+[archived fence delimiter: ```bash]
 # Build (CMake, the canonical path on 0.1.2+)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
@@ -278,34 +285,34 @@ ctest --test-dir build -E long_evolution --output-on-failure
 
 # Try an example
 ./build/bell_test_demo
-```
+[archived fence delimiter: ```]
 
 Warnings-as-errors CI build (clean on macOS arm64):
 
-```bash
+[archived fence delimiter: ```bash]
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_WERROR=ON
 cmake --build build -j
-```
+[archived fence delimiter: ```]
 
 Sanitized build (AddressSanitizer + UndefinedBehaviorSanitizer):
 
-```bash
+[archived fence delimiter: ```bash]
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DQSIM_ENABLE_SANITIZERS=ON
 cmake --build build-asan -j
 ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" \
 UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1" \
   ctest --test-dir build-asan -E "long_evolution|python_bindings|rust_bindings|webgpu_unified" \
         --output-on-failure --timeout 300
-```
+[archived fence delimiter: ```]
 
 Distributed (MPI) build:
 
-```bash
+[archived fence delimiter: ```bash]
 brew install open-mpi          # macOS; apt-get install -y libopenmpi-dev on Ubuntu
 cmake -S . -B build-mpi -DQSIM_ENABLE_MPI=ON
 cmake --build build-mpi -j
 ctest --test-dir build-mpi -E long_evolution     # mpirun -np 4 distributed_gates
-```
+[archived fence delimiter: ```]
 
 The legacy Makefile path (`make all` / `make test`) still works for a
 subset of targets, but the CMake build is the source of truth for CI,
@@ -314,7 +321,7 @@ bindings.
 
 ### Your First Quantum Program
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum/state.h"
 #include "quantum/gates.h"
 
@@ -333,7 +340,7 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## State Vector Simulation
 
@@ -361,7 +368,7 @@ Polynomial-scaling simulation for systems beyond state vector limits.
 
 ### Matrix Product States (MPS)
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/tn_state.h"
 #include "algorithms/tensor_network/tn_gates.h"
 
@@ -374,11 +381,11 @@ tn_mps_apply_two(mps, 0, 1, GATE_CNOT);
 
 // Measure expectation values
 double magnetization = tn_mps_expectation_z(mps, 50);
-```
+[archived fence delimiter: ```]
 
 ### DMRG Ground State
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/dmrg.h"
 
 // Heisenberg chain Hamiltonian
@@ -391,20 +398,20 @@ dmrg_params_t params = {
 
 dmrg_result_t result = dmrg_ground_state(&hamiltonian, &params);
 printf("Ground state energy: %.10f\n", result.energy);
-```
+[archived fence delimiter: ```]
 
 ### TDVP Time Evolution
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/tdvp.h"
 
 // Real-time dynamics
 tdvp_evolve(mps, hamiltonian, dt, num_steps, TDVP_TWO_SITE);
-```
+[archived fence delimiter: ```]
 
 ### 2D Tensor Networks
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/lattice_2d.h"
 #include "algorithms/tensor_network/mpo_2d.h"
 
@@ -413,7 +420,7 @@ lattice_2d_t* lattice = lattice_2d_create(10, 10, LATTICE_SQUARE);
 
 // Apply 2D MPO Hamiltonian
 mpo_2d_t* H = mpo_2d_heisenberg(lattice, J_coupling);
-```
+[archived fence delimiter: ```]
 
 ### Clifford-Assisted MPS (CA-MPS)
 
@@ -425,7 +432,7 @@ circuits CA-MPS uses a bond dimension of 1 regardless of qubit count,
 giving up to 64x bond-dim advantage + 13884x speedup over plain MPS at
 n=12 (see `tests/performance/bench_ca_mps.c`).
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/ca_mps.h"
 
 // 12-qubit CA-MPS with max MPS bond dim 32
@@ -446,7 +453,7 @@ moonlab_ca_mps_normalize(s);
 double _Complex e;
 uint8_t p[12] = {3,0,0,0,0,0,0,0,0,0,0,0};  // Z_0
 moonlab_ca_mps_expect_pauli(s, p, &e);
-```
+[archived fence delimiter: ```]
 
 See `docs/research/ca_mps.md` for the full theory, gate-application rules,
 and benchmark methodology.
@@ -460,7 +467,7 @@ as a low-entanglement MPS.  `moonlab_ca_mps_optimize_var_d_alternating`
 implements the alternating optimisation: greedy local-Clifford D-update
 + imag-time `|phi>` evolution.
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/ca_mps_var_d.h"
 
 ca_mps_var_d_alt_config_t cfg = ca_mps_var_d_alt_config_default();
@@ -474,7 +481,7 @@ ca_mps_var_d_alt_result_t res = {0};
 moonlab_ca_mps_optimize_var_d_alternating(
     state, paulis, coeffs, num_terms, &cfg, &res);
 // res.final_energy, res.final_phi_entropy, res.total_gates_added, ...
-```
+[archived fence delimiter: ```]
 
 Warmstart options bias the greedy search toward known-productive Clifford
 basins:
@@ -500,14 +507,14 @@ is then in the simultaneous +1 eigenspace of every generator and
 the var-D loop only has to capture the residual non-stabilizer
 dynamics on top.
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/ca_mps_var_d_stab_warmstart.h"
 
 // Generators g_0, ..., g_{k-1} as (k, n) row-major Pauli bytes
 // (0=I, 1=X, 2=Y, 3=Z), pairwise commuting and independent.
 moonlab_ca_mps_apply_stab_subgroup_warmstart(state, generators, k);
 // state->D now stabilises the +1 eigenspace of every g_i.
-```
+[archived fence delimiter: ```]
 
 First HEP application: 1+1D Z2 lattice gauge theory.
 `src/applications/hep/lattice_z2_1d.{c,h}` builds the matter +
@@ -531,14 +538,14 @@ expectation agrees to <1e-10.  Wired into ctest as `unit_ca_peps`.
 
 ### Grover's Search
 
-```c
+[archived fence delimiter: ```c]
 grover_result_t result = grover_search(&state, marked_state, num_qubits);
 // O(√N) queries vs classical O(N)
-```
+[archived fence delimiter: ```]
 
 ### Variational Quantum Eigensolver (VQE)
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/vqe.h"
 
 vqe_config_t config = {
@@ -549,29 +556,29 @@ vqe_config_t config = {
 
 vqe_result_t result = vqe_minimize(&hamiltonian, &config);
 printf("Ground state energy: %.8f Ha\n", result.energy);
-```
+[archived fence delimiter: ```]
 
 ### QAOA (Combinatorial Optimization)
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/qaoa.h"
 
 // MaxCut problem
 qaoa_result_t result = qaoa_maxcut(&graph, num_layers);
 printf("Best cut: %zu edges\n", result.best_cut);
-```
+[archived fence delimiter: ```]
 
 ### Quantum Phase Estimation
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/qpe.h"
 
 double phase = qpe_estimate(&unitary, precision_qubits, &state);
-```
+[archived fence delimiter: ```]
 
 ### Bell Test Validation
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/bell_tests.h"
 
 /* CHSH on a Bell pair */
@@ -585,7 +592,7 @@ printf("Mermin |M|: %.4f\n", m.chsh_value);
 /* Mermin-Klyshko M_N on |GHZ_N>, normalised so classical <= 1,
    quantum max 2^((N-1)/2). */
 double mk = bell_test_mermin_klyshko(&ghz_n, N, 0, NULL);
-```
+[archived fence delimiter: ```]
 
 ## Topological Quantum Computing
 
@@ -593,7 +600,7 @@ Fault-tolerant quantum computation using anyonic systems.
 
 ### Anyon Models
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/topological/topological.h"
 
 // Create Fibonacci anyon system
@@ -604,7 +611,7 @@ braid_anyons(sys, i, j, BRAID_COUNTERCLOCKWISE);
 
 // Compute resulting unitary
 complex_t* U = fusion_tree_to_unitary(sys->fusion_tree);
-```
+[archived fence delimiter: ```]
 
 ### Supported Anyon Types
 
@@ -616,7 +623,7 @@ complex_t* U = fusion_tree_to_unitary(sys->fusion_tree);
 
 ### Surface Codes
 
-```c
+[archived fence delimiter: ```c]
 // Create distance-5 surface code
 surface_code_t* code = surface_code_create(5, 5, BOUNDARY_PLANAR);
 
@@ -625,11 +632,11 @@ surface_code_measure_stabilizers(code);
 
 // Decode and correct errors
 int success = surface_code_decode_mwpm(code);
-```
+[archived fence delimiter: ```]
 
 ### Toric Codes
 
-```c
+[archived fence delimiter: ```c]
 // Create toric code on 6x6 lattice
 toric_code_t* toric = toric_code_create(6, 6);
 
@@ -639,15 +646,15 @@ toric_code_measure_stars(toric);
 
 // Apply logical X on first logical qubit
 toric_code_logical_x(toric, 0);
-```
+[archived fence delimiter: ```]
 
 ### Topological Invariants
 
-```c
+[archived fence delimiter: ```c]
 // Compute topological entanglement entropy
 double gamma = topological_entanglement_entropy(&state, &region);
 // γ = log(D) where D is total quantum dimension
-```
+[archived fence delimiter: ```]
 
 ## Skyrmion Braiding
 
@@ -659,7 +666,7 @@ Skyrmions are topologically protected magnetic structures that can encode quantu
 
 ### Usage
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/skyrmion_braiding.h"
 
 // Initialize two skyrmions
@@ -676,15 +683,15 @@ braid_result_t result = skyrmion_braid(qubit, path, &params);
 // Extract Berry phase
 printf("Berry phase: %.6f\n", result.berry_phase);
 printf("Fidelity: %.6f\n", result.fidelity);
-```
+[archived fence delimiter: ```]
 
 ### Topological Gates
 
-```c
+[archived fence delimiter: ```c]
 // Apply topological gates via skyrmion exchange
 topo_gate_apply(qubit, TOPO_GATE_EXCHANGE);  // π rotation
 topo_gate_apply(qubit, TOPO_GATE_BRAID);     // Braiding unitary
-```
+[archived fence delimiter: ```]
 
 ## Quantum Chemistry
 
@@ -692,7 +699,7 @@ Molecular simulation with fermionic mappings.
 
 ### Jordan-Wigner Transformation
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/chemistry/chemistry.h"
 
 // Create fermionic operator a†_p a_q
@@ -703,11 +710,11 @@ jw_operator_t* jw = jordan_wigner_transform(&op);
 
 // Get Pauli string representation
 pauli_string_t* paulis = jw_to_pauli_strings(jw);
-```
+[archived fence delimiter: ```]
 
 ### UCCSD Ansatz
 
-```c
+[archived fence delimiter: ```c]
 // Build UCCSD circuit for molecular simulation
 uccsd_params_t params = {
     .num_electrons = 2,
@@ -717,18 +724,18 @@ uccsd_params_t params = {
 };
 
 circuit_t* ansatz = uccsd_circuit(&params);
-```
+[archived fence delimiter: ```]
 
 ### Molecular Hamiltonians
 
-```c
+[archived fence delimiter: ```c]
 // H2 molecule in minimal basis
 molecular_hamiltonian_t* H = molecular_hamiltonian_h2(bond_length);
 
 // Run VQE
 vqe_result_t result = vqe_minimize(H, &vqe_config);
 printf("H2 energy: %.6f Ha\n", result.energy);
-```
+[archived fence delimiter: ```]
 
 ## Many-Body Localization
 
@@ -736,7 +743,7 @@ Disordered quantum systems and thermalization dynamics.
 
 ### Disordered Heisenberg Model
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/mbl/mbl.h"
 
 // Create XXZ Hamiltonian with disorder
@@ -749,18 +756,18 @@ xxz_params_t params = {
 };
 
 xxz_hamiltonian_t* H = xxz_hamiltonian_create(&params);
-```
+[archived fence delimiter: ```]
 
 ### Diagnostics
 
-```c
+[archived fence delimiter: ```c]
 // Level statistics (Poisson vs GOE)
 double r = level_spacing_ratio(eigenvalues, num_eigenvalues);
 // r ≈ 0.39 (Poisson, MBL) vs r ≈ 0.53 (GOE, thermal)
 
 // Entanglement entropy dynamics
 double S = entanglement_entropy_half_chain(state, num_sites);
-```
+[archived fence delimiter: ```]
 
 ## Post-Quantum Cryptography
 
@@ -771,7 +778,7 @@ RNG that exports `moonlab_qrng_bytes`.  Three parameter sets are
 available: ML-KEM-512 (NIST Category 1), ML-KEM-768 (recommended
 default), and ML-KEM-1024 (Category 5).
 
-```c
+[archived fence delimiter: ```c]
 #include <moonlab/moonlab_export.h>
 
 uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES];
@@ -784,17 +791,17 @@ moonlab_mlkem768_keygen_qrng(ek, dk);
 moonlab_mlkem768_encaps_qrng(ct, K_bob, ek);
 moonlab_mlkem768_decaps(K_alice, ct, dk);
 // K_alice == K_bob
-```
+[archived fence delimiter: ```]
 
 Python:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.crypto import mlkem
 ek, dk   = mlkem.keygen768_qrng()
 ct, K_a  = mlkem.encaps768_qrng(ek)
 K_b      = mlkem.decaps768(ct, dk)
 assert K_a == K_b
-```
+[archived fence delimiter: ```]
 
 All NIST FIPS 202 known-answer vectors pass byte-for-byte (SHA-3 224 /
 256 / 384 / 512, SHAKE128, SHAKE256 including split-squeeze).  ML-KEM
@@ -822,7 +829,7 @@ end-to-end demo and `docs/security/pqc.md` for the threat model.
 A new `src/mitigation/` subsystem with the two workhorse techniques
 for current-generation NISQ hardware:
 
-```c
+[archived fence delimiter: ```c]
 #include <moonlab/mitigation/zne.h>
 
 // Suppose fn(lambda, ctx) runs the circuit with noise scaled by lambda
@@ -831,7 +838,7 @@ double scales[] = { 1.0, 1.5, 2.0, 3.0 };
 double sd = 0.0;
 double E_mitigated = zne_mitigate(fn, ctx, scales, 4,
                                    ZNE_EXPONENTIAL, &sd);
-```
+[archived fence delimiter: ```]
 
 Three estimators: linear (OLS intercept fit), Richardson (exact
 Lagrange interpolation at lambda = 0 -- zero residual on polynomials
@@ -847,7 +854,7 @@ inverse noise channels.
 
 ### Python (with PyTorch Integration)
 
-```python
+[archived fence delimiter: ```python]
 import moonlab as ml
 import torch
 
@@ -868,11 +875,11 @@ class QuantumLayer(torch.nn.Module):
 # Train with backpropagation
 model = QuantumLayer(4)
 optimizer = torch.optim.Adam(model.parameters())
-```
+[archived fence delimiter: ```]
 
 ### VQE in Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 
 vqe = VQE(
@@ -882,11 +889,11 @@ vqe = VQE(
 )
 result = vqe.minimize()
 print(f"Energy: {result.energy:.8f} Ha")
-```
+[archived fence delimiter: ```]
 
 ### Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::{QuantumState, Gate};
 
 fn main() {
@@ -897,11 +904,11 @@ fn main() {
     let entropy = state.entanglement_entropy(0);
     println!("Entropy: {:.4}", entropy);
 }
-```
+[archived fence delimiter: ```]
 
 ### JavaScript (React)
 
-```jsx
+[archived fence delimiter: ```jsx]
 import { useQuantumState, BlochSphere } from '@moonlab/quantum-react';
 
 function QuantumVisualizer() {
@@ -916,11 +923,11 @@ function QuantumVisualizer() {
         </div>
     );
 }
-```
+[archived fence delimiter: ```]
 
 ### Vue
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
     <circuit-diagram :circuit="circuit" />
 </template>
@@ -929,7 +936,7 @@ function QuantumVisualizer() {
 import { useQuantumState } from '@moonlab/quantum-vue';
 const { state, circuit } = useQuantumState(2);
 </script>
-```
+[archived fence delimiter: ```]
 
 ## Limitations (as of 0.2.0)
 
@@ -995,12 +1002,12 @@ direct RB as described in `docs/release/` / `MOONLAB_RELEASE_ROADMAP.md`).
 
 Runnable micro-benchmarks ship today:
 
-```bash
+[archived fence delimiter: ```bash]
 ./build/bench_state_operations          # dense SV gate throughput
 ./build/bench_tensor_networks           # MPS / DMRG micro-probes
 ./build/grover_parallel_benchmark       # Grover scaling across cores
 ./build/phase3_phase4_benchmark         # Metal kernel sanity
-```
+[archived fence delimiter: ```]
 
 Use those to measure your own hardware. A comparative
 regression harness against Qiskit-Aer / Qulacs / cuStateVec is
@@ -1071,7 +1078,7 @@ Full documentation is available in the [docs/](docs/) directory:
 
 ## Project Structure
 
-```
+[archived fence delimiter: ```]
 moonlab/
 ├── src/
 │   ├── quantum/              # State vector engine
@@ -1097,13 +1104,13 @@ moonlab/
 │   └── applications/         # Portfolio, QRNG
 ├── tests/                    # Test suite
 └── docs/                     # Documentation
-```
+[archived fence delimiter: ```]
 
 ## Citation
 
 If you use Moonlab in your research, please cite:
 
-```bibtex
+[archived fence delimiter: ```bibtex]
 @software{tsotchke_moonlab_2026,
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
@@ -1117,7 +1124,7 @@ If you use Moonlab in your research, please cite:
                     topological quantum computing, DMRG, VQE, QAOA,
                     Chern insulators, quantum geometric tensor}
 }
-```
+[archived fence delimiter: ```]
 
 ## References
 
@@ -1171,3 +1178,4 @@ MIT License. See [LICENSE](LICENSE) for details.
 **Moonlab** - From qubits to anyons, from state vectors to tensor networks.
 
 *Built for researchers. Optimized for discovery.*
+```

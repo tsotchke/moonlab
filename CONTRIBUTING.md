@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Contributing to MoonLab Quantum Simulator
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Contributing to MoonLab Quantum Simulator
 
 Thank you for your interest in contributing to MoonLab Quantum Simulator! This document provides guidelines and information for contributors.
@@ -30,7 +37,7 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 
 ### Quick Start
 
-```bash
+[archived fence delimiter: ```bash]
 # Clone the repository
 git clone https://github.com/tsotchke/moonlab.git
 cd moonlab
@@ -40,38 +47,38 @@ make all
 
 # Run tests
 make test
-```
+[archived fence delimiter: ```]
 
 ## Development Setup
 
 ### macOS (Recommended for Metal GPU)
 
-```bash
+[archived fence delimiter: ```bash]
 # Install dependencies
 brew install libomp lcov
 
 # Build with Metal support
 make ENABLE_METAL=1 all
-```
+[archived fence delimiter: ```]
 
 ### Linux
 
-```bash
+[archived fence delimiter: ```bash]
 # Install dependencies (Ubuntu/Debian)
 sudo apt-get install build-essential libomp-dev lcov valgrind
 
 # Build
 make all
-```
+[archived fence delimiter: ```]
 
 ### Running Examples
 
-```bash
+[archived fence delimiter: ```bash]
 # Build and run examples
 make examples
 ./examples/quantum/grover_parallel_demo
 ./examples/quantum/vqe_demo
-```
+[archived fence delimiter: ```]
 
 ## Making Changes
 
@@ -99,13 +106,13 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) for consiste
 
 ### Format
 
-```
+[archived fence delimiter: ```]
 <type>(<scope>): <description>
 
 [optional body]
 
 [optional footer(s)]
-```
+[archived fence delimiter: ```]
 
 ### Types
 
@@ -123,7 +130,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) for consiste
 
 ### Examples
 
-```bash
+[archived fence delimiter: ```bash]
 feat(gates): add controlled-RZ gate implementation
 
 fix(state): correct normalization after measurement
@@ -131,17 +138,17 @@ fix(state): correct normalization after measurement
 perf(simd): optimize Hadamard gate with AVX-512
 
 docs(api): add examples for VQE configuration
-```
+[archived fence delimiter: ```]
 
 ### Breaking Changes
 
 For breaking changes, add `!` after the type or add `BREAKING CHANGE:` in the footer:
 
-```bash
+[archived fence delimiter: ```bash]
 feat(api)!: rename quantum_state_create to qs_state_create
 
 BREAKING CHANGE: All state creation calls must be updated.
-```
+[archived fence delimiter: ```]
 
 ## Pull Request Process
 
@@ -171,7 +178,7 @@ BREAKING CHANGE: All state creation calls must be updated.
 
 ### C Code Style
 
-```c
+[archived fence delimiter: ```c]
 /**
  * @brief Apply a single-qubit gate to the quantum state.
  *
@@ -198,7 +205,7 @@ int qs_apply_gate(qs_state_t *state, const complex_t gate[2][2], int qubit) {
 
     return QS_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Style Guidelines
 
@@ -214,20 +221,20 @@ int qs_apply_gate(qs_state_t *state, const complex_t gate[2][2], int qubit) {
 
 ### Header Guards
 
-```c
+[archived fence delimiter: ```c]
 #ifndef QUANTUM_STATE_H
 #define QUANTUM_STATE_H
 
 // ... content ...
 
 #endif // QUANTUM_STATE_H
-```
+[archived fence delimiter: ```]
 
 ## Testing
 
 ### Test Structure
 
-```
+[archived fence delimiter: ```]
 tests/
 ├── unit/                    # Unit tests
 │   ├── test_quantum_state.c
@@ -236,11 +243,11 @@ tests/
 │   └── test_algorithms.c
 └── benchmarks/              # Performance tests
     └── bench_grover.c
-```
+[archived fence delimiter: ```]
 
 ### Writing Tests
 
-```c
+[archived fence delimiter: ```c]
 void test_hadamard_creates_superposition(void) {
     quantum_state_t *state = quantum_state_init(1);
 
@@ -253,11 +260,11 @@ void test_hadamard_creates_superposition(void) {
 
     quantum_state_free(state);
 }
-```
+[archived fence delimiter: ```]
 
 ### Running Tests
 
-```bash
+[archived fence delimiter: ```bash]
 # Run all tests
 make test
 
@@ -269,7 +276,7 @@ make coverage
 
 # Run with Valgrind (Linux)
 valgrind --leak-check=full ./tests/quantum_sim_test
-```
+[archived fence delimiter: ```]
 
 ## Documentation
 
@@ -277,7 +284,7 @@ valgrind --leak-check=full ./tests/quantum_sim_test
 
 Use Doxygen-style comments:
 
-```c
+[archived fence delimiter: ```c]
 /**
  * @file state.h
  * @brief Quantum state management functions.
@@ -309,17 +316,17 @@ Use Doxygen-style comments:
  * @since v1.0.0
  */
 qs_state_t *qs_state_create(int num_qubits, qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### Generating Documentation
 
-```bash
+[archived fence delimiter: ```bash]
 # Generate HTML documentation
 doxygen Doxyfile
 
 # View in browser
 open docs/api/html/index.html
-```
+[archived fence delimiter: ```]
 
 ## Questions?
 
@@ -328,3 +335,4 @@ open docs/api/html/index.html
 - **Email**: support@tsotchke.ai
 
 Thank you for contributing!
+```

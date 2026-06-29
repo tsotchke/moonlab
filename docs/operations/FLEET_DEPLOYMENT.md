@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Fleet Deployment
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Fleet Deployment
 
 > **Audience:** SREs rolling Moonlab Community Edition (or a private
@@ -18,7 +25,7 @@
 
 The standard multi-node Moonlab deployment looks like this:
 
-```
+[archived fence delimiter: ```]
                               +--------------------+
             tenants  ----->   | external load LB   |   (TLS-terminating)
                               +---------+----------+
@@ -43,7 +50,7 @@ The standard multi-node Moonlab deployment looks like this:
                    | - audit log shard  |       completion hook
                    | - quota service    |   <-- backs admission hook
                    +--------------------+
-```
+[archived fence delimiter: ```]
 
 Every control-plane replica is **independent** -- they share no
 state beyond what their backing overlay services hold.  This is
@@ -55,7 +62,7 @@ tenant state lives in the overlay layer.
 The reference Dockerfile builds a self-contained binary against
 Debian 12 slim.  From the repo root:
 
-```bash
+[archived fence delimiter: ```bash]
 docker build -f deploy/docker/Dockerfile.control-plane \
              -t moonlab/control-plane:1.0.3 \
              --build-arg MOONLAB_VERSION=1.0.3 \
@@ -66,15 +73,15 @@ docker build -f deploy/docker/Dockerfile.exporter \
 docker build -f deploy/docker/Dockerfile.gateway \
              -t moonlab/websocket-gateway:1.0.3 \
              .
-```
+[archived fence delimiter: ```]
 
 Tag and push to your registry (replace with yours):
 
-```bash
+[archived fence delimiter: ```bash]
 docker tag moonlab/control-plane:1.0.3 myregistry.example/moonlab/control-plane:1.0.3
 docker push myregistry.example/moonlab/control-plane:1.0.3
 # ... same for control-exporter and websocket-gateway
-```
+[archived fence delimiter: ```]
 
 The Community Edition image carries no proprietary code; the CI
 hygiene gate (see `.github/workflows/ci.yml`) blocks proprietary
@@ -82,12 +89,12 @@ markers from landing in the public source the image is built from.
 
 Image SHA pinning is recommended for fleet upgrades:
 
-```yaml
+[archived fence delimiter: ```yaml]
 image:
   repository: myregistry.example/moonlab/control-plane
   tag:        "1.0.3"
   digest:     "sha256:..."
-```
+[archived fence delimiter: ```]
 
 ## 3. Secret distribution
 
@@ -102,7 +109,7 @@ Four distinct secrets must reach every replica:
 
 In Kubernetes, two Secrets back this:
 
-```bash
+[archived fence delimiter: ```bash]
 kubectl create secret generic moonlab-hmac \
         --from-file=hmac.bin=/path/to/hmac.bin
 
@@ -113,11 +120,11 @@ kubectl create secret tls moonlab-tls \
 # Optional mTLS:
 kubectl create secret generic moonlab-client-ca \
         --from-file=ca.crt=/path/to/clients-ca.crt
-```
+[archived fence delimiter: ```]
 
 Reference the secrets in `values.yaml`:
 
-```yaml
+[archived fence delimiter: ```yaml]
 controlPlane:
   auth:
     enabled: true
@@ -127,16 +134,16 @@ controlPlane:
     secretName: moonlab-tls
     requireClientCert: true                  # mTLS
     clientCaSecretName: moonlab-client-ca
-```
+[archived fence delimiter: ```]
 
 Rotate by replacing the Secret and triggering a rolling restart:
 
-```bash
+[archived fence delimiter: ```bash]
 kubectl create secret generic moonlab-hmac --from-file=hmac.bin=/path/to/new.bin \
         --dry-run=client -o yaml | kubectl apply -f -
 kubectl rollout restart deployment/moonlab-control-plane
 kubectl rollout status  deployment/moonlab-control-plane
-```
+[archived fence delimiter: ```]
 
 The old secret is honored until the last old-image pod terminates.
 Plan a 30-second overlap window for in-flight requests; clients
@@ -186,7 +193,7 @@ overlay installs it via `moonlab_control_server_set_admission_hook`
 when the daemon boots.  Inside the hook, the overlay queries
 fleet-shared state:
 
-```c
+[archived fence delimiter: ```c]
 int my_admission(const char *tenant_id, const char *verb,
                  int n_qubits, int n_shots, void *ctx) {
     /* Shared store: Redis / etcd / billing API.  Cache for a few
@@ -200,7 +207,7 @@ int my_admission(const char *tenant_id, const char *verb,
         return MOONLAB_CONTROL_RATE_LIMITED;
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 Distribute the shared store as a sidecar (Redis on the same node)
 or as a cluster service.  Each replica connects to it
@@ -211,7 +218,7 @@ independently; concurrent decrements are the overlay's problem.
 Every replica's Prometheus exporter emits the metrics enumerated in
 RUNBOOK Section 7.  Federate to a central Prometheus:
 
-```yaml
+[archived fence delimiter: ```yaml]
 # central Prometheus prometheus.yml
 scrape_configs:
   - job_name: moonlab-fleet
@@ -221,7 +228,7 @@ scrape_configs:
         - moonlab-control-0.example:9090
         - moonlab-control-1.example:9090
         - moonlab-control-2.example:9090
-```
+[archived fence delimiter: ```]
 
 Or use kubernetes_sd for auto-discovery.
 
@@ -241,7 +248,7 @@ Or use kubernetes_sd for auto-discovery.
 The control plane has no on-disk state to migrate, so a rolling
 upgrade is the standard Kubernetes rollout:
 
-```bash
+[archived fence delimiter: ```bash]
 # 1. Push the new image
 docker push myregistry.example/moonlab/control-plane:1.0.4
 
@@ -252,7 +259,7 @@ helm upgrade moonlab ./deploy/helm/moonlab \
 
 # 3. Watch the rollout
 kubectl rollout status deployment/moonlab-control-plane
-```
+[archived fence delimiter: ```]
 
 The default rolling strategy keeps `replicas - 1` pods serving while
 one pod restarts.  In-flight requests on the restarting pod are
@@ -268,7 +275,7 @@ delete it.
 
 After every rollout, run this from a host that can reach the LB:
 
-```bash
+[archived fence delimiter: ```bash]
 # 1. HEALTH probe (unauth, hits LB)
 for i in $(seq 1 9); do
     printf 'HEALTH\n' | nc -w 1 lb.example.com 8443
@@ -281,13 +288,13 @@ done
 # 3. Metrics check
 curl -s lb.example.com:9090/metrics | grep -E 'requests_total|rejected_total'
 # CIRCUIT counter should be non-zero on every replica.
-```
+[archived fence delimiter: ```]
 
 If any check fails, roll back:
 
-```bash
+[archived fence delimiter: ```bash]
 helm rollback moonlab
-```
+[archived fence delimiter: ```]
 
 ## 9. Capacity benchmarks per host
 
@@ -322,3 +329,4 @@ memory at high qubit counts (see RUNBOOK §9).
 - `docs/EXTENSION_SURFACES.md` -- overlay integration guide.
 - `COMMUNITY_EDITION.md` -- public / commercial product boundary.
 - `deploy/helm/moonlab/values.yaml` -- canonical k8s config knobs.
+```

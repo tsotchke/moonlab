@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Performance Documentation
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Performance Documentation
 
 Benchmarks, scaling analysis, and optimization guidance for Moonlab.
@@ -81,7 +88,7 @@ Memory planning for large simulations:
 
 ### 1. Use GPU for Large States
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import set_backend, QuantumState
 
 # Automatic selection (recommended)
@@ -90,11 +97,11 @@ set_backend('auto')
 # Force GPU for 18+ qubits
 set_backend('metal')
 state = QuantumState(24)  # Uses GPU
-```
+[archived fence delimiter: ```]
 
 ### 2. Batch Operations
 
-```python
+[archived fence delimiter: ```python]
 # Slow: Individual gate calls with syncs
 for i in range(1000):
     state.h(0)
@@ -104,21 +111,21 @@ for i in range(1000):
 for i in range(1000):
     state.h(0)
 results = state.sample(1000)  # Single sync at end
-```
+[archived fence delimiter: ```]
 
 ### 3. Use Tensor Networks for Large Systems
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import MPS
 
 # For 50+ qubits with limited entanglement
 mps = MPS(num_qubits=50, max_bond_dim=100)
 mps.apply_layer(circuit)
-```
+[archived fence delimiter: ```]
 
 ### 4. Profile Your Code
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import Profiler
 
 with Profiler() as p:
@@ -129,7 +136,7 @@ with Profiler() as p:
         state.cnot(0, 1)
 
 p.print_summary()
-```
+[archived fence delimiter: ```]
 
 ## Hardware Comparison
 
@@ -194,3 +201,4 @@ Before running large simulations:
 - [Performance Tuning Guide](../guides/performance-tuning.md) - Optimization
 - [Tensor Network Engine](../architecture/tensor-network-engine.md) - MPS/DMRG internals
 
+```

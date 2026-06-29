@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Platform Specification
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Platform Specification
 
 **Written for:** 0.2.0-dev (the document's original baseline).
@@ -104,7 +111,7 @@ lattice-field H, Floquet drive, dissipator — lives in this algebra.
 
 **API sketch:**
 
-```c
+[archived fence delimiter: ```c]
 moonlab_op_t* moonlab_op_pauli(const char* pauli_string, size_t n);
 moonlab_op_t* moonlab_op_number(size_t mode);
 moonlab_op_t* moonlab_op_fermion_c(size_t mode, int dagger);
@@ -113,7 +120,7 @@ moonlab_op_t* moonlab_op_mul(double complex z, moonlab_op_t* a);
 moonlab_op_t* moonlab_op_commutator(moonlab_op_t* a, moonlab_op_t* b);
 int           moonlab_op_normalise(moonlab_op_t* a);
 void          moonlab_op_free(moonlab_op_t* a);
-```
+[archived fence delimiter: ```]
 
 **Status today:** fragmented. Pauli-strings in VQE, MPO in DMRG,
 stencil matvec in Chern-KPM, hardcoded matrices in tensor. Migrating
@@ -235,7 +242,7 @@ The backend surface:
 The backend exposes a narrow, audited API that each substrate
 consumes:
 
-```c
+[archived fence delimiter: ```c]
 /* Apply a 1- or 2-qubit gate to a state at a given representation. */
 moonlab_backend_result_t moonlab_bk_apply_gate(
     moonlab_state_t*   state,
@@ -256,7 +263,7 @@ moonlab_backend_result_t moonlab_bk_contract(
     const char* einsum_spec,
     const moonlab_tensor_t* const* operands, size_t n_operands,
     moonlab_tensor_t* out);
-```
+[archived fence delimiter: ```]
 
 **Principles governing the backend:**
 
@@ -509,3 +516,4 @@ Every future PR is graded against four questions:
 
 A PR that scores zero on all four is closed without merge. No
 exceptions.
+```

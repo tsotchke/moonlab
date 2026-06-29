@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Linear Algebra Review
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Linear Algebra Review
 
 A focused review of linear algebra concepts essential for quantum computing. Each topic includes quantum computing context to illustrate relevance.
@@ -262,3 +269,4 @@ The reduced density matrix is maximally mixed—this is characteristic of maxima
 ## Next
 
 Proceed to [Quantum Mechanics Primer](quantum-mechanics-primer.md) to learn how these mathematical structures describe physical quantum systems.
+```

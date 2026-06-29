@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Skyrmion Braiding API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Skyrmion Braiding API
 
 C API for skyrmion-based topological quantum computing.
@@ -8,9 +15,9 @@ The skyrmion braiding API (`skyrmion_braiding.h`) provides functions for simulat
 
 ## Header
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/skyrmion_braiding.h"
-```
+[archived fence delimiter: ```]
 
 ## Types
 
@@ -18,7 +25,7 @@ The skyrmion braiding API (`skyrmion_braiding.h`) provides functions for simulat
 
 Represents a single magnetic skyrmion.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double x;           // Center x-coordinate
     double y;           // Center y-coordinate
@@ -26,7 +33,7 @@ typedef struct {
     int charge;         // Topological charge (+1 or -1)
     int helicity;       // 0 = Néel, 1 = Bloch
 } skyrmion_t;
-```
+[archived fence delimiter: ```]
 
 **Fields**:
 
@@ -42,45 +49,45 @@ typedef struct {
 
 Enumeration of braiding path types.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     BRAID_CLOCKWISE,        // Clockwise exchange
     BRAID_COUNTERCLOCKWISE, // Counter-clockwise exchange
     BRAID_FIGURE_EIGHT,     // Full figure-8 braiding
     BRAID_HALF_EXCHANGE     // Half exchange (for testing)
 } braid_type_t;
-```
+[archived fence delimiter: ```]
 
 ### `waypoint_t`
 
 Single waypoint in a braiding path.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double x;           // Target x-coordinate
     double y;           // Target y-coordinate
     double velocity;    // Velocity to this point
 } waypoint_t;
-```
+[archived fence delimiter: ```]
 
 ### `braid_path_t`
 
 Complete braiding path specification.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     waypoint_t *waypoints;  // Array of waypoints
     uint32_t num_waypoints; // Number of waypoints
     braid_type_t type;      // Type of braid
     double total_time;      // Total time for braid
 } braid_path_t;
-```
+[archived fence delimiter: ```]
 
 ### `braid_config_t`
 
 Configuration for braiding simulations.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double dt;              // TDVP time step
     uint32_t max_bond_dim;  // Maximum MPS bond dimension
@@ -92,13 +99,13 @@ typedef struct {
     double braid_velocity;  // Braiding velocity
     uint32_t braid_segments; // Number of segments in braid path
 } braid_config_t;
-```
+[archived fence delimiter: ```]
 
 ### `braid_result_t`
 
 Results from a braiding operation.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     double complex phase;       // Total accumulated phase
     double *times;              // Time array
@@ -108,13 +115,13 @@ typedef struct {
     uint32_t num_records;       // Number of recorded points
     bool success;               // Whether braiding completed
 } braid_result_t;
-```
+[archived fence delimiter: ```]
 
 ### `topo_qubit_t`
 
 Topological qubit encoded in a skyrmion pair.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     tn_mps_state_t *mps;    // MPS state encoding the qubit
     lattice_2d_t *lat;      // 2D lattice
@@ -124,13 +131,13 @@ typedef struct {
     double complex alpha;   // |0⟩ amplitude
     double complex beta;    // |1⟩ amplitude
 } topo_qubit_t;
-```
+[archived fence delimiter: ```]
 
 ### `topo_gate_type_t`
 
 Topological gate types.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     TOPO_GATE_IDENTITY,     // Identity (no braiding)
     TOPO_GATE_BRAID,        // Single braid (exp(iπ/4 σ))
@@ -138,7 +145,7 @@ typedef enum {
     TOPO_GATE_DOUBLE_BRAID, // Double braid (i σ)
     TOPO_GATE_HADAMARD      // Topological Hadamard
 } topo_gate_type_t;
-```
+[archived fence delimiter: ```]
 
 ## Functions
 
@@ -148,11 +155,11 @@ typedef enum {
 
 Track a single skyrmion from spin configuration.
 
-```c
+[archived fence delimiter: ```c]
 int skyrmion_track(const lattice_2d_t *lat,
                    const double (*spins)[3],
                    skyrmion_t *skyrmion);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -168,12 +175,12 @@ int skyrmion_track(const lattice_2d_t *lat,
 
 Track multiple skyrmions.
 
-```c
+[archived fence delimiter: ```c]
 int skyrmion_track_multiple(const lattice_2d_t *lat,
                             const double (*spins)[3],
                             skyrmion_t *skyrmions,
                             uint32_t max_skyrmions);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Number of skyrmions found.
 
@@ -183,13 +190,13 @@ int skyrmion_track_multiple(const lattice_2d_t *lat,
 
 Generate a circular braiding path.
 
-```c
+[archived fence delimiter: ```c]
 braid_path_t *braid_path_circular(double center_x, double center_y,
                                   double radius,
                                   braid_type_t type,
                                   uint32_t num_segments,
                                   double velocity);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -208,7 +215,7 @@ braid_path_t *braid_path_circular(double center_x, double center_y,
 
 Generate exchange paths for two skyrmions.
 
-```c
+[archived fence delimiter: ```c]
 int braid_path_exchange(double x1, double y1,
                         double x2, double y2,
                         braid_type_t type,
@@ -216,7 +223,7 @@ int braid_path_exchange(double x1, double y1,
                         double velocity,
                         braid_path_t **path1,
                         braid_path_t **path2);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 0 on success.
 
@@ -224,9 +231,9 @@ int braid_path_exchange(double x1, double y1,
 
 Free a braid path.
 
-```c
+[archived fence delimiter: ```c]
 void braid_path_free(braid_path_t *path);
-```
+[archived fence delimiter: ```]
 
 ### Braiding Dynamics
 
@@ -234,9 +241,9 @@ void braid_path_free(braid_path_t *path);
 
 Get default braiding configuration.
 
-```c
+[archived fence delimiter: ```c]
 static inline braid_config_t braid_config_default(void);
-```
+[archived fence delimiter: ```]
 
 **Default values**:
 - `dt`: 0.01
@@ -251,13 +258,13 @@ static inline braid_config_t braid_config_default(void);
 
 Execute a braiding protocol.
 
-```c
+[archived fence delimiter: ```c]
 braid_result_t *skyrmion_braid(tn_mps_state_t *mps,
                                const mpo_t *mpo,
                                const lattice_2d_t *lat,
                                const braid_path_t *path,
                                const braid_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -275,22 +282,22 @@ braid_result_t *skyrmion_braid(tn_mps_state_t *mps,
 
 Execute double braiding (exchange two skyrmions).
 
-```c
+[archived fence delimiter: ```c]
 braid_result_t *skyrmion_double_braid(tn_mps_state_t *mps,
                                       const mpo_t *mpo,
                                       const lattice_2d_t *lat,
                                       const braid_path_t *path1,
                                       const braid_path_t *path2,
                                       const braid_config_t *config);
-```
+[archived fence delimiter: ```]
 
 #### `braid_result_free`
 
 Free braiding result.
 
-```c
+[archived fence delimiter: ```c]
 void braid_result_free(braid_result_t *result);
-```
+[archived fence delimiter: ```]
 
 ### Topological Qubits
 
@@ -298,13 +305,13 @@ void braid_result_free(braid_result_t *result);
 
 Create a topological qubit from a skyrmion pair.
 
-```c
+[archived fence delimiter: ```c]
 topo_qubit_t *topo_qubit_create(const lattice_2d_t *lat,
                                 const hamiltonian_params_t *params,
                                 double x1, double y1,
                                 double x2, double y2,
                                 uint32_t bond_dim);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 
@@ -322,19 +329,19 @@ topo_qubit_t *topo_qubit_create(const lattice_2d_t *lat,
 
 Free a topological qubit.
 
-```c
+[archived fence delimiter: ```c]
 void topo_qubit_free(topo_qubit_t *qubit);
-```
+[archived fence delimiter: ```]
 
 #### `topo_gate_apply`
 
 Apply a topological gate to a qubit.
 
-```c
+[archived fence delimiter: ```c]
 int topo_gate_apply(topo_qubit_t *qubit,
                     topo_gate_type_t gate,
                     const braid_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 0 on success.
 
@@ -342,9 +349,9 @@ int topo_gate_apply(topo_qubit_t *qubit,
 
 Measure a topological qubit in the Z basis.
 
-```c
+[archived fence delimiter: ```c]
 int topo_qubit_measure_z(const topo_qubit_t *qubit);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Measurement result (+1 or -1).
 
@@ -352,11 +359,11 @@ int topo_qubit_measure_z(const topo_qubit_t *qubit);
 
 Get qubit state fidelity against a target state.
 
-```c
+[archived fence delimiter: ```c]
 double topo_qubit_fidelity(const topo_qubit_t *qubit,
                            double complex target_alpha,
                            double complex target_beta);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Fidelity (0 to 1).
 
@@ -366,10 +373,10 @@ double topo_qubit_fidelity(const topo_qubit_t *qubit,
 
 Extract geometric phase from braiding.
 
-```c
+[archived fence delimiter: ```c]
 double complex extract_geometric_phase(const tn_mps_state_t *mps_initial,
                                        const tn_mps_state_t *mps_final);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Geometric phase as a complex number.
 
@@ -377,15 +384,15 @@ double complex extract_geometric_phase(const tn_mps_state_t *mps_initial,
 
 Compute Berry phase from TDVP history.
 
-```c
+[archived fence delimiter: ```c]
 double compute_berry_phase(const tdvp_history_t *history);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Berry phase $\gamma = -\mathrm{Im} \sum_t \ln \langle \psi(t) | \psi(t+dt) \rangle$.
 
 ## Example
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/tensor_network/skyrmion_braiding.h"
 
 int main(void) {
@@ -416,7 +423,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -424,3 +431,4 @@ int main(void) {
 - [TDVP Algorithm](../../algorithms/tdvp-algorithm.md) - Time evolution method
 - [Topological Computing API](topological.md) - Anyon models and surface codes
 - [Tensor Network API](tensor-network.md) - MPS and MPO operations
+```

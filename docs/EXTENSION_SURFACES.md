@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Extension Surfaces
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Extension Surfaces
 
 This document is the integration guide for the four runtime registries
@@ -22,7 +29,7 @@ alternative simulators, deterministic mocks for testing.
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "src/distributed/scheduler.h"
 
 static int my_backend_execute(const moonlab_job_t *job,
@@ -42,14 +49,14 @@ moonlab_backend_t b = {
     .description = "Connects to my proprietary cluster",
 };
 moonlab_register_backend(&b);
-```
+[archived fence delimiter: ```]
 
 The struct is copied into the registry; pointer storage may be
 freed after the call.
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 # Backends are still C-only in Python; register from a host
 # extension module if you need to plug in from Python.  The Python
 # binding consumes registered backends via Job.set_backend(name).
@@ -60,7 +67,7 @@ j = Job(num_qubits=2)
 j.add_gate(GateType.H, 0).add_gate(GateType.CNOT, 1, 0)
 j.set_num_shots(1024).set_backend("my-backend")
 r = j.execute()
-```
+[archived fence delimiter: ```]
 
 ### Status codes
 
@@ -79,7 +86,7 @@ the backend.
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "src/applications/vendor_noise_backend.h"
 
 moonlab_vendor_noise_profile_t today = {
@@ -90,7 +97,7 @@ moonlab_vendor_noise_profile_t today = {
 };
 moonlab_register_vendor_noise_backend_with_profile(
     "ibm-falcon-2026-05-20-snapshot", &today);
-```
+[archived fence delimiter: ```]
 
 To update in place from a daily scraper, call
 `moonlab_register_vendor_noise_profile()` again with the same
@@ -100,7 +107,7 @@ numbers.
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.scheduler import (
     VendorNoiseProfile,
     register_vendor_noise_profile,
@@ -118,11 +125,11 @@ register_vendor_noise_profile(
 # Read back:
 prof = lookup_vendor_noise_profile("ibm-falcon-2026-05-20-snapshot")
 assert prof.p_gate_2q == 0.0095
-```
+[archived fence delimiter: ```]
 
 ### Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::scheduler::{
     register_vendor_noise_profile, lookup_vendor_noise_profile,
     VendorNoiseProfile,
@@ -133,11 +140,11 @@ let prof = VendorNoiseProfile {
     description: "IBM Falcon r5.11 (live snapshot)".to_string(),
 };
 register_vendor_noise_profile("ibm-falcon-2026-05-20-snapshot", &prof)?;
-```
+[archived fence delimiter: ```]
 
 ### JavaScript
 
-```typescript
+[archived fence delimiter: ```typescript]
 import {
     registerVendorNoiseProfile,
     lookupVendorNoiseProfile,
@@ -147,7 +154,7 @@ await registerVendorNoiseProfile('ibm-falcon-2026-05-20-snapshot', {
     pGate1q: 0.0011, pGate2q: 0.0095, pReadout: 0.0162,
     description: 'IBM Falcon r5.11 (live snapshot)',
 });
-```
+[archived fence delimiter: ```]
 
 ## Surface 3: Decoder runtime registry
 
@@ -161,7 +168,7 @@ proprietary BP-OSD takes over both dispatch paths.
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "src/applications/decoder_bench.h"
 
 static int my_decoder(const moonlab_decoder_input_t *in, void *ctx)
@@ -176,11 +183,11 @@ moonlab_register_decoder("my-bp-osd", my_decoder, &my_state,
 /* Dispatch by name: */
 moonlab_decoder_input_t input = { /* ... */ };
 moonlab_decoder_decode_by_name("my-bp-osd", &input);
-```
+[archived fence delimiter: ```]
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.decoder import register_decoder, decode_by_name
 
 def my_decoder(distance, num_qubits, is_toric, syndromes):
@@ -193,11 +200,11 @@ register_decoder("my-bp-osd", my_decoder,
 corr = decode_by_name("my-bp-osd",
                      distance=5, num_qubits=50, is_toric=True,
                      syndromes=[0] * 25)
-```
+[archived fence delimiter: ```]
 
 ### Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::decoder::{register_decoder, decode_by_name, CodeGeometry};
 
 register_decoder("my-bp-osd", "Proprietary BP-OSD",
@@ -208,11 +215,11 @@ register_decoder("my-bp-osd", "Proprietary BP-OSD",
 let corr = decode_by_name("my-bp-osd",
     &CodeGeometry { distance: 5, num_qubits: 50, is_toric: true },
     &vec![0u8; 25], 0)?;
-```
+[archived fence delimiter: ```]
 
 ### JavaScript
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { registerDecoder, decodeByName } from '@moonlab/quantum-core';
 
 await registerDecoder('my-bp-osd', (code, _syndromes, _seed) => {
@@ -222,7 +229,7 @@ await registerDecoder('my-bp-osd', (code, _syndromes, _seed) => {
 const corr = await decodeByName('my-bp-osd', {
     distance: 5, numQubits: 50, isToric: true,
 }, new Uint8Array(25));
-```
+[archived fence delimiter: ```]
 
 ### Status codes
 
@@ -245,7 +252,7 @@ alerting, quota enforcement.
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "src/distributed/scheduler.h"
 
 typedef struct { int n_runs; double total_cost; } billing_t;
@@ -268,11 +275,11 @@ moonlab_scheduler_set_completion_hook(billing_hook, &state);
 /* ... run jobs ... */
 
 moonlab_scheduler_set_completion_hook(NULL, NULL);  /* detach */
-```
+[archived fence delimiter: ```]
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.scheduler import set_completion_hook, clear_completion_hook
 
 def billing(num_qubits, total_shots, backend):
@@ -282,11 +289,11 @@ def billing(num_qubits, total_shots, backend):
 set_completion_hook(billing)
 # ... run jobs ...
 clear_completion_hook()
-```
+[archived fence delimiter: ```]
 
 ### Rust
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::scheduler::{set_completion_hook, clear_completion_hook};
 
 set_completion_hook(|info| {
@@ -295,11 +302,11 @@ set_completion_hook(|info| {
 })?;
 // ... run jobs ...
 clear_completion_hook()?;
-```
+[archived fence delimiter: ```]
 
 ### JavaScript
 
-```typescript
+[archived fence delimiter: ```typescript]
 import { setCompletionHook, clearCompletionHook } from '@moonlab/quantum-core';
 
 await setCompletionHook(info => {
@@ -308,7 +315,7 @@ await setCompletionHook(info => {
 });
 // ... run jobs ...
 await clearCompletionHook();
-```
+[archived fence delimiter: ```]
 
 ## Open-core rules
 
@@ -378,3 +385,4 @@ overlay authors don't have to cross-reference.
   boundary at the project level.
 - `docs/STABLE_ABI.md` -- the stable-ABI policy that governs how
   these surfaces evolve.
+```

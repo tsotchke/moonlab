@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Gate Implementation Architecture
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Gate Implementation Architecture
 
 How quantum gates are applied to state vectors in Moonlab.
@@ -8,7 +15,7 @@ Gate application is the core operation in quantum simulation. Moonlab implements
 
 ## Gate Application Pipeline
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────┐
 │  Gate Request   │
 │  (type, qubits) │
@@ -33,7 +40,7 @@ Gate application is the core operation in quantum simulation. Moonlab implements
 │   State Update    │
 │   (in-place)      │
 └───────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Single-Qubit Gate Algorithm
 
@@ -52,7 +59,7 @@ U_{10} \alpha_{i \oplus 2^k} + U_{11} \alpha_i & \text{if bit } k \text{ of } i 
 
 ### Implementation
 
-```c
+[archived fence delimiter: ```c]
 void apply_single_qubit_gate(quantum_state_t* state,
                               int target,
                               const complex_t gate[2][2]) {
@@ -74,11 +81,11 @@ void apply_single_qubit_gate(quantum_state_t* state,
         state->amplitudes[i1] = gate[1][0] * a0 + gate[1][1] * a1;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Memory Access Pattern
 
-```
+[archived fence delimiter: ```]
 State vector: [α₀, α₁, α₂, α₃, α₄, α₅, α₆, α₇, ...]
 
 Gate on qubit 0 (stride=1):
@@ -89,13 +96,13 @@ Gate on qubit 1 (stride=2):
 
 Gate on qubit 2 (stride=4):
   Pairs: (0,4), (1,5), (2,6), (3,7), ...
-```
+[archived fence delimiter: ```]
 
 ## Two-Qubit Gate Algorithm
 
 ### CNOT Implementation
 
-```c
+[archived fence delimiter: ```c]
 void apply_cnot(quantum_state_t* state, int control, int target) {
     size_t ctrl_stride = 1ULL << control;
     size_t targ_stride = 1ULL << target;
@@ -121,11 +128,11 @@ void apply_cnot(quantum_state_t* state, int control, int target) {
         state->amplitudes[i11] = tmp;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### General Two-Qubit Gate
 
-```c
+[archived fence delimiter: ```c]
 void apply_two_qubit_gate(quantum_state_t* state,
                            int q0, int q1,
                            const complex_t gate[4][4]) {
@@ -169,13 +176,13 @@ void apply_two_qubit_gate(quantum_state_t* state,
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## SIMD Optimization
 
 ### ARM NEON (Apple Silicon)
 
-```c
+[archived fence delimiter: ```c]
 #include <arm_neon.h>
 
 void apply_hadamard_neon(quantum_state_t* state, int target) {
@@ -201,11 +208,11 @@ void apply_hadamard_neon(quantum_state_t* state, int target) {
         vst1q_f64((double*)&state->amplitudes[i1], vmulq_f64(diff, scale));
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### AVX2 (x86-64)
 
-```c
+[archived fence delimiter: ```c]
 #include <immintrin.h>
 
 void apply_hadamard_avx2(quantum_state_t* state, int target) {
@@ -237,13 +244,13 @@ void apply_hadamard_avx2(quantum_state_t* state, int target) {
                          _mm256_mul_pd(diff, scale));
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## GPU Implementation (Metal)
 
 ### Compute Shader
 
-```metal
+[archived fence delimiter: ```metal]
 #include <metal_stdlib>
 using namespace metal;
 
@@ -288,11 +295,11 @@ kernel void apply_single_gate(
     amplitudes[i0] = new_a0;
     amplitudes[i1] = new_a1;
 }
-```
+[archived fence delimiter: ```]
 
 ### Host Code
 
-```objc
+[archived fence delimiter: ```objc]
 - (void)applyGate:(int)target gate:(complex_t[2][2])gate {
     // Set up compute pipeline
     id<MTLComputePipelineState> pipeline = [self pipelineForGate];
@@ -326,7 +333,7 @@ kernel void apply_single_gate(
     [cmdBuffer commit];
     [cmdBuffer waitUntilCompleted];
 }
-```
+[archived fence delimiter: ```]
 
 ## Optimization Strategies
 
@@ -334,7 +341,7 @@ kernel void apply_single_gate(
 
 Combine consecutive single-qubit gates on the same qubit:
 
-```c
+[archived fence delimiter: ```c]
 // Instead of:
 apply_gate(state, 0, H);
 apply_gate(state, 0, T);
@@ -345,11 +352,11 @@ complex_t fused[2][2];
 matrix_multiply(H, T, temp);
 matrix_multiply(temp, H, fused);
 apply_gate(state, 0, fused);
-```
+[archived fence delimiter: ```]
 
 ### Cache Optimization
 
-```c
+[archived fence delimiter: ```c]
 // Ensure stride fits in L1 cache
 void apply_gate_cache_optimized(quantum_state_t* state, int target,
                                  const complex_t gate[2][2]) {
@@ -367,11 +374,11 @@ void apply_gate_cache_optimized(quantum_state_t* state, int target,
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Diagonal Gate Specialization
 
-```c
+[archived fence delimiter: ```c]
 // Z, S, T gates only multiply by phase
 void apply_phase_gate(quantum_state_t* state, int target, complex_t phase) {
     size_t stride = 1ULL << target;
@@ -383,7 +390,7 @@ void apply_phase_gate(quantum_state_t* state, int target, complex_t phase) {
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Comparison
 
@@ -402,3 +409,4 @@ void apply_phase_gate(quantum_state_t* state, int target, complex_t phase) {
 - [GPU Pipeline](gpu-pipeline.md)
 - [SIMD Operations API](../api/c/simd-ops.md)
 - [Performance Tuning Guide](../guides/performance-tuning.md)
+```

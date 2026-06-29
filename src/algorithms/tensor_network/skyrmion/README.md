@@ -1,10 +1,17 @@
+# Archived Moonlab Documentation: Skyrmion Quantum Computing Module
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Skyrmion Quantum Computing Module
 
 Production-grade tensor network simulation for topological skyrmion-based quantum computing.
 
 ## Architecture Overview
 
-```
+[archived fence delimiter: ```]
 skyrmion/
 ├── lattice/
 │   ├── lattice_2d.h          # 2D lattice infrastructure
@@ -31,13 +38,13 @@ skyrmion/
     ├── skyrmion_qubit.h      # Qubit encoding
     ├── gates.h               # Topological gates
     └── readout.h             # Measurement protocols
-```
+[archived fence delimiter: ```]
 
 ## Physical Model
 
 ### Hamiltonian
 
-```
+[archived fence delimiter: ```]
 H = H_exchange + H_DMI + H_Zeeman + H_anisotropy + H_dipolar
 
 H_exchange = -J Σ_{<i,j>} S_i · S_j
@@ -52,11 +59,11 @@ H_Zeeman = -B · Σ_i S_i
 H_anisotropy = -K Σ_i (S_i · n̂)²
 
 H_dipolar = (μ₀/4π) Σ_{i≠j} [S_i·S_j/r³ - 3(S_i·r)(S_j·r)/r⁵]
-```
+[archived fence delimiter: ```]
 
 ### Topological Charge
 
-```
+[archived fence delimiter: ```]
 Q = (1/4π) ∫ n · (∂n/∂x × ∂n/∂y) d²r
 
 Discretized on lattice:
@@ -64,7 +71,7 @@ Q = (1/4π) Σ_plaquettes Ω_ijk
 
 where Ω_ijk is the solid angle subtended by spins at vertices i,j,k:
 Ω = 2 atan2(S_i · (S_j × S_k), 1 + S_i·S_j + S_j·S_k + S_k·S_i)
-```
+[archived fence delimiter: ```]
 
 ## Implementation Details
 
@@ -78,17 +85,17 @@ long-range 1D interactions with maximum range R = Lx (lattice width).
 - For Heisenberg + DMI: bond dim ≈ 4 × Lx
 - Uses "carry" indices to track open interactions
 
-```
+[archived fence delimiter: ```]
 MPO[site] structure:
 - Track which interactions are "open" (started but not closed)
 - Close interaction when partner site is reached
 - Bond indices: [identity, open_XX, open_YY, open_ZZ, open_XY, ...]
-```
+[archived fence delimiter: ```]
 
 ### TDVP Time Evolution
 
 Two-site TDVP for dynamics:
-```
+[archived fence delimiter: ```]
 |ψ(t+dt)⟩ = exp(-iHdt)|ψ(t)⟩
 
 Implemented via:
@@ -96,14 +103,14 @@ Implemented via:
 2. Solve local TDSE: i∂_t|θ⟩ = H_eff|θ⟩
 3. Use Lanczos for matrix exponential
 4. SVD truncation to maintain bond dimension
-```
+[archived fence delimiter: ```]
 
 ### Skyrmion Braiding
 
 Braiding two skyrmions exchanges their positions while accumulating
 a geometric phase. For Ising anyons (Majorana-like):
 
-```
+[archived fence delimiter: ```]
 Braid matrix: B = exp(iπ/4 σ_x)
 
 Implementation:
@@ -111,7 +118,7 @@ Implementation:
 2. Apply time-dependent field gradient to move skyrmions
 3. Execute braiding path (e.g., one skyrmion circles the other)
 4. Measure accumulated phase via interference
-```
+[archived fence delimiter: ```]
 
 ## Performance Targets
 
@@ -140,3 +147,4 @@ Implementation:
 
 6. J. Haegeman et al., "Time-dependent variational principle for quantum
    lattices", Phys. Rev. Lett. 107, 070601 (2011)
+```

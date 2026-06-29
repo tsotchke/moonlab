@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Matrix-Product Density Operator (MPDO) — API reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Matrix-Product Density Operator (MPDO) — API reference
 
 `src/quantum/noise_mpdo.{c,h}` — polynomial-cost noisy circuit
@@ -14,9 +21,9 @@ The MPDO stores a noisy n-qubit density matrix `rho` as an MPS-of-
 superoperators.  Each site tensor has a 4-dimensional physical leg
 holding the vectorised local 2x2 density block:
 
-```
+[archived fence delimiter: ```]
 vec(rho_i) = (rho_00, rho_01, rho_10, rho_11)
-```
+[archived fence delimiter: ```]
 
 and a left/right virtual bond of dimension `chi` capturing site-site
 correlations.  A single-qubit Kraus channel acts as a 4x4
@@ -29,7 +36,7 @@ during multi-site operations (when implemented) will not exceed it.
 
 ## Lifecycle
 
-```c
+[archived fence delimiter: ```c]
 typedef struct moonlab_mpdo_t moonlab_mpdo_t;
 
 typedef enum {
@@ -44,33 +51,33 @@ moonlab_mpdo_t* moonlab_mpdo_create(uint32_t num_qubits,
                                      uint32_t max_bond_dim);
 void            moonlab_mpdo_free(moonlab_mpdo_t* m);
 moonlab_mpdo_t* moonlab_mpdo_clone(const moonlab_mpdo_t* m);
-```
+[archived fence delimiter: ```]
 
 Initial state is `|0...0><0...0|` at chi = 1.  Recommended
 `max_bond_dim = 32` for ~50-qubit local-noise circuits.
 
 ## Introspection
 
-```c
+[archived fence delimiter: ```c]
 uint32_t moonlab_mpdo_num_qubits(const moonlab_mpdo_t*);
 uint32_t moonlab_mpdo_max_bond_dim(const moonlab_mpdo_t*);
 uint32_t moonlab_mpdo_current_bond_dim(const moonlab_mpdo_t*);
 double   moonlab_mpdo_trace(const moonlab_mpdo_t*);
-```
+[archived fence delimiter: ```]
 
 `Tr(rho)` should always equal 1 to within roundoff for a CPTP-evolved
 state; deviations indicate truncation error or implementation bugs.
 
 ## General Kraus channels
 
-```c
+[archived fence delimiter: ```c]
 typedef double _Complex mpdo_complex_t;
 
 mpdo_error_t moonlab_mpdo_apply_kraus_1q(moonlab_mpdo_t* state,
                                           uint32_t qubit,
                                           const mpdo_complex_t* kraus,
                                           uint32_t num_kraus);
-```
+[archived fence delimiter: ```]
 
 Kraus operators stored as a flat row-major `[num_kraus, 2, 2]` array.
 The channel is `rho -> sum_a K_a rho K_a^dagger`.  Caller must ensure
@@ -82,14 +89,14 @@ The channel is `rho -> sum_a K_a rho K_a^dagger`.  Caller must ensure
 Each wraps the right Kraus rep using conventions from
 `src/quantum/noise.h`:
 
-```c
+[archived fence delimiter: ```c]
 mpdo_error_t moonlab_mpdo_apply_depolarizing_1q     (state, qubit, p);
 mpdo_error_t moonlab_mpdo_apply_amplitude_damping_1q(state, qubit, gamma);
 mpdo_error_t moonlab_mpdo_apply_phase_damping_1q    (state, qubit, lambda);
 mpdo_error_t moonlab_mpdo_apply_bit_flip_1q         (state, qubit, p);
 mpdo_error_t moonlab_mpdo_apply_phase_flip_1q       (state, qubit, p);
 mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q   (state, qubit, p);
-```
+[archived fence delimiter: ```]
 
 | channel | Kraus | physical effect |
 |---|---|---|
@@ -102,19 +109,19 @@ mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q   (state, qubit, p);
 
 ## Observables
 
-```c
+[archived fence delimiter: ```c]
 mpdo_error_t moonlab_mpdo_expect_pauli_1q(const moonlab_mpdo_t* state,
                                            uint32_t qubit,
                                            uint8_t  pauli_code,
                                            double*  out_expval);
-```
+[archived fence delimiter: ```]
 
 `pauli_code` ∈ {0=I, 1=X, 2=Y, 3=Z}.  Returns `Tr(rho * P_q)` as a
 real number.
 
 ## Example
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/quantum/noise_mpdo.h"
 #include <stdio.h>
 
@@ -134,7 +141,7 @@ int main(void) {
     moonlab_mpdo_free(m);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Language bindings
 
@@ -165,3 +172,4 @@ int main(void) {
   source citations.
 - `docs/reference/qgt-api.md` — sister v0.3 module (quantum
   geometric tensor).
+```

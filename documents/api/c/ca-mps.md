@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Clifford-Assisted MPS (CA-MPS) C API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Clifford-Assisted MPS (CA-MPS) C API
 
 Complete reference for the CA-MPS hybrid `|psi> = D|phi>` representation,
@@ -34,7 +41,7 @@ vs plain MPS on a random Clifford circuit (`bench_ca_mps`).
 
 ## State handle
 
-```c
+[archived fence delimiter: ```c]
 typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
 
 moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits,
@@ -45,14 +52,14 @@ moonlab_ca_mps_t* moonlab_ca_mps_clone (const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_num_qubits        (const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_max_bond_dim      (const moonlab_ca_mps_t* s);
 uint32_t moonlab_ca_mps_current_bond_dim  (const moonlab_ca_mps_t* s);
-```
+[archived fence delimiter: ```]
 
 `moonlab_ca_mps_create` returns NULL on bad arguments or allocation
 failure.  `moonlab_ca_mps_free` is no-op on NULL.
 
 ## Clifford gates (tableau-only, no MPS cost)
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
 int moonlab_ca_mps_s    (moonlab_ca_mps_t* s, uint32_t q);
 int moonlab_ca_mps_sdag (moonlab_ca_mps_t* s, uint32_t q);
@@ -63,11 +70,11 @@ int moonlab_ca_mps_z    (moonlab_ca_mps_t* s, uint32_t q);
 int moonlab_ca_mps_cnot (moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
 int moonlab_ca_mps_cz   (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
 int moonlab_ca_mps_swap (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
-```
+[archived fence delimiter: ```]
 
 ## Non-Clifford rotations (Pauli-string MPO into `|phi>`)
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_ca_mps_rx        (moonlab_ca_mps_t* s, uint32_t q, double theta);
 int moonlab_ca_mps_ry        (moonlab_ca_mps_t* s, uint32_t q, double theta);
 int moonlab_ca_mps_rz        (moonlab_ca_mps_t* s, uint32_t q, double theta);
@@ -80,7 +87,7 @@ int moonlab_ca_mps_pauli_rotation     (moonlab_ca_mps_t* s,
 int moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
                                          const uint8_t* pauli,
                                          double tau);
-```
+[archived fence delimiter: ```]
 
 Pauli strings are flat `uint8_t` arrays of length `num_qubits` with
 the byte encoding `0=I, 1=X, 2=Y, 3=Z`.
@@ -90,7 +97,7 @@ the byte encoding `0=I, 1=X, 2=Y, 3=Z`.
 
 ## Norm + observables
 
-```c
+[archived fence delimiter: ```c]
 int    moonlab_ca_mps_normalize (moonlab_ca_mps_t* s);
 double moonlab_ca_mps_norm      (const moonlab_ca_mps_t* s);
 
@@ -105,11 +112,11 @@ int moonlab_ca_mps_expect_pauli_sum (const moonlab_ca_mps_t* s,
 int moonlab_ca_mps_prob_z           (const moonlab_ca_mps_t* s,
                                        uint32_t qubit,
                                        double* out_prob);
-```
+[archived fence delimiter: ```]
 
 ## Variational-D ground-state search
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
                               const uint8_t*  paulis,         /* (T, n)   */
                               const double*   coeffs,         /* (T,)     */
@@ -123,7 +130,7 @@ int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
                               const uint8_t*  stab_paulis,    /* (k, n) or NULL */
                               uint32_t        stab_num_gens,
                               double*         out_final_energy);
-```
+[archived fence delimiter: ```]
 
 `warmstart` is one of:
 
@@ -141,11 +148,11 @@ pass `NULL` and `stab_num_gens = 0`.
 
 ## Gauge-aware stabilizer-subgroup warmstart
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
                                      const uint8_t*  paulis,
                                      uint32_t        num_gens);
-```
+[archived fence delimiter: ```]
 
 Standalone use (no var-D loop): builds and applies the
 Aaronson-Gottesman symplectic-Gauss-Jordan Clifford that places
@@ -155,7 +162,7 @@ pairwise commute or aren't independent.
 
 ## 1+1D Z2 lattice gauge theory
 
-```c
+[archived fence delimiter: ```c]
 int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
                               double t_hop, double h_link,
                               double mass, double gauss_penalty,
@@ -167,7 +174,7 @@ int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
 int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
                                   uint32_t site_x,
                                   uint8_t* out_pauli);
-```
+[archived fence delimiter: ```]
 
 `moonlab_z2_lgt_1d_build` allocates `*out_paulis` and `*out_coeffs`;
 caller frees both via `free()`.  Output qubit count is
@@ -179,7 +186,7 @@ caller frees both via `free()`.  Output qubit count is
 
 ## Status code registry
 
-```c
+[archived fence delimiter: ```c]
 typedef int moonlab_status_t;
 
 #define MOONLAB_STATUS_SUCCESS          ( 0)
@@ -190,7 +197,7 @@ typedef int moonlab_status_t;
 #define MOONLAB_STATUS_ERR_MODULE_BASE  (-100)
 
 const char* moonlab_status_string(int module, int status);
-```
+[archived fence delimiter: ```]
 
 `module` enumerates the per-module status namespace (`0=GENERIC,
 1=CA_MPS, 2=CA_MPS_VAR_D, 3=CA_MPS_STAB_WARMSTART, 4=CA_PEPS,
@@ -201,7 +208,7 @@ NULL.
 
 ## Example: gauge-aware warmstart on 1+1D Z2 LGT
 
-```c
+[archived fence delimiter: ```c]
 #include "applications/moonlab_export.h"
 #include "applications/hep/lattice_z2_1d.h"
 
@@ -234,7 +241,7 @@ moonlab_ca_mps_free(s);
 free(gens);
 free(paulis);
 free(coeffs);
-```
+[archived fence delimiter: ```]
 
 ## See also
 
@@ -244,3 +251,4 @@ free(coeffs);
 - `docs/research/var_d_lattice_gauge_theory.md` -- Z2 LGT theorem +
   open directions.
 - `documents/api/python/ca_mps.md` -- Python bindings.
+```

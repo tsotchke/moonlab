@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Configuration options reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Configuration options reference
 
 Moonlab's runtime configuration is owned by the `qsim_config_t`
@@ -219,7 +226,7 @@ stamp a known-good configuration over an existing struct:
 
 ## Worked example (C)
 
-```c
+[archived fence delimiter: ```c]
 #include "utils/config.h"
 
 qsim_config_t *cfg = qsim_config_create();
@@ -239,7 +246,7 @@ if (qsim_config_validate(cfg, err, sizeof err) != 0) {
 /* ... run simulation against cfg ... */
 
 qsim_config_destroy(cfg);
-```
+[archived fence delimiter: ```]
 
 ## Language bindings
 
@@ -264,3 +271,4 @@ than wrapping the struct opaquely.
 - [TDVP API](tdvp-api.md), [QGT API](qgt-api.md),
   [MPDO API](mpdo-api.md) -- module-level config structs that layer
   on top of `qsim_config_t`.
+```

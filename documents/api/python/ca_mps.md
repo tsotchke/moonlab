@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Clifford-Assisted MPS (CA-MPS) — Python API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Clifford-Assisted MPS (CA-MPS) — Python API
 
 The `moonlab.ca_mps` module wraps the v0.2.1 stable C ABI for the
@@ -13,7 +20,7 @@ helpers.
 
 ## Quick example: gauge-aware ground-state prep on Z2 LGT
 
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 from moonlab import (
     CAMPS, var_d_run, z2_lgt_1d_build, z2_lgt_1d_gauss_law,
@@ -33,11 +40,11 @@ energy = var_d_run(state, paulis, coeffs,
                     warmstart=WARMSTART_STABILIZER_SUBGROUP,
                     stab_paulis=gens)
 print(f"final energy = {energy:.6f}")
-```
+[archived fence delimiter: ```]
 
 ## CAMPS class
 
-```python
+[archived fence delimiter: ```python]
 class CAMPS:
     def __init__(self, num_qubits: int, max_bond_dim: int = 32) -> None: ...
 
@@ -68,7 +75,7 @@ class CAMPS:
     def phase(self, q: int, theta: float) -> None: ...
 
     def normalize(self) -> None: ...
-```
+[archived fence delimiter: ```]
 
 The handle is owned and freed automatically on garbage collection.
 All methods raise `RuntimeError` on a non-zero return from the C
@@ -77,7 +84,7 @@ output.
 
 ## Free functions
 
-```python
+[archived fence delimiter: ```python]
 WARMSTART_IDENTITY              = 0
 WARMSTART_H_ALL                 = 1
 WARMSTART_DUAL_TFIM             = 2
@@ -106,7 +113,7 @@ def z2_lgt_1d_build(N: int,
 def z2_lgt_1d_gauss_law(N: int, site_x: int) -> np.ndarray: ...
 
 def status_string(module: int, status: int) -> str: ...
-```
+[archived fence delimiter: ```]
 
 `paulis` is a `(num_terms, num_qubits)` `np.uint8` array with byte
 encoding `0=I, 1=X, 2=Y, 3=Z`.  `coeffs` is a `(num_terms,)`
@@ -117,13 +124,13 @@ When `warmstart == WARMSTART_STABILIZER_SUBGROUP`, supply
 
 `status_string` mirrors the C `moonlab_status_string`:
 
-```python
+[archived fence delimiter: ```python]
 >>> from moonlab.ca_mps import status_string, StatusModule  # implicit module enum
 >>> status_string(module=1, status=0)
 'SUCCESS'
 >>> status_string(module=1, status=-1)
 'ERR_INVALID'
-```
+[archived fence delimiter: ```]
 
 ## Tests
 
@@ -139,9 +146,9 @@ Six smoke + correctness tests under
 
 Run via the Moonlab CMake suite:
 
-```bash
+[archived fence delimiter: ```bash]
 ctest -L "" -R python_bindings_pytest --output-on-failure
-```
+[archived fence delimiter: ```]
 
 ## See also
 
@@ -149,3 +156,4 @@ ctest -L "" -R python_bindings_pytest --output-on-failure
 - Algorithm walk-through: `documents/algorithms/ca-mps-var-d.md`.
 - Math: `MATH.md` §10-12.
 - Z2 LGT: `docs/research/var_d_lattice_gauge_theory.md`.
+```

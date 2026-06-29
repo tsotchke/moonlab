@@ -1,14 +1,21 @@
+# Archived Moonlab Documentation: Vue Components API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Vue Components API
 
 Vue.js components for quantum circuit visualization and interaction.
 
 ## Installation
 
-```bash
+[archived fence delimiter: ```bash]
 npm install @moonlab/quantum-vue
-```
+[archived fence delimiter: ```]
 
-```javascript
+[archived fence delimiter: ```javascript]
 // main.js
 import { createApp } from 'vue'
 import MoonlabVue from '@moonlab/quantum-vue'
@@ -17,7 +24,7 @@ import App from './App.vue'
 const app = createApp(App)
 app.use(MoonlabVue)
 app.mount('#app')
-```
+[archived fence delimiter: ```]
 
 ## Components
 
@@ -55,7 +62,7 @@ Interactive quantum circuit editor and visualizer.
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <QuantumCircuit
     :qubits="4"
@@ -90,7 +97,7 @@ async function runSimulation() {
   // Call simulation API
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `<BlochSphere>`
 
@@ -118,7 +125,7 @@ async function runSimulation() {
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <BlochSphere
     :state="qubitState"
@@ -147,7 +154,7 @@ function onStateChange({ theta: t, phi: p }) {
   phi.value = p
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `<StateVector>`
 
@@ -172,7 +179,7 @@ Visualize quantum state amplitudes.
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <StateVector
     :amplitudes="state.amplitudes"
@@ -189,7 +196,7 @@ function onBasisClick({ index, label }) {
   console.log(`Clicked basis state ${label} (index ${index})`)
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `<ProbabilityDistribution>`
 
@@ -208,7 +215,7 @@ Bar chart of measurement probabilities.
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <ProbabilityDistribution
     :probabilities="probs"
@@ -223,7 +230,7 @@ import { ProbabilityDistribution } from '@moonlab/quantum-vue'
 
 const probs = ref([0.5, 0.0, 0.0, 0.5])  // Bell state
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `<MeasurementHistogram>`
 
@@ -241,7 +248,7 @@ Histogram of measurement results.
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <MeasurementHistogram
     :counts="measurementCounts"
@@ -260,7 +267,7 @@ const measurementCounts = ref({
   '11': 488
 })
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `<GatePalette>`
 
@@ -283,7 +290,7 @@ Draggable gate palette for circuit building.
 
 #### Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <GatePalette
     :gates="['H', 'X', 'Y', 'Z', 'CNOT', 'CZ', 'SWAP']"
@@ -298,7 +305,7 @@ function onGateSelect(gateType) {
   console.log('Selected gate:', gateType)
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ## Composables
 
@@ -306,7 +313,7 @@ function onGateSelect(gateType) {
 
 Reactive quantum state management.
 
-```vue
+[archived fence delimiter: ```vue]
 <script setup>
 import { useQuantumState } from '@moonlab/quantum-vue'
 
@@ -326,7 +333,7 @@ const result = await measure()
 // Reset to |0...0⟩
 reset()
 </script>
-```
+[archived fence delimiter: ```]
 
 #### Returns
 
@@ -344,7 +351,7 @@ reset()
 
 Circuit building and manipulation.
 
-```vue
+[archived fence delimiter: ```vue]
 <script setup>
 import { useCircuitBuilder } from '@moonlab/quantum-vue'
 
@@ -371,13 +378,13 @@ const qasm = toQASM()
 undo()
 redo()
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `useSimulation`
 
 Manage simulation execution.
 
-```vue
+[archived fence delimiter: ```vue]
 <script setup>
 import { useSimulation } from '@moonlab/quantum-vue'
 
@@ -395,7 +402,7 @@ async function runCircuit(gates) {
   console.log(result.counts)
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ## Directives
 
@@ -403,7 +410,7 @@ async function runCircuit(gates) {
 
 Enable gate dropping on elements.
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <div
     v-gate-drop="{ onDrop: handleGateDrop }"
@@ -418,19 +425,19 @@ function handleGateDrop(gate, position) {
   console.log(`Dropped ${gate.type} at position`, position)
 }
 </script>
-```
+[archived fence delimiter: ```]
 
 ### `v-circuit-keyboard`
 
 Keyboard shortcuts for circuit editing.
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <div v-circuit-keyboard="circuitRef">
     <QuantumCircuit ref="circuitRef" />
   </div>
 </template>
-```
+[archived fence delimiter: ```]
 
 Shortcuts:
 - `Delete/Backspace`: Remove selected gate
@@ -443,7 +450,7 @@ Shortcuts:
 
 ### Custom Theme
 
-```vue
+[archived fence delimiter: ```vue]
 <script setup>
 import { MoonlabTheme } from '@moonlab/quantum-vue'
 
@@ -470,11 +477,11 @@ const customTheme = {
     <QuantumCircuit :qubits="4" />
   </MoonlabTheme>
 </template>
-```
+[archived fence delimiter: ```]
 
 ### Dark Mode
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <MoonlabTheme :dark="isDark">
     <QuantumCircuit theme="auto" />
@@ -486,13 +493,13 @@ import { useDark } from '@vueuse/core'
 
 const isDark = useDark()
 </script>
-```
+[archived fence delimiter: ```]
 
 ## TypeScript Support
 
 Full TypeScript definitions included:
 
-```typescript
+[archived fence delimiter: ```typescript]
 import type {
   Gate,
   GateType,
@@ -508,11 +515,11 @@ const gate: Gate = {
   target: 1,
   step: 0
 }
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```vue
+[archived fence delimiter: ```vue]
 <template>
   <div class="quantum-app">
     <div class="sidebar">
@@ -577,7 +584,7 @@ async function runSimulation() {
   height: 100vh;
 }
 </style>
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -586,3 +593,4 @@ async function runSimulation() {
 - [Visualization API](viz.md) - Rendering primitives
 - [Vue.js Documentation](https://vuejs.org/) - Vue.js framework
 
+```

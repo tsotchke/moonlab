@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial: Getting started
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial: Getting started
 
 This tutorial takes a fresh checkout to a running quantum simulation
@@ -9,10 +16,10 @@ v0.3.0 on macOS arm64 (Apple Silicon) and Ubuntu 24.04 x86_64.
 Moonlab is CMake-driven.  An out-of-tree build keeps your source tree
 clean:
 
-```sh
+[archived fence delimiter: ```sh]
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-```
+[archived fence delimiter: ```]
 
 That gives you `libquantumsim` plus every example, test, and benchmark
 target by default.  Useful flags:
@@ -28,9 +35,9 @@ target by default.  Useful flags:
 
 After the build finishes you can run the unit tests with:
 
-```sh
+[archived fence delimiter: ```sh]
 ctest --test-dir build --output-on-failure -j
-```
+[archived fence delimiter: ```]
 
 A green run is 17/17 topology, plus all base subsystems (state vector,
 gates, measurement, MPS, DMRG, var-D, MPDO, QGT, QRNG, PQC).
@@ -41,7 +48,7 @@ The canonical introductory program in quantum computing prepares a
 single-qubit superposition with the Hadamard gate `H` and verifies
 the resulting probability distribution against the Born rule:
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/quantum/state.h"
 #include "moonlab/quantum/gates.h"
 #include "moonlab/quantum/measurement.h"
@@ -62,22 +69,22 @@ int main(void) {
     quantum_state_free(&state);
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 A worked version of the same program (with measurement statistics and
 ASCII bar charts) lives at `examples/basic/hello_quantum.c` and is
 already built for you:
 
-```sh
+[archived fence delimiter: ```sh]
 ./build/examples/basic/hello_quantum
-```
+[archived fence delimiter: ```]
 
 ## 3. Bell pair preparation and verification
 
 The two-qubit entangled Bell state `|Phi^+> = (|00> + |11>) / sqrt(2)`
 is prepared by a Hadamard followed by a CNOT:
 
-```c
+[archived fence delimiter: ```c]
 quantum_state_t state;
 quantum_state_init(&state, /*num_qubits=*/2);
 
@@ -89,7 +96,7 @@ for (size_t i = 0; i < 4; ++i) {
     printf("|%zu>: %+.4f %+.4fi\n", i, creal(a), cimag(a));
 }
 quantum_state_free(&state);
-```
+[archived fence delimiter: ```]
 
 The example program `./build/examples/basic/bell_state` extends this
 preparation with a full CHSH-inequality verification: the measured
@@ -126,3 +133,4 @@ sibling using the bindings at `bindings/python/moonlab/`.
 - **`ctest` timeouts on `unit_qgt_*`**: expected at lattice sizes
   `L >= 12`; the benchmark targets use smaller grids.  Re-run with
   `-j 1` if parallel CTest contention is the suspected cause.
+```

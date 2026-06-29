@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 09: GPU Acceleration
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 09: GPU Acceleration
 
 Speed up quantum simulation with Apple Metal.
@@ -35,7 +42,7 @@ Moonlab GPU acceleration requires:
 
 Check GPU availability:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_info
 
 info = gpu_info()
@@ -43,13 +50,13 @@ print(f"GPU available: {info['available']}")
 print(f"Device: {info['device_name']}")
 print(f"Memory: {info['memory_gb']:.1f} GB")
 print(f"GPU Cores: {info['gpu_cores']}")
-```
+[archived fence delimiter: ```]
 
 ## Step 1: Enable GPU Mode
 
 ### Python
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, set_backend
 
 # Enable GPU backend
@@ -60,11 +67,11 @@ state = QuantumState(20)
 
 # Check backend
 print(f"Backend: {state.backend}")
-```
+[archived fence delimiter: ```]
 
 ### C
 
-```c
+[archived fence delimiter: ```c]
 #include "quantum_sim.h"
 #include "gpu_metal.h"
 
@@ -90,11 +97,11 @@ int main() {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Step 2: Basic Benchmark
 
-```python
+[archived fence delimiter: ```python]
 import time
 from moonlab import QuantumState, set_backend
 import numpy as np
@@ -127,10 +134,10 @@ for n in [16, 18, 20, 22, 24]:
 
     print(f"{n} qubits: CPU={cpu_time:.3f}s, GPU={gpu_time:.3f}s, "
           f"Speedup={speedup:.1f}x")
-```
+[archived fence delimiter: ```]
 
 **Example Output**:
-```
+[archived fence delimiter: ```]
 Benchmark: Random Circuit (depth=10)
 ----------------------------------------
 16 qubits: CPU=0.012s, GPU=0.015s, Speedup=0.8x
@@ -138,13 +145,13 @@ Benchmark: Random Circuit (depth=10)
 20 qubits: CPU=0.195s, GPU=0.035s, Speedup=5.6x
 22 qubits: CPU=0.782s, GPU=0.089s, Speedup=8.8x
 24 qubits: CPU=3.215s, GPU=0.245s, Speedup=13.1x
-```
+[archived fence delimiter: ```]
 
 ## Step 3: Memory Management
 
 GPU memory is separate from CPU memory:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, gpu_memory_info
 
 # Check available GPU memory
@@ -163,11 +170,11 @@ for n in range(20, 35):
     if mem_needed > mem_info['available_gb']:
         print(f"Maximum qubits: {n-1} ({state_memory_gb(n-1):.1f} GB)")
         break
-```
+[archived fence delimiter: ```]
 
 ### Explicit Memory Control
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, gpu_sync, gpu_transfer
 
 # Create state on CPU, transfer to GPU
@@ -187,13 +194,13 @@ for layer in range(100):
 # Transfer back to CPU for measurement
 cpu_state = gpu_transfer(gpu_state, 'to_cpu')
 result = cpu_state.measure_all()
-```
+[archived fence delimiter: ```]
 
 ## Step 4: Batch Operations
 
 Maximize GPU utilization with batch operations:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, batch_apply
 
 # Prepare multiple states
@@ -220,13 +227,13 @@ seq_time = time.time() - start
 print(f"Sequential: {seq_time:.3f}s")
 print(f"Batch: {batch_time:.3f}s")
 print(f"Speedup: {seq_time/batch_time:.1f}x")
-```
+[archived fence delimiter: ```]
 
 ## Step 5: SIMD + GPU Hybrid
 
 For the best performance, combine SIMD and GPU:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import configure_acceleration
 
 # Auto-select best configuration
@@ -242,11 +249,11 @@ print(f"Thread count: {config['threads']}")
 
 # Apply configuration
 state = QuantumState(26, config=config)
-```
+[archived fence delimiter: ```]
 
 ## Step 6: Profiling GPU Performance
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, GPUProfiler
 
 # Enable profiling
@@ -271,10 +278,10 @@ print(f"Peak memory: {profile['peak_memory_mb']:.1f} MB")
 print("\nKernel breakdown:")
 for kernel, time_ms in profile['kernels'].items():
     print(f"  {kernel}: {time_ms:.2f} ms")
-```
+[archived fence delimiter: ```]
 
 **Example Output**:
-```
+[archived fence delimiter: ```]
 Total GPU time: 45.32 ms
 Kernel launches: 470
 Memory transfers: 2
@@ -284,13 +291,13 @@ Kernel breakdown:
   hadamard_kernel: 12.45 ms
   cnot_kernel: 28.67 ms
   reduction_kernel: 4.20 ms
-```
+[archived fence delimiter: ```]
 
 ## Step 7: Advanced GPU Features
 
 ### Fused Gate Kernels
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, enable_fusion
 
 # Enable kernel fusion
@@ -306,13 +313,13 @@ from moonlab import get_kernel_stats
 stats = get_kernel_stats()
 print(f"Kernels without fusion: 4")
 print(f"Kernels with fusion: {stats['kernels_executed']}")
-```
+[archived fence delimiter: ```]
 
 ### Persistent State
 
 Keep state on GPU across operations:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, gpu_context
 
 # Create persistent GPU context
@@ -326,7 +333,7 @@ with gpu_context() as ctx:
 
     # Only transfer at the end
     probs = state.probabilities()  # Single transfer
-```
+[archived fence delimiter: ```]
 
 ## When to Use GPU
 
@@ -344,19 +351,19 @@ with gpu_context() as ctx:
 
 ### Auto-Select
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, auto_backend
 
 # Let Moonlab choose
 state = QuantumState(n_qubits, backend='auto')
 print(f"Auto-selected: {state.backend}")
-```
+[archived fence delimiter: ```]
 
 ## Troubleshooting
 
 ### GPU Not Detected
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import gpu_diagnose
 
 result = gpu_diagnose()
@@ -365,11 +372,11 @@ if result['issue']:
     print(f"Solution: {result['solution']}")
 else:
     print("GPU is properly configured")
-```
+[archived fence delimiter: ```]
 
 ### Out of Memory
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import estimate_memory, gpu_memory_info
 
 n = 28
@@ -382,7 +389,7 @@ if required > available:
     print("1. Reduce qubit count")
     print("2. Use CPU backend")
     print("3. Use hybrid mode (partial GPU)")
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -434,3 +441,4 @@ You've completed all the Moonlab tutorials! You now know how to:
 - [Performance Tuning](../guides/performance-tuning.md) - Optimization tips
 - [C API: GPU Metal](../api/c/gpu-metal.md) - Low-level GPU API
 
+```

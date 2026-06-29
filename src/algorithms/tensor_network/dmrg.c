@@ -27,6 +27,23 @@
 #  define MOONLAB_DMRG_HAVE_BLAS 1
 #endif
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+#  define DMRG_BLAS_AVAILABLE true
+#  define DMRG_SCALAR_KERNEL false
+#  if defined(__APPLE__)
+#    define DMRG_ACCELERATE_AVAILABLE true
+#    define DMRG_DEFAULT_BACKEND_NAME "accelerate-blas"
+#  else
+#    define DMRG_ACCELERATE_AVAILABLE false
+#    define DMRG_DEFAULT_BACKEND_NAME "cblas"
+#  endif
+#else
+#  define DMRG_BLAS_AVAILABLE false
+#  define DMRG_ACCELERATE_AVAILABLE false
+#  define DMRG_SCALAR_KERNEL true
+#  define DMRG_DEFAULT_BACKEND_NAME "scalar-c"
+#endif
+
 /* NaN is undefined behaviour under -ffast-math; use a finite sentinel
  * (DBL_MAX) for "energy/expectation computation failed" and check with
  * `>= DMRG_ENERGY_ERROR` in callers. `isnan(E)` paths are rewritten to
@@ -43,6 +60,41 @@
 
 static double get_time_sec(void) {
     return (double)clock() / CLOCKS_PER_SEC;
+}
+
+static dmrg_backend_trace_t g_dmrg_last_backend_trace = {
+    .owner = "dmrg_backend_probe",
+    .operation = "probe",
+    .backend_name = DMRG_DEFAULT_BACKEND_NAME,
+    .backend_available = true,
+    .blas_available = DMRG_BLAS_AVAILABLE,
+    .accelerate_available = DMRG_ACCELERATE_AVAILABLE,
+    .scalar_kernel = DMRG_SCALAR_KERNEL,
+    .fallback_intentional = DMRG_SCALAR_KERNEL
+};
+
+dmrg_backend_trace_t dmrg_backend_probe(const char *owner,
+                                        const char *operation) {
+    dmrg_backend_trace_t trace = {
+        .owner = owner ? owner : "dmrg_backend_probe",
+        .operation = operation ? operation : "probe",
+        .backend_name = DMRG_DEFAULT_BACKEND_NAME,
+        .backend_available = true,
+        .blas_available = DMRG_BLAS_AVAILABLE,
+        .accelerate_available = DMRG_ACCELERATE_AVAILABLE,
+        .scalar_kernel = DMRG_SCALAR_KERNEL,
+        .fallback_intentional = DMRG_SCALAR_KERNEL
+    };
+    return trace;
+}
+
+const dmrg_backend_trace_t *dmrg_get_last_backend_trace(void) {
+    return &g_dmrg_last_backend_trace;
+}
+
+static void dmrg_record_runtime_provenance(const char *owner,
+                                           const char *operation) {
+    g_dmrg_last_backend_trace = dmrg_backend_probe(owner, operation);
 }
 
 static double complex_dot(const double complex *a, const double complex *b, uint64_t n) {
@@ -1744,6 +1796,7 @@ static tensor_t *dmrg_contract_left_env_blas(const tensor_t *A,
 int dmrg_init_right_environments(dmrg_environments_t *env,
                                   const tn_mps_state_t *mps,
                                   const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_init_right_environments", "init_right");
     if (!env || !mps || !mpo) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -1818,6 +1871,7 @@ int dmrg_init_right_environments(dmrg_environments_t *env,
 int dmrg_init_left_environments(dmrg_environments_t *env,
                                  const tn_mps_state_t *mps,
                                  const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_init_left_environments", "init_left");
     if (!env || !mps || !mpo) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -1896,6 +1950,7 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
                                   const tn_mps_state_t *mps,
                                   const mpo_t *mpo,
                                   uint32_t site) {
+    dmrg_record_runtime_provenance("dmrg_update_left_environment", "update_left");
     // Similar to init_right but going left to right
     // L[site+1] = contract L[site] @ A[site] @ W[site]
 
@@ -1971,6 +2026,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
                                    const tn_mps_state_t *mps,
                                    const mpo_t *mpo,
                                    uint32_t site) {
+    dmrg_record_runtime_provenance("dmrg_update_right_environment", "update_right");
     // Update R[site-1] after optimizing at site
     if (!env || !mps || !mpo || site == 0) return -1;
     if (!env->R[site]) {
@@ -2123,6 +2179,7 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
                             dmrg_sweep_direction_t direction,
                             const dmrg_config_t *config,
                             double *energy) {
+    dmrg_record_runtime_provenance("dmrg_optimize_two_site", "optimize_two_site");
     if (!mps || !mpo || !env || !config || !energy) return -1;
     if (site >= mps->num_qubits - 1) return -1;
 
@@ -2396,6 +2453,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
                dmrg_environments_t *env,
                const dmrg_config_t *config,
                double *energy) {
+    dmrg_record_runtime_provenance("dmrg_sweep", "sweep");
     if (!mps || !mpo || !env || !config || !energy) return -1;
 
     uint32_t n = mps->num_qubits;
@@ -2429,12 +2487,14 @@ int dmrg_sweep(tn_mps_state_t *mps,
     }
 
     *energy = site_energy;
+    dmrg_record_runtime_provenance("dmrg_sweep", "sweep");
     return 0;
 }
 
 dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
                                   const mpo_t *mpo,
                                   const dmrg_config_t *config) {
+    dmrg_record_runtime_provenance("dmrg_ground_state", "ground_state");
     if (!mps || !mpo || !config) return NULL;
 
     double start_time = get_time_sec();
@@ -2580,6 +2640,7 @@ dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
 
     result->total_time = get_time_sec() - start_time;
 
+    dmrg_record_runtime_provenance("dmrg_ground_state", "ground_state");
     return result;
 }
 
@@ -2635,12 +2696,14 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         dmrg_result_free(dmrg_res);
     }
 
+    dmrg_record_runtime_provenance("dmrg_tfim_ground_state", "tfim_ground_state");
     return mps;
 }
 
 tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
                                       uint32_t chi_init,
                                       const tn_state_config_t *mps_cfg) {
+    dmrg_record_runtime_provenance("dmrg_init_random_mps", "init_random_mps");
     if (num_sites < 2) return NULL;
 
     tn_state_config_t cfg = mps_cfg ? *mps_cfg : tn_state_config_default();
@@ -2698,6 +2761,7 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
 }
 
 double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_compute_energy", "compute_energy");
     if (!mps || !mpo || mps->num_qubits != mpo->num_sites) return DMRG_ENERGY_ERROR;
 
     // E = <psi|H|psi> computed via transfer matrix contraction
@@ -2774,6 +2838,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {
 }
 
 double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
+    dmrg_record_runtime_provenance("dmrg_energy_variance", "energy_variance");
     // Var(E) = <H^2> - <H>^2
     // For a true eigenstate, Var(E) = 0
     // Computed by contracting MPS with TWO MPO layers
@@ -2899,5 +2964,6 @@ double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo) {
         // Otherwise return the value (might indicate numerical issues)
     }
 
+    dmrg_record_runtime_provenance("dmrg_energy_variance", "energy_variance");
     return variance;
 }

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab Python Bindings
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab Python Bindings
 
 **Python interface for the Moonlab Quantum Simulator**
@@ -6,7 +13,7 @@ Fast, feature-complete quantum computing in Python with PyTorch integration.
 
 ## Quick Start
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 
 # Create Bell state (maximal entanglement)
@@ -16,23 +23,23 @@ state.h(0).cnot(0, 1)
 # Measure probabilities
 probs = state.probabilities()
 print(probs)  # [0.5, 0.0, 0.0, 0.5] - |00⟩ and |11⟩
-```
+[archived fence delimiter: ```]
 
 ## Installation
 
 ### Prerequisites
 
-```bash
+[archived fence delimiter: ```bash]
 # macOS with Apple Silicon
 brew install libomp
 
 # Linux
 sudo apt-get install libomp-dev
-```
+[archived fence delimiter: ```]
 
 ### Build & Install
 
-```bash
+[archived fence delimiter: ```bash]
 # 1. Build C library
 cd /path/to/moonlab
 make
@@ -43,7 +50,7 @@ pip install -e .
 
 # 3. Test installation
 python test_moonlab.py
-```
+[archived fence delimiter: ```]
 
 ## Features
 
@@ -70,7 +77,7 @@ python test_moonlab.py
 Reverse-mode gradients for parameterised circuits, without a PyTorch
 dependency:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X
 
@@ -82,7 +89,7 @@ state = QuantumState(2)
 circ.forward(state)
 cost = DiffCircuit.expect_pauli_sum(state, H)
 grad = circ.backward_pauli_sum(state, H)   # ndarray, shape (n_params,)
-```
+[archived fence delimiter: ```]
 
 Supported gates: RX / RY / RZ / H / X / Y / Z / CNOT / CZ / CRX / CRY / CRZ.
 
@@ -91,7 +98,7 @@ Supported gates: RX / RY / RZ / H / X / Y / Z / CNOT / CZ / CRX / CRY / CRZ.
 FIPS 202 SHA-3 / SHAKE and FIPS 203 ML-KEM (512 / 768 / 1024), seeded
 by the Bell-verified quantum RNG:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.crypto import sha3, mlkem
 
 digest = sha3.sha3_256(b"quantum randomness")        # 32 bytes
@@ -104,7 +111,7 @@ ct, K_bob = mlkem.encaps768_qrng(ek)                  # 1088-byte ciphertext
 # Alice decapsulates
 K_alice = mlkem.decaps768(ct, dk)
 assert K_alice == K_bob                               # same 32-byte shared secret
-```
+[archived fence delimiter: ```]
 
 All NIST SHA-3 / SHAKE known-answer vectors pass; ML-KEM is validated
 against the pq-crystals reference via AES-256-CTR_DRBG-derived NIST
@@ -122,7 +129,7 @@ count=0 seed (see `docs/security/pqc.md` for the full threat model).
 
 ### Basic Quantum Circuit
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState, Gates
 
 # Create 3-qubit GHZ state
@@ -134,11 +141,11 @@ Gates.CNOT(state, 1, 2)
 # Get state vector
 sv = state.get_statevector()
 print(f"|GHZ⟩ = {sv}")
-```
+[archived fence delimiter: ```]
 
 ### Quantum Machine Learning
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.ml import QSVM, IQPEncoding
 import numpy as np
 
@@ -154,11 +161,11 @@ qsvm.fit(X_train, y_train)
 y_pred = qsvm.predict(X_test)
 accuracy = qsvm.score(X_test, y_test)
 print(f"Accuracy: {accuracy:.1%}")
-```
+[archived fence delimiter: ```]
 
 ### PyTorch Integration
 
-```python
+[archived fence delimiter: ```python]
 import torch
 import torch.nn as nn
 from moonlab.torch_layer import QuantumLayer
@@ -178,11 +185,11 @@ for epoch in range(10):
     loss = criterion(outputs, labels)
     loss.backward()  # Quantum gradients via parameter shift!
     optimizer.step()
-```
+[archived fence delimiter: ```]
 
 ### Quantum PCA
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.ml import QuantumPCA
 
 # Dimensionality reduction with quantum advantage
@@ -191,13 +198,13 @@ qpca.fit(X_highdim)
 X_reduced = qpca.transform(X_highdim)
 
 print(f"Explained variance: {qpca.explained_variance_}")
-```
+[archived fence delimiter: ```]
 
 ## Advanced Usage
 
 ### Custom Feature Maps
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.ml import QuantumFeatureMap
 from moonlab import QuantumState
 
@@ -210,22 +217,22 @@ class CustomEncoding(QuantumFeatureMap):
         # Add entanglement
         for i in range(state.num_qubits - 1):
             state.cnot(i, i+1)
-```
+[archived fence delimiter: ```]
 
 ### Variational Quantum Circuits
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.ml import VariationalCircuit
 from moonlab import QuantumState
 
 circuit = VariationalCircuit(num_qubits=8, num_layers=4)
 state = QuantumState(8)
 circuit(state)  # Apply parameterized circuit
-```
+[archived fence delimiter: ```]
 
 ### Quantum Kernels
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.ml import QuantumKernel, IQPEncoding
 
 # Create quantum kernel
@@ -239,13 +246,13 @@ K = kernel.compute_matrix(X_train)
 from sklearn.svm import SVC
 svm = SVC(kernel='precomputed')
 svm.fit(K, y_train)
-```
+[archived fence delimiter: ```]
 
 ## Applications
 
 ### Drug Discovery (VQE)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 
 # Simulate H₂ molecule
@@ -253,11 +260,11 @@ vqe = VQE(num_qubits=4, num_layers=3)
 result = vqe.solve_h2(bond_distance=0.74)
 print(f"Ground state energy: {result['energy']:.6f} Ha")
 print(f"Converged: {result['converged']}")
-```
+[archived fence delimiter: ```]
 
 ### Graph Optimization (QAOA)
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import QAOA
 
 # Solve MaxCut problem on a 5-vertex graph
@@ -267,11 +274,11 @@ result = qaoa.solve_maxcut(
 )
 print(f"Best cut: {bin(result['best_bitstring'])}")
 print(f"Cut value: {result['best_cost']}")
-```
+[archived fence delimiter: ```]
 
 ### Few-Shot Learning
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumClassifier
 
 # Quantum classifier for small datasets
@@ -284,7 +291,7 @@ model = QuantumClassifier(
 
 # Train on small dataset (quantum advantage!)
 train_with_few_samples(model, X_train_small, y_train_small)
-```
+[archived fence delimiter: ```]
 
 ## Performance
 
@@ -305,7 +312,7 @@ train_with_few_samples(model, X_train_small, y_train_small)
 
 ## Testing
 
-```bash
+[archived fence delimiter: ```bash]
 # Run test suite
 python test_moonlab.py
 
@@ -314,7 +321,7 @@ python test_moonlab.py
 # - Quantum ML algorithms
 # - PyTorch integration
 # - End-to-end workflows
-```
+[archived fence delimiter: ```]
 
 ## API Reference
 
@@ -368,14 +375,14 @@ MIT License - See [`LICENSE`](../../LICENSE) file.
 
 If you use Moonlab in research, please cite:
 
-```bibtex
+[archived fence delimiter: ```bibtex]
 @software{moonlab2026,
   title={Moonlab: High-Performance Quantum Computing for Apple Silicon},
   author={Tsotchke},
   year={2026},
   url={https://github.com/tsotchke/moonlab}
 }
-```
+[archived fence delimiter: ```]
 
 ## Support
 
@@ -441,3 +448,4 @@ worked examples.
 ---
 
 *Version 0.3.0 - May 2026*
+```

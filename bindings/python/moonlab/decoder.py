@@ -36,11 +36,11 @@ MOONLAB_DECODER_OOM = -404
 
 
 class DecoderError(RuntimeError):
-    pass
+    """Raised when the native decoder dispatcher returns an error."""
 
 
 class DecoderNotBuiltError(DecoderError):
-    pass
+    """Raised when a decoder slot requires an optional backend not linked."""
 
 
 # ---- FFI signatures -----------------------------------------------

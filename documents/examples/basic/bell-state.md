@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Bell State
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Bell State
 
 Create maximally entangled qubit pairs demonstrating quantum entanglement.
@@ -25,7 +32,7 @@ $$|\Psi^-\rangle = \frac{1}{\sqrt{2}}(|01\rangle - |10\rangle)$$
 
 ## Python Implementation
 
-```python
+[archived fence delimiter: ```python]
 """
 Bell States - Quantum Entanglement
 Creates and analyzes all four Bell states.
@@ -208,11 +215,11 @@ if __name__ == "__main__":
 
     # No-cloning
     demonstrate_no_cloning()
-```
+[archived fence delimiter: ```]
 
 ## C Implementation
 
-```c
+[archived fence delimiter: ```c]
 /**
  * Bell States - Quantum Entanglement
  * Creates and analyzes Bell states in C.
@@ -375,11 +382,11 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Expected Output
 
-```
+[archived fence delimiter: ```]
 ==================================================
            Bell States - Quantum Entanglement
 ==================================================
@@ -420,7 +427,7 @@ Entanglement: Maximal
 
 Global purity: 1.0000
 (Pure state = 1.0)
-```
+[archived fence delimiter: ```]
 
 ## Understanding Entanglement
 
@@ -434,13 +441,13 @@ In a Bell state like |Φ+⟩:
 
 ### The Circuit
 
-```
+[archived fence delimiter: ```]
      ┌───┐
 q0: ─┤ H ├──●──
      └───┘┌─┴─┐
 q1: ──────┤ X ├
           └───┘
-```
+[archived fence delimiter: ```]
 
 **Step by step:**
 
@@ -467,32 +474,32 @@ The ± phase determines the sign of interference in other bases.
 
 Start with both qubits in |1⟩:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(2)
 state.x(0)
 state.x(1)
 state.h(0)
 state.cnot(0, 1)
 # What Bell state is this?
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Measure in X Basis
 
 Measure entanglement in the X basis:
 
-```python
+[archived fence delimiter: ```python]
 state = create_bell_phi_plus()
 state.h(0)  # Rotate to X basis
 state.h(1)
 result = state.measure_all()
 # What correlations do you observe?
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Bell State Discrimination
 
 Given an unknown Bell state, determine which one it is:
 
-```python
+[archived fence delimiter: ```python]
 def identify_bell_state(state):
     """Identify which Bell state we have."""
     # Apply reverse Bell circuit
@@ -503,19 +510,19 @@ def identify_bell_state(state):
     # result tells us which Bell state:
     # 00 → Φ+, 01 → Ψ+, 10 → Φ-, 11 → Ψ-
     return result
-```
+[archived fence delimiter: ```]
 
 ### Exercise 4: Three-Qubit Entanglement (GHZ State)
 
 Create a GHZ state:
 
-```python
+[archived fence delimiter: ```python]
 state = QuantumState(3)
 state.h(0)
 state.cnot(0, 1)
 state.cnot(0, 2)
 # Result: (|000⟩ + |111⟩)/√2
-```
+[archived fence delimiter: ```]
 
 ## Applications
 
@@ -530,3 +537,4 @@ state.cnot(0, 2)
 - [Creating Bell States Tutorial](../../tutorials/03-creating-bell-states.md) - Detailed tutorial
 - [Entanglement Measures](../../concepts/entanglement-measures.md) - Quantifying entanglement
 
+```

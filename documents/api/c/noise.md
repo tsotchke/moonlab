@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Noise API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Noise API
 
 Complete reference for quantum noise models and error channels in the C library.
@@ -21,7 +28,7 @@ The noise module provides realistic noise simulation for NISQ (Noisy Intermediat
 
 Configuration structure for quantum noise.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     int enabled;                    // Whether noise is active
 
@@ -42,7 +49,7 @@ typedef struct {
     double readout_error_0;         // P(1|0) - measure 1 when state is 0
     double readout_error_1;         // P(0|1) - measure 0 when state is 1
 } noise_model_t;
-```
+[archived fence delimiter: ```]
 
 ## Noise Model Management
 
@@ -50,9 +57,9 @@ typedef struct {
 
 Create a new noise model with default parameters.
 
-```c
+[archived fence delimiter: ```c]
 noise_model_t* noise_model_create(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Pointer to new noise model, or NULL on error
 
@@ -62,30 +69,30 @@ noise_model_t* noise_model_create(void);
 
 Free a noise model.
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_destroy(noise_model_t *model);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_copy
 
 Create a copy of a noise model.
 
-```c
+[archived fence delimiter: ```c]
 noise_model_t* noise_model_copy(const noise_model_t *model);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_create_realistic
 
 Create a noise model from typical hardware parameters.
 
-```c
+[archived fence delimiter: ```c]
 noise_model_t* noise_model_create_realistic(
     double t1_us,
     double t2_us,
     double gate_error,
     double readout_error
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `t1_us`: T1 relaxation time in microseconds (typical: 50-200 µs)
@@ -94,7 +101,7 @@ noise_model_t* noise_model_create_realistic(
 - `readout_error`: Measurement error probability (typical: 0.01-0.05)
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // IBM-like superconducting qubit parameters
 noise_model_t *model = noise_model_create_realistic(
     100.0,  // T1 = 100 µs
@@ -102,7 +109,7 @@ noise_model_t *model = noise_model_create_realistic(
     0.001,  // 0.1% gate error
     0.02    // 2% readout error
 );
-```
+[archived fence delimiter: ```]
 
 ## Noise Channels
 
@@ -110,14 +117,14 @@ noise_model_t *model = noise_model_create_realistic(
 
 Apply depolarizing channel to a single qubit.
 
-```c
+[archived fence delimiter: ```c]
 void noise_depolarizing_single(
     quantum_state_t *state,
     int qubit,
     double probability,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (modified)
@@ -134,7 +141,7 @@ With probability $p$, applies a random Pauli error; otherwise leaves state uncha
 
 Apply depolarizing channel to two qubits.
 
-```c
+[archived fence delimiter: ```c]
 void noise_depolarizing_two_qubit(
     quantum_state_t *state,
     int qubit1,
@@ -142,7 +149,7 @@ void noise_depolarizing_two_qubit(
     double probability,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Mathematical Definition**:
 $$\mathcal{E}(\rho) = (1-p)\rho + \frac{p}{15}\sum_{P \in \{I,X,Y,Z\}^{\otimes 2} \setminus I\otimes I} P\rho P$$
@@ -151,14 +158,14 @@ $$\mathcal{E}(\rho) = (1-p)\rho + \frac{p}{15}\sum_{P \in \{I,X,Y,Z\}^{\otimes 2
 
 Apply amplitude damping channel (energy relaxation, T1 decay).
 
-```c
+[archived fence delimiter: ```c]
 void noise_amplitude_damping(
     quantum_state_t *state,
     int qubit,
     double gamma,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state (modified)
@@ -175,14 +182,14 @@ $$K_0 = \begin{pmatrix} 1 & 0 \\ 0 & \sqrt{1-\gamma} \end{pmatrix}, \quad K_1 = 
 
 Apply phase damping channel (pure dephasing).
 
-```c
+[archived fence delimiter: ```c]
 void noise_phase_damping(
     quantum_state_t *state,
     int qubit,
     double gamma,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `gamma`: Dephasing parameter $\gamma = 1 - e^{-t/T_\phi}$ where $1/T_\phi = 1/T_2 - 1/(2T_1)$
@@ -196,14 +203,14 @@ $$K_0 = \begin{pmatrix} 1 & 0 \\ 0 & \sqrt{1-\gamma} \end{pmatrix}, \quad K_1 = 
 
 Apply pure dephasing with random phase.
 
-```c
+[archived fence delimiter: ```c]
 void noise_pure_dephasing(
     quantum_state_t *state,
     int qubit,
     double sigma,
     double random_phase
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `sigma`: Standard deviation of phase fluctuation
@@ -213,14 +220,14 @@ void noise_pure_dephasing(
 
 Apply bit flip channel.
 
-```c
+[archived fence delimiter: ```c]
 void noise_bit_flip(
     quantum_state_t *state,
     int qubit,
     double probability,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Mathematical Definition**:
 $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot X\rho X$$
@@ -229,14 +236,14 @@ $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot X\rho X$$
 
 Apply phase flip channel.
 
-```c
+[archived fence delimiter: ```c]
 void noise_phase_flip(
     quantum_state_t *state,
     int qubit,
     double probability,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Mathematical Definition**:
 $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot Z\rho Z$$
@@ -245,14 +252,14 @@ $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot Z\rho Z$$
 
 Apply bit-phase flip channel (Y error).
 
-```c
+[archived fence delimiter: ```c]
 void noise_bit_phase_flip(
     quantum_state_t *state,
     int qubit,
     double probability,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Mathematical Definition**:
 $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot Y\rho Y$$
@@ -261,7 +268,7 @@ $$\mathcal{E}(\rho) = (1-p)\rho + p \cdot Y\rho Y$$
 
 Apply combined thermal relaxation (T1 and T2 processes).
 
-```c
+[archived fence delimiter: ```c]
 void noise_thermal_relaxation(
     quantum_state_t *state,
     int qubit,
@@ -270,7 +277,7 @@ void noise_thermal_relaxation(
     double time,
     const double *random_values
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `t1`: T1 relaxation time
@@ -284,14 +291,14 @@ void noise_thermal_relaxation(
 
 Simulate measurement readout error.
 
-```c
+[archived fence delimiter: ```c]
 int noise_readout_error(
     int outcome,
     double error_0_to_1,
     double error_1_to_0,
     double random_value
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `outcome`: True measurement outcome (0 or 1)
@@ -307,14 +314,14 @@ int noise_readout_error(
 
 Apply noise model to a single qubit after a gate.
 
-```c
+[archived fence delimiter: ```c]
 void noise_apply_model(
     quantum_state_t *state,
     int qubit,
     const noise_model_t *model,
     const double *random_values
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -326,7 +333,7 @@ void noise_apply_model(
 
 Apply noise model after a two-qubit gate.
 
-```c
+[archived fence delimiter: ```c]
 void noise_apply_model_two_qubit(
     quantum_state_t *state,
     int qubit1,
@@ -334,59 +341,59 @@ void noise_apply_model_two_qubit(
     const noise_model_t *model,
     const double *random_values
 );
-```
+[archived fence delimiter: ```]
 
 ## Configuration Functions
 
 ### noise_model_set_depolarizing
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_depolarizing(noise_model_t *model, double rate);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_amplitude_damping
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_amplitude_damping(noise_model_t *model, double rate);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_phase_damping
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_phase_damping(noise_model_t *model, double rate);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_thermal
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_thermal(noise_model_t *model, double t1, double t2);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_gate_time
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_gate_time(noise_model_t *model, double time);
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_readout_error
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_readout_error(
     noise_model_t *model,
     double error_0,
     double error_1
 );
-```
+[archived fence delimiter: ```]
 
 ### noise_model_set_enabled
 
-```c
+[archived fence delimiter: ```c]
 void noise_model_set_enabled(noise_model_t *model, int enabled);
-```
+[archived fence delimiter: ```]
 
 ## Example: Noisy Simulation
 
-```c
+[archived fence delimiter: ```c]
 #include "src/quantum/state.h"
 #include "src/quantum/gates.h"
 #include "src/quantum/noise.h"
@@ -442,7 +449,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Typical Hardware Parameters
 
@@ -458,3 +465,4 @@ int main(void) {
 - [VQE API](vqe.md) - VQE with noise simulation
 - [Guides: Noise Simulation](../../guides/noise-simulation.md) - Detailed guide
 - [Concepts: Noise Models](../../concepts/noise-models.md) - Theory
+```

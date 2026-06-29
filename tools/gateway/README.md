@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: moonlab-websocket-gateway
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # moonlab-websocket-gateway
 
 Browser-facing WebSocket bridge for the Moonlab control plane.
@@ -9,16 +16,16 @@ re-encodes each message as a moonlab line-protocol round trip.
 
 ## Quick start
 
-```
+[archived fence delimiter: ```]
 pip install websockets
 python3 moonlab_websocket_gateway.py \
   --target  127.0.0.1:7070 \
   --listen  0.0.0.0:8765
-```
+[archived fence delimiter: ```]
 
 Then from a browser:
 
-```javascript
+[archived fence delimiter: ```javascript]
 const ws = new WebSocket("ws://gateway-host:8765/");
 ws.onopen = () => {
   ws.send(JSON.stringify({
@@ -31,7 +38,7 @@ ws.onmessage = (evt) => {
   if (r.status === "OK") console.log("probs:", r.probs);
   else                    console.warn("err:", r.code, r.message);
 };
-```
+[archived fence delimiter: ```]
 
 ## Protocol
 
@@ -59,9 +66,9 @@ One JSON object per direction.
 
 ## Tests
 
-```
+[archived fence delimiter: ```]
 python3 -m pytest tools/gateway/tests/ -v
-```
+[archived fence delimiter: ```]
 
 The test suite uses an in-process fake control plane (no
 libquantumsim dependency) to exercise every verb path plus the
@@ -81,3 +88,4 @@ talks plain `ws://` to the gateway on the private network.  The
 gateway forwards the optional `secret` field to the moonlab control
 plane via `AUTH <hmac-sha3-256>` so the auth check happens inside the
 control plane, not at the gateway.
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Reproducible benchmarks
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Reproducible benchmarks
 
 Every benchmark that matters for a v0.2+ release writes a
@@ -24,20 +31,20 @@ Benches currently wired in:
 
 ## Reproducing a mosaic render
 
-```
+[archived fence delimiter: ```]
 mkdir -p /tmp/moonlab-chern
 MOONLAB_CHERN_OUT_CSV=/tmp/moonlab-chern/c4.csv \
 MOONLAB_CHERN_OUT_PPM=/tmp/moonlab-chern/c4.ppm \
 MOONLAB_MANIFEST_OUT=/tmp/moonlab-chern/c4_manifest.json \
 ./build/bench_chern_mosaic_hq \
   --L 64 --n 4 --V0 0.3 --Q 0.8976 --n-cheby 200
-```
+[archived fence delimiter: ```]
 
 The PPM output is a 56x56 raw-pixmap; open it with any image viewer
 that handles netpbm (Preview.app, ImageMagick, Pillow).  The
 accompanying manifest pins the full provenance:
 
-```
+[archived fence delimiter: ```]
 {
   "run_label": "bench_chern_mosaic_hq",
   "git_sha": "3a6c4b7...",
@@ -49,7 +56,7 @@ accompanying manifest pins the full provenance:
   "metrics": { "L": 64, "n_sym": 4, "V0": 0.3, "Q": 0.8976,
                "sites": 3136, "mean": 0.9807, "wall_s": 4.06, ... }
 }
-```
+[archived fence delimiter: ```]
 
 In the deep-topological regime (`V0 <= 0.3` for C_4) the per-site
 marker averages very close to +1 across the bulk, with the outer few
@@ -67,12 +74,13 @@ Because every manifest is self-describing JSON, a simple `jq` pass
 suffices to confirm that two runs on different hosts match within
 numerical tolerance:
 
-```
+[archived fence delimiter: ```]
 jq '.metrics.mean' run-a.json run-b.json
 jq '.metrics.wall_s / .metrics.sites' run-*.json
-```
+[archived fence delimiter: ```]
 
 The manifest format is designed so `git_dirty: 1` is a loud warning:
 anyone who reproduces a number against a dirty tree has an honest
 audit trail showing so.  Don't report headline numbers from dirty
 trees for any release.
+```

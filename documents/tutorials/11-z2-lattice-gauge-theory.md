@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 11: 1+1D Z2 lattice gauge theory with var-D
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 11: 1+1D Z2 lattice gauge theory with var-D
 
 End-to-end walk-through of the 1+1D Z2 lattice gauge theory shipped
@@ -17,23 +24,23 @@ By the end of this tutorial you will:
 
 The lattice qubit layout is interleaved matter / link:
 
-```
+[archived fence delimiter: ```]
 matter site 0 -- link 0 -- matter site 1 -- link 1 -- ... -- matter site N-1
 qubit:    0          1          2              3            2N-2
-```
+[archived fence delimiter: ```]
 
 Total qubits: `2N - 1`.
 
 The Hamiltonian (Jordan-Wigner with parallel transport, exactly
 gauge-invariant kinetic terms):
 
-```
+[archived fence delimiter: ```]
 H = -(t/2) sum_x [ X_{2x} Y_{2x+1} Y_{2x+2}
                  - Y_{2x} Y_{2x+1} X_{2x+2} ]   (matter + gauge link)
     - h sum_x Z_{2x+1}                          (electric field)
     + (m/2) sum_x (-1)^x Z_{2x}                 (staggered mass)
     + lambda sum_{x=1..N-2} (I - G_x)            (Gauss-law penalty)
-```
+[archived fence delimiter: ```]
 
 Interior Gauss-law operator: `G_x = X_{2x-1} Z_{2x} X_{2x+1}`.
 
@@ -42,25 +49,25 @@ count = 2 each = even), so `H` preserves the gauge sector exactly.
 
 ## Setup (Python)
 
-```python
+[archived fence delimiter: ```python]
 import numpy as np
 from moonlab import (
     CAMPS, var_d_run, gauge_warmstart, status_string,
     z2_lgt_1d_build, z2_lgt_1d_gauss_law,
     WARMSTART_STABILIZER_SUBGROUP,
 )
-```
+[archived fence delimiter: ```]
 
 ## Step 1: Build the Hamiltonian
 
-```python
+[archived fence delimiter: ```python]
 N = 4
 paulis, coeffs = z2_lgt_1d_build(
     N=N, t=1.0, h=0.5, m=0.5, gauss_penalty=0.0)
 
 print(f"qubits: {paulis.shape[1]}  ({2 * N - 1} expected)")
 print(f"terms : {paulis.shape[0]}")
-```
+[archived fence delimiter: ```]
 
 `gauss_penalty=0.0` is fine because v0.2.1's kinetic terms are
 exactly gauge-invariant -- the lambda penalty is redundant inside
@@ -68,11 +75,11 @@ the +1 sector.
 
 ## Step 2: Stack the Gauss-law generators
 
-```python
+[archived fence delimiter: ```python]
 gens = np.stack([z2_lgt_1d_gauss_law(N=N, site_x=x)
                  for x in range(1, N - 1)])
 print("gens shape =", gens.shape)   # (N - 2, 2N - 1) = (2, 7)
-```
+[archived fence delimiter: ```]
 
 Each row is the Pauli-byte encoding of one interior `G_x`.
 
@@ -81,7 +88,7 @@ Each row is the Pauli-byte encoding of one interior `G_x`.
 You can apply just the warmstart, without var-D, to confirm the
 state lands in the gauge sector:
 
-```python
+[archived fence delimiter: ```python]
 nq = 2 * N - 1
 state = CAMPS(num_qubits=nq, max_bond_dim=32)
 
@@ -91,11 +98,11 @@ gauge_warmstart(state, gens)
 # of every G_x.  Verified by tests/unit/test_gauge_warmstart.c
 # case 4 (four Gauss-law operators of N=4 -> all <G_x> = +1).
 print("norm =", state.norm)   # 1.0 within float tolerance.
-```
+[archived fence delimiter: ```]
 
 ## Step 4: Run var-D with the gauge-aware warmstart
 
-```python
+[archived fence delimiter: ```python]
 state = CAMPS(num_qubits=nq, max_bond_dim=32)
 energy = var_d_run(
     state, paulis, coeffs,
@@ -108,7 +115,7 @@ energy = var_d_run(
     stab_paulis=gens,
 )
 print(f"final variational energy = {energy:.6f}")
-```
+[archived fence delimiter: ```]
 
 Internally the loop alternates a greedy local-Clifford D-update with
 imag-time `|phi>`-update; the imag-time step preserves the gauge
@@ -147,3 +154,4 @@ For `N >= 6`, expect the alternating loop to need `max_outer_iters
   including the gauge-invariance proof.
 - `examples/hep/z2_gauge_var_d.c` -- the parameter-sweep demo
   driver.
+```

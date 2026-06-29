@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: GPU Pipeline
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # GPU Pipeline
 
 Metal GPU acceleration architecture for Moonlab.
@@ -10,7 +17,7 @@ Moonlab uses Apple's Metal framework to accelerate quantum simulation on Apple S
 
 ### Component Diagram
 
-```
+[archived fence delimiter: ```]
 ┌───────────────────────────────────────────────────────────────┐
 │                        CPU Side                               │
 │  ┌──────────────────────────────────────────────────────────┐ │
@@ -50,11 +57,11 @@ Moonlab uses Apple's Metal framework to accelerate quantum simulation on Apple S
 │  │  └─────────────────────────────────────────────────────┘ │ │
 │  └──────────────────────────────────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Execution Flow
 
-```
+[archived fence delimiter: ```]
 Gate Application Request
          │
          ▼
@@ -86,13 +93,13 @@ Gate Application Request
 ┌────────────────────┐
 │ Synchronize        │ → Wait for completion
 └────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ## Initialization
 
 ### Device Setup
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 // gpu_metal.m
 
 static id<MTLDevice> g_device = nil;
@@ -129,11 +136,11 @@ int gpu_metal_init(void) {
 
     return QSIM_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Buffer Management
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 typedef struct {
     id<MTLBuffer> buffer;
     uint64_t size;
@@ -159,13 +166,13 @@ void gpu_buffer_upload(gpu_buffer_t* buf, const void* data, uint64_t size) {
 void gpu_buffer_download(gpu_buffer_t* buf, void* data, uint64_t size) {
     memcpy(data, [buf->buffer contents], size);
 }
-```
+[archived fence delimiter: ```]
 
 ## Shader Implementation
 
 ### Single-Qubit Gates
 
-```metal
+[archived fence delimiter: ```metal]
 // quantum_shaders.metal
 
 #include <metal_stdlib>
@@ -222,11 +229,11 @@ kernel void hadamard_kernel(
         (a0.imag - a1.imag) * inv_sqrt2
     };
 }
-```
+[archived fence delimiter: ```]
 
 ### Rotation Gates
 
-```metal
+[archived fence delimiter: ```metal]
 kernel void rz_kernel(
     device Complex* amplitudes [[buffer(0)]],
     constant uint& qubit [[buffer(1)]],
@@ -264,11 +271,11 @@ kernel void rz_kernel(
         };
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Gates
 
-```metal
+[archived fence delimiter: ```metal]
 kernel void cnot_kernel(
     device Complex* amplitudes [[buffer(0)]],
     constant uint& control [[buffer(1)]],
@@ -306,13 +313,13 @@ kernel void cnot_kernel(
     amplitudes[idx10] = amplitudes[idx11];
     amplitudes[idx11] = temp;
 }
-```
+[archived fence delimiter: ```]
 
 ## Command Encoding
 
 ### Gate Dispatch
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 int gpu_metal_apply_hadamard(quantum_state_t* state, uint32_t qubit) {
     // Get pipeline state for Hadamard
     id<MTLComputePipelineState> pipeline = get_pipeline(@"hadamard_kernel");
@@ -345,11 +352,11 @@ int gpu_metal_apply_hadamard(quantum_state_t* state, uint32_t qubit) {
 
     return QSIM_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ### Batched Execution
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 int gpu_metal_apply_circuit(quantum_state_t* state,
                            const gate_op_t* gates,
                            size_t num_gates) {
@@ -381,13 +388,13 @@ int gpu_metal_apply_circuit(quantum_state_t* state,
 
     return QSIM_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ## Memory Transfer
 
 ### Synchronization Strategy
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────────────────────────────────────────────────┐
 │                    Transfer Strategy                        │
 │                                                             │
@@ -409,11 +416,11 @@ int gpu_metal_apply_circuit(quantum_state_t* state,
 │       ▼                                                     │
 │  Next GPU Gate → Re-upload if dirty                         │
 └─────────────────────────────────────────────────────────────┘
-```
+[archived fence delimiter: ```]
 
 ### Implementation
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 void ensure_gpu_buffer(quantum_state_t* state) {
     if (!state->gpu_buffer) {
         // First GPU access - allocate and upload
@@ -437,13 +444,13 @@ void ensure_cpu_current(quantum_state_t* state) {
         state->flags |= QSIM_FLAG_CPU_CURRENT;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Measurement on GPU
 
 ### Probability Computation
 
-```metal
+[archived fence delimiter: ```metal]
 kernel void compute_probabilities(
     device const Complex* amplitudes [[buffer(0)]],
     device float* probabilities [[buffer(1)]],
@@ -498,13 +505,13 @@ kernel void prefix_sum_probabilities(
         probabilities[gid] = shared[tid];
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Optimization
 
 ### Thread Group Sizing
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 MTLSize optimal_thread_group_size(id<MTLComputePipelineState> pipeline,
                                    uint64_t total_threads) {
     NSUInteger max_threads = pipeline.maxTotalThreadsPerThreadgroup;
@@ -523,13 +530,13 @@ MTLSize optimal_thread_group_size(id<MTLComputePipelineState> pipeline,
 
     return MTLSizeMake(threads_per_group, 1, 1);
 }
-```
+[archived fence delimiter: ```]
 
 ### Kernel Fusion
 
 For sequences of single-qubit gates on different qubits:
 
-```metal
+[archived fence delimiter: ```metal]
 kernel void fused_single_qubit_gates(
     device Complex* amplitudes [[buffer(0)]],
     constant uint* qubits [[buffer(1)]],
@@ -569,7 +576,7 @@ kernel void fused_single_qubit_gates(
 
     amplitudes[gid] = a;
 }
-```
+[archived fence delimiter: ```]
 
 ## Benchmarks
 
@@ -597,7 +604,7 @@ GPU becomes faster than CPU:
 
 ## Error Handling
 
-```objective-c
+[archived fence delimiter: ```objective-c]
 int gpu_metal_check_error(id<MTLCommandBuffer> cmd_buffer) {
     if (cmd_buffer.status == MTLCommandBufferStatusError) {
         NSError* error = cmd_buffer.error;
@@ -614,7 +621,7 @@ int gpu_metal_check_error(id<MTLCommandBuffer> cmd_buffer) {
 
     return QSIM_SUCCESS;
 }
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -623,3 +630,4 @@ int gpu_metal_check_error(id<MTLCommandBuffer> cmd_buffer) {
 - [Tutorial: GPU Acceleration](../tutorials/09-gpu-acceleration.md) - Usage guide
 - [C API: GPU Metal](../api/c/gpu-metal.md) - API reference
 
+```

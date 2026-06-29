@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial 10: PyTorch Integration
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial 10: PyTorch Integration
 
 Build hybrid quantum-classical neural networks using Moonlab's PyTorch integration.
@@ -31,13 +38,13 @@ Quantum machine learning combines the expressive power of quantum circuits with 
 
 ### Installation
 
-```bash
+[archived fence delimiter: ```bash]
 pip install moonlab torch torchvision
-```
+[archived fence delimiter: ```]
 
 ### Import Libraries
 
-```python
+[archived fence delimiter: ```python]
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -47,13 +54,13 @@ import numpy as np
 from moonlab import QuantumState
 from moonlab.torch_layer import QuantumLayer, QuantumCircuit
 from moonlab.torch_layer import AngleEncoding, AmplitudeEncoding
-```
+[archived fence delimiter: ```]
 
 ## Part 1: Quantum Layers as PyTorch Modules
 
 ### Creating a Basic Quantum Layer
 
-```python
+[archived fence delimiter: ```python]
 class SimpleQuantumLayer(nn.Module):
     """A simple parameterized quantum circuit layer."""
 
@@ -121,13 +128,13 @@ class SimpleQuantumLayer(nn.Module):
             exp_z = state.expectation_z(q)
             expectations.append(exp_z)
         return torch.tensor(expectations, dtype=torch.float32)
-```
+[archived fence delimiter: ```]
 
 ### Using the Built-in QuantumLayer
 
 Moonlab provides an optimized `QuantumLayer` with automatic differentiation:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import QuantumLayer
 
 # Create quantum layer with 4 qubits, 2 variational layers
@@ -142,7 +149,7 @@ quantum_layer = QuantumLayer(
 # Forward pass
 x = torch.randn(32, 4)  # batch of 32 samples, 4 features each
 output = quantum_layer(x)  # [32, 4] expectation values
-```
+[archived fence delimiter: ```]
 
 ## Part 2: The Parameter-Shift Rule
 
@@ -158,7 +165,7 @@ where $f(\theta) = \langle O \rangle_\theta$.
 
 ### Implementation
 
-```python
+[archived fence delimiter: ```python]
 class ParameterShiftQuantumLayer(nn.Module):
     """Quantum layer with parameter-shift gradient."""
 
@@ -236,13 +243,13 @@ def execute_circuit(x, params, num_qubits):
         outputs.append(exp)
 
     return torch.tensor(outputs, dtype=torch.float32)
-```
+[archived fence delimiter: ```]
 
 ## Part 3: Building a Hybrid Classifier
 
 ### Dataset: Moons Classification
 
-```python
+[archived fence delimiter: ```python]
 from sklearn.datasets import make_moons
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -257,11 +264,11 @@ X_train = torch.tensor(X_train, dtype=torch.float32)
 X_test = torch.tensor(X_test, dtype=torch.float32)
 y_train = torch.tensor(y_train, dtype=torch.long)
 y_test = torch.tensor(y_test, dtype=torch.long)
-```
+[archived fence delimiter: ```]
 
 ### Hybrid Model Architecture
 
-```python
+[archived fence delimiter: ```python]
 class HybridQuantumClassifier(nn.Module):
     """
     Classical → Quantum → Classical hybrid architecture.
@@ -301,11 +308,11 @@ class HybridQuantumClassifier(nn.Module):
         x = self.quantum(x)
         x = self.post_net(x)
         return x
-```
+[archived fence delimiter: ```]
 
 ### Training Loop
 
-```python
+[archived fence delimiter: ```python]
 def train_hybrid_model():
     model = HybridQuantumClassifier()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -353,10 +360,10 @@ def train_hybrid_model():
 
 # Train the model
 model = train_hybrid_model()
-```
+[archived fence delimiter: ```]
 
 **Expected Output:**
-```
+[archived fence delimiter: ```]
 Epoch 10/50, Loss: 0.4523, Acc: 78.50%
 Epoch 20/50, Loss: 0.3102, Acc: 86.25%
 Epoch 30/50, Loss: 0.2341, Acc: 90.75%
@@ -364,7 +371,7 @@ Epoch 40/50, Loss: 0.1876, Acc: 93.00%
 Epoch 50/50, Loss: 0.1542, Acc: 95.25%
 
 Test Accuracy: 94.00%
-```
+[archived fence delimiter: ```]
 
 ## Part 4: Advanced Techniques
 
@@ -372,7 +379,7 @@ Test Accuracy: 94.00%
 
 Interleave data encoding with variational layers for increased expressivity:
 
-```python
+[archived fence delimiter: ```python]
 class DataReuploadingLayer(nn.Module):
     """
     Data re-uploading: encode data multiple times between variational layers.
@@ -425,13 +432,13 @@ class DataReuploadingLayer(nn.Module):
             outputs.append(exp)
 
         return torch.tensor(outputs, dtype=torch.float32).unsqueeze(1)
-```
+[archived fence delimiter: ```]
 
 ### Quantum Kernel Methods
 
 Use quantum circuits to compute kernel functions:
 
-```python
+[archived fence delimiter: ```python]
 class QuantumKernel:
     """
     Quantum kernel: k(x, x') = |⟨φ(x)|φ(x')⟩|²
@@ -491,11 +498,11 @@ svc = SVC(kernel='precomputed')
 svc.fit(K_train, y_train.numpy())
 accuracy = svc.score(K_test, y_test.numpy())
 print(f"Quantum SVM Accuracy: {100*accuracy:.2f}%")
-```
+[archived fence delimiter: ```]
 
 ### Batched Execution for Performance
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.torch_layer import BatchedQuantumLayer
 
 # Batched execution on GPU
@@ -509,7 +516,7 @@ quantum_layer = BatchedQuantumLayer(
 # Much faster for large batches
 x = torch.randn(256, 4)
 output = quantum_layer(x)  # Parallelized on GPU
-```
+[archived fence delimiter: ```]
 
 ## Part 5: Training Tips
 
@@ -526,7 +533,7 @@ output = quantum_layer(x)  # Parallelized on GPU
 
 Barren plateaus occur when gradients vanish exponentially with circuit depth:
 
-```python
+[archived fence delimiter: ```python]
 # Strategy 1: Use shallow circuits with local initialization
 def initialize_near_identity(params, scale=0.1):
     """Initialize parameters so circuit is close to identity."""
@@ -549,14 +556,14 @@ def train_layerwise(model, X, y, epochs_per_layer=20):
     # Finally, fine-tune all layers together
     for param in model.parameters():
         param.requires_grad = True
-```
+[archived fence delimiter: ```]
 
 ### Gradient Clipping
 
-```python
+[archived fence delimiter: ```python]
 # Quantum gradients can be noisy
 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-```
+[archived fence delimiter: ```]
 
 ## Exercises
 
@@ -564,19 +571,19 @@ torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
 Build a hybrid model for the Iris dataset (4 features, 3 classes).
 
-```python
+[archived fence delimiter: ```python]
 from sklearn.datasets import load_iris
 
 iris = load_iris()
 X, y = iris.data, iris.target
 # ... build and train model
-```
+[archived fence delimiter: ```]
 
 ### Exercise 2: Custom Encoding
 
 Implement IQP (Instantaneous Quantum Polynomial) encoding:
 
-```python
+[archived fence delimiter: ```python]
 def iqp_encoding(state, x):
     """
     IQP encoding with ZZ interactions.
@@ -593,13 +600,13 @@ def iqp_encoding(state, x):
             if i < state.num_qubits and j < state.num_qubits:
                 angle = x[i] * x[j]
                 state.rzz(i, j, angle)
-```
+[archived fence delimiter: ```]
 
 ### Exercise 3: Quantum Transfer Learning
 
 Use a pre-trained classical network with a quantum layer:
 
-```python
+[archived fence delimiter: ```python]
 import torchvision.models as models
 
 # Pre-trained ResNet features
@@ -621,7 +628,7 @@ class QuantumTransferModel(nn.Module):
         x = torch.tanh(x)
         x = self.quantum(x)
         return self.classifier(x)
-```
+[archived fence delimiter: ```]
 
 ## Summary
 
@@ -645,3 +652,4 @@ In this tutorial, you learned:
 2. Mitarai, K., et al. (2018). "Quantum Circuit Learning"
 3. Pérez-Salinas, A., et al. (2020). "Data re-uploading for a universal quantum classifier"
 4. Havlíček, V., et al. (2019). "Supervised learning with quantum-enhanced feature spaces"
+```

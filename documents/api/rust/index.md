@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Rust API Reference
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Rust API Reference
 
 Safe, ergonomic Rust bindings for Moonlab Quantum Simulator with full ownership semantics and zero-cost abstractions.
@@ -14,21 +21,21 @@ Safe, ergonomic Rust bindings for Moonlab Quantum Simulator with full ownership 
 
 Add to your `Cargo.toml`:
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab = { path = "/path/to/quantum-simulator/bindings/rust/moonlab" }
-```
+[archived fence delimiter: ```]
 
 Or build the static library for FFI:
 
-```bash
+[archived fence delimiter: ```bash]
 cd quantum-simulator
 make rust-lib  # Creates libquantumsim.a
-```
+[archived fence delimiter: ```]
 
 ## Quick Start
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::{QuantumState, QuantumError};
 
 fn main() -> Result<(), QuantumError> {
@@ -49,7 +56,7 @@ fn main() -> Result<(), QuantumError> {
 
     Ok(())
 }
-```
+[archived fence delimiter: ```]
 
 ## QuantumState
 
@@ -57,7 +64,7 @@ The main type representing a quantum state vector.
 
 ### Creation
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Create a new quantum state initialized to |0...0⟩
     pub fn new(num_qubits: usize) -> Result<Self, QuantumError>;
@@ -68,10 +75,10 @@ impl QuantumState {
     /// Clone the state
     pub fn clone_state(&self) -> Result<Self, QuantumError>;
 }
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 use num_complex::Complex64;
 
@@ -85,11 +92,11 @@ let bell = QuantumState::from_amplitudes(vec![
     Complex64::new(0.0, 0.0),
     Complex64::new(1.0 / 2.0_f64.sqrt(), 0.0),
 ])?;
-```
+[archived fence delimiter: ```]
 
 ### Properties
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Number of qubits
     pub fn num_qubits(&self) -> usize;
@@ -109,13 +116,13 @@ impl QuantumState {
     /// Get all probabilities
     pub fn probabilities(&self) -> Vec<f64>;
 }
-```
+[archived fence delimiter: ```]
 
 ### Gates
 
 All gate methods return `Result<&mut Self, QuantumError>` for chaining:
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     // Single-qubit gates
     pub fn x(&mut self, qubit: usize) -> Result<&mut Self, QuantumError>;
@@ -141,20 +148,20 @@ impl QuantumState {
     // Three-qubit gates
     pub fn toffoli(&mut self, c1: usize, c2: usize, target: usize) -> Result<&mut Self, QuantumError>;
 }
-```
+[archived fence delimiter: ```]
 
 **Method chaining**:
-```rust
+[archived fence delimiter: ```rust]
 let mut state = QuantumState::new(3)?;
 state
     .h(0)?
     .cnot(0, 1)?
     .cnot(1, 2)?;  // GHZ state
-```
+[archived fence delimiter: ```]
 
 ### Measurement
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Measure all qubits (collapses state)
     pub fn measure(&mut self) -> Result<u64, QuantumError>;
@@ -165,11 +172,11 @@ impl QuantumState {
     /// Sample without collapse (for statistics)
     pub fn sample(&self, shots: usize) -> Vec<u64>;
 }
-```
+[archived fence delimiter: ```]
 
 ### State Operations
 
-```rust
+[archived fence delimiter: ```rust]
 impl QuantumState {
     /// Reset to |0...0⟩
     pub fn reset(&mut self);
@@ -186,11 +193,11 @@ impl QuantumState {
     /// Calculate fidelity with another state
     pub fn fidelity(&self, other: &QuantumState) -> f64;
 }
-```
+[archived fence delimiter: ```]
 
 ## Error Handling
 
-```rust
+[archived fence delimiter: ```rust]
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuantumError {
     InvalidQubit { qubit: usize, max: usize },
@@ -201,10 +208,10 @@ pub enum QuantumError {
 }
 
 impl std::error::Error for QuantumError {}
-```
+[archived fence delimiter: ```]
 
 **Usage**:
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::{QuantumState, QuantumError};
 
 fn run_circuit() -> Result<(), QuantumError> {
@@ -221,17 +228,17 @@ fn run_circuit() -> Result<(), QuantumError> {
 
     Ok(())
 }
-```
+[archived fence delimiter: ```]
 
 ## Algorithms
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::algorithms::{grover, vqe, qaoa};
-```
+[archived fence delimiter: ```]
 
 ### Grover's Search
 
-```rust
+[archived fence delimiter: ```rust]
 pub fn grover_search<F>(
     num_qubits: usize,
     oracle: F,
@@ -239,10 +246,10 @@ pub fn grover_search<F>(
 ) -> Result<u64, QuantumError>
 where
     F: Fn(&mut QuantumState) -> Result<(), QuantumError>;
-```
+[archived fence delimiter: ```]
 
 **Example**:
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::algorithms::grover_search;
 
 let result = grover_search(4, |state| {
@@ -252,11 +259,11 @@ let result = grover_search(4, |state| {
 }, None)?;
 
 println!("Found: {:04b}", result);
-```
+[archived fence delimiter: ```]
 
 ### VQE
 
-```rust
+[archived fence delimiter: ```rust]
 pub struct VqeResult {
     pub energy: f64,
     pub parameters: Vec<f64>,
@@ -271,7 +278,7 @@ pub fn vqe<H, A>(
 where
     H: Fn(&QuantumState) -> f64,
     A: Fn(&mut QuantumState, &[f64]) -> Result<(), QuantumError>;
-```
+[archived fence delimiter: ```]
 
 ## Traits
 
@@ -279,7 +286,7 @@ where
 
 Custom gate implementation:
 
-```rust
+[archived fence delimiter: ```rust]
 pub trait AsQuantumGate {
     fn apply(&self, state: &mut QuantumState) -> Result<(), QuantumError>;
 }
@@ -299,13 +306,13 @@ impl AsQuantumGate for CustomRotation {
         Ok(())
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## FFI (moonlab-sys)
 
 Raw bindings for advanced use:
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab_sys::{
     quantum_state_t,
     quantum_state_init,
@@ -319,19 +326,19 @@ unsafe {
     gate_hadamard(&mut state, 0);
     quantum_state_free(&mut state);
 }
-```
+[archived fence delimiter: ```]
 
 ## Terminal UI (moonlab-tui)
 
 Interactive quantum circuit builder:
 
-```bash
+[archived fence delimiter: ```bash]
 cargo run --package moonlab-tui
 
 # Or install
 cargo install --path bindings/rust/moonlab-tui
 moonlab-tui
-```
+[archived fence delimiter: ```]
 
 Features:
 - Visual circuit editor
@@ -343,7 +350,7 @@ Features:
 
 `QuantumState` is `Send` but not `Sync`:
 
-```rust
+[archived fence delimiter: ```rust]
 use std::thread;
 
 // OK: Move to another thread
@@ -354,13 +361,13 @@ thread::spawn(move || {
 
 // NOT OK: Share across threads
 // Use Arc<Mutex<QuantumState>> if needed
-```
+[archived fence delimiter: ```]
 
 ## Performance
 
 ### Benchmarking
 
-```rust
+[archived fence delimiter: ```rust]
 use std::time::Instant;
 
 let start = Instant::now();
@@ -372,11 +379,11 @@ for i in 0..20 {
 
 let elapsed = start.elapsed();
 println!("20-qubit H⊗20: {:?}", elapsed);
-```
+[archived fence delimiter: ```]
 
 ### Memory Usage
 
-```rust
+[archived fence delimiter: ```rust]
 use moonlab::QuantumState;
 
 // Query memory before allocation
@@ -386,16 +393,16 @@ let state = QuantumState::new(25)?;  // ~512 MB
 
 let after = get_memory_usage();
 println!("Memory used: {} MB", (after - before) / 1_000_000);
-```
+[archived fence delimiter: ```]
 
 ## no_std Support
 
 The core crate supports `no_std` environments:
 
-```toml
+[archived fence delimiter: ```toml]
 [dependencies]
 moonlab = { path = "...", default-features = false }
-```
+[archived fence delimiter: ```]
 
 Requires custom allocator and `libm` for math operations.
 
@@ -405,3 +412,4 @@ Requires custom allocator and `libm` for math operations.
 - [moonlab-sys](moonlab-sys.md) - FFI bindings
 - [moonlab-tui](moonlab-tui.md) - Terminal application
 - [Examples](../../examples/index.md) - Code examples
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Cross-language parity matrix
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Cross-language parity matrix
 
 Coverage of moonlab capabilities across the four bindings as of v1.0.
@@ -182,3 +189,4 @@ here for transparency:
   simulator function that picks the active backend.  No language-level
   toggle is exposed because the backend choice is a C-side runtime
   decision.
+```

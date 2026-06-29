@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Tutorial: Noisy circuit simulation with the MPDO engine
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Tutorial: Noisy circuit simulation with the MPDO engine
 
 The matrix-product density operator (MPDO) representation, introduced
@@ -29,7 +36,7 @@ Header: `src/quantum/noise_mpdo.h`.  Full API reference:
 
 ## 1. The initial state
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/quantum/noise_mpdo.h"
 #include <stdio.h>
 
@@ -44,7 +51,7 @@ int main(void) {
 
     moonlab_mpdo_free(m);
 }
-```
+[archived fence delimiter: ```]
 
 The MPDO is initialised in the product state
 `|0...0><0...0|` at bond dimension `chi = 1`, so `Tr(rho) = 1`
@@ -57,14 +64,14 @@ operators consistent with [4] and the conventions used in
 `src/quantum/noise.h`.  Each named channel is CPTP by construction;
 no completeness check is required of the user.
 
-```c
+[archived fence delimiter: ```c]
 moonlab_mpdo_apply_depolarizing_1q     (m, qubit, p);       /* p in [0,1] */
 moonlab_mpdo_apply_amplitude_damping_1q(m, qubit, gamma);   /* T_1 */
 moonlab_mpdo_apply_phase_damping_1q    (m, qubit, lambda);  /* T_2 */
 moonlab_mpdo_apply_bit_flip_1q         (m, qubit, p);
 moonlab_mpdo_apply_phase_flip_1q       (m, qubit, p);
 moonlab_mpdo_apply_bit_phase_flip_1q   (m, qubit, p);
-```
+[archived fence delimiter: ```]
 
 | channel | Kraus rep | analytical effect |
 |---|---|---|
@@ -76,7 +83,7 @@ moonlab_mpdo_apply_bit_phase_flip_1q   (m, qubit, p);
 
 ## 3. Worked example: the depolarising channel
 
-```c
+[archived fence delimiter: ```c]
 #include "moonlab/quantum/noise_mpdo.h"
 #include <stdio.h>
 
@@ -91,7 +98,7 @@ int main(void) {
 
     moonlab_mpdo_free(m);
 }
-```
+[archived fence delimiter: ```]
 
 The contraction `<Z> -> <Z>(1 - 4p/3)` follows from the Pauli-twirl
 identity for the symmetric depolarising channel and serves as a
@@ -105,17 +112,17 @@ operator-sum decomposition.  The convention is a row-major
 `[num_kraus, 2, 2]` flat array of `mpdo_complex_t`
 (`double _Complex`):
 
-```c
+[archived fence delimiter: ```c]
 /* Pauli X as a single-Kraus channel (i.e. a unitary X gate). */
 const mpdo_complex_t X[4] = { 0.0, 1.0,
                               1.0, 0.0 };
 moonlab_mpdo_apply_kraus_1q(m, /*qubit=*/0, X, /*num_kraus=*/1);
-```
+[archived fence delimiter: ```]
 
 A two-Kraus example for the symmetric depolarising channel at
 arbitrary `p` (equivalent to `apply_depolarizing_1q`):
 
-```c
+[archived fence delimiter: ```c]
 const double a = sqrt(1.0 - p);
 const double b = sqrt(p / 3.0);
 const mpdo_complex_t k[4 * 4] = {
@@ -126,7 +133,7 @@ const mpdo_complex_t k[4 * 4] = {
     /* sqrt(p/3) Z */     b, 0.0,    0.0, -b,
 };
 moonlab_mpdo_apply_kraus_1q(m, qubit, k, /*num_kraus=*/4);
-```
+[archived fence delimiter: ```]
 
 Trace preservation (`sum_a K_a^dag K_a = I`) is the user's
 responsibility for arbitrary Kraus decompositions; the helper
@@ -141,7 +148,7 @@ channels.  The following sequence applies a Hadamard gate followed
 by a dephasing channel and measures the resulting transverse
 coherence:
 
-```c
+[archived fence delimiter: ```c]
 moonlab_mpdo_t* m = moonlab_mpdo_create(2, 16);
 
 /* Hadamard on qubit 0 (Kraus = {H}, single op). */
@@ -159,11 +166,11 @@ moonlab_mpdo_expect_pauli_1q(m, 0, /*X=*/1, &x0);
 moonlab_mpdo_expect_pauli_1q(m, 0, /*Z=*/3, &z0);
 printf("<X_0> = %.4f (expected 0.8944)\n", x0);
 printf("<Z_0> = %.4f (expected 0)\n",      z0);
-```
+[archived fence delimiter: ```]
 
 ## 6. Observables and trace
 
-```c
+[archived fence delimiter: ```c]
 double trace = moonlab_mpdo_trace(m);                      /* always 1 */
 double e_x;
 moonlab_mpdo_expect_pauli_1q(m, qubit, /*X=*/1, &e_x);
@@ -171,7 +178,7 @@ double e_y;
 moonlab_mpdo_expect_pauli_1q(m, qubit, /*Y=*/2, &e_y);
 double e_z;
 moonlab_mpdo_expect_pauli_1q(m, qubit, /*Z=*/3, &e_z);
-```
+[archived fence delimiter: ```]
 
 `Tr(rho)` must equal 1 to roundoff for a CPTP-evolved state.  Any
 deviation indicates either (a) a non-CPTP user-supplied Kraus
@@ -185,13 +192,13 @@ The single-qubit MPDO surface ships with first-class Python and Rust
 bindings in v0.3.0.  The Python module is a thin wrapper that
 preserves the C semantics:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.mpdo import Mpdo
 
 rho = Mpdo(num_qubits=4, max_bond_dim=16)
 rho.apply_depolarizing(qubit=0, p=0.4)
 print(rho.expect_pauli(0, 'Z'))   # 0.466667 ...
-```
+[archived fence delimiter: ```]
 
 The Rust binding (`moonlab::mpdo::Mpdo`) provides RAII handle
 management, typed Pauli codes, and the same six named channels.
@@ -246,3 +253,4 @@ conventions.
 - `src/quantum/noise.h`: pure-state Kraus channel reference
   implementation with conventions identical to the MPDO engine,
   enabling small-system cross-checks.
+```

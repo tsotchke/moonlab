@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Distributed Architecture
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Distributed Architecture
 
 Design and implementation of Moonlab's MPI-based distributed quantum simulation.
@@ -8,7 +15,7 @@ Moonlab's distributed backend enables simulation of quantum systems larger than 
 
 ## Architecture Diagram
 
-```
+[archived fence delimiter: ```]
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Master Node (Rank 0)                     │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
@@ -31,7 +38,7 @@ Moonlab's distributed backend enables simulation of quantum systems larger than 
 │ │ Engine  │ │      │ │ Engine  │ │      │ │ Engine  │ │
 │ └─────────┘ │      │ └─────────┘ │      │ └─────────┘ │
 └─────────────┘      └─────────────┘      └─────────────┘
-```
+[archived fence delimiter: ```]
 
 ## State Vector Partitioning
 
@@ -39,18 +46,18 @@ Moonlab's distributed backend enables simulation of quantum systems larger than 
 
 The state vector is divided among $P = 2^p$ ranks based on the $p$ highest-order qubits:
 
-```
+[archived fence delimiter: ```]
 n-qubit system on P ranks:
 ├── Global qubits: n-p to n-1 (determine rank ownership)
 └── Local qubits: 0 to n-p-1 (stored locally per rank)
 
 Rank r owns amplitudes where top p bits equal r:
   indices: [r × 2^{n-p}, (r+1) × 2^{n-p})
-```
+[archived fence delimiter: ```]
 
 ### Example: 32 Qubits on 4 Ranks
 
-```
+[archived fence delimiter: ```]
 Total amplitudes: 2^32 = 4,294,967,296
 Amplitudes per rank: 2^30 = 1,073,741,824 (16 GB each)
 
@@ -58,11 +65,11 @@ Rank 0: indices 0x00000000 - 0x3FFFFFFF (top bits = 00)
 Rank 1: indices 0x40000000 - 0x7FFFFFFF (top bits = 01)
 Rank 2: indices 0x80000000 - 0xBFFFFFFF (top bits = 10)
 Rank 3: indices 0xC0000000 - 0xFFFFFFFF (top bits = 11)
-```
+[archived fence delimiter: ```]
 
 ### Data Structure
 
-```c
+[archived fence delimiter: ```c]
 typedef struct distributed_state {
     // MPI info
     int rank;
@@ -87,7 +94,7 @@ typedef struct distributed_state {
     MPI_Request* requests;
     int num_pending;
 } distributed_state_t;
-```
+[archived fence delimiter: ```]
 
 ## Gate Classification
 
@@ -95,7 +102,7 @@ typedef struct distributed_state {
 
 Gates on qubits 0 to n-p-1 require no communication:
 
-```c
+[archived fence delimiter: ```c]
 void distributed_local_gate(distributed_state_t* state,
                             int target,
                             const complex_t gate[2][2]) {
@@ -114,13 +121,13 @@ void distributed_local_gate(distributed_state_t* state,
         state->local_amplitudes[i1] = gate[1][0] * a0 + gate[1][1] * a1;
     }
 }
-```
+[archived fence delimiter: ```]
 
 ### Global Gates
 
 Gates on qubits n-p to n-1 require inter-rank communication:
 
-```c
+[archived fence delimiter: ```c]
 void distributed_global_gate(distributed_state_t* state,
                              int target,
                              const complex_t gate[2][2]) {
@@ -147,11 +154,11 @@ void distributed_global_gate(distributed_state_t* state,
     // Apply gate to (local_half, recv_buffer) pairs
     apply_gate_to_exchanged(state, gate, send_upper);
 }
-```
+[archived fence delimiter: ```]
 
 ### Two-Qubit Global Gates
 
-```c
+[archived fence delimiter: ```c]
 void distributed_cnot_global(distributed_state_t* state,
                              int control, int target) {
     // Classify control and target
@@ -191,13 +198,13 @@ void distributed_cnot_both_global(distributed_state_t* state,
     // Reorganize data, apply CNOT, redistribute
     // ...
 }
-```
+[archived fence delimiter: ```]
 
 ## Communication Optimization
 
 ### Non-blocking Communication
 
-```c
+[archived fence delimiter: ```c]
 void distributed_gate_async(distributed_state_t* state,
                             int target,
                             const complex_t gate[2][2]) {
@@ -226,11 +233,11 @@ void distributed_gate_async(distributed_state_t* state,
     // Complete gate on exchanged data
     apply_gate_exchanged_half(state, gate, send_upper);
 }
-```
+[archived fence delimiter: ```]
 
 ### Pipelining
 
-```c
+[archived fence delimiter: ```c]
 void distributed_circuit_pipelined(distributed_state_t* state,
                                    gate_sequence_t* gates) {
     for (int i = 0; i < gates->count; i++) {
@@ -255,13 +262,13 @@ void distributed_circuit_pipelined(distributed_state_t* state,
         }
     }
 }
-```
+[archived fence delimiter: ```]
 
 ## Collective Operations
 
 ### Probability Calculation
 
-```c
+[archived fence delimiter: ```c]
 double distributed_probability(distributed_state_t* state, size_t index) {
     int owner_rank = index >> state->local_qubits;
 
@@ -278,11 +285,11 @@ double distributed_probability(distributed_state_t* state, size_t index) {
 
     return global_prob;
 }
-```
+[archived fence delimiter: ```]
 
 ### Measurement
 
-```c
+[archived fence delimiter: ```c]
 uint64_t distributed_measure_all(distributed_state_t* state,
                                  quantum_entropy_ctx_t* entropy) {
     // Compute local probability sums
@@ -341,13 +348,13 @@ uint64_t distributed_measure_all(distributed_state_t* state,
     free(cumsum);
     return result;
 }
-```
+[archived fence delimiter: ```]
 
 ## Fault Tolerance
 
 ### Checkpointing
 
-```c
+[archived fence delimiter: ```c]
 void distributed_checkpoint(distributed_state_t* state, const char* path) {
     char filename[256];
     snprintf(filename, sizeof(filename), "%s/state_rank%04d.bin",
@@ -388,7 +395,7 @@ void distributed_restore(distributed_state_t* state, const char* path) {
 
     MPI_Barrier(state->comm);
 }
-```
+[archived fence delimiter: ```]
 
 ## Scaling Characteristics
 
@@ -427,3 +434,4 @@ Fixed local size, increasing total problem:
 - [MPI Bridge API](../api/c/mpi-bridge.md)
 - [Distributed Simulation Guide](../guides/distributed-simulation.md)
 - [Scaling Analysis](../performance/scaling-analysis.md)
+```

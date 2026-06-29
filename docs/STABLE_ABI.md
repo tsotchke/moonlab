@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Stable ABI contract -- v1.0
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Stable ABI contract -- v1.0
 
 ## Scope
@@ -39,10 +46,10 @@ include directory.
 
 Application code includes headers as:
 
-```c
+[archived fence delimiter: ```c]
 #include <quantumsim/quantum/state.h>
 #include <quantumsim/control/control_plane.h>
-```
+[archived fence delimiter: ```]
 
 A migration to `<moonlab/...>` is on the v2.0 list; this is a
 v1.0 ABI-stability commitment (the include path cannot move
@@ -220,13 +227,13 @@ Within 1.x, a symbol marked deprecated continues to work but emits a
 build-time `[[deprecated]]` warning when consumed.  The symbol may be
 removed in the next major version.
 
-```c
+[archived fence delimiter: ```c]
 [[deprecated("renamed to foo_v2; will remove in 2.0")]]
 MOONLAB_API int moonlab_foo(...);
 
 /* New replacement. */
 MOONLAB_API int moonlab_foo_v2(...);
-```
+[archived fence delimiter: ```]
 
 Bindings (Python / Rust / JS) follow their idiomatic deprecation
 mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
@@ -255,3 +262,4 @@ each binding's CHANGELOG records them with semver discipline.
 - `docs/reference/error-codes.md` -- per-module status code listing
 - `docs/INTEGRATION_libirrep_SbNN.md` -- v1.0 commitment for the two
   optional sibling-library bridges
+```

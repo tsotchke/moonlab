@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Moonlab error codes
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Moonlab error codes
 
 This file is preserved for backward-compatible links.  The canonical
@@ -15,3 +22,4 @@ documents:
   adding new error enums.
 
 See `docs/reference/error-codes.md`.
+```

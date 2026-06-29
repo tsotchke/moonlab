@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Benchmark Results
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Benchmark Results
 
 Comprehensive performance measurements for Moonlab across hardware and configurations.
@@ -310,7 +317,7 @@ Pauli string expectation (analytical):
 
 ### Run Built-in Benchmarks
 
-```bash
+[archived fence delimiter: ```bash]
 # Full benchmark suite
 ./bin/moonlab-benchmark
 
@@ -318,11 +325,11 @@ Pauli string expectation (analytical):
 ./bin/moonlab-benchmark --suite=gates --qubits=20,24,28
 ./bin/moonlab-benchmark --suite=algorithms --algorithm=grover
 ./bin/moonlab-benchmark --suite=comparison --backends=cpu,metal
-```
+[archived fence delimiter: ```]
 
 ### Python Benchmark Script
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import Profiler, QuantumState, set_backend
 import time
 
@@ -343,7 +350,7 @@ for backend in ['cpu', 'metal']:
     for n in [16, 20, 24]:
         us_per_gate = benchmark_gates(n)
         print(f"{backend:6} {n:2} qubits: {us_per_gate:.1f} µs/gate")
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -351,3 +358,4 @@ for backend in ['cpu', 'metal']:
 - [GPU Acceleration](../guides/gpu-acceleration.md) - GPU configuration
 - [Performance Tuning](../guides/performance-tuning.md) - Optimization guide
 
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: QAOA API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # QAOA API
 
 Complete reference for the Quantum Approximate Optimization Algorithm (QAOA) in the C library.
@@ -34,7 +41,7 @@ QAOA proceeds as follows:
 
 Ising model for combinatorial optimization.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;          // Number of qubits (problem size)
     double **J;                 // Coupling matrix [num_qubits × num_qubits]
@@ -42,7 +49,7 @@ typedef struct {
     double offset;              // Energy offset (constant term)
     char *problem_name;         // Problem description
 } ising_model_t;
-```
+[archived fence delimiter: ```]
 
 **Mathematical Form**:
 $$H = \sum_{i<j} J_{ij} Z_i Z_j + \sum_i h_i Z_i + \text{offset}$$
@@ -56,9 +63,9 @@ Where:
 
 Create Ising model.
 
-```c
+[archived fence delimiter: ```c]
 ising_model_t* ising_model_create(size_t num_qubits);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_qubits`: Number of qubits (problem size)
@@ -69,17 +76,17 @@ ising_model_t* ising_model_create(size_t num_qubits);
 
 Free Ising model.
 
-```c
+[archived fence delimiter: ```c]
 void ising_model_free(ising_model_t *model);
-```
+[archived fence delimiter: ```]
 
 ### ising_model_set_coupling
 
 Set coupling coefficient $J[i][j]$.
 
-```c
+[archived fence delimiter: ```c]
 int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double value);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `model`: Ising model
@@ -94,9 +101,9 @@ int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double va
 
 Set local field $h[i]$.
 
-```c
+[archived fence delimiter: ```c]
 int ising_model_set_field(ising_model_t *model, size_t i, double value);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `model`: Ising model
@@ -109,9 +116,9 @@ int ising_model_set_field(ising_model_t *model, size_t i, double value);
 
 Evaluate Ising energy for a bit string.
 
-```c
+[archived fence delimiter: ```c]
 double ising_model_evaluate(const ising_model_t *model, uint64_t bitstring);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `model`: Ising model
@@ -128,9 +135,9 @@ where $z_i \in \{-1, +1\}$ (mapped from qubit measurement outcomes)
 
 Print Ising model.
 
-```c
+[archived fence delimiter: ```c]
 void ising_model_print(const ising_model_t *model);
-```
+[archived fence delimiter: ```]
 
 ## Problem Encodings
 
@@ -140,38 +147,38 @@ void ising_model_print(const ising_model_t *model);
 
 Graph structure for MaxCut problem.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_vertices;        // Number of vertices
     size_t num_edges;           // Number of edges
     int **edges;                // Edge list [num_edges][2]
     double *weights;            // Edge weights (NULL for unweighted)
 } graph_t;
-```
+[archived fence delimiter: ```]
 
 #### graph_create
 
 Create graph.
 
-```c
+[archived fence delimiter: ```c]
 graph_t* graph_create(size_t num_vertices, size_t num_edges);
-```
+[archived fence delimiter: ```]
 
 #### graph_free
 
 Free graph.
 
-```c
+[archived fence delimiter: ```c]
 void graph_free(graph_t *graph);
-```
+[archived fence delimiter: ```]
 
 #### graph_add_edge
 
 Add edge to graph.
 
-```c
+[archived fence delimiter: ```c]
 int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `graph`: Graph
@@ -185,9 +192,9 @@ int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight)
 
 Encode MaxCut problem as Ising model.
 
-```c
+[archived fence delimiter: ```c]
 ising_model_t* ising_encode_maxcut(const graph_t *graph);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `graph`: Input graph
@@ -200,7 +207,7 @@ $$H = -\sum_{(i,j) \in E} w_{ij} \frac{1 - Z_i Z_j}{2}$$
 **MaxCut Objective**: Partition graph into two sets to maximize cut edges.
 
 **Example**:
-```c
+[archived fence delimiter: ```c]
 // Create 4-node graph
 graph_t *graph = graph_create(4, 4);
 graph_add_edge(graph, 0, 0, 1, 1.0);
@@ -210,7 +217,7 @@ graph_add_edge(graph, 3, 3, 0, 1.0);
 
 // Encode as Ising model
 ising_model_t *ising = ising_encode_maxcut(graph);
-```
+[archived fence delimiter: ```]
 
 ### Portfolio Optimization
 
@@ -218,7 +225,7 @@ ising_model_t *ising = ising_encode_maxcut(graph);
 
 Portfolio optimization problem.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_assets;          // Number of assets
     double *expected_returns;   // Expected return for each asset
@@ -226,31 +233,31 @@ typedef struct {
     double risk_aversion;       // Risk tolerance parameter λ
     double *budget_constraint;  // Budget allocation constraints
 } portfolio_problem_t;
-```
+[archived fence delimiter: ```]
 
 #### portfolio_problem_create
 
 Create portfolio problem.
 
-```c
+[archived fence delimiter: ```c]
 portfolio_problem_t* portfolio_problem_create(size_t num_assets);
-```
+[archived fence delimiter: ```]
 
 #### portfolio_problem_free
 
 Free portfolio problem.
 
-```c
+[archived fence delimiter: ```c]
 void portfolio_problem_free(portfolio_problem_t *problem);
-```
+[archived fence delimiter: ```]
 
 #### ising_encode_portfolio
 
 Encode portfolio optimization as Ising model.
 
-```c
+[archived fence delimiter: ```c]
 ising_model_t* ising_encode_portfolio(const portfolio_problem_t *problem);
-```
+[archived fence delimiter: ```]
 
 **Objective**: Maximize Return - $\lambda$ · Risk subject to budget constraints
 
@@ -260,12 +267,12 @@ ising_model_t* ising_encode_portfolio(const portfolio_problem_t *problem);
 
 Number partition problem.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_numbers;         // Number of elements
     int64_t *numbers;           // Numbers to partition
 } partition_problem_t;
-```
+[archived fence delimiter: ```]
 
 **Objective**: Partition numbers into two sets with equal sums.
 
@@ -273,9 +280,9 @@ typedef struct {
 
 Encode number partition as Ising model.
 
-```c
+[archived fence delimiter: ```c]
 ising_model_t* ising_encode_partition(const partition_problem_t *problem);
-```
+[archived fence delimiter: ```]
 
 ## QAOA Algorithm
 
@@ -283,20 +290,20 @@ ising_model_t* ising_encode_partition(const partition_problem_t *problem);
 
 QAOA configuration.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     size_t num_qubits;          // Number of qubits
     size_t num_layers;          // Circuit depth p (typically 1-10)
     double *gamma;              // Cost Hamiltonian angles [num_layers]
     double *beta;               // Mixer Hamiltonian angles [num_layers]
 } qaoa_config_t;
-```
+[archived fence delimiter: ```]
 
 ### qaoa_result_t
 
 QAOA result.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     uint64_t best_bitstring;         // Best solution found
     double best_energy;              // Energy of best solution
@@ -310,13 +317,13 @@ typedef struct {
     size_t total_measurements;       // Total quantum measurements
     double optimization_time;        // Time in seconds
 } qaoa_result_t;
-```
+[archived fence delimiter: ```]
 
 ### qaoa_solver_t
 
 QAOA solver context.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     ising_model_t *ising;            // Problem encoding
     qaoa_config_t config;            // QAOA configuration
@@ -334,19 +341,19 @@ typedef struct {
     double *energy_history;
     size_t history_size;
 } qaoa_solver_t;
-```
+[archived fence delimiter: ```]
 
 ### qaoa_solver_create
 
 Create QAOA solver.
 
-```c
+[archived fence delimiter: ```c]
 qaoa_solver_t* qaoa_solver_create(
     ising_model_t *ising_model,
     size_t num_layers,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `ising_model`: Problem as Ising model
@@ -359,21 +366,21 @@ qaoa_solver_t* qaoa_solver_create(
 
 Free QAOA solver.
 
-```c
+[archived fence delimiter: ```c]
 void qaoa_solver_free(qaoa_solver_t *solver);
-```
+[archived fence delimiter: ```]
 
 ### qaoa_compute_expectation
 
 Compute expectation value for QAOA parameters.
 
-```c
+[archived fence delimiter: ```c]
 double qaoa_compute_expectation(
     qaoa_solver_t *solver,
     const double *gamma,
     const double *beta
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: QAOA solver
@@ -386,9 +393,9 @@ double qaoa_compute_expectation(
 
 Execute QAOA optimization.
 
-```c
+[archived fence delimiter: ```c]
 qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: QAOA solver
@@ -408,7 +415,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
 
 Apply QAOA circuit for given parameters.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t qaoa_apply_circuit(
     quantum_state_t *state,
     const ising_model_t *ising,
@@ -416,7 +423,7 @@ qs_error_t qaoa_apply_circuit(
     const double *beta,
     size_t num_layers
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: Quantum state
@@ -438,13 +445,13 @@ where:
 
 Apply cost Hamiltonian evolution: $\exp(-i\gamma H_C)$.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t qaoa_apply_cost_hamiltonian(
     quantum_state_t *state,
     const ising_model_t *ising,
     double gamma
 );
-```
+[archived fence delimiter: ```]
 
 **Implementation**: Decomposes into $ZZ$ and $Z$ rotations
 
@@ -452,12 +459,12 @@ qs_error_t qaoa_apply_cost_hamiltonian(
 
 Apply mixer Hamiltonian evolution: $\exp(-i\beta H_M)$.
 
-```c
+[archived fence delimiter: ```c]
 qs_error_t qaoa_apply_mixer_hamiltonian(
     quantum_state_t *state,
     double beta
 );
-```
+[archived fence delimiter: ```]
 
 **Standard Mixer**: $H_M = \sum_i X_i$
 
@@ -469,7 +476,7 @@ qs_error_t qaoa_apply_mixer_hamiltonian(
 
 Compute gradient of energy with respect to QAOA parameters.
 
-```c
+[archived fence delimiter: ```c]
 int qaoa_compute_gradient(
     qaoa_solver_t *solver,
     const double *gamma,
@@ -477,7 +484,7 @@ int qaoa_compute_gradient(
     double *grad_gamma,
     double *grad_beta
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `solver`: QAOA solver
@@ -497,12 +504,12 @@ $$\frac{\partial\langle H \rangle}{\partial \gamma_k} = \frac{\langle H \rangle(
 
 Sample solution from QAOA state.
 
-```c
+[archived fence delimiter: ```c]
 uint64_t qaoa_sample_solution(
     quantum_state_t *state,
     quantum_entropy_ctx_t *entropy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: QAOA state
@@ -514,7 +521,7 @@ uint64_t qaoa_sample_solution(
 
 Get top k solutions from QAOA state.
 
-```c
+[archived fence delimiter: ```c]
 int qaoa_get_top_solutions(
     quantum_state_t *state,
     const ising_model_t *ising,
@@ -524,7 +531,7 @@ int qaoa_get_top_solutions(
     quantum_entropy_ctx_t *entropy,
     size_t num_samples
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `state`: QAOA state
@@ -541,13 +548,13 @@ int qaoa_get_top_solutions(
 
 Compute approximation ratio.
 
-```c
+[archived fence delimiter: ```c]
 double qaoa_approximation_ratio(
     double best_energy,
     double optimal_energy,
     double worst_energy
 );
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `best_energy`: Best energy found by QAOA
@@ -565,37 +572,37 @@ $$\text{ratio} = \frac{\text{best} - \text{worst}}{\text{optimal} - \text{worst}
 
 Print QAOA result.
 
-```c
+[archived fence delimiter: ```c]
 void qaoa_print_result(const qaoa_result_t *result);
-```
+[archived fence delimiter: ```]
 
 ### qaoa_bitstring_to_binary
 
 Convert bitstring to binary array.
 
-```c
+[archived fence delimiter: ```c]
 void qaoa_bitstring_to_binary(
     uint64_t bitstring,
     size_t num_qubits,
     int *binary
 );
-```
+[archived fence delimiter: ```]
 
 ### qaoa_bitstring_to_spins
 
 Convert bitstring to spin values ($\pm 1$).
 
-```c
+[archived fence delimiter: ```c]
 void qaoa_bitstring_to_spins(
     uint64_t bitstring,
     size_t num_qubits,
     int *spins
 );
-```
+[archived fence delimiter: ```]
 
 ## Complete Example: MaxCut
 
-```c
+[archived fence delimiter: ```c]
 #include "src/algorithms/qaoa.h"
 #include "src/utils/quantum_entropy.h"
 
@@ -652,7 +659,7 @@ int main(void) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Performance Considerations
 
@@ -683,3 +690,4 @@ int main(void) {
 - [Ising Models](../../concepts/variational-algorithms.md) - Theory
 - [Algorithms: QAOA](../../algorithms/qaoa-algorithm.md) - Full theory
 - [Tutorial: QAOA Optimization](../../tutorials/07-qaoa-optimization.md)
+```

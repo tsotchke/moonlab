@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Configuration API
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Configuration API
 
 Complete reference for simulator configuration in the C library.
@@ -21,7 +28,7 @@ The configuration module provides centralized control over all simulator setting
 
 Compute backend selection.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_BACKEND_CPU,          // Pure CPU execution
     QS_BACKEND_GPU_METAL,    // Apple Metal GPU
@@ -31,13 +38,13 @@ typedef enum {
     QS_BACKEND_HYBRID,       // GPU + CPU hybrid
     QS_BACKEND_AUTO          // Automatic selection
 } qs_backend_t;
-```
+[archived fence delimiter: ```]
 
 ### qs_simd_level_t
 
 SIMD instruction set level.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_SIMD_NONE,           // Scalar only
     QS_SIMD_SSE2,           // SSE2 (128-bit)
@@ -49,13 +56,13 @@ typedef enum {
     QS_SIMD_SVE,            // ARM SVE
     QS_SIMD_AUTO            // Auto-detect best
 } qs_simd_level_t;
-```
+[archived fence delimiter: ```]
 
 ### qs_threading_t
 
 Threading model.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_THREADING_SINGLE,     // Single-threaded
     QS_THREADING_OPENMP,     // OpenMP parallelization
@@ -63,25 +70,25 @@ typedef enum {
     QS_THREADING_GCD,        // Grand Central Dispatch (macOS)
     QS_THREADING_AUTO        // Automatic selection
 } qs_threading_t;
-```
+[archived fence delimiter: ```]
 
 ### qs_precision_t
 
 Numerical precision.
 
-```c
+[archived fence delimiter: ```c]
 typedef enum {
     QS_PRECISION_SINGLE,     // 32-bit float
     QS_PRECISION_DOUBLE,     // 64-bit double (default)
     QS_PRECISION_QUAD        // 128-bit quad (if available)
 } qs_precision_t;
-```
+[archived fence delimiter: ```]
 
 ### qs_config_t
 
 Main configuration structure.
 
-```c
+[archived fence delimiter: ```c]
 typedef struct {
     // Compute backend
     qs_backend_t backend;
@@ -125,7 +132,7 @@ typedef struct {
     int track_entanglement;       // Track entanglement metrics
     FILE *log_file;               // Log output file
 } qs_config_t;
-```
+[archived fence delimiter: ```]
 
 ## Configuration Management
 
@@ -133,9 +140,9 @@ typedef struct {
 
 Create configuration with defaults.
 
-```c
+[archived fence delimiter: ```c]
 qs_config_t* qs_config_create(void);
-```
+[archived fence delimiter: ```]
 
 **Returns**: New configuration or NULL on error
 
@@ -151,25 +158,25 @@ qs_config_t* qs_config_create(void);
 
 Free configuration.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_destroy(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_copy
 
 Create copy of configuration.
 
-```c
+[archived fence delimiter: ```c]
 qs_config_t* qs_config_copy(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_reset
 
 Reset configuration to defaults.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_reset(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ## Environment Variables
 
@@ -177,9 +184,9 @@ void qs_config_reset(qs_config_t *config);
 
 Load configuration from environment variables.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_load_env(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Number of variables loaded
 
@@ -200,24 +207,24 @@ int qs_config_load_env(qs_config_t *config);
 | `QS_LOG_FILE` | string | Log file path |
 
 **Example**:
-```bash
+[archived fence delimiter: ```bash]
 export QS_BACKEND=metal
 export QS_THREADS=8
 export QS_MAX_MEMORY=32G
 export QS_VERBOSE=2
 ./my_quantum_simulation
-```
+[archived fence delimiter: ```]
 
 ### qs_config_load_file
 
 Load configuration from file.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_load_file(qs_config_t *config, const char *filename);
-```
+[archived fence delimiter: ```]
 
 **File Format** (INI-style):
-```ini
+[archived fence delimiter: ```ini]
 [backend]
 type = metal
 gpu_device = 0
@@ -245,15 +252,15 @@ use_gpu_for_svd = true
 [debug]
 verbose = 1
 validate_operations = false
-```
+[archived fence delimiter: ```]
 
 ### qs_config_save_file
 
 Save configuration to file.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_save_file(const qs_config_t *config, const char *filename);
-```
+[archived fence delimiter: ```]
 
 ## Presets
 
@@ -261,9 +268,9 @@ int qs_config_save_file(const qs_config_t *config, const char *filename);
 
 Configure for maximum performance.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_preset_performance(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Settings**:
 - Backend: AUTO (prefers GPU)
@@ -276,9 +283,9 @@ void qs_config_preset_performance(qs_config_t *config);
 
 Configure for maximum accuracy.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_preset_accuracy(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Settings**:
 - Precision: DOUBLE
@@ -290,9 +297,9 @@ void qs_config_preset_accuracy(qs_config_t *config);
 
 Configure for memory-constrained systems.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_preset_low_memory(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Settings**:
 - Threading: Single (reduces overhead)
@@ -303,9 +310,9 @@ void qs_config_preset_low_memory(qs_config_t *config);
 
 Configure for NISQ simulation.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_preset_noisy(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Settings**:
 - Noise: Enabled
@@ -316,9 +323,9 @@ void qs_config_preset_noisy(qs_config_t *config);
 
 Configure for cluster execution.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_preset_distributed(qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Settings**:
 - Backend: DISTRIBUTED
@@ -331,33 +338,33 @@ void qs_config_preset_distributed(qs_config_t *config);
 
 Set compute backend.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_backend(qs_config_t *config, qs_backend_t backend);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_gpu_device
 
 Set GPU device index.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_gpu_device(qs_config_t *config, int device_id);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_enable_gpu_async
 
 Enable asynchronous GPU operations.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_gpu_async(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_simd_level
 
 Set SIMD instruction level.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_simd_level(qs_config_t *config, qs_simd_level_t level);
-```
+[archived fence delimiter: ```]
 
 ## Threading Configuration
 
@@ -365,17 +372,17 @@ void qs_config_set_simd_level(qs_config_t *config, qs_simd_level_t level);
 
 Set threading model.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_threading(qs_config_t *config, qs_threading_t model);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_num_threads
 
 Set number of threads.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_num_threads(qs_config_t *config, int num_threads);
-```
+[archived fence delimiter: ```]
 
 **Parameters**:
 - `num_threads`: Thread count (0 = automatic based on CPU cores)
@@ -386,17 +393,17 @@ void qs_config_set_num_threads(qs_config_t *config, int num_threads);
 
 Set maximum memory limit.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_max_memory(qs_config_t *config, size_t bytes);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_alignment
 
 Set memory alignment.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_alignment(qs_config_t *config, size_t alignment);
-```
+[archived fence delimiter: ```]
 
 **Recommended**: 64 bytes for AVX-512, 32 for AVX2, 16 for SSE
 
@@ -404,9 +411,9 @@ void qs_config_set_alignment(qs_config_t *config, size_t alignment);
 
 Enable huge pages for large allocations.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_huge_pages(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 **Benefit**: Reduced TLB misses for large state vectors
 
@@ -416,17 +423,17 @@ void qs_config_enable_huge_pages(qs_config_t *config, int enable);
 
 Set numerical precision.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_precision(qs_config_t *config, qs_precision_t precision);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_tolerance
 
 Set numerical tolerance.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_tolerance(qs_config_t *config, double tolerance);
-```
+[archived fence delimiter: ```]
 
 **Use**: Gate validation, normalization threshold
 
@@ -434,9 +441,9 @@ void qs_config_set_tolerance(qs_config_t *config, double tolerance);
 
 Enable automatic state normalization.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_auto_normalize(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ## Noise Configuration
 
@@ -444,20 +451,20 @@ void qs_config_enable_auto_normalize(qs_config_t *config, int enable);
 
 Enable noise simulation.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_noise(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_set_noise_model
 
 Set noise model.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_noise_model(
     qs_config_t *config,
     noise_model_t *model
 );
-```
+[archived fence delimiter: ```]
 
 **Note**: Configuration takes ownership of noise model
 
@@ -467,9 +474,9 @@ void qs_config_set_noise_model(
 
 Set maximum MPS bond dimension.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_max_bond_dimension(qs_config_t *config, int chi);
-```
+[archived fence delimiter: ```]
 
 **Impact**: Larger χ = more accurate, more memory
 
@@ -477,9 +484,9 @@ void qs_config_set_max_bond_dimension(qs_config_t *config, int chi);
 
 Set SVD truncation threshold.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_svd_cutoff(qs_config_t *config, double cutoff);
-```
+[archived fence delimiter: ```]
 
 **Typical Values**: 1e-10 to 1e-14
 
@@ -487,9 +494,9 @@ void qs_config_set_svd_cutoff(qs_config_t *config, double cutoff);
 
 Enable GPU-accelerated SVD.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_gpu_svd(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ## Distributed Configuration
 
@@ -497,17 +504,17 @@ void qs_config_enable_gpu_svd(qs_config_t *config, int enable);
 
 Enable MPI distributed computing.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_mpi(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_enable_comm_overlap
 
 Enable computation-communication overlap.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_comm_overlap(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 ## Debugging Configuration
 
@@ -515,9 +522,9 @@ void qs_config_enable_comm_overlap(qs_config_t *config, int enable);
 
 Set verbosity level.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_verbose(qs_config_t *config, int level);
-```
+[archived fence delimiter: ```]
 
 **Levels**:
 - 0: Silent (errors only)
@@ -529,9 +536,9 @@ void qs_config_set_verbose(qs_config_t *config, int level);
 
 Enable operation validation.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_enable_validation(qs_config_t *config, int enable);
-```
+[archived fence delimiter: ```]
 
 **Validates**: Gate unitarity, state normalization
 
@@ -539,9 +546,9 @@ void qs_config_enable_validation(qs_config_t *config, int enable);
 
 Set log output file.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_set_log_file(qs_config_t *config, FILE *file);
-```
+[archived fence delimiter: ```]
 
 ## Query Functions
 
@@ -549,36 +556,36 @@ void qs_config_set_log_file(qs_config_t *config, FILE *file);
 
 Get actual backend after AUTO resolution.
 
-```c
+[archived fence delimiter: ```c]
 qs_backend_t qs_config_get_effective_backend(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_get_effective_simd
 
 Get actual SIMD level after AUTO resolution.
 
-```c
+[archived fence delimiter: ```c]
 qs_simd_level_t qs_config_get_effective_simd(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_get_effective_threads
 
 Get actual thread count after AUTO resolution.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_get_effective_threads(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_estimate_memory
 
 Estimate memory usage for given qubit count.
 
-```c
+[archived fence delimiter: ```c]
 size_t qs_config_estimate_memory(
     const qs_config_t *config,
     int num_qubits
 );
-```
+[archived fence delimiter: ```]
 
 **Returns**: Estimated bytes required
 
@@ -586,9 +593,9 @@ size_t qs_config_estimate_memory(
 
 Calculate maximum simulatable qubits.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_max_qubits(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Maximum qubits given memory limit
 
@@ -598,9 +605,9 @@ int qs_config_max_qubits(const qs_config_t *config);
 
 Validate configuration consistency.
 
-```c
+[archived fence delimiter: ```c]
 int qs_config_validate(const qs_config_t *config, char *error_msg, size_t msg_size);
-```
+[archived fence delimiter: ```]
 
 **Returns**: 1 if valid, 0 if invalid
 
@@ -614,17 +621,17 @@ int qs_config_validate(const qs_config_t *config, char *error_msg, size_t msg_si
 
 Print configuration summary.
 
-```c
+[archived fence delimiter: ```c]
 void qs_config_print(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_config_to_string
 
 Get configuration as string.
 
-```c
+[archived fence delimiter: ```c]
 char* qs_config_to_string(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 **Returns**: Allocated string (caller must free)
 
@@ -634,21 +641,21 @@ char* qs_config_to_string(const qs_config_t *config);
 
 Set global default configuration.
 
-```c
+[archived fence delimiter: ```c]
 void qs_set_global_config(const qs_config_t *config);
-```
+[archived fence delimiter: ```]
 
 ### qs_get_global_config
 
 Get global default configuration.
 
-```c
+[archived fence delimiter: ```c]
 const qs_config_t* qs_get_global_config(void);
-```
+[archived fence delimiter: ```]
 
 ## Complete Example
 
-```c
+[archived fence delimiter: ```c]
 #include "src/utils/config.h"
 #include "src/quantum/state.h"
 #include <stdio.h>
@@ -715,11 +722,11 @@ int main(int argc, char **argv) {
 
     return 0;
 }
-```
+[archived fence delimiter: ```]
 
 ## Configuration File Example
 
-```ini
+[archived fence delimiter: ```ini]
 # moonlab.conf - Quantum Simulator Configuration
 
 [backend]
@@ -768,7 +775,7 @@ verbose = 1
 validate_operations = false
 track_entanglement = false
 log_file = /dev/null
-```
+[archived fence delimiter: ```]
 
 ## See Also
 
@@ -776,3 +783,4 @@ log_file = /dev/null
 - [GPU Metal API](gpu-metal.md) - GPU backend details
 - [MPI Bridge API](mpi-bridge.md) - Distributed configuration
 - [Guides: Performance Tuning](../../guides/performance-tuning.md)
+```

@@ -1,3 +1,10 @@
+# Archived Moonlab Documentation: Custom Hamiltonians Guide
+
+This local Moonlab document is retained as archived vendor text for the QGTL integration audit; current supported claims are measured by `scripts/moonlab_doc_claim_audit.py` and grounded against `external/moonlab/README.md`, `external/moonlab/CMakeLists.txt`, and `docs/MOONLAB_OPEN_CORE_INTEGRATION.md`.
+
+The historical text below is preserved as an archival snapshot, not as current release documentation.
+
+```text
 # Custom Hamiltonians Guide
 
 Construct and simulate custom Hamiltonians for VQE, time evolution, and ground state calculations.
@@ -18,7 +25,7 @@ where $P_i \in \{I, X, Y, Z\}^{\otimes n}$ and $c_i \in \mathbb{R}$.
 
 ### C API
 
-```c
+[archived fence delimiter: ```c]
 #include "algorithms/hamiltonian.h"
 
 // Create empty Hamiltonian
@@ -39,11 +46,11 @@ double energy = hamiltonian_expectation(H, state);
 printf("Energy: %.6f\n", energy);
 
 hamiltonian_destroy(H);
-```
+[archived fence delimiter: ```]
 
 ### Python API
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import Hamiltonian, QuantumState
 
 # Create Hamiltonian from terms
@@ -71,7 +78,7 @@ state.cnot(0, 1)
 
 energy = H.expectation(state)
 print(f"Energy: {energy:.6f}")
-```
+[archived fence delimiter: ```]
 
 ## Common Hamiltonians
 
@@ -79,7 +86,7 @@ print(f"Energy: {energy:.6f}")
 
 $$H = -J \sum_{\langle i,j \rangle} Z_i Z_j - h \sum_i X_i$$
 
-```python
+[archived fence delimiter: ```python]
 def transverse_ising(n_qubits: int, J: float = 1.0, h: float = 0.5) -> Hamiltonian:
     """
     1D Transverse-field Ising model with periodic boundary conditions.
@@ -110,13 +117,13 @@ def transverse_ising(n_qubits: int, J: float = 1.0, h: float = 0.5) -> Hamiltoni
 # Example
 H_ising = transverse_ising(8, J=1.0, h=0.5)
 print(f"Number of terms: {len(H_ising)}")
-```
+[archived fence delimiter: ```]
 
 ### Heisenberg Model
 
 $$H = J \sum_{\langle i,j \rangle} (X_i X_j + Y_i Y_j + Z_i Z_j)$$
 
-```python
+[archived fence delimiter: ```python]
 def heisenberg_chain(n_qubits: int, J: float = 1.0) -> Hamiltonian:
     """Heisenberg XXX chain."""
     H = Hamiltonian(n_qubits)
@@ -129,13 +136,13 @@ def heisenberg_chain(n_qubits: int, J: float = 1.0) -> Hamiltonian:
             H.add_term(J, ''.join(term))
 
     return H
-```
+[archived fence delimiter: ```]
 
 ### Molecular Hamiltonians
 
 For chemistry applications, use Jordan-Wigner transformation:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.chemistry import MolecularHamiltonian, jordan_wigner
 
 # Define molecular system
@@ -155,13 +162,13 @@ H_qubit = jordan_wigner(h1, h2)
 
 print(f"H₂ Hamiltonian: {len(H_qubit)} Pauli terms")
 print(f"Qubits required: {H_qubit.num_qubits}")
-```
+[archived fence delimiter: ```]
 
 ## Building from Operators
 
 ### Ladder Operators
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import PauliOperator
 
 # Creation and annihilation operators (Jordan-Wigner)
@@ -200,11 +207,11 @@ def annihilation(n_qubits: int, site: int) -> Hamiltonian:
     H.add_term(0.5j, ''.join(term_y))
 
     return H
-```
+[archived fence delimiter: ```]
 
 ### Number Operators
 
-```python
+[archived fence delimiter: ```python]
 def number_operator(n_qubits: int, site: int) -> Hamiltonian:
     """Number operator nᵢ = a†ᵢaᵢ = (1 - Zᵢ) / 2."""
     H = Hamiltonian(n_qubits)
@@ -216,13 +223,13 @@ def number_operator(n_qubits: int, site: int) -> Hamiltonian:
     H.add_term(-0.5, ''.join(z_term))
 
     return H
-```
+[archived fence delimiter: ```]
 
 ## Hamiltonian Operations
 
 ### Addition and Scaling
 
-```python
+[archived fence delimiter: ```python]
 H1 = transverse_ising(4, J=1.0, h=0.0)
 H2 = transverse_ising(4, J=0.0, h=1.0)
 
@@ -232,11 +239,11 @@ H_combined = 0.5 * H1 + 0.5 * H2
 # In-place operations
 H1 += H2
 H1 *= 2.0
-```
+[archived fence delimiter: ```]
 
 ### Commutators
 
-```python
+[archived fence delimiter: ```python]
 def commutator(A: Hamiltonian, B: Hamiltonian) -> Hamiltonian:
     """Compute [A, B] = AB - BA."""
     return A @ B - B @ A
@@ -247,11 +254,11 @@ H_z = Hamiltonian.from_dict({"ZIII": 1.0})
 
 comm = commutator(H_x, H_z)
 print(f"[X, Z] has {len(comm)} terms")  # Should be 1 term: 2iY
-```
+[archived fence delimiter: ```]
 
 ### Matrix Representation
 
-```c
+[archived fence delimiter: ```c]
 // Get dense matrix (for small systems)
 complex_t* matrix = hamiltonian_to_matrix(H);
 
@@ -264,13 +271,13 @@ complex_t* eigenvectors;
 hamiltonian_diagonalize(H, &eigenvalues, &eigenvectors);
 
 printf("Ground state energy: %.6f\n", eigenvalues[0]);
-```
+[archived fence delimiter: ```]
 
 ## Time Evolution
 
 ### Trotterization
 
-```python
+[archived fence delimiter: ```python]
 from moonlab import QuantumState
 from moonlab.algorithms import trotter_evolution
 
@@ -298,11 +305,11 @@ evolved = trotter_evolution(
     steps=50,
     order=2
 )
-```
+[archived fence delimiter: ```]
 
 ### Gate Decomposition
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import hamiltonian_to_circuit
 
 # Convert Hamiltonian evolution to circuit
@@ -315,11 +322,11 @@ circuit = hamiltonian_to_circuit(
 # Apply to state
 state = QuantumState(4)
 circuit.apply(state)
-```
+[archived fence delimiter: ```]
 
 ## VQE with Custom Hamiltonians
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import VQE
 from moonlab.ansatz import EfficientSU2
 
@@ -341,13 +348,13 @@ result = vqe.run()
 
 print(f"Ground state energy: {result.optimal_value:.6f}")
 print(f"Optimal parameters: {result.optimal_params}")
-```
+[archived fence delimiter: ```]
 
 ## MPO Representation
 
 For tensor network methods, convert to Matrix Product Operator:
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.tensor_network import Hamiltonian_to_MPO
 
 # Convert to MPO with bond dimension D
@@ -360,13 +367,13 @@ dmrg = DMRG(mpo, bond_dimension=64)
 ground_state_mps, energy = dmrg.run()
 
 print(f"DMRG energy: {energy:.8f}")
-```
+[archived fence delimiter: ```]
 
 ## Performance Tips
 
 ### Grouping Commuting Terms
 
-```python
+[archived fence delimiter: ```python]
 from moonlab.algorithms import group_commuting_terms
 
 # Group terms that can be measured simultaneously
@@ -376,17 +383,17 @@ print(f"Original terms: {len(H)}")
 print(f"Measurement groups: {len(groups)}")
 
 # Reduces measurement overhead in VQE
-```
+[archived fence delimiter: ```]
 
 ### Sparse Evaluation
 
-```python
+[archived fence delimiter: ```python]
 # For Hamiltonians with many terms, use sparse mode
 H.set_sparse_threshold(1000)  # Use sparse if > 1000 terms
 
 # Parallel evaluation
 energy = H.expectation(state, parallel=True, num_threads=8)
-```
+[archived fence delimiter: ```]
 
 ## Reference Hamiltonians
 
@@ -404,3 +411,4 @@ energy = H.expectation(state, parallel=True, num_threads=8)
 - [DMRG Algorithm](../algorithms/dmrg-algorithm.md)
 - [Tutorial: VQE Molecular Simulation](../tutorials/06-vqe-molecular-simulation.md)
 - [API: Hamiltonian](../api/python/algorithms.md#hamiltonian)
+```
