@@ -73,10 +73,14 @@ set(TOPOLOGICAL_SOURCES
 #
 # moonlab_tdvp_export.c (v0.4.3 adaptive-bond TDVP wrapper) has
 # lean deps too: tn_state + dmrg + tdvp.
+#
+# moonlab_vqe_export.c (v1.1.0 exact-gradient wrapper) depends only
+# on vqe.c + diff/, both already compiled into the WASM build.
 set(APPLICATION_SOURCES
     ${QSIM_ROOT}/src/applications/hep/lattice_z2_1d.c
     ${QSIM_ROOT}/src/applications/moonlab_export_lean.c
     ${QSIM_ROOT}/src/applications/moonlab_tdvp_export.c
+    ${QSIM_ROOT}/src/applications/moonlab_vqe_export.c
     # qgt.c powers moonlab_qwz_chern; topology binding TS layer
     # also needs the lower-level qgt_* surface (since 0.5.0).
     ${QSIM_ROOT}/src/algorithms/quantum_geometry/qgt.c

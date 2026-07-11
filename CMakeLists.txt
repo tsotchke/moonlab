@@ -967,6 +967,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/moonlab_qrng_export.c
     src/applications/moonlab_export_lean.c
     src/applications/moonlab_tdvp_export.c
+    src/applications/moonlab_vqe_export.c
     src/applications/moonlab_qgtl_backend.c
     src/applications/decoder_bench.c
     src/applications/mwpm_exact.c

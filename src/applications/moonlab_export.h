@@ -54,7 +54,7 @@ extern "C" {
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 3
+#define MOONLAB_ABI_VERSION_MINOR 4
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -676,6 +676,55 @@ MOONLAB_API int moonlab_tdvp_history_get_bond_chi(const moonlab_tdvp_engine_t* e
 
 /** Release the engine and all internal allocations. */
 MOONLAB_API void moonlab_tdvp_engine_free(moonlab_tdvp_engine_t* engine);
+
+/* ---- VQE exact gradient (stable from ABI 0.4.0) --------------------- */
+
+/**
+ * @brief Opaque handle to a VQE solver.
+ *
+ * The same object returned by @c vqe_solver_create (declared in
+ * @c src/algorithms/vqe.h, installed as
+ * @c quantumsim/algorithms/vqe.h).  Solver construction — Hamiltonian,
+ * ansatz, optimizer, entropy context — lives on the exported
+ * lower-level surface and is version-pinned rather than frozen; only
+ * the gradient entry point below is part of the committed ABI.
+ */
+typedef struct vqe_solver moonlab_vqe_solver_t;
+
+/**
+ * @brief Compute the exact gradient dE/dtheta of a VQE energy.
+ *
+ * Thin stable-ABI wrapper over Moonlab's exact-gradient dispatch:
+ * reverse-mode adjoint autograd for noise-free hardware-efficient
+ * ansaetze (cost ~2 forward passes per Hamiltonian term, independent
+ * of parameter count), analytic parameter-shift rule for every other
+ * supported configuration.  Both paths are exact; this function never
+ * computes a finite difference.  Downstream AD systems (e.g. the
+ * Eshkol custom-VJP tape node) may therefore wrap it and multiply by
+ * the incoming cotangent without violating an exact-AD contract.
+ *
+ * @param solver          Solver handle from @c vqe_solver_create.
+ * @param parameters      Parameter vector theta; @p num_parameters
+ *                        entries.
+ * @param gradient_out    Output buffer for dE/dtheta; @p num_parameters
+ *                        slots, fully overwritten on success.
+ * @param num_parameters  Length of both arrays.  Must equal the
+ *                        solver's ansatz parameter count; the
+ *                        mismatch check is what makes this entry safe
+ *                        to call through a language binding that
+ *                        cannot see the ansatz struct.
+ *
+ * @return  0 on success.
+ * @return -1 if any pointer is NULL.
+ * @return -2 if @p num_parameters does not match the solver's ansatz.
+ * @return -3 if the gradient computation failed internally.
+ *
+ * @since 1.1.0 (ABI 0.4.0)
+ */
+MOONLAB_API int moonlab_vqe_gradient(moonlab_vqe_solver_t* solver,
+                                     const double* parameters,
+                                     double* gradient_out,
+                                     size_t num_parameters);
 
 /* ---- Diagnostic stringifier (stable from 0.2.1) -------------------- */
 

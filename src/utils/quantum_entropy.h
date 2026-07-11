@@ -141,7 +141,7 @@ extern "C" {
  *
  * @since 0.2.0
  */
-quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
+MOONLAB_API quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
 
 /**
  * @brief Free a context previously returned by

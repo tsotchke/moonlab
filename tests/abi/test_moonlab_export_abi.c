@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <complex.h>
+#include <math.h>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -638,6 +639,141 @@ int main(void) {
             }
             if (!failures) {
                 fprintf(stdout, "moonlab_tdvp_* ABI smoke OK\n");
+            }
+        }
+    }
+
+    /* v1.1.0 / ABI 0.4.0 exact VQE gradient: resolve the stable entry,
+     * build an H2 hardware-efficient solver through the exported
+     * lower-level surface, and pin (a) argument validation, (b) exact
+     * agreement with a central finite difference of vqe_compute_energy.
+     * The finite difference is a TEST-ONLY cross-check: the library
+     * path under test is adjoint autograd / parameter-shift, never FD. */
+    ABI_STEP("vqe gradient");
+    {
+        typedef void*  (*vqe_h2_fn)(double);
+        typedef void*  (*vqe_hea_fn)(size_t, size_t);
+        typedef void*  (*vqe_opt_create_fn)(int);
+        typedef void*  (*entropy_hw_fn)(void);
+        typedef void   (*entropy_destroy_fn)(void*);
+        typedef void*  (*vqe_solver_create_fn)(void*, void*, void*, void*);
+        typedef void   (*vqe_free_fn)(void*);
+        typedef double (*vqe_energy_fn)(void*, const double*);
+        typedef int    (*vqe_grad_fn)(void*, const double*, double*, size_t);
+
+        dlerror();
+        vqe_grad_fn vqe_grad = (vqe_grad_fn)dlsym(h, "moonlab_vqe_gradient");
+        if (!vqe_grad) {
+            fprintf(stderr, "dlsym(moonlab_vqe_gradient) failed: %s\n",
+                    dlerror());
+            failures++;
+        } else {
+            vqe_h2_fn h2 = (vqe_h2_fn)dlsym(h, "vqe_create_h2_hamiltonian");
+            vqe_hea_fn hea =
+                (vqe_hea_fn)dlsym(h, "vqe_create_hardware_efficient_ansatz");
+            vqe_opt_create_fn opt_create =
+                (vqe_opt_create_fn)dlsym(h, "vqe_optimizer_create");
+            entropy_hw_fn entropy_hw =
+                (entropy_hw_fn)dlsym(h, "quantum_entropy_ctx_create_hw");
+            entropy_destroy_fn entropy_destroy =
+                (entropy_destroy_fn)dlsym(h, "quantum_entropy_ctx_destroy");
+            vqe_solver_create_fn solver_create =
+                (vqe_solver_create_fn)dlsym(h, "vqe_solver_create");
+            vqe_free_fn solver_free = (vqe_free_fn)dlsym(h, "vqe_solver_free");
+            vqe_free_fn ansatz_free = (vqe_free_fn)dlsym(h, "vqe_ansatz_free");
+            vqe_free_fn opt_free = (vqe_free_fn)dlsym(h, "vqe_optimizer_free");
+            vqe_free_fn ham_free =
+                (vqe_free_fn)dlsym(h, "pauli_hamiltonian_free");
+            vqe_energy_fn energy =
+                (vqe_energy_fn)dlsym(h, "vqe_compute_energy");
+
+            if (!h2 || !hea || !opt_create || !entropy_hw ||
+                !entropy_destroy || !solver_create || !solver_free ||
+                !ansatz_free || !opt_free || !ham_free || !energy) {
+                fprintf(stderr,
+                        "VQE construction surface incomplete (dlsym)\n");
+                failures++;
+            } else {
+                /* NULL args must be rejected without touching memory. */
+                double dummy = 0.0;
+                if (vqe_grad(NULL, &dummy, &dummy, 1) != -1) {
+                    fprintf(stderr,
+                            "moonlab_vqe_gradient(NULL,...) != -1\n");
+                    failures++;
+                }
+
+                void *H = h2(0.74);
+                /* H2 is a 2-qubit Hamiltonian; 2 HEA layers give
+                 * 2 qubits * 2 layers * 2 rotations = 8 parameters. */
+                void *ansatz = hea(2, 2);
+                void *opt = opt_create(/*VQE_OPTIMIZER_ADAM=*/2);
+                void *entropy = entropy_hw();
+                void *solver = (H && ansatz && opt && entropy)
+                                   ? solver_create(H, ansatz, opt, entropy)
+                                   : NULL;
+                if (!solver) {
+                    fprintf(stderr, "VQE solver construction failed\n");
+                    failures++;
+                } else {
+                    enum { N_PARAMS = 8 };
+                    double theta[N_PARAMS];
+                    double grad[N_PARAMS];
+                    for (size_t k = 0; k < N_PARAMS; k++) {
+                        theta[k] = 0.1 * (double)(k + 1);
+                    }
+
+                    /* Parameter-count mismatch must be refused. */
+                    if (vqe_grad(solver, theta, grad, N_PARAMS + 1) != -2) {
+                        fprintf(stderr,
+                                "moonlab_vqe_gradient mismatch != -2\n");
+                        failures++;
+                    }
+
+                    int rc = vqe_grad(solver, theta, grad, N_PARAMS);
+                    if (rc != 0) {
+                        fprintf(stderr,
+                                "moonlab_vqe_gradient returned %d\n", rc);
+                        failures++;
+                    } else {
+                        /* Central-difference cross-check (test-only). */
+                        const double h_step = 1e-4;
+                        double theta_p[N_PARAMS];
+                        double max_err = 0.0, max_mag = 0.0;
+                        for (size_t k = 0; k < N_PARAMS; k++) {
+                            memcpy(theta_p, theta, sizeof(theta));
+                            theta_p[k] = theta[k] + h_step;
+                            double ep = energy(solver, theta_p);
+                            theta_p[k] = theta[k] - h_step;
+                            double em = energy(solver, theta_p);
+                            double fd = (ep - em) / (2.0 * h_step);
+                            double err = fabs(grad[k] - fd);
+                            if (err > max_err) max_err = err;
+                            if (fabs(grad[k]) > max_mag) {
+                                max_mag = fabs(grad[k]);
+                            }
+                        }
+                        if (max_err > 1e-6) {
+                            fprintf(stderr,
+                                    "gradient/central-diff mismatch: "
+                                    "max err %.2e\n", max_err);
+                            failures++;
+                        } else if (max_mag < 1e-8) {
+                            fprintf(stderr,
+                                    "gradient is identically zero at a "
+                                    "generic point\n");
+                            failures++;
+                        } else {
+                            fprintf(stdout,
+                                    "moonlab_vqe_gradient OK "
+                                    "(max |grad-fd| = %.2e)\n", max_err);
+                        }
+                    }
+                    solver_free(solver);
+                }
+                if (entropy) entropy_destroy(entropy);
+                if (opt) opt_free(opt);
+                if (ansatz) ansatz_free(ansatz);
+                if (H) ham_free(H);
             }
         }
     }

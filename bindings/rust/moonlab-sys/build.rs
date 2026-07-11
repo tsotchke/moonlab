@@ -279,6 +279,7 @@ fn main() {
         .allowlist_function("vqe_solve")
         .allowlist_function("vqe_compute_energy")
         .allowlist_function("vqe_compute_gradient")
+        .allowlist_function("moonlab_vqe_gradient")
         .allowlist_function("vqe_apply_ansatz")
         .allowlist_function("vqe_exact_ground_state_energy")
         .allowlist_function("vqe_hartree_to_kcalmol")
