@@ -816,15 +816,16 @@
         TIMEOUT 30
     )
 
-    # TCP control plane (since v0.8.7).
-    add_executable(test_control_plane tests/integration/test_control_plane.c)
-    target_link_libraries(test_control_plane
-        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
-    add_test(NAME integration_control_plane COMMAND test_control_plane)
-    set_tests_properties(integration_control_plane PROPERTIES
-        LABELS "control_plane"
-        TIMEOUT 30
-    )
+    if(QSIM_ENABLE_CONTROL_PLANE)
+        # TCP control plane (since v0.8.7).
+        add_executable(test_control_plane tests/integration/test_control_plane.c)
+        target_link_libraries(test_control_plane
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+        add_test(NAME integration_control_plane COMMAND test_control_plane)
+        set_tests_properties(integration_control_plane PROPERTIES
+            LABELS "control_plane"
+            TIMEOUT 30
+        )
 
     # Concurrency stress test (since v0.8.10): 8 parallel clients
     # against the thread-pool server.
@@ -998,6 +999,8 @@
         TIMEOUT 30
     )
 
+    endif()
+
     # Multi-decoder bench harness scaffold (since v0.6.7).  Five
     # slots: GREEDY + MWPM_EXACT in-tree, SBNN + LIBIRREP_SS +
     # PYMATCHING return NOT_BUILT until v0.6.8 wires external deps.
@@ -1133,6 +1136,12 @@
     add_executable(test_entropy_pool tests/unit/test_entropy_pool.c)
     target_link_libraries(test_entropy_pool PRIVATE quantumsim)
     add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
+
+    # Timing-jitter entropy fallbacks are real fallback paths, not
+    # synthetic-data stubs.
+    add_executable(test_entropy_jitter tests/unit/test_entropy_jitter.c)
+    target_link_libraries(test_entropy_jitter PRIVATE quantumsim)
+    add_test(NAME unit_entropy_jitter COMMAND test_entropy_jitter)
 
     # ARM helper probing should use the compiled helper path, not ./tools.
     add_executable(test_hardware_entropy_probe
@@ -1439,20 +1448,27 @@
         endif()
     endif()
 
-    # Downstream-ABI smoke test — dlopens libquantumsim and verifies the
-    # symbols declared in src/applications/moonlab_export.h. Only meaningful
-    # for shared builds (dlopen needs a dylib/so).
-    if(QSIM_BUILD_SHARED AND NOT QSIM_PLATFORM_WINDOWS)
+    # Downstream-ABI smoke test — dlopens / LoadLibrarys libquantumsim and
+    # verifies the symbols declared in src/applications/moonlab_export.h. Only
+    # meaningful for shared builds.
+    if(QSIM_BUILD_SHARED)
         add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
         target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
         add_test(NAME abi_moonlab_export
                  COMMAND test_moonlab_export_abi)
         # Make the freshly-built libquantumsim discoverable to the test at
         # run time without requiring `make install`.
-        set_tests_properties(abi_moonlab_export PROPERTIES
-            ENVIRONMENT
-                "DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
-        )
+        if(QSIM_PLATFORM_WINDOWS)
+            set_tests_properties(abi_moonlab_export PROPERTIES
+                ENVIRONMENT
+                    "MOONLAB_QUANTUMSIM_LIBRARY=$<TARGET_FILE:quantumsim>"
+            )
+        else()
+            set_tests_properties(abi_moonlab_export PROPERTIES
+                ENVIRONMENT
+                    "MOONLAB_QUANTUMSIM_LIBRARY=$<TARGET_FILE:quantumsim>;DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH};LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH}"
+            )
+        endif()
     endif()
 
     # ==========================================================================
@@ -1506,7 +1522,7 @@
         differentiable)
     qsim_label_tests(qrng
         unit_qrng_di unit_qrng_statistics unit_entropy_pool
-        unit_hardware_entropy_probe health_tests)
+        unit_entropy_jitter unit_hardware_entropy_probe health_tests)
     qsim_label_tests(crypto
         unit_mlkem unit_mlkem_nist_kat unit_mlkem_poly unit_aes_drbg
         unit_sha3)

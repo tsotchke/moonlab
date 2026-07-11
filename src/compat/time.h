@@ -3,7 +3,7 @@
 
 #include_next <time.h>
 
-#if defined(_WIN32) && !defined(__cplusplus)
+#if defined(_WIN32) && !defined(__cplusplus) && !defined(__MINGW32__)
 
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0

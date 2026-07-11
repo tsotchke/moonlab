@@ -5,33 +5,12 @@ include(CMakeFindDependencyMacro)
 # Find required dependencies
 find_dependency(Threads REQUIRED)
 
-# Find optional dependencies based on how this was built
-if(@QSIM_HAS_OPENMP@)
-    find_dependency(OpenMP)
-endif()
-
-if(@QSIM_HAS_OPENCL@)
-    find_dependency(OpenCL)
-endif()
-
-if(@QSIM_HAS_VULKAN@)
-    find_dependency(Vulkan)
-endif()
-
-if(@QSIM_HAS_MPI@)
-    find_dependency(MPI)
-endif()
-
-# Include the targets file
-include("${CMAKE_CURRENT_LIST_DIR}/quantumsim-targets.cmake")
-
-# Check that targets were properly imported
-check_required_components(quantumsim)
-
-# Provide useful variables
-set(QUANTUMSIM_INCLUDE_DIRS "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@")
-set(QUANTUMSIM_LIBRARIES quantumsim::quantumsim)
-set(QUANTUMSIM_VERSION "@PROJECT_VERSION@")
+# Private dependencies are needed by consumers only when the exported
+# quantumsim target is not a shared library. Shared release packages carry
+# those dependencies in the library's own dynamic load commands, and forcing
+# downstream consumers to rediscover build-machine-specific OpenMP paths makes
+# otherwise-valid tarballs fail find_package().
+set(QUANTUMSIM_BUILD_SHARED @QSIM_BUILD_SHARED@)
 
 # Feature flags
 set(QUANTUMSIM_HAS_OPENMP @QSIM_HAS_OPENMP@)
@@ -43,3 +22,30 @@ set(QUANTUMSIM_SIMD_AVX512 @QSIM_SIMD_AVX512@)
 set(QUANTUMSIM_SIMD_AVX2 @QSIM_SIMD_AVX2@)
 set(QUANTUMSIM_SIMD_NEON @QSIM_SIMD_NEON@)
 set(QUANTUMSIM_SIMD_SVE @QSIM_SIMD_SVE@)
+
+if(NOT QUANTUMSIM_BUILD_SHARED AND QUANTUMSIM_HAS_OPENMP)
+    find_dependency(OpenMP)
+endif()
+
+if(NOT QUANTUMSIM_BUILD_SHARED AND QUANTUMSIM_HAS_OPENCL)
+    find_dependency(OpenCL)
+endif()
+
+if(NOT QUANTUMSIM_BUILD_SHARED AND QUANTUMSIM_HAS_VULKAN)
+    find_dependency(Vulkan)
+endif()
+
+if(NOT QUANTUMSIM_BUILD_SHARED AND QUANTUMSIM_HAS_MPI)
+    find_dependency(MPI)
+endif()
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/quantumsim-targets.cmake")
+
+# Check that targets were properly imported
+check_required_components(quantumsim)
+
+# Provide useful variables
+set_and_check(QUANTUMSIM_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@")
+set(QUANTUMSIM_LIBRARIES quantumsim::quantumsim)
+set(QUANTUMSIM_VERSION "@PROJECT_VERSION@")

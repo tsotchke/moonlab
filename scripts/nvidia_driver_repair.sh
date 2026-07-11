@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# cosbox_nvidia_repair.sh -- bring cosbox (RTX 3090, Ubuntu) back online
-#                            after the in-flight driver upgrade that left
-#                            kernel module + userspace at the same version
-#                            string but in incompatible runtime states.
+# nvidia_driver_repair.sh -- recover a Linux NVIDIA validation host after
+#                           an in-flight driver upgrade leaves kernel module
+#                           and userspace at the same version string but in
+#                           incompatible runtime states.
 #
 # Symptom: `nvidia-smi` returns
 #     Failed to initialize NVML: Driver/library version mismatch
@@ -18,15 +18,15 @@
 # CUDA process), which is more invasive than a reboot.
 #
 # Usage:
-#   ssh tyr@cosbox  'bash -s' < scripts/cosbox_nvidia_repair.sh
+#   ssh <user>@<host> 'bash -s' < scripts/nvidia_driver_repair.sh
 #   OR
-#   scp scripts/cosbox_nvidia_repair.sh tyr@cosbox:/tmp/
-#   ssh tyr@cosbox 'sudo bash /tmp/cosbox_nvidia_repair.sh'
+#   scp scripts/nvidia_driver_repair.sh <user>@<host>:/tmp/
+#   ssh <user>@<host> 'sudo bash /tmp/nvidia_driver_repair.sh'
 
 set -euo pipefail
 
 echo "=== Pre-repair state ==="
-uname -a
+uname -srmo
 echo
 echo "--- nvidia-smi (expected: mismatch error) ---"
 nvidia-smi 2>&1 | head -3 || true

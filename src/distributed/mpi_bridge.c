@@ -22,6 +22,15 @@
 static int mpi_initialized_by_us = 0;
 static int mpi_finalized = 0;
 
+static int mpi_include_processor_name_in_logs(void) {
+    const char* s = getenv("MOONLAB_MPI_INCLUDE_HOSTNAME");
+    return s && (strcmp(s, "1") == 0 ||
+                 strcmp(s, "true") == 0 ||
+                 strcmp(s, "TRUE") == 0 ||
+                 strcmp(s, "yes") == 0 ||
+                 strcmp(s, "YES") == 0);
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -490,7 +499,10 @@ void mpi_print_context_info(const distributed_ctx_t* ctx, int all_ranks) {
     if (!ctx) return;
 
     if (all_ranks || ctx->rank == 0) {
-        printf("[Rank %d/%d] %s\n", ctx->rank, ctx->size, ctx->processor_name);
+        const char* processor_name = mpi_include_processor_name_in_logs()
+            ? ctx->processor_name
+            : "redacted";
+        printf("[Rank %d/%d] %s\n", ctx->rank, ctx->size, processor_name);
         printf("  Local rank: %d/%d\n", ctx->local_rank, ctx->local_size);
         printf("  Thread support: %d\n", ctx->thread_support);
         printf("  Index range: [%llu, %llu)\n",

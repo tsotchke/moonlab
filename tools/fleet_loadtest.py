@@ -7,7 +7,7 @@ tenant_id:hex form).  Runnable on any host that has python3.6+,
 no moonlab build required.
 
 Usage:
-    ./fleet_loadtest.py --host <tailscale-ip> --port 17075 \\
+    ./fleet_loadtest.py --host <server-ip> --port 17075 \\
         --secret <ascii> [--tenant <id>] --workers N --duration S
 
 Reports req/sec + P50/P90/P99 latency + error count.

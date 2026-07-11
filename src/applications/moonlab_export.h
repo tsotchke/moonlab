@@ -144,7 +144,7 @@ MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
  */
-int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
+MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
 
 /**
  * @brief Encapsulate a shared secret against an ML-KEM-512 public key.
@@ -157,7 +157,7 @@ int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
  */
-int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
 
 /**
  * @brief Decapsulate an ML-KEM-512 ciphertext.  Constant-time;
@@ -169,7 +169,7 @@ int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
  * @param dk 1632-byte secret key.
  * @since 0.2.0
  */
-void moonlab_mlkem512_decaps(uint8_t* K,
+MOONLAB_API void moonlab_mlkem512_decaps(uint8_t* K,
                               const uint8_t* c,
                               const uint8_t* dk);
 
@@ -180,9 +180,9 @@ void moonlab_mlkem512_decaps(uint8_t* K,
 #define MOONLAB_MLKEM768_CIPHERTEXTBYTES   1088
 #define MOONLAB_MLKEM768_SHAREDSECRETBYTES 32
 
-int  moonlab_mlkem768_keygen_qrng(uint8_t* ek, uint8_t* dk);
-int  moonlab_mlkem768_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
-void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+MOONLAB_API int  moonlab_mlkem768_keygen_qrng(uint8_t* ek, uint8_t* dk);
+MOONLAB_API int  moonlab_mlkem768_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+MOONLAB_API void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
 
 /* ---- ML-KEM-1024 (Category 5; stable from 0.2.0) --------------------- */
 
@@ -191,9 +191,9 @@ void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
 #define MOONLAB_MLKEM1024_CIPHERTEXTBYTES   1568
 #define MOONLAB_MLKEM1024_SHAREDSECRETBYTES 32
 
-int  moonlab_mlkem1024_keygen_qrng(uint8_t* ek, uint8_t* dk);
-int  moonlab_mlkem1024_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
-void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+MOONLAB_API int  moonlab_mlkem1024_keygen_qrng(uint8_t* ek, uint8_t* dk);
+MOONLAB_API int  moonlab_mlkem1024_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+MOONLAB_API void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
 
 /* ---- Clifford-Assisted MPS (stable from 0.2.1) ---------------------- */
 /*
@@ -231,33 +231,33 @@ MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
 MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /* Clifford gates: tableau-only (O(n) per gate, no MPS cost). */
-int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_s    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_sdag (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_x    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_y    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_z    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_cnot (moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
-int moonlab_ca_mps_cz   (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
-int moonlab_ca_mps_swap (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
+MOONLAB_API int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_s    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_sdag (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_x    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_y    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_z    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_cnot (moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+MOONLAB_API int moonlab_ca_mps_cz   (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
+MOONLAB_API int moonlab_ca_mps_swap (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
 
 /* Non-Clifford gates: push a Pauli-string rotation into the MPS factor. */
-int moonlab_ca_mps_rx        (moonlab_ca_mps_t* s, uint32_t q, double theta);
-int moonlab_ca_mps_ry        (moonlab_ca_mps_t* s, uint32_t q, double theta);
-int moonlab_ca_mps_rz        (moonlab_ca_mps_t* s, uint32_t q, double theta);
-int moonlab_ca_mps_t_gate    (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_t_dagger  (moonlab_ca_mps_t* s, uint32_t q);
-int moonlab_ca_mps_phase     (moonlab_ca_mps_t* s, uint32_t q, double theta);
-int moonlab_ca_mps_crz       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
-int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
-int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
-int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
+MOONLAB_API int moonlab_ca_mps_rx        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API int moonlab_ca_mps_ry        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API int moonlab_ca_mps_rz        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API int moonlab_ca_mps_t_gate    (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_t_dagger  (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API int moonlab_ca_mps_phase     (moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API int moonlab_ca_mps_crz       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+MOONLAB_API int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+MOONLAB_API int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+MOONLAB_API int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
                                 double theta, double phi, double lambda);
 /** Toffoli (CCX): flips @p t when both @p c1 and @p c2 are |1>. */
-int moonlab_ca_mps_toffoli   (moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_toffoli   (moonlab_ca_mps_t* s,
                                 uint32_t c1, uint32_t c2, uint32_t t);
 /** Fredkin (CSWAP): swaps @p t1 and @p t2 when @p c is |1>. */
-int moonlab_ca_mps_fredkin   (moonlab_ca_mps_t* s,
+MOONLAB_API int moonlab_ca_mps_fredkin   (moonlab_ca_mps_t* s,
                                 uint32_t c, uint32_t t1, uint32_t t2);
 
 /** Apply exp(i theta P) for a Pauli string P (length = num_qubits). */
@@ -482,7 +482,7 @@ MOONLAB_API int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
  *
  * @since 0.2.1
  */
-int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
+MOONLAB_API int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
                               double t_hop, double h_link,
                               double mass, double gauss_penalty,
                               uint8_t** out_paulis,
@@ -500,7 +500,7 @@ int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
  *
  * @since 0.2.1
  */
-int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
+MOONLAB_API int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
                                   uint32_t site_x,
                                   uint8_t* out_pauli);
 

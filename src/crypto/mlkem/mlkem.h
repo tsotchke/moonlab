@@ -34,6 +34,7 @@
 #define MOONLAB_MLKEM_H
 
 #include "params.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -49,7 +50,7 @@ extern "C" {
  * entropy.  Writes 800 bytes of public key to @p ek and 1632 bytes
  * of secret key to @p dk.
  */
-void moonlab_mlkem512_keygen(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
+MOONLAB_API void moonlab_mlkem512_keygen(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
                               uint8_t dk[MLKEM512_SECRETKEYBYTES],
                               const uint8_t d[32],
                               const uint8_t z[32]);
@@ -61,7 +62,7 @@ void moonlab_mlkem512_keygen(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
  * Writes a 768-byte ciphertext to @p c and a 32-byte shared secret
  * to @p K.
  */
-void moonlab_mlkem512_encaps(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
+MOONLAB_API void moonlab_mlkem512_encaps(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                               uint8_t K[32],
                               const uint8_t ek[MLKEM512_PUBLICKEYBYTES],
                               const uint8_t m[32]);
@@ -74,7 +75,7 @@ void moonlab_mlkem512_encaps(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
  * pseudorandomly via SHAKE256(z || c), preserving IND-CCA2 security
  * without leaking failure via timing.
  */
-void moonlab_mlkem512_decaps(uint8_t K[32],
+MOONLAB_API void moonlab_mlkem512_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM512_SECRETKEYBYTES]);
 
@@ -90,7 +91,7 @@ void moonlab_mlkem512_decaps(uint8_t K[32],
  *
  * @return 0 on success; -1 on QRNG failure.
  */
-int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
+MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
                                    uint8_t dk[MLKEM512_SECRETKEYBYTES]);
 
 /**
@@ -99,41 +100,41 @@ int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
  *
  * @return 0 on success; -1 on QRNG failure.
  */
-int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
+MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                                    uint8_t K[32],
                                    const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
 
 /* ---- ML-KEM-768 ------------------------------------------------- */
-void moonlab_mlkem768_keygen(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
+MOONLAB_API void moonlab_mlkem768_keygen(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                               uint8_t dk[MLKEM768_SECRETKEYBYTES],
                               const uint8_t d[32], const uint8_t z[32]);
-void moonlab_mlkem768_encaps(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
+MOONLAB_API void moonlab_mlkem768_encaps(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                               uint8_t K[32],
                               const uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                               const uint8_t m[32]);
-void moonlab_mlkem768_decaps(uint8_t K[32],
+MOONLAB_API void moonlab_mlkem768_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
-int  moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
+MOONLAB_API int  moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                                     uint8_t dk[MLKEM768_SECRETKEYBYTES]);
-int  moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
+MOONLAB_API int  moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                                     uint8_t K[32],
                                     const uint8_t ek[MLKEM768_PUBLICKEYBYTES]);
 
 /* ---- ML-KEM-1024 ------------------------------------------------ */
-void moonlab_mlkem1024_keygen(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
+MOONLAB_API void moonlab_mlkem1024_keygen(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                uint8_t dk[MLKEM1024_SECRETKEYBYTES],
                                const uint8_t d[32], const uint8_t z[32]);
-void moonlab_mlkem1024_encaps(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
+MOONLAB_API void moonlab_mlkem1024_encaps(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                uint8_t K[32],
                                const uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                const uint8_t m[32]);
-void moonlab_mlkem1024_decaps(uint8_t K[32],
+MOONLAB_API void moonlab_mlkem1024_decaps(uint8_t K[32],
                                const uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
-int  moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
+MOONLAB_API int  moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                      uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
-int  moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
+MOONLAB_API int  moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                      uint8_t K[32],
                                      const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]);
 

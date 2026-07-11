@@ -1,7 +1,7 @@
 #ifndef QSIM_PTHREAD_COMPAT_H
 #define QSIM_PTHREAD_COMPAT_H
 
-#if defined(_WIN32) || defined(_WIN64)
+#if (defined(_WIN32) || defined(_WIN64)) && !defined(__MINGW32__)
 
 #include <stdlib.h>
 #include <windows.h>

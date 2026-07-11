@@ -60,7 +60,7 @@ is a regression.
 ## Host figures are single-host
 
 Every per-host throughput / wall-time number in the paper was measured
-on a single Apple M2 Ultra (Atlas.local, 24 cores, 192 GB RAM,
+on a single Apple M2 Ultra (redacted, 24 cores, 192 GB RAM,
 macOS 24.1.0, AppleClang 16.0).  No cross-platform multipliers are
 asserted.  Re-run the harnesses listed above on your own hardware to
 get host-specific figures.

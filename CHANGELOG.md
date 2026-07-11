@@ -89,7 +89,7 @@ the new `quantum_state_create_gpu()` constructor.
 
 ### Validated
 
-- **xavier** (Jetson AGX Xavier, Volta cc 7.2, jetpack-nixos CUDA 11.4):
+- **Jetson AGX Xavier validation node** (Volta cc 7.2, jetpack-nixos CUDA 11.4):
   Bell N=12..27 standalone PASS; Bell N=16-18 via libquantumsim PASS;
   20-gate CPU/GPU parity at machine precision (max amp err 4.5e-16);
   MPI+CUDA 4-rank PASS; ctest 137 / 138 effective pass (1 real pre-
@@ -99,7 +99,7 @@ the new `quantum_state_create_gpu()` constructor.
   vqe/qaoa/mlkem/kagome_ed/mpo_kpm/qrng/abi_export/quantum_sim_test
   /bell_test/vqe_h2/qaoa_maxcut/grover_hash/phase3_4_bench -- all
   pass given enough time; not regressions).
-- **old-donkey** (RTX 3050 Ampere cc 8.6, Ubuntu CUDA 13.1):
+- **x86_64 Ampere validation node** (RTX 3050 Ampere cc 8.6, Ubuntu CUDA 13.1):
   Bell N=16 via libquantumsim PASS; 20-gate parity (max err 4.5e-16);
   MPI+CUDA 4-rank PASS; ctest 137 / 142 at the v1.1-rc commit
   (`0d51db7`) -- 1 real pre-existing failure `unit_pauli_frame` under
@@ -127,7 +127,7 @@ the new `quantum_state_create_gpu()` constructor.
 - True sharded MPI+CUDA via `partitioned_state_t` learning about
   `gpu_state` so >32-qubit state vectors live across multiple GPUs
   with inter-rank halo swaps.
-- cosbox RTX 3090 lane (needs driver/userspace mismatch fix --
+- RTX 3090 validation lane (needs driver/userspace mismatch fix --
   user-side sudo action).
 - Python binding for `quantum_state_create_gpu()`.
 - Jetson CI runner.

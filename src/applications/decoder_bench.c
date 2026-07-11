@@ -36,15 +36,21 @@
  * the library at compile time as MOONLAB_PYMATCHING_SCRIPT_PATH so
  * tests + the installed library both find it without env-var
  * fiddling.  Available unconditionally -- Python subprocess + JSON
- * I/O works on any platform with python3 on PATH and pymatching
- * pip-installed, so we don't need a build flag. */
+ * I/O works on POSIX platforms with python3 on PATH and pymatching
+ * pip-installed.  Windows/Web builds keep the slot reserved but report
+ * NOT_BUILT until a native subprocess transport is wired. */
 #ifndef MOONLAB_PYMATCHING_SCRIPT_PATH
 #  define MOONLAB_PYMATCHING_SCRIPT_PATH NULL
 #endif
 
 #include <stdio.h>
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+#define MOONLAB_HAS_PYMATCHING_SUBPROCESS 1
 #include <sys/wait.h>
 #include <unistd.h>
+#else
+#define MOONLAB_HAS_PYMATCHING_SUBPROCESS 0
+#endif
 
 const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot)
 {
@@ -77,10 +83,14 @@ int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot)
         return 0;
 #endif
     case MOONLAB_DECODER_PYMATCHING:
-        /* Unconditional: a python3 + pymatching subprocess is the
-         * transport.  Availability check is runtime (errors from
-         * the subprocess if python or pymatching is missing). */
+#if MOONLAB_HAS_PYMATCHING_SUBPROCESS
+        /* A python3 + pymatching subprocess is the transport.
+         * Availability check is runtime (errors from the subprocess
+         * if python or pymatching is missing). */
         return MOONLAB_PYMATCHING_SCRIPT_PATH != NULL ? 1 : 0;
+#else
+        return 0;
+#endif
     default:
         return 0;
     }
@@ -292,6 +302,10 @@ static int decoder_libirrep_ss(const moonlab_decoder_input_t *in)
  * result only on caller request -- here we just propagate the error. */
 static int decoder_pymatching(const moonlab_decoder_input_t *in)
 {
+#if !MOONLAB_HAS_PYMATCHING_SUBPROCESS
+    (void)in;
+    return MOONLAB_DECODER_NOT_BUILT;
+#else
     if (!in->code->is_toric) return MOONLAB_DECODER_INFEASIBLE;
     if (!MOONLAB_PYMATCHING_SCRIPT_PATH) return MOONLAB_DECODER_NOT_BUILT;
 
@@ -377,6 +391,7 @@ static int decoder_pymatching(const moonlab_decoder_input_t *in)
         in->corrections[q] = (unsigned char)((hi << 4) | lo) & 1;
     }
     return MOONLAB_DECODER_OK;
+#endif
 }
 
 /* ------------------------------------------------------------------

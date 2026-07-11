@@ -72,7 +72,7 @@ typedef struct {
     void* local_comm;            /**< Intra-node communicator */
     int initialized;             /**< MPI initialized by us */
     int thread_support;          /**< MPI thread support level */
-    char processor_name[256];    /**< Processor/hostname */
+    char processor_name[256];    /**< Raw MPI processor/hostname */
 } distributed_ctx_t;
 
 /**
@@ -486,10 +486,10 @@ mpi_bridge_error_t mpi_allreduce_min_uint64(distributed_ctx_t* ctx,
 void mpi_print_context_info(const distributed_ctx_t* ctx, int all_ranks);
 
 /**
- * @brief Get processor name
+ * @brief Get raw MPI processor name
  *
  * @param ctx Distributed context
- * @return Processor/hostname string
+ * @return Raw processor/hostname string
  */
 const char* mpi_get_processor_name(const distributed_ctx_t* ctx);
 

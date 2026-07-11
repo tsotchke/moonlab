@@ -32,6 +32,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 /* Tiny variational ansatz with one free parameter -- 4 qubits,
@@ -103,10 +104,17 @@ int main(int argc, char **argv)
     MPI_Allreduce(&in, &out, 1, MPI_DOUBLE_INT, MPI_MINLOC, MPI_COMM_WORLD);
 
     /* Each rank prints its result; rank 0 also prints the winner. */
+    const char *rank_host = "redacted";
     char hostname[256] = {0};
-    gethostname(hostname, sizeof(hostname) - 1);
+    const char *include_host = getenv("MOONLAB_MPI_INCLUDE_HOSTNAME");
+    if (include_host && (strcmp(include_host, "1") == 0 ||
+                         strcmp(include_host, "true") == 0 ||
+                         strcmp(include_host, "TRUE") == 0) &&
+        gethostname(hostname, sizeof(hostname) - 1) == 0) {
+        rank_host = hostname;
+    }
     printf("[rank %d/%d on %-12s gpu=%s] theta=%.4f  <Z0 Z1>=%+.6f\n",
-        rank, nranks, hostname,
+        rank, nranks, rank_host,
         moonlab_gpu_probe_kind_str(moonlab_gpu_probe_kind()),
         theta, zz_local);
     fflush(stdout);

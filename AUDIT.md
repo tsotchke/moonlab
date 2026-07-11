@@ -577,7 +577,7 @@ scaling.
    Stim for Clifford, OpenFermion/FCI for chemistry. Run in CI.
    (~1 week)
 8. **Reproducibility manifest**. Every run emits JSON with git SHA,
-   build flags, compiler, hostname, seed, timestamps, input
+   build flags, compiler, redacted host label, seed, timestamps, input
    checksums. (~1 day)
 9. **Deterministic-seed mode** (`QSIM_DETERMINISTIC=1`) that forces
    a single cascade seed through every RNG site. Independent of the

@@ -75,6 +75,12 @@ option(QSIM_ENABLE_VULKAN "Enable Vulkan GPU backend" OFF)
 option(QSIM_ENABLE_CUDA      "Enable moonlab native CUDA backend (Jetson/Tegra + discrete)" OFF)
 option(QSIM_ENABLE_CUQUANTUM "Enable NVIDIA cuQuantum backend (implies QSIM_ENABLE_CUDA; not supported on Jetson)" OFF)
 option(QSIM_ENABLE_MPI "Enable MPI distributed computing" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(_qsim_control_plane_default OFF)
+else()
+    set(_qsim_control_plane_default ON)
+endif()
+option(QSIM_ENABLE_CONTROL_PLANE "Build POSIX TCP control-plane transport and tests" ${_qsim_control_plane_default})
 # TLS defaults ON if OpenSSL is detectable at config time: the control-plane
 # transport's TLS/mTLS/HMAC-SHA3 path is part of the v1.0 stable ABI, and
 # silently dropping back to plaintext on a build that didn't pass the flag
@@ -968,10 +974,6 @@ set(QSIM_APPLICATIONS_SOURCES
     # consume QGTL circuits via the scheduler's backend plug-in surface.
     src/applications/vendor_noise_backend.c
     src/distributed/scheduler.c
-    # Control plane (since v0.8.7): POSIX-socket TCP transport for the
-    # v0.8.3 moonlab-circuit v1 wire format.  v0.8.17 OpenSSL TLS path
-    # is gated via #ifdef MOONLAB_HAVE_TLS inside the same TU.
-    src/control/control_plane.c
     src/applications/nist_sp800_22.c
     src/applications/quantum_volume.c
     # HEP / lattice gauge theory bench primitives.  The 1+1D Z2 LGT Pauli-sum
@@ -979,6 +981,16 @@ set(QSIM_APPLICATIONS_SOURCES
     # examples/hep/ and tests/unit/test_z2_lgt_pauli_sum.c.
     src/applications/hep/lattice_z2_1d.c
 )
+if(QSIM_ENABLE_CONTROL_PLANE)
+    list(APPEND QSIM_APPLICATIONS_SOURCES
+        # Control plane (since v0.8.7): POSIX-socket TCP transport for the
+        # v0.8.3 moonlab-circuit v1 wire format.  v0.8.17 OpenSSL TLS path
+        # is gated via #ifdef MOONLAB_HAVE_TLS inside the same TU.
+        src/control/control_plane.c
+    )
+elseif(QSIM_ENABLE_TLS)
+    message(STATUS "Control plane: disabled; TLS transport not built")
+endif()
 
 set(QSIM_PROFILER_SOURCES
     tools/profiler/profiler.c
@@ -1024,9 +1036,11 @@ endif()
 # Standalone helper for safe ARM hardware-RNG probing.
 add_executable(hw_rng_probe tools/hw_rng_probe.c)
 
-# Production control-plane daemon (since v0.10.0).  Bound + run via
-# deploy/docker/docker-compose.yml.
-add_executable(moonlab-control-server tools/moonlab-control-server.c)
+if(QSIM_ENABLE_CONTROL_PLANE)
+    # Production control-plane daemon (since v0.10.0).  Bound + run via
+    # deploy/docker/docker-compose.yml.
+    add_executable(moonlab-control-server tools/moonlab-control-server.c)
+endif()
 
 # ==============================================================================
 # Library Target
@@ -1049,6 +1063,10 @@ else()
 endif()
 
 add_dependencies(quantumsim hw_rng_probe)
+if(QSIM_BUILD_SHARED)
+    target_compile_definitions(quantumsim
+        PRIVATE MOONLAB_BUILDING_SHARED=1)
+endif()
 target_compile_definitions(quantumsim PRIVATE
     MOONLAB_HW_RNG_PROBE_PATH=\"$<TARGET_FILE:hw_rng_probe>\"
     MOONLAB_PYMATCHING_SCRIPT_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/src/applications/pymatching_bridge.py\"
@@ -1209,9 +1227,11 @@ if(QSIM_HAS_TLS)
     target_compile_definitions(quantumsim PRIVATE MOONLAB_HAVE_TLS=1)
 endif()
 
-# Wire the production control-plane daemon binary to quantumsim.
-target_link_libraries(moonlab-control-server PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
-install(TARGETS moonlab-control-server RUNTIME DESTINATION bin)
+if(QSIM_ENABLE_CONTROL_PLANE)
+    # Wire the production control-plane daemon binary to quantumsim.
+    target_link_libraries(moonlab-control-server PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    install(TARGETS moonlab-control-server RUNTIME DESTINATION bin)
+endif()
 
 # ==============================================================================
 # Platform-Specific Configuration
@@ -1601,13 +1621,15 @@ if(QSIM_BUILD_BENCHMARKS)
     add_executable(decoder_shootout benchmarks/decoder_shootout.c)
     target_link_libraries(decoder_shootout PRIVATE quantumsim)
 
-    # Control-plane load test (since v1.0.3) -- N concurrent clients
-    # against a running moonlab-control-server; throughput + P50/P90/P99
-    # latency.  Validates the runbook capacity numbers and the
-    # FLEET_DEPLOYMENT.md per-replica budgets.
-    add_executable(control_plane_loadtest benchmarks/control_plane_loadtest.c)
-    target_link_libraries(control_plane_loadtest
-        PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    if(QSIM_ENABLE_CONTROL_PLANE)
+        # Control-plane load test (since v1.0.3) -- N concurrent clients
+        # against a running moonlab-control-server; throughput + P50/P90/P99
+        # latency.  Validates the runbook capacity numbers and the
+        # FLEET_DEPLOYMENT.md per-replica budgets.
+        add_executable(control_plane_loadtest benchmarks/control_plane_loadtest.c)
+        target_link_libraries(control_plane_loadtest
+            PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+    endif()
     if(QSIM_HAS_OPENMP)
         qsim_target_link_openmp(grover_parallel_benchmark)
         if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
@@ -1655,6 +1677,20 @@ install(DIRECTORY src/
     FILES_MATCHING PATTERN "*.h"
 )
 
+# Stable downstream C ABI convenience include path.  The full source-shaped
+# header tree remains under include/quantumsim, while README and FFI consumers
+# can include <moonlab/moonlab_export.h>.
+install(FILES
+    src/applications/moonlab_api.h
+    src/applications/moonlab_export.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/moonlab
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/include/moonlab_features.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
 # Install CMake config
 install(EXPORT quantumsim-targets
     FILE quantumsim-targets.cmake
@@ -1683,18 +1719,33 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
 )
 
-# pkg-config file.  configure_file happens at *configure* time, so
-# CMAKE_INSTALL_PREFIX inside the .pc is locked to the cache value
-# when `cmake -S . -B build` ran.  If a consumer installs to a
-# different prefix via `cmake --install ... --prefix ...`, the .pc
-# would point at the wrong location.  Generate it at install time
-# instead so the prefix substitution sees the actual destination.
+# pkg-config file.  The template uses pkg-config's ${pcfiledir} so release
+# tarballs remain relocatable after extraction.  Compute the relative walk from
+# ${libdir}/pkgconfig back to the install prefix; Debian multiarch libdirs such
+# as lib/x86_64-linux-gnu need one more ".." than plain lib/pkgconfig.
+set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "")
+set(_qsim_pc_dir "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+string(REPLACE "/" ";" _qsim_pc_dir_parts "${_qsim_pc_dir}")
+foreach(_qsim_pc_dir_part IN LISTS _qsim_pc_dir_parts)
+    if(_qsim_pc_dir_part STREQUAL "")
+        continue()
+    endif()
+    if(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR STREQUAL "")
+        set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "..")
+    else()
+        string(APPEND QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "/..")
+    endif()
+endforeach()
+if(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR STREQUAL "")
+    set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR ".")
+endif()
 install(CODE "
     set(CMAKE_INSTALL_PREFIX   \"\${CMAKE_INSTALL_PREFIX}\")
     set(CMAKE_INSTALL_LIBDIR   \"${CMAKE_INSTALL_LIBDIR}\")
     set(CMAKE_INSTALL_INCLUDEDIR \"${CMAKE_INSTALL_INCLUDEDIR}\")
     set(PROJECT_DESCRIPTION     \"${PROJECT_DESCRIPTION}\")
     set(PROJECT_VERSION         \"${PROJECT_VERSION}\")
+    set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR \"${QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR}\")
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
         ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
@@ -1799,6 +1850,11 @@ configure_file(
 )
 target_include_directories(quantumsim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/moonlab_build_info.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(FILES

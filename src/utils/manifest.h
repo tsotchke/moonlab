@@ -10,8 +10,9 @@
  *
  * Compile-time facts (git SHA, compiler, enabled feature flags, version)
  * come from the CMake-generated @c moonlab_build_info.h.  Run-time facts
- * (hostname, CPU model, total memory, timestamps, user-provided seeds
- * and labels) are captured when @c moonlab_manifest_capture runs.
+ * (redacted host label, CPU model, total memory, timestamps,
+ * user-provided seeds and labels) are captured when
+ * @c moonlab_manifest_capture runs.
  *
  * Typical usage inside a benchmark:
  *
@@ -27,7 +28,11 @@
  * The runtime capture is deliberately cheap (no process spawns on the
  * critical path) so benches can write a manifest on every run without
  * inflating wall-clock.  @c uname(2) plus @c sysctlbyname / @c /proc
- * probes supply the host info.
+ * probes supply the non-identifying host info.  Hostnames are redacted
+ * by default so public benchmark artifacts do not leak network topology.
+ * Set @c MOONLAB_MANIFEST_HOST_LABEL to a safe label, or set
+ * @c MOONLAB_MANIFEST_INCLUDE_HOSTNAME=1 for private/internal runs that
+ * need the raw machine hostname.
  *
  * JSON is emitted flat, with no vendored dependency.  Keys map 1:1 to
  * the struct fields; strings are escaped per RFC 8259; the user-
@@ -72,7 +77,7 @@ typedef struct {
     const char* enabled_features;
 
     /* Run-time facts. */
-    char*  hostname;             /* owned */
+    char*  hostname;             /* owned; redacted unless explicitly enabled */
     char*  os_release;           /* owned; uname "release" */
     char*  cpu_brand;            /* owned; sysctlbyname or /proc/cpuinfo */
     int    cpu_count;

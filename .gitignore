@@ -66,6 +66,12 @@ dist/
 # benchmarks/results/ instead).
 /bench_*.json
 
+# Raw fleet outputs can contain hostnames, IPs, DNS names, and topology.
+# Commit only redacted public copies.
+benchmarks/fleet/*private*.json
+benchmarks/fleet/*raw*.json
+benchmarks/fleet/*internal*.json
+
 # CMake / CTest local artifacts
 .cache/
 Testing/
@@ -107,3 +113,7 @@ __pycache__/
 # Temporary files
 *.tmp
 *.bak
+
+# bindgen scratch header: build.rs writes it next to the manifest and deletes
+# it after generation; interrupted/container builds can leave it behind.
+bindings/rust/moonlab-sys/wrapper.h

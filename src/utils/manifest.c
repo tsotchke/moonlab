@@ -58,7 +58,24 @@ static char* iso_utc_now(void) {
 /* host-info probes                                                  */
 /* ---------------------------------------------------------------- */
 
+static int env_is_truthy(const char* s) {
+    return s && (strcmp(s, "1") == 0 ||
+                 strcmp(s, "true") == 0 ||
+                 strcmp(s, "TRUE") == 0 ||
+                 strcmp(s, "yes") == 0 ||
+                 strcmp(s, "YES") == 0);
+}
+
 static char* probe_hostname(void) {
+    const char* host_label = getenv("MOONLAB_MANIFEST_HOST_LABEL");
+    if (host_label && *host_label) {
+        return dup_str(host_label);
+    }
+
+    if (!env_is_truthy(getenv("MOONLAB_MANIFEST_INCLUDE_HOSTNAME"))) {
+        return dup_str("redacted");
+    }
+
     char buf[256];
 #if defined(_WIN32) || defined(_WIN64)
     DWORD size = (DWORD)sizeof buf;

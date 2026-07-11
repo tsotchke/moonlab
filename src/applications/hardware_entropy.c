@@ -16,6 +16,13 @@
 #endif
 #include <time.h>
 
+#if defined(__aarch64__)
+static int env_flag_enabled(const char *name) {
+    const char *value = getenv(name);
+    return value && (value[0] == '1' || value[0] == 'y' || value[0] == 'Y');
+}
+#endif
+
 // Platform-specific includes
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -205,8 +212,7 @@ int rndr_available(void) {
     }
 
     // CI opt-out: skip hardware probe entirely
-    const char *skip = getenv("MOONLAB_SKIP_HW_ENTROPY");
-    if (skip && (skip[0] == '1' || skip[0] == 'y' || skip[0] == 'Y')) {
+    if (env_flag_enabled("MOONLAB_SKIP_HW_ENTROPY")) {
         rndr_detection_result = 0;
         return rndr_detection_result;
     }
@@ -478,11 +484,11 @@ entropy_error_t entropy_jitter(uint8_t *buffer, size_t size) {
         uint64_t t1 = get_timer_cycles();
         
         // CPU-intensive operation with unpredictable timing
-        volatile uint64_t dummy = state;
+        volatile uint64_t timing_work = state;
         for (int i = 0; i < 50; i++) {
-            dummy = crypto_mix(dummy, i);
+            timing_work = crypto_mix(timing_work, i);
         }
-        state ^= dummy; // Feed back to prevent optimization
+        state ^= timing_work; // Feed back to prevent optimization
         
         uint64_t t2 = get_timer_cycles();
         
@@ -551,13 +557,19 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
     ctx->caps.has_rdrand = rdrand_available();
     ctx->caps.has_rdseed = rdseed_available();
     
-    // ARM RNDR support via sysctl detection (safe for VMs)
-    // Uses sysctl to check hw.optional.arm.FEAT_RNG - no risky runtime probing
-    // On VMs where sysctl fails, falls back to /dev/random (also excellent)
+    // ARM RNDR support. On Linux, do not select the helper-backed RNDR path
+    // for bulk entropy by default: kernel getrandom() is already seeded from
+    // platform sources, while spawning hw_rng_probe per 64-bit sample is too
+    // slow for QRNG buffer fills and RNDRRS may stall on Jetson-class systems.
+    // Operators can opt in explicitly for diagnostics.
     #if defined(__aarch64__)
-    if (rndr_available()) {
+    int enable_arm_hw_entropy = 1;
+    #if defined(__linux__)
+    enable_arm_hw_entropy = env_flag_enabled("MOONLAB_ENABLE_ARM_HW_ENTROPY");
+    #endif
+    if (enable_arm_hw_entropy && rndr_available()) {
         ctx->caps.has_rdrand = 1;  // RNDR maps to RDRAND API
-        ctx->caps.has_rdseed = 1;  // RNDRRS maps to RDSEED API
+        ctx->caps.has_rdseed = 0;  // Avoid RNDRRS in the bulk entropy path
     }
     #endif
     
