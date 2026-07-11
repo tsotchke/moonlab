@@ -90,7 +90,8 @@ jobs:
       - name: Configure (CMake, Release)
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-            -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF
+            -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF \
+            -DQSIM_NATIVE_ARCH=OFF
 
       - name: Build
         # Full default target: the smoke step below runs labeled ctest
@@ -338,7 +339,7 @@ jobs:
           sudo apt-get install -y build-essential libomp-dev liblapacke-dev libopenblas-dev libclang-dev
 
       - name: Install Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build C Library
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
@@ -395,6 +396,17 @@ jobs:
 
       - name: Build C Library
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
+
+      - name: Setup Emscripten
+        # The core package's build script compiles the WASM module
+        # (build:wasm) before the TypeScript layer, so the emsdk must
+        # be on PATH with EMSDK exported.
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.22
+
+      - name: Build WASM BLAS (CLAPACK)
+        run: bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
 
       - name: Install JS Dependencies
         run: |

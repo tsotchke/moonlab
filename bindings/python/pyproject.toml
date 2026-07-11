@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "moonlab"
 version = "1.1.0"
 description = "High-performance quantum computing simulator with GPU acceleration"
-readme = "../../README.md"
+readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "tsotchke", email = "tsotchke@github.com"}
