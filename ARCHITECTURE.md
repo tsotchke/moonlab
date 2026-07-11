@@ -272,15 +272,26 @@ battery is available offline.
 
 ### 4.9 Stable ABI (`src/applications/moonlab_export.h`)
 
-The promised-stable surface for downstream consumers (dlsym targets).
-At 0.2.0-dev this includes:
-- `moonlab_abi_version(major, minor, patch)` — feature probe
-- `moonlab_qrng_bytes(buf, size)` — QRNG byte stream
-- `moonlab_qwz_chern(m, N, out_chern)` — integer Chern of QWZ via FHS
+The promised-stable surface for downstream consumers (dlsym targets),
+versioned independently of the package (ABI 0.4.0 at package 1.1.0).
+Grouped by module:
+- Core: `moonlab_abi_version` (feature probe), `moonlab_qrng_bytes`
+- Topology: `moonlab_qwz_chern` (integer Chern of QWZ via FHS)
+- ML-KEM (FIPS 203): keygen/encaps/decaps for 512/768/1024 + size macros
+- Clifford-assisted MPS: `moonlab_ca_mps_*` lifecycle, gates, observables
+- Variational-D: `moonlab_ca_mps_var_d_run`/`_v2`, gauge warmstart
+- DMRG scalar drivers: `moonlab_dmrg_tfim_energy`, `_heisenberg_energy`
+- Z2 LGT: `moonlab_z2_lgt_1d_build`, `_gauss_law`
+- Adaptive-bond TDVP: `moonlab_tdvp_*` engine lifecycle + history
+- VQE exact gradient (ABI 0.4.0): `moonlab_vqe_gradient` — adjoint /
+  parameter-shift dispatch, never finite differences
+- Diagnostics: `moonlab_status_string`
 
 ABI-version bumps (minor) accompany new symbols; existing symbols are
-name-and-signature frozen across all 0.x releases. QGTL, lilirrep and
-SbNN bind through this surface.
+name-and-signature frozen across all 0.x releases. Semantic changes
+ship as `_v2` suffixes. `tests/abi/test_moonlab_export_abi.c` dlopens
+the library and functionally smokes every entry, exactly as QGTL,
+libirrep and SbNN bind through this surface.
 
 ## 5. Language Bindings
 
