@@ -38,11 +38,6 @@ jobs:
             pip install moonlab
             ```
 
-            **Rust:**
-            ```bash
-            cargo add moonlab
-            ```
-
             **From Source:**
             ```bash
             git clone https://github.com/tsotchke/moonlab.git
@@ -249,7 +244,7 @@ jobs:
       - name: Calculate SHA256
         id: sha
         run: |
-          SHA256=$(curl -sL https://github.com/tsotchke/moonlab/archive/${{ github.ref_name }}.tar.gz | shasum -a 256 | cut -d ' ' -f 1)
+          SHA256=$(curl -fsSL https://github.com/tsotchke/moonlab/archive/${{ github.ref_name }}.tar.gz | shasum -a 256 | cut -d ' ' -f 1)
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
 
       - name: Update Homebrew Formula
@@ -323,49 +318,17 @@ jobs:
           fi
 
   # =============================================================================
-  # PUBLISH RUST TO CRATES.IO
+  # CRATES.IO — intentionally not published from this workflow.
+  #
+  # moonlab-sys cannot build from a registry tarball today: its build.rs
+  # resolves headers and libquantumsim from the repository tree and writes
+  # its bindgen scratch header into the manifest directory, both of which
+  # are unavailable/read-only for a crates.io consumer. Publishing would
+  # ship a crate that fails `cargo build` for every user. Standalone crate
+  # packaging (pkg-config discovery of an installed moonlab, OUT_DIR
+  # scratch header) is v1.2 scope; until then Rust users depend on the
+  # crates via git/path against this repository.
   # =============================================================================
-
-  publish-rust:
-    needs: [build-and-upload]
-    runs-on: ubuntu-22.04
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libomp-dev liblapacke-dev libopenblas-dev libclang-dev
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build C Library
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
-
-      - name: Publish to crates.io
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          if [[ -n "$CARGO_REGISTRY_TOKEN" ]]; then
-            cd bindings/rust
-
-            # Publish moonlab-sys first
-            cd moonlab-sys
-            cargo publish --allow-dirty || echo "moonlab-sys publish failed or already exists"
-            cd ..
-
-            # Wait for crates.io to index
-            sleep 30
-
-            # Publish moonlab
-            cd moonlab
-            cargo publish --allow-dirty || echo "moonlab publish failed or already exists"
-            cd ..
-          else
-            echo "CARGO_REGISTRY_TOKEN not set, skipping crates.io publish"
-          fi
 
   # =============================================================================
   # PUBLISH NPM PACKAGES
@@ -424,7 +387,7 @@ jobs:
         run: |
           if [[ -n "$NODE_AUTH_TOKEN" ]]; then
             cd bindings/javascript
-            pnpm publish --recursive --no-git-checks || echo "npm publish failed or packages already exist"
+            pnpm publish --recursive --no-git-checks --access public
           else
             echo "NPM_TOKEN not set, skipping npm publish"
           fi
