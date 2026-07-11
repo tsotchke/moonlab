@@ -27,7 +27,8 @@ COPY . .
 
 # Build library with CMake (the Makefile path is legacy and doesn't
 # generate moonlab_build_info.h that src/utils/manifest.c needs).
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_NATIVE_ARCH=OFF && \
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_NATIVE_ARCH=OFF \
+        -DQSIM_BUILD_TESTS=OFF -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF && \
     cmake --build build -j --target quantumsim moonlab-control-server
 
 # Stage the same install tree that the hosted release job packages.
