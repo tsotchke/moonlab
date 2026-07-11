@@ -16,6 +16,23 @@ the new `quantum_state_create_gpu()` constructor.
 
 ### Added
 
+- **`moonlab_vqe_gradient` stable-ABI entry (ABI 0.3.0 -> 0.4.0).**
+  The exact VQE gradient is now part of the committed dlsym contract:
+  `moonlab_vqe_export.c` wraps `vqe_compute_gradient` (reverse-mode
+  adjoint autograd for noise-free hardware-efficient ansaetze,
+  analytic parameter-shift otherwise -- never finite differences)
+  behind an opaque `moonlab_vqe_solver_t` handle with a parameter-count
+  check that makes the entry safe for language bindings.
+  `vqe_compute_gradient` and the full VQE construction chain
+  (`pauli_hamiltonian_create/add_term`, the H2/H2O builders, UCCSD and
+  symmetry-preserving ansaetze, ansatz application, noise-model
+  helpers, `quantum_entropy_ctx_create_hw`) are now `MOONLAB_API`-
+  tagged, so the whole gradient workflow survives hidden-visibility
+  and Windows DLL builds.  `test_moonlab_export_abi` gains a dlsym +
+  functional lane: argument validation, adjoint-vs-central-difference
+  agreement to 1e-6 on an H2 HEA solver, and a non-degenerate-gradient
+  check.  Unblocks the Eshkol custom-VJP AD bridge (S3 of the
+  Eshkol<->Moonlab integration design).
 - **`src/backends/cuda_tegra_probe.{h,c}`** -- platform detection
   that distinguishes TEGRA (unified memory on Jetson) from DISCRETE
   (stock NVIDIA PCIe).  No CUDA runtime dependency in the C path;

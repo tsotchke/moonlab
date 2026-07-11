@@ -132,7 +132,7 @@ typedef struct {
  * @param num_terms Number of Pauli terms
  * @return Initialized Hamiltonian structure
  */
-pauli_hamiltonian_t* pauli_hamiltonian_create(
+MOONLAB_API pauli_hamiltonian_t* pauli_hamiltonian_create(
     size_t num_qubits,
     size_t num_terms
 );
@@ -151,7 +151,7 @@ MOONLAB_API void pauli_hamiltonian_free(pauli_hamiltonian_t *hamiltonian);
  * @param term_index Index where to add term
  * @return 0 on success, -1 on error
  */
-int pauli_hamiltonian_add_term(
+MOONLAB_API int pauli_hamiltonian_add_term(
     pauli_hamiltonian_t *hamiltonian,
     double coefficient,
     const char *pauli_string,
@@ -171,7 +171,7 @@ int pauli_hamiltonian_add_term(
  * @param bond_distance Internuclear distance in Angstroms (0.5-2.0)
  * @return H₂ Hamiltonian
  */
-pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance);
+MOONLAB_API pauli_hamiltonian_t* vqe_create_h2_hamiltonian(double bond_distance);
 
 /**
  * @brief Create LiH (Lithium Hydride) molecule Hamiltonian
@@ -192,7 +192,7 @@ MOONLAB_API pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance
  * 
  * @return H₂O Hamiltonian
  */
-pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
+MOONLAB_API pauli_hamiltonian_t* vqe_create_h2o_hamiltonian(void);
 
 /**
  * @brief Exact ground-state energy of a Pauli Hamiltonian by direct
@@ -258,7 +258,7 @@ MOONLAB_API vqe_ansatz_t* vqe_create_hardware_efficient_ansatz(
  * @param num_electrons Number of electrons in molecule
  * @return Ansatz structure
  */
-vqe_ansatz_t* vqe_create_uccsd_ansatz(
+MOONLAB_API vqe_ansatz_t* vqe_create_uccsd_ansatz(
     size_t num_qubits,
     size_t num_electrons
 );
@@ -269,7 +269,7 @@ vqe_ansatz_t* vqe_create_uccsd_ansatz(
  *        Gives chemical accuracy for small molecules (2-6 qubits) where
  *        the GS lives in a fixed-occupation sector.
  */
-vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
+MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
     size_t num_qubits,
     size_t num_occupied,
     size_t num_layers
@@ -290,7 +290,7 @@ MOONLAB_API void vqe_ansatz_free(vqe_ansatz_t *ansatz);
  * @param ansatz Variational ansatz
  * @return QS_SUCCESS or error code
  */
-qs_error_t vqe_apply_ansatz(
+MOONLAB_API qs_error_t vqe_apply_ansatz(
     quantum_state_t *state,
     const vqe_ansatz_t *ansatz
 );
@@ -307,7 +307,7 @@ qs_error_t vqe_apply_ansatz(
  * @param entropy Random number source for noise
  * @return QS_SUCCESS or error code
  */
-qs_error_t vqe_apply_ansatz_noisy(
+MOONLAB_API qs_error_t vqe_apply_ansatz_noisy(
     quantum_state_t *state,
     const vqe_ansatz_t *ansatz,
     const noise_model_t *noise,
@@ -358,8 +358,12 @@ MOONLAB_API void vqe_optimizer_free(vqe_optimizer_t *optimizer);
 
 /**
  * @brief VQE solver context
+ *
+ * The struct tag exists so the stable ABI header can forward-declare
+ * the solver as an opaque handle (moonlab_vqe_solver_t) without
+ * pulling in this header.
  */
-typedef struct {
+typedef struct vqe_solver {
     pauli_hamiltonian_t *hamiltonian;      // Pauli Hamiltonian
     vqe_ansatz_t *ansatz;                  // Variational ansatz
     vqe_optimizer_t *optimizer;            // Classical optimizer
@@ -426,7 +430,7 @@ MOONLAB_API void vqe_solver_free(vqe_solver_t *solver);
  * @param solver VQE solver context
  * @param noise_model Noise model (solver takes ownership, will free on solver_free)
  */
-void vqe_solver_set_noise(vqe_solver_t *solver, noise_model_t *noise_model);
+MOONLAB_API void vqe_solver_set_noise(vqe_solver_t *solver, noise_model_t *noise_model);
 
 /**
  * @brief Create depolarizing noise model for VQE
@@ -438,7 +442,7 @@ void vqe_solver_set_noise(vqe_solver_t *solver, noise_model_t *noise_model);
  * @param readout_error Measurement error probability
  * @return Configured noise model
  */
-noise_model_t* vqe_create_depolarizing_noise(
+MOONLAB_API noise_model_t* vqe_create_depolarizing_noise(
     double single_qubit_error,
     double two_qubit_error,
     double readout_error
@@ -455,7 +459,7 @@ noise_model_t* vqe_create_depolarizing_noise(
  * @param readout_error Readout error rate
  * @return Configured noise model
  */
-noise_model_t* vqe_create_nisq_noise(
+MOONLAB_API noise_model_t* vqe_create_nisq_noise(
     double t1_us,
     double t2_us,
     double gate_error,
@@ -496,17 +500,25 @@ MOONLAB_API double vqe_compute_energy(
 MOONLAB_API vqe_result_t vqe_solve(vqe_solver_t *solver);
 
 /**
- * @brief Compute gradient of energy with respect to parameters
- * 
- * Uses parameter shift rule:
- * ∂E/∂θᵢ = (E(θ + π/2 eᵢ) - E(θ - π/2 eᵢ)) / 2
- * 
+ * @brief Compute the exact gradient of the energy with respect to the
+ *        variational parameters
+ *
+ * Dispatches between two exact paths; neither is a finite difference:
+ *
+ * 1. Reverse-mode adjoint autograd (fast path) for noise-free
+ *    hardware-efficient ansaetze: builds a moonlab_diff circuit tape
+ *    and back-propagates the Pauli-sum cotangent. Cost is ~2 forward
+ *    passes per Hamiltonian term, independent of parameter count.
+ * 2. Analytic parameter-shift rule (fallback) for UCCSD, symmetry-
+ *    preserving, custom ansaetze, and any noisy simulation:
+ *    ∂E/∂θᵢ = (E(θ + π/2 eᵢ) - E(θ - π/2 eᵢ)) / 2.
+ *
  * @param solver VQE solver context
  * @param parameters Current parameters
- * @param gradient Output: gradient vector
+ * @param gradient Output: gradient vector (ansatz->num_parameters slots)
  * @return 0 on success, -1 on error
  */
-int vqe_compute_gradient(
+MOONLAB_API int vqe_compute_gradient(
     vqe_solver_t *solver,
     const double *parameters,
     double *gradient
@@ -527,7 +539,7 @@ int vqe_compute_gradient(
  * @param num_samples Number of measurement samples
  * @return Expectation value
  */
-double vqe_measure_pauli_expectation(
+MOONLAB_API double vqe_measure_pauli_expectation(
     quantum_state_t *state,
     const pauli_term_t *pauli_term,
     quantum_entropy_ctx_t *entropy,
@@ -544,7 +556,7 @@ double vqe_measure_pauli_expectation(
  * @param angle Rotation angle
  * @return QS_SUCCESS or error
  */
-qs_error_t vqe_apply_pauli_rotation(
+MOONLAB_API qs_error_t vqe_apply_pauli_rotation(
     quantum_state_t *state,
     const char *pauli_string,
     double angle
@@ -562,13 +574,13 @@ MOONLAB_API double vqe_hartree_to_kcalmol(double energy);
  * @brief Print VQE result
  * @param result VQE result
  */
-void vqe_print_result(const vqe_result_t *result);
+MOONLAB_API void vqe_print_result(const vqe_result_t *result);
 
 /**
  * @brief Print Hamiltonian
  * @param hamiltonian Molecular Hamiltonian
  */
-void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian);
+MOONLAB_API void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian);
 
 #ifdef __cplusplus
 }
