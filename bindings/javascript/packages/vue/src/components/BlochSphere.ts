@@ -47,7 +47,7 @@ export const BlochSphere = defineComponent({
      * Amplitudes [alpha, beta] for state |psi⟩ = alpha|0⟩ + beta|1⟩
      */
     amplitudes: {
-      type: Array as PropType<[Complex, Complex]>,
+      type: Array as unknown as PropType<[Complex, Complex]>,
       default: undefined,
     },
 

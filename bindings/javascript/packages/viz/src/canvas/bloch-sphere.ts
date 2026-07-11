@@ -100,7 +100,7 @@ export class BlochSphere {
   private rotationY: number;
   private isDragging = false;
   private lastMouse: Point2D = { x: 0, y: 0 };
-  private listeners: Map<string, Set<EventListener>> = new Map();
+  private listeners: Map<string, Set<EventListener<any>>> = new Map();
 
   constructor(
     canvas: HTMLCanvasElement | string,
@@ -242,7 +242,7 @@ export class BlochSphere {
   /**
    * Add event listener
    */
-  on(event: string, callback: EventListener): void {
+  on(event: string, callback: EventListener<any>): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -252,7 +252,7 @@ export class BlochSphere {
   /**
    * Remove event listener
    */
-  off(event: string, callback: EventListener): void {
+  off(event: string, callback: EventListener<any>): void {
     this.listeners.get(event)?.delete(callback);
   }
 

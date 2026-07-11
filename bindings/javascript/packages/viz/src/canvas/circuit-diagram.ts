@@ -132,7 +132,7 @@ export class CircuitDiagram {
   private gatePositions: GatePosition[] = [];
   private hoveredGate: number = -1;
   private scrollX: number = 0;
-  private listeners: Map<string, Set<EventListener>> = new Map();
+  private listeners: Map<string, Set<EventListener<any>>> = new Map();
 
   constructor(
     canvas: HTMLCanvasElement | string,
@@ -233,7 +233,7 @@ export class CircuitDiagram {
   /**
    * Add event listener
    */
-  on(event: string, callback: EventListener): void {
+  on(event: string, callback: EventListener<any>): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -243,7 +243,7 @@ export class CircuitDiagram {
   /**
    * Remove event listener
    */
-  off(event: string, callback: EventListener): void {
+  off(event: string, callback: EventListener<any>): void {
     this.listeners.get(event)?.delete(callback);
   }
 

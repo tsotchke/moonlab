@@ -102,7 +102,7 @@ export class AmplitudeBars {
   private animation: AnimationState | null = null;
   private animationFrame: number | null = null;
   private hoveredBar: number = -1;
-  private listeners: Map<string, Set<EventListener>> = new Map();
+  private listeners: Map<string, Set<EventListener<any>>> = new Map();
 
   constructor(
     canvas: HTMLCanvasElement | string,
@@ -219,7 +219,7 @@ export class AmplitudeBars {
   /**
    * Add event listener
    */
-  on(event: string, callback: EventListener): void {
+  on(event: string, callback: EventListener<any>): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
@@ -229,7 +229,7 @@ export class AmplitudeBars {
   /**
    * Remove event listener
    */
-  off(event: string, callback: EventListener): void {
+  off(event: string, callback: EventListener<any>): void {
     this.listeners.get(event)?.delete(callback);
   }
 

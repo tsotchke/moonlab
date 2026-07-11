@@ -4,7 +4,7 @@
  * Vue 3 composable for managing quantum state with reactivity.
  */
 
-import { ref, computed, onMounted, onUnmounted, watch, type Ref } from 'vue';
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, type Ref } from 'vue';
 import { QuantumState, type Complex } from '@moonlab/quantum-core';
 
 export interface UseQuantumStateOptions {
@@ -123,7 +123,10 @@ export function useQuantumState(
 ): UseQuantumStateReturn {
   const { numQubits: initialQubits, initialAmplitudes, autoInit = true } = options;
 
-  const state = ref<QuantumState | null>(null);
+  // shallowRef: QuantumState is a WASM-backed class handle; deep
+  // reactivity would both mangle its type through UnwrapRef and
+  // pointlessly proxy internal fields.
+  const state = shallowRef<QuantumState | null>(null);
   const loading = ref(autoInit);
   const error = ref<string | null>(null);
   const amplitudes = ref<Complex[]>([]);
