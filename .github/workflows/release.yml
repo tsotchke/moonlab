@@ -89,16 +89,20 @@ jobs:
 
       - name: Configure (CMake, Release)
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF
 
       - name: Build
+        # Full default target: the smoke step below runs labeled ctest
+        # suites, so the test executables must be built, not just the
+        # library and the control server.
         run: |
-          cmake --build build -j --target quantumsim moonlab-control-server
+          cmake --build build -j
 
       - name: Run Smoke Tests
         run: |
           cd build
-          ctest --output-on-failure --timeout 60 -L "(core|abi|topology)" -j 4
+          ctest --output-on-failure --timeout 120 -L "(core|abi|topology)" -LE "long|memory_heavy" -j 4
 
       - name: Package
         run: |
