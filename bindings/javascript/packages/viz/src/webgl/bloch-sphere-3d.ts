@@ -140,7 +140,11 @@ export class BlochSphere3D {
   private rotationY = -0.5;
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
-  private listeners: Map<string, Set<EventListener>> = new Map();
+  // EventListener<any>: emit() dispatches event-specific payloads
+  // (BlochState snapshots), and subscribers declare the concrete type;
+  // the default EventListener<unknown> would reject every typed callback
+  // under strictFunctionTypes.
+  private listeners: Map<string, Set<EventListener<any>>> = new Map();
 
   // WebGL resources
   private sphereProgram: WebGLProgram | null = null;
@@ -261,14 +265,14 @@ export class BlochSphere3D {
     return { ...this.state };
   }
 
-  on(event: string, callback: EventListener): void {
+  on(event: string, callback: EventListener<any>): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(callback);
   }
 
-  off(event: string, callback: EventListener): void {
+  off(event: string, callback: EventListener<any>): void {
     this.listeners.get(event)?.delete(callback);
   }
 

@@ -4,7 +4,7 @@
  * Vue 3 composable for building and managing quantum circuits.
  */
 
-import { ref, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
 import { Circuit, type CircuitStats } from '@moonlab/quantum-core';
 
 export interface UseCircuitOptions {
@@ -108,7 +108,9 @@ export function useCircuit(options: UseCircuitOptions): UseCircuitReturn {
   const version = ref(0);
 
   // Create initial circuit
-  const circuit = ref<Circuit>(
+  // shallowRef: Circuit is a class handle; deep reactivity would
+  // mangle its type through UnwrapRef (TS2322 against Ref<Circuit>).
+  const circuit = shallowRef<Circuit>(
     initialCircuit ? Circuit.fromJSON(initialCircuit) : new Circuit(initialQubits, name)
   );
 

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Moonlab Quantum Simulator - JavaScript/WebAssembly Bindings",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build --filter=!@moonlab/quantum-demo",
     "build:wasm": "pnpm --filter @moonlab/quantum-core build:wasm",
     "dev": "turbo run dev",
     "test": "turbo run test",
