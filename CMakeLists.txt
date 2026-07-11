@@ -1289,17 +1289,25 @@ if(QSIM_PLATFORM_LINUX)
     find_library(LAPACKE_LIB NAMES lapacke)
     find_library(LAPACK_LIB NAMES lapack)
     find_library(BLAS_LIB   NAMES openblas blas)
-    if(LAPACKE_LIB AND LAPACK_LIB AND BLAS_LIB)
-        target_link_libraries(quantumsim PRIVATE
-            ${LAPACKE_LIB} ${LAPACK_LIB} ${BLAS_LIB})
-        message(STATUS "LAPACK: LAPACKE=${LAPACKE_LIB} "
-                       "LAPACK=${LAPACK_LIB} BLAS=${BLAS_LIB}")
-    else()
-        message(WARNING "LAPACK/LAPACKE not found on Linux; "
-                        "entanglement-entropy and MBL modules will fail "
-                        "to link their test drivers.  Install "
-                        "liblapacke-dev + libopenblas-dev to fix.")
+    # find_library can intermittently miss installed libraries in
+    # emulated (QEMU buildx) containers even when the packages are
+    # present and the linker resolves them fine — the same failure
+    # mode as MATH_LIBRARY above. Fall back per-library to the plain
+    # linker names; a genuinely missing provider still fails the
+    # library link loudly instead of shipping an underlinked .so.
+    if(NOT LAPACKE_LIB)
+        set(LAPACKE_LIB lapacke)
     endif()
+    if(NOT LAPACK_LIB)
+        set(LAPACK_LIB lapack)
+    endif()
+    if(NOT BLAS_LIB)
+        set(BLAS_LIB blas)
+    endif()
+    target_link_libraries(quantumsim PRIVATE
+        ${LAPACKE_LIB} ${LAPACK_LIB} ${BLAS_LIB})
+    message(STATUS "LAPACK: LAPACKE=${LAPACKE_LIB} "
+                   "LAPACK=${LAPACK_LIB} BLAS=${BLAS_LIB}")
 endif()
 
 # Windows configuration
