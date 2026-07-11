@@ -1,0 +1,50 @@
+attestations:
+- finding_key: d140d85f8a0fb320f171a4c11794e4edc1aa9cd694a164c24eefe63f641f10de
+  path: bindings/python/moonlab/decoder.py
+  line: 39
+  pattern: single_pass_body
+  severity: medium
+  reason: DecoderError is a deliberately empty exception subclass; pass body is the
+    idiomatic Python form, not a stub.
+  attested_by: tsotchke
+  attested_at: '2026-07-11T06:29:29Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '    pass'
+- finding_key: d86bddcf6cca5f19b01a3bcdeba9020dd10d9f0e073654106f9e0ddd9c50bd29
+  path: bindings/python/moonlab/decoder.py
+  line: 43
+  pattern: single_pass_body
+  severity: medium
+  reason: DecoderNotBuiltError is a deliberately empty exception subclass; pass body
+    is the idiomatic Python form, not a stub.
+  attested_by: tsotchke
+  attested_at: '2026-07-11T06:29:29Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '    pass'
+- finding_key: a057e6eb5de8402843ff5ed3d2f645c65eb20a32cb391af77f7982aa3055bac7
+  path: benchmarks/mpi_scaling/run_scaling.sh
+  line: 90
+  pattern: variable_output_redirect
+  severity: medium
+  reason: OUTPUT is constructed locally from OUT_DIR and a fixed timestamp label two
+    lines above; not attacker-controlled. Redirect target is intentional.
+  attested_by: tsotchke
+  attested_at: '2026-07-11T06:31:20Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '} > "$OUTPUT"'
+- finding_key: 6f69de42f4406e0746250c42ec4230d4733734e69b0e61078d7c332f200646ee
+  path: scripts/build-deb.sh
+  line: 107
+  pattern: variable_rm
+  severity: medium
+  reason: FINAL_NAME is a deterministic deb filename assembled from PKG_NAME/VERSION/ARCH
+    in the same script; rm -f clears a previous artifact before dpkg-deb --build.
+    Intentional.
+  attested_by: tsotchke
+  attested_at: '2026-07-11T06:31:21Z'
+  valid_until: null
+  evidence_link: null
+  line_text: rm -f "$FINAL_NAME"
