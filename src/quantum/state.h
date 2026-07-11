@@ -411,7 +411,7 @@ static inline void quantum_state_init_zero(quantum_state_t* state) {
  * @param out_state  Receives the newly-allocated state on success
  * @return QS_SUCCESS or an error code
  */
-qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state);
+MOONLAB_API qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state);
 
 /**
  * @brief Copy the GPU state into the host `amplitudes` buffer.
@@ -422,7 +422,7 @@ qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_sta
  * @param state GPU-backed state (must have non-NULL gpu_state)
  * @return QS_SUCCESS or an error code
  */
-qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
+MOONLAB_API qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
 
 /**
  * @brief Push the host `amplitudes` buffer back into the GPU state.
@@ -436,7 +436,7 @@ qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
  * @param state GPU-backed state (must have non-NULL gpu_state)
  * @return QS_SUCCESS or an error code
  */
-qs_error_t quantum_state_sync_from_host(quantum_state_t *state);
+MOONLAB_API qs_error_t quantum_state_sync_from_host(quantum_state_t *state);
 
 #ifdef __cplusplus
 }
