@@ -39,7 +39,8 @@ cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" -G Ninja \
     -DQSIM_BUILD_SHARED=ON \
     -DQSIM_BUILD_TESTS=OFF \
     -DQSIM_BUILD_EXAMPLES=OFF \
-    -DQSIM_BUILD_BENCHMARKS=OFF
+    -DQSIM_BUILD_BENCHMARKS=OFF \
+    -DQSIM_NATIVE_ARCH=OFF
 
 echo "Building..."
 cmake --build "$BUILD_DIR" --parallel --target quantumsim moonlab-control-server

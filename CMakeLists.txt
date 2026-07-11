@@ -114,6 +114,7 @@ option(QSIM_ENABLE_SBNN "Link SbNN for the learned QEC-decoder slot (since v0.7.
 set(QSIM_SBNN_ROOT "$ENV{SBNN_ROOT}" CACHE PATH
     "Root of a SbNN source/build tree.  Expected layout: <root>/include/qec_decoder/qec_decoder.h, <root>/build/libthqcp.{a,dylib,so}.")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
+option(QSIM_NATIVE_ARCH "Tune Release builds for the build machine CPU (-march=native). Turn OFF for distributable artifacts so binaries run on any CPU of the target architecture; runtime SIMD dispatch is unaffected." ON)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
 option(QSIM_ENABLE_COVERAGE   "Build with --coverage (gcov-compatible) for CI coverage reporting" OFF)
@@ -313,8 +314,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebI
     if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
         list(APPEND QSIM_OPTIMIZE_FLAGS -O3 -ffast-math -funroll-loops)
 
-        # Native CPU optimization
-        if(NOT CMAKE_CROSSCOMPILING)
+        # Native CPU optimization.  OFF for distributable artifacts:
+        # -march=native pins the binary to the build machine's ISA
+        # extensions (and under QEMU emulation resolves to a synthetic
+        # "max" CPU whose instructions fail at the LTO assembly stage).
+        # Runtime SIMD dispatch still selects NEON/AVX paths at the
+        # portable baseline.
+        if(QSIM_NATIVE_ARCH AND NOT CMAKE_CROSSCOMPILING)
             list(APPEND QSIM_OPTIMIZE_FLAGS -march=native)
         endif()
     elseif(QSIM_COMPILER_MSVC)
