@@ -406,6 +406,12 @@ if(QSIM_PLATFORM_WINDOWS)
     set(MATH_LIBRARY "")
 else()
     find_library(MATH_LIBRARY m)
+    if(NOT MATH_LIBRARY)
+        # find_library can miss libm in minimal/emulated environments
+        # (QEMU cross containers) even though the toolchain links it
+        # fine. Fall back to the plain linker name.
+        set(MATH_LIBRARY m)
+    endif()
 endif()
 
 # Threads
