@@ -44,6 +44,13 @@ _search_paths += [
     _repo_root,
     Path(__file__).parent.parent.parent / "build",
     Path(__file__).parent.parent.parent,
+    # System install locations: a pip-installed moonlab paired with a
+    # Homebrew / .deb / make-install libquantumsim has no repo tree, so
+    # the packaged library must be discoverable where those installers
+    # put it.
+    Path("/opt/homebrew/lib"),
+    Path("/usr/local/lib"),
+    Path("/usr/lib"),
 ]
 
 _lib_path = None
@@ -56,16 +63,28 @@ for _dir in _search_paths:
     if _lib_path is not None:
         break
 
-if _lib_path is None:
+_lib = None
+if _lib_path is not None:
+    _lib = ctypes.CDLL(str(_lib_path))
+else:
+    # Last resort: let the platform loader search its own path
+    # (LD_LIBRARY_PATH / DYLD_FALLBACK_LIBRARY_PATH / ldconfig cache).
+    for _name in _lib_names:
+        try:
+            _lib = ctypes.CDLL(_name)
+            break
+        except OSError:
+            continue
+
+if _lib is None:
     _tried = ", ".join(f"{d}/<{'|'.join(_lib_names)}>" for d in _search_paths)
     raise ImportError(
         f"Cannot find Moonlab shared library on {sys.platform}. "
-        f"Build the C library first (e.g. 'cmake -B build && cmake --build build') "
-        f"or set the library path. Tried: {_tried}"
+        f"Install it (Homebrew: 'brew install tsotchke/moonlab/moonlab'; "
+        f"Debian: the moonlab .deb) or build from source "
+        f"('cmake -B build && cmake --build build'), "
+        f"or set MOONLAB_LIB_DIR. Tried: {_tried}"
     )
-
-# Load C library
-_lib = ctypes.CDLL(str(_lib_path))
 
 # Complex number type matching C
 class Complex(ctypes.Structure):

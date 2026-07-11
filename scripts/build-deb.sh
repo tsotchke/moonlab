@@ -62,7 +62,7 @@ Priority: optional
 Architecture: ${ARCH}
 Maintainer: tsotchke <noreply@github.com>
 Installed-Size: ${installed_size}
-Depends: libc6 (>= 2.31), libstdc++6, libomp5 | libomp5-14, liblapacke, libopenblas0 | libblas3, libssl3 | libssl1.1
+Depends: libc6 (>= 2.31), libstdc++6, libgomp1, liblapacke, libopenblas0 | libblas3, libssl3 | libssl1.1
 Description: High-performance quantum computing simulator
  Moonlab provides the libquantumsim runtime, stable C ABI headers,
  CMake package config, pkg-config metadata, and the moonlab control server.
