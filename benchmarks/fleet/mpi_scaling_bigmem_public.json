@@ -1,6 +1,6 @@
 {
   "harness":  "moonlab/mpi-scaling/v1.0",
-  "host":     "old-donkey",
+  "host_class": "x86_64 big-memory server",
   "date":     "2026-05-21T21:49:43Z",
   "depth":    4,
   "seed":     42,

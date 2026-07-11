@@ -50,13 +50,16 @@ if ! command -v mpirun >/dev/null 2>&1; then
 fi
 
 mkdir -p "$(dirname "$OUTPUT")"
-HOSTNAME=$(hostname)
+HOST_LABEL=${MOONLAB_BENCH_HOST_LABEL:-redacted}
+if [ "${MOONLAB_BENCH_INCLUDE_HOSTNAME:-0}" = "1" ]; then
+  HOST_LABEL=$(hostname)
+fi
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 {
     printf '{\n'
     printf '  "harness":  "moonlab/mpi-scaling/v1.0",\n'
-    printf '  "host":     "%s",\n' "$HOSTNAME"
+    printf '  "host":     "%s",\n' "$HOST_LABEL"
     printf '  "date":     "%s",\n' "$DATE"
     printf '  "depth":    %d,\n' "$DEPTH"
     printf '  "seed":     %d,\n' "$SEED"

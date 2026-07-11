@@ -17,7 +17,8 @@
  *                    `MOONLAB_DECODER_NOT_BUILT` until v0.6.8 wires
  *                    it behind `QSIM_ENABLE_LIBIRREP`.
  *   - **PYMATCHING**: optional Stim-pymatching reference via the
- *                    Python bridge.  Slot reserved for v0.6.8.
+ *                    POSIX Python bridge.  Slot reserved on Windows/Web
+ *                    builds until a native subprocess transport lands.
  *
  * This release ships the slot enum + dispatcher + GREEDY decoder
  * working in-tree.  v0.6.8 fills the SBNN, LIBIRREP_SS, and
@@ -116,7 +117,7 @@ MOONLAB_API const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot);
  * "pymatching".  Their availability is governed by the same build
  * flags as the enum dispatcher (CPU-only decoders always available;
  * SBNN / LIBIRREP_SS gated on link-time presence; PYMATCHING gated
- * on the bridge script path).
+ * on the bridge script path and POSIX subprocess support).
  *
  * Use cases for the registry:
  *

@@ -92,7 +92,7 @@ MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
  * @return Max bipartite entanglement entropy in nats; 0 on a NULL or
  *         single-qubit state.
  */
-double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
+MOONLAB_API double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
 
 /* ================================================================== */
 /*  Clifford gates (tableau only, O(n) per gate)                       */
@@ -103,23 +103,23 @@ double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
  * per gate, no SVD). */
 
 /** Hadamard gate on qubit @p q. */
-ca_mps_error_t moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
 /** S = sqrt(Z), phase gate diag(1, i). */
-ca_mps_error_t moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
 /** S^dagger = diag(1, -i). */
-ca_mps_error_t moonlab_ca_mps_sdag(moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_sdag(moonlab_ca_mps_t* s, uint32_t q);
 /** Pauli X (bit flip). */
-ca_mps_error_t moonlab_ca_mps_x   (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_x   (moonlab_ca_mps_t* s, uint32_t q);
 /** Pauli Y. */
-ca_mps_error_t moonlab_ca_mps_y   (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_y   (moonlab_ca_mps_t* s, uint32_t q);
 /** Pauli Z (phase flip). */
-ca_mps_error_t moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
 /** Controlled-NOT, control = @p ctrl, target = @p targ. */
-ca_mps_error_t moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
 /** Controlled-Z (symmetric in @p a / @p b). */
-ca_mps_error_t moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 /** SWAP (symmetric in @p a / @p b). */
-ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 
 /* ================================================================== */
 /*  Non-Clifford gates (push into MPS as Pauli-string rotations)       */
@@ -128,35 +128,35 @@ ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 /** R_P(theta) = exp(-i theta P / 2) following the standard Qiskit/Cirq
  *  convention.  Non-Clifford in general: the MPS action is a Pauli-string
  *  rotation on the Clifford-conjugated string C^dagger P_q C. */
-ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
-ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
-ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
 /** T gate: equals R_Z(pi/4) up to a global phase e^{-i pi/8}. */
-ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
 
 /** T-dagger gate: equals R_Z(-pi/4) up to a global phase e^{+i pi/8}. */
-ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q);
 
 /** Phase gate: P(theta) = diag(1, e^{i theta}); equals R_Z(theta) up to a
  *  global phase e^{i theta / 2}. */
-ca_mps_error_t moonlab_ca_mps_phase(moonlab_ca_mps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_phase(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
 /** Controlled-R_Z(theta).  Decomposed as
  *    R_Z(target, theta/2) . CNOT . R_Z(target, -theta/2) . CNOT
  *  using only existing CA-MPS primitives. */
-ca_mps_error_t moonlab_ca_mps_crz(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_crz(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
 /** Controlled-R_X(theta).  Decomposed as H_t . CRZ . H_t. */
-ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
 /** Controlled-R_Y(theta).  Decomposed as S_t . CRX . S^dag_t
  *  (since S X S^dag = Y). */
-ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
@@ -164,20 +164,20 @@ ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
  *  [[cos(t/2),     -e^{i l} sin(t/2)],
  *   [e^{i p} sin(t/2),  e^{i(p+l)} cos(t/2)]]
  *  Equivalent up to a global phase to R_Z(p) . R_Y(t) . R_Z(l). */
-ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
                                   double theta, double phi, double lambda);
 
 /** Toffoli (CCX): flip target if both controls are |1>.  Decomposed via
  *  the Nielsen-Chuang 6-CNOT + 7-T construction so the operation is
  *  expressed purely in terms of CA-MPS Clifford gates plus T / T-dagger.
  *  All three qubit indices must be distinct. */
-ca_mps_error_t moonlab_ca_mps_toffoli(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_toffoli(moonlab_ca_mps_t* s,
                                        uint32_t c1, uint32_t c2, uint32_t t);
 
 /** Fredkin (CSWAP): swap @p t1 and @p t2 if the control is |1>.  Built
  *  from CSWAP = CNOT(t1,t2) . Toffoli(c, t2, t1) . CNOT(t1, t2).  All
  *  three qubit indices must be distinct. */
-ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
                                        uint32_t c, uint32_t t1, uint32_t t2);
 
 /**

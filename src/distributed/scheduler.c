@@ -22,23 +22,12 @@
 #include <string.h>
 #include <time.h>
 
-/* v1.0.3 multi-tenant metric -- defined in src/control/control_plane.c
- * alongside the other process-wide request counters.  Declared
- * here as extern so both the inline scheduler_run path and the
- * external scheduler_fire_completion_hook path increment the same
- * counter.  Operators see this as
+/* v1.0.3 multi-tenant metric.  The scheduler owns this counter because
+ * both the inline scheduler_run path and the external
+ * scheduler_fire_completion_hook path increment it.  The POSIX control
+ * plane, when built, exports the same process-wide value in METRICS as
  * `moonlab_control_completion_hook_fires_total` in METRICS. */
-extern _Atomic uint64_t g_count_completion_hook_fires;
-
-#if defined(__EMSCRIPTEN__)
-/* WASM bundle in bindings/javascript/packages/core/emscripten excludes
- * control_plane.c (the strong definition's TU), so the wasm-ld step
- * fails on the unresolved extern.  Provide a TU-local definition only
- * on the WASM target so the regular library build is unaffected.  Not
- * weak -- there is no strong definition in the WASM source list, so
- * this is the only definition and no override conflict can arise. */
 _Atomic uint64_t g_count_completion_hook_fires = 0;
-#endif
 
 #if defined(_OPENMP)
 #include <omp.h>

@@ -1,45 +1,19 @@
 {
   "harness": "moonlab/fleet-validation/v1.0",
   "date": "2026-05-21",
-  "fleet": {
-    "atlas": {
-      "role": "control-plane host",
-      "os": "macOS",
-      "arch": "arm64",
-      "cores": 8,
-      "ram_gb": 16,
-      "tailscale_ip": "100.96.130.16"
-    },
-    "cosbox": {
-      "role": "linux compute node",
-      "os": "Linux 6.8",
-      "arch": "x86_64",
-      "cores": 12,
-      "ram_gb": 32,
-      "tailscale_ip": "100.86.83.35"
-    },
-    "old-donkey": {
-      "role": "linux big iron",
-      "os": "Linux 7.0",
-      "arch": "x86_64",
-      "cores": 88,
-      "ram_gb": 499,
-      "tailscale_ip": "100.121.14.68"
-    },
-    "xavier": {
-      "role": "Jetson aarch64 (Anduril jetpack-nixos)",
-      "os": "NixOS 25.11 (jetpack)",
-      "arch": "aarch64",
-      "cores": 8,
-      "ram_gb": 30,
-      "tailscale_ip": "100.123.137.103",
-      "notes": "ARMv8.2 Carmel + integrated GPU; CPU lane validated here, GPU lane is v1.1 arc"
-    }
+  "public_redaction": {
+    "policy": "Hostnames, IP addresses, DNS names, gateway routes, and network topology are omitted from this public copy.",
+    "node_classes": [
+      {"class": "arm64 workstation", "cores": 8, "ram_gb": 16},
+      {"class": "x86_64 workstation", "cores": 12, "ram_gb": 32},
+      {"class": "x86_64 big-memory server", "cores": 88, "ram_gb": 499},
+      {"class": "aarch64 integrated-GPU dev kit", "cores": 8, "ram_gb": 30}
+    ]
   },
   "experiments": {
     "ghz_sharding_validation": {
       "binary": "examples/distributed/large_state_ghz",
-      "host": "old-donkey",
+      "host_class": "x86_64 big-memory server",
       "points": [
         {
           "N": 30,
@@ -79,8 +53,8 @@
           "state_gib": 1,
           "wall_s": 1.83,
           "verified": true,
-          "host": "xavier",
-          "notes": "first aarch64 + jetpack-nixos run on the fleet; cross-arch MPI w/ x86_64 hosts works"
+          "host_class": "aarch64 integrated-GPU dev kit",
+          "notes": "first aarch64 + jetpack-nixos run on the fleet; cross-arch MPI w/ x86_64 nodes works"
         },
         {
           "N": 28,
@@ -88,7 +62,7 @@
           "state_gib": 4,
           "wall_s": 5.46,
           "verified": true,
-          "host": "xavier",
+          "host_class": "aarch64 integrated-GPU dev kit",
           "notes": "ARM NEON+SVE lane exercised; near 30 GB RAM ceiling"
         }
       ],
@@ -108,7 +82,7 @@
       "binary": "tools/fleet_loadtest.py",
       "scenarios": [
         {
-          "clients_host": "cosbox",
+          "client_group": "single remote client",
           "workers": 8,
           "duration_s": 5,
           "tenant": null,
@@ -118,7 +92,7 @@
           "errors": 0
         },
         {
-          "clients_host": "cosbox+old-donkey",
+          "client_group": "two remote clients",
           "workers": "64+64",
           "duration_s": 8,
           "tenant": null,
@@ -129,7 +103,7 @@
           "note": "84/2401=3.5% backpressure on max-concurrent=64 server"
         },
         {
-          "clients_host": "cosbox",
+          "client_group": "single remote client",
           "workers": 16,
           "duration_s": 5,
           "tenant": "acme-corp",
@@ -139,24 +113,24 @@
           "errors": 0
         },
         {
-          "clients_host": "cosbox+old-donkey+atlas-loopback",
+          "client_group": "two remote clients plus loopback load",
           "workers": "64+64+16",
           "duration_s": 10,
           "tenant": "3 distinct IDs",
           "tls": false,
           "rps_aggregate": 3653,
-          "p50_ms_atlas": 4.3,
+          "p50_ms_loopback": 4.3,
           "p50_ms_fleet": 408,
           "errors": 472,
-          "note": "atlas localhost saturates at 3377 rps; 3 tenant IDs verified"
+          "note": "loopback client saturates at 3377 rps; 3 tenant IDs verified"
         }
       ]
     },
     "cross_host_tls": {
       "binary": "tools/fleet_loadtest.py --tls --tls-ca",
-      "cert": "self-signed RSA-2048, SAN=IP:100.96.130.16,DNS:atlas.tail5c077c.ts.net",
+      "cert": "self-signed RSA-2048 with redacted SAN",
       "result": {
-        "clients_host": "cosbox",
+        "client_group": "single remote client",
         "workers": 4,
         "duration_s": 5,
         "reqs": 36,
@@ -169,10 +143,10 @@
     },
     "websocket_gateway_fanout": {
       "binary": "tools/fleet_ws_load.py",
-      "gateway": "tools/gateway/moonlab_websocket_gateway.py on atlas:8765 -> 127.0.0.1:7070",
+      "gateway": "gateway route redacted in public copy",
       "scenarios": [
         {
-          "clients_host": "cosbox",
+          "client_group": "remote client A",
           "workers": 8,
           "duration_s": 5,
           "reqs": 72,
@@ -181,7 +155,7 @@
           "errors": 0
         },
         {
-          "clients_host": "old-donkey",
+          "client_group": "remote client B",
           "workers": 8,
           "duration_s": 5,
           "reqs": 75,
@@ -193,13 +167,13 @@
       "aggregate": {
         "reqs_total": 147,
         "errors_total": 0,
-        "note": "browser-emulating WS clients hit gateway over Tailscale, gateway forwards line-protocol to TCP server, Bell circuit verified end-to-end"
+        "note": "browser-emulating WS clients hit gateway over the private test network, gateway forwards line-protocol to TCP server, Bell circuit verified end-to-end"
       }
     },
     "mpi_random_circuit_scaling": {
       "harness": "benchmarks/mpi_scaling/run_scaling.sh",
       "binary": "build/large_state_random_circuit",
-      "host": "old-donkey",
+      "host_class": "x86_64 big-memory server",
       "depth": 4,
       "seed": 42,
       "grid": [
@@ -275,7 +249,7 @@
         "src/backends/cuda_statevec.{h,cu}",
         "examples/cuda/bell_jetson.cu"
       ],
-      "host": "xavier (Jetson AGX Xavier, Volta GPU cc 7.2, 8 SMs, 30 GB unified)",
+      "host_class": "aarch64 integrated-GPU dev kit (Volta GPU cc 7.2, 8 SMs, 30 GB unified)",
       "memory_model": "cudaMallocManaged (unified) -- the tegra-correct path",
       "smoke_results": [
         {

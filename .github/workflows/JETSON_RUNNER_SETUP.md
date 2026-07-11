@@ -42,7 +42,7 @@ real Jetson hardware, so the runner must live on-host.
        --token <PASTE_TOKEN_HERE> \
        --labels self-hosted,linux,ARM64,jetpack,cuda \
        --work _work \
-       --name jetson-xavier-01
+       --name moonlab-aarch64-cuda-01
    ```
 
 2. Install as a systemd service so it survives reboots:
@@ -58,7 +58,7 @@ real Jetson hardware, so the runner must live on-host.
    /nix/store easily exceed that.  Edit the systemd unit:
 
    ```sh
-   sudo systemctl edit actions.runner.tsotchke-moonlab.jetson-xavier-01
+   sudo systemctl edit actions.runner.tsotchke-moonlab.moonlab-aarch64-cuda-01
    # Add:
    [Service]
    WorkingDirectory=/storage/actions-runner
@@ -95,9 +95,8 @@ on a cold flake-eval.
 
 ## Adding more nodes
 
-When old-donkey (RTX 3050, x86_64, Ubuntu CUDA 13.1) or cosbox
-(RTX 3090) come online as runners, copy the `ci-jetson.yml` to
-`ci-ampere.yml` / `ci-ada.yml` and:
+When additional CUDA-capable x86_64 hosts come online as runners,
+copy the `ci-jetson.yml` to `ci-ampere.yml` / `ci-ada.yml` and:
 
 - Change `runs-on:` labels to `[self-hosted, linux, X64, cuda]`
   (plus a host-specific label like `rtx-3050` or `rtx-3090`).

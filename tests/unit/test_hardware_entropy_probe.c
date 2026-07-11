@@ -103,6 +103,32 @@ static void test_probe_ignores_cwd_helper(void) {
     CHECK(access(marker_path, F_OK) != 0,
           "malicious ./tools/hw_rng_probe was not executed");
 }
+
+#if defined(__linux__)
+static void test_linux_arm_entropy_defaults_to_kernel_rng(void) {
+    fprintf(stdout, "\n-- linux arm entropy defaults to kernel rng --\n");
+
+    unsetenv("MOONLAB_SKIP_HW_ENTROPY");
+    unsetenv("MOONLAB_ENABLE_ARM_HW_ENTROPY");
+
+    entropy_ctx_t ctx;
+    entropy_error_t rc = entropy_init(&ctx);
+    CHECK(rc == ENTROPY_SUCCESS, "entropy_init succeeds");
+    if (rc != ENTROPY_SUCCESS) {
+        return;
+    }
+
+    entropy_capabilities_t caps = entropy_get_capabilities(&ctx);
+    CHECK(caps.has_rdrand == 0,
+          "RNDR helper path is opt-in for Linux bulk entropy");
+    CHECK(caps.has_rdseed == 0,
+          "RNDRRS helper path is not selected for Linux bulk entropy");
+    CHECK(caps.has_getrandom || caps.has_dev_urandom || caps.has_jitter,
+          "kernel/jitter fallback source is available");
+
+    entropy_free(&ctx);
+}
+#endif
 #endif
 
 int main(void) {
@@ -110,6 +136,9 @@ int main(void) {
 
 #if defined(__aarch64__)
     test_probe_ignores_cwd_helper();
+#if defined(__linux__)
+    test_linux_arm_entropy_defaults_to_kernel_rng();
+#endif
 #else
     fprintf(stdout, "\n-- skipped (non-aarch64 target) --\n");
 #endif

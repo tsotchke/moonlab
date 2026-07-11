@@ -45,12 +45,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Show host fingerprint
+      - name: Show CUDA toolchain
         run: |
-          uname -a
           /usr/bin/nvidia-smi || true
           ls /usr/local/cuda*/bin/nvcc 2>/dev/null || true
-          # Show what jetpack-nixos exposes
+          uname -m
+          # Show the Nix version without printing a host fingerprint.
           nix --version
           nix flake info --json --extra-experimental-features 'nix-command flakes' \
             | head -20 || true

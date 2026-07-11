@@ -939,7 +939,6 @@ _Atomic uint64_t g_count_rate_limited        = 0;
 _Atomic uint64_t g_count_tls_failed          = 0;
 _Atomic uint64_t g_count_max_concurrent      = 0;
 _Atomic uint64_t g_count_admission_refused   = 0;
-_Atomic uint64_t g_count_completion_hook_fires = 0;
 
 struct moonlab_control_server {
     int     srv_fd;

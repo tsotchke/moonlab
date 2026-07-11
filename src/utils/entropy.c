@@ -330,33 +330,49 @@ size_t entropy_jitter_bytes(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
     size_t collected = 0;
-    uint64_t accum = 0;
-    int bits = 0;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    uint64_t state = ((uint64_t)ts.tv_sec << 32) ^
+                     (uint64_t)ts.tv_nsec ^
+                     (uint64_t)(uintptr_t)buffer ^
+                     ((uint64_t)size * 0x9e3779b97f4a7c15ULL);
 
-    for (size_t i = 0; collected < size && i < size * 100; i++) {
-        // Get high-resolution time
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
+    while (collected < size) {
+        struct timespec t0;
+        struct timespec t1;
 
-        // Extract low bits of nanoseconds (jitter)
-        uint64_t jitter = ts.tv_nsec & 0x1;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        uint64_t start_ns = ((uint64_t)t0.tv_sec * 1000000000ULL) +
+                            (uint64_t)t0.tv_nsec;
 
-        // Add some CPU jitter
-        volatile int dummy = 0;
-        for (int j = 0; j < (ts.tv_nsec & 0xF); j++) {
-            dummy += j;
+        volatile uint64_t timing_work = state ^ (uint64_t)collected;
+        size_t rounds = 17 + (size_t)(state & 0x3fU);
+        for (size_t j = 0; j < rounds; j++) {
+            timing_work ^= (uint64_t)j * 0xbf58476d1ce4e5b9ULL;
+            timing_work = (timing_work << 13) | (timing_work >> 51);
         }
-        (void)dummy;
 
-        // Accumulate bits
-        accum = (accum << 1) | jitter;
-        bits++;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        uint64_t end_ns = ((uint64_t)t1.tv_sec * 1000000000ULL) +
+                          (uint64_t)t1.tv_nsec;
+        uint64_t delta = end_ns - start_ns;
 
-        if (bits >= 8) {
-            buffer[collected++] = (uint8_t)(accum & 0xFF);
-            accum = 0;
-            bits = 0;
-        }
+        state ^= end_ns;
+        state ^= delta << 17;
+        state ^= (uint64_t)timing_work;
+        state = splitmix64(&state);
+
+        uint64_t mixed = splitmix64(&state);
+        size_t to_copy = (size - collected < sizeof(mixed))
+            ? size - collected
+            : sizeof(mixed);
+        memcpy(buffer + collected, &mixed, to_copy);
+        collected += to_copy;
+
+        // Stir in wall-clock state occasionally so repeated short calls
+        // do not run from identical monotonic-timer deltas alone.
+        clock_gettime(CLOCK_REALTIME, &ts);
+        state ^= ((uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec;
     }
 
     return collected;

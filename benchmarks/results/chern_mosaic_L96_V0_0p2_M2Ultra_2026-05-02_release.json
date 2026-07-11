@@ -13,7 +13,7 @@
   "platform": "macOS",
   "arch": "ARM64",
   "enabled_features": "openmp,metal,lto,avx512,avx2,neon,sve",
-  "hostname": "Atlas.local",
+  "hostname": "redacted",
   "os_release": "Darwin 24.1.0",
   "cpu_brand": "Apple M2 Ultra",
   "cpu_count": 24,

@@ -152,8 +152,8 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
     // Allocate communication buffers.  CNOT / SWAP exchanges along
     // the partition-boundary qubit need to send half the local state
     // (`local_count / 2`) in one shot; the historical 2^20 cap (=16 MB)
-    // ARCHITECTURAL CONSTRAINT (v1.0.6, after fleet validation on
-    // old-donkey 88c found the bug at N=31 / 4 GiB per-rank):
+    // ARCHITECTURAL CONSTRAINT (v1.0.6, after big-memory fleet validation
+    // found the bug at N=31 / 4 GiB per-rank):
     // mpi_exchange_amplitudes() and the unchunked gate-apply loops
     // in distributed_gates.c assume send_buffer and recv_buffer can
     // each hold `local_count` complex amplitudes in one shot.  Any

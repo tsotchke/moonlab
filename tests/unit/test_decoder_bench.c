@@ -48,12 +48,16 @@ static void test_slot_availability(void)
         CHECK(avail == 0 || avail == 1,
               "LIBIRREP_SS available = %d (build-conditional)", avail);
     }
-    /* PYMATCHING slot is unconditionally available since v0.7.7
-     * (subprocess transport; runtime errors if pymatching isn't
-     * pip-installed). */
+    /* PYMATCHING uses a POSIX subprocess bridge.  Windows/Web builds
+     * reserve the slot but report NOT_BUILT until a native transport
+     * lands. */
     {
         const int avail = moonlab_decoder_slot_available(MOONLAB_DECODER_PYMATCHING);
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
+        CHECK(avail == 0, "PYMATCHING subprocess bridge unavailable on this platform (got %d)", avail);
+#else
         CHECK(avail == 1, "PYMATCHING available since v0.7.7 (got %d)", avail);
+#endif
     }
 
     CHECK(strcmp(moonlab_decoder_slot_name(MOONLAB_DECODER_GREEDY),     "greedy") == 0,

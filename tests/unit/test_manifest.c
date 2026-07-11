@@ -3,7 +3,7 @@
  * @brief Smoke-check the reproducibility manifest.
  *
  * Tight checks on the structural content (non-empty git SHA of the
- * right length, valid hostname, non-NULL label, correct version vs
+ * right length, safe host label, non-NULL label, correct version vs
  * VERSION.txt), plus a round-trip that parses the compact JSON emitted
  * by @c moonlab_manifest_write_json and verifies it contains the
  * expected keys with reasonable values.  We do not bundle a JSON
@@ -106,7 +106,12 @@ static void test_capture_release(void) {
     CHECK(rc == 0, "capture rc=0");
     CHECK(m.run_label && strcmp(m.run_label, "test_manifest") == 0, "run_label");
     CHECK(m.seed == 42, "seed = 42");
-    CHECK(m.hostname && *m.hostname, "hostname non-empty: %s", m.hostname);
+    CHECK(m.hostname && *m.hostname, "host label non-empty: %s", m.hostname);
+    if (!getenv("MOONLAB_MANIFEST_HOST_LABEL") &&
+        !getenv("MOONLAB_MANIFEST_INCLUDE_HOSTNAME")) {
+        CHECK(strcmp(m.hostname, "redacted") == 0,
+              "raw hostname redacted by default");
+    }
     CHECK(m.cpu_count >= 1, "cpu_count >= 1: %d", m.cpu_count);
     CHECK(m.mem_total_bytes > 0, "mem_total_bytes > 0");
     CHECK(m.run_start_iso && strlen(m.run_start_iso) == 20,

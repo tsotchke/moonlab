@@ -10,7 +10,6 @@
  * Exits 0 on success, non-zero with a printed reason on any failure.
  */
 
-#include <dlfcn.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -18,19 +17,96 @@
 #include <string.h>
 #include <complex.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+static DWORD g_dl_last_error = 0;
+
+static void set_dll_directory_for_path(const char* path) {
+    char dir[MAX_PATH];
+    size_t n = strlen(path);
+    if (n >= sizeof(dir)) return;
+    memcpy(dir, path, n + 1);
+    for (size_t i = n; i > 0; --i) {
+        if (dir[i - 1] == '\\' || dir[i - 1] == '/') {
+            dir[i - 1] = '\0';
+            SetDllDirectoryA(dir);
+            return;
+        }
+    }
+}
+
+static const char* dlerror(void) {
+    static char buf[512];
+    DWORD err = g_dl_last_error;
+    g_dl_last_error = 0;
+    if (err == 0) return NULL;
+    DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM |
+                             FORMAT_MESSAGE_IGNORE_INSERTS,
+                             NULL, err, 0, buf, sizeof(buf), NULL);
+    if (n == 0) {
+        snprintf(buf, sizeof(buf), "Win32 error %lu", (unsigned long)err);
+    }
+    return buf;
+}
+
+static void* dlopen(const char* name, int flags) {
+    (void)flags;
+    if (strchr(name, '\\') || strchr(name, '/')) {
+        set_dll_directory_for_path(name);
+    }
+    HMODULE h = LoadLibraryA(name);
+    g_dl_last_error = h ? 0 : GetLastError();
+    return (void*)h;
+}
+
+static void* dlsym(void* h, const char* name) {
+    FARPROC p = GetProcAddress((HMODULE)h, name);
+    g_dl_last_error = p ? 0 : GetLastError();
+    return (void*)p;
+}
+
+static int dlclose(void* h) {
+    if (!h) return 0;
+    return FreeLibrary((HMODULE)h) ? 0 : 1;
+}
+
+#define RTLD_NOW 0
+#define RTLD_LOCAL 0
+#else
+#include <dlfcn.h>
+#endif
+
+#define ABI_STEP(name) do { \
+    fprintf(stdout, "[abi] %s\n", (name)); \
+} while (0)
+
 typedef int (*moonlab_qrng_bytes_fn)(uint8_t* buf, size_t size);
 typedef void (*moonlab_abi_version_fn)(int* major, int* minor, int* patch);
 typedef int (*moonlab_qwz_chern_fn)(double m, size_t N, double* out_chern);
 
 static const char* const LIB_CANDIDATES[] = {
+#if defined(_WIN32)
+    "libquantumsim.dll",
+    "quantumsim.dll",
+#else
     "libquantumsim.dylib",
     "libquantumsim.0.dylib",
     "libquantumsim.so",
     "libquantumsim.so.0",
+#endif
     NULL,
 };
 
 static void* open_library(void) {
+    const char* configured = getenv("MOONLAB_QUANTUMSIM_LIBRARY");
+    if (configured && configured[0] != '\0') {
+        void* h = dlopen(configured, RTLD_NOW | RTLD_LOCAL);
+        if (h) {
+            fprintf(stdout, "opened %s\n", configured);
+            return h;
+        }
+        fprintf(stderr, "configured library failed: %s\n", dlerror());
+    }
     for (const char* const* name = LIB_CANDIDATES; *name; ++name) {
         void* h = dlopen(*name, RTLD_NOW | RTLD_LOCAL);
         if (h) {
@@ -128,6 +204,10 @@ static int test_qrng(void* h) {
 }
 
 int main(void) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
+    ABI_STEP("open library");
     void* h = open_library();
     if (!h) {
         fprintf(stderr,
@@ -140,10 +220,13 @@ int main(void) {
     }
 
     int failures = 0;
+    ABI_STEP("version");
     failures += test_version(h);
+    ABI_STEP("qrng");
     failures += test_qrng(h);
 
     /* moonlab_qwz_chern: topological / trivial phases of QWZ. */
+    ABI_STEP("qwz chern");
     dlerror();
     moonlab_qwz_chern_fn qwz =
         (moonlab_qwz_chern_fn)dlsym(h, "moonlab_qwz_chern");
@@ -171,6 +254,7 @@ int main(void) {
      * goal is verifying the symbols are exported with the documented
      * signatures.  Two-qubit Bell-state round-trip pins the most-used
      * shape (H + CNOT, then <Z_0 Z_1> = +1 on the +Phi+ Bell state). */
+    ABI_STEP("ca-mps bell");
     typedef void* (*camps_create_fn)(uint32_t, uint32_t);
     typedef void  (*camps_free_fn)(void*);
     typedef int   (*camps_q_fn)(void*, uint32_t);
@@ -218,6 +302,7 @@ int main(void) {
      * for the current Clifford D in the state.  Probe with D = identity
      * (default after create) so Q_k must equal the input string and the
      * phase is 0. */
+    ABI_STEP("ca-mps conjugate_pauli");
     typedef int (*camps_conj_fn)(const void*, const uint8_t*, uint8_t*, int*);
     dlerror();
     camps_conj_fn camps_conj =
@@ -252,6 +337,7 @@ int main(void) {
      * exported.  Don't actually run them (they're tested elsewhere) --
      * just verify that bindings consumers (QGTL, lilirrep) can resolve
      * them. */
+    ABI_STEP("ca-mps var-d symbols");
     dlerror();
     void* var_d_run_sym    = dlsym(h, "moonlab_ca_mps_var_d_run");
     void* var_d_run_v2_sym = dlsym(h, "moonlab_ca_mps_var_d_run_v2");
@@ -271,6 +357,7 @@ int main(void) {
      * for N = 8 with periodic BCs we accept anything in [-1.3, -1.0]
      * per site, which is generous and only catches gross regressions
      * (a returned 0, +inf, or DBL_MAX). */
+    ABI_STEP("dmrg tfim");
     typedef double (*dmrg_tfim_fn)(uint32_t, double, uint32_t, uint32_t);
     dlerror();
     dmrg_tfim_fn dmrg_tfim = (dmrg_tfim_fn)dlsym(h, "moonlab_dmrg_tfim_energy");
@@ -300,6 +387,7 @@ int main(void) {
      * so the OBC ground-state energy from direct ED is -13.4997.  DMRG
      * with chi = 32, 8 sweeps converges to that within 1e-3.  Accept
      * [-13.6, -13.4] as the smoke band. */
+    ABI_STEP("dmrg heisenberg");
     typedef double (*dmrg_heis_fn)(uint32_t, double, double, double,
                                     uint32_t, uint32_t);
     dlerror();
@@ -325,6 +413,7 @@ int main(void) {
 
     /* moonlab_z2_lgt_1d_build + moonlab_z2_lgt_1d_gauss_law: probe the
      * 1+1D Z2 LGT Pauli-sum and Gauss-law accessors, new in 0.2.1. */
+    ABI_STEP("z2 lgt");
     typedef int (*z2_build_fn)(uint32_t, double, double, double, double,
                                 uint8_t**, double**, uint32_t*, uint32_t*);
     typedef int (*z2_gauss_fn)(uint32_t, uint32_t, uint8_t*);
@@ -368,6 +457,7 @@ int main(void) {
     }
 
     /* moonlab_status_string: probe the diagnostic stringifier. */
+    ABI_STEP("status string");
     typedef const char* (*status_fn)(int, int);
     dlerror();
     status_fn status = (status_fn)dlsym(h, "moonlab_status_string");
@@ -392,6 +482,7 @@ int main(void) {
      * dlsym-find the new ABI entry points (don't run them; the
      * existing CA-MPS handle creation is already exercised by
      * test_qrng's CA-MPS API probes elsewhere). */
+    ABI_STEP("gauge warmstart symbol");
     if (!dlsym(h, "moonlab_ca_mps_var_d_run")) {
         fprintf(stderr, "dlsym(moonlab_ca_mps_var_d_run) failed\n");
         failures++;
@@ -408,6 +499,7 @@ int main(void) {
     /* v0.4.1 adaptive-bond TDVP ABI: dlsym every entry point and run
      * a TFIM imag-time short evolve end-to-end to pin the full create
      * -> step -> history -> free lifecycle. */
+    ABI_STEP("tdvp");
     typedef void* (*tdvp_create_tfim_fn)(uint32_t, double, double, uint32_t,
                                           uint32_t, double, int, double);
     typedef int   (*tdvp_step_fn)(void*);
@@ -550,12 +642,32 @@ int main(void) {
         }
     }
 
+#if defined(_WIN32)
+    /* MinGW DLL detach can block after QRNG/TDVP runtime initialisation.
+     * This ABI smoke verifies load + symbol calls; Windows process teardown
+     * will reclaim the module without making FreeLibrary part of the
+     * downstream ABI contract. */
+    (void)h;
+#else
     dlclose(h);
+#endif
 
+    int exit_code = failures ? 1 : 0;
     if (failures) {
         fprintf(stderr, "ABI smoke test FAILED (%d failures)\n", failures);
-        return 1;
+    } else {
+        fprintf(stdout, "ABI smoke test OK\n");
     }
-    fprintf(stdout, "ABI smoke test OK\n");
-    return 0;
+
+#if defined(_WIN32)
+    /* The Windows shared-library smoke can leave runtime cleanup in
+     * DLL/process detach after QRNG and TDVP are initialized.  The ABI
+     * contract under test is load + calls, so exit without making teardown
+     * part of the release gate. */
+    fflush(stdout);
+    fflush(stderr);
+    TerminateProcess(GetCurrentProcess(), (UINT)exit_code);
+#endif
+
+    return exit_code;
 }
