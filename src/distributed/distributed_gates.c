@@ -7,6 +7,7 @@
  */
 
 #include "distributed_gates.h"
+#include "../utils/moonlab_weak.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -146,7 +147,7 @@ static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {
 /* Weak link to the CUDA backend's apply_1q kernel.  Resolves when
  * libquantumsim is built with QSIM_HAS_CUDA. */
 extern int moonlab_cuda_apply_1q(void *state, uint32_t target, const double m[8])
-    __attribute__((weak));
+    MOONLAB_WEAK_IMPORT;
 
 static dist_gate_error_t apply_local_1q(partitioned_state_t* state,
                                         uint32_t target,
@@ -749,7 +750,7 @@ dist_gate_error_t dist_gate_2q(partitioned_state_t* state,
 /* Weak link to the GPU CNOT routing (in libquantumsim only when
  * QSIM_HAS_CUDA is on). */
 extern int moonlab_cuda_apply_cnot(void *state, uint32_t control, uint32_t target)
-    __attribute__((weak));
+    MOONLAB_WEAK_IMPORT;
 
 dist_gate_error_t dist_cnot(partitioned_state_t* state,
                             uint32_t control,

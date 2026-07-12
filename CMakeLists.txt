@@ -1254,6 +1254,41 @@ endif()
 if(QSIM_PLATFORM_MACOS)
     target_compile_definitions(quantumsim PRIVATE PLATFORM_MACOS=1)
 
+    # weak_import marks the reference optional for dyld, but ld still needs
+    # each symbol explicitly permitted to remain unresolved when the optional
+    # backend implementation is not part of this CPU-only build.  -U emits a
+    # dynamic-lookup import for only these guarded hooks; definitions in an
+    # enabled backend continue to resolve normally.
+    set(QSIM_MACHO_OPTIONAL_BACKEND_SYMBOLS
+        _qsim_gpu_route_hadamard
+        _qsim_gpu_route_pauli_x
+        _qsim_gpu_route_cnot
+        _qsim_gpu_route_apply_1q_matrix
+        _qsim_gpu_route_apply_2q_matrix
+        _qsim_gpu_route_mcx
+        _qsim_gpu_route_mcz
+        _qsim_gpu_route_fredkin
+        _moonlab_cuda_state_free
+        _moonlab_cuda_apply_1q
+        _moonlab_cuda_apply_cnot
+        _moonlab_cuda_state_create
+        _moonlab_cuda_state_copy_to_host
+        _moonlab_cuda_state_copy_from_host
+        _moonlab_cuda_runtime_probe_discrete
+        _metal_compute_init
+        _metal_compute_free
+        _metal_buffer_create
+        _metal_buffer_contents
+        _metal_buffer_free
+        _metal_mps_apply_gate_2q
+        _metal_mps_expectation_z
+    )
+    foreach(QSIM_OPTIONAL_BACKEND_SYMBOL IN LISTS QSIM_MACHO_OPTIONAL_BACKEND_SYMBOLS)
+        target_link_options(quantumsim PRIVATE "-Wl,-U,${QSIM_OPTIONAL_BACKEND_SYMBOL}")
+    endforeach()
+    unset(QSIM_OPTIONAL_BACKEND_SYMBOL)
+    unset(QSIM_MACHO_OPTIONAL_BACKEND_SYMBOLS)
+
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(quantumsim PRIVATE ${ACCELERATE_FRAMEWORK})
         target_compile_definitions(quantumsim PRIVATE HAS_ACCELERATE=1)
