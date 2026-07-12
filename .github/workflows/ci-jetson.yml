@@ -15,18 +15,18 @@ name: CI (Jetson / aarch64 + CUDA)
 #     dev shell rather than using apt
 #
 # Trigger criteria:
-#   - All pushes to master + the active feature branches
-#   - All PRs that target master
-#   - Manual via workflow_dispatch
-# We do NOT run this lane on every push to all branches because
-# Volta cc 7.2 builds take ~6 min and the host is shared with other
-# work.
+#   - Manual via workflow_dispatch ONLY.
+# No self-hosted runner is currently enrolled for this repository, so
+# push/PR triggers would queue a dead job on every commit for 24 hours
+# before GitHub fails it.  The stock actions-runner tarball cannot run
+# on jetpack-nixos anyway (hardcoded FHS ld-linux interpreter; NixOS
+# needs the declarative services.github-runners module or nix-ld --
+# see JETSON_RUNNER_SETUP.md).  Jetson CUDA validation happens
+# out-of-band through scripts/run_mesh_release_smoke.sh, which builds
+# and tests the working tree on the Jetson over SSH for every release.
+# Restore push/pull_request triggers here if a runner is ever enrolled.
 
 on:
-  push:
-    branches: [master, 'feat/v1.1*', 'feat/v1.2*', 'chore/cuda*']
-  pull_request:
-    branches: [master]
   workflow_dispatch:
 
 # Cancel in-progress runs on the same branch when a new commit lands.
