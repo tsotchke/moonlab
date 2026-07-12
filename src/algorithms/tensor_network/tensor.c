@@ -2388,11 +2388,13 @@ tensor_gpu_context_t *tensor_gpu_context_create(void) {
     ctx->backend = 0;
 
 #if HAS_METAL
-    ctx->metal_ctx = metal_compute_init();
-    if (ctx->metal_ctx) {
-        ctx->backend = 1;
-        g_gpu_ctx = ctx;
-        return ctx;
+    if (metal_compute_init != NULL) {
+        ctx->metal_ctx = metal_compute_init();
+        if (ctx->metal_ctx) {
+            ctx->backend = 1;
+            g_gpu_ctx = ctx;
+            return ctx;
+        }
     }
 #endif
 
@@ -2424,7 +2426,7 @@ void tensor_gpu_context_destroy(tensor_gpu_context_t *ctx) {
     if (!ctx) return;
 
 #if HAS_METAL
-    if (ctx->metal_ctx) {
+    if (ctx->metal_ctx && metal_compute_free != NULL) {
         metal_compute_free(ctx->metal_ctx);
     }
 #endif

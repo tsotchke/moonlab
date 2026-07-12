@@ -7,6 +7,7 @@
  */
 
 #include "state_partition.h"
+#include "../utils/moonlab_weak.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -253,7 +254,7 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
  * still link.  On CUDA builds this resolves to moonlab_cuda_state_free
  * defined in cuda_statevec.cu.  On non-CUDA builds the state.c
  * fallback stub catches the reference. */
-extern void moonlab_cuda_state_free(void *) __attribute__((weak));
+extern void moonlab_cuda_state_free(void *) MOONLAB_WEAK_IMPORT;
 
 void partition_state_free(partitioned_state_t* state) {
     if (!state) return;
@@ -287,9 +288,9 @@ void partition_state_free(partitioned_state_t* state) {
  * MOONLAB_CUDA_OK = 0 (from moonlab_cuda_statevec_status_t).  The void*
  * here is moonlab_cuda_state_t* opaqued at the boundary so we don't
  * need to pull cuda_statevec.h into the partition TU. */
-extern int  moonlab_cuda_state_create        (uint32_t n_qubits, void** out_state) __attribute__((weak));
-extern int  moonlab_cuda_state_copy_to_host  (const void *state, double *out)      __attribute__((weak));
-extern int  moonlab_cuda_state_copy_from_host(void *state, const double *in)        __attribute__((weak));
+extern int  moonlab_cuda_state_create        (uint32_t n_qubits, void** out_state) MOONLAB_WEAK_IMPORT;
+extern int  moonlab_cuda_state_copy_to_host  (const void *state, double *out)      MOONLAB_WEAK_IMPORT;
+extern int  moonlab_cuda_state_copy_from_host(void *state, const double *in)        MOONLAB_WEAK_IMPORT;
 
 partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
                                                 uint32_t num_qubits,
