@@ -1137,6 +1137,11 @@
     target_link_libraries(test_entropy_pool PRIVATE quantumsim)
     add_test(NAME unit_entropy_pool COMMAND test_entropy_pool)
 
+    # Direct entropy source regression checks (salvaged from PR #9).
+    add_executable(test_entropy_sources tests/unit/test_entropy_sources.c)
+    target_link_libraries(test_entropy_sources PRIVATE quantumsim)
+    add_test(NAME unit_entropy_sources COMMAND test_entropy_sources)
+
     # Timing-jitter entropy fallbacks are real fallback paths, not
     # synthetic-data stubs.
     add_executable(test_entropy_jitter tests/unit/test_entropy_jitter.c)
@@ -1522,7 +1527,7 @@
         differentiable)
     qsim_label_tests(qrng
         unit_qrng_di unit_qrng_statistics unit_entropy_pool
-        unit_entropy_jitter unit_hardware_entropy_probe health_tests)
+        unit_entropy_jitter unit_entropy_sources unit_hardware_entropy_probe health_tests)
     qsim_label_tests(crypto
         unit_mlkem unit_mlkem_nist_kat unit_mlkem_poly unit_aes_drbg
         unit_sha3)
