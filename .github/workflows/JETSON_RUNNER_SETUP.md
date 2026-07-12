@@ -1,5 +1,31 @@
 # Jetson CI runner — one-time setup
 
+> **Status: dormant.** No self-hosted runner is enrolled;
+> `ci-jetson.yml` is workflow_dispatch-only so it does not queue dead
+> jobs on every push.  Jetson CUDA validation runs out-of-band via
+> `scripts/run_mesh_release_smoke.sh` (SSH build + ctest on the Jetson
+> for every release).
+>
+> **Correction to the instructions below:** the stock GitHub
+> actions-runner tarball does NOT run on jetpack-nixos.  It is a
+> dotnet binary with a hardcoded FHS `ld-linux` interpreter path, and
+> NixOS keeps its dynamic linker in the nix store, so `./config.sh`
+> dies with "No such file or directory".  If a runner is ever
+> enrolled, use the declarative NixOS module instead of steps 1-3:
+>
+> ```nix
+> services.github-runners.moonlab-aarch64-cuda-01 = {
+>   enable = true;
+>   url = "https://github.com/tsotchke/moonlab";
+>   tokenFile = "/var/lib/github-runner/moonlab.token";
+>   extraLabels = [ "jetpack" "cuda" ];
+>   replace = true;
+> };
+> ```
+>
+> (or the nix-ld shim if the tarball route is unavoidable), then
+> restore the push/pull_request triggers in `ci-jetson.yml`.
+
 This document covers bringing up the `ci-jetson.yml` workflow on a
 self-hosted Jetson Xavier running Anduril's jetpack-nixos.  It is
 intentionally terse; the on-host portion is roughly five commands
