@@ -5,6 +5,7 @@
 #include "../utils/secure_memory.h"
 #include "../utils/validation.h"
 #include "../utils/config.h"
+#include "../utils/moonlab_weak.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -66,22 +67,18 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
  * libquantumsim was built with QSIM_HAS_CUDA, this resolves to
  * moonlab_cuda_state_free() and we tear down GPU memory before
  * the host-side free.  When CUDA isn't compiled in, gpu_state is
- * always NULL and this is never called -- but the symbol still
- * needs to resolve at link time on platforms where weak imports
- * aren't supported by default (Mach-O on macOS).  Provide a
- * fallback stub when QSIM_HAS_CUDA is off. */
+ * always NULL and this is never called.  Provide a fallback stub
+ * when QSIM_HAS_CUDA is off. */
 extern void moonlab_cuda_state_free(void *)
-    __attribute__((weak));
+    MOONLAB_WEAK_IMPORT;
 
 #ifndef QSIM_HAS_CUDA
 /* Fallback stubs for the GPU routing symbols.  When CUDA isn't
  * compiled in, gates.c + cuda_tegra_probe.c declare these via
  * weak externs that they expect to find in cuda_statevec.cu /
- * state_gpu.cu.  On ELF systems the weak refs resolve to NULL at
- * link time, but Mach-O on macOS rejects unresolved weak imports
- * by default -- so we provide always-defined NULL-equivalent
- * stubs here.  None are ever called because state->gpu_state is
- * always NULL on a non-CUDA build. */
+ * state_gpu.cu.  The fallback symbols preserve the no-CUDA ABI;
+ * none are ever called because state->gpu_state is always NULL on
+ * a non-CUDA build. */
 __attribute__((weak))
 void moonlab_cuda_state_free(void *p) { (void)p; }
 
@@ -120,11 +117,9 @@ int moonlab_cuda_runtime_probe_discrete(void) { return 0; }
  * state_partition.c (partition_state_create_gpu + sync_to_host +
  * sync_from_host) declare these as weak externs.  On a non-CUDA
  * build the strong definitions in cuda_statevec.cu / state_gpu.cu
- * are absent.  ELF treats unresolved weak refs as NULL at runtime;
- * Mach-O (macOS) refuses to link without a resolvable definition.
- * Provide always-defined fallbacks here -- the callers either
- * check the symbol or only invoke when state->gpu_state != NULL,
- * so these are never actually called on non-CUDA builds. */
+ * are absent.  Provide always-defined fallbacks here -- the callers
+ * either check the symbol or only invoke when state->gpu_state !=
+ * NULL, so these are never actually called on non-CUDA builds. */
 __attribute__((weak))
 int moonlab_cuda_apply_1q(void *state, uint32_t target, const double m[8]) {
     (void)state; (void)target; (void)m; return -1;

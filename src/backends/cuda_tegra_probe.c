@@ -15,6 +15,7 @@
  */
 
 #include "cuda_tegra_probe.h"
+#include "../utils/moonlab_weak.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -65,7 +66,7 @@ static int read_compatible_has_tegra(void)
  *  -2  = CUDA runtime call failed for an unrelated reason
  */
 extern int moonlab_cuda_runtime_probe_discrete(void)
-    __attribute__((weak));
+    MOONLAB_WEAK_IMPORT;
 
 static void probe_init(void)
 {

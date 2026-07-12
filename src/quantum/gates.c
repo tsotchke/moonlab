@@ -1,6 +1,7 @@
 #include "gates.h"
 #include "../utils/quantum_entropy.h"
 #include "../utils/constants.h"
+#include "../utils/moonlab_weak.h"
 #include "../optimization/simd_ops.h"
 #include <math.h>
 #include <stdlib.h>
@@ -39,14 +40,14 @@
  * a fast path (CZ, SWAP, CY, CRX, CRY, CRZ, CPHASE) compute their
  * 4x4 matrix and route via apply_2q_matrix.
  */
-extern int qsim_gpu_route_hadamard         (quantum_state_t *state, int qubit) __attribute__((weak));
-extern int qsim_gpu_route_pauli_x          (quantum_state_t *state, int qubit) __attribute__((weak));
-extern int qsim_gpu_route_cnot             (quantum_state_t *state, int control, int target) __attribute__((weak));
-extern int qsim_gpu_route_apply_1q_matrix  (quantum_state_t *state, int qubit, const double m[8]) __attribute__((weak));
-extern int qsim_gpu_route_apply_2q_matrix  (quantum_state_t *state, int q0, int q1, const double m[32]) __attribute__((weak));
-extern int qsim_gpu_route_mcx              (quantum_state_t *state, uint64_t control_mask, int target) __attribute__((weak));
-extern int qsim_gpu_route_mcz              (quantum_state_t *state, uint64_t all_mask) __attribute__((weak));
-extern int qsim_gpu_route_fredkin          (quantum_state_t *state, int control, int t1, int t2) __attribute__((weak));
+extern int qsim_gpu_route_hadamard         (quantum_state_t *state, int qubit) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_pauli_x          (quantum_state_t *state, int qubit) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_cnot             (quantum_state_t *state, int control, int target) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_apply_1q_matrix  (quantum_state_t *state, int qubit, const double m[8]) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_apply_2q_matrix  (quantum_state_t *state, int q0, int q1, const double m[32]) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_mcx              (quantum_state_t *state, uint64_t control_mask, int target) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_mcz              (quantum_state_t *state, uint64_t all_mask) MOONLAB_WEAK_IMPORT;
+extern int qsim_gpu_route_fredkin          (quantum_state_t *state, int control, int t1, int t2) MOONLAB_WEAK_IMPORT;
 
 /* Inline dispatch helpers: return 1 if the gate ran on GPU
  * (caller should propagate *out as its return); 0 if no GPU

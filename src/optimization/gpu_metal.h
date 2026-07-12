@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <complex.h>
+#include "../utils/moonlab_weak.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,14 +48,14 @@ typedef struct metal_buffer metal_buffer_t;
  * 
  * @return Metal compute context or NULL on failure
  */
-metal_compute_ctx_t* metal_compute_init(void);
+metal_compute_ctx_t* metal_compute_init(void) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Free Metal compute context
  * 
  * @param ctx Metal compute context
  */
-void metal_compute_free(metal_compute_ctx_t* ctx);
+void metal_compute_free(metal_compute_ctx_t* ctx) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Check if Metal is available on this system
@@ -92,7 +93,7 @@ void metal_get_device_info(
  * @param size Buffer size in bytes
  * @return Metal buffer handle or NULL on failure
  */
-metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size);
+metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Create Metal buffer from existing CPU memory
@@ -116,14 +117,14 @@ metal_buffer_t* metal_buffer_create_from_data(
  * @param buffer Metal buffer
  * @return Pointer to buffer data
  */
-void* metal_buffer_contents(metal_buffer_t* buffer);
+void* metal_buffer_contents(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Free Metal buffer
  * 
  * @param buffer Metal buffer
  */
-void metal_buffer_free(metal_buffer_t* buffer);
+void metal_buffer_free(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
 
 // ============================================================================
 // QUANTUM GATE OPERATIONS (GPU-ACCELERATED)
@@ -503,7 +504,7 @@ int metal_mps_apply_gate_2q(
     double cutoff,
     uint32_t* new_bond,
     double* trunc_error
-);
+) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief GPU SVD with truncation using Jacobi iteration
@@ -557,7 +558,7 @@ double metal_mps_expectation_z(
     const uint32_t* bond_dims,
     uint32_t num_sites,
     uint32_t site
-);
+) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Compute <Z_i Z_j> two-point correlation using transfer matrix
