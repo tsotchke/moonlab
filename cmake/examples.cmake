@@ -46,6 +46,11 @@
     add_executable(vqe_h2_molecule examples/applications/vqe_h2_molecule.c)
     target_link_libraries(vqe_h2_molecule PRIVATE quantumsim)
 
+    # QGT singularity == QEC node: one eps^2=0, tying the quantum-geometric-tensor and
+    # topological-error-correction layers together on the Qi-Wu-Zhang model.
+    add_executable(qgt_qec_node examples/applications/qgt_qec_node.c)
+    target_link_libraries(qgt_qec_node PRIVATE quantumsim)
+
     add_executable(qaoa_maxcut examples/applications/qaoa_maxcut.c)
     target_link_libraries(qaoa_maxcut PRIVATE quantumsim)
 
