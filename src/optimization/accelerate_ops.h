@@ -20,22 +20,18 @@ extern "C" {
  * @file accelerate_ops.h
  * @brief Apple Accelerate framework integration for M2 Ultra quantum RNG
  * 
- * Phase 3 Optimization: AMX-Accelerated Matrix Operations
- * 
- * Leverages Apple's Accelerate framework to achieve 5-10x additional speedup
- * through AMX (Apple Matrix coprocessor) hardware acceleration.
- * 
+ * AMX-Accelerated Matrix Operations
+ *
+ * Routes matrix and vector kernels through Apple's Accelerate framework
+ * (vDSP + BLAS), which dispatches to the AMX matrix coprocessor where
+ * available.  Actual speedup is workload- and hardware-dependent; use
+ * accelerate_benchmark_vs_simd to measure it on the target machine.
+ *
  * Key Features:
- * - vDSP vectorized complex operations (AMX-accelerated)
+ * - vDSP vectorized complex operations
  * - BLAS Level 2/3 operations for matrix math
- * - 64-byte memory alignment for optimal AMX performance
- * - Automatic fallback to SIMD when Accelerate unavailable
- * 
- * M2 Ultra AMX Capabilities:
- * - 2× 512-bit matrix units
- * - 8×8 complex matrix operations in ~4 cycles
- * - Integrated with vDSP for automatic engagement
- * - Expected 5-10x speedup for matrix-heavy quantum gates
+ * - 64-byte memory alignment
+ * - Automatic fallback to SIMD when Accelerate is unavailable
  */
 
 // Complex type compatible with quantum_state.h and Accelerate framework
@@ -207,10 +203,7 @@ void accelerate_complex_scale(
  * @brief Complex matrix-vector multiply (BLAS Level 2)
  * 
  * Computes: y = alpha * A * x + beta * y
- * Uses cblas_zgemv with AMX acceleration for M2 Ultra
- * 
- * This is CRITICAL for quantum gate operations - up to 10x faster
- * than scalar implementations due to AMX matrix units.
+ * Uses cblas_zgemv, which engages AMX where available.
  * 
  * @param m Number of rows in matrix A
  * @param n Number of columns in matrix A
