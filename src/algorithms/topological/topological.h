@@ -71,6 +71,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -125,7 +127,7 @@ typedef struct {
  *
  * @return Fibonacci anyon system
  */
-anyon_system_t *anyon_system_fibonacci(void);
+MOONLAB_API anyon_system_t *anyon_system_fibonacci(void);
 
 /**
  * @brief Initialize Ising anyon system
@@ -135,7 +137,7 @@ anyon_system_t *anyon_system_fibonacci(void);
  *
  * @return Ising anyon system
  */
-anyon_system_t *anyon_system_ising(void);
+MOONLAB_API anyon_system_t *anyon_system_ising(void);
 
 /**
  * @brief Initialize SU(2)_k anyon system
@@ -143,12 +145,12 @@ anyon_system_t *anyon_system_ising(void);
  * @param k Level parameter (k=2 gives Ising, k=3 gives Fibonacci)
  * @return SU(2)_k anyon system
  */
-anyon_system_t *anyon_system_su2k(uint32_t k);
+MOONLAB_API anyon_system_t *anyon_system_su2k(uint32_t k);
 
 /**
  * @brief Free anyon system
  */
-void anyon_system_free(anyon_system_t *sys);
+MOONLAB_API void anyon_system_free(anyon_system_t *sys);
 
 /**
  * @brief Get quantum dimension of anyon charge
@@ -160,12 +162,12 @@ void anyon_system_free(anyon_system_t *sys);
  * @param charge Anyon charge
  * @return Quantum dimension
  */
-double anyon_quantum_dimension(const anyon_system_t *sys, anyon_charge_t charge);
+MOONLAB_API double anyon_quantum_dimension(const anyon_system_t *sys, anyon_charge_t charge);
 
 /**
  * @brief Get total quantum dimension D = √(Σ d_a²)
  */
-double anyon_total_dimension(const anyon_system_t *sys);
+MOONLAB_API double anyon_total_dimension(const anyon_system_t *sys);
 
 // ============================================================================
 // FUSION TREES
@@ -214,7 +216,7 @@ typedef struct {
  * @param total_charge Required total charge
  * @return Fusion tree state
  */
-fusion_tree_t *fusion_tree_create(anyon_system_t *sys,
+MOONLAB_API fusion_tree_t *fusion_tree_create(anyon_system_t *sys,
                                    const anyon_charge_t *charges,
                                    uint32_t num_anyons,
                                    anyon_charge_t total_charge);
@@ -222,7 +224,7 @@ fusion_tree_t *fusion_tree_create(anyon_system_t *sys,
 /**
  * @brief Free fusion tree
  */
-void fusion_tree_free(fusion_tree_t *tree);
+MOONLAB_API void fusion_tree_free(fusion_tree_t *tree);
 
 /**
  * @brief Count fusion paths
@@ -235,7 +237,7 @@ void fusion_tree_free(fusion_tree_t *tree);
  * @param total_charge Total charge
  * @return Number of distinct fusion paths
  */
-uint32_t fusion_count_paths(const anyon_system_t *sys,
+MOONLAB_API uint32_t fusion_count_paths(const anyon_system_t *sys,
                             const anyon_charge_t *charges,
                             uint32_t num_anyons,
                             anyon_charge_t total_charge);
@@ -255,7 +257,7 @@ uint32_t fusion_count_paths(const anyon_system_t *sys,
  * @param clockwise Direction of braid (true = σ, false = σ⁻¹)
  * @return QS_SUCCESS or error
  */
-qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
+MOONLAB_API qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
 
 /**
  * @brief Apply F-move (basis change)
@@ -267,7 +269,7 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
  * @param vertex Vertex to apply F-move
  * @return QS_SUCCESS or error
  */
-qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
+MOONLAB_API qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
 
 /**
  * @brief Get F-matrix element
@@ -280,7 +282,7 @@ qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
  * @param e,f Intermediate channels
  * @return F-matrix element
  */
-double complex get_F_symbol(const anyon_system_t *sys,
+MOONLAB_API double complex get_F_symbol(const anyon_system_t *sys,
                             anyon_charge_t a, anyon_charge_t b,
                             anyon_charge_t c, anyon_charge_t d,
                             anyon_charge_t e, anyon_charge_t f);
@@ -296,7 +298,7 @@ double complex get_F_symbol(const anyon_system_t *sys,
  * @param c Fusion outcome
  * @return R-matrix element (phase)
  */
-double complex get_R_symbol(const anyon_system_t *sys,
+MOONLAB_API double complex get_R_symbol(const anyon_system_t *sys,
                             anyon_charge_t a, anyon_charge_t b,
                             anyon_charge_t c);
 
@@ -323,13 +325,13 @@ typedef struct {
  * @param num_qubits Number of logical qubits
  * @return Anyonic register
  */
-anyonic_register_t *anyonic_register_create(anyon_system_t *sys,
+MOONLAB_API anyonic_register_t *anyonic_register_create(anyon_system_t *sys,
                                              uint32_t num_qubits);
 
 /**
  * @brief Free anyonic register
  */
-void anyonic_register_free(anyonic_register_t *reg);
+MOONLAB_API void anyonic_register_free(anyonic_register_t *reg);
 
 /**
  * @brief Apply NOT gate via braiding
@@ -341,7 +343,7 @@ void anyonic_register_free(anyonic_register_t *reg);
  * @param qubit Target qubit
  * @return QS_SUCCESS or error
  */
-qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
+MOONLAB_API qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
 
 /**
  * @brief Apply Hadamard-like gate via braiding
@@ -353,7 +355,7 @@ qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
  * @param qubit Target qubit
  * @return QS_SUCCESS or error
  */
-qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
+MOONLAB_API qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
 
 /**
  * @brief Apply T gate approximation via braiding
@@ -363,7 +365,7 @@ qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
  * @param precision Approximation precision
  * @return QS_SUCCESS or error
  */
-qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
+MOONLAB_API qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
                           double precision);
 
 /**
@@ -374,7 +376,7 @@ qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
  * @param qubit2 Second qubit
  * @return QS_SUCCESS or error
  */
-qs_error_t anyonic_entangle(anyonic_register_t *reg,
+MOONLAB_API qs_error_t anyonic_entangle(anyonic_register_t *reg,
                             uint32_t qubit1, uint32_t qubit2);
 
 // ============================================================================
@@ -402,12 +404,12 @@ typedef struct {
  * @param distance Code distance (odd, ≥3)
  * @return Surface code structure
  */
-surface_code_t *surface_code_create(uint32_t distance);
+MOONLAB_API surface_code_t *surface_code_create(uint32_t distance);
 
 /**
  * @brief Free surface code
  */
-void surface_code_free(surface_code_t *code);
+MOONLAB_API void surface_code_free(surface_code_t *code);
 
 /**
  * @brief Initialize surface code in logical |0⟩
@@ -415,7 +417,7 @@ void surface_code_free(surface_code_t *code);
  * @param code Surface code
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_init_logical_zero(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_init_logical_zero(surface_code_t *code);
 
 /**
  * @brief Initialize surface code in logical |+⟩
@@ -423,7 +425,7 @@ qs_error_t surface_code_init_logical_zero(surface_code_t *code);
  * @param code Surface code
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_init_logical_plus(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_init_logical_plus(surface_code_t *code);
 
 /**
  * @brief Apply logical X gate
@@ -433,7 +435,7 @@ qs_error_t surface_code_init_logical_plus(surface_code_t *code);
  * @param code Surface code
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_logical_X(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_logical_X(surface_code_t *code);
 
 /**
  * @brief Apply logical Z gate
@@ -443,7 +445,7 @@ qs_error_t surface_code_logical_X(surface_code_t *code);
  * @param code Surface code
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_logical_Z(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_logical_Z(surface_code_t *code);
 
 /**
  * @brief Measure X-type stabilizers
@@ -453,7 +455,7 @@ qs_error_t surface_code_logical_Z(surface_code_t *code);
  * @param code Surface code (syndrome updated)
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_measure_X_stabilizers(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_measure_X_stabilizers(surface_code_t *code);
 
 /**
  * @brief Measure Z-type stabilizers
@@ -463,7 +465,7 @@ qs_error_t surface_code_measure_X_stabilizers(surface_code_t *code);
  * @param code Surface code (syndrome updated)
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_measure_Z_stabilizers(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_measure_Z_stabilizers(surface_code_t *code);
 
 /**
  * @brief Apply single-qubit error
@@ -473,7 +475,7 @@ qs_error_t surface_code_measure_Z_stabilizers(surface_code_t *code);
  * @param error_type 'X', 'Y', or 'Z'
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_apply_error(surface_code_t *code,
+MOONLAB_API qs_error_t surface_code_apply_error(surface_code_t *code,
                                      uint32_t qubit, char error_type);
 
 /**
@@ -484,7 +486,7 @@ qs_error_t surface_code_apply_error(surface_code_t *code,
  * @param code Surface code (corrected in place)
  * @return QS_SUCCESS or error
  */
-qs_error_t surface_code_decode_correct(surface_code_t *code);
+MOONLAB_API qs_error_t surface_code_decode_correct(surface_code_t *code);
 
 // ============================================================================
 // SURFACE CODE (Clifford-backed)
@@ -549,16 +551,16 @@ typedef struct {
     uint64_t rng_state;
 } surface_code_clifford_t;
 
-surface_code_clifford_t* surface_code_clifford_create(uint32_t distance,
+MOONLAB_API surface_code_clifford_t* surface_code_clifford_create(uint32_t distance,
                                                        uint64_t rng_seed);
-void surface_code_clifford_free(surface_code_clifford_t* code);
+MOONLAB_API void surface_code_clifford_free(surface_code_clifford_t* code);
 
 /** Data-qubit index from (row, col). */
-uint32_t surface_code_clifford_data_index(const surface_code_clifford_t* code,
+MOONLAB_API uint32_t surface_code_clifford_data_index(const surface_code_clifford_t* code,
                                           uint32_t row, uint32_t col);
 
 /** Apply a Pauli error to a data qubit. Type is 'X', 'Y' or 'Z'. */
-qs_error_t surface_code_clifford_apply_error(surface_code_clifford_t* code,
+MOONLAB_API qs_error_t surface_code_clifford_apply_error(surface_code_clifford_t* code,
                                              uint32_t data_qubit,
                                              char error_type);
 
@@ -568,19 +570,19 @@ qs_error_t surface_code_clifford_apply_error(surface_code_clifford_t* code,
  * vertex, reset its ancilla to |0⟩, CNOT each data qubit onto it, then
  * measure the ancilla in Z basis.
  */
-qs_error_t surface_code_clifford_measure_z_syndromes(surface_code_clifford_t* code);
+MOONLAB_API qs_error_t surface_code_clifford_measure_z_syndromes(surface_code_clifford_t* code);
 
 /**
  * Measure all X-type stabilizers (XXXX on four data qubits around each
  * interior face). Populates `x_syndrome`. Ancilla-mediated: H on
  * ancilla, CNOT(ancilla → each data), H on ancilla, measure.
  */
-qs_error_t surface_code_clifford_measure_x_syndromes(surface_code_clifford_t* code);
+MOONLAB_API qs_error_t surface_code_clifford_measure_x_syndromes(surface_code_clifford_t* code);
 
 /**
  * Sum of set bits across both syndromes (diagnostic).
  */
-uint32_t surface_code_clifford_syndrome_weight(const surface_code_clifford_t* code);
+MOONLAB_API uint32_t surface_code_clifford_syndrome_weight(const surface_code_clifford_t* code);
 
 // ============================================================================
 // TORIC CODE
@@ -606,12 +608,12 @@ typedef struct {
  * @param L Linear size
  * @return Toric code structure
  */
-toric_code_t *toric_code_create(uint32_t L);
+MOONLAB_API toric_code_t *toric_code_create(uint32_t L);
 
 /**
  * @brief Free toric code
  */
-void toric_code_free(toric_code_t *code);
+MOONLAB_API void toric_code_free(toric_code_t *code);
 
 /**
  * @brief Initialize toric code ground state
@@ -621,7 +623,7 @@ void toric_code_free(toric_code_t *code);
  * @param code Toric code
  * @return QS_SUCCESS or error
  */
-qs_error_t toric_code_init_ground_state(toric_code_t *code);
+MOONLAB_API qs_error_t toric_code_init_ground_state(toric_code_t *code);
 
 /**
  * @brief Create anyon pair
@@ -635,7 +637,7 @@ qs_error_t toric_code_init_ground_state(toric_code_t *code);
  * @param x2,y2 End position
  * @return QS_SUCCESS or error
  */
-qs_error_t toric_code_create_anyon_pair(toric_code_t *code,
+MOONLAB_API qs_error_t toric_code_create_anyon_pair(toric_code_t *code,
                                          char type,
                                          uint32_t x1, uint32_t y1,
                                          uint32_t x2, uint32_t y2);
@@ -649,7 +651,7 @@ qs_error_t toric_code_create_anyon_pair(toric_code_t *code,
  * @param to_x,to_y New position
  * @return QS_SUCCESS or error
  */
-qs_error_t toric_code_move_anyon(toric_code_t *code, char type,
+MOONLAB_API qs_error_t toric_code_move_anyon(toric_code_t *code, char type,
                                   uint32_t from_x, uint32_t from_y,
                                   uint32_t to_x, uint32_t to_y);
 
@@ -661,7 +663,7 @@ qs_error_t toric_code_move_anyon(toric_code_t *code, char type,
  * @param anyon2_x,anyon2_y Second anyon position
  * @return QS_SUCCESS or error
  */
-qs_error_t toric_code_braid(toric_code_t *code,
+MOONLAB_API qs_error_t toric_code_braid(toric_code_t *code,
                             uint32_t anyon1_x, uint32_t anyon1_y,
                             uint32_t anyon2_x, uint32_t anyon2_y);
 
@@ -687,7 +689,7 @@ qs_error_t toric_code_braid(toric_code_t *code,
  * @param num_C Size of region C
  * @return Topological entanglement entropy
  */
-double topological_entanglement_entropy(const quantum_state_t *state,
+MOONLAB_API double topological_entanglement_entropy(const quantum_state_t *state,
                                          const uint32_t *region_A, uint32_t num_A,
                                          const uint32_t *region_B, uint32_t num_B,
                                          const uint32_t *region_C, uint32_t num_C);
@@ -704,7 +706,7 @@ double topological_entanglement_entropy(const quantum_state_t *state,
  * @param num_ring Number of ring qubits
  * @return Topological entropy γ = log(D)
  */
-double kitaev_preskill_entropy(const quantum_state_t *state,
+MOONLAB_API double kitaev_preskill_entropy(const quantum_state_t *state,
                                 const uint32_t *center_qubits, uint32_t num_center,
                                 const uint32_t *ring_qubits, uint32_t num_ring);
 
@@ -721,7 +723,7 @@ double kitaev_preskill_entropy(const quantum_state_t *state,
  * @param sys Anyon system
  * @param S_matrix Output S-matrix (num_charges × num_charges)
  */
-void compute_modular_S_matrix(const anyon_system_t *sys,
+MOONLAB_API void compute_modular_S_matrix(const anyon_system_t *sys,
                                double complex *S_matrix);
 
 /**
@@ -732,7 +734,7 @@ void compute_modular_S_matrix(const anyon_system_t *sys,
  * @param sys Anyon system
  * @param T_matrix Output T-matrix (num_charges × num_charges)
  */
-void compute_modular_T_matrix(const anyon_system_t *sys,
+MOONLAB_API void compute_modular_T_matrix(const anyon_system_t *sys,
                                double complex *T_matrix);
 
 /**
@@ -744,7 +746,7 @@ void compute_modular_T_matrix(const anyon_system_t *sys,
  * @param charge Anyon charge
  * @return Topological spin e^{2πi θ}
  */
-double complex topological_spin(const anyon_system_t *sys,
+MOONLAB_API double complex topological_spin(const anyon_system_t *sys,
                                  anyon_charge_t charge);
 
 #ifdef __cplusplus

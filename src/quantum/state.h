@@ -199,7 +199,7 @@ MOONLAB_API void quantum_state_reset(quantum_state_t *state);
  * @param tolerance Tolerance for normalization check
  * @return 1 if normalized, 0 otherwise
  */
-int quantum_state_is_normalized(const quantum_state_t *state, double tolerance);
+MOONLAB_API int quantum_state_is_normalized(const quantum_state_t *state, double tolerance);
 
 /**
  * @brief Normalize quantum state
@@ -213,13 +213,13 @@ MOONLAB_API qs_error_t quantum_state_normalize(quantum_state_t *state);
  * @param state Quantum state
  * @return Entropy in bits
  */
-double quantum_state_entropy(const quantum_state_t *state);
+MOONLAB_API double quantum_state_entropy(const quantum_state_t *state);
 
 /**
  * @brief ‖ψ‖⁴ (= Tr(ρ²) for a pure state). Always 1 for normalized |ψ⟩.
  *        For subsystem purity use entanglement_purity() (entanglement.h).
  */
-double quantum_state_purity(const quantum_state_t *state);
+MOONLAB_API double quantum_state_purity(const quantum_state_t *state);
 
 /**
  * @brief Calculate fidelity F = |⟨ψ|φ⟩|²
@@ -227,7 +227,7 @@ double quantum_state_purity(const quantum_state_t *state);
  * @param state2 Second quantum state
  * @return Fidelity between 0 and 1
  */
-double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2);
+MOONLAB_API double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2);
 
 /**
  * @brief Get probability amplitude for basis state |i⟩
@@ -235,7 +235,7 @@ double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state
  * @param basis_index Index of basis state
  * @return Complex amplitude αᵢ
  */
-complex_t quantum_state_get_amplitude(const quantum_state_t *state, uint64_t basis_index);
+MOONLAB_API complex_t quantum_state_get_amplitude(const quantum_state_t *state, uint64_t basis_index);
 
 /**
  * @brief Get probability for measuring basis state |i⟩
@@ -260,7 +260,7 @@ MOONLAB_API double quantum_state_get_probability(const quantum_state_t *state, u
  * @param num_qubits_a Number of qubits in A
  * @return Entanglement entropy in bits
  */
-double quantum_state_entanglement_entropy(
+MOONLAB_API double quantum_state_entanglement_entropy(
     const quantum_state_t *state,
     const int *qubits_subsystem_a,
     size_t num_qubits_a
@@ -277,7 +277,7 @@ double quantum_state_entanglement_entropy(
  * @param reduced_density Output: reduced density matrix
  * @return QS_SUCCESS or error code
  */
-qs_error_t quantum_state_partial_trace(
+MOONLAB_API qs_error_t quantum_state_partial_trace(
     const quantum_state_t *state,
     const int *qubits_to_trace,
     size_t num_traced,
@@ -293,7 +293,7 @@ qs_error_t quantum_state_partial_trace(
  * @param state Quantum state
  * @param outcome Measurement outcome (basis index)
  */
-void quantum_state_record_measurement(quantum_state_t *state, uint64_t outcome);
+MOONLAB_API void quantum_state_record_measurement(quantum_state_t *state, uint64_t outcome);
 
 /**
  * @brief Get measurement history
@@ -302,7 +302,7 @@ void quantum_state_record_measurement(quantum_state_t *state, uint64_t outcome);
  * @param max_outcomes Maximum outcomes to retrieve
  * @return Number of measurements retrieved
  */
-size_t quantum_state_get_measurement_history(
+MOONLAB_API size_t quantum_state_get_measurement_history(
     const quantum_state_t *state,
     uint64_t *outcomes,
     size_t max_outcomes
@@ -312,7 +312,7 @@ size_t quantum_state_get_measurement_history(
  * @brief Clear measurement history
  * @param state Quantum state
  */
-void quantum_state_clear_measurements(quantum_state_t *state);
+MOONLAB_API void quantum_state_clear_measurements(quantum_state_t *state);
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -329,7 +329,7 @@ void quantum_state_clear_measurements(quantum_state_t *state);
  * @param state     Quantum state
  * @param max_terms Maximum number of terms to print (0 = all)
  */
-void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_terms);
+MOONLAB_API void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_terms);
 
 /**
  * @brief Print quantum state to stdout (debug).
@@ -341,7 +341,7 @@ void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_te
  * @param state     Quantum state
  * @param max_terms Maximum number of terms to print (0 = all)
  */
-void quantum_state_print(const quantum_state_t *state, size_t max_terms);
+MOONLAB_API void quantum_state_print(const quantum_state_t *state, size_t max_terms);
 
 /**
  * @brief Get string representation of basis state
@@ -350,7 +350,7 @@ void quantum_state_print(const quantum_state_t *state, size_t max_terms);
  * @param buffer Output buffer
  * @param buffer_size Size of buffer
  */
-void quantum_basis_state_string(
+MOONLAB_API void quantum_basis_state_string(
     uint64_t basis_index,
     size_t num_qubits,
     char *buffer,
@@ -370,7 +370,7 @@ void quantum_basis_state_string(
  * @param num_qubits Number of qubits
  * @return Pointer to new state or NULL on error
  */
-quantum_state_t* quantum_state_create(int num_qubits);
+MOONLAB_API quantum_state_t* quantum_state_create(int num_qubits);
 
 /**
  * @brief Destroy heap-allocated quantum state
@@ -379,7 +379,7 @@ quantum_state_t* quantum_state_create(int num_qubits);
  *
  * @param state State to destroy (safe to pass NULL)
  */
-void quantum_state_destroy(quantum_state_t* state);
+MOONLAB_API void quantum_state_destroy(quantum_state_t* state);
 
 /**
  * @brief Reset state to |0...0⟩

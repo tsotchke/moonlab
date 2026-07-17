@@ -95,6 +95,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <complex.h>
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -158,7 +160,7 @@ typedef struct {
  * @param num_orbitals Total number of orbitals
  * @return Jordan-Wigner transformed operator
  */
-jw_operator_t jw_transform_single(fermion_op_t op, uint32_t num_orbitals);
+MOONLAB_API jw_operator_t jw_transform_single(fermion_op_t op, uint32_t num_orbitals);
 
 /**
  * @brief Transform a product of fermionic operators
@@ -168,18 +170,18 @@ jw_operator_t jw_transform_single(fermion_op_t op, uint32_t num_orbitals);
  * @param num_orbitals Total number of orbitals
  * @return Jordan-Wigner transformed operator
  */
-jw_operator_t jw_transform_product(const fermion_op_t *ops, uint32_t num_ops,
+MOONLAB_API jw_operator_t jw_transform_product(const fermion_op_t *ops, uint32_t num_ops,
                                    uint32_t num_orbitals);
 
 /**
  * @brief Free Jordan-Wigner operator memory
  */
-void jw_operator_free(jw_operator_t *op);
+MOONLAB_API void jw_operator_free(jw_operator_t *op);
 
 /**
  * @brief Free Pauli string memory
  */
-void pauli_string_free(pauli_string_t *ps);
+MOONLAB_API void pauli_string_free(pauli_string_t *ps);
 
 // ============================================================================
 // MOLECULAR HAMILTONIAN
@@ -233,20 +235,20 @@ typedef struct {
  * @param nuclear_repulsion Nuclear repulsion energy
  * @return Empty Hamiltonian structure to populate
  */
-molecular_hamiltonian_t *molecular_hamiltonian_create(uint32_t num_orbitals,
+MOONLAB_API molecular_hamiltonian_t *molecular_hamiltonian_create(uint32_t num_orbitals,
                                                        uint32_t num_electrons,
                                                        double nuclear_repulsion);
 
 /**
  * @brief Add one-electron integral to Hamiltonian
  */
-void molecular_hamiltonian_add_h1(molecular_hamiltonian_t *h,
+MOONLAB_API void molecular_hamiltonian_add_h1(molecular_hamiltonian_t *h,
                                    uint32_t p, uint32_t q, double value);
 
 /**
  * @brief Add two-electron integral to Hamiltonian
  */
-void molecular_hamiltonian_add_h2(molecular_hamiltonian_t *h,
+MOONLAB_API void molecular_hamiltonian_add_h2(molecular_hamiltonian_t *h,
                                    uint32_t p, uint32_t q,
                                    uint32_t r, uint32_t s, double value);
 
@@ -259,17 +261,17 @@ void molecular_hamiltonian_add_h2(molecular_hamiltonian_t *h,
  * @param mol_h Molecular Hamiltonian
  * @return Qubit Hamiltonian
  */
-qubit_hamiltonian_t *molecular_to_qubit_hamiltonian(const molecular_hamiltonian_t *mol_h);
+MOONLAB_API qubit_hamiltonian_t *molecular_to_qubit_hamiltonian(const molecular_hamiltonian_t *mol_h);
 
 /**
  * @brief Free molecular Hamiltonian
  */
-void molecular_hamiltonian_free(molecular_hamiltonian_t *h);
+MOONLAB_API void molecular_hamiltonian_free(molecular_hamiltonian_t *h);
 
 /**
  * @brief Free qubit Hamiltonian
  */
-void qubit_hamiltonian_free(qubit_hamiltonian_t *h);
+MOONLAB_API void qubit_hamiltonian_free(qubit_hamiltonian_t *h);
 
 /**
  * @brief Compute expectation value of qubit Hamiltonian
@@ -278,7 +280,7 @@ void qubit_hamiltonian_free(qubit_hamiltonian_t *h);
  * @param state Quantum state
  * @return Expectation value <H>
  */
-double qubit_hamiltonian_expectation(const qubit_hamiltonian_t *h,
+MOONLAB_API double qubit_hamiltonian_expectation(const qubit_hamiltonian_t *h,
                                       const quantum_state_t *state);
 
 // ============================================================================
@@ -320,12 +322,12 @@ typedef struct {
  * @param num_electrons Number of electrons
  * @return UCCSD configuration with zero amplitudes
  */
-uccsd_config_t *uccsd_config_create(uint32_t num_orbitals, uint32_t num_electrons);
+MOONLAB_API uccsd_config_t *uccsd_config_create(uint32_t num_orbitals, uint32_t num_electrons);
 
 /**
  * @brief Free UCCSD configuration
  */
-void uccsd_config_free(uccsd_config_t *config);
+MOONLAB_API void uccsd_config_free(uccsd_config_t *config);
 
 /**
  * @brief Apply UCCSD ansatz to Hartree-Fock state
@@ -338,7 +340,7 @@ void uccsd_config_free(uccsd_config_t *config);
  * @param config UCCSD configuration with amplitudes
  * @return Success or error code
  */
-qs_error_t uccsd_apply(quantum_state_t *state, const uccsd_config_t *config);
+MOONLAB_API qs_error_t uccsd_apply(quantum_state_t *state, const uccsd_config_t *config);
 
 /**
  * @brief Apply single excitation operator exp(t(a†_a a_i - a†_i a_a))
@@ -350,7 +352,7 @@ qs_error_t uccsd_apply(quantum_state_t *state, const uccsd_config_t *config);
  * @param num_orbitals Total orbitals
  * @return Success or error code
  */
-qs_error_t uccsd_apply_single(quantum_state_t *state,
+MOONLAB_API qs_error_t uccsd_apply_single(quantum_state_t *state,
                                uint32_t i, uint32_t a, double t,
                                uint32_t num_orbitals);
 
@@ -364,7 +366,7 @@ qs_error_t uccsd_apply_single(quantum_state_t *state,
  * @param num_orbitals Total orbitals
  * @return Success or error code
  */
-qs_error_t uccsd_apply_double(quantum_state_t *state,
+MOONLAB_API qs_error_t uccsd_apply_double(quantum_state_t *state,
                                uint32_t i, uint32_t j,
                                uint32_t a, uint32_t b, double t,
                                uint32_t num_orbitals);
@@ -378,7 +380,7 @@ qs_error_t uccsd_apply_double(quantum_state_t *state,
  *        |1...10...0⟩ (num_electrons qubits set, rest zero).
  *        Not an SCF calculation — feed SCF orbitals into the Hamiltonian.
  */
-qs_error_t hartree_fock_state(quantum_state_t *state,
+MOONLAB_API qs_error_t hartree_fock_state(quantum_state_t *state,
                                uint32_t num_electrons,
                                uint32_t num_orbitals);
 
@@ -407,18 +409,18 @@ typedef struct {
 /**
  * @brief Create molecule from atom list
  */
-molecule_t *molecule_create(const atom_t *atoms, uint32_t num_atoms,
+MOONLAB_API molecule_t *molecule_create(const atom_t *atoms, uint32_t num_atoms,
                              int charge, int multiplicity);
 
 /**
  * @brief Free molecule
  */
-void molecule_free(molecule_t *mol);
+MOONLAB_API void molecule_free(molecule_t *mol);
 
 /**
  * @brief Calculate nuclear repulsion energy
  */
-double molecule_nuclear_repulsion(const molecule_t *mol);
+MOONLAB_API double molecule_nuclear_repulsion(const molecule_t *mol);
 
 /**
  * @brief Create H2 molecule at given bond length
@@ -426,12 +428,12 @@ double molecule_nuclear_repulsion(const molecule_t *mol);
  * @param bond_length H-H bond length in Angstroms
  * @return H2 molecule
  */
-molecule_t *molecule_h2(double bond_length);
+MOONLAB_API molecule_t *molecule_h2(double bond_length);
 
 /**
  * @brief Create LiH molecule at given bond length
  */
-molecule_t *molecule_lih(double bond_length);
+MOONLAB_API molecule_t *molecule_lih(double bond_length);
 
 /**
  * @brief Create H2O molecule with given geometry
@@ -440,7 +442,7 @@ molecule_t *molecule_lih(double bond_length);
  * @param angle H-O-H angle in degrees
  * @return H2O molecule
  */
-molecule_t *molecule_h2o(double oh_length, double angle);
+MOONLAB_API molecule_t *molecule_h2o(double oh_length, double angle);
 
 #ifdef __cplusplus
 }
