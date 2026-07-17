@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>   /* struct timespec + nanosleep (compat shim on Windows) */
 
 static int failures = 0;
 #define CHECK(cond, fmt, ...) do {                              \

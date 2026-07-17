@@ -15,6 +15,16 @@
 #define _Complex_I (__extension__ 1.0i)
 #define I _Complex_I
 
+/* clang-cl lowers double _Complex multiply/divide to the compiler-rt helpers
+ * __muldc3 / __divdc3. The shared library optimizes most of these away, but
+ * the test executables emit the libcall and would fail to link. Pull in the
+ * builtins library from every complex-using TU so it resolves. */
+#if defined(_M_ARM64) || defined(__aarch64__)
+#pragma comment(lib, "clang_rt.builtins-aarch64")
+#else
+#pragma comment(lib, "clang_rt.builtins-x86_64")
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
