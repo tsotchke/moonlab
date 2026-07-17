@@ -1,0 +1,2 @@
+# Runtime differential traces emitted by scripts/run_cross_diff.sh -- not committed.
+*.jsonl
