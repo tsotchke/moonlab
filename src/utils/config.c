@@ -650,7 +650,13 @@ int qsim_detect_max_qubits(void) {
     long page_size = sysconf(_SC_PAGE_SIZE);
     mem_bytes = pages * page_size;
 #else
-    mem_bytes = 8ULL * 1024 * 1024 * 1024;  // Assume 8 GB
+    /* Assume 8 GiB, but clamp to what size_t can represent: on a 32-bit
+       size_t (e.g. wasm32) the 8 GiB literal otherwise truncates to 0. */
+    {
+        unsigned long long assumed = 8ULL * 1024 * 1024 * 1024;  // 8 GiB
+        unsigned long long size_max = (unsigned long long)(size_t)-1;
+        mem_bytes = (size_t)(assumed > size_max ? size_max : assumed);
+    }
 #endif
 
     // Use 80% of available memory
