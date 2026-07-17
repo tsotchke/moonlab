@@ -30,6 +30,33 @@
 #include <Accelerate/Accelerate.h>
 #endif
 
+#define MEASUREMENT_SMALL_NORM 1e-15
+
+// ============================================================================
+// GPU HOST-BUFFER SYNC
+// ============================================================================
+//
+// For a GPU-backed state (state->gpu_state != NULL) the host `amplitudes`
+// buffer is stale until quantum_state_sync_to_host() is called.  Every read
+// path here refreshes the host mirror on entry; every path that mutates the
+// host amplitudes (measurement collapse) pushes the result back to the GPU on
+// exit.  Both sync entry points are no-ops that return QS_SUCCESS when there
+// is no GPU backing, so these helpers are free on CPU states.
+
+static inline void measurement_gpu_pull(const quantum_state_t *state) {
+    // Reads do not logically mutate the quantum state, but they do need the
+    // host mirror refreshed from device memory, so cast away const to sync.
+    if (state && state->gpu_state) {
+        quantum_state_sync_to_host((quantum_state_t *)state);
+    }
+}
+
+static inline void measurement_gpu_push(quantum_state_t *state) {
+    if (state && state->gpu_state) {
+        quantum_state_sync_from_host(state);
+    }
+}
+
 // ============================================================================
 // PROBABILITY COMPUTATION
 // ============================================================================
@@ -48,6 +75,8 @@ double measurement_probability_one(const quantum_state_t* state, int qubit) {
         qubit >= (int)state->num_qubits) {
         return 0.0;
     }
+
+    measurement_gpu_pull(state);
 
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
@@ -112,6 +141,8 @@ void measurement_probability_distribution(const quantum_state_t* state,
                                           double* distribution) {
     if (!state || !distribution) return;
 
+    measurement_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const complex_t* amp = state->amplitudes;
 
@@ -153,11 +184,14 @@ int measurement_single_qubit(quantum_state_t* state, int qubit, double random_va
         return -1;
     }
 
+    // Refresh host mirror for a GPU-backed state before reading/collapsing.
+    measurement_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
     complex_t* amp = state->amplitudes;
 
-    // Compute probability of measuring |1⟩
+    // Compute probability of measuring |1⟩ (host buffer is now fresh).
     double prob_one = measurement_probability_one(state, qubit);
 
     // Determine outcome
@@ -178,13 +212,20 @@ int measurement_single_qubit(quantum_state_t* state, int qubit, double random_va
         }
     }
 
-    // Renormalize
-    if (norm_factor > 1e-15) {
-        double inv_norm = 1.0 / sqrt(norm_factor);
-        for (uint64_t i = 0; i < state_dim; i++) {
-            amp[i] *= inv_norm;
-        }
+    // Renormalize.  A surviving norm below the floor means we collapsed onto
+    // an outcome with (numerically) zero weight -- the residual state is not a
+    // valid density and cannot be renormalized.  Signal an error rather than
+    // silently returning a broken state.
+    if (norm_factor <= MEASUREMENT_SMALL_NORM) {
+        return -1;
     }
+    double inv_norm = 1.0 / sqrt(norm_factor);
+    for (uint64_t i = 0; i < state_dim; i++) {
+        amp[i] *= inv_norm;
+    }
+
+    // Push the collapsed host buffer back to the GPU (no-op on CPU states).
+    measurement_gpu_push(state);
 
     return result;
 }
@@ -224,32 +265,43 @@ uint64_t measurement_all_qubits(quantum_state_t* state, double random_value) {
         return 0;
     }
 
+    measurement_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const complex_t* amp = state->amplitudes;
 
     // Find outcome by cumulative probability
     double cumulative = 0.0;
     uint64_t result = 0;
+    int found = 0;
+    uint64_t last_nonzero = 0;
+    int have_nonzero = 0;
 
     for (uint64_t i = 0; i < state_dim; i++) {
         double prob = cabs(amp[i]) * cabs(amp[i]);
+        if (prob > 0.0) { last_nonzero = i; have_nonzero = 1; }
         cumulative += prob;
 
         if (random_value < cumulative) {
             result = i;
+            found = 1;
             break;
         }
     }
 
-    // Handle edge case (rounding errors)
-    if (random_value >= cumulative) {
-        result = state_dim - 1;
+    // Rounding can leave random_value >= total probability.  Collapse onto the
+    // last basis state that actually carries amplitude -- never a fixed
+    // |1...1> that may have zero amplitude.
+    if (!found) {
+        result = have_nonzero ? last_nonzero : 0;
     }
 
     // Collapse to computational basis state
     for (uint64_t i = 0; i < state_dim; i++) {
         state->amplitudes[i] = (i == result) ? 1.0 : 0.0;
     }
+
+    measurement_gpu_push(state);
 
     return result;
 }
@@ -279,6 +331,8 @@ uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
         }
     }
 
+    measurement_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     complex_t* amp = state->amplitudes;
 
@@ -302,12 +356,24 @@ uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
     // Sample outcome
     double cumulative = 0.0;
     uint64_t result = 0;
+    int found = 0;
+    uint64_t last_nonzero = 0;
+    int have_nonzero = 0;
     for (uint64_t o = 0; o < num_outcomes; o++) {
+        if (outcome_probs[o] > 0.0) { last_nonzero = o; have_nonzero = 1; }
         cumulative += outcome_probs[o];
         if (random_value < cumulative) {
             result = o;
+            found = 1;
             break;
         }
+    }
+
+    // Rounding can leave random_value >= the cumulative total.  Select the
+    // last outcome that actually carries probability rather than defaulting to
+    // outcome 0, which may be impossible for this state.
+    if (!found) {
+        result = have_nonzero ? last_nonzero : 0;
     }
 
     // Collapse: zero amplitudes that don't match, renormalize rest
@@ -328,13 +394,19 @@ uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
         }
     }
 
-    // Renormalize
-    if (norm_factor > 1e-15) {
+    // Renormalize.  The outcome selection above guarantees a positive-weight
+    // outcome for any state carrying nonzero total probability, so norm_factor
+    // is positive for valid input; the guard only trips on an all-zero
+    // (degenerate) input, which has no meaningful post-collapse normalization.
+    if (norm_factor > MEASUREMENT_SMALL_NORM) {
         double inv_norm = 1.0 / sqrt(norm_factor);
         for (uint64_t i = 0; i < state_dim; i++) {
             amp[i] *= inv_norm;
         }
     }
+
+    // Push the collapsed host buffer back to the GPU (no-op on CPU states).
+    measurement_gpu_push(state);
 
     free(outcome_probs);
     return result;
@@ -370,6 +442,8 @@ double measurement_expectation_z(const quantum_state_t* state, int qubit) {
 double measurement_expectation_x(const quantum_state_t* state, int qubit) {
     if (!state || !state->amplitudes) return 0.0;
 
+    measurement_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
     const complex_t* amp = state->amplitudes;
@@ -398,6 +472,8 @@ double measurement_expectation_x(const quantum_state_t* state, int qubit) {
  */
 double measurement_expectation_y(const quantum_state_t* state, int qubit) {
     if (!state || !state->amplitudes) return 0.0;
+
+    measurement_gpu_pull(state);
 
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
@@ -433,6 +509,8 @@ double measurement_expectation_y(const quantum_state_t* state, int qubit) {
 double measurement_correlation_zz(const quantum_state_t* state,
                                   int qubit1, int qubit2) {
     if (!state || !state->amplitudes) return 0.0;
+
+    measurement_gpu_pull(state);
 
     const uint64_t state_dim = state->state_dim;
     const uint64_t mask1 = 1ULL << qubit1;
@@ -473,6 +551,8 @@ double measurement_correlation_zz(const quantum_state_t* state,
 void measurement_sample(const quantum_state_t* state, uint64_t* outcomes,
                         int num_samples, const double* random_values) {
     if (!state || !outcomes || !random_values) return;
+
+    measurement_gpu_pull(state);
 
     const uint64_t state_dim = state->state_dim;
     const complex_t* amp = state->amplitudes;
@@ -574,8 +654,9 @@ static double povm_outcome_prob(const complex_t *Kk,
     return acc;
 }
 
-/* Verify sum_k K_k^dag K_k = I within tolerance. */
-static qs_error_t povm_check_completeness(const povm_t *povm) {
+/* Verify sum_k K_k^dag K_k = I within tolerance.  This is O(K*D^3);
+ * povm_check_completeness_cached() below runs it at most once per POVM. */
+static qs_error_t povm_check_completeness_full(const povm_t *povm) {
     if (!povm || !povm->kraus_ops || povm->num_outcomes == 0) {
         return QS_ERROR_INVALID_STATE;
     }
@@ -598,6 +679,22 @@ static qs_error_t povm_check_completeness(const povm_t *povm) {
     return QS_SUCCESS;
 }
 
+/* Memoized completeness check.  Runs the O(K*D^3) verification only on
+ * the first call for a given POVM, then caches the verdict on the
+ * struct (cast away const: the POVM object itself is caller-owned and
+ * not const-qualified in practice; only the pointer parameter is). */
+static qs_error_t povm_check_completeness_cached(const povm_t *povm) {
+    if (!povm) return QS_ERROR_INVALID_STATE;
+    if (povm->completeness_checked) {
+        return (qs_error_t)povm->completeness_status;
+    }
+    qs_error_t rc = povm_check_completeness_full(povm);
+    povm_t *mut = (povm_t *)povm;
+    mut->completeness_status  = (int)rc;
+    mut->completeness_checked = 1;
+    return rc;
+}
+
 qs_error_t measurement_povm_probabilities(const quantum_state_t *state,
                                            const povm_t *povm,
                                            double *probs_out) {
@@ -605,6 +702,7 @@ qs_error_t measurement_povm_probabilities(const quantum_state_t *state,
         povm->state_dim != state->state_dim) {
         return QS_ERROR_INVALID_STATE;
     }
+    measurement_gpu_pull(state);
     complex_t *scratch = (complex_t*)malloc(state->state_dim * sizeof(complex_t));
     if (!scratch) return QS_ERROR_OUT_OF_MEMORY;
     for (size_t k = 0; k < povm->num_outcomes; k++) {
@@ -624,8 +722,10 @@ qs_error_t measurement_povm(quantum_state_t *state,
         povm->state_dim != state->state_dim) {
         return QS_ERROR_INVALID_STATE;
     }
-    qs_error_t cc = povm_check_completeness(povm);
+    qs_error_t cc = povm_check_completeness_cached(povm);
     if (cc != QS_SUCCESS) return cc;
+
+    measurement_gpu_pull(state);
 
     const uint64_t D = state->state_dim;
     complex_t *scratch = (complex_t*)malloc(D * sizeof(complex_t));
@@ -656,6 +756,8 @@ qs_error_t measurement_povm(quantum_state_t *state,
         state->amplitudes[i] = scratch[i] * inv_norm;
     }
 
+    measurement_gpu_push(state);
+
     free(scratch); free(probs);
     return QS_SUCCESS;
 }
@@ -665,7 +767,8 @@ qs_error_t measurement_weak_z(quantum_state_t *state,
                                double strength,
                                double uniform,
                                int *outcome_out) {
-    if (!state || qubit < 0 || (uint32_t)qubit >= state->num_qubits)
+    if (!state || !state->amplitudes || qubit < 0 ||
+        (uint32_t)qubit >= state->num_qubits)
         return QS_ERROR_INVALID_STATE;
     if (strength < 0.0) strength = 0.0;
     if (strength > 1.0) strength = 1.0;
@@ -677,27 +780,42 @@ qs_error_t measurement_weak_z(quantum_state_t *state,
     const double c = cos(theta);
     const double s = sin(theta);
 
-    complex_t *Kplus  = (complex_t*)calloc(D * D, sizeof(complex_t));
-    complex_t *Kminus = (complex_t*)calloc(D * D, sizeof(complex_t));
-    if (!Kplus || !Kminus) {
-        free(Kplus); free(Kminus);
-        return QS_ERROR_OUT_OF_MEMORY;
-    }
+    /* Both Kraus operators are diagonal:
+     *   K_+[i,i] = bit ? s : c,   K_-[i,i] = bit ? c : s
+     * with bit = (i >> qubit) & 1.  Completeness (K_+^2 + K_-^2 = I) holds
+     * exactly per diagonal entry since s^2 + c^2 = 1, so no O(K*D^3) check
+     * or dense D x D materialization is needed -- everything is O(D). */
+    measurement_gpu_pull(state);
+    complex_t *amp = state->amplitudes;
+
+    double p_plus = 0.0, p_minus = 0.0;
     for (uint64_t i = 0; i < D; i++) {
         int bit = (i & mask) ? 1 : 0;
-        Kplus [i * D + i] = bit ? s : c;
-        Kminus[i * D + i] = bit ? c : s;
+        double kp = bit ? s : c;   /* K_+ diagonal */
+        double km = bit ? c : s;   /* K_- diagonal */
+        double re = creal(amp[i]);
+        double im = cimag(amp[i]);
+        double mag2 = re * re + im * im;
+        p_plus  += kp * kp * mag2;
+        p_minus += km * km * mag2;
     }
 
-    const complex_t *ops[2] = { Kplus, Kminus };
-    povm_t povm;
-    povm.num_outcomes = 2;
-    povm.state_dim    = D;
-    povm.kraus_ops    = ops;
+    /* Outcome 0 = "+", outcome 1 = "-" (matches the Kraus ordering of the
+     * general POVM form documented in the header). */
+    int outcome = (uniform < p_plus) ? 0 : 1;
+    double p = (outcome == 0) ? p_plus : p_minus;
+    if (p <= MEASUREMENT_SMALL_NORM) {
+        return QS_ERROR_NOT_NORMALIZED;
+    }
+    double inv_norm = 1.0 / sqrt(p);
+    for (uint64_t i = 0; i < D; i++) {
+        int bit = (i & mask) ? 1 : 0;
+        double k = (outcome == 0) ? (bit ? s : c) : (bit ? c : s);
+        amp[i] *= k * inv_norm;
+    }
 
-    size_t outcome = 0;
-    qs_error_t rc = measurement_povm(state, &povm, uniform, &outcome);
-    if (outcome_out) *outcome_out = (int)outcome;
-    free(Kplus); free(Kminus);
-    return rc;
+    measurement_gpu_push(state);
+
+    if (outcome_out) *outcome_out = outcome;
+    return QS_SUCCESS;
 }

@@ -1138,7 +1138,12 @@ measurement_result_t quantum_measure(
         gate_s_dagger(state, qubit);  // Transform to Y-basis
         gate_hadamard(state, qubit);
     }
-    
+
+    /* For a GPU-backed state the basis-change gates above ran on the GPU,
+     * leaving the host buffer stale.  Pull the (rotated) amplitudes to the
+     * host before computing probabilities and collapsing.  No-op on CPU. */
+    if (state->gpu_state) quantum_state_sync_to_host(state);
+
     // SIMD-OPTIMIZED probability calculation: Stride-based summation
     double prob_0 = 0.0;
     double prob_1 = 0.0;
@@ -1205,14 +1210,22 @@ measurement_result_t quantum_measure(
         }
     }
     
-    // Renormalize
-    if (norm > 1e-15) {
-        norm = sqrt(norm);
-        for (uint64_t i = 0; i < state->state_dim; i++) {
-            state->amplitudes[i] /= norm;
-        }
+    // Renormalize.  A surviving norm below the floor means we collapsed onto
+    // a (numerically) zero-probability outcome; the residual state cannot be
+    // normalized, so signal failure with a zeroed result rather than leaving
+    // a silently broken state and reporting success.
+    if (norm <= 1e-15) {
+        return (measurement_result_t){0, 0.0, 0.0};
     }
-    
+    norm = sqrt(norm);
+    for (uint64_t i = 0; i < state->state_dim; i++) {
+        state->amplitudes[i] /= norm;
+    }
+
+    /* Push the collapsed, renormalized host buffer back to the GPU so the
+     * inverse basis rotation below runs on the fresh state.  No-op on CPU. */
+    if (state->gpu_state) quantum_state_sync_from_host(state);
+
     // Transform back if needed
     if (basis == MEASURE_HADAMARD) {
         gate_hadamard(state, qubit);
@@ -1220,10 +1233,10 @@ measurement_result_t quantum_measure(
         gate_hadamard(state, qubit);
         gate_s(state, qubit);
     }
-    
+
     // Record measurement
     quantum_state_record_measurement(state, result.outcome);
-    
+
     return result;
 }
 
@@ -1253,7 +1266,11 @@ double quantum_peek_probability(
     if (!state || !state->amplitudes || !check_qubit_valid(state, qubit)) {
         return 0.0;
     }
-    
+
+    /* Pure read: refresh the host mirror for a GPU-backed state first.
+     * Cast away const to sync; the quantum state is not logically mutated. */
+    if (state->gpu_state) quantum_state_sync_to_host((quantum_state_t *)state);
+
     double prob = 0.0;
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (get_bit(i, qubit) == outcome) {
@@ -1261,7 +1278,7 @@ double quantum_peek_probability(
             prob += amp * amp;
         }
     }
-    
+
     return prob;
 }
 
@@ -1280,40 +1297,54 @@ uint64_t quantum_measure_all_fast(
     if (!state || !state->amplitudes || !entropy) {
         return 0;
     }
-    
+
     // Get random number for sampling
     double random;
     if (quantum_entropy_get_double(entropy, &random) != 0) {
         return 0;
     }
-    
+
+    /* Refresh the host mirror for a GPU-backed state before sampling and
+     * collapsing.  No-op on CPU states. */
+    if (state->gpu_state) quantum_state_sync_to_host(state);
+
     // Sample from probability distribution in ONE pass
     double cumulative = 0.0;
+    uint64_t result = 0;
+    int found = 0;
+    uint64_t last_nonzero = 0;
+    int have_nonzero = 0;
     for (uint64_t i = 0; i < state->state_dim; i++) {
         const double mag = cabs(state->amplitudes[i]);
         const double prob = mag * mag;
+        if (prob > 0.0) { last_nonzero = i; have_nonzero = 1; }
         cumulative += prob;
-        
+
         if (random < cumulative) {
-            // Collapse to this basis state
-            // Zero all other amplitudes
-            memset(state->amplitudes, 0, state->state_dim * sizeof(complex_t));
-            state->amplitudes[i] = 1.0;  // Collapsed state
-            
-            // Record measurement
-            quantum_state_record_measurement(state, i);
-            
-            return i;  // Return the measured basis state
+            result = i;
+            found = 1;
+            break;
         }
     }
-    
-    // Numerical precision fallback
-    uint64_t final_state = state->state_dim - 1;
+
+    // Rounding can leave random >= total probability.  Collapse onto the last
+    // basis state that actually carries amplitude -- never a fixed |1...1>
+    // that may have zero amplitude.
+    if (!found) {
+        result = have_nonzero ? last_nonzero : 0;
+    }
+
+    // Collapse to the sampled basis state
     memset(state->amplitudes, 0, state->state_dim * sizeof(complex_t));
-    state->amplitudes[final_state] = 1.0;
-    quantum_state_record_measurement(state, final_state);
-    
-    return final_state;
+    state->amplitudes[result] = 1.0;
+
+    /* Push the collapsed host buffer back to the GPU (no-op on CPU states). */
+    if (state->gpu_state) quantum_state_sync_from_host(state);
+
+    // Record measurement
+    quantum_state_record_measurement(state, result);
+
+    return result;
 }
 
 // ============================================================================
@@ -1327,18 +1358,37 @@ qs_error_t apply_single_qubit_gate(
 ) {
     if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
     if (!check_qubit_valid(state, qubit)) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch: pack the 2x2 matrix into the row-major (real, imag)
+     * layout the CUDA 1q kernel expects and route through the generic
+     * single-qubit matrix path.  This is the same convention every other
+     * single-qubit gate uses, so fused gates (fusion.c fuse_execute funnels
+     * here) stay on the GPU for a GPU-backed state instead of mutating the
+     * stale host buffer.  No-op / falls through on CPU states. */
+    if (state->gpu_state) {
+        const double m[8] = {
+            creal(matrix[0][0]), cimag(matrix[0][0]),
+            creal(matrix[0][1]), cimag(matrix[0][1]),
+            creal(matrix[1][0]), cimag(matrix[1][0]),
+            creal(matrix[1][1]), cimag(matrix[1][1])
+        };
+        qs_error_t rc = QS_SUCCESS;
+        if (gpu_try_apply_1q(state, qubit, m, &rc)) {
+            return rc;
+        }
+    }
+
     for (uint64_t i = 0; i < state->state_dim; i++) {
         if (!get_bit(i, qubit)) {
             uint64_t j = flip_bit(i, qubit);
             complex_t amp_0 = state->amplitudes[i];
             complex_t amp_1 = state->amplitudes[j];
-            
+
             state->amplitudes[i] = matrix[0][0] * amp_0 + matrix[0][1] * amp_1;
             state->amplitudes[j] = matrix[1][0] * amp_0 + matrix[1][1] * amp_1;
         }
     }
-    
+
     return QS_SUCCESS;
 }
 
@@ -1352,10 +1402,18 @@ qs_error_t apply_two_qubit_gate(
     if (!check_qubit_valid(state, qubit1)) return QS_ERROR_INVALID_QUBIT;
     if (!check_qubit_valid(state, qubit2)) return QS_ERROR_INVALID_QUBIT;
     if (qubit1 == qubit2) return QS_ERROR_INVALID_QUBIT;
-    
+
+    /* GPU dispatch (correct-first): the generic 4x4 kernel's basis-ordering
+     * convention is not verifiable against this function's |q_high q_low>
+     * layout without a CUDA device to test on, so for a GPU-backed state we
+     * pull the amplitudes to the host, run the (known-correct) host contraction
+     * below, and push the result back.  Both syncs are no-ops on CPU states. */
+    int gpu_backed = (state->gpu_state != NULL);
+    if (gpu_backed) quantum_state_sync_to_host(state);
+
     // Full production implementation of arbitrary two-qubit unitary
     // The matrix operates on the joint state of qubits in basis: |00⟩, |01⟩, |10⟩, |11⟩
-    
+
     int low_qubit = (qubit1 < qubit2) ? qubit1 : qubit2;
     int high_qubit = (qubit1 < qubit2) ? qubit2 : qubit1;
     int swapped = (qubit1 > qubit2);
@@ -1410,7 +1468,10 @@ qs_error_t apply_two_qubit_gate(
             }
         }
     }
-    
+
+    /* Push the mutated host buffer back to the GPU (no-op on CPU states). */
+    if (gpu_backed) quantum_state_sync_from_host(state);
+
     return QS_SUCCESS;
 }
 
