@@ -149,8 +149,14 @@ MOONLAB_API void measurement_estimate_probabilities(const uint64_t* samples, int
  *
  * The operators are stored as flat row-major state_dim x state_dim
  * complex matrices; the caller owns the memory and guarantees
- * completeness.  The simulator re-checks completeness on the first
- * call (violations return non-zero without mutating the state).
+ * completeness.  The simulator checks completeness on the first
+ * measurement_povm() call and caches the verdict on the struct
+ * (violations return non-zero without mutating the state).
+ *
+ * The struct MUST be zero-initialized before first use (e.g. via a
+ * designated or `{0}` initializer) so the cache fields start clean.
+ * If the caller mutates kraus_ops after the first call it must also
+ * clear completeness_checked to force a re-check.
  */
 typedef struct {
     size_t num_outcomes;    /* length of the kraus_ops[] array */
@@ -158,6 +164,12 @@ typedef struct {
     /* kraus_ops[i] is a state_dim * state_dim complex matrix stored
      * row-major; kraus_ops has num_outcomes entries. */
     const complex_t *const *kraus_ops;
+    /* Completeness-check cache.  completeness_checked is 0 until the
+     * first measurement_povm() verifies sum_k K_k^dag K_k = I; after
+     * that it is 1 and completeness_status holds the cached verdict.
+     * The O(K*D^3) check then runs at most once per POVM. */
+    int completeness_checked;
+    int completeness_status;   /* cached qs_error_t once checked */
 } povm_t;
 
 /**

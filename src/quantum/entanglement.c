@@ -39,6 +39,17 @@
 #define DEFAULT_JACOBI_MAX_ITER 100
 #define DEFAULT_JACOBI_TOLERANCE 1e-12
 
+/* Refresh the host `amplitudes` mirror for a GPU-backed state before any
+ * read.  No-op (returns QS_SUCCESS) on CPU states.  Every entanglement
+ * measure that reads state->amplitudes directly goes through
+ * entanglement_reduced_density_matrix or entanglement_concurrence_2qubit,
+ * so guarding those two covers the whole module transitively. */
+static inline void entanglement_gpu_pull(const quantum_state_t *state) {
+    if (state && state->gpu_state) {
+        quantum_state_sync_to_host((quantum_state_t *)state);
+    }
+}
+
 // Helper to get Jacobi parameters from config
 static inline void get_jacobi_params(int* max_iter, double* tolerance) {
     qsim_config_t* cfg = qsim_config_global();
@@ -314,6 +325,8 @@ int entanglement_reduced_density_matrix(const quantum_state_t* state,
     if (!state || !state->amplitudes || !reduced_dm) {
         return -1;
     }
+
+    entanglement_gpu_pull(state);
 
     const int total_qubits = state->num_qubits;
     const int remaining_qubits = total_qubits - num_trace_out;
@@ -643,6 +656,8 @@ double entanglement_concurrence_2qubit(const quantum_state_t* state) {
     if (!state || !state->amplitudes || state->num_qubits != 2) {
         return 0.0;
     }
+
+    entanglement_gpu_pull(state);
 
     // |ψ⟩ = α₀₀|00⟩ + α₀₁|01⟩ + α₁₀|10⟩ + α₁₁|11⟩
     complex_t a00 = state->amplitudes[0];  // |00⟩
