@@ -1,0 +1,155 @@
+# Moonlab architecture invariants.
+#
+# One invariant per incident class from the 2026-07-17 full-codebase audit.
+# These are the properties that must hold for the system to be complete; the
+# adversarial matrix and the release smoke exist to try to violate each one.
+# An invariant is only "held" when a runtime_event in the completion oracle
+# proves a real check enforced it.
+#
+# Consumed alongside .icc/completion-oracles.yaml. Mirrors the Eshkol model
+# (~/Desktop/eshkol/.icc/architecture-model.yaml).
+
+model:
+  name: moonlab
+  description: >
+    Moonlab is not a single-process quantum simulator library. It is the
+    simulation core of a distributed cloud quantum platform and a
+    hardware-design workbench: dense state-vector and tensor-network engines,
+    single-node and multi-GPU and MPI-sharded execution, a control plane, a
+    post-quantum crypto + Bell-gated QRNG surface, and a frozen C ABI that
+    QGTL / SbNN / libirrep bind through. Completeness is judged against that
+    scope, not against "another Qiskit."
+
+invariants:
+  - id: gpu-host-sync-contract
+    class: silent-wrong-answer
+    statement: >
+      No measurement, expectation, probability, noise, or collapse path may
+      read or write a device-backed state without an explicit host sync. A
+      GPU-backed state and its host buffer must never silently diverge.
+    incident: >
+      measurement.c had zero GPU awareness; quantum_state_sync_to_host had zero
+      in-tree callers; gates.c quantum_measure applied basis rotations on the
+      GPU then sampled/collapsed the stale host buffer, corrupting the device.
+    enforced_by: [gpu_host_sync_contract, cross_backend_differential, property_invariants_oracle]
+
+  - id: exact-gradient-honesty
+    class: overclaim
+    statement: >
+      Any API labeled "exact" must be exact or return an explicit error. No
+      gradient may silently degrade to a finite difference or a stochastic
+      estimate under a configuration the caller cannot detect.
+    incident: >
+      qaoa_compute_gradient was labeled "(EXACT)" but used one global pi/2
+      shift on a weighted multi-term generator; the VQE gradient ran stochastic
+      PSR silently under a noise model.
+    enforced_by: [gradient_oracle]
+
+  - id: single-definition
+    class: odr-collision
+    statement: >
+      No type or symbol name may have two distinct definitions across
+      subsystem headers. Crypto-grade and non-crypto entropy surfaces must not
+      share names.
+    incident: >
+      entropy_ctx_t, entropy_source_type_t, and measurement_result_t each had
+      two definitions; utils/entropy.c (XorShift) shared names with the
+      crypto-grade hardware_entropy.c family.
+    enforced_by: [zero_odr_collision]
+
+  - id: no-phantom-api
+    class: dangling-contract
+    statement: >
+      Every declared symbol has a definition; every MOONLAB_API symbol a
+      binding depends on survives QSIM_HIDDEN_VISIBILITY=ON.
+    incident: >
+      26 declared-never-defined symbols; the entire moonlab_diff_* and
+      state/gates/measurement binding surface was untagged and survived only on
+      default-visibility builds.
+    enforced_by: [zero_phantom_api, hidden_visibility_abi]
+
+  - id: docs-compile
+    class: fiction
+    statement: >
+      Every API named in a README or docs code snippet resolves to a real
+      header symbol with the documented signature. Docs describe reality, and
+      reality may exceed the docs, but docs may never exceed reality.
+    incident: >
+      ~25 README snippets named APIs that do not exist (vqe_minimize,
+      qaoa_maxcut, surface_code_create(5,5,...), ml.ParameterizedCircuit).
+    enforced_by: [docs_apis_exist, examples_all_build]
+
+  - id: no-theater-verification
+    class: fake-gate
+    statement: >
+      A verification gate must consume the artifact it certifies. A Bell/DI
+      randomness check must test the delivered byte stream, not a fresh
+      scratch state; a KAT must compare against an external reference, not a
+      self-generated fingerprint.
+    incident: >
+      qrng_v3_verify_quantum CHSH-tested a fresh Bell pair unrelated to output;
+      ML-KEM "NIST KAT" pinned self-generated SHA3 fingerprints.
+    enforced_by: [qrng_certification_wired, mlkem_official_kat, qrng_bias_positive_control, entropy_health_rejects_bad]
+
+  - id: parser-memory-safety
+    class: untrusted-input-crash
+    statement: >
+      No path that consumes untrusted bytes (control-plane wire protocol,
+      circuit/config deserialization, ML-KEM decode, ABI boundary) may crash,
+      read out of bounds, or exhibit UB on any input.
+    incident: >
+      Network-facing control-plane parser and crypto decode paths had no
+      fuzzing coverage.
+    enforced_by: [fuzz_corpus_clean, mlkem_negative_fuzz, abi_boundary_fuzz]
+
+  - id: cross-implementation-equivalence
+    class: divergence
+    statement: >
+      The same program yields the same result on every backend (dense, MPS,
+      Clifford, GPU) and through every binding (C, Python, Rust, WASM), all
+      agreeing with an independent reference.
+    incident: >
+      tn_apply_gate_2q applied an untransposed matrix for qubit1>qubit2
+      (reversed CNOT); no cross-binding differential existed.
+    enforced_by: [cross_backend_differential, cross_binding_python, reference_oracle_agreement]
+
+  - id: real-time-evolution-correctness
+    class: mislabeled-algorithm
+    statement: >
+      An integrator named TDVP must be projector-splitting TDVP (forward and
+      backward steps, direction-correct gauge), validated against an
+      analytically solvable reference.
+    incident: >
+      tdvp.c had no backward step and always absorbed S rightward; it was a
+      first-order TEBD-like scheme sold as TDVP.
+    enforced_by: [tdvp_projector_splitting, property_invariants_oracle]
+
+  - id: determinism
+    class: irreproducible
+    statement: >
+      Every generative corpus (oracle, fuzz seed, differential) is a pure
+      function of its seed. No global PRNG side effects (srand) in library code.
+    incident: >
+      dmrg_init_random_mps called srand(42), clobbering the process PRNG.
+    enforced_by: [backend_differential_oracle, property_invariants_oracle]
+
+  - id: distributed-platform-capability
+    class: unfinished-flagship
+    statement: >
+      The distributed layer delivers what the platform vision claims: a sharded
+      MPI+CUDA state vector that runs beyond 32 qubits across multiple GPUs with
+      correct inter-rank halo swaps, validated on real fleet hardware.
+    incident: >
+      partition_state_create_gpu shipped while >80% of distributed gates and
+      all collectives ignored the GPU shard; multi-GPU sharding was deferred.
+    enforced_by: [mpi_sharded_gpu_works]
+
+  - id: ci-tells-the-truth
+    class: hidden-red
+    statement: >
+      Every CI job on HEAD is green with no result masking (no || true, no dead
+      label filters). A red or masked lane blocks release.
+    incident: >
+      JS tests never ran in CI; the release smoke used a label that matched
+      nothing; Dockerfiles masked test failures with || echo.
+    enforced_by: [ci_all_green, full_suite_green, bindings_suites_green]

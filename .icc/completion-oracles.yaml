@@ -1,21 +1,45 @@
 # Moonlab (libquantumsim) completion oracles.
 #
 # Consumed by ICC's completion_oracles.py. Each oracle gates a "goal" the
-# assistant might be asked to drive: any goal name that contains one of
-# the listed aliases (case-folded substring match) selects that oracle.
+# assistant might be asked to drive: any goal name that contains one of the
+# listed aliases (case-folded substring match) selects that oracle.
 #
 # Severities:
-#   high   -> FAIL when criterion missing (must be fixed before claiming done)
-#   medium -> WARN when criterion missing (track, don't block)
+#   high   -> FAIL when criterion missing (release is BLOCKED until fixed)
+#   medium -> WARN when criterion missing (tracked, does not block; nightly/advisory)
 #
-# The criteria align with the user's standing rules for this project:
-#   - "no stubs - wire features properly" (no_stubbed_paths, severity: high)
-#   - audit tone leads with what's broken (failure_free, severity: high)
-#   - tests must be indexed before claiming completion (test_evidence)
+# ENFORCEMENT MODEL (the 2026-07-17 hardening).
+# The structural criteria (test_evidence, no_stubbed_paths, no_contract_gap)
+# proved too weak: they reported ready=100 while the codebase still shipped
+# GPU-measurement corruption, QRNG verification theater, a reversed-CNOT MPS
+# bug, and ~25 fictional README APIs. ICC's heuristics cannot see those.
 #
-# Add or refine an oracle when a new release stream lands (v0.3, v0.4, etc.).
+# So every goal is now ALSO gated by a runtime_event: a real executable check
+# must write a PASS line to scripts/icc_traces/*.jsonl before the criterion is
+# satisfied. This mirrors the Eshkol adversarial matrix. A missing or FAIL
+# event fails the criterion; there is no way to reach "ready" by assertion.
+#
+# Evidence producers (each script writes the JSONL its events are read from):
+#   scripts/run_moonlab_release_smoke.sh -> kind: moonlab_smoke
+#   scripts/run_moonlab_oracles.sh       -> kind: moonlab_oracle   (oracle lane)
+#   scripts/run_fuzz.sh replay           -> kind: moonlab_fuzz      (fuzz lane)
+#   scripts/run_cross_diff.sh            -> kind: moonlab_differential (differential lane)
+#   scripts/run_statistical.sh           -> kind: moonlab_statistical (statistical lane)
+#
+# Quarantine allowlists (genuine current-HEAD bugs a harness caught, each with
+# an owning lane; every entry MUST flip to required-pass before the v1.2.0 cut):
+#   tests/oracle/KNOWN_FAILURES.txt
+#   tests/fuzz/FINDINGS.md
+#   tests/differential/KNOWN_DIVERGENCES.txt
+#   tests/statistical/FINDINGS.md
 
 oracles:
+  # ---------------------------------------------------------------------------
+  # THE release gate. `icc readiness --target moonlab-release-readiness
+  # --trace-dir scripts/icc_traces` is the single go/no-go for the v1.2.0 cut.
+  # It requires the adversarial matrix to be green (see moonlab-adversarial-
+  # matrix below) PLUS the whole-system correctness/capability smoke.
+  # ---------------------------------------------------------------------------
   - name: moonlab-release-readiness
     target: moonlab-release-readiness
     aliases:
@@ -25,6 +49,7 @@ oracles:
       - quantum_simulator
       - release
     requires:
+      # -- Structural floor (kept from the original oracle). --
       - id: tests_indexed
         test_evidence: true
         severity: high
@@ -55,6 +80,302 @@ oracles:
         label: Runtime trace records no failures
         action: fix_runtime_failure
 
+      # -- Whole-system correctness smoke (run_moonlab_release_smoke.sh). --
+      - id: full_suite_green
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["full_suite_green"]
+          event_values: ["PASS"]
+        severity: high
+        label: The full ctest suite passes (no test Not Run, no failures)
+        action: ./scripts/run_moonlab_release_smoke.sh
+      - id: asan_clean
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["asan_ubsan_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: AddressSanitizer + UBSan clean across core/tn/ca_mps/algorithms
+        action: ./scripts/run_moonlab_release_smoke.sh
+      - id: ci_all_green
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["ci_all_green"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every GitHub CI job on HEAD is green, hygiene included (no red, no masking)
+        action: ./scripts/run_moonlab_release_smoke.sh
+
+      # -- Audit-finding gates: each currently-broken subsystem, proven fixed. --
+      - id: gpu_host_sync_contract
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["gpu_host_sync_contract"]
+          event_values: ["PASS"]
+        severity: high
+        label: No measurement/expectation reads a device-backed state without sync (no GPU corruption)
+        action: wire_gpu_sync_and_prove
+      - id: tdvp_projector_splitting
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["tdvp_projector_splitting"]
+          event_values: ["PASS"]
+        severity: high
+        label: TDVP is real projector-splitting (backward step present; real-time vs analytic reference)
+        action: implement_real_tdvp_and_validate
+      - id: zero_phantom_api
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["zero_phantom_api"]
+          event_values: ["PASS"]
+        severity: high
+        label: icc phantom-api reports zero declared-never-defined symbols
+        action: define_or_remove_phantom_decls
+      - id: zero_odr_collision
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["zero_odr_collision"]
+          event_values: ["PASS"]
+        severity: high
+        label: icc odr-audit reports zero cross-subsystem type/symbol collisions
+        action: rename_colliding_definitions
+      - id: hidden_visibility_abi
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["hidden_visibility_abi"]
+          event_values: ["PASS"]
+        severity: high
+        label: ABI test + bindings smoke pass under QSIM_HIDDEN_VISIBILITY=ON (tagged surface suffices)
+        action: tag_moonlab_api_surface
+      - id: docs_apis_exist
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["docs_apis_exist"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every API named in README/docs code snippets resolves to a real header symbol
+        action: rewrite_docs_against_real_headers
+      - id: examples_all_build
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["examples_all_build"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every example source is a registered target and compiles (no orphaned examples)
+        action: register_and_fix_examples
+      - id: binding_versions_synced
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["binding_versions_synced"]
+          event_values: ["PASS"]
+        severity: high
+        label: version_tool check passes (all bindings + README badge + ABI in sync)
+        action: sync_versions
+      - id: bindings_suites_green
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["bindings_suites_green"]
+          event_values: ["PASS"]
+        severity: high
+        label: Python pytest + Rust cargo test + JS vitest all pass
+        action: fix_binding_suites
+
+      # -- Capability completion: beyond what Moonlab describes itself as. --
+      - id: mpi_sharded_gpu_works
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["mpi_sharded_gpu_works"]
+          event_values: ["PASS"]
+        severity: high
+        label: Sharded MPI+CUDA state vector runs >32 qubits across multiple GPUs with halo swaps
+        action: implement_multigpu_sharding_and_fleet_validate
+      - id: qrng_certification_wired
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["qrng_certification_wired"]
+          event_values: ["PASS"]
+        severity: high
+        label: Bell/DI certification consumes the delivered byte stream (no verification theater)
+        action: wire_qrng_di_into_output_path
+      - id: mlkem_official_kat
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["mlkem_official_kat"]
+          event_values: ["PASS"]
+        severity: high
+        label: ML-KEM validated against official ACVP vectors (not self-generated fingerprints)
+        action: embed_official_acvp_vectors
+
+      # -- The adversarial matrix must be green (mirror of the sub-target). --
+      - id: adversarial_matrix_green
+        runtime_event:
+          event_kinds: [moonlab_oracle, moonlab_fuzz, moonlab_differential, moonlab_statistical]
+          event_names:
+            - backend_differential_oracle
+            - gradient_oracle
+            - measurement_statistics_oracle
+            - edge_matrix_oracle
+            - property_invariants_oracle
+            - fuzz_corpus_clean
+            - cross_backend_differential
+            - cross_binding_python
+            - reference_oracle_agreement
+            - qrng_statistical_battery
+            - qrng_bias_positive_control
+            - mlkem_negative_fuzz
+            - mlkem_avalanche
+            - entropy_health_rejects_bad
+          event_values: ["PASS"]
+        severity: high
+        label: Full adversarial matrix (differential + fuzz + statistical + property) is green
+        action: run_moonlab_oracles_and_siblings
+
+  # ---------------------------------------------------------------------------
+  # The adversarial matrix as its own target, so it can be driven and reported
+  # independently. Owned by the oracle lane + fuzz/differential/statistical lanes.
+  # ---------------------------------------------------------------------------
+  - name: moonlab-adversarial-matrix
+    target: moonlab-adversarial-matrix
+    aliases:
+      - adversarial
+      - oracle-matrix
+      - fuzz
+      - differential
+      - generative
+    requires:
+      - id: backend_differential
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["backend_differential_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P1 dense-vs-MPS-vs-Clifford backend differential agrees to tolerance
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: gradient_oracle
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["gradient_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P2 adjoint vs parameter-shift vs finite-difference gradient agreement
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: measurement_statistics
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["measurement_statistics_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P3 sampling frequencies match exact probabilities; collapse consistency
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: edge_matrix
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["edge_matrix_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P5 feature-composition edge matrix (fusion/canonical/noise interleavings)
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: property_invariants
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["property_invariants_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P6 metamorphic invariants (unitarity, reversibility, entropy bounds, isometry)
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: fuzz_corpus_clean
+        runtime_event:
+          event_kinds: [moonlab_fuzz]
+          event_names: ["fuzz_corpus_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every untrusted-input fuzz surface replays its corpus with no ASan/UBSan crash
+        action: ./scripts/run_fuzz.sh replay
+      - id: cross_backend_differential
+        runtime_event:
+          event_kinds: [moonlab_differential]
+          event_names: ["cross_backend_differential"]
+          event_values: ["PASS"]
+        severity: high
+        label: All backends agree with the independent reference oracle
+        action: ./scripts/run_cross_diff.sh
+      - id: cross_binding_python
+        runtime_event:
+          event_kinds: [moonlab_differential]
+          event_names: ["cross_binding_python"]
+          event_values: ["PASS"]
+        severity: high
+        label: Python binding reproduces the reference probabilities
+        action: ./scripts/run_cross_diff.sh
+      - id: qrng_statistical_battery
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["qrng_statistical_battery"]
+          event_values: ["PASS"]
+        severity: high
+        label: Conditioned QRNG passes the SP800-22-lite + PractRand-lite battery
+        action: ./scripts/run_statistical.sh
+      - id: qrng_bias_positive_control
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["qrng_bias_positive_control"]
+          event_values: ["PASS"]
+        severity: high
+        label: The battery has teeth (raw biased path is detected as biased)
+        action: ./scripts/run_statistical.sh
+      - id: mlkem_negative_fuzz
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["mlkem_negative_fuzz"]
+          event_values: ["PASS"]
+        severity: high
+        label: ML-KEM decaps never crashes/OOB on malformed input; implicit rejection holds
+        action: ./scripts/run_statistical.sh
+      - id: mlkem_avalanche
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["mlkem_avalanche"]
+          event_values: ["PASS"]
+        severity: high
+        label: ML-KEM shared secret avalanches on one-bit input change
+        action: ./scripts/run_statistical.sh
+      - id: entropy_health_rejects_bad
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["entropy_health_rejects_bad"]
+          event_values: ["PASS"]
+        severity: high
+        label: SP800-90B health tests reject pathological streams and pass genuine entropy
+        action: ./scripts/run_statistical.sh
+      # -- Nightly / advisory (medium): do not block the PR-time gate. --
+      - id: cross_binding_rust
+        runtime_event:
+          event_kinds: [moonlab_differential]
+          event_names: ["cross_binding_rust"]
+          event_values: ["PASS"]
+        severity: medium
+        label: Rust binding reproduces the reference probabilities (nightly)
+        action: ./scripts/run_cross_diff.sh
+      - id: cross_binding_js
+        runtime_event:
+          event_kinds: [moonlab_differential]
+          event_names: ["cross_binding_js"]
+          event_values: ["PASS"]
+        severity: medium
+        label: WASM/JS binding reproduces the reference probabilities (nightly)
+        action: ./scripts/run_cross_diff.sh
+      - id: constant_time_variance
+        runtime_event:
+          event_kinds: [moonlab_statistical]
+          event_names: ["constant_time_variance"]
+          event_values: ["PASS"]
+        severity: medium
+        label: ML-KEM decaps timing shows no valid/invalid class separation (informational on noisy CI)
+        action: ./scripts/run_statistical.sh
+
+  # ---------------------------------------------------------------------------
+  # ABI readiness (kept, tightened with a hidden-visibility runtime gate).
+  # ---------------------------------------------------------------------------
   - name: moonlab-abi-readiness
     target: moonlab-abi-readiness
     aliases:
@@ -94,12 +415,23 @@ oracles:
         severity: high
         label: ABI / bindings tests are indexed
         action: run_abi_smoke_tests_and_self_index
+      - id: abi_hidden_visibility
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["hidden_visibility_abi"]
+          event_values: ["PASS"]
+        severity: high
+        label: Tagged ABI surface suffices under QSIM_HIDDEN_VISIBILITY=ON
+        action: tag_moonlab_api_surface
       - id: failure_free
         runtime_check: failure_free
         severity: high
         label: Runtime trace records no ABI / binding failures
         action: fix_runtime_failure
 
+  # ---------------------------------------------------------------------------
+  # CA-TN paper readiness (unchanged).
+  # ---------------------------------------------------------------------------
   - name: ca-tn-paper-readiness
     target: ca-tn-paper-readiness
     aliases:
