@@ -1,0 +1,154 @@
+name: Statistical Adversarial
+
+# Adversarial statistical-quality + crypto-negative-space lane.
+#
+#   - PR / push:   fast battery + ML-KEM negative fuzz (under ASan) +
+#                  entropy-health adversarial, with bounded byte budgets.
+#   - nightly /    the deep battery (large byte budget) plus the full ML-KEM
+#     dispatch:    tamper set, the entropy-health controls, and the dudect
+#                  timing harness.  The timing harness is informational on
+#                  hosted (noisy) runners; it gates only when the dispatch
+#                  sets timing_strict=true for a controlled host.
+#
+# These jobs drive scripts/run_statistical.sh, which emits ICC evidence to
+# scripts/icc_traces/moonlab_statistical.jsonl.  Until the integrator wires
+# `add_subdirectory(tests/statistical)` into the root CMakeLists, the script
+# runs with STAT_INJECT_HOOK=1 and wires it temporarily (restored on exit).
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'tests/statistical/**'
+      - 'scripts/run_statistical.sh'
+      - '.github/workflows/statistical.yml'
+      - 'src/applications/qrng.c'
+      - 'src/applications/health_tests.c'
+      - 'src/crypto/**'
+  push:
+    branches: [master]
+    paths:
+      - 'tests/statistical/**'
+      - 'scripts/run_statistical.sh'
+      - '.github/workflows/statistical.yml'
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      timing_strict:
+        description: 'Gate the constant-time harness (only on a quiet, controlled host)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CMAKE_VERSION: '3.27.9'
+  MOONLAB_SKIP_HW_ENTROPY: '1'
+
+jobs:
+  # --------------------------------------------------------------------------
+  # PR lane: fast + ASan.  Battery, ML-KEM negative fuzz, entropy health.
+  # --------------------------------------------------------------------------
+  pr-adversarial:
+    name: pr-battery-negfuzz-health (ASan)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      STAT_INJECT_HOOK: '1'
+      STAT_TARGETS: 'battery mlkem health'
+      BUILD_TYPE: 'Debug'
+      CMAKE_EXTRA_FLAGS: '-DQSIM_ENABLE_SANITIZERS=ON -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF'
+      JOBS: '2'
+      QSIM_BATTERY_BYTES: '131072'
+      QSIM_STREAM_BYTES: '1048576'
+      QSIM_GROVER_BYTES: '65536'
+      ASAN_OPTIONS: 'detect_leaks=0:halt_on_error=1:allocator_may_return_null=1'
+      UBSAN_OPTIONS: 'halt_on_error=1:print_stacktrace=1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -o Acquire::Retries=5
+          sudo apt-get install -y build-essential ninja-build libomp-dev \
+            libopenblas-dev liblapacke-dev pkg-config
+
+      - name: Pin CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Run statistical lane (ASan)
+        shell: bash
+        run: bash scripts/run_statistical.sh
+
+      - name: Upload JSONL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-statistical-pr
+          path: scripts/icc_traces/moonlab_statistical.jsonl
+          if-no-files-found: warn
+
+  # --------------------------------------------------------------------------
+  # Nightly / dispatch: deep byte budget, full target set incl. timing.
+  # --------------------------------------------------------------------------
+  nightly-deep:
+    name: nightly-deep-battery+timing
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      STAT_INJECT_HOOK: '1'
+      STAT_TARGETS: 'battery mlkem timing health'
+      BUILD_TYPE: 'Release'
+      CMAKE_EXTRA_FLAGS: '-DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF'
+      JOBS: '2'
+      QSIM_BATTERY_BYTES: '4194304'
+      QSIM_STREAM_BYTES: '33554432'
+      QSIM_GROVER_BYTES: '262144'
+      QSIM_TIMING_REPS: '100000'
+      TIMING_STRICT: ${{ github.event.inputs.timing_strict }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -o Acquire::Retries=5
+          sudo apt-get install -y build-essential ninja-build libomp-dev \
+            libopenblas-dev liblapacke-dev pkg-config
+
+      - name: Pin CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Run statistical lane (deep)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Timing gates only on a controlled host (dispatch opt-in); on the
+          # hosted nightly it stays informational.
+          if [ "${TIMING_STRICT}" = "true" ]; then
+            export QSIM_TIMING_STRICT=1
+          fi
+          bash scripts/run_statistical.sh
+
+      - name: Upload JSONL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-statistical-nightly
+          path: scripts/icc_traces/moonlab_statistical.jsonl
+          if-no-files-found: warn
