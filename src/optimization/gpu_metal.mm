@@ -4,7 +4,31 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
+#include <complex.h>
 #include <mach/mach_time.h>
+
+/* Metal kernel sources embedded at build time (CMake generates this header
+ * from the src/optimization/kernels .metal files). Installed binaries carry
+ * their shaders here instead of loading them from cwd-relative paths that only
+ * ever exist in the source tree. */
+#include "moonlab_metal_shaders.h"
+
+/* CPU double-precision bridges (gpu_metal_svd.c). Declared here rather than via
+ * tensor.h, whose C99 `double complex` does not compile through the
+ * Objective-C++ frontend. The SVD returns min(m,n) on success, 0 on failure;
+ * the MPS expectation helpers return <Z>/<ZZ> already divided by the norm. */
+extern "C" int moonlab_metal_svd_double(const double *theta_interleaved,
+                                        uint32_t m, uint32_t n,
+                                        double *U_out, double *S_out,
+                                        double *Vt_out);
+extern "C" double moonlab_metal_mps_expectation_z(const double *const *tensors,
+                                                  const uint32_t *bond_dims,
+                                                  uint32_t num_sites, uint32_t site);
+extern "C" double moonlab_metal_mps_expectation_zz(const double *const *tensors,
+                                                   const uint32_t *bond_dims,
+                                                   uint32_t num_sites,
+                                                   uint32_t site_i, uint32_t site_j);
 
 /**
  * @file metal_bridge.mm
@@ -87,36 +111,61 @@ static void set_error(metal_compute_ctx_t* ctx, NSString* error) {
     }
 }
 
-static NSString* load_metal_source(NSString* relativePath, NSError** outError) {
-    NSMutableArray<NSString*>* candidates = [NSMutableArray array];
-    const char* root = getenv("MOONLAB_ROOT");
+/* Return the build-time embedded source for a known kernel file, or nil for
+ * an unrecognised path. This is the default source of shaders so an installed
+ * library needs no on-disk kernel tree. */
+static NSString* embedded_metal_source(NSString* relativePath) {
+    NSString* name = [relativePath lastPathComponent];
+    if ([name isEqualToString:@"quantum_kernels.metal"]) {
+        return [NSString stringWithUTF8String:MOONLAB_METAL_QUANTUM_KERNELS];
+    }
+    if ([name isEqualToString:@"quantum_kernels_batch.metal"]) {
+        return [NSString stringWithUTF8String:MOONLAB_METAL_QUANTUM_KERNELS_BATCH];
+    }
+    if ([name isEqualToString:@"tensor_kernels.metal"]) {
+        return [NSString stringWithUTF8String:MOONLAB_METAL_TENSOR_KERNELS];
+    }
+    return nil;
+}
 
+static NSString* load_metal_source(NSString* relativePath, NSError** outError) {
+    /* MOONLAB_ROOT is a development override: when set, prefer the on-disk
+     * kernel under it so edits to the .metal files take effect without a
+     * rebuild. Otherwise (the normal, installed case) use the embedded
+     * source compiled into the binary. */
+    const char* root = getenv("MOONLAB_ROOT");
     if (root && root[0]) {
         NSString* rootPath = [NSString stringWithUTF8String:root];
-        [candidates addObject:[rootPath stringByAppendingPathComponent:relativePath]];
+        NSString* candidate = [rootPath stringByAppendingPathComponent:relativePath];
+        NSError* error = nil;
+        NSString* source = [NSString stringWithContentsOfFile:candidate
+                                                     encoding:NSUTF8StringEncoding
+                                                        error:&error];
+        if (source) return source;
+        if (outError && error) *outError = error;
     }
-    [candidates addObject:relativePath];
-    [candidates addObject:[@"deps/moonlab" stringByAppendingPathComponent:relativePath]];
 
+    NSString* embedded = embedded_metal_source(relativePath);
+    if (embedded) return embedded;
+
+    /* Last-resort fallbacks for any non-embedded path: app bundle resource,
+     * then cwd-relative. Preserves the historical behaviour for callers that
+     * pass a path outside the embedded set. */
     NSString* resourceName = [[relativePath lastPathComponent] stringByDeletingPathExtension];
     NSString* resourceType = [relativePath pathExtension];
     NSString* bundlePath = [[NSBundle mainBundle] pathForResource:resourceName
                                                            ofType:resourceType];
-    if (bundlePath) {
-        [candidates addObject:bundlePath];
-    }
-
+    NSMutableArray<NSString*>* candidates = [NSMutableArray array];
+    if (bundlePath) [candidates addObject:bundlePath];
+    [candidates addObject:relativePath];
+    [candidates addObject:[@"deps/moonlab" stringByAppendingPathComponent:relativePath]];
     for (NSString* candidate in candidates) {
         NSError* error = nil;
         NSString* source = [NSString stringWithContentsOfFile:candidate
                                                      encoding:NSUTF8StringEncoding
                                                         error:&error];
-        if (source) {
-            return source;
-        }
-        if (outError && error) {
-            *outError = error;
-        }
+        if (source) return source;
+        if (outError && error) *outError = error;
     }
 
     return nil;
@@ -1274,9 +1323,12 @@ int metal_mps_apply_gate_2q(
         uint32_t n = 2 * chi_r_in;
         uint32_t rank;
 
-        // Allocate SVD output buffers (float precision)
+        // Allocate SVD output buffers (float precision). U/Vt hold the
+        // truncated factors (rank <= min(max_bond, min(m,n))), but S holds the
+        // FULL min(m,n) spectrum so the truncation-error loop below stays
+        // in-bounds.
         size_t U_size = m * MIN(max_bond, MIN(m, n)) * sizeof(float) * 2;
-        size_t S_size = MIN(max_bond, MIN(m, n)) * sizeof(float);
+        size_t S_size = MIN(m, n) * sizeof(float);
         size_t Vt_size = MIN(max_bond, MIN(m, n)) * n * sizeof(float) * 2;
 
         metal_buffer_t* U = metal_buffer_create(ctx, U_size);
@@ -1367,133 +1419,110 @@ int metal_svd_truncate(
     if (!ctx || !A || !U || !S || !Vt || !actual_rank) return -1;
 
     @autoreleasepool {
-        uint32_t min_mn = MIN(m, n);
+        const uint32_t min_mn = MIN(m, n);
+        if (min_mn == 0) { *actual_rank = 0; return -1; }
 
-        // Initialize V as identity matrix (float precision for Metal)
-        size_t V_size = n * n * sizeof(float) * 2;
-        metal_buffer_t* V = metal_buffer_create(ctx, V_size);
-        if (!V) return -1;
-
-        // Initialize V to identity
-        float* V_ptr = (float*)metal_buffer_contents(V);
-        memset(V_ptr, 0, V_size);
-        for (uint32_t i = 0; i < n; i++) {
-            V_ptr[(i * n + i) * 2] = 1.0f;  // Real part
+        /* Honest hybrid: the gate contraction upstream ran on the GPU in
+         * float, but the SVD/truncation runs on the CPU in double via the
+         * shared LAPACK-backed tensor_svd (zgesvd).  The old one-sided Jacobi
+         * path never converged (a fixed 6-sweep cap), assumed a sorted
+         * spectrum it did not produce, and silently skipped the decomposition
+         * when jacobiRotationPipeline was nil -- all of which produced wrong
+         * numbers.  Lift theta to interleaved doubles and hand it off. */
+        const float* A_ptr = (const float*)metal_buffer_contents(A);
+        double* theta_d = (double*)malloc((size_t)m * n * 2 * sizeof(double));
+        double* U_d     = (double*)malloc((size_t)m * min_mn * 2 * sizeof(double));
+        double* S_d     = (double*)malloc((size_t)min_mn * sizeof(double));
+        double* Vt_d    = (double*)malloc((size_t)min_mn * n * 2 * sizeof(double));
+        if (!theta_d || !U_d || !S_d || !Vt_d) {
+            free(theta_d); free(U_d); free(S_d); free(Vt_d);
+            return -1;
+        }
+        for (size_t i = 0; i < (size_t)m * n; i++) {
+            theta_d[2 * i]     = (double)A_ptr[2 * i];
+            theta_d[2 * i + 1] = (double)A_ptr[2 * i + 1];
         }
 
-        // Jacobi SVD iterations
-        const int MAX_SWEEPS = 30;
+        int k = moonlab_metal_svd_double(theta_d, m, n, U_d, S_d, Vt_d);
+        free(theta_d);
+        if (k <= 0) { free(U_d); free(S_d); free(Vt_d); return -1; }
 
-        for (int sweep = 0; sweep < MAX_SWEEPS; sweep++) {
-            // Process column pairs
-            for (uint32_t i = 0; i < n - 1; i++) {
-                for (uint32_t j = i + 1; j < n; j++) {
-                    if (!ctx->jacobiRotationPipeline) {
-                        // Fall back to CPU Jacobi rotation
-                        // (In production, implement CPU fallback)
-                        continue;
-                    }
-
-                    metal_buffer_t* buffers[] = {A, V};
-                    uint32_t constants[] = {m, n, i, j};
-
-                    dispatch_kernel(ctx, ctx->jacobiRotationPipeline,
-                                   buffers, 2, constants, 4,
-                                   MAX(m, n));
-                }
-            }
-
-            // Check convergence (simplified - in production, compute off-diag norm)
-            if (sweep > 5) break;  // Minimum sweeps for reasonable accuracy
-        }
-
-        // Extract singular values
-        if (ctx->extractSingularValuesPipeline) {
-            metal_buffer_t* buffers[] = {A, S};
-            uint32_t constants[] = {m, n};
-            dispatch_kernel(ctx, ctx->extractSingularValuesPipeline,
-                           buffers, 2, constants, 2, n);
-        } else {
-            // CPU fallback for singular value extraction (float precision)
-            float* A_ptr = (float*)metal_buffer_contents(A);
-            float* S_ptr = (float*)metal_buffer_contents(S);
-            for (uint32_t j = 0; j < min_mn; j++) {
-                float sum = 0.0f;
-                for (uint32_t i = 0; i < m; i++) {
-                    uint32_t idx = (i * n + j) * 2;
-                    sum += A_ptr[idx] * A_ptr[idx] + A_ptr[idx+1] * A_ptr[idx+1];
-                }
-                S_ptr[j] = sqrtf(sum);
-            }
-        }
-
-        // Determine rank based on cutoff
-        float* S_ptr = (float*)metal_buffer_contents(S);
+        /* Rank selection in double.  S_d is descending (LAPACK), so a single
+         * forward scan against the relative cutoff, capped at max_rank, is
+         * correct. */
+        double max_sv = S_d[0];
+        double thresh = cutoff * max_sv;
         uint32_t rank = 0;
-        float max_sv = S_ptr[0];
-        for (uint32_t i = 0; i < min_mn && i < max_rank; i++) {
-            if (S_ptr[i] > (float)cutoff * max_sv) {
-                rank = i + 1;
-            } else {
-                break;
-            }
+        for (uint32_t i = 0; i < (uint32_t)k && i < max_rank; i++) {
+            if (S_d[i] > thresh) rank = i + 1; else break;
         }
         if (rank == 0) rank = 1;  // Keep at least one
-
         *actual_rank = rank;
 
-        // Normalize U columns and truncate
-        if (ctx->normalizeAndTruncateUPipeline) {
-            metal_buffer_t* buffers[] = {A, U, S};
-            uint32_t constants[] = {m, n, rank};
-            dispatch_kernel_2d(ctx, ctx->normalizeAndTruncateUPipeline,
-                              buffers, 3, constants, 3, m, rank);
-        } else {
-            // CPU fallback (float precision)
-            float* A_ptr = (float*)metal_buffer_contents(A);
-            float* U_ptr = (float*)metal_buffer_contents(U);
-            for (uint32_t i = 0; i < m; i++) {
-                for (uint32_t j = 0; j < rank; j++) {
-                    uint32_t src_idx = (i * n + j) * 2;
-                    uint32_t dst_idx = (i * rank + j) * 2;
-                    float s = S_ptr[j];
-                    if (s > 1e-7f) {
-                        U_ptr[dst_idx] = A_ptr[src_idx] / s;
-                        U_ptr[dst_idx + 1] = A_ptr[src_idx + 1] / s;
-                    } else {
-                        U_ptr[dst_idx] = 0.0f;
-                        U_ptr[dst_idx + 1] = 0.0f;
-                    }
-                }
+        /* Write ALL min(m,n) singular values into S so the caller's
+         * truncation-error accumulation over min(m,n) is in-bounds (the S
+         * buffer is sized min(m,n) by metal_mps_apply_gate_and_svd). */
+        float* S_ptr = (float*)metal_buffer_contents(S);
+        for (uint32_t i = 0; i < (uint32_t)k; i++) S_ptr[i] = (float)S_d[i];
+
+        /* Write the truncated U (m x rank) and Vt (rank x n) back as float2. */
+        float* U_ptr = (float*)metal_buffer_contents(U);
+        for (uint32_t i = 0; i < m; i++) {
+            for (uint32_t j = 0; j < rank; j++) {
+                U_ptr[(i * rank + j) * 2]     = (float)U_d[((size_t)i * min_mn + j) * 2];
+                U_ptr[(i * rank + j) * 2 + 1] = (float)U_d[((size_t)i * min_mn + j) * 2 + 1];
+            }
+        }
+        float* Vt_ptr = (float*)metal_buffer_contents(Vt);
+        for (uint32_t j = 0; j < rank; j++) {
+            for (uint32_t l = 0; l < n; l++) {
+                Vt_ptr[(j * n + l) * 2]     = (float)Vt_d[((size_t)j * n + l) * 2];
+                Vt_ptr[(j * n + l) * 2 + 1] = (float)Vt_d[((size_t)j * n + l) * 2 + 1];
             }
         }
 
-        // Truncate V to get Vt
-        if (ctx->truncateVPipeline) {
-            metal_buffer_t* buffers[] = {V, Vt};
-            uint32_t constants[] = {n, rank};
-            dispatch_kernel_2d(ctx, ctx->truncateVPipeline,
-                              buffers, 2, constants, 2, n, rank);
-        } else {
-            // CPU fallback (float precision)
-            float* Vt_ptr = (float*)metal_buffer_contents(Vt);
-            for (uint32_t i = 0; i < n; i++) {
-                for (uint32_t j = 0; j < rank; j++) {
-                    uint32_t src_idx = (i * n + j) * 2;
-                    uint32_t dst_idx = (j * n + i) * 2;  // Transpose
-                    // Conjugate transpose for V -> Vt
-                    Vt_ptr[dst_idx] = V_ptr[src_idx];
-                    Vt_ptr[dst_idx + 1] = -V_ptr[src_idx + 1];
-                }
-            }
-        }
-
-        metal_buffer_free(V);
+        free(U_d); free(S_d); free(Vt_d);
         return 0;
     }
 }
 
+/* Gather the interleaved-double data pointers of the MPS tensor buffers (Apple
+ * unified memory: metal_buffer_contents is a plain host pointer). Returns a
+ * malloc'd array the caller frees, or NULL on OOM. */
+static const double** gather_mps_tensor_ptrs(metal_buffer_t** mps_tensors,
+                                             uint32_t num_sites) {
+    const double** ptrs = (const double**)malloc((size_t)num_sites * sizeof(const double*));
+    if (!ptrs) return NULL;
+    for (uint32_t s = 0; s < num_sites; s++) {
+        ptrs[s] = (const double*)metal_buffer_contents(mps_tensors[s]);
+    }
+    return ptrs;
+}
+
 double metal_mps_expectation_z(
+    metal_compute_ctx_t* ctx,
+    metal_buffer_t** mps_tensors,
+    const uint32_t* bond_dims,
+    uint32_t num_sites,
+    uint32_t site
+) {
+    if (!ctx || !mps_tensors || !bond_dims || site >= num_sites) return 0.0;
+
+    /* Compute <Z_site>/norm in double from the uploaded double-complex MPS via
+     * the C bridge (the Metal float2 kernels read the double buffers wrong and
+     * never normalized). */
+    const double** ptrs = gather_mps_tensor_ptrs(mps_tensors, num_sites);
+    if (!ptrs) return 0.0;
+    double val = moonlab_metal_mps_expectation_z(ptrs, bond_dims, num_sites, site);
+    free(ptrs);
+    return val;
+}
+
+/* Legacy float2 transfer-matrix GPU path (retired: it read the double-complex
+ * buffers as float2 and never divided by the norm).  Kept out of the build via
+ * the honest double path above; the dead body below is disabled. */
+#if 0
+double metal_mps_expectation_z_legacy(
     metal_compute_ctx_t* ctx,
     metal_buffer_t** mps_tensors,
     const uint32_t* bond_dims,
@@ -1618,6 +1647,7 @@ double metal_mps_expectation_z(
         return expectation;
     }
 }
+#endif /* legacy float2 expectation path */
 
 double metal_mps_expectation_zz(
     metal_compute_ctx_t* ctx,
@@ -1636,166 +1666,15 @@ double metal_mps_expectation_zz(
 
     if (!ctx || !mps_tensors || !bond_dims || site_j >= num_sites) return 0.0;
 
-    // For ZZ correlation, we insert Z at both sites
-    // This is similar to single-site but with two Z insertions
-    // Implementation follows same pattern as metal_mps_expectation_z
-    // but applies transferMatrixZPipeline at both site_i and site_j
-
-    // Full implementation using transfer matrix method with Z at both sites
-    @autoreleasepool {
-        // Get maximum bond dimension for buffer allocation
-        uint32_t max_chi = 1;
-        for (uint32_t s = 0; s < num_sites - 1; s++) {
-            if (bond_dims[s] > max_chi) max_chi = bond_dims[s];
-        }
-
-        // Allocate transfer matrices (float precision for Metal, complex = 2 floats)
-        size_t transfer_size = max_chi * max_chi * sizeof(float) * 2;
-        metal_buffer_t* T_left = metal_buffer_create(ctx, transfer_size);
-        metal_buffer_t* T_curr = metal_buffer_create(ctx, transfer_size);
-        metal_buffer_t* T_temp = metal_buffer_create(ctx, transfer_size);
-
-        if (!T_left || !T_curr || !T_temp) {
-            if (T_left) metal_buffer_free(T_left);
-            if (T_curr) metal_buffer_free(T_curr);
-            if (T_temp) metal_buffer_free(T_temp);
-            return 0.0;
-        }
-
-        // Initialize T_left as identity
-        float* T_left_ptr = (float*)metal_buffer_contents(T_left);
-        memset(T_left_ptr, 0, transfer_size);
-        uint32_t init_chi = (site_i > 0) ? bond_dims[site_i - 1] : 1;
-        for (uint32_t i = 0; i < init_chi; i++) {
-            T_left_ptr[(i * max_chi + i) * 2] = 1.0f;
-        }
-
-        // Phase 1: Contract from left to site_i (identity transfer matrices)
-        for (uint32_t s = 0; s < site_i; s++) {
-            uint32_t chi_s_l = (s > 0) ? bond_dims[s - 1] : 1;
-            uint32_t chi_s_r = bond_dims[s];
-
-            if (ctx->transferMatrixIdentityPipeline) {
-                metal_buffer_t* buffers[] = {mps_tensors[s], T_curr};
-                uint32_t constants[] = {chi_s_l, chi_s_r};
-                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
-                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
-            }
-
-            if (s > 0 && ctx->contractTransferPipeline) {
-                metal_buffer_t* buffers[] = {T_left, T_curr, T_temp};
-                uint32_t constants[] = {chi_s_l};
-                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
-                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
-                metal_buffer_t* tmp = T_left;
-                T_left = T_temp;
-                T_temp = tmp;
-            } else if (s == 0) {
-                memcpy(T_left_ptr, metal_buffer_contents(T_curr), transfer_size);
-            }
-        }
-
-        // Phase 2: Apply Z transfer matrix at site_i
-        uint32_t chi_i_l = (site_i > 0) ? bond_dims[site_i - 1] : 1;
-        uint32_t chi_i_r = (site_i < num_sites - 1) ? bond_dims[site_i] : 1;
-
-        if (ctx->transferMatrixZPipeline) {
-            metal_buffer_t* buffers[] = {mps_tensors[site_i], T_curr};
-            uint32_t constants[] = {chi_i_l, chi_i_r};
-            dispatch_kernel_2d(ctx, ctx->transferMatrixZPipeline,
-                              buffers, 2, constants, 2, chi_i_l, chi_i_l);
-        }
-
-        if (site_i > 0 && ctx->contractTransferPipeline) {
-            metal_buffer_t* buffers[] = {T_left, T_curr, T_temp};
-            uint32_t constants[] = {chi_i_l};
-            dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
-                              buffers, 3, constants, 1, chi_i_l, chi_i_l);
-            metal_buffer_t* tmp = T_curr;
-            T_curr = T_temp;
-            T_temp = tmp;
-        }
-
-        // Phase 3: Contract from site_i+1 to site_j-1 (identity transfer matrices)
-        for (uint32_t s = site_i + 1; s < site_j; s++) {
-            uint32_t chi_s_l = bond_dims[s - 1];
-            uint32_t chi_s_r = (s < num_sites - 1) ? bond_dims[s] : 1;
-
-            if (ctx->transferMatrixIdentityPipeline) {
-                metal_buffer_t* buffers[] = {mps_tensors[s], T_temp};
-                uint32_t constants[] = {chi_s_l, chi_s_r};
-                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
-                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
-            }
-
-            if (ctx->contractTransferPipeline) {
-                metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
-                uint32_t constants[] = {chi_s_l};
-                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
-                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
-                metal_buffer_t* tmp = T_curr;
-                T_curr = T_left;
-                T_left = tmp;
-            }
-        }
-
-        // Phase 4: Apply Z transfer matrix at site_j
-        uint32_t chi_j_l = bond_dims[site_j - 1];
-        uint32_t chi_j_r = (site_j < num_sites - 1) ? bond_dims[site_j] : 1;
-
-        if (ctx->transferMatrixZPipeline) {
-            metal_buffer_t* buffers[] = {mps_tensors[site_j], T_temp};
-            uint32_t constants[] = {chi_j_l, chi_j_r};
-            dispatch_kernel_2d(ctx, ctx->transferMatrixZPipeline,
-                              buffers, 2, constants, 2, chi_j_l, chi_j_l);
-        }
-
-        if (ctx->contractTransferPipeline) {
-            metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
-            uint32_t constants[] = {chi_j_l};
-            dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
-                              buffers, 3, constants, 1, chi_j_l, chi_j_l);
-            metal_buffer_t* tmp = T_curr;
-            T_curr = T_left;
-            T_left = tmp;
-        }
-
-        // Phase 5: Contract from site_j+1 to right (identity transfer matrices)
-        for (uint32_t s = site_j + 1; s < num_sites; s++) {
-            uint32_t chi_s_l = bond_dims[s - 1];
-            uint32_t chi_s_r = (s < num_sites - 1) ? bond_dims[s] : 1;
-
-            if (ctx->transferMatrixIdentityPipeline) {
-                metal_buffer_t* buffers[] = {mps_tensors[s], T_temp};
-                uint32_t constants[] = {chi_s_l, chi_s_r};
-                dispatch_kernel_2d(ctx, ctx->transferMatrixIdentityPipeline,
-                                  buffers, 2, constants, 2, chi_s_l, chi_s_l);
-            }
-
-            if (ctx->contractTransferPipeline) {
-                metal_buffer_t* buffers[] = {T_curr, T_temp, T_left};
-                uint32_t constants[] = {chi_s_l};
-                dispatch_kernel_2d(ctx, ctx->contractTransferPipeline,
-                                  buffers, 3, constants, 1, chi_s_l, chi_s_l);
-                metal_buffer_t* tmp = T_curr;
-                T_curr = T_left;
-                T_left = tmp;
-            }
-        }
-
-        // Extract trace (real part of diagonal elements)
-        double expectation = 0.0;
-        float* T_final = (float*)metal_buffer_contents(T_curr);
-        uint32_t final_chi = (num_sites > 1) ? bond_dims[num_sites - 2] : 1;
-        for (uint32_t i = 0; i < final_chi; i++) {
-            expectation += (double)T_final[(i * max_chi + i) * 2];
-        }
-
-        metal_buffer_free(T_left);
-        metal_buffer_free(T_curr);
-        metal_buffer_free(T_temp);
-        return expectation;
-    }
+    /* <Z_i Z_j>/norm in double from the uploaded double-complex MPS, via the
+     * same honest contraction as <Z> (Z inserted at both sites). Replaces the
+     * float2 GPU path, which misread the buffers and never normalized. */
+    const double** ptrs = gather_mps_tensor_ptrs(mps_tensors, num_sites);
+    if (!ptrs) return 0.0;
+    double val = moonlab_metal_mps_expectation_zz(ptrs, bond_dims, num_sites,
+                                                  site_i, site_j);
+    free(ptrs);
+    return val;
 }
 
 double metal_tensor_norm_squared(
