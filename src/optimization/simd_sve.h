@@ -37,15 +37,21 @@
 extern "C" {
 #endif
 
-// Check for SVE support
-#if defined(__ARM_FEATURE_SVE) && defined(__aarch64__)
+// Check for SVE support.  SVE is a Linux/aarch64 feature; Windows-on-ARM is
+// NEON-only and clang-cl there cannot even mangle the SVE built-in types, yet
+// it defines __aarch64__/_M_ARM64 (and may define __ARM_FEATURE_SVE from a
+// stray -march flag).  Exclude Windows explicitly so <arm_sve.h> is never
+// included there -- NEON is the aarch64 SIMD backend on Windows-ARM.
+#if defined(__ARM_FEATURE_SVE) && defined(__aarch64__) && \
+    !defined(_WIN32) && !defined(_WIN64)
     #define SVE_AVAILABLE 1
 #else
     #define SVE_AVAILABLE 0
 #endif
 
 // Check for SVE2 support
-#if defined(__ARM_FEATURE_SVE2) && defined(__aarch64__)
+#if defined(__ARM_FEATURE_SVE2) && defined(__aarch64__) && \
+    !defined(_WIN32) && !defined(_WIN64)
     #define SVE2_AVAILABLE 1
 #else
     #define SVE2_AVAILABLE 0

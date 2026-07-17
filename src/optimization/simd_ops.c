@@ -33,8 +33,28 @@
     #define NEON_AVAILABLE 0
 #endif
 
+#if defined(__x86_64__) && defined(__SSE2__)
+/* Horizontal sum of the two doubles in a 128-bit register.  _mm_hadd_pd is an
+ * SSE3 intrinsic; on a strict SSE2 build (no SSE3) it is undeclared and the
+ * SSE2 code paths below fail to compile.  Use hadd when SSE3 is available and a
+ * pure-SSE2 shuffle+add otherwise so every SSE2 build compiles and runs. */
+static inline double moonlab_sse_hsum_pd(__m128d v) {
+#ifdef __SSE3__
+    __m128d s = _mm_hadd_pd(v, v);
+    return _mm_cvtsd_f64(s);
+#else
+    __m128d hi = _mm_unpackhi_pd(v, v);   /* {v1, v1} */
+    __m128d s  = _mm_add_sd(v, hi);       /* {v0 + v1, .} */
+    return _mm_cvtsd_f64(s);
+#endif
+}
+#endif
+
 // ARM SVE (Scalable Vector Extension) - for Graviton3, A64FX, etc.
-#if defined(__ARM_FEATURE_SVE)
+// SVE is a Linux/aarch64 feature; Windows-on-ARM is NEON-only and clang-cl
+// there cannot mangle the SVE built-in types, so never include <arm_sve.h> on
+// Windows even if __ARM_FEATURE_SVE leaks in from a -march flag.
+#if defined(__ARM_FEATURE_SVE) && !defined(_WIN32) && !defined(_WIN64)
     #include <arm_sve.h>
     #define SVE_AVAILABLE 1
 #else
@@ -181,9 +201,7 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     __m128d sum_high = _mm256_extractf128_pd(sum_vec, 1);
     __m128d sum_low = _mm256_castpd256_pd128(sum_vec);
     __m128d sum128 = _mm_add_pd(sum_low, sum_high);
-    __m128d sum_final = _mm_hadd_pd(sum128, sum128);
-    
-    double sum = _mm_cvtsd_f64(sum_final);
+    double sum = moonlab_sse_hsum_pd(sum128);
     
     // Handle remaining elements
     for (; i < n; i++) {
@@ -206,10 +224,9 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
         sum_vec = _mm_add_pd(sum_vec, sq);
     }
     
-    // Horizontal sum
-    __m128d sum_final = _mm_hadd_pd(sum_vec, sum_vec);
-    return _mm_cvtsd_f64(sum_final);
-    
+    // Horizontal sum (SSE2-safe)
+    return moonlab_sse_hsum_pd(sum_vec);
+
 #elif SVE_AVAILABLE
     // ARM SVE implementation (scalable vector length)
     // SVE processes svcntd() doubles at a time (varies by platform: 2-8)
@@ -453,20 +470,20 @@ void simd_compute_probabilities(
         __m512d data = _mm512_loadu_pd((const double*)&amplitudes[i]);
         __m512d sq = _mm512_mul_pd(data, data);
 
-        // Horizontal add within each complex number pair
-        // Result: [re0^2+im0^2, re1^2+im1^2, re2^2+im2^2, re3^2+im3^2, ...]
-        // Use shuffle and add to get probability sums
-        __m512d even = _mm512_shuffle_pd(sq, sq, 0x00);  // Real parts duplicated
-        __m512d odd = _mm512_shuffle_pd(sq, sq, 0xFF);   // Imag parts duplicated
-        __m512d sum = _mm512_add_pd(even, odd);
+        // Horizontal add within each complex pair: sum holds
+        // [p0,p0,p1,p1,p2,p2,p3,p3] with pk = re_k^2 + im_k^2.  Store the
+        // vector and read the even lanes -- the old code discarded this vector
+        // and re-summed the squares scalar-wise.
+        __m512d even = _mm512_shuffle_pd(sq, sq, 0x00);  // real parts duplicated
+        __m512d odd  = _mm512_shuffle_pd(sq, sq, 0xFF);  // imag parts duplicated
+        __m512d sum  = _mm512_add_pd(even, odd);
 
-        // Extract the 4 probabilities
         double probs[8];
-        _mm512_storeu_pd(probs, sq);
-        probabilities[i]   = probs[0] + probs[1];
-        probabilities[i+1] = probs[2] + probs[3];
-        probabilities[i+2] = probs[4] + probs[5];
-        probabilities[i+3] = probs[6] + probs[7];
+        _mm512_storeu_pd(probs, sum);
+        probabilities[i]   = probs[0];
+        probabilities[i+1] = probs[2];
+        probabilities[i+2] = probs[4];
+        probabilities[i+3] = probs[6];
     }
 
     // Handle remaining
@@ -505,8 +522,7 @@ void simd_compute_probabilities(
     for (size_t i = 0; i < n; i++) {
         __m128d data = _mm_loadu_pd((const double*)&amplitudes[i]);
         __m128d sq = _mm_mul_pd(data, data);
-        __m128d sum = _mm_hadd_pd(sq, sq);
-        probabilities[i] = _mm_cvtsd_f64(sum);
+        probabilities[i] = moonlab_sse_hsum_pd(sq);
     }
 
 #elif SVE_AVAILABLE
@@ -643,73 +659,18 @@ void simd_mix_entropy(
     memcpy(output, state, size);
     simd_xor_bytes(output, entropy, size);
 
-#if AVX512_AVAILABLE && !defined(__aarch64__)
-    // Additional mixing with bit rotation (AVX-512)
-    size_t i = 0;
-    for (; i + 63 < size; i += 64) {
-        __m512i data = _mm512_loadu_si512((const __m512i*)(output + i));
-
-        // Rotate left by 3 bits
-        __m512i rotated = _mm512_or_si512(
-            _mm512_slli_epi32(data, 3),
-            _mm512_srli_epi32(data, 29)
-        );
-
-        // XOR with rotation
-        __m512i mixed = _mm512_xor_si512(data, rotated);
-        _mm512_storeu_si512((__m512i*)(output + i), mixed);
-    }
-
-    // Handle remaining with scalar
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-
-#elif defined(__AVX2__) && !defined(__aarch64__)
-    // Additional mixing with bit rotation (AVX2)
-    size_t i = 0;
-    for (; i + 31 < size; i += 32) {
-        __m256i data = _mm256_loadu_si256((const __m256i*)(output + i));
-        
-        // Rotate left by 3 bits
-        __m256i rotated = _mm256_or_si256(
-            _mm256_slli_epi32(data, 3),
-            _mm256_srli_epi32(data, 29)
-        );
-        
-        // XOR with rotation
-        __m256i mixed = _mm256_xor_si256(data, rotated);
-        _mm256_storeu_si256((__m256i*)(output + i), mixed);
-    }
-    
-    // Handle remaining with scalar
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-    
-#elif defined(__SSE2__) && defined(__x86_64__) && !defined(__aarch64__)
-    // SSE2 version
-    size_t i = 0;
-    for (; i + 15 < size; i += 16) {
-        __m128i data = _mm_loadu_si128((const __m128i*)(output + i));
-        __m128i rotated = _mm_or_si128(
-            _mm_slli_epi32(data, 3),
-            _mm_srli_epi32(data, 29)
-        );
-        __m128i mixed = _mm_xor_si128(data, rotated);
-        _mm_storeu_si128((__m128i*)(output + i), mixed);
-    }
-    
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-    
-#else
-    // Scalar mixing with rotation
+    // Canonical additional mixing: per-byte rotate-left-by-3 XORed into each
+    // byte.  This MUST be byte-wise so the result is identical on every build.
+    // The previous SIMD paths applied a 32-bit-lane rotate (slli_epi32(3) |
+    // srli_epi32(29)) while the scalar tail and scalar-only build applied an
+    // 8-bit rotate, so the mixed entropy diverged across architectures.  A
+    // byte-rotate has no direct SSE2/AVX2 intrinsic (and needs AVX512BW under
+    // AVX-512), so the scalar byte-rotate is the single canonical path.
     for (size_t i = 0; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
+        uint8_t b = output[i];
+        uint8_t rotl3 = (uint8_t)((b << 3) | (b >> 5));
+        output[i] = (uint8_t)(b ^ rotl3);
     }
-#endif
 }
 
 // ============================================================================
