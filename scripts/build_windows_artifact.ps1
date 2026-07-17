@@ -46,7 +46,7 @@ $commonArgs = @(
     '-DQSIM_WERROR=ON'
 )
 
-$configured = $false
+$generator = $null
 foreach ($candidate in @('Visual Studio 18 2026', 'Visual Studio 17 2022')) {
     if (-not ($cmakeHelp -match [regex]::Escape($candidate))) { continue }
     Write-Host "Trying generator '$candidate', ClangCL, platform $platform"
@@ -54,12 +54,12 @@ foreach ($candidate in @('Visual Studio 18 2026', 'Visual Studio 17 2022')) {
     & cmake '-G' $candidate @commonArgs
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Configured with '$candidate'"
-        $configured = $true
+        $generator = $candidate
         break
     }
     Write-Host "Generator '$candidate' did not configure (exit $LASTEXITCODE); trying next"
 }
-if (-not $configured) {
+if (-not $generator) {
     throw 'Moonlab configure failed: no installed Visual Studio generator worked'
 }
 
