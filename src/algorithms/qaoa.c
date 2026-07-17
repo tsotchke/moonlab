@@ -6,6 +6,14 @@
 #include <stdio.h>
 #include <float.h>
 
+/* The library is compiled with -ffast-math, under which the C99 QAOA_ENERGY_SENTINEL
+ * macro is undefined behaviour (the optimizer assumes no infinities) -- the
+ * WASM build flags every use as -Wnan-infinity-disabled.  Use DBL_MAX (finite,
+ * larger than any physical energy) as both the "failed value" sentinel and the
+ * minimisation-search initialiser; the `<` comparisons that drive the search
+ * are unchanged.  Mirrors the VQE_ENERGY_ERROR sentinel in vqe.c. */
+#define QAOA_ENERGY_SENTINEL DBL_MAX
+
 /**
  * @file qaoa.c
  * @brief Production QAOA implementation for combinatorial optimization
@@ -645,20 +653,20 @@ double qaoa_compute_expectation(
      */
     
     if (!solver || !gamma || !beta) {
-        return INFINITY;
+        return QAOA_ENERGY_SENTINEL;
     }
     
     // Create quantum state
     quantum_state_t state;
     if (quantum_state_init(&state, solver->ising->num_qubits) != QS_SUCCESS) {
-        return INFINITY;
+        return QAOA_ENERGY_SENTINEL;
     }
     
     // Apply QAOA circuit
     if (qaoa_apply_circuit(&state, solver->ising, gamma, beta, 
                           solver->config.num_layers) != QS_SUCCESS) {
         quantum_state_free(&state);
-        return INFINITY;
+        return QAOA_ENERGY_SENTINEL;
     }
     
     // Sample to estimate expectation
@@ -697,7 +705,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
     qaoa_result_t result = {0};
     
     if (!solver) {
-        result.best_energy = INFINITY;
+        result.best_energy = QAOA_ENERGY_SENTINEL;
         return result;
     }
     
@@ -710,7 +718,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
         free(result.optimal_gamma);
         free(result.optimal_beta);
         free(result.energy_history);
-        result.best_energy = INFINITY;
+        result.best_energy = QAOA_ENERGY_SENTINEL;
         return result;
     }
     
@@ -718,8 +726,8 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
     memcpy(result.optimal_gamma, solver->current_gamma, result.num_layers * sizeof(double));
     memcpy(result.optimal_beta, solver->current_beta, result.num_layers * sizeof(double));
     
-    double best_energy = INFINITY;
-    double prev_energy = INFINITY;
+    double best_energy = QAOA_ENERGY_SENTINEL;
+    double prev_energy = QAOA_ENERGY_SENTINEL;
     
     // Gradient buffers
     double *grad_gamma = malloc(result.num_layers * sizeof(double));
@@ -806,7 +814,7 @@ qaoa_result_t qaoa_solve(qaoa_solver_t *solver) {
         // Sample multiple times and keep best
         size_t num_samples = 1000;
         uint64_t best_bitstring = 0;
-        double best_sample_energy = INFINITY;
+        double best_sample_energy = QAOA_ENERGY_SENTINEL;
         
         for (size_t s = 0; s < num_samples; s++) {
             quantum_state_t sample_state;
