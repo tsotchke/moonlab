@@ -1,4 +1,5 @@
 #include "qrng.h"
+#include "qrng_di.h"
 #include "../utils/constants.h"
 #include "../optimization/simd_ops.h"
 #include "../utils/secure_memory.h"
@@ -487,6 +488,165 @@ void qrng_v3_free(qrng_v3_ctx_t *ctx) {
 // RANDOM NUMBER GENERATION
 // ============================================================================
 
+/* ============================================================================
+ * BELL-CERTIFIED EXTRACTION (BELL_VERIFIED mode)
+ * ==========================================================================*/
+
+/* Certified-epoch parameters.  A single epoch measures a simulated Bell
+ * pair, computes CHSH on that exact measurement stream, derives the Pironio
+ * min-entropy bound H_min(S), and Toeplitz-extracts a bounded chunk of
+ * near-uniform output from the same measured bits.  The chunk is capped so
+ * the (quadratic) Toeplitz stays cheap; larger requests loop over epochs. */
+#define QRNG_CERT_CHUNK_BYTES   512u
+#define QRNG_CERT_EPS_BITS      64u
+#define QRNG_CERT_TRIALS        (8u * QRNG_CERT_CHUNK_BYTES)  /* raw = 2*trials bits */
+
+/* Fill ctx->output_buffer with certified bytes for one Bell epoch.
+ * On success returns 0 and sets *out_valid to the number of certified bytes
+ * written (1..QRNG_CERT_CHUNK_BYTES).  Returns -2 if the measured CHSH fails
+ * the acceptance gate (fail closed, no output), -1 on entropy/quantum error.
+ * The CHSH statistic and the extracted output are derived from the SAME
+ * simulated measurement stream, so a set bell_epochs_certified reflects a
+ * certification that actually ran on delivered bits -- not a scratch state. */
+static int bell_certified_refill(qrng_v3_ctx_t *ctx, size_t *out_valid) {
+    const size_t n_out_max = ctx->output_buffer_size < QRNG_CERT_CHUNK_BYTES
+                                 ? ctx->output_buffer_size
+                                 : QRNG_CERT_CHUNK_BYTES;
+    const size_t trials = QRNG_CERT_TRIALS;
+    const size_t raw_bits = trials * 2;              /* two outcomes per trial */
+    const size_t raw_bytes = (raw_bits + 7) / 8;
+    /* Toeplitz needs raw_bits + 8*n_out - 1 seed bits; size for the max. */
+    const size_t seed_bits = raw_bits + 8 * n_out_max - 1;
+    const size_t seed_bytes = (seed_bits + 7) / 8;
+
+    int rc = -1;
+    uint8_t *raw = calloc(1, raw_bytes ? raw_bytes : 1);
+    uint8_t *seed = calloc(1, seed_bytes ? seed_bytes : 1);
+    quantum_state_t bell;
+    int bell_ready = 0;
+    if (!raw || !seed) goto done;
+
+    if (quantum_state_init(&bell, 2) != QS_SUCCESS) goto done;
+    bell_ready = 1;
+    if (create_bell_state_phi_plus(&bell, 0, 1) != QS_SUCCESS) goto done;
+
+    /* Optimal CHSH settings; the 4 setting pairs map to the correlator array
+     * [E(a,b), E(a,b'), E(a',b), E(a',b')] consumed by calculate_chsh_parameter. */
+    bell_measurement_settings_t s;
+    bell_get_optimal_settings(&s);
+    const double ang_a[4] = { s.angle_a1, s.angle_a1, s.angle_a2, s.angle_a2 };
+    const double ang_b[4] = { s.angle_b1, s.angle_b2, s.angle_b1, s.angle_b2 };
+
+    /* Precompute each setting's joint outcome distribution once. */
+    double p00[4], p01[4], p10[4];
+    for (int k = 0; k < 4; k++) {
+        quantum_state_t ms;
+        if (quantum_state_clone(&ms, &bell) != QS_SUCCESS) goto done;
+        if (gate_ry(&ms, 0, -ang_a[k]) != QS_SUCCESS ||
+            gate_ry(&ms, 1, -ang_b[k]) != QS_SUCCESS) {
+            quantum_state_free(&ms);
+            goto done;
+        }
+        double a00 = 0.0, a01 = 0.0, a10 = 0.0;
+        for (uint64_t basis = 0; basis < ms.state_dim; basis++) {
+            double pr = quantum_state_get_probability(&ms, basis);
+            int ba = (int)((basis >> 0) & 1);
+            int bb = (int)((basis >> 1) & 1);
+            if (!ba && !bb) a00 += pr;
+            else if (!ba && bb) a01 += pr;
+            else if (ba && !bb) a10 += pr;
+        }
+        p00[k] = a00; p01[k] = a01; p10[k] = a10;
+        quantum_state_free(&ms);
+    }
+
+    /* Measure the epoch: cycle the 4 settings, accumulate correlators, and
+     * append both outcome bits to the raw stream that will feed extraction. */
+    int64_t corr_sum[4] = {0, 0, 0, 0};
+    size_t  corr_n[4]   = {0, 0, 0, 0};
+    size_t bitpos = 0;
+    for (size_t t = 0; t < trials; t++) {
+        int k = (int)(t & 3u);
+        double r;
+        if (quantum_entropy_get_double(&ctx->entropy_ctx, &r) != 0) goto done;
+        int oa, ob;
+        if (r < p00[k]) { oa = 0; ob = 0; }
+        else if (r < p00[k] + p01[k]) { oa = 0; ob = 1; }
+        else if (r < p00[k] + p01[k] + p10[k]) { oa = 1; ob = 0; }
+        else { oa = 1; ob = 1; }
+        int sa = oa ? -1 : 1;
+        int sb = ob ? -1 : 1;
+        corr_sum[k] += (int64_t)(sa * sb);
+        corr_n[k]++;
+        if (oa) raw[bitpos >> 3] |= (uint8_t)(1u << (bitpos & 7u));
+        bitpos++;
+        if (ob) raw[bitpos >> 3] |= (uint8_t)(1u << (bitpos & 7u));
+        bitpos++;
+    }
+
+    double corr[4];
+    for (int k = 0; k < 4; k++) {
+        corr[k] = corr_n[k] ? (double)corr_sum[k] / (double)corr_n[k] : 0.0;
+    }
+    double S = calculate_chsh_parameter(corr);
+    double h_min = qrng_di_min_entropy_from_chsh(S);
+
+    /* Record this epoch's measured CHSH (pass or fail) so status reflects it. */
+    if (S > ctx->stats.max_chsh) ctx->stats.max_chsh = S;
+    if (ctx->stats.min_chsh == 0.0 || S < ctx->stats.min_chsh) ctx->stats.min_chsh = S;
+    double total = ctx->stats.average_chsh * (double)ctx->stats.bell_tests_performed;
+    ctx->stats.bell_tests_performed++;
+    ctx->stats.average_chsh = (total + S) / (double)ctx->stats.bell_tests_performed;
+
+    if (ctx->bell_monitor) {
+        bell_test_result_t bres = {0};
+        bres.chsh_value = S;
+        bres.correlation_ab = corr[0];
+        bres.correlation_ab_prime = corr[1];
+        bres.correlation_a_prime_b = corr[2];
+        bres.correlation_a_prime_b_prime = corr[3];
+        bres.classical_bound = 2.0;
+        bres.quantum_bound = 2.0 * 1.41421356237309504880;
+        bres.measurements = trials;
+        bres.standard_error = 2.0 / sqrt((double)trials);
+        bres.violates_classical = (S > 2.0);
+        bres.confirms_quantum = (S > 2.4);
+        bell_monitor_add_result(ctx->bell_monitor, &bres);
+    }
+
+    /* Acceptance gate: reject fail-closed if the violation is too weak. */
+    if (S < ctx->config.min_acceptable_chsh || S <= 2.0 || h_min <= 0.0) {
+        rc = -2;
+        goto done;
+    }
+
+    /* Certified output length: raw_bits * H_min must cover 8*n_out + eps. */
+    double certified_bits = (double)raw_bits * h_min - (double)QRNG_CERT_EPS_BITS;
+    if (certified_bits < 8.0) { rc = -2; goto done; }
+    size_t n_out = (size_t)(certified_bits / 8.0);
+    if (n_out > n_out_max) n_out = n_out_max;
+    if (n_out == 0) { rc = -2; goto done; }
+
+    /* Fresh public seed for the Toeplitz strong extractor. */
+    if (entropy_pool_get_bytes(ctx->entropy_pool, seed, seed_bytes) != 0) goto done;
+
+    if (qrng_di_toeplitz_extract(raw, raw_bytes, seed, seed_bytes,
+                                 ctx->output_buffer, n_out) != 0) {
+        goto done;
+    }
+
+    ctx->stats.bell_tests_passed++;
+    ctx->stats.bell_epochs_certified++;
+    *out_valid = n_out;
+    rc = 0;
+
+done:
+    if (bell_ready) quantum_state_free(&bell);
+    if (raw) { secure_memzero(raw, raw_bytes ? raw_bytes : 1); free(raw); }
+    if (seed) { secure_memzero(seed, seed_bytes ? seed_bytes : 1); free(seed); }
+    return rc;
+}
+
 qrng_v3_error_t qrng_v3_bytes(
     qrng_v3_ctx_t *ctx,
     uint8_t *buffer,
@@ -494,9 +654,44 @@ qrng_v3_error_t qrng_v3_bytes(
 ) {
     VALIDATE_NOT_NULL(ctx, QRNG_V3_ERROR_NULL_CONTEXT);
     VALIDATE_BUFFER(buffer, size, QRNG_V3_ERROR_NULL_BUFFER);
-    
+
     if (!ctx->initialized) {
         return QRNG_V3_ERROR_NOT_INITIALIZED;
+    }
+
+    /* BELL_VERIFIED mode delivers only Pironio-bounded, Toeplitz-extracted
+     * bytes: each refill runs a certified epoch whose CHSH is measured on the
+     * same stream that is extracted.  A failed acceptance gate is fail-closed. */
+    if (ctx->config.mode == QRNG_V3_MODE_BELL_VERIFIED) {
+        if (ctx->perf_monitor) {
+            perf_monitor_start_operation(ctx->perf_monitor, PERF_OP_OUTPUT_GENERATION);
+        }
+        size_t copied = 0;
+        while (copied < size) {
+            if (ctx->buffer_pos >= ctx->buffer_valid) {
+                size_t valid = 0;
+                int crc = bell_certified_refill(ctx, &valid);
+                if (crc != 0) {
+                    secure_memzero(buffer, size);
+                    if (ctx->perf_monitor) perf_monitor_end_operation(ctx->perf_monitor);
+                    return (crc == -2) ? QRNG_V3_ERROR_BELL_TEST_FAILED
+                                       : QRNG_V3_ERROR_ENTROPY_FAILURE;
+                }
+                ctx->buffer_pos = 0;
+                ctx->buffer_valid = valid;
+            }
+            size_t avail = ctx->buffer_valid - ctx->buffer_pos;
+            size_t take = (avail < size - copied) ? avail : size - copied;
+            memcpy(buffer + copied, ctx->output_buffer + ctx->buffer_pos, take);
+            ctx->buffer_pos += take;
+            copied += take;
+        }
+        ctx->stats.bytes_generated += size;
+        if (ctx->perf_monitor) {
+            perf_monitor_end_operation(ctx->perf_monitor);
+            perf_monitor_record_bytes(ctx->perf_monitor, size);
+        }
+        return QRNG_V3_SUCCESS;
     }
     
     // Performance monitoring
@@ -1056,6 +1251,13 @@ qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode) {
 qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx) {
     if (!ctx) return QRNG_V3_MODE_DIRECT;
     return ctx->config.mode;
+}
+
+int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx) {
+    if (!ctx) return 0;
+    /* GROVER deliberately amplifies a biased distribution; its raw bytes are
+     * non-uniform by contract.  DIRECT and BELL_VERIFIED deliver uniform bytes. */
+    return ctx->config.mode != QRNG_V3_MODE_GROVER;
 }
 
 // ============================================================================

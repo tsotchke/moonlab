@@ -33,7 +33,11 @@ extern "C" {
  *   - @em GROVER: apply a configured number of Grover iterations to
  *     bias the output distribution before measurement; used for
  *     studying structured quantum randomness and for sampling from
- *     pre-designed distributions.
+ *     pre-designed distributions. Its raw @ref qrng_v3_bytes output is
+ *     deliberately NON-UNIFORM and must not be consumed as uniform
+ *     randomness; @ref qrng_v3_output_is_uniform returns 0 in this mode.
+ *     Callers needing uniform bytes use DIRECT/BELL_VERIFIED, or the
+ *     SHAKE256-conditioned @ref moonlab_qrng_bytes release path.
  *   - @em BELL_VERIFIED: prepares a separate simulated Bell pair and runs
  *     a 4,000-sample CHSH plumbing check before releasing the first byte of
  *     every monitored epoch. A failed check zeroizes and rejects the draw.
@@ -158,6 +162,8 @@ typedef struct {
     // Bell test stats
     uint64_t bell_tests_performed;
     uint64_t bell_tests_passed;
+    uint64_t bell_epochs_certified; /**< Epochs delivered via the Pironio +
+                                     *   Toeplitz certified-extraction path */
     double average_chsh;
     double min_chsh;
     double max_chsh;
@@ -193,6 +199,10 @@ typedef struct {
     uint8_t *output_buffer;
     size_t output_buffer_size;
     size_t buffer_pos;
+    size_t buffer_valid;   /**< Bytes of output_buffer currently valid. In
+                            *   BELL_VERIFIED mode a certified epoch fills only
+                            *   up to a bounded chunk, so this can be < the
+                            *   allocated output_buffer_size. */
     
     // Grover caching
     uint64_t *grover_cache;
@@ -443,11 +453,24 @@ qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode);
 
 /**
  * @brief Get current operation mode
- * 
+ *
  * @param ctx Quantum RNG context
  * @return Current mode
  */
 qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
+
+/**
+ * @brief Report whether raw qrng_v3_bytes output in the current mode is
+ *        intended to be uniform.
+ *
+ * DIRECT and BELL_VERIFIED deliver uniform bytes (BELL_VERIFIED after
+ * Pironio-bounded Toeplitz extraction). GROVER deliberately biases the
+ * measured distribution, so its raw bytes are non-uniform by design.
+ *
+ * @param ctx Quantum RNG context
+ * @return 1 if raw output is intended uniform, 0 if non-uniform (GROVER).
+ */
+int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
 
 // ============================================================================
 // STATISTICS & MONITORING

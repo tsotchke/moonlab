@@ -181,7 +181,13 @@ int moonlab_qrng_get_status(moonlab_qrng_status_t* status) {
         MOONLAB_QRNG_CAP_SHAKE256_CONDITIONED |
         MOONLAB_QRNG_CAP_BELL_SIMULATION_GATED |
         MOONLAB_QRNG_CAP_THREAD_SAFE;
-    if (stats.bell_tests_performed > 0 &&
+    /* Set the certified bit only when the Pironio + Toeplitz certified
+     * extraction path actually ran on delivered bytes (every performed epoch
+     * passed its gate).  bell_epochs_certified is incremented solely inside
+     * bell_certified_refill on success, so this cannot be spoofed by the
+     * plumbing-only CHSH check used in the non-release modes. */
+    if (stats.bell_epochs_certified > 0 &&
+        stats.bell_tests_performed > 0 &&
         stats.bell_tests_passed == stats.bell_tests_performed) {
         capabilities |= MOONLAB_QRNG_CAP_BELL_EPOCH_CERTIFIED;
     }
