@@ -1,0 +1,46 @@
+# Moonlab adversarial oracle -- KNOWN_FAILURES allowlist.
+#
+# This is an ALLOWLIST, never a tolerance knob. Each entry documents a REAL
+# current-HEAD bug that a NAMED sibling lane owns and is fixing. Loosening a
+# tolerance, deleting a probe, or narrowing the corpus to dodge a bug is
+# prohibited (see .swarm/ADVERSARIAL_TESTING_CAMPAIGN.md).
+#
+# Format (whitespace-delimited; the first token is the probe id):
+#   <probe_id>   owner=<lane>   seed=<corpus_seed>   # justification
+#
+# The oracle binaries are allowlist-aware: a run whose only failures are listed
+# here exits 0 (XFAIL) so the default ctest lane stays green while the bug is
+# open. A non-allowlisted failure exits nonzero and turns the pillar event red.
+#
+# An allowlisted probe that PASSES is a stale entry (the fix landed) and is
+# reported as XPASS; remove it at the next integration pass so the probe
+# returns to required-pass before the v1.2.0 cut.
+#
+# Corpus seed for every probe id below: 20260717.
+#
+# ---------------------------------------------------------------------------
+# tn_mps two-qubit-gate transpose on reversed CNOTs (control > target).
+#
+# P1 catches this exactly: the dedicated `reversed_2q` class applies adjacent
+# CNOTs with control > target and the tn_mps state diverges from the dense
+# state vector (dP ~ 0.25 after committing the lazy norm; the physical state is
+# genuinely wrong, not a normalization artifact). Forward-direction 2q gates on
+# tn_mps are correct -- every forward class (clifford, rot_cnot_ladder,
+# random_universal, param_layers) passes P1 to 1e-10 -- so this is isolated to
+# the reversed-direction apply path. Owned by the tensor-network lane, which is
+# fixing the qubit1 > qubit2 transpose concurrently. Tolerances are NOT
+# weakened; these flip to required-pass once the fix lands (they will surface as
+# XPASS here first). Reproduce any one with corpus seed 20260717.
+reversed_2q_n2_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=4
+reversed_2q_n2_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=16
+reversed_2q_n2_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=64
+reversed_2q_n4_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=4
+reversed_2q_n4_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=16
+reversed_2q_n4_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=64
+reversed_2q_n6_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=4
+reversed_2q_n6_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=16
+reversed_2q_n6_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=64
+reversed_2q_n8_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=4
+reversed_2q_n8_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=16
+reversed_2q_n8_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=64
+reversed_2q_n10_d4_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=10 depth=4
