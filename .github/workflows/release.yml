@@ -3,391 +3,563 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # =============================================================================
-  # CREATE GITHUB RELEASE
-  # =============================================================================
-
-  create-release:
+  preflight:
     runs-on: ubuntu-22.04
+    outputs:
+      prerelease: ${{ steps.classify.outputs.prerelease }}
+      npm-tag: ${{ steps.classify.outputs.npm-tag }}
+      version: ${{ steps.classify.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/checkout@v6
         with:
-          name: Moonlab ${{ github.ref_name }}
-          body: |
-            See CHANGELOG.md for details.
+          persist-credentials: false
 
-            ## Quick Install
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-            **macOS (Homebrew):**
-            ```bash
-            brew tap tsotchke/moonlab
-            brew install moonlab
-            ```
+      - name: Require an exact, synchronized release tag
+        run: python3 scripts/version_tool.py check --tag "${{ github.ref_name }}"
 
-            **Python:**
-            ```bash
-            pip install moonlab
-            ```
+      - name: Classify release
+        id: classify
+        shell: bash
+        run: |
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" =~ -(alpha|beta|rc)\.[0-9]+$ ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "npm-tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "npm-tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
-            **From Source:**
-            ```bash
-            git clone https://github.com/tsotchke/moonlab.git
-            cd moonlab
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-            cmake --build build -j
-            ```
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+      - name: Require publication credentials
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$PYPI_API_TOKEN" || { echo "PYPI_API_TOKEN is required" >&2; exit 1; }
+          test -n "$NPM_TOKEN" || { echo "NPM_TOKEN is required" >&2; exit 1; }
+          test -n "$CARGO_REGISTRY_TOKEN" || { echo "CARGO_REGISTRY_TOKEN is required" >&2; exit 1; }
+          if [[ "${{ steps.classify.outputs.prerelease }}" == "false" ]]; then
+            test -n "$HOMEBREW_TAP_TOKEN" || { echo "HOMEBREW_TAP_TOKEN is required for stable releases" >&2; exit 1; }
+          fi
 
-  # =============================================================================
-  # BUILD AND UPLOAD BINARIES
-  # =============================================================================
-
-  build-and-upload:
-    needs: create-release
+  native-unix:
+    needs: preflight
+    name: native-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
             name: linux-x64
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
           - os: macos-14
             name: macos-arm64
-          - os: macos-15-large
+          - os: macos-15-intel
             name: macos-x64
-
-    runs-on: ${{ matrix.os }}
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Install Dependencies (Linux)
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libomp-dev liblapacke-dev libopenblas-dev libssl-dev pkg-config
+          sudo apt-get install -y build-essential ninja-build libomp-dev liblapacke-dev libopenblas-dev libssl-dev pkg-config
 
-      - name: Install Dependencies (macOS)
+      - name: Install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install libomp openssl@3 pkg-config
 
-      - name: Install build tools
-        run: cmake --version
+      - name: Configure portable release
+        run: >-
+          cmake -S . -B build-release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DQSIM_BUILD_EXAMPLES=OFF
+          -DQSIM_BUILD_BENCHMARKS=OFF
+          -DQSIM_NATIVE_ARCH=OFF
+          -DQSIM_FAST_MATH=OFF
+          -DQSIM_WERROR=ON
 
-      - name: Configure (CMake, Release)
+      - name: Build and test
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-            -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF \
-            -DQSIM_NATIVE_ARCH=OFF
+          cmake --build build-release --parallel 2
+          ctest --test-dir build-release --output-on-failure --timeout 180 -L "(core|abi|topology|health)" -LE "long|memory_heavy" --parallel 2
 
-      - name: Build
-        # Full default target: the smoke step below runs labeled ctest
-        # suites, so the test executables must be built, not just the
-        # library and the control server.
-        run: |
-          cmake --build build -j
-
-      - name: Run Smoke Tests
-        run: |
-          cd build
-          ctest --output-on-failure --timeout 120 -L "(core|abi|topology)" -LE "long|memory_heavy" -j 4
-
-      - name: Package
+      - name: Package and verify external consumer
         run: |
           scripts/package_release_artifact.sh \
-            --build-dir build \
+            --build-dir build-release \
             --output moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
-
-      - name: Verify Package Consumer
-        run: |
           scripts/verify_release_package.sh \
             --package moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v7
         with:
-          files: moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
-          fail_on_unmatched_files: true
+          name: native-${{ matrix.name }}
+          path: moonlab-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
 
-  # =============================================================================
-  # BUILD LINUX ARM64 (via QEMU)
-  # =============================================================================
-
-  build-linux-arm64:
-    needs: create-release
-    runs-on: ubuntu-22.04
-
+  native-windows:
+    needs: preflight
+    name: native-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            arch: x64
+          - os: windows-11-arm
+            name: windows-arm64
+            arch: arm64
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build ARM64 Binary
-        run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            -f docker/debian/release/Dockerfile \
-            --load \
-            -t moonlab-arm64:latest .
-
-      - name: Extract and Package
-        run: |
-          docker create --name arm64-build moonlab-arm64:latest
-          trap 'docker rm arm64-build >/dev/null 2>&1 || true' EXIT
-          docker cp arm64-build:/app/pkg pkg
-          docker rm arm64-build
-          trap - EXIT
-          tar -czvf moonlab-${{ github.ref_name }}-linux-arm64.tar.gz -C pkg .
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+      - uses: actions/checkout@v6
         with:
-          files: moonlab-${{ github.ref_name }}-linux-arm64.tar.gz
-          fail_on_unmatched_files: true
+          persist-credentials: false
 
-  # =============================================================================
-  # BUILD DEBIAN PACKAGES
-  # =============================================================================
+      - name: Build, test, package, and verify
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build_windows_artifact.ps1 `
+            -Arch '${{ matrix.arch }}' `
+            -BuildDir 'build-windows-${{ matrix.arch }}' `
+            -Output '${{ runner.temp }}\moonlab-${{ github.ref_name }}-${{ matrix.name }}.zip'
 
-  build-debian-x64:
-    needs: create-release
-    runs-on: ubuntu-22.04
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.name }}
+          path: ${{ runner.temp }}\moonlab-${{ github.ref_name }}-${{ matrix.name }}.zip
+          if-no-files-found: error
+          retention-days: 7
 
+  debian:
+    needs: preflight
+    name: debian-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake ninja-build libomp-dev libopenblas-dev liblapacke-dev libssl-dev dpkg-dev pkg-config
 
-      - name: Build Debian Package
-        id: deb
+      - name: Build and verify Debian package
         run: |
-          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          ./scripts/build-deb.sh "$VERSION"
-          echo "deb_file=moonlab_${VERSION}_amd64.deb" >> $GITHUB_OUTPUT
+          scripts/build-deb.sh "${{ needs.preflight.outputs.version }}"
+          dpkg-deb --info moonlab_${{ needs.preflight.outputs.version }}_${{ matrix.arch }}.deb
+          scripts/verify_deb_package.sh --package moonlab_${{ needs.preflight.outputs.version }}_${{ matrix.arch }}.deb
 
-      - name: Upload Debian Package
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v7
         with:
-          files: ${{ steps.deb.outputs.deb_file }}
-          fail_on_unmatched_files: true
+          name: debian-${{ matrix.arch }}
+          path: moonlab_${{ needs.preflight.outputs.version }}_${{ matrix.arch }}.deb
+          if-no-files-found: error
+          retention-days: 7
 
-  build-debian-arm64:
-    needs: create-release
-    runs-on: ubuntu-22.04
-
+  python-wheels:
+    needs: preflight
+    name: wheel-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+            arch: x86_64
+            macos-target: ""
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            arch: aarch64
+            macos-target: ""
+          - os: macos-14
+            name: macos-arm64
+            arch: arm64
+            macos-target: "11.0"
+          - os: macos-15-intel
+            name: macos-x64
+            arch: x86_64
+            macos-target: "10.15"
+          - os: windows-latest
+            name: windows-x64
+            arch: AMD64
+            macos-target: ""
+          - os: windows-11-arm
+            name: windows-arm64
+            arch: ARM64
+            macos-target: ""
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build ARM64 DEB
-        run: |
-          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-
-          # Build using Docker with ARM64
-          docker buildx build \
-            --platform linux/arm64 \
-            -f docker/debian/release/Dockerfile \
-            --build-arg VERSION=$VERSION \
-            --load \
-            -t moonlab-arm64-deb:latest .
-
-      - name: Extract DEB
-        run: |
-          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          docker create --name arm64-deb moonlab-arm64-deb:latest \
-            scripts/build-deb.sh "$VERSION"
-          trap 'docker rm arm64-deb >/dev/null 2>&1 || true' EXIT
-          docker start -a arm64-deb
-          docker cp "arm64-deb:/app/moonlab_${VERSION}_arm64.deb" ./
-          docker rm arm64-deb
-          trap - EXIT
-
-      - name: Upload ARM64 Debian Package
-        uses: softprops/action-gh-release@v2
+      - uses: actions/checkout@v6
         with:
-          files: moonlab_*_arm64.deb
-          fail_on_unmatched_files: true
+          persist-credentials: false
 
-  # =============================================================================
-  # UPDATE HOMEBREW TAP
-  # =============================================================================
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-  update-homebrew:
-    needs: [build-and-upload]
-    runs-on: ubuntu-22.04
-    # Only update Homebrew for stable releases
-    if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
+      - name: Install wheel builder
+        run: python -m pip install cibuildwheel==4.1.0
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Calculate SHA256
-        id: sha
-        run: |
-          SHA256=$(curl -fsSL https://github.com/tsotchke/moonlab/archive/${{ github.ref_name }}.tar.gz | shasum -a 256 | cut -d ' ' -f 1)
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-
-      - name: Update Homebrew Formula
-        run: |
-          VERSION=${{ github.ref_name }}
-          SHA256=${{ steps.sha.outputs.sha256 }}
-
-          # Update the formula file
-          sed -i "s|url \"https://github.com/tsotchke/moonlab/archive/.*\.tar\.gz\"|url \"https://github.com/tsotchke/moonlab/archive/${VERSION}.tar.gz\"|" packaging/homebrew/moonlab.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" packaging/homebrew/moonlab.rb
-
-      - name: Push to Homebrew Tap
+      - name: Build, repair, and test wheel
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [[ -n "$HOMEBREW_TAP_TOKEN" ]]; then
-            git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/tsotchke/homebrew-moonlab.git tap
-            mkdir -p tap/Formula
-            cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
-            cd tap
-            git config user.name "GitHub Actions"
-            git config user.email "actions@github.com"
-            git add Formula/moonlab.rb
-            git commit -m "Update moonlab to ${{ github.ref_name }}" || echo "No changes to commit"
-            git push || echo "Push failed - tap may not exist yet"
-          else
-            echo "HOMEBREW_TAP_TOKEN not set, skipping Homebrew update"
-          fi
+          CIBW_BUILD: cp311-*
+          CIBW_ARCHS: ${{ matrix.arch }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+          CIBW_BUILD_FRONTEND: build[uv]
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          CIBW_BEFORE_ALL_LINUX: dnf install -y openblas-devel lapack-devel
+          CIBW_BEFORE_BUILD_WINDOWS: python -m pip install ninja
+          CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja
+          CIBW_TEST_REQUIRES: numpy
+          CIBW_TEST_COMMAND: >-
+            python -c "import moonlab; from moonlab import QuantumState; from moonlab.crypto import mlkem;
+            q=QuantumState(2); q.h(0); q.cnot(0,1); pk,sk=mlkem.keygen_qrng(); s=mlkem.qrng_status();
+            assert len(pk)==800 and len(sk)==1632 and s['continuous_health_tests'] and s['shake256_conditioned'] and s['bell_epoch_certified']"
+        run: python -m cibuildwheel bindings/python --output-dir wheelhouse
 
-  # =============================================================================
-  # PUBLISH PYTHON TO PYPI
-  # =============================================================================
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-${{ matrix.name }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  npm-packages:
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          package-manager-cache: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.22
+
+      - name: Build WASM BLAS
+        run: bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
+
+      - name: Install, build, and test workspace
+        working-directory: bindings/javascript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm test
+
+      - name: Pack and verify exact npm artifacts
+        run: |
+          scripts/package_npm.sh "$RUNNER_TEMP/npm"
+          node scripts/verify_npm_packages.mjs "$RUNNER_TEMP/npm"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/npm/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  rust-crates:
+    needs: [preflight, native-unix]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: native-linux-x64
+          path: native
+
+      - name: Install Rust and native runtime dependencies
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev libomp-dev libopenblas-dev liblapacke-dev libssl-dev pkg-config
+
+      - name: Extract the tested native SDK
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/moonlab-sdk"
+          tar -xzf "native/moonlab-${{ github.ref_name }}-linux-x64.tar.gz" \
+            -C "$RUNNER_TEMP/moonlab-sdk"
+
+      - name: Test Rust bindings and publication metadata
+        env:
+          PKG_CONFIG_PATH: ${{ runner.temp }}/moonlab-sdk/lib/pkgconfig
+          LD_LIBRARY_PATH: ${{ runner.temp }}/moonlab-sdk/lib
+        shell: bash
+        run: |
+          cargo test --manifest-path bindings/rust/moonlab/Cargo.toml
+          cargo check --manifest-path bindings/rust/moonlab-tui/Cargo.toml
+          cargo publish --manifest-path bindings/rust/moonlab-sys/Cargo.toml --dry-run
+          cargo package --manifest-path bindings/rust/moonlab/Cargo.toml --list >/dev/null
+          cargo package --manifest-path bindings/rust/moonlab-tui/Cargo.toml --list >/dev/null
+
+  draft-release:
+    needs: [preflight, native-unix, native-windows, debian, python-wheels, npm-packages, rust-crates]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: shasum -a 256 * > SHA256SUMS
+
+      - name: Create fully populated draft release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Moonlab ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ needs.preflight.outputs.prerelease == 'true' }}
+          fail_on_unmatched_files: true
+          files: dist/*
+          body: |
+            See CHANGELOG.md and the release notes in `docs/release/` for details.
+
+            Install after this draft has passed registry publication:
+
+            ```bash
+            brew tap tsotchke/moonlab
+            brew install moonlab
+            pip install moonlab
+            npm install @moonlab/quantum-core
+            cargo install moonlab-tui
+            ```
+
+            Native archives cover Linux, macOS, and Windows on x64 and ARM64.
+            `SHA256SUMS` authenticates every attached release artifact.
 
   publish-python:
-    needs: [build-and-upload]
+    needs: [preflight, draft-release]
     runs-on: ubuntu-22.04
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v7
         with:
-          python-version: '3.11'
+          pattern: python-*
+          path: dist/python
+          merge-multiple: true
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libomp-dev liblapacke-dev
-          python -m pip install --upgrade pip
-          pip install build twine numpy
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-      - name: Build C Library
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
-
-      - name: Build Python Package
-        run: |
-          cd bindings/python
-          python -m build
-
-      - name: Publish to PyPI
+      - name: Validate and publish wheels
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          if [[ -n "$TWINE_PASSWORD" ]]; then
-            cd bindings/python
-            twine upload dist/* --skip-existing
-          else
-            echo "PYPI_API_TOKEN not set, skipping PyPI publish"
-          fi
-
-  # =============================================================================
-  # CRATES.IO — intentionally not published from this workflow.
-  #
-  # moonlab-sys cannot build from a registry tarball today: its build.rs
-  # resolves headers and libquantumsim from the repository tree and writes
-  # its bindgen scratch header into the manifest directory, both of which
-  # are unavailable/read-only for a crates.io consumer. Publishing would
-  # ship a crate that fails `cargo build` for every user. Standalone crate
-  # packaging (pkg-config discovery of an installed moonlab, OUT_DIR
-  # scratch header) is v1.2 scope; until then Rust users depend on the
-  # crates via git/path against this repository.
-  # =============================================================================
-
-  # =============================================================================
-  # PUBLISH NPM PACKAGES
-  # =============================================================================
+          python -m pip install twine
+          python -m twine check dist/python/*
+          python -m twine upload --non-interactive dist/python/*
 
   publish-npm:
-    needs: [build-and-upload]
+    needs: [preflight, draft-release]
     runs-on: ubuntu-22.04
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libomp-dev liblapacke-dev
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v7
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          name: npm-packages
+          path: dist/npm
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v6
         with:
-          version: 9
+          node-version: "20"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
-      - name: Build C Library
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target quantumsim
-
-      - name: Setup Emscripten
-        # The core package's build script compiles the WASM module
-        # (build:wasm) before the TypeScript layer, so the emsdk must
-        # be on PATH with EMSDK exported.
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: 4.0.22
-
-      - name: Build WASM BLAS (CLAPACK)
-        run: bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
-
-      - name: Install JS Dependencies
-        run: |
-          cd bindings/javascript
-          pnpm install
-
-      - name: Build Packages
-        run: |
-          cd bindings/javascript
-          pnpm run build
-
-      - name: Publish to npm
+      - name: Publish exact tested tarballs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ needs.preflight.outputs.npm-tag }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        shell: bash
         run: |
-          if [[ -n "$NODE_AUTH_TOKEN" ]]; then
-            cd bindings/javascript
-            pnpm publish --recursive --no-git-checks --access public
+          for package in core algorithms viz react vue; do
+            artifact="dist/npm/moonlab-quantum-${package}-${VERSION}.tgz"
+            test -f "$artifact"
+            npm publish "$artifact" --tag "$NPM_TAG" --access public --provenance
+          done
+
+  publish-rust:
+    needs: [preflight, draft-release]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: native-linux-x64
+          path: native
+
+      - name: Install Rust and native runtime dependencies
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev libomp-dev libopenblas-dev liblapacke-dev libssl-dev pkg-config
+
+      - name: Extract the tested native SDK
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/moonlab-sdk"
+          tar -xzf "native/moonlab-${{ github.ref_name }}-linux-x64.tar.gz" \
+            -C "$RUNNER_TEMP/moonlab-sdk"
+
+      - name: Publish crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PKG_CONFIG_PATH: ${{ runner.temp }}/moonlab-sdk/lib/pkgconfig
+          LD_LIBRARY_PATH: ${{ runner.temp }}/moonlab-sdk/lib
+          VERSION: ${{ needs.preflight.outputs.version }}
+        shell: bash
+        run: |
+          wait_for_crate() {
+            local crate="$1"
+            for attempt in {1..30}; do
+              if cargo info "${crate}@${VERSION}" >/dev/null 2>&1; then
+                return 0
+              fi
+              echo "waiting for crates.io index: ${crate} ${VERSION} (attempt ${attempt}/30)"
+              sleep 10
+            done
+            echo "crates.io did not index ${crate} ${VERSION} in time" >&2
+            return 1
+          }
+
+          cargo publish --manifest-path bindings/rust/moonlab-sys/Cargo.toml
+          wait_for_crate moonlab-sys
+          cargo publish --manifest-path bindings/rust/moonlab/Cargo.toml
+          wait_for_crate moonlab
+          cargo publish --manifest-path bindings/rust/moonlab-tui/Cargo.toml
+
+  update-homebrew:
+    needs: [preflight, draft-release, publish-python, publish-npm, publish-rust]
+    if: needs.preflight.outputs.prerelease == 'false'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Materialize stable formula
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          source_url="https://github.com/tsotchke/moonlab/archive/refs/tags/${TAG}.tar.gz"
+          sha256="$(curl -fsSL "$source_url" | shasum -a 256 | cut -d ' ' -f 1)"
+          sed -i '' -E "s|url \".*\"|url \"${source_url}\"|" packaging/homebrew/moonlab.rb
+          sed -i '' -E "s|sha256 \".*\"|sha256 \"${sha256}\"|" packaging/homebrew/moonlab.rb
+          grep -F "url \"${source_url}\"" packaging/homebrew/moonlab.rb
+          grep -F "sha256 \"${sha256}\"" packaging/homebrew/moonlab.rb
+
+      - name: Prepare tap checkout
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh auth setup-git
+          gh repo clone tsotchke/homebrew-moonlab tap
+          mkdir -p tap/Formula
+          cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
+
+      - name: Audit and install formula from source
+        run: |
+          brew tap tsotchke/moonlab "$PWD/tap"
+          brew audit --formula --strict tsotchke/moonlab/moonlab
+          brew install --build-from-source tsotchke/moonlab/moonlab
+          brew test tsotchke/moonlab/moonlab
+
+      - name: Push formula to tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git -C tap config user.name "Moonlab Release Bot"
+          git -C tap config user.email "actions@github.com"
+          git -C tap add Formula/moonlab.rb
+          git -C tap diff --cached --check
+          git -C tap commit -m "moonlab ${{ github.ref_name }}"
+          git -C tap push origin HEAD:main
+
+  finalize-release:
+    needs: [preflight, draft-release, publish-python, publish-npm, publish-rust, update-homebrew]
+    if: >-
+      always() &&
+      needs.draft-release.result == 'success' &&
+      needs.publish-python.result == 'success' &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-rust.result == 'success' &&
+      (needs.update-homebrew.result == 'success' || needs.update-homebrew.result == 'skipped')
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish GitHub release only after every registry succeeds
+        shell: bash
+        run: |
+          if [[ "${{ needs.preflight.outputs.prerelease }}" == "true" ]]; then
+            gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --prerelease
           else
-            echo "NPM_TOKEN not set, skipping npm publish"
+            gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false --latest
           fi

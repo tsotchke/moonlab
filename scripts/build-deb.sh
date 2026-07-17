@@ -105,14 +105,21 @@ if [[ -z "$shared_lib" ]]; then
 fi
 
 FINAL_NAME="$PROJECT_ROOT/moonlab_${VERSION}_${ARCH}.deb"
-rm -f "$FINAL_NAME"
+PACKAGE_TMP="$(mktemp "${PROJECT_ROOT}/.moonlab-deb.XXXXXX")"
+trap 'rm -f -- "$PACKAGE_TMP"' EXIT
 
 echo "Creating DEB package..."
-dpkg-deb --build --root-owner-group "$PKG_ROOT" "$FINAL_NAME"
+dpkg-deb --build --root-owner-group "$PKG_ROOT" "$PACKAGE_TMP"
 
 if [[ "${MOONLAB_DEB_VERIFY:-1}" == "1" ]]; then
-    "$PROJECT_ROOT/scripts/verify_deb_package.sh" --package "$FINAL_NAME"
+    "$PROJECT_ROOT/scripts/verify_deb_package.sh" --package "$PACKAGE_TMP"
 fi
+
+# Install only a package that was built and verified successfully. rename(2)
+# makes replacement atomic when PROJECT_ROOT is on one filesystem and does not
+# follow a pre-existing destination symlink.
+mv -f -- "$PACKAGE_TMP" "$FINAL_NAME"
+trap - EXIT
 
 echo ""
 echo "========================================"

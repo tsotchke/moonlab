@@ -87,8 +87,8 @@ Supported gates: RX / RY / RZ / H / X / Y / Z / CNOT / CZ / CRX / CRY / CRZ.
 
 ### Post-Quantum Cryptography (`moonlab.crypto`)
 
-FIPS 202 SHA-3 / SHAKE and FIPS 203 ML-KEM (512 / 768 / 1024), seeded
-by the Bell-verified quantum RNG:
+FIPS 202 SHA-3 / SHAKE and FIPS 203 ML-KEM (512 / 768 / 1024), with
+health-tested, Bell-gated, SHAKE256-conditioned RNG convenience wrappers:
 
 ```python
 from moonlab.crypto import sha3, mlkem
@@ -96,7 +96,7 @@ from moonlab.crypto import sha3, mlkem
 digest = sha3.sha3_256(b"quantum randomness")        # 32 bytes
 stream = sha3.shake256(b"seed", outlen=1024)          # XOF
 
-# Alice keygens with quantum-sourced entropy
+# Alice keygens with Moonlab's conditioned hybrid RNG
 ek, dk = mlkem.keygen768_qrng()                       # 1184-byte pk, 2400-byte sk
 # Bob encapsulates a shared secret
 ct, K_bob = mlkem.encaps768_qrng(ek)                  # 1088-byte ciphertext

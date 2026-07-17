@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./wasm": {
       "import": "./dist/moonlab.wasm"
@@ -20,9 +20,9 @@
   ],
   "scripts": {
     "build:wasm": "cd emscripten && emcmake cmake -B build && cmake --build build && cmake -E make_directory ../dist && cmake -E copy build/moonlab.js ../dist/moonlab.js && cmake -E copy build/moonlab.wasm ../dist/moonlab.wasm",
-    "build:ts": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build:ts": "tsup --config tsup.config.ts",
     "build": "pnpm build:ts && pnpm build:wasm",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "dev": "tsup --config tsup.config.ts --watch",
     "test": "vitest run",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -47,7 +47,21 @@
     "simulation"
   ],
   "author": "Moonlab",
-  "license": "Apache-2.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsotchke/moonlab.git",
+    "directory": "bindings/javascript/packages/core"
+  },
+  "homepage": "https://github.com/tsotchke/moonlab#readme",
+  "bugs": "https://github.com/tsotchke/moonlab/issues",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "tsup": "^8.0.0",

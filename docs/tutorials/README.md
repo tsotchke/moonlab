@@ -23,6 +23,8 @@ unit test or benchmark in the source tree.
   otherwise noted.
 - Build commands assume an out-of-tree build directory `build/` at
   the repository root; adjust paths if a different layout is used.
+- Windows commands and official ZIP-package consumption are documented in
+  [`../WINDOWS.md`](../WINDOWS.md); native Windows requires ClangCL.
 - Tutorials that give an analytical result also identify the unit
   test or benchmark that verifies the corresponding numerical
   output to a stated tolerance.  Local deviations beyond that
@@ -38,3 +40,4 @@ unit test or benchmark in the source tree.
   lattice gauge theory implementation.
 - `documents/index.md`: top-level documentation entry point with
   the complete module map.
+- [`../README.md`](../README.md): current documentation map for MoonLab 1.1.

@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": [
@@ -30,7 +30,21 @@
     "visualization"
   ],
   "author": "Moonlab",
-  "license": "Apache-2.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsotchke/moonlab.git",
+    "directory": "bindings/javascript/packages/react"
+  },
+  "homepage": "https://github.com/tsotchke/moonlab#readme",
+  "bugs": "https://github.com/tsotchke/moonlab/issues",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@moonlab/quantum-core": "workspace:*",
     "@moonlab/quantum-viz": "workspace:*"

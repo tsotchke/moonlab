@@ -2,10 +2,14 @@
 name = "moonlab-tui"
 version = "1.1.0"
 edition = "2021"
+rust-version = "1.86"
 authors = ["Moonlab Team"]
 description = "Beautiful terminal UI for Moonlab quantum simulator"
+license = "MIT"
+repository = "https://github.com/tsotchke/moonlab"
 keywords = ["quantum", "tui", "terminal", "simulator"]
 categories = ["science", "visualization", "command-line-utilities"]
+readme = "README.md"
 build = "build.rs"
 
 [[bin]]
@@ -13,8 +17,8 @@ name = "moonlab"
 path = "src/main.rs"
 
 [dependencies]
-moonlab = { path = "../moonlab" }
-moonlab-sys = { path = "../moonlab-sys" }
+moonlab = { version = "1.1.0", path = "../moonlab" }
+moonlab-sys = { version = "1.1.0", path = "../moonlab-sys" }
 
 # TUI Framework (pinned to versions compatible with rustc 1.86)
 ratatui = "0.26"

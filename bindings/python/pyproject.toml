@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "numpy>=1.20.0"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.12,<1.1"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "moonlab"
 version = "1.1.0"
 description = "High-performance quantum computing simulator with GPU acceleration"
 readme = "README.md"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
     {name = "tsotchke", email = "tsotchke@github.com"}
 ]
@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
 ]
 requires-python = ">=3.9"
 dependencies = [
@@ -56,9 +57,25 @@ Documentation = "https://github.com/tsotchke/moonlab#readme"
 Repository = "https://github.com/tsotchke/moonlab"
 Issues = "https://github.com/tsotchke/moonlab/issues"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["moonlab*"]
+[tool.scikit-build]
+cmake.source-dir = "../.."
+cmake.build-type = "Release"
+wheel.packages = ["moonlab"]
+wheel.py-api = "py3"
+install.components = ["python-wheel"]
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+QSIM_PYTHON_WHEEL = "ON"
+QSIM_BUILD_TESTS = "OFF"
+QSIM_BUILD_EXAMPLES = "OFF"
+QSIM_BUILD_BENCHMARKS = "OFF"
+QSIM_BUILD_JS_DIST = "OFF"
+QSIM_ENABLE_CONTROL_PLANE = "OFF"
+QSIM_ENABLE_TLS = "OFF"
+QSIM_ENABLE_OPENMP = "OFF"
+QSIM_NATIVE_ARCH = "OFF"
+QSIM_WERROR = "ON"
 
 [tool.pytest.ini_options]
 minversion = "7.0"

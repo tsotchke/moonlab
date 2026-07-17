@@ -107,6 +107,24 @@ def test_mlkem_keygen_qrng_nondeterministic():
     assert ek1 != ek2
 
 
+def test_qrng_assurance_status():
+    # Draw first so the process has passed its first pre-delivery Bell epoch.
+    mlkem.keygen_qrng()
+    status = mlkem.qrng_status()
+    assert status["api_version"] == 1
+    assert status["hardware_os_entropy"]
+    assert status["continuous_health_tests"]
+    assert status["shake256_conditioned"]
+    assert status["bell_simulation_gated"]
+    assert status["thread_safe"]
+    assert status["bell_epoch_certified"]
+    assert not status["device_independent_source"]
+    assert not status["fips140_validated"]
+    assert status["bell_tests_performed"] >= 1
+    assert status["bell_tests_passed"] == status["bell_tests_performed"]
+    assert status["minimum_chsh"] > 2.0
+
+
 def test_mlkem768_roundtrip():
     ek, dk = mlkem.keygen768()
     assert len(ek) == mlkem.MLKEM768_PUBLICKEYBYTES

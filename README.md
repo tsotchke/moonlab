@@ -1,12 +1,12 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-1.0.2-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
 > topological QC, chemistry / VQE with native autograd, error
-> mitigation, Bell-verified QRNG, and a FIPS 203 post-quantum KEM
-> seeded by that QRNG.**
+> mitigation, a Bell-gated and SHAKE256-conditioned hybrid random-byte
+> engine, and a FIPS 203 post-quantum KEM seeded by that engine.**
 
 ## Community And Commercial Use
 
@@ -20,7 +20,31 @@ packages.
 See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
 boundary.
 
-## New in v1.0.3 (2026-05-20)
+## Current release: v1.1.0 (2026-07-11)
+
+Version 1.1 brings the native CUDA state-vector backend online on Tegra and
+discrete NVIDIA GPUs. A state created with `quantum_state_create_gpu()` uses the
+same gate calls as a CPU state, with 21 one- and two-qubit primitives routed
+through CUDA. Ordinary states remain on the CPU path with 1.0-compatible
+behavior.
+
+The stable ABI advances from 0.3.0 to 0.4.0 with
+`moonlab_vqe_gradient`, exposing exact adjoint gradients for supported
+noise-free ansaetze and analytic parameter shift otherwise. The release also
+ships native Windows x64 and ARM64 packages built with ClangCL; both are tested
+as relocatable external CMake packages before upload.
+
+| 1.1 deliverable | Contract |
+|---|---|
+| Native CUDA state vector | GPU lifecycle, host/device sync, probabilities, norms, and transparent gate dispatch |
+| Tegra + discrete detection | One managed-memory code path with platform-specific runtime probes |
+| Stable VQE gradient | `moonlab_vqe_gradient` in ABI 0.4.0; never finite differences |
+| Windows distribution | `windows-x64.zip` and `windows-arm64.zip` with DLL, import library, headers, and CMake exports |
+
+See [the v1.1.0 release notes](docs/release/v1.1.0-release-notes.md),
+[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#110---2026-07-11).
+
+## v1.0 platform foundation
 
 **Open-core extension surfaces.**  Four runtime registries let private
 overlays, sibling libraries (QGTL / libirrep / SbNN), and customer
@@ -207,11 +231,13 @@ Full version-by-version notes in [CHANGELOG.md](CHANGELOG.md#050---2026-05-19).
 See [CHANGELOG.md](CHANGELOG.md#030---2026-05-08) for the full
 breakdown.
 
-Moonlab v0.2.0 was the first release with an honest end-to-end
-"quantum-source to quantum-safe" pipeline in one library: the
-Bell-verified quantum RNG generates 32-byte seeds that feed directly
-into NIST-standard ML-KEM-512 / 768 / 1024 key generation via a single
-stable-ABI call.  Alongside the cryptography work, 0.2 closes the
+Moonlab v0.2.0 introduced an end-to-end quantum-simulation-to-PQC
+pipeline: `moonlab_qrng_bytes` generates the seeds consumed by
+ML-KEM-512 / 768 / 1024 convenience wrappers through the stable ABI.
+The release path is now stronger than the original v0.2 implementation:
+it continuously health-tests hardware/OS entropy, rejects failed simulated
+Bell epochs before delivery, and domain-separates and conditions every
+request with SHAKE256. Alongside the cryptography work, 0.2 closes the
 Phase 1/2 "completeness" items from the release plan — error
 mitigation (ZNE + PEC), POVM measurement, weak measurement, Mermin /
 Mermin-Klyshko Bell inequalities, quantum mutual information,
@@ -243,7 +269,7 @@ and integrates it directly into the VQE driver.  See
 | **Measurement** | Projective, POVM (with Kraus-completeness verification), weak-Z measurement with tunable strength, partial, non-collapsing expectations. |
 | **Entanglement Metrics** | Von Neumann entropy, Rényi-α, concurrence, negativity, mutual information I(A:B), Schmidt decomposition. |
 | **Post-Quantum Cryptography** | FIPS 202 SHA-3 + SHAKE (all KATs pass), FIPS 203 ML-KEM 512 / 768 / 1024 with Fujisaki-Okamoto and implicit rejection, plus QRNG-sourced keygen / encapsulate wrappers. |
-| **Quantum RNG** | v3 QRNG with Bell-verified mode; device-independent primitives: Pironio min-entropy bound + Toeplitz extractor. |
+| **Quantum RNG** | Thread-safe conditioned hybrid RNG: continuously health-tested hardware/OS entropy, fail-closed simulated Bell epochs, SHAKE256 conditioning, live assurance status, plus Pironio-bound and Toeplitz research primitives. |
 | **Noise Models** | Depolarising, amplitude damping, phase damping, bit/phase-flip, thermal relaxation, composite, convex-mixture, correlated two-qubit Pauli. |
 | **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend scaffolded. |
 | **Multi-Language** | C core + Python (ctypes) / Rust / JavaScript bindings.  Python exposes quantum + crypto primitives; 120+ pytest cases. |
@@ -268,6 +294,27 @@ and integrates it directly into the VQE driver.  See
 
 ## Quick Start
 
+Once the first stable registry publication completes, the supported package
+manager installs are:
+
+```bash
+# Homebrew tap (repository: https://github.com/tsotchke/homebrew-moonlab)
+brew tap tsotchke/moonlab
+brew install moonlab
+
+# Self-contained Python wheel
+pip install moonlab
+
+# JavaScript/WebAssembly core
+npm install @moonlab/quantum-core
+
+# Rust TUI (the Homebrew SDK supplies the native library)
+cargo install moonlab-tui
+```
+
+The Homebrew tap setup is a one-time command. Formula updates are performed by
+the release workflow only after building and testing the formula from source.
+
 ```bash
 # Build (CMake, the canonical path on 0.1.2+)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -279,6 +326,19 @@ ctest --test-dir build -E long_evolution --output-on-failure
 # Try an example
 ./build/bell_test_demo
 ```
+
+Windows uses ClangCL because the simulator relies on C99 complex arithmetic.
+The repository driver builds, tests, packages, and consumer-verifies either
+native architecture:
+
+```powershell
+.\scripts\build_windows_artifact.ps1 `
+  -Arch x64 `
+  -BuildDir build-windows-x64 `
+  -Output .\dist\moonlab-local-windows-x64.zip
+```
+
+See [docs/WINDOWS.md](docs/WINDOWS.md) for ARM64 and release-package usage.
 
 Warnings-as-errors CI build (clean on macOS arm64):
 
@@ -766,8 +826,10 @@ double S = entanglement_entropy_half_chain(state, num_sites);
 
 Moonlab v0.2 ships a reference implementation of FIPS 202 (SHA-3,
 SHAKE) and FIPS 203 (ML-KEM — the NIST-standardised
-module-lattice-based KEM), seeded by the same Bell-verified quantum
-RNG that exports `moonlab_qrng_bytes`.  Three parameter sets are
+module-lattice-based KEM). Convenience wrappers obtain seeds from the
+health-tested, Bell-gated, SHAKE256-conditioned `moonlab_qrng_bytes` path.
+Regulated deployments can instead use the explicit-seed APIs with an approved
+DRBG at their validated module boundary. Three parameter sets are
 available: ML-KEM-512 (NIST Category 1), ML-KEM-768 (recommended
 default), and ML-KEM-1024 (Category 5).
 
@@ -887,14 +949,13 @@ print(f"Energy: {result.energy:.8f} Ha")
 ### Rust
 
 ```rust
-use moonlab::{QuantumState, Gate};
+use moonlab::QuantumState;
 
 fn main() {
-    let mut state = QuantumState::new(4);
-    state.apply(Gate::H, 0);
-    state.apply(Gate::CNOT, (0, 1));
+    let mut state = QuantumState::new(4).expect("allocate state");
+    state.h(0).cnot(0, 1);
 
-    let entropy = state.entanglement_entropy(0);
+    let entropy = state.entanglement_entropy(&[0]).expect("entropy");
     println!("Entropy: {:.4}", entropy);
 }
 ```
@@ -931,7 +992,7 @@ const { state, circuit } = useQuantumState(2);
 </script>
 ```
 
-## Limitations (as of 0.2.0)
+## Current limitations
 
 Read this before judging the repo against its headline claims.  The
 adversarial audit that produced this list lives in
@@ -962,24 +1023,25 @@ adversarial audit that produced this list lives in
   multi-node (>1 physical host) scaling, wall-clock comparisons
   against single-host baselines, and any MPI backend other than
   OpenMPI.
-- **GPU backends other than Metal + Eshkol**: OpenCL and Vulkan now
+- **GPU backends other than Metal, CUDA, and Eshkol**: OpenCL and Vulkan now
   compile cleanly and pass a "compile + discovery smoke" CI tier on
   Linux (apt's ocl-icd-loader + PoCL for OpenCL; vulkan-loader +
   lavapipe for Vulkan) but are not exercised against a real GPU in
-  CI -- the smoke test just verifies backend selection and
-  fallback.  CUDA and cuQuantum have 1000+ LOC implementations but
-  no CI runner has NVIDIA hardware; treat them as compile-only.
+  hosted CI -- the smoke test just verifies backend selection and
+  fallback. The native CUDA state-vector path is validated on Jetson
+  and x86-64 NVIDIA nodes; cuQuantum remains an optional, separately
+  provisioned backend.
 - **WebGPU / JS**: CI has a dedicated `WASM / WebGPU smoke` tier
   that builds the TS `@moonlab/quantum-core` package and runs the
   unified smoke end-to-end.  The default C-only `ctest` on a fresh
   clone without `-DQSIM_BUILD_JS_DIST=ON` produces no WebGPU
   coverage -- that is the trade-off for not requiring a JS toolchain
   just to build the library.
-- **Platforms**: Linux x86_64, Linux aarch64, macOS arm64, and
-  macOS x86_64 all have CI tiers that build the full tree and run
-  `ctest -E long_evolution`; macOS arm64 additionally runs Release,
-  Debug, -Werror, ASAN+UBSAN, and MPI-enabled variants.  Windows
-  is unsupported.
+- **Platforms**: hosted CI covers Linux x86-64, macOS ARM64, Windows
+  x64, and Windows ARM64. A separate self-hosted Jetson workflow covers
+  Linux ARM64 + CUDA. Tagged releases additionally build Linux ARM64
+  and macOS Intel archives. Windows uses Visual Studio generators with
+  ClangCL and runs a relocatable-package consumer smoke before upload.
 - **Performance numbers**: every headline multiplier was measured
   once on one host.  No stddev, no cross-platform reproduction.
   Use the benches below to measure your own hardware; do not
@@ -1023,8 +1085,9 @@ post-v1.0 scaling-honesty pass.
 
 ### Requirements
 
-- **macOS**: 10.15+ (Apple Silicon recommended)
+- **macOS**: 10.15+ on Intel; 11.0+ on Apple Silicon
 - **Linux**: GCC 9+ with OpenMP
+- **Windows**: Visual Studio 2022+ with CMake and the ClangCL toolset
 - **Memory**: 8 GB minimum, 32 GB+ for large simulations
 
 ### Build Options
@@ -1037,7 +1100,7 @@ CMake is the canonical build system (`0.1.2+`). Useful options:
 | `-DQSIM_ENABLE_METAL=ON` | `ON` on macOS | Metal GPU backend |
 | `-DQSIM_ENABLE_MPI=ON` | `OFF` | MPI distributed computing (OpenMPI) |
 | `-DQSIM_ENABLE_OPENMP=ON` | `ON` | OpenMP multi-core |
-| `-DQSIM_WERROR=ON` | `OFF` | `-Werror` build with `-Wpedantic` / `-Wdeprecated-declarations` demoted (libomp + CLAPACK externalities) |
+| `-DQSIM_WERROR=ON` | `ON` | `-Werror` build with `-Wpedantic` / `-Wdeprecated-declarations` demoted (libomp + CLAPACK externalities) |
 | `-DQSIM_ENABLE_SANITIZERS=ON` | `OFF` | AddressSanitizer + UndefinedBehaviorSanitizer |
 | `-DQSIM_ENABLE_AVX512=ON` / `AVX2` / `NEON` / `SVE` | `ON` if available | SIMD path toggles |
 | `-DQSIM_BUILD_TESTS=ON` | `ON` | CTest targets |
@@ -1049,8 +1112,8 @@ Legacy `make all` / `make test` still work for a subset of the surface.
 ### Dependencies
 
 **Required**:
-- C compiler (GCC/Clang)
-- POSIX threads
+- C compiler (GCC/Clang on Unix; ClangCL on Windows)
+- Threads implementation supplied by the platform toolchain
 
 **Optional**:
 - OpenMP (multi-core)
@@ -1060,14 +1123,15 @@ Legacy `make all` / `make test` still work for a subset of the surface.
 
 ## Documentation
 
-Full documentation is available in the [docs/](docs/) directory:
+Start with the [documentation index](docs/README.md). Current guides include:
 
-- [Getting Started](docs/getting-started/index.md)
-- [Concepts](docs/concepts/index.md)
-- [Tutorials](docs/tutorials/index.md)
-- [API Reference](docs/api/index.md)
-- [Algorithm Deep Dives](docs/algorithms/index.md)
-- [Performance Guide](docs/performance/index.md)
+- [Getting started](docs/getting-started.md)
+- [Windows builds and packages](docs/WINDOWS.md)
+- [CI/CD pipelines](docs/CI_CD.md)
+- [Tutorials](docs/tutorials/README.md)
+- [Stable C ABI](docs/STABLE_ABI.md)
+- [Configuration options](docs/reference/configuration-options.md)
+- [Architecture](ARCHITECTURE.md) and [platform specification](PLATFORM.md)
 
 ## Project Structure
 
@@ -1108,7 +1172,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v1.0.2},
+    version      = {v1.1.0},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

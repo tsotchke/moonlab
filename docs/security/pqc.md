@@ -16,14 +16,13 @@ anything that defends real assets.
   official NIST count=0 seed through our SP 800-90A CTR_DRBG.
 - Moonlab PQC is **not FIPS-140-certified**, **not CAVP-validated**,
   and **not hardened against side-channel adversaries**.
-- Use it for: learning, research, integrating Moonlab's Bell-verified
-  quantum RNG into PQC workflows, writing proof-of-concept protocols,
-  interoperability experiments.
+- Use it for: learning, research, integration testing, conditioned-hybrid-RNG
+  PQC workflows, proof-of-concept protocols, and interoperability experiments.
 - Do not use it for: storing real keys on adversarial hardware,
   anything that needs FIPS certification, high-stakes production
   deployments where a side-channel leak has financial consequences.
-  For those: route through BoringSSL / OpenSSL EVP; the QRNG seed
-  path still applies.
+  For those: place the explicit-seed API behind a validated BoringSSL / OpenSSL
+  EVP provider and its approved entropy path.
 
 ## What "reference implementation" means here
 
@@ -39,11 +38,12 @@ Moonlab PQC was written to be:
    AVX2) are ~5-10x faster.
 3. **Portable.**  C99 plus `<stdint.h>`.  No special compiler
    flags required.  Same binary semantics on every platform we
-   build on (macOS arm64, Linux x86_64 + aarch64).
+   build on (Linux, macOS, and Windows on the x86-64 and ARM64
+   release architectures).
 4. **Deterministic in entropy.**  Every KeyGen / Encaps function
    accepts explicit seed bytes so tests are reproducible.  The
-   `_qrng` convenience wrappers draw those seeds from
-   `moonlab_qrng_bytes` for production use.
+   `_qrng` convenience wrappers draw those seeds from the continuously
+   health-tested, Bell-gated, SHAKE256-conditioned `moonlab_qrng_bytes` path.
 
 ## What it is NOT
 
@@ -134,29 +134,36 @@ and comparing to the fingerprints pinned in
 ## Quantum-RNG Entropy
 
 The `_qrng` convenience wrappers pull their randomness from
-`moonlab_qrng_bytes`, which is the Bell-verified v3 QRNG engine.
-Moonlab's QRNG guarantees, precisely stated:
+`moonlab_qrng_bytes`, Moonlab's conditioned hybrid random-byte engine.
+Its release contract is:
 
 - A hardware entropy seed is drawn from `RDSEED` / `/dev/urandom` /
   `SecRandomCopyBytes` depending on platform.  This is the root
   entropy source; compromise of the platform RNG breaks Moonlab
   QRNG transitively.
-- A periodic CHSH health-check runs against a simulated `|Phi+>`
-  state to detect plumbing failures.  CHSH ~ 2.87 is the measured
-  nominal (post-v0.1.2-bugfix); sustained degradation flags an
-  internal error.
+- The stable delivery path forces BELL_VERIFIED mode. It runs a 4,000-sample
+  CHSH check against a separate simulated `|Phi+>` state before the first
+  byte of each epoch is released. A failed epoch zeroizes output and resets
+  the process context.
+- Fresh continuously health-tested entropy and the v3 stream are absorbed
+  into a domain-separated SHAKE256 conditioner for every public request.
+- `moonlab_qrng_get_status` reports the active protections, request/byte
+  counters, Bell pass counts, and observed CHSH range. It also exposes
+  explicit capability bits that remain clear unless an independent physical
+  source or FIPS-validated module is actually present.
 - The certified-min-entropy-per-bit lower bound from
   `qrng_di_min_entropy_from_chsh` is available as a primitive but
   **not currently applied** to the output stream.  Full DI-QRNG
   protocol loop (epoch acceptance + privacy amplification via
-  Toeplitz extraction) is on the 0.3 roadmap.
+  Toeplitz extraction) remains future work.
 
-For adversarial entropy-bound production use, do not rely on
-`moonlab_qrng_bytes` alone -- XOR it with a classical CSPRNG as
-defense-in-depth, or drive the `_qrng` wrappers from your own
-CSPRNG that you can audit end-to-end.
+This is a strong hybrid delivery path, but the simulated Bell check is not
+device-independent evidence: Moonlab controls both simulated devices. A real
+DI claim requires an independent physical Bell provider and transcript
+verification. Deployments that require FIPS validation should use the
+explicit-seed APIs at their approved cryptographic-module boundary.
 
-## Forward-looking: what v0.3 PQC brings
+## Forward-looking PQC work
 
 - ML-DSA (FIPS 204) signatures.
 - SLH-DSA (FIPS 205) stateless hash-based signatures.
