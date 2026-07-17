@@ -1192,13 +1192,19 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
     tdvp_result_t result = {0};
     int rc = 0;
 
-    while (engine->current_time < target_time) {
-        // Adjust dt for last step if needed
-        double remaining = target_time - engine->current_time;
-        if (remaining < engine->config.dt) {
-            engine->config.dt = remaining;
-        }
+    // Preserve the configured step: the final partial step shrinks dt only for
+    // that iteration, and the original value is restored on exit.  A
+    // non-positive configured dt can never reach the target.
+    const double dt_full = engine->config.dt;
+    if (!(dt_full > 0.0)) return -1;
+    const double eps = 1e-12 * (fabs(target_time) + 1.0);
 
+    while (engine->current_time < target_time - eps) {
+        double remaining = target_time - engine->current_time;
+        engine->config.dt = (remaining < dt_full) ? remaining : dt_full;
+        if (engine->config.dt <= 0.0) break;   // underflow guard: guarantee progress
+
+        double t_before = engine->current_time;
         if (tdvp_step(engine, &result) != 0) {
             rc = -1;
             break;
@@ -1213,8 +1219,13 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
                    result.time, result.energy, result.norm,
                    result.max_bond_dim, result.truncation_error);
         }
+
+        // If a step failed to advance time (degenerate dt), stop instead of
+        // spinning forever.
+        if (engine->current_time <= t_before) { rc = -1; break; }
     }
 
+    engine->config.dt = dt_full;   // restore the configured step
     tdvp_result_clear(&result);
     return rc;
 }
@@ -1303,12 +1314,16 @@ int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
     tdvp_result_t result = {0};
     int rc = 0;
 
-    while (engine->current_time < target_time) {
-        double remaining = target_time - engine->current_time;
-        if (remaining < engine->config.dt) {
-            engine->config.dt = remaining;
-        }
+    const double dt_full = engine->config.dt;
+    if (!(dt_full > 0.0)) return -1;
+    const double eps = 1e-12 * (fabs(target_time) + 1.0);
 
+    while (engine->current_time < target_time - eps) {
+        double remaining = target_time - engine->current_time;
+        engine->config.dt = (remaining < dt_full) ? remaining : dt_full;
+        if (engine->config.dt <= 0.0) break;   // underflow guard: guarantee progress
+
+        double t_before = engine->current_time;
         if (tdvp_step(engine, &result) != 0) {
             rc = -1;
             break;
@@ -1322,8 +1337,11 @@ int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
         } else {
             tdvp_history_add(history, &result);
         }
+
+        if (engine->current_time <= t_before) { rc = -1; break; }
     }
 
+    engine->config.dt = dt_full;   // restore the configured step
     tdvp_result_clear(&result);
     return rc;
 }
