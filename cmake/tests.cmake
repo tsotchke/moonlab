@@ -376,6 +376,15 @@
     add_test(NAME unit_tdvp_validation COMMAND test_tdvp_validation)
     set_tests_properties(unit_tdvp_validation PROPERTIES TIMEOUT 120)
 
+    # Real-time TDVP bulk-site correctness: single-site <Z_i>(0.4) on TFIM chains
+    # (n=4, n=12; one- and two-site) must match a dense exp(-iHt) reference.
+    # Guards the projector-splitting backward sub-step; the old forward-only
+    # integrator drifts the bulk-site magnetization far from exact.
+    add_executable(test_tdvp_bulk_site tests/unit/test_tdvp_bulk_site.c)
+    target_link_libraries(test_tdvp_bulk_site PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_bulk_site COMMAND test_tdvp_bulk_site)
+    set_tests_properties(unit_tdvp_bulk_site PROPERTIES TIMEOUT 120)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
@@ -534,6 +543,18 @@
         add_test(NAME unit_tn_mps_from_statevector
             COMMAND test_tn_mps_from_statevector)
         set_tests_properties(unit_tn_mps_from_statevector
+            PROPERTIES TIMEOUT 30)
+
+        # A 2q gate on an interior bond (both outer bonds entangled) must not
+        # corrupt the norm: regression for the mixed-canonical-gauge assumption
+        # in the two-site SVD rescale.
+        add_executable(test_tn_mps_interior_gate
+            tests/unit/test_tn_mps_interior_gate.c)
+        target_link_libraries(test_tn_mps_interior_gate
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_tn_mps_interior_gate
+            COMMAND test_tn_mps_interior_gate)
+        set_tests_properties(unit_tn_mps_interior_gate
             PROPERTIES TIMEOUT 30)
 
         # Deep forward-only circuit (n=12, depth=32) must stay normalized:
@@ -1626,8 +1647,9 @@
         unit_matrix_math unit_svd_compress unit_metal_parity)
     qsim_label_tests(tn
         unit_tensor_network unit_tn_dead_code_smoke
-        unit_tn_mps_from_statevector unit_tn_mps_deep_forward tensor_adversarial dmrg
-        mps_vs_exact unit_lattice_2d unit_tdvp_validation
+        unit_tn_mps_from_statevector unit_tn_mps_deep_forward
+        unit_tn_mps_interior_gate tensor_adversarial dmrg
+        mps_vs_exact unit_lattice_2d unit_tdvp_validation unit_tdvp_bulk_site
         unit_svd_noncanonical_axis unit_tn_gate_order)
     qsim_label_tests(ca_mps
         unit_ca_mps_bond_advantage unit_ca_mps_heisenberg

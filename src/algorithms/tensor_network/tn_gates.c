@@ -792,6 +792,20 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
                                                uint32_t left_qubit,
                                                const tn_gate_2q_t *gate,
                                                double *truncation_error) {
+    // Put the orthogonality center at the gate bond so the two-site block's
+    // Frobenius norm equals the physical Schmidt norm (== 1 for a normalized
+    // state).  The SVD rescale below (S /= ||S||, log_norm_factor += log(||S||))
+    // and the Metal/WebGPU paths all assume this mixed-canonical gauge; the gate
+    // path itself leaves the MPS in TN_CANONICAL_NONE, so a gate landing on an
+    // interior bond whose BOTH outer bonds are entangled had ||theta||_F != 1
+    // and silently moved physical norm into log_norm_factor, corrupting the
+    // read-out (e.g. n=4  H(0) CX(0,1) H(2) CX(2,3) CZ(1,2) -> norm 0.5).
+    // Canonicalizing here also makes the SVD truncation globally optimal.
+    {
+        tn_state_error_t canon = tn_mps_mixed_canonicalize(state, left_qubit);
+        if (canon != TN_STATE_SUCCESS) return TN_GATE_ERROR_CONTRACTION_FAILED;
+    }
+
     // Try GPU path for larger bond dimensions
     if (state->bond_dims[left_qubit] >= GPU_BOND_THRESHOLD) {
 #if HAS_METAL
