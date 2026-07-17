@@ -755,7 +755,14 @@ static size_t tensor_matmul_gpu_threshold(void) {
     }
     switch (moonlab_eshkol_get_precision()) {
         case MOONLAB_ESHKOL_PRECISION_EXACT:
-            return (size_t)1 << 33;   /* SF64/Ozaki-II: never wins at realistic sizes today */
+            /* A 32-bit WebAssembly size_t cannot represent 2^33. Saturating
+             * preserves the intended "never dispatch" policy without turning
+             * the threshold into zero through an overflowing shift. */
+#if SIZE_MAX > UINT32_MAX
+            return (size_t)(UINT64_C(1) << 33);
+#else
+            return SIZE_MAX;
+#endif
         case MOONLAB_ESHKOL_PRECISION_HIGH:
             return (size_t)1 << 28;   /* df64 (buggy 1e-7): crossover ~ 512^3 complex */
         case MOONLAB_ESHKOL_PRECISION_FAST:
@@ -763,7 +770,11 @@ static size_t tensor_matmul_gpu_threshold(void) {
         case MOONLAB_ESHKOL_PRECISION_ML:
             return (size_t)1 << 27;   /* fp24: same band as FAST */
     }
-    return (size_t)1 << 33;
+#if SIZE_MAX > UINT32_MAX
+    return (size_t)(UINT64_C(1) << 33);
+#else
+    return SIZE_MAX;
+#endif
 }
 
 tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b) {

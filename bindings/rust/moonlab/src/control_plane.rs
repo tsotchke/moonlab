@@ -22,8 +22,8 @@ use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
     moonlab_control_server_open, moonlab_control_server_run,
     moonlab_control_server_set_max_concurrent, moonlab_control_server_set_rate_limit,
-    moonlab_control_server_set_request_timeout, moonlab_control_server_set_secret,
-    moonlab_control_server_shutdown, moonlab_control_server_t,
+    moonlab_control_server_set_request_timeout, moonlab_control_server_shutdown,
+    moonlab_control_server_t,
     moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
     moonlab_control_submit_health, moonlab_control_submit_metrics,
 };

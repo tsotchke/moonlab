@@ -39,6 +39,10 @@ _env_dir = os.environ.get("MOONLAB_LIB_DIR")
 if _env_dir:
     _search_paths.append(Path(_env_dir))
 _search_paths += [
+    # Platform wheels install the native library beside the package. Keep
+    # this first so a wheel never accidentally binds an incompatible system
+    # installation with the same SONAME.
+    Path(__file__).parent / ".libs",
     _repo_root / "build_release",
     _repo_root / "build",
     _repo_root,
@@ -64,7 +68,10 @@ for _dir in _search_paths:
         break
 
 _lib = None
+_dll_directory = None
 if _lib_path is not None:
+    if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+        _dll_directory = os.add_dll_directory(str(_lib_path.parent))
     _lib = ctypes.CDLL(str(_lib_path))
 else:
     # Last resort: let the platform loader search its own path

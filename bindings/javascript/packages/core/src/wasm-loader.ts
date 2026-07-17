@@ -6,6 +6,11 @@
 
 import type { MoonlabModule } from './memory';
 
+/* tsup substitutes this with import.meta.url for ESM and undefined for CJS.
+ * Keeping import.meta out of the shared source prevents a broken/empty value
+ * from being emitted into the CommonJS runtime. */
+declare const __MOONLAB_MODULE_URL__: string | undefined;
+
 // Singleton module instance
 let modulePromise: Promise<MoonlabModule> | null = null;
 let moduleInstance: MoonlabModule | null = null;
@@ -104,12 +109,9 @@ async function loadModule(options?: LoadOptions): Promise<MoonlabModule> {
  */
 async function loadServerModule(_options?: LoadOptions): Promise<MoonlabModule> {
   const candidates: string[] = [];
-  const metaUrl =
-    typeof import.meta !== 'undefined' &&
-    typeof import.meta.url === 'string' &&
-    import.meta.url.length > 0
-      ? import.meta.url
-      : null;
+  const metaUrl = typeof __MOONLAB_MODULE_URL__ === 'string'
+    ? __MOONLAB_MODULE_URL__
+    : null;
 
   if (metaUrl) {
     candidates.push(new URL('../dist/moonlab.js', metaUrl).href);

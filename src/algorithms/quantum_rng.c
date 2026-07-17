@@ -2,11 +2,14 @@
  * @file quantum_rng.c
  * @brief Quantum Random Number Generator implementation
  *
- * True quantum random number generation using:
+ * Simulation-backed random number generation using:
  * - Hadamard-based superposition collapse
  * - Multi-qubit parallel generation
  * - Entropy extraction and conditioning
  * - Statistical validation
+ *
+ * This evolving API is not a physical quantum entropy source.  The stable
+ * cryptographically conditioned release path is `moonlab_qrng_bytes`.
  *
  * @stability evolving
  * @since v0.1.2

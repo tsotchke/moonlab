@@ -343,4 +343,4 @@ export class VQE {
   }
 }
 
-export const VERSION = '0.2.5';
+export const VERSION = '1.1.0';

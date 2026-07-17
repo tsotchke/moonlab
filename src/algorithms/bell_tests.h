@@ -51,12 +51,14 @@ extern "C" {
  *
  * USE AS A DEVICE TEST
  * --------------------
- * A CHSH sample measuring @f$S > 2 + \delta@f$ with enough statistics
- * to reject the null is a *device-independent* certificate that the
- * system produces genuine quantum randomness (Pironio et al. 2010).
- * Moonlab's Bell-verified QRNG mode (`qrng_v3_mode_bell_verified`) runs
- * a continuous CHSH monitor and discards any epoch in which the
- * measured @f$S@f$ fails to clear a user-set threshold.
+ * With independently controlled, spacelike-separated physical devices and
+ * the required loopholes closed, a statistically significant CHSH violation
+ * can support device-independent randomness certification (Pironio et al.
+ * 2010).  Moonlab controls both simulated parties, so its CHSH result is not
+ * such a certificate.  Moonlab's Bell-verified QRNG mode
+ * (`qrng_v3_mode_bell_verified`) uses the simulated CHSH monitor as a
+ * simulator-integrity gate and discards any epoch in which the measured
+ * @f$S@f$ fails to clear a user-set threshold.
  *
  * REFERENCES
  * ----------
@@ -260,15 +262,16 @@ MOONLAB_API bell_test_result_t bell_test_chsh(
 MOONLAB_API void bell_get_optimal_settings(bell_measurement_settings_t *settings);
 
 /**
- * @brief Verify Bell test results meet quantum criteria
+ * @brief Check whether Bell-test results meet the configured CHSH criteria
  * 
- * Checks if results demonstrate genuine quantum behavior:
+ * Checks whether the supplied results reproduce the expected quantum-model
+ * behavior:
  * - CHSH > 2 (violates classical bound)
  * - p-value < 0.01 (statistically significant)
  * - CHSH close to theoretical maximum (2√2)
  * 
  * @param result Bell test result
- * @return 1 if quantum behavior confirmed, 0 otherwise
+ * @return 1 if the CHSH criteria are met, 0 otherwise
  */
 int bell_test_confirms_quantum(const bell_test_result_t *result);
 

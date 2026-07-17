@@ -2,8 +2,9 @@
 
 Three operations: :func:`keygen`, :func:`encaps`, :func:`decaps`.
 All inputs / outputs are plain ``bytes``.  Randomness may be
-supplied explicitly (deterministic) or drawn from Moonlab's
-Bell-verified quantum RNG via :func:`keygen_qrng` / :func:`encaps_qrng`.
+supplied explicitly (deterministic) or drawn from Moonlab's health-tested,
+Bell-gated, SHAKE256-conditioned hybrid RNG via :func:`keygen_qrng` /
+:func:`encaps_qrng`.
 
 Example::
 
@@ -39,8 +40,33 @@ MLKEM1024_CIPHERTEXTBYTES   = 1568
 
 _Bytes = Union[bytes, bytearray, memoryview]
 
+QRNG_CAP_HARDWARE_OS_ENTROPY       = 1 << 0
+QRNG_CAP_CONTINUOUS_HEALTH_TESTS   = 1 << 1
+QRNG_CAP_SHAKE256_CONDITIONED      = 1 << 2
+QRNG_CAP_BELL_SIMULATION_GATED     = 1 << 3
+QRNG_CAP_THREAD_SAFE               = 1 << 4
+QRNG_CAP_BELL_EPOCH_CERTIFIED      = 1 << 5
+QRNG_CAP_DEVICE_INDEPENDENT_SOURCE = 1 << 6
+QRNG_CAP_FIPS140_VALIDATED         = 1 << 7
+
+
+class _QrngStatus(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_uint32),
+        ("api_version", ctypes.c_uint32),
+        ("capabilities", ctypes.c_uint64),
+        ("conditioned_requests", ctypes.c_uint64),
+        ("raw_bytes_generated", ctypes.c_uint64),
+        ("bell_tests_performed", ctypes.c_uint64),
+        ("bell_tests_passed", ctypes.c_uint64),
+        ("average_chsh", ctypes.c_double),
+        ("minimum_chsh", ctypes.c_double),
+    ]
+
 
 def _configure():
+    _lib.moonlab_qrng_get_status.argtypes = [ctypes.POINTER(_QrngStatus)]
+    _lib.moonlab_qrng_get_status.restype = ctypes.c_int
     _lib.moonlab_mlkem512_keygen.argtypes = [
         ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
     ]
@@ -83,13 +109,40 @@ def _configure():
 _configure()
 
 
+def qrng_status() -> dict:
+    """Return live protection and Bell-epoch status for the hybrid RNG."""
+    status = _QrngStatus()
+    rc = _lib.moonlab_qrng_get_status(ctypes.byref(status))
+    if rc != 0:
+        raise RuntimeError(f"moonlab_qrng_get_status failed ({rc})")
+    caps = int(status.capabilities)
+    return {
+        "api_version": int(status.api_version),
+        "capabilities": caps,
+        "hardware_os_entropy": bool(caps & QRNG_CAP_HARDWARE_OS_ENTROPY),
+        "continuous_health_tests": bool(caps & QRNG_CAP_CONTINUOUS_HEALTH_TESTS),
+        "shake256_conditioned": bool(caps & QRNG_CAP_SHAKE256_CONDITIONED),
+        "bell_simulation_gated": bool(caps & QRNG_CAP_BELL_SIMULATION_GATED),
+        "thread_safe": bool(caps & QRNG_CAP_THREAD_SAFE),
+        "bell_epoch_certified": bool(caps & QRNG_CAP_BELL_EPOCH_CERTIFIED),
+        "device_independent_source": bool(caps & QRNG_CAP_DEVICE_INDEPENDENT_SOURCE),
+        "fips140_validated": bool(caps & QRNG_CAP_FIPS140_VALIDATED),
+        "conditioned_requests": int(status.conditioned_requests),
+        "raw_bytes_generated": int(status.raw_bytes_generated),
+        "bell_tests_performed": int(status.bell_tests_performed),
+        "bell_tests_passed": int(status.bell_tests_passed),
+        "average_chsh": float(status.average_chsh),
+        "minimum_chsh": float(status.minimum_chsh),
+    }
+
+
 def keygen(d: Optional[_Bytes] = None,
            z: Optional[_Bytes] = None) -> Tuple[bytes, bytes]:
     """Generate an ML-KEM-512 key pair.
 
     If ``d`` / ``z`` are omitted, entropy is sourced from the OS CSPRNG
-    (``os.urandom``).  For a Bell-verified quantum seed use
-    :func:`keygen_qrng` instead.
+    (``os.urandom``). :func:`keygen_qrng` uses Moonlab's conditioned hybrid
+    path instead.
 
     Returns ``(ek, dk)`` -- 800 and 1632 bytes respectively.
     """
@@ -138,7 +191,7 @@ def decaps(c: _Bytes, dk: _Bytes) -> bytes:
 
 def keygen_qrng() -> Tuple[bytes, bytes]:
     """Generate a key pair with entropy drawn from Moonlab's
-    Bell-verified quantum RNG (moonlab_qrng_bytes)."""
+    conditioned hybrid RNG (moonlab_qrng_bytes)."""
     ek = ctypes.create_string_buffer(PUBLICKEYBYTES)
     dk = ctypes.create_string_buffer(SECRETKEYBYTES)
     rc = _lib.moonlab_mlkem512_keygen_qrng(ek, dk)
@@ -148,7 +201,7 @@ def keygen_qrng() -> Tuple[bytes, bytes]:
 
 
 def encaps_qrng(ek: _Bytes) -> Tuple[bytes, bytes]:
-    """Encapsulate using Bell-verified quantum entropy for the inner
+    """Encapsulate using Moonlab's conditioned hybrid RNG for the inner
     message seed."""
     ek = bytes(ek)
     if len(ek) != PUBLICKEYBYTES:
@@ -232,6 +285,7 @@ def _gen_wrappers(bits, pk_len, sk_len, ct_len):
 
 
 __all__ = [
+    "qrng_status",
     "keygen", "encaps", "decaps",
     "keygen_qrng", "encaps_qrng",
     "PUBLICKEYBYTES", "SECRETKEYBYTES",
@@ -244,4 +298,8 @@ __all__ = [
     "keygen1024_qrng", "encaps1024_qrng",
     "MLKEM1024_PUBLICKEYBYTES", "MLKEM1024_SECRETKEYBYTES",
     "MLKEM1024_CIPHERTEXTBYTES",
+    "QRNG_CAP_HARDWARE_OS_ENTROPY", "QRNG_CAP_CONTINUOUS_HEALTH_TESTS",
+    "QRNG_CAP_SHAKE256_CONDITIONED", "QRNG_CAP_BELL_SIMULATION_GATED",
+    "QRNG_CAP_THREAD_SAFE", "QRNG_CAP_BELL_EPOCH_CERTIFIED",
+    "QRNG_CAP_DEVICE_INDEPENDENT_SOURCE", "QRNG_CAP_FIPS140_VALIDATED",
 ]

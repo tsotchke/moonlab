@@ -85,6 +85,19 @@ typedef int (*moonlab_qrng_bytes_fn)(uint8_t* buf, size_t size);
 typedef void (*moonlab_abi_version_fn)(int* major, int* minor, int* patch);
 typedef int (*moonlab_qwz_chern_fn)(double m, size_t N, double* out_chern);
 
+typedef struct {
+    uint32_t struct_size;
+    uint32_t api_version;
+    uint64_t capabilities;
+    uint64_t conditioned_requests;
+    uint64_t raw_bytes_generated;
+    uint64_t bell_tests_performed;
+    uint64_t bell_tests_passed;
+    double average_chsh;
+    double minimum_chsh;
+} moonlab_qrng_status_abi_t;
+typedef int (*moonlab_qrng_get_status_fn)(moonlab_qrng_status_abi_t* status);
+
 static const char* const LIB_CANDIDATES[] = {
 #if defined(_WIN32)
     "libquantumsim.dll",
@@ -204,6 +217,56 @@ static int test_qrng(void* h) {
     return 0;
 }
 
+static int test_qrng_status(void* h) {
+    dlerror();
+    moonlab_qrng_get_status_fn fn =
+        (moonlab_qrng_get_status_fn)dlsym(h, "moonlab_qrng_get_status");
+    const char* err = dlerror();
+    if (!fn || err) {
+        fprintf(stderr, "dlsym(moonlab_qrng_get_status) failed: %s\n",
+                err ? err : "null");
+        return 1;
+    }
+    if (fn(NULL) == 0) {
+        fprintf(stderr, "moonlab_qrng_get_status(NULL) must reject NULL\n");
+        return 1;
+    }
+
+    moonlab_qrng_status_abi_t status;
+    memset(&status, 0, sizeof(status));
+    if (fn(&status) != 0) {
+        fprintf(stderr, "moonlab_qrng_get_status failed\n");
+        return 1;
+    }
+    const uint64_t required = UINT64_C(0x1f); /* Capability bits 0..4. */
+    if (status.struct_size != sizeof(status) || status.api_version != 1 ||
+        (status.capabilities & required) != required) {
+        fprintf(stderr,
+                "QRNG status contract mismatch: size=%u api=%u caps=0x%llx\n",
+                status.struct_size, status.api_version,
+                (unsigned long long)status.capabilities);
+        return 1;
+    }
+    if (status.bell_tests_performed == 0 ||
+        status.bell_tests_passed != status.bell_tests_performed ||
+        status.minimum_chsh <= 2.0) {
+        fprintf(stderr,
+                "QRNG Bell epoch status unhealthy: tests=%llu pass=%llu min=%.4f\n",
+                (unsigned long long)status.bell_tests_performed,
+                (unsigned long long)status.bell_tests_passed,
+                status.minimum_chsh);
+        return 1;
+    }
+    if ((status.capabilities & (UINT64_C(1) << 6)) != 0 ||
+        (status.capabilities & (UINT64_C(1) << 7)) != 0) {
+        fprintf(stderr, "QRNG status overclaims DI or FIPS validation\n");
+        return 1;
+    }
+    fprintf(stdout, "QRNG status ABI OK (caps=0x%llx, CHSH min=%.4f)\n",
+            (unsigned long long)status.capabilities, status.minimum_chsh);
+    return 0;
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -225,6 +288,8 @@ int main(void) {
     failures += test_version(h);
     ABI_STEP("qrng");
     failures += test_qrng(h);
+    ABI_STEP("qrng status");
+    failures += test_qrng_status(h);
 
     /* moonlab_qwz_chern: topological / trivial phases of QWZ. */
     ABI_STEP("qwz chern");

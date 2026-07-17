@@ -17,14 +17,15 @@ extern "C" {
 
 /**
  * @file qrng.h
- * @brief Quantum random number generator (QRNG v3).
+ * @brief Simulation-backed hybrid random number generator (QRNG v3).
  *
  * OVERVIEW
  * --------
- * A quantum random number generator extracts randomness from the
- * fundamental indeterminism of quantum measurements rather than from
- * deterministic pseudorandom iteration.  The generator here is a
- * layered architecture with three user-selectable modes:
+ * A physical quantum random number generator extracts randomness from
+ * measurement indeterminism. Moonlab instead simulates those measurements
+ * and drives every sampling decision from its health-tested hardware/OS
+ * entropy pool. The generator is a layered architecture with three
+ * user-selectable modes:
  *
  *   - @em DIRECT: measure a freshly prepared @f$|+\rangle^{\otimes n}@f$
  *     state in the computational basis, delivering fresh i.i.d.
@@ -33,24 +34,19 @@ extern "C" {
  *     bias the output distribution before measurement; used for
  *     studying structured quantum randomness and for sampling from
  *     pre-designed distributions.
- *   - @em BELL_VERIFIED: every epoch runs a CHSH test on an adjacent
- *     Bell pair and discards the epoch if the measured Bell parameter
- *     falls below a user-set threshold (default slack above the
- *     classical bound @f$S > 2@f$).  This is an online,
- *     *device-independent* style certification in the sense of
- *     Pironio, Acín, Massar et al. (2010): the randomness is
- *     guaranteed by the observed violation, regardless of the
- *     internal mechanism.
+ *   - @em BELL_VERIFIED: prepares a separate simulated Bell pair and runs
+ *     a 4,000-sample CHSH plumbing check before releasing the first byte of
+ *     every monitored epoch. A failed check zeroizes and rejects the draw.
  *
- * All three modes feed a post-processing layer that mixes quantum
- * output with a hardware entropy pool (RDSEED / /dev/urandom /
- * SecRandomCopyBytes, selected at build time per platform) via a
- * Toeplitz-matrix extractor, producing cryptographically-strong
- * output.  The final stage passes through the subset of the NIST
- * SP 800-22 statistical battery installed in
- * `src/applications/nist_sp800_22.c` (monobit, block frequency,
- * runs, longest-run, cusum, serial) before delivery.  The full
- * fifteen-test battery is available for offline audits.
+ * Quantum evolution and measurement are driven by a health-tested
+ * hardware/OS entropy pool (RDSEED, getrandom()/dev_urandom,
+ * SecRandomCopyBytes, or BCryptGenRandom depending on the platform).
+ * The stable @ref moonlab_qrng_bytes release surface strengthens this core:
+ * it forces BELL_VERIFIED mode, absorbs fresh continuously health-tested
+ * entropy and the v3 stream into a domain-separated SHAKE256 conditioner,
+ * serialises concurrent callers, and exposes live assurance status through
+ * @ref moonlab_qrng_get_status. Optional Toeplitz and NIST SP 800-22 modules
+ * remain research/offline qualification tools rather than per-call gates.
  *
  * See the Herrero-Collantes and Garcia-Escartin review for the
  * taxonomy of QRNG architectures and the practical tradeoffs that
@@ -59,10 +55,11 @@ extern "C" {
  * PUBLIC ABI
  * ----------
  * `moonlab_qrng_bytes` (in `moonlab_export.h`) is the stable entry
- * point: a thread-safe `dlsym` target that returns
- * cryptographically-strong bytes drawn through whichever mode the
- * engine was compiled for.  It is the symbol consumed by downstream
- * projects (QGTL, lilirrep, SbNN).
+ * point: a thread-safe `dlsym` target for the Bell-gated, health-tested,
+ * SHAKE256-conditioned hybrid path. It is the symbol consumed by downstream
+ * projects (QGTL, lilirrep, SbNN). Because Moonlab controls both simulated
+ * Bell devices, this does not by itself claim device independence or FIPS
+ * module validation; capability flags make those boundaries machine-readable.
  *
  * REFERENCES
  * ----------
@@ -116,7 +113,7 @@ typedef struct {
     // Bell test verification
     int enable_bell_monitoring;     /**< Enable continuous Bell tests */
     uint64_t bell_test_interval;    /**< Test every N bytes (0=disabled) */
-    double min_acceptable_chsh;     /**< Minimum CHSH value (2.4 recommended) */
+    double min_acceptable_chsh;     /**< CHSH plumbing-alert threshold (2.1 default) */
     
     // Grover optimization
     int enable_grover_cache;        /**< Cache Grover iterations */
@@ -392,10 +389,11 @@ qrng_v3_error_t qrng_v3_grover_multi_target(
 // ============================================================================
 
 /**
- * @brief Run Bell test to verify quantum behavior
+ * @brief Run a simulated Bell test to verify simulator behavior
  * 
- * Performs CHSH inequality test to prove genuine quantum properties.
- * Should be called periodically or on-demand.
+ * Prepares a simulated Bell state and checks that the state/measurement path
+ * reproduces the expected CHSH violation. This is an integrity check, not a
+ * physical-device or device-independent certificate.
  * 
  * @param ctx Quantum RNG context
  * @param num_measurements Number of measurements (recommend 1000+)

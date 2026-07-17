@@ -159,6 +159,12 @@ set(ALL_SOURCES
 # Create the WASM executable
 add_executable(moonlab ${ALL_SOURCES})
 
+# Keep generated JavaScript reproducible: Emscripten records the --pre-js and
+# --post-js arguments in its output, so passing source-tree absolute paths
+# leaks the builder's checkout path into every npm/demo artifact.
+configure_file("${CMAKE_SOURCE_DIR}/pre.js" "${CMAKE_BINARY_DIR}/pre.js" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/post.js" "${CMAKE_BINARY_DIR}/post.js" COPYONLY)
+
 # BLAS/LAPACK for tensor-network solvers (OpenBLAS preferred, CLAPACK fallback)
 set(OPENBLAS_WASM_ROOT "$ENV{OPENBLAS_WASM_ROOT}")
 if(NOT OPENBLAS_WASM_ROOT)
@@ -205,7 +211,8 @@ target_include_directories(moonlab PRIVATE
 # Compiler flags
 target_compile_options(moonlab PRIVATE
     -O3
-    -ffast-math
+    -fno-math-errno
+    -ffp-contract=fast
     -DWASM_BUILD
     -Wno-unused-function
 )
@@ -249,8 +256,8 @@ set_target_properties(moonlab PROPERTIES
         -s FILESYSTEM=0 \
         -s ENVIRONMENT='web,worker,node' \
         -s SINGLE_FILE=0 \
-        --pre-js ${CMAKE_SOURCE_DIR}/pre.js \
-        --post-js ${CMAKE_SOURCE_DIR}/post.js \
+        --pre-js pre.js \
+        --post-js post.js \
     "
 )
 

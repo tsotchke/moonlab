@@ -6,7 +6,7 @@
  * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifndef QUANTUM_KERNELS_CUH

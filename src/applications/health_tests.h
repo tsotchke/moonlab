@@ -19,8 +19,9 @@ extern "C" {
  * 2. Adaptive Proportion Test (APT) - detects loss of entropy
  * 3. Startup Tests - validates initial entropy source behavior
  * 
- * These tests are mandatory for FIPS 140-3 compliance and ensure
- * the entropy source is functioning correctly.
+ * RCT and APT are health-test building blocks specified by SP 800-90B.
+ * This implementation is not itself a FIPS 140-3 validation or an entropy
+ * source certification.
  */
 
 /**

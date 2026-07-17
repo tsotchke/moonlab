@@ -363,9 +363,10 @@ collective_error_t collective_top_k_states(const partitioned_state_t* state,
 // ============================================================================
 
 /**
- * @brief Generate quantum random bits
+ * @brief Generate simulation-backed random bits
  *
- * Uses measurement of superposition states for true randomness.
+ * Uses simulated measurement of superposition states. Sampling entropy comes
+ * from the configured host entropy source; this is not a physical QRNG.
  *
  * @param state Partitioned state (will be modified)
  * @param bits Output buffer
@@ -377,7 +378,7 @@ collective_error_t collective_qrng_bits(partitioned_state_t* state,
                                         uint32_t num_bits);
 
 /**
- * @brief Generate quantum random bytes
+ * @brief Generate simulation-backed random bytes
  *
  * @param state Partitioned state
  * @param bytes Output buffer
@@ -389,7 +390,7 @@ collective_error_t collective_qrng_bytes(partitioned_state_t* state,
                                          uint32_t num_bytes);
 
 /**
- * @brief Generate quantum random double in [0, 1)
+ * @brief Generate a simulation-backed random double in [0, 1)
  *
  * @param state Partitioned state
  * @param value Output random value

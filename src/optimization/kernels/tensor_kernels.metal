@@ -12,7 +12,7 @@
  * Optimized for Apple Silicon M1/M2/M3/M4 unified memory architecture.
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #include <metal_stdlib>

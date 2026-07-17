@@ -84,10 +84,10 @@ MOONLAB_API void moonlab_mlkem512_decaps(uint8_t K[32],
 /**
  * @brief KeyGen with entropy sourced from @c moonlab_qrng_bytes.
  *
- * Internally draws 64 bytes from the Bell-verified quantum RNG to
- * populate (d, z) and then calls @ref moonlab_mlkem512_keygen.  The
- * single public entry point that ties Moonlab's quantum entropy
- * source to a FIPS-203 PQC key pair in one call.
+ * Internally draws 64 bytes from Moonlab's health-tested, Bell-gated,
+ * SHAKE256-conditioned hybrid RNG to populate (d, z), then calls
+ * @ref moonlab_mlkem512_keygen. Deployments requiring a validated module
+ * boundary can instead supply explicit seeds from that module's approved DRBG.
  *
  * @return 0 on success; -1 on QRNG failure.
  */

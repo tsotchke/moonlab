@@ -77,14 +77,14 @@ mod tests {
             // No chance of |01⟩ or |10⟩
             // Subsystem A = qubit 0
             let subsystem_a: [i32; 1] = [0];
-            let entropy = quantum_state_entanglement_entropy(
-                state,
-                subsystem_a.as_ptr(),
-                1
-            );
+            let entropy = quantum_state_entanglement_entropy(state, subsystem_a.as_ptr(), 1);
 
             // Bell state should have maximal entanglement entropy = ln(2) ≈ 0.693
-            assert!(entropy > 0.6, "Bell state should have high entanglement: {}", entropy);
+            assert!(
+                entropy > 0.6,
+                "Bell state should have high entanglement: {}",
+                entropy
+            );
 
             quantum_state_free(state);
         }

@@ -75,7 +75,7 @@ export interface SubmitCircuitArgs {
    *  line is sent before the verb line.  The server must have the
    *  matching secret configured via
    *  ``moonlab_control_server_set_secret``. */
-  secret?: Buffer | string;
+  secret?: Uint8Array | string;
   /** Tenant identifier (since v1.0.3).  When set with ``secret``,
    *  the prelude becomes ``AUTH <tenantId>:<hexdigest>\n`` and the
    *  server's scheduler completion hook reads the tenant_id for
@@ -108,8 +108,14 @@ function openSocket(args: { host: string; port: number; timeoutMs: number;
       const opts: tls.ConnectionOptions = {
         host, port,
         timeout: timeoutMs,
-        servername: args.tls.serverName ?? host,
       };
+      /* TLS SNI names are DNS names, never numeric IP literals. Newer Node
+       * releases reject an IP-valued `servername`; certificate validation can
+       * still use the connection host when SNI is omitted. */
+      const serverName = args.tls.serverName ?? (net.isIP(host) === 0 ? host : undefined);
+      if (serverName) {
+        opts.servername = serverName;
+      }
       if (args.tls.caPath) {
         opts.ca = fs.readFileSync(args.tls.caPath);
       }
@@ -267,7 +273,7 @@ function parseHeader(line: Buffer, rest: Buffer): ReplyFraming {
  *  matches the C server's `hmac_sha3_256(secret, hdr, hdr_len)`
  *  call where `hdr_len` includes the `\n`.  Optional tenant_id
  *  (since v1.0.3) produces the ``AUTH <tenant>:<hex>\n`` wire form. */
-function authPrelude(secret: Buffer | string, verbLine: Buffer,
+function authPrelude(secret: Uint8Array | string, verbLine: Buffer,
                      tenantId?: string): Buffer {
   const key = typeof secret === 'string' ? Buffer.from(secret, 'utf-8') : secret;
   const h = crypto.createHmac('sha3-256', key);
@@ -281,7 +287,7 @@ function authPrelude(secret: Buffer | string, verbLine: Buffer,
 
 const TENANT_ID_RE = /^[A-Za-z0-9_.-]{1,63}$/;
 
-function validateTenantId(tenantId: string, secret: Buffer | string | undefined): void {
+function validateTenantId(tenantId: string, secret: Uint8Array | string | undefined): void {
   if (secret === undefined) {
     throw new ControlPlaneError(
       'tenantId requires secret; the server uses HMAC to authenticate ' +
