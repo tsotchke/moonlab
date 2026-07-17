@@ -1,5 +1,27 @@
 version: '3.8'
 
+# Every service below builds and self-verifies entirely inside `docker
+# build` (CMake configure -> build -> ctest / package-verify all run as
+# RUN steps, see the Dockerfiles under docker/*/*/). `docker compose up`
+# therefore only starts an already-fully-built, already-verified
+# container that idles on `sleep infinity` -- there is nothing left for
+# it to write at runtime, which is why these services carry no
+# `volumes:` entries. (An earlier version bind-mounted `../lib:/output/lib`,
+# but no Dockerfile RUN step ever wrote to `/output/lib` -- that mount
+# path never received anything even when the container ran -- and
+# Compose `volumes:` only take effect for `docker run`/`up` in the first
+# place, after the image's build-time RUN layers have already finished,
+# so it could never have captured build output either way.)
+#
+# To pull build artifacts out of one of these images after building it:
+#   docker compose build ubuntu-release
+#   id=$(docker create $(docker compose images -q ubuntu-release))
+#   docker cp "$id":/app/pkg ./dist-ubuntu-release
+#   docker rm "$id"
+# (debian-release and debian-arm64-release stage the same /app/pkg
+# install tree; debian-debug stages /app/build instead, since it's a
+# CMake build directory meant for gdb/valgrind, not a packaged install.)
+
 services:
   # Ubuntu x86_64 Release Build
   ubuntu-release:
@@ -7,10 +29,8 @@ services:
       context: ..
       dockerfile: docker/ubuntu/release/Dockerfile
       args:
-        VERSION: ${VERSION:-0.1.0}
+        VERSION: ${VERSION:-1.1.0}
     platform: linux/amd64
-    volumes:
-      - ../lib:/output/lib:rw
 
   # Debian ARM64 Release Build
   debian-arm64-release:
@@ -18,10 +38,8 @@ services:
       context: ..
       dockerfile: docker/debian/release/Dockerfile
       args:
-        VERSION: ${VERSION:-0.1.0}
+        VERSION: ${VERSION:-1.1.0}
     platform: linux/arm64
-    volumes:
-      - ../lib:/output/lib:rw
 
   # Debian Debug Build
   debian-debug:
@@ -29,7 +47,5 @@ services:
       context: ..
       dockerfile: docker/debian/debug/Dockerfile
       args:
-        VERSION: ${VERSION:-0.1.0}
+        VERSION: ${VERSION:-1.1.0}
     platform: linux/amd64
-    volumes:
-      - ../lib:/output/lib:rw

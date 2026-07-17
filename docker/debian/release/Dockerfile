@@ -2,7 +2,8 @@
 # Used for ARM64 builds via QEMU
 FROM debian:12-slim
 
-ARG VERSION=0.1.0
+ARG VERSION=1.1.0
+LABEL org.opencontainers.image.version="${VERSION}"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies

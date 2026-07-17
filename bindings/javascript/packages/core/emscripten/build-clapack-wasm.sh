@@ -18,12 +18,33 @@ DEPS_DIR="${SCRIPT_DIR}/build/deps/clapack-wasm"
 CLAPACK_URL="${CLAPACK_URL:-https://www.netlib.org/clapack/clapack-3.2.1-CMAKE.tgz}"
 CLAPACK_TGZ="${DEPS_DIR}/clapack.tgz"
 
+# Expected sha256 of the netlib clapack-3.2.1-CMAKE.tgz tarball, pinned so
+# a compromised/rewritten netlib download (or a CLAPACK_URL override
+# pointing somewhere untrusted) is caught before it feeds the shipped
+# WASM build rather than silently linked in. Recompute with
+# `shasum -a 256 clapack-3.2.1-CMAKE.tgz` if CLAPACK_URL is intentionally
+# pointed at a different, verified release and override via
+# CLAPACK_SHA256.
+CLAPACK_SHA256="${CLAPACK_SHA256:-0b3f782bc24845d85f36bafbff0f2f1384dc72df730fda4e7924ec1a70baca5a}"
+
 echo "==> Preparing deps dir at ${DEPS_DIR}"
 rm -rf "${DEPS_DIR}"
 mkdir -p "${DEPS_DIR}"
 
 echo "==> Downloading CLAPACK bundle"
 curl -fL --retry 3 "${CLAPACK_URL}" -o "${CLAPACK_TGZ}"
+
+echo "==> Verifying sha256"
+ACTUAL_SHA256=$(shasum -a 256 "${CLAPACK_TGZ}" | awk '{print $1}')
+if [ "${ACTUAL_SHA256}" != "${CLAPACK_SHA256}" ]; then
+  echo "ERROR: sha256 mismatch for ${CLAPACK_TGZ}"
+  echo "  expected: ${CLAPACK_SHA256}"
+  echo "  actual:   ${ACTUAL_SHA256}"
+  echo "  If CLAPACK_URL was intentionally overridden to a different," \
+       "verified release, set CLAPACK_SHA256 to match it."
+  rm -f "${CLAPACK_TGZ}"
+  exit 1
+fi
 
 echo "==> Extracting"
 tar -xzf "${CLAPACK_TGZ}" -C "${DEPS_DIR}"
@@ -98,12 +119,18 @@ find "${BUILD_DIR}" -name 'libclapack.a' -o -name 'liblapack.a' -o -name 'libbla
   cp -f "${lib}" "${LIB_DIR}/"
 done
 
-# Remove the Fortran runtime main() to avoid Emscripten NO_ENTRY conflicts.
+# Remove the Fortran runtime main() to avoid Emscripten NO_ENTRY conflicts,
+# and the s_copy/s_cat members to avoid signature mismatches against
+# moonlab's own definitions. `emar d` on a member that isn't present in
+# the archive is a no-op (exits 0) on both GNU ar and llvm-ar's emar
+# wrapper, so a real removal failure (corrupt archive, wrong member name
+# after a CLAPACK version bump) now surfaces instead of being masked by
+# `|| true`.
 if [ -f "${LIB_DIR}/libf2c.a" ]; then
   echo "==> Removing f2c main() from libf2c.a"
-  emar d "${LIB_DIR}/libf2c.a" main.c.o || true
+  emar d "${LIB_DIR}/libf2c.a" main.c.o
   echo "==> Removing f2c s_copy/s_cat to avoid signature mismatches"
-  emar d "${LIB_DIR}/libf2c.a" s_copy.c.o s_cat.c.o || true
+  emar d "${LIB_DIR}/libf2c.a" s_copy.c.o s_cat.c.o
 fi
 
 # Copy headers from common CLAPACK locations

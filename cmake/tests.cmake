@@ -1390,6 +1390,22 @@
         )
     endif()
 
+    # JS bindings unit tests — vitest, no WASM build required (see
+    # bindings/javascript/packages/core/vitest.config.ts: unit tests are
+    # explicitly the WASM-free lane, separate from test:integration).
+    # Mirrors python_bindings_smoke / rust_bindings_smoke above: gated on
+    # pnpm plus an already-`pnpm install`-ed workspace so a fresh clone
+    # that hasn't run the JS package manager doesn't fail the default
+    # build.
+    find_program(PNPM_EXECUTABLE pnpm)
+    if(PNPM_EXECUTABLE AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/node_modules")
+        add_test(NAME js_bindings_vitest
+                 COMMAND ${PNPM_EXECUTABLE} -C
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core
+                         run test:unit)
+    endif()
+
     # WebGPU parity smoke — runs the existing randomized eval script.
     # Requires pnpm, emscripten-built moonlab.wasm, a pnpm-built TS dist,
     # and optionally a WebGPU-capable runtime (Chromium 113+ or Deno 2).
@@ -1548,7 +1564,7 @@
         unit_circuit_diagram unit_feynman unit_manifest)
     qsim_label_tests(bindings
         bindings_version_sync python_bindings_pytest
-        python_bindings_smoke rust_bindings_smoke)
+        python_bindings_smoke rust_bindings_smoke js_bindings_vitest)
     qsim_label_tests(abi
         abi_moonlab_export unit_moonlab_status)
     qsim_label_tests(examples

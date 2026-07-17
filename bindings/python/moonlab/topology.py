@@ -146,9 +146,15 @@ class ChernKPM:
         # so we keep the buffer alive via self._mod_owned.
         arr = np.ctypeslib.as_array(cptr, shape=(self._L * self._L,)).copy()
         self._mod_owned = arr
-        # free the malloc'd C buffer (we copied its contents).
+        # Free the malloc'd C buffer (we copied its contents).  argtypes
+        # must be set explicitly -- ctypes' default int argument
+        # marshalling truncates 64-bit pointers on LLP64 targets
+        # (Windows), corrupting the free() call.  Same pattern as
+        # ca_mps.py's z2_lgt_1d_build.
         libc = ctypes.CDLL(None)
-        libc.free(cptr)
+        libc.free.argtypes = [ctypes.c_void_p]
+        libc.free.restype = None
+        libc.free(ctypes.cast(cptr, ctypes.c_void_p))
         V_max = float(n) * abs(V0)
         pptr = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         rc = _lib.chern_kpm_set_modulation(

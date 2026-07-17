@@ -22,6 +22,14 @@ print(probs)  # [0.5, 0.0, 0.0, 0.5] - |00⟩ and |11⟩
 
 ### Prerequisites
 
+The published wheel is self-contained: the Python build pins
+`QSIM_ENABLE_OPENMP=OFF` (see `bindings/python/pyproject.toml`), so
+`pip install moonlab` needs no `libomp` install.
+
+`libomp` is only relevant if you build libquantumsim yourself with
+OpenMP turned on (the top-level CMake default), e.g. for a non-Python
+build or local development against a custom CMake configuration:
+
 ```bash
 # macOS with Apple Silicon
 brew install libomp
@@ -398,10 +406,15 @@ This library implements algorithms from the following foundational works:
 
 ---
 
-## New in v0.3.0 (May 2026)
+## Historical: what shipped in v0.3.0
 
-The Python bindings are at full parity with the v0.3 C surface.  All
-new modules ship in this release:
+This package is currently at **v1.1.0** (stable ABI **0.6.0**); see
+`CHANGELOG.md` at the repo root and `docs/PARITY_MATRIX.md` for the
+full v0.4-v1.1 history, including the v1.1 GPU (CUDA) state API,
+control-plane job scheduling, and QRNG status surface added since the
+notes below. The v0.3 highlights are kept here because the
+module-level docs they reference (`docs/reference/qgt-api.md`,
+`docs/reference/mpdo-api.md`) are unchanged since:
 
 **Quantum geometric tensor and topology** (`moonlab.topology`):
 - `chern_qwz_proj(m, N)`, `chern_qwz_parallel_transport(m, N)` —
@@ -439,4 +452,4 @@ worked examples.
 
 ---
 
-*Version 0.3.0 - May 2026*
+*Current release: v1.1.0 (ABI 0.6.0)*

@@ -129,6 +129,38 @@ fi
 PKG_CONFIG_DIR="$(dirname "$pkg_config")"
 LIB_DIR="$(dirname "$shared_lib")"
 
+# ldd resolution check: confirm every shared library libquantumsim.so
+# actually NEEDs (libgomp, liblapacke, libopenblas/libblas, libssl, ...)
+# resolves on this host, i.e. the Depends: field in DEBIAN/control is
+# not missing a runtime package. Deliberately run with no
+# LD_LIBRARY_PATH override so this reflects what `apt install
+# moonlab.deb` gets on a plain system, not the CMake-consumer run
+# below (which does set LD_LIBRARY_PATH). ldd is Linux-specific
+# (dpkg packages are a Linux concept in the first place); on macOS
+# this step degrades to a no-op and the rest of the script's
+# structural checks still run.
+if [[ "$(uname -s)" == "Linux" ]]; then
+    if command -v ldd >/dev/null; then
+        echo "[verify-deb] checking ldd resolution for $shared_lib"
+        ldd_out="$(ldd "$shared_lib" 2>&1)" || {
+            echo "$ldd_out" >&2
+            echo "ldd failed to process the extracted libquantumsim.so" >&2
+            exit 1
+        }
+        echo "$ldd_out"
+        if unresolved="$(grep -E 'not found' <<<"$ldd_out")"; then
+            echo "libquantumsim.so has unresolved dynamic dependencies:" >&2
+            echo "$unresolved" >&2
+            echo "DEBIAN/control's Depends: field is likely missing a runtime package." >&2
+            exit 1
+        fi
+    else
+        echo "[verify-deb] ldd not available; skipping dynamic-dependency resolution check" >&2
+    fi
+else
+    echo "[verify-deb] ldd resolution check requires Linux; running structural checks only on $(uname -s)"
+fi
+
 cat >"$CONSUMER_DIR/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.20)
 project(moonlab_deb_consumer C)

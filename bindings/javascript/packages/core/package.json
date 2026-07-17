@@ -11,15 +11,17 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./wasm": {
-      "import": "./dist/moonlab.wasm"
+    "./control-plane": {
+      "types": "./dist/control-plane.d.ts",
+      "import": "./dist/control-plane.mjs",
+      "require": "./dist/control-plane.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build:wasm": "cd emscripten && emcmake cmake -B build && cmake --build build && cmake -E make_directory ../dist && cmake -E copy build/moonlab.js ../dist/moonlab.js && cmake -E copy build/moonlab.wasm ../dist/moonlab.wasm",
+    "build:wasm": "cd emscripten && ( [ -f build/deps/openblas-wasm/libopenblas.a ] || [ -f build/deps/clapack-wasm/lib/liblapack.a ] || bash build-clapack-wasm.sh ) && emcmake cmake -B build && cmake --build build && cmake -E make_directory ../dist && cmake -E copy build/moonlab.js ../dist/moonlab.js && cmake -E copy build/moonlab.wasm ../dist/moonlab.wasm",
     "build:ts": "tsup --config tsup.config.ts",
     "build": "pnpm build:ts && pnpm build:wasm",
     "dev": "tsup --config tsup.config.ts --watch",
