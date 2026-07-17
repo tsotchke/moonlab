@@ -176,7 +176,7 @@ jobs:
           ctest --test-dir build --output-on-failure --timeout 600 \
               -LE "long|memory_heavy" \
               -E "n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
-              "${TEST_FILTER[@]}" -j 4
+              "${TEST_FILTER[@]+${TEST_FILTER[@]}}" -j 4
 
       - name: Upload Build Log on Failure
         if: failure()
