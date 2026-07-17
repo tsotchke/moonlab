@@ -147,7 +147,7 @@ MOONLAB_API double ising_model_evaluate(const ising_model_t *model, uint64_t bit
  * @brief Print Ising model
  * @param model Ising model
  */
-void ising_model_print(const ising_model_t *model);
+MOONLAB_API void ising_model_print(const ising_model_t *model);
 
 // ============================================================================
 // PROBLEM ENCODINGS
@@ -215,13 +215,13 @@ typedef struct {
  * @param num_assets Number of assets
  * @return Initialized portfolio problem
  */
-portfolio_problem_t* portfolio_problem_create(size_t num_assets);
+MOONLAB_API portfolio_problem_t* portfolio_problem_create(size_t num_assets);
 
 /**
  * @brief Free portfolio problem
  * @param problem Portfolio problem
  */
-void portfolio_problem_free(portfolio_problem_t *problem);
+MOONLAB_API void portfolio_problem_free(portfolio_problem_t *problem);
 
 /**
  * @brief Encode portfolio optimization as Ising model
@@ -232,7 +232,7 @@ void portfolio_problem_free(portfolio_problem_t *problem);
  * @param problem Portfolio problem
  * @return Ising model encoding
  */
-ising_model_t* ising_encode_portfolio(const portfolio_problem_t *problem);
+MOONLAB_API ising_model_t* ising_encode_portfolio(const portfolio_problem_t *problem);
 
 /**
  * @brief Number partition problem
@@ -249,7 +249,7 @@ typedef struct {
  * @param problem Partition problem
  * @return Ising model encoding
  */
-ising_model_t* ising_encode_partition(const partition_problem_t *problem);
+MOONLAB_API ising_model_t* ising_encode_partition(const partition_problem_t *problem);
 
 // ============================================================================
 // QAOA ALGORITHM
@@ -383,7 +383,7 @@ MOONLAB_API qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
  * @param num_layers Number of QAOA layers
  * @return QS_SUCCESS or error
  */
-qs_error_t qaoa_apply_circuit(
+MOONLAB_API qs_error_t qaoa_apply_circuit(
     quantum_state_t *state,
     const ising_model_t *ising,
     const double *gamma,
@@ -401,7 +401,7 @@ qs_error_t qaoa_apply_circuit(
  * @param gamma Cost angle
  * @return QS_SUCCESS or error
  */
-qs_error_t qaoa_apply_cost_hamiltonian(
+MOONLAB_API qs_error_t qaoa_apply_cost_hamiltonian(
     quantum_state_t *state,
     const ising_model_t *ising,
     double gamma
@@ -416,7 +416,7 @@ qs_error_t qaoa_apply_cost_hamiltonian(
  * @param beta Mixer angle
  * @return QS_SUCCESS or error
  */
-qs_error_t qaoa_apply_mixer_hamiltonian(
+MOONLAB_API qs_error_t qaoa_apply_mixer_hamiltonian(
     quantum_state_t *state,
     double beta
 );
@@ -438,7 +438,7 @@ qs_error_t qaoa_apply_mixer_hamiltonian(
  * @param grad_beta Output: gradient w.r.t. beta
  * @return 0 on success, -1 on error
  */
-int qaoa_compute_gradient(
+MOONLAB_API int qaoa_compute_gradient(
     qaoa_solver_t *solver,
     const double *gamma,
     const double *beta,
@@ -460,7 +460,7 @@ int qaoa_compute_gradient(
  * @param entropy Entropy context
  * @return Measured bitstring
  */
-uint64_t qaoa_sample_solution(
+MOONLAB_API uint64_t qaoa_sample_solution(
     quantum_state_t *state,
     quantum_entropy_ctx_t *entropy
 );
@@ -479,7 +479,7 @@ uint64_t qaoa_sample_solution(
  * @param num_samples Number of samples to take
  * @return 0 on success, -1 on error
  */
-int qaoa_get_top_solutions(
+MOONLAB_API int qaoa_get_top_solutions(
     quantum_state_t *state,
     const ising_model_t *ising,
     size_t k,
@@ -499,7 +499,7 @@ int qaoa_get_top_solutions(
  * @param worst_energy Worst possible energy
  * @return Approximation ratio (0 to 1, higher is better)
  */
-double qaoa_approximation_ratio(
+MOONLAB_API double qaoa_approximation_ratio(
     double best_energy,
     double optimal_energy,
     double worst_energy
@@ -513,7 +513,7 @@ double qaoa_approximation_ratio(
  * @brief Print QAOA result
  * @param result QAOA result
  */
-void qaoa_print_result(const qaoa_result_t *result);
+MOONLAB_API void qaoa_print_result(const qaoa_result_t *result);
 
 /**
  * @brief Convert bitstring to binary array
@@ -521,7 +521,7 @@ void qaoa_print_result(const qaoa_result_t *result);
  * @param num_qubits Number of qubits
  * @param binary Output: binary array
  */
-void qaoa_bitstring_to_binary(
+MOONLAB_API void qaoa_bitstring_to_binary(
     uint64_t bitstring,
     size_t num_qubits,
     int *binary
@@ -533,7 +533,7 @@ void qaoa_bitstring_to_binary(
  * @param num_qubits Number of qubits
  * @param spins Output: spin array
  */
-void qaoa_bitstring_to_spins(
+MOONLAB_API void qaoa_bitstring_to_spins(
     uint64_t bitstring,
     size_t num_qubits,
     int *spins

@@ -25,6 +25,8 @@
 #include <complex.h>
 #include "mpi_bridge.h"
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -120,7 +122,7 @@ typedef struct {
  * @param config Optional configuration (NULL for defaults)
  * @return Partitioned state or NULL on failure
  */
-partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
+MOONLAB_API partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
                                             uint32_t num_qubits,
                                             const partition_config_t* config);
 
@@ -135,7 +137,7 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
  * @param config Optional configuration
  * @return Partitioned state or NULL on failure
  */
-partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
+MOONLAB_API partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
                                           uint32_t num_qubits,
                                           double complex* amplitudes,
                                           const partition_config_t* config);
@@ -145,7 +147,7 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
  *
  * @param state Partitioned state to free
  */
-void partition_state_free(partitioned_state_t* state);
+MOONLAB_API void partition_state_free(partitioned_state_t* state);
 
 /**
  * @brief Create a partitioned state whose LOCAL SHARD lives on a CUDA GPU.
@@ -159,7 +161,7 @@ void partition_state_free(partitioned_state_t* state);
  * Only available when libquantumsim was built with QSIM_HAS_CUDA.
  * Returns NULL on a non-CUDA build or when no GPU is available.
  */
-partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
+MOONLAB_API partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
                                                 uint32_t num_qubits,
                                                 const partition_config_t* config);
 
@@ -169,7 +171,7 @@ partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
  * No-op for CPU-only states.  Use before reading or sending the
  * host amplitudes (the MPI exchange path does this automatically).
  */
-partition_error_t partition_sync_to_host(partitioned_state_t* state);
+MOONLAB_API partition_error_t partition_sync_to_host(partitioned_state_t* state);
 
 /**
  * @brief Push the host amplitudes buffer back into the GPU shard.
@@ -177,7 +179,7 @@ partition_error_t partition_sync_to_host(partitioned_state_t* state);
  * No-op for CPU-only states.  Use after writing to the host
  * amplitudes from MPI receive or any other host-side mutation.
  */
-partition_error_t partition_sync_from_host(partitioned_state_t* state);
+MOONLAB_API partition_error_t partition_sync_from_host(partitioned_state_t* state);
 
 // ============================================================================
 // STATE INITIALIZATION
@@ -192,7 +194,7 @@ partition_error_t partition_sync_from_host(partitioned_state_t* state);
  * @param state Partitioned state
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_init_zero(partitioned_state_t* state);
+MOONLAB_API partition_error_t partition_init_zero(partitioned_state_t* state);
 
 /**
  * @brief Initialize to uniform superposition
@@ -202,7 +204,7 @@ partition_error_t partition_init_zero(partitioned_state_t* state);
  * @param state Partitioned state
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_init_uniform(partitioned_state_t* state);
+MOONLAB_API partition_error_t partition_init_uniform(partitioned_state_t* state);
 
 /**
  * @brief Initialize to specific basis state
@@ -213,7 +215,7 @@ partition_error_t partition_init_uniform(partitioned_state_t* state);
  * @param basis_state Target basis state index
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_init_basis(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_init_basis(partitioned_state_t* state,
                                        uint64_t basis_state);
 
 /**
@@ -223,7 +225,7 @@ partition_error_t partition_init_basis(partitioned_state_t* state,
  * @param src Source state
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_copy(partitioned_state_t* dest,
+MOONLAB_API partition_error_t partition_copy(partitioned_state_t* dest,
                                  const partitioned_state_t* src);
 
 // ============================================================================
@@ -237,7 +239,7 @@ partition_error_t partition_copy(partitioned_state_t* dest,
  * @param global_index Global amplitude index
  * @return 1 if local, 0 if remote
  */
-int partition_is_local(const partitioned_state_t* state, uint64_t global_index);
+MOONLAB_API int partition_is_local(const partitioned_state_t* state, uint64_t global_index);
 
 /**
  * @brief Convert global index to local index
@@ -246,7 +248,7 @@ int partition_is_local(const partitioned_state_t* state, uint64_t global_index);
  * @param global_index Global amplitude index
  * @return Local index or UINT64_MAX if not local
  */
-uint64_t partition_global_to_local(const partitioned_state_t* state,
+MOONLAB_API uint64_t partition_global_to_local(const partitioned_state_t* state,
                                    uint64_t global_index);
 
 /**
@@ -256,7 +258,7 @@ uint64_t partition_global_to_local(const partitioned_state_t* state,
  * @param local_index Local array index
  * @return Global amplitude index
  */
-uint64_t partition_local_to_global(const partitioned_state_t* state,
+MOONLAB_API uint64_t partition_local_to_global(const partitioned_state_t* state,
                                    uint64_t local_index);
 
 /**
@@ -266,7 +268,7 @@ uint64_t partition_local_to_global(const partitioned_state_t* state,
  * @param global_index Global amplitude index
  * @return Owning rank (0 to size-1)
  */
-int partition_get_owner(const partitioned_state_t* state, uint64_t global_index);
+MOONLAB_API int partition_get_owner(const partitioned_state_t* state, uint64_t global_index);
 
 /**
  * @brief Get local amplitude by global index
@@ -275,7 +277,7 @@ int partition_get_owner(const partitioned_state_t* state, uint64_t global_index)
  * @param global_index Global amplitude index
  * @return Amplitude value (0 if not local)
  */
-double complex partition_get_amplitude(const partitioned_state_t* state,
+MOONLAB_API double complex partition_get_amplitude(const partitioned_state_t* state,
                                        uint64_t global_index);
 
 /**
@@ -286,7 +288,7 @@ double complex partition_get_amplitude(const partitioned_state_t* state,
  * @param value New amplitude value
  * @return PARTITION_SUCCESS if local, PARTITION_ERROR_INDEX_RANGE if remote
  */
-partition_error_t partition_set_amplitude(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_set_amplitude(partitioned_state_t* state,
                                           uint64_t global_index,
                                           double complex value);
 
@@ -305,7 +307,7 @@ partition_error_t partition_set_amplitude(partitioned_state_t* state,
  * @param desc Output exchange descriptor
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_plan_1q_exchange(const partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_plan_1q_exchange(const partitioned_state_t* state,
                                              uint32_t qubit,
                                              exchange_descriptor_t* desc);
 
@@ -318,7 +320,7 @@ partition_error_t partition_plan_1q_exchange(const partitioned_state_t* state,
  * @param desc Output exchange descriptor
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_plan_2q_exchange(const partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_plan_2q_exchange(const partitioned_state_t* state,
                                              uint32_t qubit1,
                                              uint32_t qubit2,
                                              exchange_descriptor_t* desc);
@@ -328,7 +330,7 @@ partition_error_t partition_plan_2q_exchange(const partitioned_state_t* state,
  *
  * @param desc Exchange descriptor to free
  */
-void partition_free_exchange_desc(exchange_descriptor_t* desc);
+MOONLAB_API void partition_free_exchange_desc(exchange_descriptor_t* desc);
 
 /**
  * @brief Check if qubit is a partition qubit
@@ -340,7 +342,7 @@ void partition_free_exchange_desc(exchange_descriptor_t* desc);
  * @param qubit Qubit index to check
  * @return 1 if partition qubit, 0 if local qubit
  */
-int partition_is_partition_qubit(const partitioned_state_t* state, uint32_t qubit);
+MOONLAB_API int partition_is_partition_qubit(const partitioned_state_t* state, uint32_t qubit);
 
 // ============================================================================
 // DATA EXCHANGE
@@ -355,7 +357,7 @@ int partition_is_partition_qubit(const partitioned_state_t* state, uint32_t qubi
  * @param desc Exchange descriptor
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_execute_exchange(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_execute_exchange(partitioned_state_t* state,
                                              const exchange_descriptor_t* desc);
 
 /**
@@ -369,7 +371,7 @@ partition_error_t partition_execute_exchange(partitioned_state_t* state,
  * @param buffer Output buffer for amplitudes
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_fetch_remote(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_fetch_remote(partitioned_state_t* state,
                                          const uint64_t* global_indices,
                                          uint64_t count,
                                          double complex* buffer);
@@ -385,7 +387,7 @@ partition_error_t partition_fetch_remote(partitioned_state_t* state,
  * @param count Number of updates
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_scatter_updates(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_scatter_updates(partitioned_state_t* state,
                                             const uint64_t* global_indices,
                                             const double complex* values,
                                             uint64_t count);
@@ -403,7 +405,7 @@ partition_error_t partition_scatter_updates(partitioned_state_t* state,
  * @param norm_sq Output norm squared
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_global_norm_sq(const partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_global_norm_sq(const partitioned_state_t* state,
                                            double* norm_sq);
 
 /**
@@ -414,7 +416,7 @@ partition_error_t partition_global_norm_sq(const partitioned_state_t* state,
  * @param state Partitioned state
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_normalize(partitioned_state_t* state);
+MOONLAB_API partition_error_t partition_normalize(partitioned_state_t* state);
 
 /**
  * @brief Compute inner product with another state
@@ -426,7 +428,7 @@ partition_error_t partition_normalize(partitioned_state_t* state);
  * @param result Output inner product
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_inner_product(const partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_inner_product(const partitioned_state_t* state,
                                           const partitioned_state_t* other,
                                           double complex* result);
 
@@ -439,7 +441,7 @@ partition_error_t partition_inner_product(const partitioned_state_t* state,
  * @param full_state Output buffer (only significant at root)
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_gather_to_root(const partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_gather_to_root(const partitioned_state_t* state,
                                            double complex* full_state);
 
 /**
@@ -451,7 +453,7 @@ partition_error_t partition_gather_to_root(const partitioned_state_t* state,
  * @param full_state Input buffer (only significant at root)
  * @return PARTITION_SUCCESS or error code
  */
-partition_error_t partition_scatter_from_root(partitioned_state_t* state,
+MOONLAB_API partition_error_t partition_scatter_from_root(partitioned_state_t* state,
                                               const double complex* full_state);
 
 // ============================================================================
@@ -464,7 +466,7 @@ partition_error_t partition_scatter_from_root(partitioned_state_t* state,
  * @param state Partitioned state
  * @param all_ranks Print from all ranks (1) or root only (0)
  */
-void partition_print_info(const partitioned_state_t* state, int all_ranks);
+MOONLAB_API void partition_print_info(const partitioned_state_t* state, int all_ranks);
 
 /**
  * @brief Get partition statistics
@@ -474,7 +476,7 @@ void partition_print_info(const partitioned_state_t* state, int all_ranks);
  * @param min_local Output min amplitudes on any rank
  * @param load_imbalance Output imbalance ratio (max/avg - 1)
  */
-void partition_get_stats(const partitioned_state_t* state,
+MOONLAB_API void partition_get_stats(const partitioned_state_t* state,
                          uint64_t* max_local,
                          uint64_t* min_local,
                          double* load_imbalance);
@@ -486,7 +488,7 @@ void partition_get_stats(const partitioned_state_t* state,
  * @param num_processes Number of MPI processes
  * @return Memory per process in bytes
  */
-size_t partition_estimate_memory(uint32_t num_qubits, int num_processes);
+MOONLAB_API size_t partition_estimate_memory(uint32_t num_qubits, int num_processes);
 
 /**
  * @brief Get error string
@@ -494,7 +496,7 @@ size_t partition_estimate_memory(uint32_t num_qubits, int num_processes);
  * @param error Error code
  * @return Human-readable error message
  */
-const char* partition_error_string(partition_error_t error);
+MOONLAB_API const char* partition_error_string(partition_error_t error);
 
 #ifdef __cplusplus
 }

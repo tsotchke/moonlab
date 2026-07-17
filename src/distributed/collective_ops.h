@@ -22,6 +22,8 @@
 #include <complex.h>
 #include "state_partition.h"
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,7 +89,7 @@ typedef struct {
  * @param config Optional configuration (NULL for defaults)
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_measure_all(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_measure_all(partitioned_state_t* state,
                                           measurement_result_t* result,
                                           const measurement_config_t* config);
 
@@ -102,7 +104,7 @@ collective_error_t collective_measure_all(partitioned_state_t* state,
  * @param config Optional configuration
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_measure_qubit(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_measure_qubit(partitioned_state_t* state,
                                             uint32_t qubit,
                                             measurement_result_t* result,
                                             const measurement_config_t* config);
@@ -117,7 +119,7 @@ collective_error_t collective_measure_qubit(partitioned_state_t* state,
  * @param config Optional configuration
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_measure_qubits(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_measure_qubits(partitioned_state_t* state,
                                              const uint32_t* qubits,
                                              uint32_t num_qubits,
                                              measurement_result_t* result,
@@ -134,7 +136,7 @@ collective_error_t collective_measure_qubits(partitioned_state_t* state,
  * @param config Optional configuration
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_sample(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_sample(const partitioned_state_t* state,
                                      measurement_result_t* result,
                                      const measurement_config_t* config);
 
@@ -149,7 +151,7 @@ collective_error_t collective_sample(const partitioned_state_t* state,
  * @param config Optional configuration
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_sample_many(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_sample_many(const partitioned_state_t* state,
                                           uint64_t* samples,
                                           uint32_t num_samples,
                                           const measurement_config_t* config);
@@ -168,7 +170,7 @@ collective_error_t collective_sample_many(const partitioned_state_t* state,
  * @param probs Output probability array (only valid at root, size 2^n)
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_get_probabilities(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_get_probabilities(const partitioned_state_t* state,
                                                 double* probs);
 
 /**
@@ -180,7 +182,7 @@ collective_error_t collective_get_probabilities(const partitioned_state_t* state
  * @param dist Output distribution structure
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_get_local_probabilities(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_get_local_probabilities(const partitioned_state_t* state,
                                                       probability_distribution_t* dist);
 
 /**
@@ -191,7 +193,7 @@ collective_error_t collective_get_local_probabilities(const partitioned_state_t*
  * @param prob Output probability
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_get_probability(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_get_probability(const partitioned_state_t* state,
                                               uint64_t basis_state,
                                               double* prob);
 
@@ -203,7 +205,7 @@ collective_error_t collective_get_probability(const partitioned_state_t* state,
  * @param prob Output probability
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_get_qubit_probability(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_get_qubit_probability(const partitioned_state_t* state,
                                                     uint32_t qubit,
                                                     double* prob);
 
@@ -212,7 +214,7 @@ collective_error_t collective_get_qubit_probability(const partitioned_state_t* s
  *
  * @param dist Distribution to free
  */
-void collective_free_distribution(probability_distribution_t* dist);
+MOONLAB_API void collective_free_distribution(probability_distribution_t* dist);
 
 // ============================================================================
 // EXPECTATION VALUES
@@ -228,7 +230,7 @@ void collective_free_distribution(probability_distribution_t* dist);
  * @param expectation Output expectation value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_expectation_pauli(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_expectation_pauli(const partitioned_state_t* state,
                                                 const char* pauli_string,
                                                 double* expectation);
 
@@ -240,7 +242,7 @@ collective_error_t collective_expectation_pauli(const partitioned_state_t* state
  * @param expectation Output expectation value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_expectation_z(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_expectation_z(const partitioned_state_t* state,
                                             uint32_t qubit,
                                             double* expectation);
 
@@ -252,7 +254,7 @@ collective_error_t collective_expectation_z(const partitioned_state_t* state,
  * @param expectation Output expectation value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_expectation_x(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_expectation_x(const partitioned_state_t* state,
                                             uint32_t qubit,
                                             double* expectation);
 
@@ -264,7 +266,7 @@ collective_error_t collective_expectation_x(const partitioned_state_t* state,
  * @param expectation Output expectation value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_expectation_y(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_expectation_y(const partitioned_state_t* state,
                                             uint32_t qubit,
                                             double* expectation);
 
@@ -279,7 +281,7 @@ collective_error_t collective_expectation_y(const partitioned_state_t* state,
  * @param correlation Output correlation value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_correlation_zz(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_correlation_zz(const partitioned_state_t* state,
                                              uint32_t qubit_i,
                                              uint32_t qubit_j,
                                              double* correlation);
@@ -298,7 +300,7 @@ collective_error_t collective_correlation_zz(const partitioned_state_t* state,
  * @param fidelity Output fidelity (0 to 1)
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_fidelity(const partitioned_state_t* state1,
+MOONLAB_API collective_error_t collective_fidelity(const partitioned_state_t* state1,
                                        const partitioned_state_t* state2,
                                        double* fidelity);
 
@@ -310,7 +312,7 @@ collective_error_t collective_fidelity(const partitioned_state_t* state1,
  * @param fidelity Output fidelity
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_fidelity_basis(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_fidelity_basis(const partitioned_state_t* state,
                                              uint64_t basis_state,
                                              double* fidelity);
 
@@ -323,7 +325,7 @@ collective_error_t collective_fidelity_basis(const partitioned_state_t* state,
  * @param entropy Output entropy (in bits)
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_von_neumann_entropy(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_von_neumann_entropy(const partitioned_state_t* state,
                                                   double* entropy);
 
 /**
@@ -337,7 +339,7 @@ collective_error_t collective_von_neumann_entropy(const partitioned_state_t* sta
  * @param entropy Output entanglement entropy
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_entanglement_entropy(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_entanglement_entropy(const partitioned_state_t* state,
                                                    const uint32_t* subsystem_qubits,
                                                    uint32_t num_subsystem,
                                                    double* entropy);
@@ -353,7 +355,7 @@ collective_error_t collective_entanglement_entropy(const partitioned_state_t* st
  * @param k Number of top states to find
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_top_k_states(const partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_top_k_states(const partitioned_state_t* state,
                                            uint64_t* top_states,
                                            double* top_probs,
                                            uint32_t k);
@@ -373,7 +375,7 @@ collective_error_t collective_top_k_states(const partitioned_state_t* state,
  * @param num_bits Number of random bits to generate
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_qrng_bits(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_qrng_bits(partitioned_state_t* state,
                                         uint8_t* bits,
                                         uint32_t num_bits);
 
@@ -385,7 +387,7 @@ collective_error_t collective_qrng_bits(partitioned_state_t* state,
  * @param num_bytes Number of random bytes
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_qrng_bytes(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_qrng_bytes(partitioned_state_t* state,
                                          uint8_t* bytes,
                                          uint32_t num_bytes);
 
@@ -396,7 +398,7 @@ collective_error_t collective_qrng_bytes(partitioned_state_t* state,
  * @param value Output random value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_qrng_uniform(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_qrng_uniform(partitioned_state_t* state,
                                            double* value);
 
 // ============================================================================
@@ -415,7 +417,7 @@ collective_error_t collective_qrng_uniform(partitioned_state_t* state,
  * @param chsh_value Output CHSH value
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_chsh_test(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_chsh_test(partitioned_state_t* state,
                                         uint32_t qubit_a,
                                         uint32_t qubit_b,
                                         double* chsh_value);
@@ -430,7 +432,7 @@ collective_error_t collective_chsh_test(partitioned_state_t* state,
  * @param qubit_b Second qubit
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_create_bell_state(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_create_bell_state(partitioned_state_t* state,
                                                 uint32_t qubit_a,
                                                 uint32_t qubit_b);
 
@@ -444,7 +446,7 @@ collective_error_t collective_create_bell_state(partitioned_state_t* state,
  * @param num_qubits Number of qubits in GHZ state
  * @return COLLECTIVE_SUCCESS or error code
  */
-collective_error_t collective_create_ghz_state(partitioned_state_t* state,
+MOONLAB_API collective_error_t collective_create_ghz_state(partitioned_state_t* state,
                                                const uint32_t* qubits,
                                                uint32_t num_qubits);
 
@@ -461,7 +463,7 @@ collective_error_t collective_create_ghz_state(partitioned_state_t* state,
  * @param max_entries Maximum entries to print (0 for all)
  * @param threshold Minimum probability to show
  */
-void collective_print_state(const partitioned_state_t* state,
+MOONLAB_API void collective_print_state(const partitioned_state_t* state,
                            uint32_t max_entries,
                            double threshold);
 
@@ -472,7 +474,7 @@ void collective_print_state(const partitioned_state_t* state,
  * @param tolerance Acceptable deviation from 1.0
  * @return 1 if normalized, 0 otherwise
  */
-int collective_verify_normalized(const partitioned_state_t* state,
+MOONLAB_API int collective_verify_normalized(const partitioned_state_t* state,
                                  double tolerance);
 
 /**
@@ -481,14 +483,14 @@ int collective_verify_normalized(const partitioned_state_t* state,
  * @param error Error code
  * @return Human-readable message
  */
-const char* collective_error_string(collective_error_t error);
+MOONLAB_API const char* collective_error_string(collective_error_t error);
 
 /**
  * @brief Create default measurement config
  *
  * @return Default configuration
  */
-measurement_config_t collective_default_measurement_config(void);
+MOONLAB_API measurement_config_t collective_default_measurement_config(void);
 
 #ifdef __cplusplus
 }
