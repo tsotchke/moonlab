@@ -1431,6 +1431,114 @@ double tn_mps_entanglement_entropy(const tn_mps_state_t *state, uint32_t bond) {
     return entropy;
 }
 
+tn_state_error_t tn_mps_entanglement_entropy_all(const tn_mps_state_t *state,
+                                                 double *entropies,
+                                                 uint32_t *num_bonds) {
+    if (!state || !entropies || !num_bonds) return TN_STATE_ERROR_NULL_PTR;
+
+    if (state->num_qubits < 2) {
+        *num_bonds = 0;
+        return TN_STATE_SUCCESS;
+    }
+
+    // One copy + one mixed-canonicalization sweep computes every bond's Schmidt
+    // spectrum.  The center starts at site 0 (sites 1..N-1 right-isometric); we
+    // SVD the center to read bond b's spectrum, then reuse that SVD to shift the
+    // center to b+1.  The previous per-bond helper deep-copied and re-canonicalized
+    // the whole MPS for each bond -- O(N^2) work and O(N^2) allocations.
+    tn_mps_state_t *work = tn_mps_copy(state);
+    if (!work) return TN_STATE_ERROR_ALLOC_FAILED;
+
+    tn_state_error_t err = tn_mps_mixed_canonicalize(work, 0);
+    if (err != TN_STATE_SUCCESS) {
+        tn_mps_free(work);
+        return err;
+    }
+
+    uint32_t nb = state->num_qubits - 1;
+    tn_state_error_t status = TN_STATE_SUCCESS;
+
+    for (uint32_t b = 0; b < nb; b++) {
+        tensor_t *c = work->tensors[b];
+        uint32_t l_dim = c->dims[0];
+        uint32_t p_dim = c->dims[1];
+        uint32_t r_dim = c->dims[2];
+
+        uint32_t mat_dims[2] = {l_dim * p_dim, r_dim};
+        tensor_t *mat = tensor_reshape(c, 2, mat_dims);
+        if (!mat) { status = TN_STATE_ERROR_ALLOC_FAILED; break; }
+
+        tensor_svd_result_t *svd = tensor_svd(mat, 0, 0.0);
+        tensor_free(mat);
+        if (!svd) { status = TN_STATE_ERROR_ALLOC_FAILED; break; }
+
+        entropies[b] = svd_entanglement_entropy(svd->S, svd->k);
+
+        // Shift the orthogonality center to site b+1 (only if another bond
+        // follows): tensors[b] <- U (left-isometric),
+        // tensors[b+1] <- (S * Vh) * tensors[b+1].
+        if (b < nb - 1) {
+            uint32_t k = svd->k;
+
+            uint32_t u_dims[3] = {l_dim, p_dim, k};
+            tensor_t *newU = tensor_reshape(svd->U, 3, u_dims);
+            if (!newU) { tensor_svd_free(svd); status = TN_STATE_ERROR_ALLOC_FAILED; break; }
+
+            // Scale Vh rows by singular values in place: (S * Vh)
+            for (uint32_t i = 0; i < k; i++) {
+                for (uint32_t j = 0; j < r_dim; j++) {
+                    svd->Vh->data[i * r_dim + j] *= svd->S[i];
+                }
+            }
+
+            tensor_t *next = work->tensors[b + 1];
+            uint32_t next_p = next->dims[1];
+            uint32_t next_r = next->dims[2];
+            uint32_t next_mat_dims[2] = {r_dim, next_p * next_r};
+            tensor_t *next_mat = tensor_reshape(next, 2, next_mat_dims);
+            if (!next_mat) {
+                tensor_free(newU);
+                tensor_svd_free(svd);
+                status = TN_STATE_ERROR_ALLOC_FAILED;
+                break;
+            }
+
+            tensor_t *product = tensor_matmul(svd->Vh, next_mat);
+            tensor_free(next_mat);
+            if (!product) {
+                tensor_free(newU);
+                tensor_svd_free(svd);
+                status = TN_STATE_ERROR_ALLOC_FAILED;
+                break;
+            }
+
+            uint32_t next_new_dims[3] = {k, next_p, next_r};
+            tensor_t *next_new = tensor_reshape(product, 3, next_new_dims);
+            tensor_free(product);
+            if (!next_new) {
+                tensor_free(newU);
+                tensor_svd_free(svd);
+                status = TN_STATE_ERROR_ALLOC_FAILED;
+                break;
+            }
+
+            tensor_free(work->tensors[b]);
+            work->tensors[b] = newU;
+            tensor_free(work->tensors[b + 1]);
+            work->tensors[b + 1] = next_new;
+            work->bond_dims[b] = k;
+        }
+
+        tensor_svd_free(svd);
+    }
+
+    tn_mps_free(work);
+    if (status != TN_STATE_SUCCESS) return status;
+
+    *num_bonds = nb;
+    return TN_STATE_SUCCESS;
+}
+
 tn_state_error_t tn_mps_entanglement_spectrum(const tn_mps_state_t *state,
                                                uint32_t bond,
                                                double *spectrum,
@@ -1485,40 +1593,25 @@ bool tn_mps_is_product_state(const tn_mps_state_t *state, double tolerance) {
 // BOND DIMENSION MANAGEMENT
 // ============================================================================
 
-tn_state_error_t tn_mps_truncate(tn_mps_state_t *state,
-                                  uint32_t max_bond,
-                                  double *truncation_error) {
-    if (!state) return TN_STATE_ERROR_NULL_PTR;
-
-    double total_error = 0.0;
-
-    // First bring to canonical form
-    tn_mps_left_canonicalize(state);
-
-    // Then truncate from right to left
-    for (int i = state->num_qubits - 2; i >= 0; i--) {
-        double bond_error = 0.0;
-        tn_state_error_t err = tn_mps_truncate_bond(state, i, max_bond, &bond_error);
-        if (err != TN_STATE_SUCCESS) return err;
-        total_error += bond_error;
-    }
-
-    if (truncation_error) *truncation_error = total_error;
-
-    state->cumulative_truncation_error += total_error;
-    state->num_truncations++;
-
-    return TN_STATE_SUCCESS;
-}
-
-tn_state_error_t tn_mps_truncate_bond(tn_mps_state_t *state,
-                                       uint32_t bond,
-                                       uint32_t max_dim,
-                                       double *truncation_error) {
+// Compress a single bond with an explicit S-absorption direction.
+//   left_canonical == true : S absorbed into the RIGHT tensor, the left tensor
+//                            becomes a left-isometry (orthogonality center moves
+//                            one site to the right).
+//   left_canonical == false: S absorbed into the LEFT tensor, the right tensor
+//                            becomes a right-isometry (center moves left).
+// skip_if_small short-circuits when the bond is already within max_dim; the
+// sweep in tn_mps_truncate must NOT skip, because a skipped bond leaves the
+// gauge center stranded and the next bond's environment non-canonical.
+static tn_state_error_t truncate_bond_impl(tn_mps_state_t *state,
+                                           uint32_t bond,
+                                           uint32_t max_dim,
+                                           double *truncation_error,
+                                           bool left_canonical,
+                                           bool skip_if_small) {
     if (!state) return TN_STATE_ERROR_NULL_PTR;
     if (bond >= state->num_qubits - 1) return TN_STATE_ERROR_INVALID_QUBIT_INDEX;
 
-    if (state->bond_dims[bond] <= max_dim) {
+    if (skip_if_small && state->bond_dims[bond] <= max_dim) {
         if (truncation_error) *truncation_error = 0.0;
         return TN_STATE_SUCCESS;
     }
@@ -1528,7 +1621,7 @@ tn_state_error_t tn_mps_truncate_bond(tn_mps_state_t *state,
 
     svd_compress_result_t *result = svd_compress_bond(
         state->tensors[bond], state->tensors[bond + 1],
-        &config, true);
+        &config, left_canonical);
 
     if (!result) return TN_STATE_ERROR_TRUNCATION;
 
@@ -1550,6 +1643,55 @@ tn_state_error_t tn_mps_truncate_bond(tn_mps_state_t *state,
     svd_compress_result_free(result);
 
     return TN_STATE_SUCCESS;
+}
+
+tn_state_error_t tn_mps_truncate(tn_mps_state_t *state,
+                                  uint32_t max_bond,
+                                  double *truncation_error) {
+    if (!state) return TN_STATE_ERROR_NULL_PTR;
+
+    double total_error = 0.0;
+
+    // Left-canonicalize first: every tensor becomes a left-isometry and the
+    // orthogonality center sits at the right boundary.
+    tn_mps_left_canonicalize(state);
+
+    // Sweep right -> left, absorbing S into the LEFT tensor at each bond so the
+    // orthogonality center follows the sweep.  This keeps everything to the
+    // right of the current bond right-canonical, which is exactly the isometric
+    // environment that makes each local Schmidt truncation globally optimal.
+    // (The previous implementation absorbed S rightward via tn_mps_truncate_bond,
+    // pushing the center opposite the sweep and truncating in a non-canonical
+    // gauge.)
+    for (int i = state->num_qubits - 2; i >= 0; i--) {
+        double bond_error = 0.0;
+        tn_state_error_t err = truncate_bond_impl(state, (uint32_t)i, max_bond,
+                                                  &bond_error,
+                                                  /*left_canonical=*/false,
+                                                  /*skip_if_small=*/false);
+        if (err != TN_STATE_SUCCESS) return err;
+        total_error += bond_error;
+    }
+
+    if (truncation_error) *truncation_error = total_error;
+
+    state->cumulative_truncation_error += total_error;
+    state->num_truncations++;
+
+    // After the right->left sweep the center rests at site 0 and every other
+    // site is right-canonical: the MPS is in right-canonical form.
+    state->canonical = TN_CANONICAL_RIGHT;
+    state->canonical_center = -1;
+
+    return TN_STATE_SUCCESS;
+}
+
+tn_state_error_t tn_mps_truncate_bond(tn_mps_state_t *state,
+                                       uint32_t bond,
+                                       uint32_t max_dim,
+                                       double *truncation_error) {
+    return truncate_bond_impl(state, bond, max_dim, truncation_error,
+                              /*left_canonical=*/true, /*skip_if_small=*/true);
 }
 
 void tn_mps_track_relative_truncation(tn_mps_state_t *state,

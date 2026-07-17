@@ -277,12 +277,12 @@ uint32_t svd_optimal_rank(const double *singular_values, uint32_t count,
 /**
  * @brief Estimate entanglement entropy from singular values
  *
- * Computes von Neumann entropy: S = -sum(p_i * log(p_i))
+ * Computes von Neumann entropy in NATS: S = -sum(p_i * ln(p_i))
  * where p_i = s_i^2 / sum(s_j^2)
  *
  * @param singular_values Array of singular values
  * @param count Number of singular values
- * @return Entanglement entropy
+ * @return Entanglement entropy in nats
  */
 double svd_entanglement_entropy(const double *singular_values, uint32_t count);
 

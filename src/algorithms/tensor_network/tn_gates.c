@@ -914,18 +914,32 @@ tn_gate_error_t tn_apply_gate_2q(tn_mps_state_t *state,
     }
     if (qubit1 == qubit2) return TN_GATE_ERROR_INVALID_QUBIT;
 
-    // Ensure qubit1 < qubit2
+    // The adjacent-gate kernel indexes the 4x4 matrix as basis |q1 q2> with the
+    // lower-index qubit as the most-significant bit (row/col = 2*val(q1)+val(q2)).
+    // When the caller passes qubit1 > qubit2 we must reorder to lower<higher AND
+    // permute the gate accordingly, otherwise the two operands are silently
+    // transposed (e.g. tn_apply_cnot with control > target applies the reversed
+    // CNOT). Conjugate by SWAP: G' = SWAP * G * SWAP, which permutes basis
+    // indices 1<->2 (|01> <-> |10>) on both rows and columns.
+    tn_gate_2q_t swapped_gate;
+    const tn_gate_2q_t *eff_gate = gate;
     if (qubit1 > qubit2) {
         uint32_t temp = qubit1;
         qubit1 = qubit2;
         qubit2 = temp;
-        // Need to transpose gate for swapped qubit order
-        // For simplicity, require qubit1 < qubit2 or use SWAP network
+        static const int perm[4] = {0, 2, 1, 3};
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                swapped_gate.elements[i][j] =
+                    gate->elements[perm[i]][perm[j]];
+            }
+        }
+        eff_gate = &swapped_gate;
     }
 
     if (qubit2 == qubit1 + 1) {
         // Adjacent qubits
-        return apply_gate_2q_adjacent(state, qubit1, gate, truncation_error);
+        return apply_gate_2q_adjacent(state, qubit1, eff_gate, truncation_error);
     }
 
     // Non-adjacent qubits: use SWAP network
@@ -940,7 +954,7 @@ tn_gate_error_t tn_apply_gate_2q(tn_mps_state_t *state,
     }
 
     // Apply the gate
-    tn_gate_error_t err = apply_gate_2q_adjacent(state, qubit1, gate, &step_error);
+    tn_gate_error_t err = apply_gate_2q_adjacent(state, qubit1, eff_gate, &step_error);
     if (err != TN_GATE_SUCCESS) return err;
     total_error += step_error;
 
@@ -1449,9 +1463,14 @@ tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
         state->bond_dims[i] = state->tensors[i]->dims[2];
     }
 
-    // Truncate back to max bond dimension
-    double trunc_err;
-    tn_mps_truncate(state, state->config.max_bond_dim, &trunc_err);
+    // Truncate back to max bond dimension.  Propagate failure instead of
+    // folding an uninitialized trunc_err into the reported error.
+    double trunc_err = 0.0;
+    tn_state_error_t trunc_status =
+        tn_mps_truncate(state, state->config.max_bond_dim, &trunc_err);
+    if (trunc_status != TN_STATE_SUCCESS) {
+        return TN_GATE_ERROR_TRUNCATION;
+    }
     total_error += trunc_err;
 
     if (truncation_error) *truncation_error = total_error;
