@@ -21,22 +21,16 @@ $buildPath = if ([IO.Path]::IsPathRooted($BuildDir)) {
 $platform = if ($Arch -eq 'arm64') { 'ARM64' } else { 'x64' }
 
 $cmakeHelp = (cmake --help) -join "`n"
-$generator = $null
-foreach ($candidate in @('Visual Studio 18 2026', 'Visual Studio 17 2022')) {
-    if ($cmakeHelp -match [regex]::Escape($candidate)) {
-        $generator = $candidate
-        break
-    }
-}
-if (-not $generator) {
-    throw 'No supported Visual Studio CMake generator was found'
-}
-Write-Host "Using '$generator', ClangCL, platform $platform"
 
-$configureArgs = @(
+# Common configure arguments; the generator is chosen by the fallback loop
+# below. cmake --help LISTS every generator it knows, but a listed VS version
+# may have no installed instance on a given runner (notably the ARM runner
+# lists 'Visual Studio 18 2026' but only ships an older toolset). Try each
+# candidate for real and keep the first that configures, cleaning the build
+# tree between attempts so a partial cache from a failed generator never leaks.
+$commonArgs = @(
     '-S', $root,
     '-B', $buildPath,
-    '-G', $generator,
     '-A', $platform,
     '-T', 'ClangCL',
     '-DQSIM_BUILD_SHARED=ON',
@@ -51,9 +45,22 @@ $configureArgs = @(
     '-DQSIM_ENABLE_LTO=OFF',
     '-DQSIM_WERROR=ON'
 )
-& cmake @configureArgs
-if ($LASTEXITCODE -ne 0) {
-    throw "Moonlab configure failed with exit code $LASTEXITCODE"
+
+$configured = $false
+foreach ($candidate in @('Visual Studio 18 2026', 'Visual Studio 17 2022')) {
+    if (-not ($cmakeHelp -match [regex]::Escape($candidate))) { continue }
+    Write-Host "Trying generator '$candidate', ClangCL, platform $platform"
+    if (Test-Path $buildPath) { Remove-Item -Recurse -Force $buildPath }
+    & cmake '-G' $candidate @commonArgs
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Configured with '$candidate'"
+        $configured = $true
+        break
+    }
+    Write-Host "Generator '$candidate' did not configure (exit $LASTEXITCODE); trying next"
+}
+if (-not $configured) {
+    throw 'Moonlab configure failed: no installed Visual Studio generator worked'
 }
 
 & cmake --build $buildPath --config $Configuration --parallel
