@@ -15,7 +15,7 @@ surface use `docs/README.md`, `docs/release/v1.1.0-release-notes.md`, and
 | Compute representations | Dense state vector, MPS/MPO/DMRG/TDVP, MPDO, Clifford tableau, CA-MPS/CA-PEPS |
 | Hardware lowering | Runtime CPU SIMD, Apple Metal, native CUDA on Tegra/discrete NVIDIA, optional OpenCL/Vulkan/cuQuantum |
 | Distribution | Relocatable CMake packages for Linux, macOS, and Windows x64/ARM64; Debian and language-package workflows |
-| Stable integration | C ABI 0.4.0 with opaque handles and flat buffers; Python, Rust, and JavaScript/WASM bindings |
+| Stable integration | C ABI 0.5.0 with opaque handles and flat buffers; Python, Rust, and JavaScript/WASM bindings |
 | Scale and operations | Optional MPI, scheduler/control plane on POSIX, Docker/Helm deployment surfaces |
 
 The original migration plan remains below because it records the design
@@ -293,13 +293,33 @@ moonlab_backend_result_t moonlab_bk_contract(
    emits a log entry indicating which tier ran the op. Users can
    pin, audit, and reproduce.
 
-**Status today:** fragmented and partial. CPU has a runtime SIMD
+**Status today:** fragmented and partial, but no longer at the v0.2-era
+starting point this section originally described. CPU has a runtime SIMD
 dispatcher that the production gate path does *not* use (the
-stride_gates.c SIMD kernels exist but are not wired in). Metal has
-single-qubit kernels only. CUDA / OpenCL / Vulkan / cuQuantum /
-cuStateVec are declared options that have never been CI-tested
-against real SDKs. MPI has a partitioned state vector that passes a
-cross-partition smoke test but no measured scaling. WebGPU is at
+stride_gates.c SIMD kernels exist but are not wired in). Metal's dense
+state-vector path still has single-qubit + oracle kernels only (no
+two-qubit gate on the raw state vector); a separate Metal kernel set
+(`metal_mps_apply_gate_2q`, `metal_mps_contract_2site`, `metal_svd_truncate`,
+`metal_mps_expectation_z/zz`) drives two-qubit gates, 2-site contraction, and
+Jacobi-SVD truncation on the CA-MPS tensor-network path -- that TN path is
+real, not a declared option. CUDA is no longer merely declared: since v1.1.0
+`quantum_state_create_gpu()` runs the same gate calls as a CPU state, with
+21 one- and two-qubit primitives routed through the native CUDA backend on
+one node (Tegra or discrete NVIDIA), with an explicit host/device sync
+contract (`quantum_state_sync_to_host()`) rather than implicit coherence.
+That correctness path is exercised on real hardware, but not inside
+GitHub's hosted CI, which has no GPU and stays CPU-only for every lane
+(`unix-matrix`, `windows-matrix`, `wasm`). `.github/workflows/ci-jetson.yml`
+is a self-hosted Jetson lane wired for this purpose but currently
+`workflow_dispatch`-only with no runner enrolled; the CUDA backend's
+actual out-of-band validation today is `scripts/run_mesh_release_smoke.sh`,
+which builds and tests the working tree on the Jetson over SSH before
+every release. OpenCL / Vulkan / cuQuantum compile under their
+`QSIM_ENABLE_*` flags but hosted CI never sets them, so none has any
+lane-level coverage today -- see `docs/PARITY_MATRIX.md` footnote 13
+for the honest per-backend breakdown. MPI has a partitioned state vector
+that passes a
+cross-partition smoke test but no measured multi-host scaling. WebGPU is at
 Phase 3 of `webgpuplan.md`. The roofline story is zero: no kernel
 has a measured FLOPs / bandwidth number.
 

@@ -26,6 +26,97 @@
         target_link_libraries(large_state_random_circuit PRIVATE quantumsim MPI::MPI_C)
     endif()
 
+    # ------------------------------------------------------------------
+    # CUDA examples (native moonlab CUDA state-vector backend).  Gated on
+    # QSIM_HAS_CUDA, set by CMakeLists.txt's QSIM_ENABLE_CUDA block once
+    # nvcc + the CUDA Toolkit are actually found.
+    # ------------------------------------------------------------------
+    if(QSIM_HAS_CUDA)
+        # Standalone CUDA-backend smoke test: Bell state via the raw
+        # moonlab_cuda_state_* API, no moonlab core dependency.  Compiled
+        # as a .cu translation unit (nvcc) -- the tightest possible loop
+        # to verify the CUDA backend on a fresh Jetson/discrete host.
+        add_executable(bell_jetson examples/cuda/bell_jetson.cu)
+        target_link_libraries(bell_jetson PRIVATE quantumsim)
+        set_target_properties(bell_jetson PROPERTIES
+            CUDA_STANDARD 17
+            CUDA_STANDARD_REQUIRED ON
+            CUDA_SEPARABLE_COMPILATION OFF
+        )
+
+        # Same Bell-state circuit as bell_jetson, but compiled as plain C
+        # against the installed library -- proves the CUDA backend's
+        # headers are C-callable and the symbols are exported from
+        # libquantumsim.
+        add_executable(bell_lib examples/cuda/bell_lib.c)
+        target_link_libraries(bell_lib PRIVATE quantumsim)
+
+        # v1.1 step 9 "transparent GPU dispatch" proof: Bell state built
+        # with the SAME gate_hadamard()/gate_cnot() API the CPU tests use
+        # -- the only difference is quantum_state_create_gpu() at
+        # construction time.
+        add_executable(state_gpu_bell examples/cuda/state_gpu_bell.c)
+        target_link_libraries(state_gpu_bell PRIVATE quantumsim)
+
+        # v1.1 step 9b: the full single- and two-qubit gate surface (H, X,
+        # Y, Z, S, S^dagger, T, T^dagger, RX, RY, RZ, phase, CNOT, CZ,
+        # SWAP, CPHASE, CY, CRX, CRY, CRZ) dispatches transparently to
+        # GPU; asserts CPU/GPU amplitude parity to 1e-10.
+        add_executable(state_gpu_circuit examples/cuda/state_gpu_circuit.c)
+        target_link_libraries(state_gpu_circuit PRIVATE quantumsim)
+
+        # v1.1 follow-up #4: Toffoli / Fredkin / MCX / MCZ multi-control
+        # dispatch via the CUDA kernels; asserts CPU/GPU parity.
+        add_executable(state_gpu_multiq examples/cuda/state_gpu_multiq.c)
+        target_link_libraries(state_gpu_multiq PRIVATE quantumsim)
+
+        if(QSIM_HAS_MPI)
+            # v1.1 follow-up #6: sharded MPI + CUDA GHZ state -- each
+            # rank's local shard lives on a CUDA GPU.  dist_hadamard(0) is
+            # a local gate and dispatches entirely on GPU with no MPI;
+            # dist_cnot across the partition boundary syncs GPU<->host
+            # around the MPI exchange.  GPU counterpart to the plain
+            # large_state_ghz example above.
+            add_executable(large_state_ghz_gpu examples/cuda/large_state_ghz_gpu.c)
+            target_link_libraries(large_state_ghz_gpu PRIVATE quantumsim MPI::MPI_C)
+
+            # v1.1 step 11: MPI + CUDA together (trivially-parallel case)
+            # -- each rank creates an independent GPU-backed state, runs a
+            # different parameter point of a small variational circuit
+            # locally, and MPI_Allreduce finds the cluster-wide minimum.
+            add_executable(mpi_gpu_search examples/cuda/mpi_gpu_search.c)
+            target_link_libraries(mpi_gpu_search PRIVATE quantumsim MPI::MPI_C)
+        endif()
+    endif()
+
+    # ------------------------------------------------------------------
+    # Metal GPU examples (macOS only).  Gated on QSIM_HAS_METAL, set by
+    # CMakeLists.txt when QSIM_ENABLE_METAL is ON and the Metal/Foundation
+    # frameworks are found.  Both link only against quantumsim -- the
+    # Objective-C++ Metal bridge (gpu_metal.mm) is already compiled into
+    # the shared library, so a plain C translation unit can call
+    # metal_compute_init() etc. without linking the frameworks itself.
+    # ------------------------------------------------------------------
+    if(QSIM_HAS_METAL)
+        # THE RIGHT WAY to benchmark Metal GPU: batches many independent
+        # Grover searches into a single kernel launch and compares CPU
+        # sequential / CPU OpenMP-parallel / GPU batch throughput.
+        add_executable(metal_batch_benchmark examples/quantum/metal_batch_benchmark.c)
+        target_link_libraries(metal_batch_benchmark PRIVATE quantumsim)
+        if(QSIM_HAS_OPENMP)
+            qsim_target_link_openmp(metal_batch_benchmark)
+            if(QSIM_PLATFORM_MACOS AND DEFINED QSIM_OPENMP_LIBRARIES)
+                target_compile_options(metal_batch_benchmark PRIVATE -Xpreprocessor -fopenmp)
+            endif()
+            target_compile_definitions(metal_batch_benchmark PRIVATE HAS_OPENMP=1)
+        endif()
+
+        # Metal GPU vs CPU benchmark: single Grover search plus individual
+        # kernel-level benchmarks (Hadamard / oracle / diffusion).
+        add_executable(metal_gpu_benchmark examples/quantum/metal_gpu_benchmark.c)
+        target_link_libraries(metal_gpu_benchmark PRIVATE quantumsim)
+    endif()
+
     # Grover examples
     add_executable(grover_hash_collision examples/quantum/grover_hash_collision.c)
     target_link_libraries(grover_hash_collision PRIVATE quantumsim)
@@ -269,6 +360,24 @@
             example_ca_peps_2d_tfim_smoke
             example_open_core_overlay_demo
             PROPERTIES TIMEOUT 120
+        )
+
+        # `qsim_label_tests` is defined in cmake/tests.cmake, which the root
+        # CMakeLists.txt includes BEFORE this file.  The "examples" call
+        # over there (`qsim_label_tests(examples ...)`) therefore always
+        # ran against a test set that didn't include these targets yet --
+        # `if(TEST ...)` silently skipped every name, so `ctest -L examples`
+        # returned zero tests despite the tests existing.  Re-issue the
+        # same labeling here, after the targets above are actually
+        # registered, so the "examples" label is real.
+        qsim_label_tests(examples
+            example_vqe_h2_molecule
+            example_qaoa_maxcut
+            example_grover_hash_collision
+            example_quantum_spin_chain_small
+            example_phase3_phase4_benchmark
+            example_ca_peps_2d_tfim_smoke
+            example_open_core_overlay_demo
         )
     endif()
 
