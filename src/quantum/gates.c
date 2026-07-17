@@ -1417,7 +1417,17 @@ qs_error_t apply_two_qubit_gate(
     int low_qubit = (qubit1 < qubit2) ? qubit1 : qubit2;
     int high_qubit = (qubit1 < qubit2) ? qubit2 : qubit1;
     int swapped = (qubit1 > qubit2);
-    
+
+    /* Threading policy: match the single-qubit gates (QS_BLOCK_THRESHOLD_DIM).
+     * Group leaders (bit_low==bit_high==0) write disjoint |00>,|01>,|10>,|11>
+     * quadruples, so the sweep parallelises with no synchronisation. This gate
+     * was previously the only serial kernel on the state-vector hot path. */
+    const int should_thread = (state->state_dim >= QS_BLOCK_THRESHOLD_DIM);
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if (should_thread)
+#else
+    (void)should_thread;
+#endif
     for (uint64_t i = 0; i < state->state_dim; i++) {
         int bit_low = get_bit(i, low_qubit);
         int bit_high = get_bit(i, high_qubit);
