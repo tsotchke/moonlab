@@ -471,10 +471,10 @@ static void test_mps_bell_state(void) {
 
     tn_mps_free(mps);
 
-    // Maximally entangled: S = 1 bit
-    if (!approx_equal(entropy, 1.0, 0.1)) {
+    // Maximally entangled: S = ln(2) nats
+    if (!approx_equal(entropy, log(2.0), 0.05)) {
         char msg[64];
-        snprintf(msg, sizeof(msg), "Entropy = %.4f, expected 1.0", entropy);
+        snprintf(msg, sizeof(msg), "Entropy = %.4f, expected %.4f", entropy, log(2.0));
         test_fail(msg);
         return;
     }

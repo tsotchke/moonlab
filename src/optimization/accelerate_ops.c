@@ -435,47 +435,17 @@ double accelerate_sum_squared_magnitudes(
     const complex_t* amplitudes,
     size_t n
 ) {
+    if (!amplitudes || n == 0) return 0.0;
 #if HAS_ACCELERATE
-    double *a_real, *a_imag;
-    to_split_complex(amplitudes, &a_real, &a_imag, n);
-    
-    if (!a_real) {
-        double sum = 0.0;
-        for (size_t i = 0; i < n; i++) {
-            double r = creal(amplitudes[i]);
-            double im = cimag(amplitudes[i]);
-            sum += r * r + im * im;
-        }
-        return sum;
-    }
-    
-    double* mags_sq = (double*)accelerate_aligned_alloc(n * sizeof(double));
-    if (!mags_sq) {
-        accelerate_aligned_free(a_real);
-        accelerate_aligned_free(a_imag);
-        double sum = 0.0;
-        for (size_t i = 0; i < n; i++) {
-            double r = creal(amplitudes[i]);
-            double im = cimag(amplitudes[i]);
-            sum += r * r + im * im;
-        }
-        return sum;
-    }
-    
-    DSPDoubleSplitComplex a_s = {a_real, a_imag};
-    
-    // AMX-accelerated magnitude squared
-    vDSP_zvmagsD(&a_s, 1, mags_sq, 1, n);
-    
-    // AMX-accelerated sum
-    double sum = 0.0;
-    vDSP_sveD(mags_sq, 1, &sum, n);
-    
-    accelerate_aligned_free(a_real);
-    accelerate_aligned_free(a_imag);
-    accelerate_aligned_free(mags_sq);
-    
-    return sum;
+    // sum |a_i|^2 = sum(re_i^2) + sum(im_i^2).  Operate on the interleaved
+    // [re0, im0, re1, im1, ...] buffer directly with a stride of 2 -- no
+    // deinterleave, no scratch.  The old path allocated three full-length
+    // arrays (a_real, a_imag, mags_sq), a +24 GB transient at 30-32 qubits.
+    const double* base = (const double*)amplitudes;
+    double sum_re = 0.0, sum_im = 0.0;
+    vDSP_svesqD(base,     2, &sum_re, (vDSP_Length)n);
+    vDSP_svesqD(base + 1, 2, &sum_im, (vDSP_Length)n);
+    return sum_re + sum_im;
 #else
     double sum = 0.0;
     for (size_t i = 0; i < n; i++) {
@@ -492,29 +462,20 @@ void accelerate_normalize_amplitudes(
     size_t n,
     double norm_factor
 ) {
+    if (!amplitudes || n == 0) return;
     if (norm_factor == 0.0 || norm_factor == 1.0) {
         return;
     }
-    
+
     double inv_norm = 1.0 / norm_factor;
-    
+
 #if HAS_ACCELERATE
-    double *a_real, *a_imag;
-    to_split_complex(amplitudes, &a_real, &a_imag, n);
-    
-    if (!a_real) {
-        for (size_t i = 0; i < n; i++) amplitudes[i] *= inv_norm;
-        return;
-    }
-    
-    // AMX-accelerated real scalar multiply (normalization is always real)
-    vDSP_vsmulD(a_real, 1, &inv_norm, a_real, 1, n);
-    vDSP_vsmulD(a_imag, 1, &inv_norm, a_imag, 1, n);
-    
-    from_split_complex(a_real, a_imag, amplitudes, n);
-    
-    accelerate_aligned_free(a_real);
-    accelerate_aligned_free(a_imag);
+    // Normalization scales both real and imaginary parts by the same real
+    // factor, so scale the interleaved buffer as 2n contiguous doubles in
+    // place -- no deinterleave, no scratch (the old path allocated two
+    // full-length arrays plus a re-interleave pass).
+    double* base = (double*)amplitudes;
+    vDSP_vsmulD(base, 1, &inv_norm, base, 1, (vDSP_Length)(2 * n));
 #else
     for (size_t i = 0; i < n; i++) {
         amplitudes[i] *= inv_norm;
@@ -712,8 +673,8 @@ void accelerate_print_performance_stats(void) {
     printf("Memory Alignment: 64-byte (AMX-optimized)\n");
     printf("\nKEY OPTIMIZATIONS:\n");
     printf("  • BLAS (cblas_zgemv, cblas_zgemm): Direct AMX acceleration\n");
-    printf("  • vDSP (magnitude, sums): AMX-accelerated with format conversion\n");
-    printf("  • Expected 5-10x for matrix operations, 2-3x for element-wise\n");
+    printf("  • vDSP (magnitude, sums): strided in-place over the interleaved buffer\n");
+    printf("  • Measure real speedup with accelerate_benchmark_vs_simd\n");
     #else
     printf("Architecture: x86_64 (Intel)\n");
     printf("AMX Support: NO (ARM-only)\n");

@@ -273,8 +273,11 @@ if(QSIM_ARCH_ARM64 AND QSIM_ENABLE_NEON)
     set(QSIM_SIMD_NEON ON)
 endif()
 
-# ARM SVE detection
-if(QSIM_ARCH_ARM64 AND QSIM_ENABLE_SVE AND NOT QSIM_PLATFORM_MACOS)
+# ARM SVE detection.  SVE is a Linux/aarch64 feature: gate strictly on Linux so
+# it is never enabled on Apple silicon (NEON-only) or Windows-on-ARM (NEON-only,
+# and clang-cl cannot even mangle the SVE built-in types).  On those targets the
+# NEON path is the aarch64 SIMD backend.
+if(QSIM_ARCH_ARM64 AND QSIM_ENABLE_SVE AND QSIM_PLATFORM_LINUX)
     check_c_compiler_flag("-march=armv8-a+sve" QSIM_HAS_SVE_FLAG)
     if(QSIM_HAS_SVE_FLAG)
         message(STATUS "SVE: Compiler support available")

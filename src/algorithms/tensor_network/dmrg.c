@@ -45,6 +45,28 @@ static double get_time_sec(void) {
     return (double)clock() / CLOCKS_PER_SEC;
 }
 
+/* Local, self-contained PRNG (splitmix64).  Used for random MPS
+ * initialisation and the Lanczos fallback guess so neither path touches
+ * (or clobbers) the process-global rand()/srand() state.  Deterministic
+ * for a given seed. */
+static inline uint64_t dmrg_splitmix64_next(uint64_t *s) {
+    uint64_t z = (*s += 0x9E3779B97F4A7C15ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+/* Uniform double in [-0.5, 0.5). */
+static inline double dmrg_splitmix64_uniform(uint64_t *s) {
+    uint64_t r = dmrg_splitmix64_next(s) >> 11;      /* 53 random bits */
+    return (double)r / (double)(1ULL << 53) - 0.5;
+}
+
+static tn_mps_state_t *dmrg_init_random_mps_seeded(uint32_t num_sites,
+                                                   uint32_t chi_init,
+                                                   const tn_state_config_t *mps_cfg,
+                                                   uint64_t seed);
+
 static double complex_dot(const double complex *a, const double complex *b, uint64_t n) {
     double complex sum = 0.0;
     for (uint64_t i = 0; i < n; i++) {
@@ -1176,12 +1198,15 @@ lanczos_result_t *lanczos_ground_state(const effective_hamiltonian_t *H_eff,
         goto cleanup;
     }
 
-    // Initialize with provided guess or random
+    // Initialize with provided guess or a deterministic local-PRNG vector.
+    // The fallback uses splitmix64 (not global rand()) so it neither depends
+    // on nor perturbs process-global PRNG state.
     if (initial_guess && initial_guess->total_size == vec_size) {
         memcpy(v_curr, initial_guess->data, vec_size * sizeof(double complex));
     } else {
+        uint64_t rng = 0x1234567ULL ^ (vec_size * 0x9E3779B97F4A7C15ULL);
         for (uint64_t i = 0; i < vec_size; i++) {
-            v_curr[i] = (double)rand() / RAND_MAX - 0.5;
+            v_curr[i] = dmrg_splitmix64_uniform(&rng);
         }
     }
 
@@ -1911,11 +1936,14 @@ int dmrg_update_left_environment(dmrg_environments_t *env,
 
     uint32_t chi_l = A->dims[0];
 
-    // L_prev should have dimensions [chi_l][b_l][chi_l]
+    // L_prev should have dimensions [chi_l][b_l][chi_l].  A mismatch means the
+    // left environment is stale relative to the current MPS bond dimension;
+    // silently returning success left env->L[site+1] pointing at an incoherent
+    // environment for the next site.  Treat it as the hard error it is.
     if (L_prev->dims[0] != chi_l || L_prev->dims[2] != chi_l) {
         fprintf(stderr, "DMRG: L[%u] dimension mismatch: L has [%u,%u,%u], expected chi_l=%u\n",
                 site, L_prev->dims[0], L_prev->dims[1], L_prev->dims[2], chi_l);
-        return 0;  // Skip update
+        return -1;
     }
 #if defined(MOONLAB_DMRG_HAVE_BLAS)
     tensor_t *L_new = dmrg_contract_left_env_blas(A, W, L_prev);
@@ -1995,14 +2023,15 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
         uint32_t n = mps->num_qubits;
         uint32_t b_r = mpo->tensors[n - 1].bond_dim_right;
 
-        // Start from rightmost site with identity
+        // Start from rightmost site with the SAME boundary convention as
+        // create_right_boundary: R[r, b_r-1, r] = 1 for all r.  The old inline
+        // rebuild set only R[0,0,0]=1 (mpo bond 0, and only r=0), which
+        // disagreed with create_right_boundary (mpo bond b_r-1, all r) and
+        // corrupted the rebuilt environment whenever b_r>1 or A_chi>1.
         tensor_free(env->R[n - 1]);
         uint32_t A_chi = mps->tensors[n - 1]->dims[2];
-        uint32_t dims_R[3] = {A_chi, b_r, A_chi};
-        env->R[n - 1] = tensor_create(3, dims_R);
+        env->R[n - 1] = create_right_boundary(A_chi, b_r);
         if (!env->R[n - 1]) return -1;
-        memset(env->R[n - 1]->data, 0, env->R[n - 1]->total_size * sizeof(double complex));
-        env->R[n - 1]->data[0] = 1.0;  // Identity at boundary
 
         // Contract from right to site
         for (int s = (int)n - 2; s >= (int)site; s--) {
@@ -2193,12 +2222,28 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
     tensor_t *theta = tensor_create(4, theta_dims);
     if (!theta) return -1;
 
-    // theta[l,s1,s2,r] = sum_m A[l,s1,m] * B[m,s2,r]
+    // theta[l,s1,s2,r] = sum_m A[l,s1,m] * B[m,s2,r].
+    // A is row-major [chi_l, d, chi_m] and B is [chi_m, d, chi_r], so the
+    // contraction is a single (chi_l*d, chi_m) x (chi_m, d*chi_r) matmul that
+    // lands directly in the row-major theta layout -- the same zgemm form used
+    // by the TDVP two-site kernel, replacing the naive five-deep scalar loop.
     if (!A->data || !B->data) {
         tensor_free(theta);
         return -1;
     }
 
+#if defined(MOONLAB_DMRG_HAVE_BLAS)
+    {
+        const double complex one = 1.0, zero = 0.0;
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                    (int)(chi_l * d), (int)(d * chi_r), (int)chi_m,
+                    &one,
+                    A->data, (int)chi_m,
+                    B->data, (int)(d * chi_r),
+                    &zero,
+                    theta->data, (int)(d * chi_r));
+    }
+#else
     for (uint32_t l = 0; l < chi_l; l++) {
         for (uint32_t s1 = 0; s1 < d; s1++) {
             for (uint32_t s2 = 0; s2 < d; s2++) {
@@ -2215,6 +2260,7 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
             }
         }
     }
+#endif
 
     // Run Lanczos to find ground state
     lanczos_result_t *lanczos = lanczos_ground_state(&H_eff, theta,
@@ -2411,12 +2457,12 @@ int dmrg_sweep(tn_mps_state_t *mps,
             return -1;
         }
         if (site < n - 2) {
-            dmrg_update_left_environment(env, mps, mpo, site);
+            if (dmrg_update_left_environment(env, mps, mpo, site) != 0) return -1;
         }
     }
 
     // Rebuild right environments before R->L sweep
-    dmrg_init_right_environments(env, mps, mpo);
+    if (dmrg_init_right_environments(env, mps, mpo) != 0) return -1;
 
     // Right-to-left sweep
     for (int site = n - 2; site >= 0; site--) {
@@ -2424,7 +2470,7 @@ int dmrg_sweep(tn_mps_state_t *mps,
             return -1;
         }
         if (site > 0) {
-            dmrg_update_right_environment(env, mps, mpo, site + 1);
+            if (dmrg_update_right_environment(env, mps, mpo, site + 1) != 0) return -1;
         }
     }
 
@@ -2606,10 +2652,11 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
     mps_cfg.svd_cutoff = cfg.svd_cutoff;
 
     /* MPS init: random tensors at chi_init bond dim biased toward |+>.
-     * Extracted into dmrg_init_random_mps so Heisenberg / Kitaev / 2D
-     * model wrappers can reuse the same setup. */
+     * Seeded from cfg.seed via a local PRNG for reproducibility without
+     * touching global rand() state. */
     uint32_t chi_init = (cfg.max_bond_dim > 8) ? 8 : cfg.max_bond_dim;
-    tn_mps_state_t *mps = dmrg_init_random_mps(num_sites, chi_init, &mps_cfg);
+    tn_mps_state_t *mps = dmrg_init_random_mps_seeded(num_sites, chi_init,
+                                                      &mps_cfg, cfg.seed);
     if (!mps) {
         mpo_free(mpo);
         return NULL;
@@ -2625,7 +2672,17 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
         return NULL;
     }
 
-    // DMRG does not update normalization bookkeeping; ensure amplitudes are scaled correctly.
+    // DMRG's local SVD updates leave the state only approximately normalised and
+    // do not maintain the norm bookkeeping.  Actually renormalise the amplitudes
+    // (rather than blindly stamping norm = 1 on an unnormalised state) so the
+    // bookkeeping we then set is truthful.
+    double post_norm = tn_mps_norm(mps);
+    if (post_norm > 1e-300 && isfinite(post_norm) && mps->tensors && mps->tensors[0]) {
+        double scale = 1.0 / post_norm;
+        for (uint64_t j = 0; j < mps->tensors[0]->total_size; j++) {
+            mps->tensors[0]->data[j] *= scale;
+        }
+    }
     mps->norm = 1.0;
     mps->log_norm_factor = 0.0;
 
@@ -2638,9 +2695,13 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
     return mps;
 }
 
-tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
-                                      uint32_t chi_init,
-                                      const tn_state_config_t *mps_cfg) {
+/* Seeded random-MPS builder.  Uses a local splitmix64 stream so it never
+ * calls srand()/rand() and therefore never perturbs the process-global PRNG
+ * (the old srand(42) reset any caller's random stream as a side effect). */
+static tn_mps_state_t *dmrg_init_random_mps_seeded(uint32_t num_sites,
+                                                   uint32_t chi_init,
+                                                   const tn_state_config_t *mps_cfg,
+                                                   uint64_t seed) {
     if (num_sites < 2) return NULL;
 
     tn_state_config_t cfg = mps_cfg ? *mps_cfg : tn_state_config_default();
@@ -2658,9 +2719,8 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
         return NULL;
     }
 
-    /* Fixed-seed reproducibility: every DMRG model wrapper that calls
-     * this gets the same starting MPS for the same num_sites. */
-    srand(42);
+    /* Deterministic for a given seed; independent of global rand() state. */
+    uint64_t rng = seed ? seed : 0x9E3779B97F4A7C15ULL;
     for (uint32_t i = 0; i < num_sites; i++) {
         uint32_t chi_l = (i == 0) ? 1 : chi_init;
         uint32_t chi_r = (i == num_sites - 1) ? 1 : chi_init;
@@ -2671,8 +2731,8 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
             return NULL;
         }
         for (uint64_t j = 0; j < mps->tensors[i]->total_size; j++) {
-            double re = ((double)rand() / RAND_MAX - 0.5) * 0.1;
-            double im = ((double)rand() / RAND_MAX - 0.5) * 0.1;
+            double re = dmrg_splitmix64_uniform(&rng) * 0.1;
+            double im = dmrg_splitmix64_uniform(&rng) * 0.1;
             mps->tensors[i]->data[j] = re + I * im;
         }
         /* Bias toward |+> so the initial overlap with a typical
@@ -2695,6 +2755,14 @@ tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
         }
     }
     return mps;
+}
+
+tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
+                                      uint32_t chi_init,
+                                      const tn_state_config_t *mps_cfg) {
+    /* Public entry point keeps its stable signature; the fixed seed 42
+     * reproduces the previous starting MPS for a given num_sites. */
+    return dmrg_init_random_mps_seeded(num_sites, chi_init, mps_cfg, 42ULL);
 }
 
 double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo) {

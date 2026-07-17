@@ -19,6 +19,40 @@
 #endif
 
 // ============================================================================
+// PER-THREAD PRNG (independent, race-free entropy streams)
+// ============================================================================
+
+/* Independent splitmix64 stream per worker.  Parallel Grover workers cannot
+ * share a single quantum_entropy_ctx_t: copying the struct aliases the same
+ * user_data pointer, so concurrent get_bytes calls race on (and correlate)
+ * one RNG state.  Each worker instead gets its own parallel_prng_t seeded from
+ * the master pool, wrapped in a quantum_entropy_ctx_t. */
+typedef struct { uint64_t s; } parallel_prng_t;
+
+static int parallel_prng_get_bytes(void *user_data, uint8_t *buffer, size_t size) {
+    parallel_prng_t *p = (parallel_prng_t *)user_data;
+    if (!p || !buffer) return -1;
+    size_t off = 0;
+    while (off < size) {
+        uint64_t z = (p->s += 0x9E3779B97F4A7C15ULL);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+        z = z ^ (z >> 31);
+        size_t chunk = (size - off < 8) ? (size - off) : 8;
+        memcpy(buffer + off, &z, chunk);
+        off += chunk;
+    }
+    return 0;
+}
+
+static uint64_t parallel_prng_next(uint64_t *s) {
+    uint64_t z = (*s += 0x9E3779B97F4A7C15ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+// ============================================================================
 // HARDWARE DETECTION
 // ============================================================================
 
@@ -92,9 +126,14 @@ grover_parallel_result_t grover_parallel_batch(
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
     
-    // PARALLEL EXECUTION - M2 ULTRA 24-CORE OPTIMIZATION
+    // PARALLEL EXECUTION.  Bound the thread count by the hardware limit so a
+    // large num_searches does not oversubscribe the machine (num_threads used
+    // to be num_searches unconditionally).
 #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(num_searches)
+    int max_threads = omp_get_max_threads();
+    int nthreads = (num_searches < (size_t)max_threads) ? (int)num_searches : max_threads;
+    if (nthreads < 1) nthreads = 1;
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
 #endif
     for (size_t i = 0; i < num_searches; i++) {
         // Each thread runs independent Grover search
@@ -167,19 +206,30 @@ grover_parallel_result_t grover_parallel_random_batch(
         marked_states[i] = random_target % search_space;
     }
     
-    // Create entropy contexts for each thread
+    // Create a genuinely independent entropy stream per thread.  Copying the
+    // master context would alias one user_data across all threads -- a data
+    // race and correlated streams.  Instead seed a per-thread splitmix64 from
+    // the master pool (sequentially, before any parallelism) and back each
+    // thread's context with its own state.
     quantum_entropy_ctx_t *entropy_pools = calloc(num_searches, sizeof(quantum_entropy_ctx_t));
-    if (!entropy_pools) {
+    parallel_prng_t *prngs = calloc(num_searches, sizeof(parallel_prng_t));
+    if (!entropy_pools || !prngs) {
+        free(entropy_pools);
+        free(prngs);
         free(marked_states);
         return result;
     }
-    
-    // Each thread gets its own entropy context (thread-safe)
+
     for (size_t i = 0; i < num_searches; i++) {
-        // Copy entropy context structure (each thread will have independent state)
-        memcpy(&entropy_pools[i], entropy_pool, sizeof(quantum_entropy_ctx_t));
+        uint64_t seed = 0;
+        if (quantum_entropy_get_uint64(entropy_pool, &seed) != 0 || seed == 0) {
+            seed = 0x9E3779B97F4A7C15ULL ^ ((uint64_t)(i + 1) * 0xD1B54A32D192ED03ULL);
+        }
+        prngs[i].s = seed;
+        entropy_pools[i].get_bytes = parallel_prng_get_bytes;
+        entropy_pools[i].user_data = &prngs[i];
     }
-    
+
     // Configure parallel execution
     grover_parallel_config_t config = {
         .num_parallel_searches = num_searches,
@@ -187,14 +237,15 @@ grover_parallel_result_t grover_parallel_random_batch(
         .use_optimal_iterations = 1,
         .pin_to_performance_cores = 0
     };
-    
+
     // Execute parallel batch
     result = grover_parallel_batch(&config, marked_states, entropy_pools);
-    
+
     // Cleanup
     free(marked_states);
     free(entropy_pools);
-    
+    free(prngs);
+
     return result;
 }
 
@@ -288,11 +339,22 @@ grover_result_t grover_parallel_partitioned_search(
     // Allocate results array for parallel execution
     grover_result_t *partition_results = calloc(num_partitions, sizeof(grover_result_t));
     int *found_flags = calloc(num_partitions, sizeof(int));
+    // Per-partition independent RNG seeds, drawn sequentially from the master
+    // pool before any parallelism so the Born-rule sampling below is race-free.
+    uint64_t *seeds = calloc(num_partitions, sizeof(uint64_t));
 
-    if (!partition_results || !found_flags) {
+    if (!partition_results || !found_flags || !seeds) {
         free(partition_results);
         free(found_flags);
+        free(seeds);
         return result;
+    }
+    for (size_t p = 0; p < num_partitions; p++) {
+        uint64_t seed = 0;
+        if (quantum_entropy_get_uint64(entropy_pool, &seed) != 0 || seed == 0) {
+            seed = 0x9E3779B97F4A7C15ULL ^ ((uint64_t)(p + 1) * 0xD1B54A32D192ED03ULL);
+        }
+        seeds[p] = seed;
     }
 
     // Run Grover searches in parallel on each partition
@@ -312,9 +374,14 @@ grover_result_t grover_parallel_partitioned_search(
             : (p + 1) * states_per_partition;
         uint64_t partition_size = partition_end - partition_start;
 
-        // Calculate optimal iterations for this partition size
-        // Grover iterations ~ π/4 * sqrt(N/M) where N is search space, M is marked states
-        size_t optimal_iters = (size_t)(M_PI / 4.0 * sqrt((double)partition_size));
+        // The initial superposition (Hadamards on all qubits) and the diffusion
+        // operator below both act on the FULL 2^num_qubits space, so this is a
+        // full-space Grover search, not a partition-restricted one.  The optimal
+        // iteration count is therefore pi/4 * sqrt(N) over the full space; using
+        // sqrt(partition_size) under-rotated and left the marked amplitude far
+        // from its peak.
+        (void)partition_size;
+        size_t optimal_iters = (size_t)(M_PI / 4.0 * sqrt((double)total_states));
         if (optimal_iters < 1) optimal_iters = 1;
 
         // Initialize to uniform superposition over partition
@@ -345,38 +412,48 @@ grover_result_t grover_parallel_partitioned_search(
             }
         }
 
-        // Measure - get probabilities and find most likely state in partition
-        double max_prob = 0.0;
-        uint64_t most_likely = partition_start;
-
-        for (uint64_t i = partition_start; i < partition_end; i++) {
-            double prob = cabs(state.amplitudes[i]) * cabs(state.amplitudes[i]);
-            if (prob > max_prob) {
-                max_prob = prob;
-                most_likely = i;
-            }
+        // Honest success probability: the Born probability of actually
+        // measuring the marked state (0 if it is not in this partition), NOT
+        // the deterministic argmax the old code reported.
+        double success_prob = 0.0;
+        if (marked_state >= partition_start && marked_state < partition_end) {
+            double a = cabs(state.amplitudes[marked_state]);
+            success_prob = a * a;
         }
 
-        partition_results[p].found_state = most_likely;
-        partition_results[p].success_probability = max_prob;
+        // Real measurement: Born-rule sample over the full state using this
+        // partition's independent RNG stream (replaces the deterministic
+        // argmax, which was not a measurement).
+        uint64_t rng = seeds[p];
+        double u = (double)(parallel_prng_next(&rng) >> 11) * 0x1.0p-53;
+        double cumulative = 0.0;
+        uint64_t sampled = (state.state_dim > 0) ? (uint64_t)(state.state_dim - 1) : 0;
+        for (size_t i = 0; i < state.state_dim; i++) {
+            double a = cabs(state.amplitudes[i]);
+            cumulative += a * a;
+            if (u < cumulative) { sampled = (uint64_t)i; break; }
+        }
+
+        partition_results[p].found_state = sampled;
+        partition_results[p].success_probability = success_prob;
         partition_results[p].iterations_performed = optimal_iters;
 
-        // Mark if we found the target
-        if (most_likely == marked_state) {
-            found_flags[p] = 1;
-        }
+        // The search succeeded on this partition iff the measured outcome is
+        // the marked state.
+        found_flags[p] = (sampled == marked_state) ? 1 : 0;
 
         quantum_state_free(&state);
     }
 
-    // Find best result (highest probability or exact match)
+    // Aggregate: prefer a partition whose measurement actually hit the marked
+    // state; otherwise report the partition with the highest true success
+    // probability.  found_state and success_probability now mean the sampled
+    // outcome and the marked-state Born probability respectively.
     result.success_probability = 0.0;
 
     for (size_t p = 0; p < num_partitions; p++) {
         if (found_flags[p]) {
-            // Found exact match
-            result = partition_results[p];
-            result.found_state = marked_state;
+            result = partition_results[p];   // found_state == marked_state here
             break;
         }
         if (partition_results[p].success_probability > result.success_probability) {
@@ -386,6 +463,7 @@ grover_result_t grover_parallel_partitioned_search(
 
     free(partition_results);
     free(found_flags);
+    free(seeds);
 
     return result;
 }

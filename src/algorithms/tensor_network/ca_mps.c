@@ -22,8 +22,8 @@
 struct moonlab_ca_mps_t {
     uint32_t n;                     /* number of qubits */
     uint32_t max_bond;              /* MPS truncation cap */
-    clifford_tableau_t* D;          /* tableau storing C^dagger */
-    tn_mps_state_t*     phi;        /* |phi>; |psi> = D^dagger |phi> = C |phi> */
+    clifford_tableau_t* D;          /* tableau storing the forward Clifford C */
+    tn_mps_state_t*     phi;        /* |phi>; |psi> = C |phi>, C read from D */
 };
 
 /* ------------------------------------------------------------------ */
@@ -90,36 +90,47 @@ uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s) {
 
 double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s) {
     if (!s || !s->phi || s->n < 2) return 0.0;
-    double s_max = 0.0;
-    for (uint32_t i = 0; i + 1 < s->n; i++) {
-        double e = tn_mps_entanglement_entropy(s->phi, i);
-        if (e > s_max) s_max = e;
+
+    // One canonicalization sweep for all bonds instead of one per bond.
+    double* ent = (double*)malloc((size_t)(s->n - 1) * sizeof(double));
+    if (!ent) return 0.0;
+
+    uint32_t nb = 0;
+    tn_state_error_t err = tn_mps_entanglement_entropy_all(s->phi, ent, &nb);
+    if (err != TN_STATE_SUCCESS) {
+        free(ent);
+        return 0.0;
     }
+
+    double s_max = 0.0;
+    for (uint32_t i = 0; i < nb; i++) {
+        if (ent[i] > s_max) s_max = ent[i];
+    }
+    free(ent);
     return s_max;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Clifford gates -- tableau-only updates.                           */
 /*                                                                    */
-/*  The tableau D stores C^dagger, where |psi> = C|phi>.  To apply    */
-/*  Clifford gate G on |psi> we want G|psi> = GC|phi>, i.e. C <- GC.  */
-/*  Equivalently D <- (GC)^dagger = C^dagger G^dagger = D G^dagger.    */
+/*  The tableau D stores the FORWARD Clifford C, where |psi> = C|phi>. */
+/*  To apply Clifford gate G on |psi> we want G|psi> = (GC)|phi>, so   */
+/*  C <- G C: each moonlab_ca_mps_* wrapper composes the FORWARD gate  */
+/*  onto D (no dagger).  moonlab_ca_mps_sdag therefore calls           */
+/*  clifford_s_dag, moonlab_ca_mps_s calls clifford_s, and so on.      */
 /*                                                                    */
-/*  The existing clifford_{h,s,...}(tableau, q) call applies a gate   */
-/*  to the tableau such that after the call the tableau represents    */
-/*  the product of the previous tableau's C with the new gate.  Given */
-/*  our convention (tableau holds C^dagger), we need to apply         */
-/*  clifford_*(D, q) with the GATE DAGGER.  For self-inverse gates    */
-/*  (H, X, Y, Z, CNOT, CZ, SWAP) the dagger is the gate itself.  For  */
-/*  S the dagger is S^dagger and vice versa.                          */
+/*  This is the convention the read-out paths rely on: an expectation  */
+/*  <psi|P|psi> = <phi|C^dagger P C|phi> is computed by INVERSE        */
+/*  conjugation of P through D (clifford_conjugate_pauli_inverse),      */
+/*  which yields C^dagger P C precisely when D holds the forward C.     */
+/*  (An earlier comment here claimed D held C^dagger and that gates     */
+/*  were applied daggered -- that contradicted both the wrappers below  */
+/*  and every read-out call site and was wrong.)                       */
 /* ------------------------------------------------------------------ */
 
 #define CKEY(e) ((e) == CLIFFORD_SUCCESS ? CA_MPS_SUCCESS : CA_MPS_ERR_BACKEND)
 
-/* Convention: the tableau `s->D` stores the FORWARD Clifford C that has
- * been applied to the state.  After each Clifford gate call the tableau
- * is updated by standard Heisenberg conjugation (left-multiplication by
- * the gate). */
+/* D holds the forward Clifford C; each call composes the forward gate. */
 ca_mps_error_t moonlab_ca_mps_h(moonlab_ca_mps_t* s, uint32_t q) {
     if (!s || q >= s->n) return CA_MPS_ERR_QUBIT;
     return CKEY(clifford_h(s->D, q));

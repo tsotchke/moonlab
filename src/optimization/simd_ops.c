@@ -4,6 +4,21 @@
 #include <stdio.h>
 #include <math.h>
 
+/* Runtime SIMD backend dispatch.  simd_avx512.c / simd_sve.c are compiled with
+ * their own -mavx512f / -march=...+sve per-file flags (see CMake) and export
+ * standalone implementations of the core primitives; without a runtime table
+ * they had zero callers and the backend was selected purely at compile time.
+ * The pointer table below is populated once from a runtime capability probe so
+ * an AVX-512 CPU (or a Linux/aarch64 SVE CPU) actually executes those kernels,
+ * while every other target falls through to the compile-time-optimized default
+ * bodies in this file. */
+#ifdef HAS_AVX512
+#include "simd_avx512.h"
+#endif
+#ifdef HAS_SVE
+#include "simd_sve.h"
+#endif
+
 // Platform detection
 #ifdef __x86_64__
     #include <cpuid.h>
@@ -33,8 +48,84 @@
     #define NEON_AVAILABLE 0
 #endif
 
+#if defined(__x86_64__) && defined(__SSE2__)
+/* Horizontal sum of the two doubles in a 128-bit register.  _mm_hadd_pd is an
+ * SSE3 intrinsic; on a strict SSE2 build (no SSE3) it is undeclared and the
+ * SSE2 code paths below fail to compile.  Use hadd when SSE3 is available and a
+ * pure-SSE2 shuffle+add otherwise so every SSE2 build compiles and runs. */
+static inline double moonlab_sse_hsum_pd(__m128d v) {
+#ifdef __SSE3__
+    __m128d s = _mm_hadd_pd(v, v);
+    return _mm_cvtsd_f64(s);
+#else
+    __m128d hi = _mm_unpackhi_pd(v, v);   /* {v1, v1} */
+    __m128d s  = _mm_add_sd(v, hi);       /* {v0 + v1, .} */
+    return _mm_cvtsd_f64(s);
+#endif
+}
+#endif
+
+// ============================================================================
+// RUNTIME BACKEND DISPATCH TABLE
+// ============================================================================
+
+/* Specialized-backend function pointers.  NULL means "use the default body in
+ * this file".  Populated once by simd_dispatch_init_once() from a runtime
+ * capability probe.  Only ever set to a compiled-in specialized backend, so on
+ * targets without AVX-512/SVE they stay NULL and behavior is unchanged. */
+typedef struct {
+    double (*sum_squared)(const complex_t*, size_t);
+    void   (*normalize)(complex_t*, size_t, double);
+    void   (*compute_probs)(const complex_t*, double*, size_t);
+    void   (*complex_swap)(complex_t*, complex_t*, size_t);
+    void   (*negate)(complex_t*, size_t);
+    void   (*apply_phase)(complex_t*, complex_t, size_t);
+    void   (*multiply_by_i)(complex_t*, size_t, int);
+    void   (*xor_bytes)(uint8_t*, const uint8_t*, size_t);
+} simd_backend_vtable_t;
+
+static simd_backend_vtable_t g_simd_vtable;   /* zero-initialized: all NULL */
+static volatile int g_simd_vtable_ready = 0;
+
+static void simd_dispatch_init_once(void) {
+    if (g_simd_vtable_ready) return;
+    simd_backend_vtable_t vt = {0};
+
+#ifdef HAS_AVX512
+    if (avx512_is_available()) {
+        vt.sum_squared   = avx512_sum_squared_magnitudes;
+        vt.normalize     = avx512_normalize_amplitudes;
+        vt.compute_probs = avx512_compute_probabilities;
+        vt.complex_swap  = avx512_complex_swap;
+        vt.negate        = avx512_negate;
+        vt.apply_phase   = avx512_apply_phase;
+        vt.multiply_by_i = avx512_multiply_by_i;
+        vt.xor_bytes     = avx512_xor_bytes;
+    }
+#endif
+#ifdef HAS_SVE
+    if (sve_is_available()) {
+        vt.sum_squared   = sve_sum_squared_magnitudes;
+        vt.normalize     = sve_normalize_amplitudes;
+        vt.compute_probs = sve_compute_probabilities;
+        vt.complex_swap  = sve_complex_swap;
+        vt.negate        = sve_negate;
+        vt.apply_phase   = sve_apply_phase;
+        vt.multiply_by_i = sve_multiply_by_i;
+        vt.xor_bytes     = sve_xor_bytes;
+    }
+#endif
+
+    /* Idempotent: concurrent initializers install the same pointers. */
+    g_simd_vtable = vt;
+    g_simd_vtable_ready = 1;
+}
+
 // ARM SVE (Scalable Vector Extension) - for Graviton3, A64FX, etc.
-#if defined(__ARM_FEATURE_SVE)
+// SVE is a Linux/aarch64 feature; Windows-on-ARM is NEON-only and clang-cl
+// there cannot mangle the SVE built-in types, so never include <arm_sve.h> on
+// Windows even if __ARM_FEATURE_SVE leaks in from a -march flag.
+#if defined(__ARM_FEATURE_SVE) && !defined(_WIN32) && !defined(_WIN64)
     #include <arm_sve.h>
     #define SVE_AVAILABLE 1
 #else
@@ -140,6 +231,8 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps) {
 
 double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     if (!amplitudes || n == 0) return 0.0;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.sum_squared) return g_simd_vtable.sum_squared(amplitudes, n);
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512 implementation (8 doubles = 4 complex at once)
@@ -181,9 +274,7 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     __m128d sum_high = _mm256_extractf128_pd(sum_vec, 1);
     __m128d sum_low = _mm256_castpd256_pd128(sum_vec);
     __m128d sum128 = _mm_add_pd(sum_low, sum_high);
-    __m128d sum_final = _mm_hadd_pd(sum128, sum128);
-    
-    double sum = _mm_cvtsd_f64(sum_final);
+    double sum = moonlab_sse_hsum_pd(sum128);
     
     // Handle remaining elements
     for (; i < n; i++) {
@@ -206,10 +297,9 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
         sum_vec = _mm_add_pd(sum_vec, sq);
     }
     
-    // Horizontal sum
-    __m128d sum_final = _mm_hadd_pd(sum_vec, sum_vec);
-    return _mm_cvtsd_f64(sum_final);
-    
+    // Horizontal sum (SSE2-safe)
+    return moonlab_sse_hsum_pd(sum_vec);
+
 #elif SVE_AVAILABLE
     // ARM SVE implementation (scalable vector length)
     // SVE processes svcntd() doubles at a time (varies by platform: 2-8)
@@ -266,6 +356,8 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
 
 void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm) {
     if (!amplitudes || n == 0 || norm == 0.0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.normalize) { g_simd_vtable.normalize(amplitudes, n, norm); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 8 doubles (4 complex) at a time
@@ -445,6 +537,8 @@ void simd_compute_probabilities(
     size_t n
 ) {
     if (!amplitudes || !probabilities || n == 0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.compute_probs) { g_simd_vtable.compute_probs(amplitudes, probabilities, n); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 4 complex (8 doubles) at once
@@ -453,20 +547,20 @@ void simd_compute_probabilities(
         __m512d data = _mm512_loadu_pd((const double*)&amplitudes[i]);
         __m512d sq = _mm512_mul_pd(data, data);
 
-        // Horizontal add within each complex number pair
-        // Result: [re0^2+im0^2, re1^2+im1^2, re2^2+im2^2, re3^2+im3^2, ...]
-        // Use shuffle and add to get probability sums
-        __m512d even = _mm512_shuffle_pd(sq, sq, 0x00);  // Real parts duplicated
-        __m512d odd = _mm512_shuffle_pd(sq, sq, 0xFF);   // Imag parts duplicated
-        __m512d sum = _mm512_add_pd(even, odd);
+        // Horizontal add within each complex pair: sum holds
+        // [p0,p0,p1,p1,p2,p2,p3,p3] with pk = re_k^2 + im_k^2.  Store the
+        // vector and read the even lanes -- the old code discarded this vector
+        // and re-summed the squares scalar-wise.
+        __m512d even = _mm512_shuffle_pd(sq, sq, 0x00);  // real parts duplicated
+        __m512d odd  = _mm512_shuffle_pd(sq, sq, 0xFF);  // imag parts duplicated
+        __m512d sum  = _mm512_add_pd(even, odd);
 
-        // Extract the 4 probabilities
         double probs[8];
-        _mm512_storeu_pd(probs, sq);
-        probabilities[i]   = probs[0] + probs[1];
-        probabilities[i+1] = probs[2] + probs[3];
-        probabilities[i+2] = probs[4] + probs[5];
-        probabilities[i+3] = probs[6] + probs[7];
+        _mm512_storeu_pd(probs, sum);
+        probabilities[i]   = probs[0];
+        probabilities[i+1] = probs[2];
+        probabilities[i+2] = probs[4];
+        probabilities[i+3] = probs[6];
     }
 
     // Handle remaining
@@ -505,8 +599,7 @@ void simd_compute_probabilities(
     for (size_t i = 0; i < n; i++) {
         __m128d data = _mm_loadu_pd((const double*)&amplitudes[i]);
         __m128d sq = _mm_mul_pd(data, data);
-        __m128d sum = _mm_hadd_pd(sq, sq);
-        probabilities[i] = _mm_cvtsd_f64(sum);
+        probabilities[i] = moonlab_sse_hsum_pd(sq);
     }
 
 #elif SVE_AVAILABLE
@@ -555,6 +648,8 @@ void simd_compute_probabilities(
 
 void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n) {
     if (!dest || !src || n == 0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.xor_bytes) { g_simd_vtable.xor_bytes(dest, src, n); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 64 bytes at once
@@ -643,73 +738,18 @@ void simd_mix_entropy(
     memcpy(output, state, size);
     simd_xor_bytes(output, entropy, size);
 
-#if AVX512_AVAILABLE && !defined(__aarch64__)
-    // Additional mixing with bit rotation (AVX-512)
-    size_t i = 0;
-    for (; i + 63 < size; i += 64) {
-        __m512i data = _mm512_loadu_si512((const __m512i*)(output + i));
-
-        // Rotate left by 3 bits
-        __m512i rotated = _mm512_or_si512(
-            _mm512_slli_epi32(data, 3),
-            _mm512_srli_epi32(data, 29)
-        );
-
-        // XOR with rotation
-        __m512i mixed = _mm512_xor_si512(data, rotated);
-        _mm512_storeu_si512((__m512i*)(output + i), mixed);
-    }
-
-    // Handle remaining with scalar
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-
-#elif defined(__AVX2__) && !defined(__aarch64__)
-    // Additional mixing with bit rotation (AVX2)
-    size_t i = 0;
-    for (; i + 31 < size; i += 32) {
-        __m256i data = _mm256_loadu_si256((const __m256i*)(output + i));
-        
-        // Rotate left by 3 bits
-        __m256i rotated = _mm256_or_si256(
-            _mm256_slli_epi32(data, 3),
-            _mm256_srli_epi32(data, 29)
-        );
-        
-        // XOR with rotation
-        __m256i mixed = _mm256_xor_si256(data, rotated);
-        _mm256_storeu_si256((__m256i*)(output + i), mixed);
-    }
-    
-    // Handle remaining with scalar
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-    
-#elif defined(__SSE2__) && defined(__x86_64__) && !defined(__aarch64__)
-    // SSE2 version
-    size_t i = 0;
-    for (; i + 15 < size; i += 16) {
-        __m128i data = _mm_loadu_si128((const __m128i*)(output + i));
-        __m128i rotated = _mm_or_si128(
-            _mm_slli_epi32(data, 3),
-            _mm_srli_epi32(data, 29)
-        );
-        __m128i mixed = _mm_xor_si128(data, rotated);
-        _mm_storeu_si128((__m128i*)(output + i), mixed);
-    }
-    
-    for (; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
-    }
-    
-#else
-    // Scalar mixing with rotation
+    // Canonical additional mixing: per-byte rotate-left-by-3 XORed into each
+    // byte.  This MUST be byte-wise so the result is identical on every build.
+    // The previous SIMD paths applied a 32-bit-lane rotate (slli_epi32(3) |
+    // srli_epi32(29)) while the scalar tail and scalar-only build applied an
+    // 8-bit rotate, so the mixed entropy diverged across architectures.  A
+    // byte-rotate has no direct SSE2/AVX2 intrinsic (and needs AVX512BW under
+    // AVX-512), so the scalar byte-rotate is the single canonical path.
     for (size_t i = 0; i < size; i++) {
-        output[i] ^= (output[i] << 3) | (output[i] >> 5);
+        uint8_t b = output[i];
+        uint8_t rotl3 = (uint8_t)((b << 3) | (b >> 5));
+        output[i] = (uint8_t)(b ^ rotl3);
     }
-#endif
 }
 
 // ============================================================================
@@ -718,7 +758,9 @@ void simd_mix_entropy(
 
 void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n) {
     if (!amp0 || !amp1 || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.complex_swap) { g_simd_vtable.complex_swap(amp0, amp1, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Process 1 complex number (2 doubles) at a time
     for (size_t i = 0; i < n; i++) {
@@ -771,7 +813,9 @@ void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n) {
 
 void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.multiply_by_i) { g_simd_vtable.multiply_by_i(amplitudes, n, negate); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Multiply by ±i = swap real/imag and negate real
     // (a + bi) * i = -b + ai
@@ -821,7 +865,9 @@ void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate) {
 
 void simd_negate(complex_t *amplitudes, size_t n) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.negate) { g_simd_vtable.negate(amplitudes, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Negate both real and imaginary parts
     float64x2_t neg_one = vdupq_n_f64(-1.0);
@@ -870,7 +916,9 @@ void simd_negate(complex_t *amplitudes, size_t n) {
 
 void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.apply_phase) { g_simd_vtable.apply_phase(amplitudes, phase, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Complex multiplication by phase
     // (a+bi)(c+di) = (ac-bd) + (ad+bc)i

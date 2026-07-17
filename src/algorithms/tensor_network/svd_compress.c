@@ -433,7 +433,12 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
     svd_compress_config_t default_cfg = svd_compress_config_default();
     if (!config) config = &default_cfg;
 
-    // Move bond axis to last position if needed
+    // Move bond axis to last position if needed.  All matricization below
+    // must operate on this transposed `work` layout -- the non-bond axes in
+    // their original relative order form the row index, the bond axis the
+    // column.  Earlier versions re-reshaped the *untransposed* input in the
+    // truncation branch, silently scrambling the data whenever
+    // bond_axis != rank-1.
     tensor_t *work = NULL;
     if (bond_axis != tensor->rank - 1) {
         uint32_t perm[TENSOR_MAX_RANK];
@@ -450,6 +455,13 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
         if (!work) return NULL;
     }
 
+    // Record the row-axis dims (all axes except the bond, in `work` order) so
+    // the left factor can be reshaped back consistently in either branch.
+    uint32_t left_dims[TENSOR_MAX_RANK];
+    for (uint32_t i = 0; i < work->rank - 1; i++) {
+        left_dims[i] = work->dims[i];
+    }
+
     // Reshape to matrix [all_other, bond]
     uint32_t other_size = 1;
     for (uint32_t i = 0; i < work->rank - 1; i++) {
@@ -463,35 +475,16 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
 
     if (!mat) return NULL;
 
-    // QR decomposition for left-canonical form
-    tensor_qr_result_t *qr = tensor_qr(mat);
-    tensor_free(mat);
-
-    if (!qr) return NULL;
-
-    // Apply truncation if config specifies
     svd_compress_result_t *result = (svd_compress_result_t *)calloc(1, sizeof(svd_compress_result_t));
     if (!result) {
-        tensor_qr_free(qr);
+        tensor_free(mat);
         return NULL;
     }
 
-    uint32_t k = qr->Q->dims[1];  // Number of columns in Q
+    uint32_t min_dim = other_size < bond_size ? other_size : bond_size;
 
-    // Truncate based on R if config requires
-    if (config->max_bond_dim > 0 && k > config->max_bond_dim) {
-        // Need SVD for truncation
-        tensor_qr_free(qr);
-
-        // Fall back to SVD-based truncation
-        mat_dims[0] = other_size;
-        mat_dims[1] = bond_size;
-        mat = tensor_reshape(tensor, 2, mat_dims);
-        if (!mat) {
-            free(result);
-            return NULL;
-        }
-
+    // Truncate via SVD when the untruncated bond would exceed the cap.
+    if (config->max_bond_dim > 0 && min_dim > config->max_bond_dim) {
         svd_compress_result_t *svd_result = svd_compress(mat, config);
         tensor_free(mat);
 
@@ -507,11 +500,7 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
             }
         }
 
-        // Reshape left back
-        uint32_t left_dims[TENSOR_MAX_RANK];
-        for (uint32_t i = 0; i < tensor->rank - 1; i++) {
-            left_dims[i] = tensor->dims[i];
-        }
+        // Reshape left back to [row axes..., new_bond]
         left_dims[tensor->rank - 1] = svd_result->bond_dim;
 
         tensor_t *left_reshaped = tensor_reshape(svd_result->left, tensor->rank, left_dims);
@@ -537,12 +526,18 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
         return result;
     }
 
-    // No truncation needed, use QR result
-    // Reshape Q back to tensor form
-    uint32_t left_dims[TENSOR_MAX_RANK];
-    for (uint32_t i = 0; i < tensor->rank - 1; i++) {
-        left_dims[i] = tensor->dims[i];
+    // No truncation needed: QR decomposition for left-canonical form
+    tensor_qr_result_t *qr = tensor_qr(mat);
+    tensor_free(mat);
+
+    if (!qr) {
+        free(result);
+        return NULL;
     }
+
+    uint32_t k = qr->Q->dims[1];  // Number of columns in Q
+
+    // Reshape Q back to [row axes..., new_bond]
     left_dims[tensor->rank - 1] = k;
 
     result->left = tensor_reshape(qr->Q, tensor->rank, left_dims);
@@ -742,15 +737,17 @@ double svd_entanglement_entropy(const double *singular_values, uint32_t count) {
     // Values between 1e-200 and 1e-30 are legitimate small numbers
     if (total_sq < 1e-200) return 0.0;
 
-    // Compute von Neumann entropy in bits (log base 2)
-    // S = -Σ p_i log₂(p_i)
+    // Compute von Neumann entropy in NATS (natural log).
+    // S = -Σ p_i ln(p_i)
+    // The public consumers (moonlab_ca_mps_max_half_cut_entropy) document nats;
+    // this used to return bits (log2) and silently contradicted that contract.
     double entropy = 0.0;
     for (uint32_t i = 0; i < count; i++) {
         double p = (singular_values[i] * singular_values[i]) / total_sq;
         // Use 1e-15 threshold for probability (machine epsilon level)
         // Very small probabilities contribute negligibly to entropy
         if (p > 1e-15) {
-            entropy -= p * log2(p);
+            entropy -= p * log(p);
         }
     }
 

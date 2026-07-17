@@ -583,6 +583,22 @@ void tn_mps_free_workspace(tn_mps_state_t *state);
 double tn_mps_entanglement_entropy(const tn_mps_state_t *state, uint32_t bond);
 
 /**
+ * @brief Compute the von Neumann entropy (nats) at every bond in one sweep
+ *
+ * Equivalent to calling tn_mps_entanglement_entropy for each bond, but performs
+ * a single copy and a single canonicalization sweep instead of one per bond.
+ *
+ * @param state     MPS state
+ * @param entropies Output array with at least num_qubits-1 elements
+ * @param num_bonds Output: number of bonds written (num_qubits-1, or 0 for a
+ *                  single-qubit state)
+ * @return TN_STATE_SUCCESS or error code
+ */
+tn_state_error_t tn_mps_entanglement_entropy_all(const tn_mps_state_t *state,
+                                                 double *entropies,
+                                                 uint32_t *num_bonds);
+
+/**
  * @brief Compute entanglement spectrum at bond
  *
  * Returns Schmidt coefficients (squared singular values).

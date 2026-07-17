@@ -179,10 +179,22 @@
     target_link_libraries(test_vqe PRIVATE quantumsim)
     add_test(NAME unit_vqe COMMAND test_vqe)
 
+    # VQE exact-or-error gradient contract: noise refuses unless opted in,
+    # NULL-ansatz guard, and vqe_result_free.
+    add_executable(test_vqe_gradient_contract tests/unit/test_vqe_gradient_contract.c)
+    target_link_libraries(test_vqe_gradient_contract PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_vqe_gradient_contract COMMAND test_vqe_gradient_contract)
+
     # QAOA MaxCut smoke.
     add_executable(test_qaoa tests/unit/test_qaoa.c)
     target_link_libraries(test_qaoa PRIVATE quantumsim)
     add_test(NAME unit_qaoa COMMAND test_qaoa)
+
+    # QAOA exact analytic gradient vs central difference of the exact
+    # (statevector) expectation, over ZZ + Z + mixer terms and two layers.
+    add_executable(test_qaoa_gradient tests/unit/test_qaoa_gradient.c)
+    target_link_libraries(test_qaoa_gradient PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qaoa_gradient COMMAND test_qaoa_gradient)
 
     # QPE phase-recovery smoke.
     add_executable(test_qpe tests/unit/test_qpe.c)
@@ -251,6 +263,18 @@
     add_executable(test_svd_compress tests/unit/test_svd_compress.c)
     target_link_libraries(test_svd_compress PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_svd_compress COMMAND test_svd_compress)
+
+    # Regression: svd_left_canonicalize truncation across a non-last bond axis
+    # must matricize the transposed layout (isometry + reconstruction).
+    add_executable(test_svd_noncanonical_axis tests/unit/test_svd_noncanonical_axis.c)
+    target_link_libraries(test_svd_noncanonical_axis PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_svd_noncanonical_axis COMMAND test_svd_noncanonical_axis)
+
+    # Regression: tn_apply_gate_2q must permute the 4x4 matrix when
+    # qubit1 > qubit2 (tn_apply_cnot with control > target).
+    add_executable(test_tn_gate_order tests/unit/test_tn_gate_order.c)
+    target_link_libraries(test_tn_gate_order PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tn_gate_order COMMAND test_tn_gate_order)
 
     # Pin complex-Hermitian Jacobi correctness in matrix_math.c.
     # Pre-2026-04-26 the rotations were real-valued; eigenvectors of
@@ -341,6 +365,17 @@
     add_test(NAME unit_tdvp_adaptive_second_svd
              COMMAND test_tdvp_adaptive_second_svd)
 
+    # Real-time projector-splitting TDVP validation: two-site analytic Rabi
+    # (<Z>(t) = cos(2ht)) and a three-site TFIM quench whose total
+    # magnetization and energy are checked against a dense RK4 reference.
+    # The three-site case exercises the backward one-site sub-step and the
+    # sweep turning points that distinguish genuine 2TDVP from the previous
+    # forward-only integrator.
+    add_executable(test_tdvp_validation tests/unit/test_tdvp_validation.c)
+    target_link_libraries(test_tdvp_validation PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_validation COMMAND test_tdvp_validation)
+    set_tests_properties(unit_tdvp_validation PROPERTIES TIMEOUT 120)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
@@ -384,6 +419,18 @@
         endif()
         add_test(NAME unit_ca_mps_var_d COMMAND test_ca_mps_var_d)
         set_tests_properties(unit_ca_mps_var_d PROPERTIES TIMEOUT 60)
+
+        # Regression: var-D delta cache must be consistent above 255 qubits
+        # (the support arrays were uint8_t and truncated qubit indices).
+        add_executable(test_ca_mps_var_d_large tests/unit/test_ca_mps_var_d_large.c)
+        target_link_libraries(test_ca_mps_var_d_large PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_var_d_large PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_var_d_large PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_var_d_large COMMAND test_ca_mps_var_d_large)
+        set_tests_properties(unit_ca_mps_var_d_large PROPERTIES TIMEOUT 120)
 
         # CA-MPS alternating variational-D (imag-time |phi> + Clifford D).
         # Headline experiment: TFIM at criticality (g=1) on n=6 must
@@ -1568,13 +1615,14 @@
     qsim_label_tests(tn
         unit_tensor_network unit_tn_dead_code_smoke
         unit_tn_mps_from_statevector tensor_adversarial dmrg
-        mps_vs_exact unit_lattice_2d)
+        mps_vs_exact unit_lattice_2d unit_tdvp_validation
+        unit_svd_noncanonical_axis unit_tn_gate_order)
     qsim_label_tests(ca_mps
         unit_ca_mps_bond_advantage unit_ca_mps_heisenberg
         unit_ca_mps_imag_time unit_ca_mps_kagome12 unit_ca_mps_limits
         unit_ca_mps_prob unit_ca_mps_var_d unit_ca_mps_var_d_alt
         unit_ca_mps_var_d_composite unit_ca_mps_vs_sv unit_ca_peps
-        unit_gauge_warmstart unit_z2_lgt_pauli_sum)
+        unit_gauge_warmstart unit_z2_lgt_pauli_sum unit_ca_mps_var_d_large)
     qsim_label_tests(topology
         unit_chern_marker unit_chern_kpm unit_chern_fhs unit_qgt
         unit_qgt_phase_diagram unit_qgt_phase_diagram_2d
@@ -1584,7 +1632,8 @@
         unit_clifford unit_clifford_pauli_api unit_pauli_frame
         unit_surface_code_clifford)
     qsim_label_tests(algorithms
-        unit_grover unit_qaoa unit_qpe unit_vqe unit_chemistry
+        unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe
+        unit_vqe_gradient_contract unit_chemistry
         unit_quantum_volume unit_kagome_ed unit_kagome_ed_large
         unit_shor_ecdlp unit_differentiable unit_mbl unit_mbl_smoke
         differentiable)

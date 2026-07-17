@@ -327,6 +327,133 @@ static void tridiag_expm_e1(const double *alpha, const double *beta,
     free(z);
 }
 
+/* Generic Krylov (Lanczos) matrix-exponential-times-vector.
+ *
+ * Computes y = exp(alpha * H) x on length-`vec_size` complex vectors, where
+ * `apply(ctx, in, out)` evaluates out = H @ in.  Shared by the two-site TDVP
+ * propagator and the single-site backward propagator so both inherit the same
+ * OOM/failure handling: `num_iter` only advances once a tridiagonal row is
+ * fully populated, so an allocation or apply failure drops the partial row
+ * rather than reading a NULL vector or a stale alpha entry. */
+typedef int (*krylov_apply_fn)(void *ctx, const double complex *in,
+                               double complex *out);
+
+static int krylov_expm(krylov_apply_fn apply, void *ctx,
+                       const double complex *x_data, uint64_t vec_size,
+                       double complex alpha, uint32_t max_iter, double tol,
+                       double complex *y_data) {
+    if (!apply || !x_data || !y_data || vec_size == 0 || max_iter == 0) return -1;
+
+    double complex *v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
+    double complex *v_curr = (double complex *)calloc(vec_size, sizeof(double complex));
+    double complex *v_next = (double complex *)calloc(vec_size, sizeof(double complex));
+    double complex *w = (double complex *)calloc(vec_size, sizeof(double complex));
+    double *lanczos_alpha = (double *)calloc(max_iter, sizeof(double));
+    double *lanczos_beta = (double *)calloc(max_iter + 1, sizeof(double));
+    double complex **V = (double complex **)calloc(max_iter, sizeof(double complex *));
+
+    if (!v_prev || !v_curr || !v_next || !w || !lanczos_alpha || !lanczos_beta || !V) {
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta); free(V);
+        return -1;
+    }
+
+    memcpy(v_curr, x_data, vec_size * sizeof(double complex));
+    double norm_x = vector_norm(v_curr, vec_size);
+    if (norm_x < 1e-15) {
+        memcpy(y_data, x_data, vec_size * sizeof(double complex));
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta); free(V);
+        return 0;
+    }
+    vector_scale(v_curr, 1.0 / norm_x, vec_size);
+
+    lanczos_beta[0] = 0.0;
+    uint32_t num_iter = 0;   // count of fully-completed Lanczos iterations
+
+    for (uint32_t iter = 0; iter < max_iter; iter++) {
+        V[iter] = (double complex *)malloc(vec_size * sizeof(double complex));
+        if (!V[iter]) break;
+        memcpy(V[iter], v_curr, vec_size * sizeof(double complex));
+
+        if (apply(ctx, v_curr, w) != 0) {
+            free(V[iter]);
+            V[iter] = NULL;
+            break;
+        }
+
+        double complex alpha_c = complex_dot(v_curr, w, vec_size);
+        lanczos_alpha[iter] = creal(alpha_c);
+
+        vector_axpy(w, -lanczos_alpha[iter], v_curr, vec_size);
+        if (iter > 0) {
+            vector_axpy(w, -lanczos_beta[iter], v_prev, vec_size);
+        }
+
+        for (uint32_t j = 0; j <= iter; j++) {
+            double complex overlap = complex_dot(V[j], w, vec_size);
+            vector_axpy(w, -overlap, V[j], vec_size);
+        }
+
+        lanczos_beta[iter + 1] = vector_norm(w, vec_size);
+        num_iter = iter + 1;
+
+        if (lanczos_beta[iter + 1] < tol) break;
+
+        memcpy(v_next, w, vec_size * sizeof(double complex));
+        vector_scale(v_next, 1.0 / lanczos_beta[iter + 1], vec_size);
+        memcpy(v_prev, v_curr, vec_size * sizeof(double complex));
+        memcpy(v_curr, v_next, vec_size * sizeof(double complex));
+    }
+
+    if (num_iter == 0) {
+        free(V);
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta);
+        return -1;
+    }
+
+    double complex *expm_coeffs = (double complex *)calloc(num_iter, sizeof(double complex));
+    if (!expm_coeffs) {
+        for (uint32_t i = 0; i < num_iter; i++) free(V[i]);
+        free(V);
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta);
+        return -1;
+    }
+    tridiag_expm_e1(lanczos_alpha, lanczos_beta, num_iter, alpha, expm_coeffs);
+
+    memset(y_data, 0, vec_size * sizeof(double complex));
+    for (uint32_t i = 0; i < num_iter; i++) {
+        for (uint64_t j = 0; j < vec_size; j++) {
+            y_data[j] += norm_x * expm_coeffs[i] * V[i][j];
+        }
+    }
+
+    for (uint32_t i = 0; i < num_iter; i++) free(V[i]);
+    free(V);
+    free(expm_coeffs);
+    free(v_prev); free(v_curr); free(v_next); free(w);
+    free(lanczos_alpha); free(lanczos_beta);
+    return 0;
+}
+
+/* Two-site apply: wraps effective_hamiltonian_apply, reusing scratch tensors. */
+struct krylov_h2_ctx {
+    const effective_hamiltonian_t *H;
+    tensor_t *xt;
+    tensor_t *yt;
+};
+
+static int krylov_h2_apply(void *vctx, const double complex *in,
+                           double complex *out) {
+    struct krylov_h2_ctx *c = (struct krylov_h2_ctx *)vctx;
+    memcpy(c->xt->data, in, (size_t)c->xt->total_size * sizeof(double complex));
+    if (effective_hamiltonian_apply(c->H, c->xt, c->yt) != 0) return -1;
+    memcpy(out, c->yt->data, (size_t)c->yt->total_size * sizeof(double complex));
+    return 0;
+}
+
 int lanczos_expm(const effective_hamiltonian_t *H_eff,
                   const tensor_t *x,
                   double complex alpha,
@@ -340,128 +467,132 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     uint32_t d = H_eff->phys_dim;
     uint64_t vec_size = (uint64_t)chi_l * d * d * chi_r;
 
-    // Lanczos vectors
-    double complex *v_prev = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *v_curr = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *v_next = (double complex *)calloc(vec_size, sizeof(double complex));
-    double complex *w = (double complex *)calloc(vec_size, sizeof(double complex));
-
-    // Tridiagonal matrix
-    double *lanczos_alpha = (double *)calloc(max_iter, sizeof(double));
-    double *lanczos_beta = (double *)calloc(max_iter + 1, sizeof(double));
-
-    // Store Lanczos vectors
-    double complex **V = (double complex **)calloc(max_iter, sizeof(double complex *));
-
-    if (!v_prev || !v_curr || !v_next || !w || !lanczos_alpha || !lanczos_beta || !V) {
-        free(v_prev); free(v_curr); free(v_next); free(w);
-        free(lanczos_alpha); free(lanczos_beta); free(V);
-        return -1;
-    }
-
-    // Initialize with input vector
-    memcpy(v_curr, x->data, vec_size * sizeof(double complex));
-    double norm_x = vector_norm(v_curr, vec_size);
-    if (norm_x < 1e-15) {
-        memcpy(y->data, x->data, vec_size * sizeof(double complex));
-        free(v_prev); free(v_curr); free(v_next); free(w);
-        free(lanczos_alpha); free(lanczos_beta); free(V);
-        return 0;
-    }
-    vector_scale(v_curr, 1.0 / norm_x, vec_size);
-
-    lanczos_beta[0] = 0.0;
-    uint32_t num_iter = 0;
-
-    // Create tensors for H_eff application (theta is rank-4
-    // [chi_l, d, d, chi_r] for the two-site Krylov projection).
     uint32_t dims[4] = { chi_l, d, d, chi_r };
-    tensor_t *x_temp = tensor_create(4, dims);
-    tensor_t *y_temp = tensor_create(4, dims);
-
-    if (!x_temp || !y_temp) {
-        if (x_temp) tensor_free(x_temp);
-        if (y_temp) tensor_free(y_temp);
-        free(v_prev); free(v_curr); free(v_next); free(w);
-        free(lanczos_alpha); free(lanczos_beta); free(V);
+    tensor_t *xt = tensor_create(4, dims);
+    tensor_t *yt = tensor_create(4, dims);
+    if (!xt || !yt) {
+        if (xt) tensor_free(xt);
+        if (yt) tensor_free(yt);
         return -1;
     }
 
-    // Lanczos iteration
-    for (uint32_t iter = 0; iter < max_iter; iter++) {
-        num_iter = iter + 1;
+    struct krylov_h2_ctx ctx = { H_eff, xt, yt };
+    int rc = krylov_expm(krylov_h2_apply, &ctx, x->data, vec_size,
+                         alpha, max_iter, tol, y->data);
+    tensor_free(xt);
+    tensor_free(yt);
+    return rc;
+}
 
-        // Store current vector
-        V[iter] = (double complex *)malloc(vec_size * sizeof(double complex));
-        if (!V[iter]) break;
-        memcpy(V[iter], v_curr, vec_size * sizeof(double complex));
+/* Single-site effective Hamiltonian H^{1s} acting on a rank-3 center tensor
+ * C[chi_l, d, chi_r], used for the TDVP backward one-site sub-step:
+ *
+ *   y[l,s,r] = sum_{lp,sp,rp,bl,br}
+ *              L[l,bl,lp] * W[bl,s,sp,br] * R[r,br,rp] * C[lp,sp,rp]
+ *
+ * with the same L/R/W index conventions as effective_hamiltonian_apply
+ * (L: [chi_l,b_l,chi_l], R: [chi_r,b_r,chi_r], W->W: [b_l,d,d,b_r]). */
+struct krylov_h1_ctx {
+    const tensor_t *L;
+    const tensor_t *R;
+    const mpo_tensor_t *W;
+    uint32_t chi_l, chi_r, d;
+};
 
-        // w = H @ v_curr
-        memcpy(x_temp->data, v_curr, vec_size * sizeof(double complex));
-        if (effective_hamiltonian_apply(H_eff, x_temp, y_temp) != 0) {
-            break;
-        }
-        memcpy(w, y_temp->data, vec_size * sizeof(double complex));
+static int krylov_h1_apply(void *vctx, const double complex *in,
+                           double complex *out) {
+    struct krylov_h1_ctx *c = (struct krylov_h1_ctx *)vctx;
+    uint32_t chi_l = c->chi_l, chi_r = c->chi_r, d = c->d;
+    uint32_t b_l = c->W->bond_dim_left;
+    uint32_t b_r = c->W->bond_dim_right;
+    const double complex *L = c->L->data;
+    const double complex *R = c->R->data;
+    const double complex *W = c->W->W->data;
 
-        // alpha[iter] = v_curr^H @ w
-        double complex alpha_c = complex_dot(v_curr, w, vec_size);
-        lanczos_alpha[iter] = creal(alpha_c);
+    size_t t1_size = (size_t)chi_l * d * b_r * chi_r;   // t1[lp,sp,br,r]
+    size_t t2_size = (size_t)chi_l * b_l * d * chi_r;   // t2[lp,bl,s,r]
+    double complex *t1 = (double complex *)calloc(t1_size, sizeof(double complex));
+    double complex *t2 = (double complex *)calloc(t2_size, sizeof(double complex));
+    if (!t1 || !t2) { free(t1); free(t2); return -1; }
 
-        // w = w - alpha * v_curr - beta * v_prev
-        vector_axpy(w, -lanczos_alpha[iter], v_curr, vec_size);
-        if (iter > 0) {
-            vector_axpy(w, -lanczos_beta[iter], v_prev, vec_size);
-        }
-
-        // Reorthogonalization
-        for (uint32_t j = 0; j <= iter; j++) {
-            double complex overlap = complex_dot(V[j], w, vec_size);
-            vector_axpy(w, -overlap, V[j], vec_size);
-        }
-
-        // beta[iter+1] = ||w||
-        lanczos_beta[iter + 1] = vector_norm(w, vec_size);
-
-        // Check convergence
-        if (lanczos_beta[iter + 1] < tol) {
-            num_iter = iter + 1;
-            break;
-        }
-
-        // v_next = w / beta
-        memcpy(v_next, w, vec_size * sizeof(double complex));
-        vector_scale(v_next, 1.0 / lanczos_beta[iter + 1], vec_size);
-
-        // Shift
-        memcpy(v_prev, v_curr, vec_size * sizeof(double complex));
-        memcpy(v_curr, v_next, vec_size * sizeof(double complex));
-    }
-
-    tensor_free(x_temp);
-    tensor_free(y_temp);
-
-    // Compute exp(alpha * T) @ e1
-    double complex *expm_coeffs = (double complex *)calloc(num_iter, sizeof(double complex));
-    tridiag_expm_e1(lanczos_alpha, lanczos_beta, num_iter, alpha, expm_coeffs);
-
-    // Reconstruct: y = norm_x * sum_i expm_coeffs[i] * V[i]
-    memset(y->data, 0, vec_size * sizeof(double complex));
-    for (uint32_t i = 0; i < num_iter; i++) {
-        for (uint64_t j = 0; j < vec_size; j++) {
-            y->data[j] += norm_x * expm_coeffs[i] * V[i][j];
+    // Step 1: t1[lp,sp,br,r] = sum_rp in[lp,sp,rp] * R[r,br,rp]
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t sp = 0; sp < d; sp++) {
+            for (uint32_t br = 0; br < b_r; br++) {
+                for (uint32_t r = 0; r < chi_r; r++) {
+                    double complex sum = 0.0;
+                    for (uint32_t rp = 0; rp < chi_r; rp++) {
+                        uint64_t in_idx = (uint64_t)lp * d * chi_r + sp * chi_r + rp;
+                        uint64_t R_idx = (uint64_t)r * b_r * chi_r + br * chi_r + rp;
+                        sum += in[in_idx] * R[R_idx];
+                    }
+                    uint64_t t1_idx = (uint64_t)lp * d * b_r * chi_r + sp * b_r * chi_r + br * chi_r + r;
+                    t1[t1_idx] = sum;
+                }
+            }
         }
     }
 
-    // Cleanup
-    for (uint32_t i = 0; i < num_iter; i++) {
-        free(V[i]);
+    // Step 2: t2[lp,bl,s,r] = sum_{sp,br} t1[lp,sp,br,r] * W[bl,s,sp,br]
+    for (uint32_t lp = 0; lp < chi_l; lp++) {
+        for (uint32_t bl = 0; bl < b_l; bl++) {
+            for (uint32_t s = 0; s < d; s++) {
+                for (uint32_t r = 0; r < chi_r; r++) {
+                    double complex sum = 0.0;
+                    for (uint32_t sp = 0; sp < d; sp++) {
+                        for (uint32_t br = 0; br < b_r; br++) {
+                            uint64_t t1_idx = (uint64_t)lp * d * b_r * chi_r + sp * b_r * chi_r + br * chi_r + r;
+                            uint64_t W_idx = (uint64_t)bl * d * d * b_r + s * d * b_r + sp * b_r + br;
+                            sum += t1[t1_idx] * W[W_idx];
+                        }
+                    }
+                    uint64_t t2_idx = (uint64_t)lp * b_l * d * chi_r + bl * d * chi_r + s * chi_r + r;
+                    t2[t2_idx] = sum;
+                }
+            }
+        }
     }
-    free(V);
-    free(expm_coeffs);
-    free(v_prev); free(v_curr); free(v_next); free(w);
-    free(lanczos_alpha); free(lanczos_beta);
 
+    // Step 3: out[l,s,r] = sum_{lp,bl} t2[lp,bl,s,r] * L[l,bl,lp]
+    for (uint32_t l = 0; l < chi_l; l++) {
+        for (uint32_t s = 0; s < d; s++) {
+            for (uint32_t r = 0; r < chi_r; r++) {
+                double complex sum = 0.0;
+                for (uint32_t lp = 0; lp < chi_l; lp++) {
+                    for (uint32_t bl = 0; bl < b_l; bl++) {
+                        uint64_t t2_idx = (uint64_t)lp * b_l * d * chi_r + bl * d * chi_r + s * chi_r + r;
+                        uint64_t L_idx = (uint64_t)l * b_l * chi_l + bl * chi_l + lp;
+                        sum += t2[t2_idx] * L[L_idx];
+                    }
+                }
+                uint64_t y_idx = (uint64_t)l * d * chi_r + s * chi_r + r;
+                out[y_idx] = sum;
+            }
+        }
+    }
+
+    free(t1);
+    free(t2);
     return 0;
+}
+
+/* Evolve a single-site center tensor in place: C <- exp(alpha * H^{1s}) C. */
+static int lanczos_expm_single_site(const tensor_t *L, const tensor_t *R,
+                                    const mpo_tensor_t *W,
+                                    uint32_t chi_l, uint32_t d, uint32_t chi_r,
+                                    double complex *inout,
+                                    double complex alpha,
+                                    uint32_t max_iter, double tol) {
+    if (!L || !R || !W || !inout) return -1;
+    struct krylov_h1_ctx ctx = { L, R, W, chi_l, chi_r, d };
+    uint64_t vec_size = (uint64_t)chi_l * d * chi_r;
+    double complex *y = (double complex *)calloc(vec_size, sizeof(double complex));
+    if (!y) return -1;
+    int rc = krylov_expm(krylov_h1_apply, &ctx, inout, vec_size,
+                         alpha, max_iter, tol, y);
+    if (rc == 0) memcpy(inout, y, vec_size * sizeof(double complex));
+    free(y);
+    return rc;
 }
 
 // ============================================================================
@@ -688,22 +819,39 @@ static svd_compress_result_t *tdvp_truncate_bond(
 // TWO-SITE TDVP STEP
 // ============================================================================
 
+/* Sweep directions for the projector-splitting integrator. */
+#define TDVP_DIR_LR (+1)   /* left-to-right half-sweep */
+#define TDVP_DIR_RL (-1)   /* right-to-left half-sweep */
+
 /**
- * @brief Evolve two-site tensor
+ * @brief One bond of the two-site projector-splitting TDVP integrator.
  *
- * @param bond_state Per-bond PID state for the adaptive-bond
- *                   controller, or NULL on the legacy fixed-cap
- *                   path.  The pointer is owned by the engine and
- *                   updated in-place each visit.
+ * Performs the genuine 2TDVP sub-steps at bond (site, site+1):
+ *   1. forward-evolve the two-site tensor theta by exp(mp * H^{2s} * dt_half);
+ *   2. SVD-split theta, truncating (adaptive-PID aware), absorbing the singular
+ *      values TOWARD the sweep direction so the orthogonality center follows
+ *      the sweep (S into the right tensor for L->R, into the left for R->L);
+ *   3. update the environment on the trailing side;
+ *   4. unless this is the sweep's turning bond, backward-evolve the resulting
+ *      single-site center by exp(-mp * H^{1s} * dt_half) with the freshly
+ *      updated environment -- the projector-splitting correction that the old
+ *      "two forward half-sweeps, never back-evolve" code omitted entirely.
+ *
+ * @param dt_half     Half the step (the caller passes dt/2).
+ * @param direction   TDVP_DIR_LR or TDVP_DIR_RL.
+ * @param back_evolve false at the sweep's turning bond (no one-site back-step).
+ * @param bond_state  Per-bond adaptive-PID state, or NULL for the fixed cap.
  */
-static int tdvp_evolve_two_site(tn_mps_state_t *mps,
-                                 const mpo_t *mpo,
-                                 dmrg_environments_t *env,
-                                 uint32_t site,
-                                 double complex dt,
-                                 const tdvp_config_t *config,
-                                 struct tdvp_bond_pid_state *bond_state,
-                                 double *truncation_error) {
+static int tdvp_two_site_ps(tn_mps_state_t *mps,
+                            const mpo_t *mpo,
+                            dmrg_environments_t *env,
+                            uint32_t site,
+                            double complex dt_half,
+                            const tdvp_config_t *config,
+                            struct tdvp_bond_pid_state *bond_state,
+                            int direction,
+                            bool back_evolve,
+                            double *truncation_error) {
     if (!mps || !mpo || !env || site >= mps->num_qubits - 1) return -1;
 
     tensor_t *A = mps->tensors[site];
@@ -714,10 +862,8 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
     uint32_t chi_m = A->dims[2];
     uint32_t chi_r = B->dims[2];
 
-    // Check environments
     if (!env->L[site] || !env->R[site + 1]) return -1;
 
-    // Build effective Hamiltonian
     effective_hamiltonian_t H_eff = {
         .L = env->L[site],
         .R = env->R[site + 1],
@@ -728,10 +874,8 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
         .phys_dim = d,
     };
 
-    // Form theta = A @ B.  Both tensors are row-major rank-3 with the
-    // contracted axis (chi_m) on A's last and B's first slot, so a
-    // single zgemm on the (chi_l*d, chi_m) x (chi_m, d*chi_r)
-    // reshape lands directly in the row-major theta layout.
+    // theta = A @ B via a single zgemm into the row-major [chi_l,d,d,chi_r]
+    // layout (scalar fallback when BLAS is unavailable).
     uint32_t theta_dims[4] = {chi_l, d, d, chi_r};
     tensor_t *theta = tensor_create(4, theta_dims);
     if (!theta) return -1;
@@ -766,45 +910,33 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
     }
 #endif
 
-    // Evolve: theta_new = exp(-i*H*dt) @ theta
+    // Forward two-site sub-step: theta <- exp(fwd * H^{2s} * dt_half) theta.
+    // Real time: fwd = -i; imaginary time: fwd = -1.
     tensor_t *theta_evolved = tensor_create(4, theta_dims);
     if (!theta_evolved) {
         tensor_free(theta);
         return -1;
     }
 
-    double complex exponent = -I * dt;  // Real time
-    if (config->evolution_type == TDVP_IMAGINARY_TIME) {
-        exponent = -dt;  // Imaginary time
-    }
+    double complex fwd = (config->evolution_type == TDVP_IMAGINARY_TIME)
+                             ? (double complex)(-1.0)
+                             : (double complex)(-I);
+    double complex fwd_exponent = fwd * dt_half;
 
-    if (lanczos_expm(&H_eff, theta, exponent,
+    if (lanczos_expm(&H_eff, theta, fwd_exponent,
                       config->lanczos_max_iter, config->lanczos_tol,
                       theta_evolved) != 0) {
         tensor_free(theta);
         tensor_free(theta_evolved);
         return -1;
     }
-
     tensor_free(theta);
 
-    /* Imag-time normalisation hot-fix.  On the imag-time path,
-     * `exp(-H * dt) @ theta` decays the two-site tensor by roughly
-     * `exp(-E_max * dt)` per call.  After many two-site updates
-     * (2 sweeps * (n-1) updates per step, repeated across steps)
-     * the tensor shrinks below double-precision and the downstream
-     * SVD becomes ill-conditioned, producing the "Failed at site X
-     * (R->L)" symptom on Heisenberg after roughly five steps and on
-     * TFIM immediately.  Renormalising `theta_evolved` to unit
-     * Frobenius norm here is mathematically equivalent (the ground
-     * state is invariant under global rescaling and the end-of-step
-     * `tn_mps_norm`-based renormalisation absorbs the discarded
-     * factor) and keeps the inner numerics well-conditioned.  Real
-     * time evolution is norm-preserving by unitarity, so we skip the
-     * renorm there -- the Frobenius pass + division costs one
-     * full-tensor traversal per two-site update, and the
-     * `lanczos_expm` Krylov projection already preserves norm to
-     * machine precision on real-time inputs. */
+    /* Imag-time conditioning: exp(-H dt/2) shrinks the two-site tensor toward
+     * zero; renormalise to unit Frobenius norm so the downstream SVD stays
+     * well-conditioned (a global rescaling, irrelevant to the ground state the
+     * imag-time flow converges to, and absorbed by the end-of-step
+     * renormalisation).  Real-time evolution is norm preserving, so skip it. */
     if (config->evolution_type == TDVP_IMAGINARY_TIME) {
         double tnorm = tensor_norm_frobenius(theta_evolved);
         if (tnorm > 0.0 && isfinite(tnorm) && tnorm != 1.0) {
@@ -815,40 +947,40 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
         }
     }
 
-    // SVD split evolved tensor
+    // SVD-split with truncation (adaptive-PID aware).
     uint32_t mat_dims[2] = {chi_l * d, d * chi_r};
     tensor_t *mat = tensor_reshape(theta_evolved, 2, mat_dims);
     tensor_free(theta_evolved);
-
     if (!mat) return -1;
 
-    /* Route the SVD compression through the v0.4 truncation helper.
-     * On the legacy path (adaptive_bond.enabled = false, or
-     * bond_state == NULL) this is bit-identical to the previous
-     * inline svd_compress_config_default + max_bond_dim / cutoff
-     * plumbing.  When both are set, the helper runs the
-     * entropy-feedback PID and may re-truncate to a smaller chi. */
     svd_compress_result_t *svd = tdvp_truncate_bond(mat, config, bond_state);
     tensor_free(mat);
-
     if (!svd) return -1;
 
     *truncation_error = svd->truncation_error;
     uint32_t new_bond = svd->bond_dim;
 
-    // Absorb S into B (for left-canonical form)
-    for (uint32_t i = 0; i < new_bond; i++) {
-        for (uint32_t j = 0; j < svd->right->dims[1]; j++) {
-            svd->right->data[i * svd->right->dims[1] + j] *= svd->singular_values[i];
+    tensor_t *A_new = NULL, *B_new = NULL;
+    if (direction == TDVP_DIR_LR) {
+        // Center moves right: A = U (left-isometric), absorb S into V^dag.
+        for (uint32_t i = 0; i < new_bond; i++) {
+            for (uint32_t j = 0; j < svd->right->dims[1]; j++) {
+                svd->right->data[i * svd->right->dims[1] + j] *= svd->singular_values[i];
+            }
+        }
+    } else {
+        // Center moves left: B = V^dag (right-isometric), absorb S into U.
+        for (uint32_t i = 0; i < svd->left->dims[0]; i++) {
+            for (uint32_t j = 0; j < new_bond; j++) {
+                svd->left->data[i * new_bond + j] *= svd->singular_values[j];
+            }
         }
     }
 
-    // Reshape to new tensors
     uint32_t A_dims[3] = {chi_l, d, new_bond};
-    tensor_t *A_new = tensor_reshape(svd->left, 3, A_dims);
-
+    A_new = tensor_reshape(svd->left, 3, A_dims);
     uint32_t B_dims[3] = {new_bond, d, chi_r};
-    tensor_t *B_new = tensor_reshape(svd->right, 3, B_dims);
+    B_new = tensor_reshape(svd->right, 3, B_dims);
 
     if (!A_new || !B_new) {
         if (A_new) tensor_free(A_new);
@@ -857,14 +989,52 @@ static int tdvp_evolve_two_site(tn_mps_state_t *mps,
         return -1;
     }
 
-    // Update MPS
     tensor_free(mps->tensors[site]);
     tensor_free(mps->tensors[site + 1]);
     mps->tensors[site] = A_new;
     mps->tensors[site + 1] = B_new;
     mps->bond_dims[site] = new_bond;
-
     svd_compress_result_free(svd);
+
+    // Update the trailing-side environment from the freshly isometric tensor,
+    // then (unless this is the turning bond) apply the backward one-site
+    // sub-step to the center with the updated environment.
+    double complex bwd_exponent = -fwd_exponent;   // exp(+... ) inverse sub-step
+
+    if (direction == TDVP_DIR_LR) {
+        // A[site] is now left-isometric -> refresh L[site+1].
+        if (dmrg_update_left_environment(env, mps, mpo, site) != 0) return -1;
+        if (back_evolve) {
+            // Center C = B[site+1], shape [new_bond, d, chi_r].
+            if (!env->L[site + 1] || !env->R[site + 1]) return -1;
+            if (lanczos_expm_single_site(env->L[site + 1], env->R[site + 1],
+                                         &mpo->tensors[site + 1],
+                                         new_bond, d, chi_r,
+                                         mps->tensors[site + 1]->data,
+                                         bwd_exponent,
+                                         config->lanczos_max_iter,
+                                         config->lanczos_tol) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        // B[site+1] is now right-isometric -> refresh R[site].
+        if (dmrg_update_right_environment(env, mps, mpo, site + 1) != 0) return -1;
+        if (back_evolve) {
+            // Center C = A[site], shape [chi_l, d, new_bond].
+            if (!env->L[site] || !env->R[site]) return -1;
+            if (lanczos_expm_single_site(env->L[site], env->R[site],
+                                         &mpo->tensors[site],
+                                         chi_l, d, new_bond,
+                                         mps->tensors[site]->data,
+                                         bwd_exponent,
+                                         config->lanczos_max_iter,
+                                         config->lanczos_tol) != 0) {
+                return -1;
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -885,7 +1055,17 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
     dmrg_environments_t *env = engine->env;
     uint32_t n = mps->num_qubits;
 
-    // Rebuild environments - need both L and R for the sweeps
+    // Genuine two-site projector-splitting TDVP for a symmetric step of size
+    // dt: a left-to-right half-sweep followed by a right-to-left half-sweep,
+    // each forward-evolving every two-site block by dt/2 and backward-evolving
+    // the single-site center by dt/2 (except at the turning bond).  Establish
+    // the required gauge first: right-canonicalise so the orthogonality centre
+    // sits at site 0 and every site to its right is right-isometric, which is
+    // exactly the environment the L->R sweep consumes.
+    if (tn_mps_right_canonicalize(mps) != TN_STATE_SUCCESS) {
+        fprintf(stderr, "TDVP: Failed to right-canonicalize MPS\n");
+        return -1;
+    }
     if (dmrg_init_left_environments(env, mps, mpo) != 0) {
         fprintf(stderr, "TDVP: Failed to initialize left environments\n");
         return -1;
@@ -895,56 +1075,50 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result) {
         return -1;
     }
 
-    // Left-to-right sweep with dt/2
+    // Left-to-right half-sweep.  The environment on the trailing (left) side is
+    // refreshed inside tdvp_two_site_ps as the center advances.
     for (uint32_t site = 0; site < n - 1; site++) {
-        double trunc_err;
+        double trunc_err = 0.0;
         struct tdvp_bond_pid_state *bs =
             (engine->bond_states && site < engine->num_bond_states)
                 ? &engine->bond_states[site]
                 : NULL;
-        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, bs, &trunc_err) != 0) {
+        bool turning = (site == n - 2);   // last bond: no backward sub-step
+        if (tdvp_two_site_ps(mps, mpo, env, site, dt / 2,
+                             &engine->config, bs, TDVP_DIR_LR,
+                             /*back_evolve=*/!turning, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %u (L->R)\n", site);
             return -1;
         }
         total_trunc_error += trunc_err;
-
-        if (mps->bond_dims[site] > max_bond) {
-            max_bond = mps->bond_dims[site];
-        }
-
-        // Update left environment
-        if (site < n - 2) {
-            dmrg_update_left_environment(env, mps, mpo, site);
-        }
+        if (mps->bond_dims[site] > max_bond) max_bond = mps->bond_dims[site];
     }
 
-    // Rebuild right environments
-    dmrg_init_right_environments(env, mps, mpo);
+    // The state is now left-canonical with the center at site n-1.  Rebuild the
+    // right environments for the return sweep (the left environments carried
+    // forward from the L->R sweep remain valid for the sites not yet revisited).
+    if (dmrg_init_right_environments(env, mps, mpo) != 0) {
+        fprintf(stderr, "TDVP: Failed to rebuild right environments\n");
+        return -1;
+    }
 
-    // Right-to-left sweep with dt/2
+    // Right-to-left half-sweep.
     for (int site = n - 2; site >= 0; site--) {
-        double trunc_err;
+        double trunc_err = 0.0;
         struct tdvp_bond_pid_state *bs =
             (engine->bond_states &&
              (uint32_t)site < engine->num_bond_states)
                 ? &engine->bond_states[site]
                 : NULL;
-        if (tdvp_evolve_two_site(mps, mpo, env, site, dt / 2,
-                                  &engine->config, bs, &trunc_err) != 0) {
+        bool turning = (site == 0);   // last bond of the return sweep
+        if (tdvp_two_site_ps(mps, mpo, env, (uint32_t)site, dt / 2,
+                             &engine->config, bs, TDVP_DIR_RL,
+                             /*back_evolve=*/!turning, &trunc_err) != 0) {
             fprintf(stderr, "TDVP: Failed at site %d (R->L)\n", site);
             return -1;
         }
         total_trunc_error += trunc_err;
-
-        if (mps->bond_dims[site] > max_bond) {
-            max_bond = mps->bond_dims[site];
-        }
-
-        // Update right environment
-        if (site > 0) {
-            dmrg_update_right_environment(env, mps, mpo, site + 1);
-        }
+        if (mps->bond_dims[site] > max_bond) max_bond = mps->bond_dims[site];
     }
 
     // Normalize if requested
@@ -1018,13 +1192,19 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
     tdvp_result_t result = {0};
     int rc = 0;
 
-    while (engine->current_time < target_time) {
-        // Adjust dt for last step if needed
-        double remaining = target_time - engine->current_time;
-        if (remaining < engine->config.dt) {
-            engine->config.dt = remaining;
-        }
+    // Preserve the configured step: the final partial step shrinks dt only for
+    // that iteration, and the original value is restored on exit.  A
+    // non-positive configured dt can never reach the target.
+    const double dt_full = engine->config.dt;
+    if (!(dt_full > 0.0)) return -1;
+    const double eps = 1e-12 * (fabs(target_time) + 1.0);
 
+    while (engine->current_time < target_time - eps) {
+        double remaining = target_time - engine->current_time;
+        engine->config.dt = (remaining < dt_full) ? remaining : dt_full;
+        if (engine->config.dt <= 0.0) break;   // underflow guard: guarantee progress
+
+        double t_before = engine->current_time;
         if (tdvp_step(engine, &result) != 0) {
             rc = -1;
             break;
@@ -1039,8 +1219,13 @@ int tdvp_evolve_to(tdvp_engine_t *engine,
                    result.time, result.energy, result.norm,
                    result.max_bond_dim, result.truncation_error);
         }
+
+        // If a step failed to advance time (degenerate dt), stop instead of
+        // spinning forever.
+        if (engine->current_time <= t_before) { rc = -1; break; }
     }
 
+    engine->config.dt = dt_full;   // restore the configured step
     tdvp_result_clear(&result);
     return rc;
 }
@@ -1129,12 +1314,16 @@ int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
     tdvp_result_t result = {0};
     int rc = 0;
 
-    while (engine->current_time < target_time) {
-        double remaining = target_time - engine->current_time;
-        if (remaining < engine->config.dt) {
-            engine->config.dt = remaining;
-        }
+    const double dt_full = engine->config.dt;
+    if (!(dt_full > 0.0)) return -1;
+    const double eps = 1e-12 * (fabs(target_time) + 1.0);
 
+    while (engine->current_time < target_time - eps) {
+        double remaining = target_time - engine->current_time;
+        engine->config.dt = (remaining < dt_full) ? remaining : dt_full;
+        if (engine->config.dt <= 0.0) break;   // underflow guard: guarantee progress
+
+        double t_before = engine->current_time;
         if (tdvp_step(engine, &result) != 0) {
             rc = -1;
             break;
@@ -1148,8 +1337,11 @@ int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
         } else {
             tdvp_history_add(history, &result);
         }
+
+        if (engine->current_time <= t_before) { rc = -1; break; }
     }
 
+    engine->config.dt = dt_full;   // restore the configured step
     tdvp_result_clear(&result);
     return rc;
 }

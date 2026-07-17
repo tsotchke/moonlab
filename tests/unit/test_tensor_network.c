@@ -622,15 +622,15 @@ static int test_entanglement_entropy_product_state(void) {
 static int test_entanglement_entropy_bell_state(void) {
     tn_state_config_t config = tn_state_config_create(64, 1e-12);
 
-    // Bell state has maximal entanglement: S = 1 bit (log2(2) = 1)
+    // Bell state has maximal entanglement: S = ln(2) nats
     // For 2 qubits, bond 0 is between qubit 0 and 1
     tn_mps_state_t *mps = tn_mps_create_zero(2, &config);
     tn_apply_h(mps, 0);
     tn_apply_cnot(mps, 0, 1);
 
     double entropy = tn_mps_entanglement_entropy(mps, 0);
-    double expected = 1.0;  // Entropy in bits: log2(2) = 1
-    TEST_ASSERT_NEAR(entropy, expected, 0.1, "Bell state entropy wrong");
+    double expected = log(2.0);  // Entropy in nats: ln(2)
+    TEST_ASSERT_NEAR(entropy, expected, 0.05, "Bell state entropy wrong");
 
     tn_mps_free(mps);
     return 1;
