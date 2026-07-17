@@ -730,6 +730,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/qaoa.c
     src/algorithms/qpe.c
     src/algorithms/vqe.c
+    src/algorithms/h2_sto3g.c
     # Tensor-network stack — MPS / MPO / DMRG / TDVP / skyrmion braiding.
     # Previously present in the tree but not compiled into libquantumsim,
     # which meant every public TN symbol was undefined to consumers and

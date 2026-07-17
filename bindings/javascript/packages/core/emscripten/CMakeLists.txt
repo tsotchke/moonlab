@@ -23,6 +23,8 @@ set(ALGORITHM_SOURCES
     ${QSIM_ROOT}/src/algorithms/grover.c
     ${QSIM_ROOT}/src/algorithms/grover_optimizer.c
     ${QSIM_ROOT}/src/algorithms/vqe.c
+    # First-principles STO-3G H2 coefficients (referenced from vqe.c).
+    ${QSIM_ROOT}/src/algorithms/h2_sto3g.c
     ${QSIM_ROOT}/src/algorithms/qaoa.c
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
     # Native reverse-mode autograd (referenced unconditionally from vqe.c).
