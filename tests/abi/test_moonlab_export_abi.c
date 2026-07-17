@@ -17,6 +17,7 @@
 #include <string.h>
 #include <complex.h>
 #include <math.h>
+#include <limits.h>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -840,6 +841,231 @@ int main(void) {
                 if (ansatz) ansatz_free(ansatz);
                 if (H) ham_free(H);
             }
+        }
+    }
+
+    /* CA-MPS full gate + observable surface: resolve and exercise every
+     * stable CA-MPS entry a binding depends on (the Bell probe above only
+     * touches create / h / cnot / expect_pauli / free).  Physics is
+     * covered elsewhere; here we pin that every symbol is exported with
+     * the documented signature and returns success on a tiny state. */
+    ABI_STEP("ca-mps full surface");
+    {
+        typedef void*    (*mk_fn)(uint32_t, uint32_t);
+        typedef void*    (*clone_fn)(const void*);
+        typedef void     (*free1_fn)(void*);
+        typedef uint32_t (*u32_fn)(const void*);
+        typedef int      (*q_fn)(void*, uint32_t);
+        typedef int      (*qq_fn)(void*, uint32_t, uint32_t);
+        typedef int      (*qt_fn)(void*, uint32_t, double);
+        typedef int      (*cct_fn)(void*, uint32_t, uint32_t, double);
+        typedef int      (*u3_fn)(void*, uint32_t, double, double, double);
+        typedef int      (*ccc_fn)(void*, uint32_t, uint32_t, uint32_t);
+        typedef int      (*pr_fn)(void*, const uint8_t*, double);
+        typedef int      (*n_fn)(void*);
+        typedef double   (*d_fn)(const void*);
+        typedef int      (*esum_fn)(const void*, const uint8_t*,
+                                    const double _Complex*, uint32_t,
+                                    double _Complex*);
+        typedef int      (*pz_fn)(const void*, uint32_t, double*);
+
+        mk_fn    mk       = (mk_fn)   dlsym(h, "moonlab_ca_mps_create");
+        free1_fn fr       = (free1_fn)dlsym(h, "moonlab_ca_mps_free");
+        clone_fn cl       = (clone_fn)dlsym(h, "moonlab_ca_mps_clone");
+        u32_fn   nq       = (u32_fn)  dlsym(h, "moonlab_ca_mps_num_qubits");
+        q_fn     g_s      = (q_fn)    dlsym(h, "moonlab_ca_mps_s");
+        q_fn     g_sdag   = (q_fn)    dlsym(h, "moonlab_ca_mps_sdag");
+        q_fn     g_x      = (q_fn)    dlsym(h, "moonlab_ca_mps_x");
+        q_fn     g_y      = (q_fn)    dlsym(h, "moonlab_ca_mps_y");
+        q_fn     g_z      = (q_fn)    dlsym(h, "moonlab_ca_mps_z");
+        qq_fn    g_cz     = (qq_fn)   dlsym(h, "moonlab_ca_mps_cz");
+        qq_fn    g_swap   = (qq_fn)   dlsym(h, "moonlab_ca_mps_swap");
+        qt_fn    g_rx     = (qt_fn)   dlsym(h, "moonlab_ca_mps_rx");
+        qt_fn    g_ry     = (qt_fn)   dlsym(h, "moonlab_ca_mps_ry");
+        qt_fn    g_rz     = (qt_fn)   dlsym(h, "moonlab_ca_mps_rz");
+        q_fn     g_t      = (q_fn)    dlsym(h, "moonlab_ca_mps_t_gate");
+        q_fn     g_tdag   = (q_fn)    dlsym(h, "moonlab_ca_mps_t_dagger");
+        qt_fn    g_phase  = (qt_fn)   dlsym(h, "moonlab_ca_mps_phase");
+        cct_fn   g_crx    = (cct_fn)  dlsym(h, "moonlab_ca_mps_crx");
+        cct_fn   g_cry    = (cct_fn)  dlsym(h, "moonlab_ca_mps_cry");
+        cct_fn   g_crz    = (cct_fn)  dlsym(h, "moonlab_ca_mps_crz");
+        u3_fn    g_u3     = (u3_fn)   dlsym(h, "moonlab_ca_mps_u3");
+        ccc_fn   g_toff   = (ccc_fn)  dlsym(h, "moonlab_ca_mps_toffoli");
+        ccc_fn   g_fred   = (ccc_fn)  dlsym(h, "moonlab_ca_mps_fredkin");
+        pr_fn    g_prot   = (pr_fn)   dlsym(h, "moonlab_ca_mps_pauli_rotation");
+        pr_fn    g_iprot  = (pr_fn)   dlsym(h, "moonlab_ca_mps_imag_pauli_rotation");
+        n_fn     g_norm_i = (n_fn)    dlsym(h, "moonlab_ca_mps_normalize");
+        d_fn     g_norm   = (d_fn)    dlsym(h, "moonlab_ca_mps_norm");
+        esum_fn  g_esum   = (esum_fn) dlsym(h, "moonlab_ca_mps_expect_pauli_sum");
+        pz_fn    g_pz     = (pz_fn)   dlsym(h, "moonlab_ca_mps_prob_z");
+
+        if (!mk || !fr || !cl || !nq || !g_s || !g_sdag || !g_x || !g_y ||
+            !g_z || !g_cz || !g_swap || !g_rx || !g_ry || !g_rz || !g_t ||
+            !g_tdag || !g_phase || !g_crx || !g_cry || !g_crz || !g_u3 ||
+            !g_toff || !g_fred || !g_prot || !g_iprot || !g_norm_i ||
+            !g_norm || !g_esum || !g_pz) {
+            fprintf(stderr, "dlsym for one or more CA-MPS surface symbols failed\n");
+            failures++;
+        } else {
+            void* s = mk(3, 4);
+            void* s2 = s ? cl(s) : NULL;
+            if (!s || !s2) {
+                fprintf(stderr, "CA-MPS create/clone returned NULL\n");
+                failures++;
+            } else {
+                int rc = 0;
+                if (nq(s) != 3) {
+                    fprintf(stderr, "ca_mps_num_qubits != 3\n"); failures++;
+                }
+                rc |= g_s(s, 0);  rc |= g_sdag(s, 0);
+                rc |= g_x(s, 1);  rc |= g_y(s, 1);  rc |= g_z(s, 2);
+                rc |= g_cz(s, 0, 1);  rc |= g_swap(s, 1, 2);
+                rc |= g_rx(s, 0, 0.3); rc |= g_ry(s, 1, 0.3); rc |= g_rz(s, 2, 0.3);
+                rc |= g_t(s, 0); rc |= g_tdag(s, 1); rc |= g_phase(s, 2, 0.2);
+                rc |= g_crx(s, 0, 1, 0.4); rc |= g_cry(s, 1, 2, 0.4);
+                rc |= g_crz(s, 0, 2, 0.4);
+                rc |= g_u3(s, 0, 0.3, 0.2, 0.1);
+                rc |= g_toff(s, 0, 1, 2);
+                rc |= g_fred(s, 0, 1, 2);
+                uint8_t ps[3] = {3, 0, 3};       /* Z_0 Z_2 */
+                rc |= g_prot(s, ps, 0.15);
+                rc |= g_iprot(s, ps, 0.05);
+                rc |= g_norm_i(s);
+                if (rc != 0) {
+                    fprintf(stderr, "a CA-MPS gate returned non-zero (rc=%d)\n", rc);
+                    failures++;
+                }
+                double nrm = g_norm(s);
+                if (!(nrm > 0.0) || nrm != nrm) {
+                    fprintf(stderr, "ca_mps_norm not positive-finite: %g\n", nrm);
+                    failures++;
+                }
+                /* expect_pauli_sum of H = 1.0 * Z_0 on the state: value must
+                 * be real, finite, and in [-1, 1]. */
+                uint8_t hp[3] = {3, 0, 0};
+                double _Complex coeff = 1.0;
+                double _Complex ev = 0.0;
+                if (g_esum(s, hp, &coeff, 1, &ev) != 0) {
+                    fprintf(stderr, "ca_mps_expect_pauli_sum rc != 0\n"); failures++;
+                } else if (creal(ev) < -1.0001 || creal(ev) > 1.0001) {
+                    fprintf(stderr, "ca_mps_expect_pauli_sum <Z_0> out of range: %g\n",
+                            creal(ev));
+                    failures++;
+                }
+                double pz = -1.0;
+                if (g_pz(s, 0, &pz) != 0 || pz < -1e-9 || pz > 1.0 + 1e-9) {
+                    fprintf(stderr, "ca_mps_prob_z out of [0,1]: %g\n", pz);
+                    failures++;
+                }
+                fr(s2);
+                fr(s);
+                if (!failures) fprintf(stdout, "moonlab_ca_mps_* full surface OK\n");
+            }
+        }
+    }
+
+    /* ML-KEM (FIPS 203) KEMs: resolve all nine QRNG-backed entry points
+     * and run a keygen -> encaps -> decaps round trip per parameter set,
+     * asserting the decapsulated shared secret matches. */
+    ABI_STEP("ml-kem kems");
+    {
+        typedef int  (*kg_fn)(uint8_t*, uint8_t*);
+        typedef int  (*enc_fn)(uint8_t*, uint8_t*, const uint8_t*);
+        typedef void (*dec_fn)(uint8_t*, const uint8_t*, const uint8_t*);
+        struct { const char* kg; const char* en; const char* de;
+                 size_t ek, dk, ct; } kem[] = {
+            {"moonlab_mlkem512_keygen_qrng",  "moonlab_mlkem512_encaps_qrng",
+             "moonlab_mlkem512_decaps",  800, 1632,  768},
+            {"moonlab_mlkem768_keygen_qrng",  "moonlab_mlkem768_encaps_qrng",
+             "moonlab_mlkem768_decaps", 1184, 2400, 1088},
+            {"moonlab_mlkem1024_keygen_qrng", "moonlab_mlkem1024_encaps_qrng",
+             "moonlab_mlkem1024_decaps", 1568, 3168, 1568},
+        };
+        for (size_t i = 0; i < sizeof(kem) / sizeof(kem[0]); ++i) {
+            kg_fn  kg = (kg_fn) dlsym(h, kem[i].kg);
+            enc_fn en = (enc_fn)dlsym(h, kem[i].en);
+            dec_fn de = (dec_fn)dlsym(h, kem[i].de);
+            if (!kg || !en || !de) {
+                fprintf(stderr, "dlsym failed for %s / %s / %s\n",
+                        kem[i].kg, kem[i].en, kem[i].de);
+                failures++;
+                continue;
+            }
+            uint8_t* ek = (uint8_t*)malloc(kem[i].ek);
+            uint8_t* dk = (uint8_t*)malloc(kem[i].dk);
+            uint8_t* ct = (uint8_t*)malloc(kem[i].ct);
+            uint8_t k1[32], k2[32];
+            if (!ek || !dk || !ct) { failures++; free(ek); free(dk); free(ct); continue; }
+            if (kg(ek, dk) != 0) {
+                fprintf(stderr, "%s failed\n", kem[i].kg); failures++;
+            } else if (en(ct, k1, ek) != 0) {
+                fprintf(stderr, "%s failed\n", kem[i].en); failures++;
+            } else {
+                de(k2, ct, dk);
+                if (memcmp(k1, k2, 32) != 0) {
+                    fprintf(stderr, "%s round trip: shared secret mismatch\n",
+                            kem[i].kg);
+                    failures++;
+                } else {
+                    fprintf(stdout, "%s round trip OK\n", kem[i].kg);
+                }
+            }
+            free(ek); free(dk); free(ct);
+        }
+    }
+
+    /* Topology invariant one-shots (ABI 0.6.0): resolve all seven and
+     * pin the invariants that are settled by the existing qwz_chern test,
+     * plus resolve + non-error smoke the multi-band models. */
+    ABI_STEP("topology one-shots");
+    {
+        typedef int (*ssh_fn)(double, double, size_t);
+        typedef int (*kit_fn)(double, double, double);
+        typedef int (*chn_fn)(double, size_t);
+        typedef int (*km_fn)(double, double, double, double, size_t);
+        typedef int (*bhz_fn)(double, double, double, size_t);
+        typedef int (*hof_fn)(double, size_t, size_t, size_t, size_t);
+
+        ssh_fn ssh = (ssh_fn)dlsym(h, "moonlab_ssh_winding");
+        kit_fn kit = (kit_fn)dlsym(h, "moonlab_kitaev_chain_z2");
+        chn_fn cpr = (chn_fn)dlsym(h, "moonlab_chern_qwz_proj");
+        chn_fn cpt = (chn_fn)dlsym(h, "moonlab_chern_qwz_pt");
+        km_fn  km  = (km_fn) dlsym(h, "moonlab_kane_mele_z2");
+        bhz_fn bhz = (bhz_fn)dlsym(h, "moonlab_bhz_z2");
+        hof_fn hof = (hof_fn)dlsym(h, "moonlab_hofstadter_chern");
+
+        if (!ssh || !kit || !cpr || !cpt || !km || !bhz || !hof) {
+            fprintf(stderr, "dlsym for one or more topology one-shots failed\n");
+            failures++;
+        } else {
+            int wt = ssh(0.5, 1.0, 16);   /* |t2| > |t1|: topological */
+            int wv = ssh(1.0, 0.5, 16);   /* |t1| > |t2|: trivial     */
+            if (wt != 1 || wv != 0) {
+                fprintf(stderr, "moonlab_ssh_winding: got (%d, %d), expected (1, 0)\n",
+                        wt, wv);
+                failures++;
+            }
+            int kz = kit(1.0, 0.0, 1.0);  /* |mu| < 2|t|: topological */
+            if (kz != 1) {
+                fprintf(stderr, "moonlab_kitaev_chain_z2 = %d, expected 1\n", kz);
+                failures++;
+            }
+            int cproj = cpr(1.0, 16);
+            int cpar  = cpt(1.0, 16);
+            if (cproj != -1 || cpar != -1) {
+                fprintf(stderr, "moonlab_chern_qwz proj/pt = (%d, %d), expected (-1, -1)\n",
+                        cproj, cpar);
+                failures++;
+            }
+            int kmv = km(1.0, 0.06, 0.0, 0.0, 8);
+            int bz  = bhz(1.0, 1.0, 1.0, 8);
+            int hc  = hof(1.0, 1, 3, 1, 12);
+            if (kmv == INT_MIN || bz == INT_MIN || hc == INT_MIN) {
+                fprintf(stderr, "multi-band one-shot errored: km=%d bhz=%d hof=%d\n",
+                        kmv, bz, hc);
+                failures++;
+            }
+            if (!failures) fprintf(stdout, "topology one-shots OK\n");
         }
     }
 

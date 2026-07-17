@@ -171,7 +171,7 @@ MOONLAB_API qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_
  * @param entropy Secure entropy source
  * @return Sampled random number
  */
-uint64_t grover_random_sample(quantum_state_t *state, size_t num_qubits, quantum_entropy_ctx_t *entropy);
+MOONLAB_API uint64_t grover_random_sample(quantum_state_t *state, size_t num_qubits, quantum_entropy_ctx_t *entropy);
 
 /**
  * @brief Generate multiple random samples using Grover
@@ -183,7 +183,7 @@ uint64_t grover_random_sample(quantum_state_t *state, size_t num_qubits, quantum
  * @param entropy Secure entropy source
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_random_samples(
+MOONLAB_API qs_error_t grover_random_samples(
     quantum_state_t *state,
     size_t num_qubits,
     uint64_t *samples,
@@ -215,13 +215,13 @@ typedef struct {
     size_t total_oracle_calls;   // Total oracle queries
 } grover_analysis_t;
 
-grover_analysis_t grover_analyze_performance(size_t num_qubits, size_t num_trials, quantum_entropy_ctx_t *entropy);
+MOONLAB_API grover_analysis_t grover_analyze_performance(size_t num_qubits, size_t num_trials, quantum_entropy_ctx_t *entropy);
 
 /**
  * @brief Print Grover result
  * @param result Grover result
  */
-void grover_print_result(const grover_result_t *result, const grover_config_t *config);
+MOONLAB_API void grover_print_result(const grover_result_t *result, const grover_config_t *config);
 
 // ============================================================================
 // ADVANCED GROVER OPERATIONS (V3.0 ENHANCEMENTS)
@@ -238,7 +238,7 @@ void grover_print_result(const grover_result_t *result, const grover_config_t *c
  * @param entropy Secure entropy source
  * @return Grover result with adaptive optimization stats
  */
-grover_result_t grover_adaptive_search(
+MOONLAB_API grover_result_t grover_adaptive_search(
     quantum_state_t *state,
     uint64_t marked_state,
     quantum_entropy_ctx_t *entropy
@@ -256,7 +256,7 @@ grover_result_t grover_adaptive_search(
  * @param num_marked Number of marked states
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_oracle_multi_phase(
+MOONLAB_API qs_error_t grover_oracle_multi_phase(
     quantum_state_t *state,
     const uint64_t *marked_states,
     const double *phases,
@@ -274,7 +274,7 @@ qs_error_t grover_oracle_multi_phase(
  * @param num_iterations Number of amplification iterations
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_amplitude_amplification(
+MOONLAB_API qs_error_t grover_amplitude_amplification(
     quantum_state_t *state,
     const double *target_amplitudes,
     size_t num_iterations
@@ -293,7 +293,7 @@ qs_error_t grover_amplitude_amplification(
  * @param entropy Secure entropy source
  * @return QS_SUCCESS or error
  */
-qs_error_t grover_importance_sampling(
+MOONLAB_API qs_error_t grover_importance_sampling(
     quantum_state_t *state,
     double (*importance_function)(uint64_t),
     size_t num_samples,
@@ -313,7 +313,7 @@ qs_error_t grover_importance_sampling(
  * @param entropy Secure entropy source
  * @return Next MCMC state
  */
-uint64_t grover_mcmc_step(
+MOONLAB_API uint64_t grover_mcmc_step(
     quantum_state_t *state,
     double (*target_distribution)(uint64_t),
     uint64_t current_state,

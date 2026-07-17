@@ -81,6 +81,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -116,7 +118,7 @@ typedef struct {
  * @param out   result sink; must be non-NULL
  * @return 0 on success, non-zero on invalid arguments.
  */
-int shor_ecdlp_estimate(const shor_ecdlp_params_t* p,
+MOONLAB_API int shor_ecdlp_estimate(const shor_ecdlp_params_t* p,
                         shor_ecdlp_resources_t* out);
 
 /* --- FTQC overhead ------------------------------------------------------ */
@@ -147,7 +149,7 @@ typedef struct {
  * (@f$\approx 15d^{2}@f$ physical qubits per factory, one factory per
  * 100 Toffolis is a loose default).
  */
-int shor_ecdlp_ftqc_estimate(const shor_ecdlp_resources_t* logical,
+MOONLAB_API int shor_ecdlp_ftqc_estimate(const shor_ecdlp_resources_t* logical,
                              const shor_ecdlp_ftqc_params_t* ftqc,
                              shor_ecdlp_ftqc_resources_t* out);
 
@@ -155,13 +157,13 @@ int shor_ecdlp_ftqc_estimate(const shor_ecdlp_resources_t* logical,
 
 /** Populate @p p with the parameters for secp256k1 and the
  *  GDB qubit-minimal encoding. */
-void shor_ecdlp_params_secp256k1(shor_ecdlp_params_t* p);
+MOONLAB_API void shor_ecdlp_params_secp256k1(shor_ecdlp_params_t* p);
 
 /** Populate @p p with the parameters for NIST P-256. */
-void shor_ecdlp_params_p256(shor_ecdlp_params_t* p);
+MOONLAB_API void shor_ecdlp_params_p256(shor_ecdlp_params_t* p);
 
 /** Populate @p p with the parameters for Curve25519 / Ed25519. */
-void shor_ecdlp_params_curve25519(shor_ecdlp_params_t* p);
+MOONLAB_API void shor_ecdlp_params_curve25519(shor_ecdlp_params_t* p);
 
 #ifdef __cplusplus
 }

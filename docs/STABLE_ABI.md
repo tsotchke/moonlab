@@ -1,7 +1,7 @@
 # Stable ABI contract -- v1.x
 
 **Current package:** 1.1.0
-**Current ABI:** 0.5.0
+**Current ABI:** 0.6.0
 
 ## Scope
 
@@ -51,11 +51,36 @@ Neither installed namespace may move incompatibly inside the 1.x line.
 ## Symbol catalog by module
 
 The table below is the v1.0.3 catalog snapshot. Additive symbols landed after
-that snapshot, including `moonlab_vqe_gradient` in ABI 0.4.0 and
-`moonlab_qrng_get_status` plus the conditioned QRNG contract in ABI 0.5.0. The
-authoritative current list is every `MOONLAB_API` declaration in a public
-header; `tests/abi/test_moonlab_export_abi.c` loads and functionally smokes the
+that snapshot, including `moonlab_vqe_gradient` in ABI 0.4.0,
+`moonlab_qrng_get_status` plus the conditioned QRNG contract in ABI 0.5.0, and
+the ABI 0.6.0 additions below. The authoritative current list is every
+`MOONLAB_API` declaration in a public header;
+`tests/abi/test_moonlab_export_abi.c` loads and functionally smokes the
 committed export surface on Unix and Windows.
+
+### ABI 0.5.0 and 0.6.0 additions
+
+ABI 0.5.0 added `moonlab_qrng_get_status` and the `moonlab_qrng_status_t`
+conditioned-QRNG status contract.
+
+ABI 0.6.0 (this release):
+
+- Promoted `moonlab_ca_mps_conjugate_pauli` to the stable surface, declared in
+  `moonlab_export.h` with a plain `int` return (independent of the internal
+  `ca_mps_error_t` enum).
+- Declared the seven QGT topology one-shots already implemented in
+  `moonlab_export_lean.c`: `moonlab_ssh_winding`, `moonlab_kitaev_chain_z2`,
+  `moonlab_chern_qwz_proj`, `moonlab_chern_qwz_pt`, `moonlab_kane_mele_z2`,
+  `moonlab_bhz_z2`, `moonlab_hofstadter_chern`.
+- Introduced the `moonlab_complex_double` header-boundary carrier so
+  `moonlab_export.h` parses under MSVC (which lacks C99 `double _Complex`)
+  while keeping the C99 ABI byte-for-byte identical; the CA-MPS observable
+  signatures use it through pointers only.
+- Promoted the second tier of binding-consumed symbols to `MOONLAB_API` at
+  their declaration sites (the `quantum_state_*`, `gate_*`, `measurement_*`,
+  `moonlab_diff_*`, QAOA, Grover, surface-code, and distributed families), so
+  the full binding + Eshkol-RFC surface survives a `QSIM_HIDDEN_VISIBILITY=ON`
+  build.
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|

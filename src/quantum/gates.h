@@ -121,7 +121,7 @@ MOONLAB_API qs_error_t gate_rz(quantum_state_t *state, int qubit, double theta);
  * @param phi Phase angle
  * @param lambda Global phase
  */
-qs_error_t gate_u3(quantum_state_t *state, int qubit, double theta, double phi, double lambda);
+MOONLAB_API qs_error_t gate_u3(quantum_state_t *state, int qubit, double theta, double phi, double lambda);
 
 // ============================================================================
 // TWO-QUBIT GATES
@@ -150,7 +150,7 @@ MOONLAB_API qs_error_t gate_cz(quantum_state_t *state, int control, int target);
  * @param control Control qubit index
  * @param target Target qubit index
  */
-qs_error_t gate_cy(quantum_state_t *state, int control, int target);
+MOONLAB_API qs_error_t gate_cy(quantum_state_t *state, int control, int target);
 
 /**
  * @brief SWAP gate
@@ -175,7 +175,7 @@ MOONLAB_API qs_error_t gate_cphase(quantum_state_t *state, int control, int targ
  * @param target Target qubit index
  * @param theta Rotation angle
  */
-qs_error_t gate_crx(quantum_state_t *state, int control, int target, double theta);
+MOONLAB_API qs_error_t gate_crx(quantum_state_t *state, int control, int target, double theta);
 
 /**
  * @brief Controlled-Rotation Y gate
@@ -183,7 +183,7 @@ qs_error_t gate_crx(quantum_state_t *state, int control, int target, double thet
  * @param target Target qubit index
  * @param theta Rotation angle
  */
-qs_error_t gate_cry(quantum_state_t *state, int control, int target, double theta);
+MOONLAB_API qs_error_t gate_cry(quantum_state_t *state, int control, int target, double theta);
 
 /**
  * @brief Controlled-Rotation Z gate
@@ -191,7 +191,7 @@ qs_error_t gate_cry(quantum_state_t *state, int control, int target, double thet
  * @param target Target qubit index
  * @param theta Rotation angle
  */
-qs_error_t gate_crz(quantum_state_t *state, int control, int target, double theta);
+MOONLAB_API qs_error_t gate_crz(quantum_state_t *state, int control, int target, double theta);
 
 // ============================================================================
 // THREE-QUBIT GATES
@@ -214,7 +214,7 @@ MOONLAB_API qs_error_t gate_toffoli(quantum_state_t *state, int control1, int co
  * @param target1 First target qubit
  * @param target2 Second target qubit
  */
-qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int target2);
+MOONLAB_API qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int target2);
 
 // ============================================================================
 // MULTI-QUBIT GATES
@@ -227,7 +227,7 @@ qs_error_t gate_fredkin(quantum_state_t *state, int control, int target1, int ta
  * @param num_controls Number of control qubits
  * @param target Target qubit index
  */
-qs_error_t gate_mcx(quantum_state_t *state, const int *controls, size_t num_controls, int target);
+MOONLAB_API qs_error_t gate_mcx(quantum_state_t *state, const int *controls, size_t num_controls, int target);
 
 /**
  * @brief Multi-controlled Z gate
@@ -236,7 +236,7 @@ qs_error_t gate_mcx(quantum_state_t *state, const int *controls, size_t num_cont
  * @param num_controls Number of control qubits
  * @param target Target qubit index
  */
-qs_error_t gate_mcz(quantum_state_t *state, const int *controls, size_t num_controls, int target);
+MOONLAB_API qs_error_t gate_mcz(quantum_state_t *state, const int *controls, size_t num_controls, int target);
 
 /**
  * @brief Quantum Fourier Transform
@@ -245,14 +245,14 @@ qs_error_t gate_mcz(quantum_state_t *state, const int *controls, size_t num_cont
  * @param qubits Array of qubit indices to transform
  * @param num_qubits Number of qubits
  */
-qs_error_t gate_qft(quantum_state_t *state, const int *qubits, size_t num_qubits);
+MOONLAB_API qs_error_t gate_qft(quantum_state_t *state, const int *qubits, size_t num_qubits);
 
 /**
  * @brief Inverse Quantum Fourier Transform
  * @param qubits Array of qubit indices
  * @param num_qubits Number of qubits
  */
-qs_error_t gate_iqft(quantum_state_t *state, const int *qubits, size_t num_qubits);
+MOONLAB_API qs_error_t gate_iqft(quantum_state_t *state, const int *qubits, size_t num_qubits);
 
 // ============================================================================
 // MEASUREMENT
@@ -290,7 +290,7 @@ typedef struct {
  * @param entropy Secure entropy source for measurement sampling
  * @return Measurement result
  */
-measurement_result_t quantum_measure(
+MOONLAB_API measurement_result_t quantum_measure(
     quantum_state_t *state,
     int qubit,
     measurement_basis_t basis,
@@ -306,7 +306,7 @@ measurement_result_t quantum_measure(
  * @param entropy Secure entropy source
  * @return QS_SUCCESS or error
  */
-qs_error_t quantum_measure_multi(
+MOONLAB_API qs_error_t quantum_measure_multi(
     quantum_state_t *state,
     const int *qubits,
     size_t num_qubits,
@@ -322,7 +322,7 @@ qs_error_t quantum_measure_multi(
  * @param outcome Outcome to check (0 or 1)
  * @return Probability of outcome
  */
-double quantum_peek_probability(
+MOONLAB_API double quantum_peek_probability(
     const quantum_state_t *state,
     int qubit,
     int outcome
@@ -338,7 +338,7 @@ double quantum_peek_probability(
  * @param entropy Secure entropy source for sampling
  * @return Measured basis state index (contains all qubit outcomes)
  */
-uint64_t quantum_measure_all_fast(
+MOONLAB_API uint64_t quantum_measure_all_fast(
     quantum_state_t *state,
     quantum_entropy_ctx_t *entropy
 );
@@ -353,7 +353,7 @@ uint64_t quantum_measure_all_fast(
  * @param qubit Target qubit
  * @param matrix 2x2 unitary matrix
  */
-qs_error_t apply_single_qubit_gate(
+MOONLAB_API qs_error_t apply_single_qubit_gate(
     quantum_state_t *state,
     int qubit,
     const complex_t matrix[2][2]
@@ -366,7 +366,7 @@ qs_error_t apply_single_qubit_gate(
  * @param qubit2 Second qubit
  * @param matrix 4x4 unitary matrix
  */
-qs_error_t apply_two_qubit_gate(
+MOONLAB_API qs_error_t apply_two_qubit_gate(
     quantum_state_t *state,
     int qubit1,
     int qubit2,
@@ -378,7 +378,7 @@ qs_error_t apply_two_qubit_gate(
  * @param state Quantum state (after gate application)
  * @return 1 if normalized, 0 otherwise
  */
-int verify_gate_normalization(const quantum_state_t *state);
+MOONLAB_API int verify_gate_normalization(const quantum_state_t *state);
 
 #ifdef __cplusplus
 }

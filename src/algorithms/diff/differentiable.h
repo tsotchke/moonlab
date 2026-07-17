@@ -58,6 +58,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "../../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -67,33 +69,41 @@ typedef struct moonlab_diff_circuit moonlab_diff_circuit_t;
 
 /**
  * @brief Build an empty circuit on @p num_qubits qubits.
+ *
+ * @param num_qubits Number of qubits, 1..63.  The tape uses a 64-bit
+ *        basis-index representation internally, so the adjoint autograd
+ *        engine is capped at 63 qubits; @p num_qubits == 0 or > 63
+ *        returns NULL.  (The dense state-vector backend caps lower still
+ *        -- see MOONLAB_MAX_QUBITS in quantum/state.h -- so this bound is
+ *        never the binding constraint in practice.)
+ * @return New circuit handle, or NULL on a bad qubit count / OOM.
  */
-moonlab_diff_circuit_t* moonlab_diff_circuit_create(uint32_t num_qubits);
+MOONLAB_API moonlab_diff_circuit_t* moonlab_diff_circuit_create(uint32_t num_qubits);
 
 /**
  * @brief Release the circuit record.  NULL-safe.
  */
-void moonlab_diff_circuit_free(moonlab_diff_circuit_t *c);
+MOONLAB_API void moonlab_diff_circuit_free(moonlab_diff_circuit_t *c);
 
 /**
  * @brief Number of qubits the circuit acts on.
  */
-uint32_t moonlab_diff_num_qubits(const moonlab_diff_circuit_t *c);
+MOONLAB_API uint32_t moonlab_diff_num_qubits(const moonlab_diff_circuit_t *c);
 
 /**
  * @brief Number of parametric gates currently recorded.  Size of
  *        the gradient vector returned by @c moonlab_diff_backward.
  */
-size_t moonlab_diff_num_parameters(const moonlab_diff_circuit_t *c);
+MOONLAB_API size_t moonlab_diff_num_parameters(const moonlab_diff_circuit_t *c);
 
 /* -------- Non-parametric gates ------------------------------- */
 
-int moonlab_diff_h (moonlab_diff_circuit_t *c, int qubit);
-int moonlab_diff_x (moonlab_diff_circuit_t *c, int qubit);
-int moonlab_diff_y (moonlab_diff_circuit_t *c, int qubit);
-int moonlab_diff_z (moonlab_diff_circuit_t *c, int qubit);
-int moonlab_diff_cnot(moonlab_diff_circuit_t *c, int ctrl, int target);
-int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
+MOONLAB_API int moonlab_diff_h (moonlab_diff_circuit_t *c, int qubit);
+MOONLAB_API int moonlab_diff_x (moonlab_diff_circuit_t *c, int qubit);
+MOONLAB_API int moonlab_diff_y (moonlab_diff_circuit_t *c, int qubit);
+MOONLAB_API int moonlab_diff_z (moonlab_diff_circuit_t *c, int qubit);
+MOONLAB_API int moonlab_diff_cnot(moonlab_diff_circuit_t *c, int ctrl, int target);
+MOONLAB_API int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
 
 /* -------- Parametric gates ----------------------------------- */
 
@@ -104,9 +114,9 @@ int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
  *
  * Returns 0 on success.
  */
-int moonlab_diff_rx(moonlab_diff_circuit_t *c, int qubit, double theta);
-int moonlab_diff_ry(moonlab_diff_circuit_t *c, int qubit, double theta);
-int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double theta);
+MOONLAB_API int moonlab_diff_rx(moonlab_diff_circuit_t *c, int qubit, double theta);
+MOONLAB_API int moonlab_diff_ry(moonlab_diff_circuit_t *c, int qubit, double theta);
+MOONLAB_API int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double theta);
 
 /**
  * @brief Controlled single-qubit rotations.  The gradient generator
@@ -117,16 +127,16 @@ int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double theta);
  *        |1\rangle\langle 1|_{ctrl} \otimes G_{tgt})@f$.
  *        Hardware-efficient ansatze use these.
  */
-int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
-int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
-int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+MOONLAB_API int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+MOONLAB_API int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+MOONLAB_API int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
 
 /**
  * @brief Update the @p k-th parametric angle in place (useful when
  *        an optimiser updates parameters across iterations without
  *        rebuilding the circuit).
  */
-int moonlab_diff_set_theta(moonlab_diff_circuit_t *c,
+MOONLAB_API int moonlab_diff_set_theta(moonlab_diff_circuit_t *c,
                             size_t k, double theta);
 
 /* -------- Forward + expectation ------------------------------ */
@@ -137,19 +147,19 @@ int moonlab_diff_set_theta(moonlab_diff_circuit_t *c,
  *        num_qubits via @c quantum_state_init; this function resets
  *        it to @c |0..0> before applying gates.
  */
-int moonlab_diff_forward(const moonlab_diff_circuit_t *c,
+MOONLAB_API int moonlab_diff_forward(const moonlab_diff_circuit_t *c,
                           quantum_state_t *state);
 
 /**
  * @brief Compute @f$\langle \psi | Z_q | \psi \rangle@f$ for a
  *        single qubit @p q.  No tape entry; pure read-only.
  */
-double moonlab_diff_expect_z(const quantum_state_t *state, int qubit);
+MOONLAB_API double moonlab_diff_expect_z(const quantum_state_t *state, int qubit);
 
 /**
  * @brief Compute @f$\langle \psi | X_q | \psi \rangle@f$.
  */
-double moonlab_diff_expect_x(const quantum_state_t *state, int qubit);
+MOONLAB_API double moonlab_diff_expect_x(const quantum_state_t *state, int qubit);
 
 /* -------- Adjoint gradient ----------------------------------- */
 
@@ -177,7 +187,7 @@ typedef enum {
  * @return 0 on success, non-zero on invalid input or allocation
  *         failure.
  */
-int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
+MOONLAB_API int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
                            const quantum_state_t *forward_state,
                            moonlab_diff_observable_t obs,
                            int obs_qubit,
@@ -213,7 +223,7 @@ typedef struct {
  * a typical VQE Hamiltonian with O(n^4) terms that's O(n^4) sweeps,
  * still independent of the number of parameters.
  */
-int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
+MOONLAB_API int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
                                      const quantum_state_t *forward_state,
                                      const moonlab_diff_pauli_term_t *terms,
                                      size_t num_terms,
@@ -222,8 +232,19 @@ int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
 /**
  * @brief Compute @f$\sum_k c_k \langle \psi | P_k | \psi \rangle@f$
  *        without gradients (convenience for VQE cost evaluation).
+ *
+ * @warning This entry returns @c 0.0 both on argument error (NULL
+ *          @p state / @p terms, @p num_terms == 0, or an internal
+ *          clone / allocation failure) AND on a genuine zero
+ *          expectation, so a bare @c 0.0 is ambiguous.  Callers that
+ *          must distinguish the two should validate their operands
+ *          up front (non-NULL @p state and @p terms, @p num_terms > 0)
+ *          so the only remaining @c 0.0 is a true expectation; the
+ *          gradient entry ::moonlab_diff_backward_pauli_sum takes the
+ *          same operands and returns an @c int status, and can be used
+ *          as a status-returning cross-check on the same inputs.
  */
-double moonlab_diff_expect_pauli_sum(const quantum_state_t *state,
+MOONLAB_API double moonlab_diff_expect_pauli_sum(const quantum_state_t *state,
                                       const moonlab_diff_pauli_term_t *terms,
                                       size_t num_terms);
 
