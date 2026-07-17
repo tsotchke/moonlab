@@ -53,7 +53,7 @@ typedef struct {
     double probability;         /**< Probability of this outcome */
     int measured_qubit;        /**< Which qubit was measured (-1 for all) */
     int collapsed;             /**< Whether state was collapsed */
-} measurement_result_t;
+} dist_measurement_result_t;
 
 /**
  * @brief Sampling configuration
@@ -90,7 +90,7 @@ typedef struct {
  * @return COLLECTIVE_SUCCESS or error code
  */
 MOONLAB_API collective_error_t collective_measure_all(partitioned_state_t* state,
-                                          measurement_result_t* result,
+                                          dist_measurement_result_t* result,
                                           const measurement_config_t* config);
 
 /**
@@ -106,7 +106,7 @@ MOONLAB_API collective_error_t collective_measure_all(partitioned_state_t* state
  */
 MOONLAB_API collective_error_t collective_measure_qubit(partitioned_state_t* state,
                                             uint32_t qubit,
-                                            measurement_result_t* result,
+                                            dist_measurement_result_t* result,
                                             const measurement_config_t* config);
 
 /**
@@ -122,7 +122,7 @@ MOONLAB_API collective_error_t collective_measure_qubit(partitioned_state_t* sta
 MOONLAB_API collective_error_t collective_measure_qubits(partitioned_state_t* state,
                                              const uint32_t* qubits,
                                              uint32_t num_qubits,
-                                             measurement_result_t* result,
+                                             dist_measurement_result_t* result,
                                              const measurement_config_t* config);
 
 /**
@@ -137,7 +137,7 @@ MOONLAB_API collective_error_t collective_measure_qubits(partitioned_state_t* st
  * @return COLLECTIVE_SUCCESS or error code
  */
 MOONLAB_API collective_error_t collective_sample(const partitioned_state_t* state,
-                                     measurement_result_t* result,
+                                     dist_measurement_result_t* result,
                                      const measurement_config_t* config);
 
 /**
