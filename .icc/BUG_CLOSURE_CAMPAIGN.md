@@ -18,7 +18,7 @@ Never loosen a tolerance, delete a probe, or narrow a corpus to make HEAD pass.
 
 | # | bug | severity | file | regression / gate | owner | status |
 |---|-----|----------|------|-------------------|-------|--------|
-| 1 | reversed-CNOT 2q transpose (also OOB) | HIGH | tn_gates.c | oracle backend_differential (reversed_2q) | tn | CLOSED |
+| 1 | reversed-CNOT 2q transpose (also OOB) | HIGH | tn_gates.c | oracle backend_differential (reversed_2q); differential re-run | tn | CLOSED (confirmed: all 26 reversed-CNOT/Toffoli differential cases pass on re-run) |
 | 2 | control-plane resource-amplification DoS (64 GB alloc) | MED-HIGH | control_plane.c + moonlab_qgtl_backend.c | fuzz control_plane_protocol; crashes-pending/ empty | fuzz/integrator | OPEN (task 23) |
 | 3 | n>=10 tn_mps Metal read-out norm | HIGH | tn_gates.c (Metal) | unit_tn_mps_deep_forward; oracle | tn | CLOSED |
 | 4 | SVD-fallback non-orthonormal U (no-LAPACK/Windows) | HIGH | tensor.c:1356 | t_svd_fallback; numerical_edge_clean | tn/integrator | OPEN (task 28) |
@@ -26,11 +26,20 @@ Never loosen a tolerance, delete a probe, or narrow a corpus to make HEAD pass.
 | 6 | SIMD dispatch vtable race (from dispatch rewrite) | HIGH | simd_ops.c:762/120 | conc_core_init; tsan_clean | tn/integrator | OPEN (task 29) |
 | 7 | control-plane setter races (doc says thread-safe) | MED | control_plane.c:1296+ | conc_control_plane; tsan_clean | integrator | OPEN (task 29) |
 | 8 | audit-buffer destroy deadlock | HIGH | audit_buffer.c:76-87 | conc_audit_buffer; tsan_clean | integrator | OPEN (task 29) |
-| 9 | tn_mps bulk-bond 2q-gate norm (wider than #3, CPU, n=4) | HIGH | tn_gates.c:701 | scaling S1 (ghz_chain n<=4); oracle | tn | OPEN (task 30) |
-| 10 | real-time TDVP wrong for chains > 2 sites | HIGH | tdvp.c | unit_tdvp_bulk_site (n>=3 vs dense); scaling S2 | tn | OPEN (task 30) |
+| 9 | tn_mps bulk-bond 2q-gate norm (interior bond, CPU, n=4) | HIGH | tn_gates.c (mixed_canonicalize before 2q SVD) | unit_tn_mps_interior_gate | tn | CLOSED (merged 7c124a8; norm 1.0, verified on master) |
+| 10 | real-time TDVP wrong for chains > 2 sites | HIGH | tdvp.c | unit_tdvp_bulk_site (n>=3 vs dense) | tn | NOT-A-BUG (TDVP matches dense exp(-iHt) to ~1e-13 for n=3..12 on master; the coordinator report was a STALE scaling-harness branch predating projector-splitting merge 234433e; unit_tdvp_bulk_site guards it -- passes on master, fails on the forward-only integrator) |
+| 11 | tn_mps deep non-Clifford fp floor (~1e-9) at n>=10 | MED | tn_gates.c/tn_state.c/tensor.c | differential @1e-10, tn_max_n 12 | tn | OPEN (task 31) -- NOT truncation/cutoff/norm; reducibility under investigation (per-gate full-chain re-canon suspected) |
 
 Adjacent (not from the hunt, tracked): QRNG multi-MB draw robustness (task 24, nightly
 battery), wheel Accelerate -Werror (task 22), consumer OpenMP linkage (task 27).
+
+### Update 2026-07-17 (post-verification)
+The adversarial re-run split the original TN cluster cleanly: bugs #1, #3, #9 are
+genuinely CLOSED and verified on master; bug #10 was never real (stale harness);
+and a NEW, narrower item (#11) surfaced -- a floating-point accumulation floor in
+deep non-Clifford MPS circuits at n>=10, provably not a correctness bug
+(bond-independent, cutoff-independent, norm-preserving) and under active
+reducibility investigation before any tolerance/scoping decision.
 
 ## ICC gate wiring
 - `moonlab-adversarial-matrix` consumes: moonlab_oracle (5 pillars), moonlab_fuzz,
