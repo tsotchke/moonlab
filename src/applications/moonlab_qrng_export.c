@@ -1,22 +1,21 @@
 /**
  * @file moonlab_qrng_export.c
- * @brief Quantum-RNG half of the v0.2.x stable C export surface.
+ * @brief Quantum-RNG half of the stable C export surface.
  *
- * Implements only @c moonlab_qrng_bytes from @c moonlab_export.h;
- * the rest of the ABI surface (abi_version, qwz_chern, dmrg_*,
- * ca_mps_var_d_*, ca_mps_gauge_warmstart, z2_lgt_1d_*,
- * status_string) lives in the sibling file
- * @c moonlab_export_lean.c which has no qrng / hardware_entropy
- * dependency and can therefore be included in the emscripten WASM
- * build without dragging in the heavy native-only RNG stack.
+ * Implements the QRNG entries of @c moonlab_export.h -- @c moonlab_qrng_bytes
+ * and @c moonlab_qrng_get_status.  The rest of the ABI surface (abi_version,
+ * qwz_chern, dmrg_*, ca_mps_var_d_*, ca_mps_gauge_warmstart, z2_lgt_1d_*,
+ * status_string) lives in the sibling file @c moonlab_export_lean.c, which has
+ * no qrng / hardware_entropy dependency and can therefore be included in the
+ * emscripten WASM build without dragging in the heavy native-only RNG stack.
  *
- * A process-lifetime v3 QRNG context is lazily constructed in
- * BELL_VERIFIED mode and freed at atexit.  The wrapper serialises the
- * stateful v3 context, absorbs fresh health-tested entropy plus the v3
- * stream into a domain-separated SHAKE256 conditioner, and releases
- * output only after the current simulated Bell epoch has passed.
+ * A process-lifetime v3 QRNG context is lazily constructed in BELL_VERIFIED
+ * mode and freed at atexit.  The wrapper serialises the stateful v3 context,
+ * absorbs fresh health-tested entropy plus the certified v3 stream into a
+ * domain-separated SHAKE256 conditioner, and releases output only after the
+ * current simulated Bell epoch has been certified.
  *
- * @since v0.5.0 (file split from moonlab_qrng_export.c).
+ * @since v0.2.0 (QRNG split out of moonlab_export.c into this file).
  */
 
 #include "moonlab_export.h"
