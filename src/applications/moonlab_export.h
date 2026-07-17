@@ -21,10 +21,33 @@
  *
  * STABILITY
  * ---------
- *  - `moonlab_qrng_bytes` : stable since 0.1.2.
- *  - `moonlab_abi_version` : stable since 0.1.2.
+ * Every declaration in this header is tagged MOONLAB_API and survives a
+ * hidden-visibility build (`-DQSIM_HIDDEN_VISIBILITY=ON`).  The surface
+ * spans the conditioned QRNG + status, ML-KEM-512/768/1024, the QGT
+ * Chern / Z2 topology one-shots, Clifford-Assisted MPS, DMRG scalar
+ * energies, variational-D, the 1+1D Z2 lattice-gauge builder, adaptive
+ * two-site TDVP, the exact VQE gradient, and the status stringifier.
+ * `tests/abi/test_moonlab_export_abi.c` dlopens the library and resolves
+ * plus smokes this surface exactly as a downstream consumer does.
  *
- * New stable public APIs are added here as their contracts mature.
+ * VERSION HISTORY
+ * ---------------
+ *  - 0.6.0  `moonlab_ca_mps_conjugate_pauli` promoted to the stable
+ *           surface (int return, independent of the internal
+ *           `ca_mps_error_t` enum); the seven QGT topology one-shots
+ *           (`moonlab_ssh_winding`, `moonlab_kitaev_chain_z2`,
+ *           `moonlab_chern_qwz_proj`, `moonlab_chern_qwz_pt`,
+ *           `moonlab_kane_mele_z2`, `moonlab_bhz_z2`,
+ *           `moonlab_hofstadter_chern`) declared; portable
+ *           `moonlab_complex_double` carrier introduced so the header
+ *           parses under MSVC while keeping the C99 ABI identical.
+ *  - 0.5.0  `moonlab_qrng_get_status` + the conditioned-QRNG status
+ *           contract.
+ *  - 0.4.1  adaptive-bond two-site TDVP engine surface.
+ *  - 0.4.0  `moonlab_vqe_gradient` (exact adjoint / parameter-shift).
+ *  - 0.2.x  QGT Chern, ML-KEM KEMs, CA-MPS, DMRG scalar energies,
+ *           variational-D, Z2 LGT, status stringifier.
+ *  - 0.1.2  `moonlab_qrng_bytes`, `moonlab_abi_version`.
  *
  * @since 0.1.2
  * @copyright 2024-2026 tsotchke. Licensed under the MIT License.
@@ -35,7 +58,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <complex.h>     /* for double _Complex in CA-MPS observable signatures */
+#if !defined(_MSC_VER) || defined(__clang__)
+#include <complex.h>     /* native double _Complex carrier (see moonlab_complex_double) */
+#endif
 
 /* MOONLAB_API visibility tag.  Lives in its own header so module
  * headers (ca_mps.h, dmrg.h, ...) can pick up the tag without
@@ -47,12 +72,41 @@
 extern "C" {
 #endif
 
+/* Portable complex carrier for the header boundary.
+ *
+ * MSVC's C mode has no C99 `double _Complex`, so a downstream consumer
+ * compiling this header under MSVC cl.exe cannot parse the CA-MPS
+ * observable signatures below.  We expose a layout-compatible carrier:
+ *
+ *   - GNU / Clang / any C99 compiler: the native `double _Complex`,
+ *     so the ABI is byte-for-byte the C99 ABI with zero change.
+ *   - MSVC (cl.exe): a `{ double re; double im; }` struct, which is
+ *     exactly the storage of a C99 `double _Complex` (two contiguous
+ *     doubles, real part first).
+ *
+ * Every stable-ABI use below passes this type only through a pointer, so
+ * the by-value calling convention never enters the contract; only the
+ * memory layout matters, and the static assert pins it. */
+#if defined(_MSC_VER) && !defined(__clang__)
+typedef struct { double re; double im; } moonlab_complex_double;
+#else
+typedef double _Complex moonlab_complex_double;
+#endif
+
+#if defined(__cplusplus)
+static_assert(sizeof(moonlab_complex_double) == 2 * sizeof(double),
+              "moonlab_complex_double must be two contiguous doubles");
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(moonlab_complex_double) == 2 * sizeof(double),
+               "moonlab_complex_double must be two contiguous doubles");
+#endif
+
 /* ABI version constants. The (major, minor, patch) triple is purely for
  * feature-discovery by downstream consumers; it is NOT linked to the
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 5
+#define MOONLAB_ABI_VERSION_MINOR 6
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -171,6 +225,52 @@ MOONLAB_API int moonlab_qrng_get_status(moonlab_qrng_status_t* status);
  * @since 0.2.0
  */
 MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
+
+/* ---- Topology invariant one-shots (stable from 0.6.0) --------------- */
+/*
+ * Each function bundles model construction + invariant calculation +
+ * teardown into a single scalar-in / scalar-out call, so a binding
+ * consumer never marshals an opaque model handle across the FFI
+ * boundary.  The heavier opaque-handle QGT surface lives in the
+ * internal `src/algorithms/quantum_geometry/qgt.h`; these one-shots are
+ * the frozen convenience layer.  All return the integer invariant, or
+ * `INT_MIN` on allocation / argument error.
+ *
+ * Intended consumers: QGTL, libirrep, SbNN, and the JS / WASM TS layer.
+ */
+
+/** Winding number of the Su-Schrieffer-Heeger chain (t1 intra-cell,
+ *  t2 inter-cell) on an @p N-point Brillouin-zone grid (N >= 4). */
+MOONLAB_API int moonlab_ssh_winding(double t1, double t2, size_t N);
+
+/** Z2 (0/1) invariant of the Kitaev p-wave chain in its BdG form for
+ *  hopping @p t, chemical potential @p mu, pairing @p delta. */
+MOONLAB_API int moonlab_kitaev_chain_z2(double t, double mu, double delta);
+
+/** Chern number of the QWZ lower band via the projector (P dP dP)
+ *  Berry-curvature grid on an @p N x @p N BZ mesh (N >= 4). */
+MOONLAB_API int moonlab_chern_qwz_proj(double m, size_t N);
+
+/** Chern number of the QWZ lower band via the parallel-transport
+ *  (Wilson-loop) Berry-curvature grid on an @p N x @p N BZ mesh. */
+MOONLAB_API int moonlab_chern_qwz_pt(double m, size_t N);
+
+/** Z2 invariant of the Kane-Mele model (@p t hopping, @p lambda_so
+ *  spin-orbit, @p lambda_r Rashba, @p lambda_v sublattice potential)
+ *  on an @p N x @p N mesh (N >= 8, even). */
+MOONLAB_API int moonlab_kane_mele_z2(double t, double lambda_so,
+                                     double lambda_r, double lambda_v,
+                                     size_t N);
+
+/** Z2 invariant of the Bernevig-Hughes-Zhang model (@p A, @p B, @p M)
+ *  on an @p N x @p N mesh (N >= 8, even). */
+MOONLAB_API int moonlab_bhz_z2(double A, double B, double M, size_t N);
+
+/** Chern number of the Hofstadter model at flux @p p / @p q with
+ *  @p n_occupied filled sub-bands, on an @p N x @p N mesh (N >= 4,
+ *  q >= 2, 1 <= n_occupied < q). */
+MOONLAB_API int moonlab_hofstadter_chern(double t, size_t p, size_t q,
+                                         size_t n_occupied, size_t N);
 
 /* ---- ML-KEM-512 (FIPS 203) PQC KEM (stable from 0.2.0) -------------- */
 
@@ -344,17 +444,41 @@ MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
 /** <psi|P|psi> for a Pauli string P. */
 MOONLAB_API int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                  const uint8_t* pauli_string,
-                                 double _Complex* out_expval);
+                                 moonlab_complex_double* out_expval);
 /** <psi|H|psi> for H = sum_k coeffs[k] * paulis[k]; paulis is laid out
  *  as `num_terms * num_qubits` bytes. */
 MOONLAB_API int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                      const uint8_t* paulis,
-                                     const double _Complex* coeffs,
+                                     const moonlab_complex_double* coeffs,
                                      uint32_t num_terms,
-                                     double _Complex* out_expval);
+                                     moonlab_complex_double* out_expval);
 /** Marginal P(Z_qubit = +1), in [0, 1]. */
 MOONLAB_API int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                            uint32_t qubit, double* out_prob);
+
+/**
+ * @brief Q = C^dagger P C for the current Clifford C in @p s.
+ *
+ * Exposes the Clifford-conjugated Pauli string and accumulated phase so
+ * consumers can inspect Q's support without recomputing the tableau
+ * conjugation.  @p out_pauli must be at least
+ * ::moonlab_ca_mps_num_qubits bytes; @p out_phase receives the
+ * accumulated i^phase factor in {0,1,2,3}.
+ *
+ * Stable declaration with a plain `int` return.  The internal
+ * `algorithms/tensor_network/ca_mps.h` declares the same symbol
+ * returning `ca_mps_error_t`, which is a `typedef int`, so the two
+ * declarations are compatible; re-declaring here with `int` keeps the
+ * stable header free of the internal enum, exactly as the sibling
+ * CA-MPS gate entry points above are already surfaced.
+ *
+ * @return 0 on success, negative on argument error.
+ * @since 0.6.0
+ */
+MOONLAB_API int moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
+                                    const uint8_t* in_pauli,
+                                    uint8_t* out_pauli,
+                                    int* out_phase);
 
 /* ---- DMRG scalar entry points (stable from 0.2.1) ------------------ */
 /*
