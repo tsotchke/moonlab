@@ -102,20 +102,26 @@ static ca_mps_error_t undo_cand(moonlab_ca_mps_t* s, int gate,
 }
 
 /* Compute <psi|H|psi> = sum_k coeffs[k] * <psi|paulis[k]|psi> using the
- * existing CA-MPS Pauli-sum expectation primitive. */
-static double evaluate_energy(const moonlab_ca_mps_t* s,
-                               const uint8_t* paulis,
-                               const double* coeffs,
-                               uint32_t num_terms) {
+ * existing CA-MPS Pauli-sum expectation primitive.  Writes the energy to
+ * *out_energy and returns CA_MPS_SUCCESS, or a negative code on failure --
+ * never silently substitutes 0.0, which would poison accept/reject decisions. */
+static ca_mps_error_t evaluate_energy(const moonlab_ca_mps_t* s,
+                                      const uint8_t* paulis,
+                                      const double* coeffs,
+                                      uint32_t num_terms,
+                                      double* out_energy) {
     /* Convert the real coefficient array to complex once (small alloc). */
     double _Complex* cz = (double _Complex*)calloc(num_terms, sizeof(double _Complex));
-    if (!cz) return 0.0;
+    if (!cz) return CA_MPS_ERR_OOM;
     for (uint32_t i = 0; i < num_terms; i++) cz[i] = (double _Complex)coeffs[i];
 
     double _Complex out = 0.0;
-    moonlab_ca_mps_expect_pauli_sum(s, paulis, cz, num_terms, &out);
+    ca_mps_error_t e =
+        moonlab_ca_mps_expect_pauli_sum(s, paulis, cz, num_terms, &out);
     free(cz);
-    return creal(out);
+    if (e != CA_MPS_SUCCESS) return e;
+    *out_energy = creal(out);
+    return CA_MPS_SUCCESS;
 }
 
 /* One candidate move: a primary gate plus optionally a composite second
@@ -228,8 +234,8 @@ typedef struct {
     uint32_t  num_terms;
     uint32_t  n;
     double*   term_value;     /* [num_terms] */
-    uint8_t*  support_q;      /* [num_terms * n], packed list of qubits */
-    uint8_t*  support_len;    /* [num_terms] */
+    uint32_t* support_q;      /* [num_terms * n], packed list of qubits */
+    uint32_t* support_len;    /* [num_terms] */
     uint32_t* terms_for_q;    /* [n * num_terms], packed list of term ids */
     uint32_t* tfq_count;      /* [n] */
     double    E_total;
@@ -259,8 +265,8 @@ static int term_cache_build(term_cache_t* out,
     out->num_terms = num_terms;
     out->n = n;
     out->term_value  = (double*)  calloc(num_terms, sizeof(double));
-    out->support_q   = (uint8_t*) calloc((size_t)num_terms * n, sizeof(uint8_t));
-    out->support_len = (uint8_t*) calloc(num_terms, sizeof(uint8_t));
+    out->support_q   = (uint32_t*)calloc((size_t)num_terms * n, sizeof(uint32_t));
+    out->support_len = (uint32_t*)calloc(num_terms, sizeof(uint32_t));
     out->terms_for_q = (uint32_t*)calloc((size_t)n * num_terms, sizeof(uint32_t));
     out->tfq_count   = (uint32_t*)calloc(n, sizeof(uint32_t));
     if (!out->term_value || !out->support_q || !out->support_len ||
@@ -294,10 +300,10 @@ static int term_cache_build(term_cache_t* out,
             term_cache_free(out);
             return -1;
         }
-        uint8_t len = 0;
+        uint32_t len = 0;
         for (uint32_t q = 0; q < n; q++) {
             if (qbuf[q] != 0) {
-                out->support_q[(size_t)k * n + len] = (uint8_t)q;
+                out->support_q[(size_t)k * n + len] = q;
                 len++;
                 uint32_t pos = out->tfq_count[q]++;
                 out->terms_for_q[(size_t)q * num_terms + pos] = k;
@@ -493,7 +499,9 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
 
     uint32_t n = moonlab_ca_mps_num_qubits(state);
 
-    double E_curr = evaluate_energy(state, paulis, coeffs, num_terms);
+    double E_curr = 0.0;
+    ca_mps_error_t ee = evaluate_energy(state, paulis, coeffs, num_terms, &E_curr);
+    if (ee != CA_MPS_SUCCESS) return ee;
     double S0 = moonlab_ca_mps_max_half_cut_entropy(state);
     if (result) {
         result->initial_energy = E_curr;
@@ -566,7 +574,13 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
         }
 
         /* Accept the best candidate permanently on the original state. */
-        cand_apply(state, &best);
+        if (cand_apply(state, &best) != 0) {
+            /* The gate failed to apply on the master state: roll back any
+             * partial progress and report the failure rather than continuing
+             * with a corrupted tableau and a stale energy. */
+            cand_undo(state, &best);
+            return CA_MPS_ERR_BACKEND;
+        }
         E_curr += best_dE;
         gates_added++;
         if (best.gate2 >= 0) gates_added++;
@@ -762,7 +776,9 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
         if (e != CA_MPS_SUCCESS) return e;
     }
 
-    double E_curr = evaluate_energy(state, paulis, coeffs, num_terms);
+    double E_curr = 0.0;
+    ca_mps_error_t ee = evaluate_energy(state, paulis, coeffs, num_terms, &E_curr);
+    if (ee != CA_MPS_SUCCESS) return ee;
     double S0 = moonlab_ca_mps_max_half_cut_entropy(state);
     if (result) {
         result->initial_energy = E_curr;
@@ -790,7 +806,10 @@ ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
                                                 num_terms, cfg.imag_time_dtau);
             if (e != CA_MPS_SUCCESS) return e;
         }
-        double E_after_imag = evaluate_energy(state, paulis, coeffs, num_terms);
+        double E_after_imag = 0.0;
+        ca_mps_error_t eai =
+            evaluate_energy(state, paulis, coeffs, num_terms, &E_after_imag);
+        if (eai != CA_MPS_SUCCESS) return eai;
 
         /* 2. D-update: greedy Clifford search at current |phi>. */
         ca_mps_var_d_config_t inner = ca_mps_var_d_config_default();
