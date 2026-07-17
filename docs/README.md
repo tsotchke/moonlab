@@ -1,7 +1,7 @@
 # MoonLab documentation
 
 **Current release:** 1.1.0 (2026-07-11)
-**Stable C ABI:** 0.4.0
+**Stable C ABI:** 0.5.0
 **Supported release platforms:** Linux x86-64/ARM64, macOS Apple
 Silicon/Intel, and Windows x64/ARM64
 

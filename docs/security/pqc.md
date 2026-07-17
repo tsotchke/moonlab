@@ -61,8 +61,10 @@ Moonlab PQC was written to be:
    designed so that a certification effort is not blocked by
    architectural choices (documented entropy source, deterministic
    in seeds, self-tests runnable on init), but the effort itself
-   is separate.  Contact Atomic Energy of Canada Ltd., NVLAP, or
-   an accredited CMVP lab for the certification path.
+   is separate.  The Cryptographic Module Validation Program (CMVP)
+   is jointly run by NIST and the Canadian Centre for Cyber Security;
+   contact an accredited CMVP-recognised lab (or NVLAP for the
+   underlying lab-accreditation program) for the certification path.
 3. **Not protected against fault injection or electromagnetic
    analysis.**  If the deployment threat model includes an adversary
    with physical access who can glitch a CPU or read an EM emission,
@@ -130,6 +132,13 @@ sha3_256 < ml-kem-512-count-0-ss.bin
 
 and comparing to the fingerprints pinned in
 `tests/unit/test_mlkem_nist_kat.c`.  Match = conformance established.
+
+The pinned KAT vectors are being upgraded from the legacy PQCkemKAT `.rsp`
+files to the official NIST ACVP (Automated Cryptographic Validation Program)
+test vectors in a separate, in-progress workstream. That upgrade widens
+*test-vector* coverage; it is not a certification and does not change any
+claim in this document -- Moonlab PQC remains uncertified regardless of
+which vector set it is checked against.
 
 ## Quantum-RNG Entropy
 
