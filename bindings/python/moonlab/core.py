@@ -146,6 +146,17 @@ _lib.quantum_state_init.restype = ctypes.c_int
 _lib.quantum_state_free.argtypes = [ctypes.POINTER(CQuantumState)]
 _lib.quantum_state_free.restype = None
 
+# Heap-allocated-state deallocator.  quantum_state_free() only releases
+# the buffers *inside* a quantum_state_t (amplitudes, measurement_outcomes,
+# GPU backing); it does not free the struct itself.  States that Python
+# stack-allocates (CQuantumState()) are torn down with quantum_state_free()
+# alone.  States the C side heap-allocates for us (quantum_state_create_gpu)
+# must be torn down with quantum_state_destroy(), which frees the buffers
+# *and* the struct pointer -- calling quantum_state_free() on those would
+# leak the outer allocation, and calling both would double-free the buffers.
+_lib.quantum_state_destroy.argtypes = [ctypes.POINTER(CQuantumState)]
+_lib.quantum_state_destroy.restype = None
+
 # v1.1 GPU surface.  These are present in libquantumsim regardless of
 # whether CUDA was compiled in -- the weak stub in state.c returns
 # QS_ERROR_NOT_SUPPORTED (-7) when CUDA isn't available, the strong
@@ -246,36 +257,48 @@ _lib.quantum_measure_all_fast.restype = ctypes.c_uint64
 
 # Hardware-backed quantum entropy context (non-inline helpers added in
 # 0.2.0).  Passing NULL for the ctx makes the C side return 0 for every
-# measurement regardless of state, so we allocate a process-wide ctx at
-# import time and reuse it for every measure_all_fast call.
+# measurement regardless of state, so we allocate a process-wide ctx and
+# reuse it for every measure_all_fast call.
 _lib.quantum_entropy_ctx_create_hw.argtypes = []
 _lib.quantum_entropy_ctx_create_hw.restype = ctypes.c_void_p
 
 _lib.quantum_entropy_ctx_destroy.argtypes = [ctypes.c_void_p]
 _lib.quantum_entropy_ctx_destroy.restype = None
 
-
-def _init_default_entropy_ctx():
-    """Build a hardware-backed quantum_entropy_ctx_t shared by every
-    measurement on this process.  Returns an opaque ``c_void_p``, or
-    raises ``MoonlabError`` if hardware entropy init fails (extremely
-    rare; only on hosts with no /dev/urandom and no RDSEED)."""
-    ptr = _lib.quantum_entropy_ctx_create_hw()
-    if not ptr:
-        raise RuntimeError(
-            "quantum_entropy_ctx_create_hw() returned NULL; "
-            "no hardware entropy source available"
-        )
-    return ctypes.c_void_p(ptr)
-
-
-_DEFAULT_ENTROPY_CTX = _init_default_entropy_ctx()
-# Ensure the C-side ctx is released at interpreter shutdown.  atexit
-# fires before ctypes tears down the library, which is the safe order.
 import atexit as _atexit
-_atexit.register(
-    lambda: _lib.quantum_entropy_ctx_destroy(_DEFAULT_ENTROPY_CTX)
-)
+
+_DEFAULT_ENTROPY_CTX = None
+
+
+def _get_default_entropy_ctx():
+    """Lazily build (and cache) the hardware-backed quantum_entropy_ctx_t
+    shared by every measure_all_fast() call on this process.
+
+    This is deliberately deferred to first use rather than built at
+    import time: quantum_entropy_ctx_create_hw() returns NULL on hosts
+    with neither /dev/urandom nor RDSEED, which is rare but real (e.g.
+    some minimal containers). Building it eagerly at module import would
+    make ``import moonlab`` itself abort on exactly those hosts, even
+    for callers who never touch measurement. Deferring means the module
+    still imports there; only an actual measure_all_fast() call raises.
+    """
+    global _DEFAULT_ENTROPY_CTX
+    if _DEFAULT_ENTROPY_CTX is None:
+        ptr = _lib.quantum_entropy_ctx_create_hw()
+        if not ptr:
+            raise RuntimeError(
+                "quantum_entropy_ctx_create_hw() returned NULL; no "
+                "hardware entropy source available (no /dev/urandom, "
+                "no RDSEED). measure_all_fast() cannot run on this host."
+            )
+        _DEFAULT_ENTROPY_CTX = ctypes.c_void_p(ptr)
+        # Ensure the C-side ctx is released at interpreter shutdown.
+        # atexit fires before ctypes tears down the library, which is
+        # the safe order.
+        _atexit.register(
+            lambda: _lib.quantum_entropy_ctx_destroy(_DEFAULT_ENTROPY_CTX)
+        )
+    return _DEFAULT_ENTROPY_CTX
 
 # State properties
 _lib.quantum_state_get_probability.argtypes = [ctypes.POINTER(CQuantumState), ctypes.c_uint64]
@@ -344,7 +367,17 @@ class QuantumState:
     
     def __del__(self):
         """Free C quantum state resources"""
-        if hasattr(self, '_state'):
+        if not hasattr(self, '_state'):
+            return
+        heap_ptr = getattr(self, '_heap_ptr', None)
+        if heap_ptr is not None:
+            # Adopted from quantum_state_create_gpu(): the C side
+            # heap-allocated the quantum_state_t struct, so it must be
+            # torn down with quantum_state_destroy() (frees the GPU/host
+            # buffers *and* the struct). quantum_state_free() alone would
+            # leak the heap allocation.
+            _lib.quantum_state_destroy(heap_ptr)
+        else:
             _lib.quantum_state_free(ctypes.byref(self._state))
     
     def __repr__(self):
@@ -620,32 +653,49 @@ class QuantumState:
         """Get probability of measuring basis state"""
         if basis_state < 0 or basis_state >= self.state_dim:
             raise ValueError(f"basis_state must be in [0, {self.state_dim})")
-        
+
+        # quantum_state_get_probability() reads state->amplitudes
+        # directly; on a GPU-backed state that host buffer is stale
+        # until synced.
+        if self.is_gpu:
+            self.sync_to_host()
+
         return _lib.quantum_state_get_probability(
             ctypes.byref(self._state), ctypes.c_uint64(basis_state)
         )
-    
+
     def probabilities(self) -> np.ndarray:
         """Get probability distribution as NumPy array"""
+        # Sync once up front rather than once per basis state -- calling
+        # self.probability(i) in the loop would re-sync on every
+        # iteration for a GPU-backed state.
+        if self.is_gpu:
+            self.sync_to_host()
         probs = np.zeros(self.state_dim)
         for i in range(self.state_dim):
-            probs[i] = self.probability(i)
+            probs[i] = _lib.quantum_state_get_probability(
+                ctypes.byref(self._state), ctypes.c_uint64(i)
+            )
         return probs
-    
+
     def get_statevector(self) -> np.ndarray:
         """
         Get state vector as NumPy array of complex amplitudes
-        
+
         Returns:
             Complex NumPy array of shape (2^num_qubits,)
         """
+        # Host amplitudes are stale for a GPU-backed state until synced.
+        if self.is_gpu:
+            self.sync_to_host()
+
         amplitudes = np.zeros(self.state_dim, dtype=complex)
-        
+
         # Access C amplitude array
         for i in range(self.state_dim):
             c_amp = self._state.amplitudes[i]
             amplitudes[i] = complex(c_amp.real, c_amp.imag)
-        
+
         return amplitudes
     
     # ========================================================================
@@ -661,14 +711,14 @@ class QuantumState:
 
         Note: This collapses the wavefunction to the measured state.
 
-        The process-wide hardware-entropy context (created at import
-        time; see ``_DEFAULT_ENTROPY_CTX``) is threaded through so the
-        C side samples from the actual amplitudes rather than
-        returning 0 as it did for a NULL ctx.
+        The process-wide hardware-entropy context (lazily created on
+        first use; see ``_get_default_entropy_ctx()``) is threaded
+        through so the C side samples from the actual amplitudes rather
+        than returning 0 as it did for a NULL ctx.
         """
         outcome = _lib.quantum_measure_all_fast(
             ctypes.byref(self._state),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
 
         # C side already collapsed the amplitudes to the outcome basis
@@ -797,12 +847,21 @@ class Measurement:
 
         Note: Collapses wavefunction to the post-measurement state
         """
+        # This reads and writes state._state.amplitudes directly, which
+        # for a GPU-backed state is the (possibly stale) host buffer.
+        # Sync once up front; the collapse writes below are pushed back
+        # to the device at the end.
+        if state.is_gpu:
+            state.sync_to_host()
+
         # Calculate probability of measuring 0
         prob_0 = 0.0
 
         for i in range(state.state_dim):
             if not ((i >> qubit) & 1):  # Qubit is 0
-                prob_0 += state.probability(i)
+                prob_0 += _lib.quantum_state_get_probability(
+                    ctypes.byref(state._state), ctypes.c_uint64(i)
+                )
 
         # Use cryptographic randomness if available
         try:
@@ -836,6 +895,12 @@ class Measurement:
                 if ((i >> qubit) & 1) == outcome:
                     state._state.amplitudes[i].real *= renorm_factor
                     state._state.amplitudes[i].imag *= renorm_factor
+
+        # Push the collapsed amplitudes back to the GPU so subsequent
+        # gate calls (which dispatch to CUDA kernels for a GPU state)
+        # see the post-measurement state rather than stale device data.
+        if state.is_gpu:
+            state.sync_from_host()
 
         return outcome
 
