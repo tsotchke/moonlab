@@ -38,6 +38,13 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    # Surface the matrix flags through the environment rather than splicing the
+    # expression into each script: shellcheck can then reason about $CMAKE_FLAGS
+    # (no SC2193 false positive on the fixed-substitution compare) and matrix
+    # values never reach the shell as inline code.
+    env:
+      CMAKE_FLAGS: ${{ matrix.cmake_flags }}
+      TEST_LABEL: ${{ matrix.test_label }}
     strategy:
       fail-fast: false
       matrix:
@@ -81,11 +88,11 @@ jobs:
         run: |
           set -euxo pipefail
           sudo apt-get update -o Acquire::Retries=5
-          PKGS="build-essential ninja-build libomp-dev libopenblas-dev liblapacke-dev pkg-config python3-dev python3-pip"
-          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_MPI=ON"* ]]; then
-              PKGS="$PKGS libopenmpi-dev openmpi-bin"
+          PKGS=(build-essential ninja-build libomp-dev libopenblas-dev liblapacke-dev pkg-config python3-dev python3-pip)
+          if [[ "$CMAKE_FLAGS" == *"QSIM_ENABLE_MPI=ON"* ]]; then
+              PKGS+=(libopenmpi-dev openmpi-bin)
           fi
-          sudo apt-get install -y $PKGS
+          sudo apt-get install -y "${PKGS[@]}"
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
@@ -93,7 +100,7 @@ jobs:
         run: |
           set -euxo pipefail
           brew install ninja libomp openblas pkg-config
-          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_MPI=ON"* ]]; then
+          if [[ "$CMAKE_FLAGS" == *"QSIM_ENABLE_MPI=ON"* ]]; then
               brew install open-mpi
           fi
 
@@ -129,7 +136,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
+          if [[ "$CMAKE_FLAGS" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
               export ASAN_OPTIONS="detect_leaks=0:halt_on_error=1:allocator_may_return_null=1"
               export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
           fi
@@ -144,13 +151,13 @@ jobs:
           OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
         run: |
           set -euxo pipefail
-          if [[ "${{ matrix.cmake_flags }}" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
+          if [[ "$CMAKE_FLAGS" == *"QSIM_ENABLE_SANITIZERS=ON"* ]]; then
               export ASAN_OPTIONS="detect_leaks=0:halt_on_error=1:allocator_may_return_null=1"
               export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
           fi
-          TEST_FILTER=""
-          if [[ -n "${{ matrix.test_label }}" ]]; then
-              TEST_FILTER="-L ${{ matrix.test_label }}"
+          TEST_FILTER=()
+          if [[ -n "$TEST_LABEL" ]]; then
+              TEST_FILTER=(-L "$TEST_LABEL")
           fi
           # Exclude long-running tests to keep total runtime bounded.
           # Lanes that need the heavy suite live in the nightly workflow.
@@ -169,7 +176,7 @@ jobs:
           ctest --test-dir build --output-on-failure --timeout 600 \
               -LE "long|memory_heavy" \
               -E "n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
-              $TEST_FILTER -j 4
+              "${TEST_FILTER[@]}" -j 4
 
       - name: Upload Build Log on Failure
         if: failure()

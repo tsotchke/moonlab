@@ -361,7 +361,7 @@ jobs:
 
       - name: Generate checksums
         working-directory: dist
-        run: shasum -a 256 * > SHA256SUMS
+        run: shasum -a 256 -- * > SHA256SUMS
 
       - name: Create fully populated draft release
         uses: softprops/action-gh-release@v3
