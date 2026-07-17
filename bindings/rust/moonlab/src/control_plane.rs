@@ -20,10 +20,12 @@
 use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     moonlab_control_hmac_sha3_256, moonlab_control_server_close,
-    moonlab_control_server_open, moonlab_control_server_run,
+    moonlab_control_server_open, moonlab_control_server_require_client_cert,
+    moonlab_control_server_run,
     moonlab_control_server_set_max_concurrent, moonlab_control_server_set_rate_limit,
-    moonlab_control_server_set_request_timeout, moonlab_control_server_shutdown,
-    moonlab_control_server_t,
+    moonlab_control_server_set_request_timeout, moonlab_control_server_set_secret,
+    moonlab_control_server_shutdown, moonlab_control_server_t,
+    moonlab_control_server_use_tls,
     moonlab_control_submit_circuit_mtls, moonlab_control_submit_circuit_tls,
     moonlab_control_submit_health, moonlab_control_submit_metrics,
 };
@@ -449,6 +451,75 @@ impl ControlPlaneServer {
         }
         Ok(())
     }
+
+    /// Set (or clear) the HMAC-SHA3-256 shared secret this server
+    /// requires from clients (since v0.8.16).  Pass an empty slice to
+    /// disable authentication -- the default, and backward-compatible
+    /// with the unauthenticated v0.8.7..v0.8.14 wire.  Safe to call
+    /// after `open()` but before `run()`.  Pair with
+    /// [`submit_circuit_auth`] / [`submit_circuit_auth_tenant`] on the
+    /// client side.
+    pub fn set_secret(&self, secret: &[u8]) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let rc = unsafe {
+            moonlab_control_server_set_secret(ptr, secret.as_ptr(), secret.len())
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("set_secret rc={rc}")));
+        }
+        Ok(())
+    }
+
+    /// Wrap every accepted connection in TLS 1.3, loading the server
+    /// certificate + private key from PEM files at `cert_path` /
+    /// `key_path` (since v0.8.17).  Pass empty strings for both to
+    /// disable TLS on a previously configured server.  Returns
+    /// `QuantumError::Ffi` if the library was built without
+    /// `-DQSIM_ENABLE_TLS=ON`.  Pair with [`submit_circuit_tls`] /
+    /// [`submit_circuit_mtls`] on the client side.
+    pub fn use_tls(&self, cert_path: &str, key_path: &str) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let cert_c = CString::new(cert_path)
+            .map_err(|e| QuantumError::Ffi(format!("invalid cert_path: {e}")))?;
+        let key_c = CString::new(key_path)
+            .map_err(|e| QuantumError::Ffi(format!("invalid key_path: {e}")))?;
+        let rc = unsafe {
+            moonlab_control_server_use_tls(ptr, cert_c.as_ptr(), key_c.as_ptr())
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("use_tls rc={rc}")));
+        }
+        Ok(())
+    }
+
+    /// Require every incoming client to present a TLS certificate
+    /// signed by the CA at `client_ca_path` (since v0.8.19; mTLS).
+    /// Composes with [`Self::use_tls`] -- the server certificate must
+    /// be configured first.  Returns `QuantumError::Ffi` if the
+    /// library was built without TLS, or if `use_tls()` has not been
+    /// called yet.  Pair with [`submit_circuit_mtls`] on the client
+    /// side.
+    pub fn require_client_cert(&self, client_ca_path: &str) -> Result<()> {
+        let ptr = self.handle.load(Ordering::SeqCst);
+        if ptr.is_null() {
+            return Err(QuantumError::Ffi("server handle is null".into()));
+        }
+        let ca_c = CString::new(client_ca_path)
+            .map_err(|e| QuantumError::Ffi(format!("invalid client_ca_path: {e}")))?;
+        let rc = unsafe {
+            moonlab_control_server_require_client_cert(ptr, ca_c.as_ptr())
+        };
+        if rc != 0 {
+            return Err(QuantumError::Ffi(format!("require_client_cert rc={rc}")));
+        }
+        Ok(())
+    }
 }
 
 /// Scrape the v0.8.23 METRICS endpoint and return the Prometheus
@@ -500,24 +571,27 @@ impl Drop for ControlPlaneServer {
     }
 }
 
-/// Submit a circuit over a TLS-wrapped TCP connection -- since v0.8.18.
+/// Submit a circuit over a mutually-authenticated TLS connection --
+/// since v0.8.20.
 ///
-/// FFI thunk over the C `moonlab_control_submit_circuit_tls`, which is
+/// FFI thunk over the C `moonlab_control_submit_circuit_mtls`, which is
 /// built into the library when `-DQSIM_ENABLE_TLS=ON`.  Returns
-/// `QuantumError::Ffi` if the library was built without TLS.
+/// `QuantumError::Ffi` if the library was built without TLS.  Presents
+/// a client certificate + key alongside the optional server-CA pin;
+/// required when the server was configured with
+/// `moonlab_control_server_require_client_cert`.
 ///
 /// # Parameters
 ///
-/// - `ca_path`: PEM CA bundle pin against the server's cert.  Required
-///   for production; pass `None` together with `insecure = true` for
-///   development / self-signed certificates only.
+/// - `server_ca_path`: PEM CA bundle pin against the server's cert.
+///   Required for production; pass `None` together with
+///   `insecure = true` for development / self-signed certificates only.
+/// - `client_cert_path` / `client_key_path`: PEM client certificate and
+///   private key presented to the server during the TLS handshake.
 /// - `insecure`: skip peer verification.  Tests / dev only.
 /// - `secret`: optional HMAC-SHA3-256 shared secret.  Composes with
 ///   TLS -- the server must have both `use_tls` and `set_secret`
 ///   configured when both are provided.
-/// mTLS client variant -- presents a client cert + key alongside the
-/// optional server-CA pin.  Required when the server was configured
-/// with `moonlab_control_server_require_client_cert`.  Since v0.8.20.
 pub fn submit_circuit_mtls(
     host: &str,
     port: u16,
@@ -577,6 +651,24 @@ pub fn submit_circuit_mtls(
     Ok(probs)
 }
 
+/// Submit a circuit over a server-authenticated TLS connection -- since
+/// v0.8.18.
+///
+/// FFI thunk over the C `moonlab_control_submit_circuit_tls`, which is
+/// built into the library when `-DQSIM_ENABLE_TLS=ON`.  Returns
+/// `QuantumError::Ffi` if the library was built without TLS.  Unlike
+/// [`submit_circuit_mtls`], the client presents no certificate of its
+/// own -- only the server's identity is authenticated.
+///
+/// # Parameters
+///
+/// - `ca_path`: PEM CA bundle pin against the server's cert.  Required
+///   for production; pass `None` together with `insecure = true` for
+///   development / self-signed certificates only.
+/// - `insecure`: skip peer verification.  Tests / dev only.
+/// - `secret`: optional HMAC-SHA3-256 shared secret.  Composes with
+///   TLS -- the server must have both `use_tls` and `set_secret`
+///   configured when both are provided.
 pub fn submit_circuit_tls(
     host: &str,
     port: u16,
