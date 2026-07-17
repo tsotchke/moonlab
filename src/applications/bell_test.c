@@ -37,17 +37,17 @@
 // INTERNAL HELPERS
 // ============================================================================
 
-static entropy_ctx_t* g_entropy = NULL;
+static entropy_util_ctx_t* g_entropy = NULL;
 
 static void ensure_entropy(void) {
     if (!g_entropy) {
-        g_entropy = entropy_create();
+        g_entropy = entropy_util_create();
     }
 }
 
 static double get_random_double(void) {
     ensure_entropy();
-    return entropy_double(g_entropy);
+    return entropy_util_double(g_entropy);
 }
 
 /**
@@ -265,7 +265,7 @@ int bell_test_run_chsh(const bell_test_config_t* config,
         ensure_entropy();
         uint8_t seed_bytes[8];
         memcpy(seed_bytes, &config->seed, 8);
-        entropy_mix(g_entropy, seed_bytes, 8);
+        entropy_util_mix(g_entropy, seed_bytes, 8);
     }
 
     clock_t start = clock();
@@ -581,7 +581,7 @@ int bell_test_main(int argc, char** argv) {
 
     // Cleanup
     if (g_entropy) {
-        entropy_destroy(g_entropy);
+        entropy_util_destroy(g_entropy);
         g_entropy = NULL;
     }
 

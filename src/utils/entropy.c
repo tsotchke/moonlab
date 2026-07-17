@@ -185,7 +185,7 @@ static int arm64_rndr(uint64_t* value) {
 // HARDWARE RNG PUBLIC API
 // ============================================================================
 
-int entropy_hardware_available(void) {
+int entropy_util_hardware_available(void) {
 #ifdef HAS_X86
     return x86_has_rdrand() || x86_has_rdseed();
 #elif defined(HAS_ARM64)
@@ -195,7 +195,7 @@ int entropy_hardware_available(void) {
 #endif
 }
 
-int entropy_hardware_bytes(uint8_t* buffer, size_t size) {
+int entropy_util_hardware_bytes(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return -1;
 
 #ifdef HAS_X86
@@ -261,7 +261,7 @@ int entropy_hardware_bytes(uint8_t* buffer, size_t size) {
     return -1;
 }
 
-const char* entropy_hardware_name(void) {
+const char* entropy_util_hardware_name(void) {
 #ifdef HAS_X86
     if (x86_has_rdseed()) return "RDSEED";
     if (x86_has_rdrand()) return "RDRAND";
@@ -276,7 +276,7 @@ const char* entropy_hardware_name(void) {
 // OS ENTROPY
 // ============================================================================
 
-int entropy_os_bytes(uint8_t* buffer, size_t size) {
+int entropy_util_os_bytes(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return -1;
 
 #if defined(__APPLE__)
@@ -310,7 +310,7 @@ int entropy_os_bytes(uint8_t* buffer, size_t size) {
     return -1;
 }
 
-const char* entropy_os_source_name(void) {
+const char* entropy_util_os_source_name(void) {
 #if defined(__APPLE__)
     return "SecRandomCopyBytes";
 #elif defined(__linux__)
@@ -326,7 +326,7 @@ const char* entropy_os_source_name(void) {
 // JITTER ENTROPY
 // ============================================================================
 
-size_t entropy_jitter_bytes(uint8_t* buffer, size_t size) {
+size_t entropy_util_jitter_bytes(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
     size_t collected = 0;
@@ -382,12 +382,12 @@ size_t entropy_jitter_bytes(uint8_t* buffer, size_t size) {
 // CONTEXT MANAGEMENT
 // ============================================================================
 
-entropy_ctx_t* entropy_create(void) {
-    return entropy_create_with_source(ENTROPY_SOURCE_AUTO);
+entropy_util_ctx_t* entropy_util_create(void) {
+    return entropy_util_create_with_source(ENTROPY_UTIL_SOURCE_AUTO);
 }
 
-entropy_ctx_t* entropy_create_with_source(entropy_source_type_t source) {
-    entropy_ctx_t* ctx = calloc(1, sizeof(entropy_ctx_t));
+entropy_util_ctx_t* entropy_util_create_with_source(entropy_util_source_type_t source) {
+    entropy_util_ctx_t* ctx = calloc(1, sizeof(entropy_util_ctx_t));
     if (!ctx) return NULL;
 
     ctx->source = source;
@@ -407,12 +407,12 @@ entropy_ctx_t* entropy_create_with_source(entropy_source_type_t source) {
 #endif
 
     // Initial pool fill
-    entropy_reseed(ctx);
+    entropy_util_reseed(ctx);
 
     return ctx;
 }
 
-void entropy_destroy(entropy_ctx_t* ctx) {
+void entropy_util_destroy(entropy_util_ctx_t* ctx) {
     if (!ctx) return;
 
     // Close file descriptor
@@ -429,21 +429,21 @@ void entropy_destroy(entropy_ctx_t* ctx) {
     free(ctx);
 }
 
-int entropy_reseed(entropy_ctx_t* ctx) {
+int entropy_util_reseed(entropy_util_ctx_t* ctx) {
     if (!ctx) return -1;
 
     uint8_t seed[64];
     size_t seed_bytes = 0;
 
     // Try hardware RNG first
-    int hw_bytes = entropy_hardware_bytes(seed, sizeof(seed));
+    int hw_bytes = entropy_util_hardware_bytes(seed, sizeof(seed));
     if (hw_bytes > 0) {
         seed_bytes = hw_bytes;
         ctx->hardware_bytes += hw_bytes;
     }
 
     // Mix in OS entropy
-    int os_bytes = entropy_os_bytes(seed + seed_bytes, sizeof(seed) - seed_bytes);
+    int os_bytes = entropy_util_os_bytes(seed + seed_bytes, sizeof(seed) - seed_bytes);
     if (os_bytes > 0) {
         seed_bytes += os_bytes;
         ctx->os_bytes += os_bytes;
@@ -451,7 +451,7 @@ int entropy_reseed(entropy_ctx_t* ctx) {
 
     // If still need more, use jitter
     if (seed_bytes < 32) {
-        size_t jitter_bytes = entropy_jitter_bytes(seed + seed_bytes, 32 - seed_bytes);
+        size_t jitter_bytes = entropy_util_jitter_bytes(seed + seed_bytes, 32 - seed_bytes);
         seed_bytes += jitter_bytes;
     }
 
@@ -477,16 +477,16 @@ int entropy_reseed(entropy_ctx_t* ctx) {
 // ENTROPY COLLECTION
 // ============================================================================
 
-uint8_t entropy_byte(entropy_ctx_t* ctx) {
+uint8_t entropy_util_byte(entropy_util_ctx_t* ctx) {
     if (!ctx) {
         // Fallback
         uint8_t b;
-        entropy_os_bytes(&b, 1);
+        entropy_util_os_bytes(&b, 1);
         return b;
     }
 
     if (ctx->pool_pos >= ctx->pool_bytes) {
-        entropy_reseed(ctx);
+        entropy_util_reseed(ctx);
     }
 
     uint8_t result = ctx->pool[ctx->pool_pos++];
@@ -495,12 +495,12 @@ uint8_t entropy_byte(entropy_ctx_t* ctx) {
     return result;
 }
 
-size_t entropy_bytes(entropy_ctx_t* ctx, uint8_t* buffer, size_t size) {
+size_t entropy_util_bytes(entropy_util_ctx_t* ctx, uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
     if (!ctx) {
         // Fallback to OS entropy
-        int bytes = entropy_os_bytes(buffer, size);
+        int bytes = entropy_util_os_bytes(buffer, size);
         return (bytes > 0) ? bytes : 0;
     }
 
@@ -508,7 +508,7 @@ size_t entropy_bytes(entropy_ctx_t* ctx, uint8_t* buffer, size_t size) {
 
     while (collected < size) {
         if (ctx->pool_pos >= ctx->pool_bytes) {
-            entropy_reseed(ctx);
+            entropy_util_reseed(ctx);
         }
 
         size_t available = ctx->pool_bytes - ctx->pool_pos;
@@ -523,20 +523,20 @@ size_t entropy_bytes(entropy_ctx_t* ctx, uint8_t* buffer, size_t size) {
     return collected;
 }
 
-uint32_t entropy_uint32(entropy_ctx_t* ctx) {
+uint32_t entropy_util_uint32(entropy_util_ctx_t* ctx) {
     uint32_t result;
-    entropy_bytes(ctx, (uint8_t*)&result, sizeof(result));
+    entropy_util_bytes(ctx, (uint8_t*)&result, sizeof(result));
     return result;
 }
 
-uint64_t entropy_uint64(entropy_ctx_t* ctx) {
+uint64_t entropy_util_uint64(entropy_util_ctx_t* ctx) {
     uint64_t result;
-    entropy_bytes(ctx, (uint8_t*)&result, sizeof(result));
+    entropy_util_bytes(ctx, (uint8_t*)&result, sizeof(result));
     return result;
 }
 
-double entropy_double(entropy_ctx_t* ctx) {
-    uint64_t bits = entropy_uint64(ctx);
+double entropy_util_double(entropy_util_ctx_t* ctx) {
+    uint64_t bits = entropy_util_uint64(ctx);
     return (double)(bits >> 11) * (1.0 / 9007199254740992.0);
 }
 
@@ -544,19 +544,20 @@ double entropy_double(entropy_ctx_t* ctx) {
 // ENTROPY MIXING
 // ============================================================================
 
-void entropy_mix(entropy_ctx_t* ctx, const uint8_t* data, size_t size) {
+void entropy_util_mix(entropy_util_ctx_t* ctx, const uint8_t* data, size_t size) {
     if (!ctx || !data || size == 0) return;
 
     mix_into_state(ctx->mix_state, data, size);
 }
 
-int entropy_extract(const uint8_t* input, size_t input_size,
+int entropy_util_extract(const uint8_t* input, size_t input_size,
                     uint8_t* output, size_t output_size) {
     if (!input || !output || input_size == 0 || output_size == 0) {
         return -1;
     }
 
-    // Simple hash-based extraction using xorshift
+    // Non-cryptographic fold: SplitMix64 absorb + XorShift128+ squeeze.
+    // This is whitening only, not a cryptographic hash or strong extractor.
     uint64_t state[4] = {0};
 
     // Mix input into state
@@ -579,7 +580,7 @@ int entropy_extract(const uint8_t* input, size_t input_size,
 // QUALITY ASSESSMENT
 // ============================================================================
 
-double entropy_estimate(const uint8_t* data, size_t size) {
+double entropy_util_estimate(const uint8_t* data, size_t size) {
     if (!data || size == 0) return 0.0;
 
     // Count byte frequencies
@@ -601,15 +602,15 @@ double entropy_estimate(const uint8_t* data, size_t size) {
     return entropy;
 }
 
-int entropy_test_data(const uint8_t* data, size_t size,
-                      entropy_quality_t* quality) {
+int entropy_util_test_data(const uint8_t* data, size_t size,
+                      entropy_util_quality_t* quality) {
     if (!data || size == 0) return 0;
 
     if (quality) {
-        memset(quality, 0, sizeof(entropy_quality_t));
+        memset(quality, 0, sizeof(entropy_util_quality_t));
 
-        quality->estimated_entropy = entropy_estimate(data, size);
-        quality->hardware_available = entropy_hardware_available();
+        quality->estimated_entropy = entropy_util_estimate(data, size);
+        quality->hardware_available = entropy_util_hardware_available();
         quality->os_available = 1;  // Assume available
 
         // Chi-squared test
@@ -635,19 +636,19 @@ int entropy_test_data(const uint8_t* data, size_t size,
     }
 
     // Simple pass/fail based on entropy estimate
-    double entropy = entropy_estimate(data, size);
+    double entropy = entropy_util_estimate(data, size);
     return (entropy >= 7.0);  // At least 7 bits per byte
 }
 
-int entropy_assess_quality(entropy_ctx_t* ctx, size_t sample_size,
-                           entropy_quality_t* quality) {
+int entropy_util_assess_quality(entropy_util_ctx_t* ctx, size_t sample_size,
+                           entropy_util_quality_t* quality) {
     if (!ctx || sample_size == 0) return -1;
 
     uint8_t* sample = malloc(sample_size);
     if (!sample) return -1;
 
-    entropy_bytes(ctx, sample, sample_size);
-    int result = entropy_test_data(sample, sample_size, quality);
+    entropy_util_bytes(ctx, sample, sample_size);
+    int result = entropy_util_test_data(sample, sample_size, quality);
 
     free(sample);
     return result ? 0 : -1;
@@ -657,47 +658,47 @@ int entropy_assess_quality(entropy_ctx_t* ctx, size_t sample_size,
 // CONVENIENCE FUNCTIONS
 // ============================================================================
 
-size_t entropy_generate(uint8_t* buffer, size_t size) {
+size_t entropy_util_generate(uint8_t* buffer, size_t size) {
     if (!buffer || size == 0) return 0;
 
-    entropy_ctx_t* ctx = entropy_create();
+    entropy_util_ctx_t* ctx = entropy_util_create();
     if (!ctx) {
         // Fallback to OS
-        int bytes = entropy_os_bytes(buffer, size);
+        int bytes = entropy_util_os_bytes(buffer, size);
         return (bytes > 0) ? bytes : 0;
     }
 
-    size_t result = entropy_bytes(ctx, buffer, size);
-    entropy_destroy(ctx);
+    size_t result = entropy_util_bytes(ctx, buffer, size);
+    entropy_util_destroy(ctx);
 
     return result;
 }
 
-uint64_t entropy_random_uint64(void) {
+uint64_t entropy_util_random_uint64(void) {
     uint64_t result;
-    entropy_generate((uint8_t*)&result, sizeof(result));
+    entropy_util_generate((uint8_t*)&result, sizeof(result));
     return result;
 }
 
-int entropy_seed(uint8_t* seed, size_t seed_size) {
+int entropy_util_seed(uint8_t* seed, size_t seed_size) {
     if (!seed || seed_size == 0) return -1;
 
     // Try multiple sources for maximum entropy
     size_t collected = 0;
 
     // Hardware RNG
-    int hw = entropy_hardware_bytes(seed, seed_size);
+    int hw = entropy_util_hardware_bytes(seed, seed_size);
     if (hw > 0) collected += hw;
 
     // OS entropy
     if (collected < seed_size) {
-        int os = entropy_os_bytes(seed + collected, seed_size - collected);
+        int os = entropy_util_os_bytes(seed + collected, seed_size - collected);
         if (os > 0) collected += os;
     }
 
     // Jitter if still need more
     if (collected < seed_size) {
-        size_t jitter = entropy_jitter_bytes(seed + collected, seed_size - collected);
+        size_t jitter = entropy_util_jitter_bytes(seed + collected, seed_size - collected);
         collected += jitter;
     }
 
@@ -708,20 +709,20 @@ int entropy_seed(uint8_t* seed, size_t seed_size) {
 // PLATFORM DETECTION
 // ============================================================================
 
-void entropy_utils_get_capabilities(int* has_hardware, int* has_os, int* has_jitter) {
-    if (has_hardware) *has_hardware = entropy_hardware_available();
+void entropy_util_get_capabilities(int* has_hardware, int* has_os, int* has_jitter) {
+    if (has_hardware) *has_hardware = entropy_util_hardware_available();
     if (has_os) *has_os = 1;  // Always assume OS entropy available
     if (has_jitter) *has_jitter = 1;  // Always available
 }
 
-const char* entropy_utils_source_name(entropy_source_type_t source) {
+const char* entropy_util_source_name(entropy_util_source_type_t source) {
     switch (source) {
-        case ENTROPY_SOURCE_AUTO:     return "auto";
-        case ENTROPY_SOURCE_HARDWARE: return "hardware";
-        case ENTROPY_SOURCE_OS:       return "os";
-        case ENTROPY_SOURCE_JITTER:   return "jitter";
-        case ENTROPY_SOURCE_MIXED:    return "mixed";
-        case ENTROPY_SOURCE_QUANTUM:  return "quantum";
+        case ENTROPY_UTIL_SOURCE_AUTO:     return "auto";
+        case ENTROPY_UTIL_SOURCE_HARDWARE: return "hardware";
+        case ENTROPY_UTIL_SOURCE_OS:       return "os";
+        case ENTROPY_UTIL_SOURCE_JITTER:   return "jitter";
+        case ENTROPY_UTIL_SOURCE_MIXED:    return "mixed";
+        case ENTROPY_UTIL_SOURCE_QUANTUM:  return "quantum";
         default:                      return "unknown";
     }
 }

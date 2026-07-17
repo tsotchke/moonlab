@@ -156,7 +156,7 @@ measurement_config_t collective_default_measurement_config(void) {
 }
 
 collective_error_t collective_measure_all(partitioned_state_t* state,
-                                          measurement_result_t* result,
+                                          dist_measurement_result_t* result,
                                           const measurement_config_t* config) {
     if (!state || !result) {
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
@@ -277,7 +277,7 @@ collective_error_t collective_measure_all(partitioned_state_t* state,
 
 collective_error_t collective_measure_qubit(partitioned_state_t* state,
                                             uint32_t qubit,
-                                            measurement_result_t* result,
+                                            dist_measurement_result_t* result,
                                             const measurement_config_t* config) {
     if (!state || !result) {
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
@@ -352,7 +352,7 @@ collective_error_t collective_measure_qubit(partitioned_state_t* state,
 collective_error_t collective_measure_qubits(partitioned_state_t* state,
                                              const uint32_t* qubits,
                                              uint32_t num_qubits,
-                                             measurement_result_t* result,
+                                             dist_measurement_result_t* result,
                                              const measurement_config_t* config) {
     if (!state || !qubits || !result || num_qubits == 0) {
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
@@ -376,7 +376,7 @@ collective_error_t collective_measure_qubits(partitioned_state_t* state,
     double combined_prob = 1.0;
 
     for (uint32_t i = 0; i < num_qubits; i++) {
-        measurement_result_t single_result;
+        dist_measurement_result_t single_result;
         measurement_config_t single_cfg = cfg;
         single_cfg.collapse_state = 1;  // Must collapse for sequential measurement
 
@@ -397,7 +397,7 @@ collective_error_t collective_measure_qubits(partitioned_state_t* state,
 }
 
 collective_error_t collective_sample(const partitioned_state_t* state,
-                                     measurement_result_t* result,
+                                     dist_measurement_result_t* result,
                                      const measurement_config_t* config) {
     if (!state || !result) {
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
@@ -516,7 +516,7 @@ collective_error_t collective_sample_many(const partitioned_state_t* state,
     measurement_config_t cfg = config ? *config : collective_default_measurement_config();
 
     for (uint32_t i = 0; i < num_samples; i++) {
-        measurement_result_t result;
+        dist_measurement_result_t result;
         cfg.seed = cfg.seed + i;  // Vary seed for each sample
 
         collective_error_t err = collective_sample(state, &result, &cfg);
@@ -1465,7 +1465,7 @@ collective_error_t collective_qrng_bits(partitioned_state_t* state,
         dist_hadamard(state, 0);
 
         // Measure
-        measurement_result_t result;
+        dist_measurement_result_t result;
         collective_error_t err = collective_measure_qubit(state, 0, &result, NULL);
         if (err != COLLECTIVE_SUCCESS) return err;
 
@@ -1493,7 +1493,7 @@ collective_error_t collective_qrng_bytes(partitioned_state_t* state,
         }
 
         // Measure all bits
-        measurement_result_t result;
+        dist_measurement_result_t result;
         collective_error_t err = collective_measure_all(state, &result, NULL);
         if (err != COLLECTIVE_SUCCESS) return err;
 
@@ -1520,7 +1520,7 @@ collective_error_t collective_qrng_uniform(partitioned_state_t* state,
             dist_hadamard(state, q);
         }
 
-        measurement_result_t result;
+        dist_measurement_result_t result;
         collective_error_t err = collective_measure_all(state, &result, NULL);
         if (err != COLLECTIVE_SUCCESS) return err;
 

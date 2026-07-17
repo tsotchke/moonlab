@@ -47,9 +47,9 @@ static void test_direct_jitter_bytes(void) {
     uint8_t out[96];
     memset(out, 0, sizeof(out));
 
-    size_t n = entropy_jitter_bytes(out, sizeof(out));
+    size_t n = entropy_util_jitter_bytes(out, sizeof(out));
     CHECK(n == sizeof(out),
-          "entropy_jitter_bytes returned %zu of %zu bytes", n, sizeof(out));
+          "entropy_util_jitter_bytes returned %zu of %zu bytes", n, sizeof(out));
     CHECK(!buffer_is_all_zero(out, sizeof(out)),
           "jitter output is not all zero");
     CHECK(buffer_has_variation(out, sizeof(out)),
@@ -59,7 +59,7 @@ static void test_direct_jitter_bytes(void) {
 static void test_jitter_context_reseed(void) {
     fprintf(stdout, "\n-- jitter context reseed --\n");
 
-    entropy_ctx_t *ctx = entropy_create_with_source(ENTROPY_SOURCE_JITTER);
+    entropy_util_ctx_t *ctx = entropy_util_create_with_source(ENTROPY_UTIL_SOURCE_JITTER);
     CHECK(ctx != NULL, "jitter entropy context allocated");
     if (!ctx) {
         return;
@@ -67,9 +67,9 @@ static void test_jitter_context_reseed(void) {
 
     uint8_t out[128];
     memset(out, 0, sizeof(out));
-    size_t n = entropy_bytes(ctx, out, sizeof(out));
+    size_t n = entropy_util_bytes(ctx, out, sizeof(out));
     CHECK(n == sizeof(out),
-          "entropy_bytes returned %zu of %zu bytes", n, sizeof(out));
+          "entropy_util_bytes returned %zu of %zu bytes", n, sizeof(out));
     CHECK(ctx->bytes_collected >= sizeof(out),
           "context recorded collected bytes");
     CHECK(!buffer_is_all_zero(out, sizeof(out)),
@@ -77,7 +77,7 @@ static void test_jitter_context_reseed(void) {
     CHECK(buffer_has_variation(out, sizeof(out)),
           "context output has byte variation");
 
-    entropy_destroy(ctx);
+    entropy_util_destroy(ctx);
 }
 
 int main(void) {
