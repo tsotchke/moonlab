@@ -252,6 +252,18 @@
     target_link_libraries(test_svd_compress PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_svd_compress COMMAND test_svd_compress)
 
+    # Regression: svd_left_canonicalize truncation across a non-last bond axis
+    # must matricize the transposed layout (isometry + reconstruction).
+    add_executable(test_svd_noncanonical_axis tests/unit/test_svd_noncanonical_axis.c)
+    target_link_libraries(test_svd_noncanonical_axis PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_svd_noncanonical_axis COMMAND test_svd_noncanonical_axis)
+
+    # Regression: tn_apply_gate_2q must permute the 4x4 matrix when
+    # qubit1 > qubit2 (tn_apply_cnot with control > target).
+    add_executable(test_tn_gate_order tests/unit/test_tn_gate_order.c)
+    target_link_libraries(test_tn_gate_order PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tn_gate_order COMMAND test_tn_gate_order)
+
     # Pin complex-Hermitian Jacobi correctness in matrix_math.c.
     # Pre-2026-04-26 the rotations were real-valued; eigenvectors of
     # complex-Hermitian inputs only diagonalised the real part of A.
@@ -395,6 +407,18 @@
         endif()
         add_test(NAME unit_ca_mps_var_d COMMAND test_ca_mps_var_d)
         set_tests_properties(unit_ca_mps_var_d PROPERTIES TIMEOUT 60)
+
+        # Regression: var-D delta cache must be consistent above 255 qubits
+        # (the support arrays were uint8_t and truncated qubit indices).
+        add_executable(test_ca_mps_var_d_large tests/unit/test_ca_mps_var_d_large.c)
+        target_link_libraries(test_ca_mps_var_d_large PRIVATE quantumsim ${MATH_LIBRARY})
+        if(APPLE)
+            target_link_libraries(test_ca_mps_var_d_large PRIVATE "-framework Accelerate")
+        elseif(QSIM_PLATFORM_LINUX AND LAPACK_LIB AND BLAS_LIB)
+            target_link_libraries(test_ca_mps_var_d_large PRIVATE ${LAPACK_LIB} ${BLAS_LIB})
+        endif()
+        add_test(NAME unit_ca_mps_var_d_large COMMAND test_ca_mps_var_d_large)
+        set_tests_properties(unit_ca_mps_var_d_large PROPERTIES TIMEOUT 120)
 
         # CA-MPS alternating variational-D (imag-time |phi> + Clifford D).
         # Headline experiment: TFIM at criticality (g=1) on n=6 must
@@ -1524,13 +1548,14 @@
     qsim_label_tests(tn
         unit_tensor_network unit_tn_dead_code_smoke
         unit_tn_mps_from_statevector tensor_adversarial dmrg
-        mps_vs_exact unit_lattice_2d unit_tdvp_validation)
+        mps_vs_exact unit_lattice_2d unit_tdvp_validation
+        unit_svd_noncanonical_axis unit_tn_gate_order)
     qsim_label_tests(ca_mps
         unit_ca_mps_bond_advantage unit_ca_mps_heisenberg
         unit_ca_mps_imag_time unit_ca_mps_kagome12 unit_ca_mps_limits
         unit_ca_mps_prob unit_ca_mps_var_d unit_ca_mps_var_d_alt
         unit_ca_mps_var_d_composite unit_ca_mps_vs_sv unit_ca_peps
-        unit_gauge_warmstart unit_z2_lgt_pauli_sum)
+        unit_gauge_warmstart unit_z2_lgt_pauli_sum unit_ca_mps_var_d_large)
     qsim_label_tests(topology
         unit_chern_marker unit_chern_kpm unit_chern_fhs unit_qgt
         unit_qgt_phase_diagram unit_qgt_phase_diagram_2d
