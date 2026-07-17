@@ -1,0 +1,20 @@
+# ThreadSanitizer suppressions for the Moonlab concurrency lane.
+#
+# The Homebrew/LLVM libomp shipped on developer machines is NOT built with
+# the Archer TSan-annotation layer, so TSan cannot observe the happens-before
+# established by OpenMP barriers/reductions and reports false positives on the
+# runtime's own internal state.  Suppress anything originating inside the
+# OpenMP runtime library.  This does NOT hide races whose accesses are in
+# Moonlab code (gates.c / state.c / grover.c / parallel_ops.c / scheduler.c);
+# those still fire.
+#
+# To validate the OpenMP regions WITHOUT these suppressions, run on a Linux
+# CI runner with an Archer-instrumented libomp (see .github/workflows/tsan.yml)
+# where the barrier annotations make the false positives disappear for real.
+
+called_from_lib:libomp.dylib
+called_from_lib:libomp.so
+race:__kmp
+race:__gomp
+race:kmp_
+deadlock:__kmp

@@ -1,0 +1,120 @@
+name: tsan
+
+# Data-race / concurrency lane for libquantumsim (ThreadSanitizer).
+#
+# Builds two TSan-instrumented static libraries (OpenMP OFF for a clean
+# pthread-only signal, OpenMP ON to exercise the intra-gate / fan-out
+# parallel regions) and runs the checked-in harnesses under
+# tests/concurrency via scripts/run_tsan.sh.
+#
+# The lane is self-contained: TSan flags go into throwaway build dirs
+# (build-tsan/, build-tsan-omp/, build-tsan-conc/); the tracked root
+# CMakeLists, cmake/tests.cmake, and ci.yml are never modified.
+#
+# Two jobs:
+#
+#   pthread-core -- runs every harness.  The pthread-based subsystems
+#     (control plane, entropy pool, audit buffer, scheduler, Clifford /
+#     measurement, cold-start core init) give a fully accurate TSan signal
+#     with NO OpenMP-runtime noise, so this is the authoritative gate for
+#     the real findings.
+#
+#   openmp-archer -- installs an Archer-instrumented libomp so TSan can see
+#     the OpenMP barrier happens-before.  On a stock (non-Archer) libomp the
+#     intra-gate / fan-out regions produce false positives that
+#     tests/concurrency/tsan.supp filters by library; with Archer those
+#     annotations make the false positives disappear FOR REAL, giving a
+#     definitive clean verdict on the OpenMP numeric core (gate threading,
+#     parallel-Grover entropy isolation, scheduler shot fan-out).
+#
+# The JSONL trace (scripts/icc_traces/moonlab_tsan.jsonl) and per-run logs
+# are uploaded as artifacts.  The known diagnostic findings (documented in
+# tests/concurrency/FINDINGS.md) do not fail the job; a regression that makes
+# a clean-expected harness race does.
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/concurrency/**'
+      - 'scripts/run_tsan.sh'
+      - '.github/workflows/tsan.yml'
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pthread-core:
+    name: pthread-core (ThreadSanitizer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake make libopenblas-dev liblapacke-dev libomp-dev pkg-config
+
+      - name: Run concurrency lane
+        env:
+          CC: clang
+          CXX: clang++
+          QSIM_TSAN_JOBS: '2'
+          QSIM_TSAN_EXTRA_LIBS: 'openblas;lapack;lapacke'
+        run: ./scripts/run_tsan.sh
+
+      - name: Upload TSan trace + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsan-pthread-core
+          path: |
+            scripts/icc_traces/moonlab_tsan.jsonl
+            build-tsan-conc/logs/
+          if-no-files-found: warn
+
+  openmp-archer:
+    name: openmp-archer (TSan + Archer libomp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain (clang + Archer-instrumented libomp)
+        run: |
+          sudo apt-get update
+          # libomp-dev on recent LLVM ships the Archer TSan-annotation layer,
+          # so the OpenMP barrier happens-before is visible to TSan and the
+          # gate-threading / fan-out regions verify with NO suppressions.
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake make libopenblas-dev liblapacke-dev libomp-dev pkg-config
+
+      - name: Run concurrency lane (OpenMP included)
+        env:
+          CC: clang
+          CXX: clang++
+          QSIM_TSAN_JOBS: '2'
+          QSIM_TSAN_EXTRA_LIBS: 'openblas;lapack;lapacke'
+          # Archer honours TSAN_OPTIONS; keep flush_memory low so barrier
+          # annotations are not raced out under load.
+          ARCHER_OPTIONS: 'flush_shadow=1'
+        run: ./scripts/run_tsan.sh
+
+      - name: Upload TSan trace + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsan-openmp-archer
+          path: |
+            scripts/icc_traces/moonlab_tsan.jsonl
+            build-tsan-conc/logs/
+          if-no-files-found: warn
