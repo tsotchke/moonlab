@@ -1,0 +1,134 @@
+name: differential
+
+# Cross-backend / cross-binding differential: prove the SAME quantum program
+# gives the SAME result across every backend (dense / tn_mps / Clifford / GPU)
+# and every binding (C / Python / Rust / WASM-JS), all measured against an
+# INDEPENDENT numpy reference oracle. See tests/differential and
+# scripts/run_cross_diff.sh.
+#
+# PR job (fast, release-blocking): cross_backend_differential,
+#   reference_oracle_agreement, cross_binding_python -- quick corpus profile.
+# Nightly job (medium): adds cross_binding_rust and cross_binding_js over the
+#   full corpus profile.
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'tests/differential/**'
+      - 'scripts/gen_diff_corpus.py'
+      - 'scripts/run_cross_diff.sh'
+      - '.github/workflows/differential.yml'
+      - 'src/**'
+      - 'bindings/**'
+  pull_request:
+    paths:
+      - 'tests/differential/**'
+      - 'scripts/gen_diff_corpus.py'
+      - 'scripts/run_cross_diff.sh'
+      - '.github/workflows/differential.yml'
+      - 'src/**'
+      - 'bindings/**'
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: differential-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -----------------------------------------------------------------------
+  # PR-suitable: C cross-backend differential + Python binding (release gate)
+  # -----------------------------------------------------------------------
+  pr-cross-diff:
+    name: cross-backend + python (quick)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: pip install numpy
+
+      - name: Build libquantumsim
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_BUILD_TESTS=OFF
+          cmake --build build --parallel 2
+
+      - name: Run cross-diff (quick profile)
+        run: bash scripts/run_cross_diff.sh --profile quick --lib-dir build
+
+      - name: Upload differential trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: differential-trace-quick
+          path: scripts/icc_traces/moonlab_differential.jsonl
+          if-no-files-found: warn
+
+  # -----------------------------------------------------------------------
+  # Nightly / dispatch: full matrix + Rust and JS bindings (medium tier)
+  # -----------------------------------------------------------------------
+  nightly-cross-diff:
+    name: full matrix + rust + js
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: pip install numpy
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libclang (for the moonlab-sys bindgen build)
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build libquantumsim
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_BUILD_TESTS=OFF
+          cmake --build build --parallel 2
+
+      - name: Build @moonlab/quantum-core bundle (best effort; JS leg skips if this fails)
+        continue-on-error: true
+        working-directory: bindings/javascript
+        run: |
+          set -eux
+          corepack enable || npm install -g pnpm
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm --filter @moonlab/quantum-core run build:ts
+          # Reuse the tracked emscripten module rather than rebuilding WASM.
+          cp packages/core/../../demo/public/moonlab.js  packages/core/dist/moonlab.js  || true
+          cp packages/core/../../demo/public/moonlab.wasm packages/core/dist/moonlab.wasm || true
+
+      - name: "Run cross-diff (full profile: C + python + rust + js)"
+        run: bash scripts/run_cross_diff.sh --profile full --rust --js --lib-dir build
+
+      - name: Upload differential trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: differential-trace-full
+          path: scripts/icc_traces/moonlab_differential.jsonl
+          if-no-files-found: warn

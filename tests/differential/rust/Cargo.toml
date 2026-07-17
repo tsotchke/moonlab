@@ -1,0 +1,22 @@
+# Standalone cross-binding differential harness over the `moonlab` Rust crate.
+# Empty [workspace] keeps this crate from being absorbed into any parent Cargo
+# workspace (it is built directly via --manifest-path by run_cross_diff.sh).
+[package]
+name = "moonlab-differential"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Path dependency on the in-repo Rust binding. The moonlab-sys build.rs locates
+# libquantumsim via MOONLAB_LIB_DIR (set by run_cross_diff.sh).
+moonlab = { path = "../../../bindings/rust/moonlab" }
+
+[[bin]]
+name = "diff_rust"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2
