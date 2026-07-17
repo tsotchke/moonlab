@@ -1427,11 +1427,15 @@ if(QSIM_HAS_OPENMP)
             BUILD_RPATH   "${QSIM_RPATH_LIST}"
             INSTALL_RPATH "${QSIM_RPATH_LIST}"
         )
-        add_custom_command(TARGET quantumsim POST_BUILD
-            COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
-                    "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
-            VERBATIM
-        )
+        # install_name_tool rewrites a Mach-O dylib's load commands; it fails
+        # on a static archive (.a), so only run it for a shared build.
+        if(QSIM_BUILD_SHARED)
+            add_custom_command(TARGET quantumsim POST_BUILD
+                COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
+                        "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
+                VERBATIM
+            )
+        endif()
     elseif(TARGET OpenMP::OpenMP_C)
         # Standard OpenMP target
         target_link_libraries(quantumsim PRIVATE OpenMP::OpenMP_C)
