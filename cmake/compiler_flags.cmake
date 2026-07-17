@@ -18,6 +18,12 @@ if(QSIM_COMPILER_CLANG AND CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     if(QSIM_WERROR)
         list(APPEND QSIM_WARNING_FLAGS /WX)
     endif()
+    # The UCRT deprecates the POSIX spellings (strdup, strcasecmp, ...) and the
+    # non-_s CRT calls in favour of Microsoft-specific names; under /WX those
+    # deprecations become hard errors. The POSIX names are the portable ones we
+    # build against on every other platform, so silence the CRT nags rather
+    # than fork every call site to _strdup and friends.
+    add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS _CRT_SECURE_NO_WARNINGS)
 elseif(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
     list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
     if(QSIM_WERROR)
