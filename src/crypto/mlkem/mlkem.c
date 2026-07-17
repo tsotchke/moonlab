@@ -104,6 +104,40 @@ static void polyvec_decompress(mlkem_polyvec_t *v, const uint8_t *in,
 }
 
 /* -------------------------------------------------------------- */
+/* FIPS 203 input validation (Sections 7.2 / 7.3)                  */
+/* -------------------------------------------------------------- */
+
+/* Encapsulation-key check (FIPS 203 Section 7.2, "modulus check").
+ * The public key's polynomial vector is 12-bit ByteEncode of integers
+ * that MUST be reduced mod q.  Decode the polyvec, canonicalise mod q,
+ * re-encode, and require byte-for-byte equality with the input: any
+ * 12-bit word >= q survives the raw decode but changes under reduction,
+ * so a mismatch flags an out-of-range coefficient.  The trailing 32-byte
+ * rho seed is unconstrained and excluded from the check.
+ * Returns 1 if ek is well formed, 0 otherwise. */
+static int mlkem_ek_valid(const mlkem_params_t *P, const uint8_t *ek) {
+    mlkem_polyvec_t t;
+    polyvec_frombytes(&t, ek, P->k);
+    polyvec_reduce(&t, P->k);
+    uint8_t reencoded[MLKEM_MAX_K * MLKEM_POLYBYTES];
+    polyvec_tobytes(reencoded, &t, P->k);
+    return memcmp(reencoded, ek, (size_t)P->polyvec_bytes) == 0;
+}
+
+/* Decapsulation-key check (FIPS 203 Section 7.3, "hash check").
+ * dk = dk_pke || ek || H(ek) || z.  Recompute H(ek) from the embedded
+ * encapsulation key and require it to equal the stored digest; a
+ * mismatch means the key blob is corrupt or inconsistent.
+ * Returns 1 if dk is internally consistent, 0 otherwise. */
+static int mlkem_dk_valid(const mlkem_params_t *P, const uint8_t *dk) {
+    const uint8_t *ek = dk + P->polyvec_bytes;
+    const uint8_t *h  = dk + P->polyvec_bytes + P->publickey_bytes;
+    uint8_t recomputed[32];
+    sha3_256(ek, (size_t)P->publickey_bytes, recomputed);
+    return memcmp(recomputed, h, 32) == 0;
+}
+
+/* -------------------------------------------------------------- */
 /* CBD noise / message helpers                                     */
 /* -------------------------------------------------------------- */
 
@@ -126,16 +160,21 @@ static void poly_from_msg(mlkem_poly_t *p, const uint8_t msg[32]) {
         }
     }
 }
+/* Compress_1: msg bit = round(2 * coeff / q) mod 2.  Constant-time: the
+ * sign fix-up uses an arithmetic-shift mask instead of a data-dependent
+ * branch, and division by the compile-time constant MLKEM_Q lowers to a
+ * multiply/shift, so control flow and memory access are independent of the
+ * (secret) decrypted polynomial.  Matches the pq-crystals reference
+ * poly_tomsg. */
 static void poly_to_msg(uint8_t msg[32], const mlkem_poly_t *p) {
     memset(msg, 0, 32);
     for (int i = 0; i < MLKEM_N / 8; i++) {
         for (int j = 0; j < 8; j++) {
-            int32_t t = p->coeffs[8 * i + j];
-            if (t < 0) t += MLKEM_Q;
-            int32_t d = t - (MLKEM_Q / 2);
-            if (d < 0) d = -d;
-            int bit = (d <= MLKEM_Q / 4) ? 1 : 0;
-            msg[i] |= (uint8_t)(bit << j);
+            int16_t c = p->coeffs[8 * i + j];
+            /* Branchless canonicalise to [0, q): add q iff c < 0. */
+            uint32_t t = (uint32_t)((int32_t)c + ((c >> 15) & MLKEM_Q));
+            t = (((t << 1) + MLKEM_Q / 2) / MLKEM_Q) & 1u;
+            msg[i] |= (uint8_t)(t << j);
         }
     }
 }
@@ -280,6 +319,17 @@ static void mlkem_keygen_generic(const mlkem_params_t *P,
 static void mlkem_encaps_generic(const mlkem_params_t *P,
                                   uint8_t *c, uint8_t *K_out,
                                   const uint8_t *ek, const uint8_t m[32]) {
+    /* FIPS 203 Section 7.2 input validation.  The public void API cannot
+     * return an error, so reject fail-closed: emit no ciphertext and no
+     * shared secret.  Callers wanting an explicit signal use
+     * moonlab_mlkemNNN_check_ek() (or the *_encaps_qrng wrappers, which
+     * return -2) before encapsulating. */
+    if (!mlkem_ek_valid(P, ek)) {
+        memset(c, 0, (size_t)P->ciphertext_bytes);
+        memset(K_out, 0, 32);
+        return;
+    }
+
     uint8_t hpk[32];
     sha3_256(ek, (size_t)P->publickey_bytes, hpk);
 
@@ -297,6 +347,16 @@ static void mlkem_encaps_generic(const mlkem_params_t *P,
 static void mlkem_decaps_generic(const mlkem_params_t *P,
                                   uint8_t *K_out,
                                   const uint8_t *c, const uint8_t *dk) {
+    /* FIPS 203 Section 7.3 input validation: reject an inconsistent
+     * decapsulation key fail-closed (zero shared secret).  The check is
+     * over the public ek embedded in dk and its stored hash, so it does
+     * not branch on secret-dependent data.  moonlab_mlkemNNN_check_dk()
+     * exposes the same result with an explicit return value. */
+    if (!mlkem_dk_valid(P, dk)) {
+        memset(K_out, 0, 32);
+        return;
+    }
+
     const uint8_t *sk_pke = dk;
     const uint8_t *ek     = dk + P->polyvec_bytes;
     const uint8_t *h      = dk + P->polyvec_bytes + P->publickey_bytes;
@@ -389,6 +449,29 @@ void moonlab_mlkem1024_decaps(uint8_t K[32],
 }
 
 /* -------------------------------------------------------------- */
+/* FIPS 203 key validation (public)                                */
+/* -------------------------------------------------------------- */
+
+int moonlab_mlkem512_check_ek(const uint8_t ek[MLKEM512_PUBLICKEYBYTES]) {
+    return mlkem_ek_valid(&MLKEM_512_PARAMS, ek);
+}
+int moonlab_mlkem512_check_dk(const uint8_t dk[MLKEM512_SECRETKEYBYTES]) {
+    return mlkem_dk_valid(&MLKEM_512_PARAMS, dk);
+}
+int moonlab_mlkem768_check_ek(const uint8_t ek[MLKEM768_PUBLICKEYBYTES]) {
+    return mlkem_ek_valid(&MLKEM_768_PARAMS, ek);
+}
+int moonlab_mlkem768_check_dk(const uint8_t dk[MLKEM768_SECRETKEYBYTES]) {
+    return mlkem_dk_valid(&MLKEM_768_PARAMS, dk);
+}
+int moonlab_mlkem1024_check_ek(const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]) {
+    return mlkem_ek_valid(&MLKEM_1024_PARAMS, ek);
+}
+int moonlab_mlkem1024_check_dk(const uint8_t dk[MLKEM1024_SECRETKEYBYTES]) {
+    return mlkem_dk_valid(&MLKEM_1024_PARAMS, dk);
+}
+
+/* -------------------------------------------------------------- */
 /* QRNG-sourced convenience wrappers                               */
 /* -------------------------------------------------------------- */
 
@@ -403,6 +486,7 @@ int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
 int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                                    uint8_t K_out[32],
                                    const uint8_t ek[MLKEM512_PUBLICKEYBYTES]) {
+    if (!mlkem_ek_valid(&MLKEM_512_PARAMS, ek)) return -2;
     uint8_t m[32];
     if (moonlab_qrng_bytes(m, sizeof m) != 0) return -1;
     moonlab_mlkem512_encaps(c, K_out, ek, m);
@@ -420,6 +504,7 @@ int moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
 int moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                                    uint8_t K_out[32],
                                    const uint8_t ek[MLKEM768_PUBLICKEYBYTES]) {
+    if (!mlkem_ek_valid(&MLKEM_768_PARAMS, ek)) return -2;
     uint8_t m[32];
     if (moonlab_qrng_bytes(m, sizeof m) != 0) return -1;
     moonlab_mlkem768_encaps(c, K_out, ek, m);
@@ -437,6 +522,7 @@ int moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
 int moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                     uint8_t K_out[32],
                                     const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]) {
+    if (!mlkem_ek_valid(&MLKEM_1024_PARAMS, ek)) return -2;
     uint8_t m[32];
     if (moonlab_qrng_bytes(m, sizeof m) != 0) return -1;
     moonlab_mlkem1024_encaps(c, K_out, ek, m);
