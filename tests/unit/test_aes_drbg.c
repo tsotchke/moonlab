@@ -121,10 +121,39 @@ static void test_ctr_drbg_chunked(void) {
           "100-byte output identical across fresh-seed recomputation");
 }
 
+static void test_ctr_drbg_sp80090a_cavp(void) {
+    fprintf(stdout, "\n-- CTR_DRBG SP 800-90A CAVP vector (AES-256, no df) --\n");
+    /* Official NIST CAVP vector, drbgtestvectors / drbgvectors_no_reseed /
+     * CTR_DRBG.txt, block:
+     *   [AES-256 no df] [PredictionResistance = False]
+     *   [EntropyInputLen = 384] [NonceLen = 0]
+     *   [PersonalizationStringLen = 0] [AdditionalInputLen = 0]
+     *   [ReturnedBitsLen = 512]  COUNT = 0
+     * Flow: Instantiate(EntropyInput); Generate (discard); Generate (return).
+     * No reseed, no prediction resistance, no personalization, no
+     * additional input -- exactly the construction ctr_drbg.c implements. */
+    uint8_t seed[48];
+    hex_decode("df5d73faa468649edda33b5cca79b0b05600419ccb7a879ddfec9db32ee494e5"
+               "531b51de16a30f769262474c73bec010", seed, 48);
+    const char *returned_bits =
+        "d1c07cd95af8a7f11012c84ce48bb8cb87189e99d40fccb1771c619bdf82ab22"
+        "80b1dc2f2581f39164f7ac0c510494b3a43c41b7db17514c87b107ae793e01c5";
+
+    ctr_drbg_ctx_t drbg;
+    ctr_drbg_init(&drbg, seed);
+    uint8_t discard[64];
+    ctr_drbg_generate(&drbg, discard, 64);   /* first Generate: discarded */
+    uint8_t out[64];
+    ctr_drbg_generate(&drbg, out, 64);        /* second Generate: returned */
+    CHECK(hex_match(out, 64, returned_bits),
+          "CTR_DRBG reproduces NIST SP 800-90A CAVP returned bits");
+}
+
 int main(void) {
     fprintf(stdout, "=== AES + CTR_DRBG tests ===\n");
     test_aes256_fips197_c3();
     test_aes256_zero_key_zero_block();
+    test_ctr_drbg_sp80090a_cavp();
     test_ctr_drbg_deterministic();
     test_ctr_drbg_chunked();
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");

@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-size_t entropy_jitter_bytes(uint8_t* buffer, size_t size);
+size_t entropy_util_jitter_bytes(uint8_t* buffer, size_t size);
 
 static int failures = 0;
 
@@ -50,11 +50,11 @@ static void test_utils_entropy_jitter_bytes_emits_bytes(void) {
     uint8_t out[32];
     memset(out, 0, sizeof(out));
 
-    size_t n = entropy_jitter_bytes(out, sizeof(out));
-    CHECK(n == sizeof(out), "entropy_jitter_bytes filled requested buffer");
-    CHECK(!all_zero(out, n), "entropy_jitter_bytes output is not all zero");
-    CHECK(entropy_jitter_bytes(NULL, sizeof(out)) == 0,
-          "entropy_jitter_bytes rejects NULL buffer");
+    size_t n = entropy_util_jitter_bytes(out, sizeof(out));
+    CHECK(n == sizeof(out), "entropy_util_jitter_bytes filled requested buffer");
+    CHECK(!all_zero(out, n), "entropy_util_jitter_bytes output is not all zero");
+    CHECK(entropy_util_jitter_bytes(NULL, sizeof(out)) == 0,
+          "entropy_util_jitter_bytes rejects NULL buffer");
 }
 
 int main(void) {

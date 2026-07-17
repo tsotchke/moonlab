@@ -183,9 +183,23 @@ int entropy_pool_init_with_config(
         return -1;
     }
     
+    /* Derive the SP 800-90B RCT/APT cutoffs from the entropy source that was
+     * actually selected, not a blanket 4.0 bits/byte.  A global floor of 4.0
+     * left the health tests far too lax for an 8.0-rated hardware/OS source:
+     * long low-entropy runs a strong source should never emit would slip
+     * through.  entropy_quality_estimate rates the active source (8.0 for
+     * RDSEED/RDRAND/getrandom/dev_random, 7.8 for dev_urandom, 5.0 for
+     * jitter); use that so the cutoffs track the source's real quality, and
+     * fall back to the configured min_entropy only if the rating is unusable. */
+    double health_min_entropy = config->min_entropy;
+    double source_rating = entropy_quality_estimate(ctx->entropy_ctx->caps.preferred_source);
+    if (source_rating > 0.0 && source_rating <= 8.0) {
+        health_min_entropy = source_rating;
+    }
+
     health_test_config_t health_config;
-    health_get_recommended_config(config->min_entropy, &health_config);
-    
+    health_get_recommended_config(health_min_entropy, &health_config);
+
     health_error_t health_err = health_tests_init_custom(ctx->health_ctx, &health_config);
     if (health_err != HEALTH_SUCCESS) {
         free(ctx->health_ctx);
@@ -413,9 +427,10 @@ int entropy_pool_get_bytes(
     
     pthread_mutex_lock(&ctx->pool_mutex);
     ctx->stats.bytes_generated += size;
-    ctx->stats.cache_misses++;
+    /* cache_misses was already incremented at the miss decision above; do not
+     * double-count it here. */
     pthread_mutex_unlock(&ctx->pool_mutex);
-    
+
     return 0;
 }
 
