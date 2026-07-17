@@ -742,6 +742,11 @@ typedef struct {
      * thread can decrement on exit, holding the concurrency cap.  NULL
      * when no cap is configured (max_concurrent == 0). */
     _Atomic int   *active_counter;
+    /* Points at the `done` flag of this worker's registry slot (since
+     * v1.1.0).  The worker sets it to 1 as its very last action so the
+     * acceptor loop can reap (join) the slot.  NULL is never passed by
+     * the acceptor but is guarded anyway. */
+    _Atomic int   *done_flag;
     /* Admission hook (since v1.0.3); NULL when no hook is installed.
      * Copied from the server struct into each worker_ctx so the
      * handler thread can dispatch into it without touching the
@@ -782,6 +787,9 @@ static void *worker_thread(void *arg)
     memcpy(sec, ctx->secret, slen);
     /* Capture the active-counter pointer before we free the heap ctx. */
     _Atomic int *ctx_active_counter = ctx->active_counter;
+    /* Same for the registry slot's completion flag -- ctx is freed
+     * before we return, so we must not dereference it at exit. */
+    _Atomic int *ctx_done_flag = ctx->done_flag;
     /* Capture the admission hook + ctx the same way -- the heap
      * ctx is freed before handle_one_request runs, so we must not
      * dereference it inside the call. */
@@ -816,6 +824,8 @@ static void *worker_thread(void *arg)
             if (ctx_active_counter) atomic_fetch_sub(ctx_active_counter, 1);
             free(ctx);
             close(fd);
+            /* Signal the acceptor this slot is reapable (set last). */
+            if (ctx_done_flag) atomic_store(ctx_done_flag, 1);
             return NULL;
         }
         /* mTLS audit (since v0.9.0): if the peer presented a cert,
@@ -842,6 +852,10 @@ static void *worker_thread(void *arg)
      * the accept loop performed before pthread_create.  Done last so
      * the slot only frees up after the fd is actually closed. */
     if (ctx_active_counter) atomic_fetch_sub(ctx_active_counter, 1);
+    /* Mark this registry slot reapable as the very last action, after
+     * every resource (fd, ctx, concurrency reservation) is released,
+     * so the acceptor never joins us before cleanup completes. */
+    if (ctx_done_flag) atomic_store(ctx_done_flag, 1);
     return NULL;
 }
 
@@ -1116,14 +1130,72 @@ int moonlab_control_server_open(const char                 *host,
     return MOONLAB_CONTROL_OK;
 }
 
+/* ------------------------------------------------------------------
+ * Bounded live-worker registry (since v1.1.0).
+ *
+ * The accept loop used to reserve one pthread_t per iteration up front
+ * -- calloc(max_iters, ...) -- which the daemon drives with
+ * max_iters == INT_MAX, committing ~17 GB of virtual address space and
+ * never reclaiming a handle until shutdown.  Instead we keep a fixed
+ * pool of slots: each spawned worker owns a slot and sets its `done`
+ * flag just before it returns, and the acceptor reaps (joins) finished
+ * slots on its next pass so the pthread_t handles are reclaimed as
+ * workers complete.  At shutdown a drain barrier joins every still-live
+ * slot.  Live concurrency is therefore bounded by `cap`, independent
+ * of max_iters.
+ * ------------------------------------------------------------------ */
+#define MOONLAB_CONTROL_MAX_LIVE_WORKERS 1024
+
+typedef struct {
+    pthread_t   tid;
+    int         in_use;   /* slot holds a spawned, not-yet-joined worker. */
+    _Atomic int done;     /* set to 1 by the worker just before it returns. */
+} worker_slot_t;
+
+/* Reap every finished worker (its `done` flag set) by joining it and
+ * releasing its slot, then return the index of a free slot.  If every
+ * slot is still busy, block-join the round-robin slot so exactly one
+ * frees.  Only ever called from the single acceptor thread, so the
+ * non-atomic `in_use`/`tid` fields need no locking. */
+static size_t worker_registry_acquire(worker_slot_t *reg, size_t cap,
+                                      size_t *rr_cursor)
+{
+    /* Pass 1: reap any worker that has finished since we last looked. */
+    for (size_t i = 0; i < cap; i++) {
+        if (reg[i].in_use && atomic_load(&reg[i].done)) {
+            pthread_join(reg[i].tid, NULL);
+            reg[i].in_use = 0;
+        }
+    }
+    /* Pass 2: hand back the first free slot. */
+    for (size_t i = 0; i < cap; i++) {
+        if (!reg[i].in_use) return i;
+    }
+    /* Every slot is still running: block-join the round-robin slot so
+     * exactly one frees, throttling accept() to worker completion. */
+    size_t idx = *rr_cursor;
+    *rr_cursor = (idx + 1) % cap;
+    pthread_join(reg[idx].tid, NULL);
+    reg[idx].in_use = 0;
+    return idx;
+}
+
 int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 {
     if (!s || s->srv_fd < 0 || max_iters < 1) return MOONLAB_CONTROL_BAD_ARG;
 
-    pthread_t *workers = (pthread_t *)calloc((size_t)max_iters, sizeof(pthread_t));
-    if (!workers) return MOONLAB_CONTROL_OOM;
+    /* Bounded live-worker pool.  Never proportional to max_iters (which
+     * the daemon passes as INT_MAX); sized to the configured
+     * concurrency cap when that exceeds the default backstop so the
+     * registry never throttles below an admin-chosen ceiling. */
+    size_t cap = MOONLAB_CONTROL_MAX_LIVE_WORKERS;
+    if (s->max_concurrent > 0 && (size_t)s->max_concurrent > cap) {
+        cap = (size_t)s->max_concurrent;
+    }
+    worker_slot_t *reg = (worker_slot_t *)calloc(cap, sizeof(*reg));
+    if (!reg) return MOONLAB_CONTROL_OOM;
+    size_t rr_cursor = 0;
 
-    int worker_count = 0;
     int served = 0;
     int rc = MOONLAB_CONTROL_OK;
     int shutting_down = 0;
@@ -1224,7 +1296,17 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
         ctx->admission_hook     = s->admission_hook;
         ctx->admission_hook_ctx = s->admission_hook_ctx;
 
-        if (pthread_create(&workers[worker_count], NULL, worker_thread, ctx) != 0) {
+        /* Reserve a live-worker slot (reaping finished ones first, and
+         * block-joining the oldest if the pool is saturated) and point
+         * the worker at its slot's completion flag. */
+        size_t slot = worker_registry_acquire(reg, cap, &rr_cursor);
+        reg[slot].in_use = 1;
+        atomic_store(&reg[slot].done, 0);
+        ctx->done_flag = &reg[slot].done;
+
+        if (pthread_create(&reg[slot].tid, NULL, worker_thread, ctx) != 0) {
+            /* The worker never started: release the slot we reserved. */
+            reg[slot].in_use = 0;
             moonlab_io_t inline_io = { 0 };
             inline_io.fd = client;
             (void)handle_one_request(&inline_io,
@@ -1238,16 +1320,19 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
              * reservation we made above the malloc(). */
             if (ctx->active_counter) atomic_fetch_sub(ctx->active_counter, 1);
             free(ctx);
-        } else {
-            worker_count++;
         }
         served++;
     }
 
-    for (int i = 0; i < worker_count; i++) {
-        pthread_join(workers[i], NULL);
+    /* Drain barrier: join every still-live worker before returning so
+     * no pthread_t handle leaks and every fd/ctx is fully reclaimed. */
+    for (size_t i = 0; i < cap; i++) {
+        if (reg[i].in_use) {
+            pthread_join(reg[i].tid, NULL);
+            reg[i].in_use = 0;
+        }
     }
-    free(workers);
+    free(reg);
     return rc;
 }
 
