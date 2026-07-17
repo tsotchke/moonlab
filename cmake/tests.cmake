@@ -1192,6 +1192,10 @@
     target_link_libraries(test_qrng_delivery PRIVATE quantumsim)
     add_test(NAME unit_qrng_delivery COMMAND test_qrng_delivery)
 
+    add_executable(test_qrng_bell_certified_output tests/unit/test_qrng_bell_certified_output.c)
+    target_link_libraries(test_qrng_bell_certified_output PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qrng_bell_certified_output COMMAND test_qrng_bell_certified_output)
+
     if(QSIM_BUILD_BENCHMARKS)
     # Performance benchmarks (build-only; no ctest entry so CI stays
     # fast). Run directly for local profiling:
@@ -1539,7 +1543,8 @@
         unit_shor_ecdlp unit_differentiable unit_mbl unit_mbl_smoke
         differentiable)
     qsim_label_tests(qrng
-        unit_qrng_di unit_qrng_statistics unit_qrng_thread_safety unit_qrng_delivery unit_entropy_pool
+        unit_qrng_di unit_qrng_statistics unit_qrng_thread_safety unit_qrng_delivery
+        unit_qrng_bell_certified_output unit_entropy_pool
         unit_entropy_jitter unit_entropy_sources unit_hardware_entropy_probe health_tests)
     qsim_label_tests(crypto
         unit_mlkem unit_mlkem_nist_kat unit_mlkem_acvp unit_mlkem_poly unit_aes_drbg

@@ -32,15 +32,36 @@ double qrng_di_min_entropy_from_chsh(double chsh) {
 /* Toeplitz extractor                                             */
 /* ------------------------------------------------------------- */
 
-/* Get bit i (zero-indexed, LSB-first within each byte) from a packed
+/* Set bit i (zero-indexed, LSB-first within each byte) in a packed
  * bitstream. */
-static inline int getbit(const uint8_t *p, size_t i) {
-    return (p[i >> 3] >> (i & 7)) & 1;
-}
 static inline void setbit(uint8_t *p, size_t i, int b) {
     uint8_t mask = (uint8_t)(1u << (i & 7));
     if (b) p[i >> 3] |= mask;
     else   p[i >> 3] &= (uint8_t)~mask;
+}
+
+/* Read a little-endian 64-bit word from byte offset @p byteoff, treating
+ * any byte at or beyond @p nbytes as zero (no out-of-bounds access). */
+static inline uint64_t rd64(const uint8_t *p, size_t nbytes, size_t byteoff) {
+    uint64_t v = 0;
+    for (int k = 0; k < 8; k++) {
+        size_t b = byteoff + (size_t)k;
+        if (b < nbytes) v |= (uint64_t)p[b] << (8 * k);
+    }
+    return v;
+}
+
+/* Return the 64-bit window whose bit k equals getbit(p, off + k), LSB-first,
+ * with bits sourced from beyond the buffer read as zero. */
+static inline uint64_t load_bits64(const uint8_t *p, size_t nbytes, size_t off) {
+    size_t byte = off >> 3;
+    unsigned sh = (unsigned)(off & 7);
+    uint64_t lo = rd64(p, nbytes, byte);
+    if (sh == 0) return lo;
+    uint64_t hi = 0;
+    size_t b = byte + 8;
+    if (b < nbytes) hi = (uint64_t)p[b];
+    return (lo >> sh) | (hi << (64 - sh));
 }
 
 int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
@@ -56,14 +77,25 @@ int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
     if (n_seed * 8 < need_seed_bits) return -2;
 
     memset(out, 0, n_out);
-    /* y[i] = XOR_j T_{i,j} * x[j] = XOR_j seed[i + j] * raw[j]. */
+    /* y[i] = XOR_j T_{i,j} * x[j] = XOR_j seed[i + j] * raw[j].
+     *
+     * Word-parallel form: walk the raw input 64 bits at a time.  For output
+     * bit i and raw-word w (raw bits [64w, 64w+64)), AND the raw word with the
+     * matching 64-bit seed window seed[i+64w .. i+64w+63] and XOR-fold; the
+     * output bit is the parity of the accumulated product.  Raw bits past
+     * n_in_bits fall in bytes beyond the buffer and read as zero, so the tail
+     * word needs no explicit mask.  This is bit-for-bit identical to the naive
+     * double loop but ~64x fewer iterations. */
+    const size_t n_words = (n_in_bits + 63) / 64;
     for (size_t i = 0; i < n_out_bits; i++) {
-        int acc = 0;
-        for (size_t j = 0; j < n_in_bits; j++) {
-            int tij = getbit(seed, i + j);
-            if (tij) acc ^= getbit(raw, j);
+        uint64_t acc = 0;
+        for (size_t w = 0; w < n_words; w++) {
+            size_t j0 = 64 * w;
+            uint64_t rw = load_bits64(raw, n_in, j0);
+            uint64_t sw = load_bits64(seed, n_seed, i + j0);
+            acc ^= rw & sw;
         }
-        setbit(out, i, acc);
+        if (__builtin_parityll(acc)) setbit(out, i, 1);
     }
     return 0;
 }
