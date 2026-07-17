@@ -866,6 +866,14 @@ vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type) {
             opt->tolerance = 1e-6;
             opt->learning_rate = 0.005;
             break;
+
+        case VQE_OPTIMIZER_QNG:
+            // Quantum natural gradient: the metric preconditioner damps
+            // ill-conditioned directions, so a larger step is stable.
+            opt->max_iterations = 500;
+            opt->tolerance = 1e-6;
+            opt->learning_rate = 0.1;
+            break;
     }
     
     opt->verbose = 1;
@@ -1295,7 +1303,8 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
         printf("║ Optimizer:           %-33s ║\n",
                solver->optimizer->type == VQE_OPTIMIZER_ADAM ? "ADAM" :
                solver->optimizer->type == VQE_OPTIMIZER_LBFGS ? "L-BFGS" :
-               solver->optimizer->type == VQE_OPTIMIZER_COBYLA ? "COBYLA" : "Gradient Descent");
+               solver->optimizer->type == VQE_OPTIMIZER_COBYLA ? "COBYLA" :
+               solver->optimizer->type == VQE_OPTIMIZER_QNG ? "Quantum Natural Gradient" : "Gradient Descent");
         printf("║ Max iterations:      %4zu                                 ║\n", solver->optimizer->max_iterations);
         printf("╚════════════════════════════════════════════════════════════╝\n\n");
         printf("Iter    Energy (Ha)      Energy (kcal/mol)    Δ Energy     Status\n");
@@ -1395,6 +1404,24 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
                         solver->optimizer->learning_rate * gradient[p];
                 }
             }
+        } else if (solver->optimizer->type == VQE_OPTIMIZER_QNG) {
+            // Quantum natural gradient: precondition the parameter-shift
+            // gradient by the regularized Fubini-Study metric of the ansatz
+            // state, theta <- theta - lr * (g + eps*I)^{-1} grad.  On a
+            // singular metric, fall back to the plain gradient.
+            vqe_compute_gradient(solver, solver->ansatz->parameters, gradient);
+
+            double *nat_dir = malloc(result.num_parameters * sizeof(double));
+            int have_dir = (nat_dir != NULL) &&
+                (vqe_natural_gradient_direction(solver, solver->ansatz->parameters,
+                                                gradient, 1e-3, nat_dir) == 0);
+            for (size_t p = 0; p < result.num_parameters; p++) {
+                double step = have_dir ? nat_dir[p] : gradient[p];
+                solver->ansatz->parameters[p] -=
+                    solver->optimizer->learning_rate * step;
+            }
+            free(nat_dir);
+
         } else if (solver->optimizer->type == VQE_OPTIMIZER_LBFGS) {
             // L-BFGS: Limited-memory Broyden-Fletcher-Goldfarb-Shanno
             // Uses m previous gradient/parameter differences to approximate inverse Hessian
