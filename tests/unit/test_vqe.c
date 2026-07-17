@@ -259,6 +259,74 @@ static void test_h2_adjoint_gradient_matches_finite_diff(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Exact ground-state energy of H2 at a bond distance (no ansatz/optimizer). */
+static double h2_exact_energy(double r_angstrom) {
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(r_angstrom);
+    double e = vqe_exact_ground_state_energy(H);
+    pauli_hamiltonian_free(H);
+    return e;
+}
+
+/* The H2 potential energy surface must be smooth and differentiable in the
+ * bond length: the equilibrium result is unchanged, there is no flat plateau
+ * (which would give zero force at the minimum), and the force dE/dr is
+ * continuous (no kink).  This guards the first-principles STO-3G construction
+ * against a regression to the previous Morse/plateau interpolation. */
+static void test_h2_pes_smooth_and_differentiable(void) {
+    fprintf(stdout, "\n-- VQE: H2 potential energy surface is smooth + differentiable --\n");
+
+    /* (1) Equilibrium coefficients + nuclear repulsion are the exact O'Malley
+     * values (the fix is additively anchored, so 0.7414 A is unchanged). */
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.7414);
+    CHECK(H != NULL, "built H2 Hamiltonian at equilibrium");
+    if (!H) return;
+    const char *names[5] = {"II", "IZ", "ZI", "ZZ", "XX"};
+    const double omalley[5] = {-1.0523732, 0.39793742, -0.39793742,
+                               -0.01128010, 0.18093120};
+    for (int t = 0; t < 5; t++) {
+        double got = NAN;
+        for (size_t i = 0; i < H->num_terms; i++)
+            if (H->terms[i].pauli_string &&
+                strcmp(H->terms[i].pauli_string, names[t]) == 0)
+                got = H->terms[i].coefficient;
+        CHECK(isfinite(got) && fabs(got - omalley[t]) < 1e-9,
+              "equilibrium %s coefficient exact (%.8f)", names[t], got);
+    }
+    CHECK(fabs(H->nuclear_repulsion - 0.7151043390) < 1e-9,
+          "equilibrium nuclear repulsion exact (%.10f)", H->nuclear_repulsion);
+    pauli_hamiltonian_free(H);
+
+    double E_eq = h2_exact_energy(0.7414);
+    fprintf(stdout, "    E_exact(0.7414) = %.9f Ha\n", E_eq);
+    CHECK(fabs(E_eq - (-1.142170640)) < 1e-6,
+          "equilibrium ground-state energy unchanged (%.9f)", E_eq);
+
+    /* (2) No plateau: the previous construction returned identical coefficients
+     * for all r within +/-0.01 A of equilibrium, so the energy was flat there.
+     * A first-principles PES must vary. */
+    double Ea = h2_exact_energy(0.735), Eb = h2_exact_energy(0.745);
+    CHECK(fabs(Ea - Eb) > 1e-6,
+          "PES is not flat across equilibrium (no plateau): |dE| = %.2e", fabs(Ea - Eb));
+
+    /* (3) The force dE/dr is continuous through equilibrium.  The old
+     * exp(-1.5*fabs(r-r_eq)) scaling and plateau edge made it jump by ~2.4
+     * Ha/A; a smooth PES keeps adjacent central-difference forces close. */
+    const double h = 1e-3;
+    double max_force_jump = 0.0, prev_force = NAN;
+    for (double r = 0.70; r <= 0.78001; r += 0.01) {
+        double force = (h2_exact_energy(r + h) - h2_exact_energy(r - h)) / (2.0 * h);
+        if (isfinite(prev_force)) {
+            double jump = fabs(force - prev_force);
+            if (jump > max_force_jump) max_force_jump = jump;
+        }
+        prev_force = force;
+    }
+    fprintf(stdout, "    max adjacent |d(force)| over [0.70,0.78] = %.4f Ha/A\n",
+            max_force_jump);
+    CHECK(max_force_jump < 0.1,
+          "force is continuous through equilibrium (no kink): %.4f < 0.1", max_force_jump);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -266,6 +334,7 @@ int main(void) {
     test_h2_optimizer_converges_below_hf();
     test_h2_noisy();
     test_h2_adjoint_gradient_matches_finite_diff();
+    test_h2_pes_smooth_and_differentiable();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
