@@ -5,6 +5,103 @@ All notable changes to MoonLab Quantum Simulator will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**Post-v1.1.0 stabilization.** ABI 0.5.0 (QRNG status surface + honest
+certification language + wasm32 correctness fixes), a VQE quantum natural
+gradient optimizer, a first-principles H2/LiH potential energy surface, the
+real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
+for CPU-only builds, and a full packaging/release-pipeline rework. Covers
+`v1.1.0..HEAD`, including merged PRs #12, #13, and #14.
+
+### Added
+
+- **ABI 0.5.0: `moonlab_qrng_get_status`.** New stable-ABI entry exposing a
+  versioned QRNG status struct with `MOONLAB_QRNG_CAP_*` capability bits
+  stating exactly what the conditioned hybrid RNG is (hardware/OS entropy,
+  continuous SP 800-90B health tests, SHAKE256 conditioning, Bell-simulation
+  gating, thread safety) and exactly what it is not (the device-independent
+  and FIPS-140 capability bits report false). Python's `crypto.mlkem` gains
+  a mirrored `_QrngStatus` struct, capability constants, and a
+  `qrng_status()` function. New regression tests `unit_qrng_delivery` and
+  `unit_qrng_thread_safety`, plus a `moonlab_qrng_get_status` lane in the
+  dlsym ABI test.
+- **VQE quantum natural gradient (`VQE_OPTIMIZER_QNG`).** `vqe_compute_qgt`
+  computes the Fubini-Study metric via central differences on the ideal
+  trial statevector; `vqe_natural_gradient_direction` preconditions the
+  parameter-shift gradient by the Tikhonov-regularised metric. New
+  `src/algorithms/vqe_qng.c`; metric-validity and convergence tests added to
+  `tests/unit/test_vqe.c`.
+- **First-principles STO-3G H2 potential energy surface**
+  (`src/algorithms/h2_sto3g.{c,h}`) replacing the earlier ad hoc H2 PES fit
+  with a Hartree-Fock/STO-3G calculation feeding `vqe_create_h2_hamiltonian`;
+  a matching pass makes the LiH surface smooth and structurally consistent.
+  New H2/LiH smoothness, differentiability, and term-count-consistency
+  tests.
+- **`@moonlab/quantum-algorithms` real implementation.** A WASM-backed
+  `Grover` class (marked-state oracle, diffusion, optimal iteration count,
+  top-state extraction, qubit/basis-state validation) over
+  `@moonlab/quantum-core`, plus the H2-only classical `VQE` class, with
+  vitest coverage; the package returns to public at 1.1.0.
+- **`tests/unit/test_entropy_sources.c`** pins the direct entropy-source
+  surface (`entropy_jitter_bytes`, `entropy_create_with_source` +
+  `entropy_bytes` over the jitter source) against the shipped
+  implementation.
+- **`examples/applications/qgt_qec_node.c`** -- a single physics story
+  tying the quantum geometric tensor to topological error correction: the
+  Fubini-Study metric divergence at the Qi-Wu-Zhang Dirac-node gap closing
+  and the nilpotency of a surface-code stabilizer chain complex (d1.d2 = 0)
+  are the same epsilon^2 = 0.
+- **Packaging and release-pipeline rework.** `release.yml` rebuilt around a
+  preflight job that classifies the tag (stable vs. prerelease), stamps the
+  npm dist-tag, and verifies version sync before any build starts.
+  Publishing now covers crates.io (`moonlab-sys` -> `moonlab` ->
+  `moonlab-tui`, built against the tested native SDK tarball), Windows
+  x64/ARM64 zips, `cibuildwheel` wheels across six platforms, and npm with
+  id-token provenance; the draft release is undrafted only after every
+  registry succeeds. Per-package `LICENSE` files for every published
+  npm/PyPI/crates.io artifact, crate READMEs for the three Rust crates, new
+  Windows artifact build/verify scripts, and a PowerShell release packager.
+  `version_tool.py` becomes the single stamping/checking authority.
+
+### Changed
+
+- Rust toolchain raised to 1.86.0 in CI to match the crates' declared MSRV;
+  compiler flags extracted to `cmake/compiler_flags.cmake`.
+- `scripts/sync-versions.sh` / `tools/check_binding_versions.sh` now
+  delegate to `version_tool.py` instead of duplicating the version logic.
+- `setup.py` retired for the Python binding; `pyproject.toml` is the sole
+  build authority.
+- Rewrote the certification language in `bell_tests.h`, `quantum_rng.h`,
+  and the Python crypto docstrings: Moonlab controls both simulated Bell
+  parties, so a CHSH violation is a simulator-integrity gate, not a
+  device-independent randomness certificate.
+- `.github/workflows/ci-jetson.yml` documented as `workflow_dispatch`-only
+  until a self-hosted runner is enrolled; setup doc corrected to match.
+
+### Fixed
+
+- **macOS Mach-O link failure on CPU-only builds.** GPU-routing hooks
+  (`qsim_gpu_route_*`, `metal_*`, `moonlab_cuda_*`) are declared extern
+  weak and NULL-checked at runtime to fall back to CPU -- this resolves to
+  NULL on ELF but was a hard `ld` error on Mach-O when no backend
+  translation unit defines the symbol. Added `MOONLAB_WEAK_IMPORT`
+  (`weak_import` on Apple, `weak` elsewhere) plus explicit `-Wl,-U,<symbol>`
+  dynamic-lookup permits for the optional-backend symbol list; CPU-only
+  `libquantumsim` now links on macOS/arm64 with the runtime NULL-check
+  fallback preserved.
+- **wasm32 `size_t` overflows.** `tensor_matmul_gpu_threshold` now
+  saturates instead of shifting `1 << 33` into a 32-bit `size_t`;
+  `qsim_detect_max_qubits` computes in `uint64_t` and asks Emscripten for
+  the real heap size instead of advertising an assumed 8 GiB on wasm32.
+- **QAOA under `-ffast-math`.** Uses a finite sentinel instead of
+  `INFINITY`, which fast-math builds are free to fold away.
+- **32-bit `size_t` memory-assumption truncation** in `src/utils/config.c`
+  clamped so assumed-memory sizing doesn't silently truncate to 0.
+- Emscripten build now compiles `vqe_qng.c` and `h2_sto3g.c` into the WASM
+  artifact (both were reachable from `vqe.c` but missing from the
+  emscripten `CMakeLists.txt` source list).
+
 ## [1.1.0] - 2026-07-11
 
 **v1.1 GPU arc.**  Brings the moonlab CUDA backend online end-to-end
