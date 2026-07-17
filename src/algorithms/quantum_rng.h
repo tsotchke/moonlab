@@ -26,6 +26,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -75,7 +77,7 @@ typedef struct {
  * @param num_qubits Number of qubits (1-32)
  * @return New QRNG context or NULL on error
  */
-qrng_context_t* qrng_create(int num_qubits);
+MOONLAB_API qrng_context_t* qrng_create(int num_qubits);
 
 /**
  * @brief Create QRNG context with configuration
@@ -83,21 +85,21 @@ qrng_context_t* qrng_create(int num_qubits);
  * @param config Configuration options
  * @return New QRNG context or NULL on error
  */
-qrng_context_t* qrng_create_configured(const qrng_config_t* config);
+MOONLAB_API qrng_context_t* qrng_create_configured(const qrng_config_t* config);
 
 /**
  * @brief Destroy QRNG context
  *
  * @param ctx Context to destroy
  */
-void qrng_destroy(qrng_context_t* ctx);
+MOONLAB_API void qrng_destroy(qrng_context_t* ctx);
 
 /**
  * @brief Reset QRNG statistics
  *
  * @param ctx QRNG context
  */
-void qrng_reset_stats(qrng_context_t* ctx);
+MOONLAB_API void qrng_reset_stats(qrng_context_t* ctx);
 
 // ============================================================================
 // SINGLE VALUE GENERATION
@@ -111,7 +113,7 @@ void qrng_reset_stats(qrng_context_t* ctx);
  * @param ctx QRNG context
  * @return Random bit (0 or 1)
  */
-int qrng_bit(qrng_context_t* ctx);
+MOONLAB_API int qrng_bit(qrng_context_t* ctx);
 
 /**
  * @brief Generate random byte (8 bits)
@@ -119,7 +121,7 @@ int qrng_bit(qrng_context_t* ctx);
  * @param ctx QRNG context
  * @return Random byte
  */
-uint8_t qrng_byte(qrng_context_t* ctx);
+MOONLAB_API uint8_t qrng_byte(qrng_context_t* ctx);
 
 /**
  * @brief Generate random 32-bit unsigned integer
@@ -127,7 +129,7 @@ uint8_t qrng_byte(qrng_context_t* ctx);
  * @param ctx QRNG context
  * @return Random uint32_t
  */
-uint32_t qrng_uint32(qrng_context_t* ctx);
+MOONLAB_API uint32_t qrng_uint32(qrng_context_t* ctx);
 
 /**
  * @brief Generate random 64-bit unsigned integer
@@ -135,7 +137,7 @@ uint32_t qrng_uint32(qrng_context_t* ctx);
  * @param ctx QRNG context
  * @return Random uint64_t
  */
-uint64_t qrng_uint64(qrng_context_t* ctx);
+MOONLAB_API uint64_t qrng_uint64(qrng_context_t* ctx);
 
 /**
  * @brief Generate random integer in range [0, max)
@@ -146,7 +148,7 @@ uint64_t qrng_uint64(qrng_context_t* ctx);
  * @param max Exclusive upper bound
  * @return Random integer in [0, max)
  */
-uint64_t qrng_range(qrng_context_t* ctx, uint64_t max);
+MOONLAB_API uint64_t qrng_range(qrng_context_t* ctx, uint64_t max);
 
 /**
  * @brief Generate random double in [0, 1)
@@ -156,7 +158,7 @@ uint64_t qrng_range(qrng_context_t* ctx, uint64_t max);
  * @param ctx QRNG context
  * @return Random double in [0, 1)
  */
-double qrng_double(qrng_context_t* ctx);
+MOONLAB_API double qrng_double(qrng_context_t* ctx);
 
 /**
  * @brief Generate random double in [min, max)
@@ -166,7 +168,7 @@ double qrng_double(qrng_context_t* ctx);
  * @param max Maximum value (exclusive)
  * @return Random double in [min, max)
  */
-double qrng_double_range(qrng_context_t* ctx, double min, double max);
+MOONLAB_API double qrng_double_range(qrng_context_t* ctx, double min, double max);
 
 // ============================================================================
 // BULK GENERATION
@@ -182,7 +184,7 @@ double qrng_double_range(qrng_context_t* ctx, double min, double max);
  * @param size Number of bytes to generate
  * @return Number of bytes generated
  */
-size_t qrng_bytes(qrng_context_t* ctx, uint8_t* buffer, size_t size);
+MOONLAB_API size_t qrng_bytes(qrng_context_t* ctx, uint8_t* buffer, size_t size);
 
 /**
  * @brief Fill array with random uint32 values
@@ -192,7 +194,7 @@ size_t qrng_bytes(qrng_context_t* ctx, uint8_t* buffer, size_t size);
  * @param count Number of values to generate
  * @return Number of values generated
  */
-size_t qrng_uint32_array(qrng_context_t* ctx, uint32_t* values, size_t count);
+MOONLAB_API size_t qrng_uint32_array(qrng_context_t* ctx, uint32_t* values, size_t count);
 
 /**
  * @brief Fill array with random doubles in [0, 1)
@@ -202,7 +204,7 @@ size_t qrng_uint32_array(qrng_context_t* ctx, uint32_t* values, size_t count);
  * @param count Number of values to generate
  * @return Number of values generated
  */
-size_t qrng_double_array(qrng_context_t* ctx, double* values, size_t count);
+MOONLAB_API size_t qrng_double_array(qrng_context_t* ctx, double* values, size_t count);
 
 // ============================================================================
 // SPECIAL DISTRIBUTIONS
@@ -216,7 +218,7 @@ size_t qrng_double_array(qrng_context_t* ctx, double* values, size_t count);
  * @param ctx QRNG context
  * @return Standard normal random value
  */
-double qrng_normal(qrng_context_t* ctx);
+MOONLAB_API double qrng_normal(qrng_context_t* ctx);
 
 /**
  * @brief Generate normal random number with parameters
@@ -226,7 +228,7 @@ double qrng_normal(qrng_context_t* ctx);
  * @param std Standard deviation
  * @return Normal random value
  */
-double qrng_normal_params(qrng_context_t* ctx, double mean, double std);
+MOONLAB_API double qrng_normal_params(qrng_context_t* ctx, double mean, double std);
 
 /**
  * @brief Generate exponential random number
@@ -235,7 +237,7 @@ double qrng_normal_params(qrng_context_t* ctx, double mean, double std);
  * @param lambda Rate parameter
  * @return Exponential random value
  */
-double qrng_exponential(qrng_context_t* ctx, double lambda);
+MOONLAB_API double qrng_exponential(qrng_context_t* ctx, double lambda);
 
 /**
  * @brief Shuffle array using Fisher-Yates algorithm
@@ -245,7 +247,7 @@ double qrng_exponential(qrng_context_t* ctx, double lambda);
  * @param element_size Size of each element
  * @param count Number of elements
  */
-void qrng_shuffle(qrng_context_t* ctx, void* array,
+MOONLAB_API void qrng_shuffle(qrng_context_t* ctx, void* array,
                   size_t element_size, size_t count);
 
 // ============================================================================
@@ -271,7 +273,7 @@ typedef struct {
  * @param ctx QRNG context
  * @param stats Output statistics
  */
-void qrng_get_stats(const qrng_context_t* ctx, qrng_stats_t* stats);
+MOONLAB_API void qrng_get_stats(const qrng_context_t* ctx, qrng_stats_t* stats);
 
 /**
  * @brief Run NIST statistical tests on generated data
@@ -281,7 +283,7 @@ void qrng_get_stats(const qrng_context_t* ctx, qrng_stats_t* stats);
  * @param stats Output statistics
  * @return 1 if all tests pass, 0 otherwise
  */
-int qrng_validate(const uint8_t* data, size_t size, qrng_stats_t* stats);
+MOONLAB_API int qrng_validate(const uint8_t* data, size_t size, qrng_stats_t* stats);
 
 /**
  * @brief Run a small subset of NIST SP 800-22 tests (monobit, runs,
@@ -291,7 +293,7 @@ int qrng_validate(const uint8_t* data, size_t size, qrng_stats_t* stats);
  * @param num_bits Number of bits to test
  * @return Number of tests passed (out of 3)
  */
-int qrng_nist_tests(qrng_context_t* ctx, size_t num_bits);
+MOONLAB_API int qrng_nist_tests(qrng_context_t* ctx, size_t num_bits);
 
 // ============================================================================
 // STANDALONE FUNCTIONS
@@ -306,21 +308,21 @@ int qrng_nist_tests(qrng_context_t* ctx, size_t num_bits);
  * @param size Number of bytes
  * @return Number of bytes generated
  */
-size_t qrng_generate_bytes(uint8_t* buffer, size_t size);
+MOONLAB_API size_t qrng_generate_bytes(uint8_t* buffer, size_t size);
 
 /**
  * @brief Generate single random uint64 without context
  *
  * @return Random uint64_t
  */
-uint64_t qrng_generate_uint64(void);
+MOONLAB_API uint64_t qrng_generate_uint64(void);
 
 /**
  * @brief Generate random double in [0, 1) without context
  *
  * @return Random double
  */
-double qrng_generate_double(void);
+MOONLAB_API double qrng_generate_double(void);
 
 // ============================================================================
 // ENTROPY MIXING
@@ -335,7 +337,7 @@ double qrng_generate_double(void);
  * @param entropy External entropy bytes
  * @param size Size of external entropy
  */
-void qrng_mix_entropy(qrng_context_t* ctx, const uint8_t* entropy, size_t size);
+MOONLAB_API void qrng_mix_entropy(qrng_context_t* ctx, const uint8_t* entropy, size_t size);
 
 /**
  * @brief Set entropy source callback
@@ -343,7 +345,7 @@ void qrng_mix_entropy(qrng_context_t* ctx, const uint8_t* entropy, size_t size);
  * @param ctx QRNG context
  * @param source Entropy source (platform-specific)
  */
-void qrng_set_entropy_source(qrng_context_t* ctx, void* source);
+MOONLAB_API void qrng_set_entropy_source(qrng_context_t* ctx, void* source);
 
 #ifdef __cplusplus
 }
