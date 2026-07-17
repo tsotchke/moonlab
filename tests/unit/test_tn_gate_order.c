@@ -97,10 +97,15 @@ static void check_cnot(uint32_t n, uint32_t control, uint32_t target,
     /* Random normalized initial state. */
     double complex *init = calloc(dim, sizeof(double complex));
     double nrm = 0.0;
+    /* Portable deterministic PRNG (xorshift32): rand_r is POSIX-only and absent
+     * on Windows/UCRT. Any deterministic random normalized state exercises the
+     * gate-order comparison, so the specific stream does not matter. */
     unsigned int seed = 12345u + control * 131u + target * 17u + n * 7u;
     for (uint64_t b = 0; b < dim; b++) {
-        double re = (double)(rand_r(&seed)) / RAND_MAX - 0.5;
-        double im = (double)(rand_r(&seed)) / RAND_MAX - 0.5;
+        seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+        double re = (double)seed / 4294967296.0 - 0.5;
+        seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+        double im = (double)seed / 4294967296.0 - 0.5;
         init[b] = re + im * I;
         nrm += re * re + im * im;
     }

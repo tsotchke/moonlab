@@ -78,8 +78,8 @@ done
 # independent numpy reference, so large-n correctness is fully anchored; tn_mps
 # just is not used as a second oracle where it is unreliable.
 case "$PROFILE" in
-  quick) QUBITS="2,3,4,6,8";        DEPTHS="2,8";    TN_MAX_N=8 ;;
-  full)  QUBITS="2,3,4,6,8,10,12";  DEPTHS="2,8,32"; TN_MAX_N=8; RUN_RUST=1; RUN_JS=1 ;;
+  quick) QUBITS="2,3,4,6,8";        DEPTHS="2,8";    TN_MAX_N=12 ;;
+  full)  QUBITS="2,3,4,6,8,10,12";  DEPTHS="2,8,32"; TN_MAX_N=12; RUN_RUST=1; RUN_JS=1 ;;
   *) echo "unknown profile: $PROFILE (want quick|full)" >&2; exit 2 ;;
 esac
 
