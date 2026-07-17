@@ -4,6 +4,21 @@
 #include <stdio.h>
 #include <math.h>
 
+/* Runtime SIMD backend dispatch.  simd_avx512.c / simd_sve.c are compiled with
+ * their own -mavx512f / -march=...+sve per-file flags (see CMake) and export
+ * standalone implementations of the core primitives; without a runtime table
+ * they had zero callers and the backend was selected purely at compile time.
+ * The pointer table below is populated once from a runtime capability probe so
+ * an AVX-512 CPU (or a Linux/aarch64 SVE CPU) actually executes those kernels,
+ * while every other target falls through to the compile-time-optimized default
+ * bodies in this file. */
+#ifdef HAS_AVX512
+#include "simd_avx512.h"
+#endif
+#ifdef HAS_SVE
+#include "simd_sve.h"
+#endif
+
 // Platform detection
 #ifdef __x86_64__
     #include <cpuid.h>
@@ -49,6 +64,62 @@ static inline double moonlab_sse_hsum_pd(__m128d v) {
 #endif
 }
 #endif
+
+// ============================================================================
+// RUNTIME BACKEND DISPATCH TABLE
+// ============================================================================
+
+/* Specialized-backend function pointers.  NULL means "use the default body in
+ * this file".  Populated once by simd_dispatch_init_once() from a runtime
+ * capability probe.  Only ever set to a compiled-in specialized backend, so on
+ * targets without AVX-512/SVE they stay NULL and behavior is unchanged. */
+typedef struct {
+    double (*sum_squared)(const complex_t*, size_t);
+    void   (*normalize)(complex_t*, size_t, double);
+    void   (*compute_probs)(const complex_t*, double*, size_t);
+    void   (*complex_swap)(complex_t*, complex_t*, size_t);
+    void   (*negate)(complex_t*, size_t);
+    void   (*apply_phase)(complex_t*, complex_t, size_t);
+    void   (*multiply_by_i)(complex_t*, size_t, int);
+    void   (*xor_bytes)(uint8_t*, const uint8_t*, size_t);
+} simd_backend_vtable_t;
+
+static simd_backend_vtable_t g_simd_vtable;   /* zero-initialized: all NULL */
+static volatile int g_simd_vtable_ready = 0;
+
+static void simd_dispatch_init_once(void) {
+    if (g_simd_vtable_ready) return;
+    simd_backend_vtable_t vt = {0};
+
+#ifdef HAS_AVX512
+    if (avx512_is_available()) {
+        vt.sum_squared   = avx512_sum_squared_magnitudes;
+        vt.normalize     = avx512_normalize_amplitudes;
+        vt.compute_probs = avx512_compute_probabilities;
+        vt.complex_swap  = avx512_complex_swap;
+        vt.negate        = avx512_negate;
+        vt.apply_phase   = avx512_apply_phase;
+        vt.multiply_by_i = avx512_multiply_by_i;
+        vt.xor_bytes     = avx512_xor_bytes;
+    }
+#endif
+#ifdef HAS_SVE
+    if (sve_is_available()) {
+        vt.sum_squared   = sve_sum_squared_magnitudes;
+        vt.normalize     = sve_normalize_amplitudes;
+        vt.compute_probs = sve_compute_probabilities;
+        vt.complex_swap  = sve_complex_swap;
+        vt.negate        = sve_negate;
+        vt.apply_phase   = sve_apply_phase;
+        vt.multiply_by_i = sve_multiply_by_i;
+        vt.xor_bytes     = sve_xor_bytes;
+    }
+#endif
+
+    /* Idempotent: concurrent initializers install the same pointers. */
+    g_simd_vtable = vt;
+    g_simd_vtable_ready = 1;
+}
 
 // ARM SVE (Scalable Vector Extension) - for Graviton3, A64FX, etc.
 // SVE is a Linux/aarch64 feature; Windows-on-ARM is NEON-only and clang-cl
@@ -160,6 +231,8 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps) {
 
 double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
     if (!amplitudes || n == 0) return 0.0;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.sum_squared) return g_simd_vtable.sum_squared(amplitudes, n);
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512 implementation (8 doubles = 4 complex at once)
@@ -283,6 +356,8 @@ double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n) {
 
 void simd_normalize_amplitudes(complex_t *amplitudes, size_t n, double norm) {
     if (!amplitudes || n == 0 || norm == 0.0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.normalize) { g_simd_vtable.normalize(amplitudes, n, norm); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 8 doubles (4 complex) at a time
@@ -462,6 +537,8 @@ void simd_compute_probabilities(
     size_t n
 ) {
     if (!amplitudes || !probabilities || n == 0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.compute_probs) { g_simd_vtable.compute_probs(amplitudes, probabilities, n); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 4 complex (8 doubles) at once
@@ -571,6 +648,8 @@ void simd_compute_probabilities(
 
 void simd_xor_bytes(uint8_t *dest, const uint8_t *src, size_t n) {
     if (!dest || !src || n == 0) return;
+    simd_dispatch_init_once();
+    if (g_simd_vtable.xor_bytes) { g_simd_vtable.xor_bytes(dest, src, n); return; }
 
 #if AVX512_AVAILABLE && defined(__x86_64__) && !defined(__aarch64__)
     // AVX-512: Process 64 bytes at once
@@ -679,7 +758,9 @@ void simd_mix_entropy(
 
 void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n) {
     if (!amp0 || !amp1 || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.complex_swap) { g_simd_vtable.complex_swap(amp0, amp1, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Process 1 complex number (2 doubles) at a time
     for (size_t i = 0; i < n; i++) {
@@ -732,7 +813,9 @@ void simd_complex_swap(complex_t *amp0, complex_t *amp1, size_t n) {
 
 void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.multiply_by_i) { g_simd_vtable.multiply_by_i(amplitudes, n, negate); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Multiply by ±i = swap real/imag and negate real
     // (a + bi) * i = -b + ai
@@ -782,7 +865,9 @@ void simd_multiply_by_i(complex_t *amplitudes, size_t n, int negate) {
 
 void simd_negate(complex_t *amplitudes, size_t n) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.negate) { g_simd_vtable.negate(amplitudes, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Negate both real and imaginary parts
     float64x2_t neg_one = vdupq_n_f64(-1.0);
@@ -831,7 +916,9 @@ void simd_negate(complex_t *amplitudes, size_t n) {
 
 void simd_apply_phase(complex_t *amplitudes, complex_t phase, size_t n) {
     if (!amplitudes || n == 0) return;
-    
+    simd_dispatch_init_once();
+    if (g_simd_vtable.apply_phase) { g_simd_vtable.apply_phase(amplitudes, phase, n); return; }
+
 #if NEON_AVAILABLE
     // ARM NEON: Complex multiplication by phase
     // (a+bi)(c+di) = (ac-bd) + (ad+bc)i
