@@ -1578,6 +1578,8 @@ endif()
 
 if(QSIM_BUILD_TESTS)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
+    # Statistical + crypto-adversarial batteries (self-contained subdir).
+    add_subdirectory(tests/statistical)
 endif()
 
 # ==============================================================================
