@@ -259,6 +259,91 @@ static void test_h2_adjoint_gradient_matches_finite_diff(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Quantum natural gradient: the Fubini-Study metric must be a valid metric
+ * (symmetric, positive-semidefinite), and QNG must optimize H2 below the
+ * Hartree-Fock reference.  A head-to-head against ADAM from identical
+ * initial parameters reports the iteration count. */
+static void test_qng_metric_and_convergence(void) {
+    fprintf(stdout, "\n-- VQE: quantum natural gradient (QGT metric + convergence) --\n");
+
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.7414);
+    vqe_ansatz_t *ansatz = vqe_create_hardware_efficient_ansatz(H->num_qubits, 2);
+    vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+    opt->verbose = 0;
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+    vqe_solver_t *solver = vqe_solver_create(H, ansatz, opt, &e);
+    CHECK(solver != NULL, "built QNG VQE solver");
+    if (!solver) return;
+
+    const size_t n = ansatz->num_parameters;
+    double *params = malloc(n * sizeof(double));
+    for (size_t k = 0; k < n; k++) params[k] = 0.1 * (double)(k + 1);
+
+    /* (1) the metric is a valid Riemannian metric. */
+    double *g = malloc(n * n * sizeof(double));
+    int rc = vqe_compute_qgt(solver, params, g);
+    CHECK(rc == 0, "vqe_compute_qgt succeeded");
+
+    double max_asym = 0.0, min_diag = 1e300;
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
+            double a = fabs(g[i * n + j] - g[j * n + i]);
+            if (a > max_asym) max_asym = a;
+        }
+        if (g[i * n + i] < min_diag) min_diag = g[i * n + i];
+    }
+    CHECK(max_asym < 1e-9, "QGT is symmetric (max asymmetry %.2e)", max_asym);
+    CHECK(min_diag > -1e-9, "QGT diagonal is non-negative (min %.3e)", min_diag);
+
+    /* positive-semidefinite: quadratic form v^T g v >= 0 on test vectors. */
+    double min_q = 1e300;
+    for (int t = 0; t < 4; t++) {
+        double q = 0.0;
+        for (size_t i = 0; i < n; i++) {
+            double vi = ((int)((i + t) % 3) - 1);   /* entries in {-1,0,1} */
+            for (size_t j = 0; j < n; j++) {
+                double vj = ((int)((j + t) % 3) - 1);
+                q += vi * g[i * n + j] * vj;
+            }
+        }
+        if (q < min_q) min_q = q;
+    }
+    CHECK(min_q > -1e-9, "QGT is positive-semidefinite (min v^T g v %.3e)", min_q);
+    free(g);
+
+    /* (2) QNG optimizes H2 below Hartree-Fock. */
+    memcpy(ansatz->parameters, params, n * sizeof(double));
+    opt->max_iterations = 300;
+    opt->tolerance = 1e-9;
+    vqe_result_t rq = vqe_solve(solver);
+    fprintf(stdout, "    QNG:  E = %.6f Ha  in %zu iters\n",
+            rq.ground_state_energy, rq.iterations);
+    CHECK(isfinite(rq.ground_state_energy) && rq.ground_state_energy < -1.117,
+          "QNG descends below Hartree-Fock (-1.117): %.6f", rq.ground_state_energy);
+
+    /* (3) head-to-head vs ADAM from identical initial parameters (informational
+     * iteration count; both must reach the correlated ground state). */
+    vqe_ansatz_t *ansatz2 = vqe_create_hardware_efficient_ansatz(H->num_qubits, 2);
+    memcpy(ansatz2->parameters, params, n * sizeof(double));
+    vqe_optimizer_t *adam = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+    adam->verbose = 0; adam->max_iterations = 300; adam->tolerance = 1e-9;
+    adam->learning_rate = 0.1;
+    vqe_solver_t *solver2 = vqe_solver_create(H, ansatz2, adam, &e);
+    vqe_result_t ra = vqe_solve(solver2);
+    fprintf(stdout, "    ADAM: E = %.6f Ha  in %zu iters\n",
+            ra.ground_state_energy, ra.iterations);
+    CHECK(rq.ground_state_energy <= ra.ground_state_energy + 1e-3,
+          "QNG reaches an energy no worse than ADAM (QNG %.6f vs ADAM %.6f)",
+          rq.ground_state_energy, ra.ground_state_energy);
+
+    free(params);
+    vqe_solver_free(solver2); vqe_optimizer_free(adam); vqe_ansatz_free(ansatz2);
+    vqe_solver_free(solver); vqe_optimizer_free(opt); vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -266,6 +351,7 @@ int main(void) {
     test_h2_optimizer_converges_below_hf();
     test_h2_noisy();
     test_h2_adjoint_gradient_matches_finite_diff();
+    test_qng_metric_and_convergence();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
