@@ -4,7 +4,7 @@ import ctypes
 import numpy as np
 from typing import Optional, List, Tuple, Dict, Any
 from .core import _lib, QuantumState, QuantumError, CQuantumState
-from .core import _DEFAULT_ENTROPY_CTX
+from .core import _get_default_entropy_ctx
 
 # ============================================================================
 # C STRUCTURE DEFINITIONS
@@ -460,7 +460,7 @@ class VQE:
             self._hamiltonian,
             self._ansatz,
             self._optimizer,
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
         if not self._solver:
             raise QuantumError("Failed to create VQE solver")
@@ -643,7 +643,7 @@ class QAOA:
         self._solver = _lib.qaoa_solver_create(
             self._model,
             ctypes.c_size_t(self.num_layers),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
         if not self._solver:
             raise QuantumError("Failed to create QAOA solver")
@@ -776,7 +776,7 @@ class Grover:
         result = _lib.grover_search(
             ctypes.byref(self._state._state),
             ctypes.byref(config),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
 
         return {
@@ -897,7 +897,7 @@ class BellTest:
             ctypes.c_int(qubit_b),
             ctypes.c_size_t(num_measurements),
             ctypes.byref(settings),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
 
         return {
@@ -963,7 +963,7 @@ class BellTest:
             ctypes.c_int(qubit_b),
             ctypes.c_int(qubit_c),
             ctypes.c_size_t(num_measurements),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         )
         return {
             'mermin': result.chsh_value,
@@ -1010,7 +1010,7 @@ class BellTest:
             ctypes.byref(state._state),
             ctypes.c_size_t(num_qubits),
             ctypes.c_size_t(num_measurements),
-            _DEFAULT_ENTROPY_CTX,
+            _get_default_entropy_ctx(),
         ))
 
 

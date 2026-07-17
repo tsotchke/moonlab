@@ -47,22 +47,52 @@ try:
         BellTest,
     )
     _ALGO_AVAILABLE = True
-except (ImportError, AttributeError):
+except (ImportError, AttributeError, OSError):
     _ALGO_AVAILABLE = False
 
-from .benchmarks import quantum_volume, QuantumVolumeResult
-from .clifford import Clifford
-from .topology import (
-    ChernKPM, qwz_chern, berry_grid_qwz,
-    berry_grid_haldane, ssh_winding,
-    # v0.3 additions
-    chern_qwz_proj, chern_qwz_parallel_transport,
-    kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
-    # v0.3.2 curvature-grid variants
-    berry_grid_qwz_proj, berry_grid_qwz_pt,
-)
-from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
-from . import crypto
+# Everything below is optional in exactly the same sense as the guarded
+# blocks further down this file: a stripped / size-trimmed libquantumsim
+# build (e.g. WASM) can be missing any of these entry points, and that
+# must not crash `import moonlab` itself. OSError is included alongside
+# ImportError/AttributeError because a missing symbol surfaces as an
+# OSError from ctypes' CDLL.__getattr__, not an ImportError.
+try:
+    from .benchmarks import quantum_volume, QuantumVolumeResult
+    _BENCHMARKS_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _BENCHMARKS_AVAILABLE = False
+
+try:
+    from .clifford import Clifford
+    _CLIFFORD_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _CLIFFORD_AVAILABLE = False
+
+try:
+    from .topology import (
+        ChernKPM, qwz_chern, berry_grid_qwz,
+        berry_grid_haldane, ssh_winding,
+        # v0.3 additions
+        chern_qwz_proj, chern_qwz_parallel_transport,
+        kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
+        # v0.3.2 curvature-grid variants
+        berry_grid_qwz_proj, berry_grid_qwz_pt,
+    )
+    _TOPOLOGY_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _TOPOLOGY_AVAILABLE = False
+
+try:
+    from .diff import DiffCircuit, PauliTerm, OBS_Z, OBS_X, OBS_Y
+    _DIFF_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _DIFF_AVAILABLE = False
+
+try:
+    from . import crypto
+    _CRYPTO_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _CRYPTO_AVAILABLE = False
 
 # Matrix-product density operator noise simulator (since v0.3.0).
 # Optional import: a stripped libquantumsim build without these
@@ -157,40 +187,84 @@ try:
 except (ImportError, AttributeError, OSError):
     _DECODER_AVAILABLE = False
 
+# Base __all__: names from .core, imported unconditionally above (if
+# these fail to import, the whole package fails to import, so they are
+# always present). Everything else is appended below, gated on the same
+# availability flag that gated its import, so __all__ never advertises a
+# name that isn't actually bound on this build.
 __all__ = [
     'QuantumState',
     'Gates',
     'Measurement',
     'QuantumError',
-    'quantum_volume',
-    'QuantumVolumeResult',
-    'Clifford',
-    'ChernKPM',
-    'qwz_chern',
-    'berry_grid_qwz',
-    'berry_grid_haldane',
-    'ssh_winding',
-    'chern_qwz_proj',
-    'chern_qwz_parallel_transport',
-    'kane_mele_z2',
-    'bhz_z2',
-    'kitaev_chain_z2',
-    'hofstadter_chern',
-    'berry_grid_qwz_proj',
-    'berry_grid_qwz_pt',
-    'DiffCircuit',
-    'PauliTerm',
-    'OBS_Z',
-    'OBS_X',
-    'OBS_Y',
 ]
 if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
+if _BENCHMARKS_AVAILABLE:
+    __all__ += ['quantum_volume', 'QuantumVolumeResult']
+if _CLIFFORD_AVAILABLE:
+    __all__ += ['Clifford']
+if _TOPOLOGY_AVAILABLE:
+    __all__ += [
+        'ChernKPM',
+        'qwz_chern',
+        'berry_grid_qwz',
+        'berry_grid_haldane',
+        'ssh_winding',
+        'chern_qwz_proj',
+        'chern_qwz_parallel_transport',
+        'kane_mele_z2',
+        'bhz_z2',
+        'kitaev_chain_z2',
+        'hofstadter_chern',
+        'berry_grid_qwz_proj',
+        'berry_grid_qwz_pt',
+    ]
+if _DIFF_AVAILABLE:
+    __all__ += ['DiffCircuit', 'PauliTerm', 'OBS_Z', 'OBS_X', 'OBS_Y']
+if _CRYPTO_AVAILABLE:
+    __all__ += ['crypto']
 if _MPDO_AVAILABLE:
     __all__ += ['Mpdo']
 if _TDVP_AVAILABLE:
     __all__ += ['tdvp']
 if _FUSION_AVAILABLE:
     __all__ += ['FusedCircuit', 'FuseStats']
+if _CAMPS_AVAILABLE:
+    __all__ += [
+        'CAMPS',
+        'WARMSTART_IDENTITY',
+        'WARMSTART_H_ALL',
+        'WARMSTART_DUAL_TFIM',
+        'WARMSTART_FERRO_TFIM',
+        'WARMSTART_STABILIZER_SUBGROUP',
+        'var_d_run',
+        'gauge_warmstart',
+        'z2_lgt_1d_build',
+        'z2_lgt_1d_gauss_law',
+        'status_string',
+    ]
+if _CAPEPS_AVAILABLE:
+    __all__ += ['CAPEPS']
 if _SURFACE_CODE_AVAILABLE:
     __all__ += ['SurfaceCode']
+if _LIBIRREP_QEC_AVAILABLE:
+    __all__ += [
+        'LibirrepQecCode',
+        'LibirrepError',
+        'LibirrepNotBuiltError',
+        'libirrep_is_available',
+    ]
+if _QGTL_AVAILABLE:
+    __all__ += ['QgtlCircuit', 'QgtlResults', 'QgtlError', 'QgtlGateType']
+if _SCHEDULER_AVAILABLE:
+    __all__ += ['Job', 'JobResults', 'SchedulerError']
+if _DECODER_AVAILABLE:
+    __all__ += [
+        'DecoderSlot',
+        'DecoderError',
+        'DecoderNotBuiltError',
+        'decoder_decode',
+        'decoder_slot_available',
+        'decoder_slot_name',
+    ]

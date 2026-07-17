@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-1.1.0}"
 BUILD_DIR="${MOONLAB_DEB_BUILD_DIR:-$PROJECT_ROOT/build-deb}"
 PKG_ROOT="${MOONLAB_DEB_STAGING_DIR:-$PROJECT_ROOT/build/deb-root}"
 
@@ -53,6 +53,68 @@ install -d "$PKG_ROOT/DEBIAN" "$PKG_ROOT/usr/share/doc/moonlab"
 install -m 0644 "$PROJECT_ROOT/README.md" "$PROJECT_ROOT/LICENSE" \
     "$PKG_ROOT/usr/share/doc/moonlab/"
 
+# Hand-maintained fallback for hosts without dpkg-dev (e.g. building on
+# macOS for local testing). Verified against the live Debian/Ubuntu
+# archives (madison + Launchpad) rather than guessed: the LAPACKE C
+# wrapper library ships as unversioned "liblapacke" on every current
+# suite (bullseye through sid/noble) -- there is no "liblapacke3"
+# package. ("liblapack3" is a real, different package: the base
+# Fortran LAPACK library, not the C interface moonlab links.)
+STATIC_DEPENDS='libc6 (>= 2.31), libstdc++6, libgomp1, liblapacke, libopenblas0 | libblas3, libssl3 | libssl1.1'
+
+# Derive the real Depends: line from the staged binaries' actual ELF
+# NEEDED entries via dpkg-shlibdeps when available. This is the correct
+# way to compute a Debian package's runtime dependencies -- it reads
+# the installed shlibs database on the build host instead of a
+# hand-maintained guess that silently drifts as distro package names
+# change across releases. Falls back to STATIC_DEPENDS when
+# dpkg-shlibdeps isn't installed or the derivation fails for any reason.
+depends_line() {
+    if ! command -v dpkg-shlibdeps >/dev/null 2>&1; then
+        echo "$STATIC_DEPENDS"
+        return
+    fi
+
+    local scratch
+    scratch="$(mktemp -d "${PROJECT_ROOT}/.moonlab-shlibdeps.XXXXXX")"
+
+    # dpkg-shlibdeps needs debian/control on-disk (relative to its cwd)
+    # to know which binary package it is computing shlibs:Depends for,
+    # and to exclude that package from its own dependency list.
+    mkdir -p "$scratch/debian"
+    cat >"$scratch/debian/control" <<'CONTROL'
+Source: moonlab
+
+Package: moonlab
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: High-performance quantum computing simulator
+CONTROL
+
+    local libs=()
+    while IFS= read -r -d '' f; do
+        libs+=("$f")
+    done < <(find "$PKG_ROOT/usr/lib" "$PKG_ROOT/usr/bin" \
+        -type f \( -name '*.so*' -o -perm -u+x \) -print0 2>/dev/null)
+
+    local derived=""
+    if [[ ${#libs[@]} -gt 0 ]]; then
+        derived="$(cd "$scratch" && dpkg-shlibdeps -O --ignore-missing-info \
+            -Tdebian/moonlab.substvars "${libs[@]}" 2>/dev/null \
+            | sed -n 's/^shlibs:Depends=//p')" || derived=""
+    fi
+    rm -rf -- "$scratch"
+
+    if [[ -n "$derived" ]]; then
+        echo "$derived"
+    else
+        echo "$STATIC_DEPENDS"
+    fi
+}
+
+DEPENDS="$(depends_line)"
+echo "Depends: $DEPENDS"
+
 installed_size="$(du -sk "$PKG_ROOT/usr" | awk '{print $1}')"
 cat >"$PKG_ROOT/DEBIAN/control" <<EOF
 Package: moonlab
@@ -62,11 +124,35 @@ Priority: optional
 Architecture: ${ARCH}
 Maintainer: tsotchke <noreply@github.com>
 Installed-Size: ${installed_size}
-Depends: libc6 (>= 2.31), libstdc++6, libgomp1, liblapacke, libopenblas0 | libblas3, libssl3 | libssl1.1
+Depends: ${DEPENDS}
 Description: High-performance quantum computing simulator
  Moonlab provides the libquantumsim runtime, stable C ABI headers,
  CMake package config, pkg-config metadata, and the moonlab control server.
 EOF
+
+# ldconfig must run after (un)installing a shared library so the
+# dynamic linker's cache picks up libquantumsim.so's new SONAME entry;
+# without this, a fresh install can fail to resolve the library until
+# something else happens to invalidate the ld.so cache.
+cat >"$PKG_ROOT/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig
+fi
+exit 0
+EOF
+chmod 0755 "$PKG_ROOT/DEBIAN/postinst"
+
+cat >"$PKG_ROOT/DEBIAN/postrm" <<'EOF'
+#!/bin/sh
+set -e
+if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig
+fi
+exit 0
+EOF
+chmod 0755 "$PKG_ROOT/DEBIAN/postrm"
 
 required=(
     "$PKG_ROOT/usr/include/moonlab/moonlab_export.h"

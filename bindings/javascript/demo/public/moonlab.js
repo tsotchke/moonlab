@@ -789,15 +789,15 @@ async function createWasm() {
       assert(ptr, `null function pointer in dynCall`);
       assert(!promising, 'async dynCall is not supported in this mode')
       var rtn = dynCallLegacy(sig, ptr, args);
-
+  
       function convert(rtn) {
         return rtn;
       }
-
+  
       return convert(rtn);
     };
 
-
+  
     /**
      * @param {number} ptr
      * @param {string} type
@@ -826,7 +826,7 @@ async function createWasm() {
       return '0x' + ptr.toString(16).padStart(8, '0');
     };
 
-
+  
     /**
      * @param {number} ptr
      * @param {number} value
@@ -860,10 +860,10 @@ async function createWasm() {
       }
     };
 
-
+  
 
   var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
-
+  
   var findStringEnd = (heapOrArray, idx, maxBytesToRead, ignoreNul) => {
       var maxIdx = idx + maxBytesToRead;
       if (ignoreNul) return maxIdx;
@@ -874,8 +874,8 @@ async function createWasm() {
       while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx;
       return idx;
     };
-
-
+  
+  
     /**
      * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
      * array that contains uint8 values, returns a copy of that string as a
@@ -887,9 +887,9 @@ async function createWasm() {
      * @return {string}
      */
   var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
-
+  
       var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul);
-
+  
       // When using conditional TextDecoder, skip it for short strings as the overhead of the native call is not worth it.
       if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
         return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
@@ -911,7 +911,7 @@ async function createWasm() {
           if ((u0 & 0xF8) != 0xF0) warnOnce('Invalid UTF-8 leading byte ' + ptrToString(u0) + ' encountered when deserializing a UTF-8 string in wasm memory to a JS string!');
           u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63);
         }
-
+  
         if (u0 < 0x10000) {
           str += String.fromCharCode(u0);
         } else {
@@ -921,7 +921,7 @@ async function createWasm() {
       }
       return str;
     };
-
+  
     /**
      * Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
      * emscripten HEAP, returns a copy of that string as a Javascript String object.
@@ -956,7 +956,7 @@ async function createWasm() {
 
   function ___syscall_fcntl64(fd, cmd, varargs) {
   SYSCALLS.varargs = varargs;
-
+  
       return 0;
     }
 
@@ -964,22 +964,22 @@ async function createWasm() {
   abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
   };
 
-
+  
   var INT53_MAX = 9007199254740992;
-
+  
   var INT53_MIN = -9007199254740992;
   var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
   function ___syscall_ftruncate64(fd, length) {
     length = bigintToI53Checked(length);
-
-
+  
+  
   abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
   ;
   }
 
   function ___syscall_ioctl(fd, op, varargs) {
   SYSCALLS.varargs = varargs;
-
+  
       return 0;
     }
 
@@ -993,7 +993,7 @@ async function createWasm() {
 
   function ___syscall_openat(dirfd, path, flags, varargs) {
   SYSCALLS.varargs = varargs;
-
+  
   abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
   }
 
@@ -1009,17 +1009,17 @@ async function createWasm() {
       abort('native code called abort()');
 
   var _emscripten_get_now = () => performance.now();
-
+  
   var _emscripten_date_now = () => Date.now();
-
+  
   var nowIsMonotonic = 1;
-
+  
   var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3;
-
+  
   function _clock_time_get(clk_id, ignored_precision, ptime) {
     ignored_precision = bigintToI53Checked(ignored_precision);
-
-
+  
+  
       if (!checkWasiClock(clk_id)) {
         return 28;
       }
@@ -1047,12 +1047,12 @@ async function createWasm() {
       // for any code that deals with heap sizes, which would require special
       // casing all heap size related code to treat 0 specially.
       2147483648;
-
+  
   var alignMemory = (size, alignment) => {
       assert(alignment, "alignment argument is required");
       return Math.ceil(size / alignment) * alignment;
     };
-
+  
   var growMemory = (size) => {
       var oldHeapSize = wasmMemory.buffer.byteLength;
       var pages = ((size - oldHeapSize + 65535) / 65536) | 0;
@@ -1074,7 +1074,7 @@ async function createWasm() {
       // With multithreaded builds, races can happen (another thread might increase the size
       // in between), so return a failure, and let the caller retry.
       assert(requestedSize > oldSize);
-
+  
       // Memory resize rules:
       // 1.  Always increase heap size to at least the requested size, rounded up
       //     to next page multiple.
@@ -1091,7 +1091,7 @@ async function createWasm() {
       //     over-eager decision to excessively reserve due to (3) above.
       //     Hence if an allocation fails, cut down on the amount of excess
       //     growth, in an attempt to succeed to perform a smaller allocation.
-
+  
       // A limit is set for how much we can grow. We should not exceed that
       // (the wasm binary specifies it, so if we tried, we'd fail anyhow).
       var maxHeapSize = getHeapMax();
@@ -1099,7 +1099,7 @@ async function createWasm() {
         err(`Cannot enlarge memory, requested ${requestedSize} bytes, but the limit is ${maxHeapSize} bytes!`);
         return false;
       }
-
+  
       // Loop through potential heap size increases. If we attempt a too eager
       // reservation that fails, cut down on the attempted size and reserve a
       // smaller bump instead. (max 3 times, chosen somewhat arbitrarily)
@@ -1107,12 +1107,12 @@ async function createWasm() {
         var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown); // ensure geometric growth
         // but limit overreserving (default to capping at +96MB overgrowth at most)
         overGrownHeapSize = Math.min(overGrownHeapSize, requestedSize + 100663296 );
-
+  
         var newSize = Math.min(maxHeapSize, alignMemory(Math.max(requestedSize, overGrownHeapSize), 65536));
-
+  
         var replacement = growMemory(newSize);
         if (replacement) {
-
+  
           return true;
         }
       }
@@ -1122,7 +1122,7 @@ async function createWasm() {
 
   var ENV = {
   };
-
+  
   var getExecutableName = () => thisProgram || './this.program';
   var getEnvStrings = () => {
       if (!getEnvStrings.strings) {
@@ -1154,14 +1154,14 @@ async function createWasm() {
       }
       return getEnvStrings.strings;
     };
-
+  
   var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
       assert(typeof str === 'string', `stringToUTF8Array expects a string (got ${typeof str})`);
       // Parameter maxBytesToWrite is not optional. Negative values, 0, null,
       // undefined and false each don't write out any bytes.
       if (!(maxBytesToWrite > 0))
         return 0;
-
+  
       var startIdx = outIdx;
       var endIdx = outIdx + maxBytesToWrite - 1; // -1 for string null terminator.
       for (var i = 0; i < str.length; ++i) {
@@ -1213,7 +1213,7 @@ async function createWasm() {
       return 0;
     };
 
-
+  
   var lengthBytesUTF8 = (str) => {
       var len = 0;
       for (var i = 0; i < str.length; ++i) {
@@ -1245,7 +1245,7 @@ async function createWasm() {
       return 0;
     };
 
-
+  
   var runtimeKeepaliveCounter = 0;
   var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
   var _proc_exit = (code) => {
@@ -1256,21 +1256,21 @@ async function createWasm() {
       }
       quit_(code, new ExitStatus(code));
     };
-
-
+  
+  
   /** @param {boolean|number=} implicit */
   var exitJS = (status, implicit) => {
       EXITSTATUS = status;
-
+  
       checkUnflushedContent();
-
+  
       // if exit() was called explicitly, warn the user if the runtime isn't actually being shut down
       if (keepRuntimeAlive() && !implicit) {
         var msg = `program exited (with status: ${status}), but keepRuntimeAlive() is set (counter=${runtimeKeepaliveCounter}) due to an async operation, so halting execution but not exiting the runtime or preventing further async execution (you can use emscripten_force_exit, if you want to force a true shutdown)`;
         readyPromiseReject?.(msg);
         err(msg);
       }
-
+  
       _proc_exit(status);
     };
   var _exit = exitJS;
@@ -1308,14 +1308,14 @@ async function createWasm() {
 
   function _fd_seek(fd, offset, whence, newOffset) {
     offset = bigintToI53Checked(offset);
-
-
+  
+  
       return 70;
     ;
   }
 
   var printCharBuffers = [null,[],[]];
-
+  
   var printChar = (stream, curr) => {
       var buffer = printCharBuffers[stream];
       assert(buffer);
@@ -1326,15 +1326,15 @@ async function createWasm() {
         buffer.push(curr);
       }
     };
-
+  
   var flush_NO_FILESYSTEM = () => {
       // flush anything remaining in the buffers during shutdown
       _fflush(0);
       if (printCharBuffers[1].length) printChar(1, 10);
       if (printCharBuffers[2].length) printChar(2, 10);
     };
-
-
+  
+  
   var _fd_write = (fd, iov, iovcnt, pnum) => {
       // hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0
       var num = 0;
@@ -1357,7 +1357,7 @@ async function createWasm() {
         var nodeCrypto = require('crypto');
         return (view) => nodeCrypto.randomFillSync(view);
       }
-
+  
       return (view) => crypto.getRandomValues(view);
     };
   var randomFill = (view) => {
@@ -1376,7 +1376,7 @@ async function createWasm() {
         abort(e);
       }
     };
-
+  
   var handleException = (e) => {
       // Certain exception types we do not treat as errors since they are used for
       // internal control flow.
@@ -1394,9 +1394,9 @@ async function createWasm() {
       }
       quit_(1, e);
     };
-
-
-
+  
+  
+  
   var maybeExit = () => {
       if (!keepRuntimeAlive()) {
         try {
@@ -1418,23 +1418,23 @@ async function createWasm() {
         handleException(e);
       }
     };
-
+  
   var createNamedFunction = (name, func) => Object.defineProperty(func, 'name', { value: name });
-
+  
   var runtimeKeepalivePush = () => {
       runtimeKeepaliveCounter += 1;
     };
-
+  
   var runtimeKeepalivePop = () => {
       assert(runtimeKeepaliveCounter > 0);
       runtimeKeepaliveCounter -= 1;
     };
-
-
+  
+  
   var Asyncify = {
   instrumentWasmImports(imports) {
         var importPattern = /^(invoke_.*|__asyncjs__.*)$/;
-
+  
         for (let [x, original] of Object.entries(imports)) {
           if (typeof original == 'function') {
             let isAsyncifyImport = original.isAsync || importPattern.test(x);
@@ -1489,7 +1489,7 @@ async function createWasm() {
           if (typeof original == 'function') {
             var wrapper = Asyncify.instrumentFunction(original);
             ret[x] = wrapper;
-
+  
          } else {
             ret[x] = original;
           }
@@ -1532,7 +1532,7 @@ async function createWasm() {
           // the dbg() function itself can call back into WebAssembly to get the
           // current pthread_self() pointer).
           Asyncify.state = Asyncify.State.Normal;
-
+          
           // Keep the runtime alive so that a re-wind can be done later.
           runAndAbortIfError(_asyncify_stop_unwind);
           if (typeof Fibers != 'undefined') {
@@ -1584,7 +1584,7 @@ async function createWasm() {
         assert(func);
         // Once we have rewound and the stack we no longer need to artificially
         // keep the runtime alive.
-
+        
         return func();
       },
   handleSleep(startAsync) {
@@ -1688,14 +1688,14 @@ async function createWasm() {
       assert(func, 'Cannot call unknown function ' + ident + ', make sure it is exported');
       return func;
     };
-
+  
   var writeArrayToMemory = (array, buffer) => {
       assert(array.length >= 0, 'writeArrayToMemory array must have a length (should be an array or typed array)')
       HEAP8.set(array, buffer);
     };
-
-
-
+  
+  
+  
   var stackAlloc = (sz) => __emscripten_stack_alloc(sz);
   var stringToUTF8OnStack = (str) => {
       var size = lengthBytesUTF8(str) + 1;
@@ -1703,13 +1703,13 @@ async function createWasm() {
       stringToUTF8(str, ret, size);
       return ret;
     };
-
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
+  
     /**
      * @param {string|null=} returnType
      * @param {Array=} argTypes
@@ -1732,7 +1732,7 @@ async function createWasm() {
           return ret;
         }
       };
-
+  
       function convertReturnValue(ret) {
         if (returnType === 'string') {
           return UTF8ToString(ret);
@@ -1740,7 +1740,7 @@ async function createWasm() {
         if (returnType === 'boolean') return Boolean(ret);
         return ret;
       }
-
+  
       var func = getCFunc(ident);
       var cArgs = [];
       var stack = 0;
@@ -1765,7 +1765,7 @@ async function createWasm() {
         return convertReturnValue(ret);
       }
     var asyncMode = opts?.async;
-
+  
       // Keep the runtime alive through all calls. Note that this call might not be
       // async, but for simplicity we push and pop in all calls.
       runtimeKeepalivePush();
@@ -1784,14 +1784,14 @@ async function createWasm() {
         assert(asyncMode, 'The call to ' + ident + ' is running asynchronously. If this was intended, add the async option to the ccall/cwrap call.');
         return Asyncify.whenDone().then(onDone);
       }
-
+  
       ret = onDone(ret);
       // If this is an async ccall, ensure we return a promise
       if (asyncMode) return Promise.resolve(ret);
       return ret;
     };
 
-
+  
     /**
      * @param {string=} returnType
      * @param {Array=} argTypes
@@ -1806,8 +1806,8 @@ async function createWasm() {
 
 
   var wasmTableMirror = [];
-
-
+  
+  
   var getWasmTableEntry = (funcPtr) => {
       var func = wasmTableMirror[funcPtr];
       if (!func) {
@@ -1818,7 +1818,7 @@ async function createWasm() {
       assert(wasmTable.get(funcPtr) == func, 'JavaScript-side Wasm function table mirror is out of date!');
       return func;
     };
-
+  
   var updateTableMap = (offset, count) => {
       if (functionsInTableMap) {
         for (var i = offset; i < offset + count; i++) {
@@ -1830,9 +1830,9 @@ async function createWasm() {
         }
       }
     };
-
+  
   var functionsInTableMap;
-
+  
   var getFunctionAddress = (func) => {
       // First, create the map if this is the first use.
       if (!functionsInTableMap) {
@@ -1841,10 +1841,10 @@ async function createWasm() {
       }
       return functionsInTableMap.get(func) || 0;
     };
-
-
+  
+  
   var freeTableIndexes = [];
-
+  
   var getEmptyTableSlot = () => {
       // Reuse a free index if there is one, otherwise grow.
       if (freeTableIndexes.length) {
@@ -1860,8 +1860,8 @@ async function createWasm() {
         abort('Unable to grow wasm table. Set ALLOW_TABLE_GROWTH.');
       }
     };
-
-
+  
+  
   var setWasmTableEntry = (idx, func) => {
       /** @suppress {checkTypes} */
       wasmTable.set(idx, func);
@@ -1871,7 +1871,7 @@ async function createWasm() {
       /** @suppress {checkTypes} */
       wasmTableMirror[idx] = wasmTable.get(idx);
     };
-
+  
   var uleb128EncodeWithLen = (arr) => {
       const n = arr.length;
       assert(n < 16384);
@@ -1879,8 +1879,8 @@ async function createWasm() {
       // but we don't care as it's only used in a temporary representation.
       return [(n % 128) | 128, n >> 7, ...arr];
     };
-
-
+  
+  
   var wasmTypeCodes = {
       'i': 0x7f, // i32
       'p': 0x7f, // i32
@@ -1895,7 +1895,7 @@ async function createWasm() {
       return code;
     }));
   var convertJsFunctionToWasm = (func, sig) => {
-
+  
       // Rest of the module is static
       var bytes = Uint8Array.of(
         0x00, 0x61, 0x73, 0x6d, // magic ("\0asm")
@@ -1919,7 +1919,7 @@ async function createWasm() {
           // (export "f" (func 0 (type 0)))
           0x01, 0x01, 0x66, 0x00, 0x00,
       );
-
+  
       // We can compile this wasm module synchronously because it is very small.
       // This accepts an import (at "e.f"), that it reroutes to an export (at "f")
       var module = new WebAssembly.Module(bytes);
@@ -1936,11 +1936,11 @@ async function createWasm() {
       if (rtn) {
         return rtn;
       }
-
+  
       // It's not in the table, add it now.
-
+  
       var ret = getEmptyTableSlot();
-
+  
       // Set the new value.
       try {
         // Attempting to call this with JS function will cause of table.set() to fail
@@ -1953,16 +1953,16 @@ async function createWasm() {
         var wrapped = convertJsFunctionToWasm(func, sig);
         setWasmTableEntry(ret, wrapped);
       }
-
+  
       functionsInTableMap.set(func, ret);
-
+  
       return ret;
     };
 
-
-
-
-
+  
+  
+  
+  
   var removeFunction = (index) => {
       functionsInTableMap.delete(getWasmTableEntry(index));
       setWasmTableEntry(index, null);
@@ -2513,6 +2513,7 @@ var _moonlab_ca_mps_phase = Module['_moonlab_ca_mps_phase'] = makeInvalidEarlyAc
 var _moonlab_ca_mps_sample_z = Module['_moonlab_ca_mps_sample_z'] = makeInvalidEarlyAccess('_moonlab_ca_mps_sample_z');
 var _moonlab_ca_mps_normalize = Module['_moonlab_ca_mps_normalize'] = makeInvalidEarlyAccess('_moonlab_ca_mps_normalize');
 var _moonlab_ca_mps_norm = Module['_moonlab_ca_mps_norm'] = makeInvalidEarlyAccess('_moonlab_ca_mps_norm');
+var _moonlab_ca_mps_conjugate_pauli = Module['_moonlab_ca_mps_conjugate_pauli'] = makeInvalidEarlyAccess('_moonlab_ca_mps_conjugate_pauli');
 var _moonlab_ca_mps_optimize_var_d_clifford_only = Module['_moonlab_ca_mps_optimize_var_d_clifford_only'] = makeInvalidEarlyAccess('_moonlab_ca_mps_optimize_var_d_clifford_only');
 var _moonlab_ca_mps_optimize_var_d_alternating = Module['_moonlab_ca_mps_optimize_var_d_alternating'] = makeInvalidEarlyAccess('_moonlab_ca_mps_optimize_var_d_alternating');
 var _moonlab_ca_mps_apply_stab_subgroup_warmstart = Module['_moonlab_ca_mps_apply_stab_subgroup_warmstart'] = makeInvalidEarlyAccess('_moonlab_ca_mps_apply_stab_subgroup_warmstart');
@@ -2718,13 +2719,11 @@ var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_f
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
-var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
-var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
-var dynCall_iiiii = makeInvalidEarlyAccess('dynCall_iiiii');
-var dynCall_iiji = makeInvalidEarlyAccess('dynCall_iiji');
 var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_vdii = makeInvalidEarlyAccess('dynCall_vdii');
 var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
+var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
+var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
 var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
 var dynCall_i = makeInvalidEarlyAccess('dynCall_i');
@@ -2938,6 +2937,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['moonlab_ca_mps_sample_z'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_sample_z');
   assert(typeof wasmExports['moonlab_ca_mps_normalize'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_normalize');
   assert(typeof wasmExports['moonlab_ca_mps_norm'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_norm');
+  assert(typeof wasmExports['moonlab_ca_mps_conjugate_pauli'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_conjugate_pauli');
   assert(typeof wasmExports['moonlab_ca_mps_optimize_var_d_clifford_only'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_optimize_var_d_clifford_only');
   assert(typeof wasmExports['moonlab_ca_mps_optimize_var_d_alternating'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_optimize_var_d_alternating');
   assert(typeof wasmExports['moonlab_ca_mps_apply_stab_subgroup_warmstart'] != 'undefined', 'missing Wasm export: moonlab_ca_mps_apply_stab_subgroup_warmstart');
@@ -3143,13 +3143,11 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
-  assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
-  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
-  assert(typeof wasmExports['dynCall_iiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiii');
-  assert(typeof wasmExports['dynCall_iiji'] != 'undefined', 'missing Wasm export: dynCall_iiji');
   assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_vdii'] != 'undefined', 'missing Wasm export: dynCall_vdii');
   assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
+  assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
+  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
   assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
   assert(typeof wasmExports['dynCall_i'] != 'undefined', 'missing Wasm export: dynCall_i');
@@ -3359,6 +3357,7 @@ function assignWasmExports(wasmExports) {
   _moonlab_ca_mps_sample_z = Module['_moonlab_ca_mps_sample_z'] = createExportWrapper('moonlab_ca_mps_sample_z', 4);
   _moonlab_ca_mps_normalize = Module['_moonlab_ca_mps_normalize'] = createExportWrapper('moonlab_ca_mps_normalize', 1);
   _moonlab_ca_mps_norm = Module['_moonlab_ca_mps_norm'] = createExportWrapper('moonlab_ca_mps_norm', 1);
+  _moonlab_ca_mps_conjugate_pauli = Module['_moonlab_ca_mps_conjugate_pauli'] = createExportWrapper('moonlab_ca_mps_conjugate_pauli', 4);
   _moonlab_ca_mps_optimize_var_d_clifford_only = Module['_moonlab_ca_mps_optimize_var_d_clifford_only'] = createExportWrapper('moonlab_ca_mps_optimize_var_d_clifford_only', 6);
   _moonlab_ca_mps_optimize_var_d_alternating = Module['_moonlab_ca_mps_optimize_var_d_alternating'] = createExportWrapper('moonlab_ca_mps_optimize_var_d_alternating', 6);
   _moonlab_ca_mps_apply_stab_subgroup_warmstart = Module['_moonlab_ca_mps_apply_stab_subgroup_warmstart'] = createExportWrapper('moonlab_ca_mps_apply_stab_subgroup_warmstart', 3);
@@ -3564,13 +3563,11 @@ function assignWasmExports(wasmExports) {
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
-  dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', 3);
-  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
-  dynCall_iiiii = dynCalls['iiiii'] = createExportWrapper('dynCall_iiiii', 5);
-  dynCall_iiji = dynCalls['iiji'] = createExportWrapper('dynCall_iiji', 4);
   dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_vdii = dynCalls['vdii'] = createExportWrapper('dynCall_vdii', 4);
   dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
+  dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', 3);
+  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
   dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', 2);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', 2);
   dynCall_i = dynCalls['i'] = createExportWrapper('dynCall_i', 1);
