@@ -23,6 +23,8 @@ set(ALGORITHM_SOURCES
     ${QSIM_ROOT}/src/algorithms/grover.c
     ${QSIM_ROOT}/src/algorithms/grover_optimizer.c
     ${QSIM_ROOT}/src/algorithms/vqe.c
+    # Quantum natural gradient (Fubini-Study metric; referenced from vqe.c).
+    ${QSIM_ROOT}/src/algorithms/vqe_qng.c
     ${QSIM_ROOT}/src/algorithms/qaoa.c
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
     # Native reverse-mode autograd (referenced unconditionally from vqe.c).
