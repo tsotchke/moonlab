@@ -37,11 +37,21 @@ int main(void) {
     /* (1) create_gpu fails loudly on a CPU/weak-stub build. On a real CUDA
      * build this returns QS_SUCCESS; either is a defined, non-silent outcome,
      * but this CI build has no CUDA, so we require NOT_SUPPORTED + NULL out. */
-    quantum_state_t *g = (quantum_state_t *)0x1;  /* poison; must be set NULL */
+    quantum_state_t *g = (quantum_state_t *)0x1;  /* poison; must be overwritten */
     qs_error_t rc = quantum_state_create_gpu(4, &g);
-    CHECK(rc == QS_ERROR_NOT_SUPPORTED,
-          "quantum_state_create_gpu returns NOT_SUPPORTED on a CPU build (rc=%d)", (int)rc);
-    CHECK(g == NULL, "quantum_state_create_gpu sets *out_state = NULL on failure");
+    if (rc == QS_SUCCESS) {
+        /* Real GPU backend (CUDA build on a GPU host -- e.g. the xavier/cosbox
+         * mesh nodes): create_gpu succeeds and returns a valid non-NULL state.
+         * Both outcomes are defined and non-silent; the contract is only that
+         * create_gpu never silently mis-behaves. */
+        CHECK(g != NULL, "quantum_state_create_gpu success returns a non-NULL GPU state");
+        if (g) quantum_state_destroy(g);
+    } else {
+        /* CPU / weak-stub build: must fail LOUDLY (NOT_SUPPORTED) with NULL out. */
+        CHECK(rc == QS_ERROR_NOT_SUPPORTED,
+              "quantum_state_create_gpu returns NOT_SUPPORTED on a non-GPU build (rc=%d)", (int)rc);
+        CHECK(g == NULL, "quantum_state_create_gpu sets *out_state = NULL on failure");
+    }
 
     /* (2) sync entry points are no-op success on a CPU state. */
     quantum_state_t s;
