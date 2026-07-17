@@ -327,6 +327,59 @@ static void test_h2_pes_smooth_and_differentiable(void) {
           "force is continuous through equilibrium (no kink): %.4f < 0.1", max_force_jump);
 }
 
+/* LiH shares the same smoothness fix.  The previous else branch dropped 13 of
+ * the 21 terms off equilibrium (a discontinuous change of Hamiltonian
+ * structure) and used a fabs() kink; the fixed construction keeps the full term
+ * set at every geometry with a smooth Gaussian envelope. */
+static void test_lih_pes_smooth_and_consistent(void) {
+    fprintf(stdout, "\n-- VQE: LiH surface is smooth + structurally consistent --\n");
+
+    /* (1) Equilibrium preserved. */
+    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+    CHECK(H != NULL, "built LiH Hamiltonian at equilibrium");
+    if (!H) return;
+    CHECK(H->num_terms == 21, "LiH has all 21 terms at equilibrium (got %zu)",
+          H->num_terms);
+    double iiii = NAN;
+    for (size_t i = 0; i < H->num_terms; i++)
+        if (H->terms[i].pauli_string && strcmp(H->terms[i].pauli_string, "IIII") == 0)
+            iiii = H->terms[i].coefficient;
+    CHECK(isfinite(iiii) && fabs(iiii - (-7.8823620)) < 1e-9,
+          "equilibrium IIII coefficient exact (%.7f)", iiii);
+    CHECK(fabs(H->nuclear_repulsion - 0.9953800) < 1e-9,
+          "equilibrium nuclear repulsion exact (%.7f)", H->nuclear_repulsion);
+    pauli_hamiltonian_free(H);
+
+    /* (2) Structural consistency: the term COUNT must not change with geometry
+     * (the old else branch produced 8 terms instead of 21). */
+    for (double r = 1.30; r <= 1.90001; r += 0.20) {
+        pauli_hamiltonian_t *Hr = vqe_create_lih_hamiltonian(r);
+        CHECK(Hr && Hr->num_terms == 21,
+              "LiH keeps all 21 terms at r=%.2f A (got %zu)", r,
+              Hr ? Hr->num_terms : (size_t)0);
+        if (Hr) pauli_hamiltonian_free(Hr);
+    }
+
+    /* (3) Force continuity through equilibrium (no plateau, no kink). */
+    const double h = 1e-3;
+    double max_jump = 0.0, prev = NAN;
+    for (double r = 1.40; r <= 1.80001; r += 0.05) {
+        pauli_hamiltonian_t *Hp = vqe_create_lih_hamiltonian(r + h);
+        pauli_hamiltonian_t *Hm = vqe_create_lih_hamiltonian(r - h);
+        double force = (vqe_exact_ground_state_energy(Hp) -
+                        vqe_exact_ground_state_energy(Hm)) / (2.0 * h);
+        pauli_hamiltonian_free(Hp);
+        pauli_hamiltonian_free(Hm);
+        if (isfinite(prev)) {
+            double jump = fabs(force - prev);
+            if (jump > max_jump) max_jump = jump;
+        }
+        prev = force;
+    }
+    fprintf(stdout, "    LiH max adjacent |d(force)| = %.4f Ha/A\n", max_jump);
+    CHECK(max_jump < 0.5, "LiH force is continuous (no kink): %.4f < 0.5", max_jump);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -335,6 +388,7 @@ int main(void) {
     test_h2_noisy();
     test_h2_adjoint_gradient_matches_finite_diff();
     test_h2_pes_smooth_and_differentiable();
+    test_lih_pes_smooth_and_consistent();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
