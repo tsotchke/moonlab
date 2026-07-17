@@ -231,10 +231,19 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
     state->amplitudes_size = state->local_count * sizeof(double complex);
     state->owns_memory = 0;  // Don't free external memory
 
-    // Allocate communication buffers
+    // Allocate communication buffers.  Mirror the create-path sizing:
+    // the unchunked gate-apply / exchange loops assume send_buffer and
+    // recv_buffer can each hold `local_count` complex amplitudes in one
+    // shot, so the default buffer must be sized to local_count -- not the
+    // historical fixed 2^20-element cap, which overran the buffer on the
+    // first partition-crossing gate whenever local_count > 2^20 (e.g.
+    // dist_hadamard on a partition qubit at large N).  Caller can still
+    // override via config->comm_buffer_size, but only if it also chunks
+    // the exchange itself; the in-tree gate-apply path does not.
+    const size_t needed_bytes = state->local_count * sizeof(double complex);
     size_t buffer_size = config && config->comm_buffer_size > 0
                          ? config->comm_buffer_size
-                         : (1ULL << 20) * sizeof(double complex);
+                         : needed_bytes;
 
     state->buffer_size = buffer_size / sizeof(double complex);
     state->send_buffer = (double complex*)malloc(buffer_size);
@@ -1161,9 +1170,11 @@ size_t partition_estimate_memory(uint32_t num_qubits, int num_processes) {
     uint64_t total = 1ULL << num_qubits;
     uint64_t per_process = total / (uint64_t)num_processes;
 
-    // State vector + 2 communication buffers
+    // State vector + 2 communication buffers.  The comm buffers are
+    // sized to the per-process amplitude count (local_count), matching
+    // the create/wrap default -- not a fixed 2^20-element cap.
     size_t state_size = per_process * sizeof(double complex);
-    size_t buffer_size = (1ULL << 20) * sizeof(double complex);  // 1M elements
+    size_t buffer_size = per_process * sizeof(double complex);
 
     return state_size + 2 * buffer_size;
 }

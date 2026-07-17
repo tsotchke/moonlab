@@ -138,6 +138,29 @@ static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {
 }
 
 // ============================================================================
+// GPU SHARD SYNC HELPERS
+// ============================================================================
+
+/* When the local shard lives on a GPU (state->gpu_state != NULL) the
+ * host `amplitudes` buffer is stale.  GPU-unaware gate kernels operate
+ * on the host buffer, so they must pull the shard down before the op
+ * and push it back afterwards.  These mirror the sync pattern already
+ * used by apply_remote_1q / dist_cnot and are no-ops on CPU shards. */
+static inline dist_gate_error_t dist_shard_to_host(partitioned_state_t* state) {
+    if (state->gpu_state && partition_sync_to_host(state) != PARTITION_SUCCESS) {
+        return DIST_GATE_ERROR_COMM;
+    }
+    return DIST_GATE_SUCCESS;
+}
+
+static inline dist_gate_error_t dist_shard_from_host(partitioned_state_t* state) {
+    if (state->gpu_state && partition_sync_from_host(state) != PARTITION_SUCCESS) {
+        return DIST_GATE_ERROR_COMM;
+    }
+    return DIST_GATE_SUCCESS;
+}
+
+// ============================================================================
 // LOCAL SINGLE-QUBIT GATE (NO COMMUNICATION)
 // ============================================================================
 
@@ -226,7 +249,13 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
     uint32_t partition_bit = target - state->local_qubits;
     int holds_zero_states = (rank & (1 << partition_bit)) == 0;
 
-    // Exchange all local amplitudes with partner
+    /* Single full-shard exchange.  After this the rank holds BOTH its
+     * own half (state->amplitudes) and the partner half
+     * (state->recv_buffer) for every pair, so it can compute its own
+     * updated amplitudes locally.  The partner performs the symmetric
+     * computation and keeps the complementary half, so the historical
+     * second full-shard exchange was pure redundancy (doubling the
+     * dominant bandwidth cost) and is dropped. */
     mpi_bridge_error_t mpi_err = mpi_exchange_amplitudes(
         state->dist_ctx,
         state->amplitudes,
@@ -241,9 +270,9 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
         return DIST_GATE_ERROR_COMM;
     }
 
-    // Apply gate: we have one half, partner has the other
-    // If we hold |0⟩ states: a0 = local, a1 = received
-    // If we hold |1⟩ states: a0 = received, a1 = local
+    // Apply gate: we have one half, partner has the other.
+    // If we hold |0⟩ states: a0 = local, a1 = received; keep new_a0.
+    // If we hold |1⟩ states: a0 = received, a1 = local; keep new_a1.
     for (uint64_t i = 0; i < state->local_count; i++) {
         double complex a0, a1;
         if (holds_zero_states) {
@@ -257,30 +286,10 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
         double complex new_a0 = matrix->m[0] * a0 + matrix->m[1] * a1;
         double complex new_a1 = matrix->m[2] * a0 + matrix->m[3] * a1;
 
-        if (holds_zero_states) {
-            state->amplitudes[i] = new_a0;
-            state->send_buffer[i] = new_a1;  // Will send back to partner
-        } else {
-            state->amplitudes[i] = new_a1;
-            state->send_buffer[i] = new_a0;  // Will send back to partner
-        }
+        state->amplitudes[i] = holds_zero_states ? new_a0 : new_a1;
     }
-
-    // Exchange back updated amplitudes
-    mpi_err = mpi_exchange_amplitudes(
-        state->dist_ctx,
-        state->send_buffer,
-        state->recv_buffer,
-        state->local_count,
-        desc.partner_rank,
-        1
-    );
 
     partition_free_exchange_desc(&desc);
-
-    if (mpi_err != MPI_BRIDGE_SUCCESS) {
-        return DIST_GATE_ERROR_COMM;
-    }
 
     /* Push the now-correct host shard back into GPU memory if we
      * have one, so subsequent local gates see the post-exchange
@@ -729,22 +738,29 @@ dist_gate_error_t dist_gate_2q(partitioned_state_t* state,
     int q1_partition = partition_is_partition_qubit(state, qubit1);
     int q2_partition = partition_is_partition_qubit(state, qubit2);
 
-    // Both local - simple case, no communication needed
+    /* All apply_* kernels below operate on the host amplitude buffer,
+     * so pull a GPU shard down first and push it back afterwards. */
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
+
+    dist_gate_error_t rc;
     if (!q1_partition && !q2_partition) {
-        return apply_local_2q(state, qubit1, qubit2, matrix);
+        // Both local - simple case, no communication needed
+        rc = apply_local_2q(state, qubit1, qubit2, matrix);
+    } else if (q1_partition && !q2_partition) {
+        // Exactly one partition qubit
+        rc = apply_remote_2q_single_partition(state, qubit2, qubit1, matrix, 0);
+    } else if (!q1_partition && q2_partition) {
+        rc = apply_remote_2q_single_partition(state, qubit1, qubit2, matrix, 1);
+    } else {
+        // Both qubits are partition qubits - most complex case
+        rc = apply_remote_2q_both_partition(state, qubit1, qubit2, matrix);
     }
 
-    // Exactly one partition qubit
-    if (q1_partition && !q2_partition) {
-        return apply_remote_2q_single_partition(state, qubit2, qubit1, matrix, 0);
+    if (rc == DIST_GATE_SUCCESS) {
+        rc = dist_shard_from_host(state);
     }
-
-    if (!q1_partition && q2_partition) {
-        return apply_remote_2q_single_partition(state, qubit1, qubit2, matrix, 1);
-    }
-
-    // Both qubits are partition qubits - most complex case
-    return apply_remote_2q_both_partition(state, qubit1, qubit2, matrix);
+    return rc;
 }
 
 /* Weak link to the GPU CNOT routing (in libquantumsim only when
@@ -896,6 +912,9 @@ dist_gate_error_t dist_cz(partitioned_state_t* state,
 
     int rank = mpi_get_rank(state->dist_ctx);
 
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
+
     for (uint64_t i = 0; i < state->local_count; i++) {
         (void)partition_local_to_global(state, i); /* reserved for future global-index need */
 
@@ -911,7 +930,7 @@ dist_gate_error_t dist_cz(partitioned_state_t* state,
         }
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_cphase(partitioned_state_t* state,
@@ -926,6 +945,9 @@ dist_gate_error_t dist_cphase(partitioned_state_t* state,
     int tgt_partition = partition_is_partition_qubit(state, target);
     int rank = mpi_get_rank(state->dist_ctx);
 
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
+
     for (uint64_t i = 0; i < state->local_count; i++) {
         int ctrl_bit = ctrl_partition
                        ? ((rank >> (control - state->local_qubits)) & 1)
@@ -939,7 +961,7 @@ dist_gate_error_t dist_cphase(partitioned_state_t* state,
         }
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_swap(partitioned_state_t* state,
@@ -1003,6 +1025,9 @@ dist_gate_error_t dist_toffoli(partitioned_state_t* state,
 
     // Local implementation
     if (!c1_partition && !c2_partition && !tgt_partition) {
+        dist_gate_error_t serr = dist_shard_to_host(state);
+        if (serr != DIST_GATE_SUCCESS) return serr;
+
         uint64_t c1_stride = 1ULL << control1;
         uint64_t c2_stride = 1ULL << control2;
         uint64_t tgt_stride = 1ULL << target;
@@ -1017,7 +1042,7 @@ dist_gate_error_t dist_toffoli(partitioned_state_t* state,
                 }
             }
         }
-        return DIST_GATE_SUCCESS;
+        return dist_shard_from_host(state);
     }
 
     // Mixed case - decompose
@@ -1066,6 +1091,9 @@ dist_gate_error_t dist_mcz(partitioned_state_t* state,
 
     int rank = mpi_get_rank(state->dist_ctx);
 
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
+
     for (uint64_t i = 0; i < state->local_count; i++) {
         int all_ones = 1;
 
@@ -1090,7 +1118,7 @@ dist_gate_error_t dist_mcz(partitioned_state_t* state,
         }
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_mcx(partitioned_state_t* state,
@@ -1152,6 +1180,13 @@ dist_gate_error_t dist_mcx(partitioned_state_t* state,
         return dist_pauli_x(state, target);
     }
 
+    /* The remaining paths read/write the host amplitude buffer directly;
+     * pull a GPU shard down first and push it back before returning. */
+    if (dist_shard_to_host(state) != DIST_GATE_SUCCESS) {
+        free(local_controls);
+        return DIST_GATE_ERROR_COMM;
+    }
+
     // Handle target is partition qubit case
     if (tgt_partition) {
         // Need MPI exchange: partner rank has target bit flipped
@@ -1197,7 +1232,7 @@ dist_gate_error_t dist_mcx(partitioned_state_t* state,
         free(send_buf);
         free(recv_buf);
         free(local_controls);
-        return DIST_GATE_SUCCESS;
+        return dist_shard_from_host(state);
     }
 
     // Target is local: apply MCX directly
@@ -1223,7 +1258,7 @@ dist_gate_error_t dist_mcx(partitioned_state_t* state,
     }
 
     free(local_controls);
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 // ============================================================================
@@ -1238,19 +1273,25 @@ dist_gate_error_t dist_oracle_single(partitioned_state_t* state,
         return DIST_GATE_ERROR_INVALID_QUBIT;
     }
 
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
+
     // Check if target is local
     if (partition_is_local(state, target_state)) {
         uint64_t local_idx = partition_global_to_local(state, target_state);
         state->amplitudes[local_idx] *= -1.0;
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_oracle_multi(partitioned_state_t* state,
                                     const uint64_t* targets,
                                     uint32_t num_targets) {
     if (!state || !targets) return DIST_GATE_ERROR_NOT_INITIALIZED;
+
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
 
     for (uint32_t t = 0; t < num_targets; t++) {
         if (partition_is_local(state, targets[t])) {
@@ -1259,13 +1300,16 @@ dist_gate_error_t dist_oracle_multi(partitioned_state_t* state,
         }
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_grover_diffusion(partitioned_state_t* state) {
     if (!state) return DIST_GATE_ERROR_NOT_INITIALIZED;
 
     // Diffusion: 2|ψ⟩⟨ψ| - I where |ψ⟩ = (1/√N) Σ|i⟩
+
+    dist_gate_error_t serr = dist_shard_to_host(state);
+    if (serr != DIST_GATE_SUCCESS) return serr;
 
     // Step 1: Compute mean amplitude
     double complex local_sum = 0.0;
@@ -1289,7 +1333,7 @@ dist_gate_error_t dist_grover_diffusion(partitioned_state_t* state) {
         state->amplitudes[i] = 2.0 * mean - state->amplitudes[i];
     }
 
-    return DIST_GATE_SUCCESS;
+    return dist_shard_from_host(state);
 }
 
 dist_gate_error_t dist_grover_iteration(partitioned_state_t* state,
@@ -1318,6 +1362,12 @@ dist_gate_error_t dist_grover_search(partitioned_state_t* state,
     // Ensure uniform superposition
     partition_error_t perr = partition_init_uniform(state);
     if (perr != PARTITION_SUCCESS) return DIST_GATE_ERROR_NOT_INITIALIZED;
+
+    /* Uniform init writes the host buffer; push it to the GPU shard so
+     * the GPU-aware iteration kernels start from the correct state. */
+    if (dist_shard_from_host(state) != DIST_GATE_SUCCESS) {
+        return DIST_GATE_ERROR_COMM;
+    }
 
     // Run iterations
     dist_gate_error_t err;
