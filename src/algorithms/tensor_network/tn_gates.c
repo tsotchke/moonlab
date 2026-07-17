@@ -179,6 +179,38 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
     uint32_t chi_m = tl->dims[2];      // Middle bond (shared)
     uint32_t chi_r = tr->dims[2];      // Right bond
 
+    // Exact (double-precision) Frobenius norm of the gated two-site block,
+    // computed BEFORE the float32 GPU kernel runs.  This is the physical norm
+    // the CPU/WebGPU SVD paths park in log_norm_factor (sv_norm); we reproduce
+    // it here so the Metal path tracks the same physical quantity and the
+    // float32 SVD's per-gate norm drift never leaks into log_norm_factor.
+    double exact_block_norm;
+    {
+        const uint32_t d = TN_PHYSICAL_DIM;   // 2
+        double acc = 0.0;
+        for (uint32_t ll = 0; ll < chi_l; ll++) {
+            for (uint32_t rr = 0; rr < chi_r; rr++) {
+                double complex th[4];   // theta[ll, p1, p2, rr], index p1*d+p2
+                for (uint32_t p1 = 0; p1 < d; p1++) {
+                    for (uint32_t p2 = 0; p2 < d; p2++) {
+                        double complex s = 0.0;
+                        for (uint32_t m = 0; m < chi_m; m++) {
+                            s += tl->data[(uint64_t)ll * d * chi_m + p1 * chi_m + m]
+                               * tr->data[(uint64_t)m * d * chi_r + p2 * chi_r + rr];
+                        }
+                        th[p1 * d + p2] = s;
+                    }
+                }
+                for (int a = 0; a < 4; a++) {
+                    double complex g = 0.0;
+                    for (int b = 0; b < 4; b++) g += gate->elements[a][b] * th[b];
+                    acc += creal(g) * creal(g) + cimag(g) * cimag(g);
+                }
+            }
+        }
+        exact_block_norm = sqrt(acc);
+    }
+
     // Ensure tensors have GPU buffers sized for maximum possible output
     // After SVD, bond can grow up to max_bond_dim, so pre-allocate that size
     tensor_gpu_context_t *gpu_ctx = tensor_gpu_get_context();
@@ -306,6 +338,64 @@ static tn_gate_error_t apply_gate_2q_adjacent_gpu(tn_mps_state_t *state,
     }
     for (uint64_t i = 0; i < new_tr_size; i++) {
         tr->data[i] = (double)tr_result[i * 2] + I * (double)tr_result[i * 2 + 1];
+    }
+
+    // Bring the Metal output into the SAME gauge and normalization convention as
+    // the CPU / WebGPU SVD paths, so tn_mps_amplitude (amp * state->norm, no exp)
+    // reads back correctly on every path.  Three things differ from the CPU path
+    // and are corrected here:
+    //   1. The Metal kernel absorbs S into A (tl = U*S) and returns B = Vt
+    //      (orthonormal rows).  The CPU path leaves the LEFT tensor orthonormal
+    //      (tl = U) and puts S on the right.  Move S from tl to tr by dividing
+    //      each column of tl by its 2-norm (= S[j], since U's columns are
+    //      orthonormal) and multiplying the matching row of tr by it.
+    //   2. The float32 GPU SVD drifts the block Frobenius norm by ~a few percent
+    //      per gate (the physical direction stays exact).  Renormalize the block
+    //      to unit using its ACTUAL norm so that drift never accumulates.
+    //   3. Track only the PHYSICAL norm change in log_norm_factor, using the
+    //      exact (double-precision) gated-block Frobenius norm computed before
+    //      the kernel ran -- for a unitary gate on a normalized state that is 1,
+    //      so log_norm_factor is unchanged, matching the CPU path exactly.
+    {
+        uint32_t d = TN_PHYSICAL_DIM;   // physical dim (2)
+        // 1. Move S from tl (=U*S) to tr (=Vt): make tl left-orthonormal.
+        for (uint32_t j = 0; j < new_bond; j++) {
+            double col_sq = 0.0;
+            for (uint32_t l = 0; l < chi_l; l++) {
+                for (uint32_t p = 0; p < d; p++) {
+                    double complex v = tl->data[(uint64_t)l * d * new_bond + p * new_bond + j];
+                    col_sq += creal(v) * creal(v) + cimag(v) * cimag(v);
+                }
+            }
+            double s_j = sqrt(col_sq);
+            if (s_j > 1e-300) {
+                double inv = 1.0 / s_j;
+                for (uint32_t l = 0; l < chi_l; l++)
+                    for (uint32_t p = 0; p < d; p++)
+                        tl->data[(uint64_t)l * d * new_bond + p * new_bond + j] *= inv;
+                for (uint32_t p = 0; p < d; p++)
+                    for (uint32_t r = 0; r < chi_r; r++)
+                        tr->data[(uint64_t)j * d * chi_r + p * chi_r + r] *= s_j;
+            }
+        }
+        // 2. Block Frobenius norm after step 1 == ||S_metal|| == ||tr||_F.
+        double blk_sq = 0.0;
+        for (uint64_t i = 0; i < new_tr_size; i++) {
+            double re = creal(tr->data[i]), im = cimag(tr->data[i]);
+            blk_sq += re * re + im * im;
+        }
+        double blk_norm = sqrt(blk_sq);
+        if (!(blk_norm > 1e-100) || !isfinite(blk_norm)) {
+            return TN_GATE_ERROR_TRUNCATION;   // numerical collapse
+        }
+        double inv = 1.0 / blk_norm;
+        for (uint64_t i = 0; i < new_tr_size; i++) tr->data[i] *= inv;
+
+        // 3. Park only the physical norm change (exact_block_norm, computed in
+        //    double precision before the kernel) in log_norm_factor.
+        if (exact_block_norm > 1e-100 && isfinite(exact_block_norm)) {
+            state->log_norm_factor += log(exact_block_norm);
+        }
     }
 
     tl->cpu_valid = true;

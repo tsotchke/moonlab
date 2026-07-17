@@ -536,6 +536,18 @@
         set_tests_properties(unit_tn_mps_from_statevector
             PROPERTIES TIMEOUT 30)
 
+        # Deep forward-only circuit (n=12, depth=32) must stay normalized:
+        # regression for the Metal 2q-gate path's norm/gauge convention diverging
+        # from the CPU path once the bond crosses the GPU dispatch threshold.
+        add_executable(test_tn_mps_deep_forward
+            tests/unit/test_tn_mps_deep_forward.c)
+        target_link_libraries(test_tn_mps_deep_forward
+            PRIVATE quantumsim ${MATH_LIBRARY})
+        add_test(NAME unit_tn_mps_deep_forward
+            COMMAND test_tn_mps_deep_forward)
+        set_tests_properties(unit_tn_mps_deep_forward
+            PROPERTIES TIMEOUT 60)
+
         # Centralised moonlab_status_t registry test.  Closes audit
         # task #73 (was previously marked complete without code).
         add_executable(test_moonlab_status
@@ -1614,7 +1626,7 @@
         unit_matrix_math unit_svd_compress unit_metal_parity)
     qsim_label_tests(tn
         unit_tensor_network unit_tn_dead_code_smoke
-        unit_tn_mps_from_statevector tensor_adversarial dmrg
+        unit_tn_mps_from_statevector unit_tn_mps_deep_forward tensor_adversarial dmrg
         mps_vs_exact unit_lattice_2d unit_tdvp_validation
         unit_svd_noncanonical_axis unit_tn_gate_order)
     qsim_label_tests(ca_mps
