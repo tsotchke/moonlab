@@ -2,10 +2,13 @@
  * @file mlkem.h
  * @brief FIPS 203 Module-Lattice-based Key-Encapsulation Mechanism.
  *
- * This header is the end-user entry point to the ML-KEM-512 KEM.
- * Three operations:
+ * This header is the end-user entry point to the ML-KEM KEM.  All three
+ * FIPS 203 parameter sets -- ML-KEM-512, ML-KEM-768, and ML-KEM-1024 --
+ * are fully implemented and share a single generic engine driven by a
+ * runtime parameter struct (see @c mlkem.c).  Each parameter set exposes
+ * the same four operations, e.g. for ML-KEM-512:
  *
- *   - @ref moonlab_mlkem512_keygen  -- random key generation.
+ *   - @ref moonlab_mlkem512_keygen  -- key generation from (d, z).
  *   - @ref moonlab_mlkem512_encaps  -- derive a shared secret and
  *                                      ciphertext given a public key.
  *   - @ref moonlab_mlkem512_decaps  -- recover the shared secret from
@@ -15,17 +18,27 @@
  *                                      Fujisaki-Okamoto transform
  *                                      returns a pseudorandom secret
  *                                      rather than aborting).
+ *   - @ref moonlab_mlkem512_check_ek / @ref moonlab_mlkem512_check_dk --
+ *                                      FIPS 203 Section 7.2 / 7.3 input
+ *                                      validation of a public / secret key.
+ *
+ * Encaps validates its ek (Section 7.2 modulus check) and Decaps
+ * validates its dk (Section 7.3 hash check).  Because the core encaps /
+ * decaps entry points return void, an invalid key is rejected
+ * fail-closed (zeroized output); callers wanting an explicit result call
+ * the @c check_ek / @c check_dk predicates first, or use the @c *_qrng
+ * wrappers which return -2 on an invalid ek.
  *
  * All randomness is supplied by the caller via a 32-byte seed input
  * argument to each operation that needs randomness, so the module
  * is deterministic for testing.  In production, feed high-entropy
  * bytes from hardware_entropy.h or moonlab_qrng_bytes.  The FIPS
  * 203 internal variable naming (d, z, m, rho, sigma) is followed in
- * the implementation; see @c mlkem.c.
+ * the implementation.
  *
- * ML-KEM-768 and ML-KEM-1024 are one-struct extensions on top of
- * the ML-KEM-512 code; their public interfaces will follow the
- * same pattern in the next minor release.
+ * Conformance is pinned in tests/unit/test_mlkem_acvp.c against the
+ * official NIST ACVP FIPS 203 vectors (keyGen, encaps, decaps, and the
+ * encapsulation/decapsulation key checks) for all three parameter sets.
  *
  * @since 0.2.0
  */
@@ -79,6 +92,20 @@ MOONLAB_API void moonlab_mlkem512_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM512_SECRETKEYBYTES]);
 
+/**
+ * @brief FIPS 203 Section 7.2 encapsulation-key check.
+ * @return 1 if @p ek is well formed (all coefficients reduced mod q),
+ *         0 otherwise.
+ */
+MOONLAB_API int moonlab_mlkem512_check_ek(const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
+
+/**
+ * @brief FIPS 203 Section 7.3 decapsulation-key check.
+ * @return 1 if @p dk is internally consistent (embedded H(ek) matches),
+ *         0 otherwise.
+ */
+MOONLAB_API int moonlab_mlkem512_check_dk(const uint8_t dk[MLKEM512_SECRETKEYBYTES]);
+
 /* ---- Convenience wrappers driven by moonlab_qrng_bytes ---------- */
 
 /**
@@ -115,6 +142,8 @@ MOONLAB_API void moonlab_mlkem768_encaps(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
 MOONLAB_API void moonlab_mlkem768_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+MOONLAB_API int  moonlab_mlkem768_check_ek(const uint8_t ek[MLKEM768_PUBLICKEYBYTES]);
+MOONLAB_API int  moonlab_mlkem768_check_dk(const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
 MOONLAB_API int  moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                                     uint8_t dk[MLKEM768_SECRETKEYBYTES]);
 MOONLAB_API int  moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
@@ -132,6 +161,8 @@ MOONLAB_API void moonlab_mlkem1024_encaps(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
 MOONLAB_API void moonlab_mlkem1024_decaps(uint8_t K[32],
                                const uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+MOONLAB_API int  moonlab_mlkem1024_check_ek(const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]);
+MOONLAB_API int  moonlab_mlkem1024_check_dk(const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
 MOONLAB_API int  moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                      uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
 MOONLAB_API int  moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
