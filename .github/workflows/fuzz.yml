@@ -1,0 +1,111 @@
+name: fuzz
+
+# Coverage-guided fuzz lane for libquantumsim.
+#
+#   * replay job -- fast (< ~5 min) PR gate: builds the harnesses with
+#     -DQSIM_ENABLE_FUZZING=ON under Clang and replays every seed corpus
+#     through the *_replay binaries under ASan+UBSan.  A crash on any seed
+#     fails the job.
+#
+#   * soak job -- scheduled + manual: runs a real libFuzzer campaign per
+#     surface (matrix) for 300s each and uploads any crash artifacts.
+#
+# tests/fuzz is self-contained; scripts/run_fuzz.sh wires
+# `add_subdirectory(tests/fuzz)` into a scratch copy of CMakeLists.txt for
+# the duration of the run (and restores it), so this workflow needs no
+# change to the tracked root CMakeLists.
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/fuzz/**'
+      - 'scripts/run_fuzz.sh'
+      - '.github/workflows/fuzz.yml'
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    name: replay-corpus (ASan+UBSan)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake make libopenblas-dev liblapacke-dev pkg-config
+
+      - name: Replay seed corpus under sanitizers
+        env:
+          CC: clang
+          CXX: clang++
+          QSIM_FUZZ_JOBS: '2'
+        run: ./scripts/run_fuzz.sh replay
+
+      - name: Upload fuzz trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-fuzz-replay-trace
+          path: scripts/icc_traces/moonlab_fuzz.jsonl
+          if-no-files-found: warn
+
+  soak:
+    name: soak-${{ matrix.target }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - control_plane_protocol_fuzz
+          - circuit_deserialize_fuzz
+          - config_parse_fuzz
+          - mlkem_decode_fuzz
+          - entropy_input_fuzz
+          - abi_boundary_fuzz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake make libopenblas-dev liblapacke-dev pkg-config
+
+      - name: Soak ${{ matrix.target }} (300s)
+        env:
+          CC: clang
+          CXX: clang++
+          QSIM_FUZZ_JOBS: '2'
+        run: ./scripts/run_fuzz.sh soak 300 "${{ matrix.target }}"
+
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: tests/fuzz/corpora/${{ matrix.target }}/crashes-pending/
+          if-no-files-found: ignore
+
+      - name: Upload soak trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-fuzz-soak-trace-${{ matrix.target }}
+          path: scripts/icc_traces/moonlab_fuzz.jsonl
+          if-no-files-found: warn

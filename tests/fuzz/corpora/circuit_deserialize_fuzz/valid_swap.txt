@@ -1,0 +1,5 @@
+NUM_QUBITS 4
+SWAP 0 3
+CY 1 2
+S 0
+T 3

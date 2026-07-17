@@ -1,0 +1,10 @@
+{
+  "backend": "gpu_cuda",
+  "simd": "avx2",
+  "max_qubits": 24,
+  "threads": 8,
+  "log_level": "debug",
+  "noise": { "enabled": true, "depolarizing_rate": 0.001, "t1_time": 50.0, "t2_time": 70.0 },
+  "tolerance": 1e-10,
+  "seed": 12345
+}

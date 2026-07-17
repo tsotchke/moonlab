@@ -1,0 +1,22 @@
+# libFuzzer/AFL dictionary for the moonlab-circuit v1 text format
+# parsed by moonlab_qgtl_circuit_deserialize.
+# Newlines use \x0a (libFuzzer dict escapes: \xHH, \\, \" only).
+header="# moonlab-circuit v1\x0a"
+num_qubits="NUM_QUBITS "
+g_i="I "
+g_x="X "
+g_y="Y "
+g_z="Z "
+g_h="H "
+g_s="S "
+g_t="T "
+g_rx="RX "
+g_ry="RY "
+g_rz="RZ "
+g_cnot="CNOT "
+g_cy="CY "
+g_cz="CZ "
+g_swap="SWAP "
+nl="\x0a"
+theta="0.7853981633974483"
+comment="#"
