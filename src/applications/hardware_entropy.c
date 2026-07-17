@@ -16,7 +16,11 @@
 #endif
 #include <time.h>
 
-#if defined(__aarch64__)
+/* aarch64 hardware-RNG helpers are POSIX-only (fork/exec probe).  clang-cl on
+ * Windows-on-ARM also defines __aarch64__, so every aarch64 block that pulls in
+ * POSIX must additionally exclude _WIN32/_WIN64; Windows-ARM falls back to the
+ * BCryptGenRandom path below. */
+#if defined(__aarch64__) && !defined(_WIN32) && !defined(_WIN64)
 static int env_flag_enabled(const char *name) {
     const char *value = getenv(name);
     return value && (value[0] == '1' || value[0] == 'y' || value[0] == 'Y');
@@ -71,7 +75,10 @@ int rdseed_available(void) {
 // ARM HARDWARE INSTRUCTIONS (ARMv8.5-A+)
 // ============================================================================
 
-#ifdef __aarch64__
+// Windows-on-ARM (clang-cl) defines __aarch64__ but has no <sys/wait.h> and no
+// fork(); exclude _WIN32/_WIN64 so it takes the stub branch and the Windows
+// BCryptGenRandom entropy path instead of this POSIX fork/exec probe.
+#if defined(__aarch64__) && !defined(_WIN32) && !defined(_WIN64)
 
 #include <sys/wait.h>
 
@@ -257,33 +264,77 @@ int rndr_available(void) {
 }
 
 /**
- * @brief Get entropy via ARM RNDR instruction (safe popen version)
+ * @brief Read RNDR (S3_3_C2_C4_0) inline.
+ *
+ * On a successful read the value is placed in the destination and PSTATE.NZCV
+ * is set with Z clear (NE); a transient failure clears the value and sets Z
+ * (EQ).  Only reached after rndr_available() has confirmed via the one-time
+ * fork/exec probe that the instruction actually works on this hardware, so
+ * executing it inline here cannot crash a VM that merely lies about FEAT_RNG.
+ */
+static inline int rndr_read_inline(uint64_t *value) {
+    uint64_t v;
+    unsigned int ok;
+    __asm__ volatile(
+        "mrs %0, s3_3_c2_c4_0\n\t"   /* RNDR */
+        "cset %w1, ne\n\t"
+        : "=r"(v), "=r"(ok)
+        :
+        : "cc");
+    if (ok) { *value = v; return 1; }
+    return 0;
+}
+
+/**
+ * @brief Read RNDRRS (S3_3_C2_C4_1) inline (reseeded variant).
+ */
+static inline int rndrrs_read_inline(uint64_t *value) {
+    uint64_t v;
+    unsigned int ok;
+    __asm__ volatile(
+        "mrs %0, s3_3_c2_c4_1\n\t"   /* RNDRRS */
+        "cset %w1, ne\n\t"
+        : "=r"(v), "=r"(ok)
+        :
+        : "cc");
+    if (ok) { *value = v; return 1; }
+    return 0;
+}
+
+/**
+ * @brief Get entropy via ARM RNDR instruction.
+ *
+ * The fork/exec helper is used ONLY for the one-time capability probe inside
+ * rndr_available(); the bulk path reads RNDR inline.  Forking per 64-bit
+ * sample from the multithreaded entropy worker was a fork-in-threaded-process
+ * hazard, so it is confined to init-time detection.
  */
 int rndr_get_uint64(uint64_t *value) {
     if (!rndr_available()) return 0;
 
     // Retry up to 10 times
     for (int i = 0; i < 10; i++) {
-        if (hw_rng_probe_exec("rndr", value)) return 1;
+        if (rndr_read_inline(value)) return 1;
     }
     return 0;
 }
 
 /**
- * @brief Get entropy via ARM RNDRRS instruction (safe popen version)
+ * @brief Get entropy via ARM RNDRRS instruction (inline bulk path).
  */
 int rndrrs_get_uint64(uint64_t *value) {
     if (!rndr_available()) return 0;
 
     // RNDRRS may take longer, retry up to 100 times
     for (int i = 0; i < 100; i++) {
-        if (hw_rng_probe_exec("rndrrs", value)) return 1;
+        if (rndrrs_read_inline(value)) return 1;
     }
     return 0;
 }
 
 #else
-// Stub implementations for non-ARM platforms
+// Stub implementations for non-ARM platforms and Windows-on-ARM (which has no
+// fork/exec probe): report no RNDR so callers fall back to getrandom/BCrypt.
 int rndr_available(void) { return 0; }
 int rndr_get_uint64(uint64_t *value) { (void)value; return 0; }
 int rndrrs_get_uint64(uint64_t *value) { (void)value; return 0; }
@@ -559,10 +610,10 @@ entropy_error_t entropy_init(entropy_ctx_t *ctx) {
     
     // ARM RNDR support. On Linux, do not select the helper-backed RNDR path
     // for bulk entropy by default: kernel getrandom() is already seeded from
-    // platform sources, while spawning hw_rng_probe per 64-bit sample is too
-    // slow for QRNG buffer fills and RNDRRS may stall on Jetson-class systems.
-    // Operators can opt in explicitly for diagnostics.
-    #if defined(__aarch64__)
+    // platform sources, and RNDRRS may stall on Jetson-class systems.
+    // Operators can opt in explicitly for diagnostics.  Windows-on-ARM is
+    // excluded: it has no fork/exec probe and uses the BCryptGenRandom path.
+    #if defined(__aarch64__) && !defined(_WIN32) && !defined(_WIN64)
     int enable_arm_hw_entropy = 1;
     #if defined(__linux__)
     enable_arm_hw_entropy = env_flag_enabled("MOONLAB_ENABLE_ARM_HW_ENTROPY");

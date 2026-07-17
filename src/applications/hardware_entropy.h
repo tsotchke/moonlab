@@ -191,7 +191,7 @@ int rdrand_available(void);
  */
 int rdseed_available(void);
 
-#if defined(__aarch64__) && defined(MOONLAB_TESTING)
+#if defined(__aarch64__) && defined(MOONLAB_TESTING) && !defined(_WIN32) && !defined(_WIN64)
 /**
  * @brief Test-only wrapper around the ARM hardware RNG helper launcher.
  *
