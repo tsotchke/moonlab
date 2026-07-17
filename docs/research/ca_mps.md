@@ -119,13 +119,13 @@ typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
 moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
 void              moonlab_ca_mps_free(moonlab_ca_mps_t* s);
 
-/* Start in |0...0>: tableau is identity, MPS is product state. */
-moonlab_ca_mps_t* moonlab_ca_mps_zero_state(uint32_t num_qubits, uint32_t max_bond_dim);
+/* moonlab_ca_mps_create starts in |0...0>: tableau is identity, MPS is a
+ * product state. */
 
 /* Introspection */
 uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
-uint32_t moonlab_ca_mps_bond_dim(const moonlab_ca_mps_t* s);
-uint64_t moonlab_ca_mps_tableau_nnz(const moonlab_ca_mps_t* s);  /* # non-identity tableau entries */
+uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
+uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
 ```
 
 ### 3.3 Clifford gates (tableau only)
@@ -160,9 +160,12 @@ int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                   const uint8_t* pauli_string,
                                   double theta);
 
-/* Generic 2-qubit unitary via Pauli decomposition. */
-int moonlab_ca_mps_apply_2q(moonlab_ca_mps_t* s, uint32_t q1, uint32_t q2,
-                            const double _Complex matrix4x4[16]);
+/* Two-qubit gates ship as the named Clifford entanglers (cnot/cz/swap) and the
+ * controlled rotations; a general two-qubit exp(i theta P) is a weight-2
+ * moonlab_ca_mps_pauli_rotation. */
+int moonlab_ca_mps_crx(moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_cry(moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_crz(moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
 ```
 
 ### 3.5 Measurement and observables
@@ -173,37 +176,49 @@ int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                 const uint8_t* pauli_string,
                                 double _Complex* out);
 
-/* Expectation value of an MPO H.  H is given in Moonlab's existing mpo_t. */
-int moonlab_ca_mps_expect_mpo(const moonlab_ca_mps_t* s,
-                              const mpo_t* H,
-                              double _Complex* out);
+/* Expectation value of a weighted Pauli sum -- the Hamiltonian form the
+ * VQE/DMRG drivers use (coeffs are moonlab_complex_double; see moonlab_export.h). */
+int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
+                                    const uint8_t* paulis,
+                                    const moonlab_complex_double* coeffs,
+                                    uint32_t num_terms,
+                                    double _Complex* out);
 
-/* Computational-basis sample.  Collapses the state. */
-int moonlab_ca_mps_sample(moonlab_ca_mps_t* s, uint64_t* rng_state,
-                          uint8_t* out_bits);
+/* Computational-basis (Z) sampling from precomputed uniforms.  Collapses. */
+ca_mps_error_t moonlab_ca_mps_sample_z(const moonlab_ca_mps_t* s,
+                                       uint32_t num_samples,
+                                       const double* random_values,
+                                       uint8_t* out_bits);
 
-/* Entanglement entropy between qubits {0..split-1} and {split..n-1}.
- * Accounts for the Clifford prefactor via the partition-transformation step. */
-int moonlab_ca_mps_entropy_bipartite(const moonlab_ca_mps_t* s, uint32_t split,
-                                     double* out_entropy);
+/* Maximum half-cut entanglement entropy (nats), accounting for the Clifford
+ * prefactor via the partition-transformation step. */
+double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
 ```
 
 ### 3.6 Optimization drivers
 
 ```c
-/* Imaginary-time evolution exp(-tau H) |psi> with step tau, for n_steps steps.
- * Uses Pauli-decomposition Trotter-Suzuki internally.  Returns energy after
- * each step if `trace` is non-NULL. */
-int moonlab_ca_mps_imag_time_evolve(moonlab_ca_mps_t* s,
-                                    const mpo_t* H, double tau, uint32_t n_steps,
-                                    double* trace);
+/* Variational-D optimizer (the ground-state driver): alternates imaginary-time
+ * evolution of |phi> with a greedy Clifford-gauge search that pulls
+ * Clifford-like structure into the tableau D while holding the bond dimension
+ * fixed.  The Hamiltonian is a weighted Pauli sum.  var_d_run_v2 adds an
+ * explicit convergence epsilon.  Full parameter lists are in moonlab_export.h. */
+int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
+                             const uint8_t* paulis, const double* coeffs,
+                             uint32_t num_terms, uint32_t max_outer_iters,
+                             double imag_time_dtau,
+                             uint32_t imag_time_steps_per_outer,
+                             double* out_energy);
+int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
+                                const uint8_t* paulis, const double* coeffs,
+                                uint32_t num_terms, uint32_t max_outer_iters,
+                                double imag_time_dtau,
+                                uint32_t imag_time_steps_per_outer,
+                                uint32_t clifford_passes_per_outer,
+                                double convergence_eps, double* out_energy);
 
-/* Ground-state search on a CA-MPS ansatz: DMRG-style two-site sweeps that
- * optimize |phi> while holding D fixed, interleaved with "Clifford gauge"
- * updates that pull Clifford-like structure out of |phi> into D. */
-int moonlab_ca_mps_dmrg_ground_state(moonlab_ca_mps_t* s, const mpo_t* H,
-                                     uint32_t num_sweeps, double tol,
-                                     double* out_energy);
+/* A plain DMRG ground state on a bare tn_mps_state_t, no Clifford gauge, is the separate
+ * moonlab_dmrg_* API -- e.g. moonlab_dmrg_tfim_energy / _heisenberg_energy. */
 ```
 
 ---
