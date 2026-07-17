@@ -1,0 +1,24 @@
+# libFuzzer/AFL dictionary for the control-plane wire protocol.
+# Verbs, prelude tokens, and structural bytes of the length-prefixed
+# frame parsed in src/control/control_plane.c.
+# Newlines are written as \x0a: the libFuzzer dictionary parser accepts
+# only \xHH, \\ and \" escapes (not \n).
+verb_circuit="CIRCUIT "
+verb_shots="SHOTS "
+verb_health="HEALTH\x0a"
+verb_metrics="METRICS\x0a"
+verb_auth="AUTH "
+resp_ok="OK "
+resp_err="ERR "
+resp_samples="SAMPLES "
+nl="\x0a"
+colon=":"
+space=" "
+tenant="tenant.1:"
+zero="0"
+neg="-1"
+big="999999999"
+hdr="# moonlab-circuit v1\x0a"
+numqubits="NUM_QUBITS "
+gate_h="H 0\x0a"
+gate_cnot="CNOT 0 1\x0a"

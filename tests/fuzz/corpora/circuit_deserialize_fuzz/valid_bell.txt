@@ -1,0 +1,4 @@
+# moonlab-circuit v1
+NUM_QUBITS 2
+H 0
+CNOT 0 1
