@@ -371,7 +371,7 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     vector_scale(v_curr, 1.0 / norm_x, vec_size);
 
     lanczos_beta[0] = 0.0;
-    uint32_t num_iter = 0;
+    uint32_t num_iter = 0;   // count of fully-completed Lanczos iterations
 
     // Create tensors for H_eff application (theta is rank-4
     // [chi_l, d, d, chi_r] for the two-site Krylov projection).
@@ -387,18 +387,23 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
         return -1;
     }
 
-    // Lanczos iteration
+    // Lanczos iteration.  num_iter only advances once an iteration has fully
+    // populated its tridiagonal row (alpha[iter] and beta[iter+1]); a failure
+    // to allocate the Krylov vector or to apply H_eff drops the partial row so
+    // the tridiagonal exponentiation and reconstruction below never read a
+    // NULL vector or a stale (uncomputed) alpha entry.
     for (uint32_t iter = 0; iter < max_iter; iter++) {
-        num_iter = iter + 1;
-
         // Store current vector
         V[iter] = (double complex *)malloc(vec_size * sizeof(double complex));
-        if (!V[iter]) break;
+        if (!V[iter]) break;   // num_iter stays at the completed count
         memcpy(V[iter], v_curr, vec_size * sizeof(double complex));
 
         // w = H @ v_curr
         memcpy(x_temp->data, v_curr, vec_size * sizeof(double complex));
         if (effective_hamiltonian_apply(H_eff, x_temp, y_temp) != 0) {
+            // Drop this incomplete iteration: its alpha row is uncomputed.
+            free(V[iter]);
+            V[iter] = NULL;
             break;
         }
         memcpy(w, y_temp->data, vec_size * sizeof(double complex));
@@ -422,9 +427,11 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
         // beta[iter+1] = ||w||
         lanczos_beta[iter + 1] = vector_norm(w, vec_size);
 
+        // Tridiagonal row `iter` is now fully valid.
+        num_iter = iter + 1;
+
         // Check convergence
         if (lanczos_beta[iter + 1] < tol) {
-            num_iter = iter + 1;
             break;
         }
 
@@ -440,8 +447,24 @@ int lanczos_expm(const effective_hamiltonian_t *H_eff,
     tensor_free(x_temp);
     tensor_free(y_temp);
 
+    // No usable Krylov vector was built (allocation/apply failed on the very
+    // first iteration): report failure instead of writing a zero vector.
+    if (num_iter == 0) {
+        free(V);
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta);
+        return -1;
+    }
+
     // Compute exp(alpha * T) @ e1
     double complex *expm_coeffs = (double complex *)calloc(num_iter, sizeof(double complex));
+    if (!expm_coeffs) {
+        for (uint32_t i = 0; i < num_iter; i++) free(V[i]);
+        free(V);
+        free(v_prev); free(v_curr); free(v_next); free(w);
+        free(lanczos_alpha); free(lanczos_beta);
+        return -1;
+    }
     tridiag_expm_e1(lanczos_alpha, lanczos_beta, num_iter, alpha, expm_coeffs);
 
     // Reconstruct: y = norm_x * sum_i expm_coeffs[i] * V[i]

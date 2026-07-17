@@ -99,6 +99,11 @@ typedef struct {
     uint32_t warmup_sweeps;     /**< Number of warmup sweeps with larger noise */
     double warmup_noise;        /**< Noise strength during warmup */
     uint32_t warmup_bond_dim;   /**< Initial bond dimension for warmup */
+
+    // Random-number seed for reproducible initial-MPS construction.  A local
+    // splitmix64 stream is derived from this; no global rand()/srand() state is
+    // read or modified.
+    uint64_t seed;              /**< PRNG seed for initial-state generation */
 } dmrg_config_t;
 
 /**
@@ -121,7 +126,9 @@ static inline dmrg_config_t dmrg_config_default(void) {
         // Warmup defaults
         .warmup_sweeps = 3,
         .warmup_noise = 1e-3,
-        .warmup_bond_dim = 16
+        .warmup_bond_dim = 16,
+        // Deterministic default seed for reproducible initial states.
+        .seed = 42
     };
 }
 
