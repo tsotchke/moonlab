@@ -325,7 +325,8 @@ typedef enum {
     VQE_OPTIMIZER_COBYLA,      // Constrained optimization
     VQE_OPTIMIZER_LBFGS,       // Limited-memory BFGS
     VQE_OPTIMIZER_ADAM,        // Adaptive moment estimation
-    VQE_OPTIMIZER_GRADIENT_DESCENT  // Simple gradient descent
+    VQE_OPTIMIZER_GRADIENT_DESCENT, // Simple gradient descent
+    VQE_OPTIMIZER_QNG          // Quantum natural gradient (Fubini-Study metric)
 } vqe_optimizer_type_t;
 
 /**
@@ -522,6 +523,49 @@ MOONLAB_API int vqe_compute_gradient(
     vqe_solver_t *solver,
     const double *parameters,
     double *gradient
+);
+
+/**
+ * @brief Quantum geometric (Fubini-Study) tensor of the ansatz state.
+ *
+ * Computes g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>] for the
+ * ideal (noise-free) trial state |psi(parameters)>, via central differences on
+ * the statevector.  This is the natural Riemannian metric on the ansatz's
+ * parameter space, used by the quantum natural gradient optimizer.
+ *
+ * @param solver VQE solver context
+ * @param parameters Current parameters (num_parameters slots)
+ * @param qgt_out Output: symmetric metric, row-major num_parameters x num_parameters
+ * @return 0 on success, -1 on error
+ * @stability experimental
+ */
+MOONLAB_API int vqe_compute_qgt(
+    vqe_solver_t *solver,
+    const double *parameters,
+    double *qgt_out
+);
+
+/**
+ * @brief Natural-gradient direction (g + eps*I)^{-1} * gradient.
+ *
+ * Preconditions GRADIENT by the regularized quantum geometric tensor.  On
+ * success DIRECTION_OUT holds the natural-gradient step direction; on failure
+ * (singular metric) callers should fall back to the plain gradient.
+ *
+ * @param solver VQE solver context
+ * @param parameters Current parameters
+ * @param gradient Energy gradient (num_parameters slots)
+ * @param regularization Tikhonov shift added to the metric diagonal (e.g. 1e-3)
+ * @param direction_out Output: natural-gradient direction (num_parameters slots)
+ * @return 0 on success, -1 on error
+ * @stability experimental
+ */
+MOONLAB_API int vqe_natural_gradient_direction(
+    vqe_solver_t *solver,
+    const double *parameters,
+    const double *gradient,
+    double regularization,
+    double *direction_out
 );
 
 // ============================================================================
