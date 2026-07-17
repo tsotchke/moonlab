@@ -259,6 +259,127 @@ static void test_h2_adjoint_gradient_matches_finite_diff(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Exact ground-state energy of H2 at a bond distance (no ansatz/optimizer). */
+static double h2_exact_energy(double r_angstrom) {
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(r_angstrom);
+    double e = vqe_exact_ground_state_energy(H);
+    pauli_hamiltonian_free(H);
+    return e;
+}
+
+/* The H2 potential energy surface must be smooth and differentiable in the
+ * bond length: the equilibrium result is unchanged, there is no flat plateau
+ * (which would give zero force at the minimum), and the force dE/dr is
+ * continuous (no kink).  This guards the first-principles STO-3G construction
+ * against a regression to the previous Morse/plateau interpolation. */
+static void test_h2_pes_smooth_and_differentiable(void) {
+    fprintf(stdout, "\n-- VQE: H2 potential energy surface is smooth + differentiable --\n");
+
+    /* (1) Equilibrium coefficients + nuclear repulsion are the exact O'Malley
+     * values (the fix is additively anchored, so 0.7414 A is unchanged). */
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.7414);
+    CHECK(H != NULL, "built H2 Hamiltonian at equilibrium");
+    if (!H) return;
+    const char *names[5] = {"II", "IZ", "ZI", "ZZ", "XX"};
+    const double omalley[5] = {-1.0523732, 0.39793742, -0.39793742,
+                               -0.01128010, 0.18093120};
+    for (int t = 0; t < 5; t++) {
+        double got = NAN;
+        for (size_t i = 0; i < H->num_terms; i++)
+            if (H->terms[i].pauli_string &&
+                strcmp(H->terms[i].pauli_string, names[t]) == 0)
+                got = H->terms[i].coefficient;
+        CHECK(isfinite(got) && fabs(got - omalley[t]) < 1e-9,
+              "equilibrium %s coefficient exact (%.8f)", names[t], got);
+    }
+    CHECK(fabs(H->nuclear_repulsion - 0.7151043390) < 1e-9,
+          "equilibrium nuclear repulsion exact (%.10f)", H->nuclear_repulsion);
+    pauli_hamiltonian_free(H);
+
+    double E_eq = h2_exact_energy(0.7414);
+    fprintf(stdout, "    E_exact(0.7414) = %.9f Ha\n", E_eq);
+    CHECK(fabs(E_eq - (-1.142170640)) < 1e-6,
+          "equilibrium ground-state energy unchanged (%.9f)", E_eq);
+
+    /* (2) No plateau: the previous construction returned identical coefficients
+     * for all r within +/-0.01 A of equilibrium, so the energy was flat there.
+     * A first-principles PES must vary. */
+    double Ea = h2_exact_energy(0.735), Eb = h2_exact_energy(0.745);
+    CHECK(fabs(Ea - Eb) > 1e-6,
+          "PES is not flat across equilibrium (no plateau): |dE| = %.2e", fabs(Ea - Eb));
+
+    /* (3) The force dE/dr is continuous through equilibrium.  The old
+     * exp(-1.5*fabs(r-r_eq)) scaling and plateau edge made it jump by ~2.4
+     * Ha/A; a smooth PES keeps adjacent central-difference forces close. */
+    const double h = 1e-3;
+    double max_force_jump = 0.0, prev_force = NAN;
+    for (double r = 0.70; r <= 0.78001; r += 0.01) {
+        double force = (h2_exact_energy(r + h) - h2_exact_energy(r - h)) / (2.0 * h);
+        if (isfinite(prev_force)) {
+            double jump = fabs(force - prev_force);
+            if (jump > max_force_jump) max_force_jump = jump;
+        }
+        prev_force = force;
+    }
+    fprintf(stdout, "    max adjacent |d(force)| over [0.70,0.78] = %.4f Ha/A\n",
+            max_force_jump);
+    CHECK(max_force_jump < 0.1,
+          "force is continuous through equilibrium (no kink): %.4f < 0.1", max_force_jump);
+}
+
+/* LiH shares the same smoothness fix.  The previous else branch dropped 13 of
+ * the 21 terms off equilibrium (a discontinuous change of Hamiltonian
+ * structure) and used a fabs() kink; the fixed construction keeps the full term
+ * set at every geometry with a smooth Gaussian envelope. */
+static void test_lih_pes_smooth_and_consistent(void) {
+    fprintf(stdout, "\n-- VQE: LiH surface is smooth + structurally consistent --\n");
+
+    /* (1) Equilibrium preserved. */
+    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+    CHECK(H != NULL, "built LiH Hamiltonian at equilibrium");
+    if (!H) return;
+    CHECK(H->num_terms == 21, "LiH has all 21 terms at equilibrium (got %zu)",
+          H->num_terms);
+    double iiii = NAN;
+    for (size_t i = 0; i < H->num_terms; i++)
+        if (H->terms[i].pauli_string && strcmp(H->terms[i].pauli_string, "IIII") == 0)
+            iiii = H->terms[i].coefficient;
+    CHECK(isfinite(iiii) && fabs(iiii - (-7.8823620)) < 1e-9,
+          "equilibrium IIII coefficient exact (%.7f)", iiii);
+    CHECK(fabs(H->nuclear_repulsion - 0.9953800) < 1e-9,
+          "equilibrium nuclear repulsion exact (%.7f)", H->nuclear_repulsion);
+    pauli_hamiltonian_free(H);
+
+    /* (2) Structural consistency: the term COUNT must not change with geometry
+     * (the old else branch produced 8 terms instead of 21). */
+    for (double r = 1.30; r <= 1.90001; r += 0.20) {
+        pauli_hamiltonian_t *Hr = vqe_create_lih_hamiltonian(r);
+        CHECK(Hr && Hr->num_terms == 21,
+              "LiH keeps all 21 terms at r=%.2f A (got %zu)", r,
+              Hr ? Hr->num_terms : (size_t)0);
+        if (Hr) pauli_hamiltonian_free(Hr);
+    }
+
+    /* (3) Force continuity through equilibrium (no plateau, no kink). */
+    const double h = 1e-3;
+    double max_jump = 0.0, prev = NAN;
+    for (double r = 1.40; r <= 1.80001; r += 0.05) {
+        pauli_hamiltonian_t *Hp = vqe_create_lih_hamiltonian(r + h);
+        pauli_hamiltonian_t *Hm = vqe_create_lih_hamiltonian(r - h);
+        double force = (vqe_exact_ground_state_energy(Hp) -
+                        vqe_exact_ground_state_energy(Hm)) / (2.0 * h);
+        pauli_hamiltonian_free(Hp);
+        pauli_hamiltonian_free(Hm);
+        if (isfinite(prev)) {
+            double jump = fabs(force - prev);
+            if (jump > max_jump) max_jump = jump;
+        }
+        prev = force;
+    }
+    fprintf(stdout, "    LiH max adjacent |d(force)| = %.4f Ha/A\n", max_jump);
+    CHECK(max_jump < 0.5, "LiH force is continuous (no kink): %.4f < 0.5", max_jump);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -266,6 +387,8 @@ int main(void) {
     test_h2_optimizer_converges_below_hf();
     test_h2_noisy();
     test_h2_adjoint_gradient_matches_finite_diff();
+    test_h2_pes_smooth_and_differentiable();
+    test_lih_pes_smooth_and_consistent();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
