@@ -1,7 +1,8 @@
 # Moonlab Debian Debug Build
 FROM debian:12-slim
 
-ARG VERSION=0.1.0
+ARG VERSION=1.1.0
+LABEL org.opencontainers.image.version="${VERSION}"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies including debug tools
@@ -14,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libomp-dev \
     libopenblas-dev \
     liblapacke-dev \
+    libssl-dev \
     dpkg-dev \
     file \
     gdb \
@@ -25,15 +27,19 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# Build with debug symbols
-ENV CFLAGS="-g -O0"
-RUN make clean && make
+# Build with debug symbols via CMake (the Makefile path is legacy and
+# doesn't generate moonlab_build_info.h that src/utils/manifest.c
+# needs -- see docker/debian/release/Dockerfile, which this mirrors).
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DQSIM_NATIVE_ARCH=OFF \
+        -DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_EXAMPLES=OFF -DQSIM_BUILD_BENCHMARKS=OFF && \
+    cmake --build build -j
 
-# Build tests
-RUN make tests unit_tests || echo "Tests built"
-
-# Run unit tests
-RUN make test_unit || echo "Unit tests completed"
+# Run the test suite via ctest. This is a debug image built for
+# interactive gdb/valgrind sessions against a known-good binary --
+# masking a test failure with `|| echo` would ship exactly the
+# untrustworthy debug target gdb/valgrind sessions are meant to rule
+# out, so a failure here fails the image build.
+RUN cd build && ctest --output-on-failure
 
 # Keep container running for debugging
 CMD ["sleep", "infinity"]
