@@ -9,7 +9,16 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "MSVC")
 endif()
 
 set(QSIM_WARNING_FLAGS)
-if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
+if(QSIM_COMPILER_CLANG AND CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    # clang-cl: MSVC flag surface. GNU-style -Wall is aliased to MSVC
+    # /Wall here, which clang-cl maps to -Weverything (-Wpadded,
+    # -Wpre-c11-compat, -Wdocumentation, ... as errors under /WX).
+    # /W4 is the clang-cl spelling of -Wall -Wextra.
+    list(APPEND QSIM_WARNING_FLAGS /W4)
+    if(QSIM_WERROR)
+        list(APPEND QSIM_WARNING_FLAGS /WX)
+    endif()
+elseif(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
     list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
     if(QSIM_WERROR)
         # -Werror everywhere our code is responsible. Demotions are limited to

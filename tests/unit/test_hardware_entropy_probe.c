@@ -3,6 +3,16 @@
  * @brief Security regression tests for the ARM hardware RNG helper launch path.
  */
 
+#if defined(_WIN32)
+#include <stdio.h>
+/* The helper launch path is fork/exec + POSIX permissions; there is no
+ * Windows port of the probe. */
+int main(void) {
+    printf("hardware entropy probe: POSIX-only, skipped on Windows\n");
+    return 0;
+}
+#else
+
 #include "../../src/applications/hardware_entropy.h"
 
 #include <errno.h>
@@ -146,3 +156,5 @@ int main(void) {
     fprintf(stdout, "\n%d failure(s)\n", failures);
     return failures == 0 ? 0 : 1;
 }
+
+#endif /* !_WIN32 */

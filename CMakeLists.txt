@@ -1078,6 +1078,11 @@ target_include_directories(quantumsim
 # compile.  On Windows we splice src/compat/ into the include path
 # AHEAD of the system path so the shims resolve as <time.h> etc.
 if(QSIM_PLATFORM_WINDOWS)
+    # Directory-scoped: dlsym-style tests deliberately do not link
+    # quantumsim, so a target-scoped PUBLIC include leaves them on UCRT
+    # <complex.h> (_Dcomplex prototypes) while their code uses C99
+    # _Complex. Every build-tree target needs the shims.
+    include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/src/compat)
     target_include_directories(quantumsim BEFORE PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/compat>)
 endif()
