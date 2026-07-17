@@ -18,7 +18,6 @@ path = "src/main.rs"
 
 [dependencies]
 moonlab = { version = "1.1.0", path = "../moonlab" }
-moonlab-sys = { version = "1.1.0", path = "../moonlab-sys" }
 
 # TUI Framework (pinned to versions compatible with rustc 1.86)
 ratatui = "0.26"
@@ -28,11 +27,7 @@ crossterm = "0.27"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 
 # Error handling
-thiserror = "1.0"
 anyhow = "1.0"
-
-# Math & Complex numbers
-num-complex = "0.4"
 
 # Logging
 tracing = "0.1"

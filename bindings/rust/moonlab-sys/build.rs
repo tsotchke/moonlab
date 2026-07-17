@@ -17,37 +17,69 @@ fn normalize_header_root(candidate: &Path) -> Option<PathBuf> {
     None
 }
 
+// MSVC static and shared builds can both produce a bare `quantumsim.lib`:
+// CMakeLists.txt does not rename the STATIC target's output, so a static
+// build's archive is *also* named `quantumsim.lib`, identically to a
+// shared build's DLL import library. The file's presence alone is
+// therefore ambiguous on Windows -- it is only an import library (shared)
+// when `quantumsim.dll` sits next to it; with no `.dll` alongside it, it
+// is the static archive. `has_shared_library` and `has_static_library`
+// must agree on this so a directory containing only the static archive
+// is never linked as `dylib=quantumsim` (which would ask the linker to
+// resolve DLL-only symbols against an archive that has none).
+fn has_dll(dir: &Path) -> bool {
+    dir.join("quantumsim.dll").is_file()
+}
+
 fn has_shared_library(dir: &Path) -> bool {
-    [
-        "libquantumsim.so",
-        "libquantumsim.dylib",
-        "quantumsim.dll",
-        "quantumsim.lib",
-    ]
-    .iter()
-    .any(|name| dir.join(name).is_file())
+    dir.join("libquantumsim.so").is_file() || dir.join("libquantumsim.dylib").is_file() || has_dll(dir)
 }
 
 fn has_static_library(dir: &Path) -> bool {
-    dir.join("libquantumsim.a").is_file() || dir.join("quantumsim_static.lib").is_file()
+    dir.join("libquantumsim.a").is_file()
+        || dir.join("quantumsim_static.lib").is_file()
+        // A bare `.lib` with no matching `.dll` is the MSVC static
+        // archive, not an import library.
+        || (dir.join("quantumsim.lib").is_file() && !has_dll(dir))
+}
+
+/// Returns the `cargo:rustc-link-lib=<kind>=<name>` pair to emit for
+/// whatever Moonlab library is actually present in `dir`, or `None` if
+/// nothing usable is there. Distinguishing `quantumsim` from
+/// `quantumsim_static` matters on MSVC, where the link name must match
+/// the archive's real filename exactly.
+fn classify_library(dir: &Path) -> Option<(&'static str, &'static str)> {
+    if dir.join("libquantumsim.so").is_file() || dir.join("libquantumsim.dylib").is_file() {
+        return Some(("dylib", "quantumsim"));
+    }
+    if has_dll(dir) {
+        return Some(("dylib", "quantumsim"));
+    }
+    if dir.join("libquantumsim.a").is_file() {
+        return Some(("static", "quantumsim"));
+    }
+    if dir.join("quantumsim_static.lib").is_file() {
+        return Some(("static", "quantumsim_static"));
+    }
+    if dir.join("quantumsim.lib").is_file() {
+        // No matching .dll => the MSVC static archive.
+        return Some(("static", "quantumsim"));
+    }
+    None
 }
 
 fn link_from_directory(dir: &Path) {
-    if !has_shared_library(dir) && !has_static_library(dir) {
+    let Some((kind, name)) = classify_library(dir) else {
         panic!(
             "MOONLAB_LIB_DIR={} does not contain a Moonlab shared or static library",
             dir.display()
         );
-    }
+    };
 
     println!("cargo:rustc-link-search=native={}", dir.display());
-    if has_shared_library(dir) {
-        println!("cargo:rustc-link-lib=dylib=quantumsim");
-        if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
-            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
-        }
-    } else {
-        println!("cargo:rustc-link-lib=static=quantumsim");
+    println!("cargo:rustc-link-lib={kind}={name}");
+    if kind == "dylib" && env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
     }
 }
 
