@@ -43,6 +43,11 @@ endfunction()
 # streaming multi-MB check draws real conditioned bytes.
 qsim_add_statistical_test(stat_qrng_battery
     ${CMAKE_CURRENT_SOURCE_DIR}/test_qrng_battery.c 600)
+# The battery draws several MB of *live* conditioned RNG (non-deterministic)
+# and takes ~50s; it belongs in the nightly tier, not the fast PR lane where a
+# sustained multi-MB draw under load can transiently under-run the entropy pool.
+# The statistical.yml nightly lane runs it; the deep_battery drives it directly.
+set_tests_properties(stat_qrng_battery PROPERTIES LABELS "statistical;crypto;long")
 
 # ML-KEM negative / tamper fuzz + shared-secret avalanche (run under ASan in CI).
 qsim_add_statistical_test(stat_mlkem_adversarial
