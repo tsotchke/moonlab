@@ -31,16 +31,3 @@
 # fixing the qubit1 > qubit2 transpose concurrently. Tolerances are NOT
 # weakened; these flip to required-pass once the fix lands (they will surface as
 # XPASS here first). Reproduce any one with corpus seed 20260717.
-reversed_2q_n2_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=4
-reversed_2q_n2_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=16
-reversed_2q_n2_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=2 depth=64
-reversed_2q_n4_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=4
-reversed_2q_n4_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=16
-reversed_2q_n4_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=4 depth=64
-reversed_2q_n6_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=4
-reversed_2q_n6_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=16
-reversed_2q_n6_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=6 depth=64
-reversed_2q_n8_d4_s0__diff_mps    owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=4
-reversed_2q_n8_d16_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=16
-reversed_2q_n8_d64_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=8 depth=64
-reversed_2q_n10_d4_s0__diff_mps   owner=tn-lane  seed=20260717  # reversed adjacent CNOT, n=10 depth=4

@@ -62,6 +62,7 @@ project(quantum_simulator
 option(QSIM_BUILD_SHARED "Build shared library" ON)
 option(QSIM_BUILD_STATIC "Build static library" OFF)
 option(QSIM_BUILD_TESTS "Build test suite" ON)
+option(QSIM_ENABLE_FUZZING "Build the libFuzzer coverage-guided fuzz targets (clang only)" OFF)
 option(QSIM_BUILD_EXAMPLES "Build example programs" ON)
 option(QSIM_BUILD_VISUALIZATION "Build the circuit / Feynman diagram renderer module" ON)
 option(QSIM_BUILD_BENCHMARKS "Build benchmarks" ON)
@@ -1624,6 +1625,15 @@ if(QSIM_BUILD_TESTS)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
     # Statistical + crypto-adversarial batteries (self-contained subdir).
     add_subdirectory(tests/statistical)
+    # Cross-backend / cross-binding differential vs an independent reference.
+    add_subdirectory(tests/differential)
+endif()
+
+# Coverage-guided fuzz targets (clang + libFuzzer). Opt-in and self-contained;
+# fuzz builds require -DQSIM_ENABLE_METAL=OFF -DQSIM_ENABLE_OPENMP=OFF
+# -DQSIM_WERROR=OFF -DQSIM_ENABLE_TLS=OFF (see tests/fuzz + scripts/run_fuzz.sh).
+if(QSIM_ENABLE_FUZZING)
+    add_subdirectory(tests/fuzz)
 endif()
 
 # ==============================================================================
