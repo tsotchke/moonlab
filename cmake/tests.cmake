@@ -723,6 +723,36 @@
     endif()
     add_test(NAME unit_metal_parity COMMAND test_metal_parity)
 
+    # GPU host-sync contract for dense states (keys the ICC
+    # gpu_host_sync_contract criterion). Runs on every build; no GPU needed.
+    add_executable(test_gpu_sync_contract tests/unit/test_gpu_sync_contract.c)
+    target_link_libraries(test_gpu_sync_contract PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME gpu_sync_contract COMMAND test_gpu_sync_contract)
+    set_tests_properties(gpu_sync_contract PROPERTIES LABELS "core;gpu" TIMEOUT 30)
+
+    # Measurement rounding-edge regression: never collapse onto a
+    # zero-amplitude outcome.
+    add_executable(test_measurement_edge tests/unit/test_measurement_edge.c)
+    target_link_libraries(test_measurement_edge PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_measurement_edge COMMAND test_measurement_edge)
+    set_tests_properties(unit_measurement_edge PROPERTIES LABELS "core" TIMEOUT 30)
+
+    # POVM completeness check is verified once and cached per-POVM.
+    add_executable(test_povm_cache tests/unit/test_povm_cache.c)
+    target_link_libraries(test_povm_cache PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_povm_cache COMMAND test_povm_cache)
+    set_tests_properties(unit_povm_cache PROPERTIES LABELS "core" TIMEOUT 30)
+
+    # MPS (Metal-backed at high bond) vs exact statevector parity for an
+    # adjacent 2q gate + <Z> expectation. Skips cleanly without Metal.
+    add_executable(test_metal_mps_parity tests/unit/test_metal_mps_parity.c)
+    target_link_libraries(test_metal_mps_parity PRIVATE quantumsim ${MATH_LIBRARY})
+    if(QSIM_HAS_METAL)
+        target_compile_definitions(test_metal_mps_parity PRIVATE HAS_METAL=1)
+    endif()
+    add_test(NAME gpu_metal_mps_parity COMMAND test_metal_mps_parity)
+    set_tests_properties(gpu_metal_mps_parity PROPERTIES LABELS "gpu" TIMEOUT 120)
+
     # 2D lattice + MPO-2D smoke (square / triangular / honeycomb).
     add_executable(test_lattice_2d tests/unit/test_lattice_2d.c)
     target_link_libraries(test_lattice_2d PRIVATE quantumsim)

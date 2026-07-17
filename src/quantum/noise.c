@@ -26,6 +26,19 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* ---- GPU host-buffer sync helpers ----
+ * Noise channels that write state->amplitudes directly (amplitude/phase
+ * damping, pure dephasing) must refresh the host mirror from a GPU-backed
+ * state before reading and push the result back after mutating.  Channels
+ * that delegate to gate_pauli_* are already GPU-aware through those gates.
+ * Both sync entry points are no-ops (return QS_SUCCESS) on CPU states. */
+static inline void noise_gpu_pull(quantum_state_t *state) {
+    if (state && state->gpu_state) quantum_state_sync_to_host(state);
+}
+static inline void noise_gpu_push(quantum_state_t *state) {
+    if (state && state->gpu_state) quantum_state_sync_from_host(state);
+}
+
 // ============================================================================
 // NOISE MODEL STRUCTURE
 // ============================================================================
@@ -168,6 +181,8 @@ void noise_amplitude_damping(quantum_state_t* state, int qubit,
     if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
     if (qubit < 0 || qubit >= (int)state->num_qubits) return;
 
+    noise_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
     complex_t* amp = state->amplitudes;
@@ -208,6 +223,8 @@ void noise_amplitude_damping(quantum_state_t* state, int qubit,
             amp[i] *= inv_norm;
         }
     }
+
+    noise_gpu_push(state);
 }
 
 // ============================================================================
@@ -232,6 +249,8 @@ void noise_phase_damping(quantum_state_t* state, int qubit,
                          double gamma, double random_value) {
     if (!state || !state->amplitudes || gamma <= 0.0 || gamma > 1.0) return;
     if (qubit < 0 || qubit >= (int)state->num_qubits) return;
+
+    noise_gpu_pull(state);
 
     // Phase damping using Monte Carlo trajectory approach
     // K0 = [[1, 0], [0, √(1-γ)]] (no-jump evolution)
@@ -283,6 +302,8 @@ void noise_phase_damping(quantum_state_t* state, int qubit,
             amp[i] *= inv_norm;
         }
     }
+
+    noise_gpu_push(state);
 }
 
 /**
@@ -299,6 +320,8 @@ void noise_pure_dephasing(quantum_state_t* state, int qubit,
                           double sigma, double random_phase) {
     if (!state || !state->amplitudes || sigma <= 0.0) return;
 
+    noise_gpu_pull(state);
+
     const uint64_t state_dim = state->state_dim;
     const uint64_t qubit_mask = 1ULL << qubit;
     complex_t* amp = state->amplitudes;
@@ -311,6 +334,8 @@ void noise_pure_dephasing(quantum_state_t* state, int qubit,
             amp[i] *= phase;
         }
     }
+
+    noise_gpu_push(state);
 }
 
 // ============================================================================

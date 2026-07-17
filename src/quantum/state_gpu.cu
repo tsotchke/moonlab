@@ -7,14 +7,17 @@
  * in state.c (or a link-time failure -- both acceptable; the public
  * documentation says these functions require QSIM_HAS_CUDA).
  *
- * This file also provides the two routing entry points that
- * gates.c looks up via weak externs:
+ * This file also provides the routing entry points that gates.c and
+ * distributed_gates.c look up via weak externs.  Each forwards to the
+ * matching moonlab_cuda_* kernel when the state has a non-NULL gpu_state
+ * and returns -1 otherwise:
  *
- *   int qsim_gpu_route_1q(quantum_state_t *, int qubit, const double m[8]);
- *   int qsim_gpu_route_cnot(quantum_state_t *, int control, int target);
- *
- * They forward to moonlab_cuda_apply_1q / apply_cnot when the state
- * has a non-NULL gpu_state.
+ *   qsim_gpu_route_hadamard / qsim_gpu_route_pauli_x   -- specialized 1q
+ *   qsim_gpu_route_cnot                                -- specialized 2q
+ *   qsim_gpu_route_apply_1q_matrix(m[8])               -- generic 1q unitary
+ *   qsim_gpu_route_apply_2q_matrix(m[32])              -- generic 2q unitary
+ *   qsim_gpu_route_mcx / qsim_gpu_route_mcz            -- multi-control
+ *   qsim_gpu_route_fredkin                             -- CSWAP
  */
 
 #include "state.h"
@@ -97,16 +100,10 @@ qs_error_t quantum_state_sync_from_host(quantum_state_t *state)
 /* ---------- routing entry points used by gates.c ---------- */
 /* These are looked up as weak externs from gates.c.  When CUDA
  * is compiled in, they resolve here; otherwise gates.c sees NULL
- * and stays on the CPU path. */
-
-extern "C"
-int qsim_gpu_route_1q(quantum_state_t *state, int qubit, const double m[8])
-{
-    if (!state || !state->gpu_state || !m) return -1;
-    moonlab_cuda_state_t *gpu = (moonlab_cuda_state_t *)state->gpu_state;
-    moonlab_cuda_status_t rc = moonlab_cuda_apply_1q(gpu, (uint32_t)qubit, m);
-    return rc == MOONLAB_CUDA_OK ? 0 : -1;
-}
+ * and stays on the CPU path.  (There is no separate qsim_gpu_route_1q:
+ * every generic single-qubit dispatch goes through
+ * qsim_gpu_route_apply_1q_matrix below, which is the sole 2x2-matrix
+ * entry point.) */
 
 extern "C"
 int qsim_gpu_route_cnot(quantum_state_t *state, int control, int target)

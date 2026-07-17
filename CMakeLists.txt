@@ -808,7 +808,40 @@ set(QSIM_OPTIMIZATION_SOURCES
 # also need the Objective-C++ implementation file.
 if(QSIM_HAS_METAL OR QSIM_ENABLE_CUDA OR QSIM_ENABLE_OPENCL OR QSIM_ENABLE_VULKAN OR QSIM_ENABLE_CUQUANTUM OR QSIM_ENABLE_WEBGPU)
     if(QSIM_HAS_METAL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/gpu_metal.mm")
-        list(APPEND QSIM_OPTIMIZATION_SOURCES src/optimization/gpu_metal.mm)
+        # Embed the .metal kernel sources into a generated C header so an
+        # installed libquantumsim carries its shaders instead of loading them
+        # from cwd-relative paths at runtime (which only ever resolves from the
+        # source tree, so installed builds and ctest found nothing and the
+        # kernels never ran).  MOONLAB_ROOT stays a dev-only override.  The
+        # kernel files are configure-dependencies, so editing one re-runs the
+        # generation.
+        set(_moonlab_metal_kernels "${CMAKE_CURRENT_SOURCE_DIR}/src/optimization/kernels")
+        set(_moonlab_metal_hdr "${CMAKE_CURRENT_BINARY_DIR}/include/moonlab_metal_shaders.h")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            "${_moonlab_metal_kernels}/quantum_kernels.metal"
+            "${_moonlab_metal_kernels}/quantum_kernels_batch.metal"
+            "${_moonlab_metal_kernels}/tensor_kernels.metal")
+        file(READ "${_moonlab_metal_kernels}/quantum_kernels.metal"       _moonlab_metal_q)
+        file(READ "${_moonlab_metal_kernels}/quantum_kernels_batch.metal" _moonlab_metal_b)
+        file(READ "${_moonlab_metal_kernels}/tensor_kernels.metal"        _moonlab_metal_t)
+        file(WRITE "${_moonlab_metal_hdr}"
+"/* Auto-generated from the src/optimization/kernels .metal files by CMake. */
+#ifndef MOONLAB_METAL_SHADERS_H
+#define MOONLAB_METAL_SHADERS_H
+static const char MOONLAB_METAL_QUANTUM_KERNELS[] = R\"MOONLABMETAL(
+${_moonlab_metal_q}
+)MOONLABMETAL\";
+static const char MOONLAB_METAL_QUANTUM_KERNELS_BATCH[] = R\"MOONLABMETAL(
+${_moonlab_metal_b}
+)MOONLABMETAL\";
+static const char MOONLAB_METAL_TENSOR_KERNELS[] = R\"MOONLABMETAL(
+${_moonlab_metal_t}
+)MOONLABMETAL\";
+#endif /* MOONLAB_METAL_SHADERS_H */
+")
+        list(APPEND QSIM_OPTIMIZATION_SOURCES
+            src/optimization/gpu_metal.mm
+            src/optimization/gpu_metal_svd.c)
     endif()
 endif()
 
@@ -1218,7 +1251,7 @@ if(QSIM_PLATFORM_MACOS)
             ${FOUNDATION_FRAMEWORK}
             ${COREGRAPHICS_FRAMEWORK}
         )
-        target_compile_definitions(quantumsim PRIVATE HAS_METAL=1)
+        target_compile_definitions(quantumsim PRIVATE HAS_METAL=1 QSIM_HAS_METAL=1)
     endif()
 
     if(QSIM_HAS_SECURITY)
@@ -1394,11 +1427,15 @@ if(QSIM_HAS_OPENMP)
             BUILD_RPATH   "${QSIM_RPATH_LIST}"
             INSTALL_RPATH "${QSIM_RPATH_LIST}"
         )
-        add_custom_command(TARGET quantumsim POST_BUILD
-            COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
-                    "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
-            VERBATIM
-        )
+        # install_name_tool rewrites a Mach-O dylib's load commands; it fails
+        # on a static archive (.a), so only run it for a shared build.
+        if(QSIM_BUILD_SHARED)
+            add_custom_command(TARGET quantumsim POST_BUILD
+                COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
+                        "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
+                VERBATIM
+            )
+        endif()
     elseif(TARGET OpenMP::OpenMP_C)
         # Standard OpenMP target
         target_link_libraries(quantumsim PRIVATE OpenMP::OpenMP_C)
@@ -1412,17 +1449,19 @@ endif()
 
 if(QSIM_HAS_OPENCL)
     target_link_libraries(quantumsim PRIVATE OpenCL::OpenCL)
-    target_compile_definitions(quantumsim PRIVATE HAS_OPENCL=1)
+    # config.c / qsim_detect_backend test the QSIM_HAS_* names; keep the
+    # unprefixed HAS_* aliases for backward compatibility with older TUs.
+    target_compile_definitions(quantumsim PRIVATE HAS_OPENCL=1 QSIM_HAS_OPENCL=1)
 endif()
 
 if(QSIM_HAS_VULKAN)
     target_link_libraries(quantumsim PRIVATE Vulkan::Vulkan)
-    target_compile_definitions(quantumsim PRIVATE HAS_VULKAN=1)
+    target_compile_definitions(quantumsim PRIVATE HAS_VULKAN=1 QSIM_HAS_VULKAN=1)
 endif()
 
 if(QSIM_HAS_CUDA)
     target_link_libraries(quantumsim PRIVATE CUDA::cudart CUDA::cuda_driver)
-    target_compile_definitions(quantumsim PRIVATE HAS_CUDA=1)
+    target_compile_definitions(quantumsim PRIVATE HAS_CUDA=1 QSIM_HAS_CUDA=1)
     target_include_directories(quantumsim PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
     # Set CUDA architectures.  72 = Xavier (Volta integrated), 87 = Orin
@@ -1508,16 +1547,18 @@ endif()
 if(QSIM_HAS_CUQUANTUM)
     target_include_directories(quantumsim PRIVATE ${CUQUANTUM_INCLUDE_DIR})
     target_link_libraries(quantumsim PRIVATE ${CUSTATEVEC_LIBRARY})
-    target_compile_definitions(quantumsim PRIVATE HAS_CUQUANTUM=1 HAS_CUSTATEVEC=1)
+    target_compile_definitions(quantumsim PRIVATE
+        HAS_CUQUANTUM=1 HAS_CUSTATEVEC=1
+        QSIM_HAS_CUQUANTUM=1 QSIM_HAS_CUSTATEVEC=1)
     if(QSIM_HAS_CUTENSORNET)
         target_link_libraries(quantumsim PRIVATE ${CUTENSORNET_LIBRARY})
-        target_compile_definitions(quantumsim PRIVATE HAS_CUTENSORNET=1)
+        target_compile_definitions(quantumsim PRIVATE HAS_CUTENSORNET=1 QSIM_HAS_CUTENSORNET=1)
     endif()
 endif()
 
 if(QSIM_HAS_MPI)
     target_link_libraries(quantumsim PRIVATE MPI::MPI_C)
-    target_compile_definitions(quantumsim PRIVATE HAS_MPI=1)
+    target_compile_definitions(quantumsim PRIVATE HAS_MPI=1 QSIM_HAS_MPI=1)
 endif()
 
 # ==============================================================================

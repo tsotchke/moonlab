@@ -15,6 +15,23 @@
 #define SMALL_PROBABILITY 1e-15
 #define DEFAULT_MAX_MEASUREMENTS 1024
 
+/* ---- GPU host-buffer sync helpers ----
+ * For a GPU-backed state the host `amplitudes` buffer is stale until
+ * quantum_state_sync_to_host() runs.  State-property readers refresh the
+ * host mirror on entry; mutators that touch amplitudes on the host push
+ * the result back on exit.  Both sync entry points are no-ops returning
+ * QS_SUCCESS when gpu_state == NULL, so these are free on CPU states. */
+static inline void state_gpu_pull(const quantum_state_t *state) {
+    if (state && state->gpu_state) {
+        quantum_state_sync_to_host((quantum_state_t *)state);
+    }
+}
+static inline void state_gpu_push(quantum_state_t *state) {
+    if (state && state->gpu_state) {
+        quantum_state_sync_from_host(state);
+    }
+}
+
 // ============================================================================
 // STATE MANAGEMENT
 // ============================================================================
@@ -146,11 +163,19 @@ qs_error_t quantum_state_from_amplitudes(
 
 qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src) {
     if (!dest || !src) return QS_ERROR_INVALID_STATE;
-    
+
+    /* If the source is GPU-backed its host `amplitudes` buffer is stale;
+     * refresh it before copying.  The clone is always CPU-backed: dest is
+     * a plain host state (gpu_state == NULL) initialized below, so the copy
+     * captures the source's amplitudes on the host.  Callers needing a GPU
+     * clone must re-upload via quantum_state_sync_from_host() or create a
+     * fresh GPU state. */
+    state_gpu_pull(src);
+
     qs_error_t err = quantum_state_init(dest, src->num_qubits);
     if (err != QS_SUCCESS) return err;
-    
-    // Copy amplitudes
+
+    // Copy amplitudes (host-side; dest is CPU-backed)
     memcpy(dest->amplitudes, src->amplitudes, src->state_dim * sizeof(complex_t));
 
     // Copy measurement history
@@ -180,7 +205,9 @@ void quantum_state_reset(quantum_state_t *state) {
 
 int quantum_state_is_normalized(const quantum_state_t *state, double tolerance) {
     if (!state || !state->amplitudes) return 0;
-    
+
+    state_gpu_pull(state);
+
     // Phase 3: Use Accelerate framework for AMX acceleration (5-10x additional speedup)
     #if HAS_ACCELERATE
     double sum = accelerate_sum_squared_magnitudes(state->amplitudes, state->state_dim);
@@ -194,7 +221,10 @@ int quantum_state_is_normalized(const quantum_state_t *state, double tolerance) 
 
 qs_error_t quantum_state_normalize(quantum_state_t *state) {
     VALIDATE_QUANTUM_STATE(state, QS_ERROR_INVALID_STATE);
-    
+
+    // Refresh the host mirror for a GPU-backed state before normalizing.
+    state_gpu_pull(state);
+
     // Phase 3: Calculate norm using Accelerate framework (AMX-accelerated)
     #if HAS_ACCELERATE
     double norm_squared = accelerate_sum_squared_magnitudes(state->amplitudes, state->state_dim);
@@ -216,13 +246,18 @@ qs_error_t quantum_state_normalize(quantum_state_t *state) {
     // Fallback: Normalize using SIMD (4-8x faster with AVX2)
     simd_normalize_amplitudes(state->amplitudes, state->state_dim, norm);
     #endif
-    
+
+    // Push the normalized host buffer back to the GPU (no-op on CPU states).
+    state_gpu_push(state);
+
     return QS_SUCCESS;
 }
 
 double quantum_state_entropy(const quantum_state_t *state) {
     if (!state || !state->amplitudes) return 0.0;
-    
+
+    state_gpu_pull(state);
+
     double entropy = 0.0;
     
     for (size_t i = 0; i < state->state_dim; i++) {
@@ -240,6 +275,8 @@ double quantum_state_entropy(const quantum_state_t *state) {
 double quantum_state_purity(const quantum_state_t *state) {
     if (!state || !state->amplitudes) return 0.0;
 
+    state_gpu_pull(state);
+
     double norm_sq = 0.0;
     for (size_t i = 0; i < state->state_dim; i++) {
         const double mag = cabs(state->amplitudes[i]);
@@ -252,7 +289,10 @@ double quantum_state_purity(const quantum_state_t *state) {
 double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2) {
     if (!state1 || !state2 || !state1->amplitudes || !state2->amplitudes) return 0.0;
     if (state1->num_qubits != state2->num_qubits) return 0.0;
-    
+
+    state_gpu_pull(state1);
+    state_gpu_pull(state2);
+
     // Fidelity F = |⟨ψ|φ⟩|²
     complex_t inner_product = 0.0;
     
@@ -269,6 +309,7 @@ complex_t quantum_state_get_amplitude(const quantum_state_t *state, uint64_t bas
     if (!state || !state->amplitudes || basis_index >= state->state_dim) {
         return 0.0;
     }
+    state_gpu_pull(state);
     return state->amplitudes[basis_index];
 }
 
@@ -276,7 +317,9 @@ double quantum_state_get_probability(const quantum_state_t *state, uint64_t basi
     if (!state || !state->amplitudes || basis_index >= state->state_dim) {
         return 0.0;
     }
-    
+
+    state_gpu_pull(state);
+
     complex_t amplitude = state->amplitudes[basis_index];
     double prob = cabs(amplitude);
     return prob * prob;
@@ -377,10 +420,12 @@ qs_error_t quantum_state_partial_trace(
     if (!state || !qubits_to_trace || !reduced_density) {
         return QS_ERROR_INVALID_STATE;
     }
-    
+
     if (num_traced == 0 || num_traced >= state->num_qubits) {
         return QS_ERROR_INVALID_DIMENSION;
     }
+
+    state_gpu_pull(state);
     
     // Calculate dimensions
     size_t num_kept = state->num_qubits - num_traced;
