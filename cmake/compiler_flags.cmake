@@ -17,6 +17,21 @@ if(QSIM_COMPILER_CLANG AND CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     list(APPEND QSIM_WARNING_FLAGS /W4)
     if(QSIM_WERROR)
         list(APPEND QSIM_WARNING_FLAGS /WX)
+        # clang-cl is clang: accept the clang-style demotions so the same
+        # accumulated-legacy categories the GNU/Clang branch tolerates are not
+        # hard errors here either. Without this, /WX promotes e.g. an unused
+        # loop index to a build break on Windows only.
+        list(APPEND QSIM_WARNING_FLAGS
+             -Wno-error=unused-variable
+             -Wno-error=unused-parameter
+             -Wno-error=unused-function
+             -Wno-error=unused-but-set-variable
+             -Wno-error=unused-result
+             -Wno-error=deprecated-declarations
+             -Wno-error=unknown-pragmas
+             -Wno-error=implicit-fallthrough
+             -Wno-error=missing-braces
+             -Wno-error=nan-infinity-disabled)
     endif()
     # The UCRT deprecates the POSIX spellings (strdup, strcasecmp, ...) and the
     # non-_s CRT calls in favour of Microsoft-specific names; under /WX those
