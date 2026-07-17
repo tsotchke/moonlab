@@ -179,6 +179,12 @@
     target_link_libraries(test_vqe PRIVATE quantumsim)
     add_test(NAME unit_vqe COMMAND test_vqe)
 
+    # VQE exact-or-error gradient contract: noise refuses unless opted in,
+    # NULL-ansatz guard, and vqe_result_free.
+    add_executable(test_vqe_gradient_contract tests/unit/test_vqe_gradient_contract.c)
+    target_link_libraries(test_vqe_gradient_contract PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_vqe_gradient_contract COMMAND test_vqe_gradient_contract)
+
     # QAOA MaxCut smoke.
     add_executable(test_qaoa tests/unit/test_qaoa.c)
     target_link_libraries(test_qaoa PRIVATE quantumsim)
@@ -1571,7 +1577,8 @@
         unit_clifford unit_clifford_pauli_api unit_pauli_frame
         unit_surface_code_clifford)
     qsim_label_tests(algorithms
-        unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe unit_chemistry
+        unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe
+        unit_vqe_gradient_contract unit_chemistry
         unit_quantum_volume unit_kagome_ed unit_kagome_ed_large
         unit_shor_ecdlp unit_differentiable unit_mbl unit_mbl_smoke
         differentiable)

@@ -381,7 +381,19 @@ typedef struct vqe_solver {
     // Statistics
     size_t total_measurements;             // Total measurements performed
     double total_time;                     // Total optimization time
+
+    // Gradient contract: when a noise model is attached the parameter-shift
+    // gradient is stochastic and no longer the exact gradient of the ideal
+    // energy.  By default vqe_compute_gradient refuses that case
+    // (VQE_GRADIENT_ERR_NOT_EXACT); set this to opt into stochastic PSR.
+    int allow_stochastic_gradient;         // 0 = exact-or-error (default)
 } vqe_solver_t;
+
+/* Return codes for vqe_compute_gradient (exact-or-error contract). */
+#define VQE_GRADIENT_SUCCESS       0   /**< Exact gradient computed. */
+#define VQE_GRADIENT_ERR_INVALID  (-1) /**< NULL solver/ansatz/args. */
+#define VQE_GRADIENT_ERR_NOT_EXACT (-2)/**< Cannot be exact (noise attached)
+                                         *   and stochastic PSR not opted in. */
 
 /**
  * @brief VQE result
@@ -501,6 +513,17 @@ MOONLAB_API double vqe_compute_energy(
 MOONLAB_API vqe_result_t vqe_solve(vqe_solver_t *solver);
 
 /**
+ * @brief Release the heap arrays owned by a vqe_result_t.
+ *
+ * vqe_solve returns a vqe_result_t by value that owns optimal_parameters.
+ * This frees that buffer and zeroes the pointer; it does not free the struct
+ * itself (it is caller-owned / stack).
+ *
+ * @param result VQE result whose owned arrays should be freed (may be NULL)
+ */
+MOONLAB_API void vqe_result_free(vqe_result_t *result);
+
+/**
  * @brief Compute the exact gradient of the energy with respect to the
  *        variational parameters
  *
@@ -511,19 +534,37 @@ MOONLAB_API vqe_result_t vqe_solve(vqe_solver_t *solver);
  *    and back-propagates the Pauli-sum cotangent. Cost is ~2 forward
  *    passes per Hamiltonian term, independent of parameter count.
  * 2. Analytic parameter-shift rule (fallback) for UCCSD, symmetry-
- *    preserving, custom ansaetze, and any noisy simulation:
+ *    preserving, and custom ansaetze in the NOISE-FREE case:
  *    ∂E/∂θᵢ = (E(θ + π/2 eᵢ) - E(θ - π/2 eᵢ)) / 2.
+ *
+ * Exact-or-error contract (Eshkol RFC 4.4): when a noise model is attached and
+ * enabled the parameter-shift rule runs on a stochastic energy and is no longer
+ * the exact gradient of the ideal energy.  In that case this function returns
+ * VQE_GRADIENT_ERR_NOT_EXACT and writes nothing, UNLESS the caller has opted in
+ * via vqe_solver_set_allow_stochastic_gradient(solver, 1), in which case the
+ * stochastic PSR is run and 0 is returned.
  *
  * @param solver VQE solver context
  * @param parameters Current parameters
  * @param gradient Output: gradient vector (ansatz->num_parameters slots)
- * @return 0 on success, -1 on error
+ * @return VQE_GRADIENT_SUCCESS (0), VQE_GRADIENT_ERR_INVALID (-1), or
+ *         VQE_GRADIENT_ERR_NOT_EXACT (-2)
  */
 MOONLAB_API int vqe_compute_gradient(
     vqe_solver_t *solver,
     const double *parameters,
     double *gradient
 );
+
+/**
+ * @brief Opt into (or out of) stochastic parameter-shift gradients under noise.
+ *
+ * @param solver VQE solver context
+ * @param allow  Non-zero to permit stochastic PSR when a noise model is
+ *               attached; zero (default) to keep the exact-or-error contract.
+ */
+MOONLAB_API void vqe_solver_set_allow_stochastic_gradient(vqe_solver_t *solver,
+                                                          int allow);
 
 /**
  * @brief Quantum geometric (Fubini-Study) tensor of the ansatz state.

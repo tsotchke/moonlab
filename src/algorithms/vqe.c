@@ -923,8 +923,19 @@ vqe_solver_t* vqe_solver_create(
     
     solver->total_measurements = 0;
     solver->total_time = 0.0;
-    
+    solver->allow_stochastic_gradient = 0;  // exact-or-error by default
+
     return solver;
+}
+
+void vqe_solver_set_allow_stochastic_gradient(vqe_solver_t *solver, int allow) {
+    if (solver) solver->allow_stochastic_gradient = allow ? 1 : 0;
+}
+
+void vqe_result_free(vqe_result_t *result) {
+    if (!result) return;
+    free(result->optimal_parameters);
+    result->optimal_parameters = NULL;
 }
 
 void vqe_solver_free(vqe_solver_t *solver) {
@@ -1694,6 +1705,7 @@ static int vqe_compute_gradient_adjoint(vqe_solver_t *solver,
                                          const double *parameters,
                                          double *gradient) {
     if (!solver || !parameters || !gradient) return -1;
+    if (!solver->ansatz || !solver->hamiltonian) return -1;
     if (solver->ansatz->type != VQE_ANSATZ_HARDWARE_EFFICIENT) return -2;
     if (solver->noise_model && solver->noise_model->enabled) return -3;
 
@@ -1753,14 +1765,22 @@ int vqe_compute_gradient(
      *   any noisy simulation (adjoint via unitary generators doesn't
      *   apply when the channel isn't unitary).
      */
-    if (!solver || !parameters || !gradient) {
-        return -1;
+    if (!solver || !parameters || !gradient || !solver->ansatz) {
+        return VQE_GRADIENT_ERR_INVALID;
     }
 
     /* Try adjoint path first.  Silently fall back on any return code
      * so existing callers never observe a regression. */
     if (vqe_compute_gradient_adjoint(solver, parameters, gradient) == 0) {
-        return 0;
+        return VQE_GRADIENT_SUCCESS;
+    }
+
+    /* Exact-or-error: with an enabled noise model the parameter-shift energy is
+     * stochastic and the result is not the exact gradient of the ideal energy.
+     * Refuse unless the caller explicitly opted into stochastic PSR. */
+    if (solver->noise_model && solver->noise_model->enabled &&
+        !solver->allow_stochastic_gradient) {
+        return VQE_GRADIENT_ERR_NOT_EXACT;
     }
 
     double *params_plus = malloc(solver->ansatz->num_parameters * sizeof(double));
@@ -1769,9 +1789,9 @@ int vqe_compute_gradient(
     if (!params_plus || !params_minus) {
         free(params_plus);
         free(params_minus);
-        return -1;
+        return VQE_GRADIENT_ERR_INVALID;
     }
-    
+
     memcpy(params_plus, parameters, solver->ansatz->num_parameters * sizeof(double));
     memcpy(params_minus, parameters, solver->ansatz->num_parameters * sizeof(double));
     
@@ -1794,8 +1814,8 @@ int vqe_compute_gradient(
     
     free(params_plus);
     free(params_minus);
-    
-    return 0;
+
+    return VQE_GRADIENT_SUCCESS;
 }
 
 // ============================================================================
