@@ -183,7 +183,12 @@ Always call `dispose()` to free WASM-side memory.
 
 The control plane (`moonlab_control_server`) accepts serialized circuits over
 TCP, dispatches them to worker simulators, and ships metrics to Prometheus.
-The whole stack ships in `deploy/docker/`:
+It is built from `-DQSIM_ENABLE_CONTROL_PLANE=ON`, the default for a
+from-source or Homebrew build on non-Windows platforms. The published
+Python wheels build with `QSIM_ENABLE_CONTROL_PLANE=OFF` (see
+`bindings/python/pyproject.toml`) to keep the wheel dependency-free, so the
+walkthrough below needs a repo build (or the Homebrew formula), not
+`pip install moonlab`. The whole stack ships in `deploy/docker/`:
 
 ```sh
 docker compose -f deploy/docker/docker-compose.yml up --build
@@ -224,7 +229,7 @@ queue depth update in real time as you submit more jobs.
 - `docs/PARITY_MATRIX.md` -- which subsystems are exposed in which binding
 - `docs/STABLE_ABI.md` -- the v1.0 stability contract for the C ABI
 - `docs/INTEGRATION_libirrep_SbNN.md` -- bridges to the sibling libraries
-- `examples/` -- ~80 runnable demos across all bindings (start with
+- `examples/` -- 52 runnable demos across all bindings (start with
   `examples/basic/bell_state.c` for an extended version of the Bell circuit
   above with entropy and CHSH analysis)
 - `bindings/python/README.md`, `bindings/rust/moonlab/README.md`,

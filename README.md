@@ -28,17 +28,20 @@ same gate calls as a CPU state, with 21 one- and two-qubit primitives routed
 through CUDA. Ordinary states remain on the CPU path with 1.0-compatible
 behavior.
 
-The stable ABI advances from 0.3.0 to 0.4.0 with
-`moonlab_vqe_gradient`, exposing exact adjoint gradients for supported
-noise-free ansaetze and analytic parameter shift otherwise. The release also
-ships native Windows x64 and ARM64 packages built with ClangCL; both are tested
-as relocatable external CMake packages before upload.
+The stable ABI has advanced from 0.3.0 through 0.4.0 (`moonlab_vqe_gradient`,
+exposing exact adjoint gradients for supported noise-free ansaetze and
+analytic parameter shift otherwise) to **0.5.0**, which adds
+`moonlab_qrng_get_status`, honest QRNG capability bits, a certification-
+language scrub, and wasm32 correctness fixes. The release also ships native
+Windows x64 and ARM64 packages built with ClangCL; both are tested as
+relocatable external CMake packages before upload.
 
 | 1.1 deliverable | Contract |
 |---|---|
 | Native CUDA state vector | GPU lifecycle, host/device sync, probabilities, norms, and transparent gate dispatch |
 | Tegra + discrete detection | One managed-memory code path with platform-specific runtime probes |
 | Stable VQE gradient | `moonlab_vqe_gradient` in ABI 0.4.0; never finite differences |
+| QRNG status surface | `moonlab_qrng_get_status` in ABI 0.5.0; explicit capability bits instead of implied certification |
 | Windows distribution | `windows-x64.zip` and `windows-arm64.zip` with DLL, import library, headers, and CMake exports |
 
 See [the v1.1.0 release notes](docs/release/v1.1.0-release-notes.md),
@@ -55,7 +58,7 @@ touching its source:
 |--------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | `moonlab_register_backend`                       | New execution backends (live hardware, GPU cluster, alternative simulator) -- dispatch by name from `moonlab_job_set_backend`. |
 | `moonlab_register_vendor_noise_profile`          | Live calibration scrapers push device snapshots into the registry; backends look profiles up by name at execute time.          |
-| `moonlab_register_decoder`                       | Custom QEC decoders (BP-OSD, GNN, hardware-decoded) join the same dispatcher as the five built-ins.                            |
+| `moonlab_register_decoder`                       | Custom QEC decoders join the same dispatcher as the five slots (`GREEDY`, `MWPM_EXACT`, `SBNN`, `LIBIRREP_SS`, `PYMATCHING`) -- only `GREEDY` and `MWPM_EXACT` are built-in; the other three link an external library and return `MOONLAB_DECODER_NOT_BUILT` otherwise. |
 | `moonlab_scheduler_set_completion_hook`          | Synchronous hook for billing meters, audit logs, customer dashboards -- fires after every successful run with `(num_qubits, total_shots, backend_name)`. |
 
 Demo `examples/extensions/open_core_overlay_demo.c` exercises all four
@@ -78,7 +81,7 @@ emergency lockouts.  Five additional surfaces shipped:
 | `moonlab_control_server_set_admission_hook`          | Pre-dispatch refusal (`-405`/`-408`) on quotas, tier gates, lockouts.  Bound from Python + Rust. |
 | `moonlab_scheduler_set_request_context` + getters    | Tenant_id + request_id flow into the scheduler thread-local; completion hook reads both.      |
 | `moonlab_token_bucket_*`                             | Lock-free per-tenant rate-limit primitive for admission hooks.  Native Python + Rust ports.    |
-| `docs/operations/{RUNBOOK,FLEET_DEPLOYMENT}.md`      | SRE runbook + fleet-rollout guide; measured throughput 4674 req/sec Bell 2q HMAC @ P99=1.92ms. |
+| `docs/operations/{RUNBOOK,FLEET_DEPLOYMENT}.md`      | SRE runbook + fleet-rollout guide; measured throughput 4674 req/sec Bell 2q HMAC @ P99=1.92ms (single run, single host -- see "Performance numbers" under Current limitations). |
 
 Runnable Python overlay at `examples/extensions/python_overlay_demo.py`
 boots an HMAC-secured control plane with a per-tenant TokenBucket-backed
@@ -260,9 +263,9 @@ and integrates it directly into the VQE driver.  See
 |------------|-------------|
 | **State Vector Engine** | Up to 32 qubits with AMX-aligned buffers + runtime-dispatched SIMD (AVX-512 / AVX2 / NEON / SVE + Apple Accelerate). |
 | **Tensor Networks** | MPS, DMRG (2-site with subspace expansion), TDVP, MPO-2D, lattice-2D. Real-space topology via MPO Chebyshev-KPM: local Chern marker on generic 2D models matches dense reference to machine precision. |
-| **Clifford-Assisted MPS** | Hybrid `\|psi> = D \|phi>` representation that stores the Clifford part as an O(n) tableau and only the non-Clifford residual as an MPS.  64× bond-dim advantage + 13884× speedup over plain MPS on stabilizer circuits at n=12. Variational-D ground-state search (`ca_mps_var_d.{c,h}`) alternates a greedy local-Clifford D-update with imag-time on `\|phi>` — TFIM/XXZ/kagome AFM oracles ship in `examples/tensor_network/`. CA-PEPS 2D scaffold (`ca_peps.{c,h}`) lands the public API for v0.3. |
+| **Clifford-Assisted MPS** | Hybrid `\|psi> = D \|phi>` representation that stores the Clifford part as an O(n) tableau and only the non-Clifford residual as an MPS.  64× bond-dim advantage + 13884× speedup over plain MPS on stabilizer circuits at n=12 (measured once, single host -- not a portable guarantee). Variational-D ground-state search (`ca_mps_var_d.{c,h}`) alternates a greedy local-Clifford D-update with imag-time on `\|phi>` — TFIM/XXZ/kagome AFM oracles ship in `examples/tensor_network/`. CA-PEPS 2D scaffold (`ca_peps.{c,h}`) lands the public API for v0.3. |
 | **Gauge-Aware Warmstart** | Aaronson-Gottesman symplectic-Gauss-Jordan Clifford builder (`ca_mps_var_d_stab_warmstart.{c,h}`): takes any list of commuting Pauli generators on n qubits (LGT Gauss-law operators, surface/toric-code stabilizers, repetition-code stabilizers) and emits an O(n^2)-gate Clifford that places `\|0^n>` in the simultaneous +1 eigenspace.  First HEP application: 1+1D Z2 lattice gauge theory (`src/applications/hep/lattice_z2_1d.{c,h}` + `examples/hep/z2_gauge_var_d.c`). |
-| **Clifford Backend** | Aaronson–Gottesman tableau simulator: O(n) gates, O(n²) measurement. 3200-qubit GHZ + all-qubits measurement in ~100 ms. |
+| **Clifford Backend** | Aaronson–Gottesman tableau simulator: O(n) gates, O(n²) measurement. 3200-qubit GHZ + all-qubits measurement in ~100 ms (measured once, single host). |
 | **Chemistry / VQE** | Jordan-Wigner, UCCSD + hardware-efficient ansatz, H₂/LiH/H₂O Pauli Hamiltonians. Native reverse-mode autograd (CRX/CRY/CRZ + all standard rotations); `vqe_compute_gradient` uses adjoint method for HEA noise-free paths — ~5× over parameter-shift on 12 params, linear scaling to 100+. |
 | **Quantum Algorithms** | Grover, VQE, QAOA, QPE, CHSH + Mermin + Mermin-Klyshko Bell tests, Shor-ECDLP resource estimator (Gidney/Drake/Boneh 2026). |
 | **Error Mitigation** | Zero-noise extrapolation (linear / Richardson / exponential) and probabilistic error cancellation (PEC) primitives. |
@@ -272,7 +275,7 @@ and integrates it directly into the VQE driver.  See
 | **Quantum RNG** | Thread-safe conditioned hybrid RNG: continuously health-tested hardware/OS entropy, fail-closed simulated Bell epochs, SHAKE256 conditioning, live assurance status, plus Pironio-bound and Toeplitz research primitives. |
 | **Noise Models** | Depolarising, amplitude damping, phase damping, bit/phase-flip, thermal relaxation, composite, convex-mixture, correlated two-qubit Pauli. |
 | **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend scaffolded. |
-| **Multi-Language** | C core + Python (ctypes) / Rust / JavaScript bindings.  Python exposes quantum + crypto primitives; 120+ pytest cases. |
+| **Multi-Language** | C core + Python (ctypes) / Rust / JavaScript bindings.  Python exposes quantum + crypto primitives; 297 pytest test functions. |
 
 ## Table of Contents
 
@@ -286,6 +289,7 @@ and integrates it directly into the VQE driver.  See
 - [Many-Body Localization](#many-body-localization)
 - [Post-Quantum Cryptography](#post-quantum-cryptography)
 - [Error Mitigation](#error-mitigation)
+- [Additional Shipped Surfaces](#additional-shipped-surfaces)
 - [Language Bindings](#language-bindings)
 - [Performance](#performance)
 - [Building](#building)
@@ -386,8 +390,9 @@ int main(void) {
     gate_hadamard(&state, 0);
     gate_cnot(&state, 0, 1);
 
-    // Verify entanglement
-    double entropy = quantum_entanglement_entropy(&state, 0);
+    // Verify entanglement (subsystem A = qubit 0)
+    int qubit_a = 0;
+    double entropy = quantum_state_entanglement_entropy(&state, &qubit_a, 1);
     printf("Entanglement entropy: %.4f (max 1.0)\n", entropy);
 
     quantum_state_free(&state);
@@ -426,14 +431,15 @@ Polynomial-scaling simulation for systems beyond state vector limits.
 #include "algorithms/tensor_network/tn_gates.h"
 
 // Create 100-qubit MPS with bond dimension 64
-tn_mps_t* mps = tn_mps_create(100, 64);
+tn_state_config_t config = tn_state_config_create(64, 1e-10);
+tn_mps_state_t* mps = tn_mps_create_zero(100, &config);
 
 // Apply gates (automatic SVD truncation)
-tn_mps_apply_single(mps, 0, GATE_H);
-tn_mps_apply_two(mps, 0, 1, GATE_CNOT);
+tn_apply_h(mps, 0);
+tn_apply_cnot(mps, 0, 1);
 
 // Measure expectation values
-double magnetization = tn_mps_expectation_z(mps, 50);
+double magnetization = tn_expectation_z(mps, 50);
 ```
 
 ### DMRG Ground State
@@ -441,16 +447,17 @@ double magnetization = tn_mps_expectation_z(mps, 50);
 ```c
 #include "algorithms/tensor_network/dmrg.h"
 
-// Heisenberg chain Hamiltonian
-dmrg_params_t params = {
-    .num_sites = 100,
-    .max_bond_dim = 128,
-    .num_sweeps = 20,
-    .tolerance = 1e-10
-};
+// Heisenberg chain Hamiltonian as an MPO (100 sites, J=1, Delta=1)
+mpo_t* hamiltonian = mpo_heisenberg_create(100, 1.0, 1.0, 0.0);
 
-dmrg_result_t result = dmrg_ground_state(&hamiltonian, &params);
-printf("Ground state energy: %.10f\n", result.energy);
+dmrg_config_t config = dmrg_config_default();
+config.max_bond_dim = 128;
+config.max_sweeps = 20;
+config.energy_tol = 1e-10;
+
+dmrg_result_t* result = dmrg_ground_state(mps, hamiltonian, &config);
+printf("Ground state energy: %.10f\n", result->ground_energy);
+dmrg_result_free(result);
 ```
 
 ### TDVP Time Evolution
@@ -458,8 +465,13 @@ printf("Ground state energy: %.10f\n", result.energy);
 ```c
 #include "algorithms/tensor_network/tdvp.h"
 
-// Real-time dynamics
-tdvp_evolve(mps, hamiltonian, dt, num_steps, TDVP_TWO_SITE);
+// Real-time dynamics: two-site TDVP by default (config.variant == TDVP_TWO_SITE)
+tdvp_config_t tdvp_cfg = tdvp_config_default();
+tdvp_cfg.dt = dt;
+
+tdvp_engine_t* engine = tdvp_engine_create(mps, hamiltonian, &tdvp_cfg);
+tdvp_evolve_to(engine, dt * num_steps, NULL);
+tdvp_engine_free(engine);
 ```
 
 ### 2D Tensor Networks
@@ -468,11 +480,13 @@ tdvp_evolve(mps, hamiltonian, dt, num_steps, TDVP_TWO_SITE);
 #include "algorithms/tensor_network/lattice_2d.h"
 #include "algorithms/tensor_network/mpo_2d.h"
 
-// Create 10x10 lattice
-lattice_2d_t* lattice = lattice_2d_create(10, 10, LATTICE_SQUARE);
+// Create 10x10 square lattice with open boundaries
+lattice_2d_t* lattice = lattice_2d_create(10, 10, LATTICE_SQUARE, BC_OPEN);
 
 // Apply 2D MPO Hamiltonian
-mpo_2d_t* H = mpo_2d_heisenberg(lattice, J_coupling);
+hamiltonian_params_t params = hamiltonian_params_skyrmion_default();
+params.J = J_coupling;
+mpo_t* H = mpo_2d_create(lattice, &params);
 ```
 
 ### Clifford-Assisted MPS (CA-MPS)
@@ -592,7 +606,14 @@ expectation agrees to <1e-10.  Wired into ctest as `unit_ca_peps`.
 ### Grover's Search
 
 ```c
-grover_result_t result = grover_search(&state, marked_state, num_qubits);
+#include "algorithms/grover.h"
+
+grover_config_t config = {
+    .num_qubits = num_qubits,
+    .marked_state = marked_state,
+    .use_optimal_iterations = 1
+};
+grover_result_t result = grover_search(&state, &config, entropy);
 // O(√N) queries vs classical O(N)
 ```
 
@@ -601,15 +622,18 @@ grover_result_t result = grover_search(&state, marked_state, num_qubits);
 ```c
 #include "algorithms/vqe.h"
 
-vqe_config_t config = {
-    .ansatz = VQE_ANSATZ_UCCSD,
-    .optimizer = VQE_OPT_BFGS,
-    .max_iterations = 100
-};
+vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(num_qubits, /*num_layers=*/2);
+vqe_optimizer_t* optimizer = vqe_optimizer_create(VQE_OPTIMIZER_LBFGS);
+vqe_solver_t* solver = vqe_solver_create(hamiltonian, ansatz, optimizer, entropy);
 
-vqe_result_t result = vqe_minimize(&hamiltonian, &config);
-printf("Ground state energy: %.8f Ha\n", result.energy);
+vqe_result_t result = vqe_solve(solver);
+printf("Ground state energy: %.8f Ha\n", result.ground_state_energy);
 ```
+
+Optimizers: `VQE_OPTIMIZER_COBYLA`, `VQE_OPTIMIZER_LBFGS`, `VQE_OPTIMIZER_ADAM`,
+`VQE_OPTIMIZER_GRADIENT_DESCENT`, and `VQE_OPTIMIZER_QNG` (quantum natural
+gradient -- preconditions the parameter-shift gradient by the regularised
+Fubini-Study metric from `vqe_compute_qgt` / `vqe_natural_gradient_direction`).
 
 ### QAOA (Combinatorial Optimization)
 
@@ -617,8 +641,11 @@ printf("Ground state energy: %.8f Ha\n", result.energy);
 #include "algorithms/qaoa.h"
 
 // MaxCut problem
-qaoa_result_t result = qaoa_maxcut(&graph, num_layers);
-printf("Best cut: %zu edges\n", result.best_cut);
+ising_model_t* ising = ising_encode_maxcut(graph);
+qaoa_solver_t* solver = qaoa_solver_create(ising, num_layers, entropy);
+qaoa_result_t result = qaoa_solve(solver);
+printf("Best energy: %.4f (bitstring 0x%llx)\n",
+       result.best_energy, (unsigned long long)result.best_bitstring);
 ```
 
 ### Quantum Phase Estimation
@@ -626,7 +653,8 @@ printf("Best cut: %zu edges\n", result.best_cut);
 ```c
 #include "algorithms/qpe.h"
 
-double phase = qpe_estimate(&unitary, precision_qubits, &state);
+qpe_result_t result = qpe_estimate_phase(unitary, eigenstate, precision_qubits, entropy);
+double phase = result.estimated_phase;
 ```
 
 ### Bell Test Validation
@@ -639,7 +667,7 @@ bell_test_result_t r = bell_test_chsh(&state, 0, 1, 10000, NULL, entropy);
 printf("CHSH: %.4f (classical <= 2, quantum <= 2.828)\n", r.chsh_value);
 
 /* Mermin polynomial on |GHZ_3>: classical <= 2, quantum max 4 */
-bell_test_result_t m = bell_test_mermin_ghz(&ghz3, 0, 1, 2, 0, entropy);
+bell_test_result_t m = bell_test_mermin_ghz(&ghz3, 0, 1, 2, 10000, entropy);
 printf("Mermin |M|: %.4f\n", m.chsh_value);
 
 /* Mermin-Klyshko M_N on |GHZ_N>, normalised so classical <= 1,
@@ -657,13 +685,15 @@ Fault-tolerant quantum computation using anyonic systems.
 #include "algorithms/topological/topological.h"
 
 // Create Fibonacci anyon system
-anyon_system_t* sys = anyon_system_fibonacci(num_anyons);
+anyon_system_t* sys = anyon_system_fibonacci();
 
-// Braid anyons (topological gate)
-braid_anyons(sys, i, j, BRAID_COUNTERCLOCKWISE);
+// Build a fusion tree over the external anyon charges
+fusion_tree_t* tree = fusion_tree_create(sys, charges, num_anyons, total_charge);
 
-// Compute resulting unitary
-complex_t* U = fusion_tree_to_unitary(sys->fusion_tree);
+// Braid adjacent anyons (topological gate): exchanges the anyons at
+// `position` and `position + 1`, applying the R-matrix phase and any
+// F-matrix basis change to tree->amplitudes in place.
+braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
 ```
 
 ### Supported Anyon Types
@@ -678,34 +708,46 @@ complex_t* U = fusion_tree_to_unitary(sys->fusion_tree);
 
 ```c
 // Create distance-5 surface code
-surface_code_t* code = surface_code_create(5, 5, BOUNDARY_PLANAR);
+surface_code_t* code = surface_code_create(5);
+surface_code_init_logical_zero(code);
 
 // Measure stabilizers
-surface_code_measure_stabilizers(code);
+surface_code_measure_X_stabilizers(code);
+surface_code_measure_Z_stabilizers(code);
 
-// Decode and correct errors
-int success = surface_code_decode_mwpm(code);
+// Decode and correct errors (minimum-weight perfect matching)
+qs_error_t status = surface_code_decode_correct(code);
 ```
+
+A separate Clifford-tableau-backed variant (`surface_code_clifford_t`,
+`surface_code_clifford_create(distance, rng_seed)`) simulates the same
+protocol in O(n) per gate via the Aaronson-Gottesman tableau and scales
+to distance 15+ where the dense `surface_code_t` above is capped near
+distance 5 by state-vector memory.
 
 ### Toric Codes
 
 ```c
-// Create toric code on 6x6 lattice
-toric_code_t* toric = toric_code_create(6, 6);
+// Create toric code on a 6x6 torus
+toric_code_t* toric = toric_code_create(6);
+toric_code_init_ground_state(toric);
 
-// Measure plaquette and star operators
-toric_code_measure_plaquettes(toric);
-toric_code_measure_stars(toric);
+// Create an e-anyon pair via a Z-string between two vertices
+toric_code_create_anyon_pair(toric, 'e', 0, 0, 3, 3);
 
-// Apply logical X on first logical qubit
-toric_code_logical_x(toric, 0);
+// Braid the anyon pair around each other
+toric_code_braid(toric, 0, 0, 3, 3);
 ```
 
 ### Topological Invariants
 
 ```c
-// Compute topological entanglement entropy
-double gamma = topological_entanglement_entropy(&state, &region);
+// Compute topological entanglement entropy from an annulus split into
+// three regions A, B, C (S_topo = S_A + S_B + S_C - S_AB - S_BC - S_AC + S_ABC)
+double gamma = topological_entanglement_entropy(&state,
+                                                  region_A, num_A,
+                                                  region_B, num_B,
+                                                  region_C, num_C);
 // γ = log(D) where D is total quantum dimension
 ```
 
@@ -726,24 +768,32 @@ Skyrmions are topologically protected magnetic structures that can encode quantu
 skyrmion_t sk1 = { .x = 0.0, .y = 0.0, .charge = 1 };
 skyrmion_t sk2 = { .x = 2.0, .y = 0.0, .charge = 1 };
 
-// Define circular braiding path
-braid_path_t* path = braid_path_circular(sk1, sk2, num_steps);
+// Define a circular path around the midpoint for one skyrmion to encircle the other
+braid_path_t* path = braid_path_circular(/*center_x=*/1.0, /*center_y=*/0.0,
+                                          /*radius=*/1.0, BRAID_COUNTERCLOCKWISE,
+                                          /*num_segments=*/64, /*velocity=*/1.0);
+
+// Encode a topological qubit in the skyrmion pair (bond_dim=32 MPS)
+hamiltonian_params_t params = hamiltonian_params_skyrmion_default();
+topo_qubit_t* qubit = topo_qubit_create(lattice, &params,
+                                         sk1.x, sk1.y, sk2.x, sk2.y, 32);
 
 // Perform braiding with TDVP time evolution
-topo_qubit_t* qubit = topo_qubit_create(mps, sk1, sk2);
-braid_result_t result = skyrmion_braid(qubit, path, &params);
+braid_config_t braid_cfg = braid_config_default();
+braid_result_t* result = skyrmion_braid(qubit->mps, qubit->mpo, qubit->lat,
+                                         path, &braid_cfg);
 
-// Extract Berry phase
-printf("Berry phase: %.6f\n", result.berry_phase);
-printf("Fidelity: %.6f\n", result.fidelity);
+// Extract Berry phase (argument of the total accumulated phase)
+printf("Berry phase: %.6f\n", carg(result->phase));
+printf("Braid succeeded: %s\n", result->success ? "yes" : "no");
 ```
 
 ### Topological Gates
 
 ```c
-// Apply topological gates via skyrmion exchange
-topo_gate_apply(qubit, TOPO_GATE_EXCHANGE);  // π rotation
-topo_gate_apply(qubit, TOPO_GATE_BRAID);     // Braiding unitary
+// Apply topological gates via skyrmion braiding
+topo_gate_apply(qubit, TOPO_GATE_BRAID, &braid_cfg);        // exp(i*pi/4*sigma)
+topo_gate_apply(qubit, TOPO_GATE_DOUBLE_BRAID, &braid_cfg);  // i*sigma
 ```
 
 ## Quantum Chemistry
@@ -755,40 +805,46 @@ Molecular simulation with fermionic mappings.
 ```c
 #include "algorithms/chemistry/chemistry.h"
 
-// Create fermionic operator a†_p a_q
-fermion_op_t op = fermion_op_hopping(p, q);
-
-// Transform to qubit Hamiltonian
-jw_operator_t* jw = jordan_wigner_transform(&op);
-
-// Get Pauli string representation
-pauli_string_t* paulis = jw_to_pauli_strings(jw);
+// Jordan-Wigner transform of the hopping term a†_p a_q
+fermion_op_t ops[2] = {
+    { .type = FERMION_CREATE,     .orbital = p },
+    { .type = FERMION_ANNIHILATE, .orbital = q }
+};
+jw_operator_t hopping = jw_transform_product(ops, 2, num_orbitals);
+// hopping.terms[i] is a Pauli string with a double _Complex coefficient
 ```
 
 ### UCCSD Ansatz
 
 ```c
-// Build UCCSD circuit for molecular simulation
-uccsd_params_t params = {
-    .num_electrons = 2,
-    .num_orbitals = 4,
-    .singles = true,
-    .doubles = true
-};
+// Build UCCSD configuration for molecular simulation
+uccsd_config_t* config = uccsd_config_create(/*num_orbitals=*/2, /*num_electrons=*/2);
 
-circuit_t* ansatz = uccsd_circuit(&params);
+quantum_state_t state;
+quantum_state_init(&state, config->num_orbitals);
+hartree_fock_state(&state, config->num_electrons, config->num_orbitals);
+uccsd_apply(&state, config);
 ```
 
 ### Molecular Hamiltonians
 
 ```c
-// H2 molecule in minimal basis
-molecular_hamiltonian_t* H = molecular_hamiltonian_h2(bond_length);
+// H2 molecule in minimal basis (STO-3G, Jordan-Wigner) as a ready-made
+// Pauli Hamiltonian -- the direct path VQE consumes.
+pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(bond_length);
 
-// Run VQE
-vqe_result_t result = vqe_minimize(H, &vqe_config);
-printf("H2 energy: %.6f Ha\n", result.energy);
+vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(2, 2);
+vqe_optimizer_t* optimizer = vqe_optimizer_create(VQE_OPTIMIZER_LBFGS);
+vqe_solver_t* solver = vqe_solver_create(H, ansatz, optimizer, entropy);
+
+vqe_result_t result = vqe_solve(solver);
+printf("H2 energy: %.6f Ha\n", result.ground_state_energy);
 ```
+
+The lower-level geometry path (`molecule_h2(bond_length)` -> `molecule_t*`
+-> `molecular_hamiltonian_create` / `molecular_to_qubit_hamiltonian`) builds
+the same Hamiltonian from Cartesian atom coordinates for callers who need
+custom geometries rather than the pinned equilibrium bond length.
 
 ## Many-Body Localization
 
@@ -799,27 +855,33 @@ Disordered quantum systems and thermalization dynamics.
 ```c
 #include "algorithms/mbl/mbl.h"
 
-// Create XXZ Hamiltonian with disorder
-xxz_params_t params = {
-    .num_sites = 16,
-    .Jxy = 1.0,
-    .Jz = 1.0,
-    .disorder_strength = 5.0,  // Strong disorder (MBL phase)
-    .seed = 42
-};
+// Create XXZ Hamiltonian with strong disorder (MBL phase)
+xxz_hamiltonian_t* H = xxz_hamiltonian_create(/*num_sites=*/16,
+                                               /*J=*/1.0, /*delta=*/1.0,
+                                               /*disorder_strength=*/5.0,
+                                               /*periodic_bc=*/false,
+                                               /*seed=*/42);
 
-xxz_hamiltonian_t* H = xxz_hamiltonian_create(&params);
+sparse_hamiltonian_t* sparse = xxz_build_sparse(H);
+sparse_hamiltonian_diagonalize(sparse);
 ```
 
 ### Diagnostics
 
 ```c
 // Level statistics (Poisson vs GOE)
-double r = level_spacing_ratio(eigenvalues, num_eigenvalues);
-// r ≈ 0.39 (Poisson, MBL) vs r ≈ 0.53 (GOE, thermal)
+level_statistics_t* stats = compute_level_statistics(sparse->eigenvalues,
+                                                       sparse->dim,
+                                                       /*filter_edges=*/0.1);
+printf("<r> = %.4f\n", stats->mean_ratio);
+// <r> ~ 0.39 (Poisson, MBL) vs <r> ~ 0.53 (GOE, thermal)
 
-// Entanglement entropy dynamics
-double S = entanglement_entropy_half_chain(state, num_sites);
+// Entanglement entropy dynamics for an 8-site subsystem
+uint32_t subsystem[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+entropy_dynamics_t* dyn = simulate_entropy_dynamics(sparse, &initial_state,
+                                                      subsystem, 8,
+                                                      /*t_max=*/20.0,
+                                                      /*num_steps=*/200);
 ```
 
 ## Post-Quantum Cryptography
@@ -885,7 +947,7 @@ A new `src/mitigation/` subsystem with the two workhorse techniques
 for current-generation NISQ hardware:
 
 ```c
-#include <moonlab/mitigation/zne.h>
+#include <quantumsim/mitigation/zne.h>
 
 // Suppose fn(lambda, ctx) runs the circuit with noise scaled by lambda
 // and returns the measured <O>.
@@ -905,6 +967,43 @@ Probabilistic error cancellation primitives (`pec_one_norm_cost`,
 machinery for caller-supplied quasi-probability decompositions of
 inverse noise channels.
 
+## Additional Shipped Surfaces
+
+A few modules ship in the tree without a dedicated walkthrough above.
+
+- **`@moonlab/quantum-algorithms`** (npm) -- a lean, browser-friendly
+  package built on `@moonlab/quantum-core`'s WASM state vector. Ships a
+  `Grover` class (WASM-backed amplitude amplification, up to 26 qubits) and
+  an H2-only `VQE` class that runs a classical grid-search + refinement
+  optimizer over a closed-form single-parameter H2 UCCSD ansatz -- it does
+  not call into the WASM state vector and does not implement QAOA.
+- **`@moonlab/quantum-viz`** (npm) -- Canvas 2D and WebGL 3D quantum-state
+  visualizations (`BlochSphere`, `AmplitudeBars`, `CircuitDiagram`) usable
+  standalone, independent of the React/Vue framework bindings.
+- **`moonlab.ml`** (Python) -- quantum feature maps (angle / amplitude /
+  IQP encoding), a `QuantumKernel` + `QSVM` classifier, and a `QuantumPCA`
+  dimensionality reducer built on the state-vector primitives. Gradients do
+  **not** flow back through these quantum operations (the state is evolved
+  imperatively and results are detached); use `moonlab.torch_layer` for a
+  trainable quantum layer.
+- **`moonlab.torch_layer`** (Python) -- `QuantumLayer` and `QuantumConv1D`
+  PyTorch modules trained via the exact parameter-shift rule
+  (`ParameterShiftGradient`), documented above under VQE/PyTorch.
+- **`moonlab.diff`** (Python) -- `DiffCircuit`, a native reverse-mode
+  autograd circuit builder mirroring `src/algorithms/diff/differentiable.h`,
+  so Python callers get adjoint gradients (`backward_pauli_sum`) without a
+  PyTorch dependency.
+- **`moonlab::feynman`** (Rust) -- `FeynmanDiagram` + `ParticleType`
+  renderer that emits ASCII, SVG, and LaTeX/TikZ-Feynman diagrams for QFT
+  processes (fermion/antifermion/photon/gluon/W/Z/Higgs/ghost/graviton
+  lines), independent of the quantum-simulation surface.
+- **`examples/applications/qgt_qec_node.c`** -- a single physics story
+  tying the quantum geometric tensor to topological error correction: on
+  the Qi-Wu-Zhang Chern insulator, the Fubini-Study metric divergence at
+  the Dirac-node gap closing and the Chern-number jump are the same
+  epsilon^2 = 0 nilpotency that makes a surface-code stabilizer chain
+  complex (d1 . d2 = 0) well-defined.
+
 ## Language Bindings
 
 ### Python (with PyTorch Integration)
@@ -912,38 +1011,39 @@ inverse noise channels.
 ```python
 import moonlab as ml
 import torch
+from moonlab.torch_layer import QuantumLayer
 
 # Create quantum state
 state = ml.QuantumState(4)
 state.h(0).cnot(0, 1).cnot(1, 2).cnot(2, 3)
 
-# PyTorch hybrid layer
-class QuantumLayer(torch.nn.Module):
-    def __init__(self, num_qubits):
-        super().__init__()
-        self.circuit = ml.ParameterizedCircuit(num_qubits)
-        self.params = torch.nn.Parameter(torch.randn(num_qubits * 3))
-
-    def forward(self, x):
-        return self.circuit.run(x, self.params)
+# PyTorch hybrid layer: parameterized quantum circuit as an nn.Module,
+# trained via the exact parameter-shift rule (moonlab.torch_layer.ParameterShiftGradient)
+model = torch.nn.Sequential(
+    torch.nn.Linear(4, 8),
+    QuantumLayer(num_qubits=8, depth=2),
+    torch.nn.Linear(8, 2),
+)
 
 # Train with backpropagation
-model = QuantumLayer(4)
 optimizer = torch.optim.Adam(model.parameters())
+output = model(torch.randn(32, 4))
+loss = output.sum()
+loss.backward()  # quantum gradients computed automatically
 ```
+
+`moonlab.torch_layer` also ships `QuantumConv1D` (a quantum kernel applied to
+sliding windows of a 1D input, the quantum analogue of `nn.Conv1d`).
 
 ### VQE in Python
 
 ```python
 from moonlab.algorithms import VQE
 
-vqe = VQE(
-    hamiltonian=H_molecular,
-    ansatz='uccsd',
-    optimizer='BFGS'
-)
-result = vqe.minimize()
-print(f"Energy: {result.energy:.8f} Ha")
+vqe = VQE(num_qubits=4, num_layers=2)
+result = vqe.solve_h2(bond_distance=0.74)
+print(f"Energy: {result['energy']:.8f} Ha")
+# vqe.solve_lih(bond_distance=1.6) and vqe.solve_h2o() are also available
 ```
 
 ### Rust
@@ -966,12 +1066,14 @@ fn main() {
 import { useQuantumState, BlochSphere } from '@moonlab/quantum-react';
 
 function QuantumVisualizer() {
-    const [state, dispatch] = useQuantumState(1);
+    const { amplitudes, applyGate, loading } = useQuantumState({ numQubits: 1 });
+
+    if (loading) return <div>Loading...</div>;
 
     return (
         <div>
-            <BlochSphere state={state} />
-            <button onClick={() => dispatch({ type: 'H', qubit: 0 })}>
+            <BlochSphere amplitudes={amplitudes} />
+            <button onClick={() => applyGate('h', 0)}>
                 Hadamard
             </button>
         </div>
@@ -979,16 +1081,32 @@ function QuantumVisualizer() {
 }
 ```
 
+`useQuantumState` returns `{ state, loading, error, amplitudes, probabilities,
+numQubits, initialize, reset, applyGate, measure, measureAll, refresh, dispose
+}`; circuit state (add/undo/export gates) is a separate hook, `useCircuit`.
+
 ### Vue
 
 ```vue
 <template>
-    <circuit-diagram :circuit="circuit" />
+    <div>
+        <button @click="handleBellState">Create Bell State</button>
+        <CircuitDiagram :circuit="circuit" />
+    </div>
 </template>
 
 <script setup>
-import { useQuantumState } from '@moonlab/quantum-vue';
-const { state, circuit } = useQuantumState(2);
+import { useQuantumState, useCircuit } from '@moonlab/quantum-vue';
+
+const { amplitudes, numQubits, applyGate } = useQuantumState({ numQubits: 2 });
+const { circuit, addGate } = useCircuit({ numQubits: 2 });
+
+const handleBellState = () => {
+    applyGate('h', 0);
+    applyGate('cnot', 0, 1);
+    addGate('h', 0);
+    addGate('cnot', 0, 1);
+};
 </script>
 ```
 
@@ -1155,10 +1273,14 @@ moonlab/
 │   ├── rust/                 # Rust FFI + TUI
 │   └── javascript/           # React, Vue, WASM
 ├── examples/
-│   ├── basic/                # Hello quantum, Bell states
-│   ├── algorithms/           # VQE, QAOA, Grover
-│   ├── tensor_network/       # Spin chains, DMRG
-│   └── applications/         # Portfolio, QRNG
+│   ├── quantum/               # Grover search, GPU benchmarks
+│   ├── applications/          # VQE (H2), QAOA (MaxCut), portfolio, QRNG/PQC, qgt_qec_node
+│   ├── tensor_network/        # CA-MPS, CA-PEPS, DMRG spin chains, var-D
+│   ├── topological/           # QGT models (Kane-Mele, BHZ, Hofstadter, Kitaev)
+│   ├── cuda/                  # Native CUDA state-vector demos (QSIM_ENABLE_CUDA)
+│   ├── distributed/           # MPI-sharded state vector
+│   ├── hep/                   # Z2 lattice-gauge-theory var-D
+│   └── extensions/            # Open-core plug-in surfaces (C + Python)
 ├── tests/                    # Test suite
 └── docs/                     # Documentation
 ```

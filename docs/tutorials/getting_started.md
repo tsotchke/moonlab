@@ -84,13 +84,12 @@ int main(void) {
 }
 ```
 
-A worked version of the same program (with measurement statistics and
-ASCII bar charts) lives at `examples/basic/hello_quantum.c` and is
-already built for you:
-
-```sh
-./build/hello_quantum
-```
+The snippet above is a minimal, self-contained illustration -- compile it
+with `cc your_file.c -lquantumsim -o your_file` against an installed build.
+For a shipped, already-built example that exercises more of the surface
+(multi-run statistics, not just a single amplitude readout), see
+`examples/applications/bell_chsh_aggregate.c`, built as
+`./build/example_bell_chsh_aggregate`.
 
 ## 3. Bell pair preparation and verification
 
@@ -111,27 +110,42 @@ for (size_t i = 0; i < 4; ++i) {
 quantum_state_free(&state);
 ```
 
-The example program `./build/examples/basic/bell_state` extends this
-preparation with a full CHSH-inequality verification: the measured
+The example program `./build/example_bell_chsh_aggregate`
+(`examples/applications/bell_chsh_aggregate.c`) extends this
+preparation with a full CHSH-inequality verification, run N>=5 times and
+reported as median + IQR + min/max + violation rate: the measured
 correlator `S` violates the classical bound `|S| <= 2` and approaches
 the Tsirelson bound `2 sqrt(2) ~= 2.828`.  In Moonlab this verifies that
 the simulated state and measurement path reproduce the quantum prediction;
 it is not physical-device or device-independent entanglement certification.
+`examples/applications/bell_variants_aggregate.c` runs the same style of
+harness over Mermin-3 and Mermin-Klyshko-{4,5} on GHZ states.
 
 ## 4. Where to go next
 
-- `examples/basic/` — GHZ state, teleportation, full gate tour.
-- `examples/algorithms/` — Grover's search, QFT, QAOA, VQE on H_2.
-- `examples/topological/` — six topological models with computed
-  Chern / Z_2 / winding invariants.  Walked through in
-  [topological_band_structure.md](topological_band_structure.md).
-- `examples/applications/` — Bell-test QRNG, post-quantum KEM
-  (FIPS 203), CHSH multi-run aggregator.
+- `examples/quantum/` — Grover's search (hash collision, password
+  cracking, large-scale, parallel benchmark).
+- `examples/applications/` — VQE on H2 (`vqe_h2_molecule.c`), QAOA
+  MaxCut (`qaoa_maxcut.c`), portfolio and TSP optimization, Bell-test
+  QRNG, post-quantum KEM (FIPS 203), CHSH/Mermin multi-run aggregators,
+  and `qgt_qec_node.c` (quantum geometric tensor meets topological QEC).
+- `examples/tensor_network/` — CA-MPS / CA-PEPS Clifford-assisted
+  ground-state search, DMRG spin chains, variational-D benchmarks.
+- `examples/topological/` — QGT models (Kane-Mele, BHZ, Hofstadter,
+  Kitaev p-wave chain) with computed Chern / Z_2 invariants.  Walked
+  through in [topological_band_structure.md](topological_band_structure.md).
+- `examples/distributed/` — MPI-sharded state vector, including a
+  sharded QFT (`large_state_qft.c`).
+- `examples/hep/` — 1+1D Z2 lattice gauge theory via the gauge-aware
+  variational-D warmstart.
+- `examples/cuda/` — native CUDA state-vector demos (build with
+  `-DQSIM_ENABLE_CUDA=ON`).
 - [mpdo_noise.md](mpdo_noise.md) — simulate noisy circuits without
   shooting Monte Carlo trajectories.
 
-If you prefer Python, every example under `examples/basic/` has a `.py`
-sibling using the bindings at `bindings/python/moonlab/`.
+If you prefer Python, `examples/algorithms/vqe_h2_autograd.py` and
+`examples/applications/mpdo_noise_demo.py` use the bindings at
+`bindings/python/moonlab/`.
 
 ## Troubleshooting
 
