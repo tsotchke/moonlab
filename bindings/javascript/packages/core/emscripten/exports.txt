@@ -259,6 +259,8 @@ _moonlab_ca_mps_t_dagger
 _moonlab_ca_mps_phase
 _moonlab_ca_mps_normalize
 _moonlab_ca_mps_norm
+# Clifford-conjugated Pauli readback (stable ABI since 0.6.0).
+_moonlab_ca_mps_conjugate_pauli
 # Born-rule sequential sampling (since v0.10.0).
 _moonlab_ca_mps_sample_z
 # DMRG scalar-energy convenience entries (since v0.10.0).
