@@ -24,12 +24,12 @@
  * Layer 2 (Quantum): Quantum simulation
  *   - Uses Layer 1 for measurement sampling
  *   - No circular dependency!
- *   - Bell-verified quantum evolution
+ *   - Fail-closed, pre-delivery CHSH epoch gates in BELL_VERIFIED mode
  * 
  * Layer 3 (Output): Conditioned random output
  *   - Quantum-evolved entropy
  *   - Final mixing and conditioning
- *   - Cryptographic quality
+ *   - Stable ABI adds fresh entropy and domain-separated SHAKE256 conditioning
  */
 
 // ============================================================================
@@ -46,7 +46,10 @@ void qrng_v3_get_default_config(qrng_v3_config_t *config) {
     // Bell test monitoring (disable for benchmarks, enable for production)
     config->enable_bell_monitoring = 0;  // Disabled by default for performance
     config->bell_test_interval = 1024 * 1024;  // Test every 1MB when enabled
-    config->min_acceptable_chsh = 2.4;  // Conservative threshold
+    // A healthy simulated Bell pair is near Tsirelson's 2.83 bound.  Use an
+    // alert threshold just above the classical bound so finite-sample noise
+    // cannot spuriously reject otherwise healthy monitored generation.
+    config->min_acceptable_chsh = 2.1;
     
     // Grover optimization
     config->enable_grover_cache = 1;
@@ -160,7 +163,8 @@ static qs_error_t evolve_quantum_state(
  * 2. Extract MULTIPLE measurements without re-evolving
  * 3. Only re-evolve when entropy pool depleted
  *
- * This gives 10-50x speedup while maintaining quantum properties!
+ * This amortizes evolution cost while preserving the intended simulated
+ * measurement distribution.
  */
 static int extract_quantum_entropy(
     qrng_v3_ctx_t *ctx,
@@ -171,8 +175,8 @@ static int extract_quantum_entropy(
     
     size_t bytes_generated = 0;
     
-    // GUARANTEED UNIQUENESS: Always evolve between measurements
-    // Balance: Batch for performance, but ensure diversity
+    // Periodically evolve between measurement batches. Random streams do not
+    // promise unique samples; the goal here is distributional diversity.
     const size_t measurements_per_full_evolution = 64;  // Smaller batch = more diversity
     size_t measurements_since_evolution = measurements_per_full_evolution;  // Force first evolution
     
@@ -414,7 +418,7 @@ qrng_v3_error_t qrng_v3_init_with_config(
     ctx->buffer_pos = ctx->output_buffer_size;  // Force initial fill
     
     // Initialize Bell test monitoring
-    if (config->enable_bell_monitoring) {
+    if (ctx->config.enable_bell_monitoring) {
         ctx->bell_monitor = calloc(1, sizeof(bell_test_monitor_t));
         if (ctx->bell_monitor) {
             bell_monitor_init(ctx->bell_monitor, 100);  // Track last 100 tests
@@ -503,6 +507,32 @@ qrng_v3_error_t qrng_v3_bytes(
     size_t bytes_copied = 0;
     
     while (bytes_copied < size) {
+        /* Certify each monitored epoch before releasing bytes from it.  The
+         * former post-delivery check could return an error only after filling
+         * the caller's buffer, which is not a fail-closed contract. */
+        if (ctx->config.enable_bell_monitoring &&
+            ctx->config.bell_test_interval > 0 &&
+            (ctx->stats.bell_tests_performed == 0 ||
+             ctx->bytes_since_bell_test >= ctx->config.bell_test_interval)) {
+            bell_test_result_t result = qrng_v3_verify_quantum(ctx, 4000);
+
+            if (ctx->bell_monitor) {
+                bell_monitor_add_result(ctx->bell_monitor, &result);
+            }
+
+            if (!bell_test_confirms_quantum(&result) ||
+                result.chsh_value < ctx->config.min_acceptable_chsh) {
+                secure_memzero(buffer, size);
+                if (ctx->perf_monitor) {
+                    perf_monitor_end_operation(ctx->perf_monitor);
+                }
+                return QRNG_V3_ERROR_BELL_TEST_FAILED;
+            }
+
+            ctx->stats.bell_tests_passed++;
+            ctx->bytes_since_bell_test = 0;
+        }
+
         // Refill buffer if needed
         if (ctx->buffer_pos >= ctx->output_buffer_size) {
             // Generate fresh quantum entropy
@@ -527,6 +557,7 @@ qrng_v3_error_t qrng_v3_bytes(
             }
             
             if (err != 0) {
+                secure_memzero(buffer, size);
                 if (ctx->perf_monitor) {
                     perf_monitor_end_operation(ctx->perf_monitor);
                 }
@@ -541,41 +572,27 @@ qrng_v3_error_t qrng_v3_bytes(
         if (copy_size > size - bytes_copied) {
             copy_size = size - bytes_copied;
         }
+
+        /* Do not cross a monitored epoch in one copy.  The next loop
+         * iteration runs the next Bell plumbing gate before releasing more
+         * data, even for a single very large request. */
+        if (ctx->config.enable_bell_monitoring &&
+            ctx->config.bell_test_interval > 0) {
+            uint64_t epoch_remaining = ctx->config.bell_test_interval -
+                                       ctx->bytes_since_bell_test;
+            if (copy_size > epoch_remaining) {
+                copy_size = (size_t)epoch_remaining;
+            }
+        }
         
         memcpy(buffer + bytes_copied, ctx->output_buffer + ctx->buffer_pos, copy_size);
         ctx->buffer_pos += copy_size;
         bytes_copied += copy_size;
+        ctx->bytes_since_bell_test += copy_size;
     }
     
     // Update statistics
     ctx->stats.bytes_generated += size;
-    ctx->bytes_since_bell_test += size;
-    
-    // Bell test monitoring
-    if (ctx->config.enable_bell_monitoring && 
-        ctx->config.bell_test_interval > 0 &&
-        ctx->bytes_since_bell_test >= ctx->config.bell_test_interval) {
-        
-        bell_test_result_t result = qrng_v3_verify_quantum(ctx, 1000);
-        
-        if (ctx->bell_monitor) {
-            bell_monitor_add_result(ctx->bell_monitor, &result);
-        }
-        
-        ctx->stats.bell_tests_performed++;
-        if (bell_test_confirms_quantum(&result)) {
-            ctx->stats.bell_tests_passed++;
-        }
-        
-        // Check if quantum behavior is maintained
-        if (result.chsh_value < ctx->config.min_acceptable_chsh) {
-            // Quantum behavior degraded - this shouldn't happen in simulation
-            // but good to check
-            return QRNG_V3_ERROR_BELL_TEST_FAILED;
-        }
-        
-        ctx->bytes_since_bell_test = 0;
-    }
     
     if (ctx->perf_monitor) {
         perf_monitor_end_operation(ctx->perf_monitor);

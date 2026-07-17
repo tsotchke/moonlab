@@ -660,22 +660,6 @@ moonlab_cuda_apply_h(moonlab_cuda_state_t *state, uint32_t target)
 
 /* ---------- reductions: prob_z / norm ---------- */
 
-/* Helper: run a reduction kernel that writes one partial per block,
- * then sum partials on the host.  Returns the final scalar in *out. */
-static moonlab_cuda_status_t
-reduce_via_kernel(moonlab_cuda_state_t *state,
-                  void (*launch)(double * /* partials */,
-                                 int /* blocks */, int /* threads */,
-                                 cudaStream_t),
-                  double *out)
-{
-    /* Unused for now -- the dispatch below inlines launches with
-     * different kernel signatures.  Kept as a forward stub for
-     * the unified reduction path we may consolidate to later. */
-    (void)state; (void)launch; (void)out;
-    return MOONLAB_CUDA_ERR_DRIVER;
-}
-
 extern "C"
 moonlab_cuda_status_t
 moonlab_cuda_prob_z(const moonlab_cuda_state_t *state,

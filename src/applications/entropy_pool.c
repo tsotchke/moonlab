@@ -47,17 +47,17 @@ static void* entropy_worker_thread(void *arg) {
         
         pthread_mutex_unlock(&pool->pool_mutex);
         
-        // Generate entropy outside lock for better concurrency
+        // The entropy source and health-test contexts are both stateful. Keep
+        // collection + validation in one serialized transaction so a direct
+        // cache-miss cannot race this worker or validate bytes out of order.
+        pthread_mutex_lock(&pool->health_mutex);
         entropy_error_t err = entropy_get_bytes(pool->entropy_ctx, chunk, sizeof(chunk));
         if (err != ENTROPY_SUCCESS) {
+            pthread_mutex_unlock(&pool->health_mutex);
             usleep(1000);  // Back off on error
             continue;
         }
-        
-        // Run health tests on generated entropy — serialised with the
-        // direct-generation path below so both threads do not race on
-        // health_ctx->stats.
-        pthread_mutex_lock(&pool->health_mutex);
+
         health_error_t health_err = health_tests_run_batch(
             pool->health_ctx, chunk, sizeof(chunk));
         pthread_mutex_unlock(&pool->health_mutex);
@@ -236,11 +236,10 @@ int entropy_pool_init_with_config(
     
     // Pre-fill pool with tested entropy
     uint8_t startup_entropy[4096];
+    pthread_mutex_lock(&ctx->health_mutex);
     err = entropy_get_bytes(ctx->entropy_ctx, startup_entropy, sizeof(startup_entropy));
     if (err == ENTROPY_SUCCESS) {
-        pthread_mutex_lock(&ctx->health_mutex);
         health_err = health_tests_run_batch(ctx->health_ctx, startup_entropy, sizeof(startup_entropy));
-        pthread_mutex_unlock(&ctx->health_mutex);
         if (health_err == HEALTH_SUCCESS) {
             size_t startup_bytes = sizeof(startup_entropy);
             if (startup_bytes > ctx->pool_size) {
@@ -250,6 +249,7 @@ int entropy_pool_init_with_config(
             ctx->pool_available = startup_bytes;
         }
     }
+    pthread_mutex_unlock(&ctx->health_mutex);
     secure_memzero(startup_entropy, sizeof(startup_entropy));
     
     // Start background thread if enabled
@@ -394,15 +394,16 @@ int entropy_pool_get_bytes(
     ctx->stats.cache_misses++;
     pthread_mutex_unlock(&ctx->pool_mutex);
     
-    // Generate directly (bypassing pool for large requests)
+    // Generate directly (bypassing pool for large requests). Collection and
+    // health testing form one transaction shared with the background worker;
+    // both underlying contexts maintain mutable state.
+    pthread_mutex_lock(&ctx->health_mutex);
     entropy_error_t err = entropy_get_bytes(ctx->entropy_ctx, buffer, size);
     if (err != ENTROPY_SUCCESS) {
+        pthread_mutex_unlock(&ctx->health_mutex);
         return -1;
     }
-    
-    // Test generated entropy (serialised with the background worker's
-    // health_tests_run_batch call).
-    pthread_mutex_lock(&ctx->health_mutex);
+
     health_error_t health_err = health_tests_run_batch(ctx->health_ctx, buffer, size);
     pthread_mutex_unlock(&ctx->health_mutex);
     if (health_err != HEALTH_SUCCESS) {

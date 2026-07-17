@@ -428,6 +428,34 @@ int test_apt_window_behavior(void) {
     TEST_PASS();
 }
 
+int test_apt_rejects_out_of_range_cursor(void) {
+    TEST_START("APT bounds guard rejects a stale cursor");
+
+    health_test_config_t config = {
+        .rct_cutoff = 31,
+        .apt_cutoff = 20,
+        .apt_window_size = 32,
+        .startup_test_samples = 100,
+        .min_entropy_estimate = 4.0
+    };
+    health_test_ctx_t ctx;
+    ASSERT_EQ(health_tests_init_custom(&ctx, &config), HEALTH_SUCCESS,
+              "Custom initialization should succeed");
+
+    ctx.stats.apt_first_sample = 0x11;
+    ctx.stats.apt_current_count = 1;
+    ctx.stats.apt_window_pos = ctx.config.apt_window_size;
+
+    health_error_t err = health_test_apt(&ctx, 0x22);
+    ASSERT_EQ(err, HEALTH_ERROR_INVALID_PARAM,
+              "Stale cursor should fail closed");
+    ASSERT_EQ(ctx.stats.apt_window_pos, ctx.config.apt_window_size,
+              "Rejected state should not be mutated");
+
+    health_tests_free(&ctx);
+    TEST_PASS();
+}
+
 // ============================================================================
 // COMBINED TESTS
 // ============================================================================
@@ -801,6 +829,7 @@ int main(void) {
     test_apt_basic();
     test_apt_detects_bias();
     test_apt_window_behavior();
+    test_apt_rejects_out_of_range_cursor();
 
     // Combined tests
     test_combined_rct_apt();
@@ -840,7 +869,7 @@ int main(void) {
     printf("========================================\n");
 
     if (tests_failed == 0) {
-        printf("\n✓ ALL TESTS PASSED - NIST SP 800-90B compliant\n\n");
+        printf("\n✓ ALL IMPLEMENTED SP 800-90B HEALTH TESTS PASSED\n\n");
         return 0;
     } else {
         printf("\n✗ SOME TESTS FAILED - Review required\n\n");

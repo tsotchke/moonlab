@@ -205,7 +205,13 @@ health_error_t health_test_apt(health_test_ctx_t *ctx, uint8_t sample) {
         return HEALTH_SUCCESS;
     }
     
-    // Add sample to window
+    // Correctly used contexts keep apt_window_pos in
+    // [0, apt_window_size). Fail closed if state corruption or an unsafe
+    // caller violates that invariant; silently continuing would turn the
+    // continuous health test into an unreliable signal.
+    if (ctx->stats.apt_window_pos >= ctx->config.apt_window_size) {
+        return HEALTH_ERROR_INVALID_PARAM;
+    }
     ctx->stats.apt_window_buffer[ctx->stats.apt_window_pos] = sample;
     
     // Count occurrences of first sample

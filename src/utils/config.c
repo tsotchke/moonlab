@@ -22,6 +22,10 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/heap.h>
+#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 #define strcasecmp _stricmp
 #endif
@@ -640,17 +644,23 @@ int qsim_detect_threads(void) {
 
 int qsim_detect_max_qubits(void) {
     // Get available memory
-    size_t mem_bytes = 0;
+    uint64_t mem_bytes = 0;
 
-#ifdef __APPLE__
+#if defined(__EMSCRIPTEN__)
+    /* Report what this process can address now. Emscripten may grow the heap,
+     * but advertising an assumed 8 GiB on wasm32 overcommits by construction. */
+    mem_bytes = (uint64_t)emscripten_get_heap_size();
+#elif defined(__APPLE__)
     size_t size = sizeof(mem_bytes);
     sysctlbyname("hw.memsize", &mem_bytes, &size, NULL, 0);
 #elif defined(__linux__)
     long pages = sysconf(_SC_PHYS_PAGES);
     long page_size = sysconf(_SC_PAGE_SIZE);
-    mem_bytes = pages * page_size;
+    if (pages > 0 && page_size > 0) {
+        mem_bytes = (uint64_t)pages * (uint64_t)page_size;
+    }
 #else
-    mem_bytes = 8ULL * 1024 * 1024 * 1024;  // Assume 8 GB
+    mem_bytes = UINT64_C(8) * 1024 * 1024 * 1024;  // Assume 8 GB
 #endif
 
     // Use 80% of available memory
@@ -658,9 +668,9 @@ int qsim_detect_max_qubits(void) {
 
     // State vector size = 2^n * 16 bytes (complex double)
     int qubits = 0;
-    size_t state_size = 16;  // One amplitude
+    uint64_t state_size = 16;  // One amplitude
 
-    while (state_size * 2 <= mem_bytes && qubits < 40) {
+    while (state_size <= mem_bytes / 2 && qubits < 40) {
         state_size *= 2;
         qubits++;
     }

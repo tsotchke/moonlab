@@ -10,11 +10,10 @@
  * ABI CONTRACT
  * ------------
  *  - Every symbol declared in this header is guaranteed to exist, with the
- *    same name and signature, across all 0.x releases. Semantic upgrades to
+ *    same name and signature, throughout ABI major 0. Semantic upgrades to
  *    a function's behavior will be delivered via a new function (with a
  *    version suffix such as `_v2`) rather than by breaking the existing one.
- *  - Removal of any symbol declared here requires a major-version bump
- *    (1.0 -> 2.0).
+ *  - Removal or an incompatible signature change requires an ABI-major bump.
  *  - The header itself is allowed to grow: new symbols may be added, but
  *    existing declarations are locked.
  *  - Consumers should use `moonlab_abi_version()` at runtime to feature-gate
@@ -25,11 +24,10 @@
  *  - `moonlab_qrng_bytes` : stable since 0.1.2.
  *  - `moonlab_abi_version` : stable since 0.1.2.
  *
- * All future public APIs (PQC, quantum-geometry computation, Chern markers,
- * etc.) will be added here as they land in subsequent 0.x releases.
+ * New stable public APIs are added here as their contracts mature.
  *
  * @since 0.1.2
- * @copyright 2024-2026 tsotchke. Licensed under the Apache License, 2.0.
+ * @copyright 2024-2026 tsotchke. Licensed under the MIT License.
  */
 
 #ifndef MOONLAB_EXPORT_H
@@ -54,7 +52,7 @@ extern "C" {
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 4
+#define MOONLAB_ABI_VERSION_MINOR 5
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -72,12 +70,21 @@ extern "C" {
 MOONLAB_API void moonlab_abi_version(int* major, int* minor, int* patch);
 
 /**
- * @brief Fill a buffer with cryptographically-strong quantum random bytes.
+ * @brief Fill a buffer with cryptographically conditioned hybrid random bytes.
  *
- * Produces bytes from Moonlab's v3 QRNG engine, which combines a hardware
- * entropy pool (RDSEED / /dev/urandom / SecRandomCopyBytes) with a
- * Bell-verified quantum simulation layer. The function is thread-safe:
- * concurrent calls from multiple threads are serialised internally.
+ * The release path combines Moonlab's v3 quantum-simulation engine with fresh
+ * hardware/OS entropy that is continuously checked by the SP 800-90B RCT and
+ * APT health tests. Every request is domain-separated and conditioned through
+ * SHAKE256. Simulated Bell epochs are checked before their bytes are released,
+ * and any entropy, Bell, or conditioning failure is fail-closed with the
+ * caller's buffer zeroed. The function is thread-safe: concurrent calls are
+ * serialised internally.
+ *
+ * The Bell gate verifies Moonlab's quantum-simulation plumbing. It becomes a
+ * device-independent certification only when paired with an independent
+ * physical Bell-test provider and transcript verifier; the capability query
+ * below deliberately distinguishes those two assurance levels. This module
+ * is not claiming FIPS 140 validation.
  *
  * The v3 context is lazily initialised on first call and released at
  * process exit via atexit; callers do not need to perform any setup.
@@ -90,10 +97,47 @@ MOONLAB_API void moonlab_abi_version(int* major, int* minor, int* patch);
  * @return -2 if the v3 QRNG engine failed to initialise.
  * @return -3 if a subsequent byte-generation call failed (e.g. an
  *            internal Bell-verification epoch was rejected).
+ * @return -4 if fresh conditioner entropy could not be obtained.
+ * @return -5 if the per-process request counter is exhausted.
  *
  * @since 0.1.2
  */
 MOONLAB_API int moonlab_qrng_bytes(uint8_t* buf, size_t size);
+
+/* Stable QRNG delivery capabilities.  A flag is set only when that property
+ * is active in the process-wide release path. */
+#define MOONLAB_QRNG_CAP_HARDWARE_OS_ENTROPY       (UINT64_C(1) << 0)
+#define MOONLAB_QRNG_CAP_CONTINUOUS_HEALTH_TESTS   (UINT64_C(1) << 1)
+#define MOONLAB_QRNG_CAP_SHAKE256_CONDITIONED      (UINT64_C(1) << 2)
+#define MOONLAB_QRNG_CAP_BELL_SIMULATION_GATED     (UINT64_C(1) << 3)
+#define MOONLAB_QRNG_CAP_THREAD_SAFE               (UINT64_C(1) << 4)
+#define MOONLAB_QRNG_CAP_BELL_EPOCH_CERTIFIED      (UINT64_C(1) << 5)
+#define MOONLAB_QRNG_CAP_DEVICE_INDEPENDENT_SOURCE (UINT64_C(1) << 6)
+#define MOONLAB_QRNG_CAP_FIPS140_VALIDATED         (UINT64_C(1) << 7)
+
+/** Runtime status for the process-wide conditioned QRNG delivery path. */
+typedef struct {
+    uint32_t struct_size;             /**< sizeof(moonlab_qrng_status_t) */
+    uint32_t api_version;             /**< Status structure version (1) */
+    uint64_t capabilities;            /**< MOONLAB_QRNG_CAP_* bitset */
+    uint64_t conditioned_requests;    /**< Completed public API requests */
+    uint64_t raw_bytes_generated;     /**< Bytes drawn through v3 */
+    uint64_t bell_tests_performed;    /**< Simulated Bell plumbing gates */
+    uint64_t bell_tests_passed;       /**< Gates accepted before delivery */
+    double average_chsh;              /**< Mean simulated CHSH value */
+    double minimum_chsh;              /**< Lowest simulated CHSH value */
+} moonlab_qrng_status_t;
+
+/**
+ * @brief Query active QRNG protections and live health statistics.
+ *
+ * Lazily initializes the process-wide engine but does not draw output. The
+ * first output request performs the first Bell epoch gate before delivery.
+ *
+ * @return 0 on success, -1 for NULL status, -2 on initialization failure.
+ * @since ABI 0.5
+ */
+MOONLAB_API int moonlab_qrng_get_status(moonlab_qrng_status_t* status);
 
 /* ---- Quantum geometric tensor (stable from 0.2.0) -------------------- */
 
@@ -136,15 +180,20 @@ MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
 #define MOONLAB_MLKEM512_SHAREDSECRETBYTES 32
 
 /**
- * @brief Generate an ML-KEM-512 key pair, with entropy sourced from
- *        Moonlab's Bell-verified quantum RNG.
+ * @brief Generate an ML-KEM-512 key pair using Moonlab's conditioned hybrid RNG.
+ *
+ * The entropy path is health-tested, SHAKE256-conditioned, Bell-epoch gated,
+ * and fail-closed. Environments that require a validated cryptographic-module
+ * boundary should use the explicit-seed API with that module's approved DRBG.
  *
  * @param ek 800-byte output public key.
  * @param dk 1632-byte output secret key.
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
  */
-MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
+MOONLAB_API int moonlab_mlkem512_keygen_qrng(
+    uint8_t ek[MOONLAB_MLKEM512_PUBLICKEYBYTES],
+    uint8_t dk[MOONLAB_MLKEM512_SECRETKEYBYTES]);
 
 /**
  * @brief Encapsulate a shared secret against an ML-KEM-512 public key.
@@ -157,11 +206,15 @@ MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t* ek, uint8_t* dk);
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
  */
-MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
+MOONLAB_API int moonlab_mlkem512_encaps_qrng(
+    uint8_t c[MOONLAB_MLKEM512_CIPHERTEXTBYTES],
+    uint8_t K[MOONLAB_MLKEM512_SHAREDSECRETBYTES],
+    const uint8_t ek[MOONLAB_MLKEM512_PUBLICKEYBYTES]);
 
 /**
- * @brief Decapsulate an ML-KEM-512 ciphertext.  Constant-time;
- *        implicit-rejection on invalid ciphertexts.
+ * @brief Decapsulate an ML-KEM-512 ciphertext with implicit rejection on
+ *        invalid ciphertexts.  The source uses a branchless FO selector but
+ *        has not been independently side-channel audited.
  *
  * @param K  32-byte output shared secret (may be pseudorandom on
  *           tampered ciphertext).
@@ -169,9 +222,10 @@ MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t* c, uint8_t* K, const uint8
  * @param dk 1632-byte secret key.
  * @since 0.2.0
  */
-MOONLAB_API void moonlab_mlkem512_decaps(uint8_t* K,
-                              const uint8_t* c,
-                              const uint8_t* dk);
+MOONLAB_API void moonlab_mlkem512_decaps(
+    uint8_t K[MOONLAB_MLKEM512_SHAREDSECRETBYTES],
+    const uint8_t c[MOONLAB_MLKEM512_CIPHERTEXTBYTES],
+    const uint8_t dk[MOONLAB_MLKEM512_SECRETKEYBYTES]);
 
 /* ---- ML-KEM-768 (NIST-recommended default; stable from 0.2.0) ------- */
 
@@ -180,9 +234,17 @@ MOONLAB_API void moonlab_mlkem512_decaps(uint8_t* K,
 #define MOONLAB_MLKEM768_CIPHERTEXTBYTES   1088
 #define MOONLAB_MLKEM768_SHAREDSECRETBYTES 32
 
-MOONLAB_API int  moonlab_mlkem768_keygen_qrng(uint8_t* ek, uint8_t* dk);
-MOONLAB_API int  moonlab_mlkem768_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
-MOONLAB_API void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+MOONLAB_API int moonlab_mlkem768_keygen_qrng(
+    uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES],
+    uint8_t dk[MOONLAB_MLKEM768_SECRETKEYBYTES]);
+MOONLAB_API int moonlab_mlkem768_encaps_qrng(
+    uint8_t c[MOONLAB_MLKEM768_CIPHERTEXTBYTES],
+    uint8_t K[MOONLAB_MLKEM768_SHAREDSECRETBYTES],
+    const uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES]);
+MOONLAB_API void moonlab_mlkem768_decaps(
+    uint8_t K[MOONLAB_MLKEM768_SHAREDSECRETBYTES],
+    const uint8_t c[MOONLAB_MLKEM768_CIPHERTEXTBYTES],
+    const uint8_t dk[MOONLAB_MLKEM768_SECRETKEYBYTES]);
 
 /* ---- ML-KEM-1024 (Category 5; stable from 0.2.0) --------------------- */
 
@@ -191,9 +253,17 @@ MOONLAB_API void moonlab_mlkem768_decaps(uint8_t* K, const uint8_t* c, const uin
 #define MOONLAB_MLKEM1024_CIPHERTEXTBYTES   1568
 #define MOONLAB_MLKEM1024_SHAREDSECRETBYTES 32
 
-MOONLAB_API int  moonlab_mlkem1024_keygen_qrng(uint8_t* ek, uint8_t* dk);
-MOONLAB_API int  moonlab_mlkem1024_encaps_qrng(uint8_t* c, uint8_t* K, const uint8_t* ek);
-MOONLAB_API void moonlab_mlkem1024_decaps(uint8_t* K, const uint8_t* c, const uint8_t* dk);
+MOONLAB_API int moonlab_mlkem1024_keygen_qrng(
+    uint8_t ek[MOONLAB_MLKEM1024_PUBLICKEYBYTES],
+    uint8_t dk[MOONLAB_MLKEM1024_SECRETKEYBYTES]);
+MOONLAB_API int moonlab_mlkem1024_encaps_qrng(
+    uint8_t c[MOONLAB_MLKEM1024_CIPHERTEXTBYTES],
+    uint8_t K[MOONLAB_MLKEM1024_SHAREDSECRETBYTES],
+    const uint8_t ek[MOONLAB_MLKEM1024_PUBLICKEYBYTES]);
+MOONLAB_API void moonlab_mlkem1024_decaps(
+    uint8_t K[MOONLAB_MLKEM1024_SHAREDSECRETBYTES],
+    const uint8_t c[MOONLAB_MLKEM1024_CIPHERTEXTBYTES],
+    const uint8_t dk[MOONLAB_MLKEM1024_SECRETKEYBYTES]);
 
 /* ---- Clifford-Assisted MPS (stable from 0.2.1) ---------------------- */
 /*

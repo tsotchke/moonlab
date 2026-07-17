@@ -309,7 +309,7 @@ void grover_print_result(const grover_result_t *result, const grover_config_t *c
     if (result->found_marked_state) {
         printf("║  ┌─────────────────────────────────────────────────────┐  ║\n");
         printf("║  │   ✓ QUANTUM SEARCH SUCCESSFUL                       │  ║\n");
-        printf("║  │   Demonstrates genuine quantum speedup              │  ║\n");
+        printf("║  │   Reproduces Grover query-complexity advantage      │  ║\n");
         printf("║  └─────────────────────────────────────────────────────┘  ║\n");
     } else {
         printf("║  ┌─────────────────────────────────────────────────────┐  ║\n");

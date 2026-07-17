@@ -34,13 +34,18 @@ extern "C" {
 
 typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
 
-typedef enum {
+/* Keep the ABI return type exactly `int` across compilers.  A named enum is
+ * not required to have the same type as int and GCC 15 correctly diagnoses a
+ * conflict when this internal header and the stable ABI header are included
+ * together. */
+typedef int ca_mps_error_t;
+enum {
     CA_MPS_SUCCESS = 0,
     CA_MPS_ERR_INVALID = -1,
     CA_MPS_ERR_QUBIT   = -2,
     CA_MPS_ERR_OOM     = -3,
     CA_MPS_ERR_BACKEND = -4,
-} ca_mps_error_t;
+};
 
 /* ================================================================== */
 /*  Lifecycle                                                         */

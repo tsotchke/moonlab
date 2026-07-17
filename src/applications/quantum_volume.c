@@ -106,7 +106,11 @@ static int qv_one_trial(size_t width, uint64_t* rng, double* out_hop) {
             int b = (int)perm[2 * p + 1];
             complex_t U[4][4];
             haar_u4(rng, U);
-            if (apply_two_qubit_gate(&st, a, b, U) != QS_SUCCESS) {
+            /* C17 does not permit implicit qualification conversion through
+             * a pointer-to-array. The explicit read-only view is safe because
+             * apply_two_qubit_gate does not modify U. */
+            if (apply_two_qubit_gate(&st, a, b,
+                                     (const complex_t (*)[4])U) != QS_SUCCESS) {
                 free(perm);
                 quantum_state_free(&st);
                 return -1;

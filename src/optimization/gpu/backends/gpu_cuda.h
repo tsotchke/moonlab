@@ -91,7 +91,7 @@ int cuda_get_capabilities(cuda_compute_ctx_t* ctx, cuda_capabilities_t* caps);
  * @brief Get device information
  *
  * @param ctx CUDA context
- * @param device_name Output device name buffer
+ * @param device_name Output device name buffer of at least 256 bytes, or NULL
  * @param max_threads_per_block Output max threads per block
  * @param multiprocessor_count Output SM count
  */

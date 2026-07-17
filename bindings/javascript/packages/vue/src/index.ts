@@ -78,4 +78,4 @@ export {
 // Version Info
 // ============================================================================
 
-export const VERSION = '0.1.1';
+export const VERSION = '1.1.0';

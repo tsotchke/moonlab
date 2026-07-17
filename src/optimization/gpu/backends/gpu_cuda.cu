@@ -8,7 +8,7 @@
  * @since v0.1.2
  *
  * Copyright 2024-2026 tsotchke
- * Licensed under the Apache License, Version 2.0
+ * Licensed under the MIT License
  */
 
 #ifdef HAS_CUDA
@@ -556,7 +556,9 @@ int cuda_get_capabilities(cuda_compute_ctx_t* ctx, cuda_capabilities_t* caps) {
     if (!ctx || !caps) return -1;
 
     memset(caps, 0, sizeof(cuda_capabilities_t));
-    strncpy(caps->device_name, ctx->device_props.name, sizeof(caps->device_name) - 1);
+    memcpy(caps->device_name, ctx->device_props.name,
+           sizeof(caps->device_name) - 1);
+    caps->device_name[sizeof(caps->device_name) - 1] = '\0';
     caps->compute_capability_major = ctx->device_props.major;
     caps->compute_capability_minor = ctx->device_props.minor;
     caps->global_memory = ctx->device_props.totalGlobalMem;
@@ -598,7 +600,8 @@ void cuda_get_device_info(cuda_compute_ctx_t* ctx, char* device_name,
     if (!ctx) return;
 
     if (device_name) {
-        strncpy(device_name, ctx->device_props.name, 255);
+        memcpy(device_name, ctx->device_props.name, 255);
+        device_name[255] = '\0';
     }
     if (max_threads_per_block) {
         *max_threads_per_block = ctx->device_props.maxThreadsPerBlock;
@@ -866,7 +869,7 @@ int cuda_cnot(cuda_compute_ctx_t* ctx, cuda_buffer_t* amplitudes,
 
 int cuda_oracle_single_target(cuda_compute_ctx_t* ctx, cuda_buffer_t* amplitudes,
                               uint64_t target, uint64_t state_dim) {
-    if (!ctx || !amplitudes) return -1;
+    if (!ctx || !amplitudes || target >= state_dim) return -1;
 
     // Only need 1 thread for single target
     oracle_single_target_kernel<<<1, 1, 0, ctx->stream>>>(
@@ -918,7 +921,6 @@ int cuda_grover_diffusion(cuda_compute_ctx_t* ctx, cuda_buffer_t* amplitudes,
         );
     } else {
         // Two-phase approach for larger states
-        dim3 grid, block;
         uint32_t threads = 256;
         uint32_t blocks = (state_dim + threads - 1) / threads;
         if (blocks > 65535) blocks = 65535;
@@ -986,8 +988,6 @@ int cuda_grover_batch_search(cuda_compute_ctx_t* ctx, cuda_buffer_t* batch_state
                              uint32_t num_searches, uint32_t num_qubits,
                              uint32_t num_iterations) {
     if (!ctx || !batch_states || !targets || !results) return -1;
-
-    uint64_t state_dim = 1ULL << num_qubits;
 
     // Copy targets to device
     uint64_t* d_targets;

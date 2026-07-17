@@ -1179,6 +1179,14 @@
     add_test(NAME unit_qrng_statistics COMMAND test_qrng_statistics)
     set_tests_properties(unit_qrng_statistics PROPERTIES LABELS "long")
 
+    add_executable(test_qrng_thread_safety tests/unit/test_qrng_thread_safety.c)
+    target_link_libraries(test_qrng_thread_safety PRIVATE quantumsim)
+    add_test(NAME unit_qrng_thread_safety COMMAND test_qrng_thread_safety)
+
+    add_executable(test_qrng_delivery tests/unit/test_qrng_delivery.c)
+    target_link_libraries(test_qrng_delivery PRIVATE quantumsim)
+    add_test(NAME unit_qrng_delivery COMMAND test_qrng_delivery)
+
     if(QSIM_BUILD_BENCHMARKS)
     # Performance benchmarks (build-only; no ctest entry so CI stays
     # fast). Run directly for local profiling:
@@ -1526,7 +1534,7 @@
         unit_shor_ecdlp unit_differentiable unit_mbl unit_mbl_smoke
         differentiable)
     qsim_label_tests(qrng
-        unit_qrng_di unit_qrng_statistics unit_entropy_pool
+        unit_qrng_di unit_qrng_statistics unit_qrng_thread_safety unit_qrng_delivery unit_entropy_pool
         unit_entropy_jitter unit_entropy_sources unit_hardware_entropy_probe health_tests)
     qsim_label_tests(crypto
         unit_mlkem unit_mlkem_nist_kat unit_mlkem_poly unit_aes_drbg

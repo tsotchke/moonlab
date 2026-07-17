@@ -264,48 +264,30 @@ bell_test_result_t bell_test_chsh(
     // Divide measurements equally among the four settings
     size_t samples_per_setting = num_measurements / 4;
     
-    printf("Measuring correlations (this may take a moment)...\n");
-    
     // E(a, b)
-    printf("  E(a,b)...");
-    fflush(stdout);
     result.correlation_ab = measure_correlation(
         &test_state, qubit_a, qubit_b,
         settings->angle_a1, settings->angle_b1,
         samples_per_setting, entropy
     );
-    printf(" %.6f\n", result.correlation_ab);
-    
     // E(a, b')
-    printf("  E(a,b')...");
-    fflush(stdout);
     result.correlation_ab_prime = measure_correlation(
         &test_state, qubit_a, qubit_b,
         settings->angle_a1, settings->angle_b2,
         samples_per_setting, entropy
     );
-    printf(" %.6f\n", result.correlation_ab_prime);
-    
     // E(a', b)
-    printf("  E(a',b)...");
-    fflush(stdout);
     result.correlation_a_prime_b = measure_correlation(
         &test_state, qubit_a, qubit_b,
         settings->angle_a2, settings->angle_b1,
         samples_per_setting, entropy
     );
-    printf(" %.6f\n", result.correlation_a_prime_b);
-    
     // E(a', b')
-    printf("  E(a',b')...");
-    fflush(stdout);
     result.correlation_a_prime_b_prime = measure_correlation(
         &test_state, qubit_a, qubit_b,
         settings->angle_a2, settings->angle_b2,
         samples_per_setting, entropy
     );
-    printf(" %.6f\n", result.correlation_a_prime_b_prime);
-    
     // Calculate CHSH parameter
     double correlations[4] = {
         result.correlation_ab,
@@ -398,8 +380,8 @@ void bell_chsh_print_results(const bell_test_result_t *result) {
     // Overall verdict
     if (bell_test_confirms_quantum(result)) {
         printf("║  ┌─────────────────────────────────────────────────────┐  ║\n");
-        printf("║  │   ✓ QUANTUM BEHAVIOR CONFIRMED                      │  ║\n");
-        printf("║  │   System exhibits genuine quantum entanglement      │  ║\n");
+        printf("║  │   ✓ QUANTUM-MODEL BEHAVIOR REPRODUCED               │  ║\n");
+        printf("║  │   Simulated Bell state meets the CHSH criteria      │  ║\n");
         printf("║  └─────────────────────────────────────────────────────┘  ║\n");
     } else if (result->violates_classical) {
         printf("║  ┌─────────────────────────────────────────────────────┐  ║\n");
