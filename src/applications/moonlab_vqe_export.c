@@ -5,10 +5,17 @@
  * Definition for the `moonlab_vqe_gradient` entry point declared in
  * `moonlab_export.h`.  The wrapper validates the caller's view of the
  * parameter count against the solver's ansatz before delegating to
- * `vqe_compute_gradient`, whose dispatch is exact on every path:
- * reverse-mode adjoint autograd for noise-free hardware-efficient
- * ansaetze, analytic parameter-shift otherwise.  No finite
- * differences — downstream AD systems wrap this as an exact VJP.
+ * `vqe_compute_gradient`.  On a noise-free solver the gradient is exact:
+ * reverse-mode adjoint autograd for hardware-efficient ansaetze, analytic
+ * parameter-shift otherwise — never a finite difference, so downstream AD
+ * systems can wrap it as an exact VJP.  With a noise model attached,
+ * `vqe_compute_gradient` returns `VQE_GRADIENT_ERR_NOT_EXACT` (which this
+ * wrapper surfaces as -3) unless the caller has explicitly opted into a
+ * stochastic estimate via `vqe_solver_set_allow_stochastic_gradient`; the
+ * exact-AD contract is never silently violated.
+ *
+ * Returns 0 on success, -1 on NULL argument, -2 on parameter-count
+ * mismatch, -3 on gradient failure (including the not-exact-under-noise case).
  *
  * @since 1.1.0 (ABI 0.4.0)
  */
