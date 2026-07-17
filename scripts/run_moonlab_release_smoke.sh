@@ -190,6 +190,48 @@ check_versions() {
   fi
 }
 
+# --- all_discovered_bugs_closed -------------------------------------------
+# The v1.2.0 bug-closure campaign gate (.icc/BUG_CLOSURE_CAMPAIGN.md): every
+# adversarial-lane allowlist must have zero active (non-comment, non-blank)
+# entries. A live quarantine entry is an OPEN bug; the release is blocked until
+# all are removed (each removal paired with a fails-before/passes-after test).
+check_quarantines_empty() {
+  local total=0 detail=""
+  local f
+  for f in tests/oracle/KNOWN_FAILURES.txt \
+           tests/differential/KNOWN_DIVERGENCES.txt \
+           tests/scaling/KNOWN_DIVERGENCES.txt; do
+    [ -f "$f" ] || continue
+    local n; n="$(grep -cvE '^\s*#|^\s*$' "$f" 2>/dev/null || echo 0)"
+    total=$((total + n))
+    [ "$n" -gt 0 ] && detail="$detail ${f##*/}=$n"
+  done
+  # fuzz crash-seed quarantine dirs (a genuine crash the owning lane must fix)
+  local cp; cp="$(find tests/fuzz -type d -name 'crashes-pending' 2>/dev/null \
+                  -exec sh -c 'ls -A "$1" 2>/dev/null | grep -q . && echo x' _ {} \; | wc -l | tr -d ' ')"
+  total=$((total + cp))
+  [ "${cp:-0}" -gt 0 ] && detail="$detail fuzz-crashes-pending=$cp"
+  if [ "$total" -eq 0 ]; then
+    emit all_discovered_bugs_closed PASS "every adversarial allowlist is empty"
+  else
+    emit all_discovered_bugs_closed FAIL "open quarantined bugs:$detail"
+  fi
+}
+
+# --- deep-hunt lanes: relay their trace events into the gate ----------------
+# tsan/numerical/scaling emit their own kind:"moonlab_*" JSONL; the release gate
+# requires the umbrella clean events. FAIL (with reason) if a lane's trace is
+# absent so a lane that never ran cannot masquerade as green.
+check_deep_hunt() {
+  local kind="$1" name="$2" tf="$TRACE_DIR/$3"
+  if [ ! -f "$tf" ]; then
+    emit "$name" FAIL "no $kind trace ($3) -- run the lane's script"; return
+  fi
+  local v; v="$(grep -o "\"name\":\"$name\"[^}]*\"value\":\"[A-Z]*\"" "$tf" 2>/dev/null | grep -o '"value":"[A-Z]*"' | tail -1 | grep -o '[A-Z]*$')"
+  if [ "$v" = "PASS" ]; then emit "$name" PASS "$kind lane clean"
+  else emit "$name" FAIL "$kind lane value=${v:-none}"; fi
+}
+
 echo "== Moonlab release smoke -> $TRACE =="
 check_full_suite
 check_asan
@@ -209,6 +251,13 @@ check_ctest_gate mpi_sharded_gpu_works    'sharded_gpu|multigpu|partition_gpu'
 # the pre-existing unit_qrng_di which only exercises the isolated DI math.
 check_ctest_gate qrng_certification_wired 'qrng_bell_certified_output|qrng_certified_delivery|bell_epoch_certified'
 check_ctest_gate mlkem_official_kat       'mlkem_acvp|mlkem_official'
+
+# v1.2.0 bug-closure campaign gates
+check_quarantines_empty
+check_deep_hunt tsan       tsan_clean                moonlab_tsan.jsonl
+check_deep_hunt numerical  numerical_edge_clean      moonlab_numerical.jsonl
+check_deep_hunt numerical  uninit_clean              moonlab_numerical.jsonl
+check_deep_hunt scaling    scaling_differential_clean moonlab_scaling.jsonl
 
 echo "== $FAILS high-severity check(s) FAILing =="
 [ "$FAILS" -eq 0 ]

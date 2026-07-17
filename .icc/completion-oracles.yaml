@@ -230,6 +230,44 @@ oracles:
         label: Full adversarial matrix (differential + fuzz + statistical + property) is green
         action: run_moonlab_oracles_and_siblings
 
+      # -- v1.2.0 bug-closure campaign (.icc/BUG_CLOSURE_CAMPAIGN.md). --
+      # The 2026-07-17 hunt found 10 real defects; the tag is blocked until every
+      # one is closed. This gate is PASS only when every adversarial-lane
+      # allowlist (oracle/differential/scaling KNOWN_* + fuzz crashes-pending) is
+      # empty -- a live quarantine entry is an OPEN bug.
+      - id: all_discovered_bugs_closed
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["all_discovered_bugs_closed"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every quarantined bug from the adversarial hunt is fixed (all allowlists empty)
+        action: ./scripts/run_moonlab_release_smoke.sh
+      - id: deep_hunt_thread_safety
+        runtime_event:
+          event_kinds: [moonlab_tsan]
+          event_names: ["tsan_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: ThreadSanitizer finds no data races/deadlocks in shared state + hot path
+        action: ./scripts/run_tsan.sh
+      - id: deep_hunt_numerical
+        runtime_event:
+          event_kinds: [moonlab_numerical]
+          event_names: ["numerical_edge_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: Numerical edge cases (SVD/eigen/denormal/scale) match references; no non-isometry
+        action: ./scripts/run_numerical.sh
+      - id: deep_hunt_scaling
+        runtime_event:
+          event_kinds: [moonlab_scaling]
+          event_names: ["scaling_differential_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: Large-n differential clean (no S1 bulk-bond norm / S2 TDVP scaling divergence)
+        action: ./scripts/run_scaling.sh
+
   # ---------------------------------------------------------------------------
   # The adversarial matrix as its own target, so it can be driven and reported
   # independently. Owned by the oracle lane + fuzz/differential/statistical lanes.
@@ -372,6 +410,39 @@ oracles:
         severity: medium
         label: ML-KEM decaps timing shows no valid/invalid class separation (informational on noisy CI)
         action: ./scripts/run_statistical.sh
+      # -- Deep-hunt lanes (2026-07-17): races, numerics, large-n scaling. --
+      - id: tsan_clean
+        runtime_event:
+          event_kinds: [moonlab_tsan]
+          event_names: ["tsan_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: No data races or deadlocks under ThreadSanitizer
+        action: ./scripts/run_tsan.sh
+      - id: numerical_edge_clean
+        runtime_event:
+          event_kinds: [moonlab_numerical]
+          event_names: ["numerical_edge_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: Numerical edge/ill-conditioning battery clean (incl no-LAPACK SVD isometry)
+        action: ./scripts/run_numerical.sh
+      - id: scaling_differential_clean
+        runtime_event:
+          event_kinds: [moonlab_scaling]
+          event_names: ["scaling_differential_clean"]
+          event_values: ["PASS"]
+        severity: high
+        label: Large-n cross-backend differential clean (MPS gate norm + TDVP scaling)
+        action: ./scripts/run_scaling.sh
+      - id: all_discovered_bugs_closed
+        runtime_event:
+          event_kinds: [moonlab_smoke]
+          event_names: ["all_discovered_bugs_closed"]
+          event_values: ["PASS"]
+        severity: high
+        label: Every adversarial-lane quarantine allowlist is empty (all found bugs fixed)
+        action: ./scripts/run_moonlab_release_smoke.sh
 
   # ---------------------------------------------------------------------------
   # ABI readiness (kept, tightened with a hidden-visibility runtime gate).

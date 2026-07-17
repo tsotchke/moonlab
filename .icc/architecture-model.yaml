@@ -153,3 +153,56 @@ invariants:
       JS tests never ran in CI; the release smoke used a label that matched
       nothing; Dockerfiles masked test failures with || echo.
     enforced_by: [ci_all_green, full_suite_green, bindings_suites_green]
+
+  # -- 2026-07-17 adversarial-hunt invariants (one per discovered defect class) --
+  - id: thread-safety
+    class: concurrency
+    statement: >
+      Shared mutable state is never touched from more than one thread without
+      synchronization. No lazy init of a singleton without a once-guard, no
+      lock-free vtable publish, no destroy path that self-deadlocks.
+    incident: >
+      TSan lane found races on the config singleton (config.c:127/148), the SIMD
+      dispatch vtable (simd_ops.c), control-plane setters documented as
+      thread-safe, and a self-deadlock in audit_buffer destroy.
+    enforced_by: [tsan_clean]
+  - id: mps-norm-preservation
+    class: numerical-correctness
+    statement: >
+      A unitary gate applied to a normalized MPS leaves the state norm at 1 in
+      every gauge and at every bond position, on CPU and on the GPU read-out path.
+    incident: >
+      2q gates on bulk bonds left the two-site block norm folded into
+      log_norm_factor, so probabilities were wrong at n>=10 (Metal) and at n=4
+      on a bulk bond (CPU); mixed_canonicalize before the gate was missing.
+    enforced_by: [scaling_differential_clean, adversarial_matrix_green]
+  - id: tdvp-correctness-at-scale
+    class: numerical-correctness
+    statement: >
+      Real-time TDVP evolution matches dense exp(-iHt) for chains longer than two
+      sites, not only in the two-site special case.
+    incident: >
+      TDVP produced the correct answer for n<=2 but diverged from the dense
+      reference for n>=3, so "real-time evolution" was validated only at a scale
+      that hid the bug.
+    enforced_by: [scaling_differential_clean]
+  - id: svd-isometry
+    class: numerical-correctness
+    statement: >
+      Every SVD code path, including the no-LAPACK one-sided Jacobi fallback used
+      on Windows and LAPACK-less builds, returns an orthonormal U (U^H U = I).
+    incident: >
+      The one-sided Jacobi fallback (tensor.c:1356) returned a non-orthonormal U,
+      corrupting truncation on exactly the platforms with no LAPACK to fall through to.
+    enforced_by: [numerical_edge_clean]
+  - id: mesh-hardware-validation
+    class: hidden-red
+    statement: >
+      A hardware-relevant fix is validated on the real fleet (Metal on atlas/enki,
+      CUDA on xavier/cosbox) before it counts as closed -- CI alone cannot exercise
+      real GPU backends.
+    incident: >
+      The gpu_sync_contract test asserted create_gpu always fails; on a real CUDA
+      mesh node it succeeds, so the "passing" CI test encoded a false invariant
+      that only the mesh run exposed.
+    enforced_by: [mesh_release_smoke_green]
