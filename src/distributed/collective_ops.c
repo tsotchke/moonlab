@@ -109,6 +109,27 @@ static inline double amplitude_squared(double complex amp) {
     return re * re + im * im;
 }
 
+/* GPU-shard coherence helpers.  When the local shard lives on a GPU
+ * (state->gpu_state != NULL) the host `amplitudes` buffer is stale, so
+ * every host-side read must first pull the shard down and every host
+ * mutation (measurement collapse, renormalize, state prep) must push
+ * it back.  No-ops on CPU-only shards.  The read helper takes const
+ * because refreshing the host cache does not change the logical state.
+ * Return 1 on success, 0 on transfer failure. */
+static inline int collective_shard_to_host(const partitioned_state_t* state) {
+    if (state->gpu_state) {
+        return partition_sync_to_host((partitioned_state_t*)state) == PARTITION_SUCCESS;
+    }
+    return 1;
+}
+
+static inline int collective_shard_from_host(partitioned_state_t* state) {
+    if (state->gpu_state) {
+        return partition_sync_from_host(state) == PARTITION_SUCCESS;
+    }
+    return 1;
+}
+
 /**
  * @brief Compute cumulative distribution function
  */
@@ -166,6 +187,11 @@ collective_error_t collective_measure_all(partitioned_state_t* state,
 
     if (cfg.seed != 0) {
         init_rng(cfg.seed);
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // Step 1: Compute local probability sum
@@ -270,6 +296,10 @@ collective_error_t collective_measure_all(partitioned_state_t* state,
     // Step 5: Collapse state if requested
     if (cfg.collapse_state) {
         partition_init_basis(state, measurement.state);
+        // Collapse mutates the host buffer; push it back to the GPU shard.
+        if (!collective_shard_from_host(state)) {
+            return COLLECTIVE_ERROR_MPI;
+        }
     }
 
     return COLLECTIVE_SUCCESS;
@@ -344,6 +374,11 @@ collective_error_t collective_measure_qubit(partitioned_state_t* state,
 
         // Renormalize
         partition_normalize(state);
+
+        // Collapse + renormalize mutated the host buffer; push it back.
+        if (!collective_shard_from_host(state)) {
+            return COLLECTIVE_ERROR_MPI;
+        }
     }
 
     return COLLECTIVE_SUCCESS;
@@ -411,6 +446,11 @@ collective_error_t collective_sample(const partitioned_state_t* state,
 
     if (cfg.seed != 0) {
         init_rng(cfg.seed);
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // Same algorithm as measure_all but without collapse
@@ -538,6 +578,11 @@ collective_error_t collective_get_probabilities(const partitioned_state_t* state
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
     }
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     // Compute local probabilities
     double* local_probs = (double*)malloc(state->local_count * sizeof(double));
     if (!local_probs) return COLLECTIVE_ERROR_ALLOC;
@@ -566,6 +611,11 @@ collective_error_t collective_get_local_probabilities(const partitioned_state_t*
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
     }
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     dist->probabilities = (double*)malloc(state->local_count * sizeof(double));
     if (!dist->probabilities) return COLLECTIVE_ERROR_ALLOC;
 
@@ -589,6 +639,11 @@ collective_error_t collective_get_probability(const partitioned_state_t* state,
 
     if (basis_state >= state->total_amplitudes) {
         return COLLECTIVE_ERROR_INVALID_ARG;
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // Check if local
@@ -617,6 +672,11 @@ collective_error_t collective_get_qubit_probability(const partitioned_state_t* s
 
     if (qubit >= state->num_qubits) {
         return COLLECTIVE_ERROR_INVALID_QUBIT;
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     int is_partition = partition_is_partition_qubit(state, qubit);
@@ -700,6 +760,11 @@ collective_error_t collective_expectation_x(const partitioned_state_t* state,
     // For X on qubit q: pair states that differ only in bit q
     // ⟨X⟩ = 2 * Re(Σ conj(a_i) * a_{i XOR (1<<q)})
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     int is_partition = partition_is_partition_qubit(state, qubit);
     int rank = mpi_get_rank(state->dist_ctx);
 
@@ -770,6 +835,11 @@ collective_error_t collective_expectation_y(const partitioned_state_t* state,
     // ⟨Y⟩ = 2 * Im(Σ conj(a_i) * a_{i XOR (1<<q)})
     // Similar to X but take imaginary part
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     int is_partition = partition_is_partition_qubit(state, qubit);
     int rank = mpi_get_rank(state->dist_ctx);
 
@@ -831,6 +901,11 @@ collective_error_t collective_expectation_pauli(const partitioned_state_t* state
     size_t len = strlen(pauli_string);
     if (len != state->num_qubits) {
         return COLLECTIVE_ERROR_INVALID_ARG;
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // For product of Pauli operators:
@@ -943,6 +1018,11 @@ collective_error_t collective_correlation_zz(const partitioned_state_t* state,
     // ⟨Z_i Z_j⟩ = P(same) - P(different)
     // where P(same) = P(00) + P(11), P(different) = P(01) + P(10)
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     int i_partition = partition_is_partition_qubit(state, qubit_i);
     int j_partition = partition_is_partition_qubit(state, qubit_j);
     int rank = mpi_get_rank(state->dist_ctx);
@@ -993,6 +1073,11 @@ collective_error_t collective_fidelity(const partitioned_state_t* state1,
 
     if (state1->num_qubits != state2->num_qubits) {
         return COLLECTIVE_ERROR_INVALID_ARG;
+    }
+
+    // Refresh both host buffers from their GPU shards before reading.
+    if (!collective_shard_to_host(state1) || !collective_shard_to_host(state2)) {
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // F = |⟨ψ|φ⟩|²
@@ -1062,6 +1147,12 @@ collective_error_t collective_entanglement_entropy(const partitioned_state_t* st
             return COLLECTIVE_ERROR_NOT_INITIALIZED;
         }
         subsystem_mask |= (1ULL << subsystem_qubits[i]);
+    }
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        *entropy = 0.0;
+        return COLLECTIVE_ERROR_MPI;
     }
 
     // Allocate reduced density matrix (complex, dim_A x dim_A)
@@ -1362,6 +1453,11 @@ collective_error_t collective_top_k_states(const partitioned_state_t* state,
         return COLLECTIVE_ERROR_NOT_INITIALIZED;
     }
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) {
+        return COLLECTIVE_ERROR_MPI;
+    }
+
     // Find local top-k
     typedef struct { uint64_t state; double prob; } state_prob_t;
 
@@ -1462,6 +1558,8 @@ collective_error_t collective_qrng_bits(partitioned_state_t* state,
     for (uint32_t i = 0; i < num_bits; i++) {
         // Prepare superposition
         partition_init_zero(state);
+        // Host init must be pushed to the GPU shard before GPU-aware gates.
+        if (!collective_shard_from_host(state)) return COLLECTIVE_ERROR_MPI;
         dist_hadamard(state, 0);
 
         // Measure
@@ -1488,6 +1586,8 @@ collective_error_t collective_qrng_bytes(partitioned_state_t* state,
     for (uint32_t b = 0; b < num_bytes; b++) {
         // Prepare all-superposition state
         partition_init_zero(state);
+        // Host init must be pushed to the GPU shard before GPU-aware gates.
+        if (!collective_shard_from_host(state)) return COLLECTIVE_ERROR_MPI;
         for (uint32_t q = 0; q < bits_per_measurement; q++) {
             dist_hadamard(state, q);
         }
@@ -1516,6 +1616,8 @@ collective_error_t collective_qrng_uniform(partitioned_state_t* state,
 
     for (uint32_t r = 0; r < rounds && r * bits_per_round < 53; r++) {
         partition_init_zero(state);
+        // Host init must be pushed to the GPU shard before GPU-aware gates.
+        if (!collective_shard_from_host(state)) return COLLECTIVE_ERROR_MPI;
         for (uint32_t q = 0; q < bits_per_round; q++) {
             dist_hadamard(state, q);
         }
@@ -1544,6 +1646,8 @@ collective_error_t collective_create_bell_state(partitioned_state_t* state,
 
     // Initialize to |00⟩
     partition_init_zero(state);
+    // Host init must be pushed to the GPU shard before GPU-aware gates.
+    if (!collective_shard_from_host(state)) return COLLECTIVE_ERROR_MPI;
 
     // H on qubit A
     dist_gate_error_t err = dist_hadamard(state, qubit_a);
@@ -1567,6 +1671,8 @@ collective_error_t collective_create_ghz_state(partitioned_state_t* state,
 
     // Initialize to |0...0⟩
     partition_init_zero(state);
+    // Host init must be pushed to the GPU shard before GPU-aware gates.
+    if (!collective_shard_from_host(state)) return COLLECTIVE_ERROR_MPI;
 
     // H on first qubit
     dist_gate_error_t err = dist_hadamard(state, qubits[0]);
@@ -1639,6 +1745,9 @@ void collective_print_state(const partitioned_state_t* state,
                            double threshold) {
     if (!state) return;
 
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) return;
+
     int rank = mpi_get_rank(state->dist_ctx);
 
     // Each rank prints its non-zero amplitudes
@@ -1668,6 +1777,9 @@ void collective_print_state(const partitioned_state_t* state,
 int collective_verify_normalized(const partitioned_state_t* state,
                                  double tolerance) {
     if (!state) return 0;
+
+    // Refresh the host buffer from the GPU shard before reading it.
+    if (!collective_shard_to_host(state)) return 0;
 
     double norm_sq;
     partition_error_t err = partition_global_norm_sq(state, &norm_sq);
