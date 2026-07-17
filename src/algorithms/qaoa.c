@@ -485,10 +485,16 @@ qaoa_solver_t* qaoa_solver_create(
         return NULL;
     }
     
-    // Initialize parameters: γ ∈ [0,π], β ∈ [0,π]
+    // Initialize parameters: γ ∈ [0,π], β ∈ [0,π], drawn from the solver's
+    // entropy context rather than the process-global rand().
     for (size_t i = 0; i < num_layers; i++) {
-        solver->current_gamma[i] = ((double)rand() / RAND_MAX) * M_PI;
-        solver->current_beta[i] = ((double)rand() / RAND_MAX) * M_PI;
+        double u = 0.5, v = 0.5;
+        if (entropy) {
+            quantum_entropy_get_double(entropy, &u);
+            quantum_entropy_get_double(entropy, &v);
+        }
+        solver->current_gamma[i] = u * M_PI;
+        solver->current_beta[i] = v * M_PI;
     }
     
     // Optimizer settings
@@ -693,8 +699,100 @@ double qaoa_compute_expectation(
     
     solver->total_measurements += num_samples;
     quantum_state_free(&state);
-    
+
     return energy_sum / (double)num_samples;
+}
+
+// ============================================================================
+// EXACT EXPECTATION AND ANALYTIC GRADIENT
+// ============================================================================
+
+/* Exact <H_C> from a prepared statevector: sum_z |amp(z)|^2 E(z). */
+static double qaoa_expectation_from_state(const quantum_state_t *state,
+                                          const ising_model_t *ising) {
+    double e = 0.0;
+    uint64_t dim = 1ULL << state->num_qubits;
+    for (uint64_t z = 0; z < dim; z++) {
+        double p = quantum_state_get_probability(state, z);
+        e += p * ising_model_evaluate(ising, z);
+    }
+    return e;
+}
+
+double qaoa_expectation_exact(qaoa_solver_t *solver,
+                              const double *gamma,
+                              const double *beta) {
+    if (!solver || !gamma || !beta) return QAOA_ENERGY_SENTINEL;
+
+    quantum_state_t state;
+    if (quantum_state_init(&state, solver->ising->num_qubits) != QS_SUCCESS) {
+        return QAOA_ENERGY_SENTINEL;
+    }
+    if (qaoa_apply_circuit(&state, solver->ising, gamma, beta,
+                           solver->config.num_layers) != QS_SUCCESS) {
+        quantum_state_free(&state);
+        return QAOA_ENERGY_SENTINEL;
+    }
+    double e = qaoa_expectation_from_state(&state, solver->ising);
+    quantum_state_free(&state);
+    return e;
+}
+
+/* Insertion spec for a single-term parameter shift. */
+typedef enum { QAOA_INS_ZZ = 0, QAOA_INS_Z = 1, QAOA_INS_X = 2 } qaoa_ins_type_t;
+
+/* Apply exp(-i*angle*g) for the shifted generator g, reusing the same gate
+ * decompositions as the cost/mixer layers (CNOT.RZ(2*angle).CNOT = exp(-i*angle*ZZ),
+ * RZ(2*angle) = exp(-i*angle*Z), RX(2*angle) = exp(-i*angle*X)). */
+static void qaoa_apply_insert(quantum_state_t *state, qaoa_ins_type_t type,
+                              int qi, int qj, double angle) {
+    switch (type) {
+        case QAOA_INS_ZZ:
+            gate_cnot(state, (size_t)qi, (size_t)qj);
+            gate_rz(state, (size_t)qj, 2.0 * angle);
+            gate_cnot(state, (size_t)qi, (size_t)qj);
+            break;
+        case QAOA_INS_Z:
+            gate_rz(state, (size_t)qi, 2.0 * angle);
+            break;
+        case QAOA_INS_X:
+            gate_rx(state, (size_t)qi, 2.0 * angle);
+            break;
+    }
+}
+
+/* Exact expectation of the QAOA circuit with one extra single-term rotation
+ * exp(-i*angle*g) inserted after the cost layer (stage 0) or mixer layer
+ * (stage 1) of layer `ins_layer`.  All generators within a cost (or mixer)
+ * layer commute, so inserting after the whole layer is equivalent to shifting
+ * that single term's angle -- the basis of the per-term parameter shift. */
+static double qaoa_expectation_insert(qaoa_solver_t *solver,
+                                      const double *gamma, const double *beta,
+                                      int stage, size_t ins_layer,
+                                      qaoa_ins_type_t type, int qi, int qj,
+                                      double angle) {
+    quantum_state_t state;
+    if (quantum_state_init(&state, solver->ising->num_qubits) != QS_SUCCESS) {
+        return QAOA_ENERGY_SENTINEL;
+    }
+    const ising_model_t *ising = solver->ising;
+    size_t num_layers = solver->config.num_layers;
+
+    quantum_state_reset(&state);
+    for (size_t q = 0; q < state.num_qubits; q++) gate_hadamard(&state, q);
+
+    for (size_t layer = 0; layer < num_layers; layer++) {
+        qaoa_apply_cost_hamiltonian(&state, ising, gamma[layer]);
+        if (stage == 0 && layer == ins_layer)
+            qaoa_apply_insert(&state, type, qi, qj, angle);
+        qaoa_apply_mixer_hamiltonian(&state, beta[layer]);
+        if (stage == 1 && layer == ins_layer)
+            qaoa_apply_insert(&state, type, qi, qj, angle);
+    }
+
+    double e = qaoa_expectation_from_state(&state, ising);
+    quantum_state_free(&state);
+    return e;
 }
 
 // ============================================================================
@@ -876,52 +974,80 @@ int qaoa_compute_gradient(
     double *grad_gamma,
     double *grad_beta
 ) {
-    /**
-     * PARAMETER SHIFT RULE FOR QAOA (EXACT)
-     * 
-     * ∂⟨H⟩/∂γₖ = [⟨H⟩(γₖ+π/2) - ⟨H⟩(γₖ-π/2)] / 2
-     * ∂⟨H⟩/∂βₖ = [⟨H⟩(βₖ+π/2) - ⟨H⟩(βₖ-π/2)] / 2
+    /*
+     * EXACT ANALYTIC GRADIENT (per-term parameter shift).
+     *
+     * A QAOA layer parameter multiplies a sum of commuting +-1-eigenvalue
+     * Pauli generators, so a single global +-pi/2 shift on the layer parameter
+     * is NOT the gradient.  Instead differentiate each term individually.  For
+     * a gate exp(-i*theta*g) with g^2 = I the exact derivative is
+     *   d<H>/d theta = f(theta + pi/4) - f(theta - pi/4),
+     * where f is the exact statevector expectation and the shift inserts
+     * exp(-i*(+-pi/4)*g) for that one term.  The layer parameter gradient is the
+     * coefficient-weighted sum of these per-term contributions.
      */
-    
+
     if (!solver || !gamma || !beta || !grad_gamma || !grad_beta) {
         return -1;
     }
-    
+
+    const ising_model_t *ising = solver->ising;
     size_t num_layers = solver->config.num_layers;
-    double *gamma_shifted = malloc(num_layers * sizeof(double));
-    double *beta_shifted = malloc(num_layers * sizeof(double));
-    
-    memcpy(gamma_shifted, gamma, num_layers * sizeof(double));
-    memcpy(beta_shifted, beta, num_layers * sizeof(double));
-    
-    // Gradient for each gamma parameter
-    for (size_t k = 0; k < num_layers; k++) {
-        gamma_shifted[k] = gamma[k] + M_PI / 2.0;
-        double energy_plus = qaoa_compute_expectation(solver, gamma_shifted, beta);
-        
-        gamma_shifted[k] = gamma[k] - M_PI / 2.0;
-        double energy_minus = qaoa_compute_expectation(solver, gamma_shifted, beta);
-        
-        grad_gamma[k] = (energy_plus - energy_minus) / 2.0;
-        gamma_shifted[k] = gamma[k];  // Restore
+    size_t nq = ising->num_qubits;
+    const double s = M_PI / 4.0;   // shift for the exp(-i*theta*g) convention
+
+    for (size_t L = 0; L < num_layers; L++) {
+        // ---- gamma_L: cost layer H_C = sum J_ij Z_iZ_j + sum h_i Z_i ----
+        double g_gamma = 0.0;
+
+        for (size_t i = 0; i < nq; i++) {
+            for (size_t j = i + 1; j < nq; j++) {
+                double J = ising->J[i][j];
+                if (J == 0.0) continue;
+                double fp = qaoa_expectation_insert(solver, gamma, beta, 0, L,
+                                                    QAOA_INS_ZZ, (int)i, (int)j, +s);
+                double fm = qaoa_expectation_insert(solver, gamma, beta, 0, L,
+                                                    QAOA_INS_ZZ, (int)i, (int)j, -s);
+                if (fp == QAOA_ENERGY_SENTINEL || fm == QAOA_ENERGY_SENTINEL) return -1;
+                g_gamma += J * (fp - fm);
+            }
+        }
+        for (size_t i = 0; i < nq; i++) {
+            double h = ising->h[i];
+            if (h == 0.0) continue;
+            double fp = qaoa_expectation_insert(solver, gamma, beta, 0, L,
+                                                QAOA_INS_Z, (int)i, 0, +s);
+            double fm = qaoa_expectation_insert(solver, gamma, beta, 0, L,
+                                                QAOA_INS_Z, (int)i, 0, -s);
+            if (fp == QAOA_ENERGY_SENTINEL || fm == QAOA_ENERGY_SENTINEL) return -1;
+            g_gamma += h * (fp - fm);
+        }
+        grad_gamma[L] = g_gamma;
+
+        // ---- beta_L: mixer H_M = sum X_i (each coefficient 1) ----
+        double g_beta = 0.0;
+        for (size_t i = 0; i < nq; i++) {
+            double fp = qaoa_expectation_insert(solver, gamma, beta, 1, L,
+                                                QAOA_INS_X, (int)i, 0, +s);
+            double fm = qaoa_expectation_insert(solver, gamma, beta, 1, L,
+                                                QAOA_INS_X, (int)i, 0, -s);
+            if (fp == QAOA_ENERGY_SENTINEL || fm == QAOA_ENERGY_SENTINEL) return -1;
+            g_beta += (fp - fm);
+        }
+        grad_beta[L] = g_beta;
     }
-    
-    // Gradient for each beta parameter
-    for (size_t k = 0; k < num_layers; k++) {
-        beta_shifted[k] = beta[k] + M_PI / 2.0;
-        double energy_plus = qaoa_compute_expectation(solver, gamma, beta_shifted);
-        
-        beta_shifted[k] = beta[k] - M_PI / 2.0;
-        double energy_minus = qaoa_compute_expectation(solver, gamma, beta_shifted);
-        
-        grad_beta[k] = (energy_plus - energy_minus) / 2.0;
-        beta_shifted[k] = beta[k];  // Restore
-    }
-    
-    free(gamma_shifted);
-    free(beta_shifted);
-    
+
     return 0;
+}
+
+void qaoa_result_free(qaoa_result_t *result) {
+    if (!result) return;
+    free(result->energy_history);
+    free(result->optimal_gamma);
+    free(result->optimal_beta);
+    result->energy_history = NULL;
+    result->optimal_gamma = NULL;
+    result->optimal_beta = NULL;
 }
 
 // ============================================================================

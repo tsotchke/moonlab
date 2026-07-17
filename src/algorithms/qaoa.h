@@ -352,6 +352,25 @@ MOONLAB_API double qaoa_compute_expectation(
 );
 
 /**
+ * @brief Exact cost expectation from the statevector (no sampling).
+ *
+ * ⟨H_C⟩(γ,β) = Σ_z |⟨z|ψ(γ,β)⟩|² E(z), computed deterministically from the
+ * prepared statevector.  Unlike ::qaoa_compute_expectation (which averages
+ * measurement samples), this returns the exact value and is what the exact
+ * analytic gradient (::qaoa_compute_gradient) differentiates.
+ *
+ * @param solver QAOA solver
+ * @param gamma Cost Hamiltonian angles
+ * @param beta Mixer Hamiltonian angles
+ * @return Exact expected cost energy, or QAOA_ENERGY_SENTINEL on error
+ */
+MOONLAB_API double qaoa_expectation_exact(
+    qaoa_solver_t *solver,
+    const double *gamma,
+    const double *beta
+);
+
+/**
  * @brief Execute QAOA optimization
  * 
  * Main QAOA algorithm:
@@ -426,11 +445,20 @@ MOONLAB_API qs_error_t qaoa_apply_mixer_hamiltonian(
 // ============================================================================
 
 /**
- * @brief Compute gradient of energy with respect to QAOA parameters
- * 
- * Uses parameter shift rule for exact gradients:
- * ∂⟨H⟩/∂γₖ = [⟨H⟩(γₖ+π/2) - ⟨H⟩(γₖ-π/2)] / 2
- * 
+ * @brief Exact analytic gradient of the cost expectation w.r.t. QAOA parameters
+ *
+ * Each QAOA layer parameter multiplies a sum of commuting ±1-eigenvalue Pauli
+ * generators (H_C = Σ J_ij Z_iZ_j + Σ h_i Z_i for γ; H_M = Σ X_i for β).  The
+ * exact gradient is the sum of per-term parameter-shift contributions
+ *
+ *   ∂⟨H⟩/∂γ_L = Σ_t coeff_t [ f(θ_t + π/4) - f(θ_t - π/4) ]
+ *
+ * where f is the exact statevector expectation (::qaoa_expectation_exact) and
+ * the shift is applied to one term's generator at a time.  This is exact (a
+ * single global π/2 shift on the layer parameter is not, because the generator
+ * is a weighted multi-term sum), and matches central differences of
+ * qaoa_expectation_exact to numerical precision.
+ *
  * @param solver QAOA solver
  * @param gamma Cost angles
  * @param beta Mixer angles
@@ -514,6 +542,17 @@ MOONLAB_API double qaoa_approximation_ratio(
  * @param result QAOA result
  */
 MOONLAB_API void qaoa_print_result(const qaoa_result_t *result);
+
+/**
+ * @brief Release the heap arrays owned by a qaoa_result_t.
+ *
+ * qaoa_solve returns a qaoa_result_t by value that owns energy_history,
+ * optimal_gamma, and optimal_beta.  This frees those buffers and zeroes the
+ * pointers; it does not free the struct itself (it is caller-owned / stack).
+ *
+ * @param result QAOA result whose owned arrays should be freed (may be NULL)
+ */
+MOONLAB_API void qaoa_result_free(qaoa_result_t *result);
 
 /**
  * @brief Convert bitstring to binary array

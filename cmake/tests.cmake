@@ -184,6 +184,12 @@
     target_link_libraries(test_qaoa PRIVATE quantumsim)
     add_test(NAME unit_qaoa COMMAND test_qaoa)
 
+    # QAOA exact analytic gradient vs central difference of the exact
+    # (statevector) expectation, over ZZ + Z + mixer terms and two layers.
+    add_executable(test_qaoa_gradient tests/unit/test_qaoa_gradient.c)
+    target_link_libraries(test_qaoa_gradient PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qaoa_gradient COMMAND test_qaoa_gradient)
+
     # QPE phase-recovery smoke.
     add_executable(test_qpe tests/unit/test_qpe.c)
     target_link_libraries(test_qpe PRIVATE quantumsim)
@@ -1565,7 +1571,7 @@
         unit_clifford unit_clifford_pauli_api unit_pauli_frame
         unit_surface_code_clifford)
     qsim_label_tests(algorithms
-        unit_grover unit_qaoa unit_qpe unit_vqe unit_chemistry
+        unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe unit_chemistry
         unit_quantum_volume unit_kagome_ed unit_kagome_ed_large
         unit_shor_ecdlp unit_differentiable unit_mbl unit_mbl_smoke
         differentiable)
