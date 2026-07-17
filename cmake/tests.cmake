@@ -341,6 +341,17 @@
     add_test(NAME unit_tdvp_adaptive_second_svd
              COMMAND test_tdvp_adaptive_second_svd)
 
+    # Real-time projector-splitting TDVP validation: two-site analytic Rabi
+    # (<Z>(t) = cos(2ht)) and a three-site TFIM quench whose total
+    # magnetization and energy are checked against a dense RK4 reference.
+    # The three-site case exercises the backward one-site sub-step and the
+    # sweep turning points that distinguish genuine 2TDVP from the previous
+    # forward-only integrator.
+    add_executable(test_tdvp_validation tests/unit/test_tdvp_validation.c)
+    target_link_libraries(test_tdvp_validation PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_tdvp_validation COMMAND test_tdvp_validation)
+    set_tests_properties(unit_tdvp_validation PROPERTIES TIMEOUT 120)
+
     # CA-MPS bond-dimension advantage: a random Clifford circuit on n qubits
     # produces a stabilizer state that plain MPS needs bond dim ~2^(n/2) to
     # represent, while CA-MPS factors it entirely into the tableau so the
@@ -1513,7 +1524,7 @@
     qsim_label_tests(tn
         unit_tensor_network unit_tn_dead_code_smoke
         unit_tn_mps_from_statevector tensor_adversarial dmrg
-        mps_vs_exact unit_lattice_2d)
+        mps_vs_exact unit_lattice_2d unit_tdvp_validation)
     qsim_label_tests(ca_mps
         unit_ca_mps_bond_advantage unit_ca_mps_heisenberg
         unit_ca_mps_imag_time unit_ca_mps_kagome12 unit_ca_mps_limits
