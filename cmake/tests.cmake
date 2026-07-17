@@ -1556,4 +1556,39 @@
         example_phase3_phase4_benchmark example_qaoa_maxcut
         example_quantum_spin_chain_small example_vqe_h2_molecule)
 
+    # ==========================================================================
+    # Adversarial oracle matrix (.swarm/ADVERSARIAL_TESTING_CAMPAIGN.md).
+    # Generative, seed-deterministic cross-checks that make an incomplete or
+    # silently-wrong release impossible to ship. Fast by construction (full
+    # `ctest -L oracle` run < 2 min) so they stay in every default lane.
+    #
+    # Each binary is KNOWN_FAILURES-aware: a run whose only failures are
+    # allowlisted in tests/oracle/KNOWN_FAILURES.txt exits 0 (XFAIL). The path
+    # to the allowlist is baked in here and can be overridden at run time with
+    # MOONLAB_ORACLE_KNOWN_FAILURES. scripts/run_moonlab_oracles.sh translates
+    # per-pillar results into kind:"moonlab_oracle" trace events for ICC.
+    #
+    # The corpus header tests/oracle/corpus/circuit_corpus.h is a checked-in
+    # default (seed 20260717); regenerate with scripts/gen_circuit_corpus.py.
+    # ==========================================================================
+    set(_oracle_kf "${CMAKE_CURRENT_SOURCE_DIR}/tests/oracle/KNOWN_FAILURES.txt")
+    foreach(_oracle_case IN ITEMS
+            backend_differential:test_backend_differential
+            gradient:test_gradient_oracle
+            measurement_statistics:test_measurement_oracle
+            edge_matrix:test_edge_matrix
+            property_invariants:test_property_invariants)
+        string(REPLACE ":" ";" _oc_pair "${_oracle_case}")
+        list(GET _oc_pair 0 _oc_name)
+        list(GET _oc_pair 1 _oc_src)
+        add_executable(${_oc_src} tests/oracle/${_oc_src}.c)
+        target_link_libraries(${_oc_src} PRIVATE quantumsim ${MATH_LIBRARY})
+        target_compile_definitions(${_oc_src} PRIVATE
+            ORACLE_KNOWN_FAILURES_PATH=\"${_oracle_kf}\")
+        add_test(NAME oracle_${_oc_name} COMMAND ${_oc_src})
+        set_tests_properties(oracle_${_oc_name} PROPERTIES
+            LABELS "oracle"
+            TIMEOUT 120)
+    endforeach()
+
     message(STATUS "Tests: Enabled")
