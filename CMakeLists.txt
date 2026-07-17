@@ -727,6 +727,7 @@ set(QSIM_BACKEND_SOURCES
 
 set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/grover.c
+    src/algorithms/grover_optimizer.c
     src/algorithms/quantum_rng.c
     src/algorithms/bell_tests.c
     src/algorithms/qaoa.c
