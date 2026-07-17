@@ -350,61 +350,58 @@ pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance) {
     double r = bond_distance;
     double r_eq = 1.5949;
     
-    if (fabs(r - r_eq) < 0.01) {
-        // EXACT coefficients at equilibrium (from quantum chemistry)
-        size_t idx = 0;
-        
-        // Identity (electronic energy offset)
-        pauli_hamiltonian_add_term(h, -7.8823620, "IIII", idx++);
-        
-        // One-body terms (orbital energies)
-        pauli_hamiltonian_add_term(h,  0.2252416,  "ZIII", idx++);
-        pauli_hamiltonian_add_term(h,  0.2252416,  "IZII", idx++);
-        pauli_hamiltonian_add_term(h,  0.3435878,  "IIZI", idx++);
-        pauli_hamiltonian_add_term(h,  0.3435878,  "IIIZ", idx++);
-        
-        // Two-body Z terms (Coulomb interactions)
-        pauli_hamiltonian_add_term(h,  0.1721398,  "ZZII", idx++);
-        pauli_hamiltonian_add_term(h,  0.1661047,  "IZZI", idx++);
-        pauli_hamiltonian_add_term(h,  0.1742832,  "IIZZ", idx++);
-        pauli_hamiltonian_add_term(h,  0.1205336,  "ZIZI", idx++);
-        pauli_hamiltonian_add_term(h,  0.1658224,  "ZIIZ", idx++);
-        pauli_hamiltonian_add_term(h,  0.1205336,  "IZIZ", idx++);
-        
-        // Exchange terms (XX + YY)
-        pauli_hamiltonian_add_term(h,  0.0454063,  "XXII", idx++);
-        pauli_hamiltonian_add_term(h,  0.0454063,  "YYII", idx++);
-        pauli_hamiltonian_add_term(h,  0.0454063,  "IXXI", idx++);
-        pauli_hamiltonian_add_term(h,  0.0454063,  "IYYI", idx++);
-        pauli_hamiltonian_add_term(h,  0.0454063,  "IIXX", idx++);
-        pauli_hamiltonian_add_term(h,  0.0454063,  "IIYY", idx++);
-        
-        // Additional correlation terms
-        pauli_hamiltonian_add_term(h,  0.0334067,  "XXZZ", idx++);
-        pauli_hamiltonian_add_term(h,  0.0334067,  "YYZZ", idx++);
-        pauli_hamiltonian_add_term(h,  0.0251442,  "ZZXX", idx++);
-        pauli_hamiltonian_add_term(h,  0.0251442,  "ZZYY", idx++);
-        
-        h->nuclear_repulsion = 0.9953800;
-        h->num_terms = idx;  // Actual number of terms added
-        
-    } else {
-        // Scale for other geometries using exponential decay
-        double scale = exp(-1.2 * fabs(r - r_eq));
-        size_t idx = 0;
-        
-        pauli_hamiltonian_add_term(h, -7.8823620 * (1.0 + 0.5*(1-scale)), "IIII", idx++);
-        pauli_hamiltonian_add_term(h,  0.2252416 * scale,  "ZIII", idx++);
-        pauli_hamiltonian_add_term(h,  0.2252416 * scale,  "IZII", idx++);
-        pauli_hamiltonian_add_term(h,  0.3435878 * scale,  "IIZI", idx++);
-        pauli_hamiltonian_add_term(h,  0.3435878 * scale,  "IIIZ", idx++);
-        pauli_hamiltonian_add_term(h,  0.1721398 * scale,  "ZZII", idx++);
-        pauli_hamiltonian_add_term(h,  0.1661047 * scale,  "IZZI", idx++);
-        pauli_hamiltonian_add_term(h,  0.1742832 * scale,  "IIZZ", idx++);
-        
-        h->nuclear_repulsion = 0.9953800 * (r_eq / r);
-        h->num_terms = idx;
-    }
+    // Smooth, differentiable geometry dependence.
+    //
+    // The previous construction used the exact equilibrium coefficients on a
+    // flat +/-0.01 A plateau (zero force there), then an else branch that both
+    // scaled by exp(-1.2*fabs(r - r_eq)) -- a kink at the plateau edge -- AND
+    // silently dropped 13 of the 21 terms, so the Hamiltonian STRUCTURE changed
+    // discontinuously off equilibrium.  All three break a geometry derivative.
+    //
+    // Use a single smooth path for every r: a Gaussian envelope s(r) that is
+    // exactly 1 (with zero slope) at equilibrium, applied to the full term set,
+    // so the equilibrium Hamiltonian is unchanged and the coefficients vary
+    // smoothly (C-infinity) away from it.  NOTE: unlike H2, these LiH
+    // coefficients are reference values with an empirical envelope -- this fixes
+    // differentiability/continuity, not first-principles accuracy.  A genuine
+    // STO-3G LiH surface (Li 2s/2p integrals + active-space reduction) is a
+    // follow-up.
+    double s = exp(-1.2 * (r - r_eq) * (r - r_eq));
+    size_t idx = 0;
+
+    // Identity (electronic energy offset)
+    pauli_hamiltonian_add_term(h, -7.8823620 * (1.0 + 0.5 * (1.0 - s)), "IIII", idx++);
+
+    // One-body terms (orbital energies)
+    pauli_hamiltonian_add_term(h,  0.2252416 * s, "ZIII", idx++);
+    pauli_hamiltonian_add_term(h,  0.2252416 * s, "IZII", idx++);
+    pauli_hamiltonian_add_term(h,  0.3435878 * s, "IIZI", idx++);
+    pauli_hamiltonian_add_term(h,  0.3435878 * s, "IIIZ", idx++);
+
+    // Two-body Z terms (Coulomb interactions)
+    pauli_hamiltonian_add_term(h,  0.1721398 * s, "ZZII", idx++);
+    pauli_hamiltonian_add_term(h,  0.1661047 * s, "IZZI", idx++);
+    pauli_hamiltonian_add_term(h,  0.1742832 * s, "IIZZ", idx++);
+    pauli_hamiltonian_add_term(h,  0.1205336 * s, "ZIZI", idx++);
+    pauli_hamiltonian_add_term(h,  0.1658224 * s, "ZIIZ", idx++);
+    pauli_hamiltonian_add_term(h,  0.1205336 * s, "IZIZ", idx++);
+
+    // Exchange terms (XX + YY)
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "XXII", idx++);
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "YYII", idx++);
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "IXXI", idx++);
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "IYYI", idx++);
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "IIXX", idx++);
+    pauli_hamiltonian_add_term(h,  0.0454063 * s, "IIYY", idx++);
+
+    // Additional correlation terms
+    pauli_hamiltonian_add_term(h,  0.0334067 * s, "XXZZ", idx++);
+    pauli_hamiltonian_add_term(h,  0.0334067 * s, "YYZZ", idx++);
+    pauli_hamiltonian_add_term(h,  0.0251442 * s, "ZZXX", idx++);
+    pauli_hamiltonian_add_term(h,  0.0251442 * s, "ZZYY", idx++);
+
+    h->nuclear_repulsion = 0.9953800 * (r_eq / r);
+    h->num_terms = idx;
     
     return h;
 }
