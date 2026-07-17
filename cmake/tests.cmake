@@ -1676,24 +1676,30 @@
     # The corpus header tests/oracle/corpus/circuit_corpus.h is a checked-in
     # default (seed 20260717); regenerate with scripts/gen_circuit_corpus.py.
     # ==========================================================================
-    set(_oracle_kf "${CMAKE_CURRENT_SOURCE_DIR}/tests/oracle/KNOWN_FAILURES.txt")
-    foreach(_oracle_case IN ITEMS
-            backend_differential:test_backend_differential
-            gradient:test_gradient_oracle
-            measurement_statistics:test_measurement_oracle
-            edge_matrix:test_edge_matrix
-            property_invariants:test_property_invariants)
-        string(REPLACE ":" ";" _oc_pair "${_oracle_case}")
-        list(GET _oc_pair 0 _oc_name)
-        list(GET _oc_pair 1 _oc_src)
-        add_executable(${_oc_src} tests/oracle/${_oc_src}.c)
-        target_link_libraries(${_oc_src} PRIVATE quantumsim ${MATH_LIBRARY})
-        target_compile_definitions(${_oc_src} PRIVATE
-            ORACLE_KNOWN_FAILURES_PATH=\"${_oracle_kf}\")
-        add_test(NAME oracle_${_oc_name} COMMAND ${_oc_src})
-        set_tests_properties(oracle_${_oc_name} PROPERTIES
-            LABELS "oracle"
-            TIMEOUT 120)
-    endforeach()
+    # The oracle harness uses C99 _Complex and libc math corners that
+    # clang-cl/UCRT does not carry; it is a Linux/macOS dev+CI tool, not part of
+    # the shipped Windows artifact. Skip on Windows (the differential/statistical
+    # subdirs are gated the same way in the root CMakeLists).
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        set(_oracle_kf "${CMAKE_CURRENT_SOURCE_DIR}/tests/oracle/KNOWN_FAILURES.txt")
+        foreach(_oracle_case IN ITEMS
+                backend_differential:test_backend_differential
+                gradient:test_gradient_oracle
+                measurement_statistics:test_measurement_oracle
+                edge_matrix:test_edge_matrix
+                property_invariants:test_property_invariants)
+            string(REPLACE ":" ";" _oc_pair "${_oracle_case}")
+            list(GET _oc_pair 0 _oc_name)
+            list(GET _oc_pair 1 _oc_src)
+            add_executable(${_oc_src} tests/oracle/${_oc_src}.c)
+            target_link_libraries(${_oc_src} PRIVATE quantumsim ${MATH_LIBRARY})
+            target_compile_definitions(${_oc_src} PRIVATE
+                ORACLE_KNOWN_FAILURES_PATH=\"${_oracle_kf}\")
+            add_test(NAME oracle_${_oc_name} COMMAND ${_oc_src})
+            set_tests_properties(oracle_${_oc_name} PROPERTIES
+                LABELS "oracle"
+                TIMEOUT 120)
+        endforeach()
+    endif()
 
     message(STATUS "Tests: Enabled")

@@ -1623,10 +1623,16 @@ endif()
 
 if(QSIM_BUILD_TESTS)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
-    # Statistical + crypto-adversarial batteries (self-contained subdir).
-    add_subdirectory(tests/statistical)
-    # Cross-backend / cross-binding differential vs an independent reference.
-    add_subdirectory(tests/differential)
+    # Adversarial suites use POSIX sockets/pthreads, a numpy-generated corpus,
+    # and libc math corners that clang-cl/UCRT does not provide; they are
+    # Linux/macOS dev+CI tools, not part of the shipped Windows artifact (which
+    # is the library + its ABI/core numerics). Skip them on Windows.
+    if(NOT QSIM_PLATFORM_WINDOWS)
+        # Statistical + crypto-adversarial batteries (self-contained subdir).
+        add_subdirectory(tests/statistical)
+        # Cross-backend / cross-binding differential vs an independent reference.
+        add_subdirectory(tests/differential)
+    endif()
 endif()
 
 # Coverage-guided fuzz targets (clang + libFuzzer). Opt-in and self-contained;

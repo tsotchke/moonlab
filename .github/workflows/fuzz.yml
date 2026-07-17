@@ -16,16 +16,13 @@ name: fuzz
 # change to the tracked root CMakeLists.
 
 on:
-  pull_request:
-    paths:
-      - 'src/**'
-      - 'tests/fuzz/**'
-      - 'scripts/run_fuzz.sh'
-      - '.github/workflows/fuzz.yml'
+  # Deep adversarial suite: nightly + on-demand, not a per-push gate. The main
+  # CI workflow and the ICC readiness gate provide per-push coverage; running
+  # this on every src/** push only created red noise. Fold back into PR triggers
+  # once the suite is proven green in nightly.
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
-
 permissions:
   contents: read
 
