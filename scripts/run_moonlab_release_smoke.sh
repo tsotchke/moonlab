@@ -79,7 +79,9 @@ check_asan() {
     || { emit asan_ubsan_clean FAIL "configure failed"; return; }
   cmake --build "$ASAN_DIR" --parallel "$JOBS" >/dev/null 2>&1 \
     || { emit asan_ubsan_clean FAIL "build failed"; return; }
-  local out; out="$(ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
+  # LeakSanitizer is unsupported on Darwin; detect_leaks=1 aborts every test at
+  # init there. Match CI (detect_leaks=0): the gate is for UAF/OOB/UB, not leaks.
+  local out; out="$(ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
       ctest --test-dir "$ASAN_DIR" -L "core|tn|ca_mps|algorithms" \
       -LE "long|memory_heavy" --timeout 600 -j"$JOBS" 2>&1)"
   if printf '%s' "$out" | grep -q '100% tests passed'; then
@@ -202,7 +204,10 @@ check_examples
 check_versions
 check_ctest_gate bindings_suites_green    'python_bindings|rust_bindings|js_'
 check_ctest_gate mpi_sharded_gpu_works    'sharded_gpu|multigpu|partition_gpu'
-check_ctest_gate qrng_certification_wired 'qrng_di|qrng_cert|bell_epoch'
+# Must match a test that proves DI certification is consumed by the delivered
+# byte stream (bell_epoch_certified reflects real per-epoch certification), not
+# the pre-existing unit_qrng_di which only exercises the isolated DI math.
+check_ctest_gate qrng_certification_wired 'qrng_bell_certified_output|qrng_certified_delivery|bell_epoch_certified'
 check_ctest_gate mlkem_official_kat       'mlkem_acvp|mlkem_official'
 
 echo "== $FAILS high-severity check(s) FAILing =="
