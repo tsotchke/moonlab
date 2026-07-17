@@ -1,8 +1,11 @@
-# Stable ABI contract -- v1.0
+# Stable ABI contract -- v1.x
+
+**Current package:** 1.1.0
+**Current ABI:** 0.5.0
 
 ## Scope
 
-This document defines what moonlab v1.0 guarantees to consumers of
+This document defines what MoonLab 1.x guarantees to consumers of
 the C library (the FFI surface) and to consumers of the four binding
 languages (Python / Rust / JS / wire protocol).
 
@@ -27,31 +30,32 @@ The same guarantees apply transitively to the Python / Rust / JS
 binding surfaces, modulo idiomatic adaptation (e.g. Rust's
 `Result<T, Error>` vs C's `int` return code).
 
-### Header install namespace (v1.0 historical wart)
+### Header install namespaces
 
-Headers install into `<prefix>/include/quantumsim/` (not
-`/moonlab/`) -- a residue from the project's pre-rename name when
-the C library was called `libquantumsim`.  v1.0 keeps the
-`quantumsim/` install path so existing FFI consumers don't break;
-the `moonlab` brand applies to the project, the binding crates,
-and the public API symbols (`MOONLAB_API`, `moonlab_*`), not the
-include directory.
+The full source-shaped header tree installs into
+`<prefix>/include/quantumsim/`, a residue from the project's pre-rename name
+when the C library was called `libquantumsim`. MoonLab 1.x keeps this path so
+existing consumers do not break. The stable downstream ABI headers also
+install under `<prefix>/include/moonlab/` for new consumers.
 
 Application code includes headers as:
 
 ```c
 #include <quantumsim/quantum/state.h>
 #include <quantumsim/control/control_plane.h>
+#include <moonlab/moonlab_export.h>
 ```
 
-A migration to `<moonlab/...>` is on the v2.0 list; this is a
-v1.0 ABI-stability commitment (the include path cannot move
-inside the 1.x line).
+Neither installed namespace may move incompatibly inside the 1.x line.
 
 ## Symbol catalog by module
 
-`grep -rn "^MOONLAB_API " src/ --include="*.h"` returns 245
-declarations as of v1.0.3.  Distribution by header (highest first):
+The table below is the v1.0.3 catalog snapshot. Additive symbols landed after
+that snapshot, including `moonlab_vqe_gradient` in ABI 0.4.0 and
+`moonlab_qrng_get_status` plus the conditioned QRNG contract in ABI 0.5.0. The
+authoritative current list is every `MOONLAB_API` declaration in a public
+header; `tests/abi/test_moonlab_export_abi.c` loads and functionally smokes the
+committed export surface on Unix and Windows.
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|

@@ -1,8 +1,8 @@
 # Tutorial: Getting started
 
 This tutorial takes a fresh checkout to a running quantum simulation
-in three short steps.  All commands were verified against Moonlab
-v0.3.0 on macOS arm64 (Apple Silicon) and Ubuntu 24.04 x86_64.
+in three short steps. It targets MoonLab 1.1.0 and the same CMake build
+contract exercised by Linux, macOS, Windows x64, and Windows ARM64 CI.
 
 ## 1. Build the library
 
@@ -22,7 +22,7 @@ target by default.  Useful flags:
 | `-DQSIM_BUILD_TESTS=ON` | ON | CTest targets under `tests/` |
 | `-DQSIM_BUILD_EXAMPLES=ON` | ON | Programs under `examples/` |
 | `-DQSIM_BUILD_BENCHMARKS=ON` | ON | Programs under `benchmarks/` |
-| `-DQSIM_WERROR=ON` | OFF | Treat warnings as errors |
+| `-DQSIM_WERROR=ON` | ON | Treat warnings as errors |
 | `-DQSIM_ENABLE_SANITIZERS=ON` | OFF | ASAN + UBSAN (Debug builds) |
 | `-DQSIM_ENABLE_MPI=ON` | OFF | Distributed state-vector path |
 
@@ -32,8 +32,28 @@ After the build finishes you can run the unit tests with:
 ctest --test-dir build --output-on-failure -j
 ```
 
-A green run is 17/17 topology, plus all base subsystems (state vector,
-gates, measurement, MPS, DMRG, var-D, MPDO, QGT, QRNG, PQC).
+CTest labels let you select a subsystem (`core`, `tn`, `algorithms`, `topology`,
+`crypto`, `distributed`, `abi`, or `bindings`). For example:
+
+```sh
+ctest --test-dir build -L "core|abi" --output-on-failure -j 4
+```
+
+### Windows
+
+Windows builds require ClangCL rather than the MSVC C frontend. The supported
+driver builds, tests, packages, and verifies an external consumer:
+
+```powershell
+.\scripts\build_windows_artifact.ps1 `
+  -Arch x64 `
+  -BuildDir build-windows-x64 `
+  -Output .\dist\moonlab-local-windows-x64.zip
+```
+
+Pass `-Arch arm64` for native Windows ARM64. See
+[`docs/WINDOWS.md`](../WINDOWS.md) for the raw CMake command and release ZIP
+layout.
 
 ## 2. Your first quantum program
 
@@ -42,9 +62,9 @@ single-qubit superposition with the Hadamard gate `H` and verifies
 the resulting probability distribution against the Born rule:
 
 ```c
-#include "moonlab/quantum/state.h"
-#include "moonlab/quantum/gates.h"
-#include "moonlab/quantum/measurement.h"
+#include "quantum/state.h"
+#include "quantum/gates.h"
+#include "quantum/measurement.h"
 #include <stdio.h>
 
 int main(void) {
@@ -69,7 +89,7 @@ ASCII bar charts) lives at `examples/basic/hello_quantum.c` and is
 already built for you:
 
 ```sh
-./build/examples/basic/hello_quantum
+./build/hello_quantum
 ```
 
 ## 3. Bell pair preparation and verification
@@ -94,8 +114,9 @@ quantum_state_free(&state);
 The example program `./build/examples/basic/bell_state` extends this
 preparation with a full CHSH-inequality verification: the measured
 correlator `S` violates the classical bound `|S| <= 2` and approaches
-the Tsirelson bound `2 sqrt(2) ~= 2.828`, certifying genuine quantum
-entanglement.
+the Tsirelson bound `2 sqrt(2) ~= 2.828`.  In Moonlab this verifies that
+the simulated state and measurement path reproduce the quantum prediction;
+it is not physical-device or device-independent entanglement certification.
 
 ## 4. Where to go next
 
@@ -115,11 +136,14 @@ sibling using the bindings at `bindings/python/moonlab/`.
 ## Troubleshooting
 
 - **Link error on `libquantumsim`**: confirm your build directory
-  contains `build/libquantumsim.dylib` (macOS) or `.so` (Linux).
+  contains `build/libquantumsim.dylib` (macOS), `.so` (Linux), or
+  `build/Release/quantumsim.dll` (Windows multi-config builds).
   `cmake --install build --prefix /usr/local` puts it on the dynamic
   loader path system-wide.
 - **MPI build fails**: requires Homebrew OpenMPI or Linux MPICH;
   verify with `mpicc --version`.
+- **Windows complex-arithmetic compile errors**: delete the build directory
+  and reconfigure with the Visual Studio generator plus `-T ClangCL`.
 - **WebGPU demo doesn't load**: rebuild the WASM artefacts via
   `bindings/javascript/scripts/build_wasm.sh`; serve over `http`, not
   `file://` (Chrome/Safari refuse WebGPU on local files).

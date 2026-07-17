@@ -1,6 +1,6 @@
 # Cross-language parity matrix
 
-Coverage of moonlab capabilities across the four bindings as of v1.0.
+Coverage of Moonlab capabilities across the four bindings as of v1.1.0.
 
 | Symbol | Meaning |
 |--------|---------|
@@ -74,8 +74,8 @@ Coverage of moonlab capabilities across the four bindings as of v1.0.
 
 | Capability                              | C   | Python      | Rust              | JS                |
 |-----------------------------------------|-----|-------------|-------------------|-------------------|
-| ML-KEM-512 / 768 / 1024 (FIPS 203)      | ✅  | `algorithms.py` | ✗            | ✗                |
-| Bell-verified QRNG                      | ✅  | `algorithms.py` | ✗            | ✗                |
+| ML-KEM-512 / 768 / 1024 (FIPS 203)      | ✅  | `crypto.mlkem` | ✗             | ✗                |
+| Conditioned hybrid RNG + assurance status | ✅  | `crypto.mlkem` | ✗           | ✗                |
 | SHA3 / AES / DRBG primitives            | ✅  | ✗          | ✗                | ✗                |
 
 ## GPU + acceleration
@@ -163,19 +163,18 @@ software in CI; two (CUDA + cuQuantum) compile but await a hosted
 NVIDIA GPU.  Apple Metal builds locally on macOS hosts but isn't
 covered by CI today.
 
-## v1.0 parity gaps acknowledged
+## Current parity gaps
 
-The following parity gaps will NOT close in v1.0; they are listed
-here for transparency:
+The following parity gaps are listed for transparency:
 
 - **JS Node-only control-plane client.**  Browsers must go through the
   WebSocket gateway.
 - **MPI bindings.**  MPI state-vector is C-only because no high-level
   runtime co-hosts an MPI rank cleanly.
-- **Crypto bindings in Rust / JS.**  ML-KEM and the QRNG are C-only.
-  These can be added in v1.1 if there's demand; they're not
-  cloud-platform-critical because the control plane handles auth via
-  HMAC-SHA3 at a layer above.
+- **Crypto bindings in Rust / JS.**  ML-KEM and the conditioned hybrid RNG
+  are available through C and Python, but are not yet exposed by the Rust or
+  JavaScript bindings.  The control plane's HMAC-SHA3 authentication remains
+  independent of these convenience APIs.
 - **GPU backends in non-C bindings.**  The Metal / CUDA / OpenCL /
   Vulkan / cuQuantum / Eshkol kernels run inside the C library; you
   drive them implicitly when the Python / Rust binding calls into a

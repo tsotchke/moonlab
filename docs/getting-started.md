@@ -1,6 +1,6 @@
 # Getting started with Moonlab
 
-This is the 15-minute onboarding tutorial for Moonlab v1.0. It walks you from
+This is the 15-minute onboarding tutorial for MoonLab v1.1. It walks you from
 `git clone` to a working Bell circuit submitted via each of the four bindings
 (C / Python / Rust / JavaScript), and then shows how to run the same circuit
 through the cloud control plane.
@@ -16,35 +16,49 @@ neural networks). One simulation kernel, every language, one wire format.
 
 ## 2. Prerequisites
 
-- CMake 3.18 or newer
-- A C99 compiler (clang on macOS, gcc 9+ on Linux)
-- OpenBLAS / LAPACK (Accelerate is auto-detected on macOS)
-- Optional: Python 3.10+, Rust 1.70+, Node 18+ for the corresponding bindings
+- CMake 3.20 or newer
+- A C11 compiler (Clang on macOS, GCC 9+ on Linux, ClangCL on Windows)
+- OpenBLAS / LAPACK on Linux; Accelerate is auto-detected on macOS and
+  Windows packages use the in-tree QR/SVD fallbacks
+- Optional: Python 3.10+, Rust 1.86+, Node 18+ for the corresponding bindings
 - Optional: OpenSSL 1.1+ for TLS-wrapped control-plane transport
-- Validated on macOS (arm64, x86_64) and Linux (x86_64). Windows is unsupported.
+- Release targets: macOS (ARM64, x86-64), Linux (ARM64, x86-64), and Windows
+  (ARM64, x64). See [WINDOWS.md](WINDOWS.md) for the native toolchain contract.
 
 ## 3. Build from source (5 min)
 
 ```sh
 git clone https://github.com/tsotchke/moonlab
 cd moonlab
-cmake -B build -DQSIM_ENABLE_TLS=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-ctest --test-dir build --output-on-failure   # ~3 minutes, 114 tests
+ctest --test-dir build --output-on-failure -LE "long|memory_heavy" -j 4
 ```
 
-All 114 tests should pass. Common optional flags:
+Common optional flags:
 
 - `-DQSIM_ENABLE_MPI=ON` -- distributed state vector across MPI ranks
 - `-DQSIM_ENABLE_LIBIRREP=ON` -- link the sibling QEC + symmetry library
   (requires `LIBIRREP_ROOT` to point at a built libirrep tree)
 - `-DQSIM_ENABLE_METAL=ON` -- Metal GPU backend (macOS, on by default)
+- `-DQSIM_ENABLE_CUDA=ON` -- native CUDA state-vector backend (MoonLab 1.1)
 - `-DQSIM_ENABLE_OPENMP=ON` -- OpenMP parallel gate kernels (on by default)
 
-The build produces `build/libquantumsim.{dylib,so}`. To install system-wide:
+The build produces `build/libquantumsim.{dylib,so}` on Unix or
+`build/Release/quantumsim.dll` with a multi-config Windows generator. To
+install system-wide:
 
 ```sh
 sudo cmake --install build           # headers -> /usr/local/include/quantumsim/
+```
+
+On Windows, use the end-to-end package driver instead of the Unix command:
+
+```powershell
+.\scripts\build_windows_artifact.ps1 `
+  -Arch x64 `
+  -BuildDir build-windows-x64 `
+  -Output .\dist\moonlab-local-windows-x64.zip
 ```
 
 ## 4. Bell circuit from C
@@ -117,7 +131,7 @@ In `Cargo.toml`:
 
 ```toml
 [dependencies]
-moonlab = { path = "bindings/rust/moonlab" }
+moonlab = "1.1"
 ```
 
 In `src/main.rs`:
@@ -138,8 +152,10 @@ and return `&mut Self` for chaining; argument validation happens inside, and
 out-of-range qubits become a no-op rather than panicking. Constructors and
 queries (`new`, `prob_zero`, `entanglement_entropy`, ...) return `Result`.
 
-Set `MOONLAB_LIB_DIR=$(pwd)/build` if the binding cannot locate
-`libquantumsim` at runtime.
+The crate discovers a Homebrew/native SDK through `pkg-config quantumsim`.
+For a custom SDK, set both `MOONLAB_LIB_DIR` and `MOONLAB_INCLUDE_DIR`; when
+working in this source tree those can point to `$(pwd)/build` and
+`$(pwd)/src`, respectively.
 
 ## 7. Same circuit from JS (Node)
 

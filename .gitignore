@@ -117,3 +117,8 @@ __pycache__/
 # bindgen scratch header: build.rs writes it next to the manifest and deletes
 # it after generation; interrupted/container builds can leave it behind.
 bindings/rust/moonlab-sys/wrapper.h
+
+# ICC local telemetry (host-labeled evidence stays out of the repo)
+.icc/runtime-traces/
+.icc/dormant-applications.json
+.icc/dormant-applications-history.jsonl

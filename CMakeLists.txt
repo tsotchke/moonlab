@@ -5,7 +5,7 @@
 # Cross-platform build configuration supporting:
 # - macOS (Apple Silicon + Intel)
 # - Linux (x86_64 + ARM64)
-# - Windows (x86_64)
+# - Windows (x86_64 + ARM64, ClangCL)
 #
 # Features:
 # - SIMD auto-detection (AVX-512, AVX2, SSE2, NEON, SVE)
@@ -66,6 +66,7 @@ option(QSIM_BUILD_EXAMPLES "Build example programs" ON)
 option(QSIM_BUILD_VISUALIZATION "Build the circuit / Feynman diagram renderer module" ON)
 option(QSIM_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(QSIM_BUILD_JS_DIST "Auto-build the TS/JS dist via pnpm (enables webgpu_unified_smoke on fresh clones)" OFF)
+option(QSIM_PYTHON_WHEEL "Install only the native library into moonlab/.libs for a platform wheel" OFF)
 
 # Feature options
 option(QSIM_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
@@ -115,6 +116,7 @@ set(QSIM_SBNN_ROOT "$ENV{SBNN_ROOT}" CACHE PATH
     "Root of a SbNN source/build tree.  Expected layout: <root>/include/qec_decoder/qec_decoder.h, <root>/build/libthqcp.{a,dylib,so}.")
 option(QSIM_ENABLE_LTO "Enable Link-Time Optimization" ON)
 option(QSIM_NATIVE_ARCH "Tune Release builds for the build machine CPU (-march=native). Turn OFF for distributable artifacts so binaries run on any CPU of the target architecture; runtime SIMD dispatch is unaffected." ON)
+option(QSIM_FAST_MATH "Enable non-IEEE fast-math optimizations (may change NaN/Inf semantics)" OFF)
 option(QSIM_WERROR     "Treat warnings as errors (excludes -Wpedantic for OpenMP system headers, -Wdeprecated-declarations for Apple CLAPACK)" ON)
 option(QSIM_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (for CI / dev)" OFF)
 option(QSIM_ENABLE_COVERAGE   "Build with --coverage (gcov-compatible) for CI coverage reporting" OFF)
@@ -210,123 +212,7 @@ endif()
 
 message(STATUS "Platform: ${QSIM_PLATFORM_NAME} (${QSIM_ARCH_NAME})")
 
-# ==============================================================================
-# Compiler Detection and Flags
-# ==============================================================================
-
-# Detect compiler
-if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    set(QSIM_COMPILER_CLANG ON)
-elseif(CMAKE_C_COMPILER_ID MATCHES "GNU")
-    set(QSIM_COMPILER_GCC ON)
-elseif(CMAKE_C_COMPILER_ID MATCHES "MSVC")
-    set(QSIM_COMPILER_MSVC ON)
-endif()
-
-# Base warning flags
-set(QSIM_WARNING_FLAGS)
-if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
-    list(APPEND QSIM_WARNING_FLAGS -Wall -Wextra -Wpedantic)
-    if(QSIM_WERROR)
-        # -Werror everywhere our code is responsible.
-        #
-        # Demoted to warnings (not errors) -- categories where there is
-        # significant pre-existing accumulation in legacy code (gpu_
-        # backend.c stub plumbing, ca_mps.h vs moonlab_export.h
-        # signature drift, config.c string-literal const-handling), or
-        # where the check itself was added in gcc 15 and breaks code
-        # that compiled cleanly on gcc 13/14.
-        #
-        # Each flag is feature-detected: older gcc (11/12 on stock
-        # ubuntu-22.04 runners) doesn't know about gcc-15 -W names like
-        # -Wenum-int-mismatch and would refuse the matching -Wno-error=
-        # form with "no option '-Wenum-int-mismatch'".  CheckCCompilerFlag
-        # tries each in isolation and only appends the ones the current
-        # toolchain accepts.
-        include(CheckCCompilerFlag)
-        list(APPEND QSIM_WARNING_FLAGS -Werror)
-
-        # The base "demote to warning" set has been here since gcc 11
-        # and is also recognised by clang -- always add unconditionally.
-        list(APPEND QSIM_WARNING_FLAGS
-             -Wno-error=pedantic
-             -Wno-error=deprecated-declarations
-             -Wno-error=unused-parameter
-             -Wno-error=unused-variable
-             -Wno-error=unused-function
-             -Wno-error=unused-but-set-variable
-             -Wno-error=address)
-
-        # Newer / compiler-specific demotions -- probe before appending.
-        set(_qsim_optional_wno_error
-            enum-int-mismatch          # gcc 15: ca_mps.h vs moonlab_export.h drift
-            array-parameter            # gcc 15: mlkem uint8_t* vs uint8_t[N]
-            discarded-qualifiers       # gcc: config.c const-string init
-            switch-unreachable         # gcc: legacy default-case fall-through
-            ignored-qualifiers         # clang spelling of discarded-qualifiers
-            unused-but-set-variable    # gcc 11+: control_plane.c log_peer_buf
-            format-truncation          # gcc strict snprintf truncation
-            unknown-pragmas            # gcc: tensor.c #pragma STDC FP_CONTRACT
-            nan-infinity-disabled      # clang+ffast-math: qaoa.c INFINITY sentinel
-            strict-aliasing            # gcc: gpu_vulkan.c pointer punning
-            unused-result              # gcc: gpu_vulkan.c fread return value
-            overlength-strings         # gcc strict: gpu_opencl.c kernel source > 4095
-            missing-braces             # gcc strict: cl_float2 initializer
-            implicit-fallthrough       # preventive, in case it appears
-            address                    # already in base set on some toolchains
-            stringop-truncation        # gcc strict snprintf
-        )
-        foreach(_wname IN LISTS _qsim_optional_wno_error)
-            string(MAKE_C_IDENTIFIER "HAVE_WNO_ERROR_${_wname}" _have_var)
-            check_c_compiler_flag("-Wno-error=${_wname}" ${_have_var})
-            if(${_have_var})
-                list(APPEND QSIM_WARNING_FLAGS "-Wno-error=${_wname}")
-            endif()
-        endforeach()
-    endif()
-elseif(QSIM_COMPILER_MSVC)
-    list(APPEND QSIM_WARNING_FLAGS /W4)
-    if(QSIM_WERROR)
-        list(APPEND QSIM_WARNING_FLAGS /WX)
-    endif()
-endif()
-
-# AddressSanitizer + UndefinedBehaviorSanitizer. Opt-in; meant for CI
-# and local debug builds. Always paired with -O1 -g for readable reports.
-set(QSIM_SANITIZER_FLAGS)
-if(QSIM_ENABLE_SANITIZERS AND (QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC))
-    list(APPEND QSIM_SANITIZER_FLAGS
-        -fsanitize=address,undefined
-        -fno-omit-frame-pointer
-        -fno-optimize-sibling-calls
-        -g
-    )
-    # Keep -O1 so the sanitizer can keep up without losing debuggability.
-    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-        list(APPEND QSIM_SANITIZER_FLAGS -O1)
-    endif()
-    message(STATUS "Sanitizers: AddressSanitizer + UndefinedBehaviorSanitizer enabled")
-endif()
-
-# Optimization flags
-set(QSIM_OPTIMIZE_FLAGS)
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
-        list(APPEND QSIM_OPTIMIZE_FLAGS -O3 -ffast-math -funroll-loops)
-
-        # Native CPU optimization.  OFF for distributable artifacts:
-        # -march=native pins the binary to the build machine's ISA
-        # extensions (and under QEMU emulation resolves to a synthetic
-        # "max" CPU whose instructions fail at the LTO assembly stage).
-        # Runtime SIMD dispatch still selects NEON/AVX paths at the
-        # portable baseline.
-        if(QSIM_NATIVE_ARCH AND NOT CMAKE_CROSSCOMPILING)
-            list(APPEND QSIM_OPTIMIZE_FLAGS -march=native)
-        endif()
-    elseif(QSIM_COMPILER_MSVC)
-        list(APPEND QSIM_OPTIMIZE_FLAGS /O2 /fp:fast)
-    endif()
-endif()
+include(cmake/compiler_flags.cmake)
 
 # ==============================================================================
 # SIMD Detection
@@ -1062,10 +948,16 @@ endif()
 # Create library
 if(QSIM_BUILD_SHARED)
     add_library(quantumsim SHARED ${QSIM_ALL_SOURCES})
-    set_target_properties(quantumsim PROPERTIES
-        VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-    )
+    # Native SDK installs retain conventional ABI-versioned symlinks. Python
+    # wheels need one canonical library file: wheel archives cannot represent
+    # those symlinks portably and otherwise expand all three names into full
+    # duplicate copies.
+    if(NOT QSIM_PYTHON_WHEEL)
+        set_target_properties(quantumsim PROPERTIES
+            VERSION ${PROJECT_VERSION}
+            SOVERSION ${PROJECT_VERSION_MAJOR}
+        )
+    endif()
     if(QSIM_PLATFORM_WINDOWS)
         set_target_properties(quantumsim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
@@ -1188,9 +1080,28 @@ if(QSIM_PLATFORM_WINDOWS)
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/compat>)
 endif()
 
-# Compile options
+# Compile options.  C/C++ warning flags must not leak into NVCC: NVCC uses
+# `--Werror=<kind>` and interprets GCC's following `-Wno-error=...` token as
+# the argument to its own `-Werror`, aborting before kernel compilation.
+# Give CUDA both its native all-warnings gate and an explicit host-compiler
+# warning gate instead.
+foreach(_qsim_warning_flag IN LISTS QSIM_WARNING_FLAGS)
+    target_compile_options(quantumsim PRIVATE
+        "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:${_qsim_warning_flag}>")
+endforeach()
+if(QSIM_ENABLE_CUDA AND QSIM_WERROR)
+    target_compile_options(quantumsim PRIVATE
+        "$<$<COMPILE_LANGUAGE:CUDA>:--Werror=all-warnings>")
+    if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
+        # NVCC emits non-standard GCC-style #line markers in its generated
+        # host stubs. Enabling host -Wpedantic would turn NVCC's own generated
+        # text into an error, so keep every actionable -Wall/-Wextra warning
+        # strict without requesting that generated-code-only category.
+        target_compile_options(quantumsim PRIVATE
+            "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Wall,-Wextra,-Werror>")
+    endif()
+endif()
 target_compile_options(quantumsim PRIVATE
-    ${QSIM_WARNING_FLAGS}
     ${QSIM_OPTIMIZE_FLAGS}
     ${QSIM_SANITIZER_FLAGS}
 )
@@ -1380,7 +1291,10 @@ if(QSIM_PLATFORM_WINDOWS)
         endif()
 
         if(QSIM_CLANG_BUILTINS)
-            target_link_libraries(quantumsim PUBLIC "${QSIM_CLANG_BUILTINS}")
+            # The builtins archive satisfies implementation details inside the
+            # DLL. It must not leak as an absolute build-machine path through
+            # quantumsim::quantumsim in the installed CMake export.
+            target_link_libraries(quantumsim PRIVATE "${QSIM_CLANG_BUILTINS}")
             message(STATUS "Clang builtins: ${QSIM_CLANG_BUILTINS}")
         else()
             message(WARNING "Clang builtins library not found; complex arithmetic may fail to link")
@@ -1718,18 +1632,29 @@ endif()
 
 include(GNUInstallDirs)
 
-# Install library
-install(TARGETS quantumsim
-    EXPORT quantumsim-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+# Platform wheels carry their native library inside the Python package and
+# intentionally omit the C/CMake SDK payload. Normal native installs retain
+# the complete export/header/package-config contract below.
+if(QSIM_PYTHON_WHEEL)
+    install(TARGETS quantumsim
+        EXPORT quantumsim-targets
+        LIBRARY DESTINATION moonlab/.libs COMPONENT python-wheel
+        RUNTIME DESTINATION moonlab/.libs COMPONENT python-wheel
+    )
+else()
+    install(TARGETS quantumsim
+        EXPORT quantumsim-targets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+endif()
 
 # Install headers
 install(DIRECTORY src/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/quantumsim
+    COMPONENT native-sdk
     FILES_MATCHING PATTERN "*.h"
 )
 
@@ -1740,11 +1665,13 @@ install(FILES
     src/applications/moonlab_api.h
     src/applications/moonlab_export.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/moonlab
+    COMPONENT native-sdk
 )
 
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/include/moonlab_features.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    COMPONENT native-sdk
 )
 
 # Install CMake config
@@ -1752,6 +1679,7 @@ install(EXPORT quantumsim-targets
     FILE quantumsim-targets.cmake
     NAMESPACE quantumsim::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
+    COMPONENT native-sdk
 )
 
 # Generate package config
@@ -1773,6 +1701,7 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config-version.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
+    COMPONENT native-sdk
 )
 
 # pkg-config file.  The template uses pkg-config's ${pcfiledir} so release
@@ -1911,12 +1840,14 @@ target_include_directories(quantumsim PUBLIC
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/generated/moonlab_build_info.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    COMPONENT native-sdk
 )
 
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
     RENAME quantumsim.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    COMPONENT native-sdk
 )
 
 # ==============================================================================

@@ -203,7 +203,9 @@ target='$target'
 run_body() {
     cmake -S "\$repo_dir" -B "\$build_dir" \\
         -DCMAKE_BUILD_TYPE=Release \\
-        -DQSIM_WERROR=OFF \\
+        -DQSIM_WERROR=ON \\
+        -DQSIM_NATIVE_ARCH=OFF \\
+        -DQSIM_FAST_MATH=OFF \\
         -DQSIM_BUILD_BENCHMARKS=OFF \\
         -DQSIM_BUILD_EXAMPLES=OFF \\
         $flags
@@ -319,7 +321,9 @@ Run-Native 'cmake' @(
     '-B', \$SharedBuild,
     '-G', 'Ninja',
     '-DCMAKE_BUILD_TYPE=Release',
-    '-DQSIM_WERROR=OFF',
+    '-DQSIM_WERROR=ON',
+    '-DQSIM_NATIVE_ARCH=OFF',
+    '-DQSIM_FAST_MATH=OFF',
     '-DQSIM_BUILD_BENCHMARKS=OFF',
     '-DQSIM_BUILD_EXAMPLES=OFF',
     '-DQSIM_ENABLE_CUDA=OFF',
@@ -340,7 +344,9 @@ Run-Native 'cmake' @(
     '-B', \$Build,
     '-G', 'Ninja',
     '-DCMAKE_BUILD_TYPE=Release',
-    '-DQSIM_WERROR=OFF',
+    '-DQSIM_WERROR=ON',
+    '-DQSIM_NATIVE_ARCH=OFF',
+    '-DQSIM_FAST_MATH=OFF',
     '-DQSIM_BUILD_BENCHMARKS=OFF',
     '-DQSIM_BUILD_EXAMPLES=OFF',
     '-DQSIM_ENABLE_CUDA=OFF',

@@ -1,14 +1,25 @@
 # Moonlab Platform Specification
 
-**Written for:** 0.2.0-dev (the document's original baseline).
-**Current shipping version:** 0.5.10.
-**Status:** design contract; the 0.2 -> 0.3 migration laid out in
-section 5 has substantially happened (the v0.3 + v0.4 + v0.5 release
-arcs delivered most of the "Phase 1 - 6" items).  This document is
-preserved as the platform contract that produced those releases; it
-is not actively rewritten on every release.  For current-state
-descriptions see `README.md` and the `New in v0.5` section there.
+**Original baseline:** 0.2.0-dev.
+**Current shipping version:** 1.1.0.
+**Status:** prescriptive design contract. Roadmap/status statements below that
+name v0.3 are historical targets, not current release claims. For the shipping
+surface use `docs/README.md`, `docs/release/v1.1.0-release-notes.md`, and
+`CHANGELOG.md`.
 **Owner:** tsotchke
+
+## Current v1.1 posture
+
+| Contract area | Shipping state in 1.1.0 |
+|---|---|
+| Compute representations | Dense state vector, MPS/MPO/DMRG/TDVP, MPDO, Clifford tableau, CA-MPS/CA-PEPS |
+| Hardware lowering | Runtime CPU SIMD, Apple Metal, native CUDA on Tegra/discrete NVIDIA, optional OpenCL/Vulkan/cuQuantum |
+| Distribution | Relocatable CMake packages for Linux, macOS, and Windows x64/ARM64; Debian and language-package workflows |
+| Stable integration | C ABI 0.4.0 with opaque handles and flat buffers; Python, Rust, and JavaScript/WASM bindings |
+| Scale and operations | Optional MPI, scheduler/control plane on POSIX, Docker/Helm deployment surfaces |
+
+The original migration plan remains below because it records the design
+rationale. Its phase labels do not override the current-state documents.
 
 This document is the architectural contract for Moonlab as a
 platform. It is the successor to `ARCHITECTURE.md` (descriptive) and

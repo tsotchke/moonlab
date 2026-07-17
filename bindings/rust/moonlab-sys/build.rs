@@ -6,191 +6,189 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-fn openmp_link_library_exists(dir: &Path) -> bool {
-    dir.join("libomp.so").exists()
-        || dir.join("libomp.a").exists()
-        || dir.join("libomp.dylib").exists()
-        || dir.join("omp.lib").exists()
-        || dir.join("libomp.lib").exists()
+fn normalize_header_root(candidate: &Path) -> Option<PathBuf> {
+    if candidate.join("quantum/state.h").is_file() {
+        return Some(candidate.to_path_buf());
+    }
+    let installed = candidate.join("quantumsim");
+    if installed.join("quantum/state.h").is_file() {
+        return Some(installed);
+    }
+    None
 }
 
-fn emit_openmp_search_dir_if_present(dir: impl AsRef<Path>) -> bool {
-    let dir = dir.as_ref();
-    if openmp_link_library_exists(dir) {
-        println!("cargo:rustc-link-search=native={}", dir.display());
-        true
+fn has_shared_library(dir: &Path) -> bool {
+    [
+        "libquantumsim.so",
+        "libquantumsim.dylib",
+        "quantumsim.dll",
+        "quantumsim.lib",
+    ]
+    .iter()
+    .any(|name| dir.join(name).is_file())
+}
+
+fn has_static_library(dir: &Path) -> bool {
+    dir.join("libquantumsim.a").is_file() || dir.join("quantumsim_static.lib").is_file()
+}
+
+fn link_from_directory(dir: &Path) {
+    if !has_shared_library(dir) && !has_static_library(dir) {
+        panic!(
+            "MOONLAB_LIB_DIR={} does not contain a Moonlab shared or static library",
+            dir.display()
+        );
+    }
+
+    println!("cargo:rustc-link-search=native={}", dir.display());
+    if has_shared_library(dir) {
+        println!("cargo:rustc-link-lib=dylib=quantumsim");
+        if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+        }
     } else {
-        false
+        println!("cargo:rustc-link-lib=static=quantumsim");
     }
 }
 
 fn main() {
-    // Get the project root (3 levels up from bindings/rust/moonlab-sys)
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let project_root = PathBuf::from(&manifest_dir)
-        .parent().unwrap()  // rust/
-        .parent().unwrap()  // bindings/
-        .parent().unwrap()  // project root
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
         .to_path_buf();
+    let source_headers = project_root.join("src");
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}/src/quantum/state.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/quantum/gates.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/quantum/measurement.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/grover.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/vqe.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/algorithms/qaoa.h", project_root.display());
-    println!("cargo:rerun-if-changed={}/src/visualization/feynman_diagram.h", project_root.display());
-
-    // Link against the quantum simulator library. Prefer MOONLAB_LIB_DIR
-    // if the build system sets it (e.g. CMake CTest), fall back to the
-    // project root. Static preferred, but fall through to shared if
-    // only libquantumsim.{so,dylib,dll} is present.
-    //
-    // The rerun-if-env-changed line below is load-bearing: without it
-    // cargo bakes the value of MOONLAB_LIB_DIR into the cached rlib at
-    // first build and silently keeps it forever, so a later ctest run
-    // that points at a different build directory (e.g. build-fallback,
-    // build-werror) links against the stale path and fails with
-    // "library 'quantumsim' not found".
     println!("cargo:rerun-if-env-changed=MOONLAB_LIB_DIR");
-    let lib_dir = env::var("MOONLAB_LIB_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| project_root.join("build"));
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    println!("cargo:rerun-if-env-changed=MOONLAB_INCLUDE_DIR");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
 
-    let static_present = lib_dir.join("libquantumsim.a").exists();
-    if static_present {
-        println!("cargo:rustc-link-lib=static=quantumsim");
+    let explicit_lib_dir = env::var_os("MOONLAB_LIB_DIR").map(PathBuf::from);
+    let explicit_include_dir = env::var_os("MOONLAB_INCLUDE_DIR").map(PathBuf::from);
+    let source_tree_available = source_headers.join("quantum/state.h").is_file();
+
+    // Installed crates discover the native SDK through pkg-config. Contributors
+    // can still point at an arbitrary build/install tree with the two MOONLAB_*
+    // variables, and in-repository builds retain their source-tree fallback.
+    let need_pkg_config =
+        explicit_lib_dir.is_none() || (explicit_include_dir.is_none() && !source_tree_available);
+    let pkg = if need_pkg_config {
+        pkg_config::Config::new()
+            .atleast_version("1.1.0")
+            .cargo_metadata(explicit_lib_dir.is_none())
+            .probe("quantumsim")
+            .ok()
     } else {
-        println!("cargo:rustc-link-lib=dylib=quantumsim");
-        // Embed the dylib directory in the binary's rpath so cargo test
-        // works without LD_LIBRARY_PATH / DYLD_LIBRARY_PATH.
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
-    }
+        None
+    };
 
-    // Link OpenMP (required for parallel operations). Ubuntu's libomp-dev
-    // installs libomp under /usr/lib/llvm-*/lib, which rust-lld does not search
-    // by default.
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    println!("cargo:rerun-if-env-changed=MOONLAB_OMP_DIR");
-    println!("cargo:rerun-if-env-changed=MOONLAB_OPENMP_LIB_DIR");
-
-    let mut found_openmp_dir = false;
-    for var in ["MOONLAB_OMP_DIR", "MOONLAB_OPENMP_LIB_DIR"] {
-        if let Ok(dir) = env::var(var) {
-            println!("cargo:rustc-link-search=native={dir}");
-            found_openmp_dir = true;
-            break;
+    if let Some(lib_dir) = explicit_lib_dir.as_deref() {
+        link_from_directory(lib_dir);
+    } else if pkg.is_none() {
+        let development_lib_dir = project_root.join("build");
+        if source_tree_available
+            && (has_shared_library(&development_lib_dir)
+                || has_static_library(&development_lib_dir))
+        {
+            link_from_directory(&development_lib_dir);
+        } else {
+            panic!(
+                "Moonlab native SDK not found. Install Moonlab so pkg-config can find \
+                 quantumsim, or set MOONLAB_LIB_DIR and MOONLAB_INCLUDE_DIR."
+            );
         }
-    }
-
-    if !found_openmp_dir && target_os == "macos" {
-        if let Ok(brew) = env::var("HOMEBREW_PREFIX") {
-            found_openmp_dir =
-                emit_openmp_search_dir_if_present(PathBuf::from(&brew).join("opt/libomp/lib"));
-        }
-        if !found_openmp_dir {
-            for p in ["/opt/homebrew/opt/libomp/lib", "/usr/local/opt/libomp/lib"] {
-                if emit_openmp_search_dir_if_present(p) {
-                    found_openmp_dir = true;
-                    break;
-                }
-            }
+    } else if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        for lib_dir in &pkg.as_ref().unwrap().link_paths {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
         }
     }
 
-    if !found_openmp_dir && target_os == "linux" {
-        for major in (10..=21).rev() {
-            let candidate = PathBuf::from(format!("/usr/lib/llvm-{major}/lib"));
-            if emit_openmp_search_dir_if_present(candidate) {
-                found_openmp_dir = true;
-                break;
-            }
-        }
-        if !found_openmp_dir {
-            for p in [
-                "/usr/lib/x86_64-linux-gnu",
-                "/usr/lib/aarch64-linux-gnu",
-                "/usr/local/lib",
-            ] {
-                if emit_openmp_search_dir_if_present(p) {
-                    break;
-                }
-            }
-        }
-    }
-    println!("cargo:rustc-link-lib=dylib=omp");
+    let header_root = explicit_include_dir
+        .as_deref()
+        .and_then(normalize_header_root)
+        .or_else(|| {
+            pkg.as_ref().and_then(|library| {
+                library
+                    .include_paths
+                    .iter()
+                    .find_map(|path| normalize_header_root(path))
+            })
+        })
+        .or_else(|| source_tree_available.then_some(source_headers.clone()))
+        .unwrap_or_else(|| {
+            panic!(
+                "Moonlab C headers not found. Set MOONLAB_INCLUDE_DIR to either \
+                 <prefix>/include or <prefix>/include/quantumsim."
+            )
+        });
 
-    // Link system libraries (macOS)
-    #[cfg(target_os = "macos")]
-    {
-        println!("cargo:rustc-link-lib=framework=Accelerate");
-        println!("cargo:rustc-link-lib=framework=Metal");
-        println!("cargo:rustc-link-lib=framework=Foundation");
-        println!("cargo:rustc-link-lib=framework=Security");
-    }
-
-    // Link math and the platform C++ standard library.
-    if target_os != "windows" {
-        println!("cargo:rustc-link-lib=m");
-    }
-    match target_os.as_str() {
-        "linux" | "android" | "freebsd" | "openbsd" | "netbsd" => {
-            println!("cargo:rustc-link-lib=stdc++");
-        }
-        "macos" | "ios" => {
-            println!("cargo:rustc-link-lib=c++");
-        }
-        _ => {}
+    for header in [
+        "quantum/state.h",
+        "quantum/gates.h",
+        "quantum/measurement.h",
+        "algorithms/grover.h",
+        "algorithms/vqe.h",
+        "algorithms/qaoa.h",
+        "visualization/feynman_diagram.h",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            header_root.join(header).display()
+        );
     }
 
     // Create wrapper header that includes all needed headers
-    let wrapper_content = format!(r#"
+    let wrapper_content = r#"
 // Wrapper header for bindgen
-#include "{root}/src/quantum/state.h"
-#include "{root}/src/quantum/gates.h"
-#include "{root}/src/quantum/measurement.h"
-#include "{root}/src/quantum/entanglement.h"
-#include "{root}/src/quantum/noise.h"
-#include "{root}/src/quantum/noise_mpdo.h"
-#include "{root}/src/algorithms/grover.h"
-#include "{root}/src/algorithms/bell_tests.h"
-#include "{root}/src/algorithms/vqe.h"
-#include "{root}/src/algorithms/qaoa.h"
-#include "{root}/src/utils/quantum_entropy.h"
-#include "{root}/src/utils/config.h"
-#include "{root}/src/visualization/feynman_diagram.h"
-#include "{root}/src/applications/moonlab_export.h"
-#include "{root}/src/applications/quantum_volume.h"
-#include "{root}/src/backends/clifford/clifford.h"
-#include "{root}/src/algorithms/topology_realspace/chern_kpm.h"
-#include "{root}/src/algorithms/topology_realspace/chern_marker.h"
-#include "{root}/src/algorithms/quantum_geometry/qgt.h"
-#include "{root}/src/optimization/fusion/fusion.h"
-#include "{root}/src/algorithms/tensor_network/tn_state.h"
-#include "{root}/src/algorithms/tensor_network/dmrg.h"
-#include "{root}/src/algorithms/tensor_network/tdvp.h"
-#include "{root}/src/algorithms/tensor_network/ca_mps.h"
-#include "{root}/src/algorithms/tensor_network/ca_peps.h"
-#include "{root}/src/algorithms/topological/topological.h"
-#include "{root}/src/integration/libirrep_bridge.h"
-#include "{root}/src/applications/moonlab_qgtl_backend.h"
-#include "{root}/src/applications/decoder_bench.h"
-#include "{root}/src/applications/vendor_noise_backend.h"
-#include "{root}/src/distributed/scheduler.h"
-#include "{root}/src/control/control_plane.h"
-"#, root = project_root.display());
+#include "quantum/state.h"
+#include "quantum/gates.h"
+#include "quantum/measurement.h"
+#include "quantum/entanglement.h"
+#include "quantum/noise.h"
+#include "quantum/noise_mpdo.h"
+#include "algorithms/grover.h"
+#include "algorithms/bell_tests.h"
+#include "algorithms/vqe.h"
+#include "algorithms/qaoa.h"
+#include "utils/quantum_entropy.h"
+#include "utils/config.h"
+#include "visualization/feynman_diagram.h"
+#include "applications/moonlab_export.h"
+#include "applications/quantum_volume.h"
+#include "backends/clifford/clifford.h"
+#include "algorithms/topology_realspace/chern_kpm.h"
+#include "algorithms/topology_realspace/chern_marker.h"
+#include "algorithms/quantum_geometry/qgt.h"
+#include "optimization/fusion/fusion.h"
+#include "algorithms/tensor_network/tn_state.h"
+#include "algorithms/tensor_network/dmrg.h"
+#include "algorithms/tensor_network/tdvp.h"
+#include "algorithms/tensor_network/ca_mps.h"
+#include "algorithms/tensor_network/ca_peps.h"
+#include "algorithms/topological/topological.h"
+#include "integration/libirrep_bridge.h"
+#include "applications/moonlab_qgtl_backend.h"
+#include "applications/decoder_bench.h"
+#include "applications/vendor_noise_backend.h"
+#include "distributed/scheduler.h"
+#include "control/control_plane.h"
+"#;
 
-    let wrapper_path = PathBuf::from(&manifest_dir).join("wrapper.h");
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let wrapper_path = out_path.join("wrapper.h");
     std::fs::write(&wrapper_path, wrapper_content).expect("Failed to write wrapper.h");
 
     // Generate bindings
     let bindings = bindgen::Builder::default()
         .header(wrapper_path.to_str().unwrap())
         // Include paths
-        .clang_arg(format!("-I{}", project_root.display()))
-        .clang_arg(format!("-I{}/src", project_root.display()))
+        .clang_arg(format!("-I{}", header_root.display()))
+        .clang_arg(format!("-I{}", header_root.parent().unwrap().display()))
         // Core quantum types
         .allowlist_type("quantum_state_t")
         .allowlist_type("complex_t")
@@ -767,11 +765,7 @@ fn main() {
         .expect("Unable to generate bindings");
 
     // Write bindings to OUT_DIR
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
-
-    // Clean up wrapper
-    let _ = std::fs::remove_file(wrapper_path);
 }
