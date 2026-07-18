@@ -775,23 +775,30 @@ collective_error_t collective_expectation_x(const partitioned_state_t* state,
         uint32_t partition_bit = qubit - state->local_qubits;
         int partner_rank = rank ^ (1 << partition_bit);
 
-        // Exchange amplitudes
-        mpi_bridge_error_t err = mpi_exchange_amplitudes(
-            state->dist_ctx,
-            state->amplitudes,
-            state->recv_buffer,
-            state->local_count,
-            partner_rank,
-            0
-        );
-        if (err != MPI_BRIDGE_SUCCESS) {
-            return COLLECTIVE_ERROR_MPI;
-        }
+        // Exchange and reduce in bounded chunks so an explicitly limited
+        // communication buffer is safe for collective observables too.
+        const uint64_t chunk_limit = state->buffer_size < state->local_count
+                                   ? state->buffer_size : state->local_count;
+        for (uint64_t base = 0; base < state->local_count; base += chunk_limit) {
+            const uint64_t chunk = state->local_count - base < chunk_limit
+                                 ? state->local_count - base : chunk_limit;
+            mpi_bridge_error_t err = mpi_exchange_amplitudes(
+                state->dist_ctx,
+                state->amplitudes + base,
+                state->recv_buffer,
+                chunk,
+                partner_rank,
+                0
+            );
+            if (err != MPI_BRIDGE_SUCCESS) {
+                return COLLECTIVE_ERROR_MPI;
+            }
 
-        // Compute sum
-        for (uint64_t i = 0; i < state->local_count; i++) {
-            double complex prod = conj(state->amplitudes[i]) * state->recv_buffer[i];
-            local_sum += creal(prod);
+            for (uint64_t i = 0; i < chunk; i++) {
+                double complex prod = conj(state->amplitudes[base + i]) *
+                                      state->recv_buffer[i];
+                local_sum += creal(prod);
+            }
         }
     } else {
         // Local computation
@@ -808,7 +815,8 @@ collective_error_t collective_expectation_x(const partitioned_state_t* state,
         }
     }
 
-    // Sum across ranks and multiply by 2
+    // A partition pair is visited by both partner ranks, while a local pair
+    // is visited only from its zero-bit amplitude.
     double global_sum;
     mpi_bridge_error_t err = mpi_allreduce_sum_double(state->dist_ctx,
                                                       &local_sum, &global_sum, 1);
@@ -816,7 +824,7 @@ collective_error_t collective_expectation_x(const partitioned_state_t* state,
         return COLLECTIVE_ERROR_MPI;
     }
 
-    *expectation = 2.0 * global_sum;
+    *expectation = is_partition ? global_sum : 2.0 * global_sum;
 
     return COLLECTIVE_SUCCESS;
 }
@@ -848,22 +856,30 @@ collective_error_t collective_expectation_y(const partitioned_state_t* state,
     if (is_partition) {
         uint32_t partition_bit = qubit - state->local_qubits;
         int partner_rank = rank ^ (1 << partition_bit);
+        const double orientation = (rank & (1 << partition_bit)) ? -1.0 : 1.0;
 
-        mpi_bridge_error_t err = mpi_exchange_amplitudes(
-            state->dist_ctx,
-            state->amplitudes,
-            state->recv_buffer,
-            state->local_count,
-            partner_rank,
-            0
-        );
-        if (err != MPI_BRIDGE_SUCCESS) {
-            return COLLECTIVE_ERROR_MPI;
-        }
+        const uint64_t chunk_limit = state->buffer_size < state->local_count
+                                   ? state->buffer_size : state->local_count;
+        for (uint64_t base = 0; base < state->local_count; base += chunk_limit) {
+            const uint64_t chunk = state->local_count - base < chunk_limit
+                                 ? state->local_count - base : chunk_limit;
+            mpi_bridge_error_t err = mpi_exchange_amplitudes(
+                state->dist_ctx,
+                state->amplitudes + base,
+                state->recv_buffer,
+                chunk,
+                partner_rank,
+                0
+            );
+            if (err != MPI_BRIDGE_SUCCESS) {
+                return COLLECTIVE_ERROR_MPI;
+            }
 
-        for (uint64_t i = 0; i < state->local_count; i++) {
-            double complex prod = conj(state->amplitudes[i]) * state->recv_buffer[i];
-            local_sum += cimag(prod);
+            for (uint64_t i = 0; i < chunk; i++) {
+                double complex prod = conj(state->amplitudes[base + i]) *
+                                      state->recv_buffer[i];
+                local_sum += orientation * cimag(prod);
+            }
         }
     } else {
         uint64_t qubit_mask = 1ULL << qubit;
@@ -886,7 +902,7 @@ collective_error_t collective_expectation_y(const partitioned_state_t* state,
         return COLLECTIVE_ERROR_MPI;
     }
 
-    *expectation = 2.0 * global_sum;
+    *expectation = is_partition ? global_sum : 2.0 * global_sum;
 
     return COLLECTIVE_SUCCESS;
 }

@@ -62,3 +62,11 @@ int moonlab_cuda_state_copy_to_host(const void *state, double *out) {
 int moonlab_cuda_state_copy_from_host(void *state, const double *in) {
     (void)state; (void)in; return -1;
 }
+int moonlab_cuda_select_device_for_rank(int local_rank,
+                                        int *device_id,
+                                        int *device_count) {
+    (void)local_rank;
+    if (device_id) *device_id = -1;
+    if (device_count) *device_count = 0;
+    return -1;
+}

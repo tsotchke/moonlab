@@ -137,6 +137,18 @@ static inline uint64_t flip_bit(uint64_t value, uint32_t bit) {
     return value ^ (1ULL << bit);
 }
 
+static inline uint64_t min_u64(uint64_t a, uint64_t b) {
+    return a < b ? a : b;
+}
+
+static inline uint64_t selected_index_from_stride(uint64_t ordinal,
+                                                  uint64_t stride,
+                                                  uint64_t offset) {
+    uint64_t block = ordinal / stride;
+    uint64_t within_block = ordinal - block * stride;
+    return (block << 1ULL) * stride + offset + within_block;
+}
+
 // ============================================================================
 // GPU SHARD SYNC HELPERS
 // ============================================================================
@@ -220,16 +232,13 @@ static dist_gate_error_t apply_local_1q(partitioned_state_t* state,
 static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
                                          uint32_t target,
                                          const gate_matrix_2x2_t* matrix) {
-    exchange_descriptor_t desc;
-    partition_error_t err = partition_plan_1q_exchange(state, target, &desc);
-    if (err != PARTITION_SUCCESS) {
-        return DIST_GATE_ERROR_COMM;
-    }
-
-    if (!desc.requires_exchange) {
-        partition_free_exchange_desc(&desc);
+    if (!partition_is_partition_qubit(state, target)) {
         return apply_local_1q(state, target, matrix);
     }
+    const int rank = mpi_get_rank(state->dist_ctx);
+    const uint32_t partition_bit = target - state->local_qubits;
+    const int holds_zero_states = (rank & (1 << partition_bit)) == 0;
+    const uint64_t chunk_limit = min_u64(state->buffer_size, state->local_count);
 
     /* GPU sharded path: pull the local shard into the host buffer
      * before MPI exchange, run the existing CPU exchange/apply logic
@@ -238,58 +247,41 @@ static dist_gate_error_t apply_remote_1q(partitioned_state_t* state,
      * MPI exchange already dominates the cost of such gates. */
     if (state->gpu_state) {
         if (partition_sync_to_host(state) != PARTITION_SUCCESS) {
-            partition_free_exchange_desc(&desc);
             return DIST_GATE_ERROR_COMM;
         }
     }
 
-    int rank = mpi_get_rank(state->dist_ctx);
+    for (uint64_t base = 0; base < state->local_count; base += chunk_limit) {
+        const uint64_t chunk = min_u64(state->local_count - base, chunk_limit);
 
-    // Determine if we hold the |0⟩ or |1⟩ states for this partition bit
-    uint32_t partition_bit = target - state->local_qubits;
-    int holds_zero_states = (rank & (1 << partition_bit)) == 0;
+        mpi_bridge_error_t mpi_err = mpi_exchange_amplitudes(
+            state->dist_ctx,
+            state->amplitudes + base,
+            state->recv_buffer,
+            chunk,
+            rank ^ (1 << partition_bit),
+            0
+        );
 
-    /* Single full-shard exchange.  After this the rank holds BOTH its
-     * own half (state->amplitudes) and the partner half
-     * (state->recv_buffer) for every pair, so it can compute its own
-     * updated amplitudes locally.  The partner performs the symmetric
-     * computation and keeps the complementary half, so the historical
-     * second full-shard exchange was pure redundancy (doubling the
-     * dominant bandwidth cost) and is dropped. */
-    mpi_bridge_error_t mpi_err = mpi_exchange_amplitudes(
-        state->dist_ctx,
-        state->amplitudes,
-        state->recv_buffer,
-        state->local_count,
-        desc.partner_rank,
-        0
-    );
-
-    if (mpi_err != MPI_BRIDGE_SUCCESS) {
-        partition_free_exchange_desc(&desc);
-        return DIST_GATE_ERROR_COMM;
-    }
-
-    // Apply gate: we have one half, partner has the other.
-    // If we hold |0⟩ states: a0 = local, a1 = received; keep new_a0.
-    // If we hold |1⟩ states: a0 = received, a1 = local; keep new_a1.
-    for (uint64_t i = 0; i < state->local_count; i++) {
-        double complex a0, a1;
-        if (holds_zero_states) {
-            a0 = state->amplitudes[i];
-            a1 = state->recv_buffer[i];
-        } else {
-            a0 = state->recv_buffer[i];
-            a1 = state->amplitudes[i];
+        if (mpi_err != MPI_BRIDGE_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
         }
 
-        double complex new_a0 = matrix->m[0] * a0 + matrix->m[1] * a1;
-        double complex new_a1 = matrix->m[2] * a0 + matrix->m[3] * a1;
+        // Apply gate: we have one half, partner has the other.
+        // If we hold |0⟩ states: a0 = local, a1 = received; keep new_a0.
+        // If we hold |1⟩ states: a0 = received, a1 = local; keep new_a1.
+        for (uint64_t i = 0; i < chunk; i++) {
+            double complex a0 = holds_zero_states ? state->amplitudes[base + i]
+                                                 : state->recv_buffer[i];
+            double complex a1 = holds_zero_states ? state->recv_buffer[i]
+                                                 : state->amplitudes[base + i];
 
-        state->amplitudes[i] = holds_zero_states ? new_a0 : new_a1;
+            double complex new_a0 = matrix->m[0] * a0 + matrix->m[1] * a1;
+            double complex new_a1 = matrix->m[2] * a0 + matrix->m[3] * a1;
+
+            state->amplitudes[base + i] = holds_zero_states ? new_a0 : new_a1;
+        }
     }
-
-    partition_free_exchange_desc(&desc);
 
     /* Push the now-correct host shard back into GPU memory if we
      * have one, so subsequent local gates see the post-exchange
@@ -465,48 +457,51 @@ static dist_gate_error_t apply_remote_2q_single_partition(
 
     // Count pairs for exchange (half of local amplitudes participate)
     uint64_t exchange_count = state->local_count / 2;
+    uint64_t pair_capacity = state->buffer_size / 2;
+    if (pair_capacity == 0) pair_capacity = 1;
 
-    // Pack amplitudes to exchange (those where local qubit differs)
-    // We need to exchange in pairs: one with local_qubit=0, one with local_qubit=1
-    uint64_t pack_idx = 0;
-    for (uint64_t i = 0; i < state->local_count; i++) {
-        if (!(i & local_stride)) {  // Only process where local_qubit = 0
-            state->send_buffer[pack_idx++] = state->amplitudes[i];
-            state->send_buffer[pack_idx++] = state->amplitudes[i | local_stride];
+    for (uint64_t pair_base = 0; pair_base < exchange_count; pair_base += pair_capacity) {
+        uint64_t pair_count = exchange_count - pair_base;
+        if (pair_count > pair_capacity) pair_count = pair_capacity;
+
+        // Pack amplitudes to exchange (those where local qubit differs)
+        // We need to exchange in pairs: one with local_qubit=0, one with local_qubit=1.
+        for (uint64_t p = 0; p < pair_count; p++) {
+            uint64_t i = selected_index_from_stride(pair_base + p, local_stride, 0);
+            state->send_buffer[2 * p] = state->amplitudes[i];
+            state->send_buffer[2 * p + 1] = state->amplitudes[i | local_stride];
         }
-    }
 
-    // Exchange with partner
-    mpi_bridge_error_t err = mpi_exchange_amplitudes(
-        state->dist_ctx,
-        state->send_buffer,
-        state->recv_buffer,
-        exchange_count * 2,  // Exchanging pairs
-        partner_rank,
-        0
-    );
+        // Exchange with partner
+        mpi_bridge_error_t err = mpi_exchange_amplitudes(
+            state->dist_ctx,
+            state->send_buffer,
+            state->recv_buffer,
+            pair_count * 2,  // Exchanging pairs
+            partner_rank,
+            0
+        );
 
-    if (err != MPI_BRIDGE_SUCCESS) {
-        return DIST_GATE_ERROR_COMM;
-    }
+        if (err != MPI_BRIDGE_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
+        }
 
-    // Apply the 4x4 matrix to each set of 4 amplitudes
-    // a[0] = local with local_q=0, partition_q from our rank
-    // a[1] = local with local_q=1, partition_q from our rank
-    // a[2] = received with local_q=0, partition_q from partner
-    // a[3] = received with local_q=1, partition_q from partner
+        // Apply the 4x4 matrix to each set of 4 amplitudes
+        // a[0] = local with local_q=0, partition_q from our rank
+        // a[1] = local with local_q=1, partition_q from our rank
+        // a[2] = received with local_q=0, partition_q from partner
+        // a[3] = received with local_q=1, partition_q from partner
 
-    // The ordering depends on which qubit is which and partition bit values
-    pack_idx = 0;
-    for (uint64_t i = 0; i < state->local_count; i++) {
-        if (!(i & local_stride)) {
+        // The ordering depends on which qubit is which and partition bit values
+        for (uint64_t p = 0; p < pair_count; p++) {
+            uint64_t i = selected_index_from_stride(pair_base + p, local_stride, 0);
             double complex a00, a01, a10, a11;
             double complex new_a00, new_a01, new_a10, new_a11;
 
             double complex local_0 = state->amplitudes[i];
             double complex local_1 = state->amplitudes[i | local_stride];
-            double complex remote_0 = state->recv_buffer[pack_idx];
-            double complex remote_1 = state->recv_buffer[pack_idx + 1];
+            double complex remote_0 = state->recv_buffer[2 * p];
+            double complex remote_1 = state->recv_buffer[2 * p + 1];
 
             // Arrange amplitudes based on qubit ordering and partition bit ownership
             // If local_is_qubit1: qubit1 is local, qubit2 is partition
@@ -553,45 +548,43 @@ static dist_gate_error_t apply_remote_2q_single_partition(
             if (local_is_qubit1) {
                 if (holds_pq_zero) {
                     state->amplitudes[i] = new_a00;
-                    state->send_buffer[pack_idx] = new_a01;  // Send to partner
+                    state->send_buffer[2 * p] = new_a01;  // Send to partner
                     state->amplitudes[i | local_stride] = new_a10;
-                    state->send_buffer[pack_idx + 1] = new_a11;
+                    state->send_buffer[2 * p + 1] = new_a11;
                 } else {
-                    state->send_buffer[pack_idx] = new_a00;
+                    state->send_buffer[2 * p] = new_a00;
                     state->amplitudes[i] = new_a01;
-                    state->send_buffer[pack_idx + 1] = new_a10;
+                    state->send_buffer[2 * p + 1] = new_a10;
                     state->amplitudes[i | local_stride] = new_a11;
                 }
             } else {
                 if (holds_pq_zero) {
                     state->amplitudes[i] = new_a00;
                     state->amplitudes[i | local_stride] = new_a01;
-                    state->send_buffer[pack_idx] = new_a10;
-                    state->send_buffer[pack_idx + 1] = new_a11;
+                    state->send_buffer[2 * p] = new_a10;
+                    state->send_buffer[2 * p + 1] = new_a11;
                 } else {
-                    state->send_buffer[pack_idx] = new_a00;
-                    state->send_buffer[pack_idx + 1] = new_a01;
+                    state->send_buffer[2 * p] = new_a00;
+                    state->send_buffer[2 * p + 1] = new_a01;
                     state->amplitudes[i] = new_a10;
                     state->amplitudes[i | local_stride] = new_a11;
                 }
             }
-
-            pack_idx += 2;
         }
-    }
 
-    // Exchange updated remote values back to partner
-    err = mpi_exchange_amplitudes(
-        state->dist_ctx,
-        state->send_buffer,
-        state->recv_buffer,
-        exchange_count * 2,
-        partner_rank,
-        1
-    );
+        // Exchange updated remote values back to partner
+        err = mpi_exchange_amplitudes(
+            state->dist_ctx,
+            state->send_buffer,
+            state->recv_buffer,
+            pair_count * 2,
+            partner_rank,
+            1
+        );
 
-    if (err != MPI_BRIDGE_SUCCESS) {
-        return DIST_GATE_ERROR_COMM;
+        if (err != MPI_BRIDGE_SUCCESS) {
+            return DIST_GATE_ERROR_COMM;
+        }
     }
 
     return DIST_GATE_SUCCESS;
@@ -628,6 +621,7 @@ static dist_gate_error_t apply_remote_2q_both_partition(
 
     // Use a batched approach: process in chunks that fit in buffers
     uint64_t batch_size = state->buffer_size / 4;  // 4 amplitudes per group
+    if (batch_size == 0) batch_size = 1;
     if (batch_size > state->local_count) batch_size = state->local_count;
 
     for (uint64_t offset = 0; offset < state->local_count; offset += batch_size) {
@@ -835,34 +829,49 @@ dist_gate_error_t dist_cnot(partitioned_state_t* state,
         uint64_t ctrl_stride = 1ULL << control;
         uint64_t exchange_count = state->local_count / 2;
 
-        // Pack amplitudes with control=1
-        uint64_t pack_idx = 0;
-        for (uint64_t i = 0; i < state->local_count; i++) {
-            if (i & ctrl_stride) {
-                state->send_buffer[pack_idx++] = state->amplitudes[i];
+        uint64_t chunk_size = state->buffer_size;
+        if (chunk_size == 0) chunk_size = 1;
+
+        // Exchange in bounded chunks to guarantee memory safety even when
+        // user-specified comm_buffer_size is very small.
+        for (uint64_t chunk_base = 0; chunk_base < exchange_count;
+             chunk_base += chunk_size) {
+            uint64_t chunk_count = exchange_count - chunk_base;
+            if (chunk_count > chunk_size) chunk_count = chunk_size;
+
+            // Pack amplitudes with control=1
+            for (uint64_t p = 0; p < chunk_count; p++) {
+                uint64_t i = selected_index_from_stride(
+                    chunk_base + p,
+                    ctrl_stride,
+                    ctrl_stride
+                );
+                state->send_buffer[p] = state->amplitudes[i];
             }
-        }
 
-        // Exchange
-        mpi_bridge_error_t err = mpi_exchange_amplitudes(
-            state->dist_ctx,
-            state->send_buffer,
-            state->recv_buffer,
-            exchange_count,
-            partner_rank,
-            0
-        );
+            // Exchange this chunk
+            mpi_bridge_error_t err = mpi_exchange_amplitudes(
+                state->dist_ctx,
+                state->send_buffer,
+                state->recv_buffer,
+                chunk_count,
+                partner_rank,
+                0
+            );
 
-        if (err != MPI_BRIDGE_SUCCESS) {
-            rc = DIST_GATE_ERROR_COMM;
-            goto sync_out;
-        }
+            if (err != MPI_BRIDGE_SUCCESS) {
+                rc = DIST_GATE_ERROR_COMM;
+                goto sync_out;
+            }
 
-        // Unpack
-        pack_idx = 0;
-        for (uint64_t i = 0; i < state->local_count; i++) {
-            if (i & ctrl_stride) {
-                state->amplitudes[i] = state->recv_buffer[pack_idx++];
+            // Unpack
+            for (uint64_t p = 0; p < chunk_count; p++) {
+                uint64_t i = selected_index_from_stride(
+                    chunk_base + p,
+                    ctrl_stride,
+                    ctrl_stride
+                );
+                state->amplitudes[i] = state->recv_buffer[p];
             }
         }
 

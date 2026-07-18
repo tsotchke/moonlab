@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
                   rank, (unsigned long long)recv_val, partner,
                   (unsigned long long)expect_from);
         }
+
     }
 
     er = mpi_barrier(ctx);
@@ -320,6 +321,154 @@ int main(int argc, char** argv) {
                 }
 
                 partition_state_free(pstate2);
+            }
+        }
+
+        /* Bounded-buffer exchange regression: force a tiny communication
+         * buffer and exercise bounded chunking on:
+         *   - CNOT where target is a partition qubit
+         *   - 2Q gate with one partition + one local qubit
+         *   - 2Q gate with both qubits in partition space */
+        if (size >= 4) {
+            const uint32_t bounded_n = num_qubits + 2;
+            partition_config_t tiny_cfg = {0};
+            tiny_cfg.use_aligned_memory = 1;
+            tiny_cfg.comm_buffer_size = 2 * sizeof(double complex);
+
+            partitioned_state_t* bounded = partition_state_create(
+                ctx, bounded_n, &tiny_cfg);
+            CHECK(bounded != NULL,
+                  "bounded-buffer state create(%u qubits) succeeds",
+                  bounded_n);
+
+            if (bounded) {
+                CHECK(bounded->buffer_size == 2,
+                      "bounded buffer resolves to 2 amplitudes (got %zu)",
+                      bounded->buffer_size);
+
+                CHECK(partition_init_zero(bounded) == PARTITION_SUCCESS,
+                      "bounded state initialized to |0...0>");
+
+                dist_gate_error_t g;
+                const uint32_t lp = bounded->local_qubits;
+                const uint32_t p0 = lp;          // first partition qubit
+                const uint64_t idx_base = 0;
+                const uint64_t idx_h = (1ULL << p0) | 1ULL;
+                const uint64_t idx_cnot_src = 1ULL;
+                const uint64_t idx_cnot_dst = (1ULL << p0) | idx_cnot_src;
+                const uint64_t idx_pp_src = (1ULL << p0);
+                const uint64_t idx_pp_dst = (1ULL << (p0 + 1)) | idx_pp_src;
+
+                g = dist_hadamard(bounded, p0);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer remote dist_hadamard(%u) succeeds (err=%d)",
+                      p0, g);
+                double bounded_x = 0.0;
+                collective_error_t ce =
+                    collective_expectation_x(bounded, p0, &bounded_x);
+                CHECK(ce == COLLECTIVE_SUCCESS && fabs(bounded_x - 1.0) < 1e-12,
+                      "bounded-buffer remote <X_%u> = %.12f (err=%d)",
+                      p0, bounded_x, ce);
+                g = dist_s_gate(bounded, p0);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer remote dist_s_gate(%u) succeeds (err=%d)",
+                      p0, g);
+                double bounded_y = 0.0;
+                ce = collective_expectation_y(bounded, p0, &bounded_y);
+                CHECK(ce == COLLECTIVE_SUCCESS && fabs(bounded_y - 1.0) < 1e-12,
+                      "bounded-buffer remote <Y_%u> = %.12f (err=%d)",
+                      p0, bounded_y, ce);
+                CHECK(partition_init_zero(bounded) == PARTITION_SUCCESS,
+                      "bounded state reset after remote expectation");
+
+                g = dist_hadamard(bounded, 0);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer dist_hadamard(0) succeeds (err=%d)", g);
+                g = dist_cnot(bounded, 0, p0);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer dist_cnot(0, %u) succeeds (err=%d)",
+                      p0, g);
+
+                double p0_local = 0.0, p1_local = 0.0;
+                {
+                    double complex a0 = partition_get_amplitude(bounded, idx_base);
+                    double complex a1 = partition_get_amplitude(bounded, idx_h);
+                    p0_local = cabs(a0) * cabs(a0);
+                    p1_local = cabs(a1) * cabs(a1);
+                }
+                double p0_global = 0.0, p1_global = 0.0;
+                mpi_allreduce_sum_double(ctx, &p0_local, &p0_global, 1);
+                mpi_allreduce_sum_double(ctx, &p1_local, &p1_global, 1);
+                CHECK(fabs(p0_global - 0.5) < 1e-12 &&
+                      fabs(p1_global - 0.5) < 1e-12,
+                      "bounded-buffer CNOT preserves |01> and |11> probs: "
+                      "P0=%f P1=%f", p0_global, p1_global);
+
+                CHECK(partition_init_zero(bounded) == PARTITION_SUCCESS,
+                      "bounded-buffer state reset to |0...0>");
+                if (partition_get_owner(bounded, idx_base) == rank) {
+                    CHECK(partition_set_amplitude(bounded, idx_base, 0.0)
+                          == PARTITION_SUCCESS,
+                          "bounded-buffer clear |0...0> before basis init");
+                }
+                if (partition_get_owner(bounded, idx_cnot_src) == rank) {
+                    CHECK(partition_set_amplitude(bounded, idx_cnot_src, 1.0)
+                          == PARTITION_SUCCESS,
+                          "bounded-buffer init basis %llu",
+                          (unsigned long long)idx_cnot_src);
+                }
+                g = dist_gate_2q(bounded, 0, p0, &GATE_CNOT);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer dist_gate_2q(0,%u,&CNOT) succeeds (err=%d)",
+                      p0, g);
+
+                {
+                    double p_src_local = 0.0, p_dst_local = 0.0;
+                    double complex src = partition_get_amplitude(bounded, idx_cnot_src);
+                    double complex dst = partition_get_amplitude(bounded, idx_cnot_dst);
+                    p_src_local = cabs(src) * cabs(src);
+                    p_dst_local = cabs(dst) * cabs(dst);
+                    double p_src_global = 0.0, p_dst_global = 0.0;
+                    mpi_allreduce_sum_double(ctx, &p_src_local, &p_src_global, 1);
+                    mpi_allreduce_sum_double(ctx, &p_dst_local, &p_dst_global, 1);
+                    CHECK(fabs(p_src_global) < 1e-12 && fabs(p_dst_global - 1.0) < 1e-12,
+                          "bounded-buffer single-partition 2Q remaps amplitude: "
+                          "Psrc=%f Pdst=%f", p_src_global, p_dst_global);
+                }
+
+                CHECK(partition_init_zero(bounded) == PARTITION_SUCCESS,
+                      "bounded-buffer state reset before both-partition 2Q");
+                if (partition_get_owner(bounded, idx_base) == rank) {
+                    CHECK(partition_set_amplitude(bounded, idx_base, 0.0)
+                          == PARTITION_SUCCESS,
+                          "bounded-buffer clear |0...0> before partition basis init");
+                }
+                if (partition_get_owner(bounded, idx_pp_src) == rank) {
+                    CHECK(partition_set_amplitude(bounded, idx_pp_src, 1.0)
+                          == PARTITION_SUCCESS,
+                          "bounded-buffer init basis %llu",
+                          (unsigned long long)idx_pp_src);
+                }
+                g = dist_gate_2q(bounded, p0, p0 + 1, &GATE_CNOT);
+                CHECK(g == DIST_GATE_SUCCESS,
+                      "bounded-buffer dist_gate_2q(%u,%u,&CNOT) succeeds (err=%d)",
+                      p0, p0 + 1, g);
+
+                {
+                    double p_src_local = 0.0, p_dst_local = 0.0;
+                    double complex src = partition_get_amplitude(bounded, idx_pp_src);
+                    double complex dst = partition_get_amplitude(bounded, idx_pp_dst);
+                    p_src_local = cabs(src) * cabs(src);
+                    p_dst_local = cabs(dst) * cabs(dst);
+                    double p_src_global = 0.0, p_dst_global = 0.0;
+                    mpi_allreduce_sum_double(ctx, &p_src_local, &p_src_global, 1);
+                    mpi_allreduce_sum_double(ctx, &p_dst_local, &p_dst_global, 1);
+                    CHECK(fabs(p_src_global) < 1e-12 && fabs(p_dst_global - 1.0) < 1e-12,
+                          "bounded-buffer both-partition 2Q remaps amplitude: "
+                          "Psrc=%f Pdst=%f", p_src_global, p_dst_global);
+                }
+
+                partition_state_free(bounded);
             }
         }
     }

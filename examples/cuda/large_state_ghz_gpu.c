@@ -77,6 +77,30 @@ static int count_unique_gpu_endpoints(const gpu_rank_record_t *records, int coun
     return unique;
 }
 
+static int has_two_hosts_with_two_ranks_each(const gpu_rank_record_t *records,
+                                              int count)
+{
+    if (count != 4 || count_unique_hosts(records, count) != 2) return 0;
+
+    for (int i = 0; i < count; ++i) {
+        int host_ranks = 0;
+        int seen = 0;
+        for (int j = 0; j < i; ++j) {
+            if (strcmp(records[i].host, records[j].host) == 0) {
+                seen = 1;
+                break;
+            }
+        }
+        if (seen) continue;
+
+        for (int j = 0; j < count; ++j) {
+            if (strcmp(records[i].host, records[j].host) == 0) ++host_ranks;
+        }
+        if (host_ranks != 2) return 0;
+    }
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -101,17 +125,19 @@ int main(int argc, char **argv)
     const uint32_t partition_bits = partition_bits_for_size(size);
     const uint32_t local_qubits = N - partition_bits;
     const uint64_t local_count = 1ULL << local_qubits;
-    const uint64_t halo_count = local_count / 2;
 
     /* This GHZ circuit's only remote operation is CNOT(control=0,
-     * target=partition-qubit), whose packed halo is exactly half a shard.
-     * Bound both communication buffers to that proven maximum so an N=33
-     * four-rank proof needs two host-shard equivalents per rank instead of
-     * three.  Other distributed workloads must size their own config for the
-     * largest exchange they issue. */
+     * target=partition-qubit).  Use a tiny fixed halo so the example can run
+     * under the N=33 proof on two-node / four-rank style hardware profiles
+     * after the kernel-side chunked exchange landed.
+     *
+     * 1<<26 complex amplitudes = 1 GiB per buffer.  This leaves ample host
+     * memory headroom at N=33 while avoiding thousands of cross-zone MPI
+     * round trips for each partition-boundary CNOT. */
+    const size_t comm_halo_elements = 1ULL << 26;
     partition_config_t config = {0};
     config.use_aligned_memory = 1;
-    config.comm_buffer_size = (size_t)halo_count * sizeof(double complex);
+    config.comm_buffer_size = (size_t)comm_halo_elements * sizeof(double complex);
 
     if (rank == 0) {
         fprintf(stdout,
@@ -121,8 +147,11 @@ int main(int argc, char **argv)
                 (double)((1ULL << N) * sizeof(double complex)) /
                 ((double)size * 1024.0 * 1024.0));
         fprintf(stdout, "    per-rank host staging+halos: %.2f MB\n",
-                (double)(2 * local_count * sizeof(double complex)) /
+                (double)(local_count * sizeof(double complex) +
+                         2 * config.comm_buffer_size) /
                 (1024.0 * 1024.0));
+        fprintf(stdout, "    configured comm buffer: %.2f MB\n",
+                (double)(config.comm_buffer_size) / (1024.0 * 1024.0));
     }
 
     partitioned_state_t *state = partition_state_create_gpu(ctx, N, &config);
@@ -223,6 +252,8 @@ int main(int argc, char **argv)
         const double m0 = creal(a0) * creal(a0) + cimag(a0) * cimag(a0);
         const int hosts = count_unique_hosts(records, size);
         const int gpu_endpoints = count_unique_gpu_endpoints(records, size);
+        const int host_slots_2x2 =
+            has_two_hosts_with_two_ranks_each(records, size);
         fprintf(stdout,
             "\n    simulation time:  %.4f s (wall, rank 0)\n", sim_s);
         fprintf(stdout, "    P(|0...0>) = %.6f  (rank 0)\n", m0);
@@ -239,8 +270,10 @@ int main(int argc, char **argv)
                 "    the GPU->host->MPI->host->GPU sync path.\n");
             fprintf(stdout,
                 "MOONLAB_MPI_SHARDED_GPU PASS n=%u ranks=%d hosts=%d "
-                "gpu_endpoints=%d halo_swaps=%u local_qubits=%u\n",
-                N, size, hosts, gpu_endpoints, halo_swaps, local_qubits);
+                "host_slots_2x2=%d gpu_endpoints=%d halo_swaps=%u "
+                "local_qubits=%u\n",
+                N, size, hosts, host_slots_2x2, gpu_endpoints, halo_swaps,
+                local_qubits);
         } else {
             fprintf(stderr, "\n    FAIL: GHZ amplitudes off\n");
             verify_failed = 1;
