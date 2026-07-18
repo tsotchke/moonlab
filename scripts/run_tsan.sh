@@ -70,25 +70,32 @@ echo "[tsan] using $("$CC_BIN" --version | head -1)"
 # --- 1. Build the TSan-instrumented libraries -------------------------------
 build_lib() {  # $1=build_dir  $2=openmp(ON|OFF)
     local dir="$1" omp="$2"
-    if [ -f "$dir/libquantumsim.a" ] && [ "${QSIM_TSAN_FORCE:-0}" != "1" ]; then
-        echo "[tsan] reusing $dir/libquantumsim.a (QSIM_TSAN_FORCE=1 to rebuild)"
-        return 0
+    # A stale libquantumsim.a would make this evidence test PRE-FIX code and lie
+    # (a fixed race reported as still-racy, or a new race hidden by an old-clean
+    # archive). Never short-circuit on the archive's mere existence. Configure
+    # once (cache reused), then ALWAYS run the incremental build so CMake's own
+    # dependency tracking rebuilds any object whose source changed since the last
+    # run. QSIM_TSAN_FORCE=1 forces a clean reconfigure from scratch.
+    if [ "${QSIM_TSAN_FORCE:-0}" = "1" ]; then
+        rm -rf "$dir"
     fi
-    echo "[tsan] configuring $dir (OpenMP=$omp) ..."
-    CC="$CC_BIN" CXX="${CXX:-clang++}" cmake -S . -B "$dir" -G "Unix Makefiles" \
-        -DCMAKE_BUILD_TYPE=Debug \
-        -DQSIM_BUILD_STATIC=ON -DQSIM_BUILD_SHARED=OFF \
-        -DQSIM_BUILD_TESTS=OFF -DQSIM_BUILD_EXAMPLES=OFF \
-        -DQSIM_BUILD_BENCHMARKS=OFF -DQSIM_BUILD_VISUALIZATION=OFF \
-        -DQSIM_ENABLE_OPENMP="$omp" -DQSIM_ENABLE_METAL=OFF -DQSIM_WERROR=OFF \
-        -DQSIM_ENABLE_TLS=OFF -DQSIM_ENABLE_CONTROL_PLANE=ON \
-        -DQSIM_ENABLE_LTO=OFF -DQSIM_NATIVE_ARCH=OFF \
-        -DCMAKE_C_FLAGS="-fsanitize=thread -g -O1 -fno-omit-frame-pointer" \
-        -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1 -fno-omit-frame-pointer" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
-        -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread" >"$LOG_DIR/cfg_$(basename "$dir").log" 2>&1 \
-        || { echo "[tsan] configure failed for $dir; see $LOG_DIR/cfg_$(basename "$dir").log"; return 1; }
-    echo "[tsan] building $dir/libquantumsim.a -j$JOBS ..."
+    if [ ! -f "$dir/CMakeCache.txt" ]; then
+        echo "[tsan] configuring $dir (OpenMP=$omp) ..."
+        CC="$CC_BIN" CXX="${CXX:-clang++}" cmake -S . -B "$dir" -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DQSIM_BUILD_STATIC=ON -DQSIM_BUILD_SHARED=OFF \
+            -DQSIM_BUILD_TESTS=OFF -DQSIM_BUILD_EXAMPLES=OFF \
+            -DQSIM_BUILD_BENCHMARKS=OFF -DQSIM_BUILD_VISUALIZATION=OFF \
+            -DQSIM_ENABLE_OPENMP="$omp" -DQSIM_ENABLE_METAL=OFF -DQSIM_WERROR=OFF \
+            -DQSIM_ENABLE_TLS=OFF -DQSIM_ENABLE_CONTROL_PLANE=ON \
+            -DQSIM_ENABLE_LTO=OFF -DQSIM_NATIVE_ARCH=OFF \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -g -O1 -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1 -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread" >"$LOG_DIR/cfg_$(basename "$dir").log" 2>&1 \
+            || { echo "[tsan] configure failed for $dir; see $LOG_DIR/cfg_$(basename "$dir").log"; return 1; }
+    fi
+    echo "[tsan] building $dir/libquantumsim.a -j$JOBS (incremental) ..."
     cmake --build "$dir" --target quantumsim -j"$JOBS" >"$LOG_DIR/build_$(basename "$dir").log" 2>&1 \
         || { echo "[tsan] build failed for $dir; see $LOG_DIR/build_$(basename "$dir").log"; return 1; }
 }
