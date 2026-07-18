@@ -89,9 +89,9 @@ EVENTS="$WORK/events.jsonl"
 : > "$EVENTS"
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 json_escape() { printf '%s' "$1" | tr -d '\n\r' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-emit() { # emit <name> <status> <tier> <new> <known> <extra_json>
-  printf '{"kind":"moonlab_scaling","name":"%s","status":"%s","tier":"%s","ts":"%s","new_divergences":%s,"known_divergences":%s%s}\n' \
-    "$1" "$2" "$3" "$(now_iso)" "$4" "$5" "$6" >> "$EVENTS"
+emit() { # emit <name> <verdict> <tier> <new> <known> <extra_json>
+  printf '{"kind":"moonlab_scaling","name":"%s","status":"%s","value":"%s","tier":"%s","ts":"%s","new_divergences":%s,"known_divergences":%s%s}\n' \
+    "$1" "$2" "$2" "$3" "$(now_iso)" "$4" "$5" "$6" >> "$EVENTS"
 }
 
 # --------------------------------------------------------------------------

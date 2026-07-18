@@ -41,6 +41,7 @@ LIB_ON="build-tsan-omp/libquantumsim.a"
 SUPP="tests/concurrency/tsan.supp"
 
 mkdir -p "$TRACE_DIR" "$LOG_DIR"
+: > "$TRACE"
 
 # --- 0a. Windows gate --------------------------------------------------------
 # The lane is POSIX-only (pthreads / unistd / sched_yield) and TSan targets
@@ -49,7 +50,7 @@ mkdir -p "$TRACE_DIR" "$LOG_DIR"
 case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
         echo "[tsan] concurrency lane is POSIX-only; gated off Windows."
-        printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","races":0,"snippet":"POSIX-only lane, gated off Windows","confidence":0.2}\n' >> "$TRACE"
+        printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","status":"SKIP","races":0,"snippet":"POSIX-only lane, gated off Windows","confidence":0.2}\n' >> "$TRACE"
         exit 0 ;;
 esac
 
@@ -61,7 +62,7 @@ if ! "$CC_BIN" -fsanitize=thread "$probe_c" -o "${probe_c%.c}.bin" >/dev/null 2>
     echo "[tsan] Falling back to the documented Linux-CI TSan job:"
     echo "       .github/workflows/tsan.yml (clang + Archer-instrumented libomp)."
     rm -f "$probe_c" "${probe_c%.c}.bin"
-    printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","races":0,"snippet":"ThreadSanitizer unavailable on this host; see .github/workflows/tsan.yml","confidence":0.2}\n' >> "$TRACE"
+    printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","status":"SKIP","races":0,"snippet":"ThreadSanitizer unavailable on this host; see .github/workflows/tsan.yml","confidence":0.2}\n' >> "$TRACE"
     exit 0
 fi
 rm -f "$probe_c" "${probe_c%.c}.bin"
@@ -137,9 +138,9 @@ distinct_races() { grep "SUMMARY: ThreadSanitizer: data race" "$1" 2>/dev/null |
 
 json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g' <<<"$1"; }
 
-emit() {  # $1=name $2=value $3=races $4=snippet $5=confidence
-    printf '{"kind":"moonlab_tsan","name":"%s","value":"%s","races":%s,"snippet":"%s","confidence":%s}\n' \
-        "$1" "$2" "$3" "$(json_escape "$4")" "$5" >> "$TRACE"
+emit() {  # $1=name $2=verdict $3=races $4=snippet $5=confidence
+    printf '{"kind":"moonlab_tsan","name":"%s","value":"%s","status":"%s","races":%s,"snippet":"%s","confidence":%s}\n' \
+        "$1" "$2" "$2" "$3" "$(json_escape "$4")" "$5" >> "$TRACE"
 }
 
 run_one() {  # $1=name $2=supp(0|1) $3=binary $4...=args  -> echoes race count

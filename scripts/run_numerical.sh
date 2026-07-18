@@ -47,9 +47,9 @@ mkdir -p "$WORK" "$TRACES_DIR"
 : > "$OUT"
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-emit() { # name status extra_json
-  printf '{"kind":"moonlab_numerical","name":"%s","status":"%s","timestamp":"%s"%s}\n' \
-    "$1" "$2" "$(now_iso)" "$3" >> "$OUT"
+emit() { # name verdict extra_json; status and value are kept in sync for ICC consumers
+  printf '{"kind":"moonlab_numerical","name":"%s","status":"%s","value":"%s","timestamp":"%s"%s}\n' \
+    "$1" "$2" "$2" "$(now_iso)" "$3" >> "$OUT"
 }
 
 # --------------------------------------------------------------------------
