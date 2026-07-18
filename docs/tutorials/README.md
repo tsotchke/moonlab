@@ -40,4 +40,4 @@ unit test or benchmark in the source tree.
   lattice gauge theory implementation.
 - `documents/index.md`: top-level documentation entry point with
   the complete module map.
-- [`../README.md`](../README.md): current documentation map for MoonLab 1.1.
+- [`../README.md`](../README.md): current documentation map for MoonLab 1.2.

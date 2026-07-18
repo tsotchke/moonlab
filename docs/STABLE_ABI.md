@@ -1,6 +1,6 @@
 # Stable ABI contract -- v1.x
 
-**Current package:** 1.1.0
+**Current package:** 1.2.0
 **Current ABI:** 0.6.0
 
 ## Scope
@@ -272,13 +272,13 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 
 | Language | Crate / package                   | Current version |
 |----------|-----------------------------------|------------------|
-| C        | `libquantumsim.{so,dylib,dll}`    | package 1.1.0, stable ABI 0.5.0 |
-| Python   | `moonlab` (pip)                   | follows the package version (1.1.0) |
-| Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.1.0) |
-| JS       | `@moonlab/quantum-core`           | follows the package version (1.1.0) |
+| C        | `libquantumsim.{so,dylib,dll}`    | package 1.2.0, stable ABI 0.6.0 |
+| Python   | `moonlab` (pip)                   | follows the package version (1.2.0) |
+| Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.0) |
+| JS       | `@moonlab/quantum-core`           | follows the package version (1.2.0) |
 
 Each binding crate/package revs alongside the C library's package version
-(currently 1.1.0) and stays within the same 1.x compatibility line as the
+(currently 1.2.0) and stays within the same 1.x compatibility line as the
 stable C ABI (currently 0.5.0). Breaking changes in the language idiom of a
 single binding (e.g. switching Rust's `Vec<f64>` to `Box<[f64]>`) are
 allowed but rare; each binding's CHANGELOG records them with semver

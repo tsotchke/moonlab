@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -20,32 +20,33 @@ packages.
 See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
 boundary.
 
-## Current release: v1.1.0 (2026-07-11)
+## Current release: v1.2.0 (2026-07-18)
 
-Version 1.1 brings the native CUDA state-vector backend online on Tegra and
-discrete NVIDIA GPUs. A state created with `quantum_state_create_gpu()` uses the
-same gate calls as a CPU state, with 21 one- and two-qubit primitives routed
-through CUDA. Ordinary states remain on the CPU path with 1.0-compatible
-behavior.
+Version 1.2 hardens the native CUDA state-vector backend and adds bounded MPI
+sharding beyond 32 qubits. Distributed gates exchange fixed-size chunks rather
+than full remote shards, and the release fleet gate binds an N=33 four-rank,
+two-host proof to the exact clean commit and observed 2+2 topology. Ordinary
+states remain on the CPU path with 1.x-compatible behavior.
 
 The stable ABI has advanced from 0.3.0 through 0.4.0 (`moonlab_vqe_gradient`,
 exposing exact adjoint gradients for supported noise-free ansaetze and
-analytic parameter shift otherwise) to **0.5.0**, which adds
+analytic parameter shift otherwise) to **0.6.0**, which adds
 `moonlab_qrng_get_status`, honest QRNG capability bits, a certification-
-language scrub, and wasm32 correctness fixes. The release also ships native
-Windows x64 and ARM64 packages built with ClangCL; both are tested as
-relocatable external CMake packages before upload.
+language scrub, hidden-visibility exports for the binding-consumed surface, and
+the topology/CA-MPS additions documented in the stable ABI guide. The release
+also ships native Windows x64 and ARM64 packages built with ClangCL; both are
+tested as relocatable external CMake packages before upload.
 
-| 1.1 deliverable | Contract |
+| 1.2 deliverable | Contract |
 |---|---|
+| Bounded CUDA/MPI sharding | Chunked remote gates and expectations with exact N=33, four-rank, two-host attestation |
+| Stable ABI 0.6.0 | Hidden-visibility-safe native and binding surface, QGT topology one-shots, and CA-MPS conjugate Pauli |
+| Numerical and concurrency hardening | Sanitizer, TSan, no-LAPACK SVD, large-n differential, and adversarial control-plane gates |
 | Native CUDA state vector | GPU lifecycle, host/device sync, probabilities, norms, and transparent gate dispatch |
-| Tegra + discrete detection | One managed-memory code path with platform-specific runtime probes |
-| Stable VQE gradient | `moonlab_vqe_gradient` in ABI 0.4.0; never finite differences |
-| QRNG status surface | `moonlab_qrng_get_status` in ABI 0.5.0; explicit capability bits instead of implied certification |
 | Windows distribution | `windows-x64.zip` and `windows-arm64.zip` with DLL, import library, headers, and CMake exports |
 
-See [the v1.1.0 release notes](docs/release/v1.1.0-release-notes.md),
-[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#110---2026-07-11).
+See [the v1.2.0 release notes](docs/release/v1.2.0-release-notes.md),
+[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#120---2026-07-18).
 
 ## v1.0 platform foundation
 
@@ -1294,7 +1295,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v1.1.0},
+    version      = {v1.2.0},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

@@ -1,22 +1,22 @@
 # Moonlab Platform Specification
 
 **Original baseline:** 0.2.0-dev.
-**Current shipping version:** 1.1.0.
+**Current shipping version:** 1.2.0.
 **Status:** prescriptive design contract. Roadmap/status statements below that
 name v0.3 are historical targets, not current release claims. For the shipping
-surface use `docs/README.md`, `docs/release/v1.1.0-release-notes.md`, and
+surface use `docs/README.md`, `docs/release/v1.2.0-release-notes.md`, and
 `CHANGELOG.md`.
 **Owner:** tsotchke
 
-## Current v1.1 posture
+## Current v1.2 posture
 
-| Contract area | Shipping state in 1.1.0 |
+| Contract area | Shipping state in 1.2.0 |
 |---|---|
 | Compute representations | Dense state vector, MPS/MPO/DMRG/TDVP, MPDO, Clifford tableau, CA-MPS/CA-PEPS |
 | Hardware lowering | Runtime CPU SIMD, Apple Metal, native CUDA on Tegra/discrete NVIDIA, optional OpenCL/Vulkan/cuQuantum |
 | Distribution | Relocatable CMake packages for Linux, macOS, and Windows x64/ARM64; Debian and language-package workflows |
-| Stable integration | C ABI 0.5.0 with opaque handles and flat buffers; Python, Rust, and JavaScript/WASM bindings |
-| Scale and operations | Optional MPI, scheduler/control plane on POSIX, Docker/Helm deployment surfaces |
+| Stable integration | C ABI 0.6.0 with hidden-visibility-safe exports, opaque handles, and flat buffers; Python, Rust, and JavaScript/WASM bindings |
+| Scale and operations | Bounded CUDA/MPI sharding, scheduler/control plane on POSIX, Docker/Helm deployment surfaces |
 
 The original migration plan remains below because it records the design
 rationale. Its phase labels do not override the current-state documents.

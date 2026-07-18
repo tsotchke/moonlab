@@ -306,7 +306,7 @@ export type { GPUBackendTypeCode } from './gpu-backend';
 // Version Info
 // ============================================================================
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 // ============================================================================
 // Type-only Exports

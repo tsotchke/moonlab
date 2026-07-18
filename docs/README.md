@@ -1,7 +1,7 @@
 # MoonLab documentation
 
-**Current release:** 1.1.0 (2026-07-11)
-**Stable C ABI:** 0.5.0
+**Current release:** 1.2.0 (2026-07-18)
+**Stable C ABI:** 0.6.0
 **Supported release platforms:** Linux x86-64/ARM64, macOS Apple
 Silicon/Intel, and Windows x64/ARM64
 
@@ -16,19 +16,19 @@ documents that describe the current build, API, architecture, and operations.
 | Build and run a first circuit | [Getting started](getting-started.md) |
 | Build or consume MoonLab on Windows | [Windows guide](WINDOWS.md) |
 | Understand CI and release artifacts | [CI/CD pipelines](CI_CD.md) |
-| See what changed in 1.1.0 | [v1.1.0 release notes](release/v1.1.0-release-notes.md) |
+| See what changed in 1.2.0 | [v1.2.0 release notes](release/v1.2.0-release-notes.md) |
 | Use the supported binary interface | [Stable ABI](STABLE_ABI.md) |
 | Choose build flags | [Configuration options](reference/configuration-options.md) |
 | Understand the implementation | [Architecture](../ARCHITECTURE.md) |
 | Understand platform design commitments | [Platform specification](../PLATFORM.md) |
 
-## Current v1.1 surface
+## Current v1.2 surface
 
-MoonLab 1.1 adds a native CUDA state-vector backend for Tegra and discrete
-NVIDIA GPUs. States created with `quantum_state_create_gpu()` route the same
-gate API used by CPU states through CUDA kernels; ordinary states remain on the
-CPU path. The release also adds `moonlab_vqe_gradient` to stable ABI 0.4.0 for
-exact adjoint or analytic parameter-shift gradients.
+MoonLab 1.2 adds bounded CUDA/MPI sharding beyond 32 qubits, promotes the
+binding-consumed public surface under hidden visibility, and advances the
+stable ABI to 0.6.0. States created with `quantum_state_create_gpu()` retain the
+same gate API used by CPU states, while distributed gates exchange bounded
+chunks rather than allocating full remote shards.
 
 The distributable CPU library remains the broad compatibility target. Official
 release archives are built with native-CPU tuning disabled and contain the

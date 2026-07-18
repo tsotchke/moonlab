@@ -29,7 +29,7 @@ services:
       context: ..
       dockerfile: docker/ubuntu/release/Dockerfile
       args:
-        VERSION: ${VERSION:-1.1.0}
+        VERSION: ${VERSION:-1.2.0}
     platform: linux/amd64
 
   # Debian ARM64 Release Build
@@ -38,7 +38,7 @@ services:
       context: ..
       dockerfile: docker/debian/release/Dockerfile
       args:
-        VERSION: ${VERSION:-1.1.0}
+        VERSION: ${VERSION:-1.2.0}
     platform: linux/arm64
 
   # Debian Debug Build
@@ -47,5 +47,5 @@ services:
       context: ..
       dockerfile: docker/debian/debug/Dockerfile
       args:
-        VERSION: ${VERSION:-1.1.0}
+        VERSION: ${VERSION:-1.2.0}
     platform: linux/amd64

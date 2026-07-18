@@ -16,6 +16,47 @@ SEMVER_RE = re.compile(
 )
 JS_PACKAGES = ("core", "algorithms", "viz", "react", "vue")
 RUST_MANIFESTS = ("moonlab", "moonlab-sys", "moonlab-tui")
+RUST_PATH_DEPENDENCIES = (
+    ("moonlab/Cargo.toml", "moonlab-sys"),
+    ("moonlab-tui/Cargo.toml", "moonlab"),
+)
+JS_VERSION_TESTS = (
+    "react/src/__tests__/exports.test.ts",
+    "viz/src/__tests__/utilities.test.ts",
+    "vue/src/__tests__/exports.test.ts",
+)
+VERSION_DEFAULTS = (
+    (
+        "Debian package default",
+        "scripts/build-deb.sh",
+        r'^VERSION="\$\{1:-([^}]+)\}"$',
+        1,
+    ),
+    (
+        "Ubuntu release container",
+        "docker/ubuntu/release/Dockerfile",
+        r"^ARG VERSION=([^\s]+)$",
+        1,
+    ),
+    (
+        "Debian release container",
+        "docker/debian/release/Dockerfile",
+        r"^ARG VERSION=([^\s]+)$",
+        1,
+    ),
+    (
+        "Debian debug container",
+        "docker/debian/debug/Dockerfile",
+        r"^ARG VERSION=([^\s]+)$",
+        1,
+    ),
+    (
+        "Compose container defaults",
+        "docker/docker-compose.yml",
+        r"VERSION: \$\{VERSION:-([^}]+)\}",
+        3,
+    ),
+)
 
 
 def pep440_version(version: str) -> str:
@@ -36,6 +77,23 @@ def replace_one(path: Path, pattern: str, replacement: str) -> None:
     updated, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
     if count != 1:
         raise RuntimeError(f"could not update the expected version field in {path}")
+    path.write_text(updated)
+
+
+def replace_version_matches(
+    path: Path, pattern: str, version: str, expected_count: int
+) -> None:
+    text = path.read_text()
+    updated, count = re.subn(
+        pattern,
+        lambda match: match.group(0).replace(match.group(1), version, 1),
+        text,
+        flags=re.MULTILINE,
+    )
+    if count != expected_count:
+        raise RuntimeError(
+            f"expected {expected_count} version fields in {path}, found {count}"
+        )
     path.write_text(updated)
 
 
@@ -60,6 +118,12 @@ def set_version(version: str) -> None:
             r'^version = "[^"]+"$',
             f'version = "{version}"',
         )
+    for manifest, dependency in RUST_PATH_DEPENDENCIES:
+        replace_one(
+            ROOT / f"bindings/rust/{manifest}",
+            rf'^({re.escape(dependency)} = \{{ version = ")[^"]+(".*)$',
+            rf'\g<1>{version}\g<2>',
+        )
 
     package_files = [ROOT / "bindings/javascript/package.json"]
     package_files.extend(
@@ -78,6 +142,12 @@ def set_version(version: str) -> None:
             r"^export const VERSION = '[^']+';$",
             f"export const VERSION = '{version}';",
         )
+    for relative_path in JS_VERSION_TESTS:
+        replace_one(
+            ROOT / f"bindings/javascript/packages/{relative_path}",
+            r"expect\(VERSION\)\.toBe\('[^']+'\);",
+            f"expect(VERSION).toBe('{version}');",
+        )
     replace_one(
         ROOT / "bindings/javascript/packages/core/emscripten/post.js",
         r"^  core: '[^']+',$",
@@ -88,6 +158,10 @@ def set_version(version: str) -> None:
         r"version-[^-\s]+(?:-[^-\s]+)*-blue",
         f"version-{version}-blue",
     )
+    for _label, relative_path, pattern, expected_count in VERSION_DEFAULTS:
+        replace_version_matches(
+            ROOT / relative_path, pattern, version, expected_count
+        )
 
     print(f"Moonlab versions synchronized: semver={version} pypi={python_version}")
 
@@ -134,6 +208,15 @@ def check_version(tag: str | None) -> None:
             ),
             version,
         )
+    for manifest, dependency in RUST_PATH_DEPENDENCIES:
+        expect(
+            f"Rust dependency {dependency} in {manifest}",
+            first_match(
+                ROOT / f"bindings/rust/{manifest}",
+                rf'^{re.escape(dependency)} = \{{ version = "([^"]+)".*$',
+            ),
+            version,
+        )
 
     package_files = [ROOT / "bindings/javascript/package.json"]
     package_files.extend(
@@ -157,6 +240,15 @@ def check_version(tag: str | None) -> None:
             ),
             version,
         )
+    for relative_path in JS_VERSION_TESTS:
+        expect(
+            f"JavaScript version test {relative_path}",
+            first_match(
+                ROOT / f"bindings/javascript/packages/{relative_path}",
+                r"expect\(VERSION\)\.toBe\('([^']+)'\);",
+            ),
+            version,
+        )
     expect(
         "WASM runtime",
         first_match(
@@ -165,6 +257,17 @@ def check_version(tag: str | None) -> None:
         ),
         version,
     )
+    for label, relative_path, pattern, expected_count in VERSION_DEFAULTS:
+        matches = re.findall(
+            pattern, (ROOT / relative_path).read_text(), re.MULTILINE
+        )
+        if len(matches) != expected_count:
+            errors.append(
+                f"{label}: expected {expected_count} version fields, found {len(matches)}"
+            )
+            continue
+        for index, actual in enumerate(matches, start=1):
+            expect(f"{label} #{index}", actual, version)
 
     if errors:
         print("Release version gate failed:", file=sys.stderr)

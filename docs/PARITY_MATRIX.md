@@ -1,6 +1,6 @@
 # Cross-language parity matrix
 
-Coverage of Moonlab capabilities across the four bindings as of v1.1.0.
+Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 
 | Symbol | Meaning |
 |--------|---------|

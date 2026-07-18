@@ -408,7 +408,7 @@ This library implements algorithms from the following foundational works:
 
 ## Historical: what shipped in v0.3.0
 
-This package is currently at **v1.1.0** (stable ABI **0.6.0**); see
+This package is currently at **v1.2.0** (stable ABI **0.6.0**); see
 `CHANGELOG.md` at the repo root and `docs/PARITY_MATRIX.md` for the
 full v0.4-v1.1 history, including the v1.1 GPU (CUDA) state API,
 control-plane job scheduling, and QRNG status surface added since the
@@ -452,4 +452,4 @@ worked examples.
 
 ---
 
-*Current release: v1.1.0 (ABI 0.6.0)*
+*Current release: v1.2.0 (ABI 0.6.0)*

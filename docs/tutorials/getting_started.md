@@ -1,7 +1,7 @@
 # Tutorial: Getting started
 
 This tutorial takes a fresh checkout to a running quantum simulation
-in three short steps. It targets MoonLab 1.1.0 and the same CMake build
+in three short steps. It targets MoonLab 1.2.0 and the same CMake build
 contract exercised by Linux, macOS, Windows x64, and Windows ARM64 CI.
 
 ## 1. Build the library

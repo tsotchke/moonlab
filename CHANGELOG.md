@@ -7,15 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Post-v1.1.0 stabilization.** ABI 0.5.0 (QRNG status surface + honest
+## [1.2.0] - 2026-07-18
+
+**v1.2.0 stabilization and distributed-scale release.** ABI 0.5.0 (QRNG status surface + honest
 certification language + wasm32 correctness fixes), a VQE quantum natural
 gradient optimizer, a first-principles H2/LiH potential energy surface, the
 real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
-for CPU-only builds, and a full packaging/release-pipeline rework. Covers
-`v1.1.0..HEAD`, including merged PRs #12, #13, and #14.
+for CPU-only builds, bounded CUDA/MPI state sharding beyond 32 qubits, and a
+full packaging/release-pipeline rework. Covers `v1.1.0..v1.2.0`, including
+merged PRs #12, #13, and #14.
 
 ### Added
 
+- **Bounded distributed CUDA state sharding.** Remote one- and two-qubit gates,
+  CNOT, and distributed X/Y expectation values exchange fixed-size chunks
+  instead of allocating full-shard halo copies. The fleet attestation runs a
+  routine N=12 preflight followed by an exact N=33, four-rank, two-host proof
+  and binds the evidence to a clean commit SHA and the observed 2+2 topology.
+- **ICC-gated release evidence.** Hidden-visibility ABI, phantom declaration,
+  sanitizers, numerical edge cases, scaling differential, thread safety,
+  binding suites, and fleet MPI now emit commit-bound runtime traces consumed
+  by the release-readiness oracle.
 - **ABI 0.5.0: `moonlab_qrng_get_status`.** New stable-ABI entry exposing a
   versioned QRNG status struct with `MOONLAB_QRNG_CAP_*` capability bits
   stating exactly what the conditioned hybrid RNG is (hardware/OS entropy,
@@ -42,7 +54,7 @@ for CPU-only builds, and a full packaging/release-pipeline rework. Covers
   `Grover` class (marked-state oracle, diffusion, optimal iteration count,
   top-state extraction, qubit/basis-state validation) over
   `@moonlab/quantum-core`, plus the H2-only classical `VQE` class, with
-  vitest coverage; the package returns to public at 1.1.0.
+  vitest coverage; the package returns to public at 1.2.0.
 - **`tests/unit/test_entropy_sources.c`** pins the direct entropy-source
   surface (`entropy_jitter_bytes`, `entropy_create_with_source` +
   `entropy_bytes` over the jitter source) against the shipped
@@ -81,6 +93,18 @@ for CPU-only builds, and a full packaging/release-pipeline rework. Covers
 
 ### Fixed
 
+- **Hidden-visibility public ABI.** Public declarations used by native tools,
+  examples, Python, Rust, JavaScript, and distributed consumers now carry the
+  export annotation required by hidden ELF/Mach-O visibility and Windows DLL
+  builds. A fresh structural index reports zero unimplemented declarations.
+- **Distributed correctness and memory bounds.** Fixed double-counting in the
+  distributed Pauli-X expectation and the Pauli-Y orientation, added four-rank
+  regression coverage, and capped communication buffers so N=33 no longer
+  requires two full remote shards per rank.
+- **Adversarial deep-hunt findings.** Closed five concurrency races and an audit
+  deadlock, bounded an oversized control-plane allocation path, restored
+  no-LAPACK SVD isometry, and made the large-n scaling harness enforce every
+  case without stale known-divergence free passes.
 - **macOS Mach-O link failure on CPU-only builds.** GPU-routing hooks
   (`qsim_gpu_route_*`, `metal_*`, `moonlab_cuda_*`) are declared extern
   weak and NULL-checked at runtime to fall back to CPU -- this resolves to

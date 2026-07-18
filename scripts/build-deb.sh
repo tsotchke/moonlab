@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-VERSION="${1:-1.1.0}"
+VERSION="${1:-1.2.0}"
 BUILD_DIR="${MOONLAB_DEB_BUILD_DIR:-$PROJECT_ROOT/build-deb}"
 PKG_ROOT="${MOONLAB_DEB_STAGING_DIR:-$PROJECT_ROOT/build/deb-root}"
 

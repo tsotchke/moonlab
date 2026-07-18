@@ -12,7 +12,7 @@ import {
 
 describe('@moonlab/quantum-react public surface', () => {
   it('reports the release version and exports hooks', () => {
-    expect(VERSION).toBe('1.1.0');
+    expect(VERSION).toBe('1.2.0');
     expect(useQuantumState).toBeTypeOf('function');
     expect(useCircuit).toBeTypeOf('function');
   });
