@@ -1317,7 +1317,9 @@ endif()
 
 # Linux configuration
 if(QSIM_PLATFORM_LINUX)
-    target_compile_definitions(quantumsim PRIVATE PLATFORM_LINUX=1)
+    target_compile_definitions(quantumsim PRIVATE
+        PLATFORM_LINUX=1
+        MOONLAB_HAVE_LAPACKE=1)
 
     # LAPACK (zheev_, LAPACKE_zheev, LAPACKE_zgesvd) on Linux.
     # Apple's Accelerate framework provides these on macOS; Linux
