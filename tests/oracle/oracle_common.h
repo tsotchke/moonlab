@@ -68,6 +68,18 @@ static inline void oracle_rng_seed(oracle_rng_t *r, uint64_t seed) {
     r->state = seed;
 }
 
+/* Stable FNV-1a hash for deriving per-probe streams.  Never mix pointer
+ * values into deterministic seeds: ASLR makes those streams process-local. */
+static inline uint64_t oracle_stable_id_hash(const char *id) {
+    uint64_t hash = 14695981039346656037ULL;
+    const unsigned char *p = (const unsigned char *)id;
+    while (*p) {
+        hash ^= (uint64_t)*p++;
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
 static inline double oracle_rng_unit(oracle_rng_t *r) {
     /* 53-bit uniform in [0, 1). */
     return (double)(oracle_splitmix64(&r->state) >> 11) * (1.0 / 9007199254740992.0);

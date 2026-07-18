@@ -44,7 +44,7 @@ static void run_chi2(oracle_ctx_t *ctx, const oracle_circuit_t *c) {
 
     /* Deterministic uniform draws for the sampler. */
     oracle_rng_t rng;
-    oracle_rng_seed(&rng, oracle_corpus_seed ^ 0x5253u ^ (uint64_t)(uintptr_t)c->id);
+    oracle_rng_seed(&rng, oracle_corpus_seed ^ 0x5253u ^ oracle_stable_id_hash(c->id));
     for (int i = 0; i < N_SHOTS; i++) rv[i] = oracle_rng_unit(&rng);
 
     measurement_sample(s, outc, N_SHOTS, rv);
@@ -95,7 +95,7 @@ static void run_collapse(oracle_ctx_t *ctx, const oracle_circuit_t *c) {
     for (int i = 0; i < c->num_gates; i++) oracle_apply_dense(s, &c->gates[i]);
 
     oracle_rng_t rng;
-    oracle_rng_seed(&rng, oracle_corpus_seed ^ 0xC0115Eu ^ (uint64_t)(uintptr_t)c->id);
+    oracle_rng_seed(&rng, oracle_corpus_seed ^ 0xC0115Eu ^ oracle_stable_id_hash(c->id));
 
     int q = n / 2;
     double r1 = oracle_rng_unit(&rng);
