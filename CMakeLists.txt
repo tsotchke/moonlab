@@ -1323,12 +1323,16 @@ if(QSIM_PLATFORM_LINUX)
 
     # LAPACK (zheev_, LAPACKE_zheev, LAPACKE_zgesvd) on Linux.
     # Apple's Accelerate framework provides these on macOS; Linux
-    # needs an explicit link against a BLAS/LAPACK provider.  We
+    # needs explicit headers and links against a BLAS/LAPACK provider.  We
     # prefer LAPACKE (row-major wrappers used by collective_ops.c)
     # over the raw Fortran symbols, but link both forms so either
-    # entry point resolves.  If neither is available, the build
-    # carries on; the affected features will fail at link time for
-    # consumers that call them.
+    # entry point resolves.  Debian installs lapacke.h directly under
+    # its include root, while AlmaLinux installs it in a lapacke/
+    # subdirectory, so search both layouts instead of hardcoding one.
+    find_path(LAPACKE_INCLUDE_DIR
+        NAMES lapacke.h
+        PATH_SUFFIXES lapacke
+        REQUIRED)
     find_library(LAPACKE_LIB NAMES lapacke)
     find_library(LAPACK_LIB NAMES lapack)
     find_library(BLAS_LIB   NAMES openblas blas)
@@ -1347,6 +1351,8 @@ if(QSIM_PLATFORM_LINUX)
     if(NOT BLAS_LIB)
         set(BLAS_LIB blas)
     endif()
+    target_include_directories(quantumsim SYSTEM PRIVATE
+        "${LAPACKE_INCLUDE_DIR}")
     target_link_libraries(quantumsim PRIVATE
         ${LAPACKE_LIB} ${LAPACK_LIB} ${BLAS_LIB})
     message(STATUS "LAPACK: LAPACKE=${LAPACKE_LIB} "

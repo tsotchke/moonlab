@@ -239,7 +239,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install wheel builder
-        run: python -m pip install cibuildwheel==4.1.0
+        run: python -m pip install "cibuildwheel[uv]==4.1.0"
 
       - name: Build, repair, and test wheel
         env:
