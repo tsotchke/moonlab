@@ -34,7 +34,7 @@
 
 #ifndef MOONLAB_CA_PEPS_H
 #define MOONLAB_CA_PEPS_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

@@ -17,7 +17,7 @@
 
 #ifndef TN_MEASUREMENT_H
 #define TN_MEASUREMENT_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include "tn_gates.h"

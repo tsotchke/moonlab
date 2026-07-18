@@ -1,6 +1,6 @@
 #ifndef ACCELERATE_OPS_H
 #define ACCELERATE_OPS_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

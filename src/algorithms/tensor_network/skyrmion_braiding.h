@@ -48,7 +48,7 @@
 
 #ifndef SKYRMION_BRAIDING_H
 #define SKYRMION_BRAIDING_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "lattice_2d.h"
 #include "mpo_2d.h"

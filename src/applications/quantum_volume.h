@@ -63,7 +63,7 @@
 
 #ifndef MOONLAB_QUANTUM_VOLUME_H
 #define MOONLAB_QUANTUM_VOLUME_H
-#include "applications/moonlab_api.h"
+#include "moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

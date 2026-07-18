@@ -45,7 +45,7 @@
 
 #ifndef MOONLAB_CHERN_FHS_H
 #define MOONLAB_CHERN_FHS_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>

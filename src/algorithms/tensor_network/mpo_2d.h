@@ -44,7 +44,7 @@
 
 #ifndef MPO_2D_H
 #define MPO_2D_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "dmrg.h"
 #include "lattice_2d.h"

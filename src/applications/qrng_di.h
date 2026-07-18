@@ -32,7 +32,7 @@
 
 #ifndef MOONLAB_QRNG_DI_H
 #define MOONLAB_QRNG_DI_H
-#include "applications/moonlab_api.h"
+#include "moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

@@ -1,6 +1,6 @@
 #ifndef MOONLAB_FUSION_H
 #define MOONLAB_FUSION_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 /**
  * @file fusion.h

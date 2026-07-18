@@ -25,7 +25,7 @@
 
 #ifndef GPU_BACKEND_H
 #define GPU_BACKEND_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

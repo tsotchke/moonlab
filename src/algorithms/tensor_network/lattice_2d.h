@@ -48,7 +48,7 @@
 
 #ifndef LATTICE_2D_H
 #define LATTICE_2D_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stdbool.h>

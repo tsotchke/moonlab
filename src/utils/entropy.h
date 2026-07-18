@@ -17,7 +17,7 @@
 
 #ifndef UTILS_ENTROPY_H
 #define UTILS_ENTROPY_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

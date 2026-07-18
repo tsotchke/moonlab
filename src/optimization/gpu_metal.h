@@ -1,6 +1,6 @@
 #ifndef METAL_BRIDGE_H
 #define METAL_BRIDGE_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

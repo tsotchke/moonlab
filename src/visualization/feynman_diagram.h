@@ -50,7 +50,7 @@
 
 #ifndef FEYNMAN_DIAGRAM_H
 #define FEYNMAN_DIAGRAM_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdbool.h>
 #include <stddef.h>

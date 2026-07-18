@@ -46,7 +46,7 @@
 
 #ifndef CIRCUIT_DIAGRAM_H
 #define CIRCUIT_DIAGRAM_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stdbool.h>

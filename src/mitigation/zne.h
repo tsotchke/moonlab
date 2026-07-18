@@ -32,7 +32,7 @@
 
 #ifndef MOONLAB_MITIGATION_ZNE_H
 #define MOONLAB_MITIGATION_ZNE_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stddef.h>
 

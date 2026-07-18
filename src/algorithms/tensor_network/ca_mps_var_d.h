@@ -20,7 +20,7 @@
 
 #ifndef MOONLAB_CA_MPS_VAR_D_H
 #define MOONLAB_CA_MPS_VAR_D_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "ca_mps.h"
 

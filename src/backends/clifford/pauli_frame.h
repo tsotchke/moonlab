@@ -30,7 +30,7 @@
  */
 #ifndef MOONLAB_PAULI_FRAME_H
 #define MOONLAB_PAULI_FRAME_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

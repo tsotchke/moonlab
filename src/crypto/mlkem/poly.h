@@ -24,7 +24,7 @@
 
 #ifndef MOONLAB_MLKEM_POLY_H
 #define MOONLAB_MLKEM_POLY_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "params.h"
 

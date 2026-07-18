@@ -33,7 +33,7 @@
 
 #ifndef MOONLAB_CA_MPS_VAR_D_STAB_WARMSTART_H
 #define MOONLAB_CA_MPS_VAR_D_STAB_WARMSTART_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "ca_mps.h"
 

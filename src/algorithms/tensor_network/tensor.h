@@ -17,7 +17,7 @@
 
 #ifndef TENSOR_H
 #define TENSOR_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

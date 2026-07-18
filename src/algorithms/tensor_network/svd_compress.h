@@ -20,7 +20,7 @@
 
 #ifndef SVD_COMPRESS_H
 #define SVD_COMPRESS_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tensor.h"
 #include <stdbool.h>

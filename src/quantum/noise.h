@@ -68,7 +68,7 @@
 
 #ifndef QUANTUM_NOISE_H
 #define QUANTUM_NOISE_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include "state.h"
 

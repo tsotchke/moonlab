@@ -1,6 +1,6 @@
 #ifndef MATRIX_MATH_H
 #define MATRIX_MATH_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>

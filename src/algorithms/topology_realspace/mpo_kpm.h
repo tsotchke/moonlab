@@ -107,7 +107,7 @@
 
 #ifndef MOONLAB_MPO_KPM_H
 #define MOONLAB_MPO_KPM_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>

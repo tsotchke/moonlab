@@ -13,7 +13,7 @@
 
 #ifndef MOONLAB_NIST_SP800_22_H
 #define MOONLAB_NIST_SP800_22_H
-#include "applications/moonlab_api.h"
+#include "moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

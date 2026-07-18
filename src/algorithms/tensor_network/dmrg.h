@@ -60,7 +60,7 @@
 
 #ifndef DMRG_H
 #define DMRG_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include "tensor.h"

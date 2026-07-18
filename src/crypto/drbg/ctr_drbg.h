@@ -19,7 +19,7 @@
 
 #ifndef MOONLAB_CTR_DRBG_H
 #define MOONLAB_CTR_DRBG_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

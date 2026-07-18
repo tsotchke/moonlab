@@ -45,7 +45,7 @@
 
 #ifndef MOONLAB_LATTICE_Z2_1D_H
 #define MOONLAB_LATTICE_Z2_1D_H
-#include "applications/moonlab_api.h"
+#include "../moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>

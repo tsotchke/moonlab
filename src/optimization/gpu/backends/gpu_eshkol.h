@@ -38,7 +38,7 @@
 
 #ifndef MOONLAB_GPU_ESHKOL_H
 #define MOONLAB_GPU_ESHKOL_H
-#include "applications/moonlab_api.h"
+#include "../../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>

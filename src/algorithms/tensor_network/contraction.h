@@ -17,7 +17,7 @@
 
 #ifndef CONTRACTION_H
 #define CONTRACTION_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tensor.h"
 #include "svd_compress.h"

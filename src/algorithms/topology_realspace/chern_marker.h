@@ -110,7 +110,7 @@
 
 #ifndef MOONLAB_CHERN_MARKER_H
 #define MOONLAB_CHERN_MARKER_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>

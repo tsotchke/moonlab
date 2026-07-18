@@ -22,7 +22,7 @@
 
 #ifndef SIMD_DISPATCH_H
 #define SIMD_DISPATCH_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

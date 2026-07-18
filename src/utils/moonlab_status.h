@@ -35,7 +35,7 @@
 
 #ifndef MOONLAB_STATUS_H
 #define MOONLAB_STATUS_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #ifdef __cplusplus
 extern "C" {

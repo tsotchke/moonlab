@@ -20,7 +20,7 @@
 
 #ifndef TN_GATES_H
 #define TN_GATES_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include <complex.h>

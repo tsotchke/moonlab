@@ -88,7 +88,7 @@
 
 #ifndef TN_STATE_H
 #define TN_STATE_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include "tensor.h"
 #include "svd_compress.h"

@@ -18,7 +18,7 @@
 
 #ifndef ALGORITHMS_GROVER_OPTIMIZER_H
 #define ALGORITHMS_GROVER_OPTIMIZER_H
-#include "applications/moonlab_api.h"
+#include "../applications/moonlab_api.h"
 
 #include "../quantum/state.h"
 

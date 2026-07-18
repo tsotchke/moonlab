@@ -18,7 +18,7 @@
 
 #ifndef MOONLAB_AES_H
 #define MOONLAB_AES_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>

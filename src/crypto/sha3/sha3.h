@@ -38,7 +38,7 @@
 
 #ifndef MOONLAB_SHA3_H
 #define MOONLAB_SHA3_H
-#include "applications/moonlab_api.h"
+#include "../../applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
