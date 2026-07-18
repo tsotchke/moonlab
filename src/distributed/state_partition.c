@@ -115,6 +115,7 @@ partitioned_state_t* partition_state_create(distributed_ctx_t* dist_ctx,
     state->dist_ctx = dist_ctx;
     state->num_qubits = num_qubits;
     state->total_amplitudes = 1ULL << num_qubits;
+    state->gpu_device_id = -1;
 
     // Calculate partition bits (log2 of process count)
     state->partition_bits = log2_of_power_of_2((uint64_t)size);
@@ -216,6 +217,7 @@ partitioned_state_t* partition_state_wrap(distributed_ctx_t* dist_ctx,
     state->dist_ctx = dist_ctx;
     state->num_qubits = num_qubits;
     state->total_amplitudes = 1ULL << num_qubits;
+    state->gpu_device_id = -1;
     state->partition_bits = log2_of_power_of_2((uint64_t)size);
     state->local_qubits = num_qubits - state->partition_bits;
 
@@ -300,21 +302,34 @@ void partition_state_free(partitioned_state_t* state) {
 extern int  moonlab_cuda_state_create        (uint32_t n_qubits, void** out_state) MOONLAB_WEAK_IMPORT;
 extern int  moonlab_cuda_state_copy_to_host  (const void *state, double *out)      MOONLAB_WEAK_IMPORT;
 extern int  moonlab_cuda_state_copy_from_host(void *state, const double *in)        MOONLAB_WEAK_IMPORT;
+extern int  moonlab_cuda_select_device_for_rank(int local_rank,
+                                                 int *device_id,
+                                                 int *device_count)                 MOONLAB_WEAK_IMPORT;
 
 partitioned_state_t* partition_state_create_gpu(distributed_ctx_t* dist_ctx,
                                                 uint32_t num_qubits,
                                                 const partition_config_t* config)
 {
-    /* Reject early if the weak CUDA symbols aren't bound. */
-    if (moonlab_cuda_state_create == NULL) return NULL;
+    /* Reject early if the weak CUDA symbols aren't bound.  Device selection is
+     * part of the contract: without it every MPI process silently lands on
+     * CUDA device 0, exhausting one GPU while the others remain unused. */
+    if (moonlab_cuda_state_create == NULL ||
+        moonlab_cuda_select_device_for_rank == NULL) return NULL;
 
     /* Get the CPU-backed partitioned state first; we'll then attach
      * a GPU shard sized to its local_qubits. */
     partitioned_state_t* st = partition_state_create(dist_ctx, num_qubits, config);
     if (!st) return NULL;
 
-    /* Allocate a CUDA state of size 2^local_qubits.  Each rank
-     * gets its own independent CUDA context implicitly. */
+    if (moonlab_cuda_select_device_for_rank(dist_ctx->local_rank,
+                                             &st->gpu_device_id,
+                                             &st->gpu_device_count) != 0) {
+        partition_state_free(st);
+        return NULL;
+    }
+
+    /* Allocate a CUDA state of size 2^local_qubits on the device selected
+     * from this process's node-local MPI rank. */
     void* gpu = NULL;
     int rc = moonlab_cuda_state_create((uint32_t)st->local_qubits, &gpu);
     if (rc != 0 || gpu == NULL) {

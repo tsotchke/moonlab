@@ -1,4 +1,4 @@
-# Scaling / large-n differential -- FINDINGS
+# Scaling / large-n differential -- historical findings and closure
 
 Mission: push scale and circuit diversity past the adjacent-only cross-diff
 corpus to find scale-dependent cross-backend divergences BEYOND the already-known
@@ -7,7 +7,7 @@ corpus to find scale-dependent cross-backend divergences BEYOND the already-know
 structure-specific analytic checks for larger n. Report with repro; do not fix
 `src/`; never loosen tolerances.
 
-Every divergence below was confirmed with the **dense** backend still matching an
+Every historical divergence below was confirmed with the **dense** backend still matching an
 **independent** oracle (numpy statevector for the circuit corpus; a dense
 Lanczos-Krylov `exp(-iHt)` verified against `scipy.linalg.expm` for TDVP; dense
 power-iteration ED for DMRG/var-D). So dense is the trustworthy anchor and the
@@ -28,10 +28,13 @@ Build the drivers standalone against a prebuilt libquantumsim:
 
 ## Summary
 
-| id | subsystem | suspect file | distinct from the known n>=10 forward bug? | severity |
-|----|-----------|--------------|--------------------------------------------|----------|
-| S1 | tn_mps adjacent 2q gate | `src/algorithms/tensor_network/tn_gates.c` (`apply_gate_2q_adjacent`) | same root cause, **much wider envelope** (n>=4, pure Clifford, adjacent) + reached via SWAP network for non-adjacent gates | high |
-| S2 | real-time TDVP | `src/algorithms/tensor_network/tdvp.c` | **YES -- new, distinct** (different subsystem; DMRG which shares the SVD split is exact) | high |
+| id | subsystem | resolution | regression evidence | status |
+|----|-----------|------------|---------------------|--------|
+| S1 | tn_mps adjacent 2q gate | establish the required mixed-canonical gauge before the two-site SVD rescale | the full scaling circuit corpus now reports `new=0 known=0` | closed |
+| S2 | real-time TDVP | the report came from a stale pre-projector-splitting build; current projector splitting is correct at bulk sites | `unit_tdvp_bulk_site` plus the n=10 TDVP-vs-Krylov scaling check | not a bug on current code |
+
+The quarantine was removed after the complete harness passed with zero known
+and zero new divergences. `KNOWN_DIVERGENCES.txt` is intentionally empty.
 
 Clean **negative** results (no bug found -- these subsystems scale correctly):
 Clifford tableau at n=50,100 (GHZ + linear-cluster stabilizer structure);
@@ -40,7 +43,7 @@ convergence, uint32 bond-width >255); DMRG ground energy vs ED at n=8,10,12.
 
 ---
 
-## S1 -- tn_mps adjacent two-qubit gate loses norm on a "bulk" bond
+## S1 -- tn_mps adjacent two-qubit gate lost norm on a "bulk" bond (closed)
 
 **What the corpus caught.** Many `tn_mps` prob/expectation divergences at n as
 low as 6, on forward-only, Toffoli-free circuits -- so NOT the reversed-CNOT bug
@@ -97,7 +100,7 @@ adjacent on a bulk bond. Fix direction: mixed-canonicalize to the gate bond
 
 ---
 
-## S2 -- real-time TDVP is wrong for chains longer than 2 sites (NEW, distinct)
+## S2 -- stale real-time TDVP result from before projector splitting (closed)
 
 **What the driver caught.** `scaling_dmrg_tdvp` evolves `|0>^n` under TFIM
 (J=1, h=1) and compares `<Z_0>(0.4)` to a dense Lanczos-Krylov `exp(-iHt)`
@@ -124,9 +127,10 @@ n>=2). Real-time two-site TDVP:
 - **DMRG, which uses the same two-site SVD split, is exact vs ED** at n=8,10,12
   (~1e-6). So this is a real-time-TDVP-specific defect, distinct from S1.
 
-Imaginary-time TDVP is a milder symptom: two-site imag-time projection plateaus
-~0.18 ABOVE the ED ground energy at n=8,10 (bond-independent). The variational
-bound `E >= E0` still holds (kept as a LIVE check); the plateau is quarantined.
+The earlier imaginary-time comparison also judged the state at insufficient
+projection time. At `T=4` the n=8 finite-time energy error is about 3.2e-2; with
+the unchanged `dt=0.1` flow evolved to `T=8`, it satisfies both the variational
+bound and the independent ED convergence target. Both checks are now hard gates.
 
 **Suspect.** `src/algorithms/tensor_network/tdvp.c` -- the environment tensors /
 effective Hamiltonian for interior sites in the real-time sweep. The "breaks once
@@ -136,7 +140,7 @@ one subsystem.
 
 **Repro.**
 
-    scaling_dmrg_tdvp --verbose      # DMRG passes; TDVP n>=3 diverges vs Krylov
+    scaling_dmrg_tdvp --verbose      # DMRG and TDVP checks pass with no quarantine
 
 ---
 

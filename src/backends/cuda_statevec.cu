@@ -410,6 +410,33 @@ int moonlab_cuda_runtime_probe_discrete(void)
     return props.integrated ? -1 : 1;
 }
 
+/* Select one CUDA device per node-local MPI rank.  This is intentionally an
+ * internal C ABI used by state_partition.c: it keeps CUDA runtime types out of
+ * the distributed public headers while preventing every rank from defaulting
+ * to device 0 on a multi-GPU host. */
+extern "C"
+int moonlab_cuda_select_device_for_rank(int local_rank,
+                                        int *device_id,
+                                        int *device_count)
+{
+    if (local_rank < 0 || !device_id || !device_count)
+        return MOONLAB_CUDA_ERR_NO_DEVICE;
+
+    int n_dev = 0;
+    cudaError_t err = cudaGetDeviceCount(&n_dev);
+    if (err != cudaSuccess || n_dev <= 0)
+        return MOONLAB_CUDA_ERR_NO_DEVICE;
+
+    const int selected = local_rank % n_dev;
+    err = cudaSetDevice(selected);
+    if (err != cudaSuccess)
+        return MOONLAB_CUDA_ERR_DRIVER;
+
+    *device_id = selected;
+    *device_count = n_dev;
+    return MOONLAB_CUDA_OK;
+}
+
 /* ---------- public dispatch ---------- */
 
 extern "C"

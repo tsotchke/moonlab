@@ -36,25 +36,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-static long g_new = 0, g_known = 0, g_pass = 0;
+static long g_new = 0, g_pass = 0;
 static int  g_verbose = 0;
 
-/* `known`: a divergence attributable to a bug this lane already discovered and
- * quarantined in KNOWN_DIVERGENCES.txt (reported, excluded from the gate).
- * `known==0` checks are LIVE anchors whose failure is a NEW finding. */
-static void check_k(int known, int ok, const char *what, double got, double ref) {
+static void check(int ok, const char *what, double got, double ref) {
     if (ok) { g_pass++; if (g_verbose) fprintf(stderr, "  ok   %s (got=%.6f ref=%.6f)\n", what, got, ref); return; }
-    if (known) {
-        g_known++;
-        fprintf(stderr, "  KNOWN  %s got=%.6f ref=%.6f dev=%.3e  (this-lane TDVP finding, quarantined)\n",
-                what, got, ref, fabs(got - ref));
-    } else {
-        g_new++;
-        fprintf(stderr, "  *** NEW DIVERGENCE ***  %s got=%.6f ref=%.6f dev=%.3e\n",
-                what, got, ref, fabs(got - ref));
-    }
+    g_new++;
+    fprintf(stderr, "  *** NEW DIVERGENCE ***  %s got=%.6f ref=%.6f dev=%.3e\n",
+            what, got, ref, fabs(got - ref));
 }
-static void check(int ok, const char *what, double got, double ref) { check_k(0, ok, what, got, ref); }
 
 /* ---- Pauli-sum Hamiltonians matching the MPO conventions in dmrg.h ---- */
 static uint32_t build_tfim(int n, double J, double h, uint8_t **P, double **c) {
@@ -240,7 +230,10 @@ static void test_tdvp_imag(int n) {
     char lbl[96];
     if (!eng) { g_new++; fprintf(stderr, "  *** NEW DIVERGENCE ***  TDVP-imag n=%d engine create failed\n", n); }
     else {
-        tdvp_evolve_to(eng, 4.0, NULL);   /* project to ground state */
+        /* T=4 leaves a finite-time projection error of about 3.2e-2 at n=8.
+         * Evolve long enough for the configured dt=0.1 flow to reach the
+         * independently computed ground-state target before judging it. */
+        tdvp_evolve_to(eng, 8.0, NULL);
         /* energy of the evolved state */
         double _Complex *amps = malloc(((size_t)1 << n) * sizeof(double _Complex));
         tn_mps_to_statevector(mps, amps);
@@ -257,10 +250,9 @@ static void test_tdvp_imag(int n) {
         /* variational bound is a LIVE hard constraint (imag-time <H> >= E0). */
         snprintf(lbl, sizeof lbl, "TDVP-imag TFIM n=%d E >= ED E0 (%.5f)", n, e0);
         check(et >= e0 - 5e-3, lbl, et, e0);
-        /* convergence to E0: two-site imag-time TDVP plateaus ~0.18 above E0 here
-         * (bond-independent) -- a KNOWN this-lane observation, quarantined. */
+        /* The sufficiently evolved imaginary-time state must converge to E0. */
         snprintf(lbl, sizeof lbl, "TDVP-imag TFIM n=%d E ~ ED E0", n);
-        check_k(1, fabs(et - e0) <= 5e-3, lbl, et, e0);
+        check(fabs(et - e0) <= 5e-3, lbl, et, e0);
         tdvp_engine_free(eng);
     }
     if (mpo) mpo_free(mpo);
@@ -276,10 +268,10 @@ static void test_tdvp_imag(int n) {
 /*  (n=4), +0.001 (n=5), worsening with n, dt-independent, one- AND   */
 /*  two-site alike, with monotone norm loss. See FINDINGS.md.         */
 /*                                                                    */
-/*  n=2 is kept as a LIVE guard (must stay exact -> regression catch);*/
-/*  n>=3 is the quarantined this-lane finding.                        */
+/*  Projector splitting is enforced at both the one-bond and bulk-site */
+/*  sizes; every mismatch is release blocking.                        */
 /* ================================================================= */
-static void test_tdvp_real(int n, int known) {
+static void test_tdvp_real(int n) {
     /* initial state |0>^n (product; <Z_0>(t) decays non-trivially under TFIM). */
     tn_state_config_t scfg = tn_state_config_create(128, 1e-12);
     tn_mps_state_t *mps = tn_mps_create_zero((uint32_t)n, &scfg);
@@ -300,7 +292,7 @@ static void test_tdvp_real(int n, int known) {
     for (size_t i = 0; i < dim; i++) nr += creal(amps[i])*creal(amps[i]) + cimag(amps[i])*cimag(amps[i]);
     free(amps);
     snprintf(lbl, sizeof lbl, "TDVP-real TFIM n=%d norm preserved", n);
-    check_k(known, fabs(nr - 1.0) <= 5e-3, lbl, nr, 1.0);
+    check(fabs(nr - 1.0) <= 5e-3, lbl, nr, 1.0);
     /* dense Krylov reference (verified vs scipy expm to 1e-6). */
     double _Complex *psi0 = calloc(dim, sizeof(double _Complex));
     psi0[0] = 1.0;
@@ -308,7 +300,7 @@ static void test_tdvp_real(int n, int known) {
     double z_ref = krylov_z0(P, c, nt, n, psi0, T, dt / 2.0);
     free(P); free(c); free(psi0);
     snprintf(lbl, sizeof lbl, "TDVP-real TFIM n=%d <Z0>(T) vs Krylov", n);
-    check_k(known, fabs(z_tdvp - z_ref) <= 2e-2, lbl, z_tdvp, z_ref);
+    check(fabs(z_tdvp - z_ref) <= 2e-2, lbl, z_tdvp, z_ref);
     tdvp_engine_free(eng);
     if (mpo) mpo_free(mpo);
     tn_mps_free(mps);
@@ -341,15 +333,15 @@ int main(int argc, char **argv) {
     fprintf(stderr, "=== scaling_dmrg_tdvp: TDVP imag-time vs ED (n=8) ===\n");
     test_tdvp_imag(8);
     fprintf(stderr, "=== scaling_dmrg_tdvp: TDVP real-time vs Krylov ===\n");
-    test_tdvp_real(2, 0);    /* LIVE guard: must stay exact (single bond) */
-    test_tdvp_real(10, 1);   /* quarantined this-lane finding (interior-site bug) */
+    test_tdvp_real(2);       /* single-bond regression guard */
+    test_tdvp_real(10);      /* bulk-site projector-splitting regression guard */
 
     fprintf(stderr,
         "\n=== scaling_dmrg_tdvp summary ===\n"
         "checks passed    : %ld\n"
-        "KNOWN divergences: %ld (this-lane TDVP findings; excluded from gate)\n"
-        "NEW   divergences: %ld\n", g_pass, g_known, g_new);
-    fprintf(stdout, "SCALING_RESULT dmrg_tdvp new=%ld known=%ld\n", g_new, g_known);
+        "KNOWN divergences: 0 (no quarantine)\n"
+        "NEW   divergences: %ld\n", g_pass, g_new);
+    fprintf(stdout, "SCALING_RESULT dmrg_tdvp new=%ld known=0\n", g_new);
     if (g_new > 0) { fprintf(stderr, "RESULT: FAIL (%ld new divergence(s))\n", g_new); return 1; }
     fprintf(stderr, "RESULT: PASS\n");
     return 0;

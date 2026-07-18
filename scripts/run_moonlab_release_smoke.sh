@@ -127,6 +127,81 @@ check_ctest_gate() {  # <event_name> <ctest -R regex>
   fi
 }
 
+# --- mpi_sharded_gpu_works -------------------------------------------------
+# The small CTest is the regression guard; it cannot establish the release
+# claim by itself.  PASS also requires a trace from run_mpi_sharded_gpu.sh
+# proving N>32, at least two physical GPU endpoints, and at least one real
+# partition-crossing halo swap on this exact commit.
+check_mpi_sharded_gpu() {
+  if ! need_build; then emit mpi_sharded_gpu_works FAIL "build failed"; return; fi
+
+  local rx='mpi_sharded_gpu_ghz|sharded_gpu|multigpu|partition_gpu'
+  local listed; listed="$(ctest --test-dir "$BUILD_DIR" -N -R "$rx" 2>/dev/null | grep -c 'Test #')"
+  if [ "${listed:-0}" -eq 0 ]; then
+    emit mpi_sharded_gpu_works FAIL "no MPI+CUDA sharding regression test is registered"
+    return
+  fi
+
+  local out; out="$(ctest --test-dir "$BUILD_DIR" -R "$rx" --timeout 400 -j"$JOBS" 2>&1)"
+  if ! printf '%s' "$out" | grep -q '100% tests passed'; then
+    emit mpi_sharded_gpu_works FAIL "routine MPI+CUDA sharding regression failed"
+    return
+  fi
+
+  local fleet_trace="$TRACE_DIR/moonlab_mpi_gpu.jsonl"
+  if [ ! -f "$fleet_trace" ]; then
+    emit mpi_sharded_gpu_works FAIL "routine test passed; N>32 fleet trace is absent"
+    return
+  fi
+
+  local sha evidence
+  sha="$(git rev-parse HEAD)"
+  if evidence="$(python3 - "$fleet_trace" "$sha" <<'PY'
+import json
+import sys
+
+trace_path, expected_sha = sys.argv[1:]
+event = None
+with open(trace_path, encoding="utf-8") as trace:
+    for line in trace:
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (candidate.get("kind") == "moonlab_mpi_gpu" and
+                candidate.get("name") == "mpi_sharded_gpu_works"):
+            event = candidate
+
+if event is None:
+    print("no mpi_sharded_gpu_works event")
+    raise SystemExit(1)
+if event.get("value", event.get("status")) != "PASS":
+    print("latest fleet event is not PASS")
+    raise SystemExit(1)
+if event.get("commit_sha") != expected_sha:
+    print("fleet event is for a different commit")
+    raise SystemExit(1)
+
+checks = {
+    "n": int(event.get("n", 0)) > 32,
+    "ranks": int(event.get("ranks", 0)) >= 2,
+    "gpu_endpoints": int(event.get("gpu_endpoints", 0)) >= 2,
+    "halo_swaps": int(event.get("halo_swaps", 0)) >= 1,
+}
+failed = [name for name, passed in checks.items() if not passed]
+if failed:
+    print("fleet event lacks exact evidence: " + ",".join(failed))
+    raise SystemExit(1)
+
+print("N={n} ranks={ranks} GPUs={gpu_endpoints} halo_swaps={halo_swaps}".format(**event))
+PY
+)"; then
+    emit mpi_sharded_gpu_works PASS "$listed routine test(s) pass; fleet $evidence"
+  else
+    emit mpi_sharded_gpu_works FAIL "routine test passed; ${evidence:-fleet evidence invalid}"
+  fi
+}
+
 # --- zero_phantom_api / zero_odr_collision via ICC --------------------------
 check_phantom() {
   local n; n="$("$ICC" phantom-api --repo moonlab 2>/dev/null \
@@ -235,7 +310,24 @@ check_deep_hunt() {
   if [ ! -f "$tf" ]; then
     emit "$name" FAIL "no $kind trace ($3) -- run the lane's script"; return
   fi
-  local v; v="$(grep -o "\"name\":\"$name\"[^}]*\"value\":\"[A-Z]*\"" "$tf" 2>/dev/null | grep -o '"value":"[A-Z]*"' | tail -1 | grep -o '[A-Z]*$')"
+  # Parse JSON rather than depending on field order or whether a producer calls
+  # its verdict "value" (tsan/numerical) or "status" (scaling).
+  local v; v="$(python3 - "$tf" "$name" <<'PY'
+import json
+import sys
+
+verdict = ""
+with open(sys.argv[1], encoding="utf-8") as trace:
+    for line in trace:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("name") == sys.argv[2]:
+            verdict = event.get("value", event.get("status", ""))
+print(verdict)
+PY
+)"
   if [ "$v" = "PASS" ]; then emit "$name" PASS "$kind lane clean"
   else emit "$name" FAIL "$kind lane value=${v:-none}"; fi
 }
@@ -253,7 +345,7 @@ check_docs_apis
 check_examples
 check_versions
 check_ctest_gate bindings_suites_green    'python_bindings|rust_bindings|js_'
-check_ctest_gate mpi_sharded_gpu_works    'sharded_gpu|multigpu|partition_gpu'
+check_mpi_sharded_gpu
 # Must match a test that proves DI certification is consumed by the delivered
 # byte stream (bell_epoch_certified reflects real per-epoch certification), not
 # the pre-existing unit_qrng_di which only exercises the isolated DI math.

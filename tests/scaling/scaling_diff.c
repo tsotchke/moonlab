@@ -15,10 +15,10 @@
  *   - Clifford tableau   (clifford-only families; exact stabilizer observables),
  *     a locality-free second oracle that is exact at ANY n.
  *
- * KNOWN-vs-NEW classification (the whole point of this lane)
- * ---------------------------------------------------------
- * This lane's hunt ROOT-CAUSED the tn 2q-gate divergence the tn-lane tracks
- * (see tests/scaling/KNOWN_DIVERGENCES.txt and FINDINGS.md). The single defect:
+ * Historical finding and closure
+ * ------------------------------
+ * This lane ROOT-CAUSED the tn 2q-gate divergence the tn-lane tracked. The
+ * defect was:
  * the adjacent two-qubit gate path (apply_gate_2q_adjacent, tn_gates.c) rescales
  * the two-site tensor's singular values by their Frobenius norm assuming the MPS
  * is in mixed-canonical gauge at the bond -- but it never establishes that gauge
@@ -36,13 +36,9 @@
  * which are NEVER quarantined and a divergence there is always a NEW finding:
  *   - dense statevector  vs numpy reference;
  *   - Clifford tableau   vs numpy reference (clifford families; exact at any n).
- * The tn_mps leg is this lane's hunt surface. A tn divergence is classified
- * KNOWN (the root-caused normalization envelope above) and REPORTED but excluded
- * from the gate, EXCEPT on the provably canonical-safe LIVE tn guards, where a
- * tn divergence would be a genuinely DIFFERENT bug and FAILS the gate:
- *   - family ghz_chain (H(0) then a single left-to-right CNOT sweep keeps the
- *     right outer bond trivial at every gate, so the defect cannot fire);
- *   - every case at n <= 4 (too small for a both-sides-entangled bulk bond).
+ * The library now establishes the required gauge before rescaling. The tn_mps
+ * leg therefore enforces every affordable corpus case; any mismatch is a new
+ * gate failure.
  *
  * Tolerances are NEVER loosened to make anything pass.
  *
@@ -68,7 +64,6 @@
 #define TOL_TN      1e-9    /* tn_mps vs reference/dense (SVD roundoff headroom) */
 #define TOL_CLIFF   1e-9    /* Clifford stabilizer observables */
 #define MAX_ZZ      16
-#define LIVE_TN_GUARD_MAX_N 4   /* n<=this: tn must be exact (no bulk bond) */
 
 typedef struct { char name[16]; int q0, q1, q2; double angle; } dgate_t;
 
@@ -92,29 +87,12 @@ typedef struct {
 
 /* ---- counters ---- */
 static long g_new_div = 0;      /* NEW divergences (fail the gate) */
-static long g_known_div = 0;    /* known-quarantined divergences (reported only) */
 static long g_checks_pass = 0;  /* comparisons that agreed */
 static long g_tn_skipped = 0;   /* tn legs skipped for affordability (n>cap) */
 static long g_cases = 0;
 static int  g_tn_max_n = 16;
 static int  g_tn_max_depth = 1000000;  /* affordability wall: skip tn leg above this depth */
 static int  g_verbose = 0;
-
-/* A LIVE tn guard is a case on which the root-caused normalization defect
- * provably cannot fire, so tn MUST reproduce the reference exactly there; a
- * divergence would be a genuinely DIFFERENT tn bug and fails the gate:
- *   - ghz_chain: H(0) then a single L->R CNOT sweep keeps the right outer bond
- *     trivial at every gate, so no both-sides-entangled bulk bond ever forms;
- *   - any case at n <= LIVE_TN_GUARD_MAX_N: too small for a bulk bond. */
-static int is_live_tn_guard(const corpus_case_t *cc) {
-    return !strcmp(cc->cls, "ghz_chain") || cc->num_qubits <= LIVE_TN_GUARD_MAX_N;
-}
-
-/* A tn divergence is KNOWN (the root-caused normalization envelope, tn-lane owns
- * the fix) unless the case is a live tn guard. */
-static int is_known_tn_case(const corpus_case_t *cc) {
-    return !is_live_tn_guard(cc);
-}
 
 /* Does the circuit use any non-adjacent 2q gate (|q0-q1| > 1)? Used only for
  * reporting -- so a NEW finding says whether the SWAP network was exercised. */
@@ -161,19 +139,11 @@ static void exp_from_prob(const double *prob, int n, size_t dim,
     }
 }
 
-/* Record one comparison. `known` marks the case as owning a quarantined bug:
- * a mismatch is then reported but NOT counted as a failure. */
-static void record(int ok, double dev, double tol, int known,
+/* Record one comparison. Every mismatch is release blocking. */
+static void record(int ok, double dev, double tol,
                    const corpus_case_t *cc, const char *backend,
                    const char *what, const char *against) {
     if (ok) { g_checks_pass++; return; }
-    if (known) {
-        g_known_div++;
-        if (g_verbose)
-            fprintf(stderr, "  KNOWN  %s [%s] %s vs %s dev=%.3e (>%.0e)  (tn 2q-gate normalization envelope)\n",
-                    cc->id, backend, what, against, dev, tol);
-        return;
-    }
     g_new_div++;
     fprintf(stderr,
         "  *** NEW DIVERGENCE ***  case=%s seed=%llu class=%s n=%d depth=%d "
@@ -333,9 +303,8 @@ static int cliff_run(const corpus_case_t *cc, double *z_out, double *zz_out) {
 static void run_case(const corpus_case_t *cc) {
     int n = cc->num_qubits;
     size_t dim = cc->dim;
-    int known = is_known_tn_case(cc);
     g_cases++;
-    if (g_verbose) { fprintf(stderr, "[case %s ngates=%d known_tn=%d]\n", cc->id, cc->ngates, known); }
+    if (g_verbose) { fprintf(stderr, "[case %s ngates=%d]\n", cc->id, cc->ngates); }
 
     double *pd = malloc(dim * sizeof(double));
     double *pt = malloc(dim * sizeof(double));
@@ -347,12 +316,12 @@ static void run_case(const corpus_case_t *cc) {
         g_new_div++; free(pd); free(pt); return;
     }
     double dev = max_abs_dev(pd, cc->ref_prob, dim);
-    record(dev <= TOL_DENSE, dev, TOL_DENSE, 0, cc, "dense", "prob", "reference");
+    record(dev <= TOL_DENSE, dev, TOL_DENSE, cc, "dense", "prob", "reference");
     exp_from_prob(pd, n, dim, zbuf, cc->zz_a, cc->zz_b, cc->nzz, zzbuf);
     dev = max_abs_dev(zbuf, cc->ref_z, (size_t)n);
-    record(dev <= TOL_DENSE, dev, TOL_DENSE, 0, cc, "dense", "expZ", "reference");
+    record(dev <= TOL_DENSE, dev, TOL_DENSE, cc, "dense", "expZ", "reference");
     dev = max_abs_dev(zzbuf, cc->zz_v, (size_t)cc->nzz);
-    record(dev <= TOL_DENSE, dev, TOL_DENSE, 0, cc, "dense", "expZZ", "reference");
+    record(dev <= TOL_DENSE, dev, TOL_DENSE, cc, "dense", "expZZ", "reference");
 
     /* --- tn_mps --- */
     if (n > g_tn_max_n || cc->depth > g_tn_max_depth) {
@@ -361,15 +330,15 @@ static void run_case(const corpus_case_t *cc) {
                                n, cc->depth, g_tn_max_n, g_tn_max_depth);
     } else if (tn_run(cc, pt) == 0) {
         double dref = max_abs_dev(pt, cc->ref_prob, dim);
-        record(dref <= TOL_TN, dref, TOL_TN, known, cc, "tn_mps", "prob", "reference");
+        record(dref <= TOL_TN, dref, TOL_TN, cc, "tn_mps", "prob", "reference");
         double dden = max_abs_dev(pt, pd, dim);
-        record(dden <= TOL_TN, dden, TOL_TN, known, cc, "tn_mps", "prob", "dense");
+        record(dden <= TOL_TN, dden, TOL_TN, cc, "tn_mps", "prob", "dense");
         exp_from_prob(pt, n, dim, zbuf, cc->zz_a, cc->zz_b, cc->nzz, zzbuf);
         double dz = max_abs_dev(zbuf, cc->ref_z, (size_t)n);
-        record(dz <= TOL_TN, dz, TOL_TN, known, cc, "tn_mps", "expZ", "reference");
+        record(dz <= TOL_TN, dz, TOL_TN, cc, "tn_mps", "expZ", "reference");
     } else {
         fprintf(stderr, "  FAIL  case=%s tn_mps backend errored\n", cc->id);
-        if (known) g_known_div++; else g_new_div++;
+        g_new_div++;
     }
 
     /* --- Clifford (clifford-only families): exact stabilizer observables,
@@ -378,9 +347,9 @@ static void run_case(const corpus_case_t *cc) {
         double czb[128], czzb[MAX_ZZ];
         if (cliff_run(cc, czb, czzb) == 0) {
             double dz = max_abs_dev(czb, cc->ref_z, (size_t)n);
-            record(dz <= TOL_CLIFF, dz, TOL_CLIFF, 0, cc, "clifford", "expZ", "reference");
+            record(dz <= TOL_CLIFF, dz, TOL_CLIFF, cc, "clifford", "expZ", "reference");
             double dzz = max_abs_dev(czzb, cc->zz_v, (size_t)cc->nzz);
-            record(dzz <= TOL_CLIFF, dzz, TOL_CLIFF, 0, cc, "clifford", "expZZ", "reference");
+            record(dzz <= TOL_CLIFF, dzz, TOL_CLIFF, cc, "clifford", "expZZ", "reference");
         } else {
             fprintf(stderr, "  FAIL  case=%s clifford backend errored\n", cc->id);
             g_new_div++;
@@ -548,10 +517,10 @@ int main(int argc, char **argv) {
         "cases            : %ld\n"
         "checks passed    : %ld\n"
         "tn legs skipped  : %ld (n > --tn-max-n)\n"
-        "KNOWN divergences: %ld (tn 2q-gate normalization envelope; excluded from gate)\n"
+        "KNOWN divergences: 0 (no quarantine)\n"
         "NEW   divergences: %ld\n",
-        g_cases, g_checks_pass, g_tn_skipped, g_known_div, g_new_div);
-    fprintf(stdout, "SCALING_RESULT diff new=%ld known=%ld\n", g_new_div, g_known_div);
+        g_cases, g_checks_pass, g_tn_skipped, g_new_div);
+    fprintf(stdout, "SCALING_RESULT diff new=%ld known=0\n", g_new_div);
     if (g_new_div > 0) {
         fprintf(stderr, "RESULT: FAIL (%ld new divergence(s))\n", g_new_div);
         return 1;

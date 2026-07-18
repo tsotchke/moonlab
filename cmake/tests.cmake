@@ -1594,6 +1594,29 @@
         else()
             message(STATUS "MPI Tests: None present in tests/unit/ yet")
         endif()
+
+        if(QSIM_HAS_CUDA)
+            # Routine regression for the real MPI+CUDA sharding executable.
+            # The release gate separately requires a commit-bound N>32 run on
+            # at least two physical fleet GPU endpoints; this small case keeps
+            # rank/device routing and the halo path covered on ordinary CUDA CI.
+            add_executable(test_mpi_sharded_gpu_ghz
+                           examples/cuda/large_state_ghz_gpu.c)
+            target_link_libraries(test_mpi_sharded_gpu_ghz
+                                  PRIVATE quantumsim MPI::MPI_C ${MATH_LIBRARY})
+            add_test(NAME mpi_sharded_gpu_ghz
+                     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+                             --oversubscribe
+                             ${MPIEXEC_PREFLAGS}
+                             $<TARGET_FILE:test_mpi_sharded_gpu_ghz>
+                             12
+                             ${MPIEXEC_POSTFLAGS})
+            set_tests_properties(mpi_sharded_gpu_ghz PROPERTIES
+                LABELS "distributed;gpu;mpi"
+                TIMEOUT 180
+                PASS_REGULAR_EXPRESSION "MOONLAB_MPI_SHARDED_GPU PASS"
+                RESOURCE_LOCK gpu)
+        endif()
     endif()
 
     # Downstream-ABI smoke test — dlopens / LoadLibrarys libquantumsim and

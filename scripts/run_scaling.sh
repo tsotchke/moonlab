@@ -16,8 +16,8 @@
 #   5. aggregate into scripts/icc_traces/moonlab_scaling.jsonl with
 #      kind:"moonlab_scaling" events, plus the release-blocking umbrella event
 #        name:"scaling_differential_clean" value:PASS|FAIL + divergence_count
-#      where divergence_count counts only NEW (non-quarantined) divergences;
-#      the known tn 2q-gate + TDVP findings (KNOWN_DIVERGENCES.txt) are excluded.
+#      where divergence_count counts every divergence. No scaling quarantine is
+#      permitted: any nonzero known_divergences count also fails the umbrella.
 #
 # Exit status is nonzero iff any driver reports a NEW divergence.
 #
@@ -102,7 +102,7 @@ if ! python3 "$GEN" --out-dir "$CORPUS_DIR" --seed "$SEED" \
       --qubits "$QUBITS" --depths "$DEPTHS" --small-longrange; then
   echo "FATAL: corpus generation failed (numpy required)" >&2
   emit corpus_generation FAIL release 0 0 ',"reason":"gen_scaling_corpus failed"'
-  cat "$EVENTS" >> "$TRACE_FILE"; exit 4
+  cat "$EVENTS" > "$TRACE_FILE"; exit 4
 fi
 
 # --------------------------------------------------------------------------
@@ -112,7 +112,7 @@ if ! cmake -S "$SCALE_DIR" -B "$WORK/cmake" >/dev/null 2>&1 || \
    ! cmake --build "$WORK/cmake" -j2 >/dev/null 2>&1; then
   echo "FATAL: driver build failed" >&2
   emit driver_build FAIL release 0 0 ',"reason":"cmake build failed"'
-  cat "$EVENTS" >> "$TRACE_FILE"; exit 5
+  cat "$EVENTS" > "$TRACE_FILE"; exit 5
 fi
 BIN="$WORK/cmake"
 
@@ -156,13 +156,13 @@ run_driver scaling_dmrg_tdvp             release "$BIN/scaling_dmrg_tdvp"
 # --------------------------------------------------------------------------
 # 5. umbrella event
 # --------------------------------------------------------------------------
-umbrella="$([ "$total_new" -eq 0 ] && [ "$selftest_ok" -eq 1 ] && echo PASS || echo FAIL)"
+umbrella="$([ "$total_new" -eq 0 ] && [ "$total_known" -eq 0 ] && [ "$selftest_ok" -eq 1 ] && echo PASS || echo FAIL)"
 emit scaling_differential_clean "$umbrella" release "$total_new" "$total_known" \
-  ",\"profile\":\"$(json_escape "$PROFILE")\",\"divergence_count\":$total_new,\"note\":\"known-quarantined excluded (see tests/scaling/KNOWN_DIVERGENCES.txt)\""
+  ",\"profile\":\"$(json_escape "$PROFILE")\",\"divergence_count\":$((total_new + total_known)),\"note\":\"all divergences are release blocking\""
 
-cat "$EVENTS" >> "$TRACE_FILE"
+cat "$EVENTS" > "$TRACE_FILE"
 echo
-echo "=== scaling_differential_clean: $umbrella  (NEW divergences=$total_new, known-quarantined=$total_known) ==="
+echo "=== scaling_differential_clean: $umbrella  (new=$total_new known=$total_known) ==="
 echo "trace -> $TRACE_FILE"
 [ "$umbrella" = PASS ] || exit 1
 exit 0

@@ -71,6 +71,8 @@ typedef struct {
      * (sync'd from GPU before send, sync'd to GPU after recv). */
     void* gpu_state;                 /**< opaque moonlab_cuda_state_t* */
     int   gpu_backend;               /**< 0 = CPU, 1 = CUDA */
+    int   gpu_device_id;             /**< CUDA device selected for this rank, or -1 */
+    int   gpu_device_count;          /**< CUDA devices visible to this rank */
 } partitioned_state_t;
 
 /**

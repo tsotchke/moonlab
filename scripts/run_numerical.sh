@@ -28,6 +28,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NUM_DIR="$REPO_ROOT/tests/numerical"
 WORK="$REPO_ROOT/build/numerical"
+TRACES_DIR="$REPO_ROOT/scripts/icc_traces"
 LIB_DIR=""
 OUT=""
 MAX_QUBITS="${NUMERIC_MAX_QUBITS:-22}"
@@ -41,8 +42,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-mkdir -p "$WORK"
-[ -n "$OUT" ] || OUT="$WORK/numerical.jsonl"
+mkdir -p "$WORK" "$TRACES_DIR"
+[ -n "$OUT" ] || OUT="$TRACES_DIR/moonlab_numerical.jsonl"
 : > "$OUT"
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
