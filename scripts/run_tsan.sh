@@ -42,6 +42,17 @@ SUPP="tests/concurrency/tsan.supp"
 
 mkdir -p "$TRACE_DIR" "$LOG_DIR"
 
+# --- 0a. Windows gate --------------------------------------------------------
+# The lane is POSIX-only (pthreads / unistd / sched_yield) and TSan targets
+# POSIX threads, so it is gated off Windows -- mirrors the NOT
+# QSIM_PLATFORM_WINDOWS gate on the adversarial suites in cmake/tests.cmake.
+case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+        echo "[tsan] concurrency lane is POSIX-only; gated off Windows."
+        printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","races":0,"snippet":"POSIX-only lane, gated off Windows","confidence":0.2}\n' >> "$TRACE"
+        exit 0 ;;
+esac
+
 # --- 0. TSan availability probe ---------------------------------------------
 probe_c="$(mktemp -t tsanprobe.XXXXXX).c"
 printf 'int main(void){return 0;}\n' > "$probe_c"
@@ -177,32 +188,42 @@ else
     emit "grover_gates_omp" "SKIP" 0 "OpenMP library not built on this host" 0.3
 fi
 
-# ---- Diagnostic findings (expected to expose real bugs) ----
+# ---- Regression checks for the four fixed concurrency bugs (v1.2) ----
+# Each harness drives the exact race / deadlock window that once fired; a
+# nonzero race count now means a REGRESSION, so PASS iff clean.
+regress() {  # $1=name $2=races $3=snippet
+    if [ "$2" -eq 0 ]; then
+        emit "$1" "PASS" 0 "$3" 0.9
+        echo "  [PASS] $1  (0 races: fix holds)"
+    else
+        emit "$1" "FAIL" "$2" "REGRESSION -- $3" 0.95
+        echo "  [FAIL] $1  ($2 races) <-- regression"
+        FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+$2))
+    fi
+}
+
 r=$(run_one "core_init_lazy_init" 0 "conc_core_init")
-emit "core_init_lazy_init" "FAIL" "$r" \
-  "cold-start data race in unsynchronised lazy init of process globals: qsim_config_global (config.c:127/130) + simd_dispatch_init_once (simd_ops.c) + state.c:68" 0.95
-echo "  [FIND] core_init_lazy_init  ($r real races: config/simd lazy init)"
-REAL_RACES=$((REAL_RACES+r))
+regress "core_init_lazy_init" "$r" \
+  "cold-start lazy init of process globals is now race-free: qsim_config_global double-checked-locking (config.c) + simd_dispatch_init_once pthread_once (simd_ops.c)"
 
 r=$(run_one "control_plane_config_fields" 0 "conc_control_plane" adversarial)
-emit "control_plane_config_fields" "FAIL" "$r" \
-  "unsynchronised server config reads race setters mid-serve: admission_hook (control_plane.c:1296/1464, doc says Thread-safe), max_concurrent (1262/1473), request_timeout, rate_rps (1250/1483)" 0.9
-echo "  [FIND] control_plane_config_fields  ($r real races: config fields vs setters)"
-REAL_RACES=$((REAL_RACES+r))
+regress "control_plane_config_fields" "$r" \
+  "server config setters/readers now synchronised: admission_hook+ctx pair and max_concurrent/request_timeout under cfg_lock, rate_rps atomic"
 
-# Audit-buffer destroy deadlock: watchdog prints DEADLOCK + exits 7.
+# Audit-buffer destroy vs in-flight push/pop: with the in_flight drain the
+# destroy no longer wedges; watchdog prints DEADLOCK + exits 7 on a regression.
 adlog="$LOG_DIR/run_audit_destroy.log"
 TSAN_OPTIONS="halt_on_error=0" "$BIN/conc_audit_buffer" destroy >"$adlog" 2>&1
 ad_exit=$?
 if [ "$ad_exit" -eq 7 ] || grep -q "DEADLOCK:" "$adlog"; then
     emit "audit_buffer_destroy_deadlock" "FAIL" 1 \
-      "destroy() vs in-flight push/pop deadlocks on the destroyed mutex (audit_buffer.c:87 blocks; :76 destroys); contradicts the code's no-race-window claim" 0.95
-    echo "  [FIND] audit_buffer_destroy_deadlock  (1 deadlock: use of destroyed mutex)"
-    REAL_RACES=$((REAL_RACES+1))
+      "REGRESSION -- destroy() vs in-flight push/pop wedged on the destroyed mutex (audit_buffer.c)" 0.95
+    echo "  [FAIL] audit_buffer_destroy_deadlock  (deadlock reproduced) <-- regression"
+    FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+1))
 else
     emit "audit_buffer_destroy_deadlock" "PASS" 0 \
-      "destroy() vs in-flight push/pop did not wedge on this run/platform" 0.5
-    echo "  [note] audit_buffer_destroy did not deadlock this run (exit=$ad_exit)"
+      "destroy() drains in_flight before destroying the mutex; 16 rounds completed with no wedge" 0.9
+    echo "  [PASS] audit_buffer_destroy_deadlock  (0 deadlocks: drain holds)"
 fi
 
 # --- 4. Umbrella verdict ----------------------------------------------------

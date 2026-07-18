@@ -98,6 +98,42 @@ static long parse_counter(const char *body, const char *name)
     return -1;
 }
 
+/* Raw-socket round-trip: connect to the loopback server, send exactly
+ * `reqlen` bytes, half-close so the server sees EOF, and read the response
+ * into `resp` (NUL-terminated).  Returns the number of response bytes read,
+ * or -1 if the connection failed. */
+static ssize_t raw_roundtrip(uint16_t port, const char *req, size_t reqlen,
+                             char *resp, size_t respcap)
+{
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        return -1;
+    }
+    size_t off = 0;
+    while (off < reqlen) {
+        ssize_t n = send(fd, req + off, reqlen - off, 0);
+        if (n <= 0) break;
+        off += (size_t)n;
+    }
+    shutdown(fd, SHUT_WR);
+    size_t got = 0;
+    while (got + 1 < respcap) {
+        ssize_t n = recv(fd, resp + got, respcap - 1 - got, 0);
+        if (n <= 0) break;
+        got += (size_t)n;
+    }
+    resp[got] = '\0';
+    close(fd);
+    return (ssize_t)got;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -263,6 +299,58 @@ int main(void)
 #else
     fprintf(stdout, "\n  SKIP  path 2: library built without QSIM_ENABLE_TLS=ON\n");
 #endif
+
+    /* ---- Path 3: resource-amplification DoS guard (task #23) ----
+     * A tiny, well-formed CIRCUIT frame declaring 30 qubits used to drive a
+     * 2^30 * 16 B = 16 GB state-vector allocation in execute (fuzz finding
+     * oom_qubit_amplification).  The server must now reject it BEFORE
+     * allocating anything, with a clean protocol error naming the qubit cap
+     * -- while legitimate small circuits still succeed. */
+    fprintf(stdout, "\n--- path 3: oversized-qubit DoS frame is rejected ---\n");
+    server = NULL; port = 0;
+    rc = moonlab_control_server_open("127.0.0.1", 0, &server, &port);
+    CHECK(rc == 0, "server_open rc=%d", rc);
+
+    ra.server = server; ra.max_iters = 8; ra.rc = 0;
+    pthread_create(&tid, NULL, run_thread, &ra);
+    nanosleep(&ts, NULL);
+
+    /* The exact fuzz reproducer: CIRCUIT body of 18 bytes declaring 30 qubits. */
+    const char *dos_frame = "CIRCUIT 18\nNUM_QUBITS 30\nH 0\n";
+    char resp[512];
+    struct timespec t_before, t_after;
+    clock_gettime(CLOCK_MONOTONIC, &t_before);
+    ssize_t rn = raw_roundtrip(port, dos_frame, strlen(dos_frame),
+                               resp, sizeof(resp));
+    clock_gettime(CLOCK_MONOTONIC, &t_after);
+    double dos_ms = (t_after.tv_sec - t_before.tv_sec) * 1000.0 +
+                    (t_after.tv_nsec - t_before.tv_nsec) / 1.0e6;
+    fprintf(stdout, "    30-qubit frame -> \"%.*s\" (%.1f ms)\n",
+            (int)(rn > 0 ? (rn > 60 ? 60 : rn) : 0), rn > 0 ? resp : "", dos_ms);
+    CHECK(rn > 0, "server responded to oversized frame (rn=%zd)", rn);
+    CHECK(strncmp(resp, "ERR", 3) == 0,
+          "oversized frame rejected with ERR (got: %.16s)", resp);
+    /* The cap message is the fixed path; the pre-fix server had no cap and
+     * either attempted the 16 GB allocation or returned an "execute" error. */
+    CHECK(strstr(resp, "qubit") != NULL,
+          "rejection names the qubit cap (proves pre-execution reject)");
+    /* Pre-execution rejection is immediate; a real 16 GB alloc+touch would
+     * take far longer.  Generous bound to stay CI-robust. */
+    CHECK(dos_ms < 2000.0, "rejected promptly without allocating (%.1f ms)", dos_ms);
+
+    /* A legitimate small circuit still round-trips fine (the cap does not
+     * break normal traffic). */
+    const char *ok_frame = "CIRCUIT 26\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n";
+    ssize_t okn = raw_roundtrip(port, ok_frame, strlen(ok_frame),
+                                resp, sizeof(resp));
+    fprintf(stdout, "    2-qubit frame  -> \"%.*s\"\n",
+            (int)(okn > 0 ? (okn > 24 ? 24 : okn) : 0), okn > 0 ? resp : "");
+    CHECK(okn > 0 && strncmp(resp, "OK", 2) == 0,
+          "legitimate 2-qubit circuit still accepted (got: %.16s)", resp);
+
+    moonlab_control_server_shutdown(server);
+    pthread_join(tid, NULL);
+    moonlab_control_server_close(server);
 
     fprintf(stdout, "\n=== %d failure(s) ===\n", failures);
     return failures ? 1 : 0;

@@ -39,11 +39,13 @@
 extern "C" {
 #endif
 
-/* Internal state machine: protects against the destroy / push
- * race.  push/pop check state under the lock; destroy flips
- * state to DEAD atomically AND under the lock so a thread that
- * grabbed the lock before destroy can finish cleanly and a
- * thread that came after sees the DEAD state and bails. */
+/* Internal state machine: makes destroy() safe against concurrent
+ * push/pop.  Each operation registers itself in `in_flight` before
+ * taking the lock and re-checks the state; destroy() publishes DEAD
+ * and drains in_flight to zero before destroying the mutex.  An
+ * operation that has not registered by the time DEAD is published sees
+ * DEAD and bails without touching the mutex, and destroy() cannot
+ * destroy the mutex while a registered operation still holds it. */
 enum {
     MOONLAB_AUDIT_STATE_UNINIT = 0,
     MOONLAB_AUDIT_STATE_LIVE   = 1,
@@ -67,12 +69,17 @@ typedef struct {
     uint64_t          drops;
     pthread_mutex_t   lock;
 
-    /* MOONLAB_AUDIT_STATE_*.  Loaded atomically before each
-     * operation.  Mutated only under the lock (except for the
-     * very first transition UNINIT -> LIVE inside init() and
-     * the final LIVE -> DEAD inside destroy(), both of which
-     * are single-threaded by the caller's contract). */
+    /* MOONLAB_AUDIT_STATE_*.  Loaded atomically at the top of each
+     * operation and re-checked after registering in-flight (below).
+     * init() sets UNINIT->LIVE, destroy() sets LIVE->DEAD. */
     _Atomic int       state;
+
+    /* In-flight push/pop/len/drops/reset operations that have passed
+     * the LIVE gate and may hold or be about to take `lock`.  destroy()
+     * publishes DEAD then drains this to zero BEFORE destroying the
+     * mutex, so no operation can lock a destroyed mutex.  New callers
+     * observe DEAD and never register.  See audit_buffer.c. */
+    _Atomic unsigned  in_flight;
 } moonlab_audit_buffer_t;
 
 /**
@@ -104,7 +111,13 @@ moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
                           size_t                  capacity);
 
 /**
- * @brief Release the mutex; caller must not push/pop afterward.
+ * @brief Release the mutex.  Safe to call while other threads are
+ *        still calling push/pop/len/drops/reset concurrently: destroy
+ *        publishes the DEAD state, drains any operation that already
+ *        passed the LIVE gate, and only then destroys the mutex.  A
+ *        concurrent operation that has not yet registered sees DEAD and
+ *        returns without touching the mutex.  After destroy returns the
+ *        buffer is dead; further operations are safe no-ops.
  *        Safe to call on a zero-initialised (never-init'd) buffer.
  */
 MOONLAB_API void

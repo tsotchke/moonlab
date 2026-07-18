@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <pthread.h>
 
 /* Runtime SIMD backend dispatch.  simd_avx512.c / simd_sve.c are compiled with
  * their own -mavx512f / -march=...+sve per-file flags (see CMake) and export
@@ -85,10 +86,16 @@ typedef struct {
 } simd_backend_vtable_t;
 
 static simd_backend_vtable_t g_simd_vtable;   /* zero-initialized: all NULL */
-static volatile int g_simd_vtable_ready = 0;
+static pthread_once_t g_simd_vtable_once = PTHREAD_ONCE_INIT;
 
-static void simd_dispatch_init_once(void) {
-    if (g_simd_vtable_ready) return;
+/* Populate the dispatch table exactly once.  Run under pthread_once, which
+ * establishes a happens-before between this store and every reader's return
+ * from simd_dispatch_init_once(), so a torn / NULL function-pointer read can
+ * no longer occur.  The pre-1.2 code guarded the table with a plain
+ * `volatile int` flag -- volatile provides neither atomicity nor ordering in
+ * the C memory model, so a reader could observe the flag set while the vtable
+ * store was not yet visible and call through a NULL pointer. */
+static void simd_dispatch_populate(void) {
     simd_backend_vtable_t vt = {0};
 
 #ifdef HAS_AVX512
@@ -116,9 +123,11 @@ static void simd_dispatch_init_once(void) {
     }
 #endif
 
-    /* Idempotent: concurrent initializers install the same pointers. */
     g_simd_vtable = vt;
-    g_simd_vtable_ready = 1;
+}
+
+static void simd_dispatch_init_once(void) {
+    pthread_once(&g_simd_vtable_once, simd_dispatch_populate);
 }
 
 // ARM SVE (Scalable Vector Extension) - for Graviton3, A64FX, etc.

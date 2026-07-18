@@ -72,12 +72,16 @@ static int io_recv_tls(SSL *ssl,       void *buf, size_t len);
 
 static int log_enabled(void)
 {
-    static int cached = -1;
-    if (cached < 0) {
-        const char *v = getenv("MOONLAB_CONTROL_LOG");
-        cached = (v && *v && *v != '0') ? 1 : 0;
+    /* Atomic so the idempotent first-touch cache write from multiple worker
+     * threads is not a data race.  Every thread computes the same value. */
+    static _Atomic int cached = -1;
+    int v = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (v < 0) {
+        const char *e = getenv("MOONLAB_CONTROL_LOG");
+        v = (e && *e && *e != '0') ? 1 : 0;
+        atomic_store_explicit(&cached, v, memory_order_relaxed);
     }
-    return cached;
+    return v;
 }
 
 /* JSON-format log mode (since v0.8.28) -- env-gated by
@@ -85,12 +89,14 @@ static int log_enabled(void)
  * "k=v" plain-text format. */
 static int log_format_json(void)
 {
-    static int cached = -1;
-    if (cached < 0) {
-        const char *v = getenv("MOONLAB_CONTROL_LOG_FORMAT");
-        cached = (v && (strcmp(v, "json") == 0 || strcmp(v, "JSON") == 0)) ? 1 : 0;
+    static _Atomic int cached = -1;
+    int v = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (v < 0) {
+        const char *e = getenv("MOONLAB_CONTROL_LOG_FORMAT");
+        v = (e && (strcmp(e, "json") == 0 || strcmp(e, "JSON") == 0)) ? 1 : 0;
+        atomic_store_explicit(&cached, v, memory_order_relaxed);
     }
-    return cached;
+    return v;
 }
 
 static double monotonic_ms(void)
@@ -257,6 +263,33 @@ static int io_recv_tls(SSL *ssl, void *buf, size_t len)
  * abusive; we ERR out before allocating. */
 #define MOONLAB_CONTROL_MAX_BODY_BYTES (1L << 22)   /* 4 MB. */
 #define MOONLAB_CONTROL_MAX_SHOTS      (1L << 20)   /* 1 M samples (8 MB). */
+
+/* Resource-amplification DoS guard (fuzz finding oom_qubit_amplification).
+ * The 4 MB body cap bounds the payload but NOT the declared qubit count: a
+ * ~18-byte well-formed CIRCUIT frame can declare up to the deserialiser's
+ * 32-qubit ceiling, driving a 2^n * 16 B state-vector allocation in execute
+ * (2^30 = 16 GB, 2^32 = 64 GB) from one tiny request.  We reject any frame
+ * whose declared qubit count exceeds this cap BEFORE executing it, so no huge
+ * allocation is ever attempted.  Default 24 (2^24 * 16 B = 256 MB); operators
+ * on large hosts may raise it via the MOONLAB_CONTROL_MAX_QUBITS env var
+ * (clamped to a 30-qubit hard ceiling). */
+#ifndef MOONLAB_CONTROL_MAX_QUBITS
+#define MOONLAB_CONTROL_MAX_QUBITS 24
+#endif
+#define MOONLAB_CONTROL_MAX_QUBITS_CEIL 30
+
+static int control_max_qubits(void)
+{
+    int cap = MOONLAB_CONTROL_MAX_QUBITS;
+    const char *e = getenv("MOONLAB_CONTROL_MAX_QUBITS");
+    if (e && *e) {
+        int v = atoi(e);
+        if (v > 0) cap = v;
+    }
+    if (cap > MOONLAB_CONTROL_MAX_QUBITS_CEIL) cap = MOONLAB_CONTROL_MAX_QUBITS_CEIL;
+    if (cap < 1) cap = 1;
+    return cap;
+}
 
 static int handle_one_request(moonlab_io_t              *io,
                               const uint8_t             *secret,
@@ -641,6 +674,17 @@ static int handle_one_request(moonlab_io_t              *io,
     }
     log_n_qubits = moonlab_qgtl_circuit_num_qubits(c);
 
+    /* Resource-amplification guard: reject an over-sized qubit count BEFORE
+     * execute allocates a 2^n state vector.  A tiny frame declaring 30 qubits
+     * would otherwise drive a 16 GB allocation (fuzz finding
+     * oom_qubit_amplification). */
+    if (log_n_qubits > control_max_qubits()) {
+        moonlab_qgtl_circuit_free(c);
+        send_err(io, MOONLAB_CONTROL_BAD_ARG,
+                 "qubit count exceeds server cap");
+        LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
+    }
+
     moonlab_qgtl_exec_options_t opts;
     memset(&opts, 0, sizeof(opts));
     if (mode_shots) {
@@ -962,11 +1006,19 @@ struct moonlab_control_server {
 #ifdef MOONLAB_HAVE_TLS
     SSL_CTX *ssl_ctx;
 #endif
-    /* Rate limit (since v0.8.21).  rate_rps == 0 disables. */
-    int             rate_rps;
+    /* Rate limit (since v0.8.21).  rate_rps == 0 disables.  Atomic
+     * because the accept loop reads it lock-free on the fast path
+     * (rl_take_token) while set_rate_limit writes it under rl_lock. */
+    _Atomic int     rate_rps;
     int             burst;
     pthread_mutex_t rl_lock;
     rl_bucket_t     rl_table[RL_TABLE_SIZE];
+    /* Guards the live-reconfigurable server config below (since v1.2):
+     * request_timeout_secs, max_concurrent, admission_hook{,_ctx}.  The
+     * accept loop snapshots these under cfg_lock so a setter running on
+     * another thread cannot tear the hook/ctx pair or race the int reads
+     * -- the setters are documented thread-safe. */
+    pthread_mutex_t cfg_lock;
     /* Per-request socket timeout in seconds (since v0.8.26).
      * 0 = no timeout (legacy default). */
     int             request_timeout_secs;
@@ -1051,6 +1103,7 @@ int moonlab_control_server_open(const char                 *host,
     s->wake_pipe[0] = -1;
     s->wake_pipe[1] = -1;
     pthread_mutex_init(&s->rl_lock, NULL);
+    pthread_mutex_init(&s->cfg_lock, NULL);
 
     if (pipe(s->wake_pipe) != 0) {
         free(s);
@@ -1188,9 +1241,12 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
      * the daemon passes as INT_MAX); sized to the configured
      * concurrency cap when that exceeds the default backstop so the
      * registry never throttles below an admin-chosen ceiling. */
+    pthread_mutex_lock(&s->cfg_lock);
+    int mc_at_start = s->max_concurrent;
+    pthread_mutex_unlock(&s->cfg_lock);
     size_t cap = MOONLAB_CONTROL_MAX_LIVE_WORKERS;
-    if (s->max_concurrent > 0 && (size_t)s->max_concurrent > cap) {
-        cap = (size_t)s->max_concurrent;
+    if (mc_at_start > 0 && (size_t)mc_at_start > cap) {
+        cap = (size_t)mc_at_start;
     }
     worker_slot_t *reg = (worker_slot_t *)calloc(cap, sizeof(*reg));
     if (!reg) return MOONLAB_CONTROL_OOM;
@@ -1233,6 +1289,16 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             break;
         }
 
+        /* Snapshot the live-reconfigurable config once per connection under
+         * cfg_lock so a concurrent setter cannot tear the admission-hook /
+         * ctx pair or race the plain-int reads below. */
+        pthread_mutex_lock(&s->cfg_lock);
+        const int                       cur_max_concurrent = s->max_concurrent;
+        const int                       cur_req_timeout    = s->request_timeout_secs;
+        const moonlab_admission_hook_fn cur_admission_hook = s->admission_hook;
+        void                     *const cur_admission_ctx  = s->admission_hook_ctx;
+        pthread_mutex_unlock(&s->cfg_lock);
+
         /* Rate-limit check (since v0.8.21; IPv6 added v0.10.0).  IPv4
          * peers are keyed under their ::ffff:a.b.c.d mapped address so
          * a host's v4 and v6 traffic share one bucket.  Failed
@@ -1259,9 +1325,9 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
         /* Concurrent-cap check (since v0.9.0).  Reserve a slot before
          * pthread_create; the worker decrements on exit.  If the cap
          * is hit, send ERR -409 + close + bump the metric. */
-        if (s->max_concurrent > 0) {
+        if (cur_max_concurrent > 0) {
             int current = atomic_load(&s->active_workers);
-            if (current >= s->max_concurrent) {
+            if (current >= cur_max_concurrent) {
                 atomic_fetch_add(&g_count_max_concurrent, 1);
                 const char *resp = "ERR -409 server busy\n";
                 (void)send(client, resp, strlen(resp), 0);
@@ -1279,8 +1345,8 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
             (void)handle_one_request(&inline_io,
                                      s->secret_len > 0 ? s->secret : NULL,
                                      s->secret_len,
-                                     s->admission_hook,
-                                     s->admission_hook_ctx);
+                                     cur_admission_hook,
+                                     cur_admission_ctx);
             close(client);
             served++;
             continue;
@@ -1291,10 +1357,10 @@ int moonlab_control_server_run(moonlab_control_server_t *s, int max_iters)
 #endif
         ctx->secret_len = s->secret_len;
         if (s->secret_len > 0) memcpy(ctx->secret, s->secret, s->secret_len);
-        ctx->request_timeout_secs = s->request_timeout_secs;
-        ctx->active_counter = (s->max_concurrent > 0) ? &s->active_workers : NULL;
-        ctx->admission_hook     = s->admission_hook;
-        ctx->admission_hook_ctx = s->admission_hook_ctx;
+        ctx->request_timeout_secs = cur_req_timeout;
+        ctx->active_counter = (cur_max_concurrent > 0) ? &s->active_workers : NULL;
+        ctx->admission_hook     = cur_admission_hook;
+        ctx->admission_hook_ctx = cur_admission_ctx;
 
         /* Reserve a live-worker slot (reaping finished ones first, and
          * block-joining the oldest if the pool is saturated) and point
@@ -1354,6 +1420,7 @@ void moonlab_control_server_close(moonlab_control_server_t *s)
     if (s->wake_pipe[0] >= 0) { close(s->wake_pipe[0]); s->wake_pipe[0] = -1; }
     if (s->wake_pipe[1] >= 0) { close(s->wake_pipe[1]); s->wake_pipe[1] = -1; }
     pthread_mutex_destroy(&s->rl_lock);
+    pthread_mutex_destroy(&s->cfg_lock);
 #ifdef MOONLAB_HAVE_TLS
     if (s->ssl_ctx) { SSL_CTX_free(s->ssl_ctx); s->ssl_ctx = NULL; }
 #endif
@@ -1448,7 +1515,9 @@ int moonlab_control_server_set_request_timeout(moonlab_control_server_t *s,
                                                int timeout_secs)
 {
     if (!s || timeout_secs < 0) return MOONLAB_CONTROL_BAD_ARG;
+    pthread_mutex_lock(&s->cfg_lock);
     s->request_timeout_secs = timeout_secs;
+    pthread_mutex_unlock(&s->cfg_lock);
     return MOONLAB_CONTROL_OK;
 }
 
@@ -1457,12 +1526,14 @@ int moonlab_control_server_set_admission_hook(moonlab_control_server_t  *s,
                                               void                      *ctx)
 {
     if (!s) return MOONLAB_CONTROL_BAD_ARG;
-    /* Single-slot.  Atomic-ish on most archs since this is a pointer
-     * write; a connection-thread reading in parallel will see either
-     * the old or new hook, not a torn value.  Caller is expected to
-     * install the hook before run() and not toggle it mid-flight. */
+    /* Publish the (hook, ctx) pair under cfg_lock so the accept loop's
+     * snapshot never observes a torn pair (new hook + old ctx or vice
+     * versa).  This is what makes the header's "Thread-safe" promise true;
+     * the hook may be toggled while the server is serving. */
+    pthread_mutex_lock(&s->cfg_lock);
     s->admission_hook     = hook;
     s->admission_hook_ctx = ctx;
+    pthread_mutex_unlock(&s->cfg_lock);
     return MOONLAB_CONTROL_OK;
 }
 
@@ -1470,7 +1541,9 @@ int moonlab_control_server_set_max_concurrent(moonlab_control_server_t *s,
                                               int max_concurrent)
 {
     if (!s || max_concurrent < 0) return MOONLAB_CONTROL_BAD_ARG;
+    pthread_mutex_lock(&s->cfg_lock);
     s->max_concurrent = max_concurrent;
+    pthread_mutex_unlock(&s->cfg_lock);
     return MOONLAB_CONTROL_OK;
 }
 

@@ -13,21 +13,74 @@
  * increments.  Newest records are preserved because they're the
  * most actionable for SREs and the most expensive to recompute.
  *
- * Destroy-race handling: push/pop both load the atomic ``state``
- * before taking the lock, and re-check after acquiring it.
- * destroy() flips state to DEAD UNDER the lock and only then
- * destroys the mutex.  This means:
- *   - thread A enters push, sees state=LIVE, grabs the lock
- *   - thread B calls destroy, can't grab the lock yet
- *   - thread A finishes, releases the lock
- *   - thread B grabs the lock, sets state=DEAD, releases, destroys
- *   - thread C enters push, sees state=DEAD, returns 0
- * No race window where a push tries to lock a destroyed mutex.
+ * Destroy-race handling: an unsynchronised ``pthread_mutex_destroy``
+ * can never be made safe against a concurrent ``pthread_mutex_lock`` by
+ * a state flag alone -- a pusher that samples state==LIVE and is then
+ * preempted before ``pthread_mutex_lock`` can lock a mutex destroy()
+ * already destroyed (UB; on macOS it wedges forever).  Instead every
+ * operation registers itself in the ``in_flight`` counter and re-checks
+ * the state before locking; destroy() publishes DEAD, then spins until
+ * ``in_flight`` drains to zero, and only then destroys the mutex:
+ *   - thread A enters push, registers in_flight, sees state==LIVE, locks
+ *   - thread B calls destroy, publishes DEAD, waits for in_flight==0
+ *   - thread A finishes, unlocks, decrements in_flight
+ *   - thread B observes in_flight==0 and destroys the mutex
+ *   - thread C enters push, sees state==DEAD, never registers, returns 0
+ *   - a pusher preempted after the state pre-check but before it
+ *     registers re-checks state==DEAD after registering and bails
+ *     WITHOUT locking, so it never touches the (possibly destroyed) mutex
+ * The counter uses default (sequentially-consistent) atomics, which give
+ * the single total order the drain argument relies on.
  */
 
 #include "audit_buffer.h"
 
 #include <string.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+/* <windows.h> (SwitchToThread) is pulled in transitively by the pthread
+ * compat shim included via audit_buffer.h. */
+#else
+#include <sched.h>
+#endif
+
+/* Yield the CPU during the destroy drain so a registered-but-descheduled
+ * operation can run to completion instead of being starved by a busy spin. */
+static inline void audit_yield(void)
+{
+#if defined(_WIN32) || defined(_WIN64)
+    SwitchToThread();
+#else
+    sched_yield();
+#endif
+}
+
+/* Register an in-flight operation and confirm the buffer is still LIVE.
+ * Returns 1 if the caller may proceed to take the lock (and MUST pair the
+ * success with audit_leave()); returns 0 if the buffer is not LIVE, in which
+ * case no in_flight reference is held and the caller must NOT touch the lock.
+ *
+ * The fetch_add is ordered BEFORE the gating state load: any operation that
+ * observes LIVE here has already incremented in_flight, so a concurrent
+ * destroy() that has published DEAD is forced to wait for this operation in
+ * its drain loop -- it cannot destroy the mutex underneath us. */
+static int audit_enter(moonlab_audit_buffer_t *buf)
+{
+    /* Cheap pre-check: skip the RMW entirely for a never-init'd or already
+     * dead buffer (e.g. an overlay pushing before it built one). */
+    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return 0;
+    atomic_fetch_add(&buf->in_flight, 1u);
+    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
+        atomic_fetch_sub(&buf->in_flight, 1u);
+        return 0;
+    }
+    return 1;
+}
+
+static void audit_leave(moonlab_audit_buffer_t *buf)
+{
+    atomic_fetch_sub(&buf->in_flight, 1u);
+}
 
 void moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
                                void                   *slots,
@@ -54,6 +107,7 @@ void moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
     buf->tail        = 0;
     buf->count       = 0;
     buf->drops       = 0;
+    atomic_store(&buf->in_flight, 0u);
     pthread_mutex_init(&buf->lock, NULL);
     atomic_store(&buf->state, MOONLAB_AUDIT_STATE_LIVE);
 }
@@ -66,13 +120,17 @@ void moonlab_audit_buffer_destroy(moonlab_audit_buffer_t *buf)
         /* Never-init or already destroyed -- no mutex to clean. */
         return;
     }
-    /* Lock to drain any in-flight push/pop, flip state to DEAD
-     * UNDER the lock so a subsequent push/pop sees the right value
-     * even if they raced state-load + lock-acquire.  Then unlock
-     * and destroy. */
-    pthread_mutex_lock(&buf->lock);
+    /* Publish DEAD first: after this store every new operation sees DEAD
+     * at its pre-check and never registers in in_flight or touches the
+     * lock.  Then wait for any operation that already registered (and may
+     * hold or be about to take the lock) to drain to zero.  Only then is
+     * it safe to destroy the mutex -- no lock can be pending against it.
+     * The in_flight set is bounded (only ops that registered before the
+     * DEAD publish contribute), so this drains promptly. */
     atomic_store(&buf->state, MOONLAB_AUDIT_STATE_DEAD);
-    pthread_mutex_unlock(&buf->lock);
+    while (atomic_load(&buf->in_flight) != 0u) {
+        audit_yield();
+    }
     pthread_mutex_destroy(&buf->lock);
 }
 
@@ -80,18 +138,11 @@ int moonlab_audit_buffer_push(moonlab_audit_buffer_t *buf,
                               const void             *record)
 {
     if (!buf || !record) return 0;
-    /* Fast bail without touching the mutex.  Avoids the lock cost
-     * for callers that push to a never-init'd or destroyed buffer
-     * (e.g. an admission overlay that hasn't built one yet). */
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return 0;
+    /* Register in-flight + confirm LIVE before touching the mutex.  If the
+     * buffer is not LIVE (never-init'd or being destroyed) we bail without
+     * locking; see "destroy-race handling" in the header. */
+    if (!audit_enter(buf)) return 0;
     pthread_mutex_lock(&buf->lock);
-    /* Re-check under the lock: destroy() flips state under the
-     * same lock, so a state value sampled before the lock could
-     * be stale.  See "destroy-race handling" in the header. */
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
-        pthread_mutex_unlock(&buf->lock);
-        return 0;
-    }
 
     int dropped = 0;
     if (buf->count == buf->capacity) {
@@ -106,21 +157,19 @@ int moonlab_audit_buffer_push(moonlab_audit_buffer_t *buf,
     buf->head = (buf->head + 1) % buf->capacity;
 
     pthread_mutex_unlock(&buf->lock);
+    audit_leave(buf);
     return dropped ? 0 : 1;
 }
 
 int moonlab_audit_buffer_pop(moonlab_audit_buffer_t *buf, void *out)
 {
     if (!buf || !out) return 0;
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return 0;
+    if (!audit_enter(buf)) return 0;
     pthread_mutex_lock(&buf->lock);
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
-        pthread_mutex_unlock(&buf->lock);
-        return 0;
-    }
 
     if (buf->count == 0) {
         pthread_mutex_unlock(&buf->lock);
+        audit_leave(buf);
         return 0;
     }
     const uint8_t *src = buf->slots + buf->tail * buf->record_size;
@@ -129,46 +178,38 @@ int moonlab_audit_buffer_pop(moonlab_audit_buffer_t *buf, void *out)
     buf->count -= 1;
 
     pthread_mutex_unlock(&buf->lock);
+    audit_leave(buf);
     return 1;
 }
 
 size_t moonlab_audit_buffer_len(moonlab_audit_buffer_t *buf)
 {
     if (!buf) return 0;
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return 0;
+    if (!audit_enter(buf)) return 0;
     pthread_mutex_lock(&buf->lock);
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
-        pthread_mutex_unlock(&buf->lock);
-        return 0;
-    }
     const size_t n = buf->count;
     pthread_mutex_unlock(&buf->lock);
+    audit_leave(buf);
     return n;
 }
 
 uint64_t moonlab_audit_buffer_drops(moonlab_audit_buffer_t *buf)
 {
     if (!buf) return 0;
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return 0;
+    if (!audit_enter(buf)) return 0;
     pthread_mutex_lock(&buf->lock);
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
-        pthread_mutex_unlock(&buf->lock);
-        return 0;
-    }
     const uint64_t d = buf->drops;
     pthread_mutex_unlock(&buf->lock);
+    audit_leave(buf);
     return d;
 }
 
 void moonlab_audit_buffer_reset_drops(moonlab_audit_buffer_t *buf)
 {
     if (!buf) return;
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) return;
+    if (!audit_enter(buf)) return;
     pthread_mutex_lock(&buf->lock);
-    if (atomic_load(&buf->state) != MOONLAB_AUDIT_STATE_LIVE) {
-        pthread_mutex_unlock(&buf->lock);
-        return;
-    }
     buf->drops = 0;
     pthread_mutex_unlock(&buf->lock);
+    audit_leave(buf);
 }

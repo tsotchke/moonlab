@@ -21,6 +21,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdatomic.h>
+#include <pthread.h>
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/heap.h>
@@ -46,8 +48,15 @@
 // GLOBAL STATE
 // ============================================================================
 
-static qsim_config_t* g_config = NULL;
-static int g_initialized = 0;
+/* The process-global config is published exactly once via double-checked
+ * locking.  The fast path is a lock-free acquire-load of the pointer; the
+ * slow path takes g_config_lock, re-checks, fully initialises a fresh struct,
+ * then release-stores the pointer so a thread that observes it as non-NULL is
+ * guaranteed to see a fully-written struct.  The pre-1.2 code used a plain
+ * flag + pointer and raced the flag, the pointer, and the 248-byte struct
+ * body on any concurrent first touch of the core. */
+static _Atomic(qsim_config_t*) g_config = NULL;
+static pthread_mutex_t g_config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // ============================================================================
 // DEFAULT VALUES
@@ -123,38 +132,49 @@ static void set_defaults(qsim_config_t* config) {
 // GLOBAL CONFIGURATION
 // ============================================================================
 
-qsim_config_t* qsim_config_global(void) {
-    if (!g_initialized) {
-        qsim_config_init();
+static qsim_config_t* config_ensure(void) {
+    qsim_config_t* cfg = atomic_load_explicit(&g_config, memory_order_acquire);
+    if (cfg) return cfg;
+
+    pthread_mutex_lock(&g_config_lock);
+    cfg = atomic_load_explicit(&g_config, memory_order_relaxed);
+    if (!cfg) {
+        cfg = calloc(1, sizeof(qsim_config_t));
+        if (cfg) {
+            set_defaults(cfg);
+
+            // Auto-detect best settings
+            cfg->simd = qsim_detect_simd();
+            cfg->threading.num_threads = qsim_detect_threads();
+
+            // Load from environment
+            qsim_config_from_env(cfg);
+
+            // Publish only after the struct is fully written (release pairs
+            // with the acquire-load above and in qsim_config_global).
+            atomic_store_explicit(&g_config, cfg, memory_order_release);
+        }
     }
-    return g_config;
+    pthread_mutex_unlock(&g_config_lock);
+    return cfg;
+}
+
+qsim_config_t* qsim_config_global(void) {
+    return config_ensure();
 }
 
 int qsim_config_init(void) {
-    if (g_initialized) return 0;
-
-    g_config = calloc(1, sizeof(qsim_config_t));
-    if (!g_config) return -1;
-
-    set_defaults(g_config);
-
-    // Auto-detect best settings
-    g_config->simd = qsim_detect_simd();
-    g_config->threading.num_threads = qsim_detect_threads();
-
-    // Load from environment
-    qsim_config_from_env(g_config);
-
-    g_initialized = 1;
-    return 0;
+    return config_ensure() ? 0 : -1;
 }
 
 void qsim_config_cleanup(void) {
-    if (g_config) {
-        free(g_config);
-        g_config = NULL;
+    pthread_mutex_lock(&g_config_lock);
+    qsim_config_t* cfg = atomic_load_explicit(&g_config, memory_order_relaxed);
+    if (cfg) {
+        free(cfg);
+        atomic_store_explicit(&g_config, NULL, memory_order_release);
     }
-    g_initialized = 0;
+    pthread_mutex_unlock(&g_config_lock);
 }
 
 // ============================================================================
@@ -187,7 +207,7 @@ qsim_config_t* qsim_config_copy(const qsim_config_t* config) {
 
 void qsim_config_destroy(qsim_config_t* config) {
     if (!config) return;
-    if (config == g_config) {
+    if (config == atomic_load_explicit(&g_config, memory_order_acquire)) {
         // Don't destroy global config
         return;
     }

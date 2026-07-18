@@ -24,6 +24,15 @@ if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     message(FATAL_ERROR "[conc] ThreadSanitizer needs Clang or GCC; got ${CMAKE_C_COMPILER_ID}")
 endif()
 
+# POSIX-only: the harnesses use pthreads directly plus <unistd.h> /
+# sched_yield / nanosleep, and ThreadSanitizer targets POSIX threads.  The
+# lane is gated off Windows (mirrors the NOT QSIM_PLATFORM_WINDOWS gate on the
+# adversarial suites in cmake/tests.cmake); run it on Linux/macOS via
+# scripts/run_tsan.sh or the Linux .github/workflows/tsan.yml CI job.
+if(WIN32)
+    message(FATAL_ERROR "[conc] The concurrency/TSan lane is POSIX-only and is gated off Windows.")
+endif()
+
 set(MOONLAB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH "Moonlab repo root")
 set(MOONLAB_TSAN_LIB "" CACHE FILEPATH "Prebuilt TSan libquantumsim.a (OpenMP OFF)")
 set(MOONLAB_TSAN_LIB_OMP "" CACHE FILEPATH "Prebuilt TSan libquantumsim.a (OpenMP ON) -- optional")
@@ -82,32 +91,34 @@ set_tests_properties(
     PROPERTIES LABELS "tsan;clean" TIMEOUT 180
     ENVIRONMENT "TSAN_OPTIONS=halt_on_error=1:abort_on_error=1")
 
-# Diagnostic configurations that DEMONSTRATE a known finding (a race or a
-# deadlock).  These PASS when the expected finding is observed: TSan runs with
-# halt_on_error=0 (report, don't abort) so the process exits normally, and a
-# PASS_REGULAR_EXPRESSION asserts the specific race / deadlock text appears.
-# run_tsan.sh reports the same findings into the JSONL trace.
+# Regression configurations for the four fixed concurrency bugs (v1.2).  These
+# harnesses drive the exact race / deadlock windows that once fired; they now
+# PASS only when the fix holds -- TSan runs with halt_on_error=0 (report, don't
+# abort) so any surviving report lands in the log, and a FAIL_REGULAR_EXPRESSION
+# fails the test if the race / deadlock text reappears (i.e. a regression).
+#   conc_core_init_coldstart      -> config.c lazy-init + simd_ops.c vtable once
+#   conc_control_plane_adversarial-> control-plane config setters under cfg_lock
+#   conc_audit_buffer_destroy     -> audit_buffer destroy vs in-flight drain
 add_test(NAME conc_core_init_coldstart       COMMAND conc_core_init)
 add_test(NAME conc_control_plane_adversarial COMMAND conc_control_plane adversarial)
 add_test(NAME conc_audit_buffer_destroy      COMMAND conc_audit_buffer destroy)
 # abort_on_error=0 stops TSan's Darwin-default SIGABRT so the process exits
-# normally and the PASS_REGULAR_EXPRESSION governs pass/fail.
+# normally and the regexes below govern pass/fail.
 set_tests_properties(conc_core_init_coldstart PROPERTIES
-    LABELS "tsan;finding" TIMEOUT 180
+    LABELS "tsan;regression" TIMEOUT 180
     ENVIRONMENT "TSAN_OPTIONS=halt_on_error=0:abort_on_error=0"
-    PASS_REGULAR_EXPRESSION "data race.*qsim_config_global|data race.*simd")
+    FAIL_REGULAR_EXPRESSION "data race")
 set_tests_properties(conc_control_plane_adversarial PROPERTIES
-    LABELS "tsan;finding" TIMEOUT 180
+    LABELS "tsan;regression" TIMEOUT 180
     ENVIRONMENT "TSAN_OPTIONS=halt_on_error=0:abort_on_error=0"
-    PASS_REGULAR_EXPRESSION "data race.*moonlab_control_server_run")
-# The destroy deadlock is a scheduling window (probabilistic): the harness
-# retries across rounds and a watchdog prints DEADLOCK on a wedge.  Accept
-# either the wedge or a clean completion so the test is not flaky; run_tsan.sh
-# records the deadlock into the trace whenever it reproduces.
+    FAIL_REGULAR_EXPRESSION "data race")
+# The destroy path retries across rounds; it must complete every round with no
+# DEADLOCK watchdog fire (the drain in moonlab_audit_buffer_destroy holds).
 set_tests_properties(conc_audit_buffer_destroy PROPERTIES
-    LABELS "tsan;finding" TIMEOUT 60
+    LABELS "tsan;regression" TIMEOUT 60
     ENVIRONMENT "TSAN_OPTIONS=halt_on_error=0:abort_on_error=0"
-    PASS_REGULAR_EXPRESSION "DEADLOCK|destroy: .* rounds completed")
+    PASS_REGULAR_EXPRESSION "destroy: .* rounds completed"
+    FAIL_REGULAR_EXPRESSION "DEADLOCK")
 
 # --- OpenMP harness (link the OpenMP-ON library) -----------------------------
 if(MOONLAB_TSAN_LIB_OMP)

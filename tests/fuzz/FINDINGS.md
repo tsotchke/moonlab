@@ -5,16 +5,24 @@ run under AddressSanitizer + UndefinedBehaviorSanitizer. HEAD at time of
 run: `e92fea5` (ABI 0.5.0). This lane does not own `src/`; the items
 below are handed off to the owning subsystems, not fixed here.
 
-## 1. Resource amplification / memory-exhaustion DoS -- control plane
+## 1. Resource amplification / memory-exhaustion DoS -- control plane  [FIXED v1.2]
 
 - **Severity**: medium (remote unauthenticated DoS in the default build).
 - **Owning subsystem**: `src/control/control_plane.c` (`handle_one_request`)
   plus `src/applications/moonlab_qgtl_backend.c` (`moonlab_qgtl_execute`).
 - **Surfaced by**: `control_plane_protocol_fuzz` libFuzzer soak (RSS
   out-of-memory at ~3.1 GB after ~40k executions, no ASan/UBSan error).
-- **Reproducer** (checked in, quarantined):
-  `corpora/control_plane_protocol_fuzz/crashes-pending/oom_qubit_amplification.bin`
+- **Reproducer** (checked in as a regression seed, no longer quarantined):
+  `corpora/control_plane_protocol_fuzz/oom_qubit_amplification.bin`
   -- the 29 wire bytes `CIRCUIT 18\nNUM_QUBITS 30\nH 0\n`.
+- **Status**: FIXED. `handle_one_request` now rejects any frame whose
+  declared qubit count exceeds `control_max_qubits()` (default 24, env-
+  overridable via `MOONLAB_CONTROL_MAX_QUBITS`, 30-qubit hard ceiling)
+  BEFORE `moonlab_qgtl_execute` -- an `ERR MOONLAB_CONTROL_BAD_ARG
+  "qubit count exceeds server cap"` with no large allocation.  The seed
+  was moved up into the seed corpus so the replay gate now guards against
+  regression (fix (a) from the suggestion below).  Regression test:
+  `tests/integration/test_control_plane_hardening.c` path 3.
 
 A single well-formed `CIRCUIT` (or `SHOTS`) frame, comfortably under the
 4 MB body cap (`MOONLAB_CONTROL_MAX_BODY_BYTES`), can declare up to a
