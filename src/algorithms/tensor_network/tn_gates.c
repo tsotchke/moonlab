@@ -140,6 +140,32 @@ static int tensor_gpu_backend_code(void) {
 #endif
 
 #if HAS_METAL
+/**
+ * @brief Whether the float32 Metal MPS 2-qubit gate path may be used.
+ *
+ * Apple GPUs have no native fp64, so metal_mps_apply_gate_2q performs the
+ * two-site SVD in float32.  That caps the per-gate relative accuracy at the
+ * float32 floor (~1e-7) and, accumulated over a deep circuit, rotates the
+ * state within the normalized manifold by ~1e-9 in probability once any bond
+ * reaches GPU_BOND_THRESHOLD (which happens for exact n>=10 non-Clifford
+ * circuits).  That silently breaks the double-precision contract of the exact
+ * MPS simulator: the cross-backend differential oracle catches it as an
+ * ~1e-9 divergence of tn_mps from BOTH the dense statevector and the
+ * independent numpy reference at n>=10, far above the 1e-10 tolerance.
+ *
+ * The exact path therefore stays on the CPU (LAPACK zgesvd, full double
+ * precision), which reproduces dense/reference to ~1e-13.  The float32 Metal
+ * kernel is a lossy accelerator for APPROXIMATE MPS only -- where the
+ * truncation floor already dominates float32 noise -- and is opt-in via
+ * MOONLAB_TN_GPU_LOSSY=1, mirroring the existing MOONLAB_DISABLE_GPU /
+ * MOONLAB_TENSOR_GPU_THRESHOLD_MUL runtime toggles.  Off by default so that
+ * correctness, not speed, is the default.
+ */
+static bool tn_metal_2q_lossy_enabled(void) {
+    const char *env = getenv("MOONLAB_TN_GPU_LOSSY");
+    return env && env[0] == '1' && env[1] == '\0';
+}
+
 static bool g_gpu_init_logged = false;
 
 /**
@@ -806,10 +832,15 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
         if (canon != TN_STATE_SUCCESS) return TN_GATE_ERROR_CONTRACTION_FAILED;
     }
 
-    // Try GPU path for larger bond dimensions
+    // Try GPU path for larger bond dimensions.
     if (state->bond_dims[left_qubit] >= GPU_BOND_THRESHOLD) {
 #if HAS_METAL
-        if (tensor_gpu_backend_code() == TN_GPU_BACKEND_METAL) {
+        // The Metal kernel does the SVD in float32 (no fp64 on Apple GPUs),
+        // which corrupts the exact double-precision result by ~1e-7 per gate.
+        // Only take it when the caller has explicitly opted into lossy GPU
+        // acceleration; otherwise fall through to the exact CPU path.
+        if (tn_metal_2q_lossy_enabled() &&
+            tensor_gpu_backend_code() == TN_GPU_BACKEND_METAL) {
             tn_gate_error_t gpu_result = apply_gate_2q_adjacent_gpu(state, left_qubit, gate, truncation_error);
             if (gpu_result == TN_GATE_SUCCESS) {
                 return TN_GATE_SUCCESS;

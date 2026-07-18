@@ -17,10 +17,21 @@
  * log_norm_factor), so tn_mps_amplitude = amp*state->norm reads back correctly.
  *
  * This checks the full state vector against an independent dense reference: the
- * L2 norm must be 1 (the bug drove it to ~0.06) and the normalized state must
- * match the dense state (fidelity).  The CPU path is exact to ~1e-13; the norm
- * tolerance also absorbs the float32 precision of the Metal GPU kernel, whose
- * physical state is otherwise correct.
+ * L2 norm must be 1 (the gauge bug drove it to ~0.06) and the normalized state
+ * must match the dense state (fidelity).
+ *
+ * SECOND regression (numerical precision): fidelity and norm are both only
+ * SECOND order in a state perturbation, so a ~1e-7 relative amplitude error --
+ * exactly what a float32 SVD injects -- hides under a ~1e-14 infidelity while
+ * still moving individual probabilities by ~1e-9.  That is precisely how the
+ * lossy float32 Metal 2q-gate path slipped past this test yet failed the
+ * cross-backend differential oracle (which compares probabilities directly at
+ * 1e-10) for deep non-Clifford circuits at n>=10.  The exact simulator must be
+ * double precision, so we ALSO assert the first-order quantity here: the tn_mps
+ * probabilities must reproduce the dense probabilities to well under the
+ * oracle's 1e-10 tolerance.  The CPU (LAPACK zgesvd) path is exact to ~1e-13;
+ * this assertion fails if the float32 GPU 2q path is ever taken by default
+ * again (e.g. MOONLAB_TN_GPU_LOSSY=1 in the environment).
  */
 
 #include "../../src/algorithms/tensor_network/tn_state.h"
@@ -127,6 +138,22 @@ int main(void) {
     double infid = (ng > 0.0 && nr > 0.0) ? fabs(1.0 - cabs(ov) / (ng * nr)) : 1.0;
     fprintf(stdout, "  1 - fidelity vs dense = %.3e\n", infid);
     CHECK(infid < 1e-9, "physical state diverges from dense (1-F = %.3e)", infid);
+
+    /* First-order precision guard: the exact double-precision path must match
+     * the dense probability vector to well under the differential oracle's
+     * 1e-10 tolerance.  A float32 GPU 2q path leaves this at ~1e-9 (fails);
+     * the CPU LAPACK path lands at ~1e-13 (passes with 3 orders of margin). */
+    double max_dp = 0.0;
+    for (uint64_t b = 0; b < dim; b++) {
+        double pg = creal(got[b]) * creal(got[b]) + cimag(got[b]) * cimag(got[b]);
+        double pr = creal(ref[b]) * creal(ref[b]) + cimag(ref[b]) * cimag(ref[b]);
+        double dp = fabs(pg - pr);
+        if (dp > max_dp) max_dp = dp;
+    }
+    fprintf(stdout, "  max |prob_tn - prob_dense| = %.3e (tol 1e-10)\n", max_dp);
+    CHECK(max_dp < 1e-10,
+          "probability vector diverges from dense (max dev %.3e > 1e-10) -- lossy float32 GPU 2q path?",
+          max_dp);
 
     free(bp); free(ref); free(got);
     tn_mps_free(mps);

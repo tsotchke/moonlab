@@ -11,10 +11,16 @@
  * agree to single-precision tolerance. The old float2 Jacobi SVD and the
  * float2 unnormalized expectation produced garbage that this catches.
  *
+ * The float32 Metal 2q-gate path is off by default (it breaks the exact
+ * simulator's double-precision contract -- see tn_metal_2q_lossy_enabled in
+ * tn_gates.c), so this test explicitly opts in via MOONLAB_TN_GPU_LOSSY=1 to
+ * actually drive the Metal kernel it is here to validate.
+ *
  * Skips cleanly (success) when Metal is unavailable at runtime.
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <complex.h>
 
@@ -54,6 +60,10 @@ int main(void) {
         printf("test_metal_mps_parity: Metal unavailable at runtime -- SKIP\n");
         return 0;
     }
+
+    /* Opt into the lossy float32 Metal 2q-gate path (off by default) so the
+     * circuit below actually runs on the Metal kernel this test validates. */
+    setenv("MOONLAB_TN_GPU_LOSSY", "1", 1);
 
     /* Dense reference state. */
     quantum_state_t dense;
