@@ -9,13 +9,15 @@
 #   {"kind":"moonlab_oracle","name":"<pillar_event>","value":"PASS"|"FAIL",
 #    "total":N,"failed":F,"xfail":K,"xpass":S,"snippet":"...","confidence":0.95}
 #
-# The five events this runner owns are exactly the ones the integrator's
-# moonlab-adversarial-matrix target requires:
+# The six events this runner owns are exactly the ones the integrator's
+# moonlab-adversarial-matrix target requires, plus a corpus artifact
+# validation evidence event:
 #   backend_differential_oracle   (P1)
 #   gradient_oracle               (P2)
 #   measurement_statistics_oracle (P3)
 #   edge_matrix_oracle            (P5)
 #   property_invariants_oracle    (P6)
+#   corpus_artifacts_validated    (artifact contract evidence)
 #
 # The oracle binaries are KNOWN_FAILURES-aware: a binary exits 0 when its only
 # failures are allowlisted in tests/oracle/KNOWN_FAILURES.txt (XFAIL). This
@@ -92,6 +94,8 @@ echo "   ctest -L oracle exit: $CTEST_RC"
 # 4. Translate each pillar's ORACLE_SUMMARY line into a trace event.
 : > "$TRACE_FILE"
 overall_fail=0
+CIRCUIT_CORPUS_PATH="$REPO_ROOT/tests/oracle/corpus/circuit_corpus.json"
+CIRCUIT_CORPUS_REL_PATH="tests/oracle/corpus/circuit_corpus.json"
 printf '%-34s %-6s %s\n' "PILLAR" "VALUE" "counts"
 for row in "${PILLARS[@]}"; do
     IFS='|' read -r _tname _bin event <<< "$row"
@@ -119,6 +123,20 @@ for row in "${PILLARS[@]}"; do
         "$event" "$value" "${total:-0}" "${failed:-0}" "${xfail:-0}" "${xpass:-0}" "$SEED" "$snippet" \
         >> "$TRACE_FILE"
 done
+
+if [ "$CTEST_RC" -ne 0 ]; then
+    overall_fail=1
+fi
+if [ "$overall_fail" -ne 0 ]; then
+    ORACLE_CORPUS_STATUS="FAIL"
+elif [ ! -f "$CIRCUIT_CORPUS_PATH" ]; then
+    ORACLE_CORPUS_STATUS="FAIL"
+else
+    ORACLE_CORPUS_STATUS="PASS"
+fi
+printf '{"kind":"moonlab_oracle","name":"corpus_artifacts_validated","value":"%s","seed":%s,"snippet":"circuit_corpus artifact consumed: %s","artifacts":["%s"],"confidence":0.95}\n' \
+    "$ORACLE_CORPUS_STATUS" "$SEED" "$CIRCUIT_CORPUS_REL_PATH" "$CIRCUIT_CORPUS_REL_PATH" \
+    >> "$TRACE_FILE"
 
 rm -f "$CTEST_LOG"
 echo "   wrote $(wc -l < "$TRACE_FILE" | tr -d ' ') events to $TRACE_FILE"

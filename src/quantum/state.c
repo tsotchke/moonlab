@@ -89,8 +89,8 @@ qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits) {
 extern void moonlab_cuda_state_free(void *)
     MOONLAB_WEAK_IMPORT;
 
-/* The CPU-only fallback definitions of moonlab_cuda_* and qsim_gpu_route_*
- * live in gpu_route_cpu_fallback.c, compiled when CUDA is off. Keeping them
+/* The CUDA-unavailable definitions of moonlab_cuda_* and qsim_gpu_route_*
+ * live in gpu_route_cpu_unavailable.c, compiled when CUDA is off. Keeping them
  * in a dedicated TU (one strong definition per configuration) is what makes
  * the Windows/COFF link work; clang-cl ignores __attribute__((weak)) on
  * definitions. */

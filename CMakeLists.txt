@@ -1596,7 +1596,7 @@ else()
     # entry points are not compiled, so provide the single strong CPU-only
     # definition here. Must be exactly one TU so it never collides with the
     # CUDA definitions; plain (non-weak) symbols so clang-cl/COFF links it.
-    target_sources(quantumsim PRIVATE src/quantum/gpu_route_cpu_fallback.c)
+    target_sources(quantumsim PRIVATE src/quantum/gpu_route_cpu_unavailable.c)
 endif()
 
 if(QSIM_HAS_CUQUANTUM)

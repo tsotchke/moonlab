@@ -300,12 +300,19 @@ UMBRELLA_STATUS="PASS"; [ "$GATE_FAIL" = "0" ] || UMBRELLA_STATUS="FAIL"
 emit_event moonlab_differential "$UMBRELLA_STATUS" release \
   "{\"profile\":\"$PROFILE\",\"bindings_exercised\":$BINDINGS_EXERCISED,\"bindings_skipped\":$BINDINGS_SKIPPED,\"corpus_cases\":$CASES,\"gpu\":\"$(json_escape "${GPU_REASON:-not enabled}")\"}"
 
+# A silently-empty run must never look green: the C driver + at least one binding
+# must have actually exercised cases.
+CORPUS_VALIDATION_STATUS="$UMBRELLA_STATUS"
+if [ "$CASES" -lt 1 ] || [ "$BINDINGS_EXERCISED" -lt 1 ]; then
+  CORPUS_VALIDATION_STATUS="FAIL"
+fi
+CORPUS_VALIDATION_VALUE='{"artifacts":["'"$(json_escape "$CORPUS_TXT")"'","'"$(json_escape "$CORPUS_JSON")"'"],"cases":'"$CASES"',"snippet":"corpus artifacts consumed: '"$(json_escape "$CORPUS_TXT")"', '"$(json_escape "$CORPUS_JSON")"'"}'
+emit_event corpus_artifacts_validated "$CORPUS_VALIDATION_STATUS" release "$CORPUS_VALIDATION_VALUE"
+
 cat "$WORK/events.jsonl" >> "$TRACE_FILE"
 echo "--- wrote $(wc -l < "$WORK/events.jsonl" | tr -d ' ') events to $TRACE_FILE ---"
 cat "$WORK/events.jsonl"
 
-# A silently-empty run must never look green: the C driver + at least one binding
-# must have actually exercised cases.
 if [ "$BINDINGS_EXERCISED" -lt 1 ] || [ "$CASES" -lt 1 ]; then
   echo "FATAL: no cases/bindings exercised -- refusing to report green" >&2
   exit 6
