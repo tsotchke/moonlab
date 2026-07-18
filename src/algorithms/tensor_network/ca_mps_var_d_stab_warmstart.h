@@ -33,6 +33,7 @@
 
 #ifndef MOONLAB_CA_MPS_VAR_D_STAB_WARMSTART_H
 #define MOONLAB_CA_MPS_VAR_D_STAB_WARMSTART_H
+#include "applications/moonlab_api.h"
 
 #include "ca_mps.h"
 
@@ -78,7 +79,7 @@ extern "C" {
  *         Other ca_mps_error_t codes propagated from the underlying
  *         Clifford gate applications.
  */
-ca_mps_error_t moonlab_ca_mps_apply_stab_subgroup_warmstart(
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_apply_stab_subgroup_warmstart(
     moonlab_ca_mps_t* state,
     const uint8_t* paulis,
     uint32_t num_gens);

@@ -38,6 +38,7 @@
 
 #ifndef MOONLAB_SHA3_H
 #define MOONLAB_SHA3_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -68,16 +69,16 @@ typedef struct {
 /* ------------------------------------------------------------- */
 
 /** @brief One-shot SHA3-256.  @p out receives 32 bytes. */
-void sha3_256(const uint8_t *in, size_t inlen, uint8_t out[32]);
+MOONLAB_API void sha3_256(const uint8_t *in, size_t inlen, uint8_t out[32]);
 
 /** @brief One-shot SHA3-512.  @p out receives 64 bytes. */
-void sha3_512(const uint8_t *in, size_t inlen, uint8_t out[64]);
+MOONLAB_API void sha3_512(const uint8_t *in, size_t inlen, uint8_t out[64]);
 
 /** @brief One-shot SHA3-224.  @p out receives 28 bytes. */
-void sha3_224(const uint8_t *in, size_t inlen, uint8_t out[28]);
+MOONLAB_API void sha3_224(const uint8_t *in, size_t inlen, uint8_t out[28]);
 
 /** @brief One-shot SHA3-384.  @p out receives 48 bytes. */
-void sha3_384(const uint8_t *in, size_t inlen, uint8_t out[48]);
+MOONLAB_API void sha3_384(const uint8_t *in, size_t inlen, uint8_t out[48]);
 
 /* ------------------------------------------------------------- */
 /* Streaming hash interface (for chunked input)                   */
@@ -89,7 +90,7 @@ void sha3_256_init(sha3_ctx_t *ctx);
 void sha3_512_init(sha3_ctx_t *ctx);
 
 /** @brief Feed bytes into a SHA-3 or SHAKE context. */
-void sha3_update(sha3_ctx_t *ctx, const uint8_t *in, size_t inlen);
+MOONLAB_API void sha3_update(sha3_ctx_t *ctx, const uint8_t *in, size_t inlen);
 
 /**
  * @brief Finalise a fixed-output SHA-3 context and emit the digest.
@@ -102,7 +103,7 @@ void sha3_final(sha3_ctx_t *ctx, uint8_t *out);
 /* ------------------------------------------------------------- */
 
 /** @brief Initialise a SHAKE128 context (rate 168, security 128). */
-void shake128_init(sha3_ctx_t *ctx);
+MOONLAB_API void shake128_init(sha3_ctx_t *ctx);
 /** @brief Initialise a SHAKE256 context (rate 136, security 256). */
 void shake256_init(sha3_ctx_t *ctx);
 
@@ -112,16 +113,16 @@ void shake256_init(sha3_ctx_t *ctx);
  *        by FIPS 202.  Once called at least once, no more
  *        @ref sha3_update calls are permitted on this context.
  */
-void shake_squeeze(sha3_ctx_t *ctx, uint8_t *out, size_t outlen);
+MOONLAB_API void shake_squeeze(sha3_ctx_t *ctx, uint8_t *out, size_t outlen);
 
 /**
  * @brief One-shot SHAKE128: absorb @p inlen bytes and squeeze
  *        @p outlen bytes.
  */
-void shake128(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
+MOONLAB_API void shake128(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
 /** @brief One-shot SHAKE256. */
-void shake256(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
+MOONLAB_API void shake256(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
 #ifdef __cplusplus
 }

@@ -17,6 +17,7 @@
 
 #ifndef TENSOR_H
 #define TENSOR_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -182,7 +183,7 @@ typedef struct {
  * @param dims Array of dimension sizes
  * @return New tensor or NULL on failure
  */
-tensor_t *tensor_create(uint32_t rank, const uint32_t *dims);
+MOONLAB_API tensor_t *tensor_create(uint32_t rank, const uint32_t *dims);
 
 /**
  * @brief Create a tensor initialized with given data
@@ -232,7 +233,7 @@ tensor_t *tensor_create_vector(uint32_t size);
  * @param cols Number of columns
  * @return New matrix tensor or NULL on failure
  */
-tensor_t *tensor_create_matrix(uint32_t rows, uint32_t cols);
+MOONLAB_API tensor_t *tensor_create_matrix(uint32_t rows, uint32_t cols);
 
 /**
  * @brief Create an identity matrix tensor
@@ -240,7 +241,7 @@ tensor_t *tensor_create_matrix(uint32_t rows, uint32_t cols);
  * @param size Matrix dimension (creates size x size identity)
  * @return New identity matrix or NULL on failure
  */
-tensor_t *tensor_create_identity(uint32_t size);
+MOONLAB_API tensor_t *tensor_create_identity(uint32_t size);
 
 /**
  * @brief Create a copy of a tensor
@@ -257,14 +258,14 @@ tensor_t *tensor_copy(const tensor_t *src);
  *
  * @param tensor Tensor to free
  */
-void tensor_free(tensor_t *tensor);
+MOONLAB_API void tensor_free(tensor_t *tensor);
 
 /**
  * @brief Free SVD result structure
  *
  * @param svd SVD result to free
  */
-void tensor_svd_free(tensor_svd_result_t *svd);
+MOONLAB_API void tensor_svd_free(tensor_svd_result_t *svd);
 
 /**
  * @brief Free QR result structure
@@ -303,7 +304,7 @@ void tensor_get_multi_index(const tensor_t *tensor, uint64_t linear_idx,
  * @param indices Array of indices
  * @return Element value
  */
-double complex tensor_get(const tensor_t *tensor, const uint32_t *indices);
+MOONLAB_API double complex tensor_get(const tensor_t *tensor, const uint32_t *indices);
 
 /**
  * @brief Set element at indices
@@ -313,7 +314,7 @@ double complex tensor_get(const tensor_t *tensor, const uint32_t *indices);
  * @param value Value to set
  * @return TENSOR_SUCCESS or error code
  */
-tensor_error_t tensor_set(tensor_t *tensor, const uint32_t *indices,
+MOONLAB_API tensor_error_t tensor_set(tensor_t *tensor, const uint32_t *indices,
                           double complex value);
 
 /**
@@ -350,7 +351,7 @@ tensor_error_t tensor_set_linear(tensor_t *tensor, uint64_t idx,
  * @param new_dims New dimensions
  * @return Reshaped tensor or NULL on failure
  */
-tensor_t *tensor_reshape(const tensor_t *tensor, uint32_t new_rank,
+MOONLAB_API tensor_t *tensor_reshape(const tensor_t *tensor, uint32_t new_rank,
                          const uint32_t *new_dims);
 
 /**
@@ -360,7 +361,7 @@ tensor_t *tensor_reshape(const tensor_t *tensor, uint32_t new_rank,
  * @param perm Permutation of axes (length = rank)
  * @return Transposed tensor or NULL on failure
  */
-tensor_t *tensor_transpose(const tensor_t *tensor, const uint32_t *perm);
+MOONLAB_API tensor_t *tensor_transpose(const tensor_t *tensor, const uint32_t *perm);
 
 /**
  * @brief Swap two axes of a tensor
@@ -428,7 +429,7 @@ tensor_t *tensor_sub(const tensor_t *a, const tensor_t *b);
  * @param scalar Scalar multiplier
  * @return Scaled tensor or NULL on failure
  */
-tensor_t *tensor_scale(const tensor_t *tensor, double complex scalar);
+MOONLAB_API tensor_t *tensor_scale(const tensor_t *tensor, double complex scalar);
 
 /**
  * @brief Multiply two tensors element-wise (Hadamard product)
@@ -477,7 +478,7 @@ tensor_error_t tensor_add_inplace(tensor_t *tensor, const tensor_t *other);
  * @param tensor Tensor
  * @return Frobenius norm
  */
-double tensor_norm_frobenius(const tensor_t *tensor);
+MOONLAB_API double tensor_norm_frobenius(const tensor_t *tensor);
 
 /**
  * @brief Maximum absolute value norm (infinity norm)
@@ -556,7 +557,7 @@ bool tensor_allclose(const tensor_t *a, const tensor_t *b, double tol);
  * @param b Right matrix (k x n)
  * @return Result matrix (m x n) or NULL on failure
  */
-tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b);
+MOONLAB_API tensor_t *tensor_matmul(const tensor_t *a, const tensor_t *b);
 
 /**
  * @brief Matrix-vector multiplication
@@ -622,7 +623,7 @@ tensor_t *tensor_dagger(const tensor_t *mat);
  * @param cutoff Discard singular values below this threshold
  * @return SVD result or NULL on failure
  */
-tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
+MOONLAB_API tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
                                  double cutoff);
 
 /**
@@ -634,7 +635,7 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
  * @param max_error Maximum allowed truncation error (Frobenius norm)
  * @return SVD result or NULL on failure
  */
-tensor_svd_result_t *tensor_svd_truncate(const tensor_t *mat, double max_error);
+MOONLAB_API tensor_svd_result_t *tensor_svd_truncate(const tensor_t *mat, double max_error);
 
 /**
  * @brief QR decomposition
@@ -673,7 +674,7 @@ tensor_qr_result_t *tensor_lq(const tensor_t *mat);
  * @param num_contract Number of axes to contract
  * @return Contracted tensor or NULL on failure
  */
-tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
+MOONLAB_API tensor_t *tensor_contract(const tensor_t *a, const tensor_t *b,
                           const uint32_t *axes_a, const uint32_t *axes_b,
                           uint32_t num_contract);
 
@@ -700,7 +701,7 @@ tensor_t *tensor_tensordot(const tensor_t *a, const tensor_t *b);
  * @param subscripts Einsum subscript string
  * @return Result tensor or NULL on failure
  */
-tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
+MOONLAB_API tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
                         const char *subscripts);
 
 // ============================================================================
@@ -712,7 +713,7 @@ tensor_t *tensor_einsum(const tensor_t *a, const tensor_t *b,
  *
  * @param tensor Tensor to zero
  */
-void tensor_zero(tensor_t *tensor);
+MOONLAB_API void tensor_zero(tensor_t *tensor);
 
 /**
  * @brief Set all elements to a constant

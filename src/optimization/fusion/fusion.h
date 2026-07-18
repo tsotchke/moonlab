@@ -1,5 +1,6 @@
 #ifndef MOONLAB_FUSION_H
 #define MOONLAB_FUSION_H
+#include "applications/moonlab_api.h"
 
 /**
  * @file fusion.h
@@ -108,33 +109,33 @@ typedef struct {
     size_t merges_applied;
 } fuse_stats_t;
 
-fuse_circuit_t* fuse_circuit_create(size_t num_qubits);
-void            fuse_circuit_free(fuse_circuit_t* c);
-size_t          fuse_circuit_len(const fuse_circuit_t* c);
-size_t          fuse_circuit_num_qubits(const fuse_circuit_t* c);
+MOONLAB_API fuse_circuit_t* fuse_circuit_create(size_t num_qubits);
+MOONLAB_API void            fuse_circuit_free(fuse_circuit_t* c);
+MOONLAB_API size_t          fuse_circuit_len(const fuse_circuit_t* c);
+MOONLAB_API size_t          fuse_circuit_num_qubits(const fuse_circuit_t* c);
 
-int fuse_append_h(fuse_circuit_t* c, int q);
-int fuse_append_x(fuse_circuit_t* c, int q);
-int fuse_append_y(fuse_circuit_t* c, int q);
-int fuse_append_z(fuse_circuit_t* c, int q);
-int fuse_append_s(fuse_circuit_t* c, int q);
-int fuse_append_sdg(fuse_circuit_t* c, int q);
-int fuse_append_t(fuse_circuit_t* c, int q);
-int fuse_append_tdg(fuse_circuit_t* c, int q);
-int fuse_append_phase(fuse_circuit_t* c, int q, double theta);
-int fuse_append_rx(fuse_circuit_t* c, int q, double theta);
-int fuse_append_ry(fuse_circuit_t* c, int q, double theta);
-int fuse_append_rz(fuse_circuit_t* c, int q, double theta);
-int fuse_append_u3(fuse_circuit_t* c, int q,
+MOONLAB_API int fuse_append_h(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_x(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_y(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_z(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_s(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_sdg(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_t(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_tdg(fuse_circuit_t* c, int q);
+MOONLAB_API int fuse_append_phase(fuse_circuit_t* c, int q, double theta);
+MOONLAB_API int fuse_append_rx(fuse_circuit_t* c, int q, double theta);
+MOONLAB_API int fuse_append_ry(fuse_circuit_t* c, int q, double theta);
+MOONLAB_API int fuse_append_rz(fuse_circuit_t* c, int q, double theta);
+MOONLAB_API int fuse_append_u3(fuse_circuit_t* c, int q,
                    double theta, double phi, double lambda);
-int fuse_append_cnot(fuse_circuit_t* c, int ctrl, int tgt);
-int fuse_append_cz(fuse_circuit_t* c, int ctrl, int tgt);
-int fuse_append_cy(fuse_circuit_t* c, int ctrl, int tgt);
-int fuse_append_swap(fuse_circuit_t* c, int a, int b);
-int fuse_append_cphase(fuse_circuit_t* c, int ctrl, int tgt, double theta);
-int fuse_append_crx(fuse_circuit_t* c, int ctrl, int tgt, double theta);
-int fuse_append_cry(fuse_circuit_t* c, int ctrl, int tgt, double theta);
-int fuse_append_crz(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+MOONLAB_API int fuse_append_cnot(fuse_circuit_t* c, int ctrl, int tgt);
+MOONLAB_API int fuse_append_cz(fuse_circuit_t* c, int ctrl, int tgt);
+MOONLAB_API int fuse_append_cy(fuse_circuit_t* c, int ctrl, int tgt);
+MOONLAB_API int fuse_append_swap(fuse_circuit_t* c, int a, int b);
+MOONLAB_API int fuse_append_cphase(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+MOONLAB_API int fuse_append_crx(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+MOONLAB_API int fuse_append_cry(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+MOONLAB_API int fuse_append_crz(fuse_circuit_t* c, int ctrl, int tgt, double theta);
 
 /**
  * @brief Produce a fused copy of @p src.
@@ -142,7 +143,7 @@ int fuse_append_crz(fuse_circuit_t* c, int ctrl, int tgt, double theta);
  * @param stats  optional statistics sink (may be NULL)
  * @return owned, heap-allocated circuit; NULL on OOM.
  */
-fuse_circuit_t* fuse_compile(const fuse_circuit_t* src, fuse_stats_t* stats);
+MOONLAB_API fuse_circuit_t* fuse_compile(const fuse_circuit_t* src, fuse_stats_t* stats);
 
 /**
  * @brief Execute a circuit on a state vector.
@@ -150,7 +151,7 @@ fuse_circuit_t* fuse_compile(const fuse_circuit_t* src, fuse_stats_t* stats);
  * Works on both fused and unfused circuits. Returns QS_SUCCESS if every
  * gate applied cleanly.
  */
-qs_error_t fuse_execute(const fuse_circuit_t* c, quantum_state_t* state);
+MOONLAB_API qs_error_t fuse_execute(const fuse_circuit_t* c, quantum_state_t* state);
 
 #ifdef __cplusplus
 }

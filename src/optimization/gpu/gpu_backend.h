@@ -25,6 +25,7 @@
 
 #ifndef GPU_BACKEND_H
 #define GPU_BACKEND_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -103,21 +104,21 @@ typedef struct gpu_kernel gpu_kernel_t;
  * @param preferred Preferred backend (GPU_BACKEND_AUTO for auto-select)
  * @return GPU context or NULL on failure
  */
-gpu_context_t* gpu_compute_init(gpu_backend_type_t preferred);
+MOONLAB_API gpu_context_t* gpu_compute_init(gpu_backend_type_t preferred);
 
 /**
  * @brief Free GPU compute context
  *
  * @param ctx GPU context
  */
-void gpu_compute_free(gpu_context_t* ctx);
+MOONLAB_API void gpu_compute_free(gpu_context_t* ctx);
 
 /**
  * @brief Check if any GPU backend is available
  *
  * @return 1 if GPU available, 0 otherwise
  */
-int gpu_is_available(void);
+MOONLAB_API int gpu_is_available(void);
 
 /**
  * @brief Get active backend type
@@ -125,7 +126,7 @@ int gpu_is_available(void);
  * @param ctx GPU context
  * @return Active backend type
  */
-gpu_backend_type_t gpu_get_backend_type(gpu_context_t* ctx);
+MOONLAB_API gpu_backend_type_t gpu_get_backend_type(gpu_context_t* ctx);
 
 /**
  * @brief Get backend name string
@@ -133,7 +134,7 @@ gpu_backend_type_t gpu_get_backend_type(gpu_context_t* ctx);
  * @param type Backend type
  * @return Human-readable backend name
  */
-const char* gpu_backend_name(gpu_backend_type_t type);
+MOONLAB_API const char* gpu_backend_name(gpu_backend_type_t type);
 
 /**
  * @brief Whether active backend is using native GPU acceleration.
@@ -175,7 +176,7 @@ void gpu_print_device_info(gpu_context_t* ctx);
  * @param size Buffer size in bytes
  * @return GPU buffer or NULL on failure
  */
-gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size);
+MOONLAB_API gpu_buffer_t* gpu_buffer_create(gpu_context_t* ctx, size_t size);
 
 /**
  * @brief Create GPU buffer from existing CPU memory
@@ -206,7 +207,7 @@ void* gpu_buffer_contents(gpu_buffer_t* buffer);
  * @param offset Offset into buffer
  * @return GPU_SUCCESS or error code
  */
-gpu_error_t gpu_buffer_write(gpu_buffer_t* buffer, const void* data, size_t size, size_t offset);
+MOONLAB_API gpu_error_t gpu_buffer_write(gpu_buffer_t* buffer, const void* data, size_t size, size_t offset);
 
 /**
  * @brief Copy data from GPU buffer
@@ -217,14 +218,14 @@ gpu_error_t gpu_buffer_write(gpu_buffer_t* buffer, const void* data, size_t size
  * @param offset Offset into buffer
  * @return GPU_SUCCESS or error code
  */
-gpu_error_t gpu_buffer_read(gpu_buffer_t* buffer, void* data, size_t size, size_t offset);
+MOONLAB_API gpu_error_t gpu_buffer_read(gpu_buffer_t* buffer, void* data, size_t size, size_t offset);
 
 /**
  * @brief Free GPU buffer
  *
  * @param buffer GPU buffer
  */
-void gpu_buffer_free(gpu_buffer_t* buffer);
+MOONLAB_API void gpu_buffer_free(gpu_buffer_t* buffer);
 
 // ============================================================================
 // QUANTUM GATE OPERATIONS
@@ -239,7 +240,7 @@ void gpu_buffer_free(gpu_buffer_t* buffer);
  * @param state_dim State dimension (2^n)
  * @return GPU_SUCCESS or error code
  */
-gpu_error_t gpu_hadamard(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
+MOONLAB_API gpu_error_t gpu_hadamard(gpu_context_t* ctx, gpu_buffer_t* amplitudes,
                          uint32_t qubit_index, uint64_t state_dim);
 
 /**

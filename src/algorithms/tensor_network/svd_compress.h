@@ -20,6 +20,7 @@
 
 #ifndef SVD_COMPRESS_H
 #define SVD_COMPRESS_H
+#include "applications/moonlab_api.h"
 
 #include "tensor.h"
 #include <stdbool.h>
@@ -118,7 +119,7 @@ typedef struct {
  *
  * @return Default configuration (adaptive mode, chi=256, cutoff=1e-12)
  */
-svd_compress_config_t svd_compress_config_default(void);
+MOONLAB_API svd_compress_config_t svd_compress_config_default(void);
 
 /**
  * @brief Create configuration for fixed bond dimension
@@ -126,7 +127,7 @@ svd_compress_config_t svd_compress_config_default(void);
  * @param max_bond Maximum bond dimension to keep
  * @return Configuration for fixed truncation
  */
-svd_compress_config_t svd_compress_config_fixed(uint32_t max_bond);
+MOONLAB_API svd_compress_config_t svd_compress_config_fixed(uint32_t max_bond);
 
 /**
  * @brief Create configuration for error-bounded truncation
@@ -160,7 +161,7 @@ svd_compress_error_t svd_compress_config_validate(const svd_compress_config_t *c
  * @param config Compression configuration
  * @return Compression result or NULL on failure
  */
-svd_compress_result_t *svd_compress(const tensor_t *tensor,
+MOONLAB_API svd_compress_result_t *svd_compress(const tensor_t *tensor,
                                      const svd_compress_config_t *config);
 
 /**
@@ -190,7 +191,7 @@ svd_compress_result_t *svd_compress_split(const tensor_t *tensor,
  * @param left_canonical If true, absorb S into right tensor
  * @return Compression result
  */
-svd_compress_result_t *svd_compress_bond(const tensor_t *left,
+MOONLAB_API svd_compress_result_t *svd_compress_bond(const tensor_t *left,
                                           const tensor_t *right,
                                           const svd_compress_config_t *config,
                                           bool left_canonical);
@@ -200,7 +201,7 @@ svd_compress_result_t *svd_compress_bond(const tensor_t *left,
  *
  * @param result Result to free
  */
-void svd_compress_result_free(svd_compress_result_t *result);
+MOONLAB_API void svd_compress_result_free(svd_compress_result_t *result);
 
 // ============================================================================
 // CANONICAL FORMS
@@ -217,7 +218,7 @@ void svd_compress_result_free(svd_compress_result_t *result);
  * @param config Compression config (NULL for no truncation)
  * @return Compression result with left-canonical tensor and remainder
  */
-svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
+MOONLAB_API svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
                                               uint32_t bond_axis,
                                               const svd_compress_config_t *config);
 
@@ -232,7 +233,7 @@ svd_compress_result_t *svd_left_canonicalize(const tensor_t *tensor,
  * @param config Compression config (NULL for no truncation)
  * @return Compression result with right-canonical tensor and remainder
  */
-svd_compress_result_t *svd_right_canonicalize(const tensor_t *tensor,
+MOONLAB_API svd_compress_result_t *svd_right_canonicalize(const tensor_t *tensor,
                                                uint32_t bond_axis,
                                                const svd_compress_config_t *config);
 

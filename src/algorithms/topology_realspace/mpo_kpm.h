@@ -107,6 +107,7 @@
 
 #ifndef MOONLAB_MPO_KPM_H
 #define MOONLAB_MPO_KPM_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>
@@ -136,7 +137,7 @@ typedef struct {
  *        SVD cutoff 1e-12, Jackson kernel on.  Callers typically
  *        adjust n_cheby and E_shift / E_scale.
  */
-mpo_kpm_params_t mpo_kpm_params_default(void);
+MOONLAB_API mpo_kpm_params_t mpo_kpm_params_default(void);
 
 /**
  * @brief Fill the Jackson kernel weights
@@ -145,7 +146,7 @@ mpo_kpm_params_t mpo_kpm_params_default(void);
  * @param n_cheby  Chebyshev truncation order; must be >= 1.
  * @param g_out    Output array of length @p n_cheby.
  */
-void mpo_kpm_jackson_weights(size_t n_cheby, double* g_out);
+MOONLAB_API void mpo_kpm_jackson_weights(size_t n_cheby, double* g_out);
 
 /**
  * @brief Fill the Chebyshev coefficients of the sign function
@@ -154,7 +155,7 @@ void mpo_kpm_jackson_weights(size_t n_cheby, double* g_out);
  * @param n_cheby  Chebyshev truncation order.
  * @param c_out    Output array of length @p n_cheby.
  */
-void mpo_kpm_sign_coefficients(size_t n_cheby, double* c_out);
+MOONLAB_API void mpo_kpm_sign_coefficients(size_t n_cheby, double* c_out);
 
 /**
  * @brief Adapt a DMRG @c mpo_t (builder output) to a gate-API
@@ -164,7 +165,7 @@ void mpo_kpm_sign_coefficients(size_t n_cheby, double* c_out);
  *
  * @return Newly allocated @c tn_mpo_t or NULL on invalid input / OOM.
  */
-tn_mpo_t* mpo_kpm_mpo_to_tn_mpo(const mpo_t* H);
+MOONLAB_API tn_mpo_t* mpo_kpm_mpo_to_tn_mpo(const mpo_t* H);
 
 /**
  * @brief Combine @f$|C\rangle = \alpha|A\rangle + \beta|B\rangle@f$ as
@@ -179,7 +180,7 @@ tn_mpo_t* mpo_kpm_mpo_to_tn_mpo(const mpo_t* H);
  * @param beta     Scalar on @p B.
  * @return         Allocated MPS or NULL on size mismatch / OOM.
  */
-tn_mps_state_t* mpo_kpm_mps_combine(
+MOONLAB_API tn_mps_state_t* mpo_kpm_mps_combine(
     const tn_mps_state_t* A, double complex alpha,
     const tn_mps_state_t* B, double complex beta);
 
@@ -207,7 +208,7 @@ tn_mps_state_t* mpo_kpm_mps_combine(
  * @param moments_out   Output array of length @c params->n_cheby.
  * @return 0 on success, nonzero on failure.
  */
-int mpo_kpm_chebyshev_moments(
+MOONLAB_API int mpo_kpm_chebyshev_moments(
     const tn_mpo_t* H,
     const tn_mps_state_t* bra,
     const tn_mps_state_t* ket,
@@ -220,7 +221,7 @@ int mpo_kpm_chebyshev_moments(
  *        via moments + Jackson-kernel sign reconstruction, where
  *        @f$\hat{\tilde H} = (\hat H - \mathtt{E\_shift}\mathbb{1})/\mathtt{E\_scale}@f$.
  */
-double complex mpo_kpm_sign_matrix_element(
+MOONLAB_API double complex mpo_kpm_sign_matrix_element(
     const tn_mpo_t* H,
     const tn_mps_state_t* bra,
     const tn_mps_state_t* ket,
@@ -236,7 +237,7 @@ double complex mpo_kpm_sign_matrix_element(
  *        @c params->E_shift is the Fermi energy, @c E_scale is the
  *        half-bandwidth used to place the spectrum in @f$(-1, 1)@f$.
  */
-double complex mpo_kpm_projector_matrix_element(
+MOONLAB_API double complex mpo_kpm_projector_matrix_element(
     const tn_mpo_t* H,
     const tn_mps_state_t* bra,
     const tn_mps_state_t* ket,
@@ -258,7 +259,7 @@ double complex mpo_kpm_projector_matrix_element(
  * @param params     Chebyshev order, rescale, bond cap.
  * @return Newly allocated MPS, or NULL on failure.
  */
-tn_mps_state_t* mpo_kpm_apply_sign(
+MOONLAB_API tn_mps_state_t* mpo_kpm_apply_sign(
     const tn_mpo_t* H,
     const tn_mps_state_t* ket,
     const mpo_kpm_params_t* params);
@@ -269,7 +270,7 @@ tn_mps_state_t* mpo_kpm_apply_sign(
  *          \tfrac12(|\mathrm{ket}\rangle -
  *                   \operatorname{sign}(\hat{\tilde H})|\mathrm{ket}\rangle)@f$.
  */
-tn_mps_state_t* mpo_kpm_apply_projector(
+MOONLAB_API tn_mps_state_t* mpo_kpm_apply_projector(
     const tn_mpo_t* H,
     const tn_mps_state_t* ket,
     const mpo_kpm_params_t* params);
@@ -302,7 +303,7 @@ tn_mps_state_t* mpo_kpm_apply_projector(
  *                   weights @f$f_i@f$.
  * @return A new @c tn_mpo_t owned by the caller, or NULL on OOM.
  */
-tn_mpo_t* mpo_kpm_diagonal_sum_mpo(
+MOONLAB_API tn_mpo_t* mpo_kpm_diagonal_sum_mpo(
     uint32_t num_sites,
     const double complex op[4],
     const double* f_per_site);
@@ -316,7 +317,7 @@ tn_mpo_t* mpo_kpm_diagonal_sum_mpo(
  *
  * Thin wrapper around @c tn_apply_mpo's correct-axis-order cousin.
  */
-tn_mps_state_t* mpo_kpm_apply_mpo(
+MOONLAB_API tn_mps_state_t* mpo_kpm_apply_mpo(
     const tn_mpo_t* op,
     const tn_mps_state_t* in,
     uint32_t max_bond_dim);
@@ -389,7 +390,7 @@ tn_mpo_t* mpo_kpm_mpo_combine(
  * per-step SVD truncation to @c params->max_bond_dim.  The bond
  * dimension of @f$S@f$ at the end is bounded by that cap.
  */
-tn_mpo_t* mpo_kpm_sign_mpo(
+MOONLAB_API tn_mpo_t* mpo_kpm_sign_mpo(
     const tn_mpo_t* H,
     const mpo_kpm_params_t* params);
 
@@ -398,7 +399,7 @@ tn_mpo_t* mpo_kpm_sign_mpo(
  *        @f$\hat P = \tfrac12(\mathbb{1} - \operatorname{sign}(\hat{\tilde H}))@f$
  *        as an MPO.
  */
-tn_mpo_t* mpo_kpm_projector_mpo(
+MOONLAB_API tn_mpo_t* mpo_kpm_projector_mpo(
     const tn_mpo_t* H,
     const mpo_kpm_params_t* params);
 
@@ -431,7 +432,7 @@ tn_mpo_t* mpo_kpm_projector_mpo(
  * @param svd_cutoff  Singular-value truncation threshold; 0 to keep all.
  * @return Newly allocated MPO or NULL on OOM / invalid input.
  */
-tn_mpo_t* mpo_kpm_mpo_from_dense(
+MOONLAB_API tn_mpo_t* mpo_kpm_mpo_from_dense(
     const double complex* M,
     uint32_t num_sites,
     double svd_cutoff);

@@ -45,6 +45,7 @@
 
 #ifndef MOONLAB_LATTICE_Z2_1D_H
 #define MOONLAB_LATTICE_Z2_1D_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -72,7 +73,7 @@ typedef struct {
  *
  * @return 0 on success, negative on invalid configuration.
  */
-int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
+MOONLAB_API int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
                                 uint8_t** out_paulis,
                                 double**  out_coeffs,
                                 uint32_t* out_num_terms,
@@ -82,7 +83,7 @@ int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
  * @brief Number of qubits the Hamiltonian acts on for a given config:
  *        2*N - 1 = N matter + (N - 1) link qubits.
  */
-uint32_t z2_lgt_1d_num_qubits(const z2_lgt_config_t* cfg);
+MOONLAB_API uint32_t z2_lgt_1d_num_qubits(const z2_lgt_config_t* cfg);
 
 /**
  * @brief Construct the Pauli-string representation of the Gauss-law
@@ -94,7 +95,7 @@ uint32_t z2_lgt_1d_num_qubits(const z2_lgt_config_t* cfg);
  *
  * @return 0 on success, negative if site_x is out of range.
  */
-int z2_lgt_1d_gauss_law_pauli(const z2_lgt_config_t* cfg,
+MOONLAB_API int z2_lgt_1d_gauss_law_pauli(const z2_lgt_config_t* cfg,
                                  uint32_t site_x,
                                  uint8_t* out_pauli);
 
@@ -107,7 +108,7 @@ int z2_lgt_1d_gauss_law_pauli(const z2_lgt_config_t* cfg,
  *
  * @return 0 on success.
  */
-int z2_lgt_1d_wilson_line_pauli(const z2_lgt_config_t* cfg,
+MOONLAB_API int z2_lgt_1d_wilson_line_pauli(const z2_lgt_config_t* cfg,
                                   uint32_t link_start,
                                   uint32_t link_end,
                                   uint8_t* out_pauli);

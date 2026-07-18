@@ -48,6 +48,7 @@
 
 #ifndef SKYRMION_BRAIDING_H
 #define SKYRMION_BRAIDING_H
+#include "applications/moonlab_api.h"
 
 #include "lattice_2d.h"
 #include "mpo_2d.h"
@@ -152,7 +153,7 @@ typedef struct {
  * @param velocity Skyrmion velocity
  * @return Braid path or NULL on failure
  */
-braid_path_t *braid_path_circular(double center_x, double center_y,
+MOONLAB_API braid_path_t *braid_path_circular(double center_x, double center_y,
                                    double radius,
                                    braid_type_t type,
                                    uint32_t num_segments,
@@ -183,7 +184,7 @@ int braid_path_exchange(double x1, double y1,
 /**
  * @brief Free braid path
  */
-void braid_path_free(braid_path_t *path);
+MOONLAB_API void braid_path_free(braid_path_t *path);
 
 // ============================================================================
 // BRAIDING DYNAMICS

@@ -1,5 +1,6 @@
 #ifndef METAL_BRIDGE_H
 #define METAL_BRIDGE_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -48,21 +49,21 @@ typedef struct metal_buffer metal_buffer_t;
  * 
  * @return Metal compute context or NULL on failure
  */
-metal_compute_ctx_t* metal_compute_init(void) MOONLAB_WEAK_IMPORT;
+MOONLAB_API metal_compute_ctx_t* metal_compute_init(void) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Free Metal compute context
  * 
  * @param ctx Metal compute context
  */
-void metal_compute_free(metal_compute_ctx_t* ctx) MOONLAB_WEAK_IMPORT;
+MOONLAB_API void metal_compute_free(metal_compute_ctx_t* ctx) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Check if Metal is available on this system
  * 
  * @return 1 if Metal is available, 0 otherwise
  */
-int metal_is_available(void);
+MOONLAB_API int metal_is_available(void);
 
 /**
  * @brief Get GPU device information
@@ -72,7 +73,7 @@ int metal_is_available(void);
  * @param max_threads Output: max threads per threadgroup
  * @param num_cores Output: number of GPU cores
  */
-void metal_get_device_info(
+MOONLAB_API void metal_get_device_info(
     metal_compute_ctx_t* ctx,
     char* name,
     uint32_t* max_threads,
@@ -93,7 +94,7 @@ void metal_get_device_info(
  * @param size Buffer size in bytes
  * @return Metal buffer handle or NULL on failure
  */
-metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size) MOONLAB_WEAK_IMPORT;
+MOONLAB_API metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Create Metal buffer from existing CPU memory
@@ -105,7 +106,7 @@ metal_buffer_t* metal_buffer_create(metal_compute_ctx_t* ctx, size_t size) MOONL
  * @param size Buffer size in bytes
  * @return Metal buffer handle or NULL on failure
  */
-metal_buffer_t* metal_buffer_create_from_data(
+MOONLAB_API metal_buffer_t* metal_buffer_create_from_data(
     metal_compute_ctx_t* ctx,
     void* data,
     size_t size
@@ -117,14 +118,14 @@ metal_buffer_t* metal_buffer_create_from_data(
  * @param buffer Metal buffer
  * @return Pointer to buffer data
  */
-void* metal_buffer_contents(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
+MOONLAB_API void* metal_buffer_contents(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
 
 /**
  * @brief Free Metal buffer
  * 
  * @param buffer Metal buffer
  */
-void metal_buffer_free(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
+MOONLAB_API void metal_buffer_free(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
 
 // ============================================================================
 // QUANTUM GATE OPERATIONS (GPU-ACCELERATED)
@@ -141,7 +142,7 @@ void metal_buffer_free(metal_buffer_t* buffer) MOONLAB_WEAK_IMPORT;
  * @param state_dim Number of amplitudes (2^num_qubits)
  * @return 0 on success, -1 on error
  */
-int metal_hadamard(
+MOONLAB_API int metal_hadamard(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
@@ -177,7 +178,7 @@ int metal_hadamard_all(
  * @param state_dim Number of amplitudes
  * @return 0 on success, -1 on error
  */
-int metal_oracle(
+MOONLAB_API int metal_oracle(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t target_state,
@@ -214,7 +215,7 @@ int metal_oracle_multi(
  * @param state_dim Number of amplitudes
  * @return 0 on success, -1 on error
  */
-int metal_grover_diffusion(
+MOONLAB_API int metal_grover_diffusion(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t num_qubits,
@@ -230,7 +231,7 @@ int metal_grover_diffusion(
  * @param state_dim Number of amplitudes
  * @return 0 on success, -1 on error
  */
-int metal_pauli_x(
+MOONLAB_API int metal_pauli_x(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
@@ -246,7 +247,7 @@ int metal_pauli_x(
  * @param state_dim Number of amplitudes
  * @return 0 on success, -1 on error
  */
-int metal_pauli_z(
+MOONLAB_API int metal_pauli_z(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t qubit_index,
@@ -312,7 +313,7 @@ int metal_normalize(
  * @param num_iterations Grover iterations per search
  * @return 0 on success, -1 on error
  */
-int metal_grover_batch_search(
+MOONLAB_API int metal_grover_batch_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* batch_states,
     const uint32_t* targets,
@@ -361,7 +362,7 @@ int metal_grover_iteration(
  * @param num_iterations Number of Grover iterations
  * @return 0 on success, -1 on error
  */
-int metal_grover_search(
+MOONLAB_API int metal_grover_search(
     metal_compute_ctx_t* ctx,
     metal_buffer_t* amplitudes,
     uint32_t target_state,
@@ -379,7 +380,7 @@ int metal_grover_search(
  * 
  * @param ctx Metal compute context
  */
-void metal_wait_completion(metal_compute_ctx_t* ctx);
+MOONLAB_API void metal_wait_completion(metal_compute_ctx_t* ctx);
 
 /**
  * @brief Get GPU execution time for last operation
@@ -395,7 +396,7 @@ double metal_get_last_execution_time(metal_compute_ctx_t* ctx);
  * @param ctx Metal compute context
  * @param enable 1 to enable, 0 to disable
  */
-void metal_set_performance_monitoring(metal_compute_ctx_t* ctx, int enable);
+MOONLAB_API void metal_set_performance_monitoring(metal_compute_ctx_t* ctx, int enable);
 
 // ============================================================================
 // DIAGNOSTICS
@@ -406,7 +407,7 @@ void metal_set_performance_monitoring(metal_compute_ctx_t* ctx, int enable);
  *
  * @param ctx Metal compute context
  */
-void metal_print_device_info(metal_compute_ctx_t* ctx);
+MOONLAB_API void metal_print_device_info(metal_compute_ctx_t* ctx);
 
 /**
  * @brief Get error message for last error

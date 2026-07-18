@@ -64,6 +64,7 @@
 
 #ifndef TDVP_H
 #define TDVP_H
+#include "applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include "dmrg.h"
@@ -303,7 +304,7 @@ typedef struct {
  * Safe to call on a zero-initialised result (no-op) or repeatedly
  * (subsequent calls are no-ops).
  */
-void tdvp_result_clear(tdvp_result_t *result);
+MOONLAB_API void tdvp_result_clear(tdvp_result_t *result);
 
 /**
  * @brief TDVP evolution history (for observables)
@@ -329,12 +330,12 @@ typedef struct {
 /**
  * @brief Create TDVP history
  */
-tdvp_history_t *tdvp_history_create(uint32_t initial_capacity);
+MOONLAB_API tdvp_history_t *tdvp_history_create(uint32_t initial_capacity);
 
 /**
  * @brief Free TDVP history
  */
-void tdvp_history_free(tdvp_history_t *hist);
+MOONLAB_API void tdvp_history_free(tdvp_history_t *hist);
 
 /**
  * @brief Add result to history
@@ -406,7 +407,7 @@ typedef struct {
  * @param config TDVP configuration
  * @return TDVP engine or NULL on failure
  */
-tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
+MOONLAB_API tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
                                    mpo_t *mpo,
                                    const tdvp_config_t *config);
 
@@ -424,12 +425,12 @@ tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
  * `bond_chi_distribution` reporting path that the v0.4 result
  * struct will add in a future patch.
  */
-uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
+MOONLAB_API uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
 
 /**
  * @brief Free TDVP engine
  */
-void tdvp_engine_free(tdvp_engine_t *engine);
+MOONLAB_API void tdvp_engine_free(tdvp_engine_t *engine);
 
 /**
  * @brief Perform one TDVP time step
@@ -440,7 +441,7 @@ void tdvp_engine_free(tdvp_engine_t *engine);
  * @param result Output result (can be NULL)
  * @return 0 on success
  */
-int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
+MOONLAB_API int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
 
 /**
  * @brief Evolve state to target time
@@ -452,7 +453,7 @@ int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
  * @param history Optional history to record (can be NULL)
  * @return 0 on success
  */
-int tdvp_evolve_to(tdvp_engine_t *engine,
+MOONLAB_API int tdvp_evolve_to(tdvp_engine_t *engine,
                     double target_time,
                     tdvp_history_t *history);
 
@@ -577,7 +578,7 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
  * @param user_data     User data passed verbatim to @p observable_fn.
  * @return 0 on success, negative on integrator failure.
  */
-int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
+MOONLAB_API int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
                                     double target_time,
                                     tdvp_history_t *history,
                                     observable_value_callback_t observable_fn,

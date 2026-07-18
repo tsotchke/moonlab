@@ -88,7 +88,7 @@ extern "C" {
 /**
  * @brief Compute reduced density matrix by tracing out qubits
  */
-int entanglement_reduced_density_matrix(const quantum_state_t* state,
+MOONLAB_API int entanglement_reduced_density_matrix(const quantum_state_t* state,
                                         const int* trace_out_qubits,
                                         int num_trace_out,
                                         complex_t* reduced_dm,
@@ -106,7 +106,7 @@ double entanglement_von_neumann_entropy(const complex_t* reduced_dm, uint64_t di
 /**
  * @brief Compute Renyi entropy of order α
  */
-double entanglement_renyi_entropy(const complex_t* reduced_dm, uint64_t dim,
+MOONLAB_API double entanglement_renyi_entropy(const complex_t* reduced_dm, uint64_t dim,
                                   double alpha);
 
 /**
@@ -132,7 +132,7 @@ MOONLAB_API double entanglement_entropy_bipartition(const quantum_state_t* state
  * @param num_b         length of @p qubits_b.
  * @return I(A:B) in bits (log base 2), >= 0; 0.0 on argument error.
  */
-double entanglement_mutual_information(const quantum_state_t* state,
+MOONLAB_API double entanglement_mutual_information(const quantum_state_t* state,
                                         const int* qubits_a, int num_a,
                                         const int* qubits_b, int num_b);
 
@@ -144,7 +144,7 @@ double entanglement_mutual_information(const quantum_state_t* state,
  * @brief Compute concurrence for pure 2-qubit state
  * @return C in [0, 1]
  */
-double entanglement_concurrence_2qubit(const quantum_state_t* state);
+MOONLAB_API double entanglement_concurrence_2qubit(const quantum_state_t* state);
 
 /**
  * @brief Compute concurrence from 2-qubit density matrix
@@ -157,7 +157,7 @@ double entanglement_concurrence_mixed(const complex_t* density_matrix);
  * @return N in [0, 1/2]; 0 for separable, 1/2 for a maximally-entangled
  *         Bell state.
  */
-double entanglement_negativity_2qubit(const quantum_state_t* state);
+MOONLAB_API double entanglement_negativity_2qubit(const quantum_state_t* state);
 
 // ============================================================================
 // SCHMIDT DECOMPOSITION

@@ -38,6 +38,7 @@
 
 #ifndef MOONLAB_GPU_ESHKOL_H
 #define MOONLAB_GPU_ESHKOL_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>
@@ -70,7 +71,7 @@ typedef enum {
  *
  * @return 1 when Eshkol + GPU are available, 0 otherwise.
  */
-int moonlab_eshkol_available(void);
+MOONLAB_API int moonlab_eshkol_available(void);
 
 /**
  * @brief Idempotent lazy-init of the Eshkol GPU backend. Safe to
@@ -88,9 +89,9 @@ moonlab_eshkol_status_t moonlab_eshkol_init(void);
  *        ESHKOL_GPU_PRECISION env var semantics but lets the
  *        process change tier at runtime without shelling out.
  */
-void moonlab_eshkol_set_precision(moonlab_eshkol_precision_t tier);
+MOONLAB_API void moonlab_eshkol_set_precision(moonlab_eshkol_precision_t tier);
 
-moonlab_eshkol_precision_t moonlab_eshkol_get_precision(void);
+MOONLAB_API moonlab_eshkol_precision_t moonlab_eshkol_get_precision(void);
 
 /**
  * @brief Complex fp64 GEMM: C = alpha A B + beta C.
@@ -120,7 +121,7 @@ moonlab_eshkol_precision_t moonlab_eshkol_get_precision(void);
  *               round)
  * @return MOONLAB_ESHKOL_OK on success, negative on error.
  */
-moonlab_eshkol_status_t moonlab_eshkol_zgemm(
+MOONLAB_API moonlab_eshkol_status_t moonlab_eshkol_zgemm(
     const moonlab_cplx_t* A, size_t lda,
     const moonlab_cplx_t* B, size_t ldb,
     moonlab_cplx_t*       C, size_t ldc,

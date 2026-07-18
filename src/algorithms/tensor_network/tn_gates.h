@@ -20,6 +20,7 @@
 
 #ifndef TN_GATES_H
 #define TN_GATES_H
+#include "applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include <complex.h>
@@ -84,19 +85,19 @@ extern const tn_gate_1q_t TN_GATE_H;
 extern const tn_gate_1q_t TN_GATE_S;
 
 /** S-dagger gate */
-extern const tn_gate_1q_t TN_GATE_SDG;
+MOONLAB_API extern const tn_gate_1q_t TN_GATE_SDG;
 
 /** T gate (sqrt(S)) */
 extern const tn_gate_1q_t TN_GATE_T;
 
 /** T-dagger gate */
-extern const tn_gate_1q_t TN_GATE_TDG;
+MOONLAB_API extern const tn_gate_1q_t TN_GATE_TDG;
 
 /** CNOT gate */
-extern const tn_gate_2q_t TN_GATE_CNOT;
+MOONLAB_API extern const tn_gate_2q_t TN_GATE_CNOT;
 
 /** CZ gate */
-extern const tn_gate_2q_t TN_GATE_CZ;
+MOONLAB_API extern const tn_gate_2q_t TN_GATE_CZ;
 
 /** SWAP gate */
 extern const tn_gate_2q_t TN_GATE_SWAP;
@@ -158,7 +159,7 @@ tn_gate_1q_t tn_gate_u3(double theta, double phi, double lambda);
  * @param phi Phase angle
  * @return Gate matrix
  */
-tn_gate_1q_t tn_gate_phase(double phi);
+MOONLAB_API tn_gate_1q_t tn_gate_phase(double phi);
 
 /**
  * @brief Create controlled-Rz gate
@@ -174,7 +175,7 @@ tn_gate_2q_t tn_gate_crz(double theta);
  * @param phi Phase angle
  * @return Gate matrix
  */
-tn_gate_2q_t tn_gate_cphase(double phi);
+MOONLAB_API tn_gate_2q_t tn_gate_cphase(double phi);
 
 /**
  * @brief Create XX interaction gate
@@ -216,54 +217,54 @@ tn_gate_2q_t tn_gate_rzz(double theta);
  * @param gate Gate matrix
  * @return TN_GATE_SUCCESS or error code
  */
-tn_gate_error_t tn_apply_gate_1q(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_gate_1q(tn_mps_state_t *state,
                                   uint32_t qubit,
                                   const tn_gate_1q_t *gate);
 
 /**
  * @brief Apply Pauli-X gate
  */
-tn_gate_error_t tn_apply_x(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_x(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply Pauli-Y gate
  */
-tn_gate_error_t tn_apply_y(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_y(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply Pauli-Z gate
  */
-tn_gate_error_t tn_apply_z(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_z(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply Hadamard gate
  */
-tn_gate_error_t tn_apply_h(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_h(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply S gate
  */
-tn_gate_error_t tn_apply_s(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_s(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply T gate
  */
-tn_gate_error_t tn_apply_t(tn_mps_state_t *state, uint32_t qubit);
+MOONLAB_API tn_gate_error_t tn_apply_t(tn_mps_state_t *state, uint32_t qubit);
 
 /**
  * @brief Apply Rx rotation
  */
-tn_gate_error_t tn_apply_rx(tn_mps_state_t *state, uint32_t qubit, double theta);
+MOONLAB_API tn_gate_error_t tn_apply_rx(tn_mps_state_t *state, uint32_t qubit, double theta);
 
 /**
  * @brief Apply Ry rotation
  */
-tn_gate_error_t tn_apply_ry(tn_mps_state_t *state, uint32_t qubit, double theta);
+MOONLAB_API tn_gate_error_t tn_apply_ry(tn_mps_state_t *state, uint32_t qubit, double theta);
 
 /**
  * @brief Apply Rz rotation
  */
-tn_gate_error_t tn_apply_rz(tn_mps_state_t *state, uint32_t qubit, double theta);
+MOONLAB_API tn_gate_error_t tn_apply_rz(tn_mps_state_t *state, uint32_t qubit, double theta);
 
 // ============================================================================
 // TWO-QUBIT GATE APPLICATION
@@ -284,7 +285,7 @@ tn_gate_error_t tn_apply_rz(tn_mps_state_t *state, uint32_t qubit, double theta)
  * @param truncation_error Output: truncation error (can be NULL)
  * @return TN_GATE_SUCCESS or error code
  */
-tn_gate_error_t tn_apply_gate_2q(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_gate_2q(tn_mps_state_t *state,
                                   uint32_t qubit1, uint32_t qubit2,
                                   const tn_gate_2q_t *gate,
                                   double *truncation_error);
@@ -292,25 +293,25 @@ tn_gate_error_t tn_apply_gate_2q(tn_mps_state_t *state,
 /**
  * @brief Apply CNOT gate
  */
-tn_gate_error_t tn_apply_cnot(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_cnot(tn_mps_state_t *state,
                                uint32_t control, uint32_t target);
 
 /**
  * @brief Apply CZ gate
  */
-tn_gate_error_t tn_apply_cz(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_cz(tn_mps_state_t *state,
                              uint32_t qubit1, uint32_t qubit2);
 
 /**
  * @brief Apply SWAP gate
  */
-tn_gate_error_t tn_apply_swap(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_swap(tn_mps_state_t *state,
                                uint32_t qubit1, uint32_t qubit2);
 
 /**
  * @brief Apply ZZ interaction gate
  */
-tn_gate_error_t tn_apply_rzz(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_rzz(tn_mps_state_t *state,
                               uint32_t qubit1, uint32_t qubit2,
                               double theta);
 
@@ -337,7 +338,7 @@ tn_gate_error_t tn_apply_controlled(tn_mps_state_t *state,
 /**
  * @brief Apply Toffoli (CCX) gate
  */
-tn_gate_error_t tn_apply_toffoli(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_toffoli(tn_mps_state_t *state,
                                   uint32_t control1, uint32_t control2,
                                   uint32_t target);
 
@@ -360,7 +361,7 @@ tn_gate_error_t tn_apply_global_phase(tn_mps_state_t *state, double phase);
  * @param state MPS state
  * @return TN_GATE_SUCCESS or error code
  */
-tn_gate_error_t tn_apply_h_all(tn_mps_state_t *state);
+MOONLAB_API tn_gate_error_t tn_apply_h_all(tn_mps_state_t *state);
 
 /**
  * @brief Apply layer of single-qubit gates
@@ -407,7 +408,7 @@ typedef struct {
  * @param op 2x2 operator matrix
  * @return MPO or NULL on failure
  */
-tn_mpo_t *tn_mpo_single_site(uint32_t num_sites, uint32_t site,
+MOONLAB_API tn_mpo_t *tn_mpo_single_site(uint32_t num_sites, uint32_t site,
                               const tn_gate_1q_t *op);
 
 /**
@@ -419,7 +420,7 @@ tn_mpo_t *tn_mpo_single_site(uint32_t num_sites, uint32_t site,
  * @param op 4x4 operator matrix
  * @return MPO or NULL on failure
  */
-tn_mpo_t *tn_mpo_two_site(uint32_t num_sites, uint32_t site1, uint32_t site2,
+MOONLAB_API tn_mpo_t *tn_mpo_two_site(uint32_t num_sites, uint32_t site1, uint32_t site2,
                            const tn_gate_2q_t *op);
 
 /**
@@ -432,7 +433,7 @@ tn_mpo_t *tn_mpo_two_site(uint32_t num_sites, uint32_t site1, uint32_t site2,
  * @param truncation_error Output: total truncation error
  * @return TN_GATE_SUCCESS or error code
  */
-tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
+MOONLAB_API tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
                               const tn_mpo_t *mpo,
                               double *truncation_error);
 
@@ -441,7 +442,7 @@ tn_gate_error_t tn_apply_mpo(tn_mps_state_t *state,
  *
  * @param mpo MPO to free
  */
-void tn_mpo_free(tn_mpo_t *mpo);
+MOONLAB_API void tn_mpo_free(tn_mpo_t *mpo);
 
 // ============================================================================
 // UTILITIES
@@ -453,7 +454,7 @@ void tn_mpo_free(tn_mpo_t *mpo);
  * @param error Error code
  * @return Human-readable error string
  */
-const char *tn_gate_error_string(tn_gate_error_t error);
+MOONLAB_API const char *tn_gate_error_string(tn_gate_error_t error);
 
 /**
  * @brief Print gate matrix (for debugging)

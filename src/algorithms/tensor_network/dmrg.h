@@ -60,6 +60,7 @@
 
 #ifndef DMRG_H
 #define DMRG_H
+#include "applications/moonlab_api.h"
 
 #include "tn_state.h"
 #include "tensor.h"
@@ -156,7 +157,7 @@ typedef struct {
 /**
  * @brief Free DMRG result
  */
-void dmrg_result_free(dmrg_result_t *result);
+MOONLAB_API void dmrg_result_free(dmrg_result_t *result);
 
 // ============================================================================
 // HAMILTONIAN DEFINITION
@@ -194,7 +195,7 @@ typedef struct {
  * @param h Transverse field strength
  * @return MPO representation or NULL on failure
  */
-mpo_t *mpo_tfim_create(uint32_t num_sites, double J, double h);
+MOONLAB_API mpo_t *mpo_tfim_create(uint32_t num_sites, double J, double h);
 
 /**
  * @brief Create MPO for Heisenberg XXZ model
@@ -207,7 +208,7 @@ mpo_t *mpo_tfim_create(uint32_t num_sites, double J, double h);
  * @param h Magnetic field
  * @return MPO representation or NULL on failure
  */
-mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double h);
+MOONLAB_API mpo_t *mpo_heisenberg_create(uint32_t num_sites, double J, double Delta, double h);
 
 /**
  * @brief Create MPO for Kitaev chain / XY model
@@ -248,7 +249,7 @@ mpo_t *mpo_kitaev_create(uint32_t num_sites, double J_XX, double J_YY, double h)
  * @param K Easy-axis anisotropy
  * @return MPO representation or NULL on failure
  */
-mpo_t *mpo_skyrmion_create(uint32_t num_sites, uint32_t Lx, uint32_t Ly,
+MOONLAB_API mpo_t *mpo_skyrmion_create(uint32_t num_sites, uint32_t Lx, uint32_t Ly,
                            double J, double D, double B, double K);
 
 /**
@@ -267,7 +268,7 @@ mpo_t *mpo_skyrmion_create(uint32_t num_sites, uint32_t Lx, uint32_t Ly,
  * @param K Anisotropy
  * @return MPO representation or NULL on failure
  */
-mpo_t *mpo_2d_heisenberg_dmi_create(uint32_t num_sites,
+MOONLAB_API mpo_t *mpo_2d_heisenberg_dmi_create(uint32_t num_sites,
                                      uint32_t num_bonds,
                                      const uint32_t (*bonds)[2],
                                      const double (*bond_vectors)[3],
@@ -276,7 +277,7 @@ mpo_t *mpo_2d_heisenberg_dmi_create(uint32_t num_sites,
 /**
  * @brief Free MPO
  */
-void mpo_free(mpo_t *mpo);
+MOONLAB_API void mpo_free(mpo_t *mpo);
 
 // ============================================================================
 // LANCZOS EIGENSOLVER
@@ -352,12 +353,12 @@ typedef struct {
 /**
  * @brief Zero-initialise a workspace.  Cheap; no allocation.
  */
-void effective_hamiltonian_workspace_init(effective_hamiltonian_workspace_t *ws);
+MOONLAB_API void effective_hamiltonian_workspace_init(effective_hamiltonian_workspace_t *ws);
 
 /**
  * @brief Release all buffers owned by @p ws and zero the struct.
  */
-void effective_hamiltonian_workspace_free(effective_hamiltonian_workspace_t *ws);
+MOONLAB_API void effective_hamiltonian_workspace_free(effective_hamiltonian_workspace_t *ws);
 
 /**
  * @brief Apply effective Hamiltonian to vector
@@ -371,7 +372,7 @@ void effective_hamiltonian_workspace_free(effective_hamiltonian_workspace_t *ws)
  * @param y Output vector (same shape as x)
  * @return 0 on success
  */
-int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
+MOONLAB_API int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
                                 const tensor_t *x,
                                 tensor_t *y);
 
@@ -385,7 +386,7 @@ int effective_hamiltonian_apply(const effective_hamiltonian_t *H_eff,
  * across the full Lanczos sequence.  Safe to share a workspace
  * across every bond in a sweep; not thread-safe.
  */
-int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
+MOONLAB_API int effective_hamiltonian_apply_ws(const effective_hamiltonian_t *H_eff,
                                    const tensor_t *x,
                                    tensor_t *y,
                                    effective_hamiltonian_workspace_t *ws);
@@ -472,7 +473,7 @@ int dmrg_update_right_environment(dmrg_environments_t *env,
  * @param config DMRG configuration
  * @return DMRG result or NULL on failure
  */
-dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
+MOONLAB_API dmrg_result_t *dmrg_ground_state(tn_mps_state_t *mps,
                                   const mpo_t *mpo,
                                   const dmrg_config_t *config);
 
@@ -550,11 +551,11 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
  *                   NULL for default.
  * @return Allocated MPS on success, NULL on allocation failure.
  */
-tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
+MOONLAB_API tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
                                       uint32_t chi_init,
                                       const tn_state_config_t *mps_cfg);
 
-tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
+MOONLAB_API tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
                                         double g,
                                         const dmrg_config_t *config,
                                         dmrg_result_t **result);
@@ -568,7 +569,7 @@ tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
  * @param mpo Hamiltonian
  * @return Energy value
  */
-double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo);
+MOONLAB_API double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo);
 
 /**
  * @brief Compute energy variance
@@ -581,7 +582,7 @@ double dmrg_compute_energy(const tn_mps_state_t *mps, const mpo_t *mpo);
  * @param mpo Hamiltonian
  * @return Energy variance
  */
-double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo);
+MOONLAB_API double dmrg_energy_variance(const tn_mps_state_t *mps, const mpo_t *mpo);
 
 #ifdef __cplusplus
 }

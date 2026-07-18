@@ -48,6 +48,7 @@
 
 #ifndef LATTICE_2D_H
 #define LATTICE_2D_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -146,14 +147,14 @@ typedef struct {
  * @param bc Boundary conditions
  * @return Lattice structure or NULL on failure
  */
-lattice_2d_t *lattice_2d_create(uint32_t Lx, uint32_t Ly,
+MOONLAB_API lattice_2d_t *lattice_2d_create(uint32_t Lx, uint32_t Ly,
                                  lattice_type_t type,
                                  boundary_condition_t bc);
 
 /**
  * @brief Free lattice structure
  */
-void lattice_2d_free(lattice_2d_t *lat);
+MOONLAB_API void lattice_2d_free(lattice_2d_t *lat);
 
 // ============================================================================
 // COORDINATE CONVERSION

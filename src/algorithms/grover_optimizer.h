@@ -18,6 +18,7 @@
 
 #ifndef ALGORITHMS_GROVER_OPTIMIZER_H
 #define ALGORITHMS_GROVER_OPTIMIZER_H
+#include "applications/moonlab_api.h"
 
 #include "../quantum/state.h"
 
@@ -184,7 +185,7 @@ void amplitude_amplification(quantum_state_t* state,
  * @param precision_bits Number of precision bits
  * @return Estimated number of solutions
  */
-int grover_quantum_counting(quantum_state_t* state,
+MOONLAB_API int grover_quantum_counting(quantum_state_t* state,
                             int (*oracle_func)(uint64_t, void*),
                             void* oracle_data,
                             int precision_bits);

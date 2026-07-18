@@ -110,6 +110,7 @@
 
 #ifndef MOONLAB_CHERN_MARKER_H
 #define MOONLAB_CHERN_MARKER_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>
@@ -140,10 +141,10 @@ typedef struct {
  * @param m  QWZ mass parameter
  * @return   allocated system, or NULL on out-of-memory.
  */
-chern_system_t* chern_qwz_create(size_t L, double m);
+MOONLAB_API chern_system_t* chern_qwz_create(size_t L, double m);
 
 /** @brief Release the Hamiltonian, projector, and handle. */
-void chern_system_free(chern_system_t* sys);
+MOONLAB_API void chern_system_free(chern_system_t* sys);
 
 /**
  * @brief Compute the filled-band projector @f$\hat P@f$ via the matrix
@@ -151,7 +152,7 @@ void chern_system_free(chern_system_t* sys);
  *
  * @return 0 on success, non-zero on OOM or iteration failure.
  */
-int chern_build_projector(chern_system_t* sys);
+MOONLAB_API int chern_build_projector(chern_system_t* sys);
 
 /**
  * @brief Evaluate the local Chern marker at site @f$(r_x, r_y)@f$.
@@ -164,7 +165,7 @@ int chern_build_projector(chern_system_t* sys);
  *
  * @return @f$c(\mathbf r)@f$ as a real number (units of @f$1/A_{\mathrm{uc}}@f$).
  */
-double chern_local_marker(const chern_system_t* sys,
+MOONLAB_API double chern_local_marker(const chern_system_t* sys,
                           size_t rx, size_t ry);
 
 /**
@@ -174,7 +175,7 @@ double chern_local_marker(const chern_system_t* sys,
  * For a clean Chern insulator sampled well away from edges, this
  * converges to the integer Chern number times the patch area.
  */
-double chern_bulk_sum(const chern_system_t* sys,
+MOONLAB_API double chern_bulk_sum(const chern_system_t* sys,
                       size_t rmin, size_t rmax);
 
 #ifdef __cplusplus

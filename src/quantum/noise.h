@@ -68,6 +68,7 @@
 
 #ifndef QUANTUM_NOISE_H
 #define QUANTUM_NOISE_H
+#include "applications/moonlab_api.h"
 
 #include "state.h"
 
@@ -137,7 +138,7 @@ noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
 /**
  * @brief Apply depolarizing channel to single qubit
  */
-void noise_depolarizing_single(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_depolarizing_single(quantum_state_t* state, int qubit,
                                double probability, double random_value);
 
 /**
@@ -149,50 +150,50 @@ void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2
 /**
  * @brief Apply amplitude damping channel
  */
-void noise_amplitude_damping(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_amplitude_damping(quantum_state_t* state, int qubit,
                              double gamma, double random_value);
 
 /**
  * @brief Apply phase damping channel
  */
-void noise_phase_damping(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_phase_damping(quantum_state_t* state, int qubit,
                          double gamma, double random_value);
 
 /**
  * @brief Apply pure dephasing
  */
-void noise_pure_dephasing(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_pure_dephasing(quantum_state_t* state, int qubit,
                           double sigma, double random_phase);
 
 /**
  * @brief Apply bit flip channel
  */
-void noise_bit_flip(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_bit_flip(quantum_state_t* state, int qubit,
                     double probability, double random_value);
 
 /**
  * @brief Apply phase flip channel
  */
-void noise_phase_flip(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_phase_flip(quantum_state_t* state, int qubit,
                       double probability, double random_value);
 
 /**
  * @brief Apply bit-phase flip channel
  */
-void noise_bit_phase_flip(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_bit_phase_flip(quantum_state_t* state, int qubit,
                           double probability, double random_value);
 
 /**
  * @brief Apply thermal relaxation
  */
-void noise_thermal_relaxation(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_thermal_relaxation(quantum_state_t* state, int qubit,
                               double t1, double t2, double time,
                               const double* random_values);
 
 /**
  * @brief Simulate readout error
  */
-int noise_readout_error(int outcome, double error_0_to_1, double error_1_to_0,
+MOONLAB_API int noise_readout_error(int outcome, double error_0_to_1, double error_1_to_0,
                         double random_value);
 
 // ============================================================================
@@ -252,7 +253,7 @@ typedef enum {
  * @param p Channel parameter (gamma, lambda, or probability).
  * @return Max |Σ K†K - I| element-wise; negative on invalid input.
  */
-double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
+MOONLAB_API double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
 
 // ============================================================================
 // COMPOSITE / CORRELATED CHANNELS  (v0.2, Plan 2D)
@@ -277,7 +278,7 @@ double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
  * @param probs         length-16 probability table, sum to 1.
  * @param uniform       a uniform [0, 1) sample.
  */
-void noise_correlated_two_qubit_pauli(quantum_state_t* state,
+MOONLAB_API void noise_correlated_two_qubit_pauli(quantum_state_t* state,
                                        int qubit_a, int qubit_b,
                                        const double *probs,
                                        double uniform);
@@ -293,7 +294,7 @@ void noise_correlated_two_qubit_pauli(quantum_state_t* state,
  * Useful for time-varying noise (pick branch per gate) or for
  * biased-basis error models.
  */
-void noise_convex_mixture_single(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_convex_mixture_single(quantum_state_t* state, int qubit,
                                   noise_channel_id_t channel_a, double param_a,
                                   noise_channel_id_t channel_b, double param_b,
                                   double mixture_prob,
@@ -304,7 +305,7 @@ void noise_convex_mixture_single(quantum_state_t* state, int qubit,
  * @brief Sequential composition of two single-qubit channels on the
  *        same qubit.  Equivalent to applying them in succession.
  */
-void noise_composite_sequential_single(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_composite_sequential_single(quantum_state_t* state, int qubit,
                                         noise_channel_id_t channel_a, double param_a,
                                         noise_channel_id_t channel_b, double param_b,
                                         double random_a,

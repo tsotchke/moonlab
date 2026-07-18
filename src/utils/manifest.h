@@ -45,6 +45,7 @@
 
 #ifndef MOONLAB_MANIFEST_H
 #define MOONLAB_MANIFEST_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -105,27 +106,27 @@ typedef struct {
  * @param seed   Zero if the run has no stochastic seed.
  * @return 0 on success, nonzero on allocation failure.
  */
-int moonlab_manifest_capture(moonlab_manifest_t* m,
+MOONLAB_API int moonlab_manifest_capture(moonlab_manifest_t* m,
                              const char* label,
                              uint64_t seed);
 
 /**
  * @brief Stamp the finish timestamp and elapsed seconds.  Idempotent.
  */
-void moonlab_manifest_stamp_finish(moonlab_manifest_t* m);
+MOONLAB_API void moonlab_manifest_stamp_finish(moonlab_manifest_t* m);
 
 /**
  * @brief Emit the manifest as a single-line JSON object to @p out.
  *        No trailing newline.
  */
-void moonlab_manifest_write_json(const moonlab_manifest_t* m, FILE* out);
+MOONLAB_API void moonlab_manifest_write_json(const moonlab_manifest_t* m, FILE* out);
 
 /**
  * @brief Same as @c write_json but pretty-printed with two-space
  *        indentation and a trailing newline.  Use for human-readable
  *        sidecars; use the compact form inside structured logs.
  */
-void moonlab_manifest_write_json_pretty(const moonlab_manifest_t* m,
+MOONLAB_API void moonlab_manifest_write_json_pretty(const moonlab_manifest_t* m,
                                         FILE* out);
 
 /**
@@ -133,7 +134,7 @@ void moonlab_manifest_write_json_pretty(const moonlab_manifest_t* m,
  *        os_release, cpu_brand, run_start_iso, run_finish_iso).
  *        Safe to call on a zero-initialised manifest.
  */
-void moonlab_manifest_release(moonlab_manifest_t* m);
+MOONLAB_API void moonlab_manifest_release(moonlab_manifest_t* m);
 
 #ifdef __cplusplus
 }

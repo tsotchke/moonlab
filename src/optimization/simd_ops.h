@@ -1,5 +1,6 @@
 #ifndef SIMD_OPS_H
 #define SIMD_OPS_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -77,7 +78,7 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps);
  * @param n Number of amplitudes
  * @return Sum of squared magnitudes
  */
-double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n);
+MOONLAB_API double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n);
 
 /**
  * @brief Normalize complex amplitude array (vectorized)
@@ -128,7 +129,7 @@ complex_t simd_complex_multiply(complex_t z1, complex_t z2);
  * @param probabilities Output probabilities
  * @param n Number of elements
  */
-void simd_compute_probabilities(
+MOONLAB_API void simd_compute_probabilities(
     const complex_t *amplitudes,
     double *probabilities,
     size_t n

@@ -63,6 +63,7 @@
 
 #ifndef MOONLAB_QUANTUM_VOLUME_H
 #define MOONLAB_QUANTUM_VOLUME_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -94,7 +95,7 @@ typedef struct {
  * @param out        result sink (non-NULL)
  * @return 0 on success, non-zero on invalid arguments or OOM
  */
-int quantum_volume_run(size_t width,
+MOONLAB_API int quantum_volume_run(size_t width,
                        size_t num_trials,
                        uint64_t rng_seed,
                        qv_result_t* out);

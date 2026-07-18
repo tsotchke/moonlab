@@ -1,5 +1,6 @@
 #ifndef MATRIX_MATH_H
 #define MATRIX_MATH_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>
@@ -44,7 +45,7 @@ typedef double _Complex complex_t;
  * @param tolerance Convergence tolerance (default 1e-10)
  * @return 0 on success, -1 on error
  */
-int hermitian_eigen_decomposition(
+MOONLAB_API int hermitian_eigen_decomposition(
     const complex_t *matrix,
     size_t n,
     double *eigenvalues,
@@ -62,7 +63,7 @@ int hermitian_eigen_decomposition(
  * @param k Cols in A, rows in B
  * @param n Cols in B
  */
-void matrix_multiply(
+MOONLAB_API void matrix_multiply(
     const complex_t *a,
     const complex_t *b,
     complex_t *c,
@@ -77,7 +78,7 @@ void matrix_multiply(
  * @param n Dimension
  * @return Trace value
  */
-complex_t matrix_trace(const complex_t *matrix, size_t n);
+MOONLAB_API complex_t matrix_trace(const complex_t *matrix, size_t n);
 
 /**
  * @brief Check if matrix is Hermitian: A = A†
@@ -86,7 +87,7 @@ complex_t matrix_trace(const complex_t *matrix, size_t n);
  * @param tolerance Tolerance for comparison
  * @return 1 if Hermitian, 0 otherwise
  */
-int matrix_is_hermitian(const complex_t *matrix, size_t n, double tolerance);
+MOONLAB_API int matrix_is_hermitian(const complex_t *matrix, size_t n, double tolerance);
 
 /**
  * @brief Conjugate transpose: A† (dagger)
@@ -95,7 +96,7 @@ int matrix_is_hermitian(const complex_t *matrix, size_t n, double tolerance);
  * @param m Rows in input
  * @param n Cols in input
  */
-void matrix_conjugate_transpose(
+MOONLAB_API void matrix_conjugate_transpose(
     const complex_t *matrix,
     complex_t *result,
     size_t m,
@@ -109,7 +110,7 @@ void matrix_conjugate_transpose(
  * @param n Cols
  * @return Frobenius norm
  */
-double matrix_frobenius_norm(const complex_t *matrix, size_t m, size_t n);
+MOONLAB_API double matrix_frobenius_norm(const complex_t *matrix, size_t m, size_t n);
 
 #ifdef __cplusplus
 }

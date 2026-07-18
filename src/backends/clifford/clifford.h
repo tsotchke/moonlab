@@ -113,19 +113,19 @@ MOONLAB_API void clifford_tableau_free(clifford_tableau_t* t);
 MOONLAB_API size_t clifford_num_qubits(const clifford_tableau_t* t);
 
 /* ---- Single-qubit Clifford gates --- */
-clifford_error_t clifford_h(clifford_tableau_t* t, size_t q);
-clifford_error_t clifford_s(clifford_tableau_t* t, size_t q);
-clifford_error_t clifford_s_dag(clifford_tableau_t* t, size_t q);
-clifford_error_t clifford_x(clifford_tableau_t* t, size_t q);
-clifford_error_t clifford_y(clifford_tableau_t* t, size_t q);
-clifford_error_t clifford_z(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_h(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_s(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_s_dag(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_x(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_y(clifford_tableau_t* t, size_t q);
+MOONLAB_API clifford_error_t clifford_z(clifford_tableau_t* t, size_t q);
 
 /* ---- Two-qubit Clifford gate ----*/
-clifford_error_t clifford_cnot(clifford_tableau_t* t, size_t control, size_t target);
+MOONLAB_API clifford_error_t clifford_cnot(clifford_tableau_t* t, size_t control, size_t target);
 
 /* ---- Convenience composites: CZ = H_t CNOT H_t, SWAP via three CNOTs ---- */
-clifford_error_t clifford_cz(clifford_tableau_t* t, size_t a, size_t b);
-clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size_t b);
+MOONLAB_API clifford_error_t clifford_cz(clifford_tableau_t* t, size_t a, size_t b);
+MOONLAB_API clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size_t b);
 
 /**
  * @brief Z-basis measurement.
@@ -157,7 +157,7 @@ MOONLAB_API clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
  * Equivalent to measuring every qubit in order.  Collapses the tableau.
  * Bit @f$q@f$ of @p *result is the outcome on qubit @p q.
  */
-clifford_error_t clifford_sample_all(clifford_tableau_t* t,
+MOONLAB_API clifford_error_t clifford_sample_all(clifford_tableau_t* t,
                                      uint64_t* rng_state,
                                      uint64_t* result);
 
@@ -183,7 +183,7 @@ clifford_error_t clifford_sample_all(clifford_tableau_t* t,
  * @param[out] out_phase Phase code in {0, 2} for any stabilizer row
  *                       (rows always encode Hermitian Paulis with sign ±1).
  */
-clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
+MOONLAB_API clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
                                     uint8_t* out_pauli, int* out_phase);
 
 /**
@@ -196,7 +196,7 @@ clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
  * Clifford conjugation itself, but the Pauli multiplications used internally
  * can produce them; the output @p out_phase captures the full residual phase.
  */
-clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
+MOONLAB_API clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
                                           const uint8_t* in_pauli,
                                           int in_phase,
                                           uint8_t* out_pauli,
@@ -211,7 +211,7 @@ clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
  * branch.  Semantics and encoding match @c clifford_conjugate_pauli; the
  * only difference is the direction of conjugation.
  */
-clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
+MOONLAB_API clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
                                                   const uint8_t* in_pauli,
                                                   int in_phase,
                                                   uint8_t* out_pauli,
@@ -221,7 +221,7 @@ clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
  * @brief Allocate a deep copy of the tableau.  The clone and original can
  *        be mutated independently.  Returns NULL on allocation failure.
  */
-clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t);
+MOONLAB_API clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t);
 
 #ifdef __cplusplus
 }

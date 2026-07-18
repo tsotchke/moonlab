@@ -1,5 +1,6 @@
 #ifndef ACCELERATE_OPS_H
 #define ACCELERATE_OPS_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -79,13 +80,13 @@ void accelerate_aligned_free(void* ptr);
  * @param num_elements Number of complex elements
  * @return Pointer to aligned complex array
  */
-complex_t* accelerate_alloc_complex_array(size_t num_elements);
+MOONLAB_API complex_t* accelerate_alloc_complex_array(size_t num_elements);
 
 /**
  * @brief Free complex amplitude array
  * @param ptr Pointer to complex array
  */
-void accelerate_free_complex_array(complex_t* ptr);
+MOONLAB_API void accelerate_free_complex_array(complex_t* ptr);
 
 // ============================================================================
 // VECTORIZED COMPLEX OPERATIONS (vDSP)
@@ -171,7 +172,7 @@ void accelerate_complex_magnitude(
  * @param result Real output vector (squared magnitudes)
  * @param n Number of elements
  */
-void accelerate_complex_magnitude_squared(
+MOONLAB_API void accelerate_complex_magnitude_squared(
     const complex_t* a,
     double* result,
     size_t n
@@ -265,7 +266,7 @@ void accelerate_matrix_multiply(
  * @param n Number of amplitudes
  * @return Sum of squared magnitudes
  */
-double accelerate_sum_squared_magnitudes(
+MOONLAB_API double accelerate_sum_squared_magnitudes(
     const complex_t* amplitudes,
     size_t n
 );

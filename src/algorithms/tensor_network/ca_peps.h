@@ -34,6 +34,7 @@
 
 #ifndef MOONLAB_CA_PEPS_H
 #define MOONLAB_CA_PEPS_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -69,17 +70,17 @@ typedef struct moonlab_ca_peps_t moonlab_ca_peps_t;
  * The physical state is initialised to |0>^(Lx*Ly) with the Clifford
  * prefactor D = I.
  */
-moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
+MOONLAB_API moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
                                             uint32_t chi_bond);
 
-void moonlab_ca_peps_free(moonlab_ca_peps_t* s);
-moonlab_ca_peps_t* moonlab_ca_peps_clone(const moonlab_ca_peps_t* s);
+MOONLAB_API void moonlab_ca_peps_free(moonlab_ca_peps_t* s);
+MOONLAB_API moonlab_ca_peps_t* moonlab_ca_peps_clone(const moonlab_ca_peps_t* s);
 
-uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s);
-uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s);
-uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s);
-uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s);
-uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s);
+MOONLAB_API uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s);
+MOONLAB_API uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s);
+MOONLAB_API uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s);
+MOONLAB_API uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s);
+MOONLAB_API uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s);
 
 /**
  * @brief Maximum half-cut von Neumann entanglement entropy of @c |phi>
@@ -88,7 +89,7 @@ uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s);
  * Same yardstick as the CA-MPS analogue: representation-independent
  * compactness measure.
  */
-double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s);
+MOONLAB_API double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s);
 
 /* ================================================================== */
 /*  Clifford gates -- tableau-only updates (O(n) bit ops).            */
@@ -97,22 +98,22 @@ double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s);
 /* Single-qubit indexed by linear (x + Lx*y).  Two-qubit must be on
  * adjacent sites in the square lattice. */
 
-ca_peps_error_t moonlab_ca_peps_h(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_s(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_sdag(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_x(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_y(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_z(moonlab_ca_peps_t* s, uint32_t q);
-ca_peps_error_t moonlab_ca_peps_cnot(moonlab_ca_peps_t* s, uint32_t c, uint32_t t);
-ca_peps_error_t moonlab_ca_peps_cz(moonlab_ca_peps_t* s, uint32_t a, uint32_t b);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_h(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_s(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_sdag(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_x(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_y(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_z(moonlab_ca_peps_t* s, uint32_t q);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_cnot(moonlab_ca_peps_t* s, uint32_t c, uint32_t t);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_cz(moonlab_ca_peps_t* s, uint32_t a, uint32_t b);
 
 /* ================================================================== */
 /*  Non-Clifford gates -- push into PEPS via Pauli-rotation MPO.       */
 /* ================================================================== */
 
-ca_peps_error_t moonlab_ca_peps_rx(moonlab_ca_peps_t* s, uint32_t q, double theta);
-ca_peps_error_t moonlab_ca_peps_ry(moonlab_ca_peps_t* s, uint32_t q, double theta);
-ca_peps_error_t moonlab_ca_peps_rz(moonlab_ca_peps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_rx(moonlab_ca_peps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_ry(moonlab_ca_peps_t* s, uint32_t q, double theta);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_rz(moonlab_ca_peps_t* s, uint32_t q, double theta);
 
 /** T = R_Z(pi/4) up to a global phase. */
 ca_peps_error_t moonlab_ca_peps_t_gate(moonlab_ca_peps_t* s, uint32_t q);
@@ -140,21 +141,21 @@ ca_peps_error_t moonlab_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
  * Imaginary-time-step primitive (non-unitary).  The caller is
  * responsible for renormalisation via @c moonlab_ca_peps_normalize.
  */
-ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
                                                      const uint8_t* pauli,
                                                      double tau);
 
 /** Rescale the internal MPS factor to unit norm. */
-ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s);
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s);
 
 /** Return the norm of the underlying state. */
-double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s);
+MOONLAB_API double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s);
 
 /* ================================================================== */
 /*  Measurement                                                         */
 /* ================================================================== */
 
-ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
                                               const uint8_t* pauli,
                                               double _Complex* out_expval);
 
@@ -165,14 +166,14 @@ ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
  * @param coeffs     Length-num_terms complex coefficients.
  * @param num_terms  Pauli-sum length.
  */
-ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
                                                   const uint8_t* paulis,
                                                   const double _Complex* coeffs,
                                                   uint32_t num_terms,
                                                   double _Complex* out_expval);
 
 /** Marginal P(Z_q = +1).  See ca_mps analogue for the fine print. */
-ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
+MOONLAB_API ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
                                         uint32_t q, double* out_prob);
 
 /* ================================================================== */
@@ -211,7 +212,7 @@ ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
  *
  * @since v0.2.1
  */
-int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
+MOONLAB_API int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
                                const uint8_t* paulis,
                                const double* coeffs,
                                uint32_t num_terms,

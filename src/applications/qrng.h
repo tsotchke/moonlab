@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "moonlab_api.h"
 #include "../quantum/state.h"
 #include "../quantum/gates.h"
 #include "../utils/quantum_entropy.h"
@@ -233,7 +234,7 @@ typedef struct {
  * 
  * @param config Output configuration
  */
-void qrng_v3_get_default_config(qrng_v3_config_t *config);
+MOONLAB_API void qrng_v3_get_default_config(qrng_v3_config_t *config);
 
 /**
  * @brief Initialize quantum RNG v3 with default configuration
@@ -257,7 +258,7 @@ void qrng_v3_get_default_config(qrng_v3_config_t *config);
  * @param ctx Output context pointer
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_init(qrng_v3_ctx_t **ctx);
+MOONLAB_API qrng_v3_error_t qrng_v3_init(qrng_v3_ctx_t **ctx);
 
 /**
  * @brief Initialize with custom configuration
@@ -266,7 +267,7 @@ qrng_v3_error_t qrng_v3_init(qrng_v3_ctx_t **ctx);
  * @param config Custom configuration
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_init_with_config(
+MOONLAB_API qrng_v3_error_t qrng_v3_init_with_config(
     qrng_v3_ctx_t **ctx,
     const qrng_v3_config_t *config
 );
@@ -278,7 +279,7 @@ qrng_v3_error_t qrng_v3_init_with_config(
  * 
  * @param ctx Context to free
  */
-void qrng_v3_free(qrng_v3_ctx_t *ctx);
+MOONLAB_API void qrng_v3_free(qrng_v3_ctx_t *ctx);
 
 // ============================================================================
 // RANDOM NUMBER GENERATION
@@ -299,7 +300,7 @@ void qrng_v3_free(qrng_v3_ctx_t *ctx);
  * @param size Number of bytes to generate
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_bytes(
+MOONLAB_API qrng_v3_error_t qrng_v3_bytes(
     qrng_v3_ctx_t *ctx,
     uint8_t *buffer,
     size_t size
@@ -312,7 +313,7 @@ qrng_v3_error_t qrng_v3_bytes(
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_uint64(qrng_v3_ctx_t *ctx, uint64_t *value);
+MOONLAB_API qrng_v3_error_t qrng_v3_uint64(qrng_v3_ctx_t *ctx, uint64_t *value);
 
 /**
  * @brief Generate double in [0, 1) using quantum simulation
@@ -321,7 +322,7 @@ qrng_v3_error_t qrng_v3_uint64(qrng_v3_ctx_t *ctx, uint64_t *value);
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_double(qrng_v3_ctx_t *ctx, double *value);
+MOONLAB_API qrng_v3_error_t qrng_v3_double(qrng_v3_ctx_t *ctx, double *value);
 
 /**
  * @brief Generate integer in range using quantum simulation
@@ -332,7 +333,7 @@ qrng_v3_error_t qrng_v3_double(qrng_v3_ctx_t *ctx, double *value);
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_range(
+MOONLAB_API qrng_v3_error_t qrng_v3_range(
     qrng_v3_ctx_t *ctx,
     uint64_t min,
     uint64_t max,
@@ -353,7 +354,7 @@ qrng_v3_error_t qrng_v3_range(
  * @param value Output value (0 to 2^num_qubits - 1)
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_grover_sample(
+MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample(
     qrng_v3_ctx_t *ctx,
     uint64_t *value
 );
@@ -368,7 +369,7 @@ qrng_v3_error_t qrng_v3_grover_sample(
  * @param value Output sample
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_grover_sample_distribution(
+MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample_distribution(
     qrng_v3_ctx_t *ctx,
     double (*target_distribution)(uint64_t),
     uint64_t *value
@@ -386,7 +387,7 @@ qrng_v3_error_t qrng_v3_grover_sample_distribution(
  * @param value Output: found value
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_grover_multi_target(
+MOONLAB_API qrng_v3_error_t qrng_v3_grover_multi_target(
     qrng_v3_ctx_t *ctx,
     const uint64_t *targets,
     size_t num_targets,
@@ -409,7 +410,7 @@ qrng_v3_error_t qrng_v3_grover_multi_target(
  * @param num_measurements Number of measurements (recommend 1000+)
  * @return Bell test result
  */
-bell_test_result_t qrng_v3_verify_quantum(
+MOONLAB_API bell_test_result_t qrng_v3_verify_quantum(
     qrng_v3_ctx_t *ctx,
     size_t num_measurements
 );
@@ -420,7 +421,7 @@ bell_test_result_t qrng_v3_verify_quantum(
  * @param ctx Quantum RNG context
  * @return Entanglement entropy in bits
  */
-double qrng_v3_get_entanglement_entropy(const qrng_v3_ctx_t *ctx);
+MOONLAB_API double qrng_v3_get_entanglement_entropy(const qrng_v3_ctx_t *ctx);
 
 /**
  * @brief Check if quantum behavior is maintained
@@ -449,7 +450,7 @@ int qrng_v3_is_quantum_verified(const qrng_v3_ctx_t *ctx);
  * @param mode New operation mode
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode);
+MOONLAB_API qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode);
 
 /**
  * @brief Get current operation mode
@@ -457,7 +458,7 @@ qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode);
  * @param ctx Quantum RNG context
  * @return Current mode
  */
-qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
+MOONLAB_API qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
 
 /**
  * @brief Report whether raw qrng_v3_bytes output in the current mode is
@@ -470,7 +471,7 @@ qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
  * @param ctx Quantum RNG context
  * @return 1 if raw output is intended uniform, 0 if non-uniform (GROVER).
  */
-int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
+MOONLAB_API int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
 
 // ============================================================================
 // STATISTICS & MONITORING
@@ -483,7 +484,7 @@ int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
  * @param stats Output statistics structure
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_get_stats(
+MOONLAB_API qrng_v3_error_t qrng_v3_get_stats(
     const qrng_v3_ctx_t *ctx,
     qrng_v3_stats_t *stats
 );
@@ -544,7 +545,7 @@ const char* qrng_v3_mode_string(qrng_v3_mode_t mode);
  * @param seed_len Seed length
  * @return QRNG_V3_SUCCESS or error code
  */
-qrng_v3_error_t qrng_v3_init_from_seed(
+MOONLAB_API qrng_v3_error_t qrng_v3_init_from_seed(
     qrng_v3_ctx_t **ctx,
     const uint8_t *seed,
     size_t seed_len

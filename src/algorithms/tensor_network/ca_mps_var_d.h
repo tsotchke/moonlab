@@ -20,6 +20,7 @@
 
 #ifndef MOONLAB_CA_MPS_VAR_D_H
 #define MOONLAB_CA_MPS_VAR_D_H
+#include "applications/moonlab_api.h"
 
 #include "ca_mps.h"
 
@@ -55,7 +56,7 @@ typedef struct {
     int verbose;
 } ca_mps_var_d_config_t;
 
-ca_mps_var_d_config_t ca_mps_var_d_config_default(void);
+MOONLAB_API ca_mps_var_d_config_t ca_mps_var_d_config_default(void);
 
 typedef struct {
     /** Energy at the start, before any gates were applied. */
@@ -101,7 +102,7 @@ typedef struct {
  * uses purely real Pauli strings with real coefficients).  This API
  * takes real coefficients to make that explicit.
  */
-ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
     moonlab_ca_mps_t* state,
     const uint8_t* paulis,
     const double* coeffs,
@@ -173,7 +174,7 @@ typedef struct {
     int verbose;
 } ca_mps_var_d_alt_config_t;
 
-ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void);
+MOONLAB_API ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void);
 
 typedef struct {
     double initial_energy;
@@ -210,7 +211,7 @@ typedef struct {
  * Stops when an outer iteration reduces the energy by less than
  * @c convergence_eps.
  */
-ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
+MOONLAB_API ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
     moonlab_ca_mps_t* state,
     const uint8_t* paulis,
     const double* coeffs,

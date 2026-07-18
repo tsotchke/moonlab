@@ -19,6 +19,7 @@
 
 #ifndef MOONLAB_CTR_DRBG_H
 #define MOONLAB_CTR_DRBG_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -46,12 +47,12 @@ typedef struct {
  * @param ctx       DRBG state.
  * @param seed      48-byte seed material.
  */
-void ctr_drbg_init(ctr_drbg_ctx_t *ctx, const uint8_t seed[48]);
+MOONLAB_API void ctr_drbg_init(ctr_drbg_ctx_t *ctx, const uint8_t seed[48]);
 
 /**
  * @brief Generate @p len pseudorandom bytes into @p out.
  */
-void ctr_drbg_generate(ctr_drbg_ctx_t *ctx, uint8_t *out, size_t len);
+MOONLAB_API void ctr_drbg_generate(ctr_drbg_ctx_t *ctx, uint8_t *out, size_t len);
 
 #ifdef __cplusplus
 }

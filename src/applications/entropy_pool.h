@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include "hardware_entropy.h"
 #include "health_tests.h"
+#include "moonlab_api.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -104,7 +105,7 @@ typedef struct {
  * @param ctx Output context pointer
  * @return 0 on success, -1 on error
  */
-int entropy_pool_init(entropy_pool_ctx_t **ctx);
+MOONLAB_API int entropy_pool_init(entropy_pool_ctx_t **ctx);
 
 /**
  * @brief Initialize entropy pool with custom configuration
@@ -113,7 +114,7 @@ int entropy_pool_init(entropy_pool_ctx_t **ctx);
  * @param config Custom configuration
  * @return 0 on success, -1 on error
  */
-int entropy_pool_init_with_config(
+MOONLAB_API int entropy_pool_init_with_config(
     entropy_pool_ctx_t **ctx,
     const entropy_pool_config_t *config
 );
@@ -125,7 +126,7 @@ int entropy_pool_init_with_config(
  *
  * @param ctx Pool context
  */
-void entropy_pool_free(entropy_pool_ctx_t *ctx);
+MOONLAB_API void entropy_pool_free(entropy_pool_ctx_t *ctx);
 
 /**
  * @brief Start background entropy generation
@@ -159,7 +160,7 @@ void entropy_pool_stop_background(entropy_pool_ctx_t *ctx);
  * @param size Number of bytes requested
  * @return 0 on success, -1 on error
  */
-int entropy_pool_get_bytes(
+MOONLAB_API int entropy_pool_get_bytes(
     entropy_pool_ctx_t *ctx,
     uint8_t *buffer,
     size_t size
@@ -186,7 +187,7 @@ int entropy_pool_refill(entropy_pool_ctx_t *ctx);
  * @param stats Output statistics structure
  * @return 0 on success, -1 on error
  */
-int entropy_pool_get_stats(
+MOONLAB_API int entropy_pool_get_stats(
     const entropy_pool_ctx_t *ctx,
     entropy_pool_stats_t *stats
 );

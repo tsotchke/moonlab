@@ -13,6 +13,7 @@
 
 #ifndef MOONLAB_NIST_SP800_22_H
 #define MOONLAB_NIST_SP800_22_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -22,16 +23,16 @@ extern "C" {
 #endif
 
 /* Test 1: Frequency (Monobit) */
-double sp800_22_monobit(const uint8_t *bits, size_t nbits);
+MOONLAB_API double sp800_22_monobit(const uint8_t *bits, size_t nbits);
 
 /* Test 2: Frequency within a Block (M bits per block) */
-double sp800_22_block_frequency(const uint8_t *bits, size_t nbits, size_t M);
+MOONLAB_API double sp800_22_block_frequency(const uint8_t *bits, size_t nbits, size_t M);
 
 /* Test 3: Runs */
-double sp800_22_runs(const uint8_t *bits, size_t nbits);
+MOONLAB_API double sp800_22_runs(const uint8_t *bits, size_t nbits);
 
 /* Test 4: Longest Run of Ones in a Block */
-double sp800_22_longest_run(const uint8_t *bits, size_t nbits);
+MOONLAB_API double sp800_22_longest_run(const uint8_t *bits, size_t nbits);
 
 /* Test 5: Binary Matrix Rank (32x32 matrices per block) */
 double sp800_22_rank(const uint8_t *bits, size_t nbits);
@@ -52,13 +53,13 @@ double sp800_22_universal(const uint8_t *bits, size_t nbits);
 double sp800_22_linear_complexity(const uint8_t *bits, size_t nbits, size_t M);
 
 /* Test 11: Serial (m-bit overlapping patterns) */
-double sp800_22_serial(const uint8_t *bits, size_t nbits, size_t m);
+MOONLAB_API double sp800_22_serial(const uint8_t *bits, size_t nbits, size_t m);
 
 /* Test 12: Approximate Entropy */
 double sp800_22_approximate_entropy(const uint8_t *bits, size_t nbits, size_t m);
 
 /* Test 13: Cumulative Sums (forward) */
-double sp800_22_cusum_forward(const uint8_t *bits, size_t nbits);
+MOONLAB_API double sp800_22_cusum_forward(const uint8_t *bits, size_t nbits);
 
 /* Test 14: Cumulative Sums (reverse) */
 double sp800_22_cusum_reverse(const uint8_t *bits, size_t nbits);

@@ -35,6 +35,7 @@
 
 #ifndef MOONLAB_STATUS_H
 #define MOONLAB_STATUS_H
+#include "applications/moonlab_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,7 +96,7 @@ typedef enum {
  * generic "<unknown status N for module M>" if the code is not
  * recognised, so callers can always log something.
  */
-const char* moonlab_status_to_string(moonlab_status_module_t module,
+MOONLAB_API const char* moonlab_status_to_string(moonlab_status_module_t module,
                                        moonlab_status_t status);
 
 /**

@@ -17,6 +17,7 @@
 
 #ifndef UTILS_ENTROPY_H
 #define UTILS_ENTROPY_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -99,14 +100,14 @@ entropy_util_ctx_t* entropy_util_create(void);
  * @param source Preferred entropy source
  * @return New entropy context or NULL on error
  */
-entropy_util_ctx_t* entropy_util_create_with_source(entropy_util_source_type_t source);
+MOONLAB_API entropy_util_ctx_t* entropy_util_create_with_source(entropy_util_source_type_t source);
 
 /**
  * @brief Destroy entropy context
  *
  * @param ctx Context to destroy
  */
-void entropy_util_destroy(entropy_util_ctx_t* ctx);
+MOONLAB_API void entropy_util_destroy(entropy_util_ctx_t* ctx);
 
 /**
  * @brief Reset entropy context and reseed
@@ -136,7 +137,7 @@ uint8_t entropy_util_byte(entropy_util_ctx_t* ctx);
  * @param size Number of bytes
  * @return Number of bytes written
  */
-size_t entropy_util_bytes(entropy_util_ctx_t* ctx, uint8_t* buffer, size_t size);
+MOONLAB_API size_t entropy_util_bytes(entropy_util_ctx_t* ctx, uint8_t* buffer, size_t size);
 
 /**
  * @brief Get random 32-bit value
@@ -229,7 +230,7 @@ const char* entropy_util_os_source_name(void);
  *         `size` if the timer is too coarse to resolve usable
  *         jitter).
  */
-size_t entropy_util_jitter_bytes(uint8_t* buffer, size_t size);
+MOONLAB_API size_t entropy_util_jitter_bytes(uint8_t* buffer, size_t size);
 
 // ============================================================================
 // ENTROPY MIXING

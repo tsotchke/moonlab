@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "moonlab_api.h"
 #if defined(_WIN32) || defined(_WIN64)
 #include <stdint.h>
 typedef intptr_t ssize_t;
@@ -93,14 +94,14 @@ typedef enum {
  * @param ctx Entropy context to initialize
  * @return ENTROPY_SUCCESS or error code
  */
-entropy_error_t entropy_init(entropy_ctx_t *ctx);
+MOONLAB_API entropy_error_t entropy_init(entropy_ctx_t *ctx);
 
 /**
  * @brief Free entropy context resources
  * 
  * @param ctx Entropy context to free
  */
-void entropy_free(entropy_ctx_t *ctx);
+MOONLAB_API void entropy_free(entropy_ctx_t *ctx);
 
 /**
  * @brief Get entropy capabilities
@@ -130,7 +131,7 @@ entropy_capabilities_t entropy_get_capabilities(const entropy_ctx_t *ctx);
  * @param size Number of bytes to collect
  * @return ENTROPY_SUCCESS or error code
  */
-entropy_error_t entropy_get_bytes(entropy_ctx_t *ctx, uint8_t *buffer, size_t size);
+MOONLAB_API entropy_error_t entropy_get_bytes(entropy_ctx_t *ctx, uint8_t *buffer, size_t size);
 
 /**
  * @brief Collect entropy from specific source
@@ -155,7 +156,7 @@ entropy_error_t entropy_get_bytes_from_source(
  * @param value Output value
  * @return ENTROPY_SUCCESS or error code
  */
-entropy_error_t entropy_get_uint64(entropy_ctx_t *ctx, uint64_t *value);
+MOONLAB_API entropy_error_t entropy_get_uint64(entropy_ctx_t *ctx, uint64_t *value);
 
 // ============================================================================
 // HARDWARE INSTRUCTIONS
@@ -270,7 +271,7 @@ ssize_t entropy_dev_urandom(entropy_ctx_t *ctx, uint8_t *buffer, size_t size);
  *         entropy (the routine self-tests via SP 800-90B-style
  *         estimators before returning).
  */
-entropy_error_t entropy_jitter(uint8_t *buffer, size_t size);
+MOONLAB_API entropy_error_t entropy_jitter(uint8_t *buffer, size_t size);
 
 // ============================================================================
 // QUALITY ASSESSMENT
@@ -297,7 +298,7 @@ double entropy_quality_estimate(entropy_source_type_t source);
  * @param source Entropy source type
  * @return Human-readable source name
  */
-const char* entropy_source_name(entropy_source_type_t source);
+MOONLAB_API const char* entropy_source_name(entropy_source_type_t source);
 
 /**
  * @brief Print entropy statistics

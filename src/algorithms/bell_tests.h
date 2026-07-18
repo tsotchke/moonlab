@@ -149,7 +149,7 @@ typedef enum {
  * @param qubit2 Second qubit index
  * @return QS_SUCCESS or error code
  */
-qs_error_t create_bell_state_phi_plus(quantum_state_t *state, int qubit1, int qubit2);
+MOONLAB_API qs_error_t create_bell_state_phi_plus(quantum_state_t *state, int qubit1, int qubit2);
 
 /**
  * @brief Create Bell state |Φ⁻⟩ = (|00⟩ - |11⟩)/√2
@@ -273,13 +273,13 @@ MOONLAB_API void bell_get_optimal_settings(bell_measurement_settings_t *settings
  * @param result Bell test result
  * @return 1 if the CHSH criteria are met, 0 otherwise
  */
-int bell_test_confirms_quantum(const bell_test_result_t *result);
+MOONLAB_API int bell_test_confirms_quantum(const bell_test_result_t *result);
 
 /**
  * @brief Print Bell test results
  * @param result Bell test result
  */
-void bell_chsh_print_results(const bell_test_result_t *result);
+MOONLAB_API void bell_chsh_print_results(const bell_test_result_t *result);
 
 /**
  * @brief Calculate theoretical CHSH for given Bell state

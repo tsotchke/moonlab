@@ -32,6 +32,7 @@
 
 #ifndef MOONLAB_QRNG_DI_H
 #define MOONLAB_QRNG_DI_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -53,7 +54,7 @@ extern "C" {
  * Any numerically-out-of-range @p chsh clamps to the corresponding
  * endpoint.  Return value is always in [0, 1].
  */
-double qrng_di_min_entropy_from_chsh(double chsh);
+MOONLAB_API double qrng_di_min_entropy_from_chsh(double chsh);
 
 /**
  * @brief Toeplitz-hash strong extractor.
@@ -76,7 +77,7 @@ double qrng_di_min_entropy_from_chsh(double chsh);
  * min-entropy of @p raw is at least 8 * n_out.  The extractor does
  * not compute this itself.  See @ref qrng_di_min_entropy_from_chsh.
  */
-int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
+MOONLAB_API int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
                               const uint8_t *seed, size_t n_seed,
                               uint8_t *out, size_t n_out);
 
@@ -91,7 +92,7 @@ int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
  * the target length is unachievable; otherwise a positive byte count
  * suitable for sizing the input buffer.
  */
-size_t qrng_di_raw_bytes_for_output(double chsh,
+MOONLAB_API size_t qrng_di_raw_bytes_for_output(double chsh,
                                      size_t n_out,
                                      size_t epsilon_bits);
 

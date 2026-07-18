@@ -1,0 +1,71 @@
+# Phantom-API allowlist for moonlab.
+#
+# Format: one fnmatch pattern per line; `#` starts a comment. A listed symbol
+# is treated as "allowed" (not phantom) by `icc phantom-api`.
+#
+# POLICY: every entry below is a header-declared PUBLIC symbol whose definition
+# HAS been located in the tree. These are NOT missing implementations; each is
+# a definition the ICC indexer cannot emit as a C-family definition record for
+# a structural reason (Objective-C++ TU, macro-generated body, or a def-shape
+# heuristic false-positive). Nothing here is a real phantom -- a genuinely
+# undefined declaration must be implemented or deleted, never allowlisted.
+#
+# Verified against a FRESH index (a stale index inflates this list with
+# false positives for definitions added/modified since the last index run;
+# re-index before trusting phantom-api).
+
+# ---------------------------------------------------------------------------
+# (1) CA-PEPS Clifford / rotation gate wrappers.
+# Declared in src/algorithms/tensor_network/ca_peps.h; defined in
+# src/algorithms/tensor_network/ca_peps.c. The single-qubit gates are emitted
+# by the DELEGATE_1Q macro (h,s,sdag,x,y,z at ca_peps.c:141-146) and the
+# DELEGATE_1Q_THETA macro (rx,ry,rz,phase at ca_peps.c:178-181): the literal
+# symbol name never appears in the .c text, so no definition record is
+# produced. moonlab_ca_peps_cnot (ca_peps.c:150) and moonlab_ca_peps_t_gate
+# (ca_peps.c:185) have explicit multi-line definitions the indexer does not
+# surface as literal-name def records. All twelve are exercised by the ABI /
+# Python / Rust binding suites.
+moonlab_ca_peps_h
+moonlab_ca_peps_s
+moonlab_ca_peps_sdag
+moonlab_ca_peps_x
+moonlab_ca_peps_y
+moonlab_ca_peps_z
+moonlab_ca_peps_rx
+moonlab_ca_peps_ry
+moonlab_ca_peps_rz
+moonlab_ca_peps_phase
+moonlab_ca_peps_t_gate
+moonlab_ca_peps_cnot
+
+# ---------------------------------------------------------------------------
+# (2) Metal GPU backend entry points.
+# Declared in src/optimization/gpu_metal.h; defined in the Objective-C++ Metal
+# translation unit src/optimization/gpu_metal.mm (line cited per symbol). ICC
+# indexes .mm for declarations but does not emit C-family *definition* records
+# from Objective-C++, so every function bodied only in gpu_metal.mm reads as
+# declared-never-defined. Definitions located:
+metal_is_available                 # gpu_metal.mm:440
+metal_hadamard                     # gpu_metal.mm:674
+metal_hadamard_all                 # gpu_metal.mm:696
+metal_oracle                       # gpu_metal.mm:713
+metal_oracle_multi                 # gpu_metal.mm:730
+metal_grover_diffusion             # gpu_metal.mm:757
+metal_get_last_execution_time      # gpu_metal.mm:1010
+metal_set_performance_monitoring   # gpu_metal.mm:1014
+metal_print_device_info            # gpu_metal.mm:1024
+metal_mps_contract_2site           # gpu_metal.mm:1238
+
+# ---------------------------------------------------------------------------
+# (3) Full-argument variants fronted by a thin default-argument wrapper.
+# In each of these the real definition exists but is immediately preceded (<=3
+# lines) by a convenience wrapper that CALLS it, e.g.
+#     int foo(...)              { return foo_full(..., DEFAULT); }
+#     int foo_full(...) { <body> }
+# phantom-api's definition-shape probe scans a small window before the def line,
+# matches the wrapper's `foo_full(...)` call first, sees the trailing `;`, and
+# rejects the site. The definitions are real (file:line cited):
+qrng_v3_init_with_config           # src/applications/qrng.c:341
+entropy_pool_init_with_config      # src/applications/entropy_pool.c:127
+feynman_add_vertex_labeled         # src/visualization/feynman_diagram.c:129
+effective_hamiltonian_apply_ws     # src/algorithms/tensor_network/dmrg.c:867

@@ -198,7 +198,7 @@ typedef void (*qgt_bloch_1d_fn)(double k, void* user, qgt_complex_t h[4]);
 typedef struct qgt_system_1d qgt_system_1d_t;
 
 qgt_system_1d_t* qgt_create_1d(qgt_bloch_1d_fn f, void* user);
-void             qgt_free_1d(qgt_system_1d_t* sys);
+MOONLAB_API void             qgt_free_1d(qgt_system_1d_t* sys);
 
 /**
  * @brief Su-Schrieffer-Heeger two-band model
@@ -266,7 +266,7 @@ MOONLAB_API int qgt_z2_invariant_1d_bdg(const qgt_system_1d_t* sys, int* z2);
  * @param out_raw  optional output: raw pre-rounding winding @f$W \in \mathbb R@f$.
  * @return integer winding.
  */
-int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
+MOONLAB_API int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
                    double* out_raw);
 
 /**
@@ -279,7 +279,7 @@ int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
  * with @f$\mathbf k_N \equiv \mathbf k_0@f$.  Non-Abelian generalisations
  * (multi-band holonomies) will be added alongside multi-band models.
  */
-int qgt_wilson_loop(const qgt_system_t* sys,
+MOONLAB_API int qgt_wilson_loop(const qgt_system_t* sys,
                     const double* path_k,
                     size_t num_points,
                     double* out_phase);
@@ -364,7 +364,7 @@ MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
  * is optimal; a reasonable default is @p dk in @f$[10^{-4}, 10^{-3}]@f$
  * for the built-in QWZ / Haldane models.
  */
-int qgt_metric_at(const qgt_system_t* sys, const double k[2],
+MOONLAB_API int qgt_metric_at(const qgt_system_t* sys, const double k[2],
                   double dk, double g[4]);
 
 /* ====================================================================
@@ -406,7 +406,7 @@ typedef qgt_system_t* (*qgt_param_system_fn)(void* user, double param);
  *
  * @return 0 on success, negative on error.
  */
-int qgt_phase_diagram_chern(qgt_param_system_fn factory,
+MOONLAB_API int qgt_phase_diagram_chern(qgt_param_system_fn factory,
                              void* user,
                              double param_min, double param_max,
                              size_t K, size_t N,
@@ -444,7 +444,7 @@ typedef qgt_system_t* (*qgt_param_system_2d_fn)(void* user,
  *
  * @return 0 on success, negative on error.
  */
-int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
+MOONLAB_API int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
                                 void* user,
                                 double x_min, double x_max,
                                 double y_min, double y_max,

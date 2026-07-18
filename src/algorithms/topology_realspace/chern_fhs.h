@@ -45,6 +45,7 @@
 
 #ifndef MOONLAB_CHERN_FHS_H
 #define MOONLAB_CHERN_FHS_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <complex.h>
@@ -95,7 +96,7 @@ int chern_fhs_two_band(size_t N,
  * @param[out] out_chern_real  optional unrounded value.
  * @return 0 on success.
  */
-int chern_fhs_qwz(size_t N, double m,
+MOONLAB_API int chern_fhs_qwz(size_t N, double m,
                    int* out_chern, double* out_chern_real);
 
 #ifdef __cplusplus

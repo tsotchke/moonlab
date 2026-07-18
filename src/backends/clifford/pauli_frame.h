@@ -30,6 +30,7 @@
  */
 #ifndef MOONLAB_PAULI_FRAME_H
 #define MOONLAB_PAULI_FRAME_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -48,20 +49,20 @@ typedef struct pauli_frame_t pauli_frame_t;
  * @brief Allocate a frame of n qubits, initialised to identity (all
  *        x and z bits zero).
  */
-pauli_frame_t* pauli_frame_create(size_t num_qubits);
+MOONLAB_API pauli_frame_t* pauli_frame_create(size_t num_qubits);
 
 /** @brief Release all memory.  Safe on NULL. */
-void pauli_frame_free(pauli_frame_t* f);
+MOONLAB_API void pauli_frame_free(pauli_frame_t* f);
 
 /** @brief Reset to identity (all bits zero). */
-void pauli_frame_clear(pauli_frame_t* f);
+MOONLAB_API void pauli_frame_clear(pauli_frame_t* f);
 
 /** @brief Number of qubits this frame was allocated for. */
 size_t pauli_frame_num_qubits(const pauli_frame_t* f);
 
 /** @brief Read the (x_q, z_q) bits at qubit @p q.  Out parameters
  *  receive 0 or 1.  No-op on NULL inputs. */
-void pauli_frame_read(const pauli_frame_t* f, size_t q,
+MOONLAB_API void pauli_frame_read(const pauli_frame_t* f, size_t q,
                        uint8_t* out_x, uint8_t* out_z);
 
 /* ================================================================== */
@@ -69,9 +70,9 @@ void pauli_frame_read(const pauli_frame_t* f, size_t q,
 /* ================================================================== */
 
 /* H: X <-> Z (swap x_q and z_q). */
-void pauli_frame_h(pauli_frame_t* f, size_t q);
+MOONLAB_API void pauli_frame_h(pauli_frame_t* f, size_t q);
 /* S: Z stays, X picks up Z (z_q ^= x_q). */
-void pauli_frame_s(pauli_frame_t* f, size_t q);
+MOONLAB_API void pauli_frame_s(pauli_frame_t* f, size_t q);
 /* S^dagger: same bit transform as S (the difference is phase, untracked). */
 void pauli_frame_s_dag(pauli_frame_t* f, size_t q);
 
@@ -88,11 +89,11 @@ void pauli_frame_z(pauli_frame_t* f, size_t q);
 
 /* CNOT(c, t): propagates X-error on control to target (x_t ^= x_c) and
  *             Z-error on target to control (z_c ^= z_t). */
-void pauli_frame_cnot(pauli_frame_t* f, size_t control, size_t target);
+MOONLAB_API void pauli_frame_cnot(pauli_frame_t* f, size_t control, size_t target);
 
 /* CZ(a, b): propagates X-error on a to Z-error on b (z_b ^= x_a) and
  *           X-error on b to Z-error on a (z_a ^= x_b). */
-void pauli_frame_cz(pauli_frame_t* f, size_t a, size_t b);
+MOONLAB_API void pauli_frame_cz(pauli_frame_t* f, size_t a, size_t b);
 
 /* SWAP(a, b): exchanges (x_a, z_a) and (x_b, z_b). */
 void pauli_frame_swap(pauli_frame_t* f, size_t a, size_t b);
@@ -102,9 +103,9 @@ void pauli_frame_swap(pauli_frame_t* f, size_t a, size_t b);
 /* ================================================================== */
 
 /* Flip the X-component on qubit @p q (inject an X error). */
-void pauli_frame_inject_x(pauli_frame_t* f, size_t q);
+MOONLAB_API void pauli_frame_inject_x(pauli_frame_t* f, size_t q);
 /* Flip the Z-component on qubit @p q. */
-void pauli_frame_inject_z(pauli_frame_t* f, size_t q);
+MOONLAB_API void pauli_frame_inject_z(pauli_frame_t* f, size_t q);
 /* Inject a Y error = X * Z (up to phase) -> flip both x and z bits. */
 void pauli_frame_inject_y(pauli_frame_t* f, size_t q);
 
@@ -141,8 +142,8 @@ uint8_t pauli_frame_measure_x(const pauli_frame_t* f, size_t q);
  * as opaque and use the helper functions below to advance / read.
  */
 typedef struct pauli_frame_batch_t pauli_frame_batch_t;
-pauli_frame_batch_t* pauli_frame_batch_create(size_t num_qubits, size_t num_shots);
-void pauli_frame_batch_free(pauli_frame_batch_t* b);
+MOONLAB_API pauli_frame_batch_t* pauli_frame_batch_create(size_t num_qubits, size_t num_shots);
+MOONLAB_API void pauli_frame_batch_free(pauli_frame_batch_t* b);
 size_t pauli_frame_batch_num_shots(const pauli_frame_batch_t* b);
 size_t pauli_frame_batch_num_qubits(const pauli_frame_batch_t* b);
 
@@ -151,23 +152,23 @@ size_t pauli_frame_batch_num_qubits(const pauli_frame_batch_t* b);
  * injection. */
 void pauli_frame_batch_h(pauli_frame_batch_t* b, size_t q);
 void pauli_frame_batch_s(pauli_frame_batch_t* b, size_t q);
-void pauli_frame_batch_cnot(pauli_frame_batch_t* b, size_t c, size_t t);
+MOONLAB_API void pauli_frame_batch_cnot(pauli_frame_batch_t* b, size_t c, size_t t);
 void pauli_frame_batch_cz(pauli_frame_batch_t* b, size_t a, size_t b_q);
 void pauli_frame_batch_swap(pauli_frame_batch_t* b, size_t a, size_t b_q);
 
 /* Inject an i.i.d. Pauli error per shot: each shot independently
  * draws from the depolarising channel { I (1-p), X (p/3), Y (p/3),
  * Z (p/3) } using the supplied splitmix64 RNG state. */
-void pauli_frame_batch_depolarising(pauli_frame_batch_t* b, size_t q,
+MOONLAB_API void pauli_frame_batch_depolarising(pauli_frame_batch_t* b, size_t q,
                                      double p, uint64_t* rng_state);
 
 /* Inject an i.i.d. X-only bit-flip channel (X with prob p, I otherwise). */
-void pauli_frame_batch_bit_flip(pauli_frame_batch_t* b, size_t q,
+MOONLAB_API void pauli_frame_batch_bit_flip(pauli_frame_batch_t* b, size_t q,
                                  double p, uint64_t* rng_state);
 
 /* Read each shot's measure-Z outcome contribution at qubit q.  The
  * output buffer must hold @p num_shots bytes (0 or 1 each). */
-void pauli_frame_batch_measure_z(const pauli_frame_batch_t* b, size_t q,
+MOONLAB_API void pauli_frame_batch_measure_z(const pauli_frame_batch_t* b, size_t q,
                                   uint8_t* out);
 
 /* Noisy Z-basis measurement: reads x_q for each shot, flips the
@@ -177,7 +178,7 @@ void pauli_frame_batch_measure_z(const pauli_frame_batch_t* b, size_t q,
  * out buffer holds @p num_shots bytes.  This is the primitive needed
  * for noisy-syndrome QEC simulation -- the "M_meas" of the standard
  * surface-code stabilizer round. */
-void pauli_frame_batch_measure_z_noisy(pauli_frame_batch_t* b, size_t q,
+MOONLAB_API void pauli_frame_batch_measure_z_noisy(pauli_frame_batch_t* b, size_t q,
                                         double p_flip, uint64_t* rng_state,
                                         uint8_t* out);
 
@@ -187,7 +188,7 @@ void pauli_frame_batch_measure_z_noisy(pauli_frame_batch_t* b, size_t q,
 void pauli_frame_batch_reset_zero(pauli_frame_batch_t* b, size_t q);
 
 /* Reset every shot's frame to identity. */
-void pauli_frame_batch_clear(pauli_frame_batch_t* b);
+MOONLAB_API void pauli_frame_batch_clear(pauli_frame_batch_t* b);
 
 #ifdef __cplusplus
 }

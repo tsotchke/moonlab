@@ -32,6 +32,7 @@
 
 #ifndef MOONLAB_MITIGATION_ZNE_H
 #define MOONLAB_MITIGATION_ZNE_H
+#include "applications/moonlab_api.h"
 
 #include <stddef.h>
 
@@ -62,7 +63,7 @@ typedef enum {
  * @return extrapolated value E(0); returns 0 and sets *stderr_out to
  *         a negative sentinel on argument error.
  */
-double zne_extrapolate(
+MOONLAB_API double zne_extrapolate(
     const double *scales,
     const double *expectations,
     size_t n,
@@ -89,7 +90,7 @@ typedef double (*zne_expectation_fn)(double lambda, void *user);
  *
  * @return extrapolated E(0); 0 on argument error.
  */
-double zne_mitigate(
+MOONLAB_API double zne_mitigate(
     zne_expectation_fn fn,
     void *user,
     const double *scales,
@@ -126,14 +127,14 @@ typedef struct {
  * The PEC sampling overhead is gamma^2 for single-shot noisy-layer
  * mitigation (see Temme et al. 2017).  Returns 0 on NULL input.
  */
-double pec_one_norm_cost(const pec_quasi_prob_t *qp);
+MOONLAB_API double pec_one_norm_cost(const pec_quasi_prob_t *qp);
 
 /**
  * @brief Sample an index i with probability |eta_i| / gamma and
  *        return the associated sign.  Sets *index_out = i, and the
  *        function returns +1.0 or -1.0.
  */
-double pec_sample_index(const pec_quasi_prob_t *qp,
+MOONLAB_API double pec_sample_index(const pec_quasi_prob_t *qp,
                          double uniform,
                          size_t *index_out);
 
@@ -150,7 +151,7 @@ double pec_sample_index(const pec_quasi_prob_t *qp,
  *                      estimator.
  * @return PEC-mitigated <O>; 0.0 on argument error.
  */
-double pec_aggregate(const double *signs, const double *measurements,
+MOONLAB_API double pec_aggregate(const double *signs, const double *measurements,
                       size_t n, double gamma, double *stderr_out);
 
 #ifdef __cplusplus

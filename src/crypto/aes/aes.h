@@ -18,6 +18,7 @@
 
 #ifndef MOONLAB_AES_H
 #define MOONLAB_AES_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -32,10 +33,10 @@ typedef struct {
 } aes256_ctx_t;
 
 /** @brief Expand a 32-byte key into the AES-256 round-key schedule. */
-void aes256_init(aes256_ctx_t *ctx, const uint8_t key[32]);
+MOONLAB_API void aes256_init(aes256_ctx_t *ctx, const uint8_t key[32]);
 
 /** @brief Encrypt one 16-byte block in place. */
-void aes256_encrypt_block(const aes256_ctx_t *ctx,
+MOONLAB_API void aes256_encrypt_block(const aes256_ctx_t *ctx,
                            const uint8_t in[16], uint8_t out[16]);
 
 #ifdef __cplusplus

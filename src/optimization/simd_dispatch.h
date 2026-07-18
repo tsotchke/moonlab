@@ -22,6 +22,7 @@
 
 #ifndef SIMD_DISPATCH_H
 #define SIMD_DISPATCH_H
+#include "applications/moonlab_api.h"
 
 #include <stdint.h>
 #include <stddef.h>
@@ -256,7 +257,7 @@ typedef enum {
  * @stability evolving
  * @since v0.1.2
  */
-simd_backend_t simd_get_backend(simd_operation_t op);
+MOONLAB_API simd_backend_t simd_get_backend(simd_operation_t op);
 
 /**
  * @brief Get backend name string
@@ -267,7 +268,7 @@ simd_backend_t simd_get_backend(simd_operation_t op);
  * @stability evolving
  * @since v0.1.2
  */
-const char* simd_backend_name(simd_backend_t backend);
+MOONLAB_API const char* simd_backend_name(simd_backend_t backend);
 
 // ============================================================================
 // VECTOR WIDTH INFORMATION
@@ -369,7 +370,7 @@ void simd_print_capabilities(void);
  * @stability beta
  * @since v0.1.2
  */
-int simd_validate(void);
+MOONLAB_API int simd_validate(void);
 
 #ifdef __cplusplus
 }
