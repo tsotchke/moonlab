@@ -17,7 +17,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 2
 
 BUILD_DIR="${BUILD_DIR:-build}"
 ASAN_DIR="${ASAN_DIR:-build-asan-smoke}"
@@ -129,38 +129,49 @@ check_ctest_gate() {  # <event_name> <ctest -R regex>
 
 # --- mpi_sharded_gpu_works -------------------------------------------------
 # The small CTest is the regression guard; it cannot establish the release
-# claim by itself.  PASS also requires a trace from run_mpi_sharded_gpu.sh
-# proving N>32, at least two physical GPU endpoints, and at least one real
-# partition-crossing halo swap on this exact commit.
+# claim by itself.  If registered, it must pass.  PASS also requires a trace
+# from run_mpi_sharded_gpu.sh proving the exact N=33, four-rank, two-host
+# (2+2 ranks) fleet topology on this commit.  The fleet trace must also prove
+# that the same topology passed its N=12 preflight before the exact run.
 check_mpi_sharded_gpu() {
   if ! need_build; then emit mpi_sharded_gpu_works FAIL "build failed"; return; fi
 
   local rx='mpi_sharded_gpu_ghz|sharded_gpu|multigpu|partition_gpu'
   local listed; listed="$(ctest --test-dir "$BUILD_DIR" -N -R "$rx" 2>/dev/null | grep -c 'Test #')"
-  if [ "${listed:-0}" -eq 0 ]; then
-    emit mpi_sharded_gpu_works FAIL "no MPI+CUDA sharding regression test is registered"
-    return
-  fi
-
-  local out; out="$(ctest --test-dir "$BUILD_DIR" -R "$rx" --timeout 400 -j"$JOBS" 2>&1)"
-  if ! printf '%s' "$out" | grep -q '100% tests passed'; then
-    emit mpi_sharded_gpu_works FAIL "routine MPI+CUDA sharding regression failed"
-    return
+  local routine_tests_registered=0
+  local routine_local_pass=0
+  if [ "${listed:-0}" -gt 0 ]; then
+    routine_tests_registered=1
+    local out; out="$(ctest --test-dir "$BUILD_DIR" -R "$rx" --timeout 400 -j"$JOBS" 2>&1)"
+    if printf '%s' "$out" | grep -q '100% tests passed'; then
+      routine_local_pass=1
+    else
+      emit mpi_sharded_gpu_works FAIL "routine MPI+CUDA sharding regression failed"
+      return
+    fi
   fi
 
   local fleet_trace="$TRACE_DIR/moonlab_mpi_gpu.jsonl"
   if [ ! -f "$fleet_trace" ]; then
-    emit mpi_sharded_gpu_works FAIL "routine test passed; N>32 fleet trace is absent"
+    if [ "$routine_tests_registered" -eq 1 ]; then
+      emit mpi_sharded_gpu_works FAIL "routine test passed; exact fleet trace is absent"
+    else
+      emit mpi_sharded_gpu_works FAIL "routine test absent; exact fleet trace is absent"
+    fi
     return
   fi
 
   local sha evidence
   sha="$(git rev-parse HEAD)"
-  if evidence="$(python3 - "$fleet_trace" "$sha" <<'PY'
+  if evidence="$(python3 - "$fleet_trace" "$sha" "$routine_tests_registered" "$routine_local_pass" <<'PY'
 import json
 import sys
 
-trace_path, expected_sha = sys.argv[1:]
+trace_path, expected_sha, routine_tests_registered, routine_local_pass = sys.argv[1:]
+routine_tests_registered = int(routine_tests_registered)
+routine_local_pass = routine_local_pass == "1"
+routine_test_passed = False
+
 event = None
 with open(trace_path, encoding="utf-8") as trace:
     for line in trace:
@@ -168,37 +179,65 @@ with open(trace_path, encoding="utf-8") as trace:
             candidate = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if (candidate.get("kind") == "moonlab_mpi_gpu" and
-                candidate.get("name") == "mpi_sharded_gpu_works"):
+        if (
+            candidate.get("kind") == "moonlab_mpi_gpu"
+            and candidate.get("name") == "mpi_sharded_gpu_works"
+            and candidate.get("commit_sha") == expected_sha
+        ):
             event = candidate
 
 if event is None:
-    print("no mpi_sharded_gpu_works event")
+    print("no mpi_sharded_gpu_works event for this commit")
     raise SystemExit(1)
 if event.get("value", event.get("status")) != "PASS":
     print("latest fleet event is not PASS")
     raise SystemExit(1)
-if event.get("commit_sha") != expected_sha:
-    print("fleet event is for a different commit")
-    raise SystemExit(1)
 
 checks = {
-    "n": int(event.get("n", 0)) > 32,
-    "ranks": int(event.get("ranks", 0)) >= 2,
-    "gpu_endpoints": int(event.get("gpu_endpoints", 0)) >= 2,
-    "halo_swaps": int(event.get("halo_swaps", 0)) >= 1,
+    "exact_commit_sha": event.get("exact_commit_sha") == expected_sha,
+    "exact_n": int(event.get("n", 0)) == 33,
+    "exact_ranks": int(event.get("ranks", 0)) == 4,
+    "exact_hosts": int(event.get("hosts", 0)) == 2,
+    "exact_host_slots": int(event.get("host_slots_2x2", 0)) == 1,
+    "exact_gpu_endpoints": int(event.get("gpu_endpoints", 0)) >= 2,
+    "exact_halo_swaps": int(event.get("halo_swaps", 0)) >= 1,
+    "routine_n": int(event.get("routine_n", 0)) == 12,
+    "routine_ranks": int(event.get("routine_ranks", 0)) == 4,
+    "routine_hosts": int(event.get("routine_hosts", 0)) == 2,
+    "routine_host_slots": int(event.get("routine_host_slots_2x2", 0)) == 1,
+    "routine_gpu_endpoints": int(event.get("routine_gpu_endpoints", 0)) >= 2,
+    "routine_halo_swaps": int(event.get("routine_halo_swaps", 0)) >= 1,
 }
 failed = [name for name, passed in checks.items() if not passed]
 if failed:
     print("fleet event lacks exact evidence: " + ",".join(failed))
     raise SystemExit(1)
 
-print("N={n} ranks={ranks} GPUs={gpu_endpoints} halo_swaps={halo_swaps}".format(**event))
+if isinstance(event.get("routine_test_passed"), bool):
+    routine_test_passed = event.get("routine_test_passed")
+elif event.get("routine_test_passed") is not None:
+    routine_test_passed = str(event.get("routine_test_passed")).strip().lower() in ("1", "true", "yes", "on")
+
+if not routine_test_passed:
+    print("fleet N=12 routine preflight is false/missing")
+    raise SystemExit(1)
+if routine_tests_registered and not routine_local_pass:
+    print("routine local regression test did not pass")
+    raise SystemExit(1)
+
+print("N={n} ranks={ranks} hosts={hosts} slots=2+2 GPUs={gpu_endpoints} halo_swaps={halo_swaps} routine_test_passed={routine_pass}".format(
+    routine_pass=("true" if routine_test_passed else "false"),
+    **event
+))
 PY
-)"; then
-    emit mpi_sharded_gpu_works PASS "$listed routine test(s) pass; fleet $evidence"
+ )"; then
+    if [ "$routine_tests_registered" -eq 1 ]; then
+      emit mpi_sharded_gpu_works PASS "$listed routine test(s) pass; fleet $evidence"
+    else
+      emit mpi_sharded_gpu_works PASS "routine test absent locally; fleet $evidence"
+    fi
   else
-    emit mpi_sharded_gpu_works FAIL "routine test passed; ${evidence:-fleet evidence invalid}"
+    emit mpi_sharded_gpu_works FAIL "${evidence:-fleet evidence invalid}"
   fi
 }
 
