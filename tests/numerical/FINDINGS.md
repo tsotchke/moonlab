@@ -10,9 +10,18 @@ clang 21, library at v1.1.0 (ABI 0.4.0), CPU-only Release build.
 
 ---
 
-## BUG 1 (HIGH) -- one-sided Jacobi SVD fallback produces a non-orthonormal U on any rank-deficient matrix
+## BUG 1 (HIGH, FIXED) -- one-sided Jacobi SVD fallback produced a non-orthonormal U on any rank-deficient matrix
 
-`tensor_svd`'s no-LAPACK fallback (one-sided Jacobi) returns a left factor `U`
+Fixed in `src/algorithms/tensor_network/tensor.c`: after extracting the
+rank-space left singular vectors, the fallback now completes `U` over the
+zero-singular-value columns to a full orthonormal basis (modified Gram-Schmidt of
+trial standard-basis vectors against every accepted column, with a second
+re-orthogonalization pass and next-basis-vector retry on collapse), matching what
+`zgesvd` returns. `t_svd_fallback` went from 2 fails to 0; `max|U^H U - I|` on the
+two repros dropped from `8.02e-01` / `6.40e-01` to `0.0` / `2.2e-16`. The analysis
+below is retained for the record.
+
+`tensor_svd`'s no-LAPACK fallback (one-sided Jacobi) returned a left factor `U`
 that is **not** an isometry (`U^H U != I`) whenever the input has one or more
 zero / negligible singular values. The columns are individually finite and the
 `A = U S Vh` reconstruction still holds (the offending columns carry `S = 0`),
@@ -66,10 +75,10 @@ unitary, which the code's own comment says "breaks DMRG's left-canonical form".
   ./build/num/t_svd_fallback   # 2 fails: rank1_3x3, rank2_6x6 (U not orthonormal)
   ```
 
-- Fix sketch (NOT applied -- reporting only): after extracting the rank-space U
-  columns, complete `U` to an orthonormal basis over the zero-singular-value
-  columns (Gram-Schmidt / a QR of the orthogonal complement), exactly as
-  `zgesvd` returns a full orthonormal `U`.
+- Fix (applied): after extracting the rank-space U columns, complete `U` to an
+  orthonormal basis over the zero-singular-value columns (modified Gram-Schmidt of
+  the standard-basis complement against every accepted column, re-orthogonalized
+  and renormalized), exactly as `zgesvd` returns a full orthonormal `U`.
 
 ---
 

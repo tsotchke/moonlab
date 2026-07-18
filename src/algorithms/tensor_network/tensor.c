@@ -1343,7 +1343,10 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
         if (max_off < tol) break;
     }
 
-    // Extract singular values and U from orthogonalized A_work
+    // Extract singular values and the rank-space left singular vectors from the
+    // orthogonalized columns of A_work.  A column whose singular value is
+    // negligible carries no direction information: defer it (zero-fill) and
+    // complete it to a proper orthonormal basis in the null-space pass below.
     for (uint32_t i = 0; i < min_mn; i++) {
         // Compute column norm = singular value
         double sigma = 0.0;
@@ -1353,19 +1356,97 @@ tensor_svd_result_t *tensor_svd(const tensor_t *mat, uint32_t max_rank,
         }
         S_work[i] = sqrt(sigma);
 
-        // Normalize to get U column
+        // Normalize to get U column (rank space); defer zero-sv columns.
         if (S_work[i] > 1e-15) {
             for (uint32_t row = 0; row < m; row++) {
                 U_work[row * min_mn + i] = A_work[row * n + i] / S_work[i];
             }
         } else {
             for (uint32_t row = 0; row < m; row++) {
-                U_work[row * min_mn + i] = (row == i) ? 1.0 : 0.0;
+                U_work[row * min_mn + i] = 0.0;
             }
         }
     }
 
     free(A_work);
+
+    // Complete U over the zero-singular-value columns to a full orthonormal
+    // basis.  LAPACK zgesvd fills the null space with an orthonormal completion,
+    // so U^H U = I even on rank-deficient input; the one-sided Jacobi path must
+    // do the same.  Filling a null column with the bare basis vector e_i (as the
+    // previous code did) leaves U non-orthonormal whenever a singular value is
+    // negligible -- the common MPS/DMRG case (product states, post-truncation
+    // bonds, boundary tensors) -- silently corrupting left/right-canonical form
+    // on no-LAPACK builds while the A = U S V^H reconstruction still holds.
+    //
+    // For each deferred column, orthonormalize a trial standard-basis vector
+    // e_e against every already-accepted U column (the rank-space columns and
+    // the null columns completed earlier in this pass) by modified Gram-Schmidt,
+    // run a second re-orthogonalization pass for numerical robustness, then
+    // renormalize.  If a trial collapses (its component orthogonal to the
+    // accepted span underflows) advance to the next basis vector; the accepted
+    // set spans fewer than m dimensions, so some e_e always survives.
+    {
+        double complex *cand = (double complex *)calloc(m, sizeof(double complex));
+        if (!cand) {
+            free(U_work);
+            free(V_work);
+            free(S_work);
+            free(result);
+            return NULL;
+        }
+        for (uint32_t i = 0; i < min_mn; i++) {
+            if (S_work[i] > 1e-15) continue;  // rank-space column, already unit
+
+            int placed = 0;
+            for (uint32_t e = 0; e < m && !placed; e++) {
+                for (uint32_t row = 0; row < m; row++) {
+                    cand[row] = (row == e) ? 1.0 : 0.0;
+                }
+
+                // Two modified-Gram-Schmidt passes against the accepted columns.
+                for (int pass = 0; pass < 2; pass++) {
+                    for (uint32_t col = 0; col < min_mn; col++) {
+                        // Accepted = any rank-space column, or a null column
+                        // already completed (index < i in this ordered pass).
+                        int accepted = (S_work[col] > 1e-15) || (col < i);
+                        if (!accepted) continue;
+
+                        double complex dot = 0.0;
+                        for (uint32_t row = 0; row < m; row++) {
+                            dot += conj(U_work[row * min_mn + col]) * cand[row];
+                        }
+                        for (uint32_t row = 0; row < m; row++) {
+                            cand[row] -= dot * U_work[row * min_mn + col];
+                        }
+                    }
+                }
+
+                double nrm2 = 0.0;
+                for (uint32_t row = 0; row < m; row++) {
+                    double complex v = cand[row];
+                    nrm2 += creal(v) * creal(v) + cimag(v) * cimag(v);
+                }
+                double nrm = sqrt(nrm2);
+                if (nrm > 1e-8) {
+                    double inv = 1.0 / nrm;
+                    for (uint32_t row = 0; row < m; row++) {
+                        U_work[row * min_mn + i] = cand[row] * inv;
+                    }
+                    placed = 1;
+                }
+            }
+
+            if (!placed) {
+                // Unreachable for m >= min_mn (the accepted span has < m
+                // dimensions), but keep U finite if it ever occurs.
+                for (uint32_t row = 0; row < m; row++) {
+                    U_work[row * min_mn + i] = (row == i) ? 1.0 : 0.0;
+                }
+            }
+        }
+        free(cand);
+    }
 
     // Sort singular values in descending order
     for (uint32_t i = 0; i < min_mn - 1; i++) {

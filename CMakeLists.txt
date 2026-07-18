@@ -1683,6 +1683,10 @@ if(QSIM_BUILD_TESTS)
         add_subdirectory(tests/statistical)
         # Cross-backend / cross-binding differential vs an independent reference.
         add_subdirectory(tests/differential)
+        # Numerical-edge / uninitialised-memory bug-hunting harnesses. Force the
+        # no-LAPACK Jacobi/Householder fallbacks, probe rotation/SVD/eigen/DMRG
+        # edge cases; the authoritative valgrind + MSan legs are Linux-only.
+        add_subdirectory(tests/numerical)
     endif()
 endif()
 
