@@ -71,12 +71,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# The exact tn_mps oracle is bounded to n<=8: it reproduces the reference
-# exactly there across every family and depth, but has genuine correctness bugs
-# at n>=10 (reversed-CNOT transpose AND a deep-forward-circuit divergence -- see
-# KNOWN_DIVERGENCES.txt). dense/python/rust/js still validate n=10,12 against the
-# independent numpy reference, so large-n correctness is fully anchored; tn_mps
-# just is not used as a second oracle where it is unreliable.
+# tn_mps is an EXACT second oracle across the whole corpus (n<=12, every family
+# and depth): it reproduces the dense statevector and the independent numpy
+# reference to ~1e-13. The former n>=10 divergences were three real, now-fixed
+# bugs: the reversed-CNOT 2q transpose (control>target), the interior-bond
+# 2q-gate norm collapse, and the silent float32 Metal SVD (exact 2q gates now
+# stay on the CPU LAPACK double-precision path; the lossy GPU kernel is opt-in
+# via MOONLAB_TN_GPU_LOSSY). KNOWN_DIVERGENCES.txt is therefore empty; any entry
+# added back is a live open bug, never a tolerance escape hatch.
 case "$PROFILE" in
   quick) QUBITS="2,3,4,6,8";        DEPTHS="2,8";    TN_MAX_N=12 ;;
   full)  QUBITS="2,3,4,6,8,10,12";  DEPTHS="2,8,32"; TN_MAX_N=12; RUN_RUST=1; RUN_JS=1 ;;

@@ -1,92 +1,40 @@
 # KNOWN_DIVERGENCES.txt
 #
-# Cases the cross-backend differential currently catches diverging because a
-# sibling lane is mid-fix. Each line quarantines one (case, backend) pair: for
-# the tn_mps backend a quarantine means the driver SKIPS that case's tn leg
-# entirely (see below) and counts it as quarantined -- never as a pass, never as
-# a failure. Tolerances are NEVER loosened to make HEAD pass; this file is the
-# only escape hatch.
+# Cases the cross-backend differential quarantines because a sibling lane is
+# mid-fix. Each line quarantines one (case, backend) pair: for the tn_mps
+# backend a quarantine means the driver SKIPS that case's tn leg entirely and
+# counts it as quarantined -- never as a pass, never as a failure. Tolerances
+# are NEVER loosened to make HEAD pass; this file is the only escape hatch, and
+# a live entry is an OPEN bug that blocks the release (the ICC
+# all_discovered_bugs_closed gate scans this file for non-comment lines).
 #
 # Format (whitespace-delimited; '#' comments and blank lines ignored):
 #   <case_id>  <backend>  <owning_lane>  <free-form note incl. seed>
 #
 # case_id/seed reproduce byte-identically from the default corpus
 #   scripts/gen_diff_corpus.py --out-dir DIR        (seed 0xB16B00B5)
-# so any entry replays in isolation, at any profile (a case is identical whether
-# generated in the quick subset or the full matrix).
+# so any entry replays in isolation, at any profile.
 #
 # ---------------------------------------------------------------------------
-# LANE: tn-lane  (plain tn_mps backend, src/algorithms/tensor_network)
+# STATUS: EMPTY. tn_mps is an exact second oracle across the whole corpus
+# (n<=12, every family and depth), reproducing dense and the independent numpy
+# reference to ~1e-13 with the tn leg armed at --tn-max-n 12.
 # ---------------------------------------------------------------------------
-# Root cause -- the tn_mps 2-qubit gate path, two coupled failure modes:
+# The three real bugs that formerly lived here are all fixed and regression-
+# guarded, verified by a full empty-quarantine run (cross_backend_differential
+# and reference_oracle_agreement both PASS, 0 failed, 0 quarantined, 98 tn cases
+# exercised at tn_max_n=12):
 #
-#   (1) Reversed-CNOT transpose. tn_apply_cnot(control, target) with
-#       control > target applies the transposed 2-qubit tensor. Minimal repro:
-#       on 3 qubits, H(0) then CNOT(1,0) puts the amplitude on the wrong basis
-#       state; dense/reference are exact and disagree with tn_mps.
-#   (2) Toffoli (ccx) decomposition expands into a CNOT/T network containing
-#       reversed CNOTs, so it inherits (1).
+#   (1) Reversed-CNOT 2q transpose (control>target), also an out-of-bounds
+#       write -- fixed; regression tests/unit/test_tn_gate_order.c.
+#   (2) Interior-bond 2q-gate norm collapse (a gate on a bulk bond whose both
+#       outer bonds are entangled halved every probability) -- fixed by
+#       mixed_canonicalize before the two-site SVD; regression
+#       tests/unit/test_tn_mps_interior_gate.c.
+#   (3) Silent float32 Metal SVD at bond>=GPU_BOND_THRESHOLD (Apple GPUs have no
+#       fp64), which rotated the state ~1e-9 in probability at n>=10 -- fixed by
+#       keeping exact 2q gates on the CPU LAPACK double path; the lossy Metal
+#       kernel is opt-in via MOONLAB_TN_GPU_LOSSY. Regression
+#       tests/unit/test_tn_mps_deep_forward.c (asserts |prob_tn-prob_dense|<1e-10).
 #
-# WHY THE WHOLE LEG IS SKIPPED (not just its result compared): the buggy 2q
-# path also writes out of bounds. Running it corrupts heap state and poisons
-# LATER cases -- the set of secondarily-affected cases shifts run-to-run with
-# ASLR (deterministic within a process, not across). Executing the path at all
-# is therefore unsafe, so the driver refuses to run the tn leg for any case
-# listed here and the rest of the run stays deterministic.
-#
-# SCOPE: every case in the default full matrix whose circuit contains a reversed
-# CNOT (control>target) or a Toffoli is listed -- i.e. every case that can touch
-# the corrupting path, not merely the ones observed to shift on a given run.
-# Forward-only circuits (rot_cnot_ladder, param_layer, ghz, qft, and the
-# forward-CNOT clifford/random cases) reproduce the reference exactly on tn_mps,
-# so the tn_mps leg is a live guard everywhere except these entries.
-#
-# Backends that disagree: tn_mps vs {dense, reference}.  Owning lane: tn-lane.
-#
-clifford_n02_d32_sadbd          tn_mps  tn-lane  seed=5324731161261157821  reversed-CNOT (control>target)
-clifford_n03_d32_s67d0          tn_mps  tn-lane  seed=2016014523341105104  reversed-CNOT (control>target)
-clifford_n04_d08_saccb          tn_mps  tn-lane  seed=16865938782350322891  reversed-CNOT (control>target)
-clifford_n04_d32_s4522          tn_mps  tn-lane  seed=1503200127616566562  reversed-CNOT (control>target)
-clifford_n06_d32_s890e          tn_mps  tn-lane  seed=8879084662183921934  reversed-CNOT (control>target)
-clifford_n08_d02_s656a          tn_mps  tn-lane  seed=15717691853277652330  reversed-CNOT (control>target)
-clifford_n08_d32_s0248          tn_mps  tn-lane  seed=15475013507700163144  reversed-CNOT (control>target)
-clifford_n10_d08_s9313          tn_mps  tn-lane  seed=16420000568271409939  reversed-CNOT (control>target)
-clifford_n10_d32_s7dfb          tn_mps  tn-lane  seed=1057261924491820539  reversed-CNOT (control>target)
-clifford_n12_d08_s47ba          tn_mps  tn-lane  seed=9506006332493088698  reversed-CNOT (control>target)
-clifford_n12_d32_s6893          tn_mps  tn-lane  seed=6422000878634756243  reversed-CNOT (control>target)
-random_universal_n03_d02_s8afd  tn_mps  tn-lane  seed=16323627942139759357  reversed-CNOT (control>target)
-random_universal_n03_d08_s6d36  tn_mps  tn-lane  seed=3259571282694073654  reversed-CNOT (control>target)
-random_universal_n03_d32_s121e  tn_mps  tn-lane  seed=6343576709944119838  reversed-CNOT + Toffoli
-random_universal_n04_d02_s4998  tn_mps  tn-lane  seed=15161057511266011544  reversed-CNOT (control>target)
-random_universal_n04_d08_sb451  tn_mps  tn-lane  seed=9778370120332260433  reversed-CNOT (control>target)
-random_universal_n04_d32_sa539  tn_mps  tn-lane  seed=6694364707896403257  reversed-CNOT + Toffoli
-random_universal_n06_d08_sef86  tn_mps  tn-lane  seed=641691456334000006  Toffoli decomposition
-random_universal_n06_d32_sf8b9  tn_mps  tn-lane  seed=16004430061508884665  reversed-CNOT + Toffoli
-random_universal_n08_d02_sa79d  tn_mps  tn-lane  seed=10372032951421020061  Toffoli decomposition
-random_universal_n08_d08_s82d7  tn_mps  tn-lane  seed=4989345564986475223  Toffoli decomposition
-random_universal_n08_d32_s4638  tn_mps  tn-lane  seed=10129354611109938744  reversed-CNOT + Toffoli
-random_universal_n10_d08_s8b26  tn_mps  tn-lane  seed=1973064591440317222  Toffoli decomposition
-random_universal_n10_d32_sde01  tn_mps  tn-lane  seed=17335803205016149505  reversed-CNOT + Toffoli
-random_universal_n12_d08_s6489  tn_mps  tn-lane  seed=16989349539174769801  Toffoli decomposition
-random_universal_n12_d32_s2020  tn_mps  tn-lane  seed=11849340442860593184  Toffoli decomposition
-
-# ---------------------------------------------------------------------------
-# LANE: tn-lane  (SECOND, independent bug -- handled by an n-cap, not per-case)
-# ---------------------------------------------------------------------------
-# tn_mps also diverges from the reference on FORWARD-ONLY deep circuits at
-# n >= 10 (e.g. param_layer / rot_cnot_ladder at n=10: ry/rz + forward cz or
-# forward cx only, NO reversed CNOT, NO Toffoli). The divergence is:
-#   * deterministic and reproducible in complete isolation (single-case corpus),
-#   * identical under -O0 and -O2 (not a memory-UB artifact),
-#   * independent of bond dimension (chi = 32, 64, 256 give the same error),
-# so it is a genuine algorithmic tn_mps correctness bug, distinct from the
-# reversed-CNOT transpose above. Repro:
-#   scripts/gen_diff_corpus.py --out-dir /tmp/c --qubits 10 --depths 8
-#   diff_backends /tmp/c/corpus.txt   # param_layer_n10_d08 diverges ~3e-2
-#
-# tn_mps reproduces the reference EXACTLY for every family and depth at n <= 8,
-# so run_cross_diff.sh caps the exact tn_mps oracle at --tn-max-n 8. Cases at
-# n >= 10 are recorded as tn-skipped (never as pass), and their correctness is
-# still anchored absolutely by dense/python/rust/js vs the numpy reference.
-# Raising the cap (--tn-max-n 10/12) re-arms the tn leg there and the harness
-# will fail on these divergences -- intended, until the tn-lane fix lands.
+# Adding any entry back means a live open bug -- never a tolerance workaround.
