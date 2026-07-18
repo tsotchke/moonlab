@@ -47,12 +47,18 @@ emit() {   # emit <name> <PASS|FAIL> <detail>
 }
 
 need_build() {
-  if [ ! -d "$BUILD_DIR" ] || [ "${QSIM_SMOKE_BUILD:-0}" = "1" ]; then
-    echo "== configuring + building $BUILD_DIR (-j$JOBS) =="
+  # Configure once (cache reused), then ALWAYS run the incremental build so a
+  # stale $BUILD_DIR never yields false test failures against pre-fix binaries
+  # (the trap that made full_suite_green report 2/137 while a clean build is
+  # 179/179). QSIM_SMOKE_BUILD=1 forces a clean reconfigure.
+  if [ "${QSIM_SMOKE_BUILD:-0}" = "1" ]; then rm -rf "$BUILD_DIR"; fi
+  if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "== configuring $BUILD_DIR (-j$JOBS) =="
     cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release \
       -DQSIM_BUILD_TESTS=ON >/dev/null 2>&1 || return 1
-    cmake --build "$BUILD_DIR" --parallel "$JOBS" >/dev/null 2>&1 || return 1
   fi
+  echo "== building $BUILD_DIR (-j$JOBS, incremental) =="
+  cmake --build "$BUILD_DIR" --parallel "$JOBS" >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -202,7 +208,9 @@ check_quarantines_empty() {
            tests/differential/KNOWN_DIVERGENCES.txt \
            tests/scaling/KNOWN_DIVERGENCES.txt; do
     [ -f "$f" ] || continue
-    local n; n="$(grep -cvE '^\s*#|^\s*$' "$f" 2>/dev/null || echo 0)"
+    # grep -c always prints a count (0 when nothing matches) but exits 1 on zero
+    # matches; a `|| echo 0` would append a second 0 and break the arithmetic.
+    local n; n="$(grep -cvE '^[[:space:]]*#|^[[:space:]]*$' "$f" 2>/dev/null)"; n="${n:-0}"
     total=$((total + n))
     [ "$n" -gt 0 ] && detail="$detail ${f##*/}=$n"
   done
