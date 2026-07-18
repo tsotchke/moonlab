@@ -368,6 +368,16 @@ if(QSIM_PLATFORM_MACOS)
     if(ACCELERATE_FRAMEWORK)
         message(STATUS "Accelerate: Found")
         set(QSIM_HAS_ACCELERATE ON)
+        # Directory holding Accelerate.framework (and its vecLib/vImage
+        # sub-frameworks, i.e. cblas.h / lapacke.h / clapack.h) on this SDK.
+        # Used below to mark that directory as a *system* framework path
+        # (-iframework) for the specific translation units that consume it,
+        # so Apple's own header content can never be promoted to a hard
+        # error under QSIM_WERROR -- regardless of which nullability /
+        # documentation / availability diagnostics a future SDK enables by
+        # default inside those headers.
+        get_filename_component(QSIM_ACCELERATE_FRAMEWORKS_DIR
+            "${ACCELERATE_FRAMEWORK}" DIRECTORY)
     endif()
 endif()
 
@@ -1247,6 +1257,47 @@ if(QSIM_PLATFORM_MACOS)
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(quantumsim PRIVATE ${ACCELERATE_FRAMEWORK})
         target_compile_definitions(quantumsim PRIVATE HAS_ACCELERATE=1)
+
+        # cblas.h / lapacke.h / Accelerate.h are ordinarily found through
+        # the compiler's own implicit default framework search path (baked
+        # into the -isysroot toolchain default, not one we add). Apple's
+        # Xcode clang happens to already treat its own default SDK search
+        # paths as system internally (an undocumented heuristic, verified
+        # empirically: cblas.h resolves with the "system header" line-marker
+        # even with no -iframework in sight), which is why the only
+        # Accelerate/CLAPACK diagnostic reachable today
+        # (-Wdeprecated-declarations on cblas_zgemm/zgesvd_/etc., anchored at
+        # the *call site* in our .c files, not inside the header) is already
+        # handled by the -Wno-error=deprecated-declarations demotion in
+        # cmake/compiler_flags.cmake. A diagnostic whose location clang
+        # reports as being *inside* the framework headers themselves (e.g.
+        # -Wnullability-completeness, -Wdocumentation) is not reachable by
+        # that demotion and would rely entirely on Apple's undocumented
+        # heuristic to be suppressed -- a heuristic a non-Apple clang (e.g.
+        # mainline/Homebrew LLVM) does not have, and Apple's own could change
+        # without notice.
+        #
+        # Adding an explicit -iframework flag for the very same directory
+        # the compiler already searches makes the system-header treatment an
+        # explicit, portable guarantee instead of an implicit one: clang
+        # treats everything found through an -iframework entry as a system
+        # framework regardless of any other -F entry for the same
+        # directory (verified empirically, and confirmed to matter on
+        # non-Apple clang, where the plain default path is not system).
+        # This covers the whole diagnostic class regardless of which
+        # specific -W a future SDK enables, on any Xcode/SDK/toolchain
+        # combination, without demoting a category project-wide. Scoped to
+        # only the translation units that #include the Accelerate/CLAPACK
+        # headers so it cannot mask a real warning anywhere else in our own
+        # sources.
+        if(QSIM_ACCELERATE_FRAMEWORKS_DIR)
+            set_source_files_properties(
+                src/algorithms/tensor_network/tensor.c
+                src/optimization/accelerate_ops.c
+                PROPERTIES
+                COMPILE_OPTIONS "-iframework${QSIM_ACCELERATE_FRAMEWORKS_DIR}"
+            )
+        endif()
     endif()
 
     if(QSIM_HAS_METAL)
