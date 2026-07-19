@@ -5,6 +5,7 @@
 # Typical multi-host invocation (paths must exist on every MPI host):
 #   MOONLAB_MPI_GPU_COMMIT_SHA=<sha> \
 #   MOONLAB_MPI_GPU_EXECUTABLE=/shared/path/test_mpi_sharded_gpu_ghz \
+#   MOONLAB_MPI_GPU_EXECUTABLE_SHA256=<sha256> \
 #   MOONLAB_MPI_GPU_HOSTS='gpu-a:2,gpu-b:2' \
 #   MOONLAB_MPI_GPU_RANKS=4 scripts/run_mpi_sharded_gpu.sh
 #
@@ -17,7 +18,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
-TRACE_DIR="${MOONLAB_TRACE_DIR:-scripts/icc_traces}"
+TRACE_DIR="${MOONLAB_TRACE_DIR:-$REPO_ROOT/scripts/icc_traces}"
 TRACE="$TRACE_DIR/moonlab_mpi_gpu.jsonl"
 EXPECTED_N=33
 EXPECTED_RANKS=4
@@ -28,10 +29,33 @@ HOSTS="${MOONLAB_MPI_GPU_HOSTS:-}"
 MPIEXEC="${MOONLAB_MPI_GPU_MPIEXEC:-mpirun}"
 CMAKE_BIN="${MOONLAB_MPI_GPU_CMAKE:-cmake}"
 EXECUTABLE="${MOONLAB_MPI_GPU_EXECUTABLE:-}"
+EXPECTED_EXECUTABLE_SHA256="${MOONLAB_MPI_GPU_EXECUTABLE_SHA256:-}"
 COMMIT_SHA="${MOONLAB_MPI_GPU_COMMIT_SHA:-}"
 
+TRACE_DIR="$(python3 - "$TRACE_DIR" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).resolve())
+PY
+)"
+if [ "$TRACE_DIR" != "$REPO_ROOT/scripts/icc_traces" ]; then
+  echo "MOONLAB_TRACE_DIR must resolve to $REPO_ROOT/scripts/icc_traces" >&2
+  exit 2
+fi
+TRACE="$TRACE_DIR/moonlab_mpi_gpu.jsonl"
+
+# These are executed as quoted array element zero (never eval'd), but require
+# them to resolve to actual executables before creating any build/log output.
+if ! command -v "$CMAKE_BIN" >/dev/null 2>&1; then
+  echo "CMake executable is unavailable: $CMAKE_BIN" >&2
+  exit 2
+fi
+if ! command -v "$MPIEXEC" >/dev/null 2>&1; then
+  echo "MPI launcher is unavailable: $MPIEXEC" >&2
+  exit 2
+fi
+
 mkdir -p "$TRACE_DIR"
-: > "$TRACE"
 
 HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || {
   echo "cannot determine repository commit" >&2
@@ -40,8 +64,8 @@ HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || {
 if [ -z "$COMMIT_SHA" ]; then
   COMMIT_SHA="$HEAD_SHA"
 fi
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "refusing fleet attestation from a dirty tracked worktree" >&2
+if [ -n "$(git status --porcelain=v1 --untracked-files=all -- . ':(exclude)scripts/icc_traces/**')" ]; then
+  echo "refusing fleet attestation from a dirty source worktree" >&2
   exit 2
 fi
 if [ "$COMMIT_SHA" != "$HEAD_SHA" ]; then
@@ -53,6 +77,24 @@ if ! [[ "$COMMIT_SHA" =~ ^[0-9a-fA-F]{40,64}$ ]]; then
   echo "invalid commit SHA: $COMMIT_SHA" >&2
   exit 2
 fi
+
+SOURCE_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || exit 2
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+  < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
+if [ "$SOURCE_DIRTY" != "false" ]; then
+  echo "source identity unexpectedly reports dirty=true" >&2
+  exit 2
+fi
+: > "$TRACE"
 if ! [[ "$N" =~ ^[0-9]+$ ]] || [ "$N" -ne "$EXPECTED_N" ]; then
   echo "MOONLAB_MPI_GPU_N must be exactly $EXPECTED_N" >&2
   exit 2
@@ -79,7 +121,7 @@ case " ${MOONLAB_MPI_GPU_MPI_ARGS:-} " in
 esac
 
 if [ -z "$EXECUTABLE" ]; then
-  LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/moonlab-mpi-gpu.XXXXXX")"
+  LOG_DIR="$(mktemp -d "/tmp/moonlab-mpi-gpu.XXXXXX")"
   BUILD_LOG="$LOG_DIR/build.log"
   echo "== fresh CUDA+MPI build: $LOG_DIR =="
   BUILD_RC=0
@@ -92,12 +134,70 @@ if [ -z "$EXECUTABLE" ]; then
   fi
   EXECUTABLE="$LOG_DIR/test_mpi_sharded_gpu_ghz"
 else
-  LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/moonlab-mpi-gpu.XXXXXX")"
+  LOG_DIR="$(mktemp -d "/tmp/moonlab-mpi-gpu.XXXXXX")"
   BUILD_RC=0
+fi
+
+if [ ! -x "$EXECUTABLE" ]; then
+  EXECUTABLE_SHA256=""
+else
+  EXECUTABLE_SHA256="$(python3 - "$EXECUTABLE" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+fi
+if [ -n "${MOONLAB_MPI_GPU_EXECUTABLE:-}" ]; then
+  if ! [[ "$EXPECTED_EXECUTABLE_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "MOONLAB_MPI_GPU_EXECUTABLE_SHA256 is required for a supplied executable" >&2
+    exit 2
+  fi
+  if [ "$EXECUTABLE_SHA256" != "${EXPECTED_EXECUTABLE_SHA256,,}" ]; then
+    echo "supplied executable SHA-256 does not match MOONLAB_MPI_GPU_EXECUTABLE_SHA256" >&2
+    exit 2
+  fi
+else
+  EXPECTED_EXECUTABLE_SHA256="$EXECUTABLE_SHA256"
 fi
 
 ROUTINE_LOG="$LOG_DIR/routine-${ROUTINE_N}.log"
 EXACT_LOG="$LOG_DIR/exact-${N}.log"
+HASH_LOG="$LOG_DIR/executable-sha256.log"
+
+run_rank_hash_preflight() {
+  : > "$HASH_LOG"
+  if [ "$BUILD_RC" -ne 0 ] || [ ! -x "$EXECUTABLE" ] || ! command -v "$MPIEXEC" >/dev/null 2>&1; then
+    echo "executable hash preflight prerequisites are unavailable" >>"$HASH_LOG"
+    return 127
+  fi
+  local -a hash_cmd=("$MPIEXEC" -n "$RANKS" --host "$HOSTS")
+  if [ -n "${MOONLAB_MPI_GPU_MPI_ARGS:-}" ]; then
+    local -a mpi_extra=()
+    read -r -a mpi_extra <<<"$MOONLAB_MPI_GPU_MPI_ARGS"
+    hash_cmd+=( "${mpi_extra[@]}" )
+  fi
+  hash_cmd+=(sh -c '
+path=$1
+host=$(hostname)
+if command -v sha256sum >/dev/null 2>&1; then
+  line=$(sha256sum "$path")
+  digest=${line%% *}
+elif command -v shasum >/dev/null 2>&1; then
+  line=$(shasum -a 256 "$path")
+  digest=${line%% *}
+else
+  exit 127
+fi
+printf "MOONLAB_MPI_EXECUTABLE_SHA256 host=%s sha256=%s\\n" "$host" "$digest"
+' _ "$EXECUTABLE")
+  "${hash_cmd[@]}" >"$HASH_LOG" 2>&1
+}
+
+run_rank_hash_preflight
+HASH_RC=$?
+cat "$HASH_LOG"
 
 run_mpi_gpu() {
   local run_n="$1"
@@ -109,6 +209,11 @@ run_mpi_gpu() {
     [ -n "${BUILD_LOG:-}" ] && cat "$BUILD_LOG" >>"$log"
     echo "CUDA+MPI build failed (rc=$BUILD_RC); skipping run for N=$run_n" >>"$log"
     return 127
+  fi
+  if [ "$HASH_RC" -ne 0 ]; then
+    cat "$HASH_LOG" >>"$log"
+    echo "rank-local executable SHA-256 preflight failed (rc=$HASH_RC)" >>"$log"
+    return 126
   fi
 
   if [ ! -x "$EXECUTABLE" ]; then
@@ -152,17 +257,59 @@ fi
 cat "$ROUTINE_LOG"
 cat "$EXACT_LOG"
 
-python3 - "$ROUTINE_LOG" "$EXACT_LOG" "$TRACE" "$COMMIT_SHA" "$ROUTINE_N" "$N" "$ROUTINE_RC" "$EXACT_RC" <<'PY'
+FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
+FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
+PY
+)"
+ROUTINE_LOG_SHA256="$(python3 - "$ROUTINE_LOG" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+EXACT_LOG_SHA256="$(python3 - "$EXACT_LOG" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+
+python3 - "$ROUTINE_LOG" "$EXACT_LOG" "$HASH_LOG" "$TRACE" "$COMMIT_SHA" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" "$FINAL_FINGERPRINT" "$EXECUTABLE_SHA256" "$ROUTINE_LOG_SHA256" "$EXACT_LOG_SHA256" "$ROUTINE_N" "$N" "$ROUTINE_RC" "$EXACT_RC" "$HASH_RC" <<'PY'
 import datetime as dt
 import json
 import re
 import sys
 
-routine_log, exact_log, trace_path, commit_sha, routine_n, exact_n, routine_rc, exact_rc = sys.argv[1:]
+(
+    routine_log,
+    exact_log,
+    hash_log,
+    trace_path,
+    commit_sha,
+    git_tree,
+    dirty,
+    source_fingerprint,
+    final_fingerprint,
+    executable_sha256,
+    routine_log_sha256,
+    exact_log_sha256,
+    routine_n,
+    exact_n,
+    routine_rc,
+    exact_rc,
+    hash_rc,
+) = sys.argv[1:]
 routine_n = int(routine_n)
 exact_n = int(exact_n)
 routine_rc = int(routine_rc)
 exact_rc = int(exact_rc)
+hash_rc = int(hash_rc)
+dirty = dirty == "true"
 
 PATTERN = re.compile(
     r"MOONLAB_MPI_SHARDED_GPU (?P<marker>PASS|FAIL) "
@@ -197,7 +344,20 @@ def parse_event(log_path, target_n):
 routine_event = parse_event(routine_log, routine_n)
 exact_event = parse_event(exact_log, exact_n)
 
+hash_pattern = re.compile(r"MOONLAB_MPI_EXECUTABLE_SHA256 host=(\S+) sha256=([0-9a-fA-F]{64})")
+with open(hash_log, encoding="utf-8", errors="replace") as source:
+    rank_hashes = hash_pattern.findall(source.read())
+rank_hash_hosts = {host for host, _ in rank_hashes}
+rank_hash_values = {value.lower() for _, value in rank_hashes}
+
 requirements = {
+    "source_clean": not dirty,
+    "source_unchanged": source_fingerprint == final_fingerprint,
+    "executable_sha256_present": bool(re.fullmatch(r"[0-9a-f]{64}", executable_sha256)),
+    "rank_hash_preflight_exit_zero": hash_rc == 0,
+    "rank_hash_count_exact": len(rank_hashes) == 4,
+    "rank_hash_hosts_multiple": len(rank_hash_hosts) >= 2,
+    "rank_hashes_exact": rank_hash_values == {executable_sha256},
     "routine_exit_zero": routine_rc == 0,
     "routine_marker_pass": routine_event is not None and routine_event["marker"] == "PASS",
     "exact_exit_zero": exact_rc == 0,
@@ -210,6 +370,15 @@ fields = {
     "routine_run_rc": routine_rc,
     "routine_n": routine_n,
     "exact_commit_sha": commit_sha,
+    "git_head": commit_sha,
+    "git_tree": git_tree,
+    "dirty": dirty,
+    "source_fingerprint": source_fingerprint,
+    "executable_sha256": executable_sha256,
+    "routine_log_sha256": routine_log_sha256,
+    "exact_log_sha256": exact_log_sha256,
+    "rank_hash_count": len(rank_hashes),
+    "rank_hash_host_count": len(rank_hash_hosts),
     "routine_test_passed": requirements["routine_exit_zero"] and requirements["routine_marker_pass"],
 }
 if routine_event is not None:
@@ -288,10 +457,11 @@ event = {
     "name": "mpi_sharded_gpu_works",
     "value": value,
     "commit_sha": commit_sha,
-    "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
     **fields,
     "detail": "exact sharded MPI+CUDA fleet proof" if not failed else ",".join(failed),
 }
+event["ts"] = event["generated_at"]
 with open(trace_path, "w", encoding="utf-8") as trace:
     trace.write(json.dumps(event, separators=(",", ":")) + "\n")
 print(json.dumps(event, indent=2, sort_keys=True))

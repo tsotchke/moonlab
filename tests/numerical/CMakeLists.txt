@@ -64,6 +64,16 @@ endif()
 
 find_library(NUM_M_LIB m)
 
+# tensor.c includes the CBLAS API even when the numerical harness forces its
+# SVD/QR fallback paths.  Some distributions install cblas.h in an OpenBLAS
+# subdirectory instead of a default compiler include directory.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_path(NUM_CBLAS_INCLUDE_DIR
+        NAMES cblas.h
+        PATH_SUFFIXES openblas
+        REQUIRED)
+endif()
+
 # helper: a lib-linked harness
 function(num_lib_harness name src)
     add_executable(${name} ${src})
@@ -110,7 +120,8 @@ target_include_directories(num_svd_fallback_obj PRIVATE
     "${NUM_SRC_ROOT}"
     "${NUM_SRC_ROOT}/algorithms/tensor_network"
     "${NUM_SRC_ROOT}/optimization"
-    "${NUM_SRC_ROOT}/optimization/gpu/backends")
+    "${NUM_SRC_ROOT}/optimization/gpu/backends"
+    "${NUM_CBLAS_INCLUDE_DIR}")
 target_compile_definitions(num_svd_fallback_obj PRIVATE
     QSIM_FORCE_SVD_FALLBACK QSIM_FORCE_QR_FALLBACK)
 # Silence the Accelerate CLAPACK deprecation noise from the compiled-in source.

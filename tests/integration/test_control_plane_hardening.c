@@ -34,6 +34,7 @@
 #  include <openssl/pem.h>
 #  include <openssl/rsa.h>
 #  include <openssl/x509.h>
+#  include "test_tls_keygen.h"
 #endif
 
 static int failures = 0;
@@ -240,7 +241,7 @@ int main(void)
     CHECK(rc == 0, "server_open rc=%d", rc);
 
     /* Generate a self-signed cert in-process. */
-    EVP_PKEY *key = EVP_RSA_gen(2048);
+    EVP_PKEY *key = moonlab_test_generate_rsa_key();
     X509 *cert = X509_new();
     X509_set_version(cert, 2);
     ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);

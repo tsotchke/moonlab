@@ -46,6 +46,7 @@
  * concentrates ~1 target value ~12x per block. */
 #define PEAK_BLOCK   256
 #define PEAK_THRESH  8.0
+#define STREAM_ALLOC_FAILURE (-1000)
 
 /* ------------------------------------------------------------------ */
 /*  Byte-source fillers                                                 */
@@ -56,7 +57,8 @@ static int fill_conditioned(uint8_t *buf, size_t n) {
     while (off < n) {
         size_t take = n - off;
         if (take > 8192) take = 8192;   /* internal path prefers chunks */
-        if (moonlab_qrng_bytes(buf + off, take) != 0) return -1;
+        int rc = moonlab_qrng_bytes(buf + off, take);
+        if (rc != 0) return rc;
         off += take;
     }
     return 0;
@@ -309,10 +311,13 @@ static double lag1_equal_rate(const uint8_t *buf, size_t n) {
 /* ------------------------------------------------------------------ */
 
 static int streaming_check(size_t total_bytes,
-                           double *out_monobit_p, double *out_bytechi_p) {
+                           double *out_monobit_p, double *out_bytechi_p,
+                           size_t *out_completed_bytes) {
     const size_t CHUNK = 65536;
     uint8_t *chunk = (uint8_t *)malloc(CHUNK);
-    if (!chunk) return -1;
+    if (!chunk) return STREAM_ALLOC_FAILURE;
+
+    *out_completed_bytes = 0;
 
     unsigned long long ones = 0, bits = 0;
     unsigned long long hist[256];
@@ -322,7 +327,12 @@ static int streaming_check(size_t total_bytes,
     while (done < total_bytes) {
         size_t take = total_bytes - done;
         if (take > CHUNK) take = CHUNK;
-        if (fill_conditioned(chunk, take) != 0) { free(chunk); return -1; }
+        int source_rc = fill_conditioned(chunk, take);
+        if (source_rc != 0) {
+            *out_completed_bytes = done;
+            free(chunk);
+            return source_rc;
+        }
         for (size_t i = 0; i < take; i++) {
             uint8_t v = chunk[i];
             hist[v]++;
@@ -337,6 +347,7 @@ static int streaming_check(size_t total_bytes,
         done += take;
     }
     free(chunk);
+    *out_completed_bytes = done;
 
     double s_obs = fabs((double)ones - (double)bits * 0.5) /
                    sqrt((double)bits * 0.25);
@@ -412,10 +423,15 @@ int main(void) {
     printf("  collision      p=%.6g%s\n", p_coll, p_coll < 0 ? " (skip)" : "");
 
     /* -------- streaming multi-MB check -------- */
-    double p_smono = 1.0, p_sbyte = 1.0;
-    int stream_ok = (streaming_check(stream_bytes, &p_smono, &p_sbyte) == 0);
+    double p_smono = -1.0, p_sbyte = -1.0;
+    size_t stream_completed = 0;
+    int stream_rc = streaming_check(stream_bytes, &p_smono, &p_sbyte,
+                                    &stream_completed);
+    int stream_ok = (stream_rc == 0);
     printf("  stream_monobit p=%.6g\n", p_smono);
     printf("  stream_bytechi p=%.6g\n", p_sbyte);
+    printf("  stream_source  rc=%d completed=%zu/%zu\n",
+           stream_rc, stream_completed, stream_bytes);
 
     int battery_fail = 0;
     #define GATE(p) do { if ((p) >= 0.0 && (p) < FAIL_P) battery_fail = 1; } while (0)
@@ -431,9 +447,11 @@ int main(void) {
         "\"longest_run_p\":%.6g,\"cusum_p\":%.6g,\"approx_entropy_p\":%.6g,"
         "\"serial1_p\":%.6g,\"serial2_p\":%.6g,\"collision_p\":%.6g,"
         "\"stream_monobit_p\":%.6g,\"stream_bytechi_p\":%.6g,"
+        "\"stream_source_rc\":%d,\"stream_bytes_completed\":%zu,"
         "\"battery_bytes\":%zu,\"stream_bytes\":%zu,\"fail_threshold\":%g}",
         p_mono, p_block, p_runs, p_lrun, p_cusum, p_apen, p_ser1, p_ser2,
-        p_coll, p_smono, p_sbyte, battery_bytes, stream_bytes, (double)FAIL_P);
+        p_coll, p_smono, p_sbyte, stream_rc, stream_completed,
+        battery_bytes, stream_bytes, (double)FAIL_P);
     stat_emit_result("qrng_statistical_battery", !battery_fail, 1, stats);
 
     /* -------- positive control: GROVER bias must be detectable -------- */

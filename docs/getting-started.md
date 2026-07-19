@@ -27,6 +27,29 @@ neural networks). One simulation kernel, every language, one wire format.
 
 ## 3. Build from source (5 min)
 
+On Linux, the Eshkol-style universal driver detects the distribution family,
+installs the native dependency names, and performs a portable release build:
+
+```sh
+git clone https://github.com/tsotchke/moonlab
+cd moonlab
+scripts/build-linux.sh --ctest --verify-package
+```
+
+It supports Debian-family distributions (Debian, Ubuntu, Mint, Pop!_OS and
+derivatives), Fedora/RHEL-family distributions (Fedora, RHEL, Rocky, Alma and
+CentOS Stream), Arch-family distributions, openSUSE/SLES, Alpine/musl, and
+NixOS through an ephemeral `nix-shell`.
+Use `--no-install-deps` when the required development packages are already
+managed by the host. The release gate verifies clean current/floor images from
+all mainstream families. Its canonical Debian 12/13 and Ubuntu
+22.04/24.04/26.04 matrix runs on both hosted x86-64 and ARM64, requires every
+focused test (including the entropy health test) to execute without skips, and
+publishes source/image/artifact-bound evidence. Physical mesh hosts add NixOS
+and Jetson validation.
+
+The platform-neutral manual path remains:
+
 ```sh
 git clone https://github.com/tsotchke/moonlab
 cd moonlab

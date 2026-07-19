@@ -20,11 +20,9 @@
 # Ownership: this lane adds ONLY new files.  The four test targets live in
 # tests/statistical/, wired into the build by the integrator with
 #     add_subdirectory(tests/statistical)
-# inside the root CMakeLists' QSIM_BUILD_TESTS block.  Until that lands, set
-# STAT_INJECT_HOOK=1 and this script temporarily appends the hook to the root
-# CMakeLists for the duration of the build and restores it on exit (nothing is
-# committed).  Once the permanent hook exists the injection is skipped
-# (idempotent).
+# inside the root CMakeLists' QSIM_BUILD_TESTS block. Exact-source release
+# evidence requires that hook in the source snapshot; transient injection is
+# intentionally refused.
 #
 # Environment knobs:
 #   BUILD_DIR           build tree (default: <repo>/build-statistical)
@@ -33,7 +31,6 @@
 #   JOBS                parallel build jobs (default: 2 -- machine-fragile safe)
 #   STAT_TARGETS        space list from {battery mlkem timing health}
 #                       (default: all four)
-#   STAT_INJECT_HOOK    1 to temporarily wire add_subdirectory (pre-integration)
 #   QSIM_BATTERY_BYTES / QSIM_STREAM_BYTES / QSIM_GROVER_BYTES
 #   QSIM_TIMING_REPS / QSIM_TIMING_STRICT
 #   MOONLAB_SKIP_HW_ENTROPY (recommended =1 on hosted CI)
@@ -50,6 +47,8 @@ TRACE_FILE="${TRACE_DIR}/moonlab_statistical.jsonl"
 STAT_TARGETS="${STAT_TARGETS:-battery mlkem timing health}"
 
 mkdir -p "${TRACE_DIR}"
+# Invalidate saved PASS evidence before any current-tree prerequisite can fail.
+: > "${TRACE_FILE}"
 
 # --- map logical target names to CMake target + binary path ----------------
 target_cmake() {
@@ -83,27 +82,31 @@ restore_cmakelists() {
 }
 trap restore_cmakelists EXIT
 
-if [ "${STAT_INJECT_HOOK:-0}" = "1" ] \
-   && ! grep -q 'add_subdirectory(tests/statistical)' "${CMAKE_FILE}"; then
-    echo "run_statistical: temporarily wiring add_subdirectory(tests/statistical)"
-    cp "${CMAKE_FILE}" "${CMAKE_FILE}.stat.bak"
-    INJECTED=1
-    {
-        echo ""
-        echo "# TEMP (run_statistical.sh STAT_INJECT_HOOK): removed on script exit"
-        echo "if(TARGET quantumsim AND NOT TARGET stat_qrng_battery)"
-        echo "    add_subdirectory(tests/statistical)"
-        echo "endif()"
-    } >> "${CMAKE_FILE}"
+if ! grep -q 'add_subdirectory(tests/statistical)' "${CMAKE_FILE}"; then
+    echo "run_statistical: exact-source evidence requires the committed tests/statistical CMake hook" >&2
+    exit 2
 fi
 
+SOURCE_IDENTITY_JSON="$(bash "${REPO_ROOT}/scripts/run_moonlab_release_smoke.sh" --source-identity)" || exit 2
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+    < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
+
 # --- configure + build ------------------------------------------------------
-if [ ! -f "${BUILD_DIR}/CMakeCache.txt" ]; then
-    # shellcheck disable=SC2086
-    cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
-        -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-        ${CMAKE_EXTRA_FLAGS:-}
-fi
+# Always reconfigure so the cache is demonstrably attached to this checkout
+# and current CMake/source changes participate in the evidence build.
+# shellcheck disable=SC2086
+cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+    ${CMAKE_EXTRA_FLAGS:-}
 
 cmake --build "${BUILD_DIR}" --target "${CMAKE_TARGETS[@]}" -j"${JOBS}"
 
@@ -112,8 +115,6 @@ cmake --build "${BUILD_DIR}" --target "${CMAKE_TARGETS[@]}" -j"${JOBS}"
 restore_cmakelists
 
 # --- run + emit JSONL -------------------------------------------------------
-: > "${TRACE_FILE}"
-COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 OVERALL_FAIL=0
 
 emit_from_output() {
@@ -129,8 +130,10 @@ emit_from_output() {
                 [ -n "${gating}" ] || gating=0
                 [ -n "${stats}" ] || stats='{}'
                 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                printf '{"kind":"moonlab_statistical","name":"%s","value":"%s","gating":%s,"stats":%s,"commit":"%s","ts":"%s"}\n' \
-                    "${name}" "${value}" "${gating}" "${stats}" "${COMMIT}" "${ts}" >> "${TRACE_FILE}"
+                printf '{"kind":"moonlab_statistical","name":"%s","value":"%s","gating":%s,"stats":%s,"git_head":"%s","git_tree":"%s","dirty":%s,"source_fingerprint":"%s","artifact_sha256":"%s","generated_at":"%s","ts":"%s"}\n' \
+                    "${name}" "${value}" "${gating}" "${stats}" \
+                    "${SOURCE_GIT_HEAD}" "${SOURCE_GIT_TREE}" "${SOURCE_DIRTY}" "${SOURCE_FINGERPRINT}" \
+                    "${BINARY_SHA256}" "${ts}" "${ts}" >> "${TRACE_FILE}"
                 if [ "${value}" = "FAIL" ] && [ "${gating}" = "1" ]; then
                     echo "run_statistical: GATING FAIL -> ${name}" >&2
                     OVERALL_FAIL=1
@@ -142,7 +145,7 @@ emit_from_output() {
 
 run_one() {
     local logical="$1"
-    local ct binpath out rc
+    local ct binpath out rc before_count after_count expected_count
     ct="$(target_cmake "${logical}")"
     binpath="${BUILD_DIR}/tests/statistical/${ct}"
     if [ ! -x "${binpath}" ]; then
@@ -150,6 +153,14 @@ run_one() {
         OVERALL_FAIL=1
         return
     fi
+    BINARY_SHA256="$(python3 - "${binpath}" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+    before_count="$(wc -l < "${TRACE_FILE}" | tr -d ' ')"
     echo "=========================================================="
     echo "== ${ct}"
     echo "=========================================================="
@@ -159,6 +170,15 @@ run_one() {
     set -e
     printf '%s\n' "${out}"
     emit_from_output <<< "${out}"
+    after_count="$(wc -l < "${TRACE_FILE}" | tr -d ' ')"
+    case "${logical}" in
+        battery|mlkem) expected_count=2 ;;
+        timing|health) expected_count=1 ;;
+    esac
+    if [ $((after_count - before_count)) -ne "${expected_count}" ]; then
+        echo "run_statistical: ${ct} emitted $((after_count - before_count)) result(s), expected ${expected_count}" >&2
+        OVERALL_FAIL=1
+    fi
     # Our binaries exit non-zero only on a gating failure (a non-strict
     # timing FAIL exits 0); a crash (>=128) is always a failure.
     if [ "${rc}" -ne 0 ]; then
@@ -170,6 +190,30 @@ run_one() {
 for t in ${STAT_TARGETS}; do
     run_one "${t}"
 done
+
+FINAL_IDENTITY_JSON="$(bash "${REPO_ROOT}/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
+FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
+PY
+)"
+if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]; then
+    OVERALL_FAIL=1
+    python3 - "$TRACE_FILE" "$SOURCE_FINGERPRINT" "$FINAL_FINGERPRINT" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+events = []
+for line in path.read_text(encoding="utf-8").splitlines():
+    event = json.loads(line)
+    event["value"] = "FAIL"
+    event["provenance_error"] = f"source changed during lane: start={sys.argv[2]} end={sys.argv[3] or 'unknown'}"
+    events.append(event)
+path.write_text("".join(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n" for event in events), encoding="utf-8")
+PY
+fi
 
 echo "=========================================================="
 echo "JSONL evidence written to ${TRACE_FILE}"

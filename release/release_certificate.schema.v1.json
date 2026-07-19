@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tsotchke/moonlab/releases/v1/release-certificate.schema.json",
+  "title": "Moonlab release certificate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "generated_at", "source", "icc", "portability", "runtime_evidence", "release_artifacts", "mesh", "hosted_ci", "tag"],
+  "properties": {
+    "schema": {"const": "moonlab.release_certificate.v1"},
+    "version": {"const": "1.2.0"},
+    "generated_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "source": {"$ref": "#/$defs/source"},
+    "icc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "source_drift"],
+      "properties": {
+        "index": {"$ref": "#/$defs/binding"},
+        "source_drift": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "portability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aggregate", "bundles"],
+      "properties": {
+        "aggregate": {"$ref": "#/$defs/binding"},
+        "bundles": {
+          "type": "array", "minItems": 10, "maxItems": 10,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["profile_id", "file"],
+            "properties": {"profile_id": {"type": "string", "minLength": 1}, "file": {"$ref": "#/$defs/binding"}}
+          }
+        }
+      }
+    },
+    "runtime_evidence": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "items": {"$ref": "#/$defs/evidence"}
+    },
+    "release_artifacts": {
+      "type": "array", "minItems": 22, "maxItems": 22,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "platform", "package", "version", "file"],
+        "properties": {
+          "kind": {"type": "string", "minLength": 1},
+          "platform": {"type": "string", "minLength": 1},
+          "package": {"type": "string", "minLength": 1},
+          "version": {"const": "1.2.0"},
+          "file": {"$ref": "#/$defs/binding"}
+        }
+      }
+    },
+    "mesh": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "source", "manifest", "artifacts", "nodes_total", "nodes_passed", "node_ids"],
+      "properties": {
+        "status": {"const": "PASS"},
+        "source": {"$ref": "#/$defs/source"},
+        "manifest": {"$ref": "#/$defs/binding"},
+        "artifacts": {"$ref": "#/$defs/artifacts"},
+        "nodes_total": {"const": 5},
+        "nodes_passed": {"const": 5},
+        "node_ids": {
+          "type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true,
+          "items": {"enum": ["atlas", "enki", "xavier", "cosbox", "old-donkey"]}
+        }
+      }
+    },
+    "hosted_ci": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run"],
+      "properties": {"run": {"$ref": "#/$defs/binding"}}
+    },
+    "tag": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "annotated", "object", "target", "candidate_run_id", "candidate_head"],
+      "properties": {
+        "name": {"const": "v1.2.0"},
+        "annotated": {"const": true},
+        "object": {"$ref": "#/$defs/oid"},
+        "target": {"$ref": "#/$defs/oid"},
+        "candidate_run_id": {"type": "integer", "minimum": 1},
+        "candidate_head": {"$ref": "#/$defs/oid"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "oid": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["git_head", "git_tree", "dirty", "source_fingerprint"],
+      "properties": {
+        "git_head": {"$ref": "#/$defs/oid"},
+        "git_tree": {"$ref": "#/$defs/oid"},
+        "dirty": {"const": false},
+        "source_fingerprint": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "file"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "file": {"$ref": "#/$defs/binding"}}
+    },
+    "artifacts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/artifact"}},
+    "event_assertions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expected_event_count", "expected_event_names"],
+      "properties": {
+        "expected_event_count": {"type": "integer", "minimum": 1},
+        "expected_event_names": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "mpi_assertions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expected_event_count", "expected_event_names", "exact_n", "routine_n", "ranks", "hosts", "slots", "gpu_endpoints", "halo_swaps", "local_qubits", "executable_sha256", "rank_local_executable_sha256"],
+      "properties": {
+        "expected_event_count": {"const": 1},
+        "expected_event_names": {"const": ["mpi_sharded_gpu_works"]},
+        "exact_n": {"const": 33}, "routine_n": {"const": 12}, "ranks": {"const": 4}, "hosts": {"const": 2},
+        "slots": {"const": "2+2"}, "gpu_endpoints": {"type": "integer", "minimum": 2},
+        "halo_swaps": {"type": "integer", "minimum": 1}, "local_qubits": {"const": 31},
+        "executable_sha256": {"$ref": "#/$defs/sha256"},
+        "rank_local_executable_sha256": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/sha256"}}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "status", "source", "manifest", "artifacts", "assertions"],
+      "properties": {
+        "kind": {"enum": ["release_smoke", "oracles", "fuzz", "differential", "statistical", "mpi", "tsan", "numerical", "scaling"]},
+        "status": {"const": "PASS"},
+        "source": {"$ref": "#/$defs/source"},
+        "manifest": {"$ref": "#/$defs/binding"},
+        "artifacts": {"$ref": "#/$defs/artifacts"},
+        "assertions": {"oneOf": [{"$ref": "#/$defs/event_assertions"}, {"$ref": "#/$defs/mpi_assertions"}]}
+      }
+    }
+  }
+}

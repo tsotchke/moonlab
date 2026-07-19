@@ -1326,12 +1326,18 @@ if(QSIM_PLATFORM_LINUX)
     # needs explicit headers and links against a BLAS/LAPACK provider.  We
     # prefer LAPACKE (row-major wrappers used by collective_ops.c)
     # over the raw Fortran symbols, but link both forms so either
-    # entry point resolves.  Debian installs lapacke.h directly under
-    # its include root, while AlmaLinux installs it in a lapacke/
-    # subdirectory, so search both layouts instead of hardcoding one.
+    # entry point resolves.  Debian installs these headers under its
+    # multiarch include root, while AlmaLinux installs lapacke.h in a
+    # lapacke/ subdirectory and cblas.h in an openblas/ subdirectory.
+    # Locate the two interfaces independently: finding LAPACKE does not
+    # imply that the CBLAS include layout is the same.
     find_path(LAPACKE_INCLUDE_DIR
         NAMES lapacke.h
         PATH_SUFFIXES lapacke
+        REQUIRED)
+    find_path(CBLAS_INCLUDE_DIR
+        NAMES cblas.h
+        PATH_SUFFIXES openblas
         REQUIRED)
     find_library(LAPACKE_LIB NAMES lapacke)
     find_library(LAPACK_LIB NAMES lapack)
@@ -1352,7 +1358,8 @@ if(QSIM_PLATFORM_LINUX)
         set(BLAS_LIB blas)
     endif()
     target_include_directories(quantumsim SYSTEM PRIVATE
-        "${LAPACKE_INCLUDE_DIR}")
+        "${LAPACKE_INCLUDE_DIR}"
+        "${CBLAS_INCLUDE_DIR}")
     target_link_libraries(quantumsim PRIVATE
         ${LAPACKE_LIB} ${LAPACK_LIB} ${BLAS_LIB})
     message(STATUS "LAPACK: LAPACKE=${LAPACKE_LIB} "
@@ -1767,226 +1774,7 @@ endif()
 # ==============================================================================
 # Installation
 # ==============================================================================
-
-include(GNUInstallDirs)
-
-# Platform wheels carry their native library inside the Python package and
-# intentionally omit the C/CMake SDK payload. Normal native installs retain
-# the complete export/header/package-config contract below.
-if(QSIM_PYTHON_WHEEL)
-    install(TARGETS quantumsim
-        EXPORT quantumsim-targets
-        LIBRARY DESTINATION moonlab/.libs COMPONENT python-wheel
-        RUNTIME DESTINATION moonlab/.libs COMPONENT python-wheel
-    )
-else()
-    install(TARGETS quantumsim
-        EXPORT quantumsim-targets
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-endif()
-
-# Install headers
-install(DIRECTORY src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/quantumsim
-    COMPONENT native-sdk
-    FILES_MATCHING PATTERN "*.h"
-)
-
-# Stable downstream C ABI convenience include path.  The full source-shaped
-# header tree remains under include/quantumsim, while README and FFI consumers
-# can include <moonlab/moonlab_export.h>.
-install(FILES
-    src/applications/moonlab_api.h
-    src/applications/moonlab_export.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/moonlab
-    COMPONENT native-sdk
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/include/moonlab_features.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    COMPONENT native-sdk
-)
-
-# Install CMake config
-install(EXPORT quantumsim-targets
-    FILE quantumsim-targets.cmake
-    NAMESPACE quantumsim::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
-    COMPONENT native-sdk
-)
-
-# Generate package config
-include(CMakePackageConfigHelpers)
-
-configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim-config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
-)
-
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config-version.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim-config-version.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/quantumsim
-    COMPONENT native-sdk
-)
-
-# pkg-config file.  The template uses pkg-config's ${pcfiledir} so release
-# tarballs remain relocatable after extraction.  Compute the relative walk from
-# ${libdir}/pkgconfig back to the install prefix; Debian multiarch libdirs such
-# as lib/x86_64-linux-gnu need one more ".." than plain lib/pkgconfig.
-set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "")
-set(_qsim_pc_dir "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-string(REPLACE "/" ";" _qsim_pc_dir_parts "${_qsim_pc_dir}")
-foreach(_qsim_pc_dir_part IN LISTS _qsim_pc_dir_parts)
-    if(_qsim_pc_dir_part STREQUAL "")
-        continue()
-    endif()
-    if(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR STREQUAL "")
-        set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "..")
-    else()
-        string(APPEND QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR "/..")
-    endif()
-endforeach()
-if(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR STREQUAL "")
-    set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR ".")
-endif()
-install(CODE "
-    set(CMAKE_INSTALL_PREFIX   \"\${CMAKE_INSTALL_PREFIX}\")
-    set(CMAKE_INSTALL_LIBDIR   \"${CMAKE_INSTALL_LIBDIR}\")
-    set(CMAKE_INSTALL_INCLUDEDIR \"${CMAKE_INSTALL_INCLUDEDIR}\")
-    set(PROJECT_DESCRIPTION     \"${PROJECT_DESCRIPTION}\")
-    set(PROJECT_VERSION         \"${PROJECT_VERSION}\")
-    set(QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR \"${QSIM_PC_PREFIX_FROM_PKGCONFIG_DIR}\")
-    configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
-        ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
-        @ONLY)
-")
-
-# ==============================================================================
-# Reproducibility manifest build-info header (P5.18)
-# ==============================================================================
-#
-# Capture the current git SHA, dirty state, branch, and build timestamp at
-# configure time, then configure_file -> generated header so every consumer
-# can self-describe the source tree they came from.  Run again on every
-# configure; a full rebuild picks up a new commit's SHA.
-find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE MOONLAB_GIT_SHA
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE MOONLAB_GIT_SHA_SHORT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE MOONLAB_GIT_BRANCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} diff --quiet HEAD --
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        RESULT_VARIABLE MOONLAB_GIT_CLEAN_RC
-        ERROR_QUIET
-    )
-    if(MOONLAB_GIT_CLEAN_RC EQUAL 0)
-        set(MOONLAB_GIT_DIRTY 0)
-    else()
-        set(MOONLAB_GIT_DIRTY 1)
-    endif()
-endif()
-
-if(NOT MOONLAB_GIT_SHA)
-    set(MOONLAB_GIT_SHA "unknown")
-    set(MOONLAB_GIT_SHA_SHORT "unknown")
-    set(MOONLAB_GIT_BRANCH "unknown")
-    set(MOONLAB_GIT_DIRTY 0)
-endif()
-
-string(TIMESTAMP MOONLAB_BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
-
-# Translate CMake booleans into 0/1 macros for the generated header.
-foreach(flag
-    QSIM_ENABLE_OPENMP QSIM_ENABLE_METAL QSIM_ENABLE_OPENCL QSIM_ENABLE_VULKAN
-    QSIM_ENABLE_CUQUANTUM QSIM_ENABLE_MPI QSIM_ENABLE_ESHKOL QSIM_ENABLE_LTO
-    QSIM_ENABLE_SANITIZERS QSIM_ENABLE_AVX512 QSIM_ENABLE_AVX2
-    QSIM_ENABLE_NEON QSIM_ENABLE_SVE)
-    if(${flag})
-        set(${flag}_INT 1)
-    else()
-        set(${flag}_INT 0)
-    endif()
-endforeach()
-
-# Assemble a human-readable enabled-features list.
-set(MOONLAB_ENABLED_FEATURES_LIST "")
-foreach(pair
-    "QSIM_ENABLE_OPENMP:openmp"
-    "QSIM_ENABLE_METAL:metal"
-    "QSIM_ENABLE_OPENCL:opencl"
-    "QSIM_ENABLE_VULKAN:vulkan"
-    "QSIM_ENABLE_CUQUANTUM:cuquantum"
-    "QSIM_ENABLE_MPI:mpi"
-    "QSIM_ENABLE_ESHKOL:eshkol"
-    "QSIM_ENABLE_LTO:lto"
-    "QSIM_ENABLE_SANITIZERS:sanitizers"
-    "QSIM_ENABLE_AVX512:avx512"
-    "QSIM_ENABLE_AVX2:avx2"
-    "QSIM_ENABLE_NEON:neon"
-    "QSIM_ENABLE_SVE:sve")
-    string(REPLACE ":" ";" kv "${pair}")
-    list(GET kv 0 flag)
-    list(GET kv 1 label)
-    if(${flag})
-        list(APPEND MOONLAB_ENABLED_FEATURES_LIST "${label}")
-    endif()
-endforeach()
-string(REPLACE ";" "," MOONLAB_ENABLED_FEATURES "${MOONLAB_ENABLED_FEATURES_LIST}")
-
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/moonlab_build_info.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/generated/moonlab_build_info.h
-    @ONLY
-)
-target_include_directories(quantumsim PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/generated/moonlab_build_info.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    COMPONENT native-sdk
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
-    RENAME quantumsim.pc
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
-    COMPONENT native-sdk
-)
+include(cmake/install.cmake)
 
 # ==============================================================================
 # Summary

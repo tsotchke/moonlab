@@ -177,14 +177,17 @@ int test_calculate_rct_cutoff(void) {
     uint32_t cutoff_4 = health_calculate_rct_cutoff(4.0);
     uint32_t cutoff_5 = health_calculate_rct_cutoff(5.0);
     uint32_t cutoff_6 = health_calculate_rct_cutoff(6.0);
+    uint32_t cutoff_8 = health_calculate_rct_cutoff(8.0);
 
     ASSERT_TRUE(cutoff_4 > cutoff_5, "Lower entropy should have higher cutoff");
     ASSERT_TRUE(cutoff_5 > cutoff_6, "Lower entropy should have higher cutoff");
-    ASSERT_TRUE(cutoff_4 >= 8, "Cutoff for H=4 should be reasonable");
+    ASSERT_EQ(cutoff_4, 16, "H=4 cutoff should enforce alpha=2^-60");
+    ASSERT_EQ(cutoff_8, 9, "H=8 cutoff should enforce alpha=2^-60");
 
     printf("  H=4.0: cutoff=%u\n", cutoff_4);
     printf("  H=5.0: cutoff=%u\n", cutoff_5);
     printf("  H=6.0: cutoff=%u\n", cutoff_6);
+    printf("  H=8.0: cutoff=%u\n", cutoff_8);
 
     TEST_PASS();
 }
@@ -195,12 +198,15 @@ int test_calculate_apt_cutoff(void) {
     // Test various configurations
     uint32_t cutoff_512 = health_calculate_apt_cutoff(4.0, 512);
     uint32_t cutoff_1024 = health_calculate_apt_cutoff(4.0, 1024);
+    uint32_t cutoff_h8 = health_calculate_apt_cutoff(8.0, 512);
 
-    ASSERT_TRUE(cutoff_512 > 0, "APT cutoff should be positive");
-    ASSERT_TRUE(cutoff_1024 > cutoff_512, "Larger window should have higher cutoff");
+    ASSERT_EQ(cutoff_512, 92, "H=4/W=512 cutoff should use exact alpha=2^-60 tail");
+    ASSERT_EQ(cutoff_1024, 144, "H=4/W=1024 cutoff should use exact alpha=2^-60 tail");
+    ASSERT_EQ(cutoff_h8, 26, "H=8/W=512 cutoff should include the APT reference sample");
 
     printf("  H=4.0, W=512:  cutoff=%u\n", cutoff_512);
     printf("  H=4.0, W=1024: cutoff=%u\n", cutoff_1024);
+    printf("  H=8.0, W=512:  cutoff=%u\n", cutoff_h8);
 
     TEST_PASS();
 }

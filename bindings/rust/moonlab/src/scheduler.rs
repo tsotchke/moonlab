@@ -35,6 +35,9 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::sync::Mutex;
 
+#[cfg(test)]
+static SCHEDULER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 /// Execution outputs.
 #[derive(Debug, Default)]
 pub struct JobResults {
@@ -182,6 +185,9 @@ mod tests {
 
     #[test]
     fn single_worker_bell() {
+        let _scheduler_guard = SCHEDULER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut j = Job::new(2).unwrap();
         j.add_gate(GateType::H, 0, -1, &[]).unwrap();
         j.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
@@ -195,6 +201,9 @@ mod tests {
 
     #[test]
     fn four_worker_bell() {
+        let _scheduler_guard = SCHEDULER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut j = Job::new(2).unwrap();
         j.add_gate(GateType::H, 0, -1, &[]).unwrap();
         j.add_gate(GateType::Cnot, 1, 0, &[]).unwrap();
@@ -379,12 +388,14 @@ where
     F: Fn(&CompletionInfo) + Send + Sync + 'static,
 {
     let boxed: CompletionCallback = Box::new(f);
-    *COMPLETION_CALLBACK.lock().unwrap() = Some(std::sync::Arc::new(boxed));
+    let mut callback = COMPLETION_CALLBACK.lock().unwrap();
+    let previous = callback.replace(std::sync::Arc::new(boxed));
     let rc = unsafe {
         moonlab_scheduler_set_completion_hook(
             Some(rust_completion_trampoline), ptr::null_mut())
     };
     if rc != 0 {
+        *callback = previous;
         return Err(QuantumError::Ffi(
             format!("set_completion_hook: rc={rc}")));
     }
@@ -393,11 +404,13 @@ where
 
 /// Detach the active completion hook.
 pub fn clear_completion_hook() -> Result<()> {
-    *COMPLETION_CALLBACK.lock().unwrap() = None;
+    let mut callback = COMPLETION_CALLBACK.lock().unwrap();
+    let previous = callback.take();
     let rc = unsafe {
         moonlab_scheduler_set_completion_hook(None, ptr::null_mut())
     };
     if rc != 0 {
+        *callback = previous;
         return Err(QuantumError::Ffi(
             format!("clear_completion_hook: rc={rc}")));
     }
@@ -436,6 +449,18 @@ mod registry_tests {
     fn completion_hook_fires_with_args() {
         use std::sync::atomic::{AtomicI32, Ordering};
         use std::sync::Arc;
+
+        struct HookReset;
+        impl Drop for HookReset {
+            fn drop(&mut self) {
+                let _ = clear_completion_hook();
+            }
+        }
+
+        let _scheduler_guard = SCHEDULER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _hook_reset = HookReset;
         let count = Arc::new(AtomicI32::new(0));
         let last_qubits = Arc::new(AtomicI32::new(-1));
         let last_shots = Arc::new(AtomicI32::new(-1));

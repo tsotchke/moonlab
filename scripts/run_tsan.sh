@@ -25,7 +25,7 @@
 # Requires Clang (TSan / -fsanitize=thread).  If unavailable, prints a notice
 # and points at the Linux CI job in .github/workflows/tsan.yml.
 
-set -u
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -33,15 +33,131 @@ cd "$REPO_ROOT"
 
 JOBS="${QSIM_TSAN_JOBS:-2}"
 CC_BIN="${CC:-clang}"
-TRACE_DIR="${MOONLAB_TRACE_DIR:-scripts/icc_traces}"
+TRACE_DIR="${MOONLAB_TRACE_DIR:-$REPO_ROOT/scripts/icc_traces}"
 TRACE="$TRACE_DIR/moonlab_tsan.jsonl"
-LOG_DIR="build-tsan-conc/logs"
-LIB_OFF="build-tsan/libquantumsim.a"
-LIB_ON="build-tsan-omp/libquantumsim.a"
-SUPP="tests/concurrency/tsan.supp"
+LOG_DIR="$REPO_ROOT/build-tsan-conc/logs"
+LIB_OFF="$REPO_ROOT/build-tsan/libquantumsim.a"
+LIB_ON="$REPO_ROOT/build-tsan-omp/libquantumsim.a"
+SUPP="$REPO_ROOT/tests/concurrency/tsan.supp"
+
+resolve_path() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).resolve())
+PY
+}
+
+require_build_path() {
+    local resolved
+    resolved="$(resolve_path "$1")" || return 1
+    case "$resolved" in
+        "$REPO_ROOT"/build-*) printf '%s\n' "$resolved" ;;
+        *) printf 'TSan writable path must resolve under %s/build-*: %s\n' "$REPO_ROOT" "$resolved" >&2; return 1 ;;
+    esac
+}
+
+TRACE_DIR="$(resolve_path "$TRACE_DIR")" || exit 2
+if [ "$TRACE_DIR" != "$REPO_ROOT/scripts/icc_traces" ]; then
+    echo "MOONLAB_TRACE_DIR must resolve to $REPO_ROOT/scripts/icc_traces" >&2
+    exit 2
+fi
+TRACE="$TRACE_DIR/moonlab_tsan.jsonl"
+LOG_DIR="$(require_build_path "$LOG_DIR")" || exit 2
+case "$JOBS" in ''|*[!0-9]*|0) echo "QSIM_TSAN_JOBS must be a positive integer" >&2; exit 2 ;; esac
 
 mkdir -p "$TRACE_DIR" "$LOG_DIR"
-: > "$TRACE"
+python3 - "$TRACE" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_text("", encoding="utf-8")
+PY
+
+SOURCE_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || exit 2
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+    < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
+
+sha256_file() {
+    python3 - "$1" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+}
+
+write_hash_manifest() { # manifest path, followed by artifact paths
+    python3 - "$@" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+
+manifest = Path(sys.argv[1])
+rows = []
+for raw in sys.argv[2:]:
+    path = Path(raw)
+    if path.is_file():
+        rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+payload = ("\n".join(sorted(rows)) + "\n").encode()
+manifest.write_bytes(payload)
+print(hashlib.sha256(payload).hexdigest())
+PY
+}
+
+DIAGNOSTICS_SHA256=""
+
+emit() {  # name verdict races snippet confidence [extra_json_object] [artifact]
+    local generated_at extra_json artifact_path
+    generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    extra_json="${6:-{}}"
+    artifact_path="${7:-}"
+    python3 - "$TRACE" "$1" "$2" "$3" "$4" "$5" "$extra_json" "$generated_at" \
+        "$SOURCE_GIT_HEAD" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" \
+        "$DIAGNOSTICS_SHA256" "$LOG_DIR" "$artifact_path" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+(
+    trace, name, verdict, races, snippet, confidence, extra_json, generated_at,
+    git_head, git_tree, dirty, source_fingerprint, diagnostics_sha256, log_dir,
+    artifact_path,
+) = sys.argv[1:]
+event = {
+    "kind": "moonlab_tsan",
+    "name": name,
+    "value": verdict,
+    "status": verdict,
+    "races": int(races),
+    "snippet": snippet,
+    "confidence": float(confidence),
+    "generated_at": generated_at,
+    "git_head": git_head,
+    "git_tree": git_tree,
+    "dirty": dirty == "true",
+    "source_fingerprint": source_fingerprint,
+    "build_dir": str(Path(log_dir).parent),
+}
+if diagnostics_sha256:
+    event["diagnostics_manifest_sha256"] = diagnostics_sha256
+if artifact_path and Path(artifact_path).is_file():
+    event["artifact_path"] = artifact_path
+    event["artifact_sha256"] = hashlib.sha256(Path(artifact_path).read_bytes()).hexdigest()
+event.update(json.loads(extra_json))
+with open(trace, "a", encoding="utf-8") as output:
+    output.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+}
 
 # --- 0a. Windows gate --------------------------------------------------------
 # The lane is POSIX-only (pthreads / unistd / sched_yield) and TSan targets
@@ -50,7 +166,7 @@ mkdir -p "$TRACE_DIR" "$LOG_DIR"
 case "$(uname -s 2>/dev/null)" in
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
         echo "[tsan] concurrency lane is POSIX-only; gated off Windows."
-        printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","status":"SKIP","races":0,"snippet":"POSIX-only lane, gated off Windows","confidence":0.2}\n' >> "$TRACE"
+        emit "tsan_clean" "SKIP" 0 "POSIX-only lane, gated off Windows" 0.2
         exit 0 ;;
 esac
 
@@ -62,7 +178,7 @@ if ! "$CC_BIN" -fsanitize=thread "$probe_c" -o "${probe_c%.c}.bin" >/dev/null 2>
     echo "[tsan] Falling back to the documented Linux-CI TSan job:"
     echo "       .github/workflows/tsan.yml (clang + Archer-instrumented libomp)."
     rm -f "$probe_c" "${probe_c%.c}.bin"
-    printf '{"kind":"moonlab_tsan","name":"tsan_clean","value":"SKIP","status":"SKIP","races":0,"snippet":"ThreadSanitizer unavailable on this host; see .github/workflows/tsan.yml","confidence":0.2}\n' >> "$TRACE"
+    emit "tsan_clean" "SKIP" 0 "ThreadSanitizer unavailable on this host; see .github/workflows/tsan.yml" 0.2
     exit 0
 fi
 rm -f "$probe_c" "${probe_c%.c}.bin"

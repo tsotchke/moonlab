@@ -27,21 +27,58 @@ import {
 /** Spin up a fake control plane on an OS-chosen port.  Returns a
  *  bound port + close handle. */
 async function spinFakeServer(
-  onConn: (sock: net.Socket) => void,
+  onConn: (sock: net.Socket) => void | Promise<void>,
   opts: { tls?: tls.SecureContextOptions } = {},
 ): Promise<{ port: number; close: () => Promise<void> }> {
   let srv: net.Server;
+  const sockets = new Set<net.Socket>();
+  const socketClosures = new Map<net.Socket, Promise<void>>();
+  const handlers = new Set<Promise<void>>();
+  const failures: unknown[] = [];
+  const handleConnection = (sock: net.Socket) => {
+    sockets.add(sock);
+    socketClosures.set(sock, new Promise<void>((resolve) => {
+      sock.once('close', () => {
+        sockets.delete(sock);
+        resolve();
+      });
+    }));
+    // EventEmitter does not await an async connection listener.  Own the
+    // promise and every socket error so close() can deterministically surface
+    // failures instead of leaking a late ECONNRESET into Vitest.
+    sock.on('error', (error) => failures.push(error));
+    const handler = Promise.resolve()
+      .then(() => onConn(sock))
+      .catch((error) => {
+        failures.push(error);
+        sock.destroy();
+      })
+      .finally(() => handlers.delete(handler));
+    handlers.add(handler);
+  };
   if (opts.tls) {
-    srv = tls.createServer(opts.tls, (sock) => onConn(sock as unknown as net.Socket));
+    srv = tls.createServer(opts.tls, (sock) => handleConnection(sock as unknown as net.Socket));
   } else {
-    srv = net.createServer((sock) => onConn(sock));
+    srv = net.createServer(handleConnection);
   }
   await new Promise<void>((res) => srv.listen(0, '127.0.0.1', () => res()));
   const port = (srv.address() as net.AddressInfo).port;
   return {
     port,
-    close: () =>
-      new Promise<void>((res) => srv.close(() => res())),
+    close: async () => {
+      const closed = new Promise<void>((resolve, reject) => {
+        srv.close((error) => error ? reject(error) : resolve());
+      });
+      while (handlers.size > 0) {
+        await Promise.all([...handlers]);
+      }
+      await closed;
+      await Promise.all(socketClosures.values());
+      expect(sockets.size).toBe(0);
+      if (failures.length > 0) {
+        throw failures[0];
+      }
+    },
   };
 }
 
@@ -266,7 +303,7 @@ const HAS_OPENSSL = (() => {
 })();
 
 (HAS_OPENSSL ? describe : describe.skip)('control-plane TLS', () => {
-  it('TLS scrape with insecure skip', async () => {
+  it('TLS scrapes close cleanly without late socket errors', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-tls-'));
     const certPath = path.join(tmp, 'cert.pem');
     const keyPath  = path.join(tmp, 'key.pem');
@@ -294,11 +331,15 @@ const HAS_OPENSSL = (() => {
       },
     );
     try {
-      const out = await submitMetrics({
-        host: '127.0.0.1', port: server.port,
-        tls: { insecure: true },
-      });
-      expect(out).toBe(body);
+      // Repetition makes the former destroy-vs-close_notify race deterministic
+      // enough to guard: every connection and async server handler is awaited.
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const out = await submitMetrics({
+          host: '127.0.0.1', port: server.port,
+          tls: { insecure: true },
+        });
+        expect(out).toBe(body);
+      }
     } finally {
       await server.close();
       fs.rmSync(tmp, { recursive: true });

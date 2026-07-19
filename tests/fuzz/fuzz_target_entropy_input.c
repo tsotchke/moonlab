@@ -6,10 +6,10 @@
  * statistical estimation, or NIST SP 800-90B health tests over it.  This
  * target feeds adversarial streams into every such entry point:
  *
- *   - `entropy_extract`       -- hash-based conditioner (input -> output).
- *   - `entropy_estimate`      -- Shannon-entropy estimator over the bytes.
- *   - `entropy_test_data`     -- chi-squared + entropy quality assessment.
- *   - `entropy_mix`           -- fold caller bytes into a pool context.
+ *   - `entropy_util_extract`  -- hash-based conditioner (input -> output).
+ *   - `entropy_util_estimate` -- Shannon-entropy estimator over the bytes.
+ *   - `entropy_util_test_data`-- chi-squared + entropy quality assessment.
+ *   - `entropy_util_mix`      -- fold caller bytes into a pool context.
  *   - `health_tests_startup`  -- SP 800-90B startup RCT/APT over a sample
  *                                block.
  *   - `health_tests_run_batch`-- continuous RCT/APT over a sample block,
@@ -41,24 +41,24 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     /* Conditioner: extract out_len bytes from the remaining stream. */
     if (out_len > 0 && body_len > 0) {
         uint8_t out[128];
-        (void)entropy_extract(body, body_len, out, out_len);
+        (void)entropy_util_extract(body, body_len, out, out_len);
     } else {
         /* Still call it with the degenerate zero args to exercise the
          * NULL/zero-length guard. */
         uint8_t one;
-        (void)entropy_extract(body, body_len, &one, 0);
+        (void)entropy_util_extract(body, body_len, &one, 0);
     }
 
     /* Statistical estimators over the raw stream. */
-    (void)entropy_estimate(body, body_len);
-    entropy_quality_t q;
-    (void)entropy_test_data(body, body_len, &q);
+    (void)entropy_util_estimate(body, body_len);
+    entropy_util_quality_t q;
+    (void)entropy_util_test_data(body, body_len, &q);
 
     /* Pool mixing needs a live context. */
-    entropy_ctx_t *ctx = entropy_create();
+    entropy_util_ctx_t *ctx = entropy_util_create();
     if (ctx) {
-        entropy_mix(ctx, body, body_len);
-        entropy_destroy(ctx);
+        entropy_util_mix(ctx, body, body_len);
+        entropy_util_destroy(ctx);
     }
 
     /* SP 800-90B health tests: startup + continuous batch.  Both ingest

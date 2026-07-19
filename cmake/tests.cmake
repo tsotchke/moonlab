@@ -45,6 +45,7 @@
     add_executable(health_tests_test tests/health_tests_test.c)
     target_link_libraries(health_tests_test PRIVATE quantumsim)
     add_test(NAME health_tests COMMAND health_tests_test)
+    set_tests_properties(health_tests PROPERTIES LABELS "health")
 
     # Bell test demo
     add_executable(bell_test_demo tests/bell_test_demo.c)
@@ -1295,7 +1296,8 @@
     set_tests_properties(unit_qrng_statistics PROPERTIES LABELS "long")
 
     add_executable(test_qrng_thread_safety tests/unit/test_qrng_thread_safety.c)
-    target_link_libraries(test_qrng_thread_safety PRIVATE quantumsim)
+    target_link_libraries(test_qrng_thread_safety
+        PRIVATE quantumsim Threads::Threads)
     add_test(NAME unit_qrng_thread_safety COMMAND test_qrng_thread_safety)
 
     add_executable(test_qrng_delivery tests/unit/test_qrng_delivery.c)
@@ -1485,19 +1487,50 @@
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
     # Rust bindings smoke — cargo test in bindings/rust/moonlab, only
-    # if the crate root and Cargo are present.
+    # if the crate root and a toolchain meeting Cargo.toml's Rust 1.86
+    # floor are present.  Merely finding an older distro-provided Cargo
+    # is insufficient: it may not parse the v4 lockfile at all.
     #
-    # --test-threads=1 is mandatory: many of the tests touch C-side
+    # --test-threads=1 remains a defense in depth: many tests touch C-side
     # singletons (g_completion_hook, g_admission_hook, the control_plane
     # server lock, the scheduler backend registry).  cargo test's default
     # of "one OS thread per test function in the same process" lets two
-    # concurrent set_completion_hook(...) calls overwrite each other,
-    # so the hook count assertions in `completion_hook_fires_with_args`
-    # see 3 invocations instead of 1.  Serializing the test functions
-    # within this binary fixes the singleton race; cargo still
-    # parallelizes ACROSS test binaries, which is plenty.
+    # singleton state.  The scheduler hook tests also carry their own
+    # process-local lock, but keeping this smoke serial avoids unrelated
+    # singleton interference as the binding suite grows.
     find_program(CARGO_EXECUTABLE cargo)
-    if(CARGO_EXECUTABLE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
+    find_program(RUSTC_EXECUTABLE rustc)
+    set(_moonlab_rust_toolchain_supported FALSE)
+    if(CARGO_EXECUTABLE AND RUSTC_EXECUTABLE)
+        execute_process(
+            COMMAND ${CARGO_EXECUTABLE} --version
+            RESULT_VARIABLE _cargo_version_rc
+            OUTPUT_VARIABLE _cargo_version_output
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        execute_process(
+            COMMAND ${RUSTC_EXECUTABLE} --version
+            RESULT_VARIABLE _rustc_version_rc
+            OUTPUT_VARIABLE _rustc_version_output
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+"
+               _cargo_version "${_cargo_version_output}")
+        string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+"
+               _rustc_version "${_rustc_version_output}")
+        if(_cargo_version_rc EQUAL 0 AND _rustc_version_rc EQUAL 0 AND
+           _cargo_version VERSION_GREATER_EQUAL "1.86.0" AND
+           _rustc_version VERSION_GREATER_EQUAL "1.86.0")
+            set(_moonlab_rust_toolchain_supported TRUE)
+        else()
+            message(STATUS
+                "Rust bindings smoke: skipped (requires Cargo/rustc 1.86+; "
+                "found cargo='${_cargo_version_output}', "
+                "rustc='${_rustc_version_output}')")
+        endif()
+    endif()
+    if(_moonlab_rust_toolchain_supported AND EXISTS
+       "${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml")
         add_test(NAME rust_bindings_smoke
                  COMMAND ${CARGO_EXECUTABLE} test --manifest-path
                          ${CMAKE_CURRENT_SOURCE_DIR}/bindings/rust/moonlab/Cargo.toml

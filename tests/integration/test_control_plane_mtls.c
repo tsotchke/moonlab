@@ -29,6 +29,7 @@
 #  include <openssl/x509.h>
 #  include <openssl/x509v3.h>
 #  include <openssl/evp.h>
+#  include "test_tls_keygen.h"
 #endif
 
 static int failures = 0;
@@ -50,7 +51,7 @@ static int generate_ca_and_cert(const char *ca_cert_path, const char *ca_key_pat
                                 const char *cn)
 {
     /* CA */
-    EVP_PKEY *ca_key = EVP_RSA_gen(2048);
+    EVP_PKEY *ca_key = moonlab_test_generate_rsa_key();
     if (!ca_key) return -1;
     X509 *ca = X509_new();
     if (!ca) { EVP_PKEY_free(ca_key); return -1; }
@@ -71,7 +72,7 @@ static int generate_ca_and_cert(const char *ca_cert_path, const char *ca_key_pat
     X509_sign(ca, ca_key, EVP_sha256());
 
     /* End-entity (server or client) cert signed by the CA. */
-    EVP_PKEY *ee_key = EVP_RSA_gen(2048);
+    EVP_PKEY *ee_key = moonlab_test_generate_rsa_key();
     X509 *ee = X509_new();
     X509_set_version(ee, 2);
     ASN1_INTEGER_set(X509_get_serialNumber(ee), 2);
@@ -151,7 +152,7 @@ int main(void)
         f = fopen(ca_key, "r");
         EVP_PKEY *cakey = PEM_read_PrivateKey(f, NULL, NULL, NULL); fclose(f);
 
-        EVP_PKEY *cli_key = EVP_RSA_gen(2048);
+        EVP_PKEY *cli_key = moonlab_test_generate_rsa_key();
         X509 *cli = X509_new();
         X509_set_version(cli, 2);
         ASN1_INTEGER_set(X509_get_serialNumber(cli), 3);

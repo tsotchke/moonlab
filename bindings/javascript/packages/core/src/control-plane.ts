@@ -151,6 +151,42 @@ function openSocket(args: { host: string; port: number; timeoutMs: number;
   });
 }
 
+/** Complete the TCP/TLS shutdown handshake before returning.  `destroy()`
+ * immediately after the last response byte sends an RST on some Node/OpenSSL
+ * schedules; the peer then observes a late ECONNRESET after the request has
+ * ostensibly completed.  Treat shutdown errors/timeouts as request failures
+ * instead of leaking an unhandled socket error into the next operation. */
+function closeSocket(sock: Socket, timeoutMs: number): Promise<void> {
+  if (sock.destroyed) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      sock.removeListener('finish', onFinish);
+      sock.removeListener('error', onError);
+      if (error) reject(error); else resolve();
+    };
+    const onFinish = () => finish();
+    const onError = (error: Error) => finish(error);
+    const timer = setTimeout(() => {
+      const error = new Error(
+        `control-plane socket shutdown timeout (${timeoutMs}ms)`);
+      sock.destroy(error);
+      finish(error);
+    }, timeoutMs);
+    timer.unref();
+    sock.once('finish', onFinish);
+    sock.once('error', onError);
+    // recvExact removes its data listener after the framed body.  Resume the
+    // readable side so the peer's TLS close_notify/FIN can be consumed; finish
+    // proves our close_notify/FIN was flushed without forcing a TCP reset.
+    sock.resume();
+    sock.end();
+  });
+}
+
 /** Parsed framing line.  Note that the integer field differs by verb:
  *  - ``OK <count>``      -- count of doubles in the body
  *  - ``SAMPLES <count>`` -- count of uint64 outcomes in the body
@@ -349,7 +385,7 @@ export async function submitCircuit(args: SubmitCircuitArgs): Promise<number[]> 
     }
     return out;
   } finally {
-    sock.destroy();
+    await closeSocket(sock, timeoutMs);
   }
 }
 
@@ -387,7 +423,7 @@ export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
     }
     return out;
   } finally {
-    sock.destroy();
+    await closeSocket(sock, timeoutMs);
   }
 }
 
@@ -405,7 +441,7 @@ export async function submitHealth(args: SubmitMetricsArgs): Promise<void> {
       `unexpected framing: ${line.toString('ascii')}`,
       MOONLAB_CONTROL_IO_ERROR);
   } finally {
-    sock.destroy();
+    await closeSocket(sock, timeoutMs);
   }
 }
 
@@ -427,6 +463,6 @@ export async function submitMetrics(args: SubmitMetricsArgs): Promise<string> {
     const raw = await recvExact(sock, fr.numField, fr.bodySeed, timeoutMs);
     return raw.toString('utf-8');
   } finally {
-    sock.destroy();
+    await closeSocket(sock, timeoutMs);
   }
 }

@@ -12,8 +12,9 @@ runners, install-tree ZIP staging, and a consumer test before upload.
 | Workflow | File | Trigger | Purpose |
 |---|---|---|---|
 | CI | `.github/workflows/ci.yml` | Pushes and pull requests | Native Unix/Windows builds, WASM, Docker, and hygiene checks |
+| Linux compatibility | `.github/workflows/linux-compatibility.yml` | Relevant pushes/PRs, tags through the release caller, manual | Clean-distro source build, tests, package, and external-consumer verification |
 | Jetson CI | `.github/workflows/ci-jetson.yml` | Workflow-defined hardware trigger | CUDA and ARM64 validation on the self-hosted Jetson runner |
-| Release | `.github/workflows/release.yml` | Tags matching `v*` | Build and attach platform packages, Debian packages, and publish bindings |
+| Release | `.github/workflows/release.yml` | Manual candidate dispatch; tags matching `v*` promote one certified candidate | Build and seal unpublished packages, then verify exact-byte promotion before publication |
 
 GitLab also runs the repository's `.gitlab-ci.yml`; GitHub Actions is the
 source of the public release assets described here.
@@ -47,23 +48,60 @@ Additional CI jobs build the Emscripten/WASM target, smoke the Debian release
 container, and reject private markers or credential-shaped strings in the
 public tree.
 
+The Linux compatibility workflow runs the universal source-build driver on
+Ubuntu 22.04/24.04/26.04 and Debian 12/13 on both hosted amd64 and ARM64
+runners. Each of those ten canonical lanes binds the clean Git source identity,
+resolved container-image digest, positive all-pass/zero-skip CTest counts, and
+hashes for its build/test logs, install tree, package, and both external
+consumer checks. A fail-closed aggregate requires exactly those ten profiles
+to describe the identical source before reporting `PASS`.
+
+Additional clean-family smokes cover AlmaLinux 8/9/10, current Fedora, current
+Arch, current openSUSE Tumbleweed, and current Alpine; NixOS is verified on the
+physical ARM64 Jetson mesh lane. These rows represent the mainstream package-
+manager/libc families rather than claiming that every downstream derivative is
+a distinct ABI. Every row disables native CPU tuning and fast-math, builds,
+runs the bounded release labels including `health_tests`, creates the install-
+tree archive, and verifies separate CMake and pkg-config consumers. A tagged
+release cannot create its draft until this reusable workflow and its evidence
+aggregate pass.
+
 ## Release workflow
 
-A pushed tag matching `v*` first runs a fail-closed preflight: the tag must
-match every version surface; PyPI, npm, and crates.io credentials must exist;
-and stable tags also require the Homebrew tap credential. Platform artifacts
-are built and consumer-tested into private workflow storage. Only after every
-artifact passes does the workflow create a fully populated **draft** GitHub
-Release.
+Release is a two-phase candidate-and-promotion protocol. A manual
+`workflow_dispatch` for an exact version builds and consumer-tests the complete
+22-artifact release inventory without reading publication credentials or
+mutating GitHub Releases, PyPI, npm, crates.io, or Homebrew. The candidate run
+also executes the full hosted platform and Linux-compatibility matrix, then
+seals the exact run ID, head SHA, artifact identities, sizes, and SHA-256
+digests in `moonlab-release-candidate.json`.
 
-The exact tested wheels and npm tarballs are then published. Rust crates are
-verified against the packaged native SDK and published in dependency order:
-`moonlab-sys`, `moonlab`, then `moonlab-tui`. Stable tags also build, audit,
-install, and test the generated formula before pushing it to
-`tsotchke/homebrew-moonlab`. The GitHub Release leaves draft state only after
-all required registries succeed. Tags ending in numbered `alpha`, `beta`, or
-`rc` identifiers are pre-releases and publish npm packages under `next`; they
-do not update Homebrew.
+After the local release oracle, MPI/mesh evidence, and external certificate are
+green, creating and pushing the annotated release tag is a separate explicit
+approval boundary. Its annotation must contain exactly these two lines:
+
+```text
+Moonlab-Release-Candidate-Run: <positive GitHub Actions run ID>
+Moonlab-Release-Candidate-Head: <40-character lowercase commit SHA>
+```
+
+The tag must target the same head. The tag-triggered promotion path resolves
+only that run, verifies the repository, workflow, dispatch event, head,
+conclusion, complete job-name set, candidate manifest, and all 22 artifact
+hashes, then re-uploads the verified bytes for downstream publication. Missing
+or mismatched evidence is fatal; promotion never falls back to rebuilding.
+
+As of the v1.2.0 release campaign, `publication-readiness` intentionally stops
+before every external mutation because Cargo has no supported option to publish
+a supplied, pre-certified `.crate` archive. Publication remains blocked until
+an audited exact-byte crates.io upload path is implemented and tested against
+the authoritative Cargo/crates.io protocol. Once that gate is implemented,
+the exact tested wheels and npm tarballs are published, followed by the three
+certified Rust crates in dependency order: `moonlab-sys`, `moonlab`, then
+`moonlab-tui`. Stable tags then update and test Homebrew. The GitHub Release
+leaves draft state only after all required registries succeed. Numbered
+`alpha`, `beta`, or `rc` versions use the npm `next` tag and do not update
+Homebrew.
 
 ### Native archives
 

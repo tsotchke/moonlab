@@ -6,40 +6,79 @@
 #include <math.h>
 #include <inttypes.h>
 
+/* SP 800-90B Section 4.4 lets the developer choose alpha for the consuming
+ * application.  One 4 MiB conditioned Moonlab request can exercise fewer
+ * than 2^29 raw-source samples through the certified Bell extractor.  Using
+ * alpha=2^-60 per continuous-test decision leaves a union-bound false-reject
+ * probability below 2^-31 for that request while retaining ample margin for
+ * the stuck-source and biased-source failure modes these tests target. */
+#define HEALTH_FALSE_POSITIVE_BITS 60.0
+
 // ============================================================================
 // CONFIGURATION CALCULATIONS
 // ============================================================================
 
 uint32_t health_calculate_rct_cutoff(double min_entropy) {
-    // NIST SP 800-90B formula: C = ceil(1 + (-log2(2^-30) / H))
-    // Simplified: C = ceil(1 + (30 / H))
+    // NIST SP 800-90B formula: C = ceil(1 + (-log2(alpha) / H)).
     if (min_entropy <= 0.0 || min_entropy > 8.0) {
-        return 31; // Conservative default for H >= 4 bits
+        min_entropy = 4.0;
     }
-    
-    double cutoff = 1.0 + (30.0 / min_entropy);
+
+    double cutoff = 1.0 + (HEALTH_FALSE_POSITIVE_BITS / min_entropy);
     return (uint32_t)ceil(cutoff);
 }
 
-uint32_t health_calculate_apt_cutoff(double min_entropy, uint32_t window_size) {
-    // Critical value from binomial distribution
-    // For window W and probability p = 2^-H, find C such that:
-    // P(X > C) < 2^-30 where X ~ Binomial(W, p)
-    
-    if (min_entropy <= 0.0 || min_entropy > 8.0 || window_size == 0) {
-        return 354; // Conservative default for H=4, W=512
+/* Smallest APT cutoff C satisfying
+ *
+ *   Pr[1 + Binomial(trials, p) >= C] <= alpha.
+ *
+ * The leading one is the reference sample selected at the start of each APT
+ * window.  Work in log space so alpha=2^-60 remains representable without
+ * cancellation in 1-CDF or underflow in the extreme upper tail. */
+static uint32_t health_binomial_apt_cutoff(
+    uint32_t trials,
+    double p,
+    double log_alpha
+) {
+    double log_tail = -INFINITY;
+    double log_pmf = (double)trials * log(p);
+    const double log_odds_inverse = log1p(-p) - log(p);
+
+    for (uint32_t k = trials;; --k) {
+        if (isinf(log_tail) && log_tail < 0.0) {
+            log_tail = log_pmf;
+        } else {
+            double hi = log_tail > log_pmf ? log_tail : log_pmf;
+            double lo = log_tail > log_pmf ? log_pmf : log_tail;
+            log_tail = hi + log1p(exp(lo - hi));
+        }
+
+        if (log_tail > log_alpha) {
+            /* Tail(k) is too large; Tail(k+1) was the last acceptable upper
+             * tail.  Convert the remaining-match threshold k+1 to the APT's
+             * count including its fixed first sample. */
+            return k + 2u;
+        }
+        if (k == 0u) break;
+
+        log_pmf += log((double)k)
+                 - log((double)(trials - k + 1u))
+                 + log_odds_inverse;
     }
-    
+
+    return 1u;
+}
+
+uint32_t health_calculate_apt_cutoff(double min_entropy, uint32_t window_size) {
+    // SP 800-90B APT: choose C from the exact binomial upper tail.
+    if (min_entropy <= 0.0 || min_entropy > 8.0 || window_size == 0) {
+        min_entropy = 4.0;
+        window_size = 512;
+    }
+
     double p = pow(2.0, -min_entropy);
-    double mean = window_size * p;
-    double stddev = sqrt(window_size * p * (1.0 - p));
-    
-    // Use normal approximation with continuity correction
-    // For 2^-30 probability, need ~6.9 standard deviations
-    double z = 6.9; // Critical value for 2^-30 confidence
-    double cutoff = mean + z * stddev + 0.5; // +0.5 for continuity correction
-    
-    return (uint32_t)ceil(cutoff);
+    double log_alpha = -HEALTH_FALSE_POSITIVE_BITS * log(2.0);
+    return health_binomial_apt_cutoff(window_size - 1u, p, log_alpha);
 }
 
 void health_get_recommended_config(double min_entropy, health_test_config_t *config) {

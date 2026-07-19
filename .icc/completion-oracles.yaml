@@ -80,6 +80,22 @@ oracles:
         label: Runtime trace records no failures
         action: fix_runtime_failure
 
+      # A collection of bare PASS events is not a release certificate. This
+      # event is emitted only by the fail-closed certificate validator after it
+      # proves that every required lane and artifact is bound to one clean Git
+      # commit/tree, the current ICC source fingerprint, the hosted-CI head,
+      # the hardware mesh evidence, and the annotated tag target. It also
+      # prevents traces from a pre-rewrite or dirty worktree from certifying a
+      # later tag.
+      - id: release_certificate_current
+        runtime_event:
+          event_kinds: [moonlab_release_certificate]
+          event_names: ["release_certificate_valid"]
+          event_values: ["PASS"]
+        severity: high
+        label: A fail-closed release certificate binds all evidence to the exact clean v1.2.0 source tree
+        action: python3 scripts/validate_release_certificate.py
+
       # -- Whole-system correctness smoke (run_moonlab_release_smoke.sh). --
       - id: full_suite_green
         runtime_event:

@@ -88,6 +88,21 @@ esac
 echo "=== moonlab cross-diff: profile=$PROFILE qubits=$QUBITS depths=$DEPTHS tn_max_n=$TN_MAX_N ==="
 
 mkdir -p "$WORK" "$TRACES_DIR"
+# Invalidate saved evidence before any current-tree prerequisite can fail.
+: > "$TRACE_FILE"
+
+SOURCE_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || exit 2
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+  < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
 
 # --------------------------------------------------------------------------
 # Locate the prebuilt libquantumsim (for the standalone CMake build + bindings)
@@ -101,6 +116,17 @@ if [ -z "$LIB_DIR" ] || ! ls "$LIB_DIR"/libquantumsim.* >/dev/null 2>&1; then
   echo "FATAL: libquantumsim not found. Build it first:" >&2
   echo "  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build" >&2
   echo "  (or pass --lib-dir DIR / set MOONLAB_LIB_DIR)" >&2
+  exit 3
+fi
+if [ ! -f "$LIB_DIR/CMakeCache.txt" ] || \
+   ! grep -Fqx "CMAKE_HOME_DIRECTORY:INTERNAL=$REPO_ROOT" "$LIB_DIR/CMakeCache.txt"; then
+  echo "FATAL: $LIB_DIR is not a CMake build of the current source checkout" >&2
+  exit 3
+fi
+if ! cmake --build "$LIB_DIR" --target quantumsim --parallel 2 \
+    >"$WORK/library_build.out" 2>"$WORK/library_build.err"; then
+  echo "FATAL: current-source libquantumsim build failed" >&2
+  cat "$WORK/library_build.err" >&2
   exit 3
 fi
 export MOONLAB_LIB_DIR="$LIB_DIR"
@@ -122,8 +148,10 @@ json_escape() { printf '%s' "$1" | tr -d '\n\r' | sed 's/\\/\\\\/g; s/"/\\"/g'; 
 # emit_event <name> <status> <tier> <value_json>
 emit_event() {
   local name="$1" status="$2" tier="$3" value="$4"
-  printf '{"kind":"moonlab_differential","name":"%s","status":"%s","tier":"%s","value":%s,"timestamp":"%s"}\n' \
-    "$name" "$status" "$tier" "$value" "$(now_iso)" >> "$WORK/events.jsonl"
+  printf '{"kind":"moonlab_differential","name":"%s","status":"%s","tier":"%s","value":%s,"timestamp":"%s","generated_at":"%s","git_head":"%s","git_tree":"%s","dirty":%s,"source_fingerprint":"%s","corpus_txt_sha256":"%s","corpus_json_sha256":"%s"}\n' \
+    "$name" "$status" "$tier" "$value" "$(now_iso)" "$(now_iso)" \
+    "$SOURCE_GIT_HEAD" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" \
+    "${CORPUS_TXT_SHA256:-pending}" "${CORPUS_JSON_SHA256:-pending}" >> "$WORK/events.jsonl"
 }
 
 # Track overall gate outcome (release-blocking legs only) + exercise accounting.
@@ -150,12 +178,20 @@ if [ "$GEN_OK" = "0" ]; then
 fi
 CORPUS_TXT="$WORK/corpus/corpus.txt"
 CORPUS_JSON="$WORK/corpus/corpus.json"
+IFS=$'\t' read -r CORPUS_TXT_SHA256 CORPUS_JSON_SHA256 \
+  < <(python3 - "$CORPUS_TXT" "$CORPUS_JSON" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print("\t".join(hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in sys.argv[1:]))
+PY
+)
 
 # --------------------------------------------------------------------------
 # 2. Build the C differential driver (standalone CMake against prebuilt lib)
 # --------------------------------------------------------------------------
 echo "--- building C differential driver ---"
-if ! cmake -S "$DIFF_DIR" -B "$WORK/cmake" -DCMAKE_BUILD_TYPE=Release \
+if ! cmake -UMOONLAB_QUANTUMSIM -S "$DIFF_DIR" -B "$WORK/cmake" -DCMAKE_BUILD_TYPE=Release \
       -DMOONLAB_LIB_DIR="$LIB_DIR" >/dev/null 2>"$WORK/cmake_cfg.err"; then
   echo "FATAL: cmake configure failed" >&2; cat "$WORK/cmake_cfg.err" >&2; exit 5
 fi
@@ -217,8 +253,8 @@ emit_event reference_oracle_agreement "$RO_STATUS" release \
 
 [ "$CB_STATUS" = "PASS" ] || GATE_FAIL=1
 [ "$RO_STATUS" = "PASS" ] || GATE_FAIL=1
-# The C driver itself always exercises dense+tn+clifford.
-BINDINGS_EXERCISED=$((BINDINGS_EXERCISED + 1))
+# The C driver exercises backends, not a language binding.  Keep binding
+# accounting honest so a skipped Python leg cannot make the umbrella green.
 
 # --------------------------------------------------------------------------
 # 5a. Python cross-binding (release-blocking)
@@ -236,7 +272,7 @@ emit_event cross_binding_python "$PY_STATUS" release \
   "{\"cases\":$PY_CASES,\"failed\":$PY_FAILED,\"reason\":\"$PY_REASON\"}"
 if [ "$PY_STATUS" = "SKIP" ]; then BINDINGS_SKIPPED=$((BINDINGS_SKIPPED + 1));
 else BINDINGS_EXERCISED=$((BINDINGS_EXERCISED + 1)); fi
-[ "$PY_STATUS" = "FAIL" ] && GATE_FAIL=1
+[ "$PY_STATUS" = "PASS" ] || GATE_FAIL=1
 
 # --------------------------------------------------------------------------
 # 5b. Rust cross-binding (medium/nightly)
@@ -296,6 +332,29 @@ fi
 # --------------------------------------------------------------------------
 # 6. Umbrella event + append to the trace file
 # --------------------------------------------------------------------------
+FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
+FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
+PY
+)"
+if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]; then
+  GATE_FAIL=1
+  python3 - "$WORK/events.jsonl" "$SOURCE_FINGERPRINT" "$FINAL_FINGERPRINT" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+events = []
+for line in path.read_text(encoding="utf-8").splitlines():
+    event = json.loads(line)
+    event["status"] = "FAIL"
+    event["provenance_error"] = f"source changed during lane: start={sys.argv[2]} end={sys.argv[3] or 'unknown'}"
+    events.append(event)
+path.write_text("".join(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n" for event in events), encoding="utf-8")
+PY
+fi
 UMBRELLA_STATUS="PASS"; [ "$GATE_FAIL" = "0" ] || UMBRELLA_STATUS="FAIL"
 emit_event moonlab_differential "$UMBRELLA_STATUS" release \
   "{\"profile\":\"$PROFILE\",\"bindings_exercised\":$BINDINGS_EXERCISED,\"bindings_skipped\":$BINDINGS_SKIPPED,\"corpus_cases\":$CASES,\"gpu\":\"$(json_escape "${GPU_REASON:-not enabled}")\"}"

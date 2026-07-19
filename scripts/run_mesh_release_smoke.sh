@@ -32,6 +32,7 @@ if [[ -f "$MESH_CONFIG" ]]; then
 fi
 
 TARGETS="${MOONLAB_MESH_TARGETS:-}"
+EXPECTED_TARGETS="${MOONLAB_MESH_EXPECTED_TARGETS:-5}"
 JOBS="${MOONLAB_MESH_JOBS:-4}"
 LABELS="${MOONLAB_MESH_LABELS:-core|abi|gpu}"
 EXCLUDE_LABELS="${MOONLAB_MESH_EXCLUDE_LABELS:-long|memory_heavy}"
@@ -52,6 +53,7 @@ command line, MOONLAB_MESH_TARGETS, or the mesh config file.
 Environment:
   MOONLAB_MESH_CONFIG           Mesh config file. Default: \$MESH_ROOT/moonlab-mesh-smoke.conf
   MOONLAB_MESH_TARGETS          Space-separated target list.
+  MOONLAB_MESH_EXPECTED_TARGETS Exact distinct target count. Default: $EXPECTED_TARGETS
   MOONLAB_MESH_ROOT             Mesh checkout. Default: \$HOME/computer_mesh
   MOONLAB_MESH_JOBS             Build/test parallelism. Default: $JOBS
   MOONLAB_MESH_LABELS           CTest -L regex. Default: $LABELS
@@ -93,6 +95,15 @@ if [[ -z "$TARGETS" ]]; then
     exit 2
 fi
 
+read -r -a target_array <<<"$TARGETS"
+unique_target_count="$(printf '%s\n' "${target_array[@]}" | sort -u | wc -l | tr -d ' ')"
+if [[ ! "$EXPECTED_TARGETS" =~ ^[1-9][0-9]*$ ]] || \
+   [[ "${#target_array[@]}" -ne "$EXPECTED_TARGETS" ]] || \
+   [[ "$unique_target_count" -ne "$EXPECTED_TARGETS" ]]; then
+    echo "release mesh requires exactly $EXPECTED_TARGETS distinct targets (got ${#target_array[@]} entries, $unique_target_count distinct)" >&2
+    exit 2
+fi
+
 mkdir -p "$ARTIFACT_DIR/logs" "$ARTIFACT_DIR/scripts"
 
 if [[ ! -x "$MESH_BIN" ]]; then
@@ -102,7 +113,23 @@ fi
 
 git_head="$(git -C "$ROOT" rev-parse HEAD)"
 short_head="${git_head:0:12}"
-source_tar="$ARTIFACT_DIR/moonlab-source-$short_head.tar"
+SOURCE_IDENTITY_JSON="$(bash "$ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)"
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+    < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
+snapshot_id="$short_head-${SOURCE_FINGERPRINT:0:12}"
+source_tar="$ARTIFACT_DIR/moonlab-source-$snapshot_id.tar"
+# Keep existing external config hooks that key stage directories from
+# $short_head collision-safe for distinct dirty snapshots of the same commit.
+short_head="$snapshot_id"
 
 create_source_snapshot() {
     echo "[mesh-smoke] snapshot: $source_tar"
@@ -116,7 +143,10 @@ import tarfile
 root = pathlib.Path(sys.argv[1]).resolve()
 out = pathlib.Path(sys.argv[2]).resolve()
 proc = subprocess.run(
-    ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    [
+        "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard",
+        "--", ".", ":(exclude)scripts/icc_traces/**",
+    ],
     cwd=root,
     check=True,
     stdout=subprocess.PIPE,
@@ -256,8 +286,8 @@ run_posix_target() {
     local target="$1"
     local repo_dir remote_tar remote_script local_script
     repo_dir="$(posix_stage_dir "$target")"
-    remote_tar="/tmp/moonlab-source-$short_head.tar"
-    remote_script="/tmp/moonlab-mesh-smoke-$short_head.sh"
+    remote_tar="/tmp/moonlab-source-$snapshot_id.tar"
+    remote_script="/tmp/moonlab-mesh-smoke-$snapshot_id.sh"
     local_script="$ARTIFACT_DIR/scripts/$target-smoke.sh"
 
     write_posix_smoke_script "$target" "$repo_dir" "$(target_cmake_flags "$target")" "$local_script"
@@ -276,8 +306,8 @@ write_windows_smoke_script() {
     local out="$1"
     cat >"$out" <<EOF
 \$ErrorActionPreference = 'Stop'
-\$Repo = Join-Path \$env:USERPROFILE 'src\\moonlab-mesh-smoke-$short_head'
-\$Tar = Join-Path \$PSScriptRoot 'moonlab-source-$short_head.tar'
+\$Repo = Join-Path \$env:USERPROFILE 'src\\moonlab-mesh-smoke-$snapshot_id'
+\$Tar = Join-Path \$PSScriptRoot 'moonlab-source-$snapshot_id.tar'
 \$Build = Join-Path \$Repo 'build-mesh-release-smoke'
 \$SharedBuild = Join-Path \$Repo 'build-mesh-release-smoke-shared'
 \$Jobs = '$JOBS'
@@ -371,12 +401,12 @@ run_windows_target() {
     local local_script="$ARTIFACT_DIR/scripts/$target-smoke.ps1"
     write_windows_smoke_script "$local_script"
     run_and_log "$target upload source" "$ARTIFACT_DIR/logs/$target.upload-source.log" \
-        scp "${SSH_OPTS[@]}" -q "$source_tar" "$target:moonlab-source-$short_head.tar"
+        scp "${SSH_OPTS[@]}" -q "$source_tar" "$target:moonlab-source-$snapshot_id.tar"
     run_and_log "$target upload script" "$ARTIFACT_DIR/logs/$target.upload-script.log" \
-        scp "${SSH_OPTS[@]}" -q "$local_script" "$target:moonlab-mesh-smoke-$short_head.ps1"
+        scp "${SSH_OPTS[@]}" -q "$local_script" "$target:moonlab-mesh-smoke-$snapshot_id.ps1"
     run_and_log "$target smoke" "$ARTIFACT_DIR/logs/$target.smoke.log" \
         ssh "${SSH_OPTS[@]}" "$target" powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass \
-            -File "moonlab-mesh-smoke-$short_head.ps1"
+            -File "moonlab-mesh-smoke-$snapshot_id.ps1"
 }
 
 target_evidence_label() {
@@ -397,6 +427,11 @@ write_runtime_evidence() {
     {
         printf 'Moonlab mesh release smoke completed done.\n'
         printf 'Source snapshot: %s.\n' "$git_head"
+        printf 'Source git tree: %s.\n' "$SOURCE_GIT_TREE"
+        printf 'Source dirty: %s.\n' "$SOURCE_DIRTY"
+        printf 'Source fingerprint: %s.\n' "$SOURCE_FINGERPRINT"
+        printf 'Source snapshot SHA-256: %s.\n' "$SOURCE_TAR_SHA256"
+        printf 'Expected distinct targets: %s.\n' "$EXPECTED_TARGETS"
         printf 'Run id: %s.\n' "$RUN_ID"
         printf 'Labels: %s.\n' "${LABELS//|/, }"
         printf 'Excluded labels: %s.\n' "${EXCLUDE_LABELS//|/, }"
@@ -428,6 +463,13 @@ write_runtime_evidence() {
 }
 
 create_source_snapshot
+SOURCE_TAR_SHA256="$(python3 - "$source_tar" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
 
 summary="$ARTIFACT_DIR/summary.tsv"
 runtime_evidence="$ARTIFACT_DIR/icc_runtime_evidence.txt"
@@ -456,8 +498,60 @@ for target in $TARGETS; do
     fi
 done
 
+FINAL_IDENTITY_JSON="$(bash "$ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
+FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
+PY
+)"
+if [[ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]]; then
+    echo "[mesh-smoke] source changed during run: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown}" >&2
+    rc=1
+fi
+
+artifact_manifest="$ARTIFACT_DIR/artifact_manifest.json"
+python3 - "$summary" "$artifact_manifest" "$SOURCE_GIT_HEAD" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" "$SOURCE_TAR_SHA256" "$EXPECTED_TARGETS" "$rc" <<'PY'
+import datetime as dt
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+summary_path, output_path, git_head, git_tree, dirty, fingerprint, snapshot_sha256, expected_targets, run_rc = sys.argv[1:]
+targets = []
+for line in Path(summary_path).read_text(encoding="utf-8").splitlines()[1:]:
+    if not line.strip():
+        continue
+    target, status, log_name = line.split("\t")
+    log = Path(log_name)
+    targets.append({
+        "target": target,
+        "status": status,
+        "log": str(log),
+        "log_sha256": hashlib.sha256(log.read_bytes()).hexdigest() if log.is_file() else None,
+    })
+event = {
+    "schema": "moonlab.mesh_release_smoke.v1",
+    "kind": "moonlab_mesh",
+    "name": "mesh_release_smoke_green",
+    "value": "PASS" if int(run_rc) == 0 and len(targets) == int(expected_targets) and all(item["status"] == "PASS" for item in targets) else "FAIL",
+    "git_head": git_head,
+    "git_tree": git_tree,
+    "dirty": dirty == "true",
+    "source_fingerprint": fingerprint,
+    "source_snapshot_sha256": snapshot_sha256,
+    "expected_target_count": int(expected_targets),
+    "target_count": len(targets),
+    "targets": targets,
+    "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+}
+Path(output_path).write_text(json.dumps(event, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
 write_runtime_evidence "$runtime_evidence"
 echo "[mesh-smoke] summary: $summary"
 echo "[mesh-smoke] icc runtime evidence: $runtime_evidence"
+echo "[mesh-smoke] artifact manifest: $artifact_manifest"
 column -t -s $'\t' "$summary" || cat "$summary"
 exit "$rc"

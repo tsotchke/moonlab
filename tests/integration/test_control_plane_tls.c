@@ -28,6 +28,7 @@
 #  include <openssl/rsa.h>
 #  include <openssl/x509.h>
 #  include <openssl/evp.h>
+#  include "test_tls_keygen.h"
 #endif
 
 static int failures = 0;
@@ -46,7 +47,7 @@ static int failures = 0;
  * to the two paths provided.  Returns 0 on success. */
 static int generate_self_signed(const char *cert_path, const char *key_path)
 {
-    EVP_PKEY *pkey = EVP_RSA_gen(2048);
+    EVP_PKEY *pkey = moonlab_test_generate_rsa_key();
     if (!pkey) return -1;
 
     X509 *x = X509_new();

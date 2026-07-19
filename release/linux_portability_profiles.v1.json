@@ -1,0 +1,15 @@
+{
+  "schema": "moonlab.linux_portability.profiles.v1",
+  "profiles": [
+    {"id": "debian-12-amd64", "distribution": "debian", "release": "12", "architecture": "amd64", "image": "debian:12-slim"},
+    {"id": "debian-12-arm64", "distribution": "debian", "release": "12", "architecture": "arm64", "image": "debian:12-slim"},
+    {"id": "debian-13-amd64", "distribution": "debian", "release": "13", "architecture": "amd64", "image": "debian:13-slim"},
+    {"id": "debian-13-arm64", "distribution": "debian", "release": "13", "architecture": "arm64", "image": "debian:13-slim"},
+    {"id": "ubuntu-22.04-amd64", "distribution": "ubuntu", "release": "22.04", "architecture": "amd64", "image": "ubuntu:22.04"},
+    {"id": "ubuntu-22.04-arm64", "distribution": "ubuntu", "release": "22.04", "architecture": "arm64", "image": "ubuntu:22.04"},
+    {"id": "ubuntu-24.04-amd64", "distribution": "ubuntu", "release": "24.04", "architecture": "amd64", "image": "ubuntu:24.04"},
+    {"id": "ubuntu-24.04-arm64", "distribution": "ubuntu", "release": "24.04", "architecture": "arm64", "image": "ubuntu:24.04"},
+    {"id": "ubuntu-26.04-amd64", "distribution": "ubuntu", "release": "26.04", "architecture": "amd64", "image": "ubuntu:26.04"},
+    {"id": "ubuntu-26.04-arm64", "distribution": "ubuntu", "release": "26.04", "architecture": "arm64", "image": "ubuntu:26.04"}
+  ]
+}

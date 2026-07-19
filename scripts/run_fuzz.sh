@@ -28,9 +28,8 @@
 #
 # Integration note: tests/fuzz is wired in by the root CMakeLists via
 #   if(QSIM_ENABLE_FUZZING) add_subdirectory(tests/fuzz) endif()
-# If that hook is not yet present, this script appends it to a scratch
-# copy of CMakeLists.txt for the duration of the run and restores the
-# file on exit -- it never leaves the tree modified.
+# Exact-source release evidence requires that hook to be present in the source
+# snapshot; this runner refuses transient self-wiring.
 
 set -u
 
@@ -41,12 +40,37 @@ cd "$REPO_ROOT"
 
 MODE="${1:-replay}"
 
-BUILD_DIR="${QSIM_FUZZ_BUILD_DIR:-build-fuzz}"
-TRACE_DIR="${MOONLAB_TRACE_DIR:-scripts/icc_traces}"
+BUILD_DIR="${QSIM_FUZZ_BUILD_DIR:-$REPO_ROOT/build-fuzz}"
+TRACE_DIR="${MOONLAB_TRACE_DIR:-$REPO_ROOT/scripts/icc_traces}"
 TRACE="$TRACE_DIR/moonlab_fuzz.jsonl"
 JOBS="${QSIM_FUZZ_JOBS:-2}"          # gentle by default; machine may be fragile
 CORPORA="tests/fuzz/corpora"
 DICTS="tests/fuzz/dicts"
+
+# Every path this runner writes must remain in an ignored build tree or the
+# canonical trace directory.  Environment overrides are conveniences, not
+# authority to truncate arbitrary files.
+BUILD_DIR="$(python3 - "$BUILD_DIR" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).resolve())
+PY
+)"
+case "$BUILD_DIR" in
+  "$REPO_ROOT/build"|"$REPO_ROOT"/build-*|"$REPO_ROOT"/build_*) ;;
+  *) echo "QSIM_FUZZ_BUILD_DIR must be a build*, build-*, or build_* path directly under $REPO_ROOT" >&2; exit 2 ;;
+esac
+TRACE_DIR="$(python3 - "$TRACE_DIR" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).resolve())
+PY
+)"
+if [ "$TRACE_DIR" != "$REPO_ROOT/scripts/icc_traces" ]; then
+  echo "MOONLAB_TRACE_DIR must resolve to $REPO_ROOT/scripts/icc_traces" >&2
+  exit 2
+fi
+TRACE="$TRACE_DIR/moonlab_fuzz.jsonl"
 
 # Surfaces == executable / corpus / trace-name basenames.
 TARGETS=(
@@ -85,43 +109,52 @@ esac
 export ASAN_OPTIONS="abort_on_error=1:detect_leaks=${DETECT_LEAKS}:print_summary=1:handle_abort=1"
 export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
 # So the replay/engine binaries find the instrumented libquantumsim dylib.
-export DYLD_LIBRARY_PATH="$REPO_ROOT/$BUILD_DIR:${DYLD_LIBRARY_PATH:-}"
-export LD_LIBRARY_PATH="$REPO_ROOT/$BUILD_DIR:${LD_LIBRARY_PATH:-}"
+export DYLD_LIBRARY_PATH="$BUILD_DIR:${DYLD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$BUILD_DIR:${LD_LIBRARY_PATH:-}"
 
 mkdir -p "$TRACE_DIR"
 
-# --- self-wiring of the add_subdirectory hook (restored on exit) ------------
-HOOK_ADDED=0
-CMAKE_BACKUP=""
+SOURCE_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || exit 2
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT \
+  < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
+import json
+import sys
+identity = json.loads(sys.argv[1])
+print("\t".join((
+    identity["git_head"], identity["git_tree"], str(identity["dirty"]).lower(),
+    identity["source_fingerprint"],
+)))
+PY
+)
+CORPUS_SHA256="$(python3 - "$REPO_ROOT/$CORPORA" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+digest = hashlib.sha256()
+for path in sorted(p for p in root.rglob("*") if p.is_file() and "crashes-pending" not in p.parts):
+    rel = path.relative_to(root).as_posix().encode()
+    data = path.read_bytes()
+    digest.update(len(rel).to_bytes(8, "big"))
+    digest.update(rel)
+    digest.update(len(data).to_bytes(8, "big"))
+    digest.update(data)
+print(digest.hexdigest())
+PY
+)"
+
+# --- require the committed add_subdirectory hook ---------------------------
 maybe_wire_hook() {
   if grep -q "add_subdirectory(tests/fuzz)" CMakeLists.txt; then
     return 0                     # integrator already wired it
   fi
-  CMAKE_BACKUP="$(mktemp)"
-  cp CMakeLists.txt "$CMAKE_BACKUP"
-  cat >> CMakeLists.txt <<'HOOK'
-
-# --- run_fuzz.sh self-wiring shim (auto-removed after the run) ---------------
-option(QSIM_ENABLE_FUZZING "Build libFuzzer/AFL++ fuzz harnesses" OFF)
-if(QSIM_ENABLE_FUZZING)
-    add_subdirectory(tests/fuzz)
-endif()
-HOOK
-  HOOK_ADDED=1
-  echo "[run_fuzz] note: temporarily appended add_subdirectory(tests/fuzz) to CMakeLists.txt (restored on exit)"
+  echo "[run_fuzz] exact-source evidence requires the committed tests/fuzz CMake hook" >&2
+  return 1
 }
-cleanup() {
-  if [ "$HOOK_ADDED" = "1" ] && [ -n "$CMAKE_BACKUP" ] && [ -f "$CMAKE_BACKUP" ]; then
-    cp "$CMAKE_BACKUP" CMakeLists.txt
-    rm -f "$CMAKE_BACKUP"
-    echo "[run_fuzz] restored CMakeLists.txt"
-  fi
-}
-trap cleanup EXIT INT TERM
 
 # --- configure -------------------------------------------------------------
 configure() {
-  maybe_wire_hook
+  maybe_wire_hook || return 1
   echo "[run_fuzz] configuring $BUILD_DIR with clang=$FUZZ_CC"
   cmake -S . -B "$BUILD_DIR" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -141,10 +174,27 @@ FAILS=0
 emit() {   # emit <name> <PASS|FAIL> <detail>
   local name="$1" value="$2" detail="${3:-}"
   local ts; ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  detail="${detail//\"/\'}"
-  detail="${detail//$'\n'/ }"
-  printf '{"kind":"moonlab_fuzz","name":"%s","value":"%s","ts":"%s","detail":"%s"}\n' \
-    "$name" "$value" "$ts" "$detail" >> "$TRACE"
+  python3 - "$TRACE" "$name" "$value" "$ts" "$detail" \
+      "$SOURCE_GIT_HEAD" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" "$CORPUS_SHA256" <<'PY'
+import json
+import sys
+trace, name, value, generated_at, detail, git_head, git_tree, dirty, fingerprint, corpus_sha256 = sys.argv[1:]
+event = {
+    "kind": "moonlab_fuzz",
+    "name": name,
+    "value": value,
+    "generated_at": generated_at,
+    "ts": generated_at,
+    "detail": detail.replace("\n", " "),
+    "git_head": git_head,
+    "git_tree": git_tree,
+    "dirty": dirty == "true",
+    "source_fingerprint": fingerprint,
+    "corpus_sha256": corpus_sha256,
+}
+with open(trace, "a", encoding="utf-8") as output:
+    output.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+PY
   if [ "$value" = "PASS" ]; then
     printf '  [PASS] %-30s %s\n' "$name" "$detail"
   else
@@ -277,6 +327,20 @@ case "$MODE" in
     exit 2
     ;;
 esac
+
+FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
+FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
+PY
+)"
+if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]; then
+  : > "$TRACE"
+  FAILS=0
+  emit fuzz_corpus_clean FAIL "source changed during lane: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown}"
+  rc=1
+fi
 
 echo
 echo "[run_fuzz] trace written to $TRACE ; failures: $FAILS"

@@ -29,7 +29,8 @@ extern "C" {
 
 /* Git state captured at configure time. SHA is the full 40-char
  * commit hash, or "unknown" if the source tree isn't a git checkout.
- * DIRTY is 1 iff `git diff --quiet` was non-zero. */
+ * DIRTY is 1 iff tracked or non-ignored untracked source differs from HEAD;
+ * runtime traces below scripts/icc_traces are intentionally excluded. */
 #define MOONLAB_GIT_SHA            "@MOONLAB_GIT_SHA@"
 #define MOONLAB_GIT_SHA_SHORT      "@MOONLAB_GIT_SHA_SHORT@"
 #define MOONLAB_GIT_DIRTY          @MOONLAB_GIT_DIRTY@

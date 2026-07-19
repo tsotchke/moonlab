@@ -1,0 +1,17 @@
+profiles:
+  - name: moonlab-v1.2.0-release
+    targets:
+      - moonlab-release-readiness
+    index_quality_exclude_path_prefixes:
+      # Reference and private PDFs are indexed for searchable content, not
+      # code symbols. Their Markdown peers remain in the documentation audit.
+      - doc/private
+      - doc/reference
+      - references
+      # Built documentation bundles are generated artifacts; source modules
+      # and package tests remain in the audit.
+      - bindings/docs/assets
+      - docs/assets
+      # This integration test is a declarative describe/it suite with no
+      # top-level named declaration for ICC's symbol index to recover.
+      - bindings/javascript/packages/core/src/__tests__/quantum-state.integration.test.ts

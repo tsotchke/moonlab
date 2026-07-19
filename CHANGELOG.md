@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-07-18
 
-**v1.2.0 stabilization and distributed-scale release.** ABI 0.5.0 (QRNG status surface + honest
+**v1.2.0 stabilization and distributed-scale release.** ABI 0.6.0 (QRNG status surface + honest
 certification language + wasm32 correctness fixes), a VQE quantum natural
 gradient optimizer, a first-principles H2/LiH potential energy surface, the
 real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
@@ -28,7 +28,14 @@ merged PRs #12, #13, and #14.
   sanitizers, numerical edge cases, scaling differential, thread safety,
   binding suites, and fleet MPI now emit commit-bound runtime traces consumed
   by the release-readiness oracle.
-- **ABI 0.5.0: `moonlab_qrng_get_status`.** New stable-ABI entry exposing a
+- **Fail-closed Linux portability evidence.** The universal Linux driver now
+  covers Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE/SLES, Alpine/musl, and
+  NixOS package families. CI binds immutable image digests, exact clean source
+  identity, zero-skip focused tests (including entropy health), install/package
+  outputs, and both external consumers across ten Debian/Ubuntu amd64/ARM64
+  profiles before accepting the aggregate; additional clean-family smokes cover
+  AlmaLinux 8/9/10, Fedora, Arch, openSUSE, and Alpine.
+- **ABI 0.6.0: `moonlab_qrng_get_status`.** New stable-ABI entry exposing a
   versioned QRNG status struct with `MOONLAB_QRNG_CAP_*` capability bits
   stating exactly what the conditioned hybrid RNG is (hardware/OS entropy,
   continuous SP 800-90B health tests, SHAKE256 conditioning, Bell-simulation
@@ -1770,7 +1777,8 @@ control plane, gated by `-DQSIM_ENABLE_TLS=ON`.
 - `tests/integration/test_control_plane_tls.c` (ctest label
   `control_plane;tls`, only added when `QSIM_HAS_TLS=ON`):
   generates a self-signed RSA-2048/SHA-256 cert + key in-process
-  via `EVP_RSA_gen` + `X509_sign`, writes them to /tmp, spins up
+  via the portable EVP key-generation API + `X509_sign`, writes them
+  to /tmp, spins up
   the server with `use_tls`, drives a Bell circuit via
   `submit_circuit_tls(insecure=1)`, verifies P[00] = P[11] = 0.5
   came back bit-perfect through TLS.  Cleans up cert/key files
