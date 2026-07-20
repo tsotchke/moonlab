@@ -230,10 +230,10 @@ fi
 CONC_CMAKE_ARGS=(
     -S tests/concurrency -B build-tsan-conc -G "Unix Makefiles"
     -DMOONLAB_ROOT="$REPO_ROOT"
-    -DMOONLAB_TSAN_LIB="$REPO_ROOT/$LIB_OFF"
+    -DMOONLAB_TSAN_LIB="$LIB_OFF"
 )
 if [ "$WITH_OMP" = "1" ]; then
-    CONC_CMAKE_ARGS+=( -DMOONLAB_TSAN_LIB_OMP="$REPO_ROOT/$LIB_ON" )
+    CONC_CMAKE_ARGS+=( -DMOONLAB_TSAN_LIB_OMP="$LIB_ON" )
 fi
 # On non-macOS the static lib needs its BLAS/LAPACK backend at harness link
 # time (Accelerate is auto-linked on Apple).  Match the CI toolchain
@@ -254,10 +254,12 @@ distinct_races() { grep "SUMMARY: ThreadSanitizer: data race" "$1" 2>/dev/null |
 
 json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g' <<<"$1"; }
 
-emit() {  # $1=name $2=verdict $3=races $4=snippet $5=confidence
-    printf '{"kind":"moonlab_tsan","name":"%s","value":"%s","status":"%s","races":%s,"snippet":"%s","confidence":%s}\n' \
-        "$1" "$2" "$2" "$3" "$(json_escape "$4")" "$5" >> "$TRACE"
-}
+# The authoritative emit() is defined once near the top of this script: it binds
+# every event to git_head/git_tree/dirty/source_fingerprint so the release
+# smoke's check_deep_hunt relay can verify the tsan lane ran on the exact source
+# tree. A second, provenance-less emit() used to shadow it here, which made every
+# relay fail with git-tree-mismatch; it has been removed so all calls carry
+# provenance.
 
 run_one() {  # $1=name $2=supp(0|1) $3=binary $4...=args  -> echoes race count
     local name="$1" supp="$2" bin="$3"; shift 3
