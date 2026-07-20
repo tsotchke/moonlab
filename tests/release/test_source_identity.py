@@ -70,10 +70,28 @@ class SourceIdentityContractTest(unittest.TestCase):
         for field in ("git_head", "git_tree", "dirty", "source_fingerprint"):
             self.assertEqual(imported[field], cli[field])
 
-    def test_live_mode_is_content_bound_and_dirty(self) -> None:
+    def test_canonical_mode_is_host_reproducible(self) -> None:
+        # A umask-style permission change that does not touch Git's tracked exec
+        # bit must not move the fingerprint: a fleet lane on a Linux worker
+        # (umask 002 -> 0664) has to reproduce the macOS launcher's fingerprint
+        # (umask 022 -> 0644). Git ignores non-exec mode bits, so it is not
+        # "dirty" either. Hashing live modes tied provenance to the host umask.
         before = self.identity()
         tracked = self.root / "tracked.txt"
-        tracked.chmod(stat.S_IMODE(tracked.stat().st_mode) | stat.S_IXUSR)
+        tracked.chmod(0o664)
+        after = self.identity()
+        self.assertEqual(before["source_fingerprint"], after["source_fingerprint"])
+        self.assertFalse(after["dirty"])
+
+    def test_staged_exec_bit_change_rebinds_fingerprint(self) -> None:
+        # The canonical mode is still Git's view: staging an exec-bit change
+        # moves the index mode 100644 -> 100755 and therefore the fingerprint.
+        before = self.identity()
+        tracked = self.root / "tracked.txt"
+        tracked.chmod(stat.S_IMODE(tracked.stat().st_mode) | 0o111)
+        subprocess.run(
+            ["git", "-C", str(self.root), "add", "tracked.txt"], check=True
+        )
         after = self.identity()
         self.assertNotEqual(before["source_fingerprint"], after["source_fingerprint"])
         self.assertTrue(after["dirty"])

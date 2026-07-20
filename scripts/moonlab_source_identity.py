@@ -33,10 +33,17 @@ def _git(root: Path, *args: str) -> bytes:
 def source_identity(repo_root: str | os.PathLike[str]) -> dict[str, Any]:
     """Return the canonical identity of the current Moonlab worktree.
 
-    The fingerprint hashes sorted relative paths, live permission modes, entry
-    types, and live file/symlink bytes.  A tracked deletion is represented by a
-    ``MISSING`` marker.  This intentionally differs from a Git tree hash: dirty
-    and non-ignored untracked source is content-bound too.
+    The fingerprint hashes sorted relative paths, Git-canonical permission
+    modes, entry types, and live file/symlink bytes.  A tracked deletion is
+    represented by a ``MISSING`` marker.  This intentionally differs from a Git
+    tree hash: dirty and non-ignored untracked source is content-bound too.
+
+    Modes are canonicalised to Git's view (executable -> ``0755``, regular ->
+    ``0644``, symlink -> ``0777``) rather than the live filesystem mode so the
+    fingerprint is reproducible across hosts with different umasks.  A release
+    proof that runs a fleet lane on a Linux worker must produce the same
+    fingerprint the macOS launcher's release smoke recorded; hashing live modes
+    tied that to the host's umask and made cross-host binding impossible.
     """
 
     root = Path(repo_root).resolve(strict=True)
@@ -45,6 +52,17 @@ def source_identity(repo_root: str | os.PathLike[str]) -> dict[str, Any]:
 
     head = _git(root, "rev-parse", "HEAD").decode().strip()
     tree = _git(root, "rev-parse", "HEAD^{tree}").decode().strip()
+    # Git-canonical mode per tracked path (100644/100755/120000/160000).
+    git_modes: dict[str, str] = {}
+    for entry in _git(
+        root, "ls-files", "-s", "-z", "--", ".", TRACE_EXCLUDE_PATHSPEC
+    ).split(b"\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition(b"\t")
+        git_modes[path.decode("utf-8", "surrogateescape")] = (
+            meta.split(b" ", 1)[0].decode()
+        )
     raw_paths = _git(
         root,
         "ls-files",
@@ -74,7 +92,20 @@ def source_identity(repo_root: str | os.PathLike[str]) -> dict[str, Any]:
             digest.update(b"MISSING\0")
             continue
 
-        digest.update(f"{stat.S_IMODE(info.st_mode):04o}".encode())
+        git_mode = git_modes.get(relative)
+        if git_mode == "100755":
+            canonical_mode = "0755"
+        elif git_mode == "120000":
+            canonical_mode = "0777"
+        elif git_mode == "160000":
+            canonical_mode = "0755"
+        elif git_mode == "100644":
+            canonical_mode = "0644"
+        else:
+            # Untracked, non-ignored source: derive from the live executable bit
+            # only, so umask-driven group/other write bits never leak in.
+            canonical_mode = "0755" if (stat.S_IMODE(info.st_mode) & 0o111) else "0644"
+        digest.update(canonical_mode.encode())
         digest.update(b"\0")
         if path.is_symlink():
             payload = os.readlink(path).encode("utf-8", "surrogateescape")
