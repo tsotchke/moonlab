@@ -1010,6 +1010,19 @@ if(QSIM_BUILD_SHARED)
     if(QSIM_PLATFORM_WINDOWS)
         set_target_properties(quantumsim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
+    # The shared library embeds subsystems that are not unload-safe: OpenMP
+    # worker pools (libgomp is documented dlclose-unsafe), the CUDA runtime,
+    # and lazy background threads. A consumer's dlclose() would otherwise
+    # drop the last reference and unmap this DSO plus its private runtime
+    # dependencies while their threads are still parked in that code -- an
+    # intermittent SIGSEGV first caught by abi_moonlab_export on Jetson.
+    # Mark the ELF DT_FLAGS_1 nodelete (the same fix OpenBLAS ships):
+    # dlclose() still succeeds and invalidates the handle, but the mappings
+    # persist for process lifetime, which is the teardown contract the ABI
+    # smoke documents for Windows as well.
+    if(NOT QSIM_PLATFORM_WINDOWS AND NOT APPLE)
+        target_link_options(quantumsim PRIVATE "LINKER:-z,nodelete")
+    endif()
 elseif(QSIM_BUILD_STATIC)
     add_library(quantumsim STATIC ${QSIM_ALL_SOURCES})
 else()
