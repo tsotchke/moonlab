@@ -349,6 +349,9 @@ with open(hash_log, encoding="utf-8", errors="replace") as source:
     rank_hashes = hash_pattern.findall(source.read())
 rank_hash_hosts = {host for host, _ in rank_hashes}
 rank_hash_values = {value.lower() for _, value in rank_hashes}
+# The release certificate binds the per-rank hash list itself, not just the
+# count/host summaries: every rank must attest the identical executable bytes.
+rank_local_executable_sha256 = [value.lower() for _, value in rank_hashes]
 
 requirements = {
     "source_clean": not dirty,
@@ -379,6 +382,7 @@ fields = {
     "exact_log_sha256": exact_log_sha256,
     "rank_hash_count": len(rank_hashes),
     "rank_hash_host_count": len(rank_hash_hosts),
+    "rank_local_executable_sha256": rank_local_executable_sha256,
     "routine_test_passed": requirements["routine_exit_zero"] and requirements["routine_marker_pass"],
 }
 if routine_event is not None:
