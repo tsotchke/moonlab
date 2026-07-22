@@ -684,7 +684,12 @@ static qs_error_t povm_check_completeness_full(const povm_t *povm) {
  * struct (cast away const: the POVM object itself is caller-owned and
  * not const-qualified in practice; only the pointer parameter is). */
 static qs_error_t povm_check_completeness_cached(const povm_t *povm) {
-    if (!povm) return QS_ERROR_INVALID_STATE;
+    /* Cache state never overrides the structural invariants. In particular,
+     * a stale/forged cached-success verdict with zero outcomes must not reach
+     * measurement_povm(), where num_outcomes - 1 would underflow. */
+    if (!povm || !povm->kraus_ops || povm->num_outcomes == 0) {
+        return QS_ERROR_INVALID_STATE;
+    }
     if (povm->completeness_checked) {
         return (qs_error_t)povm->completeness_status;
     }
@@ -698,7 +703,9 @@ static qs_error_t povm_check_completeness_cached(const povm_t *povm) {
 qs_error_t measurement_povm_probabilities(const quantum_state_t *state,
                                            const povm_t *povm,
                                            double *probs_out) {
-    if (!state || !povm || !probs_out ||
+    if (!state || !state->amplitudes || !povm || !povm->kraus_ops ||
+        povm->num_outcomes == 0 ||
+        povm->num_outcomes > SIZE_MAX / sizeof(double) || !probs_out ||
         povm->state_dim != state->state_dim) {
         return QS_ERROR_INVALID_STATE;
     }
@@ -718,7 +725,10 @@ qs_error_t measurement_povm(quantum_state_t *state,
                              const povm_t *povm,
                              double uniform,
                              size_t *outcome_out) {
-    if (!state || !povm ||
+    if (!state || !state->amplitudes || !povm || !povm->kraus_ops ||
+        povm->num_outcomes == 0 ||
+        povm->num_outcomes > SIZE_MAX / sizeof(double) ||
+        !isfinite(uniform) || uniform < 0.0 || uniform >= 1.0 ||
         povm->state_dim != state->state_dim) {
         return QS_ERROR_INVALID_STATE;
     }
@@ -738,20 +748,27 @@ qs_error_t measurement_povm(quantum_state_t *state,
     }
 
     double cum = 0.0;
-    size_t picked = povm->num_outcomes - 1;
+    double picked_probability = 0.0;
+    size_t picked = 0;
     for (size_t k = 0; k < povm->num_outcomes; k++) {
-        cum += probs[k];
-        if (uniform < cum) { picked = k; break; }
+        const double probability = probs[k];
+        cum += probability;
+        /* Keep the fallback probability and its index coupled. Both scalars
+         * are initialized independently, and the nonzero outcome-count guard
+         * above guarantees at least one update. This also avoids asking GCC
+         * to correlate a later probs[picked] read with the separate fill loop. */
+        picked = k;
+        picked_probability = probability;
+        if (uniform < cum) break;
     }
-    if (outcome_out) *outcome_out = picked;
 
-    apply_matrix(povm->kraus_ops[picked], state->amplitudes, scratch, D);
-    double p = probs[picked];
-    if (p <= 0.0) {
+    if (picked_probability <= 0.0) {
         free(scratch); free(probs);
         return QS_ERROR_NOT_NORMALIZED;
     }
-    double inv_norm = 1.0 / sqrt(p);
+    if (outcome_out) *outcome_out = picked;
+    apply_matrix(povm->kraus_ops[picked], state->amplitudes, scratch, D);
+    double inv_norm = 1.0 / sqrt(picked_probability);
     for (uint64_t i = 0; i < D; i++) {
         state->amplitudes[i] = scratch[i] * inv_norm;
     }

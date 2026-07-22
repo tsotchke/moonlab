@@ -10,6 +10,8 @@
  *   - Weak Z at strength = 1 collapses |+> to |0> or |1> with prob 0.5.
  *   - Weak Z at strength = 0 leaves the state unchanged (up to phase).
  *   - Invalid POVM (not sum-to-I) returns QS_ERROR_NOT_NORMALIZED.
+ *   - Cached-success metadata cannot bypass zero/overflowing outcome-count
+ *     validation and drive an out-of-bounds probability read.
  */
 
 #include "../../src/quantum/measurement.h"
@@ -171,12 +173,94 @@ static void test_invalid_povm_rejected(void) {
     quantum_state_free(&s);
 }
 
+static void test_invalid_outcome_counts_rejected(void) {
+    fprintf(stdout, "\n-- Invalid cached POVM outcome counts are rejected --\n");
+    complex_t K[4] = { 1.0, 0.0, 0.0, 1.0 };
+    const complex_t *ops[1] = { K };
+    quantum_state_t s;
+    quantum_state_init(&s, 1);
+
+    /* A cached-success verdict used to bypass the full completeness check.
+     * With zero outcomes, picked = num_outcomes - 1 then underflowed before
+     * reading probs[picked]. Structural validation must precede the cache. */
+    povm_t empty = {
+        .num_outcomes = 0,
+        .state_dim = 2,
+        .kraus_ops = ops,
+        .completeness_checked = 1,
+        .completeness_status = QS_SUCCESS,
+    };
+    size_t outcome = 77;
+    qs_error_t rc = measurement_povm(&s, &empty, 0.5, &outcome);
+    CHECK(rc == QS_ERROR_INVALID_STATE,
+          "cached-success zero-outcome POVM is rejected (rc=%d)", (int)rc);
+    CHECK(outcome == 77, "rejected zero-outcome POVM does not write outcome");
+    CHECK(cabs(s.amplitudes[0] - 1.0) < 1e-12 &&
+          cabs(s.amplitudes[1]) < 1e-12,
+          "rejected zero-outcome POVM does not mutate state");
+
+    /* Bound the internal num_outcomes * sizeof(double) allocation before
+     * multiplication. The cached verdict makes this a focused O(1) check. */
+    povm_t oversized = {
+        .num_outcomes = SIZE_MAX / sizeof(double) + 1,
+        .state_dim = 2,
+        .kraus_ops = ops,
+        .completeness_checked = 1,
+        .completeness_status = QS_SUCCESS,
+    };
+    outcome = 88;
+    rc = measurement_povm(&s, &oversized, 0.5, &outcome);
+    CHECK(rc == QS_ERROR_INVALID_STATE,
+          "overflowing POVM outcome count is rejected (rc=%d)", (int)rc);
+    CHECK(outcome == 88, "rejected oversized POVM does not write outcome");
+
+    double probability = -1.0;
+    rc = measurement_povm_probabilities(&s, &empty, &probability);
+    CHECK(rc == QS_ERROR_INVALID_STATE,
+          "probability-only API rejects zero outcomes (rc=%d)", (int)rc);
+    CHECK(probability == -1.0,
+          "rejected probability-only call does not write output");
+
+    probability = -2.0;
+    rc = measurement_povm_probabilities(&s, &oversized, &probability);
+    CHECK(rc == QS_ERROR_INVALID_STATE,
+          "probability-only API rejects overflowing outcomes (rc=%d)",
+          (int)rc);
+    CHECK(probability == -2.0,
+          "rejected oversized probability call does not write output");
+
+    /* Sampling input is part of the public mathematical contract. Invalid
+     * variates must not silently select an endpoint outcome. */
+    povm_t valid = {
+        .num_outcomes = 1,
+        .state_dim = 2,
+        .kraus_ops = ops,
+        .completeness_checked = 1,
+        .completeness_status = QS_SUCCESS,
+    };
+    const double invalid_uniforms[] = { -0.01, 1.0, NAN, INFINITY };
+    for (size_t i = 0; i < sizeof(invalid_uniforms) / sizeof(invalid_uniforms[0]); i++) {
+        outcome = 99;
+        rc = measurement_povm(&s, &valid, invalid_uniforms[i], &outcome);
+        CHECK(rc == QS_ERROR_INVALID_STATE,
+              "invalid uniform[%zu] is rejected (rc=%d)", i, (int)rc);
+        CHECK(outcome == 99,
+              "invalid uniform[%zu] does not write outcome", i);
+        CHECK(cabs(s.amplitudes[0] - 1.0) < 1e-12 &&
+              cabs(s.amplitudes[1]) < 1e-12,
+              "invalid uniform[%zu] does not mutate state", i);
+    }
+
+    quantum_state_free(&s);
+}
+
 int main(void) {
     fprintf(stdout, "=== POVM / weak-measurement tests ===\n");
     test_projective_as_povm();
     test_trine_povm();
     test_weak_z_limits();
     test_invalid_povm_rejected();
+    test_invalid_outcome_counts_rejected();
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
