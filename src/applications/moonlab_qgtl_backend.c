@@ -384,7 +384,12 @@ static int next_line(const char **p, const char *end, char *line, size_t line_ca
         while (q < end && *q != '\n' && *q != '\0') q++;
         const size_t len = (size_t)(q - *p);
         const char *start = *p;
-        *p = (q < end && *q == '\n') ? q + 1 : q;
+        /* Advance past the terminator we stopped on. q < end means we halted
+         * on a '\n' OR an interior '\0'; both are line boundaries and must be
+         * consumed, otherwise a payload with an embedded NUL parks *p on that
+         * NUL forever (blank-line continue never advances) -- an untrusted-input
+         * hang first caught by circuit_deserialize_fuzz. */
+        *p = (q < end) ? q + 1 : q;
 
         /* Trim leading whitespace. */
         const char *ls = start;

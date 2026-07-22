@@ -42,7 +42,8 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential python3 python3-numpy
+          sudo apt-get install -y cmake ninja-build build-essential python3 python3-numpy \
+            libopenblas-dev liblapacke-dev
 
       - name: Build libquantumsim
         run: |
