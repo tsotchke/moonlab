@@ -1010,17 +1010,24 @@ if(QSIM_BUILD_SHARED)
     if(QSIM_PLATFORM_WINDOWS)
         set_target_properties(quantumsim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
-    # The shared library embeds subsystems that are not unload-safe: OpenMP
-    # worker pools (libgomp is documented dlclose-unsafe), the CUDA runtime,
-    # and lazy background threads. A consumer's dlclose() would otherwise
-    # drop the last reference and unmap this DSO plus its private runtime
-    # dependencies while their threads are still parked in that code -- an
-    # intermittent SIGSEGV first caught by abi_moonlab_export on Jetson.
-    # Mark the ELF DT_FLAGS_1 nodelete (the same fix OpenBLAS ships):
-    # dlclose() still succeeds and invalidates the handle, but the mappings
-    # persist for process lifetime, which is the teardown contract the ABI
-    # smoke documents for Windows as well.
-    if(NOT QSIM_PLATFORM_WINDOWS AND NOT APPLE)
+    # Linux shared builds have an explicit process-lifetime residency
+    # contract. The library embeds subsystems that are not unload-safe:
+    # OpenMP worker pools, the CUDA runtime, process-global QRNG state, and
+    # lazy background threads. A consumer's dlclose() must release its handle
+    # without unmapping code that one of those runtimes can still execute.
+    #
+    # Enforce that contract with ELF DT_FLAGS_1 NODELETE. Fail configuration
+    # instead of silently producing an unloadable Linux library when the
+    # selected linker cannot honor the policy. macOS and Windows have separate
+    # loader/runtime contracts and must not receive this ELF-only option.
+    if(QSIM_PLATFORM_LINUX)
+        include(CheckLinkerFlag)
+        check_linker_flag(C "LINKER:-z,nodelete" QSIM_LINKER_SUPPORTS_NODELETE)
+        if(NOT QSIM_LINKER_SUPPORTS_NODELETE)
+            message(FATAL_ERROR
+                "Linux shared builds require linker support for -z,nodelete "
+                "to enforce libquantumsim's process-lifetime residency contract")
+        endif()
         target_link_options(quantumsim PRIVATE "LINKER:-z,nodelete")
     endif()
 elseif(QSIM_BUILD_STATIC)

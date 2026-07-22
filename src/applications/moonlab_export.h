@@ -18,6 +18,12 @@
  *    existing declarations are locked.
  *  - Consumers should use `moonlab_abi_version()` at runtime to feature-gate
  *    newer capabilities.
+ *  - Linux shared-library builds are process-resident. `dlclose()` releases
+ *    the caller's handle, but libquantumsim remains mapped until process exit;
+ *    a later `dlopen()` can resolve and call the ABI again against the same
+ *    process-global runtime state. Consumers must not reuse a closed handle or
+ *    symbols obtained from it. Linux builds fail configuration when the
+ *    linker cannot enforce this contract with ELF `DT_FLAGS_1 NODELETE`.
  *
  * STABILITY
  * ---------
@@ -28,7 +34,9 @@
  * energies, variational-D, the 1+1D Z2 lattice-gauge builder, adaptive
  * two-site TDVP, the exact VQE gradient, and the status stringifier.
  * `tests/abi/test_moonlab_export_abi.c` dlopens the library and resolves
- * plus smokes this surface exactly as a downstream consumer does.
+ * plus smokes this surface exactly as a downstream consumer does. On Linux it
+ * also closes and reopens the library repeatedly, verifies process residency,
+ * and calls representative APIs after every reopen.
  *
  * VERSION HISTORY
  * ---------------

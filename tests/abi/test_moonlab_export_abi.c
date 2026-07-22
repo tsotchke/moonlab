@@ -132,6 +132,188 @@ static void* open_library(void) {
     return NULL;
 }
 
+#if defined(__linux__)
+#ifndef RTLD_NOLOAD
+#error "Linux ABI lifecycle coverage requires RTLD_NOLOAD"
+#endif
+
+static void* open_resident_library(void) {
+    const char* configured = getenv("MOONLAB_QUANTUMSIM_LIBRARY");
+    if (configured && configured[0] != '\0') {
+        /* The configured path is authoritative. Falling back to a generic
+         * soname here could find a different resident libquantumsim and mask
+         * physical unload of the exact DSO the lifecycle test opened. */
+        return dlopen(configured, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD);
+    }
+    for (const char* const* name = LIB_CANDIDATES; *name; ++name) {
+        void* h = dlopen(*name, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD);
+        if (h) return h;
+    }
+    return NULL;
+}
+
+static int test_configured_path_authority(void) {
+    const char* configured = getenv("MOONLAB_QUANTUMSIM_LIBRARY");
+    if (!configured || configured[0] == '\0') return 0;
+
+    char* saved = strdup(configured);
+    if (!saved) {
+        fprintf(stderr, "lifecycle setup: could not copy configured DSO path\n");
+        return 1;
+    }
+
+    const char* missing =
+        "/__moonlab_lifecycle_missing__/libquantumsim.so";
+    if (setenv("MOONLAB_QUANTUMSIM_LIBRARY", missing, 1) != 0) {
+        fprintf(stderr, "lifecycle setup: could not install missing DSO path\n");
+        free(saved);
+        return 1;
+    }
+
+    dlerror();
+    void* unexpected = open_resident_library();
+    int restore_failed =
+        setenv("MOONLAB_QUANTUMSIM_LIBRARY", saved, 1) != 0;
+    free(saved);
+
+    if (unexpected) {
+        dlclose(unexpected);
+        fprintf(stderr,
+                "lifecycle setup: configured missing DSO path fell back to "
+                "a generic resident library\n");
+        return 1;
+    }
+    if (restore_failed) {
+        fprintf(stderr, "lifecycle setup: could not restore configured DSO path\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int probe_lifecycle_apis(void* h,
+                                int expected_major,
+                                int expected_minor,
+                                int expected_patch,
+                                const char* phase,
+                                int cycle) {
+    dlerror();
+    moonlab_abi_version_fn version =
+        (moonlab_abi_version_fn)dlsym(h, "moonlab_abi_version");
+    const char* version_error = dlerror();
+    if (!version || version_error) {
+        fprintf(stderr,
+                "lifecycle cycle %d (%s): dlsym(moonlab_abi_version) "
+                "failed: %s\n",
+                cycle, phase, version_error ? version_error : "null");
+        return 1;
+    }
+
+    dlerror();
+    moonlab_qrng_bytes_fn qrng =
+        (moonlab_qrng_bytes_fn)dlsym(h, "moonlab_qrng_bytes");
+    const char* qrng_error = dlerror();
+    if (!qrng || qrng_error) {
+        fprintf(stderr,
+                "lifecycle cycle %d (%s): dlsym(moonlab_qrng_bytes) "
+                "failed: %s\n",
+                cycle, phase, qrng_error ? qrng_error : "null");
+        return 1;
+    }
+
+    int major = -1, minor = -1, patch = -1;
+    version(&major, &minor, &patch);
+    if (major != expected_major || minor != expected_minor ||
+        patch != expected_patch) {
+        fprintf(stderr,
+                "lifecycle cycle %d (%s): ABI version changed from %d.%d.%d "
+                "to %d.%d.%d\n",
+                cycle, phase,
+                expected_major, expected_minor, expected_patch,
+                major, minor, patch);
+        return 1;
+    }
+
+    uint8_t sample[8];
+    if (qrng(sample, sizeof sample) != 0) {
+        fprintf(stderr,
+                "lifecycle cycle %d (%s): moonlab_qrng_bytes failed\n",
+                cycle, phase);
+        return 1;
+    }
+    return 0;
+}
+
+static int test_linux_resident_lifecycle(void** handle_io) {
+    enum { LIFECYCLE_CYCLES = 3 };
+    void* h = *handle_io;
+
+    if (test_configured_path_authority() != 0) return 1;
+
+    dlerror();
+    moonlab_abi_version_fn version =
+        (moonlab_abi_version_fn)dlsym(h, "moonlab_abi_version");
+    const char* version_error = dlerror();
+    if (!version || version_error) {
+        fprintf(stderr, "lifecycle setup: dlsym(moonlab_abi_version) failed: %s\n",
+                version_error ? version_error : "null");
+        return 1;
+    }
+
+    int expected_major = -1, expected_minor = -1, expected_patch = -1;
+    version(&expected_major, &expected_minor, &expected_patch);
+
+    for (int cycle = 1; cycle <= LIFECYCLE_CYCLES; ++cycle) {
+        if (dlclose(h) != 0) {
+            fprintf(stderr, "lifecycle cycle %d: dlclose failed: %s\n",
+                    cycle, dlerror());
+            return 1;
+        }
+        h = NULL;
+        *handle_io = NULL;
+
+        /* RTLD_NOLOAD is the assertion that this is NODELETE residency, not
+         * a successful unload followed by a fresh load that hides teardown
+         * defects. It must find the exact configured DSO after the last
+         * consumer handle was closed. */
+        void* resident = open_resident_library();
+        if (!resident) {
+            fprintf(stderr,
+                    "lifecycle cycle %d: library was physically unloaded; "
+                    "ELF NODELETE residency is missing (%s)\n",
+                    cycle, dlerror());
+            return 1;
+        }
+
+        int failures = probe_lifecycle_apis(
+            resident, expected_major, expected_minor, expected_patch,
+            "resident-after-close", cycle);
+        if (dlclose(resident) != 0) {
+            fprintf(stderr,
+                    "lifecycle cycle %d: closing RTLD_NOLOAD handle failed: %s\n",
+                    cycle, dlerror());
+            failures++;
+        }
+
+        h = open_library();
+        if (!h) {
+            fprintf(stderr, "lifecycle cycle %d: reopen failed: %s\n",
+                    cycle, dlerror());
+            return failures + 1;
+        }
+        *handle_io = h;
+        failures += probe_lifecycle_apis(
+            h, expected_major, expected_minor, expected_patch,
+            "reopened", cycle);
+        if (failures) return failures;
+    }
+
+    fprintf(stdout,
+            "Linux resident lifecycle OK (%d dlclose/RTLD_NOLOAD/reopen cycles)\n",
+            LIFECYCLE_CYCLES);
+    return 0;
+}
+#endif
+
 static int test_version(void* h) {
     dlerror();
     moonlab_abi_version_fn fn =
@@ -1069,6 +1251,11 @@ int main(void) {
         }
     }
 
+#if defined(__linux__)
+    ABI_STEP("resident lifecycle");
+    failures += test_linux_resident_lifecycle(&h);
+#endif
+
 #if defined(_WIN32)
     /* MinGW DLL detach can block after QRNG/TDVP runtime initialisation.
      * This ABI smoke verifies load + symbol calls; Windows process teardown
@@ -1076,7 +1263,10 @@ int main(void) {
      * downstream ABI contract. */
     (void)h;
 #else
-    dlclose(h);
+    if (h && dlclose(h) != 0) {
+        fprintf(stderr, "final dlclose failed: %s\n", dlerror());
+        failures++;
+    }
 #endif
 
     int exit_code = failures ? 1 : 0;
