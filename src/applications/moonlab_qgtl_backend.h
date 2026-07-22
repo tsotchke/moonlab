@@ -220,8 +220,10 @@ moonlab_qgtl_circuit_serialize(const moonlab_qgtl_circuit_t *c,
  *        @ref moonlab_qgtl_circuit_serialize (or written by hand).
  *
  * @param[in]   buf        Input buffer.
- * @param[in]   buf_size   Bytes to read at `buf` (use SIZE_MAX to
- *                         scan until a NUL).
+ * @param[in]   buf_size   Bytes to read at `buf`.  Pass 0 for a
+ *                         NUL-terminated string.  With an explicit non-zero
+ *                         length, a NUL anywhere inside the declared extent
+ *                         is invalid input.
  * @param[out]  out_status Optional.  Set to MOONLAB_QGTL_OK on
  *                         success or a negative code on failure.
  *

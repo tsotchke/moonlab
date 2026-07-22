@@ -22,7 +22,34 @@
 
 #include "applications/moonlab_qgtl_backend.h"
 
+#include <assert.h>
+#include <ctype.h>
 #include <stdlib.h>
+
+/* Inputs with a bounded NUL or a non-comment logical line larger than the
+ * parser's 255-byte grammar limit are required to fail closed. */
+static int requires_parse_rejection(const uint8_t *data, size_t size)
+{
+    if (size > 0 && memchr(data, '\0', size) != NULL) return 1;
+
+    size_t line_start = 0;
+    while (line_start < size) {
+        size_t line_end = line_start;
+        while (line_end < size && data[line_end] != '\n') line_end++;
+
+        size_t content = line_start;
+        while (content < line_end && isspace((unsigned char)data[content])) {
+            content++;
+        }
+        if (content < line_end && data[content] != '#' &&
+            line_end - content > 255) {
+            return 1;
+        }
+
+        line_start = (line_end < size) ? line_end + 1 : line_end;
+    }
+    return 0;
+}
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -45,12 +72,20 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     moonlab_qgtl_circuit_t *c =
         moonlab_qgtl_circuit_deserialize(buf, size, &status);
 
+    if (requires_parse_rejection(data, size)) {
+        assert(c == NULL);
+        assert(status == MOONLAB_QGTL_BAD_ARG);
+    }
+
     if (c) {
         /* Valid parse: exercise the introspection accessors too, then
          * release.  A non-NULL handle must carry a sane qubit count. */
+        assert(status == MOONLAB_QGTL_OK);
         (void)moonlab_qgtl_circuit_num_qubits(c);
         (void)moonlab_qgtl_circuit_num_gates(c);
         moonlab_qgtl_circuit_free(c);
+    } else {
+        assert(status < 0);
     }
 
     free(buf);

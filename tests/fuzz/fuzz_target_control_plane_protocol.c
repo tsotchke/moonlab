@@ -33,6 +33,7 @@
 
 #include "control/control_plane.h"
 
+#include <assert.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -98,6 +99,35 @@ static void send_all_fd(int fd, const uint8_t *data, size_t size)
     }
 }
 
+/* Recognise the focused unauthenticated CIRCUIT frame carried by the
+ * embedded-NUL regression corpus.  Restricting the header to an exact decimal
+ * length keeps the oracle independent of the server's permissive sscanf
+ * details; bytes after the declared body are irrelevant to this request. */
+static int circuit_frame_requires_rejection(const uint8_t *data, size_t size)
+{
+    static const char prefix[] = "CIRCUIT ";
+    if (size <= sizeof(prefix) - 1 ||
+        memcmp(data, prefix, sizeof(prefix) - 1) != 0) {
+        return 0;
+    }
+
+    size_t pos = sizeof(prefix) - 1;
+    size_t body_size = 0;
+    int saw_digit = 0;
+    while (pos < size && data[pos] >= '0' && data[pos] <= '9') {
+        const size_t digit = (size_t)(data[pos] - '0');
+        if (body_size > (SIZE_MAX - digit) / 10) return 0;
+        body_size = body_size * 10 + digit;
+        saw_digit = 1;
+        pos++;
+    }
+    if (!saw_digit || pos >= size || data[pos] != '\n') return 0;
+
+    const size_t body_start = pos + 1;
+    if (body_size > size - body_start) return 0;
+    return body_size > 0 && memchr(data + body_start, '\0', body_size) != NULL;
+}
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     ignore_sigpipe_once();
@@ -105,6 +135,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     /* The server body cap is 4 MB; a little headroom covers the verb and
      * AUTH prelude.  Larger inputs carry no extra signal. */
     if (size > (5u * 1024u * 1024u)) size = 5u * 1024u * 1024u;
+
+    const int must_reject = circuit_frame_requires_rejection(data, size);
 
     moonlab_control_server_t *srv = NULL;
     uint16_t port = 0;
@@ -127,10 +159,24 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         /* Drain the response so the server's send() completes, bounded so
          * a hostile-looking response length can never spin forever. */
         char buf[1024];
+        char response_prefix[4];
+        size_t response_prefix_len = 0;
         int guard = 0;
         while (guard++ < 200000) {
             ssize_t n = recv(fd, buf, sizeof(buf), 0);
             if (n <= 0) break;
+            if (must_reject && response_prefix_len < sizeof(response_prefix)) {
+                size_t copy = (size_t)n;
+                if (copy > sizeof(response_prefix) - response_prefix_len) {
+                    copy = sizeof(response_prefix) - response_prefix_len;
+                }
+                memcpy(response_prefix + response_prefix_len, buf, copy);
+                response_prefix_len += copy;
+            }
+        }
+        if (must_reject) {
+            assert(response_prefix_len == sizeof(response_prefix));
+            assert(memcmp(response_prefix, "ERR ", sizeof(response_prefix)) == 0);
         }
         close(fd);
     } else {

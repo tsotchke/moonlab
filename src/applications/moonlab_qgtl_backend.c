@@ -374,21 +374,26 @@ int moonlab_qgtl_circuit_serialize(const moonlab_qgtl_circuit_t *c,
     return MOONLAB_QGTL_OK;
 }
 
+enum {
+    NEXT_LINE_INVALID = -1,
+    NEXT_LINE_EOF = 0,
+    NEXT_LINE_OK = 1
+};
+
 /* Read the next non-blank, non-comment line into `line` (terminated).
- * Returns 1 on success, 0 on EOF.  Advances `*p` past the consumed
- * bytes (and the trailing newline). */
+ * Returns NEXT_LINE_OK on success, NEXT_LINE_EOF only when the input is
+ * exhausted, and NEXT_LINE_INVALID when a logical line cannot fit.  Advances
+ * `*p` past the consumed bytes (and the trailing newline). */
 static int next_line(const char **p, const char *end, char *line, size_t line_cap)
 {
     while (*p < end) {
         const char *q = *p;
-        while (q < end && *q != '\n' && *q != '\0') q++;
+        while (q < end && *q != '\n') q++;
         const size_t len = (size_t)(q - *p);
         const char *start = *p;
-        /* Advance past the terminator we stopped on. q < end means we halted
-         * on a '\n' OR an interior '\0'; both are line boundaries and must be
-         * consumed, otherwise a payload with an embedded NUL parks *p on that
-         * NUL forever (blank-line continue never advances) -- an untrusted-input
-         * hang first caught by circuit_deserialize_fuzz. */
+        /* q < end means we halted on a newline.  Explicit-length callers are
+         * prevalidated below, so a NUL can never be reinterpreted as a line
+         * boundary. */
         *p = (q < end) ? q + 1 : q;
 
         /* Trim leading whitespace. */
@@ -398,12 +403,12 @@ static int next_line(const char **p, const char *end, char *line, size_t line_ca
         if (*ls == '#') continue;                    /* comment */
 
         const size_t copy = (size_t)((start + len) - ls);
-        if (copy + 1 > line_cap) return 0; /* overlong line -> bail */
+        if (copy + 1 > line_cap) return NEXT_LINE_INVALID;
         memcpy(line, ls, copy);
         line[copy] = '\0';
-        return 1;
+        return NEXT_LINE_OK;
     }
-    return 0;
+    return NEXT_LINE_EOF;
 }
 
 moonlab_qgtl_circuit_t *
@@ -415,7 +420,14 @@ moonlab_qgtl_circuit_deserialize(const char *buf,
     moonlab_qgtl_circuit_t *c = NULL;
 
     if (!buf) goto done;
-    if (buf_size == 0) buf_size = strlen(buf);
+    if (buf_size == 0) {
+        buf_size = strlen(buf);
+    } else if (memchr(buf, '\0', buf_size) != NULL) {
+        /* A bounded payload is binary data until proven otherwise.  Reject a
+         * NUL anywhere inside the declared extent so length-aware callers and
+         * C-string consumers cannot disagree about the parsed circuit. */
+        goto done;
+    }
     const char *p   = buf;
     const char *end = buf + buf_size;
 
@@ -423,7 +435,14 @@ moonlab_qgtl_circuit_deserialize(const char *buf,
     int got_header = 0;
     int num_qubits = -1;
 
-    while (next_line(&p, end, line, sizeof(line))) {
+    for (;;) {
+        const int line_status = next_line(&p, end, line, sizeof(line));
+        if (line_status == NEXT_LINE_EOF) break;
+        if (line_status == NEXT_LINE_INVALID) {
+            status = MOONLAB_QGTL_BAD_ARG;
+            goto done;
+        }
+
         if (!got_header) {
             int n = -1;
             if (sscanf(line, "NUM_QUBITS %d", &n) != 1 || n < 1 || n > 32) {

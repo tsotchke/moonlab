@@ -184,6 +184,33 @@ static void test_bad_input(void)
             "NUM_QUBITS 99\nH 0\n", 18, &status);
     CHECK(c == NULL, "num_qubits=99 rejected (out of range)");
 
+    /* Explicit lengths are authoritative.  A NUL inside that extent must be
+     * rejected instead of terminating a prefix or acting as a line break. */
+    static const char with_embedded_nul[] =
+        "NUM_QUBITS 2\n"
+        "H 0\0"
+        "X 1\n";
+    status = 12345;
+    c = moonlab_qgtl_circuit_deserialize(
+            with_embedded_nul, sizeof(with_embedded_nul) - 1, &status);
+    CHECK(c == NULL, "explicit-length embedded NUL rejected");
+    CHECK(status == MOONLAB_QGTL_BAD_ARG,
+          "embedded NUL status is BAD_ARG");
+    if (c) moonlab_qgtl_circuit_free(c);
+
+    /* Regression: next_line used to report both EOF and an overlong line as
+     * zero.  After a valid header that silently accepted a truncated prefix. */
+    static const char header[] = "NUM_QUBITS 2\n";
+    char overlong[sizeof(header) - 1 + 256];
+    memcpy(overlong, header, sizeof(header) - 1);
+    memset(overlong + sizeof(header) - 1, 'A', 256);
+    status = 12345;
+    c = moonlab_qgtl_circuit_deserialize(overlong, sizeof(overlong), &status);
+    CHECK(c == NULL, "overlong final line rejected instead of treated as EOF");
+    CHECK(status == MOONLAB_QGTL_BAD_ARG,
+          "overlong final line status is BAD_ARG");
+    if (c) moonlab_qgtl_circuit_free(c);
+
     /* Comments + blank lines tolerated. */
     const char *with_comments =
         "# header\n"
