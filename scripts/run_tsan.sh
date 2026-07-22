@@ -40,6 +40,38 @@ LIB_OFF="$REPO_ROOT/build-tsan/libquantumsim.a"
 LIB_ON="$REPO_ROOT/build-tsan-omp/libquantumsim.a"
 SUPP="$REPO_ROOT/tests/concurrency/tsan.supp"
 
+tsan_options_for_run() { # $1=suppression enabled (0|1)
+    local opts="halt_on_error=0"
+    [ "$1" = "1" ] && opts="$opts:suppressions=$SUPP"
+    printf '%s\n' "$opts"
+}
+
+run_result_is_clean() { # $1=unique race sites, $2=process exit status
+    [ "$1" -eq 0 ] && [ "$2" -eq 0 ]
+}
+
+# Side-effect-free probes used by the focused producer-contract regression.
+# They intentionally run before trace truncation, source capture, or toolchain
+# discovery so the test does not need ThreadSanitizer.
+case "${1:-}" in
+    --internal-print-suppression-options)
+        tsan_options_for_run 1
+        exit 0
+        ;;
+    --internal-classify-run-result)
+        if [ "$#" -ne 3 ] || ! [[ "$2" =~ ^[0-9]+$ && "$3" =~ ^[0-9]+$ ]]; then
+            echo "usage: $0 --internal-classify-run-result RACES EXIT_STATUS" >&2
+            exit 2
+        fi
+        if run_result_is_clean "$2" "$3"; then
+            echo PASS
+            exit 0
+        fi
+        echo FAIL
+        exit 1
+        ;;
+esac
+
 resolve_path() {
     python3 - "$1" <<'PY'
 from pathlib import Path
@@ -261,15 +293,17 @@ json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g' <<<"$1"; }
 # relay fail with git-tree-mismatch; it has been removed so all calls carry
 # provenance.
 
-run_one() {  # $1=name $2=supp(0|1) $3=binary $4...=args  -> echoes race count
+run_one() {  # $1=name $2=supp(0|1) $3=binary $4...=args -> echoes "races exit"
     local name="$1" supp="$2" bin="$3"; shift 3
     local log="$LOG_DIR/run_${name}.log"
-    local opts="halt_on_error=0"
-    [ "$supp" = "1" ] && opts="$opts:suppressions=$REPO_ROOT/$SUPP"
+    local opts run_rc races
+    opts="$(tsan_options_for_run "$supp")"
     TSAN_OPTIONS="$opts" OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}" \
         "$BIN/$bin" "$@" >"$log" 2>&1
-    echo $? > "$log.exit"
-    distinct_races "$log"
+    run_rc=$?
+    printf '%s\n' "$run_rc" > "$log.exit"
+    races="$(distinct_races "$log")"
+    printf '%s %s\n' "$races" "$run_rc"
 }
 
 echo "[tsan] running harnesses ..."
@@ -286,28 +320,34 @@ for spec in \
     "clifford_measurement|0|conc_clifford_measurement|" ; do
     IFS='|' read -r nm supp binp arg <<<"$spec"
     # shellcheck disable=SC2086
-    r=$(run_one "$nm" "$supp" "$binp" $arg)
-    if [ "$r" -eq 0 ]; then
+    read -r r run_rc <<<"$(run_one "$nm" "$supp" "$binp" $arg)"
+    if run_result_is_clean "$r" "$run_rc"; then
         emit "$nm" "PASS" 0 "clean under TSan (no data race)" 0.9
         echo "  [PASS] $nm  (0 races)"
     else
-        emit "$nm" "FAIL" "$r" "UNEXPECTED race in a clean-expected harness" 0.9
-        echo "  [FAIL] $nm  ($r races) <-- regression"
+        emit "$nm" "FAIL" "$r" "UNEXPECTED race or harness failure in a clean-expected harness (exit=$run_rc)" 0.9
+        echo "  [FAIL] $nm  ($r races, exit=$run_rc) <-- regression"
         FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+r))
     fi
 done
 
 # OpenMP harness: clean once libomp-internal frames are suppressed.
 if [ "$WITH_OMP" = "1" ]; then
-    r=$(run_one "grover_gates_omp" 1 "conc_grover_gates" all)
-    raw=$(run_one "grover_gates_omp_raw" 0 "conc_grover_gates" all)
-    if [ "$r" -eq 0 ]; then
+    read -r r run_rc <<<"$(run_one "grover_gates_omp" 1 "conc_grover_gates" all)"
+    read -r raw raw_rc <<<"$(run_one "grover_gates_omp_raw" 0 "conc_grover_gates" all)"
+    # The unsuppressed diagnostic normally exits nonzero when it reports the
+    # Homebrew libomp annotation gaps. It is valid only if it either completed
+    # cleanly or actually emitted a race summary; a crash with zero summaries
+    # must not turn into PASS.
+    raw_completed=0
+    if [ "$raw_rc" -eq 0 ] || [ "$raw" -gt 0 ]; then raw_completed=1; fi
+    if run_result_is_clean "$r" "$run_rc" && [ "$raw_completed" -eq 1 ]; then
         emit "grover_gates_omp" "PASS" 0 \
           "OpenMP core clean after excluding un-annotated libomp frames (raw=$raw libomp false positives); entropy isolation + disjoint fan-out verified" 0.75
-        echo "  [PASS] grover_gates_omp  (0 real, $raw libomp-runtime false positives filtered)"
+        echo "  [PASS] grover_gates_omp  (0 real, $raw libomp-runtime false positives filtered; exit=$run_rc raw_exit=$raw_rc)"
     else
-        emit "grover_gates_omp" "FAIL" "$r" "moonlab-owned race survived libomp suppression" 0.75
-        echo "  [FAIL] grover_gates_omp  ($r races)"
+        emit "grover_gates_omp" "FAIL" "$r" "moonlab-owned race or harness failure survived libomp suppression (exit=$run_rc raw_exit=$raw_rc raw_races=$raw)" 0.75
+        echo "  [FAIL] grover_gates_omp  ($r races, exit=$run_rc raw=$raw raw_exit=$raw_rc)"
         FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+r))
     fi
 else
@@ -316,24 +356,24 @@ fi
 
 # ---- Regression checks for the four fixed concurrency bugs (v1.2) ----
 # Each harness drives the exact race / deadlock window that once fired; a
-# nonzero race count now means a REGRESSION, so PASS iff clean.
-regress() {  # $1=name $2=races $3=snippet
-    if [ "$2" -eq 0 ]; then
-        emit "$1" "PASS" 0 "$3" 0.9
+# A nonzero race count or process exit means a REGRESSION, so PASS iff clean.
+regress() {  # $1=name $2=races $3=exit status $4=snippet
+    if run_result_is_clean "$2" "$3"; then
+        emit "$1" "PASS" 0 "$4" 0.9
         echo "  [PASS] $1  (0 races: fix holds)"
     else
-        emit "$1" "FAIL" "$2" "REGRESSION -- $3" 0.95
-        echo "  [FAIL] $1  ($2 races) <-- regression"
+        emit "$1" "FAIL" "$2" "REGRESSION or harness failure (exit=$3) -- $4" 0.95
+        echo "  [FAIL] $1  ($2 races, exit=$3) <-- regression"
         FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+$2))
     fi
 }
 
-r=$(run_one "core_init_lazy_init" 0 "conc_core_init")
-regress "core_init_lazy_init" "$r" \
+read -r r run_rc <<<"$(run_one "core_init_lazy_init" 0 "conc_core_init")"
+regress "core_init_lazy_init" "$r" "$run_rc" \
   "cold-start lazy init of process globals is now race-free: qsim_config_global double-checked-locking (config.c) + simd_dispatch_init_once pthread_once (simd_ops.c)"
 
-r=$(run_one "control_plane_config_fields" 0 "conc_control_plane" adversarial)
-regress "control_plane_config_fields" "$r" \
+read -r r run_rc <<<"$(run_one "control_plane_config_fields" 0 "conc_control_plane" adversarial)"
+regress "control_plane_config_fields" "$r" "$run_rc" \
   "server config setters/readers now synchronised: admission_hook+ctx pair and max_concurrent/request_timeout under cfg_lock, rate_rps atomic"
 
 # Audit-buffer destroy vs in-flight push/pop: with the in_flight drain the
@@ -341,11 +381,14 @@ regress "control_plane_config_fields" "$r" \
 adlog="$LOG_DIR/run_audit_destroy.log"
 TSAN_OPTIONS="halt_on_error=0" "$BIN/conc_audit_buffer" destroy >"$adlog" 2>&1
 ad_exit=$?
-if [ "$ad_exit" -eq 7 ] || grep -q "DEADLOCK:" "$adlog"; then
+ad_races="$(distinct_races "$adlog")"
+ad_deadlock=0
+if [ "$ad_exit" -eq 7 ] || grep -q "DEADLOCK:" "$adlog"; then ad_deadlock=1; fi
+if [ "$ad_exit" -ne 0 ] || [ "$ad_races" -ne 0 ] || [ "$ad_deadlock" -ne 0 ]; then
     emit "audit_buffer_destroy_deadlock" "FAIL" 1 \
-      "REGRESSION -- destroy() vs in-flight push/pop wedged on the destroyed mutex (audit_buffer.c)" 0.95
-    echo "  [FAIL] audit_buffer_destroy_deadlock  (deadlock reproduced) <-- regression"
-    FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+1))
+      "REGRESSION or harness failure -- destroy() vs in-flight push/pop (exit=$ad_exit races=$ad_races)" 0.95
+    echo "  [FAIL] audit_buffer_destroy_deadlock  (exit=$ad_exit races=$ad_races) <-- regression"
+    FAILS=$((FAILS+1)); REAL_RACES=$((REAL_RACES+ad_races+ad_deadlock))
 else
     emit "audit_buffer_destroy_deadlock" "PASS" 0 \
       "destroy() drains in_flight before destroying the mutex; 16 rounds completed with no wedge" 0.9
@@ -353,13 +396,13 @@ else
 fi
 
 # --- 4. Umbrella verdict ----------------------------------------------------
-if [ "$REAL_RACES" -eq 0 ]; then
+if [ "$REAL_RACES" -eq 0 ] && [ "$FAILS" -eq 0 ]; then
     emit "tsan_clean" "PASS" 0 "no data races or deadlocks across the concurrency lane" 0.9
     echo "[tsan] RESULT: PASS (0 real races)"
     exit 0
 fi
 emit "tsan_clean" "FAIL" "$REAL_RACES" \
-  "concurrency lane found real bugs: shared-core lazy-init races (config/simd), control-plane config-field races, audit-buffer destroy deadlock. Clean-surface regressions: $FAILS" 0.9
+  "concurrency lane found race/deadlock sites or harness failures. Clean-surface failures: $FAILS" 0.9
 echo "[tsan] RESULT: FAIL ($REAL_RACES real race/deadlock sites; $FAILS clean-surface regressions)"
 echo "[tsan] trace -> $TRACE ; per-run logs -> $LOG_DIR ; findings -> tests/concurrency/FINDINGS.md"
 # A clean-surface regression is a hard failure; the known diagnostic findings

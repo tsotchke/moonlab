@@ -37,6 +37,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/concurrency/**'
+      - 'tests/release/test_tsan_producer.py'
       - 'scripts/run_tsan.sh'
       - '.github/workflows/tsan.yml'
   schedule:
@@ -57,6 +58,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify TSan producer fail-closed contract
+        run: python3 tests/release/test_tsan_producer.py
 
       - name: Install toolchain
         run: |
