@@ -465,6 +465,112 @@ static void test_qng_metric_and_convergence(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* UCCSD must reach the exact STO-3G ground state of H2 to chemical
+ * accuracy (1.6 mHa).  The single-parameter UCCSD circuit is the
+ * canonical H2 ansatz: from the Hartree-Fock reference |10> a single
+ * particle-conserving excitation mixes |10> and |01>, and its optimum
+ * is the exact ground state.  This guards the fix for the two defects
+ * that previously drove UCCSD H2 well above the true ground state:
+ *   (1) the ansatz re-prepared the HF reference that vqe_compute_energy
+ *       had already prepared (double X gates -> wrong particle sector);
+ *   (2) the single-excitation "Givens" circuit was not particle
+ *       conserving (it leaked amplitude into |00>). */
+static void test_h2_uccsd_chemical_accuracy(void) {
+    fprintf(stdout, "\n-- VQE: UCCSD H2 reaches chemical accuracy --\n");
+
+    pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.74);
+    CHECK(H != NULL, "built H2 Hamiltonian");
+    if (!H) return;
+    double E_exact = vqe_exact_ground_state_energy(H);
+
+    /* 2 qubits, 1 electron in the parity/BK-reduced encoding:
+     * 1 single excitation, 0 doubles -> a single variational parameter. */
+    vqe_ansatz_t *ansatz = vqe_create_uccsd_ansatz(2, 1);
+    CHECK(ansatz != NULL, "built UCCSD ansatz (2 qubits, 1 electron)");
+    if (!ansatz) { pauli_hamiltonian_free(H); return; }
+    CHECK(ansatz->num_parameters == 1,
+          "UCCSD H2 has a single variational parameter (got %zu)",
+          ansatz->num_parameters);
+
+    vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+    opt->max_iterations = 500;
+    opt->tolerance = 1e-10;
+    opt->learning_rate = 0.1;
+    opt->verbose = 0;
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    vqe_solver_t *solver = vqe_solver_create(H, ansatz, opt, &e);
+    vqe_result_t res = vqe_solve(solver);
+
+    double err = fabs(res.ground_state_energy - E_exact);
+    fprintf(stdout, "    E_UCCSD = %.9f Ha   E_exact = %.9f Ha   |err| = %.2e Ha\n",
+            res.ground_state_energy, E_exact, err);
+    CHECK(isfinite(res.ground_state_energy), "UCCSD energy is finite");
+    CHECK(err < 1.6e-3,
+          "UCCSD H2 within chemical accuracy of exact (|err| %.2e < 1.6e-3)",
+          err);
+
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
+}
+
+/* The exact ground state of the 4-qubit LiH operator lies in the
+ * 3-excitation sector; the UCCSD reference is the contiguous
+ * three-orbital occupation |0111>, and the three single excitations
+ * (each moving a particle into the fourth orbital) span the correlated
+ * ground state exactly.  UCCSD must therefore reach chemical accuracy
+ * on LiH as well. */
+static void test_lih_uccsd_chemical_accuracy(void) {
+    fprintf(stdout, "\n-- VQE: UCCSD LiH reaches chemical accuracy --\n");
+
+    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+    CHECK(H != NULL, "built LiH Hamiltonian");
+    if (!H) return;
+    CHECK(H->hf_reference == 0x7,
+          "LiH Hartree-Fock reference is |0111> (0x7, got 0x%llx)",
+          (unsigned long long)H->hf_reference);
+    double E_exact = vqe_exact_ground_state_energy(H);
+
+    /* 4 qubits, 3 electrons: 3 single excitations, 0 doubles. */
+    vqe_ansatz_t *ansatz = vqe_create_uccsd_ansatz(4, 3);
+    CHECK(ansatz != NULL, "built UCCSD ansatz (4 qubits, 3 electrons)");
+    if (!ansatz) { pauli_hamiltonian_free(H); return; }
+    CHECK(ansatz->num_parameters == 3,
+          "UCCSD LiH has 3 single-excitation parameters (got %zu)",
+          ansatz->num_parameters);
+
+    vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_ADAM);
+    opt->max_iterations = 3000;
+    opt->tolerance = 1e-12;
+    opt->learning_rate = 0.1;
+    opt->verbose = 0;
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    vqe_solver_t *solver = vqe_solver_create(H, ansatz, opt, &e);
+    vqe_result_t res = vqe_solve(solver);
+
+    double err = fabs(res.ground_state_energy - E_exact);
+    fprintf(stdout, "    E_UCCSD = %.9f Ha   E_exact = %.9f Ha   |err| = %.2e Ha\n",
+            res.ground_state_energy, E_exact, err);
+    CHECK(isfinite(res.ground_state_energy), "UCCSD LiH energy is finite");
+    CHECK(err < 1.6e-3,
+          "UCCSD LiH within chemical accuracy of exact (|err| %.2e < 1.6e-3)",
+          err);
+
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -475,6 +581,8 @@ int main(void) {
     test_h2_pes_smooth_and_differentiable();
     test_lih_pes_smooth_and_consistent();
     test_qng_metric_and_convergence();
+    test_h2_uccsd_chemical_accuracy();
+    test_lih_uccsd_chemical_accuracy();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

@@ -122,6 +122,7 @@ pauli_hamiltonian_t* pauli_hamiltonian_create(
     h->nuclear_repulsion = 0.0;
     h->molecule_name = NULL;
     h->bond_distance = 0.0;
+    h->hf_reference = 0;   /* default |00...0>; molecule builders override */
     
     h->terms = calloc(num_terms, sizeof(pauli_term_t));
     if (!h->terms) {
@@ -346,7 +347,16 @@ pauli_hamiltonian_t* vqe_create_lih_hamiltonian(double bond_distance) {
     
     h->molecule_name = strdup("LiH");
     h->bond_distance = bond_distance;
-    
+    /* The exact ground state of this 4-qubit operator lies entirely in the
+     * 3-excitation (Hamming-weight-3) sector -- dominated by |1101> and
+     * |1110>.  The Hartree-Fock reference is therefore the contiguous
+     * three-orbital occupation |0111> (qubits 0,1,2 set), which matches the
+     * "low qubits occupied" convention the UCCSD ansatz uses and from which
+     * its single excitations span the correlated ground state exactly.
+     * (Previously this field was left uninitialised, so every VQE run on LiH
+     * started from a garbage reference bitstring.) */
+    h->hf_reference = 0x7;
+
     double r = bond_distance;
     double r_eq = 1.5949;
     
@@ -738,14 +748,18 @@ static qs_error_t vqe_apply_uccsd_ansatz(
     
     uccsd_data_t *data = (uccsd_data_t*)ansatz->circuit_data;
     if (!data) return QS_ERROR_INVALID_STATE;
-    
-    // Step 1: Prepare Hartree-Fock reference state
-    // Occupied orbitals (electrons) are in |1⟩ state
-    for (size_t i = 0; i < data->num_occupied; i++) {
-        gate_pauli_x(state, i);
-    }
-    
-    // Step 2: Apply single excitations
+
+    /* NOTE: the Hartree-Fock reference |HF> is prepared by the caller
+     * (vqe_compute_energy / qng_prepare_state) from
+     * hamiltonian->hf_reference, exactly as it is for the
+     * hardware-efficient and symmetry-preserving ansaetze.  This
+     * function applies only the unitary U(theta); it must NOT prepare
+     * HF again.  A second in-ansatz HF preparation double-applied the
+     * X gates (|HF> -> |11...>), landing the trial state in the wrong
+     * particle-number sector and driving the H2 energy far above the
+     * true ground state. */
+
+    // Step 1: Apply single excitations
     size_t param_idx = 0;
     
     for (size_t i = 0; i < data->num_occupied; i++) {
@@ -759,7 +773,7 @@ static qs_error_t vqe_apply_uccsd_ansatz(
         }
     }
     
-    // Step 3: Apply double excitations
+    // Step 2: Apply double excitations
     for (size_t i = 0; i < data->num_occupied; i++) {
         for (size_t j = i + 1; j < data->num_occupied; j++) {
             for (size_t a = 0; a < data->num_virtual; a++) {
@@ -767,7 +781,7 @@ static qs_error_t vqe_apply_uccsd_ansatz(
                     size_t a_qubit = data->num_occupied + a;
                     size_t b_qubit = data->num_occupied + b;
                     double theta = ansatz->parameters[param_idx++];
-                    
+
                     // Double excitation circuit
                     vqe_apply_double_excitation(state, i, j, a_qubit, b_qubit, theta);
                 }
@@ -786,17 +800,28 @@ static qs_error_t vqe_apply_givens_rotation(
     double theta
 ) {
     /**
-     * Fermionic excitation using Givens rotation
-     * Implements: exp(θ(a†ᵢaₐ - a†ₐaᵢ))
-     * 
-     * Circuit decomposition (exact):
-     * CNOT(i,a) - RY(a, 2θ) - CNOT(i,a)
+     * Fermionic single excitation exp(theta (a_i^dag a_a - a_a^dag a_i)),
+     * realised as a particle-number-preserving Givens rotation on the
+     * {|01>, |10>} subspace of qubits (i, a):
+     *
+     *     |01> ->  cos(theta) |01> + sin(theta) |10>
+     *     |10> -> -sin(theta) |01> + cos(theta) |10>
+     *     |00> -> |00|,   |11> -> |11>
+     *
+     * Exact decomposition:
+     *     CNOT(a, i) - CRY(control=i, target=a, theta) - CNOT(a, i)
+     *
+     * The previous decomposition CNOT(i,a) - RY(a,2theta) - CNOT(i,a)
+     * is NOT particle preserving: acting on |10> it produces
+     * cos(theta)|10> - sin(theta)|00>, leaking amplitude into the wrong
+     * particle-number sector, so starting from the Hartree-Fock
+     * reference it never reaches the correlated ground state.
      */
-    
-    gate_cnot(state, qubit_i, qubit_a);
-    gate_ry(state, qubit_a, 2.0 * theta);
-    gate_cnot(state, qubit_i, qubit_a);
-    
+
+    gate_cnot(state, qubit_a, qubit_i);
+    gate_cry(state, qubit_i, qubit_a, theta);
+    gate_cnot(state, qubit_a, qubit_i);
+
     return QS_SUCCESS;
 }
 
@@ -807,25 +832,40 @@ static qs_error_t vqe_apply_double_excitation(
     double theta
 ) {
     /**
-     * Fermionic double excitation
-     * Implements: exp(θ(a†ᵢa†ⱼaₐaᵦ - a†ₐa†ᵦaᵢaⱼ))
-     * 
-     * Decomposition from Lee et al., J. Chem. Theory Comput. 15, 311 (2019)
+     * Fermionic double excitation exp(theta (a_i^dag a_j^dag a_a a_b - h.c.)).
+     *
+     * The unitary is the identity everywhere except on the two-dimensional
+     * subspace spanned by the "both occupied" configuration
+     * |1_i 1_j 0_a 0_b> and the "both excited" configuration
+     * |0_i 0_j 1_a 1_b>, on which it is the planar rotation
+     *
+     *     |1_i 1_j 0_a 0_b> ->  cos(theta) |1100> + sin(theta) |0011>
+     *     |0_i 0_j 1_a 1_b> -> -sin(theta) |1100> + cos(theta) |0011>.
+     *
+     * It is applied here directly on the state-vector amplitudes: this is
+     * exact and manifestly particle-number preserving.  The previous
+     * CNOT-ladder + RY decomposition did not preserve particle number
+     * (the bare RY leaks amplitude out of the correct sector), so it could
+     * not represent a genuine double excitation.
      */
-    
-    // Ladder of CNOTs for fermionic ordering
-    gate_cnot(state, i, j);
-    gate_cnot(state, j, a);
-    gate_cnot(state, a, b);
-    
-    // Central rotation
-    gate_ry(state, b, 2.0 * theta);
-    
-    // Reverse ladder
-    gate_cnot(state, a, b);
-    gate_cnot(state, j, a);
-    gate_cnot(state, i, j);
-    
+    if (!state || !state->amplitudes) return QS_ERROR_INVALID_STATE;
+
+    const double c = cos(theta);
+    const double s = sin(theta);
+    const uint64_t mi = 1ULL << i, mj = 1ULL << j;
+    const uint64_t ma = 1ULL << a, mb = 1ULL << b;
+
+    for (uint64_t x = 0; x < state->state_dim; x++) {
+        /* Visit each coupled pair once, from the "both occupied" member. */
+        if ((x & mi) && (x & mj) && !(x & ma) && !(x & mb)) {
+            uint64_t y = x ^ mi ^ mj ^ ma ^ mb;   /* the "both excited" member */
+            complex_t amp_x = state->amplitudes[x];
+            complex_t amp_y = state->amplitudes[y];
+            state->amplitudes[x] = c * amp_x - s * amp_y;
+            state->amplitudes[y] = s * amp_x + c * amp_y;
+        }
+    }
+
     return QS_SUCCESS;
 }
 
@@ -1812,35 +1852,84 @@ int vqe_compute_gradient(
         return VQE_GRADIENT_ERR_NOT_EXACT;
     }
 
-    double *params_plus = malloc(solver->ansatz->num_parameters * sizeof(double));
-    double *params_minus = malloc(solver->ansatz->num_parameters * sizeof(double));
-    
-    if (!params_plus || !params_minus) {
+    const size_t nparam = solver->ansatz->num_parameters;
+    double *base        = malloc(nparam * sizeof(double));
+    double *params_plus = malloc(nparam * sizeof(double));
+    double *params_minus = malloc(nparam * sizeof(double));
+
+    if (!base || !params_plus || !params_minus) {
+        free(base);
         free(params_plus);
         free(params_minus);
         return VQE_GRADIENT_ERR_INVALID;
     }
 
-    memcpy(params_plus, parameters, solver->ansatz->num_parameters * sizeof(double));
-    memcpy(params_minus, parameters, solver->ansatz->num_parameters * sizeof(double));
-    
-    for (size_t i = 0; i < solver->ansatz->num_parameters; i++) {
-        // Shift parameter by ±π/2
-        params_plus[i] = parameters[i] + M_PI / 2.0;
-        params_minus[i] = parameters[i] - M_PI / 2.0;
-        
-        // Compute energies with shifted parameters
-        double energy_plus = vqe_compute_energy(solver, params_plus);
-        double energy_minus = vqe_compute_energy(solver, params_minus);
-        
-        // Exact gradient via parameter shift
-        gradient[i] = (energy_plus - energy_minus) / 2.0;
-        
-        // Restore original values for next parameter
-        params_plus[i] = parameters[i];
-        params_minus[i] = parameters[i];
+    /* Snapshot the evaluation point.  vqe_compute_energy overwrites
+     * solver->ansatz->parameters on every call, and callers routinely
+     * pass `parameters` ALIASED to solver->ansatz->parameters (e.g.
+     * vqe_solve computes the gradient at solver->ansatz->parameters and
+     * then updates it in place).  Reading `parameters[i]` after the
+     * first shifted energy evaluation would therefore read corrupted,
+     * already-shifted values.  Work exclusively from this private
+     * snapshot, and restore solver->ansatz->parameters to it before
+     * returning so the caller's optimiser step operates on the true
+     * current point. */
+    memcpy(base, parameters, nparam * sizeof(double));
+    memcpy(params_plus, base, nparam * sizeof(double));
+    memcpy(params_minus, base, nparam * sizeof(double));
+
+    /* Which parameter-shift rule is EXACT depends on the generator
+     * spectrum of the parameterised gates:
+     *
+     *   - Hardware-efficient: RY(theta)=exp(-i theta/2 Y), RZ likewise.
+     *     The generator has two eigenvalues (+/-1), so the energy is a
+     *     single-frequency sinusoid in each theta and the two-term rule
+     *     E' = [E(+pi/2) - E(-pi/2)] / 2 is exact.
+     *
+     *   - UCCSD / symmetry-preserving: the particle-conserving Givens
+     *     (single) and the double-excitation gate leave |0..0> and
+     *     |1..1> of the involved qubits as fixed points, so their
+     *     generator has eigenvalues {-1/2, 0, +1/2}.  The energy then
+     *     carries TWO frequencies {1/2, 1} in each theta, for which the
+     *     two-term rule is systematically wrong (it silently drops the
+     *     1/2-frequency contribution).  The exact derivative for a
+     *     {1/2, 1} spectrum is the four-term rule
+     *         E' = c1 [E(+pi/2)   - E(-pi/2)]
+     *            + c2 [E(+3pi/2)  - E(-3pi/2)],
+     *         c1 = 1/4 + sqrt(2)/8,  c2 = sqrt(2)/8 - 1/4,
+     *     which is exact on span{1, cos t, sin t, cos t/2, sin t/2}. */
+    const int excitation_ansatz =
+        (solver->ansatz->type != VQE_ANSATZ_HARDWARE_EFFICIENT);
+    const double c1 = 0.25 + M_SQRT2 / 8.0;
+    const double c2 = M_SQRT2 / 8.0 - 0.25;
+
+    for (size_t i = 0; i < nparam; i++) {
+        if (!excitation_ansatz) {
+            params_plus[i]  = base[i] + M_PI / 2.0;
+            params_minus[i] = base[i] - M_PI / 2.0;
+            double ep = vqe_compute_energy(solver, params_plus);
+            double em = vqe_compute_energy(solver, params_minus);
+            gradient[i] = (ep - em) / 2.0;
+        } else {
+            params_plus[i]  = base[i] + M_PI / 2.0;
+            params_minus[i] = base[i] - M_PI / 2.0;
+            double ep1 = vqe_compute_energy(solver, params_plus);
+            double em1 = vqe_compute_energy(solver, params_minus);
+            params_plus[i]  = base[i] + 3.0 * M_PI / 2.0;
+            params_minus[i] = base[i] - 3.0 * M_PI / 2.0;
+            double ep3 = vqe_compute_energy(solver, params_plus);
+            double em3 = vqe_compute_energy(solver, params_minus);
+            gradient[i] = c1 * (ep1 - em1) + c2 * (ep3 - em3);
+        }
+        // Restore this index for the next parameter's evaluations
+        params_plus[i] = base[i];
+        params_minus[i] = base[i];
     }
-    
+
+    /* Leave solver->ansatz->parameters at the true evaluation point. */
+    memcpy(solver->ansatz->parameters, base, nparam * sizeof(double));
+
+    free(base);
     free(params_plus);
     free(params_minus);
 
@@ -2281,13 +2370,10 @@ static qs_error_t vqe_apply_uccsd_ansatz_noisy(
     uccsd_data_t *data = (uccsd_data_t*)ansatz->circuit_data;
     if (!data) return QS_ERROR_INVALID_STATE;
 
-    // Step 1: Prepare Hartree-Fock reference with noise
-    for (size_t i = 0; i < data->num_occupied; i++) {
-        gate_pauli_x(state, i);
-        apply_single_qubit_noise(state, i, noise, entropy);
-    }
+    /* HF reference is prepared by the caller from hamiltonian->hf_reference
+     * (see vqe_apply_uccsd_ansatz); this variant applies only U(theta). */
 
-    // Step 2: Apply single excitations with noise
+    // Step 1: Apply single excitations with noise
     size_t param_idx = 0;
 
     for (size_t i = 0; i < data->num_occupied; i++) {
