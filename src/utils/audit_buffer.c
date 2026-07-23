@@ -38,8 +38,11 @@
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-/* <windows.h> (SwitchToThread) is pulled in transitively by the pthread
- * compat shim included via audit_buffer.h. */
+/* SwitchToThread() is declared in <windows.h>. Include it explicitly rather
+ * than relying on transitive inclusion via the pthread compat shim: MinGW's
+ * winpthreads does not always pull it in (observed undeclared under UCRT64
+ * gcc 16), which -Werror turns into a build failure. */
+#include <windows.h>
 #else
 #include <sched.h>
 #endif
