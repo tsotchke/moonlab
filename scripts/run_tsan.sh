@@ -50,6 +50,17 @@ run_result_is_clean() { # $1=unique race sites, $2=process exit status
     [ "$1" -eq 0 ] && [ "$2" -eq 0 ]
 }
 
+# The OpenMP grover harness needs a TSan-instrumented (Archer) libomp. On a
+# host whose libomp is stock (not Archer-aware), the binary is killed by a
+# fatal signal during OpenMP+TSan initialisation before producing any output
+# (SIGILL/132 on Ubuntu clang + system libomp). That is a host toolchain gap,
+# not a moonlab race: detect it (exit >= 128 with an empty run log) so grover
+# can be skipped rather than failing the whole lane. Grover still runs where an
+# Archer libomp is present (macOS Homebrew, CI's openmp-archer job).
+grover_omp_runtime_broken() { # $1=process exit status  $2=run log path
+    [ "$1" -ge 128 ] && [ ! -s "$2" ]
+}
+
 # Side-effect-free probes used by the focused producer-contract regression.
 # They intentionally run before trace truncation, source capture, or toolchain
 # discovery so the test does not need ThreadSanitizer.
@@ -341,7 +352,12 @@ if [ "$WITH_OMP" = "1" ]; then
     # must not turn into PASS.
     raw_completed=0
     if [ "$raw_rc" -eq 0 ] || [ "$raw" -gt 0 ]; then raw_completed=1; fi
-    if run_result_is_clean "$r" "$run_rc" && [ "$raw_completed" -eq 1 ]; then
+    if grover_omp_runtime_broken "$run_rc" "$LOG_DIR/run_grover_gates_omp.log" \
+       && grover_omp_runtime_broken "$raw_rc" "$LOG_DIR/run_grover_gates_omp_raw.log"; then
+        emit "grover_gates_omp" "SKIP" 0 \
+          "OpenMP+TSan runtime unavailable on this host: libomp is not TSan/Archer-instrumented, so the harness is killed by a signal during OpenMP+TSan init (exit=$run_rc, no output). Grover is exercised where Archer libomp is present (macOS Homebrew, CI openmp-archer)." 0.3
+        echo "  [SKIP] grover_gates_omp  (OpenMP+TSan/Archer runtime not functional on this host; exit=$run_rc)"
+    elif run_result_is_clean "$r" "$run_rc" && [ "$raw_completed" -eq 1 ]; then
         emit "grover_gates_omp" "PASS" 0 \
           "OpenMP core clean after excluding un-annotated libomp frames (raw=$raw libomp false positives); entropy isolation + disjoint fan-out verified" 0.75
         echo "  [PASS] grover_gates_omp  (0 real, $raw libomp-runtime false positives filtered; exit=$run_rc raw_exit=$raw_rc)"
