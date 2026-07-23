@@ -334,10 +334,16 @@ int entropy_pool_start_background(entropy_pool_ctx_t *ctx) {
     if (pthread_create(&ctx->background_thread, NULL, entropy_worker_thread, ctx) != 0) {
         return -1;
     }
-    
+
+    /* Publish the running flags under pool_mutex: entropy_pool_get_stats reads
+     * ctx->stats (including background_active) while holding this lock, so the
+     * transition must be synchronised or it is a data race (caught by TSan on
+     * clang-19; missed by other schedules). */
+    pthread_mutex_lock(&ctx->pool_mutex);
     ctx->background_running = 1;
     ctx->stats.background_active = 1;
-    
+    pthread_mutex_unlock(&ctx->pool_mutex);
+
     return 0;
 }
 
@@ -352,9 +358,15 @@ void entropy_pool_stop_background(entropy_pool_ctx_t *ctx) {
     
     // Wait for thread to exit
     pthread_join(ctx->background_thread, NULL);
-    
+
+    /* Clear the running flags under pool_mutex for the same reason as
+     * entropy_pool_start_background: entropy_pool_get_stats reads ctx->stats
+     * under this lock. The join must complete first (the worker takes the same
+     * lock), so the flags are cleared here rather than across the join. */
+    pthread_mutex_lock(&ctx->pool_mutex);
     ctx->background_running = 0;
     ctx->stats.background_active = 0;
+    pthread_mutex_unlock(&ctx->pool_mutex);
 }
 
 // ============================================================================
