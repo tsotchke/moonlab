@@ -167,6 +167,46 @@ static void test_deterministic_after_measurement(void) {
     clifford_tableau_free(t);
 }
 
+/* Regression for the measurement-collapse bug: on the random branch,
+ * clifford_measure must clear x_q from EVERY other row that carries it,
+ * which requires row-summing the anticommuting stabilizer BEFORE row p is
+ * overwritten with Z_q. GHZ exercises only a single anticommuting stabilizer,
+ * so it missed the defect; a broadly-entangled Clifford state makes several
+ * stabilizers anticommute with a single measured Z_q. The invariant: after
+ * measuring every qubit once, re-measuring any qubit is deterministic and
+ * equal to its recorded outcome. Under the bug the tableau is not collapsed,
+ * so re-measurement returns random ~50% of the time. */
+static void test_measurement_collapse_multi_anticommute(void) {
+    fprintf(stdout, "\n-- Clifford: collapse with multiple anticommuting stabilizers --\n");
+    const size_t n = 12;
+    clifford_tableau_t* t = clifford_tableau_create(n);
+    uint64_t rng = 0x1234567u;
+    /* Broadly-entangling Clifford circuit: alternating H layers and staggered
+     * CNOT ladders so many stabilizers share X support. */
+    for (int layer = 0; layer < 4; layer++) {
+        for (size_t q = 0; q < n; q++) clifford_h(t, q);
+        for (size_t q = (size_t)(layer & 1); q + 1 < n; q += 2)
+            clifford_cnot(t, q, q + 1);
+        for (size_t q = 0; q < n; q += 3) clifford_s(t, q);
+    }
+    int first[16];
+    for (size_t q = 0; q < n; q++) {
+        int b = -1;
+        clifford_measure(t, q, &rng, &b, NULL);
+        first[q] = b;
+    }
+    /* Every qubit is now a stabilizer eigenstate: re-measurement must be
+     * deterministic and reproduce the recorded outcome. */
+    for (size_t q = 0; q < n; q++) {
+        int b = -1, kind = -1;
+        clifford_measure(t, q, &rng, &b, &kind);
+        CHECK(kind == 0 && b == first[q],
+              "qubit %zu re-measure deterministic (kind=%d out=%d want=%d)",
+              q, kind, b, first[q]);
+    }
+    clifford_tableau_free(t);
+}
+
 int main(void) {
     fprintf(stdout, "=== Clifford stabilizer backend ===\n");
     test_fresh_state_is_zero();
@@ -176,6 +216,7 @@ int main(void) {
     test_bell_state_correlations();
     test_ghz_100_qubits();
     test_deterministic_after_measurement();
+    test_measurement_collapse_multi_anticommute();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

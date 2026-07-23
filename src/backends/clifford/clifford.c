@@ -489,8 +489,21 @@ clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
         return CLIFFORD_SUCCESS;
     }
 
-    /* Random outcome. Replace destabilizer p-n with stabilizer p, then
-     * set stabilizer p to Z_q with a random sign. */
+    /* Random outcome (Aaronson-Gottesman). The elimination MUST run first,
+     * while row p is still the stabilizer that anticommutes with Z_q: row-sum
+     * it into every other row carrying x_q so their x_q bit is cleared and the
+     * post-measurement tableau is properly collapsed. Only then overwrite row
+     * p. Doing the overwrite first (leaving row p = Z_q, whose x part is zero)
+     * fails to clear x_q from the other rows, so later measurements are not
+     * conditioned on this one and joint samples fall outside the stabilizer
+     * support. */
+    for (size_t r = 0; r < 2 * n; r++) {
+        if (r == p) continue;
+        if (tget(t, r, q)) rowsum(t, r, p);
+    }
+
+    /* Replace destabilizer p-n with (the original) stabilizer p, then set
+     * stabilizer p to Z_q with a random sign -- the measurement outcome. */
     for (size_t j = 0; j <= 2 * n; j++) {
         tset(t, p - n, j, tget(t, p, j));
         tset(t, p, j, 0);
@@ -500,12 +513,6 @@ clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
     tset(t, p, rbit, out);
     *outcome = (int)out;
 
-    /* Update all other rows whose x_q is 1 by row-summing the new
-     * stabilizer p into them. */
-    for (size_t r = 0; r < 2 * n; r++) {
-        if (r == p) continue;
-        if (tget(t, r, q)) rowsum(t, r, p);
-    }
     if (outcome_kind) *outcome_kind = 1;
     return CLIFFORD_SUCCESS;
 }
