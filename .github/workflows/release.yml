@@ -374,6 +374,32 @@ jobs:
           cp bindings/rust/moonlab/target/package/moonlab-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
           cp bindings/rust/moonlab-tui/target/package/moonlab-tui-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Seal and certify exact-byte crate uploadability
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/crates"
+          # Seal the packaged .crate bytes with a SHA256SUMS manifest, then
+          # prove each one uploads verbatim through the exact-byte publisher
+          # before the tag is cut. The SHA256SUMS stays in the work directory so
+          # the uploaded artifact carries only the .crate files that candidate-seal
+          # hashes into the immutable release manifest; publish-rust re-verifies
+          # these same bytes against that promoted manifest and ships them raw.
+          sha256sum -- *.crate > SHA256SUMS
+          echo "Certified Rust crate bytes:"
+          cat SHA256SUMS
+          for crate in moonlab-sys moonlab moonlab-tui; do
+            artifact="${crate}-${{ needs.preflight.outputs.version }}.crate"
+            sha="$(awk -v f="$artifact" '$2 == f {print $1}' SHA256SUMS)"
+            test -n "$sha"
+            python3 "$GITHUB_WORKSPACE/scripts/publish_crate_exact_bytes.py" publish \
+              --crate "$artifact" --sha256 "$sha" --dry-run
+          done
+
       - uses: actions/upload-artifact@v7
         with:
           name: rust-crates
@@ -536,12 +562,28 @@ jobs:
     needs: [preflight, promotion-verify]
     runs-on: ubuntu-22.04
     steps:
-      - name: Halt before any registry mutation until exact crate-byte upload is implemented
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require the audited exact-byte crate uploader before any registry mutation
         shell: bash
         run: |
-          echo 'BLOCKED: cargo publish always repackages from the checkout and has no supported prebuilt .crate input.' >&2
-          echo 'An audited exact-byte crates.io uploader is required before PyPI, npm, crates.io, Homebrew, or the GitHub release may be mutated.' >&2
-          exit 1
+          set -euo pipefail
+          publisher=scripts/publish_crate_exact_bytes.py
+          # cargo publish always repackages from the checkout and has no
+          # supported prebuilt .crate input, so an audited exact-byte crates.io
+          # uploader must exist before PyPI, npm, crates.io, Homebrew, or the
+          # GitHub release may be mutated. Fail closed when it is missing.
+          if [[ ! -f "$publisher" ]]; then
+            echo "BLOCKED: no audited exact-byte crates.io uploader; cargo publish has no supported prebuilt .crate input." >&2
+            exit 1
+          fi
+          if ! grep -q 'api/v1/crates/new' "$publisher"; then
+            echo "BLOCKED: $publisher is not the exact-byte crates.io uploader." >&2
+            exit 1
+          fi
+          echo "exact-byte crate uploader present: $publisher"
 
   publication-credentials:
     if: github.event_name == 'push'
@@ -689,19 +731,82 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - uses: actions/download-artifact@v7
         with:
           name: promoted-release-artifacts
           path: dist
 
-      - name: Refuse source-tree crate regeneration
+      - uses: actions/download-artifact@v7
+        with:
+          name: promoted-release-manifest
+          path: manifest
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install cargo for crates.io index polling
+        run: |
+          rustup toolchain install 1.86.0 --profile minimal
+          rustup default 1.86.0
+
+      - name: Publish the certified crate bytes in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          VERSION: ${{ needs.preflight.outputs.version }}
         shell: bash
         run: |
-          test -f 'dist/moonlab-sys-${{ needs.preflight.outputs.version }}.crate'
-          test -f 'dist/moonlab-${{ needs.preflight.outputs.version }}.crate'
-          test -f 'dist/moonlab-tui-${{ needs.preflight.outputs.version }}.crate'
-          echo 'BLOCKED: there is no audited exact-byte crates.io upload path for these certified .crate files.' >&2
-          exit 1
+          set -euo pipefail
+          # Re-assert exact byte-for-byte identity of every promoted artifact,
+          # including the three .crate tarballs, against the immutable candidate
+          # manifest before touching crates.io. Fails closed on any drift.
+          python3 scripts/verify_release_candidate.py verify \
+            --dist dist \
+            --manifest manifest/moonlab-release-candidate.json \
+            --run-id '${{ needs.promotion-verify.outputs.candidate-run-id }}' \
+            --head '${{ needs.promotion-verify.outputs.candidate-head }}' \
+            --version "$VERSION"
+
+          wait_for_crate() {
+            local crate="$1"
+            for attempt in {1..30}; do
+              if cargo info "${crate}@${VERSION}" >/dev/null 2>&1; then
+                return 0
+              fi
+              echo "waiting for crates.io index: ${crate} ${VERSION} (attempt ${attempt}/30)"
+              sleep 10
+            done
+            echo "crates.io did not index ${crate} ${VERSION} in time" >&2
+            return 1
+          }
+
+          # Ship the exact certified bytes. publish_crate_exact_bytes.py uploads
+          # the .crate tarball verbatim through PUT /api/v1/crates/new and refuses
+          # to send unless the bytes re-hash to the certified SHA-256 taken from
+          # the promoted manifest. Nothing is re-packaged, so the published
+          # tarball hash equals the release certificate.
+          publish_exact() {
+            local crate="$1"
+            local artifact="dist/${crate}-${VERSION}.crate"
+            test -f "$artifact"
+            local sha
+            sha="$(jq -er --arg f "${crate}-${VERSION}.crate" \
+              '.artifacts[] | select(.filename == $f) | .sha256' \
+              manifest/moonlab-release-candidate.json)"
+            test -n "$sha"
+            python3 scripts/publish_crate_exact_bytes.py publish \
+              --crate "$artifact" --sha256 "$sha"
+          }
+
+          publish_exact moonlab-sys
+          wait_for_crate moonlab-sys
+          publish_exact moonlab
+          wait_for_crate moonlab
+          publish_exact moonlab-tui
 
   update-homebrew:
     needs: [preflight, draft-release, publish-python, publish-npm, publish-rust]
