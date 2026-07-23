@@ -41,13 +41,22 @@ import stim
 # Op encoding -- mirrors pf_circuit_op_t / pf_op_kind_t in pauli_frame.h.
 # --------------------------------------------------------------------------
 PF_H, PF_S, PF_S_DAG, PF_X, PF_Y, PF_Z, PF_CNOT, PF_CZ, PF_SWAP, PF_RESET, PF_MEASURE = range(11)
+(PF_X_ERROR, PF_Z_ERROR, PF_Y_ERROR, PF_DEPOLARIZE1, PF_DEPOLARIZE2,
+ PF_MEASURE_NOISY) = range(11, 17)
 
 _STIM_NAME = {PF_H: "H", PF_S: "S", PF_S_DAG: "S_DAG", PF_X: "X", PF_Y: "Y",
               PF_Z: "Z", PF_CNOT: "CNOT", PF_CZ: "CZ", PF_SWAP: "SWAP"}
+# Noise channels carry a probability argument in stim.
+_STIM_NOISE = {PF_X_ERROR: "X_ERROR", PF_Z_ERROR: "Z_ERROR", PF_Y_ERROR: "Y_ERROR",
+               PF_DEPOLARIZE1: "DEPOLARIZE1", PF_DEPOLARIZE2: "DEPOLARIZE2"}
+_TWO_QUBIT = (PF_CNOT, PF_CZ, PF_SWAP)
 
 
 class _PfOp(ctypes.Structure):
-    _fields_ = [("kind", ctypes.c_uint8), ("q0", ctypes.c_uint32), ("q1", ctypes.c_uint32)]
+    # Must mirror pf_circuit_op_t exactly: the double forces 8-byte
+    # alignment, so the struct is {u8 kind, pad, u32 q0, u32 q1, pad, f64 p}.
+    _fields_ = [("kind", ctypes.c_uint8), ("q0", ctypes.c_uint32),
+                ("q1", ctypes.c_uint32), ("p", ctypes.c_double)]
 
 
 # --------------------------------------------------------------------------
@@ -160,6 +169,48 @@ def build_surface_code(d, rounds):
     return n, ops
 
 
+def build_surface_code_noisy(d, rounds, p2=0.001, p1=0.001, pm=0.001):
+    """The same syndrome-extraction circuit under a circuit-level noise model.
+
+    This is the regime stim is built for and the one its users actually
+    sample: two-qubit depolarising after every CNOT, single-qubit
+    depolarising on idling data qubits each round, and a flip probability on
+    every ancilla readout.  Noiseless Clifford sampling leaves the frames
+    almost static, so it exercises far less of the sampler than this does --
+    every noise instruction injects fresh per-shot randomness.
+    """
+    def data(i, j):
+        return i * d + j
+    ndata = d * d
+    cells = [(i, j) for i in range(d - 1) for j in range(d - 1)]
+    z_anc = {c: ndata + k for k, c in enumerate(cells)}
+    x_anc = {c: ndata + len(cells) + k for k, c in enumerate(cells)}
+    n = ndata + 2 * len(cells)
+    ops = []
+    for _ in range(rounds):
+        for q in range(ndata):
+            ops.append((PF_DEPOLARIZE1, q, 0, p1))
+        for (i, j) in cells:
+            a = z_anc[(i, j)]
+            for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
+                dq = data(i + di, j + dj)
+                ops.append((PF_CNOT, dq, a, 0.0))
+                ops.append((PF_DEPOLARIZE2, dq, a, p2))
+            ops.append((PF_MEASURE_NOISY, a, 0, pm))
+            ops.append((PF_RESET, a, 0, 0.0))
+        for (i, j) in cells:
+            a = x_anc[(i, j)]
+            ops.append((PF_H, a, 0, 0.0))
+            for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
+                dq = data(i + di, j + dj)
+                ops.append((PF_CNOT, a, dq, 0.0))
+                ops.append((PF_DEPOLARIZE2, a, dq, p2))
+            ops.append((PF_H, a, 0, 0.0))
+            ops.append((PF_MEASURE_NOISY, a, 0, pm))
+            ops.append((PF_RESET, a, 0, 0.0))
+    return n, ops
+
+
 # --------------------------------------------------------------------------
 # Engine drivers.
 # --------------------------------------------------------------------------
@@ -169,9 +220,15 @@ def _to_stim(ops):
         k = op[0]
         if k == PF_MEASURE:
             c.append("M", [op[1]])
+        elif k == PF_MEASURE_NOISY:
+            c.append("M", [op[1]], op[3])          # M(p): flips the report
         elif k == PF_RESET:
             c.append("R", [op[1]])
-        elif k in (PF_CNOT, PF_CZ, PF_SWAP):
+        elif k == PF_DEPOLARIZE2:
+            c.append("DEPOLARIZE2", [op[1], op[2]], op[3])
+        elif k in _STIM_NOISE:
+            c.append(_STIM_NOISE[k], [op[1]], op[3])
+        elif k in _TWO_QUBIT:
             c.append(_STIM_NAME[k], [op[1], op[2]])
         else:
             c.append(_STIM_NAME[k], [op[1]])
@@ -184,6 +241,7 @@ def _pf_op_array(ops):
         arr[i].kind = op[0]
         arr[i].q0 = op[1]
         arr[i].q1 = op[2]
+        arr[i].p = op[3] if len(op) > 3 else 0.0
     return arr
 
 
@@ -206,6 +264,40 @@ def stim_sample(sampler, shots):
 # --------------------------------------------------------------------------
 # Correctness gate.
 # --------------------------------------------------------------------------
+def _corr_vec(sample, k):
+    """Pairwise correlations among the first k measurements."""
+    out = []
+    for i in range(k):
+        for j in range(i + 1, k):
+            a, b = sample[i], sample[j]
+            out.append(np.corrcoef(a, b)[0, 1]
+                       if a.std() > 0 and b.std() > 0 else 0.0)
+    return np.array(out) if out else np.zeros(1)
+
+
+def _corr_stats(sample, k, nblocks=10):
+    """Pairwise correlations with a per-pair standard error (batch means).
+
+    A raw correlation difference is not comparable across circuits: on a
+    noisy QEC circuit the syndrome bits are rare, so each correlation rests
+    on ~shots*p effective samples and its spread is an order of magnitude
+    wider than on a noiseless circuit.  Splitting the sample into blocks and
+    taking the standard error of the per-block estimates measures that
+    spread directly from the data, so the gate can be expressed in sigma and
+    mean the same thing on every workload.
+    """
+    S = sample.shape[1]
+    b = S // nblocks
+    if k < 2 or b < 2:
+        return np.zeros(1), np.ones(1)
+    per_block = np.stack([_corr_vec(sample[:, i * b:(i + 1) * b], k)
+                          for i in range(nblocks)])
+    mean = _corr_vec(sample[:, :nblocks * b], k)
+    se = per_block.std(axis=0, ddof=1) / np.sqrt(nblocks)
+    return mean, se
+
+
+
 def check_correctness(n, ops, shots=200000, seed=12345, nthreads=1):
     """Gate one sampler configuration against stim.
 
@@ -229,18 +321,18 @@ def check_correctness(n, ops, shots=200000, seed=12345, nthreads=1):
     par_st = (st.sum(axis=0) & 1).mean()
     par_dev = abs(par_ml - par_st) / (np.sqrt(max(par_st * (1 - par_st), 1e-9) / shots) + 1e-12)
     k = min(6, nmeas)
-    maxcorr = 0.0
-    for i in range(k):
-        for j in range(i + 1, k):
-            a, b = ml[i], ml[j]
-            c, dd = st[i], st[j]
-            cml = np.corrcoef(a, b)[0, 1] if a.std() > 0 and b.std() > 0 else 0.0
-            cst = np.corrcoef(c, dd)[0, 1] if c.std() > 0 and dd.std() > 0 else 0.0
-            maxcorr = max(maxcorr, abs(cml - cst))
-    ok = marg_dev < 6.0 and par_dev < 6.0 and maxcorr < 0.02
+    r_ml, se_ml = _corr_stats(ml, k)
+    r_st, se_st = _corr_stats(st, k)
+    maxcorr = float(np.abs(r_ml - r_st).max())
+    # Normalise each pair by its own sampling error, then gate in sigma.
+    # A genuine modelling difference stays large under this normalisation
+    # while estimator noise sits at a few sigma whatever the event rate.
+    corr_sigma = float((np.abs(r_ml - r_st) / (np.sqrt(se_ml**2 + se_st**2) + 1e-12)).max())
+    ok = marg_dev < 6.0 and par_dev < 6.0 and corr_sigma < 6.0
     return ok, {"marg_sigma": round(marg_dev, 2), "parity_sigma": round(float(par_dev), 2),
-                "max_corr_diff": round(maxcorr, 4), "nmeas": nmeas, "shots": shots,
-                "nthreads": nthreads}
+                "max_corr_diff": round(maxcorr, 4),
+                "corr_sigma": round(corr_sigma, 2),
+                "nmeas": nmeas, "shots": shots, "nthreads": nthreads}
 
 
 # --------------------------------------------------------------------------
@@ -313,6 +405,7 @@ def _workloads():
     return [
         ("random_clifford_n40", *build_random_clifford(40, 800, seed=41)),
         ("surface_code_d5_r8", *build_surface_code(5, 8)),
+        ("surface_code_d5_r8_noisy", *build_surface_code_noisy(5, 8)),
     ]
 
 

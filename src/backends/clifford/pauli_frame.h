@@ -206,14 +206,26 @@ typedef enum {
     PF_OP_H = 0, PF_OP_S, PF_OP_S_DAG,
     PF_OP_X, PF_OP_Y, PF_OP_Z,
     PF_OP_CNOT, PF_OP_CZ, PF_OP_SWAP,
-    PF_OP_RESET, PF_OP_MEASURE
+    PF_OP_RESET, PF_OP_MEASURE,
+    /* Noise channels.  These carry a probability in pf_circuit_op_t::p and
+     * are per-shot: they act only on the frame, never on the reference
+     * trajectory, so the reference pass skips them.  Names and semantics
+     * match the corresponding stim instructions. */
+    PF_OP_X_ERROR,       /* X with probability p (stim X_ERROR)          */
+    PF_OP_Z_ERROR,       /* Z with probability p (stim Z_ERROR)          */
+    PF_OP_Y_ERROR,       /* Y with probability p (stim Y_ERROR)          */
+    PF_OP_DEPOLARIZE1,   /* uniform X/Y/Z each p/3 (stim DEPOLARIZE1)    */
+    PF_OP_DEPOLARIZE2,   /* uniform over 15 two-qubit Paulis, p/15 each  */
+    PF_OP_MEASURE_NOISY  /* measure q0, reported outcome flipped w.p. p  */
 } pf_op_kind_t;
 
-/** @brief One circuit instruction.  @p q1 is used only by two-qubit ops. */
+/** @brief One circuit instruction.  @p q1 is used only by two-qubit ops;
+ *  @p p only by the noise channels and PF_OP_MEASURE_NOISY. */
 typedef struct {
     uint8_t  kind;   /* pf_op_kind_t */
     uint32_t q0;
     uint32_t q1;
+    double   p;
 } pf_circuit_op_t;
 
 /** @brief Number of MEASURE ops in an op list (buffer sizing helper). */

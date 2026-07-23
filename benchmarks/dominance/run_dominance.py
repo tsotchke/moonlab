@@ -36,7 +36,7 @@ def _print_batch_front(name, result):
           f"{result['phys_cores']} physical cores)")
     for k, v in result.get("correctness_detail", {}).items():
         print(f"  gate {k:26} marginals={v['marg_sigma']}s parity={v['parity_sigma']}s "
-              f"corr_diff={v['max_corr_diff']}")
+              f"corr={v['corr_sigma']}s")
     print(f"{'workload':22} {'shots':>8} {'ML 1T M/s':>10} {'ML MT M/s':>10} "
           f"{'stim M/s':>9} {'1T':>6} {'MT':>8} {'verdict':>8}")
     for r in result["rows"]:

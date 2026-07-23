@@ -6,6 +6,7 @@
 #include "pauli_frame.h"
 #include "clifford.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -355,8 +356,129 @@ static inline uint64_t sm64_next(uint64_t* s) {
     return z ^ (z >> 31);
 }
 
-/* Derive an independent RNG stream for the shot block beginning at absolute
- * shot index `offset`.
+/* ------------------------------------------------------------------ */
+/*  Sparse Bernoulli noise sampling                                    */
+/*                                                                     */
+/* Drawing one variate per shot costs O(shots) per channel however small
+ * p is.  QEC circuits are dominated by noise instructions at p ~ 1e-3,
+ * where all but a thousandth of those draws produce nothing.  Sample the
+ * gap to the next affected shot from the geometric distribution instead:
+ * with P(gap = k) = p(1-p)^(k-1), a uniform u in (0,1) gives
+ * gap = floor(log u / log(1-p)) + 1, so the cost falls to O(p * shots)
+ * draws.  This is the same sparse-error strategy stim uses, and it is what
+ * makes a noisy circuit tractable at 10^6 shots.                        */
+
+/* Gap to the next selected index, >= 1.  inv_log_q is 1/log(1-p). */
+static inline size_t pf_next_gap(double inv_log_q, uint64_t* rng) {
+    /* 53-bit uniform in (0,1); the +2^-53 floor keeps log() finite. */
+    double u = (double)(sm64_next(rng) >> 11) * 0x1.0p-53;
+    if (u <= 0.0) u = 0x1.0p-53;
+    return (size_t)(log(u) * inv_log_q) + 1;
+}
+
+static inline void pf_flip_all(bf_word_t* row, size_t S) {
+    const size_t W = (S + BF_BITS_PER_WORD - 1) / BF_BITS_PER_WORD;
+    for (size_t w = 0; w < W; w++) {
+        const size_t lo = w * BF_BITS_PER_WORD;
+        const size_t bits = (lo + BF_BITS_PER_WORD <= S) ? BF_BITS_PER_WORD : S - lo;
+        row[w] ^= (bits == BF_BITS_PER_WORD) ? ~(bf_word_t)0
+                                             : (((bf_word_t)1 << bits) - 1);
+    }
+}
+
+/* X_ERROR / Z_ERROR: flip one component on a Bernoulli(p) subset of shots. */
+static void pf_noise_1comp(bf_word_t* row, size_t S, double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    if (p >= 1.0) { pf_flip_all(row, S); return; }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        row[(size_t)pos >> 6] ^= (bf_word_t)1 << ((size_t)pos & 63);
+    }
+}
+
+/* Y_ERROR: flips both components on the SAME shots (not two independent
+ * draws), so the x and z rows must share one position stream. */
+static void pf_noise_y(bf_word_t* xr, bf_word_t* zr, size_t S,
+                       double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    if (p >= 1.0) { pf_flip_all(xr, S); pf_flip_all(zr, S); return; }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        const bf_word_t bit = (bf_word_t)1 << ((size_t)pos & 63);
+        xr[(size_t)pos >> 6] ^= bit;
+        zr[(size_t)pos >> 6] ^= bit;
+    }
+}
+
+/* DEPOLARIZE1: on a Bernoulli(p) subset, apply X, Y or Z uniformly.
+ * X sets x; Y sets x and z; Z sets z. */
+static void pf_noise_depol1(bf_word_t* xr, bf_word_t* zr, size_t S,
+                            double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    if (p >= 1.0) {
+        for (size_t s = 0; s < S; s++) {
+            const bf_word_t bit = (bf_word_t)1 << (s & 63);
+            const unsigned k = (unsigned)(sm64_next(rng) % 3u);
+            if (k <= 1) xr[s >> 6] ^= bit;
+            if (k >= 1) zr[s >> 6] ^= bit;
+        }
+        return;
+    }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        const bf_word_t bit = (bf_word_t)1 << ((size_t)pos & 63);
+        const size_t w = (size_t)pos >> 6;
+        const unsigned k = (unsigned)(sm64_next(rng) % 3u);  /* 0=X 1=Y 2=Z */
+        if (k <= 1) xr[w] ^= bit;
+        if (k >= 1) zr[w] ^= bit;
+    }
+}
+
+/* DEPOLARIZE2: on a Bernoulli(p) subset, apply one of the 15 non-identity
+ * two-qubit Paulis uniformly.  Index 1..15 encodes (x0,z0,x1,z1). */
+static void pf_noise_depol2(bf_word_t* xa, bf_word_t* za,
+                            bf_word_t* xb, bf_word_t* zb, size_t S,
+                            double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        const bf_word_t bit = (bf_word_t)1 << ((size_t)pos & 63);
+        const size_t w = (size_t)pos >> 6;
+        const unsigned k = 1u + (unsigned)(sm64_next(rng) % 15u);
+        if (k & 1u) xa[w] ^= bit;
+        if (k & 2u) za[w] ^= bit;
+        if (k & 4u) xb[w] ^= bit;
+        if (k & 8u) zb[w] ^= bit;
+    }
+}
+
+/* Flip a Bernoulli(p) subset of already-written measurement result bytes. */
+static void pf_noise_flip_bytes(uint8_t* dst, size_t S, double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    if (p >= 1.0) { for (size_t s = 0; s < S; s++) dst[s] ^= 1u; return; }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        dst[(size_t)pos] ^= 1u;
+    }
+}
+
+/* Derive an independent RNG stream for the shot block beginning at
+ * absolute shot index `offset`.
  *
  * This must NOT be `seed + k * 0x9E3779B97F4A7C15`: that constant is exactly
  * the increment sm64_next applies to its state per draw, so an additive
@@ -522,7 +644,7 @@ size_t pauli_frame_circuit_num_measurements(const pf_circuit_op_t* ops,
     if (!ops) return 0;
     size_t m = 0;
     for (size_t i = 0; i < num_ops; i++)
-        if (ops[i].kind == PF_OP_MEASURE) m++;
+        if (ops[i].kind == PF_OP_MEASURE || ops[i].kind == PF_OP_MEASURE_NOISY) m++;
     return m;
 }
 
@@ -556,10 +678,18 @@ static int pf_compute_reference(size_t n, const pf_circuit_op_t* ops,
                 if (outcome) clifford_x(t, q0);
                 break;
             case PF_OP_MEASURE:
+            case PF_OP_MEASURE_NOISY:
                 clifford_measure(t, q0, &rng, &outcome, &kind);
                 m_ref[mi]  = (uint8_t)(outcome & 1);
                 m_kind[mi] = (uint8_t)(kind & 1);
                 mi++;
+                break;
+            /* Noise channels are per-shot deviations from this reference
+             * trajectory, so they contribute nothing here.  Applying them
+             * would corrupt the very baseline the frames are measured
+             * against. */
+            case PF_OP_X_ERROR: case PF_OP_Y_ERROR: case PF_OP_Z_ERROR:
+            case PF_OP_DEPOLARIZE1: case PF_OP_DEPOLARIZE2:
                 break;
             default: break;
         }
@@ -606,12 +736,20 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
                 pf_row_rand(row_z(b, q0), W, &rng);
                 break;
             }
-            case PF_OP_MEASURE: {
+            case PF_OP_MEASURE:
+            case PF_OP_MEASURE_NOISY: {
                 const bf_word_t* xq = row_x(b, q0);
                 const uint8_t mr = m_ref[mi];
                 uint8_t* dst = out + (size_t)mi * total_shots + global_offset;
                 for (size_t s = 0; s < block_shots; s++)
                     dst[s] = (uint8_t)((xq[s >> 6] >> (s & 63)) & 1) ^ mr;
+                /* Measurement error flips the REPORTED outcome only: the
+                 * frame is untouched, so a repeated measurement of the same
+                 * qubit still agrees with the state.  (This is stim's M(p)
+                 * semantics, and is what makes a flipped syndrome bit show
+                 * up as two detector events rather than one.) */
+                if (ops[i].kind == PF_OP_MEASURE_NOISY)
+                    pf_noise_flip_bytes(dst, block_shots, ops[i].p, &rng);
                 /* A random measurement injects fresh Z-frame entropy so a
                  * later basis change yields an independent outcome; the
                  * X-frame is preserved so downstream deterministic
@@ -620,6 +758,24 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
                 mi++;
                 break;
             }
+            case PF_OP_X_ERROR:
+                pf_noise_1comp(row_x(b, q0), block_shots, ops[i].p, &rng);
+                break;
+            case PF_OP_Z_ERROR:
+                pf_noise_1comp(row_z(b, q0), block_shots, ops[i].p, &rng);
+                break;
+            case PF_OP_Y_ERROR:
+                pf_noise_y(row_x(b, q0), row_z(b, q0), block_shots, ops[i].p, &rng);
+                break;
+            case PF_OP_DEPOLARIZE1:
+                pf_noise_depol1(row_x(b, q0), row_z(b, q0), block_shots,
+                                ops[i].p, &rng);
+                break;
+            case PF_OP_DEPOLARIZE2:
+                pf_noise_depol2(row_x(b, q0), row_z(b, q0),
+                                row_x(b, q1), row_z(b, q1), block_shots,
+                                ops[i].p, &rng);
+                break;
             default: break;
         }
     }

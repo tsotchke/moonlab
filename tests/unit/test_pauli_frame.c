@@ -171,7 +171,7 @@ static int test_batch_depolarising_rate(void) {
 static int test_mt_stream_independence(void) {
     enum { N = 8, SHOTS = 200000 };
     const uint64_t seeds[] = {7ULL, 11ULL, 12345ULL};
-    pf_circuit_op_t ops[N + N];
+    pf_circuit_op_t ops[N + N] = {0};   /* p defaults to 0 for non-noise ops */
     size_t k = 0;
     ops[k].kind = PF_OP_H;    ops[k].q0 = 0; ops[k].q1 = 0; k++;
     for (size_t q = 1; q < N; q++) {
