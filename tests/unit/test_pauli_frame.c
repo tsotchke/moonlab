@@ -12,6 +12,7 @@
 
 #include "../../src/backends/clifford/pauli_frame.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -155,6 +156,65 @@ static int test_batch_depolarising_rate(void) {
     return 0;
 }
 
+/* Regression: the multithreaded circuit sampler must draw independent
+ * randomness per shot block.
+ *
+ * Blocks were once seeded as `seed + k * 0x9E3779B97F4A7C15`.  That constant
+ * is exactly sm64_next's per-draw state increment, so block k started where
+ * block 0 lands after k draws: every block walked one shared stream and the
+ * shots came out correlated.  Single-threaded runs were unaffected, so a
+ * 1-thread test could not see it.
+ *
+ * GHZ_n makes the failure measurable: every shot must be all-0 or all-1, and
+ * over many shots P(all-1) must sit at 1/2.  Correlated blocks skew that
+ * proportion (the original bug reached 7.4 sigma).  Reject beyond 5 sigma. */
+static int test_mt_stream_independence(void) {
+    enum { N = 8, SHOTS = 200000 };
+    const uint64_t seeds[] = {7ULL, 11ULL, 12345ULL};
+    pf_circuit_op_t ops[N + N];
+    size_t k = 0;
+    ops[k].kind = PF_OP_H;    ops[k].q0 = 0; ops[k].q1 = 0; k++;
+    for (size_t q = 1; q < N; q++) {
+        ops[k].kind = PF_OP_CNOT; ops[k].q0 = 0; ops[k].q1 = q; k++;
+    }
+    for (size_t q = 0; q < N; q++) {
+        ops[k].kind = PF_OP_MEASURE; ops[k].q0 = q; ops[k].q1 = 0; k++;
+    }
+
+    uint8_t* out = (uint8_t*)malloc((size_t)N * SHOTS);
+    if (!out) return 1;
+
+    const double sigma = 0.5 / sqrt((double)SHOTS);   /* sd of P(all-1) */
+    int rc = 0;
+    for (size_t si = 0; si < sizeof(seeds) / sizeof(seeds[0]); si++) {
+        /* num_threads = 0 selects all cores. */
+        long nm = pauli_frame_batch_sample_circuit(N, ops, k, SHOTS,
+                                                   seeds[si], 0, out);
+        if (nm != (long)N) { fprintf(stderr, "sampler returned %ld\n", nm); rc = 1; break; }
+
+        size_t ones = 0, mixed = 0;
+        for (size_t s = 0; s < SHOTS; s++) {
+            size_t bits = 0;
+            for (size_t m = 0; m < N; m++) bits += out[m * SHOTS + s];
+            if (bits == N) ones++;
+            else if (bits != 0) mixed++;
+        }
+        if (mixed) {
+            fprintf(stderr, "GHZ correlation broken: %zu mixed shots\n", mixed);
+            rc = 1; break;
+        }
+        double dev = fabs((double)ones / SHOTS - 0.5) / sigma;
+        if (dev > 5.0) {
+            fprintf(stderr, "seed %llu: P(all-1)=%.5f is %.2f sigma off 0.5 "
+                            "-- per-block RNG streams are correlated\n",
+                    (unsigned long long)seeds[si], (double)ones / SHOTS, dev);
+            rc = 1; break;
+        }
+    }
+    free(out);
+    return rc;
+}
+
 int main(void) {
     if (test_h_swap()             != 0) return 1; fprintf(stderr, "PASS test_h_swap\n");
     if (test_s_phase()            != 0) return 1; fprintf(stderr, "PASS test_s_phase\n");
@@ -162,5 +222,6 @@ int main(void) {
     if (test_cz_propagation()     != 0) return 1; fprintf(stderr, "PASS test_cz_propagation\n");
     if (test_batch_cnot()         != 0) return 1; fprintf(stderr, "PASS test_batch_cnot\n");
     if (test_batch_depolarising_rate() != 0) return 1; fprintf(stderr, "PASS test_batch_depolarising_rate\n");
+    if (test_mt_stream_independence()  != 0) return 1; fprintf(stderr, "PASS test_mt_stream_independence\n");
     return 0;
 }

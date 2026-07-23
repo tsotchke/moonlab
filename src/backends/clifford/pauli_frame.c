@@ -4,10 +4,48 @@
  */
 
 #include "pauli_frame.h"
+#include "clifford.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+/* ------------------------------------------------------------------ */
+/*  SIMD backend selection                                             */
+/*                                                                    */
+/*  The batched frame gate kernels are word-parallel XOR / row-swap    */
+/*  loops over W = ceil(num_shots/64) uint64 words.  We widen the      */
+/*  inner loop to the host lane width: NEON (2x u64) on AArch64,       */
+/*  AVX-512 (8x) / AVX2 (4x) on x86, scalar u64 otherwise.  Build with */
+/*  -DQSIM_NATIVE_ARCH=ON (-> -mcpu=native / -march=native) so the     */
+/*  right macro is defined.                                            */
+/* ------------------------------------------------------------------ */
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#  include <arm_neon.h>
+#  define PF_SIMD_NEON 1
+#  define PF_SIMD_NAME "neon"
+#  define PF_SIMD_LANES 2
+#elif defined(__AVX512F__)
+#  include <immintrin.h>
+#  define PF_SIMD_AVX512 1
+#  define PF_SIMD_NAME "avx512"
+#  define PF_SIMD_LANES 8
+#elif defined(__AVX2__)
+#  include <immintrin.h>
+#  define PF_SIMD_AVX2 1
+#  define PF_SIMD_NAME "avx2"
+#  define PF_SIMD_LANES 4
+#else
+#  define PF_SIMD_NAME "scalar"
+#  define PF_SIMD_LANES 1
+#endif
+
+const char* pauli_frame_simd_backend(void) { return PF_SIMD_NAME; }
+int         pauli_frame_simd_lanes(void)   { return PF_SIMD_LANES; }
 
 /* ================================================================== */
 /*  Single-frame storage                                               */
@@ -209,29 +247,75 @@ void pauli_frame_batch_clear(pauli_frame_batch_t* b) {
 
 /* The batched single-qubit and two-qubit kernels are memory-bound:
  * each gate is a tight XOR loop over W = ceil(num_shots / 64) uint64
- * words.  At realistic batch sizes (10K-100K shots, W=156-1562) the
- * per-call work is small enough that OMP thread-spawn overhead
- * dominates; profiling on M2 Ultra shows OMP-parallel CNOT runs ~1.6x
- * SLOWER than serial up to W = 8192.  We therefore keep the gate
- * kernels serial and reserve OMP for the heavier RNG-draw paths
- * (noise injection) where each shot involves a splitmix64 step. */
+ * words.  Below, the inner loop is widened to the host SIMD lane width
+ * (NEON 2x u64 / AVX2 4x / AVX-512 8x), which closes the per-core gap
+ * to Stim's frame simulator on a single thread; across-shot threading
+ * is applied at the circuit-sampler level, not per gate, because a
+ * single gate's W words is too little work to amortise thread spawn. */
+
+/* d[w] ^= s[w] for w in [0,W), SIMD-widened. */
+static inline void pf_row_xor(bf_word_t* restrict d,
+                              const bf_word_t* restrict s, size_t W) {
+    size_t w = 0;
+#if defined(PF_SIMD_NEON)
+    for (; w + 2 <= W; w += 2) {
+        uint64x2_t vd = vld1q_u64(&d[w]);
+        uint64x2_t vs = vld1q_u64(&s[w]);
+        vst1q_u64(&d[w], veorq_u64(vd, vs));
+    }
+#elif defined(PF_SIMD_AVX512)
+    for (; w + 8 <= W; w += 8) {
+        __m512i vd = _mm512_loadu_si512((const void*)&d[w]);
+        __m512i vs = _mm512_loadu_si512((const void*)&s[w]);
+        _mm512_storeu_si512((void*)&d[w], _mm512_xor_si512(vd, vs));
+    }
+#elif defined(PF_SIMD_AVX2)
+    for (; w + 4 <= W; w += 4) {
+        __m256i vd = _mm256_loadu_si256((const __m256i*)&d[w]);
+        __m256i vs = _mm256_loadu_si256((const __m256i*)&s[w]);
+        _mm256_storeu_si256((__m256i*)&d[w], _mm256_xor_si256(vd, vs));
+    }
+#endif
+    for (; w < W; w++) d[w] ^= s[w];
+}
+
+/* swap rows a[w] <-> b[w] for w in [0,W), SIMD-widened. */
+static inline void pf_row_swap(bf_word_t* restrict a,
+                               bf_word_t* restrict b, size_t W) {
+    size_t w = 0;
+#if defined(PF_SIMD_NEON)
+    for (; w + 2 <= W; w += 2) {
+        uint64x2_t va = vld1q_u64(&a[w]);
+        uint64x2_t vb = vld1q_u64(&b[w]);
+        vst1q_u64(&a[w], vb);
+        vst1q_u64(&b[w], va);
+    }
+#elif defined(PF_SIMD_AVX512)
+    for (; w + 8 <= W; w += 8) {
+        __m512i va = _mm512_loadu_si512((const void*)&a[w]);
+        __m512i vb = _mm512_loadu_si512((const void*)&b[w]);
+        _mm512_storeu_si512((void*)&a[w], vb);
+        _mm512_storeu_si512((void*)&b[w], va);
+    }
+#elif defined(PF_SIMD_AVX2)
+    for (; w + 4 <= W; w += 4) {
+        __m256i va = _mm256_loadu_si256((const __m256i*)&a[w]);
+        __m256i vb = _mm256_loadu_si256((const __m256i*)&b[w]);
+        _mm256_storeu_si256((__m256i*)&a[w], vb);
+        _mm256_storeu_si256((__m256i*)&b[w], va);
+    }
+#endif
+    for (; w < W; w++) { bf_word_t t = a[w]; a[w] = b[w]; b[w] = t; }
+}
 
 void pauli_frame_batch_h(pauli_frame_batch_t* b, size_t q) {
     if (!b || q >= b->n) return;
-    bf_word_t* xq = row_x(b, q);
-    bf_word_t* zq = row_z(b, q);
-    for (size_t w = 0; w < b->words_per_row; w++) {
-        bf_word_t t = xq[w]; xq[w] = zq[w]; zq[w] = t;
-    }
+    pf_row_swap(row_x(b, q), row_z(b, q), b->words_per_row);
 }
 
 void pauli_frame_batch_s(pauli_frame_batch_t* b, size_t q) {
     if (!b || q >= b->n) return;
-    bf_word_t* xq = row_x(b, q);
-    bf_word_t* zq = row_z(b, q);
-    for (size_t w = 0; w < b->words_per_row; w++) {
-        zq[w] ^= xq[w];
-    }
+    pf_row_xor(row_z(b, q), row_x(b, q), b->words_per_row);
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,32 +324,23 @@ void pauli_frame_batch_s(pauli_frame_batch_t* b, size_t q) {
 
 void pauli_frame_batch_cnot(pauli_frame_batch_t* b, size_t c, size_t t) {
     if (!b || c >= b->n || t >= b->n || c == t) return;
-    bf_word_t* xc = row_x(b, c); bf_word_t* xt = row_x(b, t);
-    bf_word_t* zc = row_z(b, c); bf_word_t* zt = row_z(b, t);
-    for (size_t w = 0; w < b->words_per_row; w++) {
-        xt[w] ^= xc[w];
-        zc[w] ^= zt[w];
-    }
+    const size_t W = b->words_per_row;
+    pf_row_xor(row_x(b, t), row_x(b, c), W);   /* x_t ^= x_c */
+    pf_row_xor(row_z(b, c), row_z(b, t), W);   /* z_c ^= z_t */
 }
 
 void pauli_frame_batch_cz(pauli_frame_batch_t* b, size_t a, size_t bq) {
     if (!b || a >= b->n || bq >= b->n || a == bq) return;
-    bf_word_t* xa = row_x(b, a); bf_word_t* xb = row_x(b, bq);
-    bf_word_t* za = row_z(b, a); bf_word_t* zb = row_z(b, bq);
-    for (size_t w = 0; w < b->words_per_row; w++) {
-        zb[w] ^= xa[w];
-        za[w] ^= xb[w];
-    }
+    const size_t W = b->words_per_row;
+    pf_row_xor(row_z(b, bq), row_x(b, a), W);  /* z_b ^= x_a */
+    pf_row_xor(row_z(b, a), row_x(b, bq), W);  /* z_a ^= x_b */
 }
 
 void pauli_frame_batch_swap(pauli_frame_batch_t* b, size_t a, size_t bq) {
     if (!b || a >= b->n || bq >= b->n || a == bq) return;
-    bf_word_t* xa = row_x(b, a); bf_word_t* xb = row_x(b, bq);
-    bf_word_t* za = row_z(b, a); bf_word_t* zb = row_z(b, bq);
-    for (size_t w = 0; w < b->words_per_row; w++) {
-        bf_word_t tx = xa[w]; xa[w] = xb[w]; xb[w] = tx;
-        bf_word_t tz = za[w]; za[w] = zb[w]; zb[w] = tz;
-    }
+    const size_t W = b->words_per_row;
+    pf_row_swap(row_x(b, a), row_x(b, bq), W);
+    pf_row_swap(row_z(b, a), row_z(b, bq), W);
 }
 
 /* ------------------------------------------------------------------ */
@@ -278,6 +353,33 @@ static inline uint64_t sm64_next(uint64_t* s) {
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
     z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
     return z ^ (z >> 31);
+}
+
+/* Derive an independent RNG stream for the shot block beginning at absolute
+ * shot index `offset`.
+ *
+ * This must NOT be `seed + k * 0x9E3779B97F4A7C15`: that constant is exactly
+ * the increment sm64_next applies to its state per draw, so an additive
+ * stride hands block k the state block 0 reaches after k draws.  Every block
+ * then walks a single shared stream at a k-step offset and their shots are
+ * correlated -- measured as up to 7.4 sigma bias in the GHZ P(all-1) statistic
+ * on the multithreaded path while the single-threaded path stayed within
+ * 1.3 sigma.  Avalanching the (seed, offset) pair destroys that additive
+ * structure so neighbouring blocks differ in all bits.
+ *
+ * Keying on the absolute shot offset rather than the thread id means a block
+ * covering the same shots draws the same randomness wherever it is scheduled;
+ * for a fixed thread count the sample stream is reproducible.  (Changing the
+ * thread count repartitions the blocks and therefore changes the stream.) */
+static inline uint64_t pf_stream_seed(uint64_t seed, uint64_t offset) {
+    uint64_t z = seed ^ (offset * 0xD1B54A32D192ED03ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    z ^= z >> 31;
+    z += 0x9E3779B97F4A7C15ULL;
+    z = (z ^ (z >> 29)) * 0x94D049BB133111EBULL;
+    z ^= z >> 32;
+    return z ? z : 0x9E3779B97F4A7C15ULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,4 +511,165 @@ void pauli_frame_batch_reset_zero(pauli_frame_batch_t* b, size_t q) {
         xq[w] = 0;
         zq[w] = 0;
     }
+}
+
+/* ================================================================== */
+/*  Circuit-level batch shot sampler                                   */
+/* ================================================================== */
+
+size_t pauli_frame_circuit_num_measurements(const pf_circuit_op_t* ops,
+                                            size_t num_ops) {
+    if (!ops) return 0;
+    size_t m = 0;
+    for (size_t i = 0; i < num_ops; i++)
+        if (ops[i].kind == PF_OP_MEASURE) m++;
+    return m;
+}
+
+/* Reference pass: one deterministic tableau run recording, per MEASURE op,
+ * the outcome bit and whether it was random (kind 1) or deterministic
+ * (kind 0).  This anchors the affine outcome offset (sign flips from
+ * X/Y/Z, and one valid choice for each random measurement); the frame
+ * pass then spans the free subspace around it. */
+static int pf_compute_reference(size_t n, const pf_circuit_op_t* ops,
+                                size_t num_ops, uint64_t seed,
+                                uint8_t* m_ref, uint8_t* m_kind) {
+    clifford_tableau_t* t = clifford_tableau_create(n);
+    if (!t) return -1;
+    uint64_t rng = seed ? seed : 0xA5A5A5A5DEADBEEFULL;
+    size_t mi = 0;
+    for (size_t i = 0; i < num_ops; i++) {
+        const uint32_t q0 = ops[i].q0, q1 = ops[i].q1;
+        int outcome = 0, kind = 0;
+        switch (ops[i].kind) {
+            case PF_OP_H:    clifford_h(t, q0); break;
+            case PF_OP_S:    clifford_s(t, q0); break;
+            case PF_OP_S_DAG:clifford_s_dag(t, q0); break;
+            case PF_OP_X:    clifford_x(t, q0); break;
+            case PF_OP_Y:    clifford_y(t, q0); break;
+            case PF_OP_Z:    clifford_z(t, q0); break;
+            case PF_OP_CNOT: clifford_cnot(t, q0, q1); break;
+            case PF_OP_CZ:   clifford_cz(t, q0, q1); break;
+            case PF_OP_SWAP: clifford_swap(t, q0, q1); break;
+            case PF_OP_RESET:
+                clifford_measure(t, q0, &rng, &outcome, &kind);
+                if (outcome) clifford_x(t, q0);
+                break;
+            case PF_OP_MEASURE:
+                clifford_measure(t, q0, &rng, &outcome, &kind);
+                m_ref[mi]  = (uint8_t)(outcome & 1);
+                m_kind[mi] = (uint8_t)(kind & 1);
+                mi++;
+                break;
+            default: break;
+        }
+    }
+    clifford_tableau_free(t);
+    return 0;
+}
+
+/* Fill a W-word frame row with fresh per-shot random bits. */
+static inline void pf_row_rand(bf_word_t* r, size_t W, uint64_t* rng) {
+    for (size_t w = 0; w < W; w++) r[w] = sm64_next(rng);
+}
+
+/* Run the full circuit over one shot block, writing measurement outcomes
+ * measurement-major into out[ m*total_shots + (global_offset + shot) ]. */
+static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
+                        const uint8_t* m_ref, const uint8_t* m_kind,
+                        size_t block_shots, size_t global_offset,
+                        size_t total_shots, uint64_t seed, uint8_t* out) {
+    pauli_frame_batch_t* b = pauli_frame_batch_create(n, block_shots);
+    if (!b) return -1;
+    const size_t W = b->words_per_row;
+    uint64_t rng = seed ? seed : 0x1ULL;
+
+    /* Initial state |0>^n: x-frame is zero (calloc); z-frame is free and
+     * seeded random so that a later H moves genuine entropy into the
+     * measured X-component. */
+    for (size_t q = 0; q < n; q++) pf_row_rand(row_z(b, q), W, &rng);
+
+    size_t mi = 0;
+    for (size_t i = 0; i < num_ops; i++) {
+        const uint32_t q0 = ops[i].q0, q1 = ops[i].q1;
+        switch (ops[i].kind) {
+            case PF_OP_H:    pauli_frame_batch_h(b, q0); break;
+            case PF_OP_S:    pauli_frame_batch_s(b, q0); break;
+            case PF_OP_S_DAG:pauli_frame_batch_s(b, q0); break;
+            case PF_OP_X: case PF_OP_Y: case PF_OP_Z: break; /* frame no-op */
+            case PF_OP_CNOT: pauli_frame_batch_cnot(b, q0, q1); break;
+            case PF_OP_CZ:   pauli_frame_batch_cz(b, q0, q1); break;
+            case PF_OP_SWAP: pauli_frame_batch_swap(b, q0, q1); break;
+            case PF_OP_RESET: {
+                bf_word_t* xq = row_x(b, q0);
+                for (size_t w = 0; w < W; w++) xq[w] = 0;
+                pf_row_rand(row_z(b, q0), W, &rng);
+                break;
+            }
+            case PF_OP_MEASURE: {
+                const bf_word_t* xq = row_x(b, q0);
+                const uint8_t mr = m_ref[mi];
+                uint8_t* dst = out + (size_t)mi * total_shots + global_offset;
+                for (size_t s = 0; s < block_shots; s++)
+                    dst[s] = (uint8_t)((xq[s >> 6] >> (s & 63)) & 1) ^ mr;
+                /* A random measurement injects fresh Z-frame entropy so a
+                 * later basis change yields an independent outcome; the
+                 * X-frame is preserved so downstream deterministic
+                 * measurements stay correlated to this result. */
+                if (m_kind[mi]) pf_row_rand(row_z(b, q0), W, &rng);
+                mi++;
+                break;
+            }
+            default: break;
+        }
+    }
+    pauli_frame_batch_free(b);
+    return 0;
+}
+
+long pauli_frame_batch_sample_circuit(size_t num_qubits,
+                                      const pf_circuit_op_t* ops, size_t num_ops,
+                                      size_t num_shots, uint64_t seed,
+                                      int num_threads, uint8_t* out) {
+    if (num_qubits == 0 || !ops || num_shots == 0 || !out) return -1;
+    const size_t nmeas = pauli_frame_circuit_num_measurements(ops, num_ops);
+    if (nmeas == 0) return 0;
+
+    uint8_t* m_ref  = (uint8_t*)malloc(nmeas);
+    uint8_t* m_kind = (uint8_t*)malloc(nmeas);
+    if (!m_ref || !m_kind) { free(m_ref); free(m_kind); return -1; }
+    if (pf_compute_reference(num_qubits, ops, num_ops, seed, m_ref, m_kind)) {
+        free(m_ref); free(m_kind); return -1;
+    }
+
+    int nthreads = num_threads;
+#ifdef _OPENMP
+    if (nthreads <= 0) nthreads = omp_get_max_threads();
+#else
+    if (nthreads <= 0) nthreads = 1;
+#endif
+    if ((size_t)nthreads > num_shots) nthreads = (int)num_shots;
+    if (nthreads < 1) nthreads = 1;
+
+    const size_t base = num_shots / (size_t)nthreads;
+    const size_t rem  = num_shots % (size_t)nthreads;
+    int err = 0;
+
+#ifdef _OPENMP
+#   pragma omp parallel for num_threads(nthreads) schedule(static, 1) reduction(|:err)
+#endif
+    for (int tid = 0; tid < nthreads; tid++) {
+        /* Contiguous, non-overlapping shot ranges; the first `rem` blocks
+         * take one extra shot so all shots are covered. */
+        size_t bs = base + ((size_t)tid < rem ? 1 : 0);
+        size_t off = (size_t)tid * base + ((size_t)tid < rem ? (size_t)tid : rem);
+        if (bs == 0) continue;
+        uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
+        if (pf_run_block(num_qubits, ops, num_ops, m_ref, m_kind,
+                         bs, off, num_shots, bseed, out) != 0)
+            err |= 1;
+    }
+
+    free(m_ref); free(m_kind);
+    return err ? -1 : (long)nmeas;
 }

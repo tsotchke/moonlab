@@ -190,6 +190,71 @@ void pauli_frame_batch_reset_zero(pauli_frame_batch_t* b, size_t q);
 /* Reset every shot's frame to identity. */
 MOONLAB_API void pauli_frame_batch_clear(pauli_frame_batch_t* b);
 
+/* ================================================================== */
+/*  Circuit-level batch shot sampler                                   */
+/* ================================================================== */
+
+/**
+ * @brief Op kinds accepted by the batch circuit sampler.
+ *
+ * X, Y, Z are frame no-ops (their deterministic sign contribution is
+ * folded into the reference sample); RESET prepares |0> with a fresh
+ * random Z-frame per shot; MEASURE performs a destructive-free Z-basis
+ * read whose result is (reference_bit XOR frame_x).
+ */
+typedef enum {
+    PF_OP_H = 0, PF_OP_S, PF_OP_S_DAG,
+    PF_OP_X, PF_OP_Y, PF_OP_Z,
+    PF_OP_CNOT, PF_OP_CZ, PF_OP_SWAP,
+    PF_OP_RESET, PF_OP_MEASURE
+} pf_op_kind_t;
+
+/** @brief One circuit instruction.  @p q1 is used only by two-qubit ops. */
+typedef struct {
+    uint8_t  kind;   /* pf_op_kind_t */
+    uint32_t q0;
+    uint32_t q1;
+} pf_circuit_op_t;
+
+/** @brief Number of MEASURE ops in an op list (buffer sizing helper). */
+MOONLAB_API size_t pauli_frame_circuit_num_measurements(
+    const pf_circuit_op_t* ops, size_t num_ops);
+
+/**
+ * @brief Batch-sample a Clifford + measurement circuit over @p num_shots
+ *        independent shots, reproducing Stim's compile_sampler().sample()
+ *        output distribution.
+ *
+ * A single reference tableau pass fixes, per measurement, the deterministic
+ * bit and whether the outcome is random; the shot-bit-packed Pauli frame
+ * then supplies each shot's flip (with fresh Z-frame randomness injected at
+ * resets and random measurements).  The frame word ops are SIMD-widened to
+ * the host ISA and the shot batch is split into @p num_threads OpenMP
+ * blocks, each with an independent RNG stream.
+ *
+ * Output layout is measurement-major: out[m * num_shots + shot] is the
+ * m-th measurement's outcome (0/1 byte) for the given shot.  The buffer
+ * must hold (#MEASURE ops) * num_shots bytes.
+ *
+ * @param num_qubits  qubit count
+ * @param ops,num_ops circuit instruction list
+ * @param num_shots   number of independent shots
+ * @param seed        base RNG seed (0 -> internal default)
+ * @param num_threads OpenMP block count; <=0 selects omp_get_max_threads()
+ * @param out         measurement-major output buffer
+ * @return number of measurements written, or -1 on error.
+ */
+MOONLAB_API long pauli_frame_batch_sample_circuit(
+    size_t num_qubits,
+    const pf_circuit_op_t* ops, size_t num_ops,
+    size_t num_shots, uint64_t seed,
+    int num_threads, uint8_t* out);
+
+/** @brief Name of the compiled SIMD backend: "neon"|"avx2"|"avx512"|"scalar". */
+MOONLAB_API const char* pauli_frame_simd_backend(void);
+/** @brief SIMD lane width in 64-bit words (1 = scalar fallback). */
+MOONLAB_API int pauli_frame_simd_lanes(void);
+
 #ifdef __cplusplus
 }
 #endif
