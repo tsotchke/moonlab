@@ -158,6 +158,25 @@ try:
 except (ImportError, AttributeError, OSError):
     _ERROR_MITIGATION_AVAILABLE = False
 
+# Noise: Kraus-channel trajectory unravellings (depolarizing, amplitude/phase
+# damping, bit/phase flip, thermal relaxation, readout error, composite device
+# model) over the real src/quantum/noise.c engine.
+try:
+    from .noise import (
+        DepolarizingChannel,
+        AmplitudeDamping,
+        PhaseDamping,
+        BitFlip,
+        PhaseFlip,
+        BitPhaseFlip,
+        ThermalRelaxation,
+        ReadoutError,
+        DeviceNoiseModel,
+    )
+    _NOISE_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _NOISE_AVAILABLE = False
+
 # Distributed simulation: bounded MPI + CUDA state-vector sharding over the
 # real dist_*/collective_*/mpi_bridge_* engine. Imports on any build; the MPI
 # entry points raise an informative error when the library lacks MPI.
@@ -296,6 +315,12 @@ if _ERROR_MITIGATION_AVAILABLE:
     __all__ += [
         'ZNE', 'PEC', 'MeasurementMitigation',
         'ZNE_LINEAR', 'ZNE_RICHARDSON', 'ZNE_EXPONENTIAL',
+    ]
+if _NOISE_AVAILABLE:
+    __all__ += [
+        'DepolarizingChannel', 'AmplitudeDamping', 'PhaseDamping',
+        'BitFlip', 'PhaseFlip', 'BitPhaseFlip', 'ThermalRelaxation',
+        'ReadoutError', 'DeviceNoiseModel',
     ]
 if _DISTRIBUTED_AVAILABLE:
     __all__ += [

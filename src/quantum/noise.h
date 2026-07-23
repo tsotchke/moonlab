@@ -112,22 +112,22 @@ typedef struct {
 /**
  * @brief Create a noise model
  */
-noise_model_t* noise_model_create(void);
+MOONLAB_API noise_model_t* noise_model_create(void);
 
 /**
  * @brief Destroy noise model
  */
-void noise_model_destroy(noise_model_t* model);
+MOONLAB_API void noise_model_destroy(noise_model_t* model);
 
 /**
  * @brief Copy noise model
  */
-noise_model_t* noise_model_copy(const noise_model_t* model);
+MOONLAB_API noise_model_t* noise_model_copy(const noise_model_t* model);
 
 /**
  * @brief Create realistic noise model from hardware specs
  */
-noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
+MOONLAB_API noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
                                             double gate_error,
                                             double readout_error);
 
@@ -203,14 +203,14 @@ MOONLAB_API int noise_readout_error(int outcome, double error_0_to_1, double err
 /**
  * @brief Apply noise model to qubit
  */
-void noise_apply_model(quantum_state_t* state, int qubit,
+MOONLAB_API void noise_apply_model(quantum_state_t* state, int qubit,
                        const noise_model_t* model,
                        const double* random_values);
 
 /**
  * @brief Apply noise model to two-qubit gate
  */
-void noise_apply_model_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
+MOONLAB_API void noise_apply_model_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
                                  const noise_model_t* model,
                                  const double* random_values);
 
@@ -218,14 +218,14 @@ void noise_apply_model_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
 // CONFIGURATION
 // ============================================================================
 
-void noise_model_set_depolarizing(noise_model_t* model, double rate);
-void noise_model_set_amplitude_damping(noise_model_t* model, double rate);
-void noise_model_set_phase_damping(noise_model_t* model, double rate);
-void noise_model_set_thermal(noise_model_t* model, double t1, double t2);
-void noise_model_set_gate_time(noise_model_t* model, double time);
-void noise_model_set_readout_error(noise_model_t* model,
+MOONLAB_API void noise_model_set_depolarizing(noise_model_t* model, double rate);
+MOONLAB_API void noise_model_set_amplitude_damping(noise_model_t* model, double rate);
+MOONLAB_API void noise_model_set_phase_damping(noise_model_t* model, double rate);
+MOONLAB_API void noise_model_set_thermal(noise_model_t* model, double t1, double t2);
+MOONLAB_API void noise_model_set_gate_time(noise_model_t* model, double time);
+MOONLAB_API void noise_model_set_readout_error(noise_model_t* model,
                                    double error_0, double error_1);
-void noise_model_set_enabled(noise_model_t* model, int enabled);
+MOONLAB_API void noise_model_set_enabled(noise_model_t* model, int enabled);
 
 // ============================================================================
 // KRAUS-CHANNEL VALIDATION
