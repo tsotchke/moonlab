@@ -618,6 +618,11 @@
     target_link_libraries(test_clifford PRIVATE quantumsim)
     add_test(NAME unit_clifford COMMAND test_clifford)
 
+    # Exhaustive check of the word-parallel rowsum phase (popcount) formula
+    # against the scalar Aaronson-Gottesman g function. Self-contained.
+    add_executable(test_clifford_rowsum tests/unit/test_clifford_rowsum.c)
+    add_test(NAME unit_clifford_rowsum COMMAND test_clifford_rowsum)
+
     # Gate-fusion DAG: random-circuit parity vs gate-by-gate execution.
     add_executable(test_fusion tests/unit/test_fusion.c)
     target_link_libraries(test_fusion PRIVATE quantumsim)

@@ -23,20 +23,75 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * BIT-PACKED, COLUMN-MAJOR STORAGE (F3 throughput rewrite)
+ * --------------------------------------------------------
+ * The logical tableau is unchanged from Aaronson-Gottesman: 2n rows
+ * (rows [0,n) destabilizers, [n,2n) stabilizers), columns [0,n) the
+ * Pauli-X exponents, [n,2n) the Z exponents, plus one phase bit per row.
+ *
+ * The PHYSICAL storage is transposed and bit-packed.  For each qubit
+ * column j we keep the X-bits and Z-bits of that column across all 2n
+ * rows as a contiguous bit-vector of `w = ceil(2n/64)` 64-bit words
+ * (bit r of the word-vector is the entry for row r).  The 2n phase bits
+ * are one more w-word vector.
+ *
+ *   x[j*w .. j*w+w)   : X column j, bit r = X-exponent of row r on qubit j
+ *   z[j*w .. j*w+w)   : Z column j
+ *   rp[0 .. w)        : phase bits, bit r = sign of row r
+ *
+ * Why column-major: every Clifford gate on qubit q touches only the two
+ * columns q (X and Z) but *all* 2n rows.  In this layout those rows are
+ * packed 64-to-a-word, so a gate is a handful of word XOR/AND/swap loops
+ * over w = ceil(2n/64) words -- word-parallel over the rows, matching
+ * Stim's per-gate word complexity instead of the old O(n) scalar scan.
+ *
+ * Storage is 2*n*w*8 bytes for the columns (~n^2/2 bytes) versus the
+ * previous 2n*(2n+1) bytes (~4n^2), an 8x reduction.
+ *
+ * tget/tset below preserve the OLD (row,col) addressing exactly, so the
+ * Pauli-string introspection API (clifford_row_pauli, conjugate_pauli,
+ * ...) is untouched.
+ */
 struct clifford_tableau_t {
     size_t n;
-    /* Flat layout: rows * (2n + 1) uint8_t. Row r starts at
-     * row(r) = r * (2n + 1); columns [0..n-1] are x, [n..2n-1] are z,
-     * column 2n is the phase bit. One byte per bit keeps the code
-     * transparent; a bit-packed variant can follow. */
-    uint8_t* tab;
+    size_t w;        /* words per column bit-vector = ceil(2n/64) */
+    uint64_t* x;     /* n column vectors of w words each */
+    uint64_t* z;     /* n column vectors of w words each */
+    uint64_t* rp;    /* phase bit-vector, w words (2n bits used) */
 };
 
-static inline uint8_t tget(const clifford_tableau_t* t, size_t r, size_t c) {
-    return t->tab[r * (2 * t->n + 1) + c];
+static inline uint64_t* xcol(const clifford_tableau_t* t, size_t j) {
+    return t->x + j * t->w;
 }
+static inline uint64_t* zcol(const clifford_tableau_t* t, size_t j) {
+    return t->z + j * t->w;
+}
+static inline uint8_t getbit(const uint64_t* v, size_t r) {
+    return (uint8_t)((v[r >> 6] >> (r & 63)) & 1u);
+}
+static inline void setbit(uint64_t* v, size_t r, uint8_t b) {
+    uint64_t m = (uint64_t)1 << (r & 63);
+    if (b) v[r >> 6] |= m; else v[r >> 6] &= ~m;
+}
+static inline void xorbit(uint64_t* v, size_t r, uint8_t b) {
+    if (b) v[r >> 6] ^= (uint64_t)1 << (r & 63);
+}
+
+/* Preserve the original (row, col) bit addressing for the introspection
+ * API and the transparent path.  col in [0,n): X; [n,2n): Z; 2n: phase. */
+static inline uint8_t tget(const clifford_tableau_t* t, size_t r, size_t c) {
+    size_t n = t->n;
+    if (c == 2 * n) return getbit(t->rp, r);
+    if (c < n)      return getbit(xcol(t, c), r);
+    return getbit(zcol(t, c - n), r);
+}
+__attribute__((unused))
 static inline void tset(clifford_tableau_t* t, size_t r, size_t c, uint8_t v) {
-    t->tab[r * (2 * t->n + 1) + c] = v;
+    size_t n = t->n;
+    if (c == 2 * n) { setbit(t->rp, r, v); return; }
+    if (c < n)      { setbit(xcol(t, c), r, v); return; }
+    setbit(zcol(t, c - n), r, v);
 }
 
 size_t clifford_num_qubits(const clifford_tableau_t* t) { return t ? t->n : 0; }
@@ -46,46 +101,58 @@ clifford_tableau_t* clifford_tableau_create(size_t n) {
     clifford_tableau_t* t = calloc(1, sizeof(*t));
     if (!t) return NULL;
     t->n = n;
-    t->tab = calloc((size_t)2 * n * (2 * n + 1), sizeof(uint8_t));
-    if (!t->tab) { free(t); return NULL; }
-    /* Destabilizer i = X_i  →  x_i bit on row i, column i. */
-    for (size_t i = 0; i < n; i++) tset(t, i, i, 1);
-    /* Stabilizer i = Z_i  →  z_i bit on row n+i, column n+i. */
-    for (size_t i = 0; i < n; i++) tset(t, n + i, n + i, 1);
+    t->w = (2 * n + 63) / 64;
+    t->x  = calloc(n * t->w, sizeof(uint64_t));
+    t->z  = calloc(n * t->w, sizeof(uint64_t));
+    t->rp = calloc(t->w, sizeof(uint64_t));
+    if (!t->x || !t->z || !t->rp) {
+        free(t->x); free(t->z); free(t->rp); free(t);
+        return NULL;
+    }
+    /* Destabilizer i = X_i  →  X-bit on row i, column i. */
+    for (size_t i = 0; i < n; i++) setbit(xcol(t, i), i, 1);
+    /* Stabilizer i = Z_i  →  Z-bit on row n+i, column i. */
+    for (size_t i = 0; i < n; i++) setbit(zcol(t, i), n + i, 1);
     return t;
 }
 
 void clifford_tableau_free(clifford_tableau_t* t) {
     if (!t) return;
-    free(t->tab);
+    free(t->x);
+    free(t->z);
+    free(t->rp);
     free(t);
 }
 
 /* --- Gate updates (Aaronson-Gottesman §5 lookup tables) --- */
 
-/* H on qubit q: for every row, swap x_q and z_q, update r by x_q * z_q. */
+/* H on qubit q: for every row, swap x_q and z_q, update r by x_q · z_q.
+ * Word-parallel over all 2n rows: r ^= x_q & z_q (pre-swap), then swap
+ * the two column bit-vectors. */
 clifford_error_t clifford_h(clifford_tableau_t* t, size_t q) {
     if (!t || q >= t->n) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++) {
-        uint8_t x = tget(t, r, q);
-        uint8_t z = tget(t, r, n + q);
-        tset(t, r, rbit, tget(t, r, rbit) ^ (x & z));
-        tset(t, r, q, z);
-        tset(t, r, n + q, x);
+    uint64_t* xq = xcol(t, q);
+    uint64_t* zq = zcol(t, q);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) {
+        uint64_t xk = xq[k], zk = zq[k];
+        rp[k] ^= xk & zk;
+        xq[k] = zk;
+        zq[k] = xk;
     }
     return CLIFFORD_SUCCESS;
 }
 
-/* S on qubit q: z_q ← z_q ⊕ x_q; r ← r ⊕ (x_q · z_q). */
+/* S on qubit q: z_q ← z_q ⊕ x_q; r ← r ⊕ (x_q · z_q). Word-parallel. */
 clifford_error_t clifford_s(clifford_tableau_t* t, size_t q) {
     if (!t || q >= t->n) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++) {
-        uint8_t x = tget(t, r, q);
-        uint8_t z = tget(t, r, n + q);
-        tset(t, r, rbit, tget(t, r, rbit) ^ (x & z));
-        tset(t, r, n + q, z ^ x);
+    uint64_t* xq = xcol(t, q);
+    uint64_t* zq = zcol(t, q);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) {
+        uint64_t xk = xq[k];
+        rp[k] ^= xk & zq[k];
+        zq[k] ^= xk;
     }
     return CLIFFORD_SUCCESS;
 }
@@ -100,49 +167,50 @@ clifford_error_t clifford_s_dag(clifford_tableau_t* t, size_t q) {
 }
 
 /* CNOT(a,b): for every row, x_b ← x_b ⊕ x_a, z_a ← z_a ⊕ z_b,
- *            r ← r ⊕ (x_a & z_b & (x_b ⊕ z_a ⊕ 1)). */
+ *            r ← r ⊕ (x_a & z_b & (x_b ⊕ z_a ⊕ 1)).
+ * The phase term reads the OLD x_b and z_a, so it is computed before the
+ * two column updates.  Word-parallel over all rows. */
 clifford_error_t clifford_cnot(clifford_tableau_t* t, size_t a, size_t b) {
     if (!t || a >= t->n || b >= t->n || a == b) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++) {
-        uint8_t xa = tget(t, r, a);
-        uint8_t xb = tget(t, r, b);
-        uint8_t za = tget(t, r, n + a);
-        uint8_t zb = tget(t, r, n + b);
-        uint8_t r_old = tget(t, r, rbit);
-        tset(t, r, rbit, r_old ^ (xa & zb & ((xb ^ za ^ 1) & 1)));
-        tset(t, r, b, xb ^ xa);
-        tset(t, r, n + a, za ^ zb);
+    uint64_t* xa = xcol(t, a);
+    uint64_t* za = zcol(t, a);
+    uint64_t* xb = xcol(t, b);
+    uint64_t* zb = zcol(t, b);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) {
+        /* (x_b ⊕ z_a ⊕ 1) = ~(x_b ⊕ z_a) at the bit level. */
+        rp[k] ^= xa[k] & zb[k] & ~(xb[k] ^ za[k]);
+        xb[k] ^= xa[k];
+        za[k] ^= zb[k];
     }
     return CLIFFORD_SUCCESS;
 }
 
-/* Pauli X = H·S²·H. Cheaper: just update r whenever the stabilizer
- * row anticommutes with X_q, i.e., has z_q = 1. */
+/* Pauli X: flip r whenever the row anticommutes with X_q, i.e. z_q = 1. */
 clifford_error_t clifford_x(clifford_tableau_t* t, size_t q) {
     if (!t || q >= t->n) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++)
-        tset(t, r, rbit, tget(t, r, rbit) ^ tget(t, r, n + q));
+    uint64_t* zq = zcol(t, q);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) rp[k] ^= zq[k];
     return CLIFFORD_SUCCESS;
 }
 
 /* Pauli Z: flip r whenever the row has x_q = 1. */
 clifford_error_t clifford_z(clifford_tableau_t* t, size_t q) {
     if (!t || q >= t->n) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++)
-        tset(t, r, rbit, tget(t, r, rbit) ^ tget(t, r, q));
+    uint64_t* xq = xcol(t, q);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) rp[k] ^= xq[k];
     return CLIFFORD_SUCCESS;
 }
 
-/* Pauli Y = i·X·Z: anticommutes with any Pauli containing X or Z at q,
- * but not with the identity on q. Flip r when x_q ⊕ z_q = 1. */
+/* Pauli Y = i·X·Z: flip r when x_q ⊕ z_q = 1. */
 clifford_error_t clifford_y(clifford_tableau_t* t, size_t q) {
     if (!t || q >= t->n) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
-    for (size_t r = 0; r < 2 * n; r++)
-        tset(t, r, rbit, tget(t, r, rbit) ^ tget(t, r, q) ^ tget(t, r, n + q));
+    uint64_t* xq = xcol(t, q);
+    uint64_t* zq = zcol(t, q);
+    uint64_t* rp = t->rp;
+    for (size_t k = 0; k < t->w; k++) rp[k] ^= xq[k] ^ zq[k];
     return CLIFFORD_SUCCESS;
 }
 
@@ -401,40 +469,115 @@ clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t) {
     clifford_tableau_t* c = calloc(1, sizeof(*c));
     if (!c) return NULL;
     c->n = t->n;
-    size_t nbytes = 2 * t->n * (2 * t->n + 1);
-    c->tab = malloc(nbytes);
-    if (!c->tab) { free(c); return NULL; }
-    memcpy(c->tab, t->tab, nbytes);
+    c->w = t->w;
+    size_t colwords = t->n * t->w;
+    c->x  = malloc(colwords * sizeof(uint64_t));
+    c->z  = malloc(colwords * sizeof(uint64_t));
+    c->rp = malloc(t->w * sizeof(uint64_t));
+    if (!c->x || !c->z || !c->rp) {
+        free(c->x); free(c->z); free(c->rp); free(c);
+        return NULL;
+    }
+    memcpy(c->x,  t->x,  colwords * sizeof(uint64_t));
+    memcpy(c->z,  t->z,  colwords * sizeof(uint64_t));
+    memcpy(c->rp, t->rp, t->w * sizeof(uint64_t));
     return c;
 }
 
 /* --- Measurement (Aaronson-Gottesman Algorithm 2) --- */
 
-/* Row-sum helper for the measurement case: multiply row h by row i,
- * picking up the right phase from the commutation cocycle. */
-static uint8_t rowsum_g(uint8_t x1, uint8_t z1, uint8_t x2, uint8_t z2) {
-    /* AG's g function: returns the exponent of i in the product of
-     * Pauli chars (x1,z1) and (x2,z2). 0,1,-1 for I/X/Y/Z multiplication.
-     * Encoded in two bits: phase_change = g mod 4. */
+/* AG's g function (scalar reference): the exponent of i (mod 4, in the
+ * range {-1,0,1}) picked up when Pauli char (x2,z2) is multiplied on the
+ * left by (x1,z1).  Kept as the authoritative scalar against which the
+ * word-parallel form below is checked (exhaustively, in the unit test and
+ * in debug builds). */
+__attribute__((unused))
+static int rowsum_g(uint8_t x1, uint8_t z1, uint8_t x2, uint8_t z2) {
     if (x1 == 0 && z1 == 0) return 0;
-    if (x1 == 1 && z1 == 1) return (uint8_t)((z2 - x2) & 3);
-    if (x1 == 1 && z1 == 0) return (uint8_t)((z2 * (2 * x2 - 1)) & 3);
-    /* x1 == 0, z1 == 1 */
-    return (uint8_t)((x2 * (1 - 2 * z2)) & 3);
+    if (x1 == 1 && z1 == 1) return (int)z2 - (int)x2;                 /* Y */
+    if (x1 == 1 && z1 == 0) return (int)z2 * (2 * (int)x2 - 1);       /* X */
+    return (int)x2 * (1 - 2 * (int)z2);                              /* Z */
 }
 
-static void rowsum(clifford_tableau_t* t, size_t h, size_t i) {
-    size_t n = t->n, rbit = 2 * n;
-    int acc = 2 * (int)tget(t, h, rbit) + 2 * (int)tget(t, i, rbit);
-    for (size_t j = 0; j < n; j++) {
-        acc += (int)rowsum_g(tget(t, i, j), tget(t, i, n + j),
-                             tget(t, h, j), tget(t, h, n + j));
+/*
+ * WORD-PARALLEL rowsum phase (item 3 of the F3 rewrite).
+ *
+ * For a whole 64-bit word, sum the g-contributions of all 64 lanes at
+ * once.  Each lane contributes +1, 0, or -1.  We build a `pos` mask (lanes
+ * contributing +1) and a `neg` mask (lanes contributing -1) with pure
+ * bitwise ops, then popcount both.  The masks are derived directly from
+ * the scalar g table above, split by the (x1,z1) case of the left factor:
+ *
+ *   left = Z (x1=0,z1=1):  g=+1 at (x2=1,z2=0);  g=-1 at (x2=1,z2=1)
+ *   left = X (x1=1,z1=0):  g=+1 at (x2=1,z2=1);  g=-1 at (x2=0,z2=1)
+ *   left = Y (x1=1,z1=1):  g=+1 at (x2=0,z2=1);  g=-1 at (x2=1,z2=0)
+ *   left = I (x1=0,z1=0):  g=0 always
+ *
+ * Verified exhaustively over all 16 single-bit inputs and over random
+ * word vectors against rowsum_g (see tests/unit/test_clifford_rowsum.c and
+ * the debug assertion in rowsum()).  Returns the signed lane sum for the
+ * word block; the caller reduces mod 4.
+ */
+static int rowsum_phase_words(const uint64_t* x1, const uint64_t* z1,
+                              const uint64_t* x2, const uint64_t* z2,
+                              size_t ws) {
+    int acc = 0;
+    for (size_t k = 0; k < ws; k++) {
+        uint64_t X1 = x1[k], Z1 = z1[k], X2 = x2[k], Z2 = z2[k];
+        uint64_t pos = (~X1 &  Z1 &  X2 & ~Z2)   /* Z: +1 */
+                     | ( X1 & ~Z1 &  X2 &  Z2)   /* X: +1 */
+                     | ( X1 &  Z1 & ~X2 &  Z2);  /* Y: +1 */
+        uint64_t neg = (~X1 &  Z1 &  X2 &  Z2)   /* Z: -1 */
+                     | ( X1 & ~Z1 & ~X2 &  Z2)   /* X: -1 */
+                     | ( X1 &  Z1 &  X2 & ~Z2);  /* Y: -1 */
+        acc += __builtin_popcountll(pos) - __builtin_popcountll(neg);
     }
-    acc &= 3;
-    tset(t, h, rbit, (uint8_t)(acc == 2 ? 1 : 0));
+    return acc;
+}
+
+/* Extract row r into row-major packed word buffers (ws = ceil(n/64)). */
+static void row_get(const clifford_tableau_t* t, size_t r,
+                    uint64_t* xb, uint64_t* zb, size_t ws) {
+    memset(xb, 0, ws * sizeof(uint64_t));
+    memset(zb, 0, ws * sizeof(uint64_t));
+    size_t n = t->n;
     for (size_t j = 0; j < n; j++) {
-        tset(t, h, j,     tget(t, h, j)     ^ tget(t, i, j));
-        tset(t, h, n + j, tget(t, h, n + j) ^ tget(t, i, n + j));
+        if (getbit(xcol(t, j), r)) xb[j >> 6] |= (uint64_t)1 << (j & 63);
+        if (getbit(zcol(t, j), r)) zb[j >> 6] |= (uint64_t)1 << (j & 63);
+    }
+}
+
+static inline int mod4(int v) { return ((v % 4) + 4) % 4; }
+
+/* Row-sum: multiply row h by the reference row supplied in row-major
+ * packed form (rx, rz, rphase), then XOR the reference into row h's
+ * columns.  The phase is accumulated word-parallel via popcount. */
+static void rowsum_ref(clifford_tableau_t* t, size_t h,
+                       const uint64_t* rx, const uint64_t* rz, uint8_t rphase,
+                       uint64_t* xh, uint64_t* zh, size_t ws) {
+    row_get(t, h, xh, zh, ws);
+    int acc = 2 * (int)getbit(t->rp, h) + 2 * (int)rphase
+            + rowsum_phase_words(rx, rz, xh, zh, ws);
+#ifndef NDEBUG
+    /* Debug-only cross-check of the word-parallel phase against the scalar
+     * g reference. */
+    {
+        int scal = 0;
+        for (size_t j = 0; j < t->n; j++) {
+            scal += rowsum_g((uint8_t)((rx[j >> 6] >> (j & 63)) & 1),
+                             (uint8_t)((rz[j >> 6] >> (j & 63)) & 1),
+                             (uint8_t)((xh[j >> 6] >> (j & 63)) & 1),
+                             (uint8_t)((zh[j >> 6] >> (j & 63)) & 1));
+        }
+        int wp = rowsum_phase_words(rx, rz, xh, zh, ws);
+        if (mod4(scal) != mod4(wp)) abort();
+    }
+#endif
+    setbit(t->rp, h, (uint8_t)(mod4(acc) == 2 ? 1 : 0));
+    size_t n = t->n;
+    for (size_t j = 0; j < n; j++) {
+        xorbit(xcol(t, j), h, (uint8_t)((rx[j >> 6] >> (j & 63)) & 1));
+        xorbit(zcol(t, j), h, (uint8_t)((rz[j >> 6] >> (j & 63)) & 1));
     }
 }
 
@@ -451,69 +594,83 @@ clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
                                   uint64_t* rng_state, int* outcome,
                                   int* outcome_kind) {
     if (!t || q >= t->n || !rng_state || !outcome) return CLIFFORD_ERR_QUBIT;
-    size_t n = t->n, rbit = 2 * n;
+    size_t n = t->n;
+    size_t ws = (n + 63) / 64;
+    uint64_t* xq = xcol(t, q);
 
     /* Find a stabilizer row p in [n, 2n) whose x_q bit is 1. */
     size_t p = 2 * n;
     for (size_t r = n; r < 2 * n; r++) {
-        if (tget(t, r, q)) { p = r; break; }
+        if (getbit(xq, r)) { p = r; break; }
+    }
+
+    /* Row-major scratch/reference buffers. */
+    uint64_t* bufA = calloc(ws, sizeof(uint64_t));  /* reference / stabilizer */
+    uint64_t* bufB = calloc(ws, sizeof(uint64_t));
+    uint64_t* accx = calloc(ws, sizeof(uint64_t));  /* deterministic scratch */
+    uint64_t* accz = calloc(ws, sizeof(uint64_t));
+    if (!bufA || !bufB || !accx || !accz) {
+        free(bufA); free(bufB); free(accx); free(accz);
+        return CLIFFORD_ERR_OOM;
     }
 
     if (p == 2 * n) {
-        /* Deterministic outcome. Append an auxiliary row at index 2n
-         * by row-summing every destabilizer whose x_q is 1. Read sign. */
-        /* Scratch row: we reuse storage by using a temp buffer. */
-        uint8_t* scratch = calloc(2 * n + 1, sizeof(uint8_t));
-        if (!scratch) return CLIFFORD_ERR_OOM;
+        /* Deterministic outcome. Row-sum every stabilizer n+i whose paired
+         * destabilizer i anticommutes with Z_q (x_iq = 1) into a scratch
+         * row and read the accumulated sign. */
+        uint8_t sphase = 0;
         for (size_t i = 0; i < n; i++) {
-            if (tget(t, i, q)) {
-                /* Add stabilizer row n+i into scratch. */
-                /* Compute phase using rowsum_g like rowsum() does. */
-                int acc = 2 * (int)scratch[rbit] + 2 * (int)tget(t, n + i, rbit);
-                for (size_t j = 0; j < n; j++) {
-                    acc += (int)rowsum_g(tget(t, n + i, j),
-                                         tget(t, n + i, n + j),
-                                         scratch[j], scratch[n + j]);
-                }
-                acc &= 3;
-                scratch[rbit] = (uint8_t)(acc == 2 ? 1 : 0);
-                for (size_t j = 0; j < n; j++) {
-                    scratch[j] ^= tget(t, n + i, j);
-                    scratch[n + j] ^= tget(t, n + i, n + j);
-                }
-            }
+            if (!getbit(xq, i)) continue;
+            row_get(t, n + i, bufA, bufB, ws);  /* stabilizer n+i */
+            uint8_t stab_r = getbit(t->rp, n + i);
+            int acc = 2 * (int)sphase + 2 * (int)stab_r
+                    + rowsum_phase_words(bufA, bufB, accx, accz, ws);
+            sphase = (uint8_t)(mod4(acc) == 2 ? 1 : 0);
+            for (size_t k = 0; k < ws; k++) { accx[k] ^= bufA[k]; accz[k] ^= bufB[k]; }
         }
-        *outcome = scratch[rbit] ? 1 : 0;
-        free(scratch);
+        *outcome = sphase ? 1 : 0;
         if (outcome_kind) *outcome_kind = 0;
+        free(bufA); free(bufB); free(accx); free(accz);
         return CLIFFORD_SUCCESS;
     }
 
-    /* Random outcome (Aaronson-Gottesman). The elimination MUST run first,
-     * while row p is still the stabilizer that anticommutes with Z_q: row-sum
-     * it into every other row carrying x_q so their x_q bit is cleared and the
-     * post-measurement tableau is properly collapsed. Only then overwrite row
-     * p. Doing the overwrite first (leaving row p = Z_q, whose x part is zero)
-     * fails to clear x_q from the other rows, so later measurements are not
-     * conditioned on this one and joint samples fall outside the stabilizer
-     * support. */
-    for (size_t r = 0; r < 2 * n; r++) {
-        if (r == p) continue;
-        if (tget(t, r, q)) rowsum(t, r, p);
-    }
+    /* Random outcome (Aaronson-Gottesman Algorithm 2, case a).
+     *
+     * Correct ordering: the elimination row-sums must use the OLD
+     * anticommuting stabilizer (row p) as the reference, and that
+     * reference is preserved as the new destabilizer (row p-n).  We
+     * therefore extract row p FIRST, then overwrite, then eliminate. */
+    row_get(t, p, bufA, bufB, ws);      /* bufA/bufB = old stabilizer p */
+    uint8_t ref_phase = getbit(t->rp, p);
 
-    /* Replace destabilizer p-n with (the original) stabilizer p, then set
-     * stabilizer p to Z_q with a random sign -- the measurement outcome. */
-    for (size_t j = 0; j <= 2 * n; j++) {
-        tset(t, p - n, j, tget(t, p, j));
-        tset(t, p, j, 0);
+    /* Destabilizer (p-n) <- old stabilizer p (rowcopy). */
+    for (size_t j = 0; j < n; j++) {
+        setbit(xcol(t, j), p - n, (uint8_t)((bufA[j >> 6] >> (j & 63)) & 1));
+        setbit(zcol(t, j), p - n, (uint8_t)((bufB[j >> 6] >> (j & 63)) & 1));
     }
-    tset(t, p, n + q, 1);
+    setbit(t->rp, p - n, ref_phase);
+
+    /* Stabilizer p <- Z_q with a random sign. */
+    for (size_t j = 0; j < n; j++) {
+        setbit(xcol(t, j), p, 0);
+        setbit(zcol(t, j), p, 0);
+    }
+    setbit(zcol(t, q), p, 1);
     uint8_t out = (uint8_t)(sm64(rng_state) & 1ULL);
-    tset(t, p, rbit, out);
+    setbit(t->rp, p, out);
     *outcome = (int)out;
 
+    /* Eliminate the X_q component from every other row that has one, using
+     * the old anticommuting stabilizer (now in row p-n / bufA,bufB) as the
+     * reference.  Row p-n itself is the destabilizer partner and is left
+     * anticommuting; the new stabilizer p has x_q = 0 and is skipped. */
+    for (size_t r = 0; r < 2 * n; r++) {
+        if (r == p - n) continue;
+        if (getbit(xq, r)) rowsum_ref(t, r, bufA, bufB, ref_phase, accx, accz, ws);
+    }
+
     if (outcome_kind) *outcome_kind = 1;
+    free(bufA); free(bufB); free(accx); free(accz);
     return CLIFFORD_SUCCESS;
 }
 
