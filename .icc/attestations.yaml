@@ -48,3 +48,307 @@ attestations:
   valid_until: null
   evidence_link: null
   line_text: rm -f "$FINAL_NAME"
+- finding_key: 3718e5057c6c89b37c1961a740ec3bb51ec52c437027ab748c4c1d6ec3dc21aa
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 49
+  pattern: command_v_probe
+  severity: low
+  reason: 'command -v fails closed: a missing launcher yields nonzero and aborts;
+    the probed binary is only invoked as a quoted argv array element, never shell-re-interpreted.'
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:57:37Z'
+  valid_until: null
+  evidence_link: null
+  line_text: if ! command -v "$CMAKE_BIN" >/dev/null 2>&1; then
+- finding_key: 1b7a53badacb28db7ba2f971591c7a67a4ea91e1733f36cb3a95082420e44345
+  path: scripts/run_cross_diff.sh
+  line: 92
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:15Z'
+  valid_until: null
+  evidence_link: null
+  line_text: ': > "$TRACE_FILE"'
+- finding_key: 3dba4af2c3517505419406c21e92c6da23bde67751a9869e1a2dc2ff283a07da
+  path: scripts/run_cross_diff.sh
+  line: 371
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:17Z'
+  valid_until: null
+  evidence_link: null
+  line_text: cat "$WORK/events.jsonl" >> "$TRACE_FILE"
+- finding_key: a7fea484c72b3b7584d633f659afe37d7249487d7e1a0df1181e5febc71f36aa
+  path: scripts/run_fuzz.sh
+  line: 210
+  pattern: variable_output_redirect
+  severity: medium
+  reason: TRACE resolves to TRACE_DIR, which the script validates/pins to scripts/icc_traces
+    before any write; the basename is a fixed literal.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:20Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  : > "$TRACE"'
+- finding_key: 3a4c3f1f9d709b81dde6f53f3d9680e277a4364274a3dac1c548cffe76cf1139
+  path: scripts/run_fuzz.sh
+  line: 257
+  pattern: variable_output_redirect
+  severity: medium
+  reason: TRACE resolves to TRACE_DIR, which the script validates/pins to scripts/icc_traces
+    before any write; the basename is a fixed literal.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:23Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  : > "$TRACE"'
+- finding_key: 4013d8d12c71a8a1e2f7e881fc7d9c32b4811e6fc6be3bcab9202e5392dc12fd
+  path: scripts/run_fuzz.sh
+  line: 339
+  pattern: variable_output_redirect
+  severity: medium
+  reason: TRACE resolves to TRACE_DIR, which the script validates/pins to scripts/icc_traces
+    before any write; the basename is a fixed literal.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:25Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  : > "$TRACE"'
+- finding_key: 7cd9f40c605b10ff92d82509900ce76117a7e43cfd0620892831e287e3c7cb20
+  path: scripts/run_moonlab_oracles.sh
+  line: 60
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:27Z'
+  valid_until: null
+  evidence_link: null
+  line_text: ': > "$TRACE_FILE"'
+- finding_key: 12c09800bcc0065f1719d6fe35bf6709fcef449d49a0a04edaf9a775c54ded07
+  path: scripts/run_moonlab_oracles.sh
+  line: 112
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:30Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '            >"$CONFIGURE_LOG" 2>&1 || {'
+- finding_key: 1a5b7a2fd51b7edd5b5d453e1d373d99be0367ff6469dc10d6eac8be2b6aa426
+  path: scripts/run_moonlab_oracles.sh
+  line: 120
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:33Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '        >"$BUILD_LOG" 2>&1 || {'
+- finding_key: 2b439de25fdcc3ad3c6cb89c474dfd2c8d9f0f7d52775d10c7a7ff2fb2d8b82e
+  path: scripts/run_moonlab_oracles.sh
+  line: 127
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:35Z'
+  valid_until: null
+  evidence_link: null
+  line_text: ( cd "$BUILD_DIR" && ctest -L oracle -V --timeout 150 ) >"$CTEST_LOG"
+    2>&1
+- finding_key: f89129dca645fb3f151f3177d1abf86b61eddb426f2a6078e7018c05a1b8d8ff
+  path: scripts/run_moonlab_oracles.sh
+  line: 180
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:38Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '        >> "$TRACE_FILE"'
+- finding_key: 7f7a0a3027dddd0a2f1ae7a10aa4639371fb5083849d1c9be20fb89ad9b8dbf4
+  path: scripts/run_moonlab_oracles.sh
+  line: 206
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Write target is TRACE_FILE/log derived from REPO_ROOT (cd dirname/.. &&
+    pwd; no env override) or a mktemp path plus a fixed basename; not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:41Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '    >> "$TRACE_FILE"'
+- finding_key: e3c66c78b9539629e1f4356776325fa3bcd92e9874faa2bb1363aa7fb0bc73e1
+  path: scripts/run_moonlab_release_smoke.sh
+  line: 109
+  pattern: variable_output_redirect
+  severity: medium
+  reason: TRACE resolves to TRACE_DIR, which the script validates/pins to scripts/icc_traces
+    before any write; the basename is a fixed literal.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:44Z'
+  valid_until: null
+  evidence_link: null
+  line_text: ': > "$TRACE"'
+- finding_key: c8ef13c349b630b6178e0e924940e1b0ab8b0cd930e82a3ebb310af1f346eadb
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 97
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:46Z'
+  valid_until: null
+  evidence_link: null
+  line_text: ': > "$TRACE"'
+- finding_key: 26fb9f06a35131f799cbe08ea70a26c24fdb7c08aeb73c36d4e60caa77747d40
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 130
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:49Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '      -DQSIM_BUILD_TESTS=ON -DQSIM_BUILD_EXAMPLES=OFF >"$BUILD_LOG"
+    2>&1 || BUILD_RC=$?'
+- finding_key: 0fe5f682506fcebf6e578c99f50b30f4d38ba4f0e8c01b6f308e1744c5ee5c3e
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 133
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:52Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '        --parallel "${QSIM_MPI_GPU_BUILD_JOBS:-4}" >>"$BUILD_LOG" 2>&1
+    || BUILD_RC=$?'
+- finding_key: cc13b8517169f5f167498680c69692ea967863df14c4d58fa3ab4416fbae751b
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 170
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:55Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  : > "$HASH_LOG"'
+- finding_key: 84cb26689f9df2d4bffd12fc3b77fd6a2361ff7268a40de6efaa399e5a873346
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 172
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:58:58Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '    echo "executable hash preflight prerequisites are unavailable" >>"$HASH_LOG"'
+- finding_key: dc99b7f563c60f58a67bf1316287616be40ca4040dd07d6c104e88464c6662bb
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 195
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:00Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  "${hash_cmd[@]}" >"$HASH_LOG" 2>&1'
+- finding_key: 6f8fd3b77ce0da0567800ec369ead08bb3d25e7f238845af1b38575b8d478474
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 252
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:02Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  : > "$EXACT_LOG"'
+- finding_key: c53af668aa37f8e6250de12ee1214b585ab8cbaeef398cae7ff8a2636f2ab018
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 253
+  pattern: variable_output_redirect
+  severity: medium
+  reason: Path is TRACE_DIR (validated to resolve to scripts/icc_traces) or a mktemp
+    -d LOG_DIR joined with a fixed name or the strictly-validated N (N must equal
+    33); not attacker-controlled.
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:05Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  echo "routine N=$ROUTINE_N topology preflight failed; exact N=$N run
+    skipped" >>"$EXACT_LOG"'
+- finding_key: 5af12eeae533b1199da129dea1bb098bc40137b379632b80e650ae7f00e42b0b
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 53
+  pattern: command_v_probe
+  severity: low
+  reason: 'command -v fails closed: a missing launcher/cmake yields nonzero and aborts
+    or marks the run FAIL; the probed binary is only ever invoked as a quoted argv
+    array element, never shell-re-interpreted.'
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:07Z'
+  valid_until: null
+  evidence_link: null
+  line_text: if ! command -v "$MPIEXEC" >/dev/null 2>&1; then
+- finding_key: 82fb09b0631a8e93fa76bdace226450c61a67627de9e4e9e823ee131803730a5
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 171
+  pattern: command_v_probe
+  severity: low
+  reason: 'command -v fails closed: a missing launcher/cmake yields nonzero and aborts
+    or marks the run FAIL; the probed binary is only ever invoked as a quoted argv
+    array element, never shell-re-interpreted.'
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:10Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  if [ "$BUILD_RC" -ne 0 ] || [ ! -x "$EXECUTABLE" ] || ! command -v
+    "$MPIEXEC" >/dev/null 2>&1; then'
+- finding_key: 85b259fbd704878131d88efae93f8f3043349d74b7707443dfa1cd4c36d97c50
+  path: scripts/run_mpi_sharded_gpu.sh
+  line: 224
+  pattern: command_v_probe
+  severity: low
+  reason: 'command -v fails closed: a missing launcher/cmake yields nonzero and aborts
+    or marks the run FAIL; the probed binary is only ever invoked as a quoted argv
+    array element, never shell-re-interpreted.'
+  attested_by: tsotchke
+  attested_at: '2026-07-23T16:59:13Z'
+  valid_until: null
+  evidence_link: null
+  line_text: '  if ! command -v "$MPIEXEC" >/dev/null 2>&1; then'
