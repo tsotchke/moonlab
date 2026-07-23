@@ -338,6 +338,15 @@ typedef struct {
     double tolerance;            // Convergence tolerance
     double learning_rate;        // Learning rate (for gradient methods)
     int verbose;                 // Print progress
+
+    // Configurable hyperparameters (ABI-additive; appended at the end of the
+    // struct). vqe_optimizer_create initialises these to the historical
+    // defaults so existing behaviour is unchanged unless a caller overrides
+    // them via vqe_optimizer_set_hyperparams.
+    double beta1;                // Adam first-moment decay (default 0.9)
+    double beta2;                // Adam second-moment decay (default 0.999)
+    double epsilon;              // Adam numerical epsilon (default 1e-8)
+    double qng_regularization;   // QNG Tikhonov metric shift (default 1e-3)
 } vqe_optimizer_t;
 
 /**
@@ -346,6 +355,30 @@ typedef struct {
  * @return Optimizer configuration
  */
 MOONLAB_API vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type);
+
+/**
+ * @brief Override optimizer hyperparameters.
+ *
+ * Each argument that is NAN leaves the corresponding field at its current
+ * value; any finite value is written through. This lets callers set only the
+ * hyperparameters they care about (e.g. only the learning rate) without
+ * disturbing the type-specific defaults.
+ *
+ * @param optimizer          Optimizer to configure (no-op if NULL)
+ * @param learning_rate      Gradient step size (Adam / GD / QNG)
+ * @param beta1              Adam first-moment decay
+ * @param beta2              Adam second-moment decay
+ * @param epsilon            Adam numerical epsilon
+ * @param qng_regularization QNG metric Tikhonov shift
+ */
+MOONLAB_API void vqe_optimizer_set_hyperparams(
+    vqe_optimizer_t *optimizer,
+    double learning_rate,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double qng_regularization
+);
 
 /**
  * @brief Free optimizer

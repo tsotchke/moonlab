@@ -875,8 +875,32 @@ vqe_optimizer_t* vqe_optimizer_create(vqe_optimizer_type_t type) {
     }
     
     opt->verbose = 1;
-    
+
+    // Hyperparameter defaults. These reproduce the values that were previously
+    // hardcoded in the optimization loop, so existing behaviour is unchanged.
+    opt->beta1 = 0.9;
+    opt->beta2 = 0.999;
+    opt->epsilon = 1e-8;
+    opt->qng_regularization = 1e-3;
+
     return opt;
+}
+
+void vqe_optimizer_set_hyperparams(
+    vqe_optimizer_t *optimizer,
+    double learning_rate,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double qng_regularization
+) {
+    if (!optimizer) return;
+    // NAN means "leave at current value"; any finite value is written through.
+    if (!isnan(learning_rate))      optimizer->learning_rate = learning_rate;
+    if (!isnan(beta1))              optimizer->beta1 = beta1;
+    if (!isnan(beta2))              optimizer->beta2 = beta2;
+    if (!isnan(epsilon))            optimizer->epsilon = epsilon;
+    if (!isnan(qng_regularization)) optimizer->qng_regularization = qng_regularization;
 }
 
 void vqe_optimizer_free(vqe_optimizer_t *optimizer) {
@@ -1282,9 +1306,12 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
      * VQE_OPTIMIZER_COBYLA; freed unconditionally before return. */
     cobyla_state_t cobyla_state = { 0 };
 
-    // ADAM optimizer state (if using ADAM)
+    // ADAM optimizer state (if using ADAM). Hyperparameters are read from the
+    // optimizer configuration (see vqe_optimizer_create / _set_hyperparams).
     double *m = NULL, *v = NULL;
-    double beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8;
+    double beta1 = solver->optimizer->beta1;
+    double beta2 = solver->optimizer->beta2;
+    double epsilon = solver->optimizer->epsilon;
 
     if (solver->optimizer->type == VQE_OPTIMIZER_ADAM) {
         m = calloc(result.num_parameters, sizeof(double));
@@ -1423,7 +1450,9 @@ vqe_result_t vqe_solve(vqe_solver_t *solver) {
             double *nat_dir = malloc(result.num_parameters * sizeof(double));
             int have_dir = (nat_dir != NULL) &&
                 (vqe_natural_gradient_direction(solver, solver->ansatz->parameters,
-                                                gradient, 1e-3, nat_dir) == 0);
+                                                gradient,
+                                                solver->optimizer->qng_regularization,
+                                                nat_dir) == 0);
             for (size_t p = 0; p < result.num_parameters; p++) {
                 double step = have_dir ? nat_dir[p] : gradient[p];
                 solver->ansatz->parameters[p] -=

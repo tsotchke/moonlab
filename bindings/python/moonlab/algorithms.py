@@ -29,11 +29,23 @@ class CVQEAnsatz(ctypes.Structure):
     ]
 
 class CVQEOptimizer(ctypes.Structure):
-    """Opaque structure for VQE optimizer"""
+    """Layout-mirrored from ``vqe_optimizer_t`` in ``src/algorithms/vqe.h``.
+
+    Field order and widths must match the C struct exactly. The previous
+    ``(type, learning_rate, max_iter)`` layout did not, so ``learning_rate``
+    aliased the C ``max_iterations`` slot and every field past it read
+    garbage. The trailing ``beta1..qng_regularization`` fields are the
+    ABI-additive hyperparameters appended to the C struct this release."""
     _fields_ = [
-        ("type", ctypes.c_int),
-        ("learning_rate", ctypes.c_double),
-        ("max_iter", ctypes.c_int),
+        ("type",               ctypes.c_int),
+        ("max_iterations",     ctypes.c_size_t),
+        ("tolerance",          ctypes.c_double),
+        ("learning_rate",      ctypes.c_double),
+        ("verbose",            ctypes.c_int),
+        ("beta1",              ctypes.c_double),
+        ("beta2",              ctypes.c_double),
+        ("epsilon",            ctypes.c_double),
+        ("qng_regularization", ctypes.c_double),
     ]
 
 class CVQESolver(ctypes.Structure):
@@ -172,11 +184,24 @@ _lib.vqe_create_h2o_hamiltonian.restype = ctypes.POINTER(CPauliHamiltonian)
 _lib.vqe_create_hardware_efficient_ansatz.argtypes = [ctypes.c_size_t, ctypes.c_size_t]
 _lib.vqe_create_hardware_efficient_ansatz.restype = ctypes.POINTER(CVQEAnsatz)
 
+# UCCSD ansatz: (num_qubits, num_electrons) -> vqe_ansatz_t*
+_lib.vqe_create_uccsd_ansatz.argtypes = [ctypes.c_size_t, ctypes.c_size_t]
+_lib.vqe_create_uccsd_ansatz.restype = ctypes.POINTER(CVQEAnsatz)
+
 _lib.vqe_ansatz_free.argtypes = [ctypes.POINTER(CVQEAnsatz)]
 _lib.vqe_ansatz_free.restype = None
 
 _lib.vqe_optimizer_create.argtypes = [ctypes.c_int]  # type
 _lib.vqe_optimizer_create.restype = ctypes.POINTER(CVQEOptimizer)
+
+# Override optimizer hyperparameters; NAN in any slot leaves that field
+# at its default (learning_rate, beta1, beta2, epsilon, qng_regularization).
+_lib.vqe_optimizer_set_hyperparams.argtypes = [
+    ctypes.POINTER(CVQEOptimizer),
+    ctypes.c_double, ctypes.c_double, ctypes.c_double,
+    ctypes.c_double, ctypes.c_double,
+]
+_lib.vqe_optimizer_set_hyperparams.restype = None
 
 _lib.vqe_optimizer_free.argtypes = [ctypes.POINTER(CVQEOptimizer)]
 _lib.vqe_optimizer_free.restype = None
@@ -345,39 +370,132 @@ class VQE:
         print(f"Ground state energy: {result['energy']} Hartree")
     """
 
-    # Optimizer types (matching C enum)
-    OPTIMIZER_ADAM = 0
-    OPTIMIZER_GRADIENT_DESCENT = 1
-    OPTIMIZER_LBFGS = 2
-    OPTIMIZER_COBYLA = 3
+    # Optimizer types. These MUST match the C ``vqe_optimizer_type_t`` enum in
+    # src/algorithms/vqe.h (COBYLA=0, LBFGS=1, ADAM=2, GRADIENT_DESCENT=3,
+    # QNG=4). The historical values here were wrong, so e.g. selecting "ADAM"
+    # actually ran COBYLA in the C optimizer.
+    OPTIMIZER_COBYLA = 0
+    OPTIMIZER_LBFGS = 1
+    OPTIMIZER_ADAM = 2
+    OPTIMIZER_GRADIENT_DESCENT = 3
+    OPTIMIZER_QNG = 4
+    OPTIMIZER_NATURAL_GRADIENT = 4  # alias for QNG
+
+    # String -> C enum. Accepts the names used in the documentation.
+    _OPTIMIZER_NAMES = {
+        'cobyla': OPTIMIZER_COBYLA,
+        'lbfgs': OPTIMIZER_LBFGS,
+        'l-bfgs': OPTIMIZER_LBFGS,
+        'l_bfgs': OPTIMIZER_LBFGS,
+        'adam': OPTIMIZER_ADAM,
+        'gradient_descent': OPTIMIZER_GRADIENT_DESCENT,
+        'gradient-descent': OPTIMIZER_GRADIENT_DESCENT,
+        'gd': OPTIMIZER_GRADIENT_DESCENT,
+        'qng': OPTIMIZER_QNG,
+        'natural_gradient': OPTIMIZER_NATURAL_GRADIENT,
+        'natural-gradient': OPTIMIZER_NATURAL_GRADIENT,
+    }
+
+    @classmethod
+    def _resolve_optimizer(cls, optimizer) -> int:
+        """Map an optimizer spec (str or int) to the C enum value."""
+        if isinstance(optimizer, str):
+            key = optimizer.strip().lower()
+            if key not in cls._OPTIMIZER_NAMES:
+                raise ValueError(
+                    f"Unknown optimizer '{optimizer}'. Valid: "
+                    f"{sorted(set(cls._OPTIMIZER_NAMES))}"
+                )
+            return cls._OPTIMIZER_NAMES[key]
+        return int(optimizer)
 
     def __init__(self, num_qubits: int, num_layers: int = 2,
-                 optimizer_type: int = OPTIMIZER_ADAM):
+                 optimizer_type=None, optimizer=None,
+                 ansatz: str = 'hardware_efficient',
+                 num_electrons: Optional[int] = None,
+                 learning_rate: Optional[float] = None,
+                 beta1: Optional[float] = None,
+                 beta2: Optional[float] = None,
+                 epsilon: Optional[float] = None,
+                 regularization: Optional[float] = None):
         """
         Initialize VQE solver
 
         Args:
             num_qubits: Number of qubits (determines molecule complexity)
-            num_layers: Ansatz circuit depth
-            optimizer_type: Optimization algorithm (ADAM, L-BFGS, COBYLA)
+            num_layers: Ansatz circuit depth (hardware-efficient ansatz)
+            optimizer: Optimizer as a string ('cobyla', 'lbfgs', 'adam',
+                'gradient_descent', 'natural_gradient'/'qng') or the integer
+                C enum value. Takes precedence over ``optimizer_type``.
+            optimizer_type: Legacy integer optimizer selector (kept for
+                backward compatibility). Defaults to ADAM.
+            ansatz: 'hardware_efficient' (default) or 'uccsd'.
+            num_electrons: Electron count for the UCCSD ansatz. Defaults to
+                num_qubits // 2 (a half-filled reference, correct for H2/LiH
+                in the built-in Hamiltonians).
+            learning_rate: Gradient step size (Adam / gradient_descent / QNG).
+            beta1, beta2, epsilon: Adam hyperparameters.
+            regularization: QNG metric Tikhonov shift (natural_gradient only).
         """
         self.num_qubits = num_qubits
         self.num_layers = num_layers
-        self.optimizer_type = optimizer_type
+
+        # Resolve the optimizer selector. ``optimizer`` (string or int) wins;
+        # otherwise fall back to the legacy ``optimizer_type`` int, then ADAM.
+        if optimizer is not None:
+            resolved_opt = self._resolve_optimizer(optimizer)
+        elif optimizer_type is not None:
+            resolved_opt = self._resolve_optimizer(optimizer_type)
+        else:
+            resolved_opt = self.OPTIMIZER_ADAM
+        self.optimizer_type = resolved_opt
+
+        ansatz_key = ansatz.strip().lower() if isinstance(ansatz, str) else ansatz
+        self.ansatz_name = ansatz_key
 
         # Create ansatz
-        self._ansatz = _lib.vqe_create_hardware_efficient_ansatz(
-            ctypes.c_size_t(num_qubits),
-            ctypes.c_size_t(num_layers)
-        )
+        if ansatz_key == 'uccsd':
+            n_elec = num_electrons if num_electrons is not None else max(1, num_qubits // 2)
+            self.num_electrons = n_elec
+            self._ansatz = _lib.vqe_create_uccsd_ansatz(
+                ctypes.c_size_t(num_qubits),
+                ctypes.c_size_t(n_elec)
+            )
+        elif ansatz_key in ('hardware_efficient', 'hardware-efficient', 'hea'):
+            self.num_electrons = num_electrons
+            self._ansatz = _lib.vqe_create_hardware_efficient_ansatz(
+                ctypes.c_size_t(num_qubits),
+                ctypes.c_size_t(num_layers)
+            )
+        else:
+            raise ValueError(
+                f"Unknown ansatz '{ansatz}'. Valid: 'hardware_efficient', 'uccsd'"
+            )
         if not self._ansatz:
             raise QuantumError("Failed to create VQE ansatz")
 
         # Create optimizer
-        self._optimizer = _lib.vqe_optimizer_create(ctypes.c_int(optimizer_type))
+        self._optimizer = _lib.vqe_optimizer_create(ctypes.c_int(resolved_opt))
         if not self._optimizer:
             _lib.vqe_ansatz_free(self._ansatz)
             raise QuantumError("Failed to create VQE optimizer")
+
+        # Apply any overridden hyperparameters through the C setter. NAN leaves
+        # a field at its type-specific default, so we only override what the
+        # caller actually supplied.
+        def _slot(x):
+            return float('nan') if x is None else float(x)
+
+        if any(v is not None for v in
+               (learning_rate, beta1, beta2, epsilon, regularization)):
+            _lib.vqe_optimizer_set_hyperparams(
+                self._optimizer,
+                ctypes.c_double(_slot(learning_rate)),
+                ctypes.c_double(_slot(beta1)),
+                ctypes.c_double(_slot(beta2)),
+                ctypes.c_double(_slot(epsilon)),
+                ctypes.c_double(_slot(regularization)),
+            )
 
         self._hamiltonian = None
         self._solver = None
