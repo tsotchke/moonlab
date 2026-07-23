@@ -158,6 +158,22 @@ try:
 except (ImportError, AttributeError, OSError):
     _ERROR_MITIGATION_AVAILABLE = False
 
+# Distributed simulation: bounded MPI + CUDA state-vector sharding over the
+# real dist_*/collective_*/mpi_bridge_* engine. Imports on any build; the MPI
+# entry points raise an informative error when the library lacks MPI.
+try:
+    from .distributed import (
+        DistributedContext,
+        DistributedState,
+        MpiUnavailableError,
+        init_mpi,
+        finalize_mpi,
+        is_mpi_available,
+    )
+    _DISTRIBUTED_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _DISTRIBUTED_AVAILABLE = False
+
 # Chemistry: first-principles STO-3G molecular Hamiltonians (H2, LiH) over
 # the real vqe_create_*_hamiltonian / h2_sto3g_pauli_coeffs C surface.
 try:
@@ -280,6 +296,11 @@ if _ERROR_MITIGATION_AVAILABLE:
     __all__ += [
         'ZNE', 'PEC', 'MeasurementMitigation',
         'ZNE_LINEAR', 'ZNE_RICHARDSON', 'ZNE_EXPONENTIAL',
+    ]
+if _DISTRIBUTED_AVAILABLE:
+    __all__ += [
+        'DistributedContext', 'DistributedState', 'MpiUnavailableError',
+        'init_mpi', 'finalize_mpi', 'is_mpi_available',
     ]
 if _CHEMISTRY_AVAILABLE:
     __all__ += [
