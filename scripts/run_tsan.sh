@@ -395,6 +395,18 @@ else
     echo "  [PASS] audit_buffer_destroy_deadlock  (0 deadlocks: drain holds)"
 fi
 
+# --- 3b. Bind the lane's evidence by content --------------------------------
+# Every other release lane emits a content hash so the release certificate can
+# verify what was actually tested; the concurrency lane emitted none, which made
+# validate_release_certificate.py reject it ("declared artifact hashes are not
+# all content-verified"). Manifest the TSan-instrumented libraries plus the
+# per-run logs and attach the digest to the umbrella verdict via the existing
+# diagnostics_manifest_sha256 field.
+DIAG_MANIFEST="$LOG_DIR/diagnostics-manifest.sha256"
+DIAGNOSTICS_SHA256="$(write_hash_manifest "$DIAG_MANIFEST" \
+    "$LIB_OFF" "$LIB_ON" \
+    "$LOG_DIR"/run_*.log "$LOG_DIR"/run_*.log.exit "$LOG_DIR"/build_*.log 2>/dev/null || true)"
+
 # --- 4. Umbrella verdict ----------------------------------------------------
 if [ "$REAL_RACES" -eq 0 ] && [ "$FAILS" -eq 0 ]; then
     emit "tsan_clean" "PASS" 0 "no data races or deadlocks across the concurrency lane" 0.9
