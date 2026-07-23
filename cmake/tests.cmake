@@ -226,6 +226,12 @@
     target_link_libraries(test_pauli_frame PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_pauli_frame COMMAND test_pauli_frame)
 
+    # Union-find decoder: half-edge growth and per-edge virtual boundary
+    # nodes, both of which produced a running-but-wrong decoder when absent.
+    add_executable(test_uf_decoder tests/unit/test_uf_decoder.c)
+    target_link_libraries(test_uf_decoder PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_uf_decoder COMMAND test_uf_decoder)
+
     # End-to-end CA-MPS correctness: random mixed Clifford + rx/ry/rz/CZ/CNOT
     # circuits compared against the dense state-vector backend for every
     # single-qubit Pauli expectation and a handful of ZZ pairs.

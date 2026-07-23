@@ -734,6 +734,7 @@ set(QSIM_QUANTUM_SOURCES
 set(QSIM_BACKEND_SOURCES
     src/backends/clifford/clifford.c
     src/backends/clifford/pauli_frame.c
+    src/qec/uf_decoder.c
 )
 
 set(QSIM_ALGORITHMS_SOURCES

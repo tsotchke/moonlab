@@ -1,0 +1,139 @@
+/**
+ * @file test_uf_decoder.c
+ * @brief Unit test for the union-find decoder.
+ *
+ * Pins the two structural properties that were wrong when the decoder was
+ * first written, both of which produced a decoder that ran but corrected
+ * badly:
+ *
+ *  1. Growth is in HALF-edges.  With unit edge lengths a single increment
+ *     closes any edge, so every edge incident to a defect completes in the
+ *     same round and a defect pair is as likely to be routed to the boundary
+ *     as to its partner -- decoding a two-defect syndrome as two boundary
+ *     corrections and flipping the observable.
+ *
+ *  2. Each boundary edge has its OWN virtual boundary node.  With a single
+ *     shared node the boundary is a hub: clusters on opposite sides of the
+ *     code merge through it and peeling may route a defect across the whole
+ *     patch, which gets worse as the code grows.
+ */
+#include "../../src/qec/uf_decoder.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define CHECK(cond, msg) do { \
+    if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, msg); return 1; } \
+} while (0)
+
+/* Repetition code: D0 -- boundary (flips observable), D0 -- D1 (flips
+ * nothing), D1 -- boundary (flips nothing).  Every syndrome has one correct
+ * answer, so this is checkable by hand. */
+static int test_repetition_chain(void) {
+    const uint32_t ea[3] = {0, 0, 1};
+    const uint32_t eb[3] = {MOONLAB_UF_BOUNDARY, 1, MOONLAB_UF_BOUNDARY};
+    const double   ew[3] = {1.0, 1.0, 1.0};
+    const uint64_t eo[3] = {1, 0, 0};
+
+    moonlab_uf_decoder_t* d = moonlab_uf_decoder_new(2, 1, ea, eb, ew, eo, 3);
+    CHECK(d, "decoder construction");
+
+    /* four shots, one per syndrome, detector-major */
+    enum { SHOTS = 4 };
+    uint8_t det[2 * SHOTS] = {
+        /* D0 over shots */ 0, 1, 1, 0,
+        /* D1 over shots */ 0, 0, 1, 1,
+    };
+    const uint8_t want[SHOTS] = {0, 1, 0, 0};
+    uint8_t out[SHOTS] = {0};
+
+    long rc = moonlab_uf_decode_batch(d, det, SHOTS, 1, out);
+    CHECK(rc == (long)SHOTS, "decode_batch return");
+    for (int s = 0; s < SHOTS; s++) {
+        if (out[s] != want[s]) {
+            fprintf(stderr, "FAIL shot %d: obs %u, expected %u "
+                            "(a paired syndrome routed to the boundary means "
+                            "growth is not in half-edges)\n",
+                    s, out[s], want[s]);
+            moonlab_uf_decoder_free(d);
+            return 1;
+        }
+    }
+    moonlab_uf_decoder_free(d);
+    return 0;
+}
+
+/* Two independent defect pairs far apart, each pair joined by a zero
+ * observable edge and each also adjacent to the boundary through an
+ * observable-flipping edge.  A shared boundary node lets the two clusters
+ * merge and peel through each other; distinct boundary nodes keep them
+ * separate and the correct answer is obs = 0. */
+static int test_boundary_is_not_a_hub(void) {
+    /* chain A: D0 -- D1 ; chain B: D2 -- D3 ; each Di also -- boundary */
+    const uint32_t ea[6] = {0, 2, 0, 1, 2, 3};
+    const uint32_t eb[6] = {1, 3,
+                            MOONLAB_UF_BOUNDARY, MOONLAB_UF_BOUNDARY,
+                            MOONLAB_UF_BOUNDARY, MOONLAB_UF_BOUNDARY};
+    const double   ew[6] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+    const uint64_t eo[6] = {0, 0, 1, 1, 1, 1};
+
+    moonlab_uf_decoder_t* d = moonlab_uf_decoder_new(4, 1, ea, eb, ew, eo, 6);
+    CHECK(d, "decoder construction");
+
+    enum { SHOTS = 1 };
+    uint8_t det[4 * SHOTS] = {1, 1, 1, 1};   /* all four detectors lit */
+    uint8_t out[SHOTS] = {0};
+    long rc = moonlab_uf_decode_batch(d, det, SHOTS, 1, out);
+    CHECK(rc == (long)SHOTS, "decode_batch return");
+    CHECK(out[0] == 0, "two local pairs must decode to obs 0; a shared "
+                       "boundary node lets them peel through the boundary");
+    moonlab_uf_decoder_free(d);
+    return 0;
+}
+
+/* An empty syndrome must produce no correction, and the multithreaded path
+ * must agree with the single-threaded one shot for shot. */
+static int test_empty_and_threading(void) {
+    const uint32_t ea[3] = {0, 0, 1};
+    const uint32_t eb[3] = {MOONLAB_UF_BOUNDARY, 1, MOONLAB_UF_BOUNDARY};
+    const double   ew[3] = {1.0, 1.0, 1.0};
+    const uint64_t eo[3] = {1, 0, 0};
+    moonlab_uf_decoder_t* d = moonlab_uf_decoder_new(2, 1, ea, eb, ew, eo, 3);
+    CHECK(d, "decoder construction");
+
+    enum { SHOTS = 512 };
+    uint8_t* det = (uint8_t*)calloc(2 * SHOTS, 1);
+    uint8_t* o1  = (uint8_t*)calloc(SHOTS, 1);
+    uint8_t* oN  = (uint8_t*)calloc(SHOTS, 1);
+    CHECK(det && o1 && oN, "alloc");
+    for (int s = 0; s < SHOTS; s++) {          /* deterministic pattern */
+        det[0 * SHOTS + s] = (uint8_t)(s & 1);
+        det[1 * SHOTS + s] = (uint8_t)((s >> 1) & 1);
+    }
+    CHECK(moonlab_uf_decode_batch(d, det, SHOTS, 1, o1) == (long)SHOTS, "1T decode");
+    CHECK(moonlab_uf_decode_batch(d, det, SHOTS, 0, oN) == (long)SHOTS, "MT decode");
+    for (int s = 0; s < SHOTS; s++) {
+        if (o1[s] != oN[s]) {
+            fprintf(stderr, "FAIL shot %d: 1T %u vs MT %u -- decoding is "
+                            "per-shot independent and must not depend on the "
+                            "thread count\n", s, o1[s], oN[s]);
+            free(det); free(o1); free(oN); moonlab_uf_decoder_free(d);
+            return 1;
+        }
+    }
+    /* shot 0 has an empty syndrome */
+    CHECK(o1[0] == 0, "empty syndrome must yield no correction");
+    free(det); free(o1); free(oN);
+    moonlab_uf_decoder_free(d);
+    return 0;
+}
+
+int main(void) {
+    if (test_repetition_chain()     != 0) return 1;
+    fprintf(stderr, "PASS test_repetition_chain\n");
+    if (test_boundary_is_not_a_hub()!= 0) return 1;
+    fprintf(stderr, "PASS test_boundary_is_not_a_hub\n");
+    if (test_empty_and_threading()  != 0) return 1;
+    fprintf(stderr, "PASS test_empty_and_threading\n");
+    return 0;
+}
