@@ -1,6 +1,6 @@
 # Getting started with Moonlab
 
-This is the 15-minute onboarding tutorial for MoonLab v1.1. It walks you from
+This is the 15-minute onboarding tutorial for MoonLab v1.2. It walks you from
 `git clone` to a working Bell circuit submitted via each of the four bindings
 (C / Python / Rust / JavaScript), and then shows how to run the same circuit
 through the cloud control plane.

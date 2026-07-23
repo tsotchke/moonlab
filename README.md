@@ -20,7 +20,7 @@ packages.
 See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
 boundary.
 
-## Current release: v1.2.0 (2026-07-18)
+## Current release: v1.2.0 (2026-07-23)
 
 Version 1.2 hardens the native CUDA state-vector backend and adds bounded MPI
 sharding beyond 32 qubits. Distributed gates exchange fixed-size chunks rather
@@ -46,7 +46,7 @@ tested as relocatable external CMake packages before upload.
 | Windows distribution | `windows-x64.zip` and `windows-arm64.zip` with DLL, import library, headers, and CMake exports |
 
 See [the v1.2.0 release notes](docs/release/v1.2.0-release-notes.md),
-[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#120---2026-07-18).
+[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#120---2026-07-23).
 
 ## v1.0 platform foundation
 
@@ -275,7 +275,8 @@ and integrates it directly into the VQE driver.  See
 | **Post-Quantum Cryptography** | FIPS 202 SHA-3 + SHAKE (all KATs pass), FIPS 203 ML-KEM 512 / 768 / 1024 with Fujisaki-Okamoto and implicit rejection, plus QRNG-sourced keygen / encapsulate wrappers. |
 | **Quantum RNG** | Thread-safe conditioned hybrid RNG: continuously health-tested hardware/OS entropy, fail-closed simulated Bell epochs, SHAKE256 conditioning, live assurance status, plus Pironio-bound and Toeplitz research primitives. |
 | **Noise Models** | Depolarising, amplitude damping, phase damping, bit/phase-flip, thermal relaxation, composite, convex-mixture, correlated two-qubit Pauli. |
-| **GPU Acceleration** | Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend scaffolded. |
+| **GPU Acceleration** | Native CUDA state-vector backend (x86-64 NVIDIA and Jetson). Metal compute kernels on macOS (Hadamard / CNOT / probability reduction). WebGPU backend scaffolded. |
+| **Distributed State Vector** | Bounded MPI + CUDA sharding beyond 32 qubits: remote one/two-qubit gates, CNOT, and distributed X/Y expectations exchange fixed-size chunks. Release-gated by an N=33 four-rank, two-host fleet proof. |
 | **Multi-Language** | C core + Python (ctypes) / Rust / JavaScript bindings.  Python exposes quantum + crypto primitives; 297 pytest test functions. |
 
 ## Table of Contents
@@ -299,8 +300,8 @@ and integrates it directly into the VQE driver.  See
 
 ## Quick Start
 
-Once the first stable registry publication completes, the supported package
-manager installs are:
+MoonLab is published to the standard registries. The supported package-manager
+installs are:
 
 ```bash
 # Homebrew tap (repository: https://github.com/tsotchke/homebrew-moonlab)

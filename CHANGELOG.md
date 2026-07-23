@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-07-18
+## [1.2.0] - 2026-07-23
 
 **v1.2.0 stabilization and distributed-scale release.** ABI 0.6.0 (QRNG status surface + honest
 certification language + wasm32 correctness fixes), a VQE quantum natural
@@ -132,6 +132,27 @@ merged PRs #12, #13, and #14.
 - Emscripten build now compiles `vqe_qng.c` and `h2_sto3g.c` into the WASM
   artifact (both were reachable from `vqe.c` but missing from the
   emscripten `CMakeLists.txt` source list).
+- **Non-terminating circuit-payload parse.** `moonlab_qgtl_circuit_deserialize`
+  no longer loops forever on a payload containing an interior NUL byte -- the
+  line cursor advanced only on a newline and parked on the NUL. Ambiguous
+  bounded circuit input is now rejected rather than silently reinterpreted.
+  Regression seeds cover both cases.
+- **POVM structure validated before cached measurement.** The cached
+  measurement path validates the POVM structure before use instead of trusting
+  a stale cache entry.
+- **Shared-library residency across `dlclose`.** On ELF platforms the shared
+  library is linked `-z nodelete` so a consumer's `dlclose` cannot unload
+  libgomp/CUDA/background-thread state that is unsafe to unload; this had
+  crashed the ABI export test on Jetson at consumer teardown.
+- **Entropy-pool background-state data race.** `entropy_pool_start_background`
+  and `entropy_pool_stop_background` now publish and clear the running flags
+  under `pool_mutex`, matching the lock `entropy_pool_get_stats` already holds.
+  clang-19 ThreadSanitizer reported the race on the toggle path where other
+  schedules did not.
+- **Windows/MinGW build under `-Werror`.** The compat shims silence `-Wpedantic`
+  on their intentional `#include_next`, and the audit-buffer yield includes
+  `<windows.h>` for `SwitchToThread` rather than relying on transitive
+  inclusion; both were hard failures under UCRT64 gcc 16.
 
 ## [1.1.0] - 2026-07-11
 
