@@ -159,7 +159,16 @@ static inline int pthread_once(pthread_once_t *once_control, void (*init_routine
 
 #else
 
+/* Intentional GCC/Clang extension; silence -Wpedantic under -Werror only for
+ * this directive (see src/compat/complex.h for the full rationale). */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include_next <pthread.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif
 

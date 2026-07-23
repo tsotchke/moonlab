@@ -61,7 +61,16 @@ static inline long sysconf(int name) {
 
 #else
 
+/* Intentional GCC/Clang extension; silence -Wpedantic under -Werror only for
+ * this directive (see src/compat/complex.h for the full rationale). */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include_next <unistd.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif
 

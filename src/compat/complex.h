@@ -80,7 +80,20 @@ static inline double complex cpow(double complex x, double complex y) {
 
 #else
 
+/* Pull the platform's own <complex.h> after this shim (GCC/Clang on Linux,
+ * macOS, and MinGW/UCRT64 all land here). #include_next is a documented
+ * GCC/Clang extension; newer toolchains (observed with gcc 16 on MinGW)
+ * flag it under -Wpedantic, which -Werror then promotes to a hard error.
+ * The use is intentional and correct, so silence just this one diagnostic
+ * rather than weakening the warning set. */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include_next <complex.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif
 

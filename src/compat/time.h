@@ -1,7 +1,17 @@
 #ifndef QSIM_TIME_COMPAT_H
 #define QSIM_TIME_COMPAT_H
 
+/* #include_next is an intentional GCC/Clang extension; gcc 16 flags it under
+ * -Wpedantic, which -Werror promotes to an error. Silence just that one
+ * diagnostic (see src/compat/complex.h for the full rationale). */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include_next <time.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #if defined(_WIN32) && !defined(__cplusplus) && !defined(__MINGW32__)
 
