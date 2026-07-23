@@ -53,6 +53,10 @@ doc/*
 
 # Allow public docs/ subtree (top-level reference, tutorials, research)
 !docs/reference/
+
+# Allow the public documentation reference pages (gate/error/config references)
+!documents/reference/
+!documents/reference/**
 !docs/reference/**
 
 # Build directories

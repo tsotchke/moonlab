@@ -163,7 +163,7 @@ pnpm build
 ### In a Web Project
 
 ```bash
-npm install @moonlab/quantum-core @moonlab/quantum-viz
+npm install @moonlab/quantum-core @moonlab/quantum-algorithms @moonlab/quantum-viz
 ```
 
 ```javascript

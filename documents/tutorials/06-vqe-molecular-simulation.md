@@ -44,22 +44,27 @@ Using the Jordan-Wigner transformation, this maps to qubit operators (Pauli stri
 
 ### Simplified H₂ Hamiltonian
 
-For H₂ at the equilibrium bond distance (0.74 Å):
+For H₂ at the equilibrium bond distance (0.74 Å), the `moonlab.chemistry` engine builds
+the two-qubit Hamiltonian from real STO-3G integrals -- do not hardcode the coefficients:
 
 ```python
-# H2 Hamiltonian coefficients (STO-3G basis)
-H2_HAMILTONIAN = {
-    'II': -0.8105,
-    'IZ': 0.1721,
-    'ZI': -0.2257,
-    'ZZ': 0.1689,
-    'XX': 0.0454,
-    'YY': 0.0454,
-}
+from moonlab.chemistry import Hamiltonian
+
+H = Hamiltonian.h2_sto3g(bond_distance=0.74)
+
+# Five electronic Pauli terms, computed by the C engine.
+H2_HAMILTONIAN = {p: c for c, p in H.terms}
+print(H2_HAMILTONIAN)
+# {'II': -1.0521, 'IZ': 0.3988, 'ZI': -0.3988, 'ZZ': -0.0113, 'XX': 0.1809}
+
+# The constant nuclear-repulsion energy is tracked separately and added to the
+# total energy (it is NOT folded into the Pauli terms).
+NUCLEAR_REPULSION = H.nuclear_repulsion
+print(NUCLEAR_REPULSION)   # 0.7165 Hartree
 ```
 
-The full Hamiltonian:
-$$H = -0.8105 \cdot I + 0.1721 \cdot Z_0 - 0.2257 \cdot Z_1 + 0.1689 \cdot Z_0Z_1 + 0.0454 \cdot X_0X_1 + 0.0454 \cdot Y_0Y_1$$
+The full molecular energy is the Pauli-sum expectation plus the nuclear-repulsion constant:
+$$E = \underbrace{-1.0521\,\langle I\rangle + 0.3988\,\langle Z_0\rangle - 0.3988\,\langle Z_1\rangle - 0.0113\,\langle Z_0Z_1\rangle + 0.1809\,\langle X_0X_1\rangle}_{\text{electronic}} + \underbrace{0.7165}_{\text{nuclear}}$$
 
 ## Step 2: The Variational Ansatz
 
@@ -101,75 +106,46 @@ apply_ansatz(state, params)
 
 ## Step 3: Measuring the Energy
 
-We need to measure each Pauli term in the Hamiltonian:
+We need the expectation value of each Pauli term in the Hamiltonian. In simulation we can
+read the exact state vector (`QuantumState.get_statevector`) and contract it against each
+Pauli operator with NumPy -- no sampling noise:
 
 ```python
-def measure_pauli_string(state, pauli_string, shots=1000):
+import numpy as np
+
+# Single-qubit Pauli matrices.
+_PAULI = {
+    'I': np.eye(2, dtype=complex),
+    'X': np.array([[0, 1], [1, 0]], dtype=complex),
+    'Y': np.array([[0, -1j], [1j, 0]], dtype=complex),
+    'Z': np.array([[1, 0], [0, -1]], dtype=complex),
+}
+
+def pauli_matrix(pauli_string):
+    """Full operator for a Pauli string, e.g. 'XX' -> X (x) X.
+
+    Qubit 0 is the least-significant bit of the state index, so we build the
+    Kronecker product from the last character to the first.
     """
-    Measure expectation value of a Pauli string.
+    op = np.array([[1.0 + 0j]])
+    for p in reversed(pauli_string):
+        op = np.kron(op, _PAULI[p])
+    return op
 
-    pauli_string: e.g., "XY" means X on qubit 0, Y on qubit 1
-    """
-    n = len(pauli_string)
+def expectation_pauli(state, pauli_string):
+    """Exact <psi|P|psi> from the state vector."""
+    psi = state.get_statevector()
+    return complex(np.vdot(psi, pauli_matrix(pauli_string) @ psi)).real
 
-    # Change to appropriate basis for measurement
-    for q, p in enumerate(pauli_string):
-        if p == 'X':
-            state.h(q)
-        elif p == 'Y':
-            state.sdg(q)
-            state.h(q)
-        # Z and I don't need basis change
-
-    # Count parity
-    parity_sum = 0
-    for _ in range(shots):
-        result = state.measure_all()
-
-        # Compute parity (XOR of all measured bits)
-        parity = 0
-        for q, p in enumerate(pauli_string):
-            if p != 'I':
-                parity ^= (result >> q) & 1
-
-        parity_sum += 1 if parity == 0 else -1
-
-        # Reset for next measurement
-        state.reset()
-        apply_ansatz(state, current_params)
-
-    return parity_sum / shots
-
-def compute_energy(state, hamiltonian):
-    """Compute total energy from Hamiltonian."""
-    energy = 0.0
-
-    for pauli_string, coefficient in hamiltonian.items():
-        expectation = measure_pauli_string(state, pauli_string)
-        energy += coefficient * expectation
-
-    return energy
+def compute_energy_exact(state, hamiltonian, nuclear_repulsion=0.0):
+    """Total energy E = nuclear_repulsion + sum_k coeff_k <P_k>."""
+    return nuclear_repulsion + sum(coeff * expectation_pauli(state, pauli)
+                                   for pauli, coeff in hamiltonian.items())
 ```
 
-### More Efficient Energy Computation
-
-For simulation, we can compute exact expectation values:
-
-```python
-def compute_energy_exact(state, hamiltonian):
-    """
-    Compute energy using exact expectation values.
-    More efficient for simulation.
-    """
-    energy = 0.0
-
-    for pauli_string, coefficient in hamiltonian.items():
-        # Compute ⟨ψ|P|ψ⟩ for Pauli string P
-        exp_val = state.expectation_pauli(pauli_string)
-        energy += coefficient * exp_val
-
-    return energy
-```
+On real hardware you would instead rotate each qubit into the measurement basis
+(`H` for X, `Sdg` then `H` for Y), sample bitstrings, and average the parity -- trading the
+exact contraction above for shot statistics.
 
 ## Step 4: Classical Optimization
 
@@ -183,7 +159,7 @@ def vqe_cost(params_flat, hamiltonian, num_layers):
     state = QuantumState(2)
     apply_ansatz(state, params, num_layers)
 
-    energy = compute_energy_exact(state, hamiltonian)
+    energy = compute_energy_exact(state, hamiltonian, NUCLEAR_REPULSION)
     return energy
 
 # Initial parameters
@@ -199,9 +175,12 @@ result = minimize(
     options={'maxiter': 500, 'rhobeg': 0.5}
 )
 
+from moonlab.chemistry import Hamiltonian
+exact = Hamiltonian.h2_sto3g(bond_distance=0.74).exact_ground_state()
+
 print(f"Optimized energy: {result.fun:.6f} Hartree")
-print(f"Exact H2 energy:  -1.137 Hartree")
-print(f"Error: {abs(result.fun - (-1.137)):.6f} Hartree")
+print(f"Exact H2 energy:  {exact:.6f} Hartree")
+print(f"Error: {abs(result.fun - exact):.6f} Hartree")
 ```
 
 ## Using the Built-in VQE
@@ -211,10 +190,12 @@ Moonlab provides a convenient VQE class:
 ```python
 from moonlab.algorithms import VQE
 
-# Create VQE solver
-vqe = VQE(num_qubits=4, num_layers=2, optimizer_type=VQE.OPTIMIZER_ADAM)
+# H2 maps to a 2-qubit Hamiltonian. Select the optimizer with the `optimizer`
+# string: 'cobyla', 'lbfgs', 'adam', 'gradient_descent', or
+# 'natural_gradient' (quantum natural gradient / QNG).
+vqe = VQE(num_qubits=2, num_layers=2, optimizer='adam', learning_rate=0.1)
 
-# Solve for H2 at equilibrium distance
+# Solve for H2 at equilibrium distance.
 result = vqe.solve_h2(bond_distance=0.74)
 
 print(f"Ground state energy: {result['energy']:.6f} Hartree")
@@ -223,43 +204,48 @@ print(f"Converged: {result['converged']}")
 print(f"Iterations: {result['num_iterations']}")
 ```
 
+The quantum natural gradient optimizer preconditions the gradient by the Fubini-Study
+metric of the ansatz state and reaches the exact STO-3G ground state on H₂:
+
+```python
+vqe = VQE(num_qubits=2, num_layers=2, optimizer='natural_gradient', regularization=1e-3)
+result = vqe.solve_h2(bond_distance=0.74)
+print(f"QNG ground state energy: {result['energy']:.6f} Hartree")
+```
+
 ## Step 5: Potential Energy Surface
 
 Compute energy vs. bond distance:
 
+The bond distance passed to `solve_h2` selects the point on the surface; the chemistry
+engine recomputes the STO-3G coefficients for each geometry (`h2_sto3g_pauli_coeffs`), so
+you never hand-build a Hamiltonian:
+
 ```python
+import numpy as np
 import matplotlib.pyplot as plt
+from moonlab.algorithms import VQE
+from moonlab.chemistry import Hamiltonian
 
-def h2_hamiltonian(distance):
-    """Generate H2 Hamiltonian for given bond distance."""
-    # Simplified: coefficients vary with distance
-    # In reality, you'd use a quantum chemistry package
-    d = distance
-
-    return {
-        'II': -0.8105 + 0.1 * (d - 0.74),
-        'IZ': 0.1721 - 0.05 * (d - 0.74),
-        'ZI': -0.2257 + 0.03 * (d - 0.74),
-        'ZZ': 0.1689,
-        'XX': 0.0454,
-        'YY': 0.0454,
-    }
-
-# Compute potential energy curve
+# Compute the potential energy curve.
 distances = np.linspace(0.3, 3.0, 20)
-energies = []
+vqe_energies = []
+exact_energies = []
 
-vqe = VQE(num_qubits=4, num_layers=2)
-
+vqe = VQE(num_qubits=2, num_layers=2, optimizer='natural_gradient')
 for d in distances:
-    result = vqe.solve_h2(bond_distance=d)
-    energies.append(result['energy'])
-    print(f"d = {d:.2f} Å: E = {result['energy']:.6f} Hartree")
+    vqe_energies.append(vqe.solve_h2(bond_distance=d)['energy'])
+    exact_energies.append(Hamiltonian.h2_sto3g(bond_distance=d).exact_ground_state())
+    print(f"d = {d:.2f} A: E = {vqe_energies[-1]:.6f} Hartree")
 
-# Plot
+# The equilibrium is the minimum of the curve (~0.74 A, ~-1.142 Hartree).
+i = int(np.argmin(exact_energies))
+print(f"Equilibrium near d = {distances[i]:.2f} A, E = {exact_energies[i]:.6f} Hartree")
+
+# Plot.
 plt.figure(figsize=(10, 6))
-plt.plot(distances, energies, 'b-o', label='VQE')
-plt.axhline(y=-1.137, color='r', linestyle='--', label='Exact (equilibrium)')
+plt.plot(distances, exact_energies, 'r-', label='Exact (STO-3G)')
+plt.plot(distances, vqe_energies, 'bo', label='VQE')
 plt.xlabel('Bond Distance (Å)')
 plt.ylabel('Energy (Hartree)')
 plt.title('H₂ Potential Energy Curve from VQE')
@@ -315,43 +301,38 @@ print(f"Final energy: {energies[-1]:.6f}")
 
 ## UCCSD Ansatz for Chemistry
 
-For more accurate results, use the UCCSD (Unitary Coupled Cluster Singles Doubles) ansatz:
+For a chemistry-motivated, particle-number-preserving circuit, select the built-in UCCSD
+ansatz on the VQE solver. It initializes the Hartree-Fock reference and applies the singles
+and doubles excitation operators for you; pass the electron count with `num_electrons`:
 
 ```python
-def uccsd_ansatz(state, params):
-    """
-    UCCSD ansatz for 4-qubit H2 simulation.
-    """
-    # Reference state: |0011⟩ (2 electrons in lowest orbitals)
-    state.x(0)
-    state.x(1)
+from moonlab.algorithms import VQE
 
-    # Single excitation terms
-    theta_1 = params[0]
-    state.rx(0, theta_1)
-    state.cnot(0, 2)
-
-    # Double excitation terms (simplified)
-    theta_2 = params[1]
-    state.crx(0, 2, theta_2)
-    state.crx(1, 3, theta_2)
-
-    return state
+# UCCSD on a 4-qubit active space with 2 electrons.
+vqe = VQE(num_qubits=4, ansatz='uccsd', num_electrons=2,
+          optimizer='natural_gradient')
+result = vqe.solve_lih(bond_distance=1.6)
+print(f"UCCSD variational energy: {result['energy']:.6f} Hartree")
 ```
+
+The returned energy is a variational upper bound on the true ground state (the Rayleigh-Ritz
+principle guarantees `E(θ) ≥ E₀`); how tightly it approaches the exact
+`Hamiltonian.lih_sto3g(1.6).exact_ground_state()` depends on the ansatz depth, electron
+count, and optimizer. Increase `num_layers` or compare optimizers to tighten the gap.
 
 ## Larger Molecules
 
 For larger molecules (LiH, H₂O, etc.):
 
 ```python
-# LiH simulation
-vqe = VQE(num_qubits=10, num_layers=4)
+# LiH: frozen-core active space maps to 4 qubits.
+vqe = VQE(num_qubits=4, num_layers=4, optimizer='natural_gradient')
 result = vqe.solve_lih(bond_distance=1.6)
 
 print(f"LiH ground state: {result['energy']:.6f} Hartree")
 
-# H2O simulation (requires more qubits)
-vqe_h2o = VQE(num_qubits=14, num_layers=6)
+# H2O: the built-in Hamiltonian is an 8-qubit active space.
+vqe_h2o = VQE(num_qubits=8, num_layers=4, optimizer='adam')
 result_h2o = vqe_h2o.solve_h2o()
 
 print(f"H2O ground state: {result_h2o['energy']:.6f} Hartree")

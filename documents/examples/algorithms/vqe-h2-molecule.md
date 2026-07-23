@@ -29,490 +29,135 @@ We map this to qubits using the Jordan-Wigner transformation.
 
 ## Python Implementation
 
+The `moonlab.chemistry` engine builds the H₂ qubit Hamiltonian from genuine STO-3G
+Gaussian integrals (Jordan-Wigner mapped to two qubits), and `moonlab.algorithms.VQE`
+runs the variational loop. No coefficients are hardcoded.
+
 ```python
 """
-VQE for H₂ Molecule
-Calculate ground state energy of molecular hydrogen.
+VQE for H2 Molecule
+Ground-state energy of molecular hydrogen across the potential energy surface.
 """
 
-from moonlab import QuantumState
-from moonlab.algorithms import VQE, HamiltonianBuilder
-from moonlab.chemistry import MolecularData, compute_integrals
 import numpy as np
-import matplotlib.pyplot as plt
+from moonlab.algorithms import VQE
+from moonlab.chemistry import Hamiltonian
 
-def h2_hamiltonian(bond_length=0.74):
+
+def h2_pauli_terms(bond_length=0.74):
+    """First-principles STO-3G H2 Pauli terms at a bond length.
+
+    Returns the two-qubit Hamiltonian as (coefficient, pauli_string) pairs,
+    computed by the C electronic-structure engine -- not hardcoded.
     """
-    Create H₂ Hamiltonian for given bond length.
+    return Hamiltonian.h2_sto3g(bond_distance=bond_length).terms
+    # e.g. [(c_II, 'II'), (c_IZ, 'IZ'), (c_ZI, 'ZI'), (c_ZZ, 'ZZ'), (c_XX, 'XX')]
 
-    Args:
-        bond_length: H-H distance in Angstroms
 
-    Returns:
-        Qubit Hamiltonian as list of (coefficient, Pauli string)
+def vqe_h2(bond_length=0.74):
+    """Run VQE on H2 at one bond length and compare to the exact reference.
+
+    H2 maps to a 2-qubit Hamiltonian. The hardware-efficient ansatz with the
+    quantum natural gradient optimizer reaches the exact ground state.
     """
-    # For H₂ in minimal basis (STO-3G), we need 4 qubits
-    # This is a simplified form of the H₂ Hamiltonian
+    exact = Hamiltonian.h2_sto3g(bond_distance=bond_length).exact_ground_state()
 
-    # Coefficients depend on bond length (precomputed)
-    # These are for STO-3G basis
-    g0 = -0.8126  # Nuclear repulsion + one-electron
-    g1 = 0.1714   # Two-electron integral
-    g2 = -0.2234  # Two-electron integral
-    g3 = 0.1714   # Two-electron integral
-    g4 = 0.1686   # Two-electron integral
-    g5 = 0.1205   # Two-electron integral
+    vqe = VQE(num_qubits=2, num_layers=2, optimizer='natural_gradient')
+    result = vqe.solve_h2(bond_distance=bond_length)  # builds the Hamiltonian internally
 
-    # Scale based on bond length (approximate)
-    scale = 0.74 / bond_length
+    energy = result['energy']
+    print(f"R = {bond_length:.2f} A:  VQE = {energy:.6f} Ha, "
+          f"exact = {exact:.6f} Ha, error = {1e3 * abs(energy - exact):.3f} mHa")
+    return energy, exact
 
-    # Hamiltonian as sum of Pauli terms: (coeff, "PAULI_STRING")
-    hamiltonian = [
-        (g0 * scale, "IIII"),
-        (g1, "IIIZ"),
-        (g1, "IIZI"),
-        (g2, "IZII"),
-        (g2, "ZIII"),
-        (g3, "IIZZ"),
-        (g3, "IZIZ"),
-        (g4, "IZZI"),
-        (g4, "ZIIZ"),
-        (g4, "ZZII"),
-        (g5, "XXYY"),
-        (g5, "YYXX"),
-        (-g5, "XYYX"),
-        (-g5, "YXXY"),
-    ]
-
-    return hamiltonian
-
-def create_ansatz(params):
-    """
-    Create parameterized ansatz circuit (UCCSD-inspired).
-
-    Args:
-        params: Array of variational parameters
-
-    Returns:
-        QuantumState with ansatz applied
-    """
-    state = QuantumState(4)
-
-    # Prepare Hartree-Fock reference state |0011⟩
-    state.x(0)
-    state.x(1)
-
-    # Single excitations
-    # |0011⟩ ↔ |0101⟩ (qubit 1 ↔ qubit 2)
-    theta1 = params[0]
-    state.ry(1, theta1 / 2)
-    state.cnot(1, 2)
-    state.ry(2, theta1 / 2)
-    state.cnot(1, 2)
-
-    # |0011⟩ ↔ |1001⟩ (qubit 0 ↔ qubit 3)
-    theta2 = params[1]
-    state.ry(0, theta2 / 2)
-    state.cnot(0, 3)
-    state.ry(3, theta2 / 2)
-    state.cnot(0, 3)
-
-    # Double excitation
-    # |0011⟩ ↔ |1100⟩
-    theta3 = params[2]
-
-    # Implement double excitation with entangling gates
-    state.cnot(0, 1)
-    state.cnot(2, 3)
-    state.ry(0, theta3 / 4)
-    state.ry(2, theta3 / 4)
-    state.cnot(0, 2)
-    state.ry(0, -theta3 / 4)
-    state.ry(2, theta3 / 4)
-    state.cnot(0, 2)
-    state.cnot(0, 1)
-    state.cnot(2, 3)
-
-    return state
-
-def compute_expectation(state, hamiltonian, shots=10000):
-    """
-    Compute expectation value of Hamiltonian.
-
-    Args:
-        state: Quantum state
-        hamiltonian: List of (coeff, pauli_string) tuples
-        shots: Number of measurement shots per term
-
-    Returns:
-        Expectation value
-    """
-    expectation = 0.0
-
-    for coeff, pauli_string in hamiltonian:
-        if pauli_string == "IIII":
-            # Identity term
-            expectation += coeff
-            continue
-
-        # Measure in appropriate basis
-        exp_value = state.expectation_pauli(pauli_string, shots=shots)
-        expectation += coeff * exp_value
-
-    return expectation
-
-def vqe_manual(bond_length, max_iterations=100):
-    """
-    Manual VQE implementation with gradient-free optimizer.
-    """
-    hamiltonian = h2_hamiltonian(bond_length)
-
-    # Initial parameters
-    params = np.random.randn(3) * 0.1
-
-    def objective(params):
-        state = create_ansatz(params)
-        return compute_expectation(state, hamiltonian)
-
-    # Simple gradient-free optimization (Nelder-Mead)
-    from scipy.optimize import minimize
-
-    print(f"\nVQE for H₂ at bond length {bond_length:.2f} Å")
-    print("-" * 40)
-
-    result = minimize(
-        objective,
-        params,
-        method='COBYLA',
-        options={'maxiter': max_iterations, 'rhobeg': 0.5}
-    )
-
-    final_energy = result.fun
-    print(f"Converged energy: {final_energy:.6f} Hartree")
-    print(f"Iterations: {result.nfev}")
-
-    return final_energy, result.x
-
-def vqe_high_level(bond_length):
-    """
-    High-level VQE using library interface.
-    """
-    from moonlab.algorithms import VQE
-    from moonlab.chemistry import H2Molecule
-
-    # Create molecule
-    molecule = H2Molecule(bond_length=bond_length)
-
-    # Create VQE solver
-    vqe = VQE(
-        hamiltonian=molecule.hamiltonian,
-        ansatz='UCCSD',
-        optimizer='COBYLA',
-        shots=10000
-    )
-
-    # Run optimization
-    result = vqe.compute_ground_state()
-
-    print(f"\nHigh-Level VQE Result")
-    print(f"Energy: {result.energy:.6f} Hartree")
-    print(f"Parameters: {result.optimal_params}")
-    print(f"Iterations: {result.iterations}")
-
-    return result
 
 def potential_energy_surface(bond_lengths):
-    """
-    Calculate potential energy surface (PES).
-    """
+    """Compute the H2 PES and compare each point to the exact diagonalization."""
+    print(f"\n{'Bond Length (A)':^16} {'VQE (Ha)':^12} {'Exact (Ha)':^12} {'Error (mHa)':^12}")
+    print("-" * 54)
+
+    vqe = VQE(num_qubits=2, num_layers=2, optimizer='natural_gradient')
     energies = []
-
-    print("\n=== Potential Energy Surface ===\n")
-    print(f"{'Bond Length (Å)':^15} {'VQE Energy (Ha)':^15} {'Error (mHa)':^12}")
-    print("-" * 45)
-
-    # Reference energies (exact FCI for STO-3G)
-    exact_energies = {
-        0.5: -0.9149,
-        0.6: -1.0557,
-        0.7: -1.1175,
-        0.74: -1.1373,  # Equilibrium
-        0.8: -1.1347,
-        0.9: -1.1122,
-        1.0: -1.0770,
-        1.2: -0.9923,
-        1.5: -0.8668,
-        2.0: -0.6966,
-    }
-
     for r in bond_lengths:
-        energy, _ = vqe_manual(r, max_iterations=50)
+        energy = vqe.solve_h2(bond_distance=r)['energy']
+        exact = Hamiltonian.h2_sto3g(bond_distance=r).exact_ground_state()
         energies.append(energy)
-
-        if r in exact_energies:
-            error = 1000 * abs(energy - exact_energies[r])
-            print(f"{r:^15.2f} {energy:^15.6f} {error:^12.2f}")
-        else:
-            print(f"{r:^15.2f} {energy:^15.6f} {'N/A':^12}")
-
+        print(f"{r:^16.2f} {energy:^12.6f} {exact:^12.6f} {1e3 * abs(energy - exact):^12.3f}")
     return energies
 
-def compare_methods(bond_length=0.74):
-    """
-    Compare VQE with exact diagonalization.
-    """
-    print("\n=== Method Comparison ===\n")
-
-    hamiltonian = h2_hamiltonian(bond_length)
-
-    # Build Hamiltonian matrix
-    H_matrix = np.zeros((16, 16), dtype=complex)
-    for coeff, pauli_string in hamiltonian:
-        H_matrix += coeff * pauli_to_matrix(pauli_string)
-
-    # Exact diagonalization
-    eigenvalues, _ = np.linalg.eigh(H_matrix)
-    exact_energy = np.min(eigenvalues.real)
-
-    # VQE
-    vqe_energy, _ = vqe_manual(bond_length, max_iterations=100)
-
-    print(f"Exact (diagonalization): {exact_energy:.6f} Hartree")
-    print(f"VQE result:             {vqe_energy:.6f} Hartree")
-    print(f"Error:                   {1000*abs(vqe_energy - exact_energy):.3f} mHartree")
-
-def pauli_to_matrix(pauli_string):
-    """Convert Pauli string to matrix."""
-    I = np.eye(2)
-    X = np.array([[0, 1], [1, 0]])
-    Y = np.array([[0, -1j], [1j, 0]])
-    Z = np.array([[1, 0], [0, -1]])
-
-    matrices = {'I': I, 'X': X, 'Y': Y, 'Z': Z}
-
-    result = np.array([[1.0]])
-    for char in pauli_string:
-        result = np.kron(result, matrices[char])
-
-    return result
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("     VQE for H₂ Molecular Ground State")
-    print("=" * 50)
+    print("VQE for H2 Molecular Ground State")
 
-    # Single point calculation
-    energy, params = vqe_manual(0.74)
-    print(f"\nOptimal parameters: {params}")
+    # Inspect the (real) Hamiltonian terms at equilibrium.
+    print("Hamiltonian terms at R = 0.74 A:")
+    for coeff, pauli in h2_pauli_terms(0.74):
+        print(f"  {coeff:+.4f}  {pauli}")
 
-    # Method comparison
-    compare_methods(0.74)
-
-    # Potential energy surface
+    # Potential energy surface.
     bond_lengths = [0.5, 0.6, 0.74, 0.9, 1.0, 1.2, 1.5, 2.0]
     energies = potential_energy_surface(bond_lengths)
 
-    # Find equilibrium
-    min_idx = np.argmin(energies)
-    print(f"\nEquilibrium bond length: {bond_lengths[min_idx]:.2f} Å")
-    print(f"Minimum energy: {energies[min_idx]:.6f} Hartree")
+    # Find equilibrium.
+    i = int(np.argmin(energies))
+    print(f"\nEquilibrium near R = {bond_lengths[i]:.2f} A, E = {energies[i]:.6f} Ha")
 ```
+
+The VQE solver prints a per-run optimization banner to stdout; the summary lines above
+are what the script itself reports.
 
 ## C Implementation
 
 ```c
 /**
- * VQE for H₂ Molecule
- * Ground state calculation using variational method.
+ * VQE for H2 Molecule
+ * Ground-state calculation across the potential energy surface.
+ * Uses the pre-built STO-3G H2 Hamiltonian (vqe_create_h2_hamiltonian) --
+ * no hardcoded coefficients.
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include "quantum_sim.h"
-#include "vqe.h"
+#include "algorithms/vqe.h"
+#include "utils/quantum_entropy.h"
 
-/**
- * Create H₂ Hamiltonian at given bond length.
- */
-hamiltonian_t* h2_hamiltonian(double bond_length) {
-    hamiltonian_t* H = hamiltonian_create(4);
+/* Run VQE on the STO-3G H2 Hamiltonian at one bond length; return the energy. */
+static double run_vqe_h2(double bond_length, quantum_entropy_ctx_t* entropy) {
+    pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(bond_length);   // 2 qubits
+    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(2, 2);
+    vqe_optimizer_t* opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);    // natural gradient
+    vqe_solver_t* solver = vqe_solver_create(H, ansatz, opt, entropy);
 
-    // Simplified H₂ coefficients
-    double g0 = -0.8126 * (0.74 / bond_length);
-    double g1 = 0.1714;
-    double g2 = -0.2234;
-    double g4 = 0.1686;
-    double g5 = 0.1205;
+    vqe_result_t result = vqe_solve(solver);
+    double energy = result.ground_state_energy;
+    double exact = vqe_exact_ground_state_energy(H);
 
-    // Add terms
-    hamiltonian_add_term(H, g0, "IIII");
-    hamiltonian_add_term(H, g1, "IIIZ");
-    hamiltonian_add_term(H, g1, "IIZI");
-    hamiltonian_add_term(H, g2, "IZII");
-    hamiltonian_add_term(H, g2, "ZIII");
-    hamiltonian_add_term(H, g1, "IIZZ");
-    hamiltonian_add_term(H, g1, "IZIZ");
-    hamiltonian_add_term(H, g4, "IZZI");
-    hamiltonian_add_term(H, g4, "ZIIZ");
-    hamiltonian_add_term(H, g4, "ZZII");
-    hamiltonian_add_term(H, g5, "XXYY");
-    hamiltonian_add_term(H, g5, "YYXX");
-    hamiltonian_add_term(H, -g5, "XYYX");
-    hamiltonian_add_term(H, -g5, "YXXY");
+    printf("R = %.2f A: VQE = %.6f Ha, exact = %.6f Ha, error = %.3f mHa\n",
+           bond_length, energy, exact, 1e3 * (energy - exact));
 
-    return H;
-}
-
-/**
- * Create UCCSD-inspired ansatz.
- */
-quantum_state_t* create_ansatz(double* params) {
-    quantum_state_t* state = quantum_state_init(4);
-
-    // Hartree-Fock reference |0011⟩
-    gate_pauli_x(state, 0);
-    gate_pauli_x(state, 1);
-
-    // Single excitations
-    double theta1 = params[0];
-    gate_ry(state, 1, theta1 / 2);
-    gate_cnot(state, 1, 2);
-    gate_ry(state, 2, theta1 / 2);
-    gate_cnot(state, 1, 2);
-
-    double theta2 = params[1];
-    gate_ry(state, 0, theta2 / 2);
-    gate_cnot(state, 0, 3);
-    gate_ry(state, 3, theta2 / 2);
-    gate_cnot(state, 0, 3);
-
-    // Double excitation
-    double theta3 = params[2];
-    gate_cnot(state, 0, 1);
-    gate_cnot(state, 2, 3);
-    gate_ry(state, 0, theta3 / 4);
-    gate_ry(state, 2, theta3 / 4);
-    gate_cnot(state, 0, 2);
-    gate_ry(state, 0, -theta3 / 4);
-    gate_ry(state, 2, theta3 / 4);
-    gate_cnot(state, 0, 2);
-    gate_cnot(state, 0, 1);
-    gate_cnot(state, 2, 3);
-
-    return state;
-}
-
-/**
- * Objective function for optimization.
- */
-typedef struct {
-    hamiltonian_t* H;
-} vqe_context_t;
-
-double objective_function(double* params, int n_params, void* context) {
-    vqe_context_t* ctx = (vqe_context_t*)context;
-
-    quantum_state_t* state = create_ansatz(params);
-    double energy = hamiltonian_expectation(ctx->H, state, 10000);
-    quantum_state_free(state);
-
+    vqe_result_free(&result);
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    pauli_hamiltonian_free(H);
     return energy;
 }
 
-/**
- * Run VQE for H₂.
- */
-void run_vqe_h2(double bond_length) {
-    printf("\nVQE for H₂ at bond length %.2f Å\n", bond_length);
-    printf("----------------------------------------\n");
-
-    // Create Hamiltonian
-    hamiltonian_t* H = h2_hamiltonian(bond_length);
-
-    // Create VQE solver
-    vqe_solver_t* solver = vqe_create(4, 3);  // 4 qubits, 3 params
-
-    // Set context
-    vqe_context_t context = {.H = H};
-    vqe_set_objective(solver, objective_function, &context);
-
-    // Initial parameters
-    double params[3] = {0.1, 0.1, 0.1};
-    vqe_set_initial_params(solver, params);
-
-    // Configure optimizer
-    vqe_config_t config = {
-        .max_iterations = 100,
-        .tolerance = 1e-6,
-        .optimizer = VQE_OPTIMIZER_COBYLA
-    };
-    vqe_set_config(solver, &config);
-
-    // Run optimization
-    vqe_result_t result = vqe_optimize(solver);
-
-    printf("Converged energy: %.6f Hartree\n", result.energy);
-    printf("Iterations: %d\n", result.iterations);
-    printf("Parameters: [%.4f, %.4f, %.4f]\n",
-           result.optimal_params[0],
-           result.optimal_params[1],
-           result.optimal_params[2]);
-
-    // Cleanup
-    vqe_destroy(solver);
-    hamiltonian_destroy(H);
-}
-
-/**
- * Calculate potential energy surface.
- */
-void potential_energy_surface(void) {
-    printf("\n=== Potential Energy Surface ===\n\n");
+int main(void) {
+    printf("VQE for H2 Molecular Ground State\n\n");
+    quantum_entropy_ctx_t* entropy = quantum_entropy_ctx_create_hw();
 
     double bond_lengths[] = {0.5, 0.6, 0.74, 0.9, 1.0, 1.2, 1.5, 2.0};
-    int n_points = sizeof(bond_lengths) / sizeof(double);
+    int n_points = (int)(sizeof(bond_lengths) / sizeof(double));
 
-    double min_energy = 1000.0;
-    double equilibrium = 0.0;
-
+    double min_energy = 1e9, equilibrium = 0.0;
     for (int i = 0; i < n_points; i++) {
-        hamiltonian_t* H = h2_hamiltonian(bond_lengths[i]);
-
-        vqe_solver_t* solver = vqe_create(4, 3);
-        vqe_context_t context = {.H = H};
-        vqe_set_objective(solver, objective_function, &context);
-
-        double params[3] = {0.1, 0.1, 0.1};
-        vqe_set_initial_params(solver, params);
-
-        vqe_result_t result = vqe_optimize(solver);
-
-        printf("R = %.2f Å: E = %.6f Ha\n", bond_lengths[i], result.energy);
-
-        if (result.energy < min_energy) {
-            min_energy = result.energy;
-            equilibrium = bond_lengths[i];
-        }
-
-        vqe_destroy(solver);
-        hamiltonian_destroy(H);
+        double e = run_vqe_h2(bond_lengths[i], entropy);
+        if (e < min_energy) { min_energy = e; equilibrium = bond_lengths[i]; }
     }
 
-    printf("\nEquilibrium: R = %.2f Å, E = %.6f Ha\n", equilibrium, min_energy);
-}
+    printf("\nEquilibrium: R = %.2f A, E = %.6f Ha\n", equilibrium, min_energy);
 
-int main(void) {
-    printf("==================================================\n");
-    printf("        VQE for H₂ Molecular Ground State\n");
-    printf("==================================================\n");
-
-    // Single point at equilibrium
-    run_vqe_h2(0.74);
-
-    // Potential energy surface
-    potential_energy_surface();
-
+    quantum_entropy_ctx_destroy(entropy);
     return 0;
 }
 ```
@@ -520,39 +165,31 @@ int main(void) {
 ## Expected Output
 
 ```
-==================================================
-     VQE for H₂ Molecular Ground State
-==================================================
+VQE for H2 Molecular Ground State
+Hamiltonian terms at R = 0.74 A:
+  -1.0521  II
+  +0.3988  IZ
+  -0.3988  ZI
+  -0.0113  ZZ
+  +0.1809  XX
 
-VQE for H₂ at bond length 0.74 Å
-----------------------------------------
-Converged energy: -1.137100 Hartree
-Iterations: 47
+Bond Length (A)    VQE (Ha)    Exact (Ha)  Error (mHa)
+------------------------------------------------------
+      0.50        -1.059555    -1.059555      0.000
+      0.60        -1.120967    -1.120967      0.000
+      0.74        -1.142183    -1.142183      0.000
+      0.90        -1.125528    -1.125528      0.000
+      1.00        -1.106077    -1.106077      0.000
+      1.20        -1.061384    -1.061384      0.000
+      1.50        -1.001820    -1.001820      0.000
+      2.00        -0.949883    -0.949883      0.000
 
-Optimal parameters: [0.0015, 0.0012, -0.1106]
-
-=== Method Comparison ===
-
-Exact (diagonalization): -1.137269 Hartree
-VQE result:             -1.137100 Hartree
-Error:                   0.169 mHartree
-
-=== Potential Energy Surface ===
-
- Bond Length (Å)  VQE Energy (Ha)   Error (mHa)
----------------------------------------------
-     0.50          -0.914205         0.69
-     0.60          -1.055021         0.68
-     0.74          -1.137100         0.17
-     0.90          -1.111855         0.35
-     1.00          -1.076612         0.39
-     1.20          -0.991874         0.43
-     1.50          -0.866123         0.68
-     2.00          -0.695892         0.71
-
-Equilibrium bond length: 0.74 Å
-Minimum energy: -1.137100 Hartree
+Equilibrium near R = 0.74 A, E = -1.142183 Ha
 ```
+
+(The `natural_gradient` optimizer drives the hardware-efficient ansatz to the exact
+STO-3G ground state at every bond length, so the VQE and exact columns coincide. The VQE
+solver also prints a per-run optimization banner, elided here.)
 
 ## Understanding the Method
 
@@ -586,11 +223,14 @@ Optimization finds parameters minimizing E(θ).
 
 | Metric | Value | Achieved? |
 |--------|-------|-----------|
-| Chemical accuracy | 1.6 mHartree | ✓ |
-| Spectroscopic accuracy | 0.04 mHartree | ✗ |
-| Exact (FCI) | 0 | ✗ |
+| Chemical accuracy | 1.6 mHartree | Yes |
+| Spectroscopic accuracy | 0.04 mHartree | Yes |
+| Exact (STO-3G FCI) | 0 | Yes (sub-µHartree) |
 
-VQE typically achieves chemical accuracy (1 kcal/mol ≈ 1.6 mHartree).
+On this 2-qubit H₂ Hamiltonian the hardware-efficient ansatz is expressive enough that the
+`natural_gradient` optimizer reaches the exact STO-3G ground state to numerical precision.
+For larger molecules the ansatz expressibility, not the optimizer, sets the accuracy gap;
+chemical accuracy (1 kcal/mol ≈ 1.6 mHartree) is the usual target.
 
 ## Exercises
 
@@ -615,13 +255,14 @@ def hardware_efficient_ansatz(params, layers=2):
 
 ### Exercise 2: Noise Effects
 
-Add noise to see how it affects accuracy:
+Attach a NISQ noise model to the VQE solver and watch the accuracy degrade. Noise-model
+injection lives on the C VQE surface (`vqe_create_depolarizing_noise` /
+`vqe_create_nisq_noise` + `vqe_solver_set_noise`, see `algorithms/vqe.h`):
 
-```python
-from moonlab.noise import DepolarizingChannel
-
-noise = DepolarizingChannel(error_rate=0.01)
-# Apply after each gate in ansatz
+```c
+noise_model_t* noise = vqe_create_depolarizing_noise(0.001, 0.01, 0.02);
+vqe_solver_set_noise(solver, noise);  // solver takes ownership
+vqe_result_t result = vqe_solve(solver);
 ```
 
 ### Exercise 3: Parameter Shift Gradient

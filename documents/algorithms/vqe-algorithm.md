@@ -83,38 +83,38 @@ Iterate until:
 ### Basic VQE
 
 ```c
-#include "vqe.h"
+#include "algorithms/vqe.h"
+#include "utils/quantum_entropy.h"
+#include <stdio.h>
 
-int main() {
-    // H2 Hamiltonian (STO-3G, d=0.74 Å)
-    pauli_term_t terms[] = {
-        {.coefficient = -0.8105, .pauli = "II"},
-        {.coefficient =  0.1721, .pauli = "IZ"},
-        {.coefficient = -0.2257, .pauli = "ZI"},
-        {.coefficient =  0.1689, .pauli = "ZZ"},
-        {.coefficient =  0.0454, .pauli = "XX"},
-        {.coefficient =  0.0454, .pauli = "YY"}
-    };
+int main(void) {
+    // Pre-built STO-3G H2 Hamiltonian at d = 0.74 A (2 qubits, Jordan-Wigner).
+    // The coefficients are computed from first-principles STO-3G integrals;
+    // do not hardcode them.
+    pauli_hamiltonian_t* H = vqe_create_h2_hamiltonian(0.74);
 
-    hamiltonian_t* H = hamiltonian_create(terms, 6);
+    // Ansatz + optimizer + entropy source.
+    vqe_ansatz_t* ansatz = vqe_create_hardware_efficient_ansatz(2, 2);
+    vqe_optimizer_t* opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);  // natural gradient
+    quantum_entropy_ctx_t* entropy = quantum_entropy_ctx_create_hw();
 
-    // Configure VQE
-    vqe_config_t config = {
-        .num_qubits = 2,
-        .num_layers = 2,
-        .optimizer = VQE_OPTIMIZER_COBYLA,
-        .max_iterations = 500,
-        .tolerance = 1e-6
-    };
+    vqe_solver_t* solver = vqe_solver_create(H, ansatz, opt, entropy);
 
-    // Run VQE
-    vqe_result_t result = vqe_solve(H, &config);
+    // Run VQE.
+    vqe_result_t result = vqe_solve(solver);
 
-    printf("Ground state energy: %.6f Hartree\n", result.energy);
+    printf("Ground state energy: %.6f Hartree\n", result.ground_state_energy);
     printf("Converged: %s\n", result.converged ? "yes" : "no");
-    printf("Iterations: %d\n", result.iterations);
+    printf("Iterations: %zu\n", result.iterations);
+    printf("Exact (FCI) reference: %.6f Hartree\n",
+           vqe_exact_ground_state_energy(H));
 
-    hamiltonian_destroy(H);
+    vqe_result_free(&result);
+    vqe_solver_free(solver);
+    vqe_optimizer_free(opt);
+    vqe_ansatz_free(ansatz);
+    quantum_entropy_ctx_destroy(entropy);
+    pauli_hamiltonian_free(H);
     return 0;
 }
 ```
@@ -122,26 +122,32 @@ int main() {
 ### Python Interface
 
 ```python
-from moonlab.algorithms import VQE, Hamiltonian
+from moonlab.algorithms import VQE
+from moonlab.chemistry import Hamiltonian
 
-# Create H2 Hamiltonian
+# Exact STO-3G H2 reference from the chemistry engine (2-qubit Hamiltonian).
 H2 = Hamiltonian.h2_sto3g(bond_distance=0.74)
+exact = H2.exact_ground_state()
 
-# Configure VQE
+# Configure VQE (H2 is a 2-qubit problem).
 vqe = VQE(
-    num_qubits=4,
+    num_qubits=2,
     ansatz='hardware_efficient',
     num_layers=2,
     optimizer='adam',
-    learning_rate=0.1
+    learning_rate=0.1,
+    beta1=0.9,
+    beta2=0.999,
 )
 
-# Run optimization
-result = vqe.compute_ground_state(H2)
+# Run optimization. solve_h2 builds the H2 Hamiltonian internally and
+# returns a result dict.
+result = vqe.solve_h2(bond_distance=0.74)
 
-print(f"Energy: {result.energy:.6f} Hartree")
-print(f"Exact:  {H2.exact_ground_state():.6f} Hartree")
-print(f"Error:  {abs(result.energy - H2.exact_ground_state()):.6f} Hartree")
+print(f"Energy: {result['energy']:.6f} Hartree")
+print(f"Exact:  {exact:.6f} Hartree")
+print(f"Error:  {abs(result['energy'] - exact):.6f} Hartree")
+print(f"Converged: {result['converged']}")
 ```
 
 ## Ansatz Design
@@ -438,40 +444,56 @@ def layerwise_training(vqe, hamiltonian, num_layers):
 from moonlab.algorithms import VQE
 from moonlab.chemistry import Molecule
 
-# Create H2 molecule
-h2 = Molecule(
-    atoms=['H', 'H'],
-    coordinates=[[0, 0, 0], [0, 0, 0.74]]  # Angstroms
-)
+# Create H2 molecule (coordinates in Angstroms).
+h2 = Molecule(atoms=['H', 'H'], coordinates=[[0, 0, 0], [0, 0, 0.74]])
 
-# Get Hamiltonian (Jordan-Wigner encoding)
-H = h2.get_hamiltonian(basis='sto-3g')
+# Exact STO-3G (FCI-equivalent) reference for this geometry.
+fci = h2.fci_energy(basis='sto-3g')
 
-# Run VQE
-vqe = VQE(num_qubits=4, ansatz='uccsd')
-result = vqe.compute_ground_state(H)
+# Run VQE. H2 is a 2-qubit Hamiltonian; solve_h2 builds it at this bond length.
+# The hardware-efficient ansatz with the quantum natural gradient optimizer
+# reaches chemical accuracy on H2.
+vqe = VQE(num_qubits=2, num_layers=2, ansatz='hardware_efficient',
+          optimizer='natural_gradient')
+result = vqe.solve_h2(bond_distance=h2.bond_distance)
 
-print(f"VQE Energy: {result.energy:.6f} Hartree")
-print(f"Chemical accuracy: {abs(result.energy - h2.fci_energy()) < 0.0016}")
+print(f"VQE Energy: {result['energy']:.6f} Hartree")
+print(f"FCI Energy: {fci:.6f} Hartree")
+print(f"Chemical accuracy: {abs(result['energy'] - fci) < 0.0016}")
 ```
+
+For chemistry-motivated ansaetze, pass `ansatz='uccsd'` with the electron count
+(`VQE(num_qubits=4, ansatz='uccsd', num_electrons=2)` for a 4-qubit active space);
+the UCCSD circuit is particle-number preserving and systematically improvable.
 
 ### Potential Energy Surface
 
+Sweep the bond length and compare the variational energy against the exact
+`Hamiltonian.exact_ground_state()` reference at each point. The STO-3G H2 Pauli
+coefficients vary smoothly with bond distance (`h2_sto3g_pauli_coeffs`), so the
+surface is smooth:
+
 ```python
+import numpy as np
+import matplotlib.pyplot as plt
+from moonlab.algorithms import VQE
+from moonlab.chemistry import Hamiltonian
+
 distances = np.linspace(0.3, 3.0, 30)
-energies = []
+vqe_energies = []
+exact_energies = []
 
+vqe = VQE(num_qubits=2, num_layers=2, optimizer='natural_gradient')
 for d in distances:
-    h2 = Molecule(atoms=['H', 'H'], coordinates=[[0,0,0], [0,0,d]])
-    H = h2.get_hamiltonian()
+    vqe_energies.append(vqe.solve_h2(bond_distance=d)['energy'])
+    exact_energies.append(Hamiltonian.h2_sto3g(bond_distance=d).exact_ground_state())
 
-    result = vqe.compute_ground_state(H)
-    energies.append(result.energy)
-
-plt.plot(distances, energies)
+plt.plot(distances, exact_energies, 'k-', label='Exact (STO-3G)')
+plt.plot(distances, vqe_energies, 'o', label='VQE')
 plt.xlabel('Bond distance (Å)')
 plt.ylabel('Energy (Hartree)')
 plt.title('H₂ Potential Energy Surface')
+plt.legend()
 ```
 
 ## Complexity Analysis

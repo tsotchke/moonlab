@@ -52,7 +52,7 @@ Neither installed namespace may move incompatibly inside the 1.x line.
 
 The table below is a current snapshot refreshed against `moonlab_export.h` and
 every public header. It supersedes the earlier v1.0.3 snapshot this document
-used to carry, which undercounted `moonlab_export.h` itself (36 listed vs. 70
+used to carry, which undercounted `moonlab_export.h` itself (36 listed vs. 78
 actual) and predated `moonlab_vqe_gradient` (ABI 0.4.0), `moonlab_qrng_get_status`
 plus the conditioned QRNG contract (ABI 0.5.0), and the ABI 0.6.0 additions
 below. As of ABI 0.6.0 the second-tier binding surface (the `moonlab_diff_*`
@@ -88,13 +88,13 @@ ABI 0.6.0 (this release):
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|
-| `src/applications/moonlab_export.h`          |  70     |
+| `src/applications/moonlab_export.h`          |  78     |
 | `src/algorithms/tensor_network/ca_mps.h`     |  37     |
 | `src/algorithms/vqe.h`                       |  30     |
 | `src/distributed/scheduler.h`                |  26     |
 | `src/control/control_plane.h`                |  21     |
 | `src/integration/libirrep_bridge.h`          |  19     |
-| `src/algorithms/quantum_geometry/qgt.h`      |  18     |
+| `src/algorithms/quantum_geometry/qgt.h`      |  24     |
 | `src/quantum/gates.h`                        |  17     |
 | `src/quantum/noise_mpdo.h`                   |  15     |
 | `src/crypto/mlkem/mlkem.h`                   |  15     |
@@ -221,8 +221,8 @@ ranges are frozen:
 | `-201`         | `MOONLAB_LIBIRREP_NOT_BUILT`  | `src/integration/libirrep_bridge.h` |
 | `-301` ...     | QGTL backend                  | `src/applications/moonlab_qgtl_backend.h` |
 | `-400` ... `-409` | control plane              | `src/control/control_plane.h`    |
-| `-501` ... `-504` | scheduler                  | `src/distributed/scheduler.h`    |
-| `-601` ...     | decoder bench                 | `src/applications/decoder_bench.h` |
+| `-501` ... `-507` | scheduler                  | `src/distributed/scheduler.h`    |
+| `-401` ... `-404` | decoder bench              | `src/applications/decoder_bench.h` |
 
 The full mapping is in `docs/reference/error-codes.md`.  Within 1.x,
 adding a new code in an existing range is additive; changing the
@@ -279,7 +279,7 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 
 Each binding crate/package revs alongside the C library's package version
 (currently 1.2.0) and stays within the same 1.x compatibility line as the
-stable C ABI (currently 0.5.0). Breaking changes in the language idiom of a
+stable C ABI (currently 0.6.0). Breaking changes in the language idiom of a
 single binding (e.g. switching Rust's `Vec<f64>` to `Box<[f64]>`) are
 allowed but rare; each binding's CHANGELOG records them with semver
 discipline.

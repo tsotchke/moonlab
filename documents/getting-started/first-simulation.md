@@ -231,6 +231,7 @@ print("=== Simulation Complete ===")
 ## Part 3: JavaScript Version
 
 ```javascript
+// npm install @moonlab/quantum-core @moonlab/quantum-algorithms
 import { QuantumState } from '@moonlab/quantum-core';
 
 async function main() {

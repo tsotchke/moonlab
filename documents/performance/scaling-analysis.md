@@ -285,8 +285,8 @@ python tools/analyze_benchmark.py results.csv
 |----------|----------------------|
 | ≤20 qubits | State vector (CPU) |
 | 21-28 qubits | State vector (GPU) |
-| 29-32 qubits | Distributed or tensor network |
-| >32 qubits | Tensor network (if low entanglement) |
+| 29-32 qubits | Single-node dense ceiling; distributed sharding or tensor network |
+| >32 qubits | Distributed CUDA/MPI state-vector sharding, or tensor network (if low entanglement) |
 | Low-depth circuits | State vector |
 | Deep circuits | Tensor network with truncation |
 

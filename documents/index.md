@@ -1,11 +1,11 @@
 # Moonlab Quantum Simulator
 
-A high-performance quantum computing simulation library designed for researchers, developers, and educators in quantum information science. Moonlab provides state-vector simulation for up to 32 qubits with hardware-accelerated performance on Apple Silicon, comprehensive algorithm implementations, and bindings for Python, Rust, and JavaScript.
+A high-performance quantum computing simulation library designed for researchers, developers, and educators in quantum information science. Moonlab provides dense state-vector simulation up to ~32 qubits on a single node with hardware-accelerated performance on Apple Silicon, distributed CUDA/MPI state-vector sharding to go beyond the single-node ceiling, comprehensive algorithm implementations, and bindings for Python, Rust, and JavaScript.
 
 ## Key Features
 
 - **High-Fidelity Simulation**: Full state-vector simulation with double-precision complex amplitudes
-- **32-Qubit Capacity**: Simulate quantum systems with up to $2^{32}$ basis states
+- **~32-Qubit Single-Node Capacity, More with Sharding**: Dense single-node simulation up to $2^{32}$ basis states; distributed CUDA/MPI sharding (`P` ranks add $\log_2 P$ qubits) scales beyond 32 qubits
 - **Bell Inequality Verification**: CHSH parameter $S = 2\sqrt{2} \approx 2.828$, demonstrating genuine quantum correlations
 - **Hardware Acceleration**: Metal GPU acceleration for Apple Silicon (M1-M4), SIMD optimizations (AVX-512, NEON)
 - **Comprehensive Algorithms**: Grover's search, VQE, QAOA, QPE, DMRG, and tensor network methods
@@ -89,5 +89,5 @@ Moonlab Quantum Simulator is open-source software. See the LICENSE file for deta
 
 ---
 
-**Version**: 0.4.2
-**Last Updated**: May 2026
+**Version**: 1.2.0 (ABI 0.6.0)
+**Last Updated**: July 2026

@@ -2,8 +2,10 @@
 
 Complete reference for the CA-MPS hybrid `|psi> = D|phi>` representation,
 variational-D ground-state search, and gauge-aware stabilizer-subgroup
-warmstart.  All entry points listed here are committed on the stable
-ABI surface (`src/applications/moonlab_export.h`) **since v0.2.1**.
+warmstart.  The entry points listed here are committed on the stable
+ABI surface (`src/applications/moonlab_export.h`), most **since v0.2.1**;
+`moonlab_ca_mps_var_d_run_v2` is stable since 0.2.4 and
+`moonlab_ca_mps_conjugate_pauli` since 0.6.0.
 
 **Headers**:
 - `src/algorithms/tensor_network/ca_mps.h` -- state handle + gates.
@@ -88,6 +90,29 @@ the byte encoding `0=I, 1=X, 2=Y, 3=Z`.
 `moonlab_ca_mps_imag_pauli_rotation` is non-unitary; pair with
 `moonlab_ca_mps_normalize` between Trotter cycles.
 
+## Controlled rotations, U3, and multi-qubit non-Clifford gates
+
+```c
+int moonlab_ca_mps_crz     (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_crx     (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_cry     (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+int moonlab_ca_mps_u3      (moonlab_ca_mps_t* s, uint32_t q,
+                            double theta, double phi, double lambda);
+int moonlab_ca_mps_toffoli (moonlab_ca_mps_t* s,
+                            uint32_t c1, uint32_t c2, uint32_t t);
+int moonlab_ca_mps_fredkin (moonlab_ca_mps_t* s,
+                            uint32_t c, uint32_t t1, uint32_t t2);
+```
+
+- `crz` / `crx` / `cry`: apply the corresponding controlled rotation to `t` when the
+  control `c` is `|1>`.
+- `u3`: the general single-qubit unitary `U3(theta, phi, lambda)` on `q`.
+- `toffoli` (CCX): flips `t` when both `c1` and `c2` are `|1>`.
+- `fredkin` (CSWAP): swaps `t1` and `t2` when `c` is `|1>`.
+
+These non-Clifford gates decompose into Pauli-string rotations pushed into `|phi>`, so a
+high controlled-gate fraction can raise the bond dimension.
+
 ## Norm + observables
 
 ```c
@@ -106,6 +131,21 @@ int moonlab_ca_mps_prob_z           (const moonlab_ca_mps_t* s,
                                        uint32_t qubit,
                                        double* out_prob);
 ```
+
+## Clifford-conjugated Pauli (stable since 0.6.0)
+
+```c
+int moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
+                                     const uint8_t* in_pauli,   /* (n,) 0=I,1=X,2=Y,3=Z */
+                                     uint8_t*       out_pauli,  /* (n,) result support   */
+                                     int*           out_phase); /* i^phase, phase in {0,1,2,3} */
+```
+
+Computes `Q = C^dagger P C` for the current Clifford prefactor `C` in `s`, exposing the
+conjugated Pauli string and accumulated phase so consumers can inspect `Q`'s support
+without recomputing the tableau conjugation. `out_pauli` must be at least
+`moonlab_ca_mps_num_qubits(s)` bytes; `out_phase` receives the accumulated `i^phase` factor
+in `{0, 1, 2, 3}`. Returns `0` on success, negative on argument error.
 
 ## Variational-D ground-state search
 
@@ -138,6 +178,32 @@ int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
 When `warmstart == 4`, `stab_paulis` is a row-major `(stab_num_gens,
 num_qubits)` array of pairwise-commuting Pauli generators; otherwise
 pass `NULL` and `stab_num_gens = 0`.
+
+### Explicit convergence threshold (`var_d_run_v2`, since 0.2.4)
+
+```c
+int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
+                                 const uint8_t*  paulis,        /* (T, n) */
+                                 const double*   coeffs,        /* (T,)   */
+                                 uint32_t        num_terms,
+                                 uint32_t        max_outer_iters,
+                                 double          imag_time_dtau,
+                                 uint32_t        imag_time_steps_per_outer,
+                                 uint32_t        clifford_passes_per_outer,
+                                 int             composite_2gate,
+                                 int             warmstart,
+                                 const uint8_t*  stab_paulis,
+                                 uint32_t        stab_num_gens,
+                                 double          convergence_eps,
+                                 double*         out_final_energy);
+```
+
+Same semantics as `moonlab_ca_mps_var_d_run`, plus the explicit `convergence_eps` early-exit
+threshold the alternating outer loop tests after each iteration. The default-eps wrapper
+fixes this at `1e-7`, which is unsuitable for SU(2)-symmetric Heisenberg-class problems where
+the loop hits a non-ground-state fixed point quickly (declaring convergence at 11-19%
+residual); tightening `eps` below that fixed point's natural floor lets the search escape and
+resume imaginary-time evolution. Pass `convergence_eps <= 0` to use the `1e-7` default.
 
 ## Gauge-aware stabilizer-subgroup warmstart
 

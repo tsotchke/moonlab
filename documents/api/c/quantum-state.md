@@ -50,12 +50,15 @@ Error codes returned by state functions:
 
 ```c
 typedef enum {
-    QS_SUCCESS = 0,               // Operation successful
-    QS_ERROR_INVALID_QUBIT = -1,  // Qubit index out of range
-    QS_ERROR_INVALID_STATE = -2,  // Invalid state (NULL or uninitialized)
-    QS_ERROR_NOT_NORMALIZED = -3, // State not normalized
-    QS_ERROR_OUT_OF_MEMORY = -4,  // Memory allocation failed
-    QS_ERROR_INVALID_DIMENSION = -5 // Dimension mismatch
+    QS_SUCCESS = 0,                 // Operation successful
+    QS_ERROR_INVALID_QUBIT = -1,    // Qubit index out of range
+    QS_ERROR_INVALID_STATE = -2,    // Invalid state (NULL or uninitialized)
+    QS_ERROR_NOT_NORMALIZED = -3,   // State not normalized
+    QS_ERROR_OUT_OF_MEMORY = -4,    // Memory allocation failed
+    QS_ERROR_INVALID_DIMENSION = -5,// Dimension mismatch
+    QS_ERROR_INVALID_PARAM = -6,    // Invalid non-qubit argument
+    QS_ERROR_NOT_SUPPORTED = -7,    // Feature not compiled in (e.g. no CUDA)
+    QS_ERROR_DRIVER = -8            // Backend/driver failure (GPU, etc.)
 } qs_error_t;
 ```
 

@@ -4,16 +4,26 @@ Scale quantum simulations beyond single-machine memory limits using MPI-based di
 
 ## Overview
 
-Moonlab's distributed backend partitions the state vector across multiple nodes, enabling simulation of larger quantum systems than a single machine can handle. With 1024 MPI ranks, you can add approximately 10 extra qubits to your simulation capacity.
+A single-node dense state vector holds `2^n` complex128 amplitudes (16 bytes each), which
+puts a practical ceiling around 30-32 qubits before host RAM is exhausted (32 qubits is
+64 GB). Moonlab's distributed backend partitions that amplitude array across MPI ranks so
+the aggregate memory of a cluster carries systems no single node can hold. Each doubling of
+the rank count `P` adds one qubit of headroom: with `P = 2^k` ranks you gain `k` qubits over
+the single-node ceiling (1024 ranks add ~10 qubits). Each rank's local shard can optionally
+be GPU-resident (`partition_state_create_gpu`) when Moonlab is built with CUDA, so the same
+sharding scheme drives multi-GPU/MPI runs.
 
 ## When to Use Distributed Simulation
 
-| Scenario | Single Node | Distributed |
-|----------|-------------|-------------|
-| ≤28 qubits | ✓ Recommended | Unnecessary overhead |
-| 29-32 qubits | Requires 128GB+ RAM | ✓ Split across nodes |
-| 33-38 qubits | Impossible | ✓ Required |
-| >38 qubits | - | Requires 1000+ nodes |
+| Scenario | Single Node (dense) | Distributed (MPI/CUDA sharding) |
+|----------|---------------------|---------------------------------|
+| ≤28 qubits | Recommended | Unnecessary communication overhead |
+| 29-32 qubits | Needs 8-64 GB RAM; near the dense ceiling | Splits the shard across nodes |
+| 33+ qubits | Beyond a single node's dense capacity | Required; `P` ranks add `log2(P)` qubits |
+
+The distributed engine is compiled into `libquantumsim` only when it is built with
+`-DQSIM_ENABLE_MPI=ON`. On a default (non-MPI) build the Python bindings raise
+`MpiUnavailableError` and the C symbols are absent.
 
 ## Prerequisites
 
@@ -39,16 +49,23 @@ sudo yum install openmpi openmpi-devel
 
 ### Building with MPI Support
 
+The distributed engine is compiled in only when configured with `-DQSIM_ENABLE_MPI=ON`
+(build the shared library too so the Python bindings can load it):
+
 ```bash
-# Configure with MPI
-./configure --enable-mpi
+cmake -S . -B build-dist -DCMAKE_BUILD_TYPE=Release \
+      -DQSIM_ENABLE_MPI=ON -DQSIM_BUILD_SHARED=ON
+cmake --build build-dist
 
-# Or use make directly
-make MPI=1
+# Point the Python bindings at the MPI-enabled library.
+export MOONLAB_LIB_DIR=$PWD/build-dist
+```
 
-# Verify MPI support
-./bin/moonlab --version
-# Output should include: MPI: enabled
+Verify from Python that the distributed symbols are present:
+
+```python
+from moonlab.distributed import is_mpi_available
+print("MPI:", "enabled" if is_mpi_available() else "disabled")
 ```
 
 ## Basic Usage
@@ -57,36 +74,46 @@ make MPI=1
 
 ```c
 #include "distributed/mpi_bridge.h"
-#include "quantum/state.h"
+#include "distributed/state_partition.h"
+#include "distributed/distributed_gates.h"
+#include "distributed/collective_ops.h"
+#include <stdio.h>
 
 int main(int argc, char** argv) {
-    // Initialize MPI
-    mpi_quantum_init(&argc, &argv);
+    // Initialize the MPI bridge (NULL options => defaults).
+    distributed_ctx_t* ctx = mpi_bridge_init(&argc, &argv, NULL);
+    if (!ctx) {
+        fprintf(stderr, "MPI initialization failed\n");
+        return 1;
+    }
 
-    int rank = mpi_quantum_rank();
-    int size = mpi_quantum_size();
+    int rank = mpi_get_rank(ctx);
+    int size = mpi_get_size(ctx);
 
-    if (rank == 0) {
+    if (mpi_is_root(ctx)) {
         printf("Running on %d MPI ranks\n", size);
     }
 
-    // Create distributed state (32 qubits across all ranks)
-    distributed_state_t* state = distributed_state_create(32);
+    // Create a distributed state (32 qubits partitioned across all ranks;
+    // NULL config => library defaults). Initialized to |0...0>.
+    partitioned_state_t* state = partition_state_create(ctx, 32, NULL);
 
-    // Apply gates (automatically handles communication)
-    distributed_hadamard(state, 0);
-    distributed_cnot(state, 0, 1);
+    // Apply gates. The engine handles inter-rank exchange for partition qubits.
+    dist_hadamard(state, 0);
+    dist_cnot(state, 0, 1);
 
-    // Global operations require synchronization
-    double probability = distributed_measure_probability(state, 0);
+    // Collective query: probability of measuring qubit 0 as |1>.
+    double probability = 0.0;
+    collective_get_qubit_probability(state, 0, &probability);
 
-    if (rank == 0) {
+    if (mpi_is_root(ctx)) {
         printf("P(qubit 0 = 1): %.6f\n", probability);
     }
 
-    // Cleanup
-    distributed_state_destroy(state);
-    mpi_quantum_finalize();
+    // Cleanup.
+    partition_state_free(state);
+    mpi_bridge_free(ctx);
+    mpi_bridge_finalize();
 
     return 0;
 }
@@ -148,42 +175,48 @@ The state vector is partitioned by the highest-order qubits:
 ```c
 // For n qubits on P ranks (P = 2^k):
 // - Qubits 0 to n-k-1: LOCAL (no communication needed)
-// - Qubits n-k to n-1: GLOBAL (require MPI communication)
+// - Qubits n-k to n-1: PARTITION (require MPI communication)
 
-distributed_state_t* state = distributed_state_create(32);
+partitioned_state_t* state = partition_state_create(ctx, 32, NULL);
 
 // Local gate (fast, no communication)
-distributed_hadamard(state, 0);   // Qubit 0 is local
+dist_hadamard(state, 0);    // Qubit 0 is local
 
-// Global gate (requires MPI exchange)
-distributed_hadamard(state, 31);  // Qubit 31 is global
+// Partition-qubit gate (triggers inter-rank exchange)
+dist_hadamard(state, 31);   // Qubit 31 is a partition qubit
+
+// Ask the partitioner which class a qubit falls in:
+int is_partition = partition_is_partition_qubit(state, 31);  // 1 => needs exchange
 ```
 
 ## Communication Patterns
 
 ### Single-Qubit Global Gate
 
-When applying a gate to a global qubit, ranks exchange half their data:
+When applying a gate to a partition qubit, ranks exchange half their data. The public
+`dist_gate_1q` / `dist_hadamard` / ... entry points do this for you; the sketch below
+shows the mechanism using the real `partitioned_state_t` fields:
 
 ```c
 // Gate on qubit k where k >= n - log2(P)
-// Partner rank = my_rank XOR 2^(k - (n - log2(P)))
+// Partner rank = my_rank XOR 2^(k - local_qubits)
 
-void distributed_gate_global(distributed_state_t* state,
-                             int target,
-                             const complex_t gate[2][2]) {
-    int partner = state->rank ^ (1 << (target - state->local_qubits));
+void gate_on_partition_qubit(partitioned_state_t* state,
+                             uint32_t target,
+                             const gate_matrix_2x2_t* gate) {
+    int rank = state->dist_ctx->rank;
+    int partner = rank ^ (1 << (target - state->local_qubits));
 
-    // Exchange half of local state with partner
+    // Exchange the local shard with the partner (local_count amplitudes).
     MPI_Sendrecv(
-        state->local_amplitudes + state->local_size/2,  // send upper half
-        state->local_size/2, MPI_DOUBLE_COMPLEX, partner, 0,
+        state->amplitudes,                         // send local shard
+        state->local_count, MPI_DOUBLE_COMPLEX, partner, 0,
         state->recv_buffer,
-        state->local_size/2, MPI_DOUBLE_COMPLEX, partner, 0,
-        MPI_COMM_WORLD, MPI_STATUS_IGNORE
+        state->local_count, MPI_DOUBLE_COMPLEX, partner, 0,
+        (MPI_Comm)state->dist_ctx->mpi_comm, MPI_STATUS_IGNORE
     );
 
-    // Apply gate using local and received data
+    // Apply the 2x2 gate across the paired (local, remote) amplitudes.
     apply_gate_pairs(state, gate);
 }
 ```
@@ -193,14 +226,14 @@ void distributed_gate_global(distributed_state_t* state,
 CNOT between global qubits may require 4-way communication:
 
 ```c
-void distributed_cnot_global(distributed_state_t* state,
-                             int control, int target) {
+void cnot_on_partition_qubits(partitioned_state_t* state,
+                              uint32_t control, uint32_t target) {
     // Determine communication pattern based on qubit positions
     int ctrl_bit = 1 << (control - state->local_qubits);
     int targ_bit = 1 << (target - state->local_qubits);
 
     // Ranks form groups of 4 for exchange
-    int group_base = state->rank & ~(ctrl_bit | targ_bit);
+    int group_base = state->dist_ctx->rank & ~(ctrl_bit | targ_bit);
     int ranks[4] = {
         group_base,
         group_base | ctrl_bit,
@@ -218,30 +251,34 @@ void distributed_cnot_global(distributed_state_t* state,
 
 ## Configuration Options
 
-### Environment Variables
-
-```bash
-# Buffer size for MPI messages (default: auto)
-export MOONLAB_MPI_BUFFER_SIZE=67108864  # 64 MB
-
-# Enable/disable non-blocking communication
-export MOONLAB_MPI_ASYNC=1
-
-# Overlap computation with communication
-export MOONLAB_MPI_OVERLAP=1
-```
-
 ### Runtime Configuration
 
+Pass a `partition_config_t` to `partition_state_create` (or NULL for defaults). The fields
+are declared in `distributed/state_partition.h`:
+
 ```c
-distributed_config_t config = {
-    .buffer_size = 64 * 1024 * 1024,  // 64 MB
-    .use_async = true,
-    .overlap_compute = true,
-    .compression = COMPRESS_NONE  // or COMPRESS_THRESHOLD
+partition_config_t config = {
+    .use_aligned_memory   = 1,               // SIMD-aligned amplitude allocation
+    .comm_buffer_size     = 64 * 1024 * 1024, // MPI exchange buffer bytes (0 = auto)
+    .prefetch_remote      = 1,               // prefetch remote amplitudes
+    .optimize_for_locality = 1               // choose partition to reduce exchange
 };
 
-distributed_state_t* state = distributed_state_create_config(32, &config);
+partitioned_state_t* state = partition_state_create(ctx, 32, &config);
+
+// Estimate the per-rank memory footprint before allocating:
+size_t bytes_per_rank = partition_estimate_memory(32, mpi_get_size(ctx));
+```
+
+### GPU-Resident Shards
+
+When `libquantumsim` is built with CUDA, each rank's local shard can live on a GPU. The
+gate primitives dispatch to GPU kernels and the host buffer is used only as a staging area
+for MPI exchange:
+
+```c
+// Returns NULL on a non-CUDA build or when no GPU is available.
+partitioned_state_t* state = partition_state_create_gpu(ctx, 32, NULL);
 ```
 
 ## Performance Optimization
@@ -249,27 +286,27 @@ distributed_state_t* state = distributed_state_create_config(32, &config);
 ### Minimize Global Operations
 
 ```c
-// SLOW: Many global gates
+// SLOW: Many partition-qubit gates
 for (int i = 0; i < 100; i++) {
-    distributed_hadamard(state, 31);  // Global, requires MPI
+    dist_hadamard(state, 31);  // Partition qubit, requires MPI exchange
 }
 
-// FAST: Batch operations, use local qubits when possible
+// FAST: keep work on local qubits when possible
 for (int i = 0; i < 100; i++) {
-    distributed_hadamard(state, i % state->local_qubits);  // Local
+    dist_hadamard(state, i % state->local_qubits);  // Local, no communication
 }
 ```
 
 ### Use Collective Operations
 
 ```c
-// Instead of individual measurements
-for (int q = 0; q < n; q++) {
-    probs[q] = distributed_measure_probability(state, q);  // Multiple collectives
+// Per-qubit marginals each run a collective:
+for (uint32_t q = 0; q < n; q++) {
+    collective_get_qubit_probability(state, q, &probs[q]);  // one collective each
 }
 
-// Use batched measurement
-distributed_measure_probabilities_all(state, probs);  // Single collective
+// The full distribution is a single gather to root (needs O(2^n) memory there):
+collective_get_probabilities(state, full_probs);  // full_probs valid only on root
 ```
 
 ### Overlap Communication
@@ -293,51 +330,44 @@ apply_global_gate(state, recv_buffer);
 
 ```c
 #include "distributed/mpi_bridge.h"
-#include "algorithms/grover.h"
+#include "distributed/state_partition.h"
+#include "distributed/distributed_gates.h"
+#include "distributed/collective_ops.h"
+#include <stdio.h>
 
 int main(int argc, char** argv) {
-    mpi_quantum_init(&argc, &argv);
+    distributed_ctx_t* ctx = mpi_bridge_init(&argc, &argv, NULL);
+    uint32_t n_qubits = 32;  // 4 billion states
 
-    int rank = mpi_quantum_rank();
-    int n_qubits = 32;  // 4 billion states
+    // Create distributed state and initialize the uniform superposition.
+    partitioned_state_t* state = partition_state_create(ctx, n_qubits, NULL);
+    partition_init_uniform(state);
 
-    // Create distributed state
-    distributed_state_t* state = distributed_state_create(n_qubits);
-
-    // Initialize superposition
-    for (int q = 0; q < n_qubits; q++) {
-        distributed_hadamard(state, q);
-    }
-
-    // Grover iterations
+    // Full Grover search: oracle + diffusion for the optimal iteration count
+    // (num_iterations = 0 => dist_grover_optimal_iterations internally).
     uint64_t target = 123456789ULL;
-    int iterations = (int)(M_PI / 4 * sqrt(1ULL << n_qubits));
+    dist_grover_search(state, target, 0);
 
-    for (int iter = 0; iter < iterations; iter++) {
-        // Oracle (mark target state)
-        distributed_oracle_mark(state, target);
+    // Measure (collective: every rank gets the same outcome).
+    dist_measurement_result_t res;
+    collective_measure_all(state, &res, NULL);
 
-        // Diffusion operator
-        distributed_grover_diffusion(state);
-
-        if (rank == 0 && iter % 100 == 0) {
-            printf("Iteration %d/%d\n", iter, iterations);
-        }
+    if (mpi_is_root(ctx)) {
+        printf("Found: %llu (target: %llu)\n",
+               (unsigned long long)res.outcome, (unsigned long long)target);
     }
 
-    // Measure
-    uint64_t result = distributed_measure_all(state);
-
-    if (rank == 0) {
-        printf("Found: %llu (target: %llu)\n", result, target);
-    }
-
-    distributed_state_destroy(state);
-    mpi_quantum_finalize();
+    partition_state_free(state);
+    mpi_bridge_free(ctx);
+    mpi_bridge_finalize();
 
     return 0;
 }
 ```
+
+The loop form is also available if you want to interleave progress reporting:
+`dist_oracle_single(state, target)` then `dist_grover_diffusion(state)` per iteration,
+or `dist_grover_iteration(state, target)` for the combined oracle+diffusion step.
 
 ## Cluster Configuration
 

@@ -333,7 +333,7 @@ print(f"{16 * 2**28 / 2**30:.1f} GB")
 
 **Solutions:**
 
-1. There is no runtime "single precision" toggle in v0.4.2; the C
+1. There is no runtime "single precision" toggle in v1.2.0; the C
    state vector is always `double _Complex`.  To halve memory you
    must drop to a tensor-network representation:
    ```python

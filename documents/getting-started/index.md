@@ -68,7 +68,7 @@ And you'll be able to:
 - Apply quantum gates to build circuits
 - Measure quantum states and interpret results
 - Calculate entanglement entropy and fidelity
-- Run simulations up to 32 qubits
+- Run dense single-node simulations up to ~32 qubits (and beyond with distributed CUDA/MPI sharding)
 
 ## Time Investment
 

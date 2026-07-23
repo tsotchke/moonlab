@@ -6,7 +6,7 @@ Common questions about Moonlab Quantum Simulator, organized by topic.
 
 ### What is Moonlab Quantum Simulator?
 
-Moonlab is a high-performance quantum computing simulation library. It provides state-vector simulation for up to 32 qubits, comprehensive algorithm implementations (Grover, VQE, QAOA, DMRG), and bindings for multiple programming languages (C, Python, Rust, JavaScript).
+Moonlab is a high-performance quantum computing simulation library. It provides dense state-vector simulation up to ~32 qubits on a single node (and beyond via distributed CUDA/MPI sharding), comprehensive algorithm implementations (Grover, VQE, QAOA, DMRG), and bindings for multiple programming languages (C, Python, Rust, JavaScript).
 
 ### Is this a real quantum computer?
 
@@ -19,7 +19,7 @@ No. Moonlab is a **classical simulator** of quantum computation. It runs on conv
 
 ### How many qubits can I simulate?
 
-Moonlab supports up to 32 qubits with sufficient memory:
+On a single node the dense state vector is capped near 32 qubits by memory (16 bytes per amplitude):
 
 | Qubits | Memory Required |
 |--------|-----------------|
@@ -29,7 +29,7 @@ Moonlab supports up to 32 qubits with sufficient memory:
 | 30 | 16 GB |
 | 32 | 64 GB |
 
-For larger systems with limited entanglement, tensor network methods (DMRG, MPS) can simulate 100+ qubits.
+Beyond the single-node ceiling, the distributed backend shards the amplitude array across MPI ranks (each rank's shard optionally GPU-resident): `P = 2^k` ranks add `k` qubits of headroom. See the [Distributed Simulation Guide](guides/distributed-simulation.md). For systems with limited entanglement, tensor network methods (DMRG, MPS) can simulate 100+ qubits.
 
 ### What platforms are supported?
 
@@ -98,6 +98,7 @@ state = QuantumState(4)
 
 **JavaScript**:
 ```javascript
+// npm install @moonlab/quantum-core @moonlab/quantum-algorithms
 import { QuantumState } from '@moonlab/quantum-core';
 const state = await QuantumState.create({ numQubits: 4 });
 ```

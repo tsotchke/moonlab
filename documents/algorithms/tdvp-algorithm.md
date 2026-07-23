@@ -470,4 +470,4 @@ int main(void) {
 - [DMRG Algorithm](dmrg-algorithm.md) - Ground state optimization
 - [Tensor Networks](../concepts/tensor-networks.md) - MPS fundamentals
 - [Skyrmion Braiding](skyrmion-braiding.md) - Application to topological qubits
-- [API: tdvp.h](../api/c/tdvp.md) - Full API reference
+- [API: Tensor Networks](../api/c/tensor-network.md) - MPS/TDVP C API reference

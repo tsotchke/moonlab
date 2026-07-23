@@ -20,6 +20,7 @@ The C API is organized into modules:
 | [Tensor Network](tensor-network.md) | `tensor.h`, `dmrg.h` | MPS and DMRG |
 | [CA-MPS + var-D](ca-mps.md) | `ca_mps.h`, `ca_mps_var_d.h`, `ca_mps_var_d_stab_warmstart.h`, `lattice_z2_1d.h`, `moonlab_status.h` | Hybrid `\|psi> = D\|phi>` representation, var-D ground-state search, gauge-aware stabilizer-subgroup warmstart, 1+1D Z2 LGT, status registry. Since v0.2.1. |
 | [Topological](topological.md) | `topological.h` | Anyon models, surface codes |
+| [QGT Invariants](qgt-invariants.md) | `moonlab_export.h` | Band-topology one-shots: SSH winding, Kitaev/Kane-Mele/BHZ Z2, QWZ/Hofstadter Chern. Since v0.6.0 (`moonlab_qwz_chern` since v0.2.0). |
 | [Skyrmion Braiding](skyrmion-braiding.md) | `skyrmion_braiding.h` | Topological qubits |
 | [GPU Metal](gpu-metal.md) | `gpu_metal.h` | Metal acceleration |
 | [SIMD Ops](simd-ops.md) | `simd_ops.h` | Vectorization |
@@ -112,9 +113,15 @@ typedef enum {
     QS_ERROR_INVALID_STATE = -2,
     QS_ERROR_NOT_NORMALIZED = -3,
     QS_ERROR_OUT_OF_MEMORY = -4,
-    QS_ERROR_INVALID_DIMENSION = -5
+    QS_ERROR_INVALID_DIMENSION = -5,
+    QS_ERROR_INVALID_PARAM = -6,
+    QS_ERROR_NOT_SUPPORTED = -7,
+    QS_ERROR_DRIVER = -8
 } qs_error_t;
 ```
+
+See [Error Codes Reference](../../reference/error-codes.md) for the full status registry,
+including the distributed/collective error enums.
 
 ## State Management Functions
 
@@ -228,19 +235,27 @@ double quantum_state_get_probability(const quantum_state_t *state, uint64_t basi
 double p_zero = quantum_state_get_probability(&state, 0);  // P(|00...0⟩)
 ```
 
-### quantum_measure_all
+### quantum_measure_all_fast
 
-Measure all qubits:
+Measure all qubits in a single pass, returning the full basis-state index (one bit per
+qubit). This is the fast batch measurement path (`src/quantum/gates.h`):
 
 ```c
-qs_error_t quantum_measure_all(
+uint64_t quantum_measure_all_fast(
     quantum_state_t *state,
-    measurement_result_t *result,
     quantum_entropy_ctx_t *entropy
 );
 ```
 
+**Returns**: The measured basis-state index (all qubit outcomes packed into a `uint64_t`).
 **Note**: Collapses the state to the measured outcome.
+
+For a deterministic variant that takes an explicit uniform draw in `[0, 1)` instead of an
+entropy context, use `measurement_all_qubits` (`src/quantum/measurement.h`):
+
+```c
+uint64_t measurement_all_qubits(quantum_state_t *state, double random_value);
+```
 
 ## Entanglement Functions
 

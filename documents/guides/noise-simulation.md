@@ -261,37 +261,59 @@ relaxation = ThermalRelaxation(
 
 ### Zero-Noise Extrapolation
 
+`ZNE` takes a user callable `circuit_fn(noise_scale) -> expectation`. You run your
+circuit at each amplified noise scale and return a real expectation value; ZNE sweeps
+the requested `noise_factors` and extrapolates the result back to the zero-noise limit
+with the C estimator (`method='linear'`, `'richardson'` (default), or `'exponential'`).
+
 ```python
+import numpy as np
+from moonlab import QuantumState
 from moonlab.error_mitigation import ZNE
 
+def expectation_z0(state):
+    """<Z_0> from the measured probability distribution."""
+    probs = state.probabilities()
+    signs = np.where(np.arange(len(probs)) & 1, -1.0, 1.0)  # bit 0 sets the sign
+    return float(np.dot(signs, probs))
+
 def circuit_with_noise(noise_scale):
-    state = QuantumState(4, backend='cpu')
-    noise = DepolarizingChannel(0.01 * noise_scale)
+    # Ideal circuit: a definite <Z_0> = cos(0.7).
+    state = QuantumState(4)
+    state.ry(0, 0.7)
+    ideal = expectation_z0(state)
+    # Model a depolarizing channel whose strength grows with the noise scale:
+    # each unit of noise shrinks the expectation toward 0 by (1 - p).
+    p = 0.05
+    return ideal * (1.0 - p) ** noise_scale
 
-    for q in range(4):
-        state.h(q)
-        noise.apply(state, q)
-
-    return state.expectation_z(0)
-
-# Extrapolate to zero noise
-zne = ZNE(noise_factors=[1, 2, 3])
+# Extrapolate to zero noise (lambda = 1 is the native noise level).
+zne = ZNE(noise_factors=[1, 2, 3], method='richardson')
 mitigated = zne.extrapolate(circuit_with_noise)
-print(f"Mitigated expectation: {mitigated:.4f}")
+print(f"Mitigated <Z_0>: {mitigated:.4f}   (ideal cos(0.7) = {np.cos(0.7):.4f})")
+print(f"Fit residual std: {zne.last_stderr:.2e}")
 ```
 
 ### Measurement Error Mitigation
 
+`MeasurementMitigation` builds the assignment (confusion) matrix by preparing each
+computational-basis state on the real simulator and sampling its measured distribution,
+then corrects raw shot counts with the Tikhonov-regularised inverse. With an ideal
+readout the assignment matrix is the identity and `correct()` is a no-op; under a
+readout-noise model it removes the bias. The matrix is `2**num_qubits` square, so this
+targets small registers (the default cap is 12 qubits).
+
 ```python
 from moonlab.error_mitigation import MeasurementMitigation
 
-# Calibrate
-calibrator = MeasurementMitigation(num_qubits=4)
-calibrator.calibrate(shots=10000)
+# Calibrate the assignment matrix (shots per prepared basis state).
+calibrator = MeasurementMitigation(num_qubits=2)
+calibrator.calibrate(shots=2000)
 
-# Apply correction
-raw_counts = {'0000': 450, '0001': 50, ...}
+# Correct raw shot counts (dict of bitstring -> count).
+raw_counts = {'00': 450, '01': 30, '10': 25, '11': 495}
 corrected_counts = calibrator.correct(raw_counts)
+print(corrected_counts)
 ```
 
 ## Noise Analysis
