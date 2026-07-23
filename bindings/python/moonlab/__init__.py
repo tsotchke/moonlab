@@ -158,6 +158,21 @@ try:
 except (ImportError, AttributeError, OSError):
     _ERROR_MITIGATION_AVAILABLE = False
 
+# Chemistry: first-principles STO-3G molecular Hamiltonians (H2, LiH) over
+# the real vqe_create_*_hamiltonian / h2_sto3g_pauli_coeffs C surface.
+try:
+    from .chemistry import (
+        Molecule,
+        Hamiltonian,
+        h2_sto3g_pauli_coeffs,
+        hartree_to_kcalmol,
+        H2_PAULI_LABELS,
+        CHEMICAL_ACCURACY_HARTREE,
+    )
+    _CHEMISTRY_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _CHEMISTRY_AVAILABLE = False
+
 try:
     from .ca_peps import CAPEPS
     _CAPEPS_AVAILABLE = True
@@ -265,6 +280,11 @@ if _ERROR_MITIGATION_AVAILABLE:
     __all__ += [
         'ZNE', 'PEC', 'MeasurementMitigation',
         'ZNE_LINEAR', 'ZNE_RICHARDSON', 'ZNE_EXPONENTIAL',
+    ]
+if _CHEMISTRY_AVAILABLE:
+    __all__ += [
+        'Molecule', 'Hamiltonian', 'h2_sto3g_pauli_coeffs',
+        'hartree_to_kcalmol', 'H2_PAULI_LABELS', 'CHEMICAL_ACCURACY_HARTREE',
     ]
 if _CAPEPS_AVAILABLE:
     __all__ += ['CAPEPS']

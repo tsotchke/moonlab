@@ -19,6 +19,8 @@
 #ifndef MOONLAB_H2_STO3G_H
 #define MOONLAB_H2_STO3G_H
 
+#include "../applications/moonlab_api.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,7 +31,7 @@ extern "C" {
  * @param g           Output array [g0=II, g1=IZ, g2=ZI, g3=ZZ, g4=XX] (Hartree),
  *                    the electronic coefficients (nuclear repulsion is separate).
  */
-void h2_sto3g_pauli_coeffs(double r_angstrom, double g[5]);
+MOONLAB_API void h2_sto3g_pauli_coeffs(double r_angstrom, double g[5]);
 
 #ifdef __cplusplus
 }
