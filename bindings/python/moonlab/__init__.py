@@ -141,6 +141,23 @@ try:
 except (ImportError, AttributeError, OSError):
     _CAMPS_AVAILABLE = False
 
+# Error mitigation: zero-noise extrapolation, probabilistic error
+# cancellation, and readout-error mitigation.  ZNE/PEC bind the stable
+# zne.h surface; MeasurementMitigation is post-processing over the
+# measurement engine, so it imports as long as core does.
+try:
+    from .error_mitigation import (
+        ZNE,
+        PEC,
+        MeasurementMitigation,
+        ZNE_LINEAR,
+        ZNE_RICHARDSON,
+        ZNE_EXPONENTIAL,
+    )
+    _ERROR_MITIGATION_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _ERROR_MITIGATION_AVAILABLE = False
+
 try:
     from .ca_peps import CAPEPS
     _CAPEPS_AVAILABLE = True
@@ -243,6 +260,11 @@ if _CAMPS_AVAILABLE:
         'z2_lgt_1d_build',
         'z2_lgt_1d_gauss_law',
         'status_string',
+    ]
+if _ERROR_MITIGATION_AVAILABLE:
+    __all__ += [
+        'ZNE', 'PEC', 'MeasurementMitigation',
+        'ZNE_LINEAR', 'ZNE_RICHARDSON', 'ZNE_EXPONENTIAL',
     ]
 if _CAPEPS_AVAILABLE:
     __all__ += ['CAPEPS']
