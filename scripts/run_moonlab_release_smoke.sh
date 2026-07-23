@@ -773,6 +773,38 @@ PY
   fi
 }
 
+# --- environment preflight: fail closed, never emit false evidence -----------
+# The control-plane integration tests and the JS binding suite bind a loopback
+# listener. A sandbox that denies listen(2) makes all of them fail in a way that
+# is indistinguishable from a real regression -- a smoke run under such a
+# sandbox recorded 13 integration_control_plane_* plus all three binding suites
+# as FAIL while the very same build passed everything outside it. Refuse to run
+# rather than write a trace that lies: no verdict is safer than a false one.
+require_loopback_listener() {
+  python3 - <<'PY'
+import socket
+import sys
+probe = socket.socket()
+try:
+    probe.bind(("127.0.0.1", 0))
+    probe.listen(1)
+except OSError as error:
+    print(f"cannot bind a loopback listener: {error}", file=sys.stderr)
+    raise SystemExit(1)
+finally:
+    probe.close()
+PY
+}
+if ! require_loopback_listener; then
+  cat >&2 <<'MSG'
+release smoke aborted: this environment cannot bind a loopback listener.
+The control-plane integration tests and the JS binding suite require it, and
+running without it produces FAIL events that are indistinguishable from a real
+regression. Re-run outside the restricted sandbox. No trace was written.
+MSG
+  exit 2
+fi
+
 echo "== Moonlab release smoke -> $TRACE =="
 check_full_suite
 check_asan
