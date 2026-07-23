@@ -263,6 +263,32 @@ MOONLAB_API long pauli_frame_batch_sample_circuit(
     int num_threads, uint8_t* out);
 
 /** @brief Name of the compiled SIMD backend: "neon"|"avx2"|"avx512"|"scalar". */
+/**
+ * @brief Batch-sample DETECTORS of a Clifford + measurement circuit.
+ *
+ * A detector is the parity of a set of measurement records, reported as the
+ * deviation from the noiseless trajectory (so it reads 0 on a noiseless
+ * run).  This is what a decoder consumes, and it mirrors stim's
+ * compile_detector_sampler().sample().
+ *
+ * Detectors are supplied in CSR form: detector d covers the measurement
+ * indices det_indices[det_offsets[d] .. det_offsets[d+1]).  @p det_offsets
+ * therefore holds @p num_detectors + 1 entries.  Measurement indices count
+ * MEASURE and MEASURE_NOISY ops in circuit order from 0.
+ *
+ * The measurement record is reduced to detectors inside each shot block, so
+ * the full num_measurements x num_shots record is never materialised.
+ *
+ * @param out receives num_detectors * num_shots bytes, detector-major
+ *            (detector d, shot s at out[d * num_shots + s]).
+ * @return num_detectors on success, negative on error.
+ */
+MOONLAB_API long pauli_frame_batch_sample_detectors(
+    size_t num_qubits, const pf_circuit_op_t* ops, size_t num_ops,
+    const size_t* det_offsets, const uint32_t* det_indices,
+    size_t num_detectors, size_t num_shots, uint64_t seed,
+    int num_threads, uint8_t* out);
+
 MOONLAB_API const char* pauli_frame_simd_backend(void);
 /** @brief SIMD lane width in 64-bit words (1 = scalar fallback). */
 MOONLAB_API int pauli_frame_simd_lanes(void);

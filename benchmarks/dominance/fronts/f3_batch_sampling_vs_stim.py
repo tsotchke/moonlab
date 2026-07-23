@@ -91,6 +91,12 @@ _LIB.pauli_frame_batch_sample_circuit.argtypes = [
     ctypes.c_size_t, ctypes.POINTER(_PfOp), ctypes.c_size_t,
     ctypes.c_size_t, ctypes.c_uint64, ctypes.c_int,
     ctypes.POINTER(ctypes.c_uint8)]
+_LIB.pauli_frame_batch_sample_detectors.restype = ctypes.c_long
+_LIB.pauli_frame_batch_sample_detectors.argtypes = [
+    ctypes.c_size_t, ctypes.POINTER(_PfOp), ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_uint32),
+    ctypes.c_size_t, ctypes.c_size_t, ctypes.c_uint64, ctypes.c_int,
+    ctypes.POINTER(ctypes.c_uint8)]
 _LIB.pauli_frame_circuit_num_measurements.restype = ctypes.c_size_t
 _LIB.pauli_frame_circuit_num_measurements.argtypes = [ctypes.POINTER(_PfOp), ctypes.c_size_t]
 _LIB.pauli_frame_simd_backend.restype = ctypes.c_char_p
@@ -137,36 +143,20 @@ def build_random_clifford(n, ngates, seed):
 
 
 def build_surface_code(d, rounds):
-    """A surface-code-flavoured syndrome-extraction circuit: a d x d grid of
-    data qubits with a weight-4 Z- and X-plaquette on every unit cell, each
-    read by its own ancilla via local CNOTs and measure+reset, repeated for
-    `rounds` rounds. Local two-qubit gates and ancilla MR only."""
-    def data(i, j):
-        return i * d + j
-    ndata = d * d
-    cells = [(i, j) for i in range(d - 1) for j in range(d - 1)]
-    z_anc = {c: ndata + k for k, c in enumerate(cells)}
-    x_anc = {c: ndata + len(cells) + k for k, c in enumerate(cells)}
-    n = ndata + 2 * len(cells)
-    ops = []
-    for _ in range(rounds):
-        # Z-plaquettes: parity of 4 data qubits into ancilla.
-        for (i, j) in cells:
-            a = z_anc[(i, j)]
-            for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
-                ops.append((PF_CNOT, data(i + di, j + dj), a))
-            ops.append((PF_MEASURE, a, 0))
-            ops.append((PF_RESET, a, 0))
-        # X-plaquettes: ancilla in X basis, CNOT ancilla->data, back to Z.
-        for (i, j) in cells:
-            a = x_anc[(i, j)]
-            ops.append((PF_H, a, 0))
-            for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
-                ops.append((PF_CNOT, a, data(i + di, j + dj)))
-            ops.append((PF_H, a, 0))
-            ops.append((PF_MEASURE, a, 0))
-            ops.append((PF_RESET, a, 0))
-    return n, ops
+    """The same surface code with the noise switched off.
+
+    Delegates to the noisy builder so both workloads use one circuit
+    definition and cannot drift apart -- in particular so this one keeps the
+    checkerboard plaquette layout that makes the code valid.
+    """
+    n, ops, _ = build_surface_code_noisy(d, rounds, p2=0.0, p1=0.0, pm=0.0)
+    keep = []
+    for o in ops:
+        if o[0] in (PF_DEPOLARIZE1, PF_DEPOLARIZE2):
+            continue                      # zero-probability, drop entirely
+        keep.append((PF_MEASURE, o[1], o[2], 0.0)
+                    if o[0] == PF_MEASURE_NOISY else o)
+    return n, keep
 
 
 def build_surface_code_noisy(d, rounds, p2=0.001, p1=0.001, pm=0.001):
@@ -185,21 +175,38 @@ def build_surface_code_noisy(d, rounds, p2=0.001, p1=0.001, pm=0.001):
     cells = [(i, j) for i in range(d - 1) for j in range(d - 1)]
     z_anc = {c: ndata + k for k, c in enumerate(cells)}
     x_anc = {c: ndata + len(cells) + k for k, c in enumerate(cells)}
-    n = ndata + 2 * len(cells)
+    # Plaquette types alternate on a checkerboard.  Putting BOTH an X and a Z
+    # plaquette on every cell does not give a code: cells that touch only at a
+    # corner share exactly one data qubit, and an X and a Z plaquette
+    # overlapping on one qubit ANTICOMMUTE.  Nothing is then deterministic,
+    # no valid detector exists, and both engines return coin flips every
+    # round.  Checkerboarding makes every X/Z pair overlap on 0 or 2 qubits.
+    z_cells = [(i, j) for (i, j) in cells if (i + j) % 2 == 0]
+    x_cells = [(i, j) for (i, j) in cells if (i + j) % 2 == 1]
+    anc = {c: ndata + k for k, c in enumerate(z_cells + x_cells)}
+    n = ndata + len(cells)
     ops = []
-    for _ in range(rounds):
+    mi = 0                      # running measurement index
+    last = {}                   # ancilla -> measurement index in previous round
+    dets = []                   # each detector: tuple of measurement indices
+    for r in range(rounds):
         for q in range(ndata):
             ops.append((PF_DEPOLARIZE1, q, 0, p1))
-        for (i, j) in cells:
-            a = z_anc[(i, j)]
+        for (i, j) in z_cells:
+            a = anc[(i, j)]
             for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
                 dq = data(i + di, j + dj)
                 ops.append((PF_CNOT, dq, a, 0.0))
                 ops.append((PF_DEPOLARIZE2, dq, a, p2))
             ops.append((PF_MEASURE_NOISY, a, 0, pm))
             ops.append((PF_RESET, a, 0, 0.0))
-        for (i, j) in cells:
-            a = x_anc[(i, j)]
+            # Z plaquettes are deterministic on the |0..0> data state, so the
+            # very first round already yields a valid detector on its own.
+            dets.append((mi,) if r == 0 else (mi, last[a]))
+            last[a] = mi
+            mi += 1
+        for (i, j) in x_cells:
+            a = anc[(i, j)]
             ops.append((PF_H, a, 0, 0.0))
             for (di, dj) in ((0, 0), (1, 0), (0, 1), (1, 1)):
                 dq = data(i + di, j + dj)
@@ -208,7 +215,13 @@ def build_surface_code_noisy(d, rounds, p2=0.001, p1=0.001, pm=0.001):
             ops.append((PF_H, a, 0, 0.0))
             ops.append((PF_MEASURE_NOISY, a, 0, pm))
             ops.append((PF_RESET, a, 0, 0.0))
-    return n, ops
+            # X plaquette outcomes are random in round 0 on |0..0>, so an
+            # X detector only exists from round 1, comparing against round r-1.
+            if r > 0:
+                dets.append((mi, last[a]))
+            last[a] = mi
+            mi += 1
+    return n, ops, dets
 
 
 # --------------------------------------------------------------------------
@@ -258,6 +271,51 @@ def moonlab_sample(n, op_arr, nops, nmeas, shots, seed, nthreads):
 
 def stim_sample(sampler, shots):
     """Return an (nmeas x shots) uint8 array (measurement-major) to match."""
+    return sampler.sample(shots).astype(np.uint8).T
+
+
+# --------------------------------------------------------------------------
+# Detector sampling -- what a decoder actually consumes.
+# --------------------------------------------------------------------------
+def _det_csr(dets):
+    """Detector definitions in the CSR form the C entry point expects."""
+    offsets = np.zeros(len(dets) + 1, dtype=np.uintp)
+    flat = []
+    for d, idx in enumerate(dets):
+        flat.extend(idx)
+        offsets[d + 1] = len(flat)
+    return offsets, np.array(flat, dtype=np.uint32)
+
+
+def moonlab_sample_detectors(n, ops, dets, shots, seed, nthreads):
+    op_arr = _pf_op_array(ops)
+    offsets, flat = _det_csr(dets)
+    out = np.empty((len(dets), shots), dtype=np.uint8)
+    rc = _LIB.pauli_frame_batch_sample_detectors(
+        n, op_arr, len(ops),
+        offsets.ctypes.data_as(ctypes.POINTER(ctypes.c_size_t)),
+        flat.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+        len(dets), shots, ctypes.c_uint64(seed), nthreads,
+        out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
+    if rc != len(dets):
+        raise RuntimeError(f"detector sampler returned {rc}, expected {len(dets)}")
+    return out
+
+
+def _to_stim_with_detectors(ops, dets):
+    """Same circuit plus DETECTOR instructions.
+
+    Detector measurement indices are absolute; stim addresses measurements
+    backwards from the end of the circuit, so index i becomes rec[i - total].
+    """
+    c = _to_stim(ops)
+    total = sum(1 for op in ops if op[0] in (PF_MEASURE, PF_MEASURE_NOISY))
+    for idx in dets:
+        c.append("DETECTOR", [stim.target_rec(i - total) for i in idx])
+    return c
+
+
+def stim_sample_detectors(sampler, shots):
     return sampler.sample(shots).astype(np.uint8).T
 
 
@@ -398,6 +456,85 @@ def measure(n, ops, shots, seed):
     }
 
 
+def check_detector_correctness(n, ops, dets, shots=200000, seed=1234, nthreads=1):
+    """Gate detector sampling against stim's compile_detector_sampler.
+
+    Adds a property the measurement gate cannot express: on a NOISELESS run
+    every detector must read 0 in every shot.  A detector is a deterministic
+    parity by construction, so a single firing means either the sampler or
+    the detector set is wrong.  This is what caught an invalid plaquette
+    layout that the measurement gate passed -- that gate only compares the
+    first six measurements, which on a syndrome circuit are all round-0
+    ancillas, so it never inspects a round-to-round pair.
+    """
+    ml = moonlab_sample_detectors(n, ops, dets, shots, seed, nthreads)
+    st = stim_sample_detectors(
+        _to_stim_with_detectors(ops, dets).compile_detector_sampler(seed=seed + 1),
+        shots)
+    if ml.shape != st.shape:
+        return False, {"reason": f"shape {ml.shape} vs {st.shape}"}
+    pml, pst = ml.mean(axis=1), st.mean(axis=1)
+    se = np.sqrt(np.maximum(pst * (1 - pst), 1e-9) / shots) + 1e-12
+    marg_dev = float(np.abs(pml - pst).__truediv__(se).max())
+    k = min(6, len(dets))
+    r_ml, se_ml = _corr_stats(ml, k)
+    r_st, se_st = _corr_stats(st, k)
+    corr_sigma = float((np.abs(r_ml - r_st) /
+                        (np.sqrt(se_ml**2 + se_st**2) + 1e-12)).max())
+    ok = marg_dev < 6.0 and corr_sigma < 6.0
+    return ok, {"marg_sigma": round(marg_dev, 2), "corr_sigma": round(corr_sigma, 2),
+                "fire_rate_ml": round(float(pml.mean()), 5),
+                "fire_rate_stim": round(float(pst.mean()), 5),
+                "ndet": len(dets), "shots": shots, "nthreads": nthreads}
+
+
+def check_detector_silence(n, ops, dets, shots=20000, seed=99):
+    """Noiseless determinism: no detector may fire, in either engine."""
+    ml = moonlab_sample_detectors(n, ops, dets, shots, seed, 1)
+    st = stim_sample_detectors(
+        _to_stim_with_detectors(ops, dets).compile_detector_sampler(seed=seed + 1),
+        shots)
+    return int(ml.sum()), int(st.sum())
+
+
+def measure_detectors(n, ops, dets, shots, seed):
+    op_arr = _pf_op_array(ops)
+    offsets, flat = _det_csr(dets)
+    ndet = len(dets)
+    total = shots * ndet
+
+    def ml_run(nthreads):
+        out = np.empty((ndet, shots), dtype=np.uint8)
+        _LIB.pauli_frame_batch_sample_detectors(
+            n, op_arr, len(ops),
+            offsets.ctypes.data_as(ctypes.POINTER(ctypes.c_size_t)),
+            flat.ctypes.data_as(ctypes.POINTER(ctypes.c_uint32)),
+            ndet, shots, ctypes.c_uint64(seed), nthreads,
+            out.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
+
+    sampler = _to_stim_with_detectors(ops, dets).compile_detector_sampler(seed=seed + 1)
+
+    def st_run():
+        sampler.sample(shots)
+
+    def st_run_packed():
+        sampler.sample(shots, bit_packed=True)
+
+    reps = 3 if shots <= 100000 else 2
+    t_ml1 = _best_time(lambda: ml_run(1), reps=reps)
+    t_mlN = _best_time(lambda: ml_run(0), reps=reps)
+    t_st = _best_time(st_run, reps=reps)
+    t_stp = _best_time(st_run_packed, reps=reps)
+    return {
+        "ndet": ndet, "shots": shots,
+        "ml_st_sps": total / t_ml1,
+        "ml_mt_sps": total / t_mlN,
+        "stim_sps": total / t_st,
+        "stim_packed_sps": total / t_stp,
+        "stim_best_sps": total / min(t_st, t_stp),
+    }
+
+
 # --------------------------------------------------------------------------
 # Workloads.
 # --------------------------------------------------------------------------
@@ -405,7 +542,7 @@ def _workloads():
     return [
         ("random_clifford_n40", *build_random_clifford(40, 800, seed=41)),
         ("surface_code_d5_r8", *build_surface_code(5, 8)),
-        ("surface_code_d5_r8_noisy", *build_surface_code_noisy(5, 8)),
+        ("surface_code_d5_r8_noisy", *build_surface_code_noisy(5, 8)[:2]),
     ]
 
 
@@ -434,9 +571,33 @@ def run():
             verdict = "lead" if mt_ratio > 1.1 else ("parity" if mt_ratio > 0.9 else "behind")
             rows.append({"workload": name, **m,
                          "st_ratio": st_ratio, "mt_ratio": mt_ratio, "verdict": verdict})
+    # ---- detector sampling: what a decoder actually consumes --------------
+    dn, dops, ddets = build_surface_code_noisy(5, 8)
+    nn, nops, ndets = build_surface_code_noisy(5, 8, p2=0.0, p1=0.0, pm=0.0)
+    ml_fired, st_fired = check_detector_silence(nn, nops, ndets)
+    det_detail = {"noiseless_fired_moonlab": ml_fired,
+                  "noiseless_fired_stim": st_fired}
+    correctness_ok = correctness_ok and ml_fired == 0 and st_fired == 0
+    for label, nt in (("st", 1), ("mt", 0)):
+        ok, detail = check_detector_correctness(dn, dops, ddets, nthreads=nt)
+        det_detail[f"surface_code_d5_r8_noisy:{label}"] = detail
+        correctness_ok = correctness_ok and ok
+
+    det_rows = []
+    for shots in SHOT_SIZES:
+        m = measure_detectors(dn, dops, ddets, shots, seed=500 + shots % 997)
+        st_ratio = m["ml_st_sps"] / m["stim_best_sps"]
+        mt_ratio = m["ml_mt_sps"] / m["stim_best_sps"]
+        det_rows.append({"workload": "surface_code_d5_r8_noisy", **m,
+                         "st_ratio": st_ratio, "mt_ratio": mt_ratio,
+                         "verdict": "lead" if mt_ratio > 1.1
+                         else ("parity" if mt_ratio > 0.9 else "behind")})
+
     return {
         "correctness_ok": correctness_ok,
         "correctness_detail": corr_detail,
+        "detector_detail": det_detail,
+        "detector_rows": det_rows,
         "simd_backend": SIMD_BACKEND, "simd_lanes": SIMD_LANES,
         "phys_cores": PHYS_CORES, "threads": os.cpu_count(),
         "rows": rows,

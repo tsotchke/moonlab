@@ -46,6 +46,24 @@ def _print_batch_front(name, result):
     print("  stim is single-threaded per sample() call; MT ratios use all cores.")
     print("  ratios are against stim's best of {unpacked, bit_packed}.")
 
+    det = result.get("detector_rows")
+    if det:
+        dd = result.get("detector_detail", {})
+        print("\n  -- detector sampling (vs stim compile_detector_sampler) --")
+        print(f"  noiseless detectors fired: moonlab={dd.get('noiseless_fired_moonlab')} "
+              f"stim={dd.get('noiseless_fired_stim')} (must be 0: a detector is "
+              f"a deterministic parity)")
+        for k, v in dd.items():
+            if isinstance(v, dict):
+                print(f"  gate {k:30} marginals={v['marg_sigma']}s corr={v['corr_sigma']}s "
+                      f"fire_rate ml={v['fire_rate_ml']} stim={v['fire_rate_stim']}")
+        print(f"  {'ndet':>5} {'shots':>8} {'ML 1T M/s':>10} {'ML MT M/s':>10} "
+              f"{'stim M/s':>9} {'1T':>6} {'MT':>8} {'verdict':>8}")
+        for r in det:
+            print(f"  {r['ndet']:>5} {r['shots']:>8} {r['ml_st_sps']/1e6:>10.0f} "
+                  f"{r['ml_mt_sps']/1e6:>10.0f} {r['stim_best_sps']/1e6:>9.0f} "
+                  f"{r['st_ratio']:>5.2f}x {r['mt_ratio']:>7.2f}x {r['verdict']:>8}")
+
 
 def main():
     ok = True

@@ -705,10 +705,15 @@ static inline void pf_row_rand(bf_word_t* r, size_t W, uint64_t* rng) {
 
 /* Run the full circuit over one shot block, writing measurement outcomes
  * measurement-major into out[ m*total_shots + (global_offset + shot) ]. */
+/* Run one shot block.  Measurement mi of shot s is written to
+ * mdst[mi * mstride + s], so the caller chooses the layout: the measurement
+ * sampler points mdst straight into the caller's full (nmeas x total_shots)
+ * buffer with mstride = total_shots, while the detector sampler points it at
+ * a small block-local buffer and reduces to detectors before returning. */
 static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
                         const uint8_t* m_ref, const uint8_t* m_kind,
-                        size_t block_shots, size_t global_offset,
-                        size_t total_shots, uint64_t seed, uint8_t* out) {
+                        size_t block_shots, uint64_t seed,
+                        uint8_t* mdst, size_t mstride) {
     pauli_frame_batch_t* b = pauli_frame_batch_create(n, block_shots);
     if (!b) return -1;
     const size_t W = b->words_per_row;
@@ -740,7 +745,7 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
             case PF_OP_MEASURE_NOISY: {
                 const bf_word_t* xq = row_x(b, q0);
                 const uint8_t mr = m_ref[mi];
-                uint8_t* dst = out + (size_t)mi * total_shots + global_offset;
+                uint8_t* dst = mdst + (size_t)mi * mstride;
                 for (size_t s = 0; s < block_shots; s++)
                     dst[s] = (uint8_t)((xq[s >> 6] >> (s & 63)) & 1) ^ mr;
                 /* Measurement error flips the REPORTED outcome only: the
@@ -822,10 +827,95 @@ long pauli_frame_batch_sample_circuit(size_t num_qubits,
         if (bs == 0) continue;
         uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
         if (pf_run_block(num_qubits, ops, num_ops, m_ref, m_kind,
-                         bs, off, num_shots, bseed, out) != 0)
+                         bs, bseed, out + off, num_shots) != 0)
             err |= 1;
     }
 
     free(m_ref); free(m_kind);
     return err ? -1 : (long)nmeas;
+}
+
+long pauli_frame_batch_sample_detectors(size_t num_qubits,
+                                        const pf_circuit_op_t* ops, size_t num_ops,
+                                        const size_t* det_offsets,
+                                        const uint32_t* det_indices,
+                                        size_t num_detectors,
+                                        size_t num_shots, uint64_t seed,
+                                        int num_threads, uint8_t* out) {
+    if (num_qubits == 0 || !ops || num_shots == 0 || !out) return -1;
+    if (num_detectors == 0 || !det_offsets || !det_indices) return -1;
+    const size_t nmeas = pauli_frame_circuit_num_measurements(ops, num_ops);
+    if (nmeas == 0) return -1;
+    for (size_t d = 0; d < num_detectors; d++) {
+        if (det_offsets[d] > det_offsets[d + 1]) return -1;
+        for (size_t k = det_offsets[d]; k < det_offsets[d + 1]; k++)
+            if (det_indices[k] >= nmeas) return -1;
+    }
+
+    uint8_t* m_ref  = (uint8_t*)malloc(nmeas);
+    uint8_t* m_kind = (uint8_t*)malloc(nmeas);
+    if (!m_ref || !m_kind) { free(m_ref); free(m_kind); return -1; }
+    if (pf_compute_reference(num_qubits, ops, num_ops, seed, m_ref, m_kind)) {
+        free(m_ref); free(m_kind); return -1;
+    }
+
+    /* A detector reports the DEVIATION from the noiseless trajectory, so the
+     * reference parity of its measurement set is XORed out.  Without this a
+     * detector whose noiseless parity is 1 would fire on every shot. */
+    uint8_t* det_ref = (uint8_t*)calloc(num_detectors, 1);
+    if (!det_ref) { free(m_ref); free(m_kind); return -1; }
+    for (size_t d = 0; d < num_detectors; d++) {
+        uint8_t acc = 0;
+        for (size_t k = det_offsets[d]; k < det_offsets[d + 1]; k++)
+            acc ^= m_ref[det_indices[k]];
+        det_ref[d] = acc;
+    }
+
+    int nthreads = num_threads;
+#ifdef _OPENMP
+    if (nthreads <= 0) nthreads = omp_get_max_threads();
+#else
+    if (nthreads <= 0) nthreads = 1;
+#endif
+    if ((size_t)nthreads > num_shots) nthreads = (int)num_shots;
+    if (nthreads < 1) nthreads = 1;
+
+    const size_t base = num_shots / (size_t)nthreads;
+    const size_t rem  = num_shots % (size_t)nthreads;
+    int err = 0;
+
+#ifdef _OPENMP
+#   pragma omp parallel for num_threads(nthreads) schedule(static, 1) reduction(|:err)
+#endif
+    for (int tid = 0; tid < nthreads; tid++) {
+        size_t bs = base + ((size_t)tid < rem ? 1 : 0);
+        size_t off = (size_t)tid * base + ((size_t)tid < rem ? (size_t)tid : rem);
+        if (bs == 0) continue;
+
+        /* Block-local measurement buffer: detectors are reduced here, so the
+         * full nmeas x num_shots measurement record is never materialised. */
+        uint8_t* mbuf = (uint8_t*)malloc(nmeas * bs);
+        if (!mbuf) { err |= 1; continue; }
+        uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
+        if (pf_run_block(num_qubits, ops, num_ops, m_ref, m_kind,
+                         bs, bseed, mbuf, bs) != 0) {
+            free(mbuf); err |= 1; continue;
+        }
+        for (size_t d = 0; d < num_detectors; d++) {
+            uint8_t* dst = out + d * num_shots + off;
+            const size_t k0 = det_offsets[d], k1 = det_offsets[d + 1];
+            if (k0 == k1) { memset(dst, 0, bs); continue; }
+            const uint8_t* src = mbuf + (size_t)det_indices[k0] * bs;
+            for (size_t s = 0; s < bs; s++) dst[s] = src[s];
+            for (size_t k = k0 + 1; k < k1; k++) {
+                const uint8_t* m = mbuf + (size_t)det_indices[k] * bs;
+                for (size_t s = 0; s < bs; s++) dst[s] ^= m[s];
+            }
+            if (det_ref[d]) for (size_t s = 0; s < bs; s++) dst[s] ^= 1u;
+        }
+        free(mbuf);
+    }
+
+    free(m_ref); free(m_kind); free(det_ref);
+    return err ? -1 : (long)num_detectors;
 }
