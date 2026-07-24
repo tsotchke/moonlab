@@ -1,21 +1,29 @@
 /**
  * Variational Quantum Eigensolver (C-side since v0.2.0; JS binding
- * since v0.5.5).
+ * since v0.5.5; ergonomics since v1.2.0).
  *
  * Wraps ``src/algorithms/vqe.{c,h}`` around the Pauli-Hamiltonian
- * builder, the hardware-efficient ansatz, the four classical
- * optimizers (Adam / L-BFGS / COBYLA / gradient-descent), and the
- * ``vqe_solve`` driver.  Mirrors the Python
- * ``moonlab.algorithms.VQE`` and Rust ``moonlab::vqe`` surfaces.
+ * builder, the hardware-efficient and UCCSD ansaetze, the five
+ * classical optimizers (Adam / L-BFGS / COBYLA / gradient-descent /
+ * quantum natural gradient), the optimizer hyperparameter surface, and
+ * the ``vqe_solve`` driver.  Mirrors the Python
+ * ``moonlab.algorithms.VQE`` ergonomics (string optimizers,
+ * ``ansatz: 'uccsd'``, hyperparameter overrides).
  *
  * @example
  * ```typescript
- * import { PauliHamiltonian, VqeSolver, OptimizerType } from '@moonlab/quantum-core';
+ * import { PauliHamiltonian, VqeSolver } from '@moonlab/quantum-core';
  *
  * const h = await PauliHamiltonian.h2(0.74);
  * console.log('exact E_0 =', h.exactGroundStateEnergy(), 'Ha');
  *
- * const solver = await VqeSolver.create(h, 2, OptimizerType.Adam);
+ * const solver = await VqeSolver.create(h, {
+ *   ansatz: 'uccsd',
+ *   numElectrons: 1,
+ *   optimizer: 'adam',
+ *   learningRate: 0.1,
+ *   maxIterations: 500,
+ * });
  * const r = solver.solve();
  * console.log(`VQE E = ${r.groundStateEnergy.toFixed(4)} Ha`);
  * solver.dispose();
@@ -36,6 +44,77 @@ export enum OptimizerType {
   Adam = 2,
   /** Plain gradient descent. */
   GradientDescent = 3,
+  /** Quantum natural gradient (Fubini-Study metric preconditioning,
+   *  since v1.2.0). */
+  Qng = 4,
+}
+
+/** String spellings accepted wherever an optimizer is selected.
+ *  Mirrors Python's ``VQE(optimizer='qng')`` surface. */
+export type OptimizerName =
+  | 'cobyla'
+  | 'lbfgs'
+  | 'adam'
+  | 'gradient_descent'
+  | 'gradient-descent'
+  | 'qng'
+  | 'natural_gradient'
+  | 'natural-gradient';
+
+const OPTIMIZER_NAMES: Record<string, OptimizerType> = {
+  cobyla: OptimizerType.Cobyla,
+  lbfgs: OptimizerType.Lbfgs,
+  adam: OptimizerType.Adam,
+  gradient_descent: OptimizerType.GradientDescent,
+  'gradient-descent': OptimizerType.GradientDescent,
+  qng: OptimizerType.Qng,
+  natural_gradient: OptimizerType.Qng,
+  'natural-gradient': OptimizerType.Qng,
+};
+
+/** Resolve a string or enum optimizer spec to the C enum value. */
+export function resolveOptimizer(spec: OptimizerType | OptimizerName): OptimizerType {
+  if (typeof spec === 'number') return spec;
+  const resolved = OPTIMIZER_NAMES[spec.trim().toLowerCase()];
+  if (resolved === undefined) {
+    throw new Error(
+      `Unknown optimizer '${spec}'. Valid: ${Object.keys(OPTIMIZER_NAMES).join(', ')}`,
+    );
+  }
+  return resolved;
+}
+
+/** Ansatz families constructible through {@link VqeSolver.create}. */
+export type AnsatzName = 'hardware_efficient' | 'hardware-efficient' | 'hea' | 'uccsd';
+
+/** Options for {@link VqeSolver.create}.  Every field is optional;
+ *  defaults reproduce the historical hardware-efficient + Adam
+ *  behaviour. */
+export interface VqeSolverOptions {
+  /** Ansatz family (default `'hardware_efficient'`). */
+  ansatz?: AnsatzName;
+  /** Circuit depth for the hardware-efficient ansatz (default 2). */
+  numLayers?: number;
+  /** Electron count for the UCCSD ansatz (default `numQubits / 2`,
+   *  i.e. half filling -- same default as Python). */
+  numElectrons?: number;
+  /** Optimizer as enum value or string name (default Adam). */
+  optimizer?: OptimizerType | OptimizerName;
+  /** Maximum optimizer iterations (default: C per-optimizer default,
+   *  e.g. 1000 for Adam). */
+  maxIterations?: number;
+  /** Convergence tolerance (default: C per-optimizer default). */
+  tolerance?: number;
+  /** Gradient step size (Adam / gradient descent / QNG). */
+  learningRate?: number;
+  /** Adam first-moment decay (default 0.9). */
+  beta1?: number;
+  /** Adam second-moment decay (default 0.999). */
+  beta2?: number;
+  /** Adam numerical epsilon (default 1e-8). */
+  epsilon?: number;
+  /** QNG metric Tikhonov shift (default 1e-3). */
+  qngRegularization?: number;
 }
 
 /** Result of one VQE solve.  Mirrors ``vqe_result_t`` minus the raw
@@ -58,18 +137,24 @@ export interface VqeResult {
 type VqeModule = {
   _vqe_create_h2_hamiltonian: (R: number) => number;
   _vqe_create_lih_hamiltonian: (R: number) => number;
+  _vqe_create_h2o_hamiltonian: () => number;
   _vqe_exact_ground_state_energy: (h: number) => number;
   _vqe_hartree_to_kcalmol: (E: number) => number;
   _pauli_hamiltonian_create: (n: number, k: number) => number;
   _pauli_hamiltonian_add_term: (h: number, c: number, s: number, i: number) => number;
   _pauli_hamiltonian_free: (h: number) => void;
   _vqe_create_hardware_efficient_ansatz: (n: number, L: number) => number;
+  _vqe_create_uccsd_ansatz: (n: number, ne: number) => number;
   _vqe_ansatz_free: (a: number) => void;
   _vqe_optimizer_create: (t: number) => number;
+  _vqe_optimizer_set_hyperparams: (
+    o: number, lr: number, b1: number, b2: number, eps: number, reg: number,
+  ) => void;
   _vqe_optimizer_free: (o: number) => void;
   _vqe_solver_create: (h: number, a: number, o: number, e: number) => number;
   _vqe_solver_free: (s: number) => void;
   _vqe_solve: (resultPtr: number, s: number) => void;
+  _vqe_result_free: (resultPtr: number) => void;
   _vqe_compute_energy: (s: number, params: number) => number;
   _quantum_entropy_ctx_create_hw: () => number;
   _quantum_entropy_ctx_destroy: (c: number) => void;
@@ -81,6 +166,26 @@ type VqeModule = {
   HEAPU8: Uint8Array;
   stringToUTF8: (s: string, ptr: number, max: number) => void;
 };
+
+/* vqe_optimizer_t field offsets on wasm32 (offsets pinned in the
+ * source, same pattern as the var-D config marshalling in ca-mps.ts):
+ *   0  int     type
+ *   4  size_t  max_iterations
+ *   8  double  tolerance
+ *  16  double  learning_rate
+ *  24  int     verbose
+ *  32  double  beta1
+ *  40  double  beta2
+ *  48  double  epsilon
+ *  56  double  qng_regularization
+ * The double hyperparameters go through the C setter
+ * `vqe_optimizer_set_hyperparams` (NaN = keep default); only the two
+ * fields the setter does not cover are poked directly. */
+const OPT_OFF_MAX_ITERATIONS = 4;
+const OPT_OFF_TOLERANCE = 8;
+
+/* vqe_ansatz_t field offset on wasm32: num_parameters (size_t) at 12. */
+const ANSATZ_OFF_NUM_PARAMETERS = 12;
 
 /** Pauli-string Hamiltonian over `numQubits` qubits. */
 export class PauliHamiltonian {
@@ -112,6 +217,14 @@ export class PauliHamiltonian {
     const mod = (await getModule()) as unknown as VqeModule;
     const ptr = mod._vqe_create_lih_hamiltonian(bondDistance);
     if (!ptr) throw new Error('vqe_create_lih_hamiltonian returned NULL');
+    return new PauliHamiltonian(ptr, mod);
+  }
+
+  /** H2O molecule Hamiltonian at its equilibrium geometry. */
+  static async h2o(): Promise<PauliHamiltonian> {
+    const mod = (await getModule()) as unknown as VqeModule;
+    const ptr = mod._vqe_create_h2o_hamiltonian();
+    if (!ptr) throw new Error('vqe_create_h2o_hamiltonian returned NULL');
     return new PauliHamiltonian(ptr, mod);
   }
 
@@ -224,32 +337,93 @@ export class VqeSolver {
     this.mod = mod;
   }
 
-  /** Construct a VQE solver over `hamiltonian` using a hardware-
-   *  efficient ansatz of depth `numLayers` and the given classical
-   *  optimizer.  The solver takes shared ownership of `hamiltonian`
-   *  for its lifetime; the caller can dispose `hamiltonian` after
-   *  the solver is disposed. */
+  /** Construct a VQE solver over `hamiltonian`.
+   *
+   *  Preferred form: `VqeSolver.create(h, options)` with the
+   *  {@link VqeSolverOptions} bag (ansatz family, optimizer by string
+   *  or enum, hyperparameters).  The legacy positional form
+   *  `VqeSolver.create(h, numLayers, optimizerType)` remains
+   *  supported.
+   *
+   *  The solver takes shared ownership of `hamiltonian` for its
+   *  lifetime; the caller can dispose `hamiltonian` after the solver
+   *  is disposed. */
   static async create(
     hamiltonian: PauliHamiltonian,
-    numLayers: number,
-    optimizerType: OptimizerType,
+    optionsOrNumLayers?: VqeSolverOptions | number,
+    legacyOptimizerType?: OptimizerType,
   ): Promise<VqeSolver> {
+    const options: VqeSolverOptions =
+      typeof optionsOrNumLayers === 'number'
+        ? { numLayers: optionsOrNumLayers, optimizer: legacyOptimizerType ?? OptimizerType.Adam }
+        : { ...(optionsOrNumLayers ?? {}) };
+
     const mod = (await getModule()) as unknown as VqeModule;
+    const numQubits = hamiltonian.numQubits;
+    const optimizerType = resolveOptimizer(options.optimizer ?? OptimizerType.Adam);
+
     const entropy = mod._quantum_entropy_ctx_create_hw();
     if (!entropy) throw new Error('quantum_entropy_ctx_create_hw returned NULL');
-    const ansatz = mod._vqe_create_hardware_efficient_ansatz(
-      hamiltonian.numQubits, numLayers,
-    );
-    if (!ansatz) {
+
+    const ansatzName = (options.ansatz ?? 'hardware_efficient').trim().toLowerCase();
+    let ansatz: number;
+    if (ansatzName === 'uccsd') {
+      const numElectrons = options.numElectrons ?? Math.floor(numQubits / 2);
+      ansatz = mod._vqe_create_uccsd_ansatz(numQubits, numElectrons);
+      if (!ansatz) {
+        mod._quantum_entropy_ctx_destroy(entropy);
+        throw new Error('vqe_create_uccsd_ansatz returned NULL');
+      }
+    } else if (
+      ansatzName === 'hardware_efficient' ||
+      ansatzName === 'hardware-efficient' ||
+      ansatzName === 'hea'
+    ) {
+      ansatz = mod._vqe_create_hardware_efficient_ansatz(
+        numQubits, options.numLayers ?? 2,
+      );
+      if (!ansatz) {
+        mod._quantum_entropy_ctx_destroy(entropy);
+        throw new Error('vqe_create_hardware_efficient_ansatz returned NULL');
+      }
+    } else {
       mod._quantum_entropy_ctx_destroy(entropy);
-      throw new Error('vqe_create_hardware_efficient_ansatz returned NULL');
+      throw new Error(
+        `Unknown ansatz '${options.ansatz}'. Valid: 'hardware_efficient', 'uccsd'`,
+      );
     }
+
     const optimizer = mod._vqe_optimizer_create(optimizerType);
     if (!optimizer) {
       mod._vqe_ansatz_free(ansatz);
       mod._quantum_entropy_ctx_destroy(entropy);
       throw new Error('vqe_optimizer_create returned NULL');
     }
+
+    // Route the double hyperparameters through the C setter (NaN slots
+    // keep the per-optimizer defaults) and poke the two integer/double
+    // fields the setter does not cover.
+    if (
+      options.learningRate !== undefined || options.beta1 !== undefined ||
+      options.beta2 !== undefined || options.epsilon !== undefined ||
+      options.qngRegularization !== undefined
+    ) {
+      mod._vqe_optimizer_set_hyperparams(
+        optimizer,
+        options.learningRate ?? NaN,
+        options.beta1 ?? NaN,
+        options.beta2 ?? NaN,
+        options.epsilon ?? NaN,
+        options.qngRegularization ?? NaN,
+      );
+    }
+    if (options.maxIterations !== undefined) {
+      mod.HEAPU32[(optimizer + OPT_OFF_MAX_ITERATIONS) >> 2] = options.maxIterations;
+    }
+    if (options.tolerance !== undefined) {
+      mod.HEAPF64[(optimizer + OPT_OFF_TOLERANCE) >> 3] = options.tolerance;
+    }
+
     const solver = mod._vqe_solver_create(
       hamiltonian._internal_ptr(), ansatz, optimizer, entropy,
     );
@@ -260,6 +434,12 @@ export class VqeSolver {
       throw new Error('vqe_solver_create returned NULL');
     }
     return new VqeSolver(solver, ansatz, optimizer, entropy, hamiltonian, mod);
+  }
+
+  /** Number of variational parameters in the underlying ansatz. */
+  get numParameters(): number {
+    if (this.freed) throw new Error('VqeSolver disposed');
+    return this.mod.HEAPU32[(this.ansatz + ANSATZ_OFF_NUM_PARAMETERS) >> 2];
   }
 
   /** Run the classical-quantum optimisation loop to convergence. */
@@ -288,7 +468,7 @@ export class VqeSolver {
       const params = paramsArrPtr && numParameters > 0
         ? new Float64Array(
             this.mod.HEAPF64.buffer, paramsArrPtr, numParameters,
-          ).slice()  // copy out of WASM memory before VQE solver frees it
+          ).slice()  // copy out of WASM memory before vqe_result_free below
         : new Float64Array(0);
 
       const eKcalMol = this.mod._vqe_hartree_to_kcalmol(groundStateEnergy);
@@ -302,6 +482,9 @@ export class VqeSolver {
         converged,
       };
     } finally {
+      // vqe_solve returns a result that owns optimal_parameters; release
+      // the owned array through the C entry, then the struct storage.
+      this.mod._vqe_result_free(resultPtr);
       this.mod._free(resultPtr);
     }
   }
