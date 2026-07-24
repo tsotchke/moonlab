@@ -16,6 +16,16 @@
  * what makes it competitive with sparse blossom while staying far simpler.
  *
  * Decoding is per-shot independent, so a batch is split across threads.
+ *
+ * CORRELATED TWO-PASS DECODING.  A decomposed detector error model emits
+ * mechanisms like "error(p) D1 D2 ^ D3 D4": ONE physical fault whose
+ * graphlike components are perfectly correlated.  Matching decoders treat
+ * the components as independent edges and discard the correlation.  A
+ * decoder built with moonlab_uf_decoder_new_correlated() decodes each shot
+ * twice: pass 1 as usual, then, for every mechanism one of whose components
+ * lies on the pass-1 correction, the partner components' probabilities are
+ * replaced by their conditional probabilities given the used component, and
+ * pass 2 re-matches under the updated weights.  Pass 2's answer is emitted.
  */
 #ifndef MOONLAB_UF_DECODER_H
 #define MOONLAB_UF_DECODER_H
@@ -53,6 +63,52 @@ MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new(
     const uint32_t* edge_a, const uint32_t* edge_b,
     const double* edge_weight, const uint64_t* edge_obs,
     size_t num_edges);
+
+/**
+ * @brief Build a CORRELATED decoder: two-pass decoding over mechanism links.
+ *
+ * In addition to the plain edge list, takes the per-edge merged flip
+ * probability and a list of correlation links.  A link (u, v, q) states
+ * that edges u and v are components of one physical mechanism (or several)
+ * whose combined probability of firing is q; firing flips BOTH edges.  A
+ * mechanism with C components contributes all C*(C-1)/2 pairwise links;
+ * links repeated across mechanisms must be pre-combined by the caller with
+ * q = q1(1-q2) + q2(1-q1).
+ *
+ * The conditional update applied between the passes is exact within the
+ * independent-mechanism model.  Split edge v's sources into joint
+ * mechanisms (fire both u and v, combined probability q) and v-only
+ * mechanisms, q_v = (p_v - q)/(1 - 2q); u-only likewise.  Given that pass 1
+ * decided u flipped, the flip came from a joint mechanism with probability
+ *   r = q(1-q_u) / (q(1-q_u) + q_u(1-q)),
+ * and v is then flipped iff an odd number of its remaining sources fired:
+ *   P(v | u) = r(1-q_v) + (1-r) q_v.
+ * Edge v's pass-2 weight is ln((1-P(v|u))/P(v|u)), floored at a small
+ * positive value so shortest paths stay well defined, and never above the
+ * static weight.  All link weights are precomputed at construction.
+ *
+ * Decoding through moonlab_uf_decode_batch() is unchanged in signature;
+ * a decoder built here runs both passes.  Pass 2 re-matches the pass-1
+ * clusters exactly: boosted shortest distances are computed per shot on a
+ * mini-graph over the shot's defects and the boosted edges' endpoints,
+ * whose edges are the static all-pairs distances plus the boosted edges,
+ * so the per-cluster matching stays exact under the updated weights.
+ *
+ * @param edge_prob    merged flip probability per edge, in (0, 1).
+ * @param corr_a       first edge index of each link.
+ * @param corr_b       second edge index of each link.
+ * @param corr_joint_p combined joint probability q per link, 0 < q < 0.5.
+ * @param num_corr     number of links; 0 degrades to the plain decoder.
+ * @return decoder handle, or NULL on allocation failure / invalid input.
+ */
+MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new_correlated(
+    size_t num_detectors, size_t num_observables,
+    const uint32_t* edge_a, const uint32_t* edge_b,
+    const double* edge_weight, const uint64_t* edge_obs,
+    size_t num_edges,
+    const double* edge_prob,
+    const uint32_t* corr_a, const uint32_t* corr_b,
+    const double* corr_joint_p, size_t num_corr);
 
 MOONLAB_API void moonlab_uf_decoder_free(moonlab_uf_decoder_t* d);
 
