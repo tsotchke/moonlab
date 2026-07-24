@@ -1692,7 +1692,8 @@
     #   ctest -L tn             # tensor-network MPS / DMRG / TDVP
     #   ctest -L ca_mps         # CA-MPS hybrid + CA-PEPS
     #   ctest -L topology       # Chern markers, surface code, skyrmions
-    #   ctest -L clifford       # Aaronson-Gottesman + Pauli-frame
+    #   ctest -L clifford       # Aaronson-Gottesman tableau + rowsum,
+    #                           # Pauli-frame, surface code, UF decoder
     #   ctest -L algorithms     # VQE / QAOA / Grover / QPE / chemistry / Shor
     #   ctest -L qrng           # QRNG, hardware entropy, Bell certification
     #   ctest -L crypto         # ML-KEM, AES-DRBG, SHA-3
@@ -1728,10 +1729,10 @@
         unit_chern_marker unit_chern_kpm unit_chern_fhs unit_qgt
         unit_qgt_phase_diagram unit_qgt_phase_diagram_2d
         unit_topological unit_skyrmion unit_surface_code_clifford
-        unit_pauli_frame unit_mpo_kpm)
+        unit_pauli_frame unit_uf_decoder unit_mpo_kpm)
     qsim_label_tests(clifford
-        unit_clifford unit_clifford_pauli_api unit_pauli_frame
-        unit_surface_code_clifford)
+        unit_clifford unit_clifford_rowsum unit_clifford_pauli_api
+        unit_pauli_frame unit_surface_code_clifford unit_uf_decoder)
     qsim_label_tests(algorithms
         unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe
         unit_vqe_gradient_contract unit_chemistry

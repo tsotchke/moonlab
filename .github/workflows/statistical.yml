@@ -1,14 +1,18 @@
 name: Statistical Adversarial
 
 # Adversarial statistical-quality + crypto-negative-space lane.
+# Both jobs run on every trigger of this workflow (nightly schedule +
+# manual dispatch):
 #
-#   - PR / push:   fast battery + ML-KEM negative fuzz (under ASan) +
-#                  entropy-health adversarial, with bounded byte budgets.
-#   - nightly /    the deep battery (large byte budget) plus the full ML-KEM
-#     dispatch:    tamper set, the entropy-health controls, and the dudect
-#                  timing harness.  The timing harness is informational on
-#                  hosted (noisy) runners; it gates only when the dispatch
-#                  sets timing_strict=true for a controlled host.
+#   - asan-adversarial:  fast battery + ML-KEM negative fuzz (under ASan) +
+#                        entropy-health adversarial, with bounded byte
+#                        budgets.
+#   - nightly-deep:      the deep battery (large byte budget) plus the full
+#                        ML-KEM tamper set, the entropy-health controls, and
+#                        the dudect timing harness.  The timing harness is
+#                        informational on hosted (noisy) runners; it gates
+#                        only when the dispatch sets timing_strict=true for
+#                        a controlled host.
 #
 # These jobs drive scripts/run_statistical.sh, which emits ICC evidence to
 # scripts/icc_traces/moonlab_statistical.jsonl.  Until the integrator wires
@@ -41,11 +45,12 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------
-  # PR lane: fast + ASan.  Battery, ML-KEM negative fuzz, entropy health.
+  # Fast lane: ASan.  Battery, ML-KEM negative fuzz, entropy health.
+  # No `if:` guard: the old guard listed pull_request/push, neither of
+  # which triggers this workflow, so the ASan lane never ran at all.
   # --------------------------------------------------------------------------
-  pr-adversarial:
-    name: pr-battery-negfuzz-health (ASan)
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+  asan-adversarial:
+    name: battery-negfuzz-health (ASan)
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     env:

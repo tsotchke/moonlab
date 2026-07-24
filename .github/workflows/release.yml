@@ -310,7 +310,13 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
+          # `pnpm test` (turbo) only reaches each package's WASM-free
+          # vitest unit config; the core integration suite
+          # (vitest.integration.config.ts) is what exercises the
+          # moonlab.wasm module this job just built and is about to
+          # publish, so run it explicitly as well.
           pnpm test
+          pnpm run test:integration
 
       - name: Pack and verify exact npm artifacts
         run: |

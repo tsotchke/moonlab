@@ -2,10 +2,11 @@ name: fuzz
 
 # Coverage-guided fuzz lane for libquantumsim.
 #
-#   * replay job -- fast (< ~5 min) PR gate: builds the harnesses with
+#   * replay job -- fast (< ~5 min): builds the harnesses with
 #     -DQSIM_ENABLE_FUZZING=ON under Clang and replays every seed corpus
 #     through the *_replay binaries under ASan+UBSan.  A crash on any seed
-#     fails the job.
+#     fails the job.  Runs on every trigger of this workflow (nightly
+#     schedule + manual dispatch).
 #
 #   * soak job -- scheduled + manual: runs a real libFuzzer campaign per
 #     surface (matrix) for 300s each and uploads any crash artifacts.
@@ -33,7 +34,10 @@ concurrency:
 jobs:
   replay:
     name: replay-corpus (ASan+UBSan)
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # No `if:` guard: this workflow only triggers on schedule +
+    # workflow_dispatch, and replay must run on both.  The previous
+    # guard listed pull_request (not a trigger of this workflow), which
+    # silently disabled corpus replay on every nightly run.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

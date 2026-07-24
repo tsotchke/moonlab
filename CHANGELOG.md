@@ -5572,8 +5572,8 @@ Twelve audit findings closed across three commit clusters.
   archived JSON path, and asserted tolerance.  Lists superseded
   archives explicitly so future readers don't cite them.
 - **Six paper figures** rendered from archived JSONs in
-  `papers/drafts/moonlab_software/figures/` (in `tsotchke-private`
-  paper repo): threshold curves, state-throughput, Stim ratio,
+  `papers/drafts/moonlab_software/figures/` (in the private paper
+  repo): threshold curves, state-throughput, Stim ratio,
   var-D phase sweep, Chern mosaic, cross-backend bars.
 
 ### Fixed

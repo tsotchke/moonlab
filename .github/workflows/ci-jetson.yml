@@ -90,8 +90,10 @@ jobs:
           nix --extra-experimental-features 'nix-command flakes' develop \
             --command bash -lc '
               cd build_jetson
-              # Exclude the heaviest tests for the per-PR loop; the full
-              # suite runs on the nightly cron lane (separate workflow).
+              # Exclude the heaviest tests to keep this manual lane inside
+              # its 90-minute cap.  There is no scheduled Jetson lane; full
+              # Jetson coverage happens out-of-band through
+              # scripts/run_mesh_release_smoke.sh at release time.
               ctest --output-on-failure --timeout 120 \
                 -E "unit_qgt_hofstadter|unit_kagome_ed_n18|n34_to_n40" \
                 -j 4
@@ -104,9 +106,10 @@ jobs:
         run: |
           nix --extra-experimental-features 'nix-command flakes' develop \
             --command bash -lc '
-              # mpirun is provided by the flake.nix dev shell
-              mpirun -n 2 ./build_jetson/large_state_ghz_gpu 8 || \
-                echo "mpi+cuda demo failed (non-fatal until #6 lands in flake)"
+              # mpirun is provided by the flake.nix dev shell.  The sharded
+              # MPI+CUDA path shipped in v1.2.0; a failure here is a real
+              # regression and fails the lane.
+              mpirun -n 2 ./build_jetson/large_state_ghz_gpu 8
             '
 
       - name: Show ccache stats (if enabled)

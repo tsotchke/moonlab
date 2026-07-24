@@ -61,10 +61,13 @@ jobs:
             runner: ubuntu-22.04
             cmake_flags: '-DQSIM_ENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug'
             test_label: 'core'
-          # linux-arm64 lane is exercised on the self-hosted Jetson
-          # runner via .github/workflows/ci-jetson.yml; not duplicated
-          # here because ubuntu-22.04-arm hosted runners cost double
-          # the per-minute rate of ubuntu-22.04.
+          # linux-arm64 is exercised by the Linux-compatibility matrix
+          # (.github/workflows/linux-compatibility.yml) on hosted
+          # ubuntu-24.04-arm runners for relevant pushes/PRs; not
+          # duplicated here because arm hosted runners cost double the
+          # per-minute rate of ubuntu-22.04.  The Jetson CUDA lane
+          # (ci-jetson.yml) is manual-dispatch only -- no self-hosted
+          # runner is enrolled -- and does not provide routine coverage.
           - name: macos-arm64-lite
             runner: macos-14
             cmake_flags: ''
@@ -232,11 +235,15 @@ jobs:
 
   # ============================================================================
   # wasm — emscripten target, separate because it doesn't share the
-  # native compile toolchain with the unix matrix.
+  # native compile toolchain with the unix matrix.  After the module
+  # builds, the full JS binding test suite runs against it: the
+  # WASM-free vitest unit tests plus the integration suite (the
+  # 200+ tests under bindings/javascript/packages/core/src/__tests__
+  # that load the freshly built moonlab.wasm).
   # ============================================================================
 
   wasm:
-    name: wasm-smoke
+    name: wasm-js-tests
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
@@ -281,6 +288,115 @@ jobs:
           cmake --build bindings/javascript/packages/core/emscripten/build --parallel
           ls -la bindings/javascript/packages/core/emscripten/build/moonlab.{wasm,js}
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install JS workspace
+        run: pnpm -C bindings/javascript install --frozen-lockfile
+
+      - name: JS unit tests (vitest, WASM-free lane)
+        run: pnpm -C bindings/javascript/packages/core run test:unit
+
+      - name: JS integration tests (vitest, freshly built WASM)
+        # The wasm-loader resolves emscripten/build/moonlab.js when the
+        # suite runs from source, so these tests exercise the module
+        # built two steps above -- not a stale tracked artifact.
+        run: pnpm -C bindings/javascript/packages/core run test:integration
+
+      - name: Build TS dist and run WebGPU unified smoke
+        # Backend selection + fallback only: plain node has no WebGPU
+        # runtime, so the smoke reports backend=none and verifies the
+        # fallback path.  Real-GPU WebGPU execution is not covered in
+        # hosted CI.
+        run: |
+          set -euxo pipefail
+          pnpm -C bindings/javascript/packages/core run build:ts
+          cp bindings/javascript/packages/core/emscripten/build/moonlab.js \
+             bindings/javascript/packages/core/dist/moonlab.js
+          cp bindings/javascript/packages/core/emscripten/build/moonlab.wasm \
+             bindings/javascript/packages/core/dist/moonlab.wasm
+          pnpm -C bindings/javascript/packages/core exec node scripts/webgpu-unified-smoke.mjs
+
+  # ============================================================================
+  # python-wheel — builds the moonlab wheel through the same
+  # scikit-build-core backend the release cibuildwheel jobs use, then
+  # installs it and runs the same smoke assertions as the release
+  # CIBW_TEST_COMMAND.  Routine CI previously never built a wheel, so
+  # a broken pyproject/CMake wheel component only surfaced on a
+  # release candidate dispatch.
+  # ============================================================================
+
+  python-wheel:
+    name: python-wheel
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -o Acquire::Retries=5
+          sudo apt-get install -y build-essential ninja-build libopenblas-dev liblapacke-dev pkg-config
+
+      - name: Pin CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheel
+        run: |
+          set -euxo pipefail
+          python -m pip install build
+          python -m build --wheel bindings/python --outdir wheelhouse
+
+      - name: Install and smoke the wheel
+        # Same assertions as CIBW_TEST_COMMAND in release.yml: Bell-state
+        # construction, ML-KEM keygen off the QRNG, and the wheel payload
+        # containing exactly the bundled native library (no install-tree
+        # leakage).  Runs from RUNNER_TEMP so `import moonlab` can only
+        # resolve to the installed wheel, never the source tree.
+        run: |
+          set -euxo pipefail
+          python -m pip install numpy wheelhouse/*.whl
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          from importlib import metadata
+
+          from moonlab import QuantumState
+          from moonlab.crypto import mlkem
+
+          q = QuantumState(2)
+          q.h(0)
+          q.cnot(0, 1)
+          pk, sk = mlkem.keygen_qrng()
+          s = mlkem.qrng_status()
+          files = [str(p) for p in metadata.files("moonlab")]
+          assert len(pk) == 800 and len(sk) == 1632
+          assert s["continuous_health_tests"] and s["shake256_conditioned"] and s["bell_epoch_certified"]
+          assert any(p.startswith("moonlab/.libs/") for p in files)
+          assert not any(p.startswith(("include/", "lib/cmake/", "lib/pkgconfig/")) for p in files)
+          print("wheel smoke: PASS")
+          PY
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlab-ci-wheel-linux-x64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
   # ============================================================================
   # docker — image build smoke (no push), uses the release Dockerfile.
   # ============================================================================
@@ -317,19 +433,25 @@ jobs:
       - name: Public-source hygiene (proprietary-marker grep)
         run: |
           set -euxo pipefail
-          # Block accidental leak of tsotchke-private markers / credential
+          # Block accidental leak of private-repo markers / credential
           # shapes.  Patterns intentionally simple so a maintainer can
-          # eyeball false positives.
-          BAD_MARKERS='tsotchke-corporation|tsotchke-private|PRIVATE_OVERLAY|CONFIDENTIAL|REDACTED-INTERNAL'
+          # eyeball false positives.  Single-character brackets keep this
+          # file's own pattern definitions from matching themselves.
+          BAD_MARKERS='tsotchke[-]corporation|tsotchke[-]private|PRIVATE[_]OVERLAY|CONFIDENTIA[L]|REDACTED[-]INTERNAL'
           CRED_PATTERNS='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{48}'
 
-          if grep -rEn --include="*.{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake}" \
+          # The extension list must stay OUTSIDE the quotes so the shell
+          # brace-expands it into one --include per extension.  grep's
+          # --include glob matcher has no brace syntax; a quoted
+          # "*.{c,h,...}" matches zero files and silently turns both
+          # checks into always-green no-ops.
+          if grep -rEn --include="*."{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake} \
               -- "$BAD_MARKERS" \
               . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=build \
               --exclude-dir=build-* --exclude-dir=target ; then
               echo "::error::Proprietary marker found in public source"; exit 1
           fi
-          if grep -rEn --include="*.{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake}" \
+          if grep -rEn --include="*."{c,h,cpp,hpp,py,rs,js,ts,md,yml,yaml,sh,cmake} \
               -- "$CRED_PATTERNS" \
               . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=build \
               --exclude-dir=build-* --exclude-dir=target ; then

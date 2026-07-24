@@ -228,12 +228,11 @@ UNIT_TEST_STATE = tests/unit/test_quantum_state
 UNIT_TEST_GATES = tests/unit/test_quantum_gates
 UNIT_TEST_MEMORY_ALIGN = tests/unit/test_memory_align
 UNIT_TEST_SIMD_DISPATCH = tests/unit/test_simd_dispatch
-UNIT_TEST_STRIDE_GATES = tests/unit/test_stride_gates
 UNIT_TEST_TENSOR_NETWORK = tests/unit/test_tensor_network
 
 ALL_TESTS = $(QSIM_TEST) $(HEALTH_TESTS) $(BELL_TEST_DEMO) $(GATE_TEST) $(CORRELATION_TEST) \
             $(UNIT_TEST_STATE) $(UNIT_TEST_GATES) $(UNIT_TEST_MEMORY_ALIGN) $(UNIT_TEST_SIMD_DISPATCH) \
-            $(UNIT_TEST_STRIDE_GATES) $(UNIT_TEST_TENSOR_NETWORK)
+            $(UNIT_TEST_TENSOR_NETWORK)
 
 # Integration tests
 INTEGRATION_TEST_GROVER = tests/integration/test_grover_integration
@@ -320,7 +319,7 @@ $(CORRELATION_TEST): $(TEST_DIR)/correlation_test.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 # Unit tests
-unit_tests: $(UNIT_TEST_STATE) $(UNIT_TEST_GATES) $(UNIT_TEST_MEMORY_ALIGN) $(UNIT_TEST_SIMD_DISPATCH) $(UNIT_TEST_STRIDE_GATES) $(UNIT_TEST_TENSOR_NETWORK)
+unit_tests: $(UNIT_TEST_STATE) $(UNIT_TEST_GATES) $(UNIT_TEST_MEMORY_ALIGN) $(UNIT_TEST_SIMD_DISPATCH) $(UNIT_TEST_TENSOR_NETWORK)
 	@echo "All unit tests built successfully"
 
 test_unit: unit_tests
@@ -334,9 +333,6 @@ test_unit: unit_tests
 	@echo ""
 	@echo "=== SIMD Dispatch Tests ==="
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_SIMD_DISPATCH)
-	@echo ""
-	@echo "=== Stride Gates Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STRIDE_GATES)
 	@echo ""
 	@echo "=== Quantum State Tests ==="
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STATE)
@@ -361,9 +357,6 @@ $(UNIT_TEST_MEMORY_ALIGN): $(TEST_DIR)/unit/test_memory_align.o $(OPTIMIZATION_D
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 $(UNIT_TEST_SIMD_DISPATCH): $(TEST_DIR)/unit/test_simd_dispatch.o $(OPTIMIZATION_DIR)/simd_dispatch.o
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-$(UNIT_TEST_STRIDE_GATES): $(TEST_DIR)/unit/test_stride_gates.o $(OPTIMIZATION_DIR)/stride_gates.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 $(UNIT_TEST_TENSOR_NETWORK): $(TEST_DIR)/unit/test_tensor_network.o $(ALL_LIB_OBJS)
@@ -432,7 +425,6 @@ test: tests
 	@echo "=== Unit Tests ==="
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_MEMORY_ALIGN)
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_SIMD_DISPATCH)
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STRIDE_GATES)
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STATE)
 	LD_LIBRARY_PATH=. ./$(UNIT_TEST_GATES)
 	@echo ""

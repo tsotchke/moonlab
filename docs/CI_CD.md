@@ -11,10 +11,23 @@ runners, install-tree ZIP staging, and a consumer test before upload.
 
 | Workflow | File | Trigger | Purpose |
 |---|---|---|---|
-| CI | `.github/workflows/ci.yml` | Pushes and pull requests | Native Unix/Windows builds, WASM, Docker, and hygiene checks |
+| CI | `.github/workflows/ci.yml` | Pushes and pull requests | Native Unix/Windows builds, WASM build + full JS binding test suite, Python wheel build + install smoke, Docker, and hygiene checks |
 | Linux compatibility | `.github/workflows/linux-compatibility.yml` | Relevant pushes/PRs, tags through the release caller, manual | Clean-distro source build, tests, package, and external-consumer verification |
-| Jetson CI | `.github/workflows/ci-jetson.yml` | Workflow-defined hardware trigger | CUDA and ARM64 validation on the self-hosted Jetson runner |
+| Jetson CI | `.github/workflows/ci-jetson.yml` | Manual dispatch only (no self-hosted runner is currently enrolled) | CUDA and ARM64 validation on the self-hosted Jetson runner; routine Jetson coverage happens out-of-band via `scripts/run_mesh_release_smoke.sh` |
 | Release | `.github/workflows/release.yml` | Manual candidate dispatch; tags matching `v*` promote one certified candidate | Build and seal unpublished packages, then verify exact-byte promotion before publication |
+| differential | `.github/workflows/differential.yml` | Nightly cron + manual | Cross-backend / cross-binding differential against a numpy reference oracle |
+| fuzz | `.github/workflows/fuzz.yml` | Nightly cron + manual | Seed-corpus replay under ASan+UBSan plus per-surface libFuzzer soak |
+| numerical | `.github/workflows/numerical.yml` | Nightly cron + manual | Numerical-edge harnesses, valgrind memcheck uninit sweep, MSan fallback legs |
+| scaling | `.github/workflows/scaling.yml` | Nightly cron + manual | Large-n cross-backend differential with quarantined known divergences |
+| Statistical Adversarial | `.github/workflows/statistical.yml` | Nightly cron + manual | QRNG battery, ML-KEM negative fuzz, entropy-health adversarial (fast ASan + deep lanes) |
+| tsan | `.github/workflows/tsan.yml` | PRs touching concurrency surfaces, nightly cron, manual | ThreadSanitizer pthread-core and OpenMP/Archer concurrency lanes |
+
+GPU execution and multi-host MPI are NOT covered by GitHub-hosted CI: no
+hosted runner has a GPU this project targets, and multi-host MPI needs real
+fleet endpoints. Those surfaces are validated out-of-band on the release
+mesh (`scripts/run_mesh_release_smoke.sh`, `scripts/run_mpi_sharded_gpu.sh`)
+and their evidence is bound into the release certificate; hosted CI covers
+only the CPU fallbacks and the GPU/MPI code that compiles everywhere.
 
 GitLab also runs the repository's `.gitlab-ci.yml`; GitHub Actions is the
 source of the public release assets described here.
@@ -44,9 +57,19 @@ measurement, aligned memory, reproducibility manifests, and stable ABI loading.
 The job then verifies a completely separate CMake consumer against the staged
 ZIP, catching missing DLL/import-library/header/export metadata before upload.
 
-Additional CI jobs build the Emscripten/WASM target, smoke the Debian release
-container, and reject private markers or credential-shaped strings in the
-public tree.
+Additional CI jobs build the Emscripten/WASM target and run the complete JS
+binding test suite against the freshly built module (the vitest unit lane plus
+the 200+ test integration lane), build and install-smoke the Python wheel
+through the same scikit-build-core backend the release wheels use, smoke the
+Debian release container, and reject private markers or credential-shaped
+strings in the public tree.
+
+The unix matrix's ctest invocation runs the registered unit and integration
+tests without label filtering (minus the `long`/`memory_heavy` exclusions),
+which includes the bit-packed Clifford tableau tests (`unit_clifford`,
+`unit_clifford_rowsum`), the Pauli-frame batch sampler (`unit_pauli_frame`),
+the union-find decoder (`unit_uf_decoder`), and the Python binding pytest
+suite.
 
 The Linux compatibility workflow runs the universal source-build driver on
 Ubuntu 22.04/24.04/26.04 and Debian 12/13 on both hosted amd64 and ARM64
@@ -91,12 +114,14 @@ conclusion, complete job-name set, candidate manifest, and all 22 artifact
 hashes, then re-uploads the verified bytes for downstream publication. Missing
 or mismatched evidence is fatal; promotion never falls back to rebuilding.
 
-As of the v1.2.0 release campaign, `publication-readiness` intentionally stops
-before every external mutation because Cargo has no supported option to publish
-a supplied, pre-certified `.crate` archive. Publication remains blocked until
-an audited exact-byte crates.io upload path is implemented and tested against
-the authoritative Cargo/crates.io protocol. Once that gate is implemented,
-the exact tested wheels and npm tarballs are published, followed by the three
+Because Cargo has no supported option to publish a supplied, pre-certified
+`.crate` archive, crates.io publication goes through the audited exact-byte
+uploader `scripts/publish_crate_exact_bytes.py` (design and protocol audit in
+`docs/release/rust-crate-exact-byte-publish.md`, tests in
+`scripts/test_publish_crate_exact_bytes.py`). The `publication-readiness` job
+fails closed if that uploader is absent, so no registry can be mutated through
+a path that would re-package the certified bytes. With readiness green, the
+exact tested wheels and npm tarballs are published, followed by the three
 certified Rust crates in dependency order: `moonlab-sys`, `moonlab`, then
 `moonlab-tui`. Stable tags then update and test Homebrew. The GitHub Release
 leaves draft state only after all required registries succeed. Numbered

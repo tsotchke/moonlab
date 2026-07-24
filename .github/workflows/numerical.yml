@@ -110,24 +110,36 @@ jobs:
           # memcheck focuses on uninitialised-value use + invalid read/write.
           # Leak reporting is disabled: many third-party allocators (OpenBLAS)
           # retain pools at exit and would add noise unrelated to correctness.
-          VG="valgrind --error-exitcode=1 --track-origins=yes \
+          # --error-exitcode=99 gives memcheck findings a distinct exit code so
+          # they can be told apart from a harness's own assertion failures.
+          VG="valgrind --error-exitcode=99 --track-origins=yes \
               --leak-check=no --errors-for-leak-kinds=none \
               --partial-loads-ok=yes --gen-suppressions=all"
-          rc=0
-          # Pure-C fallback harnesses (no BLAS): the cleanest uninit signal.
-          for h in t_eigen_jacobi t_svd_fallback; do
+          fail=0
+          # Pure-C fallback harnesses (no BLAS) first: the cleanest uninit
+          # signal; then the shipping-path harnesses (library / BLAS linked).
+          for h in t_eigen_jacobi t_svd_fallback t_rotations t_measure t_qft t_dmrg; do
             echo "== valgrind $h =="
-            $VG ./build/numcmake/$h || rc=$?
+            $VG ./build/numcmake/$h
+            rc=$?
+            if [ "$rc" -eq 99 ]; then
+              echo "::error::valgrind reported memory errors in $h"
+              fail=1
+            elif [ "$rc" -ne 0 ]; then
+              if [ "$h" = "t_svd_fallback" ]; then
+                # The forced-fallback SVD harness reports 2 known algorithmic
+                # failures (non-orthonormal U on rank-deficient input, see
+                # tests/numerical/FINDINGS.md).  That is a value error, not a
+                # memory error, and does not fail this job; memcheck findings
+                # in the same harness (rc=99 above) still do.
+                echo "$h rc=$rc: known algorithmic failure, tolerated"
+              else
+                echo "::error::$h failed (rc=$rc)"
+                fail=1
+              fi
+            fi
           done
-          # Shipping-path harnesses (link the library / BLAS).
-          for h in t_rotations t_measure t_qft t_dmrg; do
-            echo "== valgrind $h =="
-            $VG ./build/numcmake/$h || rc=$?
-          done
-          # The forced-fallback SVD harness reports 2 known algorithmic failures
-          # (non-orthonormal U on rank-deficient input, see tests/numerical/FINDINGS.md);
-          # that is a value error, not a memory error, and does not fail this job.
-          echo "valgrind numerical rc(excluding known-SVD-fallback)=$rc"
+          exit "$fail"
 
       - name: valgrind memcheck -- core|tn|ca_mps|algorithms tests
         env:
@@ -175,7 +187,7 @@ jobs:
                 -o t_eigen_jacobi_msan
           ./t_eigen_jacobi_msan
 
-      - name: MSan -- one-sided Jacobi SVD / Householder QR (tensor.c)
+      - name: MSan -- one-sided Jacobi SVD / Householder QR (tensor.c; best effort, non-gating)
         continue-on-error: true
         run: |
           set -euxo pipefail

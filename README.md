@@ -1143,25 +1143,31 @@ adversarial audit that produced this list lives in
   multi-node (>1 physical host) scaling, wall-clock comparisons
   against single-host baselines, and any MPI backend other than
   OpenMPI.
-- **GPU backends other than Metal, CUDA, and Eshkol**: OpenCL and Vulkan now
-  compile cleanly and pass a "compile + discovery smoke" CI tier on
-  Linux (apt's ocl-icd-loader + PoCL for OpenCL; vulkan-loader +
-  lavapipe for Vulkan) but are not exercised against a real GPU in
-  hosted CI -- the smoke test just verifies backend selection and
-  fallback. The native CUDA state-vector path is validated on Jetson
-  and x86-64 NVIDIA nodes; cuQuantum remains an optional, separately
-  provisioned backend.
-- **WebGPU / JS**: CI has a dedicated `WASM / WebGPU smoke` tier
-  that builds the TS `@moonlab/quantum-core` package and runs the
-  unified smoke end-to-end.  The default C-only `ctest` on a fresh
-  clone without `-DQSIM_BUILD_JS_DIST=ON` produces no WebGPU
-  coverage -- that is the trade-off for not requiring a JS toolchain
-  just to build the library.
-- **Platforms**: hosted CI covers Linux x86-64, macOS ARM64, Windows
-  x64, and Windows ARM64. A separate self-hosted Jetson workflow covers
-  Linux ARM64 + CUDA. Tagged releases additionally build Linux ARM64
-  and macOS Intel archives. Windows uses Visual Studio generators with
-  ClangCL and runs a relocatable-package consumer smoke before upload.
+- **GPU backends other than Metal, CUDA, and Eshkol**: OpenCL and Vulkan
+  compile cleanly and pass a local compile + discovery smoke
+  (apt's ocl-icd-loader + PoCL for OpenCL; vulkan-loader + lavapipe for
+  Vulkan), but hosted CI does not currently build with either backend
+  enabled and no CI runner exercises them against a real GPU -- the
+  discovery smoke only verifies backend selection and fallback. The
+  native CUDA state-vector path is validated out-of-band on Jetson and
+  x86-64 NVIDIA fleet nodes at release time; cuQuantum remains an
+  optional, separately provisioned backend.
+- **WebGPU / JS**: the CI `wasm-js-tests` job builds moonlab.wasm and the
+  TS `@moonlab/quantum-core` package, runs the full vitest unit +
+  integration suites against the fresh module, and runs the WebGPU
+  unified smoke.  Plain node has no WebGPU runtime, so the smoke
+  verifies backend selection + fallback (backend=none), not real GPU
+  execution.  The default C-only `ctest` on a fresh clone without
+  `-DQSIM_BUILD_JS_DIST=ON` produces no WebGPU coverage -- that is the
+  trade-off for not requiring a JS toolchain just to build the library.
+- **Platforms**: hosted CI covers Linux x86-64 (plus Linux ARM64 in the
+  Linux-compatibility matrix), macOS ARM64, Windows x64, and Windows
+  ARM64. The Jetson CUDA workflow is manual-dispatch only -- no
+  self-hosted runner is currently enrolled -- so Jetson CUDA coverage
+  happens out-of-band via the release mesh smoke. Tagged releases
+  additionally build Linux ARM64 and macOS Intel archives. Windows uses
+  Visual Studio generators with ClangCL and runs a relocatable-package
+  consumer smoke before upload.
 - **Performance numbers**: every headline multiplier was measured
   once on one host.  No stddev, no cross-platform reproduction.
   Use the benches below to measure your own hardware; do not
