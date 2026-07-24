@@ -302,6 +302,23 @@ MOONLAB_API double complex get_R_symbol(const anyon_system_t *sys,
                             anyon_charge_t a, anyon_charge_t b,
                             anyon_charge_t c);
 
+/**
+ * @brief Maximum residual of the fusion-category coherence conditions.
+ *
+ * Returns the largest absolute violation, over all charge configurations, of
+ *   - the MacLane pentagon equation for the F-symbols,
+ *   - both hexagon equations relating the F- and R-symbols, and
+ *   - unitarity of every F-matrix.
+ * A consistent braided fusion category (anyon model) returns ~0 (machine
+ * precision); a nonzero value certifies that the tabulated F/R symbols are not
+ * mutually consistent.  Intended as an exact verification / regression guard
+ * for the built-in models (Fibonacci, Ising, SU(2)_k).
+ *
+ * @param sys Anyon system
+ * @return max coherence residual (>= 0), or -1 on error
+ */
+MOONLAB_API double anyon_verify_coherence(const anyon_system_t *sys);
+
 // ============================================================================
 // ANYONIC QUANTUM GATES
 // ============================================================================

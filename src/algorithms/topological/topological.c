@@ -96,84 +96,11 @@ anyon_system_t *anyon_system_fibonacci(void) {
 }
 
 anyon_system_t *anyon_system_ising(void) {
-    anyon_system_t *sys = malloc(sizeof(anyon_system_t));
-    if (!sys) return NULL;
-
-    sys->type = ANYON_MODEL_ISING;
-    sys->num_charges = 3;  // 1 (vacuum), σ, ψ
-    sys->level = 2;  // SU(2)_2 gives Ising
-
-    // Fusion rules:
-    // 1×1=1, 1×σ=σ, 1×ψ=ψ
-    // σ×1=σ, σ×σ=1+ψ, σ×ψ=σ
-    // ψ×1=ψ, ψ×σ=σ, ψ×ψ=1
-    sys->fusion_rules = malloc(3 * sizeof(uint32_t **));
-    for (int a = 0; a < 3; a++) {
-        sys->fusion_rules[a] = malloc(3 * sizeof(uint32_t *));
-        for (int b = 0; b < 3; b++) {
-            sys->fusion_rules[a][b] = calloc(3, sizeof(uint32_t));
-        }
-    }
-
-    // Vacuum fusions
-    sys->fusion_rules[0][0][0] = 1;  // 1×1=1
-    sys->fusion_rules[0][1][1] = 1;  // 1×σ=σ
-    sys->fusion_rules[0][2][2] = 1;  // 1×ψ=ψ
-    sys->fusion_rules[1][0][1] = 1;  // σ×1=σ
-    sys->fusion_rules[2][0][2] = 1;  // ψ×1=ψ
-
-    // σ fusions
-    sys->fusion_rules[1][1][0] = 1;  // σ×σ→1
-    sys->fusion_rules[1][1][2] = 1;  // σ×σ→ψ
-    sys->fusion_rules[1][2][1] = 1;  // σ×ψ=σ
-    sys->fusion_rules[2][1][1] = 1;  // ψ×σ=σ
-
-    // ψ fusions
-    sys->fusion_rules[2][2][0] = 1;  // ψ×ψ=1
-
-    // F-matrices (only F^{σσσ}_σ is non-trivial)
-    // F^{σσσ}_σ = (1/√2) [1   1]
-    //                     [1  -1]
-    sys->F_matrices = malloc(27 * sizeof(double complex *));  // 3³
-    for (int i = 0; i < 27; i++) {
-        sys->F_matrices[i] = calloc(9, sizeof(double complex));  // 3×3 max
-        // Identity default
-        for (int j = 0; j < 3; j++) {
-            sys->F_matrices[i][j * 3 + j] = 1.0;
-        }
-    }
-
-    // F^{σσσ}_σ: index = σ*9 + σ*3 + σ = 1*9 + 1*3 + 1 = 13
-    // But we need the d index too... simplify indexing
-    double rsqrt2 = 1.0 / sqrt(2.0);
-    int idx_ssss = 1 * 9 + 1 * 3 + 1;  // a=σ, b=σ, c=σ
-    // Matrix in (e,f) space where e,f ∈ {1,ψ}
-    sys->F_matrices[idx_ssss][0] = rsqrt2;   // (1,1)
-    sys->F_matrices[idx_ssss][1] = rsqrt2;   // (1,ψ)
-    sys->F_matrices[idx_ssss][3] = rsqrt2;   // (ψ,1)
-    sys->F_matrices[idx_ssss][4] = -rsqrt2;  // (ψ,ψ)
-
-    // R-matrices
-    // R^{σσ}_1 = e^{-iπ/8}, R^{σσ}_ψ = e^{3iπ/8}
-    // R^{σψ}_σ = -i, R^{ψσ}_σ = -i
-    // R^{ψψ}_1 = -1
-    sys->R_matrices = malloc(9 * sizeof(double complex *));
-    for (int i = 0; i < 9; i++) {
-        sys->R_matrices[i] = calloc(3, sizeof(double complex));
-        sys->R_matrices[i][0] = 1.0;
-    }
-
-    // R^{σσ}_c
-    sys->R_matrices[1 * 3 + 1][ISING_VACUUM] = cexp(-I * M_PI / 8.0);
-    sys->R_matrices[1 * 3 + 1][ISING_PSI] = cexp(I * 3.0 * M_PI / 8.0);
-
-    // R^{σψ}_σ = R^{ψσ}_σ = -i
-    sys->R_matrices[1 * 3 + 2][ISING_SIGMA] = -I;
-    sys->R_matrices[2 * 3 + 1][ISING_SIGMA] = -I;
-
-    // R^{ψψ}_1 = -1
-    sys->R_matrices[2 * 3 + 2][ISING_VACUUM] = -1.0;
-
+    // Ising is SU(2)_2 (three charges: 1, sigma at 2j=1, psi at 2j=2).  Build it
+    // through the SU(2)_k quantum-6j generator and label it with the Ising type;
+    // it uses the same (a,b,c,d) F/R storage as the general SU(2)_k systems.
+    anyon_system_t *sys = anyon_system_su2k(2);
+    if (sys) sys->type = ANYON_MODEL_ISING;
     return sys;
 }
 
@@ -305,10 +232,8 @@ static double complex quantum_6j(int a, int b, int c, int d, int e, int f,
 }
 
 anyon_system_t *anyon_system_su2k(uint32_t k) {
-    if (k == 2) return anyon_system_ising();
-    if (k == 3) return anyon_system_fibonacci();
-
-    // General SU(2)_k
+    // General SU(2)_k anyon model, F/R symbols from quantum 6j-symbols.  SU(2)_2
+    // is the Ising model (see anyon_system_ising).
     anyon_system_t *sys = malloc(sizeof(anyon_system_t));
     if (!sys) return NULL;
 
@@ -357,26 +282,30 @@ anyon_system_t *anyon_system_su2k(uint32_t k) {
     // q = e^{iπ/(k+2)} is the quantum group parameter
     double complex q = cexp(I * M_PI / (k + 2));
 
-    // Compute F-matrices: F^{abc}_{def} relates different fusion orderings
-    // F^{abc}_d : (a⊗b)⊗c → a⊗(b⊗c) with intermediate channels d,e
-    // The F-matrix element is the quantum 6j-symbol {a b d; c f e}_q
+    // F-matrices in the get_F_symbol convention: F_matrices[(a,b,c,d)][e,f] =
+    // [F^{abc}_d]_{ef}, with e the (a,b) fusion channel, f the (b,c) channel and
+    // d the total charge.  The unitary SU(2)_k F-symbol is the renormalised
+    // quantum 6j-symbol (the sqrt of quantum dimensions makes it unitary):
+    //   [F^{abc}_d]_{ef} = (-1)^{(a+b+c+d)/2} sqrt([e+1]_q [f+1]_q) {a b e; c d f}_q.
+    // Labels are 2j integers 0..k.
     for (uint32_t a = 0; a < n; a++) {
         for (uint32_t b = 0; b < n; b++) {
             for (uint32_t c = 0; c < n; c++) {
                 for (uint32_t d = 0; d < n; d++) {
-                    // F-matrix at (a,b,c,d) has entries for (e,f)
                     uint32_t f_idx = a * n * n * n + b * n * n + c * n + d;
                     for (uint32_t e = 0; e < n; e++) {
                         for (uint32_t f = 0; f < n; f++) {
-                            // Check if this transition is allowed by fusion rules
-                            // Need (a⊗b→d), (d⊗c→e), (b⊗c→f), (a⊗f→e)
-                            if (sys->fusion_rules[a][b][d] &&
-                                sys->fusion_rules[d][c][e] &&
+                            // fusion constraints for [F^{abc}_d]_{ef} to be nonzero:
+                            //   e in a x b, d in e x c, f in b x c, d in a x f
+                            if (sys->fusion_rules[a][b][e] &&
+                                sys->fusion_rules[e][c][d] &&
                                 sys->fusion_rules[b][c][f] &&
-                                sys->fusion_rules[a][f][e]) {
-                                // Compute quantum 6j-symbol
-                                sys->F_matrices[f_idx][e * n + f] =
-                                    quantum_6j(a, b, d, c, e, f, k, q);
+                                sys->fusion_rules[a][f][d]) {
+                                double complex sixj = quantum_6j(a, b, e, c, d, f, k, q);
+                                double complex dim = csqrt(q_number(e + 1, q) *
+                                                           q_number(f + 1, q));
+                                int sgn = (((a + b + c + d) / 2) % 2) ? -1 : 1;
+                                sys->F_matrices[f_idx][e * n + f] = sgn * dim * sixj;
                             }
                         }
                     }
@@ -385,15 +314,20 @@ anyon_system_t *anyon_system_su2k(uint32_t k) {
         }
     }
 
-    // Compute R-matrices: R^{ab}_c = q^{(c(c+2)-a(a+2)-b(b+2))/4}
-    // This is the braiding phase for exchanging anyons a and b with fusion channel c
+    // R-matrices: R^{ab}_c = (-1)^{(a+b-c)/2} q^{C_c - C_a - C_b}, the braiding
+    // phase for exchanging a and b in fusion channel c, with 2j-label Casimir
+    // C_x = x(x+2)/4.  a+b-c is even and >= 0 by the fusion rule; the Casimir
+    // difference is computed in signed arithmetic to avoid uint32_t wraparound
+    // when it is negative (c smaller than a,b).
     for (uint32_t a = 0; a < n; a++) {
         for (uint32_t b = 0; b < n; b++) {
             for (uint32_t c = 0; c < n; c++) {
                 if (sys->fusion_rules[a][b][c]) {
-                    double exp_arg = M_PI * (c * (c + 2) - a * (a + 2) - b * (b + 2)) /
-                                     (4.0 * (k + 2));
-                    sys->R_matrices[a * n + b][c] = cexp(I * exp_arg);
+                    int carg = (int)c * ((int)c + 2) - (int)a * ((int)a + 2)
+                                                     - (int)b * ((int)b + 2);
+                    double exp_arg = M_PI * carg / (4.0 * (k + 2));
+                    int rsgn = ((((int)a + (int)b - (int)c) / 2) % 2) ? -1 : 1;
+                    sys->R_matrices[a * n + b][c] = rsgn * cexp(I * exp_arg);
                 }
             }
         }
@@ -420,8 +354,9 @@ void anyon_system_free(anyon_system_t *sys) {
     }
 
     if (sys->F_matrices) {
-        uint32_t num_F = (sys->type == ANYON_MODEL_ISING) ? 27 : 16;
-        if (sys->type == ANYON_MODEL_SU2_K) num_F = n * n * n * n;
+        /* All systems store n^4 F-matrices (Fibonacci's n=2 gives 16 =
+         * a*8+b*4+c*2+d; Ising and SU(2)_k use the general n^4 layout). */
+        uint32_t num_F = n * n * n * n;
         for (uint32_t i = 0; i < num_F; i++) {
             free(sys->F_matrices[i]);
         }
@@ -429,8 +364,7 @@ void anyon_system_free(anyon_system_t *sys) {
     }
 
     if (sys->R_matrices) {
-        uint32_t num_R = (sys->type == ANYON_MODEL_ISING) ? 9 : 4;
-        if (sys->type == ANYON_MODEL_SU2_K) num_R = n * n;
+        uint32_t num_R = n * n;   /* a*n+b indexed R-table */
         for (uint32_t i = 0; i < num_R; i++) {
             free(sys->R_matrices[i]);
         }
@@ -500,24 +434,17 @@ double complex get_F_symbol(const anyon_system_t *sys,
     uint32_t idx, sub_idx;
 
     if (sys->type == ANYON_MODEL_FIBONACCI) {
-        idx = a * 8 + b * 4 + c * 2 + d;
-        sub_idx = e * 2 + f;
-        if (idx < 16 && sub_idx < 4) {
-            return sys->F_matrices[idx][sub_idx];
+        /* F^{ttt}_t is the only nontrivial F-matrix; every other allowed
+         * F-symbol is 1 on its unique fusion channel. */
+        if (a == FIB_TAU && b == FIB_TAU && c == FIB_TAU && d == FIB_TAU) {
+            return sys->F_matrices[15][e * 2 + f];
         }
-    } else if (sys->type == ANYON_MODEL_ISING) {
-        idx = a * 9 + b * 3 + c;
-        sub_idx = e * 3 + f;
-        if (idx < 27 && sub_idx < 9) {
-            return sys->F_matrices[idx][sub_idx];
-        }
-    } else {
-        idx = a * n * n * n + b * n * n + c * n + d;
-        sub_idx = e * n + f;
-        return sys->F_matrices[idx][sub_idx];
+        return 1.0;
     }
-
-    return 0.0;
+    /* Ising and SU(2)_k share the (a,b,c,d) x (e,f) storage. */
+    idx = a * n * n * n + b * n * n + c * n + d;
+    sub_idx = e * n + f;
+    return sys->F_matrices[idx][sub_idx];
 }
 
 double complex get_R_symbol(const anyon_system_t *sys,
@@ -532,14 +459,114 @@ double complex get_R_symbol(const anyon_system_t *sys,
     uint32_t idx = a * n + b;
 
     if (sys->type == ANYON_MODEL_FIBONACCI && idx < 4 && c < 2) {
-        return sys->R_matrices[idx][c];
-    } else if (sys->type == ANYON_MODEL_ISING && idx < 9 && c < 3) {
-        return sys->R_matrices[idx][c];
-    } else if (sys->type == ANYON_MODEL_SU2_K) {
-        return sys->R_matrices[idx][c];
+        /* R^{tt}_c is the only nontrivial R-symbol; the rest are 1. */
+        if (a == FIB_TAU && b == FIB_TAU) return sys->R_matrices[idx][c];
+        return 1.0;
     }
+    /* Ising and SU(2)_k share the a*n+b indexed R-table. */
+    return sys->R_matrices[idx][c];
+}
 
-    return 1.0;  // Default for vacuum-like cases
+/* Largest pentagon-equation violation for fixed external charges a,b,c,d and
+ * total charge e, over the free channel labels f,g,k,l (internal channel h
+ * summed).  The MacLane pentagon in the get_F_symbol convention reads
+ *   F(f,c,d;e)[g,l] F(a,b,l;e)[f,k] = sum_h F(a,b,c;g)[f,h] F(a,h,d;e)[g,k]
+ *                                             F(b,c,d;k)[h,l].
+ * get_F_symbol returns 0 outside the fusion-allowed channels, so the sums are
+ * automatically restricted to allowed intermediates. */
+static double pentagon_residual(const anyon_system_t *sys,
+                                uint32_t a, uint32_t b, uint32_t c,
+                                uint32_t d, uint32_t e) {
+    const uint32_t n = sys->num_charges;
+    double res = 0.0;
+    for (uint32_t f = 0; f < n; f++)
+     for (uint32_t g = 0; g < n; g++)
+      for (uint32_t k = 0; k < n; k++)
+       for (uint32_t l = 0; l < n; l++) {
+         double complex lhs = get_F_symbol(sys, f, c, d, e, g, l) *
+                              get_F_symbol(sys, a, b, l, e, f, k);
+         double complex rhs = 0.0;
+         for (uint32_t h = 0; h < n; h++)
+             rhs += get_F_symbol(sys, a, b, c, g, f, h) *
+                    get_F_symbol(sys, a, h, d, e, g, k) *
+                    get_F_symbol(sys, b, c, d, k, h, l);
+         double r = cabs(lhs - rhs);
+         if (r > res) res = r;
+       }
+    return res;
+}
+
+/* Largest hexagon-equation violation for fixed external charges a,b,c,d, over
+ * the free channels e,g (internal f summed).  With `inverse` set, every R is
+ * replaced by its inverse braiding (conjugate phase) -- the second hexagon.
+ *   R(a,c;e) F(a,c,b;d)[e,g] R(b,c;g) = sum_f F(c,a,b;d)[e,f] R(c,f;d)
+ *                                              F(a,b,c;d)[f,g]. */
+static double hexagon_residual(const anyon_system_t *sys, int inverse,
+                               uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
+    const uint32_t n = sys->num_charges;
+    double res = 0.0;
+    for (uint32_t e = 0; e < n; e++)
+     for (uint32_t g = 0; g < n; g++) {
+       double complex rac = get_R_symbol(sys, a, c, e);
+       double complex rbc = get_R_symbol(sys, b, c, g);
+       if (inverse) { if (rac != 0.0) rac = 1.0 / rac;
+                      if (rbc != 0.0) rbc = 1.0 / rbc; }
+       double complex lhs = rac * get_F_symbol(sys, a, c, b, d, e, g) * rbc;
+       double complex rhs = 0.0;
+       for (uint32_t f = 0; f < n; f++) {
+           double complex rcf = get_R_symbol(sys, c, f, d);
+           if (inverse && rcf != 0.0) rcf = 1.0 / rcf;
+           rhs += get_F_symbol(sys, c, a, b, d, e, f) * rcf *
+                  get_F_symbol(sys, a, b, c, d, f, g);
+       }
+       double r = cabs(lhs - rhs);
+       if (r > res) res = r;
+     }
+    return res;
+}
+
+/* Largest departure from unitarity of the F-matrix [F^{abc}_d]_{ef}: over its
+ * allowed channel rows, sum_f F[e,f] conj(F[e',f]) must equal delta_{e e'}. */
+static double f_unitarity_residual(const anyon_system_t *sys,
+                                   uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
+    const uint32_t n = sys->num_charges;
+    double res = 0.0;
+    for (uint32_t e = 0; e < n; e++)
+     for (uint32_t ep = 0; ep < n; ep++) {
+       double complex s = 0.0; int any = 0;
+       for (uint32_t f = 0; f < n; f++) {
+           double complex u = get_F_symbol(sys, a, b, c, d, e, f);
+           double complex v = get_F_symbol(sys, a, b, c, d, ep, f);
+           s += u * conj(v);
+           if (u != 0.0 || v != 0.0) any = 1;
+       }
+       if (!any) continue;   /* neither row exists for this (a,b,c,d) */
+       double r = cabs(s - ((e == ep) ? 1.0 : 0.0));
+       if (r > res) res = r;
+     }
+    return res;
+}
+
+double anyon_verify_coherence(const anyon_system_t *sys) {
+    if (!sys) return -1.0;
+    const uint32_t n = sys->num_charges;
+    double max_res = 0.0;
+    for (uint32_t a = 0; a < n; a++)
+     for (uint32_t b = 0; b < n; b++)
+      for (uint32_t c = 0; c < n; c++)
+       for (uint32_t d = 0; d < n; d++) {
+         double r = f_unitarity_residual(sys, a, b, c, d);
+         if (r > max_res) max_res = r;
+         r = hexagon_residual(sys, 0, a, b, c, d);
+         if (r > max_res) max_res = r;
+         r = hexagon_residual(sys, 1, a, b, c, d);
+         if (r > max_res) max_res = r;
+         for (uint32_t e = 0; e < n; e++) {
+             r = pentagon_residual(sys, a, b, c, d, e);
+             if (r > max_res) max_res = r;
+         }
+       }
+    return max_res;
 }
 
 // ============================================================================
