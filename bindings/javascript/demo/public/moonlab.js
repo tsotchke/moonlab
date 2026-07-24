@@ -2366,6 +2366,9 @@ var _entanglement_entropy_bipartition = Module['_entanglement_entropy_bipartitio
 var _entanglement_mutual_information = Module['_entanglement_mutual_information'] = makeInvalidEarlyAccess('_entanglement_mutual_information');
 var _entanglement_concurrence_2qubit = Module['_entanglement_concurrence_2qubit'] = makeInvalidEarlyAccess('_entanglement_concurrence_2qubit');
 var _entanglement_negativity_2qubit = Module['_entanglement_negativity_2qubit'] = makeInvalidEarlyAccess('_entanglement_negativity_2qubit');
+var _noise_model_create = Module['_noise_model_create'] = makeInvalidEarlyAccess('_noise_model_create');
+var _noise_model_destroy = Module['_noise_model_destroy'] = makeInvalidEarlyAccess('_noise_model_destroy');
+var _noise_model_copy = Module['_noise_model_copy'] = makeInvalidEarlyAccess('_noise_model_copy');
 var _noise_depolarizing_single = Module['_noise_depolarizing_single'] = makeInvalidEarlyAccess('_noise_depolarizing_single');
 var _noise_depolarizing_two_qubit = Module['_noise_depolarizing_two_qubit'] = makeInvalidEarlyAccess('_noise_depolarizing_two_qubit');
 var _noise_amplitude_damping = Module['_noise_amplitude_damping'] = makeInvalidEarlyAccess('_noise_amplitude_damping');
@@ -2375,6 +2378,17 @@ var _noise_bit_flip = Module['_noise_bit_flip'] = makeInvalidEarlyAccess('_noise
 var _noise_phase_flip = Module['_noise_phase_flip'] = makeInvalidEarlyAccess('_noise_phase_flip');
 var _noise_bit_phase_flip = Module['_noise_bit_phase_flip'] = makeInvalidEarlyAccess('_noise_bit_phase_flip');
 var _noise_thermal_relaxation = Module['_noise_thermal_relaxation'] = makeInvalidEarlyAccess('_noise_thermal_relaxation');
+var _noise_readout_error = Module['_noise_readout_error'] = makeInvalidEarlyAccess('_noise_readout_error');
+var _noise_apply_model = Module['_noise_apply_model'] = makeInvalidEarlyAccess('_noise_apply_model');
+var _noise_apply_model_two_qubit = Module['_noise_apply_model_two_qubit'] = makeInvalidEarlyAccess('_noise_apply_model_two_qubit');
+var _noise_model_set_depolarizing = Module['_noise_model_set_depolarizing'] = makeInvalidEarlyAccess('_noise_model_set_depolarizing');
+var _noise_model_set_amplitude_damping = Module['_noise_model_set_amplitude_damping'] = makeInvalidEarlyAccess('_noise_model_set_amplitude_damping');
+var _noise_model_set_phase_damping = Module['_noise_model_set_phase_damping'] = makeInvalidEarlyAccess('_noise_model_set_phase_damping');
+var _noise_model_set_thermal = Module['_noise_model_set_thermal'] = makeInvalidEarlyAccess('_noise_model_set_thermal');
+var _noise_model_set_gate_time = Module['_noise_model_set_gate_time'] = makeInvalidEarlyAccess('_noise_model_set_gate_time');
+var _noise_model_set_readout_error = Module['_noise_model_set_readout_error'] = makeInvalidEarlyAccess('_noise_model_set_readout_error');
+var _noise_model_set_enabled = Module['_noise_model_set_enabled'] = makeInvalidEarlyAccess('_noise_model_set_enabled');
+var _noise_model_create_realistic = Module['_noise_model_create_realistic'] = makeInvalidEarlyAccess('_noise_model_create_realistic');
 var _moonlab_mpdo_create = Module['_moonlab_mpdo_create'] = makeInvalidEarlyAccess('_moonlab_mpdo_create');
 var _moonlab_mpdo_free = Module['_moonlab_mpdo_free'] = makeInvalidEarlyAccess('_moonlab_mpdo_free');
 var _moonlab_mpdo_clone = Module['_moonlab_mpdo_clone'] = makeInvalidEarlyAccess('_moonlab_mpdo_clone');
@@ -2401,12 +2415,16 @@ var _vqe_exact_ground_state_energy = Module['_vqe_exact_ground_state_energy'] = 
 var _pauli_hamiltonian_add_term = Module['_pauli_hamiltonian_add_term'] = makeInvalidEarlyAccess('_pauli_hamiltonian_add_term');
 var _vqe_create_h2_hamiltonian = Module['_vqe_create_h2_hamiltonian'] = makeInvalidEarlyAccess('_vqe_create_h2_hamiltonian');
 var _vqe_create_lih_hamiltonian = Module['_vqe_create_lih_hamiltonian'] = makeInvalidEarlyAccess('_vqe_create_lih_hamiltonian');
+var _vqe_create_h2o_hamiltonian = Module['_vqe_create_h2o_hamiltonian'] = makeInvalidEarlyAccess('_vqe_create_h2o_hamiltonian');
 var _vqe_create_hardware_efficient_ansatz = Module['_vqe_create_hardware_efficient_ansatz'] = makeInvalidEarlyAccess('_vqe_create_hardware_efficient_ansatz');
+var _vqe_create_uccsd_ansatz = Module['_vqe_create_uccsd_ansatz'] = makeInvalidEarlyAccess('_vqe_create_uccsd_ansatz');
 var _vqe_ansatz_free = Module['_vqe_ansatz_free'] = makeInvalidEarlyAccess('_vqe_ansatz_free');
 var _vqe_apply_ansatz = Module['_vqe_apply_ansatz'] = makeInvalidEarlyAccess('_vqe_apply_ansatz');
 var _vqe_optimizer_create = Module['_vqe_optimizer_create'] = makeInvalidEarlyAccess('_vqe_optimizer_create');
+var _vqe_optimizer_set_hyperparams = Module['_vqe_optimizer_set_hyperparams'] = makeInvalidEarlyAccess('_vqe_optimizer_set_hyperparams');
 var _vqe_optimizer_free = Module['_vqe_optimizer_free'] = makeInvalidEarlyAccess('_vqe_optimizer_free');
 var _vqe_solver_create = Module['_vqe_solver_create'] = makeInvalidEarlyAccess('_vqe_solver_create');
+var _vqe_result_free = Module['_vqe_result_free'] = makeInvalidEarlyAccess('_vqe_result_free');
 var _vqe_solver_free = Module['_vqe_solver_free'] = makeInvalidEarlyAccess('_vqe_solver_free');
 var _vqe_compute_energy = Module['_vqe_compute_energy'] = makeInvalidEarlyAccess('_vqe_compute_energy');
 var _vqe_solve = Module['_vqe_solve'] = makeInvalidEarlyAccess('_vqe_solve');
@@ -2443,6 +2461,7 @@ var _dmrg_energy_variance = Module['_dmrg_energy_variance'] = makeInvalidEarlyAc
 var _tn_mps_copy = Module['_tn_mps_copy'] = makeInvalidEarlyAccess('_tn_mps_copy');
 var _tn_mps_overlap = Module['_tn_mps_overlap'] = makeInvalidEarlyAccess('_tn_mps_overlap');
 var _tn_mps_create_zero = Module['_tn_mps_create_zero'] = makeInvalidEarlyAccess('_tn_mps_create_zero');
+var _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_right_canonicalize');
 var _tensor_gpu_available = Module['_tensor_gpu_available'] = makeInvalidEarlyAccess('_tensor_gpu_available');
 var _tensor_gpu_get_context = Module['_tensor_gpu_get_context'] = makeInvalidEarlyAccess('_tensor_gpu_get_context');
 var _tensor_gpu_backend_type = Module['_tensor_gpu_backend_type'] = makeInvalidEarlyAccess('_tensor_gpu_backend_type');
@@ -2456,6 +2475,7 @@ var _tn_apply_t = Module['_tn_apply_t'] = makeInvalidEarlyAccess('_tn_apply_t');
 var _tn_apply_rx = Module['_tn_apply_rx'] = makeInvalidEarlyAccess('_tn_apply_rx');
 var _tn_apply_ry = Module['_tn_apply_ry'] = makeInvalidEarlyAccess('_tn_apply_ry');
 var _tn_apply_rz = Module['_tn_apply_rz'] = makeInvalidEarlyAccess('_tn_apply_rz');
+var _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_mixed_canonicalize');
 var _tn_apply_cnot = Module['_tn_apply_cnot'] = makeInvalidEarlyAccess('_tn_apply_cnot');
 var _tn_apply_cz = Module['_tn_apply_cz'] = makeInvalidEarlyAccess('_tn_apply_cz');
 var _tn_apply_swap = Module['_tn_apply_swap'] = makeInvalidEarlyAccess('_tn_apply_swap');
@@ -2466,7 +2486,6 @@ var _tn_measure_probability = Module['_tn_measure_probability'] = makeInvalidEar
 var _tn_measure_bitstring_probability = Module['_tn_measure_bitstring_probability'] = makeInvalidEarlyAccess('_tn_measure_bitstring_probability');
 var _tn_mps_amplitude = Module['_tn_mps_amplitude'] = makeInvalidEarlyAccess('_tn_mps_amplitude');
 var _tn_sample_auto = Module['_tn_sample_auto'] = makeInvalidEarlyAccess('_tn_sample_auto');
-var _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_mixed_canonicalize');
 var _tn_mps_move_center = Module['_tn_mps_move_center'] = makeInvalidEarlyAccess('_tn_mps_move_center');
 var _tn_mps_create_basis = Module['_tn_mps_create_basis'] = makeInvalidEarlyAccess('_tn_mps_create_basis');
 var _tn_mps_normalize = Module['_tn_mps_normalize'] = makeInvalidEarlyAccess('_tn_mps_normalize');
@@ -2474,7 +2493,6 @@ var _tn_mps_num_qubits = Module['_tn_mps_num_qubits'] = makeInvalidEarlyAccess('
 var _tn_mps_amplitudes = Module['_tn_mps_amplitudes'] = makeInvalidEarlyAccess('_tn_mps_amplitudes');
 var _tn_mps_to_statevector = Module['_tn_mps_to_statevector'] = makeInvalidEarlyAccess('_tn_mps_to_statevector');
 var _tn_mps_left_canonicalize = Module['_tn_mps_left_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_left_canonicalize');
-var _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = makeInvalidEarlyAccess('_tn_mps_right_canonicalize');
 var _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = makeInvalidEarlyAccess('_tn_mps_truncate_bond');
 var _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = makeInvalidEarlyAccess('_tn_mps_grow_bond');
 var _tn_mps_fidelity = Module['_tn_mps_fidelity'] = makeInvalidEarlyAccess('_tn_mps_fidelity');
@@ -2547,6 +2565,15 @@ var _moonlab_ca_peps_prob_z = Module['_moonlab_ca_peps_prob_z'] = makeInvalidEar
 var _clifford_num_qubits = Module['_clifford_num_qubits'] = makeInvalidEarlyAccess('_clifford_num_qubits');
 var _clifford_measure = Module['_clifford_measure'] = makeInvalidEarlyAccess('_clifford_measure');
 var _clifford_sample_all = Module['_clifford_sample_all'] = makeInvalidEarlyAccess('_clifford_sample_all');
+var _pauli_frame_simd_backend = Module['_pauli_frame_simd_backend'] = makeInvalidEarlyAccess('_pauli_frame_simd_backend');
+var _pauli_frame_simd_lanes = Module['_pauli_frame_simd_lanes'] = makeInvalidEarlyAccess('_pauli_frame_simd_lanes');
+var _pauli_frame_circuit_num_measurements = Module['_pauli_frame_circuit_num_measurements'] = makeInvalidEarlyAccess('_pauli_frame_circuit_num_measurements');
+var _pauli_frame_batch_sample_circuit = Module['_pauli_frame_batch_sample_circuit'] = makeInvalidEarlyAccess('_pauli_frame_batch_sample_circuit');
+var _pauli_frame_batch_sample_detectors = Module['_pauli_frame_batch_sample_detectors'] = makeInvalidEarlyAccess('_pauli_frame_batch_sample_detectors');
+var _moonlab_uf_decoder_new = Module['_moonlab_uf_decoder_new'] = makeInvalidEarlyAccess('_moonlab_uf_decoder_new');
+var _moonlab_uf_decoder_free = Module['_moonlab_uf_decoder_free'] = makeInvalidEarlyAccess('_moonlab_uf_decoder_free');
+var _moonlab_uf_decoder_num_edges = Module['_moonlab_uf_decoder_num_edges'] = makeInvalidEarlyAccess('_moonlab_uf_decoder_num_edges');
+var _moonlab_uf_decode_batch = Module['_moonlab_uf_decode_batch'] = makeInvalidEarlyAccess('_moonlab_uf_decode_batch');
 var _surface_code_clifford_create = Module['_surface_code_clifford_create'] = makeInvalidEarlyAccess('_surface_code_clifford_create');
 var _surface_code_clifford_free = Module['_surface_code_clifford_free'] = makeInvalidEarlyAccess('_surface_code_clifford_free');
 var _surface_code_clifford_data_index = Module['_surface_code_clifford_data_index'] = makeInvalidEarlyAccess('_surface_code_clifford_data_index');
@@ -2719,11 +2746,11 @@ var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_f
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
+var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
 var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_vdii = makeInvalidEarlyAccess('dynCall_vdii');
 var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
 var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
-var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
 var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
 var dynCall_i = makeInvalidEarlyAccess('dynCall_i');
@@ -2790,6 +2817,9 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['entanglement_mutual_information'] != 'undefined', 'missing Wasm export: entanglement_mutual_information');
   assert(typeof wasmExports['entanglement_concurrence_2qubit'] != 'undefined', 'missing Wasm export: entanglement_concurrence_2qubit');
   assert(typeof wasmExports['entanglement_negativity_2qubit'] != 'undefined', 'missing Wasm export: entanglement_negativity_2qubit');
+  assert(typeof wasmExports['noise_model_create'] != 'undefined', 'missing Wasm export: noise_model_create');
+  assert(typeof wasmExports['noise_model_destroy'] != 'undefined', 'missing Wasm export: noise_model_destroy');
+  assert(typeof wasmExports['noise_model_copy'] != 'undefined', 'missing Wasm export: noise_model_copy');
   assert(typeof wasmExports['noise_depolarizing_single'] != 'undefined', 'missing Wasm export: noise_depolarizing_single');
   assert(typeof wasmExports['noise_depolarizing_two_qubit'] != 'undefined', 'missing Wasm export: noise_depolarizing_two_qubit');
   assert(typeof wasmExports['noise_amplitude_damping'] != 'undefined', 'missing Wasm export: noise_amplitude_damping');
@@ -2799,6 +2829,17 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['noise_phase_flip'] != 'undefined', 'missing Wasm export: noise_phase_flip');
   assert(typeof wasmExports['noise_bit_phase_flip'] != 'undefined', 'missing Wasm export: noise_bit_phase_flip');
   assert(typeof wasmExports['noise_thermal_relaxation'] != 'undefined', 'missing Wasm export: noise_thermal_relaxation');
+  assert(typeof wasmExports['noise_readout_error'] != 'undefined', 'missing Wasm export: noise_readout_error');
+  assert(typeof wasmExports['noise_apply_model'] != 'undefined', 'missing Wasm export: noise_apply_model');
+  assert(typeof wasmExports['noise_apply_model_two_qubit'] != 'undefined', 'missing Wasm export: noise_apply_model_two_qubit');
+  assert(typeof wasmExports['noise_model_set_depolarizing'] != 'undefined', 'missing Wasm export: noise_model_set_depolarizing');
+  assert(typeof wasmExports['noise_model_set_amplitude_damping'] != 'undefined', 'missing Wasm export: noise_model_set_amplitude_damping');
+  assert(typeof wasmExports['noise_model_set_phase_damping'] != 'undefined', 'missing Wasm export: noise_model_set_phase_damping');
+  assert(typeof wasmExports['noise_model_set_thermal'] != 'undefined', 'missing Wasm export: noise_model_set_thermal');
+  assert(typeof wasmExports['noise_model_set_gate_time'] != 'undefined', 'missing Wasm export: noise_model_set_gate_time');
+  assert(typeof wasmExports['noise_model_set_readout_error'] != 'undefined', 'missing Wasm export: noise_model_set_readout_error');
+  assert(typeof wasmExports['noise_model_set_enabled'] != 'undefined', 'missing Wasm export: noise_model_set_enabled');
+  assert(typeof wasmExports['noise_model_create_realistic'] != 'undefined', 'missing Wasm export: noise_model_create_realistic');
   assert(typeof wasmExports['moonlab_mpdo_create'] != 'undefined', 'missing Wasm export: moonlab_mpdo_create');
   assert(typeof wasmExports['moonlab_mpdo_free'] != 'undefined', 'missing Wasm export: moonlab_mpdo_free');
   assert(typeof wasmExports['moonlab_mpdo_clone'] != 'undefined', 'missing Wasm export: moonlab_mpdo_clone');
@@ -2825,12 +2866,16 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['pauli_hamiltonian_add_term'] != 'undefined', 'missing Wasm export: pauli_hamiltonian_add_term');
   assert(typeof wasmExports['vqe_create_h2_hamiltonian'] != 'undefined', 'missing Wasm export: vqe_create_h2_hamiltonian');
   assert(typeof wasmExports['vqe_create_lih_hamiltonian'] != 'undefined', 'missing Wasm export: vqe_create_lih_hamiltonian');
+  assert(typeof wasmExports['vqe_create_h2o_hamiltonian'] != 'undefined', 'missing Wasm export: vqe_create_h2o_hamiltonian');
   assert(typeof wasmExports['vqe_create_hardware_efficient_ansatz'] != 'undefined', 'missing Wasm export: vqe_create_hardware_efficient_ansatz');
+  assert(typeof wasmExports['vqe_create_uccsd_ansatz'] != 'undefined', 'missing Wasm export: vqe_create_uccsd_ansatz');
   assert(typeof wasmExports['vqe_ansatz_free'] != 'undefined', 'missing Wasm export: vqe_ansatz_free');
   assert(typeof wasmExports['vqe_apply_ansatz'] != 'undefined', 'missing Wasm export: vqe_apply_ansatz');
   assert(typeof wasmExports['vqe_optimizer_create'] != 'undefined', 'missing Wasm export: vqe_optimizer_create');
+  assert(typeof wasmExports['vqe_optimizer_set_hyperparams'] != 'undefined', 'missing Wasm export: vqe_optimizer_set_hyperparams');
   assert(typeof wasmExports['vqe_optimizer_free'] != 'undefined', 'missing Wasm export: vqe_optimizer_free');
   assert(typeof wasmExports['vqe_solver_create'] != 'undefined', 'missing Wasm export: vqe_solver_create');
+  assert(typeof wasmExports['vqe_result_free'] != 'undefined', 'missing Wasm export: vqe_result_free');
   assert(typeof wasmExports['vqe_solver_free'] != 'undefined', 'missing Wasm export: vqe_solver_free');
   assert(typeof wasmExports['vqe_compute_energy'] != 'undefined', 'missing Wasm export: vqe_compute_energy');
   assert(typeof wasmExports['vqe_solve'] != 'undefined', 'missing Wasm export: vqe_solve');
@@ -2867,6 +2912,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['tn_mps_copy'] != 'undefined', 'missing Wasm export: tn_mps_copy');
   assert(typeof wasmExports['tn_mps_overlap'] != 'undefined', 'missing Wasm export: tn_mps_overlap');
   assert(typeof wasmExports['tn_mps_create_zero'] != 'undefined', 'missing Wasm export: tn_mps_create_zero');
+  assert(typeof wasmExports['tn_mps_right_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_right_canonicalize');
   assert(typeof wasmExports['tensor_gpu_available'] != 'undefined', 'missing Wasm export: tensor_gpu_available');
   assert(typeof wasmExports['tensor_gpu_get_context'] != 'undefined', 'missing Wasm export: tensor_gpu_get_context');
   assert(typeof wasmExports['tensor_gpu_backend_type'] != 'undefined', 'missing Wasm export: tensor_gpu_backend_type');
@@ -2880,6 +2926,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['tn_apply_rx'] != 'undefined', 'missing Wasm export: tn_apply_rx');
   assert(typeof wasmExports['tn_apply_ry'] != 'undefined', 'missing Wasm export: tn_apply_ry');
   assert(typeof wasmExports['tn_apply_rz'] != 'undefined', 'missing Wasm export: tn_apply_rz');
+  assert(typeof wasmExports['tn_mps_mixed_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_mixed_canonicalize');
   assert(typeof wasmExports['tn_apply_cnot'] != 'undefined', 'missing Wasm export: tn_apply_cnot');
   assert(typeof wasmExports['tn_apply_cz'] != 'undefined', 'missing Wasm export: tn_apply_cz');
   assert(typeof wasmExports['tn_apply_swap'] != 'undefined', 'missing Wasm export: tn_apply_swap');
@@ -2890,7 +2937,6 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['tn_measure_bitstring_probability'] != 'undefined', 'missing Wasm export: tn_measure_bitstring_probability');
   assert(typeof wasmExports['tn_mps_amplitude'] != 'undefined', 'missing Wasm export: tn_mps_amplitude');
   assert(typeof wasmExports['tn_sample_auto'] != 'undefined', 'missing Wasm export: tn_sample_auto');
-  assert(typeof wasmExports['tn_mps_mixed_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_mixed_canonicalize');
   assert(typeof wasmExports['tn_mps_move_center'] != 'undefined', 'missing Wasm export: tn_mps_move_center');
   assert(typeof wasmExports['tn_mps_create_basis'] != 'undefined', 'missing Wasm export: tn_mps_create_basis');
   assert(typeof wasmExports['tn_mps_normalize'] != 'undefined', 'missing Wasm export: tn_mps_normalize');
@@ -2898,7 +2944,6 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['tn_mps_amplitudes'] != 'undefined', 'missing Wasm export: tn_mps_amplitudes');
   assert(typeof wasmExports['tn_mps_to_statevector'] != 'undefined', 'missing Wasm export: tn_mps_to_statevector');
   assert(typeof wasmExports['tn_mps_left_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_left_canonicalize');
-  assert(typeof wasmExports['tn_mps_right_canonicalize'] != 'undefined', 'missing Wasm export: tn_mps_right_canonicalize');
   assert(typeof wasmExports['tn_mps_truncate_bond'] != 'undefined', 'missing Wasm export: tn_mps_truncate_bond');
   assert(typeof wasmExports['tn_mps_grow_bond'] != 'undefined', 'missing Wasm export: tn_mps_grow_bond');
   assert(typeof wasmExports['tn_mps_fidelity'] != 'undefined', 'missing Wasm export: tn_mps_fidelity');
@@ -2971,6 +3016,15 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['clifford_num_qubits'] != 'undefined', 'missing Wasm export: clifford_num_qubits');
   assert(typeof wasmExports['clifford_measure'] != 'undefined', 'missing Wasm export: clifford_measure');
   assert(typeof wasmExports['clifford_sample_all'] != 'undefined', 'missing Wasm export: clifford_sample_all');
+  assert(typeof wasmExports['pauli_frame_simd_backend'] != 'undefined', 'missing Wasm export: pauli_frame_simd_backend');
+  assert(typeof wasmExports['pauli_frame_simd_lanes'] != 'undefined', 'missing Wasm export: pauli_frame_simd_lanes');
+  assert(typeof wasmExports['pauli_frame_circuit_num_measurements'] != 'undefined', 'missing Wasm export: pauli_frame_circuit_num_measurements');
+  assert(typeof wasmExports['pauli_frame_batch_sample_circuit'] != 'undefined', 'missing Wasm export: pauli_frame_batch_sample_circuit');
+  assert(typeof wasmExports['pauli_frame_batch_sample_detectors'] != 'undefined', 'missing Wasm export: pauli_frame_batch_sample_detectors');
+  assert(typeof wasmExports['moonlab_uf_decoder_new'] != 'undefined', 'missing Wasm export: moonlab_uf_decoder_new');
+  assert(typeof wasmExports['moonlab_uf_decoder_free'] != 'undefined', 'missing Wasm export: moonlab_uf_decoder_free');
+  assert(typeof wasmExports['moonlab_uf_decoder_num_edges'] != 'undefined', 'missing Wasm export: moonlab_uf_decoder_num_edges');
+  assert(typeof wasmExports['moonlab_uf_decode_batch'] != 'undefined', 'missing Wasm export: moonlab_uf_decode_batch');
   assert(typeof wasmExports['surface_code_clifford_create'] != 'undefined', 'missing Wasm export: surface_code_clifford_create');
   assert(typeof wasmExports['surface_code_clifford_free'] != 'undefined', 'missing Wasm export: surface_code_clifford_free');
   assert(typeof wasmExports['surface_code_clifford_data_index'] != 'undefined', 'missing Wasm export: surface_code_clifford_data_index');
@@ -3143,11 +3197,11 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
+  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
   assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_vdii'] != 'undefined', 'missing Wasm export: dynCall_vdii');
   assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
   assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
-  assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
   assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
   assert(typeof wasmExports['dynCall_i'] != 'undefined', 'missing Wasm export: dynCall_i');
@@ -3210,6 +3264,9 @@ function assignWasmExports(wasmExports) {
   _entanglement_mutual_information = Module['_entanglement_mutual_information'] = createExportWrapper('entanglement_mutual_information', 5);
   _entanglement_concurrence_2qubit = Module['_entanglement_concurrence_2qubit'] = createExportWrapper('entanglement_concurrence_2qubit', 1);
   _entanglement_negativity_2qubit = Module['_entanglement_negativity_2qubit'] = createExportWrapper('entanglement_negativity_2qubit', 1);
+  _noise_model_create = Module['_noise_model_create'] = createExportWrapper('noise_model_create', 0);
+  _noise_model_destroy = Module['_noise_model_destroy'] = createExportWrapper('noise_model_destroy', 1);
+  _noise_model_copy = Module['_noise_model_copy'] = createExportWrapper('noise_model_copy', 1);
   _noise_depolarizing_single = Module['_noise_depolarizing_single'] = createExportWrapper('noise_depolarizing_single', 4);
   _noise_depolarizing_two_qubit = Module['_noise_depolarizing_two_qubit'] = createExportWrapper('noise_depolarizing_two_qubit', 5);
   _noise_amplitude_damping = Module['_noise_amplitude_damping'] = createExportWrapper('noise_amplitude_damping', 4);
@@ -3219,6 +3276,17 @@ function assignWasmExports(wasmExports) {
   _noise_phase_flip = Module['_noise_phase_flip'] = createExportWrapper('noise_phase_flip', 4);
   _noise_bit_phase_flip = Module['_noise_bit_phase_flip'] = createExportWrapper('noise_bit_phase_flip', 4);
   _noise_thermal_relaxation = Module['_noise_thermal_relaxation'] = createExportWrapper('noise_thermal_relaxation', 6);
+  _noise_readout_error = Module['_noise_readout_error'] = createExportWrapper('noise_readout_error', 4);
+  _noise_apply_model = Module['_noise_apply_model'] = createExportWrapper('noise_apply_model', 4);
+  _noise_apply_model_two_qubit = Module['_noise_apply_model_two_qubit'] = createExportWrapper('noise_apply_model_two_qubit', 5);
+  _noise_model_set_depolarizing = Module['_noise_model_set_depolarizing'] = createExportWrapper('noise_model_set_depolarizing', 2);
+  _noise_model_set_amplitude_damping = Module['_noise_model_set_amplitude_damping'] = createExportWrapper('noise_model_set_amplitude_damping', 2);
+  _noise_model_set_phase_damping = Module['_noise_model_set_phase_damping'] = createExportWrapper('noise_model_set_phase_damping', 2);
+  _noise_model_set_thermal = Module['_noise_model_set_thermal'] = createExportWrapper('noise_model_set_thermal', 3);
+  _noise_model_set_gate_time = Module['_noise_model_set_gate_time'] = createExportWrapper('noise_model_set_gate_time', 2);
+  _noise_model_set_readout_error = Module['_noise_model_set_readout_error'] = createExportWrapper('noise_model_set_readout_error', 3);
+  _noise_model_set_enabled = Module['_noise_model_set_enabled'] = createExportWrapper('noise_model_set_enabled', 2);
+  _noise_model_create_realistic = Module['_noise_model_create_realistic'] = createExportWrapper('noise_model_create_realistic', 4);
   _moonlab_mpdo_create = Module['_moonlab_mpdo_create'] = createExportWrapper('moonlab_mpdo_create', 2);
   _moonlab_mpdo_free = Module['_moonlab_mpdo_free'] = createExportWrapper('moonlab_mpdo_free', 1);
   _moonlab_mpdo_clone = Module['_moonlab_mpdo_clone'] = createExportWrapper('moonlab_mpdo_clone', 1);
@@ -3245,12 +3313,16 @@ function assignWasmExports(wasmExports) {
   _pauli_hamiltonian_add_term = Module['_pauli_hamiltonian_add_term'] = createExportWrapper('pauli_hamiltonian_add_term', 4);
   _vqe_create_h2_hamiltonian = Module['_vqe_create_h2_hamiltonian'] = createExportWrapper('vqe_create_h2_hamiltonian', 1);
   _vqe_create_lih_hamiltonian = Module['_vqe_create_lih_hamiltonian'] = createExportWrapper('vqe_create_lih_hamiltonian', 1);
+  _vqe_create_h2o_hamiltonian = Module['_vqe_create_h2o_hamiltonian'] = createExportWrapper('vqe_create_h2o_hamiltonian', 0);
   _vqe_create_hardware_efficient_ansatz = Module['_vqe_create_hardware_efficient_ansatz'] = createExportWrapper('vqe_create_hardware_efficient_ansatz', 2);
+  _vqe_create_uccsd_ansatz = Module['_vqe_create_uccsd_ansatz'] = createExportWrapper('vqe_create_uccsd_ansatz', 2);
   _vqe_ansatz_free = Module['_vqe_ansatz_free'] = createExportWrapper('vqe_ansatz_free', 1);
   _vqe_apply_ansatz = Module['_vqe_apply_ansatz'] = createExportWrapper('vqe_apply_ansatz', 2);
   _vqe_optimizer_create = Module['_vqe_optimizer_create'] = createExportWrapper('vqe_optimizer_create', 1);
+  _vqe_optimizer_set_hyperparams = Module['_vqe_optimizer_set_hyperparams'] = createExportWrapper('vqe_optimizer_set_hyperparams', 6);
   _vqe_optimizer_free = Module['_vqe_optimizer_free'] = createExportWrapper('vqe_optimizer_free', 1);
   _vqe_solver_create = Module['_vqe_solver_create'] = createExportWrapper('vqe_solver_create', 4);
+  _vqe_result_free = Module['_vqe_result_free'] = createExportWrapper('vqe_result_free', 1);
   _vqe_solver_free = Module['_vqe_solver_free'] = createExportWrapper('vqe_solver_free', 1);
   _vqe_compute_energy = Module['_vqe_compute_energy'] = createExportWrapper('vqe_compute_energy', 2);
   _vqe_solve = Module['_vqe_solve'] = createExportWrapper('vqe_solve', 2);
@@ -3287,6 +3359,7 @@ function assignWasmExports(wasmExports) {
   _tn_mps_copy = Module['_tn_mps_copy'] = createExportWrapper('tn_mps_copy', 1);
   _tn_mps_overlap = Module['_tn_mps_overlap'] = createExportWrapper('tn_mps_overlap', 3);
   _tn_mps_create_zero = Module['_tn_mps_create_zero'] = createExportWrapper('tn_mps_create_zero', 2);
+  _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = createExportWrapper('tn_mps_right_canonicalize', 1);
   _tensor_gpu_available = Module['_tensor_gpu_available'] = createExportWrapper('tensor_gpu_available', 0);
   _tensor_gpu_get_context = Module['_tensor_gpu_get_context'] = createExportWrapper('tensor_gpu_get_context', 0);
   _tensor_gpu_backend_type = Module['_tensor_gpu_backend_type'] = createExportWrapper('tensor_gpu_backend_type', 1);
@@ -3300,6 +3373,7 @@ function assignWasmExports(wasmExports) {
   _tn_apply_rx = Module['_tn_apply_rx'] = createExportWrapper('tn_apply_rx', 3);
   _tn_apply_ry = Module['_tn_apply_ry'] = createExportWrapper('tn_apply_ry', 3);
   _tn_apply_rz = Module['_tn_apply_rz'] = createExportWrapper('tn_apply_rz', 3);
+  _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = createExportWrapper('tn_mps_mixed_canonicalize', 2);
   _tn_apply_cnot = Module['_tn_apply_cnot'] = createExportWrapper('tn_apply_cnot', 3);
   _tn_apply_cz = Module['_tn_apply_cz'] = createExportWrapper('tn_apply_cz', 3);
   _tn_apply_swap = Module['_tn_apply_swap'] = createExportWrapper('tn_apply_swap', 3);
@@ -3310,7 +3384,6 @@ function assignWasmExports(wasmExports) {
   _tn_measure_bitstring_probability = Module['_tn_measure_bitstring_probability'] = createExportWrapper('tn_measure_bitstring_probability', 2);
   _tn_mps_amplitude = Module['_tn_mps_amplitude'] = createExportWrapper('tn_mps_amplitude', 3);
   _tn_sample_auto = Module['_tn_sample_auto'] = createExportWrapper('tn_sample_auto', 5);
-  _tn_mps_mixed_canonicalize = Module['_tn_mps_mixed_canonicalize'] = createExportWrapper('tn_mps_mixed_canonicalize', 2);
   _tn_mps_move_center = Module['_tn_mps_move_center'] = createExportWrapper('tn_mps_move_center', 2);
   _tn_mps_create_basis = Module['_tn_mps_create_basis'] = createExportWrapper('tn_mps_create_basis', 3);
   _tn_mps_normalize = Module['_tn_mps_normalize'] = createExportWrapper('tn_mps_normalize', 1);
@@ -3318,7 +3391,6 @@ function assignWasmExports(wasmExports) {
   _tn_mps_amplitudes = Module['_tn_mps_amplitudes'] = createExportWrapper('tn_mps_amplitudes', 4);
   _tn_mps_to_statevector = Module['_tn_mps_to_statevector'] = createExportWrapper('tn_mps_to_statevector', 2);
   _tn_mps_left_canonicalize = Module['_tn_mps_left_canonicalize'] = createExportWrapper('tn_mps_left_canonicalize', 1);
-  _tn_mps_right_canonicalize = Module['_tn_mps_right_canonicalize'] = createExportWrapper('tn_mps_right_canonicalize', 1);
   _tn_mps_truncate_bond = Module['_tn_mps_truncate_bond'] = createExportWrapper('tn_mps_truncate_bond', 4);
   _tn_mps_grow_bond = Module['_tn_mps_grow_bond'] = createExportWrapper('tn_mps_grow_bond', 3);
   _tn_mps_fidelity = Module['_tn_mps_fidelity'] = createExportWrapper('tn_mps_fidelity', 2);
@@ -3391,6 +3463,15 @@ function assignWasmExports(wasmExports) {
   _clifford_num_qubits = Module['_clifford_num_qubits'] = createExportWrapper('clifford_num_qubits', 1);
   _clifford_measure = Module['_clifford_measure'] = createExportWrapper('clifford_measure', 5);
   _clifford_sample_all = Module['_clifford_sample_all'] = createExportWrapper('clifford_sample_all', 3);
+  _pauli_frame_simd_backend = Module['_pauli_frame_simd_backend'] = createExportWrapper('pauli_frame_simd_backend', 0);
+  _pauli_frame_simd_lanes = Module['_pauli_frame_simd_lanes'] = createExportWrapper('pauli_frame_simd_lanes', 0);
+  _pauli_frame_circuit_num_measurements = Module['_pauli_frame_circuit_num_measurements'] = createExportWrapper('pauli_frame_circuit_num_measurements', 2);
+  _pauli_frame_batch_sample_circuit = Module['_pauli_frame_batch_sample_circuit'] = createExportWrapper('pauli_frame_batch_sample_circuit', 7);
+  _pauli_frame_batch_sample_detectors = Module['_pauli_frame_batch_sample_detectors'] = createExportWrapper('pauli_frame_batch_sample_detectors', 10);
+  _moonlab_uf_decoder_new = Module['_moonlab_uf_decoder_new'] = createExportWrapper('moonlab_uf_decoder_new', 7);
+  _moonlab_uf_decoder_free = Module['_moonlab_uf_decoder_free'] = createExportWrapper('moonlab_uf_decoder_free', 1);
+  _moonlab_uf_decoder_num_edges = Module['_moonlab_uf_decoder_num_edges'] = createExportWrapper('moonlab_uf_decoder_num_edges', 1);
+  _moonlab_uf_decode_batch = Module['_moonlab_uf_decode_batch'] = createExportWrapper('moonlab_uf_decode_batch', 5);
   _surface_code_clifford_create = Module['_surface_code_clifford_create'] = createExportWrapper('surface_code_clifford_create', 2);
   _surface_code_clifford_free = Module['_surface_code_clifford_free'] = createExportWrapper('surface_code_clifford_free', 1);
   _surface_code_clifford_data_index = Module['_surface_code_clifford_data_index'] = createExportWrapper('surface_code_clifford_data_index', 3);
@@ -3563,11 +3644,11 @@ function assignWasmExports(wasmExports) {
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
+  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
   dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_vdii = dynCalls['vdii'] = createExportWrapper('dynCall_vdii', 4);
   dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
   dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', 3);
-  dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
   dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', 2);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', 2);
   dynCall_i = dynCalls['i'] = createExportWrapper('dynCall_i', 1);
@@ -3862,7 +3943,7 @@ Module['allocFloat64Array'] = function(length) {
  * Version info
  */
 Module['version'] = {
-  core: '1.1.0',
+  core: '1.2.0',
   wasm: true
 };
 // end include: post.js

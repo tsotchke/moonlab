@@ -56,6 +56,11 @@ set(TENSOR_NETWORK_SOURCES
 # Source files - Aaronson-Gottesman tableau backend (since 0.2.1, used by CA-MPS).
 set(BACKEND_SOURCES
     ${QSIM_ROOT}/src/backends/clifford/clifford.c
+    # Pauli-frame batch shot sampler (since v1.2.0; JS binding in
+    # src/pauli-frame.ts).  Compiles the scalar SIMD fallback on wasm32.
+    ${QSIM_ROOT}/src/backends/clifford/pauli_frame.c
+    # Union-find QEC decoder (since v1.2.0; JS binding in src/uf-decoder.ts).
+    ${QSIM_ROOT}/src/qec/uf_decoder.c
 )
 
 # Source files - Topological QC (surface code Clifford-tableau variant,

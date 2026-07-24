@@ -115,7 +115,14 @@ _vqe_solve
 _vqe_compute_energy
 _vqe_hartree_to_kcalmol
 _vqe_create_lih_hamiltonian
+_vqe_create_h2o_hamiltonian
 _vqe_exact_ground_state_energy
+# VQE ergonomics (since v1.2.0): UCCSD ansatz, optimizer
+# hyperparameter setter (learning rate / Adam betas / QNG
+# regularization), and the result-array release entry.
+_vqe_create_uccsd_ansatz
+_vqe_optimizer_set_hyperparams
+_vqe_result_free
 
 # =============================================================================
 # TIER 3: QAOA
@@ -278,7 +285,9 @@ _z2_lgt_1d_build_pauli_sum
 _z2_lgt_1d_gauss_law_pauli
 _z2_lgt_1d_num_qubits
 _moonlab_status_to_string
-# Noise channels (since 0.2.1).
+# Noise channels (since 0.2.1).  Every channel takes the caller's
+# uniform-[0,1) random draw(s) as trailing argument(s) -- the JS layer
+# supplies them (crypto-backed by default, injectable for tests).
 _noise_depolarizing_single
 _noise_depolarizing_two_qubit
 _noise_amplitude_damping
@@ -288,6 +297,21 @@ _noise_bit_flip
 _noise_phase_flip
 _noise_bit_phase_flip
 _noise_thermal_relaxation
+# Readout error + composite device-noise model (since v1.2.0).
+_noise_readout_error
+_noise_model_create
+_noise_model_destroy
+_noise_model_copy
+_noise_model_create_realistic
+_noise_model_set_depolarizing
+_noise_model_set_amplitude_damping
+_noise_model_set_phase_damping
+_noise_model_set_thermal
+_noise_model_set_gate_time
+_noise_model_set_readout_error
+_noise_model_set_enabled
+_noise_apply_model
+_noise_apply_model_two_qubit
 # Entanglement metrics (since 0.2.1).
 _entanglement_entropy_bipartition
 _entanglement_mutual_information
@@ -554,3 +578,29 @@ _moonlab_ca_peps_normalize
 _moonlab_ca_peps_norm
 _moonlab_ca_peps_expect_pauli
 _moonlab_ca_peps_prob_z
+
+# =============================================================================
+# Pauli-frame batch shot sampler (since v1.2.0).
+# Implemented in src/backends/clifford/pauli_frame.c; bound by
+# src/pauli-frame.ts.  Stim-style circuit-level sampler: one reference
+# tableau pass plus bit-packed per-shot frames.  The WASM build compiles
+# the scalar SIMD fallback (no NEON/AVX on wasm32) and single-threaded
+# fan-out (no OpenMP under emscripten).
+# =============================================================================
+_pauli_frame_circuit_num_measurements
+_pauli_frame_batch_sample_circuit
+_pauli_frame_batch_sample_detectors
+_pauli_frame_simd_backend
+_pauli_frame_simd_lanes
+
+# =============================================================================
+# Union-find QEC decoder (since v1.2.0).
+# Implemented in src/qec/uf_decoder.c; bound by src/uf-decoder.ts.
+# Delfosse-Nickerson cluster growth + peeling over a detector error
+# model in edge-list form; consumes the detector-major layout that
+# pauli_frame_batch_sample_detectors emits.
+# =============================================================================
+_moonlab_uf_decoder_new
+_moonlab_uf_decoder_free
+_moonlab_uf_decode_batch
+_moonlab_uf_decoder_num_edges
