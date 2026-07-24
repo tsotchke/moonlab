@@ -390,6 +390,19 @@ if(QSIM_PLATFORM_MACOS AND QSIM_ENABLE_METAL)
     if(METAL_FRAMEWORK AND FOUNDATION_FRAMEWORK)
         message(STATUS "Metal: Found")
         set(QSIM_HAS_METAL ON)
+        # Directory holding Metal.framework / Foundation.framework on this
+        # SDK. Linking the frameworks by absolute path makes CMake put that
+        # directory on every compile line as a plain -F -- a USER framework
+        # search path, where clang applies the full -Wall/-Wextra/-Wpedantic
+        # surface to Apple's own headers. Mainline (Homebrew) clang then
+        # breaks the QSIM_WERROR build on diagnostics Apple's headers were
+        # never written against (-Wmissing-method-return-type inside
+        # NSURLHandle.h, hundreds of -Wgnu-statement-expression pedantic
+        # hits in NSObjCRuntime.h). Marked below as a *system* framework
+        # path (-iframework) for the one translation unit that imports the
+        # frameworks -- same contract as QSIM_ACCELERATE_FRAMEWORKS_DIR.
+        get_filename_component(QSIM_METAL_FRAMEWORKS_DIR
+            "${METAL_FRAMEWORK}" DIRECTORY)
     else()
         message(STATUS "Metal: Not found")
     endif()
@@ -1328,6 +1341,22 @@ if(QSIM_PLATFORM_MACOS)
             ${COREGRAPHICS_FRAMEWORK}
         )
         target_compile_definitions(quantumsim PRIVATE HAS_METAL=1 QSIM_HAS_METAL=1)
+        # System-framework treatment for the Metal/Foundation imports
+        # (issue #33): clang treats everything found through an
+        # -iframework entry as a system framework regardless of the
+        # duplicate plain -F entry CMake emits for the linked framework
+        # paths, so SDK header content can never be promoted to a hard
+        # error under QSIM_WERROR on any toolchain -- Apple clang or
+        # mainline/Homebrew LLVM. Scoped to the single Objective-C++
+        # translation unit that imports the frameworks so our own
+        # warning level is untouched everywhere else.
+        if(QSIM_METAL_FRAMEWORKS_DIR)
+            set_source_files_properties(
+                src/optimization/gpu_metal.mm
+                PROPERTIES
+                COMPILE_OPTIONS "-iframework${QSIM_METAL_FRAMEWORKS_DIR}"
+            )
+        endif()
     endif()
 
     if(QSIM_HAS_SECURITY)
