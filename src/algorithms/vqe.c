@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <float.h>
 #include <stdio.h>
+#include <complex.h>
 
 /* The library is compiled with -ffast-math, under which the C99
  * INFINITY macro is technically undefined behaviour (the optimizer
@@ -867,6 +868,168 @@ static qs_error_t vqe_apply_double_excitation(
     }
 
     return QS_SUCCESS;
+}
+
+// ============================================================================
+// Exact analytic QGT state derivatives for the UCCSD and symmetry-preserving
+// (Givens) ansätze — the generator-insertion method vqe_qng.c uses for the
+// hardware-efficient ansatz, extended here because these two need this file's
+// private circuit-data structs (uccsd_data_t / sym_preserve_data_t). Each
+// parameter drives a single gate U_i = exp(θ_i G_i), and since [G_i, U_i] = 0,
+//   d|ψ⟩/dθ_i = U_after · G_i · U_upto|ref⟩ — replay the ansatz once per
+// parameter and insert the generator G_i right after that gate. Exact (no
+// finite-difference step) and n replays vs 2n for central differences. The
+// primitive fixes the generator and scale (see each function for the details):
+//   * symmetry-preserving builds each Givens rotation from gate_cry, a genuine
+//     controlled-RY exp(-i(θ/2)|1><1|⊗Y); generator (-i/2)(|1><1|⊗Y).
+//   * UCCSD singles ALSO reduce to gate_cry (half-angle) — same controlled-Y
+//     generator, scale (-i/2); UCCSD doubles apply vqe_apply_double_excitation
+//     directly, a full-angle real rotation exp(θG) — generator G, scale +1.
+// ============================================================================
+
+// Apply |1><1|_control ⊗ Y_target in place: Y on the target everywhere, then
+// project onto control==1 (Y_t commutes with the control projector, so order is
+// irrelevant). Generator of gate_cry (a controlled-RY).
+static void qng_apply_controlled_y(quantum_state_t *st, int control, int target, size_t dim) {
+    gate_pauli_y(st, target);
+    for (size_t x = 0; x < dim; x++)
+        if (!((x >> control) & 1ULL)) st->amplitudes[x] = 0.0;
+}
+
+// Symmetry-preserving (Givens) ansatz: each parameter drives one
+// gate_cry(q_occ, q_virt, θ) = exp(-i(θ/2)·|1><1|_{q_occ}⊗Y_{q_virt}); insert
+// that controlled generator right after the CRY (before the closing CNOT), with
+// global scale (-i/2). Rows of dpsi are d_i|ψ⟩.
+int qng_symmetry_state_derivatives(vqe_solver_t *solver, const double *params,
+                                   complex_t *dpsi, size_t dim) {
+    const vqe_ansatz_t *ansatz = solver->ansatz;
+    const sym_preserve_data_t *d = (const sym_preserve_data_t *)ansatz->circuit_data;
+    if (!d) return -1;
+    const size_t n = ansatz->num_parameters;
+    const uint64_t hfref = solver->hamiltonian->hf_reference;
+
+    quantum_state_t hf;
+    if (quantum_state_init(&hf, solver->hamiltonian->num_qubits) != QS_SUCCESS) return -1;
+    for (size_t q = 0; q < ansatz->num_qubits; q++)
+        if (hfref & (1ULL << q)) gate_pauli_x(&hf, (int)q);
+
+    int rc = 0;
+    for (size_t i = 0; i < n; i++) {
+        quantum_state_t st;
+        if (quantum_state_init(&st, solver->hamiltonian->num_qubits) != QS_SUCCESS) { rc = -1; break; }
+        memcpy(st.amplitudes, hf.amplitudes, dim * sizeof(complex_t));
+        size_t idx = 0;
+        for (size_t layer = 0; layer < ansatz->num_layers; layer++)
+            for (size_t o = 0; o < d->num_occupied; o++)
+                for (size_t v = 0; v < d->num_virtual; v++) {
+                    int q_occ = (int)(d->num_virtual + o);
+                    int q_virt = (int)v;
+                    gate_cnot(&st, q_virt, q_occ);
+                    gate_cry(&st, q_occ, q_virt, params[idx]);
+                    if (idx == i) qng_apply_controlled_y(&st, q_occ, q_virt, dim);
+                    idx++;
+                    gate_cnot(&st, q_virt, q_occ);
+                }
+        for (size_t x = 0; x < dim; x++) dpsi[i * dim + x] = (-0.5 * I) * st.amplitudes[x];
+        quantum_state_free(&st);
+    }
+    quantum_state_free(&hf);
+    return rc;
+}
+
+// Generator of the double excitation vqe_apply_double_excitation on
+// (qi, qj, qa, qb). That gate is applied directly on state-vector amplitudes as
+// the FULL-angle real planar rotation U = [[c,-s],[s,c]] (c=cos θ, s=sin θ) on
+// the {|1100>, |0011>} subspace (i,j occupied & a,b empty  vs  i,j empty & a,b
+// occupied), so it is exp(θG) with G = dU/dθ|_0 = [[0,-1],[1,0]]:
+// G|1100> = |0011>, G|0011> = -|1100>. Applying G in place (scale +1, no -i, no
+// 1/2): (a1100, a0011) -> (-a0011, a1100).
+static void qng_apply_double_generator(quantum_state_t *st, int qi, int qj,
+                                       int qa, int qb, size_t dim) {
+    const uint64_t mi = 1ULL << qi, mj = 1ULL << qj;
+    const uint64_t ma = 1ULL << qa, mb = 1ULL << qb;
+    /* G lives ONLY on the {|1100>, |0011>} subspace; it annihilates every other
+     * configuration. Zero the complement first (leaving the coupled pairs, which
+     * are read in the second pass before being overwritten). */
+    for (size_t x = 0; x < dim; x++) {
+        int is_occ = ( (x & mi) &&  (x & mj) && !(x & ma) && !(x & mb));
+        int is_exc = (!(x & mi) && !(x & mj) &&  (x & ma) &&  (x & mb));
+        if (!is_occ && !is_exc) st->amplitudes[x] = 0.0;
+    }
+    for (size_t x = 0; x < dim; x++) {
+        /* Visit each pair once, from the "both occupied" member |1100>. */
+        if ((x & mi) && (x & mj) && !(x & ma) && !(x & mb)) {
+            uint64_t y = x ^ mi ^ mj ^ ma ^ mb;   /* the "both excited" member */
+            complex_t axx = st->amplitudes[x];
+            complex_t ayy = st->amplitudes[y];
+            st->amplitudes[x] = -ayy;
+            st->amplitudes[y] =  axx;
+        }
+    }
+}
+
+// UCCSD ansatz (current master). The two excitation families use DIFFERENT
+// primitives, hence different generators and scales:
+//   * Singles apply vqe_apply_givens_rotation = CNOT(a,i)·CRY(i,a,θ)·CNOT(a,i).
+//     The θ-dependence is the controlled-RY CRY(i,a,θ) = exp(-i(θ/2)|1><1|_i⊗Y_a)
+//     — a HALF-angle rotation — so the derivative inserts the controlled-Y
+//     generator |1><1|_i⊗Y_a between the CRY and the closing CNOT, with scale
+//     (-i/2) (identical machinery to qng_symmetry_state_derivatives). The bare
+//     Givens "real rotation" reading (scale +1) is wrong by a factor of two —
+//     it would over-count g by 4×.
+//   * Doubles apply vqe_apply_double_excitation directly, a FULL-angle real
+//     planar rotation exp(θG); the derivative inserts G (scale +1, no -i, no 1/2).
+// Since exactly one generator is inserted per parameter i, the per-parameter
+// scale is picked by whether i indexes a single (< n_single) or a double.
+// The Hartree-Fock reference is prepared once (from hf_reference, matching
+// qng_prepare_state); the ansatz no longer re-prepares HF (that double-X bug
+// was fixed on master alongside the particle-number-preserving rewrite).
+int qng_uccsd_state_derivatives(vqe_solver_t *solver, const double *params,
+                                complex_t *dpsi, size_t dim) {
+    const vqe_ansatz_t *ansatz = solver->ansatz;
+    const uccsd_data_t *data = (const uccsd_data_t *)ansatz->circuit_data;
+    if (!data) return -1;
+    const size_t n = ansatz->num_parameters;
+    const size_t n_single = data->num_occupied * data->num_virtual;
+    const uint64_t hfref = solver->hamiltonian->hf_reference;
+
+    int rc = 0;
+    for (size_t i = 0; i < n; i++) {
+        quantum_state_t st;
+        if (quantum_state_init(&st, solver->hamiltonian->num_qubits) != QS_SUCCESS) { rc = -1; break; }
+        // HF reference only (as the caller / qng_prepare_state prepares it).
+        for (size_t q = 0; q < ansatz->num_qubits; q++)
+            if (hfref & (1ULL << q)) gate_pauli_x(&st, (int)q);
+
+        size_t p = 0;
+        // Single excitations: CNOT(a,i)·CRY(i,a,θ)·CNOT(a,i); generator is the
+        // controlled-Y of the half-angle CRY, inserted before the closing CNOT.
+        for (size_t ii = 0; ii < data->num_occupied; ii++)
+            for (size_t a = 0; a < data->num_virtual; a++) {
+                int aq = (int)(data->num_occupied + a);
+                gate_cnot(&st, aq, (int)ii);
+                gate_cry(&st, (int)ii, aq, params[p]);
+                if (p == i) qng_apply_controlled_y(&st, (int)ii, aq, dim);
+                gate_cnot(&st, aq, (int)ii);
+                p++;
+            }
+        // Double excitations: full-angle planar rotation on {|1100>, |0011>}.
+        for (size_t ii = 0; ii < data->num_occupied; ii++)
+            for (size_t jj = ii + 1; jj < data->num_occupied; jj++)
+                for (size_t a = 0; a < data->num_virtual; a++)
+                    for (size_t b = a + 1; b < data->num_virtual; b++) {
+                        int aq = (int)(data->num_occupied + a);
+                        int bq = (int)(data->num_occupied + b);
+                        vqe_apply_double_excitation(&st, (int)ii, (int)jj, aq, bq, params[p]);
+                        if (p == i) qng_apply_double_generator(&st, (int)ii, (int)jj, aq, bq, dim);
+                        p++;
+                    }
+        // Single -> CRY generator, scale (-i/2); double -> real generator, +1.
+        const complex_t scale = (i < n_single) ? (-0.5 * I) : (complex_t)1.0;
+        for (size_t x = 0; x < dim; x++) dpsi[i * dim + x] = scale * st.amplitudes[x];
+        quantum_state_free(&st);
+    }
+    return rc;
 }
 
 // ============================================================================
