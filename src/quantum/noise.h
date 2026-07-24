@@ -144,7 +144,7 @@ MOONLAB_API void noise_depolarizing_single(quantum_state_t* state, int qubit,
 /**
  * @brief Apply depolarizing channel to two qubits
  */
-void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
+MOONLAB_API void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
                                   double probability, double random_value);
 
 /**
