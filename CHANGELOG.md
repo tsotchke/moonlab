@@ -71,6 +71,24 @@ merged PRs #12, #13, and #14.
   Fubini-Study metric divergence at the Qi-Wu-Zhang Dirac-node gap closing
   and the nilpotency of a surface-code stabilizer chain complex (d1.d2 = 0)
   are the same epsilon^2 = 0.
+- **JS binding parity for the v1.2 surfaces.** `@moonlab/quantum-core`
+  gains the VQE ergonomics (`VqeSolver.create(h, { ansatz: 'uccsd',
+  optimizer: 'qng' | 'adam' | ..., learningRate, beta1, beta2, epsilon,
+  qngRegularization, maxIterations, tolerance })`, `OptimizerType.Qng`,
+  `PauliHamiltonian.h2o()`, `numParameters`), the readout-error and
+  composite `DeviceNoiseModel` noise surface, the Pauli-frame batch
+  sampler (`pauliFrame.sampleCircuit` / `sampleDetectors` with typed op
+  builders), and the union-find decoder (`UfDecoder`, `UF_BOUNDARY`).
+  `pauli_frame.c` and `uf_decoder.c` join the WASM build (scalar SIMD
+  fallback, single-threaded fan-out).  New integration suites pin UCCSD
+  H2/LiH to chemical accuracy against exact diagonalisation, GHZ batch
+  shot correlations, per-channel noise rates at deterministic branch
+  points and 4-sigma statistical tolerance, the C decoder unit-test
+  vectors, and a seeded sampler-to-decoder round trip.
+  `docs/PARITY_MATRIX.md` re-audited: new rows for noise, VQE
+  ergonomics, the batch sampler, the UF decoder, chemistry, error
+  mitigation, and `moonlab.distributed`, each column marked to the
+  actual binding state.
 - **Packaging and release-pipeline rework.** `release.yml` rebuilt around a
   preflight job that classifies the tag (stable vs. prerelease), stamps the
   npm dist-tag, and verifies version sync before any build starts.
@@ -132,6 +150,16 @@ merged PRs #12, #13, and #14.
 - Emscripten build now compiles `vqe_qng.c` and `h2_sto3g.c` into the WASM
   artifact (both were reachable from `vqe.c` but missing from the
   emscripten `CMakeLists.txt` source list).
+- **JS noise channels passed no random draw.** The C noise channels take
+  the caller's uniform-[0, 1) draw as their trailing argument; `noise.ts`
+  called them without it, so every channel branched on an undefined
+  (NaN-coerced) draw and never realised the correct Kraus statistics.
+  The JS wrappers now thread an explicit or crypto-backed draw through
+  every channel (`thermalRelaxation` marshals its two-draw buffer), and
+  the new integration suite pins both deterministic branch selection and
+  statistical rates.  `VqeSolver.solve()` also now releases the
+  C-owned `optimal_parameters` array through `vqe_result_free` instead
+  of leaking it.
 - **Non-terminating circuit-payload parse.** `moonlab_qgtl_circuit_deserialize`
   no longer loops forever on a payload containing an interior NUL byte -- the
   line cursor advanced only on a newline and parked on the NUL. Ambiguous

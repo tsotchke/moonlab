@@ -17,9 +17,15 @@ Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 | Bell-pair primitive + CHSH + Mermin     | ✅  | `algorithms.py` | `bell.rs`     | `bell.ts`         |
 | Grover search                           | ✅  | `algorithms.py` | `grover.rs`   | `grover.ts`       |
 | VQE + native autograd                   | ✅  | `algorithms.py` | `vqe.rs`      | `vqe.ts`          |
+| VQE ergonomics: UCCSD ansatz, QNG optimizer, string optimizers, hyperparams (since v1.2) | ✅ | `algorithms.py` | ✗ ¹⁸ | `vqe.ts` |
 | QAOA                                    | ✅  | `algorithms.py` | `qaoa.rs`     | `qaoa.ts`         |
+| Noise channels (Kraus trajectory, `noise.h`) | ✅ | `noise.py` | `noise.rs`      | `noise.ts` ¹⁹     |
+| Readout error + composite `noise_model_t` | ✅ | `noise.py`  | `noise.rs` ¹⁹     | `noise.ts` ¹⁹     |
 | Clifford tableau backend                | ✅  | `clifford.py` | `clifford.rs`   | `clifford.ts`     |
+| Pauli-frame batch sampler (`pauli_frame.h`, since v1.2) | ✅ | ✗ ²⁰ | ✗ ²⁰      | `pauli-frame.ts`  |
 | Gate-fusion DAG                         | ✅  | `fusion.py` | `fusion.rs`       | `fusion.ts`       |
+| Chemistry helpers (`Molecule`, STO-3G coefficients) | ✅ | `chemistry.py` | ✗    | ✗ ²¹              |
+| Error mitigation (ZNE / PEC / readout calibration) | ✅ | `error_mitigation.py` | ✗ | ✗            |
 
 ## Tensor networks
 
@@ -53,6 +59,7 @@ Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 | Surface code (rotated, d × d)           | ✅  | `surface_code.py` | `surface_code.rs` | `surface-code.ts`|
 | Threshold sweep harness                 | ✅  | `surface_code.py` | `surface_code.rs` | `surface-code.ts`|
 | Decoder zoo (GREEDY, MWPM-exact, SBNN, LIBIRREP_SS, PyMatching) | ✅ ¹⁵ | `decoder.py` | `decoder.rs` | `decoder.ts` |
+| Union-find decoder (`uf_decoder.h`, since v1.2) | ✅ | ✗ ²⁰ | ✗ ²⁰            | `uf-decoder.ts`   |
 | QGTL circuit ingestion                  | ✅  | `qgtl.py`   | `qgtl.rs`         | `qgtl.ts`         |
 | libirrep QEC zoo bridge (opt-in)        | ✅ ⁶ | `libirrep_qec.py` | `libirrep_qec.rs` | `libirrep-qec.ts` |
 | Z_2 1+1D lattice gauge theory           | ✅  | `ca_mps.py` | `z2_lgt.rs`      | `ca-mps.ts`       |
@@ -62,7 +69,7 @@ Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 | Capability                              | C   | Python      | Rust              | JS                |
 |-----------------------------------------|-----|-------------|-------------------|-------------------|
 | Distributed scheduler MVP               | ✅  | `scheduler.py` | `scheduler.rs` | `scheduler.ts`    |
-| MPI state-vector partitioning           | ✅ ⁷ | ✗          | ✗                | ✗                |
+| MPI state-vector partitioning           | ✅ ⁷ | `distributed.py` ⁷ | ✗          | ✗ ⁷              |
 | Control plane (line protocol)           | ✅  | `control_plane.py` | `control_plane.rs` | `control-plane.ts` ⁸ |
 | Control plane TLS / mTLS                | ✅  | `control_plane.py` | `control_plane.rs` ⁹ | `control-plane.ts` ⁸ |
 | Control plane HMAC-SHA3 auth            | ✅  | `control_plane.py` | `control_plane.rs` | `control-plane.ts` ⁸ |
@@ -143,8 +150,14 @@ Without it the bridge entries return `MOONLAB_LIBIRREP_NOT_BUILT = -201`
 deliberately (caller can always call -- not a stub).
 
 ⁷ MPI state-vector requires `-DQSIM_ENABLE_MPI=ON` and an MPI runtime
-(OpenMPI / MPICH).  No binding language exposes the MPI bridge because
-none of the runtimes (CPython, Rust, V8) cleanly co-host an MPI rank.
+(OpenMPI / MPICH).  Python binds the full distributed surface through
+`moonlab.distributed` (`DistributedContext`, `DistributedState`, gates,
+collective measurement) since v1.2 -- launch under `mpirun` with an
+MPI-enabled build; `is_mpi_available()` reports the build state and
+every entry raises `MpiUnavailableError` cleanly otherwise.  Rust and
+JS do not expose the MPI bridge: neither runtime (multi-threaded tokio
+/ V8 + WASM sandbox) cleanly co-hosts an MPI rank, and the WASM build
+has no MPI at all.
 
 ⁸ The JS control-plane client is Node-only -- browsers can't open raw
 TCP sockets, and the client-side implementation (including its TLS /
@@ -220,14 +233,59 @@ H2-only `VQE` class that runs a classical (non-quantum-state) grid
 search over a closed-form single-parameter H2 ansatz. It does not
 implement QAOA.
 
+¹⁸ The v1.2 VQE ergonomics -- `vqe_create_uccsd_ansatz`,
+`VQE_OPTIMIZER_QNG`, `vqe_optimizer_set_hyperparams`, string optimizer
+names -- are bound in Python (`VQE(ansatz='uccsd', optimizer='qng',
+learning_rate=..., ...)`) and JS (`VqeSolver.create(h, { ansatz:
+'uccsd', optimizer: 'qng', learningRate, beta1, beta2, epsilon,
+qngRegularization, maxIterations, tolerance })`).  Rust's `vqe.rs`
+still constructs only the hardware-efficient ansatz with the four
+legacy optimizers.
+
+¹⁹ Every C noise channel takes the caller's uniform-[0, 1) draw as its
+trailing argument.  Python (`moonlab.noise`, seedable numpy Generator),
+Rust (`moonlab::noise`, explicit `random_value` parameter), and JS
+(`noise.ts`, optional trailing draw with a crypto-backed default) all
+pass it through correctly.  The composite `noise_model_t` +
+`noise_apply_model` device profile and `noise_readout_error` are bound
+in Python (`DeviceNoiseModel`, `ReadoutError`) and JS
+(`DeviceNoiseModel`, `readoutError`); Rust binds `readout_error` but
+not the composite `noise_model_t` surface.
+
+²⁰ The v1.2 Pauli-frame batch sampler
+(`pauli_frame_batch_sample_circuit` / `_sample_detectors`) and the
+union-find decoder (`moonlab_uf_decoder_new` / `_decode_batch`) are
+C + JS today (`pauli-frame.ts`, `uf-decoder.ts`; the WASM build
+compiles the scalar SIMD fallback and single-threaded fan-out).  The
+C-side benchmark drivers (`benchmarks/dominance/fronts/f3_*.py`) drive
+the native library directly over ctypes but no `moonlab.*` Python
+module or Rust wrapper exposes them yet.
+
+²¹ Python's `moonlab.chemistry` (`Molecule`, `Hamiltonian`,
+`h2_sto3g_pauli_coeffs`) and `moonlab.error_mitigation` (`ZNE`, `PEC`,
+`MeasurementMitigation`) are Python-only conveniences over C entries.
+JS exposes the underlying molecular Hamiltonians directly
+(`PauliHamiltonian.h2 / .lih / .h2o`) but not the geometry-driven
+`Molecule` surface or the mitigation estimators.
+
 ## Current parity gaps
 
 The following parity gaps are listed for transparency:
 
 - **JS Node-only control-plane client.**  Browsers must go through the
   WebSocket gateway.
-- **MPI bindings.**  MPI state-vector is C-only because no high-level
-  runtime co-hosts an MPI rank cleanly.
+- **MPI bindings beyond Python.**  MPI state-vector is C + Python
+  (`moonlab.distributed`, launched under `mpirun`); Rust and JS do not
+  co-host an MPI rank (see footnote ⁷).
+- **Rust v1.2 additions.**  UCCSD / QNG / optimizer hyperparameters
+  (footnote ¹⁸), the composite `noise_model_t` profile (footnote ¹⁹),
+  the Pauli-frame batch sampler, and the union-find decoder (footnote
+  ²⁰) have no Rust wrappers yet.
+- **Python Pauli-frame sampler / UF decoder.**  Reachable from the
+  dominance benchmark harness over raw ctypes but not yet packaged as
+  `moonlab.*` modules (footnote ²⁰).
+- **Chemistry + error mitigation.**  `moonlab.chemistry` and
+  `moonlab.error_mitigation` are Python-only (footnote ²¹).
 - **Crypto bindings in Rust / JS.**  ML-KEM and the conditioned hybrid RNG
   are available through C and Python, but are not yet exposed by the Rust or
   JavaScript bindings.  The control plane's HMAC-SHA3 authentication remains
