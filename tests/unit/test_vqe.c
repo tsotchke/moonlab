@@ -14,8 +14,11 @@
  */
 
 #include "../../src/algorithms/vqe.h"
+#include "../../src/quantum/state.h"
+#include "../../src/quantum/gates.h"
 #include "../../src/utils/quantum_entropy.h"
 #include "../../src/applications/hardware_entropy.h"
+#include <complex.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -384,6 +387,143 @@ static void test_lih_pes_smooth_and_consistent(void) {
  * (symmetric, positive-semidefinite), and QNG must optimize H2 below the
  * Hartree-Fock reference.  A head-to-head against ADAM from identical
  * initial parameters reports the iteration count. */
+
+/* |psi(params)> through the public forward pass only (HF preparation from
+ * hamiltonian->hf_reference, then vqe_apply_ansatz) -- the same convention
+ * vqe_compute_qgt uses internally. */
+static int qgt_ref_prepare(vqe_solver_t *s, const double *params,
+                           quantum_state_t *psi) {
+    if (quantum_state_init(psi, s->hamiltonian->num_qubits) != QS_SUCCESS)
+        return -1;
+    uint64_t hf = s->hamiltonian->hf_reference;
+    for (size_t q = 0; q < s->hamiltonian->num_qubits; q++)
+        if (hf & (1ULL << q)) gate_pauli_x(psi, (int)q);
+    memcpy(s->ansatz->parameters, params,
+           s->ansatz->num_parameters * sizeof(double));
+    if (vqe_apply_ansatz(psi, s->ansatz) != QS_SUCCESS) {
+        quantum_state_free(psi);
+        return -1;
+    }
+    return 0;
+}
+
+/* Independent central-difference reference for the Fubini-Study metric,
+ * built purely from forward passes.  Cross-checks the exact analytic
+ * generator-insertion derivatives inside vqe_compute_qgt: the two must agree
+ * to the O(delta^2) truncation error of the finite difference. */
+static int qgt_central_difference_reference(vqe_solver_t *s,
+                                            const double *params,
+                                            double *g_out) {
+    const size_t n   = s->ansatz->num_parameters;
+    const size_t dim = (size_t)1 << s->hamiltonian->num_qubits;
+    const double delta = 1e-4;
+
+    double    *pshift = malloc(n * sizeof(double));
+    complex_t *psi0   = malloc(dim * sizeof(complex_t));
+    complex_t *dpsi   = malloc(n * dim * sizeof(complex_t));
+    complex_t *ov     = malloc(n * sizeof(complex_t));
+    if (!pshift || !psi0 || !dpsi || !ov) {
+        free(pshift); free(psi0); free(dpsi); free(ov);
+        return -1;
+    }
+
+    int rc = 0;
+    quantum_state_t st;
+    if (qgt_ref_prepare(s, params, &st) != 0) { rc = -1; goto done; }
+    memcpy(psi0, st.amplitudes, dim * sizeof(complex_t));
+    quantum_state_free(&st);
+
+    for (size_t i = 0; i < n; i++) {
+        memcpy(pshift, params, n * sizeof(double));
+        pshift[i] = params[i] + delta;
+        if (qgt_ref_prepare(s, pshift, &st) != 0) { rc = -1; goto done; }
+        for (size_t x = 0; x < dim; x++) dpsi[i * dim + x] = st.amplitudes[x];
+        quantum_state_free(&st);
+
+        pshift[i] = params[i] - delta;
+        if (qgt_ref_prepare(s, pshift, &st) != 0) { rc = -1; goto done; }
+        for (size_t x = 0; x < dim; x++)
+            dpsi[i * dim + x] =
+                (dpsi[i * dim + x] - st.amplitudes[x]) / (2.0 * delta);
+        quantum_state_free(&st);
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        complex_t sum = 0.0;
+        for (size_t x = 0; x < dim; x++) sum += conj(psi0[x]) * dpsi[i * dim + x];
+        ov[i] = sum;
+    }
+    for (size_t i = 0; i < n; i++)
+        for (size_t j = i; j < n; j++) {
+            complex_t a = 0.0;
+            for (size_t x = 0; x < dim; x++)
+                a += conj(dpsi[i * dim + x]) * dpsi[j * dim + x];
+            double g = creal(a) - creal(conj(ov[i]) * ov[j]);
+            g_out[i * n + j] = g;
+            g_out[j * n + i] = g;
+        }
+
+done:
+    free(pshift); free(psi0); free(dpsi); free(ov);
+    return rc;
+}
+
+/* Symmetry, non-negative diagonal, and positive-semidefiniteness (quadratic
+ * form on {-1,0,1} test vectors) of an n x n metric. */
+static void qgt_check_metric_properties(const double *g, size_t n,
+                                        const char *name) {
+    double max_asym = 0.0, min_diag = 1e300;
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < n; j++) {
+            double a = fabs(g[i * n + j] - g[j * n + i]);
+            if (a > max_asym) max_asym = a;
+        }
+        if (g[i * n + i] < min_diag) min_diag = g[i * n + i];
+    }
+    CHECK(max_asym < 1e-9, "%s: QGT symmetric (max asymmetry %.2e)",
+          name, max_asym);
+    CHECK(min_diag > -1e-9, "%s: QGT diagonal non-negative (min %.3e)",
+          name, min_diag);
+
+    double min_q = 1e300;
+    for (int t = 0; t < 4; t++) {
+        double q = 0.0;
+        for (size_t i = 0; i < n; i++) {
+            double vi = ((int)((i + t) % 3) - 1);
+            for (size_t j = 0; j < n; j++) {
+                double vj = ((int)((j + t) % 3) - 1);
+                q += vi * g[i * n + j] * vj;
+            }
+        }
+        if (q < min_q) min_q = q;
+    }
+    CHECK(min_q > -1e-9, "%s: QGT positive-semidefinite (min v^T g v %.3e)",
+          name, min_q);
+}
+
+/* max_ij |g_exact - g_cd| between the exact metric and the independent
+ * central-difference reference, printed and gated at 1e-7. */
+static void qgt_check_matches_central_difference(vqe_solver_t *s,
+                                                 const double *params,
+                                                 const double *g_exact,
+                                                 size_t n, const char *name) {
+    double *g_cd = malloc(n * n * sizeof(double));
+    int rc = (g_cd != NULL) ?
+        qgt_central_difference_reference(s, params, g_cd) : -1;
+    CHECK(rc == 0, "%s: central-difference reference computed", name);
+    if (rc == 0) {
+        double max_diff = 0.0;
+        for (size_t k = 0; k < n * n; k++) {
+            double d = fabs(g_exact[k] - g_cd[k]);
+            if (d > max_diff) max_diff = d;
+        }
+        CHECK(max_diff < 1e-7,
+              "%s: exact QGT matches central differences (max |diff| %.3e)",
+              name, max_diff);
+    }
+    free(g_cd);
+}
+
 static void test_qng_metric_and_convergence(void) {
     fprintf(stdout, "\n-- VQE: quantum natural gradient (QGT metric + convergence) --\n");
 
@@ -433,12 +573,16 @@ static void test_qng_metric_and_convergence(void) {
     }
     CHECK(min_q > -1e-9, "QGT is positive-semidefinite (min v^T g v %.3e)", min_q);
 
-    /* (1b) exact analytic value: for the hardware-efficient ansatz the leading
-     * RY on the HF reference has Fubini-Study metric exactly 1/4 (the variance of
-     * a Pauli generator on a computational-basis eigenstate). The exact
-     * generator-insertion path (vqe_qng.c) reaches this to machine precision;
-     * central differences only get ~2e-10. */
-    CHECK(fabs(g[0] - 0.25) < 1e-12, "exact QGT g[0][0] == 1/4 (%.12f)", g[0]);
+    /* (1b) exact analytic anchor (PR #16): for the hardware-efficient ansatz
+     * the leading RY on the HF reference has Fubini-Study metric exactly 1/4,
+     * the variance of the P/2 generator on a real-amplitude state (<Y> = 0
+     * there, <Y^2> = 1).  The exact generator-insertion path reaches this to
+     * machine precision; central differences only get within ~1e-9. */
+    CHECK(fabs(g[0] - 0.25) < 1e-12, "exact QGT g[0][0] == 1/4 (%.15f)", g[0]);
+
+    /* (1c) full-metric agreement with an independent central-difference
+     * reference built from forward passes only. */
+    qgt_check_matches_central_difference(solver, params, g, n, "HEA/H2");
     free(g);
 
     /* (2) QNG optimizes H2 below Hartree-Fock. */
@@ -578,58 +722,166 @@ static void test_lih_uccsd_chemical_accuracy(void) {
     pauli_hamiltonian_free(H);
 }
 
-/* Exact QGT for the UCCSD and symmetry-preserving (Givens) ansätze (generator
- * insertion). The QGT is a geometric property of the ansatz and its reference
- * state alone — the Hamiltonian never enters the metric — so we pin the HF
- * reference to |0011> to match the 2-electron UCCSD partition (occupied {0,1},
- * virtual {2,3}): all four single excitations and the one double are then
- * unblocked, exercising both the Givens and the double-excitation generators.
- * Checks a valid metric plus the exact analytic value g[0][0]=1/4 for the
- * leading UCCSD single excitation: it is built from a half-angle controlled-RY
- * whose generator (-i/2)(|1><1|⊗Y) acts as Y/2 on the (occupied-controlled) HF
- * reference, a computational-basis eigenstate, giving Fubini-Study variance
- * (1/2)²=1/4 (same value and reason as the leading hardware-efficient RY). The
- * exact path hits it to machine precision; central differences only ~3e-9. */
+/* Exact analytic QGT for the UCCSD and symmetry-preserving (Givens) ansaetze
+ * (generator insertion, PR #16, rederived for the current particle-number-
+ * preserving excitation gates).  Three cases on the 4-qubit LiH operator:
+ *
+ * (a) UCCSD singles (4 qubits, 3 electrons, HF = |0111>): valid metric, full
+ *     agreement with an independent central-difference reference, and the
+ *     closed-form anchor g[0][0] = 1/4.  Derivation for the current Givens
+ *     gate: the composite CNOT-CRY(theta)-CNOT rotates its plane by theta/2
+ *     (CRY is a half-angle gate), so the gate is exp((theta/2) G) with G real
+ *     antisymmetric and d_0|psi> = (1/2) U_after G_0 U_upto|HF>.  Parameter 0
+ *     rotates the coupled pair {|1_0 0_3>, |0_0 1_3>} that contains the HF
+ *     reference, so U_upto|HF> stays in that plane, where G acts as the
+ *     orthogonal [[0,-1],[1,0]] -- hence <d_0 psi|d_0 psi> = 1/4 -- and the
+ *     Berry connection <psi|d_0 psi> = (1/2) v^T G v = 0 exactly for any
+ *     real v.  So g[0][0] = 1/4 to machine precision, at any theta.  (The
+ *     PR #16 anchor was g[0][0] = 1 for the old CNOT-RY(2 theta)-CNOT
+ *     decomposition; the particle-preserving replacement halves the angular
+ *     velocity, quartering the metric entry.)
+ * (b) UCCSD with an active double excitation: the same operator with a
+ *     2-electron reference |0011> gives 4 singles + 1 double.  CD agreement
+ *     at a generic point; with all singles at zero the double's rotation
+ *     plane {|0011>, |1100>} contains the reference, and the double rotates
+ *     by the FULL angle (cos/sin applied directly), so the same argument
+ *     with s = 1 pins its diagonal at g[4][4] = 1.
+ * (c) symmetry-preserving Givens ansatz (2 layers): valid metric + CD
+ *     agreement.  Here each parameter drives gate_cry inside a fixed CNOT
+ *     sandwich, so the insertion is (-i/2) |1><1| (x) Y after the CRY. */
 static void test_qng_exact_qgt_uccsd_givens(void) {
-    fprintf(stdout, "\n-- VQE: exact QGT for UCCSD / symmetry-preserving ansätze --\n");
-    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5);
-    H->hf_reference = 0x3;   /* |0011>: consistent with the 2-electron partition */
+    fprintf(stdout, "\n-- VQE: exact QGT for UCCSD / symmetry-preserving ansaetze --\n");
+
     entropy_ctx_t hw; entropy_init(&hw);
     quantum_entropy_ctx_t e;
     quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
 
-    vqe_ansatz_t *uccsd = vqe_create_uccsd_ansatz(H->num_qubits, 2);
-    vqe_ansatz_t *givens = vqe_create_symmetry_preserving_ansatz(H->num_qubits, 2, 2);
-    vqe_ansatz_t *ans[2] = { uccsd, givens };
-    const char* nm[2] = { "UCCSD", "Givens" };
-
-    for (int c = 0; c < 2; c++) {
+    /* (a) UCCSD singles on LiH: 3 electrons, HF |0111>. */
+    {
+        pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+        vqe_ansatz_t *ansatz = vqe_create_uccsd_ansatz(4, 3);
         vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
-        vqe_solver_t *s = vqe_solver_create(H, ans[c], opt, &e);
-        size_t n = ans[c]->num_parameters;
-        double *params = malloc(n * sizeof(double));
+        vqe_solver_t *s = vqe_solver_create(H, ansatz, opt, &e);
+        const size_t n = ansatz->num_parameters;
+        CHECK(n == 3, "UCCSD LiH: 3 single-excitation parameters (got %zu)", n);
+
+        double params[3], g[9];
         for (size_t k = 0; k < n; k++) params[k] = 0.1 * (double)(k + 1);
-        double *g = malloc(n * n * sizeof(double));
         int rc = vqe_compute_qgt(s, params, g);
-        CHECK(rc == 0, "%s: vqe_compute_qgt succeeded (%zu params)", nm[c], n);
+        CHECK(rc == 0, "UCCSD/LiH: vqe_compute_qgt succeeded");
 
-        double max_asym = 0.0, min_diag = 1e300;
-        for (size_t i = 0; i < n; i++) {
-            for (size_t j = 0; j < n; j++) {
-                double a = fabs(g[i * n + j] - g[j * n + i]);
-                if (a > max_asym) max_asym = a;
-            }
-            if (g[i * n + i] < min_diag) min_diag = g[i * n + i];
-        }
-        CHECK(max_asym < 1e-9, "%s: QGT symmetric (%.1e)", nm[c], max_asym);
-        CHECK(min_diag > -1e-9, "%s: QGT diagonal non-negative (%.2e)", nm[c], min_diag);
-        if (c == 0)  /* UCCSD leading single excitation: exact g[0][0] = 1/4 */
-            CHECK(fabs(g[0] - 0.25) < 1e-10, "UCCSD exact g[0][0] == 1/4 (%.12f)", g[0]);
+        qgt_check_metric_properties(g, n, "UCCSD/LiH");
+        qgt_check_matches_central_difference(s, params, g, n, "UCCSD/LiH");
+        CHECK(fabs(g[0] - 0.25) < 1e-12,
+              "UCCSD/LiH exact singles anchor g[0][0] == 1/4 (%.15f)", g[0]);
 
-        free(params); free(g);
         vqe_solver_free(s); vqe_optimizer_free(opt);
+        vqe_ansatz_free(ansatz); pauli_hamiltonian_free(H);
     }
-    vqe_ansatz_free(uccsd); vqe_ansatz_free(givens);
+
+    /* (b) UCCSD doubles: same operator, 2-electron reference |0011> so the
+     * (0,1)->(2,3) double excitation acts on the reference directly. */
+    {
+        pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+        H->hf_reference = 0x3;
+        vqe_ansatz_t *ansatz = vqe_create_uccsd_ansatz(4, 2);
+        vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, ansatz, opt, &e);
+        const size_t n = ansatz->num_parameters;
+        CHECK(n == 5, "UCCSD doubles: 4 singles + 1 double (got %zu)", n);
+
+        double params[5], g[25];
+        for (size_t k = 0; k < n; k++) params[k] = 0.1 * (double)(k + 1);
+        int rc = vqe_compute_qgt(s, params, g);
+        CHECK(rc == 0, "UCCSD doubles: vqe_compute_qgt succeeded");
+
+        qgt_check_metric_properties(g, n, "UCCSD doubles");
+        qgt_check_matches_central_difference(s, params, g, n, "UCCSD doubles");
+
+        /* Doubles anchor: singles at zero, only the double rotates. */
+        double params_d[5] = { 0.0, 0.0, 0.0, 0.0, 0.3 };
+        rc = vqe_compute_qgt(s, params_d, g);
+        CHECK(rc == 0, "UCCSD doubles anchor: vqe_compute_qgt succeeded");
+        CHECK(fabs(g[4 * n + 4] - 1.0) < 1e-12,
+              "UCCSD exact doubles anchor g[4][4] == 1 (%.15f)", g[4 * n + 4]);
+
+        vqe_solver_free(s); vqe_optimizer_free(opt);
+        vqe_ansatz_free(ansatz); pauli_hamiltonian_free(H);
+    }
+
+    /* (c) symmetry-preserving Givens ansatz, 2 layers. */
+    {
+        pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+        vqe_ansatz_t *ansatz = vqe_create_symmetry_preserving_ansatz(4, 2, 2);
+        vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, ansatz, opt, &e);
+        const size_t n = ansatz->num_parameters;
+        CHECK(n == 8, "Givens LiH: 2 layers x 2 occ x 2 virt = 8 parameters (got %zu)", n);
+
+        double params[8], g[64];
+        for (size_t k = 0; k < n; k++) params[k] = 0.1 * (double)(k + 1);
+        int rc = vqe_compute_qgt(s, params, g);
+        CHECK(rc == 0, "Givens/LiH: vqe_compute_qgt succeeded");
+
+        qgt_check_metric_properties(g, n, "Givens/LiH");
+        qgt_check_matches_central_difference(s, params, g, n, "Givens/LiH");
+
+        vqe_solver_free(s); vqe_optimizer_free(opt);
+        vqe_ansatz_free(ansatz); pauli_hamiltonian_free(H);
+    }
+}
+
+/* QNG end-to-end on LiH with the UCCSD ansatz: the exact metric must carry
+ * the natural-gradient step to the correlated ground state, and from
+ * identical initial parameters, the same learning rate, and the same
+ * iteration budget it must do at least as well as plain gradient descent. */
+static void test_qng_lih_uccsd_convergence(void) {
+    fprintf(stdout, "\n-- VQE: QNG on LiH (UCCSD) vs plain gradient --\n");
+
+    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5949);
+    double E_exact = vqe_exact_ground_state_energy(H);
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    const double init[3] = { 0.02, 0.02, 0.02 };
+
+    /* Identical initial parameters, learning rate, and iteration budget for
+     * both optimizers.  The UCCSD singles metric diagonal is ~1/4 (see the
+     * anchor above), so the natural-gradient step g^{-1} grad is ~4x the raw
+     * gradient step: QNG must converge markedly faster than plain GD here. */
+    vqe_ansatz_t *a_qng = vqe_create_uccsd_ansatz(4, 3);
+    memcpy(a_qng->parameters, init, sizeof(init));
+    vqe_optimizer_t *qng = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+    qng->verbose = 0; qng->max_iterations = 1500; qng->tolerance = 1e-12;
+    qng->learning_rate = 0.1;
+    vqe_solver_t *s_qng = vqe_solver_create(H, a_qng, qng, &e);
+    vqe_result_t rq = vqe_solve(s_qng);
+
+    vqe_ansatz_t *a_gd = vqe_create_uccsd_ansatz(4, 3);
+    memcpy(a_gd->parameters, init, sizeof(init));
+    vqe_optimizer_t *gd = vqe_optimizer_create(VQE_OPTIMIZER_GRADIENT_DESCENT);
+    gd->verbose = 0; gd->max_iterations = 1500; gd->tolerance = 1e-12;
+    gd->learning_rate = 0.1;
+    vqe_solver_t *s_gd = vqe_solver_create(H, a_gd, gd, &e);
+    vqe_result_t rg = vqe_solve(s_gd);
+
+    fprintf(stdout,
+            "    QNG:  E = %.9f Ha in %zu iters   GD: E = %.9f Ha in %zu iters"
+            "   (exact %.9f)\n",
+            rq.ground_state_energy, rq.iterations,
+            rg.ground_state_energy, rg.iterations, E_exact);
+    CHECK(isfinite(rq.ground_state_energy) &&
+          fabs(rq.ground_state_energy - E_exact) < 1.6e-3,
+          "QNG reaches the LiH ground state to chemical accuracy (|err| %.2e)",
+          fabs(rq.ground_state_energy - E_exact));
+    CHECK(rq.ground_state_energy <= rg.ground_state_energy + 1e-9,
+          "QNG at least matches plain gradient descent (QNG %.9f vs GD %.9f)",
+          rq.ground_state_energy, rg.ground_state_energy);
+
+    vqe_solver_free(s_qng); vqe_optimizer_free(qng); vqe_ansatz_free(a_qng);
+    vqe_solver_free(s_gd);  vqe_optimizer_free(gd);  vqe_ansatz_free(a_gd);
     pauli_hamiltonian_free(H);
 }
 
@@ -643,9 +895,10 @@ int main(void) {
     test_h2_pes_smooth_and_differentiable();
     test_lih_pes_smooth_and_consistent();
     test_qng_metric_and_convergence();
+    test_qng_exact_qgt_uccsd_givens();
+    test_qng_lih_uccsd_convergence();
     test_h2_uccsd_chemical_accuracy();
     test_lih_uccsd_chemical_accuracy();
-    test_qng_exact_qgt_uccsd_givens();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
