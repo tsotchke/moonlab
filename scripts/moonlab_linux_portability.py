@@ -398,6 +398,11 @@ def _atomic_write(path: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
+            # mkstemp creates the file 0600 regardless of umask.  The lane
+            # manifest is written as root inside the profile container onto a
+            # host-mounted volume, so it must be world-readable or the
+            # unprivileged runner that validates it gets EACCES.
+            os.fchmod(handle.fileno(), 0o644)
         os.replace(temporary, path)
     finally:
         if temporary.exists():
