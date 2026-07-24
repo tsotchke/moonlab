@@ -603,8 +603,10 @@ MOONLAB_API void vqe_solver_set_allow_stochastic_gradient(vqe_solver_t *solver,
  * @brief Quantum geometric (Fubini-Study) tensor of the ansatz state.
  *
  * Computes g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>] for the
- * ideal (noise-free) trial state |psi(parameters)>, via central differences on
- * the statevector.  This is the natural Riemannian metric on the ansatz's
+ * ideal (noise-free) trial state |psi(parameters)>.  Uses exact analytic
+ * parameter derivatives (generator insertion) for the built-in ansaetze and
+ * central differences for a CUSTOM ansatz.  This is the real, symmetric half of
+ * the quantum geometric tensor: the natural Riemannian metric on the ansatz's
  * parameter space, used by the quantum natural gradient optimizer.
  *
  * @param solver VQE solver context
@@ -617,6 +619,35 @@ MOONLAB_API int vqe_compute_qgt(
     vqe_solver_t *solver,
     const double *parameters,
     double *qgt_out
+);
+
+/**
+ * @brief Berry curvature of the ansatz state: the imaginary half of the QGT.
+ *
+ * Computes F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>] for the
+ * ideal (noise-free) trial state |psi(parameters)>, sharing the same exact
+ * analytic derivatives as vqe_compute_qgt.  Together they are the two halves of
+ * the Hermitian quantum geometric tensor Q = g - (i/2) F: vqe_compute_qgt
+ * returns the metric g = Re Q, this returns the curvature F = -2 Im Q.
+ *
+ * F is real and antisymmetric (F_ii = 0, F_ji = -F_ij).  The -2 Im convention
+ * makes the flux of F integrate, by Stokes' theorem, to the Berry phase around
+ * a closed loop in parameter space, and to 2*pi times the Chern number over a
+ * closed parameter 2-manifold.  For a real ansatz (only RY / CNOT / Givens /
+ * double-excitation gates) the state is real and F vanishes identically; a
+ * nonzero F requires phase-bearing gates (e.g. the RZ layer of the
+ * hardware-efficient ansatz).
+ *
+ * @param solver VQE solver context
+ * @param parameters Current parameters (num_parameters slots)
+ * @param berry_out Output: antisymmetric curvature, row-major num_parameters^2
+ * @return 0 on success, -1 on error
+ * @stability experimental
+ */
+MOONLAB_API int vqe_compute_berry_curvature(
+    vqe_solver_t *solver,
+    const double *parameters,
+    double *berry_out
 );
 
 /**
