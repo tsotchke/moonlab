@@ -48,8 +48,22 @@ export {
 } from './ca-mps';
 export type { VarDConfig, Z2LgtPauliSum, PauliByte } from './ca-mps';
 
-// Noise channels (since 0.2.1).
+// Noise channels (since 0.2.1; correct random-draw plumbing, readout
+// error, and DeviceNoiseModel since v1.2.0).
 export * as noise from './noise';
+
+// Pauli-frame batch shot sampler (since v1.2.0).  Stim-style
+// circuit-level sampling: measurement records and detector events over
+// bit-packed per-shot frames.
+export * as pauliFrame from './pauli-frame';
+export { PfOpKind } from './pauli-frame';
+export type { PfOp, CircuitSamples, SampleOptions } from './pauli-frame';
+
+// Union-find QEC decoder (since v1.2.0).  Delfosse-Nickerson cluster
+// growth + peeling over a detector error model; consumes the
+// detector-major batches pauliFrame.sampleDetectors emits.
+export { UfDecoder, UF_BOUNDARY } from './uf-decoder';
+export type { UfEdge } from './uf-decoder';
 
 // Entanglement metrics (since 0.2.1).
 export * as entanglement from './entanglement';
@@ -151,9 +165,22 @@ export type { BellTestResult } from './bell';
 export { groverSearch, groverOptimalIterations } from './grover';
 export type { GroverResult } from './grover';
 
-// Variational Quantum Eigensolver (since 0.5.5).
-export { PauliHamiltonian, PauliHamiltonianBuilder, VqeSolver, OptimizerType } from './vqe';
-export type { VqeResult } from './vqe';
+// Variational Quantum Eigensolver (since 0.5.5; UCCSD ansatz, QNG
+// optimizer, string optimizer names, and hyperparameter overrides
+// since v1.2.0).
+export {
+  PauliHamiltonian,
+  PauliHamiltonianBuilder,
+  VqeSolver,
+  OptimizerType,
+  resolveOptimizer,
+} from './vqe';
+export type {
+  VqeResult,
+  VqeSolverOptions,
+  OptimizerName,
+  AnsatzName,
+} from './vqe';
 
 // Quantum Approximate Optimization Algorithm (since 0.5.5).
 export { Graph, IsingModel, QaoaSolver } from './qaoa';
