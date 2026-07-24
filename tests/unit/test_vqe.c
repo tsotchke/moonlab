@@ -885,6 +885,73 @@ static void test_qng_lih_uccsd_convergence(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Berry curvature = the imaginary half of the QGT, F_ij = -2 Im Q_ij (the same
+ * exact derivatives as vqe_compute_qgt). Checks: (a) the closed-form single-qubit
+ * value F_01 = -sin(alpha)/2 for RY(alpha)-RZ(beta) on |0> (a Bloch state), to
+ * machine precision; (b) F is antisymmetric with zero diagonal; (c) F vanishes
+ * identically for a real ansatz (UCCSD has only RY/CNOT/Givens gates -> real
+ * state -> real QGT); (d) integrating F over the single-qubit (alpha,beta) sweep
+ * gives the Chern number -1. */
+static void test_qng_berry_curvature(void) {
+    fprintf(stdout, "\n-- VQE: Berry curvature (imaginary half of the QGT) --\n");
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    /* (a,b) single-qubit HEA: params = (alpha for RY, beta for RZ) -> Bloch state.
+     * Berry curvature F_01 = -sin(alpha)/2 exactly. */
+    {
+        pauli_hamiltonian_t *H = pauli_hamiltonian_create(1, 1);
+        H->hf_reference = 0;
+        vqe_ansatz_t *a = vqe_create_hardware_efficient_ansatz(1, 1);
+        CHECK(a->num_parameters == 2, "single-qubit HEA has 2 params (RY,RZ) (got %zu)",
+              a->num_parameters);
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, a, o, &e);
+        double F[4];
+        double p[2] = { 0.7, 1.3 };
+        int rc = vqe_compute_berry_curvature(s, p, F);
+        CHECK(rc == 0, "vqe_compute_berry_curvature succeeded");
+        CHECK(fabs(F[0] - 0.0) < 1e-14 && fabs(F[3] - 0.0) < 1e-14,
+              "Berry curvature has zero diagonal");
+        CHECK(fabs(F[1] + F[2]) < 1e-14, "Berry curvature antisymmetric (F01+F10=%.1e)",
+              F[1] + F[2]);
+        CHECK(fabs(F[1] - (-0.5 * sin(p[0]))) < 1e-12,
+              "F01 == -sin(alpha)/2 closed form (%.12f vs %.12f)", F[1], -0.5 * sin(p[0]));
+
+        /* (d) Chern number = (1/2pi) * integral of F over the (alpha,beta) sphere. */
+        double chern = 0.0; int Na = 400; double da = M_PI / Na, db = 2.0 * M_PI;
+        for (int ia = 0; ia < Na; ia++) {
+            double pp[2] = { (ia + 0.5) * da, 0.3 };
+            vqe_compute_berry_curvature(s, pp, F);
+            chern += F[1] * da * db;
+        }
+        chern /= (2.0 * M_PI);
+        CHECK(fabs(chern - (-1.0)) < 1e-2, "Chern number of single-qubit sweep == -1 (%.4f)", chern);
+
+        vqe_solver_free(s); vqe_optimizer_free(o); vqe_ansatz_free(a); pauli_hamiltonian_free(H);
+    }
+
+    /* (c) real ansatz (UCCSD, only real gates) -> Berry curvature vanishes. */
+    {
+        pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5);
+        H->hf_reference = 0x3;
+        vqe_ansatz_t *a = vqe_create_uccsd_ansatz(H->num_qubits, 2);
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, a, o, &e);
+        size_t n = a->num_parameters;
+        double *F = malloc(n * n * sizeof(double));
+        double *p = malloc(n * sizeof(double));
+        for (size_t k = 0; k < n; k++) p[k] = 0.1 * (double)(k + 1);
+        vqe_compute_berry_curvature(s, p, F);
+        double mx = 0.0;
+        for (size_t i = 0; i < n * n; i++) if (fabs(F[i]) > mx) mx = fabs(F[i]);
+        CHECK(mx < 1e-12, "UCCSD (real state) has zero Berry curvature (max|F|=%.1e)", mx);
+        free(F); free(p);
+        vqe_solver_free(s); vqe_optimizer_free(o); vqe_ansatz_free(a); pauli_hamiltonian_free(H);
+    }
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -896,6 +963,7 @@ int main(void) {
     test_lih_pes_smooth_and_consistent();
     test_qng_metric_and_convergence();
     test_qng_exact_qgt_uccsd_givens();
+    test_qng_berry_curvature();
     test_qng_lih_uccsd_convergence();
     test_h2_uccsd_chemical_accuracy();
     test_lih_uccsd_chemical_accuracy();
