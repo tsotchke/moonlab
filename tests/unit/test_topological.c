@@ -135,10 +135,36 @@ static void test_fibonacci_braiding_invariants(void) {
     anyon_system_free(sys);
 }
 
+/* The tabulated F/R symbols of every built-in anyon model must satisfy the
+ * fusion-category coherence conditions (pentagon + both hexagons + F-matrix
+ * unitarity) exactly.  anyon_verify_coherence returns the largest violation;
+ * a consistent model is 0 to machine precision. */
+static void test_anyon_coherence(void) {
+    fprintf(stdout, "\n-- topological: anyon F/R coherence (pentagon+hexagon) --\n");
+
+    anyon_system_t *fib = anyon_system_fibonacci();
+    double r = anyon_verify_coherence(fib);
+    CHECK(r < 1e-13, "Fibonacci satisfies pentagon+hexagon+unitarity (%.2e)", r);
+    anyon_system_free(fib);
+
+    anyon_system_t *ising = anyon_system_ising();
+    r = anyon_verify_coherence(ising);
+    CHECK(r < 1e-13, "Ising satisfies pentagon+hexagon+unitarity (%.2e)", r);
+    anyon_system_free(ising);
+
+    for (uint32_t k = 2; k <= 5; k++) {
+        anyon_system_t *s = anyon_system_su2k(k);
+        r = anyon_verify_coherence(s);
+        CHECK(r < 1e-13, "SU(2)_%u satisfies pentagon+hexagon+unitarity (%.2e)", k, r);
+        anyon_system_free(s);
+    }
+}
+
 int main(void) {
     fprintf(stdout, "=== topological smoke tests ===\n");
     test_fibonacci_quantum_dimension();
     test_ising_anyons();
+    test_anyon_coherence();
     test_fibonacci_braiding_invariants();
     test_surface_code_lifecycle();
     test_toric_code_lifecycle();
