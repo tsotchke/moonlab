@@ -10,6 +10,7 @@
  */
 #include "uf_decoder.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -32,6 +33,12 @@
  * this bounds per-thread scratch.  Clusters this large are vanishingly rare
  * at sub-threshold error rates. */
 #define UF_MATCH_CAP 16u
+
+/* Largest JOINT size (defects) attempted when re-solving two clusters
+ * together in the merge-refinement pass.  Smaller than UF_MATCH_CAP because
+ * every candidate pair pays a 2^(ki+kj) DP, and the cross-cluster gains live
+ * in small adjacent clusters. */
+#define UF_MERGE_CAP 12u
 
 /* ------------------------------------------------------------------ */
 /*  Graph                                                              */
@@ -60,6 +67,14 @@ struct moonlab_uf_decoder {
     uint64_t* obs_to;       /* ndet * ndet */
     double*   bdist;        /* ndet */
     uint64_t* bobs;         /* ndet */
+    /* Log path multiplicity: ln of the number of minimum-weight paths
+     * realising each shortest distance.  MWPM scores a pairing by its best
+     * path alone, but a pairing with N equally cheap paths is N times as
+     * probable: -ln P = w - ln N.  Feeding the matcher w - ln N instead of w
+     * is the maximum-likelihood score within the pairing approximation, and
+     * is accuracy MWPM leaves on the table. */
+    double*   lm_to;        /* ndet * ndet */
+    double*   lm_b;         /* ndet */
     int       have_apsp;
 };
 
@@ -98,9 +113,15 @@ typedef struct {
     /* Exact per-cluster matching scratch. */
     uint32_t* defs;         /* lit detectors this shot */
     uint8_t*  used;         /* per gathered defect: already in a group */
-    uint32_t* grp;          /* one cluster's defects */
+    uint32_t* grp;          /* joint-solve concat buffer */
     double*   dp;           /* subset-DP cost table, 1<<UF_MATCH_CAP */
     uint32_t* dpchoice;     /* subset-DP backtrack */
+    uint32_t* cl_off;       /* cluster starts into cl_defs, ncl+1 */
+    uint32_t* cl_defs;      /* defects grouped by cluster */
+    double*   cl_cost;      /* per cluster: -ln P of its solution (+1 spare) */
+    uint64_t* cl_obs;       /* per cluster: observable mask (+1 spare) */
+    uint32_t* cl_next;      /* merge chains over original clusters */
+    uint32_t* cl_size;      /* group size at representative; 0 if absorbed */
     /* Frontier bookkeeping so a growth round can advance straight to the
      * next edge closure instead of creeping one unit at a time. */
     uint32_t* fstamp;       /* per edge: round id it last joined the frontier */
@@ -119,6 +140,8 @@ static void uf_scratch_free(uf_scratch* s) {
     free(s->mhead); free(s->mnext); free(s->mslot_edge); free(s->tile);
     free(s->fstamp); free(s->fsides); free(s->flist);
     free(s->defs); free(s->used); free(s->grp); free(s->dp); free(s->dpchoice);
+    free(s->cl_off); free(s->cl_defs); free(s->cl_cost); free(s->cl_obs);
+    free(s->cl_next); free(s->cl_size);
     memset(s, 0, sizeof(*s));
 }
 
@@ -152,13 +175,20 @@ static int uf_scratch_init(uf_scratch* s, size_t nnode, size_t nedge, size_t nde
     s->grp       = (uint32_t*)malloc((ndet ? ndet : 1) * sizeof(uint32_t));
     s->dp        = (double*)malloc(((size_t)1 << UF_MATCH_CAP) * sizeof(double));
     s->dpchoice  = (uint32_t*)malloc(((size_t)1 << UF_MATCH_CAP) * sizeof(uint32_t));
+    s->cl_off    = (uint32_t*)malloc(((ndet ? ndet : 1) + 1) * sizeof(uint32_t));
+    s->cl_defs   = (uint32_t*)malloc((ndet ? ndet : 1) * sizeof(uint32_t));
+    s->cl_cost   = (double*)malloc(((ndet ? ndet : 1) + 1) * sizeof(double));
+    s->cl_obs    = (uint64_t*)malloc(((ndet ? ndet : 1) + 1) * sizeof(uint64_t));
+    s->cl_next   = (uint32_t*)malloc(((ndet ? ndet : 1) + 1) * sizeof(uint32_t));
+    s->cl_size   = (uint32_t*)malloc(((ndet ? ndet : 1) + 1) * sizeof(uint32_t));
     if (!s->parent || !s->parity || !s->touches_b || !s->next || !s->tail ||
         !s->grown || !s->full || !s->syn || !s->innode || !s->dirty_node ||
         !s->dirty_edge || !s->odd_roots || !s->stack || !s->tree_edge ||
         !s->tree_par || !s->visited || !s->mhead || !s->mnext ||
         !s->mslot_edge || !s->tile || !s->fstamp || !s->fsides ||
         !s->flist || !s->defs || !s->used || !s->grp || !s->dp ||
-        !s->dpchoice) {
+        !s->dpchoice || !s->cl_off || !s->cl_defs || !s->cl_cost ||
+        !s->cl_obs || !s->cl_next || !s->cl_size) {
         uf_scratch_free(s);
         return -1;
     }
@@ -166,8 +196,8 @@ static int uf_scratch_init(uf_scratch* s, size_t nnode, size_t nedge, size_t nde
 }
 
 static uint64_t uf_match_cluster(const moonlab_uf_decoder_t* d,
-                                 const uint32_t* def, unsigned k, int has_boundary,
-                                 double* dp, uint32_t* choice);
+                                 const uint32_t* def, unsigned k,
+                                 double* dp, uint32_t* choice, double* out_cost);
 
 static uint32_t uf_find(uint32_t* parent, uint32_t x) {
     while (parent[x] != x) {
@@ -326,28 +356,91 @@ static uint64_t uf_decode_shot(const moonlab_uf_decoder_t* d, uf_scratch* s,
         }
         int ok = 1;
         for (size_t i = 0; i < ndef; i++) s->used[i] = 0;
+        /* Collect clusters into grouped storage (ndef is small, so the
+         * O(ndef) scan per cluster is cheap in aggregate). */
+        unsigned ncl = 0;
+        uint32_t fill = 0;
         for (size_t a = 0; a < ndef && ok; a++) {
             if (s->used[a]) continue;
             uint32_t root = uf_find(s->parent, s->defs[a]);
-            /* Collect this cluster's defects (ndef is small, so the O(ndef)
-             * scan per cluster is cheap in aggregate). */
-            unsigned gc = 0;
+            s->cl_off[ncl] = fill;
             for (size_t b = a; b < ndef; b++) {
                 if (s->used[b]) continue;
                 if (uf_find(s->parent, s->defs[b]) != root) continue;
                 s->used[b] = 1;
-                if (gc < UF_MATCH_CAP) s->grp[gc] = s->defs[b];
-                gc++;
+                s->cl_defs[fill++] = s->defs[b];
             }
-            if (gc > UF_MATCH_CAP) { ok = 0; break; }   /* rare: use the peel */
-            int hb = s->touches_b[root] ? 1 : 0;
-            /* An odd cluster that somehow did not reach the boundary cannot be
-             * perfectly matched internally; permit the boundary so it still
-             * resolves rather than emitting garbage. */
-            if (!hb && (gc & 1u)) hb = 1;
-            obs ^= uf_match_cluster(d, s->grp, gc, hb, s->dp, s->dpchoice);
+            if (fill - s->cl_off[ncl] > UF_MATCH_CAP) { ok = 0; break; }
+            ncl++;
         }
-        if (ok) return obs;
+        if (ok) {
+            s->cl_off[ncl] = fill;
+            for (unsigned c = 0; c < ncl; c++)
+                s->cl_obs[c] = uf_match_cluster(
+                    d, s->cl_defs + s->cl_off[c], s->cl_off[c + 1] - s->cl_off[c],
+                    s->dp, s->dpchoice, &s->cl_cost[c]);
+
+            /* Merge refinement: the cluster partition forbids pairings that
+             * cross clusters, which is the one restriction blossom does not
+             * share and where it wins near threshold -- growth stops a
+             * cluster the moment it turns even, so two even clusters can sit
+             * adjacent with cross pairings cheaper than their internal ones.
+             * Greedily re-solve pairs of clusters jointly and keep any merge
+             * that lowers the total -ln P; each accepted merge strictly
+             * improves the global score, so this converges. */
+            /* Groups are chains over the ORIGINAL clusters -- defect data is
+             * never moved.  Group state (size, cost, obs) lives at the
+             * representative; an absorbed cluster has cl_size[c] == 0. */
+            for (unsigned c = 0; c < ncl; c++) {
+                s->cl_next[c] = UINT32_MAX;
+                s->cl_size[c] = s->cl_off[c + 1] - s->cl_off[c];
+            }
+            for (int improved = 1; improved && ncl > 1;) {
+                improved = 0;
+                double best_gain = 1e-9;
+                unsigned bi = 0, bj = 0;
+                for (unsigned i = 0; i + 1 < ncl; i++) {
+                    if (!s->cl_size[i]) continue;
+                    for (unsigned j = i + 1; j < ncl; j++) {
+                        if (!s->cl_size[j]) continue;
+                        unsigned kt = s->cl_size[i] + s->cl_size[j];
+                        if (kt > UF_MERGE_CAP) continue;
+                        unsigned g = 0;
+                        for (unsigned c = i; c != UINT32_MAX; c = s->cl_next[c])
+                            for (uint32_t t = s->cl_off[c]; t < s->cl_off[c + 1]; t++)
+                                s->grp[g++] = s->cl_defs[t];
+                        for (unsigned c = j; c != UINT32_MAX; c = s->cl_next[c])
+                            for (uint32_t t = s->cl_off[c]; t < s->cl_off[c + 1]; t++)
+                                s->grp[g++] = s->cl_defs[t];
+                        double jc;
+                        uint64_t jo = uf_match_cluster(d, s->grp, g,
+                                                       s->dp, s->dpchoice, &jc);
+                        double gain = s->cl_cost[i] + s->cl_cost[j] - jc;
+                        if (gain > best_gain) {
+                            best_gain = gain; bi = i; bj = j;
+                            /* stash the winning joint solution in the spare
+                             * slot past the last cluster */
+                            s->cl_obs[ncl] = jo;
+                            s->cl_cost[ncl] = jc;
+                        }
+                    }
+                }
+                if (best_gain > 1e-9) {
+                    /* attach bj's chain to the tail of bi's */
+                    unsigned tail = bi;
+                    while (s->cl_next[tail] != UINT32_MAX) tail = s->cl_next[tail];
+                    s->cl_next[tail] = bj;
+                    s->cl_size[bi] += s->cl_size[bj];
+                    s->cl_size[bj] = 0;
+                    s->cl_cost[bi] = s->cl_cost[ncl];
+                    s->cl_obs[bi] = s->cl_obs[ncl];
+                    improved = 1;
+                }
+            }
+            for (unsigned c = 0; c < ncl; c++)
+                if (s->cl_size[c]) obs ^= s->cl_obs[c];
+            return obs;
+        }
         obs = 0;   /* fall through to the peel */
     }
 
@@ -432,16 +525,27 @@ static uf_heap_item uf_heap_pop(uf_heap_item* h, size_t* n) {
     return top;
 }
 
+/* ln(e^a + e^b) without overflow. */
+static inline double uf_logaddexp(double a, double b) {
+    double hi = a > b ? a : b, lo = a > b ? b : a;
+    return hi + log1p(exp(lo - hi));
+}
+
 /* Dijkstra from `src` (a single node, or every boundary node at distance 0
- * when src == UINT32_MAX), writing the shortest distance and the XOR of edge
- * observables along the shortest-path tree into dist[] / obsm[] for the
- * detector nodes. */
+ * when src == UINT32_MAX), writing the shortest distance, the XOR of edge
+ * observables along one shortest path, and the LOG MULTIPLICITY of
+ * minimum-weight paths into dist[] / obsm[] / lmult[] for the detector
+ * nodes.  Multiplicity accumulates on ties relaxed from finalised nodes;
+ * ties discovered after a node is finalised are dropped, which undercounts
+ * slightly but never corrupts distances. */
 static void uf_dijkstra(const moonlab_uf_decoder_t* d, uint32_t src,
-                        double* dist, uint64_t* obsm,
-                        double* dscratch, uint64_t* oscratch,
+                        double* dist, uint64_t* obsm, double* lmult,
+                        double* dscratch, uint64_t* oscratch, double* lscratch,
                         uint8_t* done, uf_heap_item* heap) {
     const size_t nn = d->nnode;
-    for (size_t v = 0; v < nn; v++) { dscratch[v] = 1e300; oscratch[v] = 0; done[v] = 0; }
+    for (size_t v = 0; v < nn; v++) {
+        dscratch[v] = 1e300; oscratch[v] = 0; lscratch[v] = 0.0; done[v] = 0;
+    }
     size_t hn = 0;
     if (src == UINT32_MAX) {
         for (size_t v = d->ndet; v < nn; v++) {
@@ -459,14 +563,21 @@ static void uf_dijkstra(const moonlab_uf_decoder_t* d, uint32_t src,
             uint32_t e = d->adj_edge[k];
             uint32_t w = (d->ea[e] == u) ? d->eb[e] : d->ea[e];
             double nd = dscratch[u] + d->ewt[e];
-            if (nd < dscratch[w]) {
+            double eps = 1e-9 * (1.0 + nd);
+            if (nd < dscratch[w] - eps) {
                 dscratch[w] = nd;
                 oscratch[w] = oscratch[u] ^ d->eobs[e];
+                lscratch[w] = lscratch[u];
                 uf_heap_push(heap, &hn, nd, w);
+            } else if (!done[w] && nd <= dscratch[w] + eps) {
+                /* another minimum-weight route into w */
+                lscratch[w] = uf_logaddexp(lscratch[w], lscratch[u]);
             }
         }
     }
-    for (size_t j = 0; j < d->ndet; j++) { dist[j] = dscratch[j]; obsm[j] = oscratch[j]; }
+    for (size_t j = 0; j < d->ndet; j++) {
+        dist[j] = dscratch[j]; obsm[j] = oscratch[j]; lmult[j] = lscratch[j];
+    }
 }
 
 /* Precompute detector-to-detector and detector-to-boundary shortest paths.
@@ -479,21 +590,27 @@ static void uf_build_apsp(moonlab_uf_decoder_t* d) {
     d->obs_to  = (uint64_t*)malloc(nd * nd * sizeof(uint64_t));
     d->bdist   = (double*)malloc(nd * sizeof(double));
     d->bobs    = (uint64_t*)malloc(nd * sizeof(uint64_t));
+    d->lm_to   = (double*)malloc(nd * nd * sizeof(double));
+    d->lm_b    = (double*)malloc(nd * sizeof(double));
     double*   ds = (double*)malloc(d->nnode * sizeof(double));
     uint64_t* os = (uint64_t*)malloc(d->nnode * sizeof(uint64_t));
+    double*   ls = (double*)malloc(d->nnode * sizeof(double));
     uint8_t*  dn = (uint8_t*)malloc(d->nnode);
     uf_heap_item* hp = (uf_heap_item*)malloc((2 * d->nedge + d->nnode) * sizeof(uf_heap_item));
-    if (!d->dist_to || !d->obs_to || !d->bdist || !d->bobs || !ds || !os || !dn || !hp) {
+    if (!d->dist_to || !d->obs_to || !d->bdist || !d->bobs || !d->lm_to ||
+        !d->lm_b || !ds || !os || !ls || !dn || !hp) {
         free(d->dist_to); free(d->obs_to); free(d->bdist); free(d->bobs);
+        free(d->lm_to); free(d->lm_b);
         d->dist_to = NULL; d->obs_to = NULL; d->bdist = NULL; d->bobs = NULL;
-        free(ds); free(os); free(dn); free(hp);
+        d->lm_to = NULL; d->lm_b = NULL;
+        free(ds); free(os); free(ls); free(dn); free(hp);
         return;
     }
     for (size_t i = 0; i < nd; i++)
         uf_dijkstra(d, (uint32_t)i, d->dist_to + i * nd, d->obs_to + i * nd,
-                    ds, os, dn, hp);
-    uf_dijkstra(d, UINT32_MAX, d->bdist, d->bobs, ds, os, dn, hp);
-    free(ds); free(os); free(dn); free(hp);
+                    d->lm_to + i * nd, ds, os, ls, dn, hp);
+    uf_dijkstra(d, UINT32_MAX, d->bdist, d->bobs, d->lm_b, ds, os, ls, dn, hp);
+    free(ds); free(os); free(ls); free(dn); free(hp);
     d->have_apsp = 1;
 }
 
@@ -508,8 +625,8 @@ static void uf_build_apsp(moonlab_uf_decoder_t* d) {
  * chosen pairings' precomputed path observables.
  */
 static uint64_t uf_match_cluster(const moonlab_uf_decoder_t* d,
-                                 const uint32_t* def, unsigned k, int has_boundary,
-                                 double* dp, uint32_t* choice) {
+                                 const uint32_t* def, unsigned k,
+                                 double* dp, uint32_t* choice, double* out_cost) {
     const size_t nd = d->ndet;
     const uint32_t full = (k >= 32) ? 0xFFFFFFFFu : ((1u << k) - 1u);
     dp[0] = 0.0; choice[0] = 0;
@@ -517,18 +634,31 @@ static uint64_t uf_match_cluster(const moonlab_uf_decoder_t* d,
         /* lowest set bit = first unresolved defect */
         unsigned i = (unsigned)__builtin_ctz(mask);
         double best = 1e300; uint32_t bch = UINT32_MAX;
-        if (has_boundary) {
-            double c = d->bdist[def[i]] + dp[mask & ~(1u << i)];
+        /* Scores are -ln P within the pairing approximation: path weight
+         * minus ln(number of minimum-weight paths).  MWPM uses the weight
+         * alone, so between two equal-weight pairings it cannot prefer the
+         * one realisable in more ways, which is the more probable one.
+         *
+         * The boundary is ALWAYS an option: a defect-to-boundary error path
+         * is physically valid whether or not cluster growth happened to
+         * reach the boundary, and blossom considers it for every defect.
+         * Restricting it to boundary-touching clusters was an artificial
+         * constraint the incumbent does not have. */
+        {
+            double c = d->bdist[def[i]] - d->lm_b[def[i]]
+                     + dp[mask & ~(1u << i)];
             if (c < best) { best = c; bch = i; }   /* i -> boundary */
         }
         for (unsigned j = i + 1; j < k; j++) {
             if (!(mask & (1u << j))) continue;
-            double c = d->dist_to[def[i] * nd + def[j]] +
-                       dp[mask & ~(1u << i) & ~(1u << j)];
+            size_t ij = (size_t)def[i] * nd + def[j];
+            double c = d->dist_to[ij] - d->lm_to[ij]
+                     + dp[mask & ~(1u << i) & ~(1u << j)];
             if (c < best) { best = c; bch = (i << 8) | j; }
         }
         dp[mask] = best; choice[mask] = bch;
     }
+    if (out_cost) *out_cost = dp[full];
     /* backtrack */
     uint64_t obs = 0;
     uint32_t mask = full;
@@ -657,6 +787,7 @@ void moonlab_uf_decoder_free(moonlab_uf_decoder_t* d) {
     free(d->ea); free(d->eb); free(d->elen); free(d->ewt); free(d->eobs);
     free(d->adj_off); free(d->adj_edge);
     free(d->dist_to); free(d->obs_to); free(d->bdist); free(d->bobs);
+    free(d->lm_to); free(d->lm_b);
     free(d);
 }
 

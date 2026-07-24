@@ -14,7 +14,8 @@ import sys
 # Allow `from fronts import ...` when run from any working directory.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fronts import f3_batch_sampling_vs_stim, f3_clifford_vs_stim
+from fronts import (f3_batch_sampling_vs_stim, f3_clifford_vs_stim,
+                    f3_decoder_vs_pymatching)
 
 
 def _print_front(name, result):
@@ -74,6 +75,17 @@ def main():
     bres = f3_batch_sampling_vs_stim.run()
     _print_batch_front("F3 batch_sampling_vs_stim", bres)
     ok = ok and bres["correctness_ok"]
+
+    dres = f3_decoder_vs_pymatching.run()
+    print("\n=== front F3 decoder_vs_pymatching ===")
+    print(f"correctness_ok = {dres['correctness_ok']}  (fails only if "
+          f"significantly WORSE than PyMatching anywhere)")
+    for r in dres["rows"]:
+        print(f"  d={r['distance']} p={r['p']}: err {r['ml_err']:.6f} vs "
+              f"{r['pm_err']:.6f}  McNemar z={r['mcnemar_z']} {r['accuracy']}  "
+              f"| MT {r['ml_mt_sps']/1e3:.0f}k/s vs {r['pm_sps']/1e3:.0f}k/s "
+              f"({r['mt_ratio']:.1f}x)")
+    ok = ok and dres["correctness_ok"]
 
     print(f"\ndominance campaign correctness_ok = {ok}")
     return 0 if ok else 1
