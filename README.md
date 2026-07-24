@@ -1247,6 +1247,18 @@ Legacy `make all` / `make test` still work for a subset of the surface.
 - Metal (GPU, macOS)
 - MPI (distributed)
 
+**macOS OpenMP runtime**: installed `libquantumsim.dylib` artifacts reference
+`@rpath/libomp.dylib` and carry only loader-relative rpath entries, so the
+consuming process decides which OpenMP runtime satisfies the reference. This
+prevents the duplicate-runtime abort (`OMP: Error #15`) when the host
+application already ships its own libomp (conda, PyTorch, a different LLVM).
+Consumers without an OpenMP runtime on their rpath either place
+`libomp.dylib` next to `libquantumsim.dylib`, add libomp's directory to their
+link rpath (`-Wl,-rpath,$(brew --prefix libomp)/lib`), or configure Moonlab
+with `-DQSIM_EXTRA_RPATH=/path/to/libomp/lib` to pin a directory into the
+installed artifact. The Homebrew formula pins libomp's opt path this way;
+build-tree binaries reference Homebrew libomp absolutely and need none of it.
+
 ## Documentation
 
 Start with the [documentation index](docs/README.md). Current guides include:

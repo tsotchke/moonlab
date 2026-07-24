@@ -85,9 +85,9 @@ message(STATUS "[fuzz] quantumsim built as ${_qsim_type} with -fsanitize=${QSIM_
                "${_qsim_cov_note}")
 message(STATUS "[fuzz] NOTE for the integrator: build the fuzz configure with "
                "-DQSIM_ENABLE_OPENMP=OFF -DQSIM_ENABLE_METAL=OFF -DQSIM_WERROR=OFF "
-               "so the sanitized library links cleanly (OpenMP's post-build "
-               "install_name_tool step and -Werror system-header noise otherwise "
-               "break the instrumented build).")
+               "so the sanitized library links cleanly: the instrumented build "
+               "stays free of the OpenMP runtime dependency and the "
+               "Objective-C++ framework surface.")
 
 # --- 2. Homebrew-clang libc++ workaround for the libFuzzer runtime -----------
 # On Apple silicon the Homebrew clang ships libclang_rt.fuzzer_osx.a built

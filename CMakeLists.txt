@@ -1495,38 +1495,31 @@ if(QSIM_HAS_OPENMP)
         target_link_libraries(quantumsim PRIVATE ${QSIM_OPENMP_LIBRARIES})
         target_include_directories(quantumsim PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
 
-        # Relocate libomp's absolute Homebrew path to @rpath, and build
-        # an rpath list that only contains directories that actually
-        # exist on this host. This keeps the binary relocatable
-        # (@loader_path/../lib is always present) while adding
-        # developer-machine fallbacks when present. For container /
-        # Docker builds, set QSIM_EXTRA_RPATH to pre-seed additional
-        # entries (e.g. "/opt/openmp/lib").
-        set(QSIM_RPATH_LIST "@loader_path/../lib")
-        foreach(_qsim_candidate_rpath
-                "$ENV{HOMEBREW_PREFIX}/opt/libomp/lib"
-                "/opt/homebrew/opt/libomp/lib"
-                "/usr/local/opt/libomp/lib")
-            if(_qsim_candidate_rpath AND EXISTS "${_qsim_candidate_rpath}")
-                list(APPEND QSIM_RPATH_LIST "${_qsim_candidate_rpath}")
-            endif()
-        endforeach()
+        # Consumer OpenMP coexistence (issue #27). The build-tree binary
+        # references libomp by the absolute path it linked against --
+        # Homebrew libomp's own install name -- so build-tree tests and
+        # the Python bindings run from the source tree resolve exactly
+        # one libomp image with no rpath entry at all. Installed and
+        # packaged artifacts must NOT pin that path: a consumer process
+        # that carries its own OpenMP runtime (conda, PyTorch, a
+        # different LLVM) would load a second libomp image beside its
+        # own and abort with OMP Error #15. cmake/install.cmake rewrites
+        # the installed copy's load command to @rpath/libomp.dylib, and
+        # the install rpath below holds only loader-relative entries, so
+        # the consumer's loader decides which libomp satisfies the
+        # reference: an already-initialized runtime with the
+        # @rpath/libomp.dylib install name, the consumer's own rpath
+        # stack, or a copy dropped beside libquantumsim. Packagers that
+        # want a pinned directory opt in explicitly with
+        # QSIM_EXTRA_RPATH (the Homebrew formula passes libomp's opt
+        # path; container images pass e.g. "/opt/openmp/lib").
+        set(QSIM_INSTALL_RPATH_LIST "@loader_path" "@loader_path/../lib")
         if(DEFINED QSIM_EXTRA_RPATH)
-            list(APPEND QSIM_RPATH_LIST ${QSIM_EXTRA_RPATH})
+            list(APPEND QSIM_INSTALL_RPATH_LIST ${QSIM_EXTRA_RPATH})
         endif()
         set_target_properties(quantumsim PROPERTIES
-            BUILD_RPATH   "${QSIM_RPATH_LIST}"
-            INSTALL_RPATH "${QSIM_RPATH_LIST}"
+            INSTALL_RPATH "${QSIM_INSTALL_RPATH_LIST}"
         )
-        # install_name_tool rewrites a Mach-O dylib's load commands; it fails
-        # on a static archive (.a), so only run it for a shared build.
-        if(QSIM_BUILD_SHARED)
-            add_custom_command(TARGET quantumsim POST_BUILD
-                COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
-                        "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
-                VERBATIM
-            )
-        endif()
     elseif(TARGET OpenMP::OpenMP_C)
         # Standard OpenMP target
         target_link_libraries(quantumsim PRIVATE OpenMP::OpenMP_C)

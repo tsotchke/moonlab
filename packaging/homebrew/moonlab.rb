@@ -39,6 +39,11 @@ class Moonlab < Formula
       -DQSIM_WERROR=ON
     ]
 
+    # Installed dylibs reference @rpath/libomp.dylib with loader-relative
+    # rpaths only; the keg pins libomp's opt path explicitly so brewed
+    # artifacts resolve the runtime without a consumer-side rpath.
+    args << "-DQSIM_EXTRA_RPATH=#{libomp.opt_lib}" if OS.mac?
+
     ENV.append "LDFLAGS", "-L#{libomp.opt_lib}"
     ENV.append "CPPFLAGS", "-I#{libomp.opt_include}"
     unless OS.mac?
