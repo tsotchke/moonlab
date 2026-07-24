@@ -252,6 +252,7 @@ set_target_properties(moonlab PROPERTIES
     SUFFIX ".js"
     LINK_FLAGS "\
         -s WASM=1 \
+        -s WASM_BIGINT=1 \
         -s MODULARIZE=1 \
         -s EXPORT_NAME='MoonlabModule' \
         -s EXPORTED_FUNCTIONS='[${EXPORTED_FUNCTIONS}]' \
