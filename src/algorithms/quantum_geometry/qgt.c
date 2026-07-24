@@ -547,6 +547,109 @@ int qgt_metric_at(const qgt_system_t* sys, const double k[2],
     return 0;
 }
 
+/* ---- Exact / gauge-free pointwise band geometry ------------------- */
+
+int qgt_dsigma_metric_curvature(const double d[3], const double dx[3],
+                                const double dy[3], double g[4],
+                                double* omega_xy) {
+    if (!d || !dx || !dy || !g) return -1;
+
+    /* Closed form for the lower band of H = d.sigma:
+     *   g_mu_nu  = (1/4) d_mu dhat . d_nu dhat
+     *   Omega_xy = (1/2) dhat . (d_x dhat x d_y dhat)
+     * with dhat = d / |d| and
+     *   d_mu dhat = d_mu d / |d| - d (d . d_mu d) / |d|^3.
+     * Both are gauge invariant; no eigenvector enters. */
+    double n2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    if (n2 <= 0.0) return -2;              /* band touching: geometry undefined */
+    double n = sqrt(n2);
+    double inv = 1.0 / n;
+    double inv3 = inv / n2;
+
+    double hd[3] = { d[0] * inv, d[1] * inv, d[2] * inv };
+    double d_dx = d[0] * dx[0] + d[1] * dx[1] + d[2] * dx[2];
+    double d_dy = d[0] * dy[0] + d[1] * dy[1] + d[2] * dy[2];
+    double ghx[3], ghy[3];
+    for (int i = 0; i < 3; i++) {
+        ghx[i] = dx[i] * inv - d[i] * d_dx * inv3;
+        ghy[i] = dy[i] * inv - d[i] * d_dy * inv3;
+    }
+
+    g[0] = 0.25 * (ghx[0] * ghx[0] + ghx[1] * ghx[1] + ghx[2] * ghx[2]);
+    g[1] = 0.25 * (ghx[0] * ghy[0] + ghx[1] * ghy[1] + ghx[2] * ghy[2]);
+    g[2] = g[1];                            /* Re Q is symmetric */
+    g[3] = 0.25 * (ghy[0] * ghy[0] + ghy[1] * ghy[1] + ghy[2] * ghy[2]);
+
+    if (omega_xy) {
+        /* dhat . (ghx x ghy) */
+        double cx = ghx[1] * ghy[2] - ghx[2] * ghy[1];
+        double cy = ghx[2] * ghy[0] - ghx[0] * ghy[2];
+        double cz = ghx[0] * ghy[1] - ghx[1] * ghy[0];
+        *omega_xy = 0.5 * (hd[0] * cx + hd[1] * cy + hd[2] * cz);
+    }
+    return 0;
+}
+
+int qgt_curvature_at(const qgt_system_t* sys, const double k[2], double dk,
+                     double g[4], double* omega_xy) {
+    if (!sys || !k || !g || dk <= 0.0) return -1;
+
+    qgt_complex_t H0[4];
+    sys->fn(k, sys->user, H0);
+
+    /* Gap DeltaE = 2|h| from the traceless part of H0. */
+    double hz = 0.5 * creal(H0[0] - H0[3]);
+    double hx = creal(H0[1]);
+    double hy = -cimag(H0[1]);
+    double hnorm = sqrt(hx * hx + hy * hy + hz * hz);
+    if (hnorm < 1e-300) return -2;          /* band touching */
+    double DE2 = 4.0 * hnorm * hnorm;
+
+    /* Exact band projectors of the 2x2 Hamiltonian (gauge-free). */
+    qgt_complex_t Pm[4], Pp[4];
+    lower_projector_2x2(H0, Pm);
+    Pp[0] = 1.0 - Pm[0];
+    Pp[1] = -Pm[1];
+    Pp[2] = -Pm[2];
+    Pp[3] = 1.0 - Pm[3];
+
+    /* Central finite difference of the Hamiltonian matrix entries --
+     * differences H, never the eigenvector, so no phase-fixing is
+     * needed.  Finite-difference accurate in dk (not machine-exact);
+     * use qgt_dsigma_metric_curvature for the closed-form value. */
+    qgt_complex_t dH[2][4];
+    for (int mu = 0; mu < 2; mu++) {
+        double kp[2] = { k[0], k[1] }, km[2] = { k[0], k[1] };
+        kp[mu] += dk;
+        km[mu] -= dk;
+        qgt_complex_t Hp[4], Hm[4];
+        sys->fn(kp, sys->user, Hp);
+        sys->fn(km, sys->user, Hm);
+        for (int i = 0; i < 4; i++) {
+            dH[mu][i] = (Hp[i] - Hm[i]) / (2.0 * dk);
+        }
+    }
+
+    /* Q_mu_nu = Tr[P- dH_mu P+ dH_nu] / (DeltaE)^2. */
+    qgt_complex_t Q[2][2];
+    for (int mu = 0; mu < 2; mu++) {
+        for (int nu = 0; nu < 2; nu++) {
+            qgt_complex_t t1[4], t2[4], t3[4];
+            mat2_mul(Pm, dH[mu], t1);
+            mat2_mul(t1, Pp, t2);
+            mat2_mul(t2, dH[nu], t3);
+            Q[mu][nu] = mat2_trace(t3) / DE2;
+        }
+    }
+
+    g[0] = creal(Q[0][0]);
+    g[1] = creal(Q[0][1]);
+    g[2] = creal(Q[1][0]);
+    g[3] = creal(Q[1][1]);
+    if (omega_xy) *omega_xy = -2.0 * cimag(Q[0][1]);
+    return 0;
+}
+
 /* ---- Wilson loop -------------------------------------------------- */
 
 int qgt_wilson_loop(const qgt_system_t* sys,

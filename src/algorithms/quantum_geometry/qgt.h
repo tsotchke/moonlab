@@ -367,6 +367,91 @@ MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
 MOONLAB_API int qgt_metric_at(const qgt_system_t* sys, const double k[2],
                   double dk, double g[4]);
 
+/**
+ * @brief Closed-form, gauge-free lower-band quantum geometry of a
+ *        two-band Bloch Hamiltonian @f$H(\mathbf k) =
+ *        \mathbf d(\mathbf k)\cdot\boldsymbol\sigma@f$ from the analytic
+ *        @f$\mathbf d@f$ and its momentum gradients.
+ *
+ * For the lower band @f$E_- = -|\mathbf d|@f$ the quantum geometric
+ * tensor is exactly (Provost-Vallee / projector form, no eigenvector
+ * phase involved)
+ * @f[
+ *   Q_{\mu\nu} = \tfrac14\!\left(
+ *     \partial_\mu\hat{\mathbf d}\cdot\partial_\nu\hat{\mathbf d}
+ *     \;-\; i\,\hat{\mathbf d}\cdot
+ *     (\partial_\mu\hat{\mathbf d}\times\partial_\nu\hat{\mathbf d})
+ *   \right),\qquad \hat{\mathbf d} = \mathbf d/|\mathbf d|,
+ * @f]
+ * whose real part is the Fubini-Study metric and whose imaginary part
+ * is (minus one half) the Berry curvature:
+ * @f[
+ *   g_{\mu\nu} = \operatorname{Re}Q_{\mu\nu}
+ *     = \tfrac14\,\partial_\mu\hat{\mathbf d}\cdot\partial_\nu\hat{\mathbf d},
+ *   \qquad
+ *   \Omega_{xy} = -2\operatorname{Im}Q_{xy}
+ *     = \tfrac12\,\hat{\mathbf d}\cdot
+ *       (\partial_x\hat{\mathbf d}\times\partial_y\hat{\mathbf d}).
+ * @f]
+ * Both are @f$U(1)@f$-gauge invariant and depend only on @f$\mathbf d@f$
+ * and @f$\partial_\mu\mathbf d@f$; there is no finite-difference of the
+ * eigenvector and no phase-fixing.  The @f$\Omega_{xy}@f$ sign
+ * convention matches ::qgt_berry_grid: integrating @f$\Omega_{xy}@f$
+ * over the BZ yields @f$2\pi C@f$ with the same @f$C@f$ (e.g. QWZ
+ * @f$m=+1 \Rightarrow C=-1@f$).
+ *
+ * @param d         Analytic @f$\mathbf d(\mathbf k)@f$, length 3.
+ * @param dx        @f$\partial_{k_x}\mathbf d@f$, length 3.
+ * @param dy        @f$\partial_{k_y}\mathbf d@f$, length 3.
+ * @param[out] g    Row-major 2x2 metric @f$g_{\mu\nu}=\operatorname{Re}
+ *                  Q_{\mu\nu}@f$ (real, symmetric, PSD).
+ * @param[out] omega_xy  Optional (may be NULL): Berry curvature
+ *                       @f$\Omega_{xy}@f$.
+ * @return 0 on success, -1 on bad arguments, -2 at a band touching
+ *         (@f$|\mathbf d|=0@f$, where the geometry is undefined).
+ */
+MOONLAB_API int qgt_dsigma_metric_curvature(const double d[3],
+                                            const double dx[3],
+                                            const double dy[3],
+                                            double g[4], double* omega_xy);
+
+/**
+ * @brief Pointwise Fubini-Study metric and Berry curvature of the
+ *        lower band of a two-band Bloch system at momentum @p k.
+ *
+ * Assembles the gauge-invariant quantum geometric tensor from the
+ * projector form
+ * @f[
+ *   Q_{\mu\nu}(\mathbf k) = \frac{\operatorname{Tr}\!\left[
+ *     P_-\,\partial_\mu H\,P_+\,\partial_\nu H\right]}{(\Delta E)^2},
+ *   \qquad \Delta E = 2|\mathbf h(\mathbf k)|,
+ * @f]
+ * with @f$P_\pm@f$ the exact band projectors of the 2x2 Hamiltonian
+ * (no eigenvector phase), and returns
+ * @f$g_{\mu\nu}=\operatorname{Re}Q_{\mu\nu}@f$,
+ * @f$\Omega_{xy}=-2\operatorname{Im}Q_{xy}@f$ (same sign convention as
+ * ::qgt_berry_grid).
+ *
+ * Unlike ::qgt_metric_at this differentiates the *Hamiltonian* matrix
+ * entries, not the eigenvector, so it needs no gauge-fixing and returns
+ * the Berry curvature as well as the metric.  @f$\partial_\mu H@f$ is
+ * still obtained by a central finite difference of the caller's Bloch
+ * callback, so the result is finite-difference accurate in @p dk (of
+ * order @f$O(dk^2)@f$), **not** machine-exact; for the analytic
+ * @f$\mathbf d\cdot\boldsymbol\sigma@f$ built-ins use
+ * ::qgt_dsigma_metric_curvature to obtain the closed-form value.
+ *
+ * @param sys       Two-band Bloch system.
+ * @param k         Momentum, length 2.
+ * @param dk        Central-difference step for @f$\partial_\mu H@f$
+ *                  (@f$10^{-4}@f$..@f$10^{-3}@f$ is a good default).
+ * @param[out] g    Row-major 2x2 metric (real, symmetric).
+ * @param[out] omega_xy  Optional (may be NULL): Berry curvature.
+ * @return 0 on success, -1 on bad arguments, -2 at a band touching.
+ */
+MOONLAB_API int qgt_curvature_at(const qgt_system_t* sys, const double k[2],
+                                 double dk, double g[4], double* omega_xy);
+
 /* ====================================================================
  * Topological phase diagrams
  *

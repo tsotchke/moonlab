@@ -765,6 +765,14 @@
     target_link_libraries(test_qgt PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_qgt COMMAND test_qgt)
 
+    # Exact pointwise band geometry: closed-form metric + Berry curvature
+    # (qgt_dsigma_metric_curvature) cross-checked against the FHS Chern
+    # integrator and an explicit-eigenvector projector-form QGT.
+    add_executable(test_qgt_exact_curvature tests/unit/test_qgt_exact_curvature.c)
+    target_link_libraries(test_qgt_exact_curvature PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_qgt_exact_curvature COMMAND test_qgt_exact_curvature)
+    set_tests_properties(unit_qgt_exact_curvature PROPERTIES LABELS "topology")
+
     # Shor-ECDLP resource estimator: reproduce Gidney-Drake-Boneh 2026
     # secp256k1 numbers + FTQC overhead model.
     add_executable(test_shor_ecdlp tests/unit/test_shor_ecdlp.c)
