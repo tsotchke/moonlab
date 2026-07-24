@@ -405,6 +405,37 @@ static uint64_t uf_decode_shot(const moonlab_uf_decoder_t* d, uf_scratch* s,
                         if (!s->cl_size[j]) continue;
                         unsigned kt = s->cl_size[i] + s->cl_size[j];
                         if (kt > UF_MERGE_CAP) continue;
+                        /* Lossless prune: a joint solution beats the separate
+                         * optima only if it uses a cross pairing, and every
+                         * cross pairing can be replaced by two boundary
+                         * assignments at no extra cost unless some cross pair
+                         * (a,b) has eff(a,b) < beff(a) + beff(b).  If none
+                         * does, the joint optimum decomposes back into
+                         * separate solutions and the 2^k DP cannot gain.
+                         * O(ki*kj) lookups instead of the DP. */
+                        {
+                            int useful = 0;
+                            const size_t nd_ = d->ndet;
+                            for (unsigned ca = i; ca != UINT32_MAX && !useful;
+                                 ca = s->cl_next[ca])
+                              for (uint32_t ta = s->cl_off[ca];
+                                   ta < s->cl_off[ca + 1] && !useful; ta++) {
+                                uint32_t a = s->cl_defs[ta];
+                                double ba = d->bdist[a] - d->lm_b[a];
+                                for (unsigned cb = j; cb != UINT32_MAX && !useful;
+                                     cb = s->cl_next[cb])
+                                  for (uint32_t tb = s->cl_off[cb];
+                                       tb < s->cl_off[cb + 1]; tb++) {
+                                    uint32_t b = s->cl_defs[tb];
+                                    size_t ab = (size_t)a * nd_ + b;
+                                    if (d->dist_to[ab] - d->lm_to[ab] <
+                                        ba + d->bdist[b] - d->lm_b[b]) {
+                                        useful = 1; break;
+                                    }
+                                  }
+                              }
+                            if (!useful) continue;
+                        }
                         unsigned g = 0;
                         for (unsigned c = i; c != UINT32_MAX; c = s->cl_next[c])
                             for (uint32_t t = s->cl_off[c]; t < s->cl_off[c + 1]; t++)
