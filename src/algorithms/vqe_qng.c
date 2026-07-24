@@ -29,6 +29,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Exact analytic QGT state derivatives for the UCCSD / symmetry-preserving
+ * ansaetze — defined in vqe.c (they need its private circuit-data structs). */
+int qng_uccsd_state_derivatives(vqe_solver_t *solver, const double *params,
+                                complex_t *dpsi, size_t dim);
+int qng_symmetry_state_derivatives(vqe_solver_t *solver, const double *params,
+                                   complex_t *dpsi, size_t dim);
+
 /* Prepare the ideal trial state |psi(params)> = U(params)|HF>, mirroring the
  * state preparation in vqe_compute_energy (HF reference then ansatz, no noise).
  * Leaves solver->ansatz->parameters set to `params`. */
@@ -122,11 +129,18 @@ int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out)
     memcpy(psi0, st.amplitudes, dim * sizeof(complex_t));
     quantum_state_free(&st);
 
-    /* d_i|psi>: exact analytic derivatives for the hardware-efficient ansatz
-     * (no finite-difference error, n replays not 2n); central differences remain
-     * the fallback for UCCSD / symmetry-preserving ansaetze. */
+    /* d_i|psi>: exact analytic derivatives (generator insertion, no
+     * finite-difference error, n replays not 2n) for the hardware-efficient,
+     * UCCSD, and symmetry-preserving ansaetze; central differences remain the
+     * fallback for a CUSTOM ansatz whose gate structure is unknown. The UCCSD /
+     * symmetry-preserving derivatives live in vqe.c (they need its private
+     * circuit-data structs). */
     if (solver->ansatz->type == VQE_ANSATZ_HARDWARE_EFFICIENT) {
         if (qng_hea_state_derivatives(solver, params, dpsi, dim) != 0) { rc = -1; goto done; }
+    } else if (solver->ansatz->type == VQE_ANSATZ_UCCSD) {
+        if (qng_uccsd_state_derivatives(solver, params, dpsi, dim) != 0) { rc = -1; goto done; }
+    } else if (solver->ansatz->type == VQE_ANSATZ_SYMMETRY_PRESERVING) {
+        if (qng_symmetry_state_derivatives(solver, params, dpsi, dim) != 0) { rc = -1; goto done; }
     } else {
         for (size_t i = 0; i < n; i++) {
             memcpy(pshift, params, n * sizeof(double));

@@ -578,6 +578,61 @@ static void test_lih_uccsd_chemical_accuracy(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Exact QGT for the UCCSD and symmetry-preserving (Givens) ansätze (generator
+ * insertion). The QGT is a geometric property of the ansatz and its reference
+ * state alone — the Hamiltonian never enters the metric — so we pin the HF
+ * reference to |0011> to match the 2-electron UCCSD partition (occupied {0,1},
+ * virtual {2,3}): all four single excitations and the one double are then
+ * unblocked, exercising both the Givens and the double-excitation generators.
+ * Checks a valid metric plus the exact analytic value g[0][0]=1/4 for the
+ * leading UCCSD single excitation: it is built from a half-angle controlled-RY
+ * whose generator (-i/2)(|1><1|⊗Y) acts as Y/2 on the (occupied-controlled) HF
+ * reference, a computational-basis eigenstate, giving Fubini-Study variance
+ * (1/2)²=1/4 (same value and reason as the leading hardware-efficient RY). The
+ * exact path hits it to machine precision; central differences only ~3e-9. */
+static void test_qng_exact_qgt_uccsd_givens(void) {
+    fprintf(stdout, "\n-- VQE: exact QGT for UCCSD / symmetry-preserving ansätze --\n");
+    pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5);
+    H->hf_reference = 0x3;   /* |0011>: consistent with the 2-electron partition */
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    vqe_ansatz_t *uccsd = vqe_create_uccsd_ansatz(H->num_qubits, 2);
+    vqe_ansatz_t *givens = vqe_create_symmetry_preserving_ansatz(H->num_qubits, 2, 2);
+    vqe_ansatz_t *ans[2] = { uccsd, givens };
+    const char* nm[2] = { "UCCSD", "Givens" };
+
+    for (int c = 0; c < 2; c++) {
+        vqe_optimizer_t *opt = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, ans[c], opt, &e);
+        size_t n = ans[c]->num_parameters;
+        double *params = malloc(n * sizeof(double));
+        for (size_t k = 0; k < n; k++) params[k] = 0.1 * (double)(k + 1);
+        double *g = malloc(n * n * sizeof(double));
+        int rc = vqe_compute_qgt(s, params, g);
+        CHECK(rc == 0, "%s: vqe_compute_qgt succeeded (%zu params)", nm[c], n);
+
+        double max_asym = 0.0, min_diag = 1e300;
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < n; j++) {
+                double a = fabs(g[i * n + j] - g[j * n + i]);
+                if (a > max_asym) max_asym = a;
+            }
+            if (g[i * n + i] < min_diag) min_diag = g[i * n + i];
+        }
+        CHECK(max_asym < 1e-9, "%s: QGT symmetric (%.1e)", nm[c], max_asym);
+        CHECK(min_diag > -1e-9, "%s: QGT diagonal non-negative (%.2e)", nm[c], min_diag);
+        if (c == 0)  /* UCCSD leading single excitation: exact g[0][0] = 1/4 */
+            CHECK(fabs(g[0] - 0.25) < 1e-10, "UCCSD exact g[0][0] == 1/4 (%.12f)", g[0]);
+
+        free(params); free(g);
+        vqe_solver_free(s); vqe_optimizer_free(opt);
+    }
+    vqe_ansatz_free(uccsd); vqe_ansatz_free(givens);
+    pauli_hamiltonian_free(H);
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -590,6 +645,7 @@ int main(void) {
     test_qng_metric_and_convergence();
     test_h2_uccsd_chemical_accuracy();
     test_lih_uccsd_chemical_accuracy();
+    test_qng_exact_qgt_uccsd_givens();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
