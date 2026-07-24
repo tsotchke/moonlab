@@ -48,6 +48,55 @@ static int qng_prepare_state(vqe_solver_t *solver, const double *params,
     return 0;
 }
 
+/* Exact state derivatives d_i|psi> for the hardware-efficient ansatz, via
+ * analytic gate differentiation instead of a finite-difference step.  A rotation
+ * gate is exp(-i theta P/2) with generator P (Y for gate_ry, Z for gate_rz), so
+ *   d|psi>/dtheta_i = (-i/2) U_after P_i U_upto |HF>,
+ * i.e. replay the ansatz and insert the Pauli generator P_i immediately after the
+ * gate driven by parameter i (P_i commutes with its own rotation).  Exact (no
+ * delta) and cheaper than central differences: n circuit replays vs 2n.  Rows of
+ * `dpsi` are d_i|psi>, i in [0, n).  Mirrors vqe_apply_hardware_efficient_ansatz
+ * exactly (per-qubit RY,RZ then a linear CNOT chain, per layer). */
+static int qng_hea_state_derivatives(vqe_solver_t *solver, const double *params,
+                                     complex_t *dpsi, size_t dim) {
+    const vqe_ansatz_t *ansatz = solver->ansatz;
+    const size_t n  = ansatz->num_parameters;
+    const size_t nq = ansatz->num_qubits;
+
+    /* Hartree-Fock reference, copied as the start of every replay. */
+    quantum_state_t hf;
+    if (quantum_state_init(&hf, solver->hamiltonian->num_qubits) != QS_SUCCESS) return -1;
+    uint64_t hfref = solver->hamiltonian->hf_reference;
+    for (size_t q = 0; q < nq; q++)
+        if (hfref & (1ULL << q)) gate_pauli_x(&hf, (int)q);
+
+    int rc = 0;
+    for (size_t i = 0; i < n; i++) {
+        quantum_state_t st;
+        if (quantum_state_init(&st, solver->hamiltonian->num_qubits) != QS_SUCCESS) { rc = -1; break; }
+        memcpy(st.amplitudes, hf.amplitudes, dim * sizeof(complex_t));
+
+        size_t p = 0;
+        for (size_t layer = 0; layer < ansatz->num_layers; layer++) {
+            for (size_t q = 0; q < nq; q++) {
+                gate_ry(&st, (int)q, params[p]);
+                if (p == i) gate_pauli_y(&st, (int)q);   /* generator of RY is Y */
+                p++;
+                gate_rz(&st, (int)q, params[p]);
+                if (p == i) gate_pauli_z(&st, (int)q);   /* generator of RZ is Z */
+                p++;
+            }
+            for (size_t q = 0; q + 1 < nq; q++) gate_cnot(&st, (int)q, (int)(q + 1));
+        }
+        /* apply the global (-i/2) factor: d_i|psi> = (-i/2) U_after P_i U_upto |HF> */
+        for (size_t x = 0; x < dim; x++)
+            dpsi[i * dim + x] = (-0.5 * I) * st.amplitudes[x];
+        quantum_state_free(&st);
+    }
+    quantum_state_free(&hf);
+    return rc;
+}
+
 int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out) {
     if (!solver || !params || !qgt_out) return -1;
     const size_t n   = solver->ansatz->num_parameters;
@@ -73,19 +122,25 @@ int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out)
     memcpy(psi0, st.amplitudes, dim * sizeof(complex_t));
     quantum_state_free(&st);
 
-    /* d_i|psi> via central differences on the statevector */
-    for (size_t i = 0; i < n; i++) {
-        memcpy(pshift, params, n * sizeof(double));
-        pshift[i] = params[i] + delta;
-        if (qng_prepare_state(solver, pshift, &st) != 0) { rc = -1; goto done; }
-        for (size_t x = 0; x < dim; x++) dpsi[i * dim + x] = st.amplitudes[x];
-        quantum_state_free(&st);
+    /* d_i|psi>: exact analytic derivatives for the hardware-efficient ansatz
+     * (no finite-difference error, n replays not 2n); central differences remain
+     * the fallback for UCCSD / symmetry-preserving ansaetze. */
+    if (solver->ansatz->type == VQE_ANSATZ_HARDWARE_EFFICIENT) {
+        if (qng_hea_state_derivatives(solver, params, dpsi, dim) != 0) { rc = -1; goto done; }
+    } else {
+        for (size_t i = 0; i < n; i++) {
+            memcpy(pshift, params, n * sizeof(double));
+            pshift[i] = params[i] + delta;
+            if (qng_prepare_state(solver, pshift, &st) != 0) { rc = -1; goto done; }
+            for (size_t x = 0; x < dim; x++) dpsi[i * dim + x] = st.amplitudes[x];
+            quantum_state_free(&st);
 
-        pshift[i] = params[i] - delta;
-        if (qng_prepare_state(solver, pshift, &st) != 0) { rc = -1; goto done; }
-        for (size_t x = 0; x < dim; x++)
-            dpsi[i * dim + x] = (dpsi[i * dim + x] - st.amplitudes[x]) / (2.0 * delta);
-        quantum_state_free(&st);
+            pshift[i] = params[i] - delta;
+            if (qng_prepare_state(solver, pshift, &st) != 0) { rc = -1; goto done; }
+            for (size_t x = 0; x < dim; x++)
+                dpsi[i * dim + x] = (dpsi[i * dim + x] - st.amplitudes[x]) / (2.0 * delta);
+            quantum_state_free(&st);
+        }
     }
 
     /* overlaps <psi | d_i psi> */

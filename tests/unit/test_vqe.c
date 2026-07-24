@@ -432,6 +432,13 @@ static void test_qng_metric_and_convergence(void) {
         if (q < min_q) min_q = q;
     }
     CHECK(min_q > -1e-9, "QGT is positive-semidefinite (min v^T g v %.3e)", min_q);
+
+    /* (1b) exact analytic value: for the hardware-efficient ansatz the leading
+     * RY on the HF reference has Fubini-Study metric exactly 1/4 (the variance of
+     * a Pauli generator on a computational-basis eigenstate). The exact
+     * generator-insertion path (vqe_qng.c) reaches this to machine precision;
+     * central differences only get ~2e-10. */
+    CHECK(fabs(g[0] - 0.25) < 1e-12, "exact QGT g[0][0] == 1/4 (%.12f)", g[0]);
     free(g);
 
     /* (2) QNG optimizes H2 below Hartree-Fock. */
