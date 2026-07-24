@@ -82,17 +82,35 @@ static void *popper(void *a)
 }
 
 /* Watchdog: if the destroy-mode round wedges on a destroyed mutex, the
- * joins below never return.  This thread fires after a grace period, reports
- * the deadlock, and force-exits so the harness cannot hang forever. */
+ * joins below never return and the round counter stops advancing.  A wedge
+ * is therefore "no completed round for a full grace period", not "the whole
+ * run took longer than a fixed wall-clock budget": one TSan-instrumented
+ * round is ~1 s of wall time, but 16 back-to-back rounds legitimately
+ * straddle any fixed total budget depending on machine load, which made a
+ * total-budget watchdog fire on clean, progressing runs.  This thread polls
+ * the counter once per second and only reports a deadlock after `secs`
+ * consecutive seconds of zero progress, then force-exits so the harness
+ * cannot hang forever. */
+static _Atomic int g_rounds_done;
+
 static void *deadlock_watchdog(void *arg)
 {
     int secs = (int)(intptr_t)arg;
-    struct timespec ts = { secs, 0 };
-    nanosleep(&ts, NULL);
+    int last = atomic_load(&g_rounds_done);
+    int stalled = 0;
+    while (stalled < secs) {
+        struct timespec ts = { 1, 0 };
+        nanosleep(&ts, NULL);
+        int now = atomic_load(&g_rounds_done);
+        if (now != last) { last = now; stalled = 0; }
+        else             { stalled++; }
+    }
     fprintf(stdout,
         "DEADLOCK: destroy() vs in-flight push/pop wedged a thread in "
         "pthread_mutex_lock on the destroyed mutex "
-        "(audit_buffer.c:87/:76). Documented \"no race window\" claim is false.\n");
+        "(audit_buffer.c:87/:76): round %d made no progress for %d s. "
+        "Documented \"no race window\" claim is false.\n",
+        last, secs);
     fflush(stdout);
     _exit(7);
     return NULL;
@@ -150,8 +168,12 @@ int main(int argc, char **argv)
         /* Retry the destroy-vs-push race across rounds: the wedge is a
          * scheduling window, so oversubscription + repetition makes hitting
          * it near-certain.  A wedged round never returns from join(), so the
-         * watchdog fires; a clean round advances to the next. */
-        for (int r = 0; r < DESTROY_ROUNDS; r++) run_round(1);
+         * round counter stalls and the watchdog fires; a clean round
+         * advances the counter and rearms it. */
+        for (int r = 0; r < DESTROY_ROUNDS; r++) {
+            run_round(1);
+            atomic_fetch_add(&g_rounds_done, 1);
+        }
         fprintf(stdout, "destroy: %d rounds completed without wedging "
                         "(platform did not deadlock this run)\n", DESTROY_ROUNDS);
         return 0;
