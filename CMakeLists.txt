@@ -390,6 +390,19 @@ if(QSIM_PLATFORM_MACOS AND QSIM_ENABLE_METAL)
     if(METAL_FRAMEWORK AND FOUNDATION_FRAMEWORK)
         message(STATUS "Metal: Found")
         set(QSIM_HAS_METAL ON)
+        # Directory holding Metal.framework / Foundation.framework on this
+        # SDK. Linking the frameworks by absolute path makes CMake put that
+        # directory on every compile line as a plain -F -- a USER framework
+        # search path, where clang applies the full -Wall/-Wextra/-Wpedantic
+        # surface to Apple's own headers. Mainline (Homebrew) clang then
+        # breaks the QSIM_WERROR build on diagnostics Apple's headers were
+        # never written against (-Wmissing-method-return-type inside
+        # NSURLHandle.h, hundreds of -Wgnu-statement-expression pedantic
+        # hits in NSObjCRuntime.h). Marked below as a *system* framework
+        # path (-iframework) for the one translation unit that imports the
+        # frameworks -- same contract as QSIM_ACCELERATE_FRAMEWORKS_DIR.
+        get_filename_component(QSIM_METAL_FRAMEWORKS_DIR
+            "${METAL_FRAMEWORK}" DIRECTORY)
     else()
         message(STATUS "Metal: Not found")
     endif()
@@ -1328,6 +1341,22 @@ if(QSIM_PLATFORM_MACOS)
             ${COREGRAPHICS_FRAMEWORK}
         )
         target_compile_definitions(quantumsim PRIVATE HAS_METAL=1 QSIM_HAS_METAL=1)
+        # System-framework treatment for the Metal/Foundation imports
+        # (issue #33): clang treats everything found through an
+        # -iframework entry as a system framework regardless of the
+        # duplicate plain -F entry CMake emits for the linked framework
+        # paths, so SDK header content can never be promoted to a hard
+        # error under QSIM_WERROR on any toolchain -- Apple clang or
+        # mainline/Homebrew LLVM. Scoped to the single Objective-C++
+        # translation unit that imports the frameworks so our own
+        # warning level is untouched everywhere else.
+        if(QSIM_METAL_FRAMEWORKS_DIR)
+            set_source_files_properties(
+                src/optimization/gpu_metal.mm
+                PROPERTIES
+                COMPILE_OPTIONS "-iframework${QSIM_METAL_FRAMEWORKS_DIR}"
+            )
+        endif()
     endif()
 
     if(QSIM_HAS_SECURITY)
@@ -1495,38 +1524,31 @@ if(QSIM_HAS_OPENMP)
         target_link_libraries(quantumsim PRIVATE ${QSIM_OPENMP_LIBRARIES})
         target_include_directories(quantumsim PRIVATE ${QSIM_OPENMP_INCLUDE_DIR})
 
-        # Relocate libomp's absolute Homebrew path to @rpath, and build
-        # an rpath list that only contains directories that actually
-        # exist on this host. This keeps the binary relocatable
-        # (@loader_path/../lib is always present) while adding
-        # developer-machine fallbacks when present. For container /
-        # Docker builds, set QSIM_EXTRA_RPATH to pre-seed additional
-        # entries (e.g. "/opt/openmp/lib").
-        set(QSIM_RPATH_LIST "@loader_path/../lib")
-        foreach(_qsim_candidate_rpath
-                "$ENV{HOMEBREW_PREFIX}/opt/libomp/lib"
-                "/opt/homebrew/opt/libomp/lib"
-                "/usr/local/opt/libomp/lib")
-            if(_qsim_candidate_rpath AND EXISTS "${_qsim_candidate_rpath}")
-                list(APPEND QSIM_RPATH_LIST "${_qsim_candidate_rpath}")
-            endif()
-        endforeach()
+        # Consumer OpenMP coexistence (issue #27). The build-tree binary
+        # references libomp by the absolute path it linked against --
+        # Homebrew libomp's own install name -- so build-tree tests and
+        # the Python bindings run from the source tree resolve exactly
+        # one libomp image with no rpath entry at all. Installed and
+        # packaged artifacts must NOT pin that path: a consumer process
+        # that carries its own OpenMP runtime (conda, PyTorch, a
+        # different LLVM) would load a second libomp image beside its
+        # own and abort with OMP Error #15. cmake/install.cmake rewrites
+        # the installed copy's load command to @rpath/libomp.dylib, and
+        # the install rpath below holds only loader-relative entries, so
+        # the consumer's loader decides which libomp satisfies the
+        # reference: an already-initialized runtime with the
+        # @rpath/libomp.dylib install name, the consumer's own rpath
+        # stack, or a copy dropped beside libquantumsim. Packagers that
+        # want a pinned directory opt in explicitly with
+        # QSIM_EXTRA_RPATH (the Homebrew formula passes libomp's opt
+        # path; container images pass e.g. "/opt/openmp/lib").
+        set(QSIM_INSTALL_RPATH_LIST "@loader_path" "@loader_path/../lib")
         if(DEFINED QSIM_EXTRA_RPATH)
-            list(APPEND QSIM_RPATH_LIST ${QSIM_EXTRA_RPATH})
+            list(APPEND QSIM_INSTALL_RPATH_LIST ${QSIM_EXTRA_RPATH})
         endif()
         set_target_properties(quantumsim PROPERTIES
-            BUILD_RPATH   "${QSIM_RPATH_LIST}"
-            INSTALL_RPATH "${QSIM_RPATH_LIST}"
+            INSTALL_RPATH "${QSIM_INSTALL_RPATH_LIST}"
         )
-        # install_name_tool rewrites a Mach-O dylib's load commands; it fails
-        # on a static archive (.a), so only run it for a shared build.
-        if(QSIM_BUILD_SHARED)
-            add_custom_command(TARGET quantumsim POST_BUILD
-                COMMAND install_name_tool -change "${QSIM_OPENMP_LIBRARIES}"
-                        "@rpath/libomp.dylib" "$<TARGET_FILE:quantumsim>"
-                VERBATIM
-            )
-        endif()
     elseif(TARGET OpenMP::OpenMP_C)
         # Standard OpenMP target
         target_link_libraries(quantumsim PRIVATE OpenMP::OpenMP_C)

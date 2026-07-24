@@ -29,8 +29,13 @@ extern "C" {
  * - Auto-detects GPU core count for optimal threadgroup sizing
  */
 
-// Complex type (compatible with C)
+// Complex type for the C consumers of this header. double _Complex is a
+// compiler extension in C++/Objective-C++ (-Wc99-extensions under
+// -Wpedantic), and no C++ translation unit uses the typedef, so it is
+// C-only by construction.
+#ifndef __cplusplus
 typedef double _Complex complex_t;
+#endif
 
 // Opaque handle to Metal compute context
 typedef struct metal_compute_ctx metal_compute_ctx_t;

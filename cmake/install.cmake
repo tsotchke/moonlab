@@ -20,6 +20,39 @@ else()
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
+# macOS OpenMP coexistence (issue #27): the build-tree dylib references
+# Homebrew libomp by absolute path (its install name), which is correct on
+# the build machine but must not ship -- a consumer process carrying its
+# own OpenMP runtime would load ours beside it and abort with OMP Error
+# #15. Rewrite the installed copy's load command to @rpath/libomp.dylib so
+# the consumer's loader resolves the runtime through its own rpath stack
+# (or an already-loaded libomp with that install name). INSTALL_RPATH on
+# the target carries only loader-relative entries plus any explicit
+# QSIM_EXTRA_RPATH, so nothing in the artifact overrides consumer
+# resolution. install_name_tool re-signs ad-hoc automatically on arm64.
+# Wheel installs keep the absolute reference: delocate's repair pass
+# resolves absolute non-system load commands, bundles the dependency into
+# the wheel, and rewrites the reference itself, whereas an @rpath
+# reference with no absolute rpath is unresolvable for it.
+if(QSIM_PLATFORM_MACOS AND QSIM_BUILD_SHARED AND NOT QSIM_PYTHON_WHEEL
+        AND DEFINED QSIM_OPENMP_LIBRARIES)
+    set(_qsim_libomp_rel "${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:quantumsim>")
+    install(CODE "
+        set(_qsim_lib \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_qsim_libomp_rel}\")
+        if(EXISTS \"\${_qsim_lib}\")
+            execute_process(
+                COMMAND install_name_tool -change
+                    \"${QSIM_OPENMP_LIBRARIES}\" \"@rpath/libomp.dylib\"
+                    \"\${_qsim_lib}\"
+                RESULT_VARIABLE _qsim_int_rc)
+            if(NOT _qsim_int_rc EQUAL 0)
+                message(FATAL_ERROR
+                    \"install_name_tool failed to relocate libomp on \${_qsim_lib}\")
+            endif()
+        endif()")
+    unset(_qsim_libomp_rel)
+endif()
+
 if(NOT QSIM_PYTHON_WHEEL)
     install(DIRECTORY src/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/quantumsim

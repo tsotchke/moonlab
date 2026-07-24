@@ -1,6 +1,7 @@
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
 #include "gpu_metal.h"
+#include <algorithm>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -640,7 +641,7 @@ static int dispatch_kernel(
         
         // Calculate threadgroup size and count
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupSize = MIN((NSUInteger)1024, maxThreads);  // Optimal for M2 Ultra
+        NSUInteger threadgroupSize = std::min((NSUInteger)1024, maxThreads);  // Optimal for M2 Ultra
         NSUInteger threadgroups = (grid_size + threadgroupSize - 1) / threadgroupSize;
         
         MTLSize threadsPerThreadgroup = MTLSizeMake(threadgroupSize, 1, 1);
@@ -1137,9 +1138,9 @@ static int dispatch_kernel_3d(
 
         // Calculate threadgroup size
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupX = MIN((NSUInteger)8, (NSUInteger)grid_x);
-        NSUInteger threadgroupY = MIN((NSUInteger)8, (NSUInteger)grid_y);
-        NSUInteger threadgroupZ = MIN((NSUInteger)8, (NSUInteger)grid_z);
+        NSUInteger threadgroupX = std::min((NSUInteger)8, (NSUInteger)grid_x);
+        NSUInteger threadgroupY = std::min((NSUInteger)8, (NSUInteger)grid_y);
+        NSUInteger threadgroupZ = std::min((NSUInteger)8, (NSUInteger)grid_z);
 
         // Adjust to fit maxThreads
         while (threadgroupX * threadgroupY * threadgroupZ > maxThreads) {
@@ -1207,8 +1208,8 @@ static int dispatch_kernel_2d(
         }
 
         NSUInteger maxThreads = [pipeline maxTotalThreadsPerThreadgroup];
-        NSUInteger threadgroupX = MIN((NSUInteger)16, (NSUInteger)grid_x);
-        NSUInteger threadgroupY = MIN((NSUInteger)16, (NSUInteger)grid_y);
+        NSUInteger threadgroupX = std::min((NSUInteger)16, (NSUInteger)grid_x);
+        NSUInteger threadgroupY = std::min((NSUInteger)16, (NSUInteger)grid_y);
 
         while (threadgroupX * threadgroupY > maxThreads) {
             if (threadgroupY > 1) threadgroupY /= 2;
@@ -1327,9 +1328,9 @@ int metal_mps_apply_gate_2q(
         // truncated factors (rank <= min(max_bond, min(m,n))), but S holds the
         // FULL min(m,n) spectrum so the truncation-error loop below stays
         // in-bounds.
-        size_t U_size = m * MIN(max_bond, MIN(m, n)) * sizeof(float) * 2;
-        size_t S_size = MIN(m, n) * sizeof(float);
-        size_t Vt_size = MIN(max_bond, MIN(m, n)) * n * sizeof(float) * 2;
+        size_t U_size = m * std::min(max_bond, std::min(m, n)) * sizeof(float) * 2;
+        size_t S_size = std::min(m, n) * sizeof(float);
+        size_t Vt_size = std::min(max_bond, std::min(m, n)) * n * sizeof(float) * 2;
 
         metal_buffer_t* U = metal_buffer_create(ctx, U_size);
         metal_buffer_t* S = metal_buffer_create(ctx, S_size);
@@ -1357,7 +1358,7 @@ int metal_mps_apply_gate_2q(
         // Compute truncation error (float precision on GPU)
         float* S_ptr = (float*)metal_buffer_contents(S);
         double total_sq = 0.0, kept_sq = 0.0;
-        for (uint32_t i = 0; i < MIN(m, n); i++) {
+        for (uint32_t i = 0; i < std::min(m, n); i++) {
             total_sq += (double)S_ptr[i] * (double)S_ptr[i];
             if (i < rank) kept_sq += (double)S_ptr[i] * (double)S_ptr[i];
         }
@@ -1419,7 +1420,7 @@ int metal_svd_truncate(
     if (!ctx || !A || !U || !S || !Vt || !actual_rank) return -1;
 
     @autoreleasepool {
-        const uint32_t min_mn = MIN(m, n);
+        const uint32_t min_mn = std::min(m, n);
         if (min_mn == 0) { *actual_rank = 0; return -1; }
 
         /* Honest hybrid: the gate contraction upstream ran on the GPU in
