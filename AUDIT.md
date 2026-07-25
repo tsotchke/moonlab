@@ -503,13 +503,9 @@ QGTL today can call `moonlab_qwz_chern` and `moonlab_qrng_bytes`. It
 - Custom Bloch callbacks (`qgt_create`).
 - Chern-KPM marker / bulk map (`chern_kpm_*`).
 - Haldane model (`qgt_model_haldane`).
-- Anyon fusion primitives and coherence-verified F/R symbol tables.
-  (The braiding/gate layer on top of them is experimental and currently
-  incorrect -- see the v1.2.0 changelog -- so it is not something QGTL
-  should consume yet.)
+- Anyon fusion / braiding primitives.
 
-Every one of these except the anyon braiding/gate layer is implemented
-and tested. None is on the stable
+Every one of these is implemented and tested. None is on the stable
 ABI. QGTL has to vendor Moonlab's private headers to reach them,
 defeating the ABI story.
 

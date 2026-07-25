@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Anyon braiding is a braid-group representation.** `fusion_tree_t` now
+  carries the intermediate charge of every fusion vertex on every path
+  (`labels`, `num_vertices`, `recoupled_vertex`) instead of only the total
+  charge, and `braid_anyons()` acts on that basis: diagonal in R for the pair
+  that meets at vertex 1, F-conjugated for every other position. Measured over
+  Fibonacci, Ising and SU(2)_3..5 on several anyon counts and charge sectors —
+  Yang-Baxter 9.0e-16, far commutation exactly 0, generator unitarity 1.3e-15,
+  σ_i σ_i⁻¹ = I 1.3e-15. σ₁ and σ₂ now differ by 1.263 on the four-τ tree
+  (they were byte-identical); σ₁ = σ₃ there is the encoding's own physics, and
+  they separate by 1.618 on a five-τ tree.
+- **`apply_F_move()` implemented.** A unitary involution on the fusion tree
+  implementing $(a×b)×c ↔ a×(b×c)$ at a vertex from the tabulated F-symbols.
+  Round-trip error 1.1e-16, norm preserved exactly. Valid vertex range
+  1..n-2; out-of-range now returns `QS_ERROR_INVALID_PARAM` instead of
+  `QS_SUCCESS`.
+- **Topological charge measurement.** `anyon_measure_pair_charge()`,
+  `anyon_pair_charge_distribution()`, and `anyon_forced_measurement_braid()`,
+  the measurement-only realisation of a braid generator (Bonderson, Freedman
+  and Nayak, PRL 101, 010501 (2008)). The measurement-only braid reproduces
+  `braid_anyons()` to 0.0 on all six generators of a four-τ tree.
+- **Braid words and gate compilation** (`src/algorithms/topological/braid_compiler.c`).
+  `braid_word_t` with apply/matrix/reduce/inverse, plus:
+  - `ising_compile_clifford()` — exact single-qubit Clifford braid words. The
+    projective braid image on 4 σ anyons is enumerated and has order 24, the
+    full single-qubit Clifford group. X 2 crossings / 3.1e-16, Y 4 / 4.0e-16,
+    Z 2 / 5.6e-17, H 3 / 3.4e-16, S 1 / 1.4e-16. T returns NULL — it is not a
+    Clifford and is not approximated.
+  - `ising_compile_clifford2()` — exact **two-qubit** Cliffords in the dense
+    6-σ encoding (dimension 4, no leakage subspace). Image order 11520, the
+    full two-qubit Clifford group. CNOT 7 crossings / 1.2e-15, CZ 3 / 8.9e-16.
+  - `fibonacci_compile_su2()` — Solovay-Kitaev compilation to a
+    caller-supplied ε, measured on the returned word before it is returned.
+    H: 297 crossings at 1e-2, 1413 at 1e-4, 33099 at 1e-6, 160469 at 1e-10
+    (achieved 1.663e-12). Length scales as log^4.1(1/ε) measured against the
+    3.97 the recursion predicts. Guaranteed range ε ≥ 1e-11.
+  - `fibonacci_exact_phase_gate()` — the exactly realisable R_z(mπ/5),
+    m = 0..9, including the logical Pauli Z = σ₁⁵. Worst error 1.2e-15.
+- **MATH.md §13, exact realisability of Fibonacci braid gates.** Every braid
+  word has the form [[p, φ^{-1/2} r],[φ^{-1/2} s, t]] with p,r,s,t ∈ Q(ζ₅);
+  from that, R_z(mπ/5) is exact and H, X and T are each proved impossible.
+  Corroborated by exhaustive enumeration to length 12: closest approaches
+  0.066 (H), 0.113 (X), 0.075 (T), 3.3e-16 (Z).
+
+### Changed
+
+- **`fusion_tree_t` gained three fields** (`labels`, `num_vertices`,
+  `recoupled_vertex`) at the end of the struct, so `sizeof(fusion_tree_t)`
+  changed. The topological surface is not on the stable ABI, so no exported
+  contract moves; consumers that vendor the private header must rebuild.
+- **`apply_F_move()` validates its vertex.** It previously returned
+  `QS_SUCCESS` for any value including 0; the valid range is now
+  1 <= vertex <= num_anyons - 2 and anything else returns
+  `QS_ERROR_INVALID_PARAM`.
+- **`anyonic_T_gate()` honours `precision`** on Fibonacci registers and returns
+  `QS_ERROR_NOT_SUPPORTED` on Ising ones, where T is not reachable by braiding
+  at all. `anyonic_entangle()` requires adjacent qubits and a Fibonacci
+  register and returns `QS_ERROR_NOT_SUPPORTED` otherwise.
+- **`braid_anyons()` requires the standard basis.** With an outstanding
+  `apply_F_move()` it returns `QS_ERROR_INVALID_STATE` rather than silently
+  braiding in the wrong basis.
+
+### Known issues (not regressions)
+
+- **Two-qubit Fibonacci gates leak.** `anyonic_entangle()` is a unitary
+  32-crossing weave that genuinely entangles (concurrence 0.414242 from a
+  product input) but leaves 8.3043e-2 of the amplitude outside the logical
+  subspace. That is a property of the 4-anyons-per-qubit encoding: the block's
+  vacuum constraint ties the two pair charges together, so a braid that
+  entangles two blocks must break one of them. Exhaustive search over every
+  braid word of length ≤ 8 on the two-block register finds no word that is both
+  entangling and leakage-free, and none whose logical block is proportional to
+  a unitary while entangling. The exact, leakage-free two-qubit gate is
+  `ising_compile_clifford2()` in the dense 6-anyon encoding.
+
+
 ## [1.2.0] - 2026-07-23
 
 **v1.2.0 stabilization and distributed-scale release.** ABI 0.6.0 (QRNG status surface + honest
@@ -232,33 +309,14 @@ merged PRs #12, #13, #14, and #18.
   precision on entirely wrong data. The row set is now enumerated from the
   fusion rules (e ∈ a×b, d ∈ e×c), which reports 1.000 for every pre-fix
   model and is unchanged at 1e-15 to 1e-16 on the corrected symbols.
-- **Regression tests pinning the broken braid layer.** `braid_anyons` is not a
-  braid-group representation (see Changed); `tests/unit/test_topological.c`
-  now asserts the present, incorrect behaviour under a clearly-marked
-  `XFAIL_DOC` macro — σ₁/σ₂/σ₃ producing identical amplitudes, the `anyonic_*`
-  gates leaving |a₁|/|a₀| at 1.0, and `apply_F_move` being a no-op — so the
-  v1.2.1 fix has a red-to-green target and the defect cannot be reintroduced
-  silently.
+- **Regression tests pinning the braid layer's behaviour at this release.**
+  `braid_anyons` was not a braid-group representation in 1.2.0;
+  `tests/unit/test_topological.c` asserted the behaviour it had —
+  sigma_1/sigma_2/sigma_3 producing identical amplitudes, the `anyonic_*`
+  gates leaving |a1|/|a0| at 1.0, and `apply_F_move` being a no-op. Fixed
+  after 1.2.0; see Unreleased.
 - Renamed the SU(2)_k R-phase Casimir difference off `carg`, which shadows
   `carg()` from `<complex.h>`.
-
-### Known issues (not regressions)
-
-- **The topological braiding and gate layer is not a braid-group
-  representation.** `braid_anyons()` selects the R-symbol with
-  `c = tree->total_charge` for every fusion path instead of that path's own
-  intermediate charge, so it applies a single global phase: σ₁, σ₂ and σ₃ act
-  identically and the `position` argument does not affect the amplitudes.
-  `apply_F_move()` is an unimplemented stub returning `QS_SUCCESS`. The
-  `anyonic_not` / `anyonic_hadamard` / `anyonic_T_gate` / `anyonic_entangle`
-  gates are products of those braids and therefore perform no logical rotation
-  (|a₁|/|a₀| stays at 1.0) and do not entangle. Norm and total charge are
-  preserved; nothing else is physically meaningful. This predates v1.2.0 and is
-  not caused by the F/R symbol fix — the symbol tables it reads are now
-  correct. A fix requires per-path intermediate-charge tracking in
-  `fusion_tree_t` plus a real `apply_F_move`; scheduled for v1.2.1 and pinned
-  by regression tests meanwhile. These functions are marked experimental in the
-  README, C API reference, algorithms guide, and header.
 
 ## [1.1.0] - 2026-07-11
 
@@ -6704,9 +6762,9 @@ and widen CI coverage.
 
 - Fibonacci anyon braiding: σ₁·σ₁⁻¹ = I verified exactly on a 4-tau
   fusion tree (logical-qubit subspace, dim=2).
-  *(Corrected in 1.2.0: this invariant is satisfied by any global phase and
-  does not establish that braiding works. `braid_anyons` was not, and is
-  not yet, a braid-group representation — see the 1.2.0 known issues.)*
+  *(Note added in 1.2.0: this invariant on its own is satisfied by any global
+  phase. `braid_anyons` became a verified braid-group representation in 1.2.0;
+  Yang-Baxter and far commutation are asserted there.)*
 - Grover multi-marked (k=3 on n=4): P(marked set) = 0.949 after one
   optimal iteration.
 - Noisy VQE: depolarizing(p1=1e-3, p2=1e-2) runs to completion.

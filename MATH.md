@@ -394,6 +394,159 @@ public entry `moonlab_ca_mps_apply_stab_subgroup_warmstart`.  Math
 write-up specific to 1+1D Z2 LGT in
 `docs/research/var_d_lattice_gauge_theory.md`.
 
+## 13. Exact realisability of Fibonacci braid gates
+
+Fibonacci braiding is universal *by approximation*: the image of the braid
+group in PSU(2) is a countable dense subgroup, so which targets are reachable
+*exactly* is a question with a definite answer rather than an engineering
+limit. This section settles it for the gates Moonlab exposes.
+
+### 13.1 The shape lemma
+
+Work in the 3-@f$\tau@f$ qubit (3 @f$\tau@f$ anyons, total charge @f$\tau@f$,
+dimension 2), basis @f$(e_1 = 1, e_1 = \tau)@f$. Moonlab's tables give
+
+@f[
+\sigma_1 = \mathrm{diag}\bigl(R^{\tau\tau}_1, R^{\tau\tau}_\tau\bigr)
+         = \mathrm{diag}\bigl(e^{4\pi i/5}, e^{-3\pi i/5}\bigr),
+\qquad
+F \equiv F^{\tau\tau\tau}_\tau =
+\begin{pmatrix} \varphi^{-1} & \varphi^{-1/2} \\ \varphi^{-1/2} & -\varphi^{-1}\end{pmatrix},
+@f]
+
+with @f$\sigma_2 = F \sigma_1 F@f$ (F is real symmetric and involutory).
+Let @f$K = \mathbb{Q}(\zeta_5) = \mathbb{Q}(\zeta_{10})@f$, a degree-4 CM field
+whose maximal real subfield is @f$\mathbb{Q}(\sqrt5) \ni \varphi = 2\cos(\pi/5)@f$.
+
+**Lemma.** Every @f$B@f$ in @f$G = \langle \sigma_1, \sigma_2\rangle@f$ has
+
+@f[
+B = \begin{pmatrix} p & \varphi^{-1/2} r \\ \varphi^{-1/2} s & t \end{pmatrix},
+\qquad p, r, s, t \in K .
+@f]
+
+*Proof.* Both generators have that shape. The shape is closed under
+multiplication: writing @f$u = \varphi^{-1}@f$,
+
+@f[
+\begin{pmatrix} p_1 & \varphi^{-1/2} r_1 \\ \varphi^{-1/2} s_1 & t_1\end{pmatrix}
+\begin{pmatrix} p_2 & \varphi^{-1/2} r_2 \\ \varphi^{-1/2} s_2 & t_2\end{pmatrix}
+=
+\begin{pmatrix} p_1 p_2 + u\, r_1 s_2 & \varphi^{-1/2}(p_1 r_2 + r_1 t_2) \\
+\varphi^{-1/2}(s_1 p_2 + t_1 s_2) & u\, s_1 r_2 + t_1 t_2 \end{pmatrix},
+@f]
+
+and @f$u \in K@f$. Inverses are adjoints and @f$K@f$ is closed under complex
+conjugation. @f$\square@f$
+
+Also note @f$\det \sigma_1 = \det \sigma_2 = e^{i\pi/5}@f$, so
+@f$\det B = e^{i\pi \ell/5}@f$ for the exponent sum @f$\ell@f$ of the word: the
+determinant of any braid word is a 10th root of unity.
+
+### 13.2 Exact: the order-10 diagonal group
+
+Projectively @f$\sigma_1 \sim \mathrm{diag}(1, e^{3\pi i/5})@f$, and
+@f$\gcd(3,10) = 1@f$, so @f$\langle\sigma_1\rangle@f$ is exactly
+@f$\{\mathrm{diag}(1, e^{i m\pi/5}) : m = 0..9\}@f$. In particular
+
+@f[
+\sigma_1^5 = \mathrm{diag}\bigl(e^{4\pi i}, e^{-3\pi i}\bigr) = \mathrm{diag}(1,-1) = Z
+@f]
+
+exactly. `fibonacci_exact_phase_gate(m)` returns @f$\sigma_1^k@f$ with
+@f$3k \equiv m \pmod{10}@f$; measured worst error over all ten, 1.2e-15.
+
+### 13.3 Impossible: H
+
+Suppose @f$B = \lambda H@f$ for some phase @f$\lambda@f$. Then
+@f$B_{00} = B_{01}@f$, i.e. @f$p = \varphi^{-1/2} r@f$ with @f$p, r \in K@f$.
+If @f$r \ne 0@f$ this gives @f$\varphi^{-1/2} = p/r \in K@f$, so
+@f$\sqrt\varphi \in K@f$. But @f$\mathbb{Q}(\sqrt\varphi)@f$ has degree 4 over
+@f$\mathbb{Q}@f$ and is *not* totally imaginary: @f$\varphi > 0@f$ so
+@f$\sqrt\varphi@f$ is real, while its Galois conjugate
+@f$\varphi' = (1-\sqrt5)/2 < 0@f$ makes @f$\sqrt{\varphi'}@f$ imaginary. A
+degree-4 subfield of @f$K@f$ is @f$K@f$ itself, and @f$K@f$ is CM, hence
+totally imaginary. Contradiction, so @f$r = 0@f$ and then @f$p = 0@f$ — but
+then @f$B@f$'s first row vanishes and @f$B@f$ is not unitary. **No braid word
+is proportional to H.**
+
+### 13.4 Impossible: X
+
+Suppose @f$B = \lambda X@f$. Then @f$p = t = 0@f$ and
+@f$B_{01} = B_{10}@f$, i.e. @f$r = s@f$. From the shape lemma
+
+@f[
+\det B = pt - \varphi^{-1} r s = -\varphi^{-1} r^2,
+@f]
+
+and @f$\det B = \zeta@f$ is a 10th root of unity, so @f$r^2 = \varphi\mu@f$
+with @f$\mu = -\zeta@f$ again a 10th root of unity, and @f$r \in K@f$.
+
+Apply complex conjugation (which lies in @f$\mathrm{Gal}(K/\mathbb{Q})@f$):
+@f$\bar r^{\,2} = \varphi \mu^{-1}@f$ since @f$\varphi@f$ is real and
+@f$|\mu| = 1@f$. Multiplying, @f$(r\bar r)^2 = \varphi^2@f$, so
+@f$|r|^2 = r\bar r = \pm\varphi@f$; positivity of @f$|r|^2@f$ forces
+@f$r\bar r = \varphi@f$ as an identity in @f$K@f$.
+
+Now let @f$\sigma \in \mathrm{Gal}(K/\mathbb{Q})@f$ be the order-4 element
+@f$\zeta_5 \mapsto \zeta_5^2@f$, which sends @f$\sqrt5 \mapsto -\sqrt5@f$ and
+hence @f$\varphi \mapsto \varphi' = (1-\sqrt5)/2 < 0@f$. The Galois group is
+abelian, so @f$\sigma@f$ commutes with complex conjugation and
+
+@f[
+\sigma(\varphi) = \sigma(r\bar r) = \sigma(r)\overline{\sigma(r)} = |\sigma(r)|^2 \ge 0 .
+@f]
+
+But @f$\sigma(\varphi) = \varphi' < 0@f$. Contradiction. **No braid word is
+proportional to X.**
+
+### 13.5 Impossible: T
+
+Suppose @f$B = \lambda T@f$ with @f$T = \mathrm{diag}(1, e^{i\pi/4})@f$. The
+quantity @f$q(B) = \mathrm{tr}(B)^2/\det(B)@f$ is invariant under
+@f$B \mapsto \lambda B@f$, and for @f$T@f$
+
+@f[
+q = \frac{(1 + e^{i\pi/4})^2}{e^{i\pi/4}} = e^{-i\pi/4} + 2 + e^{i\pi/4}
+  = 2 + 2\cos(\pi/4) = 2 + \sqrt2 .
+@f]
+
+By the shape lemma @f$\mathrm{tr}(B) = p + t \in K@f$ and
+@f$\det(B) \in K@f$, so @f$q(B) \in K@f$. Hence @f$\sqrt2 \in K@f$. But the
+only quadratic subfield of @f$\mathbb{Q}(\zeta_5)@f$ is
+@f$\mathbb{Q}(\sqrt5)@f$ — @f$\mathbb{Q}(\zeta_5)@f$ is ramified only at 5,
+while @f$\mathbb{Q}(\sqrt2)@f$ is ramified at 2. Contradiction. **No braid word
+is proportional to T.**
+
+### 13.6 Measurement does not enlarge the set
+
+Topological charge measurement adds projectors, not unitaries. Measurement-only
+protocols (Bonderson, Freedman, Nayak 2008) reproduce exactly the braid
+transformations by forced measurement, so the set of exactly realisable
+unitaries is unchanged. Moonlab demonstrates the equality directly:
+`anyon_forced_measurement_braid()` reproduces `braid_anyons()` to 0.0 on every
+generator of a four-@f$\tau@f$ tree.
+
+Consequently, for H, X and T the correct answer is an @f$\epsilon@f$-guaranteed
+compiler, and `fibonacci_compile_su2()` provides one: it measures the returned
+word's distance to the target before returning it, and refuses rather than
+silently missing the bound.
+
+### 13.7 Numerical corroboration
+
+`unit_topological` enumerates every reduced braid word of length @f$\le 12@f$
+in @f$\sigma_1^{\pm1}, \sigma_2^{\pm1}@f$ and records the closest approach in
+the projective operator-norm distance:
+
+| Target | Closest word of length ≤ 12 |
+|--------|------------------------------|
+| Z      | 3.3e-16 (exact, @f$\sigma_1^5@f$) |
+| H      | 0.066054 |
+| X      | 0.112766 |
+| T      | 0.074916 |
+
+Implementation: `src/algorithms/topological/braid_compiler.c`.
+
 ## References
 
 All bounds and theorems cited above come from the references
@@ -415,6 +568,19 @@ derivations in this document:
   (1998), arXiv:quant-ph/9708016: QPE precision bound.
 - Aaronson, Gottesman, Phys. Rev. A 70, 052328 (2004),
   arXiv:quant-ph/0406196: Clifford tableau update rules.
+- Bonesteel, Hormozi, Zikos, Simon, Phys. Rev. Lett. 95, 140503
+  (2005), arXiv:quant-ph/0505065: Fibonacci braid-word constructions
+  and the two-qubit weave geometry.
+- Bonderson, Freedman, Nayak, Phys. Rev. Lett. 101, 010501 (2008),
+  arXiv:0802.0279: measurement-only topological quantum computation
+  and the forced-measurement protocol.
+- Dawson, Nielsen, Quantum Inf. Comput. 6, 81 (2006),
+  arXiv:quant-ph/0505030: the Solovay-Kitaev algorithm, the balanced
+  group-commutator decomposition and the @f$\log^{3.97}(1/\epsilon)@f$
+  length bound.
+- Nayak, Simon, Stern, Freedman, Das Sarma, Rev. Mod. Phys. 80, 1083
+  (2008), arXiv:0707.1889: F/R symbols of the Fibonacci and Ising
+  models, §III.B-C.
 - J. K. Asbóth, L. Oroszlány and A. Pályi, *A Short Course on
   Topological Insulators: Band Structure and Edge States in One and
   Two Dimensions*, Lect. Notes Phys. 919, Springer (2016),

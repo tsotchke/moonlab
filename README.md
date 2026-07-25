@@ -679,22 +679,22 @@ double mk = bell_test_mermin_klyshko(&ghz_n, N, 0, NULL);
 
 ## Topological Quantum Computing
 
-Anyon models, fusion trees, surface codes and toric codes.
+Fault-tolerant quantum computation using anyonic systems.
 
-> **Status.** The anyon **data** is solid: the F- and R-symbol tables of every
-> built-in model are verified against the fusion-category coherence conditions
-> (MacLane pentagon, both hexagons, and F-matrix unitarity) to 1e-15, checked in
-> CI by `unit_topological`.
->
-> The **braiding and gate layer on top of them is experimental and currently
-> incorrect.** `braid_anyons()` applies a single global R-phase to the whole
-> amplitude vector rather than the per-fusion-path phase, so it is *not* a
-> braid-group representation: σ₁, σ₂ and σ₃ act identically, and
-> `anyonic_not()` / `anyonic_hadamard()` / `anyonic_T_gate()` perform no logical
-> rotation. `apply_F_move()` is unimplemented and returns success without
-> changing the tree. Do not use these to model topological gates. Tracked for
-> v1.2.1; the present behaviour is pinned by regression tests so it cannot
-> change silently.
+Braiding is a faithful unitary representation of the Artin braid group on the
+fusion-path basis, not a phase bookkeeping exercise. Every claim below is a
+number asserted by `unit_topological`:
+
+| Property | Measured |
+|----------|----------|
+| F/R symbol coherence (pentagon, both hexagons, F-unitarity) | ≤ 2.4e-15, all built-in models |
+| Yang-Baxter σᵢσᵢ₊₁σᵢ = σᵢ₊₁σᵢσᵢ₊₁ | ≤ 9.0e-16, Fibonacci / Ising / SU(2)₃₋₅ |
+| Far commutation σᵢσⱼ = σⱼσᵢ, \|i−j\| ≥ 2 | 0.0 exactly |
+| Generator unitarity, σᵢσᵢ⁻¹ = I | ≤ 1.3e-15 |
+| Ising single-qubit Clifford group by braiding | exact, order 24, error ≤ 4.0e-16 |
+| Ising two-qubit Clifford group (dense 6-anyon encoding) | exact, order 11520, CNOT error 1.2e-15 |
+| Fibonacci logical Z = σ₁⁵ | exact, 5.6e-16 |
+| Fibonacci Solovay-Kitaev compilation | meets any ε ≥ 1e-11, measured on the returned word |
 
 ### Anyon Models
 
@@ -708,25 +708,49 @@ anyon_system_t* sys = anyon_system_fibonacci();
 // Returns the maximum coherence residual (~1e-15 for every built-in model).
 double residual = anyon_verify_coherence(sys);
 
-// Build a fusion tree over the external anyon charges
+// Build a fusion tree over the external anyon charges. The state lives in the
+// labelled fusion-path basis: tree->labels[p] holds the intermediate charge on
+// every internal edge of path p.
 fusion_tree_t* tree = fusion_tree_create(sys, charges, num_anyons, total_charge);
 
-// EXPERIMENTAL. Exchanges the anyons at `position` and `position + 1` and
-// multiplies tree->amplitudes by an R-symbol phase. That phase is currently
-// taken from the tree's total charge rather than each path's intermediate
-// charge, so the result is a global phase and carries no positional
-// information. No F-matrix basis change is applied.
+// Braid adjacent anyons (topological gate): exchanges the anyons at
+// `position` and `position + 1`, applying the R-matrix phase of each path's
+// own intermediate charge and the F-matrix basis change needed when the pair
+// does not meet at a vertex of the tree.
 braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
+
+// F-move on its own: change of fusion basis at a vertex, (a×b)×c ↔ a×(b×c).
+apply_F_move(tree, /*vertex=*/1);
+
+// Topological charge measurement, and braiding realised by measurement alone
+// (Bonderson-Freedman-Nayak forced measurement) -- agrees with braid_anyons()
+// to 0.0.
+double p = anyon_measure_pair_charge(tree, /*position=*/1, FIB_VACUUM);
+anyon_forced_measurement_braid(tree, /*position=*/1, /*clockwise=*/true);
+```
+
+### Compiling gates into braid words
+
+```c
+// Ising: every single-qubit Clifford has an EXACT braid word (~1e-16).
+double err;
+braid_word_t *w = ising_compile_clifford(ising, target_2x2, &err);
+
+// Ising, dense 6-anyon encoding: exact CNOT, and no leakage subspace exists.
+braid_word_t *cnot = ising_compile_clifford2(ising, target_4x4, &err);
+
+// Fibonacci: Solovay-Kitaev to a caller-chosen epsilon. The distance to the
+// target is measured on the returned word, so the bound is a guarantee.
+braid_word_t *h = fibonacci_compile_su2(fib, hadamard, 1e-10, &err);
+
+// Fibonacci exact gates: R_z(m·π/5), m = 0..9, including the logical Z.
+braid_word_t *z = fibonacci_exact_phase_gate(5);
 ```
 
 ### Supported Anyon Types
 
-Fusion rules and F/R symbols are coherence-verified for all three. The
-"universal" column describes the physics of the model, not a capability of the
-braiding layer above, which does not yet realise these gates.
-
-| Model | Anyons | Universal (in theory) | Application |
-|-------|--------|-----------------------|-------------|
+| Model | Anyons | Universal | Application |
+|-------|--------|-----------|-------------|
 | Fibonacci | τ, 1 | Yes | Universal TQC |
 | Ising | σ, ψ, 1 | No (+ magic) | Majorana fermions |
 | SU(2)_k | k+1 charges, 2j = 0..k | Varies | General TQC |
@@ -734,6 +758,15 @@ braiding layer above, which does not yet realise these gates.
 `anyon_system_su2k(2)` is the Ising model. `anyon_system_su2k(3)` returns the
 genuine four-charge SU(2)_3, *not* Fibonacci — Fibonacci is its
 even-integer-spin subcategory and has its own constructor.
+
+**What is exact and what is not.** Ising braiding generates a finite group —
+the Clifford group — so every Clifford is compiled exactly and T is reported
+unreachable rather than approximated. Fibonacci braiding generates a countable
+dense subgroup of PSU(2), so R_z(mπ/5) (including Z) is exact and H, X and T
+provably are not: every Fibonacci braid word has the form
+`[[p, φ^{-1/2} r], [φ^{-1/2} s, t]]` with `p,r,s,t ∈ Q(ζ₅)`, and each of the
+three targets contradicts that. See [MATH.md](MATH.md#exact-realisability-of-fibonacci-braid-gates)
+for the proofs. Those three are compiled instead to any ε the caller asks for.
 
 ### Surface Codes
 

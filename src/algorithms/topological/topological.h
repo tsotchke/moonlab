@@ -34,21 +34,103 @@
  *
  * IMPLEMENTATION STATUS
  * ---------------------
- * The description above is the physics this module targets, not a uniform
- * statement about the code.  Concretely:
- *
  *   - The F- and R-symbol tables (get_F_symbol, get_R_symbol) of every built-in
  *     model are @em verified: anyon_verify_coherence() reports the maximum
  *     violation of the MacLane pentagon equation, both hexagon equations and
  *     F-matrix unitarity, and it is ~1e-15 for Fibonacci, Ising and SU(2)_k.
- *     Fusion rules, fusion trees, quantum dimensions, the surface code, the
- *     toric code and the entropy estimators are likewise usable.
- *   - The braiding and gate layer (braid_anyons, apply_F_move, anyonic_*) is
- *     @b EXPERIMENTAL @b AND @b CURRENTLY @b INCORRECT.  braid_anyons applies a
- *     single global R-phase instead of a per-fusion-path phase, so it is not a
- *     representation of the braid group; apply_F_move is a stub; and the
- *     anyonic gates therefore perform no logical rotation.  Scheduled for
- *     v1.2.1.  See the @warning blocks on the individual declarations.
+ *   - braid_anyons() is a @em faithful unitary representation of the Artin
+ *     braid group @f$B_n@f$ on the fusion-path basis (see FUSION-TREE BASIS
+ *     below).  Yang-Baxter @f$\sigma_i\sigma_{i+1}\sigma_i =
+ *     \sigma_{i+1}\sigma_i\sigma_{i+1}@f$ and far commutation
+ *     @f$\sigma_i\sigma_j = \sigma_j\sigma_i, |i-j|\ge 2@f$ hold to ~1e-16 for
+ *     Fibonacci, Ising and SU(2)_k; every generator is unitary and
+ *     @f$\sigma_i\sigma_i^{-1} = I@f$ to ~1e-16.  Asserted by
+ *     `unit_topological`.
+ *   - apply_F_move() implements the change of fusion basis at a vertex using
+ *     the tabulated F-symbols.
+ *   - Ising braiding realises the single-qubit Clifford group @em exactly:
+ *     ising_compile_clifford() returns a braid word whose logical action equals
+ *     the requested Clifford to ~1e-16 (no approximation anywhere).
+ *   - Fibonacci braiding is dense but not exhaustive in PSU(2).  Two answers
+ *     are provided: fibonacci_compile_su2() is a Solovay-Kitaev compiler that
+ *     takes a caller-supplied @f$\epsilon@f$ and returns a braid word whose
+ *     @em measured distance to the target is below it, and
+ *     fibonacci_exact_phase_gate() returns exact (~1e-16) words for the
+ *     gates that are exactly realisable.  Which gates those are is settled,
+ *     not guessed -- see EXACT REALISABILITY below.
+ *   - Topological charge measurement (anyon_measure_pair_charge) and
+ *     measurement-only braiding (anyon_forced_measurement_braid) reproduce the
+ *     braid transformations exactly without moving anyons.
+ *
+ * FUSION-TREE BASIS
+ * -----------------
+ * A fusion_tree_t over external charges @f$a_0 \ldots a_{n-1}@f$ with total
+ * charge @f$Q@f$ carries the state of the anyons in the @em standard
+ * (left-linear / "comb") fusion basis:
+ *
+ * @verbatim
+ *      a0   a1   a2   a3        vertex v fuses e_{v-1} x a_v -> e_v
+ *       \   /    /    /         e_0 := a_0,  e_{n-1} := Q
+ *        \ /    /    /
+ *      e_1 \   /    /           basis label of a path:
+ *           \ /    /                (e_1, e_2, ..., e_{n-1})
+ *         e_2 \   /
+ *              \ /
+ *             e_3 = Q
+ * @endverbatim
+ *
+ * Each basis vector is one admissible tuple @f$(e_1,\ldots,e_{n-1})@f$, i.e.
+ * @f$N^{e_v}_{e_{v-1} a_v} \ne 0@f$ at every vertex and @f$e_{n-1} = Q@f$.
+ * fusion_tree_t::labels stores those tuples, one row of num_vertices entries
+ * per path, in lexicographic order; fusion_tree_t::amplitudes[p] is the
+ * amplitude of row p.  All built-in models are multiplicity free
+ * (@f$N^c_{ab}\in\{0,1\}@f$), so a path is fully specified by its edge labels.
+ *
+ * Braiding @f$\sigma_i@f$ (braid_anyons at @p position = i) exchanges @f$a_i@f$
+ * and @f$a_{i+1}@f$.  For i = 0 the pair meets at vertex 1 and the action is
+ * diagonal, @f$R^{a_0 a_1}_{e_1}@f$ per path.  For i >= 1 the pair does not
+ * meet at a vertex of the standard tree, so the operator is the F-conjugated
+ * R-matrix
+ * @f[
+ *   [\sigma_i]_{e'_i e_i} = \sum_f \overline{[F^{e_{i-1} a_{i+1} a_i}_{e_{i+1}}]_{e'_i f}}
+ *                            \; R^{a_i a_{i+1}}_f \;
+ *                            [F^{e_{i-1} a_i a_{i+1}}_{e_{i+1}}]_{e_i f},
+ * @f]
+ * which is what makes @f$\sigma_1,\sigma_2,\sigma_3,\ldots@f$ genuinely
+ * different operators.
+ *
+ * EXACT REALISABILITY (Fibonacci)
+ * -------------------------------
+ * The image @f$G = \langle \sigma_1,\sigma_2\rangle@f$ of the braid group in
+ * U(2) is countable and dense in PSU(2), so most targets are reachable only in
+ * the limit.  Which ones are reachable exactly is decidable here because every
+ * @f$B \in G@f$ has the form
+ * @f$\begin{pmatrix} p & \varphi^{-1/2} r\\ \varphi^{-1/2} s & t\end{pmatrix}@f$
+ * with @f$p,r,s,t \in K=\mathbb{Q}(\zeta_5)@f$ (immediate from
+ * @f$\sigma_1 = \mathrm{diag}(e^{4\pi i/5}, e^{-3\pi i/5})@f$,
+ * @f$F = \bigl(\begin{smallmatrix}\varphi^{-1} & \varphi^{-1/2}\\
+ * \varphi^{-1/2} & -\varphi^{-1}\end{smallmatrix}\bigr)@f$, and closure of that
+ * shape under multiplication).  Consequences, each proved in
+ * tests/unit/test_topological.c and MATH.md:
+ *
+ *   - @b Exact: @f$\sigma_1^k@f$ gives every @f$R_z(m\pi/5)@f$, m = 0..9, in
+ *     particular the logical Pauli @f$Z = \sigma_1^5@f$.  Also every conjugate
+ *     of those by a braid word.
+ *   - @b Impossible: no braid word is proportional to H, X or T.
+ *     H would force @f$\varphi^{-1/2} = p/r \in K@f$, false since
+ *     @f$\mathbb{Q}(\sqrt\varphi)@f$ is not CM while @f$K@f$ is.
+ *     X would force @f$r^2 = \varphi\mu@f$ for a 10th root of unity @f$\mu@f$;
+ *     applying the Galois element @f$\sqrt5 \mapsto -\sqrt5@f$ to
+ *     @f$r\bar r = \varphi@f$ gives @f$|\sigma(r)|^2 = \varphi' < 0@f$.
+ *     T would force @f$\mathrm{tr}^2/\det = 2+\sqrt2 \in K@f$, but the only
+ *     quadratic subfield of @f$\mathbb{Q}(\zeta_5)@f$ is
+ *     @f$\mathbb{Q}(\sqrt5)@f$.
+ *
+ * Topological charge measurement does not enlarge that set: measurement-only
+ * protocols (Bonderson, Freedman and Nayak, PRL 101, 010501 (2008)) reproduce
+ * braid transformations and nothing beyond them, which is why
+ * fibonacci_compile_su2()'s @f$\epsilon@f$ guarantee is the answer for H, X
+ * and T rather than a placeholder.
  *
  * Surface and toric codes complement the anyon models by encoding
  * logical qubits in the ground space of a commuting stabilizer
@@ -215,11 +297,28 @@ typedef struct fusion_node {
 } fusion_node_t;
 
 /**
+ * @brief Sentinel for fusion_tree_t::recoupled_vertex: standard (comb) basis.
+ */
+#define FUSION_TREE_STANDARD_BASIS 0xFFFFFFFFu
+
+/**
  * @brief Fusion tree state
  *
  * A fusion tree represents a specific way of fusing n anyons
  * to obtain a total charge. The state is a superposition over
  * valid intermediate fusion outcomes.
+ *
+ * The basis is the standard left-linear one documented in the FUSION-TREE
+ * BASIS section at the top of this header: vertex v (v = 1..n-1) fuses
+ * @f$e_{v-1}\times a_v \to e_v@f$ with @f$e_0 = a_0@f$ and @f$e_{n-1} = Q@f$.
+ * ::labels holds one row of ::num_vertices edge charges per path, in
+ * lexicographic order, and row p is the basis vector whose amplitude is
+ * ::amplitudes[p].  Row p's entry j is @f$e_{j+1}@f$.
+ *
+ * apply_F_move() can put the tree into the basis recoupled at one vertex; then
+ * ::recoupled_vertex names that vertex and its column of ::labels holds the
+ * recoupled channel f of @f$(a_v \times a_{v+1}) \to f@f$ instead of
+ * @f$e_v@f$.  Otherwise ::recoupled_vertex is #FUSION_TREE_STANDARD_BASIS.
  */
 typedef struct {
     anyon_system_t *anyon_sys;     // Anyon model
@@ -229,6 +328,10 @@ typedef struct {
     fusion_node_t *root;            // Root of fusion tree
     double complex *amplitudes;     // Amplitudes for each fusion path
     uint32_t num_paths;             // Number of valid fusion paths
+    anyon_charge_t *labels;         // num_paths x num_vertices internal charges
+    uint32_t num_vertices;          // num_anyons - 1 (row stride of `labels`)
+    uint32_t recoupled_vertex;      // FUSION_TREE_STANDARD_BASIS, or the vertex
+                                    // currently carrying a recoupled label
 } fusion_tree_t;
 
 /**
@@ -268,49 +371,136 @@ MOONLAB_API uint32_t fusion_count_paths(const anyon_system_t *sys,
                             uint32_t num_anyons,
                             anyon_charge_t total_charge);
 
+/**
+ * @brief Edge labels of one fusion path.
+ *
+ * @param tree Fusion tree
+ * @param path Path index (< tree->num_paths)
+ * @return Pointer to tree->num_vertices charges, or NULL on error.  The
+ *         storage belongs to @p tree.
+ */
+MOONLAB_API const anyon_charge_t *fusion_tree_path_labels(const fusion_tree_t *tree,
+                                                          uint32_t path);
+
+/**
+ * @brief Index of the path with the given edge labels.
+ *
+ * @param tree Fusion tree
+ * @param labels tree->num_vertices charges
+ * @return Path index, or -1 if the label tuple is not admissible.
+ */
+MOONLAB_API int32_t fusion_tree_find_path(const fusion_tree_t *tree,
+                                          const anyon_charge_t *labels);
+
+/**
+ * @brief Set the tree to a single basis state (amplitude 1 on @p path).
+ */
+MOONLAB_API qs_error_t fusion_tree_set_basis_state(fusion_tree_t *tree, uint32_t path);
+
 // ============================================================================
 // BRAIDING OPERATIONS
 // ============================================================================
 
 /**
- * @brief Braid two adjacent anyons.  EXPERIMENTAL -- not a braid representation.
+ * @brief Braid two adjacent anyons: the braid generator @f$\sigma_i@f$.
  *
- * Exchanges the external charges at positions i and i+1 and multiplies the
- * fusion-tree amplitudes by an R-symbol phase.
+ * Exchanges the anyons at @p position and @p position + 1 and applies the
+ * corresponding unitary to tree->amplitudes in place: the R-matrix phase of
+ * each fusion path's own intermediate charge, together with the F-matrix basis
+ * change needed when the exchanged pair does not meet at a vertex of the
+ * standard tree.  See FUSION-TREE BASIS at the top of this header for the
+ * explicit matrix.
  *
- * @warning Known defect, scheduled for v1.2.1.  The R-symbol is selected with
- * c = tree->total_charge for *every* fusion path rather than that path's own
- * intermediate charge, so a single global phase is applied to the whole
- * amplitude vector and no F-matrix basis change is performed.  As a result
- * σ₁, σ₂ and σ₃ act identically, the generators do not satisfy the braid
- * relations, and this function is NOT a representation of the braid group.
- * Norm and total charge are preserved; nothing else about the result is
- * physically meaningful.  Do not use it to model topological gates.
- * The underlying F/R symbol tables are correct -- see anyon_verify_coherence.
+ * The map @f$i \mapsto \sigma_i@f$ is a unitary representation of the Artin
+ * braid group @f$B_n@f$: Yang-Baxter and far commutation hold to ~1e-16, and
+ * @f$\sigma_i \sigma_i^{-1} = I@f$ exactly.  Total charge and norm are
+ * preserved.
  *
- * @param tree Fusion tree (modified in place)
- * @param position Position of left anyon to braid
+ * @param tree Fusion tree (modified in place); must be in the standard basis
+ * @param position Position of left anyon to braid (< num_anyons - 1)
  * @param clockwise Direction of braid (true = σ, false = σ⁻¹)
- * @return QS_SUCCESS or error
+ * @return QS_SUCCESS, QS_ERROR_INVALID_QUBIT if @p position is out of range,
+ *         QS_ERROR_INVALID_STATE if an F-move is outstanding on @p tree
  */
 MOONLAB_API qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
 
 /**
- * @brief Apply F-move (basis change).  EXPERIMENTAL -- unimplemented.
+ * @brief Apply an F-move (change of fusion basis) at a vertex.
  *
- * Intended to change the fusion order at a vertex using the F-matrix,
- * (a×b)×c ↔ a×(b×c).
+ * Changes the fusion order at @p vertex, (a×b)×c ↔ a×(b×c): the subtree
+ * @f$((e_{v-1}\, a_v)_{e_v}\, a_{v+1})_{e_{v+1}}@f$ becomes
+ * @f$(e_{v-1}\, (a_v\, a_{v+1})_f)_{e_{v+1}}@f$, and the amplitudes are
+ * transformed by @f$[F^{e_{v-1} a_v a_{v+1}}_{e_{v+1}}]_{e_v f}@f$.  The
+ * column of tree->labels at @p vertex then holds f instead of @f$e_v@f$ and
+ * tree->recoupled_vertex is set to @p vertex.
  *
- * @warning Known defect, scheduled for v1.2.1.  This function is a stub: it
- * validates @p tree, ignores @p vertex, and returns QS_SUCCESS without
- * modifying the tree.  The F-symbol data it would need is correct and
- * verified; only the transformation on the fusion tree is missing.
+ * Calling it again on the same vertex applies @f$F^\dagger@f$ and returns the
+ * tree to the standard basis, so it is an involution.  Only one vertex may be
+ * recoupled at a time.  This is the basis change that lets braids of anyons
+ * that are not adjacent in the tree be composed from F- and R-moves.
  *
- * @param tree Fusion tree
- * @param vertex Vertex to apply F-move
- * @return QS_SUCCESS or error
+ * @param tree Fusion tree (modified in place)
+ * @param vertex Vertex to apply the F-move at, 1 <= vertex <= num_anyons - 2
+ * @return QS_SUCCESS, QS_ERROR_INVALID_PARAM if @p vertex is out of range,
+ *         QS_ERROR_INVALID_STATE if a *different* vertex is already recoupled
  */
 MOONLAB_API qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
+
+/**
+ * @brief Measure the total topological charge of an adjacent anyon pair.
+ *
+ * Projects the state onto the sector in which the anyons at @p position and
+ * @p position + 1 fuse to @p outcome, renormalising if the projection is
+ * nonzero.  This is the exact projector built from the F-symbols: the tree is
+ * recoupled so that the pair meets at a vertex, the rows with a different
+ * channel are annihilated, and the tree is recoupled back.
+ *
+ * @param tree Fusion tree (modified in place if the outcome is possible)
+ * @param position Left anyon of the pair (< num_anyons - 1)
+ * @param outcome Charge to project onto
+ * @return Probability of the outcome in [0,1], or -1.0 on argument error.  The
+ *         state is left untouched when the probability is 0.
+ */
+MOONLAB_API double anyon_measure_pair_charge(fusion_tree_t *tree, uint32_t position,
+                                             anyon_charge_t outcome);
+
+/**
+ * @brief Probability distribution of the total charge of an adjacent pair.
+ *
+ * Non-destructive: @p out receives one probability per charge of the model and
+ * the state is unchanged.
+ *
+ * @param tree Fusion tree
+ * @param position Left anyon of the pair (< num_anyons - 1)
+ * @param out Array of at least tree->anyon_sys->num_charges doubles
+ * @return QS_SUCCESS or error
+ */
+MOONLAB_API qs_error_t anyon_pair_charge_distribution(const fusion_tree_t *tree,
+                                                      uint32_t position,
+                                                      double *out);
+
+/**
+ * @brief Measurement-only realisation of a braid generator (forced measurement).
+ *
+ * Reproduces braid_anyons(@p tree, @p position, @p clockwise) exactly, using
+ * only topological charge measurements of anyon pairs plus the R-phases that
+ * the measurement outcomes herald -- no anyon is transported.  This is the
+ * forced-measurement construction of Bonderson, Freedman and Nayak, PRL 101,
+ * 010501 (2008): the braid transformation is decomposed in the eigenbasis of
+ * the pair charge, which topological charge measurement resolves exactly.
+ *
+ * The resulting amplitudes agree with braid_anyons() to ~1e-16.  Because it is
+ * a decomposition of the same unitary, it inherits the same exactly-realisable
+ * set -- measurement adds no unitary that braiding cannot already produce.
+ *
+ * @param tree Fusion tree (modified in place)
+ * @param position Position of left anyon (< num_anyons - 1)
+ * @param clockwise Direction of the braid being simulated
+ * @return QS_SUCCESS or error
+ */
+MOONLAB_API qs_error_t anyon_forced_measurement_braid(fusion_tree_t *tree,
+                                                      uint32_t position,
+                                                      bool clockwise);
 
 /**
  * @brief Get F-matrix element
@@ -361,6 +551,181 @@ MOONLAB_API double complex get_R_symbol(const anyon_system_t *sys,
 MOONLAB_API double anyon_verify_coherence(const anyon_system_t *sys);
 
 // ============================================================================
+// BRAID WORDS AND BRAID-WORD COMPILATION
+// ============================================================================
+
+/**
+ * @brief One braid generator: @f$\sigma_{position}^{\pm1}@f$.
+ */
+typedef struct {
+    uint32_t position;   // left anyon of the exchanged pair
+    uint8_t  clockwise;  // 1 = sigma, 0 = sigma^{-1}
+} braid_gen_t;
+
+/**
+ * @brief A word in the braid generators, applied left to right.
+ */
+typedef struct {
+    braid_gen_t *gens;
+    uint32_t length;
+    uint32_t capacity;
+} braid_word_t;
+
+MOONLAB_API braid_word_t *braid_word_create(void);
+MOONLAB_API void braid_word_free(braid_word_t *w);
+MOONLAB_API qs_error_t braid_word_append(braid_word_t *w, uint32_t position, bool clockwise);
+MOONLAB_API qs_error_t braid_word_append_word(braid_word_t *dst, const braid_word_t *src);
+MOONLAB_API qs_error_t braid_word_append_inverse(braid_word_t *dst, const braid_word_t *src);
+MOONLAB_API braid_word_t *braid_word_clone(const braid_word_t *w);
+MOONLAB_API uint32_t braid_word_length(const braid_word_t *w);
+
+/**
+ * @brief Free reduction: cancel adjacent @f$\sigma_i\sigma_i^{-1}@f$ pairs.
+ * @return the reduced length
+ */
+MOONLAB_API uint32_t braid_word_reduce(braid_word_t *w);
+
+/**
+ * @brief Apply a braid word to a fusion tree, generator by generator.
+ */
+MOONLAB_API qs_error_t braid_word_apply(const braid_word_t *w, fusion_tree_t *tree);
+
+/**
+ * @brief Matrix of a braid word on the fusion space of the given anyons.
+ *
+ * Column j of @p out is the image of basis path j, so
+ * @f$out[i \cdot d + j] = \langle i | W | j\rangle@f$ with d the number of
+ * fusion paths.  @p out must hold at least d*d complex values; call with
+ * @p out = NULL to query d.
+ *
+ * @return QS_SUCCESS or error
+ */
+MOONLAB_API qs_error_t braid_word_matrix(const braid_word_t *w,
+                                         anyon_system_t *sys,
+                                         const anyon_charge_t *charges,
+                                         uint32_t num_anyons,
+                                         anyon_charge_t total_charge,
+                                         double complex *out,
+                                         uint32_t *out_dim);
+
+/**
+ * @brief Distance between two 2x2 unitaries, modulo global phase.
+ *
+ * @f$d(U,V) = \min_\phi \|U - e^{i\phi} V\|_{op} = \sqrt{2 - |\mathrm{tr}(U^\dagger V)|}@f$
+ * after normalising both to SU(2).  0 iff U and V agree up to a phase, and at
+ * most 2.  This is the metric every epsilon in this header is measured in.
+ */
+MOONLAB_API double su2_projective_distance(const double complex a[4],
+                                           const double complex b[4]);
+
+/**
+ * @brief Exact single-qubit Clifford braid word for Ising anyons.
+ *
+ * The Ising qubit is 4 σ anyons of total charge 1 (dimension 2, no leakage).
+ * The image of @f$\langle\sigma_1,\sigma_2\rangle@f$ in PSU(2) is exactly the
+ * 24-element single-qubit Clifford group, so every Clifford has an @em exact
+ * braid word.  This returns the shortest one found by breadth-first search of
+ * the group's Cayley graph, and the achieved distance is ~1e-16, not an
+ * approximation.
+ *
+ * @param sys Ising anyon system (ANYON_MODEL_ISING, or SU(2)_2)
+ * @param target 2x2 target unitary, row-major; must be Clifford up to phase
+ * @param achieved_error Receives the measured su2_projective_distance (optional)
+ * @return Braid word on positions {0,1} of a 4-anyon tree, or NULL if the
+ *         target is not a single-qubit Clifford
+ */
+MOONLAB_API braid_word_t *ising_compile_clifford(anyon_system_t *sys,
+                                                 const double complex target[4],
+                                                 double *achieved_error);
+
+/**
+ * @brief Exact two-qubit Clifford braid word for Ising anyons.
+ *
+ * Uses the @em dense encoding: 6 σ anyons of total charge 1 carry exactly two
+ * qubits (dimension 4), so unlike the 4-anyons-per-qubit register there is no
+ * subspace to leak out of -- the whole fusion space is computational.  Qubit 0
+ * is the charge of the pair (0,1) and qubit 1 the charge of the pair (2,3),
+ * with 1 -> |0> and ψ -> |1>; basis order is |q0 q1> = 00, 01, 10, 11.
+ *
+ * The image of @f$\langle\sigma_1..\sigma_5\rangle@f$ in PU(4) is finite and
+ * is enumerated exhaustively, so a reachable target -- CNOT among them -- gets
+ * an @em exact braid word (~1e-16), and an unreachable one gets NULL rather
+ * than a silent approximation.
+ *
+ * @param sys Ising anyon system
+ * @param target 4x4 target unitary, row-major
+ * @param achieved_error Receives the measured distance (optional)
+ * @return Braid word on positions 0..4 of a 6-anyon tree, or NULL
+ */
+MOONLAB_API braid_word_t *ising_compile_clifford2(anyon_system_t *sys,
+                                                  const double complex target[16],
+                                                  double *achieved_error);
+
+/**
+ * @brief Order of the projective image of the Ising braid group.
+ *
+ * @param sys Ising anyon system
+ * @param num_anyons 4 (one qubit) or 6 (dense two-qubit encoding)
+ * @return Number of distinct elements up to global phase, or 0 on error
+ */
+MOONLAB_API uint32_t ising_braid_group_order(anyon_system_t *sys, uint32_t num_anyons);
+
+/**
+ * @brief Solovay-Kitaev braid-word compiler for Fibonacci anyons.
+ *
+ * The Fibonacci qubit here is 3 τ anyons of total charge τ (dimension 2), with
+ * generators @f$\sigma_1,\sigma_2@f$ at positions 0 and 1.  Given any 2x2
+ * unitary and any @p epsilon, returns a braid word whose logical action is
+ * within @p epsilon of the target in su2_projective_distance -- the distance
+ * is *measured* on the returned word before it is handed back, so the bound is
+ * a guarantee and not an asymptotic statement.  Word length grows
+ * polylogarithmically in 1/epsilon (~@f$\log^{3.97}(1/\epsilon)@f$).
+ *
+ * The first call builds the base approximation net (a few seconds); it is
+ * cached for the process lifetime.
+ *
+ * @param sys Fibonacci anyon system
+ * @param target 2x2 target unitary, row-major
+ * @param epsilon Requested accuracy (> 0)
+ * @param achieved_error Receives the measured distance (optional)
+ * @return Braid word, or NULL if @p epsilon could not be met or on error
+ */
+MOONLAB_API braid_word_t *fibonacci_compile_su2(anyon_system_t *sys,
+                                                const double complex target[4],
+                                                double epsilon,
+                                                double *achieved_error);
+
+/**
+ * @brief Exact Fibonacci phase gate @f$R_z(m\pi/5)@f$, m = 0..9.
+ *
+ * @f$\sigma_1 = \mathrm{diag}(R^{\tau\tau}_1, R^{\tau\tau}_\tau)@f$ is, up to
+ * phase, @f$\mathrm{diag}(1, e^{3\pi i/5})@f$, and 3 is invertible mod 10, so
+ * @f$\langle\sigma_1\rangle@f$ is exactly the order-10 group of
+ * @f$\mathrm{diag}(1, e^{i m\pi/5})@f$.  m = 5 is the logical Pauli Z.  These
+ * are the exactly realisable diagonal gates; H, X and T provably are not (see
+ * EXACT REALISABILITY at the top of this header).
+ *
+ * @param m Phase index, 0..9
+ * @return Braid word @f$\sigma_1^{k}@f$ with 3k ≡ m (mod 10), or NULL
+ */
+MOONLAB_API braid_word_t *fibonacci_exact_phase_gate(uint32_t m);
+
+/**
+ * @brief Size and covering radius of the Solovay-Kitaev base net.
+ *
+ * Builds the net if it is not built yet.  The covering radius is the worst
+ * su2_projective_distance from a sampled SU(2) element to the net, i.e. the
+ * @f$\epsilon_0@f$ the recursion starts from; the recursion converges when
+ * @f$c^2\epsilon_0 < 1@f$.
+ *
+ * @param sys Fibonacci anyon system
+ * @param covering_radius Receives the measured covering radius (optional)
+ * @return Number of net elements, or 0 on error
+ */
+MOONLAB_API uint32_t fibonacci_braid_net_size(anyon_system_t *sys,
+                                              double *covering_radius);
+
+// ============================================================================
 // ANYONIC QUANTUM GATES
 // ============================================================================
 
@@ -392,21 +757,38 @@ MOONLAB_API anyonic_register_t *anyonic_register_create(anyon_system_t *sys,
 MOONLAB_API void anyonic_register_free(anyonic_register_t *reg);
 
 /* ----------------------------------------------------------------------------
- * ANYONIC GATES -- EXPERIMENTAL, CURRENTLY INCORRECT.
+ * ANYONIC GATES.
  *
- * Every gate below is a product of braid_anyons() calls and therefore inherits
- * its defect (see the @warning on braid_anyons): each applies one global phase
- * to the amplitude vector and performs NO logical rotation.  Registers build,
- * free and stay normalised, but the gates do not act on the encoded qubit and
- * anyonic_entangle() does not entangle.  Scheduled for v1.2.1; the present
- * behaviour is pinned by tests/unit/test_topological.c.
+ * Every gate below is a braid word applied to the register's fusion tree by
+ * braid_anyons(), so each is a genuine unitary on the encoded qubit.  Qubit q
+ * occupies anyons 4q..4q+3 and its logical bit is the charge @f$e_{4q+1}@f$ of
+ * the pair (4q, 4q+1); braids inside a block preserve every other block's
+ * charge, so the gates act as U (x) I on the register.
+ *
+ * How exact a gate is depends on the model, and the difference is not glossed:
+ *
+ *   - Ising: X, Z, H and every other single-qubit Clifford are EXACT
+ *     (~1e-16), compiled by ising_compile_clifford().  T is not a Clifford and
+ *     is therefore not reachable by Ising braiding at all -- anyonic_T_gate()
+ *     returns QS_ERROR_NOT_SUPPORTED on an Ising register rather than
+ *     pretending otherwise.
+ *   - Fibonacci: Z is EXACT (@f$\sigma_1^5@f$, see fibonacci_exact_phase_gate);
+ *     X, H and T are provably not exactly realisable by any finite braid (see
+ *     EXACT REALISABILITY at the top of this header) and are compiled by
+ *     fibonacci_compile_su2() to a caller-specified epsilon, with the achieved
+ *     error measured, guaranteed below epsilon, and reported.
  * ------------------------------------------------------------------------- */
 
+/** @brief Default accuracy for the anyonic gates that take no epsilon. */
+#define ANYONIC_GATE_DEFAULT_EPSILON 1e-6
+
+
 /**
- * @brief Apply NOT gate via braiding
+ * @brief Apply a logical NOT (Pauli X) via braiding.
  *
- * For Fibonacci qubits, NOT is achieved by braiding
- * the middle two anyons.
+ * Ising: exact Clifford braid word (~1e-16).  Fibonacci: compiled to
+ * #ANYONIC_GATE_DEFAULT_EPSILON; use anyonic_apply_unitary() to choose
+ * another epsilon.
  *
  * @param reg Anyonic register
  * @param qubit Target qubit
@@ -415,10 +797,12 @@ MOONLAB_API void anyonic_register_free(anyonic_register_t *reg);
 MOONLAB_API qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
 
 /**
- * @brief Apply Hadamard-like gate via braiding
+ * @brief Apply a Hadamard via braiding
  *
- * Fibonacci anyons can approximate H to arbitrary precision
- * using appropriate braid sequences.
+ * Ising: exact (H is Clifford).  Fibonacci: compiled to
+ * #ANYONIC_GATE_DEFAULT_EPSILON -- exactly realisable Fibonacci braid words
+ * for H do not exist, and the reason is a proof, not a limitation of this
+ * implementation.
  *
  * @param reg Anyonic register
  * @param qubit Target qubit
@@ -427,31 +811,81 @@ MOONLAB_API qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
 MOONLAB_API qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
 
 /**
- * @brief Apply T gate approximation via braiding.  EXPERIMENTAL -- see above.
+ * @brief Apply a T gate (π/8 phase gate) via braiding.
  *
- * @warning Applies a global phase only; @p precision is ignored.
+ * Fibonacci only: T is compiled by Solovay-Kitaev to within @p precision, and
+ * the returned state is guaranteed to be that of a braid word whose measured
+ * distance to T is below @p precision.  Ising braiding generates only the
+ * Clifford group, which does not contain T, so an Ising register returns
+ * QS_ERROR_NOT_SUPPORTED.
  *
  * @param reg Anyonic register
  * @param qubit Target qubit
- * @param precision Approximation precision (currently unused)
- * @return QS_SUCCESS or error
+ * @param precision Requested accuracy (> 0); pass 0 for the default
+ * @return QS_SUCCESS, QS_ERROR_NOT_SUPPORTED for Ising, or error
  */
 MOONLAB_API qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
                           double precision);
 
 /**
- * @brief Apply two-qubit entangling gate.  EXPERIMENTAL -- see above.
+ * @brief Apply an arbitrary single-qubit unitary via braiding.
  *
- * @warning Applies a global phase only, and only when the two qubits are
- * adjacent in the fusion tree; it does not entangle.
+ * Compiles @p target with ising_compile_clifford() or fibonacci_compile_su2()
+ * as appropriate and applies the resulting braid word.
  *
  * @param reg Anyonic register
- * @param qubit1 First qubit
- * @param qubit2 Second qubit
+ * @param qubit Target qubit
+ * @param target 2x2 unitary, row-major
+ * @param epsilon Requested accuracy (> 0); pass 0 for the default
+ * @param achieved Receives the measured distance actually attained (optional)
+ * @return QS_SUCCESS or error
+ */
+MOONLAB_API qs_error_t anyonic_apply_unitary(anyonic_register_t *reg, uint32_t qubit,
+                                             const double complex target[4],
+                                             double epsilon, double *achieved);
+
+/**
+ * @brief Apply a two-qubit entangling gate by weaving between blocks.
+ *
+ * A unitary inter-qubit weave in the geometry of Bonesteel, Hormozi, Zikos and
+ * Simon (PRL 95, 140503 (2005)).  It entangles: from the product state
+ * @f$|{+}0\rangle@f$ it produces concurrence 0.414242.
+ *
+ * @warning It also leaks 8.3043e-2 of the amplitude out of the logical
+ * subspace, and that is unavoidable rather than a defect of this particular
+ * weave.  Qubit q's logical bit is the charge of the pair (4q, 4q+1), and the
+ * block's vacuum constraint forces the pair (4q+2, 4q+3) to carry the same
+ * charge; a braid that entangles two blocks must change one of those pair
+ * charges without changing its partner, taking the block out of the vacuum
+ * channel.  An exhaustive search over every braid word of length <= 8 on the
+ * two-block register finds no word that is both entangling and leakage-free,
+ * and none whose logical block is proportional to a unitary while entangling.
+ * For an @em exact, leakage-free two-qubit gate use ising_compile_clifford2(),
+ * whose dense 6-anyon encoding has no non-computational subspace.
+ *
+ * Requires adjacent qubits (qubit2 == qubit1 + 1) and a Fibonacci register.
+ *
+ * @param reg Anyonic register
+ * @param qubit1 Control qubit
+ * @param qubit2 Target qubit (must be qubit1 + 1)
  * @return QS_SUCCESS or error
  */
 MOONLAB_API qs_error_t anyonic_entangle(anyonic_register_t *reg,
                             uint32_t qubit1, uint32_t qubit2);
+
+/**
+ * @brief Logical 2x2 matrix of the encoded qubit's state (for verification).
+ *
+ * Writes the amplitudes of the register's logical basis states into @p out,
+ * which must hold 2^num_logical_qubits complex values, and returns the total
+ * probability that remains inside the logical subspace (1 - leakage).
+ *
+ * @param reg Anyonic register
+ * @param out Receives the logical amplitudes (optional)
+ * @return Probability in the logical subspace, or -1.0 on error
+ */
+MOONLAB_API double anyonic_register_logical_state(const anyonic_register_t *reg,
+                                                  double complex *out);
 
 // ============================================================================
 // SURFACE CODE
