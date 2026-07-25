@@ -107,9 +107,23 @@ endif()
 set(QSIM_OPTIMIZE_FLAGS)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
-        list(APPEND QSIM_OPTIMIZE_FLAGS -O3 -fno-math-errno -ffp-contract=fast -funroll-loops)
+        # clang-cl is Clang with the MSVC driver: it parses cl.exe options and
+        # rejects GNU driver spellings as -Wunknown-argument, which /WX turns
+        # into a build break.  `/clang:<arg>` is the documented passthrough to
+        # the clang driver, so the same tuning reaches the same backend.
+        if(QSIM_COMPILER_CLANG AND CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+            set(_qsim_gnu_opt "/clang:")
+        else()
+            set(_qsim_gnu_opt "")
+        endif()
+
+        list(APPEND QSIM_OPTIMIZE_FLAGS
+            -O3
+            ${_qsim_gnu_opt}-fno-math-errno
+            ${_qsim_gnu_opt}-ffp-contract=fast
+            ${_qsim_gnu_opt}-funroll-loops)
         if(QSIM_FAST_MATH)
-            list(APPEND QSIM_OPTIMIZE_FLAGS -ffast-math)
+            list(APPEND QSIM_OPTIMIZE_FLAGS ${_qsim_gnu_opt}-ffast-math)
             message(WARNING
                 "QSIM_FAST_MATH=ON permits non-IEEE transformations. "
                 "Release artifacts and correctness validation must leave it OFF.")
@@ -118,8 +132,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebI
         # Distributable artifacts use the architecture baseline. Runtime SIMD
         # dispatch remains available even when build-machine tuning is off.
         if(QSIM_NATIVE_ARCH AND NOT CMAKE_CROSSCOMPILING)
-            list(APPEND QSIM_OPTIMIZE_FLAGS -march=native)
+            list(APPEND QSIM_OPTIMIZE_FLAGS ${_qsim_gnu_opt}-march=native)
         endif()
+        unset(_qsim_gnu_opt)
     elseif(QSIM_COMPILER_MSVC)
         list(APPEND QSIM_OPTIMIZE_FLAGS /O2)
         if(QSIM_FAST_MATH)
