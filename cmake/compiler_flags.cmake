@@ -107,10 +107,13 @@ endif()
 set(QSIM_OPTIMIZE_FLAGS)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     if(QSIM_COMPILER_CLANG OR QSIM_COMPILER_GCC)
-        # clang-cl is Clang with the MSVC driver: it parses cl.exe options and
-        # rejects GNU driver spellings as -Wunknown-argument, which /WX turns
-        # into a build break.  `/clang:<arg>` is the documented passthrough to
-        # the clang driver, so the same tuning reaches the same backend.
+        # clang-cl is Clang with the MSVC driver: it parses cl.exe options, so
+        # GNU driver spellings are either rejected outright
+        # (-Wunknown-argument for -fno-math-errno, -ffp-contract, -funroll-loops)
+        # or accepted and then dropped (-Wunused-command-line-argument for -O3).
+        # /WX turns both into a build break.  `/clang:<arg>` is the documented
+        # passthrough to the clang driver, so every one of them reaches the same
+        # backend it does on the GNU driver instead of being silently lost.
         if(QSIM_COMPILER_CLANG AND CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
             set(_qsim_gnu_opt "/clang:")
         else()
@@ -118,7 +121,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebI
         endif()
 
         list(APPEND QSIM_OPTIMIZE_FLAGS
-            -O3
+            ${_qsim_gnu_opt}-O3
             ${_qsim_gnu_opt}-fno-math-errno
             ${_qsim_gnu_opt}-ffp-contract=fast
             ${_qsim_gnu_opt}-funroll-loops)
