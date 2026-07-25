@@ -323,9 +323,12 @@ anyon_system_t *anyon_system_su2k(uint32_t k) {
         for (uint32_t b = 0; b < n; b++) {
             for (uint32_t c = 0; c < n; c++) {
                 if (sys->fusion_rules[a][b][c]) {
-                    int carg = (int)c * ((int)c + 2) - (int)a * ((int)a + 2)
-                                                     - (int)b * ((int)b + 2);
-                    double exp_arg = M_PI * carg / (4.0 * (k + 2));
+                    /* 4*(C_c - C_a - C_b); named to avoid shadowing carg()
+                     * from <complex.h>. */
+                    int casimir_diff = (int)c * ((int)c + 2)
+                                     - (int)a * ((int)a + 2)
+                                     - (int)b * ((int)b + 2);
+                    double exp_arg = M_PI * casimir_diff / (4.0 * (k + 2));
                     int rsgn = ((((int)a + (int)b - (int)c) / 2) % 2) ? -1 : 1;
                     sys->R_matrices[a * n + b][c] = rsgn * cexp(I * exp_arg);
                 }
@@ -525,25 +528,37 @@ static double hexagon_residual(const anyon_system_t *sys, int inverse,
     return res;
 }
 
+/* Row e of [F^{abc}_d]_{ef} exists exactly when e is an allowed (a,b) fusion
+ * channel that fuses with c to the total charge d.  The row set is fixed by the
+ * fusion rules alone -- it must NOT be inferred from which entries happen to be
+ * nonzero, or an F-matrix whose rows are entirely zero (the exact defect class
+ * this verifier exists to catch) would be silently skipped as "absent". */
+static int f_row_allowed(const anyon_system_t *sys,
+                         uint32_t a, uint32_t b, uint32_t c, uint32_t d,
+                         uint32_t e) {
+    return sys->fusion_rules[a][b][e] && sys->fusion_rules[e][c][d];
+}
+
 /* Largest departure from unitarity of the F-matrix [F^{abc}_d]_{ef}: over its
- * allowed channel rows, sum_f F[e,f] conj(F[e',f]) must equal delta_{e e'}. */
+ * fusion-allowed channel rows, sum_f F[e,f] conj(F[e',f]) must equal
+ * delta_{e e'}.  A zeroed-out allowed row therefore reads a residual of 1. */
 static double f_unitarity_residual(const anyon_system_t *sys,
                                    uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
     const uint32_t n = sys->num_charges;
     double res = 0.0;
-    for (uint32_t e = 0; e < n; e++)
+    for (uint32_t e = 0; e < n; e++) {
+     if (!f_row_allowed(sys, a, b, c, d, e)) continue;
      for (uint32_t ep = 0; ep < n; ep++) {
-       double complex s = 0.0; int any = 0;
+       if (!f_row_allowed(sys, a, b, c, d, ep)) continue;
+       double complex s = 0.0;
        for (uint32_t f = 0; f < n; f++) {
-           double complex u = get_F_symbol(sys, a, b, c, d, e, f);
-           double complex v = get_F_symbol(sys, a, b, c, d, ep, f);
-           s += u * conj(v);
-           if (u != 0.0 || v != 0.0) any = 1;
+           s += get_F_symbol(sys, a, b, c, d, e, f) *
+                conj(get_F_symbol(sys, a, b, c, d, ep, f));
        }
-       if (!any) continue;   /* neither row exists for this (a,b,c,d) */
        double r = cabs(s - ((e == ep) ? 1.0 : 0.0));
        if (r > res) res = r;
      }
+    }
     return res;
 }
 

@@ -142,7 +142,15 @@ MOONLAB_API anyon_system_t *anyon_system_ising(void);
 /**
  * @brief Initialize SU(2)_k anyon system
  *
- * @param k Level parameter (k=2 gives Ising, k=3 gives Fibonacci)
+ * Returns the genuine SU(2)_k model on k+1 charges labelled by 2j = 0..k, with
+ * F/R symbols generated from the quantum 6j-symbols.  k=2 is the Ising model
+ * (3 charges: 1, σ, ψ) and is what anyon_system_ising() wraps.
+ *
+ * k=3 is @em not Fibonacci: SU(2)_3 has four charges (2j = 0,1,2,3).  Fibonacci
+ * is the even-integer-spin subcategory of SU(2)_3 and is a separate hand-coded
+ * model; use anyon_system_fibonacci() for it.
+ *
+ * @param k Level parameter (k >= 1); k=2 gives Ising
  * @return SU(2)_k anyon system
  */
 MOONLAB_API anyon_system_t *anyon_system_su2k(uint32_t k);

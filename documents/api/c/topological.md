@@ -101,9 +101,11 @@ anyon_system_t *anyon_system_su2k(uint32_t k);
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `k` | `uint32_t` | Level parameter (k=2 gives Ising, k=3 gives Fibonacci) |
+| `k` | `uint32_t` | Level parameter (k ≥ 1); k=2 gives Ising |
 
-**Returns**: SU(2)_k anyon system.
+**Returns**: SU(2)_k anyon system on $k+1$ charges labelled by $2j = 0 \ldots k$, with F/R symbols generated from the quantum 6j-symbols.
+
+**Note**: `k = 3` does *not* return Fibonacci. SU(2)_3 has four charges ($2j = 0,1,2,3$); Fibonacci is the even-integer-spin subcategory of SU(2)_3 and is a separate hand-coded model. Use `anyon_system_fibonacci()` for Fibonacci anyons.
 
 #### `anyon_system_free`
 

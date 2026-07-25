@@ -76,7 +76,9 @@ anyon_system_t *fib = anyon_system_fibonacci();
 // Ising anyons (Majorana fermions)
 anyon_system_t *ising = anyon_system_ising();
 
-// General SU(2)_k (k=3 gives Fibonacci, k=2 gives Ising)
+// General SU(2)_k on k+1 charges labelled 2j = 0..k (k=2 gives Ising).
+// Note: k=3 is *not* Fibonacci — SU(2)_3 has four charges, and Fibonacci is
+// its even-integer-spin subcategory (use anyon_system_fibonacci()).
 anyon_system_t *su2_4 = anyon_system_su2k(4);
 
 // Query properties
