@@ -6,6 +6,35 @@ C API for topological quantum computing simulation.
 
 The topological computing API (`topological.h`) provides functions for simulating topological quantum computing primitives including anyon models, braiding operations, fusion trees, surface codes, and toric codes.
 
+### Maturity
+
+| Area | Status |
+|------|--------|
+| Anyon models, fusion rules, F/R symbol tables | **Verified.** Pentagon, both hexagons and F-matrix unitarity hold to 1e-15 for every built-in model; asserted by `unit_topological`. |
+| Fusion trees, quantum dimensions | Stable |
+| Surface code, toric code | Stable |
+| Topological entanglement entropy | Stable |
+| **Braiding (`braid_anyons`, `apply_F_move`)** | **Experimental, currently incorrect** — see below |
+| **Anyonic gates (`anyonic_*`)** | **Experimental, currently incorrect** — see below |
+
+`braid_anyons()` selects the R-symbol using the fusion tree's *total* charge for
+every path rather than each path's intermediate charge, so it multiplies the
+whole amplitude vector by one global phase. It is therefore **not a braid-group
+representation**: σ₁, σ₂ and σ₃ produce identical amplitudes. `apply_F_move()`
+is unimplemented and returns `QS_SUCCESS` without modifying the tree. The
+`anyonic_*` gates are products of these braids and consequently apply a global
+phase and perform **no logical rotation**.
+
+These functions are correct only in the sense that they preserve the norm. Do
+not use them to model topological gates or to benchmark braiding-based
+computation. A correct implementation requires per-path intermediate-charge
+tracking in `fusion_tree_t`; scheduled for v1.2.1. The current behaviour is
+pinned by regression tests in `tests/unit/test_topological.c` so that it cannot
+change unnoticed.
+
+The `get_F_symbol` / `get_R_symbol` / `anyon_verify_coherence` layer is
+unaffected by this and is safe to build on.
+
 ## Header
 
 ```c
@@ -221,9 +250,12 @@ uint32_t fusion_count_paths(const anyon_system_t *sys,
 
 ## Braiding Operations
 
+> **Experimental — currently incorrect.** Neither function below implements the
+> operation its name describes. See [Maturity](#maturity).
+
 #### `braid_anyons`
 
-Braid two adjacent anyons.
+Exchange two adjacent anyons and apply an R-symbol phase.
 
 ```c
 qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
@@ -239,15 +271,25 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
 
 **Returns**: `QS_SUCCESS` or error code.
 
+**Known defect (v1.2.1)**: the R-symbol is looked up with `c = tree->total_charge`
+for every fusion path instead of that path's intermediate charge. The call swaps
+the two external charges and multiplies every amplitude by the same phase, so the
+`position` argument has no effect on the amplitudes and the braid generators do
+not satisfy the braid relations. No F-matrix basis change is applied. The norm is
+preserved.
+
 #### `apply_F_move`
 
-Apply F-move (basis change).
+Intended to apply an F-move (change of fusion basis).
 
 ```c
 qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex);
 ```
 
-Changes fusion order: $(a \times b) \times c \leftrightarrow a \times (b \times c)$
+Would change fusion order: $(a \times b) \times c \leftrightarrow a \times (b \times c)$
+
+**Known defect (v1.2.1)**: **unimplemented**. Validates `tree` and returns
+`QS_SUCCESS` without reading `vertex` or modifying the tree.
 
 #### `get_F_symbol`
 
@@ -274,7 +316,42 @@ double complex get_R_symbol(const anyon_system_t *sys,
 
 **Returns**: $R^{ab}_c$ (braiding phase)
 
+#### `anyon_verify_coherence`
+
+Maximum residual of the fusion-category coherence conditions.
+
+```c
+double anyon_verify_coherence(const anyon_system_t *sys);
+```
+
+Returns the largest absolute violation, over all charge configurations, of
+
+- the MacLane pentagon equation for the F-symbols,
+- both hexagon equations relating F- and R-symbols, and
+- unitarity of every F-matrix, over the row set fixed by the fusion rules.
+
+A consistent braided fusion category returns ~0 (machine precision); a nonzero
+value certifies that the tabulated F/R symbols are not mutually consistent.
+
+**Returns**: max coherence residual (≥ 0), or −1 on error.
+
+**Measured** (all built-in models, macOS/arm64, Release):
+
+| Model | Residual |
+|-------|----------|
+| Fibonacci | 3.1e-16 |
+| Ising | 1.8e-15 |
+| SU(2)_2 | 1.8e-15 |
+| SU(2)_3 | 1.6e-15 |
+| SU(2)_4 | 2.4e-15 |
+| SU(2)_5 | 1.7e-15 |
+
 ## Anyonic Quantum Gates
+
+> **Experimental — currently incorrect.** Every function in this section is
+> built out of `braid_anyons()` and therefore applies a global phase and
+> performs no logical rotation. See [Maturity](#maturity). Registers construct,
+> free and stay normalised; the gates do not act. Scheduled for v1.2.1.
 
 ### Types
 
@@ -311,7 +388,9 @@ void anyonic_register_free(anyonic_register_t *reg);
 
 #### `anyonic_not`
 
-Apply NOT gate via braiding.
+Intended to apply a logical NOT via the braid word σ₁⁻¹σ₂σ₁⁻¹.
+
+**Known defect (v1.2.1)**: applies a global phase only; the logical amplitudes are unchanged.
 
 ```c
 qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
@@ -319,7 +398,9 @@ qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
 
 #### `anyonic_hadamard`
 
-Apply Hadamard-like gate via braiding.
+Intended to apply a Hadamard-like rotation via the braid word σ₁σ₂σ₁.
+
+**Known defect (v1.2.1)**: applies a global phase only; the logical amplitudes are unchanged.
 
 ```c
 qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
@@ -327,7 +408,9 @@ qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
 
 #### `anyonic_T_gate`
 
-Apply T gate approximation via braiding.
+Intended to apply a T-gate approximation via braiding.
+
+**Known defect (v1.2.1)**: applies a global phase only; the logical amplitudes are unchanged. The `precision` argument is ignored.
 
 ```c
 qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
@@ -336,7 +419,9 @@ qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
 
 #### `anyonic_entangle`
 
-Apply two-qubit entangling gate.
+Intended to apply a two-qubit entangling gate via inter-qubit braiding.
+
+**Known defect (v1.2.1)**: applies a global phase only, and only when the two qubits are adjacent in the fusion tree; it does not entangle.
 
 ```c
 qs_error_t anyonic_entangle(anyonic_register_t *reg,

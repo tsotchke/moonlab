@@ -15,7 +15,7 @@ gradient optimizer, a first-principles H2/LiH potential energy surface, the
 real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
 for CPU-only builds, bounded CUDA/MPI state sharding beyond 32 qubits, and a
 full packaging/release-pipeline rework. Covers `v1.1.0..v1.2.0`, including
-merged PRs #12, #13, and #14.
+merged PRs #12, #13, #14, and #18.
 
 ### Added
 
@@ -115,6 +115,30 @@ merged PRs #12, #13, and #14.
   device-independent randomness certificate.
 - `.github/workflows/ci-jetson.yml` documented as `workflow_dispatch`-only
   until a self-hosted runner is enrolled; setup doc corrected to match.
+- **BREAKING (physics), Ising anyon convention.** `anyon_system_ising()` is now
+  built through the SU(2)_2 quantum-6j generator instead of a hand-written
+  table, which moves it to a different member of the sixteenfold way. The
+  topological spin changes from θ_σ = e^{iπ/8} (ν = 1) to θ_σ = e^{3iπ/8}
+  (ν = 3); θ_ψ = −1 is unchanged. Individual symbols:
+  R^{σσ}_1 goes e^{−iπ/8} → e^{5iπ/8}, R^{σσ}_ψ goes e^{3iπ/8} → e^{iπ/8},
+  R^{σψ}_σ = R^{ψσ}_σ goes −i → +i, and F^{σσσ}_σ changes overall sign
+  (F^{σψσ}_ψ goes +1 → −1, the Frobenius-Schur sign the old storage layout
+  could not represent). Both the old and new phase sets name valid anyon
+  theories, but this is a real change in returned values and **not**
+  behaviour-preserving: code that hard-codes the ν = 1 Ising phases will see
+  different results. Fibonacci's R-symbols and F^{τττ}_τ are unchanged.
+- **`anyon_system_su2k(2)` and `(3)` no longer alias.** They previously returned
+  the hand-coded Ising and Fibonacci systems. `su2k(2)` now returns the genuine
+  SU(2)_2 (which *is* Ising, 3 charges) and `su2k(3)` returns the genuine
+  four-charge SU(2)_3 — **not** Fibonacci, which is its even-integer-spin
+  subcategory and keeps its own `anyon_system_fibonacci()` constructor. The
+  header contract, C API reference, and algorithms guide are corrected.
+- **Topological braiding and gate layer marked experimental.** `braid_anyons`,
+  `apply_F_move` and the `anyonic_*` gates are documented as currently
+  incorrect in the README, the C API reference, the algorithms guide, and the
+  header, with the specific defect and its consequences stated. No behaviour
+  change; the documentation previously claimed capabilities the code does not
+  have.
 
 ### Fixed
 
@@ -181,6 +205,60 @@ merged PRs #12, #13, and #14.
   on their intentional `#include_next`, and the audit-buffer yield includes
   `<windows.h>` for `SwitchToThread` rather than relying on transitive
   inclusion; both were hard failures under UCRT64 gcc 16.
+- **Anyon F/R symbols violated the pentagon and hexagon identities in every
+  built-in model** (PR #18). The tabulated symbols were not those of any
+  consistent fusion category. Measured coherence residuals before the fix:
+  Fibonacci 1.000, Ising 1.848, SU(2)_3 1.000, SU(2)_4 1.199, SU(2)_5 2.000.
+  Four independent causes: the Fibonacci/Ising trivial-symbol default wrote 1
+  on the matrix diagonal instead of on the unique allowed fusion channel;
+  Ising stored F^{σσσ}_σ under {vacuum, σ} instead of {vacuum, ψ}; the Ising
+  F index `a*9 + b*3 + c` dropped the total charge `d`, so d-dependent
+  Frobenius-Schur signs could not be represented at all; and the SU(2)_k
+  R-phase argument `c(c+2) − a(a+2) − b(b+2)` underflowed in `uint32_t`
+  whenever it was negative, rotating every such phase by 2π/3. The quantum-6j
+  generator is now the single source of truth for Ising and SU(2)_k, with a
+  shared (a,b,c,d)×(e,f) storage layout. All models now satisfy pentagon, both
+  hexagons and F-matrix unitarity to 1e-15.
+- **New `anyon_verify_coherence()`** returning the maximum residual of the
+  pentagon equation, both hexagon equations, and F-matrix unitarity across all
+  charge configurations. Asserted for all built-in models by
+  `unit_topological`, which also proves the check is non-vacuous by zeroing a
+  row of F^{τττ}_τ and confirming the residual jumps from 3.1e-16 to 1.000.
+- **Coherence verifier could not see the defect it was written to catch.** The
+  F-unitarity term inferred each F-matrix's row set from which entries were
+  nonzero, so an allowed row that was entirely zero — precisely the Ising and
+  Fibonacci defect above — was skipped as "absent". Against the pre-fix
+  symbols it reported 1.11e-16 for both Fibonacci and SU(2)_3: machine
+  precision on entirely wrong data. The row set is now enumerated from the
+  fusion rules (e ∈ a×b, d ∈ e×c), which reports 1.000 for every pre-fix
+  model and is unchanged at 1e-15 to 1e-16 on the corrected symbols.
+- **Regression tests pinning the broken braid layer.** `braid_anyons` is not a
+  braid-group representation (see Changed); `tests/unit/test_topological.c`
+  now asserts the present, incorrect behaviour under a clearly-marked
+  `XFAIL_DOC` macro — σ₁/σ₂/σ₃ producing identical amplitudes, the `anyonic_*`
+  gates leaving |a₁|/|a₀| at 1.0, and `apply_F_move` being a no-op — so the
+  v1.2.1 fix has a red-to-green target and the defect cannot be reintroduced
+  silently.
+- Renamed the SU(2)_k R-phase Casimir difference off `carg`, which shadows
+  `carg()` from `<complex.h>`.
+
+### Known issues (not regressions)
+
+- **The topological braiding and gate layer is not a braid-group
+  representation.** `braid_anyons()` selects the R-symbol with
+  `c = tree->total_charge` for every fusion path instead of that path's own
+  intermediate charge, so it applies a single global phase: σ₁, σ₂ and σ₃ act
+  identically and the `position` argument does not affect the amplitudes.
+  `apply_F_move()` is an unimplemented stub returning `QS_SUCCESS`. The
+  `anyonic_not` / `anyonic_hadamard` / `anyonic_T_gate` / `anyonic_entangle`
+  gates are products of those braids and therefore perform no logical rotation
+  (|a₁|/|a₀| stays at 1.0) and do not entangle. Norm and total charge are
+  preserved; nothing else is physically meaningful. This predates v1.2.0 and is
+  not caused by the F/R symbol fix — the symbol tables it reads are now
+  correct. A fix requires per-path intermediate-charge tracking in
+  `fusion_tree_t` plus a real `apply_F_move`; scheduled for v1.2.1 and pinned
+  by regression tests meanwhile. These functions are marked experimental in the
+  README, C API reference, algorithms guide, and header.
 
 ## [1.1.0] - 2026-07-11
 

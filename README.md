@@ -679,7 +679,22 @@ double mk = bell_test_mermin_klyshko(&ghz_n, N, 0, NULL);
 
 ## Topological Quantum Computing
 
-Fault-tolerant quantum computation using anyonic systems.
+Anyon models, fusion trees, surface codes and toric codes.
+
+> **Status.** The anyon **data** is solid: the F- and R-symbol tables of every
+> built-in model are verified against the fusion-category coherence conditions
+> (MacLane pentagon, both hexagons, and F-matrix unitarity) to 1e-15, checked in
+> CI by `unit_topological`.
+>
+> The **braiding and gate layer on top of them is experimental and currently
+> incorrect.** `braid_anyons()` applies a single global R-phase to the whole
+> amplitude vector rather than the per-fusion-path phase, so it is *not* a
+> braid-group representation: σ₁, σ₂ and σ₃ act identically, and
+> `anyonic_not()` / `anyonic_hadamard()` / `anyonic_T_gate()` perform no logical
+> rotation. `apply_F_move()` is unimplemented and returns success without
+> changing the tree. Do not use these to model topological gates. Tracked for
+> v1.2.1; the present behaviour is pinned by regression tests so it cannot
+> change silently.
 
 ### Anyon Models
 
@@ -689,22 +704,36 @@ Fault-tolerant quantum computation using anyonic systems.
 // Create Fibonacci anyon system
 anyon_system_t* sys = anyon_system_fibonacci();
 
+// F/R symbol tables, verified against pentagon + hexagon + unitarity.
+// Returns the maximum coherence residual (~1e-15 for every built-in model).
+double residual = anyon_verify_coherence(sys);
+
 // Build a fusion tree over the external anyon charges
 fusion_tree_t* tree = fusion_tree_create(sys, charges, num_anyons, total_charge);
 
-// Braid adjacent anyons (topological gate): exchanges the anyons at
-// `position` and `position + 1`, applying the R-matrix phase and any
-// F-matrix basis change to tree->amplitudes in place.
+// EXPERIMENTAL. Exchanges the anyons at `position` and `position + 1` and
+// multiplies tree->amplitudes by an R-symbol phase. That phase is currently
+// taken from the tree's total charge rather than each path's intermediate
+// charge, so the result is a global phase and carries no positional
+// information. No F-matrix basis change is applied.
 braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
 ```
 
 ### Supported Anyon Types
 
-| Model | Anyons | Universal | Application |
-|-------|--------|-----------|-------------|
+Fusion rules and F/R symbols are coherence-verified for all three. The
+"universal" column describes the physics of the model, not a capability of the
+braiding layer above, which does not yet realise these gates.
+
+| Model | Anyons | Universal (in theory) | Application |
+|-------|--------|-----------------------|-------------|
 | Fibonacci | τ, 1 | Yes | Universal TQC |
 | Ising | σ, ψ, 1 | No (+ magic) | Majorana fermions |
-| SU(2)_k | Multiple | Varies | General TQC |
+| SU(2)_k | k+1 charges, 2j = 0..k | Varies | General TQC |
+
+`anyon_system_su2k(2)` is the Ising model. `anyon_system_su2k(3)` returns the
+genuine four-charge SU(2)_3, *not* Fibonacci — Fibonacci is its
+even-integer-spin subcategory and has its own constructor.
 
 ### Surface Codes
 

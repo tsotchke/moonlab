@@ -6,11 +6,21 @@ Fault-tolerant quantum computation using topologically protected degrees of free
 
 Topological quantum computing (TQC) encodes quantum information in non-local, topologically protected states that are inherently robust against local perturbations. Instead of using individual qubit states, TQC uses exotic quasiparticles called **anyons** whose quantum properties depend only on the topology of their worldlines.
 
-Moonlab provides comprehensive TQC simulation including:
+Moonlab provides TQC simulation including:
 - **Anyon models**: Fibonacci, Ising, and SU(2)_k
-- **Braiding operations**: F-matrices, R-matrices, fusion trees
+- **F-matrices, R-matrices, fusion trees**
 - **Error-correcting codes**: Surface codes and toric codes
 - **Topological invariants**: Entanglement entropy, modular matrices
+
+> **Status of the braiding layer.** The F/R symbol tables below are verified
+> against the fusion-category coherence conditions (pentagon, both hexagons,
+> F-matrix unitarity) to 1e-15 for every built-in model. The *braiding and gate*
+> layer built on them is **experimental and currently incorrect**:
+> `braid_anyons()` applies a single global phase instead of a per-fusion-path
+> one, so it is not a braid-group representation, `apply_F_move()` is
+> unimplemented, and the `anyonic_*` gates perform no logical rotation. Sections
+> marked **Experimental** below describe intended behaviour that the code does
+> not yet deliver. Scheduled for v1.2.1.
 
 ## Theoretical Background
 
@@ -124,12 +134,14 @@ double complex F = get_F_symbol(fib,
 $$R^{ab}_c = \text{phase when exchanging } a \text{ and } b \text{ that fuse to } c$$
 
 ```c
-// Get braiding phase R^{ττ}_τ
-double complex R = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);
-// R = e^{4πi/5} for Fibonacci anyons
+// Get braiding phase R^{ττ}_c for each fusion channel c
+double complex R1 = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_VACUUM);  // e^{4πi/5}
+double complex Rt = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);     // e^{-3πi/5}
 ```
 
-## Braiding Operations
+(Moonlab uses the conjugate of the convention in which $R^{\tau\tau}_1 = e^{-4\pi i/5}$; the two differ by braiding orientation and are equally consistent.)
+
+## Braiding Operations (Experimental — currently incorrect)
 
 ### Elementary Braids
 
@@ -143,14 +155,29 @@ qs_error_t err = braid_anyons(tree, 1, true);
 braid_anyons(tree, 1, false);
 ```
 
-The braiding operation:
-1. Applies R-matrix for the direct phase
-2. Uses F-moves to change basis when needed
-3. Preserves the total charge
+A correct elementary braid would:
+1. Apply the R-matrix phase of each fusion path's own intermediate charge
+2. Use F-moves to change basis when the braided pair is not adjacent in the tree
+3. Preserve the total charge
 
-### Basis Changes
+**What the code actually does today.** Step 1 uses `c = tree->total_charge` for
+every path, so a single global phase multiplies the whole amplitude vector;
+step 2 is absent. The consequences are measurable and are asserted in
+`tests/unit/test_topological.c`:
 
-F-moves change the fusion order without braiding:
+- σ₁, σ₂ and σ₃ produce *identical* amplitude vectors — the `position`
+  argument does not affect the state, so the generators cannot satisfy the
+  braid relations and the map is not a braid-group representation.
+- The total charge and the norm are preserved, which is all that currently
+  holds.
+
+Do not use `braid_anyons()` to model topological gates or to study braid
+statistics. A correct implementation requires tracking per-path intermediate
+charges in `fusion_tree_t`; scheduled for v1.2.1.
+
+### Basis Changes (Experimental — unimplemented)
+
+F-moves would change the fusion order without braiding:
 
 ```c
 // Apply F-move at vertex 2
@@ -158,6 +185,24 @@ apply_F_move(tree, 2);
 ```
 
 This is essential for computing composite braids involving non-adjacent anyons.
+
+**`apply_F_move()` is not implemented.** It validates its `tree` argument,
+ignores `vertex`, and returns `QS_SUCCESS` without modifying the tree. The
+underlying `get_F_symbol()` data it would need is correct and verified; only
+the transformation on the fusion tree is missing.
+
+### Verifying the symbol tables
+
+What *is* trustworthy here is the F/R data. `anyon_verify_coherence()` returns
+the largest violation of the pentagon equation, both hexagon equations, and
+F-matrix unitarity across all charge configurations:
+
+```c
+double residual = anyon_verify_coherence(fib);   // ~3e-16
+```
+
+Measured for every built-in model: Fibonacci 3.1e-16, Ising 1.8e-15,
+SU(2)_2 1.8e-15, SU(2)_3 1.6e-15, SU(2)_4 2.4e-15, SU(2)_5 1.7e-15.
 
 ## Anyonic Qubits
 
@@ -175,9 +220,13 @@ anyonic_register_t *reg = anyonic_register_create(fib, 2);
 // Qubits are initialized in |0⟩ state
 ```
 
-### Anyonic Gates
+### Anyonic Gates (Experimental — currently incorrect)
 
-Gates are implemented via braiding sequences:
+Gates are *intended* to be implemented via braiding sequences. Because they are
+composed from `braid_anyons()`, each of the calls below currently applies a
+global phase and leaves the logical amplitudes untouched — no rotation is
+performed, and `anyonic_entangle()` does not entangle. The `precision`
+argument to `anyonic_T_gate()` is ignored.
 
 ```c
 // NOT gate (via middle anyon braids)
@@ -196,6 +245,10 @@ anyonic_register_free(reg);
 ```
 
 ### Universality
+
+The following describes the physics of the models, whose fusion rules and F/R
+symbols Moonlab represents correctly. It does **not** describe a capability of
+the braiding layer above, which does not yet realise these gates.
 
 **Fibonacci anyons** are universal for quantum computation—any quantum gate can be approximated to arbitrary precision using braiding alone. This is remarkable because:
 - No additional operations (like magic state injection) are needed

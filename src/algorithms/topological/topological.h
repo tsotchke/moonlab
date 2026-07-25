@@ -32,6 +32,24 @@
  *     and R matrices are the standard ones reviewed in Nayak et al.
  *     sections III.B-C.
  *
+ * IMPLEMENTATION STATUS
+ * ---------------------
+ * The description above is the physics this module targets, not a uniform
+ * statement about the code.  Concretely:
+ *
+ *   - The F- and R-symbol tables (get_F_symbol, get_R_symbol) of every built-in
+ *     model are @em verified: anyon_verify_coherence() reports the maximum
+ *     violation of the MacLane pentagon equation, both hexagon equations and
+ *     F-matrix unitarity, and it is ~1e-15 for Fibonacci, Ising and SU(2)_k.
+ *     Fusion rules, fusion trees, quantum dimensions, the surface code, the
+ *     toric code and the entropy estimators are likewise usable.
+ *   - The braiding and gate layer (braid_anyons, apply_F_move, anyonic_*) is
+ *     @b EXPERIMENTAL @b AND @b CURRENTLY @b INCORRECT.  braid_anyons applies a
+ *     single global R-phase instead of a per-fusion-path phase, so it is not a
+ *     representation of the braid group; apply_F_move is a stub; and the
+ *     anyonic gates therefore perform no logical rotation.  Scheduled for
+ *     v1.2.1.  See the @warning blocks on the individual declarations.
+ *
  * Surface and toric codes complement the anyon models by encoding
  * logical qubits in the ground space of a commuting stabilizer
  * Hamiltonian.  Kitaev (2003) introduced the toric code; Fowler,
@@ -255,10 +273,20 @@ MOONLAB_API uint32_t fusion_count_paths(const anyon_system_t *sys,
 // ============================================================================
 
 /**
- * @brief Braid two adjacent anyons
+ * @brief Braid two adjacent anyons.  EXPERIMENTAL -- not a braid representation.
  *
- * Exchanges anyons at positions i and i+1, applying the
- * appropriate R-matrix phase and F-matrix basis change.
+ * Exchanges the external charges at positions i and i+1 and multiplies the
+ * fusion-tree amplitudes by an R-symbol phase.
+ *
+ * @warning Known defect, scheduled for v1.2.1.  The R-symbol is selected with
+ * c = tree->total_charge for *every* fusion path rather than that path's own
+ * intermediate charge, so a single global phase is applied to the whole
+ * amplitude vector and no F-matrix basis change is performed.  As a result
+ * σ₁, σ₂ and σ₃ act identically, the generators do not satisfy the braid
+ * relations, and this function is NOT a representation of the braid group.
+ * Norm and total charge are preserved; nothing else about the result is
+ * physically meaningful.  Do not use it to model topological gates.
+ * The underlying F/R symbol tables are correct -- see anyon_verify_coherence.
  *
  * @param tree Fusion tree (modified in place)
  * @param position Position of left anyon to braid
@@ -268,10 +296,15 @@ MOONLAB_API uint32_t fusion_count_paths(const anyon_system_t *sys,
 MOONLAB_API qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise);
 
 /**
- * @brief Apply F-move (basis change)
+ * @brief Apply F-move (basis change).  EXPERIMENTAL -- unimplemented.
  *
- * Changes the fusion order at a vertex using F-matrix.
- * (a×b)×c ↔ a×(b×c)
+ * Intended to change the fusion order at a vertex using the F-matrix,
+ * (a×b)×c ↔ a×(b×c).
+ *
+ * @warning Known defect, scheduled for v1.2.1.  This function is a stub: it
+ * validates @p tree, ignores @p vertex, and returns QS_SUCCESS without
+ * modifying the tree.  The F-symbol data it would need is correct and
+ * verified; only the transformation on the fusion tree is missing.
  *
  * @param tree Fusion tree
  * @param vertex Vertex to apply F-move
@@ -358,6 +391,17 @@ MOONLAB_API anyonic_register_t *anyonic_register_create(anyon_system_t *sys,
  */
 MOONLAB_API void anyonic_register_free(anyonic_register_t *reg);
 
+/* ----------------------------------------------------------------------------
+ * ANYONIC GATES -- EXPERIMENTAL, CURRENTLY INCORRECT.
+ *
+ * Every gate below is a product of braid_anyons() calls and therefore inherits
+ * its defect (see the @warning on braid_anyons): each applies one global phase
+ * to the amplitude vector and performs NO logical rotation.  Registers build,
+ * free and stay normalised, but the gates do not act on the encoded qubit and
+ * anyonic_entangle() does not entangle.  Scheduled for v1.2.1; the present
+ * behaviour is pinned by tests/unit/test_topological.c.
+ * ------------------------------------------------------------------------- */
+
 /**
  * @brief Apply NOT gate via braiding
  *
@@ -383,18 +427,23 @@ MOONLAB_API qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit);
 MOONLAB_API qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit);
 
 /**
- * @brief Apply T gate approximation via braiding
+ * @brief Apply T gate approximation via braiding.  EXPERIMENTAL -- see above.
+ *
+ * @warning Applies a global phase only; @p precision is ignored.
  *
  * @param reg Anyonic register
  * @param qubit Target qubit
- * @param precision Approximation precision
+ * @param precision Approximation precision (currently unused)
  * @return QS_SUCCESS or error
  */
 MOONLAB_API qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
                           double precision);
 
 /**
- * @brief Apply two-qubit entangling gate
+ * @brief Apply two-qubit entangling gate.  EXPERIMENTAL -- see above.
+ *
+ * @warning Applies a global phase only, and only when the two qubits are
+ * adjacent in the fusion tree; it does not entangle.
  *
  * @param reg Anyonic register
  * @param qubit1 First qubit
