@@ -126,11 +126,13 @@
  *     quadratic subfield of @f$\mathbb{Q}(\zeta_5)@f$ is
  *     @f$\mathbb{Q}(\sqrt5)@f$.
  *
- * Topological charge measurement does not enlarge that set: measurement-only
- * protocols (Bonderson, Freedman and Nayak, PRL 101, 010501 (2008)) reproduce
- * braid transformations and nothing beyond them, which is why
- * fibonacci_compile_su2()'s @f$\epsilon@f$ guarantee is the answer for H, X
- * and T rather than a placeholder.
+ * Measurement-only protocols (Bonderson, Freedman and Nayak, PRL 101, 010501
+ * (2008)) reproduce braid transformations exactly -- see
+ * anyon_forced_measurement_braid() -- so charge measurement is at least as
+ * powerful as braiding.  The proofs above concern finite braid words; no exact
+ * adaptive construction for the Fibonacci H, X or T is known, and none is
+ * implemented here.  For those three the answer is fibonacci_compile_su2()'s
+ * checked @f$\epsilon@f$ guarantee, not a fixed-fidelity gate.
  *
  * Surface and toric codes complement the anyon models by encoding
  * logical qubits in the ground space of a commuting stabilizer

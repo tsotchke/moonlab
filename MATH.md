@@ -518,19 +518,30 @@ only quadratic subfield of @f$\mathbb{Q}(\zeta_5)@f$ is
 while @f$\mathbb{Q}(\sqrt2)@f$ is ramified at 2. Contradiction. **No braid word
 is proportional to T.**
 
-### 13.6 Measurement does not enlarge the set
+### 13.6 What measurement does and does not settle
 
-Topological charge measurement adds projectors, not unitaries. Measurement-only
-protocols (Bonderson, Freedman, Nayak 2008) reproduce exactly the braid
-transformations by forced measurement, so the set of exactly realisable
-unitaries is unchanged. Moonlab demonstrates the equality directly:
-`anyon_forced_measurement_braid()` reproduces `braid_anyons()` to 0.0 on every
-generator of a four-@f$\tau@f$ tree.
+One direction is established and implemented: measurement-only protocols
+(Bonderson, Freedman, Nayak 2008) reproduce braid transformations exactly by
+forced measurement, so charge measurement is at least as powerful as braiding.
+`anyon_forced_measurement_braid()` demonstrates the equality directly,
+reproducing `braid_anyons()` to 0.0 on every generator of a four-@f$\tau@f$
+tree.
 
-Consequently, for H, X and T the correct answer is an @f$\epsilon@f$-guaranteed
-compiler, and `fibonacci_compile_su2()` provides one: it measures the returned
-word's distance to the target before returning it, and refuses rather than
-silently missing the bound.
+The converse is *not* claimed here. Sections 13.3-13.5 prove that no finite
+braid word realises H, X or T for Fibonacci anyons; they say nothing about
+adaptive protocols that interleave braids with charge projectors and correct on
+the outcome. No such exact construction is known for the Fibonacci gate set,
+and Moonlab does not implement one. What Moonlab does provide for those three
+gates is `fibonacci_compile_su2()`, which measures the returned word's distance
+to the target before returning it and refuses rather than silently missing the
+requested bound — so the caller gets an ε they can rely on rather than a
+fixed-fidelity gate.
+
+Where an exact route *does* exist, it is implemented rather than approximated:
+`fibonacci_exact_phase_gate()` for @f$R_z(m\pi/5)@f$, and for Ising —
+whose braid image is finite — `ising_compile_clifford()` and
+`ising_compile_clifford2()` for every one- and two-qubit Clifford, CNOT
+included.
 
 ### 13.7 Numerical corroboration
 

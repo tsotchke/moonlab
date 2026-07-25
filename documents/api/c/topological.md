@@ -64,11 +64,13 @@ Consequently:
   `fibonacci_compile_su2()` is the answer for those, and it meets whatever ε the
   caller asks for.
 
-Topological charge measurement does not enlarge that set: measurement-only
-protocols (Bonderson, Freedman and Nayak, PRL 101, 010501 (2008)) reproduce
-braid transformations and nothing beyond them, which
-`anyon_forced_measurement_braid()` demonstrates directly by agreeing with
-`braid_anyons()` to 0.0.
+Measurement-only protocols (Bonderson, Freedman and Nayak, PRL 101, 010501
+(2008)) reproduce braid transformations exactly, which
+`anyon_forced_measurement_braid()` demonstrates by agreeing with
+`braid_anyons()` to 0.0. The proofs concern finite braid words; no exact
+adaptive construction for the Fibonacci H, X or T is known, and none is
+implemented here. For those three the answer is `fibonacci_compile_su2()`'s
+checked ε guarantee.
 
 ## Header
 

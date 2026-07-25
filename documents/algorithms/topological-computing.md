@@ -359,11 +359,12 @@ Hence:
   three proofs. Exhaustive enumeration of every braid word up to length 12
   agrees: the closest approaches are 0.066 (H), 0.113 (X) and 0.075 (T).
 
-Topological charge measurement does not move that boundary. Measurement-only
-protocols reproduce braid transformations and nothing beyond them, which
+Measurement-only protocols reproduce braid transformations exactly — which
 `anyon_forced_measurement_braid()` shows directly by matching `braid_anyons()`
-to 0.0. So for H, X and T the ε-guaranteed compiler is the answer, not a
-placeholder.
+to 0.0 — so charge measurement is at least as powerful as braiding. The proofs
+above concern finite braid words; no exact adaptive construction for the
+Fibonacci H, X or T is known, and none is implemented here. For those three the
+answer is the ε-guaranteed compiler, which measures what it returns.
 
 ### Two-qubit gates and leakage
 

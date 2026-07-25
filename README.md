@@ -723,8 +723,8 @@ braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
 apply_F_move(tree, /*vertex=*/1);
 
 // Topological charge measurement, and braiding realised by measurement alone
-// (Bonderson-Freedman-Nayak forced measurement) -- agrees with braid_anyons()
-// to 0.0.
+// (Bonderson-Freedman-Nayak forced measurement): agrees with braid_anyons()
+// to 0.0, no anyon transported.
 double p = anyon_measure_pair_charge(tree, /*position=*/1, FIB_VACUUM);
 anyon_forced_measurement_braid(tree, /*position=*/1, /*clockwise=*/true);
 ```
