@@ -342,7 +342,8 @@ static int su2_gc_decompose(const double complex delta[4],
         }
     } else {
         for (int i = 0; i < 3; i++) ax[i] /= axn;
-        if (dot > 1.0) dot = 1.0; if (dot < -1.0) dot = -1.0;
+        if (dot > 1.0) dot = 1.0;
+        if (dot < -1.0) dot = -1.0;
         su2_rotation(ax, acos(dot), S);
     }
     mat_dag(2, S, Sd);
