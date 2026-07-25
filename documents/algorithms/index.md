@@ -40,7 +40,7 @@ This section provides comprehensive documentation of quantum algorithms, includi
 
 | Algorithm | Approach | Use Case |
 |-----------|----------|----------|
-| [Topological Computing](topological-computing.md) | Anyons | Fault-tolerant qubits |
+| [Topological Computing](topological-computing.md) | Anyons | Verified F/R symbol tables, fusion trees, surface/toric codes (braiding/gate layer experimental) |
 | [Skyrmion Braiding](skyrmion-braiding.md) | Magnetic skyrmions | Topological gates |
 
 ### Fundamental Tests

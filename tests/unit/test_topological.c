@@ -4,8 +4,16 @@
  *
  *  - Fibonacci and Ising anyon systems construct with the expected
  *    quantum dimensions.
+ *  - Every built-in model's F/R symbols satisfy the fusion-category
+ *    coherence conditions (pentagon, both hexagons, F-matrix unitarity),
+ *    and that check is proven non-vacuous.
  *  - Anyonic registers can be created and freed on either anyon model.
  *  - Surface-code/toric-code basic lifecycle.
+ *  - The KNOWN-BROKEN braiding/gate layer is pinned in its current, wrong
+ *    form (see test_braiding_is_not_yet_a_representation) so the v1.2.1 fix
+ *    has a red-to-green target.  Nothing in this file should be read as
+ *    validating braiding: see the note on
+ *    test_fibonacci_braiding_invariants.
  */
 
 #include "../../src/algorithms/topological/topological.h"
@@ -86,6 +94,12 @@ static void test_toric_code_lifecycle(void) {
     }
 }
 
+/* NOTE: these are weak invariants, not evidence that braiding works.  Every
+ * assertion below is satisfied by multiplying the amplitude vector by a scalar
+ * phase, which is all braid_anyons currently does (see
+ * test_braiding_is_not_yet_a_representation).  The test is kept because norm
+ * preservation and sigma sigma^{-1} = I must continue to hold after the v1.2.1
+ * fix, but on its own it certifies nothing about the braid group. */
 static void test_fibonacci_braiding_invariants(void) {
     fprintf(stdout, "\n-- topological: Fibonacci braiding --\n");
     anyon_system_t* sys = anyon_system_fibonacci();

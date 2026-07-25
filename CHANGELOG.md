@@ -6704,6 +6704,9 @@ and widen CI coverage.
 
 - Fibonacci anyon braiding: σ₁·σ₁⁻¹ = I verified exactly on a 4-tau
   fusion tree (logical-qubit subspace, dim=2).
+  *(Corrected in 1.2.0: this invariant is satisfied by any global phase and
+  does not establish that braiding works. `braid_anyons` was not, and is
+  not yet, a braid-group representation — see the 1.2.0 known issues.)*
 - Grover multi-marked (k=3 on n=4): P(marked set) = 0.949 after one
   optimal iteration.
 - Noisy VQE: depolarizing(p1=1e-3, p2=1e-2) runs to completion.

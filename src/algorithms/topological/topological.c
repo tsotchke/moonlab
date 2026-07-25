@@ -2,13 +2,20 @@
  * @file topological.c
  * @brief Topological quantum computing implementation
  *
- * Full implementation of:
- * - Fibonacci and Ising anyon models
- * - F-matrices and R-matrices
- * - Fusion trees and braiding
+ * Implements:
+ * - Fibonacci, Ising and SU(2)_k anyon models
+ * - F-matrices and R-matrices (coherence-verified: pentagon, both hexagons
+ *   and F-matrix unitarity hold to ~1e-15; see anyon_verify_coherence)
+ * - Fusion trees and fusion-path counting
  * - Surface code operations
  * - Toric code operations
  * - Topological entanglement entropy
+ *
+ * NOT working, scheduled for v1.2.1: the braiding and gate layer
+ * (braid_anyons, apply_F_move, anyonic_*).  braid_anyons applies one global
+ * R-phase instead of a per-fusion-path phase, so it is not a braid-group
+ * representation; apply_F_move is an empty stub; and the anyonic gates
+ * therefore perform no logical rotation.  See topological.h for details.
  *
  * @stability evolving
  * @since v0.1.2
@@ -42,7 +49,8 @@ anyon_system_t *anyon_system_fibonacci(void) {
 
     sys->type = ANYON_MODEL_FIBONACCI;
     sys->num_charges = 2;  // 1 (vacuum) and τ
-    sys->level = 3;  // SU(2)_3 gives Fibonacci
+    sys->level = 3;  // Fibonacci is the even-integer-spin subcategory of SU(2)_3
+                     // (NOT all of SU(2)_3, which has four charges)
 
     // Fusion rules: N^c_{ab}
     // 1×1=1, 1×τ=τ, τ×1=τ, τ×τ=1+τ
@@ -716,8 +724,12 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise) 
     anyon_system_t *sys = tree->anyon_sys;
     uint32_t num_paths = tree->num_paths;
 
-    // For braiding, we need to apply R-matrices and possibly F-moves
-    // The action depends on the fusion tree structure
+    /* BROKEN (v1.2.1): a correct braid applies each fusion path's own
+     * R-symbol, selected by that path's intermediate charge, and F-moves when
+     * the braided pair is not adjacent in the tree.  The loop below instead
+     * uses the tree's total charge for every path, which makes this one global
+     * phase: braiding at any `position` gives the same amplitudes, so this is
+     * not a representation of the braid group. */
 
     // Simple case: braid charges[position] and charges[position+1]
     anyon_charge_t a = tree->external[position];
@@ -746,15 +758,16 @@ qs_error_t braid_anyons(fusion_tree_t *tree, uint32_t position, bool clockwise) 
 
 qs_error_t apply_F_move(fusion_tree_t *tree, uint32_t vertex) {
     if (!tree) return QS_ERROR_INVALID_STATE;
-    (void)vertex; /* F-move currently rotates the whole tree basis;
-                     per-vertex selection is a Phase 1G extension. */
+    (void)vertex;
 
-    // F-move changes basis at a fusion vertex
-    // This is a unitary transformation on the fusion space
-
-    // For full implementation, need to track tree structure
-    // and apply F-matrix transformation
-
+    /* NOT IMPLEMENTED (v1.2.1).  An F-move changes basis at a fusion vertex --
+     * a unitary transformation on the fusion space, using the F-matrix.  This
+     * function does none of that: it validates `tree`, ignores `vertex`, and
+     * returns success without touching the amplitudes.  Implementing it needs
+     * explicit fusion-tree structure to transform; the F-symbol data itself is
+     * correct and verified.  Returning an error instead would break callers
+     * that already ignore the result, so the no-op is documented in the header
+     * and pinned by tests/unit/test_topological.c rather than changed here. */
     return QS_SUCCESS;
 }
 
@@ -810,11 +823,13 @@ qs_error_t anyonic_not(anyonic_register_t *reg, uint32_t qubit) {
         return QS_ERROR_INVALID_QUBIT;
     }
 
-    // For Fibonacci qubits, NOT is achieved by specific braid pattern
-    // Braid middle anyons of the qubit (positions 1 and 2 within qubit)
+    // For Fibonacci qubits, NOT would be achieved by this braid pattern on
+    // the middle anyons of the qubit (positions 1 and 2 within the qubit).
     uint32_t base = qubit * 4;
 
-    // σ₁⁻¹ σ₂ σ₁⁻¹ gives a NOT gate up to a phase
+    /* BROKEN (v1.2.1): σ₁⁻¹ σ₂ σ₁⁻¹ would give a NOT up to a phase if
+     * braid_anyons were a braid representation.  It is not, so this applies a
+     * global phase and leaves the logical amplitudes untouched. */
     braid_anyons(reg->tree, base + 1, false);  // σ₁⁻¹
     braid_anyons(reg->tree, base + 2, true);   // σ₂
     braid_anyons(reg->tree, base + 1, false);  // σ₁⁻¹
@@ -827,13 +842,14 @@ qs_error_t anyonic_hadamard(anyonic_register_t *reg, uint32_t qubit) {
         return QS_ERROR_INVALID_QUBIT;
     }
 
-    // Approximate Hadamard via braiding sequence
-    // This is not exact but can be made arbitrarily precise
-    // with Solovay-Kitaev type constructions
+    /* BROKEN (v1.2.1): intended as an approximate Hadamard via a braiding
+     * sequence, refinable to arbitrary precision by Solovay-Kitaev.  Since
+     * braid_anyons is not a braid representation, this applies a global phase
+     * and performs no rotation. */
 
     uint32_t base = qubit * 4;
 
-    // Simple approximation: σ₁ σ₂ σ₁
+    // Intended braid word: σ₁ σ₂ σ₁
     braid_anyons(reg->tree, base + 1, true);
     braid_anyons(reg->tree, base + 2, true);
     braid_anyons(reg->tree, base + 1, true);
@@ -849,10 +865,11 @@ qs_error_t anyonic_T_gate(anyonic_register_t *reg, uint32_t qubit,
 
     (void)precision;  // Would be used for iterative refinement
 
-    // T gate approximation
+    /* BROKEN (v1.2.1): intended as a T-gate approximation; applies a global
+     * phase and performs no rotation.  See anyonic_not. */
     uint32_t base = qubit * 4;
 
-    // Simple braid sequence for T-like rotation
+    // Intended braid word for a T-like rotation
     braid_anyons(reg->tree, base + 1, true);
     braid_anyons(reg->tree, base + 1, true);
 
@@ -866,8 +883,8 @@ qs_error_t anyonic_entangle(anyonic_register_t *reg,
         return QS_ERROR_INVALID_QUBIT;
     }
 
-    // Two-qubit gate via inter-qubit braiding
-    // Braid anyons from different qubits
+    /* BROKEN (v1.2.1): intended as a two-qubit gate via inter-qubit braiding.
+     * Applies a global phase and does not entangle.  See anyonic_not. */
     uint32_t base1 = qubit1 * 4;
     uint32_t base2 = qubit2 * 4;
 

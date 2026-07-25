@@ -117,5 +117,5 @@ int main(void) {
 
 ## See Also
 
-- [Topological Computing API](topological.md) - anyon models, braiding, surface codes
+- [Topological Computing API](topological.md) - anyon models, fusion trees, surface codes
 - [C API Index](index.md)
