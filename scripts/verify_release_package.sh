@@ -160,6 +160,12 @@ verify_macos_openmp_contract() {
             echo "bundled libomp install name is '$omp_id', expected @rpath/libomp.dylib" >&2
             bad=1
         fi
+        # Redistributing LLVM's runtime requires shipping its Apache-2.0
+        # WITH LLVM-exception text.
+        if [[ ! -s "$PREFIX/share/licenses/libomp/LICENSE.TXT" ]]; then
+            echo "package bundles libomp without share/licenses/libomp/LICENSE.TXT" >&2
+            bad=1
+        fi
     fi
 
     if [[ "$bad" -ne 0 ]]; then
