@@ -1252,12 +1252,24 @@ Legacy `make all` / `make test` still work for a subset of the surface.
 consuming process decides which OpenMP runtime satisfies the reference. This
 prevents the duplicate-runtime abort (`OMP: Error #15`) when the host
 application already ships its own libomp (conda, PyTorch, a different LLVM).
-Consumers without an OpenMP runtime on their rpath either place
-`libomp.dylib` next to `libquantumsim.dylib`, add libomp's directory to their
-link rpath (`-Wl,-rpath,$(brew --prefix libomp)/lib`), or configure Moonlab
-with `-DQSIM_EXTRA_RPATH=/path/to/libomp/lib` to pin a directory into the
-installed artifact. The Homebrew formula pins libomp's opt path this way;
-build-tree binaries reference Homebrew libomp absolutely and need none of it.
+
+The macOS release tarballs are self-contained: they ship `lib/libomp.dylib`
+next to `lib/libquantumsim.dylib`, so `@loader_path` resolves the reference on
+a machine with no Homebrew. The bundled copy keeps the install name
+`@rpath/libomp.dylib`, which is what makes it safe to ship: dyld satisfies an
+`@rpath` reference from the install name of an already-loaded image before it
+searches any rpath, so a process that already holds an OpenMP runtime with
+that install name reuses it and never maps a second one, in either load
+order. A uniquified (delocate-style) name would defeat that dedup.
+
+Other install paths do not get the bundled copy -- `cmake --install` must not
+shadow a package manager's libomp -- so a consumer building against a source
+install either places `libomp.dylib` next to `libquantumsim.dylib`, adds
+libomp's directory to their link rpath
+(`-Wl,-rpath,$(brew --prefix libomp)/lib`), or configures Moonlab with
+`-DQSIM_EXTRA_RPATH=/path/to/libomp/lib` to pin a directory into the installed
+artifact. The Homebrew formula pins libomp's opt path this way; build-tree
+binaries reference Homebrew libomp absolutely and need none of it.
 
 ## Documentation
 

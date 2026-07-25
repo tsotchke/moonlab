@@ -80,6 +80,17 @@ else
 fi
 
 cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR"
+
+# The installed macOS dylib references @rpath/libomp.dylib so a consumer's
+# own OpenMP runtime can satisfy it (issue #27).  A redistributable tarball
+# has to resolve that reference on a machine with no Homebrew, so it also
+# carries libomp beside libquantumsim.  The component is EXCLUDE_FROM_ALL so
+# that only the tarball gets it -- a plain `cmake --install` into a system
+# prefix must not shadow the package manager's libomp.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR" --component openmp-runtime
+fi
+
 cp "$ROOT/README.md" "$ROOT/LICENSE" "$STAGING_DIR/"
 
 required=(
@@ -107,6 +118,24 @@ done
 if ! compgen -G "$STAGING_DIR/lib/libquantumsim.*" >/dev/null; then
     echo "release package missing libquantumsim artifact" >&2
     exit 1
+fi
+
+# Every @rpath dependency of the shipped dylib must resolve inside the
+# package: INSTALL_RPATH is loader-relative only, so nothing outside
+# prefix/lib can satisfy it on a clean machine.  Catch a missing bundled
+# runtime here rather than in the consumer's dyld abort.
+if [[ "$(uname -s)" == "Darwin" ]] && command -v otool >/dev/null; then
+    for dylib in "$STAGING_DIR"/lib/libquantumsim.*.dylib; do
+        [[ -f "$dylib" && ! -L "$dylib" ]] || continue
+        while read -r dep; do
+            leaf="${dep#@rpath/}"
+            if [[ ! -e "$STAGING_DIR/lib/$leaf" ]]; then
+                echo "release package dylib references $dep but lib/$leaf is absent" >&2
+                exit 1
+            fi
+        done < <(otool -L "$dylib" | awk '/^\t@rpath\//{print $1}' \
+                    | grep -v '^@rpath/libquantumsim\.')
+    done
 fi
 
 tar -czf "$OUTPUT" -C "$STAGING_DIR" .

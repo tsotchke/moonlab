@@ -122,6 +122,57 @@ for rel in "${required[@]}"; do
     fi
 done
 
+# Issue #27: no absolute build-machine OpenMP path may survive into the
+# shipped dylib.  A baked Homebrew/vendored directory makes a consumer that
+# already carries its own OpenMP runtime map a second libomp image and abort
+# with OMP Error #15.  The reference must stay @rpath-relative, every rpath
+# entry must be loader-relative, and the bundled runtime must keep the
+# @rpath install name that lets dyld dedup against an already-loaded copy.
+verify_macos_openmp_contract() {
+    local dylib rpath_line bad=0
+    for dylib in "$PREFIX"/lib/libquantumsim.*.dylib; do
+        [[ -f "$dylib" && ! -L "$dylib" ]] || continue
+
+        while read -r dep; do
+            case "$dep" in
+                /*libomp*|/*libgomp*|/*libiomp*)
+                    echo "installed dylib carries an absolute OpenMP load command: $dep" >&2
+                    bad=1
+                    ;;
+            esac
+        done < <(otool -L "$dylib" | awk 'NR>1{print $1}')
+
+        while read -r rpath_line; do
+            case "$rpath_line" in
+                @loader_path|@loader_path/*|@executable_path|@executable_path/*) ;;
+                *)
+                    echo "installed dylib carries a non-relocatable rpath: $rpath_line" >&2
+                    bad=1
+                    ;;
+            esac
+        done < <(otool -l "$dylib" | awk '/^ *cmd LC_RPATH$/{f=1;next} f&&/^ *path /{print $2;f=0}')
+    done
+
+    if [[ -f "$PREFIX/lib/libomp.dylib" ]]; then
+        local omp_id
+        omp_id="$(otool -D "$PREFIX/lib/libomp.dylib" | tail -n 1)"
+        if [[ "$omp_id" != "@rpath/libomp.dylib" ]]; then
+            echo "bundled libomp install name is '$omp_id', expected @rpath/libomp.dylib" >&2
+            bad=1
+        fi
+    fi
+
+    if [[ "$bad" -ne 0 ]]; then
+        echo "[verify-release] macOS OpenMP runtime contract violated" >&2
+        exit 1
+    fi
+    echo "[verify-release] macOS OpenMP runtime contract OK"
+}
+
+if [[ "$(uname -s)" == "Darwin" ]] && command -v otool >/dev/null; then
+    verify_macos_openmp_contract
+fi
+
 cat >"$CONSUMER_DIR/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.20)
 project(moonlab_release_consumer C)
@@ -207,6 +258,13 @@ run_cmake_consumer() {
         -DMOONLAB_EXPECT_PREFIX="$PREFIX"
     cmake --build "$CMAKE_BUILD_DIR" -j
     run_with_library_path "$CMAKE_BUILD_DIR/moonlab_release_consumer"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # A real consumer does not set DYLD_LIBRARY_PATH.  The exported
+        # target's rpath plus the dylib's own loader-relative rpath must
+        # resolve every dependency, including the bundled OpenMP runtime.
+        echo "[verify-release] rerunning the CMake consumer without DYLD_LIBRARY_PATH"
+        env -u DYLD_LIBRARY_PATH "$CMAKE_BUILD_DIR/moonlab_release_consumer"
+    fi
 }
 
 run_pkg_config_consumer() {
