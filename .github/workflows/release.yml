@@ -259,7 +259,12 @@ jobs:
           CIBW_BUILD_FRONTEND: build
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
-          CIBW_BEFORE_ALL_LINUX: dnf install -y openblas-devel lapack-devel
+          # cibuildwheel builds manylinux (dnf) and musllinux (apk) from the
+          # same matrix entry, and before_all runs once per image.
+          CIBW_BEFORE_ALL_LINUX: >-
+            if command -v dnf >/dev/null 2>&1; then
+            dnf install -y openblas-devel lapack-devel;
+            else apk add --no-cache openblas-dev lapack-dev; fi
           CIBW_BEFORE_BUILD_WINDOWS: python -m pip install ninja
           CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja
           CIBW_TEST_REQUIRES: numpy
