@@ -321,7 +321,7 @@ Solovay-Kitaev scaling, target H, base net 52959 elements with covering radius
 | 1e-8 | 33099 | 9.133e-09 |
 | 1e-10 | 160469 | 1.663e-12 |
 
-Word length grows as $\log^{4.1}(1/\epsilon)$ measured, against
+Word length grows as $\log^{4.15}(1/\epsilon)$ measured, against
 $\log_{3/2} 5 = 3.97$ from the recursion's five-fold branching and 3/2 error
 exponent. The floor is about 1.7e-12, where rounding in a length-$5^n$ matrix
 product overtakes the recursion's own residual, so ε ≥ 1e-11 is the guaranteed

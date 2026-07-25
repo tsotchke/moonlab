@@ -616,21 +616,25 @@ static void test_fibonacci_solovay_kitaev(void) {
         }
     }
 
-    /* Length scaling: polylogarithmic in 1/epsilon. */
+    /* Length scaling: polylogarithmic in 1/epsilon.  The exponent is read off
+     * the errors actually achieved, not the ones requested -- a request that
+     * lands between two recursion depths is over-satisfied and would report a
+     * steeper slope than the recursion has. */
     uint32_t len_lo = 0, len_hi = 0;
+    double err_lo = 0.0, err_hi = 0.0;
     {
-        double a;
-        braid_word_t *w = fibonacci_compile_su2(fib, Hg, 1e-4, &a);
+        braid_word_t *w = fibonacci_compile_su2(fib, Hg, 1e-6, &err_lo);
         if (w) { len_lo = braid_word_length(w); braid_word_free(w); }
-        w = fibonacci_compile_su2(fib, Hg, 1e-10, &a);
+        w = fibonacci_compile_su2(fib, Hg, 1e-10, &err_hi);
         if (w) { len_hi = braid_word_length(w); braid_word_free(w); }
     }
-    if (len_lo > 0 && len_hi > 0) {
+    if (len_lo > 0 && len_hi > 0 && err_lo > 0.0 && err_hi > 0.0) {
         double p = log((double)len_hi / (double)len_lo) /
-                   log(log(1e10) / log(1e4));
-        CHECK(p > 2.0 && p < 6.0,
-              "word length ~ log^%.2f(1/eps) (%u at 1e-4, %u at 1e-10; "
-              "theory 5^n/(3/2)^n gives 3.97)", p, len_lo, len_hi);
+                   log(log(1.0 / err_hi) / log(1.0 / err_lo));
+        CHECK(p > 3.0 && p < 5.0,
+              "word length ~ log^%.2f(1/eps) (%u crossings at %.3e, %u at %.3e; "
+              "the recursion's 5^n / (3/2)^n gives 3.97)",
+              p, len_lo, err_lo, len_hi, err_hi);
     }
 
     anyon_system_free(fib);

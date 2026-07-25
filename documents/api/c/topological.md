@@ -517,7 +517,7 @@ Measured, target H:
 | 1e-8 | 33099 | 9.133e-09 |
 | 1e-10 | 160469 | 1.663e-12 |
 
-Word length grows as $\log^{4.1}(1/\epsilon)$ measured, against $\log_{3/2} 5 =
+Word length grows as $\log^{4.15}(1/\epsilon)$ measured, against $\log_{3/2} 5 =
 3.97$ from the recursion's 5-fold branching and 3/2 error exponent. The floor is
 about 1.7e-12: below that the rounding in a length-5ⁿ matrix product dominates
 the recursion's own residual, so ε ≥ 1e-11 is the guaranteed range.
