@@ -1260,7 +1260,9 @@ a machine with no Homebrew. The bundled copy keeps the install name
 `@rpath` reference from the install name of an already-loaded image before it
 searches any rpath, so a process that already holds an OpenMP runtime with
 that install name reuses it and never maps a second one, in either load
-order. A uniquified (delocate-style) name would defeat that dedup.
+order. A uniquified (delocate-style) name would defeat that dedup. The
+bundled runtime is LLVM's, redistributed under Apache-2.0 WITH LLVM-exception;
+its license text ships at `share/licenses/libomp/LICENSE.TXT`.
 
 Other install paths do not get the bundled copy -- `cmake --install` must not
 shadow a package manager's libomp -- so a consumer building against a source

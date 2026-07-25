@@ -125,6 +125,12 @@ fi
 # prefix/lib can satisfy it on a clean machine.  Catch a missing bundled
 # runtime here rather than in the consumer's dyld abort.
 if [[ "$(uname -s)" == "Darwin" ]] && command -v otool >/dev/null; then
+    # A redistributed third-party runtime ships with its license text.
+    if [[ -f "$STAGING_DIR/lib/libomp.dylib" \
+          && ! -f "$STAGING_DIR/share/licenses/libomp/LICENSE.TXT" ]]; then
+        echo "release package bundles libomp without share/licenses/libomp/LICENSE.TXT" >&2
+        exit 1
+    fi
     for dylib in "$STAGING_DIR"/lib/libquantumsim.*.dylib; do
         [[ -f "$dylib" && ! -L "$dylib" ]] || continue
         while read -r dep; do
