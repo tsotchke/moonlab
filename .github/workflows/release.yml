@@ -373,17 +373,21 @@ jobs:
           cargo test --manifest-path bindings/rust/moonlab/Cargo.toml
           cargo check --manifest-path bindings/rust/moonlab-tui/Cargo.toml
           cargo publish --manifest-path bindings/rust/moonlab-sys/Cargo.toml --dry-run
-          cargo package --manifest-path bindings/rust/moonlab/Cargo.toml --no-verify
-          cargo package --manifest-path bindings/rust/moonlab-tui/Cargo.toml --no-verify
+          # Workspace packaging resolves the unpublished moonlab-sys/moonlab
+          # version dependencies against the locally produced .crate files;
+          # packaging the crates individually demands the versions already
+          # exist on crates.io, which the pre-publication candidate forbids.
+          cargo package --manifest-path bindings/rust/Cargo.toml --workspace --no-verify
 
       - name: Collect exact prebuilt crate payloads
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/crates"
-          cp bindings/rust/moonlab-sys/target/package/moonlab-sys-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
-          cp bindings/rust/moonlab/target/package/moonlab-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
-          cp bindings/rust/moonlab-tui/target/package/moonlab-tui-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          # Workspace packaging emits into the shared workspace target dir.
+          cp bindings/rust/target/package/moonlab-sys-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          cp bindings/rust/target/package/moonlab-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          cp bindings/rust/target/package/moonlab-tui-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
 
       - uses: actions/setup-python@v6
         with:
