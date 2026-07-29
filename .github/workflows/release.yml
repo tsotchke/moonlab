@@ -471,7 +471,7 @@ jobs:
           name: rust-crates
           path: candidate/dist
 
-      - name: Seal exact 22-artifact candidate inventory
+      - name: Seal exact 24-artifact candidate inventory
         run: >-
           python3 scripts/verify_release_candidate.py seal
           --dist candidate/dist

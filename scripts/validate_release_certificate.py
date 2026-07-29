@@ -95,12 +95,18 @@ RELEASE_ARTIFACT_SPECS = {
     "native-windows-arm64": ("windows-arm64", "native", re.compile(r"^moonlab-v1\.2\.0-windows-arm64\.zip$")),
     "debian-amd64": ("linux-amd64", "debian", re.compile(r"^moonlab_1\.2\.0_amd64\.deb$")),
     "debian-arm64": ("linux-arm64", "debian", re.compile(r"^moonlab_1\.2\.0_arm64\.deb$")),
-    "wheel-linux-x64": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-(?:manylinux|musllinux)[A-Za-z0-9_.-]*x86_64\.whl$")),
-    "wheel-linux-arm64": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-(?:manylinux|musllinux)[A-Za-z0-9_.-]*aarch64\.whl$")),
-    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
-    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
-    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-win_amd64\.whl$")),
-    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-win_arm64\.whl$")),
+    # cibuildwheel builds moonlab's ctypes binding as a single py3-none wheel per
+    # platform, but the Linux legs produce two libc-flavored wheels per arch from
+    # the same job (manylinux glibc + musllinux musl), so each flavor is its own
+    # exactly-one kind rather than one kind matching either file.
+    "wheel-linux-x64-manylinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-x64-musllinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-arm64-manylinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-linux-arm64-musllinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
+    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
+    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_amd64\.whl$")),
+    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_arm64\.whl$")),
     "rust-moonlab-sys": ("source", "moonlab-sys", re.compile(r"^moonlab-sys-1\.2\.0\.crate$")),
     "rust-moonlab": ("source", "moonlab", re.compile(r"^moonlab-1\.2\.0\.crate$")),
     "rust-moonlab-tui": ("source", "moonlab-tui", re.compile(r"^moonlab-tui-1\.2\.0\.crate$")),

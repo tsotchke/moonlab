@@ -326,12 +326,14 @@ class CertificateFixture:
         for kind in sorted(REQUIRED_RELEASE_ARTIFACT_KINDS):
             platform, package, pattern = RELEASE_ARTIFACT_SPECS[kind]
             examples = {
-                "wheel-linux-x64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_x86_64.whl",
-                "wheel-linux-arm64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_aarch64.whl",
-                "wheel-macos-arm64": "moonlab-1.2.0-cp311-cp311-macosx_11_0_arm64.whl",
-                "wheel-macos-x64": "moonlab-1.2.0-cp311-cp311-macosx_10_15_x86_64.whl",
-                "wheel-windows-x64": "moonlab-1.2.0-cp311-cp311-win_amd64.whl",
-                "wheel-windows-arm64": "moonlab-1.2.0-cp311-cp311-win_arm64.whl",
+                "wheel-linux-x64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+                "wheel-linux-x64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_x86_64.whl",
+                "wheel-linux-arm64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+                "wheel-linux-arm64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_aarch64.whl",
+                "wheel-macos-arm64": "moonlab-1.2.0-py3-none-macosx_11_0_arm64.whl",
+                "wheel-macos-x64": "moonlab-1.2.0-py3-none-macosx_10_15_x86_64.whl",
+                "wheel-windows-x64": "moonlab-1.2.0-py3-none-win_amd64.whl",
+                "wheel-windows-arm64": "moonlab-1.2.0-py3-none-win_arm64.whl",
             }
             filename = examples.get(kind)
             if filename is None:
