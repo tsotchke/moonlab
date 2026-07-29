@@ -86,6 +86,47 @@ TARGETS=(
   abi_boundary_fuzz
 )
 
+# --- engine argv ------------------------------------------------------------
+# One construction site, and the array is never empty.  Only three of the six
+# surfaces ship a dictionary, and an optional `dict_arg=()` spliced in as
+# "${dict_arg[@]}" is an unbound-variable abort under `set -u` on bash < 4.4
+# (macOS ships 3.2), which killed the soak for every dict-less surface right
+# after the trace was truncated -- empty trace, no verdict, no explanation.
+# -rss_limit_mb caps the documented state-vector amplification so a single
+# large-qubit request is reported rather than OOM-killing CI.
+ENGINE_ARGS=()
+engine_args_for() {   # engine_args_for <target> <corpus-dir> <seconds>
+  local target="$1" corpus="$2" secs="$3"
+  ENGINE_ARGS=(
+    -max_total_time="$secs"
+    -timeout=25
+    -rss_limit_mb=4096
+    -malloc_limit_mb=2048
+    -max_len=65536
+    -artifact_prefix="$corpus/crashes-pending/"
+  )
+  if [ -f "$DICTS/$target.dict" ]; then
+    ENGINE_ARGS+=("-dict=$DICTS/$target.dict")
+  fi
+  ENGINE_ARGS+=("$corpus")
+}
+
+# Internal hook: print the engine argv for <target> and exit.  Builds nothing,
+# runs nothing, writes no trace, so tests can exercise argument construction
+# under any bash without a fuzz campaign.
+if [ "$MODE" = "--internal-engine-args" ]; then
+  hook_target="${2:-}"
+  for t in "${TARGETS[@]}"; do
+    if [ "$t" = "$hook_target" ]; then
+      engine_args_for "$hook_target" "$CORPORA/$hook_target" "${3:-300}"
+      printf '%s\n' "${ENGINE_ARGS[@]}"
+      exit 0
+    fi
+  done
+  echo "unknown target '$hook_target'; valid: ${TARGETS[*]}" >&2
+  exit 2
+fi
+
 # --- compiler selection -----------------------------------------------------
 # Prefer an explicit CC/CXX; else a Homebrew clang on macOS (its libFuzzer
 # runtime is complete); else plain clang/clang++.
@@ -220,16 +261,38 @@ PY
 # to one question.
 UMBRELLA_VALUE=""
 UMBRELLA_DETAIL=""
+UMBRELLA_EMITTED=0
+LANE_STARTED=0
 umbrella() {   # umbrella <PASS|FAIL> <detail>
   UMBRELLA_VALUE="$1"
   UMBRELLA_DETAIL="$2"
 }
+record_umbrella() {   # write the single umbrella event; idempotent
+  [ "$UMBRELLA_EMITTED" -eq 0 ] || return 0
+  UMBRELLA_EMITTED=1
+  emit fuzz_corpus_clean "$UMBRELLA_VALUE" "$UMBRELLA_DETAIL"
+}
+
+# Once the trace is truncated the lane owes a verdict, so an abort anywhere
+# after that point -- `set -u`, a killed build, a signal -- still records a
+# FAIL rather than leaving an empty trace file that reads as "nothing ran".
+on_exit() {
+  local status=$?
+  trap - EXIT
+  if [ "$LANE_STARTED" -eq 1 ] && [ "$UMBRELLA_EMITTED" -eq 0 ]; then
+    umbrella FAIL "lane aborted before recording a verdict (exit $status)"
+    record_umbrella
+  fi
+  exit "$status"
+}
+trap on_exit EXIT
 
 # ============================================================================
 # REPLAY MODE
 # ============================================================================
 run_replay() {
   : > "$TRACE"
+  LANE_STARTED=1
   configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building replay targets (-j$JOBS)"
@@ -291,6 +354,7 @@ run_soak() {
   fi
 
   : > "$TRACE"
+  LANE_STARTED=1
   configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building engine targets (-j$JOBS)"
@@ -307,17 +371,10 @@ run_soak() {
     mkdir -p "$quarantine"
     if [ ! -x "$bin" ]; then emit "$t" FAIL "missing engine binary $bin"; overall=1; continue; fi
 
-    local dict_arg=()
-    [ -f "$DICTS/$t.dict" ] && dict_arg=("-dict=$DICTS/$t.dict")
-
     echo "[run_fuzz] soaking $t for ${secs}s"
     local log="$BUILD_DIR/soak_${t}.log"
-    # -rss_limit_mb caps the documented state-vector amplification so a
-    # single large-qubit request is reported rather than OOM-killing CI.
-    "$bin" -max_total_time="$secs" -timeout=25 \
-      -rss_limit_mb=4096 -malloc_limit_mb=2048 -max_len=65536 \
-      -artifact_prefix="$quarantine/" \
-      "${dict_arg[@]}" "$corpus" >"$log" 2>&1 || true
+    engine_args_for "$t" "$corpus" "$secs"
+    "$bin" "${ENGINE_ARGS[@]}" >"$log" 2>&1 || true
 
     # New artifacts == findings.
     local arts
@@ -386,7 +443,7 @@ if [ -z "$UMBRELLA_VALUE" ]; then
 elif [ "$rc" -ne 0 ] && [ "$UMBRELLA_VALUE" = "PASS" ]; then
   umbrella FAIL "lane exited $rc with a PASS verdict recorded: $UMBRELLA_DETAIL"
 fi
-emit fuzz_corpus_clean "$UMBRELLA_VALUE" "$UMBRELLA_DETAIL"
+record_umbrella
 
 echo
 echo "[run_fuzz] trace written to $TRACE ; failures: $FAILS"

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import unittest
 
@@ -140,10 +141,21 @@ class UmbrellaVerdictContractTest(unittest.TestCase):
             "source check, so a run can never record two values for it",
         )
 
-    def test_umbrella_emit_follows_the_source_check(self) -> None:
+    def test_the_only_write_path_is_idempotent(self) -> None:
+        # Both the normal tail and the abort trap route through
+        # record_umbrella, which refuses to write a second time.
+        body = self.producer.split("record_umbrella() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn('[ "$UMBRELLA_EMITTED" -eq 0 ] || return 0', body)
+        self.assertIn("UMBRELLA_EMITTED=1", body)
+        self.assertIn("emit fuzz_corpus_clean", body)
+
+    def test_umbrella_is_recorded_after_the_source_check(self) -> None:
         check = self.producer.index('if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]')
-        emit = self.producer.index("emit fuzz_corpus_clean")
-        self.assertLess(check, emit)
+        tail_calls = [
+            m.start() for m in re.finditer(r"^record_umbrella$", self.producer, re.M)
+        ]
+        self.assertEqual(len(tail_calls), 1)
+        self.assertLess(check, tail_calls[0])
 
     def test_source_check_names_the_paths_that_moved(self) -> None:
         self.assertIn("drift=", self.producer)
@@ -162,6 +174,88 @@ class UmbrellaVerdictContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("unknown target", result.stderr)
         self.assertEqual(before, after, "a usage error must not truncate the trace")
+
+
+class EngineArgvContractTest(unittest.TestCase):
+    """The soak argv must build under every bash the fleet actually runs.
+
+    Only three of the six surfaces ship a dictionary.  The optional argument
+    used to be spliced in from a possibly-empty array as "${dict_arg[@]}",
+    which is an unbound-variable abort under `set -u` on bash < 4.4 -- the
+    version macOS ships.  Every dict-less soak died immediately after the
+    trace was truncated, so the lane produced an empty trace and no verdict.
+    """
+
+    SHELLS = [
+        shell
+        for shell in dict.fromkeys(
+            [s for s in (shutil.which("bash"), "/bin/bash") if s]
+        )
+        if Path(shell).exists()
+    ]
+
+    def targets(self) -> list[str]:
+        producer = PRODUCER.read_text(encoding="utf-8")
+        block = producer.split("TARGETS=(", 1)[1].split(")", 1)[0]
+        return [line.strip() for line in block.splitlines() if line.strip()]
+
+    def engine_argv(self, shell: str, target: str) -> list[str]:
+        result = subprocess.run(
+            [shell, str(PRODUCER), "--internal-engine-args", target, "60"],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"{shell} {target}: {result.stderr}")
+        self.assertNotIn("unbound variable", result.stderr)
+        return result.stdout.split()
+
+    def test_every_surface_builds_argv_under_every_available_bash(self) -> None:
+        self.assertTrue(self.SHELLS)
+        for shell in self.SHELLS:
+            for target in self.targets():
+                with self.subTest(shell=shell, target=target):
+                    argv = self.engine_argv(shell, target)
+                    self.assertEqual(argv[-1], f"tests/fuzz/corpora/{target}")
+                    self.assertIn(
+                        f"-artifact_prefix=tests/fuzz/corpora/{target}/crashes-pending/",
+                        argv,
+                    )
+                    self.assertIn("-max_total_time=60", argv)
+
+    def test_dictionary_is_passed_exactly_when_one_exists(self) -> None:
+        shell = self.SHELLS[0]
+        for target in self.targets():
+            with self.subTest(target=target):
+                argv = self.engine_argv(shell, target)
+                dict_path = REPO_ROOT / "tests" / "fuzz" / "dicts" / f"{target}.dict"
+                expected = [f"-dict=tests/fuzz/dicts/{target}.dict"] if dict_path.exists() else []
+                self.assertEqual([a for a in argv if a.startswith("-dict=")], expected)
+
+
+class AbortedLaneContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.producer = PRODUCER.read_text(encoding="utf-8")
+
+    def test_exit_trap_is_armed(self) -> None:
+        self.assertIn("trap on_exit EXIT", self.producer)
+
+    def test_lane_start_is_marked_wherever_the_trace_is_truncated(self) -> None:
+        # Truncating the trace is the point at which the lane owes a verdict.
+        truncations = re.findall(r"^\s*: > \"\$TRACE\"\s*$", self.producer, re.M)
+        marks = re.findall(r"^\s*LANE_STARTED=1\s*$", self.producer, re.M)
+        self.assertTrue(truncations)
+        self.assertEqual(len(marks), len(truncations))
+
+    def test_abort_after_lane_start_records_a_failure(self) -> None:
+        handler = self.producer.split("on_exit() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn('[ "$LANE_STARTED" -eq 1 ]', handler)
+        self.assertIn('[ "$UMBRELLA_EMITTED" -eq 0 ]', handler)
+        self.assertIn("umbrella FAIL", handler)
+        self.assertIn("record_umbrella", handler)
 
 
 class WorkflowBindingTest(unittest.TestCase):
