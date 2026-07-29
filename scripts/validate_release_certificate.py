@@ -361,10 +361,23 @@ def _validate_portability(
                 for member in archive.getmembers():
                     name = member.name.removeprefix("./")
                     pure = PurePosixPath(name)
+                    unsafe = pure.is_absolute() or ".." in pure.parts
+                    if member.isdir():
+                        # The hosted portability job packs each lane with
+                        # `tar -czf ... -C <lane dir> .`, so every bundle carries
+                        # the lane directory itself as a "." member. A directory
+                        # member holds no content, cannot overwrite a file, and
+                        # cannot smuggle anything past the exact-artifact-set
+                        # check below, so a safe relative one is ignored while an
+                        # absolute or traversing one still fails closed.
+                        if unsafe:
+                            raise CertificateError(
+                                f"bundle {profile_id} has unsafe or duplicate member {name}"
+                            )
+                        continue
                     if (
                         not member.isfile()
-                        or pure.is_absolute()
-                        or ".." in pure.parts
+                        or unsafe
                         or len(pure.parts) != 1
                         or name in members
                     ):

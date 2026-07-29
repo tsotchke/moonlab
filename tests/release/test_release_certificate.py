@@ -242,12 +242,47 @@ class CertificateFixture:
     def entry(self, kind: str) -> dict:
         return next(item for item in self.document["runtime_evidence"] if item["kind"] == kind)
 
+    def hosted_bundle_entries(
+        self, profile_id: str, extra: tuple = ()
+    ) -> list[tuple[tarfile.TarInfo, bytes | None]]:
+        """Members exactly as `tar -czf ... -C <lane dir> .` writes them in CI."""
+        directory = tarfile.TarInfo(".")
+        directory.type = tarfile.DIRTYPE
+        directory.mode = 0o755
+        directory.mtime = 0
+        entries: list[tuple[tarfile.TarInfo, bytes | None]] = [(directory, None)]
+        for name, data in sorted(self.bundle_members[profile_id].items()):
+            info = tarfile.TarInfo(f"./{name}")
+            info.size = len(data)
+            info.mtime = 0
+            entries.append((info, data))
+        return entries + list(extra)
+
+    def write_bundle(
+        self, profile_id: str, entries: list[tuple[tarfile.TarInfo, bytes | None]]
+    ) -> None:
+        path = self.bundle_paths[profile_id]
+        with tarfile.open(path, "w:gz") as archive:
+            for info, data in entries:
+                if data is None:
+                    archive.addfile(info)
+                else:
+                    archive.addfile(info, io.BytesIO(data))
+        bundle = next(
+            item
+            for item in self.document["portability"]["bundles"]
+            if item["profile_id"] == profile_id
+        )
+        self.rebind(bundle["file"], path)
+
     def _portability(self) -> tuple[Path, list[dict]]:
         profiles = json.loads(
             (ROOT / "release/linux_portability_profiles.v1.json").read_text(encoding="utf-8")
         )["profiles"]
         lanes: list[dict] = []
         bundles: list[dict] = []
+        self.bundle_members: dict[str, dict[str, bytes]] = {}
+        self.bundle_paths: dict[str, Path] = {}
         for index, profile in enumerate(profiles):
             members = {
                 filename: f"{profile['id']}:{name}\n".encode()
@@ -289,6 +324,8 @@ class CertificateFixture:
                     info.size = len(data)
                     info.mtime = 0
                     archive.addfile(info, io.BytesIO(data))
+            self.bundle_members[profile["id"]] = members
+            self.bundle_paths[profile["id"]] = bundle_path
             bundles.append({"profile_id": profile["id"], "file": _binding(bundle_path, self.evidence_root)})
         aggregate = {
             "schema": "moonlab.linux_portability.aggregate.v1",
@@ -585,6 +622,53 @@ class ReleaseCertificateTests(unittest.TestCase):
         for value in ({"checks": 65, "failed": 0}, [1, 2], {"nested": {"failed": 0}}, None, "SKIP"):
             with self.subTest(value=value):
                 self.assertIsNone(_verdict(value))
+
+    def test_hosted_bundle_layout_with_a_directory_member_is_accepted(self) -> None:
+        profile_id = self.fixture.document["portability"]["bundles"][0]["profile_id"]
+        self.fixture.write_bundle(profile_id, self.fixture.hosted_bundle_entries(profile_id))
+        self.fixture.write()
+        document = self.validate()
+        self.assertEqual(document["version"], "1.2.0")
+
+    def test_unsafe_bundle_members_are_still_rejected(self) -> None:
+        def directory(name: str) -> tuple[tarfile.TarInfo, None]:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
+            info.mtime = 0
+            return info, None
+
+        def symlink(name: str, target: str) -> tuple[tarfile.TarInfo, None]:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.SYMTYPE
+            info.linkname = target
+            info.mtime = 0
+            return info, None
+
+        def regular(name: str, data: bytes) -> tuple[tarfile.TarInfo, bytes]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            info.mtime = 0
+            return info, data
+
+        cases = {
+            "traversing_directory": directory("../escape"),
+            "absolute_directory": directory("/etc"),
+            "nested_traversal": directory("./lane/../../escape"),
+            "symlink": symlink("./package.tar.gz.link", "/etc/passwd"),
+            "traversing_file": regular("../escape.log", b"escape\n"),
+            "nested_file": regular("./nested/build.log", b"nested\n"),
+            "duplicate_file": regular("./build.log", b"duplicate\n"),
+        }
+        for label, extra in cases.items():
+            with self.subTest(member=label):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                profile_id = self.fixture.document["portability"]["bundles"][0]["profile_id"]
+                self.fixture.write_bundle(
+                    profile_id, self.fixture.hosted_bundle_entries(profile_id, (extra,))
+                )
+                self.assert_rejected("unsafe or duplicate member")
 
     def test_certificate_must_be_external_and_untracked(self) -> None:
         _run(
