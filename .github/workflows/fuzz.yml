@@ -11,10 +11,13 @@ name: fuzz
 #   * soak job -- scheduled + manual: runs a real libFuzzer campaign per
 #     surface (matrix) for 300s each and uploads any crash artifacts.
 #
-# tests/fuzz is self-contained; scripts/run_fuzz.sh wires
-# `add_subdirectory(tests/fuzz)` into a scratch copy of CMakeLists.txt for
-# the duration of the run (and restores it), so this workflow needs no
-# change to the tracked root CMakeLists.
+#   * contract job -- seconds: static/behavioural contracts on the producer
+#     and the corpus ignore rules (tests/release/test_fuzz_producer.py).
+#
+# tests/fuzz is wired in by the tracked root CMakeLists via
+# `if(QSIM_ENABLE_FUZZING) add_subdirectory(tests/fuzz) endif()`.
+# run_fuzz.sh refuses to self-wire that hook: a lane that edits the source it
+# is producing exact-source evidence about invalidates its own evidence.
 
 on:
   # Deep adversarial suite: nightly + on-demand, not a per-push gate. The main
@@ -32,6 +35,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contract:
+    name: lane contracts (producer + corpus hygiene)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fuzz producer and corpus-ignore contracts
+        run: python3 tests/release/test_fuzz_producer.py
+
   replay:
     name: replay-corpus (ASan+UBSan)
     # No `if:` guard: this workflow only triggers on schedule +

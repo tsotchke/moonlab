@@ -12,6 +12,10 @@
 #       fuzz_corpus_clean event to scripts/icc_traces/moonlab_fuzz.jsonl.
 #       Exits nonzero if any seed crashes a sanitizer.
 #
+#       Either mode emits fuzz_corpus_clean exactly once.  The umbrella
+#       verdict is withheld until after the end-of-lane source check, so the
+#       trace can never carry two contradictory values for one check name.
+#
 #   ./scripts/run_fuzz.sh soak <seconds>
 #       Build the libFuzzer engine binaries and run an actual campaign per
 #       target for <seconds> each, seeded from the corpus.  New crash /
@@ -126,6 +130,13 @@ print("\t".join((
 )))
 PY
 )
+# Worktree state over exactly the paths the fingerprint covers (tracked
+# modifications + non-ignored untracked files, minus the trace directory).  If
+# the end-of-lane fingerprint moves, diffing this names the offending paths
+# instead of leaving two opaque hashes to be reverse-engineered.
+SOURCE_STATE="$(git status --porcelain=v1 --untracked-files=all \
+  -- . ':(exclude)scripts/icc_traces/**' | sort)"
+
 CORPUS_SHA256="$(python3 - "$REPO_ROOT/$CORPORA" <<'PY'
 import hashlib
 from pathlib import Path
@@ -203,18 +214,29 @@ PY
   fi
 }
 
+# The umbrella verdict is recorded here and emitted once, at the very end of
+# the run, after the source-drift check has had its say.  A lane that reported
+# fuzz_corpus_clean twice with different values would be reporting two answers
+# to one question.
+UMBRELLA_VALUE=""
+UMBRELLA_DETAIL=""
+umbrella() {   # umbrella <PASS|FAIL> <detail>
+  UMBRELLA_VALUE="$1"
+  UMBRELLA_DETAIL="$2"
+}
+
 # ============================================================================
 # REPLAY MODE
 # ============================================================================
 run_replay() {
   : > "$TRACE"
-  configure || { emit fuzz_corpus_clean FAIL "cmake configure failed"; return 1; }
+  configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building replay targets (-j$JOBS)"
   local build_targets=()
   for t in "${TARGETS[@]}"; do build_targets+=("${t}_replay"); done
   if ! cmake --build "$BUILD_DIR" --target "${build_targets[@]}" -j"$JOBS" >/dev/null 2>"$BUILD_DIR/replay_build.err"; then
-    emit fuzz_corpus_clean FAIL "replay build failed (see $BUILD_DIR/replay_build.err)"
+    umbrella FAIL "replay build failed (see $BUILD_DIR/replay_build.err)"
     return 1
   fi
 
@@ -241,9 +263,9 @@ run_replay() {
   done
 
   if [ "$overall" -eq 0 ]; then
-    emit fuzz_corpus_clean PASS "all ${#TARGETS[@]} surfaces replayed clean"
+    umbrella PASS "all ${#TARGETS[@]} surfaces replayed clean"
   else
-    emit fuzz_corpus_clean FAIL "one or more surfaces crashed on the seed corpus"
+    umbrella FAIL "one or more surfaces crashed on the seed corpus"
   fi
   return "$overall"
 }
@@ -254,9 +276,10 @@ run_replay() {
 run_soak() {
   local secs="${1:-300}"
   local only="${2:-}"
-  : > "$TRACE"
 
   # Optional single-target filter so CI can fan a matrix job per surface.
+  # Validated before the trace is truncated: a usage error must not destroy
+  # the previous run's evidence, and it produces no verdict of its own.
   if [ -n "$only" ]; then
     local found=0
     for t in "${TARGETS[@]}"; do [ "$t" = "$only" ] && found=1; done
@@ -267,11 +290,12 @@ run_soak() {
     TARGETS=("$only")
   fi
 
-  configure || { emit fuzz_corpus_clean FAIL "cmake configure failed"; return 1; }
+  : > "$TRACE"
+  configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building engine targets (-j$JOBS)"
   if ! cmake --build "$BUILD_DIR" --target "${TARGETS[@]}" -j"$JOBS" >/dev/null 2>"$BUILD_DIR/engine_build.err"; then
-    emit fuzz_corpus_clean FAIL "engine build failed (see $BUILD_DIR/engine_build.err)"
+    umbrella FAIL "engine build failed (see $BUILD_DIR/engine_build.err)"
     return 1
   fi
 
@@ -307,9 +331,9 @@ run_soak() {
   done
 
   if [ "$overall" -eq 0 ]; then
-    emit fuzz_corpus_clean PASS "soak clean across ${#TARGETS[@]} surfaces (${secs}s each)"
+    umbrella PASS "soak clean across ${#TARGETS[@]} surfaces (${secs}s each)"
   else
-    emit fuzz_corpus_clean FAIL "soak surfaced crash artifacts (see corpora/*/crashes-pending)"
+    umbrella FAIL "soak surfaced crash artifacts (see corpora/*/crashes-pending)"
   fi
   return "$overall"
 }
@@ -328,6 +352,16 @@ case "$MODE" in
     ;;
 esac
 
+# Usage errors ran no lane, so there is nothing to certify either way.
+if [ "$rc" -eq 2 ]; then
+  exit 2
+fi
+
+# --- end-of-lane source check ----------------------------------------------
+# The evidence above is only worth what the snapshot it was measured on is
+# worth, so the fingerprint has to still be the one the run started from.
+# libFuzzer's own output is not source and is ignored (.gitignore: 40-hex
+# corpus units and crashes-pending/), so a clean soak keeps this stable.
 FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
 FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
 import json
@@ -336,11 +370,23 @@ print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
 PY
 )"
 if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]; then
-  : > "$TRACE"
-  FAILS=0
-  emit fuzz_corpus_clean FAIL "source changed during lane: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown}"
+  FINAL_STATE="$(git status --porcelain=v1 --untracked-files=all \
+    -- . ':(exclude)scripts/icc_traces/**' | sort)"
+  DRIFT="$(diff <(printf '%s\n' "$SOURCE_STATE") <(printf '%s\n' "$FINAL_STATE") \
+    | grep -E '^[<>]' | head -8 | tr '\n' ' ')"
+  umbrella FAIL "source changed during lane: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown} drift=${DRIFT:-<no worktree status delta; content changed in place>}"
   rc=1
 fi
+
+# The one and only umbrella verdict for this run.  Silence and a green
+# verdict on a red exit code are both failures to report, so they are failures.
+if [ -z "$UMBRELLA_VALUE" ]; then
+  umbrella FAIL "lane produced no verdict"
+  rc=1
+elif [ "$rc" -ne 0 ] && [ "$UMBRELLA_VALUE" = "PASS" ]; then
+  umbrella FAIL "lane exited $rc with a PASS verdict recorded: $UMBRELLA_DETAIL"
+fi
+emit fuzz_corpus_clean "$UMBRELLA_VALUE" "$UMBRELLA_DETAIL"
 
 echo
 echo "[run_fuzz] trace written to $TRACE ; failures: $FAILS"

@@ -122,6 +122,23 @@ __pycache__/
 # it after generation; interrupted/container builds can leave it behind.
 bindings/rust/moonlab-sys/wrapper.h
 
+# libFuzzer soak output under tests/fuzz/corpora/ (scripts/run_fuzz.sh soak).
+# The engine names each new coverage-increasing unit by the SHA-1 of its own
+# contents -- exactly 40 lowercase hex characters, no extension -- and writes
+# crash/OOM/timeout artifacts under crashes-pending/ via -artifact_prefix.
+# Both are lane *outputs*. They must stay out of the exact-source fingerprint
+# (scripts/moonlab_source_identity.py hashes non-ignored untracked files), or a
+# soak mutates the very worktree it fingerprints and the lane fails itself by
+# running.  Deliberately narrow, not `corpora/**`: the 53 tracked seeds are
+# human-named (valid.json, regress-embedded-nul-hang), so a developer adding a
+# real seed is still seen by `git status` and still moves the fingerprint.
+# Tracked seeds are unaffected regardless -- ignore rules never apply to files
+# already in the index, and the fingerprint collects them via `git ls-files
+# --cached`.  A seed that genuinely needs a 40-hex name takes `git add -f`.
+# The crash gate does not read git: run_fuzz.sh counts artifacts with `find`.
+tests/fuzz/corpora/*/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+tests/fuzz/corpora/*/crashes-pending/
+
 # ICC local telemetry (host-labeled evidence stays out of the repo)
 .icc/runtime-traces/
 .icc/dormant-applications.json
