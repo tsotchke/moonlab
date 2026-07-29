@@ -681,5 +681,28 @@ class ReleaseCertificateTests(unittest.TestCase):
             self.validate()
 
 
+class ReleaseCertificateSchemaTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.schema = json.loads(
+            (ROOT / "release/release_certificate.schema.v1.json").read_text(encoding="utf-8")
+        )
+
+    def test_release_artifact_bounds_track_the_spec_table(self) -> None:
+        expected = len(RELEASE_ARTIFACT_SPECS)
+        self.assertEqual(expected, len(REQUIRED_RELEASE_ARTIFACT_KINDS))
+        artifacts = self.schema["properties"]["release_artifacts"]
+        self.assertEqual(artifacts["minItems"], expected)
+        self.assertEqual(artifacts["maxItems"], expected)
+
+    def test_runtime_evidence_bounds_and_kinds_track_the_lane_contract(self) -> None:
+        runtime = self.schema["properties"]["runtime_evidence"]
+        self.assertEqual(runtime["minItems"], len(REQUIRED_RUNTIME_KINDS))
+        self.assertEqual(runtime["maxItems"], len(REQUIRED_RUNTIME_KINDS))
+        kinds = self.schema["$defs"]["evidence"]["properties"]["kind"]["enum"]
+        self.assertEqual(len(kinds), len(set(kinds)))
+        self.assertEqual(set(kinds), set(REQUIRED_RUNTIME_KINDS))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
