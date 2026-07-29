@@ -453,6 +453,25 @@ def _declared_hashes(value: Any) -> set[str]:
     return hashes
 
 
+def _verdict(value: Any) -> bool | None:
+    """Classify one trace verdict field as pass, fail, or "carries no verdict".
+
+    Producers spell a verdict either in ``status`` or in ``value``, and lanes
+    that report counters -- ``run_cross_diff.sh`` records ``{"checks": 65,
+    "failed": 0, ...}`` as the differential ``value`` by design -- put a
+    structured object where a scalar token would otherwise sit. A structured
+    object is not a verdict: it must neither pass a record on its own nor
+    condemn one, and it must never be hashed against a set of tokens. Equality
+    against each token keeps unhashable values safe while preserving the exact
+    scalar semantics (``0``/``False`` fail, ``1``/``True`` pass).
+    """
+    if any(value == token for token in (False, "FAIL", "ERROR")):
+        return False
+    if any(value == token for token in (True, "PASS")):
+        return True
+    return None
+
+
 def _validate_evidence_entry(
     entry: dict[str, Any], certificate_path: Path, expected_source: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -472,10 +491,13 @@ def _validate_evidence_entry(
         }
         _source(record_source, f"{kind} manifest record source")
         _assert_same_tree(record_source, expected_source, f"{kind} manifest record")
-        verdicts = (record.get("status"), record.get("value"))
-        if any(value in {"FAIL", "ERROR", False} for value in verdicts):
+        # ``status`` stays authoritative: a failing status condemns the record
+        # whatever the value says, and a passing status carries a record whose
+        # value is a structured counter object rather than a scalar token.
+        verdicts = (_verdict(record.get("status")), _verdict(record.get("value")))
+        if False in verdicts:
             raise CertificateError(f"{kind} manifest contains a failing record")
-        if not any(value in {"PASS", True} for value in verdicts):
+        if True not in verdicts:
             raise CertificateError(f"{kind} manifest contains a non-passing record")
         if not isinstance(record.get("name"), str) or not record["name"]:
             raise CertificateError(f"{kind} manifest record is missing an event name")

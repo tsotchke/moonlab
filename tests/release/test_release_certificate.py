@@ -25,9 +25,33 @@ from validate_release_certificate import (  # noqa: E402
     REQUIRED_RELEASE_ARTIFACT_KINDS,
     REQUIRED_RUNTIME_KINDS,
     CertificateError,
+    _verdict,
     source_identity,
     validate_certificate,
 )
+
+# The differential lane records structured counter objects as its ``value`` --
+# this mirrors what scripts/run_cross_diff.sh actually writes to
+# scripts/icc_traces/moonlab_differential.jsonl, so the fixture exercises the
+# real record shape instead of string-only values.
+STRUCTURED_DIFFERENTIAL_VALUES = {
+    "cross_backend_differential": {
+        "checks": 65, "failed": 0, "quarantined": 0, "skipped": 0, "cases": 50,
+        "backends": {"dense": 50, "tn_mps": 50, "clifford": 15, "gpu": 0},
+    },
+    "reference_oracle_agreement": {
+        "checks": 330, "failed": 0, "quarantined": 0, "skipped": 0, "cases": 50,
+    },
+    "cross_binding_python": {"cases": 50, "failed": 0, "reason": "ok"},
+    "cross_binding_rust": {"cases": 50, "failed": 0, "reason": "ok"},
+    "cross_binding_js": {"cases": 50, "failed": 0, "reason": "ok"},
+    "moonlab_differential": {
+        "profile": "quick", "bindings_exercised": 3, "bindings_skipped": 0, "corpus_cases": 50,
+    },
+    "corpus_artifacts_validated": {
+        "artifacts": ["corpus.txt", "corpus.json"], "cases": 50, "snippet": "corpus ok",
+    },
+}
 
 
 def _run(repo: Path, *arguments: str) -> str:
@@ -196,6 +220,28 @@ class CertificateFixture:
         binding.clear()
         binding.update(_binding(path, self.evidence_root))
 
+    def records(self, entry: dict) -> list[dict]:
+        path = self.evidence_root / entry["manifest"]["path"]
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def rewrite_records(self, entry: dict, records: list[dict]) -> None:
+        path = self.evidence_root / entry["manifest"]["path"]
+        path.write_text(
+            "\n".join(
+                json.dumps(record, sort_keys=True, separators=(",", ":")) for record in records
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.rebind(entry["manifest"], path)
+
+    def entry(self, kind: str) -> dict:
+        return next(item for item in self.document["runtime_evidence"] if item["kind"] == kind)
+
     def _portability(self) -> tuple[Path, list[dict]]:
         profiles = json.loads(
             (ROOT / "release/linux_portability_profiles.v1.json").read_text(encoding="utf-8")
@@ -277,6 +323,9 @@ class CertificateFixture:
                     **self.source,
                     "artifact_sha256": artifact_binding["sha256"],
                 }
+            if kind == "differential":
+                record["status"] = "PASS"
+                record["value"] = STRUCTURED_DIFFERENTIAL_VALUES[name]
             if kind == "mpi":
                 record.update({
                     "n": 33,
@@ -495,6 +544,47 @@ class ReleaseCertificateTests(unittest.TestCase):
     def test_tag_target_mismatch_is_rejected(self) -> None:
         self.fixture.document["tag"]["target"] = "a" * 40
         self.assert_rejected("tag assertion")
+
+    def test_structured_lane_values_are_carried_by_an_authoritative_status(self) -> None:
+        entry = self.fixture.entry("differential")
+        records = self.fixture.records(entry)
+        self.assertTrue(any(isinstance(record["value"], dict) for record in records))
+        document = self.validate()
+        self.assertEqual(document["version"], "1.2.0")
+
+    def test_structured_lane_value_alone_is_not_a_passing_verdict(self) -> None:
+        for structured in ({"checks": 65, "failed": 0}, [{"checks": 65}], []):
+            with self.subTest(value=structured):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                entry = self.fixture.entry("differential")
+                records = self.fixture.records(entry)
+                records[0].pop("status")
+                records[0]["value"] = structured
+                self.fixture.rewrite_records(entry, records)
+                self.assert_rejected("non-passing record")
+
+    def test_failing_status_beside_a_structured_value_is_rejected(self) -> None:
+        for status in ("FAIL", "ERROR", False):
+            with self.subTest(status=status):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                entry = self.fixture.entry("differential")
+                records = self.fixture.records(entry)
+                records[0]["status"] = status
+                self.fixture.rewrite_records(entry, records)
+                self.assert_rejected("failing record")
+
+    def test_verdict_classification_never_hashes_structured_values(self) -> None:
+        for value in ("PASS", True, 1):
+            with self.subTest(value=value):
+                self.assertIs(_verdict(value), True)
+        for value in ("FAIL", "ERROR", False, 0):
+            with self.subTest(value=value):
+                self.assertIs(_verdict(value), False)
+        for value in ({"checks": 65, "failed": 0}, [1, 2], {"nested": {"failed": 0}}, None, "SKIP"):
+            with self.subTest(value=value):
+                self.assertIsNone(_verdict(value))
 
     def test_certificate_must_be_external_and_untracked(self) -> None:
         _run(
