@@ -352,8 +352,15 @@ jobs:
 
       - name: Install Rust and native runtime dependencies
         run: |
-          rustup toolchain install 1.86.0 --profile minimal
-          rustup default 1.86.0
+          # cargo 1.86 (the crates' declared MSRV, still enforced in ci.yml)
+          # resolves path-dependency versions against the registry even
+          # under `cargo package --workspace`, so it can't package this
+          # pre-publication workspace: moonlab-sys/moonlab aren't on
+          # crates.io yet. `cargo package --workspace` packaging members
+          # against each other's freshly produced .crate files stabilized
+          # in cargo 1.90; 1.94.0 is the newest verified locally.
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
           sudo apt-get update
           sudo apt-get install -y libclang-dev libomp-dev libopenblas-dev liblapacke-dev libssl-dev pkg-config
 
@@ -766,8 +773,12 @@ jobs:
 
       - name: Install cargo for crates.io index polling
         run: |
-          rustup toolchain install 1.86.0 --profile minimal
-          rustup default 1.86.0
+          # Kept aligned with the rust-crates job's toolchain (see the
+          # comment there); this job only runs `cargo info`, which has no
+          # 1.90 dependency, but there's no reason to run a second pinned
+          # version through the same release pipeline.
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
 
       - name: Publish the certified crate bytes in dependency order
         env:
