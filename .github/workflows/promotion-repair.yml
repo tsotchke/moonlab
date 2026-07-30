@@ -436,13 +436,32 @@ jobs:
           grep -F "sha256 \"${sha256}\"" packaging/homebrew/moonlab.rb
 
       - name: Prepare tap checkout
+        id: prepare-tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.verify.outputs.tag }}
         run: |
+          set -euo pipefail
           gh auth setup-git
           gh repo clone tsotchke/homebrew-moonlab tap
           mkdir -p tap/Formula
           cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
+          git -C tap config user.name "Moonlab Release Bot"
+          git -C tap config user.email "actions@github.com"
+          git -C tap add Formula/moonlab.rb
+          git -C tap diff --cached --check
+          # An empty stage means the tap already carries this exact url and
+          # sha256, so there is nothing new to commit. brew still needs the
+          # formula committed locally (brew tap clones ./tap and only sees
+          # committed content), and it already is, from the prior commit
+          # this same content was cloned from.
+          if git -C tap diff --cached --quiet; then
+            echo "tap already serves the ${TAG} formula, nothing to commit"
+            echo "formula-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git -C tap commit -m "moonlab ${TAG}"
+            echo "formula-changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Audit and install formula from source
         run: |
@@ -455,19 +474,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAG: ${{ needs.verify.outputs.tag }}
+          FORMULA_CHANGED: ${{ steps.prepare-tap.outputs.formula-changed }}
         run: |
           set -euo pipefail
-          git -C tap config user.name "Moonlab Release Bot"
-          git -C tap config user.email "actions@github.com"
-          git -C tap add Formula/moonlab.rb
-          git -C tap diff --cached --check
-          # An empty stage means the tap already carries this exact url and
-          # sha256, so the audited formula is live and there is nothing to push.
-          if git -C tap diff --cached --quiet; then
+          if [[ "$FORMULA_CHANGED" != "true" ]]; then
             echo "tap already serves the ${TAG} formula, skipping push"
             exit 0
           fi
-          git -C tap commit -m "moonlab ${TAG}"
           git -C tap push origin HEAD:main
 
   finalize:
