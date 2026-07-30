@@ -189,7 +189,7 @@ pnpm build
 ```
 
 ```typescript
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 const s = await QuantumState.create({ numQubits: 2 });
 s.h(0).cnot(0, 1);
@@ -239,7 +239,7 @@ print(probs)   # [0.5, 0.0, 0.0, 0.5]
 
 The Rust and JS bindings expose the same wire protocol via
 `moonlab::control_plane::submit_circuit` and
-`@moonlab/quantum-core/control-plane` respectively. The serialized form is the
+`@tsotchkecorp/moonlab/control-plane` respectively. The serialized form is the
 moonlab-circuit v1 text format, identical across all bindings.
 
 Open `http://127.0.0.1:9091` to watch shot rate, gate latency, and worker

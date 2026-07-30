@@ -99,14 +99,14 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQSIM_BUILD_TESTS=OFF
           cmake --build build --parallel 2
 
-      - name: Build @moonlab/quantum-core bundle (best effort; JS leg skips if this fails)
+      - name: Build @tsotchkecorp/moonlab bundle (best effort; JS leg skips if this fails)
         continue-on-error: true
         working-directory: bindings/javascript
         run: |
           set -eux
           corepack enable || npm install -g pnpm
           pnpm install --frozen-lockfile || pnpm install
-          pnpm --filter @moonlab/quantum-core run build:ts
+          pnpm --filter @tsotchkecorp/moonlab run build:ts
           # Reuse the tracked emscripten module rather than rebuilding WASM.
           cp packages/core/../../demo/public/moonlab.js  packages/core/dist/moonlab.js  || true
           cp packages/core/../../demo/public/moonlab.wasm packages/core/dist/moonlab.wasm || true

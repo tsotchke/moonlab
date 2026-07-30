@@ -16,8 +16,8 @@ import {
 import {
   AmplitudeBars as AmplitudeBarsViz,
   type AmplitudeBarsOptions,
-} from '@moonlab/quantum-viz';
-import type { Complex } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import type { Complex } from '@tsotchkecorp/moonlab';
 
 export const AmplitudeBars = defineComponent({
   name: 'AmplitudeBars',

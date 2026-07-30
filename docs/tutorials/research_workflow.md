@@ -93,7 +93,7 @@ For circuits with substantial Clifford structure, CA-MPS can run
 with bond-dim that's a fraction of what plain MPS needs.
 
 ```ts
-import { CaMps, varDRun, Warmstart } from '@moonlab/core';
+import { CaMps, varDRun, Warmstart } from '@tsotchkecorp/moonlab';
 
 const N = 12;
 const s = await CaMps.create(N, 16);

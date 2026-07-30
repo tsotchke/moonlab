@@ -1,5 +1,5 @@
 /**
- * @moonlab/quantum-vue
+ * @tsotchkecorp/moonlab-vue
  *
  * Vue 3 composables and components for quantum computing applications.
  *
@@ -12,7 +12,7 @@
  *   BlochSphere,
  *   AmplitudeBars,
  *   CircuitDiagram
- * } from '@moonlab/quantum-vue';
+ * } from '@tsotchkecorp/moonlab-vue';
  *
  * const { amplitudes, numQubits, applyGate } = useQuantumState({ numQubits: 2 });
  * const { circuit, addGate } = useCircuit({ numQubits: 2 });
@@ -72,7 +72,7 @@ export {
   Circuit,
   type Complex,
   type QuantumStateOptions,
-} from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab';
 
 // ============================================================================
 // Version Info

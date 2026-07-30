@@ -23,7 +23,7 @@
  *
  * @example
  * ```typescript
- * import { TdvpEngine, EvolutionType } from '@moonlab/quantum-core';
+ * import { TdvpEngine, EvolutionType } from '@tsotchkecorp/moonlab';
  *
  * const engine = await TdvpEngine.createTfim({
  *   numSites: 8,

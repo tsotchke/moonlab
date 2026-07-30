@@ -81,8 +81,8 @@ gate_cnot(state, 0, 1);
 
 ### JavaScript
 ```javascript
-// npm install @moonlab/quantum-core @moonlab/quantum-algorithms
-import { QuantumState } from '@moonlab/quantum-core';
+// npm install @tsotchkecorp/moonlab @tsotchkecorp/moonlab-algorithms
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 const state = await QuantumState.create({ numQubits: 2 });
 state.h(0).cnot(0, 1);

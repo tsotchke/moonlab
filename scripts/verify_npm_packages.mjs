@@ -9,15 +9,25 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const packDir = resolve(process.argv[2] ?? join(root, 'dist/npm'));
 const version = readFileSync(join(root, 'VERSION.txt'), 'utf8').trim();
-const expected = ['core', 'algorithms', 'viz', 'react', 'vue'];
+// Workspace directory -> published npm name. The core package is the
+// unsuffixed @tsotchkecorp/moonlab; the other four carry their role as the
+// suffix. `npm pack` flattens the scope separator to a dash, so
+// @tsotchkecorp/moonlab-viz packs as tsotchkecorp-moonlab-viz-<version>.tgz.
+const expected = new Map([
+  ['core', '@tsotchkecorp/moonlab'],
+  ['algorithms', '@tsotchkecorp/moonlab-algorithms'],
+  ['viz', '@tsotchkecorp/moonlab-viz'],
+  ['react', '@tsotchkecorp/moonlab-react'],
+  ['vue', '@tsotchkecorp/moonlab-vue'],
+]);
 const tarballs = readdirSync(packDir)
   .filter((name) => name.endsWith('.tgz'))
   .map((name) => join(packDir, name));
 
-assert.equal(tarballs.length, expected.length, 'expected exactly five npm tarballs');
+assert.equal(tarballs.length, expected.size, 'expected exactly five npm tarballs');
 
-for (const packageName of expected) {
-  const suffix = `moonlab-quantum-${packageName}-${version}.tgz`;
+for (const [packageName, registryName] of expected) {
+  const suffix = `${registryName.slice(1).replace('/', '-')}-${version}.tgz`;
   const tarball = tarballs.find((candidate) => basename(candidate) === suffix);
   assert.ok(tarball, `missing ${suffix}`);
 
@@ -26,14 +36,14 @@ for (const packageName of expected) {
       encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' },
     },
   ));
-  assert.equal(manifest.name, `@moonlab/quantum-${packageName}`);
+  assert.equal(manifest.name, registryName);
   assert.equal(manifest.version, version);
   assert.equal(manifest.license, 'MIT');
   assert.equal(manifest.publishConfig?.access, 'public');
   assert.ok(manifest.exports?.['.']?.types, `${manifest.name} lacks typed exports`);
 
   for (const [dependency, dependencyVersion] of Object.entries(manifest.dependencies ?? {})) {
-    if (dependency.startsWith('@moonlab/')) {
+    if (dependency.startsWith('@tsotchkecorp/')) {
       assert.equal(dependencyVersion, version, `${manifest.name} has a drifting dependency`);
     }
   }
@@ -68,11 +78,11 @@ try {
 
   writeFileSync(join(consumer, 'esm-smoke.mjs'), `
 import assert from 'node:assert/strict';
-import * as core from '@moonlab/quantum-core';
-import * as algorithms from '@moonlab/quantum-algorithms';
-import * as viz from '@moonlab/quantum-viz';
-import * as react from '@moonlab/quantum-react';
-import * as vue from '@moonlab/quantum-vue';
+import * as core from '@tsotchkecorp/moonlab';
+import * as algorithms from '@tsotchkecorp/moonlab-algorithms';
+import * as viz from '@tsotchkecorp/moonlab-viz';
+import * as react from '@tsotchkecorp/moonlab-react';
+import * as vue from '@tsotchkecorp/moonlab-vue';
 for (const api of [core, algorithms, viz, react, vue]) assert.equal(api.VERSION, '${version}');
 assert.equal(viz.indexToBitString(3, 2), '11');
 const state = await core.QuantumState.create({ numQubits: 2 });
@@ -87,11 +97,11 @@ try {
 
   writeFileSync(join(consumer, 'cjs-smoke.cjs'), `
 const assert = require('node:assert/strict');
-const core = require('@moonlab/quantum-core');
-const algorithms = require('@moonlab/quantum-algorithms');
-const viz = require('@moonlab/quantum-viz');
-const react = require('@moonlab/quantum-react');
-const vue = require('@moonlab/quantum-vue');
+const core = require('@tsotchkecorp/moonlab');
+const algorithms = require('@tsotchkecorp/moonlab-algorithms');
+const viz = require('@tsotchkecorp/moonlab-viz');
+const react = require('@tsotchkecorp/moonlab-react');
+const vue = require('@tsotchkecorp/moonlab-vue');
 (async () => {
   for (const api of [core, algorithms, viz, react, vue]) assert.equal(api.VERSION, '${version}');
   const state = await core.QuantumState.create({ numQubits: 1 });
@@ -105,11 +115,11 @@ const vue = require('@moonlab/quantum-vue');
 `);
 
   writeFileSync(join(consumer, 'types-smoke.ts'), `
-import { QuantumState, type Complex } from '@moonlab/quantum-core';
-import { Grover } from '@moonlab/quantum-algorithms';
-import { amplitudesToBlochState } from '@moonlab/quantum-viz';
-import { BlochSphere as ReactBlochSphere } from '@moonlab/quantum-react';
-import { BlochSphere as VueBlochSphere } from '@moonlab/quantum-vue';
+import { QuantumState, type Complex } from '@tsotchkecorp/moonlab';
+import { Grover } from '@tsotchkecorp/moonlab-algorithms';
+import { amplitudesToBlochState } from '@tsotchkecorp/moonlab-viz';
+import { BlochSphere as ReactBlochSphere } from '@tsotchkecorp/moonlab-react';
+import { BlochSphere as VueBlochSphere } from '@tsotchkecorp/moonlab-vue';
 const zero: Complex = { real: 1, imag: 0 };
 void QuantumState; void Grover; void ReactBlochSphere; void VueBlochSphere;
 amplitudesToBlochState([zero, { real: 0, imag: 0 }]);

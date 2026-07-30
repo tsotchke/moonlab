@@ -110,11 +110,11 @@ RELEASE_ARTIFACT_SPECS = {
     "rust-moonlab-sys": ("source", "moonlab-sys", re.compile(r"^moonlab-sys-1\.2\.0\.crate$")),
     "rust-moonlab": ("source", "moonlab", re.compile(r"^moonlab-1\.2\.0\.crate$")),
     "rust-moonlab-tui": ("source", "moonlab-tui", re.compile(r"^moonlab-tui-1\.2\.0\.crate$")),
-    "npm-core": ("source", "@moonlab/quantum-core", re.compile(r"^moonlab-quantum-core-1\.2\.0\.tgz$")),
-    "npm-algorithms": ("source", "@moonlab/quantum-algorithms", re.compile(r"^moonlab-quantum-algorithms-1\.2\.0\.tgz$")),
-    "npm-vue": ("source", "@moonlab/quantum-vue", re.compile(r"^moonlab-quantum-vue-1\.2\.0\.tgz$")),
-    "npm-viz": ("source", "@moonlab/quantum-viz", re.compile(r"^moonlab-quantum-viz-1\.2\.0\.tgz$")),
-    "npm-react": ("source", "@moonlab/quantum-react", re.compile(r"^moonlab-quantum-react-1\.2\.0\.tgz$")),
+    "npm-core": ("source", "@tsotchkecorp/moonlab", re.compile(r"^tsotchkecorp-moonlab-1\.2\.0\.tgz$")),
+    "npm-algorithms": ("source", "@tsotchkecorp/moonlab-algorithms", re.compile(r"^tsotchkecorp-moonlab-algorithms-1\.2\.0\.tgz$")),
+    "npm-vue": ("source", "@tsotchkecorp/moonlab-vue", re.compile(r"^tsotchkecorp-moonlab-vue-1\.2\.0\.tgz$")),
+    "npm-viz": ("source", "@tsotchkecorp/moonlab-viz", re.compile(r"^tsotchkecorp-moonlab-viz-1\.2\.0\.tgz$")),
+    "npm-react": ("source", "@tsotchkecorp/moonlab-react", re.compile(r"^tsotchkecorp-moonlab-react-1\.2\.0\.tgz$")),
 }
 REQUIRED_RELEASE_ARTIFACT_KINDS = frozenset(RELEASE_ARTIFACT_SPECS)
 REQUIRED_HOSTED_CANDIDATE_JOBS = frozenset({

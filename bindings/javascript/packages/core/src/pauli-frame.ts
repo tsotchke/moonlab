@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * import { pauliFrame } from '@moonlab/quantum-core';
+ * import { pauliFrame } from '@tsotchkecorp/moonlab';
  *
  * // 1000 shots of a 3-qubit GHZ circuit.
  * const ops = [

@@ -1,4 +1,4 @@
-import{r as l,j as a}from"./index-BnghuY-9.js";import{e as C,a as E,r as w}from"./moonlabClient-D2nZaPpU.js";const c=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@moonlab/quantum-core';
+import{r as l,j as a}from"./index-BnghuY-9.js";import{e as C,a as E,r as w}from"./moonlabClient-D2nZaPpU.js";const c=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -14,7 +14,7 @@ const probs = state.getProbabilities();
 console.log(probs);  // [0.5, 0, 0, 0.5]
 
 // Measuring qubit 0 instantly determines qubit 1
-state.dispose();`,runnable:!0},{id:"superposition",title:"Uniform Superposition",description:"Create equal superposition over all basis states using Hadamard gates",code:`import { QuantumState } from '@moonlab/quantum-core';
+state.dispose();`,runnable:!0},{id:"superposition",title:"Uniform Superposition",description:"Create equal superposition over all basis states using Hadamard gates",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 3-qubit state (8 basis states)
 const state = await QuantumState.create({ numQubits: 3 });
@@ -30,8 +30,8 @@ console.log(probs);  // [0.125, 0.125, ..., 0.125]
 const total = probs.reduce((a, b) => a + b, 0);
 console.log(\`Total probability: \${total}\`);  // 1.0
 
-state.dispose();`,runnable:!0},{id:"grover",title:"Grover's Search Algorithm",description:"Find a marked item in an unsorted database with quadratic speedup",code:`import { QuantumState } from '@moonlab/quantum-core';
-import { Grover } from '@moonlab/quantum-algorithms';
+state.dispose();`,runnable:!0},{id:"grover",title:"Grover's Search Algorithm",description:"Find a marked item in an unsorted database with quadratic speedup",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
+import { Grover } from '@tsotchkecorp/moonlab-algorithms';
 
 // Search in a space of 1024 items (10 qubits)
 const grover = await Grover.create({
@@ -46,7 +46,7 @@ console.log(\`Found: \${result.foundState}\`);          // 42
 console.log(\`Success prob: \${result.successProbability}\`);  // ~96.9%
 console.log(\`Oracle calls: \${result.oracleCalls}\`);  // ~25 (vs 1024 classically!)
 
-grover.dispose();`,runnable:!0},{id:"phase-kickback",title:"Phase Kickback",description:"Demonstrate the phase kickback phenomenon used in quantum algorithms",code:`import { QuantumState } from '@moonlab/quantum-core';
+grover.dispose();`,runnable:!0},{id:"phase-kickback",title:"Phase Kickback",description:"Demonstrate the phase kickback phenomenon used in quantum algorithms",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -69,7 +69,7 @@ state.h(0);
 const probs = state.getProbabilities();
 console.log(probs);
 
-state.dispose();`,runnable:!0},{id:"quantum-teleportation",title:"Quantum Teleportation",description:"Teleport a quantum state using entanglement and classical communication",code:`import { QuantumState } from '@moonlab/quantum-core';
+state.dispose();`,runnable:!0},{id:"quantum-teleportation",title:"Quantum Teleportation",description:"Teleport a quantum state using entanglement and classical communication",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // 3 qubits: q0=state to teleport, q1,q2=entangled pair
 const state = await QuantumState.create({ numQubits: 3 });
@@ -94,7 +94,7 @@ if (m0) state.z(2);
 // q2 now contains the original state |ψ⟩!
 console.log('Teleportation complete!');
 
-state.dispose();`,runnable:!0},{id:"vqe-h2",title:"VQE: H₂ Ground State Energy",description:"Find the ground state energy of hydrogen molecule using variational quantum eigensolver",code:`import { VQE, createH2Hamiltonian } from '@moonlab/quantum-algorithms';
+state.dispose();`,runnable:!0},{id:"vqe-h2",title:"VQE: H₂ Ground State Energy",description:"Find the ground state energy of hydrogen molecule using variational quantum eigensolver",code:`import { VQE, createH2Hamiltonian } from '@tsotchkecorp/moonlab-algorithms';
 
 // Create H2 Hamiltonian at bond distance 0.74 Å
 const hamiltonian = createH2Hamiltonian({

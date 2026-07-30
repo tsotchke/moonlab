@@ -170,9 +170,10 @@ wrapper, with end-to-end integration tests gated by CI.
   `moonlab_abi_version` + DMRG / CA-MPS / Z2-LGT shims to JS.
 
 - **JS binding parity (v0.5.4 - v0.5.6)** — Bell tests / Grover /
-  VQE / QAOA / topology are all callable from `@moonlab/quantum-
-  core` now.  Hardware entropy backed by `crypto.getRandomValues()`
-  via a WASM-only `hardware_entropy_wasm.c` shim unblocks every
+  VQE / QAOA / topology are all callable from
+  `@tsotchkecorp/moonlab` now.  Hardware entropy backed by
+  `crypto.getRandomValues()` via a WASM-only
+  `hardware_entropy_wasm.c` shim unblocks every
   shot-noise-sampling C entry point.  Eight topological-invariant
   helpers in `topology.ts` cover QWZ Chern (3 integrators), SSH
   winding, Kitaev BdG Z_2, Kane-Mele / BHZ Z_2, Hofstadter sub-band
@@ -312,7 +313,7 @@ brew install moonlab
 pip install moonlab
 
 # JavaScript/WebAssembly core
-npm install @moonlab/quantum-core
+npm install @tsotchkecorp/moonlab
 
 # Rust TUI (the Homebrew SDK supplies the native library)
 cargo install moonlab-tui
@@ -1035,13 +1036,13 @@ inverse noise channels.
 
 A few modules ship in the tree without a dedicated walkthrough above.
 
-- **`@moonlab/quantum-algorithms`** (npm) -- a lean, browser-friendly
-  package built on `@moonlab/quantum-core`'s WASM state vector. Ships a
+- **`@tsotchkecorp/moonlab-algorithms`** (npm) -- a lean, browser-friendly
+  package built on `@tsotchkecorp/moonlab`'s WASM state vector. Ships a
   `Grover` class (WASM-backed amplitude amplification, up to 26 qubits) and
   an H2-only `VQE` class that runs a classical grid-search + refinement
   optimizer over a closed-form single-parameter H2 UCCSD ansatz -- it does
   not call into the WASM state vector and does not implement QAOA.
-- **`@moonlab/quantum-viz`** (npm) -- Canvas 2D and WebGL 3D quantum-state
+- **`@tsotchkecorp/moonlab-viz`** (npm) -- Canvas 2D and WebGL 3D quantum-state
   visualizations (`BlochSphere`, `AmplitudeBars`, `CircuitDiagram`) usable
   standalone, independent of the React/Vue framework bindings.
 - **`moonlab.ml`** (Python) -- quantum feature maps (angle / amplitude /
@@ -1127,7 +1128,7 @@ fn main() {
 ### JavaScript (React)
 
 ```jsx
-import { useQuantumState, BlochSphere } from '@moonlab/quantum-react';
+import { useQuantumState, BlochSphere } from '@tsotchkecorp/moonlab-react';
 
 function QuantumVisualizer() {
     const { amplitudes, applyGate, loading } = useQuantumState({ numQubits: 1 });
@@ -1160,7 +1161,7 @@ numQubits, initialize, reset, applyGate, measure, measureAll, refresh, dispose
 </template>
 
 <script setup>
-import { useQuantumState, useCircuit } from '@moonlab/quantum-vue';
+import { useQuantumState, useCircuit } from '@tsotchkecorp/moonlab-vue';
 
 const { amplitudes, numQubits, applyGate } = useQuantumState({ numQubits: 2 });
 const { circuit, addGate } = useCircuit({ numQubits: 2 });
@@ -1215,7 +1216,7 @@ adversarial audit that produced this list lives in
   x86-64 NVIDIA fleet nodes at release time; cuQuantum remains an
   optional, separately provisioned backend.
 - **WebGPU / JS**: the CI `wasm-js-tests` job builds moonlab.wasm and the
-  TS `@moonlab/quantum-core` package, runs the full vitest unit +
+  TS `@tsotchkecorp/moonlab` package, runs the full vitest unit +
   integration suites against the fresh module, and runs the WebGPU
   unified smoke.  Plain node has no WebGPU runtime, so the smoke
   verifies backend selection + fallback (backend=none), not real GPU

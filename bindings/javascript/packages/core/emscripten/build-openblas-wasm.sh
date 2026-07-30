@@ -91,5 +91,5 @@ If the Moonlab WASM link fails to find BLAS/LAPACKE:
   - Ensure the bundle includes libopenblas.a (with LAPACK/LAPACKE symbols) and cblas/lapacke headers.
   - Re-run the WASM build, e.g.:
       cd bindings/javascript
-      pnpm --filter @moonlab/quantum-core build
+      pnpm --filter @tsotchkecorp/moonlab build
 EOF

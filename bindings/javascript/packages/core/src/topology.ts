@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * import { qwzChern, sshWinding, kaneMeleZ2 } from '@moonlab/quantum-core';
+ * import { qwzChern, sshWinding, kaneMeleZ2 } from '@tsotchkecorp/moonlab';
  *
  * console.log(await qwzChern({ m: 1.0, n: 16 }));      // -1 (topological)
  * console.log(await sshWinding({ t1: 0.5, t2: 1.0 })); // 1 (topological)

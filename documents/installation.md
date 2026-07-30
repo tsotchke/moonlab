@@ -163,11 +163,11 @@ pnpm build
 ### In a Web Project
 
 ```bash
-npm install @moonlab/quantum-core @moonlab/quantum-algorithms @moonlab/quantum-viz
+npm install @tsotchkecorp/moonlab @tsotchkecorp/moonlab-algorithms @tsotchkecorp/moonlab-viz
 ```
 
 ```javascript
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 const state = await QuantumState.create({ numQubits: 4 });
 ```
 

@@ -101,7 +101,7 @@ gauge_warmstart(&mut state, &generators, /*num_gens=*/2)?;
 ## Calling it from JS / WASM
 
 ```typescript
-import { CaMps, gaugeWarmstart } from '@moonlab/quantum-core';
+import { CaMps, gaugeWarmstart } from '@tsotchkecorp/moonlab';
 
 const generators = new Uint8Array([
   1, 1,    // X X

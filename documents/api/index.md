@@ -187,7 +187,7 @@ fn main() {
 ### JavaScript
 
 ```javascript
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 async function main() {
   const state = await QuantumState.create({ numQubits: 2 });

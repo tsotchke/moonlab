@@ -22,7 +22,7 @@
  *
  * @example
  * ```typescript
- * import { LibirrepQecCode } from '@moonlab/quantum-core';
+ * import { LibirrepQecCode } from '@tsotchkecorp/moonlab';
  *
  * if (await LibirrepQecCode.isAvailable()) {
  *   const code = await LibirrepQecCode.bb72_12_6();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cross-binding differential: the WASM/JS dense binding (@moonlab/quantum-core)
+ * Cross-binding differential: the WASM/JS dense binding (@tsotchkecorp/moonlab)
  * vs the numpy reference oracle pinned in the corpus.
  *
  * Reproduces every corpus circuit through the WASM `QuantumState` and checks the
@@ -31,7 +31,7 @@ function emit(status, cases, failed, reason) {
 async function loadBinding() {
   // Prefer the package specifier; fall back to the built dist bundle in-repo.
   const candidates = [
-    '@moonlab/quantum-core',
+    '@tsotchkecorp/moonlab',
     pathToFileURL(
       resolve(REPO_ROOT, 'bindings/javascript/packages/core/dist/index.mjs')
     ).href,
@@ -45,7 +45,7 @@ async function loadBinding() {
       lastErr = e;
     }
   }
-  return { mod: null, reason: `@moonlab/quantum-core not importable (${lastErr && lastErr.message})` };
+  return { mod: null, reason: `@tsotchkecorp/moonlab not importable (${lastErr && lastErr.message})` };
 }
 
 function applyGate(st, g) {

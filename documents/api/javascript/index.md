@@ -6,27 +6,27 @@ WebAssembly-compiled quantum simulation with React and Vue components for buildi
 
 | Package | Description |
 |---------|-------------|
-| [@moonlab/quantum-core](core.md) | Core quantum simulation (WASM) |
-| [@moonlab/quantum-viz](viz.md) | D3.js-based visualization |
-| [@moonlab/quantum-react](react.md) | React components |
-| [@moonlab/quantum-vue](vue.md) | Vue components |
+| [@tsotchkecorp/moonlab](core.md) | Core quantum simulation (WASM) |
+| [@tsotchkecorp/moonlab-viz](viz.md) | D3.js-based visualization |
+| [@tsotchkecorp/moonlab-react](react.md) | React components |
+| [@tsotchkecorp/moonlab-vue](vue.md) | Vue components |
 
 ## Installation
 
 ```bash
 # npm
-npm install @moonlab/quantum-core @moonlab/quantum-viz
+npm install @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 
 # pnpm
-pnpm add @moonlab/quantum-core @moonlab/quantum-viz
+pnpm add @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 
 # yarn
-yarn add @moonlab/quantum-core @moonlab/quantum-viz
+yarn add @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 ```
 
 For React or Vue:
 ```bash
-npm install @moonlab/quantum-react  # or @moonlab/quantum-vue
+npm install @tsotchkecorp/moonlab-react  # or @tsotchkecorp/moonlab-vue
 ```
 
 ## Quick Start
@@ -34,7 +34,7 @@ npm install @moonlab/quantum-react  # or @moonlab/quantum-vue
 ### ES Modules
 
 ```javascript
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 async function main() {
   // Create 2-qubit state
@@ -62,7 +62,7 @@ main();
 ### CommonJS (Node.js)
 
 ```javascript
-const { QuantumState } = require('@moonlab/quantum-core');
+const { QuantumState } = require('@tsotchkecorp/moonlab');
 
 async function main() {
   const state = await QuantumState.create({ numQubits: 4 });
@@ -197,7 +197,7 @@ class QuantumState {
 Full TypeScript definitions included:
 
 ```typescript
-import { QuantumState, Complex } from '@moonlab/quantum-core';
+import { QuantumState, Complex } from '@tsotchkecorp/moonlab';
 
 interface Complex {
     re: number;
@@ -210,12 +210,12 @@ const amps: Complex[] = state.getAmplitudes();
 const prob: number = state.probability(0);
 ```
 
-## Visualization (@moonlab/quantum-viz)
+## Visualization (@tsotchkecorp/moonlab-viz)
 
 ### CircuitDiagram
 
 ```typescript
-import { CircuitDiagram } from '@moonlab/quantum-viz';
+import { CircuitDiagram } from '@tsotchkecorp/moonlab-viz';
 
 const diagram = new CircuitDiagram('#container', {
     numQubits: 3,
@@ -232,7 +232,7 @@ diagram.render();
 ### StateVisualization
 
 ```typescript
-import { StateVisualization } from '@moonlab/quantum-viz';
+import { StateVisualization } from '@tsotchkecorp/moonlab-viz';
 
 const viz = new StateVisualization('#container', state, {
     type: 'bar',  // 'bar' | 'bloch' | 'city'
@@ -248,7 +248,7 @@ viz.update(state);
 ### BlochSphere
 
 ```typescript
-import { BlochSphere } from '@moonlab/quantum-viz';
+import { BlochSphere } from '@tsotchkecorp/moonlab-viz';
 
 const bloch = new BlochSphere('#container', {
     width: 300,
@@ -259,12 +259,12 @@ const bloch = new BlochSphere('#container', {
 bloch.setState(state, 0);  // Show qubit 0
 ```
 
-## React Components (@moonlab/quantum-react)
+## React Components (@tsotchkecorp/moonlab-react)
 
 ### QuantumCircuit
 
 ```jsx
-import { QuantumCircuit, Gate, Measure } from '@moonlab/quantum-react';
+import { QuantumCircuit, Gate, Measure } from '@tsotchkecorp/moonlab-react';
 
 function MyCircuit() {
     const [result, setResult] = useState(null);
@@ -283,7 +283,7 @@ function MyCircuit() {
 ### useQuantumState Hook
 
 ```jsx
-import { useQuantumState } from '@moonlab/quantum-react';
+import { useQuantumState } from '@tsotchkecorp/moonlab-react';
 
 function BellStateDemo() {
     const { state, gates, measure, probabilities } = useQuantumState(2);
@@ -306,7 +306,7 @@ function BellStateDemo() {
 ### StateVector
 
 ```jsx
-import { StateVector } from '@moonlab/quantum-react';
+import { StateVector } from '@tsotchkecorp/moonlab-react';
 
 <StateVector
     state={state}
@@ -315,7 +315,7 @@ import { StateVector } from '@moonlab/quantum-react';
 />
 ```
 
-## Vue Components (@moonlab/quantum-vue)
+## Vue Components (@tsotchkecorp/moonlab-vue)
 
 ### QuantumCircuit
 
@@ -329,7 +329,7 @@ import { StateVector } from '@moonlab/quantum-react';
 </template>
 
 <script setup>
-import { QuantumCircuit, Gate, Measure } from '@moonlab/quantum-vue';
+import { QuantumCircuit, Gate, Measure } from '@tsotchkecorp/moonlab-vue';
 
 const onMeasure = (result) => {
     console.log('Measured:', result);
@@ -341,7 +341,7 @@ const onMeasure = (result) => {
 
 ```vue
 <script setup>
-import { useQuantum } from '@moonlab/quantum-vue';
+import { useQuantum } from '@tsotchkecorp/moonlab-vue';
 
 const { state, h, cnot, measure, probabilities } = useQuantum(2);
 
@@ -357,7 +357,7 @@ const createBellState = () => {
 The factory pattern handles WASM initialization automatically:
 
 ```javascript
-import { QuantumState, preload } from '@moonlab/quantum-core';
+import { QuantumState, preload } from '@tsotchkecorp/moonlab';
 
 async function simulate() {
     // Optional: preload WASM module for faster first use
@@ -375,7 +375,7 @@ Run simulations in a Web Worker:
 
 ```javascript
 // worker.js
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 self.onmessage = async (e) => {
     const { numQubits, circuit } = e.data;
@@ -448,10 +448,10 @@ const wasmSupported = typeof WebAssembly !== 'undefined';
 
 | Package | Size (gzipped) |
 |---------|----------------|
-| @moonlab/quantum-core | ~150 KB |
-| @moonlab/quantum-viz | ~45 KB |
-| @moonlab/quantum-react | ~12 KB |
-| @moonlab/quantum-vue | ~10 KB |
+| @tsotchkecorp/moonlab | ~150 KB |
+| @tsotchkecorp/moonlab-viz | ~45 KB |
+| @tsotchkecorp/moonlab-react | ~12 KB |
+| @tsotchkecorp/moonlab-vue | ~10 KB |
 
 ## See Also
 

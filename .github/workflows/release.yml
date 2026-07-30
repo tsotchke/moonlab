@@ -661,7 +661,7 @@ jobs:
             brew tap tsotchke/moonlab
             brew install moonlab
             pip install moonlab
-            npm install @moonlab/quantum-core
+            npm install @tsotchkecorp/moonlab
             cargo install moonlab-tui
             ```
 
@@ -742,8 +742,12 @@ jobs:
             --run-id '${{ needs.promotion-verify.outputs.candidate-run-id }}' \
             --head '${{ needs.promotion-verify.outputs.candidate-head }}' \
             --version '${{ needs.preflight.outputs.version }}'
-          for package in core algorithms viz react vue; do
-            artifact="dist/moonlab-quantum-${package}-${VERSION}.tgz"
+          # The core package is the unsuffixed @tsotchkecorp/moonlab, so its
+          # tarball basename has no trailing segment; the other four keep their
+          # role as the suffix. `npm pack` flattens the scope separator, so
+          # @tsotchkecorp/moonlab-viz packs as tsotchkecorp-moonlab-viz-*.tgz.
+          for stem in moonlab moonlab-algorithms moonlab-viz moonlab-react moonlab-vue; do
+            artifact="dist/tsotchkecorp-${stem}-${VERSION}.tgz"
             test -f "$artifact"
             # npm parses an un-prefixed a/b spec as a GitHub owner/repo shorthand even when that relative path exists, so the ./ prefix is required.
             npm publish "./$artifact" --tag "$NPM_TAG" --access public --provenance

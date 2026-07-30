@@ -11,7 +11,7 @@
  *
  * @example
  * ```typescript
- * import { UfDecoder, UF_BOUNDARY } from '@moonlab/quantum-core';
+ * import { UfDecoder, UF_BOUNDARY } from '@tsotchkecorp/moonlab';
  *
  * // Repetition code: D0 -- boundary (flips the observable),
  * // D0 -- D1, D1 -- boundary.

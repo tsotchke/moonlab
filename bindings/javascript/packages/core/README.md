@@ -1,4 +1,4 @@
-# @moonlab/core
+# @tsotchkecorp/moonlab
 
 WebAssembly + WebGPU bindings for the Moonlab quantum simulator.
 

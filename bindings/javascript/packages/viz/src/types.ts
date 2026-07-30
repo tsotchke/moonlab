@@ -2,7 +2,7 @@
  * Common Types for Quantum Visualizations
  */
 
-import type { Complex } from '@moonlab/quantum-core';
+import type { Complex } from '@tsotchkecorp/moonlab';
 
 // ============================================================================
 // Color Types

@@ -98,8 +98,8 @@ state = QuantumState(4)
 
 **JavaScript**:
 ```javascript
-// npm install @moonlab/quantum-core @moonlab/quantum-algorithms
-import { QuantumState } from '@moonlab/quantum-core';
+// npm install @tsotchkecorp/moonlab @tsotchkecorp/moonlab-algorithms
+import { QuantumState } from '@tsotchkecorp/moonlab';
 const state = await QuantumState.create({ numQubits: 4 });
 ```
 

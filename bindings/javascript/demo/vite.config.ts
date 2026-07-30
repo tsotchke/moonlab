@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // checkout that hasn't run the Emscripten toolchain. Whenever this
 // plugin can find a freshly built pair, it must overwrite both files
 // unconditionally so the committed copies never drift out of sync with
-// whatever @moonlab/quantum-core actually built.
+// whatever @tsotchkecorp/moonlab actually built.
 //
 // moonlab.js and moonlab.wasm are produced together, by the same build
 // step, in either packages/core/dist/ (packages/core's own `build:wasm`
@@ -76,7 +76,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@moonlab/quantum-core'],
+    exclude: ['@tsotchkecorp/moonlab'],
   },
   server: {
     port: 3000,

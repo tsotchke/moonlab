@@ -20,7 +20,7 @@ const EXAMPLES: Example[] = [
     id: 'bell-state',
     title: 'Bell State (Entanglement)',
     description: 'Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2',
-    code: `import { QuantumState } from '@moonlab/quantum-core';
+    code: `import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -43,7 +43,7 @@ state.dispose();`,
     id: 'superposition',
     title: 'Uniform Superposition',
     description: 'Create equal superposition over all basis states using Hadamard gates',
-    code: `import { QuantumState } from '@moonlab/quantum-core';
+    code: `import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 3-qubit state (8 basis states)
 const state = await QuantumState.create({ numQubits: 3 });
@@ -66,8 +66,8 @@ state.dispose();`,
     id: 'grover',
     title: "Grover's Search Algorithm",
     description: 'Find a marked item in an unsorted database with quadratic speedup',
-    code: `import { QuantumState } from '@moonlab/quantum-core';
-import { Grover } from '@moonlab/quantum-algorithms';
+    code: `import { QuantumState } from '@tsotchkecorp/moonlab';
+import { Grover } from '@tsotchkecorp/moonlab-algorithms';
 
 // Search in a space of 1024 items (10 qubits)
 const grover = await Grover.create({
@@ -89,7 +89,7 @@ grover.dispose();`,
     id: 'phase-kickback',
     title: 'Phase Kickback',
     description: 'Demonstrate the phase kickback phenomenon used in quantum algorithms',
-    code: `import { QuantumState } from '@moonlab/quantum-core';
+    code: `import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -119,7 +119,7 @@ state.dispose();`,
     id: 'quantum-teleportation',
     title: 'Quantum Teleportation',
     description: 'Teleport a quantum state using entanglement and classical communication',
-    code: `import { QuantumState } from '@moonlab/quantum-core';
+    code: `import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // 3 qubits: q0=state to teleport, q1,q2=entangled pair
 const state = await QuantumState.create({ numQubits: 3 });
@@ -151,7 +151,7 @@ state.dispose();`,
     id: 'vqe-h2',
     title: 'VQE: H₂ Ground State Energy',
     description: 'Find the ground state energy of hydrogen molecule using variational quantum eigensolver',
-    code: `import { VQE, createH2Hamiltonian } from '@moonlab/quantum-algorithms';
+    code: `import { VQE, createH2Hamiltonian } from '@tsotchkecorp/moonlab-algorithms';
 
 // Create H2 Hamiltonian at bond distance 0.74 Å
 const hamiltonian = createH2Hamiltonian({
@@ -181,7 +181,7 @@ vqe.dispose();`,
     id: 'ca-mps-stabilizer',
     title: 'CA-MPS: Stabilizer Circuit',
     description: 'Pure-Clifford GHZ state via Clifford-Assisted MPS. The Clifford structure goes into the tableau (O(n) bit ops); the MPS stays at bond dimension 1. 64x bond-dim advantage and 13884x speedup vs plain MPS at n=12 (since v0.2.1).',
-    code: `import { CaMps } from '@moonlab/quantum-core';
+    code: `import { CaMps } from '@tsotchkecorp/moonlab';
 
 // 12-qubit CA-MPS, max MPS bond dim 32. The Clifford prefactor D
 // stores the Aaronson-Gottesman tableau; |phi> stays at bond 1
@@ -203,7 +203,7 @@ state.dispose();`,
     id: 'gauge-warmstart-bell',
     title: 'Gauge-Aware Warmstart: Bell stabilizers',
     description: 'Aaronson-Gottesman symplectic-Gauss-Jordan Clifford prep on the abelian stabilizer subgroup {XX, ZZ}. The resulting state is in the simultaneous +1 eigenspace of every generator -- the Bell state |Phi+>. Generalises to LGT Gauss-law operators, surface/toric/repetition codes (since v0.2.1).',
-    code: `import { CaMps, gaugeWarmstart } from '@moonlab/quantum-core';
+    code: `import { CaMps, gaugeWarmstart } from '@tsotchkecorp/moonlab';
 
 // Bell-pair stabilizer subgroup S = {XX, ZZ}.
 // Pauli-byte encoding: 0=I, 1=X, 2=Y, 3=Z.
@@ -225,7 +225,7 @@ state.dispose();`,
     id: 'z2-lgt-build',
     title: 'Z2 Lattice Gauge Theory: Pauli sum builder',
     description: 'Build the 1+1D Z2 LGT Hamiltonian on N matter sites. Exactly gauge-invariant kinetic terms (XYY/YYX form) -- each piece commutes with every interior Gauss-law operator G_x = X_{2x-1} Z_{2x} X_{2x+1}. First HEP application of the gauge-aware warmstart (since v0.2.1).',
-    code: `import { z2Lgt1dBuild, z2Lgt1dGaussLaw } from '@moonlab/quantum-core';
+    code: `import { z2Lgt1dBuild, z2Lgt1dGaussLaw } from '@tsotchkecorp/moonlab';
 
 // N = 4 matter sites -> 7 qubits (4 matter + 3 link).
 const ham = await z2Lgt1dBuild(4, /*t=*/1.0, /*h=*/0.5, /*m=*/0.0,

@@ -54,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The npm packages moved to the `@tsotchkecorp` scope.** As of 1.2.1 the
+  JavaScript/WebAssembly bindings publish as `@tsotchkecorp/moonlab`,
+  `@tsotchkecorp/moonlab-algorithms`, `@tsotchkecorp/moonlab-viz`,
+  `@tsotchkecorp/moonlab-react`, and `@tsotchkecorp/moonlab-vue`. The
+  `@moonlab` npm scope is registered to an unrelated party and is not
+  obtainable, so the former `quantum-core` / `quantum-algorithms` /
+  `quantum-viz` / `quantum-react` / `quantum-vue` names under that scope were
+  never published to the registry; there is nothing to deprecate or redirect,
+  and no consumer has an installed package to migrate. Install the core
+  package with `npm install @tsotchkecorp/moonlab`. `npm pack` output follows
+  the new names: `tsotchkecorp-moonlab-<version>.tgz` and
+  `tsotchkecorp-moonlab-<role>-<version>.tgz`.
 - **`fusion_tree_t` gained three fields** (`labels`, `num_vertices`,
   `recoupled_vertex`) at the end of the struct, so `sizeof(fusion_tree_t)`
   changed. The topological surface is not on the stable ABI, so no exported
@@ -89,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **v1.2.0 stabilization and distributed-scale release.** ABI 0.6.0 (QRNG status surface + honest
 certification language + wasm32 correctness fixes), a VQE quantum natural
 gradient optimizer, a first-principles H2/LiH potential energy surface, the
-real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
+real `@tsotchkecorp/moonlab-algorithms` implementation, a macOS Mach-O link fix
 for CPU-only builds, bounded CUDA/MPI state sharding beyond 32 qubits, and a
 full packaging/release-pipeline rework. Covers `v1.1.0..v1.2.0`, including
 merged PRs #12, #13, #14, and #18.
@@ -134,10 +146,10 @@ merged PRs #12, #13, #14, and #18.
   a matching pass makes the LiH surface smooth and structurally consistent.
   New H2/LiH smoothness, differentiability, and term-count-consistency
   tests.
-- **`@moonlab/quantum-algorithms` real implementation.** A WASM-backed
+- **`@tsotchkecorp/moonlab-algorithms` real implementation.** A WASM-backed
   `Grover` class (marked-state oracle, diffusion, optimal iteration count,
   top-state extraction, qubit/basis-state validation) over
-  `@moonlab/quantum-core`, plus the H2-only classical `VQE` class, with
+  `@tsotchkecorp/moonlab`, plus the H2-only classical `VQE` class, with
   vitest coverage; the package returns to public at 1.2.0.
 - **`tests/unit/test_entropy_sources.c`** pins the direct entropy-source
   surface (`entropy_jitter_bytes`, `entropy_create_with_source` +
@@ -148,7 +160,7 @@ merged PRs #12, #13, #14, and #18.
   Fubini-Study metric divergence at the Qi-Wu-Zhang Dirac-node gap closing
   and the nilpotency of a surface-code stabilizer chain complex (d1.d2 = 0)
   are the same epsilon^2 = 0.
-- **JS binding parity for the v1.2 surfaces.** `@moonlab/quantum-core`
+- **JS binding parity for the v1.2 surfaces.** `@tsotchkecorp/moonlab`
   gains the VQE ergonomics (`VqeSolver.create(h, { ansatz: 'uccsd',
   optimizer: 'qng' | 'adam' | ..., learningRate, beta1, beta2, epsilon,
   qngRegularization, maxIterations, tolerance })`, `OptimizerType.Qng`,
@@ -814,7 +826,7 @@ rejects tenant_id-without-secret with a clear error.
   Five new cargo tests (tenant_round_trip, three_tenants_in_sequence,
   illegal_char_clientside, empty_clientside, oversize_clientside).
 
-- **JavaScript / Node** (`@moonlab/quantum-core/control-plane`):
+- **JavaScript / Node** (`@tsotchkecorp/moonlab/control-plane`):
   `SubmitCircuitArgs` / `SubmitShotsArgs` gain a `tenantId` field;
   authPrelude builds the tenant-form line when set.  Six new
   assertions inside the existing JS<->C integration test; full JS
@@ -4212,7 +4224,7 @@ consume it (Bell + Grover).
   CHSH `S = 2.816` on |Phi+> (Tsirelson bound 2.828).
 - `pnpm run test:integration`: 10 files / 117 passed in 601 ms (up
   from 107 in v0.5.1; the new Bell + Grover tests add 10).
-- `npx tsc --noEmit` clean on @moonlab/quantum-core.
+- `npx tsc --noEmit` clean on @tsotchkecorp/moonlab.
 
 Manifests bumped 0.5.3 -> 0.5.4.
 
@@ -4406,7 +4418,7 @@ wrapper were missing.
   single-site observables.
 - 28 `_moonlab_ca_peps_*` symbols added to
   `bindings/javascript/packages/core/emscripten/exports.txt`.
-- `CaPeps` re-exported from `@moonlab/quantum-core`'s top-level
+- `CaPeps` re-exported from `@tsotchkecorp/moonlab`'s top-level
   index; the `PauliCode` enum is re-used from the v0.4.10 MPDO
   module.
 
@@ -4415,7 +4427,7 @@ Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 148 (all
 unchanged -- this release only touches the JS surface).
-`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the new
 `ca-peps.ts` module.
 
 ## [0.4.11] - 2026-05-18
@@ -4492,16 +4504,16 @@ doesn't depend on the hardware-entropy context.
 
 ### Changed
 
-- `Mpdo` and `PauliCode` re-exported from `@moonlab/quantum-core`'s
+- `Mpdo` and `PauliCode` re-exported from `@tsotchkecorp/moonlab`'s
   top-level index so callers can `import { Mpdo, PauliCode } from
-  '@moonlab/quantum-core'`.
+  '@tsotchkecorp/moonlab'`.
 
 Manifests bumped 0.4.9 -> 0.4.10 across the 10 binding pyproject.toml /
 Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 73 + 48 + 20 = 141
 (all unchanged -- this release only touches the JS surface).
-`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the new
 `mpdo.ts` module.
 
 ## [0.4.9] - 2026-05-18
@@ -4679,14 +4691,14 @@ build has a TypeScript wrapper.
 ### Changed
 
 - `FusedCircuit`, `FuseStats`, and `FuseCompileResult` re-exported
-  from `@moonlab/quantum-core` top-level index.
+  from `@tsotchkecorp/moonlab` top-level index.
 
 Manifests bumped 0.4.6 -> 0.4.7 across the 10 binding pyproject.toml /
 Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo test 59 + 48 +
 17 = 124 (was 111; gained 13 from the three new safe-wrapper test
-modules).  `tsc --noEmit` clean on `@moonlab/quantum-core` with the
+modules).  `tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the
 new `fusion.ts` module.
 
 ## [0.4.6] - 2026-05-18
@@ -4752,10 +4764,10 @@ stabiliser backend) now has a TypeScript wrapper.  Python has
   `bindings/javascript/packages/core/emscripten/exports.txt`; the
   C source was already in the WASM build (52 of CMakeLists.txt).
 - `CliffordTableau`, `MeasureResult`, and `SampleAllResult` are
-  re-exported from `@moonlab/quantum-core`'s top-level index so
+  re-exported from `@tsotchkecorp/moonlab`'s top-level index so
   callers reach them as `import { CliffordTableau } from
-  '@moonlab/quantum-core'`.
-- `tsc --noEmit` runs clean on `@moonlab/quantum-core` with the new
+  '@tsotchkecorp/moonlab'`.
+- `tsc --noEmit` runs clean on `@tsotchkecorp/moonlab` with the new
   module.  End-to-end runtime testing happens on the next WASM
   rebuild (`pnpm build:wasm`); the TS surface is shippable as is.
 
@@ -4792,7 +4804,7 @@ Cleanup release: the last two known gaps from the v0.4.2 audit
 (JS TDVP binding + the dead `effective_hamiltonian_t.two_site`
 branches I left after removing the public flag) both land here.
 Test gauntlet: 114/114 ctest, 183/183 pytest, 60/60 cargo test,
-plus `tsc --noEmit` on `@moonlab/quantum-core`.
+plus `tsc --noEmit` on `@tsotchkecorp/moonlab`.
 
 ### Added
 

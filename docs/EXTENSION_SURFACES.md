@@ -141,7 +141,7 @@ register_vendor_noise_profile("ibm-falcon-2026-05-20-snapshot", &prof)?;
 import {
     registerVendorNoiseProfile,
     lookupVendorNoiseProfile,
-} from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab';
 
 await registerVendorNoiseProfile('ibm-falcon-2026-05-20-snapshot', {
     pGate1q: 0.0011, pGate2q: 0.0095, pReadout: 0.0162,
@@ -213,7 +213,7 @@ let corr = decode_by_name("my-bp-osd",
 ### JavaScript
 
 ```typescript
-import { registerDecoder, decodeByName } from '@moonlab/quantum-core';
+import { registerDecoder, decodeByName } from '@tsotchkecorp/moonlab';
 
 await registerDecoder('my-bp-osd', (code, _syndromes, _seed) => {
     return new Uint8Array(code.numQubits);  // placeholder
@@ -300,7 +300,7 @@ clear_completion_hook()?;
 ### JavaScript
 
 ```typescript
-import { setCompletionHook, clearCompletionHook } from '@moonlab/quantum-core';
+import { setCompletionHook, clearCompletionHook } from '@tsotchkecorp/moonlab';
 
 await setCompletionHook(info => {
     metricsServer.recordRun(info.numQubits, info.totalShots,

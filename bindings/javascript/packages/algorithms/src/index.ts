@@ -1,4 +1,4 @@
-import { QuantumState, type Complex } from '@moonlab/quantum-core';
+import { QuantumState, type Complex } from '@tsotchkecorp/moonlab';
 
 export type TopState = {
   index: number;
