@@ -745,7 +745,8 @@ jobs:
           for package in core algorithms viz react vue; do
             artifact="dist/moonlab-quantum-${package}-${VERSION}.tgz"
             test -f "$artifact"
-            npm publish "$artifact" --tag "$NPM_TAG" --access public --provenance
+            # npm parses an un-prefixed a/b spec as a GitHub owner/repo shorthand even when that relative path exists, so the ./ prefix is required.
+            npm publish "./$artifact" --tag "$NPM_TAG" --access public --provenance
           done
 
   publish-rust:

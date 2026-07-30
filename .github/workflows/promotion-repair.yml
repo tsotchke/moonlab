@@ -1,0 +1,655 @@
+name: Promotion Repair
+
+# Re-runs the registry promotion legs of an already-tagged, already-certified
+# release without rebuilding anything. Every published byte is downloaded from
+# the sealed candidate run named by the annotated tag and re-verified against
+# the immutable release manifest before any registry is touched. Each leg is
+# idempotent, so a partially completed promotion can be finished by dispatching
+# this workflow again.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version whose registry promotion is being repaired
+        required: true
+        type: string
+        default: "1.2.0"
+      candidate-run-id:
+        description: Release run that sealed the immutable candidate inventory
+        required: true
+        type: string
+        default: "30495368813"
+      candidate-head:
+        description: Commit the sealed candidate was built from
+        required: true
+        type: string
+        default: "4bf83a6c47e7f1c53db14fcb2a61053499fd82df"
+      npm-tag:
+        description: dist-tag to attach to the published npm packages
+        required: true
+        type: string
+        default: latest
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: promotion-repair-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      version: ${{ steps.classify.outputs.version }}
+      tag: ${{ steps.classify.outputs.tag }}
+      prerelease: ${{ steps.classify.outputs.prerelease }}
+      npm-tag: ${{ steps.classify.outputs.npm-tag }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate-run-id }}
+      CANDIDATE_HEAD: ${{ inputs.candidate-head }}
+      NPM_TAG: ${{ inputs.npm-tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Classify the release identity and bind it to the annotated tag
+        id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] || {
+            echo "version input is invalid: $VERSION" >&2
+            exit 1
+          }
+          [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
+            echo "candidate-run-id input is invalid: $CANDIDATE_RUN_ID" >&2
+            exit 1
+          }
+          [[ "$CANDIDATE_HEAD" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "candidate-head input is invalid: $CANDIDATE_HEAD" >&2
+            exit 1
+          }
+          [[ "$NPM_TAG" =~ ^[a-z][a-z0-9-]*$ ]] || {
+            echo "npm-tag input is invalid: $NPM_TAG" >&2
+            exit 1
+          }
+          tag="v$VERSION"
+          # The pushed annotated tag is the authority for what may be published.
+          # The dispatch inputs may only restate the candidate run and head that
+          # the tag already certifies; anything else is refused here.
+          [[ "$(git cat-file -t "refs/tags/$tag")" == "tag" ]]
+          [[ "$(git rev-parse "refs/tags/${tag}^{commit}")" == "$CANDIDATE_HEAD" ]]
+          python3 - "$tag" <<'PY'
+          from pathlib import Path
+          import os
+          import sys
+
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from validate_release_certificate import _tag_candidate_binding
+
+          tag = sys.argv[1]
+          run_id, head = _tag_candidate_binding(Path.cwd(), tag)
+          expected_run = int(os.environ["CANDIDATE_RUN_ID"])
+          expected_head = os.environ["CANDIDATE_HEAD"]
+          if run_id != expected_run or head != expected_head:
+              raise SystemExit(
+                  f"tag {tag} binds candidate {run_id}@{head}, "
+                  f"not {expected_run}@{expected_head}"
+              )
+          print(f"tag {tag} binds candidate run {run_id} at {head}")
+          PY
+          {
+            echo "tag=$tag"
+            echo "version=$VERSION"
+            echo "npm-tag=$NPM_TAG"
+            if [[ "$VERSION" =~ -(alpha|beta|rc)\.[0-9]+$ ]]; then
+              echo "prerelease=true"
+            else
+              echo "prerelease=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Query and validate immutable hosted run identity and complete jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair
+          gh run view "$CANDIDATE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,url,headSha,conclusion,event,workflowName,jobs \
+            | jq '{databaseId,url,headSha,conclusion,event,workflowName,jobs:[.jobs[]|{name,conclusion}]}' \
+            > repair/candidate-run.json
+          python3 scripts/verify_release_candidate.py verify-run \
+            --run-json repair/candidate-run.json \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --head "$CANDIDATE_HEAD"
+
+      - name: Download only artifacts from the tag-bound candidate run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair/dist repair/manifest
+          for artifact in \
+            native-linux-x64 native-linux-arm64 native-macos-arm64 native-macos-x64 \
+            native-windows-x64 native-windows-arm64 debian-amd64 debian-arm64 \
+            python-linux-x64 python-linux-arm64 python-macos-arm64 python-macos-x64 \
+            python-windows-x64 python-windows-arm64 npm-packages rust-crates; do
+            gh run download "$CANDIDATE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir repair/dist
+          done
+          gh run download "$CANDIDATE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" --name release-candidate-manifest \
+            --dir repair/manifest
+
+      - name: Require exact byte-for-byte candidate reuse
+        run: >-
+          python3 scripts/verify_release_candidate.py verify
+          --dist repair/dist
+          --manifest repair/manifest/moonlab-release-candidate.json
+          --run-id '${{ inputs.candidate-run-id }}'
+          --head '${{ inputs.candidate-head }}'
+          --version '${{ inputs.version }}'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: repair-release-artifacts
+          path: repair/dist/**
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: repair-release-manifest
+          path: repair/manifest/moonlab-release-candidate.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-npm:
+    needs: verify
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-release-artifacts
+          path: dist
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-release-manifest
+          path: manifest
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Publish the exact tested tarballs that npm is still missing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ needs.verify.outputs.npm-tag }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate-run-id }}
+          CANDIDATE_HEAD: ${{ inputs.candidate-head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Re-assert exact byte-for-byte identity of every promoted artifact
+          # against the immutable candidate manifest before touching npm.
+          python3 scripts/verify_release_candidate.py verify \
+            --dist dist \
+            --manifest manifest/moonlab-release-candidate.json \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --head "$CANDIDATE_HEAD" \
+            --version "$VERSION"
+
+          # `npm view <name>@<version> <field>` exits 0 and prints nothing when the
+          # package exists without that version, so resolve on output, not status.
+          # --prefer-online defeats a packument cached before this run published.
+          npm_field() {
+            npm view "$1@$VERSION" "$2" --prefer-online 2>/dev/null || true
+          }
+
+          wait_for_npm() {
+            local name="$1"
+            for attempt in {1..30}; do
+              if [[ -n "$(npm_field "$name" version)" ]]; then
+                return 0
+              fi
+              echo "waiting for npm registry: ${name} ${VERSION} (attempt ${attempt}/30)"
+              sleep 10
+            done
+            echo "npm did not serve ${name} ${VERSION} in time" >&2
+            return 1
+          }
+
+          published=0
+          for package in core algorithms viz react vue; do
+            name="@moonlab/quantum-${package}"
+            file="moonlab-quantum-${package}-${VERSION}.tgz"
+            artifact="dist/${file}"
+            test -f "$artifact"
+            # Bind the tarball filename to its registry name through the certificate.
+            sha="$(jq -er --arg f "$file" --arg n "$name" \
+              '.artifacts[] | select(.filename == $f and .package == $n) | .sha256' \
+              manifest/moonlab-release-candidate.json)"
+            test -n "$sha"
+
+            if [[ -n "$(npm_field "$name" version)" ]]; then
+              echo "already published, skipping: ${name}@${VERSION}"
+            else
+              # npm parses an un-prefixed a/b spec as a GitHub owner/repo shorthand
+              # even when that relative path exists, so the ./ prefix is required.
+              npm publish "./$artifact" --tag "$NPM_TAG" --access public --provenance
+              published=$((published + 1))
+              wait_for_npm "$name"
+            fi
+
+            # The registry must serve the certified bytes, whether this run
+            # published them or an earlier one did.
+            tarball="$(npm_field "$name" dist.tarball)"
+            test -n "$tarball"
+            curl -fsSL "$tarball" -o "registry-${package}.tgz"
+            served="$(sha256sum "registry-${package}.tgz" | cut -d ' ' -f 1)"
+            if [[ "$served" != "$sha" ]]; then
+              echo "REGISTRY DRIFT: ${name}@${VERSION} serves sha256 ${served}, certificate requires ${sha}" >&2
+              exit 1
+            fi
+            advertised="$(npm_field "$name" dist.shasum)"
+            expected_sha1="$(sha1sum "$artifact" | cut -d ' ' -f 1)"
+            if [[ "$advertised" != "$expected_sha1" ]]; then
+              echo "REGISTRY DRIFT: ${name}@${VERSION} advertises shasum ${advertised}, candidate tarball is ${expected_sha1}" >&2
+              exit 1
+            fi
+            echo "verified ${name}@${VERSION} sha256=${served}"
+          done
+          echo "npm packages published by this run: ${published}"
+
+  publish-rust:
+    needs: verify
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-release-artifacts
+          path: dist
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-release-manifest
+          path: manifest
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install cargo for crates.io index polling
+        run: |
+          # Kept aligned with the release workflow's publish-rust toolchain; this
+          # job only runs `cargo info`, which has no 1.90 dependency.
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
+
+      - name: Publish the certified crate bytes crates.io is still missing
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate-run-id }}
+          CANDIDATE_HEAD: ${{ inputs.candidate-head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Re-assert exact byte-for-byte identity of every promoted artifact,
+          # including the three .crate tarballs, against the immutable candidate
+          # manifest before touching crates.io. Fails closed on any drift.
+          python3 scripts/verify_release_candidate.py verify \
+            --dist dist \
+            --manifest manifest/moonlab-release-candidate.json \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --head "$CANDIDATE_HEAD" \
+            --version "$VERSION"
+
+          user_agent='moonlab-release-promotion (https://github.com/tsotchke/moonlab)'
+
+          # The registry API is authoritative and never lags the way the sparse
+          # index can, so idempotency is decided against the API, not the index.
+          crate_published() {
+            local crate="$1"
+            local code
+            code="$(curl -sS -o /dev/null -w '%{http_code}' \
+              -H "User-Agent: ${user_agent}" \
+              "https://crates.io/api/v1/crates/${crate}/${VERSION}")"
+            [[ "$code" == "200" ]]
+          }
+
+          wait_for_crate() {
+            local crate="$1"
+            for attempt in {1..30}; do
+              if cargo info "${crate}@${VERSION}" >/dev/null 2>&1; then
+                return 0
+              fi
+              echo "waiting for crates.io index: ${crate} ${VERSION} (attempt ${attempt}/30)"
+              sleep 10
+            done
+            echo "crates.io did not index ${crate} ${VERSION} in time" >&2
+            return 1
+          }
+
+          # Ship the exact certified bytes. publish_crate_exact_bytes.py uploads
+          # the .crate tarball verbatim through PUT /api/v1/crates/new and refuses
+          # to send unless the bytes re-hash to the certified SHA-256 taken from
+          # the promoted manifest. Nothing is re-packaged, so the published
+          # tarball hash equals the release certificate.
+          publish_exact() {
+            local crate="$1"
+            local artifact="dist/${crate}-${VERSION}.crate"
+            test -f "$artifact"
+            local sha
+            sha="$(jq -er --arg f "${crate}-${VERSION}.crate" \
+              '.artifacts[] | select(.filename == $f) | .sha256' \
+              manifest/moonlab-release-candidate.json)"
+            test -n "$sha"
+            python3 scripts/publish_crate_exact_bytes.py publish \
+              --crate "$artifact" --sha256 "$sha"
+          }
+
+          # crates.io stores the SHA-256 of the uploaded .crate as the version
+          # checksum, so the registry can be held to the certificate directly.
+          require_certified_checksum() {
+            local crate="$1"
+            local expected served
+            expected="$(jq -er --arg f "${crate}-${VERSION}.crate" \
+              '.artifacts[] | select(.filename == $f) | .sha256' \
+              manifest/moonlab-release-candidate.json)"
+            served="$(curl -fsS -H "User-Agent: ${user_agent}" \
+              "https://crates.io/api/v1/crates/${crate}/${VERSION}" \
+              | jq -er '.version.checksum')"
+            if [[ "$served" != "$expected" ]]; then
+              echo "REGISTRY DRIFT: crates.io ${crate} ${VERSION} checksum ${served}, certificate requires ${expected}" >&2
+              exit 1
+            fi
+            echo "verified ${crate} ${VERSION} sha256=${served}"
+          }
+
+          publish_if_missing() {
+            local crate="$1"
+            if crate_published "$crate"; then
+              echo "already published, skipping: ${crate} ${VERSION}"
+            else
+              publish_exact "$crate"
+            fi
+            wait_for_crate "$crate"
+            require_certified_checksum "$crate"
+          }
+
+          publish_if_missing moonlab-sys
+          publish_if_missing moonlab
+          publish_if_missing moonlab-tui
+
+  update-homebrew:
+    needs: verify
+    if: needs.verify.outputs.prerelease == 'false'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Materialize stable formula
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        shell: bash
+        run: |
+          source_url="https://github.com/tsotchke/moonlab/archive/refs/tags/${TAG}.tar.gz"
+          sha256="$(curl -fsSL "$source_url" | shasum -a 256 | cut -d ' ' -f 1)"
+          sed -i '' -E "s|url \".*\"|url \"${source_url}\"|" packaging/homebrew/moonlab.rb
+          sed -i '' -E "s|sha256 \".*\"|sha256 \"${sha256}\"|" packaging/homebrew/moonlab.rb
+          grep -F "url \"${source_url}\"" packaging/homebrew/moonlab.rb
+          grep -F "sha256 \"${sha256}\"" packaging/homebrew/moonlab.rb
+
+      - name: Prepare tap checkout
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh auth setup-git
+          gh repo clone tsotchke/homebrew-moonlab tap
+          mkdir -p tap/Formula
+          cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
+
+      - name: Audit and install formula from source
+        run: |
+          brew tap tsotchke/moonlab "$PWD/tap"
+          brew audit --formula --strict tsotchke/moonlab/moonlab
+          brew install --build-from-source tsotchke/moonlab/moonlab
+          brew test tsotchke/moonlab/moonlab
+
+      - name: Push formula to tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git -C tap config user.name "Moonlab Release Bot"
+          git -C tap config user.email "actions@github.com"
+          git -C tap add Formula/moonlab.rb
+          git -C tap diff --cached --check
+          # An empty stage means the tap already carries this exact url and
+          # sha256, so the audited formula is live and there is nothing to push.
+          if git -C tap diff --cached --quiet; then
+            echo "tap already serves the ${TAG} formula, skipping push"
+            exit 0
+          fi
+          git -C tap commit -m "moonlab ${TAG}"
+          git -C tap push origin HEAD:main
+
+  finalize:
+    needs: [verify, publish-npm, publish-rust, update-homebrew]
+    if: always() && needs.verify.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-release-manifest
+          path: manifest
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Capture the GitHub release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,assets > release.json
+
+      - name: Capture the published tap formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -uo pipefail
+          # A missing formula must be reported by the verifier below, not hidden
+          # behind a failing step, so an unreadable tap yields an empty file.
+          gh api repos/tsotchke/homebrew-moonlab/contents/Formula/moonlab.rb \
+            -H "Accept: application/vnd.github.raw" > tap-formula.rb || : > tap-formula.rb
+
+      - name: Independently verify every registry serves the certified bytes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          VERSION = os.environ["VERSION"]
+          TAG = os.environ["TAG"]
+          PRERELEASE = os.environ["PRERELEASE"] == "true"
+          AGENT = "moonlab-release-promotion (https://github.com/tsotchke/moonlab)"
+
+          with open("manifest/moonlab-release-candidate.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          artifacts = manifest["artifacts"]
+          failures: list[str] = []
+
+          def fetch(url: str, binary: bool = False):
+              request = urllib.request.Request(
+                  url, headers={"User-Agent": AGENT, "Accept": "*/*"}
+              )
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  payload = response.read()
+              return payload if binary else json.loads(payload.decode("utf-8"))
+
+          def certified(prefix: str) -> list[dict]:
+              return sorted(
+                  (item for item in artifacts if item["kind"].startswith(prefix)),
+                  key=lambda item: item["filename"],
+              )
+
+          wheels = certified("wheel-")
+          try:
+              pypi = fetch(f"https://pypi.org/pypi/moonlab/{VERSION}/json")
+              served = {item["filename"]: item["digests"]["sha256"] for item in pypi["urls"]}
+              if len(pypi["urls"]) != len(wheels):
+                  failures.append(
+                      f"PyPI moonlab {VERSION} serves {len(pypi['urls'])} files, "
+                      f"the certificate has {len(wheels)}"
+                  )
+              for wheel in wheels:
+                  name = wheel["filename"]
+                  if name not in served:
+                      failures.append(f"PyPI moonlab {VERSION} is missing {name}")
+                  elif served[name] != wheel["sha256"]:
+                      failures.append(
+                          f"PyPI serves {name} as sha256 {served[name]}, "
+                          f"the certificate requires {wheel['sha256']}"
+                      )
+          except urllib.error.HTTPError as error:
+              failures.append(f"PyPI moonlab {VERSION} is not published (HTTP {error.code})")
+
+          for package in certified("npm-"):
+              name = package["package"]
+              try:
+                  document = fetch(
+                      f"https://registry.npmjs.org/{name.replace('/', '%2f')}/{VERSION}"
+                  )
+              except urllib.error.HTTPError as error:
+                  failures.append(f"npm {name}@{VERSION} is not published (HTTP {error.code})")
+                  continue
+              if document.get("version") != VERSION:
+                  failures.append(f"npm {name} does not resolve {VERSION}")
+                  continue
+              served_sha = hashlib.sha256(fetch(document["dist"]["tarball"], binary=True)).hexdigest()
+              if served_sha != package["sha256"]:
+                  failures.append(
+                      f"npm {name}@{VERSION} serves sha256 {served_sha}, "
+                      f"the certificate requires {package['sha256']}"
+                  )
+
+          for crate in certified("rust-"):
+              name = crate["package"]
+              try:
+                  document = fetch(f"https://crates.io/api/v1/crates/{name}/{VERSION}")
+              except urllib.error.HTTPError as error:
+                  failures.append(
+                      f"crates.io {name} {VERSION} is not published (HTTP {error.code})"
+                  )
+                  continue
+              version = document["version"]
+              if version.get("num") != VERSION:
+                  failures.append(f"crates.io {name} does not resolve {VERSION}")
+              if version.get("yanked"):
+                  failures.append(f"crates.io {name} {VERSION} is yanked")
+              if version.get("checksum") != crate["sha256"]:
+                  failures.append(
+                      f"crates.io {name} {VERSION} checksum {version.get('checksum')} "
+                      f"does not match the certificate {crate['sha256']}"
+                  )
+
+          if not PRERELEASE:
+              source_url = f"https://github.com/tsotchke/moonlab/archive/refs/tags/{TAG}.tar.gz"
+              tarball_sha = hashlib.sha256(fetch(source_url, binary=True)).hexdigest()
+              with open("tap-formula.rb", encoding="utf-8") as handle:
+                  formula = handle.read()
+              if not formula.strip():
+                  failures.append(
+                      "Homebrew tap tsotchke/homebrew-moonlab has no readable Formula/moonlab.rb"
+                  )
+              else:
+                  if f'url "{source_url}"' not in formula:
+                      failures.append(f"tap formula does not point at {source_url}")
+                  if f'sha256 "{tarball_sha}"' not in formula:
+                      failures.append(
+                          f"tap formula does not carry the {TAG} tarball sha256 {tarball_sha}"
+                      )
+
+          with open("release.json", encoding="utf-8") as handle:
+              release = json.load(handle)
+          assets = {asset["name"] for asset in release["assets"]}
+          expected_assets = {item["filename"] for item in artifacts} | {"SHA256SUMS"}
+          missing_assets = sorted(expected_assets - assets)
+          if missing_assets:
+              failures.append(f"release {TAG} is missing assets: {missing_assets}")
+          if not release["isDraft"]:
+              print(f"release {TAG} is already published")
+
+          if failures:
+              print(f"PROMOTION INCOMPLETE for {VERSION}; the GitHub release stays a draft:")
+              for failure in failures:
+                  print(f"  - {failure}")
+              raise SystemExit(1)
+          print(f"every registry serves the certified {VERSION} bytes")
+          PY
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$PRERELEASE" == "true" ]]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
