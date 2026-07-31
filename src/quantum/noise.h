@@ -234,13 +234,98 @@ MOONLAB_API void noise_apply_model_two_qubit(quantum_state_t* state, int qubit1,
 // CONFIGURATION
 // ============================================================================
 
+/**
+ * @brief Set the single-qubit depolarizing probability
+ *
+ * Out-of-range or NULL input leaves the model untouched, so a rejected
+ * value silently keeps the previous rate.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param rate Depolarizing probability p; applied only when in [0, 1]
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_depolarizing(noise_model_t* model, double rate);
+
+/**
+ * @brief Set the amplitude-damping (T1 relaxation) rate
+ *
+ * Out-of-range or NULL input leaves the model untouched.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param rate Damping rate gamma; applied only when in [0, 1]
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_amplitude_damping(noise_model_t* model, double rate);
+
+/**
+ * @brief Set the phase-damping (pure T2 dephasing) rate
+ *
+ * Out-of-range or NULL input leaves the model untouched.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param rate Damping rate lambda; applied only when in [0, 1]
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_phase_damping(noise_model_t* model, double rate);
+
+/**
+ * @brief Set the thermal-relaxation T1 and T2 times
+ *
+ * Both times must be strictly positive or the call is a no-op.  T2 is
+ * clamped to the physical bound T2 <= 2 T1 before being stored.
+ * Thermal relaxation only fires once a non-zero gate time is also set
+ * via ::noise_model_set_gate_time.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param t1 Energy-relaxation time in microseconds; must be > 0
+ * @param t2 Dephasing time in microseconds; must be > 0, stored as
+ *        min(t2, 2*t1)
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_thermal(noise_model_t* model, double t1, double t2);
+
+/**
+ * @brief Set the gate duration used by the thermal-relaxation channel
+ *
+ * @param model Model to update; ignored when NULL
+ * @param time Gate duration in microseconds; applied only when >= 0
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_gate_time(noise_model_t* model, double time);
+
+/**
+ * @brief Set the asymmetric readout error rates
+ *
+ * The two rates are validated independently: an out-of-range value is
+ * dropped while the in-range one is still stored.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param error_0 P(measure 1 | state 0); applied only when in [0, 1]
+ * @param error_1 P(measure 0 | state 1); applied only when in [0, 1]
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_readout_error(noise_model_t* model,
                                    double error_0, double error_1);
+
+/**
+ * @brief Enable or disable the whole model
+ *
+ * When disabled, ::noise_apply_model and
+ * ::noise_apply_model_two_qubit return without touching the state; the
+ * configured rates are retained and take effect again on re-enable.
+ * Models from ::noise_model_create start enabled.
+ *
+ * @param model Model to update; ignored when NULL
+ * @param enabled Non-zero to enable, 0 to disable
+ * @return Nothing
+ * @stability evolving
+ */
 MOONLAB_API void noise_model_set_enabled(noise_model_t* model, int enabled);
 
 // ============================================================================

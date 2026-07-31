@@ -82,8 +82,38 @@ MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
 /*  Introspection                                                     */
 /* ================================================================== */
 
+/**
+ * Number of qubits the state was created with.  This is the required
+ * length of every Pauli-string argument in this header.
+ * @param s  CA-MPS handle.
+ * @return Qubit count; 0 when @p s is NULL.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
+
+/**
+ * Bond-dimension cap applied when truncating |phi> after each
+ * non-Clifford gate.
+ * @param s  CA-MPS handle.
+ * @return The cap passed to ::moonlab_ca_mps_create; 0 when @p s is
+ *         NULL.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
+
+/**
+ * @brief Largest bond dimension currently carried by the MPS factor
+ *        |phi>.
+ *
+ * Walks every internal bond and returns the maximum.  This measures
+ * working storage after the last truncation, not intrinsic
+ * entanglement -- use ::moonlab_ca_mps_max_half_cut_entropy for that.
+ *
+ * @param s  CA-MPS handle.
+ * @return Current max bond dimension (>= 1); 0 when @p s is NULL or
+ *         carries no MPS factor.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /**
@@ -170,7 +200,37 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, 
  * @stability stable
  *  rotation on the Clifford-conjugated string C^dagger P_q C. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
+/**
+ * @brief R_Y(theta) = exp(-i theta Y / 2) on qubit @p q.
+ *
+ * The Y generator is conjugated through the tableau into the Pauli
+ * string C^dagger Y_q C, which is then applied to |phi> as a
+ * Pauli-string rotation.
+ *
+ * @param s      CA-MPS handle.
+ * @param q      Target qubit, 0..num_qubits-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return CA_MPS_SUCCESS; CA_MPS_ERR_QUBIT when @p s is NULL or @p q
+ *         is out of range; CA_MPS_ERR_OOM on allocation failure.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
+
+/**
+ * @brief R_Z(theta) = exp(-i theta Z / 2) on qubit @p q.
+ *
+ * The Z generator is conjugated through the tableau into the Pauli
+ * string C^dagger Z_q C, which is then applied to |phi> as a
+ * Pauli-string rotation.  T, T-dagger and the phase gate are all
+ * routed through this entry point.
+ *
+ * @param s      CA-MPS handle.
+ * @param q      Target qubit, 0..num_qubits-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return CA_MPS_SUCCESS; CA_MPS_ERR_QUBIT when @p s is NULL or @p q
+ *         is out of range; CA_MPS_ERR_OOM on allocation failure.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
 /**

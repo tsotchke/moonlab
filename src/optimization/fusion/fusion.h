@@ -109,32 +109,334 @@ typedef struct {
     size_t merges_applied;
 } fuse_stats_t;
 
+/**
+ * @brief Allocate an empty gate list for a circuit on @p num_qubits
+ *        qubits.
+ *
+ * The record array starts with capacity for 16 gates and doubles on
+ * demand as gates are appended.  Nothing is fused at build time; the
+ * accumulator pass runs in ::fuse_compile.
+ *
+ * @param num_qubits  Qubit count; must be in 1..MAX_QUBITS.
+ * @return Owned, heap-allocated circuit; NULL on a zero or oversized
+ *         qubit count, and on allocation failure.
+ * @stability evolving
+ */
 MOONLAB_API fuse_circuit_t* fuse_circuit_create(size_t num_qubits);
+
+/**
+ * @brief Release a circuit and the gate array it owns.
+ *
+ * @param c  Circuit to release; NULL is a no-op.
+ * @return Nothing.
+ * @stability evolving
+ */
 MOONLAB_API void            fuse_circuit_free(fuse_circuit_t* c);
+
+/**
+ * @brief Number of gate records currently held by the circuit.
+ *
+ * Counts emitted records, so on a circuit produced by ::fuse_compile
+ * this is the post-fusion gate count that ::fuse_stats_t reports as
+ * @c fused_gates.
+ *
+ * @param c  Circuit to query.
+ * @return Record count; 0 when @p c is NULL.
+ * @stability evolving
+ */
 MOONLAB_API size_t          fuse_circuit_len(const fuse_circuit_t* c);
+
+/**
+ * @brief Qubit count the circuit was created with.
+ *
+ * This is the width used to bounds-check every @c fuse_append_* call
+ * and to size the per-qubit accumulator table in ::fuse_compile.
+ *
+ * @param c  Circuit to query.
+ * @return Qubit count; 0 when @p c is NULL.
+ * @stability evolving
+ */
 MOONLAB_API size_t          fuse_circuit_num_qubits(const fuse_circuit_t* c);
 
+/**
+ * @brief Append a Hadamard gate on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_h(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append a Pauli-X (bit flip) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_x(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append a Pauli-Y on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_y(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append a Pauli-Z (phase flip) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_z(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append S = diag(1, i) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_s(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append S-dagger = diag(1, -i) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_sdg(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append T = diag(1, e^{i pi/4}) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_t(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append T-dagger = diag(1, e^{-i pi/4}) on qubit @p q.
+ *
+ * @param c  Circuit to append to.
+ * @param q  Target qubit, in 0..num_qubits-1.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_tdg(fuse_circuit_t* c, int q);
+
+/**
+ * @brief Append the phase gate diag(1, e^{i theta}) on qubit @p q.
+ *
+ * @param c      Circuit to append to.
+ * @param q      Target qubit, in 0..num_qubits-1.
+ * @param theta  Phase angle in radians, stored verbatim in the
+ *               record's p[0] slot.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_phase(fuse_circuit_t* c, int q, double theta);
+
+/**
+ * @brief Append R_X(theta) = exp(-i theta X / 2) on qubit @p q.
+ *
+ * @param c      Circuit to append to.
+ * @param q      Target qubit, in 0..num_qubits-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_rx(fuse_circuit_t* c, int q, double theta);
+
+/**
+ * @brief Append R_Y(theta) = exp(-i theta Y / 2) on qubit @p q.
+ *
+ * @param c      Circuit to append to.
+ * @param q      Target qubit, in 0..num_qubits-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_ry(fuse_circuit_t* c, int q, double theta);
+
+/**
+ * @brief Append R_Z(theta) = exp(-i theta Z / 2) on qubit @p q.
+ *
+ * @param c      Circuit to append to.
+ * @param q      Target qubit, in 0..num_qubits-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_rz(fuse_circuit_t* c, int q, double theta);
+
+/**
+ * @brief Append the general single-qubit U3(theta, phi, lambda) on
+ *        qubit @p q.
+ *
+ * Qiskit convention:
+ *   [[cos(t/2),            -e^{i l} sin(t/2)],
+ *    [e^{i p} sin(t/2),  e^{i(p+l)} cos(t/2)]].
+ *
+ * @param c       Circuit to append to.
+ * @param q       Target qubit, in 0..num_qubits-1.
+ * @param theta   Polar angle t, in radians.
+ * @param phi     Azimuthal phase p, in radians.
+ * @param lambda  Trailing phase l, in radians.
+ * @return 0 on success; -1 when @p q is out of range or the record
+ *         array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_u3(fuse_circuit_t* c, int q,
                    double theta, double phi, double lambda);
+
+/**
+ * @brief Append a CNOT: flip @p tgt when @p ctrl is |1>.
+ *
+ * Two-qubit gates are fusion barriers -- ::fuse_compile flushes the
+ * pending accumulators on both qubits before emitting this record.
+ *
+ * @param c     Circuit to append to.
+ * @param ctrl  Control qubit, in 0..num_qubits-1.
+ * @param tgt   Target qubit, in 0..num_qubits-1, distinct from
+ *              @p ctrl.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_cnot(fuse_circuit_t* c, int ctrl, int tgt);
+
+/**
+ * @brief Append a controlled-Z (symmetric in its two qubits).
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c     Circuit to append to.
+ * @param ctrl  First qubit, in 0..num_qubits-1.
+ * @param tgt   Second qubit, in 0..num_qubits-1, distinct from
+ *              @p ctrl.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_cz(fuse_circuit_t* c, int ctrl, int tgt);
+
+/**
+ * @brief Append a controlled-Y: apply Y to @p tgt when @p ctrl is |1>.
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c     Circuit to append to.
+ * @param ctrl  Control qubit, in 0..num_qubits-1.
+ * @param tgt   Target qubit, in 0..num_qubits-1, distinct from
+ *              @p ctrl.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_cy(fuse_circuit_t* c, int ctrl, int tgt);
+
+/**
+ * @brief Append a SWAP of qubits @p a and @p b.
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c  Circuit to append to.
+ * @param a  First qubit, in 0..num_qubits-1.
+ * @param b  Second qubit, in 0..num_qubits-1, distinct from @p a.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_swap(fuse_circuit_t* c, int a, int b);
+
+/**
+ * @brief Append a controlled phase: diag(1, 1, 1, e^{i theta}).
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c      Circuit to append to.
+ * @param ctrl   Control qubit, in 0..num_qubits-1.
+ * @param tgt    Target qubit, in 0..num_qubits-1, distinct from
+ *               @p ctrl.
+ * @param theta  Phase angle in radians.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_cphase(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+
+/**
+ * @brief Append a controlled-R_X(theta) on @p tgt, gated by @p ctrl.
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c      Circuit to append to.
+ * @param ctrl   Control qubit, in 0..num_qubits-1.
+ * @param tgt    Target qubit, in 0..num_qubits-1, distinct from
+ *               @p ctrl.
+ * @param theta  Rotation angle in radians.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_crx(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+
+/**
+ * @brief Append a controlled-R_Y(theta) on @p tgt, gated by @p ctrl.
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c      Circuit to append to.
+ * @param ctrl   Control qubit, in 0..num_qubits-1.
+ * @param tgt    Target qubit, in 0..num_qubits-1, distinct from
+ *               @p ctrl.
+ * @param theta  Rotation angle in radians.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_cry(fuse_circuit_t* c, int ctrl, int tgt, double theta);
+
+/**
+ * @brief Append a controlled-R_Z(theta) on @p tgt, gated by @p ctrl.
+ *
+ * Acts as a fusion barrier on both qubits.
+ *
+ * @param c      Circuit to append to.
+ * @param ctrl   Control qubit, in 0..num_qubits-1.
+ * @param tgt    Target qubit, in 0..num_qubits-1, distinct from
+ *               @p ctrl.
+ * @param theta  Rotation angle in radians.
+ * @return 0 on success; -1 when either index is out of range, the two
+ *         indices are equal, or the record array could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int fuse_append_crz(fuse_circuit_t* c, int ctrl, int tgt, double theta);
 
 /**

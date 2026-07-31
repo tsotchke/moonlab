@@ -74,13 +74,72 @@ typedef struct moonlab_ca_peps_t moonlab_ca_peps_t;
 MOONLAB_API moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
                                             uint32_t chi_bond);
 
+/**
+ * Release the handle and the underlying CA-MPS factor.  No-op on NULL.
+ * @param s  CA-PEPS handle to free.
+ * @return Nothing.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_ca_peps_free(moonlab_ca_peps_t* s);
+
+/**
+ * @brief Deep-copy a CA-PEPS.
+ *
+ * Copies the lattice extents and bond cap, then clones the backing
+ * CA-MPS (tableau D plus the MPS factor |phi>).
+ *
+ * @param s  Source handle.
+ * @return A newly owned handle, or NULL when @p s is NULL or the
+ *         clone allocation fails.
+ * @stability evolving
+ */
 MOONLAB_API moonlab_ca_peps_t* moonlab_ca_peps_clone(const moonlab_ca_peps_t* s);
 
+/**
+ * Lattice extent along x, as passed to @c moonlab_ca_peps_create.
+ * @param s  CA-PEPS handle.
+ * @return Lx; 0 when @p s is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_ca_peps_lx(const moonlab_ca_peps_t* s);
+
+/**
+ * Lattice extent along y, as passed to @c moonlab_ca_peps_create.
+ * @param s  CA-PEPS handle.
+ * @return Ly; 0 when @p s is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_ca_peps_ly(const moonlab_ca_peps_t* s);
+
+/**
+ * Number of lattice sites, Lx * Ly.  This is the length every Pauli
+ * string passed to the measurement entry points must have.
+ * @param s  CA-PEPS handle.
+ * @return Lx * Ly; 0 when @p s is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_ca_peps_num_qubits(const moonlab_ca_peps_t* s);
+
+/**
+ * Bond-dimension cap @c chi_bond the state was created with.
+ * @param s  CA-PEPS handle.
+ * @return The cap; 0 when @p s is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_ca_peps_max_bond_dim(const moonlab_ca_peps_t* s);
+
+/**
+ * @brief Largest bond dimension currently carried by the row-major MPS
+ *        factor |phi>.
+ *
+ * Reflects working storage after the most recent truncation, not the
+ * intrinsic entanglement -- use
+ * ::moonlab_ca_peps_max_half_cut_entropy for the latter.
+ *
+ * @param s  CA-PEPS handle.
+ * @return Current max bond dimension (>= 1); 0 when @p s is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s);
 
 /**
@@ -100,21 +159,150 @@ MOONLAB_API double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t*
 /* Single-qubit indexed by linear (x + Lx*y).  Two-qubit must be on
  * adjacent sites in the square lattice. */
 
+/**
+ * Hadamard on site @p q.  Tableau-only, so |phi> is untouched.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_h(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * S = sqrt(Z) = diag(1, i) on site @p q.  Tableau-only.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_s(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * S-dagger = diag(1, -i) on site @p q.  Tableau-only.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_sdag(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * Pauli X (bit flip) on site @p q.  Tableau-only.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_x(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * Pauli Y on site @p q.  Tableau-only.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_y(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * Pauli Z (phase flip) on site @p q.  Tableau-only.
+ * @param s  CA-PEPS handle.
+ * @param q  Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_z(moonlab_ca_peps_t* s, uint32_t q);
+
+/**
+ * @brief Controlled-NOT between two lattice neighbours.
+ *
+ * The tableau update itself is geometry-free, but the call still
+ * enforces square-lattice adjacency (no periodic boundary) so callers
+ * cannot silently treat distant sites as neighbours.
+ *
+ * @param s  CA-PEPS handle.
+ * @param c  Control site, linear index x + Lx*y.
+ * @param t  Target site; must be a horizontal or vertical neighbour
+ *           of @p c.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when either index is
+ *         off-lattice or the two sites are not adjacent, or a mapped
+ *         CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_cnot(moonlab_ca_peps_t* s, uint32_t c, uint32_t t);
+
+/**
+ * @brief Controlled-Z between two lattice neighbours (symmetric in
+ *        @p a / @p b).
+ *
+ * Adjacency is enforced exactly as in ::moonlab_ca_peps_cnot.
+ *
+ * @param s  CA-PEPS handle.
+ * @param a  First site, linear index x + Lx*y.
+ * @param b  Second site; must be a horizontal or vertical neighbour
+ *           of @p a.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when either index is
+ *         off-lattice or the two sites are not adjacent, or a mapped
+ *         CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_cz(moonlab_ca_peps_t* s, uint32_t a, uint32_t b);
 
 /* ================================================================== */
 /*  Non-Clifford gates -- push into PEPS via Pauli-rotation MPO.       */
 /* ================================================================== */
 
+/**
+ * @brief R_X(theta) = exp(-i theta X / 2) on site @p q.
+ *
+ * Non-Clifford: the generator is conjugated through D into a Pauli
+ * string and applied to |phi> as a bond-dim-2 MPO, so the cost is
+ * independent of where @p q sits on the lattice.
+ *
+ * @param s      CA-PEPS handle.
+ * @param q      Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, ::CA_PEPS_ERR_OOM on allocation
+ *         failure, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_rx(moonlab_ca_peps_t* s, uint32_t q, double theta);
+
+/**
+ * @brief R_Y(theta) = exp(-i theta Y / 2) on site @p q.
+ *
+ * Same Pauli-rotation push-through as ::moonlab_ca_peps_rx.
+ *
+ * @param s      CA-PEPS handle.
+ * @param q      Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, ::CA_PEPS_ERR_OOM on allocation
+ *         failure, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_ry(moonlab_ca_peps_t* s, uint32_t q, double theta);
+
+/**
+ * @brief R_Z(theta) = exp(-i theta Z / 2) on site @p q.
+ *
+ * Same Pauli-rotation push-through as ::moonlab_ca_peps_rx.
+ *
+ * @param s      CA-PEPS handle.
+ * @param q      Linear site index x + Lx*y, in 0..Lx*Ly-1.
+ * @param theta  Rotation angle in radians (Qiskit/Cirq convention).
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_QUBIT when @p s is NULL or
+ *         @p q is off-lattice, ::CA_PEPS_ERR_OOM on allocation
+ *         failure, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_rz(moonlab_ca_peps_t* s, uint32_t q, double theta);
 
 /** T = R_Z(pi/4) up to a global phase. */
@@ -164,6 +352,21 @@ MOONLAB_API double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s);
 /*  Measurement                                                         */
 /* ================================================================== */
 
+/**
+ * @brief Compute <psi | P | psi> for a Pauli string P on the lattice.
+ *
+ * Delegates to the CA-MPS contraction, which absorbs the Clifford
+ * prefactor via <psi|P|psi> = <phi| D^dagger P D |phi>.  The result is
+ * geometry-independent given the row-major embedding.
+ *
+ * @param s           CA-PEPS handle.
+ * @param pauli       Length-(Lx*Ly) byte array, 0=I, 1=X, 2=Y, 3=Z,
+ *                    indexed by x + Lx*y.
+ * @param out_expval  Receives the expectation value.
+ * @return ::CA_PEPS_SUCCESS, ::CA_PEPS_ERR_INVALID when any argument
+ *         is NULL, or a mapped CA-MPS backend error.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t* s,
                                               const uint8_t* pauli,
                                               double _Complex* out_expval);

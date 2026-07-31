@@ -102,9 +102,38 @@ MOONLAB_API int
 moonlab_job_set_rng_seed(moonlab_job_t *job, uint64_t seed);
 
 /* Introspection. */
+
+/** @brief Qubit width the job was created with (1..32).
+ * @param job  Job to query.
+ * @return The qubit count, or MOONLAB_SCHED_BAD_ARG when @p job is
+ *         NULL.
+ * @stability evolving */
 MOONLAB_API int moonlab_job_num_qubits(const moonlab_job_t *job);
+
+/** @brief Number of gates appended so far via
+ *         @ref moonlab_job_add_gate.
+ * @param job  Job to query.
+ * @return The gate count, or MOONLAB_SCHED_BAD_ARG when @p job is
+ *         NULL.
+ * @stability evolving */
 MOONLAB_API int moonlab_job_num_gates(const moonlab_job_t *job);
+
+/** @brief Total shot count set by @ref moonlab_job_set_num_shots.
+ *         Fresh jobs start at 0.
+ * @param job  Job to query.
+ * @return The shot count, or MOONLAB_SCHED_BAD_ARG when @p job is
+ *         NULL.
+ * @stability evolving */
 MOONLAB_API int moonlab_job_num_shots(const moonlab_job_t *job);
+
+/** @brief Requested worker fan-out.  Fresh jobs default to 1.
+ *         @ref moonlab_scheduler_run may use fewer workers, and
+ *         reports the count it actually used in
+ *         `num_workers_used`.
+ * @param job  Job to query.
+ * @return The worker count, or MOONLAB_SCHED_BAD_ARG when @p job is
+ *         NULL.
+ * @stability evolving */
 MOONLAB_API int moonlab_job_num_workers(const moonlab_job_t *job);
 
 /**

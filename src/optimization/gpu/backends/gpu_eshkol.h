@@ -93,6 +93,18 @@ moonlab_eshkol_status_t moonlab_eshkol_init(void);
  */
 MOONLAB_API void moonlab_eshkol_set_precision(moonlab_eshkol_precision_t tier);
 
+/**
+ * @brief Read back the precision tier currently selected for
+ *        moonlab_eshkol_zgemm.
+ *
+ * Reports the requested tier, which is the last value passed to
+ * moonlab_eshkol_set_precision, not necessarily the tier the backend
+ * managed to initialise. Defaults to MOONLAB_ESHKOL_PRECISION_FAST,
+ * and the stub build (QSIM_ENABLE_ESHKOL off) always reports that.
+ *
+ * @return The active ::moonlab_eshkol_precision_t tier.
+ * @stability evolving
+ */
 MOONLAB_API moonlab_eshkol_precision_t moonlab_eshkol_get_precision(void);
 
 /**

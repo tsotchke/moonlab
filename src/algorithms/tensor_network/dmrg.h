@@ -531,17 +531,6 @@ int dmrg_optimize_two_site(tn_mps_state_t *mps,
 // ============================================================================
 
 /**
- * @brief Find ground state of transverse field Ising model
- *
- * Convenience function that creates MPO and runs DMRG.
- *
- * @param num_sites Number of lattice sites
- * @param g Transverse field ratio h/J (critical point at g=1)
- * @param config DMRG configuration (NULL for defaults)
- * @param result Output: DMRG result
- * @return Ground state MPS or NULL on failure
- */
-/**
  * @brief Allocate and randomly initialise an MPS suitable for DMRG.
  *
  * Returns an MPS on @p num_sites with bond dimension @p chi_init in
@@ -567,6 +556,30 @@ MOONLAB_API tn_mps_state_t *dmrg_init_random_mps(uint32_t num_sites,
                                       uint32_t chi_init,
                                       const tn_state_config_t *mps_cfg);
 
+/**
+ * @brief Find the ground state of the transverse-field Ising model.
+ *
+ * Builds the TFIM MPO for H = -J sum_i Z_i Z_{i+1} - h sum_i X_i with
+ * J fixed to 1 and h = @p g, seeds a random MPS at bond dimension
+ * min(8, config->max_bond_dim) from @c config->seed (a local PRNG, so
+ * the process-global rand() stream is untouched), and runs
+ * ::dmrg_ground_state.  The optimised MPS is renormalised to unit norm
+ * before it is returned, since the local SVD updates leave it only
+ * approximately normalised.
+ *
+ * @param num_sites  Chain length.
+ * @param g          Transverse-field ratio h/J; the critical point is
+ *                   at g = 1.
+ * @param config     DMRG configuration; NULL selects
+ *                   ::dmrg_config_default.
+ * @param result     Optional sink for the sweep record.  When
+ *                   non-NULL it receives an owned ::dmrg_result_t that
+ *                   the caller must release with ::dmrg_result_free;
+ *                   when NULL the record is freed internally.
+ * @return Owned ground-state MPS, or NULL if the MPO build, the MPS
+ *         allocation, or the DMRG sweep failed.
+ * @stability evolving
+ */
 MOONLAB_API tn_mps_state_t *dmrg_tfim_ground_state(uint32_t num_sites,
                                         double g,
                                         const dmrg_config_t *config,
