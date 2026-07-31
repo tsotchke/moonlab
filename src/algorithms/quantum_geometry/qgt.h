@@ -168,6 +168,83 @@ typedef struct qgt_system qgt_system_t;
 qgt_system_t* qgt_create(qgt_bloch_fn f, void* user);
 
 /**
+ * @brief Callback supplying the analytic @f$\mathbf d(\mathbf k)@f$ of a
+ *        @f$H(\mathbf k) = \mathbf d(\mathbf k)\cdot\boldsymbol\sigma@f$
+ *        model together with its two momentum gradients.
+ *
+ * @p d, @p dx and @p dy are each length 3 and receive
+ * @f$\mathbf d@f$, @f$\partial_{k_x}\mathbf d@f$ and
+ * @f$\partial_{k_y}\mathbf d@f$ at @p k.  A Hamiltonian carrying an
+ * identity component @f$d_0(\mathbf k)\mathbb 1@f$ (the Haldane
+ * next-nearest-neighbour term, for instance) reports only the traceless
+ * part: the identity shifts both bands equally and drops out of the band
+ * projectors, so it does not enter the geometry.
+ */
+typedef void (*qgt_dsigma_fn)(const double k[2], void* user,
+                              double d[3], double dx[3], double dy[3]);
+
+/**
+ * @brief Attach an analytic @f$\mathbf d(\mathbf k)@f$ to a system, so the
+ *        closed-form geometry of ::qgt_dsigma_metric_curvature is reachable
+ *        through the handle.
+ *
+ * @c qgt_system_t otherwise carries only the Bloch callback, which forces
+ * every consumer of the exact path to re-derive @f$\mathbf d@f$ and its
+ * gradients by hand.  The built-in @c d.sigma models
+ * (::qgt_model_qwz, ::qgt_model_haldane) populate this at construction, so
+ * ::qgt_exact_curvature_at works on them with no caller-side derivation.
+ * Systems built with ::qgt_create supply their own; those that do not remain
+ * fully usable through the finite-difference paths (::qgt_metric_at,
+ * ::qgt_curvature_at) and the Berry-grid integrators.
+ *
+ * @p f is invoked with the same @c user pointer given to ::qgt_create (or
+ * held by the built-in model) and must be consistent with the system's Bloch
+ * callback: @f$H(\mathbf k)@f$ traceless part @f$=\mathbf d(\mathbf k)\cdot
+ * \boldsymbol\sigma@f$.
+ *
+ * @param sys  System to annotate.
+ * @param f    Analytic d-vector callback, or NULL to detach.
+ * @return 0 on success, -1 if @p sys is NULL.
+ */
+MOONLAB_API int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f);
+
+/**
+ * @brief Evaluate a system's analytic @f$\mathbf d(\mathbf k)@f$ and its
+ *        momentum gradients at @p k.
+ *
+ * @param sys        System carrying an analytic d-vector.
+ * @param k          Momentum, length 2.
+ * @param[out] d     @f$\mathbf d(\mathbf k)@f$, length 3.
+ * @param[out] dx    @f$\partial_{k_x}\mathbf d@f$, length 3.
+ * @param[out] dy    @f$\partial_{k_y}\mathbf d@f$, length 3.
+ * @return 0 on success, -1 on bad arguments, -3 if @p sys carries no
+ *         analytic d-vector (use ::qgt_curvature_at instead).
+ */
+MOONLAB_API int qgt_dsigma_at(const qgt_system_t* sys, const double k[2],
+                              double d[3], double dx[3], double dy[3]);
+
+/**
+ * @brief Closed-form lower-band metric and Berry curvature at @p k, routed
+ *        through a system handle.
+ *
+ * Equivalent to ::qgt_dsigma_at followed by
+ * ::qgt_dsigma_metric_curvature, and returns their status codes: this is the
+ * exact, machine-precision path (no finite difference of any kind), reachable
+ * from a @c qgt_model_qwz / @c qgt_model_haldane handle without the caller
+ * re-deriving @f$\mathbf d(\mathbf k)@f$.
+ *
+ * @param sys        System carrying an analytic d-vector.
+ * @param k          Momentum, length 2.
+ * @param[out] g     Row-major 2x2 metric (real, symmetric, PSD).
+ * @param[out] omega_xy  Optional (may be NULL): Berry curvature.
+ * @return 0 on success, -1 on bad arguments, -2 at a band touching,
+ *         -3 if @p sys carries no analytic d-vector.
+ */
+MOONLAB_API int qgt_exact_curvature_at(const qgt_system_t* sys,
+                                       const double k[2], double g[4],
+                                       double* omega_xy);
+
+/**
  * @brief Qi-Wu-Zhang two-band Chern insulator
  *        @f$H(\mathbf k) = \sin k_x\,\sigma_x + \sin k_y\,\sigma_y +
  *        (m + \cos k_x + \cos k_y)\,\sigma_z@f$.
@@ -176,6 +253,9 @@ qgt_system_t* qgt_create(qgt_bloch_fn f, void* user);
  *   - @f$C = +1@f$ for @f$-2 < m < 0@f$,
  *   - @f$C = -1@f$ for @f$0 < m < +2@f$,
  *   - @f$C = 0@f$ for @f$|m| > 2@f$.
+ *
+ * Carries an analytic d-vector, so ::qgt_exact_curvature_at and
+ * ::qgt_dsigma_at work on the returned handle.
  */
 MOONLAB_API qgt_system_t* qgt_model_qwz(double m);
 
@@ -185,6 +265,11 @@ MOONLAB_API qgt_system_t* qgt_model_qwz(double m);
  * Parameters: nearest-neighbour hopping @f$t_1@f$, next-nearest
  * @f$t_2@f$ with Peierls phase @f$\phi@f$, sublattice staggering
  * @f$M@f$.  Topological for @f$|M| < 3\sqrt{3}\,|t_2\sin\phi|@f$.
+ *
+ * Carries an analytic d-vector (the traceless part; the
+ * next-nearest-neighbour identity term does not enter the band geometry),
+ * so ::qgt_exact_curvature_at and ::qgt_dsigma_at work on the returned
+ * handle.
  */
 MOONLAB_API qgt_system_t* qgt_model_haldane(double t1, double t2,
                                 double phi, double M_stagger);
@@ -407,8 +492,17 @@ MOONLAB_API int qgt_metric_at(const qgt_system_t* sys, const double k[2],
  *                  Q_{\mu\nu}@f$ (real, symmetric, PSD).
  * @param[out] omega_xy  Optional (may be NULL): Berry curvature
  *                       @f$\Omega_{xy}@f$.
- * @return 0 on success, -1 on bad arguments, -2 at a band touching
- *         (@f$|\mathbf d|=0@f$, where the geometry is undefined).
+ * @return 0 on success, -1 on bad arguments, -2 at a band touching, where
+ *         the geometry is undefined.  The touching test is relative to the
+ *         scale of the supplied @f$\mathbf d@f$ and its gradients
+ *         (@f$|\mathbf d| < 10^{-12}\,(\|\mathbf d\|_1 +
+ *         \|\partial_x\mathbf d\|_1 + \|\partial_y\mathbf d\|_1)@f$), not
+ *         an exact zero, since @f$g@f$ and @f$\Omega@f$ both diverge as the
+ *         gap closes and a near-degenerate point would otherwise return an
+ *         enormous finite value indistinguishable from a real one.
+ *
+ * ::qgt_exact_curvature_at reaches this same closed form from a
+ * @c qgt_system_t handle, for models that carry an analytic d-vector.
  */
 MOONLAB_API int qgt_dsigma_metric_curvature(const double d[3],
                                             const double dx[3],
@@ -447,7 +541,12 @@ MOONLAB_API int qgt_dsigma_metric_curvature(const double d[3],
  *                  (@f$10^{-4}@f$..@f$10^{-3}@f$ is a good default).
  * @param[out] g    Row-major 2x2 metric (real, symmetric).
  * @param[out] omega_xy  Optional (may be NULL): Berry curvature.
- * @return 0 on success, -1 on bad arguments, -2 at a band touching.
+ * @return 0 on success, -1 on bad arguments, -2 at a band touching, tested
+ *         against the Hamiltonian's own trace scale
+ *         (@f$|\mathbf h| < 10^{-12}(|H_{00}| + |H_{11}| + 2|H_{01}|)@f$) as
+ *         elsewhere in this module, since @f$Q@f$ carries a
+ *         @f$1/(\Delta E)^2@f$ factor that turns a near-closed gap into a
+ *         huge finite number rather than an error.
  */
 MOONLAB_API int qgt_curvature_at(const qgt_system_t* sys, const double k[2],
                                  double dk, double g[4], double* omega_xy);

@@ -17,6 +17,9 @@ struct qgt_system {
     void*        user;
     /* For built-in models we own the user payload. */
     void*        owned_user;
+    /* Optional analytic d(k) for H = d.sigma models; NULL when the system
+     * is only known through its Bloch callback.  Invoked with `user`. */
+    qgt_dsigma_fn dsigma;
 };
 
 struct qgt_system_1d {
@@ -32,7 +35,30 @@ qgt_system_t* qgt_create(qgt_bloch_fn f, void* user) {
     s->fn = f;
     s->user = user;
     s->owned_user = NULL;
+    s->dsigma = NULL;
     return s;
+}
+
+int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f) {
+    if (!sys) return -1;
+    sys->dsigma = f;
+    return 0;
+}
+
+int qgt_dsigma_at(const qgt_system_t* sys, const double k[2],
+                  double d[3], double dx[3], double dy[3]) {
+    if (!sys || !k || !d || !dx || !dy) return -1;
+    if (!sys->dsigma) return -3;
+    sys->dsigma(k, sys->user, d, dx, dy);
+    return 0;
+}
+
+int qgt_exact_curvature_at(const qgt_system_t* sys, const double k[2],
+                           double g[4], double* omega_xy) {
+    double d[3], dx[3], dy[3];
+    int rc = qgt_dsigma_at(sys, k, d, dx, dy);
+    if (rc != 0) return rc;
+    return qgt_dsigma_metric_curvature(d, dx, dy, g, omega_xy);
 }
 
 void qgt_free(qgt_system_t* sys) {
@@ -59,6 +85,19 @@ static void qwz_bloch(const double k[2], void* user, qgt_complex_t h[4]) {
     h[3] = -hz;
 }
 
+/* Analytic d(k) and gradients of the QWZ Hamiltonian above -- the same
+ * expressions qwz_bloch assembles into h[], differentiated in closed form. */
+static void qwz_dsigma(const double k[2], void* user,
+                       double d[3], double dx[3], double dy[3]) {
+    double m = ((const qwz_params_t*)user)->m;
+    d[0] = sin(k[0]);
+    d[1] = sin(k[1]);
+    d[2] = m + cos(k[0]) + cos(k[1]);
+
+    dx[0] = cos(k[0]); dx[1] = 0.0;       dx[2] = -sin(k[0]);
+    dy[0] = 0.0;       dy[1] = cos(k[1]); dy[2] = -sin(k[1]);
+}
+
 qgt_system_t* qgt_model_qwz(double m) {
     qwz_params_t* p = malloc(sizeof(*p));
     if (!p) return NULL;
@@ -66,6 +105,7 @@ qgt_system_t* qgt_model_qwz(double m) {
     qgt_system_t* s = qgt_create(qwz_bloch, p);
     if (!s) { free(p); return NULL; }
     s->owned_user = p;
+    s->dsigma = qwz_dsigma;
     return s;
 }
 
@@ -113,6 +153,36 @@ static void haldane_bloch(const double k[2], void* user,
     h[3] = diag_sum - sigma_z;
 }
 
+/* Analytic d(k) and gradients of the Haldane Hamiltonian above.
+ *
+ * haldane_bloch writes h[0] = diag_sum + sigma_z, h[3] = diag_sum - sigma_z,
+ * h[1] = t1 conj(f), h[2] = t1 f.  The identity part diag_sum shifts both
+ * bands equally and cancels out of the band projectors, so the geometry sees
+ * only the traceless part.  Matching h[1] = d_x - i d_y against t1 conj(f)
+ * gives d_x = t1 Re f, d_y = t1 Im f, and d_z = sigma_z, with
+ *   Re f = cos(kx) + cos(kx - ky) + cos(ky)
+ *   Im f = sin(kx) + sin(kx - ky) + sin(ky)
+ *   sigma_z = M - 2 t2 sin(phi) sin(ky) (1 + 2 cos(kx)). */
+static void haldane_dsigma(const double k[2], void* user,
+                           double d[3], double dx[3], double dy[3]) {
+    const haldane_params_t* p = (const haldane_params_t*)user;
+    const double t1 = p->t1, t2 = p->t2, phi = p->phi, M = p->M;
+    const double kx = k[0], ky = k[1];
+    const double s2 = -2.0 * t2 * sin(phi);   /* prefactor of the NNN mass */
+
+    d[0] = t1 * (cos(kx) + cos(kx - ky) + cos(ky));
+    d[1] = t1 * (sin(kx) + sin(kx - ky) + sin(ky));
+    d[2] = M + s2 * sin(ky) * (1.0 + 2.0 * cos(kx));
+
+    dx[0] = t1 * (-sin(kx) - sin(kx - ky));
+    dx[1] = t1 * ( cos(kx) + cos(kx - ky));
+    dx[2] = s2 * sin(ky) * (-2.0 * sin(kx));
+
+    dy[0] = t1 * ( sin(kx - ky) - sin(ky));
+    dy[1] = t1 * (-cos(kx - ky) + cos(ky));
+    dy[2] = s2 * cos(ky) * (1.0 + 2.0 * cos(kx));
+}
+
 qgt_system_t* qgt_model_haldane(double t1, double t2,
                                 double phi, double M_stagger) {
     haldane_params_t* p = malloc(sizeof(*p));
@@ -121,6 +191,7 @@ qgt_system_t* qgt_model_haldane(double t1, double t2,
     qgt_system_t* s = qgt_create(haldane_bloch, p);
     if (!s) { free(p); return NULL; }
     s->owned_user = p;
+    s->dsigma = haldane_dsigma;
     return s;
 }
 
@@ -560,9 +631,22 @@ int qgt_dsigma_metric_curvature(const double d[3], const double dx[3],
      * with dhat = d / |d| and
      *   d_mu dhat = d_mu d / |d| - d (d . d_mu d) / |d|^3.
      * Both are gauge invariant; no eigenvector enters. */
+    /* Band-touching guard, on the same relative footing as lower_eigvec_2x2:
+     * an absolute floor for subnormal underflow plus a threshold relative to
+     * the construction scale of the inputs.  |d| = 0 is where the geometry is
+     * genuinely undefined, and both g ~ |grad d|^2/|d|^2 and Omega diverge as
+     * it is approached, so a test against 0 alone lets a near-gapless k return
+     * an enormous finite number that looks like a result.  The L1 sums of d
+     * and its gradients are the natural anchor here: k is dimensionless
+     * (lattice units) throughout this module, so d and grad d carry the same
+     * units and their scale is the model's own energy scale. */
     double n2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-    if (n2 <= 0.0) return -2;              /* band touching: geometry undefined */
     double n = sqrt(n2);
+    double scale = fabs(d[0]) + fabs(d[1]) + fabs(d[2])
+                 + fabs(dx[0]) + fabs(dx[1]) + fabs(dx[2])
+                 + fabs(dy[0]) + fabs(dy[1]) + fabs(dy[2]);
+    double sing_eps = 1e-12 * (scale > 0.0 ? scale : 1.0);
+    if (n < 1e-300 || n < sing_eps) return -2;  /* band touching: undefined */
     double inv = 1.0 / n;
     double inv3 = inv / n2;
 
@@ -602,7 +686,17 @@ int qgt_curvature_at(const qgt_system_t* sys, const double k[2], double dk,
     double hx = creal(H0[1]);
     double hy = -cimag(H0[1]);
     double hnorm = sqrt(hx * hx + hy * hy + hz * hz);
-    if (hnorm < 1e-300) return -2;          /* band touching */
+    /* Same trace-relative band-touching threshold as lower_eigvec_2x2: the
+     * absolute 1e-300 floor alone catches only subnormal underflow, and Q
+     * carries a 1/DeltaE^2 = 1/(4|h|^2) factor, so a k-point with |h| = 1e-6
+     * against an O(1) Hamiltonian would return ~1e11 as if it were a
+     * measurement.  The trace |h00| + |h11| + 2|h01| tracks the Hamiltonian's
+     * own scale, so the test reads "h has vanished relative to how H was
+     * built" rather than "h has vanished relative to 1.0". */
+    double trace_scale = fabs(creal(H0[0])) + fabs(creal(H0[3]))
+                       + 2.0 * (fabs(creal(H0[1])) + fabs(cimag(H0[1])));
+    double sing_eps = 1e-12 * (trace_scale > 0.0 ? trace_scale : 1.0);
+    if (hnorm < 1e-300 || hnorm < sing_eps) return -2;   /* band touching */
     double DE2 = 4.0 * hnorm * hnorm;
 
     /* Exact band projectors of the 2x2 Hamiltonian (gauge-free). */
