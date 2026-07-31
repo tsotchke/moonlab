@@ -1,0 +1,327 @@
+{
+  "schema": "moonlab/surface_code_scale_vs_stim_v1",
+  "task": "#59 -- does the stabilizer stack reach Stim's headline scale",
+  "generated_utc": "2026-07-31T18:43:25Z",
+  "host": {
+    "machine": "arm64",
+    "system": "Darwin",
+    "release": "24.1.0",
+    "cpu_count": 24
+  },
+  "build_type": "Release",
+  "stim_version": "1.15.0",
+  "params": {
+    "p": 0.001,
+    "rounds": "d",
+    "shots_all_cores": 1024,
+    "shots_one_thread": 512,
+    "repeats": 3,
+    "seed": 12345,
+    "noise_model": "circuit-level depolarising: DEPOLARIZE1(p) on data before each round and after each 1q Clifford, DEPOLARIZE2(p) after each CNOT, X_ERROR(p) after reset and before measurement",
+    "phase_definitions": {
+      "moonlab_analysis": "pf_compute_reference() -- Aaronson-Gottesman tableau pass",
+      "stim_analysis": "compile_detector_sampler() + first sample(); Stim defers the reference pass to first use",
+      "moonlab_sampling": "public-API replica of pf_run_block, calibrated against the bundled sampler",
+      "stim_reference_sample": "circuit.reference_sample() -- the computation equivalent to Moonlab's pf_compute_reference(); required for measurement sampling, skipped by Stim's detector sampler because detector reference parities are determined"
+    }
+  },
+  "correctness_gates": [
+    {
+      "d": 5,
+      "rounds": 5,
+      "noiseless_all_detectors_quiet": true,
+      "num_measurements": {
+        "ours": 145,
+        "stim_generated": 145
+      },
+      "num_detectors": {
+        "ours": 120,
+        "stim_generated": 120
+      },
+      "matches_stim_construction": true,
+      "dem_builds": true,
+      "dem_num_errors": 1961,
+      "detector_rate_xcheck": {
+        "shots": 20000,
+        "num_detectors": 120,
+        "moonlab_mean_rate": 0.014559583333333334,
+        "stim_mean_rate": 0.014634583333333333,
+        "worst_abs_z": 3.2346728654247716,
+        "detectors_beyond_4_sigma": 0,
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "d": 9,
+      "rounds": 9,
+      "noiseless_all_detectors_quiet": true,
+      "num_measurements": {
+        "ours": 801,
+        "stim_generated": 801
+      },
+      "num_detectors": {
+        "ours": 720,
+        "stim_generated": 720
+      },
+      "matches_stim_construction": true,
+      "dem_builds": true,
+      "dem_num_errors": 13823,
+      "detector_rate_xcheck": {
+        "shots": 20000,
+        "num_detectors": 720,
+        "moonlab_mean_rate": 0.01655611111111111,
+        "stim_mean_rate": 0.016558402777777776,
+        "worst_abs_z": 3.626038333590884,
+        "detectors_beyond_4_sigma": 0,
+        "pass": true
+      },
+      "pass": true
+    },
+    {
+      "d": 15,
+      "rounds": 15,
+      "noiseless_all_detectors_quiet": true,
+      "num_measurements": {
+        "ours": 3585,
+        "stim_generated": 3585
+      },
+      "num_detectors": {
+        "ours": 3360,
+        "stim_generated": 3360
+      },
+      "matches_stim_construction": true,
+      "dem_builds": true,
+      "dem_num_errors": 69476,
+      "detector_rate_xcheck": {
+        "shots": 20000,
+        "num_detectors": 3360,
+        "moonlab_mean_rate": 0.017639657738095237,
+        "stim_mean_rate": 0.01761513392857143,
+        "worst_abs_z": 3.53996388621461,
+        "detectors_beyond_4_sigma": 0,
+        "pass": true
+      },
+      "pass": true
+    }
+  ],
+  "rows": [
+    {
+      "d": 25,
+      "rounds": 25,
+      "p": 0.001,
+      "circuit": {
+        "n_qubits": 1249,
+        "n_gates": 108674,
+        "n_ops_including_noise": 232973,
+        "n_measurements": 16225,
+        "n_detectors": 15600
+      },
+      "moonlab": {
+        "analysis_s": 0.091019,
+        "analysis_completed": true,
+        "analysis_measurements_resolved": 16225,
+        "analysis_peak_rss_bytes": 10616832,
+        "sampling_all_cores": {
+          "shots": 1024,
+          "wall_s": 0.020483,
+          "shots_per_s": 49992.6769,
+          "detector_fraction": 0.0175513321,
+          "threads": 24
+        },
+        "sampling_one_thread": {
+          "shots": 512,
+          "wall_s": 0.11338,
+          "shots_per_s": 4515.78762,
+          "detector_fraction": 0.0174710787,
+          "threads": 1
+        },
+        "simd_backend": "neon",
+        "analysis_before_fix_s": 0.152052,
+        "analysis_fix_speedup": 1.6705523022665596
+      },
+      "stim": {
+        "compile_s": 0.00011583301238715649,
+        "first_sample_s": 0.0005939999828115106,
+        "analysis_s": 0.000709832995198667,
+        "sampling_s": 0.029164375009713694,
+        "shots": 1024,
+        "shots_per_s": 35111.330164247964,
+        "detector_fraction": 0.018288636818910256,
+        "threads": 1,
+        "reference_sample_s": 0.008898125000996515,
+        "measurement_sampler_setup_s": 0.009485166985541582
+      },
+      "ratio": {
+        "analysis_moonlab_over_stim": 128.2259356998835,
+        "sampling_stim_over_moonlab_one_thread": 7.77523947511242,
+        "sampling_stim_over_moonlab_all_cores": 0.7023294678634815,
+        "analysis_moonlab_over_stim_reference_sample": 10.229008919273065,
+        "stim_reference_sample_over_detector_setup": 12.53551900402449
+      }
+    },
+    {
+      "d": 51,
+      "rounds": 51,
+      "p": 0.001,
+      "circuit": {
+        "n_qubits": 5201,
+        "n_gates": 925802,
+        "n_ops_including_noise": 1984255,
+        "n_measurements": 135201,
+        "n_detectors": 132600
+      },
+      "moonlab": {
+        "analysis_s": 3.233597,
+        "analysis_completed": true,
+        "analysis_measurements_resolved": 135201,
+        "analysis_peak_rss_bytes": 77185024,
+        "sampling_all_cores": {
+          "shots": 1024,
+          "wall_s": 0.137523,
+          "shots_per_s": 7446.02721,
+          "detector_fraction": 0.0179557954,
+          "threads": 24
+        },
+        "sampling_one_thread": {
+          "shots": 512,
+          "wall_s": 0.972855,
+          "shots_per_s": 526.286034,
+          "detector_fraction": 0.0178333569,
+          "threads": 1
+        },
+        "simd_backend": "neon",
+        "analysis_before_fix_s": 5.622412,
+        "analysis_fix_speedup": 1.7387485206103295
+      },
+      "stim": {
+        "compile_s": 0.00046812501386739314,
+        "first_sample_s": 0.004925334011204541,
+        "analysis_s": 0.005393459025071934,
+        "sampling_s": 0.256607166986214,
+        "shots": 1024,
+        "shots_per_s": 3990.5354633178017,
+        "detector_fraction": 0.01885440233785822,
+        "threads": 1,
+        "reference_sample_s": 0.2656406659807544,
+        "measurement_sampler_setup_s": 0.25787320800009184
+      },
+      "ratio": {
+        "analysis_moonlab_over_stim": 599.5404776356621,
+        "sampling_stim_over_moonlab_one_thread": 7.58244605692463,
+        "sampling_stim_over_moonlab_all_cores": 0.5359281333216886,
+        "analysis_moonlab_over_stim_reference_sample": 12.172823720575497,
+        "stim_reference_sample_over_detector_setup": 49.252374913001496
+      }
+    },
+    {
+      "d": 75,
+      "rounds": 75,
+      "p": 0.001,
+      "circuit": {
+        "n_qubits": 11249,
+        "n_gates": 2947274,
+        "n_ops_including_noise": 6316423,
+        "n_measurements": 427425,
+        "n_detectors": 421800
+      },
+      "moonlab": {
+        "analysis_s": 26.116218,
+        "analysis_completed": true,
+        "analysis_measurements_resolved": 427425,
+        "analysis_peak_rss_bytes": 236421120,
+        "sampling_all_cores": {
+          "shots": 1024,
+          "wall_s": 0.47228,
+          "shots_per_s": 2168.2053,
+          "detector_fraction": 0.0180675291,
+          "threads": 24
+        },
+        "sampling_one_thread": {
+          "shots": 512,
+          "wall_s": 3.218821,
+          "shots_per_s": 159.064452,
+          "detector_fraction": 0.0180101277,
+          "threads": 1
+        },
+        "simd_backend": "neon",
+        "analysis_before_fix_s": 45.359019,
+        "analysis_fix_speedup": 1.7368142278487644
+      },
+      "stim": {
+        "compile_s": 0.0008994999807327986,
+        "first_sample_s": 0.015652083995519206,
+        "analysis_s": 0.016551583976252005,
+        "sampling_s": 0.839660500001628,
+        "shots": 1024,
+        "shots_per_s": 1219.5405166707433,
+        "detector_fraction": 0.019001317826872925,
+        "threads": 1,
+        "reference_sample_s": 2.022355166001944,
+        "measurement_sampler_setup_s": 2.437159416003851
+      },
+      "ratio": {
+        "analysis_moonlab_over_stim": 1577.8681990479706,
+        "sampling_stim_over_moonlab_one_thread": 7.66695827594932,
+        "sampling_stim_over_moonlab_all_cores": 0.5624654255160908,
+        "analysis_moonlab_over_stim_reference_sample": 12.913764327375766,
+        "stim_reference_sample_over_detector_setup": 122.1849926208629
+      }
+    },
+    {
+      "d": 101,
+      "rounds": 101,
+      "p": 0.001,
+      "circuit": {
+        "n_qubits": 20401,
+        "n_gates": 7201602,
+        "n_ops_including_noise": 15433505,
+        "n_measurements": 1040401,
+        "n_detectors": 1030200
+      },
+      "moonlab": {
+        "analysis_s": 166.537811,
+        "analysis_completed": true,
+        "analysis_measurements_resolved": 1040401,
+        "analysis_peak_rss_bytes": 753844224,
+        "sampling_all_cores": {
+          "shots": 1024,
+          "wall_s": 1.103618,
+          "shots_per_s": 927.857284,
+          "detector_fraction": 0.0180838445,
+          "threads": 24
+        },
+        "sampling_one_thread": {
+          "shots": 512,
+          "wall_s": 7.997102,
+          "shots_per_s": 64.0231924,
+          "detector_fraction": 0.0180711421,
+          "threads": 1
+        },
+        "simd_backend": "neon",
+        "analysis_before_fix_s": 270.681137,
+        "analysis_fix_speedup": 1.6253434302676164
+      },
+      "stim": {
+        "compile_s": 0.0030546670022886246,
+        "first_sample_s": 0.04277999998885207,
+        "analysis_s": 0.04583466699114069,
+        "sampling_s": 2.4340440839878283,
+        "shots": 1024,
+        "shots_per_s": 420.69903611701415,
+        "detector_fraction": 0.019097950868156667,
+        "threads": 1,
+        "reference_sample_s": 8.903997416986385,
+        "measurement_sampler_setup_s": 9.042810875020223
+      },
+      "ratio": {
+        "analysis_moonlab_over_stim": 3633.446514015032,
+        "sampling_stim_over_moonlab_one_thread": 6.571041217198256,
+        "sampling_stim_over_moonlab_all_cores": 0.4534092078292227,
+        "analysis_moonlab_over_stim_reference_sample": 18.703712860730565,
+        "stim_reference_sample_over_detector_setup": 194.26338187877363
+      }
+    }
+  ],
+  "note": "Primary rows reflect the code at HEAD (with the reset-measurement fix).  analysis_before_fix_s records the same measurement before that fix, and stim_reference_sample_s is Stim's equivalent computation -- Stim's detector sampler skips the reference pass entirely, so stim.analysis_s is NOT the comparable quantity for the reference pass."
+}

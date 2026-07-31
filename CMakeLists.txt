@@ -1813,6 +1813,19 @@ if(QSIM_BUILD_BENCHMARKS)
         benchmarks/v1_comparison/sv_random_bench.c)
     target_link_libraries(sv_random_bench PRIVATE quantumsim ${MATH_LIBRARY})
 
+    # Distance-d rotated surface-code memory benchmark (task #59).  Builds the
+    # full rotated code (X+Z stabilizers, hook-avoiding CNOT schedule, d
+    # rounds, circuit-level depolarising noise, detectors + logical
+    # observable) and times the analysis and sampling phases separately, so
+    # the numbers line up with the split in Stim's 2021 paper.  --dump-stim
+    # writes the identical circuit for the Stim side of the comparison; see
+    # benchmarks/surface_code_scale_stim.py.
+    add_executable(surface_code_scale benchmarks/surface_code_scale.c)
+    target_link_libraries(surface_code_scale PRIVATE quantumsim ${MATH_LIBRARY})
+    if(QSIM_HAS_OPENMP)
+        qsim_target_link_openmp(surface_code_scale)
+    endif()
+
     message(STATUS "Benchmarks: Enabled")
 endif()
 
