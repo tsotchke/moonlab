@@ -69,11 +69,11 @@ jobs:
           # (ci-jetson.yml) is manual-dispatch only -- no self-hosted
           # runner is enrolled -- and does not provide routine coverage.
           - name: macos-arm64-lite
-            runner: macos-14
+            runner: macos-15
             cmake_flags: ''
             test_label: ''
           - name: macos-arm64-mpi
-            runner: macos-14
+            runner: macos-15
             cmake_flags: '-DQSIM_ENABLE_MPI=ON'
             test_label: ''
           # macos-x64-lite removed: hosted macos-13 runner queue depth is
