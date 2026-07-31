@@ -90,14 +90,23 @@ typedef struct moonlab_stim_circuit moonlab_stim_circuit_t;
  * @param text NUL-terminated circuit source.
  * @param err  optional failure detail.
  * @return circuit handle, or NULL on failure (see @p err).
+ * @stability beta
  */
 MOONLAB_API moonlab_stim_circuit_t* moonlab_stim_circuit_parse(
     const char* text, moonlab_stim_error_t* err);
 
-/** @brief Parse a `.stim` file from disk.  @see moonlab_stim_circuit_parse. */
+/**
+ * @brief Parse a `.stim` file from disk.  @see moonlab_stim_circuit_parse.
+ * @stability beta
+ */
 MOONLAB_API moonlab_stim_circuit_t* moonlab_stim_circuit_parse_file(
     const char* path, moonlab_stim_error_t* err);
 
+/**
+ * @brief Release a parsed circuit handle.  No-op on NULL.
+ * @param c Circuit from moonlab_stim_circuit_parse / _parse_file.
+ * @stability beta
+ */
 MOONLAB_API void moonlab_stim_circuit_free(moonlab_stim_circuit_t* c);
 
 /**
@@ -108,24 +117,49 @@ MOONLAB_API void moonlab_stim_circuit_free(moonlab_stim_circuit_t* c);
  *                circuit.
  * @return malloc'd NUL-terminated text to release with
  *         moonlab_stim_text_free(), or NULL on allocation failure.
+ * @stability beta
  */
 MOONLAB_API char* moonlab_stim_circuit_to_text(
     const moonlab_stim_circuit_t* c, int flatten);
 
-/** @brief Release text returned by any moonlab stim serialiser. */
+/**
+ * @brief Release text returned by any moonlab stim serialiser.
+ * @stability beta
+ */
 MOONLAB_API void moonlab_stim_text_free(char* text);
 
 /* ================================================================== */
 /*  Introspection                                                      */
 /* ================================================================== */
 
-/** @brief One past the largest qubit index the circuit touches. */
+/**
+ * @brief One past the largest qubit index the circuit touches.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_stim_circuit_num_qubits(const moonlab_stim_circuit_t* c);
-/** @brief Measurement record length, counting MPAD entries. */
+/**
+ * @brief Measurement record length, counting MPAD entries.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_stim_circuit_num_measurements(const moonlab_stim_circuit_t* c);
+/**
+ * @brief Number of DETECTOR instructions in the circuit.
+ * @param c Circuit handle.
+ * @return The detector count, or 0 when @p c is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_stim_circuit_num_detectors(const moonlab_stim_circuit_t* c);
-/** @brief One past the largest OBSERVABLE_INCLUDE index. */
+/**
+ * @brief One past the largest OBSERVABLE_INCLUDE index.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_stim_circuit_num_observables(const moonlab_stim_circuit_t* c);
+/**
+ * @brief Number of TICK instructions, i.e. the circuit's cycle depth.
+ * @param c Circuit handle.
+ * @return The tick count, or 0 when @p c is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_stim_circuit_num_ticks(const moonlab_stim_circuit_t* c);
 
 /**
@@ -136,9 +170,24 @@ MOONLAB_API size_t moonlab_stim_circuit_num_ticks(const moonlab_stim_circuit_t* 
  * at the declaration are already folded in.
  *
  * @return n, or -1 when the index is out of range.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_qubit_coords(
     const moonlab_stim_circuit_t* c, size_t qubit, double* out, size_t cap);
+/**
+ * @brief Copy one detector's DETECTOR coordinate tuple into @p out.
+ *
+ * Writes at most @p cap components; pass @p out = NULL to query the arity
+ * without copying, since the full component count is returned either way.
+ *
+ * @param c        Circuit handle.
+ * @param detector Detector index, < moonlab_stim_circuit_num_detectors.
+ * @param out      Destination, or NULL to query only.
+ * @param cap      Capacity of @p out in doubles.
+ * @return The detector's coordinate count, or -1 when @p c is NULL or
+ *         @p detector is out of range.
+ * @stability beta
+ */
 MOONLAB_API long moonlab_stim_circuit_detector_coords(
     const moonlab_stim_circuit_t* c, size_t detector, double* out, size_t cap);
 
@@ -146,9 +195,15 @@ MOONLAB_API long moonlab_stim_circuit_detector_coords(
 /*  Lowering onto the Pauli-frame sampler                              */
 /* ================================================================== */
 
-/** @brief Number of pf_circuit_op_t entries the lowering produces. */
+/**
+ * @brief Number of pf_circuit_op_t entries the lowering produces.
+ * @stability beta
+ */
 MOONLAB_API long moonlab_stim_circuit_num_ops(const moonlab_stim_circuit_t* c);
-/** @brief Number of doubles the lowering's channel-argument table needs. */
+/**
+ * @brief Number of doubles the lowering's channel-argument table needs.
+ * @stability beta
+ */
 MOONLAB_API long moonlab_stim_circuit_num_channel_args(const moonlab_stim_circuit_t* c);
 
 /**
@@ -160,6 +215,7 @@ MOONLAB_API long moonlab_stim_circuit_num_channel_args(const moonlab_stim_circui
  *
  * @return the number of ops written, or MOONLAB_STIM_ERR_OVERFLOW when a cap
  *         is too small.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_lower(
     const moonlab_stim_circuit_t* c,
@@ -174,13 +230,17 @@ MOONLAB_API long moonlab_stim_circuit_lower(
  * needs num_detectors + 1 entries.  Either buffer may be NULL to size only.
  *
  * @return the number of index entries, or MOONLAB_STIM_ERR_OVERFLOW.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_detector_csr(
     const moonlab_stim_circuit_t* c,
     size_t* offsets_out, size_t off_cap,
     uint32_t* indices_out, size_t idx_cap);
 
-/** @brief As moonlab_stim_circuit_detector_csr(), for logical observables. */
+/**
+ * @brief As moonlab_stim_circuit_detector_csr(), for logical observables.
+ * @stability beta
+ */
 MOONLAB_API long moonlab_stim_circuit_observable_csr(
     const moonlab_stim_circuit_t* c,
     size_t* offsets_out, size_t off_cap,
@@ -197,6 +257,7 @@ MOONLAB_API long moonlab_stim_circuit_observable_csr(
  * moonlab_stim_circuit_sample_measurements() applies it.
  *
  * @return the number of records described, or MOONLAB_STIM_ERR_OVERFLOW.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_measurement_inversions(
     const moonlab_stim_circuit_t* c, uint8_t* out, size_t cap);
@@ -211,6 +272,7 @@ MOONLAB_API long moonlab_stim_circuit_measurement_inversions(
  * @param out receives num_measurements * num_shots bytes, measurement-major
  *            (record m, shot s at out[m * num_shots + s]).
  * @return the number of records written, or negative on error.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_sample_measurements(
     const moonlab_stim_circuit_t* c, size_t num_shots, uint64_t seed,
@@ -224,6 +286,7 @@ MOONLAB_API long moonlab_stim_circuit_sample_measurements(
  * @param det_out num_detectors * num_shots bytes, detector-major; may be NULL.
  * @param obs_out num_observables * num_shots bytes, observable-major; may be NULL.
  * @return num_detectors on success, negative on error.
+ * @stability beta
  */
 MOONLAB_API long moonlab_stim_circuit_sample_detectors(
     const moonlab_stim_circuit_t* c, size_t num_shots, uint64_t seed,

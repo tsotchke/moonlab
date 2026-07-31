@@ -68,14 +68,23 @@ typedef struct moonlab_dem moonlab_dem_t;
  * internally, so both decoders see one model.
  *
  * @return model handle, or NULL on failure (see @p err).
+ * @stability beta
  */
 MOONLAB_API moonlab_dem_t* moonlab_dem_parse(
     const char* text, moonlab_stim_error_t* err);
 
-/** @brief Parse a `.dem` file from disk.  @see moonlab_dem_parse. */
+/**
+ * @brief Parse a `.dem` file from disk.  @see moonlab_dem_parse.
+ * @stability beta
+ */
 MOONLAB_API moonlab_dem_t* moonlab_dem_parse_file(
     const char* path, moonlab_stim_error_t* err);
 
+/**
+ * @brief Release a detector error model handle.  No-op on NULL.
+ * @param d Model from the moonlab_dem_* parse or build entry points.
+ * @stability beta
+ */
 MOONLAB_API void moonlab_dem_free(moonlab_dem_t* d);
 
 /**
@@ -83,6 +92,7 @@ MOONLAB_API void moonlab_dem_free(moonlab_dem_t* d);
  *
  * @return malloc'd NUL-terminated text to release with
  *         moonlab_stim_text_free(), or NULL on allocation failure.
+ * @stability beta
  */
 MOONLAB_API char* moonlab_dem_to_text(const moonlab_dem_t* d);
 
@@ -103,6 +113,7 @@ MOONLAB_API char* moonlab_dem_to_text(const moonlab_dem_t* d);
  *         NULL on failure (see @p err).  Inconsistent inputs -- a residual
  *         probability driven negative by the links -- fail with
  *         MOONLAB_STIM_ERR_BAD_ARG rather than silently clamping.
+ * @stability beta
  */
 MOONLAB_API char* moonlab_dem_text_from_edges(
     size_t num_detectors, size_t num_observables,
@@ -116,9 +127,33 @@ MOONLAB_API char* moonlab_dem_text_from_edges(
 /*  Edge-list view                                                     */
 /* ================================================================== */
 
+/**
+ * @brief Number of detectors the model declares.
+ * @param d Model handle.
+ * @return The detector count, or 0 when @p d is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_dem_num_detectors(const moonlab_dem_t* d);
+/**
+ * @brief Number of logical observables the model declares.
+ * @param d Model handle.
+ * @return The observable count, or 0 when @p d is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_dem_num_observables(const moonlab_dem_t* d);
+/**
+ * @brief Number of two-detector error mechanisms (matchable edges).
+ * @param d Model handle.
+ * @return The edge count, or 0 when @p d is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_dem_num_edges(const moonlab_dem_t* d);
+/**
+ * @brief Number of correlated error mechanisms recorded by the model.
+ * @param d Model handle.
+ * @return The correlation count, or 0 when @p d is NULL.
+ * @stability beta
+ */
 MOONLAB_API size_t moonlab_dem_num_correlations(const moonlab_dem_t* d);
 
 /**
@@ -128,6 +163,7 @@ MOONLAB_API size_t moonlab_dem_num_correlations(const moonlab_dem_t* d);
  * than silently dropped, so a caller can tell whether the model it is
  * decoding was fully representable.  A well decomposed Stim DEM
  * (`decompose_errors=True`) reports 0.
+ * @stability beta
  */
 MOONLAB_API size_t moonlab_dem_num_hyperedges(const moonlab_dem_t* d);
 
@@ -136,6 +172,7 @@ MOONLAB_API size_t moonlab_dem_num_hyperedges(const moonlab_dem_t* d);
  *
  * Counted separately from hyperedges: they are representable in principle
  * but carry no syndrome information, so no decoder can act on them.
+ * @stability beta
  */
 MOONLAB_API size_t moonlab_dem_num_detectorless(const moonlab_dem_t* d);
 
@@ -148,6 +185,7 @@ MOONLAB_API size_t moonlab_dem_num_detectorless(const moonlab_dem_t* d);
  * Any out-pointer may be NULL to fetch only some columns.
  * @return the number of edges, or MOONLAB_STIM_ERR_OVERFLOW when @p cap is
  *         below moonlab_dem_num_edges().
+ * @stability beta
  */
 MOONLAB_API long moonlab_dem_edges(
     const moonlab_dem_t* d,
@@ -159,6 +197,7 @@ MOONLAB_API long moonlab_dem_edges(
  * @brief Copy out the correlation links in
  *        moonlab_uf_decoder_new_correlated() layout.
  * @return the number of links, or MOONLAB_STIM_ERR_OVERFLOW.
+ * @stability beta
  */
 MOONLAB_API long moonlab_dem_correlations(
     const moonlab_dem_t* d,
@@ -166,6 +205,7 @@ MOONLAB_API long moonlab_dem_correlations(
     double* corr_joint_p, size_t cap);
 
 /** @brief Coordinates from a `detector(...)` instruction.
+ * @stability beta
  *  @see moonlab_stim_circuit_detector_coords. */
 MOONLAB_API long moonlab_dem_detector_coords(
     const moonlab_dem_t* d, size_t detector, double* out, size_t cap);
@@ -175,6 +215,7 @@ MOONLAB_API long moonlab_dem_detector_coords(
  * @param correlated non-zero selects the two-pass correlated decoder, which
  *                   consumes the links Stim's `^` decompositions carry.
  * @return decoder handle to release with moonlab_uf_decoder_free(), or NULL.
+ * @stability beta
  */
 MOONLAB_API moonlab_uf_decoder_t* moonlab_dem_make_uf_decoder(
     const moonlab_dem_t* d, int correlated);

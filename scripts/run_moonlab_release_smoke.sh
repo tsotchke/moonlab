@@ -674,6 +674,25 @@ check_stable_abi_counts() {
   fi
 }
 
+# --- stability_tags_complete ------------------------------------------------
+# Every MOONLAB_API declaration must carry a stable/evolving/beta tier. This is
+# a ratchet: the surface was swept to full coverage in v1.2.1, and this lane is
+# what stops a new public symbol from landing untagged and decaying it again.
+check_stability_tags() {
+  if [ ! -x scripts/check_stability_tags.sh ]; then
+    emit stability_tags_complete FAIL "scripts/check_stability_tags.sh not present"
+    return
+  fi
+  local out rc
+  out="$(scripts/check_stability_tags.sh 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    emit stability_tags_complete PASS "$(printf '%s' "$out" | tail -n 1)"
+  else
+    emit stability_tags_complete FAIL "$(printf '%s' "$out" | head -n 1)"
+  fi
+}
+
 # --- examples_all_build -----------------------------------------------------
 check_examples() {
   cmake -S . -B "$EX_DIR" -DCMAKE_BUILD_TYPE=Release \
@@ -836,6 +855,7 @@ check_odr
 check_hidden_visibility
 check_docs_apis
 check_stable_abi_counts
+check_stability_tags
 check_examples
 check_versions
 check_ctest_gate bindings_suites_green    'python_bindings|rust_bindings|js_'
