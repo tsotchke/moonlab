@@ -9,7 +9,7 @@
 #   {"kind":"moonlab_oracle","name":"<pillar_event>","value":"PASS"|"FAIL",
 #    "total":N,"failed":F,"xfail":K,"xpass":S,"snippet":"...","confidence":0.95}
 #
-# The six events this runner owns are exactly the ones the integrator's
+# The eight events this runner owns are exactly the ones the integrator's
 # moonlab-adversarial-matrix target requires, plus a corpus artifact
 # validation evidence event:
 #   backend_differential_oracle   (P1)
@@ -17,6 +17,8 @@
 #   measurement_statistics_oracle (P3)
 #   edge_matrix_oracle            (P5)
 #   property_invariants_oracle    (P6)
+#   analyticity_oracle            (P7)
+#   wick_rotation_oracle          (P8)
 #   corpus_artifacts_validated    (artifact contract evidence)
 #
 # The oracle binaries are KNOWN_FAILURES-aware: a binary exits 0 when its only
@@ -73,6 +75,8 @@ PILLARS=(
   "oracle_measurement_statistics|test_measurement_oracle|measurement_statistics_oracle"
   "oracle_edge_matrix|test_edge_matrix|edge_matrix_oracle"
   "oracle_property_invariants|test_property_invariants|property_invariants_oracle"
+  "oracle_analyticity|test_analyticity_oracle|analyticity_oracle"
+  "oracle_wick_rotation|test_wick_rotation_oracle|wick_rotation_oracle"
 )
 
 echo "== Moonlab adversarial oracle matrix =="
@@ -107,16 +111,19 @@ if [ "${SKIP_BUILD:-0}" = "1" ]; then
     echo "run_moonlab_oracles.sh: SKIP_BUILD cannot produce exact-source release evidence" >&2
     exit 2
 else
-    if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
-        cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release \
-            >"$CONFIGURE_LOG" 2>&1 || {
-            echo "run_moonlab_oracles.sh: cmake configure failed (see $CONFIGURE_LOG)" >&2
-            exit 2
-        }
-    fi
+    # Always configure, never only on a missing cache: a build tree created
+    # before a pillar was added has no rule for its target, and `cmake --build
+    # --target` fails on the unknown name before the generator can regenerate
+    # itself. Configure is idempotent and costs ~1s.
+    cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release \
+        >"$CONFIGURE_LOG" 2>&1 || {
+        echo "run_moonlab_oracles.sh: cmake configure failed (see $CONFIGURE_LOG)" >&2
+        exit 2
+    }
     cmake --build "$BUILD_DIR" --parallel "$JOBS" \
         --target test_backend_differential test_gradient_oracle \
                  test_measurement_oracle test_edge_matrix test_property_invariants \
+                 test_analyticity_oracle test_wick_rotation_oracle \
         >"$BUILD_LOG" 2>&1 || {
         echo "run_moonlab_oracles.sh: oracle build failed (see $BUILD_LOG)" >&2
         exit 2

@@ -1789,7 +1789,9 @@
                 gradient:test_gradient_oracle
                 measurement_statistics:test_measurement_oracle
                 edge_matrix:test_edge_matrix
-                property_invariants:test_property_invariants)
+                property_invariants:test_property_invariants
+                analyticity:test_analyticity_oracle
+                wick_rotation:test_wick_rotation_oracle)
             string(REPLACE ":" ";" _oc_pair "${_oracle_case}")
             list(GET _oc_pair 0 _oc_name)
             list(GET _oc_pair 1 _oc_src)

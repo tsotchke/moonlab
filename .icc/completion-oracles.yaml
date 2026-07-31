@@ -232,6 +232,8 @@ oracles:
             - measurement_statistics_oracle
             - edge_matrix_oracle
             - property_invariants_oracle
+            - analyticity_oracle
+            - wick_rotation_oracle
             - fuzz_corpus_clean
             - cross_backend_differential
             - cross_binding_python
@@ -336,6 +338,22 @@ oracles:
           event_values: ["PASS"]
         severity: high
         label: P6 metamorphic invariants (unitarity, reversibility, entropy bounds, isometry)
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: analyticity_oracle
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["analyticity_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P7 parametric analyticity (exact trig-polynomial identity, degree bound, noise-rate continuation)
+        action: ./scripts/run_moonlab_oracles.sh
+      - id: wick_rotation_oracle
+        runtime_event:
+          event_kinds: [moonlab_oracle]
+          event_names: ["wick_rotation_oracle"]
+          event_values: ["PASS"]
+        severity: high
+        label: P8 Wick-rotation consistency (real- and imaginary-time paths agree with the spectral Loschmidt oracle)
         action: ./scripts/run_moonlab_oracles.sh
       - id: fuzz_corpus_clean
         runtime_event:
