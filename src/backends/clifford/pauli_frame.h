@@ -77,9 +77,31 @@ MOONLAB_API void pauli_frame_read(const pauli_frame_t* f, size_t q,
 /*  Single-qubit Clifford propagation                                  */
 /* ================================================================== */
 
-/* H: X <-> Z (swap x_q and z_q). */
+/**
+ * @brief Propagate a Hadamard on qubit @p q through the frame.
+ *
+ * H conjugates @f$X \leftrightarrow Z@f$, so the frame bits are
+ * exchanged: @f$(x_q, z_q) \mapsto (z_q, x_q)@f$.
+ *
+ * @param f Frame, mutated in place.
+ * @param q Qubit index; out-of-range indices and a NULL @p f are
+ *          silently ignored.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_h(pauli_frame_t* f, size_t q);
-/* S: Z stays, X picks up Z (z_q ^= x_q). */
+
+/**
+ * @brief Propagate a phase gate S on qubit @p q through the frame.
+ *
+ * @f$S X S^\dagger = Y@f$ and @f$S Z S^\dagger = Z@f$, so an
+ * X-component picks up a Z-component: @f$z_q \mathrel{\hat=} x_q@f$.
+ * The accompanying factor of @f$i@f$ is phase-only and is not tracked.
+ *
+ * @param f Frame, mutated in place.
+ * @param q Qubit index; out-of-range indices and a NULL @p f are
+ *          silently ignored.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_s(pauli_frame_t* f, size_t q);
 /* S^dagger: same bit transform as S (the difference is phase, untracked). */
 void pauli_frame_s_dag(pauli_frame_t* f, size_t q);
@@ -95,12 +117,32 @@ void pauli_frame_z(pauli_frame_t* f, size_t q);
 /*  Two-qubit Clifford propagation                                     */
 /* ================================================================== */
 
-/* CNOT(c, t): propagates X-error on control to target (x_t ^= x_c) and
- *             Z-error on target to control (z_c ^= z_t). */
+/**
+ * @brief Propagate a CNOT through the frame.
+ *
+ * An X-error on the control copies to the target and a Z-error on the
+ * target copies back to the control:
+ * @f$x_t \mathrel{\hat=} x_c@f$, @f$z_c \mathrel{\hat=} z_t@f$.
+ *
+ * @param f       Frame, mutated in place.
+ * @param control Control qubit index.
+ * @param target  Target qubit index, distinct from @p control.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_cnot(pauli_frame_t* f, size_t control, size_t target);
 
-/* CZ(a, b): propagates X-error on a to Z-error on b (z_b ^= x_a) and
- *           X-error on b to Z-error on a (z_a ^= x_b). */
+/**
+ * @brief Propagate a CZ through the frame.
+ *
+ * CZ is symmetric and maps each X-component to a Z-component on the
+ * partner: @f$z_b \mathrel{\hat=} x_a@f$ and
+ * @f$z_a \mathrel{\hat=} x_b@f$ (both read before either is written).
+ *
+ * @param f Frame, mutated in place.
+ * @param a First qubit index.
+ * @param b Second qubit index, distinct from @p a.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_cz(pauli_frame_t* f, size_t a, size_t b);
 
 /* SWAP(a, b): exchanges (x_a, z_a) and (x_b, z_b). */
@@ -110,9 +152,30 @@ void pauli_frame_swap(pauli_frame_t* f, size_t a, size_t b);
 /*  Pauli error injection                                              */
 /* ================================================================== */
 
-/* Flip the X-component on qubit @p q (inject an X error). */
+/**
+ * @brief Inject an X error on qubit @p q.
+ *
+ * Toggles the frame's X-component, @f$x_q \mathrel{\hat=} 1@f$.
+ * Injecting twice cancels.
+ *
+ * @param f Frame, mutated in place.
+ * @param q Qubit index; out-of-range indices and a NULL @p f are
+ *          silently ignored.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_inject_x(pauli_frame_t* f, size_t q);
-/* Flip the Z-component on qubit @p q. */
+
+/**
+ * @brief Inject a Z error on qubit @p q.
+ *
+ * Toggles the frame's Z-component, @f$z_q \mathrel{\hat=} 1@f$.
+ * Injecting twice cancels.
+ *
+ * @param f Frame, mutated in place.
+ * @param q Qubit index; out-of-range indices and a NULL @p f are
+ *          silently ignored.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_inject_z(pauli_frame_t* f, size_t q);
 /* Inject a Y error = X * Z (up to phase) -> flip both x and z bits. */
 void pauli_frame_inject_y(pauli_frame_t* f, size_t q);
@@ -150,7 +213,32 @@ uint8_t pauli_frame_measure_x(const pauli_frame_t* f, size_t q);
  * as opaque and use the helper functions below to advance / read.
  */
 typedef struct pauli_frame_batch_t pauli_frame_batch_t;
+
+/**
+ * @brief Allocate a shot-bit-packed batch of identity frames.
+ *
+ * Stores one X row and one Z row per qubit, each
+ * @f$\lceil \mathrm{num\_shots}/64 \rceil@f$ 64-bit words wide, with
+ * shot @f$s@f$ living in bit @f$s \bmod 64@f$ of word
+ * @f$\lfloor s/64 \rfloor@f$.  All bits start zero (identity frame on
+ * every shot).
+ *
+ * @param num_qubits Qubits per frame; must be nonzero.
+ * @param num_shots  Independent shots in the batch; must be nonzero.
+ * @return Owned batch handle, or NULL if either count is zero or an
+ *         allocation fails.
+ * @stability evolving
+ */
 MOONLAB_API pauli_frame_batch_t* pauli_frame_batch_create(size_t num_qubits, size_t num_shots);
+
+/**
+ * @brief Release a batch created by ::pauli_frame_batch_create.
+ *
+ * Frees the X and Z bit planes and the handle.
+ *
+ * @param b Batch handle to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_free(pauli_frame_batch_t* b);
 size_t pauli_frame_batch_num_shots(const pauli_frame_batch_t* b);
 size_t pauli_frame_batch_num_qubits(const pauli_frame_batch_t* b);
@@ -160,32 +248,104 @@ size_t pauli_frame_batch_num_qubits(const pauli_frame_batch_t* b);
  * injection. */
 void pauli_frame_batch_h(pauli_frame_batch_t* b, size_t q);
 void pauli_frame_batch_s(pauli_frame_batch_t* b, size_t q);
+/**
+ * @brief Propagate a CNOT through every frame in the batch.
+ *
+ * Two word-parallel row XORs over the packed shot planes,
+ * @f$x_t \mathrel{\hat=} x_c@f$ then @f$z_c \mathrel{\hat=} z_t@f$,
+ * widened to the host SIMD lane count (see
+ * ::pauli_frame_simd_backend).
+ *
+ * @param b Batch, mutated in place.
+ * @param c Control qubit index.
+ * @param t Target qubit index, distinct from @p c.  A NULL batch, an
+ *          out-of-range index, or @p c == @p t is silently ignored.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_cnot(pauli_frame_batch_t* b, size_t c, size_t t);
 void pauli_frame_batch_cz(pauli_frame_batch_t* b, size_t a, size_t b_q);
 void pauli_frame_batch_swap(pauli_frame_batch_t* b, size_t a, size_t b_q);
 
-/* Inject an i.i.d. Pauli error per shot: each shot independently
- * draws from the depolarising channel { I (1-p), X (p/3), Y (p/3),
- * Z (p/3) } using the supplied splitmix64 RNG state. */
+/**
+ * @brief Inject an i.i.d. single-qubit depolarising error per shot.
+ *
+ * Each shot draws one splitmix64 word and independently selects from
+ * @f$\{I\,(1-p),\; X\,(p/3),\; Y\,(p/3),\; Z\,(p/3)\}@f$.  The
+ * selections for the 64 shots in a word are accumulated into an X mask
+ * and a Z mask and XORed into the frame in one write per word, so the
+ * inner loop stays branch-light and single-threaded (OpenMP was
+ * measured net-negative at typical 10^4-10^5 shot counts).
+ *
+ * @param b         Batch, mutated in place.
+ * @param q         Qubit index.
+ * @param p         Total error probability; @f$p \le 0@f$ returns
+ *                  immediately without consuming RNG.
+ * @param rng_state splitmix64 state, advanced once per shot.  Must be
+ *                  non-NULL.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_depolarising(pauli_frame_batch_t* b, size_t q,
                                      double p, uint64_t* rng_state);
 
-/* Inject an i.i.d. X-only bit-flip channel (X with prob p, I otherwise). */
+/**
+ * @brief Inject an i.i.d. X-only bit-flip channel per shot.
+ *
+ * Flips @f$x_q@f$ with probability @p p independently in each shot,
+ * accumulating a per-word mask exactly as the depolarising kernel does.
+ * @f$p \ge 1@f$ is special-cased to an unconditional flip of every
+ * shot: the naive threshold @f$(\mathrm{uint64\_t})(2^{64} p)@f$ is an
+ * out-of-range conversion at @f$p = 1@f$ and yields 0 on current
+ * toolchains, which would flip nothing.  The special case still draws
+ * the same number of RNG words so interleaved callers stay
+ * deterministic.
+ *
+ * @param b         Batch, mutated in place.
+ * @param q         Qubit index.
+ * @param p         Flip probability; @f$p \le 0@f$ returns immediately
+ *                  without consuming RNG.
+ * @param rng_state splitmix64 state, advanced once per shot.  Must be
+ *                  non-NULL.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_bit_flip(pauli_frame_batch_t* b, size_t q,
                                  double p, uint64_t* rng_state);
 
-/* Read each shot's measure-Z outcome contribution at qubit q.  The
- * output buffer must hold @p num_shots bytes (0 or 1 each). */
+/**
+ * @brief Read every shot's Z-basis outcome contribution at qubit @p q.
+ *
+ * Unpacks the X bit plane of qubit @p q into one byte per shot.  Each
+ * byte is the parity by which that shot's outcome differs from the
+ * noiseless trajectory; the caller XORs it with the deterministic
+ * outcome.  Non-destructive: the frame is left untouched.
+ *
+ * @param b   Batch to read.
+ * @param q   Qubit index.
+ * @param out Receives @c num_shots bytes, each 0 or 1, in shot order.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_measure_z(const pauli_frame_batch_t* b, size_t q,
                                   uint8_t* out);
 
-/* Noisy Z-basis measurement: reads x_q for each shot, flips the
- * recorded bit with probability @p p_flip, and resets the ancilla's
- * (x_q, z_q) frame components to zero (treating the measurement as a
- * destructive readout followed by a re-prepared |0> ancilla).  The
- * out buffer holds @p num_shots bytes.  This is the primitive needed
- * for noisy-syndrome QEC simulation -- the "M_meas" of the standard
- * surface-code stabilizer round. */
+/**
+ * @brief Destructive noisy Z-basis measurement across the batch.
+ *
+ * Reads @f$x_q@f$ per shot, flips the reported bit with probability
+ * @p p_flip, then zeroes @f$(x_q, z_q)@f$ for every shot -- modelling a
+ * destructive readout followed by a re-prepared @f$|0\rangle@f$
+ * ancilla.  This is the "M_meas" primitive of a noisy surface-code
+ * stabilizer round.  The frame is cleared whether or not readout noise
+ * is active.
+ *
+ * @param b         Batch, mutated in place (ancilla frame cleared).
+ * @param q         Qubit index.
+ * @param p_flip    Readout flip probability; @f$\le 0@f$ (or a NULL
+ *                  @p rng_state) gives a noiseless read that still
+ *                  clears the frame.
+ * @param rng_state splitmix64 state, advanced once per shot when
+ *                  readout noise is active.
+ * @param out       Receives @c num_shots bytes, each 0 or 1.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_measure_z_noisy(pauli_frame_batch_t* b, size_t q,
                                         double p_flip, uint64_t* rng_state,
                                         uint8_t* out);
@@ -195,7 +355,16 @@ MOONLAB_API void pauli_frame_batch_measure_z_noisy(pauli_frame_batch_t* b, size_
  * ancilla is reused without referencing its outcome. */
 void pauli_frame_batch_reset_zero(pauli_frame_batch_t* b, size_t q);
 
-/* Reset every shot's frame to identity. */
+/**
+ * @brief Reset every shot's frame to identity.
+ *
+ * Zeroes both bit planes in full, so the batch can be reused for
+ * another circuit without reallocating.  Qubit and shot counts are
+ * unchanged.
+ *
+ * @param b Batch, mutated in place; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_batch_clear(pauli_frame_batch_t* b);
 
 /* ================================================================== */
@@ -274,7 +443,6 @@ MOONLAB_API long pauli_frame_batch_sample_circuit(
     size_t num_shots, uint64_t seed,
     int num_threads, uint8_t* out);
 
-/** @brief Name of the compiled SIMD backend: "neon"|"avx2"|"avx512"|"scalar". */
 /**
  * @brief Batch-sample DETECTORS of a Clifford + measurement circuit.
  *
@@ -302,6 +470,19 @@ MOONLAB_API long pauli_frame_batch_sample_detectors(
     size_t num_detectors, size_t num_shots, uint64_t seed,
     int num_threads, uint8_t* out);
 
+/**
+ * @brief Name of the SIMD kernel this translation unit was compiled to.
+ *
+ * Reports which of the batched frame kernels the compiler selected at
+ * build time from the host ISA macros: "neon" on AArch64/NEON,
+ * "avx512" when __AVX512F__ is defined, "avx2" when __AVX2__ is, and
+ * "scalar" otherwise.  Build with -DQSIM_NATIVE_ARCH=ON to get the
+ * widest kernel the host supports.
+ *
+ * @return Static string, never NULL; one of "neon", "avx512", "avx2",
+ *         "scalar".
+ * @stability evolving
+ */
 MOONLAB_API const char* pauli_frame_simd_backend(void);
 /**
  * @brief SIMD lane width in 64-bit words (1 = scalar fallback).

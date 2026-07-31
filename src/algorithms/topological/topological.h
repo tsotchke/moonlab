@@ -593,12 +593,90 @@ typedef struct {
     uint32_t capacity;
 } braid_word_t;
 
+/**
+ * @brief Allocate an empty braid word.
+ *
+ * Zero length, zero capacity, no generator storage yet; the first
+ * ::braid_word_append reserves 16 generators and doubles from there.
+ *
+ * @return Owned braid word, or NULL on allocation failure.
+ * @stability evolving
+ */
 MOONLAB_API braid_word_t *braid_word_create(void);
+
+/**
+ * @brief Release a braid word and its generator array.
+ *
+ * @param w Word to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void braid_word_free(braid_word_t *w);
+
+/**
+ * @brief Append one generator @f$\sigma_{position}^{\pm1}@f$ to the word.
+ *
+ * Grows the generator array by doubling when it is full.
+ *
+ * @param w         Word to extend.
+ * @param position  Index of the left anyon of the exchanged pair.
+ * @param clockwise true for @f$\sigma_{position}@f$, false for
+ *                  @f$\sigma_{position}^{-1}@f$.
+ * @return QS_SUCCESS; QS_ERROR_INVALID_STATE if @p w is NULL;
+ *         QS_ERROR_OUT_OF_MEMORY if the array cannot grow.
+ * @stability evolving
+ */
 MOONLAB_API qs_error_t braid_word_append(braid_word_t *w, uint32_t position, bool clockwise);
+
+/**
+ * @brief Concatenate @p src onto the end of @p dst.
+ *
+ * Copies @p src's generators in order, so the result applies @p dst
+ * first and then @p src.  @p src is not modified and may be reused;
+ * appending a word to itself is not supported.
+ *
+ * @param dst Word to extend.
+ * @param src Word to append.
+ * @return QS_SUCCESS; QS_ERROR_INVALID_STATE if either pointer is NULL;
+ *         QS_ERROR_OUT_OF_MEMORY if @p dst cannot grow.
+ * @stability evolving
+ */
 MOONLAB_API qs_error_t braid_word_append_word(braid_word_t *dst, const braid_word_t *src);
+
+/**
+ * @brief Append the group inverse @f$\mathrm{src}^{-1}@f$ to @p dst.
+ *
+ * Copies @p src's generators in reverse order with each handedness
+ * flipped, so @c dst followed by @c src followed by this appended
+ * block reduces to @c dst.  @p src is not modified.
+ *
+ * @param dst Word to extend.
+ * @param src Word whose inverse is appended.
+ * @return QS_SUCCESS; QS_ERROR_INVALID_STATE if either pointer is NULL;
+ *         QS_ERROR_OUT_OF_MEMORY if @p dst cannot grow.
+ * @stability evolving
+ */
 MOONLAB_API qs_error_t braid_word_append_inverse(braid_word_t *dst, const braid_word_t *src);
+/**
+ * @brief Allocate an independent copy of @p w.
+ *
+ * The clone owns its own generator array, so the two words can be
+ * extended or freed independently.
+ *
+ * @param w Word to copy.
+ * @return Owned copy; NULL if @p w is NULL or an allocation fails.
+ * @stability evolving
+ */
 MOONLAB_API braid_word_t *braid_word_clone(const braid_word_t *w);
+
+/**
+ * @brief Number of generators currently in the word.
+ *
+ * This is the braid length, not the allocated capacity.
+ *
+ * @param w Word to query.
+ * @return Generator count; 0 if @p w is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t braid_word_length(const braid_word_t *w);
 
 /**
@@ -1109,8 +1187,33 @@ typedef struct {
     uint64_t rng_state;
 } surface_code_clifford_t;
 
+/**
+ * @brief Build a distance-@p distance surface code on a Clifford tableau.
+ *
+ * Allocates a tableau of @f$d^2 + 2(d-1)^2@f$ qubits in
+ * @f$|0\rangle^{\otimes N}@f$ using the layout documented above (data
+ * qubits first, then the Z-syndrome ancillas, then the X-syndrome
+ * ancillas), plus one syndrome byte per stabilizer of each type.
+ *
+ * @param distance Code distance @f$d@f$; must be odd and at least 3.
+ * @param rng_seed Seed for the splitmix64 stream driving syndrome
+ *                 measurement.  0 selects a fixed nonzero default so
+ *                 the stream never degenerates.
+ * @return Owned code handle, or NULL if @p distance is even or below 3,
+ *         or if any allocation fails.
+ * @stability evolving
+ */
 MOONLAB_API surface_code_clifford_t* surface_code_clifford_create(uint32_t distance,
                                                        uint64_t rng_seed);
+
+/**
+ * @brief Release a Clifford-backed surface code.
+ *
+ * Frees the underlying tableau, both syndrome buffers, and the handle.
+ *
+ * @param code Code handle to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void surface_code_clifford_free(surface_code_clifford_t* code);
 
 /**

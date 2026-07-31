@@ -364,13 +364,58 @@ MOONLAB_API void moonlab_mlkem512_decaps(
 #define MOONLAB_MLKEM768_CIPHERTEXTBYTES   1088
 #define MOONLAB_MLKEM768_SHAREDSECRETBYTES 32
 
+/**
+ * @brief Generate an ML-KEM-768 key pair using Moonlab's conditioned hybrid RNG.
+ *
+ * Draws 64 bytes from @ref moonlab_qrng_bytes and splits them into the
+ * FIPS 203 seeds (d, z).  The entropy path is health-tested,
+ * SHAKE256-conditioned, Bell-epoch gated, and fail-closed.
+ * Environments that require a validated cryptographic-module boundary
+ * should use the explicit-seed API with that module's approved DRBG.
+ *
+ * @param ek 1184-byte output public key.
+ * @param dk 2400-byte output secret key.
+ * @return  0 on success, -1 on entropy failure.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API int moonlab_mlkem768_keygen_qrng(
     uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES],
     uint8_t dk[MOONLAB_MLKEM768_SECRETKEYBYTES]);
+
+/**
+ * @brief Encapsulate a shared secret against an ML-KEM-768 public key.
+ *        Entropy for the inner message seed is drawn from
+ *        @ref moonlab_qrng_bytes.
+ *
+ * @p ek is validated against the FIPS 203 Section 7.2 modulus check
+ * before any entropy is consumed.
+ *
+ * @param c  1088-byte output ciphertext.
+ * @param K  32-byte output shared secret.
+ * @param ek 1184-byte public key.
+ * @return  0 on success, -1 on entropy failure, -2 if @p ek fails the
+ *          Section 7.2 check.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API int moonlab_mlkem768_encaps_qrng(
     uint8_t c[MOONLAB_MLKEM768_CIPHERTEXTBYTES],
     uint8_t K[MOONLAB_MLKEM768_SHAREDSECRETBYTES],
     const uint8_t ek[MOONLAB_MLKEM768_PUBLICKEYBYTES]);
+
+/**
+ * @brief Decapsulate an ML-KEM-768 ciphertext with implicit rejection on
+ *        invalid ciphertexts.  The source uses a branchless FO selector but
+ *        has not been independently side-channel audited.
+ *
+ * @param K  32-byte output shared secret (pseudorandom, derived from
+ *           SHAKE256(z || c), on a tampered ciphertext).
+ * @param c  1088-byte ciphertext.
+ * @param dk 2400-byte secret key.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API void moonlab_mlkem768_decaps(
     uint8_t K[MOONLAB_MLKEM768_SHAREDSECRETBYTES],
     const uint8_t c[MOONLAB_MLKEM768_CIPHERTEXTBYTES],
@@ -383,13 +428,58 @@ MOONLAB_API void moonlab_mlkem768_decaps(
 #define MOONLAB_MLKEM1024_CIPHERTEXTBYTES   1568
 #define MOONLAB_MLKEM1024_SHAREDSECRETBYTES 32
 
+/**
+ * @brief Generate an ML-KEM-1024 key pair using Moonlab's conditioned hybrid RNG.
+ *
+ * Draws 64 bytes from @ref moonlab_qrng_bytes and splits them into the
+ * FIPS 203 seeds (d, z).  The entropy path is health-tested,
+ * SHAKE256-conditioned, Bell-epoch gated, and fail-closed.
+ * Environments that require a validated cryptographic-module boundary
+ * should use the explicit-seed API with that module's approved DRBG.
+ *
+ * @param ek 1568-byte output public key.
+ * @param dk 3168-byte output secret key.
+ * @return  0 on success, -1 on entropy failure.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API int moonlab_mlkem1024_keygen_qrng(
     uint8_t ek[MOONLAB_MLKEM1024_PUBLICKEYBYTES],
     uint8_t dk[MOONLAB_MLKEM1024_SECRETKEYBYTES]);
+
+/**
+ * @brief Encapsulate a shared secret against an ML-KEM-1024 public key.
+ *        Entropy for the inner message seed is drawn from
+ *        @ref moonlab_qrng_bytes.
+ *
+ * @p ek is validated against the FIPS 203 Section 7.2 modulus check
+ * before any entropy is consumed.
+ *
+ * @param c  1568-byte output ciphertext.
+ * @param K  32-byte output shared secret.
+ * @param ek 1568-byte public key.
+ * @return  0 on success, -1 on entropy failure, -2 if @p ek fails the
+ *          Section 7.2 check.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API int moonlab_mlkem1024_encaps_qrng(
     uint8_t c[MOONLAB_MLKEM1024_CIPHERTEXTBYTES],
     uint8_t K[MOONLAB_MLKEM1024_SHAREDSECRETBYTES],
     const uint8_t ek[MOONLAB_MLKEM1024_PUBLICKEYBYTES]);
+
+/**
+ * @brief Decapsulate an ML-KEM-1024 ciphertext with implicit rejection on
+ *        invalid ciphertexts.  The source uses a branchless FO selector but
+ *        has not been independently side-channel audited.
+ *
+ * @param K  32-byte output shared secret (pseudorandom, derived from
+ *           SHAKE256(z || c), on a tampered ciphertext).
+ * @param c  1568-byte ciphertext.
+ * @param dk 3168-byte secret key.
+ * @since 0.2.0
+ * @stability stable
+ */
 MOONLAB_API void moonlab_mlkem1024_decaps(
     uint8_t K[MOONLAB_MLKEM1024_SHAREDSECRETBYTES],
     const uint8_t c[MOONLAB_MLKEM1024_CIPHERTEXTBYTES],
@@ -449,26 +539,228 @@ MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
 MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /* Clifford gates: tableau-only (O(n) per gate, no MPS cost). */
+
+/**
+ * Hadamard on @p q, composed onto the Clifford prefactor C.  The MPS
+ * factor is untouched, so this costs O(n) tableau work and no bond
+ * growth.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_h    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Phase gate S = diag(1, i) on @p q, composed onto C.  Tableau-only.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_s    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Inverse phase gate S-dagger on @p q, composed onto C as three S
+ * applications.  Tableau-only.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_sdag (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Pauli X on @p q, composed onto C.  Tableau-only; a pure row-sign
+ * update.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_x    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Pauli Y on @p q, composed onto C.  Tableau-only; a pure row-sign
+ * update.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_y    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Pauli Z on @p q, composed onto C.  Tableau-only; a pure row-sign
+ * update.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -4 if the tableau backend rejects the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_z    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * CNOT composed onto C.  Tableau-only, so it stays O(n) regardless of
+ * how far apart @p ctrl and @p targ are -- no SWAP chain and no bond
+ * growth, unlike a plain MPS.
+ * @param s    CA-MPS state, mutated in place.
+ * @param ctrl Control qubit index in [0, num_qubits).
+ * @param targ Target qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or an index is out of range;
+ *         -4 if @p ctrl equals @p targ or the tableau backend rejects
+ *         the update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_cnot (moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
+/**
+ * Controlled-Z composed onto C as H_b CNOT(a,b) H_b.  Tableau-only.
+ * @param s CA-MPS state, mutated in place.
+ * @param a First qubit index in [0, num_qubits).
+ * @param b Second qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or an index is out of range;
+ *         -4 if @p a equals @p b or the tableau backend rejects the
+ *         update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_cz   (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
+/**
+ * SWAP composed onto C as three CNOTs.  Tableau-only, so it relabels
+ * the Clifford prefactor rather than moving MPS tensors.
+ * @param s CA-MPS state, mutated in place.
+ * @param a First qubit index in [0, num_qubits).
+ * @param b Second qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or an index is out of range;
+ *         -4 if @p a equals @p b or the tableau backend rejects the
+ *         update.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_swap (moonlab_ca_mps_t* s, uint32_t a,    uint32_t b);
 
 /* Non-Clifford gates: push a Pauli-string rotation into the MPS factor. */
+
+/**
+ * RX(theta) = exp(-i theta X_q / 2) in the Qiskit/Cirq convention.
+ * X_q is conjugated back through the stored Clifford C to a Pauli
+ * string P' = C-dagger X_q C, and exp(-i theta P' / 2) is applied to
+ * the MPS factor as a bond-dimension-2 MPO.  Bond growth is bounded by
+ * the state's max_bond_dim.
+ * @param s     CA-MPS state, mutated in place.
+ * @param q     Qubit index in [0, num_qubits).
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_rx        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+/**
+ * RY(theta) = exp(-i theta Y_q / 2), applied by the same
+ * conjugate-then-MPO path as ::moonlab_ca_mps_rx.
+ * @param s     CA-MPS state, mutated in place.
+ * @param q     Qubit index in [0, num_qubits).
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_ry        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+/**
+ * RZ(theta) = exp(-i theta Z_q / 2), applied by the same
+ * conjugate-then-MPO path as ::moonlab_ca_mps_rx.
+ * @param s     CA-MPS state, mutated in place.
+ * @param q     Qubit index in [0, num_qubits).
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_rz        (moonlab_ca_mps_t* s, uint32_t q, double theta);
+/**
+ * T = diag(1, e^{i pi/4}) on @p q.  Routed through
+ * ::moonlab_ca_mps_rz with theta = pi/4, which differs from T only by
+ * the global phase e^{i pi/8} and so leaves every observable
+ * unchanged.
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_t_gate    (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * T-dagger = diag(1, e^{-i pi/4}) on @p q, routed through
+ * ::moonlab_ca_mps_rz with theta = -pi/4 (equal up to global phase).
+ * @param s CA-MPS state, mutated in place.
+ * @param q Qubit index in [0, num_qubits).
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_t_dagger  (moonlab_ca_mps_t* s, uint32_t q);
+/**
+ * Phase gate P(theta) = diag(1, e^{i theta}) on @p q, routed through
+ * ::moonlab_ca_mps_rz with the same angle (equal up to the global
+ * phase e^{i theta / 2}).
+ * @param s     CA-MPS state, mutated in place.
+ * @param q     Qubit index in [0, num_qubits).
+ * @param theta Phase angle in radians.
+ * @return 0 on success; -2 if @p s is NULL or @p q is out of range;
+ *         -3 on allocation failure; -4 if the MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_phase     (moonlab_ca_mps_t* s, uint32_t q, double theta);
+/**
+ * Controlled-RZ(theta), built as the standard phase-kickback sequence
+ * RZ(t, theta/2), CNOT, RZ(t, -theta/2), CNOT over the primitives in
+ * this header.
+ * @param s     CA-MPS state, mutated in place.
+ * @param c     Control qubit index in [0, num_qubits).
+ * @param t     Target qubit index, distinct from @p c.
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -1 if @p s is NULL or @p c equals @p t; -2 if
+ *         an index is out of range; -3 on allocation failure; -4 if a
+ *         backend step fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_crz       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+/**
+ * Controlled-RX(theta), built as H_t CRZ(theta) H_t.
+ * @param s     CA-MPS state, mutated in place.
+ * @param c     Control qubit index in [0, num_qubits).
+ * @param t     Target qubit index, distinct from @p c.
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -1 if @p s is NULL or @p c equals @p t; -2 if
+ *         an index is out of range; -3 on allocation failure; -4 if a
+ *         backend step fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+/**
+ * Controlled-RY(theta), built as S_t CRX(theta) S-dagger_t.
+ * @param s     CA-MPS state, mutated in place.
+ * @param c     Control qubit index in [0, num_qubits).
+ * @param t     Target qubit index, distinct from @p c.
+ * @param theta Rotation angle in radians.
+ * @return 0 on success; -1 if @p s is NULL or @p c equals @p t; -2 if
+ *         an index is out of range; -3 on allocation failure; -4 if a
+ *         backend step fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
+/**
+ * General single-qubit unitary U3, applied as the Euler sequence
+ * RZ(lambda) then RY(theta) then RZ(phi) -- equal to the OpenQASM U3
+ * up to the global phase e^{i(phi+lambda)/2}.  Costs three MPO
+ * applications.
+ * @param s      CA-MPS state, mutated in place.
+ * @param q      Qubit index in [0, num_qubits).
+ * @param theta  Polar angle in radians.
+ * @param phi    Trailing Z-rotation angle in radians.
+ * @param lambda Leading Z-rotation angle in radians.
+ * @return 0 on success; -1 if @p s is NULL; -2 if @p q is out of range;
+ *         -3 on allocation failure; -4 if an MPO apply fails.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
                                 double theta, double phi, double lambda);
 /**

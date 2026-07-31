@@ -308,6 +308,18 @@ typedef void (*qgt_bloch_1d_fn)(double k, void* user, qgt_complex_t h[4]);
 typedef struct qgt_system_1d qgt_system_1d_t;
 
 qgt_system_1d_t* qgt_create_1d(qgt_bloch_1d_fn f, void* user);
+
+/**
+ * @brief Release a 1D Bloch system handle.
+ *
+ * Frees the handle and, for the built-in models (::qgt_model_ssh,
+ * ::qgt_model_kitaev_chain), the parameter block those constructors
+ * allocated internally.  A @c user pointer passed to ::qgt_create_1d by
+ * the caller is never owned and never freed here.
+ *
+ * @param sys Handle to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void             qgt_free_1d(qgt_system_1d_t* sys);
 
 /**
@@ -471,6 +483,18 @@ MOONLAB_API int qgt_berry_grid_pt(const qgt_system_t* sys, size_t N,
 MOONLAB_API int qgt_berry_grid_proj(const qgt_system_t* sys, size_t N,
                                      qgt_berry_grid_t* out);
 
+/**
+ * @brief Release the plaquette array inside a ::qgt_berry_grid_t.
+ *
+ * Frees @c g->berry and resets the container to the empty state
+ * (@c berry = NULL, @c N = 0, @c chern = 0), so the same struct can be
+ * handed straight back to ::qgt_berry_grid, ::qgt_berry_grid_pt or
+ * ::qgt_berry_grid_proj.  The container itself is caller-owned and is
+ * not freed.
+ *
+ * @param g Grid container to clear; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
 
 /**
@@ -720,6 +744,16 @@ MOONLAB_API qgt_system_n_t* qgt_create_nband(qgt_bloch_n_fn f, void* user,
                                               size_t n_bands,
                                               size_t n_occupied);
 
+/**
+ * @brief Release an n-band Bloch system handle.
+ *
+ * Frees the handle and any parameter block a built-in n-band model
+ * constructor allocated internally.  A @c user pointer supplied by the
+ * caller to ::qgt_create_nband is not owned and is left untouched.
+ *
+ * @param sys Handle to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void qgt_free_nband(qgt_system_n_t* sys);
 
 /**

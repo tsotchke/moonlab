@@ -203,16 +203,7 @@ MOONLAB_API qs_error_t grover_random_samples(
 // ============================================================================
 
 /**
- * @brief Analyze Grover's algorithm performance
- *
- * Runs multiple Grover searches and analyzes:
- * - Success rate
- * - Average iterations to success
- * - Quantum speedup vs classical
- *
- * @param num_qubits Number of qubits
- * @param num_trials Number of trials to run
- * @param entropy Secure entropy source for measurements
+ * @brief Aggregate statistics returned by ::grover_analyze_performance.
  */
 typedef struct {
     double success_rate;         // Fraction of successful searches
@@ -222,6 +213,30 @@ typedef struct {
     size_t total_oracle_calls;   // Total oracle queries
 } grover_analysis_t;
 
+/**
+ * @brief Benchmark Grover search over repeated randomly-marked trials.
+ *
+ * Allocates one @f$n@f$-qubit state and runs @p num_trials independent
+ * searches on it.  Each trial draws a marked index uniformly from
+ * @f$[0, 2^n)@f$ using @p entropy and runs ::grover_search with the
+ * optimal iteration count.  The trial loop stops early if the entropy
+ * source fails.  Success rate and average iteration count are then
+ * divided by @p num_trials (including any trials skipped by an early
+ * break), @c quantum_speedup is set to the theoretical @f$\sqrt{N}@f$,
+ * and @c measured_speedup to the classical @f$N/2@f$ expected query
+ * count divided by the observed average iteration count.
+ *
+ * @param num_qubits Qubit count; must be nonzero and at most the
+ *                   configured @c algorithm.grover_analysis_max_qubits
+ *                   (see ::qsim_config_global).
+ * @param num_trials Number of independent searches to run; must be
+ *                   nonzero.
+ * @param entropy    Entropy source used to pick the marked state and to
+ *                   drive measurement; must be non-NULL.
+ * @return Populated statistics.  An all-zero struct is returned when an
+ *         argument is rejected or state allocation fails.
+ * @stability evolving
+ */
 MOONLAB_API grover_analysis_t grover_analyze_performance(size_t num_qubits, size_t num_trials, quantum_entropy_ctx_t *entropy);
 
 /**
