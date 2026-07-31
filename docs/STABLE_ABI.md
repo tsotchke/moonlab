@@ -94,7 +94,7 @@ ABI 0.6.0 (this release):
 | `src/distributed/scheduler.h`                |  26     |
 | `src/control/control_plane.h`                |  21     |
 | `src/integration/libirrep_bridge.h`          |  19     |
-| `src/algorithms/quantum_geometry/qgt.h`      |  24     |
+| `src/algorithms/quantum_geometry/qgt.h`      |  29     |
 | `src/quantum/gates.h`                        |  17     |
 | `src/quantum/noise_mpdo.h`                   |  15     |
 | `src/crypto/mlkem/mlkem.h`                   |  15     |
@@ -113,6 +113,36 @@ ABI 0.6.0 (this release):
 
 The authoritative list is the source.  This doc is not the
 catalogue -- treat the `MOONLAB_API` annotation as the contract.
+
+### v1.2.1 additions
+
+`src/algorithms/quantum_geometry/qgt.h` (pointwise two-band geometry;
+all additive, no existing signature changed):
+
+  - `qgt_dsigma_metric_curvature(d, dx, dy, g, omega_xy)` -- closed-form,
+    gauge-free lower-band Fubini-Study metric and Berry curvature of
+    `H(k) = d(k).sigma` from the analytic `d` and its momentum gradients.
+    Machine-precision: no eigenvector, no finite difference.
+  - `qgt_curvature_at(sys, k, dk, g, omega_xy)` -- the same tensor for any
+    2-band Bloch callback via the projector trace
+    `Q = Tr[P- dH_mu P+ dH_nu]/(DeltaE)^2`, with `dH` from a central
+    difference of the Hamiltonian. Gauge-free, `O(dk^2)`-accurate.
+  - `qgt_set_dsigma(sys, f)`, `qgt_dsigma_at(sys, k, d, dx, dy)`,
+    `qgt_exact_curvature_at(sys, k, g, omega_xy)` + the `qgt_dsigma_fn`
+    callback typedef -- the analytic d-vector a system may carry, and the
+    routed exact path. `qgt_model_qwz` and `qgt_model_haldane` populate it
+    at construction, so the closed form is reachable from a model handle
+    without the caller re-deriving `d(k)`. A system with no analytic
+    d-vector returns `-3` from both accessors.
+
+Both entry points return `-2` at a band touching, tested relative to the
+scale of their inputs (`1e-12` times the Hamiltonian trace scale, matching
+the module's existing `lower_eigvec_2x2` threshold, or `1e-12` times the L1
+scale of `d` and its gradients).
+
+These land in `src/algorithms/quantum_geometry/qgt.h`, not in
+`moonlab_export.h`, so the `MOONLAB_ABI_VERSION_*` triple of the stable
+downstream export surface is unchanged at 0.6.0.
 
 ### v1.0.3 additions
 
