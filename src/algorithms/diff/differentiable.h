@@ -102,11 +102,75 @@ MOONLAB_API size_t moonlab_diff_num_parameters(const moonlab_diff_circuit_t *c);
 
 /* -------- Non-parametric gates ------------------------------- */
 
+/**
+ * @brief Record a Hadamard on @p qubit.  Adds no gradient entry.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_h (moonlab_diff_circuit_t *c, int qubit);
+
+/**
+ * @brief Record a Pauli-X on @p qubit.  Adds no gradient entry.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_x (moonlab_diff_circuit_t *c, int qubit);
+
+/**
+ * @brief Record a Pauli-Y on @p qubit.  Adds no gradient entry.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_y (moonlab_diff_circuit_t *c, int qubit);
+
+/**
+ * @brief Record a Pauli-Z on @p qubit.  Adds no gradient entry.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_z (moonlab_diff_circuit_t *c, int qubit);
+
+/**
+ * @brief Record a CNOT.  Adds no gradient entry.
+ *
+ * @param c       Circuit tape to append to.
+ * @param ctrl    Control qubit, 0..num_qubits-1.
+ * @param target  Target qubit, 0..num_qubits-1, distinct from
+ *                @p ctrl.
+ * @return 0 on success; -1 when @p c is NULL, -2 when either index is
+ *         out of range, -3 when the two indices are equal, -4 when
+ *         the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_cnot(moonlab_diff_circuit_t *c, int ctrl, int target);
+
+/**
+ * @brief Record a controlled-Z.  Adds no gradient entry.
+ *
+ * @param c   Circuit tape to append to.
+ * @param q0  First qubit, 0..num_qubits-1.
+ * @param q1  Second qubit, 0..num_qubits-1, distinct from @p q0.
+ * @return 0 on success; -1 when @p c is NULL, -2 when either index is
+ *         out of range, -3 when the two indices are equal, -4 when
+ *         the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
 
 /* -------- Parametric gates ----------------------------------- */
@@ -120,7 +184,37 @@ MOONLAB_API int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
  * @stability evolving
  */
 MOONLAB_API int moonlab_diff_rx(moonlab_diff_circuit_t *c, int qubit, double theta);
+
+/**
+ * @brief Record a parametric RY gate, @f$e^{-i\theta Y/2}@f$.
+ *
+ * Claims the next gradient slot; the adjoint pass accumulates
+ * d<O>/d(theta) into it with generator Y.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @param theta  Initial rotation angle in radians; can be revised
+ *               later with @c moonlab_diff_set_theta.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_ry(moonlab_diff_circuit_t *c, int qubit, double theta);
+
+/**
+ * @brief Record a parametric RZ gate, @f$e^{-i\theta Z/2}@f$.
+ *
+ * Claims the next gradient slot; the adjoint pass accumulates
+ * d<O>/d(theta) into it with generator Z.
+ *
+ * @param c      Circuit tape to append to.
+ * @param qubit  Target qubit, 0..num_qubits-1.
+ * @param theta  Initial rotation angle in radians; can be revised
+ *               later with @c moonlab_diff_set_theta.
+ * @return 0 on success; -1 when @p c is NULL, -2 when @p qubit is out
+ *         of range, -4 when the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double theta);
 
 /**
@@ -134,7 +228,43 @@ MOONLAB_API int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double the
  * @stability evolving
  */
 MOONLAB_API int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+
+/**
+ * @brief Record a parametric controlled-RY gate.
+ *
+ * Claims the next gradient slot, with generator
+ * @f$|1\rangle\langle 1|_{ctrl} \otimes Y_{tgt}@f$.  The tape stores
+ * the target in the primary qubit slot and the control alongside it.
+ *
+ * @param c       Circuit tape to append to.
+ * @param ctrl    Control qubit, 0..num_qubits-1.
+ * @param target  Target qubit, 0..num_qubits-1, distinct from
+ *                @p ctrl.
+ * @param theta   Initial rotation angle in radians.
+ * @return 0 on success; -1 when @p c is NULL, -2 when either index is
+ *         out of range, -3 when the two indices are equal, -4 when
+ *         the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
+
+/**
+ * @brief Record a parametric controlled-RZ gate.
+ *
+ * Claims the next gradient slot, with generator
+ * @f$|1\rangle\langle 1|_{ctrl} \otimes Z_{tgt}@f$.  The tape stores
+ * the target in the primary qubit slot and the control alongside it.
+ *
+ * @param c       Circuit tape to append to.
+ * @param ctrl    Control qubit, 0..num_qubits-1.
+ * @param target  Target qubit, 0..num_qubits-1, distinct from
+ *                @p ctrl.
+ * @param theta   Initial rotation angle in radians.
+ * @return 0 on success; -1 when @p c is NULL, -2 when either index is
+ *         out of range, -3 when the two indices are equal, -4 when
+ *         the tape could not be grown.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
 
 /**

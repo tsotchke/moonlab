@@ -56,6 +56,16 @@ typedef struct {
     int verbose;
 } ca_mps_var_d_config_t;
 
+/**
+ * @brief Default configuration for the Clifford-only greedy search.
+ *
+ * Returns by value, fully initialised: max_passes = 50,
+ * improvement_eps = 1e-8, include_2q_gates = 1, composite_2gate = 0
+ * (the O(N^2 G^2) composite moves are opt-in), verbose = 0.
+ *
+ * @return A populated ::ca_mps_var_d_config_t; never fails.
+ * @stability evolving
+ */
 MOONLAB_API ca_mps_var_d_config_t ca_mps_var_d_config_default(void);
 
 typedef struct {
@@ -175,6 +185,19 @@ typedef struct {
     int verbose;
 } ca_mps_var_d_alt_config_t;
 
+/**
+ * @brief Default configuration for the alternating optimiser.
+ *
+ * Returns by value, fully initialised: max_outer_iters = 30,
+ * imag_time_dtau = 0.1, imag_time_steps_per_outer = 5,
+ * clifford_passes_per_outer = 10, convergence_eps = 1e-7,
+ * include_2q_gates = 1, composite_2gate = 0, warmstart =
+ * ::CA_MPS_WARMSTART_IDENTITY with a NULL stabilizer-generator list,
+ * verbose = 0.
+ *
+ * @return A populated ::ca_mps_var_d_alt_config_t; never fails.
+ * @stability evolving
+ */
 MOONLAB_API ca_mps_var_d_alt_config_t ca_mps_var_d_alt_config_default(void);
 
 typedef struct {

@@ -111,8 +111,35 @@ MOONLAB_API moonlab_mpdo_t* moonlab_mpdo_clone(const moonlab_mpdo_t* m);
 /*  Introspection                                                     */
 /* ================================================================== */
 
+/**
+ * Number of qubits the MPDO was created with.
+ * @param m  MPDO handle.
+ * @return Qubit count; 0 when @p m is NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_mpdo_num_qubits(const moonlab_mpdo_t* m);
+
+/**
+ * Truncation cap applied to the bonds after each channel or gate.
+ * @param m  MPDO handle.
+ * @return The cap passed to ::moonlab_mpdo_create; 0 when @p m is
+ *         NULL.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_mpdo_max_bond_dim(const moonlab_mpdo_t* m);
+
+/**
+ * @brief Largest bond dimension currently in use across the internal
+ *        bonds.
+ *
+ * A freshly created product state reports 1; the value grows toward
+ * ::moonlab_mpdo_max_bond_dim as channels correlate the sites.
+ *
+ * @param m  MPDO handle.
+ * @return Current max bond dimension (>= 1); 0 when @p m is NULL or
+ *         holds no qubits.
+ * @stability evolving
+ */
 MOONLAB_API uint32_t moonlab_mpdo_current_bond_dim(const moonlab_mpdo_t* m);
 
 /**
