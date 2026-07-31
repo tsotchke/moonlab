@@ -584,8 +584,11 @@ static tn_gate_error_t apply_gate_2q_adjacent_webgpu(tn_mps_state_t *state,
         state->num_truncations++;
     }
 
-    svd->left = NULL;
-    svd->right = NULL;
+    /* new_tl/new_tr are deep copies: tensor_reshape goes through
+     * tensor_create_with_data, which allocates and memcpys. So svd still owns
+     * its left/right tensors and must free them -- nulling them out here would
+     * leak both on every two-qubit gate. (dmrg_optimize_two_site takes the same
+     * reshape route and frees the result whole, for the same reason.) */
     svd_compress_result_free(svd);
 
     state->canonical = TN_CANONICAL_NONE;
@@ -1026,8 +1029,8 @@ static tn_gate_error_t apply_gate_2q_adjacent(tn_mps_state_t *state,
         state->num_truncations++;
     }
 
-    svd->left = NULL;
-    svd->right = NULL;
+    /* Same ownership rule as the sibling path above: tensor_reshape deep-copied
+     * svd->left/right into new_tl/new_tr, so svd still owns the originals. */
     svd_compress_result_free(svd);
 
     // After SVD with S absorbed into right tensor, the left tensor is left-canonical
