@@ -331,7 +331,8 @@ MOONLAB_API int moonlab_mlkem512_keygen_qrng(
  * @param c  768-byte output ciphertext.
  * @param K  32-byte output shared secret.
  * @param ek 800-byte public key.
- * @return  0 on success, -1 on entropy failure.
+ * @return  0 on success, -1 on entropy failure, -2 if @p ek fails the
+ *          Section 7.2 check.
  * @since 0.2.0
  * @stability stable
  */

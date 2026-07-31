@@ -98,7 +98,7 @@ ABI 0.6.0 (this release):
 | `src/distributed/scheduler.h`                |     26  |
 | `src/control/control_plane.h`                |     21  |
 | `src/integration/libirrep_bridge.h`          |     19  |
-| `src/algorithms/quantum_geometry/qgt.h`      |     30  |
+| `src/algorithms/quantum_geometry/qgt.h`      |     32  |
 | `src/quantum/gates.h`                        |     34  |
 | `src/quantum/noise_mpdo.h`                   |     15  |
 | `src/crypto/mlkem/mlkem.h`                   |     21  |
@@ -108,7 +108,7 @@ ABI 0.6.0 (this release):
 | `src/applications/decoder_bench.h`           |      9  |
 | `src/utils/audit_buffer.h`                   |      7  |
 | `src/applications/vendor_noise_backend.h`    |      7  |
-| `src/algorithms/topology_realspace/chern_kpm.h` |      7  |
+| `src/algorithms/topology_realspace/chern_kpm.h`|      7  |
 | `src/algorithms/bell_tests.h`                |      9  |
 | `src/algorithms/grover.h`                    |     14  |
 | `src/utils/token_bucket.h`                   |      4  |

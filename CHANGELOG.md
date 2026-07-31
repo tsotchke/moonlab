@@ -127,8 +127,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finite-difference paths. `qgt_create_dsigma` bundles construction and
   attachment into one call for FFI consumers.
 
+- **VQE quantum geometry in the Rust and Python bindings.** The metric, the
+  Berry curvature, and the natural-gradient direction are reachable from both
+  binding languages, returning row-major `(n, n)` arrays (numpy in Python,
+  `Vec<f64>` in Rust) and mapping the C status codes onto each language's
+  existing error type. The band-geometry one-shots come with them, plus a
+  `BandTouchingError` in Python so a k-grid sweep can skip Dirac points without
+  swallowing real failures. Binding-level tests in both languages assert metric
+  symmetry and positive-semidefiniteness, curvature antisymmetry with a zero
+  diagonal, and that the natural-gradient direction solves `(g + eps I) x =
+  grad` to 1e-8.
+
 ### Changed
 
+- **Every public symbol now carries a meaningful `@stability` tier.** Seven of
+  1244 `MOONLAB_API` declarations were tagged; the rest made no statement about
+  what a consumer could rely on. `docs/STABLE_ABI.md` defines the three tiers
+  normatively and how each is derived, and the whole tree is swept against it:
+  128 declaration sites `stable` (the `moonlab_export.h` surface, including the
+  44 symbols the export header re-declares from a module header -- both sites
+  agree), 1106 `evolving`, 10 `beta`. 160 declarations across 19 headers had no
+  doc block at all and were given real ones written from the implementation, not
+  from the symbol name; that work turned up several behaviours the names
+  contradicted, including `scheduler.h` introspection getters returning
+  `MOONLAB_SCHED_BAD_ARG` rather than 0 on a NULL job, and
+  `moonlab_ca_mps_cnot/cz/swap` returning -4 rather than -2 on equal indices.
+- **`qgt_create` and `qgt_create_1d` are `MOONLAB_API`.** Both shipped as public
+  declarations without the tag, so neither survived a hidden-visibility build
+  even though `qgt_free` and `qgt_free_1d` did. A constructor that cannot be
+  linked while its destructor can is not a usable surface.
 - **QGT band-touching guards are scale-relative.** `qgt_curvature_at` and
   `qgt_dsigma_metric_curvature` rejected only an exact zero gap, so a
   near-gapless `k` returned finite values on the order of `1e12` -- `Q` carries

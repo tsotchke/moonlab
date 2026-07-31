@@ -164,8 +164,9 @@ typedef struct qgt_system qgt_system_t;
  * @c qgt_berry_grid and a handful of times per query in
  * @c qgt_metric_at, so cheap evaluation is rewarded.  The system
  * stores @p user as a borrowed pointer; the caller retains ownership.
+ * @stability evolving
  */
-qgt_system_t* qgt_create(qgt_bloch_fn f, void* user);
+MOONLAB_API qgt_system_t* qgt_create(qgt_bloch_fn f, void* user);
 
 /**
  * @brief Callback supplying the analytic @f$\mathbf d(\mathbf k)@f$ of a
@@ -307,7 +308,21 @@ typedef void (*qgt_bloch_1d_fn)(double k, void* user, qgt_complex_t h[4]);
 
 typedef struct qgt_system_1d qgt_system_1d_t;
 
-qgt_system_1d_t* qgt_create_1d(qgt_bloch_1d_fn f, void* user);
+/**
+ * @brief Construct a 1D QGT system around a user-supplied Bloch callback.
+ *
+ * The one-dimensional analogue of ::qgt_create, consumed by
+ * ::qgt_winding_1d and ::qgt_z2_invariant_1d_bdg.  @p user is stored as a
+ * borrowed pointer; the caller retains ownership and must keep it alive
+ * for the lifetime of the handle.  Release with ::qgt_free_1d.
+ *
+ * @param f    Bloch Hamiltonian callback at scalar momentum (required).
+ * @param user Borrowed parameter payload handed to @p f on every call.
+ * @return New system handle, or NULL if @p f is NULL or the allocation
+ *         failed.
+ * @stability evolving
+ */
+MOONLAB_API qgt_system_1d_t* qgt_create_1d(qgt_bloch_1d_fn f, void* user);
 
 /**
  * @brief Release a 1D Bloch system handle.
