@@ -416,7 +416,7 @@ jobs:
   update-homebrew:
     needs: verify
     if: needs.verify.outputs.prerelease == 'false'
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
         with:
