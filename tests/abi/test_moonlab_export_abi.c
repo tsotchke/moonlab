@@ -1026,6 +1026,256 @@ int main(void) {
         }
     }
 
+    /* v1.2.1 / ABI 0.7.0 VQE quantum geometry: resolve the three stable
+     * entries, pin argument validation, and check the tensors against
+     * properties an implementation cannot fake -- the metric is symmetric
+     * PSD, the curvature is antisymmetric with a zero diagonal, and the
+     * natural-gradient direction solves (g + eps I) x = grad. */
+    ABI_STEP("vqe quantum geometry");
+    {
+        typedef void*  (*vqe_h2_fn)(double);
+        typedef void*  (*vqe_hea_fn)(size_t, size_t);
+        typedef void*  (*vqe_opt_create_fn)(int);
+        typedef void*  (*entropy_hw_fn)(void);
+        typedef void   (*entropy_destroy_fn)(void*);
+        typedef void*  (*vqe_solver_create_fn)(void*, void*, void*, void*);
+        typedef void   (*vqe_free_fn)(void*);
+        typedef int    (*geom_fn)(void*, const double*, double*, size_t);
+        typedef int    (*natgrad_fn)(void*, const double*, const double*,
+                                     double, double*, size_t);
+
+        dlerror();
+        geom_fn qgt = (geom_fn)dlsym(h, "moonlab_vqe_qgt");
+        geom_fn berry = (geom_fn)dlsym(h, "moonlab_vqe_berry_curvature");
+        natgrad_fn natgrad =
+            (natgrad_fn)dlsym(h, "moonlab_vqe_natural_gradient");
+        if (!qgt || !berry || !natgrad) {
+            fprintf(stderr, "dlsym(moonlab_vqe geometry) failed: %s\n",
+                    dlerror());
+            failures++;
+        } else {
+            vqe_h2_fn h2 = (vqe_h2_fn)dlsym(h, "vqe_create_h2_hamiltonian");
+            vqe_hea_fn hea =
+                (vqe_hea_fn)dlsym(h, "vqe_create_hardware_efficient_ansatz");
+            vqe_opt_create_fn opt_create =
+                (vqe_opt_create_fn)dlsym(h, "vqe_optimizer_create");
+            entropy_hw_fn entropy_hw =
+                (entropy_hw_fn)dlsym(h, "quantum_entropy_ctx_create_hw");
+            entropy_destroy_fn entropy_destroy =
+                (entropy_destroy_fn)dlsym(h, "quantum_entropy_ctx_destroy");
+            vqe_solver_create_fn solver_create =
+                (vqe_solver_create_fn)dlsym(h, "vqe_solver_create");
+            vqe_free_fn solver_free = (vqe_free_fn)dlsym(h, "vqe_solver_free");
+            vqe_free_fn ansatz_free = (vqe_free_fn)dlsym(h, "vqe_ansatz_free");
+            vqe_free_fn opt_free = (vqe_free_fn)dlsym(h, "vqe_optimizer_free");
+            vqe_free_fn ham_free =
+                (vqe_free_fn)dlsym(h, "pauli_hamiltonian_free");
+
+            if (!h2 || !hea || !opt_create || !entropy_hw ||
+                !entropy_destroy || !solver_create || !solver_free ||
+                !ansatz_free || !opt_free || !ham_free) {
+                fprintf(stderr,
+                        "VQE construction surface incomplete (dlsym)\n");
+                failures++;
+            } else {
+                double dummy = 0.0;
+                if (qgt(NULL, &dummy, &dummy, 1) != -1 ||
+                    berry(NULL, &dummy, &dummy, 1) != -1 ||
+                    natgrad(NULL, &dummy, &dummy, 1e-3, &dummy, 1) != -1) {
+                    fprintf(stderr, "VQE geometry NULL check != -1\n");
+                    failures++;
+                }
+
+                void *H = h2(0.74);
+                void *ansatz = hea(2, 1);       /* 2 qubits x 1 layer -> 4 */
+                void *opt = opt_create(/*VQE_OPTIMIZER_QNG=*/4);
+                void *entropy = entropy_hw();
+                void *solver = (H && ansatz && opt && entropy)
+                                   ? solver_create(H, ansatz, opt, entropy)
+                                   : NULL;
+                if (!solver) {
+                    fprintf(stderr, "VQE solver construction failed\n");
+                    failures++;
+                } else {
+                    enum { NP = 4 };
+                    double theta[NP] = { 0.31, -0.87, 1.24, 0.55 };
+                    double g[NP * NP], F[NP * NP], grad[NP], dir[NP];
+
+                    if (qgt(solver, theta, g, NP + 1) != -2 ||
+                        berry(solver, theta, F, NP + 1) != -2) {
+                        fprintf(stderr, "VQE geometry mismatch != -2\n");
+                        failures++;
+                    }
+
+                    int rc_g = qgt(solver, theta, g, NP);
+                    int rc_f = berry(solver, theta, F, NP);
+                    if (rc_g != 0 || rc_f != 0) {
+                        fprintf(stderr, "VQE geometry rc %d / %d\n",
+                                rc_g, rc_f);
+                        failures++;
+                    } else {
+                        /* Row-major n x n, symmetric metric. */
+                        double asym = 0.0, fasym = 0.0, fdiag = 0.0;
+                        for (size_t i = 0; i < NP; i++) {
+                            if (fabs(F[i * NP + i]) > fdiag) {
+                                fdiag = fabs(F[i * NP + i]);
+                            }
+                            for (size_t j = 0; j < NP; j++) {
+                                double a = fabs(g[i * NP + j] - g[j * NP + i]);
+                                if (a > asym) asym = a;
+                                double b = fabs(F[i * NP + j] + F[j * NP + i]);
+                                if (b > fasym) fasym = b;
+                            }
+                        }
+                        if (asym > 1e-9 || fasym > 1e-9 || fdiag > 1e-12) {
+                            fprintf(stderr,
+                                    "VQE geometry symmetry violated: "
+                                    "g asym %.2e, F asym %.2e, F diag %.2e\n",
+                                    asym, fasym, fdiag);
+                            failures++;
+                        }
+
+                        /* Natural gradient solves (g + eps I) dir = grad. */
+                        for (size_t k = 0; k < NP; k++) {
+                            grad[k] = 0.1 * (double)(k + 1);
+                        }
+                        const double eps = 1e-2;
+                        if (natgrad(solver, theta, grad, eps, dir, NP) != 0) {
+                            fprintf(stderr, "moonlab_vqe_natural_gradient "
+                                            "failed\n");
+                            failures++;
+                        } else {
+                            double resid = 0.0;
+                            for (size_t i = 0; i < NP; i++) {
+                                double lhs = eps * dir[i];
+                                for (size_t j = 0; j < NP; j++) {
+                                    lhs += g[i * NP + j] * dir[j];
+                                }
+                                double e = fabs(lhs - grad[i]);
+                                if (e > resid) resid = e;
+                            }
+                            if (resid > 1e-8) {
+                                fprintf(stderr,
+                                        "natural gradient residual %.2e\n",
+                                        resid);
+                                failures++;
+                            } else {
+                                fprintf(stdout,
+                                        "moonlab_vqe geometry OK "
+                                        "(natgrad residual %.2e)\n", resid);
+                            }
+                        }
+                    }
+                    solver_free(solver);
+                }
+                if (entropy) entropy_destroy(entropy);
+                if (opt) opt_free(opt);
+                if (ansatz) ansatz_free(ansatz);
+                if (H) ham_free(H);
+            }
+        }
+    }
+
+    /* v1.2.1 / ABI 0.7.0 pointwise band geometry one-shots.  QWZ at m=+1
+     * has an analytically known total curvature (Chern -1), so integrating
+     * the one-shot over the BZ is a real check, not a smoke test; the
+     * d.sigma entry is cross-checked against the QWZ one at the same k,
+     * and the band-touching return is pinned at the m=-2 Dirac point. */
+    ABI_STEP("pointwise band geometry");
+    {
+        typedef int (*dsig_fn)(const double*, const double*, const double*,
+                               double*, double*);
+        typedef int (*qwz_fn)(double, const double*, double*, double*);
+        typedef int (*hal_fn)(double, double, double, double, const double*,
+                              double*, double*);
+
+        dlerror();
+        dsig_fn dsig = (dsig_fn)dlsym(h, "moonlab_dsigma_metric_curvature");
+        qwz_fn qwz = (qwz_fn)dlsym(h, "moonlab_qwz_curvature_at");
+        hal_fn hal = (hal_fn)dlsym(h, "moonlab_haldane_curvature_at");
+        if (!dsig || !qwz || !hal) {
+            fprintf(stderr, "dlsym(band geometry one-shots) failed: %s\n",
+                    dlerror());
+            failures++;
+        } else {
+            double g[4], om = 0.0;
+            const double k[2] = { 0.83, -1.47 };
+
+            if (qwz(1.0, NULL, g, &om) != -1 ||
+                dsig(NULL, NULL, NULL, g, &om) != -1) {
+                fprintf(stderr, "band geometry NULL check != -1\n");
+                failures++;
+            }
+
+            /* d.sigma entry fed the QWZ d-vector must equal the QWZ entry. */
+            const double m = 1.0;
+            double d[3]  = { sin(k[0]), sin(k[1]),
+                             m + cos(k[0]) + cos(k[1]) };
+            double dx[3] = { cos(k[0]), 0.0, -sin(k[0]) };
+            double dy[3] = { 0.0, cos(k[1]), -sin(k[1]) };
+            double g_d[4], om_d = 0.0;
+            int rc_d = dsig(d, dx, dy, g_d, &om_d);
+            int rc_q = qwz(m, k, g, &om);
+            if (rc_d != 0 || rc_q != 0) {
+                fprintf(stderr, "band geometry rc %d / %d\n", rc_d, rc_q);
+                failures++;
+            } else {
+                double worst = fabs(om - om_d);
+                for (int j = 0; j < 4; j++) {
+                    double e = fabs(g[j] - g_d[j]);
+                    if (e > worst) worst = e;
+                }
+                if (worst > 1e-15) {
+                    fprintf(stderr,
+                            "qwz one-shot vs d.sigma one-shot: %.2e\n", worst);
+                    failures++;
+                }
+            }
+
+            /* Integrate the pointwise curvature over the BZ: QWZ m=+1 is
+             * the C=-1 phase, so the integral must round to -1. */
+            const int N = 120;
+            const double step = 2.0 * 3.14159265358979323846 / (double)N;
+            double acc = 0.0;
+            int bad = 0;
+            for (int iy = 0; iy < N; iy++) {
+                for (int ix = 0; ix < N; ix++) {
+                    double kk[2] = { (ix + 0.5) * step, (iy + 0.5) * step };
+                    double gg[4], oo = 0.0;
+                    if (qwz(m, kk, gg, &oo) != 0) { bad++; continue; }
+                    acc += oo * step * step;
+                }
+            }
+            double chern = acc / (2.0 * 3.14159265358979323846);
+            if (bad != 0 || fabs(chern - (-1.0)) > 1e-2) {
+                fprintf(stderr,
+                        "QWZ m=+1 integrated curvature %.6f (want -1), "
+                        "%d bad points\n", chern, bad);
+                failures++;
+            }
+
+            /* Band touching at the m=-2 Dirac point returns -2. */
+            const double k0[2] = { 0.0, 0.0 };
+            if (qwz(-2.0, k0, g, &om) != -2) {
+                fprintf(stderr, "QWZ band touching != -2\n");
+                failures++;
+            }
+
+            /* Haldane resolves and produces a finite curvature. */
+            if (hal(1.0, 0.2, -1.5707963267948966, 0.2, k, g, &om) != 0 ||
+                !isfinite(om) || !isfinite(g[0])) {
+                fprintf(stderr, "moonlab_haldane_curvature_at failed\n");
+                failures++;
+            }
+
+            if (!failures) {
+                fprintf(stdout,
+                        "band geometry one-shots OK (QWZ Chern %.4f)\n",
+                        chern);
+            }
+        }
+    }
+
     /* CA-MPS full gate + observable surface: resolve and exercise every
      * stable CA-MPS entry a binding depends on (the Bell probe above only
      * touches create / h / cnot / expect_pauli / free).  Physics is

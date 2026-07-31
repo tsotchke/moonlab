@@ -88,20 +88,6 @@ static qs_error_t vqe_apply_uccsd_ansatz_noisy(
     quantum_entropy_ctx_t *entropy
 );
 
-static void apply_single_qubit_noise(
-    quantum_state_t *state,
-    int qubit,
-    const noise_model_t *noise,
-    quantum_entropy_ctx_t *entropy
-);
-
-static void apply_two_qubit_noise(
-    quantum_state_t *state,
-    int qubit1,
-    int qubit2,
-    const noise_model_t *noise,
-    quantum_entropy_ctx_t *entropy
-);
 
 // ============================================================================
 // MOLECULAR HAMILTONIAN MANAGEMENT
@@ -695,15 +681,20 @@ vqe_ansatz_t* vqe_create_custom_ansatz(
     return ansatz;
 }
 
+/* One dispatch for both paths.  NOISE and ENTROPY are NULL on the ideal path;
+ * the callback interleaves the error channels itself when they are not, since
+ * it is the only thing that can see its own gate boundaries. */
 static qs_error_t vqe_apply_custom_ansatz(
     quantum_state_t *state,
-    const vqe_ansatz_t *ansatz
+    const vqe_ansatz_t *ansatz,
+    const noise_model_t *noise,
+    quantum_entropy_ctx_t *entropy
 ) {
     const custom_ansatz_data_t *d =
         (const custom_ansatz_data_t*)ansatz->circuit_data;
     if (!d || !d->apply) return QS_ERROR_INVALID_STATE;
     return d->apply(state, ansatz->parameters, ansatz->num_parameters,
-                    d->user_data);
+                    noise, entropy, d->user_data);
 }
 
 static qs_error_t vqe_apply_symmetry_preserving_ansatz(
@@ -762,7 +753,7 @@ qs_error_t vqe_apply_ansatz(
             return vqe_apply_symmetry_preserving_ansatz(state, ansatz);
 
         case VQE_ANSATZ_CUSTOM:
-            return vqe_apply_custom_ansatz(state, ansatz);
+            return vqe_apply_custom_ansatz(state, ansatz, NULL, NULL);
 
         default:
             return QS_ERROR_INVALID_STATE;
@@ -2495,7 +2486,7 @@ void vqe_print_hamiltonian(const pauli_hamiltonian_t *hamiltonian) {
  *
  * Applies depolarizing noise based on the noise model's single-qubit error rate.
  */
-static void apply_single_qubit_noise(
+void vqe_apply_single_qubit_noise(
     quantum_state_t *state,
     int qubit,
     const noise_model_t *noise,
@@ -2528,7 +2519,7 @@ static void apply_single_qubit_noise(
 /**
  * @brief Apply two-qubit noise after a two-qubit gate
  */
-static void apply_two_qubit_noise(
+void vqe_apply_two_qubit_noise(
     quantum_state_t *state,
     int qubit1,
     int qubit2,
@@ -2565,13 +2556,13 @@ static qs_error_t vqe_apply_hardware_efficient_ansatz_noisy(
             double theta_y = ansatz->parameters[param_idx++];
             double theta_z = ansatz->parameters[param_idx++];
             gate_ry(state, q, theta_y);
-            apply_single_qubit_noise(state, q, noise, entropy);
+            vqe_apply_single_qubit_noise(state, q, noise, entropy);
             gate_rz(state, q, theta_z);
-            apply_single_qubit_noise(state, q, noise, entropy);
+            vqe_apply_single_qubit_noise(state, q, noise, entropy);
         }
         for (size_t q = 0; q < ansatz->num_qubits - 1; q++) {
             gate_cnot(state, q, q + 1);
-            apply_two_qubit_noise(state, q, q + 1, noise, entropy);
+            vqe_apply_two_qubit_noise(state, q, q + 1, noise, entropy);
         }
     }
 
@@ -2606,7 +2597,7 @@ static qs_error_t vqe_apply_uccsd_ansatz_noisy(
             // Givens rotation (decomposes into single+two qubit gates)
             // Apply noise after internal gates
             vqe_apply_givens_rotation(state, i, a_qubit, theta);
-            apply_two_qubit_noise(state, i, a_qubit, noise, entropy);
+            vqe_apply_two_qubit_noise(state, i, a_qubit, noise, entropy);
         }
     }
 
@@ -2622,8 +2613,8 @@ static qs_error_t vqe_apply_uccsd_ansatz_noisy(
 
                     vqe_apply_double_excitation(state, i, j, a_qubit, b_qubit, theta);
                     // Apply noise to all involved qubits
-                    apply_two_qubit_noise(state, i, j, noise, entropy);
-                    apply_two_qubit_noise(state, a_qubit, b_qubit, noise, entropy);
+                    vqe_apply_two_qubit_noise(state, i, j, noise, entropy);
+                    vqe_apply_two_qubit_noise(state, a_qubit, b_qubit, noise, entropy);
                 }
             }
         }
@@ -2663,14 +2654,12 @@ qs_error_t vqe_apply_ansatz_noisy(
             return vqe_apply_uccsd_ansatz_noisy(state, ansatz, noise, entropy);
 
         case VQE_ANSATZ_CUSTOM:
-            /* The built-in noisy paths interleave the noise model's error
-             * channels after each individual gate.  A custom circuit is an
-             * opaque callback, so the library has no gate boundaries to place
-             * them at, and applying a single terminal round instead would be a
-             * different noise process wearing the same name.  A callback that
-             * needs NISQ noise applies the channels itself between its own
-             * gates.  The ideal path (vqe_apply_ansatz) is fully supported. */
-            return QS_ERROR_NOT_SUPPORTED;
+            /* The callback owns its gate sequence, so it is the only place the
+             * per-gate error channels can be interleaved correctly.  Hand it
+             * the noise context and let it do so via
+             * vqe_apply_single_qubit_noise / vqe_apply_two_qubit_noise, which
+             * apply exactly what the built-in noisy paths apply. */
+            return vqe_apply_custom_ansatz(state, ansatz, noise, entropy);
 
         default:
             return QS_ERROR_INVALID_STATE;

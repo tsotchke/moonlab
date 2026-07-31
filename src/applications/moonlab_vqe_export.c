@@ -40,3 +40,66 @@ int moonlab_vqe_gradient(moonlab_vqe_solver_t* solver,
     }
     return 0;
 }
+
+/* ---- Quantum geometry (ABI 0.7.0) ----------------------------------
+ *
+ * Same shape as the gradient wrapper: validate the caller's view of the
+ * parameter count against the solver's ansatz, then delegate.  The count
+ * check is what makes these safe to call through a binding that cannot see
+ * the ansatz struct, and it also pins the output buffer size -- the two
+ * tensor verbs write num_parameters^2 doubles, row-major, and a caller that
+ * disagreed about num_parameters would otherwise overflow silently. */
+
+int moonlab_vqe_qgt(moonlab_vqe_solver_t* solver,
+                    const double* parameters,
+                    double* qgt_out,
+                    size_t num_parameters)
+{
+    if (!solver || !parameters || !qgt_out) {
+        return -1;
+    }
+    if (!solver->ansatz || solver->ansatz->num_parameters != num_parameters) {
+        return -2;
+    }
+    if (vqe_compute_qgt(solver, parameters, qgt_out) != 0) {
+        return -3;
+    }
+    return 0;
+}
+
+int moonlab_vqe_berry_curvature(moonlab_vqe_solver_t* solver,
+                                const double* parameters,
+                                double* berry_out,
+                                size_t num_parameters)
+{
+    if (!solver || !parameters || !berry_out) {
+        return -1;
+    }
+    if (!solver->ansatz || solver->ansatz->num_parameters != num_parameters) {
+        return -2;
+    }
+    if (vqe_compute_berry_curvature(solver, parameters, berry_out) != 0) {
+        return -3;
+    }
+    return 0;
+}
+
+int moonlab_vqe_natural_gradient(moonlab_vqe_solver_t* solver,
+                                 const double* parameters,
+                                 const double* gradient,
+                                 double regularization,
+                                 double* direction_out,
+                                 size_t num_parameters)
+{
+    if (!solver || !parameters || !gradient || !direction_out) {
+        return -1;
+    }
+    if (!solver->ansatz || solver->ansatz->num_parameters != num_parameters) {
+        return -2;
+    }
+    if (vqe_natural_gradient_direction(solver, parameters, gradient,
+                                       regularization, direction_out) != 0) {
+        return -3;
+    }
+    return 0;
+}

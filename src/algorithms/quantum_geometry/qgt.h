@@ -209,6 +209,25 @@ typedef void (*qgt_dsigma_fn)(const double k[2], void* user,
 MOONLAB_API int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f);
 
 /**
+ * @brief Construct a QGT system that carries an analytic d-vector from the
+ *        start: ::qgt_create followed by ::qgt_set_dsigma, in one call.
+ *
+ * The one-shot exists for FFI consumers, who would otherwise have to hold the
+ * handle across two calls and unwind the first on the second's failure.  @p
+ * user is borrowed by both callbacks exactly as in ::qgt_create; the caller
+ * retains ownership.
+ *
+ * @param f    Bloch Hamiltonian callback (required).
+ * @param d    Analytic d-vector callback (required; pass NULL to @p d only
+ *             if you meant ::qgt_create).
+ * @param user Borrowed parameter payload handed to both callbacks.
+ * @return New system handle, or NULL if either callback is NULL or the
+ *         allocation failed.
+ */
+MOONLAB_API qgt_system_t* qgt_create_dsigma(qgt_bloch_fn f, qgt_dsigma_fn d,
+                                            void* user);
+
+/**
  * @brief Evaluate a system's analytic @f$\mathbf d(\mathbf k)@f$ and its
  *        momentum gradients at @p k.
  *

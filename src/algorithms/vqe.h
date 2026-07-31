@@ -276,6 +276,52 @@ MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
 );
 
 /**
+ * @brief Apply the noise model's single-qubit error channels to QUBIT.
+ *
+ * The exact composition the built-in noisy ansaetze apply after every
+ * single-qubit gate: depolarizing, then amplitude damping (T1), then phase
+ * damping (T2), each gated on its rate being positive, each drawing from
+ * ENTROPY.  Exposed so a VQE_ANSATZ_CUSTOM circuit can interleave the same
+ * channels between its own gates and get noise semantics identical to the
+ * built-ins rather than an approximation of them.
+ *
+ * No-op when NOISE is NULL or disabled, so a callback can call it
+ * unconditionally on both the ideal and the noisy path.
+ *
+ * @param state Quantum state to perturb in place
+ * @param qubit Target qubit
+ * @param noise Noise model (NULL or disabled: no-op)
+ * @param entropy Random number source
+ */
+MOONLAB_API void vqe_apply_single_qubit_noise(
+    quantum_state_t *state,
+    int qubit,
+    const noise_model_t *noise,
+    quantum_entropy_ctx_t *entropy
+);
+
+/**
+ * @brief Apply the noise model's two-qubit error channels to a gate pair.
+ *
+ * The two-qubit counterpart of vqe_apply_single_qubit_noise, applied by the
+ * built-in noisy ansaetze after every entangling gate.  No-op when NOISE is
+ * NULL or disabled.
+ *
+ * @param state Quantum state to perturb in place
+ * @param qubit1 First gate qubit
+ * @param qubit2 Second gate qubit
+ * @param noise Noise model (NULL or disabled: no-op)
+ * @param entropy Random number source
+ */
+MOONLAB_API void vqe_apply_two_qubit_noise(
+    quantum_state_t *state,
+    int qubit1,
+    int qubit2,
+    const noise_model_t *noise,
+    quantum_entropy_ctx_t *entropy
+);
+
+/**
  * @brief Caller-supplied circuit for a VQE_ANSATZ_CUSTOM ansatz.
  *
  * Applies the parameterized circuit U(parameters) to STATE, which arrives
@@ -283,9 +329,31 @@ MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
  * (exactly as the built-in ansaetze see it).  The callback must not free or
  * reallocate STATE.
  *
+ * NOISE and ENTROPY carry the noise context.  On the ideal path
+ * (vqe_apply_ansatz, and every derivative the library takes) both are NULL.
+ * On the noisy path (vqe_apply_ansatz_noisy) they are the solver's noise model
+ * and entropy source, and the callback is responsible for interleaving the
+ * error channels between its own gates -- it owns the gate sequence, so it is
+ * the only place the interleaving can be done correctly.
+ * vqe_apply_single_qubit_noise and vqe_apply_two_qubit_noise apply exactly the
+ * channels the built-in noisy ansaetze apply, and are no-ops when NOISE is
+ * NULL, so one circuit body serves both paths:
+ *
+ * @code
+ * gate_ry(state, q, theta);
+ * vqe_apply_single_qubit_noise(state, q, noise, entropy);
+ * gate_cnot(state, q, q + 1);
+ * vqe_apply_two_qubit_noise(state, q, q + 1, noise, entropy);
+ * @endcode
+ *
+ * A callback that ignores NOISE entirely still works; it simply produces the
+ * ideal state on both paths.
+ *
  * @param state Quantum state to evolve in place (num_qubits qubits)
  * @param parameters Current parameter values (num_parameters slots)
  * @param num_parameters Length of PARAMETERS
+ * @param noise Noise model, or NULL on the ideal path
+ * @param entropy Random number source, or NULL on the ideal path
  * @param user_data Opaque pointer handed to vqe_create_custom_ansatz
  * @return QS_SUCCESS on success, any other qs_error_t on failure
  */
@@ -293,6 +361,8 @@ typedef qs_error_t (*vqe_custom_ansatz_fn)(
     quantum_state_t *state,
     const double *parameters,
     size_t num_parameters,
+    const noise_model_t *noise,
+    quantum_entropy_ctx_t *entropy,
     void *user_data
 );
 
@@ -307,11 +377,12 @@ typedef qs_error_t (*vqe_custom_ansatz_fn)(
  * statevector, since its gate structure is opaque to the library, where the
  * built-in ansaetze use exact analytic generator insertion.
  *
- * vqe_apply_ansatz_noisy returns QS_ERROR_NOT_SUPPORTED for a custom ansatz:
- * the built-in noisy paths interleave the noise model's error channels after
- * each individual gate, and the library cannot see inside APPLY to place them.
- * A callback that needs NISQ noise applies the channels itself -- it owns the
- * gate sequence and can call the noise API between its own gates.
+ * vqe_apply_ansatz_noisy routes to APPLY as well, handing it the noise model
+ * and entropy source so the circuit can interleave error channels between its
+ * own gates with vqe_apply_single_qubit_noise / vqe_apply_two_qubit_noise.
+ * The library cannot place those channels itself -- it cannot see inside APPLY
+ * -- so the callback is where the interleaving belongs; see
+ * vqe_custom_ansatz_fn for the pattern.
  *
  * USER_DATA is not owned: vqe_ansatz_free releases only the ansatz itself.
  * The initial parameter vector is all zeros; write ansatz->parameters (or pass

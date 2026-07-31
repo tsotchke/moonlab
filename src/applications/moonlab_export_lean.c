@@ -322,6 +322,46 @@ int moonlab_hofstadter_chern(double t, size_t p, size_t q,
 }
 
 /* ================================================================== */
+/*  Pointwise band-geometry one-shots (since ABI 0.7.0).               */
+/*                                                                     */
+/*  The momentum-space counterpart of the topology one-shots above:    */
+/*  the lower band's Fubini-Study metric and Berry curvature at a      */
+/*  single k, closed-form from the model's analytic d-vector.  Same    */
+/*  convention -- scalar model parameters in, plain arrays out, no     */
+/*  opaque handle across the FFI boundary.  Status codes pass through  */
+/*  from qgt_exact_curvature_at: 0 ok, -1 bad argument, -2 at a band   */
+/*  touching where the geometry is undefined.                          */
+/* ================================================================== */
+
+int moonlab_dsigma_metric_curvature(const double* d, const double* dx,
+                                    const double* dy, double* g_out,
+                                    double* omega_out) {
+    if (!d || !dx || !dy || !g_out) return -1;
+    return qgt_dsigma_metric_curvature(d, dx, dy, g_out, omega_out);
+}
+
+int moonlab_qwz_curvature_at(double m, const double* k,
+                             double* g_out, double* omega_out) {
+    if (!k || !g_out) return -1;
+    qgt_system_t* sys = qgt_model_qwz(m);
+    if (!sys) return -1;
+    int rc = qgt_exact_curvature_at(sys, k, g_out, omega_out);
+    qgt_free(sys);
+    return rc;
+}
+
+int moonlab_haldane_curvature_at(double t1, double t2, double phi,
+                                 double m_stagger, const double* k,
+                                 double* g_out, double* omega_out) {
+    if (!k || !g_out) return -1;
+    qgt_system_t* sys = qgt_model_haldane(t1, t2, phi, m_stagger);
+    if (!sys) return -1;
+    int rc = qgt_exact_curvature_at(sys, k, g_out, omega_out);
+    qgt_free(sys);
+    return rc;
+}
+
+/* ================================================================== */
 /*  Diagnostic stringifier (since 0.2.1).                              */
 /* ================================================================== */
 

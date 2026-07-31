@@ -1,7 +1,7 @@
 # Stable ABI contract -- v1.x
 
-**Current package:** 1.2.0
-**Current ABI:** 0.6.0
+**Current package:** 1.2.1
+**Current ABI:** 0.7.0
 
 ## Scope
 
@@ -147,10 +147,16 @@ constructor; all additive, no existing signature changed):
     `vqe_compute_qgt`, `vqe_compute_berry_curvature`) accepts it. The
     geometric verbs differentiate a custom circuit by central
     differences, since its gate structure is opaque to the library.
-    `vqe_apply_ansatz_noisy` returns `QS_ERROR_NOT_SUPPORTED` for a
-    custom ansatz: the built-in noisy paths interleave error channels
-    after each individual gate and the library has no gate boundaries
-    inside the callback to place them at.
+    `vqe_apply_ansatz_noisy` routes to the callback too, handing it the
+    noise model and entropy source: the callback owns its gate sequence,
+    so it is the only place the per-gate error channels can be
+    interleaved correctly.
+  - `vqe_apply_single_qubit_noise(state, qubit, noise, entropy)` and
+    `vqe_apply_two_qubit_noise(state, q1, q2, noise, entropy)` -- the
+    exact channel composition the built-in noisy ansaetze apply after
+    each gate, exposed so a custom circuit reproduces built-in noise
+    semantics rather than approximating them. No-ops when `noise` is
+    NULL, so one circuit body serves the ideal and the noisy path.
 
 `src/algorithms/quantum_geometry/qgt.h` (pointwise two-band geometry;
 all additive, no existing signature changed):
@@ -170,16 +176,42 @@ all additive, no existing signature changed):
     at construction, so the closed form is reachable from a model handle
     without the caller re-deriving `d(k)`. A system with no analytic
     d-vector returns `-3` from both accessors.
+  - `qgt_create_dsigma(bloch, dsigma, user)` -- `qgt_create` plus
+    `qgt_set_dsigma` in one call, so an FFI consumer does not hold the
+    handle across two calls and unwind the first on the second's failure.
 
 Both entry points return `-2` at a band touching, tested relative to the
 scale of their inputs (`1e-12` times the Hamiltonian trace scale, matching
 the module's existing `lower_eigvec_2x2` threshold, or `1e-12` times the L1
 scale of `d` and its gradients).
 
-All of these land in `src/algorithms/vqe.h` and
-`src/algorithms/quantum_geometry/qgt.h`, not in `moonlab_export.h`, so the
-`MOONLAB_ABI_VERSION_*` triple of the stable downstream export surface is
-unchanged at 0.6.0.
+`src/applications/moonlab_export.h` (ABI 0.7.0) promotes six of these to the
+committed downstream surface, so QGTL, libirrep, and SbNN reach the quantum
+geometry over FFI without marshalling an opaque handle:
+
+  - `moonlab_vqe_qgt(solver, parameters, qgt_out, num_parameters)` --
+    the Fubini-Study metric, written **row-major**: element (i, j) at index
+    `i * num_parameters + j`. The matrix is symmetric so the layout is its
+    own transpose, but the index formula is the committed contract. This is
+    the entry the Eshkol custom-VJP tape node binds against.
+  - `moonlab_vqe_berry_curvature(...)` -- same shape, the curvature half.
+  - `moonlab_vqe_natural_gradient(solver, parameters, gradient,
+    regularization, direction_out, num_parameters)`.
+  - `moonlab_dsigma_metric_curvature(d, dx, dy, g_out, omega_out)`.
+  - `moonlab_qwz_curvature_at(m, k, g_out, omega_out)` and
+    `moonlab_haldane_curvature_at(t1, t2, phi, m_stagger, k, g_out,
+    omega_out)` -- model parameters in, arrays out, following the ABI 0.6.0
+    topology one-shot convention exactly.
+
+All three VQE entries validate the caller's `num_parameters` against the
+solver's ansatz and return -1 / -2 / -3 for NULL argument / count mismatch /
+internal failure, matching `moonlab_vqe_gradient`. The band-geometry entries
+pass through the module status codes: 0, -1 on a bad argument, -2 at a band
+touching. `tests/abi/test_moonlab_export_abi.c` dlopens and exercises all six.
+
+Everything else added in this cycle lands in `src/algorithms/vqe.h` and
+`src/algorithms/quantum_geometry/qgt.h`, which are version-pinned rather than
+frozen.
 
 ### v1.0.3 additions
 

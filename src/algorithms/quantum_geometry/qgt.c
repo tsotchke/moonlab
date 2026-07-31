@@ -39,6 +39,14 @@ qgt_system_t* qgt_create(qgt_bloch_fn f, void* user) {
     return s;
 }
 
+qgt_system_t* qgt_create_dsigma(qgt_bloch_fn f, qgt_dsigma_fn d, void* user) {
+    if (!f || !d) return NULL;
+    qgt_system_t* s = qgt_create(f, user);
+    if (!s) return NULL;
+    s->dsigma = d;
+    return s;
+}
+
 int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f) {
     if (!sys) return -1;
     sys->dsigma = f;

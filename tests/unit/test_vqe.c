@@ -971,28 +971,86 @@ typedef struct {
     size_t num_qubits;
     size_t num_layers;
     long   invocations;
+    long   noisy_invocations;
 } custom_hea_ctx_t;
 
 static qs_error_t custom_hea_circuit(quantum_state_t *state,
                                      const double *parameters,
                                      size_t num_parameters,
+                                     const noise_model_t *noise,
+                                     quantum_entropy_ctx_t *entropy,
                                      void *user_data) {
     custom_hea_ctx_t *ctx = (custom_hea_ctx_t*)user_data;
     if (!ctx || !state || !parameters) return QS_ERROR_INVALID_STATE;
     if (num_parameters != ctx->num_qubits * ctx->num_layers * 2)
         return QS_ERROR_INVALID_PARAM;
     ctx->invocations++;
+    if (noise) ctx->noisy_invocations++;
 
+    /* The noise helpers are no-ops when noise is NULL, so this one body is
+     * both the ideal and the noisy circuit -- which is the point of handing
+     * the callback the noise context instead of refusing the noisy path. */
     size_t p = 0;
     for (size_t layer = 0; layer < ctx->num_layers; layer++) {
         for (size_t q = 0; q < ctx->num_qubits; q++) {
             gate_ry(state, (int)q, parameters[p++]);
+            vqe_apply_single_qubit_noise(state, (int)q, noise, entropy);
             gate_rz(state, (int)q, parameters[p++]);
+            vqe_apply_single_qubit_noise(state, (int)q, noise, entropy);
         }
-        for (size_t q = 0; q + 1 < ctx->num_qubits; q++)
+        for (size_t q = 0; q + 1 < ctx->num_qubits; q++) {
             gate_cnot(state, (int)q, (int)(q + 1));
+            vqe_apply_two_qubit_noise(state, (int)q, (int)(q + 1), noise, entropy);
+        }
     }
     return QS_SUCCESS;
+}
+
+/* <Z_0> read straight off the amplitudes: exact for the trajectory, no
+ * sampling noise on top of the trajectory noise we are actually measuring. */
+static double expect_z0(const quantum_state_t *st) {
+    size_t dim = (size_t)1 << st->num_qubits;
+    double acc = 0.0;
+    for (size_t x = 0; x < dim; x++) {
+        double pr = creal(st->amplitudes[x]) * creal(st->amplitudes[x])
+                  + cimag(st->amplitudes[x]) * cimag(st->amplitudes[x]);
+        acc += (x & 1u) ? -pr : pr;
+    }
+    return acc;
+}
+
+/* <H> for a diagonal-in-Z-and-X Pauli Hamiltonian, evaluated exactly on the
+ * trajectory by applying each Pauli string to the amplitudes. */
+static double pauli_energy(const pauli_hamiltonian_t *H,
+                           const quantum_state_t *st) {
+    size_t dim = (size_t)1 << st->num_qubits;
+    double total = H->nuclear_repulsion;
+    for (size_t t = 0; t < H->num_terms; t++) {
+        const pauli_term_t *pt = &H->terms[t];
+        if (!pt->pauli_string) continue;
+        complex_t acc = 0.0;
+        for (size_t x = 0; x < dim; x++) {
+            /* Same convention as vqe.c's exact energy: pauli_string[q] acts
+             * on qubit q, X/Y flip bit q, Y and Z contribute phases. */
+            size_t y = x;
+            complex_t phase = 1.0;
+            for (size_t q = 0; q < H->num_qubits; q++) {
+                char p = pt->pauli_string[q];
+                int bit = (int)((x >> q) & 1ULL);
+                if (p == 'X') {
+                    y ^= ((size_t)1 << q);
+                } else if (p == 'Y') {
+                    y ^= ((size_t)1 << q);
+                    phase *= (bit ? -I : I);
+                } else if (p == 'Z') {
+                    if (bit) phase = -phase;
+                }
+            }
+            acc += conj(st->amplitudes[y]) * phase * st->amplitudes[x];
+        }
+        total += pt->coefficient * creal(acc);
+    }
+    return total;
 }
 
 /* Largest absolute entrywise difference between two n x n matrices. */
@@ -1025,7 +1083,7 @@ static void test_custom_ansatz_end_to_end(void) {
      *     F_01 = -sin(alpha)/2, and the CUSTOM metric against the built-in
      *     HEA's exact analytic metric. */
     {
-        custom_hea_ctx_t ctx = { 1, 1, 0 };
+        custom_hea_ctx_t ctx = { 1, 1, 0, 0 };
         pauli_hamiltonian_t *H = pauli_hamiltonian_create(1, 1);
         H->hf_reference = 0;
 
@@ -1058,16 +1116,19 @@ static void test_custom_ansatz_end_to_end(void) {
               cabs(st.amplitudes[0]), cabs(st.amplitudes[1]));
         quantum_state_free(&st);
 
-        /* Noisy evolution is out of the custom ansatz's contract: the library
-         * has no gate boundaries inside the callback to interleave channels
-         * at, and says so rather than silently applying a different process. */
+        /* vqe_apply_ansatz_noisy routes to the callback too, with the noise
+         * context attached, and the callback sees it. */
         quantum_state_init(&st, 1);
-        noise_model_t nm;
-        memset(&nm, 0, sizeof(nm));
-        nm.enabled = true;
-        CHECK(vqe_apply_ansatz_noisy(&st, a_cus, &nm, &e) == QS_ERROR_NOT_SUPPORTED,
-              "vqe_apply_ansatz_noisy reports QS_ERROR_NOT_SUPPORTED for custom");
+        noise_model_t *nm = vqe_create_depolarizing_noise(0.02, 0.05, 0.0);
+        long noisy_before = ctx.noisy_invocations;
+        qs_error_t nrc = vqe_apply_ansatz_noisy(&st, a_cus, nm, &e);
+        CHECK(nrc == QS_SUCCESS,
+              "vqe_apply_ansatz_noisy accepts a custom ansatz (rc=%d)", (int)nrc);
+        CHECK(ctx.noisy_invocations == noisy_before + 1,
+              "the callback received a non-NULL noise model (%ld -> %ld)",
+              noisy_before, ctx.noisy_invocations);
         quantum_state_free(&st);
+        noise_model_destroy(nm);
 
         vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
         vqe_solver_t *s = vqe_solver_create(H, a_cus, o, &e);
@@ -1110,7 +1171,7 @@ static void test_custom_ansatz_end_to_end(void) {
      *     metric, curvature, energy, and gradient all agree between the custom
      *     circuit and the identical built-in HEA. */
     {
-        custom_hea_ctx_t ctx = { 2, 1, 0 };
+        custom_hea_ctx_t ctx = { 2, 1, 0, 0 };
         pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.74);
         const size_t n = 4;   /* 2 qubits x 1 layer x 2 rotations */
 
@@ -1162,6 +1223,66 @@ static void test_custom_ansatz_end_to_end(void) {
         CHECK(ctx.invocations > 0,
               "custom callback ran for every evaluation (%ld invocations)",
               ctx.invocations);
+
+        /* Noisy path, statistically. The callback interleaves exactly the
+         * channels the built-in noisy HEA interleaves, at the same points, so
+         * the two trajectory ensembles are the same stochastic process. Both
+         * are averaged over the same number of trajectories and compared on
+         * <Z_0> and on the mean energy; each is also required to have moved
+         * away from its own ideal value, so the check cannot pass by both
+         * paths silently ignoring the noise model. */
+        {
+            noise_model_t *nm = vqe_create_depolarizing_noise(0.02, 0.04, 0.0);
+            const int trials = 4000;
+            double z_cus = 0.0, z_hea = 0.0, e_cus = 0.0, e_hea = 0.0;
+
+            memcpy(a_cus->parameters, p, sizeof(p));
+            memcpy(a_hea->parameters, p, sizeof(p));
+            for (int t = 0; t < trials; t++) {
+                quantum_state_t sc, sh;
+                quantum_state_init(&sc, 2);
+                quantum_state_init(&sh, 2);
+                vqe_apply_ansatz_noisy(&sc, a_cus, nm, &e);
+                vqe_apply_ansatz_noisy(&sh, a_hea, nm, &e);
+                z_cus += expect_z0(&sc);
+                z_hea += expect_z0(&sh);
+                e_cus += pauli_energy(H, &sc);
+                e_hea += pauli_energy(H, &sh);
+                quantum_state_free(&sc);
+                quantum_state_free(&sh);
+            }
+            z_cus /= trials; z_hea /= trials;
+            e_cus /= trials; e_hea /= trials;
+
+            /* Ideal references for the same parameters. */
+            quantum_state_t si;
+            quantum_state_init(&si, 2);
+            vqe_apply_ansatz(&si, a_hea);
+            double z_ideal = expect_z0(&si);
+            quantum_state_free(&si);
+
+            /* Standard error of a mean of a bounded observable over `trials`
+             * independent trajectories is <= 1/sqrt(trials) ~ 1.6e-2 here;
+             * the difference of two such means is within 5e-2 with margin. */
+            fprintf(stdout, "    noisy <Z0>: custom %.5f  built-in %.5f  "
+                            "ideal %.5f\n", z_cus, z_hea, z_ideal);
+            fprintf(stdout, "    noisy <E>:  custom %.5f  built-in %.5f\n",
+                    e_cus, e_hea);
+            CHECK(fabs(z_cus - z_hea) < 5e-2,
+                  "custom and built-in noisy <Z0> agree (|diff| = %.4f)",
+                  fabs(z_cus - z_hea));
+            CHECK(fabs(e_cus - e_hea) < 5e-2,
+                  "custom and built-in noisy <E> agree (|diff| = %.4f)",
+                  fabs(e_cus - e_hea));
+            CHECK(fabs(z_cus - z_ideal) > 1e-3 && fabs(z_hea - z_ideal) > 1e-3,
+                  "both noisy paths actually applied noise (custom shift %.4f, "
+                  "built-in shift %.4f)",
+                  fabs(z_cus - z_ideal), fabs(z_hea - z_ideal));
+            CHECK(ctx.noisy_invocations >= trials,
+                  "callback saw the noise model on every noisy trajectory "
+                  "(%ld >= %d)", ctx.noisy_invocations, trials);
+            noise_model_destroy(nm);
+        }
 
         vqe_solver_free(s_cus); vqe_solver_free(s_hea);
         vqe_optimizer_free(o);

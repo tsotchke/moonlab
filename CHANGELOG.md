@@ -72,10 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `vqe_compute_berry_curvature` all accept a custom circuit. The geometric verbs
   differentiate it by central differences on the statevector, the fallback the
   header already documented but no caller could reach.
-  `vqe_apply_ansatz_noisy` returns `QS_ERROR_NOT_SUPPORTED` for a custom ansatz,
-  because the built-in noisy paths interleave the noise model's error channels
-  after each individual gate and the library cannot see inside the callback to
-  place them. New `test_custom_ansatz_end_to_end` builds a custom circuit that
+  `vqe_apply_ansatz_noisy` routes to the callback as well, handing it the noise
+  model and entropy source through `vqe_custom_ansatz_fn`; the callback owns its
+  gate sequence, so it is the only place the per-gate error channels can be
+  interleaved correctly. `vqe_apply_single_qubit_noise` and
+  `vqe_apply_two_qubit_noise` expose the exact channel composition the built-in
+  noisy ansaetze apply, and are no-ops on a NULL noise model, so one circuit
+  body serves both paths. New `test_custom_ansatz_end_to_end` builds a custom
+  circuit that
   is gate-for-gate the hardware-efficient ansatz and cross-checks the
   central-difference metric, curvature, energy, and gradient against the
   built-in exact analytic path on 1- and 2-qubit systems.
@@ -93,6 +97,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than the eigenvector, accurate to `O(dk^2)`. The `Omega` sign
   convention matches the existing `qgt_berry_grid` integrator. Contributed in
   PR #19.
+- **ABI 0.7.0: the quantum geometry on the stable export surface.**
+  `moonlab_export.h` gains `moonlab_vqe_qgt`, `moonlab_vqe_berry_curvature`,
+  `moonlab_vqe_natural_gradient`, `moonlab_dsigma_metric_curvature`,
+  `moonlab_qwz_curvature_at`, and `moonlab_haldane_curvature_at`, so QGTL,
+  libirrep, and SbNN reach the Fubini-Study metric and the Berry curvature over
+  FFI without marshalling an opaque handle. The two VQE tensor entries write
+  row-major `num_parameters x num_parameters` and validate the caller's count
+  against the solver's ansatz, matching `moonlab_vqe_gradient`'s -1 / -2 / -3
+  contract; `moonlab_vqe_qgt` is the entry the Eshkol custom-VJP tape node
+  binds against. The band-geometry one-shots take scalar model parameters and
+  return plain arrays, following the ABI 0.6.0 topology one-shot convention.
+  `MOONLAB_ABI_VERSION_MINOR` moves 6 -> 7. New lanes in
+  `tests/abi/test_moonlab_export_abi.c` dlopen all six and check the metric's
+  symmetry and positive-semidefiniteness, the curvature's antisymmetry and zero
+  diagonal, that the natural-gradient direction solves `(g + eps I) x = grad`,
+  and that the QWZ one-shot's curvature integrates over the BZ to Chern -1.
 - **Analytic d-vector on QGT system handles (`qgt_set_dsigma`,
   `qgt_dsigma_at`, `qgt_exact_curvature_at`, `qgt_dsigma_fn`).**
   `qgt_system_t` carried only the `H(k)` callback, so a caller holding a
@@ -104,7 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   traceless part; its next-nearest-neighbour identity term shifts both bands
   equally and does not enter the geometry. Systems without an analytic
   d-vector return `-3` instead of guessing, and stay fully usable through the
-  finite-difference paths.
+  finite-difference paths. `qgt_create_dsigma` bundles construction and
+  attachment into one call for FFI consumers.
 
 ### Changed
 

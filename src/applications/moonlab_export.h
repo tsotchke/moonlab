@@ -30,9 +30,10 @@
  * Every declaration in this header is tagged MOONLAB_API and survives a
  * hidden-visibility build (`-DQSIM_HIDDEN_VISIBILITY=ON`).  The surface
  * spans the conditioned QRNG + status, ML-KEM-512/768/1024, the QGT
- * Chern / Z2 topology one-shots, Clifford-Assisted MPS, DMRG scalar
- * energies, variational-D, the 1+1D Z2 lattice-gauge builder, adaptive
- * two-site TDVP, the exact VQE gradient, and the status stringifier.
+ * Chern / Z2 topology one-shots, the pointwise band geometry,
+ * Clifford-Assisted MPS, DMRG scalar energies, variational-D, the 1+1D Z2
+ * lattice-gauge builder, adaptive two-site TDVP, the exact VQE gradient
+ * and its quantum geometry, and the status stringifier.
  * `tests/abi/test_moonlab_export_abi.c` dlopens the library and resolves
  * plus smokes this surface exactly as a downstream consumer does. On Linux it
  * also closes and reopens the library repeatedly, verifies process residency,
@@ -40,6 +41,13 @@
  *
  * VERSION HISTORY
  * ---------------
+ *  - 0.7.0  VQE quantum geometry (`moonlab_vqe_qgt`,
+ *           `moonlab_vqe_berry_curvature`,
+ *           `moonlab_vqe_natural_gradient`) and the pointwise band
+ *           geometry one-shots (`moonlab_dsigma_metric_curvature`,
+ *           `moonlab_qwz_curvature_at`, `moonlab_haldane_curvature_at`)
+ *           declared, so QGTL / libirrep / SbNN reach the metric and
+ *           Berry curvature over FFI without the opaque handle surface.
  *  - 0.6.0  `moonlab_ca_mps_conjugate_pauli` promoted to the stable
  *           surface (int return, independent of the internal
  *           `ca_mps_error_t` enum); the seven QGT topology one-shots
@@ -114,7 +122,7 @@ _Static_assert(sizeof(moonlab_complex_double) == 2 * sizeof(double),
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 6
+#define MOONLAB_ABI_VERSION_MINOR 7
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -927,6 +935,176 @@ MOONLAB_API int moonlab_vqe_gradient(moonlab_vqe_solver_t* solver,
                                      const double* parameters,
                                      double* gradient_out,
                                      size_t num_parameters);
+
+/* ---- VQE quantum geometry (stable from ABI 0.7.0) ------------------ */
+
+/**
+ * @brief Quantum geometric (Fubini-Study) metric of the ansatz state.
+ *
+ * @f$g_{ij} = \operatorname{Re}[\langle\partial_i\psi|\partial_j\psi\rangle -
+ * \langle\partial_i\psi|\psi\rangle\langle\psi|\partial_j\psi\rangle]@f$ for
+ * the ideal (noise-free) trial state.  Exact analytic parameter derivatives
+ * (generator insertion) for the built-in ansaetze; central differences for a
+ * custom circuit, whose gate structure the library cannot see.
+ *
+ * @param solver          Solver handle from @c vqe_solver_create.
+ * @param parameters      Parameter vector theta; @p num_parameters entries.
+ * @param qgt_out         Output buffer, @p num_parameters *
+ *                        @p num_parameters slots, written **row-major**:
+ *                        element (i, j) is at index
+ *                        `i * num_parameters + j`.  The matrix is real and
+ *                        symmetric, so the layout is its own transpose, but
+ *                        the index formula is the committed contract.
+ * @param num_parameters  Length of @p parameters and the leading dimension
+ *                        of @p qgt_out.  Must equal the solver's ansatz
+ *                        parameter count.
+ *
+ * @return  0 on success.
+ * @return -1 if any pointer is NULL.
+ * @return -2 if @p num_parameters does not match the solver's ansatz.
+ * @return -3 if the computation failed internally.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_vqe_qgt(moonlab_vqe_solver_t* solver,
+                                const double* parameters,
+                                double* qgt_out,
+                                size_t num_parameters);
+
+/**
+ * @brief Berry curvature of the ansatz state: the imaginary half of the QGT.
+ *
+ * @f$F_{ij} = -2\operatorname{Im}[\langle\partial_i\psi|\partial_j\psi\rangle
+ * - \langle\partial_i\psi|\psi\rangle\langle\psi|\partial_j\psi\rangle]@f$,
+ * from the same derivatives as ::moonlab_vqe_qgt.  Real and antisymmetric
+ * (@f$F_{ii} = 0@f$, @f$F_{ji} = -F_{ij}@f$); the @f$-2\operatorname{Im}@f$
+ * convention makes the flux integrate to the Berry phase around a closed
+ * parameter loop.  A real ansatz gives @f$F = 0@f$ identically.
+ *
+ * @param solver          Solver handle from @c vqe_solver_create.
+ * @param parameters      Parameter vector theta; @p num_parameters entries.
+ * @param berry_out       Output buffer, @p num_parameters *
+ *                        @p num_parameters slots, row-major as above.
+ * @param num_parameters  Length of @p parameters.
+ *
+ * @return 0 on success; -1 NULL argument; -2 parameter-count mismatch;
+ *         -3 internal failure.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_vqe_berry_curvature(moonlab_vqe_solver_t* solver,
+                                            const double* parameters,
+                                            double* berry_out,
+                                            size_t num_parameters);
+
+/**
+ * @brief Natural-gradient direction @f$(g + \epsilon I)^{-1}\,\nabla E@f$.
+ *
+ * Preconditions @p gradient by the Tikhonov-regularised quantum geometric
+ * tensor.  On failure (singular metric) callers fall back to @p gradient.
+ *
+ * @param solver          Solver handle from @c vqe_solver_create.
+ * @param parameters      Parameter vector theta.
+ * @param gradient        Energy gradient; @p num_parameters entries.
+ * @param regularization  Shift added to the metric diagonal (e.g. 1e-3).
+ * @param direction_out   Output direction; @p num_parameters slots.
+ * @param num_parameters  Length of every array above.
+ *
+ * @return 0 on success; -1 NULL argument; -2 parameter-count mismatch;
+ *         -3 internal failure.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_vqe_natural_gradient(moonlab_vqe_solver_t* solver,
+                                             const double* parameters,
+                                             const double* gradient,
+                                             double regularization,
+                                             double* direction_out,
+                                             size_t num_parameters);
+
+/* ---- Pointwise band geometry one-shots (stable from ABI 0.7.0) -----
+ *
+ * The momentum-space counterpart of the topology one-shots above: the
+ * pointwise Fubini-Study metric and Berry curvature of a two-band Bloch
+ * model's lower band, at one k.  Same convention as those one-shots --
+ * scalar model parameters in, plain arrays out, no opaque handle across
+ * the FFI boundary; the handle surface lives in the internal
+ * `src/algorithms/quantum_geometry/qgt.h`.
+ *
+ * Intended consumers: QGTL, libirrep, SbNN, and the JS / WASM TS layer.
+ */
+
+/**
+ * @brief Closed-form lower-band metric and Berry curvature of
+ *        @f$H = \mathbf d\cdot\boldsymbol\sigma@f$ from an analytic
+ *        @f$\mathbf d@f$ and its momentum gradients.
+ *
+ * @f$g_{\mu\nu} = \tfrac14\,\partial_\mu\hat{\mathbf d}\cdot
+ * \partial_\nu\hat{\mathbf d}@f$ and @f$\Omega_{xy} = \tfrac12\,
+ * \hat{\mathbf d}\cdot(\partial_x\hat{\mathbf d}\times
+ * \partial_y\hat{\mathbf d})@f$.  Gauge-free and machine-precision: no
+ * eigenvector, no finite difference.
+ *
+ * @param d         @f$\mathbf d@f$, 3 entries.
+ * @param dx        @f$\partial_{k_x}\mathbf d@f$, 3 entries.
+ * @param dy        @f$\partial_{k_y}\mathbf d@f$, 3 entries.
+ * @param g_out     Row-major 2x2 metric, 4 slots.
+ * @param omega_out Berry curvature @f$\Omega_{xy}@f$.  May be NULL.
+ *
+ * @return  0 on success.
+ * @return -1 on a NULL argument.
+ * @return -2 at a band touching, where the geometry is undefined.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_dsigma_metric_curvature(const double* d,
+                                                const double* dx,
+                                                const double* dy,
+                                                double* g_out,
+                                                double* omega_out);
+
+/**
+ * @brief Pointwise metric and Berry curvature of the QWZ lower band at @p k.
+ *
+ * Bundles model construction, the exact closed-form evaluation, and teardown
+ * into one call.
+ *
+ * @param m         QWZ mass parameter.
+ * @param k         Momentum, 2 entries.
+ * @param g_out     Row-major 2x2 metric, 4 slots.
+ * @param omega_out Berry curvature.  May be NULL.
+ *
+ * @return 0 on success; -1 NULL argument or allocation failure; -2 at a
+ *         band touching.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_qwz_curvature_at(double m, const double* k,
+                                         double* g_out, double* omega_out);
+
+/**
+ * @brief Pointwise metric and Berry curvature of the Haldane lower band
+ *        at @p k.
+ *
+ * The next-nearest-neighbour identity term shifts both bands equally and does
+ * not enter the geometry; the traceless part is what is evaluated.
+ *
+ * @param t1        Nearest-neighbour hopping.
+ * @param t2        Next-nearest-neighbour hopping.
+ * @param phi       Peierls phase.
+ * @param m_stagger Sublattice staggering @f$M@f$.
+ * @param k         Momentum, 2 entries.
+ * @param g_out     Row-major 2x2 metric, 4 slots.
+ * @param omega_out Berry curvature.  May be NULL.
+ *
+ * @return 0 on success; -1 NULL argument or allocation failure; -2 at a
+ *         band touching.
+ *
+ * @since 1.2.1 (ABI 0.7.0)
+ */
+MOONLAB_API int moonlab_haldane_curvature_at(double t1, double t2, double phi,
+                                             double m_stagger, const double* k,
+                                             double* g_out, double* omega_out);
 
 /* ---- Diagnostic stringifier (stable from 0.2.1) -------------------- */
 
