@@ -669,7 +669,7 @@ MOONLAB_API void vqe_solver_set_allow_stochastic_gradient(vqe_solver_t *solver,
  * @param parameters Current parameters (num_parameters slots)
  * @param qgt_out Output: symmetric metric, row-major num_parameters x num_parameters
  * @return 0 on success, -1 on error
- * @stability experimental
+ * @stability evolving
  */
 MOONLAB_API int vqe_compute_qgt(
     vqe_solver_t *solver,
@@ -698,7 +698,7 @@ MOONLAB_API int vqe_compute_qgt(
  * @param parameters Current parameters (num_parameters slots)
  * @param berry_out Output: antisymmetric curvature, row-major num_parameters^2
  * @return 0 on success, -1 on error
- * @stability experimental
+ * @stability evolving
  */
 MOONLAB_API int vqe_compute_berry_curvature(
     vqe_solver_t *solver,
@@ -719,7 +719,7 @@ MOONLAB_API int vqe_compute_berry_curvature(
  * @param regularization Tikhonov shift added to the metric diagonal (e.g. 1e-3)
  * @param direction_out Output: natural-gradient direction (num_parameters slots)
  * @return 0 on success, -1 on error
- * @stability experimental
+ * @stability evolving
  */
 MOONLAB_API int vqe_natural_gradient_direction(
     vqe_solver_t *solver,
