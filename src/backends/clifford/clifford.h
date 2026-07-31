@@ -121,18 +121,149 @@ MOONLAB_API void clifford_tableau_free(clifford_tableau_t* t);
 MOONLAB_API size_t clifford_num_qubits(const clifford_tableau_t* t);
 
 /* ---- Single-qubit Clifford gates --- */
+
+/**
+ * @brief Hadamard on qubit @p q: swaps the X and Z columns.
+ *
+ * Every row picks up a phase flip @f$r \mathrel{\hat=} x_q z_q@f$ before
+ * the exchange @f$x_q \leftrightarrow z_q@f$, the Aaronson-Gottesman
+ * §III rule for @f$H@f$.  Runs over all @f$2n@f$ rows in
+ * @f$O(n)@f$ word operations.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL
+ *         or @p q is out of range.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_h(clifford_tableau_t* t, size_t q);
+
+/**
+ * @brief Phase gate @f$S = \mathrm{diag}(1, i)@f$ on qubit @p q.
+ *
+ * Applies @f$r \mathrel{\hat=} x_q z_q@f$ then @f$z_q \mathrel{\hat=}
+ * x_q@f$ across all rows, i.e. @f$X \mapsto Y@f$ and @f$Z \mapsto Z@f$.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL
+ *         or @p q is out of range.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_s(clifford_tableau_t* t, size_t q);
+
+/**
+ * @brief Inverse phase gate @f$S^\dagger@f$ on qubit @p q.
+ *
+ * Implemented as three applications of ::clifford_s, since
+ * @f$S^3 = S^\dagger@f$ up to global phase.  Costs @f$O(n)@f$ per
+ * application, so @f$3\times@f$ the cost of @f$S@f$.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or the first non-success code returned by
+ *         the underlying ::clifford_s applications
+ *         (CLIFFORD_ERR_QUBIT, -2).
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_s_dag(clifford_tableau_t* t, size_t q);
+
+/**
+ * @brief Pauli @f$X@f$ on qubit @p q.
+ *
+ * @f$X@f$ anticommutes with @f$Z_q@f$, so the only effect on the
+ * tableau is a sign flip: @f$r \mathrel{\hat=} z_q@f$ on every row.
+ * The X/Z bit pattern is unchanged.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL
+ *         or @p q is out of range.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_x(clifford_tableau_t* t, size_t q);
+
+/**
+ * @brief Pauli @f$Y@f$ on qubit @p q.
+ *
+ * @f$Y@f$ anticommutes with both @f$X_q@f$ and @f$Z_q@f$, giving the
+ * sign update @f$r \mathrel{\hat=} x_q \oplus z_q@f$ on every row with
+ * the bit pattern left alone.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL
+ *         or @p q is out of range.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_y(clifford_tableau_t* t, size_t q);
+
+/**
+ * @brief Pauli @f$Z@f$ on qubit @p q.
+ *
+ * @f$Z@f$ anticommutes with @f$X_q@f$, so the update is the sign flip
+ * @f$r \mathrel{\hat=} x_q@f$ on every row.
+ *
+ * @param t Tableau, mutated in place.
+ * @param q Qubit index in [0, n).
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL
+ *         or @p q is out of range.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_z(clifford_tableau_t* t, size_t q);
 
 /* ---- Two-qubit Clifford gate ----*/
+
+/**
+ * @brief CNOT with @p control and @p target.
+ *
+ * Propagates @f$x_{\rm ctrl} \to x_{\rm targ}@f$ and
+ * @f$z_{\rm targ} \to z_{\rm ctrl}@f$ across all @f$2n@f$ rows, with
+ * the Aaronson-Gottesman sign update
+ * @f$r \mathrel{\hat=} x_c z_t (x_t \oplus z_c \oplus 1)@f$.
+ *
+ * @param t       Tableau, mutated in place.
+ * @param control Control qubit index in [0, n).
+ * @param target  Target qubit index in [0, n), distinct from
+ *                @p control.
+ * @return CLIFFORD_SUCCESS, or CLIFFORD_ERR_QUBIT (-2) if @p t is NULL,
+ *         either index is out of range, or the two indices are equal.
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_cnot(clifford_tableau_t* t, size_t control, size_t target);
 
 /* ---- Convenience composites: CZ = H_t CNOT H_t, SWAP via three CNOTs ---- */
+
+/**
+ * @brief Controlled-Z on the (symmetric) pair @p a, @p b.
+ *
+ * Composed as @f$H_b\,\mathrm{CNOT}(a,b)\,H_b@f$ using the primitives
+ * in this header; three @f$O(n)@f$ passes over the tableau.
+ *
+ * @param t Tableau, mutated in place.
+ * @param a First qubit index in [0, n).
+ * @param b Second qubit index in [0, n), distinct from @p a.
+ * @return CLIFFORD_SUCCESS, or the first non-success code from the
+ *         underlying H / CNOT steps (CLIFFORD_ERR_QUBIT, -2, for a NULL
+ *         tableau, an out-of-range index, or @p a == @p b).
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_cz(clifford_tableau_t* t, size_t a, size_t b);
+
+/**
+ * @brief SWAP of qubits @p a and @p b.
+ *
+ * Composed as @f$\mathrm{CNOT}(a,b)\,\mathrm{CNOT}(b,a)\,
+ * \mathrm{CNOT}(a,b)@f$; three @f$O(n)@f$ passes over the tableau.
+ *
+ * @param t Tableau, mutated in place.
+ * @param a First qubit index in [0, n).
+ * @param b Second qubit index in [0, n), distinct from @p a.
+ * @return CLIFFORD_SUCCESS, or the first non-success code from the
+ *         underlying CNOT steps (CLIFFORD_ERR_QUBIT, -2, for a NULL
+ *         tableau, an out-of-range index, or @p a == @p b).
+ * @stability evolving
+ */
 MOONLAB_API clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size_t b);
 
 /**

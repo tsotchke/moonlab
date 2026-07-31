@@ -139,39 +139,179 @@ MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES]
                                    const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
 
 /* ---- ML-KEM-768 ------------------------------------------------- */
+
+/**
+ * @brief Generate a fresh ML-KEM-768 (public, secret) key pair.
+ *
+ * Drives the shared FIPS 203 engine with the ML-KEM-768 parameter set
+ * (k = 3).  Feeds @p d (32 bytes) and @p z (32 bytes) from the
+ * caller-supplied entropy.  Writes 1184 bytes of public key to @p ek
+ * and 2400 bytes of secret key to @p dk.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_mlkem768_keygen(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                               uint8_t dk[MLKEM768_SECRETKEYBYTES],
                               const uint8_t d[32], const uint8_t z[32]);
+
+/**
+ * @brief Encapsulate a shared secret against an ML-KEM-768 public key.
+ *
+ * Uses @p m (32 bytes of fresh random) as the internal FO seed.
+ * Writes a 1088-byte ciphertext to @p c and a 32-byte shared secret to
+ * @p K.  The Section 7.2 modulus check on @p ek is applied first; an
+ * invalid key fails closed with zeroized outputs.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_mlkem768_encaps(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                               uint8_t K[32],
                               const uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                               const uint8_t m[32]);
+
+/**
+ * @brief Decapsulate an ML-KEM-768 ciphertext using the secret key.
+ *
+ * On a valid ciphertext the original @p K is recovered.  On an invalid
+ * ciphertext, a *different* 32-byte value is produced pseudorandomly
+ * via SHAKE256(z || c), preserving IND-CCA2 security without leaking
+ * failure via timing.
+ * @stability stable
+ */
 MOONLAB_API void moonlab_mlkem768_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                               const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+
+/**
+ * @brief FIPS 203 Section 7.2 encapsulation-key check for ML-KEM-768.
+ * @return 1 if @p ek is well formed (all coefficients reduced mod q),
+ *         0 otherwise.
+ * @stability evolving
+ */
 MOONLAB_API int  moonlab_mlkem768_check_ek(const uint8_t ek[MLKEM768_PUBLICKEYBYTES]);
+
+/**
+ * @brief FIPS 203 Section 7.3 decapsulation-key check for ML-KEM-768.
+ * @return 1 if @p dk is internally consistent (embedded H(ek) matches),
+ *         0 otherwise.
+ * @stability evolving
+ */
 MOONLAB_API int  moonlab_mlkem768_check_dk(const uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+
+/**
+ * @brief ML-KEM-768 KeyGen with entropy from @c moonlab_qrng_bytes.
+ *
+ * Draws 64 bytes from Moonlab's health-tested, Bell-gated,
+ * SHAKE256-conditioned hybrid RNG and splits them into (d, z), then
+ * calls @ref moonlab_mlkem768_keygen.  Deployments requiring a
+ * validated module boundary can instead supply explicit seeds from that
+ * module's approved DRBG.
+ *
+ * @return 0 on success; -1 on QRNG failure.
+ * @stability stable
+ */
 MOONLAB_API int  moonlab_mlkem768_keygen_qrng(uint8_t ek[MLKEM768_PUBLICKEYBYTES],
                                     uint8_t dk[MLKEM768_SECRETKEYBYTES]);
+
+/**
+ * @brief ML-KEM-768 Encaps with the message seed drawn from
+ *        @c moonlab_qrng_bytes.
+ *
+ * Runs the Section 7.2 check on @p ek before touching the RNG, then
+ * draws 32 bytes for the FO seed and calls
+ * @ref moonlab_mlkem768_encaps.
+ *
+ * @return 0 on success; -1 on QRNG failure; -2 if @p ek fails the
+ *         Section 7.2 check.
+ * @stability stable
+ */
 MOONLAB_API int  moonlab_mlkem768_encaps_qrng(uint8_t c[MLKEM768_CIPHERTEXTBYTES],
                                     uint8_t K[32],
                                     const uint8_t ek[MLKEM768_PUBLICKEYBYTES]);
 
 /* ---- ML-KEM-1024 ------------------------------------------------ */
+
+/**
+ * @brief Generate a fresh ML-KEM-1024 (public, secret) key pair.
+ *
+ * Drives the shared FIPS 203 engine with the ML-KEM-1024 parameter set
+ * (k = 4).  Feeds @p d (32 bytes) and @p z (32 bytes) from the
+ * caller-supplied entropy.  Writes 1568 bytes of public key to @p ek
+ * and 3168 bytes of secret key to @p dk.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_mlkem1024_keygen(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                uint8_t dk[MLKEM1024_SECRETKEYBYTES],
                                const uint8_t d[32], const uint8_t z[32]);
+
+/**
+ * @brief Encapsulate a shared secret against an ML-KEM-1024 public key.
+ *
+ * Uses @p m (32 bytes of fresh random) as the internal FO seed.
+ * Writes a 1568-byte ciphertext to @p c and a 32-byte shared secret to
+ * @p K.  The Section 7.2 modulus check on @p ek is applied first; an
+ * invalid key fails closed with zeroized outputs.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_mlkem1024_encaps(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                uint8_t K[32],
                                const uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                const uint8_t m[32]);
+
+/**
+ * @brief Decapsulate an ML-KEM-1024 ciphertext using the secret key.
+ *
+ * On a valid ciphertext the original @p K is recovered.  On an invalid
+ * ciphertext, a *different* 32-byte value is produced pseudorandomly
+ * via SHAKE256(z || c), preserving IND-CCA2 security without leaking
+ * failure via timing.
+ * @stability stable
+ */
 MOONLAB_API void moonlab_mlkem1024_decaps(uint8_t K[32],
                                const uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+
+/**
+ * @brief FIPS 203 Section 7.2 encapsulation-key check for ML-KEM-1024.
+ * @return 1 if @p ek is well formed (all coefficients reduced mod q),
+ *         0 otherwise.
+ * @stability evolving
+ */
 MOONLAB_API int  moonlab_mlkem1024_check_ek(const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]);
+
+/**
+ * @brief FIPS 203 Section 7.3 decapsulation-key check for ML-KEM-1024.
+ * @return 1 if @p dk is internally consistent (embedded H(ek) matches),
+ *         0 otherwise.
+ * @stability evolving
+ */
 MOONLAB_API int  moonlab_mlkem1024_check_dk(const uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+
+/**
+ * @brief ML-KEM-1024 KeyGen with entropy from @c moonlab_qrng_bytes.
+ *
+ * Draws 64 bytes from Moonlab's health-tested, Bell-gated,
+ * SHAKE256-conditioned hybrid RNG and splits them into (d, z), then
+ * calls @ref moonlab_mlkem1024_keygen.  Deployments requiring a
+ * validated module boundary can instead supply explicit seeds from that
+ * module's approved DRBG.
+ *
+ * @return 0 on success; -1 on QRNG failure.
+ * @stability stable
+ */
 MOONLAB_API int  moonlab_mlkem1024_keygen_qrng(uint8_t ek[MLKEM1024_PUBLICKEYBYTES],
                                      uint8_t dk[MLKEM1024_SECRETKEYBYTES]);
+
+/**
+ * @brief ML-KEM-1024 Encaps with the message seed drawn from
+ *        @c moonlab_qrng_bytes.
+ *
+ * Runs the Section 7.2 check on @p ek before touching the RNG, then
+ * draws 32 bytes for the FO seed and calls
+ * @ref moonlab_mlkem1024_encaps.
+ *
+ * @return 0 on success; -1 on QRNG failure; -2 if @p ek fails the
+ *         Section 7.2 check.
+ * @stability stable
+ */
 MOONLAB_API int  moonlab_mlkem1024_encaps_qrng(uint8_t c[MLKEM1024_CIPHERTEXTBYTES],
                                      uint8_t K[32],
                                      const uint8_t ek[MLKEM1024_PUBLICKEYBYTES]);

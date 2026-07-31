@@ -112,6 +112,18 @@ MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new_correlated(
     const uint32_t* corr_a, const uint32_t* corr_b,
     const double* corr_joint_p, size_t num_corr);
 
+/**
+ * @brief Release a decoder built by ::moonlab_uf_decoder_new or
+ *        ::moonlab_uf_decoder_new_correlated.
+ *
+ * Frees the edge tables, the detector adjacency, the precomputed
+ * all-pairs distance / observable / predecessor caches, the boundary
+ * caches, the local-matching scratch, and the correlation adjacency,
+ * then the handle itself.
+ *
+ * @param d Decoder handle to release; NULL is a no-op.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_uf_decoder_free(moonlab_uf_decoder_t* d);
 
 /**
