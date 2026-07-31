@@ -8,8 +8,8 @@ import React, { useRef, useEffect } from 'react';
 import {
   CircuitDiagram as CircuitDiagramViz,
   type CircuitDiagramOptions,
-} from '@moonlab/quantum-viz';
-import { Circuit } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import { Circuit } from '@tsotchkecorp/moonlab';
 
 export interface CircuitDiagramProps extends Omit<CircuitDiagramOptions, 'width' | 'height'> {
   /**
@@ -58,8 +58,8 @@ export interface CircuitDiagramProps extends Omit<CircuitDiagramOptions, 'width'
  *
  * @example
  * ```tsx
- * import { CircuitDiagram } from '@moonlab/quantum-react';
- * import { useCircuit } from '@moonlab/quantum-react';
+ * import { CircuitDiagram } from '@tsotchkecorp/moonlab-react';
+ * import { useCircuit } from '@tsotchkecorp/moonlab-react';
  *
  * function App() {
  *   const { circuit, addGate } = useCircuit({ numQubits: 3 });

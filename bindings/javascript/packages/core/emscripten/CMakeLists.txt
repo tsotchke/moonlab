@@ -68,6 +68,7 @@ set(BACKEND_SOURCES
 # all already in the build above.
 set(TOPOLOGICAL_SOURCES
     ${QSIM_ROOT}/src/algorithms/topological/topological.c
+    ${QSIM_ROOT}/src/algorithms/topological/braid_compiler.c
 )
 
 # Source files - HEP applications (since 0.2.1).

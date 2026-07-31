@@ -20,6 +20,7 @@
 #include "../../src/applications/hardware_entropy.h"
 #include <complex.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -885,6 +886,290 @@ static void test_qng_lih_uccsd_convergence(void) {
     pauli_hamiltonian_free(H);
 }
 
+/* Berry curvature = the imaginary half of the QGT, F_ij = -2 Im Q_ij (the same
+ * exact derivatives as vqe_compute_qgt). Checks: (a) the closed-form single-qubit
+ * value F_01 = -sin(alpha)/2 for RY(alpha)-RZ(beta) on |0> (a Bloch state), to
+ * machine precision; (b) F is antisymmetric with zero diagonal; (c) F vanishes
+ * identically for a real ansatz (UCCSD has only RY/CNOT/Givens gates -> real
+ * state -> real QGT); (d) integrating F over the single-qubit (alpha,beta) sweep
+ * gives the Chern number -1. */
+static void test_qng_berry_curvature(void) {
+    fprintf(stdout, "\n-- VQE: Berry curvature (imaginary half of the QGT) --\n");
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    /* (a,b) single-qubit HEA: params = (alpha for RY, beta for RZ) -> Bloch state.
+     * Berry curvature F_01 = -sin(alpha)/2 exactly. */
+    {
+        pauli_hamiltonian_t *H = pauli_hamiltonian_create(1, 1);
+        H->hf_reference = 0;
+        vqe_ansatz_t *a = vqe_create_hardware_efficient_ansatz(1, 1);
+        CHECK(a->num_parameters == 2, "single-qubit HEA has 2 params (RY,RZ) (got %zu)",
+              a->num_parameters);
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, a, o, &e);
+        double F[4];
+        double p[2] = { 0.7, 1.3 };
+        int rc = vqe_compute_berry_curvature(s, p, F);
+        CHECK(rc == 0, "vqe_compute_berry_curvature succeeded");
+        CHECK(fabs(F[0] - 0.0) < 1e-14 && fabs(F[3] - 0.0) < 1e-14,
+              "Berry curvature has zero diagonal");
+        CHECK(fabs(F[1] + F[2]) < 1e-14, "Berry curvature antisymmetric (F01+F10=%.1e)",
+              F[1] + F[2]);
+        CHECK(fabs(F[1] - (-0.5 * sin(p[0]))) < 1e-12,
+              "F01 == -sin(alpha)/2 closed form (%.12f vs %.12f)", F[1], -0.5 * sin(p[0]));
+
+        /* (d) Chern number = (1/2pi) * integral of F over the (alpha,beta) sphere. */
+        double chern = 0.0; int Na = 400; double da = M_PI / Na, db = 2.0 * M_PI;
+        for (int ia = 0; ia < Na; ia++) {
+            double pp[2] = { (ia + 0.5) * da, 0.3 };
+            vqe_compute_berry_curvature(s, pp, F);
+            chern += F[1] * da * db;
+        }
+        chern /= (2.0 * M_PI);
+        CHECK(fabs(chern - (-1.0)) < 1e-2, "Chern number of single-qubit sweep == -1 (%.4f)", chern);
+
+        vqe_solver_free(s); vqe_optimizer_free(o); vqe_ansatz_free(a); pauli_hamiltonian_free(H);
+    }
+
+    /* (c) real ansatz (UCCSD, only real gates) -> Berry curvature vanishes. */
+    {
+        pauli_hamiltonian_t *H = vqe_create_lih_hamiltonian(1.5);
+        H->hf_reference = 0x3;
+        vqe_ansatz_t *a = vqe_create_uccsd_ansatz(H->num_qubits, 2);
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, a, o, &e);
+        size_t n = a->num_parameters;
+        double *F = malloc(n * n * sizeof(double));
+        double *p = malloc(n * sizeof(double));
+        for (size_t k = 0; k < n; k++) p[k] = 0.1 * (double)(k + 1);
+        vqe_compute_berry_curvature(s, p, F);
+        double mx = 0.0;
+        for (size_t i = 0; i < n * n; i++) if (fabs(F[i]) > mx) mx = fabs(F[i]);
+        CHECK(mx < 1e-12, "UCCSD (real state) has zero Berry curvature (max|F|=%.1e)", mx);
+        free(F); free(p);
+        vqe_solver_free(s); vqe_optimizer_free(o); vqe_ansatz_free(a); pauli_hamiltonian_free(H);
+    }
+}
+
+/* ---- VQE_ANSATZ_CUSTOM end-to-end ---------------------------------------
+ *
+ * vqe_create_custom_ansatz makes the CUSTOM ansatz type reachable, and
+ * vqe_apply_ansatz routes to the caller's callback.  The reference circuits
+ * below are byte-for-byte the hardware-efficient ansatz (per-qubit RY then RZ,
+ * then a linear CNOT chain, per layer), so the CUSTOM path -- which the library
+ * differentiates by central differences, its gate structure being opaque --
+ * can be cross-checked against the built-in HEA path, which differentiates by
+ * exact analytic generator insertion.  Two genuinely different derivative
+ * algorithms on the same state manifold: agreement to central-difference
+ * accuracy is real evidence, not a restatement.
+ *
+ * user_data carries an invocation counter, so the checks also prove the
+ * callback is what actually ran. */
+typedef struct {
+    size_t num_qubits;
+    size_t num_layers;
+    long   invocations;
+} custom_hea_ctx_t;
+
+static qs_error_t custom_hea_circuit(quantum_state_t *state,
+                                     const double *parameters,
+                                     size_t num_parameters,
+                                     void *user_data) {
+    custom_hea_ctx_t *ctx = (custom_hea_ctx_t*)user_data;
+    if (!ctx || !state || !parameters) return QS_ERROR_INVALID_STATE;
+    if (num_parameters != ctx->num_qubits * ctx->num_layers * 2)
+        return QS_ERROR_INVALID_PARAM;
+    ctx->invocations++;
+
+    size_t p = 0;
+    for (size_t layer = 0; layer < ctx->num_layers; layer++) {
+        for (size_t q = 0; q < ctx->num_qubits; q++) {
+            gate_ry(state, (int)q, parameters[p++]);
+            gate_rz(state, (int)q, parameters[p++]);
+        }
+        for (size_t q = 0; q + 1 < ctx->num_qubits; q++)
+            gate_cnot(state, (int)q, (int)(q + 1));
+    }
+    return QS_SUCCESS;
+}
+
+/* Largest absolute entrywise difference between two n x n matrices. */
+static double max_abs_diff(const double *a, const double *b, size_t n) {
+    double m = 0.0;
+    for (size_t i = 0; i < n * n; i++) {
+        double d = fabs(a[i] - b[i]);
+        if (d > m) m = d;
+    }
+    return m;
+}
+
+static void test_custom_ansatz_end_to_end(void) {
+    fprintf(stdout, "\n-- VQE: VQE_ANSATZ_CUSTOM end-to-end --\n");
+
+    entropy_ctx_t hw; entropy_init(&hw);
+    quantum_entropy_ctx_t e;
+    quantum_entropy_init(&e, (quantum_entropy_fn)entropy_get_bytes, &hw);
+
+    /* Argument validation: the constructor is the only way in, so it has to
+     * reject the cases that would produce an unusable ansatz. */
+    CHECK(vqe_create_custom_ansatz(0, 2, custom_hea_circuit, NULL) == NULL,
+          "custom ansatz rejects zero qubits");
+    CHECK(vqe_create_custom_ansatz(2, 0, custom_hea_circuit, NULL) == NULL,
+          "custom ansatz rejects zero parameters");
+    CHECK(vqe_create_custom_ansatz(2, 4, NULL, NULL) == NULL,
+          "custom ansatz rejects a NULL callback");
+
+    /* (a) single qubit: the CUSTOM Berry curvature against the closed form
+     *     F_01 = -sin(alpha)/2, and the CUSTOM metric against the built-in
+     *     HEA's exact analytic metric. */
+    {
+        custom_hea_ctx_t ctx = { 1, 1, 0 };
+        pauli_hamiltonian_t *H = pauli_hamiltonian_create(1, 1);
+        H->hf_reference = 0;
+
+        vqe_ansatz_t *a_cus = vqe_create_custom_ansatz(1, 2, custom_hea_circuit, &ctx);
+        CHECK(a_cus != NULL, "vqe_create_custom_ansatz returned an ansatz");
+        CHECK(a_cus && a_cus->type == VQE_ANSATZ_CUSTOM,
+              "constructed ansatz has type VQE_ANSATZ_CUSTOM");
+        CHECK(a_cus && a_cus->num_parameters == 2,
+              "custom ansatz reports 2 parameters (got %zu)",
+              a_cus ? a_cus->num_parameters : (size_t)0);
+
+        /* vqe_apply_ansatz routes to the callback and produces the state the
+         * callback's gates produce: RY(alpha)|0> with alpha = pi/3 gives
+         * amplitudes (cos(alpha/2), sin(alpha/2)) up to the RZ phase. */
+        const double alpha = M_PI / 3.0, beta = 0.0;
+        a_cus->parameters[0] = alpha;
+        a_cus->parameters[1] = beta;
+        quantum_state_t st;
+        quantum_state_init(&st, 1);
+        long before = ctx.invocations;
+        qs_error_t arc = vqe_apply_ansatz(&st, a_cus);
+        CHECK(arc == QS_SUCCESS, "vqe_apply_ansatz accepts a custom ansatz (rc=%d)",
+              (int)arc);
+        CHECK(ctx.invocations == before + 1,
+              "vqe_apply_ansatz invoked the callback exactly once (%ld -> %ld)",
+              before, ctx.invocations);
+        CHECK(fabs(cabs(st.amplitudes[0]) - cos(0.5 * alpha)) < 1e-12 &&
+              fabs(cabs(st.amplitudes[1]) - sin(0.5 * alpha)) < 1e-12,
+              "custom circuit produced RY(pi/3)|0> (|a0|=%.12f, |a1|=%.12f)",
+              cabs(st.amplitudes[0]), cabs(st.amplitudes[1]));
+        quantum_state_free(&st);
+
+        /* Noisy evolution is out of the custom ansatz's contract: the library
+         * has no gate boundaries inside the callback to interleave channels
+         * at, and says so rather than silently applying a different process. */
+        quantum_state_init(&st, 1);
+        noise_model_t nm;
+        memset(&nm, 0, sizeof(nm));
+        nm.enabled = true;
+        CHECK(vqe_apply_ansatz_noisy(&st, a_cus, &nm, &e) == QS_ERROR_NOT_SUPPORTED,
+              "vqe_apply_ansatz_noisy reports QS_ERROR_NOT_SUPPORTED for custom");
+        quantum_state_free(&st);
+
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s = vqe_solver_create(H, a_cus, o, &e);
+
+        double p[2] = { 0.7, 1.3 };
+        double g_cus[4], F_cus[4];
+        int rc = vqe_compute_qgt(s, p, g_cus);
+        CHECK(rc == 0, "vqe_compute_qgt succeeded on the custom ansatz");
+        rc = vqe_compute_berry_curvature(s, p, F_cus);
+        CHECK(rc == 0, "vqe_compute_berry_curvature succeeded on the custom ansatz");
+
+        qgt_check_metric_properties(g_cus, 2, "CUSTOM 1q");
+        CHECK(fabs(F_cus[1] - (-0.5 * sin(p[0]))) < 1e-7,
+              "custom-path F01 == -sin(alpha)/2 (%.10f vs %.10f)",
+              F_cus[1], -0.5 * sin(p[0]));
+        CHECK(fabs(F_cus[0]) < 1e-12 && fabs(F_cus[3]) < 1e-12 &&
+              fabs(F_cus[1] + F_cus[2]) < 1e-12,
+              "custom-path F antisymmetric with zero diagonal");
+
+        /* Same circuit as the built-in 1-qubit HEA: exact analytic derivatives
+         * vs the custom path's central differences. */
+        vqe_ansatz_t *a_hea = vqe_create_hardware_efficient_ansatz(1, 1);
+        vqe_solver_t *s_hea = vqe_solver_create(H, a_hea, o, &e);
+        double g_hea[4], F_hea[4];
+        vqe_compute_qgt(s_hea, p, g_hea);
+        vqe_compute_berry_curvature(s_hea, p, F_hea);
+        double dg = max_abs_diff(g_cus, g_hea, 2);
+        double dF = max_abs_diff(F_cus, F_hea, 2);
+        fprintf(stdout, "    1q  max|g_custom - g_exact| = %.3e   "
+                        "max|F_custom - F_exact| = %.3e\n", dg, dF);
+        CHECK(dg < 1e-7, "custom metric matches the exact analytic metric (%.2e)", dg);
+        CHECK(dF < 1e-7, "custom curvature matches the exact analytic curvature (%.2e)", dF);
+
+        vqe_solver_free(s_hea); vqe_ansatz_free(a_hea);
+        vqe_solver_free(s); vqe_optimizer_free(o);
+        vqe_ansatz_free(a_cus); pauli_hamiltonian_free(H);
+    }
+
+    /* (b) two qubits with entanglement, on a real molecular Hamiltonian:
+     *     metric, curvature, energy, and gradient all agree between the custom
+     *     circuit and the identical built-in HEA. */
+    {
+        custom_hea_ctx_t ctx = { 2, 1, 0 };
+        pauli_hamiltonian_t *H = vqe_create_h2_hamiltonian(0.74);
+        const size_t n = 4;   /* 2 qubits x 1 layer x 2 rotations */
+
+        vqe_ansatz_t *a_cus = vqe_create_custom_ansatz(2, n, custom_hea_circuit, &ctx);
+        vqe_ansatz_t *a_hea = vqe_create_hardware_efficient_ansatz(2, 1);
+        CHECK(a_hea->num_parameters == n,
+              "built-in 2q/1-layer HEA has %zu parameters (got %zu)",
+              n, a_hea->num_parameters);
+
+        vqe_optimizer_t *o = vqe_optimizer_create(VQE_OPTIMIZER_QNG);
+        vqe_solver_t *s_cus = vqe_solver_create(H, a_cus, o, &e);
+        vqe_solver_t *s_hea = vqe_solver_create(H, a_hea, o, &e);
+
+        double p[4] = { 0.31, -0.87, 1.24, 0.55 };
+        double g_cus[16], g_hea[16], F_cus[16], F_hea[16];
+        int rc = vqe_compute_qgt(s_cus, p, g_cus);
+        CHECK(rc == 0, "2q custom: vqe_compute_qgt succeeded");
+        rc = vqe_compute_berry_curvature(s_cus, p, F_cus);
+        CHECK(rc == 0, "2q custom: vqe_compute_berry_curvature succeeded");
+        vqe_compute_qgt(s_hea, p, g_hea);
+        vqe_compute_berry_curvature(s_hea, p, F_hea);
+
+        qgt_check_metric_properties(g_cus, n, "CUSTOM 2q");
+        double dg = max_abs_diff(g_cus, g_hea, n);
+        double dF = max_abs_diff(F_cus, F_hea, n);
+        fprintf(stdout, "    2q  max|g_custom - g_exact| = %.3e   "
+                        "max|F_custom - F_exact| = %.3e\n", dg, dF);
+        CHECK(dg < 1e-7, "2q custom metric matches exact analytic (%.2e)", dg);
+        CHECK(dF < 1e-7, "2q custom curvature matches exact analytic (%.2e)", dF);
+
+        /* The rest of the solver reaches the custom circuit too. */
+        double E_cus = vqe_compute_energy(s_cus, p);
+        double E_hea = vqe_compute_energy(s_hea, p);
+        CHECK(isfinite(E_cus) && fabs(E_cus - E_hea) < 1e-12,
+              "custom energy matches the identical built-in circuit "
+              "(%.12f vs %.12f)", E_cus, E_hea);
+
+        double grad_cus[4], grad_hea[4];
+        rc = vqe_compute_gradient(s_cus, p, grad_cus);
+        CHECK(rc == 0, "vqe_compute_gradient succeeded on the custom ansatz");
+        vqe_compute_gradient(s_hea, p, grad_hea);
+        double dgr = 0.0;
+        for (size_t i = 0; i < n; i++) {
+            double d = fabs(grad_cus[i] - grad_hea[i]);
+            if (d > dgr) dgr = d;
+        }
+        CHECK(dgr < 1e-8, "custom gradient matches the built-in circuit (%.2e)", dgr);
+
+        CHECK(ctx.invocations > 0,
+              "custom callback ran for every evaluation (%ld invocations)",
+              ctx.invocations);
+
+        vqe_solver_free(s_cus); vqe_solver_free(s_hea);
+        vqe_optimizer_free(o);
+        vqe_ansatz_free(a_cus); vqe_ansatz_free(a_hea);
+        pauli_hamiltonian_free(H);
+    }
+}
+
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
@@ -896,6 +1181,8 @@ int main(void) {
     test_lih_pes_smooth_and_consistent();
     test_qng_metric_and_convergence();
     test_qng_exact_qgt_uccsd_givens();
+    test_qng_berry_curvature();
+    test_custom_ansatz_end_to_end();
     test_qng_lih_uccsd_convergence();
     test_h2_uccsd_chemical_accuracy();
     test_lih_uccsd_chemical_accuracy();

@@ -8,8 +8,8 @@ import React, { useRef, useEffect } from 'react';
 import {
   AmplitudeBars as AmplitudeBarsViz,
   type AmplitudeBarsOptions,
-} from '@moonlab/quantum-viz';
-import type { Complex } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import type { Complex } from '@tsotchkecorp/moonlab';
 
 export interface AmplitudeBarsProps extends Omit<AmplitudeBarsOptions, 'width' | 'height'> {
   /**
@@ -63,8 +63,8 @@ export interface AmplitudeBarsProps extends Omit<AmplitudeBarsOptions, 'width' |
  *
  * @example
  * ```tsx
- * import { AmplitudeBars } from '@moonlab/quantum-react';
- * import { useQuantumState } from '@moonlab/quantum-react';
+ * import { AmplitudeBars } from '@tsotchkecorp/moonlab-react';
+ * import { useQuantumState } from '@tsotchkecorp/moonlab-react';
  *
  * function App() {
  *   const { amplitudes, numQubits } = useQuantumState({ numQubits: 3 });

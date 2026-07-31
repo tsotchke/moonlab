@@ -9,7 +9,7 @@ import {
   rgbToHex,
 } from '../index';
 
-describe('@moonlab/quantum-viz public utilities', () => {
+describe('@tsotchkecorp/moonlab-viz public utilities', () => {
   it('reports the release version and round-trips colors', () => {
     expect(VERSION).toBe('1.2.0');
     expect(rgbToHex([12, 34, 56])).toBe('#0c2238');

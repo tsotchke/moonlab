@@ -1,5 +1,5 @@
 {
-  "name": "@moonlab/quantum-react",
+  "name": "@tsotchkecorp/moonlab-react",
   "version": "1.2.0",
   "description": "React components for Moonlab quantum simulator",
   "main": "dist/index.js",
@@ -46,8 +46,8 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@moonlab/quantum-core": "workspace:*",
-    "@moonlab/quantum-viz": "workspace:*"
+    "@tsotchkecorp/moonlab": "workspace:*",
+    "@tsotchkecorp/moonlab-viz": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

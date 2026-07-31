@@ -9,7 +9,7 @@
  *
  * @example
  * ```typescript
- * import { Graph, IsingModel, QaoaSolver } from '@moonlab/quantum-core';
+ * import { Graph, IsingModel, QaoaSolver } from '@tsotchkecorp/moonlab';
  *
  * // Triangle MaxCut: optimal cut value = 2.
  * const g = await Graph.create(3, [[0, 1, 1.0], [1, 2, 1.0], [2, 0, 1.0]]);

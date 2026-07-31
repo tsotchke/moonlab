@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { QuantumState, type Complex } from '@moonlab/quantum-core';
+import { QuantumState, type Complex } from '@tsotchkecorp/moonlab';
 
 export interface UseQuantumStateOptions {
   /**

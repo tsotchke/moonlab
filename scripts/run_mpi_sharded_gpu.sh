@@ -12,6 +12,26 @@
 # Without MOONLAB_MPI_GPU_EXECUTABLE, the script configures a fresh temporary
 # CUDA+MPI build.  CUDACXX and CMAKE_CUDA_ARCHITECTURES may be supplied for a
 # non-default CUDA toolkit.
+#
+# Artifact-dir contract
+# ---------------------
+# The emitted trace declares three digests -- executable_sha256,
+# routine_log_sha256, exact_log_sha256 -- and the release certificate refuses to
+# trust a declared digest it cannot content-verify against a bound file.  The
+# build directory and run logs live in a mktemp dir on the fleet host, so before
+# the trace is written this script copies the hashed files next to the trace:
+#
+#   scripts/icc_traces/mpi_gpu_artifacts/test_mpi_sharded_gpu_ghz  executable_sha256
+#   scripts/icc_traces/mpi_gpu_artifacts/routine-12.log            routine_log_sha256
+#   scripts/icc_traces/mpi_gpu_artifacts/exact-33.log              exact_log_sha256
+#   scripts/icc_traces/mpi_gpu_artifacts/executable-sha256.log     rank-hash preflight
+#
+# Every declared digest is computed from the persisted copy, and the trace event
+# repeats the repo-relative paths in artifact_dir/*_artifact fields.  That tree
+# is gitignored and excluded from the source fingerprint, exactly like the trace
+# itself, so a driver that copies scripts/icc_traces/moonlab_mpi_gpu.jsonl off
+# the fleet host copies scripts/icc_traces/mpi_gpu_artifacts/ the same way and
+# the certificate can bind the bytes behind every digest.
 
 set -uo pipefail
 
@@ -43,6 +63,8 @@ if [ "$TRACE_DIR" != "$REPO_ROOT/scripts/icc_traces" ]; then
   exit 2
 fi
 TRACE="$TRACE_DIR/moonlab_mpi_gpu.jsonl"
+ARTIFACT_DIR="$TRACE_DIR/mpi_gpu_artifacts"
+ARTIFACT_DIR_RELATIVE="scripts/icc_traces/mpi_gpu_artifacts"
 
 # These are executed as quoted array element zero (never eval'd), but require
 # them to resolve to actual executables before creating any build/log output.
@@ -56,6 +78,10 @@ if ! command -v "$MPIEXEC" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$TRACE_DIR"
+mkdir -p "$ARTIFACT_DIR" || {
+  echo "cannot create the trace artifact directory: $ARTIFACT_DIR" >&2
+  exit 2
+}
 
 HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || {
   echo "cannot determine repository commit" >&2
@@ -257,6 +283,66 @@ fi
 cat "$ROUTINE_LOG"
 cat "$EXACT_LOG"
 
+# Persist the hashed evidence next to the trace before any digest is declared,
+# so every digest in the trace names a file that outlives this run's mktemp dir
+# (see the artifact-dir contract in the header).
+persist_artifact() {
+  local source_path="$1"
+  local destination="$ARTIFACT_DIR/$2"
+  rm -f "$destination"
+  if [ ! -f "$source_path" ]; then
+    return 1
+  fi
+  cp "$source_path" "$destination" || {
+    echo "cannot persist $2 into $ARTIFACT_DIR" >&2
+    exit 2
+  }
+  return 0
+}
+
+EXECUTABLE_ARTIFACT_NAME="test_mpi_sharded_gpu_ghz"
+ROUTINE_LOG_ARTIFACT_NAME="routine-${ROUTINE_N}.log"
+EXACT_LOG_ARTIFACT_NAME="exact-${N}.log"
+HASH_LOG_ARTIFACT_NAME="executable-sha256.log"
+
+persist_artifact "$ROUTINE_LOG" "$ROUTINE_LOG_ARTIFACT_NAME" || {
+  echo "routine run log is missing and cannot be persisted: $ROUTINE_LOG" >&2
+  exit 2
+}
+persist_artifact "$EXACT_LOG" "$EXACT_LOG_ARTIFACT_NAME" || {
+  echo "exact run log is missing and cannot be persisted: $EXACT_LOG" >&2
+  exit 2
+}
+persist_artifact "$HASH_LOG" "$HASH_LOG_ARTIFACT_NAME" || {
+  echo "rank-hash preflight log is missing and cannot be persisted: $HASH_LOG" >&2
+  exit 2
+}
+PERSISTED_ROUTINE_LOG="$ARTIFACT_DIR/$ROUTINE_LOG_ARTIFACT_NAME"
+PERSISTED_EXACT_LOG="$ARTIFACT_DIR/$EXACT_LOG_ARTIFACT_NAME"
+PERSISTED_HASH_LOG="$ARTIFACT_DIR/$HASH_LOG_ARTIFACT_NAME"
+ROUTINE_LOG_ARTIFACT="$ARTIFACT_DIR_RELATIVE/$ROUTINE_LOG_ARTIFACT_NAME"
+EXACT_LOG_ARTIFACT="$ARTIFACT_DIR_RELATIVE/$EXACT_LOG_ARTIFACT_NAME"
+HASH_LOG_ARTIFACT="$ARTIFACT_DIR_RELATIVE/$HASH_LOG_ARTIFACT_NAME"
+
+# The executable is absent only when the build failed, which already fails the
+# trace; when it exists the persisted copy must hash to the attested digest.
+EXECUTABLE_ARTIFACT=""
+if persist_artifact "$EXECUTABLE" "$EXECUTABLE_ARTIFACT_NAME"; then
+  PERSISTED_EXECUTABLE_SHA256="$(python3 - "$ARTIFACT_DIR/$EXECUTABLE_ARTIFACT_NAME" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
+  if [ "$PERSISTED_EXECUTABLE_SHA256" != "$EXECUTABLE_SHA256" ]; then
+    echo "persisted executable copy does not match the attested SHA-256" >&2
+    exit 2
+  fi
+  EXECUTABLE_ARTIFACT="$ARTIFACT_DIR_RELATIVE/$EXECUTABLE_ARTIFACT_NAME"
+fi
+echo "== persisted fleet artifacts: $ARTIFACT_DIR =="
+
 FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
 FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
 import json
@@ -264,14 +350,14 @@ import sys
 print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
 PY
 )"
-ROUTINE_LOG_SHA256="$(python3 - "$ROUTINE_LOG" <<'PY'
+ROUTINE_LOG_SHA256="$(python3 - "$PERSISTED_ROUTINE_LOG" <<'PY'
 import hashlib
 from pathlib import Path
 import sys
 print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
 PY
 )"
-EXACT_LOG_SHA256="$(python3 - "$EXACT_LOG" <<'PY'
+EXACT_LOG_SHA256="$(python3 - "$PERSISTED_EXACT_LOG" <<'PY'
 import hashlib
 from pathlib import Path
 import sys
@@ -279,9 +365,11 @@ print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
 PY
 )"
 
-python3 - "$ROUTINE_LOG" "$EXACT_LOG" "$HASH_LOG" "$TRACE" "$COMMIT_SHA" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" "$FINAL_FINGERPRINT" "$EXECUTABLE_SHA256" "$ROUTINE_LOG_SHA256" "$EXACT_LOG_SHA256" "$ROUTINE_N" "$N" "$ROUTINE_RC" "$EXACT_RC" "$HASH_RC" <<'PY'
+python3 - "$PERSISTED_ROUTINE_LOG" "$PERSISTED_EXACT_LOG" "$PERSISTED_HASH_LOG" "$TRACE" "$COMMIT_SHA" "$SOURCE_GIT_TREE" "$SOURCE_DIRTY" "$SOURCE_FINGERPRINT" "$FINAL_FINGERPRINT" "$EXECUTABLE_SHA256" "$ROUTINE_LOG_SHA256" "$EXACT_LOG_SHA256" "$ROUTINE_N" "$N" "$ROUTINE_RC" "$EXACT_RC" "$HASH_RC" "$ARTIFACT_DIR_RELATIVE" "$EXECUTABLE_ARTIFACT" "$ROUTINE_LOG_ARTIFACT" "$EXACT_LOG_ARTIFACT" "$HASH_LOG_ARTIFACT" <<'PY'
 import datetime as dt
+import hashlib
 import json
+from pathlib import Path
 import re
 import sys
 
@@ -303,6 +391,11 @@ import sys
     routine_rc,
     exact_rc,
     hash_rc,
+    artifact_dir,
+    executable_artifact,
+    routine_log_artifact,
+    exact_log_artifact,
+    rank_hash_log_artifact,
 ) = sys.argv[1:]
 routine_n = int(routine_n)
 exact_n = int(exact_n)
@@ -353,10 +446,43 @@ rank_hash_values = {value.lower() for _, value in rank_hashes}
 # count/host summaries: every rank must attest the identical executable bytes.
 rank_local_executable_sha256 = [value.lower() for _, value in rank_hashes]
 
+def persisted_digest(path):
+    """SHA-256 of a persisted artifact, or "" when it is missing or empty.
+
+    An empty file counts as missing: the release certificate refuses to bind a
+    zero-byte artifact, so an empty log is not evidence the digest can rest on.
+    """
+    if not path:
+        return ""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return ""
+    return hashlib.sha256(data).hexdigest() if data else ""
+
+
+def persisted_digest_matches(path, expected):
+    digest = persisted_digest(path)
+    return bool(digest) and digest == expected
+
+
 requirements = {
     "source_clean": not dirty,
     "source_unchanged": source_fingerprint == final_fingerprint,
     "executable_sha256_present": bool(re.fullmatch(r"[0-9a-f]{64}", executable_sha256)),
+    # Every digest this trace declares must stay content-verifiable: the release
+    # certificate binds the persisted copies, so an unpersisted digest is not
+    # evidence at all.
+    "executable_artifact_persisted": persisted_digest_matches(
+        executable_artifact, executable_sha256
+    ),
+    "routine_log_artifact_persisted": persisted_digest_matches(
+        routine_log_artifact, routine_log_sha256
+    ),
+    "exact_log_artifact_persisted": persisted_digest_matches(
+        exact_log_artifact, exact_log_sha256
+    ),
+    "rank_hash_log_artifact_persisted": bool(persisted_digest(rank_hash_log_artifact)),
     "rank_hash_preflight_exit_zero": hash_rc == 0,
     "rank_hash_count_exact": len(rank_hashes) == 4,
     "rank_hash_hosts_multiple": len(rank_hash_hosts) >= 2,
@@ -380,6 +506,13 @@ fields = {
     "executable_sha256": executable_sha256,
     "routine_log_sha256": routine_log_sha256,
     "exact_log_sha256": exact_log_sha256,
+    # Repo-relative paths of the files behind the digests above, persisted next
+    # to this trace so the release certificate can bind their bytes.
+    "artifact_dir": artifact_dir,
+    "executable_artifact": executable_artifact,
+    "routine_log_artifact": routine_log_artifact,
+    "exact_log_artifact": exact_log_artifact,
+    "rank_hash_log_artifact": rank_hash_log_artifact,
     "rank_hash_count": len(rank_hashes),
     "rank_hash_host_count": len(rank_hash_hosts),
     "rank_local_executable_sha256": rank_local_executable_sha256,

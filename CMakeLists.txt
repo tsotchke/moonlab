@@ -783,6 +783,8 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/chemistry/chemistry.c
     # Topological QC: Fibonacci/Ising anyons, fusion trees, surface/toric codes.
     src/algorithms/topological/topological.c
+    # Braid words, exact Ising Clifford compilation, Fibonacci Solovay-Kitaev.
+    src/algorithms/topological/braid_compiler.c
     # Real-space topology: Bianco-Resta local Chern marker (dense reference).
     src/algorithms/topology_realspace/chern_marker.c
     # Real-space topology: matrix-free Chebyshev-KPM Chern marker.

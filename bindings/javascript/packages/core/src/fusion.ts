@@ -17,7 +17,7 @@
  *
  * @example
  * ```typescript
- * import { QuantumState, FusedCircuit } from '@moonlab/quantum-core';
+ * import { QuantumState, FusedCircuit } from '@tsotchkecorp/moonlab';
  *
  * const circuit = await FusedCircuit.create(4);
  * circuit.h(0).rz(0, 0.3).rx(0, 0.7).cnot(0, 1).rz(1, 0.4);

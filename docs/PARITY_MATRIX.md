@@ -89,8 +89,8 @@ Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 | Feynman diagram rendering (ASCII/SVG/TikZ) | ✅ | `visualization/feynman.py` | `feynman.rs` | ✗    |
 | QSVM / QuantumKernel / QuantumPCA       | ✅ (primitives) | `ml.py` | ✗       | ✗                |
 | PyTorch quantum layer (parameter-shift autograd) | ✅ (primitives) | `torch_layer.py` | ✗ | ✗          |
-| WASM Grover + classical H2 VQE package  | -- | -- | --                | `@moonlab/quantum-algorithms` ¹⁷ |
-| Canvas2D / WebGL quantum visualizations | -- | -- | --                | `@moonlab/quantum-viz`         |
+| WASM Grover + classical H2 VQE package  | -- | -- | --                | `@tsotchkecorp/moonlab-algorithms` ¹⁷ |
+| Canvas2D / WebGL quantum visualizations | -- | -- | --                | `@tsotchkecorp/moonlab-viz`         |
 
 ## Crypto + RNG
 
@@ -227,8 +227,8 @@ given configuration.
 build (the raw FFI symbol is callable), but the high-level `moonlab`
 Rust crate does not yet expose a safe wrapper for it in `vqe.rs`.
 
-¹⁷ `@moonlab/quantum-algorithms` is a lean WASM package built on
-`@moonlab/quantum-core`: a real WASM-backed `Grover` class, and an
+¹⁷ `@tsotchkecorp/moonlab-algorithms` is a lean WASM package built on
+`@tsotchkecorp/moonlab`: a real WASM-backed `Grover` class, and an
 H2-only `VQE` class that runs a classical (non-quantum-state) grid
 search over a closed-form single-parameter H2 ansatz. It does not
 implement QAOA.

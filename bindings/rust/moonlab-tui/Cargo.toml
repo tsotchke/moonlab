@@ -36,8 +36,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 criterion = "0.5"
 
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+# [profile.release] moved to the workspace root (bindings/rust/Cargo.toml):
+# cargo only honours profiles at the workspace root and warns on member
+# profiles once a workspace exists.

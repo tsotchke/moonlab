@@ -5,7 +5,7 @@
  * Supports animation and interactive rotation.
  */
 
-import type { Complex } from '@moonlab/quantum-core';
+import type { Complex } from '@tsotchkecorp/moonlab';
 import type {
   BaseVisualizationOptions,
   ColorSchemeOptions,

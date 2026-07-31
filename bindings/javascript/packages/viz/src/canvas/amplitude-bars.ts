@@ -5,7 +5,7 @@
  * Each bar represents a basis state's probability, colored by its phase.
  */
 
-import type { Complex } from '@moonlab/quantum-core';
+import type { Complex } from '@tsotchkecorp/moonlab';
 import type {
   BaseVisualizationOptions,
   ColorSchemeOptions,

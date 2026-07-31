@@ -5,7 +5,7 @@
  * real-time lighting, and interactive controls.
  */
 
-import type { Complex } from '@moonlab/quantum-core';
+import type { Complex } from '@tsotchkecorp/moonlab';
 import type {
   BaseVisualizationOptions,
   ColorSchemeOptions,

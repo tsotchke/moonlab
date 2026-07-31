@@ -1,5 +1,5 @@
 /**
- * @moonlab/quantum-react
+ * @tsotchkecorp/moonlab-react
  *
  * React hooks and components for quantum computing applications.
  *
@@ -11,7 +11,7 @@
  *   BlochSphere,
  *   AmplitudeBars,
  *   CircuitDiagram
- * } from '@moonlab/quantum-react';
+ * } from '@tsotchkecorp/moonlab-react';
  *
  * function QuantumApp() {
  *   const { amplitudes, numQubits, applyGate } = useQuantumState({ numQubits: 2 });
@@ -78,7 +78,7 @@ export {
   Circuit,
   type Complex,
   type QuantumStateOptions,
-} from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab';
 
 // ============================================================================
 // Version Info

@@ -5,7 +5,7 @@
  */
 
 import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
-import { Circuit, type CircuitStats } from '@moonlab/quantum-core';
+import { Circuit, type CircuitStats } from '@tsotchkecorp/moonlab';
 
 export interface UseCircuitOptions {
   /**
@@ -82,7 +82,7 @@ export interface UseCircuitReturn {
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useCircuit } from '@moonlab/quantum-vue';
+ * import { useCircuit } from '@tsotchkecorp/moonlab-vue';
  *
  * const { circuit, stats, addGate, undoLastGate, clear, toQASM } = useCircuit({
  *   numQubits: 3

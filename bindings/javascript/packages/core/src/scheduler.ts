@@ -8,7 +8,7 @@
  *
  * @example
  * ```typescript
- * import { Job, QgtlGateType } from '@moonlab/quantum-core';
+ * import { Job, QgtlGateType } from '@tsotchkecorp/moonlab';
  *
  * const j = await Job.create(2);
  * j.addGate(QgtlGateType.H, 0);

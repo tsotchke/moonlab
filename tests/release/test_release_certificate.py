@@ -25,9 +25,33 @@ from validate_release_certificate import (  # noqa: E402
     REQUIRED_RELEASE_ARTIFACT_KINDS,
     REQUIRED_RUNTIME_KINDS,
     CertificateError,
+    _verdict,
     source_identity,
     validate_certificate,
 )
+
+# The differential lane records structured counter objects as its ``value`` --
+# this mirrors what scripts/run_cross_diff.sh actually writes to
+# scripts/icc_traces/moonlab_differential.jsonl, so the fixture exercises the
+# real record shape instead of string-only values.
+STRUCTURED_DIFFERENTIAL_VALUES = {
+    "cross_backend_differential": {
+        "checks": 65, "failed": 0, "quarantined": 0, "skipped": 0, "cases": 50,
+        "backends": {"dense": 50, "tn_mps": 50, "clifford": 15, "gpu": 0},
+    },
+    "reference_oracle_agreement": {
+        "checks": 330, "failed": 0, "quarantined": 0, "skipped": 0, "cases": 50,
+    },
+    "cross_binding_python": {"cases": 50, "failed": 0, "reason": "ok"},
+    "cross_binding_rust": {"cases": 50, "failed": 0, "reason": "ok"},
+    "cross_binding_js": {"cases": 50, "failed": 0, "reason": "ok"},
+    "moonlab_differential": {
+        "profile": "quick", "bindings_exercised": 3, "bindings_skipped": 0, "corpus_cases": 50,
+    },
+    "corpus_artifacts_validated": {
+        "artifacts": ["corpus.txt", "corpus.json"], "cases": 50, "snippet": "corpus ok",
+    },
+}
 
 
 def _run(repo: Path, *arguments: str) -> str:
@@ -196,12 +220,69 @@ class CertificateFixture:
         binding.clear()
         binding.update(_binding(path, self.evidence_root))
 
+    def records(self, entry: dict) -> list[dict]:
+        path = self.evidence_root / entry["manifest"]["path"]
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def rewrite_records(self, entry: dict, records: list[dict]) -> None:
+        path = self.evidence_root / entry["manifest"]["path"]
+        path.write_text(
+            "\n".join(
+                json.dumps(record, sort_keys=True, separators=(",", ":")) for record in records
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.rebind(entry["manifest"], path)
+
+    def entry(self, kind: str) -> dict:
+        return next(item for item in self.document["runtime_evidence"] if item["kind"] == kind)
+
+    def hosted_bundle_entries(
+        self, profile_id: str, extra: tuple = ()
+    ) -> list[tuple[tarfile.TarInfo, bytes | None]]:
+        """Members exactly as `tar -czf ... -C <lane dir> .` writes them in CI."""
+        directory = tarfile.TarInfo(".")
+        directory.type = tarfile.DIRTYPE
+        directory.mode = 0o755
+        directory.mtime = 0
+        entries: list[tuple[tarfile.TarInfo, bytes | None]] = [(directory, None)]
+        for name, data in sorted(self.bundle_members[profile_id].items()):
+            info = tarfile.TarInfo(f"./{name}")
+            info.size = len(data)
+            info.mtime = 0
+            entries.append((info, data))
+        return entries + list(extra)
+
+    def write_bundle(
+        self, profile_id: str, entries: list[tuple[tarfile.TarInfo, bytes | None]]
+    ) -> None:
+        path = self.bundle_paths[profile_id]
+        with tarfile.open(path, "w:gz") as archive:
+            for info, data in entries:
+                if data is None:
+                    archive.addfile(info)
+                else:
+                    archive.addfile(info, io.BytesIO(data))
+        bundle = next(
+            item
+            for item in self.document["portability"]["bundles"]
+            if item["profile_id"] == profile_id
+        )
+        self.rebind(bundle["file"], path)
+
     def _portability(self) -> tuple[Path, list[dict]]:
         profiles = json.loads(
             (ROOT / "release/linux_portability_profiles.v1.json").read_text(encoding="utf-8")
         )["profiles"]
         lanes: list[dict] = []
         bundles: list[dict] = []
+        self.bundle_members: dict[str, dict[str, bytes]] = {}
+        self.bundle_paths: dict[str, Path] = {}
         for index, profile in enumerate(profiles):
             members = {
                 filename: f"{profile['id']}:{name}\n".encode()
@@ -243,6 +324,8 @@ class CertificateFixture:
                     info.size = len(data)
                     info.mtime = 0
                     archive.addfile(info, io.BytesIO(data))
+            self.bundle_members[profile["id"]] = members
+            self.bundle_paths[profile["id"]] = bundle_path
             bundles.append({"profile_id": profile["id"], "file": _binding(bundle_path, self.evidence_root)})
         aggregate = {
             "schema": "moonlab.linux_portability.aggregate.v1",
@@ -277,6 +360,9 @@ class CertificateFixture:
                     **self.source,
                     "artifact_sha256": artifact_binding["sha256"],
                 }
+            if kind == "differential":
+                record["status"] = "PASS"
+                record["value"] = STRUCTURED_DIFFERENTIAL_VALUES[name]
             if kind == "mpi":
                 record.update({
                     "n": 33,
@@ -326,12 +412,14 @@ class CertificateFixture:
         for kind in sorted(REQUIRED_RELEASE_ARTIFACT_KINDS):
             platform, package, pattern = RELEASE_ARTIFACT_SPECS[kind]
             examples = {
-                "wheel-linux-x64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_x86_64.whl",
-                "wheel-linux-arm64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_aarch64.whl",
-                "wheel-macos-arm64": "moonlab-1.2.0-cp311-cp311-macosx_11_0_arm64.whl",
-                "wheel-macos-x64": "moonlab-1.2.0-cp311-cp311-macosx_10_15_x86_64.whl",
-                "wheel-windows-x64": "moonlab-1.2.0-cp311-cp311-win_amd64.whl",
-                "wheel-windows-arm64": "moonlab-1.2.0-cp311-cp311-win_arm64.whl",
+                "wheel-linux-x64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+                "wheel-linux-x64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_x86_64.whl",
+                "wheel-linux-arm64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+                "wheel-linux-arm64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_aarch64.whl",
+                "wheel-macos-arm64": "moonlab-1.2.0-py3-none-macosx_11_0_arm64.whl",
+                "wheel-macos-x64": "moonlab-1.2.0-py3-none-macosx_10_15_x86_64.whl",
+                "wheel-windows-x64": "moonlab-1.2.0-py3-none-win_amd64.whl",
+                "wheel-windows-arm64": "moonlab-1.2.0-py3-none-win_arm64.whl",
             }
             filename = examples.get(kind)
             if filename is None:
@@ -494,6 +582,94 @@ class ReleaseCertificateTests(unittest.TestCase):
         self.fixture.document["tag"]["target"] = "a" * 40
         self.assert_rejected("tag assertion")
 
+    def test_structured_lane_values_are_carried_by_an_authoritative_status(self) -> None:
+        entry = self.fixture.entry("differential")
+        records = self.fixture.records(entry)
+        self.assertTrue(any(isinstance(record["value"], dict) for record in records))
+        document = self.validate()
+        self.assertEqual(document["version"], "1.2.0")
+
+    def test_structured_lane_value_alone_is_not_a_passing_verdict(self) -> None:
+        for structured in ({"checks": 65, "failed": 0}, [{"checks": 65}], []):
+            with self.subTest(value=structured):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                entry = self.fixture.entry("differential")
+                records = self.fixture.records(entry)
+                records[0].pop("status")
+                records[0]["value"] = structured
+                self.fixture.rewrite_records(entry, records)
+                self.assert_rejected("non-passing record")
+
+    def test_failing_status_beside_a_structured_value_is_rejected(self) -> None:
+        for status in ("FAIL", "ERROR", False):
+            with self.subTest(status=status):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                entry = self.fixture.entry("differential")
+                records = self.fixture.records(entry)
+                records[0]["status"] = status
+                self.fixture.rewrite_records(entry, records)
+                self.assert_rejected("failing record")
+
+    def test_verdict_classification_never_hashes_structured_values(self) -> None:
+        for value in ("PASS", True, 1):
+            with self.subTest(value=value):
+                self.assertIs(_verdict(value), True)
+        for value in ("FAIL", "ERROR", False, 0):
+            with self.subTest(value=value):
+                self.assertIs(_verdict(value), False)
+        for value in ({"checks": 65, "failed": 0}, [1, 2], {"nested": {"failed": 0}}, None, "SKIP"):
+            with self.subTest(value=value):
+                self.assertIsNone(_verdict(value))
+
+    def test_hosted_bundle_layout_with_a_directory_member_is_accepted(self) -> None:
+        profile_id = self.fixture.document["portability"]["bundles"][0]["profile_id"]
+        self.fixture.write_bundle(profile_id, self.fixture.hosted_bundle_entries(profile_id))
+        self.fixture.write()
+        document = self.validate()
+        self.assertEqual(document["version"], "1.2.0")
+
+    def test_unsafe_bundle_members_are_still_rejected(self) -> None:
+        def directory(name: str) -> tuple[tarfile.TarInfo, None]:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
+            info.mtime = 0
+            return info, None
+
+        def symlink(name: str, target: str) -> tuple[tarfile.TarInfo, None]:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.SYMTYPE
+            info.linkname = target
+            info.mtime = 0
+            return info, None
+
+        def regular(name: str, data: bytes) -> tuple[tarfile.TarInfo, bytes]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            info.mtime = 0
+            return info, data
+
+        cases = {
+            "traversing_directory": directory("../escape"),
+            "absolute_directory": directory("/etc"),
+            "nested_traversal": directory("./lane/../../escape"),
+            "symlink": symlink("./package.tar.gz.link", "/etc/passwd"),
+            "traversing_file": regular("../escape.log", b"escape\n"),
+            "nested_file": regular("./nested/build.log", b"nested\n"),
+            "duplicate_file": regular("./build.log", b"duplicate\n"),
+        }
+        for label, extra in cases.items():
+            with self.subTest(member=label):
+                self.fixture.close()
+                self.fixture = CertificateFixture()
+                profile_id = self.fixture.document["portability"]["bundles"][0]["profile_id"]
+                self.fixture.write_bundle(
+                    profile_id, self.fixture.hosted_bundle_entries(profile_id, (extra,))
+                )
+                self.assert_rejected("unsafe or duplicate member")
+
     def test_certificate_must_be_external_and_untracked(self) -> None:
         _run(
             self.fixture.repo,
@@ -503,6 +679,29 @@ class ReleaseCertificateTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(CertificateError, "must be untracked"):
             self.validate()
+
+
+class ReleaseCertificateSchemaTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.schema = json.loads(
+            (ROOT / "release/release_certificate.schema.v1.json").read_text(encoding="utf-8")
+        )
+
+    def test_release_artifact_bounds_track_the_spec_table(self) -> None:
+        expected = len(RELEASE_ARTIFACT_SPECS)
+        self.assertEqual(expected, len(REQUIRED_RELEASE_ARTIFACT_KINDS))
+        artifacts = self.schema["properties"]["release_artifacts"]
+        self.assertEqual(artifacts["minItems"], expected)
+        self.assertEqual(artifacts["maxItems"], expected)
+
+    def test_runtime_evidence_bounds_and_kinds_track_the_lane_contract(self) -> None:
+        runtime = self.schema["properties"]["runtime_evidence"]
+        self.assertEqual(runtime["minItems"], len(REQUIRED_RUNTIME_KINDS))
+        self.assertEqual(runtime["maxItems"], len(REQUIRED_RUNTIME_KINDS))
+        kinds = self.schema["$defs"]["evidence"]["properties"]["kind"]["enum"]
+        self.assertEqual(len(kinds), len(set(kinds)))
+        self.assertEqual(set(kinds), set(REQUIRED_RUNTIME_KINDS))
 
 
 if __name__ == "__main__":

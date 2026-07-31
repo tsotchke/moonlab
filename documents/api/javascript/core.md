@@ -2,11 +2,11 @@
 
 Complete reference for the WebAssembly quantum simulation core.
 
-**Package**: `@moonlab/quantum-core`
+**Package**: `@tsotchkecorp/moonlab`
 
 ## Overview
 
-The `@moonlab/quantum-core` package provides WebAssembly-powered quantum simulation for JavaScript/TypeScript applications. Features:
+The `@tsotchkecorp/moonlab` package provides WebAssembly-powered quantum simulation for JavaScript/TypeScript applications. Features:
 
 - **WebAssembly Performance**: Near-native speed in the browser
 - **Fluent API**: Method chaining for circuit building
@@ -17,17 +17,17 @@ The `@moonlab/quantum-core` package provides WebAssembly-powered quantum simulat
 ## Installation
 
 ```bash
-npm install @moonlab/quantum-core
+npm install @tsotchkecorp/moonlab
 # or
-yarn add @moonlab/quantum-core
+yarn add @tsotchkecorp/moonlab
 # or
-pnpm add @moonlab/quantum-core
+pnpm add @tsotchkecorp/moonlab
 ```
 
 ## Quick Start
 
 ```typescript
-import { QuantumState, Circuit } from '@moonlab/quantum-core';
+import { QuantumState, Circuit } from '@tsotchkecorp/moonlab';
 
 // Create a 2-qubit Bell state using fluent API
 const state = await QuantumState.create({ numQubits: 2 });
@@ -412,7 +412,7 @@ interface Complex {
 ### Constants
 
 ```typescript
-import { ZERO, ONE, I } from '@moonlab/quantum-core';
+import { ZERO, ONE, I } from '@tsotchkecorp/moonlab';
 
 ZERO  // { re: 0, im: 0 }
 ONE   // { re: 1, im: 0 }
@@ -422,7 +422,7 @@ I     // { re: 0, im: 1 }
 ### Creation
 
 ```typescript
-import { complex, fromPolar } from '@moonlab/quantum-core';
+import { complex, fromPolar } from '@tsotchkecorp/moonlab';
 
 const c = complex(1, 2);  // 1 + 2i
 const p = fromPolar(1, Math.PI / 4);  // e^(iπ/4)
@@ -435,7 +435,7 @@ import {
   add, subtract, multiply, divide, scale,
   conjugate, magnitude, magnitudeSquared, phase,
   exp, equals, toString
-} from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab';
 
 const a = complex(1, 2);
 const b = complex(3, 4);
@@ -457,7 +457,7 @@ toString(a);         // "1 + 2i"
 ### Array Operations
 
 ```typescript
-import { innerProduct, norm, normalize } from '@moonlab/quantum-core';
+import { innerProduct, norm, normalize } from '@tsotchkecorp/moonlab';
 
 const v = [complex(1, 0), complex(0, 1)];
 
@@ -471,7 +471,7 @@ normalize(v);        // v / ||v||
 ### Preloading
 
 ```typescript
-import { preload, isLoaded } from '@moonlab/quantum-core';
+import { preload, isLoaded } from '@tsotchkecorp/moonlab';
 
 // Preload WASM module
 await preload();
@@ -515,7 +515,7 @@ type ProbabilityDistribution = Float64Array;
 ## Complete Example
 
 ```typescript
-import { QuantumState, Circuit, complex } from '@moonlab/quantum-core';
+import { QuantumState, Circuit, complex } from '@tsotchkecorp/moonlab';
 
 async function quantumTeleportation() {
   // Create 3-qubit state

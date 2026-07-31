@@ -17,7 +17,7 @@
  *
  * @example
  * ```typescript
- * import { QuantumState, BellState, chshTest } from '@moonlab/quantum-core';
+ * import { QuantumState, BellState, chshTest } from '@tsotchkecorp/moonlab';
  *
  * const state = await QuantumState.create({ numQubits: 2 });
  * await createBellState(state, 0, 1, BellState.PhiPlus);

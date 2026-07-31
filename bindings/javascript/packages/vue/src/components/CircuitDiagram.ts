@@ -16,8 +16,8 @@ import {
 import {
   CircuitDiagram as CircuitDiagramViz,
   type CircuitDiagramOptions,
-} from '@moonlab/quantum-viz';
-import { Circuit } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import { Circuit } from '@tsotchkecorp/moonlab';
 
 export const CircuitDiagram = defineComponent({
   name: 'CircuitDiagram',

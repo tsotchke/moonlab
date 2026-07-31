@@ -95,20 +95,26 @@ RELEASE_ARTIFACT_SPECS = {
     "native-windows-arm64": ("windows-arm64", "native", re.compile(r"^moonlab-v1\.2\.0-windows-arm64\.zip$")),
     "debian-amd64": ("linux-amd64", "debian", re.compile(r"^moonlab_1\.2\.0_amd64\.deb$")),
     "debian-arm64": ("linux-arm64", "debian", re.compile(r"^moonlab_1\.2\.0_arm64\.deb$")),
-    "wheel-linux-x64": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-(?:manylinux|musllinux)[A-Za-z0-9_.-]*x86_64\.whl$")),
-    "wheel-linux-arm64": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-(?:manylinux|musllinux)[A-Za-z0-9_.-]*aarch64\.whl$")),
-    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
-    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
-    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-win_amd64\.whl$")),
-    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-cp311-cp311-win_arm64\.whl$")),
+    # cibuildwheel builds moonlab's ctypes binding as a single py3-none wheel per
+    # platform, but the Linux legs produce two libc-flavored wheels per arch from
+    # the same job (manylinux glibc + musllinux musl), so each flavor is its own
+    # exactly-one kind rather than one kind matching either file.
+    "wheel-linux-x64-manylinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-x64-musllinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-arm64-manylinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-linux-arm64-musllinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
+    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
+    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_amd64\.whl$")),
+    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_arm64\.whl$")),
     "rust-moonlab-sys": ("source", "moonlab-sys", re.compile(r"^moonlab-sys-1\.2\.0\.crate$")),
     "rust-moonlab": ("source", "moonlab", re.compile(r"^moonlab-1\.2\.0\.crate$")),
     "rust-moonlab-tui": ("source", "moonlab-tui", re.compile(r"^moonlab-tui-1\.2\.0\.crate$")),
-    "npm-core": ("source", "@moonlab/quantum-core", re.compile(r"^moonlab-quantum-core-1\.2\.0\.tgz$")),
-    "npm-algorithms": ("source", "@moonlab/quantum-algorithms", re.compile(r"^moonlab-quantum-algorithms-1\.2\.0\.tgz$")),
-    "npm-vue": ("source", "@moonlab/quantum-vue", re.compile(r"^moonlab-quantum-vue-1\.2\.0\.tgz$")),
-    "npm-viz": ("source", "@moonlab/quantum-viz", re.compile(r"^moonlab-quantum-viz-1\.2\.0\.tgz$")),
-    "npm-react": ("source", "@moonlab/quantum-react", re.compile(r"^moonlab-quantum-react-1\.2\.0\.tgz$")),
+    "npm-core": ("source", "@tsotchkecorp/moonlab", re.compile(r"^tsotchkecorp-moonlab-1\.2\.0\.tgz$")),
+    "npm-algorithms": ("source", "@tsotchkecorp/moonlab-algorithms", re.compile(r"^tsotchkecorp-moonlab-algorithms-1\.2\.0\.tgz$")),
+    "npm-vue": ("source", "@tsotchkecorp/moonlab-vue", re.compile(r"^tsotchkecorp-moonlab-vue-1\.2\.0\.tgz$")),
+    "npm-viz": ("source", "@tsotchkecorp/moonlab-viz", re.compile(r"^tsotchkecorp-moonlab-viz-1\.2\.0\.tgz$")),
+    "npm-react": ("source", "@tsotchkecorp/moonlab-react", re.compile(r"^tsotchkecorp-moonlab-react-1\.2\.0\.tgz$")),
 }
 REQUIRED_RELEASE_ARTIFACT_KINDS = frozenset(RELEASE_ARTIFACT_SPECS)
 REQUIRED_HOSTED_CANDIDATE_JOBS = frozenset({
@@ -355,10 +361,23 @@ def _validate_portability(
                 for member in archive.getmembers():
                     name = member.name.removeprefix("./")
                     pure = PurePosixPath(name)
+                    unsafe = pure.is_absolute() or ".." in pure.parts
+                    if member.isdir():
+                        # The hosted portability job packs each lane with
+                        # `tar -czf ... -C <lane dir> .`, so every bundle carries
+                        # the lane directory itself as a "." member. A directory
+                        # member holds no content, cannot overwrite a file, and
+                        # cannot smuggle anything past the exact-artifact-set
+                        # check below, so a safe relative one is ignored while an
+                        # absolute or traversing one still fails closed.
+                        if unsafe:
+                            raise CertificateError(
+                                f"bundle {profile_id} has unsafe or duplicate member {name}"
+                            )
+                        continue
                     if (
                         not member.isfile()
-                        or pure.is_absolute()
-                        or ".." in pure.parts
+                        or unsafe
                         or len(pure.parts) != 1
                         or name in members
                     ):
@@ -447,6 +466,25 @@ def _declared_hashes(value: Any) -> set[str]:
     return hashes
 
 
+def _verdict(value: Any) -> bool | None:
+    """Classify one trace verdict field as pass, fail, or "carries no verdict".
+
+    Producers spell a verdict either in ``status`` or in ``value``, and lanes
+    that report counters -- ``run_cross_diff.sh`` records ``{"checks": 65,
+    "failed": 0, ...}`` as the differential ``value`` by design -- put a
+    structured object where a scalar token would otherwise sit. A structured
+    object is not a verdict: it must neither pass a record on its own nor
+    condemn one, and it must never be hashed against a set of tokens. Equality
+    against each token keeps unhashable values safe while preserving the exact
+    scalar semantics (``0``/``False`` fail, ``1``/``True`` pass).
+    """
+    if any(value == token for token in (False, "FAIL", "ERROR")):
+        return False
+    if any(value == token for token in (True, "PASS")):
+        return True
+    return None
+
+
 def _validate_evidence_entry(
     entry: dict[str, Any], certificate_path: Path, expected_source: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -466,10 +504,13 @@ def _validate_evidence_entry(
         }
         _source(record_source, f"{kind} manifest record source")
         _assert_same_tree(record_source, expected_source, f"{kind} manifest record")
-        verdicts = (record.get("status"), record.get("value"))
-        if any(value in {"FAIL", "ERROR", False} for value in verdicts):
+        # ``status`` stays authoritative: a failing status condemns the record
+        # whatever the value says, and a passing status carries a record whose
+        # value is a structured counter object rather than a scalar token.
+        verdicts = (_verdict(record.get("status")), _verdict(record.get("value")))
+        if False in verdicts:
             raise CertificateError(f"{kind} manifest contains a failing record")
-        if not any(value in {"PASS", True} for value in verdicts):
+        if True not in verdicts:
             raise CertificateError(f"{kind} manifest contains a non-passing record")
         if not isinstance(record.get("name"), str) or not record["name"]:
             raise CertificateError(f"{kind} manifest record is missing an event name")

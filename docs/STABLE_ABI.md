@@ -90,7 +90,7 @@ ABI 0.6.0 (this release):
 |----------------------------------------------|---------|
 | `src/applications/moonlab_export.h`          |  78     |
 | `src/algorithms/tensor_network/ca_mps.h`     |  37     |
-| `src/algorithms/vqe.h`                       |  30     |
+| `src/algorithms/vqe.h`                       |  35     |
 | `src/distributed/scheduler.h`                |  26     |
 | `src/control/control_plane.h`                |  21     |
 | `src/integration/libirrep_bridge.h`          |  19     |
@@ -114,7 +114,43 @@ ABI 0.6.0 (this release):
 The authoritative list is the source.  This doc is not the
 catalogue -- treat the `MOONLAB_API` annotation as the contract.
 
+### Stability tiers
+
+`MOONLAB_API` is the ABI contract; the `@stability` tag in a symbol's
+doc comment says how settled its *semantics* are. Three tiers are in
+use, and no others:
+
+| Tier        | Meaning                                                        |
+|-------------|----------------------------------------------------------------|
+| `stable`    | Signature and behaviour are frozen for the 1.x line.            |
+| `evolving`  | Signature is frozen by the ABI policy above; behaviour may gain precision, accuracy, or accepted inputs within 1.x. |
+| `beta`      | Newly landed; the tag may move to `evolving` or `stable` in a later 1.x release without a signature change. |
+
+The tier never weakens the ABI guarantee: an `evolving` or `beta`
+symbol that ships in a release is still a `MOONLAB_API` symbol and
+cannot be removed, renamed, or re-signatured before v2.0.
+
 ### v1.2.1 additions
+
+`src/algorithms/vqe.h` (quantum-geometry verbs and the custom-ansatz
+constructor; all additive, no existing signature changed):
+
+  - `vqe_compute_berry_curvature(solver, parameters, berry_out)` --
+    the antisymmetric imaginary half of the quantum geometric tensor,
+    `F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]`,
+    sharing the exact analytic derivatives of `vqe_compute_qgt`.
+  - `vqe_create_custom_ansatz(num_qubits, num_parameters, apply,
+    user_data)` + the `vqe_custom_ansatz_fn` callback typedef --
+    constructs a `VQE_ANSATZ_CUSTOM` ansatz from a caller-supplied
+    circuit. `vqe_apply_ansatz` routes to it, so the whole ideal-state
+    surface (`vqe_compute_energy`, `vqe_compute_gradient`, `vqe_solve`,
+    `vqe_compute_qgt`, `vqe_compute_berry_curvature`) accepts it. The
+    geometric verbs differentiate a custom circuit by central
+    differences, since its gate structure is opaque to the library.
+    `vqe_apply_ansatz_noisy` returns `QS_ERROR_NOT_SUPPORTED` for a
+    custom ansatz: the built-in noisy paths interleave error channels
+    after each individual gate and the library has no gate boundaries
+    inside the callback to place them at.
 
 `src/algorithms/quantum_geometry/qgt.h` (pointwise two-band geometry;
 all additive, no existing signature changed):
@@ -140,9 +176,10 @@ scale of their inputs (`1e-12` times the Hamiltonian trace scale, matching
 the module's existing `lower_eigvec_2x2` threshold, or `1e-12` times the L1
 scale of `d` and its gradients).
 
-These land in `src/algorithms/quantum_geometry/qgt.h`, not in
-`moonlab_export.h`, so the `MOONLAB_ABI_VERSION_*` triple of the stable
-downstream export surface is unchanged at 0.6.0.
+All of these land in `src/algorithms/vqe.h` and
+`src/algorithms/quantum_geometry/qgt.h`, not in `moonlab_export.h`, so the
+`MOONLAB_ABI_VERSION_*` triple of the stable downstream export surface is
+unchanged at 0.6.0.
 
 ### v1.0.3 additions
 
@@ -305,7 +342,7 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 | C        | `libquantumsim.{so,dylib,dll}`    | package 1.2.0, stable ABI 0.6.0 |
 | Python   | `moonlab` (pip)                   | follows the package version (1.2.0) |
 | Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.0) |
-| JS       | `@moonlab/quantum-core`           | follows the package version (1.2.0) |
+| JS       | `@tsotchkecorp/moonlab`           | follows the package version (1.2.0) |
 
 Each binding crate/package revs alongside the C library's package version
 (currently 1.2.0) and stays within the same 1.x compatibility line as the

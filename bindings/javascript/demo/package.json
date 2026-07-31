@@ -1,5 +1,5 @@
 {
-  "name": "@moonlab/quantum-demo",
+  "name": "@tsotchkecorp/moonlab-demo",
   "version": "1.2.0",
   "private": true,
   "description": "Interactive demo site for Moonlab Quantum Simulator",
@@ -7,14 +7,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:gh-pages": "test -f ../packages/core/emscripten/build/deps/clapack-wasm/lib/liblapack.a || bash ../packages/core/emscripten/build-clapack-wasm.sh && pnpm --filter @moonlab/quantum-core build && vite build --outDir ../../../docs --emptyOutDir",
+    "build:gh-pages": "test -f ../packages/core/emscripten/build/deps/clapack-wasm/lib/liblapack.a || bash ../packages/core/emscripten/build-clapack-wasm.sh && pnpm --filter @tsotchkecorp/moonlab build && vite build --outDir ../../../docs --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@moonlab/quantum-core": "workspace:*",
-    "@moonlab/quantum-algorithms": "workspace:*",
-    "@moonlab/quantum-viz": "workspace:*",
-    "@moonlab/quantum-react": "workspace:*",
+    "@tsotchkecorp/moonlab": "workspace:*",
+    "@tsotchkecorp/moonlab-algorithms": "workspace:*",
+    "@tsotchkecorp/moonlab-viz": "workspace:*",
+    "@tsotchkecorp/moonlab-react": "workspace:*",
     "three": "^0.161.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

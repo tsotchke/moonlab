@@ -4,7 +4,7 @@
  * Stunning 3D visualizations powered by WebGL.
  * Provides immersive, interactive experiences.
  *
- * @module @moonlab/quantum-viz/webgl
+ * @module @tsotchkecorp/moonlab-viz/webgl
  */
 
 export { BlochSphere3D } from './bloch-sphere-3d';

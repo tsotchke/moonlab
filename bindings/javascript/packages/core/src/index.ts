@@ -1,5 +1,5 @@
 /**
- * @moonlab/quantum-core
+ * @tsotchkecorp/moonlab
  *
  * WebAssembly quantum computing simulator core library.
  * Provides low-level access to quantum state manipulation,
@@ -7,7 +7,7 @@
  *
  * @example
  * ```typescript
- * import { QuantumState, Circuit } from '@moonlab/quantum-core';
+ * import { QuantumState, Circuit } from '@tsotchkecorp/moonlab';
  *
  * // Create a 2-qubit Bell state using fluent API
  * const state = await QuantumState.create({ numQubits: 2 });

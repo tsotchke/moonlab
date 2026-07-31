@@ -8,8 +8,8 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import {
   BlochSphere as BlochSphereViz,
   type BlochSphereOptions,
-} from '@moonlab/quantum-viz';
-import type { Complex } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import type { Complex } from '@tsotchkecorp/moonlab';
 
 export interface BlochSphereProps extends Omit<BlochSphereOptions, 'width' | 'height'> {
   /**
@@ -58,7 +58,7 @@ export interface BlochSphereProps extends Omit<BlochSphereOptions, 'width' | 'he
  *
  * @example
  * ```tsx
- * import { BlochSphere } from '@moonlab/quantum-react';
+ * import { BlochSphere } from '@tsotchkecorp/moonlab-react';
  *
  * function App() {
  *   const [amps, setAmps] = useState<[Complex, Complex]>([

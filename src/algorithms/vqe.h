@@ -276,6 +276,62 @@ MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
 );
 
 /**
+ * @brief Caller-supplied circuit for a VQE_ANSATZ_CUSTOM ansatz.
+ *
+ * Applies the parameterized circuit U(parameters) to STATE, which arrives
+ * already prepared in the Hartree-Fock reference of the active Hamiltonian
+ * (exactly as the built-in ansaetze see it).  The callback must not free or
+ * reallocate STATE.
+ *
+ * @param state Quantum state to evolve in place (num_qubits qubits)
+ * @param parameters Current parameter values (num_parameters slots)
+ * @param num_parameters Length of PARAMETERS
+ * @param user_data Opaque pointer handed to vqe_create_custom_ansatz
+ * @return QS_SUCCESS on success, any other qs_error_t on failure
+ */
+typedef qs_error_t (*vqe_custom_ansatz_fn)(
+    quantum_state_t *state,
+    const double *parameters,
+    size_t num_parameters,
+    void *user_data
+);
+
+/**
+ * @brief Create a VQE_ANSATZ_CUSTOM ansatz from a user-supplied circuit.
+ *
+ * The returned ansatz is a first-class ansatz everywhere the type is
+ * dispatched on the ideal statevector: vqe_apply_ansatz routes to APPLY, so
+ * vqe_compute_energy, vqe_compute_gradient, vqe_solve, and the geometric-tensor
+ * verbs vqe_compute_qgt / vqe_compute_berry_curvature all work.  The geometric
+ * verbs differentiate a custom circuit by central differences on the
+ * statevector, since its gate structure is opaque to the library, where the
+ * built-in ansaetze use exact analytic generator insertion.
+ *
+ * vqe_apply_ansatz_noisy returns QS_ERROR_NOT_SUPPORTED for a custom ansatz:
+ * the built-in noisy paths interleave the noise model's error channels after
+ * each individual gate, and the library cannot see inside APPLY to place them.
+ * A callback that needs NISQ noise applies the channels itself -- it owns the
+ * gate sequence and can call the noise API between its own gates.
+ *
+ * USER_DATA is not owned: vqe_ansatz_free releases only the ansatz itself.
+ * The initial parameter vector is all zeros; write ansatz->parameters (or pass
+ * a parameter vector to the compute verbs) to set a starting point.
+ *
+ * @param num_qubits Number of qubits the circuit acts on (1..MAX_QUBITS)
+ * @param num_parameters Number of variational parameters (>= 1)
+ * @param apply Circuit callback (must be non-NULL)
+ * @param user_data Opaque pointer forwarded to APPLY on every call
+ * @return Ansatz structure, or NULL on invalid arguments / allocation failure
+ * @stability evolving
+ */
+MOONLAB_API vqe_ansatz_t* vqe_create_custom_ansatz(
+    size_t num_qubits,
+    size_t num_parameters,
+    vqe_custom_ansatz_fn apply,
+    void *user_data
+);
+
+/**
  * @brief Free ansatz structure
  * @param ansatz Ansatz to free
  */
@@ -603,20 +659,51 @@ MOONLAB_API void vqe_solver_set_allow_stochastic_gradient(vqe_solver_t *solver,
  * @brief Quantum geometric (Fubini-Study) tensor of the ansatz state.
  *
  * Computes g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>] for the
- * ideal (noise-free) trial state |psi(parameters)>, via central differences on
- * the statevector.  This is the natural Riemannian metric on the ansatz's
+ * ideal (noise-free) trial state |psi(parameters)>.  Uses exact analytic
+ * parameter derivatives (generator insertion) for the built-in ansaetze and
+ * central differences for a CUSTOM ansatz.  This is the real, symmetric half of
+ * the quantum geometric tensor: the natural Riemannian metric on the ansatz's
  * parameter space, used by the quantum natural gradient optimizer.
  *
  * @param solver VQE solver context
  * @param parameters Current parameters (num_parameters slots)
  * @param qgt_out Output: symmetric metric, row-major num_parameters x num_parameters
  * @return 0 on success, -1 on error
- * @stability experimental
+ * @stability evolving
  */
 MOONLAB_API int vqe_compute_qgt(
     vqe_solver_t *solver,
     const double *parameters,
     double *qgt_out
+);
+
+/**
+ * @brief Berry curvature of the ansatz state: the imaginary half of the QGT.
+ *
+ * Computes F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>] for the
+ * ideal (noise-free) trial state |psi(parameters)>, sharing the same exact
+ * analytic derivatives as vqe_compute_qgt.  Together they are the two halves of
+ * the Hermitian quantum geometric tensor Q = g - (i/2) F: vqe_compute_qgt
+ * returns the metric g = Re Q, this returns the curvature F = -2 Im Q.
+ *
+ * F is real and antisymmetric (F_ii = 0, F_ji = -F_ij).  The -2 Im convention
+ * makes the flux of F integrate, by Stokes' theorem, to the Berry phase around
+ * a closed loop in parameter space, and to 2*pi times the Chern number over a
+ * closed parameter 2-manifold.  For a real ansatz (only RY / CNOT / Givens /
+ * double-excitation gates) the state is real and F vanishes identically; a
+ * nonzero F requires phase-bearing gates (e.g. the RZ layer of the
+ * hardware-efficient ansatz).
+ *
+ * @param solver VQE solver context
+ * @param parameters Current parameters (num_parameters slots)
+ * @param berry_out Output: antisymmetric curvature, row-major num_parameters^2
+ * @return 0 on success, -1 on error
+ * @stability evolving
+ */
+MOONLAB_API int vqe_compute_berry_curvature(
+    vqe_solver_t *solver,
+    const double *parameters,
+    double *berry_out
 );
 
 /**
@@ -632,7 +719,7 @@ MOONLAB_API int vqe_compute_qgt(
  * @param regularization Tikhonov shift added to the metric diagonal (e.g. 1e-3)
  * @param direction_out Output: natural-gradient direction (num_parameters slots)
  * @return 0 on success, -1 on error
- * @stability experimental
+ * @stability evolving
  */
 MOONLAB_API int vqe_natural_gradient_direction(
     vqe_solver_t *solver,

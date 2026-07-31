@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { Circuit, type CircuitStats } from '@moonlab/quantum-core';
+import { Circuit, type CircuitStats } from '@tsotchkecorp/moonlab';
 
 export interface UseCircuitOptions {
   /**

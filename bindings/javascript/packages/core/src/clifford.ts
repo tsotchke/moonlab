@@ -20,7 +20,7 @@
  *
  * @example
  * ```typescript
- * import { CliffordTableau } from '@moonlab/quantum-core';
+ * import { CliffordTableau } from '@tsotchkecorp/moonlab';
  *
  * // GHZ state on 64 qubits: H(0); CNOT(0, i) for i in 1..n-1.
  * const c = await CliffordTableau.create(64);

@@ -16,8 +16,8 @@ import {
 import {
   BlochSphere as BlochSphereViz,
   type BlochSphereOptions,
-} from '@moonlab/quantum-viz';
-import type { Complex } from '@moonlab/quantum-core';
+} from '@tsotchkecorp/moonlab-viz';
+import type { Complex } from '@tsotchkecorp/moonlab';
 
 export interface BlochSphereEmits {
   (e: 'stateChange', state: { theta: number; phi: number; x: number; y: number; z: number }): void;

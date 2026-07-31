@@ -1,0 +1,30 @@
+# Virtual workspace over the three published crates.
+#
+# Its purpose is release packaging: moonlab depends on moonlab-sys and
+# moonlab-tui on moonlab by version, so packaging them individually requires
+# each dependency to already exist on crates.io -- impossible for the
+# release-candidate build, which by design runs before anything is published.
+# `cargo package --workspace` (stable since 1.90) packages the members in
+# dependency order and verifies each against the locally produced .crate
+# files instead of the registry, which is exactly the candidate's job:
+# byte-exact payloads first, publication after certification.
+#
+# Members keep their own Cargo.toml metadata; only profiles are
+# workspace-level (cargo ignores member [profile.*] sections).
+[workspace]
+resolver = "2"
+members = [
+    "moonlab-sys",
+    "moonlab",
+    "moonlab-tui",
+]
+
+# Hoisted from moonlab-tui, where cargo would ignore it with a warning now
+# that a workspace root exists. Release-profile settings apply workspace-wide;
+# the library crates were built with defaults before, and lto/strip only
+# tighten the shipped binaries.
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
