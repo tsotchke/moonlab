@@ -16,7 +16,7 @@
  *
  * @example
  * ```typescript
- * import { SurfaceCode } from '@moonlab/quantum-core';
+ * import { SurfaceCode } from '@tsotchkecorp/moonlab';
  *
  * const code = await SurfaceCode.create(3, 42n);
  * const q = code.dataIndex(1, 1);

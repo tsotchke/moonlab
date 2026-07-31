@@ -62,7 +62,7 @@ print(probs)   # [0.5, 0.0, 0.0, 0.5]
 ```
 
 Equivalent calls exist for the Rust (`moonlab::control_plane::submit_circuit`)
-and Node.js (`@moonlab/quantum-core` `controlPlaneSubmitCircuit`)
+and Node.js (`@tsotchkecorp/moonlab` `controlPlaneSubmitCircuit`)
 bindings.
 
 ## Hardening the deployment

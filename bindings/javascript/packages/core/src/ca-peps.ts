@@ -11,7 +11,7 @@
  *
  * @example
  * ```typescript
- * import { CaPeps, PauliCode } from '@moonlab/quantum-core';
+ * import { CaPeps, PauliCode } from '@tsotchkecorp/moonlab';
  *
  * // 2x3 lattice with bond-dim cap chi = 8.
  * const state = await CaPeps.create(2, 3, 8);
@@ -25,7 +25,7 @@
 import { getModule } from './wasm-loader';
 import { PauliCode } from './mpdo';
 
-// Re-export so `import { PauliCode } from '@moonlab/quantum-core'` keeps
+// Re-export so `import { PauliCode } from '@tsotchkecorp/moonlab'` keeps
 // working when callers reach for CaPeps observables.
 export { PauliCode } from './mpdo';
 

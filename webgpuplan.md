@@ -151,7 +151,7 @@ Suggested location:
 - `bindings/javascript/packages/core/scripts/webgpu-eval.mjs`
 
 Suggested command:
-- `pnpm --filter @moonlab/quantum-core webgpu:eval`
+- `pnpm --filter @tsotchkecorp/moonlab webgpu:eval`
 
 ### 3) CI/Automation Topology
 - Tier A (always-on): Node-based smoke/integration checks (WebGPU unavailable expected in many runners).

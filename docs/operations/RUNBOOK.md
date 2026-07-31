@@ -303,10 +303,10 @@ let probs = submit_circuit_auth_tenant(
 // probs == vec![0.5, 0.0, 0.0, 0.5]
 ```
 
-### JavaScript / Node (`@moonlab/quantum-core/control-plane`)
+### JavaScript / Node (`@tsotchkecorp/moonlab/control-plane`)
 
 ```typescript
-import { submitCircuit } from '@moonlab/quantum-core/control-plane';
+import { submitCircuit } from '@tsotchkecorp/moonlab/control-plane';
 
 const probs = await submitCircuit({
   host: 'moonlab.example.com', port: 8443,

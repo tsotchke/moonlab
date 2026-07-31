@@ -1,13 +1,13 @@
 /**
- * @moonlab/quantum-viz
+ * @tsotchkecorp/moonlab-viz
  *
  * Beautiful quantum state visualizations for web applications.
  * Supports both Canvas 2D and WebGL 3D rendering.
  *
  * @example
  * ```typescript
- * import { BlochSphere, AmplitudeBars } from '@moonlab/quantum-viz';
- * import { QuantumState } from '@moonlab/quantum-core';
+ * import { BlochSphere, AmplitudeBars } from '@tsotchkecorp/moonlab-viz';
+ * import { QuantumState } from '@tsotchkecorp/moonlab';
  *
  * // Create visualizations
  * const sphere = new BlochSphere('bloch-canvas');

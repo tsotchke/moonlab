@@ -51,6 +51,82 @@ if(QSIM_PLATFORM_MACOS AND QSIM_BUILD_SHARED AND NOT QSIM_PYTHON_WHEEL
             endif()
         endif()")
     unset(_qsim_libomp_rel)
+
+    # ...and the redistributable tarball has to satisfy that @rpath
+    # reference on a machine with no Homebrew, so it carries its own
+    # libomp beside libquantumsim.  The bundled copy's LC_ID_DYLIB is
+    # rewritten to @rpath/libomp.dylib -- the same spelling our load
+    # command uses -- because dyld resolves an @rpath reference against
+    # the install names of already-loaded images before it searches any
+    # LC_RPATH.  A consumer that already holds an OpenMP runtime with
+    # that install name (PyTorch, conda-forge llvm-openmp, anything
+    # repaired by delocate/auditwheel) therefore satisfies our reference
+    # from its own image and never maps a second one, in either load
+    # order.  Keeping Homebrew's absolute install name here, or giving
+    # the copy a uniquified delocate-style name, would defeat that
+    # dedup and reintroduce OMP Error #15 (issue #27).
+    #
+    # EXCLUDE_FROM_ALL: `cmake --install` into a system prefix must not
+    # drop a libomp.dylib into /usr/local/lib or a Homebrew prefix and
+    # shadow the package manager's own copy.  Only the release packager
+    # asks for it, via `cmake --install ... --component openmp-runtime`
+    # in scripts/package_release_artifact.sh.
+    install(FILES "${QSIM_OPENMP_LIBRARIES}"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RENAME libomp.dylib
+        COMPONENT openmp-runtime
+        EXCLUDE_FROM_ALL)
+
+    # Bundling the runtime means redistributing it, so its license travels
+    # with it. LLVM's libomp is Apache-2.0 WITH LLVM-exception, which
+    # requires the license text in the distribution.
+    get_filename_component(_qsim_libomp_dir "${QSIM_OPENMP_LIBRARIES}" DIRECTORY)
+    set(QSIM_LIBOMP_LICENSE "")
+    foreach(_qsim_lic
+            "${_qsim_libomp_dir}/../LICENSE.TXT"
+            "${_qsim_libomp_dir}/../LICENSE"
+            "${_qsim_libomp_dir}/../COPYING"
+            "${_qsim_libomp_dir}/../share/doc/libomp/LICENSE.TXT")
+        if(EXISTS "${_qsim_lic}" AND QSIM_LIBOMP_LICENSE STREQUAL "")
+            get_filename_component(QSIM_LIBOMP_LICENSE "${_qsim_lic}" ABSOLUTE)
+        endif()
+    endforeach()
+    if(NOT QSIM_LIBOMP_LICENSE STREQUAL "")
+        install(FILES "${QSIM_LIBOMP_LICENSE}"
+            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/libomp
+            RENAME LICENSE.TXT
+            COMPONENT openmp-runtime
+            EXCLUDE_FROM_ALL)
+    else()
+        install(CODE "message(FATAL_ERROR
+            \"cannot bundle libomp: no license file next to ${_qsim_libomp_dir}. \"
+            \"Redistributing the OpenMP runtime requires shipping its \"
+            \"Apache-2.0 WITH LLVM-exception text.\")"
+            COMPONENT openmp-runtime
+            EXCLUDE_FROM_ALL)
+    endif()
+    unset(_qsim_libomp_dir)
+    install(CODE "
+        set(_qsim_omp \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libomp.dylib\")
+        if(EXISTS \"\${_qsim_omp}\")
+            execute_process(
+                COMMAND install_name_tool -id \"@rpath/libomp.dylib\" \"\${_qsim_omp}\"
+                RESULT_VARIABLE _qsim_omp_rc ERROR_QUIET)
+            if(NOT _qsim_omp_rc EQUAL 0)
+                message(FATAL_ERROR
+                    \"install_name_tool failed to set the bundled libomp install name\")
+            endif()
+            # install_name_tool invalidates the ad-hoc signature; an
+            # unsigned dylib is SIGKILLed on arm64, so re-sign it.
+            execute_process(
+                COMMAND codesign --force --sign - \"\${_qsim_omp}\"
+                RESULT_VARIABLE _qsim_omp_sign_rc ERROR_QUIET)
+            if(NOT _qsim_omp_sign_rc EQUAL 0)
+                message(FATAL_ERROR \"codesign failed on the bundled libomp\")
+            endif()
+        endif()"
+        COMPONENT openmp-runtime
+        EXCLUDE_FROM_ALL)
 endif()
 
 if(NOT QSIM_PYTHON_WHEEL)

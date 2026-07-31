@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Anyon braiding is a braid-group representation.** `fusion_tree_t` now
+  carries the intermediate charge of every fusion vertex on every path
+  (`labels`, `num_vertices`, `recoupled_vertex`) instead of only the total
+  charge, and `braid_anyons()` acts on that basis: diagonal in R for the pair
+  that meets at vertex 1, F-conjugated for every other position. Measured over
+  Fibonacci, Ising and SU(2)_3..5 on several anyon counts and charge sectors —
+  Yang-Baxter 9.0e-16, far commutation exactly 0, generator unitarity 1.3e-15,
+  σ_i σ_i⁻¹ = I 1.3e-15. σ₁ and σ₂ now differ by 1.263 on the four-τ tree
+  (they were byte-identical); σ₁ = σ₃ there is the encoding's own physics, and
+  they separate by 1.618 on a five-τ tree.
+- **`apply_F_move()` implemented.** A unitary involution on the fusion tree
+  implementing $(a×b)×c ↔ a×(b×c)$ at a vertex from the tabulated F-symbols.
+  Round-trip error 1.1e-16, norm preserved exactly. Valid vertex range
+  1..n-2; out-of-range now returns `QS_ERROR_INVALID_PARAM` instead of
+  `QS_SUCCESS`.
+- **Topological charge measurement.** `anyon_measure_pair_charge()`,
+  `anyon_pair_charge_distribution()`, and `anyon_forced_measurement_braid()`,
+  the measurement-only realisation of a braid generator (Bonderson, Freedman
+  and Nayak, PRL 101, 010501 (2008)). The measurement-only braid reproduces
+  `braid_anyons()` to 0.0 on all six generators of a four-τ tree.
+- **Braid words and gate compilation** (`src/algorithms/topological/braid_compiler.c`).
+  `braid_word_t` with apply/matrix/reduce/inverse, plus:
+  - `ising_compile_clifford()` — exact single-qubit Clifford braid words. The
+    projective braid image on 4 σ anyons is enumerated and has order 24, the
+    full single-qubit Clifford group. X 2 crossings / 3.1e-16, Y 4 / 4.0e-16,
+    Z 2 / 5.6e-17, H 3 / 3.4e-16, S 1 / 1.4e-16. T returns NULL — it is not a
+    Clifford and is not approximated.
+  - `ising_compile_clifford2()` — exact **two-qubit** Cliffords in the dense
+    6-σ encoding (dimension 4, no leakage subspace). Image order 11520, the
+    full two-qubit Clifford group. CNOT 7 crossings / 1.2e-15, CZ 3 / 8.9e-16.
+  - `fibonacci_compile_su2()` — Solovay-Kitaev compilation to a
+    caller-supplied ε, measured on the returned word before it is returned.
+    H: 297 crossings at 1e-2, 1413 at 1e-4, 33099 at 1e-6, 160469 at 1e-10
+    (achieved 1.663e-12). Length scales as log^4.1(1/ε) measured against the
+    3.97 the recursion predicts. Guaranteed range ε ≥ 1e-11.
+  - `fibonacci_exact_phase_gate()` — the exactly realisable R_z(mπ/5),
+    m = 0..9, including the logical Pauli Z = σ₁⁵. Worst error 1.2e-15.
+- **MATH.md §13, exact realisability of Fibonacci braid gates.** Every braid
+  word has the form [[p, φ^{-1/2} r],[φ^{-1/2} s, t]] with p,r,s,t ∈ Q(ζ₅);
+  from that, R_z(mπ/5) is exact and H, X and T are each proved impossible.
+  Corroborated by exhaustive enumeration to length 12: closest approaches
+  0.066 (H), 0.113 (X), 0.075 (T), 3.3e-16 (Z).
 - **VQE Berry curvature (`vqe_compute_berry_curvature`).** The antisymmetric
   imaginary half of the quantum geometric tensor,
   `F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]`, computed from
@@ -44,16 +86,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/STABLE_ABI.md` defines, instead of `experimental`, which was not a tier
   the project used anywhere. `docs/STABLE_ABI.md` gains the tier table those
   tags refer to.
+- **The npm packages moved to the `@tsotchkecorp` scope.** As of 1.2.1 the
+  JavaScript/WebAssembly bindings publish as `@tsotchkecorp/moonlab`,
+  `@tsotchkecorp/moonlab-algorithms`, `@tsotchkecorp/moonlab-viz`,
+  `@tsotchkecorp/moonlab-react`, and `@tsotchkecorp/moonlab-vue`. The
+  `@moonlab` npm scope is registered to an unrelated party and is not
+  obtainable, so the former `quantum-core` / `quantum-algorithms` /
+  `quantum-viz` / `quantum-react` / `quantum-vue` names under that scope were
+  never published to the registry; there is nothing to deprecate or redirect,
+  and no consumer has an installed package to migrate. Install the core
+  package with `npm install @tsotchkecorp/moonlab`. `npm pack` output follows
+  the new names: `tsotchkecorp-moonlab-<version>.tgz` and
+  `tsotchkecorp-moonlab-<role>-<version>.tgz`.
+- **`fusion_tree_t` gained three fields** (`labels`, `num_vertices`,
+  `recoupled_vertex`) at the end of the struct, so `sizeof(fusion_tree_t)`
+  changed. The topological surface is not on the stable ABI, so no exported
+  contract moves; consumers that vendor the private header must rebuild.
+- **`apply_F_move()` validates its vertex.** It previously returned
+  `QS_SUCCESS` for any value including 0; the valid range is now
+  1 <= vertex <= num_anyons - 2 and anything else returns
+  `QS_ERROR_INVALID_PARAM`.
+- **`anyonic_T_gate()` honours `precision`** on Fibonacci registers and returns
+  `QS_ERROR_NOT_SUPPORTED` on Ising ones, where T is not reachable by braiding
+  at all. `anyonic_entangle()` requires adjacent qubits and a Fibonacci
+  register and returns `QS_ERROR_NOT_SUPPORTED` otherwise.
+- **`braid_anyons()` requires the standard basis.** With an outstanding
+  `apply_F_move()` it returns `QS_ERROR_INVALID_STATE` rather than silently
+  braiding in the wrong basis.
+
+### Known issues (not regressions)
+
+- **Two-qubit Fibonacci gates leak.** `anyonic_entangle()` is a unitary
+  32-crossing weave that genuinely entangles (concurrence 0.414242 from a
+  product input) but leaves 8.3043e-2 of the amplitude outside the logical
+  subspace. That is a property of the 4-anyons-per-qubit encoding: the block's
+  vacuum constraint ties the two pair charges together, so a braid that
+  entangles two blocks must break one of them. Exhaustive search over every
+  braid word of length ≤ 8 on the two-block register finds no word that is both
+  entangling and leakage-free, and none whose logical block is proportional to
+  a unitary while entangling. The exact, leakage-free two-qubit gate is
+  `ising_compile_clifford2()` in the dense 6-anyon encoding.
+
 
 ## [1.2.0] - 2026-07-23
 
 **v1.2.0 stabilization and distributed-scale release.** ABI 0.6.0 (QRNG status surface + honest
 certification language + wasm32 correctness fixes), a VQE quantum natural
 gradient optimizer, a first-principles H2/LiH potential energy surface, the
-real `@moonlab/quantum-algorithms` implementation, a macOS Mach-O link fix
+real `@tsotchkecorp/moonlab-algorithms` implementation, a macOS Mach-O link fix
 for CPU-only builds, bounded CUDA/MPI state sharding beyond 32 qubits, and a
 full packaging/release-pipeline rework. Covers `v1.1.0..v1.2.0`, including
-merged PRs #12, #13, and #14.
+merged PRs #12, #13, #14, and #18.
 
 ### Added
 
@@ -95,10 +178,10 @@ merged PRs #12, #13, and #14.
   a matching pass makes the LiH surface smooth and structurally consistent.
   New H2/LiH smoothness, differentiability, and term-count-consistency
   tests.
-- **`@moonlab/quantum-algorithms` real implementation.** A WASM-backed
+- **`@tsotchkecorp/moonlab-algorithms` real implementation.** A WASM-backed
   `Grover` class (marked-state oracle, diffusion, optimal iteration count,
   top-state extraction, qubit/basis-state validation) over
-  `@moonlab/quantum-core`, plus the H2-only classical `VQE` class, with
+  `@tsotchkecorp/moonlab`, plus the H2-only classical `VQE` class, with
   vitest coverage; the package returns to public at 1.2.0.
 - **`tests/unit/test_entropy_sources.c`** pins the direct entropy-source
   surface (`entropy_jitter_bytes`, `entropy_create_with_source` +
@@ -109,7 +192,7 @@ merged PRs #12, #13, and #14.
   Fubini-Study metric divergence at the Qi-Wu-Zhang Dirac-node gap closing
   and the nilpotency of a surface-code stabilizer chain complex (d1.d2 = 0)
   are the same epsilon^2 = 0.
-- **JS binding parity for the v1.2 surfaces.** `@moonlab/quantum-core`
+- **JS binding parity for the v1.2 surfaces.** `@tsotchkecorp/moonlab`
   gains the VQE ergonomics (`VqeSolver.create(h, { ansatz: 'uccsd',
   optimizer: 'qng' | 'adam' | ..., learningRate, beta1, beta2, epsilon,
   qngRegularization, maxIterations, tolerance })`, `OptimizerType.Qng`,
@@ -153,6 +236,30 @@ merged PRs #12, #13, and #14.
   device-independent randomness certificate.
 - `.github/workflows/ci-jetson.yml` documented as `workflow_dispatch`-only
   until a self-hosted runner is enrolled; setup doc corrected to match.
+- **BREAKING (physics), Ising anyon convention.** `anyon_system_ising()` is now
+  built through the SU(2)_2 quantum-6j generator instead of a hand-written
+  table, which moves it to a different member of the sixteenfold way. The
+  topological spin changes from θ_σ = e^{iπ/8} (ν = 1) to θ_σ = e^{3iπ/8}
+  (ν = 3); θ_ψ = −1 is unchanged. Individual symbols:
+  R^{σσ}_1 goes e^{−iπ/8} → e^{5iπ/8}, R^{σσ}_ψ goes e^{3iπ/8} → e^{iπ/8},
+  R^{σψ}_σ = R^{ψσ}_σ goes −i → +i, and F^{σσσ}_σ changes overall sign
+  (F^{σψσ}_ψ goes +1 → −1, the Frobenius-Schur sign the old storage layout
+  could not represent). Both the old and new phase sets name valid anyon
+  theories, but this is a real change in returned values and **not**
+  behaviour-preserving: code that hard-codes the ν = 1 Ising phases will see
+  different results. Fibonacci's R-symbols and F^{τττ}_τ are unchanged.
+- **`anyon_system_su2k(2)` and `(3)` no longer alias.** They previously returned
+  the hand-coded Ising and Fibonacci systems. `su2k(2)` now returns the genuine
+  SU(2)_2 (which *is* Ising, 3 charges) and `su2k(3)` returns the genuine
+  four-charge SU(2)_3 — **not** Fibonacci, which is its even-integer-spin
+  subcategory and keeps its own `anyon_system_fibonacci()` constructor. The
+  header contract, C API reference, and algorithms guide are corrected.
+- **Topological braiding and gate layer marked experimental.** `braid_anyons`,
+  `apply_F_move` and the `anyonic_*` gates are documented as currently
+  incorrect in the README, the C API reference, the algorithms guide, and the
+  header, with the specific defect and its consequences stated. No behaviour
+  change; the documentation previously claimed capabilities the code does not
+  have.
 
 ### Fixed
 
@@ -219,6 +326,41 @@ merged PRs #12, #13, and #14.
   on their intentional `#include_next`, and the audit-buffer yield includes
   `<windows.h>` for `SwitchToThread` rather than relying on transitive
   inclusion; both were hard failures under UCRT64 gcc 16.
+- **Anyon F/R symbols violated the pentagon and hexagon identities in every
+  built-in model** (PR #18). The tabulated symbols were not those of any
+  consistent fusion category. Measured coherence residuals before the fix:
+  Fibonacci 1.000, Ising 1.848, SU(2)_3 1.000, SU(2)_4 1.199, SU(2)_5 2.000.
+  Four independent causes: the Fibonacci/Ising trivial-symbol default wrote 1
+  on the matrix diagonal instead of on the unique allowed fusion channel;
+  Ising stored F^{σσσ}_σ under {vacuum, σ} instead of {vacuum, ψ}; the Ising
+  F index `a*9 + b*3 + c` dropped the total charge `d`, so d-dependent
+  Frobenius-Schur signs could not be represented at all; and the SU(2)_k
+  R-phase argument `c(c+2) − a(a+2) − b(b+2)` underflowed in `uint32_t`
+  whenever it was negative, rotating every such phase by 2π/3. The quantum-6j
+  generator is now the single source of truth for Ising and SU(2)_k, with a
+  shared (a,b,c,d)×(e,f) storage layout. All models now satisfy pentagon, both
+  hexagons and F-matrix unitarity to 1e-15.
+- **New `anyon_verify_coherence()`** returning the maximum residual of the
+  pentagon equation, both hexagon equations, and F-matrix unitarity across all
+  charge configurations. Asserted for all built-in models by
+  `unit_topological`, which also proves the check is non-vacuous by zeroing a
+  row of F^{τττ}_τ and confirming the residual jumps from 3.1e-16 to 1.000.
+- **Coherence verifier could not see the defect it was written to catch.** The
+  F-unitarity term inferred each F-matrix's row set from which entries were
+  nonzero, so an allowed row that was entirely zero — precisely the Ising and
+  Fibonacci defect above — was skipped as "absent". Against the pre-fix
+  symbols it reported 1.11e-16 for both Fibonacci and SU(2)_3: machine
+  precision on entirely wrong data. The row set is now enumerated from the
+  fusion rules (e ∈ a×b, d ∈ e×c), which reports 1.000 for every pre-fix
+  model and is unchanged at 1e-15 to 1e-16 on the corrected symbols.
+- **Regression tests pinning the braid layer's behaviour at this release.**
+  `braid_anyons` was not a braid-group representation in 1.2.0;
+  `tests/unit/test_topological.c` asserted the behaviour it had —
+  sigma_1/sigma_2/sigma_3 producing identical amplitudes, the `anyonic_*`
+  gates leaving |a1|/|a0| at 1.0, and `apply_F_move` being a no-op. Fixed
+  after 1.2.0; see Unreleased.
+- Renamed the SU(2)_k R-phase Casimir difference off `carg`, which shadows
+  `carg()` from `<complex.h>`.
 
 ## [1.1.0] - 2026-07-11
 
@@ -716,7 +858,7 @@ rejects tenant_id-without-secret with a clear error.
   Five new cargo tests (tenant_round_trip, three_tenants_in_sequence,
   illegal_char_clientside, empty_clientside, oversize_clientside).
 
-- **JavaScript / Node** (`@moonlab/quantum-core/control-plane`):
+- **JavaScript / Node** (`@tsotchkecorp/moonlab/control-plane`):
   `SubmitCircuitArgs` / `SubmitShotsArgs` gain a `tenantId` field;
   authPrelude builds the tenant-form line when set.  Six new
   assertions inside the existing JS<->C integration test; full JS
@@ -4114,7 +4256,7 @@ consume it (Bell + Grover).
   CHSH `S = 2.816` on |Phi+> (Tsirelson bound 2.828).
 - `pnpm run test:integration`: 10 files / 117 passed in 601 ms (up
   from 107 in v0.5.1; the new Bell + Grover tests add 10).
-- `npx tsc --noEmit` clean on @moonlab/quantum-core.
+- `npx tsc --noEmit` clean on @tsotchkecorp/moonlab.
 
 Manifests bumped 0.5.3 -> 0.5.4.
 
@@ -4308,7 +4450,7 @@ wrapper were missing.
   single-site observables.
 - 28 `_moonlab_ca_peps_*` symbols added to
   `bindings/javascript/packages/core/emscripten/exports.txt`.
-- `CaPeps` re-exported from `@moonlab/quantum-core`'s top-level
+- `CaPeps` re-exported from `@tsotchkecorp/moonlab`'s top-level
   index; the `PauliCode` enum is re-used from the v0.4.10 MPDO
   module.
 
@@ -4317,7 +4459,7 @@ Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 148 (all
 unchanged -- this release only touches the JS surface).
-`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the new
 `ca-peps.ts` module.
 
 ## [0.4.11] - 2026-05-18
@@ -4394,16 +4536,16 @@ doesn't depend on the hardware-entropy context.
 
 ### Changed
 
-- `Mpdo` and `PauliCode` re-exported from `@moonlab/quantum-core`'s
+- `Mpdo` and `PauliCode` re-exported from `@tsotchkecorp/moonlab`'s
   top-level index so callers can `import { Mpdo, PauliCode } from
-  '@moonlab/quantum-core'`.
+  '@tsotchkecorp/moonlab'`.
 
 Manifests bumped 0.4.9 -> 0.4.10 across the 10 binding pyproject.toml /
 Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo 73 + 48 + 20 = 141
 (all unchanged -- this release only touches the JS surface).
-`tsc --noEmit` clean on `@moonlab/quantum-core` with the new
+`tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the new
 `mpdo.ts` module.
 
 ## [0.4.9] - 2026-05-18
@@ -4581,14 +4723,14 @@ build has a TypeScript wrapper.
 ### Changed
 
 - `FusedCircuit`, `FuseStats`, and `FuseCompileResult` re-exported
-  from `@moonlab/quantum-core` top-level index.
+  from `@tsotchkecorp/moonlab` top-level index.
 
 Manifests bumped 0.4.6 -> 0.4.7 across the 10 binding pyproject.toml /
 Cargo.toml / package.json files plus VERSION.txt.
 
 Full gauntlet: 114/114 ctest, 193/193 pytest, cargo test 59 + 48 +
 17 = 124 (was 111; gained 13 from the three new safe-wrapper test
-modules).  `tsc --noEmit` clean on `@moonlab/quantum-core` with the
+modules).  `tsc --noEmit` clean on `@tsotchkecorp/moonlab` with the
 new `fusion.ts` module.
 
 ## [0.4.6] - 2026-05-18
@@ -4654,10 +4796,10 @@ stabiliser backend) now has a TypeScript wrapper.  Python has
   `bindings/javascript/packages/core/emscripten/exports.txt`; the
   C source was already in the WASM build (52 of CMakeLists.txt).
 - `CliffordTableau`, `MeasureResult`, and `SampleAllResult` are
-  re-exported from `@moonlab/quantum-core`'s top-level index so
+  re-exported from `@tsotchkecorp/moonlab`'s top-level index so
   callers reach them as `import { CliffordTableau } from
-  '@moonlab/quantum-core'`.
-- `tsc --noEmit` runs clean on `@moonlab/quantum-core` with the new
+  '@tsotchkecorp/moonlab'`.
+- `tsc --noEmit` runs clean on `@tsotchkecorp/moonlab` with the new
   module.  End-to-end runtime testing happens on the next WASM
   rebuild (`pnpm build:wasm`); the TS surface is shippable as is.
 
@@ -4694,7 +4836,7 @@ Cleanup release: the last two known gaps from the v0.4.2 audit
 (JS TDVP binding + the dead `effective_hamiltonian_t.two_site`
 branches I left after removing the public flag) both land here.
 Test gauntlet: 114/114 ctest, 183/183 pytest, 60/60 cargo test,
-plus `tsc --noEmit` on `@moonlab/quantum-core`.
+plus `tsc --noEmit` on `@tsotchkecorp/moonlab`.
 
 ### Added
 
@@ -6664,6 +6806,9 @@ and widen CI coverage.
 
 - Fibonacci anyon braiding: σ₁·σ₁⁻¹ = I verified exactly on a 4-tau
   fusion tree (logical-qubit subspace, dim=2).
+  *(Note added in 1.2.0: this invariant on its own is satisfied by any global
+  phase. `braid_anyons` became a verified braid-group representation in 1.2.0;
+  Yang-Baxter and far commutation are asserted there.)*
 - Grover multi-marked (k=3 on n=4): P(marked set) = 0.949 after one
   optimal iteration.
 - Noisy VQE: depolarizing(p1=1e-3, p2=1e-2) runs to completion.

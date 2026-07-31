@@ -5,7 +5,7 @@
  * qubit lines, and optional annotations.
  */
 
-import type { Circuit, Gate } from '@moonlab/quantum-core';
+import type { Circuit, Gate } from '@tsotchkecorp/moonlab';
 import type {
   BaseVisualizationOptions,
   ColorSchemeOptions,

@@ -2,11 +2,11 @@
 
 React hooks and components for quantum simulation.
 
-**Package**: `@moonlab/quantum-react`
+**Package**: `@tsotchkecorp/moonlab-react`
 
 ## Overview
 
-The `@moonlab/quantum-react` package provides idiomatic React integration for quantum simulation:
+The `@tsotchkecorp/moonlab-react` package provides idiomatic React integration for quantum simulation:
 
 - **Hooks**: `useQuantumState`, `useCircuit`, `useMeasurement`
 - **Components**: Pre-built visualization components
@@ -16,11 +16,11 @@ The `@moonlab/quantum-react` package provides idiomatic React integration for qu
 ## Installation
 
 ```bash
-npm install @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
+npm install @tsotchkecorp/moonlab-react @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 # or
-yarn add @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
+yarn add @tsotchkecorp/moonlab-react @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 # or
-pnpm add @moonlab/quantum-react @moonlab/quantum-core @moonlab/quantum-viz
+pnpm add @tsotchkecorp/moonlab-react @tsotchkecorp/moonlab @tsotchkecorp/moonlab-viz
 ```
 
 ## Quick Start
@@ -31,7 +31,7 @@ import {
   QuantumProvider,
   useQuantumState,
   AmplitudeBars
-} from '@moonlab/quantum-react';
+} from '@tsotchkecorp/moonlab-react';
 
 function BellStateDemo() {
   const { state, isLoading, error } = useQuantumState({ numQubits: 2 });
@@ -68,7 +68,7 @@ Context provider for quantum simulation resources.
 ### Usage
 
 ```tsx
-import { QuantumProvider } from '@moonlab/quantum-react';
+import { QuantumProvider } from '@tsotchkecorp/moonlab-react';
 
 function App() {
   return (
@@ -99,7 +99,7 @@ interface QuantumProviderProps {
 Access provider context directly.
 
 ```tsx
-import { useQuantumContext } from '@moonlab/quantum-react';
+import { useQuantumContext } from '@tsotchkecorp/moonlab-react';
 
 function DebugInfo() {
   const { isLoaded, version, memoryUsage } = useQuantumContext();
@@ -147,7 +147,7 @@ interface UseQuantumStateResult {
 
 **Example**:
 ```tsx
-import { useQuantumState } from '@moonlab/quantum-react';
+import { useQuantumState } from '@tsotchkecorp/moonlab-react';
 
 function QuantumCircuit() {
   const {
@@ -218,7 +218,7 @@ interface CircuitStats {
 
 **Example**:
 ```tsx
-import { useCircuit, useQuantumState } from '@moonlab/quantum-react';
+import { useCircuit, useQuantumState } from '@tsotchkecorp/moonlab-react';
 
 function CircuitBuilder() {
   const { state } = useQuantumState({ numQubits: 4 });
@@ -283,7 +283,7 @@ interface MeasurementResults {
 
 **Example**:
 ```tsx
-import { useQuantumState, useMeasurement } from '@moonlab/quantum-react';
+import { useQuantumState, useMeasurement } from '@tsotchkecorp/moonlab-react';
 
 function MeasurementDemo() {
   const { state } = useQuantumState({ numQubits: 2 });
@@ -335,7 +335,7 @@ interface BlochCoords {
 
 **Example**:
 ```tsx
-import { useQuantumState, useBlochCoordinates } from '@moonlab/quantum-react';
+import { useQuantumState, useBlochCoordinates } from '@tsotchkecorp/moonlab-react';
 
 function BlochDisplay() {
   const { state } = useQuantumState({ numQubits: 1 });
@@ -362,7 +362,7 @@ function BlochDisplay() {
 Bar chart of state probabilities.
 
 ```tsx
-import { AmplitudeBars } from '@moonlab/quantum-react';
+import { AmplitudeBars } from '@tsotchkecorp/moonlab-react';
 
 <AmplitudeBars
   state={quantumState}
@@ -400,7 +400,7 @@ interface AmplitudeBarsProps {
 Single-qubit Bloch sphere visualization.
 
 ```tsx
-import { BlochSphere } from '@moonlab/quantum-react';
+import { BlochSphere } from '@tsotchkecorp/moonlab-react';
 
 <BlochSphere
   state={singleQubitState}
@@ -433,7 +433,7 @@ interface BlochSphereProps {
 Quantum circuit visualization.
 
 ```tsx
-import { CircuitDiagram } from '@moonlab/quantum-react';
+import { CircuitDiagram } from '@tsotchkecorp/moonlab-react';
 
 <CircuitDiagram
   state={quantumState}
@@ -466,7 +466,7 @@ interface CircuitDiagramProps {
 Display full state vector with amplitudes.
 
 ```tsx
-import { StateVector } from '@moonlab/quantum-react';
+import { StateVector } from '@tsotchkecorp/moonlab-react';
 
 <StateVector
   state={quantumState}
@@ -496,7 +496,7 @@ interface StateVectorProps {
 Histogram of measurement results.
 
 ```tsx
-import { MeasurementHistogram } from '@moonlab/quantum-react';
+import { MeasurementHistogram } from '@tsotchkecorp/moonlab-react';
 
 <MeasurementHistogram
   counts={measurementCounts}
@@ -529,7 +529,7 @@ interface MeasurementHistogramProps {
 Interactive Grover's algorithm demonstration.
 
 ```tsx
-import { GroverDemo } from '@moonlab/quantum-react';
+import { GroverDemo } from '@tsotchkecorp/moonlab-react';
 
 <GroverDemo
   numQubits={4}
@@ -542,7 +542,7 @@ import { GroverDemo } from '@moonlab/quantum-react';
 CHSH Bell inequality test.
 
 ```tsx
-import { BellTestDemo } from '@moonlab/quantum-react';
+import { BellTestDemo } from '@tsotchkecorp/moonlab-react';
 
 <BellTestDemo
   numShots={10000}
@@ -555,7 +555,7 @@ import { BellTestDemo } from '@moonlab/quantum-react';
 Variational Quantum Eigensolver visualization.
 
 ```tsx
-import { VQEDemo } from '@moonlab/quantum-react';
+import { VQEDemo } from '@tsotchkecorp/moonlab-react';
 
 <VQEDemo
   molecule="H2"
@@ -569,7 +569,7 @@ import { VQEDemo } from '@moonlab/quantum-react';
 ### Built-in Themes
 
 ```tsx
-import { ThemeProvider, themes } from '@moonlab/quantum-react';
+import { ThemeProvider, themes } from '@tsotchkecorp/moonlab-react';
 
 function App() {
   return (
@@ -585,7 +585,7 @@ function App() {
 ### Custom Theme
 
 ```tsx
-import { ThemeProvider, createTheme } from '@moonlab/quantum-react';
+import { ThemeProvider, createTheme } from '@tsotchkecorp/moonlab-react';
 
 const myTheme = createTheme({
   colors: {
@@ -626,7 +626,7 @@ function App() {
 ### useTheme Hook
 
 ```tsx
-import { useTheme } from '@moonlab/quantum-react';
+import { useTheme } from '@tsotchkecorp/moonlab-react';
 
 function CustomComponent() {
   const theme = useTheme();
@@ -658,7 +658,7 @@ import {
   BlochSphere,
   MeasurementHistogram,
   themes,
-} from '@moonlab/quantum-react';
+} from '@tsotchkecorp/moonlab-react';
 
 function QuantumLab() {
   const { state, isLoading, error, reset } = useQuantumState({ numQubits: 3 });
@@ -780,7 +780,7 @@ import type {
   MeasurementResults,
   ThemeConfig,
   BlochCoords,
-} from '@moonlab/quantum-react';
+} from '@tsotchkecorp/moonlab-react';
 ```
 
 ## Server-Side Rendering
@@ -791,12 +791,12 @@ The WASM module requires browser APIs. For SSR frameworks:
 import dynamic from 'next/dynamic';
 
 const QuantumProvider = dynamic(
-  () => import('@moonlab/quantum-react').then(mod => mod.QuantumProvider),
+  () => import('@tsotchkecorp/moonlab-react').then(mod => mod.QuantumProvider),
   { ssr: false }
 );
 
 const AmplitudeBars = dynamic(
-  () => import('@moonlab/quantum-react').then(mod => mod.AmplitudeBars),
+  () => import('@tsotchkecorp/moonlab-react').then(mod => mod.AmplitudeBars),
   { ssr: false }
 );
 ```

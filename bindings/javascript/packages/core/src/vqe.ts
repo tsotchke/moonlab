@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * import { PauliHamiltonian, VqeSolver } from '@moonlab/quantum-core';
+ * import { PauliHamiltonian, VqeSolver } from '@tsotchkecorp/moonlab';
  *
  * const h = await PauliHamiltonian.h2(0.74);
  * console.log('exact E_0 =', h.exactGroundStateEnergy(), 'Ha');

@@ -17,16 +17,16 @@ importers:
 
   demo:
     dependencies:
-      '@moonlab/quantum-algorithms':
-        specifier: workspace:*
-        version: link:../packages/algorithms
-      '@moonlab/quantum-core':
+      '@tsotchkecorp/moonlab':
         specifier: workspace:*
         version: link:../packages/core
-      '@moonlab/quantum-react':
+      '@tsotchkecorp/moonlab-algorithms':
+        specifier: workspace:*
+        version: link:../packages/algorithms
+      '@tsotchkecorp/moonlab-react':
         specifier: workspace:*
         version: link:../packages/react
-      '@moonlab/quantum-viz':
+      '@tsotchkecorp/moonlab-viz':
         specifier: workspace:*
         version: link:../packages/viz
       react:
@@ -66,7 +66,7 @@ importers:
 
   packages/algorithms:
     dependencies:
-      '@moonlab/quantum-core':
+      '@tsotchkecorp/moonlab':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -91,10 +91,10 @@ importers:
 
   packages/react:
     dependencies:
-      '@moonlab/quantum-core':
+      '@tsotchkecorp/moonlab':
         specifier: workspace:*
         version: link:../core
-      '@moonlab/quantum-viz':
+      '@tsotchkecorp/moonlab-viz':
         specifier: workspace:*
         version: link:../viz
     devDependencies:
@@ -119,7 +119,7 @@ importers:
 
   packages/viz:
     dependencies:
-      '@moonlab/quantum-core':
+      '@tsotchkecorp/moonlab':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -132,10 +132,10 @@ importers:
 
   packages/vue:
     dependencies:
-      '@moonlab/quantum-core':
+      '@tsotchkecorp/moonlab':
         specifier: workspace:*
         version: link:../core
-      '@moonlab/quantum-viz':
+      '@tsotchkecorp/moonlab-viz':
         specifier: workspace:*
         version: link:../viz
     devDependencies:

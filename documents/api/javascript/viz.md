@@ -2,11 +2,11 @@
 
 Interactive quantum state visualizations for the browser.
 
-**Package**: `@moonlab/quantum-viz`
+**Package**: `@tsotchkecorp/moonlab-viz`
 
 ## Overview
 
-The `@moonlab/quantum-viz` package provides beautiful, interactive visualizations for quantum states and circuits:
+The `@tsotchkecorp/moonlab-viz` package provides beautiful, interactive visualizations for quantum states and circuits:
 
 - **BlochSphere**: 2D/3D single-qubit state visualization
 - **AmplitudeBars**: Probability distribution bar charts
@@ -16,18 +16,18 @@ The `@moonlab/quantum-viz` package provides beautiful, interactive visualization
 ## Installation
 
 ```bash
-npm install @moonlab/quantum-viz
+npm install @tsotchkecorp/moonlab-viz
 # or
-yarn add @moonlab/quantum-viz
+yarn add @tsotchkecorp/moonlab-viz
 # or
-pnpm add @moonlab/quantum-viz
+pnpm add @tsotchkecorp/moonlab-viz
 ```
 
 ## Quick Start
 
 ```typescript
-import { BlochSphere, AmplitudeBars } from '@moonlab/quantum-viz';
-import { QuantumState } from '@moonlab/quantum-core';
+import { BlochSphere, AmplitudeBars } from '@tsotchkecorp/moonlab-viz';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create quantum state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -554,7 +554,7 @@ city.update(state.getAmplitudes());
 ### Built-in Themes
 
 ```typescript
-import { themes } from '@moonlab/quantum-viz';
+import { themes } from '@tsotchkecorp/moonlab-viz';
 
 const bars = new AmplitudeBars(container, {
   colors: themes.dark
@@ -570,7 +570,7 @@ const bars = new AmplitudeBars(container, {
 ### Custom Theme
 
 ```typescript
-import { createTheme } from '@moonlab/quantum-viz';
+import { createTheme } from '@tsotchkecorp/moonlab-viz';
 
 const myTheme = createTheme({
   primary: '#6366f1',
@@ -591,7 +591,7 @@ const sphere = new BlochSphere(container, { colors: myTheme.bloch });
 Track state evolution with smooth transitions.
 
 ```typescript
-import { AnimatedState } from '@moonlab/quantum-viz';
+import { AnimatedState } from '@tsotchkecorp/moonlab-viz';
 
 const animated = new AnimatedState({
   duration: 500,
@@ -617,7 +617,7 @@ animated.setState(state);  // Animates again
 Step through circuit execution.
 
 ```typescript
-import { Timeline } from '@moonlab/quantum-viz';
+import { Timeline } from '@tsotchkecorp/moonlab-viz';
 
 const state = await QuantumState.create({ numQubits: 3 });
 const timeline = new Timeline(state);
@@ -637,13 +637,13 @@ timeline.reset();     // Back to |000⟩
 ## Complete Example
 
 ```typescript
-import { QuantumState } from '@moonlab/quantum-core';
+import { QuantumState } from '@tsotchkecorp/moonlab';
 import {
   BlochSphere,
   AmplitudeBars,
   CircuitDiagram,
   themes
-} from '@moonlab/quantum-viz';
+} from '@tsotchkecorp/moonlab-viz';
 
 async function visualizeGHZ() {
   // Create 3-qubit GHZ state

@@ -93,7 +93,7 @@ aggregate pass.
 
 Release is a two-phase candidate-and-promotion protocol. A manual
 `workflow_dispatch` for an exact version builds and consumer-tests the complete
-22-artifact release inventory without reading publication credentials or
+24-artifact release inventory without reading publication credentials or
 mutating GitHub Releases, PyPI, npm, crates.io, or Homebrew. The candidate run
 also executes the full hosted platform and Linux-compatibility matrix, then
 seals the exact run ID, head SHA, artifact identities, sizes, and SHA-256
@@ -110,7 +110,7 @@ Moonlab-Release-Candidate-Head: <40-character lowercase commit SHA>
 
 The tag must target the same head. The tag-triggered promotion path resolves
 only that run, verifies the repository, workflow, dispatch event, head,
-conclusion, complete job-name set, candidate manifest, and all 22 artifact
+conclusion, complete job-name set, candidate manifest, and all 24 artifact
 hashes, then re-uploads the verified bytes for downstream publication. Missing
 or mismatched evidence is fatal; promotion never falls back to rebuilding.
 
@@ -147,8 +147,9 @@ headers, pkg-config metadata, and project documents.
 ### Other release outputs
 
 - Debian x86-64 and ARM64 packages
-- Self-contained Python wheels for Linux, macOS, and Windows on x64/ARM64,
-  uploaded with `PYPI_API_TOKEN`
+- Self-contained `py3-none` Python wheels for macOS and Windows on x64/ARM64,
+  plus a manylinux and a musllinux wheel for each of Linux x64/ARM64 (eight
+  wheels total), uploaded with `PYPI_API_TOKEN`
 - Five exact-tested JavaScript/WASM tarballs uploaded with `NPM_TOKEN`
 - Three SDK-tested Rust crates uploaded with `CARGO_REGISTRY_TOKEN`
 - Homebrew formula updates for stable tags with `HOMEBREW_TAP_TOKEN`

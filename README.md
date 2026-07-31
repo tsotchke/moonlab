@@ -170,9 +170,10 @@ wrapper, with end-to-end integration tests gated by CI.
   `moonlab_abi_version` + DMRG / CA-MPS / Z2-LGT shims to JS.
 
 - **JS binding parity (v0.5.4 - v0.5.6)** — Bell tests / Grover /
-  VQE / QAOA / topology are all callable from `@moonlab/quantum-
-  core` now.  Hardware entropy backed by `crypto.getRandomValues()`
-  via a WASM-only `hardware_entropy_wasm.c` shim unblocks every
+  VQE / QAOA / topology are all callable from
+  `@tsotchkecorp/moonlab` now.  Hardware entropy backed by
+  `crypto.getRandomValues()` via a WASM-only
+  `hardware_entropy_wasm.c` shim unblocks every
   shot-noise-sampling C entry point.  Eight topological-invariant
   helpers in `topology.ts` cover QWZ Chern (3 integrators), SSH
   winding, Kitaev BdG Z_2, Kane-Mele / BHZ Z_2, Hofstadter sub-band
@@ -312,7 +313,7 @@ brew install moonlab
 pip install moonlab
 
 # JavaScript/WebAssembly core
-npm install @moonlab/quantum-core
+npm install @tsotchkecorp/moonlab
 
 # Rust TUI (the Homebrew SDK supplies the native library)
 cargo install moonlab-tui
@@ -681,6 +682,21 @@ double mk = bell_test_mermin_klyshko(&ghz_n, N, 0, NULL);
 
 Fault-tolerant quantum computation using anyonic systems.
 
+Braiding is a faithful unitary representation of the Artin braid group on the
+fusion-path basis, not a phase bookkeeping exercise. Every claim below is a
+number asserted by `unit_topological`:
+
+| Property | Measured |
+|----------|----------|
+| F/R symbol coherence (pentagon, both hexagons, F-unitarity) | ≤ 2.4e-15, all built-in models |
+| Yang-Baxter σᵢσᵢ₊₁σᵢ = σᵢ₊₁σᵢσᵢ₊₁ | ≤ 9.0e-16, Fibonacci / Ising / SU(2)₃₋₅ |
+| Far commutation σᵢσⱼ = σⱼσᵢ, \|i−j\| ≥ 2 | 0.0 exactly |
+| Generator unitarity, σᵢσᵢ⁻¹ = I | ≤ 1.3e-15 |
+| Ising single-qubit Clifford group by braiding | exact, order 24, error ≤ 4.0e-16 |
+| Ising two-qubit Clifford group (dense 6-anyon encoding) | exact, order 11520, CNOT error 1.2e-15 |
+| Fibonacci logical Z = σ₁⁵ | exact, 5.6e-16 |
+| Fibonacci Solovay-Kitaev compilation | meets any ε ≥ 1e-11, measured on the returned word |
+
 ### Anyon Models
 
 ```c
@@ -689,13 +705,47 @@ Fault-tolerant quantum computation using anyonic systems.
 // Create Fibonacci anyon system
 anyon_system_t* sys = anyon_system_fibonacci();
 
-// Build a fusion tree over the external anyon charges
+// F/R symbol tables, verified against pentagon + hexagon + unitarity.
+// Returns the maximum coherence residual (~1e-15 for every built-in model).
+double residual = anyon_verify_coherence(sys);
+
+// Build a fusion tree over the external anyon charges. The state lives in the
+// labelled fusion-path basis: tree->labels[p] holds the intermediate charge on
+// every internal edge of path p.
 fusion_tree_t* tree = fusion_tree_create(sys, charges, num_anyons, total_charge);
 
 // Braid adjacent anyons (topological gate): exchanges the anyons at
-// `position` and `position + 1`, applying the R-matrix phase and any
-// F-matrix basis change to tree->amplitudes in place.
+// `position` and `position + 1`, applying the R-matrix phase of each path's
+// own intermediate charge and the F-matrix basis change needed when the pair
+// does not meet at a vertex of the tree.
 braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
+
+// F-move on its own: change of fusion basis at a vertex, (a×b)×c ↔ a×(b×c).
+apply_F_move(tree, /*vertex=*/1);
+
+// Topological charge measurement, and braiding realised by measurement alone
+// (Bonderson-Freedman-Nayak forced measurement): agrees with braid_anyons()
+// to 0.0, no anyon transported.
+double p = anyon_measure_pair_charge(tree, /*position=*/1, FIB_VACUUM);
+anyon_forced_measurement_braid(tree, /*position=*/1, /*clockwise=*/true);
+```
+
+### Compiling gates into braid words
+
+```c
+// Ising: every single-qubit Clifford has an EXACT braid word (~1e-16).
+double err;
+braid_word_t *w = ising_compile_clifford(ising, target_2x2, &err);
+
+// Ising, dense 6-anyon encoding: exact CNOT, and no leakage subspace exists.
+braid_word_t *cnot = ising_compile_clifford2(ising, target_4x4, &err);
+
+// Fibonacci: Solovay-Kitaev to a caller-chosen epsilon. The distance to the
+// target is measured on the returned word, so the bound is a guarantee.
+braid_word_t *h = fibonacci_compile_su2(fib, hadamard, 1e-10, &err);
+
+// Fibonacci exact gates: R_z(m·π/5), m = 0..9, including the logical Z.
+braid_word_t *z = fibonacci_exact_phase_gate(5);
 ```
 
 ### Supported Anyon Types
@@ -704,7 +754,20 @@ braid_anyons(tree, /*position=*/i, /*clockwise=*/true);
 |-------|--------|-----------|-------------|
 | Fibonacci | τ, 1 | Yes | Universal TQC |
 | Ising | σ, ψ, 1 | No (+ magic) | Majorana fermions |
-| SU(2)_k | Multiple | Varies | General TQC |
+| SU(2)_k | k+1 charges, 2j = 0..k | Varies | General TQC |
+
+`anyon_system_su2k(2)` is the Ising model. `anyon_system_su2k(3)` returns the
+genuine four-charge SU(2)_3, *not* Fibonacci — Fibonacci is its
+even-integer-spin subcategory and has its own constructor.
+
+**What is exact and what is not.** Ising braiding generates a finite group —
+the Clifford group — so every Clifford is compiled exactly and T is reported
+unreachable rather than approximated. Fibonacci braiding generates a countable
+dense subgroup of PSU(2), so R_z(mπ/5) (including Z) is exact and H, X and T
+provably are not: every Fibonacci braid word has the form
+`[[p, φ^{-1/2} r], [φ^{-1/2} s, t]]` with `p,r,s,t ∈ Q(ζ₅)`, and each of the
+three targets contradicts that. See [MATH.md](MATH.md#exact-realisability-of-fibonacci-braid-gates)
+for the proofs. Those three are compiled instead to any ε the caller asks for.
 
 ### Surface Codes
 
@@ -973,13 +1036,13 @@ inverse noise channels.
 
 A few modules ship in the tree without a dedicated walkthrough above.
 
-- **`@moonlab/quantum-algorithms`** (npm) -- a lean, browser-friendly
-  package built on `@moonlab/quantum-core`'s WASM state vector. Ships a
+- **`@tsotchkecorp/moonlab-algorithms`** (npm) -- a lean, browser-friendly
+  package built on `@tsotchkecorp/moonlab`'s WASM state vector. Ships a
   `Grover` class (WASM-backed amplitude amplification, up to 26 qubits) and
   an H2-only `VQE` class that runs a classical grid-search + refinement
   optimizer over a closed-form single-parameter H2 UCCSD ansatz -- it does
   not call into the WASM state vector and does not implement QAOA.
-- **`@moonlab/quantum-viz`** (npm) -- Canvas 2D and WebGL 3D quantum-state
+- **`@tsotchkecorp/moonlab-viz`** (npm) -- Canvas 2D and WebGL 3D quantum-state
   visualizations (`BlochSphere`, `AmplitudeBars`, `CircuitDiagram`) usable
   standalone, independent of the React/Vue framework bindings.
 - **`moonlab.ml`** (Python) -- quantum feature maps (angle / amplitude /
@@ -1065,7 +1128,7 @@ fn main() {
 ### JavaScript (React)
 
 ```jsx
-import { useQuantumState, BlochSphere } from '@moonlab/quantum-react';
+import { useQuantumState, BlochSphere } from '@tsotchkecorp/moonlab-react';
 
 function QuantumVisualizer() {
     const { amplitudes, applyGate, loading } = useQuantumState({ numQubits: 1 });
@@ -1098,7 +1161,7 @@ numQubits, initialize, reset, applyGate, measure, measureAll, refresh, dispose
 </template>
 
 <script setup>
-import { useQuantumState, useCircuit } from '@moonlab/quantum-vue';
+import { useQuantumState, useCircuit } from '@tsotchkecorp/moonlab-vue';
 
 const { amplitudes, numQubits, applyGate } = useQuantumState({ numQubits: 2 });
 const { circuit, addGate } = useCircuit({ numQubits: 2 });
@@ -1153,7 +1216,7 @@ adversarial audit that produced this list lives in
   x86-64 NVIDIA fleet nodes at release time; cuQuantum remains an
   optional, separately provisioned backend.
 - **WebGPU / JS**: the CI `wasm-js-tests` job builds moonlab.wasm and the
-  TS `@moonlab/quantum-core` package, runs the full vitest unit +
+  TS `@tsotchkecorp/moonlab` package, runs the full vitest unit +
   integration suites against the fresh module, and runs the WebGPU
   unified smoke.  Plain node has no WebGPU runtime, so the smoke
   verifies backend selection + fallback (backend=none), not real GPU
@@ -1252,12 +1315,26 @@ Legacy `make all` / `make test` still work for a subset of the surface.
 consuming process decides which OpenMP runtime satisfies the reference. This
 prevents the duplicate-runtime abort (`OMP: Error #15`) when the host
 application already ships its own libomp (conda, PyTorch, a different LLVM).
-Consumers without an OpenMP runtime on their rpath either place
-`libomp.dylib` next to `libquantumsim.dylib`, add libomp's directory to their
-link rpath (`-Wl,-rpath,$(brew --prefix libomp)/lib`), or configure Moonlab
-with `-DQSIM_EXTRA_RPATH=/path/to/libomp/lib` to pin a directory into the
-installed artifact. The Homebrew formula pins libomp's opt path this way;
-build-tree binaries reference Homebrew libomp absolutely and need none of it.
+
+The macOS release tarballs are self-contained: they ship `lib/libomp.dylib`
+next to `lib/libquantumsim.dylib`, so `@loader_path` resolves the reference on
+a machine with no Homebrew. The bundled copy keeps the install name
+`@rpath/libomp.dylib`, which is what makes it safe to ship: dyld satisfies an
+`@rpath` reference from the install name of an already-loaded image before it
+searches any rpath, so a process that already holds an OpenMP runtime with
+that install name reuses it and never maps a second one, in either load
+order. A uniquified (delocate-style) name would defeat that dedup. The
+bundled runtime is LLVM's, redistributed under Apache-2.0 WITH LLVM-exception;
+its license text ships at `share/licenses/libomp/LICENSE.TXT`.
+
+Other install paths do not get the bundled copy -- `cmake --install` must not
+shadow a package manager's libomp -- so a consumer building against a source
+install either places `libomp.dylib` next to `libquantumsim.dylib`, adds
+libomp's directory to their link rpath
+(`-Wl,-rpath,$(brew --prefix libomp)/lib`), or configures Moonlab with
+`-DQSIM_EXTRA_RPATH=/path/to/libomp/lib` to pin a directory into the installed
+artifact. The Homebrew formula pins libomp's opt path this way; build-tree
+binaries reference Homebrew libomp absolutely and need none of it.
 
 ## Documentation
 

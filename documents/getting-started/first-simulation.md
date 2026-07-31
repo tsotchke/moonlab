@@ -231,8 +231,8 @@ print("=== Simulation Complete ===")
 ## Part 3: JavaScript Version
 
 ```javascript
-// npm install @moonlab/quantum-core @moonlab/quantum-algorithms
-import { QuantumState } from '@moonlab/quantum-core';
+// npm install @tsotchkecorp/moonlab @tsotchkecorp/moonlab-algorithms
+import { QuantumState } from '@tsotchkecorp/moonlab';
 
 async function main() {
   console.log("=== Moonlab Quantum Simulator: First Simulation (JS) ===\n");

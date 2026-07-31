@@ -80,7 +80,7 @@ jobs:
             name: linux-x64
           - os: ubuntu-24.04-arm
             name: linux-arm64
-          - os: macos-14
+          - os: macos-15
             name: macos-arm64
           - os: macos-15-intel
             name: macos-x64
@@ -221,7 +221,7 @@ jobs:
             name: linux-arm64
             arch: aarch64
             macos-target: ""
-          - os: macos-14
+          - os: macos-15
             name: macos-arm64
             arch: arm64
             macos-target: "11.0"
@@ -259,7 +259,12 @@ jobs:
           CIBW_BUILD_FRONTEND: build
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
-          CIBW_BEFORE_ALL_LINUX: dnf install -y openblas-devel lapack-devel
+          # cibuildwheel builds manylinux (dnf) and musllinux (apk) from the
+          # same matrix entry, and before_all runs once per image.
+          CIBW_BEFORE_ALL_LINUX: >-
+            if command -v dnf >/dev/null 2>&1; then
+            dnf install -y openblas-devel lapack-devel;
+            else apk add --no-cache openblas-dev lapack-dev; fi
           CIBW_BEFORE_BUILD_WINDOWS: python -m pip install ninja
           CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_GENERATOR=Ninja
           CIBW_TEST_REQUIRES: numpy
@@ -347,8 +352,15 @@ jobs:
 
       - name: Install Rust and native runtime dependencies
         run: |
-          rustup toolchain install 1.86.0 --profile minimal
-          rustup default 1.86.0
+          # cargo 1.86 (the crates' declared MSRV, still enforced in ci.yml)
+          # resolves path-dependency versions against the registry even
+          # under `cargo package --workspace`, so it can't package this
+          # pre-publication workspace: moonlab-sys/moonlab aren't on
+          # crates.io yet. `cargo package --workspace` packaging members
+          # against each other's freshly produced .crate files stabilized
+          # in cargo 1.90; 1.94.0 is the newest verified locally.
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
           sudo apt-get update
           sudo apt-get install -y libclang-dev libomp-dev libopenblas-dev liblapacke-dev libssl-dev pkg-config
 
@@ -368,17 +380,21 @@ jobs:
           cargo test --manifest-path bindings/rust/moonlab/Cargo.toml
           cargo check --manifest-path bindings/rust/moonlab-tui/Cargo.toml
           cargo publish --manifest-path bindings/rust/moonlab-sys/Cargo.toml --dry-run
-          cargo package --manifest-path bindings/rust/moonlab/Cargo.toml --no-verify
-          cargo package --manifest-path bindings/rust/moonlab-tui/Cargo.toml --no-verify
+          # Workspace packaging resolves the unpublished moonlab-sys/moonlab
+          # version dependencies against the locally produced .crate files;
+          # packaging the crates individually demands the versions already
+          # exist on crates.io, which the pre-publication candidate forbids.
+          cargo package --manifest-path bindings/rust/Cargo.toml --workspace --no-verify
 
       - name: Collect exact prebuilt crate payloads
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/crates"
-          cp bindings/rust/moonlab-sys/target/package/moonlab-sys-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
-          cp bindings/rust/moonlab/target/package/moonlab-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
-          cp bindings/rust/moonlab-tui/target/package/moonlab-tui-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          # Workspace packaging emits into the shared workspace target dir.
+          cp bindings/rust/target/package/moonlab-sys-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          cp bindings/rust/target/package/moonlab-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
+          cp bindings/rust/target/package/moonlab-tui-${{ needs.preflight.outputs.version }}.crate "$RUNNER_TEMP/crates/"
 
       - uses: actions/setup-python@v6
         with:
@@ -455,7 +471,7 @@ jobs:
           name: rust-crates
           path: candidate/dist
 
-      - name: Seal exact 22-artifact candidate inventory
+      - name: Seal exact 24-artifact candidate inventory
         run: >-
           python3 scripts/verify_release_candidate.py seal
           --dist candidate/dist
@@ -645,7 +661,7 @@ jobs:
             brew tap tsotchke/moonlab
             brew install moonlab
             pip install moonlab
-            npm install @moonlab/quantum-core
+            npm install @tsotchkecorp/moonlab
             cargo install moonlab-tui
             ```
 
@@ -726,10 +742,15 @@ jobs:
             --run-id '${{ needs.promotion-verify.outputs.candidate-run-id }}' \
             --head '${{ needs.promotion-verify.outputs.candidate-head }}' \
             --version '${{ needs.preflight.outputs.version }}'
-          for package in core algorithms viz react vue; do
-            artifact="dist/moonlab-quantum-${package}-${VERSION}.tgz"
+          # The core package is the unsuffixed @tsotchkecorp/moonlab, so its
+          # tarball basename has no trailing segment; the other four keep their
+          # role as the suffix. `npm pack` flattens the scope separator, so
+          # @tsotchkecorp/moonlab-viz packs as tsotchkecorp-moonlab-viz-*.tgz.
+          for stem in moonlab moonlab-algorithms moonlab-viz moonlab-react moonlab-vue; do
+            artifact="dist/tsotchkecorp-${stem}-${VERSION}.tgz"
             test -f "$artifact"
-            npm publish "$artifact" --tag "$NPM_TAG" --access public --provenance
+            # npm parses an un-prefixed a/b spec as a GitHub owner/repo shorthand even when that relative path exists, so the ./ prefix is required.
+            npm publish "./$artifact" --tag "$NPM_TAG" --access public --provenance
           done
 
   publish-rust:
@@ -757,8 +778,12 @@ jobs:
 
       - name: Install cargo for crates.io index polling
         run: |
-          rustup toolchain install 1.86.0 --profile minimal
-          rustup default 1.86.0
+          # Kept aligned with the rust-crates job's toolchain (see the
+          # comment there); this job only runs `cargo info`, which has no
+          # 1.90 dependency, but there's no reason to run a second pinned
+          # version through the same release pipeline.
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
 
       - name: Publish the certified crate bytes in dependency order
         env:
@@ -817,7 +842,7 @@ jobs:
   update-homebrew:
     needs: [preflight, draft-release, publish-python, publish-npm, publish-rust]
     if: needs.preflight.outputs.prerelease == 'false'
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -837,13 +862,32 @@ jobs:
           grep -F "sha256 \"${sha256}\"" packaging/homebrew/moonlab.rb
 
       - name: Prepare tap checkout
+        id: prepare-tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           gh auth setup-git
           gh repo clone tsotchke/homebrew-moonlab tap
           mkdir -p tap/Formula
           cp packaging/homebrew/moonlab.rb tap/Formula/moonlab.rb
+          git -C tap config user.name "Moonlab Release Bot"
+          git -C tap config user.email "actions@github.com"
+          git -C tap add Formula/moonlab.rb
+          git -C tap diff --cached --check
+          # An empty stage means the tap already carries this exact url and
+          # sha256, so there is nothing new to commit. brew still needs the
+          # formula committed locally (brew tap clones ./tap and only sees
+          # committed content), and it already is, from the prior commit
+          # this same content was cloned from.
+          if git -C tap diff --cached --quiet; then
+            echo "tap already serves the ${TAG} formula, nothing to commit"
+            echo "formula-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git -C tap commit -m "moonlab ${TAG}"
+            echo "formula-changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Audit and install formula from source
         run: |
@@ -855,12 +899,14 @@ jobs:
       - name: Push formula to tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          FORMULA_CHANGED: ${{ steps.prepare-tap.outputs.formula-changed }}
         run: |
-          git -C tap config user.name "Moonlab Release Bot"
-          git -C tap config user.email "actions@github.com"
-          git -C tap add Formula/moonlab.rb
-          git -C tap diff --cached --check
-          git -C tap commit -m "moonlab ${{ github.ref_name }}"
+          set -euo pipefail
+          if [[ "$FORMULA_CHANGED" != "true" ]]; then
+            echo "tap already serves the ${TAG} formula, skipping push"
+            exit 0
+          fi
           git -C tap push origin HEAD:main
 
   finalize-release:

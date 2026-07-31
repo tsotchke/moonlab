@@ -5,7 +5,7 @@
  */
 
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, type Ref } from 'vue';
-import { QuantumState, type Complex } from '@moonlab/quantum-core';
+import { QuantumState, type Complex } from '@tsotchkecorp/moonlab';
 
 export interface UseQuantumStateOptions {
   /**
@@ -97,7 +97,7 @@ export interface UseQuantumStateReturn {
  * @example
  * ```vue
  * <script setup lang="ts">
- * import { useQuantumState } from '@moonlab/quantum-vue';
+ * import { useQuantumState } from '@tsotchkecorp/moonlab-vue';
  *
  * const { amplitudes, probabilities, applyGate, loading } = useQuantumState({
  *   numQubits: 2

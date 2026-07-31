@@ -23,12 +23,14 @@ from verify_release_candidate import (  # noqa: E402
 
 
 WHEEL_FILENAMES = {
-    "wheel-linux-x64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_x86_64.whl",
-    "wheel-linux-arm64": "moonlab-1.2.0-cp311-cp311-manylinux_2_28_aarch64.whl",
-    "wheel-macos-arm64": "moonlab-1.2.0-cp311-cp311-macosx_11_0_arm64.whl",
-    "wheel-macos-x64": "moonlab-1.2.0-cp311-cp311-macosx_10_15_x86_64.whl",
-    "wheel-windows-x64": "moonlab-1.2.0-cp311-cp311-win_amd64.whl",
-    "wheel-windows-arm64": "moonlab-1.2.0-cp311-cp311-win_arm64.whl",
+    "wheel-linux-x64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "wheel-linux-x64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_x86_64.whl",
+    "wheel-linux-arm64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+    "wheel-linux-arm64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_aarch64.whl",
+    "wheel-macos-arm64": "moonlab-1.2.0-py3-none-macosx_11_0_arm64.whl",
+    "wheel-macos-x64": "moonlab-1.2.0-py3-none-macosx_10_15_x86_64.whl",
+    "wheel-windows-x64": "moonlab-1.2.0-py3-none-win_amd64.whl",
+    "wheel-windows-arm64": "moonlab-1.2.0-py3-none-win_arm64.whl",
 }
 HEAD = "a" * 40
 
@@ -61,7 +63,7 @@ class ReleaseCandidateTests(unittest.TestCase):
     def test_complete_candidate_seals_and_verifies(self) -> None:
         self.seal()
         document = verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
-        self.assertEqual(len(document["artifacts"]), 22)
+        self.assertEqual(len(document["artifacts"]), 24)
 
     def test_tampered_artifact_is_rejected(self) -> None:
         self.seal()

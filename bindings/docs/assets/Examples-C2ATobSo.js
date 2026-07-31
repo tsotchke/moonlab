@@ -1,4 +1,4 @@
-import{r as n,j as e}from"./index-CKxQBaM-.js";const s=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@moonlab/quantum-core';
+import{r as n,j as e}from"./index-CKxQBaM-.js";const s=[{id:"bell-state",title:"Bell State (Entanglement)",description:"Create a maximally entangled Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -16,7 +16,7 @@ console.log(probs);  // [0.5, 0, 0, 0.5]
 // Measuring qubit 0 instantly determines qubit 1
 state.dispose();`,output:`Probabilities: [0.5, 0, 0, 0.5]
 States |00⟩ and |11⟩ each have 50% probability
-The qubits are now entangled!`},{id:"superposition",title:"Uniform Superposition",description:"Create equal superposition over all basis states using Hadamard gates",code:`import { QuantumState } from '@moonlab/quantum-core';
+The qubits are now entangled!`},{id:"superposition",title:"Uniform Superposition",description:"Create equal superposition over all basis states using Hadamard gates",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create a 3-qubit state (8 basis states)
 const state = await QuantumState.create({ numQubits: 3 });
@@ -34,8 +34,8 @@ console.log(\`Total probability: \${total}\`);  // 1.0
 
 state.dispose();`,output:`Probabilities: [0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125]
 Each of the 8 states (|000⟩ to |111⟩) has 12.5% probability
-Total probability: 1.0`},{id:"grover",title:"Grover's Search Algorithm",description:"Find a marked item in an unsorted database with quadratic speedup",code:`import { QuantumState } from '@moonlab/quantum-core';
-import { Grover } from '@moonlab/quantum-algorithms';
+Total probability: 1.0`},{id:"grover",title:"Grover's Search Algorithm",description:"Find a marked item in an unsorted database with quadratic speedup",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
+import { Grover } from '@tsotchkecorp/moonlab-algorithms';
 
 // Search in a space of 1024 items (10 qubits)
 const grover = await Grover.create({
@@ -55,7 +55,7 @@ Success probability: 96.9%
 Oracle calls: 25
 
 Classical search would need 512 calls on average!
-Grover provides quadratic speedup: O(√N) vs O(N)`},{id:"phase-kickback",title:"Phase Kickback",description:"Demonstrate the phase kickback phenomenon used in quantum algorithms",code:`import { QuantumState } from '@moonlab/quantum-core';
+Grover provides quadratic speedup: O(√N) vs O(N)`},{id:"phase-kickback",title:"Phase Kickback",description:"Demonstrate the phase kickback phenomenon used in quantum algorithms",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // Create 2-qubit state
 const state = await QuantumState.create({ numQubits: 2 });
@@ -80,7 +80,7 @@ console.log(probs);
 
 state.dispose();`,output:`After phase kickback and measurement:
 The control qubit's phase has been modified
-This is the key insight behind QPE and other algorithms`},{id:"quantum-teleportation",title:"Quantum Teleportation",description:"Teleport a quantum state using entanglement and classical communication",code:`import { QuantumState } from '@moonlab/quantum-core';
+This is the key insight behind QPE and other algorithms`},{id:"quantum-teleportation",title:"Quantum Teleportation",description:"Teleport a quantum state using entanglement and classical communication",code:`import { QuantumState } from '@tsotchkecorp/moonlab';
 
 // 3 qubits: q0=state to teleport, q1,q2=entangled pair
 const state = await QuantumState.create({ numQubits: 3 });
@@ -109,7 +109,7 @@ state.dispose();`,output:`Teleportation protocol:
 1. Create entangled pair (q1, q2)
 2. Bell measurement on (q0, q1)
 3. Apply corrections based on classical bits
-Result: q2 now has the original state from q0!`},{id:"vqe-h2",title:"VQE: H₂ Ground State Energy",description:"Find the ground state energy of hydrogen molecule using variational quantum eigensolver",code:`import { VQE, createH2Hamiltonian } from '@moonlab/quantum-algorithms';
+Result: q2 now has the original state from q0!`},{id:"vqe-h2",title:"VQE: H₂ Ground State Energy",description:"Find the ground state energy of hydrogen molecule using variational quantum eigensolver",code:`import { VQE, createH2Hamiltonian } from '@tsotchkecorp/moonlab-algorithms';
 
 // Create H2 Hamiltonian at bond distance 0.74 Å
 const hamiltonian = createH2Hamiltonian({

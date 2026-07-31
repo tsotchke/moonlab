@@ -169,8 +169,10 @@ install_arch() {
 }
 
 install_suse() {
+    # findutils is not in the tumbleweed container base image, and the
+    # release packaging script depends on `find`.
     sudo_cmd zypper --non-interactive install \
-        ca-certificates gcc gcc-c++ cmake ninja git \
+        ca-certificates gcc gcc-c++ cmake ninja git findutils \
         openblas-devel lapack-devel lapacke-devel libopenssl-devel \
         pkg-config python3
 }

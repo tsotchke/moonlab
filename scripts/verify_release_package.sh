@@ -26,7 +26,7 @@ Extracts a release tarball, configures a tiny external CMake project with
 find_package(quantumsim CONFIG), includes the public Moonlab ABI headers, links
 against quantumsim::quantumsim, and runs the resulting executable.  When
 pkg-config is available, it also compiles and runs the same consumer through
-lib/pkgconfig/quantumsim.pc.
+<libdir>/pkgconfig/quantumsim.pc.
 EOF
 }
 
@@ -105,14 +105,26 @@ mkdir -p "$PREFIX" "$CONSUMER_DIR"
 
 tar -xzf "$PACKAGE" -C "$PREFIX"
 
+# CMAKE_INSTALL_LIBDIR is not always "lib" -- GNUInstallDirs picks lib64 on
+# plenty of 64-bit hosts -- so follow the tree that was actually packaged.
+qs_config="$(find "$PREFIX" -maxdepth 5 \
+    -path '*/cmake/quantumsim/quantumsim-config.cmake' -print -quit)"
+if [[ -z "$qs_config" ]]; then
+    echo "release package has no quantumsim-config.cmake under any libdir" >&2
+    exit 1
+fi
+libdir_abs="${qs_config%/cmake/quantumsim/quantumsim-config.cmake}"
+LIBDIR="${libdir_abs#"$PREFIX"/}"
+echo "[verify-release] package libdir: $LIBDIR"
+
 required=(
     "include/moonlab/moonlab_export.h"
     "include/moonlab/moonlab_api.h"
     "include/moonlab_features.h"
     "include/moonlab_build_info.h"
     "include/quantumsim/algorithms/tensor_network/ca_mps.h"
-    "lib/cmake/quantumsim/quantumsim-config.cmake"
-    "lib/pkgconfig/quantumsim.pc"
+    "$LIBDIR/cmake/quantumsim/quantumsim-config.cmake"
+    "$LIBDIR/pkgconfig/quantumsim.pc"
 )
 
 for rel in "${required[@]}"; do
@@ -121,6 +133,77 @@ for rel in "${required[@]}"; do
         exit 1
     fi
 done
+
+# Issue #27: no absolute build-machine OpenMP path may survive into the
+# shipped dylib.  A baked Homebrew/vendored directory makes a consumer that
+# already carries its own OpenMP runtime map a second libomp image and abort
+# with OMP Error #15.  The reference must stay @rpath-relative, every rpath
+# entry must be loader-relative, and the bundled runtime must keep the
+# @rpath install name that lets dyld dedup against an already-loaded copy.
+verify_macos_openmp_contract() {
+    local dylib rpath_line bad=0
+    for dylib in "$PREFIX"/"$LIBDIR"/libquantumsim.*.dylib; do
+        [[ -f "$dylib" && ! -L "$dylib" ]] || continue
+
+        while read -r dep; do
+            case "$dep" in
+                /*libomp*|/*libgomp*|/*libiomp*)
+                    echo "installed dylib carries an absolute OpenMP load command: $dep" >&2
+                    bad=1
+                    ;;
+            esac
+        done < <(otool -L "$dylib" | awk 'NR>1{print $1}')
+
+        while read -r rpath_line; do
+            case "$rpath_line" in
+                @loader_path|@loader_path/*|@executable_path|@executable_path/*) ;;
+                *)
+                    echo "installed dylib carries a non-relocatable rpath: $rpath_line" >&2
+                    bad=1
+                    ;;
+            esac
+        done < <(otool -l "$dylib" | awk '/^ *cmd LC_RPATH$/{f=1;next} f&&/^ *path /{print $2;f=0}')
+
+        # Loader-relative rpaths can only be satisfied from inside the
+        # package, so every @rpath dependency must be present here.  Say so
+        # plainly instead of leaving the consumer to abort in dyld.
+        while read -r dep; do
+            case "$dep" in
+                @rpath/*)
+                    if [[ ! -e "$PREFIX/$LIBDIR/${dep#@rpath/}" ]]; then
+                        echo "dylib needs $dep but $LIBDIR/${dep#@rpath/} is not in the package" >&2
+                        bad=1
+                    fi
+                    ;;
+            esac
+        done < <(otool -L "$dylib" | awk 'NR>1{print $1}')
+    done
+
+    if [[ -f "$PREFIX/$LIBDIR/libomp.dylib" ]]; then
+        local omp_id
+        omp_id="$(otool -D "$PREFIX/$LIBDIR/libomp.dylib" | tail -n 1)"
+        if [[ "$omp_id" != "@rpath/libomp.dylib" ]]; then
+            echo "bundled libomp install name is '$omp_id', expected @rpath/libomp.dylib" >&2
+            bad=1
+        fi
+        # Redistributing LLVM's runtime requires shipping its Apache-2.0
+        # WITH LLVM-exception text.
+        if [[ ! -s "$PREFIX/share/licenses/libomp/LICENSE.TXT" ]]; then
+            echo "package bundles libomp without share/licenses/libomp/LICENSE.TXT" >&2
+            bad=1
+        fi
+    fi
+
+    if [[ "$bad" -ne 0 ]]; then
+        echo "[verify-release] macOS OpenMP runtime contract violated" >&2
+        exit 1
+    fi
+    echo "[verify-release] macOS OpenMP runtime contract OK"
+}
+
+if [[ "$(uname -s)" == "Darwin" ]] && command -v otool >/dev/null; then
+    verify_macos_openmp_contract
+fi
 
 cat >"$CONSUMER_DIR/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.20)
@@ -189,10 +272,10 @@ run_with_library_path() {
     local exe="$1"
     case "$(uname -s)" in
         Darwin)
-            DYLD_LIBRARY_PATH="$PREFIX/lib:${DYLD_LIBRARY_PATH:-}" "$exe"
+            DYLD_LIBRARY_PATH="$PREFIX/$LIBDIR:${DYLD_LIBRARY_PATH:-}" "$exe"
             ;;
         Linux)
-            LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}" "$exe"
+            LD_LIBRARY_PATH="$PREFIX/$LIBDIR:${LD_LIBRARY_PATH:-}" "$exe"
             ;;
         *)
             "$exe"
@@ -207,10 +290,17 @@ run_cmake_consumer() {
         -DMOONLAB_EXPECT_PREFIX="$PREFIX"
     cmake --build "$CMAKE_BUILD_DIR" -j
     run_with_library_path "$CMAKE_BUILD_DIR/moonlab_release_consumer"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # A real consumer does not set DYLD_LIBRARY_PATH.  The exported
+        # target's rpath plus the dylib's own loader-relative rpath must
+        # resolve every dependency, including the bundled OpenMP runtime.
+        echo "[verify-release] rerunning the CMake consumer without DYLD_LIBRARY_PATH"
+        env -u DYLD_LIBRARY_PATH "$CMAKE_BUILD_DIR/moonlab_release_consumer"
+    fi
 }
 
 run_pkg_config_consumer() {
-    export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    export PKG_CONFIG_PATH="$PREFIX/$LIBDIR/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
     # NixOS wraps pkg-config for the active target and deliberately reads the
     # target-specific path instead of PKG_CONFIG_PATH.  Export both spellings
     # so the extracted package is verified rather than silently hidden by the

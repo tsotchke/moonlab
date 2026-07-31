@@ -12,6 +12,10 @@
 #       fuzz_corpus_clean event to scripts/icc_traces/moonlab_fuzz.jsonl.
 #       Exits nonzero if any seed crashes a sanitizer.
 #
+#       Either mode emits fuzz_corpus_clean exactly once.  The umbrella
+#       verdict is withheld until after the end-of-lane source check, so the
+#       trace can never carry two contradictory values for one check name.
+#
 #   ./scripts/run_fuzz.sh soak <seconds>
 #       Build the libFuzzer engine binaries and run an actual campaign per
 #       target for <seconds> each, seeded from the corpus.  New crash /
@@ -82,6 +86,47 @@ TARGETS=(
   abi_boundary_fuzz
 )
 
+# --- engine argv ------------------------------------------------------------
+# One construction site, and the array is never empty.  Only three of the six
+# surfaces ship a dictionary, and an optional `dict_arg=()` spliced in as
+# "${dict_arg[@]}" is an unbound-variable abort under `set -u` on bash < 4.4
+# (macOS ships 3.2), which killed the soak for every dict-less surface right
+# after the trace was truncated -- empty trace, no verdict, no explanation.
+# -rss_limit_mb caps the documented state-vector amplification so a single
+# large-qubit request is reported rather than OOM-killing CI.
+ENGINE_ARGS=()
+engine_args_for() {   # engine_args_for <target> <corpus-dir> <seconds>
+  local target="$1" corpus="$2" secs="$3"
+  ENGINE_ARGS=(
+    -max_total_time="$secs"
+    -timeout=25
+    -rss_limit_mb=4096
+    -malloc_limit_mb=2048
+    -max_len=65536
+    -artifact_prefix="$corpus/crashes-pending/"
+  )
+  if [ -f "$DICTS/$target.dict" ]; then
+    ENGINE_ARGS+=("-dict=$DICTS/$target.dict")
+  fi
+  ENGINE_ARGS+=("$corpus")
+}
+
+# Internal hook: print the engine argv for <target> and exit.  Builds nothing,
+# runs nothing, writes no trace, so tests can exercise argument construction
+# under any bash without a fuzz campaign.
+if [ "$MODE" = "--internal-engine-args" ]; then
+  hook_target="${2:-}"
+  for t in "${TARGETS[@]}"; do
+    if [ "$t" = "$hook_target" ]; then
+      engine_args_for "$hook_target" "$CORPORA/$hook_target" "${3:-300}"
+      printf '%s\n' "${ENGINE_ARGS[@]}"
+      exit 0
+    fi
+  done
+  echo "unknown target '$hook_target'; valid: ${TARGETS[*]}" >&2
+  exit 2
+fi
+
 # --- compiler selection -----------------------------------------------------
 # Prefer an explicit CC/CXX; else a Homebrew clang on macOS (its libFuzzer
 # runtime is complete); else plain clang/clang++.
@@ -126,6 +171,13 @@ print("\t".join((
 )))
 PY
 )
+# Worktree state over exactly the paths the fingerprint covers (tracked
+# modifications + non-ignored untracked files, minus the trace directory).  If
+# the end-of-lane fingerprint moves, diffing this names the offending paths
+# instead of leaving two opaque hashes to be reverse-engineered.
+SOURCE_STATE="$(git status --porcelain=v1 --untracked-files=all \
+  -- . ':(exclude)scripts/icc_traces/**' | sort)"
+
 CORPUS_SHA256="$(python3 - "$REPO_ROOT/$CORPORA" <<'PY'
 import hashlib
 from pathlib import Path
@@ -203,18 +255,51 @@ PY
   fi
 }
 
+# The umbrella verdict is recorded here and emitted once, at the very end of
+# the run, after the source-drift check has had its say.  A lane that reported
+# fuzz_corpus_clean twice with different values would be reporting two answers
+# to one question.
+UMBRELLA_VALUE=""
+UMBRELLA_DETAIL=""
+UMBRELLA_EMITTED=0
+LANE_STARTED=0
+umbrella() {   # umbrella <PASS|FAIL> <detail>
+  UMBRELLA_VALUE="$1"
+  UMBRELLA_DETAIL="$2"
+}
+record_umbrella() {   # write the single umbrella event; idempotent
+  [ "$UMBRELLA_EMITTED" -eq 0 ] || return 0
+  UMBRELLA_EMITTED=1
+  emit fuzz_corpus_clean "$UMBRELLA_VALUE" "$UMBRELLA_DETAIL"
+}
+
+# Once the trace is truncated the lane owes a verdict, so an abort anywhere
+# after that point -- `set -u`, a killed build, a signal -- still records a
+# FAIL rather than leaving an empty trace file that reads as "nothing ran".
+on_exit() {
+  local status=$?
+  trap - EXIT
+  if [ "$LANE_STARTED" -eq 1 ] && [ "$UMBRELLA_EMITTED" -eq 0 ]; then
+    umbrella FAIL "lane aborted before recording a verdict (exit $status)"
+    record_umbrella
+  fi
+  exit "$status"
+}
+trap on_exit EXIT
+
 # ============================================================================
 # REPLAY MODE
 # ============================================================================
 run_replay() {
   : > "$TRACE"
-  configure || { emit fuzz_corpus_clean FAIL "cmake configure failed"; return 1; }
+  LANE_STARTED=1
+  configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building replay targets (-j$JOBS)"
   local build_targets=()
   for t in "${TARGETS[@]}"; do build_targets+=("${t}_replay"); done
   if ! cmake --build "$BUILD_DIR" --target "${build_targets[@]}" -j"$JOBS" >/dev/null 2>"$BUILD_DIR/replay_build.err"; then
-    emit fuzz_corpus_clean FAIL "replay build failed (see $BUILD_DIR/replay_build.err)"
+    umbrella FAIL "replay build failed (see $BUILD_DIR/replay_build.err)"
     return 1
   fi
 
@@ -241,9 +326,9 @@ run_replay() {
   done
 
   if [ "$overall" -eq 0 ]; then
-    emit fuzz_corpus_clean PASS "all ${#TARGETS[@]} surfaces replayed clean"
+    umbrella PASS "all ${#TARGETS[@]} surfaces replayed clean"
   else
-    emit fuzz_corpus_clean FAIL "one or more surfaces crashed on the seed corpus"
+    umbrella FAIL "one or more surfaces crashed on the seed corpus"
   fi
   return "$overall"
 }
@@ -254,9 +339,10 @@ run_replay() {
 run_soak() {
   local secs="${1:-300}"
   local only="${2:-}"
-  : > "$TRACE"
 
   # Optional single-target filter so CI can fan a matrix job per surface.
+  # Validated before the trace is truncated: a usage error must not destroy
+  # the previous run's evidence, and it produces no verdict of its own.
   if [ -n "$only" ]; then
     local found=0
     for t in "${TARGETS[@]}"; do [ "$t" = "$only" ] && found=1; done
@@ -267,11 +353,13 @@ run_soak() {
     TARGETS=("$only")
   fi
 
-  configure || { emit fuzz_corpus_clean FAIL "cmake configure failed"; return 1; }
+  : > "$TRACE"
+  LANE_STARTED=1
+  configure || { umbrella FAIL "cmake configure failed"; return 1; }
 
   echo "[run_fuzz] building engine targets (-j$JOBS)"
   if ! cmake --build "$BUILD_DIR" --target "${TARGETS[@]}" -j"$JOBS" >/dev/null 2>"$BUILD_DIR/engine_build.err"; then
-    emit fuzz_corpus_clean FAIL "engine build failed (see $BUILD_DIR/engine_build.err)"
+    umbrella FAIL "engine build failed (see $BUILD_DIR/engine_build.err)"
     return 1
   fi
 
@@ -283,17 +371,10 @@ run_soak() {
     mkdir -p "$quarantine"
     if [ ! -x "$bin" ]; then emit "$t" FAIL "missing engine binary $bin"; overall=1; continue; fi
 
-    local dict_arg=()
-    [ -f "$DICTS/$t.dict" ] && dict_arg=("-dict=$DICTS/$t.dict")
-
     echo "[run_fuzz] soaking $t for ${secs}s"
     local log="$BUILD_DIR/soak_${t}.log"
-    # -rss_limit_mb caps the documented state-vector amplification so a
-    # single large-qubit request is reported rather than OOM-killing CI.
-    "$bin" -max_total_time="$secs" -timeout=25 \
-      -rss_limit_mb=4096 -malloc_limit_mb=2048 -max_len=65536 \
-      -artifact_prefix="$quarantine/" \
-      "${dict_arg[@]}" "$corpus" >"$log" 2>&1 || true
+    engine_args_for "$t" "$corpus" "$secs"
+    "$bin" "${ENGINE_ARGS[@]}" >"$log" 2>&1 || true
 
     # New artifacts == findings.
     local arts
@@ -307,9 +388,9 @@ run_soak() {
   done
 
   if [ "$overall" -eq 0 ]; then
-    emit fuzz_corpus_clean PASS "soak clean across ${#TARGETS[@]} surfaces (${secs}s each)"
+    umbrella PASS "soak clean across ${#TARGETS[@]} surfaces (${secs}s each)"
   else
-    emit fuzz_corpus_clean FAIL "soak surfaced crash artifacts (see corpora/*/crashes-pending)"
+    umbrella FAIL "soak surfaced crash artifacts (see corpora/*/crashes-pending)"
   fi
   return "$overall"
 }
@@ -328,6 +409,16 @@ case "$MODE" in
     ;;
 esac
 
+# Usage errors ran no lane, so there is nothing to certify either way.
+if [ "$rc" -eq 2 ]; then
+  exit 2
+fi
+
+# --- end-of-lane source check ----------------------------------------------
+# The evidence above is only worth what the snapshot it was measured on is
+# worth, so the fingerprint has to still be the one the run started from.
+# libFuzzer's own output is not source and is ignored (.gitignore: 40-hex
+# corpus units and crashes-pending/), so a clean soak keeps this stable.
 FINAL_IDENTITY_JSON="$(bash "$REPO_ROOT/scripts/run_moonlab_release_smoke.sh" --source-identity)" || FINAL_IDENTITY_JSON="{}"
 FINAL_FINGERPRINT="$(python3 - "$FINAL_IDENTITY_JSON" <<'PY'
 import json
@@ -336,11 +427,23 @@ print(json.loads(sys.argv[1]).get("source_fingerprint", ""))
 PY
 )"
 if [ "$FINAL_FINGERPRINT" != "$SOURCE_FINGERPRINT" ]; then
-  : > "$TRACE"
-  FAILS=0
-  emit fuzz_corpus_clean FAIL "source changed during lane: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown}"
+  FINAL_STATE="$(git status --porcelain=v1 --untracked-files=all \
+    -- . ':(exclude)scripts/icc_traces/**' | sort)"
+  DRIFT="$(diff <(printf '%s\n' "$SOURCE_STATE") <(printf '%s\n' "$FINAL_STATE") \
+    | grep -E '^[<>]' | head -8 | tr '\n' ' ')"
+  umbrella FAIL "source changed during lane: start=$SOURCE_FINGERPRINT end=${FINAL_FINGERPRINT:-unknown} drift=${DRIFT:-<no worktree status delta; content changed in place>}"
   rc=1
 fi
+
+# The one and only umbrella verdict for this run.  Silence and a green
+# verdict on a red exit code are both failures to report, so they are failures.
+if [ -z "$UMBRELLA_VALUE" ]; then
+  umbrella FAIL "lane produced no verdict"
+  rc=1
+elif [ "$rc" -ne 0 ] && [ "$UMBRELLA_VALUE" = "PASS" ]; then
+  umbrella FAIL "lane exited $rc with a PASS verdict recorded: $UMBRELLA_DETAIL"
+fi
+record_umbrella
 
 echo
 echo "[run_fuzz] trace written to $TRACE ; failures: $FAILS"

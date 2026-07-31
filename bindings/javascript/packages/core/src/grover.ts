@@ -11,7 +11,7 @@
  *
  * @example
  * ```typescript
- * import { QuantumState, groverSearch } from '@moonlab/quantum-core';
+ * import { QuantumState, groverSearch } from '@tsotchkecorp/moonlab';
  *
  * const state = await QuantumState.create({ numQubits: 4 });
  * const r = await groverSearch(state, 0b1010n);

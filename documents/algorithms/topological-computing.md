@@ -9,8 +9,21 @@ Topological quantum computing (TQC) encodes quantum information in non-local, to
 Moonlab provides comprehensive TQC simulation including:
 - **Anyon models**: Fibonacci, Ising, and SU(2)_k
 - **Braiding operations**: F-matrices, R-matrices, fusion trees
+- **Topological charge measurement** and measurement-only braiding
+- **Braid-word compilation**: exact for Ising Cliffords, Solovay-Kitaev to a
+  caller-chosen ε for Fibonacci
 - **Error-correcting codes**: Surface codes and toric codes
 - **Topological invariants**: Entanglement entropy, modular matrices
+
+> **What is verified.** The F/R symbol tables satisfy the fusion-category
+> coherence conditions (pentagon, both hexagons, F-matrix unitarity) to 2.4e-15
+> for every built-in model, and the braiding built on them is a faithful unitary
+> representation of the Artin braid group: Yang-Baxter to 9.0e-16, far
+> commutation exactly 0, σᵢσᵢ⁻¹ = I to 1.3e-15, across Fibonacci, Ising and
+> SU(2)₃₋₅ and several anyon counts and charge sectors. Ising braiding realises
+> the single-qubit Clifford group exactly (order 24) and the two-qubit Clifford
+> group exactly in the dense 6-anyon encoding (order 11520, CNOT included).
+> Every number in this document is asserted by `unit_topological`.
 
 ## Theoretical Background
 
@@ -76,7 +89,9 @@ anyon_system_t *fib = anyon_system_fibonacci();
 // Ising anyons (Majorana fermions)
 anyon_system_t *ising = anyon_system_ising();
 
-// General SU(2)_k (k=3 gives Fibonacci, k=2 gives Ising)
+// General SU(2)_k on k+1 charges labelled 2j = 0..k (k=2 gives Ising).
+// Note: k=3 is *not* Fibonacci — SU(2)_3 has four charges, and Fibonacci is
+// its even-integer-spin subcategory (use anyon_system_fibonacci()).
 anyon_system_t *su2_4 = anyon_system_su2k(4);
 
 // Query properties
@@ -122,12 +137,23 @@ double complex F = get_F_symbol(fib,
 $$R^{ab}_c = \text{phase when exchanging } a \text{ and } b \text{ that fuse to } c$$
 
 ```c
-// Get braiding phase R^{ττ}_τ
-double complex R = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);
-// R = e^{4πi/5} for Fibonacci anyons
+// Get braiding phase R^{ττ}_c for each fusion channel c
+double complex R1 = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_VACUUM);  // e^{4πi/5}
+double complex Rt = get_R_symbol(fib, FIB_TAU, FIB_TAU, FIB_TAU);     // e^{-3πi/5}
 ```
 
+(Moonlab uses the conjugate of the convention in which $R^{\tau\tau}_1 = e^{-4\pi i/5}$; the two differ by braiding orientation and are equally consistent.)
+
 ## Braiding Operations
+
+### The fusion-path basis
+
+A fusion tree over external charges $a_0 \ldots a_{n-1}$ with total charge $Q$
+stores its state in the standard left-linear basis: vertex $v$ fuses
+$e_{v-1} \times a_v \to e_v$, with $e_0 = a_0$ and $e_{n-1} = Q$. A basis vector
+is one admissible tuple $(e_1, \ldots, e_{n-1})$; `tree->labels` holds one row
+of edge charges per path and `tree->amplitudes[p]` is that path's amplitude.
+Braiding acts on those labels, which is what makes it positional.
 
 ### Elementary Braids
 
@@ -142,9 +168,32 @@ braid_anyons(tree, 1, false);
 ```
 
 The braiding operation:
-1. Applies R-matrix for the direct phase
-2. Uses F-moves to change basis when needed
+1. Applies the R-matrix phase of each fusion path's own intermediate charge
+2. Uses F-moves to change basis when the braided pair is not adjacent in the tree
 3. Preserves the total charge
+
+Concretely, $\sigma_0$ is diagonal — the pair meets at vertex 1 — while for
+$i \ge 1$ the pair does not meet at a vertex of the standard tree and the
+operator is the F-conjugated R-matrix
+
+$$[\sigma_i]_{e'_i e_i} = \sum_f \overline{[F^{e_{i-1} a_{i+1} a_i}_{e_{i+1}}]_{e'_i f}}\; R^{a_i a_{i+1}}_f\; [F^{e_{i-1} a_i a_{i+1}}_{e_{i+1}}]_{e_i f}$$
+
+which is what makes $\sigma_1, \sigma_2, \sigma_3, \ldots$ genuinely different
+operators. `unit_topological` measures, over Fibonacci, Ising and SU(2)₃₋₅ and
+several anyon counts and charge sectors:
+
+| Relation | Worst residual |
+|----------|----------------|
+| Yang-Baxter $\sigma_i\sigma_{i+1}\sigma_i = \sigma_{i+1}\sigma_i\sigma_{i+1}$ | 9.0e-16 |
+| Far commutation $\sigma_i\sigma_j = \sigma_j\sigma_i$, $\lvert i-j\rvert \ge 2$ | 0.0 |
+| Generator unitarity | 1.3e-15 |
+| $\sigma_i \sigma_i^{-1} = I$ | 1.3e-15 |
+
+On the four-τ vacuum tree $\sigma_1$ and $\sigma_2$ differ by 1.263 in
+amplitude; $\sigma_1$ and $\sigma_3$ coincide there, and that is the physics
+rather than a bug — with total charge 1 the pairs $(a_0,a_1)$ and $(a_2,a_3)$
+carry conjugate charges, so both braids read the same R-symbol on every path.
+On a five-τ tree they separate by 1.618.
 
 ### Basis Changes
 
@@ -156,6 +205,43 @@ apply_F_move(tree, 2);
 ```
 
 This is essential for computing composite braids involving non-adjacent anyons.
+The subtree $((e_{v-1} a_v)_{e_v} a_{v+1})_{e_{v+1}}$ becomes
+$(e_{v-1} (a_v a_{v+1})_f)_{e_{v+1}}$, the amplitudes are transformed by
+$[F^{e_{v-1} a_v a_{v+1}}_{e_{v+1}}]_{e_v f}$, and the label column at that
+vertex now carries $f$. Applying it again on the same vertex applies
+$F^\dagger$ and restores the standard basis: measured round-trip error 1.1e-16
+with the norm preserved to 1.000000000000000.
+
+### Topological charge measurement
+
+A pair's total charge can be measured directly, and braiding can be realised by
+measurement alone:
+
+```c
+double p = anyon_measure_pair_charge(tree, 1, FIB_VACUUM);  // projects and renormalises
+anyon_pair_charge_distribution(tree, 1, probs);             // non-destructive
+anyon_forced_measurement_braid(tree, 1, true);              // no anyon transported
+```
+
+The projector is the exact one built from the F-symbols. The forced-measurement
+braid is the construction of Bonderson, Freedman and Nayak (PRL 101, 010501
+(2008)): $\sigma = \sum_c R^{ab}_c \Pi_c$, decomposed in the eigenbasis of the
+pair charge that measurement resolves. It reproduces `braid_anyons()` to **0.0**
+on all six generators of a four-τ tree — which also shows that measurement adds
+no unitary that braiding cannot already produce.
+
+### Verifying the symbol tables
+
+`anyon_verify_coherence()` returns the largest violation of the pentagon
+equation, both hexagon equations, and F-matrix unitarity across all charge
+configurations:
+
+```c
+double residual = anyon_verify_coherence(fib);   // ~3e-16
+```
+
+Measured for every built-in model: Fibonacci 3.1e-16, Ising 1.8e-15,
+SU(2)_2 1.8e-15, SU(2)_3 1.6e-15, SU(2)_4 2.4e-15, SU(2)_5 1.7e-15.
 
 ## Anyonic Qubits
 
@@ -178,14 +264,18 @@ anyonic_register_t *reg = anyonic_register_create(fib, 2);
 Gates are implemented via braiding sequences:
 
 ```c
-// NOT gate (via middle anyon braids)
+// NOT gate (via braiding inside the qubit's block)
 anyonic_not(reg, 0);
 
-// Approximate Hadamard (Fibonacci anyons are universal)
+// Hadamard (Fibonacci anyons are universal)
 anyonic_hadamard(reg, 0);
 
 // T gate with specified precision
 anyonic_T_gate(reg, 0, 1e-6);
+
+// Arbitrary single-qubit unitary at a chosen epsilon
+double achieved;
+anyonic_apply_unitary(reg, 0, target, 1e-10, &achieved);
 
 // Two-qubit entangling gate
 anyonic_entangle(reg, 0, 1);
@@ -193,13 +283,109 @@ anyonic_entangle(reg, 0, 1);
 anyonic_register_free(reg);
 ```
 
+Measured, starting from $|0\rangle_L$:
+
+| Gate | Ising | Fibonacci |
+|------|-------|-----------|
+| NOT  | exact: $\lvert a_0\rvert$ = 0.0, $\lvert a_1\rvert$ = 1.000000000000000 | ε = 1e-8, achieved 1.3e-12 |
+| H    | exact: (0.707106781186548, 0.707106781186548) | (0.707106784, 0.707106778) |
+| T    | `QS_ERROR_NOT_SUPPORTED` — not a Clifford | compiled to the requested ε |
+
+### Compiling braid words
+
+```c
+// Ising: every single-qubit Clifford has an exact braid word.
+double err;
+braid_word_t *w = ising_compile_clifford(ising, target, &err);   // err ~ 1e-16
+
+// Ising, dense 6-anyon encoding: exact two-qubit Cliffords, CNOT included,
+// and no leakage subspace exists at all.
+braid_word_t *cnot = ising_compile_clifford2(ising, cnot_4x4, &err);
+
+// Fibonacci: Solovay-Kitaev to any epsilon the caller asks for. The distance
+// to the target is measured on the returned word before it is handed back.
+braid_word_t *h = fibonacci_compile_su2(fib, hadamard, 1e-10, &err);
+
+// Fibonacci exact gates: R_z(m pi/5), m = 0..9, including the logical Z.
+braid_word_t *z = fibonacci_exact_phase_gate(5);
+```
+
+Solovay-Kitaev scaling, target H, base net 52959 elements with covering radius
+0.101:
+
+| ε | crossings | achieved |
+|---|-----------|----------|
+| 1e-2 | 297 | 1.315e-03 |
+| 1e-4 | 1413 | 7.941e-05 |
+| 1e-6 | 33099 | 9.133e-09 |
+| 1e-8 | 33099 | 9.133e-09 |
+| 1e-10 | 160469 | 1.663e-12 |
+
+Word length grows as $\log^{4.15}(1/\epsilon)$ measured, against
+$\log_{3/2} 5 = 3.97$ from the recursion's five-fold branching and 3/2 error
+exponent. The floor is about 1.7e-12, where rounding in a length-$5^n$ matrix
+product overtakes the recursion's own residual, so ε ≥ 1e-11 is the guaranteed
+range.
+
 ### Universality
 
 **Fibonacci anyons** are universal for quantum computation—any quantum gate can be approximated to arbitrary precision using braiding alone. This is remarkable because:
 - No additional operations (like magic state injection) are needed
 - The approximation converges efficiently (Solovay-Kitaev theorem applies)
 
-**Ising anyons** are not universal alone but become universal with the addition of a non-topological "magic" gate.
+**Ising anyons** are not universal alone but become universal with the addition of a non-topological "magic" gate. Their braid image is finite — order 24 on one
+qubit, 11520 on two — so Moonlab compiles Cliffords exactly and reports T as
+unreachable instead of approximating it.
+
+### Which Fibonacci gates are exactly realisable
+
+"Universal by approximation" is precise, and the boundary is decidable. Every
+Fibonacci braid word has the form
+
+$$B = \begin{pmatrix} p & \varphi^{-1/2} r \\ \varphi^{-1/2} s & t\end{pmatrix},\qquad p,r,s,t \in K = \mathbb{Q}(\zeta_5)$$
+
+which follows from $\sigma_1 = \mathrm{diag}(e^{4\pi i/5}, e^{-3\pi i/5})$, the
+real $F^{\tau\tau\tau}_\tau$, and closure of that shape under multiplication.
+Hence:
+
+- **Exact**: $R_z(m\pi/5)$, $m = 0..9$. In particular
+  $\sigma_1^5 = \mathrm{diag}(1,-1) = Z$, measured error 5.6e-16, and all ten
+  phase gates to 1.2e-15.
+- **Impossible**: H, X and T. H would force $\varphi^{-1/2} = p/r \in K$; X would
+  force $r^2 = \varphi\mu$ for a 10th root of unity $\mu$; T would force
+  $\mathrm{tr}^2/\det = 2+\sqrt2 \in K$. Each contradicts a property of
+  $\mathbb{Q}(\zeta_5)$ — see
+  [MATH.md](../../MATH.md#exact-realisability-of-fibonacci-braid-gates) for the
+  three proofs. Exhaustive enumeration of every braid word up to length 12
+  agrees: the closest approaches are 0.066 (H), 0.113 (X) and 0.075 (T).
+
+Measurement-only protocols reproduce braid transformations exactly — which
+`anyon_forced_measurement_braid()` shows directly by matching `braid_anyons()`
+to 0.0 — so charge measurement is at least as powerful as braiding. The proofs
+above concern finite braid words; no exact adaptive construction for the
+Fibonacci H, X or T is known, and none is implemented here. For those three the
+answer is the ε-guaranteed compiler, which measures what it returns.
+
+### Two-qubit gates and leakage
+
+`anyonic_entangle()` is a unitary 32-crossing inter-qubit weave in the geometry
+of Bonesteel, Hormozi, Zikos and Simon (PRL 95, 140503 (2005)), found by
+exhaustive search to length 8 followed by randomised search with hill climbing
+at length 32. It entangles: concurrence **0.414242** from a product input.
+
+It also leaks **8.3043e-2**, and that is a property of the 4-anyons-per-qubit
+encoding, not of the search. Qubit $q$'s logical bit is the charge of the pair
+$(4q, 4q{+}1)$, and the block's vacuum constraint forces $(4q{+}2, 4q{+}3)$ to
+carry the same charge; a braid that entangles two blocks must change one of
+those pair charges without changing its partner, taking the block out of the
+vacuum channel. Exhaustive search confirms it directly: no braid word of length
+≤ 8 on the two-block register is both entangling and leakage-free, and none
+makes the logical block proportional to a unitary while entangling.
+
+For an exact, leakage-free two-qubit gate use `ising_compile_clifford2()`: its
+dense 6-anyon encoding carries two qubits in a 4-dimensional fusion space with
+no non-computational subspace at all, and CNOT compiles to a 7-crossing braid
+with maximum element error 1.2e-15.
 
 ## Surface Codes
 

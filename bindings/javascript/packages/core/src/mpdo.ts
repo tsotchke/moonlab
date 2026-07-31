@@ -15,7 +15,7 @@
  *
  * @example
  * ```typescript
- * import { Mpdo, PauliCode } from '@moonlab/quantum-core';
+ * import { Mpdo, PauliCode } from '@tsotchkecorp/moonlab';
  *
  * const rho = await Mpdo.create(4, 16);  // 4 qubits, chi_max = 16
  * rho.applyDepolarizing(0, 0.05);

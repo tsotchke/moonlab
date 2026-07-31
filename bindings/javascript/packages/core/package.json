@@ -1,5 +1,5 @@
 {
-  "name": "@moonlab/quantum-core",
+  "name": "@tsotchkecorp/moonlab",
   "version": "1.2.0",
   "description": "WebAssembly quantum computing simulator core",
   "main": "dist/index.js",

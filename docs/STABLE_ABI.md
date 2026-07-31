@@ -317,7 +317,7 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 | C        | `libquantumsim.{so,dylib,dll}`    | package 1.2.0, stable ABI 0.6.0 |
 | Python   | `moonlab` (pip)                   | follows the package version (1.2.0) |
 | Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.0) |
-| JS       | `@moonlab/quantum-core`           | follows the package version (1.2.0) |
+| JS       | `@tsotchkecorp/moonlab`           | follows the package version (1.2.0) |
 
 Each binding crate/package revs alongside the C library's package version
 (currently 1.2.0) and stays within the same 1.x compatibility line as the

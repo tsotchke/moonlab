@@ -3,7 +3,7 @@
 This folder contains the JavaScript/TypeScript bindings, the WASM build, and the demo app.
 
 ## What's here
-- `packages/core`: WASM build + JS bindings (`@moonlab/quantum-core`).
+- `packages/core`: WASM build + JS bindings (`@tsotchkecorp/moonlab`).
 - `demo`: Vite demo app (Orbital Explorer and other examples).
 
 ## Prerequisites
@@ -23,21 +23,21 @@ pnpm install
 ## Run the demo
 ```
 cd bindings/javascript
-pnpm --filter @moonlab/quantum-demo dev
+pnpm --filter @tsotchkecorp/moonlab-demo dev
 ```
 
 ## Build for GitHub Pages
 This builds the demo into `/docs` at the repo root with relative asset paths:
 ```
 cd bindings/javascript
-pnpm --filter @moonlab/quantum-demo build:gh-pages
+pnpm --filter @tsotchkecorp/moonlab-demo build:gh-pages
 ```
 The script will auto-build CLAPACK if the libs are missing (requires network access).
 The demo entrypoint will be `/docs/index.html`.
 
 ## Recent changes (Tensor Network + DMRG)
 - Tensor-network solver sources are compiled into the WASM build (DMRG/TDVP helpers, MPS ops).
-- New JS bindings are exposed in `@moonlab/quantum-core`:
+- New JS bindings are exposed in `@tsotchkecorp/moonlab`:
   - `TensorNetworkState`
   - `dmrgTFIMGroundState`
 - The Orbital demo now uses the DMRG TFIM ground-state distribution to modulate the orbital cloud.
@@ -81,8 +81,8 @@ cd bindings/javascript/packages/core/emscripten
 bash build-clapack-wasm.sh
 
 cd /home/cos/projects/moonlab/bindings/javascript
-pnpm --filter @moonlab/quantum-core build
-pnpm --filter @moonlab/quantum-demo dev
+pnpm --filter @tsotchkecorp/moonlab build
+pnpm --filter @tsotchkecorp/moonlab-demo dev
 ```
 
 Notes:

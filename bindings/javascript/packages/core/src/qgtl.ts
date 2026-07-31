@@ -12,7 +12,7 @@
  *
  * @example
  * ```typescript
- * import { QgtlCircuit, GateType } from '@moonlab/quantum-core';
+ * import { QgtlCircuit, GateType } from '@tsotchkecorp/moonlab';
  *
  * const c = await QgtlCircuit.create(2);
  * c.addGate(GateType.H, 0);

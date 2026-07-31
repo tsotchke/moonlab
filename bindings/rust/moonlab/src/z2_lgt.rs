@@ -10,7 +10,7 @@
 //!
 //! Mirrors the Python `moonlab.ca_mps.z2_lgt_1d_build` /
 //! `z2_lgt_1d_gauss_law` and the JavaScript
-//! `@moonlab/quantum-core` `z2Lgt1dBuild` / `z2Lgt1dGaussLaw`
+//! `@tsotchkecorp/moonlab` `z2Lgt1dBuild` / `z2Lgt1dGaussLaw`
 //! surface.
 //!
 //! ## Quick start

@@ -13,7 +13,7 @@
  *
  * @example
  * ```typescript
- * import { submitCircuit } from '@moonlab/quantum-core/control-plane';
+ * import { submitCircuit } from '@tsotchkecorp/moonlab/control-plane';
  *
  * const circuit = "MOONLAB_CIRCUIT_V1\nN_QUBITS 2\nGATES 2\n" +
  *                 "GATE H 0 -1\nGATE CNOT 1 0\nEND\n";

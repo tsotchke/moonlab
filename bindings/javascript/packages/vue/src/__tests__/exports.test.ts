@@ -8,7 +8,7 @@ import {
   useQuantumState,
 } from '../index';
 
-describe('@moonlab/quantum-vue public surface', () => {
+describe('@tsotchkecorp/moonlab-vue public surface', () => {
   it('reports the release version and exports composables', () => {
     expect(VERSION).toBe('1.2.0');
     expect(useQuantumState).toBeTypeOf('function');
