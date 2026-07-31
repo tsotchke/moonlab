@@ -81,10 +81,10 @@ def main():
     print(f"correctness_ok = {dres['correctness_ok']}  (fails only if "
           f"significantly WORSE than PyMatching anywhere)")
     for r in dres["rows"]:
-        print(f"  d={r['distance']} p={r['p']}: err {r['ml_err']:.6f} vs "
-              f"{r['pm_err']:.6f}  McNemar z={r['mcnemar_z']} {r['accuracy']}  "
-              f"| MT {r['ml_mt_sps']/1e3:.0f}k/s vs {r['pm_sps']/1e3:.0f}k/s "
-              f"({r['mt_ratio']:.1f}x)")
+        print(f"  d={r['distance']} p={r['p']}: err {r['mlc_err']:.6f} vs "
+              f"{r['pm_err']:.6f}  McNemar z={r['corr_vs_pm']['z']} {r['accuracy']}  "
+              f"| MT {r['mlc_mt_sps']/1e3:.0f}k/s vs {r['pm_sps']/1e3:.0f}k/s "
+              f"({r['mlc_mt_ratio']:.1f}x)")
     ok = ok and dres["correctness_ok"]
 
     print(f"\ndominance campaign correctness_ok = {ok}")
