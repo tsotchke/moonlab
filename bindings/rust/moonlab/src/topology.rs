@@ -33,7 +33,9 @@ use crate::error::{QuantumError, Result};
 use moonlab_sys::{
     chern_kpm_bulk_map, chern_kpm_bulk_sum, chern_kpm_cn_modulation,
     chern_kpm_create, chern_kpm_free, chern_kpm_local_marker,
-    chern_kpm_set_modulation, moonlab_qwz_chern, qgt_berry_grid_free,
+    chern_kpm_set_modulation, moonlab_dsigma_metric_curvature,
+    moonlab_haldane_curvature_at, moonlab_qwz_chern,
+    moonlab_qwz_curvature_at, qgt_berry_grid_free,
     qgt_berry_grid_nband, qgt_berry_grid_proj, qgt_berry_grid_pt,
     qgt_berry_grid_t, qgt_free, qgt_free_1d, qgt_free_nband,
     qgt_model_bhz, qgt_model_hofstadter, qgt_model_kane_mele,
@@ -268,6 +270,125 @@ pub fn hofstadter_chern(
     Ok(chern)
 }
 
+/// Pointwise geometry of a two-band Bloch model's lower band at one
+/// momentum: the Fubini-Study metric and the Berry curvature.
+///
+/// Returned by [`qwz_curvature_at`], [`haldane_curvature_at`] and
+/// [`dsigma_metric_curvature`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BandGeometry {
+    /// Row-major 2x2 Fubini-Study metric `g_{mu nu}`: element `(mu, nu)`
+    /// at index `mu * 2 + nu`.  Real, symmetric, positive semidefinite.
+    pub metric: [f64; 4],
+    /// Berry curvature `Omega_xy` of the lower band.
+    pub curvature: f64,
+}
+
+/// Translate the `0 / -1 / -2` return contract of the ABI band-geometry
+/// one-shots.  `-2` is a band touching, where the geometry is undefined
+/// rather than merely hard to compute.
+fn band_geometry_rc(what: &str, rc: i32, geom: BandGeometry) -> Result<BandGeometry> {
+    match rc {
+        0 => Ok(geom),
+        -1 => Err(QuantumError::NullPointer),
+        -2 => Err(QuantumError::Algorithm(format!(
+            "{what}: band touching, geometry undefined"
+        ))),
+        _ => Err(QuantumError::Ffi(format!("{what} failed (rc={rc})"))),
+    }
+}
+
+/// Closed-form lower-band metric and Berry curvature of
+/// `H = d . sigma` from an analytic `d` and its momentum gradients.
+///
+/// `g_{mu nu} = (1/4) d_mu dhat . d_nu dhat` and
+/// `Omega_xy = (1/2) dhat . (d_x dhat x d_y dhat)`.  Gauge-free and
+/// machine-precision: no eigenvector, no finite difference.
+///
+/// `d`, `dx` and `dy` are the d-vector and its `k_x` / `k_y`
+/// derivatives.  Errors with [`QuantumError::Algorithm`] at a band
+/// touching (`|d| = 0`).
+pub fn dsigma_metric_curvature(
+    d: [f64; 3],
+    dx: [f64; 3],
+    dy: [f64; 3],
+) -> Result<BandGeometry> {
+    let mut metric = [0.0_f64; 4];
+    let mut curvature = 0.0_f64;
+    let rc = unsafe {
+        moonlab_dsigma_metric_curvature(
+            d.as_ptr(),
+            dx.as_ptr(),
+            dy.as_ptr(),
+            metric.as_mut_ptr(),
+            &mut curvature,
+        )
+    };
+    band_geometry_rc(
+        "moonlab_dsigma_metric_curvature",
+        rc,
+        BandGeometry { metric, curvature },
+    )
+}
+
+/// Pointwise metric and Berry curvature of the Qi-Wu-Zhang lower band
+/// at momentum `k = (k_x, k_y)`.
+///
+/// Bundles model construction, the exact closed-form evaluation and
+/// teardown into one call.  Errors with [`QuantumError::Algorithm`] at
+/// a band touching -- for QWZ, the Dirac points of `m = 0, ±2`.
+pub fn qwz_curvature_at(m: f64, k: [f64; 2]) -> Result<BandGeometry> {
+    let mut metric = [0.0_f64; 4];
+    let mut curvature = 0.0_f64;
+    let rc = unsafe {
+        moonlab_qwz_curvature_at(
+            m,
+            k.as_ptr(),
+            metric.as_mut_ptr(),
+            &mut curvature,
+        )
+    };
+    band_geometry_rc(
+        "moonlab_qwz_curvature_at",
+        rc,
+        BandGeometry { metric, curvature },
+    )
+}
+
+/// Pointwise metric and Berry curvature of the Haldane lower band at
+/// momentum `k = (k_x, k_y)`.
+///
+/// `t1` is the nearest-neighbour hopping, `t2` the next-nearest, `phi`
+/// the Peierls phase and `m_stagger` the sublattice staggering.  The
+/// next-nearest-neighbour identity term shifts both bands equally and
+/// does not enter the geometry.
+pub fn haldane_curvature_at(
+    t1: f64,
+    t2: f64,
+    phi: f64,
+    m_stagger: f64,
+    k: [f64; 2],
+) -> Result<BandGeometry> {
+    let mut metric = [0.0_f64; 4];
+    let mut curvature = 0.0_f64;
+    let rc = unsafe {
+        moonlab_haldane_curvature_at(
+            t1,
+            t2,
+            phi,
+            m_stagger,
+            k.as_ptr(),
+            metric.as_mut_ptr(),
+            &mut curvature,
+        )
+    };
+    band_geometry_rc(
+        "moonlab_haldane_curvature_at",
+        rc,
+        BandGeometry { metric, curvature },
+    )
+}
+
 /// Matrix-free Chebyshev-KPM Bianco-Resta local Chern marker.
 pub struct ChernKpm {
     handle: *mut moonlab_sys::chern_kpm_system_t,
@@ -477,6 +598,87 @@ mod tests {
             let c = hofstadter_chern(1, q, 1, 1.0, 24).unwrap();
             assert_eq!(c, 1, "q={q}: expected +1, got {c}");
         }
+    }
+
+    #[test]
+    fn qwz_pointwise_geometry_one_shot() {
+        // Gapped QWZ at m = +1: the one-shot must succeed and return
+        // finite geometry.  The raw ABI code is pinned alongside the
+        // safe wrapper so the binding's return contract is tested, not
+        // just its Rust-side translation.
+        let k = [0.83_f64, -1.47];
+        let geom = qwz_curvature_at(1.0, k).unwrap();
+        assert!(
+            geom.metric.iter().all(|x| x.is_finite()) && geom.curvature.is_finite(),
+            "non-finite geometry: {geom:?}"
+        );
+        // Metric symmetric PSD, curvature nonzero in a Chern phase.
+        assert!((geom.metric[1] - geom.metric[2]).abs() < 1e-15);
+        assert!(geom.metric[0] >= 0.0 && geom.metric[3] >= 0.0);
+        assert!(geom.curvature.abs() > 0.0);
+
+        let mut g = [0.0_f64; 4];
+        let mut om = 0.0_f64;
+        let rc = unsafe {
+            moonlab_sys::moonlab_qwz_curvature_at(
+                1.0,
+                k.as_ptr(),
+                g.as_mut_ptr(),
+                &mut om,
+            )
+        };
+        assert_eq!(rc, 0, "moonlab_qwz_curvature_at rc");
+        assert_eq!(g, geom.metric);
+        assert_eq!(om, geom.curvature);
+
+        // The d.sigma entry fed the QWZ d-vector must agree exactly.
+        let d = [k[0].sin(), k[1].sin(), 1.0 + k[0].cos() + k[1].cos()];
+        let dx = [k[0].cos(), 0.0, -k[0].sin()];
+        let dy = [0.0, k[1].cos(), -k[1].sin()];
+        let from_d = dsigma_metric_curvature(d, dx, dy).unwrap();
+        assert_eq!(from_d.metric, geom.metric);
+        assert_eq!(from_d.curvature, geom.curvature);
+    }
+
+    #[test]
+    fn qwz_band_touching_is_reported() {
+        // m = -2 puts a Dirac point at k = (0, 0); the geometry is
+        // undefined there and the ABI returns -2.
+        let k = [0.0_f64, 0.0];
+        let mut g = [0.0_f64; 4];
+        let mut om = 0.0_f64;
+        let rc = unsafe {
+            moonlab_sys::moonlab_qwz_curvature_at(
+                -2.0,
+                k.as_ptr(),
+                g.as_mut_ptr(),
+                &mut om,
+            )
+        };
+        assert_eq!(rc, -2, "band touching must return -2, got {rc}");
+
+        let err = qwz_curvature_at(-2.0, k).unwrap_err();
+        assert!(
+            err.to_string().contains("band touching"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn haldane_pointwise_geometry_one_shot() {
+        // Haldane in its Chern phase (phi = pi/2, M = 0) away from the
+        // Dirac points.
+        let geom = haldane_curvature_at(
+            1.0,
+            0.1,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            [0.4, 0.9],
+        )
+        .unwrap();
+        assert!(geom.metric.iter().all(|x| x.is_finite()));
+        assert!(geom.curvature.is_finite());
+        assert!((geom.metric[1] - geom.metric[2]).abs() < 1e-15);
     }
 
     #[test]

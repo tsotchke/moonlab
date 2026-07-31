@@ -317,6 +317,23 @@ fn main() {
         .allowlist_function("pauli_hamiltonian_add_term")
         .allowlist_function("pauli_hamiltonian_free")
         .allowlist_function("vqe_ansatz_free")
+        // v1.2.1: VQE quantum geometry -- the Fubini-Study metric, the
+        // Berry curvature that is its imaginary half, and the
+        // natural-gradient direction they precondition.  Module surface
+        // plus the ABI 0.7.0 entries that carry num_parameters.
+        .allowlist_function("vqe_compute_qgt")
+        .allowlist_function("vqe_compute_berry_curvature")
+        .allowlist_function("vqe_natural_gradient_direction")
+        .allowlist_function("moonlab_vqe_qgt")
+        .allowlist_function("moonlab_vqe_berry_curvature")
+        .allowlist_function("moonlab_vqe_natural_gradient")
+        // Custom ansatz: the caller-supplied circuit callback and the
+        // noise helpers it interleaves between its own gates to match the
+        // built-in noisy ansaetze exactly.
+        .allowlist_type("vqe_custom_ansatz_fn")
+        .allowlist_function("vqe_create_custom_ansatz")
+        .allowlist_function("vqe_apply_single_qubit_noise")
+        .allowlist_function("vqe_apply_two_qubit_noise")
         // QAOA types and functions
         .allowlist_type("ising_model_t")
         .allowlist_type("graph_t")
@@ -711,6 +728,12 @@ fn main() {
         .allowlist_function("qgt_set_dsigma")
         .allowlist_function("qgt_dsigma_at")
         .allowlist_function("qgt_exact_curvature_at")
+        // ABI 0.7.0 pointwise band-geometry one-shots: model construction,
+        // closed-form evaluation and teardown in one call, no opaque
+        // handle across the boundary.
+        .allowlist_function("moonlab_dsigma_metric_curvature")
+        .allowlist_function("moonlab_qwz_curvature_at")
+        .allowlist_function("moonlab_haldane_curvature_at")
         // Gate-fusion DAG
         .allowlist_type("fuse_circuit_t")
         .allowlist_type("fuse_gate_t")
