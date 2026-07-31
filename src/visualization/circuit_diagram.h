@@ -141,6 +141,7 @@ typedef struct {
  *
  * @param num_qubits Number of qubits in the circuit
  * @return Pointer to new circuit, or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API circuit_diagram_t *circuit_create(int num_qubits);
 
@@ -150,6 +151,7 @@ MOONLAB_API circuit_diagram_t *circuit_create(int num_qubits);
  * @param num_qubits Number of quantum bits
  * @param num_classical Number of classical bits
  * @return Pointer to new circuit, or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API circuit_diagram_t *circuit_create_with_classical(int num_qubits, int num_classical);
 
@@ -157,6 +159,7 @@ MOONLAB_API circuit_diagram_t *circuit_create_with_classical(int num_qubits, int
  * Free circuit diagram and all resources
  *
  * @param circuit Circuit to free
+ * @stability evolving
  */
 MOONLAB_API void circuit_free(circuit_diagram_t *circuit);
 
@@ -165,6 +168,7 @@ MOONLAB_API void circuit_free(circuit_diagram_t *circuit);
  *
  * @param circuit Circuit to modify
  * @param title Title string
+ * @stability evolving
  */
 MOONLAB_API void circuit_set_title(circuit_diagram_t *circuit, const char *title);
 
@@ -182,6 +186,7 @@ void circuit_set_qubit_label(circuit_diagram_t *circuit, int qubit, const char *
  *
  * @param circuit Circuit to query
  * @return Maximum time slot used
+ * @stability evolving
  */
 MOONLAB_API int circuit_get_depth(const circuit_diagram_t *circuit);
 
@@ -203,6 +208,7 @@ void circuit_clear(circuit_diagram_t *circuit);
  * @param qubit Target qubit
  * @param name Gate name ("H", "X", "Y", "Z", "S", "T")
  * @return Time slot where gate was placed
+ * @stability evolving
  */
 MOONLAB_API int circuit_add_gate(circuit_diagram_t *circuit, int qubit, const char *name);
 
@@ -225,6 +231,7 @@ int circuit_add_rotation(circuit_diagram_t *circuit, int qubit, const char *name
  * @param target Target qubit
  * @param name Gate name ("X" for CNOT, "Z" for CZ, etc.)
  * @return Time slot where gate was placed
+ * @stability evolving
  */
 MOONLAB_API int circuit_add_controlled(circuit_diagram_t *circuit, int control, int target, const char *name);
 
@@ -249,6 +256,7 @@ int circuit_add_controlled_rotation(circuit_diagram_t *circuit, int control, int
  * @param ctrl2 Second control qubit
  * @param target Target qubit
  * @return Time slot where gate was placed
+ * @stability evolving
  */
 MOONLAB_API int circuit_add_toffoli(circuit_diagram_t *circuit, int ctrl1, int ctrl2, int target);
 
@@ -270,6 +278,7 @@ int circuit_add_fredkin(circuit_diagram_t *circuit, int control, int target1, in
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return Time slot where gate was placed
+ * @stability evolving
  */
 MOONLAB_API int circuit_add_swap(circuit_diagram_t *circuit, int qubit1, int qubit2);
 
@@ -280,6 +289,7 @@ MOONLAB_API int circuit_add_swap(circuit_diagram_t *circuit, int qubit1, int qub
  * @param qubit Qubit to measure
  * @param classical_bit Classical bit to store result
  * @return Time slot where measurement was placed
+ * @stability evolving
  */
 MOONLAB_API int circuit_add_measurement(circuit_diagram_t *circuit, int qubit, int classical_bit);
 

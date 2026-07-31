@@ -59,6 +59,7 @@ extern "C" {
  * @return  `MOONLAB_MWPM_OK` on success; `MOONLAB_MWPM_INFEASIBLE`
  *          when the defect count is odd (no perfect matching exists
  *          on the closed surface).  Negative on other failures.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_mwpm_exact_decode_toric(int distance,

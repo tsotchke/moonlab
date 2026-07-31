@@ -94,12 +94,14 @@ typedef struct {
  * @brief Create unitary operator
  * @param num_qubits Number of qubits
  * @return Initialized operator
+ * @stability evolving
  */
 MOONLAB_API unitary_operator_t* unitary_operator_create(size_t num_qubits);
 
 /**
  * @brief Free unitary operator
  * @param op Operator to free
+ * @stability evolving
  */
 MOONLAB_API void unitary_operator_free(unitary_operator_t *op);
 
@@ -120,12 +122,14 @@ typedef struct {
  * @brief Create eigenstate
  * @param num_qubits Number of qubits
  * @return Initialized eigenstate
+ * @stability evolving
  */
 MOONLAB_API eigenstate_t* eigenstate_create(size_t num_qubits);
 
 /**
  * @brief Free eigenstate
  * @param es Eigenstate to free
+ * @stability evolving
  */
 MOONLAB_API void eigenstate_free(eigenstate_t *es);
 
@@ -167,6 +171,7 @@ typedef struct {
  * @param precision_qubits Number of bits of precision (m)
  * @param entropy Entropy source
  * @return QPE result with phase estimate
+ * @stability evolving
  */
 MOONLAB_API qpe_result_t qpe_estimate_phase(
     const unitary_operator_t *unitary,
@@ -186,6 +191,7 @@ MOONLAB_API qpe_result_t qpe_estimate_phase(
  * @param unitary Unitary operator
  * @param power k (apply U^k)
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t qpe_apply_controlled_unitary_power(
     quantum_state_t *state,
@@ -201,12 +207,14 @@ MOONLAB_API qs_error_t qpe_apply_controlled_unitary_power(
  * @param bitstring Measured m-bit string
  * @param precision_bits Number of bits
  * @return Phase φ ∈ [0, 1)
+ * @stability evolving
  */
 MOONLAB_API double qpe_bitstring_to_phase(uint64_t bitstring, size_t precision_bits);
 
 /**
  * @brief Print QPE result
  * @param result QPE result
+ * @stability evolving
  */
 MOONLAB_API void qpe_print_result(const qpe_result_t *result);
 
@@ -218,12 +226,14 @@ MOONLAB_API void qpe_print_result(const qpe_result_t *result);
  * @brief Create phase gate unitary: U|ψ⟩ = e^(iθ)|ψ⟩
  * @param theta Phase angle
  * @return Unitary operator
+ * @stability evolving
  */
 MOONLAB_API unitary_operator_t* qpe_create_phase_gate(double theta);
 
 /**
  * @brief Create T gate unitary: U|1⟩ = e^(iπ/4)|1⟩
  * @return Unitary operator
+ * @stability evolving
  */
 MOONLAB_API unitary_operator_t* qpe_create_t_gate(void);
 
@@ -231,6 +241,7 @@ MOONLAB_API unitary_operator_t* qpe_create_t_gate(void);
  * @brief Create rotation unitary: RZ(θ)
  * @param theta Rotation angle
  * @return Unitary operator
+ * @stability evolving
  */
 MOONLAB_API unitary_operator_t* qpe_create_rz_gate(double theta);
 

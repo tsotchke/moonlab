@@ -93,6 +93,7 @@ typedef struct {
  * @return MOONLAB_DECODER_OK on success, MOONLAB_DECODER_NOT_BUILT
  *         when the requested slot needs an external library, or a
  *         negative status code on failure.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
@@ -100,10 +101,14 @@ moonlab_decoder_decode(moonlab_decoder_kind_t          slot,
 
 /** @brief Indicates whether a slot has its external dependency
  *  linked at build time.  Always returns 1 for GREEDY / MWPM_EXACT.
+ * @stability evolving
  *  Returns 0 for SBNN / LIBIRREP_SS / PYMATCHING until v0.6.8+. */
 MOONLAB_API int moonlab_decoder_slot_available(moonlab_decoder_kind_t slot);
 
-/** @brief Human-readable name for a slot, useful for JSON output. */
+/**
+ * @brief Human-readable name for a slot, useful for JSON output.
+ * @stability evolving
+ */
 MOONLAB_API const char *moonlab_decoder_slot_name(moonlab_decoder_kind_t slot);
 
 /* ------------------------------------------------------------------
@@ -147,6 +152,7 @@ typedef struct {
 } moonlab_decoder_entry_t;
 
 /** @brief Register (or replace) a decoder under `name`.  Returns 0
+ * @stability evolving
  *  on success, MOONLAB_DECODER_BAD_ARG on NULL input or registry-full. */
 MOONLAB_API int moonlab_register_decoder(const char         *name,
                                          moonlab_decoder_fn  fn,
@@ -154,24 +160,33 @@ MOONLAB_API int moonlab_register_decoder(const char         *name,
                                          const char         *description);
 
 /** @brief Remove a decoder from the registry.  Returns 0 on success,
+ * @stability evolving
  *  negative on not-found. */
 MOONLAB_API int moonlab_unregister_decoder(const char *name);
 
-/** @brief Look up a decoder by name.  Returns NULL if not registered. */
+/**
+ * @brief Look up a decoder by name.  Returns NULL if not registered.
+ * @stability evolving
+ */
 MOONLAB_API const moonlab_decoder_entry_t *
 moonlab_lookup_decoder(const char *name);
 
 /** @brief Dispatch decode-by-name.  Equivalent to looking up `name`
  *  and calling its fn.  Returns MOONLAB_DECODER_BAD_ARG if `name` is
+ * @stability evolving
  *  not registered (which is the runtime equivalent of an unknown enum). */
 MOONLAB_API int
 moonlab_decoder_decode_by_name(const char                     *name,
                                const moonlab_decoder_input_t  *in);
 
-/** @brief Number of decoders currently registered. */
+/**
+ * @brief Number of decoders currently registered.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_num_decoders(void);
 
 /** @brief Copy up to `max` registered decoder names into `out_names`.
+ * @stability evolving
  *  Returns the number copied. */
 MOONLAB_API int moonlab_list_decoders(const char **out_names, int max);
 

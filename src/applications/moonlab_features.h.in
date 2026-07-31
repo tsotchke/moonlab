@@ -13,8 +13,9 @@
  * configure time.  Do not edit the @c .h directly.
  *
  * @since v0.2.2
- * @stability  the macro names are stable; their values flip with the
- *             build configuration.
+ * @stability stable
+ * @note The macro names are stable; their values flip with the build
+ *       configuration.
  */
 #ifndef MOONLAB_FEATURES_H
 #define MOONLAB_FEATURES_H

@@ -118,6 +118,7 @@ typedef struct {
  * @brief Check if MPI is available
  *
  * @return 1 if MPI support compiled in, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int mpi_is_available(void);
 
@@ -130,6 +131,7 @@ MOONLAB_API int mpi_is_available(void);
  * @param argv Pointer to argv from main()
  * @param options Optional initialization options (NULL for defaults)
  * @return Distributed context or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API distributed_ctx_t* mpi_bridge_init(int* argc, char*** argv,
                                    const mpi_init_options_t* options);
@@ -141,6 +143,7 @@ MOONLAB_API distributed_ctx_t* mpi_bridge_init(int* argc, char*** argv,
  *
  * @param options Optional initialization options (NULL for defaults)
  * @return Distributed context or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API distributed_ctx_t* mpi_bridge_init_no_args(const mpi_init_options_t* options);
 
@@ -150,6 +153,7 @@ MOONLAB_API distributed_ctx_t* mpi_bridge_init_no_args(const mpi_init_options_t*
  * Frees context resources. Does NOT finalize MPI unless we initialized it.
  *
  * @param ctx Distributed context
+ * @stability evolving
  */
 MOONLAB_API void mpi_bridge_free(distributed_ctx_t* ctx);
 
@@ -157,6 +161,7 @@ MOONLAB_API void mpi_bridge_free(distributed_ctx_t* ctx);
  * @brief Finalize MPI
  *
  * Only call at program end. Safe to call multiple times.
+ * @stability evolving
  */
 MOONLAB_API void mpi_bridge_finalize(void);
 
@@ -169,6 +174,7 @@ MOONLAB_API void mpi_bridge_finalize(void);
  *
  * @param ctx Distributed context
  * @return Rank (0 to size-1)
+ * @stability evolving
  */
 MOONLAB_API int mpi_get_rank(const distributed_ctx_t* ctx);
 
@@ -177,6 +183,7 @@ MOONLAB_API int mpi_get_rank(const distributed_ctx_t* ctx);
  *
  * @param ctx Distributed context
  * @return Number of MPI processes
+ * @stability evolving
  */
 MOONLAB_API int mpi_get_size(const distributed_ctx_t* ctx);
 
@@ -185,6 +192,7 @@ MOONLAB_API int mpi_get_size(const distributed_ctx_t* ctx);
  *
  * @param ctx Distributed context
  * @return 1 if root, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int mpi_is_root(const distributed_ctx_t* ctx);
 
@@ -194,6 +202,7 @@ MOONLAB_API int mpi_is_root(const distributed_ctx_t* ctx);
  * @param ctx Distributed context
  * @param start Output: starting index (inclusive)
  * @param end Output: ending index (exclusive)
+ * @stability evolving
  */
 MOONLAB_API void mpi_get_local_range(const distributed_ctx_t* ctx,
                          uint64_t* start, uint64_t* end);
@@ -204,6 +213,7 @@ MOONLAB_API void mpi_get_local_range(const distributed_ctx_t* ctx,
  * @param ctx Distributed context
  * @param index Amplitude index
  * @return Rank owning the index
+ * @stability evolving
  */
 MOONLAB_API int mpi_get_owner_rank(const distributed_ctx_t* ctx, uint64_t index);
 
@@ -213,6 +223,7 @@ MOONLAB_API int mpi_get_owner_rank(const distributed_ctx_t* ctx, uint64_t index)
  * @param ctx Distributed context
  * @param index Amplitude index
  * @return 1 if local, 0 if remote
+ * @stability evolving
  */
 MOONLAB_API int mpi_is_local_index(const distributed_ctx_t* ctx, uint64_t index);
 
@@ -227,6 +238,7 @@ MOONLAB_API int mpi_is_local_index(const distributed_ctx_t* ctx, uint64_t index)
  *
  * @param ctx Distributed context
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_barrier(distributed_ctx_t* ctx);
 
@@ -236,6 +248,7 @@ MOONLAB_API mpi_bridge_error_t mpi_barrier(distributed_ctx_t* ctx);
  * @param ctx Distributed context
  * @param timeout_ms Timeout in milliseconds (0 for infinite)
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_barrier_timeout(distributed_ctx_t* ctx,
                                        uint32_t timeout_ms);
@@ -253,6 +266,7 @@ MOONLAB_API mpi_bridge_error_t mpi_barrier_timeout(distributed_ctx_t* ctx,
  * @param dest Destination rank
  * @param tag Message tag
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_send_amplitudes(distributed_ctx_t* ctx,
                                        const void* data, uint64_t count,
@@ -267,6 +281,7 @@ MOONLAB_API mpi_bridge_error_t mpi_send_amplitudes(distributed_ctx_t* ctx,
  * @param source Source rank (or MPI_ANY_SOURCE equivalent)
  * @param tag Message tag (or MPI_ANY_TAG equivalent)
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_recv_amplitudes(distributed_ctx_t* ctx,
                                        void* data, uint64_t count,
@@ -284,6 +299,7 @@ MOONLAB_API mpi_bridge_error_t mpi_recv_amplitudes(distributed_ctx_t* ctx,
  * @param partner Partner rank
  * @param tag Message tag
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_exchange_amplitudes(distributed_ctx_t* ctx,
                                            const void* send_data,
@@ -303,6 +319,7 @@ MOONLAB_API mpi_bridge_error_t mpi_exchange_amplitudes(distributed_ctx_t* ctx,
  * @param count Number of bytes
  * @param root Root rank
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_broadcast(distributed_ctx_t* ctx,
                                  void* data, size_t count, int root);
@@ -315,6 +332,7 @@ MOONLAB_API mpi_bridge_error_t mpi_broadcast(distributed_ctx_t* ctx,
  * @param recv_data Output sum
  * @param count Number of complex doubles
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_allreduce_sum_complex(distributed_ctx_t* ctx,
                                              const void* send_data,
@@ -329,6 +347,7 @@ MOONLAB_API mpi_bridge_error_t mpi_allreduce_sum_complex(distributed_ctx_t* ctx,
  * @param recv_data Output sum
  * @param count Number of doubles
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_allreduce_sum_double(distributed_ctx_t* ctx,
                                             const double* send_data,
@@ -344,6 +363,7 @@ MOONLAB_API mpi_bridge_error_t mpi_allreduce_sum_double(distributed_ctx_t* ctx,
  * @param recv_data Receive buffer (only at root)
  * @param root Root rank
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_gather(distributed_ctx_t* ctx,
                               const void* send_data, size_t send_count,
@@ -357,6 +377,7 @@ MOONLAB_API mpi_bridge_error_t mpi_gather(distributed_ctx_t* ctx,
  * @param send_count Elements per rank
  * @param recv_data Receive buffer (all ranks get all data)
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_allgather(distributed_ctx_t* ctx,
                                  const void* send_data, size_t send_count,
@@ -371,6 +392,7 @@ MOONLAB_API mpi_bridge_error_t mpi_allgather(distributed_ctx_t* ctx,
  * @param recv_count Bytes per rank
  * @param root Root rank
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_scatter(distributed_ctx_t* ctx,
                                const void* send_data,
@@ -388,6 +410,7 @@ MOONLAB_API mpi_bridge_error_t mpi_scatter(distributed_ctx_t* ctx,
  * @param recv_data Receive buffer (size * count integers)
  * @param count Integers per rank
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_alltoall_int(distributed_ctx_t* ctx,
                                     const int* send_data,
@@ -403,6 +426,7 @@ MOONLAB_API mpi_bridge_error_t mpi_alltoall_int(distributed_ctx_t* ctx,
  * @param dest Destination rank
  * @param tag Message tag
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_send(distributed_ctx_t* ctx,
                             const void* data, size_t count,
@@ -417,6 +441,7 @@ MOONLAB_API mpi_bridge_error_t mpi_send(distributed_ctx_t* ctx,
  * @param source Source rank
  * @param tag Message tag
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_recv(distributed_ctx_t* ctx,
                             void* data, size_t count,
@@ -438,6 +463,7 @@ MOONLAB_API mpi_bridge_error_t mpi_recv(distributed_ctx_t* ctx,
  * @param recv_count Number of bytes to receive.
  * @param source     Source rank.
  * @return MPI_BRIDGE_SUCCESS or an error code.
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_sendrecv(distributed_ctx_t* ctx,
                                 const void* send_data, size_t send_count,
@@ -453,6 +479,7 @@ MOONLAB_API mpi_bridge_error_t mpi_sendrecv(distributed_ctx_t* ctx,
  * @param recv_data Output max
  * @param count Number of uint64_t values
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_allreduce_max_uint64(distributed_ctx_t* ctx,
                                              const uint64_t* send_data,
@@ -467,6 +494,7 @@ MOONLAB_API mpi_bridge_error_t mpi_allreduce_max_uint64(distributed_ctx_t* ctx,
  * @param recv_data Output min
  * @param count Number of uint64_t values
  * @return MPI_BRIDGE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API mpi_bridge_error_t mpi_allreduce_min_uint64(distributed_ctx_t* ctx,
                                              const uint64_t* send_data,
@@ -484,6 +512,7 @@ MOONLAB_API mpi_bridge_error_t mpi_allreduce_min_uint64(distributed_ctx_t* ctx,
  *
  * @param ctx Distributed context
  * @param all_ranks Print from all ranks (1) or only root (0)
+ * @stability evolving
  */
 MOONLAB_API void mpi_print_context_info(const distributed_ctx_t* ctx, int all_ranks);
 
@@ -492,6 +521,7 @@ MOONLAB_API void mpi_print_context_info(const distributed_ctx_t* ctx, int all_ra
  *
  * @param ctx Distributed context
  * @return Raw processor/hostname string
+ * @stability evolving
  */
 MOONLAB_API const char* mpi_get_processor_name(const distributed_ctx_t* ctx);
 
@@ -500,6 +530,7 @@ MOONLAB_API const char* mpi_get_processor_name(const distributed_ctx_t* ctx);
  *
  * @param ctx Distributed context
  * @return 1 if size > 1, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int mpi_is_distributed(const distributed_ctx_t* ctx);
 
@@ -508,6 +539,7 @@ MOONLAB_API int mpi_is_distributed(const distributed_ctx_t* ctx);
  *
  * @param error Error code
  * @return Human-readable error string
+ * @stability evolving
  */
 MOONLAB_API const char* mpi_bridge_error_string(mpi_bridge_error_t error);
 
@@ -519,6 +551,7 @@ MOONLAB_API const char* mpi_bridge_error_string(mpi_bridge_error_t error);
  * @param ctx Distributed context (or NULL)
  * @param error_code Exit code
  * @param message Error message
+ * @stability evolving
  */
 MOONLAB_API void mpi_abort(distributed_ctx_t* ctx, int error_code, const char* message);
 

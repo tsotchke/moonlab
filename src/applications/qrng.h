@@ -233,6 +233,7 @@ typedef struct {
  * - Background entropy enabled
  * 
  * @param config Output configuration
+ * @stability evolving
  */
 MOONLAB_API void qrng_v3_get_default_config(qrng_v3_config_t *config);
 
@@ -257,6 +258,7 @@ MOONLAB_API void qrng_v3_get_default_config(qrng_v3_config_t *config);
  * 
  * @param ctx Output context pointer
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_init(qrng_v3_ctx_t **ctx);
 
@@ -266,6 +268,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_init(qrng_v3_ctx_t **ctx);
  * @param ctx Output context pointer
  * @param config Custom configuration
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_init_with_config(
     qrng_v3_ctx_t **ctx,
@@ -278,6 +281,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_init_with_config(
  * Securely erases all quantum states and entropy buffers.
  * 
  * @param ctx Context to free
+ * @stability evolving
  */
 MOONLAB_API void qrng_v3_free(qrng_v3_ctx_t *ctx);
 
@@ -299,6 +303,7 @@ MOONLAB_API void qrng_v3_free(qrng_v3_ctx_t *ctx);
  * @param buffer Output buffer
  * @param size Number of bytes to generate
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_bytes(
     qrng_v3_ctx_t *ctx,
@@ -312,6 +317,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_bytes(
  * @param ctx Quantum RNG context
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_uint64(qrng_v3_ctx_t *ctx, uint64_t *value);
 
@@ -321,6 +327,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_uint64(qrng_v3_ctx_t *ctx, uint64_t *value);
  * @param ctx Quantum RNG context
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_double(qrng_v3_ctx_t *ctx, double *value);
 
@@ -332,6 +339,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_double(qrng_v3_ctx_t *ctx, double *value);
  * @param max Maximum value (inclusive)
  * @param value Output value pointer
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_range(
     qrng_v3_ctx_t *ctx,
@@ -353,6 +361,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_range(
  * @param ctx Quantum RNG context
  * @param value Output value (0 to 2^num_qubits - 1)
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample(
     qrng_v3_ctx_t *ctx,
@@ -368,6 +377,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample(
  * @param target_distribution Probability distribution function
  * @param value Output sample
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample_distribution(
     qrng_v3_ctx_t *ctx,
@@ -386,6 +396,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_grover_sample_distribution(
  * @param found_index Output: which target was found
  * @param value Output: found value
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_grover_multi_target(
     qrng_v3_ctx_t *ctx,
@@ -409,6 +420,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_grover_multi_target(
  * @param ctx Quantum RNG context
  * @param num_measurements Number of measurements (recommend 1000+)
  * @return Bell test result
+ * @stability evolving
  */
 MOONLAB_API bell_test_result_t qrng_v3_verify_quantum(
     qrng_v3_ctx_t *ctx,
@@ -420,6 +432,7 @@ MOONLAB_API bell_test_result_t qrng_v3_verify_quantum(
  * 
  * @param ctx Quantum RNG context
  * @return Entanglement entropy in bits
+ * @stability evolving
  */
 MOONLAB_API double qrng_v3_get_entanglement_entropy(const qrng_v3_ctx_t *ctx);
 
@@ -449,6 +462,7 @@ int qrng_v3_is_quantum_verified(const qrng_v3_ctx_t *ctx);
  * @param ctx Quantum RNG context
  * @param mode New operation mode
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t mode);
 
@@ -457,6 +471,7 @@ MOONLAB_API qrng_v3_error_t qrng_v3_set_mode(qrng_v3_ctx_t *ctx, qrng_v3_mode_t 
  *
  * @param ctx Quantum RNG context
  * @return Current mode
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
 
@@ -470,6 +485,7 @@ MOONLAB_API qrng_v3_mode_t qrng_v3_get_mode(const qrng_v3_ctx_t *ctx);
  *
  * @param ctx Quantum RNG context
  * @return 1 if raw output is intended uniform, 0 if non-uniform (GROVER).
+ * @stability evolving
  */
 MOONLAB_API int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
 
@@ -483,6 +499,7 @@ MOONLAB_API int qrng_v3_output_is_uniform(const qrng_v3_ctx_t *ctx);
  * @param ctx Quantum RNG context
  * @param stats Output statistics structure
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_get_stats(
     const qrng_v3_ctx_t *ctx,
@@ -544,6 +561,7 @@ const char* qrng_v3_mode_string(qrng_v3_mode_t mode);
  * @param seed Seed bytes (can be NULL)
  * @param seed_len Seed length
  * @return QRNG_V3_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qrng_v3_error_t qrng_v3_init_from_seed(
     qrng_v3_ctx_t **ctx,

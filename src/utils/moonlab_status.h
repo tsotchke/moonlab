@@ -95,6 +95,7 @@ typedef enum {
  * Returns a static string (do not free).  Falls through to a
  * generic "<unknown status N for module M>" if the code is not
  * recognised, so callers can always log something.
+ * @stability evolving
  */
 MOONLAB_API const char* moonlab_status_to_string(moonlab_status_module_t module,
                                        moonlab_status_t status);

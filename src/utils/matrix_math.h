@@ -44,6 +44,7 @@ typedef double _Complex complex_t;
  * @param max_iterations Maximum iterations (default 50*n²)
  * @param tolerance Convergence tolerance (default 1e-10)
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int hermitian_eigen_decomposition(
     const complex_t *matrix,
@@ -62,6 +63,7 @@ MOONLAB_API int hermitian_eigen_decomposition(
  * @param m Rows in A
  * @param k Cols in A, rows in B
  * @param n Cols in B
+ * @stability evolving
  */
 MOONLAB_API void matrix_multiply(
     const complex_t *a,
@@ -77,6 +79,7 @@ MOONLAB_API void matrix_multiply(
  * @param matrix Square matrix (n×n)
  * @param n Dimension
  * @return Trace value
+ * @stability evolving
  */
 MOONLAB_API complex_t matrix_trace(const complex_t *matrix, size_t n);
 
@@ -86,6 +89,7 @@ MOONLAB_API complex_t matrix_trace(const complex_t *matrix, size_t n);
  * @param n Dimension
  * @param tolerance Tolerance for comparison
  * @return 1 if Hermitian, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int matrix_is_hermitian(const complex_t *matrix, size_t n, double tolerance);
 
@@ -95,6 +99,7 @@ MOONLAB_API int matrix_is_hermitian(const complex_t *matrix, size_t n, double to
  * @param result Output matrix (n×m)
  * @param m Rows in input
  * @param n Cols in input
+ * @stability evolving
  */
 MOONLAB_API void matrix_conjugate_transpose(
     const complex_t *matrix,
@@ -109,6 +114,7 @@ MOONLAB_API void matrix_conjugate_transpose(
  * @param m Rows
  * @param n Cols
  * @return Frobenius norm
+ * @stability evolving
  */
 MOONLAB_API double matrix_frobenius_norm(const complex_t *matrix, size_t m, size_t n);
 

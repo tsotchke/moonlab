@@ -63,9 +63,15 @@ void mlkem_poly_sub(mlkem_poly_t *dst, const mlkem_poly_t *a, const mlkem_poly_t
 /** @brief Reduce each coefficient of p to [0, q - 1]. */
 void mlkem_poly_reduce(mlkem_poly_t *p);
 
-/** @brief In-place forward NTT. */
+/**
+ * @brief In-place forward NTT.
+ * @stability evolving
+ */
 MOONLAB_API void mlkem_poly_ntt(mlkem_poly_t *p);
-/** @brief In-place inverse NTT + Montgomery correction. */
+/**
+ * @brief In-place inverse NTT + Montgomery correction.
+ * @stability evolving
+ */
 MOONLAB_API void mlkem_poly_invntt(mlkem_poly_t *p);
 /**
  * @brief Multiply every coefficient of @p p by the Montgomery factor
@@ -80,6 +86,7 @@ void mlkem_poly_tomont(mlkem_poly_t *p);
  * @brief Pointwise multiplication of two polynomials in NTT domain;
  *        each pair (c[2i], c[2i+1]) = a[2i..2i+1] * b[2i..2i+1]
  *        mod (X^2 - zeta_i).  See FIPS 203 Algorithm 11.
+ * @stability evolving
  */
 MOONLAB_API void mlkem_poly_basemul(mlkem_poly_t *dst,
                          const mlkem_poly_t *a, const mlkem_poly_t *b);
@@ -90,6 +97,7 @@ MOONLAB_API void mlkem_poly_basemul(mlkem_poly_t *dst,
  * @brief Centered binomial sampler CBD_eta.  Expects
  *        @p buf_len >= eta * n / 4 bytes of uniformly-random input
  *        (typically SHAKE output seeded by a domain-separated seed).
+ * @stability evolving
  */
 MOONLAB_API void mlkem_poly_cbd(mlkem_poly_t *p, const uint8_t *buf, int eta);
 
@@ -98,17 +106,25 @@ MOONLAB_API void mlkem_poly_cbd(mlkem_poly_t *p, const uint8_t *buf, int eta);
 /**
  * @brief Pack a polynomial into MLKEM_POLYBYTES = 384 bytes.  Each
  *        coefficient is 12 bits (q fits in 12 bits).
+ * @stability evolving
  */
 MOONLAB_API void mlkem_poly_tobytes(uint8_t out[MLKEM_POLYBYTES], const mlkem_poly_t *p);
-/** @brief Inverse of @ref mlkem_poly_tobytes. */
+/**
+ * @brief Inverse of @ref mlkem_poly_tobytes.
+ * @stability evolving
+ */
 MOONLAB_API void mlkem_poly_frombytes(mlkem_poly_t *p, const uint8_t in[MLKEM_POLYBYTES]);
 
 /**
  * @brief Compress each coefficient of @p p to @p d bits, pack into
  *        ceil(n * d / 8) bytes.  FIPS 203 Algorithm 4.
+ * @stability evolving
  */
 MOONLAB_API void mlkem_poly_compress(uint8_t *out, const mlkem_poly_t *p, int d);
-/** @brief Decompress the inverse of @ref mlkem_poly_compress. */
+/**
+ * @brief Decompress the inverse of @ref mlkem_poly_compress.
+ * @stability evolving
+ */
 MOONLAB_API void mlkem_poly_decompress(mlkem_poly_t *p, const uint8_t *in, int d);
 
 /**
@@ -117,6 +133,7 @@ MOONLAB_API void mlkem_poly_decompress(mlkem_poly_t *p, const uint8_t *in, int d
  *        sampled by rejection from SHAKE128(seed || j || i) (FIPS 203
  *        Algorithm 7 -- "GenMatrix").  When @p transposed is non-zero
  *        the indices are swapped (FIPS 203 uses A^T in decapsulation).
+ * @stability evolving
  */
 MOONLAB_API void mlkem_gen_matrix(mlkem_poly_t *A, int k, const uint8_t seed[32],
                        int transposed);

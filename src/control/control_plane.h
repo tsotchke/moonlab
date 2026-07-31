@@ -78,6 +78,7 @@ extern "C" {
  * @return MOONLAB_CONTROL_OK if every cycle completed (or no client
  *         connected before SIGINT), or a negative code on bind/accept
  *         failure.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_serve(const char *host,
@@ -101,6 +102,7 @@ moonlab_control_serve(const char *host,
  *
  * @return MOONLAB_CONTROL_OK on success or a negative code.
  *         On any failure, `*out_probs` is left NULL and `*out_num` 0.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit(const char *host,
@@ -120,6 +122,7 @@ moonlab_control_submit_circuit(const char *host,
  *
  * @return MOONLAB_CONTROL_OK on success or a negative code.
  *         On any failure, `*out_outcomes` is left NULL.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit_shots(const char *host,
@@ -158,6 +161,7 @@ typedef struct moonlab_control_server moonlab_control_server_t;
  * @param[out] out_port   Optional.  Bound port (useful when port=0).
  *
  * @return MOONLAB_CONTROL_OK on success or a negative code.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_open(const char                 *host,
@@ -176,6 +180,7 @@ moonlab_control_server_open(const char                 *host,
  *                        daemon mode.
  *
  * @return MOONLAB_CONTROL_OK on clean shutdown, negative on I/O error.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_run(moonlab_control_server_t *server,
@@ -185,11 +190,15 @@ moonlab_control_server_run(moonlab_control_server_t *server,
  * @brief Signal a running server to stop after the current request.
  *        Thread-safe and safe to call from a signal handler (writes a
  *        single byte to a self-pipe; no malloc, no printf).
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_control_server_shutdown(moonlab_control_server_t *server);
 
-/** @brief Release listener + self-pipe; idempotent on NULL. */
+/**
+ * @brief Release listener + self-pipe; idempotent on NULL.
+ * @stability evolving
+ */
 MOONLAB_API void
 moonlab_control_server_close(moonlab_control_server_t *server);
 
@@ -222,6 +231,7 @@ moonlab_control_server_close(moonlab_control_server_t *server);
  *        Safe to call after `open()` but before `run()`.
  *
  * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_set_secret(moonlab_control_server_t *server,
@@ -233,6 +243,7 @@ moonlab_control_server_set_secret(moonlab_control_server_t *server,
  *        Pass `secret = NULL` / `secret_len = 0` to fall back to the
  *        unauthenticated path (equivalent to
  *        `moonlab_control_submit_circuit`).
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit_auth(const char    *host,
@@ -262,6 +273,7 @@ moonlab_control_submit_circuit_auth(const char    *host,
  *        computed over the verb line as before; the tenant_id is
  *        plumbed through to the scheduler's thread-local request
  *        context for the duration of the run.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit_auth_tenant(const char    *host,
@@ -279,6 +291,7 @@ moonlab_control_submit_circuit_auth_tenant(const char    *host,
  *        clients can construct the AUTH token themselves when they want
  *        to handle the socket directly rather than going through
  *        @ref moonlab_control_submit_circuit_auth.  Output is 32 bytes.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
@@ -307,6 +320,7 @@ moonlab_control_hmac_sha3_256(const uint8_t *secret, size_t secret_len,
  *
  * @return MOONLAB_CONTROL_OK or a negative code.  Returns
  *         MOONLAB_CONTROL_BAD_ARG if the library was built without TLS.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_use_tls(moonlab_control_server_t *server,
@@ -323,6 +337,7 @@ moonlab_control_server_use_tls(moonlab_control_server_t *server,
  * @return MOONLAB_CONTROL_OK or a negative code.
  *         MOONLAB_CONTROL_BAD_ARG if the library was built without TLS
  *         or `use_tls()` has not been called yet.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_require_client_cert(moonlab_control_server_t *server,
@@ -337,6 +352,7 @@ moonlab_control_server_require_client_cert(moonlab_control_server_t *server,
  *        Pass `rate_rps = 0` to disable rate limiting (default).
  *
  * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_set_rate_limit(moonlab_control_server_t *server,
@@ -350,6 +366,7 @@ moonlab_control_server_set_rate_limit(moonlab_control_server_t *server,
  *        and never sends a verb line.  Default 0 = no timeout (legacy).
  *
  * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_set_request_timeout(moonlab_control_server_t *server,
@@ -366,6 +383,7 @@ moonlab_control_server_set_request_timeout(moonlab_control_server_t *server,
  *        in-flight server work.  Both can be active simultaneously.
  *
  * @return MOONLAB_CONTROL_OK or MOONLAB_CONTROL_BAD_ARG.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_set_max_concurrent(moonlab_control_server_t *server,
@@ -427,6 +445,7 @@ typedef int (*moonlab_admission_hook_fn)(const char *tenant_id,
  *
  * @return MOONLAB_CONTROL_OK on success, MOONLAB_CONTROL_BAD_ARG on
  *         NULL server.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_server_set_admission_hook(moonlab_control_server_t  *server,
@@ -439,6 +458,7 @@ moonlab_control_server_set_admission_hook(moonlab_control_server_t  *server,
  *        reachable and responsive, or a negative status otherwise.
  *        Skips both AUTH and TLS-cert layers so it can be used by a
  *        load-balancer probe before secrets are configured.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_health(const char *host, uint16_t port);
@@ -461,6 +481,7 @@ moonlab_control_submit_health(const char *host, uint16_t port);
  *
  * Bypasses AUTH and TLS-cert layers (same justification as HEALTH:
  * monitoring scrapers ought not need credentials).
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_metrics(const char *host, uint16_t port,
@@ -476,6 +497,7 @@ moonlab_control_submit_metrics(const char *host, uint16_t port,
  *                       should set 0 and supply `ca_path`.
  * @param[in]  secret / secret_len  Optional HMAC auth (matches the
  *                       v0.8.15 / v0.8.16 in-band AUTH prelude).
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit_tls(const char    *host,
@@ -498,6 +520,7 @@ moonlab_control_submit_circuit_tls(const char    *host,
  * @param[in] client_cert_path  PEM client certificate (signed by the
  *                              CA the server is configured to trust).
  * @param[in] client_key_path   PEM client private key.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_control_submit_circuit_mtls(const char    *host,

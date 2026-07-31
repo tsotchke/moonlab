@@ -80,6 +80,7 @@ typedef struct {
  *        re-installs the profile (so if the caller overrode one
  *        and wants to revert to the defaults, calling this again
  *        works).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_register_vendor_noise_backends(void);
 
@@ -91,6 +92,7 @@ MOONLAB_API int moonlab_register_vendor_noise_backends(void);
  *
  *        The profile struct is copied into the registry, so the
  *        caller's storage can be freed after the call returns.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_register_vendor_noise_backend_with_profile(
         const char *name,
@@ -123,6 +125,7 @@ MOONLAB_API int moonlab_register_vendor_noise_backend_with_profile(
  *        the old.
  *
  * @return MOONLAB_SCHED_OK / MOONLAB_SCHED_BAD_ARG / MOONLAB_SCHED_OOM.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_register_vendor_noise_profile(
         const char *name,
@@ -132,6 +135,7 @@ MOONLAB_API int moonlab_register_vendor_noise_profile(
  * @brief Unregister a profile by name.  Returns
  *        MOONLAB_SCHED_OK or MOONLAB_SCHED_BACKEND_NOT_FOUND
  *        (reused for "profile not found" — same status family).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_unregister_vendor_noise_profile(const char *name);
 
@@ -143,6 +147,7 @@ MOONLAB_API int moonlab_unregister_vendor_noise_profile(const char *name);
  *        any profile registered via
  *        @ref moonlab_register_vendor_noise_profile.  NULL if
  *        @p name is not in the registry.
+ * @stability evolving
  */
 MOONLAB_API const moonlab_vendor_noise_profile_t *
 moonlab_lookup_vendor_noise_profile(const char *name);
@@ -150,6 +155,7 @@ moonlab_lookup_vendor_noise_profile(const char *name);
 /**
  * @brief Number of currently-registered profiles (including the
  *        pre-baked + alias entries).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_num_vendor_noise_profiles(void);
 
@@ -158,6 +164,7 @@ MOONLAB_API int moonlab_num_vendor_noise_profiles(void);
  *        Pointers are owned by the registry, valid until the
  *        respective profile is unregistered.  Returns count
  *        written (<= max).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_list_vendor_noise_profiles(
         const char **out_names, int max);

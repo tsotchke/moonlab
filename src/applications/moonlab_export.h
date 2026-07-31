@@ -136,6 +136,7 @@ _Static_assert(sizeof(moonlab_complex_double) == 2 * sizeof(double),
  * @param[out] patch Patch version component. May be NULL.
  *
  * @since 0.1.2
+ * @stability stable
  */
 MOONLAB_API void moonlab_abi_version(int* major, int* minor, int* patch);
 
@@ -171,6 +172,7 @@ MOONLAB_API void moonlab_abi_version(int* major, int* minor, int* patch);
  * @return -5 if the per-process request counter is exhausted.
  *
  * @since 0.1.2
+ * @stability stable
  */
 MOONLAB_API int moonlab_qrng_bytes(uint8_t* buf, size_t size);
 
@@ -206,6 +208,7 @@ typedef struct {
  *
  * @return 0 on success, -1 for NULL status, -2 on initialization failure.
  * @since ABI 0.5
+ * @stability stable
  */
 MOONLAB_API int moonlab_qrng_get_status(moonlab_qrng_status_t* status);
 
@@ -239,6 +242,7 @@ MOONLAB_API int moonlab_qrng_get_status(moonlab_qrng_status_t* status);
  *         error (bad arguments / allocation failure).
  *
  * @since 0.2.0
+ * @stability stable
  */
 MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
 
@@ -256,34 +260,41 @@ MOONLAB_API int moonlab_qwz_chern(double m, size_t N, double* out_chern);
  */
 
 /** Winding number of the Su-Schrieffer-Heeger chain (t1 intra-cell,
+ * @stability stable
  *  t2 inter-cell) on an @p N-point Brillouin-zone grid (N >= 4). */
 MOONLAB_API int moonlab_ssh_winding(double t1, double t2, size_t N);
 
 /** Z2 (0/1) invariant of the Kitaev p-wave chain in its BdG form for
+ * @stability stable
  *  hopping @p t, chemical potential @p mu, pairing @p delta. */
 MOONLAB_API int moonlab_kitaev_chain_z2(double t, double mu, double delta);
 
 /** Chern number of the QWZ lower band via the projector (P dP dP)
+ * @stability stable
  *  Berry-curvature grid on an @p N x @p N BZ mesh (N >= 4). */
 MOONLAB_API int moonlab_chern_qwz_proj(double m, size_t N);
 
 /** Chern number of the QWZ lower band via the parallel-transport
+ * @stability stable
  *  (Wilson-loop) Berry-curvature grid on an @p N x @p N BZ mesh. */
 MOONLAB_API int moonlab_chern_qwz_pt(double m, size_t N);
 
 /** Z2 invariant of the Kane-Mele model (@p t hopping, @p lambda_so
  *  spin-orbit, @p lambda_r Rashba, @p lambda_v sublattice potential)
+ * @stability stable
  *  on an @p N x @p N mesh (N >= 8, even). */
 MOONLAB_API int moonlab_kane_mele_z2(double t, double lambda_so,
                                      double lambda_r, double lambda_v,
                                      size_t N);
 
 /** Z2 invariant of the Bernevig-Hughes-Zhang model (@p A, @p B, @p M)
+ * @stability stable
  *  on an @p N x @p N mesh (N >= 8, even). */
 MOONLAB_API int moonlab_bhz_z2(double A, double B, double M, size_t N);
 
 /** Chern number of the Hofstadter model at flux @p p / @p q with
  *  @p n_occupied filled sub-bands, on an @p N x @p N mesh (N >= 4,
+ * @stability stable
  *  q >= 2, 1 <= n_occupied < q). */
 MOONLAB_API int moonlab_hofstadter_chern(double t, size_t p, size_t q,
                                          size_t n_occupied, size_t N);
@@ -306,6 +317,7 @@ MOONLAB_API int moonlab_hofstadter_chern(double t, size_t p, size_t q,
  * @param dk 1632-byte output secret key.
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
+ * @stability stable
  */
 MOONLAB_API int moonlab_mlkem512_keygen_qrng(
     uint8_t ek[MOONLAB_MLKEM512_PUBLICKEYBYTES],
@@ -321,6 +333,7 @@ MOONLAB_API int moonlab_mlkem512_keygen_qrng(
  * @param ek 800-byte public key.
  * @return  0 on success, -1 on entropy failure.
  * @since 0.2.0
+ * @stability stable
  */
 MOONLAB_API int moonlab_mlkem512_encaps_qrng(
     uint8_t c[MOONLAB_MLKEM512_CIPHERTEXTBYTES],
@@ -337,6 +350,7 @@ MOONLAB_API int moonlab_mlkem512_encaps_qrng(
  * @param c  768-byte ciphertext.
  * @param dk 1632-byte secret key.
  * @since 0.2.0
+ * @stability stable
  */
 MOONLAB_API void moonlab_mlkem512_decaps(
     uint8_t K[MOONLAB_MLKEM512_SHAREDSECRETBYTES],
@@ -402,18 +416,36 @@ MOONLAB_API void moonlab_mlkem1024_decaps(
 
 typedef struct moonlab_ca_mps_t moonlab_ca_mps_t;
 
-/** Allocate a CA-MPS state on @p num_qubits with bond cap @p max_bond_dim. */
+/**
+ * Allocate a CA-MPS state on @p num_qubits with bond cap @p max_bond_dim.
+ * @stability stable
+ */
 MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
-/** Release a CA-MPS state created by ::moonlab_ca_mps_create. */
+/**
+ * Release a CA-MPS state created by ::moonlab_ca_mps_create.
+ * @stability stable
+ */
 MOONLAB_API void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
-/** Deep-clone (independent of the source). */
+/**
+ * Deep-clone (independent of the source).
+ * @stability stable
+ */
 MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
 
-/** Number of qubits.  0 if @p s is NULL. */
+/**
+ * Number of qubits.  0 if @p s is NULL.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_num_qubits(const moonlab_ca_mps_t* s);
-/** Configured bond-dimension cap. */
+/**
+ * Configured bond-dimension cap.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_max_bond_dim(const moonlab_ca_mps_t* s);
-/** Current peak bond dimension across the MPS factor. */
+/**
+ * Current peak bond dimension across the MPS factor.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
 
 /* Clifford gates: tableau-only (O(n) per gate, no MPS cost). */
@@ -439,36 +471,61 @@ MOONLAB_API int moonlab_ca_mps_crx       (moonlab_ca_mps_t* s, uint32_t c, uint3
 MOONLAB_API int moonlab_ca_mps_cry       (moonlab_ca_mps_t* s, uint32_t c, uint32_t t, double theta);
 MOONLAB_API int moonlab_ca_mps_u3        (moonlab_ca_mps_t* s, uint32_t q,
                                 double theta, double phi, double lambda);
-/** Toffoli (CCX): flips @p t when both @p c1 and @p c2 are |1>. */
+/**
+ * Toffoli (CCX): flips @p t when both @p c1 and @p c2 are |1>.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_toffoli   (moonlab_ca_mps_t* s,
                                 uint32_t c1, uint32_t c2, uint32_t t);
-/** Fredkin (CSWAP): swaps @p t1 and @p t2 when @p c is |1>. */
+/**
+ * Fredkin (CSWAP): swaps @p t1 and @p t2 when @p c is |1>.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_fredkin   (moonlab_ca_mps_t* s,
                                 uint32_t c, uint32_t t1, uint32_t t2);
 
-/** Apply exp(i theta P) for a Pauli string P (length = num_qubits). */
+/**
+ * Apply exp(i theta P) for a Pauli string P (length = num_qubits).
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                    const uint8_t* pauli_string, double theta);
-/** Imaginary-time exp(-tau P) for a Pauli string P; non-unitary. */
+/**
+ * Imaginary-time exp(-tau P) for a Pauli string P; non-unitary.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
                                         const uint8_t* pauli_string, double tau);
-/** Restore unit norm after non-unitary evolution. */
+/**
+ * Restore unit norm after non-unitary evolution.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
-/** Current state norm. */
+/**
+ * Current state norm.
+ * @stability stable
+ */
 MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
 
-/** <psi|P|psi> for a Pauli string P. */
+/**
+ * <psi|P|psi> for a Pauli string P.
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                  const uint8_t* pauli_string,
                                  moonlab_complex_double* out_expval);
 /** <psi|H|psi> for H = sum_k coeffs[k] * paulis[k]; paulis is laid out
+ * @stability stable
  *  as `num_terms * num_qubits` bytes. */
 MOONLAB_API int moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                      const uint8_t* paulis,
                                      const moonlab_complex_double* coeffs,
                                      uint32_t num_terms,
                                      moonlab_complex_double* out_expval);
-/** Marginal P(Z_qubit = +1), in [0, 1]. */
+/**
+ * Marginal P(Z_qubit = +1), in [0, 1].
+ * @stability stable
+ */
 MOONLAB_API int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                            uint32_t qubit, double* out_prob);
 
@@ -490,6 +547,7 @@ MOONLAB_API int moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
  *
  * @return 0 on success, negative on argument error.
  * @since 0.6.0
+ * @stability stable
  */
 MOONLAB_API int moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
                                     const uint8_t* in_pauli,
@@ -520,6 +578,7 @@ MOONLAB_API int moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
  * @return Ground-state energy, or DBL_MAX on error.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
                                  uint32_t max_bond_dim, uint32_t num_sweeps);
@@ -548,6 +607,7 @@ MOONLAB_API double moonlab_dmrg_tfim_energy(uint32_t num_sites, double g,
  * @return Ground-state energy, or DBL_MAX on error.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
                                        double J, double Delta, double h,
@@ -589,6 +649,7 @@ MOONLAB_API double moonlab_dmrg_heisenberg_energy(uint32_t num_sites,
  * @return 0 on success, negative ::ca_mps_error_t on failure.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
                               const uint8_t* paulis,
@@ -621,6 +682,7 @@ MOONLAB_API int moonlab_ca_mps_var_d_run(moonlab_ca_mps_t* state,
  * Pass @p convergence_eps <= 0 to use the default 1e-7.
  *
  * @since 0.2.4
+ * @stability stable
  */
 MOONLAB_API int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
                                  const uint8_t* paulis,
@@ -662,6 +724,7 @@ MOONLAB_API int moonlab_ca_mps_var_d_run_v2(moonlab_ca_mps_t* state,
  *         don't pairwise commute or aren't independent.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
                                      const uint8_t* paulis,
@@ -691,6 +754,7 @@ MOONLAB_API int moonlab_ca_mps_gauge_warmstart(moonlab_ca_mps_t* state,
  * @return 0 on success, negative on bad input or OOM.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
                               double t_hop, double h_link,
@@ -709,6 +773,7 @@ MOONLAB_API int moonlab_z2_lgt_1d_build(uint32_t num_matter_sites,
  * @return 0 on success, negative on out-of-range x.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_z2_lgt_1d_gauss_law(uint32_t num_matter_sites,
                                   uint32_t site_x,
@@ -759,6 +824,7 @@ typedef struct moonlab_tdvp_engine_t moonlab_tdvp_engine_t;
  * @return Engine handle on success, NULL on allocation failure.
  *
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API moonlab_tdvp_engine_t*
 moonlab_tdvp_create_heisenberg(uint32_t num_sites,
@@ -780,6 +846,7 @@ moonlab_tdvp_create_heisenberg(uint32_t num_sites,
  * ::moonlab_tdvp_create_heisenberg.
  *
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API moonlab_tdvp_engine_t*
 moonlab_tdvp_create_tfim(uint32_t num_sites,
@@ -801,6 +868,7 @@ moonlab_tdvp_create_tfim(uint32_t num_sites,
  *
  * @return 0 on success, negative on integrator failure.
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_tdvp_step(moonlab_tdvp_engine_t* engine);
 
@@ -814,24 +882,38 @@ MOONLAB_API int moonlab_tdvp_step(moonlab_tdvp_engine_t* engine);
  *
  * @return 0 on success, negative on integrator failure.
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_tdvp_evolve_to(moonlab_tdvp_engine_t* engine,
                                         double target_time);
 
-/** Current evolution time accumulated by the engine. */
+/**
+ * Current evolution time accumulated by the engine.
+ * @stability stable
+ */
 MOONLAB_API double moonlab_tdvp_current_time(const moonlab_tdvp_engine_t* engine);
 
 /** Current variational energy @c <psi|H|psi> evaluated after the
+ * @stability stable
  *  most recent step (or at engine creation if no steps have run). */
 MOONLAB_API double moonlab_tdvp_current_energy(const moonlab_tdvp_engine_t* engine);
 
-/** Current MPS norm @c <psi|psi>^{1/2}. */
+/**
+ * Current MPS norm @c <psi|psi>^{1/2}.
+ * @stability stable
+ */
 MOONLAB_API double moonlab_tdvp_current_norm(const moonlab_tdvp_engine_t* engine);
 
-/** Peak bond dimension across the MPS factor after the latest step. */
+/**
+ * Peak bond dimension across the MPS factor after the latest step.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_tdvp_current_max_bond_dim(const moonlab_tdvp_engine_t* engine);
 
-/** Number of inter-site bonds (n_qubits - 1). */
+/**
+ * Number of inter-site bonds (n_qubits - 1).
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_tdvp_num_bonds(const moonlab_tdvp_engine_t* engine);
 
 /**
@@ -842,11 +924,15 @@ MOONLAB_API uint32_t moonlab_tdvp_num_bonds(const moonlab_tdvp_engine_t* engine)
  * on the most recent two-site update of that bond.
  *
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API uint32_t moonlab_tdvp_bond_chi(const moonlab_tdvp_engine_t* engine,
                                             uint32_t bond);
 
-/** Number of steps currently recorded in the engine's history. */
+/**
+ * Number of steps currently recorded in the engine's history.
+ * @stability stable
+ */
 MOONLAB_API uint32_t moonlab_tdvp_history_num_steps(const moonlab_tdvp_engine_t* engine);
 
 /**
@@ -861,6 +947,7 @@ MOONLAB_API uint32_t moonlab_tdvp_history_num_steps(const moonlab_tdvp_engine_t*
  * @return 0 on success, -1 if @p engine is NULL or @p step is out of
  *         range.
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_tdvp_history_get_step(const moonlab_tdvp_engine_t* engine,
                                                uint32_t step,
@@ -878,13 +965,17 @@ MOONLAB_API int moonlab_tdvp_history_get_step(const moonlab_tdvp_engine_t* engin
  *
  * @return 0 on success, -1 on out-of-range step or NULL buffer.
  * @since 0.4.1
+ * @stability stable
  */
 MOONLAB_API int moonlab_tdvp_history_get_bond_chi(const moonlab_tdvp_engine_t* engine,
                                                    uint32_t step,
                                                    uint32_t* out_chi,
                                                    uint32_t buf_capacity);
 
-/** Release the engine and all internal allocations. */
+/**
+ * Release the engine and all internal allocations.
+ * @stability stable
+ */
 MOONLAB_API void moonlab_tdvp_engine_free(moonlab_tdvp_engine_t* engine);
 
 /* ---- VQE exact gradient (stable from ABI 0.4.0) --------------------- */
@@ -930,6 +1021,7 @@ typedef struct vqe_solver moonlab_vqe_solver_t;
  * @return -3 if the gradient computation failed internally.
  *
  * @since 1.1.0 (ABI 0.4.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_vqe_gradient(moonlab_vqe_solver_t* solver,
                                      const double* parameters,
@@ -965,6 +1057,7 @@ MOONLAB_API int moonlab_vqe_gradient(moonlab_vqe_solver_t* solver,
  * @return -3 if the computation failed internally.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_vqe_qgt(moonlab_vqe_solver_t* solver,
                                 const double* parameters,
@@ -991,6 +1084,7 @@ MOONLAB_API int moonlab_vqe_qgt(moonlab_vqe_solver_t* solver,
  *         -3 internal failure.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_vqe_berry_curvature(moonlab_vqe_solver_t* solver,
                                             const double* parameters,
@@ -1014,6 +1108,7 @@ MOONLAB_API int moonlab_vqe_berry_curvature(moonlab_vqe_solver_t* solver,
  *         -3 internal failure.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_vqe_natural_gradient(moonlab_vqe_solver_t* solver,
                                              const double* parameters,
@@ -1056,6 +1151,7 @@ MOONLAB_API int moonlab_vqe_natural_gradient(moonlab_vqe_solver_t* solver,
  * @return -2 at a band touching, where the geometry is undefined.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_dsigma_metric_curvature(const double* d,
                                                 const double* dx,
@@ -1078,6 +1174,7 @@ MOONLAB_API int moonlab_dsigma_metric_curvature(const double* d,
  *         band touching.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_qwz_curvature_at(double m, const double* k,
                                          double* g_out, double* omega_out);
@@ -1101,6 +1198,7 @@ MOONLAB_API int moonlab_qwz_curvature_at(double m, const double* k,
  *         band touching.
  *
  * @since 1.2.1 (ABI 0.7.0)
+ * @stability stable
  */
 MOONLAB_API int moonlab_haldane_curvature_at(double t1, double t2, double phi,
                                              double m_stagger, const double* k,
@@ -1125,6 +1223,7 @@ MOONLAB_API int moonlab_haldane_curvature_at(double t1, double t2, double phi,
  * @param status  Integer return code.
  *
  * @since 0.2.1
+ * @stability stable
  */
 MOONLAB_API const char* moonlab_status_string(int module, int status);
 

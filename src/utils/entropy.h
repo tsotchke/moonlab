@@ -99,6 +99,7 @@ entropy_util_ctx_t* entropy_util_create(void);
  *
  * @param source Preferred entropy source
  * @return New entropy context or NULL on error
+ * @stability evolving
  */
 MOONLAB_API entropy_util_ctx_t* entropy_util_create_with_source(entropy_util_source_type_t source);
 
@@ -106,6 +107,7 @@ MOONLAB_API entropy_util_ctx_t* entropy_util_create_with_source(entropy_util_sou
  * @brief Destroy entropy context
  *
  * @param ctx Context to destroy
+ * @stability evolving
  */
 MOONLAB_API void entropy_util_destroy(entropy_util_ctx_t* ctx);
 
@@ -136,6 +138,7 @@ uint8_t entropy_util_byte(entropy_util_ctx_t* ctx);
  * @param buffer Output buffer
  * @param size Number of bytes
  * @return Number of bytes written
+ * @stability evolving
  */
 MOONLAB_API size_t entropy_util_bytes(entropy_util_ctx_t* ctx, uint8_t* buffer, size_t size);
 
@@ -229,6 +232,7 @@ const char* entropy_util_os_source_name(void);
  * @return Number of bytes successfully collected (may be less than
  *         `size` if the timer is too coarse to resolve usable
  *         jitter).
+ * @stability evolving
  */
 MOONLAB_API size_t entropy_util_jitter_bytes(uint8_t* buffer, size_t size);
 

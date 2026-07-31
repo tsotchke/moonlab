@@ -142,6 +142,7 @@ MOONLAB_API int fuse_append_crz(fuse_circuit_t* c, int ctrl, int tgt, double the
  * @param src    input circuit (not modified)
  * @param stats  optional statistics sink (may be NULL)
  * @return owned, heap-allocated circuit; NULL on OOM.
+ * @stability evolving
  */
 MOONLAB_API fuse_circuit_t* fuse_compile(const fuse_circuit_t* src, fuse_stats_t* stats);
 
@@ -150,6 +151,7 @@ MOONLAB_API fuse_circuit_t* fuse_compile(const fuse_circuit_t* src, fuse_stats_t
  *
  * Works on both fused and unfused circuits. Returns QS_SUCCESS if every
  * gate applied cleanly.
+ * @stability evolving
  */
 MOONLAB_API qs_error_t fuse_execute(const fuse_circuit_t* c, quantum_state_t* state);
 

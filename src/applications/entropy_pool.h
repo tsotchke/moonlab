@@ -104,6 +104,7 @@ typedef struct {
  *
  * @param ctx Output context pointer
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int entropy_pool_init(entropy_pool_ctx_t **ctx);
 
@@ -113,6 +114,7 @@ MOONLAB_API int entropy_pool_init(entropy_pool_ctx_t **ctx);
  * @param ctx Output context pointer
  * @param config Custom configuration
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int entropy_pool_init_with_config(
     entropy_pool_ctx_t **ctx,
@@ -125,6 +127,7 @@ MOONLAB_API int entropy_pool_init_with_config(
  * Stops background thread and securely erases pool.
  *
  * @param ctx Pool context
+ * @stability evolving
  */
 MOONLAB_API void entropy_pool_free(entropy_pool_ctx_t *ctx);
 
@@ -159,6 +162,7 @@ void entropy_pool_stop_background(entropy_pool_ctx_t *ctx);
  * @param buffer Output buffer
  * @param size Number of bytes requested
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int entropy_pool_get_bytes(
     entropy_pool_ctx_t *ctx,
@@ -186,6 +190,7 @@ int entropy_pool_refill(entropy_pool_ctx_t *ctx);
  * @param ctx Pool context
  * @param stats Output statistics structure
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int entropy_pool_get_stats(
     const entropy_pool_ctx_t *ctx,

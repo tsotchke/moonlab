@@ -70,6 +70,7 @@ typedef enum {
  *        backend. Cheap; can be called on every dispatch decision.
  *
  * @return 1 when Eshkol + GPU are available, 0 otherwise.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_eshkol_available(void);
 
@@ -88,6 +89,7 @@ moonlab_eshkol_status_t moonlab_eshkol_init(void);
  *        moonlab_eshkol_zgemm calls. Maps to Eshkol's
  *        ESHKOL_GPU_PRECISION env var semantics but lets the
  *        process change tier at runtime without shelling out.
+ * @stability evolving
  */
 MOONLAB_API void moonlab_eshkol_set_precision(moonlab_eshkol_precision_t tier);
 
@@ -120,6 +122,7 @@ MOONLAB_API moonlab_eshkol_precision_t moonlab_eshkol_get_precision(void);
  *               before being written, which costs an extra traffic
  *               round)
  * @return MOONLAB_ESHKOL_OK on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API moonlab_eshkol_status_t moonlab_eshkol_zgemm(
     const moonlab_cplx_t* A, size_t lda,

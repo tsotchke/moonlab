@@ -140,10 +140,14 @@ typedef struct {
  * @param L  linear lattice size (L >= 3)
  * @param m  QWZ mass parameter
  * @return   allocated system, or NULL on out-of-memory.
+ * @stability evolving
  */
 MOONLAB_API chern_system_t* chern_qwz_create(size_t L, double m);
 
-/** @brief Release the Hamiltonian, projector, and handle. */
+/**
+ * @brief Release the Hamiltonian, projector, and handle.
+ * @stability evolving
+ */
 MOONLAB_API void chern_system_free(chern_system_t* sys);
 
 /**
@@ -151,6 +155,7 @@ MOONLAB_API void chern_system_free(chern_system_t* sys);
  *        sign function and store it in @p sys->P.
  *
  * @return 0 on success, non-zero on OOM or iteration failure.
+ * @stability evolving
  */
 MOONLAB_API int chern_build_projector(chern_system_t* sys);
 
@@ -164,6 +169,7 @@ MOONLAB_API int chern_build_projector(chern_system_t* sys);
  * zero by construction.
  *
  * @return @f$c(\mathbf r)@f$ as a real number (units of @f$1/A_{\mathrm{uc}}@f$).
+ * @stability evolving
  */
 MOONLAB_API double chern_local_marker(const chern_system_t* sys,
                           size_t rx, size_t ry);
@@ -174,6 +180,7 @@ MOONLAB_API double chern_local_marker(const chern_system_t* sys,
  *
  * For a clean Chern insulator sampled well away from edges, this
  * converges to the integer Chern number times the patch area.
+ * @stability evolving
  */
 MOONLAB_API double chern_bulk_sum(const chern_system_t* sys,
                       size_t rmin, size_t rmax);

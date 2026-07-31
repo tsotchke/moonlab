@@ -62,6 +62,7 @@ typedef struct {
  *                            Set to 0 to disable refilling (one-shot
  *                            budget that must be replenished by an
  *                            explicit refill() call).
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_token_bucket_init(moonlab_token_bucket_t *bkt,
@@ -80,6 +81,7 @@ moonlab_token_bucket_init(moonlab_token_bucket_t *bkt,
  *
  * @return  1 on success (tokens removed), 0 on insufficient balance
  *          (no tokens removed).
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_token_bucket_take(moonlab_token_bucket_t *bkt, uint64_t n);
@@ -90,6 +92,7 @@ moonlab_token_bucket_take(moonlab_token_bucket_t *bkt, uint64_t n);
  *        on payment) or that refill on a custom schedule.
  *
  *        Thread-safe; concurrent calls compose correctly.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_token_bucket_refill(moonlab_token_bucket_t *bkt, uint64_t n);
@@ -98,6 +101,7 @@ moonlab_token_bucket_refill(moonlab_token_bucket_t *bkt, uint64_t n);
  * @brief Read the current balance.  Lazily refills under the hood
  *        before returning so the answer reflects elapsed time.
  *        Thread-safe.
+ * @stability evolving
  */
 MOONLAB_API uint64_t
 moonlab_token_bucket_peek(moonlab_token_bucket_t *bkt);

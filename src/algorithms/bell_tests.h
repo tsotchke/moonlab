@@ -148,6 +148,7 @@ typedef enum {
  * @param qubit1 First qubit index
  * @param qubit2 Second qubit index
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t create_bell_state_phi_plus(quantum_state_t *state, int qubit1, int qubit2);
 
@@ -173,6 +174,7 @@ qs_error_t create_bell_state_psi_minus(quantum_state_t *state, int qubit1, int q
  * @param qubit2 Second qubit
  * @param type Bell state type
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t create_bell_state(quantum_state_t *state, int qubit1, int qubit2, bell_state_type_t type);
 
@@ -217,6 +219,7 @@ double measure_correlation(
  * 
  * @param correlations Array of 4 correlations [E(a,b), E(a,b'), E(a',b), E(a',b')]
  * @return CHSH S-parameter
+ * @stability evolving
  */
 MOONLAB_API double calculate_chsh_parameter(const double correlations[4]);
 
@@ -239,6 +242,7 @@ MOONLAB_API double calculate_chsh_parameter(const double correlations[4]);
  * @param settings Measurement angles (NULL for optimal settings)
  * @param entropy Secure entropy source
  * @return Complete Bell test results with statistical analysis
+ * @stability evolving
  */
 MOONLAB_API bell_test_result_t bell_test_chsh(
     quantum_state_t *state,
@@ -258,6 +262,7 @@ MOONLAB_API bell_test_result_t bell_test_chsh(
  * These angles give CHSH = 2√2 for maximally entangled states.
  * 
  * @param settings Output: optimal measurement settings
+ * @stability evolving
  */
 MOONLAB_API void bell_get_optimal_settings(bell_measurement_settings_t *settings);
 
@@ -272,12 +277,14 @@ MOONLAB_API void bell_get_optimal_settings(bell_measurement_settings_t *settings
  * 
  * @param result Bell test result
  * @return 1 if the CHSH criteria are met, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int bell_test_confirms_quantum(const bell_test_result_t *result);
 
 /**
  * @brief Print Bell test results
  * @param result Bell test result
+ * @stability evolving
  */
 MOONLAB_API void bell_chsh_print_results(const bell_test_result_t *result);
 
@@ -358,6 +365,7 @@ void bell_monitor_free(bell_test_monitor_t *monitor);
  * Result fields re-used: chsh_value holds |M|; correlation_ab through
  * correlation_a_prime_b_prime hold the four <P1 P2 P3> correlators in
  * the order {XYY, YXY, YYX, XXX}; classical_bound = 2; quantum_bound = 4.
+ * @stability evolving
  */
 MOONLAB_API bell_test_result_t bell_test_mermin_ghz(
     quantum_state_t *state,
@@ -379,6 +387,7 @@ MOONLAB_API bell_test_result_t bell_test_mermin_ghz(
  * 1 and the ideal GHZ quantum value is 2^((N-1)/2).  For N = 2 this
  * reduces to CHSH / (2 sqrt(2)); for N = 3 to Mermin / 4.  0.0 on
  * argument error.
+ * @stability evolving
  */
 MOONLAB_API double bell_test_mermin_klyshko(
     quantum_state_t *state,

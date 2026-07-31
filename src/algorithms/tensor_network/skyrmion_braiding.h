@@ -152,6 +152,7 @@ typedef struct {
  * @param num_segments Number of path segments
  * @param velocity Skyrmion velocity
  * @return Braid path or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API braid_path_t *braid_path_circular(double center_x, double center_y,
                                    double radius,
@@ -183,6 +184,7 @@ int braid_path_exchange(double x1, double y1,
 
 /**
  * @brief Free braid path
+ * @stability evolving
  */
 MOONLAB_API void braid_path_free(braid_path_t *path);
 

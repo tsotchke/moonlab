@@ -117,6 +117,7 @@ typedef struct {
  * @param p     parameters
  * @param out   result sink; must be non-NULL
  * @return 0 on success, non-zero on invalid arguments.
+ * @stability evolving
  */
 MOONLAB_API int shor_ecdlp_estimate(const shor_ecdlp_params_t* p,
                         shor_ecdlp_resources_t* out);
@@ -148,6 +149,7 @@ typedef struct {
  * magic-state-factory multiplier for the T-state consumption rate
  * (@f$\approx 15d^{2}@f$ physical qubits per factory, one factory per
  * 100 Toffolis is a loose default).
+ * @stability evolving
  */
 MOONLAB_API int shor_ecdlp_ftqc_estimate(const shor_ecdlp_resources_t* logical,
                              const shor_ecdlp_ftqc_params_t* ftqc,
@@ -156,13 +158,20 @@ MOONLAB_API int shor_ecdlp_ftqc_estimate(const shor_ecdlp_resources_t* logical,
 /* --- Named-curve convenience -------------------------------------------- */
 
 /** Populate @p p with the parameters for secp256k1 and the
+ * @stability evolving
  *  GDB qubit-minimal encoding. */
 MOONLAB_API void shor_ecdlp_params_secp256k1(shor_ecdlp_params_t* p);
 
-/** Populate @p p with the parameters for NIST P-256. */
+/**
+ * Populate @p p with the parameters for NIST P-256.
+ * @stability evolving
+ */
 MOONLAB_API void shor_ecdlp_params_p256(shor_ecdlp_params_t* p);
 
-/** Populate @p p with the parameters for Curve25519 / Ed25519. */
+/**
+ * Populate @p p with the parameters for Curve25519 / Ed25519.
+ * @stability evolving
+ */
 MOONLAB_API void shor_ecdlp_params_curve25519(shor_ecdlp_params_t* p);
 
 #ifdef __cplusplus

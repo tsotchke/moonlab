@@ -158,10 +158,14 @@ typedef struct {
  * @param m        QWZ mass parameter
  * @param n_cheby  Chebyshev truncation order; n_cheby >= 8
  * @return         allocated handle, or NULL on invalid arguments / OOM.
+ * @stability evolving
  */
 MOONLAB_API chern_kpm_system_t* chern_kpm_create(size_t L, double m, size_t n_cheby);
 
-/** @brief Release memory owned by the handle. */
+/**
+ * @brief Release memory owned by the handle.
+ * @stability evolving
+ */
 MOONLAB_API void chern_kpm_free(chern_kpm_system_t* sys);
 
 /**
@@ -170,6 +174,7 @@ MOONLAB_API void chern_kpm_free(chern_kpm_system_t* sys);
  * Performs three matrix-free projector applications sandwiching the
  * diagonal position operators.  Memory is @f$O(N)@f$; work is
  * @f$O(N_c \cdot \mathrm{nnz}(\hat H))@f$ per site.
+ * @stability evolving
  */
 MOONLAB_API double chern_kpm_local_marker(const chern_kpm_system_t* sys,
                               size_t rx, size_t ry);
@@ -178,6 +183,7 @@ MOONLAB_API double chern_kpm_local_marker(const chern_kpm_system_t* sys,
  * @brief Integrate the marker over a square bulk patch.
  *
  * Parallelised across sites via OpenMP where available.
+ * @stability evolving
  */
 MOONLAB_API double chern_kpm_bulk_sum(const chern_kpm_system_t* sys,
                           size_t rmin, size_t rmax);
@@ -187,6 +193,7 @@ MOONLAB_API double chern_kpm_bulk_sum(const chern_kpm_system_t* sys,
  *        per-site marker, parallelised by site.
  *
  * @return 0 on success, nonzero on invalid range / OOM.
+ * @stability evolving
  */
 MOONLAB_API int chern_kpm_bulk_map(const chern_kpm_system_t* sys,
                        size_t rmin, size_t rmax,
@@ -206,6 +213,7 @@ MOONLAB_API int chern_kpm_bulk_map(const chern_kpm_system_t* sys,
  * numerically stable.
  *
  * @return 0 on success, non-zero on invalid arguments.
+ * @stability evolving
  */
 MOONLAB_API int chern_kpm_set_modulation(chern_kpm_system_t* sys,
                              const double* V_per_site,
@@ -221,6 +229,7 @@ MOONLAB_API int chern_kpm_set_modulation(chern_kpm_system_t* sys,
  * Canonical quasi-crystal choices: @f$n = 4@f$ (square), @f$8@f$
  * (octagonal), @f$10@f$ (decagonal).  Ownership transfers to the
  * caller; free with @c free when done.
+ * @stability evolving
  */
 MOONLAB_API double* chern_kpm_cn_modulation(size_t L, int n, double Q, double V0);
 

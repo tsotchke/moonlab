@@ -326,6 +326,7 @@ void mpo_print_info(const mpo_t *mpo);
  *
  * @param mpo MPO representation
  * @return Full Hamiltonian matrix or NULL if too large
+ * @stability evolving
  */
 MOONLAB_API tensor_t *mpo_to_matrix(const mpo_t *mpo);
 

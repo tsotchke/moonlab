@@ -79,12 +79,14 @@ void accelerate_aligned_free(void* ptr);
  * @brief Allocate complex amplitude array with AMX alignment
  * @param num_elements Number of complex elements
  * @return Pointer to aligned complex array
+ * @stability evolving
  */
 MOONLAB_API complex_t* accelerate_alloc_complex_array(size_t num_elements);
 
 /**
  * @brief Free complex amplitude array
  * @param ptr Pointer to complex array
+ * @stability evolving
  */
 MOONLAB_API void accelerate_free_complex_array(complex_t* ptr);
 
@@ -171,6 +173,7 @@ void accelerate_complex_magnitude(
  * @param a Complex input vector
  * @param result Real output vector (squared magnitudes)
  * @param n Number of elements
+ * @stability evolving
  */
 MOONLAB_API void accelerate_complex_magnitude_squared(
     const complex_t* a,
@@ -265,6 +268,7 @@ void accelerate_matrix_multiply(
  * @param amplitudes Complex amplitude array
  * @param n Number of amplitudes
  * @return Sum of squared magnitudes
+ * @stability evolving
  */
 MOONLAB_API double accelerate_sum_squared_magnitudes(
     const complex_t* amplitudes,

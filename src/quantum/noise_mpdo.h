@@ -90,14 +90,21 @@ typedef enum {
  * @param max_bond_dim   MPS truncation cap.  32 is reasonable for
  *                       ~50-qubit local-noise circuits at 1e-3 error.
  * @return New handle or NULL on bad args / alloc failure.
+ * @stability evolving
  */
 MOONLAB_API moonlab_mpdo_t* moonlab_mpdo_create(uint32_t num_qubits,
                                                   uint32_t max_bond_dim);
 
-/** Release all memory.  No-op on NULL. */
+/**
+ * Release all memory.  No-op on NULL.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_mpdo_free(moonlab_mpdo_t* m);
 
-/** Deep copy of the MPDO. */
+/**
+ * Deep copy of the MPDO.
+ * @stability evolving
+ */
 MOONLAB_API moonlab_mpdo_t* moonlab_mpdo_clone(const moonlab_mpdo_t* m);
 
 /* ================================================================== */
@@ -113,6 +120,7 @@ MOONLAB_API uint32_t moonlab_mpdo_current_bond_dim(const moonlab_mpdo_t* m);
  *
  * For a properly normalised quantum state Tr(rho) = 1; deviations
  * indicate truncation error (small) or implementation bugs (large).
+ * @stability evolving
  */
 MOONLAB_API double moonlab_mpdo_trace(const moonlab_mpdo_t* m);
 
@@ -144,6 +152,7 @@ MOONLAB_API double moonlab_mpdo_trace(const moonlab_mpdo_t* m);
  * provides a numerical check.
  *
  * @return MPDO_SUCCESS or an error code.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_kraus_1q(moonlab_mpdo_t* state,
                                                       uint32_t qubit,
@@ -166,6 +175,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_kraus_1q(moonlab_mpdo_t* state,
  * @param p  Depolarising probability in [0, 1].  At p=0 the channel
  *           is identity; at p=3/4 it sends every state to the maximally
  *           mixed state I/2.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_depolarizing_1q(moonlab_mpdo_t* state,
                                                             uint32_t qubit,
@@ -180,6 +190,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_depolarizing_1q(moonlab_mpdo_t* stat
  * @param gamma  Damping parameter in [0, 1].  At gamma=0 the channel
  *               is identity; at gamma=1 it deterministically resets
  *               every state to |0><0|.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_amplitude_damping_1q(moonlab_mpdo_t* state,
                                                                   uint32_t qubit,
@@ -192,6 +203,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_amplitude_damping_1q(moonlab_mpdo_t*
  *
  * @param lambda  Dephasing parameter in [0, 1].  Reduces off-diagonal
  *                density-matrix elements by factor sqrt(1-lambda).
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_damping_1q(moonlab_mpdo_t* state,
                                                               uint32_t qubit,
@@ -200,6 +212,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_damping_1q(moonlab_mpdo_t* sta
 /**
  * @brief Bit-flip channel
  *        @f$\rho \mapsto (1-p)\rho + p\,X\rho X@f$.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_flip_1q(moonlab_mpdo_t* state,
                                                         uint32_t qubit,
@@ -208,6 +221,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_flip_1q(moonlab_mpdo_t* state,
 /**
  * @brief Phase-flip channel
  *        @f$\rho \mapsto (1-p)\rho + p\,Z\rho Z@f$.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_flip_1q(moonlab_mpdo_t* state,
                                                           uint32_t qubit,
@@ -216,6 +230,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_phase_flip_1q(moonlab_mpdo_t* state,
 /**
  * @brief Bit-phase-flip channel
  *        @f$\rho \mapsto (1-p)\rho + p\,Y\rho Y@f$.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q(moonlab_mpdo_t* state,
                                                                uint32_t qubit,
@@ -237,6 +252,7 @@ MOONLAB_API mpdo_error_t moonlab_mpdo_apply_bit_phase_flip_1q(moonlab_mpdo_t* st
  *                         are Hermitian so the imaginary part is
  *                         numerically zero up to roundoff).
  * @return MPDO_SUCCESS or an error code.
+ * @stability evolving
  */
 MOONLAB_API mpdo_error_t moonlab_mpdo_expect_pauli_1q(const moonlab_mpdo_t* state,
                                                       uint32_t qubit,

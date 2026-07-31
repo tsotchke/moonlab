@@ -78,6 +78,7 @@ extern "C" {
  *         commutation/independence preconditions.
  *         Other ca_mps_error_t codes propagated from the underlying
  *         Clifford gate applications.
+ * @stability evolving
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_apply_stab_subgroup_warmstart(
     moonlab_ca_mps_t* state,

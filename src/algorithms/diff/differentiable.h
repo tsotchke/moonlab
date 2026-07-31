@@ -77,22 +77,26 @@ typedef struct moonlab_diff_circuit moonlab_diff_circuit_t;
  *        -- see MOONLAB_MAX_QUBITS in quantum/state.h -- so this bound is
  *        never the binding constraint in practice.)
  * @return New circuit handle, or NULL on a bad qubit count / OOM.
+ * @stability evolving
  */
 MOONLAB_API moonlab_diff_circuit_t* moonlab_diff_circuit_create(uint32_t num_qubits);
 
 /**
  * @brief Release the circuit record.  NULL-safe.
+ * @stability evolving
  */
 MOONLAB_API void moonlab_diff_circuit_free(moonlab_diff_circuit_t *c);
 
 /**
  * @brief Number of qubits the circuit acts on.
+ * @stability evolving
  */
 MOONLAB_API uint32_t moonlab_diff_num_qubits(const moonlab_diff_circuit_t *c);
 
 /**
  * @brief Number of parametric gates currently recorded.  Size of
  *        the gradient vector returned by @c moonlab_diff_backward.
+ * @stability evolving
  */
 MOONLAB_API size_t moonlab_diff_num_parameters(const moonlab_diff_circuit_t *c);
 
@@ -113,6 +117,7 @@ MOONLAB_API int moonlab_diff_cz  (moonlab_diff_circuit_t *c, int q0,   int q1);
  *        corresponding slot of the @c moonlab_diff_backward output.
  *
  * Returns 0 on success.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_rx(moonlab_diff_circuit_t *c, int qubit, double theta);
 MOONLAB_API int moonlab_diff_ry(moonlab_diff_circuit_t *c, int qubit, double theta);
@@ -126,6 +131,7 @@ MOONLAB_API int moonlab_diff_rz(moonlab_diff_circuit_t *c, int qubit, double the
  *        @f$CR_{X/Y/Z}(\theta) = \exp(-i \theta/2 \cdot
  *        |1\rangle\langle 1|_{ctrl} \otimes G_{tgt})@f$.
  *        Hardware-efficient ansatze use these.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_crx(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
 MOONLAB_API int moonlab_diff_cry(moonlab_diff_circuit_t *c, int ctrl, int target, double theta);
@@ -135,6 +141,7 @@ MOONLAB_API int moonlab_diff_crz(moonlab_diff_circuit_t *c, int ctrl, int target
  * @brief Update the @p k-th parametric angle in place (useful when
  *        an optimiser updates parameters across iterations without
  *        rebuilding the circuit).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_set_theta(moonlab_diff_circuit_t *c,
                             size_t k, double theta);
@@ -146,6 +153,7 @@ MOONLAB_API int moonlab_diff_set_theta(moonlab_diff_circuit_t *c,
  *        circuit.  @p state must be initialised to the correct
  *        num_qubits via @c quantum_state_init; this function resets
  *        it to @c |0..0> before applying gates.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_forward(const moonlab_diff_circuit_t *c,
                           quantum_state_t *state);
@@ -153,11 +161,13 @@ MOONLAB_API int moonlab_diff_forward(const moonlab_diff_circuit_t *c,
 /**
  * @brief Compute @f$\langle \psi | Z_q | \psi \rangle@f$ for a
  *        single qubit @p q.  No tape entry; pure read-only.
+ * @stability evolving
  */
 MOONLAB_API double moonlab_diff_expect_z(const quantum_state_t *state, int qubit);
 
 /**
  * @brief Compute @f$\langle \psi | X_q | \psi \rangle@f$.
+ * @stability evolving
  */
 MOONLAB_API double moonlab_diff_expect_x(const quantum_state_t *state, int qubit);
 
@@ -186,6 +196,7 @@ typedef enum {
  *
  * @return 0 on success, non-zero on invalid input or allocation
  *         failure.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_backward(const moonlab_diff_circuit_t *c,
                            const quantum_state_t *forward_state,
@@ -222,6 +233,7 @@ typedef struct {
  * Cost: @c num_terms forward+backward sweeps (one per term).  For
  * a typical VQE Hamiltonian with O(n^4) terms that's O(n^4) sweeps,
  * still independent of the number of parameters.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
                                      const quantum_state_t *forward_state,
@@ -243,6 +255,7 @@ MOONLAB_API int moonlab_diff_backward_pauli_sum(const moonlab_diff_circuit_t *c,
  *          gradient entry ::moonlab_diff_backward_pauli_sum takes the
  *          same operands and returns an @c int status, and can be used
  *          as a status-returning cross-check on the same inputs.
+ * @stability evolving
  */
 MOONLAB_API double moonlab_diff_expect_pauli_sum(const quantum_state_t *state,
                                       const moonlab_diff_pauli_term_t *terms,

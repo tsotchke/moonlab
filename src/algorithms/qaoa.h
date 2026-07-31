@@ -103,12 +103,14 @@ typedef struct {
  * @brief Create Ising model
  * @param num_qubits Number of qubits
  * @return Initialized Ising model
+ * @stability evolving
  */
 MOONLAB_API ising_model_t* ising_model_create(size_t num_qubits);
 
 /**
  * @brief Free Ising model
  * @param model Ising model to free
+ * @stability evolving
  */
 MOONLAB_API void ising_model_free(ising_model_t *model);
 
@@ -119,6 +121,7 @@ MOONLAB_API void ising_model_free(ising_model_t *model);
  * @param j Second qubit index
  * @param value Coupling strength
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int ising_model_set_coupling(ising_model_t *model, size_t i, size_t j, double value);
 
@@ -128,6 +131,7 @@ MOONLAB_API int ising_model_set_coupling(ising_model_t *model, size_t i, size_t 
  * @param i Qubit index
  * @param value Field strength
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int ising_model_set_field(ising_model_t *model, size_t i, double value);
 
@@ -140,12 +144,14 @@ MOONLAB_API int ising_model_set_field(ising_model_t *model, size_t i, double val
  * @param model Ising model
  * @param bitstring Bit string (0/1 for each qubit)
  * @return Energy value
+ * @stability evolving
  */
 MOONLAB_API double ising_model_evaluate(const ising_model_t *model, uint64_t bitstring);
 
 /**
  * @brief Print Ising model
  * @param model Ising model
+ * @stability evolving
  */
 MOONLAB_API void ising_model_print(const ising_model_t *model);
 
@@ -168,12 +174,14 @@ typedef struct {
  * @param num_vertices Number of vertices
  * @param num_edges Number of edges
  * @return Initialized graph
+ * @stability evolving
  */
 MOONLAB_API graph_t* graph_create(size_t num_vertices, size_t num_edges);
 
 /**
  * @brief Free graph
  * @param graph Graph to free
+ * @stability evolving
  */
 MOONLAB_API void graph_free(graph_t *graph);
 
@@ -185,6 +193,7 @@ MOONLAB_API void graph_free(graph_t *graph);
  * @param v Second vertex
  * @param weight Edge weight (1.0 for unweighted)
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, double weight);
 
@@ -196,6 +205,7 @@ MOONLAB_API int graph_add_edge(graph_t *graph, size_t edge_idx, int u, int v, do
  * 
  * @param graph Input graph
  * @return Ising model encoding
+ * @stability evolving
  */
 MOONLAB_API ising_model_t* ising_encode_maxcut(const graph_t *graph);
 
@@ -214,12 +224,14 @@ typedef struct {
  * @brief Create portfolio problem
  * @param num_assets Number of assets
  * @return Initialized portfolio problem
+ * @stability evolving
  */
 MOONLAB_API portfolio_problem_t* portfolio_problem_create(size_t num_assets);
 
 /**
  * @brief Free portfolio problem
  * @param problem Portfolio problem
+ * @stability evolving
  */
 MOONLAB_API void portfolio_problem_free(portfolio_problem_t *problem);
 
@@ -231,6 +243,7 @@ MOONLAB_API void portfolio_problem_free(portfolio_problem_t *problem);
  * 
  * @param problem Portfolio problem
  * @return Ising model encoding
+ * @stability evolving
  */
 MOONLAB_API ising_model_t* ising_encode_portfolio(const portfolio_problem_t *problem);
 
@@ -248,6 +261,7 @@ typedef struct {
  * @brief Encode number partition as Ising model
  * @param problem Partition problem
  * @return Ising model encoding
+ * @stability evolving
  */
 MOONLAB_API ising_model_t* ising_encode_partition(const partition_problem_t *problem);
 
@@ -320,6 +334,7 @@ typedef struct {
  * @param num_layers QAOA depth p (typically 1-5)
  * @param entropy Entropy context
  * @return QAOA solver context
+ * @stability evolving
  */
 MOONLAB_API qaoa_solver_t* qaoa_solver_create(
     ising_model_t *ising_model,
@@ -330,6 +345,7 @@ MOONLAB_API qaoa_solver_t* qaoa_solver_create(
 /**
  * @brief Free QAOA solver
  * @param solver QAOA solver
+ * @stability evolving
  */
 MOONLAB_API void qaoa_solver_free(qaoa_solver_t *solver);
 
@@ -344,6 +360,7 @@ MOONLAB_API void qaoa_solver_free(qaoa_solver_t *solver);
  * @param gamma Cost Hamiltonian angles
  * @param beta Mixer Hamiltonian angles
  * @return Expected energy (cost function value)
+ * @stability evolving
  */
 MOONLAB_API double qaoa_compute_expectation(
     qaoa_solver_t *solver,
@@ -363,6 +380,7 @@ MOONLAB_API double qaoa_compute_expectation(
  * @param gamma Cost Hamiltonian angles
  * @param beta Mixer Hamiltonian angles
  * @return Exact expected cost energy, or QAOA_ENERGY_SENTINEL on error
+ * @stability evolving
  */
 MOONLAB_API double qaoa_expectation_exact(
     qaoa_solver_t *solver,
@@ -384,6 +402,7 @@ MOONLAB_API double qaoa_expectation_exact(
  * 
  * @param solver QAOA solver
  * @return QAOA result with best solution
+ * @stability evolving
  */
 MOONLAB_API qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
 
@@ -401,6 +420,7 @@ MOONLAB_API qaoa_result_t qaoa_solve(qaoa_solver_t *solver);
  * @param beta Mixer angles
  * @param num_layers Number of QAOA layers
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t qaoa_apply_circuit(
     quantum_state_t *state,
@@ -419,6 +439,7 @@ MOONLAB_API qs_error_t qaoa_apply_circuit(
  * @param ising Ising model
  * @param gamma Cost angle
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t qaoa_apply_cost_hamiltonian(
     quantum_state_t *state,
@@ -434,6 +455,7 @@ MOONLAB_API qs_error_t qaoa_apply_cost_hamiltonian(
  * @param state Quantum state
  * @param beta Mixer angle
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t qaoa_apply_mixer_hamiltonian(
     quantum_state_t *state,
@@ -465,6 +487,7 @@ MOONLAB_API qs_error_t qaoa_apply_mixer_hamiltonian(
  * @param grad_gamma Output: gradient w.r.t. gamma
  * @param grad_beta Output: gradient w.r.t. beta
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int qaoa_compute_gradient(
     qaoa_solver_t *solver,
@@ -487,6 +510,7 @@ MOONLAB_API int qaoa_compute_gradient(
  * @param state QAOA state
  * @param entropy Entropy context
  * @return Measured bitstring
+ * @stability evolving
  */
 MOONLAB_API uint64_t qaoa_sample_solution(
     quantum_state_t *state,
@@ -506,6 +530,7 @@ MOONLAB_API uint64_t qaoa_sample_solution(
  * @param entropy Entropy context
  * @param num_samples Number of samples to take
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int qaoa_get_top_solutions(
     quantum_state_t *state,
@@ -526,6 +551,7 @@ MOONLAB_API int qaoa_get_top_solutions(
  * @param optimal_energy Known optimal energy
  * @param worst_energy Worst possible energy
  * @return Approximation ratio (0 to 1, higher is better)
+ * @stability evolving
  */
 MOONLAB_API double qaoa_approximation_ratio(
     double best_energy,
@@ -540,6 +566,7 @@ MOONLAB_API double qaoa_approximation_ratio(
 /**
  * @brief Print QAOA result
  * @param result QAOA result
+ * @stability evolving
  */
 MOONLAB_API void qaoa_print_result(const qaoa_result_t *result);
 
@@ -551,6 +578,7 @@ MOONLAB_API void qaoa_print_result(const qaoa_result_t *result);
  * pointers; it does not free the struct itself (it is caller-owned / stack).
  *
  * @param result QAOA result whose owned arrays should be freed (may be NULL)
+ * @stability evolving
  */
 MOONLAB_API void qaoa_result_free(qaoa_result_t *result);
 
@@ -559,6 +587,7 @@ MOONLAB_API void qaoa_result_free(qaoa_result_t *result);
  * @param bitstring Input bitstring
  * @param num_qubits Number of qubits
  * @param binary Output: binary array
+ * @stability evolving
  */
 MOONLAB_API void qaoa_bitstring_to_binary(
     uint64_t bitstring,
@@ -571,6 +600,7 @@ MOONLAB_API void qaoa_bitstring_to_binary(
  * @param bitstring Input bitstring
  * @param num_qubits Number of qubits
  * @param spins Output: spin array
+ * @stability evolving
  */
 MOONLAB_API void qaoa_bitstring_to_spins(
     uint64_t bitstring,

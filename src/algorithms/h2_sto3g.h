@@ -30,6 +30,7 @@ extern "C" {
  * @param r_angstrom  Internuclear distance in Angstroms.
  * @param g           Output array [g0=II, g1=IZ, g2=ZI, g3=ZZ, g4=XX] (Hartree),
  *                    the electronic coefficients (nuclear repulsion is separate).
+ * @stability evolving
  */
 MOONLAB_API void h2_sto3g_pauli_coeffs(double r_angstrom, double g[5]);
 

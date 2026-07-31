@@ -323,6 +323,7 @@ tensor_t *contract_execute_plan(const contract_network_t *network,
  * @param axes_b Axes of B to contract
  * @param num_contract Number of axes to contract
  * @return Contracted tensor or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tensor_t *contract_tensors(const tensor_t *a, const tensor_t *b,
                            const uint32_t *axes_a, const uint32_t *axes_b,
@@ -358,6 +359,7 @@ tensor_t *contract_tensors_compressed(const tensor_t *a, const tensor_t *b,
  * @param axis1 First axis to trace
  * @param axis2 Second axis to trace
  * @return Traced tensor or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tensor_t *contract_trace(const tensor_t *tensor, uint32_t axis1, uint32_t axis2);
 

@@ -32,10 +32,16 @@ typedef struct {
     uint8_t round_keys[240];
 } aes256_ctx_t;
 
-/** @brief Expand a 32-byte key into the AES-256 round-key schedule. */
+/**
+ * @brief Expand a 32-byte key into the AES-256 round-key schedule.
+ * @stability evolving
+ */
 MOONLAB_API void aes256_init(aes256_ctx_t *ctx, const uint8_t key[32]);
 
-/** @brief Encrypt one 16-byte block in place. */
+/**
+ * @brief Encrypt one 16-byte block in place.
+ * @stability evolving
+ */
 MOONLAB_API void aes256_encrypt_block(const aes256_ctx_t *ctx,
                            const uint8_t in[16], uint8_t out[16]);
 

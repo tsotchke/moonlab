@@ -140,6 +140,7 @@ extern "C" {
  *          init failure.
  *
  * @since 0.2.0
+ * @stability evolving
  */
 MOONLAB_API quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
 
@@ -148,6 +149,7 @@ MOONLAB_API quantum_entropy_ctx_t *quantum_entropy_ctx_create_hw(void);
  *        @c quantum_entropy_ctx_create_hw.  NULL-safe.
  *
  * @since 0.2.0
+ * @stability evolving
  */
 MOONLAB_API void quantum_entropy_ctx_destroy(quantum_entropy_ctx_t *ctx);
 

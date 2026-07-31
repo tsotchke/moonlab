@@ -94,6 +94,7 @@ typedef struct {
  * @param rng_seed   64-bit seed for the internal xorshift RNG
  * @param out        result sink (non-NULL)
  * @return 0 on success, non-zero on invalid arguments or OOM
+ * @stability evolving
  */
 MOONLAB_API int quantum_volume_run(size_t width,
                        size_t num_trials,

@@ -61,14 +61,19 @@ typedef struct {
  *        count 0.  Call `moonlab_job_add_gate` and
  *        `moonlab_job_set_num_shots` / `_set_num_workers` to flesh
  *        it out before scheduling.
+ * @stability evolving
  */
 MOONLAB_API moonlab_job_t *
 moonlab_job_create(int num_qubits);
 
-/** @brief Release a job handle. */
+/**
+ * @brief Release a job handle.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_job_free(moonlab_job_t *job);
 
 /** @brief Append a gate.  Same contract as
+ * @stability evolving
  *         @ref moonlab_qgtl_add_gate. */
 MOONLAB_API int
 moonlab_job_add_gate(moonlab_job_t *job,
@@ -77,18 +82,21 @@ moonlab_job_add_gate(moonlab_job_t *job,
                      const double *params);
 
 /** @brief Set the total shot count.  The scheduler splits this
+ * @stability evolving
  *         across `num_workers` slices internally. */
 MOONLAB_API int
 moonlab_job_set_num_shots(moonlab_job_t *job, int num_shots);
 
 /** @brief Set the worker fan-out.  Default 1.  Capped at
  *         `OMP_NUM_THREADS` when OpenMP is enabled; otherwise the
+ * @stability evolving
  *         scheduler runs everything serially regardless. */
 MOONLAB_API int
 moonlab_job_set_num_workers(moonlab_job_t *job, int num_workers);
 
 /** @brief Optional reproducibility seed for the per-worker PRNGs.
  *         Worker `i` derives its seed as
+ * @stability evolving
  *         `splitmix64(base_seed XOR i_in_hi32)`. */
 MOONLAB_API int
 moonlab_job_set_rng_seed(moonlab_job_t *job, uint64_t seed);
@@ -114,12 +122,16 @@ MOONLAB_API int moonlab_job_num_workers(const moonlab_job_t *job);
  * `moonlab_job_results_free`.
  *
  * @return MOONLAB_SCHED_OK on success or a negative status code.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_scheduler_run(moonlab_job_t           *job,
                       moonlab_job_results_t   *out);
 
-/** @brief Release buffers attached to a results record. */
+/**
+ * @brief Release buffers attached to a results record.
+ * @stability evolving
+ */
 MOONLAB_API void
 moonlab_job_results_free(moonlab_job_results_t *r);
 
@@ -161,6 +173,7 @@ moonlab_job_results_free(moonlab_job_results_t *r);
  *                  `src/distributed/mpi_bridge.h`, passed as `void *`
  *                  so scheduler.h doesn't drag MPI headers in.
  *                  Pass NULL to fall back to the in-process scheduler.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_scheduler_run_mpi(moonlab_job_t           *job,
@@ -215,12 +228,14 @@ typedef struct {
  *        of vendor backends across calibration generations).
  *
  * @return MOONLAB_SCHED_OK / MOONLAB_SCHED_BAD_ARG / MOONLAB_SCHED_OOM.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_register_backend(const moonlab_backend_t *backend);
 
 /**
  * @brief Unregister a backend by name.  Returns MOONLAB_SCHED_OK or
  *        MOONLAB_SCHED_BACKEND_NOT_FOUND.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_unregister_backend(const char *name);
 
@@ -230,11 +245,13 @@ MOONLAB_API int moonlab_unregister_backend(const char *name);
  *        The "simulator" backend is auto-registered on the first
  *        call to any backend function or any scheduler_run; callers
  *        can rely on `moonlab_find_backend("simulator") != NULL`.
+ * @stability evolving
  */
 MOONLAB_API const moonlab_backend_t *moonlab_find_backend(const char *name);
 
 /**
  * @brief Number of currently registered backends.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_num_backends(void);
 
@@ -244,6 +261,7 @@ MOONLAB_API int moonlab_num_backends(void);
  *        respective backends are unregistered).
  *
  * @return Actual number of names written (<= max).
+ * @stability evolving
  */
 MOONLAB_API int moonlab_list_backends(const char **out_names, int max);
 
@@ -254,6 +272,7 @@ MOONLAB_API int moonlab_list_backends(const char **out_names, int max);
  *
  *        The backend need not be registered at the time of this call;
  *        lookup happens at @ref moonlab_scheduler_run.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_job_set_backend(moonlab_job_t *job, const char *backend_name);
 
@@ -261,6 +280,7 @@ MOONLAB_API int moonlab_job_set_backend(moonlab_job_t *job, const char *backend_
  * @brief Return the configured backend name, or NULL if the default
  *        ("simulator") is being used.  Pointer is owned by the job
  *        and is valid until the next set_backend call / job_free.
+ * @stability evolving
  */
 MOONLAB_API const char *moonlab_job_backend(const moonlab_job_t *job);
 
@@ -297,6 +317,7 @@ typedef void (*moonlab_completion_hook_fn)(
  * @brief Install a completion hook.  Pass NULL to clear.  Only one
  *        hook is registered at a time; a subsequent call replaces
  *        the previous hook.  Thread-safe.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_scheduler_set_completion_hook(
     moonlab_completion_hook_fn hook, void *ctx);
@@ -324,6 +345,7 @@ MOONLAB_API int moonlab_scheduler_set_completion_hook(
  *          exceeds `bufsize`, the output is truncated; pass a
  *          NULL `buf` and `bufsize = 0` to size-probe.
  *          Negative on bad argument.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_job_to_json(const moonlab_job_t *job,
@@ -365,6 +387,7 @@ moonlab_job_to_json(const moonlab_job_t *job,
  *        either field to clear it.  Strings are NOT copied; caller
  *        owns the storage and must keep it alive until cleared
  *        (typically through the end of scheduler_run + hook fire).
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_scheduler_set_request_context(const char *tenant_id,
@@ -374,6 +397,7 @@ moonlab_scheduler_set_request_context(const char *tenant_id,
  * @brief Read the current thread's tenant_id.  Returns NULL if no
  *        request context is set.  Pointer is valid only until the
  *        caller calls set_request_context again on the same thread.
+ * @stability evolving
  */
 MOONLAB_API const char *
 moonlab_scheduler_current_tenant_id(void);
@@ -381,6 +405,7 @@ moonlab_scheduler_current_tenant_id(void);
 /**
  * @brief Read the current thread's request_id.  Returns NULL if no
  *        request context is set.
+ * @stability evolving
  */
 MOONLAB_API const char *
 moonlab_scheduler_current_request_id(void);
@@ -401,6 +426,7 @@ moonlab_scheduler_current_request_id(void);
  *        Hook ctx is the value passed at set_completion_hook time;
  *        the caller does not supply it.  job + results + backend_name
  *        pass through directly.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_scheduler_fire_completion_hook(const moonlab_job_t          *job,

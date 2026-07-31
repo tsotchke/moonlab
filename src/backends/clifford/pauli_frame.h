@@ -48,19 +48,27 @@ typedef struct pauli_frame_t pauli_frame_t;
 /**
  * @brief Allocate a frame of n qubits, initialised to identity (all
  *        x and z bits zero).
+ * @stability evolving
  */
 MOONLAB_API pauli_frame_t* pauli_frame_create(size_t num_qubits);
 
-/** @brief Release all memory.  Safe on NULL. */
+/**
+ * @brief Release all memory.  Safe on NULL.
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_free(pauli_frame_t* f);
 
-/** @brief Reset to identity (all bits zero). */
+/**
+ * @brief Reset to identity (all bits zero).
+ * @stability evolving
+ */
 MOONLAB_API void pauli_frame_clear(pauli_frame_t* f);
 
 /** @brief Number of qubits this frame was allocated for. */
 size_t pauli_frame_num_qubits(const pauli_frame_t* f);
 
 /** @brief Read the (x_q, z_q) bits at qubit @p q.  Out parameters
+ * @stability evolving
  *  receive 0 or 1.  No-op on NULL inputs. */
 MOONLAB_API void pauli_frame_read(const pauli_frame_t* f, size_t q,
                        uint8_t* out_x, uint8_t* out_z);
@@ -228,7 +236,10 @@ typedef struct {
     double   p;
 } pf_circuit_op_t;
 
-/** @brief Number of MEASURE ops in an op list (buffer sizing helper). */
+/**
+ * @brief Number of MEASURE ops in an op list (buffer sizing helper).
+ * @stability evolving
+ */
 MOONLAB_API size_t pauli_frame_circuit_num_measurements(
     const pf_circuit_op_t* ops, size_t num_ops);
 
@@ -255,6 +266,7 @@ MOONLAB_API size_t pauli_frame_circuit_num_measurements(
  * @param num_threads OpenMP block count; <=0 selects omp_get_max_threads()
  * @param out         measurement-major output buffer
  * @return number of measurements written, or -1 on error.
+ * @stability evolving
  */
 MOONLAB_API long pauli_frame_batch_sample_circuit(
     size_t num_qubits,
@@ -282,6 +294,7 @@ MOONLAB_API long pauli_frame_batch_sample_circuit(
  * @param out receives num_detectors * num_shots bytes, detector-major
  *            (detector d, shot s at out[d * num_shots + s]).
  * @return num_detectors on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API long pauli_frame_batch_sample_detectors(
     size_t num_qubits, const pf_circuit_op_t* ops, size_t num_ops,
@@ -290,7 +303,10 @@ MOONLAB_API long pauli_frame_batch_sample_detectors(
     int num_threads, uint8_t* out);
 
 MOONLAB_API const char* pauli_frame_simd_backend(void);
-/** @brief SIMD lane width in 64-bit words (1 = scalar fallback). */
+/**
+ * @brief SIMD lane width in 64-bit words (1 = scalar fallback).
+ * @stability evolving
+ */
 MOONLAB_API int pauli_frame_simd_lanes(void);
 
 #ifdef __cplusplus

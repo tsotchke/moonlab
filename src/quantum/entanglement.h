@@ -87,6 +87,7 @@ extern "C" {
 
 /**
  * @brief Compute reduced density matrix by tracing out qubits
+ * @stability evolving
  */
 MOONLAB_API int entanglement_reduced_density_matrix(const quantum_state_t* state,
                                         const int* trace_out_qubits,
@@ -105,12 +106,14 @@ double entanglement_von_neumann_entropy(const complex_t* reduced_dm, uint64_t di
 
 /**
  * @brief Compute Renyi entropy of order α
+ * @stability evolving
  */
 MOONLAB_API double entanglement_renyi_entropy(const complex_t* reduced_dm, uint64_t dim,
                                   double alpha);
 
 /**
  * @brief Compute entanglement entropy for bipartition
+ * @stability evolving
  */
 MOONLAB_API double entanglement_entropy_bipartition(const quantum_state_t* state,
                                         const int* subsystem_b_qubits,
@@ -131,6 +134,7 @@ MOONLAB_API double entanglement_entropy_bipartition(const quantum_state_t* state
  * @param qubits_b      indices of subsystem B.
  * @param num_b         length of @p qubits_b.
  * @return I(A:B) in bits (log base 2), >= 0; 0.0 on argument error.
+ * @stability evolving
  */
 MOONLAB_API double entanglement_mutual_information(const quantum_state_t* state,
                                         const int* qubits_a, int num_a,
@@ -143,6 +147,7 @@ MOONLAB_API double entanglement_mutual_information(const quantum_state_t* state,
 /**
  * @brief Compute concurrence for pure 2-qubit state
  * @return C in [0, 1]
+ * @stability evolving
  */
 MOONLAB_API double entanglement_concurrence_2qubit(const quantum_state_t* state);
 
@@ -156,6 +161,7 @@ double entanglement_concurrence_mixed(const complex_t* density_matrix);
  *        Equal to (C + 0)/2 for pure states, where C is concurrence.
  * @return N in [0, 1/2]; 0 for separable, 1/2 for a maximally-entangled
  *         Bell state.
+ * @stability evolving
  */
 MOONLAB_API double entanglement_negativity_2qubit(const quantum_state_t* state);
 

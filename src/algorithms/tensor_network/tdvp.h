@@ -303,6 +303,7 @@ typedef struct {
  *
  * Safe to call on a zero-initialised result (no-op) or repeatedly
  * (subsequent calls are no-ops).
+ * @stability evolving
  */
 MOONLAB_API void tdvp_result_clear(tdvp_result_t *result);
 
@@ -329,11 +330,13 @@ typedef struct {
 
 /**
  * @brief Create TDVP history
+ * @stability evolving
  */
 MOONLAB_API tdvp_history_t *tdvp_history_create(uint32_t initial_capacity);
 
 /**
  * @brief Free TDVP history
+ * @stability evolving
  */
 MOONLAB_API void tdvp_history_free(tdvp_history_t *hist);
 
@@ -406,6 +409,7 @@ typedef struct {
  * @param mpo Hamiltonian MPO
  * @param config TDVP configuration
  * @return TDVP engine or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
                                    mpo_t *mpo,
@@ -424,11 +428,13 @@ MOONLAB_API tdvp_engine_t *tdvp_engine_create(tn_mps_state_t *mps,
  * Primarily intended for tests, instrumentation, and the
  * `bond_chi_distribution` reporting path that the v0.4 result
  * struct will add in a future patch.
+ * @stability evolving
  */
 MOONLAB_API uint32_t tdvp_bond_chi(const tdvp_engine_t *engine, uint32_t bond);
 
 /**
  * @brief Free TDVP engine
+ * @stability evolving
  */
 MOONLAB_API void tdvp_engine_free(tdvp_engine_t *engine);
 
@@ -440,6 +446,7 @@ MOONLAB_API void tdvp_engine_free(tdvp_engine_t *engine);
  * @param engine TDVP engine
  * @param result Output result (can be NULL)
  * @return 0 on success
+ * @stability evolving
  */
 MOONLAB_API int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
 
@@ -452,6 +459,7 @@ MOONLAB_API int tdvp_step(tdvp_engine_t *engine, tdvp_result_t *result);
  * @param target_time Target evolution time
  * @param history Optional history to record (can be NULL)
  * @return 0 on success
+ * @stability evolving
  */
 MOONLAB_API int tdvp_evolve_to(tdvp_engine_t *engine,
                     double target_time,
@@ -577,6 +585,7 @@ int tdvp_evolve_with_observables(tdvp_engine_t *engine,
  * @param observable_fn Per-step observable callback, or NULL.
  * @param user_data     User data passed verbatim to @p observable_fn.
  * @return 0 on success, negative on integrator failure.
+ * @stability evolving
  */
 MOONLAB_API int tdvp_evolve_to_with_observable(tdvp_engine_t *engine,
                                     double target_time,

@@ -184,6 +184,7 @@ void amplitude_amplification(quantum_state_t* state,
  * @param oracle_data Oracle data
  * @param precision_bits Number of precision bits
  * @return Estimated number of solutions
+ * @stability evolving
  */
 MOONLAB_API int grover_quantum_counting(quantum_state_t* state,
                             int (*oracle_func)(uint64_t, void*),

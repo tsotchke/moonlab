@@ -246,6 +246,7 @@ void tn_mps_track_relative_truncation(tn_mps_state_t *state,
  * @brief Create default configuration
  *
  * @return Default MPS configuration
+ * @stability evolving
  */
 MOONLAB_API tn_state_config_t tn_state_config_default(void);
 
@@ -255,6 +256,7 @@ MOONLAB_API tn_state_config_t tn_state_config_default(void);
  * @param max_bond Maximum bond dimension
  * @param cutoff SVD truncation cutoff
  * @return Configuration
+ * @stability evolving
  */
 MOONLAB_API tn_state_config_t tn_state_config_create(uint32_t max_bond, double cutoff);
 
@@ -264,6 +266,7 @@ MOONLAB_API tn_state_config_t tn_state_config_create(uint32_t max_bond, double c
  * @param num_qubits Number of qubits
  * @param config Configuration (NULL for defaults)
  * @return MPS state or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_state_t *tn_mps_create_zero(uint32_t num_qubits,
                                     const tn_state_config_t *config);
@@ -275,6 +278,7 @@ MOONLAB_API tn_mps_state_t *tn_mps_create_zero(uint32_t num_qubits,
  * @param basis_state Binary representation of basis state
  * @param config Configuration
  * @return MPS state or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_state_t *tn_mps_create_basis(uint32_t num_qubits,
                                      uint64_t basis_state,
@@ -289,6 +293,7 @@ MOONLAB_API tn_mps_state_t *tn_mps_create_basis(uint32_t num_qubits,
  * @param qubit_states Array of 2-component complex vectors [num_qubits][2]
  * @param config Configuration
  * @return MPS state or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_state_t *tn_mps_create_product(uint32_t num_qubits,
                                        const double complex (*qubit_states)[2],
@@ -304,6 +309,7 @@ MOONLAB_API tn_mps_state_t *tn_mps_create_product(uint32_t num_qubits,
  * @param num_qubits Number of qubits
  * @param config Configuration
  * @return MPS state or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_state_t *tn_mps_from_statevector(const double complex *amplitudes,
                                          uint32_t num_qubits,
@@ -314,6 +320,7 @@ MOONLAB_API tn_mps_state_t *tn_mps_from_statevector(const double complex *amplit
  *
  * @param state State to copy
  * @return Copy or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_state_t *tn_mps_copy(const tn_mps_state_t *state);
 
@@ -321,6 +328,7 @@ MOONLAB_API tn_mps_state_t *tn_mps_copy(const tn_mps_state_t *state);
  * @brief Free MPS state
  *
  * @param state State to free
+ * @stability evolving
  */
 MOONLAB_API void tn_mps_free(tn_mps_state_t *state);
 
@@ -342,6 +350,7 @@ uint32_t tn_mps_num_qubits(const tn_mps_state_t *state);
  * @param state MPS state
  * @param bond Bond index (0 to num_qubits-2)
  * @return Bond dimension
+ * @stability evolving
  */
 MOONLAB_API uint32_t tn_mps_bond_dim(const tn_mps_state_t *state, uint32_t bond);
 
@@ -350,6 +359,7 @@ MOONLAB_API uint32_t tn_mps_bond_dim(const tn_mps_state_t *state, uint32_t bond)
  *
  * @param state MPS state
  * @return Maximum bond dimension across all bonds
+ * @stability evolving
  */
 MOONLAB_API uint32_t tn_mps_max_bond_dim(const tn_mps_state_t *state);
 
@@ -367,6 +377,7 @@ const tensor_t *tn_mps_get_tensor(const tn_mps_state_t *state, uint32_t qubit);
  *
  * @param state MPS state
  * @return Statistics structure
+ * @stability evolving
  */
 MOONLAB_API tn_mps_stats_t tn_mps_get_stats(const tn_mps_state_t *state);
 
@@ -390,6 +401,7 @@ void tn_mps_print_info(const tn_mps_state_t *state);
  * @param state MPS state
  * @param basis_state Binary representation
  * @return Complex amplitude
+ * @stability evolving
  */
 MOONLAB_API double complex tn_mps_amplitude(const tn_mps_state_t *state, uint64_t basis_state);
 
@@ -415,6 +427,7 @@ tn_state_error_t tn_mps_amplitudes(const tn_mps_state_t *state,
  * @param state MPS state
  * @param amplitudes Output array (length 2^num_qubits)
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_to_statevector(const tn_mps_state_t *state,
                                         double complex *amplitudes);
@@ -430,6 +443,7 @@ MOONLAB_API tn_state_error_t tn_mps_to_statevector(const tn_mps_state_t *state,
  *
  * @param state MPS state (modified in place)
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_left_canonicalize(tn_mps_state_t *state);
 
@@ -440,6 +454,7 @@ MOONLAB_API tn_state_error_t tn_mps_left_canonicalize(tn_mps_state_t *state);
  *
  * @param state MPS state (modified in place)
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_right_canonicalize(tn_mps_state_t *state);
 
@@ -451,6 +466,7 @@ MOONLAB_API tn_state_error_t tn_mps_right_canonicalize(tn_mps_state_t *state);
  * @param state MPS state (modified in place)
  * @param center Center site index
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_mixed_canonicalize(tn_mps_state_t *state, uint32_t center);
 
@@ -474,6 +490,7 @@ tn_state_error_t tn_mps_move_center(tn_mps_state_t *state, int direction);
  * Call this after completing a full Trotter step (even bonds then odd bonds).
  *
  * @param state MPS state
+ * @stability evolving
  */
 MOONLAB_API void tn_mps_mark_canonical_left(tn_mps_state_t *state);
 
@@ -495,6 +512,7 @@ void tn_mps_mark_canonical_right(tn_mps_state_t *state);
  *
  * @param state MPS state
  * @return Norm (should be 1 for normalized state)
+ * @stability evolving
  */
 MOONLAB_API double tn_mps_norm(const tn_mps_state_t *state);
 
@@ -514,6 +532,7 @@ double tn_mps_norm_squared_fast(tn_mps_state_t *state);
  *
  * @param state MPS state (modified in place)
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_normalize(tn_mps_state_t *state);
 
@@ -548,6 +567,7 @@ tn_state_error_t tn_mps_commit_normalization(tn_mps_state_t *state);
  *
  * @param state MPS state
  * @return True norm including lazy factor
+ * @stability evolving
  */
 MOONLAB_API double tn_mps_true_norm(const tn_mps_state_t *state);
 
@@ -580,6 +600,7 @@ void tn_mps_free_workspace(tn_mps_state_t *state);
  * @param state MPS state
  * @param bond Bond index
  * @return Entanglement entropy (von Neumann)
+ * @stability evolving
  */
 MOONLAB_API double tn_mps_entanglement_entropy(const tn_mps_state_t *state, uint32_t bond);
 
@@ -635,6 +656,7 @@ bool tn_mps_is_product_state(const tn_mps_state_t *state, double tolerance);
  * @param max_bond Maximum bond dimension
  * @param truncation_error Output: total truncation error
  * @return TN_STATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_truncate(tn_mps_state_t *state,
                                   uint32_t max_bond,
@@ -676,6 +698,7 @@ tn_state_error_t tn_mps_grow_bond(tn_mps_state_t *state,
  * @param state1 First MPS state
  * @param state2 Second MPS state
  * @return Complex overlap
+ * @stability evolving
  */
 MOONLAB_API double complex tn_mps_overlap(const tn_mps_state_t *state1,
                                const tn_mps_state_t *state2);
@@ -686,6 +709,7 @@ MOONLAB_API double complex tn_mps_overlap(const tn_mps_state_t *state1,
  * @param state1 First MPS state
  * @param state2 Second MPS state
  * @return Fidelity (0 to 1)
+ * @stability evolving
  */
 MOONLAB_API double tn_mps_fidelity(const tn_mps_state_t *state1,
                         const tn_mps_state_t *state2);
@@ -708,6 +732,7 @@ const char *tn_state_error_string(tn_state_error_t error);
  * @param num_qubits Number of qubits
  * @param bond_dim Uniform bond dimension
  * @return Estimated memory in bytes
+ * @stability evolving
  */
 MOONLAB_API uint64_t tn_mps_estimate_memory(uint32_t num_qubits, uint32_t bond_dim);
 
@@ -718,6 +743,7 @@ MOONLAB_API uint64_t tn_mps_estimate_memory(uint32_t num_qubits, uint32_t bond_d
  *
  * @param state MPS state
  * @return TN_STATE_SUCCESS if valid
+ * @stability evolving
  */
 MOONLAB_API tn_state_error_t tn_mps_validate(const tn_mps_state_t *state);
 

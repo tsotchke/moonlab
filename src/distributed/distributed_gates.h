@@ -92,6 +92,7 @@ extern const gate_matrix_4x4_t GATE_ISWAP;   // iSWAP
  * @param target Target qubit index
  * @param matrix 2x2 gate matrix
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_gate_1q(partitioned_state_t* state,
                                uint32_t target,
@@ -103,6 +104,7 @@ MOONLAB_API dist_gate_error_t dist_gate_1q(partitioned_state_t* state,
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_hadamard(partitioned_state_t* state, uint32_t target);
 
@@ -113,6 +115,7 @@ MOONLAB_API dist_gate_error_t dist_hadamard(partitioned_state_t* state, uint32_t
  *
  * @param state Partitioned state
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_hadamard_all(partitioned_state_t* state);
 
@@ -122,6 +125,7 @@ MOONLAB_API dist_gate_error_t dist_hadamard_all(partitioned_state_t* state);
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_pauli_x(partitioned_state_t* state, uint32_t target);
 
@@ -131,6 +135,7 @@ MOONLAB_API dist_gate_error_t dist_pauli_x(partitioned_state_t* state, uint32_t 
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_pauli_y(partitioned_state_t* state, uint32_t target);
 
@@ -140,6 +145,7 @@ MOONLAB_API dist_gate_error_t dist_pauli_y(partitioned_state_t* state, uint32_t 
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_pauli_z(partitioned_state_t* state, uint32_t target);
 
@@ -152,6 +158,7 @@ MOONLAB_API dist_gate_error_t dist_pauli_z(partitioned_state_t* state, uint32_t 
  * @param target Target qubit
  * @param theta Rotation angle in radians
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_rz(partitioned_state_t* state, uint32_t target, double theta);
 
@@ -164,6 +171,7 @@ MOONLAB_API dist_gate_error_t dist_rz(partitioned_state_t* state, uint32_t targe
  * @param target Target qubit
  * @param theta Rotation angle in radians
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_rx(partitioned_state_t* state, uint32_t target, double theta);
 
@@ -176,6 +184,7 @@ MOONLAB_API dist_gate_error_t dist_rx(partitioned_state_t* state, uint32_t targe
  * @param target Target qubit
  * @param theta Rotation angle in radians
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_ry(partitioned_state_t* state, uint32_t target, double theta);
 
@@ -188,6 +197,7 @@ MOONLAB_API dist_gate_error_t dist_ry(partitioned_state_t* state, uint32_t targe
  * @param target Target qubit
  * @param phi Phase angle in radians
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_phase(partitioned_state_t* state, uint32_t target, double phi);
 
@@ -197,6 +207,7 @@ MOONLAB_API dist_gate_error_t dist_phase(partitioned_state_t* state, uint32_t ta
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_s_gate(partitioned_state_t* state, uint32_t target);
 
@@ -206,6 +217,7 @@ MOONLAB_API dist_gate_error_t dist_s_gate(partitioned_state_t* state, uint32_t t
  * @param state Partitioned state
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_t_gate(partitioned_state_t* state, uint32_t target);
 
@@ -223,6 +235,7 @@ MOONLAB_API dist_gate_error_t dist_t_gate(partitioned_state_t* state, uint32_t t
  * @param qubit2 Second qubit (target for controlled gates)
  * @param matrix 4x4 gate matrix
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_gate_2q(partitioned_state_t* state,
                                uint32_t qubit1,
@@ -236,6 +249,7 @@ MOONLAB_API dist_gate_error_t dist_gate_2q(partitioned_state_t* state,
  * @param control Control qubit
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_cnot(partitioned_state_t* state,
                             uint32_t control,
@@ -248,6 +262,7 @@ MOONLAB_API dist_gate_error_t dist_cnot(partitioned_state_t* state,
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_cz(partitioned_state_t* state,
                           uint32_t qubit1,
@@ -263,6 +278,7 @@ MOONLAB_API dist_gate_error_t dist_cz(partitioned_state_t* state,
  * @param target Target qubit
  * @param phi Phase angle in radians
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_cphase(partitioned_state_t* state,
                               uint32_t control,
@@ -276,6 +292,7 @@ MOONLAB_API dist_gate_error_t dist_cphase(partitioned_state_t* state,
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_swap(partitioned_state_t* state,
                             uint32_t qubit1,
@@ -288,6 +305,7 @@ MOONLAB_API dist_gate_error_t dist_swap(partitioned_state_t* state,
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_iswap(partitioned_state_t* state,
                              uint32_t qubit1,
@@ -300,6 +318,7 @@ MOONLAB_API dist_gate_error_t dist_iswap(partitioned_state_t* state,
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_sqrt_swap(partitioned_state_t* state,
                                  uint32_t qubit1,
@@ -317,6 +336,7 @@ MOONLAB_API dist_gate_error_t dist_sqrt_swap(partitioned_state_t* state,
  * @param control2 Second control qubit
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_toffoli(partitioned_state_t* state,
                                uint32_t control1,
@@ -331,6 +351,7 @@ MOONLAB_API dist_gate_error_t dist_toffoli(partitioned_state_t* state,
  * @param target1 First swap qubit
  * @param target2 Second swap qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_fredkin(partitioned_state_t* state,
                                uint32_t control,
@@ -344,6 +365,7 @@ MOONLAB_API dist_gate_error_t dist_fredkin(partitioned_state_t* state,
  * @param controls Array of control qubit indices
  * @param num_controls Number of control qubits
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_mcz(partitioned_state_t* state,
                            const uint32_t* controls,
@@ -357,6 +379,7 @@ MOONLAB_API dist_gate_error_t dist_mcz(partitioned_state_t* state,
  * @param num_controls Number of control qubits
  * @param target Target qubit
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_mcx(partitioned_state_t* state,
                            const uint32_t* controls,
@@ -375,6 +398,7 @@ MOONLAB_API dist_gate_error_t dist_mcx(partitioned_state_t* state,
  * @param state Partitioned state
  * @param target_state Basis state to mark
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_oracle_single(partitioned_state_t* state,
                                      uint64_t target_state);
@@ -386,6 +410,7 @@ MOONLAB_API dist_gate_error_t dist_oracle_single(partitioned_state_t* state,
  * @param targets Array of target states
  * @param num_targets Number of targets
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_oracle_multi(partitioned_state_t* state,
                                     const uint64_t* targets,
@@ -398,6 +423,7 @@ MOONLAB_API dist_gate_error_t dist_oracle_multi(partitioned_state_t* state,
  *
  * @param state Partitioned state
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_grover_diffusion(partitioned_state_t* state);
 
@@ -407,6 +433,7 @@ MOONLAB_API dist_gate_error_t dist_grover_diffusion(partitioned_state_t* state);
  * @param state Partitioned state
  * @param target_state Target basis state
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_grover_iteration(partitioned_state_t* state,
                                         uint64_t target_state);
@@ -420,6 +447,7 @@ MOONLAB_API dist_gate_error_t dist_grover_iteration(partitioned_state_t* state,
  * @param target_state State to find
  * @param num_iterations Number of iterations (0 for optimal)
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_grover_search(partitioned_state_t* state,
                                      uint64_t target_state,
@@ -436,6 +464,7 @@ MOONLAB_API dist_gate_error_t dist_grover_search(partitioned_state_t* state,
  * @param start_qubit First qubit index
  * @param num_qubits Number of qubits for QFT
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_qft(partitioned_state_t* state,
                            uint32_t start_qubit,
@@ -448,6 +477,7 @@ MOONLAB_API dist_gate_error_t dist_qft(partitioned_state_t* state,
  * @param start_qubit First qubit index
  * @param num_qubits Number of qubits for IQFT
  * @return DIST_GATE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API dist_gate_error_t dist_iqft(partitioned_state_t* state,
                             uint32_t start_qubit,
@@ -462,6 +492,7 @@ MOONLAB_API dist_gate_error_t dist_iqft(partitioned_state_t* state,
  *
  * @param theta Rotation angle
  * @param matrix Output matrix
+ * @stability evolving
  */
 MOONLAB_API void dist_build_rx_matrix(double theta, gate_matrix_2x2_t* matrix);
 
@@ -470,6 +501,7 @@ MOONLAB_API void dist_build_rx_matrix(double theta, gate_matrix_2x2_t* matrix);
  *
  * @param theta Rotation angle
  * @param matrix Output matrix
+ * @stability evolving
  */
 MOONLAB_API void dist_build_ry_matrix(double theta, gate_matrix_2x2_t* matrix);
 
@@ -478,6 +510,7 @@ MOONLAB_API void dist_build_ry_matrix(double theta, gate_matrix_2x2_t* matrix);
  *
  * @param theta Rotation angle
  * @param matrix Output matrix
+ * @stability evolving
  */
 MOONLAB_API void dist_build_rz_matrix(double theta, gate_matrix_2x2_t* matrix);
 
@@ -486,6 +519,7 @@ MOONLAB_API void dist_build_rz_matrix(double theta, gate_matrix_2x2_t* matrix);
  *
  * @param phi Phase angle
  * @param matrix Output matrix
+ * @stability evolving
  */
 MOONLAB_API void dist_build_phase_matrix(double phi, gate_matrix_2x2_t* matrix);
 
@@ -494,6 +528,7 @@ MOONLAB_API void dist_build_phase_matrix(double phi, gate_matrix_2x2_t* matrix);
  *
  * @param phi Phase angle
  * @param matrix Output matrix
+ * @stability evolving
  */
 MOONLAB_API void dist_build_cphase_matrix(double phi, gate_matrix_4x4_t* matrix);
 
@@ -502,6 +537,7 @@ MOONLAB_API void dist_build_cphase_matrix(double phi, gate_matrix_4x4_t* matrix)
  *
  * @param error Error code
  * @return Human-readable error message
+ * @stability evolving
  */
 MOONLAB_API const char* dist_gate_error_string(dist_gate_error_t error);
 
@@ -511,6 +547,7 @@ MOONLAB_API const char* dist_gate_error_string(dist_gate_error_t error);
  * @param num_qubits Number of qubits
  * @param num_targets Number of marked states
  * @return Optimal iteration count
+ * @stability evolving
  */
 MOONLAB_API uint32_t dist_grover_optimal_iterations(uint32_t num_qubits, uint32_t num_targets);
 

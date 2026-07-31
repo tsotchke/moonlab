@@ -87,6 +87,7 @@ typedef struct {
  * @param prob_0 Output: probability of |0>
  * @param prob_1 Output: probability of |1>
  * @return TN_MEASURE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_measure_error_t tn_measure_probability(const tn_mps_state_t *state,
                                            uint32_t qubit,
@@ -103,6 +104,7 @@ MOONLAB_API tn_measure_error_t tn_measure_probability(const tn_mps_state_t *stat
  * @param random_value Random value in [0, 1) for outcome selection
  * @param result Output: measurement result
  * @return TN_MEASURE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_measure_error_t tn_measure_single(tn_mps_state_t *state,
                                       uint32_t qubit,
@@ -165,6 +167,7 @@ tn_measure_error_t tn_measure_subset(tn_mps_state_t *state,
  * @param state MPS state (not modified)
  * @param bitstring Target outcome
  * @return Probability of outcome
+ * @stability evolving
  */
 MOONLAB_API double tn_measure_bitstring_probability(const tn_mps_state_t *state,
                                          uint64_t bitstring);
@@ -203,6 +206,7 @@ tn_measure_error_t tn_sample_bitstrings(const tn_mps_state_t *state,
  * @param seed Random seed (0 for time-based)
  * @param stats Output statistics (can be NULL)
  * @return TN_MEASURE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_measure_error_t tn_sample_auto(const tn_mps_state_t *state,
                                    uint32_t num_samples,
@@ -222,6 +226,7 @@ MOONLAB_API tn_measure_error_t tn_sample_auto(const tn_mps_state_t *state,
  * @param state MPS state
  * @param qubit Qubit index
  * @return Expectation value
+ * @stability evolving
  */
 MOONLAB_API double tn_expectation_z(const tn_mps_state_t *state, uint32_t qubit);
 
@@ -231,6 +236,7 @@ MOONLAB_API double tn_expectation_z(const tn_mps_state_t *state, uint32_t qubit)
  * @param state MPS state
  * @param qubit Qubit index
  * @return Expectation value
+ * @stability evolving
  */
 MOONLAB_API double tn_expectation_x(const tn_mps_state_t *state, uint32_t qubit);
 
@@ -264,6 +270,7 @@ double complex tn_expectation_1q(const tn_mps_state_t *state,
  * @param qubit1 First qubit
  * @param qubit2 Second qubit
  * @return Expectation value
+ * @stability evolving
  */
 MOONLAB_API double tn_expectation_zz(const tn_mps_state_t *state,
                           uint32_t qubit1, uint32_t qubit2);
@@ -307,6 +314,7 @@ double tn_expectation_zz_fast(tn_mps_state_t *state, uint32_t qubit1, uint32_t q
  *
  * @param state MPS state (will be canonicalized)
  * @return Average magnetization Σ⟨Z⟩/n
+ * @stability evolving
  */
 MOONLAB_API double tn_magnetization_fast(tn_mps_state_t *state);
 
@@ -317,6 +325,7 @@ MOONLAB_API double tn_magnetization_fast(tn_mps_state_t *state);
  *
  * @param state MPS state (will be canonicalized)
  * @return Average correlation Σ⟨ZZ⟩/(n-1)
+ * @stability evolving
  */
 MOONLAB_API double tn_zz_correlation_fast(tn_mps_state_t *state);
 
@@ -328,6 +337,7 @@ MOONLAB_API double tn_zz_correlation_fast(tn_mps_state_t *state);
  * @param qubit2 Second qubit
  * @param op Operator (4x4 matrix)
  * @return Expectation value
+ * @stability evolving
  */
 MOONLAB_API double complex tn_expectation_2q(const tn_mps_state_t *state,
                                   uint32_t qubit1, uint32_t qubit2,
@@ -358,6 +368,7 @@ double complex tn_expectation_pauli_string(const tn_mps_state_t *state,
  * @param qubit Qubit index
  * @param rho Output: 2x2 density matrix (4 elements, row-major)
  * @return TN_MEASURE_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
                                           uint32_t qubit,
@@ -408,6 +419,7 @@ typedef struct {
  * @param samples Array of sample bitstrings
  * @param num_samples Number of samples
  * @return Histogram or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API tn_histogram_t *tn_histogram_create(const uint64_t *samples, uint32_t num_samples);
 
@@ -446,6 +458,7 @@ void tn_histogram_print(const tn_histogram_t *hist, uint32_t max_show);
  * @brief Free histogram
  *
  * @param hist Histogram to free
+ * @stability evolving
  */
 MOONLAB_API void tn_histogram_free(tn_histogram_t *hist);
 

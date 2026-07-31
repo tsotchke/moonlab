@@ -72,6 +72,7 @@ typedef struct {
  * caller is responsible for free()-ing both arrays.
  *
  * @return 0 on success, negative on invalid configuration.
+ * @stability evolving
  */
 MOONLAB_API int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
                                 uint8_t** out_paulis,
@@ -82,6 +83,7 @@ MOONLAB_API int z2_lgt_1d_build_pauli_sum(const z2_lgt_config_t* cfg,
 /**
  * @brief Number of qubits the Hamiltonian acts on for a given config:
  *        2*N - 1 = N matter + (N - 1) link qubits.
+ * @stability evolving
  */
 MOONLAB_API uint32_t z2_lgt_1d_num_qubits(const z2_lgt_config_t* cfg);
 
@@ -94,6 +96,7 @@ MOONLAB_API uint32_t z2_lgt_1d_num_qubits(const z2_lgt_config_t* cfg);
  * above).  This is a Hermitian Pauli with phase 0.
  *
  * @return 0 on success, negative if site_x is out of range.
+ * @stability evolving
  */
 MOONLAB_API int z2_lgt_1d_gauss_law_pauli(const z2_lgt_config_t* cfg,
                                  uint32_t site_x,
@@ -107,6 +110,7 @@ MOONLAB_API int z2_lgt_1d_gauss_law_pauli(const z2_lgt_config_t* cfg,
  * Writes the Pauli string into @p out_pauli of length 2*N - 1.
  *
  * @return 0 on success.
+ * @stability evolving
  */
 MOONLAB_API int z2_lgt_1d_wilson_line_pauli(const z2_lgt_config_t* cfg,
                                   uint32_t link_start,

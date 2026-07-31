@@ -367,7 +367,7 @@ void simd_print_capabilities(void);
  *
  * @return 1 if validation passes, 0 otherwise
  *
- * @stability beta
+ * @stability evolving
  * @since v0.1.2
  */
 MOONLAB_API int simd_validate(void);

@@ -69,6 +69,7 @@ typedef struct moonlab_ca_peps_t moonlab_ca_peps_t;
  *
  * The physical state is initialised to |0>^(Lx*Ly) with the Clifford
  * prefactor D = I.
+ * @stability evolving
  */
 MOONLAB_API moonlab_ca_peps_t* moonlab_ca_peps_create(uint32_t Lx, uint32_t Ly,
                                             uint32_t chi_bond);
@@ -88,6 +89,7 @@ MOONLAB_API uint32_t moonlab_ca_peps_current_bond_dim(const moonlab_ca_peps_t* s
  *
  * Same yardstick as the CA-MPS analogue: representation-independent
  * compactness measure.
+ * @stability evolving
  */
 MOONLAB_API double moonlab_ca_peps_max_half_cut_entropy(const moonlab_ca_peps_t* s);
 
@@ -140,15 +142,22 @@ ca_peps_error_t moonlab_ca_peps_pauli_rotation(moonlab_ca_peps_t* s,
  *
  * Imaginary-time-step primitive (non-unitary).  The caller is
  * responsible for renormalisation via @c moonlab_ca_peps_normalize.
+ * @stability evolving
  */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_imag_pauli_rotation(moonlab_ca_peps_t* s,
                                                      const uint8_t* pauli,
                                                      double tau);
 
-/** Rescale the internal MPS factor to unit norm. */
+/**
+ * Rescale the internal MPS factor to unit norm.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_normalize(moonlab_ca_peps_t* s);
 
-/** Return the norm of the underlying state. */
+/**
+ * Return the norm of the underlying state.
+ * @stability evolving
+ */
 MOONLAB_API double moonlab_ca_peps_norm(const moonlab_ca_peps_t* s);
 
 /* ================================================================== */
@@ -165,6 +174,7 @@ MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli(const moonlab_ca_peps_t
  * @param paulis     Flat (num_terms, num_qubits) uint8 Pauli array.
  * @param coeffs     Length-num_terms complex coefficients.
  * @param num_terms  Pauli-sum length.
+ * @stability evolving
  */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_peps_t* s,
                                                   const uint8_t* paulis,
@@ -172,7 +182,10 @@ MOONLAB_API ca_peps_error_t moonlab_ca_peps_expect_pauli_sum(const moonlab_ca_pe
                                                   uint32_t num_terms,
                                                   double _Complex* out_expval);
 
-/** Marginal P(Z_q = +1).  See ca_mps analogue for the fine print. */
+/**
+ * Marginal P(Z_q = +1).  See ca_mps analogue for the fine print.
+ * @stability evolving
+ */
 MOONLAB_API ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
                                         uint32_t q, double* out_prob);
 
@@ -211,6 +224,7 @@ MOONLAB_API ca_peps_error_t moonlab_ca_peps_prob_z(const moonlab_ca_peps_t* s,
  * @return 0 on success, negative ::ca_peps_error_t on failure.
  *
  * @since v0.2.1
+ * @stability evolving
  */
 MOONLAB_API int moonlab_ca_peps_var_d_run(moonlab_ca_peps_t* state,
                                const uint8_t* paulis,

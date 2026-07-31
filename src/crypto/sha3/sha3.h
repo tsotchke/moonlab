@@ -68,16 +68,28 @@ typedef struct {
 /* Fixed-output hashes                                            */
 /* ------------------------------------------------------------- */
 
-/** @brief One-shot SHA3-256.  @p out receives 32 bytes. */
+/**
+ * @brief One-shot SHA3-256.  @p out receives 32 bytes.
+ * @stability evolving
+ */
 MOONLAB_API void sha3_256(const uint8_t *in, size_t inlen, uint8_t out[32]);
 
-/** @brief One-shot SHA3-512.  @p out receives 64 bytes. */
+/**
+ * @brief One-shot SHA3-512.  @p out receives 64 bytes.
+ * @stability evolving
+ */
 MOONLAB_API void sha3_512(const uint8_t *in, size_t inlen, uint8_t out[64]);
 
-/** @brief One-shot SHA3-224.  @p out receives 28 bytes. */
+/**
+ * @brief One-shot SHA3-224.  @p out receives 28 bytes.
+ * @stability evolving
+ */
 MOONLAB_API void sha3_224(const uint8_t *in, size_t inlen, uint8_t out[28]);
 
-/** @brief One-shot SHA3-384.  @p out receives 48 bytes. */
+/**
+ * @brief One-shot SHA3-384.  @p out receives 48 bytes.
+ * @stability evolving
+ */
 MOONLAB_API void sha3_384(const uint8_t *in, size_t inlen, uint8_t out[48]);
 
 /* ------------------------------------------------------------- */
@@ -89,7 +101,10 @@ void sha3_256_init(sha3_ctx_t *ctx);
 /** @brief Initialise a streaming SHA3-512 context. */
 void sha3_512_init(sha3_ctx_t *ctx);
 
-/** @brief Feed bytes into a SHA-3 or SHAKE context. */
+/**
+ * @brief Feed bytes into a SHA-3 or SHAKE context.
+ * @stability evolving
+ */
 MOONLAB_API void sha3_update(sha3_ctx_t *ctx, const uint8_t *in, size_t inlen);
 
 /**
@@ -102,7 +117,10 @@ void sha3_final(sha3_ctx_t *ctx, uint8_t *out);
 /* SHAKE (extendable output) interface                            */
 /* ------------------------------------------------------------- */
 
-/** @brief Initialise a SHAKE128 context (rate 168, security 128). */
+/**
+ * @brief Initialise a SHAKE128 context (rate 168, security 128).
+ * @stability evolving
+ */
 MOONLAB_API void shake128_init(sha3_ctx_t *ctx);
 /** @brief Initialise a SHAKE256 context (rate 136, security 256). */
 void shake256_init(sha3_ctx_t *ctx);
@@ -112,16 +130,21 @@ void shake256_init(sha3_ctx_t *ctx);
  *        called repeatedly; the total output stream is as defined
  *        by FIPS 202.  Once called at least once, no more
  *        @ref sha3_update calls are permitted on this context.
+ * @stability evolving
  */
 MOONLAB_API void shake_squeeze(sha3_ctx_t *ctx, uint8_t *out, size_t outlen);
 
 /**
  * @brief One-shot SHAKE128: absorb @p inlen bytes and squeeze
  *        @p outlen bytes.
+ * @stability evolving
  */
 MOONLAB_API void shake128(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
-/** @brief One-shot SHAKE256. */
+/**
+ * @brief One-shot SHAKE256.
+ * @stability evolving
+ */
 MOONLAB_API void shake256(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen);
 
 #ifdef __cplusplus

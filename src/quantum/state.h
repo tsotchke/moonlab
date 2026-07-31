@@ -153,12 +153,14 @@ typedef struct {
  * @param state Pointer to quantum state structure
  * @param num_qubits Number of qubits (1-32, recommended 28 for speed/memory balance)
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_init(quantum_state_t *state, size_t num_qubits);
 
 /**
  * @brief Free quantum state resources
  * @param state Quantum state to free
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_free(quantum_state_t *state);
 
@@ -168,6 +170,7 @@ MOONLAB_API void quantum_state_free(quantum_state_t *state);
  * @param amplitudes Array of complex amplitudes
  * @param dim Dimension of state space
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_from_amplitudes(
     quantum_state_t *state,
@@ -180,12 +183,14 @@ MOONLAB_API qs_error_t quantum_state_from_amplitudes(
  * @param dest Destination state
  * @param src Source state
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_clone(quantum_state_t *dest, const quantum_state_t *src);
 
 /**
  * @brief Reset state to |0...0⟩
  * @param state Quantum state to reset
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_reset(quantum_state_t *state);
 
@@ -198,6 +203,7 @@ MOONLAB_API void quantum_state_reset(quantum_state_t *state);
  * @param state Quantum state
  * @param tolerance Tolerance for normalization check
  * @return 1 if normalized, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int quantum_state_is_normalized(const quantum_state_t *state, double tolerance);
 
@@ -205,6 +211,7 @@ MOONLAB_API int quantum_state_is_normalized(const quantum_state_t *state, double
  * @brief Normalize quantum state
  * @param state Quantum state to normalize
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_normalize(quantum_state_t *state);
 
@@ -212,12 +219,14 @@ MOONLAB_API qs_error_t quantum_state_normalize(quantum_state_t *state);
  * @brief Calculate von Neumann entropy S = -Tr(ρ log₂ ρ)
  * @param state Quantum state
  * @return Entropy in bits
+ * @stability evolving
  */
 MOONLAB_API double quantum_state_entropy(const quantum_state_t *state);
 
 /**
  * @brief ‖ψ‖⁴ (= Tr(ρ²) for a pure state). Always 1 for normalized |ψ⟩.
  *        For subsystem purity use entanglement_purity() (entanglement.h).
+ * @stability evolving
  */
 MOONLAB_API double quantum_state_purity(const quantum_state_t *state);
 
@@ -226,6 +235,7 @@ MOONLAB_API double quantum_state_purity(const quantum_state_t *state);
  * @param state1 First quantum state
  * @param state2 Second quantum state
  * @return Fidelity between 0 and 1
+ * @stability evolving
  */
 MOONLAB_API double quantum_state_fidelity(const quantum_state_t *state1, const quantum_state_t *state2);
 
@@ -234,6 +244,7 @@ MOONLAB_API double quantum_state_fidelity(const quantum_state_t *state1, const q
  * @param state Quantum state
  * @param basis_index Index of basis state
  * @return Complex amplitude αᵢ
+ * @stability evolving
  */
 MOONLAB_API complex_t quantum_state_get_amplitude(const quantum_state_t *state, uint64_t basis_index);
 
@@ -242,6 +253,7 @@ MOONLAB_API complex_t quantum_state_get_amplitude(const quantum_state_t *state, 
  * @param state Quantum state
  * @param basis_index Index of basis state
  * @return Probability |αᵢ|²
+ * @stability evolving
  */
 MOONLAB_API double quantum_state_get_probability(const quantum_state_t *state, uint64_t basis_index);
 
@@ -259,6 +271,7 @@ MOONLAB_API double quantum_state_get_probability(const quantum_state_t *state, u
  * @param qubits_subsystem_a Qubits in subsystem A
  * @param num_qubits_a Number of qubits in A
  * @return Entanglement entropy in bits
+ * @stability evolving
  */
 MOONLAB_API double quantum_state_entanglement_entropy(
     const quantum_state_t *state,
@@ -276,6 +289,7 @@ MOONLAB_API double quantum_state_entanglement_entropy(
  * @param num_traced Number of qubits to trace
  * @param reduced_density Output: reduced density matrix
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_partial_trace(
     const quantum_state_t *state,
@@ -292,6 +306,7 @@ MOONLAB_API qs_error_t quantum_state_partial_trace(
  * @brief Record measurement outcome
  * @param state Quantum state
  * @param outcome Measurement outcome (basis index)
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_record_measurement(quantum_state_t *state, uint64_t outcome);
 
@@ -301,6 +316,7 @@ MOONLAB_API void quantum_state_record_measurement(quantum_state_t *state, uint64
  * @param outcomes Output array for outcomes
  * @param max_outcomes Maximum outcomes to retrieve
  * @return Number of measurements retrieved
+ * @stability evolving
  */
 MOONLAB_API size_t quantum_state_get_measurement_history(
     const quantum_state_t *state,
@@ -311,6 +327,7 @@ MOONLAB_API size_t quantum_state_get_measurement_history(
 /**
  * @brief Clear measurement history
  * @param state Quantum state
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_clear_measurements(quantum_state_t *state);
 
@@ -328,6 +345,7 @@ MOONLAB_API void quantum_state_clear_measurements(quantum_state_t *state);
  * @param out       Destination stream (must be non-NULL)
  * @param state     Quantum state
  * @param max_terms Maximum number of terms to print (0 = all)
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_fprint(FILE *out, const quantum_state_t *state, size_t max_terms);
 
@@ -340,6 +358,7 @@ MOONLAB_API void quantum_state_fprint(FILE *out, const quantum_state_t *state, s
  *
  * @param state     Quantum state
  * @param max_terms Maximum number of terms to print (0 = all)
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_print(const quantum_state_t *state, size_t max_terms);
 
@@ -349,6 +368,7 @@ MOONLAB_API void quantum_state_print(const quantum_state_t *state, size_t max_te
  * @param num_qubits Number of qubits
  * @param buffer Output buffer
  * @param buffer_size Size of buffer
+ * @stability evolving
  */
 MOONLAB_API void quantum_basis_state_string(
     uint64_t basis_index,
@@ -369,6 +389,7 @@ MOONLAB_API void quantum_basis_state_string(
  *
  * @param num_qubits Number of qubits
  * @return Pointer to new state or NULL on error
+ * @stability evolving
  */
 MOONLAB_API quantum_state_t* quantum_state_create(int num_qubits);
 
@@ -378,6 +399,7 @@ MOONLAB_API quantum_state_t* quantum_state_create(int num_qubits);
  * Frees resources and the state structure itself.
  *
  * @param state State to destroy (safe to pass NULL)
+ * @stability evolving
  */
 MOONLAB_API void quantum_state_destroy(quantum_state_t* state);
 
@@ -410,6 +432,7 @@ static inline void quantum_state_init_zero(quantum_state_t* state) {
  * @param num_qubits Number of qubits (1..31)
  * @param out_state  Receives the newly-allocated state on success
  * @return QS_SUCCESS or an error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state_t **out_state);
 
@@ -421,6 +444,7 @@ MOONLAB_API qs_error_t quantum_state_create_gpu(size_t num_qubits, quantum_state
  *
  * @param state GPU-backed state (must have non-NULL gpu_state)
  * @return QS_SUCCESS or an error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
 
@@ -435,6 +459,7 @@ MOONLAB_API qs_error_t quantum_state_sync_to_host(quantum_state_t *state);
  *
  * @param state GPU-backed state (must have non-NULL gpu_state)
  * @return QS_SUCCESS or an error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t quantum_state_sync_from_host(quantum_state_t *state);
 

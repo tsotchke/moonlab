@@ -62,6 +62,7 @@ typedef enum {
  *
  * @return extrapolated value E(0); returns 0 and sets *stderr_out to
  *         a negative sentinel on argument error.
+ * @stability evolving
  */
 MOONLAB_API double zne_extrapolate(
     const double *scales,
@@ -89,6 +90,7 @@ typedef double (*zne_expectation_fn)(double lambda, void *user);
  *     return zne_extrapolate(scales, E, n, method, stderr_out)
  *
  * @return extrapolated E(0); 0 on argument error.
+ * @stability evolving
  */
 MOONLAB_API double zne_mitigate(
     zne_expectation_fn fn,
@@ -126,6 +128,7 @@ typedef struct {
  *
  * The PEC sampling overhead is gamma^2 for single-shot noisy-layer
  * mitigation (see Temme et al. 2017).  Returns 0 on NULL input.
+ * @stability evolving
  */
 MOONLAB_API double pec_one_norm_cost(const pec_quasi_prob_t *qp);
 
@@ -133,6 +136,7 @@ MOONLAB_API double pec_one_norm_cost(const pec_quasi_prob_t *qp);
  * @brief Sample an index i with probability |eta_i| / gamma and
  *        return the associated sign.  Sets *index_out = i, and the
  *        function returns +1.0 or -1.0.
+ * @stability evolving
  */
 MOONLAB_API double pec_sample_index(const pec_quasi_prob_t *qp,
                          double uniform,
@@ -150,6 +154,7 @@ MOONLAB_API double pec_sample_index(const pec_quasi_prob_t *qp,
  * @param stderr_out    optional; receives the standard error of the
  *                      estimator.
  * @return PEC-mitigated <O>; 0.0 on argument error.
+ * @stability evolving
  */
 MOONLAB_API double pec_aggregate(const double *signs, const double *measurements,
                       size_t n, double gamma, double *stderr_out);

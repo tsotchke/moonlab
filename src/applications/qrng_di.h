@@ -53,6 +53,7 @@ extern "C" {
  *
  * Any numerically-out-of-range @p chsh clamps to the corresponding
  * endpoint.  Return value is always in [0, 1].
+ * @stability evolving
  */
 MOONLAB_API double qrng_di_min_entropy_from_chsh(double chsh);
 
@@ -76,6 +77,7 @@ MOONLAB_API double qrng_di_min_entropy_from_chsh(double chsh);
  * Error semantics: the caller is responsible for ensuring that the
  * min-entropy of @p raw is at least 8 * n_out.  The extractor does
  * not compute this itself.  See @ref qrng_di_min_entropy_from_chsh.
+ * @stability evolving
  */
 MOONLAB_API int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
                               const uint8_t *seed, size_t n_seed,
@@ -91,6 +93,7 @@ MOONLAB_API int qrng_di_toeplitz_extract(const uint8_t *raw, size_t n_in,
  * Returns 0 if the CHSH violation is insufficient (H_min <= 0) and
  * the target length is unachievable; otherwise a positive byte count
  * suitable for sizing the input buffer.
+ * @stability evolving
  */
 MOONLAB_API size_t qrng_di_raw_bytes_for_output(double chsh,
                                      size_t n_out,

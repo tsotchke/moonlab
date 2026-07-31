@@ -151,6 +151,7 @@ typedef struct {
  *
  * @param process Process notation (e.g., "e+ e- -> mu+ mu-")
  * @return Pointer to new diagram, or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API feynman_diagram_t *feynman_create(const char *process);
 
@@ -158,6 +159,7 @@ MOONLAB_API feynman_diagram_t *feynman_create(const char *process);
  * Free Feynman diagram and all resources
  *
  * @param diagram Diagram to free
+ * @stability evolving
  */
 MOONLAB_API void feynman_free(feynman_diagram_t *diagram);
 
@@ -166,6 +168,7 @@ MOONLAB_API void feynman_free(feynman_diagram_t *diagram);
  *
  * @param diagram Diagram to modify
  * @param title Title string
+ * @stability evolving
  */
 MOONLAB_API void feynman_set_title(feynman_diagram_t *diagram, const char *title);
 
@@ -174,6 +177,7 @@ MOONLAB_API void feynman_set_title(feynman_diagram_t *diagram, const char *title
  *
  * @param diagram Diagram to modify
  * @param order Loop order
+ * @stability evolving
  */
 MOONLAB_API void feynman_set_loop_order(feynman_diagram_t *diagram, int order);
 
@@ -188,6 +192,7 @@ MOONLAB_API void feynman_set_loop_order(feynman_diagram_t *diagram, int order);
  * @param x X coordinate
  * @param y Y coordinate
  * @return Vertex ID, or -1 on error
+ * @stability evolving
  */
 MOONLAB_API int feynman_add_vertex(feynman_diagram_t *diagram, double x, double y);
 
@@ -227,6 +232,7 @@ int feynman_add_external_vertex(feynman_diagram_t *diagram, double x, double y,
  * @param to Ending vertex ID
  * @param label Particle label (e.g., "e-", "mu-", "u")
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int feynman_add_fermion(feynman_diagram_t *diagram, int from, int to, const char *label);
 
@@ -249,6 +255,7 @@ int feynman_add_antifermion(feynman_diagram_t *diagram, int from, int to, const 
  * @param to Ending vertex ID
  * @param label Particle label (default "gamma")
  * @return 0 on success, -1 on error
+ * @stability evolving
  */
 MOONLAB_API int feynman_add_photon(feynman_diagram_t *diagram, int from, int to, const char *label);
 
@@ -354,6 +361,7 @@ int feynman_add_outgoing(feynman_diagram_t *diagram, int vertex, particle_type_t
  * Create QED vertex diagram (e- -> e- + gamma)
  *
  * @return New diagram, or NULL on error
+ * @stability evolving
  */
 MOONLAB_API feynman_diagram_t *feynman_create_qed_vertex(void);
 
@@ -361,6 +369,7 @@ MOONLAB_API feynman_diagram_t *feynman_create_qed_vertex(void);
  * Create e+ e- -> mu+ mu- diagram (s-channel)
  *
  * @return New diagram, or NULL on error
+ * @stability evolving
  */
 MOONLAB_API feynman_diagram_t *feynman_create_ee_to_mumu(void);
 
@@ -368,6 +377,7 @@ MOONLAB_API feynman_diagram_t *feynman_create_ee_to_mumu(void);
  * Create Compton scattering diagram (e- + gamma -> e- + gamma)
  *
  * @return New diagram, or NULL on error
+ * @stability evolving
  */
 MOONLAB_API feynman_diagram_t *feynman_create_compton(void);
 
@@ -375,6 +385,7 @@ MOONLAB_API feynman_diagram_t *feynman_create_compton(void);
  * Create pair annihilation diagram (e+ e- -> gamma gamma)
  *
  * @return New diagram, or NULL on error
+ * @stability evolving
  */
 MOONLAB_API feynman_diagram_t *feynman_create_pair_annihilation(void);
 
@@ -434,6 +445,7 @@ feynman_options_t feynman_publication_options(void);
  * @param diagram Diagram to render
  * @param opts Rendering options (NULL for defaults)
  * @return Allocated string with ASCII diagram (caller must free)
+ * @stability evolving
  */
 MOONLAB_API char *feynman_render_ascii(const feynman_diagram_t *diagram, const feynman_options_t *opts);
 

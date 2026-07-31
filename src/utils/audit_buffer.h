@@ -103,6 +103,7 @@ typedef struct {
  * @param[in]  slots        Caller-owned storage block.
  * @param[in]  record_size  Bytes per record.  Must be > 0.
  * @param[in]  capacity     Number of records.  Must be > 0.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
@@ -119,6 +120,7 @@ moonlab_audit_buffer_init(moonlab_audit_buffer_t *buf,
  *        returns without touching the mutex.  After destroy returns the
  *        buffer is dead; further operations are safe no-ops.
  *        Safe to call on a zero-initialised (never-init'd) buffer.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_audit_buffer_destroy(moonlab_audit_buffer_t *buf);
@@ -132,6 +134,7 @@ moonlab_audit_buffer_destroy(moonlab_audit_buffer_t *buf);
  *        Returns 1 if the record was stored without dropping
  *        anything, 0 if a drop occurred (record still stored).
  *        Returns 0 also if buf is unusable (init failed).
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_audit_buffer_push(moonlab_audit_buffer_t *buf,
@@ -140,6 +143,7 @@ moonlab_audit_buffer_push(moonlab_audit_buffer_t *buf,
 /**
  * @brief Pop the oldest pending record into ``out``.  Returns 1
  *        on success, 0 if the buffer is empty.  Thread-safe.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_audit_buffer_pop(moonlab_audit_buffer_t *buf, void *out);
@@ -147,6 +151,7 @@ moonlab_audit_buffer_pop(moonlab_audit_buffer_t *buf, void *out);
 /**
  * @brief Number of records currently pending.  Snapshot value;
  *        a concurrent push/pop may change it immediately after.
+ * @stability evolving
  */
 MOONLAB_API size_t
 moonlab_audit_buffer_len(moonlab_audit_buffer_t *buf);
@@ -155,12 +160,14 @@ moonlab_audit_buffer_len(moonlab_audit_buffer_t *buf);
  * @brief Cumulative drop count.  Operators expose this as a
  *        Prometheus counter so they know the consumer is falling
  *        behind faster than the buffer can absorb.
+ * @stability evolving
  */
 MOONLAB_API uint64_t
 moonlab_audit_buffer_drops(moonlab_audit_buffer_t *buf);
 
 /**
  * @brief Reset the drop counter to zero.
+ * @stability evolving
  */
 MOONLAB_API void
 moonlab_audit_buffer_reset_drops(moonlab_audit_buffer_t *buf);

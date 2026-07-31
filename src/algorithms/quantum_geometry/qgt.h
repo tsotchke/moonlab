@@ -205,6 +205,7 @@ typedef void (*qgt_dsigma_fn)(const double k[2], void* user,
  * @param sys  System to annotate.
  * @param f    Analytic d-vector callback, or NULL to detach.
  * @return 0 on success, -1 if @p sys is NULL.
+ * @stability beta
  */
 MOONLAB_API int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f);
 
@@ -223,6 +224,7 @@ MOONLAB_API int qgt_set_dsigma(qgt_system_t* sys, qgt_dsigma_fn f);
  * @param user Borrowed parameter payload handed to both callbacks.
  * @return New system handle, or NULL if either callback is NULL or the
  *         allocation failed.
+ * @stability beta
  */
 MOONLAB_API qgt_system_t* qgt_create_dsigma(qgt_bloch_fn f, qgt_dsigma_fn d,
                                             void* user);
@@ -238,6 +240,7 @@ MOONLAB_API qgt_system_t* qgt_create_dsigma(qgt_bloch_fn f, qgt_dsigma_fn d,
  * @param[out] dy    @f$\partial_{k_y}\mathbf d@f$, length 3.
  * @return 0 on success, -1 on bad arguments, -3 if @p sys carries no
  *         analytic d-vector (use ::qgt_curvature_at instead).
+ * @stability beta
  */
 MOONLAB_API int qgt_dsigma_at(const qgt_system_t* sys, const double k[2],
                               double d[3], double dx[3], double dy[3]);
@@ -258,6 +261,7 @@ MOONLAB_API int qgt_dsigma_at(const qgt_system_t* sys, const double k[2],
  * @param[out] omega_xy  Optional (may be NULL): Berry curvature.
  * @return 0 on success, -1 on bad arguments, -2 at a band touching,
  *         -3 if @p sys carries no analytic d-vector.
+ * @stability beta
  */
 MOONLAB_API int qgt_exact_curvature_at(const qgt_system_t* sys,
                                        const double k[2], double g[4],
@@ -275,6 +279,7 @@ MOONLAB_API int qgt_exact_curvature_at(const qgt_system_t* sys,
  *
  * Carries an analytic d-vector, so ::qgt_exact_curvature_at and
  * ::qgt_dsigma_at work on the returned handle.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_t* qgt_model_qwz(double m);
 
@@ -289,6 +294,7 @@ MOONLAB_API qgt_system_t* qgt_model_qwz(double m);
  * next-nearest-neighbour identity term does not enter the band geometry),
  * so ::qgt_exact_curvature_at and ::qgt_dsigma_at work on the returned
  * handle.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_t* qgt_model_haldane(double t1, double t2,
                                 double phi, double M_stagger);
@@ -311,6 +317,7 @@ MOONLAB_API void             qgt_free_1d(qgt_system_1d_t* sys);
  * Integer winding number @f$W = +1@f$ when @f$|t_2| > |t_1|@f$
  * (topological phase with zero-energy edge modes in open boundaries);
  * @f$W = 0@f$ otherwise.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_1d_t* qgt_model_ssh(double t1, double t2);
 
@@ -333,6 +340,7 @@ MOONLAB_API qgt_system_1d_t* qgt_model_ssh(double t1, double t2);
  *               complex pairing factors out a global gauge).
  *
  * @return Newly-owned 1D system handle, or NULL on alloc failure.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_1d_t* qgt_model_kitaev_chain(double t, double mu,
                                                      double delta);
@@ -356,6 +364,7 @@ MOONLAB_API qgt_system_1d_t* qgt_model_kitaev_chain(double t, double mu,
  * @param[out] z2   0 (trivial) or 1 (topological).
  *
  * @return 0 on success, negative on bad arguments.
+ * @stability evolving
  */
 MOONLAB_API int qgt_z2_invariant_1d_bdg(const qgt_system_1d_t* sys, int* z2);
 
@@ -369,6 +378,7 @@ MOONLAB_API int qgt_z2_invariant_1d_bdg(const qgt_system_1d_t* sys, int* z2);
  * @param N        grid size in @f$k@f$; N >= 8 is sufficient.
  * @param out_raw  optional output: raw pre-rounding winding @f$W \in \mathbb R@f$.
  * @return integer winding.
+ * @stability evolving
  */
 MOONLAB_API int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
                    double* out_raw);
@@ -382,6 +392,7 @@ MOONLAB_API int qgt_winding_1d(const qgt_system_1d_t* sys, size_t N,
  * @f$\prod_{i=0}^{N-1} \langle u(\mathbf k_i) | u(\mathbf k_{i+1}) \rangle@f$
  * with @f$\mathbf k_N \equiv \mathbf k_0@f$.  Non-Abelian generalisations
  * (multi-band holonomies) will be added alongside multi-band models.
+ * @stability evolving
  */
 MOONLAB_API int qgt_wilson_loop(const qgt_system_t* sys,
                     const double* path_k,
@@ -390,6 +401,7 @@ MOONLAB_API int qgt_wilson_loop(const qgt_system_t* sys,
 
 /**
  * @brief Release the QGT handle.
+ * @stability evolving
  */
 MOONLAB_API void qgt_free(qgt_system_t* sys);
 
@@ -414,6 +426,7 @@ typedef struct {
  * The result is exactly an integer Chern number at any finite @f$N@f$
  * provided the band remains gapped throughout the grid (Fukui,
  * Hatsugai and Suzuki 2005).
+ * @stability evolving
  */
 MOONLAB_API int qgt_berry_grid(const qgt_system_t* sys, size_t N,
                    qgt_berry_grid_t* out);
@@ -429,6 +442,7 @@ MOONLAB_API int qgt_berry_grid(const qgt_system_t* sys, size_t N,
  * eigvec-based methods.  Costs an extra O(N^2) per-grid phase-fix
  * on top of the standard FHS work.  Returns the same physically-
  * correct Chern number as ::qgt_berry_grid_proj.
+ * @stability evolving
  */
 MOONLAB_API int qgt_berry_grid_pt(const qgt_system_t* sys, size_t N,
                                    qgt_berry_grid_t* out);
@@ -452,6 +466,7 @@ MOONLAB_API int qgt_berry_grid_pt(const qgt_system_t* sys, size_t N,
  * integrator: it has no eigvec-gauge sensitivity by construction
  * and produces results identical to a correctly-implemented
  * ::qgt_berry_grid (eigvec FHS) path on the same Hamiltonian.
+ * @stability evolving
  */
 MOONLAB_API int qgt_berry_grid_proj(const qgt_system_t* sys, size_t N,
                                      qgt_berry_grid_t* out);
@@ -467,6 +482,7 @@ MOONLAB_API void qgt_berry_grid_free(qgt_berry_grid_t* g);
  * Neither @p dk too large (truncation error) nor too small (roundoff)
  * is optimal; a reasonable default is @p dk in @f$[10^{-4}, 10^{-3}]@f$
  * for the built-in QWZ / Haldane models.
+ * @stability evolving
  */
 MOONLAB_API int qgt_metric_at(const qgt_system_t* sys, const double k[2],
                   double dk, double g[4]);
@@ -522,6 +538,7 @@ MOONLAB_API int qgt_metric_at(const qgt_system_t* sys, const double k[2],
  *
  * ::qgt_exact_curvature_at reaches this same closed form from a
  * @c qgt_system_t handle, for models that carry an analytic d-vector.
+ * @stability beta
  */
 MOONLAB_API int qgt_dsigma_metric_curvature(const double d[3],
                                             const double dx[3],
@@ -566,6 +583,7 @@ MOONLAB_API int qgt_dsigma_metric_curvature(const double d[3],
  *         elsewhere in this module, since @f$Q@f$ carries a
  *         @f$1/(\Delta E)^2@f$ factor that turns a near-closed gap into a
  *         huge finite number rather than an error.
+ * @stability beta
  */
 MOONLAB_API int qgt_curvature_at(const qgt_system_t* sys, const double k[2],
                                  double dk, double g[4], double* omega_xy);
@@ -608,6 +626,7 @@ typedef qgt_system_t* (*qgt_param_system_fn)(void* user, double param);
  *                        with integer Chern numbers.
  *
  * @return 0 on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API int qgt_phase_diagram_chern(qgt_param_system_fn factory,
                              void* user,
@@ -646,6 +665,7 @@ typedef qgt_system_t* (*qgt_param_system_2d_fn)(void* user,
  *                        Chern number for sample (ix, iy).
  *
  * @return 0 on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API int qgt_phase_diagram_chern_2d(qgt_param_system_2d_fn factory,
                                 void* user,
@@ -694,6 +714,7 @@ typedef struct qgt_system_n qgt_system_n_t;
  *                      Pass @p n_bands / 2 for the conventional half-filling.
  *
  * @return Newly-owned handle, or NULL on bad arguments.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_n_t* qgt_create_nband(qgt_bloch_n_fn f, void* user,
                                               size_t n_bands,
@@ -722,6 +743,7 @@ MOONLAB_API void qgt_free_nband(qgt_system_n_t* sys);
  * @param[out] out Result container (caller-supplied).  Holds the
  *                 plaquette field and the integrated total Chern.
  * @return 0 on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
                                       qgt_berry_grid_t* out);
@@ -751,6 +773,7 @@ MOONLAB_API int qgt_berry_grid_nband(const qgt_system_n_t* sys, size_t N,
  * @param N       Grid side; must be even, >= 8.
  * @param[out]    z2 Output: 0 (trivial) or 1 (topological).
  * @return 0 on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N,
                                   int* z2);
@@ -768,6 +791,7 @@ MOONLAB_API int qgt_z2_invariant(const qgt_system_n_t* sys, size_t N,
  * @param sys    4-band system with @c n_occupied == 2.
  * @param[out] z2 0 (trivial) or 1 (topological QSH).
  * @return 0 on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API int qgt_z2_invariant_pfaffian(const qgt_system_n_t* sys,
                                            int* z2);
@@ -799,6 +823,7 @@ MOONLAB_API int qgt_z2_invariant_pfaffian(const qgt_system_n_t* sys,
  * @return Newly-owned 4-band system at half-filling (n_occupied = 2),
  *         NULL on alloc failure, or NULL if `lambda_r != 0` (see
  *         note above).
+ * @stability evolving
  */
 MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
                                                  double lambda_r,
@@ -836,6 +861,7 @@ MOONLAB_API qgt_system_n_t* qgt_model_kane_mele(double t, double lambda_so,
  *
  * @return Newly-owned 4-band system at half-filling (n_occupied = 2)
  *         or NULL on alloc failure.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_n_t* qgt_model_bhz(double A, double B, double M);
 
@@ -873,6 +899,7 @@ MOONLAB_API qgt_system_n_t* qgt_model_bhz(double A, double B, double M);
  *              for ::qgt_berry_grid_nband.  1..(q-1).
  *
  * @return Newly-owned q-band system handle, or NULL on bad args.
+ * @stability evolving
  */
 MOONLAB_API qgt_system_n_t* qgt_model_hofstadter(double t,
                                                   size_t p, size_t q,

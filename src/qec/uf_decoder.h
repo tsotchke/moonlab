@@ -57,6 +57,7 @@ typedef struct moonlab_uf_decoder moonlab_uf_decoder_t;
  * @param edge_obs        bitmask of observables this edge flips.
  * @param num_edges       number of edges.
  * @return decoder handle, or NULL on allocation failure / invalid input.
+ * @stability evolving
  */
 MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new(
     size_t num_detectors, size_t num_observables,
@@ -100,6 +101,7 @@ MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new(
  * @param corr_joint_p combined joint probability q per link, 0 < q < 0.5.
  * @param num_corr     number of links; 0 degrades to the plain decoder.
  * @return decoder handle, or NULL on allocation failure / invalid input.
+ * @stability evolving
  */
 MOONLAB_API moonlab_uf_decoder_t* moonlab_uf_decoder_new_correlated(
     size_t num_detectors, size_t num_observables,
@@ -121,12 +123,16 @@ MOONLAB_API void moonlab_uf_decoder_free(moonlab_uf_decoder_t* d);
  * @param obs_out receives num_observables * num_shots bytes, observable-major.
  * @param num_threads <=0 selects all cores.
  * @return num_shots on success, negative on error.
+ * @stability evolving
  */
 MOONLAB_API long moonlab_uf_decode_batch(
     moonlab_uf_decoder_t* d, const uint8_t* det, size_t num_shots,
     int num_threads, uint8_t* obs_out);
 
-/** @brief Number of edges the decoder was built with. */
+/**
+ * @brief Number of edges the decoder was built with.
+ * @stability evolving
+ */
 MOONLAB_API size_t moonlab_uf_decoder_num_edges(const moonlab_uf_decoder_t* d);
 
 #ifdef __cplusplus

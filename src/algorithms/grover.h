@@ -108,6 +108,7 @@ typedef struct {
  * @param config Algorithm configuration
  * @param entropy Secure entropy source for measurement
  * @return Result including found state and statistics
+ * @stability evolving
  */
 MOONLAB_API grover_result_t grover_search(quantum_state_t *state, const grover_config_t *config, quantum_entropy_ctx_t *entropy);
 
@@ -119,6 +120,7 @@ MOONLAB_API grover_result_t grover_search(quantum_state_t *state, const grover_c
  * 
  * @param num_qubits Number of qubits
  * @return Optimal number of iterations
+ * @stability evolving
  */
 MOONLAB_API size_t grover_optimal_iterations(size_t num_qubits);
 
@@ -131,6 +133,7 @@ MOONLAB_API size_t grover_optimal_iterations(size_t num_qubits);
  * @param state Quantum state
  * @param marked_state Index of state to mark
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_state);
 
@@ -142,6 +145,7 @@ MOONLAB_API qs_error_t grover_oracle(quantum_state_t *state, uint64_t marked_sta
  * 
  * @param state Quantum state
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_diffusion(quantum_state_t *state);
 
@@ -153,6 +157,7 @@ MOONLAB_API qs_error_t grover_diffusion(quantum_state_t *state);
  * @param state Quantum state
  * @param marked_state State to amplify
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_state);
 
@@ -170,6 +175,7 @@ MOONLAB_API qs_error_t grover_iteration(quantum_state_t *state, uint64_t marked_
  * @param num_qubits Number of qubits (determines range: 0 to 2^n-1)
  * @param entropy Secure entropy source
  * @return Sampled random number
+ * @stability evolving
  */
 MOONLAB_API uint64_t grover_random_sample(quantum_state_t *state, size_t num_qubits, quantum_entropy_ctx_t *entropy);
 
@@ -182,6 +188,7 @@ MOONLAB_API uint64_t grover_random_sample(quantum_state_t *state, size_t num_qub
  * @param num_samples Number of samples to generate
  * @param entropy Secure entropy source
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_random_samples(
     quantum_state_t *state,
@@ -220,6 +227,7 @@ MOONLAB_API grover_analysis_t grover_analyze_performance(size_t num_qubits, size
 /**
  * @brief Print Grover result
  * @param result Grover result
+ * @stability evolving
  */
 MOONLAB_API void grover_print_result(const grover_result_t *result, const grover_config_t *config);
 
@@ -237,6 +245,7 @@ MOONLAB_API void grover_print_result(const grover_result_t *result, const grover
  * @param marked_state Target to find
  * @param entropy Secure entropy source
  * @return Grover result with adaptive optimization stats
+ * @stability evolving
  */
 MOONLAB_API grover_result_t grover_adaptive_search(
     quantum_state_t *state,
@@ -255,6 +264,7 @@ MOONLAB_API grover_result_t grover_adaptive_search(
  * @param phases Phase angle for each marked state (in radians)
  * @param num_marked Number of marked states
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_oracle_multi_phase(
     quantum_state_t *state,
@@ -273,6 +283,7 @@ MOONLAB_API qs_error_t grover_oracle_multi_phase(
  * @param target_amplitudes Desired amplitude for each basis state
  * @param num_iterations Number of amplification iterations
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_amplitude_amplification(
     quantum_state_t *state,
@@ -292,6 +303,7 @@ MOONLAB_API qs_error_t grover_amplitude_amplification(
  * @param samples Output array for samples
  * @param entropy Secure entropy source
  * @return QS_SUCCESS or error
+ * @stability evolving
  */
 MOONLAB_API qs_error_t grover_importance_sampling(
     quantum_state_t *state,
@@ -312,6 +324,7 @@ MOONLAB_API qs_error_t grover_importance_sampling(
  * @param current_state Current MCMC state
  * @param entropy Secure entropy source
  * @return Next MCMC state
+ * @stability evolving
  */
 MOONLAB_API uint64_t grover_mcmc_step(
     quantum_state_t *state,

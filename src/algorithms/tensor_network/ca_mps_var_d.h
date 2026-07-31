@@ -101,6 +101,7 @@ typedef struct {
  * operator has real coefficients up to phase, but the full Pauli sum
  * uses purely real Pauli strings with real coefficients).  This API
  * takes real coefficients to make that explicit.
+ * @stability evolving
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_optimize_var_d_clifford_only(
     moonlab_ca_mps_t* state,
@@ -210,6 +211,7 @@ typedef struct {
  *
  * Stops when an outer iteration reduces the energy by less than
  * @c convergence_eps.
+ * @stability evolving
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_optimize_var_d_alternating(
     moonlab_ca_mps_t* state,

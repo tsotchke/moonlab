@@ -77,6 +77,7 @@ const char* simd_capabilities_string(const simd_capabilities_t *caps);
  * @param amplitudes Complex amplitude array
  * @param n Number of amplitudes
  * @return Sum of squared magnitudes
+ * @stability evolving
  */
 MOONLAB_API double simd_sum_squared_magnitudes(const complex_t *amplitudes, size_t n);
 
@@ -128,6 +129,7 @@ complex_t simd_complex_multiply(complex_t z1, complex_t z2);
  * @param amplitudes Input amplitudes
  * @param probabilities Output probabilities
  * @param n Number of elements
+ * @stability evolving
  */
 MOONLAB_API void simd_compute_probabilities(
     const complex_t *amplitudes,

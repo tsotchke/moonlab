@@ -146,6 +146,7 @@ typedef struct {
  * @param type Lattice geometry
  * @param bc Boundary conditions
  * @return Lattice structure or NULL on failure
+ * @stability evolving
  */
 MOONLAB_API lattice_2d_t *lattice_2d_create(uint32_t Lx, uint32_t Ly,
                                  lattice_type_t type,
@@ -153,6 +154,7 @@ MOONLAB_API lattice_2d_t *lattice_2d_create(uint32_t Lx, uint32_t Ly,
 
 /**
  * @brief Free lattice structure
+ * @stability evolving
  */
 MOONLAB_API void lattice_2d_free(lattice_2d_t *lat);
 

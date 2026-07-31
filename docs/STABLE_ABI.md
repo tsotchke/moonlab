@@ -122,13 +122,33 @@ use, and no others:
 
 | Tier        | Meaning                                                        |
 |-------------|----------------------------------------------------------------|
-| `stable`    | Signature and behaviour are frozen for the 1.x line.            |
-| `evolving`  | Signature is frozen by the ABI policy above; behaviour may gain precision, accuracy, or accepted inputs within 1.x. |
-| `beta`      | Newly landed; the tag may move to `evolving` or `stable` in a later 1.x release without a signature change. |
+| `stable`    | Frozen. Signature and semantics break only at a major version.  |
+| `evolving`  | Signature is stable within the minor series; semantics may extend compatibly. |
+| `beta`      | May change in any release. No compatibility promise. Promotion to `evolving` requires no signature change at the time of promotion. |
 
-The tier never weakens the ABI guarantee: an `evolving` or `beta`
-symbol that ships in a release is still a `MOONLAB_API` symbol and
-cannot be removed, renamed, or re-signatured before v2.0.
+The tiers are normative, not descriptive: they state what a consumer may
+rely on, and the release process is bound by them.
+
+How the tier is assigned:
+
+- **`stable`** -- every symbol declared in
+  `src/applications/moonlab_export.h`. That header is the committed
+  downstream ABI, versioned by `MOONLAB_ABI_VERSION_*` and pinned by
+  `tests/abi/test_moonlab_export_abi.c`, which dlopens and smokes the
+  surface exactly as a consumer does. A symbol declared both there and in
+  its module header carries `stable` at both declaration sites; the two
+  must not disagree.
+- **`evolving`** -- every other `MOONLAB_API` symbol that has shipped in a
+  tagged release. These are covered by the v1.x no-break policy above.
+- **`beta`** -- `MOONLAB_API` symbols added since the last tagged release
+  and not yet shipped. This is the only tier whose signature may still
+  move, and it is where a symbol lives during the release cycle that
+  introduces it.
+
+An `evolving` or `stable` symbol that has shipped cannot be removed,
+renamed, or re-signatured before v2.0. A `beta` symbol carries no such
+promise until it ships, which is exactly why the tier exists: the
+alternative is to freeze a signature before anyone has used it.
 
 ### v1.2.1 additions
 

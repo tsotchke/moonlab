@@ -62,13 +62,20 @@ enum {
  *                       application.  32 is a reasonable default for
  *                       VQE / QAOA workloads.
  * @return A newly owned handle, or NULL on allocation failure / bad args.
+ * @stability stable
  */
 MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_create(uint32_t num_qubits, uint32_t max_bond_dim);
 
-/** Release all memory owned by @p s.  No-op on NULL. */
+/**
+ * Release all memory owned by @p s.  No-op on NULL.
+ * @stability stable
+ */
 MOONLAB_API void moonlab_ca_mps_free(moonlab_ca_mps_t* s);
 
-/** Deep-copy a CA-MPS. */
+/**
+ * Deep-copy a CA-MPS.
+ * @stability stable
+ */
 MOONLAB_API moonlab_ca_mps_t* moonlab_ca_mps_clone(const moonlab_ca_mps_t* s);
 
 /* ================================================================== */
@@ -96,6 +103,7 @@ MOONLAB_API uint32_t moonlab_ca_mps_current_bond_dim(const moonlab_ca_mps_t* s);
  * @param s  CA-MPS handle.  Must be non-NULL.
  * @return Max bipartite entanglement entropy in nats; 0 on a NULL or
  *         single-qubit state.
+ * @stability evolving
  */
 MOONLAB_API double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s);
 
@@ -107,23 +115,50 @@ MOONLAB_API double moonlab_ca_mps_max_half_cut_entropy(const moonlab_ca_mps_t* s
  * the MPS factor |phi> is left untouched (cost: O(n) bit operations
  * per gate, no SVD). */
 
-/** Hadamard gate on qubit @p q. */
+/**
+ * Hadamard gate on qubit @p q.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_h   (moonlab_ca_mps_t* s, uint32_t q);
-/** S = sqrt(Z), phase gate diag(1, i). */
+/**
+ * S = sqrt(Z), phase gate diag(1, i).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_s   (moonlab_ca_mps_t* s, uint32_t q);
-/** S^dagger = diag(1, -i). */
+/**
+ * S^dagger = diag(1, -i).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_sdag(moonlab_ca_mps_t* s, uint32_t q);
-/** Pauli X (bit flip). */
+/**
+ * Pauli X (bit flip).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_x   (moonlab_ca_mps_t* s, uint32_t q);
-/** Pauli Y. */
+/**
+ * Pauli Y.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_y   (moonlab_ca_mps_t* s, uint32_t q);
-/** Pauli Z (phase flip). */
+/**
+ * Pauli Z (phase flip).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_z   (moonlab_ca_mps_t* s, uint32_t q);
-/** Controlled-NOT, control = @p ctrl, target = @p targ. */
+/**
+ * Controlled-NOT, control = @p ctrl, target = @p targ.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_cnot(moonlab_ca_mps_t* s, uint32_t ctrl, uint32_t targ);
-/** Controlled-Z (symmetric in @p a / @p b). */
+/**
+ * Controlled-Z (symmetric in @p a / @p b).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_cz  (moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
-/** SWAP (symmetric in @p a / @p b). */
+/**
+ * SWAP (symmetric in @p a / @p b).
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, uint32_t b);
 
 /* ================================================================== */
@@ -132,34 +167,47 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_swap(moonlab_ca_mps_t* s, uint32_t a, 
 
 /** R_P(theta) = exp(-i theta P / 2) following the standard Qiskit/Cirq
  *  convention.  Non-Clifford in general: the MPS action is a Pauli-string
+ * @stability stable
  *  rotation on the Clifford-conjugated string C^dagger P_q C. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_rx(moonlab_ca_mps_t* s, uint32_t q, double theta);
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_ry(moonlab_ca_mps_t* s, uint32_t q, double theta);
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_rz(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
-/** T gate: equals R_Z(pi/4) up to a global phase e^{-i pi/8}. */
+/**
+ * T gate: equals R_Z(pi/4) up to a global phase e^{-i pi/8}.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_t_gate(moonlab_ca_mps_t* s, uint32_t q);
 
-/** T-dagger gate: equals R_Z(-pi/4) up to a global phase e^{+i pi/8}. */
+/**
+ * T-dagger gate: equals R_Z(-pi/4) up to a global phase e^{+i pi/8}.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_t_dagger(moonlab_ca_mps_t* s, uint32_t q);
 
 /** Phase gate: P(theta) = diag(1, e^{i theta}); equals R_Z(theta) up to a
+ * @stability stable
  *  global phase e^{i theta / 2}. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_phase(moonlab_ca_mps_t* s, uint32_t q, double theta);
 
 /** Controlled-R_Z(theta).  Decomposed as
  *    R_Z(target, theta/2) . CNOT . R_Z(target, -theta/2) . CNOT
+ * @stability stable
  *  using only existing CA-MPS primitives. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_crz(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
-/** Controlled-R_X(theta).  Decomposed as H_t . CRZ . H_t. */
+/**
+ * Controlled-R_X(theta).  Decomposed as H_t . CRZ . H_t.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
                                    double theta);
 
 /** Controlled-R_Y(theta).  Decomposed as S_t . CRX . S^dag_t
+ * @stability stable
  *  (since S X S^dag = Y). */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
                                    uint32_t control, uint32_t target,
@@ -168,6 +216,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
 /** General single-qubit unitary U3(theta, phi, lambda) (Qiskit convention):
  *  [[cos(t/2),     -e^{i l} sin(t/2)],
  *   [e^{i p} sin(t/2),  e^{i(p+l)} cos(t/2)]]
+ * @stability stable
  *  Equivalent up to a global phase to R_Z(p) . R_Y(t) . R_Z(l). */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
                                   double theta, double phi, double lambda);
@@ -175,12 +224,14 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_u3(moonlab_ca_mps_t* s, uint32_t q,
 /** Toffoli (CCX): flip target if both controls are |1>.  Decomposed via
  *  the Nielsen-Chuang 6-CNOT + 7-T construction so the operation is
  *  expressed purely in terms of CA-MPS Clifford gates plus T / T-dagger.
+ * @stability stable
  *  All three qubit indices must be distinct. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_toffoli(moonlab_ca_mps_t* s,
                                        uint32_t c1, uint32_t c2, uint32_t t);
 
 /** Fredkin (CSWAP): swap @p t1 and @p t2 if the control is |1>.  Built
  *  from CSWAP = CNOT(t1,t2) . Toffoli(c, t2, t1) . CNOT(t1, t2).  All
+ * @stability stable
  *  three qubit indices must be distinct. */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
                                        uint32_t c, uint32_t t1, uint32_t t2);
@@ -190,6 +241,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_fredkin(moonlab_ca_mps_t* s,
  *
  * @param pauli_string Array of n bytes in {0=I, 1=X, 2=Y, 3=Z}.
  * @param theta        Rotation angle (radians).
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
                                              const uint8_t* pauli_string,
@@ -206,15 +258,22 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_pauli_rotation(moonlab_ca_mps_t* s,
  * @param pauli_string Array of n bytes in {0=I, 1=X, 2=Y, 3=Z}.
  * @param tau          Imaginary-time step.  Positive tau pushes the
  *                     state toward the lowest-eigenvalue sector of P.
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_imag_pauli_rotation(moonlab_ca_mps_t* s,
                                                   const uint8_t* pauli_string,
                                                   double tau);
 
-/** Rescale the internal MPS to unit norm. */
+/**
+ * Rescale the internal MPS to unit norm.
+ * @stability stable
+ */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_normalize(moonlab_ca_mps_t* s);
 
-/** Return <psi|psi> (should be 1 for a normalized state). */
+/**
+ * Return <psi|psi> (should be 1 for a normalized state).
+ * @stability stable
+ */
 MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
 
 /* ================================================================== */
@@ -227,6 +286,7 @@ MOONLAB_API double moonlab_ca_mps_norm(const moonlab_ca_mps_t* s);
  * The Clifford prefactor is absorbed via <psi|P|psi> =
  * <phi | C^dagger P C | phi>.  The conjugated Pauli string is computed in
  * O(n^2) and the MPS expectation in O(n chi^2).
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s,
                                            const uint8_t* pauli_string,
@@ -247,6 +307,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli(const moonlab_ca_mps_t* s
  * Cost: O(num_terms * n^2) for the n Clifford conjugations plus
  * O(num_terms * n * chi^2) for the MPS expectation on each conjugated
  * term.  Trivially parallelizable across terms.
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_t* s,
                                                 const uint8_t* paulis,
@@ -264,6 +325,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_expect_pauli_sum(const moonlab_ca_mps_
  * accumulated @f$i^{phase}@f$ factor in {0,1,2,3}.
  *
  * Cost: O(n^2) Heisenberg conjugation through the tableau.
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t* s,
                                                           const uint8_t* in_pauli,
@@ -279,6 +341,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_conjugate_pauli(const moonlab_ca_mps_t
  * v0.10.0).
  *
  * Cost: O(n^2 + n chi^2), same as a single Pauli-string expectation.
+ * @stability stable
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
                                       uint32_t qubit,
@@ -308,6 +371,7 @@ MOONLAB_API ca_mps_error_t moonlab_ca_mps_prob_z(const moonlab_ca_mps_t* s,
  * before SVD-truncation back to @c max_bond_dim.
  *
  * @return CA_MPS_SUCCESS or a negative error code.
+ * @stability evolving
  */
 MOONLAB_API ca_mps_error_t moonlab_ca_mps_sample_z(const moonlab_ca_mps_t* s,
                                        uint32_t num_samples,

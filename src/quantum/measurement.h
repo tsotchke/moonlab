@@ -30,21 +30,25 @@ extern "C" {
 
 /**
  * @brief Compute probability of measuring qubit in |1⟩ state
+ * @stability evolving
  */
 MOONLAB_API double measurement_probability_one(const quantum_state_t* state, int qubit);
 
 /**
  * @brief Compute probability of measuring qubit in |0⟩ state
+ * @stability evolving
  */
 MOONLAB_API double measurement_probability_zero(const quantum_state_t* state, int qubit);
 
 /**
  * @brief Compute all single-qubit probabilities of |1⟩
+ * @stability evolving
  */
 MOONLAB_API void measurement_all_probabilities(const quantum_state_t* state, double* probabilities);
 
 /**
  * @brief Compute full probability distribution
+ * @stability evolving
  */
 MOONLAB_API void measurement_probability_distribution(const quantum_state_t* state,
                                           double* distribution);
@@ -60,11 +64,13 @@ MOONLAB_API void measurement_probability_distribution(const quantum_state_t* sta
  * @param qubit Qubit index (0-indexed)
  * @param random_value Random value in [0, 1) for outcome
  * @return Measurement result (0 or 1), -1 on error
+ * @stability evolving
  */
 MOONLAB_API int measurement_single_qubit(quantum_state_t* state, int qubit, double random_value);
 
 /**
  * @brief Measure single qubit without collapse
+ * @stability evolving
  */
 MOONLAB_API int measurement_single_qubit_no_collapse(const quantum_state_t* state,
                                          int qubit, double random_value);
@@ -79,6 +85,7 @@ MOONLAB_API int measurement_single_qubit_no_collapse(const quantum_state_t* stat
  * @param state Quantum state (collapses to basis state)
  * @param random_value Random value in [0, 1)
  * @return Measurement result as bit pattern
+ * @stability evolving
  */
 MOONLAB_API uint64_t measurement_all_qubits(quantum_state_t* state, double random_value);
 
@@ -90,6 +97,7 @@ MOONLAB_API uint64_t measurement_all_qubits(quantum_state_t* state, double rando
  * @param num_measure Number of qubits to measure
  * @param random_value Random value for sampling
  * @return Measurement result as bit pattern
+ * @stability evolving
  */
 MOONLAB_API uint64_t measurement_partial(quantum_state_t* state, const int* qubits,
                              int num_measure, double random_value);
@@ -101,24 +109,28 @@ MOONLAB_API uint64_t measurement_partial(quantum_state_t* state, const int* qubi
 /**
  * @brief Compute expectation value of Z operator
  * @return <Z> in [-1, 1]
+ * @stability evolving
  */
 MOONLAB_API double measurement_expectation_z(const quantum_state_t* state, int qubit);
 
 /**
  * @brief Compute expectation value of X operator
  * @return <X> in [-1, 1]
+ * @stability evolving
  */
 MOONLAB_API double measurement_expectation_x(const quantum_state_t* state, int qubit);
 
 /**
  * @brief Compute expectation value of Y operator
  * @return <Y> in [-1, 1]
+ * @stability evolving
  */
 MOONLAB_API double measurement_expectation_y(const quantum_state_t* state, int qubit);
 
 /**
  * @brief Compute ZZ correlation between two qubits
  * @return <Z_i Z_j> in [-1, 1]
+ * @stability evolving
  */
 MOONLAB_API double measurement_correlation_zz(const quantum_state_t* state,
                                   int qubit1, int qubit2);
@@ -129,12 +141,14 @@ MOONLAB_API double measurement_correlation_zz(const quantum_state_t* state,
 
 /**
  * @brief Sample measurement outcomes without collapse
+ * @stability evolving
  */
 MOONLAB_API void measurement_sample(const quantum_state_t* state, uint64_t* outcomes,
                         int num_samples, const double* random_values);
 
 /**
  * @brief Estimate probabilities from samples
+ * @stability evolving
  */
 MOONLAB_API void measurement_estimate_probabilities(const uint64_t* samples, int num_samples,
                                         uint64_t state_dim, double* probabilities);
@@ -183,6 +197,7 @@ typedef struct {
  * @param outcome_out receives the chosen outcome index (0..n-1).
  * @return QS_SUCCESS on success; QS_ERROR_INVALID_STATE on argument
  *         error; QS_ERROR_NOT_NORMALIZED if Kraus ops don't sum to I.
+ * @stability evolving
  */
 MOONLAB_API qs_error_t measurement_povm(quantum_state_t *state,
                              const povm_t *povm,
@@ -194,6 +209,7 @@ MOONLAB_API qs_error_t measurement_povm(quantum_state_t *state,
  *        mutating the state.
  *
  * @param probs_out array of length povm->num_outcomes.
+ * @stability evolving
  */
 MOONLAB_API qs_error_t measurement_povm_probabilities(const quantum_state_t *state,
                                            const povm_t *povm,
@@ -212,6 +228,7 @@ MOONLAB_API qs_error_t measurement_povm_probabilities(const quantum_state_t *sta
  * theta = pi/4 (outcomes equally likely regardless of the state,
  * P_k |psi> = |psi>/sqrt(2)) and strength = 1 gives theta = 0
  * (projective).
+ * @stability evolving
  */
 MOONLAB_API qs_error_t measurement_weak_z(quantum_state_t *state,
                                int qubit,

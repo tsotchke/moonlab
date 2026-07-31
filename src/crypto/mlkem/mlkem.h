@@ -62,6 +62,7 @@ extern "C" {
  * Feeds @p d (32 bytes) and @p z (32 bytes) from the caller-supplied
  * entropy.  Writes 800 bytes of public key to @p ek and 1632 bytes
  * of secret key to @p dk.
+ * @stability evolving
  */
 MOONLAB_API void moonlab_mlkem512_keygen(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
                               uint8_t dk[MLKEM512_SECRETKEYBYTES],
@@ -74,6 +75,7 @@ MOONLAB_API void moonlab_mlkem512_keygen(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
  * Uses @p m (32 bytes of fresh random) as the internal FO seed.
  * Writes a 768-byte ciphertext to @p c and a 32-byte shared secret
  * to @p K.
+ * @stability evolving
  */
 MOONLAB_API void moonlab_mlkem512_encaps(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                               uint8_t K[32],
@@ -87,6 +89,7 @@ MOONLAB_API void moonlab_mlkem512_encaps(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
  * invalid ciphertext, a *different* 32-byte value is produced
  * pseudorandomly via SHAKE256(z || c), preserving IND-CCA2 security
  * without leaking failure via timing.
+ * @stability stable
  */
 MOONLAB_API void moonlab_mlkem512_decaps(uint8_t K[32],
                               const uint8_t c[MLKEM512_CIPHERTEXTBYTES],
@@ -96,6 +99,7 @@ MOONLAB_API void moonlab_mlkem512_decaps(uint8_t K[32],
  * @brief FIPS 203 Section 7.2 encapsulation-key check.
  * @return 1 if @p ek is well formed (all coefficients reduced mod q),
  *         0 otherwise.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_mlkem512_check_ek(const uint8_t ek[MLKEM512_PUBLICKEYBYTES]);
 
@@ -103,6 +107,7 @@ MOONLAB_API int moonlab_mlkem512_check_ek(const uint8_t ek[MLKEM512_PUBLICKEYBYT
  * @brief FIPS 203 Section 7.3 decapsulation-key check.
  * @return 1 if @p dk is internally consistent (embedded H(ek) matches),
  *         0 otherwise.
+ * @stability evolving
  */
 MOONLAB_API int moonlab_mlkem512_check_dk(const uint8_t dk[MLKEM512_SECRETKEYBYTES]);
 
@@ -117,6 +122,7 @@ MOONLAB_API int moonlab_mlkem512_check_dk(const uint8_t dk[MLKEM512_SECRETKEYBYT
  * boundary can instead supply explicit seeds from that module's approved DRBG.
  *
  * @return 0 on success; -1 on QRNG failure.
+ * @stability stable
  */
 MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES],
                                    uint8_t dk[MLKEM512_SECRETKEYBYTES]);
@@ -126,6 +132,7 @@ MOONLAB_API int moonlab_mlkem512_keygen_qrng(uint8_t ek[MLKEM512_PUBLICKEYBYTES]
  *        @c moonlab_qrng_bytes.
  *
  * @return 0 on success; -1 on QRNG failure.
+ * @stability stable
  */
 MOONLAB_API int moonlab_mlkem512_encaps_qrng(uint8_t c[MLKEM512_CIPHERTEXTBYTES],
                                    uint8_t K[32],

@@ -112,6 +112,7 @@ typedef struct {
  * 
  * @param ctx Health test context to initialize
  * @return HEALTH_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_tests_init(health_test_ctx_t *ctx);
 
@@ -121,6 +122,7 @@ MOONLAB_API health_error_t health_tests_init(health_test_ctx_t *ctx);
  * @param ctx Health test context
  * @param config Custom configuration
  * @return HEALTH_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_tests_init_custom(health_test_ctx_t *ctx, const health_test_config_t *config);
 
@@ -128,6 +130,7 @@ MOONLAB_API health_error_t health_tests_init_custom(health_test_ctx_t *ctx, cons
  * @brief Free health test resources
  * 
  * @param ctx Health test context
+ * @stability evolving
  */
 MOONLAB_API void health_tests_free(health_test_ctx_t *ctx);
 
@@ -135,6 +138,7 @@ MOONLAB_API void health_tests_free(health_test_ctx_t *ctx);
  * @brief Reset health test statistics
  * 
  * @param ctx Health test context
+ * @stability evolving
  */
 MOONLAB_API void health_tests_reset(health_test_ctx_t *ctx);
 
@@ -152,6 +156,7 @@ MOONLAB_API void health_tests_reset(health_test_ctx_t *ctx);
  * @param samples Sample data
  * @param num_samples Number of samples (typically ≥1024)
  * @return HEALTH_SUCCESS if tests pass, error code if failure
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_tests_startup(health_test_ctx_t *ctx, const uint8_t *samples, size_t num_samples);
 
@@ -164,6 +169,7 @@ MOONLAB_API health_error_t health_tests_startup(health_test_ctx_t *ctx, const ui
  * @param ctx Health test context
  * @param sample Sample to test
  * @return HEALTH_SUCCESS if tests pass, error code if failure
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_tests_run(health_test_ctx_t *ctx, uint8_t sample);
 
@@ -176,6 +182,7 @@ MOONLAB_API health_error_t health_tests_run(health_test_ctx_t *ctx, uint8_t samp
  * @param samples Array of samples
  * @param num_samples Number of samples
  * @return HEALTH_SUCCESS if all tests pass, error code on first failure
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_tests_run_batch(health_test_ctx_t *ctx, const uint8_t *samples, size_t num_samples);
 
@@ -195,6 +202,7 @@ MOONLAB_API health_error_t health_tests_run_batch(health_test_ctx_t *ctx, const 
  * @param ctx Health test context
  * @param sample Current sample
  * @return HEALTH_SUCCESS or HEALTH_ERROR_RCT_FAILURE
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_test_rct(health_test_ctx_t *ctx, uint8_t sample);
 
@@ -210,6 +218,7 @@ MOONLAB_API health_error_t health_test_rct(health_test_ctx_t *ctx, uint8_t sampl
  * @param ctx Health test context
  * @param sample Current sample
  * @return HEALTH_SUCCESS or HEALTH_ERROR_APT_FAILURE
+ * @stability evolving
  */
 MOONLAB_API health_error_t health_test_apt(health_test_ctx_t *ctx, uint8_t sample);
 
@@ -225,6 +234,7 @@ MOONLAB_API health_error_t health_test_apt(health_test_ctx_t *ctx, uint8_t sampl
  * 
  * @param min_entropy Min-entropy per sample in bits
  * @return RCT cutoff value
+ * @stability evolving
  */
 MOONLAB_API uint32_t health_calculate_rct_cutoff(double min_entropy);
 
@@ -237,6 +247,7 @@ MOONLAB_API uint32_t health_calculate_rct_cutoff(double min_entropy);
  * @param min_entropy Min-entropy per sample in bits
  * @param window_size APT window size
  * @return APT cutoff value
+ * @stability evolving
  */
 MOONLAB_API uint32_t health_calculate_apt_cutoff(double min_entropy, uint32_t window_size);
 
@@ -259,6 +270,7 @@ void health_get_recommended_config(double min_entropy, health_test_config_t *con
  * 
  * @param ctx Health test context
  * @return Statistics structure
+ * @stability evolving
  */
 MOONLAB_API health_test_stats_t health_tests_get_stats(const health_test_ctx_t *ctx);
 
@@ -267,6 +279,7 @@ MOONLAB_API health_test_stats_t health_tests_get_stats(const health_test_ctx_t *
  * 
  * @param ctx Health test context
  * @return 1 if passed, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int health_tests_startup_complete(const health_test_ctx_t *ctx);
 
@@ -274,6 +287,7 @@ MOONLAB_API int health_tests_startup_complete(const health_test_ctx_t *ctx);
  * @brief Print health test statistics
  * 
  * @param ctx Health test context
+ * @stability evolving
  */
 MOONLAB_API void health_tests_print_stats(const health_test_ctx_t *ctx);
 
@@ -286,6 +300,7 @@ MOONLAB_API void health_tests_print_stats(const health_test_ctx_t *ctx);
  * @param ctx Health test context
  * @param callback Callback function
  * @param user_data User data passed to callback
+ * @stability evolving
  */
 MOONLAB_API void health_tests_set_callback(
     health_test_ctx_t *ctx,
@@ -301,6 +316,7 @@ MOONLAB_API void health_tests_set_callback(
  * 
  * @param ctx Health test context
  * @param enabled 1 to enable, 0 to disable
+ * @stability evolving
  */
 MOONLAB_API void health_tests_set_enabled(health_test_ctx_t *ctx, int enabled);
 
@@ -313,6 +329,7 @@ MOONLAB_API void health_tests_set_enabled(health_test_ctx_t *ctx, int enabled);
  * 
  * @param error Health error code
  * @return Human-readable error description
+ * @stability evolving
  */
 MOONLAB_API const char* health_error_string(health_error_t error);
 
@@ -323,6 +340,7 @@ MOONLAB_API const char* health_error_string(health_error_t error);
  * 
  * @param config Configuration to validate
  * @return 1 if valid, 0 otherwise
+ * @stability evolving
  */
 MOONLAB_API int health_validate_config(const health_test_config_t *config);
 

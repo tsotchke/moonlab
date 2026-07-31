@@ -111,21 +111,25 @@ typedef struct {
 
 /**
  * @brief Create a noise model
+ * @stability evolving
  */
 MOONLAB_API noise_model_t* noise_model_create(void);
 
 /**
  * @brief Destroy noise model
+ * @stability evolving
  */
 MOONLAB_API void noise_model_destroy(noise_model_t* model);
 
 /**
  * @brief Copy noise model
+ * @stability evolving
  */
 MOONLAB_API noise_model_t* noise_model_copy(const noise_model_t* model);
 
 /**
  * @brief Create realistic noise model from hardware specs
+ * @stability evolving
  */
 MOONLAB_API noise_model_t* noise_model_create_realistic(double t1_us, double t2_us,
                                             double gate_error,
@@ -137,54 +141,63 @@ MOONLAB_API noise_model_t* noise_model_create_realistic(double t1_us, double t2_
 
 /**
  * @brief Apply depolarizing channel to single qubit
+ * @stability evolving
  */
 MOONLAB_API void noise_depolarizing_single(quantum_state_t* state, int qubit,
                                double probability, double random_value);
 
 /**
  * @brief Apply depolarizing channel to two qubits
+ * @stability evolving
  */
 MOONLAB_API void noise_depolarizing_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
                                   double probability, double random_value);
 
 /**
  * @brief Apply amplitude damping channel
+ * @stability evolving
  */
 MOONLAB_API void noise_amplitude_damping(quantum_state_t* state, int qubit,
                              double gamma, double random_value);
 
 /**
  * @brief Apply phase damping channel
+ * @stability evolving
  */
 MOONLAB_API void noise_phase_damping(quantum_state_t* state, int qubit,
                          double gamma, double random_value);
 
 /**
  * @brief Apply pure dephasing
+ * @stability evolving
  */
 MOONLAB_API void noise_pure_dephasing(quantum_state_t* state, int qubit,
                           double sigma, double random_phase);
 
 /**
  * @brief Apply bit flip channel
+ * @stability evolving
  */
 MOONLAB_API void noise_bit_flip(quantum_state_t* state, int qubit,
                     double probability, double random_value);
 
 /**
  * @brief Apply phase flip channel
+ * @stability evolving
  */
 MOONLAB_API void noise_phase_flip(quantum_state_t* state, int qubit,
                       double probability, double random_value);
 
 /**
  * @brief Apply bit-phase flip channel
+ * @stability evolving
  */
 MOONLAB_API void noise_bit_phase_flip(quantum_state_t* state, int qubit,
                           double probability, double random_value);
 
 /**
  * @brief Apply thermal relaxation
+ * @stability evolving
  */
 MOONLAB_API void noise_thermal_relaxation(quantum_state_t* state, int qubit,
                               double t1, double t2, double time,
@@ -192,6 +205,7 @@ MOONLAB_API void noise_thermal_relaxation(quantum_state_t* state, int qubit,
 
 /**
  * @brief Simulate readout error
+ * @stability evolving
  */
 MOONLAB_API int noise_readout_error(int outcome, double error_0_to_1, double error_1_to_0,
                         double random_value);
@@ -202,6 +216,7 @@ MOONLAB_API int noise_readout_error(int outcome, double error_0_to_1, double err
 
 /**
  * @brief Apply noise model to qubit
+ * @stability evolving
  */
 MOONLAB_API void noise_apply_model(quantum_state_t* state, int qubit,
                        const noise_model_t* model,
@@ -209,6 +224,7 @@ MOONLAB_API void noise_apply_model(quantum_state_t* state, int qubit,
 
 /**
  * @brief Apply noise model to two-qubit gate
+ * @stability evolving
  */
 MOONLAB_API void noise_apply_model_two_qubit(quantum_state_t* state, int qubit1, int qubit2,
                                  const noise_model_t* model,
@@ -252,6 +268,7 @@ typedef enum {
  * @param channel Channel identifier.
  * @param p Channel parameter (gamma, lambda, or probability).
  * @return Max |Σ K†K - I| element-wise; negative on invalid input.
+ * @stability evolving
  */
 MOONLAB_API double noise_kraus_completeness_deviation(noise_channel_id_t channel, double p);
 
@@ -277,6 +294,7 @@ MOONLAB_API double noise_kraus_completeness_deviation(noise_channel_id_t channel
  * @param qubit_b       second qubit (must differ from qubit_a).
  * @param probs         length-16 probability table, sum to 1.
  * @param uniform       a uniform [0, 1) sample.
+ * @stability evolving
  */
 MOONLAB_API void noise_correlated_two_qubit_pauli(quantum_state_t* state,
                                        int qubit_a, int qubit_b,
@@ -293,6 +311,7 @@ MOONLAB_API void noise_correlated_two_qubit_pauli(quantum_state_t* state,
  *
  * Useful for time-varying noise (pick branch per gate) or for
  * biased-basis error models.
+ * @stability evolving
  */
 MOONLAB_API void noise_convex_mixture_single(quantum_state_t* state, int qubit,
                                   noise_channel_id_t channel_a, double param_a,
@@ -304,6 +323,7 @@ MOONLAB_API void noise_convex_mixture_single(quantum_state_t* state, int qubit,
 /**
  * @brief Sequential composition of two single-qubit channels on the
  *        same qubit.  Equivalent to applying them in succession.
+ * @stability evolving
  */
 MOONLAB_API void noise_composite_sequential_single(quantum_state_t* state, int qubit,
                                         noise_channel_id_t channel_a, double param_a,

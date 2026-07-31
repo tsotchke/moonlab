@@ -139,6 +139,7 @@ typedef struct {
  * @param periodic_bc Use periodic boundary conditions
  * @param seed Random seed for disorder realization
  * @return XXZ Hamiltonian structure
+ * @stability evolving
  */
 MOONLAB_API xxz_hamiltonian_t *xxz_hamiltonian_create(uint32_t num_sites,
                                            double J, double delta,
@@ -148,6 +149,7 @@ MOONLAB_API xxz_hamiltonian_t *xxz_hamiltonian_create(uint32_t num_sites,
 
 /**
  * @brief Free XXZ Hamiltonian
+ * @stability evolving
  */
 MOONLAB_API void xxz_hamiltonian_free(xxz_hamiltonian_t *h);
 
@@ -159,11 +161,13 @@ MOONLAB_API void xxz_hamiltonian_free(xxz_hamiltonian_t *h);
  *
  * @param xxz XXZ Hamiltonian parameters
  * @return Sparse Hamiltonian matrix
+ * @stability evolving
  */
 MOONLAB_API sparse_hamiltonian_t *xxz_build_sparse(const xxz_hamiltonian_t *xxz);
 
 /**
  * @brief Free sparse Hamiltonian
+ * @stability evolving
  */
 MOONLAB_API void sparse_hamiltonian_free(sparse_hamiltonian_t *h);
 
@@ -175,6 +179,7 @@ MOONLAB_API void sparse_hamiltonian_free(sparse_hamiltonian_t *h);
  *
  * @param h Sparse Hamiltonian (modified to cache results)
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t sparse_hamiltonian_diagonalize(sparse_hamiltonian_t *h);
 
@@ -209,6 +214,7 @@ typedef struct {
  * @param num_eigenvalues Number of eigenvalues
  * @param filter_edges Exclude fraction of spectrum edges (typically 0.1)
  * @return Level statistics structure
+ * @stability evolving
  */
 MOONLAB_API level_statistics_t *compute_level_statistics(const double *eigenvalues,
                                               uint32_t num_eigenvalues,
@@ -216,6 +222,7 @@ MOONLAB_API level_statistics_t *compute_level_statistics(const double *eigenvalu
 
 /**
  * @brief Free level statistics
+ * @stability evolving
  */
 MOONLAB_API void level_statistics_free(level_statistics_t *stats);
 
@@ -224,6 +231,7 @@ MOONLAB_API void level_statistics_free(level_statistics_t *stats);
  *
  * @param stats Level statistics
  * @return 1 for MBL phase, 0 for thermal phase, -1 for inconclusive
+ * @stability evolving
  */
 MOONLAB_API int classify_phase_from_levels(const level_statistics_t *stats);
 
@@ -261,6 +269,7 @@ typedef struct {
  * @param t_max Maximum time
  * @param num_steps Number of time steps
  * @return Entropy dynamics structure
+ * @stability evolving
  */
 MOONLAB_API entropy_dynamics_t *simulate_entropy_dynamics(const sparse_hamiltonian_t *h,
                                                const quantum_state_t *initial_state,
@@ -270,6 +279,7 @@ MOONLAB_API entropy_dynamics_t *simulate_entropy_dynamics(const sparse_hamiltoni
 
 /**
  * @brief Free entropy dynamics
+ * @stability evolving
  */
 MOONLAB_API void entropy_dynamics_free(entropy_dynamics_t *dyn);
 
@@ -282,6 +292,7 @@ MOONLAB_API void entropy_dynamics_free(entropy_dynamics_t *dyn);
  * @param log_fit_quality Output: R² for log(t) fit
  * @param linear_fit_quality Output: R² for t fit
  * @return 1 if logarithmic dominates, 0 if linear dominates
+ * @stability evolving
  */
 MOONLAB_API int fit_entropy_growth(const entropy_dynamics_t *dyn,
                        double *log_fit_quality, double *linear_fit_quality);
@@ -318,6 +329,7 @@ typedef struct {
  * @param t_max Maximum time
  * @param num_steps Number of time steps
  * @return Imbalance dynamics structure
+ * @stability evolving
  */
 MOONLAB_API imbalance_dynamics_t *simulate_imbalance_dynamics(const sparse_hamiltonian_t *h,
                                                    double t_max,
@@ -325,6 +337,7 @@ MOONLAB_API imbalance_dynamics_t *simulate_imbalance_dynamics(const sparse_hamil
 
 /**
  * @brief Free imbalance dynamics
+ * @stability evolving
  */
 MOONLAB_API void imbalance_dynamics_free(imbalance_dynamics_t *dyn);
 
@@ -334,6 +347,7 @@ MOONLAB_API void imbalance_dynamics_free(imbalance_dynamics_t *dyn);
  * @param dyn Imbalance dynamics
  * @param threshold Threshold for persistent imbalance (typically 0.1)
  * @return 1 for MBL, 0 for thermal
+ * @stability evolving
  */
 MOONLAB_API int classify_phase_from_imbalance(const imbalance_dynamics_t *dyn,
                                    double threshold);
@@ -381,11 +395,13 @@ typedef struct {
  *
  * @param h Sparse Hamiltonian (must be diagonalized)
  * @return LIOM system
+ * @stability evolving
  */
 MOONLAB_API liom_system_t *construct_lioms(const sparse_hamiltonian_t *h);
 
 /**
  * @brief Free LIOM system
+ * @stability evolving
  */
 MOONLAB_API void liom_system_free(liom_system_t *sys);
 
@@ -396,6 +412,7 @@ MOONLAB_API void liom_system_free(liom_system_t *sys);
  *
  * @param liom Single LIOM
  * @return Localization length ξ
+ * @stability evolving
  */
 MOONLAB_API double liom_localization_length(const liom_t *liom);
 
@@ -422,6 +439,7 @@ typedef enum {
  * @param time Evolution time
  * @param method Evolution method
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t mbl_time_evolve(quantum_state_t *state,
                             const sparse_hamiltonian_t *h,
@@ -437,6 +455,7 @@ MOONLAB_API qs_error_t mbl_time_evolve(quantum_state_t *state,
  * @param h Sparse Hamiltonian (must be diagonalized)
  * @param time Evolution time
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t mbl_evolve_exact(quantum_state_t *state,
                              const sparse_hamiltonian_t *h,
@@ -453,6 +472,7 @@ MOONLAB_API qs_error_t mbl_evolve_exact(quantum_state_t *state,
  * @param time Evolution time
  * @param krylov_dim Dimension of Krylov subspace
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t mbl_evolve_krylov(quantum_state_t *state,
                               const sparse_hamiltonian_t *h,
@@ -469,6 +489,7 @@ MOONLAB_API qs_error_t mbl_evolve_krylov(quantum_state_t *state,
  *
  * @param state Quantum state (initialized with correct num_qubits)
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t prepare_neel_state(quantum_state_t *state);
 
@@ -479,6 +500,7 @@ MOONLAB_API qs_error_t prepare_neel_state(quantum_state_t *state);
  *
  * @param state Quantum state
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t prepare_domain_wall_state(quantum_state_t *state);
 
@@ -490,6 +512,7 @@ MOONLAB_API qs_error_t prepare_domain_wall_state(quantum_state_t *state);
  * @param state Quantum state
  * @param seed Random seed
  * @return QS_SUCCESS or error code
+ * @stability evolving
  */
 MOONLAB_API qs_error_t prepare_random_product_state(quantum_state_t *state, uint64_t seed);
 
@@ -533,6 +556,7 @@ typedef struct {
  * @param num_realizations Disorder realizations to average over
  * @param periodic_bc Periodic boundaries
  * @return Phase diagram structure
+ * @stability evolving
  */
 MOONLAB_API phase_diagram_t *scan_phase_diagram(uint32_t num_sites,
                                      double J, double delta,
@@ -543,6 +567,7 @@ MOONLAB_API phase_diagram_t *scan_phase_diagram(uint32_t num_sites,
 
 /**
  * @brief Free phase diagram
+ * @stability evolving
  */
 MOONLAB_API void phase_diagram_free(phase_diagram_t *pd);
 
@@ -553,6 +578,7 @@ MOONLAB_API void phase_diagram_free(phase_diagram_t *pd);
  *
  * @param pd Phase diagram data
  * @return Critical disorder Wc
+ * @stability evolving
  */
 MOONLAB_API double estimate_critical_disorder(const phase_diagram_t *pd);
 
@@ -566,6 +592,7 @@ MOONLAB_API double estimate_critical_disorder(const phase_diagram_t *pd);
  * @param state Quantum state
  * @param site Site index
  * @return ⟨Sᶻᵢ⟩ in range [-0.5, 0.5]
+ * @stability evolving
  */
 MOONLAB_API double expectation_sz(const quantum_state_t *state, uint32_t site);
 
@@ -574,6 +601,7 @@ MOONLAB_API double expectation_sz(const quantum_state_t *state, uint32_t site);
  *
  * @param state Quantum state
  * @return Total ⟨Sᶻ⟩
+ * @stability evolving
  */
 MOONLAB_API double expectation_sz_total(const quantum_state_t *state);
 
@@ -584,6 +612,7 @@ MOONLAB_API double expectation_sz_total(const quantum_state_t *state);
  * @param site_i First site
  * @param site_j Second site
  * @return ⟨Sᶻᵢ Sᶻⱼ⟩
+ * @stability evolving
  */
 MOONLAB_API double correlation_sz_sz(const quantum_state_t *state,
                           uint32_t site_i, uint32_t site_j);
@@ -595,6 +624,7 @@ MOONLAB_API double correlation_sz_sz(const quantum_state_t *state,
  * @param site_i First site
  * @param site_j Second site
  * @return Connected correlation
+ * @stability evolving
  */
 MOONLAB_API double correlation_connected(const quantum_state_t *state,
                               uint32_t site_i, uint32_t site_j);
@@ -605,6 +635,7 @@ MOONLAB_API double correlation_connected(const quantum_state_t *state,
  * @param state Quantum state
  * @param h Sparse Hamiltonian
  * @return ⟨H⟩
+ * @stability evolving
  */
 MOONLAB_API double expectation_energy(const quantum_state_t *state,
                            const sparse_hamiltonian_t *h);
@@ -618,6 +649,7 @@ MOONLAB_API double expectation_energy(const quantum_state_t *state,
  * @param state Quantum state
  * @param h Sparse Hamiltonian
  * @return Energy variance
+ * @stability evolving
  */
 MOONLAB_API double energy_variance(const quantum_state_t *state,
                         const sparse_hamiltonian_t *h);

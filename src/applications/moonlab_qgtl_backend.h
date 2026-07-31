@@ -116,11 +116,15 @@ typedef struct {
  * @return Owned handle, or NULL on OOM / `num_qubits` out of range.
  *         The current build caps `num_qubits` at `MOONLAB_MAX_QUBITS`
  *         (30 in WASM, 32 native).
+ * @stability evolving
  */
 MOONLAB_API moonlab_qgtl_circuit_t *
 moonlab_qgtl_circuit_create(int num_qubits);
 
-/** @brief Release a handle returned by @ref moonlab_qgtl_circuit_create. */
+/**
+ * @brief Release a handle returned by @ref moonlab_qgtl_circuit_create.
+ * @stability evolving
+ */
 MOONLAB_API void moonlab_qgtl_circuit_free(moonlab_qgtl_circuit_t *c);
 
 /**
@@ -135,6 +139,7 @@ MOONLAB_API void moonlab_qgtl_circuit_free(moonlab_qgtl_circuit_t *c);
  *                     `params[0]` as `theta`.  Single-qubit gates
  *                     without parameters tolerate NULL.
  * @return MOONLAB_QGTL_OK on success or a negative status code.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_qgtl_add_gate(moonlab_qgtl_circuit_t *c,
@@ -154,6 +159,7 @@ moonlab_qgtl_add_gate(moonlab_qgtl_circuit_t *c,
  * `num_shots > 0`).
  *
  * @return MOONLAB_QGTL_OK on success or a negative status code.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_qgtl_execute(moonlab_qgtl_circuit_t           *c,
@@ -161,6 +167,7 @@ moonlab_qgtl_execute(moonlab_qgtl_circuit_t           *c,
                      moonlab_qgtl_results_t           *out);
 
 /** @brief Release any buffers attached to a results record by
+ * @stability evolving
  *  @ref moonlab_qgtl_execute.  Safe on a zero-initialised record. */
 MOONLAB_API void moonlab_qgtl_results_free(moonlab_qgtl_results_t *r);
 
@@ -168,10 +175,16 @@ MOONLAB_API void moonlab_qgtl_results_free(moonlab_qgtl_results_t *r);
  * Introspection (handy for QGTL's circuit-validation step).
  * ------------------------------------------------------------------ */
 
-/** @brief Number of qubits the circuit was created with. */
+/**
+ * @brief Number of qubits the circuit was created with.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_qgtl_circuit_num_qubits(const moonlab_qgtl_circuit_t *c);
 
-/** @brief Number of gates recorded in the circuit. */
+/**
+ * @brief Number of gates recorded in the circuit.
+ * @stability evolving
+ */
 MOONLAB_API int moonlab_qgtl_circuit_num_gates(const moonlab_qgtl_circuit_t *c);
 
 /* ------------------------------------------------------------------
@@ -208,6 +221,7 @@ MOONLAB_API int moonlab_qgtl_circuit_num_gates(const moonlab_qgtl_circuit_t *c);
  *         circuit, or MOONLAB_QGTL_OOM if `buf_size > 0 && buf_size`
  *         is insufficient.  In the OOM case `*out_written` reports
  *         the required size.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_qgtl_circuit_serialize(const moonlab_qgtl_circuit_t *c,
@@ -229,6 +243,7 @@ moonlab_qgtl_circuit_serialize(const moonlab_qgtl_circuit_t *c,
  *
  * @return Owned circuit handle on success, NULL on failure.  Free
  *         via @ref moonlab_qgtl_circuit_free.
+ * @stability evolving
  */
 MOONLAB_API moonlab_qgtl_circuit_t *
 moonlab_qgtl_circuit_deserialize(const char *buf,
@@ -241,6 +256,7 @@ moonlab_qgtl_circuit_deserialize(const char *buf,
  *
  * @return MOONLAB_QGTL_OK on success, MOONLAB_QGTL_BAD_ARG / OOM
  *         / INTERNAL (= I/O) on failure.
+ * @stability evolving
  */
 MOONLAB_API int
 moonlab_qgtl_circuit_save(const moonlab_qgtl_circuit_t *c,
@@ -251,6 +267,7 @@ moonlab_qgtl_circuit_save(const moonlab_qgtl_circuit_t *c,
  *        @ref moonlab_qgtl_circuit_save.
  *
  * @return Owned handle, or NULL on failure.
+ * @stability evolving
  */
 MOONLAB_API moonlab_qgtl_circuit_t *
 moonlab_qgtl_circuit_load(const char *path, int *out_status);

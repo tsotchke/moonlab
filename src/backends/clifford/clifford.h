@@ -72,7 +72,8 @@
  *    Pauli-frame sampling and surface-code workloads.
  *
  * @since  v0.2.0
- * @stability evolving (semver minor bumps may refine the error enum)
+ * @stability evolving
+ * @note A semver minor bump may refine the error enum.
  */
 
 #ifndef MOONLAB_CLIFFORD_H
@@ -103,13 +104,20 @@ typedef enum {
  * to @f$Z_i@f$, all row phases to zero.  See Aaronson-Gottesman §III.
  *
  * @return Pointer to an owned tableau, or NULL on allocation failure.
+ * @stability evolving
  */
 MOONLAB_API clifford_tableau_t* clifford_tableau_create(size_t num_qubits);
 
-/** @brief Release all memory associated with the tableau. */
+/**
+ * @brief Release all memory associated with the tableau.
+ * @stability evolving
+ */
 MOONLAB_API void clifford_tableau_free(clifford_tableau_t* t);
 
-/** @brief Number of qubits this tableau was created for. */
+/**
+ * @brief Number of qubits this tableau was created for.
+ * @stability evolving
+ */
 MOONLAB_API size_t clifford_num_qubits(const clifford_tableau_t* t);
 
 /* ---- Single-qubit Clifford gates --- */
@@ -145,6 +153,7 @@ MOONLAB_API clifford_error_t clifford_swap(clifford_tableau_t* t, size_t a, size
  * @param[out]    outcome_kind 0 for deterministic, 1 for random (may be
  *                            NULL).
  * @return CLIFFORD_SUCCESS on success.
+ * @stability evolving
  */
 MOONLAB_API clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
                                   uint64_t* rng_state,
@@ -156,6 +165,7 @@ MOONLAB_API clifford_error_t clifford_measure(clifford_tableau_t* t, size_t q,
  *
  * Equivalent to measuring every qubit in order.  Collapses the tableau.
  * Bit @f$q@f$ of @p *result is the outcome on qubit @p q.
+ * @stability evolving
  */
 MOONLAB_API clifford_error_t clifford_sample_all(clifford_tableau_t* t,
                                      uint64_t* rng_state,
@@ -182,6 +192,7 @@ MOONLAB_API clifford_error_t clifford_sample_all(clifford_tableau_t* t,
  * @param[out] out_pauli Array of length n; byte j is the Pauli on qubit j.
  * @param[out] out_phase Phase code in {0, 2} for any stabilizer row
  *                       (rows always encode Hermitian Paulis with sign ±1).
+ * @stability evolving
  */
 MOONLAB_API clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, size_t row,
                                     uint8_t* out_pauli, int* out_phase);
@@ -195,6 +206,7 @@ MOONLAB_API clifford_error_t clifford_row_pauli(const clifford_tableau_t* t, siz
  * Pauli string with its accumulated phase.  No i-factors are introduced by the
  * Clifford conjugation itself, but the Pauli multiplications used internally
  * can produce them; the output @p out_phase captures the full residual phase.
+ * @stability evolving
  */
 MOONLAB_API clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* t,
                                           const uint8_t* in_pauli,
@@ -210,6 +222,7 @@ MOONLAB_API clifford_error_t clifford_conjugate_pauli(const clifford_tableau_t* 
  * @f$C^\dagger T_q C@f$ to absorb a non-Clifford @f$T@f$ gate into the MPS
  * branch.  Semantics and encoding match @c clifford_conjugate_pauli; the
  * only difference is the direction of conjugation.
+ * @stability evolving
  */
 MOONLAB_API clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tableau_t* t,
                                                   const uint8_t* in_pauli,
@@ -220,6 +233,7 @@ MOONLAB_API clifford_error_t clifford_conjugate_pauli_inverse(const clifford_tab
 /**
  * @brief Allocate a deep copy of the tableau.  The clone and original can
  *        be mutated independently.  Returns NULL on allocation failure.
+ * @stability evolving
  */
 MOONLAB_API clifford_tableau_t* clifford_tableau_clone(const clifford_tableau_t* t);
 

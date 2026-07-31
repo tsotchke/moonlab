@@ -95,6 +95,7 @@ int chern_fhs_two_band(size_t N,
  * @param[out] out_chern  rounded integer Chern number of the lower band.
  * @param[out] out_chern_real  optional unrounded value.
  * @return 0 on success.
+ * @stability evolving
  */
 MOONLAB_API int chern_fhs_qwz(size_t N, double m,
                    int* out_chern, double* out_chern_real);
