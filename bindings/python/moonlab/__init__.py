@@ -77,6 +77,9 @@ try:
         kane_mele_z2, bhz_z2, kitaev_chain_z2, hofstadter_chern,
         # v0.3.2 curvature-grid variants
         berry_grid_qwz_proj, berry_grid_qwz_pt,
+        # v1.2.1 pointwise band geometry one-shots (ABI 0.7.0)
+        dsigma_metric_curvature, qwz_curvature_at, haldane_curvature_at,
+        BandTouchingError,
     )
     _TOPOLOGY_AVAILABLE = True
 except (ImportError, AttributeError, OSError):
@@ -286,6 +289,10 @@ if _TOPOLOGY_AVAILABLE:
         'hofstadter_chern',
         'berry_grid_qwz_proj',
         'berry_grid_qwz_pt',
+        'dsigma_metric_curvature',
+        'qwz_curvature_at',
+        'haldane_curvature_at',
+        'BandTouchingError',
     ]
 if _DIFF_AVAILABLE:
     __all__ += ['DiffCircuit', 'PauliTerm', 'OBS_Z', 'OBS_X', 'OBS_Y']

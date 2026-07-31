@@ -2,9 +2,11 @@
 //! since v0.4.9).
 //!
 //! Wraps `src/algorithms/vqe.{c,h}` with idiomatic Rust around the
-//! Pauli-Hamiltonian builder, the hardware-efficient ansatz, the
-//! four classical optimizers (Adam, L-BFGS, COBYLA, gradient
-//! descent), and the `vqe_solve` driver.  Mirrors the v0.2.0 Python
+//! Pauli-Hamiltonian builder, the hardware-efficient ansatz, the five
+//! classical optimizers (Adam, L-BFGS, COBYLA, gradient descent,
+//! quantum natural gradient), the `vqe_solve` driver, and the
+//! parameter-space geometry (Fubini-Study metric, Berry curvature,
+//! natural-gradient direction).  Mirrors the Python
 //! `moonlab.algorithms.VQE` surface.
 //!
 //! The C entry points need a `quantum_entropy_ctx_t` for shot-noise
@@ -27,7 +29,8 @@
 
 use crate::error::{QuantumError, Result};
 use moonlab_sys::{
-    pauli_hamiltonian_add_term, pauli_hamiltonian_create,
+    moonlab_vqe_berry_curvature, moonlab_vqe_natural_gradient,
+    moonlab_vqe_qgt, pauli_hamiltonian_add_term, pauli_hamiltonian_create,
     pauli_hamiltonian_free, pauli_hamiltonian_t, quantum_entropy_ctx_create_hw,
     quantum_entropy_ctx_destroy, quantum_entropy_ctx_t,
     vqe_ansatz_free, vqe_ansatz_t, vqe_compute_energy,
@@ -81,6 +84,9 @@ pub enum OptimizerType {
     Adam = 2,
     /// Plain gradient descent.
     GradientDescent = 3,
+    /// Quantum natural gradient: gradient descent preconditioned by the
+    /// Fubini-Study metric ([`VqeSolver::quantum_geometric_tensor`]).
+    Qng = 4,
 }
 
 /// Owned Pauli-string Hamiltonian over `num_qubits` qubits.
@@ -342,6 +348,104 @@ impl VqeSolver {
     pub fn compute_energy(&self, parameters: &[f64]) -> f64 {
         unsafe { vqe_compute_energy(self.solver, parameters.as_ptr()) }
     }
+
+    /// Number of variational parameters the ansatz carries.  Every
+    /// geometry entry point below takes and returns arrays sized by it.
+    pub fn num_parameters(&self) -> usize {
+        unsafe { (*self.ansatz).num_parameters }
+    }
+
+    /// Quantum geometric (Fubini-Study) metric of the trial state:
+    /// `g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]`.
+    ///
+    /// Returns the row-major `n x n` metric (element `(i, j)` at index
+    /// `i * n + j`), where `n = parameters.len()`.  The matrix is real,
+    /// symmetric and positive semidefinite: it is the Riemannian metric
+    /// the quantum natural gradient descends against.
+    ///
+    /// Exact analytic derivatives (generator insertion) for the built-in
+    /// ansaetze; central differences for a custom circuit.
+    pub fn quantum_geometric_tensor(&self, parameters: &[f64]) -> Result<Vec<f64>> {
+        let n = parameters.len();
+        let mut out = vec![0.0_f64; n * n];
+        let rc = unsafe {
+            moonlab_vqe_qgt(self.solver, parameters.as_ptr(), out.as_mut_ptr(), n)
+        };
+        geometry_rc("moonlab_vqe_qgt", rc, n, self.num_parameters())?;
+        Ok(out)
+    }
+
+    /// Berry curvature of the trial state, the imaginary half of the
+    /// quantum geometric tensor:
+    /// `F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]`.
+    ///
+    /// Returns the row-major `n x n` curvature.  Real and antisymmetric
+    /// (`F_ii = 0`, `F_ji = -F_ij`); a purely real ansatz gives `F = 0`
+    /// identically, so a nonzero curvature requires phase-bearing gates
+    /// such as the RZ layer of the hardware-efficient ansatz.
+    pub fn berry_curvature(&self, parameters: &[f64]) -> Result<Vec<f64>> {
+        let n = parameters.len();
+        let mut out = vec![0.0_f64; n * n];
+        let rc = unsafe {
+            moonlab_vqe_berry_curvature(
+                self.solver,
+                parameters.as_ptr(),
+                out.as_mut_ptr(),
+                n,
+            )
+        };
+        geometry_rc("moonlab_vqe_berry_curvature", rc, n, self.num_parameters())?;
+        Ok(out)
+    }
+
+    /// Natural-gradient direction `(g + regularization * I)^-1 * gradient`,
+    /// the energy gradient preconditioned by the Tikhonov-regularised
+    /// quantum geometric tensor.
+    ///
+    /// `parameters` and `gradient` must have the same length.  A typical
+    /// `regularization` is `1e-3`; it keeps the metric invertible where
+    /// the ansatz is locally degenerate.
+    pub fn natural_gradient_direction(
+        &self,
+        parameters: &[f64],
+        gradient: &[f64],
+        regularization: f64,
+    ) -> Result<Vec<f64>> {
+        let n = parameters.len();
+        if gradient.len() != n {
+            return Err(QuantumError::Ffi(format!(
+                "natural_gradient_direction: gradient has {} entries, \
+                 parameters {n}",
+                gradient.len()
+            )));
+        }
+        let mut out = vec![0.0_f64; n];
+        let rc = unsafe {
+            moonlab_vqe_natural_gradient(
+                self.solver,
+                parameters.as_ptr(),
+                gradient.as_ptr(),
+                regularization,
+                out.as_mut_ptr(),
+                n,
+            )
+        };
+        geometry_rc("moonlab_vqe_natural_gradient", rc, n, self.num_parameters())?;
+        Ok(out)
+    }
+}
+
+/// Translate the shared `0 / -1 / -2 / -3` return contract of the ABI
+/// geometry entry points into a [`QuantumError`].
+fn geometry_rc(what: &str, rc: i32, requested: usize, ansatz: usize) -> Result<()> {
+    match rc {
+        0 => Ok(()),
+        -1 => Err(QuantumError::NullPointer),
+        -2 => Err(QuantumError::Ffi(format!(
+            "{what}: {requested} parameters requested, ansatz has {ansatz}"
+        ))),
+        _ => Err(QuantumError::Ffi(format!("{what} failed (rc={rc})"))),
+    }
 }
 
 impl Drop for VqeSolver {
@@ -420,5 +524,139 @@ mod tests {
             exact
         );
         assert!(!result.optimal_parameters.is_empty());
+    }
+
+    /// 2-qubit H2 under a 1-layer hardware-efficient ansatz: 4
+    /// parameters, the fixture every geometry test below shares.
+    fn h2_qng_solver() -> VqeSolver {
+        let h = PauliHamiltonian::h2(0.74).unwrap();
+        VqeSolver::new(h, 1, OptimizerType::Qng).unwrap()
+    }
+
+    const THETA: [f64; 4] = [0.31, -0.87, 1.24, 0.55];
+
+    #[test]
+    fn hardware_efficient_ansatz_has_four_parameters() {
+        let solver = h2_qng_solver();
+        assert_eq!(solver.num_parameters(), 4);
+    }
+
+    #[test]
+    fn quantum_geometric_tensor_is_symmetric_psd() {
+        let solver = h2_qng_solver();
+        let n = THETA.len();
+        let g = solver.quantum_geometric_tensor(&THETA).unwrap();
+        assert_eq!(g.len(), n * n);
+        assert!(g.iter().all(|x| x.is_finite()), "QGT has non-finite entries");
+
+        // Symmetric to round-off.
+        for i in 0..n {
+            for j in 0..n {
+                let d = (g[i * n + j] - g[j * n + i]).abs();
+                assert!(d < 1e-9, "g[{i}][{j}] != g[{j}][{i}]: asym {d:.3e}");
+            }
+        }
+
+        // Positive semidefinite: v^T g v >= 0 for a spanning set of
+        // directions -- the axes, and every signed pair combination,
+        // which together certify the diagonal and the 2x2 minors.
+        for i in 0..n {
+            assert!(
+                g[i * n + i] >= -1e-12,
+                "negative diagonal g[{i}][{i}] = {}",
+                g[i * n + i]
+            );
+            for j in (i + 1)..n {
+                for &s in &[1.0_f64, -1.0] {
+                    let q = g[i * n + i] + g[j * n + j] + 2.0 * s * g[i * n + j];
+                    assert!(
+                        q >= -1e-12,
+                        "PSD violated on ({i},{j}) sign {s}: v^T g v = {q:.3e}"
+                    );
+                }
+            }
+        }
+
+        // And on random directions, which catch indefiniteness the
+        // pairwise minors miss.  Deterministic LCG, no rand dependency.
+        let mut seed = 0x2545_F491_4F6C_DD1D_u64;
+        for _ in 0..64 {
+            let mut v = vec![0.0_f64; n];
+            for slot in v.iter_mut() {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                *slot = ((seed >> 11) as f64 / (1_u64 << 53) as f64) * 2.0 - 1.0;
+            }
+            let mut q = 0.0;
+            for i in 0..n {
+                for j in 0..n {
+                    q += v[i] * g[i * n + j] * v[j];
+                }
+            }
+            assert!(q >= -1e-12, "PSD violated: v^T g v = {q:.3e}");
+        }
+    }
+
+    #[test]
+    fn berry_curvature_is_antisymmetric_with_zero_diagonal() {
+        let solver = h2_qng_solver();
+        let n = THETA.len();
+        let f = solver.berry_curvature(&THETA).unwrap();
+        assert_eq!(f.len(), n * n);
+        assert!(f.iter().all(|x| x.is_finite()), "F has non-finite entries");
+
+        for i in 0..n {
+            assert!(
+                f[i * n + i].abs() < 1e-12,
+                "F[{i}][{i}] = {} is not zero",
+                f[i * n + i]
+            );
+            for j in 0..n {
+                let s = (f[i * n + j] + f[j * n + i]).abs();
+                assert!(s < 1e-9, "F[{i}][{j}] + F[{j}][{i}] = {s:.3e}");
+            }
+        }
+    }
+
+    #[test]
+    fn natural_gradient_solves_the_regularized_metric_system() {
+        let solver = h2_qng_solver();
+        let n = THETA.len();
+        let g = solver.quantum_geometric_tensor(&THETA).unwrap();
+
+        let gradient: Vec<f64> = (0..n).map(|k| 0.1 * (k + 1) as f64).collect();
+        let eps = 1e-2;
+        let dir = solver
+            .natural_gradient_direction(&THETA, &gradient, eps)
+            .unwrap();
+        assert_eq!(dir.len(), n);
+
+        // (g + eps I) dir must reproduce the gradient.
+        for i in 0..n {
+            let mut lhs = eps * dir[i];
+            for j in 0..n {
+                lhs += g[i * n + j] * dir[j];
+            }
+            let resid = (lhs - gradient[i]).abs();
+            assert!(
+                resid < 1e-8,
+                "row {i}: (g + eps I) x = {lhs}, grad = {}, residual {resid:.3e}",
+                gradient[i]
+            );
+        }
+    }
+
+    #[test]
+    fn geometry_rejects_a_parameter_count_mismatch() {
+        let solver = h2_qng_solver();
+        let wrong = [0.1, 0.2, 0.3, 0.4, 0.5];
+        assert!(solver.quantum_geometric_tensor(&wrong).is_err());
+        assert!(solver.berry_curvature(&wrong).is_err());
+        assert!(solver
+            .natural_gradient_direction(&wrong, &wrong, 1e-3)
+            .is_err());
+        // Mismatched gradient length is caught before the FFI call.
+        assert!(solver
+            .natural_gradient_direction(&THETA, &[0.1, 0.2], 1e-3)
+            .is_err());
     }
 }

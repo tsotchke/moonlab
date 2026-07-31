@@ -12,7 +12,7 @@ Example:
 """
 
 import ctypes
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -267,6 +267,143 @@ _lib.qgt_model_hofstadter.argtypes = [
     ctypes.c_double, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_size_t,
 ]
 _lib.qgt_model_hofstadter.restype = ctypes.c_void_p
+
+# ---- Pointwise band-geometry one-shots (stable ABI 0.7.0) -----------
+#
+# Model construction, closed-form evaluation and teardown in one call,
+# with no opaque handle crossing the boundary. Return codes: 0 ok,
+# -1 NULL argument or allocation failure, -2 band touching (the
+# geometry is undefined there, not merely hard to compute).
+
+_lib.moonlab_dsigma_metric_curvature.argtypes = [
+    ctypes.POINTER(ctypes.c_double),  # d, 3 entries
+    ctypes.POINTER(ctypes.c_double),  # dx, 3 entries
+    ctypes.POINTER(ctypes.c_double),  # dy, 3 entries
+    ctypes.POINTER(ctypes.c_double),  # g_out, row-major 2x2
+    ctypes.POINTER(ctypes.c_double),  # omega_out
+]
+_lib.moonlab_dsigma_metric_curvature.restype = ctypes.c_int
+
+_lib.moonlab_qwz_curvature_at.argtypes = [
+    ctypes.c_double,                  # m
+    ctypes.POINTER(ctypes.c_double),  # k, 2 entries
+    ctypes.POINTER(ctypes.c_double),  # g_out, row-major 2x2
+    ctypes.POINTER(ctypes.c_double),  # omega_out
+]
+_lib.moonlab_qwz_curvature_at.restype = ctypes.c_int
+
+_lib.moonlab_haldane_curvature_at.argtypes = [
+    ctypes.c_double,                  # t1
+    ctypes.c_double,                  # t2
+    ctypes.c_double,                  # phi
+    ctypes.c_double,                  # m_stagger
+    ctypes.POINTER(ctypes.c_double),  # k, 2 entries
+    ctypes.POINTER(ctypes.c_double),  # g_out, row-major 2x2
+    ctypes.POINTER(ctypes.c_double),  # omega_out
+]
+_lib.moonlab_haldane_curvature_at.restype = ctypes.c_int
+
+
+class BandTouchingError(RuntimeError):
+    """Raised when pointwise band geometry is requested at a gap closing.
+
+    The Fubini-Study metric and Berry curvature of a band are undefined
+    where it touches another band, so the C one-shots return -2 rather
+    than a number. Distinct from the generic ``RuntimeError`` the other
+    failure codes raise so callers can skip Dirac points on a k-grid
+    without swallowing real errors.
+    """
+
+
+def _band_geometry(rc: int, what: str, g_buf, omega) -> Tuple[np.ndarray, float]:
+    """Translate the shared 0 / -1 / -2 one-shot return contract."""
+    if rc == -2:
+        raise BandTouchingError(f"{what}: band touching, geometry undefined")
+    if rc != 0:
+        raise RuntimeError(f"{what} failed (rc={rc})")
+    return np.ctypeslib.as_array(g_buf).reshape(2, 2).copy(), float(omega.value)
+
+
+def dsigma_metric_curvature(d, dx, dy) -> Tuple[np.ndarray, float]:
+    """Lower-band metric and Berry curvature of ``H = d . sigma``.
+
+    ``g_{mu nu} = (1/4) d_mu dhat . d_nu dhat`` and ``Omega_xy =
+    (1/2) dhat . (d_x dhat x d_y dhat)``, in closed form from an
+    analytic d-vector and its momentum gradients. Gauge-free and
+    machine-precision: no eigenvector, no finite difference.
+
+    Args:
+        d: d-vector, 3 entries.
+        dx: Derivative of ``d`` along k_x, 3 entries.
+        dy: Derivative of ``d`` along k_y, 3 entries.
+
+    Returns:
+        ``(g, omega)`` with ``g`` a ``(2, 2)`` float64 array.
+
+    Raises:
+        BandTouchingError: at ``|d| = 0``.
+    """
+    c_d = (ctypes.c_double * 3)(*d)
+    c_dx = (ctypes.c_double * 3)(*dx)
+    c_dy = (ctypes.c_double * 3)(*dy)
+    g = (ctypes.c_double * 4)()
+    omega = ctypes.c_double(0.0)
+    rc = _lib.moonlab_dsigma_metric_curvature(
+        c_d, c_dx, c_dy, g, ctypes.byref(omega)
+    )
+    return _band_geometry(rc, "moonlab_dsigma_metric_curvature", g, omega)
+
+
+def qwz_curvature_at(m: float, k) -> Tuple[np.ndarray, float]:
+    """Pointwise metric and Berry curvature of the QWZ lower band at ``k``.
+
+    Args:
+        m: QWZ mass parameter.
+        k: Momentum ``(k_x, k_y)``.
+
+    Returns:
+        ``(g, omega)`` with ``g`` a ``(2, 2)`` float64 array.
+
+    Raises:
+        BandTouchingError: at a Dirac point (``m = 0, +-2``).
+    """
+    c_k = (ctypes.c_double * 2)(*k)
+    g = (ctypes.c_double * 4)()
+    omega = ctypes.c_double(0.0)
+    rc = _lib.moonlab_qwz_curvature_at(
+        ctypes.c_double(m), c_k, g, ctypes.byref(omega)
+    )
+    return _band_geometry(rc, "moonlab_qwz_curvature_at", g, omega)
+
+
+def haldane_curvature_at(t1: float, t2: float, phi: float,
+                         m_stagger: float, k) -> Tuple[np.ndarray, float]:
+    """Pointwise metric and Berry curvature of the Haldane lower band.
+
+    The next-nearest-neighbour identity term shifts both bands equally
+    and does not enter the geometry; the traceless part is evaluated.
+
+    Args:
+        t1: Nearest-neighbour hopping.
+        t2: Next-nearest-neighbour hopping.
+        phi: Peierls phase.
+        m_stagger: Sublattice staggering M.
+        k: Momentum ``(k_x, k_y)``.
+
+    Returns:
+        ``(g, omega)`` with ``g`` a ``(2, 2)`` float64 array.
+
+    Raises:
+        BandTouchingError: at a gap closing.
+    """
+    c_k = (ctypes.c_double * 2)(*k)
+    g = (ctypes.c_double * 4)()
+    omega = ctypes.c_double(0.0)
+    rc = _lib.moonlab_haldane_curvature_at(
+        ctypes.c_double(t1), ctypes.c_double(t2), ctypes.c_double(phi),
+        ctypes.c_double(m_stagger), c_k, g, ctypes.byref(omega)
+    )
+    return _band_geometry(rc, "moonlab_haldane_curvature_at", g, omega)
 
 
 def berry_grid_qwz(m: float, N: int = 32) -> np.ndarray:
@@ -606,4 +743,7 @@ __all__ = [
     "kane_mele_z2", "bhz_z2", "kitaev_chain_z2", "hofstadter_chern",
     # v0.3.2: curvature grids for the gauge-invariant integrators.
     "berry_grid_qwz_proj", "berry_grid_qwz_pt",
+    # v1.2.1: pointwise band geometry one-shots (ABI 0.7.0).
+    "dsigma_metric_curvature", "qwz_curvature_at", "haldane_curvature_at",
+    "BandTouchingError",
 ]

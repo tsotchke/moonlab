@@ -90,8 +90,9 @@ pub mod prelude {
     pub use crate::state::{QuantumState, MAX_QUBITS};
     pub use crate::topology::{
         bhz_z2, chern_qwz_parallel_transport, chern_qwz_proj,
-        hofstadter_chern, kane_mele_z2, kitaev_chain_z2, qwz_chern,
-        ssh_winding, ChernKpm,
+        dsigma_metric_curvature, haldane_curvature_at, hofstadter_chern,
+        kane_mele_z2, kitaev_chain_z2, qwz_chern, qwz_curvature_at,
+        ssh_winding, BandGeometry, ChernKpm,
     };
 }
 
