@@ -20,12 +20,19 @@ class CPauliHamiltonian(ctypes.Structure):
     ]
 
 class CVQEAnsatz(ctypes.Structure):
-    """Opaque structure for VQE ansatz"""
+    """Layout-mirrored from ``vqe_ansatz_t`` in ``src/algorithms/vqe.h``.
+
+    Field order and widths must match the C struct exactly. The previous
+    ``(num_qubits, num_layers, num_params, ansatz_type)`` layout omitted
+    the leading ``type`` enum, so every field was shifted by one slot and
+    ``num_params`` aliased the C ``num_layers``."""
     _fields_ = [
-        ("num_qubits", ctypes.c_size_t),
-        ("num_layers", ctypes.c_size_t),
-        ("num_params", ctypes.c_size_t),
-        ("ansatz_type", ctypes.c_int),
+        ("type",            ctypes.c_int),
+        ("num_qubits",      ctypes.c_size_t),
+        ("num_layers",      ctypes.c_size_t),
+        ("num_parameters",  ctypes.c_size_t),
+        ("parameters",      ctypes.POINTER(ctypes.c_double)),
+        ("circuit_data",    ctypes.c_void_p),
     ]
 
 class CVQEOptimizer(ctypes.Structure):
@@ -229,6 +236,39 @@ _lib.vqe_compute_energy.restype = ctypes.c_double
 
 _lib.vqe_hartree_to_kcalmol.argtypes = [ctypes.c_double]
 _lib.vqe_hartree_to_kcalmol.restype = ctypes.c_double
+
+# VQE parameter-space geometry (stable ABI 0.7.0). The moonlab_vqe_*
+# entries take num_parameters explicitly and validate it against the
+# solver's ansatz, which the internal vqe_compute_qgt /
+# vqe_compute_berry_curvature / vqe_natural_gradient_direction cannot do
+# -- they trust the caller to size the buffers. Bind the checked ones.
+# Return codes: 0 ok, -1 NULL argument, -2 parameter-count mismatch,
+# -3 internal failure.
+_lib.moonlab_vqe_qgt.argtypes = [
+    ctypes.POINTER(CVQESolver),
+    ctypes.POINTER(ctypes.c_double),  # parameters
+    ctypes.POINTER(ctypes.c_double),  # qgt_out, row-major n x n
+    ctypes.c_size_t,                  # num_parameters
+]
+_lib.moonlab_vqe_qgt.restype = ctypes.c_int
+
+_lib.moonlab_vqe_berry_curvature.argtypes = [
+    ctypes.POINTER(CVQESolver),
+    ctypes.POINTER(ctypes.c_double),  # parameters
+    ctypes.POINTER(ctypes.c_double),  # berry_out, row-major n x n
+    ctypes.c_size_t,                  # num_parameters
+]
+_lib.moonlab_vqe_berry_curvature.restype = ctypes.c_int
+
+_lib.moonlab_vqe_natural_gradient.argtypes = [
+    ctypes.POINTER(CVQESolver),
+    ctypes.POINTER(ctypes.c_double),  # parameters
+    ctypes.POINTER(ctypes.c_double),  # gradient
+    ctypes.c_double,                  # regularization
+    ctypes.POINTER(ctypes.c_double),  # direction_out
+    ctypes.c_size_t,                  # num_parameters
+]
+_lib.moonlab_vqe_natural_gradient.restype = ctypes.c_int
 
 # QAOA functions
 _lib.ising_model_create.argtypes = [ctypes.c_size_t]
@@ -619,6 +659,110 @@ class VQE:
             c_params,
             ctypes.c_size_t(len(params))
         )
+
+    @property
+    def num_parameters(self) -> int:
+        """Number of variational parameters in the ansatz.
+
+        The hardware-efficient ansatz carries ``2 * num_qubits *
+        num_layers`` parameters; UCCSD carries one per single and double
+        excitation. Every geometry method below is sized by this count.
+        """
+        return int(self._ansatz.contents.num_parameters)
+
+    def _geometry_params(self, params: np.ndarray) -> Tuple[Any, int]:
+        """Validate a solver + parameter vector and marshal it to C."""
+        if not self._solver:
+            raise QuantumError("Must call solve() first to set up the problem")
+        n = len(params)
+        if n != self.num_parameters:
+            raise ValueError(
+                f"Expected {self.num_parameters} parameters, got {n}"
+            )
+        return (ctypes.c_double * n)(*params), n
+
+    def quantum_geometric_tensor(self, params: np.ndarray) -> np.ndarray:
+        """Fubini-Study metric of the trial state at ``params``.
+
+        ``g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]``,
+        the real symmetric positive-semidefinite half of the quantum
+        geometric tensor and the metric the quantum natural gradient
+        descends against. Exact analytic derivatives (generator
+        insertion) for the built-in ansaetze.
+
+        Args:
+            params: Parameter vector, ``num_parameters`` entries.
+
+        Returns:
+            ``(n, n)`` float64 NumPy array, ``n = num_parameters``.
+        """
+        c_params, n = self._geometry_params(params)
+        out = (ctypes.c_double * (n * n))()
+        rc = _lib.moonlab_vqe_qgt(
+            self._solver, c_params, out, ctypes.c_size_t(n)
+        )
+        if rc != 0:
+            raise QuantumError(f"moonlab_vqe_qgt failed (rc={rc})")
+        return np.ctypeslib.as_array(out).reshape(n, n).copy()
+
+    def berry_curvature(self, params: np.ndarray) -> np.ndarray:
+        """Berry curvature of the trial state at ``params``.
+
+        ``F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]``,
+        the imaginary half of the quantum geometric tensor. Real and
+        antisymmetric with a zero diagonal; a purely real ansatz gives
+        ``F = 0`` identically, so a nonzero curvature requires
+        phase-bearing gates such as the RZ layer of the
+        hardware-efficient ansatz.
+
+        Args:
+            params: Parameter vector, ``num_parameters`` entries.
+
+        Returns:
+            ``(n, n)`` float64 NumPy array, ``n = num_parameters``.
+        """
+        c_params, n = self._geometry_params(params)
+        out = (ctypes.c_double * (n * n))()
+        rc = _lib.moonlab_vqe_berry_curvature(
+            self._solver, c_params, out, ctypes.c_size_t(n)
+        )
+        if rc != 0:
+            raise QuantumError(f"moonlab_vqe_berry_curvature failed (rc={rc})")
+        return np.ctypeslib.as_array(out).reshape(n, n).copy()
+
+    def natural_gradient_direction(self, params: np.ndarray,
+                                   gradient: np.ndarray,
+                                   regularization: float = 1e-3) -> np.ndarray:
+        """Natural-gradient direction ``(g + eps I)^-1 grad``.
+
+        Preconditions ``gradient`` by the Tikhonov-regularised quantum
+        geometric tensor. ``regularization`` keeps the metric invertible
+        where the ansatz is locally degenerate.
+
+        Args:
+            params: Parameter vector, ``num_parameters`` entries.
+            gradient: Energy gradient, same length as ``params``.
+            regularization: Shift added to the metric diagonal.
+
+        Returns:
+            ``(n,)`` float64 NumPy array.
+        """
+        c_params, n = self._geometry_params(params)
+        if len(gradient) != n:
+            raise ValueError(
+                f"gradient has {len(gradient)} entries, params {n}"
+            )
+        c_grad = (ctypes.c_double * n)(*gradient)
+        out = (ctypes.c_double * n)()
+        rc = _lib.moonlab_vqe_natural_gradient(
+            self._solver, c_params, c_grad,
+            ctypes.c_double(regularization), out, ctypes.c_size_t(n)
+        )
+        if rc != 0:
+            raise QuantumError(
+                f"moonlab_vqe_natural_gradient failed (rc={rc})"
+            )
+        return np.ctypeslib.as_array(out).copy()
 
 
 # ============================================================================
