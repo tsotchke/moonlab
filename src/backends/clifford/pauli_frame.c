@@ -658,28 +658,65 @@ static int pf_compute_reference(size_t n, const pf_circuit_op_t* ops,
                                 uint8_t* m_ref, uint8_t* m_kind) {
     clifford_tableau_t* t = clifford_tableau_create(n);
     if (!t) return -1;
+
+    /* Z-eigenstate cache.  Entry q holds the known outcome of Z_q (0 or 1)
+     * when the tableau is known to be stabilized by (-1)^outcome Z_q, and -1
+     * when that is not known.
+     *
+     * This exists because a measurement is by far the most expensive thing in
+     * this loop -- the deterministic branch of clifford_measure is quadratic
+     * in the qubit count -- and the standard QEC circuit measures every
+     * ancilla and then immediately resets it, paying for the same information
+     * twice.  On a distance-d surface-code memory circuit that is exactly half
+     * of all deterministic measurements.
+     *
+     * The cache is sound because a Z-basis measurement of a *different* qubit
+     * cannot evict Z_q from the stabilizer group: Z_q commutes with Z_q', so
+     * it survives in the commuting subgroup that the measurement retains, sign
+     * included.  Conditional X on another qubit likewise commutes with Z_q.
+     * Only a gate acting on q itself invalidates the entry. */
+    signed char* zknown = (signed char*)malloc(n);
+    if (!zknown) { clifford_tableau_free(t); return -1; }
+    memset(zknown, -1, n);
+
     uint64_t rng = seed ? seed : 0xA5A5A5A5DEADBEEFULL;
     size_t mi = 0;
     for (size_t i = 0; i < num_ops; i++) {
         const uint32_t q0 = ops[i].q0, q1 = ops[i].q1;
         int outcome = 0, kind = 0;
         switch (ops[i].kind) {
-            case PF_OP_H:    clifford_h(t, q0); break;
-            case PF_OP_S:    clifford_s(t, q0); break;
-            case PF_OP_S_DAG:clifford_s_dag(t, q0); break;
-            case PF_OP_X:    clifford_x(t, q0); break;
-            case PF_OP_Y:    clifford_y(t, q0); break;
-            case PF_OP_Z:    clifford_z(t, q0); break;
-            case PF_OP_CNOT: clifford_cnot(t, q0, q1); break;
-            case PF_OP_CZ:   clifford_cz(t, q0, q1); break;
-            case PF_OP_SWAP: clifford_swap(t, q0, q1); break;
+            case PF_OP_H:    clifford_h(t, q0); zknown[q0] = -1; break;
+            case PF_OP_S:    clifford_s(t, q0); zknown[q0] = -1; break;
+            case PF_OP_S_DAG:clifford_s_dag(t, q0); zknown[q0] = -1; break;
+            case PF_OP_X:    clifford_x(t, q0); zknown[q0] = -1; break;
+            case PF_OP_Y:    clifford_y(t, q0); zknown[q0] = -1; break;
+            case PF_OP_Z:    clifford_z(t, q0); zknown[q0] = -1; break;
+            case PF_OP_CNOT: clifford_cnot(t, q0, q1);
+                             zknown[q0] = -1; zknown[q1] = -1; break;
+            case PF_OP_CZ:   clifford_cz(t, q0, q1);
+                             zknown[q0] = -1; zknown[q1] = -1; break;
+            case PF_OP_SWAP: clifford_swap(t, q0, q1);
+                             zknown[q0] = -1; zknown[q1] = -1; break;
             case PF_OP_RESET:
-                clifford_measure(t, q0, &rng, &outcome, &kind);
+                if (zknown[q0] < 0) {
+                    clifford_measure(t, q0, &rng, &outcome, &kind);
+                } else {
+                    outcome = zknown[q0];
+                }
                 if (outcome) clifford_x(t, q0);
+                zknown[q0] = 0;   /* now stabilized by +Z_q0 */
                 break;
             case PF_OP_MEASURE:
             case PF_OP_MEASURE_NOISY:
-                clifford_measure(t, q0, &rng, &outcome, &kind);
+                if (zknown[q0] < 0) {
+                    clifford_measure(t, q0, &rng, &outcome, &kind);
+                } else {
+                    /* Already a Z_q0 eigenstate: the outcome is forced and the
+                     * tableau is unchanged by the measurement. */
+                    outcome = zknown[q0];
+                    kind = 0;
+                }
+                zknown[q0] = (signed char)(outcome & 1);
                 m_ref[mi]  = (uint8_t)(outcome & 1);
                 m_kind[mi] = (uint8_t)(kind & 1);
                 mi++;
@@ -694,6 +731,7 @@ static int pf_compute_reference(size_t n, const pf_circuit_op_t* ops,
             default: break;
         }
     }
+    free(zknown);
     clifford_tableau_free(t);
     return 0;
 }

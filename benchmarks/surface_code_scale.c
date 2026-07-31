@@ -78,6 +78,10 @@
 #include <mach/mach.h>
 #endif
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 /* ------------------------------------------------------------------ */
 /*  Timing / memory helpers                                            */
 /* ------------------------------------------------------------------ */
@@ -470,6 +474,14 @@ static int sc_analysis_run(const sc_circuit_t* C, size_t n_qubits,
     clifford_tableau_t* t = clifford_tableau_create(n_qubits);
     if (!t) return -1;
 
+    /* Mirrors the Z-eigenstate cache in pf_compute_reference(); see the
+     * comment there for why it is sound.  Set MOONLAB_SC_NO_ZCACHE=1 to
+     * disable it and reproduce the pre-fix timings. */
+    signed char* zknown = (signed char*)malloc(n_qubits);
+    if (!zknown) { clifford_tableau_free(t); return -1; }
+    memset(zknown, -1, n_qubits);
+    const int use_cache = (getenv("MOONLAB_SC_NO_ZCACHE") == NULL);
+
     uint64_t rng = seed ? seed : 0xA5A5A5A5DEADBEEFULL;
     size_t mi = 0, det_ct = 0;
     const double t0 = now_s();
@@ -481,22 +493,29 @@ static int sc_analysis_run(const sc_circuit_t* C, size_t n_qubits,
         const uint32_t q0 = o->q0, q1 = o->q1;
         int outcome = 0, kind = 0;
         switch (o->kind) {
-            case PF_OP_H:     clifford_h(t, q0); break;
-            case PF_OP_S:     clifford_s(t, q0); break;
-            case PF_OP_S_DAG: clifford_s_dag(t, q0); break;
-            case PF_OP_X:     clifford_x(t, q0); break;
-            case PF_OP_Y:     clifford_y(t, q0); break;
-            case PF_OP_Z:     clifford_z(t, q0); break;
-            case PF_OP_CNOT:  clifford_cnot(t, q0, q1); break;
-            case PF_OP_CZ:    clifford_cz(t, q0, q1); break;
-            case PF_OP_SWAP:  clifford_swap(t, q0, q1); break;
+            case PF_OP_H:     clifford_h(t, q0); zknown[q0] = -1; break;
+            case PF_OP_S:     clifford_s(t, q0); zknown[q0] = -1; break;
+            case PF_OP_S_DAG: clifford_s_dag(t, q0); zknown[q0] = -1; break;
+            case PF_OP_X:     clifford_x(t, q0); zknown[q0] = -1; break;
+            case PF_OP_Y:     clifford_y(t, q0); zknown[q0] = -1; break;
+            case PF_OP_Z:     clifford_z(t, q0); zknown[q0] = -1; break;
+            case PF_OP_CNOT:  clifford_cnot(t, q0, q1);
+                              zknown[q0] = -1; zknown[q1] = -1; break;
+            case PF_OP_CZ:    clifford_cz(t, q0, q1);
+                              zknown[q0] = -1; zknown[q1] = -1; break;
+            case PF_OP_SWAP:  clifford_swap(t, q0, q1);
+                              zknown[q0] = -1; zknown[q1] = -1; break;
             case PF_OP_RESET:
-                clifford_measure(t, q0, &rng, &outcome, &kind);
+                if (use_cache && zknown[q0] >= 0) outcome = zknown[q0];
+                else clifford_measure(t, q0, &rng, &outcome, &kind);
                 if (outcome) clifford_x(t, q0);
+                zknown[q0] = 0;
                 break;
             case PF_OP_MEASURE:
             case PF_OP_MEASURE_NOISY:
-                clifford_measure(t, q0, &rng, &outcome, &kind);
+                if (use_cache && zknown[q0] >= 0) { outcome = zknown[q0]; kind = 0; }
+                else clifford_measure(t, q0, &rng, &outcome, &kind);
+                zknown[q0] = (signed char)(outcome & 1);
                 if (m_ref)  m_ref[mi]  = (uint8_t)(outcome & 1);
                 if (m_kind) m_kind[mi] = (uint8_t)(kind & 1);
                 if (!kind) det_ct++;
@@ -512,6 +531,7 @@ static int sc_analysis_run(const sc_circuit_t* C, size_t n_qubits,
     }
 
     elapsed = now_s() - t0;
+    free(zknown);
     clifford_tableau_free(t);
 
     out->wall_s = elapsed;
@@ -533,6 +553,125 @@ static int sc_analysis_run(const sc_circuit_t* C, size_t n_qubits,
 }
 
 /* ------------------------------------------------------------------ */
+/*  Sampling-only pass (frame phase without the analysis phase)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Faithful replica of pauli_frame.c's pf_run_block() built from the public
+ * pauli_frame_batch_* API, so the SAMPLING phase can be timed at distances
+ * where the analysis phase does not terminate.
+ *
+ * Two deliberate deviations, both cost-neutral to within a few percent and
+ * both calibrated at every d where the real sampler also runs (the JSON
+ * reports replica / real as sampling_replica_calibration):
+ *
+ *   - DEPOLARIZE2(p) has no public batch entry point.  It is emulated by
+ *     two single-qubit depolarising calls at the correct single-qubit
+ *     marginal 8p/15.  Noise injection walks geometric gaps, so its cost is
+ *     proportional to the expected number of hit shots, and 2 * 8p/15 =
+ *     1.07p reproduces the real channel's p to within 7%.
+ *   - RESET additionally refreshes the Z frame with random bits inside the
+ *     real sampler; the public reset only clears.  That is a W-word fill per
+ *     reset against the ~3W word ops of a CNOT, and the calibration factor
+ *     absorbs it.
+ *
+ * Returns 0 on success and writes the elapsed seconds to *out_wall.
+ */
+static int sc_sampling_only(const sc_circuit_t* C, const sc_layout_t* L,
+                            int shots, int threads, uint64_t seed,
+                            double* out_wall, double* out_det_fraction) {
+    const size_t nmeas = C->n_meas;
+    int nthreads = threads;
+#ifdef _OPENMP
+    if (nthreads <= 0) nthreads = omp_get_max_threads();
+#else
+    if (nthreads <= 0) nthreads = 1;
+#endif
+    if (nthreads > shots) nthreads = shots;
+    if (nthreads < 1) nthreads = 1;
+
+    const size_t base = (size_t)shots / (size_t)nthreads;
+    const size_t rem  = (size_t)shots % (size_t)nthreads;
+
+    /* Detector-major output, exactly as the real sampler writes it. */
+    uint8_t* out = (uint8_t*)malloc(C->n_det * (size_t)shots);
+    if (!out) return -1;
+
+    int err = 0;
+    const double t0 = now_s();
+
+#ifdef _OPENMP
+#   pragma omp parallel for num_threads(nthreads) schedule(static, 1) reduction(|:err)
+#endif
+    for (int tid = 0; tid < nthreads; tid++) {
+        const size_t bs = base + ((size_t)tid < rem ? 1u : 0u);
+        const size_t off = (size_t)tid * base + ((size_t)tid < rem ? (size_t)tid : rem);
+        if (bs == 0) continue;
+
+        pauli_frame_batch_t* b = pauli_frame_batch_create((size_t)L->n_qubits, bs);
+        uint8_t* mbuf = (uint8_t*)malloc(nmeas * bs);
+        if (!b || !mbuf) { pauli_frame_batch_free(b); free(mbuf); err |= 1; continue; }
+
+        uint64_t rng = seed + 0x9E3779B97F4A7C15ULL * (uint64_t)(tid + 1);
+        size_t mi = 0;
+        for (size_t i = 0; i < C->n_ops; i++) {
+            const pf_circuit_op_t* o = &C->ops[i];
+            switch (o->kind) {
+                case PF_OP_H:    pauli_frame_batch_h(b, o->q0); break;
+                case PF_OP_S:
+                case PF_OP_S_DAG: pauli_frame_batch_s(b, o->q0); break;
+                case PF_OP_X: case PF_OP_Y: case PF_OP_Z: break;
+                case PF_OP_CNOT: pauli_frame_batch_cnot(b, o->q0, o->q1); break;
+                case PF_OP_CZ:   pauli_frame_batch_cz(b, o->q0, o->q1); break;
+                case PF_OP_SWAP: pauli_frame_batch_swap(b, o->q0, o->q1); break;
+                case PF_OP_RESET: pauli_frame_batch_reset_zero(b, o->q0); break;
+                case PF_OP_MEASURE:
+                case PF_OP_MEASURE_NOISY:
+                    pauli_frame_batch_measure_z(b, o->q0, mbuf + mi * bs);
+                    mi++;
+                    break;
+                case PF_OP_X_ERROR:
+                    pauli_frame_batch_bit_flip(b, o->q0, o->p, &rng); break;
+                case PF_OP_Z_ERROR: case PF_OP_Y_ERROR:
+                case PF_OP_DEPOLARIZE1:
+                    pauli_frame_batch_depolarising(b, o->q0, o->p, &rng); break;
+                case PF_OP_DEPOLARIZE2:
+                    pauli_frame_batch_depolarising(b, o->q0, o->p * 8.0 / 15.0, &rng);
+                    pauli_frame_batch_depolarising(b, o->q1, o->p * 8.0 / 15.0, &rng);
+                    break;
+                default: break;
+            }
+        }
+
+        /* Reduce the block's measurement record to detectors. */
+        for (size_t dd = 0; dd < C->n_det; dd++) {
+            uint8_t* dst = out + dd * (size_t)shots + off;
+            const size_t k0 = C->det_offsets[dd], k1 = C->det_offsets[dd + 1];
+            if (k0 == k1) { memset(dst, 0, bs); continue; }
+            const uint8_t* src = mbuf + (size_t)C->det_indices[k0] * bs;
+            for (size_t s = 0; s < bs; s++) dst[s] = src[s];
+            for (size_t k = k0 + 1; k < k1; k++) {
+                const uint8_t* m = mbuf + (size_t)C->det_indices[k] * bs;
+                for (size_t s = 0; s < bs; s++) dst[s] ^= m[s];
+            }
+        }
+        pauli_frame_batch_free(b);
+        free(mbuf);
+    }
+
+    *out_wall = now_s() - t0;
+
+    if (!err && out_det_fraction) {
+        size_t fired = 0;
+        const size_t tot = C->n_det * (size_t)shots;
+        for (size_t k = 0; k < tot; k++) fired += out[k] ? 1u : 0u;
+        *out_det_fraction = (double)fired / (double)tot;
+    }
+    free(out);
+    return err ? -1 : 0;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Driver                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -549,6 +688,9 @@ static void usage(const char* p) {
         "                       the remainder (default 60; <=0 means no cap)\n"
         "  --dump-stim PATH     write the identical circuit in stim text format\n"
         "  --det-rates PATH     write per-detector fire counts, one per line\n"
+        "  --skip-analysis      skip the analysis pass and time sampling only\n"
+        "  --slope              re-run sampling at 2N shots and take the slope, so\n"
+        "                       the sampling figure is free of the analysis term\n"
         "  --verify             run the noiseless circuit and assert every\n"
         "                       detector is quiet in every shot\n",
         p);
@@ -556,6 +698,8 @@ static void usage(const char* p) {
 
 int main(int argc, char** argv) {
     int d = 5, rounds = -1, shots = 1024, threads = 0, verify = 0, want_json = 0;
+    int slope_cal = 0;
+    int skip_analysis = 0;
     double p = 0.001, budget = 60.0;
     uint64_t seed = 12345;
     const char* dump_stim = NULL;
@@ -571,6 +715,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--dump-stim") && i + 1 < argc) dump_stim = argv[++i];
         else if (!strcmp(argv[i], "--det-rates") && i + 1 < argc) det_rates_path = argv[++i];
         else if (!strcmp(argv[i], "--threads") && i + 1 < argc) threads = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--slope")) slope_cal = 1;
+        else if (!strcmp(argv[i], "--skip-analysis")) skip_analysis = 1;
         else if (!strcmp(argv[i], "--verify")) verify = 1;
         else if (!strcmp(argv[i], "--json")) want_json = 1;
         else { usage(argv[0]); return 2; }
@@ -608,7 +754,18 @@ int main(int argc, char** argv) {
     uint8_t* m_ref  = (uint8_t*)calloc(C.n_meas ? C.n_meas : 1, 1);
     uint8_t* m_kind = (uint8_t*)calloc(C.n_meas ? C.n_meas : 1, 1);
     sc_analysis_t an;
-    if (!m_ref || !m_kind ||
+    memset(&an, 0, sizeof(an));
+    an.meas_total = C.n_meas;
+    if (skip_analysis) {
+        /* Sampling-phase-only run: the analysis pass is measured separately
+         * (it costs minutes at large d) and its result is not needed by the
+         * replica, which supplies its own all-zero reference. */
+        if (!m_ref || !m_kind) {
+            fprintf(stderr, "error: allocation failed\n");
+            free(m_ref); free(m_kind); sc_circuit_free(&C); sc_layout_free(&L);
+            return 1;
+        }
+    } else if (!m_ref || !m_kind ||
         sc_analysis_run(&C, (size_t)L.n_qubits, budget, seed, m_ref, m_kind, &an)) {
         fprintf(stderr, "error: analysis pass failed\n");
         free(m_ref); free(m_kind); sc_circuit_free(&C); sc_layout_free(&L);
@@ -638,10 +795,27 @@ int main(int argc, char** argv) {
                 sample_peak_rss = peak_rss_bytes();
                 if (sample_rc > 0) {
                     sampled = 1;
-                    /* The published call bundles analysis + sampling; the
-                     * sampling-only figure subtracts the measured analysis. */
+                    /* The published call bundles analysis + sampling.
+                     * Subtracting the separately measured analysis is a
+                     * difference of two large numbers and is far too noisy
+                     * once analysis dominates, so --slope re-runs the call
+                     * at 2N shots and takes the slope, which cancels the
+                     * analysis term exactly. */
                     sample_wall = total_wall - an.wall_s;
-                    if (sample_wall < 0.0) sample_wall = total_wall;
+                    if (slope_cal) {
+                        uint8_t* out2 = (uint8_t*)malloc((size_t)C.n_det * (size_t)shots * 2u);
+                        if (out2) {
+                            const double t1 = now_s();
+                            long rc2 = pauli_frame_batch_sample_detectors(
+                                (size_t)L.n_qubits, C.ops, C.n_ops,
+                                C.det_offsets, C.det_indices, C.n_det,
+                                (size_t)shots * 2u, seed, threads, out2);
+                            const double dt2 = now_s() - t1;
+                            if (rc2 > 0 && dt2 > total_wall) sample_wall = dt2 - total_wall;
+                            free(out2);
+                        }
+                    }
+                    if (sample_wall <= 0.0) sample_wall = total_wall;
                     shots_per_s = (double)shots / sample_wall;
 
                     size_t fired = 0;
@@ -667,6 +841,25 @@ int main(int argc, char** argv) {
                 }
                 free(out);
             }
+        }
+    }
+
+    /* ---- Phase 2b: sampling-only replica ----
+     * Runs regardless of whether the analysis pass completed, which is the
+     * only way to get a sampling number at the distances where analysis
+     * does not terminate.  Where phase 2 also ran, the two are compared so
+     * the replica carries a stated calibration rather than an assumption. */
+    double replica_wall = 0.0, replica_shots_per_s = 0.0, replica_det_fraction = -1.0;
+    double replica_calibration = -1.0;
+    int replica_ran = 0;
+    if (shots > 0 && (double)C.n_det * (double)shots < 32e9) {
+        double w = 0.0, dfrac = -1.0;
+        if (sc_sampling_only(&C, &L, shots, threads, seed, &w, &dfrac) == 0) {
+            replica_ran = 1;
+            replica_wall = w;
+            replica_shots_per_s = (double)shots / w;
+            replica_det_fraction = dfrac;
+            if (sampled && sample_wall > 0.0) replica_calibration = w / sample_wall;
         }
     }
 
@@ -703,6 +896,13 @@ int main(int argc, char** argv) {
         printf("    \"detector_fraction\": %.9g,\n", det_fraction);
         printf("    \"peak_rss_bytes\": %.0f\n", sample_peak_rss);
         printf("  },\n");
+        printf("  \"sampling_replica\": {\n");
+        printf("    \"ran\": %s,\n", replica_ran ? "true" : "false");
+        printf("    \"wall_s\": %.9g,\n", replica_wall);
+        printf("    \"shots_per_s\": %.9g,\n", replica_shots_per_s);
+        printf("    \"detector_fraction\": %.9g,\n", replica_det_fraction);
+        printf("    \"calibration_replica_over_real\": %.9g\n", replica_calibration);
+        printf("  },\n");
         printf("  \"verify\": { \"requested\": %s, \"all_detectors_quiet\": %s }\n",
                verify ? "true" : "false",
                verify_pass < 0 ? "null" : (verify_pass ? "true" : "false"));
@@ -718,6 +918,11 @@ int main(int argc, char** argv) {
                             "(detector fraction %.5f) peak_rss=%.1f MB\n",
                     shots, sample_wall, shots_per_s, det_fraction,
                     sample_peak_rss / 1e6);
+        if (replica_ran)
+            fprintf(stderr, "sampling(replica): %d shots in %.3f s -> %.1f shots/s "
+                            "(detector fraction %.5f, calibration %.3f)\n",
+                    shots, replica_wall, replica_shots_per_s,
+                    replica_det_fraction, replica_calibration);
         if (verify)
             fprintf(stderr, "verify: %s\n",
                     verify_pass < 0 ? "NOT RUN" : (verify_pass ? "PASS" : "FAIL"));
