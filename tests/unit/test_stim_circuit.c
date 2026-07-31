@@ -518,6 +518,110 @@ static int test_inverted_measurements(void) {
     return 0;
 }
 
+/* Sample a fully deterministic circuit and check every record against the
+ * expected bit string.  This runs each decomposition through the reference
+ * Clifford tableau, so it validates the encoded gate table and the
+ * measurement / reset basis rotations end to end. */
+static int expect_records(const char* src, const char* bits) {
+    moonlab_stim_circuit_t* c = must_parse(src, src);
+    if (!c) { fprintf(stderr, "  circuit:\n%s", src); return 1; }
+    const size_t nm = moonlab_stim_circuit_num_measurements(c);
+    const size_t want = strlen(bits);
+    int rc = 0;
+    if (nm != want) {
+        fprintf(stderr, "FAIL `%s` produced %zu records, want %zu\n",
+                src, nm, want);
+        rc = 1;
+    } else {
+        const size_t shots = 32;
+        uint8_t* out = (uint8_t*)malloc(nm * shots);
+        if (!out) { moonlab_stim_circuit_free(c); return 1; }
+        if (moonlab_stim_circuit_sample_measurements(c, shots, 424242, 1, out)
+            != (long)nm) {
+            fprintf(stderr, "FAIL `%s` sampling failed\n", src);
+            rc = 1;
+        } else {
+            for (size_t m = 0; m < nm && !rc; m++)
+                for (size_t s = 0; s < shots; s++)
+                    if (out[m * shots + s] != (uint8_t)(bits[m] - '0')) {
+                        fprintf(stderr, "FAIL `%s` record %zu is %u, want %c\n",
+                                src, m, out[m * shots + s], bits[m]);
+                        rc = 1;
+                        break;
+                    }
+        }
+        free(out);
+    }
+    moonlab_stim_circuit_free(c);
+    return rc;
+}
+
+static int test_deterministic_gate_actions(void) {
+    struct { const char* src; const char* bits; } cases[] = {
+        /* -- Pauli and basis preparation / readout ------------------- */
+        {"R 0\nM 0\n",                                   "0"},
+        {"R 0\nX 0\nM 0\n",                              "1"},
+        {"R 0\nY 0\nM 0\n",                              "1"},
+        {"R 0\nZ 0\nM 0\n",                              "0"},
+        {"R 0\nI 0\nM 0\n",                              "0"},
+        {"RX 0\nMX 0\n",                                 "0"},
+        {"RX 0\nZ 0\nMX 0\n",                            "1"},
+        {"RY 0\nMY 0\n",                                 "0"},
+        {"RY 0\nZ 0\nMY 0\n",                            "1"},
+        {"R 0\nH 0\nMX 0\n",                             "0"},
+        /* MR-family resets restore the promised basis state. */
+        {"R 0\nX 0\nMR 0\nM 0\n",                        "10"},
+        {"RX 0\nZ 0\nMRX 0\nMX 0\n",                     "10"},
+        {"RY 0\nZ 0\nMRY 0\nMY 0\n",                     "10"},
+        {"RY 0\nMRY 0\nMY 0\n",                          "00"},
+        /* -- single-qubit Clifford flows ----------------------------- */
+        {"R 0\nSQRT_X 0\nMY 0\n",                        "1"},  /* Z -> -Y */
+        {"R 0\nSQRT_X_DAG 0\nMY 0\n",                    "0"},  /* Z ->  Y */
+        {"R 0\nSQRT_Y 0\nMX 0\n",                        "0"},  /* Z ->  X */
+        {"R 0\nSQRT_Y_DAG 0\nMX 0\n",                    "1"},  /* Z -> -X */
+        {"R 0\nC_XYZ 0\nMX 0\n",                         "0"},  /* Z ->  X */
+        {"R 0\nC_ZYX 0\nMY 0\n",                         "0"},  /* Z ->  Y */
+        {"R 0\nH_YZ 0\nMY 0\n",                          "0"},  /* Z ->  Y */
+        {"RX 0\nH_XY 0\nMY 0\n",                         "0"},  /* X ->  Y */
+        {"R 0\nS 0\nM 0\n",                              "0"},
+        {"R 0\nSQRT_Z 0\nSQRT_Z_DAG 0\nM 0\n",           "0"},
+        /* -- two-qubit Clifford flows -------------------------------- */
+        {"R 0 1\nX 0\nCX 0 1\nM 0 1\n",                  "11"},
+        {"R 0 1\nX 0\nCNOT 0 1\nM 0 1\n",                "11"},
+        {"R 0 1\nX 1\nXCZ 0 1\nM 0 1\n",                 "11"},
+        {"R 0 1\nX 0\nCY 0 1\nM 0 1\n",                  "11"},
+        {"R 0 1\nX 1\nYCZ 0 1\nM 0 1\n",                 "11"},
+        {"R 0 1\nX 0\nCZ 0 1\nM 0 1\n",                  "10"},
+        {"R 0 1\nX 0\nSWAP 0 1\nM 0 1\n",                "01"},
+        {"R 0 1\nX 0\nISWAP 0 1\nM 0 1\n",               "01"},
+        {"R 0 1\nX 0\nISWAP_DAG 0 1\nM 0 1\n",           "01"},
+        {"R 0 1\nX 0\nCXSWAP 0 1\nM 0 1\n",              "11"},
+        {"R 0 1\nX 0\nSWAPCX 0 1\nM 0 1\n",              "01"},
+        {"R 0 1\nX 0\nCZSWAP 0 1\nM 0 1\n",              "01"},
+        {"R 0 1\nX 0\nSWAPCZ 0 1\nM 0 1\n",              "01"},
+        /* Squaring a square root reproduces the two-qubit Pauli. */
+        {"R 0 1\nSQRT_XX 0 1\nSQRT_XX 0 1\nM 0 1\n",             "11"},
+        {"R 0 1\nX 0\nSQRT_XX_DAG 0 1\nSQRT_XX_DAG 0 1\nM 0 1\n", "01"},
+        {"R 0 1\nSQRT_YY 0 1\nSQRT_YY 0 1\nM 0 1\n",             "11"},
+        {"R 0 1\nSQRT_YY_DAG 0 1\nSQRT_YY_DAG 0 1\nM 0 1\n",     "11"},
+        {"R 0 1\nX 0\nSQRT_ZZ 0 1\nSQRT_ZZ 0 1\nM 0 1\n",        "10"},
+        {"R 0 1\nX 0\nSQRT_ZZ_DAG 0 1\nSQRT_ZZ_DAG 0 1\nM 0 1\n","10"},
+        /* Controls in the X and Y bases. */
+        {"R 0 1\nH 0\nXCX 0 1\nM 1\n",                   "0"},
+        {"R 0 1\nH 0\nZ 0\nXCX 0 1\nM 1\n",              "1"},
+        {"R 0 1\nH 0\nZ 0\nXCY 0 1\nM 1\n",              "1"},
+        {"R 1\nRY 0\nZ 0\nYCX 0 1\nM 1\n",               "1"},
+        {"R 1\nRY 0\nZ 0\nYCY 0 1\nM 1\n",               "1"},
+        {"R 1\nRY 0\nYCX 0 1\nM 1\n",                    "0"},
+        /* Multi-target instructions apply per target / per pair. */
+        {"R 0 1 2 3\nX 0 2\nCX 0 1 2 3\nM 0 1 2 3\n",    "1111"},
+    };
+    int rc = 0;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+        if (expect_records(cases[i].src, cases[i].bits)) rc = 1;
+    return rc;
+}
+
 static int test_lowering_sizes(void) {
     struct { const char* src; long ops; long chan; } cases[] = {
         {"H 0\n",                       1,  0},
@@ -688,12 +792,24 @@ static int test_noiseless_detectors_are_zero(void) {
     uint8_t* det = (uint8_t*)malloc(8 * shots);
     uint8_t* obs = (uint8_t*)malloc(1 * shots);
     ASSERT(det && obs, "alloc");
-    ASSERT(moonlab_stim_circuit_sample_detectors(c, shots, 20260731, 1, det, obs)
-               == 8, "sample");
-    for (size_t i = 0; i < 8 * shots; i++)
-        ASSERT(det[i] == 0, "noiseless detector fired");
-    for (size_t i = 0; i < shots; i++)
-        ASSERT(obs[i] == 0, "noiseless observable flipped");
+    /* num_threads = 0 selects every core; the answer must not depend on it. */
+    for (int threads = 0; threads <= 1; threads++) {
+        ASSERT(moonlab_stim_circuit_sample_detectors(c, shots, 20260731,
+                                                     threads, det, obs) == 8,
+               "sample");
+        for (size_t i = 0; i < 8 * shots; i++)
+            ASSERT(det[i] == 0, "noiseless detector fired");
+        for (size_t i = 0; i < shots; i++)
+            ASSERT(obs[i] == 0, "noiseless observable flipped");
+    }
+    /* The raw measurement path must agree: all records read 0. */
+    uint8_t* recs = (uint8_t*)malloc(9 * shots);
+    ASSERT(recs, "alloc");
+    ASSERT(moonlab_stim_circuit_sample_measurements(c, shots, 20260731, 0, recs)
+               == 9, "sample measurements");
+    for (size_t i = 0; i < 9 * shots; i++)
+        ASSERT(recs[i] == 0, "noiseless record is not 0");
+    free(recs);
     free(det); free(obs);
     moonlab_stim_circuit_free(c);
     return 0;
@@ -874,6 +990,8 @@ int main(void) {
     fprintf(stderr, "PASS test_mpad_is_a_record_not_a_measurement\n");
     if (test_inverted_measurements() != 0) return 1;
     fprintf(stderr, "PASS test_inverted_measurements\n");
+    if (test_deterministic_gate_actions() != 0) return 1;
+    fprintf(stderr, "PASS test_deterministic_gate_actions\n");
     if (test_lowering_sizes() != 0) return 1;
     fprintf(stderr, "PASS test_lowering_sizes\n");
     if (test_rejections() != 0) return 1;
