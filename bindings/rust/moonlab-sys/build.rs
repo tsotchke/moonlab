@@ -702,6 +702,15 @@ fn main() {
         .allowlist_function("qgt_model_bhz")
         .allowlist_function("qgt_model_kitaev_chain")
         .allowlist_function("qgt_model_hofstadter")
+        // v1.2.1: exact pointwise band geometry (closed-form Fubini-Study
+        // metric + Berry curvature) and the analytic d-vector that routes a
+        // model handle to it.
+        .allowlist_type("qgt_dsigma_fn")
+        .allowlist_function("qgt_dsigma_metric_curvature")
+        .allowlist_function("qgt_curvature_at")
+        .allowlist_function("qgt_set_dsigma")
+        .allowlist_function("qgt_dsigma_at")
+        .allowlist_function("qgt_exact_curvature_at")
         // Gate-fusion DAG
         .allowlist_type("fuse_circuit_t")
         .allowlist_type("fuse_gate_t")

@@ -11,6 +11,14 @@ What the module computes:
 - Berry curvature `Omega_{xy}(k) = -2 Im Q_{xy}(k)` and Fubini-Study
   metric `g_{mu nu}(k) = Re Q_{mu nu}(k)` of any user-supplied 1D or
   2D Bloch Hamiltonian.
+- The *pointwise continuum* `Omega_{xy}(k)` and `g_{mu nu}(k)` of a
+  two-band system, as a curvature density rather than a plaquette
+  sum: in closed form from an analytic `d(k)` and its momentum
+  gradients (`qgt_dsigma_metric_curvature`, machine-precision, no
+  finite difference anywhere), or from any Bloch callback via the
+  projector trace with a central difference of `H` itself
+  (`qgt_curvature_at`, accurate to `O(dk^2)`).  See the fourth
+  integrator section below.
 - Integer Chern numbers via the Fukui-Hatsugai-Suzuki [3] discrete
   link-variable construction, generalised to non-Abelian U(M)
   occupied subspaces in the n-band path.
@@ -25,20 +33,34 @@ What the module computes:
 
 What the module does *not* compute, and why:
 
-- A *continuum* Berry-curvature density beyond the finite plaquette
-  sum.  The FHS construction is exactly integer-valued at any finite
-  `N` once the gap is open [3]; the discrete sum *is* the
-  topological invariant and no continuum limit is needed.
+- A continuum curvature density for systems with more than two bands.
+  The pointwise path above is two-band only: it rests on the
+  `H = d.sigma` decomposition and the rank-1 lower-band projector.
+  The n-band path stays discrete (FHS link variables over a U(M)
+  occupied subspace), where the plaquette sum is exactly integer at
+  any finite `N` once the gap is open [3] and the topological answer
+  needs no continuum limit.
 - The full Pfaffian variant of Fukui and Hatsugai [11] for systems
   that break S_z symmetry (e.g. Kane-Mele with Rashba coupling).
   This is scheduled for a future release; the S_z-conserving
   shortcut covers the canonical Kane-Mele and BHZ regimes.
 
-## Three integrators
+An earlier revision of this section stated that the module computes
+no continuum curvature density at all, on the grounds that the
+invariant does not need one.  That is right about the *invariant* and
+wrong about the module: the density is what a caller wants for
+quantum-geometry work that is not a Chern number -- metric
+anisotropy, the trace/determinant bounds relating `g` to `Omega`,
+quantum-metric contributions to transport -- and the two-band
+pointwise path now supplies it.
+
+## Integrators
 
 We ship three independent Berry-grid integrators, each handling the
 gauge problem differently.  All return the same integer Chern on a
-gapped Hamiltonian.
+gapped Hamiltonian.  A fourth path, added in v1.2.1, is not a grid
+integrator at all: it evaluates the curvature and metric *at a point*,
+and is described in the section after them.
 
 ### 1. `qgt_berry_grid` — eigvec FHS (legacy)
 
@@ -76,6 +98,88 @@ F_xy(k) = -arg Tr[P_-(k) P_-(k+x) P_-(k+x+y) P_-(k+y)]
 is gauge-free without any phase-fix scaffolding.  This is the
 canonical Wilson-loop-style construction.  Recommended for any 2-band
 Bloch model where gauge sensitivity is suspect.
+
+## Pointwise band geometry (two-band)
+
+The three integrators above answer "what is the Chern number".  The
+pointwise path answers "what is the curvature and the metric *here*",
+which is what quantum-geometry work outside topology needs.  Two
+entry points, differing in what the caller can supply.
+
+### `qgt_dsigma_metric_curvature` — closed form from analytic `d(k)`
+
+For `H(k) = d(k).sigma` the lower-band QGT is exactly
+
+```
+Q_munu = (1/4) [ d_mu dhat . d_nu dhat
+                 - i dhat . (d_mu dhat x d_nu dhat) ],   dhat = d/|d|
+```
+
+so
+
+```
+g_munu   = (1/4) d_mu dhat . d_nu dhat
+Omega_xy = -2 Im Q_xy = (1/2) dhat . (d_x dhat x d_y dhat)
+```
+
+the skyrmion density of the `dhat` texture.  Both are U(1)-gauge
+invariant and depend only on `d` and `grad d`: no eigenvector is ever
+formed, so the gauge problem the three integrators each work around
+does not arise, and there is no finite difference of any kind.  The
+result is machine-precision.
+
+The caller supplies `d`, `d_x d` and `d_y d` directly.  The two
+built-in `d.sigma` models carry theirs: `qgt_model_qwz` and
+`qgt_model_haldane` populate an analytic d-vector at construction, so
+`qgt_exact_curvature_at(sys, k, g, &omega)` reaches the closed form
+from a model handle without the caller re-deriving anything, and
+`qgt_dsigma_at` exposes the vector itself.  A system built through
+`qgt_create` attaches its own with `qgt_set_dsigma`, or leaves it
+unset and uses the finite-difference path below; the unset case
+returns `-3` rather than guessing.
+
+Haldane carries an identity component (`2 t2 cos(phi) c1`) on top of
+its `d.sigma` part.  The d-vector reports only the traceless part:
+an identity term shifts both bands equally, drops out of the band
+projectors, and therefore does not enter the geometry at all.
+
+### `qgt_curvature_at` — projector trace from any Bloch callback
+
+For a system known only through its `qgt_bloch_fn`, the same tensor
+comes from the projector form
+
+```
+Q_munu(k) = Tr[ P_- d_mu H P_+ d_nu H ] / (DeltaE)^2,   DeltaE = 2|h(k)|
+```
+
+with `P_±` the exact 2x2 band projectors.  This differentiates the
+*Hamiltonian matrix entries*, never the eigenvector, so it is still
+gauge-free and needs no phase-fixing — but `d_mu H` comes from a
+central difference in `k`, so the result is `O(dk^2)`-accurate rather
+than machine-exact.  Use it when there is no analytic `d(k)`; use the
+closed form when there is.
+
+### Band touchings
+
+Both entry points return `-2` at a band touching, where the geometry
+is genuinely undefined, and both test for it *relative to the scale of
+their inputs* rather than against an exact zero — `1e-12` times the
+Hamiltonian's trace scale for `qgt_curvature_at`, matching
+`lower_eigvec_2x2`, and `1e-12` times the L1 scale of `d` and its
+gradients for the closed form.  `g` and `Omega` both diverge as the
+gap closes (`Q` carries a `1/(DeltaE)^2`), so an absolute-zero test
+would let a near-gapless `k` return an enormous finite number that a
+caller cannot tell from a measurement.
+
+### Cross-checks
+
+`tests/unit/test_qgt_exact_curvature.c` pins the pointwise path
+against three independent references: the projector-form QGT built
+from an explicit 2x2 diagonalisation (agreement ~1e-16 on QWZ and
+Haldane); the FHS Chern number, by integrating the pointwise
+`Omega_xy` over the BZ (`|diff| < 5e-15` across QWZ `C = 0, ±1` and
+the Haldane transition at `phi = -pi/2`); and the finite-difference
+path against the closed form (~1e-9).
 
 ## n-band non-Abelian path
 

@@ -79,9 +79,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is gate-for-gate the hardware-efficient ansatz and cross-checks the
   central-difference metric, curvature, energy, and gradient against the
   built-in exact analytic path on 1- and 2-qubit systems.
+- **Exact pointwise band geometry (`qgt_dsigma_metric_curvature`,
+  `qgt_curvature_at`).** The QGT module computed only the Fubini-Study metric,
+  through eigenvector finite differences in `qgt_metric_at`, and had no
+  pointwise Berry curvature at all -- only the discretised FHS grid integrator.
+  `qgt_dsigma_metric_curvature` returns the closed-form, gauge-free lower-band
+  metric `g_munu = (1/4) d_mu dhat . d_nu dhat` and curvature
+  `Omega_xy = (1/2) dhat . (d_x dhat x d_y dhat)` of `H(k) = d(k).sigma` from
+  the analytic `d` and its momentum gradients: no eigenvector, no phase-fixing,
+  no finite difference, machine-precision. `qgt_curvature_at` gives the same
+  tensor for any 2-band Bloch callback via the projector form
+  `Q = Tr[P- dH_mu P+ dH_nu]/(DeltaE)^2`, differentiating the Hamiltonian
+  rather than the eigenvector, accurate to `O(dk^2)`. The `Omega` sign
+  convention matches the existing `qgt_berry_grid` integrator. Contributed in
+  PR #19.
+- **Analytic d-vector on QGT system handles (`qgt_set_dsigma`,
+  `qgt_dsigma_at`, `qgt_exact_curvature_at`, `qgt_dsigma_fn`).**
+  `qgt_system_t` carried only the `H(k)` callback, so a caller holding a
+  `qgt_model_qwz` or `qgt_model_haldane` handle could not reach
+  `qgt_dsigma_metric_curvature` without re-deriving `d(k)` and its gradients by
+  hand. Systems now optionally carry an analytic d-vector, and both built-in
+  `d.sigma` models populate it at construction, so `qgt_exact_curvature_at`
+  runs the exact path straight off a model handle. Haldane reports the
+  traceless part; its next-nearest-neighbour identity term shifts both bands
+  equally and does not enter the geometry. Systems without an analytic
+  d-vector return `-3` instead of guessing, and stay fully usable through the
+  finite-difference paths.
 
 ### Changed
 
+- **QGT band-touching guards are scale-relative.** `qgt_curvature_at` and
+  `qgt_dsigma_metric_curvature` rejected only an exact zero gap, so a
+  near-gapless `k` returned finite values on the order of `1e12` -- `Q` carries
+  a `1/(DeltaE)^2` factor -- that a caller could not distinguish from a
+  measurement. Both now use the module's existing trace-relative `1e-12`
+  threshold (`lower_eigvec_2x2`): `1e-12` times the Hamiltonian's trace scale
+  for the Bloch path, `1e-12` times the L1 scale of `d` and its gradients for
+  the closed form.
+- `docs/research/quantum_geometry_tensor.md` no longer states that the module
+  computes no continuum Berry-curvature density. It does now, for two-band
+  systems; the Scope section and the integrator sections describe the pointwise
+  path, its two entry points, and its cross-checks. The n-band path remains
+  discrete, and the doc says so rather than generalising.
 - The `@stability` tags in `src/algorithms/vqe.h` now read `evolving`, the tier
   `docs/STABLE_ABI.md` defines, instead of `experimental`, which was not a tier
   the project used anywhere. `docs/STABLE_ABI.md` gains the tier table those
@@ -126,7 +165,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entangling and leakage-free, and none whose logical block is proportional to
   a unitary while entangling. The exact, leakage-free two-qubit gate is
   `ising_compile_clifford2()` in the dense 6-anyon encoding.
-
 
 ## [1.2.0] - 2026-07-23
 
