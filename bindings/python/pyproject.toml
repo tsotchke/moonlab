@@ -47,8 +47,16 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+# Stim-ecosystem interop. These are development/test dependencies only:
+# moonlab.qec itself runs on numpy alone, and only moonlab.qec.sinter
+# (never imported by moonlab.qec) needs sinter at all.
+qec = [
+    "stim>=1.13",
+    "pymatching>=2.2",
+    "sinter>=1.13",
+]
 all = [
-    "moonlab[ml,viz,dev]",
+    "moonlab[ml,viz,dev,qec]",
 ]
 
 [project.urls]

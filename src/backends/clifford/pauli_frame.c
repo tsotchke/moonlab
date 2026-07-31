@@ -464,6 +464,90 @@ static void pf_noise_depol2(bf_word_t* xa, bf_word_t* za,
     }
 }
 
+/* PAULI_CHANNEL_1(px, py, pz): on a Bernoulli(px+py+pz) subset, apply X, Y
+ * or Z with the conditional weights px/p, py/p, pz/p.  Drawing the subset
+ * from the total first and the letter second is exactly the same law as
+ * three independent draws would be for disjoint events, but costs
+ * O(p * shots) instead of O(shots).  chan args are validated non-negative
+ * with sum <= 1 before we get here. */
+static void pf_noise_pauli1(bf_word_t* xr, bf_word_t* zr, size_t S,
+                            const double* pr, uint64_t* rng) {
+    const double px = pr[0], py = pr[1], pz = pr[2];
+    double p = px + py + pz;
+    if (p <= 0.0 || S == 0) return;
+    if (p > 1.0) p = 1.0;
+
+    if (p >= 1.0) {
+        for (size_t s = 0; s < S; s++) {
+            const bf_word_t bit = (bf_word_t)1 << (s & 63);
+            const double u = (double)(sm64_next(rng) >> 11) * 0x1.0p-53 * p;
+            if (u < px)            { xr[s >> 6] ^= bit; }
+            else if (u < px + py)  { xr[s >> 6] ^= bit; zr[s >> 6] ^= bit; }
+            else                   { zr[s >> 6] ^= bit; }
+        }
+        return;
+    }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        const bf_word_t bit = (bf_word_t)1 << ((size_t)pos & 63);
+        const size_t w = (size_t)pos >> 6;
+        const double u = (double)(sm64_next(rng) >> 11) * 0x1.0p-53 * p;
+        if (u < px)            { xr[w] ^= bit; }
+        else if (u < px + py)  { xr[w] ^= bit; zr[w] ^= bit; }
+        else                   { zr[w] ^= bit; }
+    }
+}
+
+/* PAULI_CHANNEL_2: 15 probabilities in stim's order
+ * IX IY IZ XI XX XY XZ YI YX YY YZ ZI ZX ZY ZZ, so entry k corresponds to
+ * the base-4 pair n = k + 1 with n / 4 acting on the first target and
+ * n % 4 on the second (0 = I, 1 = X, 2 = Y, 3 = Z). */
+static inline void pf_pc2_apply(bf_word_t* xa, bf_word_t* za,
+                                bf_word_t* xb, bf_word_t* zb,
+                                size_t w, bf_word_t bit,
+                                const double* pr, double p, uint64_t* rng) {
+    const double u = (double)(sm64_next(rng) >> 11) * 0x1.0p-53 * p;
+    double acc = 0.0;
+    int k = 14;
+    for (int j = 0; j < 15; j++) {
+        acc += pr[j];
+        if (u < acc) { k = j; break; }
+    }
+    const unsigned n  = (unsigned)k + 1u;
+    const unsigned p0 = n >> 2, p1 = n & 3u;   /* 0=I 1=X 2=Y 3=Z */
+    if (p0 == 1u || p0 == 2u) xa[w] ^= bit;
+    if (p0 == 2u || p0 == 3u) za[w] ^= bit;
+    if (p1 == 1u || p1 == 2u) xb[w] ^= bit;
+    if (p1 == 2u || p1 == 3u) zb[w] ^= bit;
+}
+
+static void pf_noise_pauli2(bf_word_t* xa, bf_word_t* za,
+                            bf_word_t* xb, bf_word_t* zb, size_t S,
+                            const double* pr, uint64_t* rng) {
+    double p = 0.0;
+    for (int k = 0; k < 15; k++) p += pr[k];
+    if (p <= 0.0 || S == 0) return;
+    if (p > 1.0) p = 1.0;
+
+    if (p >= 1.0) {
+        for (size_t s = 0; s < S; s++)
+            pf_pc2_apply(xa, za, xb, zb, s >> 6,
+                         (bf_word_t)1 << (s & 63), pr, p, rng);
+        return;
+    }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        pf_pc2_apply(xa, za, xb, zb, (size_t)pos >> 6,
+                     (bf_word_t)1 << ((size_t)pos & 63), pr, p, rng);
+    }
+}
+
 /* Flip a Bernoulli(p) subset of already-written measurement result bytes. */
 static void pf_noise_flip_bytes(uint8_t* dst, size_t S, double p, uint64_t* rng) {
     if (p <= 0.0 || S == 0) return;
@@ -727,12 +811,37 @@ static int pf_compute_reference(size_t n, const pf_circuit_op_t* ops,
              * against. */
             case PF_OP_X_ERROR: case PF_OP_Y_ERROR: case PF_OP_Z_ERROR:
             case PF_OP_DEPOLARIZE1: case PF_OP_DEPOLARIZE2:
+            case PF_OP_PAULI_CHANNEL_1: case PF_OP_PAULI_CHANNEL_2:
                 break;
             default: break;
         }
     }
     free(zknown);
     clifford_tableau_free(t);
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Channel-table validation                                           */
+/*                                                                    */
+/* A PAULI_CHANNEL op with no table, or with a base index whose block  */
+/* runs off the end of the table, is a hard error.  Skipping it would  */
+/* silently drop noise from the circuit being sampled, which is        */
+/* exactly the failure mode a benchmark cannot detect.                 */
+/* ------------------------------------------------------------------ */
+static int pf_validate_channels(const pf_circuit_op_t* ops, size_t num_ops,
+                                const double* chan_args, size_t num_chan_args) {
+    for (size_t i = 0; i < num_ops; i++) {
+        size_t width;
+        if (ops[i].kind == PF_OP_PAULI_CHANNEL_1)      width = 3;
+        else if (ops[i].kind == PF_OP_PAULI_CHANNEL_2) width = 15;
+        else continue;
+        if (!chan_args) return -1;
+        const double base_d = ops[i].p;
+        if (!(base_d >= 0.0) || base_d != (double)(size_t)base_d) return -1;
+        const size_t base = (size_t)base_d;
+        if (base > num_chan_args || num_chan_args - base < width) return -1;
+    }
     return 0;
 }
 
@@ -749,6 +858,7 @@ static inline void pf_row_rand(bf_word_t* r, size_t W, uint64_t* rng) {
  * buffer with mstride = total_shots, while the detector sampler points it at
  * a small block-local buffer and reduces to detectors before returning. */
 static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
+                        const double* chan_args,
                         const uint8_t* m_ref, const uint8_t* m_kind,
                         size_t block_shots, uint64_t seed,
                         uint8_t* mdst, size_t mstride) {
@@ -819,6 +929,15 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
                                 row_x(b, q1), row_z(b, q1), block_shots,
                                 ops[i].p, &rng);
                 break;
+            case PF_OP_PAULI_CHANNEL_1:
+                pf_noise_pauli1(row_x(b, q0), row_z(b, q0), block_shots,
+                                chan_args + (size_t)ops[i].p, &rng);
+                break;
+            case PF_OP_PAULI_CHANNEL_2:
+                pf_noise_pauli2(row_x(b, q0), row_z(b, q0),
+                                row_x(b, q1), row_z(b, q1), block_shots,
+                                chan_args + (size_t)ops[i].p, &rng);
+                break;
             default: break;
         }
     }
@@ -830,7 +949,19 @@ long pauli_frame_batch_sample_circuit(size_t num_qubits,
                                       const pf_circuit_op_t* ops, size_t num_ops,
                                       size_t num_shots, uint64_t seed,
                                       int num_threads, uint8_t* out) {
+    return pauli_frame_batch_sample_circuit_ex(num_qubits, ops, num_ops,
+                                               NULL, 0, num_shots, seed,
+                                               num_threads, out);
+}
+
+long pauli_frame_batch_sample_circuit_ex(size_t num_qubits,
+                                         const pf_circuit_op_t* ops, size_t num_ops,
+                                         const double* chan_args,
+                                         size_t num_chan_args,
+                                         size_t num_shots, uint64_t seed,
+                                         int num_threads, uint8_t* out) {
     if (num_qubits == 0 || !ops || num_shots == 0 || !out) return -1;
+    if (pf_validate_channels(ops, num_ops, chan_args, num_chan_args) != 0) return -1;
     const size_t nmeas = pauli_frame_circuit_num_measurements(ops, num_ops);
     if (nmeas == 0) return 0;
 
@@ -864,7 +995,7 @@ long pauli_frame_batch_sample_circuit(size_t num_qubits,
         size_t off = (size_t)tid * base + ((size_t)tid < rem ? (size_t)tid : rem);
         if (bs == 0) continue;
         uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
-        if (pf_run_block(num_qubits, ops, num_ops, m_ref, m_kind,
+        if (pf_run_block(num_qubits, ops, num_ops, chan_args, m_ref, m_kind,
                          bs, bseed, out + off, num_shots) != 0)
             err |= 1;
     }
@@ -880,8 +1011,23 @@ long pauli_frame_batch_sample_detectors(size_t num_qubits,
                                         size_t num_detectors,
                                         size_t num_shots, uint64_t seed,
                                         int num_threads, uint8_t* out) {
+    return pauli_frame_batch_sample_detectors_ex(
+        num_qubits, ops, num_ops, NULL, 0, det_offsets, det_indices,
+        num_detectors, num_shots, seed, num_threads, out);
+}
+
+long pauli_frame_batch_sample_detectors_ex(size_t num_qubits,
+                                           const pf_circuit_op_t* ops, size_t num_ops,
+                                           const double* chan_args,
+                                           size_t num_chan_args,
+                                           const size_t* det_offsets,
+                                           const uint32_t* det_indices,
+                                           size_t num_detectors,
+                                           size_t num_shots, uint64_t seed,
+                                           int num_threads, uint8_t* out) {
     if (num_qubits == 0 || !ops || num_shots == 0 || !out) return -1;
     if (num_detectors == 0 || !det_offsets || !det_indices) return -1;
+    if (pf_validate_channels(ops, num_ops, chan_args, num_chan_args) != 0) return -1;
     const size_t nmeas = pauli_frame_circuit_num_measurements(ops, num_ops);
     if (nmeas == 0) return -1;
     for (size_t d = 0; d < num_detectors; d++) {
@@ -935,7 +1081,7 @@ long pauli_frame_batch_sample_detectors(size_t num_qubits,
         uint8_t* mbuf = (uint8_t*)malloc(nmeas * bs);
         if (!mbuf) { err |= 1; continue; }
         uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
-        if (pf_run_block(num_qubits, ops, num_ops, m_ref, m_kind,
+        if (pf_run_block(num_qubits, ops, num_ops, chan_args, m_ref, m_kind,
                          bs, bseed, mbuf, bs) != 0) {
             free(mbuf); err |= 1; continue;
         }

@@ -748,6 +748,8 @@ set(QSIM_BACKEND_SOURCES
     src/backends/clifford/clifford.c
     src/backends/clifford/pauli_frame.c
     src/qec/uf_decoder.c
+    src/qec/stim_circuit.c
+    src/qec/stim_dem.c
 )
 
 set(QSIM_ALGORITHMS_SOURCES

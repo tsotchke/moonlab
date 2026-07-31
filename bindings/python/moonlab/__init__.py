@@ -246,6 +246,15 @@ try:
 except (ImportError, AttributeError, OSError):
     _SCHEDULER_AVAILABLE = False
 
+# Stim-ecosystem QEC interop (.stim circuits, .dem models, union-find
+# decoding). numpy-only at runtime; moonlab.qec.sinter is deliberately
+# not imported by the subpackage.
+try:
+    from . import qec
+    _QEC_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _QEC_AVAILABLE = False
+
 try:
     from .decoder import (
         DecoderSlot, DecoderError, DecoderNotBuiltError,
@@ -354,6 +363,8 @@ if _QGTL_AVAILABLE:
     __all__ += ['QgtlCircuit', 'QgtlResults', 'QgtlError', 'QgtlGateType']
 if _SCHEDULER_AVAILABLE:
     __all__ += ['Job', 'JobResults', 'SchedulerError']
+if _QEC_AVAILABLE:
+    __all__ += ['qec']
 if _DECODER_AVAILABLE:
     __all__ += [
         'DecoderSlot',

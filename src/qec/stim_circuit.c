@@ -1,0 +1,1941 @@
+/**
+ * @file stim_circuit.c
+ * @brief Stim `.stim` circuit reader, writer, lowering and samplers.
+ *
+ * Three stages:
+ *
+ *  1. PARSE builds a literal instruction tree (`st_block_t` / `st_inst_t`)
+ *     that keeps REPEAT blocks, tags, parens arguments and the exact target
+ *     list as written.  Everything checkable without knowing the
+ *     measurement record -- names, arity, target kinds, probability ranges
+ *     -- is rejected here, with the source line and the offending token in
+ *     the message.  Nothing is ever skipped: an instruction we cannot lower
+ *     is a parse failure, because dropping it would silently change the
+ *     physics of whatever is being benchmarked.
+ *
+ *  2. WALK expands REPEAT and lowers the tree onto the Pauli-frame op list,
+ *     the channel-argument table, the measurement record, the detector and
+ *     observable parity sets, and the coordinate tables.  rec[-k] resolves
+ *     against the record length at the point of use, so each REPEAT
+ *     iteration resolves its own records; SHIFT_COORDS accumulates across
+ *     iterations for the same reason.  The walk runs once, at parse time,
+ *     and its results are cached on the circuit.
+ *
+ *  3. SERIALISE prints the tree back out in Stim's canonical upper-case
+ *     spelling, either preserving REPEAT (flatten = 0) or expanding it
+ *     (flatten = 1).  Coordinates are printed as written, NOT with the
+ *     SHIFT_COORDS offset folded in, because the SHIFT_COORDS instruction
+ *     is printed too and folding would double-apply it on re-parse.
+ */
+
+#include "stim_circuit.h"
+
+#include <ctype.h>
+#include <math.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Largest qubit index we accept.  Coordinate and frame tables are indexed
+ * densely by qubit, so an absurd index is a resource bomb, not a circuit. */
+#define ST_MAX_QUBIT      0x00FFFFFFu
+/* Largest observable index we accept (CSR rows are dense in the index). */
+#define ST_MAX_OBSERVABLE 0x00FFFFFFu
+/* Guard against REPEAT counts that would expand into an unbounded circuit. */
+#define ST_MAX_OPS        ((size_t)1 << 31)
+
+/* Record has no Pauli-frame measurement behind it (an MPAD placeholder). */
+#define ST_REC_NONE  UINT32_MAX
+
+/* ================================================================== */
+/*  Error reporting                                                    */
+/* ================================================================== */
+
+static void st_ok(moonlab_stim_error_t* e) {
+    if (!e) return;
+    e->code = MOONLAB_STIM_OK;
+    e->line = 0;
+    e->message[0] = '\0';
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 4, 5)))
+#endif
+static void st_fail(moonlab_stim_error_t* e, int code, size_t line,
+                    const char* fmt, ...) {
+    if (!e) return;
+    e->code = code;
+    e->line = line;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(e->message, sizeof(e->message), fmt, ap);
+    va_end(ap);
+}
+
+/* ================================================================== */
+/*  Growable buffers                                                   */
+/* ================================================================== */
+
+static void* st_grow(void* buf, size_t* cap, size_t need, size_t elem) {
+    size_t nc = *cap ? *cap : 8;
+    while (nc < need) {
+        if (nc > (size_t)-1 / 2) return NULL;
+        nc *= 2;
+    }
+    if (elem && nc > (size_t)-1 / elem) return NULL;
+    void* p = realloc(buf, nc * elem);
+    if (!p) return NULL;
+    *cap = nc;
+    return p;
+}
+
+/* Grow (ptr, cap) to hold at least `need` elements of type T.  `failstmt`
+ * runs on allocation failure; realloc leaves the old buffer intact, so the
+ * caller's cleanup path stays valid.  `failstmt` must not be a bare `break`
+ * or `continue` -- the macro body is a do/while(0). */
+#define ST_GROW(ptr, cap, need, T, failstmt)                              \
+    do {                                                                  \
+        if ((size_t)(need) > (cap)) {                                     \
+            void* p__ = st_grow((void*)(ptr), &(cap), (size_t)(need),     \
+                                sizeof(T));                               \
+            if (!p__) { failstmt; }                                       \
+            (ptr) = (T*)p__;                                              \
+        }                                                                 \
+    } while (0)
+
+/* ================================================================== */
+/*  Gate decompositions                                                */
+/*                                                                     */
+/*  Every Stim Clifford is lowered onto moonlab's primitive set         */
+/*  H, S, S_DAG, X, Y, Z, CNOT, CZ, SWAP.  The sequences below came     */
+/*  from a breadth-first search over the group generated by those       */
+/*  primitives and were checked element by element against              */
+/*  stim.Tableau.from_named_gate (exact, signs included; tableaus carry  */
+/*  no global phase, so this is equality up to global phase).  Steps    */
+/*  apply left to right.  Slot 0 is the instruction's first target,     */
+/*  slot 1 its second.                                                  */
+/* ================================================================== */
+
+enum {
+    G1_I = 0, G1_X, G1_Y, G1_Z, G1_H, G1_H_XY, G1_H_YZ, G1_S, G1_S_DAG,
+    G1_SQRT_X, G1_SQRT_X_DAG, G1_SQRT_Y, G1_SQRT_Y_DAG, G1_C_XYZ, G1_C_ZYX,
+    G1_COUNT
+};
+
+enum {
+    G2_CX = 0, G2_CY, G2_CZ, G2_XCX, G2_XCY, G2_XCZ, G2_YCX, G2_YCY, G2_YCZ,
+    G2_SWAP, G2_ISWAP, G2_ISWAP_DAG, G2_CXSWAP, G2_SWAPCX, G2_CZSWAP,
+    G2_SQRT_XX, G2_SQRT_XX_DAG, G2_SQRT_YY, G2_SQRT_YY_DAG,
+    G2_SQRT_ZZ, G2_SQRT_ZZ_DAG,
+    G2_COUNT
+};
+
+#define ST_MAX_STEPS 8
+
+typedef struct { uint8_t kind, a, b; } st_step_t;
+typedef struct { uint8_t n; st_step_t s[ST_MAX_STEPS]; } st_decomp_t;
+
+#define S1(k)        {PF_OP_##k, 0, 0}
+#define S2(k, x, y)  {PF_OP_##k, (x), (y)}
+
+static const st_decomp_t ST_G1[G1_COUNT] = {
+    /* I          */ {0, {{0, 0, 0}}},
+    /* X          */ {1, {S1(X)}},
+    /* Y          */ {1, {S1(Y)}},
+    /* Z          */ {1, {S1(Z)}},
+    /* H, H_XZ    */ {1, {S1(H)}},
+    /* H_XY       */ {2, {S1(S), S1(Y)}},
+    /* H_YZ       */ {3, {S1(S_DAG), S1(H), S1(S)}},
+    /* S, SQRT_Z  */ {1, {S1(S)}},
+    /* S_DAG      */ {1, {S1(S_DAG)}},
+    /* SQRT_X     */ {3, {S1(H), S1(S), S1(H)}},
+    /* SQRT_X_DAG */ {3, {S1(H), S1(S_DAG), S1(H)}},
+    /* SQRT_Y     */ {2, {S1(H), S1(X)}},
+    /* SQRT_Y_DAG */ {2, {S1(H), S1(Z)}},
+    /* C_XYZ      */ {2, {S1(S_DAG), S1(H)}},
+    /* C_ZYX      */ {2, {S1(H), S1(S)}},
+};
+
+static const st_decomp_t ST_G2[G2_COUNT] = {
+    /* CX          */ {1, {S2(CNOT, 0, 1)}},
+    /* CY          */ {3, {S2(S, 0, 0), S2(CZ, 0, 1), S2(CNOT, 0, 1)}},
+    /* CZ          */ {1, {S2(CZ, 0, 1)}},
+    /* XCX         */ {3, {S2(H, 0, 0), S2(CNOT, 0, 1), S2(H, 0, 0)}},
+    /* XCY         */ {5, {S2(H, 0, 0), S2(S, 0, 0), S2(CZ, 0, 1),
+                           S2(CNOT, 0, 1), S2(H, 0, 0)}},
+    /* XCZ         */ {1, {S2(CNOT, 1, 0)}},
+    /* YCX         */ {5, {S2(H, 1, 0), S2(S, 1, 0), S2(CZ, 0, 1),
+                           S2(CNOT, 1, 0), S2(H, 1, 0)}},
+    /* YCY         */ {7, {S2(H, 0, 0), S2(H, 1, 0), S2(S, 0, 0),
+                           S2(CNOT, 1, 0), S2(H, 1, 0), S2(CNOT, 1, 0),
+                           S2(S, 0, 0)}},
+    /* YCZ         */ {3, {S2(S, 1, 0), S2(CZ, 0, 1), S2(CNOT, 1, 0)}},
+    /* SWAP        */ {1, {S2(SWAP, 0, 1)}},
+    /* ISWAP       */ {4, {S2(S, 0, 0), S2(S, 1, 0), S2(CZ, 0, 1),
+                           S2(SWAP, 0, 1)}},
+    /* ISWAP_DAG   */ {4, {S2(S_DAG, 0, 0), S2(S_DAG, 1, 0), S2(CZ, 0, 1),
+                           S2(SWAP, 0, 1)}},
+    /* CXSWAP      */ {2, {S2(CNOT, 0, 1), S2(SWAP, 0, 1)}},
+    /* SWAPCX      */ {2, {S2(CNOT, 0, 1), S2(CNOT, 1, 0)}},
+    /* CZSWAP      */ {2, {S2(CZ, 0, 1), S2(SWAP, 0, 1)}},
+    /* SQRT_XX     */ {5, {S2(S_DAG, 0, 0), S2(CNOT, 0, 1), S2(H, 0, 0),
+                           S2(S_DAG, 0, 0), S2(CNOT, 0, 1)}},
+    /* SQRT_XX_DAG */ {5, {S2(S, 0, 0), S2(CNOT, 0, 1), S2(H, 0, 0),
+                           S2(S, 0, 0), S2(CNOT, 0, 1)}},
+    /* SQRT_YY     */ {6, {S2(S, 0, 0), S2(CNOT, 1, 0), S2(H, 1, 0),
+                           S2(Z, 0, 0), S2(CNOT, 1, 0), S2(S, 0, 0)}},
+    /* SQRT_YY_DAG */ {6, {S2(S, 0, 0), S2(Z, 1, 0), S2(CNOT, 1, 0),
+                           S2(H, 1, 0), S2(CNOT, 1, 0), S2(S_DAG, 0, 0)}},
+    /* SQRT_ZZ     */ {3, {S2(S, 0, 0), S2(S, 1, 0), S2(CZ, 0, 1)}},
+    /* SQRT_ZZ_DAG */ {3, {S2(S_DAG, 0, 0), S2(S_DAG, 1, 0), S2(CZ, 0, 1)}},
+};
+
+#undef S1
+#undef S2
+
+/* ================================================================== */
+/*  Instruction table                                                  */
+/* ================================================================== */
+
+typedef enum {
+    IC_GATE1 = 0, IC_GATE2, IC_MEASURE, IC_RESET, IC_NOISE1, IC_NOISE2,
+    IC_PC1, IC_PC2, IC_DETECTOR, IC_OBSERVABLE, IC_QUBIT_COORDS,
+    IC_SHIFT_COORDS, IC_TICK, IC_MPAD, IC_REPEAT, IC_REJECT
+} st_class_t;
+
+/* Measurement / reset basis. */
+enum { BASIS_Z = 0, BASIS_X = 1, BASIS_Y = 2 };
+
+typedef struct {
+    const char* alias;  /* accepted spelling (upper case)                 */
+    const char* canon;  /* spelling emitted by the serialiser             */
+    uint8_t     cls;    /* st_class_t                                     */
+    uint8_t     a;      /* gate id / pf noise kind / measurement basis     */
+    uint8_t     reset;  /* measurement also resets the qubit              */
+} st_inst_def_t;
+
+static const st_inst_def_t ST_INSTS[] = {
+    /* -- single-qubit Cliffords -------------------------------------- */
+    {"I",           "I",           IC_GATE1, G1_I,          0},
+    {"X",           "X",           IC_GATE1, G1_X,          0},
+    {"Y",           "Y",           IC_GATE1, G1_Y,          0},
+    {"Z",           "Z",           IC_GATE1, G1_Z,          0},
+    {"H",           "H",           IC_GATE1, G1_H,          0},
+    {"H_XZ",        "H",           IC_GATE1, G1_H,          0},
+    {"H_XY",        "H_XY",        IC_GATE1, G1_H_XY,       0},
+    {"H_YZ",        "H_YZ",        IC_GATE1, G1_H_YZ,       0},
+    {"S",           "S",           IC_GATE1, G1_S,          0},
+    {"SQRT_Z",      "S",           IC_GATE1, G1_S,          0},
+    {"S_DAG",       "S_DAG",       IC_GATE1, G1_S_DAG,      0},
+    {"SQRT_Z_DAG",  "S_DAG",       IC_GATE1, G1_S_DAG,      0},
+    {"SQRT_X",      "SQRT_X",      IC_GATE1, G1_SQRT_X,     0},
+    {"SQRT_X_DAG",  "SQRT_X_DAG",  IC_GATE1, G1_SQRT_X_DAG, 0},
+    {"SQRT_Y",      "SQRT_Y",      IC_GATE1, G1_SQRT_Y,     0},
+    {"SQRT_Y_DAG",  "SQRT_Y_DAG",  IC_GATE1, G1_SQRT_Y_DAG, 0},
+    {"C_XYZ",       "C_XYZ",       IC_GATE1, G1_C_XYZ,      0},
+    {"C_ZYX",       "C_ZYX",       IC_GATE1, G1_C_ZYX,      0},
+
+    /* -- two-qubit Cliffords ----------------------------------------- */
+    {"CX",          "CX",          IC_GATE2, G2_CX,          0},
+    {"CNOT",        "CX",          IC_GATE2, G2_CX,          0},
+    {"ZCX",         "CX",          IC_GATE2, G2_CX,          0},
+    {"CY",          "CY",          IC_GATE2, G2_CY,          0},
+    {"ZCY",         "CY",          IC_GATE2, G2_CY,          0},
+    {"CZ",          "CZ",          IC_GATE2, G2_CZ,          0},
+    {"ZCZ",         "CZ",          IC_GATE2, G2_CZ,          0},
+    {"XCX",         "XCX",         IC_GATE2, G2_XCX,         0},
+    {"XCY",         "XCY",         IC_GATE2, G2_XCY,         0},
+    {"XCZ",         "XCZ",         IC_GATE2, G2_XCZ,         0},
+    {"YCX",         "YCX",         IC_GATE2, G2_YCX,         0},
+    {"YCY",         "YCY",         IC_GATE2, G2_YCY,         0},
+    {"YCZ",         "YCZ",         IC_GATE2, G2_YCZ,         0},
+    {"SWAP",        "SWAP",        IC_GATE2, G2_SWAP,        0},
+    {"ISWAP",       "ISWAP",       IC_GATE2, G2_ISWAP,       0},
+    {"ISWAP_DAG",   "ISWAP_DAG",   IC_GATE2, G2_ISWAP_DAG,   0},
+    {"CXSWAP",      "CXSWAP",      IC_GATE2, G2_CXSWAP,      0},
+    {"SWAPCX",      "SWAPCX",      IC_GATE2, G2_SWAPCX,      0},
+    {"CZSWAP",      "CZSWAP",      IC_GATE2, G2_CZSWAP,      0},
+    {"SWAPCZ",      "CZSWAP",      IC_GATE2, G2_CZSWAP,      0},
+    {"SQRT_XX",     "SQRT_XX",     IC_GATE2, G2_SQRT_XX,     0},
+    {"SQRT_XX_DAG", "SQRT_XX_DAG", IC_GATE2, G2_SQRT_XX_DAG, 0},
+    {"SQRT_YY",     "SQRT_YY",     IC_GATE2, G2_SQRT_YY,     0},
+    {"SQRT_YY_DAG", "SQRT_YY_DAG", IC_GATE2, G2_SQRT_YY_DAG, 0},
+    {"SQRT_ZZ",     "SQRT_ZZ",     IC_GATE2, G2_SQRT_ZZ,     0},
+    {"SQRT_ZZ_DAG", "SQRT_ZZ_DAG", IC_GATE2, G2_SQRT_ZZ_DAG, 0},
+
+    /* -- measurement and reset ---------------------------------------- */
+    {"M",   "M",   IC_MEASURE, BASIS_Z, 0},
+    {"MZ",  "M",   IC_MEASURE, BASIS_Z, 0},
+    {"MX",  "MX",  IC_MEASURE, BASIS_X, 0},
+    {"MY",  "MY",  IC_MEASURE, BASIS_Y, 0},
+    {"R",   "R",   IC_RESET,   BASIS_Z, 0},
+    {"RZ",  "R",   IC_RESET,   BASIS_Z, 0},
+    {"RX",  "RX",  IC_RESET,   BASIS_X, 0},
+    {"RY",  "RY",  IC_RESET,   BASIS_Y, 0},
+    {"MR",  "MR",  IC_MEASURE, BASIS_Z, 1},
+    {"MRZ", "MR",  IC_MEASURE, BASIS_Z, 1},
+    {"MRX", "MRX", IC_MEASURE, BASIS_X, 1},
+    {"MRY", "MRY", IC_MEASURE, BASIS_Y, 1},
+
+    /* -- noise --------------------------------------------------------- */
+    {"X_ERROR",         "X_ERROR",         IC_NOISE1, PF_OP_X_ERROR,     0},
+    {"Y_ERROR",         "Y_ERROR",         IC_NOISE1, PF_OP_Y_ERROR,     0},
+    {"Z_ERROR",         "Z_ERROR",         IC_NOISE1, PF_OP_Z_ERROR,     0},
+    {"DEPOLARIZE1",     "DEPOLARIZE1",     IC_NOISE1, PF_OP_DEPOLARIZE1, 0},
+    {"DEPOLARIZE2",     "DEPOLARIZE2",     IC_NOISE2, PF_OP_DEPOLARIZE2, 0},
+    {"PAULI_CHANNEL_1", "PAULI_CHANNEL_1", IC_PC1,    0,                 0},
+    {"PAULI_CHANNEL_2", "PAULI_CHANNEL_2", IC_PC2,    0,                 0},
+
+    /* -- annotations and control --------------------------------------- */
+    {"DETECTOR",           "DETECTOR",           IC_DETECTOR,     0, 0},
+    {"OBSERVABLE_INCLUDE", "OBSERVABLE_INCLUDE", IC_OBSERVABLE,   0, 0},
+    {"QUBIT_COORDS",       "QUBIT_COORDS",       IC_QUBIT_COORDS, 0, 0},
+    {"SHIFT_COORDS",       "SHIFT_COORDS",       IC_SHIFT_COORDS, 0, 0},
+    {"TICK",               "TICK",               IC_TICK,         0, 0},
+    {"MPAD",               "MPAD",               IC_MPAD,         0, 0},
+    {"REPEAT",             "REPEAT",             IC_REPEAT,       0, 0},
+
+    /* -- recognised but deliberately refused ---------------------------
+     * These need measurement of arbitrary Pauli products, heralded
+     * outcomes, or correlated-error decomposition, none of which the
+     * Pauli-frame lowering can express.  Naming them here lets the error
+     * message say so instead of "unknown instruction". */
+    {"MPP",                      "MPP",                      IC_REJECT, 0, 0},
+    {"SPP",                      "SPP",                      IC_REJECT, 0, 0},
+    {"SPP_DAG",                  "SPP_DAG",                  IC_REJECT, 0, 0},
+    {"E",                        "E",                        IC_REJECT, 0, 0},
+    {"CORRELATED_ERROR",         "CORRELATED_ERROR",         IC_REJECT, 0, 0},
+    {"ELSE_CORRELATED_ERROR",    "ELSE_CORRELATED_ERROR",    IC_REJECT, 0, 0},
+    {"HERALDED_ERASE",           "HERALDED_ERASE",           IC_REJECT, 0, 0},
+    {"HERALDED_PAULI_CHANNEL_1", "HERALDED_PAULI_CHANNEL_1", IC_REJECT, 0, 0},
+    {"II",                       "II",                       IC_REJECT, 0, 0},
+    {"II_ERROR",                 "II_ERROR",                 IC_REJECT, 0, 0},
+};
+
+static const size_t ST_NUM_INSTS = sizeof(ST_INSTS) / sizeof(ST_INSTS[0]);
+
+static const st_inst_def_t* st_lookup(const char* upper_name) {
+    for (size_t i = 0; i < ST_NUM_INSTS; i++)
+        if (strcmp(ST_INSTS[i].alias, upper_name) == 0) return &ST_INSTS[i];
+    return NULL;
+}
+
+/* ================================================================== */
+/*  Parse tree                                                         */
+/* ================================================================== */
+
+typedef enum { TT_QUBIT = 0, TT_REC = 1, TT_PAD = 2 } st_targ_kind_t;
+
+typedef struct {
+    uint8_t  kind;      /* st_targ_kind_t                                */
+    uint8_t  inverted;  /* stim '!' prefix                               */
+    uint32_t value;     /* qubit index | rec lookback k | pad literal     */
+} st_targ_t;
+
+struct st_block;
+
+typedef struct {
+    const st_inst_def_t* def;
+    char*      tag;      /* raw text between [ and ], or NULL            */
+    double*    args;
+    size_t     nargs;
+    st_targ_t* targs;
+    size_t     ntargs;
+    size_t     line;     /* 1-based source line                           */
+    uint64_t   repeat_count;
+    struct st_block* body;   /* REPEAT only                               */
+} st_inst_t;
+
+typedef struct st_block {
+    st_inst_t* v;
+    size_t     n, cap;
+} st_block_t;
+
+static void st_block_free(st_block_t* b);
+
+static void st_inst_release(st_inst_t* in) {
+    free(in->tag);
+    free(in->args);
+    free(in->targs);
+    if (in->body) st_block_free(in->body);
+}
+
+static void st_block_free(st_block_t* b) {
+    if (!b) return;
+    for (size_t i = 0; i < b->n; i++) st_inst_release(&b->v[i]);
+    free(b->v);
+    free(b);
+}
+
+static st_block_t* st_block_new(void) {
+    return (st_block_t*)calloc(1, sizeof(st_block_t));
+}
+
+static st_inst_t* st_block_push(st_block_t* b) {
+    ST_GROW(b->v, b->cap, b->n + 1, st_inst_t, return NULL);
+    st_inst_t* in = &b->v[b->n++];
+    memset(in, 0, sizeof(*in));
+    return in;
+}
+
+/* ================================================================== */
+/*  Circuit                                                            */
+/* ================================================================== */
+
+typedef struct { uint32_t* v; size_t n, cap; } st_u32vec_t;
+typedef struct { double* v; size_t n; uint8_t declared; } st_coord_t;
+
+struct moonlab_stim_circuit {
+    st_block_t* root;
+
+    size_t num_qubits;
+    size_t num_ticks;
+
+    /* Lowered Pauli-frame program. */
+    pf_circuit_op_t* ops;
+    size_t           num_ops;
+    double*          chan;
+    size_t           num_chan;
+
+    /* Measurement record (MPAD entries included). */
+    size_t    num_records;
+    size_t    num_pf_meas;
+    uint8_t*  rec_inverted;   /* stim '!'                                 */
+    uint8_t*  rec_value;      /* literal value of an MPAD record           */
+    uint32_t* rec_pf;         /* record -> pf measurement, or ST_REC_NONE  */
+
+    /* Detectors: CSR over record indices, plus a CSR of coordinates. */
+    size_t    num_detectors;
+    size_t*   det_off;
+    uint32_t* det_idx;
+    size_t    num_det_idx;
+    size_t*   det_coff;
+    double*   det_cval;
+
+    /* Observables: CSR over record indices. */
+    size_t    num_observables;
+    size_t*   obs_off;
+    uint32_t* obs_idx;
+    size_t    num_obs_idx;
+
+    /* Qubit coordinates: CSR over qubit index. */
+    size_t*   qc_off;
+    double*   qc_val;
+};
+
+/* ================================================================== */
+/*  Walk context                                                       */
+/* ================================================================== */
+
+typedef struct {
+    pf_circuit_op_t* ops;  size_t nops,  cap_ops;
+    double*          chan; size_t nchan, cap_chan;
+
+    uint8_t*  rec_inv; size_t cap_inv;
+    uint8_t*  rec_val; size_t cap_val;
+    uint32_t* rec_pf;  size_t cap_pf;
+    size_t    nrec, npf;
+
+    size_t*   det_off;  size_t cap_doff;
+    uint32_t* det_idx;  size_t ndetidx, cap_didx;
+    size_t    ndet;
+    size_t*   det_coff; size_t cap_dcoff;
+    double*   det_cval; size_t ndcval, cap_dcval;
+
+    st_u32vec_t* obs; size_t nobs, cap_obs;
+
+    st_coord_t* qc; size_t cap_qc;
+
+    double* shift; size_t nshift, cap_shift;
+
+    size_t num_qubits;
+    size_t nticks;
+
+    moonlab_stim_error_t* err;
+} st_ctx_t;
+
+static void st_ctx_release(st_ctx_t* c) {
+    free(c->ops);
+    free(c->chan);
+    free(c->rec_inv);
+    free(c->rec_val);
+    free(c->rec_pf);
+    free(c->det_off);
+    free(c->det_idx);
+    free(c->det_coff);
+    free(c->det_cval);
+    for (size_t i = 0; i < c->nobs; i++) free(c->obs[i].v);
+    free(c->obs);
+    for (size_t i = 0; i < c->cap_qc; i++) free(c->qc[i].v);
+    free(c->qc);
+    free(c->shift);
+}
+
+static int st_oom(st_ctx_t* c, size_t line) {
+    st_fail(c->err, MOONLAB_STIM_ERR_OOM, line, "out of memory");
+    return -1;
+}
+
+static void st_touch_qubit(st_ctx_t* c, uint32_t q) {
+    if ((size_t)q + 1 > c->num_qubits) c->num_qubits = (size_t)q + 1;
+}
+
+static int st_emit_op(st_ctx_t* c, size_t line, uint8_t kind,
+                      uint32_t q0, uint32_t q1, double p) {
+    if (c->nops >= ST_MAX_OPS) {
+        st_fail(c->err, MOONLAB_STIM_ERR_OVERFLOW, line,
+                "circuit expands to more than %zu operations",
+                (size_t)ST_MAX_OPS);
+        return -1;
+    }
+    ST_GROW(c->ops, c->cap_ops, c->nops + 1, pf_circuit_op_t,
+            return st_oom(c, line));
+    pf_circuit_op_t* op = &c->ops[c->nops++];
+    /* Zero the whole struct, not just the named fields: pf_circuit_op_t has
+     * padding after `kind` and after `q1`, and leaving it indeterminate makes
+     * a lowered op list byte-compare unstable and trips MemorySanitizer.  The
+     * sampler only reads the named fields, so this costs nothing and lets
+     * callers memcmp or hash a lowered circuit. */
+    memset(op, 0, sizeof(*op));
+    op->kind = kind;
+    op->q0   = q0;
+    op->q1   = q1;
+    op->p    = p;
+    return 0;
+}
+
+static int st_emit_decomp(st_ctx_t* c, size_t line, const st_decomp_t* d,
+                          uint32_t q0, uint32_t q1) {
+    for (uint8_t i = 0; i < d->n; i++) {
+        const st_step_t* s = &d->s[i];
+        const uint32_t a = s->a ? q1 : q0;
+        const uint32_t b = s->b ? q1 : q0;
+        if (st_emit_op(c, line, s->kind, a, b, 0.0)) return -1;
+    }
+    return 0;
+}
+
+/* Append one measurement record.  Returns its index, or (size_t)-1. */
+static size_t st_add_record(st_ctx_t* c, size_t line, int is_pad,
+                            uint8_t pad_value, uint8_t inverted) {
+    if (c->nrec >= UINT32_MAX) {
+        st_fail(c->err, MOONLAB_STIM_ERR_OVERFLOW, line,
+                "measurement record exceeds %u entries", UINT32_MAX);
+        return (size_t)-1;
+    }
+    ST_GROW(c->rec_inv, c->cap_inv, c->nrec + 1, uint8_t,
+            st_oom(c, line); return (size_t)-1);
+    ST_GROW(c->rec_val, c->cap_val, c->nrec + 1, uint8_t,
+            st_oom(c, line); return (size_t)-1);
+    ST_GROW(c->rec_pf, c->cap_pf, c->nrec + 1, uint32_t,
+            st_oom(c, line); return (size_t)-1);
+    const size_t idx = c->nrec++;
+    c->rec_inv[idx] = inverted ? 1u : 0u;
+    c->rec_val[idx] = pad_value ? 1u : 0u;
+    c->rec_pf[idx]  = is_pad ? ST_REC_NONE : (uint32_t)c->npf;
+    if (!is_pad) c->npf++;
+    return idx;
+}
+
+/* Resolve rec[-k] against the record length at the point of use. */
+static int st_resolve_rec(st_ctx_t* c, size_t line, uint32_t k, uint32_t* out) {
+    if (k == 0 || (size_t)k > c->nrec) {
+        st_fail(c->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                "rec[-%u] refers past the start of a %zu entry measurement "
+                "record", k, c->nrec);
+        return -1;
+    }
+    *out = (uint32_t)(c->nrec - (size_t)k);
+    return 0;
+}
+
+/* ================================================================== */
+/*  Tokenising                                                         */
+/* ================================================================== */
+
+static int st_is_name_start(int ch) { return isalpha((unsigned char)ch); }
+static int st_is_name_char(int ch) {
+    return isalnum((unsigned char)ch) || ch == '_';
+}
+static int st_is_space(int ch) { return ch == ' ' || ch == '\t'; }
+
+typedef struct {
+    const char* p;
+    const char* end;
+    size_t      line;
+    moonlab_stim_error_t* err;
+} st_cursor_t;
+
+static void st_skip_space(st_cursor_t* cur) {
+    while (cur->p < cur->end && st_is_space(*cur->p)) cur->p++;
+}
+
+/* Copy up to `n` chars starting at `s` into a bounded buffer, so the token
+ * can be quoted verbatim in an error message. */
+static void st_quote(char* dst, size_t cap, const char* s, size_t n) {
+    if (cap == 0) return;
+    if (n >= cap) n = cap - 1;
+    memcpy(dst, s, n);
+    dst[n] = '\0';
+}
+
+/* ------------------------------------------------------------------ */
+/*  Target parsing                                                     */
+/* ------------------------------------------------------------------ */
+
+static int st_parse_target(st_cursor_t* cur, const char* name,
+                           const st_inst_def_t* def, st_targ_t* out) {
+    const char* tok = cur->p;
+    const char* e   = tok;
+    while (e < cur->end && !st_is_space(*e) && *e != '{') e++;
+    const size_t toklen = (size_t)(e - tok);
+    char quoted[64];
+    st_quote(quoted, sizeof(quoted), tok, toklen);
+
+    const char* q = tok;
+    uint8_t inverted = 0;
+    if (q < e && *q == '!') { inverted = 1; q++; }
+
+    memset(out, 0, sizeof(*out));
+    out->inverted = inverted;
+
+    if (inverted && def->cls != IC_MEASURE && def->cls != IC_MPAD) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "inverted target '%s' on '%s': the '!' prefix is only "
+                "meaningful on a measurement target", quoted, name);
+        return -1;
+    }
+    if (q < e && *q == '*') {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "combiner target '*' on '%s' is not supported", name);
+        return -1;
+    }
+    if ((size_t)(e - q) > 6 && strncmp(q, "sweep[", 6) == 0) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "sweep-bit target '%s' on '%s' is not supported",
+                quoted, name);
+        return -1;
+    }
+    if ((size_t)(e - q) > 4 && strncmp(q, "rec[", 4) == 0) {
+        const char* r = q + 4;
+        if (r >= e || *r != '-') {
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "malformed measurement-record target '%s' on '%s': "
+                    "expected rec[-k]", quoted, name);
+            return -1;
+        }
+        r++;
+        if (r >= e || !isdigit((unsigned char)*r)) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "malformed measurement-record target '%s' on '%s'",
+                    quoted, name);
+            return -1;
+        }
+        unsigned long long k = 0;
+        while (r < e && isdigit((unsigned char)*r)) {
+            k = k * 10ull + (unsigned long long)(*r - '0');
+            if (k > 0xFFFFFFFFull) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_OVERFLOW, cur->line,
+                        "measurement-record lookback in '%s' is too large",
+                        quoted);
+                return -1;
+            }
+            r++;
+        }
+        if (r >= e || *r != ']') {
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "malformed measurement-record target '%s' on '%s'",
+                    quoted, name);
+            return -1;
+        }
+        r++;
+        if (r != e) {
+            if (*r == '*')
+                st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                        "combiner target '%s' on '%s' is not supported",
+                        quoted, name);
+            else
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                        "malformed measurement-record target '%s' on '%s'",
+                        quoted, name);
+            return -1;
+        }
+        out->kind  = TT_REC;
+        out->value = (uint32_t)k;
+        cur->p = e;
+        return 0;
+    }
+    if (q < e) {
+        const int up = toupper((unsigned char)*q);
+        if ((up == 'X' || up == 'Y' || up == 'Z') && q + 1 < e &&
+            isdigit((unsigned char)q[1])) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                    "Pauli target '%s' is not accepted by '%s'", quoted, name);
+            return -1;
+        }
+    }
+    if (q < e && isdigit((unsigned char)*q)) {
+        unsigned long long v = 0;
+        const char* r = q;
+        while (r < e && isdigit((unsigned char)*r)) {
+            v = v * 10ull + (unsigned long long)(*r - '0');
+            if (v > 0xFFFFFFFFull) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_OVERFLOW, cur->line,
+                        "target '%s' on '%s' exceeds the supported range",
+                        quoted, name);
+                return -1;
+            }
+            r++;
+        }
+        if (r != e) {
+            if (*r == '*')
+                st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                        "combiner target '%s' on '%s' is not supported",
+                        quoted, name);
+            else
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                        "malformed target '%s' on '%s'", quoted, name);
+            return -1;
+        }
+        if (v > ST_MAX_QUBIT && def->cls != IC_REPEAT) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_OVERFLOW, cur->line,
+                    "qubit index %llu in '%s' exceeds the supported maximum "
+                    "of %u", v, name, ST_MAX_QUBIT);
+            return -1;
+        }
+        out->kind  = TT_QUBIT;
+        out->value = (uint32_t)v;
+        cur->p = e;
+        return 0;
+    }
+
+    st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+            "malformed target '%s' on '%s'", quoted, name);
+    return -1;
+}
+
+/* ================================================================== */
+/*  Instruction validation                                             */
+/* ================================================================== */
+
+/* This is the whole "no silent skips" contract: anything the lowering
+ * cannot express fails here, naming the instruction and the token. */
+static int st_validate(st_inst_t* in, const char* name, st_cursor_t* cur) {
+    const st_inst_def_t* def = in->def;
+    const size_t line = in->line;
+
+    size_t want_min = 0, want_max = 0;
+    int    prob_args = 0;
+    switch (def->cls) {
+        case IC_GATE1: case IC_GATE2: case IC_RESET:
+        case IC_TICK:  case IC_MPAD:  case IC_REPEAT:
+            want_min = want_max = 0; break;
+        case IC_MEASURE:
+            want_min = 0; want_max = 1; prob_args = 1; break;
+        case IC_NOISE1: case IC_NOISE2:
+            want_min = want_max = 1; prob_args = 1; break;
+        case IC_PC1: want_min = want_max = 3;  prob_args = 1; break;
+        case IC_PC2: want_min = want_max = 15; prob_args = 1; break;
+        case IC_OBSERVABLE: want_min = want_max = 1; break;
+        default: want_min = 0; want_max = (size_t)-1; break;
+    }
+    if (in->nargs < want_min || in->nargs > want_max) {
+        if (want_min == want_max)
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                    "'%s' takes exactly %zu parens argument%s, got %zu",
+                    name, want_min, want_min == 1 ? "" : "s", in->nargs);
+        else
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                    "'%s' takes at most %zu parens argument%s, got %zu",
+                    name, want_max, want_max == 1 ? "" : "s", in->nargs);
+        return -1;
+    }
+    if (prob_args) {
+        double sum = 0.0;
+        for (size_t i = 0; i < in->nargs; i++) {
+            if (!(in->args[i] >= 0.0 && in->args[i] <= 1.0)) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                        "'%s' probability argument %zu is %g, outside [0, 1]",
+                        name, i, in->args[i]);
+                return -1;
+            }
+            sum += in->args[i];
+        }
+        if ((def->cls == IC_PC1 || def->cls == IC_PC2) && sum > 1.0 + 1e-9) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                    "'%s' probabilities sum to %g, which exceeds 1", name, sum);
+            return -1;
+        }
+    }
+    if (def->cls == IC_OBSERVABLE) {
+        const double v = in->args[0];
+        if (!(v >= 0.0) || v != floor(v) || v > (double)ST_MAX_OBSERVABLE) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                    "'%s' index argument %g is not a valid observable index",
+                    name, v);
+            return -1;
+        }
+    }
+
+    const int wants_rec = (def->cls == IC_DETECTOR || def->cls == IC_OBSERVABLE);
+    for (size_t i = 0; i < in->ntargs; i++) {
+        const st_targ_t* t = &in->targs[i];
+        if (wants_rec && t->kind != TT_REC) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, line,
+                    "'%s' only accepts rec[-k] targets, got '%u'",
+                    name, t->value);
+            return -1;
+        }
+        if (!wants_rec && t->kind == TT_REC) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, line,
+                    "'%s' does not accept the measurement-record target "
+                    "'rec[-%u]'", name, t->value);
+            return -1;
+        }
+    }
+
+    switch (def->cls) {
+        case IC_GATE2: case IC_NOISE2: case IC_PC2:
+            if (in->ntargs % 2u != 0) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'%s' consumes targets in pairs but got %zu of them",
+                        name, in->ntargs);
+                return -1;
+            }
+            for (size_t i = 0; i + 1 < in->ntargs; i += 2) {
+                if (in->targs[i].value == in->targs[i + 1].value) {
+                    st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                            "'%s' pair %zu targets qubit %u twice",
+                            name, i / 2, in->targs[i].value);
+                    return -1;
+                }
+            }
+            break;
+        case IC_TICK:
+            if (in->ntargs != 0) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'TICK' takes no targets, got %zu", in->ntargs);
+                return -1;
+            }
+            break;
+        case IC_SHIFT_COORDS:
+            if (in->ntargs != 0) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'SHIFT_COORDS' takes no targets, got %zu",
+                        in->ntargs);
+                return -1;
+            }
+            break;
+        case IC_QUBIT_COORDS:
+            if (in->nargs == 0) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'QUBIT_COORDS' needs at least one coordinate");
+                return -1;
+            }
+            if (in->ntargs == 0) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'QUBIT_COORDS' needs at least one qubit target");
+                return -1;
+            }
+            break;
+        case IC_MPAD:
+            for (size_t i = 0; i < in->ntargs; i++) {
+                if (in->targs[i].value > 1u) {
+                    st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                            "'MPAD' targets must be 0 or 1, got '%u'",
+                            in->targs[i].value);
+                    return -1;
+                }
+                in->targs[i].kind = TT_PAD;
+            }
+            break;
+        case IC_REPEAT:
+            if (in->ntargs != 1) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, line,
+                        "'REPEAT' takes exactly one repetition count, got %zu",
+                        in->ntargs);
+                return -1;
+            }
+            if (in->targs[0].value < 1u) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, line,
+                        "'REPEAT' count must be at least 1");
+                return -1;
+            }
+            in->repeat_count = in->targs[0].value;
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+
+/* ================================================================== */
+/*  Line parsing                                                       */
+/* ================================================================== */
+
+static int st_parse_line(st_cursor_t* cur, st_block_t* blk,
+                         int* closed_block, st_inst_t** opened) {
+    *closed_block = 0;
+    *opened       = NULL;
+
+    st_skip_space(cur);
+    if (cur->p >= cur->end) return 0;   /* blank or comment-only line */
+
+    if (*cur->p == '}') {
+        cur->p++;
+        st_skip_space(cur);
+        if (cur->p != cur->end) {
+            char quoted[64];
+            st_quote(quoted, sizeof(quoted), cur->p,
+                     (size_t)(cur->end - cur->p));
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "trailing text '%s' after block close '}'", quoted);
+            return -1;
+        }
+        *closed_block = 1;
+        return 0;
+    }
+
+    if (!st_is_name_start(*cur->p)) {
+        char quoted[64];
+        st_quote(quoted, sizeof(quoted), cur->p, (size_t)(cur->end - cur->p));
+        st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                "expected an instruction name, found '%s'", quoted);
+        return -1;
+    }
+    const char* nstart = cur->p;
+    while (cur->p < cur->end && st_is_name_char(*cur->p)) cur->p++;
+    const size_t nlen = (size_t)(cur->p - nstart);
+    char name[64];
+    if (nlen >= sizeof(name)) {
+        char quoted[64];
+        st_quote(quoted, sizeof(quoted), nstart, nlen);
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "unknown instruction '%s'", quoted);
+        return -1;
+    }
+    for (size_t i = 0; i < nlen; i++)
+        name[i] = (char)toupper((unsigned char)nstart[i]);
+    name[nlen] = '\0';
+
+    const st_inst_def_t* def = st_lookup(name);
+    if (!def) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "unknown instruction '%s'", name);
+        return -1;
+    }
+    if (def->cls == IC_REJECT) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "instruction '%s' is not supported by the moonlab Stim "
+                "reader", name);
+        return -1;
+    }
+
+    st_inst_t* in = st_block_push(blk);
+    if (!in) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_OOM, cur->line, "out of memory");
+        return -1;
+    }
+    in->def  = def;
+    in->line = cur->line;
+
+    /* ---- optional tag ---------------------------------------------- */
+    if (cur->p < cur->end && *cur->p == '[') {
+        const char* ts = ++cur->p;
+        while (cur->p < cur->end && *cur->p != ']') cur->p++;
+        if (cur->p >= cur->end) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "unterminated tag on '%s'", name);
+            return -1;
+        }
+        const size_t tlen = (size_t)(cur->p - ts);
+        in->tag = (char*)malloc(tlen + 1);
+        if (!in->tag) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_OOM, cur->line, "out of memory");
+            return -1;
+        }
+        memcpy(in->tag, ts, tlen);
+        in->tag[tlen] = '\0';
+        cur->p++;   /* past ']' */
+    }
+
+    /* ---- optional parens arguments ---------------------------------- */
+    st_skip_space(cur);
+    if (cur->p < cur->end && *cur->p == '(') {
+        cur->p++;
+        size_t cap = 0;
+        for (;;) {
+            while (cur->p < cur->end &&
+                   (st_is_space(*cur->p) || *cur->p == ',')) cur->p++;
+            if (cur->p < cur->end && *cur->p == ')') { cur->p++; break; }
+            if (cur->p >= cur->end) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                        "unterminated argument list on '%s'", name);
+                return -1;
+            }
+            char* endp = NULL;
+            const double v = strtod(cur->p, &endp);
+            if (endp == cur->p || endp > cur->end) {
+                char quoted[64];
+                st_quote(quoted, sizeof(quoted), cur->p,
+                         (size_t)(cur->end - cur->p));
+                st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                        "malformed argument '%s' on '%s'", quoted, name);
+                return -1;
+            }
+            if (!isfinite(v)) {
+                st_fail(cur->err, MOONLAB_STIM_ERR_BAD_ARG, cur->line,
+                        "non-finite argument on '%s'", name);
+                return -1;
+            }
+            ST_GROW(in->args, cap, in->nargs + 1, double,
+                    st_fail(cur->err, MOONLAB_STIM_ERR_OOM, cur->line,
+                            "out of memory");
+                    return -1);
+            in->args[in->nargs++] = v;
+            cur->p = endp;
+        }
+    }
+
+    /* ---- targets ----------------------------------------------------- */
+    size_t tcap = 0;
+    for (;;) {
+        st_skip_space(cur);
+        if (cur->p >= cur->end || *cur->p == '{') break;
+        st_targ_t t;
+        if (st_parse_target(cur, name, def, &t) != 0) return -1;
+        ST_GROW(in->targs, tcap, in->ntargs + 1, st_targ_t,
+                st_fail(cur->err, MOONLAB_STIM_ERR_OOM, cur->line,
+                        "out of memory");
+                return -1);
+        in->targs[in->ntargs++] = t;
+    }
+
+    /* ---- block open --------------------------------------------------- */
+    int opens = 0;
+    if (cur->p < cur->end && *cur->p == '{') {
+        cur->p++;
+        st_skip_space(cur);
+        if (cur->p != cur->end) {
+            char quoted[64];
+            st_quote(quoted, sizeof(quoted), cur->p,
+                     (size_t)(cur->end - cur->p));
+            st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                    "trailing text '%s' after block open '{'", quoted);
+            return -1;
+        }
+        opens = 1;
+    }
+    if (opens && def->cls != IC_REPEAT) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_UNSUPPORTED, cur->line,
+                "instruction '%s' cannot open a block; only REPEAT can", name);
+        return -1;
+    }
+    if (!opens && def->cls == IC_REPEAT) {
+        st_fail(cur->err, MOONLAB_STIM_ERR_SYNTAX, cur->line,
+                "'REPEAT' must be followed by '{'");
+        return -1;
+    }
+
+    if (st_validate(in, name, cur) != 0) return -1;
+
+    if (opens) {
+        in->body = st_block_new();
+        if (!in->body) {
+            st_fail(cur->err, MOONLAB_STIM_ERR_OOM, cur->line, "out of memory");
+            return -1;
+        }
+        *opened = in;
+    }
+    return 0;
+}
+
+/* ================================================================== */
+/*  Walk: lowering + derived tables                                    */
+/* ================================================================== */
+
+static int st_walk_block(st_ctx_t* c, const st_block_t* b);
+
+static int st_lower_measure(st_ctx_t* c, const st_inst_t* in) {
+    const st_inst_def_t* def = in->def;
+    const double p = (in->nargs == 1) ? in->args[0] : 0.0;
+    const uint8_t mk = (p > 0.0) ? (uint8_t)PF_OP_MEASURE_NOISY
+                                 : (uint8_t)PF_OP_MEASURE;
+    for (size_t i = 0; i < in->ntargs; i++) {
+        const uint32_t q = in->targs[i].value;
+        st_touch_qubit(c, q);
+        /* Rotate the measured basis onto Z: the circuit measures
+         * G^dag Z G, so G = H gives X and G = H S_DAG gives Y. */
+        if (def->a == BASIS_X) {
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+        } else if (def->a == BASIS_Y) {
+            if (st_emit_op(c, in->line, PF_OP_S_DAG, q, q, 0.0)) return -1;
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+        }
+        if (st_emit_op(c, in->line, mk, q, q, p)) return -1;
+        if (st_add_record(c, in->line, 0, 0, in->targs[i].inverted)
+            == (size_t)-1) return -1;
+        /* MR family: destructive reset, which must not create a record. */
+        if (def->reset) {
+            if (st_emit_op(c, in->line, PF_OP_RESET, q, q, 0.0)) return -1;
+        }
+        /* Rotate back.  For the MR family this also turns the |0> the reset
+         * prepared into the basis state the instruction promises. */
+        if (def->a == BASIS_X) {
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+        } else if (def->a == BASIS_Y) {
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+            if (st_emit_op(c, in->line, PF_OP_S, q, q, 0.0)) return -1;
+        }
+    }
+    return 0;
+}
+
+static int st_lower_reset(st_ctx_t* c, const st_inst_t* in) {
+    for (size_t i = 0; i < in->ntargs; i++) {
+        const uint32_t q = in->targs[i].value;
+        st_touch_qubit(c, q);
+        if (st_emit_op(c, in->line, PF_OP_RESET, q, q, 0.0)) return -1;
+        if (in->def->a == BASIS_X) {
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+        } else if (in->def->a == BASIS_Y) {
+            if (st_emit_op(c, in->line, PF_OP_H, q, q, 0.0)) return -1;
+            if (st_emit_op(c, in->line, PF_OP_S, q, q, 0.0)) return -1;
+        }
+    }
+    return 0;
+}
+
+static int st_push_chan(st_ctx_t* c, size_t line, const double* v, size_t n,
+                        size_t* base_out) {
+    ST_GROW(c->chan, c->cap_chan, c->nchan + n, double,
+            return st_oom(c, line));
+    *base_out = c->nchan;
+    memcpy(c->chan + c->nchan, v, n * sizeof(double));
+    c->nchan += n;
+    return 0;
+}
+
+static int st_lower_detector(st_ctx_t* c, const st_inst_t* in) {
+    ST_GROW(c->det_off, c->cap_doff, c->ndet + 2, size_t,
+            return st_oom(c, in->line));
+    ST_GROW(c->det_coff, c->cap_dcoff, c->ndet + 2, size_t,
+            return st_oom(c, in->line));
+    if (c->ndet == 0) { c->det_off[0] = 0; c->det_coff[0] = 0; }
+
+    /* A record may legitimately appear twice in one DETECTOR, in which case
+     * it cancels.  Keep the literal list: the parity is an XOR anyway, and
+     * preserving it keeps the round-tripped text exact. */
+    for (size_t i = 0; i < in->ntargs; i++) {
+        uint32_t rec;
+        if (st_resolve_rec(c, in->line, in->targs[i].value, &rec)) return -1;
+        ST_GROW(c->det_idx, c->cap_didx, c->ndetidx + 1, uint32_t,
+                return st_oom(c, in->line));
+        c->det_idx[c->ndetidx++] = rec;
+    }
+    for (size_t i = 0; i < in->nargs; i++) {
+        const double off = (i < c->nshift) ? c->shift[i] : 0.0;
+        ST_GROW(c->det_cval, c->cap_dcval, c->ndcval + 1, double,
+                return st_oom(c, in->line));
+        c->det_cval[c->ndcval++] = in->args[i] + off;
+    }
+    c->ndet++;
+    c->det_off[c->ndet]  = c->ndetidx;
+    c->det_coff[c->ndet] = c->ndcval;
+    return 0;
+}
+
+static int st_lower_observable(st_ctx_t* c, const st_inst_t* in) {
+    const size_t idx = (size_t)in->args[0];
+    if (idx + 1 > c->nobs) {
+        ST_GROW(c->obs, c->cap_obs, idx + 1, st_u32vec_t,
+                return st_oom(c, in->line));
+        for (size_t i = c->nobs; i <= idx; i++) {
+            c->obs[i].v = NULL; c->obs[i].n = 0; c->obs[i].cap = 0;
+        }
+        c->nobs = idx + 1;
+    }
+    /* OBSERVABLE_INCLUDE(k) may appear many times: the observable is the
+     * XOR over the union of every contribution, so append, never replace. */
+    st_u32vec_t* v = &c->obs[idx];
+    for (size_t i = 0; i < in->ntargs; i++) {
+        uint32_t rec;
+        if (st_resolve_rec(c, in->line, in->targs[i].value, &rec)) return -1;
+        ST_GROW(v->v, v->cap, v->n + 1, uint32_t, return st_oom(c, in->line));
+        v->v[v->n++] = rec;
+    }
+    return 0;
+}
+
+static int st_lower_qubit_coords(st_ctx_t* c, const st_inst_t* in) {
+    for (size_t t = 0; t < in->ntargs; t++) {
+        const uint32_t q = in->targs[t].value;
+        st_touch_qubit(c, q);
+        if ((size_t)q + 1 > c->cap_qc) {
+            const size_t old = c->cap_qc;
+            ST_GROW(c->qc, c->cap_qc, (size_t)q + 1, st_coord_t,
+                    return st_oom(c, in->line));
+            memset(c->qc + old, 0, (c->cap_qc - old) * sizeof(st_coord_t));
+        }
+        if (c->qc[q].declared) {
+            st_fail(c->err, MOONLAB_STIM_ERR_BAD_ARG, in->line,
+                    "QUBIT_COORDS declared more than once for qubit %u", q);
+            return -1;
+        }
+        double* v = (double*)malloc(in->nargs * sizeof(double));
+        if (!v) return st_oom(c, in->line);
+        for (size_t i = 0; i < in->nargs; i++)
+            v[i] = in->args[i] + ((i < c->nshift) ? c->shift[i] : 0.0);
+        c->qc[q].v = v;
+        c->qc[q].n = in->nargs;
+        c->qc[q].declared = 1;
+    }
+    return 0;
+}
+
+static int st_walk_inst(st_ctx_t* c, const st_inst_t* in) {
+    const st_inst_def_t* def = in->def;
+    switch (def->cls) {
+        case IC_GATE1:
+            for (size_t i = 0; i < in->ntargs; i++) {
+                const uint32_t q = in->targs[i].value;
+                st_touch_qubit(c, q);
+                if (st_emit_decomp(c, in->line, &ST_G1[def->a], q, q))
+                    return -1;
+            }
+            return 0;
+        case IC_GATE2:
+            for (size_t i = 0; i + 1 < in->ntargs; i += 2) {
+                const uint32_t a = in->targs[i].value;
+                const uint32_t b = in->targs[i + 1].value;
+                st_touch_qubit(c, a);
+                st_touch_qubit(c, b);
+                if (st_emit_decomp(c, in->line, &ST_G2[def->a], a, b))
+                    return -1;
+            }
+            return 0;
+        case IC_MEASURE: return st_lower_measure(c, in);
+        case IC_RESET:   return st_lower_reset(c, in);
+        case IC_NOISE1:
+            for (size_t i = 0; i < in->ntargs; i++) {
+                const uint32_t q = in->targs[i].value;
+                st_touch_qubit(c, q);
+                if (st_emit_op(c, in->line, def->a, q, q, in->args[0]))
+                    return -1;
+            }
+            return 0;
+        case IC_NOISE2:
+            for (size_t i = 0; i + 1 < in->ntargs; i += 2) {
+                const uint32_t a = in->targs[i].value;
+                const uint32_t b = in->targs[i + 1].value;
+                st_touch_qubit(c, a);
+                st_touch_qubit(c, b);
+                if (st_emit_op(c, in->line, def->a, a, b, in->args[0]))
+                    return -1;
+            }
+            return 0;
+        case IC_PC1: {
+            if (in->ntargs == 0) return 0;
+            size_t base;
+            if (st_push_chan(c, in->line, in->args, 3, &base)) return -1;
+            for (size_t i = 0; i < in->ntargs; i++) {
+                const uint32_t q = in->targs[i].value;
+                st_touch_qubit(c, q);
+                if (st_emit_op(c, in->line, PF_OP_PAULI_CHANNEL_1, q, q,
+                               (double)base)) return -1;
+            }
+            return 0;
+        }
+        case IC_PC2: {
+            if (in->ntargs == 0) return 0;
+            size_t base;
+            if (st_push_chan(c, in->line, in->args, 15, &base)) return -1;
+            for (size_t i = 0; i + 1 < in->ntargs; i += 2) {
+                const uint32_t a = in->targs[i].value;
+                const uint32_t b = in->targs[i + 1].value;
+                st_touch_qubit(c, a);
+                st_touch_qubit(c, b);
+                if (st_emit_op(c, in->line, PF_OP_PAULI_CHANNEL_2, a, b,
+                               (double)base)) return -1;
+            }
+            return 0;
+        }
+        case IC_DETECTOR:     return st_lower_detector(c, in);
+        case IC_OBSERVABLE:   return st_lower_observable(c, in);
+        case IC_QUBIT_COORDS: return st_lower_qubit_coords(c, in);
+        case IC_SHIFT_COORDS:
+            if (in->nargs > c->nshift) {
+                const size_t old = c->nshift;
+                ST_GROW(c->shift, c->cap_shift, in->nargs, double,
+                        return st_oom(c, in->line));
+                for (size_t i = old; i < in->nargs; i++) c->shift[i] = 0.0;
+                c->nshift = in->nargs;
+            }
+            for (size_t i = 0; i < in->nargs; i++) c->shift[i] += in->args[i];
+            return 0;
+        case IC_TICK:
+            c->nticks++;
+            return 0;
+        case IC_MPAD:
+            /* An MPAD entry advances the measurement record without being a
+             * measurement: its value is the target literal, identical on
+             * every shot, so it never becomes a PF_OP_MEASURE. */
+            for (size_t i = 0; i < in->ntargs; i++)
+                if (st_add_record(c, in->line, 1, (uint8_t)in->targs[i].value,
+                                  in->targs[i].inverted) == (size_t)-1)
+                    return -1;
+            return 0;
+        case IC_REPEAT:
+            if (!in->body || in->body->n == 0) return 0;
+            for (uint64_t k = 0; k < in->repeat_count; k++) {
+                if (st_walk_block(c, in->body)) return -1;
+                if (c->nops + c->nrec + c->ndet + c->nticks >= ST_MAX_OPS) {
+                    st_fail(c->err, MOONLAB_STIM_ERR_OVERFLOW, in->line,
+                            "REPEAT %llu expands past the %zu instruction "
+                            "limit", (unsigned long long)in->repeat_count,
+                            (size_t)ST_MAX_OPS);
+                    return -1;
+                }
+            }
+            return 0;
+        default:
+            return 0;
+    }
+}
+
+static int st_walk_block(st_ctx_t* c, const st_block_t* b) {
+    for (size_t i = 0; i < b->n; i++)
+        if (st_walk_inst(c, &b->v[i])) return -1;
+    return 0;
+}
+
+/* ================================================================== */
+/*  Finalisation                                                       */
+/* ================================================================== */
+
+static int st_finalise(moonlab_stim_circuit_t* circ, st_ctx_t* c) {
+    circ->num_qubits = c->num_qubits;
+    circ->num_ticks  = c->nticks;
+
+    circ->ops      = c->ops;   c->ops  = NULL;
+    circ->num_ops  = c->nops;
+    circ->chan     = c->chan;  c->chan = NULL;
+    circ->num_chan = c->nchan;
+
+    circ->num_records  = c->nrec;
+    circ->num_pf_meas  = c->npf;
+    circ->rec_inverted = c->rec_inv; c->rec_inv = NULL;
+    circ->rec_value    = c->rec_val; c->rec_val = NULL;
+    circ->rec_pf       = c->rec_pf;  c->rec_pf  = NULL;
+
+    circ->num_detectors = c->ndet;
+    circ->num_det_idx   = c->ndetidx;
+    if (c->ndet > 0) {
+        circ->det_off  = c->det_off;  c->det_off  = NULL;
+        circ->det_idx  = c->det_idx;  c->det_idx  = NULL;
+        circ->det_coff = c->det_coff; c->det_coff = NULL;
+        circ->det_cval = c->det_cval; c->det_cval = NULL;
+    } else {
+        circ->det_off  = (size_t*)calloc(1, sizeof(size_t));
+        circ->det_coff = (size_t*)calloc(1, sizeof(size_t));
+        if (!circ->det_off || !circ->det_coff) return -1;
+    }
+
+    /* Flatten the per-index observable lists into one CSR.  Indices never
+     * mentioned still get an (empty) row, so numbering never shifts. */
+    circ->num_observables = c->nobs;
+    circ->obs_off = (size_t*)calloc(c->nobs + 1, sizeof(size_t));
+    if (!circ->obs_off) return -1;
+    size_t total = 0;
+    for (size_t i = 0; i < c->nobs; i++) total += c->obs[i].n;
+    circ->num_obs_idx = total;
+    circ->obs_idx = (uint32_t*)malloc((total ? total : 1) * sizeof(uint32_t));
+    if (!circ->obs_idx) return -1;
+    size_t w = 0;
+    for (size_t i = 0; i < c->nobs; i++) {
+        circ->obs_off[i] = w;
+        for (size_t k = 0; k < c->obs[i].n; k++)
+            circ->obs_idx[w++] = c->obs[i].v[k];
+    }
+    circ->obs_off[c->nobs] = w;
+
+    /* Qubit coordinates as a dense CSR over qubit index. */
+    circ->qc_off = (size_t*)calloc(circ->num_qubits + 1, sizeof(size_t));
+    if (!circ->qc_off) return -1;
+    size_t qtotal = 0;
+    for (size_t q = 0; q < circ->num_qubits && q < c->cap_qc; q++)
+        qtotal += c->qc[q].n;
+    circ->qc_val = (double*)malloc((qtotal ? qtotal : 1) * sizeof(double));
+    if (!circ->qc_val) return -1;
+    size_t qw = 0;
+    for (size_t q = 0; q < circ->num_qubits; q++) {
+        circ->qc_off[q] = qw;
+        if (q < c->cap_qc && c->qc[q].n) {
+            memcpy(circ->qc_val + qw, c->qc[q].v, c->qc[q].n * sizeof(double));
+            qw += c->qc[q].n;
+        }
+    }
+    circ->qc_off[circ->num_qubits] = qw;
+    return 0;
+}
+
+/* ================================================================== */
+/*  Public: parsing                                                    */
+/* ================================================================== */
+
+moonlab_stim_circuit_t* moonlab_stim_circuit_parse(const char* text,
+                                                   moonlab_stim_error_t* err) {
+    st_ok(err);
+    if (!text) {
+        st_fail(err, MOONLAB_STIM_ERR_BAD_ARG, 0, "circuit text is NULL");
+        return NULL;
+    }
+
+    st_block_t* root = st_block_new();
+    if (!root) {
+        st_fail(err, MOONLAB_STIM_ERR_OOM, 0, "out of memory");
+        return NULL;
+    }
+
+    /* Block stack; entry 0 is the root. */
+    st_block_t** stack = NULL;
+    size_t stack_n = 0, stack_cap = 0;
+    ST_GROW(stack, stack_cap, 1, st_block_t*,
+            st_block_free(root);
+            st_fail(err, MOONLAB_STIM_ERR_OOM, 0, "out of memory");
+            return NULL);
+    stack[stack_n++] = root;
+
+    st_cursor_t cur;
+    cur.err = err;
+    cur.p = NULL; cur.end = NULL; cur.line = 0;
+
+    size_t line_no = 0;
+    const char* p = text;
+    int failed = 0;
+
+    for (;;) {
+        line_no++;
+        const char* ls = p;
+        while (*p && *p != '\n') p++;
+        const char* le = p;
+        const int had_newline = (*p == '\n');
+        if (had_newline) p++;
+        if (le > ls && le[-1] == '\r') le--;
+
+        /* Strip the comment, respecting a bracketed tag. */
+        {
+            int in_tag = 0;
+            for (const char* s = ls; s < le; s++) {
+                if (*s == '[') in_tag = 1;
+                else if (*s == ']') in_tag = 0;
+                else if (*s == '#' && !in_tag) { le = s; break; }
+            }
+        }
+        while (le > ls && st_is_space(le[-1])) le--;
+
+        cur.p = ls; cur.end = le; cur.line = line_no;
+
+        int closed = 0;
+        st_inst_t* opened = NULL;
+        if (st_parse_line(&cur, stack[stack_n - 1], &closed, &opened) != 0) {
+            failed = 1;
+            break;
+        }
+        if (closed) {
+            if (stack_n <= 1) {
+                st_fail(err, MOONLAB_STIM_ERR_SYNTAX, line_no,
+                        "unmatched block close '}'");
+                failed = 1;
+                break;
+            }
+            stack_n--;
+        } else if (opened) {
+            if (stack_n + 1 > stack_cap) {
+                void* np = st_grow((void*)stack, &stack_cap, stack_n + 1,
+                                   sizeof(st_block_t*));
+                if (!np) {
+                    st_fail(err, MOONLAB_STIM_ERR_OOM, line_no,
+                            "out of memory");
+                    failed = 1;
+                    break;
+                }
+                stack = (st_block_t**)np;
+            }
+            stack[stack_n++] = opened->body;
+        }
+        if (!had_newline) break;
+    }
+
+    if (!failed && stack_n != 1) {
+        st_fail(err, MOONLAB_STIM_ERR_SYNTAX, line_no,
+                "%zu REPEAT block(s) left open at end of input", stack_n - 1);
+        failed = 1;
+    }
+    free(stack);
+    if (failed) { st_block_free(root); return NULL; }
+
+    /* ---- walk ---------------------------------------------------------- */
+    st_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.err = err;
+    if (st_walk_block(&ctx, root) != 0) {
+        st_ctx_release(&ctx);
+        st_block_free(root);
+        return NULL;
+    }
+
+    moonlab_stim_circuit_t* circ =
+        (moonlab_stim_circuit_t*)calloc(1, sizeof(*circ));
+    if (!circ || st_finalise(circ, &ctx) != 0) {
+        st_fail(err, MOONLAB_STIM_ERR_OOM, 0, "out of memory");
+        moonlab_stim_circuit_free(circ);
+        st_ctx_release(&ctx);
+        st_block_free(root);
+        return NULL;
+    }
+    circ->root = root;
+    st_ctx_release(&ctx);
+    return circ;
+}
+
+moonlab_stim_circuit_t* moonlab_stim_circuit_parse_file(
+    const char* path, moonlab_stim_error_t* err) {
+    st_ok(err);
+    if (!path) {
+        st_fail(err, MOONLAB_STIM_ERR_BAD_ARG, 0, "path is NULL");
+        return NULL;
+    }
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        st_fail(err, MOONLAB_STIM_ERR_IO, 0, "cannot open '%s'", path);
+        return NULL;
+    }
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        st_fail(err, MOONLAB_STIM_ERR_IO, 0, "cannot seek '%s'", path);
+        return NULL;
+    }
+    const long sz = ftell(f);
+    if (sz < 0) {
+        fclose(f);
+        st_fail(err, MOONLAB_STIM_ERR_IO, 0, "cannot size '%s'", path);
+        return NULL;
+    }
+    rewind(f);
+    char* buf = (char*)malloc((size_t)sz + 1);
+    if (!buf) {
+        fclose(f);
+        st_fail(err, MOONLAB_STIM_ERR_OOM, 0, "out of memory");
+        return NULL;
+    }
+    const size_t got = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[got] = '\0';
+    moonlab_stim_circuit_t* c = moonlab_stim_circuit_parse(buf, err);
+    free(buf);
+    return c;
+}
+
+void moonlab_stim_circuit_free(moonlab_stim_circuit_t* c) {
+    if (!c) return;
+    st_block_free(c->root);
+    free(c->ops);
+    free(c->chan);
+    free(c->rec_inverted);
+    free(c->rec_value);
+    free(c->rec_pf);
+    free(c->det_off);
+    free(c->det_idx);
+    free(c->det_coff);
+    free(c->det_cval);
+    free(c->obs_off);
+    free(c->obs_idx);
+    free(c->qc_off);
+    free(c->qc_val);
+    free(c);
+}
+
+/* ================================================================== */
+/*  Public: introspection                                              */
+/* ================================================================== */
+
+size_t moonlab_stim_circuit_num_qubits(const moonlab_stim_circuit_t* c) {
+    return c ? c->num_qubits : 0;
+}
+size_t moonlab_stim_circuit_num_measurements(const moonlab_stim_circuit_t* c) {
+    return c ? c->num_records : 0;
+}
+size_t moonlab_stim_circuit_num_detectors(const moonlab_stim_circuit_t* c) {
+    return c ? c->num_detectors : 0;
+}
+size_t moonlab_stim_circuit_num_observables(const moonlab_stim_circuit_t* c) {
+    return c ? c->num_observables : 0;
+}
+size_t moonlab_stim_circuit_num_ticks(const moonlab_stim_circuit_t* c) {
+    return c ? c->num_ticks : 0;
+}
+
+long moonlab_stim_circuit_qubit_coords(const moonlab_stim_circuit_t* c,
+                                       size_t qubit, double* out, size_t cap) {
+    if (!c || qubit >= c->num_qubits) return -1;
+    const size_t lo = c->qc_off[qubit], hi = c->qc_off[qubit + 1];
+    const size_t n = hi - lo;
+    if (out) {
+        const size_t w = (n < cap) ? n : cap;
+        for (size_t i = 0; i < w; i++) out[i] = c->qc_val[lo + i];
+    }
+    return (long)n;
+}
+
+long moonlab_stim_circuit_detector_coords(const moonlab_stim_circuit_t* c,
+                                          size_t detector, double* out,
+                                          size_t cap) {
+    if (!c || detector >= c->num_detectors) return -1;
+    const size_t lo = c->det_coff[detector], hi = c->det_coff[detector + 1];
+    const size_t n = hi - lo;
+    if (out) {
+        const size_t w = (n < cap) ? n : cap;
+        for (size_t i = 0; i < w; i++) out[i] = c->det_cval[lo + i];
+    }
+    return (long)n;
+}
+
+/* ================================================================== */
+/*  Public: lowering                                                   */
+/* ================================================================== */
+
+long moonlab_stim_circuit_num_ops(const moonlab_stim_circuit_t* c) {
+    return c ? (long)c->num_ops : (long)MOONLAB_STIM_ERR_BAD_ARG;
+}
+
+long moonlab_stim_circuit_num_channel_args(const moonlab_stim_circuit_t* c) {
+    return c ? (long)c->num_chan : (long)MOONLAB_STIM_ERR_BAD_ARG;
+}
+
+long moonlab_stim_circuit_lower(const moonlab_stim_circuit_t* c,
+                                pf_circuit_op_t* ops_out, size_t ops_cap,
+                                double* chan_args_out, size_t chan_cap,
+                                moonlab_stim_error_t* err) {
+    st_ok(err);
+    if (!c) {
+        st_fail(err, MOONLAB_STIM_ERR_BAD_ARG, 0, "circuit is NULL");
+        return MOONLAB_STIM_ERR_BAD_ARG;
+    }
+    if (ops_out && ops_cap < c->num_ops) {
+        st_fail(err, MOONLAB_STIM_ERR_OVERFLOW, 0,
+                "op buffer holds %zu entries, the lowering needs %zu",
+                ops_cap, c->num_ops);
+        return MOONLAB_STIM_ERR_OVERFLOW;
+    }
+    if (chan_args_out && chan_cap < c->num_chan) {
+        st_fail(err, MOONLAB_STIM_ERR_OVERFLOW, 0,
+                "channel-argument buffer holds %zu entries, the lowering "
+                "needs %zu", chan_cap, c->num_chan);
+        return MOONLAB_STIM_ERR_OVERFLOW;
+    }
+    if (ops_out && c->num_ops)
+        memcpy(ops_out, c->ops, c->num_ops * sizeof(pf_circuit_op_t));
+    if (chan_args_out && c->num_chan)
+        memcpy(chan_args_out, c->chan, c->num_chan * sizeof(double));
+    return (long)c->num_ops;
+}
+
+static long st_copy_csr(const size_t* off, const uint32_t* idx, size_t rows,
+                        size_t nidx,
+                        size_t* offsets_out, size_t off_cap,
+                        uint32_t* indices_out, size_t idx_cap) {
+    if (offsets_out) {
+        if (off_cap < rows + 1) return MOONLAB_STIM_ERR_OVERFLOW;
+        for (size_t i = 0; i <= rows; i++) offsets_out[i] = off[i];
+    }
+    if (indices_out) {
+        if (idx_cap < nidx) return MOONLAB_STIM_ERR_OVERFLOW;
+        if (nidx) memcpy(indices_out, idx, nidx * sizeof(uint32_t));
+    }
+    return (long)nidx;
+}
+
+long moonlab_stim_circuit_detector_csr(const moonlab_stim_circuit_t* c,
+                                       size_t* offsets_out, size_t off_cap,
+                                       uint32_t* indices_out, size_t idx_cap) {
+    if (!c) return MOONLAB_STIM_ERR_BAD_ARG;
+    return st_copy_csr(c->det_off, c->det_idx, c->num_detectors,
+                       c->num_det_idx, offsets_out, off_cap,
+                       indices_out, idx_cap);
+}
+
+long moonlab_stim_circuit_observable_csr(const moonlab_stim_circuit_t* c,
+                                         size_t* offsets_out, size_t off_cap,
+                                         uint32_t* indices_out,
+                                         size_t idx_cap) {
+    if (!c) return MOONLAB_STIM_ERR_BAD_ARG;
+    return st_copy_csr(c->obs_off, c->obs_idx, c->num_observables,
+                       c->num_obs_idx, offsets_out, off_cap,
+                       indices_out, idx_cap);
+}
+
+long moonlab_stim_circuit_measurement_inversions(
+    const moonlab_stim_circuit_t* c, uint8_t* out, size_t cap) {
+    if (!c) return MOONLAB_STIM_ERR_BAD_ARG;
+    if (out) {
+        if (cap < c->num_records) return MOONLAB_STIM_ERR_OVERFLOW;
+        if (c->num_records) memcpy(out, c->rec_inverted, c->num_records);
+    }
+    return (long)c->num_records;
+}
+
+/* ================================================================== */
+/*  Public: serialisation                                              */
+/* ================================================================== */
+
+typedef struct { char* s; size_t n, cap; } st_sb_t;
+
+static int sb_reserve(st_sb_t* b, size_t extra) {
+    if (b->s && b->n + extra + 1 <= b->cap) return 0;
+    size_t nc = b->cap ? b->cap : 256;
+    while (nc < b->n + extra + 1) {
+        if (nc > (size_t)-1 / 2) return -1;
+        nc *= 2;
+    }
+    char* p = (char*)realloc(b->s, nc);
+    if (!p) return -1;
+    b->s = p;
+    b->cap = nc;
+    return 0;
+}
+
+static int sb_puts(st_sb_t* b, const char* s) {
+    const size_t l = strlen(s);
+    if (sb_reserve(b, l)) return -1;
+    memcpy(b->s + b->n, s, l);
+    b->n += l;
+    b->s[b->n] = '\0';
+    return 0;
+}
+
+static int sb_putc(st_sb_t* b, char ch) {
+    if (sb_reserve(b, 1)) return -1;
+    b->s[b->n++] = ch;
+    b->s[b->n] = '\0';
+    return 0;
+}
+
+/* Shortest decimal spelling that reads back as the same double. */
+static void st_fmt_double(char* out, size_t cap, double v) {
+    for (int prec = 1; prec <= 17; prec++) {
+        snprintf(out, cap, "%.*g", prec, v);
+        if (strtod(out, NULL) == v) return;
+    }
+}
+
+static int st_write_block(st_sb_t* b, const st_block_t* blk, int flatten,
+                          int indent);
+
+static int st_write_inst(st_sb_t* b, const st_inst_t* in, int flatten,
+                         int indent) {
+    if (in->def->cls == IC_REPEAT && flatten) {
+        /* Expanded form: the body sits at the current level, repeated. */
+        for (uint64_t k = 0; k < in->repeat_count; k++)
+            if (st_write_block(b, in->body, 1, indent)) return -1;
+        return 0;
+    }
+
+    for (int i = 0; i < indent; i++)
+        if (sb_puts(b, "    ")) return -1;
+
+    if (in->def->cls == IC_REPEAT) {
+        char num[32];
+        snprintf(num, sizeof(num), "%llu",
+                 (unsigned long long)in->repeat_count);
+        if (sb_puts(b, "REPEAT ")) return -1;
+        if (sb_puts(b, num)) return -1;
+        if (sb_puts(b, " {\n")) return -1;
+        if (st_write_block(b, in->body, 0, indent + 1)) return -1;
+        for (int i = 0; i < indent; i++)
+            if (sb_puts(b, "    ")) return -1;
+        return sb_puts(b, "}\n");
+    }
+
+    if (sb_puts(b, in->def->canon)) return -1;
+    if (in->tag) {
+        if (sb_putc(b, '[')) return -1;
+        if (sb_puts(b, in->tag)) return -1;
+        if (sb_putc(b, ']')) return -1;
+    }
+    if (in->nargs) {
+        if (sb_putc(b, '(')) return -1;
+        for (size_t i = 0; i < in->nargs; i++) {
+            if (i && sb_puts(b, ", ")) return -1;
+            char num[40];
+            st_fmt_double(num, sizeof(num), in->args[i]);
+            if (sb_puts(b, num)) return -1;
+        }
+        if (sb_putc(b, ')')) return -1;
+    }
+    for (size_t i = 0; i < in->ntargs; i++) {
+        const st_targ_t* t = &in->targs[i];
+        if (sb_putc(b, ' ')) return -1;
+        if (t->inverted && sb_putc(b, '!')) return -1;
+        char tok[32];
+        if (t->kind == TT_REC) snprintf(tok, sizeof(tok), "rec[-%u]", t->value);
+        else                   snprintf(tok, sizeof(tok), "%u", t->value);
+        if (sb_puts(b, tok)) return -1;
+    }
+    return sb_putc(b, '\n');
+}
+
+static int st_write_block(st_sb_t* b, const st_block_t* blk, int flatten,
+                          int indent) {
+    for (size_t i = 0; i < blk->n; i++)
+        if (st_write_inst(b, &blk->v[i], flatten, indent)) return -1;
+    return 0;
+}
+
+char* moonlab_stim_circuit_to_text(const moonlab_stim_circuit_t* c,
+                                   int flatten) {
+    if (!c) return NULL;
+    st_sb_t b;
+    memset(&b, 0, sizeof(b));
+    if (sb_reserve(&b, 0)) return NULL;
+    b.s[0] = '\0';
+    if (st_write_block(&b, c->root, flatten ? 1 : 0, 0)) {
+        free(b.s);
+        return NULL;
+    }
+    return b.s;
+}
+
+void moonlab_stim_text_free(char* text) { free(text); }
+
+/* ================================================================== */
+/*  Public: sampling                                                   */
+/* ================================================================== */
+
+long moonlab_stim_circuit_sample_measurements(const moonlab_stim_circuit_t* c,
+                                              size_t num_shots, uint64_t seed,
+                                              int num_threads, uint8_t* out) {
+    if (!c || !out || num_shots == 0) return MOONLAB_STIM_ERR_BAD_ARG;
+    const size_t nrec = c->num_records;
+    if (nrec == 0) return 0;
+
+    if (c->num_pf_meas > 0) {
+        /* When no MPAD entries exist the record and the Pauli-frame
+         * measurement index spaces coincide, so sample straight into the
+         * caller's buffer. */
+        const int direct = (c->num_pf_meas == nrec);
+        uint8_t* buf = out;
+        if (!direct) {
+            buf = (uint8_t*)malloc(c->num_pf_meas * num_shots);
+            if (!buf) return MOONLAB_STIM_ERR_OOM;
+        }
+        const long r = pauli_frame_batch_sample_circuit_ex(
+            c->num_qubits, c->ops, c->num_ops, c->chan, c->num_chan,
+            num_shots, seed, num_threads, buf);
+        if (r != (long)c->num_pf_meas) {
+            if (!direct) free(buf);
+            return -1;
+        }
+        if (!direct) {
+            for (size_t rec = 0; rec < nrec; rec++) {
+                uint8_t* dst = out + rec * num_shots;
+                if (c->rec_pf[rec] == ST_REC_NONE)
+                    memset(dst, c->rec_value[rec], num_shots);
+                else
+                    memcpy(dst, buf + (size_t)c->rec_pf[rec] * num_shots,
+                           num_shots);
+            }
+            free(buf);
+        }
+    } else {
+        for (size_t rec = 0; rec < nrec; rec++)
+            memset(out + rec * num_shots, c->rec_value[rec], num_shots);
+    }
+
+    /* Stim's '!' inverts the value written to the record. */
+    for (size_t rec = 0; rec < nrec; rec++) {
+        if (!c->rec_inverted[rec]) continue;
+        uint8_t* dst = out + rec * num_shots;
+        for (size_t s = 0; s < num_shots; s++) dst[s] ^= 1u;
+    }
+    return (long)nrec;
+}
+
+long moonlab_stim_circuit_sample_detectors(const moonlab_stim_circuit_t* c,
+                                           size_t num_shots, uint64_t seed,
+                                           int num_threads,
+                                           uint8_t* det_out, uint8_t* obs_out) {
+    if (!c || num_shots == 0) return MOONLAB_STIM_ERR_BAD_ARG;
+    const size_t nd = c->num_detectors, no = c->num_observables;
+    const int want_det = (det_out != NULL && nd > 0);
+    const int want_obs = (obs_out != NULL && no > 0);
+    if (!want_det && !want_obs) return (long)nd;
+
+    /* No Pauli-frame measurements at all: every parity set is either empty
+     * or made of constant MPAD records, and a detector reports the deviation
+     * from the noiseless reference, so it reads zero on every shot. */
+    if (c->num_pf_meas == 0) {
+        if (want_det) memset(det_out, 0, nd * num_shots);
+        if (want_obs) memset(obs_out, 0, no * num_shots);
+        return (long)nd;
+    }
+
+    const size_t rows = (want_det ? nd : 0) + (want_obs ? no : 0);
+    const size_t nidx = c->num_det_idx + c->num_obs_idx;
+
+    size_t*   off = (size_t*)malloc((rows + 1) * sizeof(size_t));
+    uint32_t* idx = (uint32_t*)malloc((nidx ? nidx : 1) * sizeof(uint32_t));
+    if (!off || !idx) { free(off); free(idx); return MOONLAB_STIM_ERR_OOM; }
+
+    /* One combined CSR, detectors first and observables after, so the
+     * sampler runs the circuit once.  MPAD records carry the same constant
+     * on every shot and cancel out of the deviation, so they are dropped
+     * from the parity sets rather than sampled. */
+    size_t r = 0, w = 0;
+    off[0] = 0;
+    if (want_det) {
+        for (size_t d = 0; d < nd; d++) {
+            for (size_t k = c->det_off[d]; k < c->det_off[d + 1]; k++) {
+                const uint32_t pf = c->rec_pf[c->det_idx[k]];
+                if (pf != ST_REC_NONE) idx[w++] = pf;
+            }
+            off[++r] = w;
+        }
+    }
+    if (want_obs) {
+        for (size_t o = 0; o < no; o++) {
+            for (size_t k = c->obs_off[o]; k < c->obs_off[o + 1]; k++) {
+                const uint32_t pf = c->rec_pf[c->obs_idx[k]];
+                if (pf != ST_REC_NONE) idx[w++] = pf;
+            }
+            off[++r] = w;
+        }
+    }
+
+    uint8_t* buf;
+    int owned = 0;
+    if (want_det && want_obs) {
+        buf = (uint8_t*)malloc(rows * num_shots);
+        if (!buf) { free(off); free(idx); return MOONLAB_STIM_ERR_OOM; }
+        owned = 1;
+    } else {
+        buf = want_det ? det_out : obs_out;
+    }
+
+    const long rc = pauli_frame_batch_sample_detectors_ex(
+        c->num_qubits, c->ops, c->num_ops, c->chan, c->num_chan,
+        off, idx, rows, num_shots, seed, num_threads, buf);
+
+    long result = (long)nd;
+    if (rc != (long)rows) {
+        result = -1;
+    } else if (owned) {
+        memcpy(det_out, buf, nd * num_shots);
+        memcpy(obs_out, buf + nd * num_shots, no * num_shots);
+    }
+    if (owned) free(buf);
+    free(off);
+    free(idx);
+    return result;
+}

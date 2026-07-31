@@ -232,6 +232,19 @@
     target_link_libraries(test_uf_decoder PRIVATE quantumsim ${MATH_LIBRARY})
     add_test(NAME unit_uf_decoder COMMAND test_uf_decoder)
 
+    # Stim .stim circuit format: gate and annotation coverage, REPEAT and
+    # rec[-k] resolution, and the reject-never-skip contract for anything
+    # outside the supported surface.
+    add_executable(test_stim_circuit tests/unit/test_stim_circuit.c)
+    target_link_libraries(test_stim_circuit PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_stim_circuit COMMAND test_stim_circuit)
+
+    # Stim detector error model: import to the uf_decoder edge list, export
+    # back, and the round-trip fixed point through decomposed mechanisms.
+    add_executable(test_stim_dem tests/unit/test_stim_dem.c)
+    target_link_libraries(test_stim_dem PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_stim_dem COMMAND test_stim_dem)
+
     # End-to-end CA-MPS correctness: random mixed Clifford + rx/ry/rz/CZ/CNOT
     # circuits compared against the dense state-vector backend for every
     # single-qubit Pauli expectation and a handful of ZZ pairs.
@@ -1740,7 +1753,8 @@
         unit_pauli_frame unit_uf_decoder unit_mpo_kpm)
     qsim_label_tests(clifford
         unit_clifford unit_clifford_rowsum unit_clifford_pauli_api
-        unit_pauli_frame unit_surface_code_clifford unit_uf_decoder)
+        unit_pauli_frame unit_surface_code_clifford unit_uf_decoder
+        unit_stim_circuit unit_stim_dem)
     qsim_label_tests(algorithms
         unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe
         unit_vqe_gradient_contract unit_chemistry

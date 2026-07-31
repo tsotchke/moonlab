@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **First-class interop with the Stim QEC ecosystem.** moonlab reads and
+  writes the community's own file formats, so its QEC claims can be checked
+  inside anyone else's harness instead of only its own benchmarks.
+  - `src/qec/stim_circuit.h` -- `.stim` circuit import and export. Every
+    one- and two-qubit Clifford Stim defines is accepted and lowered onto
+    moonlab's primitives; the 44 decompositions were found by BFS over the
+    generated group (all 24 one-qubit and all 11520 two-qubit elements are
+    reachable) and are checked element by element against
+    `stim.Tableau.from_named_gate`, signs included. Measurement and reset in
+    all three bases, `X_ERROR`, `Y_ERROR`, `Z_ERROR`, `DEPOLARIZE1/2`,
+    `PAULI_CHANNEL_1/2`, the annotations `DETECTOR`, `OBSERVABLE_INCLUDE`,
+    `QUBIT_COORDS`, `SHIFT_COORDS`, `TICK`, `MPAD`, and nested `REPEAT`
+    blocks are all handled, including `rec[-k]` resolution per repeat
+    iteration. Anything outside that surface is rejected with a status code,
+    a 1-based line number and a message naming the token -- never skipped,
+    because a silently dropped instruction silently changes the physics.
+  - `src/qec/stim_dem.h` -- detector error model import and export. Stim DEM
+    text becomes the edge list `uf_decoder.h` consumes, with `^`-decomposed
+    mechanisms turned into the correlation links the two-pass correlated
+    decoder needs, and moonlab edge lists serialise back to DEM text that
+    Stim parses and PyMatching loads directly. Export is the exact inverse of
+    the import merge: `edges -> text -> parse -> edges` is a fixed point to
+    5.6e-17 over 400 randomised models. Non-graphlike and detectorless
+    mechanisms are counted and reported rather than dropped.
+  - `moonlab.qec` -- Python surface over both (`StimCircuit`,
+    `DetectorErrorModel`, `UFDecoder`), plus `moonlab.qec.sinter`, which
+    registers `moonlab_uf` and `moonlab_uf_correlated` as `sinter.Decoder`
+    plug-ins. `sinter collect --decoders moonlab_uf_correlated
+    --custom_decoders_module_function moonlab.qec.sinter:make_custom_decoders`
+    runs against stock `.stim` files.
+  - `pauli_frame_batch_sample_circuit_ex` and
+    `pauli_frame_batch_sample_detectors_ex` take a general-Pauli-channel
+    argument table, and `PF_OP_PAULI_CHANNEL_1/2` extend `pf_op_kind_t`
+    additively. `pf_circuit_op_t` keeps its layout, so the JS binding's
+    mirrored `PfOpKind` and every existing op array stay valid.
+
+  Verified against Stim 1.15, PyMatching 2.3.1 and Sinter 1.16, all
+  dev-only: `import moonlab` and `import moonlab.qec` work with the three
+  blocked at the import hook. Detector output is bit-identical to Stim's on
+  deterministic faults, including each of the 15 `PAULI_CHANNEL_2` argument
+  slots driven to 1.0 in turn; statistically compatible under noise (max
+  |z| 2.27 over 20000 shots). Inside `sinter.collect` at p=0.005 with
+  200000 shots per configuration, the correlated decoder cuts the logical
+  error rate 25.7 percent at d=5 and 33.1 percent at d=7 relative to
+  PyMatching, with disjoint confidence intervals, while plain union-find
+  tracks PyMatching to within 2 percent.
+
 - **Anyon braiding is a braid-group representation.** `fusion_tree_t` now
   carries the intermediate charge of every fusion vertex on every path
   (`labels`, `num_vertices`, `recoupled_vertex`) instead of only the total

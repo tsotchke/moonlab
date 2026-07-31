@@ -393,7 +393,37 @@ typedef enum {
     PF_OP_Y_ERROR,       /* Y with probability p (stim Y_ERROR)          */
     PF_OP_DEPOLARIZE1,   /* uniform X/Y/Z each p/3 (stim DEPOLARIZE1)    */
     PF_OP_DEPOLARIZE2,   /* uniform over 15 two-qubit Paulis, p/15 each  */
-    PF_OP_MEASURE_NOISY  /* measure q0, reported outcome flipped w.p. p  */
+    PF_OP_MEASURE_NOISY, /* measure q0, reported outcome flipped w.p. p  */
+
+    /* ---- Additive general Pauli channels -------------------------------
+     * These need more than the single probability pf_circuit_op_t carries,
+     * and pf_circuit_op_t is ABI-frozen.  So they store the BASE INDEX of
+     * their probability block in a separate caller-supplied `chan_args`
+     * table, encoded as a double in pf_circuit_op_t::p (exact for every
+     * index below 2^53).  Only the _ex sampler entry points take that
+     * table; the original entry points reject a circuit containing these
+     * kinds rather than skipping them, because skipping a noise channel
+     * silently changes the physics being sampled.                        */
+
+    PF_OP_PAULI_CHANNEL_1 = 17, /**< q0 = qubit, p = base index.
+                                 *   chan_args[base+0..2] = px, py, pz
+                                 *   (stim PAULI_CHANNEL_1 order).  I is
+                                 *   implicit with probability
+                                 *   1 - (px + py + pz).                  */
+
+    PF_OP_PAULI_CHANNEL_2 = 18  /**< q0, q1 = qubits, p = base index.
+                                 *   chan_args[base+0..14] = the 15 stim
+                                 *   PAULI_CHANNEL_2 probabilities in
+                                 *   stim's argument order
+                                 *   (`stim.gate_data('PAULI_CHANNEL_2')`):
+                                 *
+                                 *     0:IX  1:IY  2:IZ  3:XI  4:XX
+                                 *     5:XY  6:XZ  7:YI  8:YX  9:YY
+                                 *    10:YZ 11:ZI 12:ZX 13:ZY 14:ZZ
+                                 *
+                                 *   The FIRST letter acts on q0 and the
+                                 *   second on q1.  II is implicit with
+                                 *   probability 1 - sum(args).           */
 } pf_op_kind_t;
 
 /** @brief One circuit instruction.  @p q1 is used only by two-qubit ops;
@@ -466,6 +496,44 @@ MOONLAB_API long pauli_frame_batch_sample_circuit(
  */
 MOONLAB_API long pauli_frame_batch_sample_detectors(
     size_t num_qubits, const pf_circuit_op_t* ops, size_t num_ops,
+    const size_t* det_offsets, const uint32_t* det_indices,
+    size_t num_detectors, size_t num_shots, uint64_t seed,
+    int num_threads, uint8_t* out);
+
+/* ================================================================== */
+/*  Channel-table sampler entry points                                 */
+/* ================================================================== */
+
+/**
+ * @brief pauli_frame_batch_sample_circuit() plus a general-Pauli-channel
+ *        argument table.
+ *
+ * PF_OP_PAULI_CHANNEL_1 / PF_OP_PAULI_CHANNEL_2 ops read their
+ * probabilities from @p chan_args at the base index stored in
+ * pf_circuit_op_t::p.  Every other op kind behaves exactly as in
+ * pauli_frame_batch_sample_circuit(), which is this function with
+ * `chan_args = NULL, num_chan_args = 0`.
+ *
+ * @return number of measurements written, or -1 on error.  A channel op
+ *         whose probability block does not fit inside @p chan_args (in
+ *         particular a NULL table) is an error, never a skipped op.
+ * @stability beta
+ */
+MOONLAB_API long pauli_frame_batch_sample_circuit_ex(
+    size_t num_qubits, const pf_circuit_op_t* ops, size_t num_ops,
+    const double* chan_args, size_t num_chan_args,
+    size_t num_shots, uint64_t seed, int num_threads, uint8_t* out);
+
+/**
+ * @brief pauli_frame_batch_sample_detectors() plus a general-Pauli-channel
+ *        argument table.  @see pauli_frame_batch_sample_circuit_ex.
+ *
+ * @return num_detectors on success, negative on error.
+ * @stability beta
+ */
+MOONLAB_API long pauli_frame_batch_sample_detectors_ex(
+    size_t num_qubits, const pf_circuit_op_t* ops, size_t num_ops,
+    const double* chan_args, size_t num_chan_args,
     const size_t* det_offsets, const uint32_t* det_indices,
     size_t num_detectors, size_t num_shots, uint64_t seed,
     int num_threads, uint8_t* out);

@@ -89,6 +89,7 @@ module-specific and documented in the listed header.
 | GPU backend                   | `gpu_error_t`          | `src/optimization/gpu/gpu_backend.h`                    |
 | Eshkol fp64-on-Metal interop  | `moonlab_eshkol_status_t` | `src/optimization/gpu/backends/gpu_eshkol.h`         |
 | Control plane                 | `MOONLAB_CONTROL_*`       | `src/control/control_plane.h`                        |
+| Stim circuit / DEM interop    | `moonlab_stim_status_t`   | `src/qec/stim_circuit.h`                             |
 
 Notable module-specific extensions:
 
@@ -123,6 +124,22 @@ Notable module-specific extensions:
   reserved for cross-module-safe generic codes; the control plane
   borrows the HTTP convention because its wire protocol emits the
   numeric code directly to clients.
+- Stim interop uses the `-7xx` range (`src/qec/stim_circuit.h`), chosen
+  because `-6xx` is already held by `mwpm_exact.h`:
+
+  | Enumerator                     | Value | Meaning                        |
+  |--------------------------------|------:|--------------------------------|
+  | `MOONLAB_STIM_OK`              |     0 | success                        |
+  | `MOONLAB_STIM_ERR_SYNTAX`      |  -701 | malformed token or structure   |
+  | `MOONLAB_STIM_ERR_UNSUPPORTED` |  -702 | well formed, not implemented   |
+  | `MOONLAB_STIM_ERR_BAD_ARG`     |  -703 | bad argument from the caller   |
+  | `MOONLAB_STIM_ERR_OOM`         |  -704 | allocation failure             |
+  | `MOONLAB_STIM_ERR_IO`          |  -705 | file could not be read         |
+  | `MOONLAB_STIM_ERR_OVERFLOW`    |  -706 | caller buffer too small        |
+
+  These travel with a `moonlab_stim_error_t`, which also carries the
+  1-based source line and a message naming the offending token, so a
+  rejected instruction can always be located in the input file.
 
 ## Diagnostic helper
 

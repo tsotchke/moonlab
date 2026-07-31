@@ -97,10 +97,12 @@ ABI 0.6.0 (this release):
 | `src/algorithms/vqe.h`                       |     37  |
 | `src/distributed/scheduler.h`                |     26  |
 | `src/control/control_plane.h`                |     21  |
+| `src/qec/stim_circuit.h`                     |     20  |
 | `src/integration/libirrep_bridge.h`          |     19  |
 | `src/algorithms/quantum_geometry/qgt.h`      |     32  |
 | `src/quantum/gates.h`                        |     34  |
 | `src/quantum/noise_mpdo.h`                   |     15  |
+| `src/qec/stim_dem.h`                         |     15  |
 | `src/crypto/mlkem/mlkem.h`                   |     21  |
 | `src/algorithms/qaoa.h`                      |     30  |
 | `src/applications/moonlab_qgtl_backend.h`    |     11  |
@@ -153,6 +155,70 @@ An `evolving` or `stable` symbol that has shipped cannot be removed,
 renamed, or re-signatured before v2.0. A `beta` symbol carries no such
 promise until it ships, which is exactly why the tier exists: the
 alternative is to freeze a signature before anyone has used it.
+
+### Stim ecosystem interop additions
+
+Thirty-seven new symbols across three headers, all additive. No existing
+signature changed, and `moonlab_export.h` is untouched, so the
+`MOONLAB_ABI_VERSION_*` triple of the stable downstream export surface is
+unchanged.
+
+`src/qec/stim_circuit.h` -- 20 symbols. Import and export of Stim's `.stim`
+circuit format, plus lowering onto the Pauli-frame sampler:
+
+  - `moonlab_stim_circuit_parse`, `..._parse_file`, `..._free`,
+    `moonlab_stim_circuit_to_text`, `moonlab_stim_text_free` -- the format
+    round trip. Serialisation takes a `flatten` flag selecting whether
+    `REPEAT` blocks are preserved or expanded; both forms re-parse to a
+    semantically identical circuit.
+  - `moonlab_stim_circuit_num_qubits`, `..._num_measurements`,
+    `..._num_detectors`, `..._num_observables`, `..._num_ticks`,
+    `..._qubit_coords`, `..._detector_coords` -- introspection, with
+    `SHIFT_COORDS` offsets already folded into the reported coordinates.
+  - `moonlab_stim_circuit_num_ops`, `..._num_channel_args`, `..._lower`,
+    `..._detector_csr`, `..._observable_csr`,
+    `..._measurement_inversions` -- lowering to `pf_circuit_op_t` plus the
+    CSR parity sets the detector sampler and the decoders consume.
+  - `moonlab_stim_circuit_sample_measurements`,
+    `..._sample_detectors` -- one-call sampling, mirroring Stim's
+    `compile_sampler()` and `compile_detector_sampler()` layouts.
+  - `moonlab_stim_status_t` and `moonlab_stim_error_t` carry the failure
+    code, 1-based source line, and a message naming the offending token.
+    Unsupported input is always rejected, never skipped.
+
+`src/qec/stim_dem.h` -- 15 symbols. Import and export of Stim's detector
+error model format against moonlab's edge-list decoders:
+
+  - `moonlab_dem_parse`, `..._parse_file`, `..._free`, `moonlab_dem_to_text`,
+    `moonlab_dem_text_from_edges` -- the DEM round trip. Export is the exact
+    inverse of the import merge, so an edge list survives a trip through DEM
+    text, and the emitted text loads directly into PyMatching.
+  - `moonlab_dem_num_detectors`, `..._num_observables`, `..._num_edges`,
+    `..._num_correlations`, `..._num_hyperedges`, `..._num_detectorless`,
+    `..._edges`, `..._correlations`, `..._detector_coords` -- the edge-list
+    view in `moonlab_uf_decoder_new()` layout. Components that are not
+    graphlike are counted and reported rather than dropped.
+  - `moonlab_dem_make_uf_decoder` -- builds a plain or correlated decoder
+    straight from a parsed model, so Stim's `^` decompositions reach the
+    two-pass correlated decoder as correlation links.
+
+`src/backends/clifford/pauli_frame.h` -- 2 symbols, plus two additive
+`pf_op_kind_t` enumerators:
+
+  - `pauli_frame_batch_sample_circuit_ex`,
+    `pauli_frame_batch_sample_detectors_ex` -- the existing samplers plus a
+    channel-argument table. The original entry points delegate to these and
+    are unchanged.
+  - `PF_OP_PAULI_CHANNEL_1 = 17` and `PF_OP_PAULI_CHANNEL_2 = 18` extend
+    `pf_op_kind_t` additively; values 0..16 keep their numbers, and
+    `pf_circuit_op_t` keeps its layout, so the JS binding's mirrored
+    `PfOpKind` and every existing op array stay valid. The channel ops carry
+    the base index of their probabilities in the table in
+    `pf_circuit_op_t::p`, which is why no struct field was added.
+
+@stability beta for all thirty-seven: the signatures are frozen by the ABI
+policy above, and the tier will move once the format coverage has had a
+release in the field.
 
 ### v1.2.1 additions
 
