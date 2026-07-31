@@ -654,6 +654,26 @@ check_docs_apis() {
   fi
 }
 
+# --- stable_abi_counts ------------------------------------------------------
+# The per-header symbol counts in docs/STABLE_ABI.md must equal the number of
+# MOONLAB_API declarations in those headers. Ten rows had silently drifted
+# before this lane existed; the table is what a downstream consumer reads to
+# size the surface they are binding against.
+check_stable_abi_counts() {
+  if [ ! -x scripts/check_stable_abi_counts.sh ]; then
+    emit stable_abi_counts FAIL "scripts/check_stable_abi_counts.sh not present"
+    return
+  fi
+  local out rc
+  out="$(scripts/check_stable_abi_counts.sh 2>&1)"
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    emit stable_abi_counts PASS "$(printf '%s' "$out" | tail -n 1)"
+  else
+    emit stable_abi_counts FAIL "$(printf '%s' "$out" | tr '\n' ';' | cut -c1-300)"
+  fi
+}
+
 # --- examples_all_build -----------------------------------------------------
 check_examples() {
   cmake -S . -B "$EX_DIR" -DCMAKE_BUILD_TYPE=Release \
@@ -815,6 +835,7 @@ check_phantom
 check_odr
 check_hidden_visibility
 check_docs_apis
+check_stable_abi_counts
 check_examples
 check_versions
 check_ctest_gate bindings_suites_green    'python_bindings|rust_bindings|js_'

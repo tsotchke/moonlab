@@ -50,15 +50,19 @@ Neither installed namespace may move incompatibly inside the 1.x line.
 
 ## Symbol catalog by module
 
-The table below is a current snapshot refreshed against `moonlab_export.h` and
-every public header. It supersedes the earlier v1.0.3 snapshot this document
-used to carry, which undercounted `moonlab_export.h` itself (36 listed vs. 78
-actual) and predated `moonlab_vqe_gradient` (ABI 0.4.0), `moonlab_qrng_get_status`
-plus the conditioned QRNG contract (ABI 0.5.0), and the ABI 0.6.0 additions
-below. As of ABI 0.6.0 the second-tier binding surface (the `moonlab_diff_*`
-autograd API, the dense state/gate/measurement calls, and the distributed
-headers) is also `MOONLAB_API`-tagged, so it survives a hidden-visibility build.
-The authoritative current list is always every `MOONLAB_API` declaration in a
+The table below counts the `MOONLAB_API` declarations in each public header.
+`scripts/check_stable_abi_counts.sh` verifies it against the source and fails
+the release smoke on any mismatch, which is new in v1.2.1 and was overdue: ten
+of these rows had drifted, some badly (`grover.h` read 5 against 14 real
+declarations, `quantum/state.h` 10 against 25, `quantum/gates.h` 17 against 34)
+because nothing tied the prose to the headers. A wrong count is not cosmetic --
+this table is what a downstream consumer reads to size the surface they are
+binding against.
+
+As of ABI 0.6.0 the second-tier binding surface (the `moonlab_diff_*` autograd
+API, the dense state/gate/measurement calls, and the distributed headers) is
+also `MOONLAB_API`-tagged, so it survives a hidden-visibility build. The
+authoritative current list is always every `MOONLAB_API` declaration in a
 public header; `tests/abi/test_moonlab_export_abi.c` loads and functionally
 smokes the committed export surface on Unix and Windows.
 
@@ -88,27 +92,27 @@ ABI 0.6.0 (this release):
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|
-| `src/applications/moonlab_export.h`          |  78     |
-| `src/algorithms/tensor_network/ca_mps.h`     |  37     |
-| `src/algorithms/vqe.h`                       |  35     |
-| `src/distributed/scheduler.h`                |  26     |
-| `src/control/control_plane.h`                |  21     |
-| `src/integration/libirrep_bridge.h`          |  19     |
-| `src/algorithms/quantum_geometry/qgt.h`      |  29     |
-| `src/quantum/gates.h`                        |  17     |
-| `src/quantum/noise_mpdo.h`                   |  15     |
-| `src/crypto/mlkem/mlkem.h`                   |  15     |
-| `src/algorithms/qaoa.h`                      |  13     |
-| `src/applications/moonlab_qgtl_backend.h`    |  11     |
-| `src/quantum/state.h`                        |  10     |
-| `src/applications/decoder_bench.h`           |   9     |
-| `src/utils/audit_buffer.h`                   |   7     |
-| `src/applications/vendor_noise_backend.h`    |   7     |
-| `src/algorithms/topology_realspace/chern_kpm.h` | 7   |
-| `src/algorithms/bell_tests.h`                |   6     |
-| `src/algorithms/grover.h`                    |   5     |
-| `src/utils/token_bucket.h`                   |   4     |
-| `src/backends/clifford/clifford.h`           |   4     |
+| `src/applications/moonlab_export.h`          |     84  |
+| `src/algorithms/tensor_network/ca_mps.h`     |     37  |
+| `src/algorithms/vqe.h`                       |     37  |
+| `src/distributed/scheduler.h`                |     26  |
+| `src/control/control_plane.h`                |     21  |
+| `src/integration/libirrep_bridge.h`          |     19  |
+| `src/algorithms/quantum_geometry/qgt.h`      |     30  |
+| `src/quantum/gates.h`                        |     34  |
+| `src/quantum/noise_mpdo.h`                   |     15  |
+| `src/crypto/mlkem/mlkem.h`                   |     21  |
+| `src/algorithms/qaoa.h`                      |     30  |
+| `src/applications/moonlab_qgtl_backend.h`    |     11  |
+| `src/quantum/state.h`                        |     25  |
+| `src/applications/decoder_bench.h`           |      9  |
+| `src/utils/audit_buffer.h`                   |      7  |
+| `src/applications/vendor_noise_backend.h`    |      7  |
+| `src/algorithms/topology_realspace/chern_kpm.h` |      7  |
+| `src/algorithms/bell_tests.h`                |      9  |
+| `src/algorithms/grover.h`                    |     14  |
+| `src/utils/token_bucket.h`                   |      4  |
+| `src/backends/clifford/clifford.h`           |     18  |
 | (others: `quantum_entropy.h`, `entanglement.h`, `mwpm_exact.h`) | 4 |
 
 The authoritative list is the source.  This doc is not the
