@@ -104,37 +104,31 @@ static int qng_hea_state_derivatives(vqe_solver_t *solver, const double *params,
     return rc;
 }
 
-int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out) {
-    if (!solver || !params || !qgt_out) return -1;
-    const size_t n   = solver->ansatz->num_parameters;
-    const size_t dim = (size_t)1 << solver->hamiltonian->num_qubits;
-    const double delta = 1e-4;   /* central-difference step for d|psi>/dtheta */
-
-    double  *saved  = malloc(n * sizeof(double));
-    double  *pshift = malloc(n * sizeof(double));
-    complex_t *psi0 = malloc(dim * sizeof(complex_t));
-    complex_t *dpsi = malloc(n * dim * sizeof(complex_t));   /* row i = d_i psi */
-    complex_t *ov   = malloc(n * sizeof(complex_t));         /* <psi | d_i psi> */
-    if (!saved || !pshift || !psi0 || !dpsi || !ov) {
-        free(saved); free(pshift); free(psi0); free(dpsi); free(ov);
-        return -1;
-    }
+/* Shared core for the geometric-tensor verbs.  Fills psi0[dim] = |psi(params)>,
+ * dpsi[n*dim] (row i = d_i|psi>) and ov[n] = <psi|d_i psi>, using exact analytic
+ * derivatives (generator insertion, n replays not 2n) for the hardware-efficient,
+ * UCCSD and symmetry-preserving ansaetze, and a central-difference fallback for a
+ * CUSTOM ansatz whose gate structure is unknown.  Restores the ansatz parameters
+ * before returning.  Both vqe_compute_qgt (the metric, Re) and
+ * vqe_compute_berry_curvature (the curvature, -2 Im) are assembled from these
+ * three arrays: they are the two halves of the one Hermitian quantum geometric
+ * tensor Q_ij = <d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>. */
+static int qng_state_and_derivatives(vqe_solver_t *solver, const double *params,
+                                     complex_t *psi0, complex_t *dpsi, complex_t *ov,
+                                     size_t n, size_t dim) {
+    const double delta = 1e-4;   /* central-difference step for the CUSTOM path */
+    double *saved  = malloc(n * sizeof(double));
+    double *pshift = malloc(n * sizeof(double));
+    if (!saved || !pshift) { free(saved); free(pshift); return -1; }
     memcpy(saved, solver->ansatz->parameters, n * sizeof(double));
 
     int rc = 0;
     quantum_state_t st;
 
-    /* |psi(params)> */
     if (qng_prepare_state(solver, params, &st) != 0) { rc = -1; goto done; }
     memcpy(psi0, st.amplitudes, dim * sizeof(complex_t));
     quantum_state_free(&st);
 
-    /* d_i|psi>: exact analytic derivatives (generator insertion, no
-     * finite-difference error, n replays not 2n) for the hardware-efficient,
-     * UCCSD, and symmetry-preserving ansaetze; central differences remain the
-     * fallback for a CUSTOM ansatz whose gate structure is unknown. The UCCSD /
-     * symmetry-preserving derivatives live in vqe.c (they need its private
-     * circuit-data structs). */
     if (solver->ansatz->type == VQE_ANSATZ_HARDWARE_EFFICIENT) {
         if (qng_hea_state_derivatives(solver, params, dpsi, dim) != 0) { rc = -1; goto done; }
     } else if (solver->ansatz->type == VQE_ANSATZ_UCCSD) {
@@ -157,29 +151,81 @@ int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out)
         }
     }
 
-    /* overlaps <psi | d_i psi> */
     for (size_t i = 0; i < n; i++) {
         complex_t s = 0.0;
         for (size_t x = 0; x < dim; x++) s += conj(psi0[x]) * dpsi[i * dim + x];
         ov[i] = s;
     }
 
-    /* g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>], symmetrized */
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = i; j < n; j++) {
-            complex_t a = 0.0;
-            for (size_t x = 0; x < dim; x++)
-                a += conj(dpsi[i * dim + x]) * dpsi[j * dim + x];
-            /* <d_i psi|psi> = conj(<psi|d_i psi>) = conj(ov[i]) */
-            double g = creal(a) - creal(conj(ov[i]) * ov[j]);
-            qgt_out[i * n + j] = g;
-            qgt_out[j * n + i] = g;
-        }
-    }
-
 done:
     memcpy(solver->ansatz->parameters, saved, n * sizeof(double));   /* restore */
-    free(saved); free(pshift); free(psi0); free(dpsi); free(ov);
+    free(saved); free(pshift);
+    return rc;
+}
+
+int vqe_compute_qgt(vqe_solver_t *solver, const double *params, double *qgt_out) {
+    if (!solver || !params || !qgt_out) return -1;
+    const size_t n   = solver->ansatz->num_parameters;
+    const size_t dim = (size_t)1 << solver->hamiltonian->num_qubits;
+
+    complex_t *psi0 = malloc(dim * sizeof(complex_t));
+    complex_t *dpsi = malloc(n * dim * sizeof(complex_t));   /* row i = d_i psi */
+    complex_t *ov   = malloc(n * sizeof(complex_t));         /* <psi | d_i psi> */
+    if (!psi0 || !dpsi || !ov) { free(psi0); free(dpsi); free(ov); return -1; }
+
+    int rc = qng_state_and_derivatives(solver, params, psi0, dpsi, ov, n, dim);
+    if (rc == 0) {
+        /* g_ij = Re[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>], symmetrized. */
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = i; j < n; j++) {
+                complex_t a = 0.0;
+                for (size_t x = 0; x < dim; x++)
+                    a += conj(dpsi[i * dim + x]) * dpsi[j * dim + x];
+                /* <d_i psi|psi> = conj(<psi|d_i psi>) = conj(ov[i]) */
+                double g = creal(a) - creal(conj(ov[i]) * ov[j]);
+                qgt_out[i * n + j] = g;
+                qgt_out[j * n + i] = g;
+            }
+        }
+    }
+    free(psi0); free(dpsi); free(ov);
+    return rc;
+}
+
+int vqe_compute_berry_curvature(vqe_solver_t *solver, const double *params,
+                                double *berry_out) {
+    if (!solver || !params || !berry_out) return -1;
+    const size_t n   = solver->ansatz->num_parameters;
+    const size_t dim = (size_t)1 << solver->hamiltonian->num_qubits;
+
+    complex_t *psi0 = malloc(dim * sizeof(complex_t));
+    complex_t *dpsi = malloc(n * dim * sizeof(complex_t));
+    complex_t *ov   = malloc(n * sizeof(complex_t));
+    if (!psi0 || !dpsi || !ov) { free(psi0); free(dpsi); free(ov); return -1; }
+
+    int rc = qng_state_and_derivatives(solver, params, psi0, dpsi, ov, n, dim);
+    if (rc == 0) {
+        /* Berry curvature is the antisymmetric imaginary half of the QGT:
+         *   F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>].
+         * Q is Hermitian, so F is real with F_ii = 0 and F_ji = -F_ij.  The
+         * -2 Im convention makes the surface flux of F integrate (via Stokes)
+         * to the Berry phase around a closed parameter loop, and over a closed
+         * parameter 2-manifold to 2*pi times the Chern number.  For a real
+         * ansatz (only RY / CNOT / Givens / double-excitation gates) the state
+         * is real, Q is real, and F vanishes identically. */
+        for (size_t i = 0; i < n; i++) {
+            berry_out[i * n + i] = 0.0;
+            for (size_t j = i + 1; j < n; j++) {
+                complex_t a = 0.0;
+                for (size_t x = 0; x < dim; x++)
+                    a += conj(dpsi[i * dim + x]) * dpsi[j * dim + x];
+                double F = -2.0 * (cimag(a) - cimag(conj(ov[i]) * ov[j]));
+                berry_out[i * n + j] =  F;
+                berry_out[j * n + i] = -F;
+            }
+        }
+    }
+    free(psi0); free(dpsi); free(ov);
     return rc;
 }
 

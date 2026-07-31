@@ -51,9 +51,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from that, R_z(mπ/5) is exact and H, X and T are each proved impossible.
   Corroborated by exhaustive enumeration to length 12: closest approaches
   0.066 (H), 0.113 (X), 0.075 (T), 3.3e-16 (Z).
+- **VQE Berry curvature (`vqe_compute_berry_curvature`).** The antisymmetric
+  imaginary half of the quantum geometric tensor,
+  `F_ij = -2 Im[<d_i psi|d_j psi> - <d_i psi|psi><psi|d_j psi>]`, computed from
+  the same exact analytic parameter derivatives (generator insertion) already
+  used by `vqe_compute_qgt`. The two verbs return the real and imaginary halves
+  of the one Hermitian QGT `Q = g - (i/2) F`. `F` is real antisymmetric with
+  zero diagonal; the `-2 Im` convention makes its flux integrate by Stokes to
+  the Berry phase around a closed parameter loop and to `2*pi` times the Chern
+  number over a closed parameter 2-manifold. A real ansatz (RY/CNOT/Givens/
+  double-excitation only) gives `F = 0` identically. New
+  `test_qng_berry_curvature` covers the closed-form single-qubit
+  `F01 = -sin(alpha)/2`, antisymmetry, the real-ansatz vanishing, and Chern
+  number `-1` for the single-qubit sweep. Contributed in PR #17.
+- **User-supplied VQE ansatz (`vqe_create_custom_ansatz`).** Constructs a
+  `VQE_ANSATZ_CUSTOM` ansatz from a caller-supplied circuit callback
+  (`vqe_custom_ansatz_fn`), making the enum value reachable for the first time:
+  `vqe_apply_ansatz` now dispatches it, so `vqe_compute_energy`,
+  `vqe_compute_gradient`, `vqe_solve`, `vqe_compute_qgt`, and
+  `vqe_compute_berry_curvature` all accept a custom circuit. The geometric verbs
+  differentiate it by central differences on the statevector, the fallback the
+  header already documented but no caller could reach.
+  `vqe_apply_ansatz_noisy` returns `QS_ERROR_NOT_SUPPORTED` for a custom ansatz,
+  because the built-in noisy paths interleave the noise model's error channels
+  after each individual gate and the library cannot see inside the callback to
+  place them. New `test_custom_ansatz_end_to_end` builds a custom circuit that
+  is gate-for-gate the hardware-efficient ansatz and cross-checks the
+  central-difference metric, curvature, energy, and gradient against the
+  built-in exact analytic path on 1- and 2-qubit systems.
 
 ### Changed
 
+- The `@stability` tags in `src/algorithms/vqe.h` now read `evolving`, the tier
+  `docs/STABLE_ABI.md` defines, instead of `experimental`, which was not a tier
+  the project used anywhere. `docs/STABLE_ABI.md` gains the tier table those
+  tags refer to.
 - **The npm packages moved to the `@tsotchkecorp` scope.** As of 1.2.1 the
   JavaScript/WebAssembly bindings publish as `@tsotchkecorp/moonlab`,
   `@tsotchkecorp/moonlab-algorithms`, `@tsotchkecorp/moonlab-viz`,

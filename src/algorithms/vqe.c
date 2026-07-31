@@ -650,6 +650,62 @@ vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
     return ansatz;
 }
 
+/* Payload of a VQE_ANSATZ_CUSTOM ansatz: the caller's circuit callback and the
+ * opaque pointer it is invoked with.  Owned by the ansatz (vqe_ansatz_free
+ * releases it via the generic circuit_data free); user_data is not owned. */
+typedef struct {
+    vqe_custom_ansatz_fn apply;
+    void                *user_data;
+} custom_ansatz_data_t;
+
+vqe_ansatz_t* vqe_create_custom_ansatz(
+    size_t num_qubits,
+    size_t num_parameters,
+    vqe_custom_ansatz_fn apply,
+    void *user_data
+) {
+    if (num_qubits == 0 || num_qubits > MAX_QUBITS ||
+        num_parameters == 0 || !apply) {
+        return NULL;
+    }
+
+    vqe_ansatz_t *ansatz = malloc(sizeof(vqe_ansatz_t));
+    if (!ansatz) return NULL;
+
+    ansatz->type = VQE_ANSATZ_CUSTOM;
+    ansatz->num_qubits = num_qubits;
+    /* A custom circuit has no layer structure the library can see; the
+     * callback owns its own depth.  Report one layer so consumers that read
+     * num_layers (progress reporting, resource estimates) get a sane value. */
+    ansatz->num_layers = 1;
+    ansatz->num_parameters = num_parameters;
+
+    /* Zero start: unlike the built-ins we cannot know a good initial point for
+     * an arbitrary circuit, and a deterministic origin keeps repeated runs
+     * reproducible.  Callers set ansatz->parameters before optimizing. */
+    ansatz->parameters = calloc(num_parameters, sizeof(double));
+    if (!ansatz->parameters) { free(ansatz); return NULL; }
+
+    custom_ansatz_data_t *d = malloc(sizeof(custom_ansatz_data_t));
+    if (!d) { free(ansatz->parameters); free(ansatz); return NULL; }
+    d->apply = apply;
+    d->user_data = user_data;
+    ansatz->circuit_data = d;
+
+    return ansatz;
+}
+
+static qs_error_t vqe_apply_custom_ansatz(
+    quantum_state_t *state,
+    const vqe_ansatz_t *ansatz
+) {
+    const custom_ansatz_data_t *d =
+        (const custom_ansatz_data_t*)ansatz->circuit_data;
+    if (!d || !d->apply) return QS_ERROR_INVALID_STATE;
+    return d->apply(state, ansatz->parameters, ansatz->num_parameters,
+                    d->user_data);
+}
+
 static qs_error_t vqe_apply_symmetry_preserving_ansatz(
     quantum_state_t *state,
     const vqe_ansatz_t *ansatz
@@ -704,6 +760,9 @@ qs_error_t vqe_apply_ansatz(
 
         case VQE_ANSATZ_SYMMETRY_PRESERVING:
             return vqe_apply_symmetry_preserving_ansatz(state, ansatz);
+
+        case VQE_ANSATZ_CUSTOM:
+            return vqe_apply_custom_ansatz(state, ansatz);
 
         default:
             return QS_ERROR_INVALID_STATE;
@@ -2602,6 +2661,16 @@ qs_error_t vqe_apply_ansatz_noisy(
 
         case VQE_ANSATZ_UCCSD:
             return vqe_apply_uccsd_ansatz_noisy(state, ansatz, noise, entropy);
+
+        case VQE_ANSATZ_CUSTOM:
+            /* The built-in noisy paths interleave the noise model's error
+             * channels after each individual gate.  A custom circuit is an
+             * opaque callback, so the library has no gate boundaries to place
+             * them at, and applying a single terminal round instead would be a
+             * different noise process wearing the same name.  A callback that
+             * needs NISQ noise applies the channels itself between its own
+             * gates.  The ideal path (vqe_apply_ansatz) is fully supported. */
+            return QS_ERROR_NOT_SUPPORTED;
 
         default:
             return QS_ERROR_INVALID_STATE;
