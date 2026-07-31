@@ -276,6 +276,62 @@ MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
 );
 
 /**
+ * @brief Caller-supplied circuit for a VQE_ANSATZ_CUSTOM ansatz.
+ *
+ * Applies the parameterized circuit U(parameters) to STATE, which arrives
+ * already prepared in the Hartree-Fock reference of the active Hamiltonian
+ * (exactly as the built-in ansaetze see it).  The callback must not free or
+ * reallocate STATE.
+ *
+ * @param state Quantum state to evolve in place (num_qubits qubits)
+ * @param parameters Current parameter values (num_parameters slots)
+ * @param num_parameters Length of PARAMETERS
+ * @param user_data Opaque pointer handed to vqe_create_custom_ansatz
+ * @return QS_SUCCESS on success, any other qs_error_t on failure
+ */
+typedef qs_error_t (*vqe_custom_ansatz_fn)(
+    quantum_state_t *state,
+    const double *parameters,
+    size_t num_parameters,
+    void *user_data
+);
+
+/**
+ * @brief Create a VQE_ANSATZ_CUSTOM ansatz from a user-supplied circuit.
+ *
+ * The returned ansatz is a first-class ansatz everywhere the type is
+ * dispatched on the ideal statevector: vqe_apply_ansatz routes to APPLY, so
+ * vqe_compute_energy, vqe_compute_gradient, vqe_solve, and the geometric-tensor
+ * verbs vqe_compute_qgt / vqe_compute_berry_curvature all work.  The geometric
+ * verbs differentiate a custom circuit by central differences on the
+ * statevector, since its gate structure is opaque to the library, where the
+ * built-in ansaetze use exact analytic generator insertion.
+ *
+ * vqe_apply_ansatz_noisy returns QS_ERROR_NOT_SUPPORTED for a custom ansatz:
+ * the built-in noisy paths interleave the noise model's error channels after
+ * each individual gate, and the library cannot see inside APPLY to place them.
+ * A callback that needs NISQ noise applies the channels itself -- it owns the
+ * gate sequence and can call the noise API between its own gates.
+ *
+ * USER_DATA is not owned: vqe_ansatz_free releases only the ansatz itself.
+ * The initial parameter vector is all zeros; write ansatz->parameters (or pass
+ * a parameter vector to the compute verbs) to set a starting point.
+ *
+ * @param num_qubits Number of qubits the circuit acts on (1..MAX_QUBITS)
+ * @param num_parameters Number of variational parameters (>= 1)
+ * @param apply Circuit callback (must be non-NULL)
+ * @param user_data Opaque pointer forwarded to APPLY on every call
+ * @return Ansatz structure, or NULL on invalid arguments / allocation failure
+ * @stability evolving
+ */
+MOONLAB_API vqe_ansatz_t* vqe_create_custom_ansatz(
+    size_t num_qubits,
+    size_t num_parameters,
+    vqe_custom_ansatz_fn apply,
+    void *user_data
+);
+
+/**
  * @brief Free ansatz structure
  * @param ansatz Ansatz to free
  */
