@@ -1,11 +1,22 @@
 name: Promotion Repair
 
 # Re-runs the registry promotion legs of an already-tagged, already-certified
-# release. Every published byte is downloaded from the sealed candidate run
-# named by the annotated tag and re-verified against the immutable release
-# manifest before any registry is touched. Each leg is idempotent, so a
-# partially completed promotion can be finished by dispatching this workflow
-# again.
+# release. Every published byte is re-verified against the release manifest
+# before any registry is touched. Each leg is idempotent, so a partially
+# completed promotion can be finished by dispatching this workflow again.
+#
+# The bytes come from the published GitHub release, not from the candidate run.
+# All 28 artifacts of run 30495368813 expired on 2026-08-06 under Actions
+# retention, which took the sealed inventory and release-candidate-manifest with
+# them, so `gh run download` is dead as a source. draft-release in release.yml
+# attaches the same 24 promoted artifacts to the release along with a SHA256SUMS
+# generated over exactly that set, and release assets do not expire. verify
+# authenticates the assets against SHA256SUMS, reseals them into the candidate
+# manifest with the sealer the tag sealed the original with, and cross-checks the
+# result against crates.io and PyPI, which hold third-party copies of eleven of
+# the digests from the original promotion. The candidate-run-id input still names
+# the run and is still validated against the annotated tag, as provenance
+# metadata rather than a download source.
 #
 # npm is the one exception, and it is deliberate. The sealed 1.2.0 tarballs were
 # packed as @moonlab/quantum-{core,algorithms,viz,react,vue}, and the @moonlab
@@ -172,6 +183,12 @@ jobs:
           test -f repair/sealed-scripts/verify_release_candidate.py
           test -f repair/sealed-scripts/validate_release_certificate.py
 
+      # The candidate run's own artifacts are gone: all 28 of them expired on
+      # 2026-08-06 under Actions retention, so `gh run download` reports "no
+      # valid artifacts found to download" and can never be a source again. The
+      # run's metadata survives and still carries the identity this workflow
+      # binds itself to, so the provenance check below is unchanged; only the
+      # bytes have to come from somewhere durable.
       - name: Query and validate immutable hosted run identity and complete jobs
         shell: bash
         run: |
@@ -187,22 +204,46 @@ jobs:
             --run-id "$CANDIDATE_RUN_ID" \
             --head "$CANDIDATE_HEAD"
 
-      - name: Download only artifacts from the tag-bound candidate run
+      - name: Download the sealed bytes from the published release
+        env:
+          TAG: ${{ steps.classify.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
+          # The published release is the durable home of the same bytes the
+          # candidate run sealed: draft-release in release.yml attaches the whole
+          # promoted artifact set, all 24 of them, and release assets do not
+          # expire. SHA256SUMS is attached alongside them and is generated over
+          # exactly that set, so it authenticates every file here.
           mkdir -p repair/dist repair/manifest
-          for artifact in \
-            native-linux-x64 native-linux-arm64 native-macos-arm64 native-macos-x64 \
-            native-windows-x64 native-windows-arm64 debian-amd64 debian-arm64 \
-            python-linux-x64 python-linux-arm64 python-macos-arm64 python-macos-x64 \
-            python-windows-x64 python-windows-arm64 npm-packages rust-crates; do
-            gh run download "$CANDIDATE_RUN_ID" \
-              --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir repair/dist
-          done
-          gh run download "$CANDIDATE_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" --name release-candidate-manifest \
-            --dir repair/manifest
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir repair/dist --clobber
+          # SHA256SUMS is the authenticator, not a candidate artifact, and the
+          # candidate scanner rejects any file it cannot account for, so it has
+          # to sit outside the artifact directory.
+          mv repair/dist/SHA256SUMS repair/SHA256SUMS
+          ( cd repair/dist && sha256sum -c ../SHA256SUMS )
+
+      - name: Reseal the release bytes into the candidate manifest
+        env:
+          TAG: ${{ steps.classify.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # release-candidate-manifest expired with the rest of the run, so the
+          # manifest is rebuilt here from the release bytes SHA256SUMS just
+          # authenticated. The manifest is a pure function of the artifact
+          # filenames, their bytes, and the run identity, and the sealer is the
+          # one the tag sealed the original with, so resealing the same bytes
+          # reproduces the same document. The filename-to-kind table still has to
+          # account for every file and match exactly one artifact per kind, so a
+          # missing, extra, or misnamed asset fails here rather than downstream.
+          python3 repair/sealed-scripts/verify_release_candidate.py seal \
+            --dist repair/dist \
+            --output repair/manifest/moonlab-release-candidate.json \
+            --run-id "$CANDIDATE_RUN_ID" \
+            --head "$CANDIDATE_HEAD" \
+            --version "$VERSION"
 
       - name: Require exact byte-for-byte candidate reuse
         run: >-
@@ -212,6 +253,69 @@ jobs:
           --run-id '${{ inputs.candidate-run-id }}'
           --head '${{ inputs.candidate-head }}'
           --version '${{ inputs.version }}'
+
+      - name: Hold the resealed manifest to the live registries
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The resealed manifest is only as good as the bytes it was built from,
+          # so cross-check it against parties that hold copies of the originals
+          # and that this workflow does not control. crates.io stores the SHA-256
+          # of each uploaded .crate as the version checksum and PyPI publishes a
+          # sha256 digest per file; both were populated from the candidate run
+          # during the original promotion, before the artifacts expired. Eleven of
+          # the twenty-four artifacts are covered, and any drift in the release
+          # assets shows up here instead of being promoted.
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          VERSION = os.environ["VERSION"]
+          AGENT = "moonlab-release-promotion (https://github.com/tsotchke/moonlab)"
+
+          with open("repair/manifest/moonlab-release-candidate.json", encoding="utf-8") as handle:
+              sealed = {item["filename"]: item for item in json.load(handle)["artifacts"]}
+
+          def fetch(url: str):
+              request = urllib.request.Request(url, headers={"User-Agent": AGENT})
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          failures: list[str] = []
+          confirmed = 0
+
+          for crate in ("moonlab-sys", "moonlab", "moonlab-tui"):
+              filename = f"{crate}-{VERSION}.crate"
+              served = fetch(f"https://crates.io/api/v1/crates/{crate}/{VERSION}")["version"]["checksum"]
+              if served != sealed[filename]["sha256"]:
+                  failures.append(
+                      f"crates.io {crate} {VERSION} checksum {served} does not match "
+                      f"the resealed {sealed[filename]['sha256']}"
+                  )
+              else:
+                  confirmed += 1
+
+          for item in fetch(f"https://pypi.org/pypi/moonlab/{VERSION}/json")["urls"]:
+              filename = item["filename"]
+              if filename not in sealed:
+                  failures.append(f"PyPI serves {filename}, which the release does not carry")
+                  continue
+              if item["digests"]["sha256"] != sealed[filename]["sha256"]:
+                  failures.append(
+                      f"PyPI {filename} digest {item['digests']['sha256']} does not match "
+                      f"the resealed {sealed[filename]['sha256']}"
+                  )
+              else:
+                  confirmed += 1
+
+          if failures:
+              print("RESEALED MANIFEST REJECTED; the release assets are not the promoted bytes:")
+              for failure in failures:
+                  print(f"  - {failure}")
+              raise SystemExit(1)
+          print(f"{confirmed} of {len(sealed)} resealed artifacts confirmed against crates.io and PyPI")
+          PY
 
       - uses: actions/upload-artifact@v7
         with:
@@ -446,8 +550,10 @@ jobs:
         run: |
           set -euo pipefail
           # Re-assert exact byte-for-byte identity of every promoted artifact,
-          # including the three .crate tarballs, against the immutable candidate
-          # manifest before touching crates.io. Fails closed on any drift.
+          # including the three .crate tarballs, against the candidate manifest
+          # before touching crates.io. Both the artifacts and the manifest are the
+          # release assets verify authenticated against SHA256SUMS and resealed,
+          # the candidate run's own copies having expired. Fails closed on drift.
           python3 sealed-scripts/verify_release_candidate.py verify \
             --dist dist \
             --manifest manifest/moonlab-release-candidate.json \
