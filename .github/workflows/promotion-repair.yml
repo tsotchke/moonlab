@@ -1,11 +1,28 @@
 name: Promotion Repair
 
 # Re-runs the registry promotion legs of an already-tagged, already-certified
-# release without rebuilding anything. Every published byte is downloaded from
-# the sealed candidate run named by the annotated tag and re-verified against
-# the immutable release manifest before any registry is touched. Each leg is
-# idempotent, so a partially completed promotion can be finished by dispatching
-# this workflow again.
+# release. Every published byte is downloaded from the sealed candidate run
+# named by the annotated tag and re-verified against the immutable release
+# manifest before any registry is touched. Each leg is idempotent, so a
+# partially completed promotion can be finished by dispatching this workflow
+# again.
+#
+# npm is the one exception, and it is deliberate. The sealed 1.2.0 tarballs were
+# packed as @moonlab/quantum-{core,algorithms,viz,react,vue}, and the @moonlab
+# npm scope is registered to an unrelated account and cannot be obtained. The
+# scope is baked into the manifest name fields, the workspace dependency ranges,
+# and every import specifier inside those tarballs, so no amount of retrying can
+# publish them. f5f037b renamed the five packages to @tsotchkecorp/moonlab,
+# -algorithms, -viz, -react, and -vue, and it is the only post-tag commit that
+# touched bindings/javascript.
+#
+# Dispatch this workflow from repair/v1.2.0-npm, which is exactly v1.2.0 plus
+# f5f037b (and the workflow commits): the C sources, the emscripten inputs, and
+# the TypeScript sit at their certified tag state and only the package names
+# differ. publish-npm therefore rebuilds the five packages from that tree and
+# publishes them under the new names, and finalize records what npm serves
+# instead of matching it to the certificate. Every non-npm leg still republishes
+# the sealed bytes and is still held to the certificate exactly as before.
 
 on:
   workflow_dispatch:
@@ -124,6 +141,37 @@ jobs:
             fi
           } >> "$GITHUB_OUTPUT"
 
+      - name: Materialize the sealed candidate verifier from the annotated tag
+        env:
+          TAG: ${{ steps.classify.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # RELEASE_ARTIFACT_SPECS is the filename-to-kind table the candidate
+          # scanner matches the sealed inventory against, and f5f037b repointed
+          # its five npm entries at the @tsotchkecorp tarball names the rebuild
+          # produces. This branch carries that commit, so its copy of the table
+          # no longer describes the sealed bytes, which are still named
+          # moonlab-quantum-*.tgz and always will be.
+          #
+          # Verify the immutable candidate with the exact verifier the tag sealed
+          # it with, taken from the annotated tag this run already bound itself
+          # to. That keeps the sealed inventory held to the certificate without
+          # forking the branch copy of the scripts away from master. The rebuilt
+          # npm tarballs are a separate artifact set and are checked by
+          # scripts/verify_npm_packages.mjs inside publish-npm.
+          #
+          # Take the whole directory rather than the two entry points: the
+          # verifier imports validate_release_certificate, which in turn imports
+          # moonlab_linux_portability and moonlab_source_identity as siblings, and
+          # only the script's own directory lands on sys.path when it runs from
+          # outside the tree.
+          mkdir -p repair/sealed-scripts
+          git archive "refs/tags/${TAG}" scripts \
+            | tar -x --strip-components=1 -C repair/sealed-scripts
+          test -f repair/sealed-scripts/verify_release_candidate.py
+          test -f repair/sealed-scripts/validate_release_certificate.py
+
       - name: Query and validate immutable hosted run identity and complete jobs
         shell: bash
         run: |
@@ -134,7 +182,7 @@ jobs:
             --json databaseId,url,headSha,conclusion,event,workflowName,jobs \
             | jq '{databaseId,url,headSha,conclusion,event,workflowName,jobs:[.jobs[]|{name,conclusion}]}' \
             > repair/candidate-run.json
-          python3 scripts/verify_release_candidate.py verify-run \
+          python3 repair/sealed-scripts/verify_release_candidate.py verify-run \
             --run-json repair/candidate-run.json \
             --run-id "$CANDIDATE_RUN_ID" \
             --head "$CANDIDATE_HEAD"
@@ -158,7 +206,7 @@ jobs:
 
       - name: Require exact byte-for-byte candidate reuse
         run: >-
-          python3 scripts/verify_release_candidate.py verify
+          python3 repair/sealed-scripts/verify_release_candidate.py verify
           --dist repair/dist
           --manifest repair/manifest/moonlab-release-candidate.json
           --run-id '${{ inputs.candidate-run-id }}'
@@ -174,6 +222,13 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
+          name: repair-sealed-verifier
+          path: repair/sealed-scripts/**
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        with:
           name: repair-release-manifest
           path: repair/manifest/moonlab-release-candidate.json
           if-no-files-found: error
@@ -182,23 +237,28 @@ jobs:
   publish-npm:
     needs: verify
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
     permissions:
       contents: read
       id-token: write
     steps:
+      # The sealed 1.2.0 npm tarballs carry the unobtainable @moonlab scope in
+      # their manifest name fields, their workspace dependency ranges, and every
+      # import specifier inside them, so they are permanently unpublishable and
+      # this job does not download them. It rebuilds instead, from the ref the
+      # workflow was dispatched from: repair/v1.2.0-npm is the v1.2.0 tag plus
+      # f5f037b, the only post-tag commit that touched bindings/javascript, so
+      # the C sources the WASM module is compiled from and the TypeScript the
+      # bundles are built from are byte-identical to the certified tag and only
+      # the five package names differ. Dispatching from master instead would
+      # compile post-tag C changes into a 1.2.0 artifact; do not do that.
+      #
+      # The build recipe below is lifted from release.yml's npm-packages job at
+      # this same ref, so the rebuild runs the toolchain, the test suites, and
+      # the pack-and-verify step the sealed candidate was produced by.
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: repair-release-artifacts
-          path: dist
-
-      - uses: actions/download-artifact@v7
-        with:
-          name: repair-release-manifest
-          path: manifest
 
       - uses: actions/setup-node@v6
         with:
@@ -206,24 +266,48 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Publish the exact tested tarballs that npm is still missing
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.22
+
+      - name: Build WASM BLAS
+        run: bindings/javascript/packages/core/emscripten/build-clapack-wasm.sh
+
+      - name: Install, build, and test workspace
+        working-directory: bindings/javascript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+          # `pnpm test` (turbo) only reaches each package's WASM-free vitest unit
+          # config; the core integration suite (vitest.integration.config.ts) is
+          # what exercises the moonlab.wasm module this job just built and is
+          # about to publish, so run it explicitly as well.
+          pnpm test
+          pnpm run test:integration
+
+      - name: Pack and verify exact npm artifacts
+        run: |
+          set -euo pipefail
+          scripts/package_npm.sh "$RUNNER_TEMP/npm"
+          # Asserts the five manifests carry the @tsotchkecorp names at this
+          # version, that no workspace dependency range escaped the rewrite, that
+          # core ships dist/moonlab.wasm, and that a fresh consumer can install
+          # all five tarballs and run them through ESM, CJS, and tsc --strict.
+          node scripts/verify_npm_packages.mjs "$RUNNER_TEMP/npm"
+
+      - name: Publish the rebuilt packages npm is still missing
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ needs.verify.outputs.npm-tag }}
           VERSION: ${{ needs.verify.outputs.version }}
-          CANDIDATE_RUN_ID: ${{ inputs.candidate-run-id }}
-          CANDIDATE_HEAD: ${{ inputs.candidate-head }}
         shell: bash
         run: |
           set -euo pipefail
-          # Re-assert exact byte-for-byte identity of every promoted artifact
-          # against the immutable candidate manifest before touching npm.
-          python3 scripts/verify_release_candidate.py verify \
-            --dist dist \
-            --manifest manifest/moonlab-release-candidate.json \
-            --run-id "$CANDIDATE_RUN_ID" \
-            --head "$CANDIDATE_HEAD" \
-            --version "$VERSION"
+          pack_dir="$RUNNER_TEMP/npm"
 
           # `npm view <name>@<version> <field>` exits 0 and prints nothing when the
           # package exists without that version, so resolve on output, not status.
@@ -245,43 +329,68 @@ jobs:
             return 1
           }
 
+          # Workspace directory, published name, and pack stem, stated explicitly
+          # because core drops the -core suffix and is the unsuffixed
+          # @tsotchkecorp/moonlab, so the three no longer derive from one stem.
+          # Core is published first: the other four declare it as a dependency at
+          # exactly this version.
           published=0
-          for package in core algorithms viz react vue; do
-            name="@moonlab/quantum-${package}"
-            file="moonlab-quantum-${package}-${VERSION}.tgz"
-            artifact="dist/${file}"
+          for entry in \
+            "core:@tsotchkecorp/moonlab:tsotchkecorp-moonlab" \
+            "algorithms:@tsotchkecorp/moonlab-algorithms:tsotchkecorp-moonlab-algorithms" \
+            "viz:@tsotchkecorp/moonlab-viz:tsotchkecorp-moonlab-viz" \
+            "react:@tsotchkecorp/moonlab-react:tsotchkecorp-moonlab-react" \
+            "vue:@tsotchkecorp/moonlab-vue:tsotchkecorp-moonlab-vue"; do
+            package="${entry%%:*}"
+            rest="${entry#*:}"
+            name="${rest%%:*}"
+            file="${rest##*:}-${VERSION}.tgz"
+            artifact="${pack_dir}/${file}"
             test -f "$artifact"
-            # Bind the tarball filename to its registry name through the certificate.
-            sha="$(jq -er --arg f "$file" --arg n "$name" \
-              '.artifacts[] | select(.filename == $f and .package == $n) | .sha256' \
-              manifest/moonlab-release-candidate.json)"
-            test -n "$sha"
+            built="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
 
             if [[ -n "$(npm_field "$name" version)" ]]; then
               echo "already published, skipping: ${name}@${VERSION}"
+              rebuilt_here=0
             else
-              # npm parses an un-prefixed a/b spec as a GitHub owner/repo shorthand
-              # even when that relative path exists, so the ./ prefix is required.
-              npm publish "./$artifact" --tag "$NPM_TAG" --access public --provenance
+              # npm parses an un-prefixed spec as a registry name or a GitHub
+              # owner/repo shorthand even when that relative path exists, so the
+              # ./ prefix is required. It has to be a relative path for that, so
+              # publish from inside the pack directory rather than prefixing ./
+              # onto an absolute one.
+              ( cd "$pack_dir" && npm publish "./$file" --tag "$NPM_TAG" --access public --provenance )
               published=$((published + 1))
               wait_for_npm "$name"
+              rebuilt_here=1
             fi
 
-            # The registry must serve the certified bytes, whether this run
-            # published them or an earlier one did.
             tarball="$(npm_field "$name" dist.tarball)"
             test -n "$tarball"
-            curl -fsSL "$tarball" -o "registry-${package}.tgz"
-            served="$(sha256sum "registry-${package}.tgz" | cut -d ' ' -f 1)"
-            if [[ "$served" != "$sha" ]]; then
-              echo "REGISTRY DRIFT: ${name}@${VERSION} serves sha256 ${served}, certificate requires ${sha}" >&2
-              exit 1
-            fi
-            advertised="$(npm_field "$name" dist.shasum)"
-            expected_sha1="$(sha1sum "$artifact" | cut -d ' ' -f 1)"
-            if [[ "$advertised" != "$expected_sha1" ]]; then
-              echo "REGISTRY DRIFT: ${name}@${VERSION} advertises shasum ${advertised}, candidate tarball is ${expected_sha1}" >&2
-              exit 1
+            curl -fsSL "$tarball" -o "${RUNNER_TEMP}/registry-${package}.tgz"
+            served="$(sha256sum "${RUNNER_TEMP}/registry-${package}.tgz" | cut -d ' ' -f 1)"
+
+            if [[ "$rebuilt_here" -eq 1 ]]; then
+              # npm stores and serves an uploaded tarball verbatim, so the bytes
+              # this run built and pushed have to come back unchanged. The
+              # certificate is not the reference here: it seals the @moonlab
+              # tarballs this job cannot publish.
+              if [[ "$served" != "$built" ]]; then
+                echo "REGISTRY DRIFT: ${name}@${VERSION} serves sha256 ${served}, this run published ${built}" >&2
+                exit 1
+              fi
+              advertised="$(npm_field "$name" dist.shasum)"
+              expected_sha1="$(sha1sum "$artifact" | cut -d ' ' -f 1)"
+              if [[ "$advertised" != "$expected_sha1" ]]; then
+                echo "REGISTRY DRIFT: ${name}@${VERSION} advertises shasum ${advertised}, this run published ${expected_sha1}" >&2
+                exit 1
+              fi
+            else
+              # An earlier dispatch published this version from its own rebuild.
+              # npm versions are immutable, so those bytes are the release and
+              # this run's rebuild is discarded rather than compared: the two
+              # come from identical source but the toolchain is not bit
+              # reproducible, so an equality check here would fail every rerun.
+              echo "note: ${name}@${VERSION} predates this run; this run rebuilt ${built}"
             fi
             echo "verified ${name}@${VERSION} sha256=${served}"
           done
@@ -306,6 +415,16 @@ jobs:
           name: repair-release-manifest
           path: manifest
 
+      # The sealed inventory still names its npm tarballs moonlab-quantum-*.tgz,
+      # which this branch's RELEASE_ARTIFACT_SPECS no longer matches, so the
+      # re-verification below runs the verifier the tag sealed the candidate
+      # with. verify materialized it from the annotated tag. The crate bytes and
+      # the certificate checks in this job are otherwise unchanged.
+      - uses: actions/download-artifact@v7
+        with:
+          name: repair-sealed-verifier
+          path: sealed-scripts
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -329,7 +448,7 @@ jobs:
           # Re-assert exact byte-for-byte identity of every promoted artifact,
           # including the three .crate tarballs, against the immutable candidate
           # manifest before touching crates.io. Fails closed on any drift.
-          python3 scripts/verify_release_candidate.py verify \
+          python3 sealed-scripts/verify_release_candidate.py verify \
             --dist dist \
             --manifest manifest/moonlab-release-candidate.json \
             --run-id "$CANDIDATE_RUN_ID" \
@@ -544,6 +663,31 @@ jobs:
           artifacts = manifest["artifacts"]
           failures: list[str] = []
 
+          # The certificate seals five npm tarballs packed as
+          # @moonlab/quantum-{core,algorithms,viz,react,vue}. The @moonlab npm
+          # scope belongs to an unrelated account and cannot be obtained, and the
+          # scope is baked into those tarballs' manifest name fields, workspace
+          # dependency ranges, and import specifiers, so those exact bytes can
+          # never reach the registry. The npm leg therefore publishes a rebuild
+          # from the certified v1.2.0 source plus f5f037b, the rename to
+          # @tsotchkecorp, which is byte-different from the sealed tarballs by
+          # construction.
+          #
+          # So for npm this job requires the new names to be live at this version
+          # and records what the registry serves as a supplementary attestation,
+          # rather than matching it against the certificate. Certificate sha256
+          # equality stays mandatory for every other artifact: the PyPI wheels,
+          # the three crates, the Homebrew source tarball, and the release assets
+          # are all the sealed bytes and are held to the certificate below.
+          NPM_REBUILD_NAMES = {
+              "@moonlab/quantum-core": "@tsotchkecorp/moonlab",
+              "@moonlab/quantum-algorithms": "@tsotchkecorp/moonlab-algorithms",
+              "@moonlab/quantum-viz": "@tsotchkecorp/moonlab-viz",
+              "@moonlab/quantum-react": "@tsotchkecorp/moonlab-react",
+              "@moonlab/quantum-vue": "@tsotchkecorp/moonlab-vue",
+          }
+          npm_attestation: dict[str, str] = {}
+
           def fetch(url: str, binary: bool = False):
               request = urllib.request.Request(
                   url, headers={"User-Agent": AGENT, "Accept": "*/*"}
@@ -580,7 +724,8 @@ jobs:
               failures.append(f"PyPI moonlab {VERSION} is not published (HTTP {error.code})")
 
           for package in certified("npm-"):
-              name = package["package"]
+              sealed_name = package["package"]
+              name = NPM_REBUILD_NAMES.get(sealed_name, sealed_name)
               try:
                   document = fetch(
                       f"https://registry.npmjs.org/{name.replace('/', '%2f')}/{VERSION}"
@@ -591,12 +736,9 @@ jobs:
               if document.get("version") != VERSION:
                   failures.append(f"npm {name} does not resolve {VERSION}")
                   continue
-              served_sha = hashlib.sha256(fetch(document["dist"]["tarball"], binary=True)).hexdigest()
-              if served_sha != package["sha256"]:
-                  failures.append(
-                      f"npm {name}@{VERSION} serves sha256 {served_sha}, "
-                      f"the certificate requires {package['sha256']}"
-                  )
+              npm_attestation[name] = hashlib.sha256(
+                  fetch(document["dist"]["tarball"], binary=True)
+              ).hexdigest()
 
           for crate in certified("rust-"):
               name = crate["package"]
@@ -645,12 +787,21 @@ jobs:
           if not release["isDraft"]:
               print(f"release {TAG} is already published")
 
+          if npm_attestation:
+              print(f"npm rebuild attestation for {VERSION} (not certificate-matched):")
+              for name, digest in sorted(npm_attestation.items()):
+                  print(f"  - {name}@{VERSION} sha256={digest}")
+
           if failures:
               print(f"PROMOTION INCOMPLETE for {VERSION}; the GitHub release stays a draft:")
               for failure in failures:
                   print(f"  - {failure}")
               raise SystemExit(1)
-          print(f"every registry serves the certified {VERSION} bytes")
+          print(
+              f"every non-npm registry serves the certified {VERSION} bytes, "
+              f"and all {len(npm_attestation)} npm packages are live under their "
+              "@tsotchkecorp names"
+          )
           PY
 
       - name: Publish the GitHub release
