@@ -31,6 +31,7 @@ class FakeControlPlane:
         # Captures the AUTH line of every request that started with one,
         # so tests can assert the gateway emitted the right wire form.
         self.auth_lines: list[str] = []
+        self.verb_lines: list[str] = []
 
     def __enter__(self) -> "FakeControlPlane":
         self._thread.start()
@@ -69,6 +70,7 @@ class FakeControlPlane:
                     buf += chunk
                 verb_line, _, rest = buf.partition(b"\n")
                 text = verb_line.decode("ascii", errors="replace")
+            self.verb_lines.append(text)
             if text == "HEALTH":
                 conn.sendall(b"OK alive\n")
                 return
@@ -86,7 +88,12 @@ class FakeControlPlane:
                 buf2 = bytearray()
                 for v in (500, 0, 0, 500):
                     buf2 += struct.pack("<Q", v)
-                conn.sendall(b"SAMPLES 4\n" + bytes(buf2))
+                seed = "0123456789abcdef"
+                for token in text.split():
+                    if token.startswith("seed="):
+                        seed = token[len("seed="):]
+                conn.sendall(
+                    f"SAMPLES 4 seed={seed}\n".encode("ascii") + bytes(buf2))
                 return
             conn.sendall(b"ERR -400 unknown verb\n")
         finally:
@@ -183,6 +190,36 @@ def test_shots_round_trip(gateway_pair):
     }))
     assert reply["status"] == "OK"
     assert reply["counts"] == [500, 0, 0, 500]
+    assert reply["seed"] == "0123456789abcdef"
+
+
+def test_seeded_shots_forward_and_echo(gateway_pair):
+    port, cp = gateway_pair
+    reply = asyncio.run(_send(port, {
+        "verb": "SHOTS",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 2\nH 0\nCNOT 1 0\n",
+        "shots": 1000,
+        "seed": "deadbeef",
+    }))
+    assert reply["status"] == "OK"
+    assert reply["seed"] == "00000000deadbeef"
+    assert any(
+        line.endswith("seed=00000000deadbeef") for line in cp.verb_lines
+    ), cp.verb_lines
+
+
+def test_zero_seed_rejected_before_upstream(gateway_pair):
+    port, cp = gateway_pair
+    before = len(cp.verb_lines)
+    reply = asyncio.run(_send(port, {
+        "verb": "SHOTS",
+        "circuit": "# moonlab-circuit v1\nNUM_QUBITS 1\n",
+        "shots": 1,
+        "seed": "0",
+    }))
+    assert reply["status"] == "ERR"
+    assert reply["code"] == -400
+    assert len(cp.verb_lines) == before
 
 
 def test_tenant_form_auth_propagates_through_gateway(gateway_pair):

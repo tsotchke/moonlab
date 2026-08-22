@@ -2,7 +2,7 @@
 //! Server-thread spawned in-process, 1024 Bell samples requested,
 //! every outcome must be 0 or 3 (the Bell support).
 
-use moonlab::control_plane::submit_circuit_shots;
+use moonlab::control_plane::submit_circuit_shots_seeded;
 use moonlab::qgtl::{GateType, QgtlCircuit};
 use moonlab_sys::moonlab_control_serve;
 use std::ffi::CString;
@@ -20,7 +20,7 @@ fn bell_shots_round_trip() {
         let bp = Arc::clone(&bind_port);
         thread::spawn(move || unsafe {
             let port_ptr = bp.as_ref() as *const AtomicU16 as *mut u16;
-            moonlab_control_serve(host.as_ptr(), 0, 1, port_ptr)
+            moonlab_control_serve(host.as_ptr(), 0, 2, port_ptr)
         })
     };
 
@@ -40,8 +40,17 @@ fn bell_shots_round_trip() {
     let text = c.serialize().unwrap();
 
     const N_SHOTS: i32 = 1024;
-    let outcomes = submit_circuit_shots("127.0.0.1", port, &text, N_SHOTS)
-        .expect("shots submission failed");
+    const SEED: u64 = 0x0123_4567_89ab_cdef;
+    let first = submit_circuit_shots_seeded(
+        "127.0.0.1", port, &text, N_SHOTS, Some(SEED))
+        .expect("first seeded shots submission failed");
+    let second = submit_circuit_shots_seeded(
+        "127.0.0.1", port, &text, N_SHOTS, Some(SEED))
+        .expect("second seeded shots submission failed");
+    assert_eq!(first.effective_seed, SEED);
+    assert_eq!(second.effective_seed, SEED);
+    assert_eq!(first.outcomes, second.outcomes);
+    let outcomes = first.outcomes;
     assert_eq!(outcomes.len(), N_SHOTS as usize);
 
     let mut n_bell = 0usize;

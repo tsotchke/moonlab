@@ -558,6 +558,64 @@ the projective operator-norm distance:
 
 Implementation: `src/algorithms/topological/braid_compiler.c`.
 
+## 14. Transverse-field quantum annealing
+
+Moonlab evolves
+
+@f[
+H(s)=-A(s)g_D\sum_i X_i+B(s)g_P
+\left(c+\sum_i h_iZ_i+\sum_{i<j}J_{ij}Z_iZ_j\right),
+\qquad s=t/T.
+@f]
+
+The driver ground state is @f$|+\rangle^{\otimes n}@f$. For a midpoint
+@f$s_k=(k+1/2)/N@f$ and @f$\Delta t=T/N@f$, the default Strang step is
+
+@f[
+e^{-i\Delta t H(s_k)} =
+e^{+i\Delta t A g_D \sum X/2}
+e^{-i\Delta t B g_P H_P}
+e^{+i\Delta t A g_D \sum X/2}+O(\Delta t^3).
+@f]
+
+The signs map directly to Moonlab's gate convention:
+@f$R_X(\theta)=e^{-i\theta X/2}@f$, so each driver half-step uses
+@f$\theta=-\Delta t A g_D@f$. A field term uses
+@f$R_Z(2\Delta t B g_P h_i)@f$, and a coupling uses
+`CNOT(i,j)-RZ(j,2 dt B g_P J_ij)-CNOT(i,j)`.
+
+### 14.1 Full-matrix QUBO map
+
+For the documented convention
+
+@f[
+E(x)=c_Q+\sum_{ij}x_iQ_{ij}x_j,\qquad x_i=(1-z_i)/2,
+@f]
+
+let @f$q_{ij}=Q_{ij}+Q_{ji}@f$ for @f$i<j@f$. Then
+
+@f[
+J_{ij}=q_{ij}/4,\qquad
+h_i=-Q_{ii}/2-\sum_{j\ne i}q_{\min(i,j),\max(i,j)}/4,
+@f]
+
+@f[
+c_I=c_Q+\sum_iQ_{ii}/2+\sum_{i<j}q_{ij}/4.
+@f]
+
+Substitution proves @f$E_Q(x)=E_I(z)@f$ pointwise, including asymmetric
+input matrices. `unit_quantum_annealing` checks this identity on every
+bitstring of an asymmetric three-variable oracle.
+
+### 14.2 What enumeration proves
+
+After evolution, Moonlab scans the same @f$2^n@f$ basis already represented by
+the dense statevector to compute the exact ground energy, degeneracy, final
+classical gap, expected energy, and ground-manifold probability. This scan is
+diagnostic: it never changes the evolved amplitudes or the retained samples.
+The best sampled bitstring and exact ground bitstring are separate result
+fields so a failed anneal cannot be reported as a successful classical solve.
+
 ## References
 
 All bounds and theorems cited above come from the references
@@ -597,3 +655,6 @@ derivations in this document:
   Two Dimensions*, Lect. Notes Phys. 919, Springer (2016),
   doi:10.1007/978-3-319-25607-8. §1.5 for the SSH Zak-phase /
   winding-number sign convention adopted here.
+- Albash and Lidar, Rev. Mod. Phys. 90, 015002 (2018),
+  arXiv:1611.04471: adiabatic quantum computation, schedules, gaps, and
+  open-system limitations.

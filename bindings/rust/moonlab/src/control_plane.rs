@@ -241,8 +241,9 @@ pub fn submit_circuit_shots(
     circuit_text: &str,
     num_shots: i32,
 ) -> Result<Vec<u64>> {
-    submit_circuit_shots_with_timeout(
-        host, port, circuit_text, num_shots, Duration::from_secs(60))
+    Ok(submit_circuit_shots_full(
+        host, port, circuit_text, num_shots, None,
+        false, Duration::from_secs(60))?.outcomes)
 }
 
 /// Same as [`submit_circuit_shots`] but with explicit socket timeout.
@@ -253,10 +254,66 @@ pub fn submit_circuit_shots_with_timeout(
     num_shots: i32,
     timeout: Duration,
 ) -> Result<Vec<u64>> {
+    Ok(submit_circuit_shots_full(
+        host, port, circuit_text, num_shots, None, false, timeout)?.outcomes)
+}
+
+/// Attributed SHOTS result (control protocol v1.1, Moonlab v1.2.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShotSamples {
+    /// Integer bitstring outcome for each shot.
+    pub outcomes: Vec<u64>,
+    /// Exact non-zero seed used by the server.
+    pub effective_seed: u64,
+}
+
+/// Submit shots with an optional exact reproducibility seed.
+///
+/// `None` asks the server to assign a seed and return it.  `Some(seed)`
+/// requires a non-zero `u64` and verifies that the response echoes the exact
+/// requested value.  A pre-v1.1 server that silently ignores the additive
+/// request token is rejected instead of producing falsely attributed data.
+pub fn submit_circuit_shots_seeded(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    num_shots: i32,
+    seed: Option<u64>,
+) -> Result<ShotSamples> {
+    submit_circuit_shots_seeded_with_timeout(
+        host, port, circuit_text, num_shots, seed, Duration::from_secs(60))
+}
+
+/// Same as [`submit_circuit_shots_seeded`] with an explicit socket timeout.
+pub fn submit_circuit_shots_seeded_with_timeout(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    num_shots: i32,
+    seed: Option<u64>,
+    timeout: Duration,
+) -> Result<ShotSamples> {
+    submit_circuit_shots_full(
+        host, port, circuit_text, num_shots, seed, true, timeout)
+}
+
+fn submit_circuit_shots_full(
+    host: &str,
+    port: u16,
+    circuit_text: &str,
+    num_shots: i32,
+    seed: Option<u64>,
+    require_seed_reply: bool,
+    timeout: Duration,
+) -> Result<ShotSamples> {
     if num_shots <= 0 || num_shots > (1 << 20) {
         return Err(QuantumError::Ffi(format!(
             "num_shots {num_shots} out of range [1, 2^20]"
         )));
+    }
+    if seed == Some(0) {
+        return Err(QuantumError::Ffi(
+            "explicit seed must be in [1, 2^64-1]".to_string()));
     }
 
     let addr_str = format!("{host}:{port}");
@@ -277,7 +334,11 @@ pub fn submit_circuit_shots_with_timeout(
         .map_err(|e| QuantumError::Ffi(format!("set_write_timeout: {e}")))?;
 
     let bytes = circuit_text.as_bytes();
-    let header = format!("SHOTS {} {}\n", num_shots, bytes.len());
+    let header = match seed {
+        Some(value) => format!(
+            "SHOTS {} {} seed={:016x}\n", num_shots, bytes.len(), value),
+        None => format!("SHOTS {} {}\n", num_shots, bytes.len()),
+    };
     stream
         .write_all(header.as_bytes())
         .map_err(|e| QuantumError::Ffi(format!("send header: {e}")))?;
@@ -292,12 +353,51 @@ pub fn submit_circuit_shots_with_timeout(
         .map_err(|e| QuantumError::Ffi(format!("recv header: {e}")))?;
 
     if let Some(rest) = resp_hdr.strip_prefix("SAMPLES ") {
-        let n: usize = rest
-            .trim()
+        let mut fields = rest.split_whitespace();
+        let n: usize = fields
+            .next()
+            .ok_or_else(|| QuantumError::Ffi(format!(
+                "malformed SAMPLES header {resp_hdr:?}: missing count")))?
             .parse()
             .map_err(|e| QuantumError::Ffi(format!("malformed SAMPLES header {resp_hdr:?}: {e}")))?;
+        let effective_seed = match fields.next() {
+            Some(token) => {
+                let hex = token.strip_prefix("seed=").ok_or_else(|| {
+                    QuantumError::Ffi(format!(
+                        "malformed SAMPLES header {resp_hdr:?}: bad seed token"))
+                })?;
+                if hex.len() != 16 {
+                    return Err(QuantumError::Ffi(format!(
+                        "malformed SAMPLES header {resp_hdr:?}: seed is not hex64")));
+                }
+                let value = u64::from_str_radix(hex, 16).map_err(|e| {
+                    QuantumError::Ffi(format!(
+                        "malformed SAMPLES header {resp_hdr:?}: {e}"))
+                })?;
+                if value == 0 {
+                    return Err(QuantumError::Ffi(format!(
+                        "malformed SAMPLES header {resp_hdr:?}: zero seed")));
+                }
+                value
+            }
+            None => 0,
+        };
+        if fields.next().is_some() {
+            return Err(QuantumError::Ffi(format!(
+                "malformed SAMPLES header {resp_hdr:?}: trailing fields")));
+        }
         if n == 0 || n > (1usize << 20) {
             return Err(QuantumError::Ffi(format!("implausible shots_back {n}")));
+        }
+        if require_seed_reply && effective_seed == 0 {
+            return Err(QuantumError::Ffi(format!(
+                "server omitted effective seed: {resp_hdr:?}")));
+        }
+        if let Some(requested) = seed {
+            if effective_seed != requested {
+                return Err(QuantumError::Ffi(format!(
+                    "server seed mismatch: requested {requested:016x}, received {effective_seed:016x}")));
+            }
         }
         let mut raw = vec![0u8; n * 8];
         reader
@@ -310,7 +410,7 @@ pub fn submit_circuit_shots_with_timeout(
             buf.copy_from_slice(chunk);
             outs.push(u64::from_le_bytes(buf));
         }
-        Ok(outs)
+        Ok(ShotSamples { outcomes: outs, effective_seed })
     } else if resp_hdr.starts_with("ERR ") {
         Err(QuantumError::Ffi(format!("server rejected: {}", resp_hdr.trim_end())))
     } else {

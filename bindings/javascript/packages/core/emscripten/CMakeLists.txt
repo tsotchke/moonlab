@@ -28,6 +28,7 @@ set(ALGORITHM_SOURCES
     # Quantum natural gradient (Fubini-Study metric; referenced from vqe.c).
     ${QSIM_ROOT}/src/algorithms/vqe_qng.c
     ${QSIM_ROOT}/src/algorithms/qaoa.c
+    ${QSIM_ROOT}/src/algorithms/quantum_annealing.c
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
     # Native reverse-mode autograd (referenced unconditionally from vqe.c).
     ${QSIM_ROOT}/src/algorithms/diff/differentiable.c
@@ -91,6 +92,7 @@ set(APPLICATION_SOURCES
     ${QSIM_ROOT}/src/applications/moonlab_export_lean.c
     ${QSIM_ROOT}/src/applications/moonlab_tdvp_export.c
     ${QSIM_ROOT}/src/applications/moonlab_vqe_export.c
+    ${QSIM_ROOT}/src/applications/moonlab_anneal_export.c
     # qgt.c powers moonlab_qwz_chern; topology binding TS layer
     # also needs the lower-level qgt_* surface (since 0.5.0).
     ${QSIM_ROOT}/src/algorithms/quantum_geometry/qgt.c

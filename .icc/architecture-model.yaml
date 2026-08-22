@@ -206,3 +206,34 @@ invariants:
       mesh node it succeeds, so the "passing" CI test encoded a false invariant
       that only the mesh run exposed.
     enforced_by: [mesh_release_smoke_green]
+
+  - id: attributable-remote-sampling
+    class: unverifiable-compute
+    statement: >
+      Every remote SHOTS execution has one effective non-zero uint64 seed that
+      is authenticated with the request, passed unchanged into execution,
+      returned to the caller, and logged. Replaying the same canonical circuit,
+      shot count, and seed on an independent host yields byte-identical outcome
+      vectors.
+    incident: >
+      The v1.0 control plane hard-coded rng_seed=0 in its SHOTS handler, leaving
+      the sampler to choose a hidden clock seed. Remote work therefore could
+      not be replayed or bound into a per-job receipt.
+    enforced_by: [seeded_shots_local_replay, seeded_shots_protocol_fuzz,
+                  seeded_shots_cross_host_replay]
+
+  - id: quantum-annealing-honesty
+    class: mislabeled-algorithm
+    statement: >
+      Quantum annealing evolves the real state under a declared transverse-field
+      Hamiltonian and schedule, preserves norm, agrees with an independent
+      time-dependent Schrodinger oracle, and never substitutes exhaustive
+      enumeration for evolution. Ising and full-matrix QUBO energies are
+      exactly equivalent under the documented binary-to-spin map.
+    incident: >
+      Moonlab had Ising encoders and QAOA plus prose proposing annealing, but no
+      annealing engine. A thin classical argmin labeled quantum annealing would
+      have produced convincing answers without exercising quantum dynamics.
+    enforced_by: [annealing_rk4_oracle, annealing_qubo_ising_parity,
+                  annealing_binding_parity, annealing_asan_ubsan_clean,
+                  annealing_abi_080]

@@ -68,6 +68,8 @@ python test_moonlab.py
   with native reverse-mode autograd (adjoint-method gradient) for the
   hardware-efficient ansatz in noise-free simulation
 - **QAOA** - Quantum optimization (MaxCut, Ising models)
+- **Quantum annealing** - Exact logical transverse-field Ising and full-QUBO
+  evolution with deterministic samples and ground-state diagnostics
 - **Grover** - Quantum search algorithm
 - **Bell Tests** - CHSH, Mermin (3-qubit GHZ), and Mermin-Klyshko
   N-qubit nonlocality inequalities
@@ -274,6 +276,20 @@ result = qaoa.solve_maxcut(
 )
 print(f"Best cut: {bin(result['best_bitstring'])}")
 print(f"Cut value: {result['best_cost']}")
+```
+
+### Quantum Annealing (QUBO)
+
+```python
+from moonlab.annealing import AnnealConfig, anneal_qubo
+
+result = anneal_qubo(
+    [[-1.0, 1.0], [1.0, -1.0]], offset=1.0,
+    config=AnnealConfig(total_time=12, num_steps=1200,
+                        num_samples=128, seed=0x123456789abcdef0),
+)
+print(result.best_bitstring, result.best_energy,
+      result.success_probability)
 ```
 
 ### Few-Shot Learning

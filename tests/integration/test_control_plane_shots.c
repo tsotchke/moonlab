@@ -33,7 +33,7 @@ static void *server_thread(void *arg)
 {
     server_args_t *sa = (server_args_t *)arg;
     sa->rc = moonlab_control_serve(
-        "127.0.0.1", 0, 2, (uint16_t *)&sa->bind_port);
+        "127.0.0.1", 0, 5, (uint16_t *)&sa->bind_port);
     return NULL;
 }
 
@@ -91,20 +91,58 @@ int main(void)
           "Bell split |00>-|11| = %d within 3-sigma", diff);
     free(outcomes);
 
+    fprintf(stdout, "\n--- seeded replay: identical bytes ---\n");
+    const uint64_t requested_seed = UINT64_C(0x0123456789abcdef);
+    uint64_t effective_a = 0, effective_b = 0;
+    uint64_t *seeded_a = NULL, *seeded_b = NULL;
+    size_t seeded_n_a = 0, seeded_n_b = 0;
+    rc = moonlab_control_submit_circuit_shots_seeded(
+        "127.0.0.1", port, text, 0, N_SHOTS, requested_seed,
+        &seeded_a, &seeded_n_a, &effective_a);
+    CHECK(rc == MOONLAB_CONTROL_OK, "first seeded submission rc=%d", rc);
+    rc = moonlab_control_submit_circuit_shots_seeded(
+        "127.0.0.1", port, text, 0, N_SHOTS, requested_seed,
+        &seeded_b, &seeded_n_b, &effective_b);
+    CHECK(rc == MOONLAB_CONTROL_OK, "second seeded submission rc=%d", rc);
+    CHECK(effective_a == requested_seed && effective_b == requested_seed,
+          "server echoed requested seed %016llx",
+          (unsigned long long)requested_seed);
+    CHECK(seeded_n_a == seeded_n_b && seeded_n_a == (size_t)N_SHOTS,
+          "seeded response lengths match (%zu/%zu)", seeded_n_a, seeded_n_b);
+    CHECK(seeded_a && seeded_b &&
+          memcmp(seeded_a, seeded_b, seeded_n_a * sizeof(uint64_t)) == 0,
+          "same circuit+shots+seed gives byte-identical outcomes");
+    free(seeded_a);
+    free(seeded_b);
+
+    fprintf(stdout, "\n--- assigned seed: echo then replay ---\n");
+    uint64_t assigned_seed = 0, replay_seed = 0;
+    uint64_t *assigned = NULL, *replayed = NULL;
+    size_t assigned_n = 0, replayed_n = 0;
+    rc = moonlab_control_submit_circuit_shots_seeded(
+        "127.0.0.1", port, text, 0, 256, 0,
+        &assigned, &assigned_n, &assigned_seed);
+    CHECK(rc == MOONLAB_CONTROL_OK, "clock-seeded attributed submission rc=%d", rc);
+    CHECK(assigned_seed != 0, "server returned a non-zero effective seed");
+    rc = moonlab_control_submit_circuit_shots_seeded(
+        "127.0.0.1", port, text, 0, 256, assigned_seed,
+        &replayed, &replayed_n, &replay_seed);
+    CHECK(rc == MOONLAB_CONTROL_OK, "assigned-seed replay rc=%d", rc);
+    CHECK(replay_seed == assigned_seed,
+          "replay echoed assigned seed %016llx",
+          (unsigned long long)assigned_seed);
+    CHECK(assigned_n == replayed_n && assigned && replayed &&
+          memcmp(assigned, replayed, assigned_n * sizeof(uint64_t)) == 0,
+          "server-assigned seed reproduces byte-identical outcomes");
+    free(assigned);
+    free(replayed);
+
     fprintf(stdout, "\n--- shots-mode: reject num_shots = 0 ---\n");
     outcomes = NULL; nout = 0;
     rc = moonlab_control_submit_circuit_shots(
         "127.0.0.1", port, text, 0, 0, &outcomes, &nout);
     CHECK(rc == MOONLAB_CONTROL_BAD_ARG,
           "client rejects num_shots=0 locally (rc=%d)", rc);
-
-    /* Drive a real submission so the server max_iters=2 budget is met. */
-    fprintf(stdout, "\n--- shots-mode: 2nd request to drain server ---\n");
-    rc = moonlab_control_submit_circuit_shots(
-        "127.0.0.1", port, text, 0, 16, &outcomes, &nout);
-    CHECK(rc == MOONLAB_CONTROL_OK, "second submission rc=%d", rc);
-    CHECK(nout == 16, "second submission got %zu shots", nout);
-    free(outcomes);
 
     free(text);
     pthread_join(srv_tid, NULL);

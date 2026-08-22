@@ -1,7 +1,8 @@
 # Stable ABI contract -- v1.x
 
-**Current package:** 1.2.1
-**Current ABI:** 0.7.0
+**Current released package:** 1.2.0
+**Development target:** 1.2.1
+**Current development ABI:** 0.8.0
 
 ## Scope
 
@@ -92,11 +93,12 @@ ABI 0.6.0 (this release):
 
 | Header                                       | Symbols |
 |----------------------------------------------|---------|
-| `src/applications/moonlab_export.h`          |     84  |
+| `src/applications/moonlab_export.h`          |     86  |
+| `src/algorithms/quantum_annealing.h`         |     23  |
 | `src/algorithms/tensor_network/ca_mps.h`     |     37  |
 | `src/algorithms/vqe.h`                       |     37  |
 | `src/distributed/scheduler.h`                |     26  |
-| `src/control/control_plane.h`                |     21  |
+| `src/control/control_plane.h`                |     22  |
 | `src/qec/stim_circuit.h`                     |     20  |
 | `src/integration/libirrep_bridge.h`          |     19  |
 | `src/algorithms/quantum_geometry/qgt.h`      |     32  |
@@ -221,6 +223,19 @@ policy above, and the tier will move once the format coverage has had a
 release in the field.
 
 ### v1.2.1 additions
+
+ABI 0.8.0 adds complete closed-system transverse-field quantum annealing.
+`moonlab_anneal_ising_v1` and `moonlab_anneal_qubo_v1` accept plain arrays and
+caller-owned sample buffers, and return the versioned
+`moonlab_anneal_summary_v1`. The full module surface in
+`src/algorithms/quantum_annealing.h` adds exact QUBO conversion, schedule
+inspection, deterministic retained samples, and opaque-result accessors. The
+two stable one-shots are resolved and numerically exercised by the ABI smoke.
+
+`src/control/control_plane.h` adds the beta
+`moonlab_control_submit_circuit_shots_seeded` entry without changing the
+legacy SHOTS client. It requests or discovers the effective v1.1 wire seed and
+fails closed when a pre-v1.1 server omits the echo.
 
 `src/algorithms/vqe.h` (quantum-geometry verbs and the custom-ansatz
 constructor; all additive, no existing signature changed):
@@ -383,13 +398,17 @@ overlays that exercise the full plug-in arc.
 
 ## Wire protocol contract
 
-The control-plane line protocol is frozen at v1.0.  See
-`docs/CONTROL_PLANE.md` for the full reference; the v1.0 guarantees:
+The control-plane line protocol is at v1.1.  See `docs/CONTROL_PLANE.md` for
+the full reference.  The v1.0 guarantees remain in force, with the additive
+v1.1 SHOTS attribution extension:
 
 - Verbs `CIRCUIT`, `SHOTS`, `HEALTH`, `METRICS`, `AUTH`,
   `CIRCUIT_AUTH` keep their existing wire formats.
 - Reply framing tokens (`OK <count>`, `SAMPLES <count>`,
   `METRICS <bytes>`, `ERR <code> <msg>`) keep their existing units.
+- `SHOTS <shots> <bytes> [seed=<hex64>]` accepts an optional non-zero
+  reproducibility seed. `SAMPLES <count> seed=<hex64>` retains `<count>` as
+  the outcome count and adds the effective seed as v1.1 metadata.
 - Status codes `MOONLAB_CONTROL_*` (-400, -401, -402, -403, -405,
   -407, -408, -409) are stable.  New codes may be added in the
   -4xx range; existing codes do not change meaning.
@@ -461,14 +480,15 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 
 | Language | Crate / package                   | Current version |
 |----------|-----------------------------------|------------------|
-| C        | `libquantumsim.{so,dylib,dll}`    | package 1.2.0, stable ABI 0.6.0 |
+| C        | `libquantumsim.{so,dylib,dll}`    | released package 1.2.0 / ABI 0.6.0; development ABI 0.8.0 |
 | Python   | `moonlab` (pip)                   | follows the package version (1.2.0) |
 | Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.0) |
 | JS       | `@tsotchkecorp/moonlab`           | follows the package version (1.2.0) |
 
 Each binding crate/package revs alongside the C library's package version
-(currently 1.2.0) and stays within the same 1.x compatibility line as the
-stable C ABI (currently 0.6.0). Breaking changes in the language idiom of a
+(released at 1.2.0; next target 1.2.1) and stays within the same 1.x
+compatibility line as the stable C ABI (released at 0.6.0; development at
+0.8.0). Breaking changes in the language idiom of a
 single binding (e.g. switching Rust's `Vec<f64>` to `Box<[f64]>`) are
 allowed but rare; each binding's CHANGELOG records them with semver
 discipline.

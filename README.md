@@ -48,6 +48,19 @@ tested as relocatable external CMake packages before upload.
 See [the v1.2.0 release notes](docs/release/v1.2.0-release-notes.md),
 [Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#120---2026-07-23).
 
+## Developing v1.2.1
+
+The v1.2.1 line adds attributable seeded control-plane shots and complete
+closed-system transverse-field quantum annealing. The annealer accepts Ising
+or full-matrix QUBO objectives, evolves the real statevector under linear,
+quadratic, or cosine schedules with second-order product-formula evolution,
+and returns deterministic samples plus exact optimum, degeneracy, final
+problem gap, residual energy, and success probability. C ABI 0.8.0 and the
+Python, Rust, and JavaScript/WASM bindings expose the same contract. See
+[the quantum annealing guide](docs/QUANTUM_ANNEALING.md).
+The complete release delta is tracked in the
+[v1.2.1 release notes](docs/release/v1.2.1-release-notes.md).
+
 ## v1.0 platform foundation
 
 **Open-core extension surfaces.**  Four runtime registries let private

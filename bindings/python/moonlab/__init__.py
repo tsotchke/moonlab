@@ -50,6 +50,15 @@ try:
 except (ImportError, AttributeError, OSError):
     _ALGO_AVAILABLE = False
 
+try:
+    from .annealing import (
+        AnnealError, AnnealSchedule, AnnealConfig, AnnealResult,
+        anneal_ising, anneal_qubo, qubo_to_ising,
+    )
+    _ANNEALING_AVAILABLE = True
+except (ImportError, AttributeError, OSError):
+    _ANNEALING_AVAILABLE = False
+
 # Everything below is optional in exactly the same sense as the guarded
 # blocks further down this file: a stripped / size-trimmed libquantumsim
 # build (e.g. WASM) can be missing any of these entry points, and that
@@ -279,6 +288,11 @@ __all__ = [
 ]
 if _ALGO_AVAILABLE:
     __all__ += ['VQE', 'QAOA', 'Grover', 'BellTest']
+if _ANNEALING_AVAILABLE:
+    __all__ += [
+        'AnnealError', 'AnnealSchedule', 'AnnealConfig', 'AnnealResult',
+        'anneal_ising', 'anneal_qubo', 'qubo_to_ising',
+    ]
 if _BENCHMARKS_AVAILABLE:
     __all__ += ['quantum_volume', 'QuantumVolumeResult']
 if _CLIFFORD_AVAILABLE:

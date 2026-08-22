@@ -1,6 +1,7 @@
 # Cross-language parity matrix
 
-Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
+Coverage of Moonlab capabilities across the four bindings on the v1.2.1
+development line.
 
 | Symbol | Meaning |
 |--------|---------|
@@ -19,6 +20,7 @@ Coverage of Moonlab capabilities across the four bindings as of v1.2.0.
 | VQE + native autograd                   | ✅  | `algorithms.py` | `vqe.rs`      | `vqe.ts`          |
 | VQE ergonomics: UCCSD ansatz, QNG optimizer, string optimizers, hyperparams (since v1.2) | ✅ | `algorithms.py` | ✗ ¹⁸ | `vqe.ts` |
 | QAOA                                    | ✅  | `algorithms.py` | `qaoa.rs`     | `qaoa.ts`         |
+| Quantum annealing (Ising + full QUBO, ABI 0.8.0) | ✅ | `annealing.py` | `annealing.rs` | `annealing.ts` |
 | Noise channels (Kraus trajectory, `noise.h`) | ✅ | `noise.py` | `noise.rs`      | `noise.ts` ¹⁹     |
 | Readout error + composite `noise_model_t` | ✅ | `noise.py`  | `noise.rs` ¹⁹     | `noise.ts` ¹⁹     |
 | Clifford tableau backend                | ✅  | `clifford.py` | `clifford.rs`   | `clifford.ts`     |
