@@ -30,7 +30,7 @@ if [ "${1:-}" = "--source-identity" ]; then
 fi
 
 SOURCE_IDENTITY_JSON="$(source_identity)" || exit 2
-IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT SOURCE_CAPTURED_AT \
+IFS=$'\t' read -r SOURCE_GIT_HEAD SOURCE_GIT_TREE SOURCE_DIRTY SOURCE_FINGERPRINT _SOURCE_CAPTURED_AT \
   < <(python3 - "$SOURCE_IDENTITY_JSON" <<'PY'
 import json
 import sys
@@ -50,6 +50,7 @@ TRACE_DIR="${MOONLAB_TRACE_DIR:-$REPO_ROOT/scripts/icc_traces}"
 TRACE="$TRACE_DIR/moonlab_smoke.jsonl"
 JOBS="${QSIM_SMOKE_JOBS:-2}"          # gentle by default; machine may be fragile
 ICC="${ICC_BIN:-$HOME/Desktop/infinite_context_coder/bin/icc}"
+ICC_REPO="${MOONLAB_ICC_REPO:-moonlab}"
 LOCK_DIR="${MOONLAB_SMOKE_LOCK_DIR:-${BUILD_DIR}.moonlab-smoke.lock}"
 LIBIRREP_SOURCE="${MOONLAB_LIBIRREP_SOURCE:-$REPO_ROOT/../libirrep}"
 LIBIRREP_ROOT=""
@@ -612,13 +613,13 @@ PY
 
 # --- zero_phantom_api / zero_odr_collision via ICC --------------------------
 check_phantom() {
-  local n; n="$("$ICC" phantom-api --repo moonlab 2>/dev/null \
+  local n; n="$("$ICC" phantom-api --repo "$ICC_REPO" 2>/dev/null \
       | python3 -c 'import json,sys;print(json.load(sys.stdin).get("phantom_count","?"))' 2>/dev/null)"
   if [ "$n" = "0" ]; then emit zero_phantom_api PASS "0 phantom declarations"
   else emit zero_phantom_api FAIL "phantom_count=${n:-error}"; fi
 }
 check_odr() {
-  local n; n="$("$ICC" odr-audit --repo moonlab 2>/dev/null \
+  local n; n="$("$ICC" odr-audit --repo "$ICC_REPO" 2>/dev/null \
       | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("summary",{}).get("high","?"))' 2>/dev/null)"
   if [ "$n" = "0" ]; then emit zero_odr_collision PASS "0 high-severity ODR collisions"
   else emit zero_odr_collision FAIL "high-severity collisions=${n:-error}"; fi
@@ -627,7 +628,8 @@ check_odr() {
 # --- hidden_visibility_abi --------------------------------------------------
 check_hidden_visibility() {
   cmake -S . -B "$HIDDEN_DIR" -DCMAKE_BUILD_TYPE=Release \
-    -DQSIM_HIDDEN_VISIBILITY=ON -DQSIM_BUILD_TESTS=ON >/dev/null 2>&1 \
+    -DQSIM_HIDDEN_VISIBILITY=ON -DQSIM_BUILD_TESTS=ON \
+    -DQSIM_BUILD_BENCHMARKS=OFF -DQSIM_BUILD_EXAMPLES=OFF >/dev/null 2>&1 \
     || { emit hidden_visibility_abi FAIL "configure failed"; return; }
   cmake --build "$HIDDEN_DIR" --parallel "$JOBS" >/dev/null 2>&1 \
     || { emit hidden_visibility_abi FAIL "build failed"; return; }
@@ -738,8 +740,9 @@ check_quarantines_empty() {
     [ "$n" -gt 0 ] && detail="$detail ${f##*/}=$n"
   done
   # fuzz crash-seed quarantine dirs (a genuine crash the owning lane must fix)
-  local cp; cp="$(find tests/fuzz -type d -name 'crashes-pending' 2>/dev/null \
-                  -exec sh -c 'ls -A "$1" 2>/dev/null | grep -q . && echo x' _ {} \; | wc -l | tr -d ' ')"
+  local cp; cp="$(find tests/fuzz -type d -name 'crashes-pending' \
+                  -exec sh -c 'ls -A "$1" 2>/dev/null | grep -q . && echo x' _ {} \; \
+                  2>/dev/null | wc -l | tr -d ' ')"
   total=$((total + cp))
   [ "${cp:-0}" -gt 0 ] && detail="$detail fuzz-crashes-pending=$cp"
   if [ "$total" -eq 0 ]; then

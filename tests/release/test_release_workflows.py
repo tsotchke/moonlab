@@ -26,6 +26,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.linux_text = (ROOT / ".github/workflows/linux-compatibility.yml").read_text(
             encoding="utf-8"
         )
+        cls.smoke_text = (ROOT / "scripts/run_moonlab_release_smoke.sh").read_text(
+            encoding="utf-8"
+        )
         cls.release = yaml.safe_load(cls.release_text)
         cls.linux = yaml.safe_load(cls.linux_text)
 
@@ -158,6 +161,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
             *(f"linux-compatibility / {name}" for name in REQUIRED_HOSTED_LINUX_JOBS),
         }
         self.assertEqual(exact, set(REQUIRED_HOSTED_RAW_JOBS))
+
+    def test_release_smoke_is_safe_from_an_isolated_candidate_worktree(self) -> None:
+        self.assertIn('ICC_REPO="${MOONLAB_ICC_REPO:-moonlab}"', self.smoke_text)
+        self.assertIn('phantom-api --repo "$ICC_REPO"', self.smoke_text)
+        self.assertIn('odr-audit --repo "$ICC_REPO"', self.smoke_text)
+        self.assertIn("-DQSIM_BUILD_BENCHMARKS=OFF", self.smoke_text)
+        self.assertIn("-DQSIM_BUILD_EXAMPLES=OFF", self.smoke_text)
 
 
 if __name__ == "__main__":

@@ -449,25 +449,63 @@ void moonlab_anneal_result_free(moonlab_anneal_result_t *result)
     free(result);
 }
 
-#define RESULT_GETTER(type, name, field, fallback) \
-    type name(const moonlab_anneal_result_t *r) { return r ? r->field : fallback; }
+size_t moonlab_anneal_result_num_qubits(const moonlab_anneal_result_t *r) {
+    return r ? r->num_qubits : 0;
+}
 
-RESULT_GETTER(size_t, moonlab_anneal_result_num_qubits, num_qubits, 0)
-RESULT_GETTER(size_t, moonlab_anneal_result_num_samples, num_samples, 0)
-RESULT_GETTER(uint64_t, moonlab_anneal_result_effective_seed, effective_seed, 0)
-RESULT_GETTER(uint64_t, moonlab_anneal_result_best_bitstring, best_bitstring, 0)
-RESULT_GETTER(uint64_t, moonlab_anneal_result_most_likely_bitstring, most_likely_bitstring, 0)
-RESULT_GETTER(uint64_t, moonlab_anneal_result_ground_bitstring, ground_bitstring, 0)
-RESULT_GETTER(size_t, moonlab_anneal_result_ground_degeneracy, ground_degeneracy, 0)
-RESULT_GETTER(double, moonlab_anneal_result_best_energy, best_energy, DBL_MAX)
-RESULT_GETTER(double, moonlab_anneal_result_ground_energy, ground_energy, DBL_MAX)
-RESULT_GETTER(double, moonlab_anneal_result_expected_energy, expected_energy, DBL_MAX)
-RESULT_GETTER(double, moonlab_anneal_result_success_probability, success_probability, 0.0)
-RESULT_GETTER(double, moonlab_anneal_result_residual_energy, residual_energy, DBL_MAX)
-RESULT_GETTER(double, moonlab_anneal_result_problem_gap, problem_gap, 0.0)
-RESULT_GETTER(double, moonlab_anneal_result_final_norm, final_norm, 0.0)
+size_t moonlab_anneal_result_num_samples(const moonlab_anneal_result_t *r) {
+    return r ? r->num_samples : 0;
+}
 
-#undef RESULT_GETTER
+uint64_t moonlab_anneal_result_effective_seed(const moonlab_anneal_result_t *r) {
+    return r ? r->effective_seed : 0;
+}
+
+uint64_t moonlab_anneal_result_best_bitstring(const moonlab_anneal_result_t *r) {
+    return r ? r->best_bitstring : 0;
+}
+
+uint64_t moonlab_anneal_result_most_likely_bitstring(
+    const moonlab_anneal_result_t *r
+) {
+    return r ? r->most_likely_bitstring : 0;
+}
+
+uint64_t moonlab_anneal_result_ground_bitstring(const moonlab_anneal_result_t *r) {
+    return r ? r->ground_bitstring : 0;
+}
+
+size_t moonlab_anneal_result_ground_degeneracy(const moonlab_anneal_result_t *r) {
+    return r ? r->ground_degeneracy : 0;
+}
+
+double moonlab_anneal_result_best_energy(const moonlab_anneal_result_t *r) {
+    return r ? r->best_energy : DBL_MAX;
+}
+
+double moonlab_anneal_result_ground_energy(const moonlab_anneal_result_t *r) {
+    return r ? r->ground_energy : DBL_MAX;
+}
+
+double moonlab_anneal_result_expected_energy(const moonlab_anneal_result_t *r) {
+    return r ? r->expected_energy : DBL_MAX;
+}
+
+double moonlab_anneal_result_success_probability(const moonlab_anneal_result_t *r) {
+    return r ? r->success_probability : 0.0;
+}
+
+double moonlab_anneal_result_residual_energy(const moonlab_anneal_result_t *r) {
+    return r ? r->residual_energy : DBL_MAX;
+}
+
+double moonlab_anneal_result_problem_gap(const moonlab_anneal_result_t *r) {
+    return r ? r->problem_gap : 0.0;
+}
+
+double moonlab_anneal_result_final_norm(const moonlab_anneal_result_t *r) {
+    return r ? r->final_norm : 0.0;
+}
 
 int moonlab_anneal_result_sample(const moonlab_anneal_result_t *result,
                                  size_t index, uint64_t *bitstring_out,
