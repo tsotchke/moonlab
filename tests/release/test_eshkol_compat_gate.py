@@ -63,6 +63,15 @@ class EshkolCompatibilityProducerTest(unittest.TestCase):
         self.assertIn('"kind": "moonlab_eshkol_compatibility"', self.source)
         self.assertIn('"name": "eshkol_v134_quantum_consumer"', self.source)
 
+    def test_trace_is_reset_only_after_clean_identity_capture(self) -> None:
+        clean_check = self.source.index('source_is_clean || fail')
+        capture = self.source.index('capture_source_identity "$RUN_DIR"')
+        reset = self.source.index(': > "$TRACE"')
+        evidence_start = self.source.index("EVIDENCE_STARTED=1")
+        self.assertLess(clean_check, capture)
+        self.assertLess(capture, reset)
+        self.assertLess(reset, evidence_start)
+
 
 if __name__ == "__main__":
     unittest.main()

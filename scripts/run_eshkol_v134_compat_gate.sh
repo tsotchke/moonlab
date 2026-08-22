@@ -148,6 +148,7 @@ RUN_DIR="$BUILD_BASE/run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 LOG_DIR="$RUN_DIR/logs"
 mkdir -p "$LOG_DIR" || fail "unable to create run directory"
 capture_source_identity "$RUN_DIR" || fail "unable to capture clean Moonlab source identity"
+: > "$TRACE" || fail "unable to reset compatibility evidence"
 EVIDENCE_STARTED=1
 
 git -C "$ESH_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "ESHKOL_REPO is not a Git worktree: $ESH_REPO"
