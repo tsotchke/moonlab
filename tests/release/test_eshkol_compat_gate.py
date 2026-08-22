@@ -29,14 +29,15 @@ class EshkolCompatibilityProducerTest(unittest.TestCase):
         self.assertIsNotNone(matrix)
         self.assertEqual(tuple(matrix.group(1).split()), expected)
 
-    def test_tag_is_annotated_and_commit_pinned(self) -> None:
+    def test_published_tag_ref_is_commit_pinned(self) -> None:
         self.assertIn('ESH_TAG="v1.3.4-evolve"', self.source)
         self.assertIn(
             'EXPECTED_ESH_COMMIT="694c31798f3f89d55015492bffd027c01951f7bf"',
             self.source,
         )
-        self.assertIn('cat-file -t "$ESH_TAG"', self.source)
-        self.assertIn('= "tag"', self.source)
+        self.assertIn('show-ref --verify --quiet "refs/tags/$ESH_TAG"', self.source)
+        self.assertIn('rev-parse --verify "refs/tags/$ESH_TAG^{commit}"', self.source)
+        self.assertIn('archive --format=tar "$ESH_COMMIT"', self.source)
 
     def test_build_is_cpu_only_and_uses_clean_source_override(self) -> None:
         for flag in (

@@ -151,8 +151,8 @@ capture_source_identity "$RUN_DIR" || fail "unable to capture clean Moonlab sour
 EVIDENCE_STARTED=1
 
 git -C "$ESH_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "ESHKOL_REPO is not a Git worktree: $ESH_REPO"
-[ "$(git -C "$ESH_REPO" cat-file -t "$ESH_TAG" 2>/dev/null)" = "tag" ] || fail "$ESH_TAG is not an annotated tag in $ESH_REPO"
-ESH_COMMIT="$(git -C "$ESH_REPO" rev-parse --verify "$ESH_TAG^{commit}" 2>/dev/null)" || fail "unable to resolve $ESH_TAG to a commit"
+git -C "$ESH_REPO" show-ref --verify --quiet "refs/tags/$ESH_TAG" || fail "$ESH_TAG is not a published tag ref in $ESH_REPO"
+ESH_COMMIT="$(git -C "$ESH_REPO" rev-parse --verify "refs/tags/$ESH_TAG^{commit}" 2>/dev/null)" || fail "unable to resolve $ESH_TAG to a commit"
 [ "$ESH_COMMIT" = "$EXPECTED_ESH_COMMIT" ] || fail "$ESH_TAG resolves to $ESH_COMMIT, expected $EXPECTED_ESH_COMMIT"
 
 ESH_SOURCE="$RUN_DIR/eshkol-source"
@@ -162,9 +162,9 @@ reject_error_output() {
   local log="$1" label="$2"
   grep -q 'ERROR' "$log" && fail "$label emitted ERROR output; log=$log"
 }
-# git archive reads the tag object but never checks out or writes the user's
-# (possibly dirty) Eshkol worktree.
-git -C "$ESH_REPO" archive --format=tar "$ESH_TAG" | tar -xf - -C "$ESH_SOURCE" >"$LOG_DIR/archive.log" 2>&1 || fail "unable to archive $ESH_TAG"
+# git archive reads the pinned commit object but never checks out or writes the
+# user's (possibly dirty) Eshkol worktree.
+git -C "$ESH_REPO" archive --format=tar "$ESH_COMMIT" | tar -xf - -C "$ESH_SOURCE" >"$LOG_DIR/archive.log" 2>&1 || fail "unable to archive $ESH_TAG at $ESH_COMMIT"
 [ ! -s "$LOG_DIR/archive.log" ] || reject_error_output "$LOG_DIR/archive.log" archive
 [ -f "$ESH_SOURCE/CMakeLists.txt" ] || fail "archived Eshkol source is incomplete"
 
