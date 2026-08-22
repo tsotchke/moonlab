@@ -9,19 +9,72 @@
 # Consumed alongside .icc/completion-oracles.yaml. Mirrors the Eshkol model
 # (~/Desktop/eshkol/.icc/architecture-model.yaml).
 
-model:
-  name: moonlab
-  description: >
-    Moonlab is not a single-process quantum simulator library. It is the
-    simulation core of a distributed cloud quantum platform and a
-    hardware-design workbench: dense state-vector and tensor-network engines,
-    single-node and multi-GPU and MPI-sharded execution, a control plane, a
-    post-quantum crypto + Bell-gated QRNG surface, and a frozen C ABI that
-    QGTL / SbNN / libirrep bind through. Completeness is judged against that
-    scope, not against "another Qiskit."
+version: 2
+name: moonlab-architecture
+repo: moonlab
+description: >
+  Moonlab is not a single-process quantum simulator library. It is the
+  simulation core of a distributed cloud quantum platform and a
+  hardware-design workbench: dense state-vector and tensor-network engines,
+  single-node and multi-GPU and MPI-sharded execution, a control plane, a
+  post-quantum crypto + Bell-gated QRNG surface, and a frozen C ABI that
+  QGTL / SbNN / libirrep bind through. Completeness is judged against that
+  scope, not against "another Qiskit."
+
+# ICC has no external-consumer/public-output contract kind. These fields record
+# the public QRNG status boundary explicitly. The Python wrapper validates and
+# reconstructs every field before returning the dictionary, and C/Python tests
+# consume the delivered values; third-party callers remain outside ICC's graph.
+public_output_contracts:
+  - id: qrng-status-public-output
+    producer:
+      path: bindings/python/moonlab/crypto/mlkem.py
+      symbol: qrng_status
+    external_consumer_scope: public Python API callers and C ABI consumers
+    fields:
+      - api_version
+      - capabilities
+      - hardware_os_entropy
+      - continuous_health_tests
+      - shake256_conditioned
+      - bell_simulation_gated
+      - thread_safe
+      - bell_epoch_certified
+      - device_independent_source
+      - fips140_validated
+      - conditioned_requests
+      - raw_bytes_generated
+      - bell_tests_performed
+      - bell_tests_passed
+      - average_chsh
+      - minimum_chsh
+    evidence:
+      c_tests:
+        - tests/unit/test_qrng_delivery.c
+        - tests/unit/test_qrng_bell_certified_output.c
+        - tests/abi/test_moonlab_export_abi.c
+      python_tests:
+        - bindings/python/tests/test_crypto.py
+    graph_status: every field has an in-repository public-boundary validator; external callers remain outside the graph
+
+components:
+  - id: simulation-core
+    role: simulation-core
+    modules: [src/algorithms/**, src/optimization/**]
+  - id: distributed-control-plane
+    role: control-plane
+    modules: [src/distributed/**]
+  - id: public-abi-bindings
+    role: public-api
+    modules: [src/applications/**, bindings/python/**]
+  - id: verification-gates
+    role: verification
+    modules: [tests/**, scripts/icc_traces/**, .icc/completion-oracles.yaml]
 
 invariants:
   - id: gpu-host-sync-contract
+    kind: intended-invariant
+    invariant_name: gpu-host-sync-contract
     class: silent-wrong-answer
     statement: >
       No measurement, expectation, probability, noise, or collapse path may
@@ -34,6 +87,8 @@ invariants:
     enforced_by: [gpu_host_sync_contract, cross_backend_differential, property_invariants_oracle]
 
   - id: exact-gradient-honesty
+    kind: intended-invariant
+    invariant_name: exact-gradient-honesty
     class: overclaim
     statement: >
       Any API labeled "exact" must be exact or return an explicit error. No
@@ -46,6 +101,8 @@ invariants:
     enforced_by: [gradient_oracle]
 
   - id: single-definition
+    kind: intended-invariant
+    invariant_name: single-definition
     class: odr-collision
     statement: >
       No type or symbol name may have two distinct definitions across
@@ -58,6 +115,8 @@ invariants:
     enforced_by: [zero_odr_collision]
 
   - id: no-phantom-api
+    kind: intended-invariant
+    invariant_name: no-phantom-api
     class: dangling-contract
     statement: >
       Every declared symbol has a definition; every MOONLAB_API symbol a
@@ -69,6 +128,8 @@ invariants:
     enforced_by: [zero_phantom_api, hidden_visibility_abi]
 
   - id: docs-compile
+    kind: intended-invariant
+    invariant_name: docs-compile
     class: fiction
     statement: >
       Every API named in a README or docs code snippet resolves to a real
@@ -80,6 +141,8 @@ invariants:
     enforced_by: [docs_apis_exist, examples_all_build]
 
   - id: no-theater-verification
+    kind: intended-invariant
+    invariant_name: no-theater-verification
     class: fake-gate
     statement: >
       A verification gate must consume the artifact it certifies. A Bell/DI
@@ -92,6 +155,8 @@ invariants:
     enforced_by: [qrng_certification_wired, mlkem_official_kat, qrng_bias_positive_control, entropy_health_rejects_bad]
 
   - id: parser-memory-safety
+    kind: intended-invariant
+    invariant_name: parser-memory-safety
     class: untrusted-input-crash
     statement: >
       No path that consumes untrusted bytes (control-plane wire protocol,
@@ -103,6 +168,8 @@ invariants:
     enforced_by: [fuzz_corpus_clean, mlkem_negative_fuzz, abi_boundary_fuzz]
 
   - id: cross-implementation-equivalence
+    kind: intended-invariant
+    invariant_name: cross-implementation-equivalence
     class: divergence
     statement: >
       The same program yields the same result on every backend (dense, MPS,
@@ -114,6 +181,8 @@ invariants:
     enforced_by: [cross_backend_differential, cross_binding_python, reference_oracle_agreement]
 
   - id: real-time-evolution-correctness
+    kind: intended-invariant
+    invariant_name: real-time-evolution-correctness
     class: mislabeled-algorithm
     statement: >
       An integrator named TDVP must be projector-splitting TDVP (forward and
@@ -125,6 +194,8 @@ invariants:
     enforced_by: [tdvp_projector_splitting, property_invariants_oracle]
 
   - id: determinism
+    kind: intended-invariant
+    invariant_name: determinism
     class: irreproducible
     statement: >
       Every generative corpus (oracle, fuzz seed, differential) is a pure
@@ -134,6 +205,8 @@ invariants:
     enforced_by: [backend_differential_oracle, property_invariants_oracle]
 
   - id: distributed-platform-capability
+    kind: intended-invariant
+    invariant_name: distributed-platform-capability
     class: unfinished-flagship
     statement: >
       The distributed layer delivers what the platform vision claims: a sharded
@@ -145,6 +218,8 @@ invariants:
     enforced_by: [mpi_sharded_gpu_works]
 
   - id: ci-tells-the-truth
+    kind: intended-invariant
+    invariant_name: ci-tells-the-truth
     class: hidden-red
     statement: >
       Every CI job on HEAD is green with no result masking (no || true, no dead
@@ -156,6 +231,8 @@ invariants:
 
   # -- 2026-07-17 adversarial-hunt invariants (one per discovered defect class) --
   - id: thread-safety
+    kind: intended-invariant
+    invariant_name: thread-safety
     class: concurrency
     statement: >
       Shared mutable state is never touched from more than one thread without
@@ -167,6 +244,8 @@ invariants:
       thread-safe, and a self-deadlock in audit_buffer destroy.
     enforced_by: [tsan_clean]
   - id: mps-norm-preservation
+    kind: intended-invariant
+    invariant_name: mps-norm-preservation
     class: numerical-correctness
     statement: >
       A unitary gate applied to a normalized MPS leaves the state norm at 1 in
@@ -177,6 +256,8 @@ invariants:
       on a bulk bond (CPU); mixed_canonicalize before the gate was missing.
     enforced_by: [scaling_differential_clean, adversarial_matrix_green]
   - id: tdvp-correctness-at-scale
+    kind: intended-invariant
+    invariant_name: tdvp-correctness-at-scale
     class: numerical-correctness
     statement: >
       Real-time TDVP evolution matches dense exp(-iHt) for chains longer than two
@@ -187,6 +268,8 @@ invariants:
       that hid the bug.
     enforced_by: [scaling_differential_clean]
   - id: svd-isometry
+    kind: intended-invariant
+    invariant_name: svd-isometry
     class: numerical-correctness
     statement: >
       Every SVD code path, including the no-LAPACK one-sided Jacobi fallback used
@@ -196,6 +279,8 @@ invariants:
       corrupting truncation on exactly the platforms with no LAPACK to fall through to.
     enforced_by: [numerical_edge_clean]
   - id: mesh-hardware-validation
+    kind: intended-invariant
+    invariant_name: mesh-hardware-validation
     class: hidden-red
     statement: >
       A hardware-relevant fix is validated on the real fleet (Metal on atlas/enki,
@@ -208,6 +293,9 @@ invariants:
     enforced_by: [mesh_release_smoke_green]
 
   - id: attributable-remote-sampling
+    kind: intended-invariant
+    invariant_name: attributable-remote-sampling
+    runtime_evidence_required: true
     class: unverifiable-compute
     statement: >
       Every remote SHOTS execution has one effective non-zero uint64 seed that
@@ -223,6 +311,9 @@ invariants:
                   seeded_shots_cross_host_replay]
 
   - id: quantum-annealing-honesty
+    kind: intended-invariant
+    invariant_name: quantum-annealing-honesty
+    runtime_evidence_required: true
     class: mislabeled-algorithm
     statement: >
       Quantum annealing evolves the real state under a declared transverse-field

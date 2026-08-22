@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Produce and validate Moonlab's fail-closed v1.2.0 release certificate."""
+"""Produce and validate Moonlab's fail-closed v1.2.1 release certificate."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from moonlab_source_identity import source_identity as canonical_source_identity
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CERTIFICATE = (
-    ROOT / "scripts/icc_traces/release-certificate/moonlab-v1.2.0-release-certificate.json"
+    ROOT / "scripts/icc_traces/release-certificate/moonlab-v1.2.1-release-certificate.json"
 )
 DEFAULT_ICC_INDEXES = (
     ROOT.parent / "infinite_context_coder/artifacts/repos/moonlab/codebase_index.json",
@@ -40,7 +40,8 @@ RFC3339_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 REQUIRED_RUNTIME_KINDS = frozenset(
     {
         "release_smoke", "oracles", "fuzz", "differential", "statistical",
-        "mpi", "tsan", "numerical", "scaling",
+        "mpi", "tsan", "numerical", "scaling", "seeded_shots", "quantum_annealing",
+        "eshkol_compatibility",
     }
 )
 EXPECTED_EVENTS = {
@@ -52,10 +53,12 @@ EXPECTED_EVENTS = {
         "mpi_sharded_gpu_works", "qrng_certification_wired", "mlkem_official_kat",
         "all_discovered_bugs_closed", "tsan_clean", "numerical_edge_clean",
         "uninit_clean", "scaling_differential_clean", "source_identity_stable",
+        "stable_abi_counts", "stability_tags_complete",
     }),
     "oracles": frozenset({
         "backend_differential_oracle", "gradient_oracle", "measurement_statistics_oracle",
-        "edge_matrix_oracle", "property_invariants_oracle", "corpus_artifacts_validated",
+        "edge_matrix_oracle", "property_invariants_oracle", "analyticity_oracle",
+        "wick_rotation_oracle", "corpus_artifacts_validated",
     }),
     "fuzz": frozenset({
         "control_plane_protocol_fuzz", "circuit_deserialize_fuzz", "config_parse_fuzz",
@@ -83,38 +86,45 @@ EXPECTED_EVENTS = {
         "scaling_clifford_stabilizer", "scaling_var_d", "scaling_dmrg_tdvp",
         "scaling_differential_clean",
     }),
+    "seeded_shots": frozenset({
+        "local_bit_replay", "protocol_fuzz_clean", "cross_host_bit_replay",
+    }),
+    "quantum_annealing": frozenset({
+        "rk4_oracle", "qubo_ising_parity", "abi_080", "binding_parity", "asan_ubsan_clean",
+    }),
+    "eshkol_compatibility": frozenset({"eshkol_v134_quantum_consumer"}),
     "mesh": frozenset({"mesh_release_smoke_green"}),
 }
 REQUIRED_MESH_NODES = frozenset({"atlas", "enki", "xavier", "cosbox", "old-donkey"})
 RELEASE_ARTIFACT_SPECS = {
-    "native-linux-x64": ("linux-x64", "native", re.compile(r"^moonlab-v1\.2\.0-linux-x64\.tar\.gz$")),
-    "native-linux-arm64": ("linux-arm64", "native", re.compile(r"^moonlab-v1\.2\.0-linux-arm64\.tar\.gz$")),
-    "native-macos-arm64": ("macos-arm64", "native", re.compile(r"^moonlab-v1\.2\.0-macos-arm64\.tar\.gz$")),
-    "native-macos-x64": ("macos-x64", "native", re.compile(r"^moonlab-v1\.2\.0-macos-x64\.tar\.gz$")),
-    "native-windows-x64": ("windows-x64", "native", re.compile(r"^moonlab-v1\.2\.0-windows-x64\.zip$")),
-    "native-windows-arm64": ("windows-arm64", "native", re.compile(r"^moonlab-v1\.2\.0-windows-arm64\.zip$")),
-    "debian-amd64": ("linux-amd64", "debian", re.compile(r"^moonlab_1\.2\.0_amd64\.deb$")),
-    "debian-arm64": ("linux-arm64", "debian", re.compile(r"^moonlab_1\.2\.0_arm64\.deb$")),
+    "native-linux-x64": ("linux-x64", "native", re.compile(r"^moonlab-v1\.2\.1-linux-x64\.tar\.gz$")),
+    "native-linux-arm64": ("linux-arm64", "native", re.compile(r"^moonlab-v1\.2\.1-linux-arm64\.tar\.gz$")),
+    "native-macos-arm64": ("macos-arm64", "native", re.compile(r"^moonlab-v1\.2\.1-macos-arm64\.tar\.gz$")),
+    "native-macos-x64": ("macos-x64", "native", re.compile(r"^moonlab-v1\.2\.1-macos-x64\.tar\.gz$")),
+    "native-windows-x64": ("windows-x64", "native", re.compile(r"^moonlab-v1\.2\.1-windows-x64\.zip$")),
+    "native-windows-arm64": ("windows-arm64", "native", re.compile(r"^moonlab-v1\.2\.1-windows-arm64\.zip$")),
+    "debian-amd64": ("linux-amd64", "debian", re.compile(r"^moonlab_1\.2\.1_amd64\.deb$")),
+    "debian-arm64": ("linux-arm64", "debian", re.compile(r"^moonlab_1\.2\.1_arm64\.deb$")),
     # cibuildwheel builds moonlab's ctypes binding as a single py3-none wheel per
     # platform, but the Linux legs produce two libc-flavored wheels per arch from
     # the same job (manylinux glibc + musllinux musl), so each flavor is its own
     # exactly-one kind rather than one kind matching either file.
-    "wheel-linux-x64-manylinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*x86_64\.whl$")),
-    "wheel-linux-x64-musllinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*x86_64\.whl$")),
-    "wheel-linux-arm64-manylinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-manylinux[A-Za-z0-9_.-]*aarch64\.whl$")),
-    "wheel-linux-arm64-musllinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-musllinux[A-Za-z0-9_.-]*aarch64\.whl$")),
-    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
-    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
-    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_amd64\.whl$")),
-    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.0-py3-none-win_arm64\.whl$")),
-    "rust-moonlab-sys": ("source", "moonlab-sys", re.compile(r"^moonlab-sys-1\.2\.0\.crate$")),
-    "rust-moonlab": ("source", "moonlab", re.compile(r"^moonlab-1\.2\.0\.crate$")),
-    "rust-moonlab-tui": ("source", "moonlab-tui", re.compile(r"^moonlab-tui-1\.2\.0\.crate$")),
-    "npm-core": ("source", "@tsotchkecorp/moonlab", re.compile(r"^tsotchkecorp-moonlab-1\.2\.0\.tgz$")),
-    "npm-algorithms": ("source", "@tsotchkecorp/moonlab-algorithms", re.compile(r"^tsotchkecorp-moonlab-algorithms-1\.2\.0\.tgz$")),
-    "npm-vue": ("source", "@tsotchkecorp/moonlab-vue", re.compile(r"^tsotchkecorp-moonlab-vue-1\.2\.0\.tgz$")),
-    "npm-viz": ("source", "@tsotchkecorp/moonlab-viz", re.compile(r"^tsotchkecorp-moonlab-viz-1\.2\.0\.tgz$")),
-    "npm-react": ("source", "@tsotchkecorp/moonlab-react", re.compile(r"^tsotchkecorp-moonlab-react-1\.2\.0\.tgz$")),
+    "wheel-linux-x64-manylinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-manylinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-x64-musllinux": ("linux-x64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-musllinux[A-Za-z0-9_.-]*x86_64\.whl$")),
+    "wheel-linux-arm64-manylinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-manylinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-linux-arm64-musllinux": ("linux-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-musllinux[A-Za-z0-9_.-]*aarch64\.whl$")),
+    "wheel-macos-arm64": ("macos-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-macosx_[A-Za-z0-9_.-]*_arm64\.whl$")),
+    "wheel-macos-x64": ("macos-x64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-macosx_[A-Za-z0-9_.-]*_x86_64\.whl$")),
+    "wheel-windows-x64": ("windows-x64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-win_amd64\.whl$")),
+    "wheel-windows-arm64": ("windows-arm64", "moonlab", re.compile(r"^moonlab-1\.2\.1-py3-none-win_arm64\.whl$")),
+    "rust-moonlab-sys": ("source", "moonlab-sys", re.compile(r"^moonlab-sys-1\.2\.1\.crate$")),
+    "rust-moonlab": ("source", "moonlab", re.compile(r"^moonlab-1\.2\.1\.crate$")),
+    "rust-moonlab-tui": ("source", "moonlab-tui", re.compile(r"^moonlab-tui-1\.2\.1\.crate$")),
+    "npm-core": ("source", "@tsotchkecorp/moonlab", re.compile(r"^tsotchkecorp-moonlab-1\.2\.1\.tgz$")),
+    "npm-algorithms": ("source", "@tsotchkecorp/moonlab-algorithms", re.compile(r"^tsotchkecorp-moonlab-algorithms-1\.2\.1\.tgz$")),
+    "npm-vue": ("source", "@tsotchkecorp/moonlab-vue", re.compile(r"^tsotchkecorp-moonlab-vue-1\.2\.1\.tgz$")),
+    "npm-viz": ("source", "@tsotchkecorp/moonlab-viz", re.compile(r"^tsotchkecorp-moonlab-viz-1\.2\.1\.tgz$")),
+    "npm-react": ("source", "@tsotchkecorp/moonlab-react", re.compile(r"^tsotchkecorp-moonlab-react-1\.2\.1\.tgz$")),
 }
 REQUIRED_RELEASE_ARTIFACT_KINDS = frozenset(RELEASE_ARTIFACT_SPECS)
 REQUIRED_HOSTED_CANDIDATE_JOBS = frozenset({
@@ -639,7 +649,7 @@ def _validate_release_artifacts(value: object, certificate_path: Path) -> None:
             or artifact["kind"] in kinds
             or not isinstance(artifact["platform"], str) or not artifact["platform"]
             or not isinstance(artifact["package"], str) or not artifact["package"]
-            or artifact["version"] != "1.2.0"
+            or artifact["version"] != "1.2.1"
         ):
             raise CertificateError("release artifact identity/version is invalid or duplicated")
         expected_platform, expected_package, filename_pattern = RELEASE_ARTIFACT_SPECS[artifact["kind"]]
@@ -672,30 +682,57 @@ def _tag_candidate_binding(repo: Path, name: str) -> tuple[int, str]:
     return int(run_values[0]), head_values[0]
 
 
-def _validate_tag(value: object, repo: Path, expected_head: str, expected_run_id: int) -> None:
+def _tag_release_evidence_binding(repo: Path, name: str) -> tuple[str, str, str]:
+    """Return the exact evidence branch, commit, and certificate digest in a tag."""
+    message = _git(repo, "for-each-ref", "--format=%(contents)", f"refs/tags/{name}").decode(
+        "utf-8", "strict"
+    )
+    branch_values = re.findall(
+        r"(?m)^Moonlab-Release-Evidence-Branch: (release-evidence/v1\.2\.1)$", message
+    )
+    commit_values = re.findall(
+        r"(?m)^Moonlab-Release-Evidence-Commit: ([0-9a-f]{40})$", message
+    )
+    certificate_values = re.findall(
+        r"(?m)^Moonlab-Release-Certificate-SHA256: ([0-9a-f]{64})$", message
+    )
+    if len(branch_values) != 1 or len(commit_values) != 1 or len(certificate_values) != 1:
+        raise CertificateError(
+            "release tag annotation must bind exactly one v1.2.1 evidence branch, commit, and certificate digest"
+        )
+    return branch_values[0], commit_values[0], certificate_values[0]
+
+
+def _validate_tag(
+    value: object,
+    repo: Path,
+    expected_head: str,
+    expected_run_id: int,
+    certificate_sha256: str,
+) -> None:
     tag = _exact(
         value,
-        {"name", "annotated", "object", "target", "candidate_run_id", "candidate_head"},
+        {"name", "annotated", "target", "candidate_run_id", "candidate_head"},
         "tag",
     )
     if (
-        tag["name"] != "v1.2.0"
+        tag["name"] != "v1.2.1"
         or tag["annotated"] is not True
-        or not isinstance(tag["object"], str)
-        or OID.fullmatch(tag["object"]) is None
         or tag["target"] != expected_head
         or tag["candidate_run_id"] != expected_run_id
         or tag["candidate_head"] != expected_head
     ):
         raise CertificateError("release tag assertion is invalid")
     actual_type = _git(repo, "cat-file", "-t", f"refs/tags/{tag['name']}").decode().strip()
-    actual_object = _git(repo, "rev-parse", f"refs/tags/{tag['name']}").decode().strip()
     actual_target = _git(repo, "rev-parse", f"refs/tags/{tag['name']}^{{commit}}").decode().strip()
-    if actual_type != "tag" or actual_object != tag["object"] or actual_target != expected_head:
-        raise CertificateError("annotated release tag object/target does not match the certificate")
+    if actual_type != "tag" or actual_target != expected_head:
+        raise CertificateError("annotated release tag type/target does not match the certificate")
     actual_run, actual_head = _tag_candidate_binding(repo, tag["name"])
     if actual_run != expected_run_id or actual_head != expected_head:
         raise CertificateError("annotated release tag candidate binding does not match hosted CI")
+    _, _, actual_certificate_sha256 = _tag_release_evidence_binding(repo, tag["name"])
+    if actual_certificate_sha256 != certificate_sha256:
+        raise CertificateError("annotated release tag certificate digest does not match the certificate")
 
 
 def _validate_icc(
@@ -764,7 +801,11 @@ def _validate_icc(
 
 
 def validate_certificate(
-    certificate_path: Path, repo: Path, icc_index_path: Path
+    certificate_path: Path,
+    repo: Path,
+    icc_index_path: Path,
+    *,
+    require_tag: bool = True,
 ) -> dict[str, Any]:
     certificate_path = certificate_path.resolve()
     repo = repo.resolve()
@@ -783,8 +824,9 @@ def validate_certificate(
     )
     if tracked.returncode == 0:
         raise CertificateError("release certificate must be untracked to avoid source-identity circularity")
+    certificate_bytes = _read_regular(certificate_path, "release certificate")
     document = _exact(
-        _read_json(certificate_path, "release certificate"),
+        _decode_json(certificate_bytes, "release certificate"),
         {
             "schema",
             "version",
@@ -800,7 +842,7 @@ def validate_certificate(
         },
         "release certificate",
     )
-    if document["schema"] != "moonlab.release_certificate.v1" or document["version"] != "1.2.0":
+    if document["schema"] != "moonlab.release_certificate.v1" or document["version"] != "1.2.1":
         raise CertificateError("release certificate schema/version is unsupported")
     if not isinstance(document["generated_at"], str) or RFC3339_UTC.fullmatch(document["generated_at"]) is None:
         raise CertificateError("release certificate generated_at must be UTC RFC3339 seconds")
@@ -880,7 +922,28 @@ def validate_certificate(
     candidate_run_id = _validate_hosted_ci(
         document["hosted_ci"], certificate_path, source["git_head"]
     )
-    _validate_tag(document["tag"], repo, source["git_head"], candidate_run_id)
+    tag = _exact(
+        document["tag"],
+        {"name", "annotated", "target", "candidate_run_id", "candidate_head"},
+        "tag",
+    )
+    if (
+        tag["name"] != "v1.2.1"
+        or tag["target"] != source["git_head"]
+        or tag["candidate_run_id"] != candidate_run_id
+        or tag["candidate_head"] != source["git_head"]
+    ):
+        raise CertificateError("release certificate candidate/tag identity is invalid")
+    if require_tag:
+        _validate_tag(
+            tag,
+            repo,
+            source["git_head"],
+            candidate_run_id,
+            hashlib.sha256(certificate_bytes).hexdigest(),
+        )
+    elif tag["annotated"] is not True:
+        raise CertificateError("prepared release certificate must require an annotated tag")
     return document
 
 
@@ -921,6 +984,19 @@ def _fill_event_assertions(document: dict[str, Any]) -> None:
             assertions["expected_event_names"] = names
 
 
+def _prepared_hosted_run(
+    document: dict[str, Any], certificate_path: Path, expected_head: str
+) -> int:
+    hosted = _exact(document.get("hosted_ci"), {"run"}, "hosted CI")
+    raw_binding = hosted["run"]
+    if isinstance(raw_binding, dict) and set(raw_binding) == {"path"}:
+        path = _resolve_bound_path(certificate_path, raw_binding["path"], "hosted CI draft run")
+        binding = _binding_for(path, certificate_path)
+    else:
+        binding = raw_binding
+    return _validate_hosted_ci({"run": binding}, certificate_path, expected_head)
+
+
 def produce_certificate(
     draft_path: Path, certificate_path: Path, repo: Path, icc_index_path: Path
 ) -> dict[str, Any]:
@@ -933,20 +1009,18 @@ def produce_certificate(
     if source["dirty"]:
         raise CertificateError("a final release certificate cannot be produced from a dirty source")
     document["schema"] = "moonlab.release_certificate.v1"
-    document["version"] = "1.2.0"
+    document["version"] = "1.2.1"
     document["generated_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     document["source"] = source
     if not isinstance(document.get("icc"), dict):
         raise CertificateError("release certificate draft must bind ICC index and source-drift artifacts")
-    tag_object = _git(repo, "rev-parse", "refs/tags/v1.2.0").decode().strip()
-    tag_target = _git(repo, "rev-parse", "refs/tags/v1.2.0^{commit}").decode().strip()
+    candidate_run_id = _prepared_hosted_run(document, certificate_path, source["git_head"])
     document["tag"] = {
-        "name": "v1.2.0",
+        "name": "v1.2.1",
         "annotated": True,
-        "object": tag_object,
-        "target": tag_target,
-        "candidate_run_id": _tag_candidate_binding(repo, "v1.2.0")[0],
-        "candidate_head": _tag_candidate_binding(repo, "v1.2.0")[1],
+        "target": source["git_head"],
+        "candidate_run_id": candidate_run_id,
+        "candidate_head": source["git_head"],
     }
     _fill_event_assertions(document)
     _fill_bindings(document, certificate_path)
@@ -963,7 +1037,7 @@ def produce_certificate(
     finally:
         if temporary.exists():
             temporary.unlink()
-    return validate_certificate(certificate_path, repo, icc_index_path)
+    return validate_certificate(certificate_path, repo, icc_index_path, require_tag=False)
 
 
 def _default_icc_index() -> Path:
@@ -992,8 +1066,8 @@ def main(argv: list[str] | None = None) -> int:
     source = document["source"]
     print(json.dumps({
         "kind": "moonlab_release_certificate",
-        "name": "release_certificate_valid",
-        "value": "PASS",
+        "name": "release_certificate_prepared" if arguments.emit_from else "release_certificate_valid",
+        "value": "PREPARED" if arguments.emit_from else "PASS",
         "version": document["version"],
         "git_head": source["git_head"],
         "git_tree": source["git_tree"],

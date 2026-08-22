@@ -148,8 +148,8 @@ def _validate_run_identity(run_id: int, head: str, version: str) -> None:
         raise CandidateError("candidate run ID must be positive")
     if OID.fullmatch(head) is None:
         raise CandidateError("candidate head must be a full lowercase Git SHA")
-    if version != "1.2.0":
-        raise CandidateError("candidate version must be exactly 1.2.0")
+    if version != "1.2.1":
+        raise CandidateError("candidate version must be exactly 1.2.1")
 
 
 def seal_candidate(
@@ -226,7 +226,7 @@ def verify_candidate(
 
 
 def verify_hosted_run(run_json: Path, run_id: int, head: str) -> dict[str, Any]:
-    _validate_run_identity(run_id, head, "1.2.0")
+    _validate_run_identity(run_id, head, "1.2.1")
     run = _read_json(run_json, "hosted candidate run")
     expected_keys = {
         "databaseId", "url", "headSha", "conclusion", "event", "workflowName", "jobs"

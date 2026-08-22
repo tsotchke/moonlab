@@ -18,8 +18,9 @@ Example::
 from __future__ import annotations
 
 import ctypes
+import math
 import os
-from typing import Optional, Tuple, Union
+from typing import Final, Optional, Tuple, TypedDict, Union
 
 from ..core import _lib
 
@@ -27,6 +28,10 @@ PUBLICKEYBYTES    = 800
 SECRETKEYBYTES    = 1632
 CIPHERTEXTBYTES   = 768
 SHAREDSECRETBYTES = 32
+
+_UINT64_MAX: Final = (1 << 64) - 1
+_MIN_CHSH: Final = -4.0
+_MAX_CHSH: Final = 4.0
 
 # ML-KEM-768 (NIST-recommended default)
 MLKEM768_PUBLICKEYBYTES    = 1184
@@ -62,6 +67,175 @@ class _QrngStatus(ctypes.Structure):
         ("average_chsh", ctypes.c_double),
         ("minimum_chsh", ctypes.c_double),
     ]
+
+
+class _QrngStatusRecord(TypedDict):
+    api_version: int
+    capabilities: int
+    hardware_os_entropy: bool
+    continuous_health_tests: bool
+    shake256_conditioned: bool
+    bell_simulation_gated: bool
+    thread_safe: bool
+    bell_epoch_certified: bool
+    device_independent_source: bool
+    fips140_validated: bool
+    conditioned_requests: int
+    raw_bytes_generated: int
+    bell_tests_performed: int
+    bell_tests_passed: int
+    average_chsh: float
+    minimum_chsh: float
+
+
+def _consume_qrng_status_record(record: _QrngStatusRecord) -> _QrngStatusRecord:
+    # Enforce strict typing on the assembled public record and consume each key
+    # explicitly at the public boundary before returning it to callers.
+    api_version = int(record["api_version"])
+    if api_version != 1:
+        raise RuntimeError(
+            f"Unsupported moonlab_qrng_status api_version ({api_version})"
+        )
+
+    if int(record["capabilities"]) > _UINT64_MAX:
+        raise RuntimeError("moonlab_qrng_status capabilities out of uint64 bounds")
+
+    conditioned_requests = int(record["conditioned_requests"])
+    raw_bytes_generated = int(record["raw_bytes_generated"])
+    bell_tests_performed = int(record["bell_tests_performed"])
+    bell_tests_passed = int(record["bell_tests_passed"])
+
+    if (
+        conditioned_requests < 0
+        or raw_bytes_generated < 0
+        or bell_tests_performed < 0
+        or bell_tests_passed < 0
+    ):
+        raise RuntimeError("moonlab_qrng_status counters cannot be negative")
+
+    if raw_bytes_generated < conditioned_requests:
+        raise RuntimeError(
+            "moonlab_qrng_status counter ordering invalid: "
+            "raw_bytes_generated < conditioned_requests"
+        )
+    if bell_tests_passed > bell_tests_performed:
+        raise RuntimeError(
+            "moonlab_qrng_status bell_tests_passed > bell_tests_performed"
+        )
+
+    if record["bell_epoch_certified"] and (
+        bell_tests_performed == 0 or bell_tests_passed != bell_tests_performed
+    ):
+        raise RuntimeError(
+            "moonlab_qrng_status bell_epoch_certified requires all Bell tests to pass"
+        )
+
+    average_chsh = float(record["average_chsh"])
+    minimum_chsh = float(record["minimum_chsh"])
+    if (
+        not math.isfinite(average_chsh)
+        or not math.isfinite(minimum_chsh)
+        or average_chsh < _MIN_CHSH
+        or average_chsh > _MAX_CHSH
+        or minimum_chsh < _MIN_CHSH
+        or minimum_chsh > _MAX_CHSH
+    ):
+        raise RuntimeError("moonlab_qrng_status CHSH values are invalid")
+    if minimum_chsh > average_chsh:
+        raise RuntimeError(
+            "moonlab_qrng_status minimum_chsh cannot exceed average_chsh"
+        )
+
+    return {
+        "api_version": api_version,
+        "capabilities": int(record["capabilities"]),
+        "hardware_os_entropy": bool(record["hardware_os_entropy"]),
+        "continuous_health_tests": bool(record["continuous_health_tests"]),
+        "shake256_conditioned": bool(record["shake256_conditioned"]),
+        "bell_simulation_gated": bool(record["bell_simulation_gated"]),
+        "thread_safe": bool(record["thread_safe"]),
+        "bell_epoch_certified": bool(record["bell_epoch_certified"]),
+        "device_independent_source": bool(record["device_independent_source"]),
+        "fips140_validated": bool(record["fips140_validated"]),
+        "conditioned_requests": conditioned_requests,
+        "raw_bytes_generated": raw_bytes_generated,
+        "bell_tests_performed": bell_tests_performed,
+        "bell_tests_passed": bell_tests_passed,
+        "average_chsh": average_chsh,
+        "minimum_chsh": minimum_chsh,
+    }
+
+
+def _validate_qrng_status(status: _QrngStatus) -> _QrngStatusRecord:
+    struct_size = int(status.struct_size)
+    if struct_size != ctypes.sizeof(_QrngStatus):
+        raise RuntimeError(
+            f"moonlab_qrng_status struct_size mismatch ({struct_size})"
+        )
+
+    api_version = int(status.api_version)
+    if api_version != 1:
+        raise RuntimeError(f"Unsupported moonlab_qrng_status api_version ({api_version})")
+
+    caps = int(status.capabilities)
+    if caps < 0 or caps > _UINT64_MAX:
+        raise RuntimeError("moonlab_qrng_status capabilities out of uint64 bounds")
+
+    conditioned_requests = int(status.conditioned_requests)
+    raw_bytes_generated = int(status.raw_bytes_generated)
+    bell_tests_performed = int(status.bell_tests_performed)
+    bell_tests_passed = int(status.bell_tests_passed)
+
+    for name, value in (
+        ("conditioned_requests", conditioned_requests),
+        ("raw_bytes_generated", raw_bytes_generated),
+        ("bell_tests_performed", bell_tests_performed),
+        ("bell_tests_passed", bell_tests_passed),
+    ):
+        if value < 0 or value > _UINT64_MAX:
+            raise RuntimeError(f"moonlab_qrng_status {name} out of uint64 bounds: {value}")
+
+    if conditioned_requests < 0 or raw_bytes_generated < 0:
+        raise RuntimeError("moonlab_qrng_status counters cannot be negative")
+    if raw_bytes_generated < conditioned_requests:
+        raise RuntimeError(
+            "moonlab_qrng_status counter ordering invalid: "
+            "raw_bytes_generated < conditioned_requests"
+        )
+    if bell_tests_passed > bell_tests_performed:
+        raise RuntimeError(
+            "moonlab_qrng_status bell_tests_passed > bell_tests_performed"
+        )
+
+    bell_epoch_certified = bool(caps & QRNG_CAP_BELL_EPOCH_CERTIFIED)
+    if bell_epoch_certified and (
+        bell_tests_performed <= 0 or bell_tests_passed != bell_tests_performed
+    ):
+        raise RuntimeError(
+            "moonlab_qrng_status bell_epoch_certified requires all Bell tests to pass"
+        )
+
+    average_chsh = float(status.average_chsh)
+    minimum_chsh = float(status.minimum_chsh)
+    record: _QrngStatusRecord = {
+        "api_version": api_version,
+        "capabilities": caps,
+        "hardware_os_entropy": bool(caps & QRNG_CAP_HARDWARE_OS_ENTROPY),
+        "continuous_health_tests": bool(caps & QRNG_CAP_CONTINUOUS_HEALTH_TESTS),
+        "shake256_conditioned": bool(caps & QRNG_CAP_SHAKE256_CONDITIONED),
+        "bell_simulation_gated": bool(caps & QRNG_CAP_BELL_SIMULATION_GATED),
+        "thread_safe": bool(caps & QRNG_CAP_THREAD_SAFE),
+        "bell_epoch_certified": bell_epoch_certified,
+        "device_independent_source": bool(caps & QRNG_CAP_DEVICE_INDEPENDENT_SOURCE),
+        "fips140_validated": bool(caps & QRNG_CAP_FIPS140_VALIDATED),
+        "conditioned_requests": conditioned_requests,
+        "raw_bytes_generated": raw_bytes_generated,
+        "bell_tests_performed": bell_tests_performed,
+        "bell_tests_passed": bell_tests_passed,
+        "average_chsh": average_chsh,
+        "minimum_chsh": minimum_chsh,
+    }
+    return _consume_qrng_status_record(record)
 
 
 def _configure():
@@ -115,25 +289,7 @@ def qrng_status() -> dict:
     rc = _lib.moonlab_qrng_get_status(ctypes.byref(status))
     if rc != 0:
         raise RuntimeError(f"moonlab_qrng_get_status failed ({rc})")
-    caps = int(status.capabilities)
-    return {
-        "api_version": int(status.api_version),
-        "capabilities": caps,
-        "hardware_os_entropy": bool(caps & QRNG_CAP_HARDWARE_OS_ENTROPY),
-        "continuous_health_tests": bool(caps & QRNG_CAP_CONTINUOUS_HEALTH_TESTS),
-        "shake256_conditioned": bool(caps & QRNG_CAP_SHAKE256_CONDITIONED),
-        "bell_simulation_gated": bool(caps & QRNG_CAP_BELL_SIMULATION_GATED),
-        "thread_safe": bool(caps & QRNG_CAP_THREAD_SAFE),
-        "bell_epoch_certified": bool(caps & QRNG_CAP_BELL_EPOCH_CERTIFIED),
-        "device_independent_source": bool(caps & QRNG_CAP_DEVICE_INDEPENDENT_SOURCE),
-        "fips140_validated": bool(caps & QRNG_CAP_FIPS140_VALIDATED),
-        "conditioned_requests": int(status.conditioned_requests),
-        "raw_bytes_generated": int(status.raw_bytes_generated),
-        "bell_tests_performed": int(status.bell_tests_performed),
-        "bell_tests_passed": int(status.bell_tests_passed),
-        "average_chsh": float(status.average_chsh),
-        "minimum_chsh": float(status.minimum_chsh),
-    }
+    return _validate_qrng_status(status)
 
 
 def keygen(d: Optional[_Bytes] = None,

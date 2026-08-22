@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-22
+
 ### Added
 
 - **Complete quantum annealing (v1.2.1 / ABI 0.8.0).** A real
@@ -274,6 +276,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`braid_anyons()` requires the standard basis.** With an outstanding
   `apply_F_move()` it returns `QS_ERROR_INVALID_STATE` rather than silently
   braiding in the wrong basis.
+
+### Fixed
+
+- **Native SDK component installs now include generated package metadata.**
+  `quantumsim.pc.install` belongs to the `native-sdk` component, so component
+  archives retain a working pkg-config surface alongside the CMake package.
+- **Linux release gates resolve their real link dependencies.** The public ABI
+  probe links libm on Linux, and the TSan concurrency harness receives an
+  absolute compiler-resolved libomp path instead of relying on a missing bare
+  `-lomp` search result.
+- **Noise-instruction marginals are pinned to their closed-form rates.** A
+  high-shot deterministic regression checks every supported noise and
+  measurement semantic directly, preventing simulator-to-simulator agreement
+  from hiding a shared probability error.
 
 ### Known issues (not regressions)
 

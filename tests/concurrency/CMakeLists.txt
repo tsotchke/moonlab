@@ -126,11 +126,13 @@ if(MOONLAB_TSAN_LIB_OMP)
         set(_omp_lib "${MOONLAB_OMP_LIB}")
     elseif(APPLE)
         find_library(_omp_lib omp PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
-        if(NOT _omp_lib)
-            set(_omp_lib "-lomp")
-        endif()
     else()
-        set(_omp_lib "-lomp")
+        find_library(_omp_lib omp
+            PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu
+                   /usr/local/llvm/lib /opt/llvm/lib)
+    endif()
+    if(NOT _omp_lib)
+        message(FATAL_ERROR "[conc] Could not resolve a full path for libomp. Set -DMOONLAB_OMP_LIB=/path/to/libomp.so/.dylib")
     endif()
 
     add_executable(conc_grover_gates conc_grover_gates.c)

@@ -57,6 +57,44 @@ VERSION_DEFAULTS = (
         3,
     ),
 )
+CURRENT_VERSION_FIELDS = (
+    (
+        "README current release",
+        "README.md",
+        r"^## Current release: v([^\s]+)",
+        1,
+    ),
+    (
+        "README citation",
+        "README.md",
+        r"^\s*version\s*= \{v([^}]+)\},$",
+        1,
+    ),
+    (
+        "platform shipping version",
+        "PLATFORM.md",
+        r"^\*\*Current shipping version:\*\* ([^.]*(?:\.[^.]*){2})\.$",
+        1,
+    ),
+    (
+        "documentation index",
+        "documents/index.md",
+        r"^\*\*Version\*\*: ([^\s]+) \(ABI ",
+        1,
+    ),
+    (
+        "Python README current release",
+        "bindings/python/README.md",
+        r"^This package is currently at \*\*v([^*]+)\*\*",
+        1,
+    ),
+    (
+        "Python README footer",
+        "bindings/python/README.md",
+        r"^\*Current release: v([^\s]+) \(ABI ",
+        1,
+    ),
+)
 
 
 def pep440_version(version: str) -> str:
@@ -158,6 +196,10 @@ def set_version(version: str) -> None:
         r"version-[^-\s]+(?:-[^-\s]+)*-blue",
         f"version-{version}-blue",
     )
+    for _label, relative_path, pattern, expected_count in CURRENT_VERSION_FIELDS:
+        replace_version_matches(
+            ROOT / relative_path, pattern, version, expected_count
+        )
     for _label, relative_path, pattern, expected_count in VERSION_DEFAULTS:
         replace_version_matches(
             ROOT / relative_path, pattern, version, expected_count
@@ -257,6 +299,22 @@ def check_version(tag: str | None) -> None:
         ),
         version,
     )
+    expect(
+        "README version badge",
+        first_match(ROOT / "README.md", r"version-([^-\s]+(?:-[^-\s]+)*)-blue"),
+        version,
+    )
+    for label, relative_path, pattern, expected_count in CURRENT_VERSION_FIELDS:
+        matches = re.findall(
+            pattern, (ROOT / relative_path).read_text(), re.MULTILINE
+        )
+        if len(matches) != expected_count:
+            errors.append(
+                f"{label}: expected {expected_count} version fields, found {len(matches)}"
+            )
+            continue
+        for index, actual in enumerate(matches, start=1):
+            expect(f"{label} #{index}", actual, version)
     for label, relative_path, pattern, expected_count in VERSION_DEFAULTS:
         matches = re.findall(
             pattern, (ROOT / relative_path).read_text(), re.MULTILINE

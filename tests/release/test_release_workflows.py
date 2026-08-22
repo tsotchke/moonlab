@@ -35,6 +35,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("candidate-seal", self.release["jobs"])
         self.assertIn("promotion-verify", self.release["jobs"])
 
+    def test_v121_certificate_is_required_before_publication(self) -> None:
+        self.assertIn('"this workflow is the strict v1.2.1 release path;', self.release_text)
+        verifier = self.release["jobs"]["release-certificate-verify"]
+        self.assertIn("promotion-verify", verifier["needs"])
+        self.assertEqual(verifier["permissions"]["actions"], "read")
+        self.assertEqual(verifier["permissions"]["contents"], "read")
+        self.assertIn("moonlab-v1.2.1-release-certificate.json", str(verifier))
+        self.assertIn("release-evidence/v1.2.1", str(verifier))
+        self.assertIn("git fetch --no-tags origin", str(verifier))
+        self.assertIn("git archive --format=tar", str(verifier))
+        self.assertIn("linux-portability-aggregate", str(verifier))
+        self.assertIn("materialize_release_evidence.py", str(verifier))
+        self.assertIn("promotion/candidate", str(verifier))
+        self.assertIn("promotion/portability", str(verifier))
+        self.assertIn("certificate_sha256", str(verifier))
+        self.assertIn("validate_release_certificate.py", str(verifier))
+        readiness = self.release["jobs"]["publication-readiness"]
+        self.assertIn("release-certificate-verify", readiness["needs"])
+
     def test_candidate_builders_cannot_publish(self) -> None:
         self.assertEqual(self.release["permissions"]["contents"], "read")
         candidate_jobs = {

@@ -1,11 +1,11 @@
 """Python-binding tests for moonlab.crypto."""
 from __future__ import annotations
 
-import os
+import ctypes
 
-from moonlab.crypto import sha3
-from moonlab.crypto import mlkem
+import pytest
 
+from moonlab.crypto import mlkem, sha3
 
 # --------------------------------------------------------------------
 # SHA3 / SHAKE KAT vectors
@@ -105,6 +105,111 @@ def test_mlkem_keygen_qrng_nondeterministic():
     ek1, _ = mlkem.keygen_qrng()
     ek2, _ = mlkem.keygen_qrng()
     assert ek1 != ek2
+
+
+def _base_qrng_status() -> mlkem._QrngStatus:
+    status = mlkem._QrngStatus()
+    status.struct_size = ctypes.sizeof(mlkem._QrngStatus)
+    status.api_version = 1
+    status.capabilities = (
+        mlkem.QRNG_CAP_HARDWARE_OS_ENTROPY
+        | mlkem.QRNG_CAP_CONTINUOUS_HEALTH_TESTS
+        | mlkem.QRNG_CAP_SHAKE256_CONDITIONED
+        | mlkem.QRNG_CAP_BELL_SIMULATION_GATED
+        | mlkem.QRNG_CAP_THREAD_SAFE
+    )
+    status.conditioned_requests = 4
+    status.raw_bytes_generated = 512
+    status.bell_tests_performed = 2
+    status.bell_tests_passed = 2
+    status.average_chsh = 2.61
+    status.minimum_chsh = 2.31
+    return status
+
+
+def _with_qrng_status(monkeypatch, status: mlkem._QrngStatus) -> None:
+    def fake_get_status(ptr):
+        ctypes.memmove(
+            ptr,
+            ctypes.byref(status),
+            ctypes.sizeof(mlkem._QrngStatus),
+        )
+        return 0
+
+    monkeypatch.setattr(mlkem._lib, "moonlab_qrng_get_status", fake_get_status)
+
+
+def test_qrng_assurance_status_contract(monkeypatch):
+    status = _base_qrng_status()
+    _with_qrng_status(monkeypatch, status)
+    got = mlkem.qrng_status()
+    caps = int(status.capabilities)
+    assert got["api_version"] == 1
+    assert got["capabilities"] == caps
+    assert got["hardware_os_entropy"] == bool(
+        caps & mlkem.QRNG_CAP_HARDWARE_OS_ENTROPY
+    )
+    assert got["continuous_health_tests"] == bool(
+        caps & mlkem.QRNG_CAP_CONTINUOUS_HEALTH_TESTS
+    )
+    assert got["shake256_conditioned"] == bool(
+        caps & mlkem.QRNG_CAP_SHAKE256_CONDITIONED
+    )
+    assert got["bell_simulation_gated"] == bool(
+        caps & mlkem.QRNG_CAP_BELL_SIMULATION_GATED
+    )
+    assert got["thread_safe"] == bool(caps & mlkem.QRNG_CAP_THREAD_SAFE)
+    assert not got["bell_epoch_certified"]
+    assert got["conditioned_requests"] == status.conditioned_requests
+    assert got["raw_bytes_generated"] == status.raw_bytes_generated
+    assert got["bell_tests_performed"] == status.bell_tests_performed
+    assert got["bell_tests_passed"] == status.bell_tests_passed
+    assert got["average_chsh"] == status.average_chsh
+    assert got["minimum_chsh"] == status.minimum_chsh
+
+
+def test_qrng_assurance_status_rejects_non_finite_chsh(monkeypatch):
+    status = _base_qrng_status()
+    status.average_chsh = float("nan")
+    _with_qrng_status(monkeypatch, status)
+    with pytest.raises(RuntimeError, match="CHSH values"):
+        mlkem.qrng_status()
+
+
+def test_qrng_assurance_status_rejects_bell_counter_inversion(monkeypatch):
+    status = _base_qrng_status()
+    status.bell_tests_performed = 2
+    status.bell_tests_passed = 3
+    _with_qrng_status(monkeypatch, status)
+    with pytest.raises(RuntimeError, match="bell_tests_passed > bell_tests_performed"):
+        mlkem.qrng_status()
+
+
+def test_qrng_assurance_status_rejects_bell_epoch_certified_without_tests(monkeypatch):
+    status = _base_qrng_status()
+    status.capabilities |= mlkem.QRNG_CAP_BELL_EPOCH_CERTIFIED
+    status.bell_tests_performed = 0
+    status.bell_tests_passed = 0
+    _with_qrng_status(monkeypatch, status)
+    with pytest.raises(RuntimeError, match="bell_epoch_certified"):
+        mlkem.qrng_status()
+
+
+def test_qrng_assurance_status_rejects_raw_counter_underflow(monkeypatch):
+    status = _base_qrng_status()
+    status.conditioned_requests = 1024
+    status.raw_bytes_generated = 256
+    _with_qrng_status(monkeypatch, status)
+    with pytest.raises(RuntimeError, match="counter ordering invalid"):
+        mlkem.qrng_status()
+
+
+def test_qrng_assurance_status_rejects_bad_api_version(monkeypatch):
+    status = _base_qrng_status()
+    status.api_version = 2
+    _with_qrng_status(monkeypatch, status)
+    with pytest.raises(RuntimeError, match="Unsupported moonlab_qrng_status api_version"):
+        mlkem.qrng_status()
 
 
 def test_qrng_assurance_status():
