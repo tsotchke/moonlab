@@ -622,7 +622,7 @@ oracles:
           event_values: [PASS]
         severity: high
         label: Two independent fleet hosts return byte-identical outcomes for the same request seed
-        action: run_seeded_shots_mesh_gate
+        action: ./scripts/run_seeded_shots_mesh_gate.sh
       - id: failure_free
         runtime_check: failure_free
         severity: high

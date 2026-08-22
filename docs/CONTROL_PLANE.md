@@ -98,6 +98,16 @@ seed before execution.  In both forms the response echoes the effective seed,
 and `MOONLAB_CONTROL_LOG=1` records the same value.  Replaying the same
 canonical circuit, shot count, and seed produces byte-identical outcomes.
 
+The release replay probe uses the canonical two-qubit Bell circuit and a fixed
+non-zero seed.  Run the focused local executable with
+`cmake --build build --target seeded_shots_replay_probe` followed by
+`build/seeded_shots_replay_probe`; it emits one host-independent line containing
+the seed, shot count, and ordered outcomes.  The two-host release gate is
+`./scripts/run_seeded_shots_mesh_gate.sh [target target]` (or set
+`MOONLAB_SEEDED_SHOTS_TARGETS`); it requires a clean tree, stages only `git
+archive HEAD` in unique directories, and records PASS/FAIL evidence in
+`scripts/icc_traces/moonlab_seeded_shots.jsonl` after byte comparison.
+
 Note that the integer field after the verb has different units per
 reply: ``OK <n>`` is a *count of doubles*, ``SAMPLES <n>`` is a
 *count of uint64 outcomes*, ``METRICS <n>`` is *byte length*.

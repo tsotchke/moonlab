@@ -1739,6 +1739,7 @@ endif()
 if(QSIM_BUILD_TESTS)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantum_annealing_tests.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/seeded_shots_tests.cmake)
     # Adversarial suites use POSIX sockets/pthreads, a numpy-generated corpus,
     # and libc math corners that clang-cl/UCRT does not provide; they are
     # Linux/macOS dev+CI tools, not part of the shipped Windows artifact (which
