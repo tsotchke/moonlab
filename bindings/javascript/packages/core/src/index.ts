@@ -121,8 +121,12 @@ export type { LoadOptions } from './wasm-loader';
 export { WasmMemory } from './memory';
 export type { MoonlabModule } from './memory';
 
-export { IsingModel } from './ising-model';
-export type { IsingModelOptions } from './ising-model';
+// ULG's thin WASM wrapper over the _ising_model_* C surface. Exported under
+// a qualified name because ./qaoa exports a different, upstream IsingModel
+// (since 0.5.5) with an incompatible API: create(numQubits) and a bigint
+// evaluate(), versus create({ numQubits }) and a number evaluate() here.
+export { IsingModel as UlgIsingModel } from './ising-model';
+export type { IsingModelOptions as UlgIsingModelOptions } from './ising-model';
 
 export {
   buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe,
