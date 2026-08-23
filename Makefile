@@ -115,6 +115,9 @@ endif
 
 LDFLAGS = -lm -lpthread -flto $(OPENMP_LIBS) $(ACCELERATE_FLAGS) $(SECURITY_FLAGS) $(METAL_FLAGS) $(LAPACK_LIBS)
 
+# Prepend the build dir to any ambient LD_LIBRARY_PATH instead of replacing it.
+RUNTIME_LIBRARY_PATH = .:$(LD_LIBRARY_PATH)
+
 # Directory structure (MOONLAB REORGANIZATION)
 QUANTUM_DIR = src/quantum
 ALGORITHMS_DIR = src/algorithms
@@ -251,7 +254,7 @@ ALL_INTEGRATION_TESTS = $(INTEGRATION_TEST_GROVER) $(INTEGRATION_TEST_VQE) $(INT
 # Main targets
 all: $(LIB) $(QSIM_TEST) $(HW_RNG_PROBE)
 	@echo "Running Quantum Simulator v3.0 optimized tests..."
-	LD_LIBRARY_PATH=. ./$(QSIM_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(QSIM_TEST)
 
 # Hardware RNG probe helper (for safe RNDR/RDRAND detection via fork+exec)
 $(HW_RNG_PROBE): tools/hw_rng_probe.c
@@ -281,7 +284,7 @@ tests: $(ALL_TESTS)
 # Quantum Simulator v3 test
 test_v3: $(QSIM_TEST)
 	@echo "Running Quantum Simulator v3.0 tests..."
-	LD_LIBRARY_PATH=. ./$(QSIM_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(QSIM_TEST)
 
 $(QSIM_TEST): $(TEST_DIR)/quantum_sim_test.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -289,7 +292,7 @@ $(QSIM_TEST): $(TEST_DIR)/quantum_sim_test.o $(ALL_LIB_OBJS)
 # Health tests (NIST SP 800-90B compliance)
 test_health: $(HEALTH_TESTS)
 	@echo "Running NIST SP 800-90B health tests..."
-	LD_LIBRARY_PATH=. ./$(HEALTH_TESTS)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(HEALTH_TESTS)
 
 $(HEALTH_TESTS): $(TEST_DIR)/health_tests_test.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -297,7 +300,7 @@ $(HEALTH_TESTS): $(TEST_DIR)/health_tests_test.o $(ALL_LIB_OBJS)
 # Bell test demonstration
 test_bell: $(BELL_TEST_DEMO)
 	@echo "Running Bell inequality test demonstration..."
-	LD_LIBRARY_PATH=. ./$(BELL_TEST_DEMO)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(BELL_TEST_DEMO)
 
 $(BELL_TEST_DEMO): $(TEST_DIR)/bell_test_demo.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -305,7 +308,7 @@ $(BELL_TEST_DEMO): $(TEST_DIR)/bell_test_demo.o $(ALL_LIB_OBJS)
 # Gate correctness test
 test_gate: $(GATE_TEST)
 	@echo "Running quantum gate correctness tests..."
-	LD_LIBRARY_PATH=. ./$(GATE_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(GATE_TEST)
 
 $(GATE_TEST): $(TEST_DIR)/gate_test.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -313,7 +316,7 @@ $(GATE_TEST): $(TEST_DIR)/gate_test.o $(ALL_LIB_OBJS)
 # Correlation test
 test_correlation: $(CORRELATION_TEST)
 	@echo "Running entanglement correlation tests..."
-	LD_LIBRARY_PATH=. ./$(CORRELATION_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(CORRELATION_TEST)
 
 $(CORRELATION_TEST): $(TEST_DIR)/correlation_test.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -329,19 +332,19 @@ test_unit: unit_tests
 	@echo "╚═══════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "=== Memory Alignment Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_MEMORY_ALIGN)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_MEMORY_ALIGN)
 	@echo ""
 	@echo "=== SIMD Dispatch Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_SIMD_DISPATCH)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_SIMD_DISPATCH)
 	@echo ""
 	@echo "=== Quantum State Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STATE)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_STATE)
 	@echo ""
 	@echo "=== Quantum Gates Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_GATES)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_GATES)
 	@echo ""
 	@echo "=== Tensor Network Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_TENSOR_NETWORK)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_TENSOR_NETWORK)
 	@echo ""
 	@echo "╔═══════════════════════════════════════════════════════════╗"
 	@echo "║         UNIT TESTS COMPLETED                              ║"
@@ -373,16 +376,16 @@ test_integration: integration-tests
 	@echo "╚═══════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "=== Grover Integration Tests ==="
-	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_GROVER)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(INTEGRATION_TEST_GROVER)
 	@echo ""
 	@echo "=== VQE Integration Tests ==="
-	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_VQE)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(INTEGRATION_TEST_VQE)
 	@echo ""
 	@echo "=== QAOA Integration Tests ==="
-	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_QAOA)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(INTEGRATION_TEST_QAOA)
 	@echo ""
 	@echo "=== QPE Integration Tests ==="
-	LD_LIBRARY_PATH=. ./$(INTEGRATION_TEST_QPE)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(INTEGRATION_TEST_QPE)
 	@echo ""
 	@echo "╔═══════════════════════════════════════════════════════════╗"
 	@echo "║         INTEGRATION TESTS COMPLETED                       ║"
@@ -408,25 +411,25 @@ test: tests
 	@echo "╚═══════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "=== Quantum RNG v3.0 Tests ==="
-	LD_LIBRARY_PATH=. ./$(QSIM_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(QSIM_TEST)
 	@echo ""
 	@echo "=== Health Tests ==="
-	LD_LIBRARY_PATH=. ./$(HEALTH_TESTS)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(HEALTH_TESTS)
 	@echo ""
 	@echo "=== Bell Test Demo ==="
-	-LD_LIBRARY_PATH=. ./$(BELL_TEST_DEMO)
+	-LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(BELL_TEST_DEMO)
 	@echo ""
 	@echo "=== Gate Tests ==="
-	LD_LIBRARY_PATH=. ./$(GATE_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(GATE_TEST)
 	@echo ""
 	@echo "=== Correlation Tests ==="
-	LD_LIBRARY_PATH=. ./$(CORRELATION_TEST)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(CORRELATION_TEST)
 	@echo ""
 	@echo "=== Unit Tests ==="
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_MEMORY_ALIGN)
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_SIMD_DISPATCH)
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_STATE)
-	LD_LIBRARY_PATH=. ./$(UNIT_TEST_GATES)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_MEMORY_ALIGN)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_SIMD_DISPATCH)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_STATE)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(UNIT_TEST_GATES)
 	@echo ""
 	@echo "╔═══════════════════════════════════════════════════════════╗"
 	@echo "║         ALL TESTS COMPLETED                               ║"
@@ -436,7 +439,7 @@ test: tests
 parallel_bench: $(GROVER_PARALLEL_BENCH)
 	@echo "Running M2 Ultra parallel Grover benchmark..."
 	@echo "This tests 24-core parallelization targeting 20-30x speedup"
-	LD_LIBRARY_PATH=. ./$(GROVER_PARALLEL_BENCH)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(GROVER_PARALLEL_BENCH)
 
 $(GROVER_PARALLEL_BENCH): $(EXAMPLES_DIR)/quantum/grover_parallel_benchmark.o $(OPTIMIZATION_DIR)/parallel_ops.o $(ALL_LIB_OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -534,7 +537,7 @@ $(EXAMPLE_SPIN_CHAIN): $(EXAMPLES_DIR)/tensor_network/quantum_spin_chain.o $(ALL
 # Run tensor network spin chain demo
 spin_chain: $(EXAMPLE_SPIN_CHAIN)
 	@echo "Running 100-qubit quantum spin chain simulation..."
-	LD_LIBRARY_PATH=. ./$(EXAMPLE_SPIN_CHAIN)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(EXAMPLE_SPIN_CHAIN)
 
 # Quantum critical point demo (200 qubits, CFT verification)
 $(EXAMPLE_CRITICAL_POINT): $(EXAMPLES_DIR)/tensor_network/quantum_critical_point.o $(ALL_LIB_OBJS)
@@ -543,7 +546,7 @@ $(EXAMPLE_CRITICAL_POINT): $(EXAMPLES_DIR)/tensor_network/quantum_critical_point
 # Run quantum critical point demo
 critical_point: $(EXAMPLE_CRITICAL_POINT)
 	@echo "Running 200-qubit quantum critical point analysis..."
-	LD_LIBRARY_PATH=. ./$(EXAMPLE_CRITICAL_POINT)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(EXAMPLE_CRITICAL_POINT)
 
 # ============================================================================
 # TOPOLOGICAL PHYSICS EXAMPLES
@@ -556,7 +559,7 @@ $(EXAMPLE_KITAEV_CHAIN): $(EXAMPLES_DIR)/topological/kitaev_chain.o $(ALL_LIB_OB
 # Run Kitaev chain demo (Majorana fermions, topological phase transition)
 kitaev_chain: $(EXAMPLE_KITAEV_CHAIN)
 	@echo "Running Kitaev chain topological simulation..."
-	LD_LIBRARY_PATH=. ./$(EXAMPLE_KITAEV_CHAIN)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(EXAMPLE_KITAEV_CHAIN)
 
 # Skyrmion ground state simulation
 $(EXAMPLE_SKYRMION_GS): $(EXAMPLES_DIR)/topological/skyrmion_ground_state.o $(ALL_LIB_OBJS)
@@ -569,11 +572,11 @@ $(EXAMPLE_SKYRMION_GATES): $(EXAMPLES_DIR)/topological/skyrmion_qubit_gates.o $(
 # Run skyrmion demos
 skyrmion: $(EXAMPLE_SKYRMION_GS)
 	@echo "Running 2D skyrmion ground state simulation..."
-	LD_LIBRARY_PATH=. ./$(EXAMPLE_SKYRMION_GS)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(EXAMPLE_SKYRMION_GS)
 
 skyrmion-gates: $(EXAMPLE_SKYRMION_GATES)
 	@echo "Running skyrmion qubit gate demonstration..."
-	LD_LIBRARY_PATH=. ./$(EXAMPLE_SKYRMION_GATES)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(EXAMPLE_SKYRMION_GATES)
 
 # Build all topological examples
 topological: kitaev_chain $(EXAMPLE_SKYRMION_GS) $(EXAMPLE_SKYRMION_GATES)
@@ -603,7 +606,7 @@ $(BENCHMARK_SCALING): tools/benchmarks/scaling_benchmark.o $(ALL_LIB_OBJS)
 
 bench_scaling: $(BENCHMARK_SCALING)
 	@echo "Running scaling benchmark..."
-	LD_LIBRARY_PATH=. ./$(BENCHMARK_SCALING)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(BENCHMARK_SCALING)
 
 # Memory profiler
 $(BENCHMARK_MEMORY): tools/benchmarks/memory_profiler.o $(ALL_LIB_OBJS)
@@ -611,7 +614,7 @@ $(BENCHMARK_MEMORY): tools/benchmarks/memory_profiler.o $(ALL_LIB_OBJS)
 
 bench_memory: $(BENCHMARK_MEMORY)
 	@echo "Running memory profiler..."
-	LD_LIBRARY_PATH=. ./$(BENCHMARK_MEMORY)
+	LD_LIBRARY_PATH=$(RUNTIME_LIBRARY_PATH) ./$(BENCHMARK_MEMORY)
 
 # Clean benchmarks
 clean_benchmarks:
