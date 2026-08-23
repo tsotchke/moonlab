@@ -670,7 +670,10 @@ clean: clean_examples clean_tests clean_benchmarks
 	rm -rf *.dSYM
 	rm -rf tests/*.dSYM
 	rm -f tests/test_comprehensive tests/test_dmrg tests/test_dmrg_exe
-	rm -f tests/integration/test_*
+	# Delete compiled integration binaries only -- an unanchored
+	# `rm -f tests/integration/test_*` also removes the .c/.h sources.
+	find tests/integration -maxdepth 1 -type f -name 'test_*' \
+		! -name '*.c' ! -name '*.h' -delete
 	find . -name "*.o" -delete
 	find . -name "*.so" -delete
 	find . -name "*.dylib" -delete
