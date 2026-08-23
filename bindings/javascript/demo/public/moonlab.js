@@ -3952,7 +3952,7 @@ Module['allocFloat64Array'] = function(length) {
  * Version info
  */
 Module['version'] = {
-  core: '1.2.0',
+  core: '1.2.1',
   wasm: true
 };
 // end include: post.js

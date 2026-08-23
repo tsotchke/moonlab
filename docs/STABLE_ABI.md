@@ -1,8 +1,7 @@
 # Stable ABI contract -- v1.x
 
-**Current released package:** 1.2.0
-**Development target:** 1.2.1
-**Current development ABI:** 0.8.0
+**Current released package:** 1.2.1
+**Current stable ABI:** 0.8.0
 
 ## Scope
 
@@ -480,15 +479,14 @@ mechanism (Python `DeprecationWarning`, Rust `#[deprecated]`, JS
 
 | Language | Crate / package                   | Current version |
 |----------|-----------------------------------|------------------|
-| C        | `libquantumsim.{so,dylib,dll}`    | released package 1.2.0 / ABI 0.6.0; development ABI 0.8.0 |
-| Python   | `moonlab` (pip)                   | follows the package version (1.2.0) |
-| Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.0) |
-| JS       | `@tsotchkecorp/moonlab`           | follows the package version (1.2.0) |
+| C        | `libquantumsim.{so,dylib,dll}`    | released package 1.2.1 / ABI 0.8.0 |
+| Python   | `moonlab` (pip)                   | follows the package version (1.2.1) |
+| Rust     | `moonlab` + `moonlab-sys` crates  | follows the package version (1.2.1) |
+| JS       | `@tsotchkecorp/moonlab`           | follows the package version (1.2.1) |
 
 Each binding crate/package revs alongside the C library's package version
-(released at 1.2.0; next target 1.2.1) and stays within the same 1.x
-compatibility line as the stable C ABI (released at 0.6.0; development at
-0.8.0). Breaking changes in the language idiom of a
+(currently 1.2.1) and stays within the same 1.x compatibility line as the
+stable C ABI (currently 0.8.0). Breaking changes in the language idiom of a
 single binding (e.g. switching Rust's `Vec<f64>` to `Box<[f64]>`) are
 allowed but rare; each binding's CHANGELOG records them with semver
 discipline.
