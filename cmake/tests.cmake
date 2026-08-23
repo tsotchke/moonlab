@@ -1689,7 +1689,7 @@
     # meaningful for shared builds.
     if(QSIM_BUILD_SHARED)
         add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
-        target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
+        target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS} ${MATH_LIBRARY})
         add_test(NAME abi_moonlab_export
                  COMMAND test_moonlab_export_abi)
         # Make the freshly-built libquantumsim discoverable to the test at
