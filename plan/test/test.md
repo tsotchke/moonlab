@@ -1,4 +1,56 @@
-# Testing Strategy
+# Test strategy
+
+Describe only project-wide verification expectations here. Put checks unique to
+one task in that task's `Acceptance checks` section.
+
+## Completion standard
+
+A change is complete when the CMake build is clean and `ctest` passes, with no
+new failures relative to the baseline below.
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+cd build && OMP_NUM_THREADS=2 taskset -c 0-7 ctest --output-on-failure -j4
+```
+
+Cap the CPU as shown. Each test spawns one OpenMP thread per core, so an
+uncapped `ctest -jN` will saturate the machine.
+
+The bare `Makefile` is not a valid verification path — it cannot build a clean
+tree. See `plan/arch/stack.md`.
+
+## Test levels
+
+| Level | Where | Run by |
+|-------|-------|--------|
+| Unit | `tests/unit/` | `ctest -L unit` |
+| Integration | `tests/integration/` | `ctest` |
+| ABI | `tests/abi/` | `ctest` |
+| Oracle / differential | `tests/` | `ctest -R oracle_` |
+| Binding smoke | `bindings/{python,rust,javascript}` | `ctest -R _bindings_smoke` |
+| JS unit / integration | `bindings/javascript/packages/core` | `pnpm test:unit`, `pnpm test:integration` |
+
+## Baseline as of 2026-08-23
+
+184 tests: 183 pass, 1 fails, 2 skip.
+
+- `webgpu_unified_smoke` fails without the Emscripten SDK. It needs
+  `pnpm build:wasm` to produce `dist/moonlab.js` and `dist/moonlab.wasm`;
+  `emcc` is not installed on the current machine. Rebuild the TypeScript first
+  (`pnpm build:ts`) — a stale `dist/` fails earlier and more confusingly, with
+  an undefined export rather than a missing module.
+- `unit_libirrep_sector_ed` and `unit_libirrep_css` skip by design.
+
+## Special environments or fixtures
+
+The WASM and browser-WebGPU checks need the Emscripten SDK on `PATH`
+(`emcc`, `emcmake`). Without it, skip them and say so; do not report the suite
+as fully green.
+
+## Task-specific validation
+
+The sections below are the per-slice checks carried over from the `ulg` branch.
 
 ## ULG Quantum Response Artifact Readiness
 
