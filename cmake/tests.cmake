@@ -1590,6 +1590,29 @@
                          run test:unit)
     endif()
 
+    # exomoonlab native-vs-WASM equivalence (since 1.2).  Runs the same fixed
+    # circuit set through the FFI backend and the Emscripten backend and
+    # asserts they agree to float64 precision -- the property that lets the
+    # console be one application rather than two.
+    #
+    # Gated on deno plus a loadable WASM artifact.  --no-remote keeps the run
+    # hermetic; the test deliberately has no remote imports.  MOONLAB_LIB
+    # points the FFI backend at the library built in this tree rather than
+    # whatever the loader would find.
+    find_program(DENO_EXECUTABLE deno)
+    if(DENO_EXECUTABLE AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/deno/exomoonlab/tests/equivalence.test.ts")
+        add_test(NAME deno_bindings_equivalence
+                 COMMAND ${DENO_EXECUTABLE} test
+                         --allow-read --allow-ffi --allow-env --no-remote
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/deno/exomoonlab/tests/equivalence.test.ts)
+        set_tests_properties(deno_bindings_equivalence PROPERTIES
+            ENVIRONMENT
+                "MOONLAB_LIB=$<TARGET_FILE:quantumsim>;LD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{LD_LIBRARY_PATH};DYLD_LIBRARY_PATH=$<TARGET_FILE_DIR:quantumsim>:$ENV{DYLD_LIBRARY_PATH}"
+            TIMEOUT 120
+        )
+    endif()
+
     # WebGPU parity smoke — runs the existing randomized eval script.
     # Requires pnpm, emscripten-built moonlab.wasm, a pnpm-built TS dist,
     # and optionally a WebGPU-capable runtime (Chromium 113+ or Deno 2).
@@ -1777,7 +1800,8 @@
         unit_circuit_diagram unit_feynman unit_manifest)
     qsim_label_tests(bindings
         bindings_version_sync python_bindings_pytest
-        python_bindings_smoke rust_bindings_smoke js_bindings_vitest)
+        python_bindings_smoke rust_bindings_smoke js_bindings_vitest
+        deno_bindings_equivalence)
     qsim_label_tests(abi
         abi_moonlab_export unit_moonlab_status)
     qsim_label_tests(examples

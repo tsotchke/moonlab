@@ -1,0 +1,30 @@
+{
+  // exomoonlab -- a themable terminal-desktop console for MoonLab.
+  //
+  // Phase 1 is the backend seam only: one interface over MoonLab's stable C
+  // ABI with a native (FFI) and a WASM implementation, plus the harness that
+  // proves they agree. The UI arrives in phase 2 and is what pulls in exotui.
+  "name": "@moonlab/exomoonlab",
+  "version": "0.0.1",
+  "exports": {
+    "./backend": "./src/backend/mod.ts"
+  },
+  "imports": {
+    // Pinned to the JSR release. exotui 0.6.0 is the first version carrying
+    // the ShellPresenter seam this console is built on.
+    //
+    // To develop against a local exotui checkout without changing this file:
+    //   deno task test --import-map=import_map.local.json
+    // See README.md; import_map.local.json is gitignored.
+    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.6.0"
+  },
+  "tasks": {
+    "test": "deno test --allow-read --allow-ffi --allow-env",
+    "equivalence": "deno test --allow-read --allow-ffi --allow-env tests/equivalence.test.ts",
+    "check": "deno check src/backend/mod.ts"
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "semiColons": true
+  }
+}
