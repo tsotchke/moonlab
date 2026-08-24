@@ -8,25 +8,32 @@ Plan and architecture live in `plan/` at the repository root —
 [the task](../../../plan/todo/exomoonlab-console-interface.md) and
 [the architecture](../../../plan/arch/exomoonlab.md).
 
-## Status: phase 1 of 5
+## Status: phase 2 of 5, terminal half
 
-The backend seam only. There is no UI yet; that is phase 2, and it is what pulls in exotui.
+The console runs in a terminal against either backend. The browser half is blocked on exotui — see
+**The exotui gap** below.
 
-What works today:
-
-|                     |                                                                  |
-| ------------------- | ---------------------------------------------------------------- |
-| `MoonLabBackend`    | one interface over MoonLab's stable C ABI                        |
-| native backend      | `Deno.dlopen` over `libquantumsim`, using `quantum_state_create` |
-| WASM backend        | the Emscripten build, loaded and driven from Deno                |
-| equivalence harness | seven circuits through both, agreeing to **1.1e-16**             |
+|                      |                                                                  |
+| -------------------- | ---------------------------------------------------------------- |
+| `MoonLabBackend`     | one interface over MoonLab's stable C ABI                        |
+| native backend       | `Deno.dlopen` over `libquantumsim`, using `quantum_state_create` |
+| WASM backend         | the Emscripten build, loaded and driven from Deno                |
+| equivalence harness  | seven circuits through both, agreeing to **1.1e-16**             |
+| probabilities window | bar chart, marginals, entropy and purity                         |
+| terminal host        | `runConsoleShellApp` from `@ubernaut/exotui/runtime`             |
+| browser host         | **blocked** — exotui 0.6.0 does not export its web presenter     |
 
 ## Running
 
 ```bash
-deno task check          # type-check the seam
-deno task equivalence    # native vs WASM, the phase-1 acceptance check
+deno task exomoonlab                  # the console, in a terminal
+deno task exomoonlab --backend=wasm   # force the WASM backend
+deno task check                       # type-check
+deno task test                        # everything, offline
+deno task equivalence                 # native vs WASM only
 ```
+
+Keys: `j`/`k` circuit, `+`/`-` qubits, `r` rerun, `q` quit.
 
 Or through the project's own suite, where it is gated on `deno` being present:
 
@@ -86,3 +93,24 @@ instead, which works regardless of where the artifact lives.
   made after those `exports.txt` additions will take the direct path.
 - Building a fresh `moonlab.wasm` needs the Emscripten SDK, which is not installed on the current
   development machine.
+
+## The exotui gap
+
+exotui 0.6.0 publishes fifteen entrypoints, and the terminal host needs only what is already there:
+`consolePresenter` and `runConsoleShellApp` are reachable through `@ubernaut/exotui/runtime`. The
+browser host is not. These ship in 0.6.0 but sit under `src/`, which is not a published entrypoint:
+
+| File                               | Needed for                                                  |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `src/web/web_presenter.ts`         | the browser host — phase 2's second half                    |
+| `src/app/shell_presenter.ts`       | `ShellPresenter` / `ShellApp` / `ShellPresentedFrame` types |
+| `src/app/workbench_shell.ts`       | window chrome and shared painters — phase 3                 |
+| `src/app/shell_theme.ts`           | the seventeen-theme catalog — phase 3                       |
+| `src/app/backgrounds/`             | the animated backdrops — phase 3                            |
+| `src/app/workbench_window_host.ts` | the window manager — phase 3                                |
+
+Reaching into a dependency's `src/` is not something we do, so the fix belongs upstream: a branch in
+the exotui repository widening the public surface, then a release. Until then this package mirrors
+the seam's types structurally in `src/ui/cells.ts` and `src/app/console_app.ts` — which is enough
+for the terminal host, since TypeScript is structural and `runConsoleShellApp` accepts the frames
+unchanged.

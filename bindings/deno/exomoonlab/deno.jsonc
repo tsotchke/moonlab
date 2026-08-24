@@ -7,7 +7,8 @@
   "name": "@moonlab/exomoonlab",
   "version": "0.0.1",
   "exports": {
-    "./backend": "./src/backend/mod.ts"
+    "./backend": "./src/backend/mod.ts",
+    "./app": "./src/app/console_app.ts"
   },
   "imports": {
     // Pinned to the JSR release. exotui 0.6.0 is the first version carrying
@@ -16,12 +17,15 @@
     // To develop against a local exotui checkout without changing this file:
     //   deno task test --import-map=import_map.local.json
     // See README.md; import_map.local.json is gitignored.
-    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.6.0"
+    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.6.0",
+    "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.6.0/"
   },
   "tasks": {
-    "test": "deno test --allow-read --allow-ffi --allow-env",
-    "equivalence": "deno test --allow-read --allow-ffi --allow-env tests/equivalence.test.ts",
-    "check": "deno check src/backend/mod.ts"
+    // The console, in a terminal. Add --backend=native|wasm to force one.
+    "exomoonlab": "deno run --allow-read --allow-ffi --allow-env --allow-write main.ts",
+    "test": "deno test --allow-read --allow-ffi --allow-env --no-remote",
+    "equivalence": "deno test --allow-read --allow-ffi --allow-env --no-remote tests/equivalence.test.ts",
+    "check": "deno check main.ts src/backend/mod.ts"
   },
   "fmt": {
     "lineWidth": 100,
