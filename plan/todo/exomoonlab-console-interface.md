@@ -101,16 +101,20 @@ Schrödinger orbitals, and a tensor-network/DMRG monitor.
 
 ## Notes
 
-**Open questions for the user.**
+**Decided (2026-08-24).** The console lives in this repository, at
+`bindings/deno/exomoonlab`, alongside the other language bindings. It is
+therefore versioned with the ABI it calls: a change to `MOONLAB_API` or to
+`exports.txt` and the console that consumes it land in the same commit, and the
+equivalence harness in phase 1 can run in this repo's CI against the library
+built beside it. The cost is that the fork's rebases now carry the console too;
+that is accepted.
 
-1. Where should the console live — in this repository (say
-   `bindings/deno/exomoonlab`), or as its own repository depending on
-   `@ubernaut/exotui` and `@moonlab/core`? A separate repository keeps the
-   fork's rebases clean; living here keeps it versioned with the ABI it calls.
-2. Should exomoonlab eventually replace `bindings/rust/moonlab-tui`, or do both
-   stay?
+Implementation happens on `feature/exomoonlab-tui`, branched from
+`exomoonlab`.
 
-Neither blocks phase 1, which is why phase 1 is first.
+**Still open.** Should exomoonlab eventually replace
+`bindings/rust/moonlab-tui`, or do both stay? This does not block any phase —
+decide it once the console can do what the Ratatui one does, not before.
 
 **Known environmental gap.** The browser path needs the Emscripten SDK to build
 `moonlab.wasm`; `emcc` is not installed on the current machine, and

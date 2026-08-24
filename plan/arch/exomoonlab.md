@@ -38,6 +38,13 @@ re-exports 424 of those symbols through `emscripten/exports.txt`.
 So both hosts can reach the *same C functions*. That is the whole reason this
 is one application rather than two.
 
+## Where it lives
+
+`bindings/deno/exomoonlab`, beside the JavaScript, Python, and Rust bindings.
+The console is a consumer of the ABI, so it is versioned with the ABI: a change
+to `exports.txt` and the code that needs it land together, and the equivalence
+harness runs against the library built next to it.
+
 ## Layering
 
 ```mermaid

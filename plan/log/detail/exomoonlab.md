@@ -67,3 +67,38 @@ neither should hold up starting.
 **Known gap.** The browser half cannot be verified on this machine: building
 `moonlab.wasm` needs the Emscripten SDK and `emcc` is not installed. This is
 also why `webgpu_unified_smoke` fails locally.
+
+## 2026-08-24 — The console lives in this repo
+
+### Prompt
+
+Push `origin/ulg`, and create a new branch off this one for the TUI work; it
+should live in this repo.
+
+### Response and strategy
+
+Before publishing, moved the Turborepo untracking commit down from
+`exomoonlab` onto `ulg` and rebased `exomoonlab` back on top. It is a
+repo-hygiene fix of the same class as the others already on `ulg`, and leaving
+it above the fork point would have meant anyone branching from the newly
+published `ulg` still carried the stale `.turbo/` artifacts. Git dropped the
+duplicate on its own during the rebase.
+
+Force-pushed `ulg` — required, since the rebase onto `origin/master` rewrote
+its history. Used `--force-with-lease` pinned to the previously fetched
+`7952d7a` so the push would abort if anyone had moved the branch meanwhile.
+`ulg-prerebase-backup` still holds the pre-rebase tip.
+
+Answered the first open question from the task file: the console lives here, at
+`bindings/deno/exomoonlab`, next to the other language bindings. The deciding
+argument is that the console consumes the stable ABI, so it should be versioned
+with it — a change to `exports.txt` and the code needing it land in one commit,
+and the phase-1 equivalence harness can run against the library built beside
+it. The accepted cost is that the fork's rebases now carry the console too.
+
+The second question — whether this supersedes `bindings/rust/moonlab-tui` — is
+left open on purpose. It is not answerable until the console can actually do
+what the Ratatui one does.
+
+Implementation moves to `feature/exomoonlab-tui`, branched from here, starting
+at phase 1 (the backend seam and the equivalence harness).
