@@ -59,16 +59,44 @@ the WASM backend reports `allocatingConstructor: false` and allocates via
 `malloc` + `quantum_state_init`. It takes the direct path automatically once a
 build carrying that export exists.
 
-### 2. One window, both hosts
+### 2. One window, both hosts — **terminal half done (2026-08-24)**
 
-Get a single MoonLab window — the amplitude/probability view — composing
-through `ShellPresenter` and running under the console presenter and the web
-presenter with no host-specific code in the application.
-
-- [ ] `deno task exomoonlab` opens it in a terminal.
+- [x] `deno task exomoonlab` opens it in a terminal, on either backend.
 - [ ] The browser build opens the same window with the same output.
-- [ ] Backend calls run off the frame loop; the UI stays responsive during a
-      20-qubit run.
+      **Blocked** — see *The exotui gap* below.
+- [x] Backend calls run off the frame loop. `frame()` never awaits; work goes
+      through a `Job` and the frame paints the latest result. Scanning is
+      bounded, because reading every basis probability at 20 qubits would be a
+      million round trips through FFI.
+
+The application is host-neutral as designed: it composes cells and takes
+events, and the terminal host is one file (`main.ts`) calling
+`runConsoleShellApp`. Swapping that file is the whole of "run it in a browser".
+
+#### The exotui gap
+
+exotui 0.6.0 publishes fifteen entrypoints. The terminal host needs only what
+is already public — `consolePresenter` and `runConsoleShellApp` via
+`@ubernaut/exotui/runtime`. The browser host needs things that ship in 0.6.0
+but sit under `src/`, which is not a published entrypoint:
+
+| File | Needed for |
+|------|-----------|
+| `src/web/web_presenter.ts` | the browser host — this phase |
+| `src/app/shell_presenter.ts` | the seam's types |
+| `src/app/workbench_shell.ts` | window chrome and painters — phase 3 |
+| `src/app/shell_theme.ts` | the theme catalog — phase 3 |
+| `src/app/backgrounds/` | animated backdrops — phase 3 |
+| `src/app/workbench_window_host.ts` | the window manager — phase 3 |
+
+We do not import from a dependency's `src/`, so the fix belongs upstream: a
+branch in the exotui repository widening the public surface, then a release.
+Phase 3 needs the same change, so it is worth doing once and properly rather
+than piecemeal.
+
+Meanwhile the seam's types are mirrored structurally in `src/ui/cells.ts`.
+TypeScript is structural, so `runConsoleShellApp` accepts the frames unchanged
+— `deno check main.ts` against the published package is what proves it.
 
 ### 3. The desktop
 

@@ -89,3 +89,58 @@ vendored or reached into via `src/`.
 **Next.** Phase 2 — one window (amplitudes/probabilities) composed through
 `ShellPresenter`, running under both the console and web presenters, with
 backend calls off the frame loop.
+
+## 2026-08-24 — Phase 2: a window in a terminal, and the exotui gap
+
+### Prompt
+
+Proceed.
+
+### Response and strategy
+
+**Checked the published surface before designing against it.** The plan assumed
+`ShellPresenter` and `runShellApp` were importable. At 0.6.0 they are not — they
+live in `src/app/shell_presenter.ts`, and none of the fifteen published
+entrypoints re-export them. What *is* public, via `@ubernaut/exotui/runtime`, is
+`consolePresenter` and `runConsoleShellApp`, because `src/runtime/mod.ts`
+re-exports the console presenter and `mod.runtime.ts` re-exports all of that.
+So the terminal host works with the pin and the browser host does not.
+
+Verified against JSR itself rather than the local checkout — the working copy is
+on a feature branch ahead of the tag, and what matters is what was published.
+
+**Structural typing closed the gap without touching `src/`.** The frame is just
+`ReadonlyArray<ReadonlyArray<{char, foreground?, background?, bold?}>>` with
+`ShellRgb = readonly [number, number, number]`. Mirroring those shapes in
+`src/ui/cells.ts` lets `runConsoleShellApp` accept our frames unchanged;
+`deno check main.ts` resolves the real package and confirms it. When exotui
+publishes the seam, that file becomes re-exports and nothing else moves.
+
+**The frame loop discipline is the design, so it is enforced by types.** Every
+`MoonLabBackend` method is async, so nothing can accidentally be awaited inside
+the synchronous `frame()`. Work goes through a `Job` that keeps the last good
+value while the next computes, and abandons a superseded run rather than
+queueing it.
+
+**Bounded scanning.** Reading every basis probability is one call per amplitude,
+so 20 qubits is a million round trips. The readout stops at a scan limit and the
+window says the scan was bounded, rather than claiming a share "of the mass" it
+did not measure.
+
+**A pty run caught what headless tests missed.** Rendering under
+`script -qec "stty rows 30 cols 100; …"` showed `-0.000% of the mass`: two 0.5
+probabilities sum to a hair over 1, so the residual went negative. Headless
+assertions had checked the numbers, not the sentence. Clamped, zero-probability
+states now say "none with measurable probability", and there is a regression
+assertion. Worth remembering that a real terminal at a real size renders things
+no unit test was looking at.
+
+A second self-inflicted one: the first `settle()` helper waited for "computing…"
+to disappear, but the window deliberately keeps showing the previous readout
+while recomputing, so that string never returns and stale frames passed as
+fresh. It now waits on the job's own status.
+
+**Next.** The browser half and all of phase 3 need the same upstream change:
+exotui exporting its web presenter, seam types, shell painters, theme catalog,
+backgrounds, and window host. That is a branch and a release in the exotui
+repository, not something to work around here.
