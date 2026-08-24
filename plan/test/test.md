@@ -30,10 +30,14 @@ tree. See `plan/arch/stack.md`.
 | Oracle / differential | `tests/` | `ctest -R oracle_` |
 | Binding smoke | `bindings/{python,rust,javascript}` | `ctest -R _bindings_smoke` |
 | JS unit / integration | `bindings/javascript/packages/core` | `pnpm test:unit`, `pnpm test:integration` |
+| Native/WASM equivalence | `bindings/deno/exomoonlab` | `ctest -R deno_bindings_equivalence` |
 
-## Baseline as of 2026-08-23
+## Baseline as of 2026-08-24
 
-184 tests: 183 pass, 1 fails, 2 skip.
+185 tests: 184 pass, 1 fails, 2 skip.
+
+The 185th is `deno_bindings_equivalence`, added with the exomoonlab backend
+seam. It needs `deno` on PATH and is skipped by CMake's gate otherwise.
 
 - `webgpu_unified_smoke` fails without the Emscripten SDK. It needs
   `pnpm build:wasm` to produce `dist/moonlab.js` and `dist/moonlab.wasm`;
