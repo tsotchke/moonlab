@@ -63,7 +63,7 @@ build carrying that export exists.
 
 - [x] `deno task exomoonlab` opens it in a terminal, on either backend.
 - [ ] The browser build opens the same window with the same output.
-      **Blocked** — see *The exotui gap* below.
+      **Not blocked** — see the corrected note below.
 - [x] Backend calls run off the frame loop. `frame()` never awaits; work goes
       through a `Job` and the frame paints the latest result. Scanning is
       bounded, because reading every basis probability at 20 qubits would be a
@@ -73,26 +73,29 @@ The application is host-neutral as designed: it composes cells and takes
 events, and the terminal host is one file (`main.ts`) calling
 `runConsoleShellApp`. Swapping that file is the whole of "run it in a browser".
 
-#### The exotui gap
+#### The exotui gap — corrected 2026-08-24
 
-exotui 0.6.0 publishes fifteen entrypoints. The terminal host needs only what
-is already public — `consolePresenter` and `runConsoleShellApp` via
-`@ubernaut/exotui/runtime`. The browser host needs things that ship in 0.6.0
-but sit under `src/`, which is not a published entrypoint:
+An earlier version of this file said the browser host was blocked. **It was
+not.** The check that produced that claim grepped only `mod.web.ts` and missed
+that `src/web/mod.ts` re-exports `web_presenter.ts`, the same way `./runtime`
+exposes the console presenter. Probing the published package settled it:
 
-| File | Needed for |
-|------|-----------|
-| `src/web/web_presenter.ts` | the browser host — this phase |
-| `src/app/shell_presenter.ts` | the seam's types |
-| `src/app/workbench_shell.ts` | window chrome and painters — phase 3 |
-| `src/app/shell_theme.ts` | the theme catalog — phase 3 |
-| `src/app/backgrounds/` | animated backdrops — phase 3 |
-| `src/app/workbench_window_host.ts` | the window manager — phase 3 |
+| Already public at 0.6.0 | Via |
+|---|---|
+| `webPresenter`, `runWebShellApp` | `./web` |
+| `consolePresenter`, `runConsoleShellApp` | `./runtime` |
+| `ShellApp`, `ShellPresenter`, `ShellPresentedFrame`, `runShellApp` | `./web`, transitively |
+| the workbench window host | `./web`, transitively |
 
-We do not import from a dependency's `src/`, so the fix belongs upstream: a
-branch in the exotui repository widening the public surface, then a release.
-Phase 3 needs the same change, so it is worth doing once and properly rather
-than piecemeal.
+So phase 2's browser half can be built on the current pin. What genuinely was
+not reachable: the shell painters (`workbench_shell.ts`) and the seventeen-theme
+catalog (`shell_theme.ts`) — both needed by **phase 3**, not phase 2. The seam
+types were reachable only through `./web`, which is the wrong door for a
+terminal application.
+
+exotui 0.7.0 (`feature/publish-shell-seam`, health green, unpublished) adds a
+`./shell` entrypoint carrying the seam, painters, theme catalog, window host,
+and backgrounds. Phase 3 moves to it; phase 2 does not have to wait.
 
 Meanwhile the seam's types are mirrored structurally in `src/ui/cells.ts`.
 TypeScript is structural, so `runConsoleShellApp` accepts the frames unchanged

@@ -144,3 +144,52 @@ fresh. It now waits on the job's own status.
 exotui exporting its web presenter, seam types, shell painters, theme catalog,
 backgrounds, and window host. That is a branch and a release in the exotui
 repository, not something to work around here.
+
+## 2026-08-24 — Correction: the browser host was never blocked
+
+### Prompt
+
+Branch exotui from main, widen the public entrypoints, prepare 0.7.0, stop
+before publish.
+
+### Response and strategy
+
+**The premise was mine and it was wrong.** I had recorded that exotui 0.6.0 did
+not export its web presenter, and planned an upstream release around that. It
+does. `src/web/mod.ts` re-exports `web_presenter.ts`, and `mod.web.ts`
+re-exports that barrel — exactly the pattern that puts `consolePresenter`
+behind `./runtime`. My check grepped only the top-level `mod.web.ts` and stopped
+there, which is the same class of mistake as the earlier `strings | grep -qx`
+false negative on `gate_cnot`: a cheap check answering a slightly different
+question than the one asked, taken as authoritative.
+
+Probing the *published* package is what settled it. Available at 0.6.0:
+`webPresenter`, `runWebShellApp`, `consolePresenter`, `runConsoleShellApp`, the
+seam types, and the window host. **Phase 2's browser half can be built on the
+current pin.**
+
+What was genuinely unreachable: the shell painters (`workbench_shell.ts`) and
+the theme catalog (`shell_theme.ts`) — phase 3, not phase 2. And the seam types
+escaped only through `./web`, which is the wrong door for a terminal app and an
+accident of one barrel importing another rather than a decision.
+
+**The upstream change was still worth making, at a smaller size.** exotui
+`feature/publish-shell-seam` adds a `./shell` entrypoint for the host-neutral
+half — seam, painters, theme catalog, window host, backgrounds — with the
+presenters staying in their host-specific homes so the export map shows the
+split instead of hiding it. Additive; nothing moved. `deno task health` is
+green at 140/140. Committed, not published.
+
+Two things that repo's gate taught, worth keeping:
+
+- Adding an entrypoint there is seven files. The export map, the closed unions
+  and manifest, the packaging doc, the README table, *both* fixtures in the
+  stability test, and the budget baseline all have to agree; three tests failed
+  until they did.
+- The generated `docs/api-reference.md` must be simultaneously byte-identical to
+  its generator and `deno fmt`-clean. A 133-character manifest description made
+  those two requirements contradict each other, and running `deno fmt` on the
+  file "fixed" one by breaking the other. The fix belonged at the source.
+
+**Next.** Phase 2's browser host, on the 0.6.0 pin. It does not depend on 0.7.0
+publishing.

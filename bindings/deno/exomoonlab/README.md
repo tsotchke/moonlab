@@ -96,21 +96,22 @@ instead, which works regardless of where the artifact lives.
 
 ## The exotui gap
 
-exotui 0.6.0 publishes fifteen entrypoints, and the terminal host needs only what is already there:
-`consolePresenter` and `runConsoleShellApp` are reachable through `@ubernaut/exotui/runtime`. The
-browser host is not. These ship in 0.6.0 but sit under `src/`, which is not a published entrypoint:
+An earlier version of this file said the browser host was blocked by exotui. **It was not.** That
+check grepped only `mod.web.ts` and missed that `src/web/mod.ts` re-exports `web_presenter.ts` — the
+same pattern that puts the console presenter behind `./runtime`. Available in 0.6.0 today:
 
-| File                               | Needed for                                                  |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `src/web/web_presenter.ts`         | the browser host — phase 2's second half                    |
-| `src/app/shell_presenter.ts`       | `ShellPresenter` / `ShellApp` / `ShellPresentedFrame` types |
-| `src/app/workbench_shell.ts`       | window chrome and shared painters — phase 3                 |
-| `src/app/shell_theme.ts`           | the seventeen-theme catalog — phase 3                       |
-| `src/app/backgrounds/`             | the animated backdrops — phase 3                            |
-| `src/app/workbench_window_host.ts` | the window manager — phase 3                                |
+| Symbol                                                             | Entrypoint                 |
+| ------------------------------------------------------------------ | -------------------------- |
+| `webPresenter`, `runWebShellApp`                                   | `@ubernaut/exotui/web`     |
+| `consolePresenter`, `runConsoleShellApp`                           | `@ubernaut/exotui/runtime` |
+| `ShellApp`, `ShellPresenter`, `ShellPresentedFrame`, `runShellApp` | `@ubernaut/exotui/web`     |
+| the workbench window host                                          | `@ubernaut/exotui/web`     |
 
-Reaching into a dependency's `src/` is not something we do, so the fix belongs upstream: a branch in
-the exotui repository widening the public surface, then a release. Until then this package mirrors
-the seam's types structurally in `src/ui/cells.ts` and `src/app/console_app.ts` — which is enough
-for the terminal host, since TypeScript is structural and `runConsoleShellApp` accepts the frames
-unchanged.
+What genuinely was not reachable: the shell painters (`workbench_shell.ts`) and the seventeen-theme
+catalog (`shell_theme.ts`). Both are phase 3 concerns, not phase 2. The seam types were reachable
+only through `./web`, which is the wrong door for a terminal application.
+
+exotui 0.7.0 adds a `./shell` entrypoint carrying the seam, the painters, the theme catalog, the
+window host, and the backgrounds, with the presenters staying in their host-specific homes. When it
+publishes, `src/ui/cells.ts` becomes re-exports from `@ubernaut/exotui/shell` and nothing else
+moves.
