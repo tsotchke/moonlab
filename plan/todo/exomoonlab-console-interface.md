@@ -59,11 +59,14 @@ the WASM backend reports `allocatingConstructor: false` and allocates via
 `malloc` + `quantum_state_init`. It takes the direct path automatically once a
 build carrying that export exists.
 
-### 2. One window, both hosts — **terminal half done (2026-08-24)**
+### 2. One window, both hosts — **done (2026-08-25)**
 
 - [x] `deno task exomoonlab` opens it in a terminal, on either backend.
-- [ ] The browser build opens the same window with the same output.
-      **Not blocked** — see the corrected note below.
+- [x] The browser build opens the same window with the same output. Verified in
+      a real browser: the page loads the WASM build client-side, renders the
+      identical Bell pair, and responds to input — `j` selected GHZ, `+ +` grew
+      it to six qubits, and |000000⟩ / |111111⟩ came back at 50.000% each over
+      dim 64 with six correct marginals.
 - [x] Backend calls run off the frame loop. `frame()` never awaits; work goes
       through a `Job` and the frame paints the latest result. Scanning is
       bounded, because reading every basis probability at 20 qubits would be a
@@ -73,25 +76,17 @@ The application is host-neutral as designed: it composes cells and takes
 events, and the terminal host is one file (`main.ts`) calling
 `runConsoleShellApp`. Swapping that file is the whole of "run it in a browser".
 
-#### The exotui gap — corrected 2026-08-24
+#### The exotui gap — corrected
 
 An earlier version of this file said the browser host was blocked. **It was
-not.** The check that produced that claim grepped only `mod.web.ts` and missed
-that `src/web/mod.ts` re-exports `web_presenter.ts`, the same way `./runtime`
-exposes the console presenter. Probing the published package settled it:
+not.** That check grepped only `mod.web.ts` and missed that `src/web/mod.ts`
+re-exports `web_presenter.ts`, the same way `./runtime` exposes the console
+presenter. Everything phase 2 needed — `webPresenter`, `runWebShellApp`,
+`runShellApp`, the seam types, the window host — is public in 0.6.0, and phase
+2 shipped on that pin.
 
-| Already public at 0.6.0 | Via |
-|---|---|
-| `webPresenter`, `runWebShellApp` | `./web` |
-| `consolePresenter`, `runConsoleShellApp` | `./runtime` |
-| `ShellApp`, `ShellPresenter`, `ShellPresentedFrame`, `runShellApp` | `./web`, transitively |
-| the workbench window host | `./web`, transitively |
-
-So phase 2's browser half can be built on the current pin. What genuinely was
-not reachable: the shell painters (`workbench_shell.ts`) and the seventeen-theme
-catalog (`shell_theme.ts`) — both needed by **phase 3**, not phase 2. The seam
-types were reachable only through `./web`, which is the wrong door for a
-terminal application.
+What genuinely was not reachable: the shell painters (`workbench_shell.ts`) and
+the seventeen-theme catalog (`shell_theme.ts`). Both are **phase 3** concerns.
 
 exotui 0.7.0 (`feature/publish-shell-seam`, health green, unpublished) adds a
 `./shell` entrypoint carrying the seam, painters, theme catalog, window host,
@@ -100,6 +95,15 @@ and backgrounds. Phase 3 moves to it; phase 2 does not have to wait.
 Meanwhile the seam's types are mirrored structurally in `src/ui/cells.ts`.
 TypeScript is structural, so `runConsoleShellApp` accepts the frames unchanged
 — `deno check main.ts` against the published package is what proves it.
+
+#### Found while building the browser host
+
+exotui's `WebTuiHost` exposes no `focus()`. Keys reach an application only once
+the host's keyboard target — a hidden textarea its browser platform creates for
+on-screen keyboard support — has focus, so a visitor had to click the page
+before typing did anything. `web.ts` works around it by focusing that textarea
+on load and on pointerdown. Worth a small upstream addition; the workaround
+retires the moment `WebTuiHost` can focus itself.
 
 ### 3. The desktop
 

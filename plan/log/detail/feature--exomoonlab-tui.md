@@ -193,3 +193,54 @@ Two things that repo's gate taught, worth keeping:
 
 **Next.** Phase 2's browser host, on the 0.6.0 pin. It does not depend on 0.7.0
 publishing.
+
+## 2026-08-25 — Phase 2 complete: the browser host
+
+### Prompt
+
+Go ahead.
+
+### Response and strategy
+
+**exotui first.** Merged `feature/publish-shell-seam` into exotui's `main` and
+tagged `v0.7.0` locally; `deno publish --dry-run` succeeds. Not published —
+there are no JSR credentials on this machine, so the real publish needs an
+interactive browser OAuth flow only the user can complete.
+
+**Then the browser host, which the 0.6.0 pin already supports.** The work was
+not in the UI — `web.ts` is fifteen lines of substance — but in the backend.
+`openWasmBackend` assumed Deno: `Deno.readTextFile`, `node:module`,
+`node:path`. None of that exists in a tab.
+
+The fix was to name the thing that actually differs. `WasmArtifactSource`
+splits *reading* the artifacts from *binding* them: Deno reads from disk and
+supplies a real `require`; a browser fetches and stubs `require` out, since the
+glue only reaches for it on the Node path it never takes there. Everything
+below the split is byte-identical, which is what keeps the two hosts honestly
+the same computation. `node:module` became a lazy import so a browser bundle
+never pulls it in.
+
+`deno bundle` (2.9, experimental but present) removed the need for esbuild.
+
+**Verifying in a real browser earned its keep, twice.**
+
+First it caught that I was testing the wrong thing: `curl` returned 200 for all
+three artifacts on port 8787, so the server looked fine — but the page the
+browser showed was another project's. My file-server had failed to bind because
+that port was already taken, and the 200s came from whatever owned it. A green
+check against the wrong process. Picking a verified-free port fixed it.
+
+Then it caught a real defect that no amount of type-checking would have: the
+page rendered perfectly and ignored every keystroke. exotui's browser platform
+routes keys through a hidden textarea it creates for on-screen keyboards, and
+that has to hold focus. A visitor would have had to click before typing worked.
+`web.ts` now focuses it on load and on pointerdown. Recorded as an upstream
+follow-up: a `focus()` on `WebTuiHost` retires the workaround.
+
+Final state, confirmed by screenshot: `j` selected GHZ, `+ +` grew it to six
+qubits, |000000⟩ and |111111⟩ at 50.000% each over dim 64 with six correct
+marginals — computed by the WASM build inside the tab, matching what the
+terminal shows from the native library.
+
+**Next.** Phase 3, the desktop — and that is the part that genuinely needs
+exotui 0.7.0's `./shell` for the painters and the theme catalog.
