@@ -121,6 +121,16 @@
     # because it was compiled into the artifact.
     add_executable(test_simd_dispatch_portability
                    tests/unit/test_simd_dispatch_portability.c)
+    # The portability test intentionally calls the private baseline probes.
+    # A hidden shared library does not export them, so compile the baseline
+    # dispatch TU into this test executable only in that configuration. The
+    # normal shared build already exports the symbols, while static builds
+    # resolve them from libquantumsim; restricting this to hidden+shared keeps
+    # both modes free of duplicate-symbol/interposition surprises.
+    if(QSIM_HIDDEN_VISIBILITY AND QSIM_BUILD_SHARED)
+        target_sources(test_simd_dispatch_portability PRIVATE
+                       src/optimization/simd_dispatch.c)
+    endif()
     target_link_libraries(test_simd_dispatch_portability PRIVATE quantumsim)
     add_test(NAME unit_simd_dispatch_portability
              COMMAND test_simd_dispatch_portability)
