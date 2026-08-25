@@ -51,6 +51,12 @@ class MeshTransportProducerTest(unittest.TestCase):
         self.assertEqual(runner.count("mesh_upload_posix"), 2)
         self.assertEqual(runner.count("mesh_download_posix"), 1)
 
+    def test_seeded_bounded_runner_wraps_shell_helpers_as_executables(self) -> None:
+        bounded = function_body(self.seeded_mesh, "run_bounded")
+        self.assertIn('declare -F "${1:-}"', bounded)
+        self.assertIn('export -f "${bounded_function?}" quote_sh', bounded)
+        self.assertIn('set -- bash -c', bounded)
+
 
 if __name__ == "__main__":
     unittest.main()

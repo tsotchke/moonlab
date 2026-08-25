@@ -163,6 +163,17 @@ quote_sh() {
 }
 
 run_bounded() {
+    # timeout(1) can invoke exported shell functions only through a shell, and
+    # the Python fallback can invoke executables only. Normalize internal
+    # helpers to an explicit bash command so both paths preserve the timeout
+    # contract instead of trying to exec a function name as a binary.
+    if declare -F "${1:-}" >/dev/null; then
+        local bounded_function="$1"
+        shift
+        export MESH_BIN
+        export -f "${bounded_function?}" quote_sh
+        set -- bash -c "$bounded_function \"\$@\"" _ "$@"
+    fi
     if command -v timeout >/dev/null 2>&1; then
         timeout --signal=TERM "$TIMEOUT_SECS" "$@"
     elif command -v gtimeout >/dev/null 2>&1; then
