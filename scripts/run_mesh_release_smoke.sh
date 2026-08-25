@@ -282,6 +282,16 @@ run_local_target() {
     run_and_log "$target smoke" "$ARTIFACT_DIR/logs/$target.smoke.log" bash "$script"
 }
 
+# Transfer through the mesh resolver rather than invoking scp directly. Some
+# inventory nodes are reachable only through a LAN or cloud fallback selected
+# by `mesh exec`; bypassing that resolver makes commands work while uploads to
+# the same node fail. stdin remains byte-transparent over the POSIX transports
+# and does not require a remote SFTP subsystem.
+mesh_upload_posix() {
+    local target="$1" source="$2" destination="$3"
+    "$MESH_BIN" exec "$target" "umask 077; cat > '$destination'" <"$source"
+}
+
 run_posix_target() {
     local target="$1"
     local repo_dir remote_tar remote_script local_script
@@ -293,9 +303,9 @@ run_posix_target() {
     write_posix_smoke_script "$target" "$repo_dir" "$(target_cmake_flags "$target")" "$local_script"
 
     run_and_log "$target upload source" "$ARTIFACT_DIR/logs/$target.upload-source.log" \
-        scp "${SSH_OPTS[@]}" -q "$source_tar" "$target:$remote_tar"
+        mesh_upload_posix "$target" "$source_tar" "$remote_tar"
     run_and_log "$target upload script" "$ARTIFACT_DIR/logs/$target.upload-script.log" \
-        scp "${SSH_OPTS[@]}" -q "$local_script" "$target:$remote_script"
+        mesh_upload_posix "$target" "$local_script" "$remote_script"
     run_and_log "$target stage" "$ARTIFACT_DIR/logs/$target.stage.log" \
         "$MESH_BIN" exec "$target" "rm -rf '$repo_dir' && mkdir -p '$repo_dir' && tar -xf '$remote_tar' -C '$repo_dir'"
     run_and_log "$target smoke" "$ARTIFACT_DIR/logs/$target.smoke.log" \

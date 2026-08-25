@@ -198,6 +198,20 @@ run_probe_logged() {
     fi
 }
 
+# Route file bytes through the same typed mesh transport as command execution.
+# Direct scp can bypass LAN/cloud fallbacks and fail on an otherwise healthy
+# target. `mesh exec ... cat` is byte-transparent and needs no remote SFTP
+# subsystem.
+mesh_upload_posix() {
+    local target="$1" source="$2" destination="$3"
+    "$MESH_BIN" exec "$target" "umask 077; cat > $(quote_sh "$destination")" <"$source"
+}
+
+mesh_download_posix() {
+    local target="$1" source="$2" destination="$3"
+    "$MESH_BIN" exec "$target" "cat $(quote_sh "$source")" >"$destination"
+}
+
 target_kind() {
     if declare -F mesh_target_kind >/dev/null; then
         mesh_target_kind "$1"
@@ -282,20 +296,18 @@ run_target() {
         run_logged "$ARTIFACT_DIR/logs/$target-preflight.log" \
             "$MESH_BIN" exec "$target" "$remote_check" || return 1
         run_logged "$ARTIFACT_DIR/logs/$target-upload.log" \
-            scp -q -o BatchMode=yes -o ConnectTimeout=20 \
-            "$SOURCE_ARCHIVE" "$target:$archive" || return 1
+            mesh_upload_posix "$target" "$SOURCE_ARCHIVE" "$archive" || return 1
         flags_text="$(cmake_flags "$target")"
         write_remote_runner "$target" "$stage" "$archive" "$remote_output" "$flags_text" \
             "$ARTIFACT_DIR/$target-runner.sh"
         run_logged "$ARTIFACT_DIR/logs/$target-script-upload.log" \
-            scp -q -o BatchMode=yes -o ConnectTimeout=20 \
-            "$ARTIFACT_DIR/$target-runner.sh" "$target:$remote_script" || return 1
+            mesh_upload_posix "$target" "$ARTIFACT_DIR/$target-runner.sh" \
+            "$remote_script" || return 1
         run_logged "$ARTIFACT_DIR/logs/$target-run.log" \
             "$MESH_BIN" exec "$target" \
             "mkdir -p $(quote_sh "$base") && mkdir $(quote_sh "$stage") && tar -xf $(quote_sh "$archive") -C $(quote_sh "$stage") && bash $(quote_sh "$remote_script")" || return 1
         run_logged "$ARTIFACT_DIR/logs/$target-download.log" \
-            scp -q -o BatchMode=yes -o ConnectTimeout=20 \
-            "$target:$remote_output" "$local_output" || return 1
+            mesh_download_posix "$target" "$remote_output" "$local_output" || return 1
     fi
     [[ "$(wc -l <"$local_output" | tr -d ' ')" == 1 ]] || {
         echo "seeded-SHOTS probe did not emit exactly one line" >&2
