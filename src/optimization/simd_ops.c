@@ -1,4 +1,5 @@
 #include "simd_ops.h"
+#include "simd_dispatch.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -99,7 +100,11 @@ static void simd_dispatch_populate(void) {
     simd_backend_vtable_t vt = {0};
 
 #ifdef HAS_AVX512
-    if (avx512_is_available()) {
+    /* This gate is deliberately baseline-compiled. Do not call into the
+     * -mavx512* translation unit to decide whether it is safe to enter that
+     * translation unit; the downstream runner may not support AVX-512 even
+     * though the release artifact contains the optional object. */
+    if (simd_runtime_has_avx512()) {
         vt.sum_squared   = avx512_sum_squared_magnitudes;
         vt.normalize     = avx512_normalize_amplitudes;
         vt.compute_probs = avx512_compute_probabilities;

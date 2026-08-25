@@ -115,6 +115,18 @@
     endif()
     add_test(NAME unit_simd_dispatch COMMAND test_simd_dispatch)
 
+    # Always run the baseline override, including on AVX-512 build hosts. It
+    # represents the downstream runner that caused the release rust-crates
+    # SIGILL and proves dispatch never selects the specialized TU merely
+    # because it was compiled into the artifact.
+    add_executable(test_simd_dispatch_portability
+                   tests/unit/test_simd_dispatch_portability.c)
+    target_link_libraries(test_simd_dispatch_portability PRIVATE quantumsim)
+    add_test(NAME unit_simd_dispatch_portability
+             COMMAND test_simd_dispatch_portability)
+    set_tests_properties(unit_simd_dispatch_portability PROPERTIES
+        ENVIRONMENT "MOONLAB_SIMD_FORCE_BASELINE=1")
+
     # Tensor-network unit test — the 800+ line suite that exercises
     # tensors, SVD, MPS, gate application via tensor networks,
     # measurement, and entanglement. Already in-tree but historically
@@ -1744,7 +1756,7 @@
         unit_quantum_state unit_quantum_gates unit_constants
         unit_correctness_properties unit_measurement unit_entanglement
         unit_noise unit_composite_noise unit_fusion unit_povm
-        unit_mutual_info unit_zne unit_simd_dispatch unit_simd_parity
+        unit_mutual_info unit_zne unit_simd_dispatch unit_simd_dispatch_portability unit_simd_parity
         unit_memory_align gate_test fast_measurement
         comprehensive correlation_test unit_hermitian_eigen
         unit_matrix_math unit_svd_compress unit_metal_parity)

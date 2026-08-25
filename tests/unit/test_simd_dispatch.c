@@ -131,7 +131,7 @@ static int test_simd_level(void) {
     const simd_info_t* info = simd_detect_capabilities_full();
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) {
+    if (simd_runtime_has_avx512()) {
         TEST_ASSERT(level >= SIMD_LEVEL_AVX512, "AVX-512 should give level 4");
     } else if (info->has_avx2) {
         TEST_ASSERT(level >= SIMD_LEVEL_AVX2, "AVX2 should give level 3");
@@ -169,7 +169,7 @@ static int test_backend_selection(void) {
     const simd_info_t* info = simd_detect_capabilities_full();
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) {
+    if (simd_runtime_has_avx512()) {
         TEST_ASSERT(backend == SIMD_BACKEND_AVX512, "AVX-512 capable should select AVX-512");
     } else if (info->has_avx2) {
         TEST_ASSERT(backend == SIMD_BACKEND_AVX2, "AVX2 capable should select AVX2");
@@ -242,7 +242,7 @@ static int test_vector_width(void) {
     const simd_info_t* info = simd_detect_capabilities_full();
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) {
+    if (simd_runtime_has_avx512()) {
         TEST_ASSERT(width >= 64, "AVX-512 should have 64-byte vectors");
     } else if (info->has_avx) {
         TEST_ASSERT(width >= 32, "AVX should have 32-byte vectors");

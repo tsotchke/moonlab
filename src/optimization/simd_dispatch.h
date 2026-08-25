@@ -168,6 +168,17 @@ typedef struct {
 const simd_info_t* simd_detect_capabilities_full(void);
 
 /**
+ * @brief Whether the complete AVX-512 kernel contract is executable now.
+ *
+ * This is intentionally implemented in the baseline-compiled dispatch TU,
+ * not in the AVX-512 translation unit. It requires OS-managed vector state
+ * and every instruction subset used by simd_avx512.c (F, DQ, BW, and VL).
+ * Setting MOONLAB_SIMD_FORCE_BASELINE=1 provides a portable fallback switch
+ * for cross-runner validation and emergency deployments.
+ */
+int simd_runtime_has_avx512(void);
+
+/**
  * @brief Get capability flags
  *
  * Quick access to capability bit flags.

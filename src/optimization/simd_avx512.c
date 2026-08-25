@@ -18,6 +18,7 @@
  */
 
 #include "simd_avx512.h"
+#include "simd_dispatch.h"
 #include <stdio.h>   /* snprintf used in the APPEND_FEATURE macro below */
 #include <stdlib.h>
 #include <string.h>
@@ -36,10 +37,14 @@
 // ============================================================================
 
 int avx512_is_available(void) {
-    return 1;  // Compiled with AVX-512, so it's available
+    /* Compilation proves only that this TU may contain AVX-512 instructions;
+     * the baseline dispatch probe must prove that this process may execute
+     * them on the current CPU and that the OS saves the required state. */
+    return simd_runtime_has_avx512();
 }
 
 const char* avx512_get_features(void) {
+    if (!simd_runtime_has_avx512()) return "AVX-512 unavailable";
     static char features[128] = "AVX-512";
     static int initialized = 0;
 
