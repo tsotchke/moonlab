@@ -196,6 +196,12 @@ Additional environment variables consulted elsewhere in the tree
 | `MOONLAB_TENSOR_GPU_THRESHOLD_MUL`| `src/algorithms/tensor_network/tn_gates.c` | scale the tensor-GPU dispatch crossover. |
 | `MOONLAB_BENCH_N`                 | `src/utils/bench_stats.h:81` (`bench_stats_n_runs`) | timing-replica count for benchmark harnesses. |
 | `MOONLAB_LIB_DIR`                 | `bindings/python/moonlab/core.py:38` and `bindings/rust/moonlab/build.rs:15` | directory containing the built `libquantumsim` library; the Python and Rust bindings dlopen / link against it. |
+| `MOONLAB_SIMD_FORCE_BASELINE`     | `src/optimization/simd_dispatch.c:515` | when exactly `1`, `true`, or `yes`, disable only AVX-512 specialized dispatch for portability diagnosis or emergency fallback; detected physical capability flags remain unchanged. This is not the general `QSIM_SIMD` selector. |
+
+`MOONLAB_SIMD_FORCE_BASELINE` is intentionally a narrow runtime safety
+override. Any other value has no effect, and the normal baseline capability
+probe still reports the host's actual AVX-512 flags. It must not be used as a
+replacement for `QSIM_SIMD`, which selects the configured SIMD preference.
 
 ## File I/O
 

@@ -57,14 +57,18 @@ typedef double _Complex complex_t;
 /**
  * @brief Check if AVX-512 is available at runtime
  *
- * @return 1 if AVX-512F is supported, 0 otherwise
+ * @return 1 only when the runtime and OS support the complete kernel contract
+ *         (AVX-512F, DQ, BW, and VL plus OS-managed extended vector state),
+ *         otherwise 0. Compilation of this translation unit alone is not
+ *         sufficient.
  */
 int avx512_is_available(void);
 
 /**
  * @brief Get AVX-512 feature string
  *
- * @return String describing available AVX-512 features
+ * @return String describing the available full AVX-512 kernel contract, or
+ *         "AVX-512 unavailable" when the baseline runtime probe rejects it
  */
 const char* avx512_get_features(void);
 
