@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>exomoonlab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root {
+  color-scheme: dark;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #05070d;
+  color: #7a8494;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+#app {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+#status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-top: 1px solid #2a3040;
+  white-space: pre-wrap;
+}
+</style>
+<div id="app"></div>
+<div id="status">starting…</div>
+<script type="module" src="./exomoonlab.js"></script>

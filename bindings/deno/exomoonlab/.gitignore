@@ -1,2 +1,3 @@
 # Local exotui override; see README.md
 import_map.local.json
+dist/

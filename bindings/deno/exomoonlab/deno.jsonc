@@ -23,9 +23,17 @@
   "tasks": {
     // The console, in a terminal. Add --backend=native|wasm to force one.
     "exomoonlab": "deno run --allow-read --allow-ffi --allow-env --allow-write main.ts",
+    // The browser host: bundles web.ts and the WASM artifacts into dist/.
+    "build:web": "deno run -A scripts/build_web.ts",
+    "serve:web": "deno run -A jsr:@std/http/file-server dist --port 8787",
     "test": "deno test --allow-read --allow-ffi --allow-env --no-remote",
     "equivalence": "deno test --allow-read --allow-ffi --allow-env --no-remote tests/equivalence.test.ts",
     "check": "deno check main.ts src/backend/mod.ts"
+  },
+  // The console runs in a terminal and in a browser from one source tree, so
+  // the type environment has to admit both. Matches exotui's own config.
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable"]
   },
   "fmt": {
     "lineWidth": 100,

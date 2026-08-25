@@ -9,7 +9,15 @@
 export type { BackendCapabilities, BackendKind, MoonLabBackend, StateHandle } from "./types.ts";
 export { BackendUnavailableError } from "./types.ts";
 export { nativeLibraryCandidates, openNativeBackend } from "./native.ts";
-export { openWasmBackend, wasmGlueCandidates } from "./wasm.ts";
+export {
+  defaultWasmSources,
+  fetchArtifactSource,
+  fileArtifactSource,
+  openWasmBackend,
+  type WasmArtifactSource,
+  type WasmBackendOptions,
+  wasmGlueCandidates,
+} from "./wasm.ts";
 
 import { type BackendKind, BackendUnavailableError, type MoonLabBackend } from "./types.ts";
 import { openNativeBackend } from "./native.ts";

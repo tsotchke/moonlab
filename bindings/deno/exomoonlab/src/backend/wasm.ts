@@ -17,8 +17,6 @@
  * available this backend prefers it and the constant stops mattering.
  */
 
-import { dirname } from "node:path";
-import { createRequire } from "node:module";
 import {
   type BackendCapabilities,
   BackendUnavailableError,
@@ -33,7 +31,31 @@ const STATE_STRUCT_SIZE = 256;
 
 type WasmModule = Record<string, (...args: never[]) => unknown>;
 
-/** Candidate glue files, freshest build first. */
+/**
+ * Where the Emscripten artifacts come from and how to read them.
+ *
+ * Deno reads the glue off disk and hands the module a real `require`; a
+ * browser fetches it and stubs `require` out, because the glue only reaches
+ * for it on the Node path it will not take there. Splitting the two keeps the
+ * binding code below identical for both, which is the point -- the backend is
+ * the same computation either way, and only its delivery differs.
+ */
+export interface WasmArtifactSource {
+  readonly description: string;
+  /** The glue source text. */
+  readSource(): Promise<string>;
+  /** Resolves a sibling artifact (moonlab.wasm) to a path or URL. */
+  locate(file: string): string;
+  /** Bound to `require` inside the glue's synthetic module scope. */
+  createRequire(): unknown;
+}
+
+function parentOf(reference: string): string {
+  const cut = reference.lastIndexOf("/");
+  return cut < 0 ? "." : reference.slice(0, cut);
+}
+
+/** Candidate glue files in the local checkout, freshest build first. */
 export function wasmGlueCandidates(): string[] {
   const explicit = Deno.env.get("MOONLAB_WASM");
   const repoRoot = new URL("../../../../../", import.meta.url).pathname;
@@ -47,25 +69,58 @@ export function wasmGlueCandidates(): string[] {
   ];
 }
 
-async function instantiate(gluePath: string): Promise<WasmModule> {
-  const source = await Deno.readTextFile(gluePath);
-  const here = dirname(gluePath);
+/** Reads the glue from the local filesystem. Deno only. */
+export function fileArtifactSource(path: string): WasmArtifactSource {
+  return {
+    description: path,
+    readSource: () => Deno.readTextFile(path),
+    locate: (file) => `${parentOf(path)}/${file}`,
+    createRequire: () => {
+      // Imported lazily so a browser bundle never pulls in node:module.
+      const specifier = "node:module";
+      return import(specifier).then((m) => m.createRequire(path));
+    },
+  };
+}
+
+/** Fetches the glue over HTTP. Works in a browser and in Deno. */
+export function fetchArtifactSource(url: string): WasmArtifactSource {
+  return {
+    description: url,
+    readSource: async () => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText} for ${url}`);
+      return await response.text();
+    },
+    locate: (file) => new URL(file, url).href,
+    // The glue only calls require() on its Node path, which a browser never
+    // takes. Throwing beats returning undefined: if that assumption is ever
+    // wrong we want to see it, not a confusing property access on undefined.
+    createRequire: () => (specifier: string) => {
+      throw new Error(`the browser WASM host cannot require(${specifier})`);
+    },
+  };
+}
+
+async function instantiate(source: WasmArtifactSource): Promise<WasmModule> {
+  const text = await source.readSource();
   const mod: { exports: Record<string, unknown> } = { exports: {} };
-  const require = createRequire(gluePath);
-  new Function("module", "exports", "require", "__dirname", "__filename", source)(
+  const requireImpl = await source.createRequire();
+  const here = parentOf(source.description);
+  new Function("module", "exports", "require", "__dirname", "__filename", text)(
     mod,
     mod.exports,
-    require,
+    requireImpl,
     here,
-    gluePath,
+    source.description,
   );
   const factory = (mod.exports.default ?? mod.exports) as
     | ((options: unknown) => Promise<WasmModule>)
     | undefined;
   if (typeof factory !== "function") {
-    throw new Error(`${gluePath} did not export a MODULARIZE factory`);
+    throw new Error(`${source.description} did not export a MODULARIZE factory`);
   }
-  return await factory({ locateFile: (file: string) => `${here}/${file}` });
+  return await factory({ locateFile: (file: string) => source.locate(file) });
 }
 
 interface WasmState extends StateHandle {
@@ -82,17 +137,36 @@ function asWasm(state: StateHandle): WasmState {
   return w;
 }
 
-export async function openWasmBackend(): Promise<MoonLabBackend> {
+export interface WasmBackendOptions {
+  /**
+   * Where to load the Emscripten build from. Defaults to probing the local
+   * checkout under Deno, and `./moonlab.js` beside the page in a browser.
+   */
+  readonly sources?: readonly WasmArtifactSource[];
+}
+
+/** The default search order for the host we are actually running on. */
+export function defaultWasmSources(): readonly WasmArtifactSource[] {
+  const hasDeno = typeof (globalThis as { Deno?: unknown }).Deno !== "undefined";
+  if (hasDeno) return wasmGlueCandidates().map(fileArtifactSource);
+  // In a browser the artifacts are served next to the page by the build.
+  return [fetchArtifactSource(new URL("./moonlab.js", location.href).href)];
+}
+
+export async function openWasmBackend(
+  options: WasmBackendOptions = {},
+): Promise<MoonLabBackend> {
+  const sources = options.sources ?? defaultWasmSources();
   const tried: string[] = [];
   let m: WasmModule | undefined;
   let path = "";
-  for (const candidate of wasmGlueCandidates()) {
+  for (const source of sources) {
     try {
-      m = await instantiate(candidate);
-      path = candidate;
+      m = await instantiate(source);
+      path = source.description;
       break;
     } catch (cause) {
-      tried.push(`${candidate}: ${cause instanceof Error ? cause.message : cause}`);
+      tried.push(`${source.description}: ${cause instanceof Error ? cause.message : cause}`);
     }
   }
   if (!m) {

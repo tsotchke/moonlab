@@ -8,7 +8,7 @@ Plan and architecture live in `plan/` at the repository root —
 [the task](../../../plan/todo/exomoonlab-console-interface.md) and
 [the architecture](../../../plan/arch/exomoonlab.md).
 
-## Status: phase 2 of 5, terminal half
+## Status: phase 2 of 5, done
 
 The console runs in a terminal against either backend. The browser half is blocked on exotui — see
 **The exotui gap** below.
@@ -31,6 +31,9 @@ deno task exomoonlab --backend=wasm   # force the WASM backend
 deno task check                       # type-check
 deno task test                        # everything, offline
 deno task equivalence                 # native vs WASM only
+
+deno task build:web                   # bundle the browser host into dist/
+deno task serve:web                   # serve dist/ on :8787
 ```
 
 Keys: `j`/`k` circuit, `+`/`-` qubits, `r` rerun, `q` quit.
@@ -115,3 +118,21 @@ exotui 0.7.0 adds a `./shell` entrypoint carrying the seam, the painters, the th
 window host, and the backgrounds, with the presenters staying in their host-specific homes. When it
 publishes, `src/ui/cells.ts` becomes re-exports from `@ubernaut/exotui/shell` and nothing else
 moves.
+
+## The browser host
+
+`deno task build:web` bundles `web.ts` and copies the Emscripten glue and `.wasm` beside it. The
+backend resolves the glue as `./moonlab.js` relative to the page, so the three landing as siblings
+is the contract, not a convenience.
+
+The WASM backend is host-agnostic by construction: `WasmArtifactSource` splits _reading_ the
+artifacts from _binding_ them. Deno reads from disk and hands the glue a real `require`; the browser
+fetches and stubs `require` out, because the glue only reaches for it on the Node path it never
+takes there. The binding code below that split is identical, which is the point — same C surface,
+same numbers, only delivery differs.
+
+One rough edge worth knowing: keys reach the application only once the host's keyboard target has
+focus, and exotui 0.6.0 exposes no `focus()` on the host — the target is a hidden textarea its
+browser platform creates for on-screen keyboard support. `web.ts` focuses it on load and on
+pointerdown so a visitor can type without clicking first. A `focus()` on `WebTuiHost` would let that
+workaround go away.
