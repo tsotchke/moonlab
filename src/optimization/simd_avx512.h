@@ -50,6 +50,10 @@ typedef double _Complex complex_t;
 // AVX-512 CAPABILITY CHECK
 // ============================================================================
 
+/* Implemented in the baseline-compiled SIMD dispatch TU.  These probes must
+ * remain callable on a host that lacks AVX-512 even when this header's
+ * specialized translation unit is present in the artifact. */
+
 /**
  * @brief Check if AVX-512 is available at runtime
  *

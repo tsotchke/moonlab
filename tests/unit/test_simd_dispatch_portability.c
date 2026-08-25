@@ -10,11 +10,13 @@
  */
 
 #include "../../src/optimization/simd_dispatch.h"
+#include "../../src/optimization/simd_avx512.h"
 #include "../../src/optimization/simd_ops.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int force_baseline(void)
 {
@@ -34,6 +36,14 @@ int main(void)
 
     if (simd_runtime_has_avx512() != 0) {
         fprintf(stderr, "forced baseline still reports AVX-512\n");
+        return EXIT_FAILURE;
+    }
+    if (avx512_is_available() != 0) {
+        fprintf(stderr, "direct AVX-512 availability probe ignored baseline override\n");
+        return EXIT_FAILURE;
+    }
+    if (strcmp(avx512_get_features(), "AVX-512 unavailable") != 0) {
+        fprintf(stderr, "direct AVX-512 feature probe was not baseline-safe\n");
         return EXIT_FAILURE;
     }
     if (simd_get_backend(SIMD_OP_SUM_SQUARED_MAG) == SIMD_BACKEND_AVX512) {

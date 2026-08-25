@@ -531,6 +531,34 @@ int simd_runtime_has_avx512(void)
 #endif
 }
 
+/* These probe symbols are part of the AVX-512 header surface, but their
+ * implementations must stay in this baseline-compiled TU.  Direct callers
+ * (including parity tests) must not enter a -mavx512* function merely to ask
+ * whether entering one is safe. */
+int avx512_is_available(void)
+{
+    return simd_runtime_has_avx512();
+}
+
+const char *avx512_get_features(void)
+{
+    if (!simd_runtime_has_avx512()) return "AVX-512 unavailable";
+
+    const simd_info_t *info = simd_detect_capabilities_full();
+    static _Thread_local char features[128];
+    int written = snprintf(features, sizeof(features), "AVX-512 F DQ BW VL");
+    size_t used = written > 0 ? (size_t)written : 0;
+    if (used >= sizeof(features)) used = sizeof(features) - 1;
+    if (info->has_avx512cd && used < sizeof(features)) {
+        written = snprintf(features + used, sizeof(features) - used, " CD");
+        if (written > 0) used += (size_t)written;
+    }
+    if (info->has_avx512vnni && used < sizeof(features)) {
+        (void)snprintf(features + used, sizeof(features) - used, " VNNI");
+    }
+    return features;
+}
+
 // ============================================================================
 // ACCESSOR FUNCTIONS
 // ============================================================================
