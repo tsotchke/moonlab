@@ -20,6 +20,7 @@
 import {
   type BackendCapabilities,
   BackendUnavailableError,
+  type BerryGrid,
   type MoonLabBackend,
   type StateHandle,
 } from "./types.ts";
@@ -28,6 +29,17 @@ const QS_SUCCESS = 0;
 
 /** Upstream's over-allocation for quantum_state_t; see the note above. */
 const STATE_STRUCT_SIZE = 256;
+
+/**
+ * `qgt_berry_grid_t` under wasm32: `{ size_t N; double* berry; double chern; }`
+ * is 4 + 4 + (8-aligned) 8 = 16 bytes, where the native build makes it 24.
+ * That difference is exactly why the layout is written down per target and
+ * never shared with the FFI backend.
+ */
+const BERRY_GRID_SIZE_WASM = 16;
+const BERRY_N_OFFSET_WASM = 0;
+const BERRY_PTR_OFFSET_WASM = 4;
+const BERRY_CHERN_OFFSET_WASM = 8;
 
 type WasmModule = Record<string, (...args: never[]) => unknown>;
 
@@ -199,6 +211,11 @@ export async function openWasmBackend(
   const entropy = fn<(p: number) => number>("_quantum_state_entropy");
   const purity = fn<(p: number) => number>("_quantum_state_purity");
 
+  const heap = () => {
+    const buffer = (m as unknown as { HEAPU8: Uint8Array }).HEAPU8.buffer;
+    return new DataView(buffer);
+  };
+
   const createFn = m["_quantum_state_create"] as ((n: number) => number) | undefined;
   const destroyFn = m["_quantum_state_destroy"] as ((p: number) => void) | undefined;
   const hasAllocatingCtor = typeof createFn === "function" && typeof destroyFn === "function";
@@ -299,6 +316,96 @@ export async function openWasmBackend(
     },
     purity(state) {
       return Promise.resolve(purity(asWasm(state).ptr));
+    },
+
+    loadAmplitudes(state: StateHandle, amplitudes: Float64Array): Promise<void> {
+      const w = asWasm(state);
+      if (amplitudes.length !== state.stateDim * 2) {
+        return Promise.reject(
+          new RangeError(
+            `expected ${state.stateDim * 2} interleaved values, got ${amplitudes.length}`,
+          ),
+        );
+      }
+      const fromAmplitudes = m["_quantum_state_from_amplitudes"] as
+        | ((p: number, a: number, d: number) => number)
+        | undefined;
+      if (!fromAmplitudes) {
+        return Promise.reject(
+          new Error("this build does not export quantum_state_from_amplitudes"),
+        );
+      }
+      const bytes = amplitudes.length * 8;
+      const buffer = malloc(bytes);
+      if (buffer === 0) return Promise.reject(new Error("malloc for amplitudes failed"));
+      try {
+        // Copy through a fresh view: the heap can be detached and replaced by
+        // a growth between calls, so it is never cached across one.
+        new Float64Array(
+          (m as unknown as { HEAPU8: Uint8Array }).HEAPU8.buffer,
+          buffer,
+          amplitudes.length,
+        ).set(amplitudes);
+        check(fromAmplitudes(w.ptr, buffer, state.stateDim), "quantum_state_from_amplitudes");
+        return Promise.resolve();
+      } finally {
+        free(buffer);
+      }
+    },
+
+    berryGrid(model, n): Promise<BerryGrid> {
+      const modelFn = model.kind === "qwz"
+        ? m["_qgt_model_qwz"] as ((v: number) => number) | undefined
+        : m["_qgt_model_haldane"] as
+          | ((a: number, b: number, c: number, d: number) => number)
+          | undefined;
+      const gridFn = m["_qgt_berry_grid"] as
+        | ((s: number, n: number, o: number) => number)
+        | undefined;
+      const gridFree = m["_qgt_berry_grid_free"] as ((p: number) => void) | undefined;
+      const sysFree = m["_qgt_free"] as ((p: number) => void) | undefined;
+      if (!modelFn || !gridFn || !gridFree || !sysFree) {
+        return Promise.reject(new Error("this build does not export the quantum-geometry symbols"));
+      }
+      const sys = model.kind === "qwz"
+        ? (modelFn as (v: number) => number)(model.m)
+        : (modelFn as (a: number, b: number, c: number, d: number) => number)(
+          model.t1,
+          model.t2,
+          model.phi,
+          model.mStagger,
+        );
+      if (sys === 0) return Promise.reject(new Error(`qgt_model_${model.kind} returned NULL`));
+      const out = malloc(BERRY_GRID_SIZE_WASM);
+      if (out === 0) {
+        sysFree(sys);
+        return Promise.reject(new Error("malloc for the berry grid failed"));
+      }
+      try {
+        const rc = gridFn(sys, n, out);
+        if (rc !== 0) throw new Error(`qgt_berry_grid failed with ${rc}`);
+        const view = heap();
+        const gridN = view.getUint32(out + BERRY_N_OFFSET_WASM, true);
+        const berryPtr = view.getUint32(out + BERRY_PTR_OFFSET_WASM, true);
+        const chern = view.getFloat64(out + BERRY_CHERN_OFFSET_WASM, true);
+        const curvature = new Float64Array(
+          (m as unknown as { HEAPU8: Uint8Array }).HEAPU8.buffer.slice(
+            berryPtr,
+            berryPtr + gridN * gridN * 8,
+          ),
+        );
+        let min = Infinity;
+        let max = -Infinity;
+        for (const value of curvature) {
+          if (value < min) min = value;
+          if (value > max) max = value;
+        }
+        gridFree(out);
+        return Promise.resolve({ n: gridN, curvature, chern, min, max });
+      } finally {
+        free(out);
+        sysFree(sys);
+      }
     },
 
     dispose(): Promise<void> {

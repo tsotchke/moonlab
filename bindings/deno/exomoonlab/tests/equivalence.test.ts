@@ -205,6 +205,63 @@ Deno.test("native and WASM backends agree", async (t) => {
     });
   }
 
+  // The new surface, reachable on both sides since the WASM build caught up
+  // with exports.txt. Comparing it here is the point of having a seam: the
+  // browser and the terminal must agree about topology, not just about
+  // probabilities.
+  await t.step("band geometry agrees, including the Chern integers", async () => {
+    if (!native.capabilities.bandGeometry || !wasm.capabilities.bandGeometry) {
+      throw new Error(
+        "band geometry missing: " +
+          `native=${native.capabilities.bandGeometry} wasm=${wasm.capabilities.bandGeometry}. ` +
+          "Rebuild the WASM artifact (pnpm build:wasm) rather than skipping this.",
+      );
+    }
+    for (const m of [-1.5, -0.5, 0.5, 1.5, 3]) {
+      const a = await native.berryGrid!({ kind: "qwz", m }, 20);
+      const b = await wasm.berryGrid!({ kind: "qwz", m }, 20);
+      assert(a.n === b.n, `grid size differs at m=${m}`);
+      // A Chern number is an integer; the two hosts must agree on it exactly.
+      assertAlmostEquals(Math.round(b.chern), Math.round(a.chern), 0, `Chern at m=${m}`);
+      for (let i = 0; i < a.curvature.length; i++) {
+        worst = Math.max(worst, Math.abs(a.curvature[i] - b.curvature[i]));
+        assertAlmostEquals(b.curvature[i], a.curvature[i], TOLERANCE, `Omega[${i}] at m=${m}`);
+      }
+    }
+  });
+
+  await t.step("an uploaded amplitude vector round-trips the same way", async () => {
+    if (!native.capabilities.amplitudeUpload || !wasm.capabilities.amplitudeUpload) {
+      throw new Error("amplitude upload missing on one side; rebuild the WASM artifact");
+    }
+    const qubits = 6;
+    const dim = 2 ** qubits;
+    // A skewed distribution, so an implementation that silently uniformises
+    // would be caught rather than flattered.
+    const amplitudes = new Float64Array(dim * 2);
+    let total = 0;
+    const weights = new Float64Array(dim);
+    for (let i = 0; i < dim; i++) {
+      weights[i] = Math.exp(-i / 7) + 1e-3;
+      total += weights[i];
+    }
+    for (let i = 0; i < dim; i++) amplitudes[i * 2] = Math.sqrt(weights[i] / total);
+
+    for (const backend of [native, wasm]) {
+      const state = await backend.createState(qubits);
+      try {
+        await backend.loadAmplitudes!(state, amplitudes);
+        for (let i = 0; i < dim; i++) {
+          const got = await backend.probability(state, i);
+          worst = Math.max(worst, Math.abs(got - weights[i] / total));
+          assertAlmostEquals(got, weights[i] / total, TOLERANCE, `${backend.kind} P(${i})`);
+        }
+      } finally {
+        await backend.destroyState(state);
+      }
+    }
+  });
+
   await t.step("summary", () => {
     console.log(`    largest deviation across all circuits: ${worst.toExponential(3)}`);
   });

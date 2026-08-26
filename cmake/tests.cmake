@@ -1599,9 +1599,17 @@
     # hermetic; the test deliberately has no remote imports.  MOONLAB_LIB
     # points the FFI backend at the library built in this tree rather than
     # whatever the loader would find.
+    # Also gated on a current WASM artifact.  The harness compares band
+    # geometry and amplitude upload across both backends and fails rather than
+    # skipping when one side cannot do them -- a half-run equivalence suite
+    # reporting "ok" would be worse than none.  Those symbols only reach the
+    # artifact from `pnpm build:wasm`, which needs emcc, so a tree that has not
+    # built one does not register the test instead of failing it.
     find_program(DENO_EXECUTABLE deno)
     if(DENO_EXECUTABLE AND EXISTS
-        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/deno/exomoonlab/tests/equivalence.test.ts")
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/deno/exomoonlab/tests/equivalence.test.ts"
+       AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/moonlab.wasm")
         add_test(NAME deno_bindings_equivalence
                  COMMAND ${DENO_EXECUTABLE} test
                          --allow-read --allow-ffi --allow-env --no-remote

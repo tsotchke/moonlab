@@ -31,6 +31,14 @@ set(ALGORITHM_SOURCES
     ${QSIM_ROOT}/src/algorithms/bell_tests.c
     # Native reverse-mode autograd (referenced unconditionally from vqe.c).
     ${QSIM_ROOT}/src/algorithms/diff/differentiable.c
+    # Quantum chemistry: Jordan-Wigner, molecular Hamiltonians, UCCSD.
+    # Native-only until now; the browser needs it for an H2 curve.
+    ${QSIM_ROOT}/src/algorithms/chemistry/chemistry.c
+    # Real-space topology: Chern markers, the FHS integer, and the KPM
+    # estimator. qgt.c already ships the momentum-space side.
+    ${QSIM_ROOT}/src/algorithms/topology_realspace/chern_fhs.c
+    ${QSIM_ROOT}/src/algorithms/topology_realspace/chern_kpm.c
+    ${QSIM_ROOT}/src/algorithms/topology_realspace/chern_marker.c
 )
 
 # Source files - Tensor Network solvers (DMRG/TDVP/TEBD helpers, MPO utilities)
