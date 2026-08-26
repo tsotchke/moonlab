@@ -8,7 +8,7 @@ Plan and architecture live in `plan/` at the repository root —
 [the task](../../../plan/todo/exomoonlab-console-interface.md) and
 [the architecture](../../../plan/arch/exomoonlab.md).
 
-## Status: phase 2 of 5, done
+## Status: phase 3 of 5, the desktop
 
 The console runs in a terminal against either backend. The browser half is blocked on exotui — see
 **The exotui gap** below.
@@ -136,3 +136,48 @@ focus, and exotui 0.6.0 exposes no `focus()` on the host — the target is a hid
 browser platform creates for on-screen keyboard support. `web.ts` focuses it on load and on
 pointerdown so a visitor can type without clicking first. A `focus()` on `WebTuiHost` would let that
 workaround go away.
+
+## The desktop
+
+`src/app/desktop.ts` owns no window mechanics. Dragging, resizing, snapping, tiling and the
+title-bar controls all come from exotui's `WorkbenchWindowHostController` — the same controller
+exowebtui uses, so the behaviour cannot drift from it. This package supplies the window contents, a
+palette, and the routing.
+
+Three windows: **Probabilities** (the phase-2 view), **Circuits** (the catalog, with the selection
+marked), and **Session** (backend, capabilities, theme).
+
+Keys: `j`/`k` circuit, `+`/`-` qubits, `t` theme (`T` backwards), `tab` focus, `m` maximize, `r`
+rerun, `q` quit.
+
+Themes are exotui's `SHELL_THEMES` plus one MoonLab-branded entry — eighteen in all. A theme belongs
+to the shell, not to this application, so redefining one here would only guarantee drift. Title-bar
+text colour comes from exotui's `shellActiveTitlebarForeground`, which picks dark-on-pale or
+light-on-dark by luminance rather than by eye.
+
+Theme, circuit and register size persist through `presenter.store()` — a file under the console
+host, IndexedDB in the browser.
+
+### Requires exotui 0.7.0, which is not published
+
+The desktop imports `@ubernaut/exotui/shell`, which does not exist in 0.6.0. Until 0.7.0 publishes,
+anything touching the desktop needs the local override:
+
+```bash
+deno run --import-map=import_map.local.json --allow-read --allow-ffi --allow-env main.ts
+deno test --import-map=import_map.local.json --allow-read --allow-ffi --allow-env
+```
+
+`deno task test:core` is the subset that needs no exotui at all — the backend seam and the pure
+painters — and is what `ctest` runs, so the project's own gate stays green regardless.
+
+A path override does not carry a dependency's own `imports` the way a JSR dependency would, so
+`import_map.local.json` mirrors exotui's npm specifiers as well. That is a property of path
+overrides, not a fault in exotui.
+
+### Verified
+
+The terminal desktop is verified in a real terminal (via a pty), and the headless suite covers
+window layout, circuit selection, theme cycling and the persistence round-trip. The web bundle
+builds and serves, and carries the desktop code — but **the desktop has not been rendered in a
+browser**; phase 2's single-window view was the last thing checked there.

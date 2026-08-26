@@ -10,6 +10,7 @@
 
 import { runConsoleShellApp } from "@ubernaut/exotui/runtime";
 import { MoonLabApp } from "./src/app/console_app.ts";
+import { MoonLabDesktop } from "./src/app/desktop.ts";
 import { type BackendKind, selectBackend } from "./src/backend/mod.ts";
 
 function parseBackend(args: string[]): BackendKind | undefined {
@@ -30,13 +31,15 @@ if (import.meta.main) {
   // The app must be able to stop the loop, and the loop needs the app to
   // exist first. A const holder carries the reference across that cycle.
   const loop: { handle?: ReturnType<typeof runConsoleShellApp> } = {};
-  const app = new MoonLabApp({
-    backend,
-    onQuit: () => {
-      loop.handle?.stop();
-      backend.dispose().finally(() => Deno.exit(0));
-    },
-  });
+  const onQuit = () => {
+    loop.handle?.stop();
+    backend.dispose().finally(() => Deno.exit(0));
+  };
+  // `--simple` is the single-window view: one probability window, no desktop.
+  // Useful in a narrow terminal, and the fallback if the desktop misbehaves.
+  const app = Deno.args.includes("--simple")
+    ? new MoonLabApp({ backend, onQuit })
+    : new MoonLabDesktop({ backend, onQuit });
 
   loop.handle = runConsoleShellApp(app);
 }

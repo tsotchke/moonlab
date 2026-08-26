@@ -11,7 +11,7 @@
  * work, done off-thread -- see `src/app/console_app.ts`.
  */
 
-import type { Rgb, Style, Surface } from "./cells.ts";
+import type { Rect, Rgb, Style, Surface } from "./cells.ts";
 
 export interface BasisEntry {
   readonly index: number;
@@ -59,13 +59,6 @@ export interface WindowState {
   readonly error?: string;
 }
 
-export interface Rect {
-  readonly column: number;
-  readonly row: number;
-  readonly width: number;
-  readonly height: number;
-}
-
 const BAR_GLYPHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"] as const;
 
 /** A fractional-width bar, so small probabilities stay visible. */
@@ -83,30 +76,63 @@ export function basisLabel(index: number, numQubits: number): string {
   return `|${index.toString(2).padStart(numQubits, "0")}⟩`;
 }
 
+/**
+ * The boxed form: draws its own border and title.
+ *
+ * Used by the single-window app. On the desktop the window chrome already
+ * supplies a border and a title bar, so that path calls
+ * {@link paintProbabilitiesBody} instead -- drawing a second box inside the
+ * chrome overwrote the title bar and its controls.
+ */
 export function paintProbabilities(
   surface: Surface,
   rect: Rect,
   state: WindowState,
   palette: WindowPalette = DEFAULT_PALETTE,
 ): void {
-  const border: Style = { foreground: palette.border };
+  surface.box(rect.column, rect.row, rect.width, rect.height, { foreground: palette.border });
+  paintProbabilitiesBody(
+    surface,
+    { column: rect.column + 2, row: rect.row, width: rect.width - 4, height: rect.height },
+    state,
+    palette,
+    { title: true },
+  );
+}
+
+export interface BodyOptions {
+  /** Draw the title and subtitle lines. Off when chrome already shows them. */
+  readonly title?: boolean;
+}
+
+/** The contents alone: no border, no assumption about who drew one. */
+export function paintProbabilitiesBody(
+  surface: Surface,
+  rect: Rect,
+  state: WindowState,
+  palette: WindowPalette = DEFAULT_PALETTE,
+  options: BodyOptions = {},
+): void {
   const text: Style = { foreground: palette.text };
   const muted: Style = { foreground: palette.muted };
   const accent: Style = { foreground: palette.accent };
 
-  surface.box(rect.column, rect.row, rect.width, rect.height, border);
+  const inner = rect.column;
+  const innerWidth = rect.width;
+  if (innerWidth < 8 || rect.height < 4) return;
 
-  const inner = rect.column + 2;
-  const innerWidth = rect.width - 4;
-  if (innerWidth < 8 || rect.height < 5) return;
-
-  surface.writeFitted(inner, rect.row, ` ${state.title} `, innerWidth, {
-    foreground: palette.accent,
-    bold: true,
-  });
-  surface.writeFitted(inner, rect.row + 1, state.subtitle, innerWidth, muted);
-
-  let y = rect.row + 3;
+  let y = rect.row;
+  if (options.title) {
+    surface.writeFitted(inner, y, ` ${state.title} `, innerWidth, {
+      foreground: palette.accent,
+      bold: true,
+    });
+    surface.writeFitted(inner, y + 1, state.subtitle, innerWidth, muted);
+    y += 3;
+  } else {
+    surface.writeFitted(inner, y, state.subtitle, innerWidth, muted);
+    y += 2;
+  }
   const lastRow = rect.row + rect.height - 2;
 
   if (state.error) {

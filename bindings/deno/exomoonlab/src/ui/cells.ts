@@ -29,6 +29,21 @@ export interface Style {
   readonly bold?: boolean;
 }
 
+/** A rectangle in cells, matching exotui's `Rectangle`. */
+export interface Rect {
+  readonly column: number;
+  readonly row: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Structural match for exotui's `ShellSurface`; see {@link Surface.shellSurface}. */
+export interface ShellSurfaceLike {
+  cell(column: number, row: number, char: string, style: Style): void;
+  write(column: number, row: number, text: string, style: Style): void;
+  fill(rect: Rect, char: string, style: Style): void;
+}
+
 /** A writable grid that composes into a {@link Frame}. */
 export class Surface {
   readonly columns: number;
@@ -91,6 +106,28 @@ export class Surface {
       this.set(column, y, "│", style);
       this.set(right, y, "│", style);
     }
+  }
+
+  /** Fills a rectangle, clipped to the surface. */
+  fill(rect: Rect, char: string, style: Style = {}): void {
+    for (let y = rect.row; y < rect.row + rect.height; y++) {
+      for (let x = rect.column; x < rect.column + rect.width; x++) this.set(x, y, char, style);
+    }
+  }
+
+  /**
+   * A `ShellSurface` view for exotui's painters.
+   *
+   * Its three methods are `cell`/`write`/`fill`; ours are `set`/`write`/`fill`.
+   * Adapting rather than renaming keeps this class readable on its own terms
+   * and keeps exotui's contract in exactly one place.
+   */
+  shellSurface(): ShellSurfaceLike {
+    return {
+      cell: (column, row, char, style) => this.set(column, row, char, style),
+      write: (column, row, text, style) => void this.write(column, row, text, style),
+      fill: (rect, char, style) => this.fill(rect, char, style),
+    };
   }
 
   /** Freezes the grid into a frame. */

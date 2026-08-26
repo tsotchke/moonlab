@@ -11,14 +11,17 @@
     "./app": "./src/app/console_app.ts"
   },
   "imports": {
-    // Pinned to the JSR release. exotui 0.6.0 is the first version carrying
-    // the ShellPresenter seam this console is built on.
+    // 0.7.0 is the first release with the ./shell entrypoint the desktop
+    // needs. IT IS NOT PUBLISHED YET -- until it is, anything importing
+    // ./shell (the desktop, main.ts, web.ts, tests/desktop.test.ts) needs the
+    // local override:
     //
-    // To develop against a local exotui checkout without changing this file:
-    //   deno task test --import-map=import_map.local.json
-    // See README.md; import_map.local.json is gitignored.
-    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.6.0",
-    "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.6.0/"
+    //   deno run --import-map=import_map.local.json ...
+    //
+    // `deno task test:core` is the subset that needs no exotui at all and
+    // runs regardless. See README.md; import_map.local.json is gitignored.
+    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.7.0",
+    "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.7.0/"
   },
   "tasks": {
     // The console, in a terminal. Add --backend=native|wasm to force one.
@@ -26,7 +29,10 @@
     // The browser host: bundles web.ts and the WASM artifacts into dist/.
     "build:web": "deno run -A scripts/build_web.ts",
     "serve:web": "deno run -A jsr:@std/http/file-server dist --port 8787",
-    "test": "deno test --allow-read --allow-ffi --allow-env --no-remote",
+    "test": "deno test --allow-read --allow-ffi --allow-env",
+    // The exotui-free subset: the backend seam and the pure painters. Runs
+    // offline and without a published 0.7.0, which is why ctest uses it.
+    "test:core": "deno test --allow-read --allow-ffi --allow-env --no-remote tests/equivalence.test.ts tests/render.test.ts",
     "equivalence": "deno test --allow-read --allow-ffi --allow-env --no-remote tests/equivalence.test.ts",
     "check": "deno check main.ts src/backend/mod.ts"
   },

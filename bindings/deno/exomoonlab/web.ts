@@ -12,7 +12,7 @@
  */
 
 import { runShellApp, webPresenter } from "@ubernaut/exotui/web";
-import { MoonLabApp } from "./src/app/console_app.ts";
+import { MoonLabDesktop } from "./src/app/desktop.ts";
 import { openWasmBackend } from "./src/backend/mod.ts";
 
 const root = document.querySelector<HTMLElement>("#app");
@@ -30,7 +30,10 @@ try {
   say(backend.description);
 
   const presenter = webPresenter({ root });
-  runShellApp(presenter, new MoonLabApp({ backend }));
+  // runShellApp calls init(presenter) itself; ShellPresenter satisfies the
+  // desktop's DesktopHost structurally, so it loads its persisted state from
+  // IndexedDB here and from a file under the console host.
+  runShellApp(presenter, new MoonLabDesktop({ backend }));
 
   /**
    * Keys reach the application only once the host's keyboard target has
