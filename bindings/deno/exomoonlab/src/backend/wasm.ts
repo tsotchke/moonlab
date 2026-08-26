@@ -215,6 +215,7 @@ export async function openWasmBackend(
     allocatingConstructor: hasAllocatingCtor,
     exportedFunctions: Object.keys(m).filter((k) => k.startsWith("_")).length,
     bandGeometry: hasBandGeometry,
+    amplitudeUpload: typeof m["_quantum_state_from_amplitudes"] === "function",
   };
 
   const check = (code: number, what: string): void => {

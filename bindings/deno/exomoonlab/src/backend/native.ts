@@ -34,6 +34,10 @@ const SYMBOLS = {
   quantum_state_purity: { parameters: ["pointer"], result: "f64" },
   // Quantum geometry. The models carry an analytic d-vector, so the curvature
   // is exact rather than a finite difference.
+  quantum_state_from_amplitudes: {
+    parameters: ["pointer", "buffer", "usize"],
+    result: "i32",
+  },
   qgt_model_qwz: { parameters: ["f64"], result: "pointer" },
   qgt_model_haldane: { parameters: ["f64", "f64", "f64", "f64"], result: "pointer" },
   qgt_free: { parameters: ["pointer"], result: "void" },
@@ -116,8 +120,9 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
     // This is a guard against obvious mistakes, not a hardware measurement.
     maxQubits: 28,
     allocatingConstructor: true,
-    // dlopen resolved every qgt symbol above, or we would not be here.
+    // dlopen resolved every symbol above, or we would not be here.
     bandGeometry: true,
+    amplitudeUpload: true,
   };
 
   const check = (code: number, what: string): void => {
@@ -199,6 +204,26 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
 
       purity(state: StateHandle): Promise<number> {
         return Promise.resolve(fns.quantum_state_purity(asNative(state).ptr));
+      },
+
+      loadAmplitudes(state: StateHandle, amplitudes: Float64Array): Promise<void> {
+        const native = asNative(state);
+        if (amplitudes.length !== state.stateDim * 2) {
+          return Promise.reject(
+            new RangeError(
+              `expected ${state.stateDim * 2} interleaved values, got ${amplitudes.length}`,
+            ),
+          );
+        }
+        check(
+          fns.quantum_state_from_amplitudes(
+            native.ptr,
+            new Uint8Array(amplitudes.buffer, amplitudes.byteOffset, amplitudes.byteLength),
+            BigInt(state.stateDim),
+          ),
+          "quantum_state_from_amplitudes",
+        );
+        return Promise.resolve();
       },
 
       berryGrid(model, n): Promise<BerryGrid> {

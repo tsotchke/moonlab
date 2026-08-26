@@ -57,7 +57,7 @@ Deno.test("desktop opens its windows with chrome, none hidden at the default siz
     await desktop.init();
     const text = await settle(desktop);
 
-    for (const title of ["Probabilities", "Band geometry", "Circuits", "Session"]) {
+    for (const title of ["Probabilities", "Band geometry", "Schrödinger", "Circuits", "Session"]) {
       assert(text.includes(title), `window "${title}" missing:\n${text}`);
     }
     // Chrome controls come from exotui's painter, not from this app.
@@ -70,6 +70,9 @@ Deno.test("desktop opens its windows with chrome, none hidden at the default siz
     // The default layout must not start any window behind another: every
     // window's own content has to be visible, not just its title bar.
     assert(text.includes("C = "), `band window content hidden:\n${text}`);
+    // A title bar too narrow for its own name plus the four controls truncates
+    // the title away, which is how Circuits and Session went missing once.
+    assert(text.includes("a₀"), `orbital window content hidden:\n${text}`);
   } finally {
     await backend.dispose();
   }
@@ -97,19 +100,26 @@ Deno.test("themes cycle through the full catalog", async () => {
   try {
     await desktop.init();
     await settle(desktop);
-    assert(render(desktop).includes("MoonLab (1/"), "did not start on the MoonLab theme");
+    // Read the Session window's theme row rather than matching a literal: that
+    // window is narrow and truncates a long label, so any fixed string is a
+    // hostage to its width.
+    // Anchored on the window border: the status bar's own hint contains the
+    // word "theme" too, and an unanchored match picks that up instead.
+    const themeOf = (text: string) =>
+      text.split("\n").find((line) => /│\s*theme\s{2,}/.test(line))
+        ?.match(/theme\s{2,}(\S+)/)?.[1] ?? "";
+    const first = themeOf(render(desktop));
+    assert(first.startsWith("MoonLab"), `did not start on the MoonLab theme: "${first}"`);
 
     desktop.key({ key: "t" } as never);
     const next = render(desktop);
-    // Assert on the status bar, not the Session window: that window is narrow
-    // and truncates a long theme label, so "(2/18)" may never appear there.
     assert(next.includes("theme: "), `no theme change announced:\n${next}`);
-    assert(!next.includes("MoonLab (1/"), `theme did not change:\n${next}`);
+    assert(themeOf(next) !== first, `theme did not change from "${first}"`);
     assert(THEMES.length === 18, `expected 18 themes, got ${THEMES.length}`);
 
     // All the way around returns to where it started.
     for (let i = 1; i < THEMES.length; i++) desktop.key({ key: "t" } as never);
-    assert(render(desktop).includes("MoonLab (1/"), "cycling did not wrap to the start");
+    assert(themeOf(render(desktop)) === first, "cycling did not wrap to the start");
   } finally {
     await backend.dispose();
   }
@@ -133,7 +143,9 @@ Deno.test("theme, circuit and register size survive a restart", async () => {
     await second.init(host);
     const after = await settle(second);
 
-    const themeOf = (text: string) => text.match(/theme\s+(.+?)\s*│/)?.[1]?.trim();
+    const themeOf = (text: string) =>
+      text.split("\n").find((line) => /│\s*theme\s{2,}/.test(line))
+        ?.match(/theme\s{2,}(\S+)/)?.[1] ?? "";
     assert(
       themeOf(after) === themeOf(before),
       `theme not restored: ${themeOf(after)} vs ${themeOf(before)}`,

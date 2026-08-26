@@ -104,3 +104,42 @@ export function rampColor(ramp: DivergingRamp, value: number, extent: number): R
   const offset = Math.round(t * ramp.mid);
   return ramp.steps[ramp.mid + offset];
 }
+
+/**
+ * A sequential ramp for magnitude.
+ *
+ * |psi|^2 is a magnitude, not a polarity: it has no meaningful zero to diverge
+ * about, so it takes one hue running light to dark rather than the two-hue
+ * diverging scale the Berry curvature uses. Getting this distinction wrong is
+ * the most common way a correct number ends up in a misleading picture.
+ */
+export function sequentialRamp(surface: Rgb, hue: Rgb, steps = 12): readonly Rgb[] {
+  const ramp: Rgb[] = [];
+  for (let i = 0; i < steps; i++) ramp.push(mix(surface, hue, i / (steps - 1)));
+  return ramp;
+}
+
+/** True when luminance moves in one direction across the whole ramp. */
+export function sequentialIsMonotone(ramp: readonly Rgb[]): boolean {
+  let direction = 0;
+  for (let i = 1; i < ramp.length; i++) {
+    const delta = luminance(ramp[i]) - luminance(ramp[i - 1]);
+    if (Math.abs(delta) < 1e-9) return false;
+    const sign = Math.sign(delta);
+    if (direction === 0) direction = sign;
+    else if (sign !== direction) return false;
+  }
+  return true;
+}
+
+/** Picks a step for a value in `[0, max]`, with a gamma to lift faint detail. */
+export function sequentialColor(
+  ramp: readonly Rgb[],
+  value: number,
+  max: number,
+  gamma = 0.45,
+): Rgb {
+  if (!(max > 0) || !(value > 0)) return ramp[0];
+  const t = Math.min(1, (value / max) ** gamma);
+  return ramp[Math.round(t * (ramp.length - 1))];
+}

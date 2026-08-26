@@ -622,3 +622,90 @@ _qgt_exact_curvature_at
 _qgt_curvature_at
 _qgt_metric_at
 _chern_fhs_qwz
+
+# =============================================================================
+# State construction from a supplied amplitude vector
+# =============================================================================
+# The browser orbital view loads an analytic density into a state and reads
+# the probabilities back; without this it cannot.
+_quantum_state_from_amplitudes
+
+# =============================================================================
+# Quantum geometry — the rest of the module
+# =============================================================================
+# Nine symbols were exported earlier for the band-geometry window. These are
+# the remainder of the same public module: more models (SSH, BHZ, Kane-Mele,
+# Hofstadter, Kitaev), the Z2 invariants, Wilson loops, and the phase-diagram
+# sweeps.
+_qgt_berry_grid_nband
+_qgt_berry_grid_proj
+_qgt_berry_grid_pt
+_qgt_create
+_qgt_create_1d
+_qgt_create_dsigma
+_qgt_create_nband
+_qgt_dsigma_at
+_qgt_dsigma_metric_curvature
+_qgt_free_1d
+_qgt_free_nband
+_qgt_model_bhz
+_qgt_model_hofstadter
+_qgt_model_kane_mele
+_qgt_model_kitaev_chain
+_qgt_model_ssh
+_qgt_phase_diagram_chern
+_qgt_phase_diagram_chern_2d
+_qgt_set_dsigma
+_qgt_wilson_loop
+_qgt_winding_1d
+_qgt_z2_invariant
+_qgt_z2_invariant_1d_bdg
+_qgt_z2_invariant_pfaffian
+
+# =============================================================================
+# Real-space topology — Chern markers and KPM
+# =============================================================================
+# chern_fhs_qwz was exported with the band-geometry window; this completes the
+# module: local markers, the KPM estimator, and the projector builder.
+_chern_build_projector
+_chern_bulk_sum
+_chern_fhs_two_band
+_chern_kpm_bulk_map
+_chern_kpm_bulk_sum
+_chern_kpm_cn_modulation
+_chern_kpm_create
+_chern_kpm_free
+_chern_kpm_local_marker
+_chern_kpm_set_modulation
+_chern_local_marker
+_chern_qwz_create
+_chern_system_free
+
+# =============================================================================
+# Quantum chemistry — Jordan-Wigner, molecular Hamiltonians, UCCSD
+# =============================================================================
+# The whole chemistry module was native-only. An H2 dissociation curve in the
+# browser needs all of it.
+_h2_sto3g_pauli_coeffs
+_jw_operator_free
+_jw_transform_product
+_jw_transform_single
+_molecular_hamiltonian_add_h1
+_molecular_hamiltonian_add_h2
+_molecular_hamiltonian_create
+_molecular_hamiltonian_free
+_molecular_to_qubit_hamiltonian
+_qubit_hamiltonian_expectation
+_qubit_hamiltonian_free
+_uccsd_apply
+_uccsd_apply_double
+_uccsd_apply_single
+_uccsd_config_create
+_uccsd_config_free
+
+# =============================================================================
+# Grover quantum counting
+# =============================================================================
+# Estimates the number of marked states; the counterpart to the search that is
+# already exported.
+_grover_quantum_counting

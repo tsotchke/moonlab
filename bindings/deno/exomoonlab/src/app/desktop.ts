@@ -30,6 +30,9 @@ import { computeReadout, DEFAULT_SCAN_LIMIT } from "./readout.ts";
 import { type Frame, Surface } from "../ui/cells.ts";
 import { paintProbabilitiesBody, type ProbabilityReadout } from "../ui/probabilities.ts";
 import { type BandField, paintBandGeometry } from "../ui/band_geometry.ts";
+import { type Orbital, orbitalIsValid, orbitalLabel } from "./orbital.ts";
+import { computeOrbital, type OrbitalResult } from "./orbital_job.ts";
+import { paintOrbital } from "../ui/orbital_view.ts";
 import { type DesktopPalette, desktopPalette, themeById, themeIndex, THEMES } from "../ui/theme.ts";
 
 /**
@@ -51,7 +54,7 @@ export interface MoonLabDesktopOptions {
   readonly scanLimit?: number;
 }
 
-const WINDOW_IDS = ["probabilities", "bands", "circuits", "session"] as const;
+const WINDOW_IDS = ["probabilities", "bands", "orbital", "circuits", "session"] as const;
 type WindowId = (typeof WINDOW_IDS)[number];
 
 /** What persists between runs. Deliberately small. */
@@ -60,7 +63,25 @@ interface PersistedState {
   circuit?: string;
   qubits?: number;
   qwzMass?: number;
+  orbital?: number;
 }
+
+/**
+ * The orbitals on offer, in shell order. Every entry satisfies l < n and
+ * |m| <= l, asserted in the tests so a typo cannot ship a bogus quantum
+ * number that would silently render as an empty slice.
+ */
+const ORBITALS: readonly Orbital[] = [
+  { n: 1, l: 0, m: 0, z: 1 },
+  { n: 2, l: 0, m: 0, z: 1 },
+  { n: 2, l: 1, m: 0, z: 1 },
+  { n: 2, l: 1, m: 1, z: 1 },
+  { n: 3, l: 0, m: 0, z: 1 },
+  { n: 3, l: 1, m: 0, z: 1 },
+  { n: 3, l: 2, m: 0, z: 1 },
+  { n: 3, l: 2, m: 2, z: 1 },
+  { n: 4, l: 3, m: 0, z: 1 },
+];
 
 const THIN_GLYPHS = {
   topLeft: "┌",
@@ -79,6 +100,7 @@ export class MoonLabDesktop {
   readonly #scanLimit: number;
   readonly #job = new Job<ProbabilityReadout>();
   readonly #bandJob = new Job<BerryGrid>();
+  readonly #orbitalJob = new Job<OrbitalResult>();
   readonly #workspace = createTiledWorkspaceController({});
   readonly #host: ReturnType<typeof createWorkbenchWindowHostController<WindowId>>;
 
@@ -94,12 +116,16 @@ export class MoonLabDesktop {
   #status = "";
   /** QWZ mass. Its sign and magnitude select the topological phase. */
   #qwzMass = -1;
+  /** The orbital on show. Cycled through a fixed, valid sequence. */
+  #orbitalIndex = 0;
+  readonly #renderer: "kitty" | "half-block";
 
   constructor(options: MoonLabDesktopOptions) {
     this.#backend = options.backend;
     this.#onQuit = options.onQuit ?? (() => {});
     this.#scanLimit = options.scanLimit ?? DEFAULT_SCAN_LIMIT;
     this.#palette = desktopPalette(themeById(this.#themeId));
+    this.#renderer = MoonLabDesktop.detectRenderer();
     this.#numQubits = this.#circuit.defaultQubits;
     this.#host = createWorkbenchWindowHostController<WindowId>({
       workspace: this.#workspace,
@@ -115,7 +141,7 @@ export class MoonLabDesktop {
           minHeight: 10,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 2, row: 2, width: 58, height: 14 },
+          floatingRect: { column: 2, row: 2, width: 40, height: 14 },
         },
         {
           id: "bands",
@@ -124,7 +150,16 @@ export class MoonLabDesktop {
           minHeight: 10,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 2, row: 17, width: 58, height: 12 },
+          floatingRect: { column: 2, row: 17, width: 40, height: 12 },
+        },
+        {
+          id: "orbital",
+          title: "Schrödinger",
+          minWidth: 24,
+          minHeight: 10,
+          placement: "floating",
+          state: "normal",
+          floatingRect: { column: 44, row: 2, width: 30, height: 27 },
         },
         {
           id: "circuits",
@@ -133,7 +168,7 @@ export class MoonLabDesktop {
           minHeight: 8,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 62, row: 2, width: 38, height: 12 },
+          floatingRect: { column: 76, row: 2, width: 26, height: 12 },
         },
         {
           id: "session",
@@ -142,7 +177,7 @@ export class MoonLabDesktop {
           minHeight: 6,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 62, row: 15, width: 38, height: 11 },
+          floatingRect: { column: 76, row: 15, width: 26, height: 14 },
         },
       ],
     });
@@ -175,6 +210,12 @@ export class MoonLabDesktop {
         const saved = await this.#store.get("state");
         if (saved?.theme) this.#applyTheme(saved.theme);
         if (typeof saved?.qwzMass === "number") this.#qwzMass = saved.qwzMass;
+        if (
+          typeof saved?.orbital === "number" && saved.orbital >= 0 &&
+          saved.orbital < ORBITALS.length
+        ) {
+          this.#orbitalIndex = saved.orbital;
+        }
         if (saved?.circuit) {
           const found = CIRCUITS.findIndex((c) => c.id === saved.circuit);
           if (found >= 0) this.#circuitIndex = found;
@@ -187,6 +228,7 @@ export class MoonLabDesktop {
     }
     this.#run();
     this.#runBands();
+    this.#runOrbital();
   }
 
   #persist(): void {
@@ -197,6 +239,7 @@ export class MoonLabDesktop {
       circuit: this.#circuit.id,
       qubits: this.#numQubits,
       qwzMass: this.#qwzMass,
+      orbital: this.#orbitalIndex,
     }).catch(() => {});
   }
 
@@ -226,6 +269,59 @@ export class MoonLabDesktop {
     const m = this.#qwzMass;
     const berryGrid = this.#backend.berryGrid.bind(this.#backend);
     this.#bandJob.start(() => berryGrid({ kind: "qwz", m }, 32));
+  }
+
+  /**
+   * Kitty-class terminals can show a real image; everything else gets the
+   * half-block path. Detected once from the environment, because the console
+   * presenter exposes no image channel and the host would have to supply one
+   * through `ShellCapabilities.extras` for the image path to be usable.
+   */
+  static detectRenderer(): "kitty" | "half-block" {
+    const env = (name: string) => {
+      try {
+        return Deno.env.get(name) ?? "";
+      } catch {
+        return "";
+      }
+    };
+    const term = env("TERM").toLowerCase();
+    const program = env("TERM_PROGRAM").toLowerCase();
+    const kitty = term.includes("kitty") || env("KITTY_WINDOW_ID") !== "" ||
+      program.includes("ghostty") || program.includes("wezterm");
+    return kitty ? "kitty" : "half-block";
+  }
+
+  #runOrbital(): void {
+    const orbital = this.#orbital;
+    const backend = this.#backend;
+    this.#orbitalJob.start(() => computeOrbital(backend, orbital, 48));
+  }
+
+  #cycleOrbital(delta: number): void {
+    const count = ORBITALS.length;
+    this.#orbitalIndex = (this.#orbitalIndex + delta + count) % count;
+    this.#status = `orbital: ${orbitalLabel(this.#orbital)}`;
+    this.#persist();
+    this.#runOrbital();
+  }
+
+  get #orbital(): Orbital {
+    return ORBITALS[this.#orbitalIndex];
+  }
+
+  #paintOrbital(surface: Surface, rect: Rectangle): void {
+    const snapshot = this.#orbitalJob.snapshot;
+    const result = snapshot.value;
+    paintOrbital(surface, rect, {
+      label: orbitalLabel(this.#orbital),
+      detail: `Z=${this.#orbital.z}   o / O to cycle`,
+      slice: result?.slice,
+      busy: snapshot.status === "running",
+      error: snapshot.status === "failed" ? snapshot.error : undefined,
+      drift: result?.drift,
+      renderer: this.#renderer,
+    }, this.#palette);
   }
 
   #adjustMass(delta: number): void {
@@ -287,6 +383,8 @@ export class MoonLabDesktop {
         return this.#resizeRegister(-1);
       case "t":
         return this.#cycleTheme(event.shift ? -1 : 1);
+      case "o":
+        return this.#cycleOrbital(event.shift ? -1 : 1);
       case "[":
         return this.#adjustMass(-0.25);
       case "]":
@@ -345,7 +443,7 @@ export class MoonLabDesktop {
       { foreground: p.muted, background: p.surfaceStrong },
     );
     const hint = this.#status ||
-      "j/k circuit  ± qubits  [ ] mass  t theme  tab focus  m max  q quit";
+      "j/k circuit  ± qubits  [ ] mass  o orbital  t theme  tab focus  q quit";
     surface.writeFitted(
       Math.max(0, surface.columns - hint.length - 2),
       0,
@@ -381,6 +479,8 @@ export class MoonLabDesktop {
         return this.#paintProbabilities(surface, client);
       case "bands":
         return this.#paintBands(surface, client);
+      case "orbital":
+        return this.#paintOrbital(surface, client);
       case "circuits":
         return this.#paintCircuits(surface, client);
       case "session":

@@ -39,6 +39,8 @@ export interface BackendCapabilities {
    * plainly when the answer is no, rather than drawing an empty grid.
    */
   readonly bandGeometry: boolean;
+  /** `quantum_state_from_amplitudes` is reachable. */
+  readonly amplitudeUpload: boolean;
 }
 
 /** A two-band model with an analytic d-vector, so curvature is exact. */
@@ -100,6 +102,15 @@ export interface MoonLabBackend {
   pauliX(state: StateHandle, qubit: number): Promise<void>;
   pauliZ(state: StateHandle, qubit: number): Promise<void>;
   cnot(state: StateHandle, control: number, target: number): Promise<void>;
+
+  /**
+   * Overwrites the state with a supplied amplitude vector.
+   *
+   * `amplitudes` is interleaved real/imaginary, length `2 * stateDim`, matching
+   * the C `complex_t*`. Present only when
+   * `capabilities.amplitudeUpload` is true.
+   */
+  loadAmplitudes?(state: StateHandle, amplitudes: Float64Array): Promise<void>;
 
   /** Probability of one computational basis state. */
   probability(state: StateHandle, basisIndex: number): Promise<number>;
