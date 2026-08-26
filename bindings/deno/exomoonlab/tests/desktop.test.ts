@@ -50,14 +50,14 @@ function memoryHost() {
   };
 }
 
-Deno.test("desktop opens three windows with chrome", async () => {
+Deno.test("desktop opens its windows with chrome, none hidden at the default size", async () => {
   const backend = await openNativeBackend();
   const desktop = new MoonLabDesktop({ backend });
   try {
     await desktop.init();
     const text = await settle(desktop);
 
-    for (const title of ["Probabilities", "Circuits", "Session"]) {
+    for (const title of ["Probabilities", "Band geometry", "Circuits", "Session"]) {
       assert(text.includes(title), `window "${title}" missing:\n${text}`);
     }
     // Chrome controls come from exotui's painter, not from this app.
@@ -67,6 +67,9 @@ Deno.test("desktop opens three windows with chrome", async () => {
     assert(text.includes("|00⟩") && text.includes("|11⟩"), `probabilities missing:\n${text}`);
     assert(text.includes("▸ Bell pair"), `circuit selection marker missing:\n${text}`);
     assert(text.includes("backend"), `session window empty:\n${text}`);
+    // The default layout must not start any window behind another: every
+    // window's own content has to be visible, not just its title bar.
+    assert(text.includes("C = "), `band window content hidden:\n${text}`);
   } finally {
     await backend.dispose();
   }

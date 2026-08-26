@@ -30,6 +30,41 @@ export interface BackendCapabilities {
   readonly allocatingConstructor: boolean;
   /** Exported function count, where the backend can report one. */
   readonly exportedFunctions?: number;
+  /**
+   * Berry curvature and Chern numbers are reachable.
+   *
+   * Native builds carry the whole quantum-geometry module; the WASM build
+   * only does when it was compiled after those symbols were added to
+   * `emscripten/exports.txt`. A window that needs it asks first and says so
+   * plainly when the answer is no, rather than drawing an empty grid.
+   */
+  readonly bandGeometry: boolean;
+}
+
+/** A two-band model with an analytic d-vector, so curvature is exact. */
+export type BandModel =
+  | { readonly kind: "qwz"; readonly m: number }
+  | {
+    readonly kind: "haldane";
+    readonly t1: number;
+    readonly t2: number;
+    readonly phi: number;
+    readonly mStagger: number;
+  };
+
+/** Berry curvature sampled over the Brillouin zone, with its integral. */
+export interface BerryGrid {
+  /** Momenta per axis; the field is `n * n`, row-major. */
+  readonly n: number;
+  readonly curvature: Float64Array;
+  /**
+   * The integrated Chern number. Exact at any finite `n` provided the band
+   * stays gapped across the grid (Fukui-Hatsugai-Suzuki), which is why a
+   * coarse grid still reports a clean integer.
+   */
+  readonly chern: number;
+  readonly min: number;
+  readonly max: number;
 }
 
 /**
@@ -72,6 +107,13 @@ export interface MoonLabBackend {
   probabilityOne(state: StateHandle, qubit: number): Promise<number>;
   entropy(state: StateHandle): Promise<number>;
   purity(state: StateHandle): Promise<number>;
+
+  /**
+   * Berry curvature over the Brillouin zone for a two-band model.
+   *
+   * Present only when `capabilities.bandGeometry` is true.
+   */
+  berryGrid?(model: BandModel, n: number): Promise<BerryGrid>;
 
   /** Releases the library handle. Safe to call twice. */
   dispose(): Promise<void>;

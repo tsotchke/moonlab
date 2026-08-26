@@ -606,3 +606,19 @@ _moonlab_uf_decoder_new
 _moonlab_uf_decoder_free
 _moonlab_uf_decode_batch
 _moonlab_uf_decoder_num_edges
+
+# =============================================================================
+# Quantum geometry — Berry curvature, quantum metric, Chern numbers
+# =============================================================================
+# Native-only until now. The console's band-geometry window needs these in the
+# browser too, and they are existing C symbols: this only widens the WASM
+# export list, it changes no simulation code.
+_qgt_model_qwz
+_qgt_model_haldane
+_qgt_free
+_qgt_berry_grid
+_qgt_berry_grid_free
+_qgt_exact_curvature_at
+_qgt_curvature_at
+_qgt_metric_at
+_chern_fhs_qwz

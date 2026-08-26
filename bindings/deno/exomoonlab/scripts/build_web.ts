@@ -57,7 +57,14 @@ const mapArgs = (() => {
   }
   return [];
 })();
-await run(["bundle", ...mapArgs, "--platform=browser", "-o", `${dist}/exomoonlab.js`, `${here}web.ts`]);
+await run([
+  "bundle",
+  ...mapArgs,
+  "--platform=browser",
+  "-o",
+  `${dist}/exomoonlab.js`,
+  `${here}web.ts`,
+]);
 
 const { glue, wasm } = findArtifacts();
 console.log(`artifacts: ${glue}`);

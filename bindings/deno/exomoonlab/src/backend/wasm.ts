@@ -203,11 +203,18 @@ export async function openWasmBackend(
   const destroyFn = m["_quantum_state_destroy"] as ((p: number) => void) | undefined;
   const hasAllocatingCtor = typeof createFn === "function" && typeof destroyFn === "function";
 
+  // Probed, not assumed: the quantum-geometry symbols reached exports.txt
+  // only recently, so a prebuilt artifact from before that will not carry
+  // them. Asking the module is the only honest answer.
+  const hasBandGeometry = typeof m["_qgt_berry_grid"] === "function" &&
+    typeof m["_qgt_model_qwz"] === "function";
+
   const capabilities: BackendCapabilities = {
     // wasm32 memory ceiling bites long before the native one does.
     maxQubits: 24,
     allocatingConstructor: hasAllocatingCtor,
     exportedFunctions: Object.keys(m).filter((k) => k.startsWith("_")).length,
+    bandGeometry: hasBandGeometry,
   };
 
   const check = (code: number, what: string): void => {

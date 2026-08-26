@@ -6,7 +6,14 @@
  * for this seam is `plan/arch/exomoonlab.md`.
  */
 
-export type { BackendCapabilities, BackendKind, MoonLabBackend, StateHandle } from "./types.ts";
+export type {
+  BackendCapabilities,
+  BackendKind,
+  BandModel,
+  BerryGrid,
+  MoonLabBackend,
+  StateHandle,
+} from "./types.ts";
 export { BackendUnavailableError } from "./types.ts";
 export { nativeLibraryCandidates, openNativeBackend } from "./native.ts";
 export {

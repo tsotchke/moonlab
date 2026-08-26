@@ -12,6 +12,7 @@
 import {
   type BackendCapabilities,
   BackendUnavailableError,
+  type BerryGrid,
   type MoonLabBackend,
   type StateHandle,
 } from "./types.ts";
@@ -31,7 +32,27 @@ const SYMBOLS = {
   measurement_probability_one: { parameters: ["pointer", "i32"], result: "f64" },
   quantum_state_entropy: { parameters: ["pointer"], result: "f64" },
   quantum_state_purity: { parameters: ["pointer"], result: "f64" },
+  // Quantum geometry. The models carry an analytic d-vector, so the curvature
+  // is exact rather than a finite difference.
+  qgt_model_qwz: { parameters: ["f64"], result: "pointer" },
+  qgt_model_haldane: { parameters: ["f64", "f64", "f64", "f64"], result: "pointer" },
+  qgt_free: { parameters: ["pointer"], result: "void" },
+  qgt_berry_grid: { parameters: ["pointer", "usize", "pointer"], result: "i32" },
+  qgt_berry_grid_free: { parameters: ["pointer"], result: "void" },
 } as const;
+
+/**
+ * `qgt_berry_grid_t` is `{ size_t N; double* berry; double chern; }`.
+ *
+ * Read by explicit offset because the caller allocates it. Unlike the
+ * quantum_state_t layout this one is unavoidable -- there is no allocating
+ * constructor -- so it is written down once, here, against a 64-bit host, and
+ * never shared with the WASM backend, where the offsets would differ.
+ */
+const BERRY_GRID_SIZE = 24;
+const BERRY_N_OFFSET = 0;
+const BERRY_PTR_OFFSET = 8;
+const BERRY_CHERN_OFFSET = 16;
 
 /** Where to look for the shared library, most explicit first. */
 export function nativeLibraryCandidates(): string[] {
@@ -95,6 +116,8 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
     // This is a guard against obvious mistakes, not a hardware measurement.
     maxQubits: 28,
     allocatingConstructor: true,
+    // dlopen resolved every qgt symbol above, or we would not be here.
+    bandGeometry: true,
   };
 
   const check = (code: number, what: string): void => {
@@ -176,6 +199,47 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
 
       purity(state: StateHandle): Promise<number> {
         return Promise.resolve(fns.quantum_state_purity(asNative(state).ptr));
+      },
+
+      berryGrid(model, n): Promise<BerryGrid> {
+        if (!Number.isInteger(n) || n < 2) {
+          return Promise.reject(new RangeError("n must be an integer >= 2"));
+        }
+        const sys = model.kind === "qwz"
+          ? fns.qgt_model_qwz(model.m)
+          : fns.qgt_model_haldane(model.t1, model.t2, model.phi, model.mStagger);
+        if (sys === null) {
+          return Promise.reject(new Error(`qgt_model_${model.kind} returned NULL`));
+        }
+        const out = new Uint8Array(BERRY_GRID_SIZE);
+        try {
+          const rc = fns.qgt_berry_grid(sys, BigInt(n), Deno.UnsafePointer.of(out));
+          if (rc !== 0) throw new Error(`qgt_berry_grid failed with ${rc}`);
+
+          const view = new DataView(out.buffer);
+          const gridN = Number(view.getBigUint64(BERRY_N_OFFSET, true));
+          const chern = view.getFloat64(BERRY_CHERN_OFFSET, true);
+          const berryPtr = Deno.UnsafePointer.create(
+            view.getBigUint64(BERRY_PTR_OFFSET, true),
+          );
+          if (berryPtr === null) throw new Error("qgt_berry_grid returned a null field");
+
+          // Copy out before freeing: the field belongs to the library.
+          const bytes = new Deno.UnsafePointerView(berryPtr)
+            .getArrayBuffer(gridN * gridN * 8);
+          const curvature = new Float64Array(bytes.slice(0));
+
+          let min = Infinity;
+          let max = -Infinity;
+          for (const value of curvature) {
+            if (value < min) min = value;
+            if (value > max) max = value;
+          }
+          fns.qgt_berry_grid_free(Deno.UnsafePointer.of(out));
+          return Promise.resolve({ n: gridN, curvature, chern, min, max });
+        } finally {
+          fns.qgt_free(sys);
+        }
       },
 
       dispose(): Promise<void> {

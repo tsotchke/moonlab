@@ -23,12 +23,13 @@ import {
   type WorkbenchWindowHostProjectionOptions,
 } from "@ubernaut/exotui/shell";
 
-import type { MoonLabBackend } from "../backend/mod.ts";
+import type { BerryGrid, MoonLabBackend } from "../backend/mod.ts";
 import { type Circuit, CIRCUITS } from "./circuits.ts";
 import { Job } from "./jobs.ts";
 import { computeReadout, DEFAULT_SCAN_LIMIT } from "./readout.ts";
 import { type Frame, Surface } from "../ui/cells.ts";
 import { paintProbabilitiesBody, type ProbabilityReadout } from "../ui/probabilities.ts";
+import { type BandField, paintBandGeometry } from "../ui/band_geometry.ts";
 import { type DesktopPalette, desktopPalette, themeById, themeIndex, THEMES } from "../ui/theme.ts";
 
 /**
@@ -50,7 +51,7 @@ export interface MoonLabDesktopOptions {
   readonly scanLimit?: number;
 }
 
-const WINDOW_IDS = ["probabilities", "circuits", "session"] as const;
+const WINDOW_IDS = ["probabilities", "bands", "circuits", "session"] as const;
 type WindowId = (typeof WINDOW_IDS)[number];
 
 /** What persists between runs. Deliberately small. */
@@ -58,6 +59,7 @@ interface PersistedState {
   theme?: string;
   circuit?: string;
   qubits?: number;
+  qwzMass?: number;
 }
 
 const THIN_GLYPHS = {
@@ -76,6 +78,7 @@ export class MoonLabDesktop {
   readonly #onQuit: () => void;
   readonly #scanLimit: number;
   readonly #job = new Job<ProbabilityReadout>();
+  readonly #bandJob = new Job<BerryGrid>();
   readonly #workspace = createTiledWorkspaceController({});
   readonly #host: ReturnType<typeof createWorkbenchWindowHostController<WindowId>>;
 
@@ -89,6 +92,8 @@ export class MoonLabDesktop {
     set(key: string, value: PersistedState): Promise<void>;
   };
   #status = "";
+  /** QWZ mass. Its sign and magnitude select the topological phase. */
+  #qwzMass = -1;
 
   constructor(options: MoonLabDesktopOptions) {
     this.#backend = options.backend;
@@ -110,7 +115,16 @@ export class MoonLabDesktop {
           minHeight: 10,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 2, row: 2, width: 62, height: 18 },
+          floatingRect: { column: 2, row: 2, width: 58, height: 14 },
+        },
+        {
+          id: "bands",
+          title: "Band geometry",
+          minWidth: 30,
+          minHeight: 10,
+          placement: "floating",
+          state: "normal",
+          floatingRect: { column: 2, row: 17, width: 58, height: 12 },
         },
         {
           id: "circuits",
@@ -119,7 +133,7 @@ export class MoonLabDesktop {
           minHeight: 8,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 66, row: 2, width: 32, height: 12 },
+          floatingRect: { column: 62, row: 2, width: 38, height: 12 },
         },
         {
           id: "session",
@@ -128,7 +142,7 @@ export class MoonLabDesktop {
           minHeight: 6,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 66, row: 15, width: 32, height: 9 },
+          floatingRect: { column: 62, row: 15, width: 38, height: 11 },
         },
       ],
     });
@@ -160,6 +174,7 @@ export class MoonLabDesktop {
       try {
         const saved = await this.#store.get("state");
         if (saved?.theme) this.#applyTheme(saved.theme);
+        if (typeof saved?.qwzMass === "number") this.#qwzMass = saved.qwzMass;
         if (saved?.circuit) {
           const found = CIRCUITS.findIndex((c) => c.id === saved.circuit);
           if (found >= 0) this.#circuitIndex = found;
@@ -171,6 +186,7 @@ export class MoonLabDesktop {
       }
     }
     this.#run();
+    this.#runBands();
   }
 
   #persist(): void {
@@ -180,6 +196,7 @@ export class MoonLabDesktop {
       theme: this.#themeId,
       circuit: this.#circuit.id,
       qubits: this.#numQubits,
+      qwzMass: this.#qwzMass,
     }).catch(() => {});
   }
 
@@ -201,6 +218,23 @@ export class MoonLabDesktop {
     this.#job.start(() =>
       computeReadout(this.#backend, circuit, { numQubits, scanLimit: this.#scanLimit })
     );
+  }
+
+  /** Recomputes the Berry field. Off the frame loop, like everything else. */
+  #runBands(): void {
+    if (!this.#backend.capabilities.bandGeometry || !this.#backend.berryGrid) return;
+    const m = this.#qwzMass;
+    const berryGrid = this.#backend.berryGrid.bind(this.#backend);
+    this.#bandJob.start(() => berryGrid({ kind: "qwz", m }, 32));
+  }
+
+  #adjustMass(delta: number): void {
+    const next = Math.round((this.#qwzMass + delta) * 100) / 100;
+    if (next < -3.5 || next > 3.5) return;
+    this.#qwzMass = next;
+    this.#status = `QWZ m = ${next.toFixed(2)}`;
+    this.#persist();
+    this.#runBands();
   }
 
   #selectCircuit(delta: number): void {
@@ -253,6 +287,10 @@ export class MoonLabDesktop {
         return this.#resizeRegister(-1);
       case "t":
         return this.#cycleTheme(event.shift ? -1 : 1);
+      case "[":
+        return this.#adjustMass(-0.25);
+      case "]":
+        return this.#adjustMass(0.25);
       case "tab":
         this.#host.execute(
           { kind: "focus-next", direction: event.shift ? -1 : 1 },
@@ -306,7 +344,8 @@ export class MoonLabDesktop {
       `${this.#backend.kind} · ${this.#numQubits}q · ${state}`,
       { foreground: p.muted, background: p.surfaceStrong },
     );
-    const hint = this.#status || "j/k circuit  ± qubits  t theme  tab focus  m max  q quit";
+    const hint = this.#status ||
+      "j/k circuit  ± qubits  [ ] mass  t theme  tab focus  m max  q quit";
     surface.writeFitted(
       Math.max(0, surface.columns - hint.length - 2),
       0,
@@ -340,6 +379,8 @@ export class MoonLabDesktop {
     switch (window.id as WindowId) {
       case "probabilities":
         return this.#paintProbabilities(surface, client);
+      case "bands":
+        return this.#paintBands(surface, client);
       case "circuits":
         return this.#paintCircuits(surface, client);
       case "session":
@@ -363,6 +404,21 @@ export class MoonLabDesktop {
       },
       this.#palette,
     );
+  }
+
+  #paintBands(surface: Surface, rect: Rectangle): void {
+    const snapshot = this.#bandJob.snapshot;
+    const capable = this.#backend.capabilities.bandGeometry;
+    paintBandGeometry(surface, rect, {
+      modelLabel: "Qi-Wu-Zhang",
+      paramLabel: `m = ${this.#qwzMass.toFixed(2)}   [ / ] to sweep`,
+      field: snapshot.value as BandField | undefined,
+      busy: snapshot.status === "running",
+      unavailable: capable
+        ? undefined
+        : `the ${this.#backend.kind} backend does not export the quantum-geometry symbols`,
+      error: snapshot.status === "failed" ? snapshot.error : undefined,
+    }, this.#palette);
   }
 
   #paintCircuits(surface: Surface, rect: Rectangle): void {
