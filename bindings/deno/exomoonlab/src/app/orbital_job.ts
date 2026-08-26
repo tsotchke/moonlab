@@ -10,7 +10,14 @@
  */
 
 import type { MoonLabBackend } from "../backend/mod.ts";
-import { type DensitySlice, densitySlice, type Orbital, suggestedExtent } from "./orbital.ts";
+import {
+  correctedDensitySlice,
+  type DensitySlice,
+  NO_CORRECTIONS,
+  type Orbital,
+  type OrbitalPhysics,
+  suggestedExtent,
+} from "./orbital.ts";
 
 export interface OrbitalResult {
   readonly slice: DensitySlice;
@@ -31,8 +38,15 @@ export async function computeOrbital(
   backend: MoonLabBackend,
   orbital: Orbital,
   size: number,
+  physics: OrbitalPhysics = NO_CORRECTIONS,
+  zoom = 1,
 ): Promise<OrbitalResult> {
-  const slice = densitySlice(orbital, size, suggestedExtent(orbital));
+  const slice = correctedDensitySlice(
+    orbital,
+    physics,
+    size,
+    suggestedExtent(orbital) / Math.max(0.1, zoom),
+  );
 
   // The round-trip needs the backend to accept an amplitude vector. When it
   // cannot, the picture is still correct -- only the cross-check is missing,

@@ -30,7 +30,17 @@ import { computeReadout, DEFAULT_SCAN_LIMIT } from "./readout.ts";
 import { type Frame, Surface } from "../ui/cells.ts";
 import { paintProbabilitiesBody, type ProbabilityReadout } from "../ui/probabilities.ts";
 import { type BandField, paintBandGeometry } from "../ui/band_geometry.ts";
-import { type Orbital, orbitalIsValid, orbitalLabel } from "./orbital.ts";
+import {
+  activeCorrections,
+  NO_CORRECTIONS,
+  type Orbital,
+  orbitalIsValid,
+  orbitalLabel,
+  type OrbitalPhysics,
+} from "./orbital.ts";
+import { densityToRgb, ImageLayer, probeGraphics } from "../ui/graphics.ts";
+import { orbitalRamp } from "../ui/orbital_view.ts";
+import { ELEMENTS } from "./elements.ts";
 import { computeOrbital, type OrbitalResult } from "./orbital_job.ts";
 import { paintOrbital } from "../ui/orbital_view.ts";
 import { type DesktopPalette, desktopPalette, themeById, themeIndex, THEMES } from "../ui/theme.ts";
@@ -64,6 +74,13 @@ interface PersistedState {
   qubits?: number;
   qwzMass?: number;
   orbital?: number;
+  n?: number;
+  l?: number;
+  m?: number;
+  element?: number;
+  physics?: OrbitalPhysics;
+  zoom?: number;
+  guides?: boolean;
 }
 
 /**
@@ -119,13 +136,28 @@ export class MoonLabDesktop {
   /** The orbital on show. Cycled through a fixed, valid sequence. */
   #orbitalIndex = 0;
   readonly #renderer: "kitty" | "half-block";
+  readonly #image: ImageLayer;
+  readonly #graphicsReason: string;
+  /** Direct quantum numbers, as the web build exposes them. */
+  #n = 3;
+  #l = 2;
+  #m = 0;
+  #elementIndex = 0;
+  #physics: OrbitalPhysics = NO_CORRECTIONS;
+  #resolution = 48;
+  #zoom = 1;
+  #showGuides = false;
 
   constructor(options: MoonLabDesktopOptions) {
     this.#backend = options.backend;
     this.#onQuit = options.onQuit ?? (() => {});
     this.#scanLimit = options.scanLimit ?? DEFAULT_SCAN_LIMIT;
     this.#palette = desktopPalette(themeById(this.#themeId));
-    this.#renderer = MoonLabDesktop.detectRenderer();
+    const graphics = probeGraphics();
+    this.#image = new ImageLayer(graphics.surface);
+    this.#graphicsReason = graphics.reason;
+    // What the terminal can actually do, not what it advertises.
+    this.#renderer = this.#image.available ? "kitty" : "half-block";
     this.#numQubits = this.#circuit.defaultQubits;
     this.#host = createWorkbenchWindowHostController<WindowId>({
       workspace: this.#workspace,
@@ -215,7 +247,21 @@ export class MoonLabDesktop {
           saved.orbital < ORBITALS.length
         ) {
           this.#orbitalIndex = saved.orbital;
+          const preset = ORBITALS[this.#orbitalIndex];
+          this.#n = preset.n;
+          this.#l = preset.l;
+          this.#m = preset.m;
         }
+        if (typeof saved?.n === "number") this.#n = saved.n;
+        if (typeof saved?.l === "number") this.#l = saved.l;
+        if (typeof saved?.m === "number") this.#m = saved.m;
+        if (typeof saved?.element === "number") {
+          this.#elementIndex = Math.max(0, Math.min(ELEMENTS.length - 1, saved.element));
+        }
+        if (saved?.physics) this.#physics = saved.physics;
+        if (typeof saved?.zoom === "number") this.#zoom = saved.zoom;
+        if (typeof saved?.guides === "boolean") this.#showGuides = saved.guides;
+        this.#clampQuantumNumbers();
         if (saved?.circuit) {
           const found = CIRCUITS.findIndex((c) => c.id === saved.circuit);
           if (found >= 0) this.#circuitIndex = found;
@@ -240,6 +286,13 @@ export class MoonLabDesktop {
       qubits: this.#numQubits,
       qwzMass: this.#qwzMass,
       orbital: this.#orbitalIndex,
+      n: this.#n,
+      l: this.#l,
+      m: this.#m,
+      element: this.#elementIndex,
+      physics: this.#physics,
+      zoom: this.#zoom,
+      guides: this.#showGuides,
     }).catch(() => {});
   }
 
@@ -295,33 +348,102 @@ export class MoonLabDesktop {
   #runOrbital(): void {
     const orbital = this.#orbital;
     const backend = this.#backend;
-    this.#orbitalJob.start(() => computeOrbital(backend, orbital, 48));
+    const physics = this.#physics;
+    const resolution = this.#resolution;
+    const zoom = this.#zoom;
+    this.#orbitalJob.start(() => computeOrbital(backend, orbital, resolution, physics, zoom));
   }
 
+  /** Steps through the preset shells, as the web build's dropdown does. */
   #cycleOrbital(delta: number): void {
     const count = ORBITALS.length;
     this.#orbitalIndex = (this.#orbitalIndex + delta + count) % count;
+    const preset = ORBITALS[this.#orbitalIndex];
+    this.#n = preset.n;
+    this.#l = preset.l;
+    this.#m = preset.m;
     this.#status = `orbital: ${orbitalLabel(this.#orbital)}`;
     this.#persist();
     this.#runOrbital();
   }
 
   get #orbital(): Orbital {
-    return ORBITALS[this.#orbitalIndex];
+    return { n: this.#n, l: this.#l, m: this.#m, z: ELEMENTS[this.#elementIndex].z };
+  }
+
+  /** Keeps l < n and |m| <= l after any change to n, l, m or the element. */
+  #clampQuantumNumbers(): void {
+    this.#n = Math.max(1, Math.min(6, this.#n));
+    this.#l = Math.max(0, Math.min(this.#n - 1, this.#l));
+    this.#m = Math.max(-this.#l, Math.min(this.#l, this.#m));
+  }
+
+  #adjustQuantum(which: "n" | "l" | "m" | "z", delta: number): void {
+    if (which === "n") this.#n += delta;
+    else if (which === "l") this.#l += delta;
+    else if (which === "m") this.#m += delta;
+    else {
+      this.#elementIndex = Math.max(
+        0,
+        Math.min(ELEMENTS.length - 1, this.#elementIndex + delta),
+      );
+    }
+    this.#clampQuantumNumbers();
+    const element = ELEMENTS[this.#elementIndex];
+    this.#status = `${element.symbol}  ${orbitalLabel(this.#orbital)}`;
+    this.#persist();
+    this.#runOrbital();
+  }
+
+  #adjustZoom(factor: number): void {
+    this.#zoom = Math.max(0.25, Math.min(6, this.#zoom * factor));
+    this.#status = `zoom ×${this.#zoom.toFixed(2)}`;
+    this.#persist();
+    this.#runOrbital();
+  }
+
+  #togglePhysics(which: keyof OrbitalPhysics): void {
+    this.#physics = { ...this.#physics, [which]: !this.#physics[which] };
+    const active = activeCorrections(this.#physics);
+    this.#status = active.length === 0 ? "hydrogenic baseline" : active.join(" + ");
+    this.#persist();
+    this.#runOrbital();
   }
 
   #paintOrbital(surface: Surface, rect: Rectangle): void {
     const snapshot = this.#orbitalJob.snapshot;
     const result = snapshot.value;
+    const element = ELEMENTS[this.#elementIndex];
+    const useImage = this.#image.available && result !== undefined;
+
     paintOrbital(surface, rect, {
       label: orbitalLabel(this.#orbital),
-      detail: `Z=${this.#orbital.z}   o / O to cycle`,
+      detail: `n${this.#n} l${this.#l} m${this.#m}  ·  n/l/, . quantum  z element  1 2 3 physics`,
+      element: `${element.symbol} (Z=${element.z})`,
       slice: result?.slice,
       busy: snapshot.status === "running",
       error: snapshot.status === "failed" ? snapshot.error : undefined,
       drift: result?.drift,
       renderer: this.#renderer,
+      corrections: activeCorrections(this.#physics),
+      resolution: this.#resolution,
+      showGuides: this.#showGuides,
+      reserveForImage: useImage,
+      graphicsReason: this.#renderer === "kitty" ? undefined : this.#graphicsReason,
     }, this.#palette);
+
+    if (useImage) {
+      // The picture occupies the window body; the header and the two status
+      // rows stay as cells so they keep following the theme.
+      const ramp = orbitalRamp(this.#palette);
+      const slice = result.slice;
+      this.#image.show(snapshot.generation, {
+        column: rect.column + 1,
+        row: rect.row + 3,
+        width: Math.max(1, rect.width - 2),
+        height: Math.max(1, rect.height - 6),
+      }, () => densityToRgb(slice, ramp, 256));
+    }
   }
 
   #adjustMass(delta: number): void {
@@ -385,6 +507,33 @@ export class MoonLabDesktop {
         return this.#cycleTheme(event.shift ? -1 : 1);
       case "o":
         return this.#cycleOrbital(event.shift ? -1 : 1);
+      // Quantum numbers directly, as the web build's sliders expose them.
+      case "n":
+        return this.#adjustQuantum("n", event.shift ? -1 : 1);
+      case "l":
+        return this.#adjustQuantum("l", event.shift ? -1 : 1);
+      case ",":
+        return this.#adjustQuantum("m", -1);
+      case ".":
+        return this.#adjustQuantum("m", 1);
+      case "z":
+        return this.#adjustQuantum("z", event.shift ? -1 : 1);
+      // The three multi-electron corrections.
+      case "1":
+        return this.#togglePhysics("screeningExchange");
+      case "2":
+        return this.#togglePhysics("relativisticSpinOrbit");
+      case "3":
+        return this.#togglePhysics("correlationMixing");
+      case "g":
+        this.#showGuides = !this.#showGuides;
+        this.#status = `guides ${this.#showGuides ? "on" : "off"}`;
+        this.#persist();
+        return;
+      case "9":
+        return this.#adjustZoom(1 / 1.25);
+      case "0":
+        return this.#adjustZoom(1.25);
       case "[":
         return this.#adjustMass(-0.25);
       case "]":
@@ -443,7 +592,7 @@ export class MoonLabDesktop {
       { foreground: p.muted, background: p.surfaceStrong },
     );
     const hint = this.#status ||
-      "j/k circuit  ± qubits  [ ] mass  o orbital  t theme  tab focus  q quit";
+      "j/k circuit  ± qubits  [ ] mass  o/n/l/,. orbital  z element  1 2 3 physics  g guides  9 0 zoom  t theme  q quit";
     surface.writeFitted(
       Math.max(0, surface.columns - hint.length - 2),
       0,

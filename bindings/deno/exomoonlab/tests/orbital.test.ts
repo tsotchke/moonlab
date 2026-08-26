@@ -8,12 +8,18 @@
 
 import { openNativeBackend } from "../src/backend/mod.ts";
 import {
+  applyRelativisticContraction,
+  buildCorrelationTerms,
+  correctedDensitySlice,
   densitySlice,
+  effectiveNuclearCharge,
+  NO_CORRECTIONS,
   orbitalIsValid,
   orbitalLabel,
   radialWavefunction,
   suggestedExtent,
 } from "../src/app/orbital.ts";
+import { densityToRgb } from "../src/ui/graphics.ts";
 import { computeOrbital } from "../src/app/orbital_job.ts";
 import { sequentialColor, sequentialIsMonotone, sequentialRamp } from "../src/ui/colormap.ts";
 import { desktopPalette, THEMES } from "../src/ui/theme.ts";
@@ -111,4 +117,86 @@ Deno.test("the offered orbitals are all physically valid", () => {
   for (const o of offered) {
     assert(orbitalIsValid(o), `invalid quantum numbers: ${JSON.stringify(o)}`);
   }
+});
+
+Deno.test("corrections off reproduce the hydrogenic baseline exactly", () => {
+  // An approximation that quietly moved the uncorrected result would be worse
+  // than not offering one.
+  const o = { n: 3, l: 1, m: 0, z: 1 };
+  const plain = densitySlice(o, 33, suggestedExtent(o));
+  const corrected = correctedDensitySlice(o, NO_CORRECTIONS, 33, suggestedExtent(o));
+  for (let i = 0; i < plain.density.length; i++) {
+    assert(
+      Math.abs(plain.density[i] - corrected.density[i]) < 1e-15,
+      `baseline drift at ${i}`,
+    );
+  }
+});
+
+Deno.test("screening lowers the effective charge, never below one", () => {
+  // Slater: a 1s electron in helium sees less than the full +2.
+  assert(effectiveNuclearCharge(2, 1, 0, true) < 2, "helium 1s is unscreened");
+  assert(effectiveNuclearCharge(2, 1, 0, true) >= 1, "screening drove Zeff below 1");
+  assert(effectiveNuclearCharge(1, 1, 0, true) === 1, "hydrogen should be unshielded");
+  assert(effectiveNuclearCharge(26, 3, 2, true) < 26, "iron 3d is unscreened");
+  // Disabled is the identity.
+  assert(effectiveNuclearCharge(26, 3, 2, false) === 26, "disabled screening changed Zeff");
+});
+
+Deno.test("relativistic contraction increases Zeff and grows with Z", () => {
+  const light = applyRelativisticContraction(2, 1, 0, true) / 2;
+  const heavy = applyRelativisticContraction(80, 1, 0, true) / 80;
+  assert(heavy > light, "contraction does not grow with Z");
+  assert(applyRelativisticContraction(80, 1, 0, false) === 80, "disabled changed Zeff");
+});
+
+Deno.test("correlation mixing only offers valid configurations", () => {
+  for (const [n, l, m] of [[3, 1, 0], [4, 2, 1], [2, 0, 0], [1, 0, 0]] as const) {
+    for (const term of buildCorrelationTerms(n, l, m)) {
+      assert(term.l < term.n, `invalid term l=${term.l} n=${term.n}`);
+      assert(Math.abs(term.m) <= term.l, `invalid term m=${term.m} l=${term.l}`);
+      assert(term.weight > 0, "non-positive weight");
+    }
+  }
+});
+
+Deno.test("corrections change the picture when switched on", () => {
+  const o = { n: 3, l: 2, m: 1, z: 26 };
+  const plain = correctedDensitySlice(o, NO_CORRECTIONS, 25, suggestedExtent(o));
+  const full = correctedDensitySlice(
+    o,
+    {
+      screeningExchange: true,
+      relativisticSpinOrbit: true,
+      correlationMixing: true,
+    },
+    25,
+    suggestedExtent(o),
+  );
+  let delta = 0;
+  for (let i = 0; i < plain.density.length; i++) {
+    delta += Math.abs(plain.density[i] - full.density[i]);
+  }
+  assert(delta > 1e-3, `corrections had no visible effect (L1 ${delta})`);
+  // Still a normalised density.
+  let sum = 0;
+  for (const v of full.density) sum += v;
+  assert(Math.abs(sum - 1) < 1e-12, `corrected density sums to ${sum}`);
+});
+
+Deno.test("the RGB encoder produces one pixel per sample", () => {
+  const o = { n: 2, l: 1, m: 0, z: 1 };
+  const slice = densitySlice(o, 32, suggestedExtent(o));
+  const ramp = orbitalRamp(desktopPalette(THEMES[0]));
+  const image = densityToRgb(slice, ramp, 32);
+  assert(image.width === 32 && image.height === 32, "wrong image size");
+  assert(image.data.length === 32 * 32 * 3, `expected RGB24, got ${image.data.length} bytes`);
+  // The nodal plane must be the ramp's low end, not an arbitrary colour.
+  const mid = 16;
+  const offset = (mid * 32 + 4) * 3;
+  const [r, g, b] = ramp[0];
+  assert(
+    image.data[offset] === r && image.data[offset + 1] === g && image.data[offset + 2] === b,
+    "nodal plane is not the ramp floor",
+  );
 });
