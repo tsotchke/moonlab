@@ -26,15 +26,23 @@ The console runs in a terminal against either backend. The browser half is block
 ## Running
 
 ```bash
-deno task exomoonlab                  # the console, in a terminal
-deno task exomoonlab --backend=wasm   # force the WASM backend
-deno task check                       # type-check
-deno task test                        # everything, offline
-deno task equivalence                 # native vs WASM only
+# exotui 0.7.0 is not published yet, so use the `dev` tasks. They resolve
+# exotui from a sibling checkout via import_map.dev.json.
+deno task dev                       # the desktop, in a terminal
+deno task dev --backend=wasm        # force the WASM backend
+deno task dev --simple              # single-window view instead of the desktop
+deno task dev:test                  # every test
+deno task dev:build:web             # bundle the browser host into dist/
+deno task serve:web                 # serve dist/ on :8787
 
-deno task build:web                   # bundle the browser host into dist/
-deno task serve:web                   # serve dist/ on :8787
+deno task test:core                 # the exotui-free subset; works with no override
 ```
+
+Keys: `j`/`k` circuit, `+`/`-` qubits, `t` theme (`T` back), `tab` focus, `m` maximize, `r` rerun,
+`q` quit.
+
+Once exotui 0.7.0 publishes, delete `import_map.dev.json` and use the plain tasks —
+`deno task exomoonlab`, `deno task test`, `deno task build:web` — which resolve straight from JSR.
 
 Keys: `j`/`k` circuit, `+`/`-` qubits, `r` rerun, `q` quit.
 

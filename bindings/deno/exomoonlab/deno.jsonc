@@ -24,7 +24,18 @@
     "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.7.0/"
   },
   "tasks": {
-    // The console, in a terminal. Add --backend=native|wasm to force one.
+    // ---- Development, today ----------------------------------------------
+    // exotui 0.7.0 is not published, so the ^0.7.0 pin below cannot resolve
+    // and these `dev` tasks go through import_map.dev.json instead, which
+    // points at a sibling exotui checkout. Use these now.
+    "dev": "deno run --import-map=import_map.dev.json --allow-read --allow-ffi --allow-env --allow-write main.ts",
+    "dev:test": "deno test --import-map=import_map.dev.json --allow-read --allow-ffi --allow-env",
+    "dev:build:web": "deno run -A scripts/build_web.ts",
+
+    // ---- After exotui 0.7.0 publishes -------------------------------------
+    // These resolve from JSR and need no override; delete import_map.dev.json
+    // and use them instead. Add --backend=native|wasm to force a backend, or
+    // --simple for the single-window view.
     "exomoonlab": "deno run --allow-read --allow-ffi --allow-env --allow-write main.ts",
     // The browser host: bundles web.ts and the WASM artifacts into dist/.
     "build:web": "deno run -A scripts/build_web.ts",

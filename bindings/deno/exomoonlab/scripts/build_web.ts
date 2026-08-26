@@ -45,15 +45,17 @@ await Deno.mkdir(dist, { recursive: true });
 console.log("bundling web.ts …");
 // Until exotui 0.7.0 publishes, ./shell resolves only through the local
 // override; use it when it is there and fall back to the pin when it is not.
-const localMap = `${here}import_map.local.json`;
 const mapArgs = (() => {
-  try {
-    Deno.statSync(localMap);
-    console.log(`using local exotui override: ${localMap}`);
-    return [`--import-map=${localMap}`];
-  } catch {
-    return [];
+  for (const candidate of [`${here}import_map.local.json`, `${here}import_map.dev.json`]) {
+    try {
+      Deno.statSync(candidate);
+      console.log(`using exotui override: ${candidate}`);
+      return [`--import-map=${candidate}`];
+    } catch {
+      // try the next one
+    }
   }
+  return [];
 })();
 await run(["bundle", ...mapArgs, "--platform=browser", "-o", `${dist}/exomoonlab.js`, `${here}web.ts`]);
 

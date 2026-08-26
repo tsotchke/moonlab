@@ -1,0 +1,28 @@
+{
+  "//": "Development override for a sibling exotui checkout.",
+  "//2": "exotui 0.7.0 adds the ./shell entrypoint the desktop needs but is not",
+  "//3": "published yet, so the ^0.7.0 pin in deno.jsonc cannot resolve. The",
+  "//4": "`dev` tasks use this map; delete it and use the plain tasks once 0.7.0",
+  "//5": "publishes. Paths are relative, so this works for any sibling layout.",
+  "imports": {
+    "@ubernaut/exotui": "../../../../exotui/mod.ts",
+    "@ubernaut/exotui/shell": "../../../../exotui/mod.shell.ts",
+    "@ubernaut/exotui/web": "../../../../exotui/mod.web.ts",
+    "@ubernaut/exotui/runtime": "../../../../exotui/mod.runtime.ts",
+    "@ubernaut/exotui/app": "../../../../exotui/mod.app.ts",
+    "@ubernaut/exotui/theme": "../../../../exotui/mod.theme.ts",
+    "@ubernaut/exotui/terminal": "../../../../exotui/mod.terminal.ts",
+    "@sigma/pty-ffi": "jsr:@sigma/pty-ffi@0.42.0",
+    "crayon": "https://deno.land/x/crayon@3.3.3/mod.ts",
+    "esbuild": "npm:esbuild@0.28.2",
+    "jpeg-js": "npm:jpeg-js@0.4.4",
+    "jsonc": "jsr:@std/jsonc@1.0.2",
+    "markdown-it": "npm:markdown-it@15.0.0",
+    "pngjs": "npm:pngjs@7.0.0",
+    "three": "npm:three@0.185.1",
+    "three/tsl": "npm:three@0.185.1/tsl",
+    "three/webgpu": "npm:three@0.185.1/webgpu",
+    "taffy-layout": "npm:taffy-layout@2.0.3",
+    "yoga-layout": "npm:yoga-layout@3.2.1"
+  }
+}
