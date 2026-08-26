@@ -50,6 +50,9 @@ logging optional.
 - `implementation-status.md`: the running checklist of delivered slices. It
   predates this framework and is kept because it is still the fastest way to
   see what has actually shipped on this branch.
+- `wasm-spec-changes.md`: the branch specification — everything this branch
+  changes relative to upstream `main`, and why. Read it before rebasing or
+  before deciding what is safe to drop.
 
 Use `todo/_template.md` when a task file is warranted. Delete unused template
 sections rather than filling them with boilerplate.
