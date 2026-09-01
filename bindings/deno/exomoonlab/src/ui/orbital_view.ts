@@ -18,12 +18,17 @@
 import type { Rect, Rgb, Style, Surface } from "./cells.ts";
 import type { DesktopPalette } from "./theme.ts";
 import { sequentialColor, sequentialRamp } from "./colormap.ts";
-import type { DensitySlice } from "../app/orbital.ts";
+import type { DensitySlice, Projection } from "../app/orbital.ts";
 
 export interface OrbitalWindowState {
   readonly label: string;
   readonly detail: string;
   readonly slice?: DensitySlice;
+  /** Rotated column density; when present it is drawn instead of the slice. */
+  readonly projection?: Projection;
+  /** Shown in the status row so the orientation is readable, not guessed. */
+  readonly yaw?: number;
+  readonly pitch?: number;
   readonly busy: boolean;
   readonly error?: string;
   /** L1 distance between MoonLab's probabilities and the analytic ones. */
@@ -96,12 +101,19 @@ export function paintOrbital(
 
   const ramp = orbitalRamp(palette);
   const slice = state.slice;
+  const proj = state.projection;
+  // One accessor over either source, so the half-block loop below does not
+  // care which of the two it is drawing.
+  const sampleSize = proj ? Math.min(proj.width, proj.height) : slice.size;
+  const sampleAt = (sx: number, sy: number): number =>
+    proj ? proj.image[sy * proj.width + sx] : slice.density[sy * slice.size + sx];
+  const sampleMax = proj ? 1 : slice.max;
   const top = rect.row + 3;
   const rows = Math.max(1, rect.height - 6);
   // Two columns per sample keeps the plane square; two samples per cell row
   // via the half-block doubles the vertical detail.
-  const columns = Math.min(Math.floor(width / 2), slice.size);
-  const sampleRows = Math.min(rows * 2, slice.size);
+  const columns = Math.min(Math.floor(width / 2), sampleSize);
+  const sampleRows = Math.min(rows * 2, sampleSize);
 
   // With a real image over this area the cells stay clear, or the half-block
   // fallback would show through the picture.
@@ -119,14 +131,17 @@ export function paintOrbital(
   } else {
     for (let cell = 0; cell < Math.min(rows, Math.ceil(sampleRows / 2)); cell++) {
       for (let column = 0; column < columns; column++) {
-        const sx = Math.min(slice.size - 1, Math.floor((column * slice.size) / columns));
-        const upperY = Math.min(slice.size - 1, Math.floor(((cell * 2) * slice.size) / sampleRows));
-        const lowerY = Math.min(
-          slice.size - 1,
-          Math.floor(((cell * 2 + 1) * slice.size) / sampleRows),
+        const sx = Math.min(sampleSize - 1, Math.floor((column * sampleSize) / columns));
+        const upperY = Math.min(
+          sampleSize - 1,
+          Math.floor(((cell * 2) * sampleSize) / sampleRows),
         );
-        const upper = sequentialColor(ramp, slice.density[upperY * slice.size + sx], slice.max);
-        const lower = sequentialColor(ramp, slice.density[lowerY * slice.size + sx], slice.max);
+        const lowerY = Math.min(
+          sampleSize - 1,
+          Math.floor(((cell * 2 + 1) * sampleSize) / sampleRows),
+        );
+        const upper = sequentialColor(ramp, sampleAt(sx, upperY), sampleMax);
+        const lower = sequentialColor(ramp, sampleAt(sx, lowerY), sampleMax);
         const x = left + column * 2;
         surface.set(x, top + cell, "▀", { foreground: upper, background: lower });
         surface.set(x + 1, top + cell, "▀", { foreground: upper, background: lower });
@@ -153,7 +168,13 @@ export function paintOrbital(
   surface.writeFitted(
     left,
     footer,
-    `±${slice.extent.toFixed(1)} a₀  ${state.resolution}²  ${drift}  [${state.renderer}]` +
+    `±${slice.extent.toFixed(1)} a₀  ` +
+      (proj
+        ? `yaw ${Math.round(((state.yaw ?? 0) * 180) / Math.PI)}° pitch ${
+          Math.round(((state.pitch ?? 0) * 180) / Math.PI)
+        }°  `
+        : `${state.resolution}²  `) +
+      `${drift}  [${state.renderer}]` +
       (state.graphicsReason ? `  ${state.graphicsReason}` : ""),
     width,
     muted,

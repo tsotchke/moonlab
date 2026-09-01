@@ -13,14 +13,26 @@ import type { MoonLabBackend } from "../backend/mod.ts";
 import {
   correctedDensitySlice,
   type DensitySlice,
+  densityVolume,
   NO_CORRECTIONS,
   type Orbital,
   type OrbitalPhysics,
+  type Projection,
+  projectVolume,
   suggestedExtent,
 } from "./orbital.ts";
 
+export interface OrbitalView {
+  readonly yaw: number;
+  readonly pitch: number;
+  /** Samples per axis in the sampled cube. */
+  readonly volumeSize: number;
+}
+
 export interface OrbitalResult {
   readonly slice: DensitySlice;
+  /** Column density after rotation; absent when the view is a flat slice. */
+  readonly projection?: Projection;
   /** L1 distance between MoonLab's probabilities and the analytic density. */
   readonly drift?: number;
   /** Qubits used for the round-trip, when it ran. */
@@ -40,19 +52,25 @@ export async function computeOrbital(
   size: number,
   physics: OrbitalPhysics = NO_CORRECTIONS,
   zoom = 1,
+  view?: OrbitalView,
 ): Promise<OrbitalResult> {
-  const slice = correctedDensitySlice(
-    orbital,
-    physics,
-    size,
-    suggestedExtent(orbital) / Math.max(0.1, zoom),
-  );
+  const extent = suggestedExtent(orbital) / Math.max(0.1, zoom);
+  const slice = correctedDensitySlice(orbital, physics, size, extent);
+
+  // The volume is only sampled when a rotated view asks for one: it is a
+  // cube where the slice is a square, and nothing needs it while the cloud
+  // is being looked at edge-on.
+  let projection: Projection | undefined;
+  if (view) {
+    const volume = densityVolume(orbital, physics, view.volumeSize, extent);
+    projection = projectVolume(volume, view.yaw, view.pitch, view.volumeSize, view.volumeSize);
+  }
 
   // The round-trip needs the backend to accept an amplitude vector. When it
   // cannot, the picture is still correct -- only the cross-check is missing,
   // and the window says so rather than inventing a drift figure.
   if (!backend.capabilities.amplitudeUpload || !backend.loadAmplitudes) {
-    return { slice };
+    return { slice, projection };
   }
 
   const qubits = fittedQubits(slice.density.length, backend.capabilities.maxQubits);
@@ -62,7 +80,7 @@ export async function computeOrbital(
   // are what fits, renormalised so the vector is a legal state.
   let total = 0;
   for (let i = 0; i < dim; i++) total += slice.density[i];
-  if (!(total > 0)) return { slice };
+  if (!(total > 0)) return { slice, projection };
 
   const amplitudes = new Float64Array(dim * 2);
   const expected = new Float64Array(dim);
@@ -79,7 +97,7 @@ export async function computeOrbital(
     for (let i = 0; i < dim; i++) {
       drift += Math.abs((await backend.probability(state, i)) - expected[i]);
     }
-    return { slice, drift, qubits };
+    return { slice, projection, drift, qubits };
   } finally {
     await backend.destroyState(state);
   }

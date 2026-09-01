@@ -14,6 +14,7 @@ import {
   createTiledWorkspaceController,
   createWorkbenchWindowHostController,
   type KeyPressEvent,
+  paintShellMenuPanel,
   paintShellWindowChrome,
   type PointerInputEvent,
   type Rectangle,
@@ -45,6 +46,13 @@ import { computeOrbital, type OrbitalResult } from "./orbital_job.ts";
 import { paintOrbital } from "../ui/orbital_view.ts";
 import { measureThreshold, type ThresholdCurve } from "./repetition_code.ts";
 import { paintDecoder } from "../ui/decoder_view.ts";
+import {
+  APPS,
+  CLOSED_LAUNCHER,
+  handleLauncherKey,
+  launcherPanelSize,
+  type LauncherState,
+} from "./launcher.ts";
 import { type DesktopPalette, desktopPalette, themeById, themeIndex, THEMES } from "../ui/theme.ts";
 
 /**
@@ -83,6 +91,8 @@ interface PersistedState {
   physics?: OrbitalPhysics;
   zoom?: number;
   guides?: boolean;
+  yaw?: number;
+  pitch?: number;
 }
 
 /**
@@ -150,6 +160,11 @@ export class MoonLabDesktop {
   #resolution = 48;
   #zoom = 1;
   #showGuides = false;
+  #launcher: LauncherState = CLOSED_LAUNCHER;
+  /** Orientation of the 3-D cloud. Starts off-axis so the shape reads as a
+   * shape rather than a silhouette. */
+  #yaw = 0.6;
+  #pitch = 0.35;
   /** Shots per threshold point. Enough to resolve the crossing, cheap enough
    * to recompute on demand. */
   readonly #decoderShots = 2000;
@@ -187,7 +202,7 @@ export class MoonLabDesktop {
           minWidth: 30,
           minHeight: 10,
           placement: "floating",
-          state: "normal",
+          state: "closed",
           floatingRect: { column: 2, row: 17, width: 40, height: 12 },
         },
         {
@@ -196,7 +211,7 @@ export class MoonLabDesktop {
           minWidth: 24,
           minHeight: 10,
           placement: "floating",
-          state: "normal",
+          state: "closed",
           floatingRect: { column: 44, row: 2, width: 30, height: 27 },
         },
         {
@@ -205,7 +220,7 @@ export class MoonLabDesktop {
           minWidth: 26,
           minHeight: 10,
           placement: "floating",
-          state: "normal",
+          state: "closed",
           floatingRect: { column: 76, row: 19, width: 26, height: 10 },
         },
         {
@@ -214,7 +229,7 @@ export class MoonLabDesktop {
           minWidth: 24,
           minHeight: 8,
           placement: "floating",
-          state: "normal",
+          state: "closed",
           floatingRect: { column: 76, row: 2, width: 26, height: 9 },
         },
         {
@@ -223,7 +238,7 @@ export class MoonLabDesktop {
           minWidth: 24,
           minHeight: 6,
           placement: "floating",
-          state: "normal",
+          state: "closed",
           floatingRect: { column: 76, row: 12, width: 26, height: 6 },
         },
       ],
@@ -276,6 +291,8 @@ export class MoonLabDesktop {
         if (saved?.physics) this.#physics = saved.physics;
         if (typeof saved?.zoom === "number") this.#zoom = saved.zoom;
         if (typeof saved?.guides === "boolean") this.#showGuides = saved.guides;
+        if (typeof saved?.yaw === "number") this.#yaw = saved.yaw;
+        if (typeof saved?.pitch === "number") this.#pitch = saved.pitch;
         this.#clampQuantumNumbers();
         if (saved?.circuit) {
           const found = CIRCUITS.findIndex((c) => c.id === saved.circuit);
@@ -309,6 +326,8 @@ export class MoonLabDesktop {
       physics: this.#physics,
       zoom: this.#zoom,
       guides: this.#showGuides,
+      yaw: this.#yaw,
+      pitch: this.#pitch,
     }).catch(() => {});
   }
 
@@ -367,7 +386,8 @@ export class MoonLabDesktop {
     const physics = this.#physics;
     const resolution = this.#resolution;
     const zoom = this.#zoom;
-    this.#orbitalJob.start(() => computeOrbital(backend, orbital, resolution, physics, zoom));
+    const view = { yaw: this.#yaw, pitch: this.#pitch, volumeSize: 36 };
+    this.#orbitalJob.start(() => computeOrbital(backend, orbital, resolution, physics, zoom, view));
   }
 
   /** Steps through the preset shells, as the web build's dropdown does. */
@@ -411,6 +431,28 @@ export class MoonLabDesktop {
     this.#runOrbital();
   }
 
+  #rotate(dYaw: number, dPitch: number): void {
+    const wrap = (a: number) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    this.#yaw = wrap(this.#yaw + dYaw);
+    // Pitch is clamped rather than wrapped: past a quarter turn the cloud is
+    // upside down, which reads as a bug rather than a view.
+    this.#pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.#pitch + dPitch));
+    this.#status = `yaw ${Math.round((this.#yaw * 180) / Math.PI)}° pitch ${
+      Math.round((this.#pitch * 180) / Math.PI)
+    }°`;
+    this.#persist();
+    this.#runOrbital();
+  }
+
+  /** Opens an application: a closed window is not destroyed, only unlaunched. */
+  #launch(id: string): void {
+    const bounds = this.#bodyBounds();
+    const options = this.#projectionOptions();
+    this.#host.execute({ kind: "restore", id }, bounds, options);
+    this.#host.execute({ kind: "focus", id }, bounds, options);
+    this.#status = `launched ${id}`;
+  }
+
   #adjustZoom(factor: number): void {
     this.#zoom = Math.max(0.25, Math.min(6, this.#zoom * factor));
     this.#status = `zoom ×${this.#zoom.toFixed(2)}`;
@@ -434,9 +476,13 @@ export class MoonLabDesktop {
 
     paintOrbital(surface, rect, {
       label: orbitalLabel(this.#orbital),
-      detail: `n${this.#n} l${this.#l} m${this.#m}  ·  n/l/, . quantum  z element  1 2 3 physics`,
+      detail:
+        `n${this.#n} l${this.#l} m${this.#m}  ·  wasd orbit  9/0 zoom  z element  1 2 3 physics`,
       element: `${element.symbol} (Z=${element.z})`,
       slice: result?.slice,
+      projection: result?.projection,
+      yaw: this.#yaw,
+      pitch: this.#pitch,
       busy: snapshot.status === "running",
       error: snapshot.status === "failed" ? snapshot.error : undefined,
       drift: result?.drift,
@@ -500,6 +546,27 @@ export class MoonLabDesktop {
 
   key(event: KeyPressEvent): void {
     if (event.ctrl && event.key === "c") return this.#onQuit();
+
+    // The launcher claims keys only while it is open, and only the ones it
+    // uses -- anything else falls through so the menu does not swallow the
+    // whole keyboard.
+    const folded = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (this.#launcher.open) {
+      const action = handleLauncherKey(this.#launcher, folded);
+      if (action.kind === "state") {
+        this.#launcher = action.state;
+        return;
+      }
+      if (action.kind === "launch") {
+        this.#launcher = action.state;
+        return this.#launch(action.app.id);
+      }
+    }
+    if (folded === "`") {
+      this.#launcher = this.#launcher.open ? CLOSED_LAUNCHER : { open: true, index: 0 };
+      this.#status = this.#launcher.open ? "launcher: ↑↓ then enter" : "";
+      return;
+    }
     // The two hosts disagree about case: the browser lowercases a shifted
     // letter and reports shift separately, while the console reader leaves the
     // raw character, so shift+T arrives as "T" and would fall straight through
@@ -548,6 +615,16 @@ export class MoonLabDesktop {
         return this.#togglePhysics("relativisticSpinOrbit");
       case "3":
         return this.#togglePhysics("correlationMixing");
+      // Orbit the cloud. wasd rather than the arrows, which already step the
+      // circuit list and the register size.
+      case "a":
+        return this.#rotate(-0.25, 0);
+      case "d":
+        return this.#rotate(0.25, 0);
+      case "w":
+        return this.#rotate(0, 0.2);
+      case "s":
+        return this.#rotate(0, -0.2);
       case "g":
         this.#showGuides = !this.#showGuides;
         this.#status = `guides ${this.#showGuides ? "on" : "off"}`;
@@ -591,6 +668,9 @@ export class MoonLabDesktop {
 
     const projection = this.#host.project(this.#bodyBounds(), this.#projectionOptions());
     for (const window of projection.windows) this.#paintWindow(surface, window);
+    // The menu is drawn last so it sits over every window, which is what a
+    // launcher is for.
+    if (this.#launcher.open) this.#paintLauncher(surface);
     return surface.frame();
   }
 
@@ -603,19 +683,20 @@ export class MoonLabDesktop {
       : snapshot.durationMs !== undefined
       ? `${snapshot.durationMs.toFixed(1)}ms`
       : "idle";
-    surface.write(1, 0, "MoonLab", {
-      foreground: p.accent,
-      background: p.surfaceStrong,
+    const start = " ⏻ MoonLab ";
+    surface.write(0, 0, start, {
+      foreground: this.#launcher.open ? p.onAccent : p.accent,
+      background: this.#launcher.open ? p.accent : p.surfaceStrong,
       bold: true,
     });
     surface.write(
-      9,
+      start.length + 1,
       0,
       `${this.#backend.kind} · ${this.#numQubits}q · ${state}`,
       { foreground: p.muted, background: p.surfaceStrong },
     );
     const hint = this.#status ||
-      "j/k circuit  ± qubits  [ ] mass  o/n/l/,. orbital  z element  1 2 3 physics  g guides  9 0 zoom  t theme  q quit";
+      "` apps   j/k circuit   wasd orbit   9 0 zoom   z element   1 2 3 physics   t theme   q quit";
     surface.writeFitted(
       Math.max(0, surface.columns - hint.length - 2),
       0,
@@ -717,6 +798,54 @@ export class MoonLabDesktop {
         : `the ${this.#backend.kind} backend does not export the union-find decoder`,
       shots: this.#decoderShots,
     }, this.#palette);
+  }
+
+  /** The start button lives in the bar; the panel drops from it. */
+  #paintLauncher(surface: Surface): void {
+    const p = this.#palette;
+    const { width, height } = launcherPanelSize();
+    const panelRect = {
+      column: 1,
+      row: 1,
+      width: Math.min(width, Math.max(12, this.#size.columns - 2)),
+      height: Math.min(height, Math.max(4, this.#size.rows - 2)),
+    };
+
+    const rows = APPS.slice(0, panelRect.height - 2).map((app, i) => ({
+      rect: {
+        column: panelRect.column + 1,
+        row: panelRect.row + 1 + i,
+        width: panelRect.width - 2,
+        height: 1,
+      },
+      label: `${i === this.#launcher.index ? "▸ " : "  "}${app.label.padEnd(15)}${app.hint}`,
+    }));
+
+    paintShellMenuPanel(surface.shellSurface(), panelRect, rows, {
+      panelFill: { foreground: p.text, background: p.surfaceStrong },
+      borderGlyphs: THIN_GLYPHS,
+      borderStyle: { foreground: p.accent, background: p.surfaceStrong },
+      rowStyle: { foreground: p.text, background: p.surfaceStrong },
+      dangerForeground: p.danger,
+    });
+
+    // The painter fills every row the same; the selection is re-drawn on top
+    // so the highlight is a real inversion rather than a leading glyph alone.
+    const selected = rows[this.#launcher.index];
+    if (selected) {
+      surface.fill(selected.rect, " ", { background: p.accent });
+      surface.writeFitted(
+        selected.rect.column,
+        selected.rect.row,
+        selected.label,
+        selected.rect.width,
+        {
+          foreground: p.onAccent,
+          background: p.accent,
+          bold: true,
+        },
+      );
+    }
   }
 
   #paintCircuits(surface: Surface, rect: Rectangle): void {

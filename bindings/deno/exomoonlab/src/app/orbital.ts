@@ -330,3 +330,143 @@ export function correctedDensitySlice(
   }
   return { size, density, extent, max };
 }
+
+// ---------------------------------------------------------------------------
+// The 3-D cloud
+//
+// A slice through the x-z plane shows an orbital's nodal structure exactly,
+// which is why it was the first view. What it cannot show is the shape: a
+// d_xy and a d_x2-y2 have identical x-z slices and look nothing alike. For
+// that the density has to be sampled as a volume and projected, and the
+// projection has to be rotatable or the reader is back to guessing.
+// ---------------------------------------------------------------------------
+
+export interface DensityVolume {
+  readonly size: number;
+  /** |psi|^2 on a size^3 grid, index (((z * size) + y) * size) + x. */
+  readonly density: Float64Array;
+  readonly extent: number;
+  readonly max: number;
+}
+
+/** Samples |psi|^2 over a cube, with the same corrections the slice uses. */
+export function densityVolume(
+  orbital: Orbital,
+  physics: OrbitalPhysics,
+  size: number,
+  extent: number,
+): DensityVolume {
+  const zEffBase = effectiveNuclearCharge(
+    orbital.z,
+    orbital.n,
+    orbital.l,
+    physics.screeningExchange,
+  );
+  const zEff = applyRelativisticContraction(
+    zEffBase,
+    orbital.n,
+    orbital.l,
+    physics.relativisticSpinOrbit,
+  );
+  const terms = physics.correlationMixing
+    ? buildCorrelationTerms(orbital.n, orbital.l, orbital.m)
+    : [];
+
+  const density = new Float64Array(size * size * size);
+  let max = 0;
+  const step = (2 * extent) / (size - 1);
+  for (let iz = 0; iz < size; iz++) {
+    const zc = -extent + iz * step;
+    for (let iy = 0; iy < size; iy++) {
+      const yc = -extent + iy * step;
+      for (let ix = 0; ix < size; ix++) {
+        const xc = -extent + ix * step;
+        const r = Math.sqrt(xc * xc + yc * yc + zc * zc);
+        const theta = r === 0 ? 0 : Math.acos(zc / r);
+        const phi = Math.atan2(yc, xc);
+
+        const base = radialWavefunction(orbital.n, orbital.l, zEff, r) *
+          realSphericalHarmonic(orbital.l, orbital.m, theta, phi);
+        let value = base * base;
+        for (const term of terms) {
+          const psi = radialWavefunction(term.n, term.l, zEff, r) *
+            realSphericalHarmonic(term.l, term.m, theta, phi);
+          value += term.weight * psi * psi;
+        }
+        value *= spinOrbitDensityFactor(
+          theta,
+          orbital.n,
+          orbital.l,
+          orbital.m,
+          zEff,
+          physics.relativisticSpinOrbit,
+        );
+        density[(iz * size + iy) * size + ix] = value;
+        if (value > max) max = value;
+      }
+    }
+  }
+  return { size, density, extent, max };
+}
+
+export interface Projection {
+  readonly width: number;
+  readonly height: number;
+  /** Column density, row-major, normalised so the peak is 1. */
+  readonly image: Float64Array;
+}
+
+/**
+ * Projects the volume along the view axis after a yaw/pitch rotation.
+ *
+ * Forward splatting rather than ray marching: every voxel is rotated once and
+ * added to the pixel it lands on, which costs one pass over the volume and
+ * needs no interpolation along a ray. The result is column density -- what an
+ * X-ray of the cloud would show -- so a lobe pointing at the viewer reads
+ * bright and the nodal planes stay dark.
+ */
+export function projectVolume(
+  volume: DensityVolume,
+  yaw: number,
+  pitch: number,
+  width: number,
+  height: number,
+): Projection {
+  const image = new Float64Array(width * height);
+  const size = volume.size;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  // The cube's half-diagonal, so no rotation can push a voxel off the canvas.
+  const reach = Math.SQRT2;
+  const half = (size - 1) / 2;
+
+  for (let iz = 0; iz < size; iz++) {
+    const z = (iz - half) / half;
+    for (let iy = 0; iy < size; iy++) {
+      const y = (iy - half) / half;
+      const rowBase = (iz * size + iy) * size;
+      for (let ix = 0; ix < size; ix++) {
+        const value = volume.density[rowBase + ix];
+        if (value <= 0) continue;
+        const x = (ix - half) / half;
+
+        // Yaw about the vertical axis, then pitch about the horizontal one.
+        const x1 = x * cy + y * sy;
+        const y1 = -x * sy + y * cy;
+        const y2 = y1 * cp + z * sp;
+        const z2 = -y1 * sp + z * cp;
+
+        // x1 across, z2 up; y2 is depth and is summed away.
+        const u = Math.round(((x1 / reach + 1) / 2) * (width - 1));
+        const v = Math.round(((1 - z2 / reach) / 2) * (height - 1));
+        if (u < 0 || u >= width || v < 0 || v >= height) continue;
+        image[v * width + u] += value;
+      }
+    }
+  }
+
+  let peak = 0;
+  for (const v of image) if (v > peak) peak = v;
+  if (peak > 0) { for (let i = 0; i < image.length; i++) image[i] /= peak; }
+  return { width, height, image };
+}
