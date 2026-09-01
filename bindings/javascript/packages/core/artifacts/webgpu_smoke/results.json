@@ -1,16 +1,19 @@
 {
-  "generatedAt": "2026-08-26T22:59:58.382Z",
+  "generatedAt": "2026-09-01T01:24:23.119Z",
   "requireWebGPU": false,
   "requireNativeWebGPU": false,
   "sessionCreated": true,
-  "backend": "none",
+  "backend": "webgpu",
   "nativeAccelerated": false,
-  "hadamardRc": -7,
-  "pauliXRc": -7,
-  "pauliZRc": -7,
-  "cnotRc1": -7,
-  "cnotRc2": -7,
-  "probabilities": null,
+  "hadamardRc": 0,
+  "pauliXRc": 0,
+  "pauliZRc": 0,
+  "cnotRc1": 0,
+  "cnotRc2": 0,
+  "probabilities": [
+    0.5000000000000001,
+    0.5000000000000001
+  ],
   "passed": true,
   "reason": "PASS"
 }

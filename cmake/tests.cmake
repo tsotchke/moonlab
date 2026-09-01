@@ -1656,6 +1656,33 @@
                          exec node scripts/webgpu-unified-smoke.mjs)
     endif()
 
+    # The node lane above cannot exercise WebGPU at all: node has no
+    # navigator.gpu, so the smoke takes its "no GPU backend available" branch
+    # and reports passed=true with backend="none" and every kernel returning
+    # GPU_ERROR_NOT_SUPPORTED (-7).  That is a vacuous pass -- it stays green
+    # whether or not the WASM WebGPU path works.
+    #
+    # Deno ships WebGPU, so the same script under Deno with
+    # MOONLAB_WEBGPU_SMOKE_REQUIRE_BACKEND=1 actually dispatches the kernels and
+    # fails if they do not run.  Gated on deno plus a built artifact, and needs a
+    # WebGPU-capable runtime (a software adapter is enough).
+    find_program(DENO_EXECUTABLE deno)
+    if(DENO_EXECUTABLE AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/dist/moonlab.wasm"
+       AND EXISTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs")
+        add_test(NAME webgpu_unified_smoke_deno
+                 COMMAND ${DENO_EXECUTABLE} run -A
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core/scripts/webgpu-unified-smoke.mjs
+                 WORKING_DIRECTORY
+                         ${CMAKE_CURRENT_SOURCE_DIR}/bindings/javascript/packages/core)
+        set_tests_properties(webgpu_unified_smoke_deno PROPERTIES
+            ENVIRONMENT "MOONLAB_WEBGPU_SMOKE_REQUIRE_BACKEND=1"
+            LABELS "gpu"
+            TIMEOUT 180
+        )
+    endif()
+
     # Distributed computing tests (MPI). Each test executable is only
     # added if the corresponding source file is present — the MPI test
     # sources are planned per the 0.x release roadmap but not all are
