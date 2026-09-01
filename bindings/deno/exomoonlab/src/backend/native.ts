@@ -38,6 +38,15 @@ const SYMBOLS = {
     parameters: ["pointer", "buffer", "usize"],
     result: "i32",
   },
+  moonlab_uf_decoder_new: {
+    parameters: ["usize", "usize", "buffer", "buffer", "buffer", "buffer", "usize"],
+    result: "pointer",
+  },
+  moonlab_uf_decoder_free: { parameters: ["pointer"], result: "void" },
+  moonlab_uf_decode_batch: {
+    parameters: ["pointer", "buffer", "usize", "i32", "buffer"],
+    result: "i64",
+  },
   qgt_model_qwz: { parameters: ["f64"], result: "pointer" },
   qgt_model_haldane: { parameters: ["f64", "f64", "f64", "f64"], result: "pointer" },
   qgt_free: { parameters: ["pointer"], result: "void" },
@@ -123,6 +132,7 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
     // dlopen resolved every symbol above, or we would not be here.
     bandGeometry: true,
     amplitudeUpload: true,
+    decoder: true,
   };
 
   const check = (code: number, what: string): void => {
@@ -224,6 +234,41 @@ export async function openNativeBackend(): Promise<MoonLabBackend> {
           "quantum_state_from_amplitudes",
         );
         return Promise.resolve();
+      },
+
+      decodeBatch(graph, detectors, numShots): Promise<Uint8Array> {
+        const expected = graph.numDetectors * numShots;
+        if (detectors.length !== expected) {
+          return Promise.reject(
+            new RangeError(`expected ${expected} detector bytes, got ${detectors.length}`),
+          );
+        }
+        const d = fns.moonlab_uf_decoder_new(
+          BigInt(graph.numDetectors),
+          BigInt(graph.numObservables),
+          new Uint8Array(graph.edgeA.buffer, graph.edgeA.byteOffset, graph.edgeA.byteLength),
+          new Uint8Array(graph.edgeB.buffer, graph.edgeB.byteOffset, graph.edgeB.byteLength),
+          new Uint8Array(
+            graph.edgeWeight.buffer,
+            graph.edgeWeight.byteOffset,
+            graph.edgeWeight.byteLength,
+          ),
+          new Uint8Array(graph.edgeObs.buffer, graph.edgeObs.byteOffset, graph.edgeObs.byteLength),
+          BigInt(graph.edgeA.length),
+        );
+        if (d === null) return Promise.reject(new Error("moonlab_uf_decoder_new returned NULL"));
+        try {
+          const out = new Uint8Array(graph.numObservables * numShots);
+          // -1 threads would take every core; the console must stay a good
+          // neighbour, so it asks for a modest fixed number.
+          const rc = fns.moonlab_uf_decode_batch(d, detectors, BigInt(numShots), 2, out);
+          if (rc !== BigInt(numShots)) {
+            throw new Error(`moonlab_uf_decode_batch returned ${rc}, expected ${numShots}`);
+          }
+          return Promise.resolve(out);
+        } finally {
+          fns.moonlab_uf_decoder_free(d);
+        }
       },
 
       berryGrid(model, n): Promise<BerryGrid> {

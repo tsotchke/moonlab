@@ -57,7 +57,16 @@ Deno.test("desktop opens its windows with chrome, none hidden at the default siz
     await desktop.init();
     const text = await settle(desktop);
 
-    for (const title of ["Probabilities", "Band geometry", "Schrödinger", "Circuits", "Session"]) {
+    for (
+      const title of [
+        "Probabilities",
+        "Band geometry",
+        "Schrödinger",
+        "QEC decoder",
+        "Circuits",
+        "Session",
+      ]
+    ) {
       assert(text.includes(title), `window "${title}" missing:\n${text}`);
     }
     // Chrome controls come from exotui's painter, not from this app.

@@ -233,6 +233,8 @@ export async function openWasmBackend(
     exportedFunctions: Object.keys(m).filter((k) => k.startsWith("_")).length,
     bandGeometry: hasBandGeometry,
     amplitudeUpload: typeof m["_quantum_state_from_amplitudes"] === "function",
+    decoder: typeof m["_moonlab_uf_decoder_new"] === "function" &&
+      typeof m["_moonlab_uf_decode_batch"] === "function",
   };
 
   const check = (code: number, what: string): void => {

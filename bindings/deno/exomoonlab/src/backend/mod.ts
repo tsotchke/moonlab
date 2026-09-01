@@ -11,9 +11,11 @@ export type {
   BackendKind,
   BandModel,
   BerryGrid,
+  DetectorGraph,
   MoonLabBackend,
   StateHandle,
 } from "./types.ts";
+export { UF_BOUNDARY } from "./types.ts";
 export { BackendUnavailableError } from "./types.ts";
 export { nativeLibraryCandidates, openNativeBackend } from "./native.ts";
 export {

@@ -41,7 +41,28 @@ export interface BackendCapabilities {
   readonly bandGeometry: boolean;
   /** `quantum_state_from_amplitudes` is reachable. */
   readonly amplitudeUpload: boolean;
+  /** The union-find QEC decoder is reachable. */
+  readonly decoder: boolean;
 }
+
+/**
+ * A detector error model, in the shape `moonlab_uf_decoder_new` takes.
+ *
+ * Nodes are detectors plus one virtual boundary; `edgeB[i] === BOUNDARY`
+ * means edge i runs to that boundary. Each edge carries the bitmask of
+ * observables it flips.
+ */
+export interface DetectorGraph {
+  readonly numDetectors: number;
+  readonly numObservables: number;
+  readonly edgeA: Uint32Array;
+  readonly edgeB: Uint32Array;
+  readonly edgeWeight: Float64Array;
+  readonly edgeObs: BigUint64Array;
+}
+
+/** The sentinel exotui's C header calls MOONLAB_UF_BOUNDARY. */
+export const UF_BOUNDARY = 0xffffffff;
 
 /** A two-band model with an analytic d-vector, so curvature is exact. */
 export type BandModel =
@@ -125,6 +146,21 @@ export interface MoonLabBackend {
    * Present only when `capabilities.bandGeometry` is true.
    */
   berryGrid?(model: BandModel, n: number): Promise<BerryGrid>;
+
+  /**
+   * Decodes a batch of syndromes.
+   *
+   * `detectors` is detector-major: detector i of shot s at
+   * `i * numShots + s`. Returns the predicted observables, observable-major,
+   * `numObservables * numShots` bytes.
+   *
+   * Present only when `capabilities.decoder` is true.
+   */
+  decodeBatch?(
+    graph: DetectorGraph,
+    detectors: Uint8Array,
+    numShots: number,
+  ): Promise<Uint8Array>;
 
   /** Releases the library handle. Safe to call twice. */
   dispose(): Promise<void>;

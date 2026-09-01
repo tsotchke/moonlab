@@ -43,6 +43,8 @@ import { orbitalRamp } from "../ui/orbital_view.ts";
 import { ELEMENTS } from "./elements.ts";
 import { computeOrbital, type OrbitalResult } from "./orbital_job.ts";
 import { paintOrbital } from "../ui/orbital_view.ts";
+import { measureThreshold, type ThresholdCurve } from "./repetition_code.ts";
+import { paintDecoder } from "../ui/decoder_view.ts";
 import { type DesktopPalette, desktopPalette, themeById, themeIndex, THEMES } from "../ui/theme.ts";
 
 /**
@@ -64,7 +66,7 @@ export interface MoonLabDesktopOptions {
   readonly scanLimit?: number;
 }
 
-const WINDOW_IDS = ["probabilities", "bands", "orbital", "circuits", "session"] as const;
+const WINDOW_IDS = ["probabilities", "bands", "orbital", "decoder", "circuits", "session"] as const;
 type WindowId = (typeof WINDOW_IDS)[number];
 
 /** What persists between runs. Deliberately small. */
@@ -118,6 +120,7 @@ export class MoonLabDesktop {
   readonly #job = new Job<ProbabilityReadout>();
   readonly #bandJob = new Job<BerryGrid>();
   readonly #orbitalJob = new Job<OrbitalResult>();
+  readonly #decoderJob = new Job<ThresholdCurve>();
   readonly #workspace = createTiledWorkspaceController({});
   readonly #host: ReturnType<typeof createWorkbenchWindowHostController<WindowId>>;
 
@@ -147,6 +150,9 @@ export class MoonLabDesktop {
   #resolution = 48;
   #zoom = 1;
   #showGuides = false;
+  /** Shots per threshold point. Enough to resolve the crossing, cheap enough
+   * to recompute on demand. */
+  readonly #decoderShots = 2000;
 
   constructor(options: MoonLabDesktopOptions) {
     this.#backend = options.backend;
@@ -194,13 +200,22 @@ export class MoonLabDesktop {
           floatingRect: { column: 44, row: 2, width: 30, height: 27 },
         },
         {
+          id: "decoder",
+          title: "QEC decoder",
+          minWidth: 26,
+          minHeight: 10,
+          placement: "floating",
+          state: "normal",
+          floatingRect: { column: 76, row: 19, width: 26, height: 10 },
+        },
+        {
           id: "circuits",
           title: "Circuits",
           minWidth: 24,
           minHeight: 8,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 76, row: 2, width: 26, height: 12 },
+          floatingRect: { column: 76, row: 2, width: 26, height: 9 },
         },
         {
           id: "session",
@@ -209,7 +224,7 @@ export class MoonLabDesktop {
           minHeight: 6,
           placement: "floating",
           state: "normal",
-          floatingRect: { column: 76, row: 15, width: 26, height: 14 },
+          floatingRect: { column: 76, row: 12, width: 26, height: 6 },
         },
       ],
     });
@@ -275,6 +290,7 @@ export class MoonLabDesktop {
     this.#run();
     this.#runBands();
     this.#runOrbital();
+    this.#runDecoder();
   }
 
   #persist(): void {
@@ -637,6 +653,8 @@ export class MoonLabDesktop {
         return this.#paintBands(surface, client);
       case "orbital":
         return this.#paintOrbital(surface, client);
+      case "decoder":
+        return this.#paintDecoder(surface, client);
       case "circuits":
         return this.#paintCircuits(surface, client);
       case "session":
@@ -677,6 +695,30 @@ export class MoonLabDesktop {
     }, this.#palette);
   }
 
+  #runDecoder(): void {
+    if (!this.#backend.capabilities.decoder || !this.#backend.decodeBatch) return;
+    const backend = this.#backend;
+    const shots = this.#decoderShots;
+    // Rates straddle the repetition code's p=0.5 threshold, because the
+    // crossing is the whole reason to draw several distances at once.
+    this.#decoderJob.start(() =>
+      measureThreshold(backend, [3, 5, 9], [0.1, 0.3, 0.45, 0.5, 0.55, 0.65], shots)
+    );
+  }
+
+  #paintDecoder(surface: Surface, rect: Rectangle): void {
+    const snapshot = this.#decoderJob.snapshot;
+    paintDecoder(surface, rect, {
+      curve: snapshot.value,
+      busy: snapshot.status === "running",
+      error: snapshot.status === "failed" ? snapshot.error : undefined,
+      unavailable: this.#backend.capabilities.decoder
+        ? undefined
+        : `the ${this.#backend.kind} backend does not export the union-find decoder`,
+      shots: this.#decoderShots,
+    }, this.#palette);
+  }
+
   #paintCircuits(surface: Surface, rect: Rectangle): void {
     const p = this.#palette;
     CIRCUITS.forEach((circuit, index) => {
@@ -705,12 +747,14 @@ export class MoonLabDesktop {
   #paintSession(surface: Surface, rect: Rectangle): void {
     const p = this.#palette;
     const caps = this.#backend.capabilities;
+    // Ordered by what survives truncation best: this window is narrow and
+    // short, and the rows below the fold are the ones nobody misses.
     const lines: Array<[string, string]> = [
       ["backend", this.#backend.kind],
-      ["max qubits", String(caps.maxQubits)],
-      ["alloc ctor", caps.allocatingConstructor ? "yes" : "no"],
-      ["exports", caps.exportedFunctions ? String(caps.exportedFunctions) : "—"],
       ["theme", `${this.#palette.label} (${themeIndex(this.#themeId) + 1}/${THEMES.length})`],
+      ["max qubits", String(caps.maxQubits)],
+      ["gpu/decoder", `${caps.bandGeometry ? "y" : "n"}/${caps.decoder ? "y" : "n"}`],
+      ["exports", caps.exportedFunctions ? String(caps.exportedFunctions) : "—"],
     ];
     lines.forEach(([label, value], index) => {
       const y = rect.row + index;

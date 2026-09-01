@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-01T01:24:23.119Z",
-  "requireWebGPU": false,
+  "generatedAt": "2026-09-01T04:55:14.691Z",
+  "requireWebGPU": true,
   "requireNativeWebGPU": false,
   "sessionCreated": true,
   "backend": "webgpu",
