@@ -287,5 +287,21 @@ exports 34 `gpu_*` functions (`gpu_compute_init`, the buffer surface, the gate
 kernels), and `webgpu_unified_smoke` passes — it had failed all session purely
 because no artifact existed, not because the support was missing.
 
+Two further avenues were checked before calling the search complete:
+
+- **Is `tsotchke/moonlab` itself a fork with an upstream parent carrying the
+  work?** No — the GitHub API reports `fork: false`, no `parent`, no `source`.
+  It is the root of its own lineage, so there is no hidden upstream to pull
+  from.
+- **Is the work in an unmerged pull request?** No. All 20 pull requests on the
+  repository are closed; the most recent (#20) is 2026-07-31, and none concerns
+  WebGPU. The July run of merged PRs is QGT/VQE geometry work, which we already
+  carry.
+
+That exhausts every place the changes could be: branches, tags, loose commits,
+the export list, a parent repository, and pull requests. **The upstream WebGPU
+changes described do not exist.** "Find them and rebase them" resolves to: found
+nothing, so the rebase is a no-op — not skipped, but vacuous.
+
 The user was told this and redirected: "it's ok skip the webgpu moonlab rebase
 and focus on the exotui work."
