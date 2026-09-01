@@ -305,3 +305,91 @@ nothing, so the rebase is a no-op — not skipped, but vacuous.
 
 The user was told this and redirected: "it's ok skip the webgpu moonlab rebase
 and focus on the exotui work."
+
+## 2026-08-31 — the cloud turns, and demos become applications
+
+Request: "we should be able to zoom and rotate the Schrodinger probability
+cloud. different demos and examples should be launched like applications from
+the main menu. leverage the exotui lib wherever possible and extend it when you
+can't."
+
+### The cloud is a volume now
+
+The orbital window rendered a slice through the x-z plane. A slice is exact
+about nodal structure, which is why it was the first thing built, but it cannot
+convey shape — `d_xy` and `d_x2-y2` have *identical* x-z slices and are
+physically nothing alike. That is a real limitation, not a cosmetic one.
+
+`densityVolume()` samples |ψ|² over a cube; `projectVolume()` forward-splats
+each voxel through a yaw/pitch rotation and accumulates **column density**, the
+depth-integrated quantity an X-ray of the cloud would measure. Column density,
+not maximum-intensity or a nearest-surface hit, because it keeps the projection
+linear: a lobe pointing at the viewer reads bright because there is genuinely
+more probability along that ray, and the nodal planes stay dark because no
+amount of rotation puts density where the wavefunction has a zero. A
+maximum-intensity projection would have washed the nodes out.
+
+Verified against physics rather than against a screenshot: `2p_z` at pitch 0
+shows two lobes with a dark plane between them; rotated to pitch 90° they point
+along the view axis and merge into a single blob. That is what projecting a
+dumbbell onto its own axis must look like, and it is the check that a slice
+renderer would have failed.
+
+Cost: one full recompute is ~14ms, so rotation re-runs the whole job instead of
+caching and re-projecting a volume. Worth noting the tradeoff was measured, not
+assumed — at 14ms there is no frame-loop pressure, and a cache would have added
+an invalidation rule (which parameters dirty the volume vs. only the
+projection) for no user-visible gain. Revisit only if the sampling grid grows.
+
+`wasd` orbits, `9`/`0` zoom, orientation persists across recomputes.
+
+### Demos are applications
+
+Every window except Probabilities now starts closed, and `` ` `` opens a
+launcher listing the six with a one-line description each.
+
+Launching a closed window is the window host's own `restore` command. That
+choice matters: a closed window here was never destroyed, it was *unlaunched* —
+so its state, geometry and z-order all survive, and there is no second
+lifecycle to keep in sync with the host's. Inventing a create-on-launch path
+would have meant reconstructing what the host already holds.
+
+**Leveraging exotui rather than reimplementing it** was the explicit
+instruction, and the launcher follows it literally. Traversal and wrapping come
+from `moveWorkbenchMenuIndex`; Enter and Escape are decided by
+`isWorkbenchMenuActivationKey` / `isWorkbenchMenuCloseKey`; drawing is
+`paintShellMenuPanel`. Hand-rolling those is exactly how a launcher ends up
+quietly disagreeing with the rest of the shell about what Escape means — the
+menu would close on a key the window chrome treats as something else, and the
+divergence only shows up months later as a bug report about "Escape sometimes
+not working."
+
+`handleLauncherKey` returns `{kind: "none" | "state" | "launch"}` so the menu
+claims only the keys it actually uses and never swallows the keyboard; `q` and
+`t` fall through to the desktop even while the menu is open. There is a test
+asserting exactly that, because "the menu ate my keystroke" is the other
+classic launcher bug.
+
+### What this required from exotui
+
+`src/shell/workbench_menu.ts` existed but was in **no entrypoint** — `./shell`
+could *paint* a menu (`paintShellMenuPanel` was exported) but could not *run*
+one, since the traversal and key predicates were unreachable. Exporting them is
+`6a122538` on exotui's `feature/publish-menu-surface`, with api-reference and
+entrypoint budgets regenerated; api_stability and entrypoint_budgets pass 11/11.
+
+This is the first genuine gap the exotui audit turned up. The earlier 8-lens
+adversarial audit (53 agents) had found *zero* missing features — worth
+recording that the gap surfaced only when a real consumer tried to build a real
+launcher, not from auditing the surface in the abstract.
+
+### Verification
+
+39 tests pass (`deno task dev:test`), `deno lint` clean across 31 files, ctest
+3/3 on the Deno-facing gates. The desktop was rendered under a pty and the
+start button, hint line and single open window confirmed by reading the frame
+text — not by opening a browser, per the standing constraint.
+
+Two tests needed updating rather than fixing: Session and Circuits both assert
+on window content, and both windows now start closed, so each launches its app
+first. The tests were right; the model beneath them changed.
