@@ -160,3 +160,39 @@ Deno.test("theme, circuit and register size survive a restart", async () => {
     await backend.dispose();
   }
 });
+
+Deno.test("shifted keys work under both hosts' event shapes", async () => {
+  // The console reader reports shift+T as key "T" with shift:true; the browser
+  // reports key "t" with shift:true. An app switching on lowercase literals
+  // silently ignores the console form, which killed every reverse binding in a
+  // terminal while working perfectly in a tab.
+  const backend = await openNativeBackend();
+  try {
+    const themeOf = (text: string) =>
+      text.split("\n").find((line) => /│\s*theme\s{2,}/.test(line))
+        ?.match(/theme\s{2,}(\S+)/)?.[1] ?? "";
+
+    const advance = async (key: string) => {
+      const desktop = new MoonLabDesktop({ backend });
+      await desktop.init();
+      await settle(desktop);
+      const before = themeOf(render(desktop));
+      desktop.key({ key, shift: true } as never);
+      await settle(desktop);
+      return { before, after: themeOf(render(desktop)) };
+    };
+
+    const browserForm = await advance("t");
+    const consoleForm = await advance("T");
+
+    assert(browserForm.after !== browserForm.before, "browser-form shift+t did nothing");
+    assert(consoleForm.after !== consoleForm.before, "console-form shift+T did nothing");
+    // Both must land on the same theme: shift means "previous" either way.
+    assert(
+      browserForm.after === consoleForm.after,
+      `hosts disagree: browser->${browserForm.after} console->${consoleForm.after}`,
+    );
+  } finally {
+    await backend.dispose();
+  }
+});

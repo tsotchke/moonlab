@@ -111,7 +111,14 @@ export class MoonLabApp {
   key(event: KeyEvent): void {
     this.#lastKey = event.key;
     if (event.ctrl && event.key === "c") return this.#onQuit();
-    switch (event.key) {
+    // The two hosts disagree about case: the browser lowercases a shifted
+    // letter and reports shift separately, while the console reader leaves the
+    // raw character, so shift+T arrives as "T" and would fall straight through
+    // a switch on lowercase literals -- every reverse binding silently dead in
+    // a terminal. Folding here is exotui's own idiom (workbench_menu,
+    // workbench_terminal and workbench_window_host all do it).
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    switch (key) {
       case "q":
       case "escape":
         return this.#onQuit();
