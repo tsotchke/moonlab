@@ -35,21 +35,11 @@ try {
   // IndexedDB here and from a file under the console host.
   runShellApp(presenter, new MoonLabDesktop({ backend }));
 
-  /**
-   * Keys reach the application only once the host's keyboard target has
-   * focus. On a page whose whole content is the console, a visitor should not
-   * have to click before typing works -- but exotui 0.6.0 exposes no `focus()`
-   * on the host, and the target is a hidden textarea the browser platform
-   * creates for on-screen keyboard support. So: focus it if we can find it,
-   * fall back to the mount, and re-focus on pointerdown, which is what a user
-   * does anyway.
-   */
-  const focusKeyboard = () => {
-    const target = document.querySelector<HTMLElement>("body > textarea") ?? root;
-    target.focus?.();
-  };
-  focusKeyboard();
-  root.addEventListener("pointerdown", focusKeyboard);
+  // Keys reach the application only once the host's keyboard target has focus,
+  // and on a page whose whole content is the console a visitor should not have
+  // to click first. A pointer press focuses it anyway; this covers the visitor
+  // who just starts typing.
+  presenter.focus();
 } catch (cause) {
   const message = cause instanceof Error ? cause.message : String(cause);
   say(`could not start: ${message}`);
