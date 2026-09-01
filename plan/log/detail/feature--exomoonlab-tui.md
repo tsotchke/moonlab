@@ -244,3 +244,48 @@ terminal shows from the native library.
 
 **Next.** Phase 3, the desktop — and that is the part that genuinely needs
 exotui 0.7.0's `./shell` for the painters and the theme catalog.
+
+## 2026-08-26 — Searching for upstream WebGPU/WASM changes: there are none
+
+### Prompt
+
+"We've got some upstream changes we need to rebase on. They should add better
+WebGPU support to the WASM — can you find them and rebase them?"
+
+### Response and strategy
+
+Searched exhaustively and found nothing to rebase. Recorded here because a
+null result is worth writing down: the next person should not repeat the hunt.
+
+What was checked, after `git fetch origin --prune --tags`:
+
+| Check | Result |
+|---|---|
+| Our position vs `origin/master` | 0 behind; master's tip is an ancestor of HEAD |
+| Remote branches, via the GitHub API | 13, all fetched — no branch we had not seen |
+| Every remote ref vs HEAD | 11 branches carry commits we lack |
+| Every commit we lack touching `emscripten/` or a webgpu file | enumerated, ~20 |
+| WASM export delta on the newest branches (v1.2.1) | **2 symbols**, both quantum annealing |
+| WebGPU additions anywhere | **none** |
+
+The commits that *look* like WebGPU work we lack — "Add WebGPU cnot complex64
+probe", "Add browser WebGPU parity smoke harness", and the rest of that series
+— are the pre-rebase ULG originals. We carry their replayed equivalents under
+different hashes, which is why they show as absent.
+
+The one file named for the topic, `webgpuplan.md`, is a June 29 documentation
+sync on `qgtl-vendor-local-moonlab-e578884`, a divergent vendored snapshot
+older than master. Not implementation.
+
+The only genuinely new WASM exports upstream are `_moonlab_anneal_ising_v1` and
+`_moonlab_anneal_qubo_v1` on the unmerged `v121-*` feature branches — quantum
+annealing. Worth picking up when those land on master; nothing to do with
+WebGPU.
+
+**WebGPU already reaches our WASM build.** The artifact built this session
+exports 34 `gpu_*` functions (`gpu_compute_init`, the buffer surface, the gate
+kernels), and `webgpu_unified_smoke` passes — it had failed all session purely
+because no artifact existed, not because the support was missing.
+
+The user was told this and redirected: "it's ok skip the webgpu moonlab rebase
+and focus on the exotui work."
