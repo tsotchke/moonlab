@@ -11,28 +11,32 @@
     "./app": "./src/app/console_app.ts"
   },
   "imports": {
-    // 0.7.0 is the first release with the ./shell entrypoint the desktop
-    // needs. IT IS NOT PUBLISHED YET -- until it is, anything importing
-    // ./shell (the desktop, main.ts, web.ts, tests/desktop.test.ts) needs the
-    // local override:
+    // 0.7.0 is on JSR and is the first release carrying the ./shell
+    // entrypoint. It is not enough: the desktop needs 0.7.2, which adds the
+    // three ./shell completeness fixes plus focus() (0.7.1) and the menu
+    // surface the application launcher runs on (0.7.2). Both were cut here
+    // and are NOT PUBLISHED YET.
     //
-    //   deno run --import-map=import_map.local.json ...
+    // Until 0.7.2 lands on JSR, anything importing ./shell (the desktop,
+    // main.ts, web.ts, tests/desktop.test.ts) resolves through
+    // import_map.dev.json and the `dev` tasks below.
     //
     // `deno task test:core` is the subset that needs no exotui at all and
-    // runs regardless. See README.md; import_map.local.json is gitignored.
-    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.7.0",
-    "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.7.0/"
+    // runs regardless. See README.md.
+    "@ubernaut/exotui": "jsr:@ubernaut/exotui@^0.7.2",
+    "@ubernaut/exotui/": "jsr:/@ubernaut/exotui@^0.7.2/"
   },
   "tasks": {
     // ---- Development, today ----------------------------------------------
-    // exotui 0.7.0 is not published, so the ^0.7.0 pin below cannot resolve
-    // and these `dev` tasks go through import_map.dev.json instead, which
-    // points at a sibling exotui checkout. Use these now.
+    // JSR's newest exotui is 0.7.0, older than the ^0.7.2 pin above, so that
+    // pin cannot resolve yet. These `dev` tasks go through
+    // import_map.dev.json instead, which points at a sibling exotui checkout.
+    // Use these now.
     "dev": "deno run --import-map=import_map.dev.json --allow-read --allow-ffi --allow-env --allow-write main.ts",
     "dev:test": "deno test --import-map=import_map.dev.json --allow-read --allow-ffi --allow-env",
     "dev:build:web": "deno run -A scripts/build_web.ts",
 
-    // ---- After exotui 0.7.0 publishes -------------------------------------
+    // ---- After exotui 0.7.2 publishes -------------------------------------
     // These resolve from JSR and need no override; delete import_map.dev.json
     // and use them instead. Add --backend=native|wasm to force a backend, or
     // --simple for the single-window view.

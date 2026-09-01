@@ -1,9 +1,10 @@
 {
   "//": "Development override for a sibling exotui checkout.",
-  "//2": "exotui 0.7.0 adds the ./shell entrypoint the desktop needs but is not",
-  "//3": "published yet, so the ^0.7.0 pin in deno.jsonc cannot resolve. The",
-  "//4": "`dev` tasks use this map; delete it and use the plain tasks once 0.7.0",
-  "//5": "publishes. Paths are relative, so this works for any sibling layout.",
+  "//2": "The desktop needs exotui 0.7.2 -- 0.7.1's ./shell completeness fixes",
+  "//3": "and focus(), plus 0.7.2's menu surface, which the launcher runs on.",
+  "//4": "JSR's newest is 0.7.0, so the ^0.7.2 pin in deno.jsonc cannot resolve.",
+  "//5": "The `dev` tasks use this map; delete it and use the plain tasks once",
+  "//6": "0.7.2 publishes. Paths are relative, so any sibling layout works.",
   "imports": {
     "@ubernaut/exotui": "../../../../exotui/mod.ts",
     "@ubernaut/exotui/shell": "../../../../exotui/mod.shell.ts",

@@ -10,7 +10,6 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@ubernaut/exotui@0.7": "0.7.0",
     "npm:three@0.185.1": "0.185.1"
   },
   "jsr": {
@@ -54,12 +53,6 @@
       "dependencies": [
         "jsr:@std/internal"
       ]
-    },
-    "@ubernaut/exotui@0.7.0": {
-      "integrity": "134efdc075e1224a02682d18f1e45acd02d71cd127f2ad55e483a354185ace66",
-      "dependencies": [
-        "jsr:@sigma/pty-ffi"
-      ]
     }
   },
   "npm": {
@@ -69,7 +62,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@ubernaut/exotui@0.7"
+      "jsr:@ubernaut/exotui@~0.7.2"
     ]
   }
 }
