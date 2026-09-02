@@ -6,6 +6,13 @@ resume the project. Do not duplicate task files, commit history, or routine chat
 Add dated entries in reverse chronological order when there is something worth
 preserving.
 
+## 2026-09-01
+
+- Isolated the reduced WebGPU parity harness behind a browser-safe package
+  entry. The established root Node control-plane exports remain compatible,
+  while ULG service-asset staging no longer resolves `net`, `tls`, `fs`, or
+  `crypto` in a browser.
+
 ## 2026-08-23
 
 - Rebased `ulg` onto `origin/master`, which had force-updated and moved 788

@@ -1,5 +1,8 @@
 import { QuantumState } from './quantum-state';
 import { IsingModel } from './ising-model';
+import { canonicalJson } from './canonical-json';
+
+export { canonicalJson };
 
 export const ULG_QUANTUM_RESPONSE_SCHEMA_TITLE =
   'ULG Quantum Response Artifact v0.5';
@@ -1428,10 +1431,6 @@ export function validateUlgQuantumResponseArtifact(
   return { valid: errors.length === 0, errors };
 }
 
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJsonValue(value));
-}
-
 async function sha256Hex(value: string): Promise<string> {
   if (!globalThis.crypto?.subtle) {
     throw new Error('WebCrypto SHA-256 support is required to build a ULG artifact');
@@ -1442,20 +1441,6 @@ async function sha256Hex(value: string): Promise<string> {
     new TextEncoder().encode(value)
   );
   return `sha256:${Array.from(new Uint8Array(digest), byteToHex).join('')}`;
-}
-
-function sortJsonValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJsonValue);
-  }
-  if (isRecord(value)) {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value).sort()) {
-      sorted[key] = sortJsonValue(value[key]);
-    }
-    return sorted;
-  }
-  return value;
 }
 
 function byteToHex(byte: number): string {

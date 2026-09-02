@@ -6,7 +6,11 @@ export default defineConfig({
   // comment in src/control-plane.ts) is a real, buildable entry --
   // package.json's "./control-plane" export condition points at
   // dist/control-plane.{js,mjs,d.ts}, generated from this same entry.
-  entry: ['src/index.ts', 'src/control-plane.ts'],
+  entry: [
+    'src/index.ts',
+    'src/control-plane.ts',
+    'src/browser-webgpu-complex64-parity.ts',
+  ],
   format: ['cjs', 'esm'],
   dts: true,
   clean: true,

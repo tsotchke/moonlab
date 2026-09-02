@@ -23,6 +23,8 @@ declared fixture operations.
   a caller-supplied path. On the local Chrome run for this slice it acquired a
   device, covered all declared reduced operations, and set
   `webgpuParity.passed=true`.
+- The browser harness imports a dedicated parity entry that excludes the
+  package root's Node-only TCP/TLS control-plane client.
 - The active magnetar runtime contract remains reduced fixture plumbing:
   `ulg.magnetar.fidelity-runtime-scope.v0`,
   `fullFidelityMagnetarSimulation = false`, and
@@ -111,6 +113,9 @@ Implemented slice:
     downstream ULG handoff checks a compact readiness shape with covered/missing
     native operations, preflight stage, blockers, and explicit reduced-scope
     flags.
+11. Added a browser-safe parity package entry. Canonical JSON remains shared
+    with the existing ULG artifact API, while browser loading no longer pulls
+    Node-only control-plane imports into the module graph.
 
 The next patch after this browser harness and handoff summary should stay
 minimal: either check in stable browser-smoke evidence, or continue toward a

@@ -949,7 +949,10 @@ describe('WebGPU complex64 parity scope contract', () => {
       'utf8'
     );
 
-    expect(harness).toContain("await import('../dist/index.mjs')");
+    expect(harness).toContain(
+      "await import('../dist/browser-webgpu-complex64-parity.mjs')"
+    );
+    expect(harness).not.toContain("await import('../dist/index.mjs')");
     expect(harness).toContain('buildMoonlabWebGpuComplex64ParityScopeWithBrowserProbe');
     expect(harness).toContain('summarizeMoonlabWebGpuComplex64ParityScope');
     expect(harness).toContain('validateMoonlabWebGpuComplex64ParityScope');

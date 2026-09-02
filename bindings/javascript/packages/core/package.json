@@ -15,6 +15,11 @@
       "types": "./dist/control-plane.d.ts",
       "import": "./dist/control-plane.mjs",
       "require": "./dist/control-plane.js"
+    },
+    "./webgpu-complex64-parity": {
+      "types": "./dist/browser-webgpu-complex64-parity.d.ts",
+      "import": "./dist/browser-webgpu-complex64-parity.mjs",
+      "require": "./dist/browser-webgpu-complex64-parity.js"
     }
   },
   "files": [

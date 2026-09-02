@@ -166,6 +166,9 @@ reference data.
 - [x] Add compact `moonlab.webgpu.complex64-parity-handoff-summary.v0`
   output for downstream ULG handoff checks, available from both Node parity and
   browser smoke paths via `--summary`.
+- [x] Isolate the real-browser harness behind a browser-safe package entry so
+  the root package can retain its documented Node TCP/TLS control-plane API
+  without exposing those imports to the browser module graph.
 
 Current blocker: MoonLab now has the reduced-fixture WebGPU complex64 parity
 scope artifact, CLI, and a browser-executable `compute_probabilities` WGSL
