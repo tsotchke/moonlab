@@ -322,26 +322,29 @@ int entanglement_reduced_density_matrix(const quantum_state_t* state,
                                         int num_trace_out,
                                         complex_t* reduced_dm,
                                         uint64_t* reduced_dim) {
-    if (!state || !state->amplitudes || !reduced_dm) {
+    if (!state || !state->amplitudes || !trace_out_qubits ||
+        !reduced_dm || !reduced_dim) {
         return -1;
     }
-
-    entanglement_gpu_pull(state);
 
     const int total_qubits = state->num_qubits;
-    const int remaining_qubits = total_qubits - num_trace_out;
-
-    if (remaining_qubits <= 0 || remaining_qubits > 30) {
+    if (num_trace_out <= 0 || num_trace_out >= total_qubits) {
         return -1;
     }
+    const int remaining_qubits = total_qubits - num_trace_out;
+    if (remaining_qubits > 30) return -1;
 
     // Create mask for traced-out qubits
     uint64_t trace_mask = 0;
     for (int i = 0; i < num_trace_out; i++) {
-        if (trace_out_qubits[i] >= 0 && trace_out_qubits[i] < total_qubits) {
-            trace_mask |= (1ULL << trace_out_qubits[i]);
-        }
+        int qubit = trace_out_qubits[i];
+        if (qubit < 0 || qubit >= total_qubits) return -1;
+        uint64_t qubit_mask = 1ULL << qubit;
+        if (trace_mask & qubit_mask) return -1;
+        trace_mask |= qubit_mask;
     }
+
+    entanglement_gpu_pull(state);
 
     const uint64_t full_dim = state->state_dim;
     const uint64_t red_dim = 1ULL << remaining_qubits;
