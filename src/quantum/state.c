@@ -337,6 +337,15 @@ double quantum_state_entanglement_entropy(
     // Validate inputs
     if (!state || !qubits_subsystem_a || num_qubits_a == 0) return 0.0;
     if (num_qubits_a >= state->num_qubits) return 0.0;
+
+    uint64_t seen_qubits = 0;
+    for (size_t i = 0; i < num_qubits_a; i++) {
+        int qubit = qubits_subsystem_a[i];
+        if (qubit < 0 || qubit >= (int)state->num_qubits) return 0.0;
+        uint64_t qubit_mask = 1ULL << qubit;
+        if (seen_qubits & qubit_mask) return 0.0;
+        seen_qubits |= qubit_mask;
+    }
     
     // Calculate dimensions
     size_t num_qubits_b = state->num_qubits - num_qubits_a;
@@ -425,6 +434,19 @@ qs_error_t quantum_state_partial_trace(
         return QS_ERROR_INVALID_DIMENSION;
     }
 
+    uint64_t seen_qubits = 0;
+    for (size_t i = 0; i < num_traced; i++) {
+        int qubit = qubits_to_trace[i];
+        if (qubit < 0 || qubit >= (int)state->num_qubits) {
+            return QS_ERROR_INVALID_QUBIT;
+        }
+        uint64_t qubit_mask = 1ULL << qubit;
+        if (seen_qubits & qubit_mask) {
+            return QS_ERROR_INVALID_PARAM;
+        }
+        seen_qubits |= qubit_mask;
+    }
+
     state_gpu_pull(state);
     
     // Calculate dimensions
@@ -440,10 +462,6 @@ qs_error_t quantum_state_partial_trace(
     if (!is_traced) return QS_ERROR_OUT_OF_MEMORY;
 
     for (size_t i = 0; i < num_traced; i++) {
-        if (qubits_to_trace[i] < 0 || qubits_to_trace[i] >= (int)state->num_qubits) {
-            free(is_traced);
-            return QS_ERROR_INVALID_QUBIT;
-        }
         is_traced[qubits_to_trace[i]] = 1;
     }
     
