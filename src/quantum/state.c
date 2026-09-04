@@ -451,7 +451,7 @@ qs_error_t quantum_state_partial_trace(
     memset(reduced_density, 0, dim_kept * dim_kept * sizeof(complex_t));
     
     // Compute partial trace: ρ_A = Tr_B(|ψ⟩⟨ψ|)
-    // ρ_A(i,j) = Σ_k ⟨i,k|ψ⟩⟨ψ|j,k⟩ = Σ_k ψ*_{i,k} ψ_{j,k}
+    // ρ_A(i,j) = Σ_k ⟨i,k|ψ⟩⟨ψ|j,k⟩ = Σ_k ψ_{i,k} ψ*_{j,k}
     
     for (uint64_t kept_i = 0; kept_i < dim_kept; kept_i++) {
         for (uint64_t kept_j = 0; kept_j < dim_kept; kept_j++) {
@@ -489,8 +489,8 @@ qs_error_t quantum_state_partial_trace(
                     }
                 }
                 
-                // Add contribution: ψ*_i × ψ_j
-                sum += conj(state->amplitudes[basis_i]) * state->amplitudes[basis_j];
+                // Add contribution: ψ_i × ψ*_j
+                sum += state->amplitudes[basis_i] * conj(state->amplitudes[basis_j]);
             }
             
             // Store in reduced density matrix
