@@ -295,8 +295,9 @@ MOONLAB_API vqe_ansatz_t* vqe_create_symmetry_preserving_ansatz(
  * channels between its own gates and get noise semantics identical to the
  * built-ins rather than an approximation of them.
  *
- * No-op when NOISE is NULL or disabled, so a callback can call it
- * unconditionally on both the ideal and the noisy path.
+ * No-op when NOISE is NULL or disabled, or when ENTROPY cannot provide all
+ * required samples, so a callback can call it unconditionally on both the
+ * ideal and the noisy path.  An entropy failure leaves STATE unchanged.
  *
  * @param state Quantum state to perturb in place
  * @param qubit Target qubit
@@ -316,7 +317,8 @@ MOONLAB_API void vqe_apply_single_qubit_noise(
  *
  * The two-qubit counterpart of vqe_apply_single_qubit_noise, applied by the
  * built-in noisy ansaetze after every entangling gate.  No-op when NOISE is
- * NULL or disabled.
+ * NULL or disabled, or when ENTROPY cannot provide a sample.  An entropy
+ * failure leaves STATE unchanged.
  *
  * @param state Quantum state to perturb in place
  * @param qubit1 First gate qubit

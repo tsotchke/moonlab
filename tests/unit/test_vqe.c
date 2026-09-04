@@ -36,6 +36,18 @@ static int failures = 0;
     }                                                           \
 } while (0)
 
+typedef struct {
+    int successful_calls_remaining;
+} failing_entropy_t;
+
+static int fail_after_n_entropy_calls(void *user_data, uint8_t *buffer,
+                                      size_t size) {
+    failing_entropy_t *ctx = user_data;
+    if (ctx->successful_calls_remaining-- <= 0) return -1;
+    memset(buffer, 0, size);
+    return 0;
+}
+
 static void test_h2_single_energy_evaluation(void) {
     fprintf(stdout, "\n-- VQE: H2 Hamiltonian + single energy evaluation --\n");
 
@@ -145,6 +157,48 @@ static void test_pauli_hamiltonian_construction(void) {
 
     pauli_hamiltonian_free(H);
     fprintf(stdout, "  OK    freed Hamiltonian cleanly\n");
+}
+
+static void test_noise_helpers_leave_state_unchanged_on_entropy_failure(void) {
+    fprintf(stdout, "\n-- VQE: noise helpers handle entropy failure --\n");
+
+    quantum_state_t state;
+    int rc = quantum_state_init(&state, 2);
+    CHECK(rc == QS_SUCCESS, "initialized two-qubit state");
+    if (rc != QS_SUCCESS) return;
+
+    const double complex initial[4] = {
+        0.25 + 0.125 * I,
+        -0.375 + 0.25 * I,
+        0.5 - 0.125 * I,
+        -0.25 - 0.5 * I
+    };
+    memcpy(state.amplitudes, initial, sizeof(initial));
+
+    noise_model_t noise = {0};
+    noise.enabled = 1;
+    noise.depolarizing_rate = 0.2;
+    noise.amplitude_damping_rate = 0.3;
+    noise.phase_damping_rate = 0.4;
+    noise.two_qubit_depolarizing_rate = 0.5;
+
+    failing_entropy_t failing = {2};
+    quantum_entropy_ctx_t entropy;
+    quantum_entropy_init(&entropy, fail_after_n_entropy_calls, &failing);
+    vqe_apply_single_qubit_noise(&state, 0, &noise, &entropy);
+    CHECK(memcmp(state.amplitudes, initial, sizeof(initial)) == 0,
+          "single-qubit helper is unchanged after a partial entropy failure");
+
+    failing.successful_calls_remaining = 0;
+    vqe_apply_two_qubit_noise(&state, 0, 1, &noise, &entropy);
+    CHECK(memcmp(state.amplitudes, initial, sizeof(initial)) == 0,
+          "two-qubit helper is unchanged after an entropy failure");
+
+    vqe_apply_two_qubit_noise(&state, 0, 1, &noise, NULL);
+    CHECK(memcmp(state.amplitudes, initial, sizeof(initial)) == 0,
+          "two-qubit helper is unchanged without an entropy context");
+
+    quantum_state_free(&state);
 }
 
 /* Noisy VQE: attach a depolarizing noise model and confirm the solver
@@ -1294,6 +1348,7 @@ static void test_custom_ansatz_end_to_end(void) {
 int main(void) {
     fprintf(stdout, "=== VQE smoke tests ===\n");
     test_pauli_hamiltonian_construction();
+    test_noise_helpers_leave_state_unchanged_on_entropy_failure();
     test_h2_single_energy_evaluation();
     test_h2_optimizer_converges_below_hf();
     test_h2_noisy();
