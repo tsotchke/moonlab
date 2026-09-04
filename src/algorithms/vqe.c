@@ -2497,7 +2497,9 @@ void vqe_apply_single_qubit_noise(
     // Generate random values for noise application
     double random_values[4];
     for (int i = 0; i < 4; i++) {
-        quantum_entropy_get_double(entropy, &random_values[i]);
+        if (quantum_entropy_get_double(entropy, &random_values[i]) != 0) {
+            return;
+        }
     }
 
     // Apply depolarizing channel
@@ -2529,7 +2531,7 @@ void vqe_apply_two_qubit_noise(
     if (!noise || !noise->enabled) return;
 
     double random_value;
-    quantum_entropy_get_double(entropy, &random_value);
+    if (quantum_entropy_get_double(entropy, &random_value) != 0) return;
 
     // Apply two-qubit depolarizing channel
     if (noise->two_qubit_depolarizing_rate > 0) {
