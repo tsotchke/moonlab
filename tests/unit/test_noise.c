@@ -123,6 +123,95 @@ static void test_amplitude_damping_preserves_norm(void) {
     quantum_state_free(&s);
 }
 
+static void test_amplitude_damping_matches_kraus_ensemble(void) {
+    fprintf(stdout, "\n-- amplitude damping matches the Kraus ensemble --\n");
+    const int shots = 1200;
+    const double gamma = 0.5;
+    double average_p1 = 0.0;
+
+    for (int shot = 0; shot < shots; ++shot) {
+        quantum_state_t s;
+        quantum_state_init(&s, 2);
+        gate_hadamard(&s, 0);
+        gate_hadamard(&s, 1);  /* |++>, so P(q0=1) starts at 1/2. */
+
+        double random_value = ((double)shot + 0.5) / (double)shots;
+        noise_amplitude_damping(&s, 0, gamma, random_value);
+        average_p1 += measurement_probability_one(&s, 0);
+        quantum_state_free(&s);
+    }
+
+    average_p1 /= (double)shots;
+    /* Kraus evolution gives P'(1) = (1-gamma) P(1) = 1/4. */
+    CHECK(near(average_p1, 0.25, 1e-12),
+          "shot-averaged P(q0=1) = %.15g (Kraus expectation 0.25)",
+          average_p1);
+}
+
+static void test_amplitude_damping_branch_amplitudes(void) {
+    fprintf(stdout, "\n-- amplitude damping matches normalized Kraus branches --\n");
+    const double gamma = 0.3;
+    const double drift = 1.0 + 1e-8;
+    const double inv_sqrt_8 = 1.0 / sqrt(8.0);
+    const complex_t initial[4] = {
+        drift * inv_sqrt_8,
+        drift * I * inv_sqrt_8,
+        2.0 * drift * inv_sqrt_8,
+        drift * (1.0 - I) * inv_sqrt_8
+    };
+    double total_norm = 0.0;
+    double prob_one = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        const double p = creal(initial[i]) * creal(initial[i]) +
+                         cimag(initial[i]) * cimag(initial[i]);
+        total_norm += p;
+        if (i & 1) prob_one += p;
+    }
+
+    quantum_state_t jump;
+    quantum_state_init(&jump, 2);
+    for (int i = 0; i < 4; ++i) jump.amplitudes[i] = initial[i];
+    noise_amplitude_damping(&jump, 0, gamma, 0.0);
+
+    const double jump_scale = 1.0 / sqrt(prob_one);
+    const complex_t expected_jump[4] = {
+        initial[1] * jump_scale, 0.0,
+        initial[3] * jump_scale, 0.0
+    };
+    double jump_residual = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        const double residual = cabs(jump.amplitudes[i] - expected_jump[i]);
+        if (residual > jump_residual) jump_residual = residual;
+    }
+    CHECK(jump_residual < 1e-12,
+          "jump branch amplitudes match K1 normalization (max residual %.3e)",
+          jump_residual);
+    CHECK(near(state_norm_squared(&jump), 1.0, 1e-12),
+          "jump branch is normalized");
+    quantum_state_free(&jump);
+
+    quantum_state_t no_jump;
+    quantum_state_init(&no_jump, 2);
+    for (int i = 0; i < 4; ++i) no_jump.amplitudes[i] = initial[i];
+    noise_amplitude_damping(&no_jump, 0, gamma, 0.999999);
+
+    const double no_jump_scale = 1.0 / sqrt(total_norm - gamma * prob_one);
+    const double excited_scale = sqrt(1.0 - gamma) * no_jump_scale;
+    double no_jump_residual = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        const complex_t expected = initial[i] *
+            ((i & 1) ? excited_scale : no_jump_scale);
+        const double residual = cabs(no_jump.amplitudes[i] - expected);
+        if (residual > no_jump_residual) no_jump_residual = residual;
+    }
+    CHECK(no_jump_residual < 1e-12,
+          "no-jump amplitudes match K0 normalization (max residual %.3e)",
+          no_jump_residual);
+    CHECK(near(state_norm_squared(&no_jump), 1.0, 1e-12),
+          "no-jump branch is normalized");
+    quantum_state_free(&no_jump);
+}
+
 static void test_pure_dephasing_populations(void) {
     fprintf(stdout, "\n-- pure dephasing preserves populations --\n");
     /* Pure dephasing destroys coherence but preserves |alpha|^2 and
@@ -241,6 +330,8 @@ int main(void) {
     test_phase_flip_populations();
     test_depolarizing_p0_is_noop();
     test_amplitude_damping_preserves_norm();
+    test_amplitude_damping_matches_kraus_ensemble();
+    test_amplitude_damping_branch_amplitudes();
     test_pure_dephasing_populations();
     test_norm_after_every_channel();
     test_depolarizing_fully_mixes_to_I2();
