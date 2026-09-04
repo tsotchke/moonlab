@@ -187,40 +187,42 @@ void noise_amplitude_damping(quantum_state_t* state, int qubit,
     const uint64_t qubit_mask = 1ULL << qubit;
     complex_t* amp = state->amplitudes;
 
-    double sqrt_1_gamma = sqrt(1.0 - gamma);
-
-    // For each pair of amplitudes differing in qubit
+    double prob_one = 0.0;
+    double total_norm = 0.0;
     for (uint64_t i = 0; i < state_dim; i++) {
+        const double re = creal(amp[i]);
+        const double im = cimag(amp[i]);
+        const double probability = re * re + im * im;
+        total_norm += probability;
         if (i & qubit_mask) {
-            // i has qubit=1, j=i^mask has qubit=0
-            uint64_t j = i ^ qubit_mask;
-
-            complex_t a0 = amp[j];  // |...0...⟩
-            complex_t a1 = amp[i];  // |...1...⟩
-
-            // Compute decay probability for this amplitude
-            double p_decay = gamma * cabs(a1) * cabs(a1);
-
-            if (random_value < p_decay) {
-                // Decay occurred: collapse |1⟩ → |0⟩
-                amp[j] = a0 + a1;  // Transfer amplitude
-                amp[i] = 0.0;
-            } else {
-                // No decay: apply damping
-                amp[i] *= sqrt_1_gamma;
-            }
+            prob_one += probability;
         }
     }
 
-    // Renormalize
-    double norm = 0.0;
-    for (uint64_t i = 0; i < state_dim; i++) {
-        norm += cabs(amp[i]) * cabs(amp[i]);
-    }
-    if (norm > 1e-15) {
-        double inv_norm = 1.0 / sqrt(norm);
+    const double p_jump = gamma * prob_one;
+    double sqrt_1_gamma = sqrt(1.0 - gamma);
+
+    // A quantum trajectory selects one Kraus operator for the whole state.
+    // Selecting independently for each basis pair does not unravel the
+    // channel and gives incorrect ensemble populations on multi-qubit states.
+    if (random_value < p_jump && prob_one > 1e-15) {
+        const double scale = 1.0 / sqrt(prob_one);
         for (uint64_t i = 0; i < state_dim; i++) {
-            amp[i] *= inv_norm;
+            if (i & qubit_mask) {
+                uint64_t j = i ^ qubit_mask;
+                amp[j] = scale * amp[i];
+                amp[i] = 0.0;
+            }
+        }
+    } else {
+        const double branch_norm = total_norm - p_jump;
+        const double scale = branch_norm > 1e-15 ? 1.0 / sqrt(branch_norm) : 1.0;
+        for (uint64_t i = 0; i < state_dim; i++) {
+            if (i & qubit_mask) {
+                amp[i] *= sqrt_1_gamma * scale;
+            } else {
+                amp[i] *= scale;
+            }
         }
     }
 
