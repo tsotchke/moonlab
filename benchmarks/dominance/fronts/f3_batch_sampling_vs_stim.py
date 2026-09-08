@@ -9,13 +9,15 @@ Two mandatory gates:
 
   1. Cross-engine correctness (correctness_ok): both engines sample the SAME
      op list. Per-measurement marginals must agree within 6 sigma over >=1e5
-     shots, the global parity marginal must agree within 6 sigma, and pairwise
-     measurement correlations must match within 0.02. A faster wrong sampler
-     fails here.
+     shots using both engines' sampling variance, the global parity marginal
+     must agree within 6 sigma, and pairwise correlations must agree within
+     6 batch-means standard errors. Detector marginals must additionally agree
+     with the exact detector-error-model probabilities within 6 sigma for
+     each engine. Legacy one-sample scores remain in the diagnostic output.
 
   2. Throughput: samples/second = num_shots * num_measurements / wall-clock,
-     timing only the sampling call for both engines (Stim's compile and
-     MoonLab's one-shot reference tableau pass are excluded / negligible).
+     timing the sampling call for both engines. Stim's compilation is excluded;
+     MoonLab's current one-shot API includes its reference-tableau setup.
      Three numbers per size are reported for full honesty:
         (a) MoonLab single-thread vs Stim single-thread  (kernel/SIMD)
         (b) MoonLab all-cores   vs Stim                  (as-used)
@@ -36,6 +38,11 @@ from pathlib import Path
 
 import numpy as np
 import stim
+
+if __package__:
+    from .sampling_statistics import binomial_reference_sigma, proportion_difference_sigma
+else:  # Retain direct-script execution as well as package imports.
+    from sampling_statistics import binomial_reference_sigma, proportion_difference_sigma
 
 # --------------------------------------------------------------------------
 # Op encoding -- mirrors pf_circuit_op_t / pf_op_kind_t in pauli_frame.h.
@@ -374,10 +381,13 @@ def check_correctness(n, ops, shots=200000, seed=12345, nthreads=1):
     pml = ml.mean(axis=1)
     pst = st.mean(axis=1)
     sig = np.sqrt(np.maximum(pst * (1 - pst), 1e-9) / shots) + 1e-12
-    marg_dev = float(np.abs(pml - pst).__truediv__(sig).max())
+    legacy_marg_dev = float(np.abs(pml - pst).__truediv__(sig).max())
+    marg_dev = max(proportion_difference_sigma(a, ml.shape[1], b, st.shape[1])
+                   for a, b in zip(pml, pst))
     par_ml = (ml.sum(axis=0) & 1).mean()
     par_st = (st.sum(axis=0) & 1).mean()
-    par_dev = abs(par_ml - par_st) / (np.sqrt(max(par_st * (1 - par_st), 1e-9) / shots) + 1e-12)
+    legacy_par_dev = abs(par_ml - par_st) / (np.sqrt(max(par_st * (1 - par_st), 1e-9) / shots) + 1e-12)
+    par_dev = proportion_difference_sigma(par_ml, ml.shape[1], par_st, st.shape[1])
     k = min(6, nmeas)
     r_ml, se_ml = _corr_stats(ml, k)
     r_st, se_st = _corr_stats(st, k)
@@ -390,6 +400,9 @@ def check_correctness(n, ops, shots=200000, seed=12345, nthreads=1):
     return ok, {"marg_sigma": round(marg_dev, 2), "parity_sigma": round(float(par_dev), 2),
                 "max_corr_diff": round(maxcorr, 4),
                 "corr_sigma": round(corr_sigma, 2),
+                "legacy_marg_sigma": round(legacy_marg_dev, 2),
+                "legacy_parity_sigma": round(float(legacy_par_dev), 2),
+                "variance_basis": "pooled_two_sample",
                 "nmeas": nmeas, "shots": shots, "nthreads": nthreads}
 
 
@@ -456,6 +469,31 @@ def measure(n, ops, shots, seed):
     }
 
 
+def detector_reference_probabilities(circuit):
+    """Analytic detector marginals from Stim's exact independent-error model.
+
+    For independent faults, E[(-1)^parity] is the product of (1-2p).
+    No disjoint-error approximation or gauge-detector relaxation is allowed.
+    Unsupported circuits raise instead of silently substituting sampled data.
+    """
+    model = circuit.detector_error_model(approximate_disjoint_errors=False).flattened()
+    parity_mean = np.ones(circuit.num_detectors)
+    for instruction in model:
+        if instruction.type != "error":
+            continue
+        probability, = instruction.args_copy()
+        flipped = set()
+        for target in instruction.targets_copy():
+            if target.is_relative_detector_id():
+                if target.val in flipped:
+                    flipped.remove(target.val)
+                else:
+                    flipped.add(target.val)
+        for detector in flipped:
+            parity_mean[detector] *= 1 - 2 * probability
+    return (1 - parity_mean) / 2
+
+
 def check_detector_correctness(n, ops, dets, shots=200000, seed=1234, nthreads=1):
     """Gate detector sampling against stim's compile_detector_sampler.
 
@@ -468,23 +506,34 @@ def check_detector_correctness(n, ops, dets, shots=200000, seed=1234, nthreads=1
     ancillas, so it never inspects a round-to-round pair.
     """
     ml = moonlab_sample_detectors(n, ops, dets, shots, seed, nthreads)
-    st = stim_sample_detectors(
-        _to_stim_with_detectors(ops, dets).compile_detector_sampler(seed=seed + 1),
-        shots)
+    circuit = _to_stim_with_detectors(ops, dets)
+    expected = detector_reference_probabilities(circuit)
+    st = stim_sample_detectors(circuit.compile_detector_sampler(seed=seed + 1), shots)
     if ml.shape != st.shape:
         return False, {"reason": f"shape {ml.shape} vs {st.shape}"}
     pml, pst = ml.mean(axis=1), st.mean(axis=1)
     se = np.sqrt(np.maximum(pst * (1 - pst), 1e-9) / shots) + 1e-12
-    marg_dev = float(np.abs(pml - pst).__truediv__(se).max())
+    legacy_marg_dev = float(np.abs(pml - pst).__truediv__(se).max())
+    marg_dev = max(proportion_difference_sigma(a, ml.shape[1], b, st.shape[1])
+                   for a, b in zip(pml, pst))
+    analytic_ml = max(binomial_reference_sigma(a, ml.shape[1], p)
+                      for a, p in zip(pml, expected))
+    analytic_st = max(binomial_reference_sigma(b, st.shape[1], p)
+                      for b, p in zip(pst, expected))
     k = min(6, len(dets))
     r_ml, se_ml = _corr_stats(ml, k)
     r_st, se_st = _corr_stats(st, k)
     corr_sigma = float((np.abs(r_ml - r_st) /
                         (np.sqrt(se_ml**2 + se_st**2) + 1e-12)).max())
-    ok = marg_dev < 6.0 and corr_sigma < 6.0
+    ok = (marg_dev < 6.0 and corr_sigma < 6.0
+          and analytic_ml < 6.0 and analytic_st < 6.0)
     return ok, {"marg_sigma": round(marg_dev, 2), "corr_sigma": round(corr_sigma, 2),
                 "fire_rate_ml": round(float(pml.mean()), 5),
                 "fire_rate_stim": round(float(pst.mean()), 5),
+                "legacy_marg_sigma": round(legacy_marg_dev, 2),
+                "analytic_moonlab_sigma": round(analytic_ml, 2),
+                "analytic_stim_sigma": round(analytic_st, 2),
+                "variance_basis": "pooled_two_sample_and_analytic_reference",
                 "ndet": len(dets), "shots": shots, "nthreads": nthreads}
 
 
