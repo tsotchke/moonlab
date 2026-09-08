@@ -60,6 +60,8 @@ typedef struct {
  * can take longer than the deadlock grace period even while workers are
  * making steady progress, so the watchdog also tracks this heartbeat. */
 static _Atomic unsigned long g_activity;
+enum { PHASE_RUNNING, PHASE_DESTROYING, PHASE_JOINING, PHASE_COMPLETE };
+static _Atomic int g_phase;
 
 static void *pusher(void *a)
 {
@@ -105,15 +107,20 @@ static void *deadlock_watchdog(void *arg)
     int secs = (int)(intptr_t)arg;
     int last = atomic_load(&g_rounds_done);
     unsigned long last_activity = atomic_load(&g_activity);
+    int last_phase = atomic_load(&g_phase);
     int stalled = 0;
     while (stalled < secs) {
         struct timespec ts = { 1, 0 };
         nanosleep(&ts, NULL);
         int now = atomic_load(&g_rounds_done);
         unsigned long activity = atomic_load(&g_activity);
-        if (now != last || activity != last_activity) {
+        int phase = atomic_load(&g_phase);
+        if (phase != last_phase ||
+            (phase == PHASE_RUNNING &&
+             (now != last || activity != last_activity))) {
             last = now;
             last_activity = activity;
+            last_phase = phase;
             stalled = 0;
         } else {
             stalled++;
@@ -132,6 +139,7 @@ static void *deadlock_watchdog(void *arg)
 
 static int run_round(int destroy_midflight)
 {
+    atomic_store(&g_phase, PHASE_RUNNING);
     static uint8_t slots[REC_SIZE * CAP];
     moonlab_audit_buffer_t buf;
     memset(&buf, 0, sizeof(buf));
@@ -154,7 +162,9 @@ static int run_round(int destroy_midflight)
          * under them -- the design claims the state machine tolerates this. */
         struct timespec ts = { 0, 300 * 1000 };
         nanosleep(&ts, NULL);
+        atomic_store(&g_phase, PHASE_DESTROYING);
         moonlab_audit_buffer_destroy(&buf);
+        atomic_store(&g_phase, PHASE_JOINING);
         /* Give the still-running push/pop threads a moment to hit the
          * DEAD-state path (and any lock-on-destroyed-mutex window). */
         nanosleep(&ts, NULL);
@@ -168,14 +178,24 @@ static int run_round(int destroy_midflight)
     for (int i = 0; i < N_POP; i++) pthread_join(ct[i], NULL);
 
     if (!destroy_midflight) moonlab_audit_buffer_destroy(&buf);
+    atomic_store(&g_phase, PHASE_COMPLETE);
     return 0;
 }
 
 int main(int argc, char **argv)
 {
     const int destroy_mode = (argc > 1 && strcmp(argv[1], "destroy") == 0);
+    const int stuck_control = (argc > 1 && strcmp(argv[1], "stuck") == 0);
     fprintf(stdout, "=== conc_audit_buffer (%s) ===\n",
-            destroy_mode ? "destroy" : "mpmc");
+            destroy_mode ? "destroy" : (stuck_control ? "stuck" : "mpmc"));
+    if (stuck_control) {
+        pthread_t wd;
+        fprintf(stdout, "negative control: simulating a stuck destroy phase\n");
+        atomic_store(&g_phase, PHASE_DESTROYING);
+        pthread_create(&wd, NULL, deadlock_watchdog, (void *)(intptr_t)15);
+        pthread_join(wd, NULL);
+        return 0;
+    }
     if (destroy_mode) {
         pthread_t wd;
         pthread_create(&wd, NULL, deadlock_watchdog, (void *)(intptr_t)15);
