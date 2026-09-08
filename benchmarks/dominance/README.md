@@ -95,3 +95,31 @@ Use `.so` on Linux. Peak RSS includes the common Python/NumPy/Stim/Moonlab
 harness and is not just backend workspace. These bounded probes are diagnostic,
 not a dominance certificate. Same circuit/shot count, declared thread budgets,
 output layout, library hash and unloaded repeatable host conditions matter.
+
+## Estimation error at a deadline
+
+`benchmark_estimation_accuracy.py` measures detector-marginal RMSE against
+the exact model after sampling **and aggregation** have completed. Each
+engine/seed cell gets a fresh process; engine order rotates across seeds.
+Both Stim output modes are included, with required unpacking charged to the
+budget. Batch seeds are domain-separated so adjacent experiment seeds do not
+reuse the same batch streams.
+
+```sh
+python benchmarks/dominance/benchmark_estimation_accuracy.py \
+  --library "$MOONLAB_LIB_DIR/libquantumsim.dylib" \
+  --budget-s 0.25 --batch-size 100000
+```
+
+Budgets are limited to one second and output batches to 256 MiB. Only fully
+aggregated checkpoints available by the deadline count; a final native call
+cannot be interrupted and may overrun. Its shots are discarded and the
+overrun is reported. This is not a hard real-time return guarantee. Circuit
+and library preparation are outside the budget and reported separately.
+The fixed-N IID expected MSE is descriptive, not a guarantee conditional on
+deadline-based stopping. Preserve every seed and failed/incomplete cell;
+five exploratory seeds do not certify a universal accuracy advantage.
+
+The `linux-x64-lite` CI job now runs the analytic marginal and joint audits,
+their negative controls, and the deadline-accounting tests. It uploads the
+raw model-comparison JSON files and fails if any required accuracy check fails.

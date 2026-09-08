@@ -181,6 +181,37 @@ jobs:
               -E "n34_to_n40|hofstadter_sweep|kagome_ed_n18" \
               "${TEST_FILTER[@]+${TEST_FILTER[@]}}" -j 4
 
+      - name: Verify sampler accuracy against exact Stim models
+        if: matrix.name == 'linux-x64-lite'
+        timeout-minutes: 5
+        shell: bash
+        env:
+          MOONLAB_LIB_DIR: ${{ github.workspace }}/build
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+        run: |
+          set -euo pipefail
+          python -m pip install --only-binary=:all: stim==1.16.0 numpy==2.4.6
+          python -m unittest \
+            tests.release.test_sampling_statistics \
+            benchmarks.dominance.tests.test_batch_sampling_gate \
+            benchmarks.dominance.tests.test_detector_joint_accuracy \
+            benchmarks.dominance.tests.test_estimation_accuracy
+          python benchmarks/dominance/check_sampling_reference.py \
+            --shots 200000 > build/sampling-reference.json
+          python benchmarks/dominance/check_detector_joint_accuracy.py \
+            --shots 200000 --seeds 1234 7 47 12345 987654321 --threads 1 4 \
+            > build/sampling-joint-accuracy.json
+
+      - name: Upload sampler accuracy evidence
+        if: always() && matrix.name == 'linux-x64-lite'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sampler-accuracy-evidence
+          path: build/sampling-*.json
+          if-no-files-found: warn
+
       - name: Upload Build Log on Failure
         if: failure()
         uses: actions/upload-artifact@v4
