@@ -56,6 +56,11 @@ typedef struct {
     int                     id;
 } args_t;
 
+/* A round is only marked complete after all worker joins.  Under TSan that
+ * can take longer than the deadlock grace period even while workers are
+ * making steady progress, so the watchdog also tracks this heartbeat. */
+static _Atomic unsigned long g_activity;
+
 static void *pusher(void *a)
 {
     args_t *ar = (args_t *)a;
@@ -63,6 +68,7 @@ static void *pusher(void *a)
     memset(rec, ar->id & 0xff, sizeof(rec));
     uint64_t n = 0;
     while (!atomic_load(ar->stop)) {
+        atomic_fetch_add(&g_activity, 1ul);
         rec[0] = (uint8_t)(n++ & 0xff);
         (void)moonlab_audit_buffer_push(ar->buf, rec);
     }
@@ -74,6 +80,7 @@ static void *popper(void *a)
     args_t *ar = (args_t *)a;
     uint8_t out[REC_SIZE];
     while (!atomic_load(ar->stop)) {
+        atomic_fetch_add(&g_activity, 1ul);
         (void)moonlab_audit_buffer_pop(ar->buf, out);
         (void)moonlab_audit_buffer_len(ar->buf);
         (void)moonlab_audit_buffer_drops(ar->buf);
@@ -97,13 +104,20 @@ static void *deadlock_watchdog(void *arg)
 {
     int secs = (int)(intptr_t)arg;
     int last = atomic_load(&g_rounds_done);
+    unsigned long last_activity = atomic_load(&g_activity);
     int stalled = 0;
     while (stalled < secs) {
         struct timespec ts = { 1, 0 };
         nanosleep(&ts, NULL);
         int now = atomic_load(&g_rounds_done);
-        if (now != last) { last = now; stalled = 0; }
-        else             { stalled++; }
+        unsigned long activity = atomic_load(&g_activity);
+        if (now != last || activity != last_activity) {
+            last = now;
+            last_activity = activity;
+            stalled = 0;
+        } else {
+            stalled++;
+        }
     }
     fprintf(stdout,
         "DEADLOCK: destroy() vs in-flight push/pop wedged a thread in "
