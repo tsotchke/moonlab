@@ -10,6 +10,7 @@
  */
 
 #include "simd_dispatch.h"
+#include "simd_avx512.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

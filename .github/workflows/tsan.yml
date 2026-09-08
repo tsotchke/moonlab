@@ -108,9 +108,8 @@ jobs:
           CXX: clang++
           QSIM_TSAN_JOBS: '2'
           QSIM_TSAN_EXTRA_LIBS: 'openblas;lapack;lapacke'
-          # Archer honours TSAN_OPTIONS; keep flush_memory low so barrier
-          # annotations are not raced out under load.
-          ARCHER_OPTIONS: 'flush_shadow=1'
+          # Use Archer's defaults. Ubuntu's packaged runtime rejects the
+          # optional flush_shadow setting; it is not required for detection.
         run: ./scripts/run_tsan.sh
 
       - name: Upload TSan trace + logs
