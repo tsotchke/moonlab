@@ -510,6 +510,28 @@ const simd_info_t* simd_detect_capabilities_full(void) {
     return &g_simd_info;
 }
 
+/* This function is deliberately compiled in the baseline dispatch
+ * translation unit.  simd_avx512.c is compiled with AVX-512 enabled and must
+ * never execute a feature probe itself: doing so would make the result depend
+ * on the ISA used to compile that translation unit and previously caused it
+ * to report "available" based on compilation alone.
+ *
+ * The capability detector gates AVX-512 CPUID bits on OS XCR0 support.  Keep
+ * the complete F/DQ/BW/VL requirement here because the specialized kernels
+ * use all four extensions.
+ */
+int avx512_is_available(void) {
+#ifdef HAS_AVX512
+    const simd_info_t* info = simd_detect_capabilities_full();
+    return info->has_avx512f &&
+           info->has_avx512dq &&
+           info->has_avx512bw &&
+           info->has_avx512vl;
+#else
+    return 0;
+#endif
+}
+
 // ============================================================================
 // ACCESSOR FUNCTIONS
 // ============================================================================

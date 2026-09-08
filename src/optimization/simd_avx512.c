@@ -31,14 +31,6 @@
 
 #include <immintrin.h>
 
-// ============================================================================
-// CAPABILITY CHECK
-// ============================================================================
-
-int avx512_is_available(void) {
-    return 1;  // Compiled with AVX-512, so it's available
-}
-
 const char* avx512_get_features(void) {
     static char features[128] = "AVX-512";
     static int initialized = 0;
@@ -447,10 +439,6 @@ void avx512_xor_bytes(uint8_t* dest, const uint8_t* src, size_t n) {
 // ============================================================================
 // FALLBACK IMPLEMENTATIONS (When AVX-512 not available at compile time)
 // ============================================================================
-
-int avx512_is_available(void) {
-    return 0;
-}
 
 const char* avx512_get_features(void) {
     return "AVX-512 not available";

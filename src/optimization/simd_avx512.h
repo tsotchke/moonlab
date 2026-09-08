@@ -53,7 +53,8 @@ typedef double _Complex complex_t;
 /**
  * @brief Check if AVX-512 is available at runtime
  *
- * @return 1 if AVX-512F is supported, 0 otherwise
+ * @return 1 if the compiled AVX-512 backend and its required runtime
+ *         extensions (F/DQ/BW/VL) are supported, 0 otherwise
  */
 int avx512_is_available(void);
 
